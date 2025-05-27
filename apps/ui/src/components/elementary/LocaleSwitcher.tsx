@@ -17,6 +17,7 @@ import {
 const localeTranslation = {
   cs: "Czech",
   en: "English",
+  vi: "Vietnamese",
 }
 
 const LocaleSwitcher = ({ locale }: { locale: AppLocale }) => {

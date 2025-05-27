@@ -95,11 +95,11 @@ const TableCell = React.forwardRef<
 TableCell.displayName = "TableCell"
 
 const TableCaption = React.forwardRef<
-  HTMLTableCaptionElement,
-  React.HTMLAttributes<HTMLTableCaptionElement>
+  HTMLElement,
+  React.HTMLAttributes<HTMLElement>
 >(({ className, ...props }, ref) => (
   <caption
-    ref={ref}
+    ref={ref as React.Ref<HTMLTableCaptionElement>}
     className={cn("text-muted-foreground mt-4 text-sm", className)}
     {...props}
   />

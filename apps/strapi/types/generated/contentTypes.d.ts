@@ -373,6 +373,102 @@ export interface AdminUser extends Struct.CollectionTypeSchema {
   }
 }
 
+export interface ApiCategoryCategory extends Struct.CollectionTypeSchema {
+  collectionName: "categories"
+  info: {
+    description: ""
+    displayName: "Category"
+    pluralName: "categories"
+    singularName: "category"
+  }
+  options: {
+    draftAndPublish: true
+  }
+  pluginOptions: {
+    i18n: {
+      localized: true
+    }
+  }
+  attributes: {
+    createdAt: Schema.Attribute.DateTime
+    createdBy: Schema.Attribute.Relation<"oneToOne", "admin::user"> &
+      Schema.Attribute.Private
+    Description: Schema.Attribute.Blocks
+    Image: Schema.Attribute.Media<"images" | "files" | "videos" | "audios">
+    is_Active: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<true>
+    locale: Schema.Attribute.String
+    localizations: Schema.Attribute.Relation<
+      "oneToMany",
+      "api::category.category"
+    >
+    Name: Schema.Attribute.String & Schema.Attribute.Required
+    publishedAt: Schema.Attribute.DateTime
+    Slug: Schema.Attribute.UID<"Name">
+    updatedAt: Schema.Attribute.DateTime
+    updatedBy: Schema.Attribute.Relation<"oneToOne", "admin::user"> &
+      Schema.Attribute.Private
+  }
+}
+
+export interface ApiDirectoryDirectory extends Struct.CollectionTypeSchema {
+  collectionName: "directories"
+  info: {
+    description: ""
+    displayName: "Directory"
+    pluralName: "directories"
+    singularName: "directory"
+  }
+  options: {
+    draftAndPublish: true
+  }
+  pluginOptions: {
+    i18n: {
+      localized: true
+    }
+  }
+  attributes: {
+    createdAt: Schema.Attribute.DateTime
+    createdBy: Schema.Attribute.Relation<"oneToOne", "admin::user"> &
+      Schema.Attribute.Private
+    Description: Schema.Attribute.Blocks &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: true
+        }
+      }>
+    Image: Schema.Attribute.Media<"images" | "files" | "videos" | "audios"> &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: true
+        }
+      }>
+    is_Active: Schema.Attribute.Boolean &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: true
+        }
+      }> &
+      Schema.Attribute.DefaultTo<true>
+    locale: Schema.Attribute.String
+    localizations: Schema.Attribute.Relation<
+      "oneToMany",
+      "api::directory.directory"
+    >
+    Name: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: true
+        }
+      }>
+    publishedAt: Schema.Attribute.DateTime
+    Slug: Schema.Attribute.UID<"Name"> & Schema.Attribute.Required
+    updatedAt: Schema.Attribute.DateTime
+    updatedBy: Schema.Attribute.Relation<"oneToOne", "admin::user"> &
+      Schema.Attribute.Private
+  }
+}
+
 export interface ApiFooterFooter extends Struct.SingleTypeSchema {
   collectionName: "footers"
   info: {
@@ -420,6 +516,37 @@ export interface ApiFooterFooter extends Struct.SingleTypeSchema {
           localized: true
         }
       }>
+    updatedAt: Schema.Attribute.DateTime
+    updatedBy: Schema.Attribute.Relation<"oneToOne", "admin::user"> &
+      Schema.Attribute.Private
+  }
+}
+
+export interface ApiIdentityIdentity extends Struct.CollectionTypeSchema {
+  collectionName: "identities"
+  info: {
+    displayName: "Identity"
+    pluralName: "identities"
+    singularName: "identity"
+  }
+  options: {
+    draftAndPublish: true
+  }
+  attributes: {
+    Avatar: Schema.Attribute.Media<"images" | "files" | "videos" | "audios">
+    createdAt: Schema.Attribute.DateTime
+    createdBy: Schema.Attribute.Relation<"oneToOne", "admin::user"> &
+      Schema.Attribute.Private
+    locale: Schema.Attribute.String & Schema.Attribute.Private
+    localizations: Schema.Attribute.Relation<
+      "oneToMany",
+      "api::identity.identity"
+    > &
+      Schema.Attribute.Private
+    Name: Schema.Attribute.String & Schema.Attribute.Required
+    publishedAt: Schema.Attribute.DateTime
+    Slug: Schema.Attribute.String
+    Type: Schema.Attribute.Enumeration<["Individual", "Organization"]>
     updatedAt: Schema.Attribute.DateTime
     updatedBy: Schema.Attribute.Relation<"oneToOne", "admin::user"> &
       Schema.Attribute.Private
@@ -1088,7 +1215,10 @@ declare module "@strapi/strapi" {
       "admin::transfer-token": AdminTransferToken
       "admin::transfer-token-permission": AdminTransferTokenPermission
       "admin::user": AdminUser
+      "api::category.category": ApiCategoryCategory
+      "api::directory.directory": ApiDirectoryDirectory
       "api::footer.footer": ApiFooterFooter
+      "api::identity.identity": ApiIdentityIdentity
       "api::navbar.navbar": ApiNavbarNavbar
       "api::page.page": ApiPagePage
       "api::subscriber.subscriber": ApiSubscriberSubscriber

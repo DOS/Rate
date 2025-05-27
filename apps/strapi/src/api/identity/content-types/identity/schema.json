@@ -1,0 +1,38 @@
+{
+  "kind": "collectionType",
+  "collectionName": "identities",
+  "info": {
+    "singularName": "identity",
+    "pluralName": "identities",
+    "displayName": "Identity"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "attributes": {
+    "Name": {
+      "type": "string",
+      "required": true
+    },
+    "Type": {
+      "type": "enumeration",
+      "enum": [
+        "Individual",
+        "Organization"
+      ]
+    },
+    "Slug": {
+      "type": "string"
+    },
+    "Avatar": {
+      "allowedTypes": [
+        "images",
+        "files",
+        "videos",
+        "audios"
+      ],
+      "type": "media",
+      "multiple": false
+    }
+  }
+}
