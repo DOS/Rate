@@ -34,6 +34,10 @@ export interface AdminApiToken extends Struct.CollectionTypeSchema {
         minLength: 1
       }> &
       Schema.Attribute.DefaultTo<"">
+    encryptedKey: Schema.Attribute.Text &
+      Schema.Attribute.SetMinMaxLength<{
+        minLength: 1
+      }>
     expiresAt: Schema.Attribute.DateTime
     lastUsedAt: Schema.Attribute.DateTime
     lifespan: Schema.Attribute.BigInteger
@@ -425,13 +429,12 @@ export interface ApiFooterFooter extends Struct.SingleTypeSchema {
 export interface ApiNavbarNavbar extends Struct.SingleTypeSchema {
   collectionName: "navbars"
   info: {
-    description: ""
     displayName: "Navbar"
     pluralName: "navbars"
     singularName: "navbar"
   }
   options: {
-    draftAndPublish: false
+    draftAndPublish: true
   }
   pluginOptions: {
     i18n: {
