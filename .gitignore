@@ -42,3 +42,4 @@ yarn-error.log*
 .cache
 
 .strapi-updater.json
+node_modules_old/
