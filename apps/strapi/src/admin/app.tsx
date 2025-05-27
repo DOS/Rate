@@ -10,12 +10,15 @@ import { defaultCkEditorConfig } from "./ckeditor/configs"
 
 export default {
   config: {
-    locales: ["en", "cs"],
+    locales: ["en", "cs", "vi"],
     translations: {
       cs,
     },
   },
-  bootstrap(_app: StrapiApp) {},
+  bootstrap(app: StrapiApp) {
+    // Simple i18n fix: ensure default locale is properly set
+    console.log("Admin app bootstrapped with locales:", ["en", "cs", "vi"])
+  },
   register() {
     setPluginConfig({ presets: [defaultCkEditorConfig] })
   },

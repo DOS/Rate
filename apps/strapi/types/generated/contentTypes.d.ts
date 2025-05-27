@@ -434,7 +434,7 @@ export interface ApiNavbarNavbar extends Struct.SingleTypeSchema {
     singularName: "navbar"
   }
   options: {
-    draftAndPublish: true
+    draftAndPublish: false
   }
   pluginOptions: {
     i18n: {
