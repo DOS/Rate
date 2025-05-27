@@ -4,11 +4,10 @@
   "info": {
     "singularName": "navbar",
     "pluralName": "navbars",
-    "displayName": "Navbar",
-    "description": ""
+    "displayName": "Navbar"
   },
   "options": {
-    "draftAndPublish": false
+    "draftAndPublish": true
   },
   "pluginOptions": {
     "i18n": {
@@ -19,22 +18,22 @@
     "links": {
       "type": "component",
       "repeatable": true,
+      "component": "utilities.link",
       "pluginOptions": {
         "i18n": {
           "localized": true
         }
-      },
-      "component": "utilities.link"
+      }
     },
     "logoImage": {
       "type": "component",
       "repeatable": false,
+      "component": "utilities.image-with-link",
       "pluginOptions": {
         "i18n": {
           "localized": true
         }
-      },
-      "component": "utilities.image-with-link"
+      }
     }
   }
 }
