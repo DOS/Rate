@@ -1,0 +1,44 @@
+{
+  "kind": "collectionType",
+  "collectionName": "listings",
+  "info": {
+    "singularName": "listing",
+    "pluralName": "listings",
+    "displayName": "Listing",
+    "description": ""
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "attributes": {
+    "Title": {
+      "type": "string",
+      "required": true
+    },
+    "Slug": {
+      "type": "string"
+    },
+    "URL": {
+      "type": "string"
+    },
+    "is_Active": {
+      "type": "boolean",
+      "default": true
+    },
+    "Description": {
+      "type": "blocks"
+    },
+    "Category": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::category.category",
+      "inversedBy": "listings"
+    },
+    "Item": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::item.item",
+      "inversedBy": "listings"
+    }
+  }
+}

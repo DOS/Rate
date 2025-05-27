@@ -42,6 +42,18 @@
     "is_Active": {
       "type": "boolean",
       "default": true
+    },
+    "listings": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::listing.listing",
+      "mappedBy": "Category"
+    },
+    "listing_type": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::listing-type.listing-type",
+      "inversedBy": "Categories"
     }
   }
 }

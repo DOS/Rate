@@ -36,6 +36,20 @@ export interface FormsNewsletterForm extends Struct.ComponentSchema {
   }
 }
 
+export interface RatingCriterion extends Struct.ComponentSchema {
+  collectionName: "components_rating_criteria"
+  info: {
+    description: ""
+    displayName: "Criterion"
+  }
+  attributes: {
+    is_Required: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<true>
+    Name: Schema.Attribute.String
+    Tooltip: Schema.Attribute.String
+    Weight: Schema.Attribute.Decimal
+  }
+}
+
 export interface SectionsAnimatedLogoRow extends Struct.ComponentSchema {
   collectionName: "components_sections_animated_logo_rows"
   info: {
@@ -338,6 +352,7 @@ declare module "@strapi/strapi" {
       "elements.footer-item": ElementsFooterItem
       "forms.contact-form": FormsContactForm
       "forms.newsletter-form": FormsNewsletterForm
+      "rating.criterion": RatingCriterion
       "sections.animated-logo-row": SectionsAnimatedLogoRow
       "sections.carousel": SectionsCarousel
       "sections.faq": SectionsFaq

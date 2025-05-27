@@ -1,0 +1,46 @@
+{
+  "kind": "collectionType",
+  "collectionName": "platforms",
+  "info": {
+    "singularName": "platform",
+    "pluralName": "platforms",
+    "displayName": "Platform",
+    "description": ""
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "attributes": {
+    "Name": {
+      "type": "string",
+      "required": true
+    },
+    "Slug": {
+      "type": "uid",
+      "targetField": "Name"
+    },
+    "URL": {
+      "type": "string"
+    },
+    "is_Active": {
+      "type": "boolean",
+      "default": true
+    },
+    "Logo": {
+      "type": "media",
+      "multiple": false,
+      "required": false,
+      "allowedTypes": [
+        "images",
+        "files",
+        "videos",
+        "audios"
+      ]
+    },
+    "Listings": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::listing.listing"
+    }
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "collectionName": "components_rating_criteria",
+  "info": {
+    "displayName": "Criterion",
+    "description": ""
+  },
+  "options": {},
+  "attributes": {
+    "Name": {
+      "type": "string"
+    },
+    "Weight": {
+      "type": "decimal"
+    },
+    "Tooltip": {
+      "type": "string"
+    },
+    "is_Required": {
+      "type": "boolean",
+      "default": true
+    }
+  }
+}

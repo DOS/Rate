@@ -1,0 +1,35 @@
+{
+  "kind": "collectionType",
+  "collectionName": "listing_types",
+  "info": {
+    "singularName": "listing-type",
+    "pluralName": "listing-types",
+    "displayName": "Listing Type"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "attributes": {
+    "Name": {
+      "type": "string",
+      "required": true
+    },
+    "Slug": {
+      "type": "uid",
+      "targetField": "Name"
+    },
+    "Description": {
+      "type": "blocks"
+    },
+    "is_Active": {
+      "type": "boolean",
+      "default": true
+    },
+    "Categories": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::category.category",
+      "mappedBy": "listing_type"
+    }
+  }
+}
