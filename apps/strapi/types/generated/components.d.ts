@@ -283,13 +283,7 @@ export interface UtilitiesCkEditorContent extends Struct.ComponentSchema {
     displayName: "CkEditorContent"
   }
   attributes: {
-    content: Schema.Attribute.RichText &
-      Schema.Attribute.CustomField<
-        "plugin::ckeditor5.CKEditor",
-        {
-          preset: "defaultCkEditor"
-        }
-      >
+    content: Schema.Attribute.RichText
   }
 }
 
