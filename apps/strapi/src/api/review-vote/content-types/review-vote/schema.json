@@ -1,0 +1,29 @@
+{
+  "kind": "collectionType",
+  "collectionName": "review_votes",
+  "info": {
+    "singularName": "review-vote",
+    "pluralName": "review-votes",
+    "displayName": "Review Vote"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "attributes": {
+    "isHelpful": {
+      "type": "boolean"
+    },
+    "Identity": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "api::identity.identity",
+      "inversedBy": "ReviewVote"
+    },
+    "Review": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "api::review.review",
+      "inversedBy": "ReviewVote"
+    }
+  }
+}

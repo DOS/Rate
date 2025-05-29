@@ -4,7 +4,8 @@
   "info": {
     "singularName": "review",
     "pluralName": "reviews",
-    "displayName": "Review"
+    "displayName": "Review",
+    "description": ""
   },
   "options": {
     "draftAndPublish": true
@@ -17,8 +18,95 @@
     "Content": {
       "type": "text"
     },
-    "is_Approved": {
-      "type": "boolean"
+    "ReviewDate": {
+      "type": "datetime",
+      "default": "2024-12-19T00:00:00.000Z"
+    },
+    "ReviewType": {
+      "type": "enumeration",
+      "enum": [
+        "Expert",
+        "User"
+      ],
+      "required": true
+    },
+    "Status": {
+      "type": "enumeration",
+      "enum": [
+        "Draft",
+        "Pending", 
+        "Published",
+        "Rejected",
+        "Archived"
+      ],
+      "default": "Draft"
+    },
+    
+    // Ratings gom vào đây
+    "Ratings": {
+      "type": "component",
+      "repeatable": true,
+      "component": "rating.criterion-score"
+    },
+    
+    // Feature flags
+    "is_Featured": {
+      "type": "boolean",
+      "default": false
+    },
+    
+    // Verification fields
+    "VerifiedPurchase": {
+      "type": "boolean",
+      "default": false
+    },
+    "BlockchainVerified": {
+      "type": "boolean", 
+      "default": false
+    },
+    
+    // Social fields (calculated)
+    "HelpfulVotes": {
+      "type": "integer",
+      "default": 0
+    },
+    "ReportedCount": {
+      "type": "integer",
+      "default": 0
+    },
+    
+    // Admin fields
+    "RejectionReason": {
+      "type": "text"
+    },
+    "ModeratorNotes": {
+      "type": "text"
+    },
+    
+    // Relations
+    "Item": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::item.item",
+      "inversedBy": "Reviews"
+    },
+    "Reviewer": {
+      "type": "relation",
+      "relation": "manyToOne", 
+      "target": "api::identity.identity",
+      "inversedBy": "Reviews"
+    },
+    "ReviewVotes": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::review-vote.review-vote",
+      "mappedBy": "Review"
+    },
+    "Reports": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::report.report",
+      "mappedBy": "Review"
     }
   }
 }

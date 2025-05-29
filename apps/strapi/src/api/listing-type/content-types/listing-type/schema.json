@@ -4,7 +4,8 @@
   "info": {
     "singularName": "listing-type",
     "pluralName": "listing-types",
-    "displayName": "Listing Type"
+    "displayName": "Listing Type",
+    "description": ""
   },
   "options": {
     "draftAndPublish": true
@@ -21,7 +22,7 @@
     "Description": {
       "type": "blocks"
     },
-    "is_Active": {
+    "isActive": {
       "type": "boolean",
       "default": true
     },
@@ -29,7 +30,7 @@
       "type": "relation",
       "relation": "oneToMany",
       "target": "api::category.category",
-      "mappedBy": "listing_type"
+      "mappedBy": "ListingType"
     }
   }
 }

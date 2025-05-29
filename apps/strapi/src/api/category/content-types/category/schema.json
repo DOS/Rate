@@ -39,17 +39,17 @@
         "audios"
       ]
     },
-    "is_Active": {
+    "isActive": {
       "type": "boolean",
       "default": true
     },
-    "listings": {
+    "Listings": {
       "type": "relation",
       "relation": "oneToMany",
       "target": "api::listing.listing",
       "mappedBy": "Category"
     },
-    "listing_type": {
+    "ListingType": {
       "type": "relation",
       "relation": "manyToOne",
       "target": "api::listing-type.listing-type",

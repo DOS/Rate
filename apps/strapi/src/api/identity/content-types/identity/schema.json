@@ -4,7 +4,8 @@
   "info": {
     "singularName": "identity",
     "pluralName": "identities",
-    "displayName": "Identity"
+    "displayName": "Identity",
+    "description": ""
   },
   "options": {
     "draftAndPublish": true
@@ -25,14 +26,36 @@
       "type": "string"
     },
     "Avatar": {
+      "type": "media",
+      "multiple": false,
+      "required": false,
       "allowedTypes": [
         "images",
         "files",
         "videos",
         "audios"
-      ],
-      "type": "media",
-      "multiple": false
+      ]
+    },
+    "Bio": {
+      "type": "blocks"
+    },
+    "ReviewVote": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "api::review-vote.review-vote",
+      "mappedBy": "Identity"
+    },
+    "ReportMade": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::report.report",
+      "mappedBy": "Reporter"
+    },
+    "ReportReceived": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::report.report",
+      "mappedBy": "TargetIdentity"
     }
   }
 }

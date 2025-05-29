@@ -395,12 +395,12 @@ export interface ApiCategoryCategory extends Struct.CollectionTypeSchema {
       Schema.Attribute.Private
     Description: Schema.Attribute.Blocks
     Image: Schema.Attribute.Media<"images" | "files" | "videos" | "audios">
-    is_Active: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<true>
-    listing_type: Schema.Attribute.Relation<
+    isActive: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<true>
+    Listings: Schema.Attribute.Relation<"oneToMany", "api::listing.listing">
+    ListingType: Schema.Attribute.Relation<
       "manyToOne",
       "api::listing-type.listing-type"
     >
-    listings: Schema.Attribute.Relation<"oneToMany", "api::listing.listing">
     locale: Schema.Attribute.String
     localizations: Schema.Attribute.Relation<
       "oneToMany",
@@ -432,6 +432,7 @@ export interface ApiDirectoryDirectory extends Struct.CollectionTypeSchema {
     }
   }
   attributes: {
+    Categories: Schema.Attribute.Relation<"oneToMany", "api::category.category">
     createdAt: Schema.Attribute.DateTime
     createdBy: Schema.Attribute.Relation<"oneToOne", "admin::user"> &
       Schema.Attribute.Private
@@ -447,7 +448,7 @@ export interface ApiDirectoryDirectory extends Struct.CollectionTypeSchema {
           localized: true
         }
       }>
-    is_Active: Schema.Attribute.Boolean &
+    isActive: Schema.Attribute.Boolean &
       Schema.Attribute.SetPluginOptions<{
         i18n: {
           localized: true
@@ -530,6 +531,7 @@ export interface ApiFooterFooter extends Struct.SingleTypeSchema {
 export interface ApiIdentityIdentity extends Struct.CollectionTypeSchema {
   collectionName: "identities"
   info: {
+    description: ""
     displayName: "Identity"
     pluralName: "identities"
     singularName: "identity"
@@ -539,6 +541,7 @@ export interface ApiIdentityIdentity extends Struct.CollectionTypeSchema {
   }
   attributes: {
     Avatar: Schema.Attribute.Media<"images" | "files" | "videos" | "audios">
+    Bio: Schema.Attribute.Blocks
     createdAt: Schema.Attribute.DateTime
     createdBy: Schema.Attribute.Relation<"oneToOne", "admin::user"> &
       Schema.Attribute.Private
@@ -550,6 +553,12 @@ export interface ApiIdentityIdentity extends Struct.CollectionTypeSchema {
       Schema.Attribute.Private
     Name: Schema.Attribute.String & Schema.Attribute.Required
     publishedAt: Schema.Attribute.DateTime
+    ReportMade: Schema.Attribute.Relation<"oneToMany", "api::report.report">
+    ReportReceived: Schema.Attribute.Relation<"oneToMany", "api::report.report">
+    ReviewVote: Schema.Attribute.Relation<
+      "oneToOne",
+      "api::review-vote.review-vote"
+    >
     Slug: Schema.Attribute.String
     Type: Schema.Attribute.Enumeration<["Individual", "Organization"]>
     updatedAt: Schema.Attribute.DateTime
@@ -586,6 +595,7 @@ export interface ApiItemItem extends Struct.CollectionTypeSchema {
     localizations: Schema.Attribute.Relation<"oneToMany", "api::item.item"> &
       Schema.Attribute.Private
     publishedAt: Schema.Attribute.DateTime
+    Reports: Schema.Attribute.Relation<"oneToMany", "api::report.report">
     Slug: Schema.Attribute.UID<"Title">
     Title: Schema.Attribute.String & Schema.Attribute.Required
     updatedAt: Schema.Attribute.DateTime
@@ -597,6 +607,7 @@ export interface ApiItemItem extends Struct.CollectionTypeSchema {
 export interface ApiListingTypeListingType extends Struct.CollectionTypeSchema {
   collectionName: "listing_types"
   info: {
+    description: ""
     displayName: "Listing Type"
     pluralName: "listing-types"
     singularName: "listing-type"
@@ -610,7 +621,7 @@ export interface ApiListingTypeListingType extends Struct.CollectionTypeSchema {
     createdBy: Schema.Attribute.Relation<"oneToOne", "admin::user"> &
       Schema.Attribute.Private
     Description: Schema.Attribute.Blocks
-    is_Active: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<true>
+    isActive: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<true>
     locale: Schema.Attribute.String & Schema.Attribute.Private
     localizations: Schema.Attribute.Relation<
       "oneToMany",
@@ -643,7 +654,7 @@ export interface ApiListingListing extends Struct.CollectionTypeSchema {
     createdBy: Schema.Attribute.Relation<"oneToOne", "admin::user"> &
       Schema.Attribute.Private
     Description: Schema.Attribute.Blocks
-    is_Active: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<true>
+    isActive: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<true>
     Item: Schema.Attribute.Relation<"manyToOne", "api::item.item">
     locale: Schema.Attribute.String & Schema.Attribute.Private
     localizations: Schema.Attribute.Relation<
@@ -652,6 +663,7 @@ export interface ApiListingListing extends Struct.CollectionTypeSchema {
     > &
       Schema.Attribute.Private
     publishedAt: Schema.Attribute.DateTime
+    Reports: Schema.Attribute.Relation<"oneToMany", "api::report.report">
     Slug: Schema.Attribute.String
     Title: Schema.Attribute.String & Schema.Attribute.Required
     updatedAt: Schema.Attribute.DateTime
@@ -818,9 +830,93 @@ export interface ApiPlatformPlatform extends Struct.CollectionTypeSchema {
   }
 }
 
+export interface ApiReportReport extends Struct.CollectionTypeSchema {
+  collectionName: "reports"
+  info: {
+    description: ""
+    displayName: "Report"
+    pluralName: "reports"
+    singularName: "report"
+  }
+  options: {
+    draftAndPublish: true
+  }
+  attributes: {
+    createdAt: Schema.Attribute.DateTime
+    createdBy: Schema.Attribute.Relation<"oneToOne", "admin::user"> &
+      Schema.Attribute.Private
+    Description: Schema.Attribute.Blocks
+    locale: Schema.Attribute.String & Schema.Attribute.Private
+    localizations: Schema.Attribute.Relation<
+      "oneToMany",
+      "api::report.report"
+    > &
+      Schema.Attribute.Private
+    Note: Schema.Attribute.String
+    publishedAt: Schema.Attribute.DateTime
+    Reason: Schema.Attribute.String
+    Reporter: Schema.Attribute.Relation<"manyToOne", "api::identity.identity">
+    ReportStatus: Schema.Attribute.Enumeration<
+      ["Pending", "Investigating", "Resolved", "Dismissed"]
+    >
+    Review: Schema.Attribute.Relation<"manyToOne", "api::review.review">
+    TargetIdentity: Schema.Attribute.Relation<
+      "manyToOne",
+      "api::identity.identity"
+    >
+    TargetItem: Schema.Attribute.Relation<"manyToOne", "api::item.item">
+    TargetListing: Schema.Attribute.Relation<
+      "manyToOne",
+      "api::listing.listing"
+    >
+    TargetType: Schema.Attribute.Enumeration<
+      ["Identity", "Review", "Item", "Listing"]
+    > &
+      Schema.Attribute.Required
+    Type: Schema.Attribute.Enumeration<
+      ["Scam", "Offensive", "Fake Review", "Spam", "Copyright", "Other"]
+    > &
+      Schema.Attribute.Required
+    updatedAt: Schema.Attribute.DateTime
+    updatedBy: Schema.Attribute.Relation<"oneToOne", "admin::user"> &
+      Schema.Attribute.Private
+  }
+}
+
+export interface ApiReviewVoteReviewVote extends Struct.CollectionTypeSchema {
+  collectionName: "review_votes"
+  info: {
+    displayName: "Review Vote"
+    pluralName: "review-votes"
+    singularName: "review-vote"
+  }
+  options: {
+    draftAndPublish: true
+  }
+  attributes: {
+    createdAt: Schema.Attribute.DateTime
+    createdBy: Schema.Attribute.Relation<"oneToOne", "admin::user"> &
+      Schema.Attribute.Private
+    Identity: Schema.Attribute.Relation<"oneToOne", "api::identity.identity">
+    isHelpful: Schema.Attribute.Boolean
+    locale: Schema.Attribute.String & Schema.Attribute.Private
+    localizations: Schema.Attribute.Relation<
+      "oneToMany",
+      "api::review-vote.review-vote"
+    > &
+      Schema.Attribute.Private
+    publishedAt: Schema.Attribute.DateTime
+    Review: Schema.Attribute.Relation<"oneToOne", "api::review.review">
+    updatedAt: Schema.Attribute.DateTime
+    updatedBy: Schema.Attribute.Relation<"oneToOne", "admin::user"> &
+      Schema.Attribute.Private
+  }
+}
+
 export interface ApiReviewReview extends Struct.CollectionTypeSchema {
   collectionName: "reviews"
   info: {
+    description: ""
     displayName: "Review"
     pluralName: "reviews"
     singularName: "review"
@@ -833,7 +929,8 @@ export interface ApiReviewReview extends Struct.CollectionTypeSchema {
     createdAt: Schema.Attribute.DateTime
     createdBy: Schema.Attribute.Relation<"oneToOne", "admin::user"> &
       Schema.Attribute.Private
-    is_Approved: Schema.Attribute.Boolean
+    DownVote: Schema.Attribute.Integer
+    isFeatured: Schema.Attribute.Boolean
     locale: Schema.Attribute.String & Schema.Attribute.Private
     localizations: Schema.Attribute.Relation<
       "oneToMany",
@@ -841,10 +938,23 @@ export interface ApiReviewReview extends Struct.CollectionTypeSchema {
     > &
       Schema.Attribute.Private
     publishedAt: Schema.Attribute.DateTime
+    RejectReason: Schema.Attribute.String
+    ReportedCount: Schema.Attribute.Integer
+    Reports: Schema.Attribute.Relation<"oneToMany", "api::report.report">
+    ReviewDate: Schema.Attribute.DateTime
+    ReviewStatus: Schema.Attribute.Enumeration<
+      ["Draft", "Pending", "Published", "Rejected", "Archived"]
+    >
+    ReviewType: Schema.Attribute.Enumeration<["Expert", "User"]>
+    ReviewVote: Schema.Attribute.Relation<
+      "oneToOne",
+      "api::review-vote.review-vote"
+    >
     Title: Schema.Attribute.String & Schema.Attribute.Required
     updatedAt: Schema.Attribute.DateTime
     updatedBy: Schema.Attribute.Relation<"oneToOne", "admin::user"> &
       Schema.Attribute.Private
+    UpVote: Schema.Attribute.Integer
   }
 }
 
@@ -1397,6 +1507,8 @@ declare module "@strapi/strapi" {
       "api::navbar.navbar": ApiNavbarNavbar
       "api::page.page": ApiPagePage
       "api::platform.platform": ApiPlatformPlatform
+      "api::report.report": ApiReportReport
+      "api::review-vote.review-vote": ApiReviewVoteReviewVote
       "api::review.review": ApiReviewReview
       "api::subscriber.subscriber": ApiSubscriberSubscriber
       "plugin::content-releases.release": PluginContentReleasesRelease

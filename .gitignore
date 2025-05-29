@@ -20,6 +20,9 @@ dist/
 .DS_Store
 *.pem
 
+# Backup directory
+/Backup/
+
 # debug
 npm-debug.log*
 yarn-debug.log*

@@ -54,7 +54,7 @@
         }
       }
     },
-    "is_Active": {
+    "isActive": {
       "type": "boolean",
       "default": true,
       "pluginOptions": {
@@ -62,6 +62,11 @@
           "localized": true
         }
       }
+    },
+    "Categories": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::category.category"
     }
   }
 }

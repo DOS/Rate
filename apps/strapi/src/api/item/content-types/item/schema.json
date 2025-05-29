@@ -57,6 +57,12 @@
       "relation": "oneToMany",
       "target": "api::listing.listing",
       "mappedBy": "Item"
+    },
+    "Reports": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::report.report",
+      "mappedBy": "TargetItem"
     }
   }
 }

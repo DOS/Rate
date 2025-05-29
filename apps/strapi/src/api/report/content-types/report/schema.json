@@ -1,0 +1,85 @@
+{
+  "kind": "collectionType",
+  "collectionName": "reports",
+  "info": {
+    "singularName": "report",
+    "pluralName": "reports",
+    "displayName": "Report",
+    "description": ""
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "attributes": {
+    "Type": {
+      "type": "enumeration",
+      "enum": [
+        "Scam",
+        "Offensive",
+        "Fake Review",
+        "Spam",
+        "Copyright",
+        "Other"
+      ],
+      "required": true
+    },
+    "TargetType": {
+      "type": "enumeration",
+      "enum": [
+        "Identity",
+        "Review",
+        "Item",
+        "Listing"
+      ],
+      "required": true
+    },
+    "ReportStatus": {
+      "type": "enumeration",
+      "enum": [
+        "Pending",
+        "Investigating",
+        "Resolved",
+        "Dismissed"
+      ]
+    },
+    "Reason": {
+      "type": "string"
+    },
+    "Description": {
+      "type": "blocks"
+    },
+    "Note": {
+      "type": "string"
+    },
+    "Review": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::review.review",
+      "inversedBy": "Reports"
+    },
+    "TargetItem": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::item.item",
+      "inversedBy": "Reports"
+    },
+    "TargetListing": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::listing.listing",
+      "inversedBy": "Reports"
+    },
+    "TargetIdentity": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::identity.identity",
+      "inversedBy": "ReportReceived"
+    },
+    "Reporter": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::identity.identity",
+      "inversedBy": "ReportMade"
+    }
+  }
+}
