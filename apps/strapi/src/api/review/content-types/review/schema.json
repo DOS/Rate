@@ -19,86 +19,43 @@
       "type": "text"
     },
     "ReviewDate": {
-      "type": "datetime",
-      "default": "2024-12-19T00:00:00.000Z"
+      "type": "datetime"
+    },
+    "isFeatured": {
+      "type": "boolean"
+    },
+    "ReviewStatus": {
+      "type": "enumeration",
+      "enum": [
+        "Draft",
+        "Pending",
+        "Published",
+        "Rejected",
+        "Archived"
+      ]
+    },
+    "UpVote": {
+      "type": "integer"
+    },
+    "DownVote": {
+      "type": "integer"
+    },
+    "ReportedCount": {
+      "type": "integer"
+    },
+    "RejectReason": {
+      "type": "string"
     },
     "ReviewType": {
       "type": "enumeration",
       "enum": [
         "Expert",
         "User"
-      ],
-      "required": true
+      ]
     },
-    "Status": {
-      "type": "enumeration",
-      "enum": [
-        "Draft",
-        "Pending", 
-        "Published",
-        "Rejected",
-        "Archived"
-      ],
-      "default": "Draft"
-    },
-    
-    // Ratings gom vào đây
-    "Ratings": {
-      "type": "component",
-      "repeatable": true,
-      "component": "rating.criterion-score"
-    },
-    
-    // Feature flags
-    "is_Featured": {
-      "type": "boolean",
-      "default": false
-    },
-    
-    // Verification fields
-    "VerifiedPurchase": {
-      "type": "boolean",
-      "default": false
-    },
-    "BlockchainVerified": {
-      "type": "boolean", 
-      "default": false
-    },
-    
-    // Social fields (calculated)
-    "HelpfulVotes": {
-      "type": "integer",
-      "default": 0
-    },
-    "ReportedCount": {
-      "type": "integer",
-      "default": 0
-    },
-    
-    // Admin fields
-    "RejectionReason": {
-      "type": "text"
-    },
-    "ModeratorNotes": {
-      "type": "text"
-    },
-    
-    // Relations
-    "Item": {
+    "ReviewVote": {
       "type": "relation",
-      "relation": "manyToOne",
-      "target": "api::item.item",
-      "inversedBy": "Reviews"
-    },
-    "Reviewer": {
-      "type": "relation",
-      "relation": "manyToOne", 
-      "target": "api::identity.identity",
-      "inversedBy": "Reviews"
-    },
-    "ReviewVotes": {
-      "type": "relation",
-      "relation": "oneToMany",
+      "relation": "oneToOne",
       "target": "api::review-vote.review-vote",
       "mappedBy": "Review"
     },
