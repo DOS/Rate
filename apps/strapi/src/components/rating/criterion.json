@@ -2,22 +2,37 @@
   "collectionName": "components_rating_criteria",
   "info": {
     "displayName": "Criterion",
+    "icon": "emotionHappy",
     "description": ""
   },
   "options": {},
   "attributes": {
     "Name": {
-      "type": "string"
+      "type": "string",
+      "required": true,
+      "maxLength": 100
     },
     "Weight": {
-      "type": "decimal"
+      "type": "decimal",
+      "default": 0,
+      "max": 100,
+      "required": true
     },
     "Tooltip": {
-      "type": "string"
+      "type": "string",
+      "maxLength": 200
     },
-    "is_Required": {
+    "isRequired": {
       "type": "boolean",
-      "default": true
+      "default": true,
+      "required": true
+    },
+    "Order": {
+      "type": "integer",
+      "default": 0
+    },
+    "Icon": {
+      "type": "string"
     }
   }
 }

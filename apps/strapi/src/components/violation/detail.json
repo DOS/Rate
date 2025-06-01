@@ -1,0 +1,55 @@
+{
+  "collectionName": "components_violation_details",
+  "info": {
+    "displayName": "Detail",
+    "icon": "thumbDown",
+    "description": ""
+  },
+  "options": {},
+  "attributes": {
+    "Type": {
+      "type": "enumeration",
+      "enum": [
+        "Scam",
+        "Spam",
+        "Phishing",
+        "Harassment",
+        "Fake Content",
+        "Sexual Content",
+        "Self‐harm",
+        "Copyright",
+        "Hate Speech"
+      ]
+    },
+    "Severity": {
+      "type": "enumeration",
+      "enum": [
+        "Low",
+        "Medium",
+        "High",
+        "Critical"
+      ]
+    },
+    "Method": {
+      "type": "string"
+    },
+    "Impact": {
+      "type": "string"
+    },
+    "Amount": {
+      "type": "decimal"
+    },
+    "Platform": {
+      "type": "enumeration",
+      "enum": [
+        "Facebook",
+        "TikTok",
+        "Website",
+        "Shopee",
+        "Email",
+        "Phone Call",
+        "Other"
+      ]
+    }
+  }
+}

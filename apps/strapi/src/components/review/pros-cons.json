@@ -1,0 +1,19 @@
+{
+  "collectionName": "components_review_pros_cons",
+  "info": {
+    "displayName": "ProsCons"
+  },
+  "options": {},
+  "attributes": {
+    "Pros": {
+      "type": "component",
+      "repeatable": true,
+      "component": "review.pro-item"
+    },
+    "Cons": {
+      "type": "component",
+      "repeatable": true,
+      "component": "review.pro-item"
+    }
+  }
+}

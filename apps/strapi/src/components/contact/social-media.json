@@ -1,0 +1,32 @@
+{
+  "collectionName": "components_contact_social_medias",
+  "info": {
+    "displayName": "Social",
+    "icon": "earth",
+    "description": ""
+  },
+  "options": {},
+  "attributes": {
+    "Facebook": {
+      "type": "string"
+    },
+    "Instagram": {
+      "type": "string"
+    },
+    "YouTube": {
+      "type": "string"
+    },
+    "TikTok": {
+      "type": "string"
+    },
+    "LinkedIn": {
+      "type": "string"
+    },
+    "Discord": {
+      "type": "string"
+    },
+    "Telegram": {
+      "type": "string"
+    }
+  }
+}

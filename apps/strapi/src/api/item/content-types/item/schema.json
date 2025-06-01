@@ -5,22 +5,37 @@
     "singularName": "item",
     "pluralName": "items",
     "displayName": "Item",
-    "description": ""
+    "description": "Generic item that can represent products, people, services, etc."
   },
   "options": {
     "draftAndPublish": true
   },
+  "pluginOptions": {
+    "i18n": {
+      "localized": true
+    }
+  },
   "attributes": {
     "Title": {
       "type": "string",
-      "required": true
+      "required": true,
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
+      }
     },
     "Slug": {
       "type": "uid",
       "targetField": "Title"
     },
     "Description": {
-      "type": "blocks"
+      "type": "blocks",
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
+      }
     },
     "Image": {
       "type": "media",
@@ -31,7 +46,12 @@
         "files",
         "videos",
         "audios"
-      ]
+      ],
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
+      }
     },
     "Gallery": {
       "type": "media",
@@ -42,15 +62,68 @@
         "files",
         "videos",
         "audios"
-      ]
+      ],
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
+      }
     },
     "is_Active": {
       "type": "boolean",
-      "default": true
+      "default": true,
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
+      }
     },
     "is_Featured": {
       "type": "boolean",
-      "default": true
+      "default": false,
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
+      }
+    },
+    "ItemType": {
+      "type": "enumeration",
+      "enum": [
+        "Product",
+        "Service",
+        "Person",
+        "Business",
+        "Event",
+        "Other"
+      ],
+      "default": "Other",
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
+      }
+    },
+    "FieldGroup": {
+      "type": "dynamiczone",
+      "components": [
+        "contact.basic"
+      ],
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
+      }
+    },
+    "ListingType": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::listing-type.listing-type"
+    },
+    "RelatedIdentity": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::identity.identity"
     },
     "listings": {
       "type": "relation",
@@ -63,6 +136,14 @@
       "relation": "oneToMany",
       "target": "api::report.report",
       "mappedBy": "TargetItem"
+    },
+    "SearchSummary": {
+      "type": "string",
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
+      }
     }
   }
 }

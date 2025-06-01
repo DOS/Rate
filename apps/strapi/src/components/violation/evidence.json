@@ -1,0 +1,40 @@
+{
+  "collectionName": "components_violation_evidences",
+  "info": {
+    "displayName": "Evidence",
+    "description": ""
+  },
+  "options": {},
+  "attributes": {
+    "Photo": {
+      "type": "media",
+      "multiple": true,
+      "required": false,
+      "allowedTypes": [
+        "images",
+        "files",
+        "videos",
+        "audios"
+      ]
+    },
+    "VerificationDate": {
+      "type": "datetime"
+    },
+    "Note": {
+      "type": "string"
+    },
+    "VerificationStatus": {
+      "type": "enumeration",
+      "enum": [
+        "Pending",
+        "Verified",
+        "Rejected"
+      ]
+    },
+    "Report": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "api::report.report"
+    }
+  }
+}

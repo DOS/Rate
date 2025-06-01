@@ -80,6 +80,19 @@
       "relation": "manyToOne",
       "target": "api::identity.identity",
       "inversedBy": "ReportMade"
+    },
+    "ProofLinks": {
+      "type": "json"
+    },
+    "Photo": {
+      "allowedTypes": [
+        "images",
+        "files",
+        "videos",
+        "audios"
+      ],
+      "type": "media",
+      "multiple": true
     }
   }
 }

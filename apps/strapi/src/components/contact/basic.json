@@ -1,0 +1,18 @@
+{
+  "collectionName": "components_contact_basics",
+  "info": {
+    "displayName": "Basic"
+  },
+  "options": {},
+  "attributes": {
+    "Email": {
+      "type": "string"
+    },
+    "Phone": {
+      "type": "string"
+    },
+    "Website": {
+      "type": "string"
+    }
+  }
+}

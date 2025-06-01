@@ -1,5 +1,45 @@
 import type { Schema, Struct } from "@strapi/strapi"
 
+export interface ContactBasic extends Struct.ComponentSchema {
+  collectionName: "components_contact_basics"
+  info: {
+    displayName: "Basic"
+  }
+  attributes: {
+    Email: Schema.Attribute.String
+    Phone: Schema.Attribute.String
+    Website: Schema.Attribute.String
+  }
+}
+
+export interface ContactLocation extends Struct.ComponentSchema {
+  collectionName: "components_contact_locations"
+  info: {
+    displayName: "Location"
+  }
+  attributes: {
+    Address: Schema.Attribute.String
+  }
+}
+
+export interface ContactSocialMedia extends Struct.ComponentSchema {
+  collectionName: "components_contact_social_medias"
+  info: {
+    description: ""
+    displayName: "Social"
+    icon: "earth"
+  }
+  attributes: {
+    Discord: Schema.Attribute.String
+    Facebook: Schema.Attribute.String
+    Instagram: Schema.Attribute.String
+    LinkedIn: Schema.Attribute.String
+    Telegram: Schema.Attribute.String
+    TikTok: Schema.Attribute.String
+    YouTube: Schema.Attribute.String
+  }
+}
+
 export interface ElementsFooterItem extends Struct.ComponentSchema {
   collectionName: "components_elements_footer_items"
   info: {
@@ -36,17 +76,86 @@ export interface FormsNewsletterForm extends Struct.ComponentSchema {
   }
 }
 
+export interface MediaPhoto extends Struct.ComponentSchema {
+  collectionName: "components_media_photos"
+  info: {
+    displayName: "Photo"
+    icon: "picture"
+  }
+  attributes: {
+    Gallery: Schema.Attribute.Media<
+      "images" | "files" | "videos" | "audios",
+      true
+    >
+    Profile: Schema.Attribute.Media<"images" | "files" | "videos" | "audios">
+  }
+}
+
+export interface MediaVideo extends Struct.ComponentSchema {
+  collectionName: "components_media_videos"
+  info: {
+    displayName: "Video"
+    icon: "slideshow"
+  }
+  attributes: {
+    YouTube: Schema.Attribute.String
+  }
+}
+
 export interface RatingCriterion extends Struct.ComponentSchema {
   collectionName: "components_rating_criteria"
   info: {
     description: ""
     displayName: "Criterion"
+    icon: "emotionHappy"
   }
   attributes: {
-    is_Required: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<true>
-    Name: Schema.Attribute.String
-    Tooltip: Schema.Attribute.String
-    Weight: Schema.Attribute.Decimal
+    Icon: Schema.Attribute.String
+    isRequired: Schema.Attribute.Boolean &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<true>
+    Name: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 100
+      }>
+    Order: Schema.Attribute.Integer & Schema.Attribute.DefaultTo<0>
+    Tooltip: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 200
+      }>
+    Weight: Schema.Attribute.Decimal &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMax<
+        {
+          max: 100
+        },
+        number
+      > &
+      Schema.Attribute.DefaultTo<0>
+  }
+}
+
+export interface ReviewProItem extends Struct.ComponentSchema {
+  collectionName: "components_review_pro_items"
+  info: {
+    description: ""
+    displayName: "Item"
+    icon: "thumbUp"
+  }
+  attributes: {
+    Item: Schema.Attribute.String
+  }
+}
+
+export interface ReviewProsCons extends Struct.ComponentSchema {
+  collectionName: "components_review_pros_cons"
+  info: {
+    displayName: "ProsCons"
+  }
+  attributes: {
+    Cons: Schema.Attribute.Component<"review.pro-item", true>
+    Pros: Schema.Attribute.Component<"review.pro-item", true>
   }
 }
 
@@ -346,13 +455,81 @@ export interface UtilitiesText extends Struct.ComponentSchema {
   }
 }
 
+export interface ViolationDetail extends Struct.ComponentSchema {
+  collectionName: "components_violation_details"
+  info: {
+    description: ""
+    displayName: "Detail"
+    icon: "thumbDown"
+  }
+  attributes: {
+    Amount: Schema.Attribute.Decimal
+    Impact: Schema.Attribute.String
+    Method: Schema.Attribute.String
+    Platform: Schema.Attribute.Enumeration<
+      [
+        "Facebook",
+        "TikTok",
+        "Website",
+        "Shopee",
+        "Email",
+        "Phone Call",
+        "Other",
+      ]
+    >
+    Severity: Schema.Attribute.Enumeration<
+      ["Low", "Medium", "High", "Critical"]
+    >
+    Type: Schema.Attribute.Enumeration<
+      [
+        "Scam",
+        "Spam",
+        "Phishing",
+        "Harassment",
+        "Fake Content",
+        "Sexual Content",
+        "Self\u2010harm",
+        "Copyright",
+        "Hate Speech",
+      ]
+    >
+  }
+}
+
+export interface ViolationEvidence extends Struct.ComponentSchema {
+  collectionName: "components_violation_evidences"
+  info: {
+    description: ""
+    displayName: "Evidence"
+  }
+  attributes: {
+    Note: Schema.Attribute.String
+    Photo: Schema.Attribute.Media<
+      "images" | "files" | "videos" | "audios",
+      true
+    >
+    Report: Schema.Attribute.Relation<"oneToOne", "api::report.report">
+    VerificationDate: Schema.Attribute.DateTime
+    VerificationStatus: Schema.Attribute.Enumeration<
+      ["Pending", "Verified", "Rejected"]
+    >
+  }
+}
+
 declare module "@strapi/strapi" {
   export module Public {
     export interface ComponentSchemas {
+      "contact.basic": ContactBasic
+      "contact.location": ContactLocation
+      "contact.social-media": ContactSocialMedia
       "elements.footer-item": ElementsFooterItem
       "forms.contact-form": FormsContactForm
       "forms.newsletter-form": FormsNewsletterForm
+      "media.photo": MediaPhoto
+      "media.video": MediaVideo
       "rating.criterion": RatingCriterion
+      "review.pro-item": ReviewProItem
+      "review.pros-cons": ReviewProsCons
       "sections.animated-logo-row": SectionsAnimatedLogoRow
       "sections.carousel": SectionsCarousel
       "sections.faq": SectionsFaq
@@ -372,6 +549,8 @@ declare module "@strapi/strapi" {
       "utilities.link": UtilitiesLink
       "utilities.links-with-title": UtilitiesLinksWithTitle
       "utilities.text": UtilitiesText
+      "violation.detail": ViolationDetail
+      "violation.evidence": ViolationEvidence
     }
   }
 }

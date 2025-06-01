@@ -64,6 +64,12 @@
       "relation": "oneToMany",
       "target": "api::report.report",
       "mappedBy": "Review"
+    },
+    "FieldGroup": {
+      "type": "dynamiczone",
+      "components": [
+        "contact.basic"
+      ]
     }
   }
 }

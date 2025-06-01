@@ -1,0 +1,13 @@
+{
+  "collectionName": "components_media_videos",
+  "info": {
+    "displayName": "Video",
+    "icon": "slideshow"
+  },
+  "options": {},
+  "attributes": {
+    "YouTube": {
+      "type": "string"
+    }
+  }
+}

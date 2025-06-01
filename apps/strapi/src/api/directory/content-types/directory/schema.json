@@ -66,7 +66,8 @@
     "Categories": {
       "type": "relation",
       "relation": "oneToMany",
-      "target": "api::category.category"
+      "target": "api::category.category",
+      "mappedBy": "Directory"
     }
   }
 }

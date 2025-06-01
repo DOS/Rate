@@ -29,7 +29,7 @@ Field Name         | Type           | Required | Unique | Default | Description
 ------------------|----------------|----------|--------|---------|------------------
 Title             | String         | YES      | NO     | -       | Tiêu đề review
 Content           | Long Text      | NO       | NO     | -       | Nội dung đánh giá chi tiết
-ReviewType        | Enum           | YES      | NO     | -       | [Expert, User]
+ReviewType        | Enum           | YES      | NO     | -       | [Expert, User, Report]
 Status            | Enum           | YES      | NO     | Draft   | [Draft, Pending, Published, Rejected, Archived]
 ReviewDate        | DateTime       | YES      | NO     | now     | Ngày đánh giá
 
@@ -191,28 +191,75 @@ VoteDate      | DateTime       | YES      | NO     | now     | Ngày vote
 
 ### 7. Report Table
 
-Hệ thống báo cáo vi phạm.
+Hệ thống báo cáo vi phạm với evidence support.
 
 ```
 Field Name     | Type           | Required | Unique | Default | Description
 --------------|----------------|----------|--------|---------|------------------
-ReportType    | Enum           | YES      | NO     | -       | [Spam, Inappropriate, Fake, Other]
-Reason        | Text           | YES      | NO     | -       | Lý do báo cáo chi tiết
-Status        | Enum           | YES      | NO     | Pending | [Pending, Reviewing, Resolved, Dismissed]
+Type          | Enum           | YES      | NO     | -       | [Scam, Offensive, Fake Review, Spam, Copyright, Other]
+TargetType    | Enum           | YES      | NO     | -       | [Identity, Review, Item, Listing]
+ReportStatus  | Enum           | NO       | NO     | Pending | [Pending, Investigating, Resolved, Dismissed]
+Reason        | String         | NO       | NO     | -       | Lý do báo cáo ngắn gọn
+Description   | Rich Text      | NO       | NO     | -       | Mô tả chi tiết vi phạm
+Note          | String         | NO       | NO     | -       | Ghi chú admin
+
+// Evidence fields (JSON for performance with high volume reports)
+Screenshots   | Media (Multi)  | NO       | NO     | -       | Ảnh chứng cứ
+ProofLinks    | JSON Array     | NO       | NO     | []      | URLs evidence ["url1", "url2"]
 ReportDate    | DateTime       | YES      | NO     | now     | Ngày báo cáo
-AdminNotes    | Text           | NO       | NO     | -       | Ghi chú của admin
+ReporterNotes | Rich Text      | NO       | NO     | -       | Ghi chú từ người báo cáo
 ResolvedDate  | DateTime       | NO       | NO     | -       | Ngày xử lý
 ```
 
 **Relations:**
 
-- Report **belongs to** Review (reportable)
-- Report **belongs to** Identity (Reporter)
-- Report **belongs to** Identity (Admin/Moderator) - optional
+- Report **belongs to** Review (optional - when TargetType = Review)
+- Report **belongs to** Item (optional - when TargetType = Item)
+- Report **belongs to** Listing (optional - when TargetType = Listing)
+- Report **belongs to** Identity as TargetIdentity (optional - when TargetType = Identity)
+- Report **belongs to** Identity as Reporter (who submitted the report)
 
 ---
 
 ## 🔄 Status Workflow
+
+### Report Processing Flow (với AI Verification)
+
+```
+Report Submitted (Pending) → AI/Admin Verify → Approved → Create Review + Update/Create Item
+                                           → Rejected → No action
+```
+
+**Report to Review + Item Workflow (Updated):**
+
+1. **User submits Report** with evidence (Photos, ProofLinks, ReporterNotes)
+2. **AI/Admin reviews** Report.Type and evidence quality
+3. **If approved:**
+   - **Create Review** từ Report data:
+     - Review.ReviewType = "Report"
+     - Review.Title = Report summary
+     - Review.Content = Report.Description + ReporterNotes
+     - Review.Item = target Item (created/existing)
+   - **Check for existing Item** (duplicate detection by bank account, social URLs, etc.)
+   - **If Item exists:** Update metrics (VictimCount++, TotalDamage+=amount)
+   - **If new Item needed:** Create Item với ListingType
+   - **Process form data:** ItemGroup → Item.FieldGroup, ReviewGroup → Review.Content
+4. **Copy evidence:** Report.Photos + ProofLinks → Item.FieldGroup.violation-evidence
+5. **Community voting:** Users vote on Review credibility (Helpful/Unhelpful)
+
+**Key Changes:**
+
+- ❌ **No Listing creation** for Violator cases (chỉ dành cho ecommerce products)
+- ✅ **Direct Report → Review → Item** relationship
+- ✅ **Review system reused** cho Report validation workflow
+- ✅ **Community voting** on Report credibility via Review votes
+
+**Evidence Flow:**
+
+```
+Report.Photos + ProofLinks (JSON) → Verify → Item.FieldGroup.violation-evidence component
+Report data → Review → Community vote on credibility
+```
 
 ### Review Status Flow
 
@@ -244,6 +291,15 @@ Draft → Published (auto-approve trong MVP)
 Draft → Pending → Published (manual approve)
                 → Rejected (nếu vi phạm)
 ```
+
+**Report Review (New):**
+
+```
+Report [Approved] → Review.Status = Published (auto-create from Report)
+Review → Community Vote → Credibility scoring
+```
+
+**Note:** Report Reviews are auto-generated từ approved Reports, không qua draft/pending state.
 
 ---
 

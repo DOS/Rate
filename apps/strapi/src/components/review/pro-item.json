@@ -1,0 +1,14 @@
+{
+  "collectionName": "components_review_pro_items",
+  "info": {
+    "displayName": "Item",
+    "icon": "thumbUp",
+    "description": ""
+  },
+  "options": {},
+  "attributes": {
+    "Item": {
+      "type": "string"
+    }
+  }
+}
