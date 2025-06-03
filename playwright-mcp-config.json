@@ -1,7 +1,7 @@
 {
   "browser": {
-        "browserName": "chromium",
-    "isolated": true,
+    "browserName": "chromium",
+    "isolated": false,
     "launchOptions": {
       "headless": false,
       "args": [
@@ -17,7 +17,6 @@
       }
     }
   },
-
   "capabilities": [
     "core",
     "tabs", 
@@ -29,7 +28,5 @@
     "testing"
   ],
   "vision": false,
-  "outputDir": "./playwright-output",
-
   "noImageResponses": false
 } 

@@ -18,15 +18,15 @@ export default {
     console.log('🚀 Smart Component Filter plugin bootstrapping...');
     
     try {
-      // Use the correct v5 injection method for content manager components  
+      // Inject component filter display in edit view
       app.getPlugin('content-manager').injectComponent('editView', 'right-links', {
         name: 'smart-filter-display',
-        Component: ComponentFilter,
+        Component: ComponentFilter as any,
       });
 
-      console.log('✅ Smart Component Filter plugin: Component injection successful');
+      console.log('✅ Smart Component Filter plugin: Bootstrap completed');
     } catch (error) {
-      console.error('❌ Failed to inject Smart Component Filter plugin:', error);
+      console.error('❌ Failed to bootstrap Smart Component Filter plugin:', error);
     }
   },
 }; 
