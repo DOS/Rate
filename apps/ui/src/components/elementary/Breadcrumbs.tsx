@@ -1,6 +1,6 @@
 import { BreadCrumb } from "@/types/api"
 
-import { cn } from "@/lib/styles"
+import { cn } from "@/lib/utils"
 import AppLink from "@/components/elementary/AppLink"
 
 interface Props {

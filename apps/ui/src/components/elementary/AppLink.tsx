@@ -2,7 +2,7 @@ import React from "react"
 import { VariantProps } from "class-variance-authority"
 
 import { formatHref, isAppLink, Link } from "@/lib/navigation"
-import { cn } from "@/lib/styles"
+import { cn } from "@/lib/utils"
 import { buttonVariants } from "@/components/ui/button"
 
 export interface AppLinkProps

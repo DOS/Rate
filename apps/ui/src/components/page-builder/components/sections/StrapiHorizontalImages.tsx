@@ -1,7 +1,6 @@
 import { Data } from "@repo/strapi"
 
-import { removeThisWhenYouNeedMe } from "@/lib/general-helpers"
-import { cn } from "@/lib/styles"
+import { cn } from "@/lib/utils"
 import { Container } from "@/components/elementary/Container"
 import StrapiImageWithLink from "@/components/page-builder/components/utilities/StrapiImageWithLink"
 
@@ -10,7 +9,6 @@ export function StrapiHorizontalImages({
 }: {
   readonly component: Data.Component<"sections.horizontal-images">
 }) {
-  removeThisWhenYouNeedMe("StrapiHorizontalImages")
 
   return (
     <section>

@@ -5,7 +5,7 @@ import { cva } from "class-variance-authority"
 
 import type { VariantProps } from "class-variance-authority"
 
-import { cn } from "@/lib/styles"
+import { cn } from "@/lib/utils"
 
 const ToastProvider = ToastPrimitives.Provider
 

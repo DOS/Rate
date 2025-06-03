@@ -43,8 +43,13 @@ export default ({ env }) => {
         // Only set `dsn` property in production
         dsn: env("NODE_ENV") === "production" ? env("SENTRY_DSN") : null,
         sendMetadata: true,
-      },
+      }
     },
+
+    'smart-component-filter': {
+      enabled: true,
+      resolve: './src/plugins/_smart-component-filter'
+    }
 
     // email: {
     //   config: {

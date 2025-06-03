@@ -3,7 +3,7 @@
 import { useMemo } from "react"
 import { useLocale } from "next-intl"
 
-import { cn } from "@/lib/styles"
+import { cn } from "@/lib/utils"
 import { processLinkHrefAttribute } from "@/components/elementary/ck-editor/utils"
 
 const CkEditorCSRRenderer = ({

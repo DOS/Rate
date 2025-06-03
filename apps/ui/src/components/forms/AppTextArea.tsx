@@ -3,7 +3,7 @@
 import React from "react"
 import { useFormContext } from "react-hook-form"
 
-import { cn } from "@/lib/styles"
+import { cn } from "@/lib/utils"
 import { AppFormDescription } from "@/components/forms/AppFormDescription"
 import { AppFormLabel } from "@/components/forms/AppFormLabel"
 import {

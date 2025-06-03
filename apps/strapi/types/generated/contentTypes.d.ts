@@ -397,7 +397,12 @@ export interface ApiCategoryCategory extends Struct.CollectionTypeSchema {
     createdAt: Schema.Attribute.DateTime
     createdBy: Schema.Attribute.Relation<"oneToOne", "admin::user"> &
       Schema.Attribute.Private
-    Description: Schema.Attribute.Blocks
+    Description: Schema.Attribute.Blocks &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: true
+        }
+      }>
     Directory: Schema.Attribute.Relation<
       "manyToOne",
       "api::directory.directory"
@@ -414,7 +419,13 @@ export interface ApiCategoryCategory extends Struct.CollectionTypeSchema {
       "oneToMany",
       "api::category.category"
     >
-    Name: Schema.Attribute.String & Schema.Attribute.Required
+    Name: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: true
+        }
+      }>
     ParentCategory: Schema.Attribute.Relation<
       "manyToOne",
       "api::category.category"
@@ -605,7 +616,22 @@ export interface ApiItemItem extends Struct.CollectionTypeSchema {
           localized: true
         }
       }>
-    FieldGroup: Schema.Attribute.DynamicZone<["contact.basic"]> &
+    FieldGroup: Schema.Attribute.DynamicZone<
+      [
+        "contact.basic",
+        "contact.location",
+        "contact.social-media",
+        "info.bank-info",
+        "violation.detail",
+        "violation.evidence",
+        "utilities.text",
+        "utilities.link",
+        "media.photo",
+        "media.video",
+        "review.pros-cons",
+        "rating.criterion",
+      ]
+    > &
       Schema.Attribute.SetPluginOptions<{
         i18n: {
           localized: true
@@ -626,14 +652,14 @@ export interface ApiItemItem extends Struct.CollectionTypeSchema {
           localized: true
         }
       }>
-    is_Active: Schema.Attribute.Boolean &
+    isActive: Schema.Attribute.Boolean &
       Schema.Attribute.SetPluginOptions<{
         i18n: {
           localized: true
         }
       }> &
       Schema.Attribute.DefaultTo<true>
-    is_Featured: Schema.Attribute.Boolean &
+    isFeatured: Schema.Attribute.Boolean &
       Schema.Attribute.SetPluginOptions<{
         i18n: {
           localized: true

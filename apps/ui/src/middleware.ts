@@ -64,7 +64,7 @@ export const config = {
     "/",
     // Set a cookie to remember the previous locale for
     // all requests that have a locale prefix
-    `/(cs|en)/:path*`,
+    `/(cs|en|vi)/:path*`,
 
     // Skip all paths that should not be internationalized
     "/((?!_next|_vercel|api|robots.txt|favicon.ico|sitemap|.*\\..*).*)",

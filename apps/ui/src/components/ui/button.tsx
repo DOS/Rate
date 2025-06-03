@@ -4,7 +4,7 @@ import { cva } from "class-variance-authority"
 
 import type { VariantProps } from "class-variance-authority"
 
-import { cn } from "@/lib/styles"
+import { cn } from "@/lib/utils"
 import { Spinner } from "@/components/elementary/Spinner"
 
 const buttonVariants = cva(

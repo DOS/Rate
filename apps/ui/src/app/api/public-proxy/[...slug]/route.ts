@@ -22,7 +22,11 @@ async function handler(
 
   if (
     isReadOnly &&
-    !ALLOWED_STRAPI_ENDPOINTS.some((endpoint) => path.includes(endpoint))
+    !ALLOWED_STRAPI_ENDPOINTS.some((endpoint) => {
+      // Add leading slash to path for proper comparison
+      const fullPath = `/${path}`
+      return fullPath === endpoint
+    })
   ) {
     return NextResponse.json(
       {
@@ -70,4 +74,20 @@ export {
 }
 
 // List of allowed endpoints for GET requests
-const ALLOWED_STRAPI_ENDPOINTS = ["/pages", "/footer", "/navbar"]
+const ALLOWED_STRAPI_ENDPOINTS = [
+  "/api/pages", 
+  "/api/footer", 
+  "/api/navbar",
+  "/api/categories",
+  "/api/criteria", 
+  "/api/directories",
+  "/api/identities",
+  "/api/items",
+  "/api/listings",
+  "/api/listing-types",
+  "/api/platforms",
+  "/api/reports",
+  "/api/reviews",
+  "/api/review-votes",
+  "/api/subscribers"
+]

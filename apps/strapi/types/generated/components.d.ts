@@ -76,6 +76,19 @@ export interface FormsNewsletterForm extends Struct.ComponentSchema {
   }
 }
 
+export interface InfoBankInfo extends Struct.ComponentSchema {
+  collectionName: "components_info_bank_infos"
+  info: {
+    description: ""
+    displayName: "Bank"
+    icon: "folder"
+  }
+  attributes: {
+    Name: Schema.Attribute.String
+    SWIFT_BIC: Schema.Attribute.String
+  }
+}
+
 export interface MediaPhoto extends Struct.ComponentSchema {
   collectionName: "components_media_photos"
   info: {
@@ -373,6 +386,57 @@ export interface SeoUtilitiesSocialIcons extends Struct.ComponentSchema {
   }
 }
 
+export interface SharedMetaSocial extends Struct.ComponentSchema {
+  collectionName: "components_shared_meta_socials"
+  info: {
+    displayName: "metaSocial"
+    icon: "project-diagram"
+  }
+  attributes: {
+    description: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 65
+      }>
+    image: Schema.Attribute.Media<"images" | "files" | "videos">
+    socialNetwork: Schema.Attribute.Enumeration<["Facebook", "Twitter"]> &
+      Schema.Attribute.Required
+    title: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 60
+      }>
+  }
+}
+
+export interface SharedSeo extends Struct.ComponentSchema {
+  collectionName: "components_shared_seos"
+  info: {
+    displayName: "seo"
+    icon: "search"
+  }
+  attributes: {
+    canonicalURL: Schema.Attribute.String
+    keywords: Schema.Attribute.Text
+    metaDescription: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 160
+        minLength: 50
+      }>
+    metaImage: Schema.Attribute.Media<"images" | "files" | "videos">
+    metaRobots: Schema.Attribute.String
+    metaSocial: Schema.Attribute.Component<"shared.meta-social", true>
+    metaTitle: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 60
+      }>
+    metaViewport: Schema.Attribute.String
+    structuredData: Schema.Attribute.JSON
+  }
+}
+
 export interface UtilitiesAccordions extends Struct.ComponentSchema {
   collectionName: "components_utilities_accordions"
   info: {
@@ -525,6 +589,7 @@ declare module "@strapi/strapi" {
       "elements.footer-item": ElementsFooterItem
       "forms.contact-form": FormsContactForm
       "forms.newsletter-form": FormsNewsletterForm
+      "info.bank-info": InfoBankInfo
       "media.photo": MediaPhoto
       "media.video": MediaVideo
       "rating.criterion": RatingCriterion
@@ -542,6 +607,8 @@ declare module "@strapi/strapi" {
       "seo-utilities.seo-og": SeoUtilitiesSeoOg
       "seo-utilities.seo-twitter": SeoUtilitiesSeoTwitter
       "seo-utilities.social-icons": SeoUtilitiesSocialIcons
+      "shared.meta-social": SharedMetaSocial
+      "shared.seo": SharedSeo
       "utilities.accordions": UtilitiesAccordions
       "utilities.basic-image": UtilitiesBasicImage
       "utilities.ck-editor-content": UtilitiesCkEditorContent

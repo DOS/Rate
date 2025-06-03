@@ -3,8 +3,7 @@
 import React from "react"
 import { useFormContext } from "react-hook-form"
 
-import { removeThisWhenYouNeedMe } from "@/lib/general-helpers"
-import { cn } from "@/lib/styles"
+import { cn } from "@/lib/utils"
 import {
   FormControl,
   FormField,
@@ -34,7 +33,6 @@ export function AppField({
   description,
   ...nativeProps
 }: Props) {
-  removeThisWhenYouNeedMe("AppField")
 
   const { control } = useFormContext()
 

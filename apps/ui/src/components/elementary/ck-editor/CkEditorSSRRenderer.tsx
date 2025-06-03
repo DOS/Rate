@@ -1,7 +1,7 @@
 import { getLocale } from "next-intl/server"
 import parse from "node-html-parser"
 
-import { cn } from "@/lib/styles"
+import { cn } from "@/lib/utils"
 import { processLinkHrefAttribute } from "@/components/elementary/ck-editor/utils"
 
 const CkEditorSSRRenderer = async ({

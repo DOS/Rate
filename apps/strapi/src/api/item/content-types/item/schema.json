@@ -18,12 +18,12 @@
   "attributes": {
     "Title": {
       "type": "string",
-      "required": true,
       "pluginOptions": {
         "i18n": {
           "localized": true
         }
-      }
+      },
+      "required": true
     },
     "Slug": {
       "type": "uid",
@@ -39,6 +39,11 @@
     },
     "Image": {
       "type": "media",
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
+      },
       "multiple": false,
       "required": false,
       "allowedTypes": [
@@ -46,15 +51,15 @@
         "files",
         "videos",
         "audios"
-      ],
+      ]
+    },
+    "Gallery": {
+      "type": "media",
       "pluginOptions": {
         "i18n": {
           "localized": true
         }
-      }
-    },
-    "Gallery": {
-      "type": "media",
+      },
       "multiple": true,
       "required": false,
       "allowedTypes": [
@@ -62,33 +67,34 @@
         "files",
         "videos",
         "audios"
-      ],
-      "pluginOptions": {
-        "i18n": {
-          "localized": true
-        }
-      }
+      ]
     },
-    "is_Active": {
+    "isActive": {
       "type": "boolean",
-      "default": true,
       "pluginOptions": {
         "i18n": {
           "localized": true
         }
-      }
+      },
+      "default": true
     },
-    "is_Featured": {
+    "isFeatured": {
       "type": "boolean",
-      "default": false,
       "pluginOptions": {
         "i18n": {
           "localized": true
         }
-      }
+      },
+      "default": false
     },
     "ItemType": {
       "type": "enumeration",
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
+      },
+      "default": "Other",
       "enum": [
         "Product",
         "Service",
@@ -96,24 +102,29 @@
         "Business",
         "Event",
         "Other"
-      ],
-      "default": "Other",
-      "pluginOptions": {
-        "i18n": {
-          "localized": true
-        }
-      }
+      ]
     },
     "FieldGroup": {
       "type": "dynamiczone",
-      "components": [
-        "contact.basic"
-      ],
       "pluginOptions": {
         "i18n": {
           "localized": true
         }
-      }
+      },
+      "components": [
+        "contact.basic",
+        "contact.location",
+        "contact.social-media",
+        "info.bank-info",
+        "violation.detail",
+        "violation.evidence",
+        "utilities.text",
+        "utilities.link",
+        "media.photo",
+        "media.video",
+        "review.pros-cons",
+        "rating.criterion"
+      ]
     },
     "ListingType": {
       "type": "relation",

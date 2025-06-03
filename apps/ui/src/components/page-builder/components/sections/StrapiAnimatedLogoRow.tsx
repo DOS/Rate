@@ -1,7 +1,6 @@
 import { Data } from "@repo/strapi"
 
-import { removeThisWhenYouNeedMe } from "@/lib/general-helpers"
-import { cn } from "@/lib/styles"
+import { cn } from "@/lib/utils"
 import { StrapiBasicImage } from "@/components/page-builder/components/utilities/StrapiBasicImage"
 import Heading from "@/components/typography/Heading"
 
@@ -10,7 +9,6 @@ export function StrapiAnimatedLogoRow({
 }: {
   readonly component: Data.Component<"sections.animated-logo-row">
 }) {
-  removeThisWhenYouNeedMe("StrapiAnimatedLogoRow")
 
   if (!component.logos) return null
 

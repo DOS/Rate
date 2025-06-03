@@ -1,7 +1,5 @@
-import { removeThisWhenYouNeedMe } from "./general-helpers"
 
 export const downloadBlob = (blob: Blob, fileName: string) => {
-  removeThisWhenYouNeedMe("downloadBlob")
 
   const fileUrl = window.URL.createObjectURL(blob)
   const link = document.createElement("a")
@@ -13,7 +11,6 @@ export const downloadBlob = (blob: Blob, fileName: string) => {
 }
 
 export const openBlobInNewTab = (blob: Blob) => {
-  removeThisWhenYouNeedMe("openBlobInNewTab")
 
   const file = window.URL.createObjectURL(blob)
   window.open(file, "_blank")

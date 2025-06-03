@@ -1,6 +1,6 @@
 import React from "react"
 
-import { cn } from "@/lib/styles"
+import { cn } from "@/lib/utils"
 
 export const variantStyles = {
   base: "text-base leading-[25px]",

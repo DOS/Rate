@@ -5,8 +5,7 @@ import { useTranslations } from "next-intl"
 
 import type { ReactNode } from "react"
 
-import { removeThisWhenYouNeedMe } from "@/lib/general-helpers"
-import { cn } from "@/lib/styles"
+import { cn } from "@/lib/utils"
 import {
   Dialog,
   DialogContent,
@@ -50,7 +49,6 @@ export function AppDialog({
   confirmDialogClose,
   dialogCloseCallback,
 }: Props) {
-  removeThisWhenYouNeedMe("AppDialog")
 
   const t = useTranslations("comps.dialog")
   const [open, setOpen] = useState<boolean>(false)

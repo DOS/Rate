@@ -8,7 +8,6 @@ import {
   UseFormReturn,
 } from "react-hook-form"
 
-import { removeThisWhenYouNeedMe } from "@/lib/general-helpers"
 
 interface Props<T extends FieldValues = FieldValues> {
   readonly form: UseFormReturn<T>
@@ -34,7 +33,6 @@ export function AppForm<T extends FieldValues = FieldValues>({
   form,
   disabled,
 }: Props<T>) {
-  removeThisWhenYouNeedMe("AppForm")
 
   const { handleSubmit } = form
 

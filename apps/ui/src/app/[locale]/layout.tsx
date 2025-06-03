@@ -8,7 +8,7 @@ import { LayoutProps } from "@/types/next"
 
 import { fontRoboto } from "@/lib/fonts"
 import { routing } from "@/lib/navigation"
-import { cn } from "@/lib/styles"
+import { cn } from "@/lib/utils"
 import { ErrorBoundary } from "@/components/elementary/ErrorBoundary"
 import StrapiPreviewListener from "@/components/elementary/StrapiPreviewListener"
 import { TailwindIndicator } from "@/components/elementary/TailwindIndicator"

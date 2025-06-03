@@ -3,7 +3,7 @@ import { Fragment } from "react"
 import { AppLocale } from "@/types/general"
 
 import { PublicStrapiClient } from "@/lib/strapi-api"
-import { cn } from "@/lib/styles"
+import { cn } from "@/lib/utils"
 import { Container } from "@/components/elementary/Container"
 import StrapiImageWithLink from "@/components/page-builder/components/utilities/StrapiImageWithLink"
 import StrapiLink from "@/components/page-builder/components/utilities/StrapiLink"

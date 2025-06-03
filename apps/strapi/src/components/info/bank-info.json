@@ -1,0 +1,17 @@
+{
+  "collectionName": "components_info_bank_infos",
+  "info": {
+    "displayName": "Bank",
+    "icon": "folder",
+    "description": ""
+  },
+  "options": {},
+  "attributes": {
+    "Name": {
+      "type": "string"
+    },
+    "SWIFT_BIC": {
+      "type": "string"
+    }
+  }
+}

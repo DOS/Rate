@@ -1,4 +1,4 @@
-import { cn } from "@/lib/styles"
+import { cn } from "@/lib/utils"
 
 interface Props {
   readonly className?: string

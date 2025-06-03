@@ -5,7 +5,7 @@ import { AppLocale } from "@/types/general"
 
 import { getAuth } from "@/lib/auth"
 import { PublicStrapiClient } from "@/lib/strapi-api"
-import { cn } from "@/lib/styles"
+import { cn } from "@/lib/utils"
 import AppLink from "@/components/elementary/AppLink"
 import LocaleSwitcher from "@/components/elementary/LocaleSwitcher"
 import StrapiImageWithLink from "@/components/page-builder/components/utilities/StrapiImageWithLink"
