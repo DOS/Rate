@@ -32,11 +32,14 @@ const ComponentFilterCSS: React.FC = () => {
     
     // Wait for modal to render
     setTimeout(() => {
-      // First, reset all styles (show everything)
-      const allElements = document.querySelectorAll('h3, button, [role="separator"], hr');
-      allElements.forEach(element => {
+      // Simple reset - only reset what we explicitly hid before
+      const prevHidden = document.querySelectorAll('[data-smart-filter-hidden]');
+      prevHidden.forEach(element => {
         (element as HTMLElement).style.display = '';
+        element.removeAttribute('data-smart-filter-hidden');
       });
+      
+      addLog(`🔄 RESET: Previously hidden elements restored`);
       
       if (listingType === 'Bank') {
         // Bank: Hide all categories except contact, and hide Social within contact
@@ -48,22 +51,24 @@ const ComponentFilterCSS: React.FC = () => {
           headings.forEach(heading => {
             if (heading.textContent?.toLowerCase().includes(category)) {
               (heading as HTMLElement).style.display = 'none';
+              heading.setAttribute('data-smart-filter-hidden', 'true');
               addLog(`❌ HIDING: ${category}`);
             }
           });
         });
         
-        // Hide Social button within contact
+        // Hide Social button within contact  
         const buttons = document.querySelectorAll('button');
         buttons.forEach(button => {
           if (button.textContent?.trim() === 'Social') {
             (button as HTMLElement).style.display = 'none';
+            button.setAttribute('data-smart-filter-hidden', 'true');
             addLog(`❌ HIDING: Social button`);
           }
         });
         
-        // Hide separators/dividers after hidden elements
-        hideSeparators();
+        // Hide separators between hidden sections
+        hideSeparatorsAfterHiding();
         
         addLog(`✅ BANK FILTER APPLIED! Only contact.Basic + contact.Location visible`);
         
@@ -76,6 +81,7 @@ const ComponentFilterCSS: React.FC = () => {
           headings.forEach(heading => {
             if (heading.textContent?.toLowerCase().includes(category)) {
               (heading as HTMLElement).style.display = 'none';
+              heading.setAttribute('data-smart-filter-hidden', 'true');
               addLog(`❌ HIDING: ${category}`);
             }
           });
@@ -87,49 +93,97 @@ const ComponentFilterCSS: React.FC = () => {
           const text = button.textContent?.trim();
           if (text === 'Basic' || text === 'Location') {
             (button as HTMLElement).style.display = 'none';
+            button.setAttribute('data-smart-filter-hidden', 'true');
             addLog(`❌ HIDING: ${text} button`);
           }
         });
         
-        // Hide separators/dividers after hidden elements
-        hideSeparators();
+        // Hide separators between hidden sections
+        hideSeparatorsAfterHiding();
         
         addLog(`✅ SCAMMER FILTER APPLIED! Only violation + contact.Social + review visible`);
       }
     }, 200);
   };
-  
-  // Function to hide separators between groups
-  const hideSeparators = () => {
-    // Hide horizontal lines/separators
-    const separators = document.querySelectorAll('[role="separator"], hr, .separator');
-    separators.forEach(separator => {
-      const parent = separator.parentElement;
-      if (parent) {
-        // Check if the separator is between hidden elements
-        const siblings = Array.from(parent.children);
-        const separatorIndex = siblings.indexOf(separator as Element);
+
+  // Function to hide separators/dividers selectively
+  const hideSeparatorsAfterHiding = () => {
+    // Wait a bit for DOM to settle after hiding elements
+    setTimeout(() => {
+      // Find separators that are between hidden elements or next to them
+      const modalContainer = document.querySelector('[data-testid="modal"], .modal, [role="dialog"]');
+      if (!modalContainer) return;
+      
+      // Look for horizontal lines, borders, or spacing divs
+      const allElements = modalContainer.querySelectorAll('*');
+      allElements.forEach(element => {
+        const htmlElement = element as HTMLElement;
         
-        // Check if previous or next sibling is hidden
-        const prevSibling = siblings[separatorIndex - 1] as HTMLElement;
-        const nextSibling = siblings[separatorIndex + 1] as HTMLElement;
+        // Check if this looks like a separator
+        const isHorizontalLine = 
+          htmlElement.tagName === 'HR' ||
+          htmlElement.getAttribute('role') === 'separator' ||
+          (htmlElement.tagName === 'DIV' && 
+           htmlElement.children.length === 0 && 
+           (!htmlElement.textContent || htmlElement.textContent.trim() === '') &&
+           (
+             htmlElement.style.borderTop || 
+             htmlElement.style.borderBottom ||
+             htmlElement.offsetHeight <= 2 ||
+             htmlElement.style.height === '1px' ||
+             htmlElement.style.height === '2px'
+           )
+          );
         
-        if ((prevSibling && prevSibling.style.display === 'none') || 
-            (nextSibling && nextSibling.style.display === 'none')) {
-          (separator as HTMLElement).style.display = 'none';
-          addLog(`❌ HIDING: separator`);
+        if (isHorizontalLine) {
+          // Check if previous or next sibling is hidden
+          let hasHiddenSibling = false;
+          
+          // Check siblings
+          const parent = htmlElement.parentElement;
+          if (parent) {
+            const siblings = Array.from(parent.children);
+            const currentIndex = siblings.indexOf(htmlElement);
+            
+            // Check previous sibling
+            for (let i = currentIndex - 1; i >= 0; i--) {
+              const sibling = siblings[i] as HTMLElement;
+              if (sibling.style.display === 'none' || sibling.hasAttribute('data-smart-filter-hidden')) {
+                hasHiddenSibling = true;
+                break;
+              }
+              // If we hit visible content, stop looking
+              if (sibling.textContent && sibling.textContent.trim() !== '') {
+                break;
+              }
+            }
+            
+            // Check next sibling if not found hidden before
+            if (!hasHiddenSibling) {
+              for (let i = currentIndex + 1; i < siblings.length; i++) {
+                const sibling = siblings[i] as HTMLElement;
+                if (sibling.style.display === 'none' || sibling.hasAttribute('data-smart-filter-hidden')) {
+                  hasHiddenSibling = true;
+                  break;
+                }
+                // If we hit visible content, stop looking
+                if (sibling.textContent && sibling.textContent.trim() !== '') {
+                  break;
+                }
+              }
+            }
+          }
+          
+          if (hasHiddenSibling) {
+            htmlElement.style.display = 'none';
+            htmlElement.setAttribute('data-smart-filter-hidden', 'true');
+            addLog(`❌ HIDING: separator line`);
+          }
         }
-      }
-    });
-    
-    // Also hide empty divs and spacing elements
-    const spacingElements = document.querySelectorAll('div[style*="height"], div[style*="margin"], div[style*="padding"]');
-    spacingElements.forEach(element => {
-      const htmlElement = element as HTMLElement;
-      if (htmlElement.children.length === 0 && htmlElement.textContent?.trim() === '') {
-        htmlElement.style.display = 'none';
-      }
-    });
+      });
+      
+      addLog(`🧹 Separator cleanup completed`);
+    }, 100);
   };
 
   useEffect(() => {
