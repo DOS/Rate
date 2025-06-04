@@ -179,3 +179,132 @@ We are using `GitHub Actions` for continuous integration. The `CI` expects some 
 ## 💙 Feedback
 
 This repository was created based on [strapi-next-monorepo-starter](https://github.com/notum-cz/strapi-next-monorepo-starter). If you encounter a problem with the template code during development, or you have implemented a useful feature that should be part of that template, please create an issue with a description or PR in that repository. So we can keep it updated with great features.
+
+# Rate-New
+
+Một dự án Turborepo với Strapi CMS và Next.js frontend.
+
+## Cấu trúc dự án
+
+- `apps/strapi` - Strapi CMS backend
+- `apps/ui` - Next.js frontend application  
+- `packages/` - Shared packages và utilities
+
+## Smart Component Filter Plugin
+
+### Mô tả
+Plugin Strapi tự động filter danh sách components trong modal "Pick one component" dựa trên ListingType được chọn.
+
+### Business Logic
+- **Bank**: Chỉ hiện `contact.Basic` + `contact.Location`
+- **Scammer**: Chỉ hiện `violation` + `contact.Social` + `review`
+
+### Kiến trúc Technical
+
+#### 1. Plugin Structure
+```
+apps/strapi/src/plugins/_smart-component-filter/
+├── admin/src/
+│   ├── components/ComponentFilterCSS.tsx    # Main filtering logic
+│   └── index.tsx                           # Plugin registration
+├── server/src/index.ts                     # Server-side (minimal)
+└── package.json                           # Plugin dependencies
+```
+
+#### 2. Core Implementation
+
+**ComponentFilterCSS.tsx** - Main filtering component:
+- **Real-time Detection**: Monitor ListingType changes via MutationObserver
+- **Modal Detection**: Multi-pattern detection cho component picker modal
+- **Group-level Hiding**: Hide entire category groups thay vì individual buttons
+- **NUCLEAR Separator Cleaning**: Aggressive removal của separator bars
+- **NO DELAY Approach**: Immediate execution cho responsive UX
+
+#### 3. Key Features
+
+**A. Real-time ListingType Detection:**
+```typescript
+const detectListingType = () => {
+  const buttons = document.querySelectorAll('button');
+  for (const button of buttons) {
+    if (button.textContent?.trim() === 'Bank') return 'Bank';
+    if (button.textContent?.trim() === 'Scammer') return 'Scammer';
+  }
+  return null;
+};
+```
+
+**B. Group-level Component Hiding:**
+```typescript
+// Hide entire category groups, not individual buttons
+groupsToHide.forEach(groupName => {
+  const headings = modalContainer.querySelectorAll('h3');
+  headings.forEach(heading => {
+    if (heading.textContent?.toLowerCase().includes(groupName)) {
+      let groupContainer = heading.closest('div[role="region"], section, article');
+      if (groupContainer) {
+        groupContainer.style.display = 'none';
+        groupContainer.setAttribute('data-smart-filter-hidden', 'true');
+      }
+    }
+  });
+});
+```
+
+**C. NUCLEAR Separator Elimination:**
+```typescript
+// Aggressive CSS injection để remove separator bars
+const aggressiveStyle = document.createElement('style');
+aggressiveStyle.textContent = `
+  [data-testid="modal"] hr,
+  [data-testid="modal"] .border,
+  [data-testid="modal"] .divide-y > *:not(:first-child)::before {
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+  }
+`;
+document.head.appendChild(aggressiveStyle);
+```
+
+#### 4. Performance Optimizations
+
+- **IMMEDIATE Execution**: No setTimeout delays
+- **Scoped DOM Queries**: Target modal container only
+- **Efficient Reset**: Track hidden elements với data attributes
+- **Periodic Check**: 500ms interval for responsive monitoring
+
+#### 5. Build & Deploy
+
+```bash
+# Build plugin
+cd apps/strapi/src/plugins/_smart-component-filter
+npm run build
+
+# Restart Strapi to apply changes
+cd apps/strapi
+yarn develop
+```
+
+#### 6. Testing Workflow
+
+1. Navigate to Item creation: `/admin/content-manager/collection-types/api::item.item/create`
+2. Select ListingType (Bank/Scammer)
+3. Click "Add a component to FieldGroup"
+4. Verify filtered components in modal
+
+### Troubleshooting
+
+**Modal không filter:**
+- Check plugin build status
+- Verify ListingType selection
+- Check browser console cho error logs
+
+**Performance issues:**
+- Current 500ms interval là optimal balance
+- Plugin filtering execution là immediate (no delay)
+
+### Version History
+
+- **v1.0.0**: GROUP-LEVEL filtering với NO DELAY approach
+- **Previous**: Individual component hiding với setTimeout delays
