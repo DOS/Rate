@@ -131,9 +131,9 @@ Directory (People)
 
 ### Architecture & Design
 
-- 📚 **[Dynamic Content Architecture](./dynamic-content-architecture.md)** - Core system design and concepts
-- 🔧 **[API Design & Examples](./api-design-examples.md)** - Implementation patterns and usage
-- 🗓️ **[Implementation Roadmap](./implementation-roadmap.md)** - Development phases and timelines
+- 📚 **[Dynamic Content Architecture](./dynamic-content-architecture.md)** - Core system design, API patterns, review system và user profiles
+- 🚀 **[Implementation Plan - Dynamic Zone Native](./implementation-plan-dynamic-zone-native.md)** - Smart Loading + Smart Component Filter Plugin
+- 🔧 **[Backup & Disaster Recovery](./backup-disaster-recovery.md)** - Production deployment và recovery procedures
 
 ### Development Guides
 

@@ -521,11 +521,460 @@ npm run build
 
 ---
 
-**Document Version**: 1.1  
+---
+
+# 👤 **User Profile System Architecture**
+
+## 📋 **Profile System Overview**
+
+Hệ thống profile phân biệt rõ ràng giữa:
+
+1. **Unified Profile** (Zitadel) - Thông tin identity do Zitadel quản lý
+2. **Local Profile** (Strapi) - Dữ liệu app-specific lưu trong Strapi  
+3. **Multi-tenancy Support** - User quản lý nhiều organization
+
+### **Authentication Flow**
+
+```mermaid
+sequenceDiagram
+    User->>Frontend: Login Request
+    Frontend->>Zitadel: Redirect to OIDC
+    Zitadel->>Frontend: Return with code
+    Frontend->>Strapi: Exchange code for token
+    Strapi->>Zitadel: Validate token
+    Strapi->>Strapi: Create/Update Identity
+    Strapi->>Frontend: Return JWT + Profile
+```
+
+### **🔐 Security Architecture**
+
+#### **1. Authentication & Authorization**
+- **OIDC Integration** với Zitadel
+- **JWT Validation** trên mỗi request
+- **Refresh Token Rotation** với HttpOnly cookies
+- **Device Fingerprinting** để phát hiện token theft
+
+#### **2. Data Protection**
+- **Field-level Encryption** cho dữ liệu nhạy cảm (SSN, Tax ID)
+- **Key Versioning** cho encryption key rotation
+- **TLS Everywhere** cho mọi kết nối
+- **CSRF Protection** cho stateful endpoints
+
+#### **3. Access Control**
+- **Policy-based** authorization
+- **Owner validation** ở cả policy và service layer
+- **Rate limiting** cho auth endpoints
+- **Audit logging** cho mọi action
+
+### **📊 Identity Collection Schema**
+
+```javascript
+{
+  // Core fields
+  "user_id": "string", // Zitadel user ID
+  "organization_id": "string", // For multi-tenancy
+  "is_primary": "boolean", // Primary identity flag
+
+  // Profile data
+  "display_name": "string",
+  "avatar_url": "string", 
+  "bio": "text",
+
+  // Preferences
+  "language": "string",
+  "timezone": "string",
+  "theme": "enum", // light/dark
+
+  // Sensitive data (encrypted)
+  "ssn": "string",
+  "ssn_version": "integer",
+  "tax_id": "string", 
+  "tax_id_version": "integer",
+
+  // Metadata
+  "last_login": "datetime",
+  "created_at": "datetime",
+  "updated_at": "datetime"
+}
+```
+
+### **Database Indexes**
+
+```sql
+-- Performance indexes
+CREATE INDEX idx_identity_user_id ON identities(user_id);
+CREATE INDEX idx_identity_org_user ON identities(organization_id, user_id);
+CREATE INDEX idx_identity_primary ON identities(user_id, is_primary);
+
+-- Audit log indexes  
+CREATE INDEX idx_audit_user_time ON audit_logs(user_id, timestamp);
+CREATE INDEX idx_audit_action ON audit_logs(action, success, timestamp);
+```
+
+### **🚀 Implementation Status**
+
+#### **✅ Phase 1: Core MVP** 
+- ✅ OIDC plugin cài đặt và config
+- ✅ Identity collection schema created
+- ✅ Lifecycle hooks cho auto-create profile
+- ✅ Custom refresh/logout endpoints
+- ✅ Basic error handling
+
+#### **🔄 Phase 2: Security Hardening**
+- 🔄 Field-level encryption
+- 🔄 Rate limiting setup
+- 🔄 Audit logging với queue
+- 🔄 CSRF protection
+- 🔄 Device fingerprinting
+
+#### **📋 Phase 3: Production Ready**
+- 📋 Database indexes optimization
+- 📋 Redis caching layer
+- 📋 Health/readiness probes
+- 📋 Monitoring & alerting
+- 📋 Load testing
+
+---
+
+# 📊 **Review System Schema Design**
+
+## **Review Architecture Overview**
+
+Hệ thống Review hỗ trợ đánh giá theo 2 loại với **criteria-based rating**:
+
+- **Expert Review**: Đánh giá từ chuyên gia (auto-publish)
+- **User Review**: Đánh giá từ người dùng (manual approval)
+
+### **Core Tables**
+
+#### **1. Review Table (Unified)**
+
+```javascript
+{
+  "Title": "string",           // Tiêu đề review
+  "Content": "text",           // Nội dung đánh giá chi tiết
+  "ReviewType": "enum",        // [Expert, User, Report]
+  "Status": "enum",            // [Draft, Pending, Published, Rejected]
+  "ReviewDate": "datetime",    // Ngày đánh giá
+  
+  // Feature flags
+  "is_Featured": "boolean",    // Review nổi bật
+  "VerifiedPurchase": "boolean", // Đã mua/sử dụng thật
+  "BlockchainVerified": "boolean", // Verify blockchain (future)
+  
+  // Social fields  
+  "HelpfulVotes": "number",    // Số vote hữu ích (calculated)
+  "ReportedCount": "number",   // Số lần bị report (calculated)
+  
+  // Admin fields
+  "RejectionReason": "text",   // Lý do từ chối
+  "ModeratorNotes": "text"     // Ghi chú moderator
+}
+```
+
+#### **2. Rating Table (Criteria-based)**
+
+```javascript
+{
+  "Rating": "number",          // Điểm số 1-10 cho tiêu chí
+  "Comment": "text",           // Ghi chú cho tiêu chí cụ thể
+  // Relations: belongs to Review + Criteria
+}
+```
+
+#### **3. Criteria Table**
+
+```javascript
+{
+  "Name": "string",            // Tên tiêu chí (Design, Performance, Value...)
+  "Description": "text",       // Mô tả tiêu chí
+  "Weight": "number",          // Trọng số cho tính điểm tổng (0-1)
+  "is_Active": "boolean",      // Đang sử dụng
+  "Order": "number",           // Thứ tự hiển thị
+  "Icon": "string"             // Icon name (optional)
+}
+```
+
+#### **4. Enhanced Item Table (Aggregated Data)**
+
+```javascript
+{
+  // Existing fields + thêm:
+  "ExpertScore": "decimal",        // Điểm TB Expert (0-10)
+  "UserScore": "decimal",          // Điểm TB User (0-10)
+  "OverallScore": "decimal",       // Điểm tổng hợp có trọng số
+  "TotalExpertReviews": "number",  // Số review Expert
+  "TotalUserReviews": "number",    // Số review User
+  "TotalReviews": "number",        // Tổng số review
+  "CriteriaScores": "json"         // Điểm TB theo từng tiêu chí
+}
+```
+
+### **Supporting Tables**
+
+#### **5. Review Vote Table**
+
+```javascript
+{
+  "VoteType": "enum",          // [Helpful, Unhelpful]
+  "VoteDate": "datetime",      // Ngày vote
+  // Relations: belongs to Review + Identity (Voter)
+  // Unique Constraint: [Review, Identity]
+}
+```
+
+#### **6. Report Table**
+
+```javascript
+{
+  "Type": "enum",              // [Scam, Offensive, Fake Review, Spam, Copyright, Other]
+  "TargetType": "enum",        // [Identity, Review, Item, Listing]
+  "Description": "text",       // Mô tả vi phạm
+  "Evidence": "json",          // Evidence files/links
+  "Status": "enum",            // [Pending, Reviewed, Resolved, Dismissed]
+  // Relations: belongs to Reporter + Target
+}
+```
+
+---
+
+# 🌐 **API Design & Usage Examples**
+
+## **Core Endpoints Architecture**
+
+### **Listing Types API**
+
+```javascript
+// GET /api/listing-types
+{
+  "data": [
+    {
+      "id": 1,
+      "Name": "Scammer",
+      "Directory": "people",
+      "Category": "romance-scam",
+      "allowComment": true,
+      "allowRating": true,
+      "FieldGroup": [...],  // Component definitions
+      "Criteria": [...]     // Rating criteria
+    }
+  ]
+}
+
+// GET /api/listing-types/by-slug/scammer
+```
+
+### **Items API (Dynamic Content)**
+
+```javascript
+// GET /api/items?filters[listing_type][Name][$eq]=Scammer
+
+// POST /api/items
+{
+  "data": {
+    "Title": "Nguyễn Văn A - Romance Scammer",
+    "listing_type": 1,
+    "field_data": {
+      "known_accounts": {
+        "phone": "0901234567",
+        "facebook": "fb.com/nguyenvana.fake",
+        "telegram": "@fakescammer"
+      },
+      "risk_assessment": {
+        "risk_level": "High",
+        "confidence": 85,
+        "total_victims": 12,
+        "estimated_damage": 500000000
+      },
+      "scam_methods": ["Romance", "Investment"]
+    }
+  }
+}
+```
+
+### **Review API**
+
+```javascript
+// POST /api/reviews
+{
+  "data": {
+    "Title": "Comprehensive Scammer Analysis",
+    "Content": "Detailed review content...",
+    "ReviewType": "Expert",
+    "item": 123,
+    "ratings": [
+      {
+        "criteria": 1,  // Risk Level
+        "rating": 9,
+        "comment": "Extremely high risk based on evidence"
+      },
+      {
+        "criteria": 2,  // Evidence Quality
+        "rating": 8,
+        "comment": "Strong evidence from multiple victims"
+      }
+    ]
+  }
+}
+
+// GET /api/reviews?filters[item][id][$eq]=123&populate=*
+```
+
+### **GraphQL Query Examples**
+
+#### **Scammer Profile Page**
+
+```graphql
+query ScammerProfile($slug: String!) {
+  items(filters: { Slug: { eq: $slug } }) {
+    data {
+      id
+      Title
+      Slug
+      Description
+      Image { url }
+      listing_type {
+        data {
+          Name
+          allowComment
+          allowRating
+          FieldGroup
+          Criteria
+        }
+      }
+      field_data  # Dynamic JSON data
+      
+      # Review aggregation
+      ExpertScore
+      UserScore
+      OverallScore
+      TotalReviews
+      
+      # Related reviews
+      reviews {
+        data {
+          id
+          Title
+          Content
+          ReviewType
+          ReviewDate
+          ratings {
+            data {
+              rating
+              comment
+              criteria {
+                data { Name }
+              }
+            }
+          }
+          reviewer {
+            data {
+              Name
+              Avatar { url }
+              ExpertCredentials
+            }
+          }
+        }
+      }
+      
+      # Related listings (victim reports)
+      listings {
+        data {
+          id
+          Title
+          field_data
+          createdAt
+        }
+      }
+    }
+  }
+}
+```
+
+#### **Advanced Search với JSON Fields**
+
+```graphql
+query SearchScammers(
+  $riskLevel: String,
+  $scamMethod: String,
+  $minDamage: Float
+) {
+  items(
+    filters: {
+      listing_type: { Name: { eq: "Scammer" } },
+      field_data: {
+        risk_level: { eq: $riskLevel },
+        scam_methods: { contains: $scamMethod },
+        estimated_damage: { gte: $minDamage }
+      }
+    },
+    sort: ["OverallScore:desc", "TotalReviews:desc"]
+  ) {
+    data {
+      Title
+      Slug
+      field_data
+      ExpertScore
+      UserScore
+      TotalReviews
+      Image { url }
+    }
+  }
+}
+```
+
+### **Performance Optimization**
+
+#### **Database Indexes**
+
+```sql
+-- JSON field indexes for search
+CREATE INDEX idx_items_field_data_gin ON items USING GIN (field_data);
+
+-- Specific field indexes for common queries
+CREATE INDEX idx_items_risk_level ON items 
+  USING GIN ((field_data->>'risk_level'));
+CREATE INDEX idx_items_scam_methods ON items 
+  USING GIN ((field_data->'scam_methods'));
+
+-- Review aggregation indexes
+CREATE INDEX idx_items_scores ON items(ExpertScore, UserScore, OverallScore);
+CREATE INDEX idx_reviews_item_type ON reviews(item_id, ReviewType, Status);
+```
+
+#### **Caching Strategy**
+
+```javascript
+// Redis caching patterns
+const cacheKeys = {
+  itemProfile: `item:${slug}:profile`,
+  itemReviews: `item:${id}:reviews:${page}`,
+  searchResults: `search:${hashQuery}`,
+  aggregateScores: `item:${id}:scores`
+};
+
+// Cache TTL strategy
+const cacheTTL = {
+  itemProfile: 3600,    // 1 hour
+  itemReviews: 1800,    // 30 minutes  
+  searchResults: 900,   // 15 minutes
+  aggregateScores: 300  // 5 minutes
+};
+```
+
+---
+
+**Document Version**: 1.2  
 **Last Updated**: 2024-12-25  
 **Author**: Architecture Team
 
 ### **Changelog**
+
+#### **v1.2 (2024-12-25)**
+- ✅ **Merged User Profile System Architecture** from separate document
+- ✅ Consolidated authentication và security documentation
+- ✅ Added Identity collection schema và implementation status
+- ✅ Reduced document count by merging related architectures
 
 #### **v1.1 (2024-12-25)**
 - ✅ Added Smart Component Filter Plugin documentation
