@@ -1541,156 +1541,143 @@ For each field, decide if it needs translation:
 
 ---
 
-## 🎨 **Smart Component Filter Plugin - COMPLETED ✅**
+## 🔧 **Smart Component Filter Plugin - Production Implementation**
 
-### **Plugin Overview**
+### **Overview**
+Smart Component Filter Plugin đã được triển khai thành công để lọc component picker modal dựa trên ListingType selection. Plugin hoạt động bằng cách inject CSS để hide các component groups và components không phù hợp.
 
-**Purpose**: Auto-filter component danh sách trong "Pick one component" modal dựa trên ListingType selection  
-**Status**: Production-ready và deployed  
-**Performance**: IMMEDIATE filtering với NO DELAY approach  
+### **Core Functionality**
+- **Bank ListingType**: Chỉ hiển thị `contact.Basic` + `contact.Location`
+- **Scammer ListingType**: Chỉ hiển thị `violation` + `contact.Social` + `review`
+- **Detection**: Sử dụng MutationObserver để detect modal opening
+- **Filtering**: CSS-based hiding với "nuclear approach" (display: none + dimensions 0px)
 
-### **Business Logic Implementation**
+### **Critical Build Requirement ⚠️**
 
-| ListingType | Filtered Components                    | Hidden Categories |
-|-------------|----------------------------------------|-------------------|
-| **Bank**    | `contact.Basic` + `contact.Location`  | info, violation, utilities, media, review, rating |
-| **Scammer** | `violation` + `contact.Social` + `review` | info, utilities, media, rating |
-
-### **Technical Architecture**
-
-#### **Plugin Structure**
-
-```
-apps/strapi/src/plugins/_smart-component-filter/
-├── admin/src/
-│   ├── components/ComponentFilterCSS.tsx    # Main filtering logic
-│   └── index.tsx                           # Plugin registration  
-├── server/src/index.ts                     # Server-side (minimal)
-└── package.json                           # Plugin dependencies
-```
-
-#### **Core Implementation Details**
-
-**A. Real-time ListingType Detection:**
-```typescript
-const detectListingType = () => {
-  const buttons = document.querySelectorAll('button');
-  for (const button of buttons) {
-    if (button.textContent?.trim() === 'Bank') return 'Bank';
-    if (button.textContent?.trim() === 'Scammer') return 'Scammer';
-  }
-  return null;
-};
-```
-
-**B. GROUP-LEVEL Component Hiding:**
-```typescript
-// Hide entire category groups, not individual buttons
-groupsToHide.forEach(groupName => {
-  const headings = modalContainer.querySelectorAll('h3');
-  headings.forEach(heading => {
-    if (heading.textContent?.toLowerCase().includes(groupName)) {
-      let groupContainer = heading.closest('div[role="region"], section, article');
-      if (groupContainer) {
-        groupContainer.style.display = 'none';
-        groupContainer.setAttribute('data-smart-filter-hidden', 'true');
-      }
-    }
-  });
-});
-```
-
-**C. NUCLEAR Separator Elimination:**
-```typescript
-// Aggressive CSS injection để remove separator bars
-const aggressiveStyle = document.createElement('style');
-aggressiveStyle.textContent = `
-  [data-testid="modal"] hr,
-  [data-testid="modal"] .border,
-  [data-testid="modal"] .divide-y > *:not(:first-child)::before {
-    display: none !important;
-    visibility: hidden !important;
-    height: 0 !important;
-  }
-`;
-document.head.appendChild(aggressiveStyle);
-```
-
-### **Performance Optimizations**
-
-- ✅ **IMMEDIATE Execution**: No setTimeout delays
-- ✅ **Scoped DOM Queries**: Target modal container only  
-- ✅ **Efficient Reset**: Track hidden elements với data attributes
-- ✅ **Periodic Check**: 500ms interval for responsive monitoring
-- ✅ **Multi-pattern Modal Detection**: Robust detection với fallback mechanisms
-
-### **Build & Deploy Process**
+**QUAN TRỌNG**: Plugin phải được build sau mỗi lần thay đổi code!
 
 ```bash
-# Build plugin
+# Chạy từ thư mục plugin
 cd apps/strapi/src/plugins/_smart-component-filter
 npm run build
 
-# Restart Strapi to apply changes
-cd apps/strapi
-yarn develop
+# Hoặc từ root project
+cd apps/strapi/src/plugins/_smart-component-filter && npm run build
 ```
 
-### **Testing Workflow**
+### **Problem Resolution History**
 
-1. Navigate to Item creation: `/admin/content-manager/collection-types/api::item.item/create`
-2. Select ListingType (Bank/Scammer) 
-3. Click "Add a component to FieldGroup"
-4. Verify filtered components in modal:
-   - **Bank**: Only contact.Basic + contact.Location visible
-   - **Scammer**: Only violation + contact.Social + review visible
+#### **Issue**: Code Changes Not Applied
+**Symptoms**:
+- Plugin UI hoạt động bình thường (sidebar status updates)
+- Modal mở nhưng vẫn hiển thị tất cả components
+- Debug logs không xuất hiện
+- Console log: "❌ Safe modal container not found - SKIPPING to prevent sidebar issues"
 
-### **Implementation Success Metrics**
+**Root Cause**: 
+Plugin sử dụng build process và export từ `dist/` folder. Strapi load code từ `dist/admin/index.js` và `dist/server/index.js`, không phải source files.
 
-| Metric | Target | Achieved |
-|--------|--------|----------|
-| Filter Response Time | <100ms | ✅ IMMEDIATE (0ms delay) |
-| Modal Detection Success | >95% | ✅ 100% với fallback |
-| Separator Elimination | Complete | ✅ NUCLEAR approach |
-| ListingType Detection | Real-time | ✅ 500ms polling |
-| Business Logic Accuracy | 100% | ✅ Bank/Scammer rules perfect |
+**Solution**:
+```bash
+# Build plugin sau mỗi code change
+cd apps/strapi/src/plugins/_smart-component-filter
+npm run build
 
-### **Version History & Evolution**
+# Restart Strapi để load new build
+yarn dev (từ root)
+```
 
-- **v0.1**: Individual component hiding với setTimeout delays
-- **v0.2**: Improved modal detection, still có separator issues  
-- **v0.3**: NUCLEAR separator cleaning approach
-- **v1.0**: **GROUP-LEVEL filtering với NO DELAY approach** ⭐
+#### **Build Artifacts**
+Plugin build tạo ra:
+- `./dist/admin/index.js`
+- `./dist/admin/index.mjs` 
+- `./dist/server/index.js`
+- `./dist/server/index.mjs`
 
-### **Integration Notes**
+### **Testing & Verification**
 
-- **Perfect compatibility** với Dynamic Zone Native approach
-- **Zero conflict** với i18n plugin operations
-- **Transparent to business users** - just works automatically
-- **Maintains Strapi admin UI consistency**
+#### **Success Indicators**
+1. **Plugin Load**: Console log với timestamp mới sau build
+2. **Detection**: "🎯 COMPONENT PICKER DETECTED!" khi mở modal
+3. **Filtering Applied**: 
+   - Bank: Chỉ hiển thị contact group với Basic, Location buttons
+   - Scammer: Hiển thị contact (Social only), violation, review groups
+4. **Debug Logs**: "🔍 FORCED DEBUG: hasPickOneComponent=true, hasComponentGroups=true, h3Count=X"
 
-### **Future Enhancements**
+#### **Console Log Examples**
+```javascript
+// Successful filtering
+✅ SCAMMER GROUP FILTER APPLIED! Only violation + contact.Social + review visible
+❌ HIDING ENTIRE GROUP BOX: info
+❌ HIDING ENTIRE GROUP BOX: utilities  
+❌ HIDING ENTIRE GROUP BOX: media
+❌ HIDING ENTIRE GROUP BOX: rating
+❌ HIDING: Basic button
+❌ HIDING: Location button
+```
 
-#### **Phase 2 Potential Features:**
-- [ ] **Smart Preloading**: Cache component lists based on user patterns
-- [ ] **Custom Rules Engine**: Admin UI để configure filtering rules
-- [ ] **Analytics Integration**: Track component usage patterns  
-- [ ] **A/B Testing**: Different filtering strategies per user group
+### **Development Workflow**
 
-#### **Performance Monitoring:**
-- [ ] Component filter execution time tracking
-- [ ] Modal detection success rate monitoring
-- [ ] User interaction pattern analysis
+1. **Make Code Changes** in source files
+2. **Build Plugin**: `npm run build` trong plugin directory
+3. **Restart Strapi**: Ctrl+C và `yarn dev` từ root
+4. **Test Functionality**: Open component picker modal
+5. **Verify Console Logs**: Confirm filtering applied
+
+### **Technical Implementation Details**
+
+#### **Architecture**
+- **Detection**: MutationObserver watching for modal appearance
+- **Targeting**: CSS selectors targeting specific component groups/buttons
+- **Hiding Method**: CSS injection với display:none và dimensional reset
+- **Safety**: Extensive checks để tránh breaking sidebar functionality
+
+#### **Key Components**
+- `admin/src/index.js`: Main plugin entry point với component picker detection
+- `admin/src/components/PluginSidebar.js`: Status display component
+- Build config: `package.json` với `strapi-plugin build` script
+
+### **Troubleshooting Guide**
+
+| Issue | Symptoms | Solution |
+|-------|----------|----------|
+| Code changes ignored | Debug logs missing, filtering not applied | Run `npm run build` trong plugin directory |
+| Modal shows all components | Console: "Safe modal container not found" | Build plugin và restart Strapi |
+| Plugin not loading | No sidebar, no console logs | Check plugin enabled trong `config/plugins.js` |
+| Filtering inconsistent | Works sometimes | Kiểm tra ListingType selection timing |
+
+### **Production Considerations**
+
+- **Performance**: Plugin có minimal overhead, chỉ hoạt động khi cần
+- **Stability**: Extensive error handling để tránh breaking admin UI
+- **Maintainability**: Clear console logging for debugging
+- **Scalability**: Dễ dàng thêm ListingType rules mới
 
 ---
 
-**Smart Component Filter Status**: ✅ **COMPLETED & DEPLOYED**  
-**Business Impact**: Immediate UX improvement for Item creation workflow  
-**Technical Debt**: Zero - clean implementation with proper fallbacks
+## 📝 **Development Notes**
 
----
+### **Plugin Build Process**
+Plugin sử dụng Strapi's plugin build system:
+- Source: `src/` directory  
+- Build: `dist/` directory
+- Export: Plugin exports từ built files, không phải source
+- **Critical**: Phải build sau mỗi code change
 
-**Overall Implementation Status**: Ready for Implementation ✅  
-**Approach**: Dynamic Zone Native + Smart Loading + Smart Component Filter  
-**Confidence**: 95% Production-Ready với i18n native + component filtering  
-**Next Action**: Setup i18n plugin và tạo component structure
+### **MCP Playwright Integration**
+Khi test với browser automation:
+- **Server Command**: `npx @playwright/mcp@latest --port 8931 --config D:\Projects\JOY\Rate-New\playwright-mcp-config.json`
+- **Port Check**: `netstat -an | findstr 8931`
+- **Restart Strategy**: Chỉ kill node processes liên quan Strapi/NextJS, giữ MCP server
+
+### **PowerShell Development Environment**
+```powershell
+# Restart development servers (giữ MCP)
+Get-Process node | Where-Object {$_.CommandLine -like "*strapi*" -or $_.CommandLine -like "*next*"} | Stop-Process -Force
+
+# Start development
+yarn dev
+
+# Build plugin
+cd apps/strapi/src/plugins/_smart-component-filter && npm run build
+```
