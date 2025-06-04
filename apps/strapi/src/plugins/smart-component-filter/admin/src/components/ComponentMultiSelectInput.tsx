@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MultiSelect, MultiSelectOption, Loader, Alert } from '@strapi/design-system';
+import { MultiSelect, MultiSelectOption, Loader, Alert, Field } from '@strapi/design-system';
 import { getFetchClient } from '@strapi/strapi/admin';
 
 interface ComponentData {
@@ -171,38 +171,17 @@ const ComponentMultiSelectInput: React.FC<ComponentMultiSelectInputProps> = ({
     );
   }
 
-  // Force parent container to be half width using direct DOM manipulation
-  React.useEffect(() => {
-    const interval = setInterval(() => {
-      const elements = document.querySelectorAll('[data-strapi-field-uid*="TestItemGroup"]');
-      elements.forEach((element) => {
-        const parent = element.closest('[data-strapi-field]') || element.parentElement;
-        if (parent && parent instanceof HTMLElement) {
-          parent.style.width = '50%';
-          parent.style.maxWidth = '50%';
-          parent.style.flex = '0 0 50%';
-          parent.style.display = 'inline-block';
-          parent.style.verticalAlign = 'top';
-          parent.style.paddingRight = '8px';
-        }
-      });
-    }, 100);
-    
-    return () => clearInterval(interval);
-  }, []);
-
   return (
-    <div>
+    <Field.Root name={name} id={name} error={error} required={required}>
+      <Field.Label action={labelAction}>
+        {intlLabel?.defaultMessage || name}
+      </Field.Label>
       <MultiSelect
-        label={intlLabel?.defaultMessage || name || 'Component Multi-Select'}
         name={name}
         placeholder="Chọn components cho listing type này..."
         value={value || []}
         onChange={handleChange}
         disabled={disabled}
-        required={required}
-        labelAction={labelAction}
-        hint={`Đã chọn ${(value || []).length} components từ ${components.length} components có sẵn`}
       >
         {options.map(option => (
           <MultiSelectOption 
@@ -219,21 +198,11 @@ const ComponentMultiSelectInput: React.FC<ComponentMultiSelectInputProps> = ({
           </MultiSelectOption>
         ))}
       </MultiSelect>
-      
-      {/* Debug info */}
-      {value && value.length > 0 && (
-        <div style={{ 
-          marginTop: '8px', 
-          padding: '8px', 
-          backgroundColor: '#f8f9fa', 
-          borderRadius: '4px',
-          fontSize: '12px',
-          color: '#666'
-        }}>
-          <strong>Selected UIDs:</strong> {value.join(', ')}
-        </div>
-      )}
-    </div>
+      <Field.Hint>
+        Đã chọn {(value || []).length} components từ {components.length} components có sẵn
+      </Field.Hint>
+      <Field.Error />
+    </Field.Root>
   );
 };
 

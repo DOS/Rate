@@ -48,6 +48,7 @@
     "react": "^18.0.0",
     "react-dom": "^18.0.0",
     "react-router-dom": "^6.0.0",
+    "react-select": "^5.10.1",
     "strapi-plugin-config-sync": "2",
     "strapi-v5-plugin-populate-deep": "^4.0.5",
     "styled-components": "^6.0.0"
@@ -56,6 +57,7 @@
     "@types/node": "^22",
     "@types/react": "^18",
     "@types/react-dom": "^18",
+    "@types/react-select": "^5.0.1",
     "typescript": "^5"
   },
   "engines": {

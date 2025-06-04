@@ -1,13 +1,11 @@
 import { StrapiApp } from '@strapi/strapi/admin';
-import ComponentFilterCSS from './components/ComponentFilterCSS';
-import { PLUGIN_ID as importedPluginId } from './pluginId';
-import React from 'react';
+import ComponentMultiSelectInput from './components/ComponentMultiSelectInput';
 
 const PLUGIN_ID = 'smart-component-filter';
 
 export default {
   register(app: StrapiApp) {
-    console.log('🚀 Smart Component Filter plugin registering...');
+    console.log('🚀 Smart Component Filter plugin registering with Strapi Design System...');
     
     // Register the plugin
     app.registerPlugin({
@@ -15,21 +13,23 @@ export default {
       name: 'Smart Component Filter',
     });
 
-    // Register Custom Field Type for Component Multi-Select
+    // Register Custom Field Type for Component Multi-Select using Strapi Design System
     app.customFields.register({
       name: 'component-multi-select',
       pluginId: PLUGIN_ID,
       type: 'json',
       intlLabel: {
-        id: `${PLUGIN_ID}.component-multi-select.label`,
+        id: 'smart-component-filter.component-multi-select.label',
         defaultMessage: 'Component Multi-Select',
       },
       intlDescription: {
-        id: `${PLUGIN_ID}.component-multi-select.description`, 
-        defaultMessage: 'Select multiple components for ItemGroup and ReviewGroup',
+        id: 'smart-component-filter.component-multi-select.description', 
+        defaultMessage: 'Select multiple components using Strapi Design System with native theme support',
       },
       components: {
-        Input: async () => import('./components/ComponentMultiSelectInput'),
+        Input: async () => {
+          return { default: ComponentMultiSelectInput as any };
+        },
       },
       options: {
         base: [],
@@ -38,22 +38,11 @@ export default {
       },
     });
 
-    console.log('✅ Smart Component Filter plugin registered with custom field');
+    console.log('✅ Smart Component Filter plugin registered with Strapi Design System support');
   },
 
-  async bootstrap(app: StrapiApp) {
+  bootstrap(app: StrapiApp) {
     console.log('🚀 Smart Component Filter plugin bootstrapping...');
-    
-    try {
-      // Inject component filter display in editView (works for both create and edit)
-      app.getPlugin('content-manager').injectComponent('editView', 'right-links', {
-        name: 'smart-filter-display',
-        Component: ComponentFilterCSS as any,
-      });
-
-      console.log('✅ Smart Component Filter plugin: Bootstrap completed for editView (create & edit)');
-    } catch (error) {
-      console.error('❌ Failed to bootstrap Smart Component Filter plugin:', error);
-    }
+    console.log('✅ Smart Component Filter plugin: Bootstrap completed with native Strapi integration');
   },
 }; 

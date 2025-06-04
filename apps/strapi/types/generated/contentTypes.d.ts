@@ -740,6 +740,13 @@ export interface ApiListingTypeListingType extends Struct.CollectionTypeSchema {
       }> &
       Schema.Attribute.DefaultTo<true>
     Categories: Schema.Attribute.Relation<"oneToMany", "api::category.category">
+    ComponentFilter: Schema.Attribute.JSON &
+      Schema.Attribute.CustomField<"plugin::smart-component-filter.component-multi-select"> &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: true
+        }
+      }>
     createdAt: Schema.Attribute.DateTime
     createdBy: Schema.Attribute.Relation<"oneToOne", "admin::user"> &
       Schema.Attribute.Private
@@ -787,7 +794,7 @@ export interface ApiListingTypeListingType extends Struct.CollectionTypeSchema {
     publishedAt: Schema.Attribute.DateTime
     ReviewGroup: Schema.Attribute.JSON
     Slug: Schema.Attribute.UID<"Name">
-    TestItemGroup: Schema.Attribute.JSON &
+    TestField: Schema.Attribute.JSON &
       Schema.Attribute.CustomField<"plugin::smart-component-filter.component-multi-select"> &
       Schema.Attribute.SetPluginOptions<{
         i18n: {
