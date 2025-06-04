@@ -28,90 +28,166 @@ const ComponentFilterCSS: React.FC = () => {
 
   // Function to apply DOM filter
   const applyDOMFilter = (listingType: string) => {
-    addLog(`🎯 APPLYING DOM FILTER for ${listingType}`);
+    addLog(`🎯 APPLYING GROUP-LEVEL FILTER for ${listingType} (NO DELAY)`);
     
-    // Wait for modal to render
-    setTimeout(() => {
-      // Simple reset - only reset what we explicitly hid before
-      const prevHidden = document.querySelectorAll('[data-smart-filter-hidden]');
-      prevHidden.forEach(element => {
-        (element as HTMLElement).style.display = '';
-        element.removeAttribute('data-smart-filter-hidden');
+    // IMMEDIATE execution - NO setTimeout delay to reduce lag
+    // Try multiple selector patterns for component picker modal
+    let modalContainer = document.querySelector('[data-testid="modal"], .modal, [role="dialog"]');
+    
+    if (!modalContainer) {
+      // Check for modal with "Pick one component" text
+      const allElements = document.querySelectorAll('*');
+      for (const element of allElements) {
+        if (element.textContent?.includes('Pick one component')) {
+          modalContainer = element.closest('div') || element;
+          break;
+        }
+      }
+    }
+    
+    if (!modalContainer) {
+      // Check body for modal content
+      if (document.body.textContent?.includes('Pick one component')) {
+        modalContainer = document.body;
+        addLog('📋 Using document.body as modal container');
+      }
+    }
+    
+    if (!modalContainer) {
+      addLog('❌ Modal container not found');
+      return;
+    }
+    
+    // Simple reset - only reset what we explicitly hid before  
+    const prevHidden = modalContainer.querySelectorAll('[data-smart-filter-hidden]');
+    prevHidden.forEach(element => {
+      (element as HTMLElement).style.display = '';
+      (element as HTMLElement).style.visibility = '';
+      element.removeAttribute('data-smart-filter-hidden');
+    });
+    
+    addLog(`🔄 RESET: ${prevHidden.length} previously hidden elements restored`);
+    
+    if (listingType === 'Bank') {
+      // Bank: Hide ENTIRE GROUP/BOX for unwanted categories
+      const groupsToHide = ['info', 'violation', 'utilities', 'media', 'review', 'rating'];
+      
+      groupsToHide.forEach(groupName => {
+        // Find and hide ENTIRE category group/box
+        const headings = modalContainer.querySelectorAll('h3');
+        headings.forEach(heading => {
+          if (heading.textContent?.toLowerCase().includes(groupName)) {
+            // Hide the entire parent container/box
+            let groupContainer = heading.closest('div[role="region"], div:has(h3), section, article') as HTMLElement;
+            
+            if (!groupContainer) {
+              // Fallback: hide heading and next siblings until next heading
+              (heading as HTMLElement).style.display = 'none';
+              heading.setAttribute('data-smart-filter-hidden', 'true');
+              
+              let nextSibling = heading.nextElementSibling;
+              while (nextSibling && nextSibling.tagName !== 'H3') {
+                (nextSibling as HTMLElement).style.display = 'none';
+                nextSibling.setAttribute('data-smart-filter-hidden', 'true');
+                nextSibling = nextSibling.nextElementSibling;
+              }
+            } else {
+              // Hide entire container/box
+              groupContainer.style.display = 'none';
+              groupContainer.setAttribute('data-smart-filter-hidden', 'true');
+            }
+            
+            addLog(`❌ HIDING ENTIRE GROUP BOX: ${groupName}`);
+          }
+        });
       });
       
-      addLog(`🔄 RESET: Previously hidden elements restored`);
+      // Hide Social button within contact (but keep Basic + Location)
+      const buttons = modalContainer.querySelectorAll('button');
+      buttons.forEach(button => {
+        if (button.textContent?.trim() === 'Social') {
+          (button as HTMLElement).style.display = 'none';
+          button.setAttribute('data-smart-filter-hidden', 'true');
+          addLog(`❌ HIDING: Social button`);
+        }
+      });
       
-      if (listingType === 'Bank') {
-        // Bank: Hide all categories except contact, and hide Social within contact
-        const categoriesToHide = ['info', 'violation', 'utilities', 'media', 'review', 'rating'];
-        
-        categoriesToHide.forEach(category => {
-          // Find heading by text content
-          const headings = document.querySelectorAll('h3');
-          headings.forEach(heading => {
-            if (heading.textContent?.toLowerCase().includes(category)) {
+      addLog(`✅ BANK GROUP FILTER APPLIED! Only contact.Basic + contact.Location visible`);
+      
+    } else if (listingType === 'Scammer') {
+      // Scammer: Hide ENTIRE GROUP/BOX for unwanted categories
+      const groupsToHide = ['info', 'utilities', 'media', 'rating'];
+      
+      groupsToHide.forEach(groupName => {
+        const headings = modalContainer.querySelectorAll('h3');
+        headings.forEach(heading => {
+          if (heading.textContent?.toLowerCase().includes(groupName)) {
+            // Hide the entire parent container/box
+            let groupContainer = heading.closest('div[role="region"], div:has(h3), section, article') as HTMLElement;
+            
+            if (!groupContainer) {
+              // Fallback: hide heading and next siblings until next heading
               (heading as HTMLElement).style.display = 'none';
               heading.setAttribute('data-smart-filter-hidden', 'true');
-              addLog(`❌ HIDING: ${category}`);
+              
+              let nextSibling = heading.nextElementSibling;
+              while (nextSibling && nextSibling.tagName !== 'H3') {
+                (nextSibling as HTMLElement).style.display = 'none';
+                nextSibling.setAttribute('data-smart-filter-hidden', 'true');
+                nextSibling = nextSibling.nextElementSibling;
+              }
+            } else {
+              // Hide entire container/box
+              groupContainer.style.display = 'none';
+              groupContainer.setAttribute('data-smart-filter-hidden', 'true');
             }
-          });
-        });
-        
-        // Hide Social button within contact  
-        const buttons = document.querySelectorAll('button');
-        buttons.forEach(button => {
-          if (button.textContent?.trim() === 'Social') {
-            (button as HTMLElement).style.display = 'none';
-            button.setAttribute('data-smart-filter-hidden', 'true');
-            addLog(`❌ HIDING: Social button`);
+            
+            addLog(`❌ HIDING ENTIRE GROUP BOX: ${groupName}`);
           }
         });
-        
-        // Hide separators between hidden sections
-        hideSeparatorsAfterHiding();
-        
-        addLog(`✅ BANK FILTER APPLIED! Only contact.Basic + contact.Location visible`);
-        
-      } else if (listingType === 'Scammer') {
-        // Scammer: Hide specific categories and components
-        const categoriesToHide = ['info', 'utilities', 'media', 'rating'];
-        
-        categoriesToHide.forEach(category => {
-          const headings = document.querySelectorAll('h3');
-          headings.forEach(heading => {
-            if (heading.textContent?.toLowerCase().includes(category)) {
-              (heading as HTMLElement).style.display = 'none';
-              heading.setAttribute('data-smart-filter-hidden', 'true');
-              addLog(`❌ HIDING: ${category}`);
-            }
-          });
-        });
-        
-        // Hide Basic and Location buttons within contact
-        const buttons = document.querySelectorAll('button');
-        buttons.forEach(button => {
-          const text = button.textContent?.trim();
-          if (text === 'Basic' || text === 'Location') {
-            (button as HTMLElement).style.display = 'none';
-            button.setAttribute('data-smart-filter-hidden', 'true');
-            addLog(`❌ HIDING: ${text} button`);
-          }
-        });
-        
-        // Hide separators between hidden sections
-        hideSeparatorsAfterHiding();
-        
-        addLog(`✅ SCAMMER FILTER APPLIED! Only violation + contact.Social + review visible`);
-      }
-    }, 200);
+      });
+      
+      // Hide Basic and Location buttons within contact (but keep Social)
+      const buttons = modalContainer.querySelectorAll('button');
+      buttons.forEach(button => {
+        const text = button.textContent?.trim();
+        if (text === 'Basic' || text === 'Location') {
+          (button as HTMLElement).style.display = 'none';
+          button.setAttribute('data-smart-filter-hidden', 'true');
+          addLog(`❌ HIDING: ${text} button`);
+        }
+      });
+      
+      addLog(`✅ SCAMMER GROUP FILTER APPLIED! Only violation + contact.Social + review visible`);
+    }
+    
+    // Apply MEGA separator cleanup IMMEDIATELY
+    hideSeparatorsAfterHiding();
   };
 
-  // Function to AGGRESSIVELY hide ALL separators/dividers  
+  // Function to MEGA AGGRESSIVELY hide ALL separators/dividers IMMEDIATELY
   const hideSeparatorsAfterHiding = () => {
-    // Wait a bit for DOM to settle after hiding elements
-    setTimeout(() => {
-      const modalContainer = document.querySelector('[data-testid="modal"], .modal, [role="dialog"]');
-      if (!modalContainer) return;
+    // NO DELAY - immediate execution for faster response
+    // Use same modal detection logic as main filter
+    let modalContainer = document.querySelector('[data-testid="modal"], .modal, [role="dialog"]');
+    
+    if (!modalContainer) {
+      const allElements = document.querySelectorAll('*');
+      for (const element of allElements) {
+        if (element.textContent?.includes('Pick one component')) {
+          modalContainer = element.closest('div') || element;
+          break;
+        }
+      }
+    }
+    
+    if (!modalContainer) {
+      if (document.body.textContent?.includes('Pick one component')) {
+        modalContainer = document.body;
+      }
+    }
+    
+    if (!modalContainer) return;
       
       // NUCLEAR APPROACH - Hide everything that could be a separator
       const allElements = modalContainer.querySelectorAll('*');
@@ -227,8 +303,7 @@ const ComponentFilterCSS: React.FC = () => {
       
       document.head.appendChild(aggressiveStyle);
       
-      addLog('🧹 NUCLEAR separator annihilation completed with CSS injection');
-    }, 150);
+      addLog('🧹 MEGA NUCLEAR separator annihilation completed IMMEDIATELY');
   };
 
   useEffect(() => {
