@@ -106,84 +106,129 @@ const ComponentFilterCSS: React.FC = () => {
     }, 200);
   };
 
-  // Function to hide separators/dividers selectively
+  // Function to AGGRESSIVELY hide ALL separators/dividers  
   const hideSeparatorsAfterHiding = () => {
     // Wait a bit for DOM to settle after hiding elements
     setTimeout(() => {
-      // Find separators that are between hidden elements or next to them
       const modalContainer = document.querySelector('[data-testid="modal"], .modal, [role="dialog"]');
       if (!modalContainer) return;
       
-      // Look for horizontal lines, borders, or spacing divs
+      // NUCLEAR APPROACH - Hide everything that could be a separator
       const allElements = modalContainer.querySelectorAll('*');
       allElements.forEach(element => {
         const htmlElement = element as HTMLElement;
+        const computedStyle = window.getComputedStyle(htmlElement);
         
-        // Check if this looks like a separator
-        const isHorizontalLine = 
+        // Extremely aggressive criteria for separator detection
+        const isLikelySeparator = (
+          // HR tags
           htmlElement.tagName === 'HR' ||
+          
+          // Role-based separators
           htmlElement.getAttribute('role') === 'separator' ||
+          
+          // Any element with visible borders
+          (computedStyle.borderTopWidth && computedStyle.borderTopWidth !== '0px') ||
+          (computedStyle.borderBottomWidth && computedStyle.borderBottomWidth !== '0px') ||
+          (computedStyle.borderLeftWidth && computedStyle.borderLeftWidth !== '0px') ||
+          (computedStyle.borderRightWidth && computedStyle.borderRightWidth !== '0px') ||
+          
+          // Small height elements that span width (typical separators)
+          (htmlElement.offsetHeight <= 15 && htmlElement.offsetWidth > 50) ||
+          
+          // Elements with gray/border-like backgrounds
+          computedStyle.backgroundColor === 'rgb(229, 231, 235)' || // gray-200
+          computedStyle.backgroundColor === 'rgb(156, 163, 175)' || // gray-400  
+          computedStyle.backgroundColor === 'rgb(209, 213, 219)' || // gray-300
+          computedStyle.backgroundColor === 'rgb(107, 114, 128)' || // gray-500
+          computedStyle.backgroundColor === 'rgb(75, 85, 99)' ||   // gray-600
+          computedStyle.backgroundColor === 'rgba(0, 0, 0, 0.1)' ||
+          computedStyle.backgroundColor === 'rgba(0, 0, 0, 0.05)' ||
+          
+          // Class-based detection for common separator classes
+          htmlElement.className.includes('border') ||
+          htmlElement.className.includes('separator') ||
+          htmlElement.className.includes('divider') ||
+          htmlElement.className.includes('divide') ||
+          htmlElement.className.includes('line') ||
+          htmlElement.className.includes('hr') ||
+          htmlElement.className.includes('border-t') ||
+          htmlElement.className.includes('border-b') ||
+          htmlElement.className.includes('border-gray') ||
+          
+          // Empty divs with minimal height (spacers/separators)
           (htmlElement.tagName === 'DIV' && 
-           htmlElement.children.length === 0 && 
+           htmlElement.children.length === 0 &&
            (!htmlElement.textContent || htmlElement.textContent.trim() === '') &&
-           (
-             htmlElement.style.borderTop || 
-             htmlElement.style.borderBottom ||
-             htmlElement.offsetHeight <= 2 ||
-             htmlElement.style.height === '1px' ||
-             htmlElement.style.height === '2px'
-           )
-          );
+           htmlElement.offsetHeight <= 25) ||
+           
+          // Elements with explicit height values that suggest separators
+          computedStyle.height === '1px' ||
+          computedStyle.height === '2px' ||
+          computedStyle.height === '3px' ||
+          computedStyle.minHeight === '1px'
+        );
         
-        if (isHorizontalLine) {
-          // Check if previous or next sibling is hidden
-          let hasHiddenSibling = false;
-          
-          // Check siblings
-          const parent = htmlElement.parentElement;
-          if (parent) {
-            const siblings = Array.from(parent.children);
-            const currentIndex = siblings.indexOf(htmlElement);
-            
-            // Check previous sibling
-            for (let i = currentIndex - 1; i >= 0; i--) {
-              const sibling = siblings[i] as HTMLElement;
-              if (sibling.style.display === 'none' || sibling.hasAttribute('data-smart-filter-hidden')) {
-                hasHiddenSibling = true;
-                break;
-              }
-              // If we hit visible content, stop looking
-              if (sibling.textContent && sibling.textContent.trim() !== '') {
-                break;
-              }
-            }
-            
-            // Check next sibling if not found hidden before
-            if (!hasHiddenSibling) {
-              for (let i = currentIndex + 1; i < siblings.length; i++) {
-                const sibling = siblings[i] as HTMLElement;
-                if (sibling.style.display === 'none' || sibling.hasAttribute('data-smart-filter-hidden')) {
-                  hasHiddenSibling = true;
-                  break;
-                }
-                // If we hit visible content, stop looking
-                if (sibling.textContent && sibling.textContent.trim() !== '') {
-                  break;
-                }
-              }
-            }
-          }
-          
-          if (hasHiddenSibling) {
-            htmlElement.style.display = 'none';
-            htmlElement.setAttribute('data-smart-filter-hidden', 'true');
-            addLog(`❌ HIDING: separator line`);
-          }
+        if (isLikelySeparator) {
+          htmlElement.style.display = 'none';
+          htmlElement.style.visibility = 'hidden';
+          htmlElement.style.height = '0';
+          htmlElement.style.margin = '0';
+          htmlElement.style.padding = '0';
+          htmlElement.setAttribute('data-smart-filter-hidden', 'true');
+          addLog(`🧹 NUCLEAR HIDING: ${htmlElement.tagName}.${htmlElement.className || 'no-class'} (${htmlElement.offsetHeight}px)`);
         }
       });
       
-      addLog(`🧹 Separator cleanup completed`);
-    }, 100);
+      // Also inject aggressive CSS to catch anything we missed
+      const aggressiveStyle = document.createElement('style');
+      aggressiveStyle.id = 'aggressive-separator-killer';
+      aggressiveStyle.textContent = `
+        /* NUCLEAR separator removal in modals */
+        [data-testid="modal"] hr,
+        [data-testid="modal"] .border,
+        [data-testid="modal"] .border-t,
+        [data-testid="modal"] .border-b,
+        [data-testid="modal"] .border-l,
+        [data-testid="modal"] .border-r,
+        [data-testid="modal"] .border-gray-100,
+        [data-testid="modal"] .border-gray-200,
+        [data-testid="modal"] .border-gray-300,
+        [data-testid="modal"] .border-gray-400,
+        [data-testid="modal"] .divide-y > *:not(.contact-category),
+        [data-testid="modal"] .divide-x > *,
+        [role="dialog"] hr,
+        [role="dialog"] .border,
+        [role="dialog"] .border-t,
+        [role="dialog"] .border-b,
+        .modal hr,
+        .modal .border,
+        .modal .border-t,
+        .modal .border-b,
+        .modal .divide-y > *:not(:first-child)::before,
+        .modal .divide-x > *:not(:first-child)::before {
+          display: none !important;
+          visibility: hidden !important;
+          height: 0 !important;
+          min-height: 0 !important;
+          max-height: 0 !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          border: none !important;
+          background: none !important;
+        }
+      `;
+      
+      // Remove existing aggressive style first
+      const existingAggressive = document.getElementById('aggressive-separator-killer');
+      if (existingAggressive) {
+        existingAggressive.remove();
+      }
+      
+      document.head.appendChild(aggressiveStyle);
+      
+      addLog('🧹 NUCLEAR separator annihilation completed with CSS injection');
+    }, 150);
   };
 
   useEffect(() => {
