@@ -171,6 +171,26 @@ const ComponentMultiSelectInput: React.FC<ComponentMultiSelectInputProps> = ({
     );
   }
 
+  // Force parent container to be half width using direct DOM manipulation
+  React.useEffect(() => {
+    const interval = setInterval(() => {
+      const elements = document.querySelectorAll('[data-strapi-field-uid*="TestItemGroup"]');
+      elements.forEach((element) => {
+        const parent = element.closest('[data-strapi-field]') || element.parentElement;
+        if (parent && parent instanceof HTMLElement) {
+          parent.style.width = '50%';
+          parent.style.maxWidth = '50%';
+          parent.style.flex = '0 0 50%';
+          parent.style.display = 'inline-block';
+          parent.style.verticalAlign = 'top';
+          parent.style.paddingRight = '8px';
+        }
+      });
+    }, 100);
+    
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <div>
       <MultiSelect
