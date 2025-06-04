@@ -18,12 +18,12 @@
   "attributes": {
     "Name": {
       "type": "string",
-      "required": true,
       "pluginOptions": {
         "i18n": {
           "localized": true
         }
-      }
+      },
+      "required": true
     },
     "Slug": {
       "type": "uid",
@@ -39,12 +39,12 @@
     },
     "isActive": {
       "type": "boolean",
-      "default": true,
       "pluginOptions": {
         "i18n": {
           "localized": true
         }
-      }
+      },
+      "default": true
     },
     "Categories": {
       "type": "relation",
@@ -54,31 +54,31 @@
     },
     "Criteria": {
       "type": "component",
-      "repeatable": true,
-      "component": "rating.criterion",
       "pluginOptions": {
         "i18n": {
           "localized": true
         }
-      }
+      },
+      "component": "rating.criterion",
+      "repeatable": true
     },
     "allowComment": {
       "type": "boolean",
-      "default": true,
       "pluginOptions": {
         "i18n": {
           "localized": true
         }
-      }
+      },
+      "default": true
     },
     "allowRating": {
       "type": "boolean",
-      "default": true,
       "pluginOptions": {
         "i18n": {
           "localized": true
         }
-      }
+      },
+      "default": true
     },
     "ItemGroup": {
       "type": "json",
@@ -93,13 +93,22 @@
     },
     "IconSet": {
       "type": "enumeration",
+      "default": "Classic",
       "enum": [
         "Classic",
         "Warning",
         "Thumb",
         "Minimal"
-      ],
-      "default": "Classic"
+      ]
+    },
+    "TestItemGroup": {
+      "type": "customField",
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
+      },
+      "customField": "plugin::smart-component-filter.component-multi-select"
     }
   }
 }

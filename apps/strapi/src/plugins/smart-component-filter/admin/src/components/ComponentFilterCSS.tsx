@@ -35,27 +35,59 @@ const ComponentFilterCSS: React.FC = () => {
     let modalContainer = document.querySelector('[data-testid="modal"], .modal, [role="dialog"]');
     
     if (!modalContainer) {
-      // Check for modal with "Pick one component" text
+      // DIRECT APPROACH: Find modal by "Pick one component" text and h3 elements
       const allElements = document.querySelectorAll('*');
+      addLog(`🔍 DEBUG: Scanning ${allElements.length} elements for "Pick one component"`);
+      
       for (const element of allElements) {
         if (element.textContent?.includes('Pick one component')) {
-          modalContainer = element.closest('div') || element;
-          break;
+          addLog(`🔍 DEBUG: Found "Pick one component" in ${element.tagName}.${element.className || 'no-class'}`);
+          
+          // Check if this element or its parent contains component groups (h3 elements)
+          const hasComponentGroups = element.querySelector('h3') || element.querySelectorAll('h3').length > 0;
+          addLog(`🔍 DEBUG: Element has component groups: ${hasComponentGroups}, h3Count: ${element.querySelectorAll('h3').length}`);
+          
+          if (hasComponentGroups) {
+            modalContainer = element;
+            addLog('📋 Found modal container with component groups');
+            break;
+          }
+          
+          // Otherwise try to find parent with component groups
+          let parent = element.parentElement;
+          let parentLevel = 0;
+          while (parent && parent !== document.body && parentLevel < 10) {
+            const parentHasGroups = parent.querySelector('h3') || parent.querySelectorAll('h3').length > 0;
+            addLog(`🔍 DEBUG: Parent level ${parentLevel} (${parent.tagName}.${parent.className || 'no-class'}) has groups: ${parentHasGroups}, h3Count: ${parent.querySelectorAll('h3').length}`);
+            
+            if (parentHasGroups) {
+              modalContainer = parent;
+              addLog('📋 Found modal container via parent with component groups');
+              break;
+            }
+            parent = parent.parentElement;
+            parentLevel++;
+          }
+          
+          if (modalContainer) break;
         }
       }
     }
     
+    // SAFE FALLBACK: Only use document.body if we're definitely in modal context
     if (!modalContainer) {
-      // Check body for modal content
-      if (document.body.textContent?.includes('Pick one component')) {
+      const hasPickOneComponent = document.body.textContent?.includes('Pick one component');
+      const hasComponentGroups = document.querySelectorAll('h3').length > 0;
+      
+      addLog(`🔍 FALLBACK CHECK: hasPickOneComponent=${hasPickOneComponent}, hasComponentGroups=${hasComponentGroups}, h3Count=${document.querySelectorAll('h3').length}`);
+      
+      if (hasPickOneComponent && hasComponentGroups) {
         modalContainer = document.body;
-        addLog('📋 Using document.body as modal container');
+        addLog('⚠️ FALLBACK: Using document.body as last resort');
+      } else {
+        addLog('❌ Safe modal container not found - SKIPPING to prevent sidebar issues');
+        return;
       }
-    }
-    
-    if (!modalContainer) {
-      addLog('❌ Modal container not found');
-      return;
     }
     
     // Simple reset - only reset what we explicitly hid before  
@@ -68,15 +100,21 @@ const ComponentFilterCSS: React.FC = () => {
     
     addLog(`🔄 RESET: ${prevHidden.length} previously hidden elements restored`);
     
+    // SIMPLE SIDEBAR PROTECTION: Only hide if we're in component picker context
+    const isInComponentModal = (element: Element): boolean => {
+      // Simple check: if "Pick one component" text exists globally, we're in modal
+      return document.body.textContent?.includes('Pick one component') || false;
+    };
+
     if (listingType === 'Bank') {
       // Bank: Hide ENTIRE GROUP/BOX for unwanted categories
       const groupsToHide = ['info', 'violation', 'utilities', 'media', 'review', 'rating'];
       
       groupsToHide.forEach(groupName => {
-        // Find and hide ENTIRE category group/box
+        // Find and hide ENTIRE category group/box - WITH SIDEBAR PROTECTION
         const headings = modalContainer.querySelectorAll('h3');
         headings.forEach(heading => {
-          if (heading.textContent?.toLowerCase().includes(groupName)) {
+          if (heading.textContent?.toLowerCase().includes(groupName) && isInComponentModal(heading)) {
             // Hide the entire parent container/box
             let groupContainer = heading.closest('div[role="region"], div:has(h3), section, article') as HTMLElement;
             
@@ -102,10 +140,10 @@ const ComponentFilterCSS: React.FC = () => {
         });
       });
       
-      // Hide Social button within contact (but keep Basic + Location)
+      // Hide Social button within contact (but keep Basic + Location) - WITH SIDEBAR PROTECTION
       const buttons = modalContainer.querySelectorAll('button');
       buttons.forEach(button => {
-        if (button.textContent?.trim() === 'Social') {
+        if (button.textContent?.trim() === 'Social' && isInComponentModal(button)) {
           (button as HTMLElement).style.display = 'none';
           button.setAttribute('data-smart-filter-hidden', 'true');
           addLog(`❌ HIDING: Social button`);
@@ -121,7 +159,7 @@ const ComponentFilterCSS: React.FC = () => {
       groupsToHide.forEach(groupName => {
         const headings = modalContainer.querySelectorAll('h3');
         headings.forEach(heading => {
-          if (heading.textContent?.toLowerCase().includes(groupName)) {
+          if (heading.textContent?.toLowerCase().includes(groupName) && isInComponentModal(heading)) {
             // Hide the entire parent container/box
             let groupContainer = heading.closest('div[role="region"], div:has(h3), section, article') as HTMLElement;
             
@@ -147,11 +185,11 @@ const ComponentFilterCSS: React.FC = () => {
         });
       });
       
-      // Hide Basic and Location buttons within contact (but keep Social)
+      // Hide Basic and Location buttons within contact (but keep Social) - WITH SIDEBAR PROTECTION
       const buttons = modalContainer.querySelectorAll('button');
       buttons.forEach(button => {
         const text = button.textContent?.trim();
-        if (text === 'Basic' || text === 'Location') {
+        if ((text === 'Basic' || text === 'Location') && isInComponentModal(button)) {
           (button as HTMLElement).style.display = 'none';
           button.setAttribute('data-smart-filter-hidden', 'true');
           addLog(`❌ HIDING: ${text} button`);
@@ -172,22 +210,44 @@ const ComponentFilterCSS: React.FC = () => {
     let modalContainer = document.querySelector('[data-testid="modal"], .modal, [role="dialog"]');
     
     if (!modalContainer) {
+      // Use same DIRECT APPROACH as main filter
       const allElements = document.querySelectorAll('*');
       for (const element of allElements) {
         if (element.textContent?.includes('Pick one component')) {
-          modalContainer = element.closest('div') || element;
-          break;
+          const hasComponentGroups = element.querySelector('h3') || element.querySelectorAll('h3').length > 0;
+          if (hasComponentGroups) {
+            modalContainer = element;
+            break;
+          }
+          
+          let parent = element.parentElement;
+          while (parent && parent !== document.body) {
+            const parentHasGroups = parent.querySelector('h3') || parent.querySelectorAll('h3').length > 0;
+            if (parentHasGroups) {
+              modalContainer = parent;
+              break;
+            }
+            parent = parent.parentElement;
+          }
+          
+          if (modalContainer) break;
         }
       }
     }
     
+    // Use same SMART SIDEBAR PROTECTION as main filter
     if (!modalContainer) {
-      if (document.body.textContent?.includes('Pick one component')) {
+      const hasPickOneComponent = document.body.textContent?.includes('Pick one component');
+      const hasComponentGroups = document.querySelectorAll('h3').length > 0;
+      
+      if (hasPickOneComponent && hasComponentGroups) {
         modalContainer = document.body;
       }
     }
     
-    if (!modalContainer) return;
+    if (!modalContainer) {
+      return;
+    }
       
       // NUCLEAR APPROACH - Hide everything that could be a separator
       const allElements = modalContainer.querySelectorAll('*');

@@ -48,8 +48,8 @@ export default ({ env }) => {
 
     'smart-component-filter': {
       enabled: true,
-      resolve: './src/plugins/_smart-component-filter'
-    }
+      resolve: './src/plugins/smart-component-filter'
+    },
 
     // email: {
     //   config: {

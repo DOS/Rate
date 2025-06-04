@@ -229,21 +229,46 @@ export default ({ strapi }: { strapi: Core.Strapi }) => ({
   /**
    * Get available components cho một category
    */
-  async getAvailableComponents(categoryId?: number): Promise<string[]> {
+  async getAvailableComponents(categoryId?: number): Promise<any> {
     try {
-      // Load all components có thể sử dụng
-      const components = Object.keys(strapi.components);
+      console.log('🔍 [Service] getAvailableComponents starting, categoryId:', categoryId);
       
-      // Filter theo category nếu có
+      // Load all components có thể sử dụng
+      const componentNames = Object.keys(strapi.components);
+      console.log('🔍 [Service] Total component names found:', componentNames.length);
+      console.log('🔍 [Service] First few component names:', componentNames.slice(0, 5));
+      
+      const components = componentNames.map((componentName) => {
+        const componentSchema = strapi.components[componentName];
+        
+        return {
+          uid: componentName,
+          name: componentName,
+          displayName: componentSchema.info?.displayName || componentName,
+          description: componentSchema.info?.description,
+          category: componentSchema.category || 'uncategorized',
+          icon: componentSchema.info?.icon,
+          attributes: Object.keys(componentSchema.attributes || {}),
+          attributeCount: Object.keys(componentSchema.attributes || {}).length,
+        };
+      });
+      
+      console.log('🔍 [Service] Mapped components:', components.length);
+      console.log('🔍 [Service] First mapped component:', components[0]);
+      
+      // Filter by category if specified
+      let filteredComponents = components;
       if (categoryId) {
-        // Có thể implement logic filter theo category
-        // Ví dụ: chỉ show components thuộc category cụ thể
+        console.log('🔍 [Service] Filtering by categoryId:', categoryId);
+        // Add category filtering logic here if needed
       }
-
-      return components;
+      
+      console.log('✅ [Service] Returning', filteredComponents.length, 'components');
+      return filteredComponents;
     } catch (error) {
-      strapi.log.error('[Schema Loader] Error getting available components:', error);
-      return [];
+      console.error('❌ [Service] getAvailableComponents error:', error);
+      strapi.log.error('[Schema Loader Service] Error getting available components:', error);
+      throw error;
     }
   },
 }); 
