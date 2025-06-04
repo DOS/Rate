@@ -46,3 +46,4 @@ yarn-error.log*
 
 .strapi-updater.json
 node_modules_old/
+.cursor/rules/strapi-login.mdc
