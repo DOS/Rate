@@ -1,0 +1,6 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+Trong dự án Rate-New Turborepo trên PowerShell 7 Windows 11, luôn chạy lệnh từ thư mục root. Sử dụng "yarn dev" để khởi động môi trường phát triển và "yarn build" để build, tuyệt đối không dùng npm tương đương. Thao tác file phải dùng cú pháp PowerShell. Tránh dùng lệnh bash.

@@ -1,5 +1,5 @@
 import { StrapiApp } from '@strapi/strapi/admin';
-import ComponentFilter from './components/ComponentFilter';
+import ComponentFilterCSS from './components/ComponentFilterCSS';
 
 const PLUGIN_ID = '_smart-component-filter';
 
@@ -18,13 +18,13 @@ export default {
     console.log('🚀 Smart Component Filter plugin bootstrapping...');
     
     try {
-      // Inject component filter display in edit view
+      // Inject component filter display in editView (works for both create and edit)
       app.getPlugin('content-manager').injectComponent('editView', 'right-links', {
         name: 'smart-filter-display',
-        Component: ComponentFilter as any,
+        Component: ComponentFilterCSS as any,
       });
 
-      console.log('✅ Smart Component Filter plugin: Bootstrap completed');
+      console.log('✅ Smart Component Filter plugin: Bootstrap completed for editView (create & edit)');
     } catch (error) {
       console.error('❌ Failed to bootstrap Smart Component Filter plugin:', error);
     }
