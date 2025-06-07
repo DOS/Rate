@@ -18,12 +18,12 @@
   "attributes": {
     "Title": {
       "type": "string",
-      "required": true,
       "pluginOptions": {
         "i18n": {
           "localized": true
         }
-      }
+      },
+      "required": true
     },
     "Slug": {
       "type": "string",
@@ -43,12 +43,12 @@
     },
     "isActive": {
       "type": "boolean",
-      "default": true,
       "pluginOptions": {
         "i18n": {
           "localized": true
         }
-      }
+      },
+      "default": true
     },
     "Description": {
       "type": "blocks",
@@ -62,7 +62,7 @@
       "type": "relation",
       "relation": "manyToOne",
       "target": "api::item.item",
-      "inversedBy": "listings"
+      "inversedBy": "Listings"
     },
     "Category": {
       "type": "relation",

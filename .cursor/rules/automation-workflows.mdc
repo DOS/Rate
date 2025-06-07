@@ -1,0 +1,44 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+---
+description: Development automation workflows và productivity patterns
+globs: ["scripts/**/*", "*.ps1", "package.json"]
+alwaysApply: true
+---
+
+# Automation Workflows
+
+## Testing Automation
+- Write tests first, then code
+- Run tests until pass
+- Auto-fix linting errors
+- Validate with TypeScript strict mode
+
+## Code Generation Rules
+- Generate complete, runnable code
+- Include all imports và dependencies
+- Add comprehensive error handling
+- Create documentation automatically
+
+## PowerShell Automation
+- Use PowerShell 7 syntax
+- Avoid bash commands
+- Auto-restart services
+- Background process management
+
+## Quality Assurance
+- Automatic linting fixes
+- TypeScript validation
+- Performance monitoring
+- Security best practices by default
+
+## File Operations
+- PowerShell file manipulation
+- Respect existing project structure  
+- Version control integration
+
+
+- Backup critical changes

@@ -1,0 +1,180 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# MCP INTEGRATIONS & EXTENSIONS
+
+
+## 🎨 DESIGN-TO-CODE WORKFLOW
+
+### Builder.io Integration
+```typescript
+// Workflow: Figma → Builder.io → Cursor
+const designToCodeProcess = {
+  step1: "Design UI components trong Figma",
+  step2: "Use Builder.io plugin để export code",
+  step3: "Import vào Cursor và enhance với AI",
+  step4: "AI optimize, add functionality, và integrate"
+};
+```
+
+### Mermaid Diagram Automation
+Cursor 1.0 render Mermaid diagrams trực tiếp trong chat:
+
+```
+Prompt Pattern:
+"Tạo Mermaid diagram cho [system/workflow] và implement code theo diagram đó"
+
+AI sẽ:
+1. Tạo Mermaid syntax
+2. Cursor render visual diagram  
+3. AI generate code theo architecture trong diagram
+```
+
+## 🧠 ENHANCED MEMORY BANK STRUCTURE
+
+Dựa trên ChatGPT suggestion, enhance memory structure:
+
+```
+memory-bank/
+├── 📋 project-brief.md      # Project overview & goals
+├── 🔧 tech-context.md       # Technology stack & constraints  
+├── 🏗️ system-patterns.md    # Architecture & design patterns
+├── 🎯 product-context.md    # Business logic & UX requirements
+├── ⚡ active-context.md     # Current work focus
+├── 📊 progress.md           # Completed vs remaining tasks
+└── 🐛 troubleshooting.md    # Common issues & solutions
+```
+
+### Auto-Update Memory Templates
+```typescript
+// Template cho active-context.md
+interface ActiveContext {
+  currentFeature: string;
+  recentChanges: string[];
+  nextSteps: string[];
+  blockers: string[];
+  decisions: { what: string; why: string; when: string }[];
+}
+
+// AI tự động update sau mỗi major task
+const updateMemoryPrompt = `
+Analyze our session và update:
+1. active-context.md với current state
+2. progress.md với completed tasks
+3. troubleshooting.md nếu có new solutions
+4. system-patterns.md nếu có architecture changes
+`;
+```
+
+## 🚀 SEQUENTIAL THINKING AUTOMATION
+
+### Multi-Step Task Planning
+```
+Advanced Prompt Pattern:
+"Use Sequential Thinking để:
+1. Break down [complex task] thành steps
+2. Identify dependencies và prerequisites  
+3. Create implementation timeline
+4. Execute step-by-step với validation
+5. Update memory bank với lessons learned"
+```
+
+### Auto-Research Workflow
+```typescript
+const researchPattern = {
+  trigger: "When encountering unfamiliar technology/API",
+  process: [
+    "Search documentation",
+    "Analyze best practices từ multiple sources", 
+    "Generate implementation plan",
+    "Create reusable templates",
+    "Store knowledge trong memory bank"
+  ]
+};
+```
+
+## 🎮 GAMING THE SYSTEM
+
+### Productivity Metrics Tracking
+```typescript
+interface ProductivityMetrics {
+  codeGenerationAccuracy: number;
+  bugResolutionTime: number; 
+  automationEffectiveness: number;
+  manualInterventionRate: number;
+  userSatisfactionScore: number;
+}
+
+// Target: 30% time saving, 80% automation rate
+```
+
+### Continuous Improvement Loop
+```
+Weekly Review Process:
+1. Analyze failed automation attempts
+2. Identify repetitive manual tasks
+3. Create new rules/MCPs để automate
+4. Update memory bank với new patterns
+5. Optimize MCP configurations
+```
+
+## 🔍 SMART DEBUGGING WORKFLOW
+
+### Deebo Integration Pattern
+```typescript
+const debugWorkflow = {
+  issue: "Complex bug discovered",
+  process: [
+    "Deebo MCP analyzes error patterns",
+    "Generate comprehensive logging",
+    "Run diagnostics across stack",
+    "AI proposes multiple solutions",
+    "Test solutions with automated validation",
+    "Store successful pattern trong memory"
+  ]
+};
+```
+
+### Squidler UI Testing Automation
+```typescript
+const uiTestingWorkflow = {
+  trigger: "After UI changes",
+  process: [
+    "Squidler auto-crawls application",
+    "Simulates user interactions",
+    "Detects UI/UX issues, console errors",
+    "Reports issues với actionable fixes",
+    "AI implements fixes automatically",
+    "Re-test until all issues resolved"
+  ]
+};
+```
+
+## 📈 PERFORMANCE OPTIMIZATION
+
+### Bundle Analysis Automation
+```typescript
+const performanceWorkflow = {
+  schedule: "After major features",
+  tasks: [
+    "AI analyzes bundle sizes",
+    "Identifies optimization opportunities", 
+    "Implements code splitting strategies",
+    "Optimizes database queries",
+    "Sets up monitoring alerts",
+    "Documents performance patterns"
+  ]
+};
+```
+
+## 🎯 SUCCESS METRICS
+
+Target achievements với enhanced setup:
+- ✅ **80% code automation** (vs 60% với basic setup)
+- ✅ **10x faster debugging** (với Deebo integration)
+- ✅ **Zero UI bugs** (với Squidler auto-testing)
+- ✅ **30% time savings** (confirmed metric từ research)
+- ✅ **Self-improving system** (via enhanced memory bank)
+

@@ -1,0 +1,90 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# CORE SETUP - NON-CODER AUTOMATION
+
+## 🎯 ROLE & PERSONA
+Tôi là non-coder, mạnh về logic, solution design, business design và multitasking.
+Tôi cần AI làm tự động nhiều nhất có thể, ít phải động tay vào code.
+
+## 🛠️ TECH STACK CHÍNH
+- **Runtime**: Node.js, PowerShell 7 (Windows 11) 
+- **Frontend**: Next.js, React, TypeScript
+- **Backend**: Strapi CMS, Node.js APIs
+- **Database**: PostgreSQL, MongoDB
+- **DevOps**: Docker, Docker Compose
+- **Future**: Flutter (mobile development)
+
+## 🤖 AI AUTOMATION PRINCIPLES
+
+### Code Generation
+- LUÔN tạo code hoàn chỉnh, có thể chạy ngay
+- Thêm đầy đủ imports, dependencies, error handling
+- Tạo README và documentation tự động
+- Không bao giờ tạo code cần manual setup phức tạp
+
+### Testing & Quality
+- Tự động tạo tests khi generate code
+- Sử dụng "Write tests first, then code, then run tests until pass"
+- Auto-fix linting errors với Command K terminal
+- Validate code bằng TypeScript strict mode
+
+### Project Structure
+- Tạo file structure hoàn chỉnh cho new projects
+- Include package.json với correct dependencies
+- Setup Docker files khi cần
+- Tạo environment files (.env.example)
+
+## 📁 WORKSPACE PATTERNS
+
+### Turborepo Structure
+```
+workspace/
+├── apps/
+│   ├── strapi/     # Backend CMS
+│   └── ui/         # Frontend Next.js
+├── packages/
+│   ├── shared-data/
+│   ├── design-system/
+│   └── typescript-config/
+```
+
+### Commands Automation
+- **Dev**: `yarn dev` (NEVER npm equivalents)
+- **Build**: `yarn build` 
+- **PowerShell**: Sử dụng Windows PowerShell syntax
+- **File operations**: PowerShell commands, not bash
+
+## 🔧 ERROR HANDLING & DEBUGGING
+- Luôn add comprehensive error handling
+- Log meaningful error messages
+- Provide recovery suggestions
+- Auto-restart services khi cần (MCP servers, etc.)
+- Tạo testing script trong /Test
+
+## 🚀 PRODUCTIVITY BOOSTERS
+- Sử dụng Agent Mode cho complex tasks
+- Leverage Background Agent cho parallel work
+- Auto-generate commit messages
+- Use YOLO mode cho automatic testing/building
+
+## 🎨 UI/UX STANDARDS
+- Tạo beautiful, modern UI by default
+- Follow best UX practices
+- Responsive design là mandatory
+- Accessibility considerations
+
+## 📝 DOCUMENTATION AUTO-GENERATION
+- Tạo comprehensive README cho mọi project
+- JSDoc cho functions
+- API documentation tự động
+- Setup guides với screenshots nếu cần
+
+## 🔒 SECURITY & BEST PRACTICES
+- Never hardcode credentials
+- Use environment variables
+- Implement proper validation
+- Follow security best practices by default
+

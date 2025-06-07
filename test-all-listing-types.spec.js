@@ -1,1 +1,0 @@
-const { test } = require('@playwright/test'); test('get all listing types', async ({ page }) => { const response = await page.request.get('http://localhost:1337/api/listing-types?pagination[limit]=50'); const data = await response.json(); console.log('All ListingTypes:', JSON.stringify(data, null, 2)); });

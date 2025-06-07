@@ -1,0 +1,196 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# MEMORY PATTERNS & KNOWLEDGE MANAGEMENT
+
+## 🧠 MEMORY BANK AUTOMATION
+
+### Tự động Capture Knowledge
+Khi AI encounter situations này, LUÔN update memory:
+
+1. **Giải quyết bug phức tạp** → Store solution pattern
+2. **Discover project-specific quirks** → Document trong rules
+3. **Successful feature implementation** → Save architecture decision
+4. **Performance optimization** → Record performance pattern
+5. **Error resolution** → Add to troubleshooting knowledge
+
+### Knowledge Categories
+```
+📁 memory-bank/
+├── 🔧 technical-patterns/
+│   ├── strapi-plugin-development.md
+│   ├── turborepo-optimization.md
+│   └── powershell-automation.md
+├── 🐛 bug-solutions/
+│   ├── mcp-server-crashes.md
+│   ├── strapi-build-errors.md
+│   └── playwright-test-failures.md
+├── 🚀 successful-implementations/
+│   ├── smart-component-filter.md
+│   ├── authentication-flow.md
+│   └── api-integration-patterns.md
+└── 📊 performance-insights/
+    ├── build-optimization.md
+    ├── database-query-tuning.md
+    └── frontend-bundle-analysis.md
+```
+
+## 🔄 LEARNING LOOP PATTERNS
+
+### After Every Major Task
+```
+AUTOMATIC ROUTINE:
+1. Analyze what worked well
+2. Identify what was challenging
+3. Extract reusable patterns
+4. Update relevant memory files
+5. Enhance cursor rules if needed
+```
+
+### Pattern Recognition Triggers
+- **Repetitive problems** → Create automation script
+- **Manual steps** → Generate automation workflow  
+- **Knowledge gaps** → Request documentation
+- **Successful solutions** → Template for future use
+
+## 📚 KNOWLEDGE TEMPLATES
+
+### Bug Resolution Template
+```markdown
+# [Bug Name] - [Date]
+
+## Problem
+- Symptoms: [what user observed]
+- Root Cause: [technical cause]
+- Impact: [what broke]
+
+## Solution
+```code
+[exact solution code]
+```
+
+## Prevention
+- [how to avoid in future]
+- [detection methods]
+- [monitoring to add]
+
+## Related Patterns
+- Similar issues: [links]
+- Prevention strategies: [list]
+```
+
+### Feature Implementation Template
+```markdown
+# [Feature Name] - Implementation Pattern
+
+## Architecture Decision
+- Approach: [why this approach]
+- Trade-offs: [what was considered]
+- Dependencies: [what was needed]
+
+## Code Pattern
+```typescript
+// Reusable pattern example
+[key code snippets]
+```
+
+## Testing Strategy
+- Unit tests: [approach]
+- Integration tests: [coverage]
+- E2E tests: [scenarios]
+
+## Deployment Notes
+- Build requirements: [list]
+- Environment variables: [list]
+- Post-deployment checks: [list]
+```
+
+## 🤖 AI SELF-IMPROVEMENT
+
+### Continuous Learning Prompts
+```
+END-OF-SESSION AUTOMATION:
+"Analyze our conversation and identify:
+1. New patterns worth remembering
+2. Mistakes to avoid next time
+3. Successful techniques to reuse
+4. Updates needed for cursor rules
+5. Memory bank additions required"
+```
+
+### Performance Tracking
+Track và improve:
+- **Code generation accuracy**
+- **Bug resolution speed**  
+- **Pattern recognition success**
+- **Automation effectiveness**
+- **User satisfaction levels**
+
+## 📈 MEMORY OPTIMIZATION
+
+### Regular Maintenance
+- **Weekly**: Review và consolidate memories
+- **Monthly**: Archive outdated patterns
+- **Quarterly**: Optimize rule effectiveness
+- **Yearly**: Major knowledge reorganization
+
+### Memory Prioritization
+1. **High Priority**: Frequently used patterns
+2. **Medium Priority**: Project-specific knowledge
+3. **Low Priority**: One-time solutions
+4. **Archive**: Deprecated/outdated information
+
+## 🔍 PATTERN MATCHING
+
+### Common Scenarios to Remember
+- **MCP Server Issues** → Auto-restart procedures
+- **Strapi Plugin Problems** → Version compatibility matrix
+- **Build Failures** → Common causes và fixes
+- **Performance Issues** → Optimization checklists
+- **Deployment Problems** → Rollback procedures
+
+### Correlation Analysis
+Connect patterns across:
+- **Technology stacks** (Node.js + Strapi + Next.js)
+- **Error types** (build vs runtime vs deployment)
+- **User workflows** (development vs testing vs production)
+- **Time patterns** (morning issues vs evening issues)
+
+## 🎯 ACTIONABLE MEMORY RULES
+
+### Immediate Actions
+Khi AI sees these triggers, AUTO-EXECUTE:
+
+1. **"Can't connect to database"** → Check connection string + env vars
+2. **"Port already in use"** → Run port kill script + restart service
+3. **"Module not found"** → Check imports + run yarn install
+4. **"Build failed"** → Run lint + fix TypeScript errors
+5. **"Tests failing"** → Update snapshots + check test data
+
+### Preventive Actions
+Based on past patterns, AUTO-SUGGEST:
+
+1. **Before major changes** → Run full test suite
+2. **Before deployment** → Check environment variables
+3. **Before new features** → Update documentation
+4. **Before package updates** → Check compatibility matrix
+5. **Before refactoring** → Create backup branch
+
+## 🔄 FEEDBACK LOOPS
+
+### Success Metrics
+Track effectiveness of memory patterns:
+- **Reduced repetitive questions**
+- **Faster problem resolution**
+- **Fewer recurring bugs**
+- **Improved code quality**
+- **Higher user satisfaction**
+
+### Memory Quality Indicators
+- **Relevance**: Được sử dụng thường xuyên
+- **Accuracy**: Giải pháp work consistently
+- **Completeness**: Enough detail to reproduce
+- **Timeliness**: Still relevant for current tech stack
+- **Clarity**: Easy to understand và apply

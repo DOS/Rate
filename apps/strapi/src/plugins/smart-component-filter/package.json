@@ -1,5 +1,5 @@
 {
-  "version": "1.0.7",
+  "version": "2.0.2",
   "keywords": [],
   "type": "commonjs",
   "exports": {
@@ -60,10 +60,10 @@
     "kind": "plugin",
     "name": "smart-component-filter",
     "displayName": "Smart Component Filter",
-    "description": "To dynamic load a set of components in a dynamic zone based on the config"
+    "description": "Smart Component Filter v2.0.2 - Native Strapi MultiSelect with dynamic component loading and real-time filtering"
   },
   "name": "smart-component-filter",
-  "description": "To dynamic load a set of components in a dynamic zone based on the config",
+  "description": "Smart Component Filter v2.0.2 - Native Strapi MultiSelect with dynamic component loading and real-time filtering",
   "license": "MIT",
   "repository": {
     "type": "git",

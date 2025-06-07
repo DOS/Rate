@@ -136,7 +136,7 @@
       "relation": "manyToOne",
       "target": "api::identity.identity"
     },
-    "listings": {
+    "Listings": {
       "type": "relation",
       "relation": "oneToMany",
       "target": "api::listing.listing",

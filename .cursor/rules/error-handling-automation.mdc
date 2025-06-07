@@ -1,0 +1,31 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Error Handling Automation
+
+## MCP Server Issues
+- Auto-restart command: `npx @playwright/mcp@latest --port 8931`
+- Check port: `netstat -an | findstr 8931`
+- Config file: `playwright-mcp-config.json`
+
+## Build Failures
+1. Check TypeScript errors first
+2. Verify imports và dependencies
+3. Clear dist directories
+4. Run yarn install if needed
+5. Check environment variables
+
+## Plugin Development
+- Test trong /Test directory
+- Clean build artifacts khi có issues
+- Verify database connections
+- Check console logs cho JavaScript errors
+
+## Automatic Recovery
+- Port conflicts: Auto-kill và restart
+- Module not found: Run yarn install
+- Database issues: Check connection strings
+- Build cache: Clear và rebuild
+

@@ -1,0 +1,87 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+---
+description: Documentation và Modules integration workflow
+globs: ["Docs/**/*", "Modules/**/*", "*.md"]
+alwaysApply: true
+---
+
+# Docs & Modules Integration Workflow
+
+## 📚 Knowledge Sources Priority
+1. **Primary docs**: `D:\Projects\JOY\Rate\Docs`
+2. **Modules reference**: `D:\Projects\JOY\Rate\Modules`  
+3. **Project codebase**: Existing patterns trong apps/
+4. **Memory bank**: Lessons learned từ previous sessions
+
+## 🔍 Search Pattern for Solutions
+Khi implement new features:
+1. **Search existing Docs** cho established patterns
+2. **Check Modules** cho similar functionality
+3. **Reference existing solutions** trước khi tạo new
+4. **Update docs** với new discoveries
+5. **Maintain consistency** với established patterns
+
+## 📁 Documentation Structure
+```
+Docs/
+├── Guides/           # Development và setup guides
+├── Modules/          # Module-specific documentation
+│   ├── Rate-Extension/
+│   ├── Rate-Importer/
+│   └── Rate-New/     # Current project docs
+├── Platform/         # Platform architecture docs
+└── Resources/        # Additional resources
+```
+
+## 🏗️ Modules Architecture
+```
+Modules/
+├── Extension/        # Browser extension
+│   ├── Crawler/      # Web crawling functionality
+│   ├── Docs/         # Extension documentation
+│   └── memory-bank/  # Extension knowledge base
+├── Importer/         # Data import system
+│   ├── Docs/         # Import documentation  
+│   ├── Results/      # Import results
+│   ├── Scripts/      # Import automation scripts
+│   ├── Splink/       # Record linkage system
+│   └── memory-bank/  # Import knowledge base
+└── Validator/        # Data validation system
+```
+
+## 🔄 Integration Workflow
+Khi develop new functionality:
+1. **Check existing modules** cho similar patterns
+2. **Reference docs** cho established conventions
+3. **Follow existing file/folder structure**
+4. **Update docs** với new patterns discovered
+5. **Cross-reference** related documentation
+
+## 📝 Documentation Updates
+After major implementations:
+1. **Update relevant files** trong `/Docs`
+2. **Create module documentation** trong `/Modules`  
+3. **Link related patterns** across docs
+4. **Maintain consistency** với existing style
+5. **Version control** documentation changes
+
+## 🧠 Memory Bank Integration
+Use `/Docs` as living memory bank:
+- **Reference existing guides** trước khi tạo mới
+- **Update troubleshooting** với new solutions
+- **Document architecture decisions** và rationale
+- **Maintain patterns library** cho reuse
+
+## 🎯 Consistency Rules
+- **Naming conventions**: Follow existing patterns trong codebase
+- **File structure**: Respect established organization
+- **Code style**: Match existing conventions
+- **Documentation format**: Consistent với current docs style
+- **Module organization**: Follow `/Modules` structure patterns
+
+
+

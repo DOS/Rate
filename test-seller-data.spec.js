@@ -1,1 +1,0 @@
-const { test } = require('@playwright/test'); test('check seller itemfield', async ({ page }) => { const response = await page.request.get('http://localhost:1337/api/listing-types/22?populate=*'); const data = await response.json(); console.log('Seller data:', JSON.stringify(data, null, 2)); });

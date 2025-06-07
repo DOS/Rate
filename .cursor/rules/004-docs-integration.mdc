@@ -1,0 +1,59 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# DOCS & MODULES INTEGRATION
+
+## 📚 KNOWLEDGE SOURCES
+- **Primary docs**: `D:\Projects\JOY\Rate\Docs`
+- **Modules reference**: `D:\Projects\JOY\Rate\Modules`  
+- **Project structure**: Existing codebase patterns
+- Always check existing docs before creating new solutions
+
+## 🔍 SEARCH PATTERN
+When asked about implementation:
+1. **Search existing Docs** for established patterns
+2. **Check Modules** for similar functionality  
+3. **Reference existing solutions** before creating new
+4. **Update docs** with new discoveries
+5. **Maintain consistency** với established patterns
+
+## 📝 DOCUMENTATION UPDATES
+After major implementations:
+1. **Update relevant files** trong `/Docs`
+2. **Create module documentation** trong `/Modules`  
+3. **Link related patterns** across docs
+4. **Maintain consistency** với existing style
+5. **Version control** documentation changes
+
+## 🏗️ EXISTING PROJECT STRUCTURE
+Respect current architecture:
+- **Turborepo structure**: `apps/` và `packages/`
+- **Strapi plugins**: Follow existing plugin patterns
+- **Next.js conventions**: Use established routing/component patterns
+- **PowerShell scripts**: Follow existing automation patterns
+
+## 🧠 MEMORY BANK INTEGRATION
+Use `/Docs` as living memory bank:
+- **Reference existing guides** trước khi tạo mới
+- **Update troubleshooting** với new solutions
+- **Document architecture decisions** và rationale
+- **Maintain patterns library** cho reuse
+
+## 🔄 WORKFLOW INTEGRATION
+Khi implement new features:
+1. **Check existing modules** for similar patterns
+2. **Reference docs** for established conventions
+3. **Follow existing file/folder structure**
+4. **Update docs** with new patterns discovered
+5. **Cross-reference** related documentation
+
+## 🎯 CONSISTENCY RULES
+- **Naming conventions**: Follow existing patterns trong codebase
+- **File structure**: Respect established organization
+- **Code style**: Match existing conventions
+- **Documentation format**: Consistent with current docs style
+- **Module organization**: Follow `/Modules` structure patterns
+
+

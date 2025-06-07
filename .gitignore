@@ -6,7 +6,7 @@ node_modules
 .pnp.js
 
 # testing
-coverage
+/coverage
 
 # next.js
 .next/
@@ -47,3 +47,22 @@ yarn-error.log*
 .strapi-updater.json
 node_modules_old/
 .cursor/rules/strapi-login.mdc
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# Test files and screenshots
+Test/
+*.spec.js
+*.png
+debug-*.js
+test-*.js
+find-*.js
+create-*.js
+verify-*.js
+inspect-*.js
+quick-*.js

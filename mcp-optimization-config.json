@@ -1,0 +1,54 @@
+{
+  "mcpServers": {
+    "// CORE TESTING (26 tools - KEEP)": "",
+    "Playwright": {
+      "command": "npx @playwright/mcp@latest --config D:\\Projects\\JOY\\Rate-New\\playwright-mcp-config.json",
+      "env": {},
+      "priority": "HIGH",
+      "note": "Already configured, works well for automation"
+    },
+
+    "// DEVELOPMENT ESSENTIALS (~15 tools total)": "",
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "D:\\Projects\\JOY"],
+      "description": "File operations cho Docs & Modules access",
+      "tools": "~8"
+    },
+    
+    "git": {
+      "command": "npx", 
+      "args": ["-y", "@modelcontextprotocol/server-git"],
+      "description": "Git operations automation",
+      "tools": "~7"
+    },
+
+    "// DOCUMENTATION & MEMORY (~10 tools)": "",
+    "docs-search": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-everything"],
+      "env": {
+        "SEARCH_PATHS": "D:\\Projects\\JOY\\Rate\\Docs,D:\\Projects\\JOY\\Rate\\Modules"
+      },
+      "description": "Search Docs & Modules for memory bank",
+      "tools": "~10"
+    },
+
+    "// OPTIONAL - ENABLE WHEN NEEDED": "",
+    "// deebo": {
+    "//   command": "npx",
+    "//   args": ["deebo-setup@latest"],
+    "//   description": "Advanced debugging - enable khi có complex bugs",
+    "//   tools": "~15",
+    "//   note": "Disable default, enable when debugging"
+    "// }",
+
+    "// SKIP THESE": "",
+    "// squidler": "SKIP - Playwright đã đủ cho testing",
+    "// pollinations": "SKIP - Ít dùng content generation", 
+    "// context7": "SKIP - Dùng docs-search thay thế"
+  },
+
+  "totalTools": "~49 tools (under 50 limit)",
+  "strategy": "Core essentials only, enable others on-demand"
+} 

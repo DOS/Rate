@@ -399,7 +399,7 @@ function getShopeeProductAndSellerInfo() {
 
   return {
     productName, price, productUrl, productId,
-    categories, brand, warehouse,
+    categories, brand,
     sellerName, sellerLink, sellerAvatar, sellerReviewCount, sellerFollowerCount
   };
 }
@@ -506,8 +506,17 @@ function scrapeShopeeVisibleReviews() {
     const likeNode = rating.querySelector('.shopee-product-rating__like-count');
     if (likeNode) likes = likeNode.textContent.trim();
 
+    // Extract variant (phân loại hàng) từ timeType nếu có
+    let reviewVariant = '';
+    if (timeType && timeType.includes('Phân loại hàng:')) {
+      // Ví dụ: "2025-02-10 11:34 | Phân loại hàng: Titan Sa Mạc"
+      const match = timeType.match(/Phân loại hàng:\s*([^|]+)/);
+      if (match) reviewVariant = match[1].trim();
+    }
+
     return {
       avatar, username, starCount, timeType, content, images, videos, likes,
+      reviewVariant,
       product: productInfo
     };
   });

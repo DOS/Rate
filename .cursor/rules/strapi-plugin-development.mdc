@@ -1,0 +1,36 @@
+---
+description: Strapi plugin development patterns, troubleshooting, Smart Component Filter v2.0.1 solutions, API endpoints, và plugin registration workflows
+globs: 
+alwaysApply: false
+---
+---
+description: Strapi plugin development patterns, troubleshooting, Smart Component Filter v2.0.1 solutions, API endpoints, và plugin registration workflows
+alwaysApply: false
+---
+
+# Strapi Plugin Development
+
+## Smart Component Filter Plugin Patterns
+- Plugin version: v2.0.1
+- Location: `apps/strapi/src/plugins/smart-component-filter/`
+- Database: PostgreSQL với ratebox schema
+
+## Common Issues & Solutions
+- **White screen errors**: Check @strapi/design-system imports
+- **Hardcoded data**: Replace with dynamic API calls  
+- **Custom fields**: Use React hooks for dynamic loading
+- **Real-time filtering**: Implement proper API endpoints
+
+## API Endpoints Pattern
+- `/api/smart-component-filter/components` - Get all components
+- `/api/smart-component-filter/listing-type/{id}/components` - Filtered components
+
+## Plugin Registration
+- Server: Tự động register trong bootstrap
+- Admin: Import trong admin/src/index.tsx
+
+
+
+
+
+- Test APIs với proper authentication

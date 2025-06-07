@@ -675,7 +675,7 @@ export interface ApiItemItem extends Struct.CollectionTypeSchema {
         }
       }> &
       Schema.Attribute.DefaultTo<"Other">
-    listings: Schema.Attribute.Relation<"oneToMany", "api::listing.listing">
+    Listings: Schema.Attribute.Relation<"oneToMany", "api::listing.listing">
     ListingType: Schema.Attribute.Relation<
       "manyToOne",
       "api::listing-type.listing-type"
