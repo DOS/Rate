@@ -98,6 +98,21 @@
         }
       },
       "customField": "plugin::smart-component-filter.component-multi-select"
+    },
+    "TestList": {
+      "type": "enumeration",
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
+      },
+      "enum": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E"
+      ]
     }
   }
 }

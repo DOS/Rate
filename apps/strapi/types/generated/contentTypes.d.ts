@@ -787,6 +787,12 @@ export interface ApiListingTypeListingType extends Struct.CollectionTypeSchema {
       }>
     publishedAt: Schema.Attribute.DateTime
     Slug: Schema.Attribute.UID<"Name">
+    TestList: Schema.Attribute.Enumeration<["A", "B", "C", "D", "E"]> &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: true
+        }
+      }>
     updatedAt: Schema.Attribute.DateTime
     updatedBy: Schema.Attribute.Relation<"oneToOne", "admin::user"> &
       Schema.Attribute.Private

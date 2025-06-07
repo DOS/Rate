@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, Fragment } from 'react';
 import { MultiSelect, MultiSelectOption, Loader, Alert, Field } from '@strapi/design-system';
 import { getFetchClient } from '@strapi/strapi/admin';
 
@@ -13,7 +13,7 @@ interface ComponentMultiSelectInputProps {
   disabled?: boolean;
   error?: string;
   intlLabel?: { defaultMessage: string };
-  labelAction?: React.ReactNode;
+  labelAction?: any;
   name: string;
   onChange: (event: { target: { name: string; value: string[] } }) => void;
   required?: boolean;
@@ -24,7 +24,7 @@ interface ComponentMultiSelectInputProps {
   metadatas?: any;
 }
 
-const ComponentMultiSelectInput: React.FC<ComponentMultiSelectInputProps> = ({
+const ComponentMultiSelectInput = ({
   attribute,
   disabled = false,
   error,
@@ -160,35 +160,19 @@ const ComponentMultiSelectInput: React.FC<ComponentMultiSelectInputProps> = ({
         withTags
       >
         {sortedCategories.map((category) => (
-          <React.Fragment key={category}>
-            {/* Category Header */}
-            <MultiSelectOption 
-              value={`__category_${category}`} 
-              disabled
-              style={{ 
-                fontWeight: 'bold', 
-                backgroundColor: '#f6f6f9',
-                color: '#32324d',
-                textTransform: 'uppercase',
-                fontSize: '11px',
-                padding: '8px 12px'
-              }}
-            >
-              {category.toUpperCase()}
-            </MultiSelectOption>
-            
-            {/* Components in this category */}
+          <Fragment key={category}>
+            {/* Components in this category with clean category prefix */}
             {groupedComponents[category].map((component) => (
               <MultiSelectOption key={component.uid} value={component.uid}>
-                {component.displayName}
+                {category.charAt(0).toUpperCase() + category.slice(1)} • {component.displayName}
               </MultiSelectOption>
             ))}
-          </React.Fragment>
+          </Fragment>
         ))}
       </MultiSelect>
       {error && <Field.Error>{error}</Field.Error>}
       <Field.Hint>
-        Smart Component Filter v2.0.2 - Native Strapi MultiSelect with grouped categories and sorted components
+        Smart Component Filter v2.0.3 - Native Strapi MultiSelect with clean category display
       </Field.Hint>
     </Field.Root>
   );
