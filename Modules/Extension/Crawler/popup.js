@@ -64,24 +64,32 @@ document.addEventListener('DOMContentLoaded', initPopup);
 // Setup event listeners
 function setupEventListeners(domain) {
   if (domain && domain.includes('shopee.vn')) {
-    // Nút extract Shopee reviews thủ công
-    document.getElementById('extractShopeeBtn').addEventListener('click', function() {
-      chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
-        if (tabs && tabs.length > 0) {
-          chrome.tabs.sendMessage(tabs[0].id, { type: 'extract-shopee-reviews' }, function(response) {
-            if (response && response.success) {
-              // Lưu vào background
-              chrome.runtime.sendMessage({ type: 'shopee-reviews-found', data: response.data, url: tabs[0].url, timestamp: new Date().toISOString() }, function() {
-                loadShopeeReviews();
-              });
-            } else {
-              alert('Không tìm thấy review Shopee nào trên trang này!');
-            }
+
+    exportShopeeBtn.addEventListener('click', async function() {
+      // Khi export, luôn extract lại review mới nhất từ trang
+      let extractedReviews = [];
+      try {
+        extractedReviews = await new Promise((resolve, reject) => {
+          chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+            if (!tabs || !tabs[0]) return resolve([]);
+            chrome.tabs.sendMessage(tabs[0].id, {type: 'extract-shopee-reviews'}, function(response) {
+              if (chrome.runtime.lastError) return resolve([]);
+              if (response && response.data) return resolve(response.data);
+              resolve([]);
+            });
           });
-        }
-      });
-    });
-    exportShopeeBtn.addEventListener('click', function() {
+        });
+      } catch (e) { extractedReviews = []; }
+      // Lọc trùng trước khi export Shopee reviews
+      const uniqueReviews = dedupeReviews(extractedReviews);
+
+      // Thêm nút gửi Shopee review qua API (nếu có nút, hoặc gắn vào exportShopeeBtn cho demo)
+      const sendShopeeBtn = document.getElementById('sendShopeeBtn');
+      if (sendShopeeBtn) {
+        sendShopeeBtn.addEventListener('click', function() {
+          sendBatchDataToAPI(currentShopeeReviews, 'shopee');
+        });
+      }
       exportShopeeBtn.disabled = true;
       exportShopeeBtn.textContent = '⏳ Extracting...';
       chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
@@ -93,7 +101,7 @@ function setupEventListeners(domain) {
               try {
                 const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
                 const filename = `shopee-reviews-${timestamp}.json`;
-                const blob = new Blob([JSON.stringify(response.data, null, 2)], { type: 'application/json' });
+                const blob = new Blob([JSON.stringify(uniqueReviews, null, 2)], { type: 'application/json' });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
@@ -129,6 +137,13 @@ function setupEventListeners(domain) {
   }
   if (domain && domain.includes('checkscam.vn')) {
     exportBtn.addEventListener('click', exportData);
+    // Thêm nút gửi batch data qua API (nếu có nút, hoặc gắn vào exportBtn cho demo)
+    const sendBatchBtn = document.getElementById('sendBatchBtn');
+    if (sendBatchBtn) {
+      sendBatchBtn.addEventListener('click', function() {
+        sendBatchDataToAPI(currentData, 'checkscam');
+      });
+    }
     refreshBtn.addEventListener('click', refreshData);
     clearBtn.addEventListener('click', clearData);
     debugBtn.addEventListener('click', debugExtract);
@@ -243,26 +258,18 @@ async function exportData() {
     showError('No data to export');
     return;
   }
-  
   try {
     showLoading(true);
-    
-    await chrome.runtime.sendMessage({
-      type: 'export-accumulated-data'
-    });
-    
+    await chrome.runtime.sendMessage({ type: 'export-accumulated-data' });
     // Show success feedback
     const originalText = exportBtn.textContent;
     exportBtn.textContent = '✅ Exported!';
     exportBtn.style.background = '#28A745';
-    
     setTimeout(() => {
       exportBtn.textContent = originalText;
       exportBtn.style.background = '#FF6B35';
     }, 2000);
-    
     console.log('Export initiated');
-    
   } catch (error) {
     console.error('Export error:', error);
     showError('Export failed');
@@ -270,6 +277,44 @@ async function exportData() {
     showLoading(false);
   }
 }
+
+// Hàm lọc trùng review dựa trên id hoặc user+content
+function dedupeReviews(reviews) {
+  const seen = new Set();
+  return reviews.filter(r => {
+    // Ưu tiên id, fallback về user+content
+    const key = (r.id || '') + '|' + (r.user || r.owner || '') + '|' + (r.content || '');
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+// Gửi batch data qua API backend (luôn lọc trùng trước khi gửi)
+async function sendBatchDataToAPI(data, source = 'checkscam') {
+  if (!Array.isArray(data) || data.length === 0) {
+    alert('Không có dữ liệu để gửi!');
+    return;
+  }
+  const uniqueData = dedupeReviews(data);
+  try {
+    // Có thể đổi endpoint này khi backend thật sẵn sàng
+    const res = await fetch('https://your-backend-domain/api/extension/upload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reviews: uniqueData, source })
+    });
+    const result = await res.json();
+    if (result.success) {
+      alert(`✅ Đã gửi thành công ${result.validated || uniqueData.length} records!`);
+    } else {
+      alert(`❌ Lỗi gửi data: ${result.errors?.map(e => e.reason).join(', ') || result.error}`);
+    }
+  } catch (err) {
+    alert('❌ Lỗi kết nối server!');
+  }
+}
+
 
 // Refresh data from background
 async function refreshData() {

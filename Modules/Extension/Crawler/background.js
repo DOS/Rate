@@ -251,6 +251,17 @@ async function exportShopeeReviews() {
   }
 }
 
+// Hàm lọc trùng review dựa trên id hoặc user+content
+function dedupeReviews(reviews) {
+  const seen = new Set();
+  return reviews.filter(r => {
+    const key = (r.id || '') + '|' + (r.user || r.owner || '') + '|' + (r.content || '');
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 // Handle new Shopee reviews from content script
 async function handleShopeeReviewsFound(message, sender) {
   try {
@@ -259,10 +270,10 @@ async function handleShopeeReviewsFound(message, sender) {
       console.log('[Background] No Shopee reviews in message');
       return;
     }
-    // Add all reviews (no dedup for now, can enhance later)
-    shopeeReviewsDatabase.push(...data);
-    totalShopeeReviews += data.length;
-    console.log(`[Background] Added ${data.length} Shopee reviews`);
+    // Gộp và lọc trùng khi lưu
+    shopeeReviewsDatabase = dedupeReviews([...shopeeReviewsDatabase, ...data]);
+    totalShopeeReviews = shopeeReviewsDatabase.length;
+    console.log(`[Background] Shopee reviews DB now: ${shopeeReviewsDatabase.length} unique reviews`);
     updateBadge();
     await saveAccumulatedData();
   } catch (error) {

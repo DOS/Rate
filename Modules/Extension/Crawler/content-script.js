@@ -288,29 +288,231 @@ const urlObserver = new MutationObserver(() => {
 });
 urlObserver.observe(document.body, { childList: true, subtree: true });
 
-// Hàm scrape review Shopee đang hiển thị trên DOM
-function scrapeShopeeVisibleReviews() {
-  return Array.from(document.querySelectorAll('.shopee-product-rating')).map(rating => {
-    const avatar = rating.querySelector('.shopee-product-rating__avatar img')?.src || '';
-    const username = rating.querySelector('.shopee-product-rating__author-name')?.textContent.trim() || '';
-    const starCount = rating.querySelectorAll('.shopee-product-rating__rating svg.icon-rating-solid--active').length;
-    const timeType = rating.querySelector('.shopee-product-rating__time')?.textContent.trim() || '';
-    // Nội dung review (hỗ trợ cả nhiều dòng)
-    const contentBlock = rating.querySelector('.shopee-product-rating__main > div[style*="box-sizing: border-box"]');
-    let content = '';
-    if (contentBlock) {
-      content = Array.from(contentBlock.querySelectorAll('div')).map(d => d.textContent.trim()).join('\n');
-      if (!content) content = contentBlock.textContent.trim();
+// Lấy thông tin sản phẩm và seller trên trang Shopee
+function getShopeeProductAndSellerInfo() {
+  // --- PRODUCT INFO ---
+  let productName = '';
+  let price = '';
+  let productId = '';
+  let productUrl = window.location.href;
+  let categories = [];
+  let brand = '';
+  let warehouse = '';
+
+  // Tên sản phẩm
+  const nameNode = document.querySelector('.vR6K3w')
+    || document.querySelector('h1[data-sqe="name"]')
+    || document.querySelector('._44qnta')
+    || document.querySelector('.qaNIZv');
+  if (nameNode) productName = nameNode.textContent.trim();
+  else console.warn('[Shopee] Không tìm thấy tên sản phẩm');
+
+  // Giá sản phẩm (nhiều khả năng Shopee đổi class)
+  let priceNode = document.querySelector('.pmmxKx')
+    || document.querySelector('.pmmxKx._2v0HOb')
+    || document.querySelector('.pqTWkA')
+    || document.querySelector('div[data-sqe="price"]');
+  if (!priceNode) {
+    // Fallback: tìm bất kỳ node nào có thuộc tính data-sqe='price' hoặc class chứa 'price'
+    priceNode = Array.from(document.querySelectorAll('[data-sqe], [class*="price"]')).find(el => {
+      return el.getAttribute('data-sqe') === 'price' || (el.className && el.className.includes('price'));
+    });
+  }
+  if (priceNode) price = priceNode.textContent.trim();
+  else console.warn('[Shopee] Không tìm thấy giá sản phẩm');
+
+  // ProductId từ URL (Shopee dạng .../i.<shopid>.<itemid>)
+  const idMatch = productUrl.match(/i\.(\d+)\.(\d+)/);
+  if (idMatch && idMatch[2]) productId = idMatch[2];
+  else productId = productUrl.split('.').pop().split('?')[0] || '';
+
+  // Danh mục (category)
+  const catNodes = document.querySelectorAll('.Gf4Ro0 .flex.items-center.idLK2l a');
+  if (catNodes && catNodes.length > 0) {
+    categories = Array.from(catNodes).map(a => a.textContent.trim());
+  }
+
+  // Thương hiệu (brand)
+  const brandNode = document.querySelector('.Gf4Ro0 .Dgs_Bt');
+  if (brandNode) brand = brandNode.textContent.trim();
+
+  // Kho (warehouse)
+  const warehouseNode = document.querySelector('.Gf4Ro0 .ybxj32:nth-child(4) div');
+  if (warehouseNode) warehouse = warehouseNode.textContent.trim();
+
+  // --- SELLER INFO ---
+  let sellerName = '';
+  let sellerLink = '';
+  let sellerAvatar = '';
+  let sellerReviewCount = '';
+  let sellerFollowerCount = '';
+
+  // Link shop + tên shop
+  const sellerLinkNode = document.querySelector('section.page-product__shop a.lG5Xxv');
+  if (sellerLinkNode) {
+    sellerLink = sellerLinkNode.href;
+    // Tên shop nằm ở .fV3TIn bên cạnh hoặc trong zone này
+    const sellerNameNode = sellerLinkNode.parentElement?.parentElement?.querySelector('.fV3TIn')
+      || document.querySelector('.fV3TIn');
+    if (sellerNameNode) sellerName = sellerNameNode.textContent.trim();
+    // Avatar shop
+    const sellerAvatarNode = sellerLinkNode.querySelector('img.uXN1L5');
+    if (sellerAvatarNode) sellerAvatar = sellerAvatarNode.src;
+  } else {
+    console.warn('[Shopee] Không tìm thấy link shop');
+    const sellerNameNode = document.querySelector('.fV3TIn');
+    if (sellerNameNode) sellerName = sellerNameNode.textContent.trim();
+  }
+
+  // Tổng số đánh giá shop
+  let reviewCountNode = null;
+  // KHÔNG dùng :contains, phải quét thủ công
+  const reviewBlocks = document.querySelectorAll('section.page-product__shop .YnZi6x');
+  for (const block of reviewBlocks) {
+    const label = block.querySelector('label.ffHYws');
+    if (label && label.textContent.includes('Đánh giá')) {
+      reviewCountNode = label.nextElementSibling;
+      break;
     }
+  }
+  if (!reviewCountNode) {
+    // Fallback: lấy node .Cs6w3G nếu text cha chứa 'Đánh giá'
+    for (const block of reviewBlocks) {
+      if (block.textContent.includes('Đánh giá')) {
+        const csNode = block.querySelector('.Cs6w3G');
+        if (csNode) {
+          reviewCountNode = csNode;
+          break;
+        }
+      }
+    }
+  }
+  if (reviewCountNode) sellerReviewCount = reviewCountNode.textContent.trim();
+
+
+  // Số người theo dõi shop
+  const followerNode = Array.from(document.querySelectorAll('section.page-product__shop .YnZi6x')).find(div => div.textContent.includes('Người theo dõi'));
+  if (followerNode) {
+    const val = followerNode.querySelector('.Cs6w3G');
+    if (val) sellerFollowerCount = val.textContent.trim();
+  }
+
+  return {
+    productName, price, productUrl, productId,
+    categories, brand, warehouse,
+    sellerName, sellerLink, sellerAvatar, sellerReviewCount, sellerFollowerCount
+  };
+}
+
+
+
+// Hàm scrape review Shopee đang hiển thị trên DOM, gắn thêm info sản phẩm & seller
+function scrapeShopeeVisibleReviews() {
+  const productInfo = getShopeeProductAndSellerInfo();
+
+  // Logging từng bước selector
+  const ratingOld = document.querySelectorAll('.shopee-product-rating');
+  const ratingNew = document.querySelectorAll('.product-rating-item, .rG6jF7');
+  const divWithMain = Array.from(document.querySelectorAll('div')).filter(div => div.querySelector('.shopee-product-rating__main'));
+  console.log(`[Shopee] .shopee-product-rating: ${ratingOld.length}, .product-rating-item/.rG6jF7: ${ratingNew.length}, div có .shopee-product-rating__main: ${divWithMain.length}`);
+
+  // 1. Ưu tiên selector cũ
+  let reviewNodes = Array.from(ratingOld);
+
+  // 2. Nếu không có, fallback sang selector mới
+  if (reviewNodes.length === 0) {
+    reviewNodes = Array.from(ratingNew);
+    if (reviewNodes.length === 0) {
+      reviewNodes = divWithMain;
+    }
+  }
+
+  // 3. Nếu vẫn không có, thử shadow DOM
+  if (reviewNodes.length === 0) {
+    let foundInShadow = [];
+    const allElements = Array.from(document.querySelectorAll('*'));
+    allElements.forEach(el => {
+      if (el.shadowRoot) {
+        const shadowRatings = el.shadowRoot.querySelectorAll('.shopee-product-rating, .product-rating-item, .rG6jF7, .shopee-product-rating__main');
+        if (shadowRatings.length > 0) {
+          foundInShadow = foundInShadow.concat(Array.from(shadowRatings));
+        }
+      }
+    });
+    if (foundInShadow.length > 0) {
+      console.log(`[Shopee] Tìm thấy review trong shadow DOM: ${foundInShadow.length}`);
+      reviewNodes = foundInShadow;
+    }
+  }
+
+  if (reviewNodes.length === 0) {
+    console.warn('[Shopee] Không tìm thấy review nào trên trang! Có thể review nằm trong iframe hoặc shadow DOM đặc biệt.');
+    return [];
+  }
+
+  return reviewNodes.map(rating => {
+    // Avatar
+    let avatar = '';
+    const avatarImg = rating.querySelector('.shopee-product-rating__avatar img, .shopee-avatar__img');
+    if (avatarImg) avatar = avatarImg.src || '';
+
+    // Username
+    let username = '';
+    const usernameNode = rating.querySelector('.shopee-product-rating__author-name') || rating.querySelector('.shopee-product-rating__main .shopee-product-rating__author-name') || rating.querySelector('.shopee-product-rating__main > div > div');
+    if (usernameNode) username = usernameNode.textContent.trim();
+
+    // Star
+    let starCount = 0;
+    const starNodes = rating.querySelectorAll('.shopee-product-rating__rating svg.icon-rating-solid--active, .shopee-product-rating__main .shopee-product-rating__rating svg.icon-rating-solid--active');
+    if (starNodes) starCount = starNodes.length;
+
+    // Time & loại hàng
+    let timeType = '';
+    const timeNode = rating.querySelector('.shopee-product-rating__time') || rating.querySelector('.shopee-product-rating__main .shopee-product-rating__time');
+    if (timeNode) timeType = timeNode.textContent.trim();
+
+    // Nội dung review (hỗ trợ nhiều dòng)
+    let content = '';
+    const contentBlock = rating.querySelector('.shopee-product-rating__main > div[style*="box-sizing: border-box"]')
+      || rating.querySelector('.shopee-product-rating__main > div[style*="white-space: pre-wrap"]')
+      || rating.querySelector('.shopee-product-rating__main > div');
+    if (contentBlock) {
+      // Lấy tất cả div con, nối lại
+      const divs = Array.from(contentBlock.querySelectorAll('div'));
+      if (divs.length > 0) {
+        content = divs.map(d => d.textContent.trim()).filter(Boolean).join('\n');
+      } else {
+        content = contentBlock.textContent.trim();
+      }
+    }
+
     // Ảnh review
-    const images = Array.from(rating.querySelectorAll('.rating-media-list__image-wrapper--image')).map(img => img.src);
+    let images = [];
+    // Ảnh nhỏ
+    images = Array.from(rating.querySelectorAll('.rating-media-list__image-wrapper--image, .rating-media-list__zoomed-image-item, .shopee-rating-media-list-image__content'))
+      .map(img => img.src || img.style?.backgroundImage?.replace(/url\(["']?(.*?)["']?\)/, '$1'))
+      .filter(Boolean);
+    // Loại bỏ các giá trị undefined/null/rỗng
+    images = images.map(url => url && url.startsWith('http') ? url : '').filter(Boolean);
+
     // Video review
-    const videos = Array.from(rating.querySelectorAll('.rating-media-list__zoomed-video-item')).map(video => video.src);
+    let videos = [];
+    videos = Array.from(rating.querySelectorAll('.rating-media-list__zoomed-video-item, video.o5ubXd'))
+      .map(video => video.src || (video.querySelector('source')?.src ?? ''))
+      .filter(Boolean);
+
     // Số like
-    const likes = rating.querySelector('.shopee-product-rating__like-count')?.textContent.trim() || '0';
-    return { avatar, username, starCount, timeType, content, images, videos, likes };
+    let likes = '0';
+    const likeNode = rating.querySelector('.shopee-product-rating__like-count');
+    if (likeNode) likes = likeNode.textContent.trim();
+
+    return {
+      avatar, username, starCount, timeType, content, images, videos, likes,
+      product: productInfo
+    };
   });
 }
+
 
 // Wait for page to fully load, then check for scam data
 function initPassiveCrawler() {

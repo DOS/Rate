@@ -194,6 +194,9 @@
       <button class="button btn-primary" id="exportBtn" disabled>
         📥 Export Data (JSON)
       </button>
+      <button class="button btn-success" id="sendBatchBtn">
+        🚀 Gửi Data lên API (Batch)
+      </button>
       <button class="button btn-secondary" id="refreshBtn">
         🔄 Refresh Data
       </button>
@@ -207,17 +210,17 @@
   </div>
 
   <!-- Shopee Reviews Section -->
-  <div id="shopeeSection">
+  <div id="shopeeSection" style="display:none;">
     <div class="stats-card" id="shopeeStatsCard">
       <div class="stat-item">
         <span>Shopee Reviews:</span>
         <span class="stat-value" id="shopeeReviewCount">0</span>
       </div>
-      <button class="button btn-secondary" id="extractShopeeBtn" style="margin-top:8px;">
-        🛒 Extract Shopee Reviews
-      </button>
       <button class="button btn-primary" id="exportShopeeBtn" style="margin-top:10px;">
         📥 Export Shopee Reviews (JSON)
+      </button>
+      <button class="button btn-success" id="sendShopeeBtn" style="margin-top:8px;">
+        🚀 Gửi Shopee Reviews lên API (Batch)
       </button>
       <button class="button btn-danger" id="clearShopeeBtn" style="margin-top:8px;">
         🗑️ Clear Shopee Reviews
@@ -227,6 +230,14 @@
       </div>
     </div>
   </div>
+<script>
+  // Hiển thị section Shopee chỉ khi đang ở trang Shopee
+  chrome.tabs && chrome.tabs.query({active:true, currentWindow:true}, function(tabs){
+    if (tabs && tabs[0] && tabs[0].url && tabs[0].url.includes('shopee.vn')) {
+      document.getElementById('shopeeSection').style.display = '';
+    }
+  });
+</script>
 
   <div class="stats-card">
     <div style="font-size: 12px; opacity: 0.8; text-align: center;">
