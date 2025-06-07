@@ -1,0 +1,1 @@
+const { test } = require('@playwright/test'); test('debug seller', async ({ page }) => { console.log('Testing Seller API...'); const response = await page.request.get('http://localhost:1337/api/smart-component-filter/listing-type/22/components'); const data = await response.json(); console.log('Seller API:', data); });

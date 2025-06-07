@@ -1,0 +1,12 @@
+{
+  "link_type": "dedupe_only",
+  "blocking_rules_to_generate_predictions": [
+    "l.phone = r.phone",
+    "l.bank_account = r.bank_account",
+    "substr(l.title,1,8) = substr(r.title,1,8)"
+  ],
+  "comparison_columns": [
+    { "col_name": "title", "num_levels": 3 },
+    { "col_name": "name",  "num_levels": 3, "term_frequency_adjustments": true }
+  ]
+}

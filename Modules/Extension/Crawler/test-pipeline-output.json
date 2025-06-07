@@ -1,0 +1,148 @@
+{
+  "metadata": {
+    "pipeline_test": true,
+    "timestamp": "2025-06-05T15:38:02.551Z",
+    "input_count": 5,
+    "output_count": 4,
+    "stats": {
+      "totalAmount": 26200000,
+      "byCategory": {
+        "Mua bán online": 1,
+        "Đầu tư": 1,
+        "Game": 1,
+        "Lừa đảo": 1
+      },
+      "byBank": {
+        "Vietcombank": 2,
+        "MB Bank": 1,
+        "Techcombank": 1
+      },
+      "avgFraudScore": 0.05
+    }
+  },
+  "data": [
+    {
+      "owner": "NGUYEN VAN HUNG",
+      "account": "1234567890123",
+      "bank": "Vietcombank",
+      "amount": 5500000,
+      "content": "Lừa đảo bán iPhone 15 Pro Max. Đã chuyển 5.5 triệu qua VCB, sau đó bị block Facebook và Zalo. Cảnh báo mọi người cẩn thận.",
+      "category": "Mua bán online",
+      "phone": "0912345678",
+      "images": [
+        "proof1.jpg",
+        "proof2.jpg"
+      ],
+      "_meta": {
+        "source": "browser_extension",
+        "source_id": "real-1",
+        "source_url": "https://checkscam.com",
+        "crawled_at": "2025-06-05T15:38:02.539Z",
+        "extension_version": "1.0.0",
+        "crawl_mode": "test",
+        "url": "https://checkscam.com",
+        "version": "1.0.0",
+        "mode": "test",
+        "timestamp": "2025-06-05T15:38:02.539Z",
+        "trust_score": 0.905,
+        "region": "Miền Nam",
+        "fraud_factors": [],
+        "fraud_score": 0,
+        "validated_at": "2025-06-05T15:38:02.550Z",
+        "validation_version": "1.0"
+      },
+      "fraudScore": 0
+    },
+    {
+      "owner": "TRAN THI LOAN",
+      "account": "9876543210",
+      "bank": "MB Bank",
+      "amount": 12000000,
+      "content": "Rủ đầu tư tiền ảo, cam kết lãi 30%/tháng. Sau khi nộp 12 triệu thì web sập, không liên lạc được.",
+      "category": "Đầu tư",
+      "phone": "",
+      "images": [],
+      "_meta": {
+        "source": "browser_extension",
+        "source_id": "real-2",
+        "source_url": "https://checkscam.com",
+        "crawled_at": "2025-06-05T15:38:02.539Z",
+        "extension_version": "1.0.0",
+        "crawl_mode": "test",
+        "url": "https://checkscam.com",
+        "version": "1.0.0",
+        "mode": "test",
+        "timestamp": "2025-06-05T15:38:02.539Z",
+        "trust_score": 0.8072340425531915,
+        "region": "Không xác định",
+        "fraud_factors": [
+          "high_amount"
+        ],
+        "fraud_score": 0.2,
+        "validated_at": "2025-06-05T15:38:02.550Z",
+        "validation_version": "1.0"
+      },
+      "fraudScore": 0.2
+    },
+    {
+      "owner": "LE MINH TUAN",
+      "account": "5555666677778888",
+      "bank": "Techcombank",
+      "amount": 3200000,
+      "content": "Bán acc Liên Quân VIP, nhận tiền rồi đổi pass.",
+      "category": "Game",
+      "phone": "0987654321",
+      "images": [
+        "scam-proof.png"
+      ],
+      "_meta": {
+        "source": "browser_extension",
+        "source_id": "real-3",
+        "source_url": "https://checkscam.com",
+        "crawled_at": "2025-06-05T15:38:02.539Z",
+        "extension_version": "1.0.0",
+        "crawl_mode": "test",
+        "url": "https://checkscam.com",
+        "version": "1.0.0",
+        "mode": "test",
+        "timestamp": "2025-06-05T15:38:02.539Z",
+        "trust_score": 0.8015384615384616,
+        "region": "Miền Nam",
+        "fraud_factors": [],
+        "fraud_score": 0,
+        "validated_at": "2025-06-05T15:38:02.550Z",
+        "validation_version": "1.0"
+      },
+      "fraudScore": 0
+    },
+    {
+      "owner": "NGUYEN VAN HUNG",
+      "account": "1234567890123",
+      "bank": "Vietcombank",
+      "amount": 5500000,
+      "content": "Lừa bán iPhone",
+      "category": "Lừa đảo",
+      "phone": "0912345678",
+      "images": [],
+      "_meta": {
+        "source": "browser_extension",
+        "source_id": "duplicate-1",
+        "source_url": "https://checkscam.com",
+        "crawled_at": "2025-06-05T15:38:02.539Z",
+        "extension_version": "1.0.0",
+        "crawl_mode": "test",
+        "url": "https://checkscam.com",
+        "version": "1.0.0",
+        "mode": "test",
+        "timestamp": "2025-06-05T15:38:02.539Z",
+        "trust_score": 0.72,
+        "region": "Miền Nam",
+        "fraud_factors": [],
+        "fraud_score": 0,
+        "validated_at": "2025-06-05T15:38:02.550Z",
+        "validation_version": "1.0"
+      },
+      "fraudScore": 0
+    }
+  ]
+}

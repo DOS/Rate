@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {
+      width: 350px;
+      padding: 20px;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+    
+    .header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    
+    .header h1 {
+      margin: 0;
+      font-size: 24px;
+      font-weight: 600;
+    }
+    
+    .header p {
+      margin: 5px 0 0 0;
+      opacity: 0.9;
+      font-size: 14px;
+    }
+    
+    .stats-card {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 15px;
+      margin: 15px 0;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    
+    .stat-item {
+      display: flex;
+      justify-content: space-between;
+      margin: 8px 0;
+      font-size: 14px;
+    }
+    
+    .stat-value {
+      font-weight: 600;
+      color: #FFE066;
+    }
+    
+    .button {
+      width: 100%;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      margin: 8px 0;
+      transition: all 0.3s ease;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    .btn-primary {
+      background: #FF6B35;
+      color: white;
+    }
+    
+    .btn-primary:hover {
+      background: #E55A2B;
+      transform: translateY(-2px);
+    }
+    
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.2);
+      color: white;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+    }
+    
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.3);
+    }
+    
+    .btn-danger {
+      background: #DC3545;
+      color: white;
+    }
+    
+    .btn-danger:hover {
+      background: #C82333;
+    }
+    
+    .status {
+      text-align: center;
+      margin: 15px 0;
+      padding: 10px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+    
+    .status.active {
+      background: rgba(40, 167, 69, 0.2);
+      border: 1px solid rgba(40, 167, 69, 0.5);
+      color: #28A745;
+    }
+    
+    .status.inactive {
+      background: rgba(108, 117, 125, 0.2);
+      border: 1px solid rgba(108, 117, 125, 0.5);
+      color: #6C757D;
+    }
+    
+    .data-preview {
+      max-height: 150px;
+      overflow-y: auto;
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 8px;
+      padding: 10px;
+      margin: 10px 0;
+      font-size: 12px;
+    }
+    
+    .data-item {
+      padding: 5px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    .data-item:last-child {
+      border-bottom: none;
+    }
+    
+    .loading {
+      display: none;
+      text-align: center;
+      margin: 10px 0;
+    }
+    
+    .spinner {
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      border-top: 2px solid white;
+      width: 20px;
+      height: 20px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>🎯 Rate Crawler</h1>
+    <p>Passive Scam Data Collection</p>
+  </div>
+  
+  <div class="status active" id="status">
+    ✅ Passive Mode Active - Browse checkscam.vn to collect data
+  </div>
+  
+  <div id="scamSection">
+    <div class="stats-card">
+      <div class="stat-item">
+        <span>Records Found:</span>
+        <span class="stat-value" id="recordCount">0</span>
+      </div>
+      <div class="stat-item">
+        <span>Last Updated:</span>
+        <span class="stat-value" id="lastUpdated">Never</span>
+      </div>
+      <div class="stat-item">
+        <span>Status:</span>
+        <span class="stat-value" id="crawlStatus">Waiting for data...</span>
+      </div>
+    </div>
+    
+    <div class="data-preview" id="dataPreview" style="display: none;">
+      <div id="dataList"></div>
+    </div>
+    
+    <div class="loading" id="loading">
+      <div class="spinner"></div>
+      <p>Processing data...</p>
+    </div>
+    
+    <div class="actions">
+      <button class="button btn-primary" id="exportBtn" disabled>
+        📥 Export Data (JSON)
+      </button>
+      <button class="button btn-secondary" id="refreshBtn">
+        🔄 Refresh Data
+      </button>
+      <button class="button btn-secondary" id="debugBtn">
+        🐛 Debug Extract
+      </button>
+      <button class="button btn-danger" id="clearBtn">
+        🗑️ Clear All Data
+      </button>
+    </div>
+  </div>
+
+  <!-- Shopee Reviews Section -->
+  <div id="shopeeSection">
+    <div class="stats-card" id="shopeeStatsCard">
+      <div class="stat-item">
+        <span>Shopee Reviews:</span>
+        <span class="stat-value" id="shopeeReviewCount">0</span>
+      </div>
+      <button class="button btn-secondary" id="extractShopeeBtn" style="margin-top:8px;">
+        🛒 Extract Shopee Reviews
+      </button>
+      <button class="button btn-primary" id="exportShopeeBtn" style="margin-top:10px;">
+        📥 Export Shopee Reviews (JSON)
+      </button>
+      <button class="button btn-danger" id="clearShopeeBtn" style="margin-top:8px;">
+        🗑️ Clear Shopee Reviews
+      </button>
+      <div class="data-preview" id="shopeePreview" style="display:none; margin-top:10px;">
+        <div id="shopeeList"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="stats-card">
+    <div style="font-size: 12px; opacity: 0.8; text-align: center;">
+      <p>💡 <strong>How it works:</strong></p>
+      <p>Just browse checkscam.vn normally. The extension will automatically detect and collect scam data from pages you visit.</p>
+      <p style="margin-top:8px;">🛒 <strong>Shopee:</strong> Khi bạn mở trang sản phẩm Shopee, extension sẽ tự động lưu lại các review đang hiển thị. Xem và export tại đây!</p>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

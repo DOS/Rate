@@ -78,6 +78,28 @@
       },
       "default": true
     },
+    "FieldGroup": {
+      "type": "dynamiczone",
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
+      },
+      "components": [
+        "contact.basic",
+        "contact.location",
+        "contact.social-media",
+        "info.bank-info",
+        "violation.detail",
+        "violation.evidence",
+        "utilities.text",
+        "utilities.link",
+        "media.photo",
+        "media.video",
+        "review.pros-cons",
+        "rating.criterion"
+      ]
+    },
     "isFeatured": {
       "type": "boolean",
       "pluginOptions": {
@@ -102,28 +124,6 @@
         "Business",
         "Event",
         "Other"
-      ]
-    },
-    "FieldGroup": {
-      "type": "dynamiczone",
-      "pluginOptions": {
-        "i18n": {
-          "localized": true
-        }
-      },
-      "components": [
-        "contact.basic",
-        "contact.location",
-        "contact.social-media",
-        "info.bank-info",
-        "violation.detail",
-        "violation.evidence",
-        "utilities.text",
-        "utilities.link",
-        "media.photo",
-        "media.video",
-        "review.pros-cons",
-        "rating.criterion"
       ]
     },
     "ListingType": {

@@ -1,0 +1,10 @@
+# Ignore all result files but keep the directory structure
+*.json
+*.png
+*.jpg
+*.jpeg
+*.html
+*.txt
+
+# Keep this gitignore file
+!.gitignore

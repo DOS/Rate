@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rate Crawler - Validation Pipeline Demo</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        .section {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f9f9f9;
+            border-radius: 5px;
+            border-left: 4px solid #2196F3;
+        }
+        .code {
+            background: #263238;
+            color: #aed581;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .stat-card {
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #4CAF50;
+        }
+        .stat-label {
+            color: #666;
+            margin-top: 5px;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        .error {
+            color: #f44336;
+        }
+        .warning {
+            color: #ff9800;
+        }
+        .success {
+            color: #4CAF50;
+        }
+        #output {
+            margin-top: 20px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .record {
+            background: #f5f5f5;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 5px;
+            border-left: 4px solid #ddd;
+        }
+        .record.valid {
+            border-left-color: #4CAF50;
+        }
+        .record.invalid {
+            border-left-color: #f44336;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Rate Crawler - Validation Pipeline Demo</h1>
+        
+        <div class="section">
+            <h2>📊 Pipeline Architecture</h2>
+            <div class="code">
+Raw Data → Extension Adapter → Core Validator → Validated Output
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>🧪 Test Data</h2>
+            <button onclick="runDemo()">Run Validation Demo</button>
+            <button onclick="clearOutput()">Clear Output</button>
+        </div>
+
+        <div class="stats" id="stats" style="display:none;">
+            <div class="stat-card">
+                <div class="stat-value" id="totalRecords">0</div>
+                <div class="stat-label">Total Records</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="validRecords">0</div>
+                <div class="stat-label">Valid Records</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="invalidRecords">0</div>
+                <div class="stat-label">Invalid Records</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="avgFraudScore">0</div>
+                <div class="stat-label">Avg Fraud Score</div>
+            </div>
+        </div>
+
+        <div id="output"></div>
+    </div>
+
+    <script type="module">
+        // Import modules
+        import { ExtensionAdapter } from './extension-adapter.esm.js';
+        
+        // Load Core Validator (it sets window.CoreValidator)
+        const script = document.createElement('script');
+        script.src = './core-validator-v1.js';
+        document.head.appendChild(script);
+        
+        window.runDemo = async function() {
+            const output = document.getElementById('output');
+            output.innerHTML = '<h3>🔄 Running Validation Pipeline...</h3>';
+            
+            // Sample data from crawler
+            const rawData = [
+                {
+                    owner: "NGUYEN VAN A - 0912345678",
+                    account: "1234567890",
+                    bank: "VCB",
+                    amount: "5,500,000",
+                    category: "Mua bán online",
+                    content: "Lừa đảo bán hàng online, chuyển tiền không giao hàng",
+                    votes: 45,
+                    images: ["img1.jpg", "img2.jpg"]
+                },
+                {
+                    owner: "TRAN THI B",
+                    account: "9876543210123",
+                    bank: "MB Bank",
+                    amount: "12.000.000đ",
+                    category: "Đầu tư",
+                    content: "Cam kết lãi suất cao, chiếm đoạt tiền",
+                    votes: 23
+                },
+                {
+                    owner: "Invalid Data",
+                    account: "123", // Too short
+                    bank: "Unknown",
+                    amount: "abc", // Invalid
+                    votes: -5 // Invalid
+                }
+            ];
+            
+            try {
+                // Step 1: Transform with Extension Adapter
+                output.innerHTML += '<h4>📦 Step 1: Extension Adapter Transformation</h4>';
+                const adapter = new ExtensionAdapter();
+                const transformed = await adapter.transformBatch(rawData, (progress) => {
+                    console.log(`Transform progress: ${progress.percentage}%`);
+                });
+                
+                output.innerHTML += `<div class="success">✅ Transformed ${transformed.success.length} records</div>`;
+                
+                // Step 2: Validate with Core Validator
+                output.innerHTML += '<h4>🔍 Step 2: Core Validator Validation</h4>';
+                const validator = window.CoreValidator;
+                const validated = await validator.validateBatch(transformed.success, (progress) => {
+                    console.log(`Validation progress: ${progress.percentage}%`);
+                });
+                
+                // Display results
+                displayResults(validated);
+                
+            } catch (error) {
+                output.innerHTML += `<div class="error">❌ Error: ${error.message}</div>`;
+            }
+        };
+        
+        function displayResults(validated) {
+            const output = document.getElementById('output');
+            const stats = document.getElementById('stats');
+            
+            // Show stats
+            stats.style.display = 'grid';
+            document.getElementById('totalRecords').textContent = validated.summary.total;
+            document.getElementById('validRecords').textContent = validated.summary.valid;
+            document.getElementById('invalidRecords').textContent = validated.summary.invalid;
+            
+            // Calculate average fraud score
+            const validResults = validated.results.filter(r => r.isValid);
+            const avgScore = validResults.length > 0 
+                ? (validResults.reduce((sum, r) => sum + (r.data.fraudScore || 0), 0) / validResults.length).toFixed(2)
+                : 0;
+            document.getElementById('avgFraudScore').textContent = avgScore;
+            
+            // Display individual records
+            output.innerHTML += '<h4>📋 Validation Results:</h4>';
+            
+            validated.results.forEach((result, index) => {
+                const recordClass = result.isValid ? 'valid' : 'invalid';
+                const statusIcon = result.isValid ? '✅' : '❌';
+                
+                let recordHtml = `
+                    <div class="record ${recordClass}">
+                        <strong>${statusIcon} Record ${index + 1}: ${result.data.owner || '(No owner)'}</strong><br>
+                `;
+                
+                if (result.isValid) {
+                    recordHtml += `
+                        Bank: ${result.data.bank} | Account: ${result.data.account}<br>
+                        Amount: ${result.data.amount.toLocaleString('vi-VN')}đ<br>
+                        Category: ${result.data.category} | Fraud Score: ${result.data.fraudScore}<br>
+                    `;
+                }
+                
+                if (result.errors.length > 0) {
+                    recordHtml += `<div class="error">Errors: ${result.errors.join(', ')}</div>`;
+                }
+                
+                if (result.warnings.length > 0) {
+                    recordHtml += `<div class="warning">Warnings: ${result.warnings.join(', ')}</div>`;
+                }
+                
+                recordHtml += '</div>';
+                output.innerHTML += recordHtml;
+            });
+            
+            output.innerHTML += `
+                <div class="section">
+                    <h4>📊 Summary:</h4>
+                    <ul>
+                        <li>Total warnings: ${validated.summary.totalWarnings}</li>
+                        <li>Duplicates found: ${validated.summary.duplicatesFound}</li>
+                        <li>Success rate: ${Math.round((validated.summary.valid / validated.summary.total) * 100)}%</li>
+                    </ul>
+                </div>
+            `;
+        }
+        
+        window.clearOutput = function() {
+            document.getElementById('output').innerHTML = '';
+            document.getElementById('stats').style.display = 'none';
+        };
+    </script>
+</body>
+</html>

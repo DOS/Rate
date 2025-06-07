@@ -1,0 +1,36 @@
+{
+  "manifest_version": 3,
+  "name": "Rate Crawler",
+  "version": "1.0.4",
+  "description": "Passive crawler for scam data from checkscam sites",
+  "permissions": [
+    "storage",
+    "downloads",
+    "scripting",
+    "tabs",
+    "notifications"
+  ],
+  "host_permissions": [
+    "*://checkscam.vn/*",
+    "*://checkscam.com/*",
+    "*://shopee.vn/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://checkscam.vn/*",
+        "*://checkscam.com/*",
+        "*://shopee.vn/*"
+      ],
+      "js": ["content-script.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Rate Crawler"
+  }
+}

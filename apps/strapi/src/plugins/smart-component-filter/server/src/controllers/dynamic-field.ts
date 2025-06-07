@@ -157,6 +157,101 @@ const controller = ({ strapi }: { strapi: Core.Strapi }) => ({
     };
   },
 
+  async getItemComponents(ctx: any) {
+    const { id } = ctx.params;
+    strapi.log.info(`🚀 [getItemComponents] Getting allowed components for item: ${id}`);
+    
+    try {
+      // Fetch the Item to get its ListingType
+      const item = await strapi.entityService.findOne('api::item.item', id, {
+        populate: ['ListingType']
+      });
+      
+      if (!item) {
+        strapi.log.warn(`⚠️ [getItemComponents] Item not found: ${id}`);
+        ctx.body = {
+          success: false,
+          error: 'Item not found'
+        };
+        return;
+      }
+      
+      strapi.log.info(`📦 [getItemComponents] Item found:`, {
+        id: item.id,
+        title: item.Title,
+        listingType: item.ListingType
+      });
+      
+      // Get ListingType ID
+      const listingTypeId = item.ListingType?.id;
+      if (!listingTypeId) {
+        strapi.log.warn(`⚠️ [getItemComponents] No ListingType found for item: ${id}`);
+        ctx.body = {
+          success: false,
+          error: 'No ListingType associated with this item'
+        };
+        return;
+      }
+      
+      // Fetch ListingType with ItemField
+      const listingType = await strapi.entityService.findOne('api::listing-type.listing-type', listingTypeId);
+      
+      if (!listingType) {
+        strapi.log.warn(`⚠️ [getItemComponents] ListingType not found: ${listingTypeId}`);
+        ctx.body = {
+          success: false,
+          error: 'ListingType not found'
+        };
+        return;
+      }
+      
+      strapi.log.info(`📋 [getItemComponents] ListingType found:`, {
+        id: listingType.id,
+        name: listingType.Name,
+        itemField: listingType.ItemField
+      });
+      
+      // Parse ItemField to get allowed components
+      let allowedComponents = [];
+      if (listingType.ItemField) {
+        try {
+          const itemFieldData = typeof listingType.ItemField === 'string' 
+            ? JSON.parse(listingType.ItemField) 
+            : listingType.ItemField;
+          
+          allowedComponents = Array.isArray(itemFieldData) ? itemFieldData : [];
+          strapi.log.info(`✅ [getItemComponents] Parsed allowed components:`, allowedComponents);
+        } catch (parseError) {
+          strapi.log.error(`❌ [getItemComponents] Error parsing ItemField:`, parseError);
+          allowedComponents = [];
+        }
+      }
+      
+      ctx.body = {
+        success: true,
+        data: {
+          item: {
+            id: item.id,
+            title: item.Title
+          },
+          listingType: {
+            id: listingType.id,
+            name: listingType.Name
+          },
+          allowedComponents,
+          totalCount: allowedComponents.length
+        }
+      };
+      
+    } catch (error) {
+      strapi.log.error(`❌ [getItemComponents] Error:`, error);
+      ctx.body = {
+        success: false,
+        error: 'Internal server error'
+      };
+    }
+  },
+
   async saveListingTypeComponents(ctx: any) {
     const { id } = ctx.params;
     const { itemComponents, reviewComponents } = ctx.request.body;

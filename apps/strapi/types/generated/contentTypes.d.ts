@@ -616,6 +616,27 @@ export interface ApiItemItem extends Struct.CollectionTypeSchema {
           localized: true
         }
       }>
+    FieldGroup: Schema.Attribute.DynamicZone<
+      [
+        "contact.basic",
+        "contact.location",
+        "contact.social-media",
+        "info.bank-info",
+        "violation.detail",
+        "violation.evidence",
+        "utilities.text",
+        "utilities.link",
+        "media.photo",
+        "media.video",
+        "review.pros-cons",
+        "rating.criterion",
+      ]
+    > &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: true
+        }
+      }>
     Gallery: Schema.Attribute.Media<
       "images" | "files" | "videos" | "audios",
       true
@@ -645,27 +666,6 @@ export interface ApiItemItem extends Struct.CollectionTypeSchema {
         }
       }> &
       Schema.Attribute.DefaultTo<false>
-    ItemField: Schema.Attribute.DynamicZone<
-      [
-        "contact.basic",
-        "contact.location",
-        "contact.social-media",
-        "info.bank-info",
-        "violation.detail",
-        "violation.evidence",
-        "utilities.text",
-        "utilities.link",
-        "media.photo",
-        "media.video",
-        "review.pros-cons",
-        "rating.criterion",
-      ]
-    > &
-      Schema.Attribute.SetPluginOptions<{
-        i18n: {
-          localized: true
-        }
-      }>
     ItemType: Schema.Attribute.Enumeration<
       ["Product", "Service", "Person", "Business", "Event", "Other"]
     > &
@@ -688,12 +688,6 @@ export interface ApiItemItem extends Struct.CollectionTypeSchema {
       "api::identity.identity"
     >
     Reports: Schema.Attribute.Relation<"oneToMany", "api::report.report">
-    ReviewField: Schema.Attribute.DynamicZone<["review.pros-cons"]> &
-      Schema.Attribute.SetPluginOptions<{
-        i18n: {
-          localized: true
-        }
-      }>
     SearchSummary: Schema.Attribute.String &
       Schema.Attribute.SetPluginOptions<{
         i18n: {
@@ -779,12 +773,6 @@ export interface ApiListingTypeListingType extends Struct.CollectionTypeSchema {
           localized: true
         }
       }>
-    ItemGroup: Schema.Attribute.JSON &
-      Schema.Attribute.SetPluginOptions<{
-        i18n: {
-          localized: true
-        }
-      }>
     locale: Schema.Attribute.String
     localizations: Schema.Attribute.Relation<
       "oneToMany",
@@ -798,14 +786,6 @@ export interface ApiListingTypeListingType extends Struct.CollectionTypeSchema {
         }
       }>
     publishedAt: Schema.Attribute.DateTime
-    ReviewField: Schema.Attribute.JSON &
-      Schema.Attribute.CustomField<"plugin::smart-component-filter.component-multi-select"> &
-      Schema.Attribute.SetPluginOptions<{
-        i18n: {
-          localized: true
-        }
-      }>
-    ReviewGroup: Schema.Attribute.JSON
     Slug: Schema.Attribute.UID<"Name">
     updatedAt: Schema.Attribute.DateTime
     updatedBy: Schema.Attribute.Relation<"oneToOne", "admin::user"> &

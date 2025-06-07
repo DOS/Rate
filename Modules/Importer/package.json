@@ -1,0 +1,78 @@
+{
+  "name": "@rate-importer/core",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Data import tool for Rate platform with support for multiple data sources",
+  "main": "dist/Packages/Crawler/Src/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/Packages/Crawler/Src/index.js",
+    "dev": "ts-node-esm --esm Packages/Crawler/Src/index.ts",
+    "lint": "eslint . --ext .ts",
+    "format": "prettier --write \"Packages/**/*.ts\"",
+    "test": "vitest",
+    "prepare": "husky install",
+    "crawler:dev": "ts-node-esm --esm Packages/Crawler/Src/index.ts",
+    "extension:dev": "cd Packages/Extension && npm run dev",
+    "api:dev": "cd Packages/API && npm run dev"
+  },
+  "keywords": [
+    "data-import",
+    "crawler",
+    "etl",
+    "strapi",
+    "rate-platform"
+  ],
+  "author": "",
+  "license": "MIT",
+  "workspaces": [
+    "Packages/*"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@crawlee/playwright": "^3.13.5",
+    "@types/ioredis": "^4.28.10",
+    "@types/node": "^20.0.0",
+    "axios": "^1.9.0",
+    "bullmq": "^5.0.0",
+    "cheerio": "^1.0.0-rc.12",
+    "crawlee": "^3.13.5",
+    "date-fns": "^3.0.0",
+    "dotenv": "^16.0.0",
+    "form-data": "^4.0.0",
+    "https": "^1.0.0",
+    "https-proxy-agent": "^7.0.6",
+    "ioredis": "^5.6.1",
+    "playwright": "^1.52.0",
+    "proxy-chain": "^2.5.9",
+    "puppeteer": "^24.10.0",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "random-useragent": "^0.5.0",
+    "user-agents": "^1.1.560",
+    "winston": "^3.17.0",
+    "winston-daily-rotate-file": "^5.0.0",
+    "zod": "^3.22.0"
+  },
+  "devDependencies": {
+    "@types/cheerio": "latest",
+    "@types/form-data": "latest",
+    "@types/jest": "latest",
+    "@types/ws": "latest",
+    "@typescript-eslint/eslint-plugin": "latest",
+    "@typescript-eslint/parser": "latest",
+    "eslint": "latest",
+    "eslint-config-prettier": "latest",
+    "eslint-plugin-prettier": "latest",
+    "husky": "latest",
+    "lint-staged": "latest",
+    "prettier": "latest",
+    "ts-node": "latest",
+    "typescript": "latest",
+    "vite-tsconfig-paths": "latest",
+    "vitest": "latest"
+  }
+}

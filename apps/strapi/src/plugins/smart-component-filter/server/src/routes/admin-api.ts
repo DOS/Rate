@@ -64,6 +64,14 @@ export default [
     },
   },
   {
+    method: 'GET',
+    path: '/item/:id/components',
+    handler: 'dynamic-field.getItemComponents',
+    config: {
+      policies: ['admin::isAuthenticatedAdmin'],
+    },
+  },
+  {
     method: 'POST',
     path: '/listing-type/:id/components',
     handler: 'dynamic-field.saveListingTypeComponents',

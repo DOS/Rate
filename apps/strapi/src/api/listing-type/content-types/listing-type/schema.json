@@ -80,17 +80,6 @@
       },
       "default": true
     },
-    "ItemGroup": {
-      "type": "json",
-      "pluginOptions": {
-        "i18n": {
-          "localized": true
-        }
-      }
-    },
-    "ReviewGroup": {
-      "type": "json"
-    },
     "IconSet": {
       "type": "enumeration",
       "default": "Classic",
@@ -101,16 +90,7 @@
         "Minimal"
       ]
     },
-    "TestField": {
-      "type": "customField",
-      "pluginOptions": {
-        "i18n": {
-          "localized": true
-        }
-      },
-      "customField": "plugin::smart-component-filter.component-multi-select"
-    },
-    "ComponentFilter": {
+    "ItemField": {
       "type": "customField",
       "pluginOptions": {
         "i18n": {

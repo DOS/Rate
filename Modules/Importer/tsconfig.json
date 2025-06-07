@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "outDir": "./dist",
+    "rootDir": ".",
+    "baseUrl": ".",
+    "paths": {
+      "@crawler/*": ["./Packages/Crawler/Src/*"],
+      "@utils/*": ["./Packages/Utils/*"],
+      "@types/*": ["./Packages/Types/*"]
+    },
+    "types": ["node", "vitest/globals"]
+  },
+  "include": [
+    "Scripts/**/*.ts",
+    "Scripts/**/*.js",
+    "Packages/**/*.ts"
+  ],
+  "exclude": ["node_modules", "dist", "**/*.test.ts"]
+}

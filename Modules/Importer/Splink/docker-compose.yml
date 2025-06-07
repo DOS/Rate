@@ -1,0 +1,11 @@
+
+services:
+  rate-dedup:
+    build: ./splink-service
+    environment:
+      - DB_CONN=postgresql://rate:rate@host.docker.internal:5432/rate
+      - SPLINK_SETTINGS_PATH=/app/linker_settings.json
+    volumes:
+      - ./splink-service/linker_settings.json:/app/linker_settings.json
+    ports: ["8090:8090"]
+    depends_on: []
