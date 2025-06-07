@@ -7,8 +7,8 @@ This is a ready-to-go starter template for Strapi projects. It combines the powe
 - UI - [https://www.notum-dev.cz/](https://www.notum-dev.cz/)
 - Strapi - [https://api.notum-dev.cz/admin](https://api.notum-dev.cz/admin)
 - **Readonly user:**
-  - Email: user@notum.cz
-  - Password: Secret-pass-55
+  - Email: [REDACTED]
+  - Password: [REDACTED]
 
 ## 🥞 Tech stack
 
