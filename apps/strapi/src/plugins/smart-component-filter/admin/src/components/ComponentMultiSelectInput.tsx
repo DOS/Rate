@@ -13,10 +13,15 @@ interface ComponentMultiSelectInputProps {
   disabled?: boolean;
   error?: string;
   intlLabel?: { defaultMessage: string };
+  labelAction?: React.ReactNode;
   name: string;
   onChange: (event: { target: { name: string; value: string[] } }) => void;
   required?: boolean;
   value?: string[];
+  // Additional Strapi props that might contain field metadata
+  contentTypeUID?: string;
+  fieldSchema?: any;
+  metadatas?: any;
 }
 
 const ComponentMultiSelectInput: React.FC<ComponentMultiSelectInputProps> = ({
@@ -24,16 +29,30 @@ const ComponentMultiSelectInput: React.FC<ComponentMultiSelectInputProps> = ({
   disabled = false,
   error,
   intlLabel,
+  labelAction,
   name,
   onChange,
   required = false,
-  value = []
+  value = [],
+  contentTypeUID,
+  fieldSchema,
+  metadatas
 }) => {
   const [components, setComponents] = useState<ComponentData[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
   useEffect(() => {
+    // Debug: Log all props to understand what's available
+    console.log('🔍 ComponentMultiSelectInput props:', {
+      name,
+      intlLabel,
+      metadatas,
+      fieldSchema,
+      contentTypeUID,
+      attribute
+    });
+
     const fetchComponents = async () => {
       try {
         console.log('🔍 Fetching components from API...');
@@ -69,7 +88,33 @@ const ComponentMultiSelectInput: React.FC<ComponentMultiSelectInputProps> = ({
     });
   };
 
-  const labelText = intlLabel?.defaultMessage || 'Component Multi-Select';
+  // Try to get field name from various sources
+  const getFieldLabel = () => {
+    // 1. Try intlLabel first (from field configuration)
+    if (intlLabel?.defaultMessage) {
+      return intlLabel.defaultMessage;
+    }
+    
+    // 2. Try metadatas (Strapi field metadata)
+    if (metadatas?.label) {
+      return metadatas.label;
+    }
+    
+    // 3. Try fieldSchema (field definition)
+    if (fieldSchema?.displayName) {
+      return fieldSchema.displayName;
+    }
+    
+    // 4. Use field name as fallback (capitalize first letter)
+    if (name) {
+      return name.charAt(0).toUpperCase() + name.slice(1).replace(/([A-Z])/g, ' $1').trim();
+    }
+    
+    // 5. Final fallback
+    return 'Component Multi-Select';
+  };
+
+  const labelText = getFieldLabel();
 
   if (loading) {
     return (
@@ -89,6 +134,21 @@ const ComponentMultiSelectInput: React.FC<ComponentMultiSelectInputProps> = ({
     );
   }
 
+  // Group components by category and sort
+  const groupedComponents = components.reduce((acc, component) => {
+    if (!acc[component.category]) {
+      acc[component.category] = [];
+    }
+    acc[component.category].push(component);
+    return acc;
+  }, {} as Record<string, ComponentData[]>);
+
+  // Sort categories alphabetically and components within each category
+  const sortedCategories = Object.keys(groupedComponents).sort();
+  sortedCategories.forEach(category => {
+    groupedComponents[category].sort((a, b) => a.displayName.localeCompare(b.displayName));
+  });
+
   return (
     <Field.Root name={name} required={required} error={error}>
       <Field.Label>{labelText}</Field.Label>
@@ -99,15 +159,36 @@ const ComponentMultiSelectInput: React.FC<ComponentMultiSelectInputProps> = ({
         placeholder="Select components..."
         withTags
       >
-        {components.map((component) => (
-          <MultiSelectOption key={component.uid} value={component.uid}>
-            {component.displayName} ({component.category})
-          </MultiSelectOption>
+        {sortedCategories.map((category) => (
+          <React.Fragment key={category}>
+            {/* Category Header */}
+            <MultiSelectOption 
+              value={`__category_${category}`} 
+              disabled
+              style={{ 
+                fontWeight: 'bold', 
+                backgroundColor: '#f6f6f9',
+                color: '#32324d',
+                textTransform: 'uppercase',
+                fontSize: '11px',
+                padding: '8px 12px'
+              }}
+            >
+              {category.toUpperCase()}
+            </MultiSelectOption>
+            
+            {/* Components in this category */}
+            {groupedComponents[category].map((component) => (
+              <MultiSelectOption key={component.uid} value={component.uid}>
+                {component.displayName}
+              </MultiSelectOption>
+            ))}
+          </React.Fragment>
         ))}
       </MultiSelect>
       {error && <Field.Error>{error}</Field.Error>}
       <Field.Hint>
-        Smart Component Filter v2.0.2 - Native Strapi MultiSelect with dynamic components from database
+        Smart Component Filter v2.0.2 - Native Strapi MultiSelect with grouped categories and sorted components
       </Field.Hint>
     </Field.Root>
   );
