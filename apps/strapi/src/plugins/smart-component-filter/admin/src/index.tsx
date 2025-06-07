@@ -44,14 +44,37 @@ const filterComponents = async () => {
         const allowedComponents = data.data.allowedComponents;
         console.log('✅ Allowed components from API:', allowedComponents);
         
-        if (allowedComponents.length === 0) {
-          console.log('🚫 No components allowed for this ListingType');
-          hideAllComponents();
-          return;
-        }
+        // Get all available components to validate
+        console.log('🔍 Validating component UIDs...');
+        const allComponentsResponse = await fetch('/api/smart-component-filter/components');
+        const allComponentsData = await allComponentsResponse.json();
         
-        // Apply filtering
-        applyFiltering(allowedComponents);
+        if (allComponentsData.success && allComponentsData.data?.components) {
+          const validComponentUIDs = new Set(allComponentsData.data.components.map(c => c.uid));
+          
+          // Filter out invalid components and log warnings
+          const validAllowedComponents = allowedComponents.filter(uid => {
+            const isValid = validComponentUIDs.has(uid);
+            if (!isValid) {
+              console.warn(`⚠️ Invalid component UID found: "${uid}" - skipping from filter`);
+            }
+            return isValid;
+          });
+          
+          console.log(`✅ Valid allowed components (${validAllowedComponents.length}/${allowedComponents.length}):`, validAllowedComponents);
+          
+          if (validAllowedComponents.length === 0) {
+            console.log('🚫 No valid components found for this ListingType');
+            hideAllComponents();
+            return;
+          }
+          
+          // Apply filtering with valid components only
+          applyFiltering(validAllowedComponents);
+        } else {
+          console.warn('⚠️ Could not validate components, using all allowed components');
+          applyFiltering(allowedComponents);
+        }
       } else {
         console.error('❌ Failed to get allowed components:', data);
         showAllComponents(); // Fallback
