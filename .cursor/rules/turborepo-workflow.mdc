@@ -5,8 +5,7 @@ alwaysApply: true
 ---
 Rate-New Turborepo development workflow and commands
 globs: ["package.json", "turbo.json", "yarn.lock"]
-alwaysApply: true
----
+
 
 # Rate-New Turborepo Workflow
 

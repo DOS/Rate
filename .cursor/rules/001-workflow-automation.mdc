@@ -1,31 +1,5 @@
 ---
 description: 
 globs: 
-alwaysApply: true
+alwaysApply: false
 ---
-# WORKFLOW AUTOMATION RULES
-
-## 🔄 AUTOMATED WORKFLOWS
-
-### Development Lifecycle
-1. **Project Setup**: Tự động tạo complete project structure
-2. **Code Generation**: Generate với tests + documentation
-3. **Quality Check**: Auto-run linting, testing, build
-4. **Deployment**: One-click deployment scripts
-
-
-## 📈 PERFORMANCE OPTIMIZATION
-
-### Auto-Optimization Rules
-- Bundle size analysis
-- Performance monitoring setup
-- Database query optimization
-- Caching strategy implementation
-
-### Memory Bank Updates
-Automatically capture và store:
-- Successful solution patterns
-- Error resolution methods
-- Performance improvements
-- Best practice discoveries
-

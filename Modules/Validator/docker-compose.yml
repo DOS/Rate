@@ -1,0 +1,74 @@
+# Redis Stream Validator Stack - Production Docker Compose
+# NOTE: This stack is configured to use an EXISTING Redis container.
+# Ensure all services join the same Docker network as your running Redis.
+# Set REDIS_URL to the correct hostname or container name (e.g. redis://redis:6379)
+# Remove or comment out the redis service below if using external Redis.
+
+services:
+
+
+  # Redis Stream Validator Worker
+  validator-worker:
+    build: .
+    container_name: validator-worker
+    environment:
+      REDIS_URL: redis://redis:6379
+      REDIS_STREAM: validation_requests
+      CONSUMER_GROUP: validator_workers
+      CONSUMER_NAME: worker_1
+      # Use the DB container for PostgreSQL
+      POSTGRES_DSN: postgresql://JOY:***REMOVED-SECRET***@DB:5432/validator
+      BATCH_SIZE: 10
+      BLOCK_TIME: 1000
+      MAX_RETRIES: 3
+      LOG_LEVEL: INFO
+
+    restart: unless-stopped
+    networks:
+      - Gateway
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+
+  # Redis Stream Producer (for testing)
+  stream-producer:
+    build: .
+    container_name: stream-producer
+    command: ["python", "redis_stream_producer.py"]
+    environment:
+      REDIS_URL: redis://redis:6379
+      REDIS_STREAM: validation_requests
+      # Use the DB container for PostgreSQL
+      POSTGRES_DSN: postgresql://JOY:***REMOVED-SECRET***@DB:5432/validator
+
+    profiles:
+      - testing
+    networks:
+      - Gateway
+
+  # Redis Stream Monitor (for monitoring)
+  stream-monitor:
+    build: .
+    container_name: stream-monitor
+    command: ["python", "redis_stream_monitor.py"]
+    environment:
+      REDIS_URL: redis://redis:6379
+      REDIS_STREAM: validation_requests
+      CONSUMER_GROUP: validator_workers
+      # Use the DB container for PostgreSQL
+      POSTGRES_DSN: postgresql://JOY:***REMOVED-SECRET***@DB:5432/JOY
+
+    profiles:
+      - monitoring
+    networks:
+      - Gateway
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  Gateway:
+    external: true

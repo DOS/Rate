@@ -1,6 +1,7 @@
 import { StrapiApp } from '@strapi/strapi/admin';
 import React from 'react';
 import ComponentMultiSelectInput from './components/ComponentMultiSelectInput';
+import packageJson from '../../package.json';
 
 const PLUGIN_ID = 'smart-component-filter';
 
@@ -50,10 +51,10 @@ const filterComponents = async () => {
         const allComponentsData = await allComponentsResponse.json();
         
         if (allComponentsData.success && allComponentsData.data?.components) {
-          const validComponentUIDs = new Set(allComponentsData.data.components.map(c => c.uid));
+          const validComponentUIDs = new Set(allComponentsData.data.components.map((c: any) => c.uid));
           
           // Filter out invalid components and log warnings
-          const validAllowedComponents = allowedComponents.filter(uid => {
+          const validAllowedComponents = allowedComponents.filter((uid: string) => {
             const isValid = validComponentUIDs.has(uid);
             if (!isValid) {
               console.warn(`⚠️ Invalid component UID found: "${uid}" - skipping from filter`);
@@ -201,13 +202,13 @@ const applyFiltering = (allowedComponents: string[]) => {
   console.log('📋 Allowed categories:', Array.from(allowedCategories));
   console.log('📋 Components by category:', Object.fromEntries(componentsByCategory));
   
-  // Find and filter categories
+  // Find and filter categories using correct DOM structure
   const categorySelectors = [
-    'h3[role="button"]',
-    'h2[role="button"]', 
-    'button[role="button"]',
-    '[class*="category"]',
-    'div:has(> button)'
+    'h3',           // Direct h3 elements
+    'h2',           // Direct h2 elements  
+    'heading',      // ARIA heading elements
+    'button[expanded]',  // Expanded buttons
+    'button[aria-expanded]'  // ARIA expanded buttons
   ];
   
   let foundCategories = 0;
@@ -223,14 +224,27 @@ const applyFiltering = (allowedComponents: string[]) => {
         const categoryNames = ['contact', 'violation', 'business', 'media', 'review', 'rating', 'info', 'utilities'];
         if (categoryNames.includes(text)) {
           foundCategories++;
-          console.log(`🔍 Found category: "${text}"`);
+          console.log(`🔍 Found category: "${text}" using selector "${selector}"`);
+          
+          // Find the parent container (the category section)
+          let container = element.closest('div');
+          
+          // Try to find the specific category container
+          let currentParent = element.parentElement;
+          while (currentParent && !currentParent.querySelector('button[data-testid*="component"], button:has(img)')) {
+            currentParent = currentParent.parentElement;
+            if (currentParent && currentParent.tagName === 'BODY') break;
+          }
+          
+          if (currentParent && currentParent !== document.body) {
+            container = currentParent;
+          }
           
           if (allowedCategories.has(text)) {
             console.log(`✅ Showing category: "${text}"`);
             (element as HTMLElement).style.display = '';
             
             // Show parent container
-            const container = element.closest('div') || element.closest('section') || element.closest('li');
             if (container) {
               (container as HTMLElement).style.display = '';
             }
@@ -243,7 +257,6 @@ const applyFiltering = (allowedComponents: string[]) => {
             (element as HTMLElement).style.display = 'none';
             
             // Hide parent container
-            const container = element.closest('div') || element.closest('section') || element.closest('li');
             if (container) {
               (container as HTMLElement).style.display = 'none';
             }
@@ -260,37 +273,54 @@ const applyFiltering = (allowedComponents: string[]) => {
 
 // Filter components within a category
 const filterComponentsInCategory = (categoryElement: Element, allowedComponents: Set<string>) => {
-  const componentButtons = categoryElement.querySelectorAll('button:not([role="button"]), div[role="button"]:not(h1):not(h2):not(h3)');
+  // Look for component buttons more specifically
+  const componentButtons = categoryElement.querySelectorAll('button:not([expanded]):not([aria-expanded])');
   
   console.log(`🔍 Found ${componentButtons.length} component buttons in category`);
   console.log(`📋 Allowed components:`, Array.from(allowedComponents));
   
   componentButtons.forEach(button => {
-    const text = button.textContent?.trim()?.toLowerCase();
+    const text = button.textContent?.trim();
     if (!text) return;
     
-    // Improved matching logic
+    console.log(`🔍 Checking component button: "${text}"`);
+    
+    // Improved matching logic with better component name mapping
     const isAllowed = Array.from(allowedComponents).some(comp => {
       const compLower = comp.toLowerCase();
-      const compParts = compLower.split(/[-.]/).filter(part => part.length > 0);
-      const textParts = text.split(/[\s-.]/).filter(part => part.length > 0);
+      const textLower = text.toLowerCase();
       
-      // Direct match
-      if (text.includes(compLower) || compLower.includes(text)) {
-        return true;
+      // Extract component name from UID (e.g., "contact.basic" -> "basic")
+      const compName = compLower.includes('.') ? compLower.split('.').pop() || compLower : compLower;
+      
+      // Direct matches
+      if (textLower === compName) return true;
+      if (textLower.includes(compName)) return true;
+      if (compName.includes(textLower)) return true;
+      
+      // Handle special cases
+      const mappings: { [key: string]: string[] } = {
+        'basic': ['basic', 'contact'],
+        'social-media': ['social', 'social-media'],
+        'location': ['location', 'address'],
+        'detail': ['detail', 'violation'],
+        'evidence': ['evidence', 'proof'],
+        'photo': ['photo', 'image', 'picture']
+      };
+      
+      if (mappings[compName]) {
+        return mappings[compName].some((alias: string) => 
+          textLower.includes(alias) || alias.includes(textLower)
+        );
       }
       
-      // Part-based matching
-      return compParts.some(compPart => 
-        textParts.some(textPart => 
-          textPart.includes(compPart) || compPart.includes(textPart)
-        )
-      );
+      return false;
     });
     
     if (isAllowed) {
       console.log(`✅ Showing component: "${text}"`);
       (button as HTMLElement).style.display = '';
+      (button as HTMLElement).style.visibility = '';
     } else {
       console.log(`🚫 Hiding component: "${text}"`);
       (button as HTMLElement).style.display = 'none';
@@ -345,7 +375,7 @@ const setupObservers = () => {
             return element.querySelector && (
               element.querySelector('input[name="ListingType"]') ||
               element.querySelector('[data-strapi-field="ListingType"]') ||
-              element.querySelector('button:has-text("Add component")')
+              element.querySelector('button[type="button"]')
             );
           }
           return false;
@@ -409,28 +439,27 @@ const setupObservers = () => {
 // Plugin registration
 export default {
   register(app: StrapiApp) {
-    console.log('🔌 Smart Component Filter v2.0.1 - Simple & Reliable');
+    console.log(`🔌 Smart Component Filter v${packageJson.version} - Fixed field label to use user-defined name`);
     console.log('📋 Supported ListingTypes:', Object.keys(LISTING_TYPE_COMPONENTS));
     
-    // Register custom field
+    // Register custom field with minimal intlLabel
     app.customFields.register({
       name: 'component-multi-select',
       pluginId: PLUGIN_ID,
       type: 'string',
       intlLabel: {
         id: 'smart-component-filter.component-multi-select.label',
-        defaultMessage: 'Component Multi-Select',
+        defaultMessage: 'Smart Component Filter',
       },
       intlDescription: {
         id: 'smart-component-filter.component-multi-select.description',
         defaultMessage: 'Enhanced component selection with smart filtering',
       },
-      // icon: LayerGroupIcon, // Optional - can be removed if no icon needed
       components: {
-        Input: async () => {
+        Input: (async () => {
           const module = await import('./components/ComponentMultiSelectInput');
           return { default: module.default };
-        },
+        }) as any,
       },
       options: {
         base: [],
@@ -443,7 +472,7 @@ export default {
   },
 
   bootstrap(app: StrapiApp) {
-    console.log('🚀 Smart Component Filter v2.0.1 - Bootstrap starting...');
+    console.log(`🚀 Smart Component Filter v${packageJson.version} - Bootstrap starting...`);
     
     // Add version display to UI
     setTimeout(() => {
@@ -462,7 +491,7 @@ export default {
           z-index: 9999;
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         ">
-          Smart Filter v2.0.1
+          Smart Filter v${packageJson.version}
         </div>
       `;
       document.body.appendChild(versionElement);
@@ -470,7 +499,7 @@ export default {
       // Setup filtering system
       setupObservers();
       
-      console.log('✅ Smart Component Filter v2.0.1 - Bootstrap completed');
+      console.log(`✅ Smart Component Filter v${packageJson.version} - Bootstrap completed`);
     }, 1000);
   },
 }; 

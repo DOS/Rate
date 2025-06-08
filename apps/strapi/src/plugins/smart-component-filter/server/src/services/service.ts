@@ -114,10 +114,13 @@ const service = ({ strapi }: { strapi: Core.Strapi }) => ({
 
       // Convert components object to array with metadata
       for (const [uid, component] of Object.entries(components)) {
+        // Extract category from component uid (e.g., 'contact.basic' -> 'contact')
+        const category = uid.includes('.') ? uid.split('.')[0] : 'uncategorized';
+        
         componentList.push({
           uid,
           displayName: component.info?.displayName || uid,
-          category: component.category || 'uncategorized',
+          category,
           icon: component.info?.icon || 'cube',
           attributes: Object.keys(component.attributes || {})
         });

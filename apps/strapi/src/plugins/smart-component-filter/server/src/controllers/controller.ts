@@ -53,7 +53,11 @@ const controller = ({ strapi }: { strapi: Core.Strapi }) => ({
         .getAvailableComponents();
 
       ctx.body = {
-        data: availableComponents,
+        data: {
+          components: availableComponents.components,
+          totalCount: availableComponents.totalCount,
+          categories: availableComponents.categories
+        },
         success: true
       };
     } catch (error) {

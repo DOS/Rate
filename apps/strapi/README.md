@@ -9,7 +9,7 @@ This is a [Stapi v5](https://strapi.io/) project.
 - Strapi 5
 - TypeScript
 - Docker
-- Postgres 16 alpine (in local docker container)
+- Postgres 17 alpine (in local docker container)
 
 ## 📦 Included plugins and packages
 

@@ -1,0 +1,23 @@
+FROM postgres:16
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    postgresql-server-dev-16 \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Clone and install pg_uuidv7 extension
+RUN git clone https://github.com/fboulnois/pg_uuidv7.git /tmp/pg_uuidv7 \
+    && cd /tmp/pg_uuidv7 \
+    && make \
+    && make install \
+    && rm -rf /tmp/pg_uuidv7
+
+# Copy initialization script
+COPY init-extensions.sql /docker-entrypoint-initdb.d/
+
+# Clean up build dependencies to reduce image size
+RUN apt-get remove -y build-essential postgresql-server-dev-16 git \
+    && apt-get autoremove -y \
+    && apt-get clean

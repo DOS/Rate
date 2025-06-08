@@ -78,7 +78,7 @@
       },
       "default": true
     },
-    "FieldGroup": {
+    "ItemField": {
       "type": "dynamiczone",
       "pluginOptions": {
         "i18n": {

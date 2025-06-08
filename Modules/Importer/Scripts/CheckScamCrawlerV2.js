@@ -2,6 +2,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import axios from 'axios';
 import { fileURLToPath } from 'url';
+import Redis from 'ioredis';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -13,6 +14,23 @@ class CheckScamCrawlerV2 {
         this.delayMs = options.delayMs || 5000;
         this.maxRetries = options.maxRetries || 3;
         this.outputDir = options.outputDir || path.join(__dirname, '../Results');
+        
+        // Redis integration
+        this.enableRedis = options.enableRedis !== false; // Default: enabled
+        this.redis = null;
+        this.streamName = options.streamName || 'validation_requests';
+        this.batchId = `checkscam_${Date.now()}`;
+        this.sequence = 0;
+        
+        // Initialize Redis if enabled
+        if (this.enableRedis) {
+            this.redis = new Redis({
+                host: options.redis?.host || process.env.REDIS_HOST || 'localhost',
+                port: options.redis?.port || process.env.REDIS_PORT || 6379,
+                retryDelayOnFailover: 100,
+                maxRetriesPerRequest: 3,
+            });
+        }
     }
 
     async fetchWithFlareSolverr(url) {
@@ -195,6 +213,76 @@ class CheckScamCrawlerV2 {
         };
     }
 
+    async sendToRedis(scammerData) {
+        if (!this.enableRedis || !this.redis) {
+            console.log('⚠️ Redis disabled, skipping stream publish');
+            return null;
+        }
+
+        try {
+            this.sequence++;
+            
+            // Transform crawler data to validation format
+            const validationData = {
+                // Required fields for validation
+                phone: scammerData.phone || '',
+                bank_account: scammerData.bank_account_name || '',
+                email: scammerData.email || '',
+                name: scammerData.name || '',
+                
+                // Source tracking
+                source: 'checkscam_crawler',
+                scrape_url: scammerData.url,
+                batch_id: this.batchId,
+                sequence: this.sequence,
+                timestamp: new Date().toISOString(),
+                
+                // Additional checkscam data
+                scam_type: scammerData.scam_type || 'Unknown',
+                bank: scammerData.bank || '',
+                scam_amount: scammerData.scam_amount || '',
+                content: scammerData.content || '',
+                evidence_images: scammerData.evidence_images || [],
+                quality: scammerData.quality || 'low',
+                score: scammerData.score || 0,
+                issues: scammerData.issues || [],
+                
+                // Raw data for reference
+                raw_data: JSON.stringify(scammerData)
+            };
+
+            const messageId = await this.redis.xadd(
+                this.streamName,
+                '*',
+                'data', JSON.stringify(validationData),
+                'source', 'checkscam_crawler',
+                'timestamp', validationData.timestamp,
+                'scrape_url', scammerData.url,
+                'batch_id', this.batchId,
+                'sequence', this.sequence
+            );
+
+            console.log(`✅ Sent to Redis stream ${this.streamName}: ${messageId}`);
+            console.log(`📊 Data: ${scammerData.name} | Phone: ${scammerData.phone} | Bank: ${scammerData.bank_account_name}`);
+            
+            return messageId;
+        } catch (error) {
+            console.error('❌ Failed to send to Redis:', error.message);
+            throw error;
+        }
+    }
+
+    async cleanup() {
+        if (this.redis) {
+            try {
+                await this.redis.quit();
+                console.log('✅ Redis connection closed');
+            } catch (error) {
+                console.error('⚠️ Error closing Redis connection:', error.message);
+            }
+        }
+    }
+
     async crawlScammer(url) {
         try {
             const html = await this.fetchWithFlareSolverr(url);
@@ -220,13 +308,24 @@ class CheckScamCrawlerV2 {
             scammerData.quality = validation.quality;
             scammerData.issues = validation.issues;
             scammerData.score = validation.score;
+            
+            // Send to Redis stream if enabled
+            if (this.enableRedis && scammerData.success !== false) {
+                try {
+                    await this.sendToRedis(scammerData);
+                } catch (redisError) {
+                    console.error('⚠️ Redis publish failed, continuing with crawl:', redisError.message);
+                    scammerData.redis_error = redisError.message;
+                }
+            }
+            
             return scammerData;
         } catch (error) {
             console.error(`❌ Crawl error for ${url}:`, error.message);
             return {
                 url: url,
                 success: false,
-                error: error.message
+                error: error.message,
                 quality_level: 'low'
             };
         }
@@ -305,7 +404,7 @@ class CheckScamCrawlerV2 {
 export default CheckScamCrawlerV2;
 
 // CLI support
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1].endsWith('CheckScamCrawlerV2.js')) {
     const args = process.argv.slice(2);
     const crawler = new CheckScamCrawlerV2();
     
@@ -317,15 +416,21 @@ Usage:
   node CheckScamCrawlerV2.js [options]
 
 Options:
-  --file <path>     Input file with scammer links
-  --max <number>    Maximum number of scammers to crawl
-  --delay <ms>      Delay between requests (default: 5000)
-  --output <dir>    Output directory (default: ../Results)
-  --help, -h        Show this help
+  --file <path>       Input file with scammer links
+  --max <number>      Maximum number of scammers to crawl
+  --delay <ms>        Delay between requests (default: 5000)
+  --output <dir>      Output directory (default: ../Results)
+  --no-redis          Disable Redis stream publishing
+  --redis-host <host> Redis host (default: localhost)
+  --redis-port <port> Redis port (default: 6379)
+  --stream <name>     Redis stream name (default: validation_requests)
+  --help, -h          Show this help
 
 Examples:
   node CheckScamCrawlerV2.js --file ../Results/scam_links_latest.json --max 10
   node CheckScamCrawlerV2.js --file ../Results/scam_links_latest.json --delay 10000
+  node CheckScamCrawlerV2.js --file ../Results/scam_links_latest.json --no-redis
+  node CheckScamCrawlerV2.js --file ../Results/scam_links_latest.json --redis-host redis.example.com --redis-port 6380
         `);
         process.exit(0);
     }
@@ -335,11 +440,19 @@ Examples:
     const maxIndex = args.indexOf('--max');
     const delayIndex = args.indexOf('--delay');
     const outputIndex = args.indexOf('--output');
+    const noRedisIndex = args.indexOf('--no-redis');
+    const redisHostIndex = args.indexOf('--redis-host');
+    const redisPortIndex = args.indexOf('--redis-port');
+    const streamIndex = args.indexOf('--stream');
     
     const inputFile = fileIndex !== -1 ? args[fileIndex + 1] : null;
     const maxCrawl = maxIndex !== -1 ? parseInt(args[maxIndex + 1]) : null;
     const delay = delayIndex !== -1 ? parseInt(args[delayIndex + 1]) : 5000;
     const outputDir = outputIndex !== -1 ? args[outputIndex + 1] : null;
+    const noRedis = noRedisIndex !== -1;
+    const redisHost = redisHostIndex !== -1 ? args[redisHostIndex + 1] : null;
+    const redisPort = redisPortIndex !== -1 ? parseInt(args[redisPortIndex + 1]) : null;
+    const streamName = streamIndex !== -1 ? args[streamIndex + 1] : null;
     
     if (!inputFile) {
         console.error('❌ Error: --file parameter is required');
@@ -358,6 +471,10 @@ Examples:
         
         const crawlerOptions = { delayMs: delay };
         if (outputDir) crawlerOptions.outputDir = outputDir;
+        if (noRedis) crawlerOptions.enableRedis = false;
+        if (redisHost) crawlerOptions.redis = { host: redisHost };
+        if (redisPort) crawlerOptions.redis = { ...crawlerOptions.redis, port: redisPort };
+        if (streamName) crawlerOptions.streamName = streamName;
         
         const crawlerInstance = new CheckScamCrawlerV2(crawlerOptions);
         const results = await crawlerInstance.crawlMultiple(links, { max: maxCrawl, delay });
@@ -365,6 +482,9 @@ Examples:
         
         console.log(`\n✅ Crawl completed!`);
         console.log(`📊 Results: ${results.filter(r => r.success).length}/${results.length} successful`);
+        
+        // Cleanup Redis connection
+        await crawlerInstance.cleanup();
         
     } catch (error) {
         console.error('❌ Error:', error.message);

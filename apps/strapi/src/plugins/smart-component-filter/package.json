@@ -1,5 +1,5 @@
 {
-  "version": "2.0.3",
+  "version": "2.1.0",
   "keywords": [],
   "type": "commonjs",
   "exports": {
@@ -60,10 +60,10 @@
     "kind": "plugin",
     "name": "smart-component-filter",
     "displayName": "Smart Component Filter",
-    "description": "Smart Component Filter v2.0.3 - Native Strapi MultiSelect with grouped categories and enhanced UX"
+    "description": "Smart Component Filter v2.1.0 - Fixed field label to use user-defined name and improved component list with category headers"
   },
   "name": "smart-component-filter",
-  "description": "Smart Component Filter v2.0.3 - Native Strapi MultiSelect with grouped categories and enhanced UX",
+  "description": "Smart Component Filter v2.1.0 - Fixed field label to use user-defined name and improved component list with category headers",
   "license": "MIT",
   "repository": {
     "type": "git",

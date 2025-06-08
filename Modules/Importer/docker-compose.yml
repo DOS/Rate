@@ -19,7 +19,10 @@ services:
       start_period: 30s
     networks:
       - Rate
+      - Gateway
 
 networks:
   Rate:
     driver: bridge
+  Gateway:
+    external: true
