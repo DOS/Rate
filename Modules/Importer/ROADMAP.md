@@ -10,6 +10,18 @@
 
 ---
 
+## 📈 Recent Progress (2025-06-09)
+
+- [x] **Redis Stream Integration:** Đã hoàn thành, production-ready, Validator Worker xử lý realtime, không lưu rác vào CMS
+- [x] **Validator Worker:** Đã validate 9,000+ items, Docker production OK, logic dedupe/enrich hoạt động tốt
+- [x] **Strapi Importer API:** Đã hoạt động đúng chuẩn forward-only, chỉ forward lên Redis, không lưu raw vào CMS
+- [x] **Push-to-validation CLI:** Đã tạo script gửi batch từ crawler vào validation pipeline, không lưu trực tiếp vào CMS
+- [x] **Docs:** Đã cập nhật kiến trúc ingest mới (forward-only gateway), best practice, và flow chuẩn
+- [ ] **core-validator package:** Chưa tách thành package TypeScript độc lập, validation logic vẫn nằm trong Python/JS scripts
+- [ ] **JS/TS migration:** Chưa migrate toàn bộ business logic sang JS/TS, vẫn còn nhiều ở Python worker
+- [ ] **Enrichment pipeline:** Chưa có pipeline độc lập, mới chỉ inline trong worker/crawler
+- [ ] **Testing (Jest):** Chưa có testing coverage đầy đủ cho validation logic JS/TS
+
 ## 🚀 MVP Phase: Foundation Platform (6-8 weeks)
 
 ### **Milestone 1: Core Validation Foundation** (Week 1-2)

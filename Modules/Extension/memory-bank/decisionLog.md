@@ -38,6 +38,32 @@
 - Comply with Chrome policies
 **Alternative**: Auto-extraction on page load (rejected)
 
+### 2025-06-08: Single Strapi Instance with PM2 Cluster Architecture
+
+**Decision**: Use a single Strapi instance with PM2 cluster mode for Website, Extension, Importer, and Validator modules
+
+**Rationale**:
+- Simplifies maintenance with single codebase and schema
+- Zero-downtime deployments via PM2 rolling restarts
+- Cost-effective solution for current scale
+- Easy horizontal scaling on same server
+- Maintains flexibility to migrate to microservices later
+
+**Implementation**:
+- PM2 cluster mode with 2-4 workers
+- Redis for session sharing between workers
+- Nginx as reverse proxy
+- Shared file storage (S3/NFS) for uploads
+
+**Alternative Considered**: 
+- Multiple separate Strapi instances (rejected due to maintenance overhead)
+- Full microservices architecture (postponed until scale requires it)
+
+**Impact**: 
+- Reduced operational complexity
+- Better resource utilization
+- Easier schema/API management across modules
+
 ## Implementation Patterns
 
 ### Defensive DOM Querying
@@ -50,4 +76,4 @@
 **Benefits**: Easier debugging across platforms
 
 ---
-*Last updated: 2025-06-07*
+*Last updated: 2025-06-08*

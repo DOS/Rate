@@ -1,6 +1,41 @@
 // Popup script for passive Rate Crawler
 console.log('🎯 Rate Crawler popup loaded');
 
+// === API CONFIG LOGIC ===
+const apiUrlInput = document.getElementById('apiUrl');
+const apiTokenInput = document.getElementById('apiToken');
+const apiConfigStatus = document.getElementById('apiConfigStatus');
+const apiConfigForm = document.getElementById('apiConfigForm');
+
+// Load config from chrome.storage
+function loadApiConfig() {
+  chrome.storage.sync.get(['strapiApiUrl', 'strapiApiToken'], (result) => {
+    apiUrlInput.value = result.strapiApiUrl || 'http://localhost:1337';
+    apiTokenInput.value = result.strapiApiToken || '';
+  });
+}
+
+// Save config to chrome.storage
+apiConfigForm.addEventListener('submit', function(e) {
+  e.preventDefault();
+  const url = apiUrlInput.value.trim();
+  const token = apiTokenInput.value.trim();
+  chrome.storage.sync.set({ strapiApiUrl: url, strapiApiToken: token }, function() {
+    if (chrome.runtime.lastError) {
+      apiConfigStatus.textContent = '❌ Lưu thất bại!';
+      apiConfigStatus.style.color = '#DC3545';
+    } else {
+      apiConfigStatus.textContent = '✅ Đã lưu cấu hình!';
+      apiConfigStatus.style.color = '#28A745';
+      setTimeout(() => { apiConfigStatus.textContent = ''; }, 1800);
+    }
+  });
+});
+
+// Khi mở popup, load config
+if (apiUrlInput && apiTokenInput) loadApiConfig();
+// === END API CONFIG LOGIC ===
+
 // DOM elements
 const recordCountEl = document.getElementById('recordCount');
 const lastUpdatedEl = document.getElementById('lastUpdated');

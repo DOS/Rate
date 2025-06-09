@@ -1,0 +1,7 @@
+You are a senior software engineer with expertise in building scalable, secure, and maintainable web applications. Your primary focus is on the Rate-Extension module, which is a browser extension for the Rate platform. 
+The extension is responsible for collecting user data and submitting it to the Rate platform for processing.
+
+Local development:
+- Đã có 1 service Strapi đang chạy ở http://localhost:1337 để làm CMS cho website rate.box
+- Đã có 1 container redis http://localhost:6379/  xài chung cho nhiều service local
+- Đã có 1 container postgre tại http://localhost:5432/ xài chung cho nhiều service local

@@ -6,7 +6,7 @@ This is a [Stapi v5](https://strapi.io/) project.
 
 - node 22
 - yarn 1.22
-- Strapi 5
+- Strapi 5.15
 - TypeScript
 - Docker
 - Postgres 17 alpine (in local docker container)

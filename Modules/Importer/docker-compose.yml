@@ -12,11 +12,30 @@ services:
       - "8191:8191"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8191/v1"]
+      test: ["CMD", "curl", "-fsSL", "-X", "POST", "http://localhost:8191/v1", "-d", "{\"cmd\":\"sessions.list\"}", "-H", "Content-Type: application/json"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 30s
+    networks:
+      - Rate
+      - Gateway
+
+  crawler:
+    build: .
+    container_name: checkscam-crawler
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - FLARESOLVERR_URL=http://flaresolverr:8191/v1
+      - TZ=Asia/Ho_Chi_Minh
+    volumes:
+      - ./Results:/app/Results
+      - ./Logs:/app/Logs
+    depends_on:
+      flaresolverr:
+        condition: service_healthy
+    restart: unless-stopped
     networks:
       - Rate
       - Gateway

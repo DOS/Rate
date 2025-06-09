@@ -1,6 +1,44 @@
 // Rate Crawler Background Script - Passive Data Accumulation
 console.log('[Background] Rate Crawler extension loaded');
 
+// Import Strapi API client
+let StrapiClient;
+try {
+  StrapiClient = require('./api/strapi-client.js');
+} catch (e) {
+  // For browser context (if needed)
+  StrapiClient = window?.StrapiClient;
+}
+
+// Dynamic Strapi config
+let strapiConfig = {
+  baseUrl: 'http://localhost:1337',
+  apiToken: '',
+  timeout: 15000
+};
+
+const strapiClient = new StrapiClient(strapiConfig);
+
+// Load Strapi config from chrome.storage.sync
+function loadStrapiConfigAndApply() {
+  chrome.storage.sync.get(['strapiApiUrl', 'strapiApiToken'], (result) => {
+    strapiConfig.baseUrl = result.strapiApiUrl || 'http://localhost:1337';
+    strapiConfig.apiToken = result.strapiApiToken || '';
+    strapiClient.baseUrl = strapiConfig.baseUrl;
+    strapiClient.setAuthToken(strapiConfig.apiToken, 'api');
+    console.log('[Background] Loaded Strapi config:', strapiConfig);
+  });
+}
+// Initial load
+loadStrapiConfigAndApply();
+// Listen for config changes
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'sync' && (changes.strapiApiUrl || changes.strapiApiToken)) {
+    loadStrapiConfigAndApply();
+    console.log('[Background] Strapi config updated from storage change');
+  }
+});
+
 // In-memory database for accumulated scam data
 let scamDatabase = [];
 let totalRecordsFound = 0;
@@ -113,6 +151,14 @@ function removeDuplicates(newData) {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('[Background] Received message:', message.type);
   console.log('[Background] Current database size:', scamDatabase.length);
+
+  // New: Handle submit reviews to Strapi
+  if (message.type === 'submit_shopee_reviews_to_strapi') {
+    submitShopeeReviewsToStrapi(message.reviews)
+      .then(result => sendResponse({ success: true, result }))
+      .catch(error => sendResponse({ success: false, error: error.message }));
+    return true; // Keep message channel open for async
+  }
   console.log('[Background] Message details:', message);
   
   switch (message.type) {
@@ -249,17 +295,6 @@ async function exportShopeeReviews() {
     });
     return { success: false, error: error.message };
   }
-}
-
-// Hàm lọc trùng review dựa trên id hoặc user+content
-function dedupeReviews(reviews) {
-  const seen = new Set();
-  return reviews.filter(r => {
-    const key = (r.id || '') + '|' + (r.user || r.owner || '') + '|' + (r.content || '');
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
 }
 
 // Handle new Shopee reviews from content script

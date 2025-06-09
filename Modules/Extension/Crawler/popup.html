@@ -160,6 +160,21 @@
     <h1>🎯 Rate Crawler</h1>
     <p>Passive Scam Data Collection</p>
   </div>
+  <!-- API Config Section -->
+  <div class="stats-card" style="margin-bottom: 10px;">
+    <form id="apiConfigForm" autocomplete="off">
+      <div style="margin-bottom: 8px;">
+        <label for="apiUrl" style="font-size:13px;">Strapi API URL:</label>
+        <input type="text" id="apiUrl" name="apiUrl" style="width:100%;padding:6px;border-radius:5px;border:none;margin-top:2px;" placeholder="http://localhost:1337" />
+      </div>
+      <div style="margin-bottom: 8px;">
+        <label for="apiToken" style="font-size:13px;">API Token:</label>
+        <input type="password" id="apiToken" name="apiToken" style="width:100%;padding:6px;border-radius:5px;border:none;margin-top:2px;" placeholder="Your API Token..." />
+      </div>
+      <button type="submit" class="button btn-secondary" style="margin-top:4px;">💾 Lưu cấu hình</button>
+      <div id="apiConfigStatus" style="font-size:12px;margin-top:6px;text-align:center;"></div>
+    </form>
+  </div>
   
   <div class="status active" id="status">
     ✅ Passive Mode Active - Browse checkscam.vn to collect data

@@ -1,5 +1,24 @@
 # Changelog
 
+## [2025-06-09]
+### Added
+- Redis Stream integration for ingest pipeline (production-ready)
+- Validator Worker: real-time validation, dedupe, enrichment, Docker production deployment
+- Strapi Importer API: forward-only gateway, no raw data stored in CMS
+- Push-to-validation CLI: batch submit crawler results to validation pipeline
+- Updated ingest architecture docs: forward-only gateway, best practices, flow diagrams
+
+### Changed
+- Strapi Importer API now only publishes to Redis, does not write to CMS database
+- Updated ROADMAP.md to reflect new progress and pending tasks
+
+### Pending
+- core-validator package (TypeScript, monorepo)
+- Full migration of business logic to JS/TS
+- Standalone enrichment pipeline
+- Comprehensive Jest testing for validation logic
+
+
 All notable changes to Rate-Importer CheckScam Crawler will be documented in this file.
 
 ## [2.1.0] - 2025-06-06

@@ -188,8 +188,21 @@ const ComponentMultiSelectInput = ({
     return acc;
   }, {} as Record<string, ComponentData[]>);
 
-  // Sort categories alphabetically and components within each category
-  const sortedCategories = Object.keys(groupedComponents).sort();
+  // Define categories to hide for Smart Component Filter
+  const hiddenCategories = [
+    'elements',
+    'sections', 
+    'seo-utilities',
+    'utilities',
+    'shared',
+    'forms'
+  ];
+
+  // Filter out hidden categories and sort remaining categories alphabetically
+  const sortedCategories = Object.keys(groupedComponents)
+    .filter(category => !hiddenCategories.includes(category.toLowerCase()))
+    .sort();
+    
   sortedCategories.forEach(category => {
     groupedComponents[category].sort((a, b) => a.displayName.localeCompare(b.displayName));
   });
@@ -256,7 +269,7 @@ const ComponentMultiSelectInput = ({
         </MultiSelect>
         {error && <Field.Error>{error}</Field.Error>}
         <Field.Hint>
-          Smart Component Filter v2.1.0 - Using user-defined field names with category grouping
+          Smart Component Filter v2.1.0 - Filtered categories (hiding Elements, Sections, SEO-utilities, Utilities, Shared, Forms)
         </Field.Hint>
       </Field.Root>
     </>
