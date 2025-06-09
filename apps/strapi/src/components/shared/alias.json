@@ -1,0 +1,14 @@
+{
+  "collectionName": "components_shared_aliases",
+  "info": {
+    "displayName": "Alias",
+    "icon": "alien"
+  },
+  "options": {},
+  "attributes": {
+    "Alias": {
+      "type": "string"
+    }
+  },
+  "config": {}
+}

@@ -83,6 +83,7 @@ export interface InfoBasic extends Struct.ComponentSchema {
     displayName: "Basic"
   }
   attributes: {
+    Alias: Schema.Attribute.Component<"review.pro-item", true>
     Name: Schema.Attribute.String
     TaxCode: Schema.Attribute.String
   }
@@ -110,6 +111,7 @@ export interface InfoOrganization extends Struct.ComponentSchema {
   }
   attributes: {
     BusinessID: Schema.Attribute.String
+    FoundingDate: Schema.Attribute.Date
   }
 }
 
@@ -410,6 +412,17 @@ export interface SeoUtilitiesSocialIcons extends Struct.ComponentSchema {
   }
 }
 
+export interface SharedAlias extends Struct.ComponentSchema {
+  collectionName: "components_shared_aliases"
+  info: {
+    displayName: "Alias"
+    icon: "alien"
+  }
+  attributes: {
+    Alias: Schema.Attribute.String
+  }
+}
+
 export interface SharedMetaSocial extends Struct.ComponentSchema {
   collectionName: "components_shared_meta_socials"
   info: {
@@ -632,6 +645,7 @@ declare module "@strapi/strapi" {
       "seo-utilities.seo-og": SeoUtilitiesSeoOg
       "seo-utilities.seo-twitter": SeoUtilitiesSeoTwitter
       "seo-utilities.social-icons": SeoUtilitiesSocialIcons
+      "shared.alias": SharedAlias
       "shared.meta-social": SharedMetaSocial
       "shared.seo": SharedSeo
       "utilities.accordions": UtilitiesAccordions

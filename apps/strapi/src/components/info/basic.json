@@ -10,6 +10,11 @@
     },
     "TaxCode": {
       "type": "string"
+    },
+    "Alias": {
+      "type": "component",
+      "component": "review.pro-item",
+      "repeatable": true
     }
   },
   "config": {}
