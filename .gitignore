@@ -46,6 +46,7 @@ yarn-error.log*
 
 .strapi-updater.json
 node_modules_old/
+node_modules_old_*/
 .cursor/rules/strapi-login.mdc
 
 # vercel
