@@ -77,6 +77,42 @@ export interface FormsNewsletterForm extends Struct.ComponentSchema {
   }
 }
 
+export interface InfoBasic extends Struct.ComponentSchema {
+  collectionName: "components_info_basics"
+  info: {
+    displayName: "Basic"
+  }
+  attributes: {
+    Name: Schema.Attribute.String
+    TaxCode: Schema.Attribute.String
+  }
+}
+
+export interface InfoIndividual extends Struct.ComponentSchema {
+  collectionName: "components_info_individuals"
+  info: {
+    displayName: "Individual"
+    icon: "user"
+  }
+  attributes: {
+    DateOfBirth: Schema.Attribute.Date
+    MaritalStatus: Schema.Attribute.Enumeration<
+      ["Married", "Single", "Divorced", "Widowed"]
+    >
+    PersonalID: Schema.Attribute.String
+  }
+}
+
+export interface InfoOrganization extends Struct.ComponentSchema {
+  collectionName: "components_info_organizations"
+  info: {
+    displayName: "Organization"
+  }
+  attributes: {
+    BusinessID: Schema.Attribute.String
+  }
+}
+
 export interface MediaPhoto extends Struct.ComponentSchema {
   collectionName: "components_media_photos"
   info: {
@@ -576,6 +612,9 @@ declare module "@strapi/strapi" {
       "elements.footer-item": ElementsFooterItem
       "forms.contact-form": FormsContactForm
       "forms.newsletter-form": FormsNewsletterForm
+      "info.basic": InfoBasic
+      "info.individual": InfoIndividual
+      "info.organization": InfoOrganization
       "media.photo": MediaPhoto
       "media.video": MediaVideo
       "rating.criterion": RatingCriterion
