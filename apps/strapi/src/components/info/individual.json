@@ -1,0 +1,26 @@
+{
+  "collectionName": "components_info_individuals",
+  "info": {
+    "displayName": "Individual",
+    "icon": "user"
+  },
+  "options": {},
+  "attributes": {
+    "PersonalID": {
+      "type": "string"
+    },
+    "DateOfBirth": {
+      "type": "date"
+    },
+    "MaritalStatus": {
+      "type": "enumeration",
+      "enum": [
+        "Married",
+        "Single",
+        "Divorced",
+        "Widowed"
+      ]
+    }
+  },
+  "config": {}
+}

@@ -27,6 +27,9 @@
     },
     "Telegram": {
       "type": "string"
+    },
+    "Zalo": {
+      "type": "string"
     }
   }
 }

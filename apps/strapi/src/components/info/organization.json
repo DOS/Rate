@@ -1,0 +1,13 @@
+{
+  "collectionName": "components_info_organizations",
+  "info": {
+    "displayName": "Organization"
+  },
+  "options": {},
+  "attributes": {
+    "BusinessID": {
+      "type": "string"
+    }
+  },
+  "config": {}
+}

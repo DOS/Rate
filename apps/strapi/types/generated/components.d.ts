@@ -37,6 +37,7 @@ export interface ContactSocialMedia extends Struct.ComponentSchema {
     Telegram: Schema.Attribute.String
     TikTok: Schema.Attribute.String
     YouTube: Schema.Attribute.String
+    Zalo: Schema.Attribute.String
   }
 }
 

@@ -1,0 +1,16 @@
+{
+  "collectionName": "components_info_basics",
+  "info": {
+    "displayName": "Basic"
+  },
+  "options": {},
+  "attributes": {
+    "Name": {
+      "type": "string"
+    },
+    "TaxCode": {
+      "type": "string"
+    }
+  },
+  "config": {}
+}
