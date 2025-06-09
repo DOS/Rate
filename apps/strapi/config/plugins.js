@@ -4,4 +4,8 @@ module.exports = {
     enabled: true,
     resolve: './src/plugins/smart-component-filter'
   },
+  // Temporarily disable CKEditor to fix Prism error
+  'ckeditor5': {
+    enabled: false,
+  },
 }; 
