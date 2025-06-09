@@ -76,19 +76,6 @@ export interface FormsNewsletterForm extends Struct.ComponentSchema {
   }
 }
 
-export interface InfoBankInfo extends Struct.ComponentSchema {
-  collectionName: "components_info_bank_infos"
-  info: {
-    description: ""
-    displayName: "Bank"
-    icon: "folder"
-  }
-  attributes: {
-    Name: Schema.Attribute.String
-    SWIFT_BIC: Schema.Attribute.String
-  }
-}
-
 export interface MediaPhoto extends Struct.ComponentSchema {
   collectionName: "components_media_photos"
   info: {
@@ -572,7 +559,6 @@ export interface ViolationEvidence extends Struct.ComponentSchema {
       "images" | "files" | "videos" | "audios",
       true
     >
-    Report: Schema.Attribute.Relation<"oneToOne", "api::report.report">
     VerificationDate: Schema.Attribute.DateTime
     VerificationStatus: Schema.Attribute.Enumeration<
       ["Pending", "Verified", "Rejected"]
@@ -589,7 +575,6 @@ declare module "@strapi/strapi" {
       "elements.footer-item": ElementsFooterItem
       "forms.contact-form": FormsContactForm
       "forms.newsletter-form": FormsNewsletterForm
-      "info.bank-info": InfoBankInfo
       "media.photo": MediaPhoto
       "media.video": MediaVideo
       "rating.criterion": RatingCriterion

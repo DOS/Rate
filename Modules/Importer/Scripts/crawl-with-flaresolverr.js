@@ -43,94 +43,38 @@ function extractScammerLinks(html) {
     console.log('🔍 HTML structure:');
     console.log(html.substring(0, 200) + '...');
 
+    // Sử dụng regex giống script test_flaresolverr_list.js
+    const matches = [...html.matchAll(/<div class="ct1">\s*<a href="([^"]+)">/g)];
     const links = [];
-    
-    // First try to find article/post links in main content area
-    const articlePatterns = [
-        // Article titles with links
-        /<article[^>]*>.*?<a[^>]+href="(https:\/\/checkscam\.vn\/[^"]+)"[^>]*>([^<]+)<\/a>.*?<\/article>/gis,
-        // Post titles in content area
-        /<div[^>]*class="[^"]*post[^"]*"[^>]*>.*?<a[^>]+href="(https:\/\/checkscam\.vn\/[^"]+)"[^>]*>([^<]+)<\/a>.*?<\/div>/gis,
-        // Entry titles
-        /<div[^>]*class="[^"]*entry[^"]*"[^>]*>.*?<a[^>]+href="(https:\/\/checkscam\.vn\/[^"]+)"[^>]*>([^<]+)<\/a>.*?<\/div>/gis,
-        // H2/H3 titles with links
-        /<h[23][^>]*>.*?<a[^>]+href="(https:\/\/checkscam\.vn\/[^"]+)"[^>]*>([^<]+)<\/a>.*?<\/h[23]>/gis
-    ];
-    
-    // Try each pattern
-    for (const pattern of articlePatterns) {
-        let match;
-        while ((match = pattern.exec(html)) !== null) {
-            const url = match[1];
-            const name = match[2].trim();
-            
-            // Filter out navigation and system links
-            if (!url.includes('/category/') && 
-                !url.includes('/page/') && 
-                !url.includes('/tag/') &&
-                !url.includes('checkscam.vn/#') &&
-                !url.includes('/wp-') &&
-                !url.includes('/dieu-khoan') &&
-                !url.includes('/lien-he') &&
-                !url.includes('/marketing') &&
-                !url.includes('/gioi-thieu') &&
-                !url.includes('/dich-vu') &&
-                !url.includes('/to-cao') &&
-                !url.includes('loginSocial') &&
-                name.length > 5) {
-                
-                links.push({
-                    name: name,
-                    url: url
-                });
-            }
+    for (const m of matches) {
+        const url = m[1];
+        // Loại bỏ các link hệ thống, chỉ lấy link scammer thực sự
+        if (
+            url.startsWith('https://checkscam.vn/') &&
+            !url.includes('/category/') &&
+            !url.includes('/page/') &&
+            !url.includes('/tag/') &&
+            !url.includes('checkscam.vn/#') &&
+            !url.includes('/wp-') &&
+            !url.includes('/dieu-khoan') &&
+            !url.includes('/lien-he') &&
+            !url.includes('/marketing') &&
+            !url.includes('/gioi-thieu') &&
+            !url.includes('/dich-vu') &&
+            !url.includes('/to-cao') &&
+            !url.includes('loginSocial')
+        ) {
+            links.push({
+                name: url.split('/').pop(),
+                url: url
+            });
         }
     }
-    
-    // If no articles found, try general link pattern but with stricter filtering
-    if (links.length === 0) {
-        console.log('🔍 No article links found, trying general pattern...');
-        
-        const linkPattern = /<a[^>]+href="(https:\/\/checkscam\.vn\/[^"]+)"[^>]*>([^<]+)<\/a>/gi;
-        let match;
-        
-        while ((match = linkPattern.exec(html)) !== null) {
-            const url = match[1];
-            const name = match[2].trim();
-            
-            // Very strict filtering for individual posts
-            if (url.match(/\/\d{4}\/\d{2}\/\d{2}\//) || // Date-based URLs
-                url.match(/\/[^\/]+\/$/) && // Single post URLs
-                !url.includes('/category/') && 
-                !url.includes('/page/') && 
-                !url.includes('/tag/') &&
-                !url.includes('checkscam.vn/#') &&
-                !url.includes('/wp-') &&
-                !url.includes('/dieu-khoan') &&
-                !url.includes('/lien-he') &&
-                !url.includes('/marketing') &&
-                !url.includes('/gioi-thieu') &&
-                !url.includes('/dich-vu') &&
-                !url.includes('/to-cao') &&
-                !url.includes('loginSocial') &&
-                name.length > 10 &&
-                !name.match(/^(Điều khoản|Liên hệ|Quảng cáo|GIỚI THIỆU|QUỸ|Tố cáo|Đăng nhập)/i)) {
-                
-                links.push({
-                    name: name,
-                    url: url
-                });
-            }
-        }
-    }
-    
     // Remove duplicates
-    const uniqueLinks = links.filter((link, index, self) => 
+    const uniqueLinks = links.filter((link, index, self) =>
         index === self.findIndex(l => l.url === link.url)
     );
-    
-    console.log(`🔍 Found ${uniqueLinks.length} potential scammer links`);
-    
+    console.log(`🔍 Found ${uniqueLinks.length} <div class=\"ct1\"><a ...> scammer links`);
     return uniqueLinks;
 }
 

@@ -33,7 +33,7 @@ const controller = ({ strapi }: { strapi: Core.Strapi }) => ({
         data: allowedComponents
       };
     } catch (error) {
-      console.error('Error in getAllowedComponents:', error);
+      // Handle error silently
       ctx.status = 500;
       return {
         success: false,

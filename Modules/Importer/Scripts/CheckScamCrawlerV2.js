@@ -3,6 +3,7 @@ import path from 'path';
 import axios from 'axios';
 import { fileURLToPath } from 'url';
 import Redis from 'ioredis';
+import ValidationPusher from './push-to-validation.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -16,14 +17,17 @@ class CheckScamCrawlerV2 {
         this.outputDir = options.outputDir || path.join(__dirname, '../Results');
         
         // Redis integration
-        this.enableRedis = options.enableRedis !== false; // Default: enabled
+        this.useRedis = options.useRedis !== false; // Default: enabled
         this.redis = null;
         this.streamName = options.streamName || 'validation_requests';
         this.batchId = `checkscam_${Date.now()}`;
         this.sequence = 0;
         
+        // Validation pipeline integration
+        this.validationPusher = options.pushToValidation ? new ValidationPusher(options.validationOptions) : null;
+        
         // Initialize Redis if enabled
-        if (this.enableRedis) {
+        if (this.useRedis) {
             this.redis = new Redis({
                 host: options.redis?.host || process.env.REDIS_HOST || 'localhost',
                 port: options.redis?.port || process.env.REDIS_PORT || 6379,
@@ -37,7 +41,10 @@ class CheckScamCrawlerV2 {
         const payload = {
             cmd: 'request.get',
             url: url,
-            maxTimeout: this.timeout
+            maxTimeout: this.timeout,
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
+            }
         };
 
         try {
@@ -214,7 +221,7 @@ class CheckScamCrawlerV2 {
     }
 
     async sendToRedis(scammerData) {
-        if (!this.enableRedis || !this.redis) {
+        if (!this.useRedis || !this.redis) {
             console.log('⚠️ Redis disabled, skipping stream publish');
             return null;
         }
@@ -310,7 +317,7 @@ class CheckScamCrawlerV2 {
             scammerData.score = validation.score;
             
             // Send to Redis stream if enabled
-            if (this.enableRedis && scammerData.success !== false) {
+            if (this.useRedis && scammerData.success !== false) {
                 try {
                     await this.sendToRedis(scammerData);
                 } catch (redisError) {
@@ -329,6 +336,101 @@ class CheckScamCrawlerV2 {
                 quality_level: 'low'
             };
         }
+    }
+
+    /**
+     * Automatically crawl all scammer profiles from the source website.
+     * This method paginates through all list pages, extracts profile links,
+     * and crawls each scammer profile found. Robust error handling and logging.
+     * @param {Object} options - { max, delay }
+     * @returns {Promise<Array>} Array of crawl results
+     */
+    async crawlAll(options = {}) {
+    console.log('=== ENTER crawlAll ===');
+        const max = options.max || 0; // 0 = crawl all
+        const delay = options.delay || this.delayMs;
+        const results = [];
+        let page = 1;
+        let totalProfiles = 0;
+        let stop = false;
+
+        console.log('🌐 Auto-crawling all scammer profiles from source site...');
+
+        while (!stop) {
+            console.log('=== ENTER while LOOP ===');
+            let html = null;
+            try {
+                console.log('=== BEFORE FETCH ===');
+                const listUrl = `https://checkscam.com/scams?page=${page}`;
+                console.log(`📄 Fetching list page: ${listUrl}`);
+                html = await this.fetchWithFlareSolverr(listUrl);
+                console.log('[DEBUG] typeof html:', typeof html);
+                if (typeof html === 'string') {
+                    console.log('[DEBUG] html length:', html.length);
+                    if (html.length === 0) {
+                        console.log('[DEBUG] html value:', JSON.stringify(html));
+                    } else {
+                        console.log('[DEBUG HTML SNIPPET]', html.slice(0, 200).replace(/\n/g, ' '));
+                    }
+                } else {
+                    console.log('[DEBUG] html is not a string:', typeof html, JSON.stringify(html));
+                }
+
+                // [DEBUG] Save first 500 chars of HTML in 5 parts (nếu cần)
+                if (page === 1 && typeof html === 'string' && html.length > 0) {
+                    try {
+                        await fs.mkdir(this.outputDir, { recursive: true });
+                        for (let i = 0; i < 5; i++) {
+                            const part = html.slice(i * 100, (i + 1) * 100);
+                            if (part.length > 0) {
+                                const debugPath = path.join(this.outputDir, `debug_list_page1_part${i+1}.html`);
+                                await fs.writeFile(debugPath, part);
+                                console.log(`[DEBUG] Saved HTML PART ${i+1} to ${debugPath}`);
+                            }
+                        }
+                    } catch (e) {
+                        console.error('[DEBUG] Failed to save debug HTML parts:', e.message);
+                    }
+                }
+
+                // Extract profile links: lấy đúng link dạng full URL với class 'stretched-link'
+                const profileLinks = Array.from(
+                  html.matchAll(/<a[^>]+href=["'](https:\/\/checkscam\.com\/scams\/[0-9a-zA-Z\-_]+\.html)["'][^>]+class=["'][^"']*stretched-link[^"']*["'][^>]*>/g)
+                ).map(m => m[1]);
+                console.log(`[DEBUG] Found ${profileLinks.length} profile links on page ${page}`);
+
+                if (!profileLinks.length) {
+                    console.log(`[DEBUG] No profile links found on page ${page}. Dumping HTML body snippet:`);
+                    console.log(html.slice(0, 300));
+                    console.log(`🚩 No more profiles found on page ${page}. Stopping.`);
+                    break;
+                }
+
+                for (const link of profileLinks) {
+                    if (max && results.length >= max) {
+                        stop = true;
+                        break;
+                    }
+                    console.log(`🎯 Crawling profile: ${link}`);
+                    const result = await this.crawlScammer(link);
+                    results.push(result);
+                    totalProfiles++;
+                    if (delay > 0) {
+                        await new Promise(res => setTimeout(res, delay));
+                    }
+                }
+
+                page++;
+            } catch (err) {
+                console.error(`❌ Error crawling list page ${page}:`, err.message);
+                break;
+            }
+        }
+
+        console.log('=== END PAGE LOOP ===');
+        await new Promise(res => setTimeout(res, 3000)); // Sleep 3s để flush log
+        console.log(`✅ Auto-crawl finished. Total profiles crawled: ${results.length}`);
+        return results;
     }
 
     async crawlMultiple(scammerLinks, options = {}) {
@@ -393,6 +495,17 @@ class CheckScamCrawlerV2 {
             await fs.writeFile(outputPath, JSON.stringify(output, null, 2));
             console.log(`📁 Results saved: ${outputPath}`);
             
+            // Push to validation pipeline if enabled
+            if (this.validationPusher && results.length > 0) {
+                try {
+                    console.log('\n📤 Pushing to validation pipeline...');
+                    const validationResult = await this.validationPusher.pushForValidation(outputPath);
+                    console.log('✅ Submitted for validation:', validationResult.requestId);
+                } catch (error) {
+                    console.error('❌ Failed to submit for validation:', error.message);
+                }
+            }
+            
             return outputPath;
         } catch (error) {
             console.error(`❌ Failed to save results:`, error.message);
@@ -420,17 +533,17 @@ Options:
   --max <number>      Maximum number of scammers to crawl
   --delay <ms>        Delay between requests (default: 5000)
   --output <dir>      Output directory (default: ../Results)
-  --no-redis          Disable Redis stream publishing
-  --redis-host <host> Redis host (default: localhost)
-  --redis-port <port> Redis port (default: 6379)
-  --stream <name>     Redis stream name (default: validation_requests)
+  --no-redis          Disable Redis integration
+  --push-validation   Push results to validation pipeline
+  --strapi-url <url>  Strapi URL (default: http://localhost:1337)
+  --strapi-token <token> Strapi API token
   --help, -h          Show this help
 
 Examples:
   node CheckScamCrawlerV2.js --file ../Results/scam_links_latest.json --max 10
   node CheckScamCrawlerV2.js --file ../Results/scam_links_latest.json --delay 10000
   node CheckScamCrawlerV2.js --file ../Results/scam_links_latest.json --no-redis
-  node CheckScamCrawlerV2.js --file ../Results/scam_links_latest.json --redis-host redis.example.com --redis-port 6380
+  node CheckScamCrawlerV2.js --file ../Results/scam_links_latest.json --push-validation --strapi-token YOUR_API_TOKEN
         `);
         process.exit(0);
     }
@@ -441,53 +554,80 @@ Examples:
     const delayIndex = args.indexOf('--delay');
     const outputIndex = args.indexOf('--output');
     const noRedisIndex = args.indexOf('--no-redis');
-    const redisHostIndex = args.indexOf('--redis-host');
-    const redisPortIndex = args.indexOf('--redis-port');
-    const streamIndex = args.indexOf('--stream');
+    const pushValidationIndex = args.indexOf('--push-validation');
+    const strapiUrlIndex = args.indexOf('--strapi-url');
+    const strapiTokenIndex = args.indexOf('--strapi-token');
     
     const inputFile = fileIndex !== -1 ? args[fileIndex + 1] : null;
     const maxCrawl = maxIndex !== -1 ? parseInt(args[maxIndex + 1]) : null;
     const delay = delayIndex !== -1 ? parseInt(args[delayIndex + 1]) : 5000;
     const outputDir = outputIndex !== -1 ? args[outputIndex + 1] : null;
     const noRedis = noRedisIndex !== -1;
-    const redisHost = redisHostIndex !== -1 ? args[redisHostIndex + 1] : null;
-    const redisPort = redisPortIndex !== -1 ? parseInt(args[redisPortIndex + 1]) : null;
-    const streamName = streamIndex !== -1 ? args[streamIndex + 1] : null;
+    const pushValidation = pushValidationIndex !== -1;
+    const strapiUrl = strapiUrlIndex !== -1 ? args[strapiUrlIndex + 1] : 'http://localhost:1337';
+    const strapiToken = strapiTokenIndex !== -1 ? args[strapiTokenIndex + 1] : null;
     
-    if (!inputFile) {
-        console.error('❌ Error: --file parameter is required');
-        process.exit(1);
-    }
-    
-    try {
-        const fileContent = await fs.readFile(inputFile, 'utf8');
-        const data = JSON.parse(fileContent);
-        const links = data.links || data;
-        
-        if (!Array.isArray(links) || links.length === 0) {
-            console.error('❌ Error: No valid links found in input file');
+    if (inputFile) {
+        try {
+            const fileContent = await fs.readFile(inputFile, 'utf8');
+            const data = JSON.parse(fileContent);
+            const links = data.links || data;
+            
+            if (!Array.isArray(links) || links.length === 0) {
+                console.error('❌ Error: No valid links found in input file');
+                process.exit(1);
+            }
+            
+            const crawlerOptions = { delayMs: delay };
+            if (outputDir) crawlerOptions.outputDir = outputDir;
+            if (noRedis) crawlerOptions.useRedis = false;
+            if (pushValidation) {
+                crawlerOptions.pushToValidation = true;
+                crawlerOptions.validationOptions = {
+                    strapiUrl,
+                    apiToken: strapiToken || process.env.STRAPI_API_TOKEN
+                };
+            }
+            
+            const crawlerInstance = new CheckScamCrawlerV2(crawlerOptions);
+            const results = await crawlerInstance.crawlMultiple(links, { max: maxCrawl, delay });
+            await crawlerInstance.saveResults(results);
+            
+            console.log(`\n✅ Crawl completed!`);
+            console.log(`📊 Results: ${results.filter(r => r.success).length}/${results.length} successful`);
+            
+            // Cleanup Redis connection
+            await crawlerInstance.cleanup();
+            
+        } catch (error) {
+            console.error('❌ Error:', error.message);
             process.exit(1);
         }
-        
-        const crawlerOptions = { delayMs: delay };
-        if (outputDir) crawlerOptions.outputDir = outputDir;
-        if (noRedis) crawlerOptions.enableRedis = false;
-        if (redisHost) crawlerOptions.redis = { host: redisHost };
-        if (redisPort) crawlerOptions.redis = { ...crawlerOptions.redis, port: redisPort };
-        if (streamName) crawlerOptions.streamName = streamName;
-        
-        const crawlerInstance = new CheckScamCrawlerV2(crawlerOptions);
-        const results = await crawlerInstance.crawlMultiple(links, { max: maxCrawl, delay });
-        await crawlerInstance.saveResults(results);
-        
-        console.log(`\n✅ Crawl completed!`);
-        console.log(`📊 Results: ${results.filter(r => r.success).length}/${results.length} successful`);
-        
-        // Cleanup Redis connection
-        await crawlerInstance.cleanup();
-        
-    } catch (error) {
-        console.error('❌ Error:', error.message);
-        process.exit(1);
+    } else {
+        // Production: auto-crawl all scammer data (no file required)
+        try {
+            const crawlerOptions = { delayMs: delay };
+            if (outputDir) crawlerOptions.outputDir = outputDir;
+            if (noRedis) crawlerOptions.useRedis = false;
+            if (pushValidation) {
+                crawlerOptions.pushToValidation = true;
+                crawlerOptions.validationOptions = {
+                    strapiUrl,
+                    apiToken: strapiToken || process.env.STRAPI_API_TOKEN
+                };
+            }
+            
+            const crawlerInstance = new CheckScamCrawlerV2(crawlerOptions);
+            // Implement crawlAll or similar method for full-site crawl
+            const results = await crawlerInstance.crawlAll({ max: maxCrawl, delay });
+            await crawlerInstance.saveResults(results);
+            
+            console.log(`\n✅ Auto-crawl completed!`);
+            console.log(`📊 Results: ${results.filter(r => r.success).length}/${results.length} successful`);
+            await crawlerInstance.cleanup();
+        } catch (error) {
+            console.error('❌ Error:', error.message);
+            process.exit(1);
+        }
     }
 }

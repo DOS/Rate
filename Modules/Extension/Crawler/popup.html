@@ -171,8 +171,12 @@
         <label for="apiToken" style="font-size:13px;">API Token:</label>
         <input type="password" id="apiToken" name="apiToken" style="width:100%;padding:6px;border-radius:5px;border:none;margin-top:2px;" placeholder="Your API Token..." />
       </div>
-      <button type="submit" class="button btn-secondary" style="margin-top:4px;">💾 Lưu cấu hình</button>
+      <div style="display:flex;gap:8px;">
+        <button type="submit" class="button btn-secondary" style="flex:1;margin-top:4px;">💾 Lưu cấu hình</button>
+        <button type="button" id="testApiBtn" class="button btn-primary" style="flex:1;margin-top:4px;">🔌 Test Connection</button>
+      </div>
       <div id="apiConfigStatus" style="font-size:12px;margin-top:6px;text-align:center;"></div>
+      <div id="apiTestStatus" style="font-size:12px;margin-top:4px;text-align:center;"></div>
     </form>
   </div>
   

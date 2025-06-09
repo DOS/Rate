@@ -1,0 +1,156 @@
+[
+  {
+    "domain": "checkscam.com",
+    "method": "playwright",
+    "success": true,
+    "num_links": 0,
+    "timestamp": "2025-06-08T15:57:10.678Z"
+  },
+  {
+    "domain": "checkscam.com",
+    "method": "playwright",
+    "success": true,
+    "num_links": 0,
+    "timestamp": "2025-06-08T15:57:38.826Z"
+  },
+  {
+    "domain": "checkscam.vn",
+    "method": "flaresolverr",
+    "success": false,
+    "num_links": 0,
+    "timestamp": "2025-06-08T15:57:42.220Z"
+  },
+  {
+    "domain": "checkscam.vn",
+    "method": "playwright",
+    "success": false,
+    "num_links": 0,
+    "timestamp": "2025-06-08T15:58:43.613Z"
+  },
+  {
+    "domain": "lazada.vn",
+    "method": "playwright",
+    "success": true,
+    "num_links": 0,
+    "timestamp": "2025-06-08T15:58:48.850Z"
+  },
+  {
+    "domain": "checkscam.com",
+    "method": "playwright",
+    "success": true,
+    "num_links": 0,
+    "timestamp": "2025-06-08T16:03:15.861Z"
+  },
+  {
+    "domain": "checkscam.vn",
+    "method": "flaresolverr",
+    "success": false,
+    "num_links": 0,
+    "timestamp": "2025-06-08T16:03:19.187Z"
+  },
+  {
+    "domain": "checkscam.vn",
+    "method": "playwright",
+    "success": false,
+    "num_links": 0,
+    "timestamp": "2025-06-08T16:04:20.579Z"
+  },
+  {
+    "domain": "lazada.vn",
+    "method": "playwright",
+    "success": true,
+    "num_links": 0,
+    "timestamp": "2025-06-08T16:04:25.705Z"
+  },
+  {
+    "domain": "checkscam.com",
+    "method": "playwright",
+    "success": true,
+    "num_links": 0,
+    "timestamp": "2025-06-08T16:12:45.721Z"
+  },
+  {
+    "domain": "checkscam.vn",
+    "method": "flaresolverr",
+    "success": false,
+    "num_links": 0,
+    "timestamp": "2025-06-08T16:12:49.032Z"
+  },
+  {
+    "domain": "checkscam.vn",
+    "method": "playwright",
+    "success": false,
+    "num_links": 0,
+    "timestamp": "2025-06-08T16:13:50.421Z"
+  },
+  {
+    "domain": "lazada.vn",
+    "method": "playwright",
+    "success": true,
+    "num_links": 0,
+    "timestamp": "2025-06-08T16:13:56.660Z"
+  },
+  {
+    "domain": "checkscam.com",
+    "method": "playwright",
+    "success": true,
+    "num_links": 0,
+    "timestamp": "2025-06-08T16:14:31.644Z"
+  },
+  {
+    "domain": "checkscam.vn",
+    "method": "flaresolverr",
+    "success": false,
+    "num_links": 0,
+    "timestamp": "2025-06-08T16:14:34.718Z"
+  },
+  {
+    "domain": "checkscam.vn",
+    "method": "playwright",
+    "success": false,
+    "num_links": 0,
+    "timestamp": "2025-06-08T16:14:56.599Z"
+  },
+  {
+    "domain": "lazada.vn",
+    "method": "playwright",
+    "success": true,
+    "num_links": 0,
+    "timestamp": "2025-06-08T16:14:58.656Z"
+  },
+  {
+    "domain": "checkscam.com",
+    "method": "playwright",
+    "success": true,
+    "num_links": 0,
+    "timestamp": "2025-06-08T16:18:27.569Z"
+  },
+  {
+    "domain": "checkscam.vn",
+    "method": "flaresolverr",
+    "success": false,
+    "num_links": 0,
+    "timestamp": "2025-06-08T16:18:30.846Z"
+  },
+  {
+    "domain": "checkscam.vn",
+    "method": "playwright",
+    "success": false,
+    "num_links": 0,
+    "timestamp": "2025-06-08T16:18:32.736Z"
+  },
+  {
+    "domain": "lazada.vn",
+    "method": "playwright",
+    "success": true,
+    "num_links": 0,
+    "timestamp": "2025-06-08T16:18:34.594Z"
+  },
+  {
+    "domain": "checkscam.com",
+    "method": "playwright",
+    "success": true,
+    "num_links": 0,
+    "timestamp": "2025-06-08T16:21:15.441Z"
+  }
+]

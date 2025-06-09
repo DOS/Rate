@@ -1,4 +1,4 @@
-import CheckScamCrawlerV2 from './CheckScamCrawlerV2.js';
+import CheckScamCrawlerV2 from '../CheckScamCrawlerV2.js';
 import Redis from 'ioredis';
 import { v4 as uuidv4 } from 'uuid';
 

@@ -44,19 +44,10 @@ const ComponentMultiSelectInput = ({
   const [fieldDisplayName, setFieldDisplayName] = useState<string | null>(null);
 
   useEffect(() => {
-    // Debug: Log all props to understand what's available
-    console.log('🔍 ComponentMultiSelectInput props:', {
-      name,
-      intlLabel,
-      metadatas,
-      fieldSchema,
-      contentTypeUID,
-      attribute
-    });
-
-    const fetchComponentsAndFieldInfo = async () => {
+    const fetchData = async () => {
+      setLoading(true);
+      
       try {
-        console.log('🔍 Fetching components and field info from API...');
         const { get } = getFetchClient();
         
         // Fetch components
@@ -65,15 +56,9 @@ const ComponentMultiSelectInput = ({
         // Try to fetch field display name from content type schema if contentTypeUID is available
         if (contentTypeUID) {
           try {
-            console.log('🔍 Fetching content type schema for:', contentTypeUID);
-            const schemaResponse = await get(`/content-manager/content-types/${contentTypeUID}/configuration`);
-            
-            console.log('🔍 Schema response:', schemaResponse.data);
-            
             // Look in contentType.attributes for field configuration
-            if (schemaResponse.data?.contentType?.attributes?.[name]) {
-              const fieldConfig = schemaResponse.data.contentType.attributes[name];
-              console.log('🔍 Found field config:', fieldConfig);
+            if (response.data?.contentType?.attributes?.[name]) {
+              const fieldConfig = response.data.contentType.attributes[name];
               
               // Look for display name in various places
               const displayName = fieldConfig.customField?.displayName || 
@@ -82,64 +67,50 @@ const ComponentMultiSelectInput = ({
                                 fieldConfig.name;
               
               if (displayName) {
-                console.log('✅ Found field display name from schema:', displayName);
                 setFieldDisplayName(displayName);
               }
             }
             
             // Also try layouts.edit for field metadata
-            if (schemaResponse.data?.layouts?.edit) {
-              console.log('🔍 Checking edit layouts...');
-              const editLayouts = schemaResponse.data.layouts.edit;
+            if (response.data?.layouts?.edit) {
+              const editLayouts = response.data.layouts.edit;
               
               // Flatten all fields from all sections
               const allFields = editLayouts.flatMap((section: any) => section.children?.flatMap((row: any) => row) || []);
               const fieldMeta = allFields.find((field: any) => field.name === name);
               
               if (fieldMeta) {
-                console.log('🔍 Found field metadata:', fieldMeta);
                 const displayName = fieldMeta.label || fieldMeta.displayName || fieldMeta.name;
                 if (displayName) {
-                  console.log('✅ Found field display name from layouts:', displayName);
                   setFieldDisplayName(displayName);
                 }
               }
             }
           } catch (schemaError) {
-            console.warn('⚠️ Failed to fetch field schema:', schemaError);
+            // Schema fetch failed, continue without field name
           }
         }
         
-        console.log('🔍 Full API Response:', response);
-        console.log('🔍 API Response.data:', response.data);
-        console.log('🔍 API Response.data type:', typeof response.data);
-        console.log('🔍 API Response.data.data:', response.data?.data);
-        
         // Check if response.data.data.components exists (nested structure)
         const componentsData = response.data?.data?.components || response.data?.components;
-        console.log('🔍 Components data found:', componentsData);
         
         if (componentsData && Array.isArray(componentsData)) {
-          console.log('✅ Components loaded:', componentsData.length, 'components');
           setComponents(componentsData);
-          setFetchError(null);
         } else {
-          console.error('❌ Failed to load components - Invalid response structure:', response.data);
-          setFetchError('Failed to load components - Invalid response format');
+          setComponents([]);
         }
       } catch (error) {
-        console.error('❌ Error fetching components:', error);
-        setFetchError('Error fetching components');
-      } finally {
-        setLoading(false);
+        setFetchError('Failed to load components');
+        setComponents([]);
       }
+      
+      setLoading(false);
     };
 
-    fetchComponentsAndFieldInfo();
-  }, []);
+    fetchData();
+  }, [contentTypeUID, name]);
 
   const handleChange = (selectedValues: string[]) => {
-    console.log('🎯 MultiSelect changed:', selectedValues);
     onChange({
       target: {
         name,

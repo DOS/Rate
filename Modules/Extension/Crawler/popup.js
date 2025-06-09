@@ -36,6 +36,40 @@ apiConfigForm.addEventListener('submit', function(e) {
 if (apiUrlInput && apiTokenInput) loadApiConfig();
 // === END API CONFIG LOGIC ===
 
+// === TEST CONNECTION LOGIC ===
+const testApiBtn = document.getElementById('testApiBtn');
+const apiTestStatus = document.getElementById('apiTestStatus');
+
+if (testApiBtn) {
+  testApiBtn.addEventListener('click', async function() {
+    apiTestStatus.textContent = '⏳ Đang kiểm tra kết nối...';
+    apiTestStatus.style.color = '#FFE066';
+    const url = apiUrlInput.value.trim() || 'http://localhost:1337';
+    const token = apiTokenInput.value.trim();
+    try {
+      const resp = await fetch(url.replace(/\/$/, '') + '/api/validation/status', {
+        method: 'GET',
+        headers: {
+          'Authorization': token ? `Bearer ${token}` : '',
+          'Content-Type': 'application/json'
+        },
+        timeout: 10000
+      });
+      if (resp.ok) {
+        apiTestStatus.textContent = '✅ Kết nối thành công!';
+        apiTestStatus.style.color = '#28A745';
+      } else {
+        apiTestStatus.textContent = `❌ Lỗi: ${resp.status} ${resp.statusText}`;
+        apiTestStatus.style.color = '#DC3545';
+      }
+    } catch (e) {
+      apiTestStatus.textContent = '❌ Không kết nối được tới API!';
+      apiTestStatus.style.color = '#DC3545';
+    }
+  });
+}
+// === END TEST CONNECTION LOGIC ===
+
 // DOM elements
 const recordCountEl = document.getElementById('recordCount');
 const lastUpdatedEl = document.getElementById('lastUpdated');

@@ -650,7 +650,6 @@ export interface ApiItemItem extends Struct.CollectionTypeSchema {
         "contact.basic",
         "contact.location",
         "contact.social-media",
-        "info.bank-info",
         "violation.detail",
         "violation.evidence",
         "utilities.text",

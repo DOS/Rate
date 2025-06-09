@@ -12,7 +12,6 @@
     "lint": "eslint . --ext .ts",
     "format": "prettier --write \"Packages/**/*.ts\"",
     "test": "vitest",
-    "prepare": "husky install",
     "crawler:dev": "ts-node-esm --esm Packages/Crawler/Src/index.ts",
     "extension:dev": "cd Packages/Extension && npm run dev",
     "api:dev": "cd Packages/API && npm run dev"

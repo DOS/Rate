@@ -30,11 +30,6 @@
         "Verified",
         "Rejected"
       ]
-    },
-    "Report": {
-      "type": "relation",
-      "relation": "oneToOne",
-      "target": "api::report.report"
     }
   }
 }
