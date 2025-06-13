@@ -94,6 +94,42 @@ const ComponentMultiSelectInput: React.FC<ComponentMultiSelectInputProps> = ({
     fetchComponents();
   }, [uniqueFieldName]);
 
+  // Custom hook to add category prefix to selected tags
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      try {
+        // Find all selected tags in this MultiSelect instance
+        const multiSelectContainer = document.querySelector(`[data-field-name="${name}"]`);
+        if (!multiSelectContainer) return;
+
+        const tags = multiSelectContainer.querySelectorAll('[data-strapi-field-tag]');
+        
+        tags.forEach((tag: Element) => {
+          const tagElement = tag as HTMLElement;
+          const tagValue = tagElement.getAttribute('data-value') || tagElement.textContent?.trim();
+          
+          if (tagValue) {
+            // Find the component data for this tag
+            const component = components.find(comp => comp.uid === tagValue);
+            if (component) {
+              const categoryName = component.category.charAt(0).toUpperCase() + component.category.slice(1);
+              const newText = `${categoryName} - ${component.displayName}`;
+              
+              // Only update if not already updated
+              if (tagElement.textContent !== newText) {
+                tagElement.textContent = newText;
+              }
+            }
+          }
+        });
+      } catch (error) {
+        console.warn(`[${uniqueFieldName}] Error updating tag display:`, error);
+      }
+    }, 100); // Small delay to ensure DOM is ready
+
+    return () => clearTimeout(timer);
+  }, [cleanValue, components, name, uniqueFieldName]);
+
   const handleChange = (selectedValues: string[]) => {
     try {
       // Clean and validate selected values
@@ -166,26 +202,15 @@ const ComponentMultiSelectInput: React.FC<ComponentMultiSelectInputProps> = ({
   return (
     <Field.Root name={name} required={required} error={error}>
       <Field.Label action={labelAction}>{getLabelText()}</Field.Label>
-      <MultiSelect
-        value={cleanValue}
-        onChange={handleChange}
-        disabled={disabled}
-        placeholder="Chọn components cho listing type này..."
-        withTags
-        key={name}
-        customizeContent={(value: string) => {
-          // Find the component and its category for selected values
-          const component = Object.values(groupedComponents)
-            .flat()
-            .find(comp => comp.uid === value);
-          
-          if (component) {
-            const category = component.category.charAt(0).toUpperCase() + component.category.slice(1);
-            return `${category} - ${component.displayName}`;
-          }
-          return value;
-        }}
-      >
+      <div data-field-name={name}>
+        <MultiSelect
+          value={cleanValue}
+          onChange={handleChange}
+          disabled={disabled}
+          placeholder="Chọn components cho listing type này..."
+          withTags
+          key={name}
+        >
         {sortedCategories.map((category) => (
           <Fragment key={`${uniqueFieldName}-${category}`}>
             <div 
@@ -208,13 +233,16 @@ const ComponentMultiSelectInput: React.FC<ComponentMultiSelectInputProps> = ({
               <MultiSelectOption 
                 key={`${uniqueFieldName}-${component.uid}`} 
                 value={component.uid}
+                data-category={component.category}
+                data-display-name={component.displayName}
               >
                 {component.displayName}
               </MultiSelectOption>
             ))}
           </Fragment>
         ))}
-      </MultiSelect>
+        </MultiSelect>
+      </div>
       {selectedCount > 0 && (
         <div style={{ marginTop: '8px', fontSize: '14px', color: '#666' }}>
           Selected: {selectedCount} components
