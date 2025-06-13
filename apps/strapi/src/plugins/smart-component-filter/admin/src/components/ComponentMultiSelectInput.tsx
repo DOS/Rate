@@ -188,19 +188,22 @@ const ComponentMultiSelectInput: React.FC<ComponentMultiSelectInputProps> = ({
       >
         {sortedCategories.map((category) => (
           <Fragment key={`${uniqueFieldName}-${category}`}>
-            <MultiSelectOption 
-              value={`header-${category}-${instanceId}`} 
-              disabled 
+            <div 
               style={{ 
                 fontWeight: 'bold', 
                 backgroundColor: '#f6f6f9', 
                 color: '#32324d',
                 cursor: 'default',
-                pointerEvents: 'none'
+                pointerEvents: 'none',
+                padding: '8px 12px',
+                borderBottom: '1px solid #e6e6e6',
+                fontSize: '12px',
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px'
               }}
             >
               {category.toUpperCase()}
-            </MultiSelectOption>
+            </div>
             {groupedComponents[category].map((component) => (
               <MultiSelectOption 
                 key={`${uniqueFieldName}-${component.uid}`} 
