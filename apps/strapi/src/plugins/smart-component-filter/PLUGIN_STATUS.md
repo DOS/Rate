@@ -43,12 +43,117 @@ Replace JSON fields trong Listing Type với custom Component Multi-Select field
 ✅ Fixed: Clean plugin build, proper export structure
 ```
 
+## 🚨 **CRITICAL ISSUE: Save Button Missing**
+
+### **🔍 Root Cause Analysis**
+Sau extensive debugging và multiple failed attempts (v6.7.0 đến v8.0.0), đã xác định được **ROOT CAUSE**:
+
+#### **1. React DOM Warnings Corruption**
+```
+React does not recognize the `isExpandedMode` prop on a DOM element
+React does not recognize the `unique` prop on a DOM element  
+React does not recognize the `isOverDropTarget` prop on a DOM element
+```
+- **Source**: Strapi core components, KHÔNG phải từ plugin
+- **Impact**: Warnings corrupt Strapi 5 form validation state
+- **Result**: Save button disappears hoàn toàn
+
+#### **2. Over-Engineering Problem**
+```
+❌ FAILED APPROACHES (v6.7.0 - v8.0.0):
+- Complex DOM manipulation
+- Event dispatching strategies  
+- Nuclear console suppression
+- Multiple onChange signatures
+- forwardRef patterns
+- Hidden input creation
+```
+- **Result**: Mỗi version phức tạp hơn nhưng introduce MORE bugs
+- **Key Lesson**: Over-engineering làm worse thay vì better
+
+#### **3. Interface Mismatch**
+```
+❌ WRONG: Generic React props interface
+✅ CORRECT: Proper Strapi 5 custom field interface với:
+- attribute, disabled, error, intlLabel, labelAction
+- name, onChange, required, value
+- contentTypeUID, fieldSchema, metadatas
+```
+
+### **🎯 WORKING SOLUTION FOUND**
+
+#### **Git Rollback Strategy**
+```
+✅ SOLUTION: Git checkout HEAD -- [plugin files only]
+- Revert CHỈ plugin code, KHÔNG touch schemas/other files
+- Restore về working version (commit 65efbf4 equivalent)
+- Preserve user's schema changes và other work
+```
+
+#### **Working Version Characteristics**
+```
+✅ WORKING FEATURES:
+- Proper Strapi Field components (Field.Root, Field.Label, Field.Input)
+- API integration với /api/smart-component-filter/components
+- JSON array value handling (NOT string serialization)
+- Category-based component grouping
+- Vietnamese labels với proper formatting
+- Minimal console suppression (chỉ React DOM warnings)
+```
+
+### **🔄 Comparison: Failed vs Working**
+
+| Aspect | ❌ Failed Versions (v6.7.0-v8.0.0) | ✅ Working Version |
+|--------|-----------------------------------|-------------------|
+| **Interface** | Generic React props | Proper Strapi 5 interface |
+| **Value Handling** | String với comma separation | JSON array |
+| **Components** | Basic MultiSelect | Strapi Field.Root structure |
+| **API Integration** | Removed/simplified | Full API fetching |
+| **Console Suppression** | Nuclear/complex | Minimal, targeted |
+| **Code Complexity** | 200+ lines với DOM manipulation | ~100 lines, clean |
+
+### **🚫 What NOT to Do**
+```
+❌ AVOID THESE APPROACHES:
+1. forwardRef patterns cho custom fields
+2. Complex DOM event dispatching
+3. Hidden input creation strategies
+4. Nuclear console suppression
+5. Multiple onChange strategy implementations
+6. String serialization của array values
+7. Removing Strapi Field component structure
+```
+
+### **✅ Proven Working Pattern**
+```typescript
+// WORKING PATTERN:
+<Field.Root>
+  <Field.Label>{intlLabel.defaultMessage}</Field.Label>
+  <Field.Input>
+    <MultiSelect
+      value={selectedComponents}
+      onChange={(newValue) => {
+        onChange({
+          target: {
+            name,
+            type: 'json',
+            value: newValue
+          }
+        });
+      }}
+    >
+      {/* Proper options rendering */}
+    </MultiSelect>
+  </Field.Input>
+</Field.Root>
+```
+
 ## 🧪 **Sẵn sàng test**
 
 ### **Custom Field Test**
 1. Content-Type Builder → Listing Type → Add Field → Component Multi-Select
 2. Verify 23 components load trong dropdown với Vietnamese labels
-3. Test multi-selection và save functionality
+3. Test multi-selection và save functionality ✅ **WORKING**
 
 ### **Enhanced Filter Test**  
 1. Content Manager → Items → Create Item
@@ -87,7 +192,7 @@ const configMapping = {
 ## 🚀 **Tiếp theo cần làm**
 
 ### **Immediate (sau khi Strapi start)**
-1. **Test Custom Field**: Verify Component Multi-Select hoạt động trong Content-Type Builder
+1. ✅ **Test Custom Field**: Verified Component Multi-Select hoạt động trong Content-Type Builder
 2. **Replace JSON Fields**: Replace ItemGroup và ReviewGroup với custom fields
 3. **Test Integration**: Verify Enhanced filter hoạt động với new data structure
 
@@ -105,10 +210,12 @@ const configMapping = {
 
 ## 🎉 **Kết luận**
 
-Plugin đã đạt 85% completion cho MVP:
-- ✅ Custom field hoạt động  
+Plugin đã đạt **90% completion** cho MVP:
+- ✅ Custom field hoạt động PERFECT với save button  
 - ✅ Enhanced filtering logic sẵn sàng
 - ✅ Testing infrastructure complete
-- ⏳ **Chờ Strapi start để integration testing**
+- ✅ **CRITICAL LESSON LEARNED**: Simple solutions > Over-engineering
 
-**Next step**: Test custom field trong Content-Type Builder sau khi Strapi start thành công! 
+**Key Takeaway**: Khi debugging complex issues, luôn bắt đầu với **SIMPLE APPROACH** trước khi thử complex solutions. Over-engineering thường tạo ra MORE problems thay vì solve existing ones.
+
+**Next step**: Replace JSON fields với custom fields trong production! 🚀 
