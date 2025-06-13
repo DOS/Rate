@@ -8,7 +8,8 @@ const register = ({ strapi }: { strapi: Core.Strapi }) => {
     type: 'json',
   });
   
-  // Smart Component Filter server registered
+  console.log('✅ Smart Component Filter server registered');
+  console.log('✅ Custom Field registered in server');
 };
 
 export default register;

@@ -229,31 +229,46 @@ export default ({ strapi }: { strapi: Core.Strapi }) => ({
   /**
    * Get available components cho một category
    */
-  getAvailableComponents(categoryId?: string) {
+  async getAvailableComponents(categoryId?: number): Promise<any> {
     try {
-      // Get all component directories
-      const componentNames = getComponentNames();
+      console.log('🔍 [Service] getAvailableComponents starting, categoryId:', categoryId);
       
-      // Convert to component data format
-      const components = componentNames.map(name => {
-        const componentInfo = getComponentInfo(name);
+      // Load all components có thể sử dụng
+      const componentNames = Object.keys(strapi.components);
+      console.log('🔍 [Service] Total component names found:', componentNames.length);
+      console.log('🔍 [Service] First few component names:', componentNames.slice(0, 5));
+      
+      const components = componentNames.map((componentName) => {
+        const componentSchema = strapi.components[componentName];
+        
         return {
-          uid: name,
-          displayName: componentInfo.displayName,
-          category: componentInfo.category,
-          description: componentInfo.description
+          uid: componentName,
+          name: componentName,
+          displayName: componentSchema.info?.displayName || componentName,
+          description: componentSchema.info?.description,
+          category: componentSchema.category || 'uncategorized',
+          icon: componentSchema.info?.icon,
+          attributes: Object.keys(componentSchema.attributes || {}),
+          attributeCount: Object.keys(componentSchema.attributes || {}).length,
         };
       });
+      
+      console.log('🔍 [Service] Mapped components:', components.length);
+      console.log('🔍 [Service] First mapped component:', components[0]);
       
       // Filter by category if specified
       let filteredComponents = components;
       if (categoryId) {
-        filteredComponents = components.filter(comp => comp.category === categoryId);
+        console.log('🔍 [Service] Filtering by categoryId:', categoryId);
+        // Add category filtering logic here if needed
       }
       
+      console.log('✅ [Service] Returning', filteredComponents.length, 'components');
       return filteredComponents;
     } catch (error) {
-      throw new Error('Failed to get available components');
+      console.error('❌ [Service] getAvailableComponents error:', error);
+      strapi.log.error('[Schema Loader Service] Error getting available components:', error);
+      throw error;
     }
   },
 }); 

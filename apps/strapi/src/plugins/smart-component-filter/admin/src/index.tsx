@@ -23,35 +23,49 @@ const filterComponents = async () => {
   isFilteringActive = true;
   
   try {
+    console.log('🎯 Starting component filtering...');
+    
     // Get current ListingType ID
     const listingTypeId = await getCurrentListingTypeId();
+    console.log('📋 Current ListingType ID:', listingTypeId);
     
     if (!listingTypeId) {
+      console.log('❌ No ListingType found, showing all components');
       showAllComponents();
       return;
     }
     
     // Get allowed components from API
     try {
+      console.log('🌐 Fetching allowed components from API...');
       const response = await fetch(`/api/smart-component-filter/listing-type/${listingTypeId}/components`);
       const data = await response.json();
       
       if (data.success && data.data?.allowedComponents) {
         const allowedComponents = data.data.allowedComponents;
+        console.log('✅ Allowed components from API:', allowedComponents);
         
         // Get all available components to validate
+        console.log('🔍 Validating component UIDs...');
         const allComponentsResponse = await fetch('/api/smart-component-filter/components');
         const allComponentsData = await allComponentsResponse.json();
         
         if (allComponentsData.success && allComponentsData.data?.components) {
           const validComponentUIDs = new Set(allComponentsData.data.components.map((c: any) => c.uid));
           
-          // Filter out invalid components
+          // Filter out invalid components and log warnings
           const validAllowedComponents = allowedComponents.filter((uid: string) => {
-            return validComponentUIDs.has(uid);
+            const isValid = validComponentUIDs.has(uid);
+            if (!isValid) {
+              console.warn(`⚠️ Invalid component UID found: "${uid}" - skipping from filter`);
+            }
+            return isValid;
           });
           
+          console.log(`✅ Valid allowed components (${validAllowedComponents.length}/${allowedComponents.length}):`, validAllowedComponents);
+          
           if (validAllowedComponents.length === 0) {
+            console.log('🚫 No valid components found for this ListingType');
             hideAllComponents();
             return;
           }
@@ -59,17 +73,20 @@ const filterComponents = async () => {
           // Apply filtering with valid components only
           applyFiltering(validAllowedComponents);
         } else {
-          // Could not validate components, use all allowed components
+          console.warn('⚠️ Could not validate components, using all allowed components');
           applyFiltering(allowedComponents);
         }
       } else {
+        console.error('❌ Failed to get allowed components:', data);
         showAllComponents(); // Fallback
       }
     } catch (error) {
+      console.error('❌ API call failed:', error);
       showAllComponents(); // Fallback
     }
     
   } catch (error) {
+    console.error('❌ Error in filtering:', error);
     showAllComponents(); // Fallback to show all
   } finally {
     isFilteringActive = false;
@@ -79,12 +96,17 @@ const filterComponents = async () => {
 // Get current ListingType ID from form
 const getCurrentListingTypeId = async (): Promise<string | null> => {
   try {
+    console.log('🔍 Searching for ListingType...');
+    
     // Method 1: Check input value
     const listingTypeInputs = document.querySelectorAll('input[name="ListingType"]');
+    console.log(`📋 Found ${listingTypeInputs.length} ListingType inputs`);
     
     for (const input of listingTypeInputs) {
       const value = (input as HTMLInputElement).value;
+      console.log(`📋 Input value: "${value}"`);
       if (value && value !== '') {
+        console.log('✅ Found ListingType from input:', value);
         return value;
       }
     }
@@ -101,14 +123,18 @@ const getCurrentListingTypeId = async (): Promise<string | null> => {
     
     for (const selector of selectors) {
       const elements = document.querySelectorAll(selector);
+      console.log(`📋 Checking selector "${selector}": ${elements.length} elements`);
       
       for (const element of elements) {
         const text = element.textContent?.trim();
         const value = (element as HTMLInputElement).value;
         
+        console.log(`📋 Element text: "${text}", value: "${value}"`);
+        
         if (text && text !== 'Add or create a relation' && text !== 'Select...') {
           const id = getListingTypeIdFromText(text);
           if (id) {
+            console.log('✅ Found ListingType from text:', text, '-> ID:', id);
             return id;
           }
         }
@@ -125,14 +151,17 @@ const getCurrentListingTypeId = async (): Promise<string | null> => {
         if (parent && parent.querySelector('input[name="ListingType"]')) {
           const id = getListingTypeIdFromText(text);
           if (id) {
+            console.log('✅ Found ListingType from nearby text:', text, '-> ID:', id);
             return id;
           }
         }
       }
     }
     
+    console.log('❌ No ListingType found');
     return null;
   } catch (error) {
+    console.error('❌ Error getting ListingType ID:', error);
     return null;
   }
 };
@@ -151,6 +180,8 @@ const getListingTypeIdFromText = (text: string): string | null => {
 
 // Apply filtering to component picker
 const applyFiltering = (allowedComponents: string[]) => {
+  console.log('🎯 Applying filtering with components:', allowedComponents);
+  
   // Reset all components first
   showAllComponents();
   
@@ -167,6 +198,9 @@ const applyFiltering = (allowedComponents: string[]) => {
     }
     componentsByCategory.get(category)!.add(component);
   });
+  
+  console.log('📋 Allowed categories:', Array.from(allowedCategories));
+  console.log('📋 Components by category:', Object.fromEntries(componentsByCategory));
   
   // Find and filter categories using correct DOM structure
   const categorySelectors = [
@@ -190,6 +224,7 @@ const applyFiltering = (allowedComponents: string[]) => {
         const categoryNames = ['contact', 'violation', 'business', 'media', 'review', 'rating', 'info', 'utilities'];
         if (categoryNames.includes(text)) {
           foundCategories++;
+          console.log(`🔍 Found category: "${text}" using selector "${selector}"`);
           
           // Find the parent container (the category section)
           let container = element.closest('div');
@@ -206,6 +241,7 @@ const applyFiltering = (allowedComponents: string[]) => {
           }
           
           if (allowedCategories.has(text)) {
+            console.log(`✅ Showing category: "${text}"`);
             (element as HTMLElement).style.display = '';
             
             // Show parent container
@@ -217,6 +253,7 @@ const applyFiltering = (allowedComponents: string[]) => {
             filterComponentsInCategory(container || element, componentsByCategory.get(text) || new Set());
             
           } else {
+            console.log(`🚫 Hiding category: "${text}"`);
             (element as HTMLElement).style.display = 'none';
             
             // Hide parent container
@@ -227,10 +264,11 @@ const applyFiltering = (allowedComponents: string[]) => {
         }
       });
     } catch (error) {
-      // Handle error silently
+      console.log('⚠️ Error with selector:', selector, error);
     }
   }
-
+  
+  console.log(`📊 Total categories found and processed: ${foundCategories}`);
 };
 
 // Filter components within a category
@@ -238,9 +276,14 @@ const filterComponentsInCategory = (categoryElement: Element, allowedComponents:
   // Look for component buttons more specifically
   const componentButtons = categoryElement.querySelectorAll('button:not([expanded]):not([aria-expanded])');
   
+  console.log(`🔍 Found ${componentButtons.length} component buttons in category`);
+  console.log(`📋 Allowed components:`, Array.from(allowedComponents));
+  
   componentButtons.forEach(button => {
     const text = button.textContent?.trim();
     if (!text) return;
+    
+    console.log(`🔍 Checking component button: "${text}"`);
     
     // Improved matching logic with better component name mapping
     const isAllowed = Array.from(allowedComponents).some(comp => {
@@ -275,9 +318,11 @@ const filterComponentsInCategory = (categoryElement: Element, allowedComponents:
     });
     
     if (isAllowed) {
+      console.log(`✅ Showing component: "${text}"`);
       (button as HTMLElement).style.display = '';
       (button as HTMLElement).style.visibility = '';
     } else {
+      console.log(`🚫 Hiding component: "${text}"`);
       (button as HTMLElement).style.display = 'none';
     }
   });
@@ -289,6 +334,7 @@ const showAllComponents = () => {
   allElements.forEach(element => {
     (element as HTMLElement).style.display = '';
   });
+  console.log('✅ Showing all components');
 };
 
 // Hide all components
@@ -297,6 +343,7 @@ const hideAllComponents = () => {
   componentButtons.forEach(button => {
     (button as HTMLElement).style.display = 'none';
   });
+  console.log('🚫 Hiding all components');
 };
 
 // Debounced filtering
@@ -312,6 +359,8 @@ const debouncedFilter = () => {
 
 // Setup observers
 const setupObservers = () => {
+  console.log('🔍 Setting up observers...');
+  
   // Observer for DOM changes
   const observer = new MutationObserver((mutations) => {
     let shouldFilter = false;
@@ -350,6 +399,7 @@ const setupObservers = () => {
     });
     
     if (shouldFilter) {
+      console.log('🔄 DOM change detected, triggering filter...');
       debouncedFilter();
     }
   });
@@ -366,6 +416,7 @@ const setupObservers = () => {
   document.addEventListener('change', (event) => {
     const target = event.target as HTMLElement;
     if (target && target.matches && target.matches('input[name="ListingType"]')) {
+      console.log('📝 ListingType input changed:', (target as HTMLInputElement).value);
       debouncedFilter();
     }
   });
@@ -376,16 +427,20 @@ const setupObservers = () => {
     if (target && target.textContent) {
       const text = target.textContent.trim();
       if (['Scammer', 'Bank', 'Seller', 'Business'].includes(text)) {
+        console.log('🖱️ ListingType option clicked:', text);
         setTimeout(() => debouncedFilter(), 500); // Delay to allow form update
       }
     }
   });
+  
+  console.log('✅ Observers setup complete');
 };
 
 // Plugin registration
 export default {
   register(app: StrapiApp) {
-    // Plugin registration for Smart Component Filter
+    console.log(`🔌 Smart Component Filter v${packageJson.version} - Fixed field label to use user-defined name`);
+    console.log('📋 Supported ListingTypes:', Object.keys(LISTING_TYPE_COMPONENTS));
     
     // Register custom field with minimal intlLabel
     app.customFields.register({
@@ -413,13 +468,38 @@ export default {
       },
     });
     
-    // Custom field registered successfully
+    console.log('✅ Custom field registered: component-multi-select');
   },
 
   bootstrap(app: StrapiApp) {
-    // Initialize the filtering system
+    console.log(`🚀 Smart Component Filter v${packageJson.version} - Bootstrap starting...`);
+    
+    // Add version display to UI
     setTimeout(() => {
+      const versionElement = document.createElement('div');
+      versionElement.innerHTML = `
+        <div style="
+          position: fixed;
+          top: 10px;
+          right: 10px;
+          background: #4945ff;
+          color: white;
+          padding: 4px 8px;
+          border-radius: 4px;
+          font-size: 11px;
+          font-weight: bold;
+          z-index: 9999;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        ">
+          Smart Filter v${packageJson.version}
+        </div>
+      `;
+      document.body.appendChild(versionElement);
+      
+      // Setup filtering system
       setupObservers();
+      
+      console.log(`✅ Smart Component Filter v${packageJson.version} - Bootstrap completed`);
     }, 1000);
   },
 }; 
