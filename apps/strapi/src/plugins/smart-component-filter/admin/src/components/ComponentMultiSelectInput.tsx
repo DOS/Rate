@@ -207,7 +207,7 @@ const ComponentMultiSelectInput: React.FC<ComponentMultiSelectInputProps> = ({
           value={cleanValue}
           onChange={handleChange}
           disabled={disabled}
-          placeholder="Chọn components cho listing type này..."
+          placeholder="Select components for this listing type..."
           withTags
           key={name}
         >

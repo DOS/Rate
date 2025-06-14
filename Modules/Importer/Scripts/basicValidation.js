@@ -27,18 +27,18 @@ export function applyBasicValidation(record, whitelistDomains = [], blacklistDom
         return { ...record, flag: 'blacklisted_domain', score: 0 };
     }
     if (whitelistDomains.length && !whitelistDomains.includes(domain)) {
-        return { ...record, flag: 'not_in_whitelist', score: 0.5 };
+        return { ...record, flag: 'not_in_whitelist', score: 50 };
     }
     // Kiểm tra nội dung
     if (!record.content || record.content.trim().length < 10) {
-        return { ...record, flag: 'empty_content', score: 0.5 };
+        return { ...record, flag: 'empty_content', score: 50 };
     }
     // Không chứa script/html nguy hiểm
     if (/<script|<iframe|onerror=|onload=/.test(record.content)) {
         return { ...record, flag: 'unsafe_content', score: 0 };
     }
     // Nếu qua hết các bước trên
-    return { ...record, flag: 'valid', score: 1 };
+    return { ...record, flag: 'valid', score: 100 };
 }
 // Example usage
 if (require.main === module) {

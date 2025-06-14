@@ -67,3 +67,7 @@ create-*.js
 verify-*.js
 inspect-*.js
 quick-*.js
+
+# Node modules backups
+node_modules_backup_*
+node_modules_old_*

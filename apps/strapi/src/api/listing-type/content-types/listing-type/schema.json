@@ -90,21 +90,6 @@
         "Minimal"
       ]
     },
-    "TestList": {
-      "type": "enumeration",
-      "pluginOptions": {
-        "i18n": {
-          "localized": true
-        }
-      },
-      "enum": [
-        "A",
-        "B",
-        "C",
-        "D",
-        "E"
-      ]
-    },
     "ItemField": {
       "type": "customField",
       "pluginOptions": {
