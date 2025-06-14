@@ -66,7 +66,7 @@
   "dependencies": {
     "@next/eslint-plugin-next": "15.3.3",
     "@strapi/plugin-seo": "2.0.8",
-    "@strapi/strapi": "^5.15.0",
+    "@strapi/strapi": "^5.15.1",
     "@t3-oss/env-nextjs": "0.13.6",
     "@typescript-eslint/eslint-plugin": "8.33.1",
     "@typescript-eslint/parser": "8.33.1",

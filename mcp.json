@@ -1,0 +1,30 @@
+{
+  "mcpServers": {
+    "MCP_DOCKER": {
+      "command": "docker",
+      "args": [
+        "mcp",
+        "gateway",
+        "run"
+      ],
+      "env": {
+        "LOCALAPPDATA": "C:\\Users\\JOY\\AppData\\Local",
+        "ProgramFiles": "C:\\Program Files"
+      },
+      "enabled": true
+    },
+    "Playwright": {
+      "command": "npx",
+      "args": [
+        "@playwright/mcp@latest",
+        "--port",
+        "8931"
+      ],
+      "env": {
+        "LOCALAPPDATA": "C:\\Users\\JOY\\AppData\\Local",
+        "ProgramFiles": "C:\\Program Files"
+      },
+      "enabled": true
+    }
+  }
+} 

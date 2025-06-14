@@ -71,3 +71,8 @@ quick-*.js
 # Node modules backups
 node_modules_backup_*
 node_modules_old_*
+
+# Strapi compiled config files (keep only TypeScript sources)
+apps/strapi/config/*.js
+node_modules_*
+node_modules_*
