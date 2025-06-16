@@ -1,5 +1,5 @@
 {
-  "version": "2.1.0",
+  "version": "3.0.0",
   "keywords": [],
   "type": "commonjs",
   "exports": {
@@ -60,10 +60,10 @@
     "kind": "plugin",
     "name": "smart-component-filter",
     "displayName": "Smart Component Filter",
-    "description": "Smart Component Filter v2.1.0 - Fixed field label to use user-defined name and improved component list with category headers"
+    "description": "Smart Component Filter v3.0.0 - Clean TypeScript-only codebase, removed all .js files for consistency"
   },
   "name": "smart-component-filter",
-  "description": "Smart Component Filter v2.1.0 - Fixed field label to use user-defined name and improved component list with category headers",
+  "description": "Smart Component Filter v3.0.0 - Clean TypeScript-only codebase, removed all .js files for consistency",
   "license": "MIT",
   "repository": {
     "type": "git",

@@ -1,256 +1,188 @@
-import React, { useState, useEffect, Fragment, useId } from 'react';
-import { MultiSelect, MultiSelectOption, Loader, Alert, Field } from '@strapi/design-system';
-import { getFetchClient } from '@strapi/strapi/admin';
+import React, { useState, useEffect } from 'react';
+import {
+  Field,
+  MultiSelect,
+  MultiSelectOption,
+  Typography,
+  Box,
+  Divider,
+} from '@strapi/design-system';
+import { useFetchClient } from '@strapi/strapi/admin';
 
-interface ComponentData {
+interface Component {
   uid: string;
   displayName: string;
   category: string;
 }
 
-interface ComponentMultiSelectInputProps {
-  attribute?: any;
-  disabled?: boolean;
-  error?: string;
-  intlLabel?: { defaultMessage: string };
-  labelAction?: any;
-  name: string;
-  onChange: (event: { target: { name: string; value: string[] } }) => void;
-  required?: boolean;
-  value?: string[];
+interface ComponentsByCategory {
+  [category: string]: Component[];
 }
 
-const ComponentMultiSelectInput: React.FC<ComponentMultiSelectInputProps> = ({
-  attribute,
-  disabled = false,
-  error,
-  intlLabel,
-  labelAction,
-  name,
-  onChange,
-  required = false,
-  value = []
-}) => {
-  // Generate unique ID for this instance
-  const instanceId = useId();
-  const uniqueFieldName = `${name}-${instanceId}`;
-  
-  // Clean and validate incoming value prop to handle corrupted data from old entries
-  const cleanValue = React.useMemo(() => {
-    if (!value) return [];
-    if (Array.isArray(value)) {
-      return value.filter(val => val && typeof val === 'string' && !val.startsWith('header-'));
-    }
-    // Handle corrupted string values (comma-separated, etc.)
-    if (typeof value === 'string') {
-      try {
-        const parsed = JSON.parse(value);
-        return Array.isArray(parsed) ? parsed.filter(val => val && typeof val === 'string') : [];
-      } catch {
-        return (value as string).split(',').map((v: string) => v.trim()).filter((v: string) => v);
-      }
-    }
-    return [];
-  }, [value]);
-  
-  const [components, setComponents] = useState<ComponentData[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [fetchError, setFetchError] = useState<string | null>(null);
+interface ComponentMultiSelectInputProps {
+  name: string;
+  value?: string | string[];
+  onChange: (value: { target: { name: string; value: string; type: string } }) => void;
+  intlLabel?: { id: string; defaultMessage: string };
+  description?: { id: string; defaultMessage: string };
+  error?: string;
+  required?: boolean;
+  attribute?: { type: string };
+}
 
-  // Mock data fallback
-  const mockComponents: ComponentData[] = [
-    { uid: 'contact.basic', displayName: 'Basic', category: 'contact' },
-    { uid: 'contact.photo', displayName: 'Photo', category: 'contact' },
-    { uid: 'info.description', displayName: 'Description', category: 'info' },
-    { uid: 'rating.pros-cons', displayName: 'ProsCons', category: 'rating' },
-    { uid: 'review.rating', displayName: 'Rating', category: 'review' },
-    { uid: 'media.photo', displayName: 'Photo', category: 'media' }
-  ];
+const ComponentMultiSelectInput = React.forwardRef<HTMLInputElement, ComponentMultiSelectInputProps>((props, ref) => {
+  const {
+    name,
+    value = '',
+    onChange,
+    intlLabel,
+    description,
+    error,
+    required = false,
+    attribute,
+  } = props;
 
+  const [components, setComponents] = useState<Component[]>([]);
+  const [selectedComponents, setSelectedComponents] = useState<string[]>([]);
+  const [componentsByCategory, setComponentsByCategory] = useState<ComponentsByCategory>({});
+  const { get } = useFetchClient();
+
+  // Fetch all components from Strapi
   useEffect(() => {
     const fetchComponents = async () => {
       try {
-        const { get } = getFetchClient();
-        const response = await get('/api/smart-component-filter/components');
+        console.log('🔍 Fetching components from Strapi...');
+        const { data } = await get('/content-type-builder/components');
+        console.log('📦 Raw API response:', data);
         
-        const componentsData = response.data?.data?.components || response.data?.components || mockComponents;
+        const allComponents: Component[] = [];
         
-        if (Array.isArray(componentsData)) {
-          setComponents(componentsData);
-          setFetchError(null);
-        } else {
-          setComponents(mockComponents);
-          setFetchError(null);
+        // Parse components from Strapi response
+        if (data && data.data) {
+          data.data.forEach((componentData: any, index: number) => {
+            console.log(`🧩 Processing component: ${index}`, componentData);
+            if (componentData && componentData.schema && componentData.uid) {
+              const [category, name] = componentData.uid.split('.');
+              allComponents.push({
+                uid: componentData.uid,
+                displayName: componentData.schema.displayName || name,
+                category: category || 'other',
+              });
+            }
+          });
         }
+
+        console.log(`✅ Found ${allComponents.length} components:`, allComponents);
+
+        // Sort components by category and name
+        allComponents.sort((a, b) => {
+          if (a.category !== b.category) {
+            return a.category.localeCompare(b.category);
+          }
+          return a.displayName.localeCompare(b.displayName);
+        });
+
+        // Filter out unwanted categories (keep only relevant ones)
+        const filteredComponents = allComponents.filter(component => 
+          ['contact', 'info', 'media', 'rating', 'review', 'violation'].includes(component.category)
+        );
+
+        console.log(`🔍 Filtered from ${allComponents.length} to ${filteredComponents.length} components`);
+
+        // Group by category
+        const grouped: ComponentsByCategory = {};
+        filteredComponents.forEach((component) => {
+          if (!grouped[component.category]) {
+            grouped[component.category] = [];
+          }
+          grouped[component.category].push(component);
+        });
+
+        console.log('📂 Grouped by category:', grouped);
+
+        setComponents(filteredComponents);
+        setComponentsByCategory(grouped);
       } catch (error) {
-        console.warn(`[${uniqueFieldName}] Using mock data due to API error:`, error);
-        setComponents(mockComponents);
-        setFetchError(null);
-      } finally {
-        setLoading(false);
+        console.error('❌ Failed to fetch components:', error);
+        // Fallback to empty state
+        setComponents([]);
+        setComponentsByCategory({});
       }
     };
 
     fetchComponents();
-  }, [uniqueFieldName]);
+  }, [get]);
 
-  // Custom hook to add category prefix to selected tags
+  // Parse value
   useEffect(() => {
-    const timer = setTimeout(() => {
+    if (typeof value === 'string' && value) {
       try {
-        // Find all selected tags in this MultiSelect instance
-        const multiSelectContainer = document.querySelector(`[data-field-name="${name}"]`);
-        if (!multiSelectContainer) return;
-
-        const tags = multiSelectContainer.querySelectorAll('[data-strapi-field-tag]');
-        
-        tags.forEach((tag: Element) => {
-          const tagElement = tag as HTMLElement;
-          const tagValue = tagElement.getAttribute('data-value') || tagElement.textContent?.trim();
-          
-          if (tagValue) {
-            // Find the component data for this tag
-            const component = components.find(comp => comp.uid === tagValue);
-            if (component) {
-              const categoryName = component.category.charAt(0).toUpperCase() + component.category.slice(1);
-              const newText = `${categoryName} - ${component.displayName}`;
-              
-              // Only update if not already updated
-              if (tagElement.textContent !== newText) {
-                tagElement.textContent = newText;
-              }
-            }
-          }
-        });
-      } catch (error) {
-        console.warn(`[${uniqueFieldName}] Error updating tag display:`, error);
+        const parsed = JSON.parse(value);
+        setSelectedComponents(Array.isArray(parsed) ? parsed : []);
+      } catch {
+        setSelectedComponents(value.split(',').filter(Boolean));
       }
-    }, 100); // Small delay to ensure DOM is ready
-
-    return () => clearTimeout(timer);
-  }, [cleanValue, components, name, uniqueFieldName]);
-
-  const handleChange = (selectedValues: string[]) => {
-    try {
-      // Clean and validate selected values
-      const cleanValues = Array.isArray(selectedValues) 
-        ? selectedValues.filter(val => val && typeof val === 'string' && !val.startsWith('header-'))
-        : [];
-      
-      // Ensure proper event format for Strapi form validation
-      const event = {
-        target: {
-          name: name, // Use original name, not uniqueFieldName
-          value: cleanValues,
-          type: 'custom-field'
-        }
-      };
-      
-      console.log(`[${uniqueFieldName}] Change event:`, event);
-      onChange(event);
-    } catch (error) {
-      console.error(`[${uniqueFieldName}] Error in handleChange:`, error);
-      // Fallback: send empty array to prevent form corruption
-      onChange({
-        target: {
-          name: name,
-          value: []
-        }
-      });
+    } else if (Array.isArray(value)) {
+      setSelectedComponents(value);
+    } else {
+      setSelectedComponents([]);
     }
+  }, [value]);
+
+  const handleChange = (newValue: string[]) => {
+    setSelectedComponents(newValue);
+    onChange({
+      target: {
+        name,
+        value: JSON.stringify(newValue),
+        type: attribute?.type || 'string',
+      },
+    });
   };
 
-  const getLabelText = () => {
-    return intlLabel?.defaultMessage || name || 'Component Multi-Select';
+  // Get selected components with full display format
+  const getSelectedComponentDisplay = (uid: string) => {
+    const component = components.find(c => c.uid === uid);
+    if (!component) return uid;
+    return `${component.category.charAt(0).toUpperCase() + component.category.slice(1)} • ${component.displayName}`;
   };
-
-  if (loading) {
-    return (
-      <Field.Root name={name} required={required}>
-        <Field.Label>{getLabelText()}</Field.Label>
-        <Loader>Loading components...</Loader>
-      </Field.Root>
-    );
-  }
-
-  if (fetchError) {
-    return (
-      <Field.Root name={name} required={required}>
-        <Field.Label>{getLabelText()}</Field.Label>
-        <Alert variant="danger">{fetchError}</Alert>
-      </Field.Root>
-    );
-  }
-
-  // Group components by category
-  const groupedComponents = components.reduce((acc, component) => {
-    if (!acc[component.category]) {
-      acc[component.category] = [];
-    }
-    acc[component.category].push(component);
-    return acc;
-  }, {} as Record<string, ComponentData[]>);
-
-  // Sort categories and components
-  const sortedCategories = Object.keys(groupedComponents).sort();
-  sortedCategories.forEach(category => {
-    groupedComponents[category].sort((a, b) => a.displayName.localeCompare(b.displayName));
-  });
-
-  const selectedCount = cleanValue?.length || 0;
 
   return (
-    <Field.Root name={name} required={required} error={error}>
-      <Field.Label action={labelAction}>{getLabelText()}</Field.Label>
-      <div data-field-name={name}>
-        <MultiSelect
-          value={cleanValue}
-          onChange={handleChange}
-          disabled={disabled}
-          placeholder="Chọn components cho listing type này..."
-          withTags
-          key={name}
-        >
-        {sortedCategories.map((category) => (
-          <Fragment key={`${uniqueFieldName}-${category}`}>
-            <div 
-              style={{ 
-                fontWeight: 'bold', 
-                backgroundColor: '#f6f6f9', 
-                color: '#32324d',
-                cursor: 'default',
-                pointerEvents: 'none',
-                padding: '8px 12px',
-                borderBottom: '1px solid #e6e6e6',
-                fontSize: '12px',
-                textTransform: 'uppercase',
-                letterSpacing: '0.5px'
-              }}
-            >
-              {category.toUpperCase()}
-            </div>
-            {groupedComponents[category].map((component) => (
-              <MultiSelectOption 
-                key={`${uniqueFieldName}-${component.uid}`} 
-                value={component.uid}
-                data-category={component.category}
-                data-display-name={component.displayName}
-              >
-                {component.displayName}
-              </MultiSelectOption>
-            ))}
-          </Fragment>
-        ))}
-        </MultiSelect>
-      </div>
-      {selectedCount > 0 && (
-        <div style={{ marginTop: '8px', fontSize: '14px', color: '#666' }}>
-          Selected: {selectedCount} components
-        </div>
+    <Field.Root name={name} error={error} required={required}>
+      <Field.Label>{intlLabel?.defaultMessage || name}</Field.Label>
+      <MultiSelect
+        placeholder={`Select components for ${name}...`}
+        value={selectedComponents}
+        onChange={handleChange}
+        withTags
+        customizeContent={(value) => getSelectedComponentDisplay(value)}
+      >
+        {Object.keys(componentsByCategory)
+          .sort()
+          .map((category) => (
+            <React.Fragment key={category}>
+              <Box padding={2} background="neutral100">
+                <Typography variant="sigma" textColor="neutral600">
+                  {category.charAt(0).toUpperCase() + category.slice(1)}
+                </Typography>
+              </Box>
+              {componentsByCategory[category].map((component) => (
+                <MultiSelectOption key={component.uid} value={component.uid}>
+                  {component.displayName}
+                </MultiSelectOption>
+              ))}
+            </React.Fragment>
+          ))}
+      </MultiSelect>
+      {description && (
+        <Field.Hint>{description.defaultMessage}</Field.Hint>
       )}
-      {error && <Field.Error>{error}</Field.Error>}
+      <Field.Error />
     </Field.Root>
   );
-};
+});
 
+ComponentMultiSelectInput.displayName = 'ComponentMultiSelectInput';
+
+export { ComponentMultiSelectInput };
 export default ComponentMultiSelectInput; 

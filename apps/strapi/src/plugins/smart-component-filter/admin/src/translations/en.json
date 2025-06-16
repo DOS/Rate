@@ -1,4 +1,6 @@
 {
-  "smart-component-filter.component-multi-select.label": "Item Field",
-  "smart-component-filter.component-multi-select.description": "Enhanced component selection with smart filtering for ItemField custom field"
+  "plugin.name": "Smart Component Filter",
+  "plugin.description": "Filter components based on listing type",
+  "component-multi-select.label": "Component Multi Select",
+  "component-multi-select.description": "Select multiple components with smart filtering"
 }

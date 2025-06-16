@@ -1,1 +1,3 @@
-export const PLUGIN_ID = 'smart-component-filter';
+const PLUGIN_ID = 'smart-component-filter';
+
+export { PLUGIN_ID };
