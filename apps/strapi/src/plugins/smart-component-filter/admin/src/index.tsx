@@ -4,7 +4,7 @@ import { PLUGIN_ID } from './pluginId';
 import { Initializer } from './components/Initializer';
 import { PluginIcon } from './components/PluginIcon';
 
-const name = PLUGIN_ID;
+const name = 'Smart Component Filter';
 
 export default {
   register(app: StrapiApp) {
@@ -12,7 +12,7 @@ export default {
     app.customFields.register({
       name: 'component-multi-select',
       pluginId: PLUGIN_ID,
-      type: 'json',
+      type: 'string',
       intlLabel: {
         id: `${PLUGIN_ID}.component-multi-select.label`,
         defaultMessage: 'Component Multi Select',
@@ -24,7 +24,7 @@ export default {
       components: {
         Input: async () =>
           import('./components/ComponentMultiSelectInput').then((module) => ({
-            default: module.ComponentMultiSelectInput,
+            default: module.default,
           })),
       },
       options: {
