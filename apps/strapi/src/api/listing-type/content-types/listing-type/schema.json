@@ -113,15 +113,6 @@
         }
       },
       "customField": "plugin::smart-component-filter.component-multi-select"
-    },
-    "ReviewField": {
-      "type": "customField",
-      "pluginOptions": {
-        "i18n": {
-          "localized": true
-        }
-      },
-      "customField": "plugin::smart-component-filter.component-multi-select"
     }
   }
 }

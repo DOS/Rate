@@ -6,134 +6,118 @@ const service = ({ strapi }: { strapi: Core.Strapi }) => ({
   },
 
   // Get allowed components for a specific ListingType
-  async getAllowedComponents(listingTypeId: string | number) {
+  async getAllowedComponents(listingTypeId: string) {
     try {
-      // Convert to number if it's a string
-      const id = typeof listingTypeId === 'string' ? parseInt(listingTypeId, 10) : listingTypeId;
+      strapi.log.info(`🔍 Looking for ListingType with ID: ${listingTypeId}`);
       
-      if (isNaN(id)) {
-        strapi.log.warn(`Invalid ListingType ID: ${listingTypeId}`);
-        return {
-          listingType: null,
-          allowedComponents: [],
-          totalCount: 0,
-          error: `Invalid ListingType ID: ${listingTypeId}`
-        };
+      let listingType = null;
+      
+      const populateObj = { ItemField: true };
+
+      // Helper to fetch via entityService with given filter
+      const fetchListing = async (filterObj: any) => {
+        const results = await strapi.entityService.findMany('api::listing-type.listing-type', {
+          filters: filterObj,
+          populate: populateObj,
+          publicationState: 'preview',
+          locale: 'en'
+        });
+        return Array.isArray(results) && results.length > 0 ? results[0] : null;
+      };
+
+      // 1) Try documentId
+      listingType = await fetchListing({ documentId: { $eq: listingTypeId } });
+      if (listingType) {
+        strapi.log.info(`✅ Found ListingType by documentId`);
       }
 
-      strapi.log.info(`🔍 Looking for ListingType with ID: ${id}`);
-
-      // First, let's check if the ListingType exists
-      const listingType = await strapi.entityService.findOne(
-        'api::listing-type.listing-type',
-        id,
-        {
-          fields: ['ItemField', 'Name'],
-          populate: {}
+      // 2) Try internal numeric/string id
+      if (!listingType) {
+        listingType = await fetchListing({ id: { $eq: listingTypeId } });
+        if (listingType) {
+          strapi.log.info(`✅ Found ListingType by id`);
         }
-      );
+      }
+
+      // 3) Try by Name (case-insensitive)
+      if (!listingType) {
+        listingType = await fetchListing({ Name: { $eqi: listingTypeId } });
+        if (listingType) {
+          strapi.log.info(`✅ Found ListingType by Name`);
+        }
+      }
 
       if (!listingType) {
-        strapi.log.warn(`❌ ListingType with ID ${id} not found`);
-        
-        // Let's get all available ListingTypes for debugging
-        const allListingTypes = await strapi.entityService.findMany(
-          'api::listing-type.listing-type',
-          {
-            fields: ['id', 'Name'],
-            pagination: { limit: 10 }
-          }
-        );
-        
-        strapi.log.info(`📋 Available ListingTypes:`, allListingTypes);
-        
-        return {
-          listingType: null,
-          allowedComponents: [],
-          totalCount: 0,
-          error: `ListingType with ID ${id} not found`,
-          availableListingTypes: allListingTypes
-        };
+        strapi.log.error(`❌ ListingType not found with ID: ${listingTypeId}`);
+        return [];
       }
 
-      strapi.log.info(`✅ Found ListingType: ${listingType.Name} (ID: ${id})`);
+      strapi.log.info(`✅ Found ListingType: ${listingType.Name} (ID: ${listingTypeId})`);
+      
+      // Access ItemField custom field data
+      const itemFieldData = listingType.ItemField;
+      strapi.log.info(`🔍 Raw ItemField data:`, itemFieldData);
+      strapi.log.info(`🔍 ItemField type:`, typeof itemFieldData);
 
-      // Get allowed components from ItemField custom field
-      // ItemField is our custom field that stores selected component UIDs
-      strapi.log.info(`🔍 Raw ItemField data:`, listingType.ItemField);
-      strapi.log.info(`🔍 ItemField type:`, typeof listingType.ItemField);
-      
       let allowedComponentUIDs = [];
-      
-      // Handle different possible formats of ItemField data
-      if (Array.isArray(listingType.ItemField)) {
-        allowedComponentUIDs = listingType.ItemField.filter(Boolean);
-      } else if (typeof listingType.ItemField === 'string') {
+
+      if (Array.isArray(itemFieldData)) {
+        allowedComponentUIDs = itemFieldData;
+        strapi.log.info(`✅ Using ItemField array data: ${allowedComponentUIDs.length} components`);
+      } else if (typeof itemFieldData === 'string') {
         try {
-          // Try to parse as JSON if it's a string
-          allowedComponentUIDs = JSON.parse(listingType.ItemField);
-          if (!Array.isArray(allowedComponentUIDs)) {
-            allowedComponentUIDs = [listingType.ItemField];
-          }
+          allowedComponentUIDs = JSON.parse(itemFieldData);
+          strapi.log.info(`✅ Parsed ItemField string data: ${allowedComponentUIDs.length} components`);
         } catch (e) {
-          // If not JSON, treat as single value or comma-separated
-          allowedComponentUIDs = listingType.ItemField.split(',').map(s => s.trim()).filter(Boolean);
+          strapi.log.error(`❌ Failed to parse ItemField string:`, e.message);
+          allowedComponentUIDs = [];
         }
-      } else if (listingType.ItemField) {
-        // If it's some other truthy value, convert to array
-        allowedComponentUIDs = [listingType.ItemField];
+      } else {
+        strapi.log.warn(`⚠️ ItemField data is not array or string for ${listingType.Name}, type: ${typeof itemFieldData}`);
+        allowedComponentUIDs = [];
       }
 
       strapi.log.info(`🎯 Processed allowed components for ${listingType.Name}:`, allowedComponentUIDs);
+      return allowedComponentUIDs;
 
-      return {
-        listingType: {
-          id: id,
-          name: listingType.Name || `ListingType ${id}`
-        },
-        allowedComponents: allowedComponentUIDs,
-        totalCount: allowedComponentUIDs.length
-      };
     } catch (error) {
-      strapi.log.error('Error in getAllowedComponents service:', error);
-      return {
-        listingType: null,
-        allowedComponents: [],
-        totalCount: 0,
-        error: error.message
-      };
+      strapi.log.error('Error in getAllowedComponents service:', error.message);
+      return [];
     }
   },
 
   // Get all available components in the system
   async getAvailableComponents() {
     try {
-      // Get all components from Strapi's component registry
-      const components = strapi.components;
-      const componentList = [];
+      strapi.log.info('🔍 [Smart Component Filter] Getting available components from Strapi registry');
+      
+      const components = strapi.components || {};
+      const availableComponents: any[] = [];
 
-      // Convert components object to array with metadata
-      for (const [uid, component] of Object.entries(components)) {
-        // Extract category from component uid (e.g., 'contact.basic' -> 'contact')
-        const category = uid.includes('.') ? uid.split('.')[0] : 'uncategorized';
-        
-        componentList.push({
-          uid,
-          displayName: component.info?.displayName || uid,
-          category,
-          icon: component.info?.icon || 'cube',
-          attributes: Object.keys(component.attributes || {})
-        });
-      }
+      // Get all registered components from Strapi
+      Object.keys(components).forEach(componentUID => {
+        const component = components[componentUID];
+        if (component && component.info) {
+          const [category, name] = componentUID.split('.');
+          
+          // Filter out irrelevant categories
+          const excludedCategories = ['elements', 'sections', 'seo-utilities', 'utilities', 'shared', 'forms'];
+          if (!excludedCategories.includes(category)) {
+            availableComponents.push({
+              uid: componentUID,
+              category: category,
+              displayName: component.info.displayName || name,
+              icon: component.info.icon || 'cube'
+            });
+          }
+        }
+      });
 
-      return {
-        components: componentList,
-        totalCount: componentList.length,
-        categories: [...new Set(componentList.map(c => c.category))]
-      };
+      strapi.log.info(`✅ Found ${availableComponents.length} available components`);
+      return availableComponents;
     } catch (error) {
-      strapi.log.error('Error getting available components:', error);
-      throw error;
+      strapi.log.error('Error in getAvailableComponents service:', error);
+      return [];
     }
   },
 

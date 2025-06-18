@@ -91,12 +91,11 @@
         "contact.social-media",
         "violation.detail",
         "violation.evidence",
-        "utilities.text",
-        "utilities.link",
         "media.photo",
         "media.video",
-        "review.pros-cons",
-        "rating.criterion"
+        "info.organization",
+        "info.individual",
+        "info.basic"
       ]
     },
     "isFeatured": {

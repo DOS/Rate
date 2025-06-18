@@ -60,10 +60,10 @@
     "kind": "plugin",
     "name": "smart-component-filter",
     "displayName": "Smart Component Filter",
-    "description": "Smart Component Filter v3.0.0 - Clean TypeScript-only codebase, removed all .js files for consistency"
+    "description": "Smart Component Filter V2.0.0 - Enhanced Dynamic Zone filtering with useCMEditViewDataManager hook and improved component detection"
   },
   "name": "smart-component-filter",
-  "description": "Smart Component Filter v3.0.0 - Clean TypeScript-only codebase, removed all .js files for consistency",
+  "description": "Smart Component Filter V2.0.0 - Enhanced Dynamic Zone filtering with useCMEditViewDataManager hook and improved component detection",
   "license": "MIT",
   "repository": {
     "type": "git",

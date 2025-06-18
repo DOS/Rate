@@ -13,97 +13,83 @@ export default ({ strapi }: { strapi: Core.Strapi }) => {
     // Only intercept content-type-builder component requests
     if (ctx.url.includes('/content-type-builder/components') && ctx.method === 'GET') {
       console.log('🎯 [Smart Component Filter] Intercepting components API call');
-      console.log('📍 [Smart Component Filter] Referer:', ctx.headers.referer);
+      
+      // Call next to get the original response
+      await next();
       
       try {
-        // Get the original response first
-        await next();
-        
-        // Check if this is for Item content type editing
+        // Extract item ID from referer URL
         const referer = ctx.headers.referer || '';
-        const isItemEdit = referer.includes('/content-manager/collection-types/api::item.item');
+        console.log('📍 [Smart Component Filter] Referer URL:', referer);
         
-        if (isItemEdit && ctx.body && Array.isArray(ctx.body.data)) {
-          console.log('📝 [Smart Component Filter] Filtering components for Item editing');
-          console.log('📦 [Smart Component Filter] Original components count:', ctx.body.data.length);
+        // Check if this is an Item editing page - FIXED URL PATTERN
+        const itemMatch = referer.match(/\/content-manager\/collection-types\/api::item\.item\/([^?]+)/) ||
+                         referer.match(/\/api::item\.item\/([^?]+)/);
+        
+        if (itemMatch && itemMatch[1] && itemMatch[1] !== 'create') {
+          const itemId = itemMatch[1];
+          console.log('🔍 [Smart Component Filter] Found Item ID:', itemId);
           
-          // Get current item data to determine ListingType
-          const itemId = extractItemIdFromReferer(referer);
-          let allowedComponents: string[] = [];
+          // Fetch the item to get its ListingType
+          const item = await strapi.documents('api::item.item').findOne({
+            documentId: itemId,
+            populate: ['ListingType']
+          });
           
-          if (itemId) {
-            console.log('🔍 [Smart Component Filter] Extracted item ID:', itemId);
+          console.log('📄 [Smart Component Filter] Item data:', item);
+          
+          if (item && item.ListingType && item.ListingType.length > 0) {
+            const listingType = item.ListingType[0];
+            console.log('🏷️ [Smart Component Filter] ListingType:', listingType);
             
-            // Fetch item to get ListingType
-            const item = await strapi.entityService.findOne('api::item.item', itemId, {
-              populate: ['ListingType']
-            });
-            
-            console.log('📋 [Smart Component Filter] Item data:', {
-              id: item?.id,
-              documentId: item?.documentId,
-              title: item?.Title,
-              listingType: item?.ListingType
-            });
-            
-            if (item?.ListingType?.ItemField) {
-              console.log(`🎯 [Smart Component Filter] Found ListingType rules:`, item.ListingType.ItemField);
-              allowedComponents = item.ListingType.ItemField;
+            // FIXED: Use TestComponentFilter instead of ItemField
+            if (listingType.TestComponentFilter && Array.isArray(listingType.TestComponentFilter)) {
+              console.log('📋 [Smart Component Filter] TestComponentFilter rules:', listingType.TestComponentFilter);
+              
+              // Get the original response body
+              const originalComponents = ctx.body;
+              console.log('🧩 [Smart Component Filter] Original components count:', originalComponents?.length || 0);
+              
+              if (originalComponents && Array.isArray(originalComponents)) {
+                // Filter components based on TestComponentFilter rules
+                const allowedComponents = originalComponents.filter((component: any) => {
+                  const componentKey = `${component.category}.${component.info.displayName.toLowerCase()}`;
+                  const isAllowed = listingType.TestComponentFilter.includes(componentKey);
+                  
+                  if (isAllowed) {
+                    console.log('✅ [Smart Component Filter] Allowing component:', componentKey);
+                  } else {
+                    console.log('❌ [Smart Component Filter] Filtering out component:', componentKey);
+                  }
+                  
+                  return isAllowed;
+                });
+                
+                console.log(`🎯 [Smart Component Filter] Filtered from ${originalComponents.length} to ${allowedComponents.length} components`);
+                
+                // Modify the response body
+                ctx.body = allowedComponents;
+              }
             } else {
-              console.log('⚠️ [Smart Component Filter] No ItemField rules found');
+              console.log('⚠️ [Smart Component Filter] No TestComponentFilter rules found in ListingType');
             }
           } else {
-            console.log('⚠️ [Smart Component Filter] Could not extract item ID from referer');
-          }
-          
-          // Filter components based on rules
-          if (allowedComponents.length > 0) {
-            console.log('🔧 [Smart Component Filter] Applying filter with rules:', allowedComponents);
-            
-            const filteredComponents = ctx.body.data.filter((component: any) => {
-              // Try different component key formats
-              const uid = component.uid || '';
-              const category = component.category || '';
-              const displayName = component.info?.displayName || component.schema?.displayName || '';
-              
-              // Check various formats that might match ItemField rules
-              const possibleKeys = [
-                uid, // e.g., "contact.basic"
-                `${category}.${displayName.toLowerCase()}`,
-                `${category}.${displayName}`,
-                displayName.toLowerCase(),
-                displayName
-              ];
-              
-              const isAllowed = possibleKeys.some(key => allowedComponents.includes(key));
-              
-              if (isAllowed) {
-                console.log(`✅ [Smart Component Filter] Allowing component: ${uid} (${displayName})`);
-              } else {
-                console.log(`❌ [Smart Component Filter] Filtering out component: ${uid} (${displayName})`);
-              }
-              
-              return isAllowed;
-            });
-            
-            console.log(`🔍 [Smart Component Filter] Filtered ${ctx.body.data.length} → ${filteredComponents.length} components`);
-            ctx.body.data = filteredComponents;
-          } else {
-            console.log('ℹ️ [Smart Component Filter] No filtering rules applied - showing all components');
+            console.log('⚠️ [Smart Component Filter] No ListingType found for item');
           }
         } else {
-          console.log('ℹ️ [Smart Component Filter] Not an Item edit page - skipping filter');
+          console.log('ℹ️ [Smart Component Filter] Not an Item editing page or create page');
         }
       } catch (error) {
-        console.error('❌ [Smart Component Filter] Middleware error:', error);
-        // Continue with original response on error
+        console.error('❌ [Smart Component Filter] Error in middleware:', error);
+        // Don't break the request if filtering fails
       }
     } else {
+      // For all other requests, just continue
       await next();
     }
   });
   
-  console.log('✅ [Smart Component Filter] Server middleware initialized');
+  console.log('✅ [Smart Component Filter] Server middleware registered successfully');
 };
 
 // Helper function to extract item ID from referer URL
