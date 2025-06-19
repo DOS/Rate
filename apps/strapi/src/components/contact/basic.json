@@ -1,7 +1,8 @@
 {
   "collectionName": "components_contact_basics",
   "info": {
-    "displayName": "Basic"
+    "displayName": "Basic",
+    "icon": "phone"
   },
   "options": {},
   "attributes": {
@@ -13,6 +14,16 @@
     },
     "Website": {
       "type": "string"
+    },
+    "Location": {
+      "type": "component",
+      "component": "contact.location",
+      "repeatable": false
+    },
+    "Social": {
+      "type": "component",
+      "component": "contact.social-media",
+      "repeatable": false
     }
   }
 }

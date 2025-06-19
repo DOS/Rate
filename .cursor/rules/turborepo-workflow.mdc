@@ -41,6 +41,4 @@ globs: ["package.json", "turbo.json", "yarn.lock"]
 - Strapi admin: localhost:1337
 - Next.js UI: localhost:3000
 
-
-
 - Auto-restart services khi cần thiết

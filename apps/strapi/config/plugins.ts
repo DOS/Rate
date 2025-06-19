@@ -20,7 +20,7 @@ export default ({ env }) => {
     },
 
     ckeditor5: {
-      enabled: true, // Re-enabled - added cs.json translation
+      enabled: false, // Disabled - plugin not installed in 5.17.0-beta.0
     },
 
     "strapi-v5-plugin-populate-deep": {

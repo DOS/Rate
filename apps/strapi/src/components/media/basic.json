@@ -1,0 +1,26 @@
+{
+  "collectionName": "components_media_basics",
+  "info": {
+    "displayName": "Basic",
+    "icon": "landscape"
+  },
+  "options": {},
+  "attributes": {
+    "Media": {
+      "type": "media",
+      "multiple": true,
+      "allowedTypes": [
+        "images",
+        "files",
+        "videos",
+        "audios"
+      ]
+    },
+    "MediaURL": {
+      "type": "component",
+      "component": "media.media-url",
+      "repeatable": true
+    }
+  },
+  "config": {}
+}

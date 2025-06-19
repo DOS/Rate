@@ -37,23 +37,16 @@
         }
       }
     },
-    "Image": {
-      "type": "media",
+    "isActive": {
+      "type": "boolean",
       "pluginOptions": {
         "i18n": {
           "localized": true
         }
       },
-      "multiple": false,
-      "required": false,
-      "allowedTypes": [
-        "images",
-        "files",
-        "videos",
-        "audios"
-      ]
+      "default": true
     },
-    "Gallery": {
+    "Media": {
       "type": "media",
       "pluginOptions": {
         "i18n": {
@@ -69,14 +62,40 @@
         "audios"
       ]
     },
-    "isActive": {
-      "type": "boolean",
+    "MediaURL": {
+      "type": "component",
       "pluginOptions": {
         "i18n": {
           "localized": true
         }
       },
-      "default": true
+      "component": "media.media-url",
+      "repeatable": true
+    },
+    "BasicContact": {
+      "type": "component",
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
+      },
+      "component": "contact.basic",
+      "repeatable": false
+    },
+    "BasicInfo": {
+      "type": "component",
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
+      },
+      "component": "info.basic",
+      "repeatable": true
+    },
+    "ListingType": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::listing-type.listing-type"
     },
     "ItemField": {
       "type": "dynamiczone",
@@ -86,16 +105,9 @@
         }
       },
       "components": [
-        "contact.basic",
-        "contact.location",
-        "contact.social-media",
         "violation.detail",
-        "violation.evidence",
-        "media.photo",
-        "media.video",
         "info.organization",
-        "info.individual",
-        "info.basic"
+        "info.individual"
       ]
     },
     "isFeatured": {
@@ -124,11 +136,6 @@
         "Other"
       ]
     },
-    "ListingType": {
-      "type": "relation",
-      "relation": "manyToOne",
-      "target": "api::listing-type.listing-type"
-    },
     "RelatedIdentity": {
       "type": "relation",
       "relation": "manyToOne",
@@ -145,14 +152,6 @@
       "relation": "oneToMany",
       "target": "api::report.report",
       "mappedBy": "TargetItem"
-    },
-    "SearchSummary": {
-      "type": "string",
-      "pluginOptions": {
-        "i18n": {
-          "localized": true
-        }
-      }
     }
   }
 }

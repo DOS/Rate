@@ -54,7 +54,9 @@ export default {
   bootstrap(app: StrapiApp) {
     console.log('🎉 Smart Component Filter V3.0 - Bootstrap started');
     
-    // ENHANCED APPROACH: Stable CSS-based filtering with proper detection
+    // ⚠️ Strapi v5 chưa hỗ trợ registerHook Admin/CM/components/filter – tạm thời bỏ, sẽ dùng
+    // useCMEditViewDataManager + MutationObserver như trước.
+    
     app.getPlugin('content-manager').injectComponent('editView', 'right-links', {
       name: 'smart-component-filter-v3',
       Component: () => {

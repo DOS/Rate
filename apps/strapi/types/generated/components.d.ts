@@ -4,10 +4,13 @@ export interface ContactBasic extends Struct.ComponentSchema {
   collectionName: "components_contact_basics"
   info: {
     displayName: "Basic"
+    icon: "phone"
   }
   attributes: {
     Email: Schema.Attribute.String
+    Location: Schema.Attribute.Component<"contact.location", false>
     Phone: Schema.Attribute.String
+    Social: Schema.Attribute.Component<"contact.social-media", false>
     Website: Schema.Attribute.String
   }
 }
@@ -16,6 +19,7 @@ export interface ContactLocation extends Struct.ComponentSchema {
   collectionName: "components_contact_locations"
   info: {
     displayName: "Location"
+    icon: "pinMap"
   }
   attributes: {
     Address: Schema.Attribute.String
@@ -81,11 +85,15 @@ export interface InfoBasic extends Struct.ComponentSchema {
   collectionName: "components_info_basics"
   info: {
     displayName: "Basic"
+    icon: "information"
   }
   attributes: {
     Alias: Schema.Attribute.Component<"review.pro-item", true>
     Name: Schema.Attribute.String
+    Organization: Schema.Attribute.Component<"info.organization", false>
+    PersonalInfo: Schema.Attribute.Component<"info.individual", true>
     TaxCode: Schema.Attribute.String
+    Type: Schema.Attribute.Enumeration<["Individual", "Organization"]>
   }
 }
 
@@ -108,6 +116,7 @@ export interface InfoOrganization extends Struct.ComponentSchema {
   collectionName: "components_info_organizations"
   info: {
     displayName: "Organization"
+    icon: "briefcase"
   }
   attributes: {
     BusinessID: Schema.Attribute.String
@@ -115,29 +124,28 @@ export interface InfoOrganization extends Struct.ComponentSchema {
   }
 }
 
-export interface MediaPhoto extends Struct.ComponentSchema {
-  collectionName: "components_media_photos"
+export interface MediaBasic extends Struct.ComponentSchema {
+  collectionName: "components_media_basics"
   info: {
-    displayName: "Photo"
-    icon: "picture"
+    displayName: "Basic"
+    icon: "landscape"
   }
   attributes: {
-    Gallery: Schema.Attribute.Media<
+    Media: Schema.Attribute.Media<
       "images" | "files" | "videos" | "audios",
       true
     >
-    Profile: Schema.Attribute.Media<"images" | "files" | "videos" | "audios">
+    MediaURL: Schema.Attribute.Component<"media.media-url", true>
   }
 }
 
-export interface MediaVideo extends Struct.ComponentSchema {
-  collectionName: "components_media_videos"
+export interface MediaMediaUrl extends Struct.ComponentSchema {
+  collectionName: "components_media_media_urls"
   info: {
-    displayName: "Video"
-    icon: "slideshow"
+    displayName: "Media URL"
   }
   attributes: {
-    YouTube: Schema.Attribute.String
+    URL: Schema.Attribute.String
   }
 }
 
@@ -412,17 +420,6 @@ export interface SeoUtilitiesSocialIcons extends Struct.ComponentSchema {
   }
 }
 
-export interface SharedAlias extends Struct.ComponentSchema {
-  collectionName: "components_shared_aliases"
-  info: {
-    displayName: "Alias"
-    icon: "alien"
-  }
-  attributes: {
-    Alias: Schema.Attribute.String
-  }
-}
-
 export interface SharedMetaSocial extends Struct.ComponentSchema {
   collectionName: "components_shared_meta_socials"
   info: {
@@ -565,6 +562,7 @@ export interface ViolationDetail extends Struct.ComponentSchema {
   }
   attributes: {
     Amount: Schema.Attribute.Decimal
+    Evidence: Schema.Attribute.Component<"violation.evidence", true>
     Impact: Schema.Attribute.String
     Method: Schema.Attribute.String
     Platform: Schema.Attribute.Enumeration<
@@ -628,8 +626,8 @@ declare module "@strapi/strapi" {
       "info.basic": InfoBasic
       "info.individual": InfoIndividual
       "info.organization": InfoOrganization
-      "media.photo": MediaPhoto
-      "media.video": MediaVideo
+      "media.basic": MediaBasic
+      "media.media-url": MediaMediaUrl
       "rating.criterion": RatingCriterion
       "review.pro-item": ReviewProItem
       "review.pros-cons": ReviewProsCons
@@ -645,7 +643,6 @@ declare module "@strapi/strapi" {
       "seo-utilities.seo-og": SeoUtilitiesSeoOg
       "seo-utilities.seo-twitter": SeoUtilitiesSeoTwitter
       "seo-utilities.social-icons": SeoUtilitiesSocialIcons
-      "shared.alias": SharedAlias
       "shared.meta-social": SharedMetaSocial
       "shared.seo": SharedSeo
       "utilities.accordions": UtilitiesAccordions

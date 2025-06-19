@@ -50,6 +50,11 @@
         "Phone Call",
         "Other"
       ]
+    },
+    "Evidence": {
+      "type": "component",
+      "component": "violation.evidence",
+      "repeatable": true
     }
   }
 }

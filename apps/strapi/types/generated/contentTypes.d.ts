@@ -607,25 +607,22 @@ export interface ApiItemItem extends Struct.CollectionTypeSchema {
     }
   }
   attributes: {
+    BasicContact: Schema.Attribute.Component<"contact.basic", false> &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: true
+        }
+      }>
+    BasicInfo: Schema.Attribute.Component<"info.basic", true> &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: true
+        }
+      }>
     createdAt: Schema.Attribute.DateTime
     createdBy: Schema.Attribute.Relation<"oneToOne", "admin::user"> &
       Schema.Attribute.Private
     Description: Schema.Attribute.Blocks &
-      Schema.Attribute.SetPluginOptions<{
-        i18n: {
-          localized: true
-        }
-      }>
-    Gallery: Schema.Attribute.Media<
-      "images" | "files" | "videos" | "audios",
-      true
-    > &
-      Schema.Attribute.SetPluginOptions<{
-        i18n: {
-          localized: true
-        }
-      }>
-    Image: Schema.Attribute.Media<"images" | "files" | "videos" | "audios"> &
       Schema.Attribute.SetPluginOptions<{
         i18n: {
           localized: true
@@ -646,19 +643,7 @@ export interface ApiItemItem extends Struct.CollectionTypeSchema {
       }> &
       Schema.Attribute.DefaultTo<false>
     ItemField: Schema.Attribute.DynamicZone<
-      [
-        "contact.basic",
-        "contact.location",
-        "contact.social-media",
-        "violation.detail",
-        "violation.evidence",
-        "utilities.text",
-        "utilities.link",
-        "media.photo",
-        "media.video",
-        "review.pros-cons",
-        "rating.criterion",
-      ]
+      ["violation.detail", "info.organization", "info.individual"]
     > &
       Schema.Attribute.SetPluginOptions<{
         i18n: {
@@ -681,18 +666,27 @@ export interface ApiItemItem extends Struct.CollectionTypeSchema {
     >
     locale: Schema.Attribute.String
     localizations: Schema.Attribute.Relation<"oneToMany", "api::item.item">
+    Media: Schema.Attribute.Media<
+      "images" | "files" | "videos" | "audios",
+      true
+    > &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: true
+        }
+      }>
+    MediaURL: Schema.Attribute.Component<"media.media-url", true> &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: true
+        }
+      }>
     publishedAt: Schema.Attribute.DateTime
     RelatedIdentity: Schema.Attribute.Relation<
       "manyToOne",
       "api::identity.identity"
     >
     Reports: Schema.Attribute.Relation<"oneToMany", "api::report.report">
-    SearchSummary: Schema.Attribute.String &
-      Schema.Attribute.SetPluginOptions<{
-        i18n: {
-          localized: true
-        }
-      }>
     Slug: Schema.Attribute.UID<"Title">
     Title: Schema.Attribute.String &
       Schema.Attribute.Required &
@@ -785,20 +779,7 @@ export interface ApiListingTypeListingType extends Struct.CollectionTypeSchema {
         }
       }>
     publishedAt: Schema.Attribute.DateTime
-    ReviewField: Schema.Attribute.JSON &
-      Schema.Attribute.CustomField<"plugin::smart-component-filter.component-multi-select"> &
-      Schema.Attribute.SetPluginOptions<{
-        i18n: {
-          localized: true
-        }
-      }>
     Slug: Schema.Attribute.UID<"Name">
-    TestList: Schema.Attribute.Enumeration<["A", "B", "C", "D", "E"]> &
-      Schema.Attribute.SetPluginOptions<{
-        i18n: {
-          localized: true
-        }
-      }>
     updatedAt: Schema.Attribute.DateTime
     updatedBy: Schema.Attribute.Relation<"oneToOne", "admin::user"> &
       Schema.Attribute.Private

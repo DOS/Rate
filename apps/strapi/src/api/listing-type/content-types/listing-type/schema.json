@@ -46,22 +46,6 @@
       },
       "default": true
     },
-    "Categories": {
-      "type": "relation",
-      "relation": "oneToMany",
-      "target": "api::category.category",
-      "mappedBy": "ListingType"
-    },
-    "Criteria": {
-      "type": "component",
-      "pluginOptions": {
-        "i18n": {
-          "localized": true
-        }
-      },
-      "component": "rating.criterion",
-      "repeatable": true
-    },
     "allowComment": {
       "type": "boolean",
       "pluginOptions": {
@@ -80,29 +64,50 @@
       },
       "default": true
     },
+    "Categories": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::category.category",
+      "mappedBy": "ListingType"
+    },
+    "Criteria": {
+      "type": "component",
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
+      },
+      "conditions": {
+        "visible": {
+          "==": [
+            {
+              "var": "allowRating"
+            },
+            true
+          ]
+        }
+      },
+      "component": "rating.criterion",
+      "repeatable": true
+    },
     "IconSet": {
       "type": "enumeration",
+      "conditions": {
+        "visible": {
+          "==": [
+            {
+              "var": "allowRating"
+            },
+            true
+          ]
+        }
+      },
       "default": "Classic",
       "enum": [
         "Classic",
         "Warning",
         "Thumb",
         "Minimal"
-      ]
-    },
-    "TestList": {
-      "type": "enumeration",
-      "pluginOptions": {
-        "i18n": {
-          "localized": true
-        }
-      },
-      "enum": [
-        "A",
-        "B",
-        "C",
-        "D",
-        "E"
       ]
     },
     "ItemField": {
