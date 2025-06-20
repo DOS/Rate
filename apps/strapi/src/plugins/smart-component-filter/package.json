@@ -1,5 +1,5 @@
 {
-  "version": "3.0.0",
+  "version": "3.1.0",
   "keywords": [],
   "type": "commonjs",
   "exports": {
@@ -60,10 +60,10 @@
     "kind": "plugin",
     "name": "smart-component-filter",
     "displayName": "Smart Component Filter",
-    "description": "Smart Component Filter V2.0.0 - Enhanced Dynamic Zone filtering with useCMEditViewDataManager hook and improved component detection"
+    "description": "Smart Component Filter V3.1.0 - Testing Dynamic Category Enum with auto-populate from Categories API"
   },
   "name": "smart-component-filter",
-  "description": "Smart Component Filter V2.0.0 - Enhanced Dynamic Zone filtering with useCMEditViewDataManager hook and improved component detection",
+  "description": "Smart Component Filter V3.1.0 - Testing Dynamic Category Enum with auto-populate from Categories API",
   "license": "MIT",
   "repository": {
     "type": "git",

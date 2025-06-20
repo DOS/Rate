@@ -152,6 +152,40 @@
       "relation": "oneToMany",
       "target": "api::report.report",
       "mappedBy": "TargetItem"
+    },
+    "Violation": {
+      "type": "component",
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
+      },
+      "conditions": {
+        "visible": {
+          "==": [
+            {
+              "var": "ListingType2"
+            },
+            "scammer"
+          ]
+        }
+      },
+      "component": "violation.detail",
+      "repeatable": true
+    },
+    "ListingType2": {
+      "type": "enumeration",
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
+      },
+      "enum": [
+        "Bank",
+        "Spammer",
+        "doctor",
+        "scammer"
+      ]
     }
   }
 }

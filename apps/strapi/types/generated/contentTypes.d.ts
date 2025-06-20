@@ -664,6 +664,14 @@ export interface ApiItemItem extends Struct.CollectionTypeSchema {
       "manyToOne",
       "api::listing-type.listing-type"
     >
+    ListingType2: Schema.Attribute.Enumeration<
+      ["Bank", "Spammer", "doctor", "scammer"]
+    > &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: true
+        }
+      }>
     locale: Schema.Attribute.String
     localizations: Schema.Attribute.Relation<"oneToMany", "api::item.item">
     Media: Schema.Attribute.Media<
@@ -698,6 +706,12 @@ export interface ApiItemItem extends Struct.CollectionTypeSchema {
     updatedAt: Schema.Attribute.DateTime
     updatedBy: Schema.Attribute.Relation<"oneToOne", "admin::user"> &
       Schema.Attribute.Private
+    Violation: Schema.Attribute.Component<"violation.detail", true> &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: true
+        }
+      }>
   }
 }
 
@@ -759,7 +773,7 @@ export interface ApiListingTypeListingType extends Struct.CollectionTypeSchema {
         }
       }> &
       Schema.Attribute.DefaultTo<true>
-    ItemField: Schema.Attribute.JSON &
+    ItemField: Schema.Attribute.String &
       Schema.Attribute.CustomField<"plugin::smart-component-filter.component-multi-select"> &
       Schema.Attribute.SetPluginOptions<{
         i18n: {

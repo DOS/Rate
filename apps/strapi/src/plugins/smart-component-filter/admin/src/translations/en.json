@@ -1,6 +1,14 @@
 {
   "plugin.name": "Smart Component Filter",
   "plugin.description": "Filter components based on listing type",
-  "component-multi-select.label": "Component Multi Select",
-  "component-multi-select.description": "Select multiple components with smart filtering"
+  "smart-component-filter.component-multi-select.label": "Component Multi Select",
+  "smart-component-filter.component-multi-select.description": "Select multiple components for dynamic zone filtering",
+  "smart-component-filter.dynamic-category-enum.label": "Dynamic Category Enum",
+  "smart-component-filter.dynamic-category-enum.description": "Dynamic enumeration field populated from Categories API - perfect for Conditional Fields",
+  "smart-component-filter.dynamic-category-enum.section.values": "Values",
+  "smart-component-filter.dynamic-category-enum.enum.label": "Values (one per line)",
+  "smart-component-filter.dynamic-category-enum.enum.description": "Define possible values for this enumeration field. One value per line.",
+  "smart-component-filter.dynamic-category-enum.placeholder": "Select a category...",
+  "smart-component-filter.dynamic-category-enum.loading": "Loading categories...",
+  "smart-component-filter.dynamic-category-enum.error": "Failed to load categories"
 }

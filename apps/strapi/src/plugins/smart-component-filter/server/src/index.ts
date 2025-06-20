@@ -1,32 +1,31 @@
-/**
- * Application methods
- */
-import bootstrap from './bootstrap';
-import destroy from './destroy';
-import register from './register';
+'use strict';
 
-/**
- * Plugin server methods
- */
-import config from './config';
-import contentTypes from './content-types';
-import controllers from './controllers';
-import routes from './routes';
-import middlewares from './middlewares';
-import policies from './policies';
-import services from './services';
+module.exports = {
+  register({ strapi }) {
+    console.log('🎯 [Smart Component Filter] Server registration started');
+    
+    // Register component-multi-select custom field
+    strapi.customFields.register({
+      name: 'component-multi-select',
+      plugin: 'smart-component-filter',
+      type: 'string',
+    });
+    
+    // Register dynamic-category-enum custom field  
+    strapi.customFields.register({
+      name: 'dynamic-category-enum',
+      plugin: 'smart-component-filter',
+      type: 'enumeration',
+      inputSize: {
+        default: 4,
+        isResizable: true,
+      },
+    });
+    
+    console.log('✅ [Smart Component Filter] Server custom fields registered successfully');
+  },
 
-export default {
-  register,
-  bootstrap,
-  destroy,
-  config,
-  controllers,
-  contentTypes,
-  routes,
-  middlewares,
-  policies,
-  services,
-  
-
-};
+  bootstrap({ strapi }) {
+    console.log('🚀 [Smart Component Filter] Server bootstrap completed');
+  },
+}; 
