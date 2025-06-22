@@ -59,12 +59,7 @@
       "target": "api::listing.listing",
       "mappedBy": "Category"
     },
-    "ListingType": {
-      "type": "relation",
-      "relation": "manyToOne",
-      "target": "api::listing-type.listing-type",
-      "inversedBy": "Categories"
-    },
+
     "ParentCategory": {
       "type": "relation",
       "relation": "manyToOne",

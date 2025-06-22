@@ -155,32 +155,9 @@
           "localized": true
         }
       },
-      "conditions": {
-        "visible": {
-          "==": [
-            {
-              "var": "ListingType2"
-            },
-            "scammer"
-          ]
-        }
-      },
-      "component": "violation.detail",
-      "repeatable": true
-    },
-    "ListingType": {
-      "type": "enumeration",
-      "pluginOptions": {
-        "i18n": {
-          "localized": true
-        }
-      },
-      "enum": [
-        "Bank",
-        "Spammer",
-        "doctor",
-        "scammer"
-      ]
+
+              "component": "violation.detail",
+        "repeatable": true
+      }
     }
-  }
 }

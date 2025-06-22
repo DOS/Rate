@@ -9,17 +9,6 @@ export default [
     },
   },
 
-  // Get allowed components for a specific ListingType
-  {
-    method: 'GET',
-    path: '/listing-type/:listingTypeId/components',
-    handler: 'controller.getAllowedComponents',
-    config: {
-      policies: [],
-      auth: false, // Allow without authentication for now
-    },
-  },
-
   // Get all available components in the system
   {
     method: 'GET',
@@ -27,7 +16,7 @@ export default [
     handler: 'controller.getAvailableComponents',
     config: {
       policies: [],
-      auth: false, // Allow without authentication for now
+      auth: false,
     },
   },
 ];

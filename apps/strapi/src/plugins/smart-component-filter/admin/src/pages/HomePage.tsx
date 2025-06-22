@@ -127,22 +127,11 @@ const HomePage = () => {
           setComponents(mockComponents);
         }
 
-        // DIRECT STRAPI API CALL để load listing-types
-        console.log('🚀 Loading listing types from Strapi...');
-        const listingTypesRes = await get('/content-manager/collection-types/api::listing-type.listing-type');
-        console.log('📥 Listing Types Response:', listingTypesRes);
+        // DISABLED: ListingType functionality removed
+        console.log('⚠️ ListingType functionality has been removed from the system');
         
-        if (listingTypesRes.data) {
-          // Mock listing types từ actual data structure
-          const mockListingTypes = [
-            { id: 1, name: 'Business', value: 'business' },
-            { id: 2, name: 'Individual', value: 'individual' },
-            { id: 3, name: 'Platform', value: 'platform' }
-          ];
-          
-          console.log('✅ Setting mock listing types:', mockListingTypes);
-          setListingTypes(mockListingTypes);
-        }
+        // Set empty listing types since ListingType model no longer exists
+        setListingTypes([]);
         
       } catch (error) {
         console.error('❌ Failed to fetch data:', error);

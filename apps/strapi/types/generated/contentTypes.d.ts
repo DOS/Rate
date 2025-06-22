@@ -410,10 +410,6 @@ export interface ApiCategoryCategory extends Struct.CollectionTypeSchema {
     Image: Schema.Attribute.Media<"images" | "files" | "videos" | "audios">
     isActive: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<true>
     Listings: Schema.Attribute.Relation<"oneToMany", "api::listing.listing">
-    ListingType: Schema.Attribute.Relation<
-      "manyToOne",
-      "api::listing-type.listing-type"
-    >
     locale: Schema.Attribute.String
     localizations: Schema.Attribute.Relation<
       "oneToMany",
@@ -660,14 +656,6 @@ export interface ApiItemItem extends Struct.CollectionTypeSchema {
       }> &
       Schema.Attribute.DefaultTo<"Other">
     Listings: Schema.Attribute.Relation<"oneToMany", "api::listing.listing">
-    ListingType: Schema.Attribute.Enumeration<
-      ["Bank", "Spammer", "doctor", "scammer"]
-    > &
-      Schema.Attribute.SetPluginOptions<{
-        i18n: {
-          localized: true
-        }
-      }>
     locale: Schema.Attribute.String
     localizations: Schema.Attribute.Relation<"oneToMany", "api::item.item">
     Media: Schema.Attribute.Media<
@@ -708,91 +696,6 @@ export interface ApiItemItem extends Struct.CollectionTypeSchema {
           localized: true
         }
       }>
-  }
-}
-
-export interface ApiListingTypeListingType extends Struct.CollectionTypeSchema {
-  collectionName: "listing_types"
-  info: {
-    description: ""
-    displayName: "Listing Type"
-    pluralName: "listing-types"
-    singularName: "listing-type"
-  }
-  options: {
-    draftAndPublish: true
-  }
-  pluginOptions: {
-    i18n: {
-      localized: true
-    }
-  }
-  attributes: {
-    allowComment: Schema.Attribute.Boolean &
-      Schema.Attribute.SetPluginOptions<{
-        i18n: {
-          localized: true
-        }
-      }> &
-      Schema.Attribute.DefaultTo<true>
-    allowRating: Schema.Attribute.Boolean &
-      Schema.Attribute.SetPluginOptions<{
-        i18n: {
-          localized: true
-        }
-      }> &
-      Schema.Attribute.DefaultTo<true>
-    Categories: Schema.Attribute.Relation<"oneToMany", "api::category.category">
-    createdAt: Schema.Attribute.DateTime
-    createdBy: Schema.Attribute.Relation<"oneToOne", "admin::user"> &
-      Schema.Attribute.Private
-    Criteria: Schema.Attribute.Component<"rating.criterion", true> &
-      Schema.Attribute.SetPluginOptions<{
-        i18n: {
-          localized: true
-        }
-      }>
-    Description: Schema.Attribute.Blocks &
-      Schema.Attribute.SetPluginOptions<{
-        i18n: {
-          localized: true
-        }
-      }>
-    IconSet: Schema.Attribute.Enumeration<
-      ["Classic", "Warning", "Thumb", "Minimal"]
-    > &
-      Schema.Attribute.DefaultTo<"Classic">
-    isActive: Schema.Attribute.Boolean &
-      Schema.Attribute.SetPluginOptions<{
-        i18n: {
-          localized: true
-        }
-      }> &
-      Schema.Attribute.DefaultTo<true>
-    ItemField: Schema.Attribute.JSON &
-      Schema.Attribute.CustomField<"plugin::smart-component-filter.component-multi-select"> &
-      Schema.Attribute.SetPluginOptions<{
-        i18n: {
-          localized: true
-        }
-      }>
-    locale: Schema.Attribute.String
-    localizations: Schema.Attribute.Relation<
-      "oneToMany",
-      "api::listing-type.listing-type"
-    >
-    Name: Schema.Attribute.String &
-      Schema.Attribute.Required &
-      Schema.Attribute.SetPluginOptions<{
-        i18n: {
-          localized: true
-        }
-      }>
-    publishedAt: Schema.Attribute.DateTime
-    Slug: Schema.Attribute.UID<"Name">
-    updatedAt: Schema.Attribute.DateTime
-    updatedBy: Schema.Attribute.Relation<"oneToOne", "admin::user"> &
-      Schema.Attribute.Private
   }
 }
 
@@ -1698,7 +1601,6 @@ declare module "@strapi/strapi" {
       "api::footer.footer": ApiFooterFooter
       "api::identity.identity": ApiIdentityIdentity
       "api::item.item": ApiItemItem
-      "api::listing-type.listing-type": ApiListingTypeListingType
       "api::listing.listing": ApiListingListing
       "api::navbar.navbar": ApiNavbarNavbar
       "api::page.page": ApiPagePage
