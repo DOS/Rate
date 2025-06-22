@@ -92,11 +92,6 @@
       "component": "info.basic",
       "repeatable": true
     },
-    "ListingType": {
-      "type": "relation",
-      "relation": "manyToOne",
-      "target": "api::listing-type.listing-type"
-    },
     "ItemField": {
       "type": "dynamiczone",
       "pluginOptions": {
@@ -173,7 +168,7 @@
       "component": "violation.detail",
       "repeatable": true
     },
-    "ListingType2": {
+    "ListingType": {
       "type": "enumeration",
       "pluginOptions": {
         "i18n": {

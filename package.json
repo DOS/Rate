@@ -66,6 +66,7 @@
   "dependencies": {
     "@next/eslint-plugin-next": "15.3.3",
     "@strapi/plugin-color-picker": "5.17.0-beta.0",
+
     "@strapi/plugin-sentry": "5.17.0-beta.0",
     "@strapi/plugin-seo": "2.0.8",
     "@strapi/plugin-users-permissions": "5.17.0-beta.0",

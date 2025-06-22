@@ -1,6 +1,6 @@
 /**
  * Category Lifecycle Hooks
- * Auto-sync Categories với Item.ListingType2 enum values
+ * Auto-sync Categories với Item.ListingType enum values
  */
 
 export default {
@@ -24,7 +24,7 @@ export default {
 };
 
 /**
- * Sync Categories với Item.ListingType2 enum values
+ * Sync Categories với Item.ListingType enum values
  */
 async function syncEnumValues() {
   try {
@@ -42,16 +42,16 @@ async function syncEnumValues() {
     // Get current Item schema
     const itemSchema = strapi.contentTypes['api::item.item'];
     
-    if (itemSchema && itemSchema.attributes.ListingType2) {
+    if (itemSchema && itemSchema.attributes.ListingType) {
       // Update enum values in schema
-      const currentEnum = itemSchema.attributes.ListingType2.enum || [];
+      const currentEnum = itemSchema.attributes.ListingType.enum || [];
       const hasChanges = JSON.stringify(currentEnum.sort()) !== JSON.stringify(enumValues.sort());
       
       if (hasChanges) {
         console.log('🔄 [Category Sync] Updating enum values...');
         
         // Update schema enum values
-        (itemSchema.attributes.ListingType2 as any).enum = enumValues;
+        (itemSchema.attributes.ListingType as any).enum = enumValues;
         
         console.log('✅ [Category Sync] Enum values updated successfully!');
         console.log('📋 [Category Sync] New values:', enumValues);
@@ -59,7 +59,7 @@ async function syncEnumValues() {
         console.log('✅ [Category Sync] Enum values already up to date');
       }
     } else {
-      console.log('⚠️  [Category Sync] ListingType2 field not found in Item schema');
+      console.log('⚠️  [Category Sync] ListingType field not found in Item schema');
     }
     
   } catch (error) {

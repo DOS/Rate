@@ -660,11 +660,7 @@ export interface ApiItemItem extends Struct.CollectionTypeSchema {
       }> &
       Schema.Attribute.DefaultTo<"Other">
     Listings: Schema.Attribute.Relation<"oneToMany", "api::listing.listing">
-    ListingType: Schema.Attribute.Relation<
-      "manyToOne",
-      "api::listing-type.listing-type"
-    >
-    ListingType2: Schema.Attribute.Enumeration<
+    ListingType: Schema.Attribute.Enumeration<
       ["Bank", "Spammer", "doctor", "scammer"]
     > &
       Schema.Attribute.SetPluginOptions<{
@@ -773,7 +769,7 @@ export interface ApiListingTypeListingType extends Struct.CollectionTypeSchema {
         }
       }> &
       Schema.Attribute.DefaultTo<true>
-    ItemField: Schema.Attribute.String &
+    ItemField: Schema.Attribute.JSON &
       Schema.Attribute.CustomField<"plugin::smart-component-filter.component-multi-select"> &
       Schema.Attribute.SetPluginOptions<{
         i18n: {
