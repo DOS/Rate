@@ -1,17 +1,17 @@
 {
-  "name": "strapi-next-monorepo-starter",
+  "name": "rate-box",
   "version": "2.0.0",
   "private": true,
   "author": {
-    "name": "Notum Technologies",
-    "email": "info@notum.cz",
-    "url": "https://notum.cz"
+    "name": "JOY",
+    "email": "joy@rate.box",
+    "url": "https://rate.box"
   },
   "maintainers": [
     {
-      "name": "Notum Technologies",
-      "email": "info@notum.cz",
-      "url": "https://notum.cz"
+      "name": "JOY",
+      "email": "joy@rate.box",
+      "url": "https://rate.box"
     }
   ],
   "workspaces": [
