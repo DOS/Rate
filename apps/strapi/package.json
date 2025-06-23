@@ -33,6 +33,10 @@
   "dependencies": {
     "@repo/design-system": "*",
     "@repo/shared-data": "*",
+    "@strapi/admin": "5.17.0-beta.0",
+    "@strapi/content-manager": "5.17.0-beta.0",
+    "@strapi/content-type-builder": "5.17.0-beta.0",
+    "@strapi/email": "5.17.0-beta.0",
     "@strapi/plugin-color-picker": "^5.17.0-beta.0",
     "@strapi/plugin-sentry": "^5.17.0-beta.0",
     "@strapi/plugin-seo": "2.0.8",
@@ -40,6 +44,7 @@
     "@strapi/provider-email-mailgun": "^5.17.0-beta.0",
     "@strapi/provider-upload-aws-s3": "^5.17.0-beta.0",
     "@strapi/strapi": "5.17.0-beta.0",
+    "@strapi/upload": "5.17.0-beta.0",
     "lodash": "^4.17.21",
     "pg": "^8.13.1",
     "prismjs": "^1.30.0",
