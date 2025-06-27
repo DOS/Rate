@@ -520,5 +520,67 @@
       "submit": "Gửi đánh giá",
       "cancel": "Hủy"
     }
+  },
+
+  "listingDetail": {
+    "description": "Mô tả",
+    "noDescription": "Không có mô tả",
+    "additionalInfo": "Thông tin bổ sung",
+    "relatedItem": "Sản phẩm/Dịch vụ liên quan",
+    "stats": "Thống kê",
+    "views": "Lượt xem",
+    "lastUpdated": "Cập nhật lần cuối",
+    "actions": "Hành động",
+    "reportListing": "Báo cáo tin đăng",
+    "shareListing": "Chia sẻ tin đăng",
+    "status": {
+      "pending": "Đang chờ duyệt",
+      "approved": "Đã duyệt",
+      "rejected": "Đã từ chối",
+      "needs_revision": "Cần chỉnh sửa"
+    }
+  },
+
+  "homepage": {
+    "hero": {
+      "title": "Chào mừng đến với Rate Platform",
+      "description": "Khám phá, đánh giá và chia sẻ trải nghiệm về sản phẩm và dịch vụ",
+      "submitButton": "Đăng tin",
+      "searchButton": "Tìm kiếm"
+    },
+    "recentListings": {
+      "title": "Tin đăng mới nhất",
+      "empty": "Chưa có tin đăng nào. Hãy là người đầu tiên!",
+      "viewAll": "Xem tất cả"
+    },
+    "stats": {
+      "totalListings": "Tổng tin đăng",
+      "activeUsers": "Người dùng hoạt động",
+      "totalReviews": "Tổng đánh giá",
+      "averageRating": "Đánh giá trung bình"
+    }
+  },
+
+  "listingsView": {
+    "cardView": "Dạng thẻ",
+    "listView": "Dạng danh sách"
+  },
+
+  "search": {
+    "title": "Tìm kiếm tin đăng",
+    "searchPlaceholder": "Tìm theo tiêu đề hoặc mô tả...",
+    "allCategories": "Tất cả danh mục",
+    "selectCategory": "Chọn danh mục",
+    "searchButton": "Tìm kiếm",
+    "resultsFound": "Tìm thấy {count} kết quả cho \"{query}\"",
+    "noResults": "Không tìm thấy tin đăng nào. Thử điều chỉnh tiêu chí tìm kiếm.",
+    "sortBy": {
+      "label": "Sắp xếp theo",
+      "newest": "Mới nhất",
+      "oldest": "Cũ nhất",
+      "titleAZ": "Tiêu đề (A-Z)",
+      "titleZA": "Tiêu đề (Z-A)",
+      "mostViewed": "Xem nhiều nhất"
+    }
   }
 }

@@ -520,5 +520,67 @@
       "submit": "Submit Review",
       "cancel": "Cancel"
     }
+  },
+
+  "listingDetail": {
+    "description": "Description",
+    "noDescription": "No description available",
+    "additionalInfo": "Additional Information",
+    "relatedItem": "Related Item",
+    "stats": "Statistics",
+    "views": "Views",
+    "lastUpdated": "Last Updated",
+    "actions": "Actions",
+    "reportListing": "Report Listing",
+    "shareListing": "Share Listing",
+    "status": {
+      "pending": "Pending Review",
+      "approved": "Approved",
+      "rejected": "Rejected",
+      "needs_revision": "Needs Revision"
+    }
+  },
+
+  "homepage": {
+    "hero": {
+      "title": "Welcome to Rate Platform",
+      "description": "Discover, review, and share experiences about products and services",
+      "submitButton": "Submit Listing",
+      "searchButton": "Search Listings"
+    },
+    "recentListings": {
+      "title": "Recent Listings",
+      "empty": "No listings available yet. Be the first to submit!",
+      "viewAll": "View All Listings"
+    },
+    "stats": {
+      "totalListings": "Total Listings",
+      "activeUsers": "Active Users",
+      "totalReviews": "Total Reviews",
+      "averageRating": "Average Rating"
+    }
+  },
+
+  "listingsView": {
+    "cardView": "Card View",
+    "listView": "List View"
+  },
+
+  "search": {
+    "title": "Search Listings",
+    "searchPlaceholder": "Search by title or description...",
+    "allCategories": "All Categories",
+    "selectCategory": "Select Category",
+    "searchButton": "Search",
+    "resultsFound": "Found {count} results for \"{query}\"",
+    "noResults": "No listings found. Try adjusting your search criteria.",
+    "sortBy": {
+      "label": "Sort By",
+      "newest": "Newest First",
+      "oldest": "Oldest First",
+      "titleAZ": "Title (A-Z)",
+      "titleZA": "Title (Z-A)",
+      "mostViewed": "Most Viewed"
+    }
   }
 }
