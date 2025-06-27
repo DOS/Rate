@@ -236,5 +236,289 @@
       "email": "Email",
       "submit": "Recover account"
     }
+  },
+
+  "scamDetector": {
+    "hero": {
+      "badge": "Được tin cậy bởi +100,000 người dùng",
+      "title": "Kiểm tra thông tin",
+      "titleHighlight": "lừa đảo trực tuyến",
+      "description": "Bảo vệ bản thân khỏi chiêu trò lừa đảo với công cụ kiểm tra",
+      "descriptionHighlight": "miễn phí, nhanh chóng và chính xác",
+      "descriptionEnd": "của chúng tôi",
+      "features": {
+        "instant": {
+          "title": "Kiểm tra tức thì",
+          "description": "Kết quả trong vài giây"
+        },
+        "warning": {
+          "title": "Cảnh báo sớm",
+          "description": "Phát hiện mối đe dọa mới"
+        },
+        "updated": {
+          "title": "Dữ liệu cập nhật",
+          "description": "Từ cộng đồng người dùng"
+        }
+      }
+    },
+    "search": {
+      "title": "Kiểm tra thông tin lừa đảo",
+      "placeholder": "Nhập số điện thoại, email, website hoặc tên tổ chức...",
+      "button": "Kiểm tra",
+      "checking": "Đang kiểm tra...",
+      "tips": {
+        "title": "Hướng dẫn tìm kiếm:",
+        "phone": "Số điện thoại:",
+        "phoneExample": "0909123456, +84909123456",
+        "email": "Email:",
+        "emailExample": "example@scam.com",
+        "website": "Website:",
+        "websiteExample": "https://example.com, www.example.com",
+        "organization": "Tên/Tổ chức:",
+        "organizationExample": "Công ty ABC, Nguyễn Văn A"
+      },
+      "recent": "Tìm kiếm gần đây:"
+    },
+    "trust": {
+      "accuracy": "Độ chính xác",
+      "activeUsers": "Người dùng active",
+      "reportsProcessed": "Báo cáo đã xử lý",
+      "monthlyGrowth": "Tăng trưởng hàng tháng"
+    },
+    "statistics": {
+      "title": "Minh bạch & Tin cậy",
+      "description": "Thống kê thời gian thực từ hệ thống báo cáo cộng đồng",
+      "totalReports": "Tổng báo cáo",
+      "dailyReports": "Báo cáo hôm nay",
+      "monthlyReports": "Báo cáo tháng",
+      "resolvedCases": "Đã giải quyết",
+      "scammersBlocked": "Đã chặn lừa đảo",
+      "moneyProtected": "Tiền được bảo vệ",
+      "successRate": "Tỷ lệ thành công",
+      "scamTypes": {
+        "title": "Phân loại hình thức lừa đảo",
+        "phone": "Lừa đảo qua điện thoại",
+        "website": "Website giả mạo",
+        "email": "Lừa đảo qua email",
+        "organization": "Tổ chức giả mạo"
+      },
+      "metrics": {
+        "accuracy": "Độ chính xác phát hiện",
+        "responseTime": "Thời gian phản hồi trung bình",
+        "uptime": "Thời gian hoạt động"
+      }
+    },
+    "searchResults": {
+      "enterQuery": "Vui lòng nhập từ khóa để tìm kiếm kẻ lừa đảo tiềm năng",
+      "noResults": {
+        "title": "Không tìm thấy kết quả",
+        "description": "Tin tốt! Chúng tôi không tìm thấy báo cáo lừa đảo nào cho \"{query}\". Có thể an toàn, nhưng hãy luôn cảnh giác."
+      },
+      "foundResults": "Tìm thấy {count} kết quả cho \"{query}\"",
+      "searchType": "Loại tìm kiếm: {type}",
+      "types": {
+        "all": "Tất cả",
+        "email": "Email",
+        "phone": "Số điện thoại",
+        "website": "Website",
+        "organization": "Tổ chức"
+      },
+      "risk": {
+        "high": "Rủi ro cao",
+        "medium": "Rủi ro trung bình",
+        "low": "Rủi ro thấp"
+      },
+      "reports": "{count} báo cáo",
+      "viewDetails": "Xem chi tiết",
+      "unknownEntity": "Không xác định"
+    },
+    "reports": {
+      "title": "Cảnh báo mới nhất",
+      "description": "Các trường hợp lừa đảo được báo cáo gần đây",
+      "viewAll": "Xem tất cả",
+      "type": "Loại:",
+      "reports": "báo cáo",
+      "trending": "Đang hot",
+      "noName": "Không có tên",
+      "noDescription": "Không có mô tả",
+      "dangerLevels": {
+        "extreme": "Cực kỳ nguy hiểm",
+        "high": "Nguy hiểm cao",
+        "medium": "Cảnh báo",
+        "low": "Rủi ro thấp"
+      },
+      "timeAgo": {
+        "hours": "{count} giờ trước",
+        "days": "{count} ngày trước",
+        "weeks": "{count} tuần trước",
+        "recent": "Gần đây"
+      }
+    },
+    "cta": {
+      "title": "Bảo vệ cộng đồng khỏi lừa đảo",
+      "description": "Nếu bạn phát hiện hoặc là nạn nhân của lừa đảo, hãy báo cáo ngay để cảnh báo người khác",
+      "reportButton": "Báo cáo lừa đảo",
+      "learnButton": "Học cách phòng tránh"
+    }
+  },
+
+  "forms": {
+    "submitListing": {
+      "title": "Gửi báo cáo mới",
+      "error": {
+        "title": "Gửi báo cáo thất bại"
+      },
+      "fields": {
+        "item": {
+          "label": "Tổ chức/Cá nhân",
+          "searchPlaceholder": "Tìm kiếm tổ chức hoặc cá nhân đã có...",
+          "createNew": "Tạo mới"
+        },
+        "category": {
+          "label": "Danh mục",
+          "placeholder": "Chọn danh mục"
+        },
+        "title": {
+          "label": "Tiêu đề",
+          "placeholder": "VD: Chi nhánh ngân hàng giả, Số điện thoại lừa đảo..."
+        },
+        "url": {
+          "label": "URL/Link (tùy chọn)",
+          "placeholder": "https://example.com"
+        },
+        "description": {
+          "label": "Mô tả",
+          "placeholder": "Cung cấp thông tin chi tiết về báo cáo này..."
+        },
+        "isActive": {
+          "label": "Báo cáo đang hoạt động"
+        }
+      },
+      "submit": "Gửi báo cáo",
+      "submitting": "Đang gửi...",
+      "cancel": "Hủy"
+    }
+  },
+
+  "submitSuccess": {
+    "title": "Gửi thành công!",
+    "description": "Cảm ơn bạn đã đóng góp. Báo cáo của bạn đã được gửi và đang chờ xét duyệt.",
+    "whatNext": {
+      "title": "Điều gì xảy ra tiếp theo?",
+      "review": "Đội ngũ của chúng tôi sẽ xem xét báo cáo trong vòng 24-48 giờ",
+      "notification": "Bạn sẽ nhận được email thông báo khi báo cáo được duyệt",
+      "visibility": "Báo cáo đã duyệt sẽ hiển thị với cộng đồng ngay lập tức"
+    },
+    "actions": {
+      "submitAnother": "Gửi báo cáo khác",
+      "backToHome": "Về trang chủ"
+    },
+    "support": {
+      "question": "Có câu hỏi về báo cáo của bạn?",
+      "contact": "Liên hệ đội hỗ trợ"
+    }
+  },
+
+  "mySubmissions": {
+    "title": "Báo cáo của tôi",
+    "backToHome": "Về trang chủ",
+    "submitNew": "Gửi báo cáo mới",
+    "noSubmissions": "Bạn chưa gửi báo cáo nào.",
+    "submitFirst": "Gửi báo cáo đầu tiên",
+    "category": "Danh mục",
+    "item": "Đối tượng",
+    "reviewNotes": "Ghi chú xét duyệt",
+    "edit": "Sửa",
+    "delete": "Xóa",
+    "deleteConfirm": "Bạn có chắc muốn xóa báo cáo này?",
+    "status": {
+      "pending": "Đang chờ duyệt",
+      "approved": "Đã duyệt",
+      "rejected": "Bị từ chối",
+      "needs_revision": "Cần chỉnh sửa"
+    }
+  },
+
+  "adminSubmissions": {
+    "title": "Xét duyệt báo cáo",
+    "backToHome": "Về trang chủ",
+    "noSubmissions": "Không có báo cáo nào cần xét duyệt.",
+    "filter": {
+      "all": "Tất cả",
+      "pending": "Chờ duyệt",
+      "approved": "Đã duyệt",
+      "rejected": "Đã từ chối"
+    },
+    "table": {
+      "listing": "Báo cáo",
+      "submittedBy": "Người gửi",
+      "status": "Trạng thái",
+      "date": "Ngày gửi",
+      "actions": "Hành động"
+    },
+    "status": {
+      "pending": "Chờ duyệt",
+      "approved": "Đã duyệt",
+      "rejected": "Bị từ chối",
+      "needs_revision": "Cần chỉnh sửa"
+    },
+    "view": "Xem",
+    "approve": "Duyệt",
+    "reject": "Từ chối",
+    "requestRevision": "Yêu cầu chỉnh sửa",
+    "reviewModal": {
+      "title": "Thêm ghi chú xét duyệt",
+      "placeholder": "Giải thích lý do từ chối hoặc yêu cầu chỉnh sửa...",
+      "submit": "Gửi đánh giá",
+      "cancel": "Hủy"
+    }
+  },
+
+  "comments": {
+    "title": "Bình luận",
+    "placeholder": "Viết bình luận...",
+    "replyPlaceholder": "Viết phản hồi...",
+    "submit": "Đăng bình luận",
+    "submitReply": "Đăng phản hồi",
+    "reply": "Phản hồi",
+    "replies": "{count} phản hồi",
+    "noComments": "Chưa có bình luận. Hãy là người đầu tiên bình luận!",
+    "anonymous": "Ẩn danh"
+  },
+
+  "reviews": {
+    "title": "Đánh giá",
+    "writeReview": "Viết đánh giá",
+    "reviewCount": "đánh giá",
+    "noReviews": "Chưa có đánh giá. Hãy là người đầu tiên đánh giá!",
+    "anonymous": "Ẩn danh",
+    "pros": "Ưu điểm",
+    "cons": "Nhược điểm",
+    "wasThisHelpful": "Đánh giá này có hữu ích không?",
+    "form": {
+      "title": "Viết đánh giá của bạn",
+      "rating": {
+        "label": "Xếp hạng",
+        "required": "Vui lòng chọn xếp hạng"
+      },
+      "titleField": {
+        "label": "Tiêu đề đánh giá",
+        "placeholder": "Tóm tắt trải nghiệm của bạn"
+      },
+      "description": {
+        "label": "Đánh giá của bạn",
+        "placeholder": "Chia sẻ trải nghiệm của bạn..."
+      },
+      "pros": {
+        "label": "Ưu điểm (Tùy chọn)",
+        "placeholder": "Bạn thích điều gì?"
+      },
+      "cons": {
+        "label": "Nhược điểm (Tùy chọn)",
+        "placeholder": "Điều gì cần cải thiện?"
+      },
+      "submit": "Gửi đánh giá",
+      "cancel": "Hủy"
+    }
   }
 }

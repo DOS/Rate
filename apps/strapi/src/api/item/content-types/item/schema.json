@@ -46,6 +46,23 @@
       },
       "default": true
     },
+    "isFeatured": {
+      "type": "boolean",
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
+      },
+      "default": false
+    },
+    "QRCode": {
+      "type": "string",
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
+      }
+    },
     "Media": {
       "type": "media",
       "pluginOptions": {
@@ -62,15 +79,22 @@
         "audios"
       ]
     },
-    "MediaURL": {
-      "type": "component",
+    "ItemType": {
+      "type": "enumeration",
       "pluginOptions": {
         "i18n": {
           "localized": true
         }
       },
-      "component": "media.media-url",
-      "repeatable": true
+      "default": "Other",
+      "enum": [
+        "Product",
+        "Service",
+        "Person",
+        "Business",
+        "Event",
+        "Other"
+      ]
     },
     "BasicContact": {
       "type": "component",
@@ -105,32 +129,6 @@
         "info.individual"
       ]
     },
-    "isFeatured": {
-      "type": "boolean",
-      "pluginOptions": {
-        "i18n": {
-          "localized": true
-        }
-      },
-      "default": false
-    },
-    "ItemType": {
-      "type": "enumeration",
-      "pluginOptions": {
-        "i18n": {
-          "localized": true
-        }
-      },
-      "default": "Other",
-      "enum": [
-        "Product",
-        "Service",
-        "Person",
-        "Business",
-        "Event",
-        "Other"
-      ]
-    },
     "RelatedIdentity": {
       "type": "relation",
       "relation": "manyToOne",
@@ -148,16 +146,17 @@
       "target": "api::report.report",
       "mappedBy": "TargetItem"
     },
-    "Violation": {
-      "type": "component",
-      "pluginOptions": {
-        "i18n": {
-          "localized": true
-        }
-      },
-
-              "component": "violation.detail",
-        "repeatable": true
-      }
+    "Category": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::category.category",
+      "inversedBy": "Items"
+    },
+    "Reviews": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::review.review",
+      "mappedBy": "Item"
     }
+  }
 }

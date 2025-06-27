@@ -5,71 +5,137 @@
     "singularName": "review",
     "pluralName": "reviews",
     "displayName": "Review",
-    "description": ""
+    "description": "User reviews and ratings for listings"
   },
   "options": {
-    "draftAndPublish": true
+    "draftAndPublish": false
+  },
+  "pluginOptions": {
+    "i18n": {
+      "localized": true
+    }
   },
   "attributes": {
     "Title": {
       "type": "string",
-      "required": true
+      "required": true,
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
+      }
     },
-    "Content": {
-      "type": "text"
+    "Description": {
+      "type": "blocks",
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
+      }
     },
-    "ReviewDate": {
-      "type": "datetime"
+    "Rating": {
+      "type": "integer",
+      "required": true,
+      "min": 1,
+      "max": 5,
+      "pluginOptions": {
+        "i18n": {
+          "localized": false
+        }
+      }
     },
-    "isFeatured": {
-      "type": "boolean"
+    "Pros": {
+      "type": "text",
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
+      }
     },
-    "ReviewStatus": {
-      "type": "enumeration",
-      "enum": [
-        "Draft",
-        "Pending",
-        "Published",
-        "Rejected",
-        "Archived"
-      ]
+    "Cons": {
+      "type": "text",
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
+      }
     },
-    "UpVote": {
-      "type": "integer"
+    "Photos": {
+      "type": "media",
+      "multiple": true,
+      "required": false,
+      "allowedTypes": [
+        "images"
+      ],
+      "pluginOptions": {
+        "i18n": {
+          "localized": false
+        }
+      }
     },
-    "DownVote": {
-      "type": "integer"
+    "IsVerified": {
+      "type": "boolean",
+      "default": false,
+      "pluginOptions": {
+        "i18n": {
+          "localized": false
+        }
+      }
     },
-    "ReportedCount": {
-      "type": "integer"
+    "IsApproved": {
+      "type": "boolean",
+      "default": true,
+      "pluginOptions": {
+        "i18n": {
+          "localized": false
+        }
+      }
     },
-    "RejectReason": {
-      "type": "string"
+    "HelpfulCount": {
+      "type": "integer",
+      "default": 0,
+      "pluginOptions": {
+        "i18n": {
+          "localized": false
+        }
+      }
     },
-    "ReviewType": {
-      "type": "enumeration",
-      "enum": [
-        "Expert",
-        "User"
-      ]
+    "NotHelpfulCount": {
+      "type": "integer",
+      "default": 0,
+      "pluginOptions": {
+        "i18n": {
+          "localized": false
+        }
+      }
     },
-    "ReviewVote": {
+    "Item": {
       "type": "relation",
-      "relation": "oneToOne",
-      "target": "api::review-vote.review-vote",
-      "mappedBy": "Review"
+      "relation": "manyToOne",
+      "target": "api::item.item",
+      "inversedBy": "Reviews"
     },
-    "Reports": {
+    "Listing": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::listing.listing",
+      "inversedBy": "Reviews"
+    },
+    "Reviewer": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "Comments": {
       "type": "relation",
       "relation": "oneToMany",
-      "target": "api::report.report",
-      "mappedBy": "Review"
+      "target": "api::comment.comment"
     },
-    "FieldGroup": {
-      "type": "dynamiczone",
-      "components": [
-        "contact.basic"
-      ]
+    "ReviewVotes": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::review-vote.review-vote",
+      "mappedBy": "Review"
     }
   }
 }

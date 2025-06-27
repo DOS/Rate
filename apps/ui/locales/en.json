@@ -236,5 +236,289 @@
       "email": "Email",
       "submit": "Recover account"
     }
+  },
+
+  "scamDetector": {
+    "hero": {
+      "badge": "Trusted by +100,000 users",
+      "title": "Check",
+      "titleHighlight": "Online Scams",
+      "description": "Protect yourself from scam tricks with our",
+      "descriptionHighlight": "free, fast and accurate",
+      "descriptionEnd": "checking tool",
+      "features": {
+        "instant": {
+          "title": "Instant Check",
+          "description": "Results in seconds"
+        },
+        "warning": {
+          "title": "Early Warning",
+          "description": "Detect new threats"
+        },
+        "updated": {
+          "title": "Updated Data",
+          "description": "From user community"
+        }
+      }
+    },
+    "search": {
+      "title": "Check Scam Information",
+      "placeholder": "Enter phone number, email, website or organization name...",
+      "button": "Check",
+      "checking": "Checking...",
+      "tips": {
+        "title": "Search Guide:",
+        "phone": "Phone number:",
+        "phoneExample": "0909123456, +84909123456",
+        "email": "Email:",
+        "emailExample": "example@scam.com",
+        "website": "Website:",
+        "websiteExample": "https://example.com, www.example.com",
+        "organization": "Name/Organization:",
+        "organizationExample": "ABC Company, John Doe"
+      },
+      "recent": "Recent searches:"
+    },
+    "trust": {
+      "accuracy": "Accuracy",
+      "activeUsers": "Active Users",
+      "reportsProcessed": "Reports Processed",
+      "monthlyGrowth": "Monthly Growth"
+    },
+    "statistics": {
+      "title": "Transparency & Trust",
+      "description": "Real-time statistics from our community reporting system",
+      "totalReports": "Total Reports",
+      "dailyReports": "Daily Reports",
+      "monthlyReports": "Monthly Reports",
+      "resolvedCases": "Resolved Cases",
+      "scammersBlocked": "Scammers Blocked",
+      "moneyProtected": "Money Protected",
+      "successRate": "Success Rate",
+      "scamTypes": {
+        "title": "Scam Types Distribution",
+        "phone": "Phone Scams",
+        "website": "Fake Websites",
+        "email": "Email Fraud",
+        "organization": "Fake Organizations"
+      },
+      "metrics": {
+        "accuracy": "Detection Accuracy",
+        "responseTime": "Average Response Time",
+        "uptime": "System Uptime"
+      }
+    },
+    "searchResults": {
+      "enterQuery": "Please enter a search query to find potential scammers",
+      "noResults": {
+        "title": "No Records Found",
+        "description": "Good news! We couldn't find any scam reports for \"{query}\". This might be safe, but always stay cautious."
+      },
+      "foundResults": "Found {count} results for \"{query}\"",
+      "searchType": "Search type: {type}",
+      "types": {
+        "all": "All",
+        "email": "Email",
+        "phone": "Phone Number",
+        "website": "Website",
+        "organization": "Organization"
+      },
+      "risk": {
+        "high": "High Risk",
+        "medium": "Medium Risk",
+        "low": "Low Risk"
+      },
+      "reports": "{count} reports",
+      "viewDetails": "View Details",
+      "unknownEntity": "Unknown Entity"
+    },
+    "reports": {
+      "title": "Latest Warnings",
+      "description": "Recently reported scam cases",
+      "viewAll": "View All",
+      "type": "Type:",
+      "reports": "reports",
+      "trending": "Trending",
+      "noName": "No name",
+      "noDescription": "No description",
+      "dangerLevels": {
+        "extreme": "Extremely Dangerous",
+        "high": "High Risk",
+        "medium": "Warning",
+        "low": "Low Risk"
+      },
+      "timeAgo": {
+        "hours": "{count} hours ago",
+        "days": "{count} days ago",
+        "weeks": "{count} weeks ago",
+        "recent": "Recently"
+      }
+    },
+    "cta": {
+      "title": "Protect the Community from Scams",
+      "description": "If you discover or are a victim of scams, report immediately to warn others",
+      "reportButton": "Report Scam",
+      "learnButton": "Learn Prevention"
+    }
+  },
+
+  "forms": {
+    "submitListing": {
+      "title": "Submit New Report",
+      "error": {
+        "title": "Submission Failed"
+      },
+      "fields": {
+        "item": {
+          "label": "Entity/Organization",
+          "searchPlaceholder": "Search for existing entity or person...",
+          "createNew": "Create new entity"
+        },
+        "category": {
+          "label": "Category",
+          "placeholder": "Select a category"
+        },
+        "title": {
+          "label": "Title",
+          "placeholder": "e.g., Fake bank branch, Scam phone number..."
+        },
+        "url": {
+          "label": "URL/Link (optional)",
+          "placeholder": "https://example.com"
+        },
+        "description": {
+          "label": "Description",
+          "placeholder": "Provide detailed information about this listing..."
+        },
+        "isActive": {
+          "label": "Active listing"
+        }
+      },
+      "submit": "Submit Report",
+      "submitting": "Submitting...",
+      "cancel": "Cancel"
+    }
+  },
+  
+  "submitSuccess": {
+    "title": "Submission Successful!",
+    "description": "Thank you for your contribution. Your listing has been submitted and is now under review.",
+    "whatNext": {
+      "title": "What happens next?",
+      "review": "Our team will review your submission within 24-48 hours",
+      "notification": "You'll receive an email notification once your listing is approved",
+      "visibility": "Approved listings will be visible to the community immediately"
+    },
+    "actions": {
+      "submitAnother": "Submit Another",
+      "backToHome": "Back to Home"
+    },
+    "support": {
+      "question": "Have questions about your submission?",
+      "contact": "Contact our support team"
+    }
+  },
+  
+  "mySubmissions": {
+    "title": "My Submissions",
+    "backToHome": "Back to Home",
+    "submitNew": "Submit New",
+    "noSubmissions": "You haven't submitted any listings yet.",
+    "submitFirst": "Submit your first listing",
+    "category": "Category",
+    "item": "Item",
+    "reviewNotes": "Review Notes",
+    "edit": "Edit",
+    "delete": "Delete",
+    "deleteConfirm": "Are you sure you want to delete this listing?",
+    "status": {
+      "pending": "Pending Review",
+      "approved": "Approved",
+      "rejected": "Rejected",
+      "needs_revision": "Needs Revision"
+    }
+  },
+  
+  "adminSubmissions": {
+    "title": "Review Submissions",
+    "backToHome": "Back to Home",
+    "noSubmissions": "No submissions to review.",
+    "filter": {
+      "all": "All",
+      "pending": "Pending",
+      "approved": "Approved",
+      "rejected": "Rejected"
+    },
+    "table": {
+      "listing": "Listing",
+      "submittedBy": "Submitted By",
+      "status": "Status",
+      "date": "Date",
+      "actions": "Actions"
+    },
+    "status": {
+      "pending": "Pending",
+      "approved": "Approved",
+      "rejected": "Rejected",
+      "needs_revision": "Needs Revision"
+    },
+    "view": "View",
+    "approve": "Approve",
+    "reject": "Reject",
+    "requestRevision": "Request Revision",
+    "reviewModal": {
+      "title": "Add Review Notes",
+      "placeholder": "Explain why this listing is being rejected or needs revision...",
+      "submit": "Submit Review",
+      "cancel": "Cancel"
+    }
+  },
+
+  "comments": {
+    "title": "Comments",
+    "placeholder": "Write a comment...",
+    "replyPlaceholder": "Write a reply...",
+    "submit": "Post Comment",
+    "submitReply": "Post Reply",
+    "reply": "Reply",
+    "replies": "{count} replies",
+    "noComments": "No comments yet. Be the first to comment!",
+    "anonymous": "Anonymous"
+  },
+
+  "reviews": {
+    "title": "Reviews",
+    "writeReview": "Write a Review",
+    "reviewCount": "reviews",
+    "noReviews": "No reviews yet. Be the first to review!",
+    "anonymous": "Anonymous",
+    "pros": "Pros",
+    "cons": "Cons",
+    "wasThisHelpful": "Was this helpful?",
+    "form": {
+      "title": "Write Your Review",
+      "rating": {
+        "label": "Rating",
+        "required": "Please select a rating"
+      },
+      "titleField": {
+        "label": "Review Title",
+        "placeholder": "Summarize your experience"
+      },
+      "description": {
+        "label": "Your Review",
+        "placeholder": "Tell us about your experience..."
+      },
+      "pros": {
+        "label": "Pros (Optional)",
+        "placeholder": "What did you like?"
+      },
+      "cons": {
+        "label": "Cons (Optional)",
+        "placeholder": "What could be improved?"
+      },
+      "submit": "Submit Review",
+      "cancel": "Cancel"
+    }
   }
 }

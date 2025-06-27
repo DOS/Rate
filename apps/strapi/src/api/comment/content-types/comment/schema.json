@@ -1,0 +1,50 @@
+{
+  "kind": "collectionType",
+  "collectionName": "comments",
+  "info": {
+    "singularName": "comment",
+    "pluralName": "comments",
+    "displayName": "Comment",
+    "description": "Comments on listings"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "Content": {
+      "type": "text",
+      "required": true,
+      "maxLength": 1000
+    },
+    "Author": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "Listing": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::listing.listing",
+      "inversedBy": "Comments"
+    },
+    "ParentComment": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::comment.comment"
+    },
+    "Replies": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::comment.comment",
+      "mappedBy": "ParentComment"
+    },
+    "IsApproved": {
+      "type": "boolean",
+      "default": true
+    },
+    "IsDeleted": {
+      "type": "boolean",
+      "default": false
+    }
+  }
+} 

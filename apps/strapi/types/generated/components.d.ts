@@ -124,31 +124,6 @@ export interface InfoOrganization extends Struct.ComponentSchema {
   }
 }
 
-export interface MediaBasic extends Struct.ComponentSchema {
-  collectionName: "components_media_basics"
-  info: {
-    displayName: "Basic"
-    icon: "landscape"
-  }
-  attributes: {
-    Media: Schema.Attribute.Media<
-      "images" | "files" | "videos" | "audios",
-      true
-    >
-    MediaURL: Schema.Attribute.Component<"media.media-url", true>
-  }
-}
-
-export interface MediaMediaUrl extends Struct.ComponentSchema {
-  collectionName: "components_media_media_urls"
-  info: {
-    displayName: "Media URL"
-  }
-  attributes: {
-    URL: Schema.Attribute.String
-  }
-}
-
 export interface RatingCriterion extends Struct.ComponentSchema {
   collectionName: "components_rating_criteria"
   info: {
@@ -626,8 +601,6 @@ declare module "@strapi/strapi" {
       "info.basic": InfoBasic
       "info.individual": InfoIndividual
       "info.organization": InfoOrganization
-      "media.basic": MediaBasic
-      "media.media-url": MediaMediaUrl
       "rating.criterion": RatingCriterion
       "review.pro-item": ReviewProItem
       "review.pros-cons": ReviewProsCons
