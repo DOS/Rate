@@ -1,8 +1,8 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
-import { Search, Filter } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { Search } from "lucide-react"
 import { useTranslations } from "next-intl"
 import ListingsView from "@/components/ui/ListingsView"
 
@@ -19,7 +19,6 @@ interface SearchListingsProps {
 export default function SearchListings({ initialListings, locale, searchParams }: SearchListingsProps) {
   const t = useTranslations("search")
   const router = useRouter()
-  const urlSearchParams = useSearchParams()
   
   const [searchQuery, setSearchQuery] = useState(searchParams.q || "")
   const [selectedCategory, setSelectedCategory] = useState(searchParams.category || "")
@@ -56,8 +55,14 @@ export default function SearchListings({ initialListings, locale, searchParams }
   }
   
   useEffect(() => {
-    updateSearchParams()
-  }, [selectedCategory, sortBy])
+    const params = new URLSearchParams()
+    
+    if (searchQuery) params.set("q", searchQuery)
+    if (selectedCategory) params.set("category", selectedCategory)
+    if (sortBy !== "createdAt:desc") params.set("sort", sortBy)
+    
+    router.push(`/${locale}/search?${params.toString()}`)
+  }, [selectedCategory, sortBy, searchQuery, router, locale])
   
   return (
     <div>

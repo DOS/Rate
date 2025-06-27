@@ -1,6 +1,5 @@
 import { getTranslations } from "next-intl/server"
 import Link from "next/link"
-import { Calendar, Eye, MessageCircle, Star, Tag } from "lucide-react"
 import ListingsView from "@/components/ui/ListingsView"
 
 async function getRecentListings() {

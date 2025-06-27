@@ -29,6 +29,7 @@ export default function ListingsView({ listings, locale, emptyMessage }: Listing
       <div className="flex justify-end mb-6">
         <div className="bg-white border rounded-lg p-1 flex gap-1">
           <button
+            type="button"
             onClick={() => setViewMode("card")}
             className={`px-3 py-2 rounded-md transition-colors flex items-center gap-2 ${
               viewMode === "card"
@@ -41,6 +42,7 @@ export default function ListingsView({ listings, locale, emptyMessage }: Listing
             <span className="hidden sm:inline">{t("cardView")}</span>
           </button>
           <button
+            type="button"
             onClick={() => setViewMode("list")}
             className={`px-3 py-2 rounded-md transition-colors flex items-center gap-2 ${
               viewMode === "list"

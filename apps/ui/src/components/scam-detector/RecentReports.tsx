@@ -159,7 +159,7 @@ export default function RecentReports({ reports }: RecentReportsProps) {
               {/* Warning Badge */}
               <div className="flex items-center justify-between mb-4">
                 <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${getWarningColor(report.warningLevel)}`}>
-                  <span className={`w-2 h-2 rounded-full ${getWarningIcon(report.warningLevel)} mr-2`}></span>
+                  <span className={`w-2 h-2 rounded-full ${getWarningIcon(report.warningLevel)} mr-2`} />
                   {report.warningLevel === "extreme" && t("dangerLevels.extreme")}
                   {report.warningLevel === "high" && t("dangerLevels.high")}
                   {report.warningLevel === "medium" && t("dangerLevels.medium")}
