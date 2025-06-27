@@ -18,12 +18,12 @@
   "attributes": {
     "Name": {
       "type": "string",
-      "required": true,
       "pluginOptions": {
         "i18n": {
           "localized": true
         }
-      }
+      },
+      "required": true
     },
     "Slug": {
       "type": "uid",
@@ -59,7 +59,6 @@
       "target": "api::listing.listing",
       "mappedBy": "Category"
     },
-
     "ParentCategory": {
       "type": "relation",
       "relation": "manyToOne",
@@ -77,6 +76,12 @@
       "relation": "manyToOne",
       "target": "api::directory.directory",
       "inversedBy": "Categories"
+    },
+    "Items": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::item.item",
+      "mappedBy": "Category"
     }
   }
 }
