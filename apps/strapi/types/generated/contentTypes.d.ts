@@ -394,6 +394,18 @@ export interface ApiCategoryCategory extends Struct.CollectionTypeSchema {
       "oneToMany",
       "api::category.category"
     >
+    Comment: Schema.Attribute.Boolean &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: true
+        }
+      }>
+    Contact: Schema.Attribute.Boolean &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: true
+        }
+      }>
     createdAt: Schema.Attribute.DateTime
     createdBy: Schema.Attribute.Relation<"oneToOne", "admin::user"> &
       Schema.Attribute.Private
@@ -428,7 +440,23 @@ export interface ApiCategoryCategory extends Struct.CollectionTypeSchema {
       "api::category.category"
     >
     publishedAt: Schema.Attribute.DateTime
+    Review: Schema.Attribute.Boolean &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: true
+        }
+      }>
     Slug: Schema.Attribute.UID<"Name">
+    Type: Schema.Attribute.Enumeration<
+      ["Product", "Service", "Person", "Business", "Other"]
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: false
+        }
+      }> &
+      Schema.Attribute.DefaultTo<"Other">
     updatedAt: Schema.Attribute.DateTime
     updatedBy: Schema.Attribute.Relation<"oneToOne", "admin::user"> &
       Schema.Attribute.Private
@@ -620,8 +648,8 @@ export interface ApiIdentityIdentity extends Struct.CollectionTypeSchema {
     publishedAt: Schema.Attribute.DateTime
     ReportMade: Schema.Attribute.Relation<"oneToMany", "api::report.report">
     ReportReceived: Schema.Attribute.Relation<"oneToMany", "api::report.report">
-    ReviewVote: Schema.Attribute.Relation<
-      "oneToOne",
+    ReviewVotes: Schema.Attribute.Relation<
+      "oneToMany",
       "api::review-vote.review-vote"
     >
     Slug: Schema.Attribute.String
@@ -649,23 +677,17 @@ export interface ApiItemItem extends Struct.CollectionTypeSchema {
     }
   }
   attributes: {
-    BasicContact: Schema.Attribute.Component<"contact.basic", false> &
-      Schema.Attribute.SetPluginOptions<{
-        i18n: {
-          localized: true
-        }
-      }>
-    BasicInfo: Schema.Attribute.Component<"info.basic", true> &
-      Schema.Attribute.SetPluginOptions<{
-        i18n: {
-          localized: true
-        }
-      }>
     Category: Schema.Attribute.Relation<"manyToOne", "api::category.category">
     createdAt: Schema.Attribute.DateTime
     createdBy: Schema.Attribute.Relation<"oneToOne", "admin::user"> &
       Schema.Attribute.Private
     Description: Schema.Attribute.Blocks &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: true
+        }
+      }>
+    DynamicFields: Schema.Attribute.JSON &
       Schema.Attribute.SetPluginOptions<{
         i18n: {
           localized: true
@@ -686,7 +708,15 @@ export interface ApiItemItem extends Struct.CollectionTypeSchema {
       }> &
       Schema.Attribute.DefaultTo<false>
     ItemField: Schema.Attribute.DynamicZone<
-      ["violation.detail", "info.organization", "info.individual"]
+      [
+        "violation.detail",
+        "info.organization",
+        "info.individual",
+        "violation.evidence",
+        "contact.basic",
+        "contact.location",
+        "contact.social-media",
+      ]
     > &
       Schema.Attribute.SetPluginOptions<{
         i18n: {
@@ -1058,7 +1088,7 @@ export interface ApiReviewVoteReviewVote extends Struct.CollectionTypeSchema {
     createdAt: Schema.Attribute.DateTime
     createdBy: Schema.Attribute.Relation<"oneToOne", "admin::user"> &
       Schema.Attribute.Private
-    Identity: Schema.Attribute.Relation<"oneToOne", "api::identity.identity">
+    Identity: Schema.Attribute.Relation<"manyToOne", "api::identity.identity">
     isHelpful: Schema.Attribute.Boolean
     locale: Schema.Attribute.String & Schema.Attribute.Private
     localizations: Schema.Attribute.Relation<
@@ -1067,7 +1097,7 @@ export interface ApiReviewVoteReviewVote extends Struct.CollectionTypeSchema {
     > &
       Schema.Attribute.Private
     publishedAt: Schema.Attribute.DateTime
-    Review: Schema.Attribute.Relation<"oneToOne", "api::review.review">
+    Review: Schema.Attribute.Relation<"manyToOne", "api::review.review">
     updatedAt: Schema.Attribute.DateTime
     updatedBy: Schema.Attribute.Relation<"oneToOne", "admin::user"> &
       Schema.Attribute.Private
@@ -1166,6 +1196,7 @@ export interface ApiReviewReview extends Struct.CollectionTypeSchema {
         },
         number
       >
+    Reports: Schema.Attribute.Relation<"oneToMany", "api::report.report">
     Reviewer: Schema.Attribute.Relation<
       "manyToOne",
       "plugin::users-permissions.user"

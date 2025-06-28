@@ -76,6 +76,7 @@ workspace/
 - Follow best UX practices
 - Responsive design là mandatory
 - Accessibility considerations
+- Ưu tiên sử dụng các component sẵn có của Tailwind Plus và Shacn tại: D:\Projects\Give\apps\ui\src\components\
 
 ## 📝 DOCUMENTATION AUTO-GENERATION
 - Tạo comprehensive README cho mọi project

@@ -2,7 +2,7 @@
 
 module.exports = {
   register({ strapi }) {
-    console.log('🎯 [Smart Component Filter] Server registration started');
+    // console.log('🎯 [Smart Component Filter] Server registration started');
     
     // Register component-multi-select custom field
     strapi.customFields.register({
@@ -22,10 +22,10 @@ module.exports = {
       },
     });
     
-    console.log('✅ [Smart Component Filter] Server custom fields registered successfully');
+    // console.log('✅ [Smart Component Filter] Server custom fields registered successfully');
   },
 
   bootstrap({ strapi }) {
-    console.log('🚀 [Smart Component Filter] Server bootstrap completed');
+    // console.log('🚀 [Smart Component Filter] Server bootstrap completed');
   },
 }; 

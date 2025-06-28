@@ -39,9 +39,9 @@
     "Bio": {
       "type": "blocks"
     },
-    "ReviewVote": {
+    "ReviewVotes": {
       "type": "relation",
-      "relation": "oneToOne",
+      "relation": "oneToMany",
       "target": "api::review-vote.review-vote",
       "mappedBy": "Identity"
     },

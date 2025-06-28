@@ -3,19 +3,22 @@ import {
   TextInput, 
   NumberInput, 
   Checkbox, 
-  Select, 
-  Option,
+  SingleSelect,
+  SingleSelectOption,
   DatePicker,
   Textarea,
   Field,
   Flex,
-  Box
+  Box,
+  Typography,
+  JSONInput
 } from '@strapi/design-system';
+import { useFetchClient } from '@strapi/strapi/admin';
 
 interface FieldDefinition {
   name: string;
   label: string;
-  type: 'text' | 'number' | 'boolean' | 'select' | 'date' | 'textarea';
+  type: 'text' | 'number' | 'boolean' | 'select' | 'date' | 'textarea' | 'json';
   required?: boolean;
   options?: string[]; // For select type
   validation?: {
@@ -26,111 +29,163 @@ interface FieldDefinition {
 }
 
 interface DynamicFieldsEditorProps {
-  categorySlug: string;
-  value: Record<string, any>;
-  onChange: (value: Record<string, any>) => void;
-  error?: Record<string, string>;
+  categoryId?: number | string;
+  value?: any;
+  onChange: (value: any) => void;
+  error?: string;
+  disabled?: boolean;
 }
 
 export const DynamicFieldsEditor: React.FC<DynamicFieldsEditorProps> = ({
-  categorySlug,
+  categoryId,
   value = {},
   onChange,
-  error = {}
+  error,
+  disabled
 }) => {
+  const { get } = useFetchClient();
   const [fieldDefinitions, setFieldDefinitions] = useState<FieldDefinition[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [categoryInfo, setCategoryInfo] = useState<any>(null);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
+  // Fetch category and its field definitions
   useEffect(() => {
-    const fetchCategoryFields = async () => {
-      if (!categorySlug) {
+    const fetchCategoryFieldDefinitions = async () => {
+      if (!categoryId) {
         setFieldDefinitions([]);
-        setLoading(false);
+        setCategoryInfo(null);
         return;
       }
 
+      setLoading(true);
       try {
-        setLoading(true);
-        // Fetch category với field definitions
-        const response = await fetch(
-          `/api/categories?filters[Slug][$eq]=${categorySlug}&fields[0]=FieldDefinitions`
-        );
+        // Fetch category details including Type and FieldDefinitions
+        const response = await get(`/content-manager/collection-types/api::category.category/${categoryId}`);
         
-        if (!response.ok) throw new Error('Failed to fetch category');
-        
-        const data = await response.json();
-        const category = data.data?.[0];
-        
-        if (category?.FieldDefinitions) {
-          setFieldDefinitions(category.FieldDefinitions);
-        } else {
-          setFieldDefinitions([]);
+        if (response.data) {
+          setCategoryInfo({
+            name: response.data.Name,
+            type: response.data.Type
+          });
+
+          // Parse field definitions from JSON
+          if (response.data.FieldDefinitions) {
+            try {
+              const definitions = typeof response.data.FieldDefinitions === 'string' 
+                ? JSON.parse(response.data.FieldDefinitions)
+                : response.data.FieldDefinitions;
+              
+              setFieldDefinitions(definitions || getDefaultFieldsForType(response.data.Type));
+            } catch (e) {
+              console.error('Error parsing field definitions:', e);
+              // Fallback to default fields based on Type
+              setFieldDefinitions(getDefaultFieldsForType(response.data.Type));
+            }
+          } else {
+            // Use default fields based on Type
+            setFieldDefinitions(getDefaultFieldsForType(response.data.Type));
+          }
         }
-      } catch (err) {
-        console.error('Error fetching category fields:', err);
+      } catch (error) {
+        console.error('Error fetching category field definitions:', error);
         setFieldDefinitions([]);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchCategoryFields();
-  }, [categorySlug]);
+    fetchCategoryFieldDefinitions();
+  }, [categoryId, get]);
+
+  // Default field definitions based on category type
+  const getDefaultFieldsForType = (type: string): FieldDefinition[] => {
+    const fieldsByType: Record<string, FieldDefinition[]> = {
+      'Product': [
+        { name: 'brand', label: 'Brand', type: 'text' },
+        { name: 'model', label: 'Model', type: 'text' },
+        { name: 'sku', label: 'SKU', type: 'text' },
+        { name: 'price', label: 'Price', type: 'number' },
+        { name: 'inStock', label: 'In Stock', type: 'boolean' },
+        { name: 'specifications', label: 'Technical Specifications', type: 'json' }
+      ],
+      'Person': [
+        { name: 'firstName', label: 'First Name', type: 'text', required: true },
+        { name: 'lastName', label: 'Last Name', type: 'text', required: true },
+        { name: 'dateOfBirth', label: 'Date of Birth', type: 'date' },
+        { name: 'profession', label: 'Profession', type: 'text' },
+        { name: 'biography', label: 'Biography', type: 'textarea' }
+      ],
+      'Business': [
+        { name: 'companyName', label: 'Company Name', type: 'text', required: true },
+        { name: 'businessId', label: 'Business ID', type: 'text' },
+        { name: 'taxId', label: 'Tax ID', type: 'text' },
+        { name: 'industry', label: 'Industry', type: 'text' },
+        { name: 'yearEstablished', label: 'Year Established', type: 'number' },
+        { name: 'numberOfEmployees', label: 'Number of Employees', type: 'number' }
+      ],
+      'Service': [
+        { name: 'serviceName', label: 'Service Name', type: 'text', required: true },
+        { name: 'serviceType', label: 'Service Type', type: 'text' },
+        { name: 'pricing', label: 'Pricing', type: 'json' },
+        { name: 'availability', label: 'Availability', type: 'json' }
+      ]
+    };
+
+    return fieldsByType[type] || [];
+  };
 
   const handleFieldChange = (fieldName: string, fieldValue: any) => {
-    onChange({
+    const newValue = {
       ...value,
       [fieldName]: fieldValue
-    });
+    };
+    onChange(newValue);
   };
 
   const renderField = (field: FieldDefinition) => {
-    const fieldValue = value[field.name] || '';
-    const fieldError = error[field.name];
+    const fieldValue = value?.[field.name] || '';
+    const fieldError = errors[field.name];
 
     switch (field.type) {
       case 'text':
         return (
-          <TextInput
-            name={field.name}
-            label={field.label}
-            value={fieldValue}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => 
-              handleFieldChange(field.name, e.target.value)
-            }
+          <Field.Root 
+            name={field.name} 
             error={fieldError}
             required={field.required}
-          />
-        );
-
-      case 'textarea':
-        return (
-          <Textarea
-            name={field.name}
-            label={field.label}
-            value={fieldValue}
-            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => 
-              handleFieldChange(field.name, e.target.value)
-            }
-            error={fieldError}
-            required={field.required}
-          />
+          >
+            <Field.Label>{field.label}</Field.Label>
+            <TextInput
+              value={fieldValue}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => 
+                handleFieldChange(field.name, e.target.value)
+              }
+              disabled={disabled}
+              placeholder={`Enter ${field.label.toLowerCase()}`}
+            />
+            {fieldError && <Field.Error />}
+          </Field.Root>
         );
 
       case 'number':
         return (
-          <NumberInput
-            name={field.name}
-            label={field.label}
-            value={fieldValue}
-            onValueChange={(value: number) => 
-              handleFieldChange(field.name, value)
-            }
+          <Field.Root 
+            name={field.name} 
             error={fieldError}
             required={field.required}
-            min={field.validation?.min}
-            max={field.validation?.max}
-          />
+          >
+            <Field.Label>{field.label}</Field.Label>
+            <NumberInput
+              value={fieldValue}
+              onValueChange={(value: number) => 
+                handleFieldChange(field.name, value)
+              }
+              disabled={disabled}
+              placeholder={`Enter ${field.label.toLowerCase()}`}
+            />
+            {fieldError && <Field.Error />}
+          </Field.Root>
         );
 
       case 'boolean':
@@ -141,44 +196,95 @@ export const DynamicFieldsEditor: React.FC<DynamicFieldsEditorProps> = ({
             onValueChange={(value: boolean) => 
               handleFieldChange(field.name, value)
             }
+            disabled={disabled}
           >
             {field.label}
           </Checkbox>
         );
 
-      case 'select':
+      case 'textarea':
         return (
-          <Select
-            name={field.name}
-            label={field.label}
-            value={fieldValue}
-            onChange={(value: string) => 
-              handleFieldChange(field.name, value)
-            }
+          <Field.Root 
+            name={field.name} 
             error={fieldError}
             required={field.required}
           >
-            <Option value="">Select {field.label}</Option>
-            {field.options?.map(option => (
-              <Option key={option} value={option}>
-                {option}
-              </Option>
-            ))}
-          </Select>
+            <Field.Label>{field.label}</Field.Label>
+            <Textarea
+              value={fieldValue}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => 
+                handleFieldChange(field.name, e.target.value)
+              }
+              disabled={disabled}
+              placeholder={`Enter ${field.label.toLowerCase()}`}
+            />
+            {fieldError && <Field.Error />}
+          </Field.Root>
+        );
+
+      case 'json':
+        return (
+          <Field.Root 
+            name={field.name} 
+            error={fieldError}
+            required={field.required}
+          >
+            <Field.Label>{field.label}</Field.Label>
+            <JSONInput
+              value={fieldValue}
+              onChange={(value: any) => 
+                handleFieldChange(field.name, value)
+              }
+              disabled={disabled}
+            />
+            {fieldError && <Field.Error />}
+          </Field.Root>
+        );
+
+      case 'select':
+        return (
+          <Field.Root 
+            name={field.name} 
+            error={fieldError}
+            required={field.required}
+          >
+            <Field.Label>{field.label}</Field.Label>
+            <SingleSelect
+              value={fieldValue}
+              onChange={(value: string) => 
+                handleFieldChange(field.name, value)
+              }
+              disabled={disabled}
+              placeholder={`Select ${field.label.toLowerCase()}`}
+            >
+              <SingleSelectOption value="">Select {field.label}</SingleSelectOption>
+              {field.options?.map(option => (
+                <SingleSelectOption key={option} value={option}>
+                  {option}
+                </SingleSelectOption>
+              ))}
+            </SingleSelect>
+            {fieldError && <Field.Error />}
+          </Field.Root>
         );
 
       case 'date':
         return (
-          <DatePicker
-            name={field.name}
-            label={field.label}
-            value={fieldValue}
-            onChange={(date: Date) => 
-              handleFieldChange(field.name, date)
-            }
+          <Field.Root 
+            name={field.name} 
             error={fieldError}
             required={field.required}
-          />
+          >
+            <Field.Label>{field.label}</Field.Label>
+            <DatePicker
+              value={fieldValue}
+              onChange={(date: Date) => 
+                handleFieldChange(field.name, date)
+              }
+              disabled={disabled}
+            />
+            {fieldError && <Field.Error />}
+          </Field.Root>
         );
 
       default:
@@ -190,10 +296,12 @@ export const DynamicFieldsEditor: React.FC<DynamicFieldsEditorProps> = ({
     return <Box padding={4}>Loading category fields...</Box>;
   }
 
-  if (!categorySlug) {
+  if (!categoryId) {
     return (
       <Box padding={4} background="neutral100">
-        Please select a category first to see available fields.
+        <Typography variant="pi">
+          Please select a category first to see available fields.
+        </Typography>
       </Box>
     );
   }
@@ -201,18 +309,35 @@ export const DynamicFieldsEditor: React.FC<DynamicFieldsEditorProps> = ({
   if (fieldDefinitions.length === 0) {
     return (
       <Box padding={4} background="neutral100">
-        No custom fields defined for this category.
+        <Typography variant="pi">
+          No custom fields defined for this category.
+        </Typography>
       </Box>
     );
   }
 
   return (
-    <Flex direction="column" gap={4}>
-      {fieldDefinitions.map((field) => (
-        <Field key={field.name}>
-          {renderField(field)}
-        </Field>
-      ))}
-    </Flex>
+    <Box>
+      {categoryInfo && (
+        <Box paddingBottom={4}>
+          <Typography variant="beta">
+            {categoryInfo.name} Fields
+          </Typography>
+          <Typography variant="pi" textColor="neutral600">
+            Category Type: {categoryInfo.type}
+          </Typography>
+        </Box>
+      )}
+      
+      <Flex direction="column" gap={4}>
+        {fieldDefinitions.map((field) => (
+          <Box key={field.name}>
+            {renderField(field)}
+          </Box>
+        ))}
+      </Flex>
+    </Box>
   );
-}; 
+};
+
+export default DynamicFieldsEditor; 

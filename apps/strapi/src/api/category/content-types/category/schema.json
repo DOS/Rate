@@ -53,6 +53,47 @@
       "type": "boolean",
       "default": true
     },
+    "Type": {
+      "type": "enumeration",
+      "pluginOptions": {
+        "i18n": {
+          "localized": false
+        }
+      },
+      "required": true,
+      "default": "Other",
+      "enum": [
+        "Product",
+        "Service",
+        "Person",
+        "Business",
+        "Other"
+      ]
+    },
+    "Contact": {
+      "type": "boolean",
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
+      }
+    },
+    "Review": {
+      "type": "boolean",
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
+      }
+    },
+    "Comment": {
+      "type": "boolean",
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
+      }
+    },
     "Listings": {
       "type": "relation",
       "relation": "oneToMany",

@@ -13,6 +13,10 @@ export default {
       });
       
       if (listing.CreatedBy?.email) {
+        // Email functionality temporarily disabled - just log for now
+        strapi.log.info(`[EMAIL DISABLED] Would send approval email to ${listing.CreatedBy.email} for listing "${listing.Title}" (ID: ${listing.id})`);
+        
+        /* Uncomment when email plugin is configured
         try {
           await strapi.plugins['email'].services.email.send({
             to: listing.CreatedBy.email,
@@ -32,6 +36,7 @@ export default {
         } catch (error) {
           strapi.log.error('Failed to send email:', error);
         }
+        */
       }
     }
     
@@ -43,6 +48,10 @@ export default {
       });
       
       if (listing.CreatedBy?.email) {
+        // Email functionality temporarily disabled - just log for now
+        strapi.log.info(`[EMAIL DISABLED] Would send rejection email to ${listing.CreatedBy.email} for listing "${listing.Title}" (ID: ${listing.id})`);
+        
+        /* Uncomment when email plugin is configured
         try {
           await strapi.plugins['email'].services.email.send({
             to: listing.CreatedBy.email,
@@ -58,6 +67,7 @@ export default {
         } catch (error) {
           strapi.log.error('Failed to send email:', error);
         }
+        */
       }
     }
   },
@@ -70,10 +80,13 @@ export default {
       data.Status = 'pending';
     }
     
-    // Set CreatedBy if user is authenticated
+    // Set CreatedBy if user is authenticated - temporarily disabled due to context issues
+    // TODO: Fix requestContext implementation
+    /*
     const ctx = strapi.requestContext.get();
     if (ctx?.state?.user) {
       data.CreatedBy = ctx.state.user.id;
     }
+    */
   }
 }; 

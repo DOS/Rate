@@ -3,11 +3,11 @@ import { PLUGIN_ID } from './pluginId';
 import { Initializer } from './components/Initializer';
 import { DynamicCategoryEnum } from './components/DynamicCategoryEnum';
 
-const name = 'Smart Component Filter V3.1';
+const name = 'Rate Custom Fields';
 
 export default {
   register(app: StrapiApp) {
-    console.log('🎯 [Smart Component Filter V3.1] Register function started');
+    // console.log('🎯 [Rate Custom Fields] Register function started');
     
     // Register existing custom field for component multi-select
     app.customFields.register({
@@ -45,7 +45,7 @@ export default {
       },
     });
 
-    console.log('✅ [Smart Component Filter V3.1] Both custom fields registered successfully');
+    // console.log('✅ [Rate Custom Fields] Both custom fields registered successfully');
 
     const plugin = {
       id: PLUGIN_ID,
@@ -58,8 +58,8 @@ export default {
   },
 
   bootstrap(app: StrapiApp) {
-    console.log('🚀 [Smart Component Filter V3.1] Bootstrap function started');
-    console.log('✅ [Smart Component Filter V3.1] Bootstrap completed successfully');
+    // console.log('🚀 [Rate Custom Fields] Bootstrap function started');
+    // console.log('✅ [Rate Custom Fields] Bootstrap completed successfully');
   },
 
   async registerTrads(app: any) {

@@ -59,11 +59,11 @@
   "strapi": {
     "kind": "plugin",
     "name": "smart-component-filter",
-    "displayName": "Smart Component Filter",
-    "description": "Smart Component Filter V3.1.0 - Testing Dynamic Category Enum with auto-populate from Categories API"
+    "displayName": "Rate Custom Fields",
+    "description": "Custom fields for Rate platform - Dynamic category enum and component multi-select"
   },
   "name": "smart-component-filter",
-  "description": "Smart Component Filter V3.1.0 - Testing Dynamic Category Enum with auto-populate from Categories API",
+  "description": "Custom fields for Rate platform - Dynamic category enum and component multi-select",
   "license": "MIT",
   "repository": {
     "type": "git",

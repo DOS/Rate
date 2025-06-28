@@ -96,26 +96,6 @@
         "Other"
       ]
     },
-    "BasicContact": {
-      "type": "component",
-      "pluginOptions": {
-        "i18n": {
-          "localized": true
-        }
-      },
-      "component": "contact.basic",
-      "repeatable": false
-    },
-    "BasicInfo": {
-      "type": "component",
-      "pluginOptions": {
-        "i18n": {
-          "localized": true
-        }
-      },
-      "component": "info.basic",
-      "repeatable": true
-    },
     "ItemField": {
       "type": "dynamiczone",
       "pluginOptions": {
@@ -126,7 +106,11 @@
       "components": [
         "violation.detail",
         "info.organization",
-        "info.individual"
+        "info.individual",
+        "violation.evidence",
+        "contact.basic",
+        "contact.location",
+        "contact.social-media"
       ]
     },
     "RelatedIdentity": {
@@ -151,6 +135,14 @@
       "relation": "manyToOne",
       "target": "api::category.category",
       "inversedBy": "Items"
+    },
+    "DynamicFields": {
+      "type": "json",
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
+      }
     },
     "Reviews": {
       "type": "relation",

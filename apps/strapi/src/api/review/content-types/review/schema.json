@@ -136,6 +136,12 @@
       "relation": "oneToMany",
       "target": "api::review-vote.review-vote",
       "mappedBy": "Review"
+    },
+    "Reports": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::report.report",
+      "mappedBy": "Review"
     }
   }
 }
