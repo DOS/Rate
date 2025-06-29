@@ -1,0 +1,49 @@
+{
+  "total_links": 3,
+  "scammers": [
+    {
+      "url": "https://checkscam.vn/profile/0903123456",
+      "phone": "0903123456",
+      "name": "Nguyễn Văn A",
+      "bank": "Vietcombank",
+      "bank_account_name": "NGUYEN VAN A",
+      "scam_amount": 5000000,
+      "content": "Lừa đảo đầu tư forex với lãi suất cao 50%/tháng. Cam kết lợi nhuận nhưng sau khi chuyển tiền thì chặn liên lạc.",
+      "evidence_images": [
+        "https://checkscam.vn/evidence/1.jpg",
+        "https://checkscam.vn/evidence/2.jpg"
+      ],
+      "location": "Hà Nội",
+      "id": "cs_001"
+    },
+    {
+      "url": "https://checkscam.vn/profile/0983456789",
+      "phone": "+84983456789",
+      "name": "Trần Thị B",
+      "bank": "TCB",
+      "bank_account_name": "TRAN THI B",
+      "scam_amount": 10000000,
+      "content": "Bán hàng online qua Facebook, nhận tiền không giao hàng",
+      "evidence_images": [],
+      "location": "HCM",
+      "id": "cs_002"
+    },
+    {
+      "url": "https://checkscam.vn/profile/0123",
+      "phone": "0123",
+      "name": "Test Invalid",
+      "bank": "Unknown Bank XYZ",
+      "bank_account_name": "TEST",
+      "scam_amount": 500,
+      "content": "Test",
+      "evidence_images": [],
+      "location": "Unknown",
+      "id": "cs_003"
+    }
+  ],
+  "crawler_metadata": {
+    "crawled_at": "2025-01-01T10:00:00Z",
+    "source": "checkscam.vn",
+    "version": "2.0"
+  }
+} 

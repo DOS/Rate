@@ -1,6 +1,13 @@
-# 🔥 Strapi v5 & Next.js v15 Monorepo Starter
+# 🛡️ Rate Platform - Anti-Scam Ecosystem for Vietnam
 
-This is a ready-to-go starter template for Strapi projects. It combines the power of Strapi, Next.js, Shadcn/ui libraries with Turborepo setup and kickstarts your project development. We call it a **Page builder** for enterprise applications.
+Platform chống lừa đảo toàn diện cho người dùng Việt Nam với browser extension, data validation pipeline và community-driven database.
+
+## 📚 Quick Links
+
+- **[MODULES.md](./Docs/MODULES.md)** - Technical documentation của tất cả modules
+- **[ROADMAP.md](./Docs/ROADMAP.md)** - Development roadmap 2025
+- **[CHANGELOG.md](./Docs/CHANGELOG.md)** - Release history và dev log
+- **[Full Documentation](./Docs/)** - Detailed guides và resources
 
 ## 👀 Live demo
 
@@ -187,21 +194,24 @@ Một dự án Turborepo với Strapi CMS và Next.js frontend.
 ## Cấu trúc dự án
 
 - `apps/strapi` - Strapi CMS backend
-- `apps/ui` - Next.js frontend application  
+- `apps/ui` - Next.js frontend application
 - `packages/` - Shared packages và utilities
 
 ## Smart Component Filter Plugin
 
 ### Mô tả
+
 Plugin Strapi tự động filter danh sách components trong modal "Pick one component" dựa trên ListingType được chọn.
 
 ### Business Logic
+
 - **Bank**: Chỉ hiện `contact.Basic` + `contact.Location`
 - **Scammer**: Chỉ hiện `violation` + `contact.Social` + `review`
 
 ### Kiến trúc Technical
 
 #### 1. Plugin Structure
+
 ```
 apps/strapi/src/plugins/_smart-component-filter/
 ├── admin/src/
@@ -214,6 +224,7 @@ apps/strapi/src/plugins/_smart-component-filter/
 #### 2. Core Implementation
 
 **ComponentFilterCSS.tsx** - Main filtering component:
+
 - **Real-time Detection**: Monitor ListingType changes via MutationObserver
 - **Modal Detection**: Multi-pattern detection cho component picker modal
 - **Group-level Hiding**: Hide entire category groups thay vì individual buttons
@@ -223,38 +234,43 @@ apps/strapi/src/plugins/_smart-component-filter/
 #### 3. Key Features
 
 **A. Real-time ListingType Detection:**
+
 ```typescript
 const detectListingType = () => {
-  const buttons = document.querySelectorAll('button');
+  const buttons = document.querySelectorAll("button")
   for (const button of buttons) {
-    if (button.textContent?.trim() === 'Bank') return 'Bank';
-    if (button.textContent?.trim() === 'Scammer') return 'Scammer';
+    if (button.textContent?.trim() === "Bank") return "Bank"
+    if (button.textContent?.trim() === "Scammer") return "Scammer"
   }
-  return null;
-};
+  return null
+}
 ```
 
 **B. Group-level Component Hiding:**
+
 ```typescript
 // Hide entire category groups, not individual buttons
-groupsToHide.forEach(groupName => {
-  const headings = modalContainer.querySelectorAll('h3');
-  headings.forEach(heading => {
+groupsToHide.forEach((groupName) => {
+  const headings = modalContainer.querySelectorAll("h3")
+  headings.forEach((heading) => {
     if (heading.textContent?.toLowerCase().includes(groupName)) {
-      let groupContainer = heading.closest('div[role="region"], section, article');
+      let groupContainer = heading.closest(
+        'div[role="region"], section, article'
+      )
       if (groupContainer) {
-        groupContainer.style.display = 'none';
-        groupContainer.setAttribute('data-smart-filter-hidden', 'true');
+        groupContainer.style.display = "none"
+        groupContainer.setAttribute("data-smart-filter-hidden", "true")
       }
     }
-  });
-});
+  })
+})
 ```
 
 **C. NUCLEAR Separator Elimination:**
+
 ```typescript
 // Aggressive CSS injection để remove separator bars
-const aggressiveStyle = document.createElement('style');
+const aggressiveStyle = document.createElement("style")
 aggressiveStyle.textContent = `
   [data-testid="modal"] hr,
   [data-testid="modal"] .border,
@@ -263,8 +279,8 @@ aggressiveStyle.textContent = `
     visibility: hidden !important;
     height: 0 !important;
   }
-`;
-document.head.appendChild(aggressiveStyle);
+`
+document.head.appendChild(aggressiveStyle)
 ```
 
 #### 4. Performance Optimizations
@@ -296,11 +312,13 @@ yarn develop
 ### Troubleshooting
 
 **Modal không filter:**
+
 - Check plugin build status
 - Verify ListingType selection
 - Check browser console cho error logs
 
 **Performance issues:**
+
 - Current 500ms interval là optimal balance
 - Plugin filtering execution là immediate (no delay)
 
@@ -316,41 +334,47 @@ yarn develop
 **Smart Loading Plugin** đã được implement hoàn chỉnh và test thành công với **DOM filtering functionality**.
 
 #### ✅ **Core Features Working:**
+
 - **API Backend**: Fast responses (<100ms)
-- **Custom Field Integration**: "ItemField" multi-select dropdown  
+- **Custom Field Integration**: "ItemField" multi-select dropdown
 - **Real-time Component Filtering**: Chỉ hiển thị components được phép theo ListingType
 - **DOM Manipulation**: Hide/show categories và components dynamically
 - **Restart Stability**: Plugin survives Strapi restart
 
 #### 🎯 **Verified Behavior:**
+
 **For Scammer ListingType (ID: 1)**:
+
 - ✅ **contact** category: Basic, Location, Social (3 components)
-- ✅ **violation** category: Detail, Evidence (2 components)  
+- ✅ **violation** category: Detail, Evidence (2 components)
 - ✅ **media** category: Photo (1 component)
 - ❌ **Hidden categories**: info, utilities, review, rating (4 categories filtered out)
 
 **Result**: 43% reduction in UI complexity (3/7 categories shown)
 
 #### 🔧 **Technical Implementation:**
+
 ```javascript
 // Fixed DOM selectors to match actual Strapi structure
-const categorySelectors = ['h3', 'heading', 'button[expanded]'];
+const categorySelectors = ["h3", "heading", "button[expanded]"]
 
 // Improved component matching logic
-const componentName = uid.includes('.') ? uid.split('.').pop() : uid;
+const componentName = uid.includes(".") ? uid.split(".").pop() : uid
 
 // Real-time API calls on component picker open
-GET /api/smart-component-filter/listing-type/{id}/components
+GET / api / smart - component - filter / listing - type / { id } / components
 ```
 
 #### 📊 **Testing Results:**
+
 - **MCP Playwright**: Automated browser testing ✅
-- **API Endpoints**: All working perfectly ✅  
+- **API Endpoints**: All working perfectly ✅
 - **DOM Filtering**: Categories filtered correctly ✅
 - **User Experience**: Smooth interactions ✅
 - **Performance**: No lag, fast filtering ✅
 
 #### 🚀 **Production Deployment Ready**
+
 - **Confidence Level**: 100%
 - **Error Rate**: 0% in extensive testing
 - **Documentation**: Complete implementation guide
