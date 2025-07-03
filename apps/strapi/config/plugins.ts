@@ -34,6 +34,30 @@ export default ({ env }) => {
         jwt: {
           expiresIn: "30d", // this value is synced with NextAuth session maxAge
         },
+        register: {
+          allowedFields: ["username", "email", "firstName", "lastName"],
+        },
+        emailConfirmation: true,
+        passwordResetTimeout: 3600000, // 1 hour
+        ratelimit: {
+          interval: 60000, // 1 minute
+          max: 5, // 5 attempts per minute
+        },
+      },
+    },
+
+    // Enhanced email configuration for user profile system
+    email: {
+      config: {
+        provider: "resend", // Modern email service
+        providerOptions: {
+          apiKey: env("RESEND_API_KEY"),
+        },
+        settings: {
+          defaultFrom: env("DEFAULT_FROM_EMAIL", "noreply@rate.app"),
+          defaultReplyTo: env("DEFAULT_REPLY_TO_EMAIL", "support@rate.app"),
+          defaultFromName: env("DEFAULT_FROM_NAME", "Rate App"),
+        },
       },
     },
 
