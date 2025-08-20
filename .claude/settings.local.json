@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(yarn dev)",
+      "Bash(docker:*)",
+      "Bash(yarn build)",
+      "Bash(yarn install)",
+      "Bash(yarn --version)",
+      "Bash(curl:*)",
+      "Bash(yarn upgrade:*)",
+      "Bash(rm:*)",
+      "Bash(yarn list:*)",
+      "Bash(yarn remove:*)",
+      "Bash(yarn strapi:dev:*)",
+      "Bash(yarn dev:strapi:*)",
+      "Bash(yarn add:*)",
+      "Bash(yarn workspace @app/strapi add:*)",
+      "Bash(yarn workspace @repo/strapi add:*)",
+      "Bash(yarn playwright install:*)",
+      "Bash(node:*)",
+      "Bash(yarn workspace @app/strapi dev:*)",
+      "Bash(git submodule:*)",
+      "Bash(git fetch:*)",
+      "Bash(git checkout:*)",
+      "Bash(git pull:*)",
+      "Bash(git add:*)"
+    ],
+    "deny": [],
+    "ask": [],
+    "additionalDirectories": [
+      "C:\\Users\\JOY\\AppData\\Local\\ms-playwright",
+      "D:\\Projects"
+    ]
+  }
+}
