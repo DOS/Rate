@@ -1,5 +1,9 @@
 # 🛡️ Rate Platform - Anti-Scam Ecosystem for Vietnam
 
+![Commitlint](https://github.com/RateBox/Rate/actions/workflows/commitlint.yml/badge.svg?branch=dev)
+![PR Auto Label](https://github.com/RateBox/Rate/actions/workflows/pr-auto-label.yml/badge.svg?branch=dev)
+![Labels Sync](https://github.com/RateBox/Rate/actions/workflows/labels-sync.yml/badge.svg?branch=dev)
+
 Platform chống lừa đảo toàn diện cho người dùng Việt Nam với browser extension, data validation pipeline và community-driven database.
 
 ## 📚 Quick Links
