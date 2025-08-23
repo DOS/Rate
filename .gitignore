@@ -76,3 +76,6 @@ node_modules_old_*
 apps/strapi/config/*.js
 node_modules_*
 node_modules_*
+
+# ignore compiled Strapi admin assets
+apps/strapi/public/admin/

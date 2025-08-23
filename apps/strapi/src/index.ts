@@ -3,6 +3,7 @@ import type { Core } from "@strapi/strapi"
 import { registerAdminUserSubscriber } from "./lifeCycles/adminUser"
 import { registerPopulateDeepSubscriber } from "./lifeCycles/populateDeep"
 import { registerUserSubscriber } from "./lifeCycles/user"
+import { registerContentLifecycleHooks } from "./lifeCycles/contentHooks"
 
 export default {
   /**
@@ -24,5 +25,6 @@ export default {
     registerAdminUserSubscriber({ strapi })
     registerUserSubscriber({ strapi })
     registerPopulateDeepSubscriber({ strapi })
+    registerContentLifecycleHooks({ strapi })
   },
 }

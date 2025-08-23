@@ -1,80 +1,10 @@
-export default ({ env }) => {
-  const awsS3Config = prepareAwsS3Config(env)
-  if (!awsS3Config) {
-    console.info(
-      "AWS S3 upload configuration is not complete. Local file storage will be used."
-    )
-  }
-
-  return {
-    upload: {
-      config: awsS3Config ?? localUploadConfig,
-    },
-
-    seo: {
-      enabled: true,
-    },
-
-    "config-sync": {
-      enabled: true,
-    },
-
-    ckeditor5: {
-      enabled: false, // Disabled - plugin not installed in 5.17.0-beta.0
-    },
-
-    "strapi-v5-plugin-populate-deep": {
-      config: {
-        defaultDepth: 5,
-      },
-    },
-
-    "users-permissions": {
-      config: {
-        jwt: {
-          expiresIn: "30d", // this value is synced with NextAuth session maxAge
-        },
-      },
-    },
-
-    sentry: {
-      enabled: true,
-      config: {
-        // Only set `dsn` property in production
-        dsn: env("NODE_ENV") === "production" ? env("SENTRY_DSN") : null,
-        sendMetadata: true,
-      }
-    },
-
-    'smart-component-filter': {
-      enabled: true,
-      resolve: './src/plugins/smart-component-filter'
-    },
-
-    // email: {
-    //   config: {
-    //     provider: "mailgun",
-    //     providerOptions: {
-    //       key: env("MAILGUN_API_KEY"),
-    //       domain: env("MAILGUN_DOMAIN"),
-    //       url: env("MAILGUN_HOST", "https://api.eu.mailgun.net"),
-    //     },
-    //     settings: {
-    //       defaultFrom: env("MAILGUN_EMAIL"),
-    //       defaultReplyTo: env("MAILGUN_EMAIL"),
-    //     },
-    //   },
-    // },
-  }
-}
-
 const localUploadConfig: any = {
   // Local provider setup
   // https://docs.strapi.io/dev-docs/plugins/upload
   sizeLimit: 250 * 1024 * 1024, // 256mb in bytes,
 }
 
-const prepareAwsS3Config = (env) => {
+const prepareAwsS3Config = (env: any) => {
   const awsAccessKeyId = env("AWS_ACCESS_KEY_ID")
   const awsAccessSecret = env("AWS_ACCESS_SECRET")
   const awsRegion = env("AWS_REGION")
@@ -117,4 +47,70 @@ const prepareAwsS3Config = (env) => {
   }
 
   return undefined
+}
+
+export default ({ env }: any) => {
+  const awsS3Config = prepareAwsS3Config(env)
+  if (!awsS3Config) {
+    console.info(
+      "AWS S3 upload configuration is not complete. Local file storage will be used."
+    )
+  }
+
+  return {
+    upload: {
+      config: awsS3Config ?? localUploadConfig,
+    },
+
+    // seo: {
+    //   enabled: true,
+    // },
+
+    // "config-sync": {
+    //   enabled: true,
+    // },
+
+    // "strapi-v5-plugin-populate-deep": {
+    //   config: {
+    //     defaultDepth: 5,
+    //   },
+    // },
+
+    "users-permissions": {
+      config: {
+        jwt: {
+          expiresIn: "30d", // this value is synced with NextAuth session maxAge
+        },
+      },
+    },
+
+    // sentry: {
+    //   enabled: true,
+    //   config: {
+    //     // Only set `dsn` property in production
+    //     dsn: env("NODE_ENV") === "production" ? env("SENTRY_DSN") : null,
+    //     sendMetadata: true,
+    //   }
+    // },
+
+    // 'smart-component-filter': {
+    //   enabled: false,
+    //   resolve: './src/plugins/smart-component-filter'
+    // },
+
+    // email: {
+    //   config: {
+    //     provider: "mailgun",
+    //     providerOptions: {
+    //       key: env("MAILGUN_API_KEY"),
+    //       domain: env("MAILGUN_DOMAIN"),
+    //       url: env("MAILGUN_HOST", "https://api.eu.mailgun.net"),
+    //     },
+    //     settings: {
+    //       defaultFrom: env("MAILGUN_EMAIL"),
+    //       defaultReplyTo: env("MAILGUN_EMAIL"),
+    //     },
+    //   },
+    // },
+  }
 }

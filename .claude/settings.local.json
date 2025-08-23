@@ -45,7 +45,11 @@
       "mcp__playwright__browser_console_messages",
       "Bash(grep:*)",
       "Bash(yarn install:*)",
-      "Bash(yarn:*)"
+      "Bash(yarn:*)",
+      "Bash(timeout:*)",
+      "mcp__playwright__browser_evaluate",
+      "Bash(git clone:*)",
+      "Bash(git commit:*)"
     ],
     "deny": [],
     "ask": [],

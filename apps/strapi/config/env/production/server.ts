@@ -1,6 +1,6 @@
 import cronTasks from "../../cron-tasks"
 
-export default ({ env }) => ({
+export default ({ env }: any) => ({
   proxy: true,
   url: env("APP_URL"), // Sets the public URL of the application.
   app: {

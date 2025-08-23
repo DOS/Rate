@@ -1,6 +1,25 @@
+// Fix for "Prism is not defined" error in Strapi 5.23.0
+if (typeof window !== 'undefined' && !window.Prism) {
+  (window as any).Prism = {
+    manual: true,
+    disableWorkerMessageHandler: true,
+    languages: {},
+    plugins: {},
+    hooks: {
+      add: () => {},
+      run: () => {}
+    },
+    highlight: (text: string) => text,
+    highlightAll: () => {},
+    highlightElement: () => {},
+    Token: class {
+      constructor(public type: string, public content: any, public alias?: any) {}
+    }
+  };
+}
+
+import './prism-init';
 import { StrapiApp } from '@strapi/strapi/admin';
-import { unstable_useContentManagerContext as useContentManagerContext } from '@strapi/strapi/admin';
-import ItemCategoryHandler from './extensions/item-category-handler';
 
 export default {
   config: {

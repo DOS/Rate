@@ -1,0 +1,46 @@
+# Label presets for repository
+# Managed by .github/workflows/labels-sync.yml
+
+- name: area:frontend
+  color: 0e8a16
+  description: Frontend / Next.js / UI
+
+- name: area:backend
+  color: 1d76db
+  description: Backend / Strapi / APIs / DB
+
+- name: area:shared
+  color: 5319e7
+  description: Shared packages / contracts / configs
+
+- name: docs
+  color: c5def5
+  description: Documentation changes
+
+- name: chore
+  color: bfd4f2
+  description: Tooling / config / no code behavior change
+
+- name: bug
+  color: d73a4a
+  description: Something isn't working
+
+- name: feature
+  color: a2eeef
+  description: New feature or enhancement
+
+- name: breaking:api
+  color: d93f0b
+  description: Breaking change to shared contracts/APIs
+
+- name: test
+  color: e4e669
+  description: Tests and test infrastructure
+
+- name: ci
+  color: 6f42c1
+  description: CI/CD workflows and pipelines
+
+- name: performance
+  color: 1abc9c
+  description: Performance improvements

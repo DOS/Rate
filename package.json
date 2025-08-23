@@ -65,14 +65,6 @@
   },
   "dependencies": {
     "@next/eslint-plugin-next": "15.3.3",
-    "@strapi/plugin-color-picker": "5.17.0-beta.0",
-
-    "@strapi/plugin-sentry": "5.17.0-beta.0",
-    "@strapi/plugin-seo": "2.0.8",
-    "@strapi/plugin-users-permissions": "5.17.0-beta.0",
-    "@strapi/provider-email-mailgun": "5.17.0-beta.0",
-    "@strapi/provider-upload-aws-s3": "5.17.0-beta.0",
-    "@strapi/strapi": "5.17.0-beta.0",
     "@t3-oss/env-nextjs": "0.13.6",
     "@typescript-eslint/eslint-plugin": "8.33.1",
     "@typescript-eslint/parser": "8.33.1",
@@ -80,7 +72,6 @@
     "eslint-config-prettier": "10.1.5",
     "lucide-react": "0.513.0",
     "playwright": "^1.52.0",
-    "strapi-plugin-config-sync": "3.1.1",
     "zod": "^3.25.56"
   }
 }
