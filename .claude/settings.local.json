@@ -23,13 +23,36 @@
       "Bash(git fetch:*)",
       "Bash(git checkout:*)",
       "Bash(git pull:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "mcp__playwright__browser_navigate",
+      "mcp__playwright__browser_snapshot",
+      "Bash(psql:*)",
+      "Bash(where psql)",
+      "Bash(yarn info:*)",
+      "Bash(npm view:*)",
+      "Bash(yarn strapi:*)",
+      "mcp__playwright__browser_wait_for",
+      "mcp__playwright__browser_take_screenshot",
+      "Bash(yarn start)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(iconv:*)",
+      "mcp__playwright__browser_type",
+      "mcp__playwright__browser_click",
+      "Bash(powershell:*)",
+      "mcp__playwright__browser_close",
+      "Bash(yarn cache:*)",
+      "mcp__playwright__browser_console_messages",
+      "Bash(grep:*)",
+      "Bash(yarn install:*)",
+      "Bash(yarn:*)"
     ],
     "deny": [],
     "ask": [],
     "additionalDirectories": [
       "C:\\Users\\JOY\\AppData\\Local\\ms-playwright",
-      "D:\\Projects"
+      "D:\\Projects",
+      "C:\\Program Files\\PostgreSQL"
     ]
   }
 }
