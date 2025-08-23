@@ -1,13 +1,18 @@
 module.exports = {
-  extends: ["next", "turbo", "prettier"],
-  settings: {
-    react: {
-      version: "detect",
+  extends: ["eslint:recommended", "plugin:@typescript-eslint/recommended", "prettier"],
+  parser: "@typescript-eslint/parser",
+  plugins: ["@typescript-eslint"],
+  env: { node: true, es2022: true, browser: false },
+  overrides: [
+    {
+      files: ["**/*.tsx", "**/*.ts"],
+      parserOptions: { project: true },
     },
-  },
-  parserOptions: {
-    babelOptions: {
-      presets: [require.resolve("next/babel")],
+    {
+      files: ["apps/ui/**/*"],
+      env: { browser: true },
+      extends: ["plugin:react/recommended", "plugin:react-hooks/recommended"],
+      settings: { react: { version: "detect" } },
     },
-  },
+  ],
 }
