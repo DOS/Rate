@@ -237,9 +237,8 @@ class StrapiClient {
    */
   async testConnection() {
     try {
-      const response = await this.makeRequest(`${this.baseUrl}/api`, {
-        method: 'GET',
-        headers: this.getAuthHeaders()
+      const response = await this.makeRequest(`${this.baseUrl}/api/validation/ping`, {
+        method: 'GET'
       }, 1); // Only 1 retry for connection test
 
       return response.ok;
@@ -250,9 +249,4 @@ class StrapiClient {
   }
 }
 
-// Export for use in extension
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = StrapiClient;
-} else {
-  window.StrapiClient = StrapiClient;
-}
+export default StrapiClient;

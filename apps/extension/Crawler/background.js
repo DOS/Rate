@@ -1,14 +1,8 @@
 // Rate Crawler Background Script - Passive Data Accumulation
 console.log('[Background] Rate Crawler extension loaded');
 
-// Import Strapi API client
-let StrapiClient;
-try {
-  StrapiClient = require('./api/strapi-client.js');
-} catch (e) {
-  // For browser context (if needed)
-  StrapiClient = window?.StrapiClient;
-}
+// Import Strapi API client (ESM)
+import StrapiClient from './api/strapi-client.js';
 
 // Dynamic Strapi config
 let strapiConfig = {
@@ -20,14 +14,13 @@ let strapiConfig = {
 const strapiClient = new StrapiClient(strapiConfig);
 
 // Load Strapi config from chrome.storage.sync
-function loadStrapiConfigAndApply() {
-  chrome.storage.sync.get(['strapiApiUrl', 'strapiApiToken'], (result) => {
-    strapiConfig.baseUrl = result.strapiApiUrl || 'http://localhost:1337';
-    strapiConfig.apiToken = result.strapiApiToken || '';
-    strapiClient.baseUrl = strapiConfig.baseUrl;
-    strapiClient.setAuthToken(strapiConfig.apiToken, 'api');
-    console.log('[Background] Loaded Strapi config:', strapiConfig);
-  });
+async function loadStrapiConfigAndApply() {
+  const result = await chrome.storage.sync.get(['strapiApiUrl', 'strapiApiToken']);
+  strapiConfig.baseUrl = result.strapiApiUrl || 'http://localhost:1337';
+  strapiConfig.apiToken = result.strapiApiToken || '';
+  strapiClient.baseUrl = strapiConfig.baseUrl;
+  strapiClient.setAuthToken(strapiConfig.apiToken, 'api');
+  console.log('[Background] Loaded Strapi config:', strapiConfig);
 }
 // Initial load
 loadStrapiConfigAndApply();
@@ -57,6 +50,43 @@ chrome.runtime.onInstalled.addListener(() => {
   // Set initial badge
   updateBadge();
 });
+
+// Submit Shopee reviews to Strapi Validation API
+async function submitShopeeReviewsToStrapi(reviews) {
+  console.log('[Background] Attempting to submit Shopee reviews to Strapi...');
+  // Ensure latest config
+  await loadStrapiConfigAndApply();
+  if (!strapiConfig.baseUrl || !strapiConfig.apiToken) {
+    throw new Error('Strapi API URL or Token is not configured.');
+  }
+  try {
+    const uniqueReviews = dedupeReviews(reviews);
+    const payload = uniqueReviews.map(review => ({
+      source: 'shopee_extension',
+      type: 'review',
+      review,
+      url: review?.product?.productUrl || '',
+      crawledAt: new Date().toISOString()
+    }));
+    const result = await strapiClient.validate(payload);
+    console.log('[Background] Successfully submitted reviews:', result);
+    return result;
+  } catch (error) {
+    console.error('[Background] submitShopeeReviewsToStrapi error:', error);
+    throw error;
+  }
+}
+
+// Dedupe reviews by id|username|content|variant
+function dedupeReviews(reviews) {
+  const seen = new Set();
+  return (reviews || []).filter(r => {
+    const key = (r.id || '') + '|' + (r.username || r.owner || '') + '|' + (r.content || '') + '|' + (r.reviewVariant || '');
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
 
 // Load accumulated data from storage
 async function loadAccumulatedData() {
@@ -162,6 +192,30 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('[Background] Message details:', message);
   
   switch (message.type) {
+    case 'inject_page_scripts': {
+      const tabId = sender?.tab?.id;
+      if (!tabId) {
+        sendResponse({ success: false, error: 'no_tab' });
+        return true;
+      }
+      (async () => {
+        try {
+          await chrome.scripting.executeScript({
+            target: { tabId, world: 'MAIN' },
+            files: ['page-bridge.js']
+          });
+          await chrome.scripting.executeScript({
+            target: { tabId, world: 'MAIN' },
+            files: ['page-sniffer.js']
+          });
+          sendResponse({ success: true });
+        } catch (e) {
+          console.error('[Background] inject_page_scripts failed', e);
+          sendResponse({ success: false, error: (e && e.message) || String(e) });
+        }
+      })();
+      return true;
+    }
     case 'scam-data-found':
       handleScamDataFound(message, sender);
       sendResponse({ success: true });
@@ -211,6 +265,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse(ok);
       });
       return true; // Keep channel open for async
+
+    case 'pull_shopee_ratings_url':
+      // Fetch ratings JSON from Shopee (public endpoint)
+      (async () => {
+        try {
+          const url = message.url;
+          if (!url) return sendResponse({ success: false, error: 'missing_url' });
+          // Ensure absolute URL
+          const abs = url.startsWith('http') ? url : `https://shopee.vn${url}`;
+          const resp = await fetch(abs, { method: 'GET' });
+          const data = await resp.json();
+          sendResponse({ success: true, data });
+        } catch (e) {
+          sendResponse({ success: false, error: (e && e.message) || String(e) });
+        }
+      })();
+      return true;
 
     default:
       console.log('[Background] Unknown message type:', message.type);
@@ -311,6 +382,8 @@ async function handleShopeeReviewsFound(message, sender) {
     console.log(`[Background] Shopee reviews DB now: ${shopeeReviewsDatabase.length} unique reviews`);
     updateBadge();
     await saveAccumulatedData();
+    // Notify popup to refresh immediately
+    try { chrome.runtime.sendMessage({ type: 'data-updated' }); } catch (e) {}
   } catch (error) {
     console.error('[Background] Error handling Shopee reviews:', error);
   }

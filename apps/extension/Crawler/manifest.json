@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Rate Crawler",
-  "version": "1.0.9",
+  "version": "1.0.23",
   "description": "Passive crawler for scam data from checkscam sites",
   "permissions": [
     "storage",
@@ -13,20 +13,37 @@
   "host_permissions": [
     "*://checkscam.vn/*",
     "*://checkscam.com/*",
-    "*://shopee.vn/*"
+    "*://shopee.vn/*",
+    "*://*.shopee.vn/*",
+    "http://localhost:1337/*",
+    "https://localhost:1337/*",
+    "http://127.0.0.1:1337/*",
+    "https://127.0.0.1:1337/*"
   ],
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "type": "module"
   },
+  "web_accessible_resources": [
+    {
+      "resources": ["page-bridge.js", "page-sniffer.js"],
+      "matches": [
+        "*://shopee.vn/*",
+        "*://*.shopee.vn/*"
+      ]
+    }
+  ],
   "content_scripts": [
     {
       "matches": [
         "*://checkscam.vn/*",
         "*://checkscam.com/*",
-        "*://shopee.vn/*"
+        "*://shopee.vn/*",
+        "*://*.shopee.vn/*"
       ],
       "js": ["content-script.js"],
-      "run_at": "document_idle"
+      "run_at": "document_idle",
+      "all_frames": true
     }
   ],
   "action": {
