@@ -49,7 +49,9 @@
       "Bash(timeout:*)",
       "mcp__playwright__browser_evaluate",
       "Bash(git clone:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(move:*)",
+      "Bash(dir:*)"
     ],
     "deny": [],
     "ask": [],

@@ -38,3 +38,4 @@
 - PostgreSQL 17 via Docker Compose (`apps/strapi`)
 
 Thanks for contributing!
+

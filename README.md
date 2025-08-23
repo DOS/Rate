@@ -6,9 +6,87 @@
 
 Platform chống lừa đảo toàn diện cho người dùng Việt Nam với browser extension, data validation pipeline và community-driven database.
 
+## 🏗️ System Architecture
+
+```mermaid
+graph TB
+    %% User Interfaces
+    UI["`**Next.js Frontend**<br/>localhost:3000<br/>- User Dashboard<br/>- Admin Interface<br/>- Report Management`"]
+    EXT["`**Browser Extension**<br/>Chrome/Edge<br/>- Real-time Detection<br/>- Page Analysis<br/>- Quick Report`"]
+
+    %% Core Platform
+    STRAPI["`**Strapi CMS**<br/>localhost:1337<br/>- Content Management<br/>- API Gateway<br/>- Admin Panel<br/>- Authentication`"]
+
+    %% Database
+    DB[("`**PostgreSQL**<br/>Docker Container<br/>- User Data<br/>- Reports<br/>- Categories<br/>- Validation Results`")]
+
+    %% Services
+    CRAWLER["`**Importer/Crawler**<br/>Python Service<br/>- Web Scraping<br/>- Data Collection<br/>- FlareSolverr Proxy<br/>- Scheduled Jobs`"]
+
+    VALIDATOR["`**Validator Service**<br/>TypeScript/Python<br/>- Data Validation<br/>- Business Rules<br/>- Risk Scoring<br/>- Quality Check`"]
+
+    %% External Services
+    FLARE["`**FlareSolverr**<br/>Docker Service<br/>- Cloudflare Bypass<br/>- Proxy Service`"]
+
+    REDIS["`**Redis Stream**<br/>Message Queue<br/>- Job Processing<br/>- Inter-service Comm`"]
+
+    %% User Flow
+    USER(["`**Users**<br/>End Users<br/>Administrators`"])
+
+    %% Connections
+    USER --> UI
+    USER --> EXT
+
+    UI --> STRAPI
+    EXT --> STRAPI
+
+    STRAPI --> DB
+    STRAPI --> VALIDATOR
+    STRAPI --> CRAWLER
+
+    CRAWLER --> FLARE
+    CRAWLER --> REDIS
+    CRAWLER --> DB
+
+    VALIDATOR --> REDIS
+    VALIDATOR --> DB
+
+    %% Styling
+    classDef frontend fill:#e1f5fe
+    classDef backend fill:#f3e5f5
+    classDef database fill:#e8f5e8
+    classDef service fill:#fff3e0
+    classDef external fill:#fce4ec
+
+    class UI,EXT frontend
+    class STRAPI backend
+    class DB database
+    class CRAWLER,VALIDATOR service
+    class FLARE,REDIS external
+```
+
+## 🔄 Data Flow
+
+```
+🌐 External Sources → 🕷️ Importer → 🎯 Strapi API → 📨 Redis Queue → ✅ Validator → 💾 Database
+     ↓                     ↓              ↓              ↓              ↓
+CheckScam.vn         FlareSolverr    Auth/Rate      Async Process   Validation
+User Reports         Proxy           Enrichment     Pub/Sub         Results
+Browser Extension    Captcha         API Gateway    Job Queue       Storage
+```
+
+### Current Status
+
+- ✅ **Core Platform**: Strapi + Next.js running
+- ✅ **Database**: PostgreSQL in Docker
+- ✅ **Validator**: Advanced TypeScript package completed
+- 🔄 **Crawler**: Python service in development
+- 📋 **Extension**: Browser extension in development
+- 📋 **Redis**: Message queue planned
+
 ## 📚 Quick Links
 
-- **[MODULES.md](./Docs/MODULES.md)** - Technical documentation của tất cả modules
+- **[Modules Overview](./Modules/README.md)** - Technical documentation của tất cả modules
 - **[ROADMAP.md](./Docs/ROADMAP.md)** - Development roadmap 2025
 - **[CHANGELOG.md](./Docs/CHANGELOG.md)** - Release history và dev log
 - **[Full Documentation](./Docs/)** - Detailed guides và resources
