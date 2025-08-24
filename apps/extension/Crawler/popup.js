@@ -168,116 +168,17 @@ function setupEventListeners(domain) {
   if (domain && domain.includes('shopee.vn')) {
 
     exportShopeeBtn.addEventListener('click', async function() {
-      // Khi export, luôn extract lại review mới nhất từ trang
-      let extractedReviews = [];
-      try {
-        extractedReviews = await new Promise((resolve, reject) => {
-          chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-            if (!tabs || !tabs[0]) return resolve([]);
-            chrome.tabs.sendMessage(tabs[0].id, {type: 'extract-shopee-reviews'}, function(response) {
-              if (chrome.runtime.lastError) return resolve([]);
-              if (response && response.data) return resolve(response.data);
-              resolve([]);
-            });
-          });
-        });
-      } catch (e) { extractedReviews = []; }
-      // Lọc trùng trước khi export Shopee reviews (kèm reviewVariant)
-      const uniqueReviews = dedupeReviews(extractedReviews);
-      // Nhóm theo listing (shopid+itemid) cho batch hiện tại
-      const groupedBatch = groupByListing(uniqueReviews);
-
-      // Thêm nút gửi Shopee review qua API (nếu có nút, hoặc gắn vào exportShopeeBtn cho demo)
-      const sendShopeeBtn = document.getElementById('sendShopeeBtn');
-      if (sendShopeeBtn) {
-        sendShopeeBtn.addEventListener('click', function() {
-          sendBatchDataToAPI(currentShopeeReviews, 'shopee');
-        });
+      // KHÔNG re-extract để tránh captcha. Export từ dữ liệu đã lưu trong background.
+      // Nếu popup chưa có dữ liệu, lấy lại từ background.
+      if (!currentShopeeReviews.length) {
+        await loadShopeeReviews();
       }
-      exportShopeeBtn.disabled = true;
-      exportShopeeBtn.textContent = '⏳ Extracting...';
-      chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
-        if (tabs && tabs.length > 0) {
-          chrome.tabs.sendMessage(tabs[0].id, { type: 'extract-shopee-reviews' }, function(response) {
-            if (response && response.success && response.data && response.data.length > 0) {
-              // Đã extract xong, tiến hành export ngay tại popup (không qua background)
-              exportShopeeBtn.textContent = '⏳ Exporting...';
-              try {
-                const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-                const filename = `shopee-reviews-${timestamp}.json`;
-                const blob = new Blob([JSON.stringify(groupedBatch, null, 2)], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = filename;
-                document.body.appendChild(a);
-                a.click();
-                setTimeout(() => {
-                  document.body.removeChild(a);
-                  URL.revokeObjectURL(url);
-                }, 100);
-                exportShopeeBtn.disabled = false;
-                exportShopeeBtn.textContent = '📥 Export Shopee Reviews (JSON)';
-                // Hiển thị status inline thay vì alert
-                const shopeeStatusEl = document.getElementById('shopeeStatus');
-                if (shopeeStatusEl) {
-                  shopeeStatusEl.style.display = 'block';
-                  shopeeStatusEl.className = 'status active';
-                  shopeeStatusEl.textContent = `✅ Đã export ${groupedBatch.length} listings (${uniqueReviews.length} reviews)`;
-                  setTimeout(() => { shopeeStatusEl.style.display = 'none'; }, 2000);
-                }
-              } catch (err) {
-                exportShopeeBtn.disabled = false;
-                exportShopeeBtn.textContent = '📥 Export Shopee Reviews (JSON)';
-                const shopeeStatusEl = document.getElementById('shopeeStatus');
-                if (shopeeStatusEl) {
-                  shopeeStatusEl.style.display = 'block';
-                  shopeeStatusEl.className = 'status inactive';
-                  shopeeStatusEl.textContent = `❌ Export thất bại: ${err?.message || 'Không rõ'}`;
-                  setTimeout(() => { shopeeStatusEl.style.display = 'none'; }, 2500);
-                }
-              }
-            } else {
-              exportShopeeBtn.disabled = false;
-              exportShopeeBtn.textContent = '📥 Export Shopee Reviews (JSON)';
-              const shopeeStatusEl = document.getElementById('shopeeStatus');
-              if (shopeeStatusEl) {
-                shopeeStatusEl.style.display = 'block';
-                shopeeStatusEl.className = 'status inactive';
-                shopeeStatusEl.textContent = '❌ Không tìm thấy review Shopee nào trên trang này!';
-                setTimeout(() => { shopeeStatusEl.style.display = 'none'; }, 2500);
-              }
-            }
-          });
-        } else {
-          exportShopeeBtn.disabled = false;
-          exportShopeeBtn.textContent = '📥 Export Shopee Reviews (JSON)';
-          const shopeeStatusEl = document.getElementById('shopeeStatus');
-          if (shopeeStatusEl) {
-            shopeeStatusEl.style.display = 'block';
-            shopeeStatusEl.className = 'status inactive';
-            shopeeStatusEl.textContent = '❌ Không thể lấy thông tin tab hiện tại!';
-            setTimeout(() => { shopeeStatusEl.style.display = 'none'; }, 2500);
-          }
-        }
-      });
+      await exportShopeeReviews();
     });
     clearShopeeBtn.addEventListener('click', clearShopeeReviews);
 
-    // Auto-extract fresh reviews when popup opens on Shopee
-    (async () => {
-      try {
-        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (tab) {
-          chrome.tabs.sendMessage(tab.id, { type: 'extract-shopee-reviews' }, function(response) {
-            if (response && response.data && Array.isArray(response.data)) {
-              currentShopeeReviews = response.data;
-              updateShopeeUI({ data: currentShopeeReviews, totalShopeeReviews: currentShopeeReviews.length });
-            }
-          });
-        }
-      } catch (_) {}
-    })();
+    // KHÔNG tự động re-extract khi mở popup để tránh captcha; chỉ load từ background
+    (async () => { await loadShopeeReviews(); })();
 
     // Bind send to Strapi if button exists
     const sendShopeeBtn = document.getElementById('sendShopeeBtn');
@@ -457,7 +358,7 @@ function dedupeReviews(reviews) {
   const seen = new Set();
   return reviews.filter(r => {
     // Ưu tiên id, fallback về user+content
-    const key = (r.id || '') + '|' + (r.user || r.owner || r.username || '') + '|' + (r.content || '') + '|' + (r.reviewVariant || '');
+    const key = (r.id || r.userId || '') + '|' + (r.user || r.owner || r.username || '') + '|' + ((r.comment || r.content || '')) + '|' + (r.reviewVariant || '');
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -675,8 +576,8 @@ function updateShopeeUI(resp) {
       <img src="${r.avatar}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.style.display='none'" />
       <div style="flex:1;">
         <div style="font-weight:600;font-size:13px;">${r.username || 'User'}</div>
-        <div style="font-size:12px;color:#FFE066;">${'★'.repeat(r.starCount)}${'☆'.repeat(5 - r.starCount)}</div>
-        <div style="font-size:12px;opacity:0.8;margin:2px 0 0 0;max-width:210px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.content?.split('\n')[0] || ''}</div>
+        <div style="font-size:12px;color:#FFE066;">${'★'.repeat(r.starRate || r.starCount || 0)}${'☆'.repeat(5 - (r.starRate || r.starCount || 0))}</div>
+        <div style="font-size:12px;opacity:0.8;margin:2px 0 0 0;max-width:210px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${(r.comment || r.content || '').split('\n')[0]}</div>
       </div>
     </div>
   `).join('');
@@ -708,54 +609,49 @@ async function clearShopeeReviews() {
 
 // Send Shopee reviews to Strapi from popup (delegates to background)
 async function submitShopeeReviewsToStrapiFromPopup() {
-  // Extract again to ensure freshness
-  let extracted = await new Promise((resolve) => {
-    chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-      if (!tabs || !tabs[0]) return resolve([]);
-      chrome.tabs.sendMessage(tabs[0].id, {type: 'extract-shopee-reviews'}, function(response) {
-        if (chrome.runtime.lastError) return resolve([]);
-        if (response && response.data) return resolve(response.data);
-        resolve([]);
-      });
-    });
-  });
-  if (!Array.isArray(extracted) || extracted.length === 0) {
-    extracted = currentShopeeReviews || [];
-  }
-  const unique = dedupeReviews(extracted);
-  const shopeeStatusEl = document.getElementById('shopeeStatus');
+  // Tránh gọi lại Shopee API để không kích hoạt captcha: dùng dữ liệu đã thu thập
+  const unique = dedupeReviews(currentShopeeReviews || []);
+  const sendShopeeBtn = document.getElementById('sendShopeeBtn');
   if (!unique.length) {
-    if (shopeeStatusEl) {
-      shopeeStatusEl.style.display = 'block';
-      shopeeStatusEl.className = 'status inactive';
-      shopeeStatusEl.textContent = '❌ Không có review để gửi';
-      setTimeout(() => { shopeeStatusEl.style.display = 'none'; }, 2000);
+    if (sendShopeeBtn) {
+      const originalText = sendShopeeBtn.textContent;
+      sendShopeeBtn.textContent = '❌ Không có review';
+      sendShopeeBtn.style.background = '#DC3545';
+      setTimeout(() => { sendShopeeBtn.textContent = originalText; sendShopeeBtn.style.background = '#6C63FF'; }, 1800);
     }
     return;
   }
   try {
+    if (sendShopeeBtn) {
+      sendShopeeBtn.disabled = true;
+      var originalText = sendShopeeBtn.textContent;
+      sendShopeeBtn.textContent = '⏳ Sending...';
+      sendShopeeBtn.style.background = '#FFE066';
+    }
     const resp = await chrome.runtime.sendMessage({ type: 'submit_shopee_reviews_to_strapi', reviews: unique });
     if (resp && resp.success) {
-      if (shopeeStatusEl) {
-        shopeeStatusEl.style.display = 'block';
-        shopeeStatusEl.className = 'status active';
-        shopeeStatusEl.textContent = '✅ Đã gửi reviews lên Strapi';
-        setTimeout(() => { shopeeStatusEl.style.display = 'none'; }, 2000);
+      if (sendShopeeBtn) {
+        if (resp.result?.status === 'duplicate_ignored') {
+          sendShopeeBtn.textContent = 'ℹ️ Skipped (duplicate)';
+          sendShopeeBtn.style.background = '#6C757D';
+        } else {
+          sendShopeeBtn.textContent = '✅ Sent!';
+          sendShopeeBtn.style.background = '#28A745';
+        }
+        setTimeout(() => { sendShopeeBtn.textContent = originalText; sendShopeeBtn.style.background = '#6C63FF'; sendShopeeBtn.disabled = false; }, 1800);
       }
     } else {
-      if (shopeeStatusEl) {
-        shopeeStatusEl.style.display = 'block';
-        shopeeStatusEl.className = 'status inactive';
-        shopeeStatusEl.textContent = `❌ Gửi thất bại: ${resp?.error || 'Unknown'}`;
-        setTimeout(() => { shopeeStatusEl.style.display = 'none'; }, 2500);
+      if (sendShopeeBtn) {
+        sendShopeeBtn.textContent = `❌ ${resp?.error || 'Gửi thất bại'}`;
+        sendShopeeBtn.style.background = '#DC3545';
+        setTimeout(() => { sendShopeeBtn.textContent = originalText; sendShopeeBtn.style.background = '#6C63FF'; sendShopeeBtn.disabled = false; }, 2000);
       }
     }
   } catch (e) {
-    if (shopeeStatusEl) {
-      shopeeStatusEl.style.display = 'block';
-      shopeeStatusEl.className = 'status inactive';
-      shopeeStatusEl.textContent = `❌ Lỗi: ${e?.message || 'Unknown'}`;
-      setTimeout(() => { shopeeStatusEl.style.display = 'none'; }, 2500);
+    if (sendShopeeBtn) {
+      sendShopeeBtn.textContent = `❌ Lỗi: ${e?.message || 'Unknown'}`;
+      sendShopeeBtn.style.background = '#DC3545';
+      setTimeout(() => { sendShopeeBtn.textContent = originalText; sendShopeeBtn.style.background = '#6C63FF'; sendShopeeBtn.disabled = false; }, 2000);
     }
   }
 }

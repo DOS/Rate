@@ -39,6 +39,8 @@ let totalRecordsFound = 0;
 // Shopee reviews storage
 let shopeeReviewsDatabase = [];
 let totalShopeeReviews = 0;
+// Chống spam gửi trùng: lưu hash batch gần nhất và thời điểm gửi
+let lastShopeeSubmissionHash = '';
 
 // Initialize extension
 chrome.runtime.onInstalled.addListener(() => {
@@ -61,6 +63,12 @@ async function submitShopeeReviewsToStrapi(reviews) {
   }
   try {
     const uniqueReviews = dedupeReviews(reviews);
+    const batchHash = computeBatchHash(uniqueReviews);
+    // Nếu batch giống hệt với lần gửi gần nhất, bỏ qua (không áp dụng cooldown theo thời gian)
+    if (batchHash && lastShopeeSubmissionHash === batchHash) {
+      console.log('[Background] Duplicate submission detected, ignored');
+      return { ok: true, status: 'duplicate_ignored', count: uniqueReviews.length };
+    }
     const payload = uniqueReviews.map(review => ({
       source: 'shopee_extension',
       type: 'review',
@@ -69,8 +77,9 @@ async function submitShopeeReviewsToStrapi(reviews) {
       crawledAt: new Date().toISOString()
     }));
     const result = await strapiClient.validate(payload);
+    lastShopeeSubmissionHash = batchHash;
     console.log('[Background] Successfully submitted reviews:', result);
-    return result;
+    return { ok: true, status: 'submitted', count: uniqueReviews.length, result };
   } catch (error) {
     console.error('[Background] submitShopeeReviewsToStrapi error:', error);
     throw error;
@@ -81,7 +90,7 @@ async function submitShopeeReviewsToStrapi(reviews) {
 function dedupeReviews(reviews) {
   const seen = new Set();
   return (reviews || []).filter(r => {
-    const key = (r.id || '') + '|' + (r.username || r.owner || '') + '|' + (r.content || '') + '|' + (r.reviewVariant || '');
+    const key = (r.id || r.userId || '') + '|' + (r.username || r.owner || '') + '|' + (r.content || '') + '|' + (r.reviewVariant || '');
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -360,54 +369,33 @@ async function exportShopeeReviews() {
     const grouped = groupShopeeReviewsByListing(shopeeReviewsDatabase);
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const filename = `rate-crawler/shopee-reviews-${timestamp}.json`;
-    const blob = new Blob([JSON.stringify(grouped, null, 2)], { type: 'application/json' });
-    let urlCreator = undefined;
-    if (typeof self !== 'undefined' && self.URL && typeof self.URL.createObjectURL === 'function') {
-      urlCreator = self.URL;
-    } else if (typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function') {
-      urlCreator = URL;
-    }
-    if (!urlCreator) {
-      console.error('[Background] Không tìm thấy URL.createObjectURL ở môi trường background/service worker!');
+    const jsonString = JSON.stringify(grouped, null, 2);
+    const dataUrl = 'data:application/json;charset=utf-8,' + encodeURIComponent(jsonString);
+    const downloadId = await chrome.downloads.download({
+      url: dataUrl,
+      filename: filename,
+      conflictAction: 'uniquify',
+      saveAs: false
+    });
+    if (downloadId) {
+      chrome.notifications.create({
+        type: 'basic',
+        iconUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+        title: '✅ Export Successful!',
+        message: `Exported ${grouped.length} listings (${shopeeReviewsDatabase.length} reviews)`,
+        priority: 1
+      });
+      return { success: true };
+    } else {
       chrome.notifications.create({
         type: 'basic',
         iconUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
         title: '❌ Export Failed',
-        message: 'Không hỗ trợ export file: Không tìm thấy URL.createObjectURL trong môi trường background/service worker.',
+        message: 'Could not save file. Check Downloads folder permissions.',
         priority: 2
       });
-      return { success: false, error: 'Không tìm thấy URL.createObjectURL trong môi trường background/service worker.' };
+      return { success: false, error: 'Could not save file.' };
     }
-    const url = urlCreator.createObjectURL(blob);
-    return new Promise((resolve) => {
-      chrome.downloads.download({
-        url: url,
-        filename: filename,
-        conflictAction: 'uniquify',
-        saveAs: false
-      }, (downloadId) => {
-        URL.revokeObjectURL(url);
-        if (downloadId) {
-          chrome.notifications.create({
-            type: 'basic',
-            iconUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
-            title: '✅ Export Successful!',
-            message: `Exported ${grouped.length} listings (${shopeeReviewsDatabase.length} reviews) to Downloads/rate-crawler/${filename}`,
-            priority: 1
-          });
-          resolve({ success: true });
-        } else {
-          chrome.notifications.create({
-            type: 'basic',
-            iconUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
-            title: '❌ Export Failed',
-            message: 'Could not save file. Check Downloads folder permissions.',
-            priority: 2
-          });
-          resolve({ success: false, error: 'Could not save file.' });
-        }
-      });
-    });
   } catch (error) {
     console.error('[Background] Error exporting Shopee reviews:', error);
     chrome.notifications.create({
@@ -419,6 +407,32 @@ async function exportShopeeReviews() {
     });
     return { success: false, error: error.message };
   }
+}
+
+// Tạo hash đơn giản, ổn định cho batch để chống gửi trùng
+function computeBatchHash(reviews) {
+  try {
+    const minimal = (reviews || []).map(r => ({
+      u: r.userId || r.username || r.owner || '',
+      s: r.starRate || r.starCount || 0,
+      v: r.reviewVariant || '',
+      c: (r.comment || r.content || '').slice(0, 140),
+      p: (r.product && r.product.productUrl) || ''
+    }));
+    const json = JSON.stringify(minimal.sort((a,b)=>{
+      if (a.p!==b.p) return a.p<b.p?-1:1;
+      if (a.u!==b.u) return a.u<b.u?-1:1;
+      if (a.c!==b.c) return a.c<b.c?-1:1;
+      if (a.v!==b.v) return a.v<b.v?-1:1;
+      return a.s-b.s;
+    }));
+    let h = 0;
+    for (let i = 0; i < json.length; i++) {
+      h = ((h << 5) - h) + json.charCodeAt(i);
+      h |= 0;
+    }
+    return String(h);
+  } catch (_) { return ''; }
 }
 
 // Handle new Shopee reviews from content script
