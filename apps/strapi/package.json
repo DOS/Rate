@@ -55,7 +55,7 @@
     "react-dom": "^18.0.0",
     "react-router-dom": "^6.0.0",
     "react-select": "^5.10.1",
-    "redis": "^5.5.6",
+    "redis": "^5.8.2",
     "strapi-plugin-config-sync": "3.1.1",
     "strapi-v5-plugin-populate-deep": "^4.0.5",
     "styled-components": "^6.0.0"

@@ -165,14 +165,8 @@ function triggerShopeeRatingsLoad() {
         }
       }
     };
+    // Gentle: chỉ click, KHÔNG auto-scroll để tránh captcha/anti-bot
     tryClick();
-    // Also scroll down to force lazy loading
-    let steps = 0;
-    const timer = setInterval(() => {
-      window.scrollBy(0, Math.max(200, window.innerHeight * 0.6));
-      steps++;
-      if (steps >= 5) clearInterval(timer);
-    }, 400);
     // Try click again after some DOM updates
     setTimeout(tryClick, 1200);
   } catch (_) {}
@@ -195,8 +189,8 @@ function mapShopeeApiRatingToReview(r, productInfo) {
   if (!r) return null;
   const username = r.author_username || r.author_shopid || r.author_name || '';
   const userId = r.userid || r.user_id || r.author_userid || r.author_user_id || '';
-  const starCount = r.rating_star || r.rating || 0;
-  const content = (r.comment || '').trim();
+  const starRate = r.rating_star || r.rating || 0;
+  const comment = (r.comment || '').trim();
   const images = Array.isArray(r.images)
     ? r.images.map(i => normalizeShopeeImageUrl(i && (i.url || i.image_url || i)))
     : [];
@@ -213,15 +207,15 @@ function mapShopeeApiRatingToReview(r, productInfo) {
   // Extract structured criteria
   const criteria = {};
   try {
-    const lines = (content || '').split(/\n+/).map(s => s.trim()).filter(Boolean);
+    const lines = (comment || '').split(/\n+/).map(s => s.trim()).filter(Boolean);
     lines.forEach((ln) => {
       const idx = ln.indexOf(':');
       if (idx <= 0) return;
       const key = ln.slice(0, idx).toLowerCase();
       const val = ln.slice(idx + 1).trim();
-      if (key.includes('chất lượng sản phẩm')) criteria.productQuality = val;
-      else if (key.includes('tính năng nổi bật')) criteria.featured = val;
-      else if (key.includes('đúng với mô tả')) criteria.matchDescription = val;
+      if (key.includes('chất lượng sản phẩm')) criteria.quality = val;
+      else if (key.includes('tính năng nổi bật')) criteria.features = val;
+      else if (key.includes('đúng với mô tả')) criteria.matchesDescription = val;
       else if (key.startsWith('sản phẩm')) criteria.productTags = val.split(/,\s*/).filter(Boolean);
     });
   } catch {}
@@ -230,9 +224,12 @@ function mapShopeeApiRatingToReview(r, productInfo) {
     username,
     userId,
     isUsernameMasked: typeof username === 'string' ? /\*/.test(username) : false,
-    starCount,
+    starRate,
     timeType,
-    content,
+    comment,
+    // Backward compatible fields
+    starCount: starRate,
+    content: comment,
     images: images.filter(Boolean),
     videos: videos.filter(Boolean),
     likes,
@@ -904,9 +901,9 @@ function scrapeShopeeVisibleReviews() {
     if (usernameNode) username = usernameNode.textContent.trim();
 
     // Star
-    let starCount = 0;
+    let starRate = 0;
     const starNodes = rating.querySelectorAll('.shopee-product-rating__rating svg.icon-rating-solid--active, .shopee-product-rating__main .shopee-product-rating__rating svg.icon-rating-solid--active');
-    if (starNodes) starCount = starNodes.length;
+    if (starNodes) starRate = starNodes.length;
 
     // Time & loại hàng
     let timeType = '';
@@ -956,9 +953,30 @@ function scrapeShopeeVisibleReviews() {
       if (match) reviewVariant = match[1].trim();
     }
 
+    // Chuẩn hóa criteria
+    const criteria = {};
+    try {
+      const lines = (content || '').split(/\n+/).map(s => s.trim()).filter(Boolean);
+      lines.forEach((ln) => {
+        const idx = ln.indexOf(':');
+        if (idx <= 0) return;
+        const key = ln.slice(0, idx).toLowerCase();
+        const val = ln.slice(idx + 1).trim();
+        if (key.includes('chất lượng sản phẩm')) criteria.quality = val;
+        else if (key.includes('tính năng nổi bật')) criteria.features = val;
+        else if (key.includes('đúng với mô tả')) criteria.matchesDescription = val;
+        else if (key.startsWith('sản phẩm')) criteria.productTags = val.split(/,\s*/).filter(Boolean);
+      });
+    } catch {}
+
+    const comment = content;
     return {
-      avatar, username, starCount, timeType, content, images, videos, likes,
+      avatar, username, starRate, timeType, comment, images, videos, likes,
+      // Backward compatible
+      starCount: starRate,
+      content: comment,
       reviewVariant,
+      criteria,
       product: productInfo
     };
   }).filter(review => {
@@ -1055,6 +1073,10 @@ function initPassiveCrawler() {
         console.log('📭 No scam data found on this page');
       }
     }
+    // Hiển thị Rate Score trên Shopee PDP (sau tiêu đề rating/sales)
+    if (window.location.host.includes('shopee.vn')) {
+      try { renderRateScoreBadge(); } catch(_) {}
+    }
   }, 5000); // Wait 5s for AJAX content
 }
 
@@ -1143,3 +1165,106 @@ window.addEventListener('message', (e) => {
     }
   } catch (_) {}
 }, false);
+
+// Render Rate Score badge near rating line (after sales count)
+async function renderRateScoreBadge() {
+  try {
+    // Tìm vùng chứa "Đã bán" để chèn Rate Score badge
+    const soldSection = document.querySelector('.flex.asFzUa .flex.mnzVGI .aleSBU');
+    if (!soldSection) {
+      console.log('🔍 Không tìm thấy vùng "Đã bán"');
+      return;
+    }
+
+    // Kiểm tra xem đã có badge chưa
+    if (document.querySelector('.rate-score-badge')) {
+      return;
+    }
+
+    // Lấy điểm từ background script
+    const productUrl = window.location.href;
+    chrome.runtime.sendMessage({ type: 'get_rate_score', url: productUrl }, (response) => {
+      if (response && response.score !== undefined) {
+        const score = response.score;
+        const count = response.count || 0;
+        
+        // Tính màu sắc theo thang điểm (0-10)
+        let backgroundColor, textColor, borderColor;
+        if (score >= 8.5) {
+          // Xanh lá đậm cho điểm cao
+          backgroundColor = '#10b981';
+          textColor = '#ffffff';
+          borderColor = '#059669';
+        } else if (score >= 7.0) {
+          // Xanh lá nhạt cho điểm trung bình cao
+          backgroundColor = '#34d399';
+          textColor = '#ffffff';
+          borderColor = '#10b981';
+        } else if (score >= 5.5) {
+          // Vàng cho điểm trung bình
+          backgroundColor = '#fbbf24';
+          textColor = '#1f2937';
+          borderColor = '#f59e0b';
+        } else if (score >= 4.0) {
+          // Cam cho điểm thấp
+          backgroundColor = '#fb923c';
+          textColor = '#ffffff';
+          borderColor = '#ea580c';
+        } else {
+          // Đỏ cho điểm rất thấp
+          backgroundColor = '#ef4444';
+          textColor = '#ffffff';
+          borderColor = '#dc2626';
+        }
+
+        // Tạo badge
+        const badge = document.createElement('div');
+        badge.className = 'rate-score-badge';
+        badge.style.cssText = `
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          padding: 4px 8px;
+          margin-left: 12px;
+          background-color: ${backgroundColor};
+          color: ${textColor};
+          border: 1px solid ${borderColor};
+          border-radius: 12px;
+          font-size: 12px;
+          font-weight: 600;
+          line-height: 1;
+          white-space: nowrap;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        `;
+
+        // Tạo icon sao nhỏ
+        const starIcon = document.createElement('span');
+        starIcon.innerHTML = '⭐';
+        starIcon.style.fontSize = '10px';
+
+        // Tạo text
+        const scoreText = document.createElement('span');
+        scoreText.textContent = `Rate Score: ${score}`;
+        scoreText.style.fontWeight = '600';
+
+        // Tạo count trong ngoặc
+        const countText = document.createElement('span');
+        countText.textContent = `(${count})`;
+        countText.style.fontWeight = '400';
+        countText.style.opacity = '0.9';
+
+        // Ghép các phần tử
+        badge.appendChild(starIcon);
+        badge.appendChild(scoreText);
+        badge.appendChild(countText);
+
+        // Chèn vào sau vùng "Đã bán"
+        soldSection.parentNode.insertBefore(badge, soldSection.nextSibling);
+
+        console.log('✅ Đã render Rate Score badge:', { score, count, color: backgroundColor });
+      }
+    });
+  } catch (error) {
+    console.error('❌ Lỗi render Rate Score badge:', error);
+  }
+}

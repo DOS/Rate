@@ -51,14 +51,18 @@
       "Bash(git clone:*)",
       "Bash(git commit:*)",
       "Bash(move:*)",
-      "Bash(dir:*)"
+      "Bash(dir:*)",
+      "Bash(\"C:\\Program Files\\PostgreSQL\\17\\bin\\psql\" -U JOY -d rate_db -c \"SELECT id, \"\"Title\"\", \"\"URL\"\", \"\"Status\"\" FROM listings ORDER BY id DESC LIMIT 5;\")",
+      "Bash(\"C:\\Program Files\\PostgreSQL\\17\\bin\\psql\" -U JOY -d rate_db -c \"SELECT id, \"\"Title\"\", \"\"URL\"\", \"\"Status\"\", \"\"createdAt\"\" FROM listings ORDER BY \"\"createdAt\"\" DESC LIMIT 5;\")"
     ],
     "deny": [],
     "ask": [],
     "additionalDirectories": [
       "C:\\Users\\JOY\\AppData\\Local\\ms-playwright",
       "D:\\Projects",
-      "C:\\Program Files\\PostgreSQL"
+      "C:\\Program Files\\PostgreSQL",
+      "D:\\d\\Projects\\Rate\\packages",
+      "D:\\d\\Projects"
     ]
   }
 }

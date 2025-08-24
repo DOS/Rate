@@ -165,3 +165,11 @@ Required `.env` files:
 3. **Localization**: Vietnamese (vi), English (en), Czech (cs) supported
 4. **API Tokens**: Strapi API tokens required for frontend-backend communication
 5. **File Uploads**: Configure AWS S3 for production Strapi deployments
+
+## Docker Services
+
+**IMPORTANT**: PostgreSQL and Redis run in Docker containers:
+- **PostgreSQL**: Container name `DB`, user `JOY`, database `rate_db`
+- **Redis**: Container name `redis`, used for job queues and caching
+- Access PostgreSQL: `docker exec DB psql -U JOY -d rate_db -c "SQL_QUERY"`
+- Access Redis: `docker exec redis redis-cli COMMAND`

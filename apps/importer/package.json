@@ -7,14 +7,11 @@
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "start": "node dist/Packages/Crawler/Src/index.js",
-    "dev": "ts-node-esm --esm Packages/Crawler/Src/index.ts",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
     "lint": "eslint . --ext .ts",
-    "format": "prettier --write \"Packages/**/*.ts\"",
-    "test": "vitest",
-    "crawler:dev": "ts-node-esm --esm Packages/Crawler/Src/index.ts",
-    "extension:dev": "cd Packages/Extension && npm run dev",
-    "api:dev": "cd Packages/API && npm run dev"
+    "format": "prettier --write \"src/**/*.ts\"",
+    "test": "vitest"
   },
   "keywords": [
     "data-import",
@@ -31,7 +28,6 @@
   },
   "dependencies": {
     "@crawlee/playwright": "^3.13.5",
-    "@repo/validator": "*",
     "@types/ioredis": "^4.28.10",
     "@types/node": "^20.0.0",
     "axios": "^1.9.0",
@@ -40,7 +36,6 @@
     "crawlee": "^3.13.5",
     "date-fns": "^3.0.0",
     "dotenv": "^16.0.0",
-    "ioredis": "^5.4.1",
     "form-data": "^4.0.0",
     "https": "^1.0.0",
     "https-proxy-agent": "^7.0.6",
@@ -71,6 +66,7 @@
     "lint-staged": "latest",
     "prettier": "latest",
     "ts-node": "latest",
+    "tsx": "^4.20.5",
     "typescript": "latest",
     "vite-tsconfig-paths": "latest",
     "vitest": "latest"
