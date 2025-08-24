@@ -167,6 +167,7 @@ function normalizeShopeeImageUrl(s) {
 function mapShopeeApiRatingToReview(r, productInfo) {
   if (!r) return null;
   const username = r.author_username || r.author_shopid || r.author_name || '';
+  const userId = r.userid || r.user_id || r.author_userid || r.author_user_id || '';
   const starCount = r.rating_star || r.rating || 0;
   const content = (r.comment || '').trim();
   const images = Array.isArray(r.images)
@@ -182,26 +183,11 @@ function mapShopeeApiRatingToReview(r, productInfo) {
   } else if (r.model_name) {
     reviewVariant = r.model_name;
   }
-  // Attach variant price if available from productInfo.variants
-  let variantPrice = '';
-  try {
-    const candidates = (productInfo && Array.isArray(productInfo.variants)) ? productInfo.variants : [];
-    if (reviewVariant && candidates.length) {
-      const norm = (s) => (s || '').toString().normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-      const rv = norm(reviewVariant);
-      // 1) Exact (case-insensitive)
-      let found = candidates.find(v => norm(v.name) === rv);
-      // 2) Includes either way
-      if (!found) found = candidates.find(v => {
-        const vn = norm(v.name);
-        return vn.includes(rv) || rv.includes(vn);
-      });
-      if (found) variantPrice = found.price || found.priceMin || '';
-    }
-  } catch {}
   return {
     avatar: normalizeShopeeImageUrl(r.author_portrait || r.author_portrait_url || r.author_portrait_thumb || ''),
     username,
+    userId,
+    isUsernameMasked: typeof username === 'string' ? /\*/.test(username) : false,
     starCount,
     timeType,
     content,
@@ -209,7 +195,6 @@ function mapShopeeApiRatingToReview(r, productInfo) {
     videos: videos.filter(Boolean),
     likes,
     reviewVariant,
-    variantPrice,
     product: productInfo
   };
 }
