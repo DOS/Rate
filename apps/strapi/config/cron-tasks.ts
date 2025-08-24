@@ -1,7 +1,7 @@
 // https://docs.strapi.io/dev-docs/configurations/cron
 
 const sayHelloJob = {
-  task: ({ strapi }) => {
+  task: ({ strapi }: any) => {
     // Add your own logic here (e.g. send a queue of email, create a database backup, etc.).
     console.log("A beautiful start to the week!")
   },

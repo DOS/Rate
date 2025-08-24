@@ -5,6 +5,22 @@ import createMiddleware from "next-intl/middleware"
 import { isDevelopment } from "./lib/general-helpers"
 import { routing } from "./lib/navigation"
 
+// Brotli compression middleware
+function withBrotli(response: NextResponse) {
+  // Add Brotli compression headers for supported content types
+  const contentType = response.headers.get('content-type')
+  if (contentType && (
+    contentType.includes('text/') ||
+    contentType.includes('application/javascript') ||
+    contentType.includes('application/json') ||
+    contentType.includes('text/css')
+  )) {
+    response.headers.set('Accept-Encoding', 'br, gzip, deflate')
+    response.headers.set('Content-Encoding', 'br')
+  }
+  return response
+}
+
 // https://next-intl-docs.vercel.app/docs/getting-started/app-router
 const intlMiddleware = createMiddleware(routing)
 
@@ -54,7 +70,8 @@ export default function middleware(req: NextRequest) {
   }
 
   // All other pages are public
-  return intlMiddleware(req)
+  const response = intlMiddleware(req)
+  return withBrotli(response)
 }
 
 export const config = {

@@ -18,12 +18,12 @@
   "attributes": {
     "Name": {
       "type": "string",
-      "required": true,
       "pluginOptions": {
         "i18n": {
           "localized": true
         }
-      }
+      },
+      "required": true
     },
     "Slug": {
       "type": "uid",
@@ -53,17 +53,52 @@
       "type": "boolean",
       "default": true
     },
+    "Type": {
+      "type": "enumeration",
+      "pluginOptions": {
+        "i18n": {
+          "localized": false
+        }
+      },
+      "required": true,
+      "default": "Other",
+      "enum": [
+        "Product",
+        "Service",
+        "Person",
+        "Business",
+        "Other"
+      ]
+    },
+    "Contact": {
+      "type": "boolean",
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
+      }
+    },
+    "Review": {
+      "type": "boolean",
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
+      }
+    },
+    "Comment": {
+      "type": "boolean",
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
+      }
+    },
     "Listings": {
       "type": "relation",
       "relation": "oneToMany",
       "target": "api::listing.listing",
       "mappedBy": "Category"
-    },
-    "ListingType": {
-      "type": "relation",
-      "relation": "manyToOne",
-      "target": "api::listing-type.listing-type",
-      "inversedBy": "Categories"
     },
     "ParentCategory": {
       "type": "relation",
@@ -82,6 +117,12 @@
       "relation": "manyToOne",
       "target": "api::directory.directory",
       "inversedBy": "Categories"
+    },
+    "Items": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::item.item",
+      "mappedBy": "Category"
     }
   }
 }

@@ -1,17 +1,17 @@
 {
-  "name": "strapi-next-monorepo-starter",
+  "name": "rate-box",
   "version": "2.0.0",
   "private": true,
   "author": {
-    "name": "Notum Technologies",
-    "email": "info@notum.cz",
-    "url": "https://notum.cz"
+    "name": "JOY",
+    "email": "joy@rate.box",
+    "url": "https://rate.box"
   },
   "maintainers": [
     {
-      "name": "Notum Technologies",
-      "email": "info@notum.cz",
-      "url": "https://notum.cz"
+      "name": "JOY",
+      "email": "joy@rate.box",
+      "url": "https://rate.box"
     }
   ],
   "workspaces": [
@@ -35,6 +35,7 @@
     "start:strapi": "turbo run start --filter=@repo/strapi",
     "start:ui": "turbo run start --filter=@repo/ui",
     "setup:apps": "find . -name '*.example' -exec sh -c 'cp \"$1\" \"${1%.example}\"' _ {} \\;",
+    "setup:env": "cp .env.example .env && echo 'Created .env file. Please add your API keys!'",
     "type-check": "turbo type-check",
     "auto-test": "pwsh -File .\\Test\\auto-test-build-workflow.ps1",
     "test-plugin": "npx playwright test Test/auto-test-smart-component-filter.spec.js --headed"
@@ -65,8 +66,6 @@
   },
   "dependencies": {
     "@next/eslint-plugin-next": "15.3.3",
-    "@strapi/plugin-seo": "2.0.8",
-    "@strapi/strapi": "^5.15.1",
     "@t3-oss/env-nextjs": "0.13.6",
     "@typescript-eslint/eslint-plugin": "8.33.1",
     "@typescript-eslint/parser": "8.33.1",
@@ -74,7 +73,6 @@
     "eslint-config-prettier": "10.1.5",
     "lucide-react": "0.513.0",
     "playwright": "^1.52.0",
-    "strapi-plugin-config-sync": "3.1.1",
     "zod": "^3.25.56"
   }
 }

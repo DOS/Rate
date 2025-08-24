@@ -56,6 +56,7 @@ workspace/
 - **Build**: `yarn build` 
 - **PowerShell**: Sử dụng Windows PowerShell syntax
 - **File operations**: PowerShell commands, not bash
+- Chạy command từ root qua turbo workspace
 
 ## 🔧 ERROR HANDLING & DEBUGGING
 - Luôn add comprehensive error handling
@@ -75,6 +76,7 @@ workspace/
 - Follow best UX practices
 - Responsive design là mandatory
 - Accessibility considerations
+- Ưu tiên sử dụng các component sẵn có của Tailwind Plus và Shacn tại: D:\Projects\Give\apps\ui\src\components\
 
 ## 📝 DOCUMENTATION AUTO-GENERATION
 - Tạo comprehensive README cho mọi project

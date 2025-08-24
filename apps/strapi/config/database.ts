@@ -1,6 +1,6 @@
 import path from "path"
 
-export default ({ env }) => {
+export default ({ env }: any) => {
   const client = env("DATABASE_CLIENT", "postgres")
 
   const connections = {
@@ -46,7 +46,7 @@ export default ({ env }) => {
   return {
     connection: {
       client,
-      ...connections[client],
+      ...(connections as any)[client],
       acquireConnectionTimeout: env.int("DATABASE_CONNECTION_TIMEOUT", 60000),
     },
   }

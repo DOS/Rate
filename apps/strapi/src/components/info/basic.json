@@ -1,7 +1,8 @@
 {
   "collectionName": "components_info_basics",
   "info": {
-    "displayName": "Basic"
+    "displayName": "Basic",
+    "icon": "information"
   },
   "options": {},
   "attributes": {
@@ -14,6 +15,43 @@
     "Alias": {
       "type": "component",
       "component": "review.pro-item",
+      "repeatable": true
+    },
+    "Type": {
+      "type": "enumeration",
+      "enum": [
+        "Individual",
+        "Organization"
+      ]
+    },
+    "Organization": {
+      "type": "component",
+      "conditions": {
+        "visible": {
+          "==": [
+            {
+              "var": "Type"
+            },
+            "Organization"
+          ]
+        }
+      },
+      "component": "info.organization",
+      "repeatable": false
+    },
+    "PersonalInfo": {
+      "type": "component",
+      "conditions": {
+        "visible": {
+          "==": [
+            {
+              "var": "Type"
+            },
+            "Individual"
+          ]
+        }
+      },
+      "component": "info.individual",
       "repeatable": true
     }
   },

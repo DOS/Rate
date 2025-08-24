@@ -46,7 +46,7 @@ export async function StrapiNavbar({ locale }: { readonly locale: AppLocale }) {
 
   return (
     <header className="sticky top-0 z-40 w-full border-b bg-white/90 shadow-sm backdrop-blur transition-colors duration-300">
-      <div className="flex h-16 items-center space-x-6 px-6 sm:space-x-0">
+      <div className="flex h-16 items-center justify-between px-6">
         <div className="flex gap-6 md:gap-10">
           {navbar.logoImage ? (
             <StrapiImageWithLink
@@ -64,7 +64,7 @@ export async function StrapiNavbar({ locale }: { readonly locale: AppLocale }) {
           )}
 
           {links.length > 0 ? (
-            <nav className="flex">
+            <nav className="flex gap-6">
               {links.map((link) => (
                 <StrapiLink
                   component={link}
@@ -78,7 +78,7 @@ export async function StrapiNavbar({ locale }: { readonly locale: AppLocale }) {
           ) : null}
         </div>
 
-        <div className="hidden flex-1 items-center justify-end space-x-4 lg:flex">
+        <div className="flex items-center gap-4">
           {session?.user ? (
             <nav className="flex items-center space-x-1">
               <LoggedUserMenu user={session.user} />

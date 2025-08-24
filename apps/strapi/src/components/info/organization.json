@@ -1,7 +1,8 @@
 {
   "collectionName": "components_info_organizations",
   "info": {
-    "displayName": "Organization"
+    "displayName": "Organization",
+    "icon": "briefcase"
   },
   "options": {},
   "attributes": {

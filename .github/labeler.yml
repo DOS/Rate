@@ -1,0 +1,27 @@
+area:frontend:
+  - 'apps/ui/**'
+  - 'packages/design-system/**'
+
+area:backend:
+  - 'apps/strapi/**'
+
+area:shared:
+  - 'packages/shared-data/**'
+  - 'packages/typescript-config/**'
+  - 'packages/eslint-config/**'
+  - 'packages/prettier-config/**'
+
+feature:
+  - 'Docs/**'
+  - 'apps/ui/src/app/(features)/**'
+
+breaking:api:
+  - any: ['packages/shared-data/**']
+    changed-files: true
+
+ci:
+  - '.github/**'
+
+docs:
+  - 'Docs/**'
+

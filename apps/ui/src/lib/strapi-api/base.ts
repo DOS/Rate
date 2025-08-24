@@ -18,6 +18,8 @@ export const API_ENDPOINTS: { [key in UID.ContentType]?: string } = {
   "api::footer.footer": "/footer",
   "api::navbar.navbar": "/navbar",
   "api::subscriber.subscriber": "/subscribers",
+  "api::item.item": "/items",
+  "api::category.category": "/categories",
 } as const
 
 export default abstract class BaseStrapiClient {

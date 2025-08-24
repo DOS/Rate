@@ -394,6 +394,18 @@ export interface ApiCategoryCategory extends Struct.CollectionTypeSchema {
       "oneToMany",
       "api::category.category"
     >
+    Comment: Schema.Attribute.Boolean &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: true
+        }
+      }>
+    Contact: Schema.Attribute.Boolean &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: true
+        }
+      }>
     createdAt: Schema.Attribute.DateTime
     createdBy: Schema.Attribute.Relation<"oneToOne", "admin::user"> &
       Schema.Attribute.Private
@@ -409,11 +421,8 @@ export interface ApiCategoryCategory extends Struct.CollectionTypeSchema {
     >
     Image: Schema.Attribute.Media<"images" | "files" | "videos" | "audios">
     isActive: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<true>
+    Items: Schema.Attribute.Relation<"oneToMany", "api::item.item">
     Listings: Schema.Attribute.Relation<"oneToMany", "api::listing.listing">
-    ListingType: Schema.Attribute.Relation<
-      "manyToOne",
-      "api::listing-type.listing-type"
-    >
     locale: Schema.Attribute.String
     localizations: Schema.Attribute.Relation<
       "oneToMany",
@@ -431,7 +440,68 @@ export interface ApiCategoryCategory extends Struct.CollectionTypeSchema {
       "api::category.category"
     >
     publishedAt: Schema.Attribute.DateTime
+    Review: Schema.Attribute.Boolean &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: true
+        }
+      }>
     Slug: Schema.Attribute.UID<"Name">
+    Type: Schema.Attribute.Enumeration<
+      ["Product", "Service", "Person", "Business", "Other"]
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: false
+        }
+      }> &
+      Schema.Attribute.DefaultTo<"Other">
+    updatedAt: Schema.Attribute.DateTime
+    updatedBy: Schema.Attribute.Relation<"oneToOne", "admin::user"> &
+      Schema.Attribute.Private
+  }
+}
+
+export interface ApiCommentComment extends Struct.CollectionTypeSchema {
+  collectionName: "comments"
+  info: {
+    description: "Comments on listings"
+    displayName: "Comment"
+    pluralName: "comments"
+    singularName: "comment"
+  }
+  options: {
+    draftAndPublish: false
+  }
+  attributes: {
+    Author: Schema.Attribute.Relation<
+      "manyToOne",
+      "plugin::users-permissions.user"
+    >
+    Content: Schema.Attribute.Text &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 1000
+      }>
+    createdAt: Schema.Attribute.DateTime
+    createdBy: Schema.Attribute.Relation<"oneToOne", "admin::user"> &
+      Schema.Attribute.Private
+    IsApproved: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<true>
+    IsDeleted: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>
+    Listing: Schema.Attribute.Relation<"manyToOne", "api::listing.listing">
+    locale: Schema.Attribute.String & Schema.Attribute.Private
+    localizations: Schema.Attribute.Relation<
+      "oneToMany",
+      "api::comment.comment"
+    > &
+      Schema.Attribute.Private
+    ParentComment: Schema.Attribute.Relation<
+      "manyToOne",
+      "api::comment.comment"
+    >
+    publishedAt: Schema.Attribute.DateTime
+    Replies: Schema.Attribute.Relation<"oneToMany", "api::comment.comment">
     updatedAt: Schema.Attribute.DateTime
     updatedBy: Schema.Attribute.Relation<"oneToOne", "admin::user"> &
       Schema.Attribute.Private
@@ -492,6 +562,68 @@ export interface ApiDirectoryDirectory extends Struct.CollectionTypeSchema {
       }>
     publishedAt: Schema.Attribute.DateTime
     Slug: Schema.Attribute.UID<"Name"> & Schema.Attribute.Required
+    updatedAt: Schema.Attribute.DateTime
+    updatedBy: Schema.Attribute.Relation<"oneToOne", "admin::user"> &
+      Schema.Attribute.Private
+  }
+}
+
+export interface ApiExampleFeatureExampleFeature
+  extends Struct.CollectionTypeSchema {
+  collectionName: "example_features"
+  info: {
+    description: "Example content type for demonstration"
+    displayName: "Example Feature"
+    pluralName: "example-features"
+    singularName: "example-feature"
+  }
+  options: {
+    draftAndPublish: true
+  }
+  attributes: {
+    attachments: Schema.Attribute.Media<"images" | "files", true>
+    category: Schema.Attribute.Enumeration<
+      ["technology", "finance", "education", "healthcare", "other"]
+    > &
+      Schema.Attribute.DefaultTo<"other">
+    createdAt: Schema.Attribute.DateTime
+    createdBy: Schema.Attribute.Relation<"oneToOne", "admin::user"> &
+      Schema.Attribute.Private
+    description: Schema.Attribute.Text &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 5000
+      }>
+    locale: Schema.Attribute.String & Schema.Attribute.Private
+    localizations: Schema.Attribute.Relation<
+      "oneToMany",
+      "api::example-feature.example-feature"
+    > &
+      Schema.Attribute.Private
+    metadata: Schema.Attribute.JSON
+    priority: Schema.Attribute.Integer &
+      Schema.Attribute.SetMinMax<
+        {
+          max: 10
+          min: 1
+        },
+        number
+      > &
+      Schema.Attribute.DefaultTo<5>
+    publishedAt: Schema.Attribute.DateTime
+    relatedFeatures: Schema.Attribute.Relation<
+      "manyToMany",
+      "api::example-feature.example-feature"
+    >
+    status: Schema.Attribute.Enumeration<["draft", "published", "archived"]> &
+      Schema.Attribute.DefaultTo<"draft">
+    tags: Schema.Attribute.JSON
+    thumbnail: Schema.Attribute.Media<"images">
+    title: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 200
+        minLength: 1
+      }>
     updatedAt: Schema.Attribute.DateTime
     updatedBy: Schema.Attribute.Relation<"oneToOne", "admin::user"> &
       Schema.Attribute.Private
@@ -578,8 +710,8 @@ export interface ApiIdentityIdentity extends Struct.CollectionTypeSchema {
     publishedAt: Schema.Attribute.DateTime
     ReportMade: Schema.Attribute.Relation<"oneToMany", "api::report.report">
     ReportReceived: Schema.Attribute.Relation<"oneToMany", "api::report.report">
-    ReviewVote: Schema.Attribute.Relation<
-      "oneToOne",
+    ReviewVotes: Schema.Attribute.Relation<
+      "oneToMany",
       "api::review-vote.review-vote"
     >
     Slug: Schema.Attribute.String
@@ -607,6 +739,7 @@ export interface ApiItemItem extends Struct.CollectionTypeSchema {
     }
   }
   attributes: {
+    Category: Schema.Attribute.Relation<"manyToOne", "api::category.category">
     createdAt: Schema.Attribute.DateTime
     createdBy: Schema.Attribute.Relation<"oneToOne", "admin::user"> &
       Schema.Attribute.Private
@@ -616,16 +749,7 @@ export interface ApiItemItem extends Struct.CollectionTypeSchema {
           localized: true
         }
       }>
-    Gallery: Schema.Attribute.Media<
-      "images" | "files" | "videos" | "audios",
-      true
-    > &
-      Schema.Attribute.SetPluginOptions<{
-        i18n: {
-          localized: true
-        }
-      }>
-    Image: Schema.Attribute.Media<"images" | "files" | "videos" | "audios"> &
+    DynamicFields: Schema.Attribute.JSON &
       Schema.Attribute.SetPluginOptions<{
         i18n: {
           localized: true
@@ -647,17 +771,13 @@ export interface ApiItemItem extends Struct.CollectionTypeSchema {
       Schema.Attribute.DefaultTo<false>
     ItemField: Schema.Attribute.DynamicZone<
       [
+        "violation.detail",
+        "info.organization",
+        "info.individual",
+        "violation.evidence",
         "contact.basic",
         "contact.location",
         "contact.social-media",
-        "violation.detail",
-        "violation.evidence",
-        "utilities.text",
-        "utilities.link",
-        "media.photo",
-        "media.video",
-        "review.pros-cons",
-        "rating.criterion",
       ]
     > &
       Schema.Attribute.SetPluginOptions<{
@@ -675,125 +795,33 @@ export interface ApiItemItem extends Struct.CollectionTypeSchema {
       }> &
       Schema.Attribute.DefaultTo<"Other">
     Listings: Schema.Attribute.Relation<"oneToMany", "api::listing.listing">
-    ListingType: Schema.Attribute.Relation<
-      "manyToOne",
-      "api::listing-type.listing-type"
-    >
     locale: Schema.Attribute.String
     localizations: Schema.Attribute.Relation<"oneToMany", "api::item.item">
+    Media: Schema.Attribute.Media<
+      "images" | "files" | "videos" | "audios",
+      true
+    > &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: true
+        }
+      }>
     publishedAt: Schema.Attribute.DateTime
+    QRCode: Schema.Attribute.String &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: true
+        }
+      }>
     RelatedIdentity: Schema.Attribute.Relation<
       "manyToOne",
       "api::identity.identity"
     >
     Reports: Schema.Attribute.Relation<"oneToMany", "api::report.report">
-    SearchSummary: Schema.Attribute.String &
-      Schema.Attribute.SetPluginOptions<{
-        i18n: {
-          localized: true
-        }
-      }>
+    Reviews: Schema.Attribute.Relation<"oneToMany", "api::review.review">
     Slug: Schema.Attribute.UID<"Title">
     Title: Schema.Attribute.String &
       Schema.Attribute.Required &
-      Schema.Attribute.SetPluginOptions<{
-        i18n: {
-          localized: true
-        }
-      }>
-    updatedAt: Schema.Attribute.DateTime
-    updatedBy: Schema.Attribute.Relation<"oneToOne", "admin::user"> &
-      Schema.Attribute.Private
-  }
-}
-
-export interface ApiListingTypeListingType extends Struct.CollectionTypeSchema {
-  collectionName: "listing_types"
-  info: {
-    description: ""
-    displayName: "Listing Type"
-    pluralName: "listing-types"
-    singularName: "listing-type"
-  }
-  options: {
-    draftAndPublish: true
-  }
-  pluginOptions: {
-    i18n: {
-      localized: true
-    }
-  }
-  attributes: {
-    allowComment: Schema.Attribute.Boolean &
-      Schema.Attribute.SetPluginOptions<{
-        i18n: {
-          localized: true
-        }
-      }> &
-      Schema.Attribute.DefaultTo<true>
-    allowRating: Schema.Attribute.Boolean &
-      Schema.Attribute.SetPluginOptions<{
-        i18n: {
-          localized: true
-        }
-      }> &
-      Schema.Attribute.DefaultTo<true>
-    Categories: Schema.Attribute.Relation<"oneToMany", "api::category.category">
-    createdAt: Schema.Attribute.DateTime
-    createdBy: Schema.Attribute.Relation<"oneToOne", "admin::user"> &
-      Schema.Attribute.Private
-    Criteria: Schema.Attribute.Component<"rating.criterion", true> &
-      Schema.Attribute.SetPluginOptions<{
-        i18n: {
-          localized: true
-        }
-      }>
-    Description: Schema.Attribute.Blocks &
-      Schema.Attribute.SetPluginOptions<{
-        i18n: {
-          localized: true
-        }
-      }>
-    IconSet: Schema.Attribute.Enumeration<
-      ["Classic", "Warning", "Thumb", "Minimal"]
-    > &
-      Schema.Attribute.DefaultTo<"Classic">
-    isActive: Schema.Attribute.Boolean &
-      Schema.Attribute.SetPluginOptions<{
-        i18n: {
-          localized: true
-        }
-      }> &
-      Schema.Attribute.DefaultTo<true>
-    ItemField: Schema.Attribute.JSON &
-      Schema.Attribute.CustomField<"plugin::smart-component-filter.component-multi-select"> &
-      Schema.Attribute.SetPluginOptions<{
-        i18n: {
-          localized: true
-        }
-      }>
-    locale: Schema.Attribute.String
-    localizations: Schema.Attribute.Relation<
-      "oneToMany",
-      "api::listing-type.listing-type"
-    >
-    Name: Schema.Attribute.String &
-      Schema.Attribute.Required &
-      Schema.Attribute.SetPluginOptions<{
-        i18n: {
-          localized: true
-        }
-      }>
-    publishedAt: Schema.Attribute.DateTime
-    ReviewField: Schema.Attribute.JSON &
-      Schema.Attribute.CustomField<"plugin::smart-component-filter.component-multi-select"> &
-      Schema.Attribute.SetPluginOptions<{
-        i18n: {
-          localized: true
-        }
-      }>
-    Slug: Schema.Attribute.UID<"Name">
-    TestList: Schema.Attribute.Enumeration<["A", "B", "C", "D", "E"]> &
       Schema.Attribute.SetPluginOptions<{
         i18n: {
           localized: true
@@ -823,9 +851,14 @@ export interface ApiListingListing extends Struct.CollectionTypeSchema {
   }
   attributes: {
     Category: Schema.Attribute.Relation<"manyToOne", "api::category.category">
+    Comments: Schema.Attribute.Relation<"oneToMany", "api::comment.comment">
     createdAt: Schema.Attribute.DateTime
     createdBy: Schema.Attribute.Relation<"oneToOne", "admin::user"> &
       Schema.Attribute.Private
+    CreatedBy: Schema.Attribute.Relation<
+      "manyToOne",
+      "plugin::users-permissions.user"
+    >
     Description: Schema.Attribute.Blocks &
       Schema.Attribute.SetPluginOptions<{
         i18n: {
@@ -847,12 +880,28 @@ export interface ApiListingListing extends Struct.CollectionTypeSchema {
     >
     publishedAt: Schema.Attribute.DateTime
     Reports: Schema.Attribute.Relation<"oneToMany", "api::report.report">
+    ReviewNotes: Schema.Attribute.Text &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: false
+        }
+      }>
+    Reviews: Schema.Attribute.Relation<"oneToMany", "api::review.review">
     Slug: Schema.Attribute.String &
       Schema.Attribute.SetPluginOptions<{
         i18n: {
           localized: true
         }
       }>
+    Status: Schema.Attribute.Enumeration<
+      ["pending", "approved", "rejected", "needs_revision"]
+    > &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: false
+        }
+      }> &
+      Schema.Attribute.DefaultTo<"pending">
     Title: Schema.Attribute.String &
       Schema.Attribute.Required &
       Schema.Attribute.SetPluginOptions<{
@@ -1101,7 +1150,7 @@ export interface ApiReviewVoteReviewVote extends Struct.CollectionTypeSchema {
     createdAt: Schema.Attribute.DateTime
     createdBy: Schema.Attribute.Relation<"oneToOne", "admin::user"> &
       Schema.Attribute.Private
-    Identity: Schema.Attribute.Relation<"oneToOne", "api::identity.identity">
+    Identity: Schema.Attribute.Relation<"manyToOne", "api::identity.identity">
     isHelpful: Schema.Attribute.Boolean
     locale: Schema.Attribute.String & Schema.Attribute.Private
     localizations: Schema.Attribute.Relation<
@@ -1110,7 +1159,7 @@ export interface ApiReviewVoteReviewVote extends Struct.CollectionTypeSchema {
     > &
       Schema.Attribute.Private
     publishedAt: Schema.Attribute.DateTime
-    Review: Schema.Attribute.Relation<"oneToOne", "api::review.review">
+    Review: Schema.Attribute.Relation<"manyToOne", "api::review.review">
     updatedAt: Schema.Attribute.DateTime
     updatedBy: Schema.Attribute.Relation<"oneToOne", "admin::user"> &
       Schema.Attribute.Private
@@ -1120,46 +1169,114 @@ export interface ApiReviewVoteReviewVote extends Struct.CollectionTypeSchema {
 export interface ApiReviewReview extends Struct.CollectionTypeSchema {
   collectionName: "reviews"
   info: {
-    description: ""
+    description: "User reviews and ratings for listings"
     displayName: "Review"
     pluralName: "reviews"
     singularName: "review"
   }
   options: {
-    draftAndPublish: true
+    draftAndPublish: false
+  }
+  pluginOptions: {
+    i18n: {
+      localized: true
+    }
   }
   attributes: {
-    Content: Schema.Attribute.Text
+    Comments: Schema.Attribute.Relation<"oneToMany", "api::comment.comment">
+    Cons: Schema.Attribute.Text &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: true
+        }
+      }>
     createdAt: Schema.Attribute.DateTime
     createdBy: Schema.Attribute.Relation<"oneToOne", "admin::user"> &
       Schema.Attribute.Private
-    DownVote: Schema.Attribute.Integer
-    FieldGroup: Schema.Attribute.DynamicZone<["contact.basic"]>
-    isFeatured: Schema.Attribute.Boolean
-    locale: Schema.Attribute.String & Schema.Attribute.Private
-    localizations: Schema.Attribute.Relation<
-      "oneToMany",
-      "api::review.review"
-    > &
-      Schema.Attribute.Private
+    Description: Schema.Attribute.Blocks &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: true
+        }
+      }>
+    HelpfulCount: Schema.Attribute.Integer &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: false
+        }
+      }> &
+      Schema.Attribute.DefaultTo<0>
+    IsApproved: Schema.Attribute.Boolean &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: false
+        }
+      }> &
+      Schema.Attribute.DefaultTo<true>
+    IsVerified: Schema.Attribute.Boolean &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: false
+        }
+      }> &
+      Schema.Attribute.DefaultTo<false>
+    Item: Schema.Attribute.Relation<"manyToOne", "api::item.item">
+    Listing: Schema.Attribute.Relation<"manyToOne", "api::listing.listing">
+    locale: Schema.Attribute.String
+    localizations: Schema.Attribute.Relation<"oneToMany", "api::review.review">
+    NotHelpfulCount: Schema.Attribute.Integer &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: false
+        }
+      }> &
+      Schema.Attribute.DefaultTo<0>
+    Photos: Schema.Attribute.Media<"images", true> &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: false
+        }
+      }>
+    Pros: Schema.Attribute.Text &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: true
+        }
+      }>
     publishedAt: Schema.Attribute.DateTime
-    RejectReason: Schema.Attribute.String
-    ReportedCount: Schema.Attribute.Integer
+    Rating: Schema.Attribute.Integer &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: false
+        }
+      }> &
+      Schema.Attribute.SetMinMax<
+        {
+          max: 5
+          min: 1
+        },
+        number
+      >
     Reports: Schema.Attribute.Relation<"oneToMany", "api::report.report">
-    ReviewDate: Schema.Attribute.DateTime
-    ReviewStatus: Schema.Attribute.Enumeration<
-      ["Draft", "Pending", "Published", "Rejected", "Archived"]
+    Reviewer: Schema.Attribute.Relation<
+      "manyToOne",
+      "plugin::users-permissions.user"
     >
-    ReviewType: Schema.Attribute.Enumeration<["Expert", "User"]>
-    ReviewVote: Schema.Attribute.Relation<
-      "oneToOne",
+    ReviewVotes: Schema.Attribute.Relation<
+      "oneToMany",
       "api::review-vote.review-vote"
     >
-    Title: Schema.Attribute.String & Schema.Attribute.Required
+    Title: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: true
+        }
+      }>
     updatedAt: Schema.Attribute.DateTime
     updatedBy: Schema.Attribute.Relation<"oneToOne", "admin::user"> &
       Schema.Attribute.Private
-    UpVote: Schema.Attribute.Integer
   }
 }
 
@@ -1703,11 +1820,12 @@ declare module "@strapi/strapi" {
       "admin::transfer-token-permission": AdminTransferTokenPermission
       "admin::user": AdminUser
       "api::category.category": ApiCategoryCategory
+      "api::comment.comment": ApiCommentComment
       "api::directory.directory": ApiDirectoryDirectory
+      "api::example-feature.example-feature": ApiExampleFeatureExampleFeature
       "api::footer.footer": ApiFooterFooter
       "api::identity.identity": ApiIdentityIdentity
       "api::item.item": ApiItemItem
-      "api::listing-type.listing-type": ApiListingTypeListingType
       "api::listing.listing": ApiListingListing
       "api::navbar.navbar": ApiNavbarNavbar
       "api::page.page": ApiPagePage

@@ -58,6 +58,29 @@
         }
       }
     },
+    "Status": {
+      "type": "enumeration",
+      "enum": [
+        "pending",
+        "approved",
+        "rejected",
+        "needs_revision"
+      ],
+      "default": "pending",
+      "pluginOptions": {
+        "i18n": {
+          "localized": false
+        }
+      }
+    },
+    "ReviewNotes": {
+      "type": "text",
+      "pluginOptions": {
+        "i18n": {
+          "localized": false
+        }
+      }
+    },
     "Item": {
       "type": "relation",
       "relation": "manyToOne",
@@ -75,6 +98,23 @@
       "relation": "oneToMany",
       "target": "api::report.report",
       "mappedBy": "TargetListing"
+    },
+    "CreatedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "Comments": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::comment.comment",
+      "mappedBy": "Listing"
+    },
+    "Reviews": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::review.review",
+      "mappedBy": "Listing"
     }
   }
 }

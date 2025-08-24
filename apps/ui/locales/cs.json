@@ -235,5 +235,128 @@
       "email": "E-mail",
       "submit": "Obnovit účet"
     }
+  },
+
+  "scamDetector": {
+    "hero": {
+      "badge": "Důvěřuje nám +100 000 uživatelů",
+      "title": "Zkontrolujte",
+      "titleHighlight": "online podvody",
+      "description": "Chraňte se před podvodnými triky s naším",
+      "descriptionHighlight": "bezplatným, rychlým a přesným",
+      "descriptionEnd": "nástrojem pro kontrolu",
+      "features": {
+        "instant": {
+          "title": "Okamžitá kontrola",
+          "description": "Výsledky během několika sekund"
+        },
+        "warning": {
+          "title": "Včasné varování",
+          "description": "Detekce nových hrozeb"
+        },
+        "updated": {
+          "title": "Aktualizovaná data",
+          "description": "Od komunity uživatelů"
+        }
+      }
+    },
+    "search": {
+      "title": "Zkontrolovat podvodné informace",
+      "placeholder": "Zadejte telefonní číslo, e-mail, webovou stránku nebo název organizace...",
+      "button": "Zkontrolovat",
+      "checking": "Kontroluje se...",
+      "tips": {
+        "title": "Průvodce vyhledáváním:",
+        "phone": "Telefonní číslo:",
+        "phoneExample": "0909123456, +420909123456",
+        "email": "E-mail:",
+        "emailExample": "example@scam.com",
+        "website": "Webová stránka:",
+        "websiteExample": "https://example.com, www.example.com",
+        "organization": "Jméno/Organizace:",
+        "organizationExample": "Společnost ABC, Jan Novák"
+      },
+      "recent": "Nedávná vyhledávání:"
+    },
+    "trust": {
+      "accuracy": "Přesnost",
+      "activeUsers": "Aktivních uživatelů",
+      "reportsProcessed": "Zpracovaných hlášení",
+      "monthlyGrowth": "Měsíční růst"
+    },
+    "statistics": {
+      "title": "Transparentnost a důvěra",
+      "description": "Statistiky v reálném čase z našeho komunitního systému hlášení",
+      "totalReports": "Celkem hlášení",
+      "dailyReports": "Dnešní hlášení",
+      "monthlyReports": "Měsíční hlášení",
+      "resolvedCases": "Vyřešené případy",
+      "scammersBlocked": "Zablokovaní podvodníci",
+      "moneyProtected": "Ochráněné peníze",
+      "successRate": "Úspěšnost",
+      "scamTypes": {
+        "title": "Distribuce typů podvodů",
+        "phone": "Telefonní podvody",
+        "website": "Falešné webové stránky",
+        "email": "E-mailové podvody",
+        "organization": "Falešné organizace"
+      },
+      "metrics": {
+        "accuracy": "Přesnost detekce",
+        "responseTime": "Průměrná doba odezvy",
+        "uptime": "Doba provozu systému"
+      }
+    },
+    "searchResults": {
+      "enterQuery": "Zadejte prosím vyhledávací dotaz pro nalezení potenciálních podvodníků",
+      "noResults": {
+        "title": "Žádné záznamy nenalezeny",
+        "description": "Dobré zprávy! Nenašli jsme žádná hlášení o podvodech pro \"{query}\". Může to být bezpečné, ale vždy buďte opatrní."
+      },
+      "foundResults": "Nalezeno {count} výsledků pro \"{query}\"",
+      "searchType": "Typ vyhledávání: {type}",
+      "types": {
+        "all": "Vše",
+        "email": "E-mail",
+        "phone": "Telefonní číslo",
+        "website": "Webová stránka",
+        "organization": "Organizace"
+      },
+      "risk": {
+        "high": "Vysoké riziko",
+        "medium": "Střední riziko",
+        "low": "Nízké riziko"
+      },
+      "reports": "{count} hlášení",
+      "viewDetails": "Zobrazit detaily",
+      "unknownEntity": "Neznámý subjekt"
+    },
+    "reports": {
+      "title": "Nejnovější varování",
+      "description": "Nedávno hlášené případy podvodů",
+      "viewAll": "Zobrazit vše",
+      "type": "Typ:",
+      "trending": "Trendy",
+      "noName": "Bez názvu",
+      "noDescription": "Bez popisu",
+      "dangerLevels": {
+        "extreme": "Extrémně nebezpečné",
+        "high": "Vysoké riziko",
+        "medium": "Varování",
+        "low": "Nízké riziko"
+      },
+      "timeAgo": {
+        "hours": "před {count} hodinami",
+        "days": "před {count} dny",
+        "weeks": "před {count} týdny",
+        "recent": "Nedávno"
+      }
+    },
+    "cta": {
+      "title": "Chraňte komunitu před podvody",
+      "description": "Pokud objevíte nebo jste obětí podvodu, okamžitě to nahlaste, abyste varovali ostatní",
+      "reportButton": "Nahlásit podvod",
+      "learnButton": "Naučit se prevenci"
+    }
   }
 }

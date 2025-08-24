@@ -1,0 +1,55 @@
+# CODEOWNERS for Rate Platform
+# This file defines code ownership for automated review requests
+# Format: pattern @github-username or @team-name
+
+# Default owners for everything
+* @team-lead
+
+# Frontend (Claude Code responsibility)
+/apps/ui/ @claude-code
+/apps/ui/src/ @claude-code
+/apps/ui/src/app/ @claude-code
+/apps/ui/src/components/ @claude-code
+/apps/ui/src/hooks/ @claude-code
+/apps/ui/src/lib/ @claude-code
+/apps/ui/src/styles/ @claude-code
+/apps/ui/public/ @claude-code
+
+# Backend (Cursor responsibility)
+/apps/strapi/ @cursor-agent
+/apps/strapi/src/api/ @cursor-agent
+/apps/strapi/src/plugins/ @cursor-agent
+/apps/strapi/src/admin/ @cursor-agent
+/apps/strapi/src/extensions/ @cursor-agent
+/apps/strapi/config/ @cursor-agent
+/apps/strapi/database/ @cursor-agent
+
+# Shared packages (both agents)
+/packages/shared-data/ @claude-code @cursor-agent
+/packages/design-system/ @claude-code
+/packages/validator/ @cursor-agent
+/packages/eslint-config/ @claude-code @cursor-agent
+/packages/prettier-config/ @claude-code @cursor-agent
+/packages/typescript-config/ @claude-code @cursor-agent
+
+# Modules
+/Modules/Extension/ @claude-code
+/Modules/Importer/ @cursor-agent
+/Modules/Validator/ @cursor-agent
+
+# Documentation and config
+/docs/ @claude-code @cursor-agent
+*.md @claude-code @cursor-agent
+CLAUDE.md @claude-code @cursor-agent
+
+# DevOps and Infrastructure
+/docker/ @cursor-agent
+docker-compose.yml @cursor-agent
+.github/ @cursor-agent
+turbo.json @claude-code @cursor-agent
+
+# Root config files
+package.json @claude-code @cursor-agent
+yarn.lock @claude-code @cursor-agent
+tsconfig.json @claude-code @cursor-agent
+.env.example @claude-code @cursor-agent

@@ -1,25 +1,58 @@
-import { setPluginConfig } from "@_sh/strapi-plugin-ckeditor"
+// Fix for "Prism is not defined" error in Strapi 5.23.0
+if (typeof window !== 'undefined' && !window.Prism) {
+  (window as any).Prism = {
+    manual: true,
+    disableWorkerMessageHandler: true,
+    languages: {},
+    plugins: {},
+    hooks: {
+      add: () => {},
+      run: () => {}
+    },
+    highlight: (text: string) => text,
+    highlightAll: () => {},
+    highlightElement: () => {},
+    Token: class {
+      constructor(public type: string, public content: any, public alias?: any) {}
+    }
+  };
+}
 
-import type { StrapiApp } from "@strapi/strapi/admin"
-
-import { cs } from "./cs"
-
-import "@repo/design-system/styles.css"
-
-import { defaultCkEditorConfig } from "./ckeditor/configs"
+import './prism-init';
+import { StrapiApp } from '@strapi/strapi/admin';
 
 export default {
   config: {
-    locales: ["en", "cs", "vi"],
-    translations: {
-      cs,
-    },
+    locales: [
+      // 'ar',
+      // 'fr',
+      'cs',
+      'vi',
+      // 'de',
+      // 'dk',
+      // 'es',
+      // 'he',
+      // 'id',
+      // 'it',
+      // 'ja',
+      // 'ko',
+      // 'ms',
+      // 'nl',
+      // 'no',
+      // 'pl',
+      // 'pt-BR',
+      // 'pt',
+      // 'ru',
+      // 'sk',
+      // 'sv',
+      // 'th',
+      // 'tr',
+      // 'uk',
+      // 'zh-Hans',
+      // 'zh',
+    ],
   },
   bootstrap(app: StrapiApp) {
-    // Simple i18n fix: ensure default locale is properly set
-    console.log("Admin app bootstrapped with locales:", ["en", "cs", "vi"])
+    console.log("🎯 [ADMIN] Admin app bootstrapped");
   },
-  register() {
-    setPluginConfig({ presets: [defaultCkEditorConfig] })
-  },
-}
+};

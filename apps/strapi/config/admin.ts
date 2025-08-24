@@ -2,7 +2,7 @@ import { UID } from "@strapi/strapi"
 
 import { StrapiPreviewConfig } from "../types/internals"
 
-export default ({ env }) => {
+export default ({ env }: any) => {
   const strapiPreviewConfig: StrapiPreviewConfig = {
     enabled: env("STRAPI_PREVIEW_ENABLED") === "true",
     previewSecret: env("STRAPI_PREVIEW_SECRET"),
@@ -27,7 +27,7 @@ export default ({ env }) => {
         allowedOrigins: env("CLIENT_URL"),
         handler: async (
           uid: UID.CollectionType,
-          { documentId, locale, status }
+          { documentId, locale, status }: any
         ) => {
           // Fetch the complete document from Strapi
           if (

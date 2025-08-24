@@ -1,0 +1,72 @@
+yarn workspace v1.22.22
+yarn run v1.22.22
+$ strapi develop
+- Cleaning dist dir D:/Projects/JOY/Rate/apps/strapi/dist
+Γ£ö Cleaning dist dir (15ms)
+- Loading Strapi
+[2025-06-15 18:40:29.720] [32minfo[39m: @strapi/plugin-sentry is disabled because no Sentry DSN was provided
+(node:82620) Warning: Missing transfer.token.salt: Data transfer features have been disabled.
+Please set transfer.token.salt in config/admin.js (ex: you can generate one using Node with `crypto.randomBytes(16).toString('base64')`)
+For security reasons, prefer storing the secret in an environment variable and read it in config/admin.js. See https://docs.strapi.io/developer-docs/latest/setup-deployment-guides/configurations/optional/environment.html#configuration-using-environment-variables.
+(Use `node --trace-warnings ...` to show where the warning was created)
+- Building build context
+
+[INFO] Including the following ENV variables as part of the JS bundle:
+    - ADMIN_PATH
+    - STRAPI_ADMIN_BACKEND_URL
+    - STRAPI_TELEMETRY_DISABLED
+Γ£ö Building build context (57ms)
+- Creating admin
+The CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.
+Γ£ö Creating admin (205ms)
+Γ£ö Loading Strapi (1786ms)
+- Generating types
+Γ£ö Generating types (652ms)
+- Compiling TS
+- Cleaning dist dir D:/Projects/JOY/Rate/apps/strapi/dist
+Γ£ö Cleaning dist dir (60ms)
+Γ£ö Compiling TS (1844ms)
+
+ Project information
+
+[90mΓöîΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ[39m[90mΓö¼ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÉ[39m
+[90mΓöé[39m Time               [90mΓöé[39m Sun Jun 15 2025 18:40:32 GMT+0700 (Indochina TiΓÇª [90mΓöé[39m
+[90mΓöé[39m Launched in        [90mΓöé[39m 4297 ms                                          [90mΓöé[39m
+[90mΓöé[39m Environment        [90mΓöé[39m development                                      [90mΓöé[39m
+[90mΓöé[39m Process PID        [90mΓöé[39m 82620                                            [90mΓöé[39m
+[90mΓöé[39m Version            [90mΓöé[39m 5.15.1 (node v22.14.0)                           [90mΓöé[39m
+[90mΓöé[39m Edition            [90mΓöé[39m Community                                        [90mΓöé[39m
+[90mΓöé[39m Database           [90mΓöé[39m postgres                                         [90mΓöé[39m
+[90mΓöé[39m Database name      [90mΓöé[39m ratebox                                          [90mΓöé[39m
+[90mΓöé[39m Database schema    [90mΓöé[39m public                                           [90mΓöé[39m
+[90mΓööΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ[39m[90mΓö┤ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÿ[39m
+
+ Actions available
+
+Welcome back!
+To access the server ΓÜí∩╕Å, go to:
+http://localhost:1337
+
+[2025-06-15 18:40:32.615] [32minfo[39m: Strapi started successfully
+[2025-06-15 18:41:54.009] [32mhttp[39m: GET /admin/settings/application-infos (42 ms) 200
+[2025-06-15 18:41:54.461] [32mhttp[39m: GET /admin/settings/application-infos (179 ms) 200
+[2025-06-15 18:41:55.033] [32mhttp[39m: GET /admin/project-type (3 ms) 200
+[2025-06-15 18:41:55.095] [32mhttp[39m: GET /favicon.ico (1 ms) 200
+[2025-06-15 18:41:55.240] [32mhttp[39m: POST /admin/renew-token (15 ms) 200
+[2025-06-15 18:41:55.248] [32mhttp[39m: GET /admin/init (33 ms) 200
+[2025-06-15 18:41:55.256] [32mhttp[39m: POST /admin/renew-token (3 ms) 200
+[2025-06-15 18:41:55.271] [32mhttp[39m: GET /admin/users/me (52 ms) 200
+[2025-06-15 18:41:55.303] [32mhttp[39m: GET /admin/users/me/permissions (82 ms) 200
+[2025-06-15 18:41:55.323] [32mhttp[39m: GET /admin/information (48 ms) 200
+[2025-06-15 18:41:55.324] [32mhttp[39m: GET /admin/telemetry-properties (45 ms) 200
+[2025-06-15 18:41:55.344] [32mhttp[39m: GET /admin/license-limit-information (3 ms) 200
+error Command failed with exit code 4294967295.
+info Visit https://yarnpkg.com/en/docs/cli/run for documentation about this command.
+error Command failed.
+Exit code: 4294967295
+Command: C:\nvm4w\nodejs\node.exe
+Arguments: C:\Users\JOY\AppData\Roaming\npm\node_modules\yarn\lib\cli.js develop
+Directory: D:\Projects\JOY\Rate\apps\strapi
+Output:
+
+info Visit https://yarnpkg.com/en/docs/cli/workspace for documentation about this command.

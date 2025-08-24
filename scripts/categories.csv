@@ -1,0 +1,11 @@
+slug,name,categoryType,sharedComponents,specificFields
+bat-dong-san,Bất động sản,RealEstate,"real-estate-basics;location-details","propertyType:enum:house,apartment,land,villa,office|area:decimal|bedrooms:integer|bathrooms:integer|direction:enum:north,south,east,west"
+xe-hoi,Xe hơi,Vehicle,"technical-specs;warranty-info","vehicleType:enum:sedan,suv,truck,van|brand:string|model:string|year:integer|mileage:decimal|transmission:enum:manual,automatic"
+xe-may,Xe máy,Vehicle,"technical-specs;warranty-info","bikeType:enum:scooter,sport,cruiser,manual|brand:string|model:string|year:integer|mileage:decimal|engineSize:integer"
+dien-thoai,Điện thoại,Electronics,"technical-specs;warranty-info","phoneBrand:string|model:string|storage:enum:32GB,64GB,128GB,256GB,512GB|ram:enum:4GB,6GB,8GB,12GB|condition:enum:new,likenew,used"
+may-tinh,Máy tính,Electronics,"technical-specs;warranty-info","computerType:enum:laptop,desktop,allinone|brand:string|processor:string|ram:string|storage:string|graphics:string"
+thoi-trang,Thời trang,Fashion,"size-guide;material-info","clothingType:enum:shirt,pants,dress,shoes|size:string|brand:string|material:string|condition:enum:new,likenew,used"
+nha-hang,Nhà hàng,Food,"location-details;business-hours","cuisineType:enum:vietnamese,chinese,japanese,korean,western|seatingCapacity:integer|hasDelivery:boolean|priceRange:enum:budget,medium,premium"
+viec-lam,Việc làm,Job,"job-requirements;company-info","jobType:enum:fulltime,parttime,freelance,internship|experienceLevel:enum:fresher,junior,senior,manager|salary:string|industry:string"
+khoa-hoc,Khóa học,Education,"course-details;instructor-info","courseType:enum:online,offline,hybrid|duration:string|level:enum:beginner,intermediate,advanced|certification:boolean"
+dich-vu,Dịch vụ,Service,"service-details;provider-info","serviceType:string|availability:string|pricing:string|location:string" 

@@ -28,7 +28,7 @@ export const getFullPopulateObject = (
     return undefined
   }
 
-  const populate = {}
+  const populate: Record<string, any> = {}
   const model = strapi.getModel(modelUid)
   if (ignore && !ignore.includes(model.collectionName)) {
     ignore.push(model.collectionName)
@@ -45,7 +45,7 @@ export const getFullPopulateObject = (
       if (value.type === "component") {
         populate[key] = getFullPopulateObject(value.component, maxDepth - 1)
       } else if (value.type === "dynamiczone") {
-        const dynamicPopulate = value.components.reduce((prev, cur) => {
+        const dynamicPopulate = value.components.reduce((prev: any, cur: any) => {
           const curPopulate = getFullPopulateObject(cur, maxDepth - 1)
           return merge(prev, { [cur]: curPopulate })
         }, {})

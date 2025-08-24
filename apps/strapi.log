@@ -1,0 +1,31 @@
+yarn run v1.22.22
+$ strapi develop
+- Cleaning dist dir D:/Projects/JOY/Rate/apps/strapi/dist
+Γ£ö Cleaning dist dir (20ms)
+- Loading Strapi
+[2025-06-15 17:41:39.764] [32minfo[39m: @strapi/plugin-sentry is disabled because no Sentry DSN was provided
+(node:33356) Warning: Missing transfer.token.salt: Data transfer features have been disabled.
+Please set transfer.token.salt in config/admin.js (ex: you can generate one using Node with `crypto.randomBytes(16).toString('base64')`)
+For security reasons, prefer storing the secret in an environment variable and read it in config/admin.js. See https://docs.strapi.io/developer-docs/latest/setup-deployment-guides/configurations/optional/environment.html#configuration-using-environment-variables.
+(Use `node --trace-warnings ...` to show where the warning was created)
+- Building build context
+
+[INFO] Including the following ENV variables as part of the JS bundle:
+    - ADMIN_PATH
+    - STRAPI_ADMIN_BACKEND_URL
+    - STRAPI_TELEMETRY_DISABLED
+Γ£ö Building build context (55ms)
+- Creating admin
+The CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.
+Γ£ö Creating admin (197ms)
+Γ£ö Loading Strapi (1643ms)
+- Generating types
+Γ£ö Generating types (651ms)
+- Compiling TS
+- Cleaning dist dir D:/Projects/JOY/Rate/apps/strapi/dist
+Γ£ö Cleaning dist dir (73ms)
+Γ£ö Compiling TS (1827ms)
+[2025-06-15 17:41:42.610] [31merror[39m: The port 1337 is already used by another application.
+[2025-06-15 17:41:42.610] [32minfo[39m: Shutting down Strapi
+error Command failed with exit code 1.
+info Visit https://yarnpkg.com/en/docs/cli/run for documentation about this command.

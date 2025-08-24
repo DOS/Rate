@@ -1,6 +1,6 @@
 import cronTasks from "./cron-tasks"
 
-export default ({ env }) => ({
+export default ({ env }: any) => ({
   host: env("HOST", "0.0.0.0"),
   port: env.int("PORT", 1337),
   app: {

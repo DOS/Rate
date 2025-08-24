@@ -37,23 +37,33 @@
         }
       }
     },
-    "Image": {
-      "type": "media",
+    "isActive": {
+      "type": "boolean",
       "pluginOptions": {
         "i18n": {
           "localized": true
         }
       },
-      "multiple": false,
-      "required": false,
-      "allowedTypes": [
-        "images",
-        "files",
-        "videos",
-        "audios"
-      ]
+      "default": true
     },
-    "Gallery": {
+    "isFeatured": {
+      "type": "boolean",
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
+      },
+      "default": false
+    },
+    "QRCode": {
+      "type": "string",
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
+      }
+    },
+    "Media": {
       "type": "media",
       "pluginOptions": {
         "i18n": {
@@ -68,45 +78,6 @@
         "videos",
         "audios"
       ]
-    },
-    "isActive": {
-      "type": "boolean",
-      "pluginOptions": {
-        "i18n": {
-          "localized": true
-        }
-      },
-      "default": true
-    },
-    "ItemField": {
-      "type": "dynamiczone",
-      "pluginOptions": {
-        "i18n": {
-          "localized": true
-        }
-      },
-      "components": [
-        "contact.basic",
-        "contact.location",
-        "contact.social-media",
-        "violation.detail",
-        "violation.evidence",
-        "utilities.text",
-        "utilities.link",
-        "media.photo",
-        "media.video",
-        "review.pros-cons",
-        "rating.criterion"
-      ]
-    },
-    "isFeatured": {
-      "type": "boolean",
-      "pluginOptions": {
-        "i18n": {
-          "localized": true
-        }
-      },
-      "default": false
     },
     "ItemType": {
       "type": "enumeration",
@@ -125,10 +96,22 @@
         "Other"
       ]
     },
-    "ListingType": {
-      "type": "relation",
-      "relation": "manyToOne",
-      "target": "api::listing-type.listing-type"
+    "ItemField": {
+      "type": "dynamiczone",
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
+      },
+      "components": [
+        "violation.detail",
+        "info.organization",
+        "info.individual",
+        "violation.evidence",
+        "contact.basic",
+        "contact.location",
+        "contact.social-media"
+      ]
     },
     "RelatedIdentity": {
       "type": "relation",
@@ -147,13 +130,25 @@
       "target": "api::report.report",
       "mappedBy": "TargetItem"
     },
-    "SearchSummary": {
-      "type": "string",
+    "Category": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::category.category",
+      "inversedBy": "Items"
+    },
+    "DynamicFields": {
+      "type": "json",
       "pluginOptions": {
         "i18n": {
           "localized": true
         }
       }
+    },
+    "Reviews": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::review.review",
+      "mappedBy": "Item"
     }
   }
 }
