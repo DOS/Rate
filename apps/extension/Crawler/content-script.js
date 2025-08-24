@@ -7,6 +7,7 @@ try { if (location.host.includes('shopee.vn')) { injectShopeeApiBridge(); inject
 function injectShopeeApiBridge() {
   try {
     if (document.getElementById('rate-shopee-bridge')) return;
+    try { chrome.runtime && chrome.runtime.sendMessage && chrome.runtime.sendMessage({ type: 'inject_page_scripts' }); } catch {}
     const script = document.createElement('script');
     script.id = 'rate-shopee-bridge';
     script.src = chrome.runtime.getURL('page-bridge.js');
@@ -18,6 +19,7 @@ function injectShopeeApiBridge() {
 function injectShopeeSniffer() {
   try {
     if (document.getElementById('rate-shopee-sniffer')) return;
+    try { chrome.runtime && chrome.runtime.sendMessage && chrome.runtime.sendMessage({ type: 'inject_page_scripts' }); } catch {}
     const script = document.createElement('script');
     script.id = 'rate-shopee-sniffer';
     script.src = chrome.runtime.getURL('page-sniffer.js');
@@ -38,21 +40,85 @@ async function fetchShopeeProductViaAPI() {
   try {
     const { shopId, itemId } = getShopeeIdsFromUrl();
     if (!shopId || !itemId) return null;
-    const resp = await fetch(`/api/v4/item/get?itemid=${itemId}&shopid=${shopId}`, { credentials: 'include' });
-    const j = await resp.json();
+    // Ensure bridge ready
+    try {
+      injectShopeeApiBridge();
+      await new Promise((resolve) => {
+        let resolved = false;
+        const t = setTimeout(() => { if (!resolved) resolve(); }, 500);
+        const onMsg = (e) => { if (e && e.data && e.data.type === 'EXT_BRIDGE_READY') { resolved = true; clearTimeout(t); window.removeEventListener('message', onMsg); resolve(); } };
+        window.addEventListener('message', onMsg);
+      });
+    } catch {}
+    // Try bridge first to avoid 403
+    let j = null;
+    try {
+      const requestId = 'item_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+      j = await new Promise((resolve) => {
+        const onMsg = (e) => {
+          const m = e && e.data;
+          if (!m || m.requestId !== requestId) return;
+          window.removeEventListener('message', onMsg);
+          if (m.type === 'EXT_SHOPEE_ITEM_DATA') return resolve(m.data);
+          return resolve(null);
+        };
+        window.addEventListener('message', onMsg);
+        window.postMessage({ type: 'EXT_REQUEST_SHOPEE_ITEM_GET', requestId, shopId, itemId }, '*');
+      });
+      if (!j) throw new Error('bridge_failed');
+    } catch (_) {
+      // Last resort: direct (may 403)
+      try {
+        const resp = await fetch(`/api/v4/item/get?itemid=${itemId}&shopid=${shopId}`, { credentials: 'include' });
+        if (resp.ok) j = await resp.json();
+      } catch {}
+    }
     const item = j?.data?.item || j?.item || j?.data;
     if (!item) return null;
-    const priceMin = (item.price_min || item.price || 0) / 100000;
-    const priceStr = priceMin ? String(priceMin).replace(/\B(?=(\d{3})+(?!\d))/g, ',') : '';
+    const toFormatted = (raw) => {
+      const val = Number(raw || 0) / 100000; // Shopee uses x100000
+      if (!val) return '';
+      return String(val).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    };
+    const priceMinNum = (item.price_min || item.price || 0);
+    const priceMaxNum = (item.price_max || item.price || 0);
+    const priceStr = toFormatted(priceMinNum);
+    const priceRange = priceMaxNum && priceMaxNum !== priceMinNum ? `${toFormatted(priceMinNum)} - ${toFormatted(priceMaxNum)}` : priceStr;
     const categories = Array.isArray(item.categories) ? item.categories.map(c => c?.display_name || c?.name).filter(Boolean) : [];
     const brand = item.brand || '';
+    // Variants/models mapping
+    const models = Array.isArray(item.models) ? item.models : [];
+    const variantsFromModels = models.map(m => {
+      const name = m?.name || m?.model_name || '';
+      const vMin = m?.price_min || m?.price || 0;
+      const vMax = m?.price_max || m?.price || 0;
+      return {
+        name,
+        price: toFormatted(vMin),
+        priceMin: toFormatted(vMin),
+        priceMax: toFormatted(vMax)
+      };
+    }).filter(v => v.name);
+    // Fallback: tier variations (options)
+    let variants = variantsFromModels;
+    try {
+      if ((!variants || variants.length === 0) && Array.isArray(item.tier_variations)) {
+        const names = [];
+        item.tier_variations.forEach(tv => {
+          (tv?.options || []).forEach(opt => { if (opt) names.push(opt); });
+        });
+        variants = names.map(n => ({ name: n, price: toFormatted(item.price_min || item.price || 0) }));
+      }
+    } catch {}
     return {
       productName: item.name || '',
       price: priceStr,
+      priceRange,
       productUrl: window.location.href,
       productId: String(item.itemid || itemId),
       categories,
-      brand
+      brand,
+      variants
     };
   } catch (_) { return null; }
 }
@@ -85,12 +151,27 @@ function triggerShopeeRatingsLoad() {
   } catch (_) {}
 }
 
+function normalizeShopeeImageUrl(s) {
+  try {
+    if (!s) return '';
+    const str = String(s);
+    if (/^https?:\/\//i.test(str)) return str;
+    if (str.startsWith('//')) return 'https:' + str;
+    // Shopee image id -> full URL
+    return 'https://down-vn.img.susercontent.com/file/' + str;
+  } catch (_) {
+    return '';
+  }
+}
+
 function mapShopeeApiRatingToReview(r, productInfo) {
   if (!r) return null;
   const username = r.author_username || r.author_shopid || r.author_name || '';
   const starCount = r.rating_star || r.rating || 0;
   const content = (r.comment || '').trim();
-  const images = Array.isArray(r.images) ? r.images.map(i => (i && (i.url || i.image_url || i))) : [];
+  const images = Array.isArray(r.images)
+    ? r.images.map(i => normalizeShopeeImageUrl(i && (i.url || i.image_url || i)))
+    : [];
   const videos = Array.isArray(r.videos) ? r.videos.map(v => (v && (v.url || v.video_url || v))) : [];
   const likes = String(r.like_count || r.helpful_count || '0');
   const ts = r.ctime || r.timestamp || 0;
@@ -101,8 +182,25 @@ function mapShopeeApiRatingToReview(r, productInfo) {
   } else if (r.model_name) {
     reviewVariant = r.model_name;
   }
+  // Attach variant price if available from productInfo.variants
+  let variantPrice = '';
+  try {
+    const candidates = (productInfo && Array.isArray(productInfo.variants)) ? productInfo.variants : [];
+    if (reviewVariant && candidates.length) {
+      const norm = (s) => (s || '').toString().normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+      const rv = norm(reviewVariant);
+      // 1) Exact (case-insensitive)
+      let found = candidates.find(v => norm(v.name) === rv);
+      // 2) Includes either way
+      if (!found) found = candidates.find(v => {
+        const vn = norm(v.name);
+        return vn.includes(rv) || rv.includes(vn);
+      });
+      if (found) variantPrice = found.price || found.priceMin || '';
+    }
+  } catch {}
   return {
-    avatar: r.author_portrait || '',
+    avatar: normalizeShopeeImageUrl(r.author_portrait || r.author_portrait_url || r.author_portrait_thumb || ''),
     username,
     starCount,
     timeType,
@@ -111,66 +209,84 @@ function mapShopeeApiRatingToReview(r, productInfo) {
     videos: videos.filter(Boolean),
     likes,
     reviewVariant,
+    variantPrice,
     product: productInfo
   };
 }
 
-function fetchShopeeReviewsViaPageApi(maxPages = 3) {
-  return new Promise((resolve) => {
+async function fetchShopeeReviewsViaPageApi(maxPages = 3) {
+  try {
+    injectShopeeApiBridge();
+    const { shopId, itemId } = getShopeeIdsFromUrl();
+    if (!shopId || !itemId) return [];
+    // Build enriched product info before mapping any review
+    let productInfo = getShopeeProductAndSellerInfo();
     try {
-      injectShopeeApiBridge();
-      const { shopId, itemId } = getShopeeIdsFromUrl();
-      if (!shopId || !itemId) return resolve([]);
-      const productInfo = getShopeeProductAndSellerInfo();
-      const requestId = 'req_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
-      const collected = [];
-      const onMsg = (e) => {
-        const m = e && e.data;
-        if (!m || m.requestId !== requestId) return;
-        if (m.type === 'EXT_SHOPEE_RATINGS_CHUNK' && Array.isArray(m.ratings)) {
-          m.ratings.forEach((raw) => {
-            const review = mapShopeeApiRatingToReview(raw, productInfo);
-            if (review) collected.push(review);
-          });
-        } else if (m.type === 'EXT_SHOPEE_RATINGS_DONE') {
-          window.removeEventListener('message', onMsg);
-          // If v2 yielded nothing, try v4 once directly
-          if (collected.length === 0) {
-            (async () => {
-              try {
-                let offset = 0;
-                for (let p = 0; p < maxPages; p++) {
-                  const v4 = await fetch(`/api/v4/pdp/get_rating_list?itemid=${itemId}&shopid=${shopId}&limit=20&offset=${offset}`, { credentials: 'include' });
-                  const jd = await v4.json();
-                  const list = (jd && (jd.data?.list || jd.list || jd.data?.ratings)) || [];
-                  if (Array.isArray(list)) {
-                    list.forEach(raw => {
-                      const review = mapShopeeApiRatingToReview(raw, productInfo);
-                      if (review) collected.push(review);
-                    });
-                    if (list.length < 20) break;
-                    offset += 20;
-                  } else {
-                    break;
+      const apiInfo = await fetchShopeeProductViaAPI();
+      if (apiInfo) {
+        productInfo = {
+          ...productInfo,
+          productName: productInfo.productName || apiInfo.productName,
+          price: productInfo.price || apiInfo.price,
+          priceRange: productInfo.priceRange || apiInfo.priceRange,
+          categories: (productInfo.categories && productInfo.categories.length ? productInfo.categories : apiInfo.categories) || [],
+          brand: productInfo.brand || apiInfo.brand,
+          productId: productInfo.productId || apiInfo.productId,
+          variants: apiInfo.variants || productInfo.variants
+        };
+      }
+    } catch {}
+    const requestId = 'req_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+    const collected = [];
+    return await new Promise((resolve) => {
+      try {
+        const onMsg = (e) => {
+          const m = e && e.data;
+          if (!m || m.requestId !== requestId) return;
+          if (m.type === 'EXT_SHOPEE_RATINGS_CHUNK' && Array.isArray(m.ratings)) {
+            m.ratings.forEach((raw) => {
+              const review = mapShopeeApiRatingToReview(raw, productInfo);
+              if (review) collected.push(review);
+            });
+          } else if (m.type === 'EXT_SHOPEE_RATINGS_DONE') {
+            window.removeEventListener('message', onMsg);
+            if (collected.length === 0) {
+              (async () => {
+                try {
+                  let offset = 0;
+                  for (let p = 0; p < maxPages; p++) {
+                    const v4 = await fetch(`/api/v4/pdp/get_rating_list?itemid=${itemId}&shopid=${shopId}&limit=20&offset=${offset}`, { credentials: 'include' });
+                    const jd = await v4.json();
+                    const list = (jd && (jd.data?.list || jd.list || jd.data?.ratings)) || [];
+                    if (Array.isArray(list)) {
+                      list.forEach(raw => {
+                        const review = mapShopeeApiRatingToReview(raw, productInfo);
+                        if (review) collected.push(review);
+                      });
+                      if (list.length < 20) break;
+                      offset += 20;
+                    } else {
+                      break;
+                    }
                   }
-                }
-              } catch {}
+                } catch {}
+                resolve(collected);
+              })();
+            } else {
               resolve(collected);
-            })();
-          } else {
+            }
+          } else if (m.type === 'EXT_SHOPEE_RATINGS_ERROR') {
+            window.removeEventListener('message', onMsg);
             resolve(collected);
           }
-        } else if (m.type === 'EXT_SHOPEE_RATINGS_ERROR') {
-          window.removeEventListener('message', onMsg);
-          resolve(collected);
-        }
-      };
-      window.addEventListener('message', onMsg);
-      window.postMessage({ type: 'EXT_REQUEST_SHOPEE_RATINGS', requestId, shopId, itemId, pages: maxPages, limit: 20 }, '*');
-    } catch (_) {
-      resolve([]);
-    }
-  });
+        };
+        window.addEventListener('message', onMsg);
+        window.postMessage({ type: 'EXT_REQUEST_SHOPEE_RATINGS', requestId, shopId, itemId, pages: maxPages, limit: 20 }, '*');
+      } catch (_) {
+        resolve([]);
+      }
+    });
+  } catch (_) { return []; }
 }
 
 // Final fallback: fetch directly from content-script (same-origin, cookies should apply)
@@ -477,7 +593,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
     };
     if (domReviews && domReviews.length > 0) {
-      proceed(domReviews);
+      // Enrich DOM-scraped reviews with product variants/price
+      enrichReviewsWithVariants(domReviews).then(proceed).catch(() => proceed(domReviews));
     } else {
       fetchShopeeReviewsViaPageApi(5).then(apiReviews => {
         if (apiReviews && apiReviews.length > 0) return proceed(apiReviews);
@@ -534,15 +651,35 @@ function getShopeeProductAndSellerInfo() {
   let priceNode = document.querySelector('.pmmxKx')
     || document.querySelector('.pmmxKx._2v0HOb')
     || document.querySelector('.pqTWkA')
-    || document.querySelector('div[data-sqe="price"]');
+    || document.querySelector('div[data-sqe="price"]')
+    || document.querySelector('[data-sqe="price"]')
+    || document.querySelector('[class*="price" i]');
   if (!priceNode) {
-    // Fallback: tìm bất kỳ node nào có thuộc tính data-sqe='price' hoặc class chứa 'price'
-    priceNode = Array.from(document.querySelectorAll('[data-sqe], [class*="price"]')).find(el => {
-      return el.getAttribute('data-sqe') === 'price' || (el.className && el.className.includes('price'));
-    });
+    // Fallback: tìm trong khu vực tiêu đề/giá sản phẩm
+    const scope = document.querySelector('div[data-sqe="price"], section.page-product, main, body') || document;
+    priceNode = Array.from(scope.querySelectorAll('span, div, strong'))
+      .find(el => {
+        const t = (el.textContent || '').replace(/\s+/g, ' ').trim();
+        // text có ký tự tiền tệ hoặc mẫu số tiền
+        return /₫|VND|vnđ|\d{1,3}(?:[.,]\d{3}){1,3}/.test(t);
+      });
   }
-  if (priceNode) price = priceNode.textContent.trim();
-  else console.warn('[Shopee] Không tìm thấy giá sản phẩm');
+  if (priceNode) {
+    const raw = (priceNode.textContent || '').replace(/\s+/g, ' ').trim();
+    // Lấy số lớn nhất trong chuỗi (thường là giá hiện tại)
+    const matches = raw.match(/\d{1,3}(?:[.,]\d{3}){1,3}/g);
+    if (matches && matches.length) {
+      // Ưu tiên số có giá trị lớn nhất để tránh giá gạch
+      const toNumber = (s) => Number(s.replace(/[.,]/g, ''));
+      const best = matches.reduce((a, b) => (toNumber(b) > toNumber(a) ? b : a));
+      price = best;
+    } else {
+      // Nếu không parse được, dùng nguyên văn
+      price = raw;
+    }
+  } else {
+    console.warn('[Shopee] Không tìm thấy giá sản phẩm');
+  }
 
   // ProductId từ URL (Shopee dạng .../i.<shopid>.<itemid>)
   const idMatch = productUrl.match(/i\.(\d+)\.(\d+)/);
@@ -764,6 +901,35 @@ function scrapeShopeeVisibleReviews() {
     
     return hasValidContent && isNotPageNoise;
   });
+}
+
+// Enrich existing reviews array with product variants and variantPrice
+async function enrichReviewsWithVariants(reviews) {
+  if (!Array.isArray(reviews) || reviews.length === 0) return reviews;
+  try {
+    const apiInfo = await fetchShopeeProductViaAPI();
+    if (!apiInfo || !Array.isArray(apiInfo.variants) || apiInfo.variants.length === 0) return reviews;
+    const nameToPrice = new Map();
+    apiInfo.variants.forEach(v => {
+      const key = (v.name || '').toLowerCase();
+      if (key) nameToPrice.set(key, v.price || v.priceMin || '');
+    });
+    return reviews.map(r => {
+      const vName = (r.reviewVariant || '').toLowerCase();
+      const variantPrice = vName && nameToPrice.has(vName) ? nameToPrice.get(vName) : (r.variantPrice || '');
+      return {
+        ...r,
+        variantPrice,
+        product: {
+          ...(r.product || {}),
+          priceRange: (r.product && r.product.priceRange) || apiInfo.priceRange || (r.product && r.product.price) || '',
+          variants: apiInfo.variants
+        }
+      };
+    });
+  } catch {
+    return reviews;
+  }
 }
 
 

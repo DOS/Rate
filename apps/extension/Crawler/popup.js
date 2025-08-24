@@ -1,6 +1,44 @@
 // Popup script for passive Rate Crawler
 console.log('🎯 Rate Crawler popup loaded');
 
+// === TOOLTIP LOGIC ===
+document.addEventListener('DOMContentLoaded', function() {
+  const helpIcon = document.getElementById('helpIcon');
+  const tooltip = document.getElementById('tooltip');
+  
+  if (helpIcon && tooltip) {
+    helpIcon.addEventListener('mouseenter', function() {
+      tooltip.style.display = 'block';
+      helpIcon.style.color = 'white';
+    });
+    
+    helpIcon.addEventListener('mouseleave', function() {
+      tooltip.style.display = 'none';
+      helpIcon.style.color = 'rgba(255,255,255,0.8)';
+    });
+    
+    // For mobile/touch devices
+    helpIcon.addEventListener('click', function(e) {
+      e.stopPropagation();
+      if (tooltip.style.display === 'none' || !tooltip.style.display) {
+        tooltip.style.display = 'block';
+        helpIcon.style.color = 'white';
+      } else {
+        tooltip.style.display = 'none';
+        helpIcon.style.color = 'rgba(255,255,255,0.8)';
+      }
+    });
+    
+    // Hide tooltip when clicking outside
+    document.addEventListener('click', function(e) {
+      if (!helpIcon.contains(e.target) && !tooltip.contains(e.target)) {
+        tooltip.style.display = 'none';
+        helpIcon.style.color = 'rgba(255,255,255,0.8)';
+      }
+    });
+  }
+});
+
 // === API CONFIG LOGIC ===
 const apiUrlInput = document.getElementById('apiUrl');
 const apiTokenInput = document.getElementById('apiToken');
@@ -146,6 +184,8 @@ function setupEventListeners(domain) {
       } catch (e) { extractedReviews = []; }
       // Lọc trùng trước khi export Shopee reviews (kèm reviewVariant)
       const uniqueReviews = dedupeReviews(extractedReviews);
+      // Nhóm theo listing (shopid+itemid) cho batch hiện tại
+      const groupedBatch = groupByListing(uniqueReviews);
 
       // Thêm nút gửi Shopee review qua API (nếu có nút, hoặc gắn vào exportShopeeBtn cho demo)
       const sendShopeeBtn = document.getElementById('sendShopeeBtn');
@@ -165,7 +205,7 @@ function setupEventListeners(domain) {
               try {
                 const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
                 const filename = `shopee-reviews-${timestamp}.json`;
-                const blob = new Blob([JSON.stringify(uniqueReviews, null, 2)], { type: 'application/json' });
+                const blob = new Blob([JSON.stringify(groupedBatch, null, 2)], { type: 'application/json' });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
@@ -183,7 +223,7 @@ function setupEventListeners(domain) {
                 if (shopeeStatusEl) {
                   shopeeStatusEl.style.display = 'block';
                   shopeeStatusEl.className = 'status active';
-                  shopeeStatusEl.textContent = `✅ Đã export ${uniqueReviews.length} review`;
+                  shopeeStatusEl.textContent = `✅ Đã export ${groupedBatch.length} listings (${uniqueReviews.length} reviews)`;
                   setTimeout(() => { shopeeStatusEl.style.display = 'none'; }, 2000);
                 }
               } catch (err) {
@@ -422,6 +462,45 @@ function dedupeReviews(reviews) {
     seen.add(key);
     return true;
   });
+}
+
+// Group reviews by listing (shopid + itemid)
+function groupByListing(reviews) {
+  const map = new Map();
+  (reviews || []).forEach((r) => {
+    const product = r && r.product ? r.product : {};
+    const url = product.productUrl || '';
+    const m = url.match(/i\.(\d+)\.(\d+)/);
+    const shopId = (m && m[1]) || '';
+    const itemId = (m && m[2]) || (product.productId || '');
+    const key = (shopId || '') + '|' + (itemId || '') || url || (product.productName || 'unknown');
+    if (!map.has(key)) {
+      map.set(key, {
+        shopId,
+        itemId,
+        url,
+        product,
+        reviews: []
+      });
+    }
+    // Push compact review to avoid duplicating product block per review
+    const compact = { ...r };
+    try {
+      // Remove heavy duplicated product info inside each review (kept at group level)
+      if (compact.product) {
+        delete compact.product;
+      }
+    } catch (_) {}
+    map.get(key).reviews.push(compact);
+  });
+  return Array.from(map.values()).map(g => ({
+    shopId: g.shopId,
+    itemId: g.itemId,
+    url: g.url,
+    product: g.product,
+    count: g.reviews.length,
+    reviews: g.reviews
+  }));
 }
 
 // Gửi batch data qua API backend (luôn lọc trùng trước khi gửi)

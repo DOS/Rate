@@ -165,11 +165,11 @@
     <form id="apiConfigForm" autocomplete="off">
       <div style="margin-bottom: 8px;">
         <label for="apiUrl" style="font-size:13px;">Strapi API URL:</label>
-        <input type="text" id="apiUrl" name="apiUrl" style="width:100%;padding:6px;border-radius:5px;border:none;margin-top:2px;" placeholder="http://localhost:1337" />
+        <input type="text" id="apiUrl" name="apiUrl" style="width:100%;padding:6px;border-radius:5px;border:none;margin-top:2px;" />
       </div>
       <div style="margin-bottom: 8px;">
         <label for="apiToken" style="font-size:13px;">API Token:</label>
-        <input type="password" id="apiToken" name="apiToken" style="width:100%;padding:6px;border-radius:5px;border:none;margin-top:2px;" placeholder="Your API Token..." />
+        <input type="password" id="apiToken" name="apiToken" style="width:100%;padding:6px;border-radius:5px;border:none;margin-top:2px;" />
       </div>
       <div style="display:flex;gap:8px;">
         <button type="submit" class="button btn-secondary" style="flex:1;margin-top:4px;">💾 Lưu cấu hình</button>
@@ -180,8 +180,8 @@
     </form>
   </div>
   
-  <div class="status active" id="status">
-    ✅ Passive Mode Active - Browse checkscam.vn to collect data
+  <div class="status active" id="status" style="background: rgba(40, 167, 69, 0.3); color: white; text-shadow: 0 1px 2px rgba(0,0,0,0.3);">
+    ⏳ Browse checkscam.vn to start collecting data
   </div>
   
   <div id="scamSection">
@@ -244,6 +244,7 @@
       <button class="button btn-danger" id="clearShopeeBtn" style="margin-top:8px;">
         🗑️ Clear Shopee Reviews
       </button>
+      <div id="shopeeStatus" class="status inactive" style="display:none; margin-top:8px;"></div>
       <div class="data-preview" id="shopeePreview" style="display:none; margin-top:10px;">
         <div id="shopeeList"></div>
       </div>
@@ -258,11 +259,12 @@
   });
 </script>
 
-  <div class="stats-card">
-    <div style="font-size: 12px; opacity: 0.8; text-align: center;">
-      <p>💡 <strong>How it works:</strong></p>
-      <p>Just browse checkscam.vn normally. The extension will automatically detect and collect scam data from pages you visit.</p>
-      <p style="margin-top:8px;">🛒 <strong>Shopee:</strong> Khi bạn mở trang sản phẩm Shopee, extension sẽ tự động lưu lại các review đang hiển thị. Xem và export tại đây!</p>
+  <div style="text-align: center; margin-top: 15px; position: relative;">
+    <span id="helpIcon" style="cursor: pointer; font-size: 20px; color: rgba(255,255,255,0.8); transition: color 0.3s;">💡</span>
+    <div id="tooltip" style="display: none; position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.9); color: white; padding: 12px; border-radius: 8px; width: 320px; font-size: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); z-index: 1000;">
+      <p style="margin: 0 0 8px 0;"><strong>How it works:</strong></p>
+      <p style="margin: 0 0 8px 0;">Just browse checkscam.vn normally. The extension will automatically detect and collect scam data from pages you visit.</p>
+      <p style="margin: 0;">🛒 <strong>Shopee:</strong> Khi bạn mở trang sản phẩm Shopee, extension sẽ tự động lưu lại các review đang hiển thị.</p>
     </div>
   </div>
 

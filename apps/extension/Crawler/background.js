@@ -138,6 +138,57 @@ function updateBadge() {
   }
 }
 
+// Group Shopee reviews by listing (shopid + itemid)
+function groupShopeeReviewsByListing(reviews) {
+  const groupedMap = new Map();
+  (reviews || []).forEach((r) => {
+    const product = r && r.product ? r.product : {};
+    const url = product.productUrl || '';
+    const m = url.match(/i\.(\d+)\.(\d+)/);
+    const shopId = (m && m[1]) || '';
+    const itemId = (m && m[2]) || (product.productId || '');
+    const key = (shopId || '') + '|' + (itemId || '') || url || (product.productName || 'unknown');
+    if (!groupedMap.has(key)) {
+      groupedMap.set(key, {
+        shopId,
+        itemId,
+        url,
+        product: product,
+        reviews: []
+      });
+    }
+    // Store compact review (avoid repeating product block inside each review)
+    const compact = { ...r };
+    try {
+      if (compact.product) {
+        delete compact.product;
+      }
+    } catch (_) {}
+    groupedMap.get(key).reviews.push(compact);
+  });
+  return Array.from(groupedMap.values()).map((g) => ({
+    shopId: g.shopId,
+    itemId: g.itemId,
+    url: g.url,
+    product: g.product,
+    count: g.reviews.length,
+    reviews: g.reviews
+  }));
+}
+
+// Normalize Shopee media IDs to full URLs
+function normalizeShopeeImageUrl(input) {
+  try {
+    if (!input) return '';
+    const s = String(input);
+    if (/^https?:\/\//i.test(s)) return s;
+    if (s.startsWith('//')) return 'https:' + s;
+    return 'https://down-vn.img.susercontent.com/file/' + s;
+  } catch (_) {
+    return '';
+  }
+}
+
 // Show notification when new data found
 function showNotification(newRecordsCount, url) {
   chrome.notifications.create({
@@ -305,9 +356,11 @@ async function exportShopeeReviews() {
   }
 
   try {
+    // Group by listing (shopid+itemid)
+    const grouped = groupShopeeReviewsByListing(shopeeReviewsDatabase);
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const filename = `rate-crawler/shopee-reviews-${timestamp}.json`;
-    const blob = new Blob([JSON.stringify(shopeeReviewsDatabase, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify(grouped, null, 2)], { type: 'application/json' });
     let urlCreator = undefined;
     if (typeof self !== 'undefined' && self.URL && typeof self.URL.createObjectURL === 'function') {
       urlCreator = self.URL;
@@ -339,7 +392,7 @@ async function exportShopeeReviews() {
             type: 'basic',
             iconUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
             title: '✅ Export Successful!',
-            message: `Exported ${shopeeReviewsDatabase.length} Shopee reviews to Downloads/rate-crawler/${filename}`,
+            message: `Exported ${grouped.length} listings (${shopeeReviewsDatabase.length} reviews) to Downloads/rate-crawler/${filename}`,
             priority: 1
           });
           resolve({ success: true });
