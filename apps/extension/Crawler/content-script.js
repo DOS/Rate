@@ -36,6 +36,34 @@ function getShopeeIdsFromUrl() {
   return { shopId: '', itemId: '' };
 }
 
+// Canonicalize Shopee PDP URL to https://shopee.vn/i.<shopId>.<itemId>
+function canonicalProductUrl(url) {
+  try {
+    const m = String(url || window.location.href).match(/i\.(\d+)\.(\d+)/);
+    if (m) return `https://shopee.vn/i.${m[1]}.${m[2]}`;
+    return (url || '').split('#')[0].split('?')[0];
+  } catch (_) { return url; }
+}
+
+// Parse VND numeric amount from text like "46.990.000" → 46990000
+function parsePriceVNDFromText(text) {
+  try {
+    const digits = (text || '').replace(/[^0-9]/g, '');
+    if (!digits) return 0;
+    return Number(digits);
+  } catch (_) { return 0; }
+}
+
+// Convert Shopee raw integer price into VND number (handles different multipliers)
+function convertRawShopeePriceToVND(raw) {
+  const n = Number(raw || 0);
+  if (!n) return 0;
+  if (n > 1e10) return Math.round(n / 100000);
+  if (n > 1e9) return Math.round(n / 1000);
+  if (n > 1e6) return Math.round(n / 100);
+  return n;
+}
+
 async function fetchShopeeProductViaAPI() {
   try {
     const { shopId, itemId } = getShopeeIdsFromUrl();
@@ -75,28 +103,24 @@ async function fetchShopeeProductViaAPI() {
     }
     const item = j?.data?.item || j?.item || j?.data;
     if (!item) return null;
-    const toFormatted = (raw) => {
-      const val = Number(raw || 0) / 100000; // Shopee uses x100000
-      if (!val) return '';
-      return String(val).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-    };
-    const priceMinNum = (item.price_min || item.price || 0);
-    const priceMaxNum = (item.price_max || item.price || 0);
-    const priceStr = toFormatted(priceMinNum);
-    const priceRange = priceMaxNum && priceMaxNum !== priceMinNum ? `${toFormatted(priceMinNum)} - ${toFormatted(priceMaxNum)}` : priceStr;
+    const priceMinNum = convertRawShopeePriceToVND(item.price_min || item.price || 0);
+    const priceMaxNum = convertRawShopeePriceToVND(item.price_max || item.price || 0);
+    const priceRange = priceMaxNum && priceMaxNum !== priceMinNum
+      ? { min: priceMinNum, max: priceMaxNum }
+      : { min: priceMinNum, max: priceMinNum };
     const categories = Array.isArray(item.categories) ? item.categories.map(c => c?.display_name || c?.name).filter(Boolean) : [];
     const brand = item.brand || '';
     // Variants/models mapping
     const models = Array.isArray(item.models) ? item.models : [];
     const variantsFromModels = models.map(m => {
       const name = m?.name || m?.model_name || '';
-      const vMin = m?.price_min || m?.price || 0;
-      const vMax = m?.price_max || m?.price || 0;
+      const vMin = convertRawShopeePriceToVND(m?.price_min || m?.price || 0);
+      const vMax = convertRawShopeePriceToVND(m?.price_max || m?.price || 0);
       return {
         name,
-        price: toFormatted(vMin),
-        priceMin: toFormatted(vMin),
-        priceMax: toFormatted(vMax)
+        price: vMin,
+        priceMin: vMin,
+        priceMax: vMax
       };
     }).filter(v => v.name);
     // Fallback: tier variations (options)
@@ -107,18 +131,21 @@ async function fetchShopeeProductViaAPI() {
         item.tier_variations.forEach(tv => {
           (tv?.options || []).forEach(opt => { if (opt) names.push(opt); });
         });
-        variants = names.map(n => ({ name: n, price: toFormatted(item.price_min || item.price || 0) }));
+        const basePrice = convertRawShopeePriceToVND(item.price_min || item.price || 0);
+        variants = names.map(n => ({ name: n, price: basePrice, priceMin: basePrice, priceMax: basePrice }));
       }
     } catch {}
     return {
       productName: item.name || '',
-      price: priceStr,
+      price: priceMinNum,
       priceRange,
-      productUrl: window.location.href,
+      productUrl: canonicalProductUrl(window.location.href),
       productId: String(item.itemid || itemId),
       categories,
       brand,
-      variants
+      variants,
+      stock: Number(item.stock || item.normal_stock || 0),
+      shipFrom: item.shop_location || item.shop_loca || ''
     };
   } catch (_) { return null; }
 }
@@ -183,6 +210,21 @@ function mapShopeeApiRatingToReview(r, productInfo) {
   } else if (r.model_name) {
     reviewVariant = r.model_name;
   }
+  // Extract structured criteria
+  const criteria = {};
+  try {
+    const lines = (content || '').split(/\n+/).map(s => s.trim()).filter(Boolean);
+    lines.forEach((ln) => {
+      const idx = ln.indexOf(':');
+      if (idx <= 0) return;
+      const key = ln.slice(0, idx).toLowerCase();
+      const val = ln.slice(idx + 1).trim();
+      if (key.includes('chất lượng sản phẩm')) criteria.productQuality = val;
+      else if (key.includes('tính năng nổi bật')) criteria.featured = val;
+      else if (key.includes('đúng với mô tả')) criteria.matchDescription = val;
+      else if (key.startsWith('sản phẩm')) criteria.productTags = val.split(/,\s*/).filter(Boolean);
+    });
+  } catch {}
   return {
     avatar: normalizeShopeeImageUrl(r.author_portrait || r.author_portrait_url || r.author_portrait_thumb || ''),
     username,
@@ -195,6 +237,7 @@ function mapShopeeApiRatingToReview(r, productInfo) {
     videos: videos.filter(Boolean),
     likes,
     reviewVariant,
+    criteria,
     product: productInfo
   };
 }
@@ -619,10 +662,11 @@ function getShopeeProductAndSellerInfo() {
   let productName = '';
   let price = '';
   let productId = '';
-  let productUrl = window.location.href;
+  let productUrl = canonicalProductUrl(window.location.href);
   let categories = [];
   let brand = '';
-  let warehouse = '';
+  let shipFrom = '';
+  let stock = 0;
 
   // Tên sản phẩm
   const nameNode = document.querySelector('.vR6K3w')
@@ -681,9 +725,23 @@ function getShopeeProductAndSellerInfo() {
   const brandNode = document.querySelector('.Gf4Ro0 .Dgs_Bt');
   if (brandNode) brand = brandNode.textContent.trim();
 
-  // Kho (warehouse)
-  const warehouseNode = document.querySelector('.Gf4Ro0 .ybxj32:nth-child(4) div');
-  if (warehouseNode) warehouse = warehouseNode.textContent.trim();
+  // Product details: stock and shipFrom
+  try {
+    const rows = Array.from(document.querySelectorAll('section div, .product-detail div'));
+    rows.forEach((el) => {
+      const t = (el.textContent || '').replace(/\s+/g, ' ').trim();
+      if (!t) return;
+      if (/^Kho(\s|$)/i.test(t)) {
+        const val = (el.nextElementSibling ? el.nextElementSibling.textContent : t).replace(/[^0-9]/g, '');
+        const n = Number(val);
+        if (n) stock = n;
+      }
+      if (/^Gửi từ/i.test(t)) {
+        const val = (el.nextElementSibling ? el.nextElementSibling.textContent : '').trim();
+        if (val) shipFrom = val;
+      }
+    });
+  } catch {}
 
   // --- SELLER INFO ---
   let sellerName = '';
@@ -691,6 +749,10 @@ function getShopeeProductAndSellerInfo() {
   let sellerAvatar = '';
   let sellerReviewCount = '';
   let sellerFollowerCount = '';
+  let sellerResponseRate = '';
+  let sellerResponseTime = '';
+  let sellerJoinSince = '';
+  let sellerProductCount = '';
 
   // Link shop + tên shop
   const sellerLinkNode = document.querySelector('section.page-product__shop a.lG5Xxv');
@@ -709,7 +771,7 @@ function getShopeeProductAndSellerInfo() {
     if (sellerNameNode) sellerName = sellerNameNode.textContent.trim();
   }
 
-  // Tổng số đánh giá shop
+  // Tổng số đánh giá shop + các chỉ số khác
   let reviewCountNode = null;
   // KHÔNG dùng :contains, phải quét thủ công
   const reviewBlocks = document.querySelectorAll('section.page-product__shop .YnZi6x');
@@ -719,6 +781,12 @@ function getShopeeProductAndSellerInfo() {
       reviewCountNode = label.nextElementSibling;
       break;
     }
+    const text = (block.textContent || '').trim();
+    const valueNode = block.querySelector('.Cs6w3G');
+    if (/Tỉ\s*Lệ\s*Phản\s*Hồi/i.test(text) && valueNode) sellerResponseRate = valueNode.textContent.trim();
+    if (/Thời\s*Gian\s*Phản\s*Hồi/i.test(text) && valueNode) sellerResponseTime = valueNode.textContent.trim();
+    if (/Tham\s*Gia/i.test(text) && valueNode) sellerJoinSince = valueNode.textContent.trim();
+    if (/Sản\s*Phẩm/i.test(text) && valueNode) sellerProductCount = valueNode.textContent.trim();
   }
   if (!reviewCountNode) {
     // Fallback: lấy node .Cs6w3G nếu text cha chứa 'Đánh giá'
@@ -743,9 +811,24 @@ function getShopeeProductAndSellerInfo() {
   }
 
   return {
-    productName, price, productUrl, productId,
-    categories, brand,
-    sellerName, sellerLink, sellerAvatar, sellerReviewCount, sellerFollowerCount
+    productName,
+    price,
+    priceVND: parsePriceVNDFromText(price),
+    productUrl,
+    productId,
+    categories,
+    brand,
+    shipFrom,
+    stock,
+    sellerName,
+    sellerLink,
+    sellerAvatar,
+    sellerReviewCount,
+    sellerFollowerCount,
+    sellerResponseRate,
+    sellerResponseTime,
+    sellerJoinSince,
+    sellerProductCount
   };
 }
 
