@@ -208,7 +208,7 @@ class ListingProcessorService {
         return platforms[0];
       }
       
-      // Nếu chưa có, tạo mới với PlatformID, Country và Locale
+      // Nếu chưa có, tạo mới với PlatformID, Country và PlatformLocale
       return await this.strapi.entityService.create('api::platform.platform', {
         data: {
           Name: 'Shopee Việt Nam',
@@ -216,7 +216,7 @@ class ListingProcessorService {
           PlatformID: 'shopee-vn', // Set PlatformID field
           URL: 'https://shopee.vn',
           Country: 'VN',
-          Locale: 'vi',
+          PlatformLocale: 'vi',
           is_Active: true
         }
       });
@@ -245,12 +245,12 @@ class ListingProcessorService {
         throw new Error(`Platform ${platform.Name || platformId} is missing PlatformID field`);
       }
       
-      // Use Locale from platform or determine based on Country/URL
+      // Use PlatformLocale from platform or determine based on Country/URL
       type LocaleType = 'vi' | 'en' | 'cs' | 'zh' | 'th' | 'id' | 'ms' | 'ja' | 'ko' | 'de' | 'fr' | 'sk' | 'pl';
-      let locale: LocaleType = platform.Locale || 'vi'; // Default to Vietnamese
+      let locale: LocaleType = platform.PlatformLocale || 'vi'; // Default to Vietnamese
       
-      // Fallback logic if Locale field is not set
-      if (!platform.Locale) {
+      // Fallback logic if PlatformLocale field is not set
+      if (!platform.PlatformLocale) {
         // Try to determine from Country field
         if (platform.Country) {
           const countryLocaleMap: { [key: string]: LocaleType } = {

@@ -78,6 +78,13 @@
     },
     "Country": {
       "type": "enumeration",
+      "pluginOptions": {
+        "i18n": {
+          "localized": false
+        }
+      },
+      "required": true,
+      "default": "VN",
       "enum": [
         "VN",
         "US",
@@ -96,17 +103,17 @@
         "JP",
         "KR",
         "OTHER"
-      ],
+      ]
+    },
+    "PlatformLocale": {
+      "type": "enumeration",
       "pluginOptions": {
         "i18n": {
           "localized": false
         }
       },
-      "default": "VN",
-      "required": true
-    },
-    "Locale": {
-      "type": "enumeration",
+      "required": true,
+      "default": "vi",
       "enum": [
         "vi",
         "en",
@@ -121,14 +128,7 @@
         "fr",
         "sk",
         "pl"
-      ],
-      "pluginOptions": {
-        "i18n": {
-          "localized": false
-        }
-      },
-      "default": "vi",
-      "required": true
+      ]
     }
   }
 }

@@ -1233,30 +1233,6 @@ export interface ApiPlatformPlatform extends Struct.CollectionTypeSchema {
       Schema.Attribute.DefaultTo<true>
     Listings: Schema.Attribute.Relation<"oneToMany", "api::listing.listing">
     locale: Schema.Attribute.String
-    Locale: Schema.Attribute.Enumeration<
-      [
-        "vi",
-        "en",
-        "cs",
-        "zh",
-        "th",
-        "id",
-        "ms",
-        "ja",
-        "ko",
-        "de",
-        "fr",
-        "sk",
-        "pl",
-      ]
-    > &
-      Schema.Attribute.Required &
-      Schema.Attribute.SetPluginOptions<{
-        i18n: {
-          localized: false
-        }
-      }> &
-      Schema.Attribute.DefaultTo<"vi">
     localizations: Schema.Attribute.Relation<
       "oneToMany",
       "api::platform.platform"
@@ -1280,6 +1256,30 @@ export interface ApiPlatformPlatform extends Struct.CollectionTypeSchema {
           localized: true
         }
       }>
+    PlatformLocale: Schema.Attribute.Enumeration<
+      [
+        "vi",
+        "en",
+        "cs",
+        "zh",
+        "th",
+        "id",
+        "ms",
+        "ja",
+        "ko",
+        "de",
+        "fr",
+        "sk",
+        "pl",
+      ]
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: false
+        }
+      }> &
+      Schema.Attribute.DefaultTo<"vi">
     publishedAt: Schema.Attribute.DateTime
     Slug: Schema.Attribute.UID<"Name">
     updatedAt: Schema.Attribute.DateTime
