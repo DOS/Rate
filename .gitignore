@@ -85,11 +85,19 @@ quick-*.js
 # Node modules backups
 node_modules_backup_*
 node_modules_old_*
+node_modules.bak_*
+**/node_modules.bak_*
 
 # Strapi compiled config files (keep only TypeScript sources)
 apps/strapi/config/*.js
 node_modules_*
 node_modules_*
 
+# backup trash directories
+/.trash/
+**/.trash/
+
 # ignore compiled Strapi admin assets
 apps/strapi/public/admin/
+apps/ui/node_modules*
+node_modules*

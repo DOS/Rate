@@ -1,92 +1,55 @@
-import { Metadata } from 'next'
+import React from 'react'
+import Link from 'next/link'
 
-import { Button } from '@/components/radiant/button'
-import { Container } from '@/components/radiant/container'
-import { Footer } from '@/components/radiant/footer'
-import { Navbar } from '@/components/radiant/navbar'
-import { Heading, Subheading } from '@/components/radiant/text'
+import NavbarDark from '../components/navbar/navbar-dark'
+import PricingOne from '../components/pricing-one'
+import FooterTop from '../components/footer-top'
+import Footer from '../components/footer/footer'
+import BackToTop from '../components/back-to-top'
 
-export const metadata: Metadata = {
-  title: 'Pricing',
-  description: 'Transparent pricing built for teams of all sizes.',
-}
+import { MdArrowForwardIos } from 'react-icons/md'
 
-const tiers = [
-  {
-    name: 'Starter',
-    price: '$0',
-    description: 'Perfect to explore the platform.',
-    features: ['Up to 3 projects', 'Community support', 'Basic analytics'],
-    cta: 'Get started',
-    href: '#',
-    highlight: false,
-  },
-  {
-    name: 'Pro',
-    price: '$29',
-    description: 'Best for growing teams.',
-    features: ['Unlimited projects', 'Priority support', 'Advanced analytics'],
-    cta: 'Upgrade to Pro',
-    href: '#',
-    highlight: true,
-  },
-  {
-    name: 'Enterprise',
-    price: 'Contact',
-    description: 'Security, SSO and custom terms.',
-    features: ['SSO/SAML', 'Dedicated support', 'Custom SLAs'],
-    cta: 'Contact sales',
-    href: '#',
-    highlight: false,
-  },
-]
-
-export default function PricingPage() {
+export default function Pricing() {
   return (
-    <div className="min-h-screen overflow-hidden">
-      <Navbar />
-      <main>
-        <Container className="pt-20 pb-24 sm:pt-28 sm:pb-32">
-          <Subheading>Pricing</Subheading>
-          <Heading as="h1" className="mt-2 max-w-3xl">
-            Simple, predictable pricing.
-          </Heading>
-          <p className="mt-6 max-w-2xl text-base/7 text-gray-600">
-            Start free and scale when you are ready. No hidden fees.
-          </p>
+    <>
+        <NavbarDark/>
 
-          <div className="mt-12 grid grid-cols-1 gap-6 sm:mt-16 lg:grid-cols-3">
-            {tiers.map((tier) => (
-              <div
-                key={tier.name}
-                className={`rounded-3xl border p-8 ${
-                  tier.highlight ? 'border-gray-900 shadow-lg shadow-gray-900/10' : 'border-gray-200'
-                }`}
-              >
-                <h3 className="text-base/6 font-medium text-gray-900">{tier.name}</h3>
-                <p className="mt-2 text-4xl font-semibold text-gray-900">{tier.price}</p>
-                <p className="mt-2 text-sm/6 text-gray-600">{tier.description}</p>
-                <ul className="mt-6 space-y-2 text-sm/6 text-gray-700">
-                  {tier.features.map((f) => (
-                    <li key={f} className="flex items-center gap-2">
-                      <span className="inline-block size-1.5 rounded-full bg-gray-900" />
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-                <div className="mt-8">
-                  <Button href={tier.href} className={tier.highlight ? '' : 'variant-secondary'}>
-                    {tier.cta}
-                  </Button>
+        <section className="bg-light">
+            <div className="container">
+                <div className="row justify-content-start align-items-center">
+                    <div className="col-xl-7 col-lg-9 col-md-12 col-sm-12 pt-lg-0 pt-5">
+                        <div className="position-relative">
+                            <h1 className="xl-heading">Pricing Page</h1>
+                            <nav id="breadcrumbs" className="breadcrumbs">
+                                <ul>
+                                    <li><Link href="#">Home</Link></li><MdArrowForwardIos className='ms-2'/>
+                                    <li><Link href="#">Pages</Link></li><MdArrowForwardIos className='ms-2'/>
+                                    <li>Pricing</li>
+                                </ul>
+                            </nav>
+                        </div>
+                    </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        </Container>
-      </main>
-      <Footer />
-    </div>
+            </div>
+        </section>
+
+        <section>
+            <div className="container">
+                <div className="row align-items-center justify-content-center">
+                    <div className="col-xl-7 col-lg-8 col-md-11 col-sm-12">
+                        <div className="secHeading-wrap text-center mb-5">
+                            <h2 className="fw-semibold">Choose your Package</h2>
+                            <p>Showcase the finest features of your properties with the List Category shortcode. Utilize this tool to display specific property categories, types, cities, and areas of your choice.</p>
+                        </div>
+                    </div>
+                </div>
+                <PricingOne/>
+            </div>	
+        </section>
+
+        <FooterTop/>
+        <Footer/>
+        <BackToTop/>
+    </>
   )
 }
-
-

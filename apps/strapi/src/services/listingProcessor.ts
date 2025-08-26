@@ -100,24 +100,24 @@ class ListingProcessorService {
       const existingListing = await this.findExistingListing(productUrl, platform.id);
       
       if (existingListing) {
-        console.log('[ListingProcessor] ✅ Listing already exists with ID:', existingListing.id, 'listing_id:', existingListing.listing_id);
+        console.log('[ListingProcessor] ✅ Listing already exists with ID:', existingListing.id, 'ListingID:', existingListing.ListingID);
         return {
           success: true,
           action: 'existing_listing',
           listingId: existingListing.id,
-          message: `Listing already exists (ID: ${existingListing.id}, listing_id: ${existingListing.listing_id})`
+          message: `Listing already exists (ID: ${existingListing.id}, ListingID: ${existingListing.ListingID})`
         };
       }
 
       // Tạo listing mới
       const newListing = await this.createNewListing(data, platform.id);
       
-      console.log('[ListingProcessor] ✨ Created new listing:', newListing.id, 'listing_id:', newListing.listing_id);
+      console.log('[ListingProcessor] ✨ Created new listing:', newListing.id, 'ListingID:', newListing.ListingID);
       return {
         success: true,
         action: 'created_listing',
         listingId: newListing.id,
-        message: `New listing created (ID: ${newListing.id}, listing_id: ${newListing.listing_id})`
+        message: `New listing created (ID: ${newListing.id}, ListingID: ${newListing.ListingID})`
       };
       
     } catch (error) {
@@ -169,12 +169,12 @@ class ListingProcessorService {
         return null;
       }
       
-      // Tìm listing theo Platform và listing_id (database field name)
-      console.log('[ListingProcessor] Searching for existing listing with Platform:', platformId, 'listing_id:', listingId);
+      // Tìm listing theo Platform và ListingID (Strapi field name)
+      console.log('[ListingProcessor] Searching for existing listing with Platform:', platformId, 'ListingID:', listingId);
       const listings = await this.strapi.entityService.findMany('api::listing.listing', {
         filters: {
           Platform: { id: platformId },
-          listing_id: listingId  // Use actual database field name
+          ListingID: listingId  // Use Strapi field name (capital letters)
         },
         populate: '*' as any
       });
@@ -245,39 +245,11 @@ class ListingProcessorService {
         throw new Error(`Platform ${platform.Name || platformId} is missing PlatformID field`);
       }
       
-      // Use PlatformLocale from platform or determine based on Country/URL
+      // Force Vietnamese locale for Shopee VN
       type LocaleType = 'vi' | 'en' | 'cs' | 'zh' | 'th' | 'id' | 'ms' | 'ja' | 'ko' | 'de' | 'fr' | 'sk' | 'pl';
-      let locale: LocaleType = platform.PlatformLocale || 'vi'; // Default to Vietnamese
+      let locale: LocaleType = 'vi'; // Always use Vietnamese for Shopee VN
       
-      // Fallback logic if PlatformLocale field is not set
-      if (!platform.PlatformLocale) {
-        // Try to determine from Country field
-        if (platform.Country) {
-          const countryLocaleMap: { [key: string]: LocaleType } = {
-            'VN': 'vi',
-            'US': 'en',
-            'UK': 'en',
-            'CZ': 'cs',
-            'CN': 'zh',
-            'TH': 'th',
-            'ID': 'id',
-            'MY': 'ms',
-            'JP': 'ja',
-            'KR': 'ko',
-            'DE': 'de',
-            'FR': 'fr',
-            'SK': 'sk',
-            'PL': 'pl'
-          };
-          locale = countryLocaleMap[platform.Country] || 'en';
-        }
-        // Last resort: check URL
-        else if (platform.URL?.includes('.vn')) {
-          locale = 'vi';
-        } else if (platform.URL?.includes('.cz')) {
-          locale = 'cs';
-        }
-      }
+      console.log('[ListingProcessor] Using locale:', locale, 'for platform:', platform.Name);
       
       // Extract IDs để tạo ListingID unique với format: platformIdentifier.uniqueId
       const productId = this.extractProductId(product.productUrl || '');
@@ -300,7 +272,7 @@ class ListingProcessorService {
         IsActive: true,
         Status: 'pending', // Set pending để review
         ReviewNotes: `Nhập từ Shopee. Giá: ${product.price?.toLocaleString('vi-VN')} ${product.currency}. Người bán: ${this.toTitleCase(seller.name || '')}`,
-        listing_id: listingId, // ID unique từ platform - use database field name
+        ListingID: listingId, // ID unique từ platform - use Strapi field name
         Platform: platformId, // Relation tới Platform
         locale: locale, // Set locale based on platform
         
@@ -377,6 +349,17 @@ class ListingProcessorService {
         }
       };
 
+      // Log the data being sent to Strapi
+      console.log('[ListingProcessor] Creating listing with locale:', listingData.locale);
+      console.log('[ListingProcessor] Full listing data:', JSON.stringify({
+        Title: listingData.Title,
+        ListingID: listingData.ListingID,
+        Platform: listingData.Platform,
+        locale: listingData.locale,
+        Price: listingData.Price,
+        Currency: listingData.Currency
+      }, null, 2));
+      
       // Tạo listing
       const newListing = await this.strapi.entityService.create('api::listing.listing', {
         data: listingData

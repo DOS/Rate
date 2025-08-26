@@ -100,13 +100,14 @@ async function submitShopeeReviewsToStrapi(reviews) {
   }
   try {
     const uniqueReviews = dedupeReviews(reviews);
-    const batchHash = computeBatchHash(uniqueReviews);
+    // Remove client-side duplicate check - let server handle it
+    // const batchHash = computeBatchHash(uniqueReviews);
     
-    // Nếu batch giống hệt với lần gửi gần nhất, bỏ qua (không áp dụng cooldown theo thời gian)
-    if (batchHash && lastShopeeSubmissionHash === batchHash) {
-      console.log('[Background] Duplicate submission detected, ignored');
-      return { ok: true, status: 'duplicate_ignored', count: uniqueReviews.length };
-    }
+    // Server will handle duplicate checking based on listing_id
+    // if (batchHash && lastShopeeSubmissionHash === batchHash) {
+    //   console.log('[Background] Duplicate submission detected, ignored');
+    //   return { ok: true, status: 'duplicate_ignored', count: uniqueReviews.length };
+    // }
 
     // Chuẩn bị payload theo format Strapi Redis Stream
     const items = uniqueReviews.map(review => {
@@ -151,8 +152,8 @@ async function submitShopeeReviewsToStrapi(reviews) {
         },
         // Metadata
         source: 'shopee_extension',
-        crawledAt: new Date().toISOString(),
-        batchHash: batchHash
+        crawledAt: new Date().toISOString()
+        // Removed batchHash - server handles deduplication
       };
     });
 
@@ -209,7 +210,8 @@ async function submitShopeeReviewsToStrapi(reviews) {
     
     // Check if we have a requestId (successful submission)
     if (result.requestId) {
-      lastShopeeSubmissionHash = batchHash;
+      // Remove hash tracking - server handles deduplication
+      // lastShopeeSubmissionHash = batchHash;
       console.log('[Background] Successfully submitted to Strapi Redis Stream:', result);
       
       // Lưu requestId để check status sau này
