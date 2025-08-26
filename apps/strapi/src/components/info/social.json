@@ -1,0 +1,32 @@
+{
+  "collectionName": "components_info_socials",
+  "info": {
+    "displayName": "Social Media",
+    "description": "Social media links",
+    "icon": "share-alt"
+  },
+  "options": {},
+  "attributes": {
+    "Facebook": {
+      "type": "string"
+    },
+    "Zalo": {
+      "type": "string"
+    },
+    "Instagram": {
+      "type": "string"
+    },
+    "TikTok": {
+      "type": "string"
+    },
+    "Youtube": {
+      "type": "string"
+    },
+    "Telegram": {
+      "type": "string"
+    },
+    "WhatsApp": {
+      "type": "string"
+    }
+  }
+}

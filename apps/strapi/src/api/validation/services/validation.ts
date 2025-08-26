@@ -37,20 +37,29 @@ async function ensureRedis() {
 }
 
 async function publishToRedis(items: unknown[], options: EnqueueOptions) {
-  const client = await ensureRedis();
-  if (!client) return null;
-  const requestId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-  const payload = {
-    request_id: requestId,
-    source: 'extension',
-    action: 'validate',
-    data: { items: Array.isArray(items) ? items : [items] },
-    priority: options.priority || 'normal',
-    callback_config: { stream: 'extension_responses', webhook_url: options.webhookUrl || null },
-    timestamp: new Date().toISOString(),
-  };
-  await client.xAdd('validation_requests', '*', { data: JSON.stringify(payload) });
-  return requestId;
+  try {
+    const client = await ensureRedis();
+    if (!client) {
+      strapi.log.warn('Redis not available for validation');
+      return null;
+    }
+    const requestId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const payload = {
+      request_id: requestId,
+      source: 'extension',
+      action: 'validate',
+      data: { items: Array.isArray(items) ? items : [items] },
+      priority: options.priority || 'normal',
+      callback_config: { stream: 'extension_responses', webhook_url: options.webhookUrl || null },
+      timestamp: new Date().toISOString(),
+    };
+    await client.xAdd('validation_requests', '*', { data: JSON.stringify(payload) });
+    strapi.log.info(`Published validation request ${requestId} to Redis`);
+    return requestId;
+  } catch (error: any) {
+    strapi.log.error('Failed to publish to Redis:', error.message);
+    return null;
+  }
 }
 
 // Custom service (not bound to any content-type)

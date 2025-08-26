@@ -775,9 +775,6 @@ export interface ApiItemItem extends Struct.CollectionTypeSchema {
         "info.organization",
         "info.individual",
         "violation.evidence",
-        "contact.basic",
-        "contact.location",
-        "contact.social-media",
       ]
     > &
       Schema.Attribute.SetPluginOptions<{
@@ -850,6 +847,18 @@ export interface ApiListingListing extends Struct.CollectionTypeSchema {
     }
   }
   attributes: {
+    AverageRating: Schema.Attribute.Decimal &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: false
+        }
+      }>
+    Brand: Schema.Attribute.String &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: true
+        }
+      }>
     Category: Schema.Attribute.Relation<"manyToOne", "api::category.category">
     Comments: Schema.Attribute.Relation<"oneToMany", "api::comment.comment">
     createdAt: Schema.Attribute.DateTime
@@ -859,25 +868,123 @@ export interface ApiListingListing extends Struct.CollectionTypeSchema {
       "manyToOne",
       "plugin::users-permissions.user"
     >
+    Currency: Schema.Attribute.String &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: false
+        }
+      }> &
+      Schema.Attribute.DefaultTo<"VND">
     Description: Schema.Attribute.Blocks &
       Schema.Attribute.SetPluginOptions<{
         i18n: {
           localized: true
         }
       }>
-    isActive: Schema.Attribute.Boolean &
+    FavoriteCount: Schema.Attribute.Integer &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: true
+        }
+      }>
+    IsActive: Schema.Attribute.Boolean &
       Schema.Attribute.SetPluginOptions<{
         i18n: {
           localized: true
         }
       }> &
       Schema.Attribute.DefaultTo<true>
+    IsFeatured: Schema.Attribute.Boolean &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: true
+        }
+      }>
+    IsVerified: Schema.Attribute.Boolean &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: true
+        }
+      }>
     Item: Schema.Attribute.Relation<"manyToOne", "api::item.item">
+    LastUpdated: Schema.Attribute.DateTime &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: true
+        }
+      }>
+    ListingID: Schema.Attribute.String &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: false
+        }
+      }>
     locale: Schema.Attribute.String
     localizations: Schema.Attribute.Relation<
       "oneToMany",
       "api::listing.listing"
     >
+    Location: Schema.Attribute.String &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: true
+        }
+      }>
+    Media: Schema.Attribute.Media<"images" | "videos", true> &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: false
+        }
+      }>
+    Metadata: Schema.Attribute.JSON &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: false
+        }
+      }>
+    OriginalPrice: Schema.Attribute.Decimal &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: true
+        }
+      }>
+    Platform: Schema.Attribute.Relation<"manyToOne", "api::platform.platform">
+    PlatformOwnerID: Schema.Attribute.String &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: false
+        }
+      }>
+    PlatformOwnerName: Schema.Attribute.String &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: true
+        }
+      }>
+    Price: Schema.Attribute.Decimal &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: false
+        }
+      }>
+    PriceUnit: Schema.Attribute.Enumeration<["Item", "Hour", "Day", "Month"]> &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: true
+        }
+      }>
+    Property: Schema.Attribute.DynamicZone<
+      [
+        "property.phone-performance",
+        "property.phone-display",
+        "property.phone-battery",
+      ]
+    > &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: true
+        }
+      }>
     publishedAt: Schema.Attribute.DateTime
     Reports: Schema.Attribute.Relation<"oneToMany", "api::report.report">
     ReviewNotes: Schema.Attribute.Text &
@@ -902,6 +1009,12 @@ export interface ApiListingListing extends Struct.CollectionTypeSchema {
         }
       }> &
       Schema.Attribute.DefaultTo<"pending">
+    Stock: Schema.Attribute.Integer &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: false
+        }
+      }>
     Title: Schema.Attribute.String &
       Schema.Attribute.Required &
       Schema.Attribute.SetPluginOptions<{
@@ -909,10 +1022,29 @@ export interface ApiListingListing extends Struct.CollectionTypeSchema {
           localized: true
         }
       }>
+    TotalReviews: Schema.Attribute.Integer &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: false
+        }
+      }> &
+      Schema.Attribute.DefaultTo<0>
     updatedAt: Schema.Attribute.DateTime
     updatedBy: Schema.Attribute.Relation<"oneToOne", "admin::user"> &
       Schema.Attribute.Private
     URL: Schema.Attribute.String &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: true
+        }
+      }>
+    UsageCount: Schema.Attribute.Integer &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: false
+        }
+      }>
+    ViewCount: Schema.Attribute.Integer &
       Schema.Attribute.SetPluginOptions<{
         i18n: {
           localized: true
@@ -1055,26 +1187,110 @@ export interface ApiPlatformPlatform extends Struct.CollectionTypeSchema {
   options: {
     draftAndPublish: true
   }
+  pluginOptions: {
+    i18n: {
+      localized: true
+    }
+  }
   attributes: {
+    Country: Schema.Attribute.Enumeration<
+      [
+        "VN",
+        "US",
+        "UK",
+        "CN",
+        "TH",
+        "SG",
+        "MY",
+        "PH",
+        "ID",
+        "CZ",
+        "SK",
+        "PL",
+        "DE",
+        "FR",
+        "JP",
+        "KR",
+        "OTHER",
+      ]
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: false
+        }
+      }> &
+      Schema.Attribute.DefaultTo<"VN">
     createdAt: Schema.Attribute.DateTime
     createdBy: Schema.Attribute.Relation<"oneToOne", "admin::user"> &
       Schema.Attribute.Private
-    is_Active: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<true>
+    is_Active: Schema.Attribute.Boolean &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: true
+        }
+      }> &
+      Schema.Attribute.DefaultTo<true>
     Listings: Schema.Attribute.Relation<"oneToMany", "api::listing.listing">
-    locale: Schema.Attribute.String & Schema.Attribute.Private
+    locale: Schema.Attribute.String
+    Locale: Schema.Attribute.Enumeration<
+      [
+        "vi",
+        "en",
+        "cs",
+        "zh",
+        "th",
+        "id",
+        "ms",
+        "ja",
+        "ko",
+        "de",
+        "fr",
+        "sk",
+        "pl",
+      ]
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: false
+        }
+      }> &
+      Schema.Attribute.DefaultTo<"vi">
     localizations: Schema.Attribute.Relation<
       "oneToMany",
       "api::platform.platform"
-    > &
-      Schema.Attribute.Private
-    Logo: Schema.Attribute.Media<"images" | "files" | "videos" | "audios">
-    Name: Schema.Attribute.String & Schema.Attribute.Required
+    >
+    Logo: Schema.Attribute.Media<"images" | "files" | "videos" | "audios"> &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: true
+        }
+      }>
+    Name: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: true
+        }
+      }>
+    PlatformID: Schema.Attribute.UID &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: true
+        }
+      }>
     publishedAt: Schema.Attribute.DateTime
     Slug: Schema.Attribute.UID<"Name">
     updatedAt: Schema.Attribute.DateTime
     updatedBy: Schema.Attribute.Relation<"oneToOne", "admin::user"> &
       Schema.Attribute.Private
-    URL: Schema.Attribute.String
+    URL: Schema.Attribute.String &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: true
+        }
+      }>
   }
 }
 

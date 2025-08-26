@@ -23,7 +23,8 @@
     "build:strapi": "turbo run build --filter=@repo/strapi",
     "build:ui": "turbo run build --filter=@repo/ui",
     "commit": "git-cz",
-    "dev": "turbo dev",
+    "dev": "turbo run dev --filter=@repo/strapi --filter=@repo/ui",
+    "dev:all": "turbo dev",
     "dev:strapi": "turbo run dev --filter=@repo/strapi",
     "dev:ui": "turbo run dev --filter=@repo/ui",
     "format": "prettier --write --cache --ignore-unknown \"**/*.{js,jsx,ts,tsx,md,css,scss}\"",
@@ -39,6 +40,9 @@
     "type-check": "turbo type-check",
     "auto-test": "pwsh -File .\\Test\\auto-test-build-workflow.ps1",
     "test-plugin": "npx playwright test Test/auto-test-smart-component-filter.spec.js --headed"
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx}": "eslint --fix --max-warnings=0"
   },
   "prettier": "@repo/prettier-config",
   "devDependencies": {

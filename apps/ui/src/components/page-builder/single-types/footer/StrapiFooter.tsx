@@ -32,7 +32,16 @@ export async function StrapiFooter({ locale }: { readonly locale: AppLocale }) {
   const component = response?.data
 
   if (component == null) {
-    return null
+    return (
+      <div className="w-full border-t bg-white/10">
+        <Container className="flex items-center justify-between py-4">
+          <p>© {new Date().getFullYear()} Rate Platform. All rights reserved.</p>
+          <div className="flex items-center gap-4">
+            <a href="/privacy" className="hover:underline">Privacy Policy</a>
+          </div>
+        </Container>
+      </div>
+    )
   }
 
   return (

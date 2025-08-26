@@ -10,9 +10,19 @@
   "options": {
     "draftAndPublish": true
   },
+  "pluginOptions": {
+    "i18n": {
+      "localized": true
+    }
+  },
   "attributes": {
     "Name": {
       "type": "string",
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
+      },
       "required": true
     },
     "Slug": {
@@ -20,14 +30,29 @@
       "targetField": "Name"
     },
     "URL": {
-      "type": "string"
+      "type": "string",
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
+      }
     },
     "is_Active": {
       "type": "boolean",
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
+      },
       "default": true
     },
     "Logo": {
       "type": "media",
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
+      },
       "multiple": false,
       "required": false,
       "allowedTypes": [
@@ -40,7 +65,70 @@
     "Listings": {
       "type": "relation",
       "relation": "oneToMany",
-      "target": "api::listing.listing"
+      "target": "api::listing.listing",
+      "mappedBy": "Platform"
+    },
+    "PlatformID": {
+      "type": "uid",
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
+      }
+    },
+    "Country": {
+      "type": "enumeration",
+      "enum": [
+        "VN",
+        "US",
+        "UK",
+        "CN",
+        "TH",
+        "SG",
+        "MY",
+        "PH",
+        "ID",
+        "CZ",
+        "SK",
+        "PL",
+        "DE",
+        "FR",
+        "JP",
+        "KR",
+        "OTHER"
+      ],
+      "pluginOptions": {
+        "i18n": {
+          "localized": false
+        }
+      },
+      "default": "VN",
+      "required": true
+    },
+    "Locale": {
+      "type": "enumeration",
+      "enum": [
+        "vi",
+        "en",
+        "cs",
+        "zh",
+        "th",
+        "id",
+        "ms",
+        "ja",
+        "ko",
+        "de",
+        "fr",
+        "sk",
+        "pl"
+      ],
+      "pluginOptions": {
+        "i18n": {
+          "localized": false
+        }
+      },
+      "default": "vi",
+      "required": true
     }
   }
 }

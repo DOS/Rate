@@ -1,5 +1,17 @@
 # Changelog
 
+## 2025-08-13
+
+- Fix inconsistent `Input` error border color ([#1710](https://github.com/tailwindlabs/tailwind-plus-issues/issues/1710))
+
+## 2025-07-29
+
+- Update to React 19 and Next.js 15.4
+
+## 2025-06-05
+
+- Update `DropdownLabel` to extend a plain `<div>` instead of the `Headless.Label` ([#1699](https://github.com/tailwindlabs/tailwind-plus-issues/issues/1699))
+
 ## 2025-04-28
 
 - Update template to Tailwind CSS v4.1.4

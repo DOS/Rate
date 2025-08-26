@@ -52,10 +52,15 @@
       "Bash(git commit:*)",
       "Bash(move:*)",
       "Bash(dir:*)",
-      "Bash(\"C:\\Program Files\\PostgreSQL\\17\\bin\\psql\" -U JOY -d rate_db -c \"SELECT id, \"\"Title\"\", \"\"URL\"\", \"\"Status\"\" FROM listings ORDER BY id DESC LIMIT 5;\")",
-      "Bash(\"C:\\Program Files\\PostgreSQL\\17\\bin\\psql\" -U JOY -d rate_db -c \"SELECT id, \"\"Title\"\", \"\"URL\"\", \"\"Status\"\", \"\"createdAt\"\" FROM listings ORDER BY \"\"createdAt\"\" DESC LIMIT 5;\")"
+      "Bash(git push:*)",
+      "Read(/C:\\Users\\JOY\\AppData\\Local\\Temp\\SnagitTemp/**)",
+      "Read(/C:\\Users\\JOY\\AppData\\Local\\Temp\\SnagitTemp/**)",
+      "Read(/C:\\Users\\JOY\\AppData\\Local\\Temp\\SnagitTemp/**)"
     ],
-    "deny": [],
+    "deny": [
+      "Bash(taskkill //F //IM node.exe)",
+      "Bash(git checkout:*)"
+    ],
     "ask": [],
     "additionalDirectories": [
       "C:\\Users\\JOY\\AppData\\Local\\ms-playwright",

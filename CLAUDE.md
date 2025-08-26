@@ -173,3 +173,12 @@ Required `.env` files:
 - **Redis**: Container name `redis`, used for job queues and caching
 - Access PostgreSQL: `docker exec DB psql -U JOY -d rate_db -c "SQL_QUERY"`
 - Access Redis: `docker exec redis redis-cli COMMAND`
+- Luôn xài yarn trong workspace này
+
+## Process Management
+
+**IMPORTANT**: NEVER kill all Node.js processes indiscriminately using commands like `Stop-Process -Name node -Force`
+- Always identify the specific process you need to terminate first
+- Use `Get-Process node` to list all Node processes with their IDs and command lines
+- Kill only the specific process by ID: `Stop-Process -Id <PID>`
+- Killing all Node processes can terminate critical services including Claude Code itself

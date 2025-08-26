@@ -35,7 +35,23 @@ export async function StrapiNavbar({ locale }: { readonly locale: AppLocale }) {
   const navbar = response?.data
 
   if (navbar == null) {
-    return null
+    // Fallback lightweight header when single-type not configured
+    const t = await getTranslations("navbar")
+    return (
+      <header className="sticky top-0 z-40 w-full border-b bg-white/90 shadow-sm backdrop-blur">
+        <div className="mx-auto flex h-16 w-full max-w-[1296px] items-center justify-between px-6">
+          <AppLink href="/" className="text-xl font-bold">
+            <Image src="/images/logo.svg" alt="logo" height={23} width={82} />
+          </AppLink>
+          <nav className="flex items-center gap-6">
+            <AppLink href="/">Home</AppLink>
+            <AppLink href="/about">About</AppLink>
+            <AppLink href="/auth/signin">{t("actions.signIn")}</AppLink>
+            <LocaleSwitcher locale={locale} />
+          </nav>
+        </div>
+      </header>
+    )
   }
 
   const t = await getTranslations("navbar")

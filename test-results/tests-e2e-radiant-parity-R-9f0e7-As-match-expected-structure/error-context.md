@@ -1,0 +1,464 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - main [ref=e6]:
+      - generic [ref=e9]:
+        - generic [ref=e13]:
+          - generic [ref=e19]:
+            - generic [ref=e20]:
+              - img [ref=e21]
+              - img [ref=e23]
+              - img [ref=e25]
+              - img [ref=e27]
+              - link "Home" [ref=e29] [cursor=pointer]:
+                - /url: /
+                - img [ref=e30] [cursor=pointer]
+            - link "Radiant raises $100M Series A from Tailwind Ventures" [ref=e55] [cursor=pointer]:
+              - /url: /blog/radiant-raises-100m-series-a-from-tailwind-ventures
+              - text: Radiant raises $100M Series A from Tailwind Ventures
+              - img [ref=e56] [cursor=pointer]
+          - navigation [ref=e58]:
+            - generic [ref=e59]:
+              - img [ref=e60]
+              - img [ref=e62]
+              - img [ref=e64]
+              - img [ref=e66]
+              - link "Pricing" [ref=e68] [cursor=pointer]:
+                - /url: /pricing
+            - generic [ref=e69]:
+              - img [ref=e70]
+              - img [ref=e72]
+              - link "Company" [ref=e74] [cursor=pointer]:
+                - /url: /company
+            - generic [ref=e75]:
+              - img [ref=e76]
+              - img [ref=e78]
+              - link "Blog" [ref=e80] [cursor=pointer]:
+                - /url: /blog
+            - generic [ref=e81]:
+              - img [ref=e82]
+              - img [ref=e84]
+              - link "Login" [ref=e86] [cursor=pointer]:
+                - /url: /login
+        - generic [ref=e87]:
+          - heading "Close every deal." [level=1] [ref=e88]
+          - paragraph [ref=e89]: Radiant helps you sell more by revealing sensitive information about your customers.
+          - generic [ref=e90]:
+            - link "Get started" [ref=e91] [cursor=pointer]:
+              - /url: /en/submit
+            - link "See pricing" [ref=e92] [cursor=pointer]:
+              - /url: /en/pricing
+      - generic [ref=e95]:
+        - img "SavvyCal" [ref=e96]
+        - img "Laravel" [ref=e97]
+        - img "Tuple" [ref=e98]
+        - img "Transistor" [ref=e99]
+        - img "Statamic" [ref=e100]
+      - generic [ref=e101]:
+        - heading "A snapshot of your entire sales pipeline." [level=2] [ref=e105]
+        - generic [ref=e109]:
+          - heading "Sales" [level=2] [ref=e110]
+          - heading "Know more about your customers than they do." [level=3] [ref=e111]
+          - generic [ref=e112]:
+            - generic [ref=e117]:
+              - heading "Insight" [level=3] [ref=e118]
+              - paragraph [ref=e119]: Get perfect clarity
+              - paragraph [ref=e120]: Radiant uses social engineering to build a detailed financial picture of your leads. Know their budget, compensation package, social security number, and more.
+            - generic [ref=e125]:
+              - heading "Analysis" [level=3] [ref=e126]
+              - paragraph [ref=e127]: Undercut your competitors
+              - paragraph [ref=e128]: With our advanced data mining, you’ll know which companies your leads are talking to and exactly how much they’re being charged.
+            - generic [ref=e129]:
+              - generic [ref=e132]:
+                - generic [ref=e133]:
+                  - img [ref=e135]
+                  - generic [ref=e137]:
+                    - img [ref=e138]
+                    - img [ref=e140]
+                  - generic [ref=e142]:
+                    - img [ref=e143]
+                    - img [ref=e145]
+                  - generic [ref=e147]:
+                    - img [ref=e148]
+                    - img [ref=e150]
+                  - generic [ref=e152]:
+                    - img [ref=e153]
+                    - img [ref=e155]
+                  - generic [ref=e157]:
+                    - img [ref=e158]
+                    - img [ref=e160]
+                  - generic [ref=e162]:
+                    - img [ref=e163]
+                    - img [ref=e165]
+                  - generic [ref=e167]:
+                    - img [ref=e168]
+                    - img [ref=e170]
+                  - generic [ref=e172]:
+                    - img [ref=e173]
+                    - img [ref=e175]
+                  - generic [ref=e177]:
+                    - img [ref=e178]
+                    - img [ref=e180]
+                  - generic [ref=e182]:
+                    - img [ref=e183]
+                    - img [ref=e185]
+                  - generic [ref=e187]:
+                    - img [ref=e188]
+                    - img [ref=e190]
+                  - generic [ref=e192]:
+                    - img [ref=e193]
+                    - img [ref=e195]
+                  - img [ref=e198]
+                - generic [ref=e200]:
+                  - generic [ref=e201]:
+                    - img [ref=e202]
+                    - img [ref=e204]
+                  - generic [ref=e206]:
+                    - img [ref=e207]
+                    - img [ref=e209]
+                  - generic [ref=e211]:
+                    - img [ref=e212]
+                    - img [ref=e214]
+                  - generic [ref=e216]:
+                    - img [ref=e217]
+                    - img [ref=e219]
+                  - generic [ref=e221]:
+                    - img [ref=e222]
+                    - img [ref=e224]
+                  - generic [ref=e226]:
+                    - img [ref=e227]
+                    - img [ref=e229]
+                  - generic [ref=e231]:
+                    - img [ref=e232]
+                    - img [ref=e234]
+                  - generic [ref=e236]:
+                    - img [ref=e237]
+                    - img [ref=e239]
+                  - generic [ref=e241]:
+                    - img [ref=e242]
+                    - img [ref=e244]
+                  - generic [ref=e246]:
+                    - img [ref=e247]
+                    - img [ref=e249]
+                  - generic [ref=e251]:
+                    - img [ref=e252]
+                    - img [ref=e254]
+                  - generic [ref=e256]:
+                    - img [ref=e257]
+                    - img [ref=e259]
+                  - generic [ref=e261]:
+                    - img [ref=e262]
+                    - img [ref=e264]
+                  - img [ref=e267]
+                - generic [ref=e269]:
+                  - img [ref=e271]
+                  - img [ref=e274]
+                  - img [ref=e277]
+                  - img [ref=e280]
+                  - img [ref=e283]
+                  - img [ref=e286]
+                  - img [ref=e289]
+                  - img [ref=e292]
+                  - img [ref=e295]
+                  - img [ref=e298]
+                  - img [ref=e301]
+                  - generic [ref=e303]:
+                    - img [ref=e304]
+                    - img [ref=e306]
+                  - generic [ref=e308]:
+                    - img [ref=e309]
+                    - img [ref=e311]
+                  - generic [ref=e313]:
+                    - img [ref=e314]
+                    - img [ref=e316]
+                - generic [ref=e318]:
+                  - generic [ref=e319]:
+                    - img [ref=e320]
+                    - img [ref=e322]
+                  - img [ref=e325]
+                  - img [ref=e328]
+                  - img [ref=e331]
+                  - img [ref=e334]
+                  - img [ref=e337]
+                  - img [ref=e340]
+                  - img [ref=e343]
+                  - img [ref=e346]
+                  - img [ref=e349]
+                  - generic [ref=e351]:
+                    - img [ref=e352]
+                    - img [ref=e354]
+                  - generic [ref=e356]:
+                    - img [ref=e357]
+                    - img [ref=e359]
+                  - img [ref=e362]
+                - generic [ref=e364]:
+                  - img [ref=e366]
+                  - img [ref=e369]
+                  - img [ref=e372]
+                  - img [ref=e375]
+                  - img [ref=e378]
+                  - img [ref=e381]
+                  - img [ref=e384]
+                  - img [ref=e387]
+                  - generic [ref=e389]:
+                    - img [ref=e390]
+                    - img [ref=e392]
+                  - generic [ref=e394]:
+                    - img [ref=e395]
+                    - img [ref=e397]
+                  - generic [ref=e399]:
+                    - img [ref=e400]
+                    - img [ref=e402]
+                  - img [ref=e405]
+                - generic [ref=e407]:
+                  - generic [ref=e408]:
+                    - img [ref=e409]
+                    - img [ref=e411]
+                  - generic [ref=e413]:
+                    - img [ref=e414]
+                    - img [ref=e416]
+                  - generic [ref=e418]:
+                    - img [ref=e419]
+                    - img [ref=e421]
+                  - generic [ref=e423]:
+                    - img [ref=e424]
+                    - img [ref=e426]
+                  - generic [ref=e429]:
+                    - img [ref=e430]
+                    - img [ref=e432]
+                  - generic [ref=e434]:
+                    - img [ref=e435]
+                    - img [ref=e437]
+                  - img [ref=e440]
+                  - generic [ref=e442]:
+                    - img [ref=e444]
+                    - img [ref=e447]
+                  - img [ref=e450]
+              - generic [ref=e452]:
+                - heading "Speed" [level=3] [ref=e453]
+                - paragraph [ref=e454]: Built for power users
+                - paragraph [ref=e455]: It’s never been faster to cold email your entire contact list using our streamlined keyboard shortcuts.
+            - generic [ref=e456]:
+              - img [ref=e467]
+              - generic [ref=e487]:
+                - heading "Source" [level=3] [ref=e488]
+                - paragraph [ref=e489]: Get the furthest reach
+                - paragraph [ref=e490]: Bypass those inconvenient privacy laws to source leads from the most unexpected places.
+            - generic [ref=e496]:
+              - heading "Limitless" [level=3] [ref=e497]
+              - paragraph [ref=e498]: Sell globally
+              - paragraph [ref=e499]: Radiant helps you sell in locations currently under international embargo.
+      - generic [ref=e502]:
+        - heading "Outreach" [level=2] [ref=e503]
+        - heading "Customer outreach has never been easier." [level=3] [ref=e504]
+        - generic [ref=e505]:
+          - generic [ref=e510]:
+            - heading "Networking" [level=3] [ref=e511]
+            - paragraph [ref=e512]: Sell at the speed of light
+            - paragraph [ref=e513]: Our RadiantAI chat assistants analyze the sentiment of your conversations in real time, ensuring you're always one step ahead.
+          - generic [ref=e514]:
+            - generic [ref=e516]:
+              - img [ref=e520]
+              - generic [ref=e540]:
+                - generic [ref=e541]:
+                  - generic [ref=e545]: Loom
+                  - generic [ref=e547]: Gmail
+                - generic [ref=e548]:
+                  - generic [ref=e552]: Asana
+                  - generic [ref=e554]: Microsoft Teams
+                - generic [ref=e555]:
+                  - generic [ref=e559]: Google Calendar
+                  - generic [ref=e561]: Google Drive
+                - generic [ref=e562]:
+                  - generic [ref=e566]: Basecamp
+                  - generic [ref=e568]: Discord
+                - generic [ref=e569]:
+                  - generic [ref=e573]: Hubspot
+                  - generic [ref=e575]: Slack
+                - generic [ref=e576]:
+                  - generic [ref=e579]: Adobe Creative Cloud
+                  - generic [ref=e581]: Zoom
+            - generic [ref=e582]:
+              - heading "Integrations" [level=3] [ref=e583]
+              - paragraph [ref=e584]: Meet leads where they are
+              - paragraph [ref=e585]: With thousands of integrations, no one will be able to escape your cold outreach.
+          - generic [ref=e586]:
+            - generic [ref=e588]:
+              - img [ref=e589]
+              - img [ref=e636]
+            - generic [ref=e638]:
+              - heading "Meetings" [level=3] [ref=e639]
+              - paragraph [ref=e640]: Smart call scheduling
+              - paragraph [ref=e641]: Automatically insert intro calls into your leads' calendars without their consent.
+          - generic [ref=e646]:
+            - heading "Engagement" [level=3] [ref=e647]
+            - paragraph [ref=e648]: Become a thought leader
+            - paragraph [ref=e649]: RadiantAI automatically writes LinkedIn posts that relate current events to B2B sales, helping you build a reputation as a thought leader.
+      - generic [ref=e650]:
+        - generic [ref=e653]:
+          - heading "What everyone is saying" [level=2] [ref=e654]
+          - heading "Trusted by professionals." [level=3] [ref=e655]
+        - generic [ref=e656]:
+          - figure "Tina Yards VP of Sales, Protocol" [ref=e659]:
+            - blockquote [ref=e660]:
+              - paragraph [ref=e661]:
+                - generic [ref=e662]: “
+                - text: Thanks to Radiant, we’re finding new leads that we never would have found with legal methods.
+                - generic [ref=e663]: ”
+            - generic [ref=e664]:
+              - paragraph [ref=e665]: Tina Yards
+              - paragraph [ref=e666]:
+                - generic [ref=e667]: VP of Sales, Protocol
+          - figure "Conor Neville Head of Customer Success, TaxPal" [ref=e670]:
+            - blockquote [ref=e671]:
+              - paragraph [ref=e672]:
+                - generic [ref=e673]: “
+                - text: Radiant made undercutting all of our competitors an absolute breeze.
+                - generic [ref=e674]: ”
+            - generic [ref=e675]:
+              - paragraph [ref=e676]: Conor Neville
+              - paragraph [ref=e677]:
+                - generic [ref=e678]: Head of Customer Success, TaxPal
+          - figure "Amy Chase Head of GTM, Pocket" [ref=e681]:
+            - blockquote [ref=e682]:
+              - paragraph [ref=e683]:
+                - generic [ref=e684]: “
+                - text: We closed a deal in literally a few minutes because we knew their exact budget.
+                - generic [ref=e685]: ”
+            - generic [ref=e686]:
+              - paragraph [ref=e687]: Amy Chase
+              - paragraph [ref=e688]:
+                - generic [ref=e689]: Head of GTM, Pocket
+          - figure "Veronica Winton CSO, Planeteria" [ref=e692]:
+            - blockquote [ref=e693]:
+              - paragraph [ref=e694]:
+                - generic [ref=e695]: “
+                - text: We’ve managed to put two of our main competitors out of business in 6 months.
+                - generic [ref=e696]: ”
+            - generic [ref=e697]:
+              - paragraph [ref=e698]: Veronica Winton
+              - paragraph [ref=e699]:
+                - generic [ref=e700]: CSO, Planeteria
+          - figure "Dillon Lenora VP of Sales, Detax" [ref=e703]:
+            - blockquote [ref=e704]:
+              - paragraph [ref=e705]:
+                - generic [ref=e706]: “
+                - text: I was able to replace 80% of my team with RadiantAI bots.
+                - generic [ref=e707]: ”
+            - generic [ref=e708]:
+              - paragraph [ref=e709]: Dillon Lenora
+              - paragraph [ref=e710]:
+                - generic [ref=e711]: VP of Sales, Detax
+          - figure "Harriet Arron Account Manager, Commit" [ref=e714]:
+            - blockquote [ref=e715]:
+              - paragraph [ref=e716]:
+                - generic [ref=e717]: “
+                - text: I’ve smashed all my targets without having to speak to a lead in months.
+                - generic [ref=e718]: ”
+            - generic [ref=e719]:
+              - paragraph [ref=e720]: Harriet Arron
+              - paragraph [ref=e721]:
+                - generic [ref=e722]: Account Manager, Commit
+        - generic [ref=e726]:
+          - generic [ref=e727]:
+            - paragraph [ref=e728]: Join the best sellers in the business and start using Radiant to hit your targets today.
+            - link "Get started" [ref=e730] [cursor=pointer]:
+              - /url: "#"
+              - text: Get started
+              - img [ref=e731] [cursor=pointer]
+          - generic [ref=e733]:
+            - button "Scroll to testimonial from Tina Yards" [ref=e734]
+            - button "Scroll to testimonial from Conor Neville" [ref=e735]
+            - button "Scroll to testimonial from Amy Chase" [ref=e736]
+            - button "Scroll to testimonial from Veronica Winton" [ref=e737]
+            - button "Scroll to testimonial from Dillon Lenora" [ref=e738]
+            - button "Scroll to testimonial from Harriet Arron" [ref=e739]
+      - generic [ref=e744]:
+        - generic [ref=e745]:
+          - generic [ref=e746]:
+            - heading "Get started" [level=2] [ref=e747]
+            - paragraph [ref=e748]:
+              - text: Ready to dive in?
+              - text: Start your free trial today.
+          - paragraph [ref=e749]: Get the cheat codes for selling and unlock your team's revenue potential.
+          - link "Get started" [ref=e751] [cursor=pointer]:
+            - /url: "#"
+        - generic [ref=e752]:
+          - generic [ref=e757]:
+            - generic [ref=e759]:
+              - img [ref=e760]
+              - img [ref=e762]
+              - img [ref=e764]
+            - generic [ref=e788]:
+              - generic [ref=e789]:
+                - heading "Product" [level=3] [ref=e790]
+                - list [ref=e791]:
+                  - listitem [ref=e792]:
+                    - link "Pricing" [ref=e793] [cursor=pointer]:
+                      - /url: /pricing
+                  - listitem [ref=e794]:
+                    - link "Analysis" [ref=e795] [cursor=pointer]:
+                      - /url: "#"
+                  - listitem [ref=e796]:
+                    - link "API" [ref=e797] [cursor=pointer]:
+                      - /url: "#"
+              - generic [ref=e798]:
+                - heading "Company" [level=3] [ref=e799]
+                - list [ref=e800]:
+                  - listitem [ref=e801]:
+                    - link "Careers" [ref=e802] [cursor=pointer]:
+                      - /url: "#"
+                  - listitem [ref=e803]:
+                    - link "Blog" [ref=e804] [cursor=pointer]:
+                      - /url: /blog
+                  - listitem [ref=e805]:
+                    - link "Company" [ref=e806] [cursor=pointer]:
+                      - /url: /company
+              - generic [ref=e807]:
+                - heading "Support" [level=3] [ref=e808]
+                - list [ref=e809]:
+                  - listitem [ref=e810]:
+                    - link "Help center" [ref=e811] [cursor=pointer]:
+                      - /url: "#"
+                  - listitem [ref=e812]:
+                    - link "Community" [ref=e813] [cursor=pointer]:
+                      - /url: "#"
+              - generic [ref=e814]:
+                - heading "Company" [level=3] [ref=e815]
+                - list [ref=e816]:
+                  - listitem [ref=e817]:
+                    - link "Terms of service" [ref=e818] [cursor=pointer]:
+                      - /url: "#"
+                  - listitem [ref=e819]:
+                    - link "Privacy policy" [ref=e820] [cursor=pointer]:
+                      - /url: "#"
+          - generic [ref=e821]:
+            - generic [ref=e828]:
+              - img [ref=e829]
+              - img [ref=e831]
+              - img [ref=e833]
+              - img [ref=e835]
+              - generic [ref=e837]: © 2025 Radiant Inc.
+            - generic [ref=e839]:
+              - img [ref=e840]
+              - img [ref=e842]
+              - img [ref=e844]
+              - img [ref=e846]
+              - link "Visit us on Facebook" [ref=e848] [cursor=pointer]:
+                - /url: https://facebook.com
+                - img [ref=e849] [cursor=pointer]
+              - link "Visit us on X" [ref=e851] [cursor=pointer]:
+                - /url: https://x.com
+                - img [ref=e852] [cursor=pointer]
+              - link "Visit us on LinkedIn" [ref=e854] [cursor=pointer]:
+                - /url: https://linkedin.com
+                - img [ref=e855] [cursor=pointer]
+    - generic [ref=e858]: xl
+    - region "Notifications (F8)":
+      - list
+  - button "Open Next.js Dev Tools" [ref=e864] [cursor=pointer]:
+    - img [ref=e865] [cursor=pointer]
+  - alert [ref=e868]
+```

@@ -44,8 +44,13 @@ export default abstract class BaseStrapiClient {
       ...requestInit,
       next: {
         ...requestInit?.next,
-        // if revalidate is set to a number since 0 implies cache: 'no-store' and a positive value implies cache: 'force-cache'.
-        revalidate: isDevelopment() ? 0 : requestInit?.next?.revalidate ?? 60,
+        // Respect explicit revalidate if provided, even in dev; otherwise default
+        revalidate:
+          typeof requestInit?.next?.revalidate === 'number'
+            ? requestInit.next.revalidate
+            : isDevelopment()
+              ? 0
+              : 60,
       },
       headers: {
         ...requestInit?.headers,
@@ -66,12 +71,15 @@ export default abstract class BaseStrapiClient {
     }
 
     if (!response.ok) {
-      const { error } = json
+      // Some endpoints may return empty body or non-JSON error payloads.
+      // Guard against destructuring undefined.
+      const safeError: any = (json as any)?.error
       const appError: AppError = {
-        name: error?.name,
-        message: error?.message,
-        details: error?.details,
-        status: response.status ?? error?.status,
+        name: safeError?.name ?? "HTTP Error",
+        message:
+          safeError?.message ?? text ?? response.statusText ?? "Request failed",
+        details: safeError?.details ?? (text ? { body: text } : undefined),
+        status: response.status ?? safeError?.status ?? 500,
       }
       console.error("[BaseStrapiClient] Strapi API request error: ", appError)
       throw new Error(JSON.stringify(appError))

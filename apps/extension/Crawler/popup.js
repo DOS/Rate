@@ -44,12 +44,33 @@ const apiUrlInput = document.getElementById('apiUrl');
 const apiTokenInput = document.getElementById('apiToken');
 const apiConfigStatus = document.getElementById('apiConfigStatus');
 const apiConfigForm = document.getElementById('apiConfigForm');
+const toggleTokenBtn = document.getElementById('toggleTokenBtn');
+
+// Toggle show/hide API token
+if (toggleTokenBtn) {
+  toggleTokenBtn.addEventListener('click', function() {
+    const currentType = apiTokenInput.getAttribute('type');
+    if (currentType === 'password') {
+      apiTokenInput.setAttribute('type', 'text');
+      toggleTokenBtn.textContent = '🙈'; // Closed eye when showing
+    } else {
+      apiTokenInput.setAttribute('type', 'password');
+      toggleTokenBtn.textContent = '👁️'; // Open eye when hidden
+    }
+  });
+}
 
 // Load config from chrome.storage
 function loadApiConfig() {
   chrome.storage.sync.get(['strapiApiUrl', 'strapiApiToken'], (result) => {
     apiUrlInput.value = result.strapiApiUrl || 'http://localhost:1337';
     apiTokenInput.value = result.strapiApiToken || '';
+    // Debug: log token info
+    if (result.strapiApiToken) {
+      console.log('[Popup] Token loaded, length:', result.strapiApiToken.length);
+      console.log('[Popup] Token first 20 chars:', result.strapiApiToken.substring(0, 20));
+      console.log('[Popup] Token last 20 chars:', result.strapiApiToken.substring(result.strapiApiToken.length - 20));
+    }
   });
 }
 
@@ -57,7 +78,13 @@ function loadApiConfig() {
 apiConfigForm.addEventListener('submit', function(e) {
   e.preventDefault();
   const url = apiUrlInput.value.trim();
-  const token = apiTokenInput.value.trim();
+  let token = apiTokenInput.value.trim();
+  
+  // Clean token - remove any non-ASCII characters
+  token = token.replace(/[^\x00-\x7F]/g, '');
+  
+  console.log('[Popup] Saving token, length:', token.length);
+  
   chrome.storage.sync.set({ strapiApiUrl: url, strapiApiToken: token }, function() {
     if (chrome.runtime.lastError) {
       apiConfigStatus.textContent = '❌ Lưu thất bại!';
@@ -69,6 +96,22 @@ apiConfigForm.addEventListener('submit', function(e) {
     }
   });
 });
+
+// Clear config button
+const clearConfigBtn = document.getElementById('clearConfigBtn');
+if (clearConfigBtn) {
+  clearConfigBtn.addEventListener('click', function() {
+    if (confirm('Clear all saved API configuration?')) {
+      chrome.storage.sync.remove(['strapiApiUrl', 'strapiApiToken'], function() {
+        apiUrlInput.value = 'http://localhost:1337';
+        apiTokenInput.value = '';
+        apiConfigStatus.textContent = '✅ Config cleared!';
+        apiConfigStatus.style.color = '#28A745';
+        setTimeout(() => { apiConfigStatus.textContent = ''; }, 1800);
+      });
+    }
+  });
+}
 
 // Khi mở popup, load config
 if (apiUrlInput && apiTokenInput) loadApiConfig();

@@ -1,0 +1,32 @@
+{
+  "collectionName": "components_property_phone_performances",
+  "info": {
+    "displayName": "Phone Performance"
+  },
+  "options": {},
+  "attributes": {
+    "ProcessorModel": {
+      "type": "string"
+    },
+    "ProcessorSpeed": {
+      "type": "decimal"
+    },
+    "RAM": {
+      "type": "integer"
+    },
+    "Storage": {
+      "type": "integer"
+    },
+    "ExpandableStorage": {
+      "type": "boolean",
+      "default": false
+    },
+    "OS": {
+      "type": "string"
+    },
+    "GPUModel": {
+      "type": "string"
+    }
+  },
+  "config": {}
+}

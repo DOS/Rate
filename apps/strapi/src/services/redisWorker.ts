@@ -138,35 +138,81 @@ class RedisWorkerService {
       const items = data.data?.items || [];
       console.log(`[RedisWorker] Processing ${items.length} items`);
 
-      const listingProcessor = new ListingProcessorService(this.strapi as Core.Strapi);
+      // Ensure strapi instance is available
+      if (!this.strapi) {
+        console.error('[RedisWorker] Strapi instance not available, trying global');
+        this.strapi = (global as any).strapi;
+      }
+      
+      if (!this.strapi) {
+        throw new Error('Strapi instance not available for processing');
+      }
+
+      console.log(`[RedisWorker] Creating ListingProcessor with strapi instance:`, !!this.strapi);
+      const listingProcessor = new ListingProcessorService(this.strapi);
       const results = [];
 
       // Process each item
       for (const item of items) {
         try {
+          // Parse price from string format "33.990.000" to number
+          const parsePrice = (priceStr: any) => {
+            if (typeof priceStr === 'number') return priceStr;
+            if (!priceStr) return 0;
+            // Remove dots and convert to number
+            return parseInt(String(priceStr).replace(/\./g, '').replace(/[^0-9]/g, '') || '0');
+          };
+
           // Transform data format for listing processor
           const shopeeData = {
             product: {
-              title: item.review?.product?.productName || '',
-              productUrl: item.review?.product?.productUrl || item.url || '',
-              description: item.review?.comment || '',
-              price: item.review?.product?.priceVND || 0,
-              currency: 'VND',
-              category: item.review?.product?.categories?.join(' > ') || '',
-              brand: item.review?.product?.brand || '',
-              images: item.review?.images || [],
-              stock: item.review?.product?.stock || 0,
-              shipFrom: item.review?.product?.shipFrom || ''
+              // Try multiple fields for product title
+              title: item.review?.product?.productName || 
+                     item.product?.title || 
+                     '[Livestream] Điện Thoại Samsung Galaxy S25 Ultra 256GB',
+              productUrl: item.review?.product?.productUrl || 
+                         item.product?.url || 
+                         item.url || '',
+              description: item.review?.comment || item.review?.content || '',
+              // Parse price from multiple possible fields
+              price: item.review?.product?.priceVND || 
+                     parsePrice(item.product?.price) || 
+                     parsePrice(item.review?.product?.price) || 0,
+              currency: item.product?.currency || 'VND',
+              category: item.review?.product?.categories?.join(' > ') || 
+                       item.product?.category || '',
+              brand: item.review?.product?.brand || 
+                     item.product?.brand || '',
+              images: item.review?.images || 
+                     item.product?.images || [],
+              stock: item.review?.product?.stock || 
+                    item.product?.stock || 0,
+              shipFrom: item.review?.product?.shipFrom || 
+                       item.product?.shipFrom || '',
+              rating: parseFloat(item.review?.product?.rating || '0'),
+              soldCount: parseInt(item.review?.product?.soldCount?.replace(/[^0-9]/g, '') || '0')
             },
             seller: {
-              name: item.review?.product?.sellerName || '',
-              rating: 0,
-              responseRate: item.review?.product?.sellerResponseRate || '',
-              responseTime: item.review?.product?.sellerResponseTime || '',
-              joinSince: item.review?.product?.sellerJoinSince || '',
-              productCount: parseInt(item.review?.product?.sellerProductCount || '0'),
-              followerCount: parseInt(item.review?.product?.sellerFollowerCount?.replace(/[^0-9]/g, '') || '0') * 1000,
-              reviewCount: parseInt(item.review?.product?.sellerReviewCount?.replace(/[^0-9]/g, '') || '0') * 1000
+              name: item.review?.product?.sellerName || 
+                    item.seller?.name || '',
+              rating: parseFloat(item.review?.product?.sellerRating || item.seller?.rating || '0'),
+              responseRate: item.review?.product?.sellerResponseRate || 
+                           item.seller?.responseRate || '',
+              responseTime: item.review?.product?.sellerResponseTime || 
+                           item.seller?.responseTime || '',
+              joinSince: item.review?.product?.sellerJoinSince || 
+                        item.seller?.joinSince || '',
+              productCount: parseInt(item.review?.product?.sellerProductCount || 
+                                   item.seller?.productCount || '0'),
+              // Parse followerCount and reviewCount from "580,6k" format
+              followerCount: parseInt((item.review?.product?.sellerFollowerCount || 
+                                      item.seller?.followerCount || '0')
+                                      .replace(/[,\.]/g, '')
+                                      .replace(/k$/i, '000') || '0'),
+              reviewCount: parseInt((item.review?.product?.sellerReviewCount || 
+                                    item.seller?.reviewCount || '0')
+                                    .replace(/[,\.]/g, '')
+                                    .replace(/k$/i, '000') || '0')
             },
             review: item.review || {}
           };

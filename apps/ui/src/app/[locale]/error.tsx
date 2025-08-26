@@ -37,9 +37,9 @@ export default function Error({ error, reset }: Props) {
         {isDev ? `: ${error.message}` : null}
       </p>
       {isDev && (
-        <p className="mt-2 w-full overflow-x-auto bg-gray-100 p-3 text-xs">
+        <div className="mt-2 w-full overflow-x-auto bg-gray-100 p-3 text-xs">
           <pre>{error.stack?.split("\n").slice(0, 7).join("\n")}</pre>
-        </p>
+        </div>
       )}
 
       <Button type="button" size="sm" onClick={handleTryAgain} className="mt-2">

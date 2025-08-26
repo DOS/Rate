@@ -60,6 +60,8 @@ html {
   scroll-behavior: smooth;
 }
 
+/* Removed legacy landing-root centering to match Radiant 1:1 */
+
 /* Utilities */
 .no-scrollbar {
   -ms-overflow-style: none;

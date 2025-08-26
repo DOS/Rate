@@ -18,7 +18,10 @@
       "dependsOn": ["^lint"]
     },
     "dev": {
-      "dependsOn": ["@repo/shared-data#build", "@repo/design-system#build"],
+      "dependsOn": [
+        "@repo/shared-data#build",
+        "@repo/design-system#build"
+      ],
       "cache": false,
       "persistent": true
     },

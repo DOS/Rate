@@ -1,4 +1,4 @@
-import "@/styles/globals.css"
+import "@/styles/tailwind.css"
 
 import { Metadata } from "next"
 import { notFound } from "next/navigation"
@@ -12,8 +12,7 @@ import { cn } from "@/lib/utils"
 import { ErrorBoundary } from "@/components/elementary/ErrorBoundary"
 import StrapiPreviewListener from "@/components/elementary/StrapiPreviewListener"
 import { TailwindIndicator } from "@/components/elementary/TailwindIndicator"
-import StrapiFooter from "@/components/page-builder/single-types/footer/StrapiFooter"
-import StrapiNavbar from "@/components/page-builder/single-types/navbar/StrapiNavbar"
+// Swap to Radiant layout components
 import { ClientProviders } from "@/components/providers/ClientProviders"
 import { ServerProviders } from "@/components/providers/ServerProviders"
 import TrackingScripts from "@/components/providers/TrackingScripts"
@@ -43,33 +42,22 @@ export default async function RootLayout({ children, params }: LayoutProps) {
 
   return (
     <html lang={locale} suppressHydrationWarning>
-      <head />
-      <body
-        className={cn(
-          "bg-background min-h-screen font-sans antialiased",
-          fontRoboto.variable
-        )}
-      >
+      <head>
+        <link
+          rel="stylesheet"
+          href="https://api.fontshare.com/css?f%5B%5D=switzer@400,500,600,700&display=swap"
+        />
+      </head>
+      <body className={cn("antialiased text-gray-950") }>
         <StrapiPreviewListener />
         <TrackingScripts />
         <ServerProviders params={params}>
           <ClientProviders>
             <div className="relative flex min-h-screen flex-col">
-              <ErrorBoundary hideFallback>
-                <StrapiNavbar locale={locale} />
-              </ErrorBoundary>
-
-              <div className="flex-1">
-                <div>{children}</div>
-              </div>
+              <div className="flex-1">{children}</div>
 
               <TailwindIndicator />
-
               <Toaster />
-
-              <ErrorBoundary hideFallback>
-                <StrapiFooter locale={locale} />
-              </ErrorBoundary>
             </div>
           </ClientProviders>
         </ServerProviders>

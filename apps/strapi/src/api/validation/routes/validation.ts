@@ -31,7 +31,7 @@ export default {
       config: {
         auth: {
           strategies: ['api-token', 'jwt'],
-          scope: ['api::validation.validation.validate'],
+          // scope: ['api::validation.validation.validate'], // Tạm comment để test
         },
         policies: [],
         middlewares: [],

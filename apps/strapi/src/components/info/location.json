@@ -1,0 +1,34 @@
+{
+  "collectionName": "components_info_locations",
+  "info": {
+    "displayName": "Location",
+    "description": "Physical location information",
+    "icon": "map-marker-alt"
+  },
+  "options": {},
+  "attributes": {
+    "Address": {
+      "type": "text",
+      "required": true
+    },
+    "District": {
+      "type": "string"
+    },
+    "City": {
+      "type": "string",
+      "required": true
+    },
+    "Province": {
+      "type": "string"
+    },
+    "PostalCode": {
+      "type": "string"
+    },
+    "GoogleMaps": {
+      "type": "string"
+    },
+    "Coordinates": {
+      "type": "json"
+    }
+  }
+}

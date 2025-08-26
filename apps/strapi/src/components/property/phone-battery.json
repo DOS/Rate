@@ -1,0 +1,50 @@
+{
+  "collectionName": "components_property_phone_batteries",
+  "info": {
+    "displayName": "Phone Battery"
+  },
+  "options": {},
+  "attributes": {
+    "Capacity": {
+      "type": "integer"
+    },
+    "Type": {
+      "type": "enumeration",
+      "enum": [
+        "Li-Ion",
+        "Li-Po",
+        "Li-Polymer"
+      ],
+      "default": "Li-Ion"
+    },
+    "ChargingSpeed": {
+      "type": "integer"
+    },
+    "FastCharging": {
+      "type": "boolean",
+      "default": false
+    },
+    "WirelessCharging": {
+      "type": "boolean",
+      "default": false
+    },
+    "WirelessChargingSpeed": {
+      "type": "integer",
+      "conditions": {
+        "visible": {
+          "==": [
+            {
+              "var": "WirelessCharging"
+            },
+            true
+          ]
+        }
+      }
+    },
+    "ReverseCharging": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "config": {}
+}

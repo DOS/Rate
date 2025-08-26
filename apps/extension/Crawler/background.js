@@ -85,8 +85,16 @@ chrome.runtime.onInstalled.addListener(() => {
 // Submit Shopee reviews to Strapi Validation API
 async function submitShopeeReviewsToStrapi(reviews) {
   console.log('[Background] Attempting to submit Shopee reviews to Strapi...');
+  console.log('[Background] Reviews count:', reviews?.length);
+  
   // Ensure latest config
   await loadStrapiConfigAndApply();
+  console.log('[Background] Strapi config loaded:', { 
+    baseUrl: strapiConfig.baseUrl, 
+    hasToken: !!strapiConfig.apiToken,
+    tokenLength: strapiConfig.apiToken?.length 
+  });
+  
   if (!strapiConfig.baseUrl || !strapiConfig.apiToken) {
     throw new Error('Strapi API URL or Token is not configured.');
   }
@@ -149,26 +157,58 @@ async function submitShopeeReviewsToStrapi(reviews) {
     });
 
     // Gửi đến Strapi validation endpoint
-    const response = await fetch(`${strapiConfig.baseUrl}/api/validation/validate`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${strapiConfig.apiToken}`
-      },
-      body: JSON.stringify({
-        items: items,
-        priority: 'normal',
-        source: 'shopee_extension'
-      })
-    });
+    const url = `${strapiConfig.baseUrl}/api/validation/validate`;
+    const payload = {
+      items: items,
+      priority: 'normal',
+      source: 'shopee_extension'
+    };
+    
+    console.log('[Background] Sending request to:', url);
+    console.log('[Background] Payload items count:', items.length);
+    console.log('[Background] First item sample:', items[0]);
+    
+    let response;
+    try {
+      // Add timeout using AbortController
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+      
+      response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${strapiConfig.apiToken}`
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      console.log('[Background] Response status:', response.status, response.statusText);
+      
+      // Log response body if error
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[Background] Error response body:', errorText);
+      }
+    } catch (fetchError) {
+      console.error('[Background] Fetch error:', fetchError);
+      if (fetchError.name === 'AbortError') {
+        throw new Error('Request timeout after 30 seconds');
+      }
+      throw new Error(`Network error: ${fetchError.message}`);
+    }
 
     if (!response.ok) {
       throw new Error(`Strapi API error: ${response.status} ${response.statusText}`);
     }
 
     const result = await response.json();
+    console.log('[Background] Strapi API response:', result);
     
-    if (result.success) {
+    // Check if we have a requestId (successful submission)
+    if (result.requestId) {
       lastShopeeSubmissionHash = batchHash;
       console.log('[Background] Successfully submitted to Strapi Redis Stream:', result);
       
@@ -185,8 +225,13 @@ async function submitShopeeReviewsToStrapi(reviews) {
         requestId: result.requestId,
         message: 'Data sent to Strapi Redis Stream for processing'
       };
+    } else if (result.error) {
+      // Handle error response from Strapi
+      throw new Error(`Strapi error: ${result.error.message || result.error.name || JSON.stringify(result.error)}`);
     } else {
-      throw new Error(`Strapi validation failed: ${result.message || 'Unknown error'}`);
+      // Unknown response format
+      console.error('[Background] Unexpected Strapi response format:', result);
+      throw new Error(`Strapi validation failed: ${result.message || 'Unknown response format'}`);
     }
     
   } catch (error) {
@@ -353,9 +398,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   // New: Handle submit reviews to Strapi
   if (message.type === 'submit_shopee_reviews_to_strapi') {
+    console.log('[Background] Handling submit_shopee_reviews_to_strapi with', message.reviews?.length, 'reviews');
     submitShopeeReviewsToStrapi(message.reviews)
-      .then(result => sendResponse({ success: true, result }))
-      .catch(error => sendResponse({ success: false, error: error.message }));
+      .then(result => {
+        console.log('[Background] Submit success:', result);
+        sendResponse({ success: true, result });
+      })
+      .catch(error => {
+        console.error('[Background] Submit error:', error);
+        sendResponse({ success: false, error: error.message });
+      });
     return true; // Keep message channel open for async
   }
   console.log('[Background] Message details:', message);
@@ -369,14 +421,28 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
       (async () => {
         try {
-          await chrome.scripting.executeScript({
-            target: { tabId, world: 'MAIN' },
-            files: ['page-bridge.js']
-          });
-          await chrome.scripting.executeScript({
-            target: { tabId, world: 'MAIN' },
-            files: ['page-sniffer.js']
-          });
+          // Try with world: 'MAIN' first (Chrome 111+)
+          try {
+            await chrome.scripting.executeScript({
+              target: { tabId, world: 'MAIN' },
+              files: ['page-bridge.js']
+            });
+            await chrome.scripting.executeScript({
+              target: { tabId, world: 'MAIN' },
+              files: ['page-sniffer.js']
+            });
+          } catch (worldError) {
+            // Fallback for older Chrome versions - inject without world property
+            console.log('[Background] Falling back to injection without world property');
+            await chrome.scripting.executeScript({
+              target: { tabId },
+              files: ['page-bridge.js']
+            });
+            await chrome.scripting.executeScript({
+              target: { tabId },
+              files: ['page-sniffer.js']
+            });
+          }
           sendResponse({ success: true });
         } catch (e) {
           console.error('[Background] inject_page_scripts failed', e);

@@ -169,11 +169,19 @@
       </div>
       <div style="margin-bottom: 8px;">
         <label for="apiToken" style="font-size:13px;">API Token:</label>
-        <input type="password" id="apiToken" name="apiToken" style="width:100%;padding:6px;border-radius:5px;border:none;margin-top:2px;" />
+        <div style="position:relative;">
+          <input type="password" id="apiToken" name="apiToken" style="width:100%;padding:6px 30px 6px 6px;border-radius:5px;border:none;margin-top:2px;" />
+          <button type="button" id="toggleTokenBtn" style="position:absolute;right:2px;top:50%;transform:translateY(-50%);background:transparent;border:none;cursor:pointer;padding:4px;font-size:16px;" title="Show/Hide token">
+            👁️
+          </button>
+        </div>
       </div>
       <div style="display:flex;gap:8px;">
         <button type="submit" class="button btn-secondary" style="flex:1;margin-top:4px;">💾 Lưu cấu hình</button>
         <button type="button" id="testApiBtn" class="button btn-primary" style="flex:1;margin-top:4px;">🔌 Test Connection</button>
+      </div>
+      <div style="margin-top:4px;">
+        <button type="button" id="clearConfigBtn" class="button btn-danger" style="width:100%;padding:8px;font-size:12px;">🔄 Clear Config</button>
       </div>
       <div id="apiConfigStatus" style="font-size:12px;margin-top:6px;text-align:center;"></div>
       <div id="apiTestStatus" style="font-size:12px;margin-top:4px;text-align:center;"></div>

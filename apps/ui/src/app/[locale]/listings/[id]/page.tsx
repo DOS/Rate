@@ -5,11 +5,9 @@ import CommentList from "@/components/ui/CommentList"
 import ReviewList from "@/components/ui/ReviewList"
 import { formatDistanceToNow } from "date-fns"
 
-interface PageProps {
-  params: {
-    locale: string
-    id: string
-  }
+interface PageParams {
+  locale: string
+  id: string
 }
 
 async function getListing(id: string) {
@@ -39,8 +37,9 @@ async function getListing(id: string) {
   }
 }
 
-export default async function ListingDetailPage({ params }: PageProps) {
-  const listing = await getListing(params.id)
+export default async function ListingDetailPage({ params }: { params: Promise<PageParams> }) {
+  const { id } = await params
+  const listing = await getListing(id)
   
   if (!listing) {
     notFound()
@@ -144,14 +143,14 @@ export default async function ListingDetailPage({ params }: PageProps) {
             {/* Reviews Section - Only show if approved */}
             {isApproved && (
               <div className="bg-white rounded-lg shadow-sm p-6">
-                <ReviewList listingId={params.id} />
+                <ReviewList listingId={id} />
               </div>
             )}
             
             {/* Comments Section - Only show if approved */}
             {isApproved && (
               <div className="bg-white rounded-lg shadow-sm p-6">
-                <CommentList listingId={params.id} />
+                <CommentList listingId={id} />
               </div>
             )}
           </div>

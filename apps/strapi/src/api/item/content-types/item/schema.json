@@ -107,10 +107,7 @@
         "violation.detail",
         "info.organization",
         "info.individual",
-        "violation.evidence",
-        "contact.basic",
-        "contact.location",
-        "contact.social-media"
+        "violation.evidence"
       ]
     },
     "RelatedIdentity": {

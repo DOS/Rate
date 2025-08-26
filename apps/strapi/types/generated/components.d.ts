@@ -1,50 +1,5 @@
 import type { Schema, Struct } from "@strapi/strapi"
 
-export interface ContactBasic extends Struct.ComponentSchema {
-  collectionName: "components_contact_basics"
-  info: {
-    displayName: "Basic"
-    icon: "phone"
-  }
-  attributes: {
-    Email: Schema.Attribute.String
-    Location: Schema.Attribute.Component<"contact.location", false>
-    Phone: Schema.Attribute.String
-    Social: Schema.Attribute.Component<"contact.social-media", false>
-    Website: Schema.Attribute.String
-  }
-}
-
-export interface ContactLocation extends Struct.ComponentSchema {
-  collectionName: "components_contact_locations"
-  info: {
-    displayName: "Location"
-    icon: "pinMap"
-  }
-  attributes: {
-    Address: Schema.Attribute.String
-  }
-}
-
-export interface ContactSocialMedia extends Struct.ComponentSchema {
-  collectionName: "components_contact_social_medias"
-  info: {
-    description: ""
-    displayName: "Social"
-    icon: "earth"
-  }
-  attributes: {
-    Discord: Schema.Attribute.String
-    Facebook: Schema.Attribute.String
-    Instagram: Schema.Attribute.String
-    LinkedIn: Schema.Attribute.String
-    Telegram: Schema.Attribute.String
-    TikTok: Schema.Attribute.String
-    YouTube: Schema.Attribute.String
-    Zalo: Schema.Attribute.String
-  }
-}
-
 export interface ElementsFooterItem extends Struct.ComponentSchema {
   collectionName: "components_elements_footer_items"
   info: {
@@ -81,19 +36,18 @@ export interface FormsNewsletterForm extends Struct.ComponentSchema {
   }
 }
 
-export interface InfoBasic extends Struct.ComponentSchema {
-  collectionName: "components_info_basics"
+export interface InfoContact extends Struct.ComponentSchema {
+  collectionName: "components_info_contacts"
   info: {
-    displayName: "Basic"
-    icon: "information"
+    description: "Contact information"
+    displayName: "Contact"
+    icon: "phone"
   }
   attributes: {
-    Alias: Schema.Attribute.Component<"review.pro-item", true>
-    Name: Schema.Attribute.String
-    Organization: Schema.Attribute.Component<"info.organization", false>
-    PersonalInfo: Schema.Attribute.Component<"info.individual", true>
-    TaxCode: Schema.Attribute.String
-    Type: Schema.Attribute.Enumeration<["Individual", "Organization"]>
+    Email: Schema.Attribute.Email
+    OpeningHours: Schema.Attribute.Text
+    Phone: Schema.Attribute.String
+    Website: Schema.Attribute.String
   }
 }
 
@@ -112,6 +66,24 @@ export interface InfoIndividual extends Struct.ComponentSchema {
   }
 }
 
+export interface InfoLocation extends Struct.ComponentSchema {
+  collectionName: "components_info_locations"
+  info: {
+    description: "Physical location information"
+    displayName: "Location"
+    icon: "map-marker-alt"
+  }
+  attributes: {
+    Address: Schema.Attribute.Text & Schema.Attribute.Required
+    City: Schema.Attribute.String & Schema.Attribute.Required
+    Coordinates: Schema.Attribute.JSON
+    District: Schema.Attribute.String
+    GoogleMaps: Schema.Attribute.String
+    PostalCode: Schema.Attribute.String
+    Province: Schema.Attribute.String
+  }
+}
+
 export interface InfoOrganization extends Struct.ComponentSchema {
   collectionName: "components_info_organizations"
   info: {
@@ -121,6 +93,89 @@ export interface InfoOrganization extends Struct.ComponentSchema {
   attributes: {
     BusinessID: Schema.Attribute.String
     FoundingDate: Schema.Attribute.Date
+  }
+}
+
+export interface InfoSocial extends Struct.ComponentSchema {
+  collectionName: "components_info_socials"
+  info: {
+    description: "Social media links"
+    displayName: "Social Media"
+    icon: "share-alt"
+  }
+  attributes: {
+    Facebook: Schema.Attribute.String
+    Instagram: Schema.Attribute.String
+    Telegram: Schema.Attribute.String
+    TikTok: Schema.Attribute.String
+    WhatsApp: Schema.Attribute.String
+    Youtube: Schema.Attribute.String
+    Zalo: Schema.Attribute.String
+  }
+}
+
+export interface PropertyPhoneBattery extends Struct.ComponentSchema {
+  collectionName: "components_property_phone_batteries"
+  info: {
+    displayName: "Phone Battery"
+  }
+  attributes: {
+    Capacity: Schema.Attribute.Integer
+    ChargingSpeed: Schema.Attribute.Integer
+    FastCharging: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>
+    ReverseCharging: Schema.Attribute.Boolean &
+      Schema.Attribute.DefaultTo<false>
+    Type: Schema.Attribute.Enumeration<["Li-Ion", "Li-Po", "Li-Polymer"]> &
+      Schema.Attribute.DefaultTo<"Li-Ion">
+    WirelessCharging: Schema.Attribute.Boolean &
+      Schema.Attribute.DefaultTo<false>
+    WirelessChargingSpeed: Schema.Attribute.Integer
+  }
+}
+
+export interface PropertyPhoneDisplay extends Struct.ComponentSchema {
+  collectionName: "components_property_phone_displays"
+  info: {
+    displayName: "Phone Display"
+    icon: "phone"
+  }
+  attributes: {
+    Brightness: Schema.Attribute.Integer
+    Protection: Schema.Attribute.String
+    RefreshRate: Schema.Attribute.Integer
+    ResolutionHeight: Schema.Attribute.Integer
+    ResolutionWidth: Schema.Attribute.Integer
+    Size: Schema.Attribute.Decimal
+    Type: Schema.Attribute.Enumeration<
+      [
+        "LCD",
+        "IPS LCD",
+        "OLED",
+        "AMOLED",
+        "Super AMOLED",
+        "Dynamic AMOLED",
+        "LTPO OLED",
+        "Retina",
+        "Super Retina XDR",
+      ]
+    >
+  }
+}
+
+export interface PropertyPhonePerformance extends Struct.ComponentSchema {
+  collectionName: "components_property_phone_performances"
+  info: {
+    displayName: "Phone Performance"
+  }
+  attributes: {
+    ExpandableStorage: Schema.Attribute.Boolean &
+      Schema.Attribute.DefaultTo<false>
+    GPUModel: Schema.Attribute.String
+    OS: Schema.Attribute.String
+    ProcessorModel: Schema.Attribute.String
+    ProcessorSpeed: Schema.Attribute.Decimal
+    RAM: Schema.Attribute.Integer
+    Storage: Schema.Attribute.Integer
   }
 }
 
@@ -592,15 +647,17 @@ export interface ViolationEvidence extends Struct.ComponentSchema {
 declare module "@strapi/strapi" {
   export module Public {
     export interface ComponentSchemas {
-      "contact.basic": ContactBasic
-      "contact.location": ContactLocation
-      "contact.social-media": ContactSocialMedia
       "elements.footer-item": ElementsFooterItem
       "forms.contact-form": FormsContactForm
       "forms.newsletter-form": FormsNewsletterForm
-      "info.basic": InfoBasic
+      "info.contact": InfoContact
       "info.individual": InfoIndividual
+      "info.location": InfoLocation
       "info.organization": InfoOrganization
+      "info.social": InfoSocial
+      "property.phone-battery": PropertyPhoneBattery
+      "property.phone-display": PropertyPhoneDisplay
+      "property.phone-performance": PropertyPhonePerformance
       "rating.criterion": RatingCriterion
       "review.pro-item": ReviewProItem
       "review.pros-cons": ReviewProsCons
