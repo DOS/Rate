@@ -919,6 +919,15 @@ export interface ApiListingListing extends Struct.CollectionTypeSchema {
           localized: false
         }
       }>
+    ListingStatus: Schema.Attribute.Enumeration<
+      ["Pending", "Approved", "Rejected", "Need Review"]
+    > &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: false
+        }
+      }> &
+      Schema.Attribute.DefaultTo<"Pending">
     locale: Schema.Attribute.String
     localizations: Schema.Attribute.Relation<
       "oneToMany",
@@ -1000,15 +1009,6 @@ export interface ApiListingListing extends Struct.CollectionTypeSchema {
           localized: true
         }
       }>
-    Status: Schema.Attribute.Enumeration<
-      ["pending", "approved", "rejected", "needs_revision"]
-    > &
-      Schema.Attribute.SetPluginOptions<{
-        i18n: {
-          localized: false
-        }
-      }> &
-      Schema.Attribute.DefaultTo<"pending">
     Stock: Schema.Attribute.Integer &
       Schema.Attribute.SetPluginOptions<{
         i18n: {

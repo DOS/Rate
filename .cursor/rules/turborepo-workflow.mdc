@@ -1,23 +1,25 @@
 ---
-description: 
-globs: 
+description:
+globs:
 alwaysApply: true
 ---
+
 Rate-New Turborepo development workflow and commands
 globs: ["package.json", "turbo.json", "yarn.lock"]
-
 
 # Rate-New Turborepo Workflow
 
 ## Core Commands
+
 - **Start dev**: `yarn dev` từ root directory
-- **Build project**: `yarn build` 
+- **Build project**: `yarn build`
 - **NEVER use npm**: Chỉ sử dụng yarn commands
 - **PowerShell syntax**: Tránh bash commands
 
 ## Project Structure
+
 - `apps/strapi/`: Strapi CMS backend với PostgreSQL
-- `apps/ui/`: Next.js frontend
+- `apps/web/`: Next.js frontend
 - `packages/`: Shared components và configs
 - `Docs/`: Project documentation, guides, platform resources
   - `Docs/Modules/`: Module-specific documentation
@@ -31,12 +33,14 @@ globs: ["package.json", "turbo.json", "yarn.lock"]
 - Luôn chạy commands từ D:\Projects\JOY\Rate
 
 ## Documentation Workflow
+
 - **Check existing docs** trước khi tạo solutions mới
 - **Reference Modules/** cho similar functionality patterns
 - **Update Docs/** với new discoveries
 - **Maintain consistency** với established patterns
 
-## Development Rules  
+## Development Rules
+
 - Kiểm tra port conflicts trước khi start
 - Strapi admin: localhost:1337
 - Next.js UI: localhost:3000

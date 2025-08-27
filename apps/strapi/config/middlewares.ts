@@ -48,7 +48,21 @@ export default [
       },
     },
   },
-  "strapi::cors",
+  {
+    name: "strapi::cors",
+    config: {
+      origin: [
+        "http://localhost:3000",
+        "http://localhost:1337",
+        "chrome-extension://*",
+        "*://shopee.vn",
+        "*://*.shopee.vn"
+      ],
+      headers: "*",
+      methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+      credentials: true
+    }
+  },
   "strapi::poweredBy",
   "strapi::logger",
   "strapi::query",

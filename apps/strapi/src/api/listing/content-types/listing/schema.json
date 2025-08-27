@@ -58,19 +58,19 @@
         }
       }
     },
-    "Status": {
+    "ListingStatus": {
       "type": "enumeration",
       "pluginOptions": {
         "i18n": {
           "localized": false
         }
       },
-      "default": "pending",
+      "default": "Pending",
       "enum": [
-        "pending",
-        "approved",
-        "rejected",
-        "needs_revision"
+        "Pending",
+        "Approved",
+        "Rejected",
+        "Need Review"
       ]
     },
     "Media": {

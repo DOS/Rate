@@ -69,21 +69,39 @@ class RedisWorkerService {
 
     while (this.isRunning) {
       try {
-        // Read messages from stream
-        const messages = await client.xReadGroup(
+        // First, try to read pending messages (messages that were not acknowledged)
+        let messages = await client.xReadGroup(
           this.consumerGroup,
           this.consumerName,
           [
             {
               key: 'validation_requests',
-              id: '>' // Only new messages
+              id: '0' // Read pending messages first
             }
           ],
           {
             COUNT: 10,
-            BLOCK: 5000 // Block for 5 seconds
+            BLOCK: 0 // Don't block for pending messages
           }
         );
+
+        // If no pending messages, read new messages
+        if (!messages || messages.length === 0) {
+          messages = await client.xReadGroup(
+            this.consumerGroup,
+            this.consumerName,
+            [
+              {
+                key: 'validation_requests',
+                id: '>' // Only new messages
+              }
+            ],
+            {
+              COUNT: 10,
+              BLOCK: 5000 // Block for 5 seconds
+            }
+          );
+        }
 
         if (messages && messages.length > 0) {
           for (const stream of messages) {
@@ -163,6 +181,13 @@ class RedisWorkerService {
             return parseInt(String(priceStr).replace(/\./g, '').replace(/[^0-9]/g, '') || '0');
           };
 
+          // Debug: Log raw data from extension
+          console.log('[RedisWorker] Raw item data:', JSON.stringify({
+            review_product: item.review?.product,
+            product: item.product,
+            review: item.review
+          }, null, 2));
+
           // Transform data format for listing processor
           const shopeeData = {
             product: {
@@ -173,7 +198,10 @@ class RedisWorkerService {
               productUrl: item.review?.product?.productUrl || 
                          item.product?.url || 
                          item.url || '',
-              description: item.review?.comment || item.review?.content || '',
+              // Use actual product description, not review comment
+              description: item.product?.description || 
+                          item.review?.product?.description || 
+                          item.description || '',
               // Parse price from multiple possible fields
               price: item.review?.product?.priceVND || 
                      parsePrice(item.product?.price) || 

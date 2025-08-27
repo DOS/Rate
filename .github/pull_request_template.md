@@ -17,5 +17,5 @@
 ## Screenshots (optional)
 
 ## Notes
-- Affected areas: `apps/ui`, `apps/strapi`, `packages/*`, `Docs/*`
+- Affected areas: `apps/web`, `apps/strapi`, `packages/*`, `Docs/*`
 - Reviewers: @agent-frontend @agent-backend

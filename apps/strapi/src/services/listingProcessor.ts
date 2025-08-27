@@ -14,6 +14,7 @@ interface ShopeeProduct {
   title?: string;
   description?: string;
   price?: number;
+  originalPrice?: number;
   currency?: string;
   category?: string;
   brand?: string;
@@ -23,6 +24,7 @@ interface ShopeeProduct {
   shipFrom?: string;
   rating?: number;
   soldCount?: number;
+  likedCount?: number;
 }
 
 interface ShopeeSeller {
@@ -216,7 +218,7 @@ class ListingProcessorService {
           PlatformID: 'shopee-vn', // Set PlatformID field
           URL: 'https://shopee.vn',
           Country: 'VN',
-          PlatformLocale: 'vi',
+          PlatformLocale: 'vi', // Ensure Vietnamese locale
           is_Active: true
         }
       });
@@ -239,17 +241,49 @@ class ListingProcessorService {
         throw new Error(`Platform not found with ID: ${platformId}`);
       }
       
-      // Use PlatformID field (required)
-      const platformIdentifier = platform.PlatformID || platform.Slug;
+      // Use PlatformID field (required) - handle both uppercase (Strapi) and lowercase (DB) field names
+      const platformIdentifier = platform.PlatformID || platform.platform_id || platform.Slug || platform.slug;
       if (!platformIdentifier) {
-        throw new Error(`Platform ${platform.Name || platformId} is missing PlatformID field`);
+        throw new Error(`Platform ${platform.Name || platform.name || platformId} is missing PlatformID field`);
       }
       
-      // Force Vietnamese locale for Shopee VN
-      type LocaleType = 'vi' | 'en' | 'cs' | 'zh' | 'th' | 'id' | 'ms' | 'ja' | 'ko' | 'de' | 'fr' | 'sk' | 'pl';
-      let locale: LocaleType = 'vi'; // Always use Vietnamese for Shopee VN
+      // Determine locale based on platform
+      const platformLocale = platform.PlatformLocale || platform.platform_locale;
+      const countryCode = platform.Country || platform.country;
       
-      console.log('[ListingProcessor] Using locale:', locale, 'for platform:', platform.Name);
+      console.log('[ListingProcessor] Platform data:', {
+        Name: platform.Name || platform.name,
+        PlatformLocale: platformLocale,
+        Country: countryCode,
+        PlatformID: platform.PlatformID || platform.platform_id
+      });
+      
+      // Map platform locale or country to Strapi locale
+      // Priority: platform_locale -> country code -> default
+      let locale = 'en'; // Default fallback
+      
+      // Check platform locale first
+      if (platformLocale === 'vi') {
+        locale = 'vi';
+      } else if (platformLocale === 'en') {
+        locale = 'en';
+      } else if (platformLocale === 'cs') {
+        locale = 'cs';
+      } 
+      // Then check country code
+      else if (countryCode === 'VN') {
+        locale = 'vi';
+      } else if (countryCode === 'UK' || countryCode === 'US') {
+        locale = 'en';
+      } else if (countryCode === 'CZ') {
+        locale = 'cs';
+      }
+      // For Shopee Vietnam specifically, force Vietnamese
+      else if (platform.Slug === 'shopee-vn' || platform.slug === 'shopee-vn') {
+        locale = 'vi';
+      }
+      
+      console.log('[ListingProcessor] Determined locale:', locale, 'for platform:', platform.Name || platform.name);
       
       // Extract IDs để tạo ListingID unique với format: platformIdentifier.uniqueId
       const productId = this.extractProductId(product.productUrl || '');
@@ -263,14 +297,27 @@ class ListingProcessorService {
       // Upload images to Strapi Media Library (temporarily disabled - needs proper implementation)
       // const mediaIds = await this.uploadProductImages(product.images || [], product.title || '');
       
+      // Convert description to Blocks format for Strapi
+      const descriptionBlocks = product.description ? [
+        {
+          type: 'paragraph',
+          children: [
+            {
+              type: 'text',
+              text: product.description
+            }
+          ]
+        }
+      ] : [];
+
       // Chuẩn bị listing data với tất cả fields mới
       const listingData: any = {
         Title: product.title || 'Sản phẩm Shopee',
         Slug: this.generateSlug(product.title || 'san-pham-shopee'),
         URL: product.productUrl || '',
-        Description: product.description || '',
+        Description: descriptionBlocks, // Use Blocks format
         IsActive: true,
-        Status: 'pending', // Set pending để review
+        ListingStatus: 'Pending', // Set Pending để review - use correct field name with capital P
         ReviewNotes: `Nhập từ Shopee. Giá: ${product.price?.toLocaleString('vi-VN')} ${product.currency}. Người bán: ${this.toTitleCase(seller.name || '')}`,
         ListingID: listingId, // ID unique từ platform - use Strapi field name
         Platform: platformId, // Relation tới Platform
@@ -278,20 +325,24 @@ class ListingProcessorService {
         
         // Generic fields - data chung cho mọi platform
         Price: product.price || 0,
+        OriginalPrice: product.price || 0, // Add OriginalPrice (can be updated later if have discount info)
         Currency: product.currency || 'VND',
         PriceUnit: 'Item', // Default là per Item (capital I), có thể là 'Hour', 'Day', 'Month'
-        AverageRating: product.rating || 0, // Will be recalculated from actual reviews
-        TotalReviews: 0, // Start at 0, will increment when reviews are added
-        SoldCount: product.soldCount || 0,
+        AverageRating: product.rating || 0, // Rating from Shopee
+        TotalReviews: seller.reviewCount || 0, // Use seller's review count
+        SoldCount: product.soldCount || 0, // Map to sold_count field
         UsageCount: product.soldCount || 0, // Map sold count to usage count
         Stock: product.stock || 0,
         PlatformOwnerID: shopId || '', // Shop ID là owner ID cho Shopee
         PlatformOwnerName: this.toTitleCase(seller.name || ''), // Normalize to Title Case
         Brand: product.brand || '', // Keep original brand casing (SAMSUNG, Apple, etc.)
         Location: product.shipFrom || '',
+        LastUpdated: new Date().toISOString(), // Add LastUpdated timestamp
+        FavoriteCount: 0, // Initialize FavoriteCount (will be updated when users add to favorites)
+        ViewCount: 0, // Initialize ViewCount
         
         // Relations
-        Category: category ? [category] : [], // Link to category if found
+        Category: category ? category.id : null, // Link to category if found (use ID directly)
         // Media: mediaIds, // Temporarily disabled - needs proper implementation
         
         // Dynamic Zone Properties - Shopee không cung cấp specs chi tiết
@@ -360,6 +411,14 @@ class ListingProcessorService {
         Currency: listingData.Currency
       }, null, 2));
       
+      // Log final data before creating
+      console.log('[ListingProcessor] Creating listing with data:', {
+        Title: listingData.Title,
+        locale: listingData.locale,
+        Platform: listingData.Platform,
+        ListingID: listingData.ListingID
+      });
+      
       // Tạo listing
       const newListing = await this.strapi.entityService.create('api::listing.listing', {
         data: listingData
@@ -408,41 +467,109 @@ class ListingProcessorService {
       if (!categoryString) return null;
       
       // Parse Shopee category format: "Shopee > Điện Thoại & Phụ Kiện > Điện thoại > Samsung"
-      const categories = categoryString.split('>').map(c => c.trim());
+      const categories = categoryString.split('>').map(c => c.trim()).filter(c => c && c !== 'Shopee');
       
-      // Try to find main category (e.g., "Điện thoại" or "Cell Phones")
-      const mainCategory = categories.find(c => 
-        c.toLowerCase().includes('điện thoại') || 
-        c.toLowerCase().includes('phone') ||
-        c.toLowerCase().includes('cell')
-      );
+      console.log('[ListingProcessor] Parsing category:', categoryString, 'Categories:', categories);
       
-      if (!mainCategory) return null;
+      // Category mapping for common Vietnamese e-commerce categories
+      const categoryMap: { [key: string]: { name: string; slug: string } } = {
+        // Electronics
+        'điện thoại': { name: 'Điện thoại', slug: 'dien-thoai' },
+        'phone': { name: 'Điện thoại', slug: 'dien-thoai' },
+        'laptop': { name: 'Laptop', slug: 'laptop' },
+        'máy tính': { name: 'Máy tính', slug: 'may-tinh' },
+        'tablet': { name: 'Máy tính bảng', slug: 'may-tinh-bang' },
+        'máy tính bảng': { name: 'Máy tính bảng', slug: 'may-tinh-bang' },
+        
+        // Fashion
+        'thời trang': { name: 'Thời trang', slug: 'thoi-trang' },
+        'quần áo': { name: 'Quần áo', slug: 'quan-ao' },
+        'giày dép': { name: 'Giày dép', slug: 'giay-dep' },
+        'túi xách': { name: 'Túi xách', slug: 'tui-xach' },
+        
+        // Beauty
+        'mỹ phẩm': { name: 'Mỹ phẩm', slug: 'my-pham' },
+        'làm đẹp': { name: 'Làm đẹp', slug: 'lam-dep' },
+        'sức khỏe': { name: 'Sức khỏe', slug: 'suc-khoe' },
+        
+        // Home & Living
+        'nhà cửa': { name: 'Nhà cửa & Đời sống', slug: 'nha-cua' },
+        'đời sống': { name: 'Nhà cửa & Đời sống', slug: 'nha-cua' },
+        'nội thất': { name: 'Nội thất', slug: 'noi-that' },
+        
+        // Mother & Baby
+        'mẹ & bé': { name: 'Mẹ & Bé', slug: 'me-va-be' },
+        'mẹ và bé': { name: 'Mẹ & Bé', slug: 'me-va-be' },
+        'đồ chơi': { name: 'Đồ chơi', slug: 'do-choi' },
+        
+        // Sports & Outdoors
+        'thể thao': { name: 'Thể thao & Du lịch', slug: 'the-thao' },
+        'du lịch': { name: 'Thể thao & Du lịch', slug: 'the-thao' },
+        
+        // Automotive
+        'ô tô': { name: 'Ô tô & Xe máy', slug: 'o-to-xe-may' },
+        'xe máy': { name: 'Ô tô & Xe máy', slug: 'o-to-xe-may' },
+        'phụ kiện xe': { name: 'Phụ kiện xe', slug: 'phu-kien-xe' },
+        
+        // Books & Stationery
+        'sách': { name: 'Sách & Văn phòng phẩm', slug: 'sach' },
+        'văn phòng phẩm': { name: 'Sách & Văn phòng phẩm', slug: 'sach' },
+        
+        // Food & Beverage
+        'thực phẩm': { name: 'Thực phẩm', slug: 'thuc-pham' },
+        'đồ ăn': { name: 'Thực phẩm', slug: 'thuc-pham' }
+      };
       
-      // Find existing category by name or slug
+      // Try to find matching category from the parsed strings
+      let matchedCategory = null;
+      
+      for (const cat of categories) {
+        const catLower = cat.toLowerCase();
+        for (const [keyword, categoryInfo] of Object.entries(categoryMap)) {
+          if (catLower.includes(keyword)) {
+            matchedCategory = categoryInfo;
+            break;
+          }
+        }
+        if (matchedCategory) break;
+      }
+      
+      // If no match found, use the first meaningful category string as-is
+      if (!matchedCategory && categories.length > 0) {
+        const firstCategory = categories[0];
+        matchedCategory = {
+          name: firstCategory,
+          slug: this.generateSlug(firstCategory)
+        };
+      }
+      
+      if (!matchedCategory) return null;
+      
+      // Find existing category by slug or name
       const existingCategories = await this.strapi.entityService.findMany('api::category.category', {
         filters: {
           $or: [
-            { Name: { $containsi: 'phone' } },
-            { Name: { $containsi: 'điện thoại' } },
-            { Slug: 'cell-phones' }
+            { Slug: matchedCategory.slug },
+            { Name: matchedCategory.name }
           ]
         }
       });
       
       if (existingCategories && existingCategories.length > 0) {
+        console.log('[ListingProcessor] Found existing category:', existingCategories[0].Name);
         return existingCategories[0];
       }
       
       // If not found, create new category
       const newCategory = await this.strapi.entityService.create('api::category.category', {
         data: {
-          Name: 'Cell Phones',
-          Slug: 'cell-phones',
+          Name: matchedCategory.name,
+          Slug: matchedCategory.slug,
           Type: 'Product' // Required field with capital P
         }
       });
       
+      console.log('[ListingProcessor] Created new category:', newCategory.Name);
       return newCategory;
       
     } catch (error) {

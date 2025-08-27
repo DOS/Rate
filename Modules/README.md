@@ -132,7 +132,7 @@ graph LR
 **Components**:
 
 - **Strapi Backend**: `apps/strapi/` (localhost:1337)
-- **Next.js Frontend**: `apps/ui/` (localhost:3000)
+- **Next.js Frontend**: `apps/web/` (localhost:3000)
 - **PostgreSQL**: Docker container
 - **Shared Packages**: Validation, configs, design system
 

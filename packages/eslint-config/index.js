@@ -9,7 +9,7 @@ module.exports = {
       parserOptions: { project: true },
     },
     {
-      files: ["apps/ui/**/*"],
+      files: ["apps/web/**/*"],
       env: { browser: true },
       extends: ["plugin:react/recommended", "plugin:react-hooks/recommended"],
       settings: { react: { version: "detect" } },

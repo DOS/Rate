@@ -6,14 +6,14 @@
 * @team-lead
 
 # Frontend (Claude Code responsibility)
-/apps/ui/ @claude-code
-/apps/ui/src/ @claude-code
-/apps/ui/src/app/ @claude-code
-/apps/ui/src/components/ @claude-code
-/apps/ui/src/hooks/ @claude-code
-/apps/ui/src/lib/ @claude-code
-/apps/ui/src/styles/ @claude-code
-/apps/ui/public/ @claude-code
+/apps/web/ @claude-code
+/apps/web/src/ @claude-code
+/apps/web/src/app/ @claude-code
+/apps/web/src/components/ @claude-code
+/apps/web/src/hooks/ @claude-code
+/apps/web/src/lib/ @claude-code
+/apps/web/src/styles/ @claude-code
+/apps/web/public/ @claude-code
 
 # Backend (Cursor responsibility)
 /apps/strapi/ @cursor-agent

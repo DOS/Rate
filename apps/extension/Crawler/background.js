@@ -112,22 +112,33 @@ async function submitShopeeReviewsToStrapi(reviews) {
     // Chuẩn bị payload theo format Strapi Redis Stream
     const items = uniqueReviews.map(review => {
       const product = review.product || {};
+      
+      // Extract description from Shopee if needed
+      // We'll use the product name as description placeholder for now
+      const description = product.description || product.productName || '';
+      
+      // Parse soldCount from sellerProductCount or use 0
+      const soldCount = parseInt((product.sellerProductCount || '0').replace(/[^0-9]/g, '') || '0');
+      
       return {
         // Product information
         product: {
           url: product.productUrl || '',
-          title: product.title || '',
-          description: product.description || '',
-          price: product.price || 0,
+          // Use productName from DOM scraping
+          title: product.productName || product.title || '',
+          description: description,
+          // Use priceVND if available (already parsed)
+          price: product.priceVND || product.price || 0,
           currency: product.currency || 'VND',
-          category: product.category || '',
+          // Categories is array from DOM, join them
+          category: Array.isArray(product.categories) ? product.categories.join(' > ') : (product.category || ''),
           brand: product.brand || '',
           images: product.images || [],
           variants: product.variants || [],
           stock: product.stock || 0,
           shipFrom: product.shipFrom || '',
           rating: product.rating || 0,
-          soldCount: product.soldCount || 0
+          soldCount: soldCount
         },
         // Seller information
         seller: {

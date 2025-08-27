@@ -57,10 +57,15 @@ class RedisStreamService {
       this.client = createClient({ url });
       
       this.client.on('error', (err) => {
-        if (this.strapi?.log) {
-          this.strapi.log.error('Redis Client Error:', err);
+        // Don't log socket closed errors during shutdown
+        if (err.message && err.message.includes('Socket closed')) {
+          console.log('Redis connection closed');
         } else {
-          console.error('Redis Client Error:', err);
+          if (this.strapi?.log) {
+            this.strapi.log.error('Redis Client Error:', err);
+          } else {
+            console.error('Redis Client Error:', err);
+          }
         }
       });
 

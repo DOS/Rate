@@ -99,5 +99,5 @@ node_modules_*
 
 # ignore compiled Strapi admin assets
 apps/strapi/public/admin/
-apps/ui/node_modules*
+apps/web/node_modules*
 node_modules*

@@ -1,5 +1,5 @@
 {
-  "eslint.workingDirectories": ["./apps/ui", "./apps/strapi"],
+  "eslint.workingDirectories": ["./apps/web", "./apps/strapi"],
   "tailwindCSS.classAttributes": [
     "class",
     "className",

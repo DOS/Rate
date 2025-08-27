@@ -16,6 +16,7 @@ Rate Platform is an anti-scam ecosystem for Vietnamese users, consisting of a St
 ## Essential Commands
 
 ### Development
+
 ```bash
 # Install dependencies (use yarn, not npm)
 yarn install
@@ -32,6 +33,7 @@ yarn dev
 ```
 
 ### Build & Deploy
+
 ```bash
 # Build all apps
 yarn build
@@ -42,6 +44,7 @@ yarn build:strapi    # Strapi backend
 ```
 
 ### Code Quality
+
 ```bash
 # Lint code
 yarn lint
@@ -57,6 +60,7 @@ yarn lint && yarn format && yarn type-check
 ```
 
 ### Testing
+
 ```bash
 # Run automated test workflow (PowerShell)
 yarn auto-test
@@ -68,6 +72,7 @@ yarn test-plugin
 ## Architecture
 
 ### Monorepo Structure
+
 ```
 apps/
 ├── strapi/           # Strapi CMS with custom plugins
@@ -103,33 +108,39 @@ Modules/             # Independent services
 ### Environment Variables
 
 Required `.env` files:
+
 - `apps/strapi/.env`: Database credentials, AWS S3, API keys
-- `apps/ui/.env.local`: Strapi API URL/tokens, NextAuth secrets
+- `apps/web/.env.local`: Strapi API URL/tokens, NextAuth secrets
 
 ## Development Guidelines
 
 ### Package Management
+
 - Always use `yarn` commands, never `npm`
 - Add dependencies to specific workspace: `yarn workspace @app/ui add <package>`
 - Root dependencies: `yarn add -W <package>`
 
 ### TypeScript
+
 - Strict mode enabled
 - Use path aliases configured in tsconfig.json
 - Validator package provides shared validation schemas
 
 ### Strapi Development
+
 - Custom plugins in `apps/strapi/src/plugins/`
 - API extensions in `apps/strapi/src/api/`
 - Admin customizations in `apps/strapi/src/admin/`
 
 ### Next.js Development
+
 - App Router with Server Components
 - TailwindCSS 4 with custom design system
-- Shadcn/ui components in `apps/ui/components/ui/`
-- API routes in `apps/ui/app/api/`
+- Shadcn/ui components in `apps/web/components/ui/`
+- API routes in `apps/web/app/api/`
 
 ### Testing Approach
+
 - Playwright for E2E testing (smart-component-filter plugin)
 - PowerShell automation scripts for workflow testing
 - Manual testing for browser extension
@@ -137,16 +148,19 @@ Required `.env` files:
 ## Module-Specific Information
 
 ### Browser Extension (`Modules/Extension/`)
+
 - Manifest V3 for Chrome/Edge
 - Build: `npm run build` in Extension directory
 - Load unpacked extension from `dist/` folder
 
 ### Data Importer (`Modules/Importer/`)
+
 - Requires FlareSolverr Docker container running
 - Config in `config.json`
 - Run: `python main.py`
 
 ### Validator Service (`Modules/Validator/`)
+
 - Redis streams for job queue
 - PostgreSQL for data storage
 - Run: `python worker.py`
@@ -169,6 +183,7 @@ Required `.env` files:
 ## Docker Services
 
 **IMPORTANT**: PostgreSQL and Redis run in Docker containers:
+
 - **PostgreSQL**: Container name `DB`, user `JOY`, database `rate_db`
 - **Redis**: Container name `redis`, used for job queues and caching
 - Access PostgreSQL: `docker exec DB psql -U JOY -d rate_db -c "SQL_QUERY"`
@@ -178,6 +193,7 @@ Required `.env` files:
 ## Process Management
 
 **IMPORTANT**: NEVER kill all Node.js processes indiscriminately using commands like `Stop-Process -Name node -Force`
+
 - Always identify the specific process you need to terminate first
 - Use `Get-Process node` to list all Node processes with their IDs and command lines
 - Kill only the specific process by ID: `Stop-Process -Id <PID>`
