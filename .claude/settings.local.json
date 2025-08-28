@@ -57,7 +57,9 @@
       "Read(/C:\\Users\\JOY\\AppData\\Local\\Temp\\SnagitTemp/**)",
       "Read(/C:\\Users\\JOY\\AppData\\Local\\Temp\\SnagitTemp/**)",
       "mcp__playwright__browser_network_requests",
-      "Bash(Get-Process node)"
+      "Bash(Get-Process node)",
+      "Read(c:\\Users\\JOY\\AppData\\Local\\Temp\\SnagitTemp/**)",
+      "Read(c:\\Users\\JOY\\AppData\\Local\\Temp\\SnagitTemp/**)"
     ],
     "deny": [
       "Bash(taskkill //F //IM node.exe)",

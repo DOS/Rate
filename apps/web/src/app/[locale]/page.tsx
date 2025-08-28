@@ -1,9 +1,9 @@
 import Link from "next/link";
 import NavbarDark from "./components/navbar/navbar-dark";
-import FormOne from "./components/form/form-one";
 import { BsMouse } from "react-icons/bs";
+import { FaMagnifyingGlass } from "react-icons/fa6";
 import BrandImage from "./components/brand-image";
-import CategoryOne from "./components/categories/category-one";
+import CategoryTwo from "./components/categories/category-two";
 import PopularListingOne from "./components/popular-listing-one";
 import ClientOne from "./components/client-one";
 import BlogOne from "./components/blog-one";
@@ -16,22 +16,40 @@ export default function Home() {
     <>
      <NavbarDark/>
 
-          <div className="image-cover hero-header position-relative" style={{backgroundImage:`url('/img/banner-1.jpg')`}} data-overlay="6">
+          <div className="image-cover hero-header position-relative overflow-hidden" style={{backgroundImage:`url('/img/banner-6.jpg')`}} data-overlay="6">
             <div className="container">
-                <div className="row justify-content-center align-items-center mb-5 pt-lg-0 pt-5">
+                <div className="row justify-content-center align-items-center">
                     <div className="col-xl-10 col-lg-11 col-md-12 col-sm-12">
-                        <div className="position-relative text-center">
-                            <h1>Explore Your Perfect Places</h1>
-                            <p className="subtitle">Browse high-rated hotels, restaurants, attractions, activities and more!</p>
+                        <div className="position-relative text-center mb-5 pt-lg-0 pt-5">
+                            <h1 className="fw-semibold mb-4">Explore <span className="text-light border border-light border-2 px-3 rounded-pill br-dashed">Your Perfect</span> Places</h1>
+                            <p className="fs-5 fw-light">Browse high-rated hotels, restaurants, attractions, activities and more!</p>
                         </div>
                     </div>
                 </div>
                 
-                <FormOne/>
+                <div className="row justify-content-center align-items-center">
+                    <div className="col-xl-7 col-lg-8 col-md-11 col-sm-12">
+                        <div className="row gx-lg-0 gx-md-0 m-0">
+                            <div className="search-wrap bg-white rounded-pill p-2 border">
+                                <div className="row gx-lg-2 gx-md-2 gx-3">
+                                    <div className="col-auto">
+                                        <button type="button" className="btn btn-primary rounded-pill fw-medium"><FaMagnifyingGlass className="text-light fs-5"/></button>
+                                    </div>
+                                    <div className="col">
+                                        <div className="form-group no-border position-relative mb-0">
+                                            <input type="text" className="form-control border-0 fw-medium rounded-pill ps-2" placeholder="Search for locality, project.."/>
+                                            <span className="position-absolute top-50 end-0 translate-middle"><label className="badge text-success bg-light-success rounded">22k+</label></span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 
                 <div className="row align-items-center justify-content-center">
                     <div className="col-xl-12 col-lg-12 col-md-12 col-12 mb-2">
-                        <div className="text-center"><h6 className="fw-semibold">Explore Popular Categories</h6></div>
+                        <div className="text-center"><h6 className="fw-semibold text-white">Explore Popular Categories</h6></div>
                     </div>
                     <div className="col-xl-12 col-lg-12 col-md-12 col-md-12 col-12">
                         <div className="popularSearches d-flex align-items-center justify-content-center column-gap-3 row-gap-1 flex-wrap">
@@ -64,7 +82,7 @@ export default function Home() {
                         </div>
                     </div>
                 </div>
-              <CategoryOne/>
+              <CategoryTwo/>
             </div>
         </section>
 
