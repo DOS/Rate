@@ -20,7 +20,7 @@ export default function Home() {
             <div className="container">
                 <div className="row justify-content-center align-items-center">
                     <div className="col-xl-10 col-lg-11 col-md-12 col-sm-12">
-                        <div className="position-relative text-center mb-5 pt-lg-5 pt-3 pb-4">
+                        <div className="position-relative text-center mb-4 pt-3 pb-3">
                             <h1 className="fw-semibold mb-4">Explore <span className="text-light border border-light border-2 px-3 rounded-pill br-dashed">Your Perfect</span> Places</h1>
                             <p className="fs-5 fw-light">Browse high-rated hotels, restaurants, attractions, activities and more!</p>
                         </div>
