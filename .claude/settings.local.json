@@ -55,7 +55,9 @@
       "Bash(git push:*)",
       "Read(/C:\\Users\\JOY\\AppData\\Local\\Temp\\SnagitTemp/**)",
       "Read(/C:\\Users\\JOY\\AppData\\Local\\Temp\\SnagitTemp/**)",
-      "Read(/C:\\Users\\JOY\\AppData\\Local\\Temp\\SnagitTemp/**)"
+      "Read(/C:\\Users\\JOY\\AppData\\Local\\Temp\\SnagitTemp/**)",
+      "mcp__playwright__browser_network_requests",
+      "Bash(Get-Process node)"
     ],
     "deny": [
       "Bash(taskkill //F //IM node.exe)",

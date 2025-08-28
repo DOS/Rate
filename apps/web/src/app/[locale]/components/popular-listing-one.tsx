@@ -1,7 +1,6 @@
 'use client'
 import React from 'react'
 import Link from 'next/link';
-import Image from 'next/image';
 
 import { listData } from '../data/data'
 
@@ -69,7 +68,7 @@ export default function PopularListingOne() {
                                                     }
                                                 </div>
                                             </div>
-                                            <Image src={item.image} width={0} height={0} sizes='100vw' style={{width:'100%', height:'100%'}} className="img-fluid" alt="Listing Image"/>
+                                            <img src={item.image} className="img-fluid" alt="Listing Image" />
                                         </Link>
                                         <div className="position-absolute end-0 bottom-0 me-3 mb-3 z-2">
                                             <Link href="/single-listing-01" className="bookmarkList" data-bs-toggle="tooltip" data-bs-title="Save Listing"><BsSuitHeart className="m-0"/></Link>
@@ -77,7 +76,7 @@ export default function PopularListingOne() {
                                     </div>
                                     <div className="listing-middle-item">
                                         <div className="listing-avatar">
-                                            <Link href="/single-listing-01" className="avatarImg"><Image src={item.user} width={0} height={0} sizes='100vw' style={{width:'100%', height:'100%'}} className="img-fluid circle" alt="Avatar"/></Link>
+                                            <Link href="/single-listing-01" className="avatarImg"><img src={item.user} className="img-fluid circle" alt="Avatar" /></Link>
                                         </div>
                                         <div className="listing-details">
                                             <h4 className="listingTitle"><Link href="/single-listing-01" className="titleLink">{item.title}<span className="verified"><BsPatchCheckFill className="bi bi-patch-check-fill m-0"/></span></Link></h4>

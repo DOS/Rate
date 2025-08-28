@@ -51,5 +51,61 @@ export default factories.createCoreController("api::listing.listing", ({ strapi 
         error: error instanceof Error ? error.message : 'Unknown error'
       };
     }
+  },
+
+  async shopeeImport(ctx) {
+    try {
+      console.log('[ShopeeImport] Received data from extension');
+      
+      // Ensure proper UTF-8 encoding for Vietnamese characters
+      ctx.set('Content-Type', 'application/json; charset=utf-8');
+      const data = ctx.request.body;
+      
+      // Check if data is from extension (validation format) or direct Shopee format
+      let shopeeData;
+      
+      if (data.items && Array.isArray(data.items)) {
+        // From extension via validation format
+        console.log('[ShopeeImport] Processing validation format with', data.items.length, 'items');
+        
+        // Process first item if exists
+        if (data.items.length > 0) {
+          const item = data.items[0];
+          shopeeData = {
+            product: item.product || {},
+            seller: item.seller || {},
+            review: item.review || null
+          };
+        } else {
+          return ctx.badRequest('No items to process');
+        }
+      } else if (data.product && data.seller) {
+        // Direct Shopee format
+        console.log('[ShopeeImport] Processing direct Shopee format');
+        shopeeData = data;
+      } else {
+        return ctx.badRequest('Invalid data format');
+      }
+      
+      // Process using ListingProcessor service
+      const processor = new ListingProcessorService(strapi);
+      const result = await processor.processShopeeData(shopeeData);
+      
+      console.log('[ShopeeImport] Processing result:', result);
+      
+      // Return the result
+      ctx.body = {
+        success: true,
+        result,
+        message: result.message
+      };
+      
+    } catch (error) {
+      strapi.log.error('[ShopeeImport] Error:', error);
+      ctx.body = {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
   }
 }))

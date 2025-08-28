@@ -1,18 +1,1 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/assets/icon-DGMzp7dd.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ListingHub - Business Directory & Listing Template</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.5/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-SgOJa3DmI69IUzQ2PVdRZhwQ+dy64/BUtbMJw1MZ8t5HZApcHrRKUc4W0kG879m7" crossorigin="anonymous">
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.5/dist/js/bootstrap.bundle.min.js" integrity="sha384-k6d4wzSIapyDyv1kpU366/PK5hCdSbCRGRCMv+eplOQJWyd1fbcAu9OCUj5zNLiq" crossorigin="anonymous"></script>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css"/>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="sha512-Evv84Mr4kqVGRNSgIGL/F/aIDqQb7xQ2vcrdIwxfjThSH8CSR7PBEakCr51Ck+w+/U6swU2Im1vVX0SVk9ABhg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
-    <script type="module" crossorigin src="/assets/index-BOP9mL-i.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-FsTVstPE.css">
-  </head>
-  <body>
-    <div id="root"></div>
-  </body>
-</html>
+<svg version="1.2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 561 560" width="561" height="560"><style>.a{fill:#2ca862}.b{fill:#fff}</style><path class="a" d="m561 293.1c0 19.6-4.7 37.8-14.1 54.4-9.4 16.6-22 29.6-37.9 38.7q0.7 4.4 0.7 13.8c0 29.6-10 54.8-29.7 75.6-19.8 20.9-43.6 31.2-71.5 31.2-12.5 0-24.4-2.3-35.6-6.8-8.8 17.9-21.4 32.3-37.9 43.4-16.4 11.1-34.4 16.6-54 16.6-20 0-38.2-5.4-54.4-16.3-16.3-10.8-28.7-25.4-37.5-43.7-11.3 4.5-23.1 6.8-35.7 6.8-27.8 0-51.8-10.3-71.8-31.2-20-20.8-30-46.1-30-75.6 0-3.3 0.5-7.9 1.2-13.8-15.8-9.2-28.4-22.1-37.8-38.7-9.3-16.6-14-34.8-14-54.4 0-20.8 5.2-39.9 15.6-57.2 10.4-17.3 24.4-30.1 41.9-38.4-4.6-12.4-6.9-25-6.9-37.5 0-29.5 10-54.8 30-75.6 20-20.7 44-31.2 71.8-31.2 12.5 0 24.4 2.3 35.7 6.8 8.8-17.9 21.3-32.3 37.8-43.4 16.5-11 34.5-16.6 54.1-16.6 19.6 0 37.6 5.6 54 16.5 16.4 11.1 29.1 25.5 37.9 43.4 11.2-4.6 23-6.9 35.6-6.9 27.9 0 51.7 10.4 71.5 31.3 19.8 20.9 29.7 46.1 29.7 75.6 0 13.8-2.1 26.3-6.3 37.5 17.5 8.3 31.5 21.1 41.9 38.4 10.4 17.4 15.7 36.5 15.7 57.3z"/><path class="b" d="m137.7 310l30.9-38.9 77.9 61.7 138.8-175.4 38.9 30.9-169.6 214.3z"/></svg>

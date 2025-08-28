@@ -211,6 +211,7 @@ class ListingProcessorService {
       }
       
       // Nếu chưa có, tạo mới với PlatformID, Country và PlatformLocale
+      console.log('[ListingProcessor] Creating new Shopee Vietnam platform with locale: vi');
       return await this.strapi.entityService.create('api::platform.platform', {
         data: {
           Name: 'Shopee Việt Nam',
@@ -241,36 +242,39 @@ class ListingProcessorService {
         throw new Error(`Platform not found with ID: ${platformId}`);
       }
       
-      // Use PlatformID field (required) - handle both uppercase (Strapi) and lowercase (DB) field names
-      const platformIdentifier = platform.PlatformID || platform.platform_id || platform.Slug || platform.slug;
+      // Use PlatformID field (required)
+      const platformIdentifier = platform.PlatformID || platform.Slug;
       if (!platformIdentifier) {
-        throw new Error(`Platform ${platform.Name || platform.name || platformId} is missing PlatformID field`);
+        throw new Error(`Platform ${platform.Name || platformId} is missing PlatformID field`);
       }
       
       // Determine locale based on platform
-      const platformLocale = platform.PlatformLocale || platform.platform_locale;
-      const countryCode = platform.Country || platform.country;
+      const platformLocale = platform.PlatformLocale;
+      const countryCode = platform.Country;
       
       console.log('[ListingProcessor] Platform data:', {
-        Name: platform.Name || platform.name,
+        Name: platform.Name,
         PlatformLocale: platformLocale,
         Country: countryCode,
-        PlatformID: platform.PlatformID || platform.platform_id
+        PlatformID: platform.PlatformID
       });
       
       // Map platform locale or country to Strapi locale
-      // Priority: platform_locale -> country code -> default
-      let locale = 'en'; // Default fallback
+      let locale = 'vi'; // Default to Vietnamese for Vietnamese platform
       
-      // Check platform locale first
-      if (platformLocale === 'vi') {
+      // For Shopee Vietnam specifically, ALWAYS use Vietnamese
+      if (platform.Slug === 'shopee-vn' || platform.PlatformID === 'shopee-vn' || platform.URL?.includes('shopee.vn')) {
+        locale = 'vi';
+      }
+      // Check platform locale (highest priority)
+      else if (platformLocale === 'vi') {
         locale = 'vi';
       } else if (platformLocale === 'en') {
         locale = 'en';
       } else if (platformLocale === 'cs') {
         locale = 'cs';
       } 
-      // Then check country code
+      // Then check country code (second priority)
       else if (countryCode === 'VN') {
         locale = 'vi';
       } else if (countryCode === 'UK' || countryCode === 'US') {
@@ -278,12 +282,15 @@ class ListingProcessorService {
       } else if (countryCode === 'CZ') {
         locale = 'cs';
       }
-      // For Shopee Vietnam specifically, force Vietnamese
-      else if (platform.Slug === 'shopee-vn' || platform.slug === 'shopee-vn') {
-        locale = 'vi';
-      }
       
-      console.log('[ListingProcessor] Determined locale:', locale, 'for platform:', platform.Name || platform.name);
+      console.log('[ListingProcessor] DEBUG - Locale determination:', {
+        platformLocale,
+        countryCode,
+        slug: platform.Slug,
+        determinedLocale: locale
+      });
+      
+      console.log('[ListingProcessor] FINAL locale set to:', locale, 'for platform:', platform.Name);
       
       // Extract IDs để tạo ListingID unique với format: platformIdentifier.uniqueId
       const productId = this.extractProductId(product.productUrl || '');
@@ -291,37 +298,43 @@ class ListingProcessorService {
       const uniqueId = productId && shopId ? `${shopId}_${productId}` : null;
       const listingId = uniqueId ? `${platformIdentifier}.${uniqueId}` : null;
       
-      // Find or create category based on product category
-      const category = await this.findOrCreateCategory(product.category || '');
+      // Find or create category based on product category with encoding fix
+      const fixedCategory = this.fixVietnameseEncoding(product.category || '');
+      const category = await this.findOrCreateCategory(fixedCategory);
       
       // Upload images to Strapi Media Library (temporarily disabled - needs proper implementation)
       // const mediaIds = await this.uploadProductImages(product.images || [], product.title || '');
       
-      // Convert description to Blocks format for Strapi
-      const descriptionBlocks = product.description ? [
+      // Convert description to Blocks format for Strapi with encoding fix
+      const fixedDescription = this.fixVietnameseEncoding(product.description || '');
+      const descriptionBlocks = fixedDescription ? [
         {
           type: 'paragraph',
           children: [
             {
               type: 'text',
-              text: product.description
+              text: fixedDescription
             }
           ]
         }
       ] : [];
 
+      // Fix encoding issues with Vietnamese characters in title
+      const fixedTitle = this.fixVietnameseEncoding(product.title || 'Sản phẩm Shopee');
+      
       // Chuẩn bị listing data với tất cả fields mới
       const listingData: any = {
-        Title: product.title || 'Sản phẩm Shopee',
-        Slug: this.generateSlug(product.title || 'san-pham-shopee'),
+        Title: fixedTitle,
+        Slug: this.generateSlug(fixedTitle),
         URL: product.productUrl || '',
         Description: descriptionBlocks, // Use Blocks format
         IsActive: true,
         ListingStatus: 'Pending', // Set Pending để review - use correct field name with capital P
-        ReviewNotes: `Nhập từ Shopee. Giá: ${product.price?.toLocaleString('vi-VN')} ${product.currency}. Người bán: ${this.toTitleCase(seller.name || '')}`,
+        ReviewNotes: `Nhập từ Shopee. Giá: ${product.price?.toLocaleString('vi-VN')} ${product.currency}. Người bán: ${this.toTitleCase(this.fixVietnameseEncoding(seller.name || ''))}`,
         ListingID: listingId, // ID unique từ platform - use Strapi field name
         Platform: platformId, // Relation tới Platform
         locale: locale, // Set locale based on platform
+        publishedAt: new Date().toISOString(), // Auto-publish the listing
         
         // Generic fields - data chung cho mọi platform
         Price: product.price || 0,
@@ -334,9 +347,9 @@ class ListingProcessorService {
         UsageCount: product.soldCount || 0, // Map sold count to usage count
         Stock: product.stock || 0,
         PlatformOwnerID: shopId || '', // Shop ID là owner ID cho Shopee
-        PlatformOwnerName: this.toTitleCase(seller.name || ''), // Normalize to Title Case
-        Brand: product.brand || '', // Keep original brand casing (SAMSUNG, Apple, etc.)
-        Location: product.shipFrom || '',
+        PlatformOwnerName: this.toTitleCase(this.fixVietnameseEncoding(seller.name || '')), // Fix encoding and normalize to Title Case
+        Brand: this.fixVietnameseEncoding(product.brand || ''), // Fix encoding, keep original brand casing
+        Location: this.fixVietnameseEncoding(product.shipFrom || ''), // Fix encoding for location
         LastUpdated: new Date().toISOString(), // Add LastUpdated timestamp
         FavoriteCount: 0, // Initialize FavoriteCount (will be updated when users add to favorites)
         ViewCount: 0, // Initialize ViewCount
@@ -377,7 +390,7 @@ class ListingProcessorService {
             variants: product.variants || []
           },
           seller: {
-            name: seller.name,
+            name: this.fixVietnameseEncoding(seller.name || ''),
             rating: seller.rating,
             responseRate: seller.responseRate,
             responseTime: seller.responseTime,
@@ -433,6 +446,44 @@ class ListingProcessorService {
       console.error('[ListingProcessor] Error creating new listing:', error);
       throw error;
     }
+  }
+
+  /**
+   * Fix encoding issues with Vietnamese characters
+   */
+  private fixVietnameseEncoding(text: string): string {
+    if (!text) return text;
+    
+    // Check if text contains encoding issues (� or question marks in unusual places)
+    if (text.includes('�') || /\?[a-z]/.test(text)) {
+      // Common Vietnamese character replacements
+      const replacements: { [key: string]: string } = {
+        '\\?i': 'Đi',
+        '\\?a': 'đa', 
+        '\\?o': 'đo',
+        '\\?u': 'đu'
+      };
+      
+      let fixed = text;
+      for (const [bad, good] of Object.entries(replacements)) {
+        fixed = fixed.replace(new RegExp(bad, 'g'), good);
+      }
+      
+      // If still has issues, try to decode from common encodings
+      try {
+        // Try to detect if it's incorrectly encoded Latin-1 or Windows-1252
+        if (fixed.includes('�') || fixed.includes('?')) {
+          // Log warning about encoding issue
+          console.log('[ListingProcessor] WARNING: Encoding issue detected in text:', text.substring(0, 50) + '...');
+        }
+      } catch (e) {
+        // Keep original if decoding fails
+      }
+      
+      return fixed;
+    }
+    
+    return text;
   }
 
   /**
