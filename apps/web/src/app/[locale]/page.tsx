@@ -1,7 +1,7 @@
 import Link from "next/link";
 import NavbarDark from "./components/navbar/navbar-dark";
 import { BsMouse } from "react-icons/bs";
-import { FaMagnifyingGlass } from "react-icons/fa6";
+import { FaBagShopping, FaBowlRice, FaMagnifyingGlass, FaMartiniGlass, FaMugSaucer, FaSpa } from "react-icons/fa6";
 import BrandImage from "./components/brand-image";
 import CategoryTwo from "./components/categories/category-two";
 import PopularListingOne from "./components/popular-listing-one";
@@ -20,7 +20,7 @@ export default function Home() {
             <div className="container">
                 <div className="row justify-content-center align-items-center">
                     <div className="col-xl-10 col-lg-11 col-md-12 col-sm-12">
-                        <div className="position-relative text-center mb-5 pt-lg-0 pt-5">
+                        <div className="position-relative text-center mb-5 pt-lg-5 pt-3 pb-4">
                             <h1 className="fw-semibold mb-4">Explore <span className="text-light border border-light border-2 px-3 rounded-pill br-dashed">Your Perfect</span> Places</h1>
                             <p className="fs-5 fw-light">Browse high-rated hotels, restaurants, attractions, activities and more!</p>
                         </div>
@@ -47,23 +47,22 @@ export default function Home() {
                     </div>
                 </div>
                 
-                <div className="row align-items-center justify-content-center">
-                    <div className="col-xl-12 col-lg-12 col-md-12 col-12 mb-2">
-                        <div className="text-center"><h6 className="fw-semibold text-white">Explore Popular Categories</h6></div>
-                    </div>
-                    <div className="col-xl-12 col-lg-12 col-md-12 col-md-12 col-12">
-                        <div className="popularSearches d-flex align-items-center justify-content-center column-gap-3 row-gap-1 flex-wrap">
-                            <div className="singleItem"><Link href="#" className="badge badge-transparent rounded-pill">Real Estate</Link></div>	
-                            <div className="singleItem"><Link href="#" className="badge badge-transparent rounded-pill">Eat & Drink</Link></div>	
-                            <div className="singleItem"><Link href="#" className="badge badge-transparent rounded-pill">Shopping</Link></div>	
-                            <div className="singleItem"><Link href="#" className="badge badge-transparent rounded-pill">Nightlife</Link></div>	
-                            <div className="singleItem"><Link href="#" className="badge badge-transparent rounded-pill">Services</Link></div>	
-                        </div>
-                    </div>
-                </div>
+				  <div className="row justify-content-center align-items-center">
+					 <div className="col-xl-7 col-lg-8 col-md-11 col-sm-12">
+						<div className="d-block position-relative mt-5">
+							<div className="popularSearches d-flex align-items-center justify-content-center gap-3 flex-wrap">
+								<div className="singleItem"><Link href="#" className="badge badge-transparent rounded-pill"><FaSpa className="me-2"/>Beauty & Spa</Link></div>	
+								<div className="singleItem"><Link href="#" className="badge badge-transparent rounded-pill"><FaBowlRice className="me-2"/>Eat & Drink</Link></div>	
+								<div className="singleItem"><Link href="#" className="badge badge-transparent rounded-pill"><FaBagShopping className="me-2"/>Shopping</Link></div>	
+								<div className="singleItem"><Link href="#" className="badge badge-transparent rounded-pill"><FaMartiniGlass className="me-2"/>Nightlife</Link></div>	
+								<div className="singleItem"><Link href="#" className="badge badge-transparent rounded-pill"><FaMugSaucer className="me-2"/>Coffee Shop</Link></div>	
+							</div>
+						</div>
+					 </div>
+				 </div>
 
             </div>
-            <div className="mousedrop z-1"><Link href="#mains" className="mousewheel"><BsMouse className=""/></Link></div>
+            <div className="mousedrop z-1 d-none d-lg-block"><Link href="#mains" className="mousewheel center" style={{ bottom: '80px', position: 'absolute', left: '50%', transform: 'translateX(-50%)' }}><BsMouse className=""/></Link></div>
           </div>
 
           <section className="py-4 pb-0">

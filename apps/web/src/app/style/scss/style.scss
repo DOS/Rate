@@ -6128,7 +6128,7 @@ a.mousewheel {
   color: var(--bs-white);
   position: absolute;
   right: 50px;
-  bottom: 50px;
+  bottom: 30%;
   border-radius: 100px;
   -webkit-animation: mover 2s infinite alternate;
   animation: mover 2s infinite alternate;
@@ -6137,7 +6137,9 @@ a.mousewheel {
 a.mousewheel.center {
   left: 50%;
   right: auto;
-  transform: translateX(50%);
+  transform: translateX(-50%);
+  -webkit-animation: moverCenter 2s infinite alternate;
+  animation: moverCenter 2s infinite alternate;
 }
 
 @-webkit-keyframes mover {
@@ -6157,6 +6159,26 @@ a.mousewheel.center {
 
   100% {
     transform: translateY(-10px);
+  }
+}
+
+@-webkit-keyframes moverCenter {
+  0% {
+    transform: translateX(-50%) translateY(0);
+  }
+
+  100% {
+    transform: translateX(-50%) translateY(-10px);
+  }
+}
+
+@keyframes moverCenter {
+  0% {
+    transform: translateX(-50%) translateY(0);
+  }
+
+  100% {
+    transform: translateX(-50%) translateY(-10px);
   }
 }
 
@@ -10442,6 +10464,12 @@ Responsiveness Start
 
   .mousedrop {
     display: none;
+  }
+  
+  @media (min-width: 992px) {
+    .mousedrop {
+      display: block;
+    }
   }
 
   .mngListings .mngListinfirst,
