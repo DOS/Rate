@@ -693,9 +693,19 @@ class ListingProcessorService {
   private extractProductId(url: string): string | null {
     try {
       if (url.includes('shopee.vn')) {
-        // Format: https://shopee.vn/product/shopId/productId
-        const match = url.match(/product\/(\d+)\/(\d+)/);
-        return match ? match[2] : null;
+        // Format 1: https://shopee.vn/product/shopId/productId
+        let match = url.match(/product\/(\d+)\/(\d+)/);
+        if (match) return match[2];
+        
+        // Format 2: https://shopee.vn/i.shopId.productId (new format from extension)
+        match = url.match(/i\.(\d+)\.(\d+)/);
+        if (match) return match[2];
+        
+        // Format 3: Just productId at the end after dot
+        match = url.match(/\.(\d+)$/);
+        if (match) return match[1];
+        
+        return null;
       }
       if (url.includes('lazada.vn')) {
         // Format: https://www.lazada.vn/products/xxx-i123456789.html
@@ -718,9 +728,15 @@ class ListingProcessorService {
    */
   private extractShopId(url: string): string | null {
     try {
-      // Format: https://shopee.vn/product/shopId/productId
-      const match = url.match(/product\/(\d+)\/(\d+)/);
-      return match ? match[1] : null;
+      // Format 1: https://shopee.vn/product/shopId/productId
+      let match = url.match(/product\/(\d+)\/(\d+)/);
+      if (match) return match[1];
+      
+      // Format 2: https://shopee.vn/i.shopId.productId (new format from extension)
+      match = url.match(/i\.(\d+)\.(\d+)/);
+      if (match) return match[1];
+      
+      return null;
     } catch {
       return null;
     }

@@ -54,6 +54,7 @@ export default [
       origin: [
         "http://localhost:3000",
         "http://localhost:1337",
+        "http://localhost:8080",
         "chrome-extension://*",
         "*://shopee.vn",
         "*://*.shopee.vn"

@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Shopee Import API</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .container {
+            background: #f5f5f5;
+            padding: 20px;
+            border-radius: 8px;
+        }
+        button {
+            background: #ee4d2d;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background: #d73211;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            background: white;
+            border-radius: 4px;
+            border-left: 4px solid #ee4d2d;
+        }
+        .success {
+            border-left-color: #4caf50;
+        }
+        .error {
+            border-left-color: #f44336;
+        }
+        pre {
+            background: #f0f0f0;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Test Shopee Import API</h1>
+        <p>Click button để test gửi data từ Shopee lên Strapi</p>
+        
+        <button onclick="testShopeeImport()">Test Import Shopee Product</button>
+        
+        <div id="result"></div>
+    </div>
+
+    <script>
+        async function testShopeeImport() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = '<div class="result">Đang gửi dữ liệu...</div>';
+            
+            // Sample Shopee data - giống như data từ extension
+            const shopeeData = {
+                product: {
+                    productUrl: "https://shopee.vn/product/88201679/14570132673",
+                    title: "Áo thun nam nữ form rộng",
+                    description: "Áo thun chất cotton thoáng mát",
+                    price: 99000,
+                    currency: "VND",
+                    category: "Shopee > Thời Trang Nam > Áo > Áo Thun",
+                    brand: "No Brand",
+                    images: [
+                        "https://down-vn.img.susercontent.com/file/1234567890.jpg"
+                    ],
+                    stock: 100,
+                    shipFrom: "TP. Hồ Chí Minh",
+                    rating: 4.8,
+                    soldCount: 1523
+                },
+                seller: {
+                    sellerName: "fashionshop.vn",
+                    sellerUrl: "https://shopee.vn/shop/88201679",
+                    shopId: "88201679",
+                    rating: 4.7,
+                    responseRate: 95,
+                    joinDate: "2020-05-15",
+                    followers: 25000,
+                    products: 450,
+                    verified: true
+                },
+                review: {
+                    reviewCount: 234,
+                    rating: 4.8,
+                    fiveStar: 180,
+                    fourStar: 40,
+                    threeStar: 10,
+                    twoStar: 3,
+                    oneStar: 1
+                }
+            };
+            
+            try {
+                const response = await fetch('http://localhost:1337/api/listings/shopee-import', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json; charset=utf-8'
+                    },
+                    body: JSON.stringify(shopeeData)
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    resultDiv.innerHTML = `
+                        <div class="result success">
+                            <h3>✅ Import thành công!</h3>
+                            <p><strong>Message:</strong> ${data.message}</p>
+                            <p><strong>Listing ID:</strong> ${data.result.listingId}</p>
+                            <details>
+                                <summary>Chi tiết response</summary>
+                                <pre>${JSON.stringify(data, null, 2)}</pre>
+                            </details>
+                        </div>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <div class="result error">
+                            <h3>❌ Lỗi!</h3>
+                            <p>${data.error || 'Unknown error'}</p>
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="result error">
+                        <h3>❌ Lỗi kết nối!</h3>
+                        <p>${error.message}</p>
+                        <p>Đảm bảo Strapi đang chạy ở http://localhost:1337</p>
+                    </div>
+                `;
+            }
+        }
+    </script>
+</body>
+</html>

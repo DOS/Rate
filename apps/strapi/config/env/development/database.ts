@@ -4,9 +4,9 @@ export default ({ env }: any) => ({
     connection: {
       host: env('DATABASE_HOST', 'localhost'),
       port: env.int('DATABASE_PORT', 5432),
-      database: env('DATABASE_NAME', 'rate_db'),
-      user: env('DATABASE_USERNAME', 'JOY'),
-      password: env('DATABASE_PASSWORD', '***REMOVED-SECRET***'),
+      database: env('DATABASE_NAME', 'rate'),
+      user: env('DATABASE_USERNAME', 'joy'),
+      password: env('DATABASE_PASSWORD', 'joy123456'),
       schema: env('DATABASE_SCHEMA', 'public'),
       ssl: env.bool('DATABASE_SSL', false),
     },

@@ -49,6 +49,40 @@
         "audios"
       ]
     },
+    "Icon": {
+      "type": "media",
+      "multiple": false,
+      "required": false,
+      "allowedTypes": [
+        "images"
+      ]
+    },
+    "IconKey": {
+      "type": "enumeration",
+      "pluginOptions": {
+        "i18n": { "localized": false }
+      },
+      "enum": [
+        "shop",
+        "coffee",
+        "drink",
+        "restaurant",
+        "hospital",
+        "wedding",
+        "events",
+        "business",
+        "service",
+        "product",
+        "realestate",
+        "bar",
+        "spa",
+        "person",
+        "smartphone",
+        "phone",
+        "ecommerce",
+        "scam"
+      ]
+    },
     "isActive": {
       "type": "boolean",
       "default": true

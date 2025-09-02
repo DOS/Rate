@@ -53,6 +53,7 @@ class RedisWorkerService {
 
     // Create consumer group if not exists
     try {
+      // Use '0' to read ALL messages from the beginning of the stream
       await client.xGroupCreate('validation_requests', this.consumerGroup, '0', {
         MKSTREAM: true
       });
@@ -60,58 +61,67 @@ class RedisWorkerService {
     } catch (error: any) {
       if (error.message?.includes('BUSYGROUP')) {
         console.log('[RedisWorker] Consumer group already exists');
+        // Don't reset the group - let it continue from where it left off
       } else {
         console.error('[RedisWorker] Error creating consumer group:', error);
       }
     }
 
     console.log('[RedisWorker] Starting to consume validation requests...');
-
+    
+    // Track last processed message ID  
+    let lastId = '-'; // Start from beginning
+    
     while (this.isRunning) {
       try {
-        // First, try to read pending messages (messages that were not acknowledged)
-        let messages = await client.xReadGroup(
-          this.consumerGroup,
-          this.consumerName,
-          [
-            {
-              key: 'validation_requests',
-              id: '0' // Read pending messages first
-            }
-          ],
-          {
-            COUNT: 10,
-            BLOCK: 0 // Don't block for pending messages
-          }
+        console.log('[RedisWorker] Attempting to read all messages from beginning...');
+        
+        // Use XRANGE to read ALL messages from the beginning
+        // node-redis library syntax  
+        const messages = await client.xRange(
+          'validation_requests',
+          '-',   // From beginning
+          '+'    // To end
         );
 
-        // If no pending messages, read new messages
-        if (!messages || messages.length === 0) {
-          messages = await client.xReadGroup(
-            this.consumerGroup,
-            this.consumerName,
-            [
-              {
-                key: 'validation_requests',
-                id: '>' // Only new messages
-              }
-            ],
-            {
-              COUNT: 10,
-              BLOCK: 5000 // Block for 5 seconds
-            }
-          );
-        }
-
+        console.log(`[RedisWorker] XRANGE returned: ${messages ? messages.length : 'null'} messages`);
+        
         if (messages && messages.length > 0) {
-          for (const stream of messages) {
-            for (const message of stream.messages) {
-              await this.processMessage(message.id, message.message);
-              
-              // Acknowledge message
-              await client.xAck('validation_requests', this.consumerGroup, message.id);
+          console.log(`[RedisWorker] Found ${messages.length} total messages in stream`);
+          
+          // Process only unprocessed messages
+          let processed = false;
+          for (const message of messages) {
+            const messageId = message.id;
+            const fields = message.message;
+            
+            // Skip already processed messages
+            if (lastId !== '-' && messageId <= lastId) {
+              continue;
             }
+            
+            // Convert fields object to our format
+            const messageData: Record<string, string> = fields;
+            
+            console.log(`[RedisWorker] Processing message ${messageId}`);
+            console.log(`[RedisWorker] Message data keys:`, Object.keys(messageData));
+            
+            await this.processMessage(messageId, messageData);
+            
+            // Update last processed ID
+            lastId = messageId;
+            processed = true;
+            console.log(`[RedisWorker] Successfully processed message ${messageId}`);
           }
+          
+          if (!processed) {
+            console.log('[RedisWorker] All messages already processed, waiting...');
+            await new Promise(resolve => setTimeout(resolve, 5000));
+          }
+        } else {
+          // No messages at all
+          console.log('[RedisWorker] No messages in stream, waiting...');
+          await new Promise(resolve => setTimeout(resolve, 5000));
         }
       } catch (error) {
         console.error('[RedisWorker] Error consuming messages:', error);
@@ -134,7 +144,7 @@ class RedisWorkerService {
       
       console.log(`[RedisWorker] Request ID: ${requestId}, Source: ${source}`);
 
-      // Process based on source
+      // Process based on source  
       if (source === 'extension') {
         await this.processExtensionData(requestId, data);
       } else {

@@ -419,6 +419,34 @@ export interface ApiCategoryCategory extends Struct.CollectionTypeSchema {
       "manyToOne",
       "api::directory.directory"
     >
+    Icon: Schema.Attribute.Media<"images">
+    IconKey: Schema.Attribute.Enumeration<
+      [
+        "shop",
+        "coffee",
+        "drink",
+        "restaurant",
+        "hospital",
+        "wedding",
+        "events",
+        "business",
+        "service",
+        "product",
+        "realestate",
+        "bar",
+        "spa",
+        "person",
+        "smartphone",
+        "phone",
+        "ecommerce",
+        "scam",
+      ]
+    > &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: false
+        }
+      }>
     Image: Schema.Attribute.Media<"images" | "files" | "videos" | "audios">
     isActive: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<true>
     Items: Schema.Attribute.Relation<"oneToMany", "api::item.item">

@@ -4,7 +4,8 @@
     "plugins": [{ "name": "next" }],
     "paths": {
       "@/*": ["./src/*"]
-    }
+    },
+    "types": []
   },
   "include": [
     "next-env.d.ts",
@@ -15,5 +16,8 @@
     ".next/types/**/*.ts",
     "prettier.config.js"
   ],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules"],
+  "typeAcquisition": {
+    "enable": false
+  }
 }

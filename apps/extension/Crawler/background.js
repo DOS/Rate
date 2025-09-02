@@ -173,7 +173,7 @@ async function submitShopeeReviewsToStrapi(reviews) {
     const payload = {
       items: items,
       priority: 'normal',
-      source: 'shopee_extension'
+      source: 'extension'  // Universal extension, not just Shopee
     };
     
     console.log('[Background] Sending request to:', url);
