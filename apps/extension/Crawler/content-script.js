@@ -724,38 +724,47 @@ function getShopeeProductAndSellerInfo() {
   
   // Mô tả sản phẩm (product description)
   let description = '';
-  // Shopee thường để mô tả trong section có text "Mô tả sản phẩm" hoặc "Chi tiết sản phẩm"
-  // Strategy 1: Tìm section chứa "Mô tả sản phẩm"
-  const descriptionSection = Array.from(document.querySelectorAll('div, section')).find(el => {
-    const text = el.textContent || '';
-    return (text.includes('MÔ TẢ SẢN PHẨM') || text.includes('Mô tả sản phẩm') || text.includes('Chi tiết sản phẩm')) 
-      && el.querySelector('div[style*="white-space"]'); // Có content div
-  });
   
-  if (descriptionSection) {
-    // Tìm content div (thường có style white-space: pre-wrap)
-    const contentDiv = descriptionSection.querySelector('div[style*="white-space: pre-wrap"]') 
-      || descriptionSection.querySelector('div[style*="word-break"]')
-      || descriptionSection.querySelector('.f7AU53'); // Class có thể thay đổi
-      
-    if (contentDiv) {
-      description = contentDiv.textContent.trim();
-      console.log('[Shopee] Mô tả sản phẩm:', description.substring(0, 200) + '...');
+  // Strategy 1: Tìm theo class chính xác từ HTML thực
+  const descriptionDiv = document.querySelector('.e8lZp3');
+  if (descriptionDiv) {
+    // Lấy tất cả text từ các p tags
+    const paragraphs = descriptionDiv.querySelectorAll('.QN2lPu');
+    description = Array.from(paragraphs)
+      .map(p => p.textContent.trim())
+      .filter(text => text.length > 0)
+      .join('\n');
+    console.log('[Shopee] Mô tả sản phẩm (by class):', description.substring(0, 200) + '...');
+  }
+  
+  // Strategy 2: Tìm section có heading "MÔ TẢ SẢN PHẨM"
+  if (!description) {
+    const sections = document.querySelectorAll('section.I_DV_3');
+    for (const section of sections) {
+      const heading = section.querySelector('h2.WjNdTR');
+      if (heading && heading.textContent.includes('MÔ TẢ SẢN PHẨM')) {
+        const contentDiv = section.querySelector('.Gf4Ro0 > div');
+        if (contentDiv) {
+          description = contentDiv.textContent.trim();
+          console.log('[Shopee] Mô tả sản phẩm (by heading):', description.substring(0, 200) + '...');
+          break;
+        }
+      }
     }
   }
   
-  // Strategy 2: Fallback - tìm div có nhiều text nhất (thường là description)
+  // Strategy 3: Fallback - tìm bằng text content
   if (!description) {
-    const longTextDivs = Array.from(document.querySelectorAll('div[style*="white-space: pre-wrap"]'));
-    const longestDiv = longTextDivs.reduce((prev, current) => {
-      const prevLen = (prev?.textContent || '').length;
-      const currLen = (current?.textContent || '').length;
-      return currLen > prevLen ? current : prev;
-    }, null);
-    
-    if (longestDiv && longestDiv.textContent.length > 100) {
-      description = longestDiv.textContent.trim();
-      console.log('[Shopee] Mô tả (fallback):', description.substring(0, 200) + '...');
+    const allElements = Array.from(document.querySelectorAll('*'));
+    for (const el of allElements) {
+      if (el.textContent && el.textContent.includes('MÔ TẢ SẢN PHẨM')) {
+        const nextDiv = el.nextElementSibling;
+        if (nextDiv && nextDiv.tagName === 'DIV') {
+          description = nextDiv.textContent.trim();
+          console.log('[Shopee] Mô tả (fallback):', description.substring(0, 200) + '...');
+          break;
+        }
+      }
     }
   }
   
