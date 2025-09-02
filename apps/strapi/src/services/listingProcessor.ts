@@ -333,6 +333,7 @@ class ListingProcessorService {
         ReviewNotes: `Nhập từ Shopee. Giá: ${product.price?.toLocaleString('vi-VN')} ${product.currency}. Người bán: ${this.toTitleCase(this.fixVietnameseEncoding(seller.name || ''))}`,
         ListingID: listingId, // ID unique từ platform - use Strapi field name
         Platform: platformId, // Relation tới Platform
+        Category: category ? category.id : null, // Map Category relation
         locale: locale, // Set locale based on platform
         publishedAt: new Date().toISOString(), // Auto-publish the listing
         
@@ -429,7 +430,9 @@ class ListingProcessorService {
         Title: listingData.Title,
         locale: listingData.locale,
         Platform: listingData.Platform,
-        ListingID: listingData.ListingID
+        ListingID: listingData.ListingID,
+        Category: listingData.Category,
+        UsageCount: listingData.UsageCount
       });
       
       // Tạo listing
