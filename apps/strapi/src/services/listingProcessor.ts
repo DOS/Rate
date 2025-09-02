@@ -300,7 +300,7 @@ class ListingProcessorService {
       
       // Find or create category based on product category with encoding fix
       const fixedCategory = this.fixVietnameseEncoding(product.category || '');
-      const category = await this.findOrCreateCategory(fixedCategory);
+      const category = await this.findOrCreateCategory(fixedCategory, locale);
       
       // Upload images to Strapi Media Library (temporarily disabled - needs proper implementation)
       // const mediaIds = await this.uploadProductImages(product.images || [], product.title || '');
@@ -513,14 +513,14 @@ class ListingProcessorService {
   /**
    * Find or create category based on Shopee category string
    */
-  private async findOrCreateCategory(categoryString: string): Promise<any> {
+  private async findOrCreateCategory(categoryString: string, locale: string = 'vi'): Promise<any> {
     try {
       if (!categoryString) return null;
       
       // Parse Shopee category format: "Shopee > Điện Thoại & Phụ Kiện > Điện thoại > Samsung"
       const categories = categoryString.split('>').map(c => c.trim()).filter(c => c && c !== 'Shopee');
       
-      console.log('[ListingProcessor] Parsing category:', categoryString, 'Categories:', categories);
+      console.log('[ListingProcessor] Parsing category:', categoryString, 'Categories:', categories, 'Locale:', locale);
       
       // Category mapping for common Vietnamese e-commerce categories
       const categoryMap: { [key: string]: { name: string; slug: string } } = {
@@ -616,11 +616,12 @@ class ListingProcessorService {
         data: {
           Name: matchedCategory.name,
           Slug: matchedCategory.slug,
-          Type: 'Product' // Required field with capital P
+          Type: 'Product', // Required field with capital P
+          locale: locale // Set locale for category
         }
       });
       
-      console.log('[ListingProcessor] Created new category:', newCategory.Name);
+      console.log('[ListingProcessor] Created new category:', newCategory.Name, 'with locale:', locale);
       return newCategory;
       
     } catch (error) {
