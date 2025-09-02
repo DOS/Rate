@@ -117,8 +117,8 @@ async function submitShopeeReviewsToStrapi(reviews) {
       // We'll use the product name as description placeholder for now
       const description = product.description || product.productName || '';
       
-      // Parse soldCount from sellerProductCount or use 0
-      const soldCount = parseInt((product.sellerProductCount || '0').replace(/[^0-9]/g, '') || '0');
+      // Use soldCount from product data if available
+      const soldCount = product.soldCount || 0;
       
       return {
         // Product information

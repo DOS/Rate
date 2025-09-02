@@ -721,6 +721,29 @@ function getShopeeProductAndSellerInfo() {
   // Thương hiệu (brand)
   const brandNode = document.querySelector('.Gf4Ro0 .Dgs_Bt');
   if (brandNode) brand = brandNode.textContent.trim();
+  
+  // Số lượng đã bán (sold count)
+  let soldCount = 0;
+  // Tìm element chứa "Đã bán" - Shopee hay đổi class nên dùng nhiều selector
+  const soldNode = document.querySelector('.aleSBU .AcmPRb') 
+    || document.querySelector('.flex.mnzVGI .aleSBU span')
+    || document.querySelector('[class*="sold"] span')
+    || document.querySelector('div:has(> span):has-text("Đã bán") span');
+    
+  if (soldNode) {
+    const soldText = soldNode.textContent.trim();
+    // Parse số từ text (có thể format như "71", "1,2k", "1.2k")
+    if (soldText.match(/k$/i)) {
+      // Convert "1.2k" or "1,2k" to 1200
+      soldCount = Math.round(parseFloat(soldText.replace(/[,\.]/g, '.').replace(/k$/i, '')) * 1000);
+    } else {
+      // Normal number "71" or "1,234"
+      soldCount = parseInt(soldText.replace(/[^\d]/g, '') || '0');
+    }
+    console.log('[Shopee] Đã bán:', soldCount);
+  } else {
+    console.warn('[Shopee] Không tìm thấy số lượng đã bán');
+  }
 
   // Product details: stock and shipFrom
   try {
@@ -817,6 +840,7 @@ function getShopeeProductAndSellerInfo() {
     brand,
     shipFrom,
     stock,
+    soldCount,
     sellerName,
     sellerLink,
     sellerAvatar,
