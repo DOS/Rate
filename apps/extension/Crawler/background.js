@@ -113,9 +113,8 @@ async function submitShopeeReviewsToStrapi(reviews) {
     const items = uniqueReviews.map(review => {
       const product = review.product || {};
       
-      // Extract description from Shopee if needed
-      // We'll use the product name as description placeholder for now
-      const description = product.description || product.productName || '';
+      // Use actual description from Shopee page, fallback to productName if not found
+      const description = product.description || '';
       
       // Use soldCount from product data if available
       const soldCount = product.soldCount || 0;

@@ -722,6 +722,43 @@ function getShopeeProductAndSellerInfo() {
   const brandNode = document.querySelector('.Gf4Ro0 .Dgs_Bt');
   if (brandNode) brand = brandNode.textContent.trim();
   
+  // Mô tả sản phẩm (product description)
+  let description = '';
+  // Shopee thường để mô tả trong section có text "Mô tả sản phẩm" hoặc "Chi tiết sản phẩm"
+  // Strategy 1: Tìm section chứa "Mô tả sản phẩm"
+  const descriptionSection = Array.from(document.querySelectorAll('div, section')).find(el => {
+    const text = el.textContent || '';
+    return (text.includes('MÔ TẢ SẢN PHẨM') || text.includes('Mô tả sản phẩm') || text.includes('Chi tiết sản phẩm')) 
+      && el.querySelector('div[style*="white-space"]'); // Có content div
+  });
+  
+  if (descriptionSection) {
+    // Tìm content div (thường có style white-space: pre-wrap)
+    const contentDiv = descriptionSection.querySelector('div[style*="white-space: pre-wrap"]') 
+      || descriptionSection.querySelector('div[style*="word-break"]')
+      || descriptionSection.querySelector('.f7AU53'); // Class có thể thay đổi
+      
+    if (contentDiv) {
+      description = contentDiv.textContent.trim();
+      console.log('[Shopee] Mô tả sản phẩm:', description.substring(0, 200) + '...');
+    }
+  }
+  
+  // Strategy 2: Fallback - tìm div có nhiều text nhất (thường là description)
+  if (!description) {
+    const longTextDivs = Array.from(document.querySelectorAll('div[style*="white-space: pre-wrap"]'));
+    const longestDiv = longTextDivs.reduce((prev, current) => {
+      const prevLen = (prev?.textContent || '').length;
+      const currLen = (current?.textContent || '').length;
+      return currLen > prevLen ? current : prev;
+    }, null);
+    
+    if (longestDiv && longestDiv.textContent.length > 100) {
+      description = longestDiv.textContent.trim();
+      console.log('[Shopee] Mô tả (fallback):', description.substring(0, 200) + '...');
+    }
+  }
+  
   // Số lượng đã bán (sold count) - Tìm theo text content thay vì class
   let soldCount = 0;
   
@@ -876,6 +913,7 @@ function getShopeeProductAndSellerInfo() {
 
   return {
     productName,
+    description,
     price,
     priceVND: parsePriceVNDFromText(price),
     productUrl,
