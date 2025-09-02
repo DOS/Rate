@@ -259,28 +259,14 @@ class ListingProcessorService {
         PlatformID: platform.PlatformID
       });
       
-      // Map platform locale or country to Strapi locale
-      let locale = 'vi'; // Default to Vietnamese for Vietnamese platform
+      // Use PlatformLocale from Platform table directly
+      let locale = platformLocale || 'en'; // Default to 'en' if PlatformLocale is not set
       
-      // For Shopee Vietnam specifically, ALWAYS use Vietnamese
-      if (platform.Slug === 'shopee-vn' || platform.PlatformID === 'shopee-vn' || platform.URL?.includes('shopee.vn')) {
-        locale = 'vi';
-      }
-      // Check platform locale (highest priority)
-      else if (platformLocale === 'vi') {
-        locale = 'vi';
-      } else if (platformLocale === 'en') {
+      // Validate locale is supported by Strapi (vi, en, cs)
+      const supportedLocales = ['vi', 'en', 'cs'];
+      if (!supportedLocales.includes(locale)) {
+        console.log(`[ListingProcessor] Platform locale '${locale}' not supported, using default 'en'`);
         locale = 'en';
-      } else if (platformLocale === 'cs') {
-        locale = 'cs';
-      } 
-      // Then check country code (second priority)
-      else if (countryCode === 'VN') {
-        locale = 'vi';
-      } else if (countryCode === 'UK' || countryCode === 'US') {
-        locale = 'en';
-      } else if (countryCode === 'CZ') {
-        locale = 'cs';
       }
       
       console.log('[ListingProcessor] DEBUG - Locale determination:', {

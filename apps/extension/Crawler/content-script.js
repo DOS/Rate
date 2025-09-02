@@ -722,27 +722,71 @@ function getShopeeProductAndSellerInfo() {
   const brandNode = document.querySelector('.Gf4Ro0 .Dgs_Bt');
   if (brandNode) brand = brandNode.textContent.trim();
   
-  // Số lượng đã bán (sold count)
+  // Số lượng đã bán (sold count) - Tìm theo text content thay vì class
   let soldCount = 0;
-  // Tìm element chứa "Đã bán" - Shopee hay đổi class nên dùng nhiều selector
-  const soldNode = document.querySelector('.aleSBU .AcmPRb') 
-    || document.querySelector('.flex.mnzVGI .aleSBU span')
-    || document.querySelector('[class*="sold"] span')
-    || document.querySelector('div:has(> span):has-text("Đã bán") span');
+  
+  // Strategy 1: Tìm tất cả elements có text "Đã bán"
+  const allElements = Array.from(document.querySelectorAll('*'));
+  let soldElement = null;
+  
+  for (const el of allElements) {
+    const text = el.textContent || '';
+    // Tìm element có text "Đã bán" nhưng không có child elements (leaf node)
+    if (text.includes('Đã bán') && el.children.length === 0) {
+      // Tìm số gần nhất sau text "Đã bán"
+      const parent = el.parentElement;
+      if (parent) {
+        // Tìm trong siblings hoặc children của parent
+        const spans = parent.querySelectorAll('span');
+        for (const span of spans) {
+          const spanText = span.textContent || '';
+          // Check if contains number
+          if (/^\d+([,.]?\d+)*k?$/i.test(spanText.trim())) {
+            soldElement = span;
+            break;
+          }
+        }
+      }
+      if (soldElement) break;
+    }
+  }
+  
+  // Strategy 2: Regex search cho pattern "Đã bán {number}"
+  if (!soldElement) {
+    const bodyText = document.body.innerText || '';
+    const soldMatch = bodyText.match(/Đã bán\s+(\d+(?:[,.]?\d+)*k?)/i);
+    if (soldMatch && soldMatch[1]) {
+      const soldText = soldMatch[1];
+      // Find element containing this exact text
+      for (const el of allElements) {
+        if (el.textContent?.trim() === soldText && el.children.length === 0) {
+          soldElement = el;
+          break;
+        }
+      }
+    }
+  }
+  
+  // Strategy 3: Fallback to class-based selectors
+  if (!soldElement) {
+    soldElement = document.querySelector('.aleSBU .AcmPRb') 
+      || document.querySelector('.flex.mnzVGI .aleSBU span')
+      || document.querySelector('[class*="sold"] span');
+  }
     
-  if (soldNode) {
-    const soldText = soldNode.textContent.trim();
-    // Parse số từ text (có thể format như "71", "1,2k", "1.2k")
+  if (soldElement) {
+    const soldText = soldElement.textContent.trim();
+    // Parse số từ text (có thể format như "71", "1,2k", "1.2k", "1.234")
     if (soldText.match(/k$/i)) {
       // Convert "1.2k" or "1,2k" to 1200
-      soldCount = Math.round(parseFloat(soldText.replace(/[,\.]/g, '.').replace(/k$/i, '')) * 1000);
+      soldCount = Math.round(parseFloat(soldText.replace(/,/g, '.').replace(/k$/i, '')) * 1000);
     } else {
-      // Normal number "71" or "1,234"
+      // Normal number "71" or "1,234" or "1.234"
       soldCount = parseInt(soldText.replace(/[^\d]/g, '') || '0');
     }
-    console.log('[Shopee] Đã bán:', soldCount);
+    console.log('[Shopee] Đã bán:', soldCount, 'từ element:', soldElement);
   } else {
-    console.warn('[Shopee] Không tìm thấy số lượng đã bán');
+    console.warn('[Shopee] Không tìm thấy số lượng đã bán - page structure may have changed');
   }
 
   // Product details: stock and shipFrom
