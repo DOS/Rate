@@ -781,29 +781,34 @@ class ListingProcessorService {
           
           // Upload to Strapi with folder specification
           const uploadService = this.strapi.plugin('upload').service('upload');
-          const uploadData: any = {
-            data: {
-              fileInfo: {
-                name: fileName,
-                caption: `${productTitle} - Image ${i + 1}`,
-                alternativeText: productTitle || 'Product image'
-              }
-            },
-            files: {
-              name: fileName,
-              type: 'image/jpeg',
-              size: nodeBuffer.length,
-              buffer: nodeBuffer,
-              mimetype: 'image/jpeg'
-            }
+          
+          // Prepare file info
+          const fileInfo: any = {
+            name: fileName,
+            caption: `${productTitle} - Image ${i + 1}`,
+            alternativeText: productTitle || 'Product image'
           };
           
           // Add folder ID if we found/created it
           if (itemsFolderId) {
-            uploadData.data.fileInfo.folder = itemsFolderId;
+            fileInfo.folder = itemsFolderId;
           }
           
-          const uploadedFiles = await uploadService.upload(uploadData);
+          // Create file object that matches Strapi's expected format
+          const file = {
+            name: fileName,
+            type: 'image/jpeg',
+            size: nodeBuffer.length,
+            buffer: nodeBuffer,
+            mimetype: 'image/jpeg',
+            path: null // This is required by Strapi but we use buffer instead
+          };
+          
+          // Call upload with the correct structure
+          const uploadedFiles = await uploadService.upload({
+            data: { fileInfo },
+            files: file
+          });
           
           if (uploadedFiles && uploadedFiles.length > 0) {
             mediaIds.push(uploadedFiles[0].id);
