@@ -1,4 +1,7 @@
 import type { Core } from '@strapi/strapi';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
 
 declare global {
   var strapi: Core.Strapi;
@@ -779,42 +782,63 @@ class ListingProcessorService {
           
           console.log(`[ListingProcessor] Uploading to Strapi Items folder: ${fileName}`);
           
-          // Upload to Strapi with folder specification
-          const uploadService = this.strapi.plugin('upload').service('upload');
+          // Write buffer to temporary file (Strapi requires actual file path)
+          const tempDir = os.tmpdir();
+          const tempFilePath = path.join(tempDir, fileName);
+          fs.writeFileSync(tempFilePath, nodeBuffer);
+          console.log(`[ListingProcessor] Wrote temp file to: ${tempFilePath}`);
           
-          // Prepare file info
-          const fileInfo: any = {
-            name: fileName,
-            caption: `${productTitle} - Image ${i + 1}`,
-            alternativeText: productTitle || 'Product image'
-          };
-          
-          // Add folder ID if we found/created it
-          if (itemsFolderId) {
-            fileInfo.folder = itemsFolderId;
-          }
-          
-          // Create file object that matches Strapi's expected format
-          const file = {
-            name: fileName,
-            type: 'image/jpeg',
-            size: nodeBuffer.length,
-            buffer: nodeBuffer,
-            mimetype: 'image/jpeg',
-            path: null // This is required by Strapi but we use buffer instead
-          };
-          
-          // Call upload with the correct structure
-          const uploadedFiles = await uploadService.upload({
-            data: { fileInfo },
-            files: file
-          });
-          
-          if (uploadedFiles && uploadedFiles.length > 0) {
-            mediaIds.push(uploadedFiles[0].id);
-            console.log(`[ListingProcessor] Uploaded image ${i + 1} to Items folder, ID: ${uploadedFiles[0].id}`);
-          } else {
-            console.log(`[ListingProcessor] No file returned from upload for image ${i + 1}`);
+          try {
+            // Upload to Strapi with folder specification
+            const uploadService = this.strapi.plugin('upload').service('upload');
+            
+            // Prepare file info
+            const fileInfo: any = {
+              name: fileName,
+              caption: `${productTitle} - Image ${i + 1}`,
+              alternativeText: productTitle || 'Product image'
+            };
+            
+            // Add folder ID if we found/created it
+            if (itemsFolderId) {
+              fileInfo.folder = itemsFolderId;
+            }
+            
+            // Create file object that matches Strapi's expected format
+            const file = {
+              name: fileName,
+              type: 'image/jpeg',
+              size: nodeBuffer.length,
+              buffer: nodeBuffer,
+              mimetype: 'image/jpeg',
+              path: tempFilePath // Use actual temp file path
+            };
+            
+            // Call upload with the correct structure
+            const uploadedFiles = await uploadService.upload({
+              data: { fileInfo },
+              files: file
+            });
+            
+            // Clean up temp file
+            try {
+              fs.unlinkSync(tempFilePath);
+            } catch (e) {
+              console.log(`[ListingProcessor] Could not delete temp file: ${tempFilePath}`);
+            }
+            
+            if (uploadedFiles && uploadedFiles.length > 0) {
+              mediaIds.push(uploadedFiles[0].id);
+              console.log(`[ListingProcessor] Uploaded image ${i + 1} to Items folder, ID: ${uploadedFiles[0].id}`);
+            } else {
+              console.log(`[ListingProcessor] No file returned from upload for image ${i + 1}`);
+            }
+          } catch (uploadError) {
+            // Clean up temp file on error
+            try {
+              fs.unlinkSync(tempFilePath);
+            } catch (e) {}
+            throw uploadError;
           }
           
         } catch (error) {
