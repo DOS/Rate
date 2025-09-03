@@ -231,11 +231,20 @@ class RedisWorkerService {
             review: firstItem.review
           }, null, 2));
           
-          // Debug: Check if likedCount is present
-          console.log('[RedisWorker] DEBUG - likedCount from product:', firstItem.product?.likedCount);
-          console.log('[RedisWorker] DEBUG - all product fields:', Object.keys(firstItem.product || {}));
+          // Debug: Check fields - extension sends data directly in item, not nested in item.product
+          console.log('[RedisWorker] DEBUG - item.product (direct):', firstItem.product);
+          console.log('[RedisWorker] DEBUG - likedCount:', firstItem.product?.likedCount);
+          console.log('[RedisWorker] DEBUG - images:', firstItem.product?.images?.length || 0, 'items');
+          console.log('[RedisWorker] DEBUG - stock:', firstItem.product?.stock);
+          console.log('[RedisWorker] DEBUG - rating:', firstItem.product?.rating);
 
+          // Calculate average rating from all reviews
+          const avgRating = allReviews.length > 0 
+            ? allReviews.reduce((sum, r) => sum + (r?.starRate || 0), 0) / allReviews.length
+            : parseFloat(firstItem.product?.rating || '0');
+          
           // Transform data format for listing processor
+          // Extension sends data as: item.product.field, item.seller.field, item.review.field
           const shopeeData = {
             product: {
               // Try multiple fields for product title
@@ -258,17 +267,16 @@ class RedisWorkerService {
                        firstItem.review?.product?.categories?.join(' > ') || '',
               brand: firstItem.product?.brand || 
                      firstItem.review?.product?.brand || '',
-              images: firstItem.product?.images || 
-                     firstItem.review?.images || [],
-              stock: firstItem.product?.stock || 
-                    firstItem.review?.product?.stock || 0,
+              // Images from product - extension sends them directly in product.images
+              images: firstItem.product?.images || firstItem.review?.images || [],
+              stock: parseInt(String(firstItem.product?.stock || firstItem.review?.product?.stock || '0')),
               shipFrom: firstItem.product?.shipFrom || 
                        firstItem.review?.product?.shipFrom || '',
-              rating: parseFloat(firstItem.product?.rating || firstItem.review?.product?.rating || '0'),
-              soldCount: parseInt(firstItem.product?.soldCount || firstItem.review?.product?.soldCount?.replace(/[^0-9]/g, '') || '0'),
-              // Add the missing fields
-              productReviewCount: parseInt(firstItem.product?.productReviewCount || '0'),
-              likedCount: parseInt(firstItem.product?.likedCount || '0')
+              rating: avgRating, // Use calculated average
+              soldCount: parseInt(String(firstItem.product?.soldCount || firstItem.review?.product?.soldCount || '0').replace(/[^0-9]/g, '')),
+              // Add the missing fields - extension sends these directly
+              productReviewCount: parseInt(String(firstItem.product?.productReviewCount || allReviews.length || '0')),
+              likedCount: parseInt(String(firstItem.product?.likedCount || '0'))
             },
             seller: {
               name: firstItem.seller?.name || 

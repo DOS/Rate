@@ -976,21 +976,29 @@ function getShopeeProductAndSellerInfo() {
   let productImages = [];
   try {
     // Strategy 1: Tìm trong carousel gallery với các class patterns khác nhau
-    const imageElements = document.querySelectorAll(
+    let imageElements = document.querySelectorAll(
       '.YJBRVb img, ' + // Main gallery images
       '.jmcg8C img, ' + // Thumbnail images 
+      '.ztkp_R img, ' + // Shopee gallery
+      '.yvbeI6 img, ' + // Product container
       '[class*="gallery"] img, ' + // Any gallery class
       '[class*="image-list"] img, ' + // Image list
       '[class*="carousel"] img, ' + // Carousel
       '.product-image img' // Generic product image
     );
     
-    console.log('[DEBUG] Found image elements:', imageElements.length);
+    console.log('[DEBUG] Found image elements with selectors:', imageElements.length);
+    
+    // Strategy 2: Nếu không tìm thấy, tìm trực tiếp Shopee image URLs
+    if (imageElements.length === 0) {
+      imageElements = document.querySelectorAll('img[src*="img.susercontent.com"], img[data-src*="img.susercontent.com"]');
+      console.log('[DEBUG] Using fallback - found Shopee images:', imageElements.length);
+    }
     
     productImages = Array.from(imageElements)
       .map(img => {
         // Get high-res version by removing size params from URL
-        let src = img.src || img.dataset.src || '';
+        let src = img.src || img.dataset.src || img.getAttribute('src') || '';
         // Remove query params that limit size
         src = src.split('?')[0];
         // Ensure we get full URL
@@ -1003,27 +1011,48 @@ function getShopeeProductAndSellerInfo() {
       .slice(0, 10); // Limit to 10 images
       
     console.log('[Shopee] Product images found:', productImages.length);
+    if (productImages.length > 0) {
+      console.log('[Shopee] Sample image URL:', productImages[0]);
+    }
   } catch (e) {
     console.error('[Shopee] Error getting product images:', e);
   }
 
   // Product details: stock and shipFrom
   try {
-    const rows = Array.from(document.querySelectorAll('section div, .product-detail div'));
-    rows.forEach((el) => {
-      const t = (el.textContent || '').replace(/\s+/g, ' ').trim();
-      if (!t) return;
-      if (/^Kho(\s|$)/i.test(t)) {
-        const val = (el.nextElementSibling ? el.nextElementSibling.textContent : t).replace(/[^0-9]/g, '');
-        const n = Number(val);
-        if (n) stock = n;
-      }
-      if (/^Gửi từ/i.test(t)) {
-        const val = (el.nextElementSibling ? el.nextElementSibling.textContent : '').trim();
-        if (val) shipFrom = val;
-      }
-    });
-  } catch {}
+    // Strategy 1: Tìm text "Kho" và lấy số gần nhất
+    const allTexts = document.body.innerText || '';
+    const stockMatch = allTexts.match(/Kho[\s:]*([0-9]+(?:[.,]?[0-9]+)*)/i);
+    if (stockMatch && stockMatch[1]) {
+      stock = parseInt(stockMatch[1].replace(/[^0-9]/g, ''));
+      console.log('[Shopee] Stock found from regex:', stock);
+    }
+    
+    // Strategy 2: Tìm trong các elements
+    if (!stock) {
+      const rows = Array.from(document.querySelectorAll('section div, .product-detail div, [class*="stock"] span'));
+      rows.forEach((el) => {
+        const t = (el.textContent || '').replace(/\s+/g, ' ').trim();
+        if (!t) return;
+        if (/^Kho(\s|$)/i.test(t)) {
+          const val = (el.nextElementSibling ? el.nextElementSibling.textContent : t).replace(/[^0-9]/g, '');
+          const n = Number(val);
+          if (n) {
+            stock = n;
+            console.log('[Shopee] Stock found from element:', stock);
+          }
+        }
+        if (/^Gửi từ/i.test(t)) {
+          const val = (el.nextElementSibling ? el.nextElementSibling.textContent : '').trim();
+          if (val) shipFrom = val;
+        }
+      });
+    }
+    
+    console.log('[Shopee] Final stock value:', stock);
+  } catch (e) {
+    console.error('[Shopee] Error getting stock:', e);
+  }
 
   // --- SELLER INFO ---
   let sellerName = '';

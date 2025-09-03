@@ -67,7 +67,9 @@
       "Bash(where nvm)",
       "Bash(nvm:*)",
       "Bash(C:UsersJOYAppDataLocalnvmnvm.exe version)",
-      "Bash(\"C:\\Users\\JOY\\AppData\\Local\\nvm\\nvm.exe\" version)"
+      "Bash(\"C:\\Users\\JOY\\AppData\\Local\\nvm\\nvm.exe\" version)",
+      "Bash(az vm run-command:*)",
+      "Bash(where claude)"
     ],
     "deny": [
       "Bash(taskkill //F //IM node.exe)",

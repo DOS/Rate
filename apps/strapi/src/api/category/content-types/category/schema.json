@@ -60,7 +60,9 @@
     "IconKey": {
       "type": "enumeration",
       "pluginOptions": {
-        "i18n": { "localized": false }
+        "i18n": {
+          "localized": false
+        }
       },
       "enum": [
         "shop",

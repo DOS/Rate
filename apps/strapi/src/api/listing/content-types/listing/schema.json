@@ -31,7 +31,8 @@
         "i18n": {
           "localized": true
         }
-      }
+      },
+      "required": true
     },
     "URL": {
       "type": "string",
@@ -150,7 +151,9 @@
         "i18n": {
           "localized": false
         }
-      }
+      },
+      "required": true,
+      "unique": true
     },
     "Price": {
       "type": "decimal",

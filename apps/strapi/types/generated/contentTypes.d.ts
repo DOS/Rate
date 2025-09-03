@@ -942,6 +942,8 @@ export interface ApiListingListing extends Struct.CollectionTypeSchema {
         }
       }>
     ListingID: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.Unique &
       Schema.Attribute.SetPluginOptions<{
         i18n: {
           localized: false
@@ -1032,6 +1034,7 @@ export interface ApiListingListing extends Struct.CollectionTypeSchema {
       }>
     Reviews: Schema.Attribute.Relation<"oneToMany", "api::review.review">
     Slug: Schema.Attribute.String &
+      Schema.Attribute.Required &
       Schema.Attribute.SetPluginOptions<{
         i18n: {
           localized: true
