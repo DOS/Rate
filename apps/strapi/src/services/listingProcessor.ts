@@ -756,6 +756,8 @@ class ListingProcessorService {
       }
       
       for (let i = 0; i < Math.min(imageUrls.length, 5); i++) { // Limit to 5 images
+        let tempFilePath: string | undefined;
+        
         try {
           const imageUrl = imageUrls[i];
           if (!imageUrl || !imageUrl.startsWith('http')) {
@@ -784,7 +786,7 @@ class ListingProcessorService {
           
           // Write buffer to temporary file (Strapi requires actual file path)
           const tempDir = os.tmpdir();
-          const tempFilePath = path.join(tempDir, fileName);
+          tempFilePath = path.join(tempDir, fileName);
           fs.writeFileSync(tempFilePath, nodeBuffer);
           console.log(`[ListingProcessor] Wrote temp file to: ${tempFilePath}`);
           
@@ -835,14 +837,18 @@ class ListingProcessorService {
             }
           } catch (uploadError) {
             // Clean up temp file on error
-            try {
-              fs.unlinkSync(tempFilePath);
-            } catch (e) {}
+            if (tempFilePath) {
+              try {
+                fs.unlinkSync(tempFilePath);
+              } catch (e) {}
+            }
             throw uploadError;
           }
           
         } catch (error) {
           console.error(`[ListingProcessor] Error uploading image ${i}:`, error);
+          // Continue with next image
+          continue;
         }
       }
       
