@@ -18,13 +18,21 @@ class RedisWorkerService {
    */
   async start(strapiInstance?: Core.Strapi) {
     this.strapi = strapiInstance || (global as any).strapi;
+    
+    // Validate strapi instance is available
+    if (!this.strapi) {
+      console.error('[RedisWorker] ERROR: Strapi instance not available!');
+      console.error('[RedisWorker] Cannot start worker without Strapi instance');
+      return;
+    }
+    
     if (this.isRunning) {
-      console.log('[RedisWorker] Worker already running');
+      console.log('[RedisWorker] Worker already running with strapi:', !!this.strapi);
       return;
     }
 
     this.isRunning = true;
-    console.log('[RedisWorker] Starting worker...');
+    console.log('[RedisWorker] Starting worker with strapi:', !!this.strapi);
 
     // Initialize Redis connection
     await redisStreamService.initialize();
@@ -180,8 +188,32 @@ class RedisWorkerService {
       const listingProcessor = new ListingProcessorService(this.strapi);
       const results = [];
 
-      // Process each item
+      // Group items by product URL to avoid duplicate listings
+      const productGroups = new Map<string, any[]>();
+      
       for (const item of items) {
+        const productUrl = item.review?.product?.productUrl || 
+                          item.product?.url || 
+                          item.url || '';
+        
+        if (productUrl) {
+          // Normalize URL (remove query params and hash)
+          const normalizedUrl = productUrl.split('?')[0].split('#')[0];
+          
+          if (!productGroups.has(normalizedUrl)) {
+            productGroups.set(normalizedUrl, []);
+          }
+          productGroups.get(normalizedUrl)?.push(item);
+        }
+      }
+      
+      console.log(`[RedisWorker] Grouped into ${productGroups.size} unique products`);
+
+      // Process each unique product (not each review)
+      for (const [productUrl, groupedItems] of productGroups) {
+        // Use the first item for product data, collect all reviews
+        const firstItem = groupedItems[0];
+        const allReviews = groupedItems.map(item => item.review).filter(Boolean);
         try {
           // Parse price from string format "33.990.000" to number
           const parsePrice = (priceStr: any) => {
@@ -192,67 +224,78 @@ class RedisWorkerService {
           };
 
           // Debug: Log raw data from extension
-          console.log('[RedisWorker] Raw item data:', JSON.stringify({
-            review_product: item.review?.product,
-            product: item.product,
-            review: item.review
+          console.log('[RedisWorker] Processing product with', allReviews.length, 'reviews');
+          console.log('[RedisWorker] First item data:', JSON.stringify({
+            review_product: firstItem.review?.product,
+            product: firstItem.product,
+            review: firstItem.review
           }, null, 2));
+          
+          // Debug: Check if likedCount is present
+          console.log('[RedisWorker] DEBUG - likedCount from product:', firstItem.product?.likedCount);
+          console.log('[RedisWorker] DEBUG - all product fields:', Object.keys(firstItem.product || {}));
 
           // Transform data format for listing processor
           const shopeeData = {
             product: {
               // Try multiple fields for product title
-              title: item.review?.product?.productName || 
-                     item.product?.title || 
+              title: firstItem.product?.title || 
+                     firstItem.review?.product?.productName || 
                      '[Livestream] Điện Thoại Samsung Galaxy S25 Ultra 256GB',
-              productUrl: item.review?.product?.productUrl || 
-                         item.product?.url || 
-                         item.url || '',
+              productUrl: firstItem.product?.url || 
+                         firstItem.review?.product?.productUrl || 
+                         productUrl || '',  // Use the normalized URL
               // Use actual product description, not review comment
-              description: item.product?.description || 
-                          item.review?.product?.description || 
-                          item.description || '',
+              description: firstItem.product?.description || 
+                          firstItem.review?.product?.description || 
+                          firstItem.description || '',
               // Parse price from multiple possible fields
-              price: item.review?.product?.priceVND || 
-                     parsePrice(item.product?.price) || 
-                     parsePrice(item.review?.product?.price) || 0,
-              currency: item.product?.currency || 'VND',
-              category: item.review?.product?.categories?.join(' > ') || 
-                       item.product?.category || '',
-              brand: item.review?.product?.brand || 
-                     item.product?.brand || '',
-              images: item.review?.images || 
-                     item.product?.images || [],
-              stock: item.review?.product?.stock || 
-                    item.product?.stock || 0,
-              shipFrom: item.review?.product?.shipFrom || 
-                       item.product?.shipFrom || '',
-              rating: parseFloat(item.review?.product?.rating || '0'),
-              soldCount: parseInt(item.review?.product?.soldCount?.replace(/[^0-9]/g, '') || '0')
+              price: parsePrice(firstItem.product?.price) || 
+                     firstItem.review?.product?.priceVND || 
+                     parsePrice(firstItem.review?.product?.price) || 0,
+              currency: firstItem.product?.currency || 'VND',
+              category: firstItem.product?.category || 
+                       firstItem.review?.product?.categories?.join(' > ') || '',
+              brand: firstItem.product?.brand || 
+                     firstItem.review?.product?.brand || '',
+              images: firstItem.product?.images || 
+                     firstItem.review?.images || [],
+              stock: firstItem.product?.stock || 
+                    firstItem.review?.product?.stock || 0,
+              shipFrom: firstItem.product?.shipFrom || 
+                       firstItem.review?.product?.shipFrom || '',
+              rating: parseFloat(firstItem.product?.rating || firstItem.review?.product?.rating || '0'),
+              soldCount: parseInt(firstItem.product?.soldCount || firstItem.review?.product?.soldCount?.replace(/[^0-9]/g, '') || '0'),
+              // Add the missing fields
+              productReviewCount: parseInt(firstItem.product?.productReviewCount || '0'),
+              likedCount: parseInt(firstItem.product?.likedCount || '0')
             },
             seller: {
-              name: item.review?.product?.sellerName || 
-                    item.seller?.name || '',
-              rating: parseFloat(item.review?.product?.sellerRating || item.seller?.rating || '0'),
-              responseRate: item.review?.product?.sellerResponseRate || 
-                           item.seller?.responseRate || '',
-              responseTime: item.review?.product?.sellerResponseTime || 
-                           item.seller?.responseTime || '',
-              joinSince: item.review?.product?.sellerJoinSince || 
-                        item.seller?.joinSince || '',
-              productCount: parseInt(item.review?.product?.sellerProductCount || 
-                                   item.seller?.productCount || '0'),
+              name: firstItem.seller?.name || 
+                    firstItem.review?.product?.sellerName || '',
+              rating: parseFloat(firstItem.seller?.rating || firstItem.review?.product?.sellerRating || '0'),
+              responseRate: firstItem.seller?.responseRate || 
+                           firstItem.review?.product?.sellerResponseRate || '',
+              responseTime: firstItem.seller?.responseTime || 
+                           firstItem.review?.product?.sellerResponseTime || '',
+              joinSince: firstItem.seller?.joinSince || 
+                        firstItem.review?.product?.sellerJoinSince || '',
+              productCount: parseInt(firstItem.seller?.productCount || 
+                                   firstItem.review?.product?.sellerProductCount || '0'),
               // Parse followerCount and reviewCount from "580,6k" format
-              followerCount: parseInt((item.review?.product?.sellerFollowerCount || 
-                                      item.seller?.followerCount || '0')
+              followerCount: parseInt((firstItem.seller?.followerCount || 
+                                      firstItem.review?.product?.sellerFollowerCount || '0')
+                                      .toString()
                                       .replace(/[,\.]/g, '')
                                       .replace(/k$/i, '000') || '0'),
-              reviewCount: parseInt((item.review?.product?.sellerReviewCount || 
-                                    item.seller?.reviewCount || '0')
+              reviewCount: parseInt((firstItem.seller?.reviewCount || 
+                                    firstItem.review?.product?.sellerReviewCount || '0')
+                                    .toString()
                                     .replace(/[,\.]/g, '')
                                     .replace(/k$/i, '000') || '0')
             },
-            review: item.review || {}
+            // Use only the first review, but we can store all reviews later
+            review: allReviews.length > 0 ? allReviews[0] : {}
           };
 
           const result = await listingProcessor.processShopeeData(shopeeData);

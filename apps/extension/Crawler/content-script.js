@@ -725,11 +725,15 @@ function getShopeeProductAndSellerInfo() {
   // Mô tả sản phẩm (product description)
   let description = '';
   
+  console.log('[DEBUG] Starting description parsing...');
+  
   // Strategy 1: Tìm theo class chính xác từ HTML thực
   const descriptionDiv = document.querySelector('.e8lZp3');
+  console.log('[DEBUG] Found .e8lZp3 element:', !!descriptionDiv);
   if (descriptionDiv) {
     // Lấy tất cả text từ các p tags
     const paragraphs = descriptionDiv.querySelectorAll('.QN2lPu');
+    console.log('[DEBUG] Found .QN2lPu paragraphs:', paragraphs.length);
     description = Array.from(paragraphs)
       .map(p => p.textContent.trim())
       .filter(text => text.length > 0)
@@ -739,10 +743,13 @@ function getShopeeProductAndSellerInfo() {
   
   // Strategy 2: Tìm section có heading "MÔ TẢ SẢN PHẨM"
   if (!description) {
+    console.log('[DEBUG] Trying strategy 2 - find by heading...');
     const sections = document.querySelectorAll('section.I_DV_3');
+    console.log('[DEBUG] Found sections with .I_DV_3:', sections.length);
     for (const section of sections) {
       const heading = section.querySelector('h2.WjNdTR');
       if (heading && heading.textContent.includes('MÔ TẢ SẢN PHẨM')) {
+        console.log('[DEBUG] Found "MÔ TẢ SẢN PHẨM" heading');
         const contentDiv = section.querySelector('.Gf4Ro0 > div');
         if (contentDiv) {
           description = contentDiv.textContent.trim();
@@ -755,6 +762,7 @@ function getShopeeProductAndSellerInfo() {
   
   // Strategy 3: Fallback - tìm bằng text content
   if (!description) {
+    console.log('[DEBUG] Trying strategy 3 - fallback search...');
     const allElements = Array.from(document.querySelectorAll('*'));
     for (const el of allElements) {
       if (el.textContent && el.textContent.includes('MÔ TẢ SẢN PHẨM')) {
@@ -771,19 +779,25 @@ function getShopeeProductAndSellerInfo() {
   // Số lượng đã bán (sold count) - Tìm theo text content thay vì class
   let soldCount = 0;
   
+  console.log('[DEBUG] Starting soldCount parsing...');
+  
   // Strategy 1: Tìm tất cả elements có text "Đã bán"
   const allElements = Array.from(document.querySelectorAll('*'));
   let soldElement = null;
   
+  console.log('[DEBUG] Searching for "Đã bán" in all elements...');
   for (const el of allElements) {
     const text = el.textContent || '';
     // Tìm element có text "Đã bán" nhưng không có child elements (leaf node)
     if (text.includes('Đã bán') && el.children.length === 0) {
+      console.log('[DEBUG] Found "Đã bán" element:', el, 'text:', text);
       // Tìm số gần nhất sau text "Đã bán"
       const parent = el.parentElement;
       if (parent) {
+        console.log('[DEBUG] Parent element:', parent);
         // Tìm trong siblings hoặc children của parent
         const spans = parent.querySelectorAll('span');
+        console.log('[DEBUG] Found spans in parent:', spans.length);
         for (const span of spans) {
           const spanText = span.textContent || '';
           // Check if contains number
@@ -822,17 +836,175 @@ function getShopeeProductAndSellerInfo() {
     
   if (soldElement) {
     const soldText = soldElement.textContent.trim();
+    console.log('[DEBUG] Parsing soldText:', soldText);
     // Parse số từ text (có thể format như "71", "1,2k", "1.2k", "1.234")
     if (soldText.match(/k$/i)) {
       // Convert "1.2k" or "1,2k" to 1200
       soldCount = Math.round(parseFloat(soldText.replace(/,/g, '.').replace(/k$/i, '')) * 1000);
+      console.log('[DEBUG] Parsed as k-format:', soldCount);
     } else {
       // Normal number "71" or "1,234" or "1.234"
       soldCount = parseInt(soldText.replace(/[^\d]/g, '') || '0');
+      console.log('[DEBUG] Parsed as normal number:', soldCount);
     }
     console.log('[Shopee] Đã bán:', soldCount, 'từ element:', soldElement);
   } else {
     console.warn('[Shopee] Không tìm thấy số lượng đã bán - page structure may have changed');
+    console.log('[DEBUG] soldElement is null, soldCount remains:', soldCount);
+  }
+
+  // Product review count (số đánh giá của sản phẩm, không phải shop)
+  let productReviewCount = 0;
+  try {
+    // Strategy 0: Look for button with classes "flex e2p50f" (new HTML structure)
+    const reviewButtons = document.querySelectorAll('button.e2p50f, button.flex.e2p50f');
+    for (const btn of reviewButtons) {
+      const countEl = btn.querySelector('.F9RHbS, div.F9RHbS');
+      const textEl = btn.querySelector('.x1i_He, div.x1i_He'); 
+      if (countEl && textEl && textEl.textContent?.includes('đánh giá')) {
+        productReviewCount = parseInt(countEl.textContent.replace(/[^\d]/g, ''));
+        console.log('[Shopee] Product review count (from button e2p50f):', productReviewCount);
+        break;
+      }
+    }
+    
+    console.log('[DEBUG] Looking for product review count...');
+    
+    // Strategy 1: Find in rating section with "(23 đánh giá)" format
+    const ratingElements = document.querySelectorAll('.flex.aleSBU > div, .flex.YlOlLR > div, .flex._R_6qC > div');
+    for (const el of ratingElements) {
+      const text = el.textContent || '';
+      // Look for pattern like "(23 đánh giá)" or "23 đánh giá"
+      const match = text.match(/\(?([\d,]+)\s*đánh giá\)?/i);
+      if (match && match[1]) {
+        productReviewCount = parseInt(match[1].replace(/[^\d]/g, ''));
+        console.log('[Shopee] Product review count (from rating):', productReviewCount);
+        break;
+      }
+    }
+    
+    // Strategy 2: Find near star rating
+    if (productReviewCount === 0) {
+      const starContainer = document.querySelector('.flex._R_6qC, .flex.YlOlLR');
+      if (starContainer) {
+        const reviewText = starContainer.textContent || '';
+        const match = reviewText.match(/([\d,]+)\s*đánh giá/i);
+        if (match) {
+          productReviewCount = parseInt(match[1].replace(/[^\d]/g, ''));
+          console.log('[Shopee] Product review count (from star container):', productReviewCount);
+        }
+      }
+    }
+  } catch (e) {
+    console.error('[Shopee] Error getting product review count:', e);
+  }
+
+  // Liked count (Đã thích) - tìm element chứa số lượt thích
+  let likedCount = 0;
+  try {
+    console.log('[DEBUG] Looking for liked count...');
+    
+    // Strategy 1: Find button with class w2JMKY containing "Đã thích (120)"
+    const likeButton = document.querySelector('button.w2JMKY');
+    console.log('[DEBUG] Looking for like button with .w2JMKY:', !!likeButton);
+    if (likeButton) {
+      console.log('[DEBUG] Like button HTML:', likeButton.outerHTML);
+      const likeText = likeButton.querySelector('div.rhG6k7');
+      console.log('[DEBUG] Looking for text div with .rhG6k7:', !!likeText);
+      if (likeText) {
+        const text = likeText.textContent || '';
+        console.log('[DEBUG] Like text content:', text);
+        const match = text.match(/Đã thích\s*\((\d+(?:[,.]?\d+)*)\)/);
+        if (match && match[1]) {
+          likedCount = parseInt(match[1].replace(/[^\d]/g, ''));
+          console.log('[Shopee] ✅ Đã thích extracted (from button w2JMKY):', likedCount);
+        }
+      }
+    }
+    
+    // Strategy 2: Look for any button/div containing "Đã thích"
+    if (likedCount === 0) {
+      const likeButtons = document.querySelectorAll('button, div');
+      for (const btn of likeButtons) {
+        const text = btn.textContent || '';
+        const match = text.match(/Đã thích\s*\((\d+(?:[,.]?\d+)*)\)/);
+        if (match && match[1]) {
+          likedCount = parseInt(match[1].replace(/[^\d]/g, ''));
+          console.log('[Shopee] Đã thích (from generic search):', likedCount);
+          break;
+        }
+      }
+    }
+    
+    // If not found, search all elements
+    if (likedCount === 0) {
+      const allElements = Array.from(document.querySelectorAll('*'));
+      for (const el of allElements) {
+        const text = el.textContent || '';
+        if (text.includes('Đã thích')) {
+          const match = text.match(/Đã thích\s*\((\d+(?:[,.]?\d+)*)\)/);
+          if (match && match[1]) {
+            likedCount = parseInt(match[1].replace(/[^\d]/g, ''));
+            console.log('[Shopee] Đã thích (from text):', likedCount);
+            break;
+          }
+        }
+      }
+    }
+    
+    // Strategy 2: Tìm trong các stat elements  
+    if (likedCount === 0) {
+      const statElements = document.querySelectorAll('.flex.aleSBU > div, .flex.YlOlLR > div');
+      for (const stat of statElements) {
+        const text = stat.textContent || '';
+        if (text.includes('Đã thích')) {
+          // Look for number in same or adjacent element
+          const numberMatch = text.match(/\((\d+(?:[,.]?\d+)*)\)/);
+          if (numberMatch) {
+            likedCount = parseInt(numberMatch[1].replace(/[^\d]/g, ''));
+            console.log('[Shopee] Đã thích (from stat):', likedCount);
+            break;
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.error('[Shopee] Error getting liked count:', e);
+  }
+
+  // Product images - lấy từ gallery carousel
+  let productImages = [];
+  try {
+    // Strategy 1: Tìm trong carousel gallery với các class patterns khác nhau
+    const imageElements = document.querySelectorAll(
+      '.YJBRVb img, ' + // Main gallery images
+      '.jmcg8C img, ' + // Thumbnail images 
+      '[class*="gallery"] img, ' + // Any gallery class
+      '[class*="image-list"] img, ' + // Image list
+      '[class*="carousel"] img, ' + // Carousel
+      '.product-image img' // Generic product image
+    );
+    
+    console.log('[DEBUG] Found image elements:', imageElements.length);
+    
+    productImages = Array.from(imageElements)
+      .map(img => {
+        // Get high-res version by removing size params from URL
+        let src = img.src || img.dataset.src || '';
+        // Remove query params that limit size
+        src = src.split('?')[0];
+        // Ensure we get full URL
+        if (src && !src.startsWith('http')) {
+          src = src.startsWith('//') ? 'https:' + src : 'https://down-vn.img.susercontent.com/file/' + src;
+        }
+        return src;
+      })
+      .filter(src => src && src.includes('img.susercontent.com'))
+      .slice(0, 10); // Limit to 10 images
+      
+    console.log('[Shopee] Product images found:', productImages.length);
+  } catch (e) {
+    console.error('[Shopee] Error getting product images:', e);
   }
 
   // Product details: stock and shipFrom
@@ -920,6 +1092,16 @@ function getShopeeProductAndSellerInfo() {
     if (val) sellerFollowerCount = val.textContent.trim();
   }
 
+  // Debug log final values before returning
+  console.log('[DEBUG] Final product data:', {
+    productName: productName || 'NOT_FOUND',
+    description: description ? `${description.substring(0, 100)}...` : 'EMPTY',
+    descriptionLength: description ? description.length : 0,
+    soldCount: soldCount,
+    price: price,
+    categories: categories
+  });
+  
   return {
     productName,
     description,
@@ -929,9 +1111,12 @@ function getShopeeProductAndSellerInfo() {
     productId,
     categories,
     brand,
+    images: productImages,
+    likedCount,
     shipFrom,
     stock,
     soldCount,
+    productReviewCount,
     sellerName,
     sellerLink,
     sellerAvatar,

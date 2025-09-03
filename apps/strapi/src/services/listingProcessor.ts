@@ -25,6 +25,7 @@ interface ShopeeProduct {
   rating?: number;
   soldCount?: number;
   likedCount?: number;
+  productReviewCount?: number;
 }
 
 interface ShopeeSeller {
@@ -56,7 +57,7 @@ interface ShopeeData {
 
 interface ProcessingResult {
   success: boolean;
-  action: 'existing_listing' | 'created_listing';
+  action: 'existing_listing' | 'created_listing' | 'updated_existing_listing';
   listingId?: number;
   message: string;
 }
@@ -103,11 +104,25 @@ class ListingProcessorService {
       
       if (existingListing) {
         console.log('[ListingProcessor] ✅ Listing already exists with ID:', existingListing.id, 'ListingID:', existingListing.ListingID);
+        
+        // Update UsageCount - increment by 1 for each data submission
+        const updatedListing = await this.strapi.entityService.update('api::listing.listing', existingListing.id, {
+          data: {
+            // Do NOT increment UsageCount - it should be the actual soldCount from Shopee
+            UsageCount: data.product.soldCount || existingListing.UsageCount || 0,
+            LastUpdated: new Date().toISOString(),
+            // Also update ViewCount when listing is accessed
+            ViewCount: (existingListing.ViewCount || 0) + 1
+          }
+        });
+        
+        console.log('[ListingProcessor] Updated UsageCount to:', updatedListing?.UsageCount, 'ViewCount to:', updatedListing?.ViewCount);
+        
         return {
           success: true,
-          action: 'existing_listing',
+          action: 'updated_existing_listing',
           listingId: existingListing.id,
-          message: `Listing already exists (ID: ${existingListing.id}, ListingID: ${existingListing.ListingID})`
+          message: `Listing already exists and updated usage count (ID: ${existingListing.id}, UsageCount: ${updatedListing?.UsageCount || 0})`
         };
       }
 
@@ -133,7 +148,7 @@ class ListingProcessorService {
    */
   private async findExistingListing(productUrl: string, platformId: number): Promise<any> {
     try {
-      // Get platform to get its PlatformID
+      // Get platform to get its PlatformID and PlatformLocale
       const platform = await this.strapi.entityService.findOne('api::platform.platform', platformId);
       if (!platform) {
         console.log('[ListingProcessor] Platform not found:', platformId);
@@ -172,15 +187,63 @@ class ListingProcessorService {
       }
       
       // Tìm listing theo Platform và ListingID (Strapi field name)
+      // IMPORTANT: Search across ALL locales to prevent duplicates
       console.log('[ListingProcessor] Searching for existing listing with Platform:', platformId, 'ListingID:', listingId);
-      const listings = await this.strapi.entityService.findMany('api::listing.listing', {
+      
+      // Try different search approaches for Strapi 5
+      let listings = await this.strapi.entityService.findMany('api::listing.listing', {
         filters: {
           Platform: { id: platformId },
           ListingID: listingId  // Use Strapi field name (capital letters)
         },
-        populate: '*' as any
-      });
+        populate: '*' as any,
+        locale: 'all' // Search in ALL locales to prevent duplicates
+      } as any);
+      
+      // Debug: Log raw query result
+      console.log('[ListingProcessor] Query result type:', typeof listings, 'Is array:', Array.isArray(listings));
+      
+      // If not array or empty, try without locale filter
+      if (!listings || (Array.isArray(listings) && listings.length === 0)) {
+        console.log('[ListingProcessor] First query returned no results, trying without locale filter');
+        listings = await this.strapi.entityService.findMany('api::listing.listing', {
+          filters: {
+            Platform: { id: platformId },
+            ListingID: listingId
+          },
+          populate: '*' as any
+        } as any);
+        console.log('[ListingProcessor] Second query result:', listings ? listings.length : 'null');
+      }
 
+      // If still no results, try direct database query
+      if (!listings || (Array.isArray(listings) && listings.length === 0)) {
+        console.log('[ListingProcessor] API queries failed, trying direct database query');
+        try {
+          const knex = this.strapi.db.connection;
+          const dbResults = await knex('listings')
+            .where('listing_id', listingId)
+            .andWhere((builder) => {
+              builder.whereExists(function() {
+                this.select('*')
+                  .from('listings_platform_lnk')
+                  .whereRaw('listings.id = listings_platform_lnk.listing_id')
+                  .andWhere('listings_platform_lnk.platform_id', platformId);
+              });
+            })
+            .select('*');
+          
+          console.log('[ListingProcessor] Direct DB query found:', dbResults.length, 'listings');
+          
+          if (dbResults && dbResults.length > 0) {
+            // Return first result as Strapi entity format
+            return dbResults[0];
+          }
+        } catch (dbError) {
+          console.error('[ListingProcessor] Database query error:', dbError);
+        }
+      }
+      
       const found = listings && listings.length > 0;
       console.log('[ListingProcessor] Found existing listing:', found, 'Count:', listings?.length || 0);
       return found ? listings[0] : null;
@@ -236,7 +299,7 @@ class ListingProcessorService {
     try {
       const { product, seller, review } = data;
       
-      // Get platform to get its PlatformID
+      // Get platform to get its PlatformID and PlatformLocale
       const platform = await this.strapi.entityService.findOne('api::platform.platform', platformId);
       if (!platform) {
         throw new Error(`Platform not found with ID: ${platformId}`);
@@ -256,18 +319,15 @@ class ListingProcessorService {
         Name: platform.Name,
         PlatformLocale: platformLocale,
         Country: countryCode,
-        PlatformID: platform.PlatformID
+        PlatformID: platform.PlatformID,
+        AllFields: Object.keys(platform)
       });
       
-      // Use PlatformLocale from Platform table directly
-      let locale = platformLocale || 'en'; // Default to 'en' if PlatformLocale is not set
+      // Force Vietnamese locale for Shopee Vietnam
+      let locale = 'vi'; // Always use Vietnamese for Shopee Vietnam
       
-      // Validate locale is supported by Strapi (vi, en, cs)
-      const supportedLocales = ['vi', 'en', 'cs'];
-      if (!supportedLocales.includes(locale)) {
-        console.log(`[ListingProcessor] Platform locale '${locale}' not supported, using default 'en'`);
-        locale = 'en';
-      }
+      // Log locale determination
+      console.log(`[ListingProcessor] Setting locale to 'vi' for Shopee Vietnam platform`);
       
       console.log('[ListingProcessor] DEBUG - Locale determination:', {
         platformLocale,
@@ -288,8 +348,10 @@ class ListingProcessorService {
       const fixedCategory = this.fixVietnameseEncoding(product.category || '');
       const category = await this.findOrCreateCategory(fixedCategory, locale);
       
-      // Upload images to Strapi Media Library (temporarily disabled - needs proper implementation)
-      // const mediaIds = await this.uploadProductImages(product.images || [], product.title || '');
+      // Upload images to Strapi Media Library (Items folder)
+      console.log('[ListingProcessor] Starting image upload for product:', product.title);
+      const mediaIds = await this.uploadProductImages(product.images || [], product.title || '');
+      console.log('[ListingProcessor] Image upload complete, IDs:', mediaIds);
       
       // Convert description to Blocks format for Strapi with encoding fix
       const fixedDescription = this.fixVietnameseEncoding(product.description || '');
@@ -319,7 +381,6 @@ class ListingProcessorService {
         ReviewNotes: `Nhập từ Shopee. Giá: ${product.price?.toLocaleString('vi-VN')} ${product.currency}. Người bán: ${this.toTitleCase(this.fixVietnameseEncoding(seller.name || ''))}`,
         ListingID: listingId, // ID unique từ platform - use Strapi field name
         Platform: platformId, // Relation tới Platform
-        locale: locale, // Set locale based on platform
         publishedAt: new Date().toISOString(), // Auto-publish the listing
         
         // Generic fields - data chung cho mọi platform
@@ -328,21 +389,21 @@ class ListingProcessorService {
         Currency: product.currency || 'VND',
         PriceUnit: 'Item', // Default là per Item (capital I), có thể là 'Hour', 'Day', 'Month'
         AverageRating: product.rating || 0, // Rating from Shopee
-        TotalReviews: seller.reviewCount || 0, // Use seller's review count
-        SoldCount: product.soldCount || 0, // Map to sold_count field
-        UsageCount: product.soldCount || 0, // Map sold count to usage count
+        TotalReviews: product.productReviewCount || 0, // Use actual product review count (not seller's total)
+        SoldCount: product.soldCount || 0, // Map to sold_count field from Shopee
+        UsageCount: product.soldCount || 0, // UsageCount = SoldCount (Đã bán)
         Stock: product.stock || 0,
         PlatformOwnerID: shopId || '', // Shop ID là owner ID cho Shopee
         PlatformOwnerName: this.toTitleCase(this.fixVietnameseEncoding(seller.name || '')), // Fix encoding and normalize to Title Case
         Brand: this.fixVietnameseEncoding(product.brand || ''), // Fix encoding, keep original brand casing
         Location: this.fixVietnameseEncoding(product.shipFrom || ''), // Fix encoding for location
         LastUpdated: new Date().toISOString(), // Add LastUpdated timestamp
-        FavoriteCount: 0, // Initialize FavoriteCount (will be updated when users add to favorites)
+        FavoriteCount: product.likedCount || 0, // Map likedCount from Shopee (Đã thích)
         ViewCount: 0, // Initialize ViewCount
         
         // Relations
         Category: category ? category.id : null, // Link to category if found (use ID directly)
-        // Media: mediaIds, // Temporarily disabled - needs proper implementation
+        Media: mediaIds, // Use Media field (not Images) as per schema
         
         // Dynamic Zone Properties - Shopee không cung cấp specs chi tiết
         // Có thể extract từ description hoặc dùng AI sau
@@ -372,6 +433,7 @@ class ListingProcessorService {
             shipFrom: product.shipFrom,
             rating: product.rating,
             soldCount: product.soldCount,
+            likedCount: product.likedCount,
             images: product.images || [],
             variants: product.variants || []
           },
@@ -420,10 +482,16 @@ class ListingProcessorService {
         UsageCount: listingData.UsageCount
       });
       
-      // Tạo listing
+      // Tạo listing - IMPORTANT: Strapi 5 needs locale in params, not in data
+      // Only create in Vietnamese locale to prevent duplicate English entries
       const newListing = await this.strapi.entityService.create('api::listing.listing', {
-        data: listingData
-      });
+        data: listingData,
+        locale: 'vi', // Force Vietnamese locale here
+        populate: ['Media', 'Platform', 'Category'] // Populate relations to verify
+      } as any);
+      
+      console.log('[ListingProcessor] Created listing with ID:', newListing.id, 'Locale:', 'vi');
+      console.log('[ListingProcessor] Listing has Media:', (newListing as any).Media?.length || 0, 'images');
 
       // KHÔNG tạo review từ Shopee data
       // Reviews sẽ được người dùng tự thêm hoặc import riêng
@@ -496,6 +564,32 @@ class ListingProcessorService {
       .split(' ')
       .map(word => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ');
+  }
+
+  /**
+   * Parse number from text like "1,068k" or "1.2k" or "1,234"
+   */
+  private parseNumberFromText(text: string | number): number {
+    if (typeof text === 'number') return text;
+    if (!text) return 0;
+    
+    const str = String(text).trim();
+    
+    // Handle "k" suffix (e.g., "1.2k" = 1200)
+    if (str.toLowerCase().endsWith('k')) {
+      const numStr = str.slice(0, -1).replace(/,/g, '.');
+      return Math.round(parseFloat(numStr) * 1000);
+    }
+    
+    // Handle "m" suffix (e.g., "1.5m" = 1500000)
+    if (str.toLowerCase().endsWith('m')) {
+      const numStr = str.slice(0, -1).replace(/,/g, '.');
+      return Math.round(parseFloat(numStr) * 1000000);
+    }
+    
+    // Remove all non-numeric characters except dots
+    const cleanStr = str.replace(/[^\d.]/g, '');
+    return parseInt(cleanStr) || 0;
   }
 
   /**
@@ -584,33 +678,26 @@ class ListingProcessorService {
       
       if (!matchedCategory) return null;
       
-      // Find existing category by slug or name
+      // Find existing category by slug WITH CORRECT LOCALE
       const existingCategories = await this.strapi.entityService.findMany('api::category.category', {
         filters: {
-          $or: [
-            { Slug: matchedCategory.slug },
-            { Name: matchedCategory.name }
-          ]
+          Slug: matchedCategory.slug,
+          locale: locale // Filter by Vietnamese locale
         }
       });
       
       if (existingCategories && existingCategories.length > 0) {
-        console.log('[ListingProcessor] Found existing category:', existingCategories[0].Name);
+        console.log('[ListingProcessor] Found existing category:', existingCategories[0].Name, 'with locale:', locale);
         return existingCategories[0];
       }
       
-      // If not found, create new category
-      const newCategory = await this.strapi.entityService.create('api::category.category', {
-        data: {
-          Name: matchedCategory.name,
-          Slug: matchedCategory.slug,
-          Type: 'Product', // Required field with capital P
-          locale: locale // Set locale for category
-        }
-      });
+      // Category not found - DO NOT create new, let admin manage categories
+      console.log('[ListingProcessor] WARNING: Category not found for:', matchedCategory.name, 'with locale:', locale);
+      console.log('[ListingProcessor] Admin should create category with Name:', matchedCategory.name, 'Slug:', matchedCategory.slug, 'Locale:', locale);
       
-      console.log('[ListingProcessor] Created new category:', newCategory.Name, 'with locale:', locale);
-      return newCategory;
+      // Return null - listing will be created without category
+      // Admin can assign category later
+      return null;
       
     } catch (error) {
       console.error('[ListingProcessor] Error finding/creating category:', error);
@@ -623,44 +710,106 @@ class ListingProcessorService {
    */
   private async uploadProductImages(imageUrls: string[], productTitle: string): Promise<number[]> {
     try {
-      if (!imageUrls || imageUrls.length === 0) return [];
+      if (!imageUrls || imageUrls.length === 0) {
+        console.log('[ListingProcessor] No images to upload');
+        return [];
+      }
+      
+      // Ensure strapi instance is available
+      if (!this.strapi) {
+        console.error('[ListingProcessor] Strapi instance not available in uploadProductImages');
+        return [];
+      }
       
       const mediaIds: number[] = [];
+      console.log(`[ListingProcessor] Attempting to upload ${Math.min(imageUrls.length, 5)} images to Items folder`);
+      
+      // First, find or create the Items folder
+      let itemsFolderId = null;
+      try {
+        // Check if Items folder exists
+        const folders = await this.strapi.entityService.findMany('plugin::upload.folder', {
+          filters: { name: 'Items' },
+          limit: 1
+        });
+        
+        if (folders && folders.length > 0) {
+          itemsFolderId = folders[0].id;
+          console.log('[ListingProcessor] Found existing Items folder with ID:', itemsFolderId);
+        } else {
+          // Create Items folder if it doesn't exist
+          const newFolder = await this.strapi.entityService.create('plugin::upload.folder', {
+            data: {
+              name: 'Items',
+              path: '/1', // Root level folder path
+              pathId: 1 // Root folder ID
+            }
+          });
+          itemsFolderId = newFolder.id;
+          console.log('[ListingProcessor] Created new Items folder with ID:', itemsFolderId);
+        }
+      } catch (folderError) {
+        console.log('[ListingProcessor] Could not find/create Items folder, uploading to root:', folderError);
+      }
       
       for (let i = 0; i < Math.min(imageUrls.length, 5); i++) { // Limit to 5 images
         try {
           const imageUrl = imageUrls[i];
+          if (!imageUrl || !imageUrl.startsWith('http')) {
+            console.log(`[ListingProcessor] Skipping invalid URL at index ${i}:`, imageUrl);
+            continue;
+          }
+          
+          console.log(`[ListingProcessor] Downloading image ${i + 1} from:`, imageUrl);
           
           // Download image from URL
           const response = await fetch(imageUrl);
-          if (!response.ok) continue;
+          if (!response.ok) {
+            console.error(`[ListingProcessor] Failed to download image: ${response.status}`);
+            continue;
+          }
           
           const buffer = await response.arrayBuffer();
-          const uint8Array = new Uint8Array(buffer);
+          const nodeBuffer = Buffer.from(buffer);
           
-          // Create file info
-          const fileName = `${this.generateSlug(productTitle)}-${i + 1}.jpg`;
+          // Create unique file name
+          const timestamp = Date.now();
+          const slug = this.generateSlug(productTitle || 'product');
+          const fileName = `shopee-${slug}-${timestamp}-${i + 1}.jpg`;
           
-          // Upload to Strapi
-          const uploadedFile = await this.strapi.plugin('upload').service('upload').upload({
+          console.log(`[ListingProcessor] Uploading to Strapi Items folder: ${fileName}`);
+          
+          // Upload to Strapi with folder specification
+          const uploadService = this.strapi.plugin('upload').service('upload');
+          const uploadData: any = {
             data: {
               fileInfo: {
                 name: fileName,
                 caption: `${productTitle} - Image ${i + 1}`,
-                alternativeText: productTitle
+                alternativeText: productTitle || 'Product image'
               }
             },
             files: {
-              path: imageUrl,
               name: fileName,
               type: 'image/jpeg',
-              size: uint8Array.length,
-              buffer: Buffer.from(uint8Array)
+              size: nodeBuffer.length,
+              buffer: nodeBuffer,
+              mimetype: 'image/jpeg'
             }
-          });
+          };
           
-          if (uploadedFile && uploadedFile[0]) {
-            mediaIds.push(uploadedFile[0].id);
+          // Add folder ID if we found/created it
+          if (itemsFolderId) {
+            uploadData.data.fileInfo.folder = itemsFolderId;
+          }
+          
+          const uploadedFiles = await uploadService.upload(uploadData);
+          
+          if (uploadedFiles && uploadedFiles.length > 0) {
+            mediaIds.push(uploadedFiles[0].id);
+            console.log(`[ListingProcessor] Uploaded image ${i + 1} to Items folder, ID: ${uploadedFiles[0].id}`);
+          } else {
+            console.log(`[ListingProcessor] No file returned from upload for image ${i + 1}`);
           }
           
         } catch (error) {
@@ -668,6 +817,7 @@ class ListingProcessorService {
         }
       }
       
+      console.log(`[ListingProcessor] Successfully uploaded ${mediaIds.length} images to Items folder`);
       return mediaIds;
       
     } catch (error) {

@@ -113,11 +113,23 @@ async function submitShopeeReviewsToStrapi(reviews) {
     const items = uniqueReviews.map(review => {
       const product = review.product || {};
       
+      // Debug log what we received from content script
+      console.log('[Background DEBUG] Product data from content:', {
+        description: product.description ? `${product.description.substring(0, 100)}...` : 'EMPTY',
+        descriptionLength: product.description ? product.description.length : 0,
+        soldCount: product.soldCount || 0
+      });
+      
       // Use actual description from Shopee page, fallback to productName if not found
       const description = product.description || '';
       
       // Use soldCount from product data if available
       const soldCount = product.soldCount || 0;
+      
+      console.log('[Background DEBUG] Sending to Strapi:', {
+        description: description ? `${description.substring(0, 100)}...` : 'EMPTY',
+        soldCount: soldCount
+      });
       
       return {
         // Product information
@@ -137,7 +149,9 @@ async function submitShopeeReviewsToStrapi(reviews) {
           stock: product.stock || 0,
           shipFrom: product.shipFrom || '',
           rating: product.rating || 0,
-          soldCount: soldCount
+          soldCount: soldCount,
+          productReviewCount: product.productReviewCount || 0,
+          likedCount: product.likedCount || 0
         },
         // Seller information
         seller: {
