@@ -494,7 +494,7 @@ class ListingProcessorService {
       } as any);
       
       console.log('[ListingProcessor] Created listing with ID:', newListing.id, 'Locale:', 'vi');
-      console.log('[ListingProcessor] Listing has Media:', (newListing as any).Media?.length || 0, 'images');
+      console.log('[ListingProcessor] Listing has Media:', mediaIds.length || 0, 'images uploaded');
 
       // KHÔNG tạo review từ Shopee data
       // Reviews sẽ được người dùng tự thêm hoặc import riêng
