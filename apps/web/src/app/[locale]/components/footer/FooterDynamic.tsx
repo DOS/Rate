@@ -56,7 +56,11 @@ export default function FooterDynamic({
                 <ul className="footersocial">
                   {(socialLinks && socialLinks.length > 0)
                     ? socialLinks.filter(s=>s?.href && s?.label).map((s,i)=> (
-                        <li key={String(s.id)+i}><Link href={s.href!} target={s.newTab ? '_blank' : undefined} className="social-link">{s.label}</Link></li>
+                        <li key={String(s.id)+i}>
+                          <Link href={s.href!} target={s.newTab ? '_blank' : undefined} className="social-link">
+                            {getSocialIcon(s.href) || getSocialIcon(s.label) || s.label}
+                          </Link>
+                        </li>
                       ))
                     : (
                         <>
@@ -140,7 +144,11 @@ export default function FooterDynamic({
                 <ul className="footersocial">
                   {(socialLinks && socialLinks.length > 0)
                     ? socialLinks.filter(s=>s?.href && s?.label).map((s,i)=> (
-                        <li key={String(s.id)+i}><Link href={s.href!} target={s.newTab ? '_blank' : undefined} className="social-link">{s.label}</Link></li>
+                        <li key={String(s.id)+i}>
+                          <Link href={s.href!} target={s.newTab ? '_blank' : undefined} className="social-link">
+                            {getSocialIcon(s.href) || getSocialIcon(s.label) || s.label}
+                          </Link>
+                        </li>
                       ))
                     : (
                         <>

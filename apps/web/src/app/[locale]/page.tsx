@@ -1,5 +1,6 @@
 import Link from "next/link";
-import NavbarDark from "./components/navbar/navbar-dark";
+import NavbarDarkDynamic from "./components/navbar/NavbarDarkDynamic";
+import { PublicStrapiClient } from "@/lib/strapi-api";
 import { BsMouse } from "react-icons/bs";
 import { FaBagShopping, FaBowlRice, FaMagnifyingGlass, FaMartiniGlass, FaMugSaucer, FaSpa } from "react-icons/fa6";
 import BrandImage from "./components/brand-image";
@@ -8,13 +9,30 @@ import PopularListingOne from "./components/popular-listing-one";
 import ClientOne from "./components/client-one";
 import BlogOne from "./components/blog-one";
 import FooterTop from "./components/footer-top";
-import Footer from "./components/footer/footer";
+import FooterDynamic from "./components/footer/FooterDynamic";
 import BackToTop from "./components/back-to-top";
 
-export default function Home() {
+async function fetchNavbar(locale: string) {
+  const res = await PublicStrapiClient.fetchOne("api::navbar.navbar", undefined, {
+    locale: locale as any,
+    populate: { links: true },
+  })
+  const data = res?.data
+  return {
+    links: (data?.links ?? []) as any,
+    logoUrl: undefined as string | undefined,
+  }
+}
+
+export default async function Home({ params }: { params: { locale: string } }) {
+  const { locale } = params
+  const navbarData = await fetchNavbar(locale)
+  const footerRes = await PublicStrapiClient.fetchOne("api::footer.footer", undefined, { locale: locale as any, populate: { sections: { populate: { links: true } }, links: true, socialLinks: true } })
+  const footerData = footerRes?.data as any
   return (
     <>
-     <NavbarDark/>
+     {/* Navbar UI template + dữ liệu Strapi */}
+     <NavbarDarkDynamic links={navbarData.links} logoUrl={navbarData.logoUrl} />
 
           <div className="image-cover hero-header position-relative overflow-hidden" style={{backgroundImage:`url('/img/banner-6.jpg')`}} data-overlay="6">
             <div className="container">
@@ -33,7 +51,9 @@ export default function Home() {
                             <div className="search-wrap bg-white rounded-pill p-2 border">
                                 <div className="row gx-lg-2 gx-md-2 gx-3">
                                     <div className="col-auto">
-                                        <button type="button" className="btn btn-primary rounded-pill fw-medium"><FaMagnifyingGlass className="text-light fs-5"/></button>
+                                        <button type="button" className="btn btn-primary rounded-pill fw-medium" aria-label="Search">
+                                          <FaMagnifyingGlass className="text-light fs-5"/>
+                                        </button>
                                     </div>
                                     <div className="col">
                                         <div className="form-group no-border position-relative mb-0">
@@ -125,7 +145,13 @@ export default function Home() {
             </div>
         </section>
         <FooterTop/>
-        <Footer/>
+        <FooterDynamic
+          sections={(footerData?.sections ?? [])}
+          links={(footerData?.links ?? [])}
+          logoUrl={undefined}
+          copyRight={footerData?.copyRight}
+          socialLinks={(footerData?.socialLinks ?? [])}
+        />
         <BackToTop/>
     </>
   );
