@@ -30,6 +30,11 @@ yarn dev
 # Access points:
 # Frontend: http://localhost:3000
 # Strapi Admin: http://localhost:1337/admin
+
+# IMPORTANT: Only this project uses ports 3000 and 1337
+# If port conflict occurs, kill the process using the port:
+# Windows: powershell -Command "Stop-Process -Id [PID] -Force"
+# Check port usage: netstat -ano | grep [PORT]
 ```
 
 ### Build & Deploy
@@ -116,9 +121,10 @@ Required `.env` files:
 
 ### Package Management
 
-- Always use `yarn` commands, never `npm`
+- **IMPORTANT**: Always use `yarn` commands, NEVER use `npm` or `npx` in this project
 - Add dependencies to specific workspace: `yarn workspace @app/ui add <package>`
 - Root dependencies: `yarn add -W <package>`
+- For TypeScript checks: Use `yarn` scripts, not `npx tsc`
 
 ### TypeScript
 

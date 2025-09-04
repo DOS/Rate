@@ -97,6 +97,7 @@ class ListingProcessorService {
     try {
       const productUrl = data.product.productUrl || '';
       console.log('[ListingProcessor] Processing Shopee data for URL:', productUrl);
+      console.log('[ListingProcessor] Product data received:', JSON.stringify(data.product, null, 2));
       
       // Lấy hoặc tạo Platform Shopee
       const platform = await this.getOrCreateShopeePlatform();
@@ -108,15 +109,42 @@ class ListingProcessorService {
       if (existingListing) {
         console.log('[ListingProcessor] ✅ Listing already exists with ID:', existingListing.id, 'ListingID:', existingListing.ListingID);
         
-        // Update UsageCount - increment by 1 for each data submission
+        // Force Vietnamese locale for Shopee Vietnam
+        const locale = 'vi';
+        
+        // Find or create Item for this product
+        const fixedCategory = this.fixVietnameseEncoding(data.product.category || '');
+        const category = await this.findOrCreateCategory(fixedCategory, locale);
+        const item = await this.findOrCreateItem(data.product, category, locale);
+        
+        // Upload images to Strapi Media Library
+        console.log('[ListingProcessor] Starting image upload for existing listing:', data.product.title);
+        console.log('[ListingProcessor] Product images array:', data.product.images);
+        console.log('[ListingProcessor] Images count:', data.product.images ? data.product.images.length : 0);
+        const mediaIds = await this.uploadProductImages(data.product.images || [], data.product.title || '');
+        console.log('[ListingProcessor] Image upload complete, IDs:', mediaIds);
+        
+        // Update existing listing with new data
         const updatedListing = await this.strapi.entityService.update('api::listing.listing', existingListing.id, {
           data: {
-            // Do NOT increment UsageCount - it should be the actual soldCount from Shopee
+            // Update basic fields
             UsageCount: data.product.soldCount || existingListing.UsageCount || 0,
             LastUpdated: new Date().toISOString(),
-            // Also update ViewCount when listing is accessed
-            ViewCount: (existingListing.ViewCount || 0) + 1
-          }
+            ViewCount: (existingListing.ViewCount || 0) + 1,
+            
+            // Update relations - Link Item if not already linked
+            Item: item ? item.id : existingListing.Item,
+            
+            // Update Media only if new images uploaded successfully
+            Media: mediaIds.length > 0 ? mediaIds : existingListing.Media,
+            
+            // Update other fields that might have changed
+            Stock: data.product.stock || existingListing.Stock || 0,
+            AverageRating: data.product.rating || existingListing.AverageRating || 0,
+            TotalReviews: data.product.productReviewCount || existingListing.TotalReviews || 0,
+            FavoriteCount: data.product.likedCount || existingListing.FavoriteCount || 0
+          },
+          locale: locale // Specify locale to prevent updating wrong language version
         });
         
         console.log('[ListingProcessor] Updated UsageCount to:', updatedListing?.UsageCount, 'ViewCount to:', updatedListing?.ViewCount);
@@ -194,27 +222,29 @@ class ListingProcessorService {
       console.log('[ListingProcessor] Searching for existing listing with Platform:', platformId, 'ListingID:', listingId);
       
       // Try different search approaches for Strapi 5
+      // Force Vietnamese locale for Shopee Vietnam
       let listings = await this.strapi.entityService.findMany('api::listing.listing', {
         filters: {
           Platform: { id: platformId },
           ListingID: listingId  // Use Strapi field name (capital letters)
         },
         populate: '*' as any,
-        locale: 'all' // Search in ALL locales to prevent duplicates
+        locale: 'vi' // Force Vietnamese locale for Shopee Vietnam
       } as any);
       
       // Debug: Log raw query result
       console.log('[ListingProcessor] Query result type:', typeof listings, 'Is array:', Array.isArray(listings));
       
-      // If not array or empty, try without locale filter
+      // If not array or empty, try with 'all' locale to find any existing
       if (!listings || (Array.isArray(listings) && listings.length === 0)) {
-        console.log('[ListingProcessor] First query returned no results, trying without locale filter');
+        console.log('[ListingProcessor] First query returned no results, trying with all locales');
         listings = await this.strapi.entityService.findMany('api::listing.listing', {
           filters: {
             Platform: { id: platformId },
             ListingID: listingId
           },
-          populate: '*' as any
+          populate: '*' as any,
+          locale: 'all' // Search all locales to find any duplicate
         } as any);
         console.log('[ListingProcessor] Second query result:', listings ? listings.length : 'null');
       }
@@ -225,16 +255,10 @@ class ListingProcessorService {
         try {
           const knex = this.strapi.db.connection;
           const dbResults = await knex('listings')
-            .where('listing_id', listingId)
-            .andWhere((builder) => {
-              builder.whereExists(function() {
-                this.select('*')
-                  .from('listings_platform_lnk')
-                  .whereRaw('listings.id = listings_platform_lnk.listing_id')
-                  .andWhere('listings_platform_lnk.platform_id', platformId);
-              });
-            })
-            .select('*');
+            .where('listings.listing_id', listingId)  // Specify table name for listing_id
+            .join('listings_platform_lnk', 'listings.id', 'listings_platform_lnk.listing_id')
+            .where('listings_platform_lnk.platform_id', platformId)
+            .select('listings.*');
           
           console.log('[ListingProcessor] Direct DB query found:', dbResults.length, 'listings');
           
@@ -296,6 +320,70 @@ class ListingProcessorService {
   }
 
   /**
+   * Find or create Item based on product data
+   */
+  private async findOrCreateItem(product: ShopeeProduct, category: any, locale: string = 'vi'): Promise<any> {
+    try {
+      const itemTitle = this.fixVietnameseEncoding(product.title || '');
+      const itemSlug = this.generateSlug(itemTitle);
+      
+      // Try to find existing item by slug
+      const existingItems = await this.strapi.entityService.findMany('api::item.item', {
+        filters: {
+          Slug: itemSlug,
+          locale: locale
+        }
+      });
+      
+      if (existingItems && existingItems.length > 0) {
+        console.log('[ListingProcessor] Found existing Item:', existingItems[0].id);
+        return existingItems[0];
+      }
+      
+      // Create new item if not found
+      console.log('[ListingProcessor] Creating new Item:', itemTitle);
+      
+      const descriptionBlocks = product.description ? [
+        {
+          type: 'paragraph',
+          children: [
+            {
+              type: 'text',
+              text: this.fixVietnameseEncoding(product.description)
+            }
+          ]
+        }
+      ] : [];
+      
+      const newItem = await this.strapi.entityService.create('api::item.item', {
+        data: {
+          Title: itemTitle,
+          Slug: itemSlug,
+          Description: descriptionBlocks,
+          isActive: true,
+          isFeatured: false,
+          ItemType: 'Product', // Since this is from e-commerce platform
+          Category: category ? category.id : null,
+          DynamicFields: {
+            brand: product.brand,
+            originalPrice: product.price,
+            currency: product.currency
+          },
+          publishedAt: new Date().toISOString()
+        },
+        locale: locale
+      } as any);
+      
+      console.log('[ListingProcessor] Created new Item with ID:', newItem.id);
+      return newItem;
+      
+    } catch (error) {
+      console.error('[ListingProcessor] Error finding/creating Item:', error);
+      return null;
+    }
+  }
+
+  /**
    * Tạo listing mới từ Shopee data
    */
   private async createNewListing(data: ShopeeData, platformId: number): Promise<any> {
@@ -351,8 +439,13 @@ class ListingProcessorService {
       const fixedCategory = this.fixVietnameseEncoding(product.category || '');
       const category = await this.findOrCreateCategory(fixedCategory, locale);
       
+      // Find or create Item for this product (Item is the generic representation)
+      const item = await this.findOrCreateItem(product, category, locale);
+      
       // Upload images to Strapi Media Library (Items folder)
       console.log('[ListingProcessor] Starting image upload for product:', product.title);
+      console.log('[ListingProcessor] Product images array:', product.images);
+      console.log('[ListingProcessor] Images count:', product.images ? product.images.length : 0);
       const mediaIds = await this.uploadProductImages(product.images || [], product.title || '');
       console.log('[ListingProcessor] Image upload complete, IDs:', mediaIds);
       
@@ -384,6 +477,7 @@ class ListingProcessorService {
         ReviewNotes: `Nhập từ Shopee. Giá: ${product.price?.toLocaleString('vi-VN')} ${product.currency}. Người bán: ${this.toTitleCase(this.fixVietnameseEncoding(seller.name || ''))}`,
         ListingID: listingId, // ID unique từ platform - use Strapi field name
         Platform: platformId, // Relation tới Platform
+        Item: item ? item.id : null, // Link to Item entity
         publishedAt: new Date().toISOString(), // Auto-publish the listing
         
         // Generic fields - data chung cho mọi platform
@@ -709,9 +803,21 @@ class ListingProcessorService {
   }
 
   /**
-   * Upload product images to Strapi Media Library
+   * Upload product images to Strapi Media Library using internal upload service
+   * Supports: http/https URLs, // protocol-relative URLs, data:image base64
    */
   private async uploadProductImages(imageUrls: string[], productTitle: string): Promise<number[]> {
+    // Import the new upload function
+    const { uploadProductImages } = require('./uploadProductImages');
+    return uploadProductImages(this.strapi, imageUrls, productTitle);
+  }
+  
+  /**
+   * OLD - Upload product images to Strapi Media Library 
+   * TODO: Remove after testing
+   */
+  /* COMMENTED OUT - OLD CODE
+  private async uploadProductImagesOLD(imageUrls: string[], productTitle: string): Promise<number[]> {
     try {
       if (!imageUrls || imageUrls.length === 0) {
         console.log('[ListingProcessor] No images to upload');
@@ -725,7 +831,11 @@ class ListingProcessorService {
       }
       
       const mediaIds: number[] = [];
-      console.log(`[ListingProcessor] Attempting to upload ${Math.min(imageUrls.length, 5)} images to Items folder`);
+      const maxImages = Math.min(imageUrls.length, 5); // Limit to 5 images
+      console.log(`[ListingProcessor] Attempting to upload ${maxImages} images`);
+      
+      // Import crypto for MD5 hash
+      const crypto = require('crypto');
       
       // First, find or create the Items folder
       let itemsFolderId = null;
@@ -755,104 +865,244 @@ class ListingProcessorService {
         console.log('[ListingProcessor] Could not find/create Items folder, uploading to root:', folderError);
       }
       
-      for (let i = 0; i < Math.min(imageUrls.length, 5); i++) { // Limit to 5 images
-        let tempFilePath: string | undefined;
-        
+      for (let i = 0; i < maxImages; i++) {
         try {
           const imageUrl = imageUrls[i];
-          if (!imageUrl || !imageUrl.startsWith('http')) {
-            console.log(`[ListingProcessor] Skipping invalid URL at index ${i}:`, imageUrl);
+          if (!imageUrl) {
+            console.log(`[ListingProcessor] Skipping empty URL at index ${i}`);
             continue;
           }
           
-          console.log(`[ListingProcessor] Downloading image ${i + 1} from:`, imageUrl);
+          console.log(`[ListingProcessor] Processing image ${i + 1}/${maxImages}: ${imageUrl.substring(0, 100)}${imageUrl.length > 100 ? '...' : ''}`);
           
-          // Download image from URL
-          const response = await fetch(imageUrl);
-          if (!response.ok) {
-            console.error(`[ListingProcessor] Failed to download image: ${response.status}`);
-            continue;
-          }
+          let buffer: Buffer;
+          let mimeType = 'image/jpeg'; // Default mime type
+          let extension = 'jpg'; // Default extension
+          let originalUrl = imageUrl;
           
-          const buffer = await response.arrayBuffer();
-          const nodeBuffer = Buffer.from(buffer);
-          
-          // Create unique file name
-          const timestamp = Date.now();
-          const slug = this.generateSlug(productTitle || 'product');
-          const fileName = `shopee-${slug}-${timestamp}-${i + 1}.jpg`;
-          
-          console.log(`[ListingProcessor] Uploading to Strapi Items folder: ${fileName}`);
-          
-          // Write buffer to temporary file (Strapi requires actual file path)
-          const tempDir = os.tmpdir();
-          tempFilePath = path.join(tempDir, fileName);
-          fs.writeFileSync(tempFilePath, nodeBuffer);
-          console.log(`[ListingProcessor] Wrote temp file to: ${tempFilePath}`);
-          
-          try {
-            // Upload to Strapi with folder specification
-            const uploadService = this.strapi.plugin('upload').service('upload');
-            
-            // Prepare file info
-            const fileInfo: any = {
-              name: fileName,
-              caption: `${productTitle} - Image ${i + 1}`,
-              alternativeText: productTitle || 'Product image'
-            };
-            
-            // Add folder ID if we found/created it
-            if (itemsFolderId) {
-              fileInfo.folder = itemsFolderId;
+          // Handle different image formats
+          if (imageUrl.startsWith('data:')) {
+            // Handle base64 data URLs
+            console.log(`[ListingProcessor] Detected base64 data URL`);
+            const matches = imageUrl.match(/^data:([^;]+);base64,(.+)$/);
+            if (!matches) {
+              console.error(`[ListingProcessor] Invalid base64 format for image ${i + 1}`);
+              continue;
             }
+            mimeType = matches[1];
+            const base64Data = matches[2];
+            buffer = Buffer.from(base64Data, 'base64');
             
-            // Create file object that matches Strapi's expected format
-            const file = {
-              name: fileName,
-              type: 'image/jpeg',
-              size: nodeBuffer.length,
-              buffer: nodeBuffer,
-              mimetype: 'image/jpeg',
-              path: tempFilePath // Use actual temp file path
-            };
+            // Determine extension from mime type
+            if (mimeType.includes('png')) extension = 'png';
+            else if (mimeType.includes('gif')) extension = 'gif';
+            else if (mimeType.includes('webp')) extension = 'webp';
+            else extension = 'jpg';
             
-            // Call upload with the correct structure
-            const uploadedFiles = await uploadService.upload({
-              data: { fileInfo },
-              files: file
+          } else if (imageUrl.startsWith('//')) {
+            // Handle protocol-relative URLs
+            originalUrl = `https:${imageUrl}`;
+            console.log(`[ListingProcessor] Converted protocol-relative URL to: ${originalUrl}`);
+            
+            // Fetch image
+            const response = await fetch(originalUrl, {
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+              }
             });
             
-            // Clean up temp file
-            try {
-              fs.unlinkSync(tempFilePath);
-            } catch (e) {
-              console.log(`[ListingProcessor] Could not delete temp file: ${tempFilePath}`);
+            if (!response.ok) {
+              console.error(`[ListingProcessor] Failed to download image ${i + 1}: HTTP ${response.status}`);
+              continue;
             }
             
-            if (uploadedFiles && uploadedFiles.length > 0) {
-              mediaIds.push(uploadedFiles[0].id);
-              console.log(`[ListingProcessor] Uploaded image ${i + 1} to Items folder, ID: ${uploadedFiles[0].id}`);
-            } else {
-              console.log(`[ListingProcessor] No file returned from upload for image ${i + 1}`);
+            buffer = Buffer.from(await response.arrayBuffer());
+            const contentType = response.headers.get('content-type');
+            if (contentType) {
+              mimeType = contentType.split(';')[0];
+              if (mimeType.includes('png')) extension = 'png';
+              else if (mimeType.includes('gif')) extension = 'gif';
+              else if (mimeType.includes('webp')) extension = 'webp';
             }
-          } catch (uploadError) {
-            // Clean up temp file on error
+            
+          } else if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+            // Handle regular HTTP/HTTPS URLs
+            console.log(`[ListingProcessor] Fetching HTTP/HTTPS URL`);
+            
+            const response = await fetch(imageUrl, {
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+              }
+            });
+            
+            if (!response.ok) {
+              console.error(`[ListingProcessor] Failed to download image ${i + 1}: HTTP ${response.status}`);
+              continue;
+            }
+            
+            buffer = Buffer.from(await response.arrayBuffer());
+            const contentType = response.headers.get('content-type');
+            if (contentType) {
+              mimeType = contentType.split(';')[0];
+              if (mimeType.includes('png')) extension = 'png';
+              else if (mimeType.includes('gif')) extension = 'gif';
+              else if (mimeType.includes('webp')) extension = 'webp';
+            }
+            
+          } else {
+            console.log(`[ListingProcessor] Unsupported image format at index ${i}: ${imageUrl.substring(0, 50)}`);
+            continue;
+          }
+          
+          // Generate unique filename with MD5 hash
+          const timestamp = Date.now();
+          const slug = this.generateSlug(productTitle || 'product');
+          const hash = crypto.createHash('md5').update(buffer).digest('hex').substring(0, 8);
+          const fileName = `shopee-${slug}-${timestamp}-${hash}.${extension}`;
+          
+          console.log(`[ListingProcessor] Uploading ${fileName} (${buffer.length} bytes, ${mimeType})`);
+          
+          try {
+            // Verify temp file exists
+            if (!fs.existsSync(tempFilePath)) {
+              console.error(`[ListingProcessor] Temp file does not exist: ${tempFilePath}`);
+              continue;
+            }
+            
+            // Get file stats
+            const stats = fs.statSync(tempFilePath);
+            console.log(`[ListingProcessor] Temp file size: ${stats.size} bytes`);
+            
+            // Create FormData for upload
+            const form = new FormData();
+            
+            // Add file to form
+            form.append('files', fs.createReadStream(tempFilePath), {
+              filename: fileName,
+              contentType: 'image/jpeg'
+            });
+            
+            // If we have a folder ID, add it
+            if (itemsFolderId) {
+              form.append('folder', itemsFolderId.toString());
+            }
+            
+            console.log(`[ListingProcessor] Uploading via REST API to folder ${itemsFolderId || 'root'}`);
+            
+            // Upload via direct file creation
+            let uploadedFiles: any[] = [];
+            try {
+              // Read file as buffer
+              const fileBuffer = fs.readFileSync(tempFilePath);
+              const fileStats = fs.statSync(tempFilePath);
+              
+              // Create file entry directly in database
+              const fileData = {
+                name: fileName,
+                alternativeText: productTitle || 'Product image',
+                caption: `${productTitle} - Image ${i + 1}`,
+                width: null,
+                height: null,
+                formats: null,
+                hash: `${fileName.replace(/\.[^/.]+$/, '')}_${Date.now()}`,
+                ext: '.jpg',
+                mime: 'image/jpeg',
+                size: (fileStats.size / 1024).toFixed(2), // Size in KB
+                url: `/uploads/${fileName}`,
+                previewUrl: null,
+                provider: 'local',
+                provider_metadata: null,
+                folder: itemsFolderId,
+                folderPath: itemsFolderId ? '/1' : '/',
+                createdBy: null,
+                updatedBy: null
+              };
+              
+              // Create the file entry in database
+              const uploadedFile = await this.strapi.entityService.create('plugin::upload.file', {
+                data: fileData
+              });
+              
+              // Copy file to uploads directory
+              const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
+              if (!fs.existsSync(uploadsDir)) {
+                fs.mkdirSync(uploadsDir, { recursive: true });
+              }
+              
+              const targetPath = path.join(uploadsDir, fileName);
+              fs.copyFileSync(tempFilePath, targetPath);
+              console.log(`[ListingProcessor] Copied file to: ${targetPath}`);
+              
+              if (uploadedFile && uploadedFile.id) {
+                uploadedFiles = [uploadedFile];
+                console.log(`[ListingProcessor] ✅ Created file entry with ID: ${uploadedFile.id}`);
+              } else {
+                uploadedFiles = [];
+              }
+              
+            } catch (uploadError) {
+              console.error(`[ListingProcessor] Failed to create file entry:`, uploadError);
+              uploadedFiles = [];
+            }
+            
+            // Clean up temp file
             if (tempFilePath) {
               try {
                 fs.unlinkSync(tempFilePath);
-              } catch (e) {}
+                console.log(`[ListingProcessor] Cleaned up temp file: ${tempFilePath}`);
+                tempFilePath = undefined;
+              } catch (e) {
+                console.log(`[ListingProcessor] Could not delete temp file: ${tempFilePath}`);
+              }
             }
-            throw uploadError;
+            
+            // Check upload result
+            if (uploadedFiles && uploadedFiles.length > 0) {
+              const uploadedFile = uploadedFiles[0];
+              
+              if (uploadedFile && uploadedFile.id) {
+                mediaIds.push(uploadedFile.id);
+                console.log(`[ListingProcessor] ✅ Successfully uploaded image ${i + 1}, ID: ${uploadedFile.id}, URL: ${uploadedFile.url}`);
+              } else {
+                console.log(`[ListingProcessor] ⚠️ Upload returned unexpected format:`, uploadedFile);
+              }
+            } else {
+              console.log(`[ListingProcessor] ❌ No file returned from upload for image ${i + 1}`);
+            }
+          } catch (uploadError) {
+            console.error(`[ListingProcessor] Error during Strapi upload for image ${i + 1}:`, uploadError);
+            console.error(`[ListingProcessor] Upload error details:`, {
+              message: uploadError instanceof Error ? uploadError.message : 'Unknown error',
+              stack: uploadError instanceof Error ? uploadError.stack : undefined
+            });
+            
+            // Clean up temp file on error
+            if (tempFilePath && fs.existsSync(tempFilePath)) {
+              try {
+                fs.unlinkSync(tempFilePath);
+                console.log(`[ListingProcessor] Cleaned up temp file after error: ${tempFilePath}`);
+              } catch (e) {
+                console.log(`[ListingProcessor] Could not delete temp file after error: ${tempFilePath}`);
+              }
+            }
+            // Don't throw, continue with next image
+            continue;
           }
           
         } catch (error) {
-          console.error(`[ListingProcessor] Error uploading image ${i}:`, error);
+          console.error(`[ListingProcessor] Error processing image ${i + 1}:`, error);
+          // Clean up temp file if it exists
+          if (tempFilePath && fs.existsSync(tempFilePath)) {
+            try {
+              fs.unlinkSync(tempFilePath);
+            } catch (e) {}
+          }
           // Continue with next image
           continue;
         }
       }
       
-      console.log(`[ListingProcessor] Successfully uploaded ${mediaIds.length} images to Items folder`);
+      console.log(`[ListingProcessor] Successfully uploaded ${mediaIds.length} images`);
       return mediaIds;
       
     } catch (error) {
@@ -860,6 +1110,7 @@ class ListingProcessorService {
       return [];
     }
   }
+  */
 
   /**
    * Trích xuất product ID từ Shopee URL

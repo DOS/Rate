@@ -38,8 +38,8 @@
   --bs-nav-color: #212529;
   --bs-dashboard-bg: #2e3338;
 
-  --body-font-family: 'Jost', sans-serif;
+  --body-font-family: 'Jost', 'Noto Sans', 'Segoe UI', system-ui, -apple-system, sans-serif;
 }
 
-// Import Font Family
-@import url('https://fonts.googleapis.com/css2?family=Jost:wght@200;300;400;500;600;700;800&display=swap');
+// Import Font Family with Vietnamese support
+@import url('https://fonts.googleapis.com/css2?family=Jost:wght@200;300;400;500;600;700;800&family=Noto+Sans:wght@300;400;500;600;700&display=swap');

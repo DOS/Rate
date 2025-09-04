@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 
 const STRAPI_URL = process.env.STRAPI_URL || "http://localhost:1337"
-const STRAPI_TOKEN = process.env.STRAPI_TOKEN
+const STRAPI_TOKEN = process.env.STRAPI_REST_READONLY_API_KEY
 
 export async function GET(request: NextRequest) {
   try {
