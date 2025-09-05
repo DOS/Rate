@@ -1,0 +1,35 @@
+{
+  "collectionName": "components_business_opening_hours",
+  "info": {
+    "displayName": "Opening Hour",
+    "icon": "clock",
+    "description": "Business opening hours"
+  },
+  "options": {},
+  "attributes": {
+    "Day": {
+      "type": "enumeration",
+      "enum": [
+        "Mon",
+        "Tue",
+        "Wed",
+        "Thu",
+        "Fri",
+        "Sat",
+        "Sun"
+      ]
+    },
+    "OpenTime": {
+      "type": "string"
+    },
+    "CloseTime": {
+      "type": "string"
+    },
+    "IsClosed": {
+      "type": "boolean",
+      "default": false
+    }
+  }
+}
+
+

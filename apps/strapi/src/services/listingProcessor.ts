@@ -2,6 +2,8 @@ import type { Core } from '@strapi/strapi';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { TitleNormalizer } from './titleNormalizer';
+import { ItemValidator } from './itemValidator';
 
 declare global {
   var strapi: Core.Strapi;
@@ -80,6 +82,8 @@ interface BatchResult {
 
 class ListingProcessorService {
   private strapi: Core.Strapi;
+  private titleNormalizer: TitleNormalizer;
+  private itemValidator: ItemValidator;
 
   constructor(strapiInstance?: Core.Strapi) {
     this.strapi = strapiInstance || global.strapi;
@@ -87,6 +91,8 @@ class ListingProcessorService {
       console.error('[ListingProcessor] ERROR: Strapi instance not available!');
       throw new Error('Strapi instance is required for ListingProcessor');
     }
+    this.titleNormalizer = new TitleNormalizer();
+    this.itemValidator = new ItemValidator();
     console.log('[ListingProcessor] Initialized with strapi instance:', !!this.strapi);
   }
 
@@ -335,24 +341,67 @@ class ListingProcessorService {
    */
   private async findOrCreateItem(product: ShopeeProduct, category: any, locale: string = 'vi'): Promise<any> {
     try {
-      const itemTitle = this.fixVietnameseEncoding(product.title || '');
-      const itemSlug = this.generateSlug(itemTitle);
+      // First, validate if Item should be created
+      const validation = this.itemValidator.shouldCreateItem(product);
       
-      // Try to find existing item by slug
-      const existingItems = await this.strapi.entityService.findMany('api::item.item', {
+      if (!validation.valid) {
+        console.log('[ListingProcessor] Skip Item creation:', validation.reason);
+        console.log('[ListingProcessor] Product:', product.title, 'Brand:', product.brand);
+        return null; // Don't create Item for generic products
+      }
+      
+      const itemTitle = this.fixVietnameseEncoding(product.title || '');
+      
+      // Generate MatchCode using TitleNormalizer (with category for better matching)
+      const categoryName = category?.Title || product.category || 'item';
+      const matchCode = this.titleNormalizer.generateMatchCode(itemTitle, product.brand, categoryName);
+      const normalizedTitle = this.titleNormalizer.normalizeTitle(itemTitle, product.brand);
+      
+      console.log('[ListingProcessor] Finding Item with MatchCode:', matchCode);
+      console.log('[ListingProcessor] Normalized title:', normalizedTitle);
+      
+      // 1. Try to find by MatchCode (primary matching)
+      const existingByCode = await this.strapi.entityService.findMany('api::item.item', {
         filters: {
-          Slug: itemSlug,
+          MatchCode: matchCode,
           locale: locale
         }
       });
       
-      if (existingItems && existingItems.length > 0) {
-        console.log('[ListingProcessor] Found existing Item:', existingItems[0].id);
-        return existingItems[0];
+      if (existingByCode && existingByCode.length > 0) {
+        console.log('[ListingProcessor] Found existing Item by MatchCode:', existingByCode[0].id);
+        return this.updateItemWithLatestData(existingByCode[0], product, locale);
       }
       
-      // Create new item if not found
-      console.log('[ListingProcessor] Creating new Item:', itemTitle);
+      // 2. Try fuzzy matching with similar normalized titles
+      const similarItems = await this.strapi.entityService.findMany('api::item.item', {
+        filters: {
+          Category: category ? category.id : undefined,
+          locale: locale
+        },
+        limit: 50 // Check top 50 items in same category
+      });
+      
+      for (const item of similarItems || []) {
+        const similarity = this.titleNormalizer.calculateSimilarity(itemTitle, item.Title || '');
+        if (similarity > 0.85) {
+          console.log('[ListingProcessor] Found similar Item with', similarity * 100, '% similarity:', item.id);
+          // Update MatchCode if not set
+          if (!item.MatchCode) {
+            await this.strapi.entityService.update('api::item.item', item.id, {
+              data: {
+                MatchCode: matchCode,
+                NormalizedTitle: normalizedTitle
+              },
+              locale: locale
+            });
+          }
+          return this.updateItemWithLatestData(item, product, locale);
+        }
+      }
+      
+      // No matching Item found - create new one
+      console.log('[ListingProcessor] No matching Item found, creating new Item with MatchCode:', matchCode);
       
       const descriptionBlocks = product.description ? [
         {
@@ -366,26 +415,51 @@ class ListingProcessorService {
         }
       ] : [];
       
+      // Extract core product name for display
+      const coreProductName = this.titleNormalizer.extractCoreProductName(itemTitle, product.brand);
+      const itemSlug = this.generateSlug(coreProductName);
+      
+      // Build platform identifiers
+      const platformId = product.productUrl ? this.extractPlatformProductId(product.productUrl) : null;
+      let platformIdentifiers = {};
+      if (platformId) {
+        const [platform, id] = platformId.split(':');
+        platformIdentifiers = { [platform]: id };
+      }
+      
+      // Get confidence score for this Item
+      const confidence = this.itemValidator.getItemConfidence(product);
+      
       const newItem = await this.strapi.entityService.create('api::item.item', {
         data: {
-          Title: itemTitle,
+          Title: coreProductName, // Clean title without marketing text
           Slug: itemSlug,
+          MatchCode: matchCode, // Unique matching code
+          NormalizedTitle: normalizedTitle, // For similarity comparison
+          MatchConfidence: confidence, // Confidence based on validation
           Description: descriptionBlocks,
           isActive: true,
           isFeatured: false,
-          ItemType: 'Product', // Since this is from e-commerce platform
+          ItemType: 'Product',
+          Price: product.price || 0,
+          Currency: product.currency || 'VND',
+          Score: product.rating || 0,
+          Brand: product.brand ? this.titleNormalizer.normalizeBrand(product.brand) : null,
+          ModelNumber: this.extractModelNumber(itemTitle),
+          PlatformIdentifiers: platformIdentifiers,
           Category: category ? category.id : null,
           DynamicFields: {
-            brand: product.brand,
             originalPrice: product.price,
-            currency: product.currency
+            createdAt: new Date().toISOString(),
+            stock: product.stock,
+            soldCount: product.soldCount
           },
           publishedAt: new Date().toISOString()
         },
         locale: locale
       } as any);
       
-      console.log('[ListingProcessor] Created new Item with ID:', newItem.id);
+      console.log('[ListingProcessor] Created new Item with ID:', newItem.id, 'MatchCode:', matchCode);
       return newItem;
       
     } catch (error) {
@@ -482,11 +556,16 @@ class ListingProcessorService {
       // Fix encoding issues with Vietnamese characters in title
       const fixedTitle = this.fixVietnameseEncoding(product.title || 'Sản phẩm Shopee');
       
+      // Format proper Shopee product URL
+      const formattedUrl = product.productUrl && product.productUrl.includes('shopee.vn/i.')
+        ? product.productUrl.replace('shopee.vn/i.', 'shopee.vn/product/').replace('.', '/')
+        : product.productUrl;
+      
       // Chuẩn bị listing data với tất cả fields mới
       const listingData: any = {
         Title: fixedTitle,
         Slug: this.generateSlug(fixedTitle),
-        URL: product.productUrl || '',
+        URL: formattedUrl || '',
         Description: descriptionBlocks, // Use Blocks format
         IsActive: true,
         ListingStatus: 'Pending', // Set Pending để review - use correct field name with capital P
@@ -541,7 +620,7 @@ class ListingProcessorService {
             price: product.price,
             currency: product.currency,
             category: product.category,
-            brand: product.brand,
+            brand: product.brand || null,
             stock: product.stock,
             shipFrom: product.shipFrom,
             rating: product.rating,
@@ -597,14 +676,33 @@ class ListingProcessorService {
       
       // Tạo listing - IMPORTANT: Strapi 5 needs locale in params, not in data
       // Only create in Vietnamese locale to prevent duplicate English entries
-      const newListing = await this.strapi.entityService.create('api::listing.listing', {
-        data: listingData,
-        locale: 'vi', // Force Vietnamese locale here
-        populate: ['Media', 'Platform', 'Category'] // Populate relations to verify
-      } as any);
-      
-      console.log('[ListingProcessor] Created listing with ID:', newListing.id, 'Locale:', 'vi');
-      console.log('[ListingProcessor] Listing has Media:', mediaIds.length || 0, 'images uploaded');
+      // Handle race condition with try-catch for duplicate key error
+      let newListing;
+      try {
+        newListing = await this.strapi.entityService.create('api::listing.listing', {
+          data: listingData,
+          locale: 'vi', // Force Vietnamese locale here
+          populate: ['Media', 'Platform', 'Category'] // Populate relations to verify
+        } as any);
+        
+        console.log('[ListingProcessor] Created listing with ID:', newListing.id, 'Locale:', 'vi');
+        console.log('[ListingProcessor] Listing has Media:', mediaIds.length || 0, 'images uploaded');
+      } catch (error: any) {
+        // Check if it's a duplicate key error (PostgreSQL error code 23505)
+        if (error.code === '23505' || error.message?.includes('duplicate key') || error.message?.includes('unique constraint')) {
+          console.log('[ListingProcessor] Duplicate listing detected, fetching existing one...');
+          
+          // Re-fetch the existing listing that was created by another parallel process
+          const platformId = typeof platform.id === 'string' ? parseInt(platform.id) : platform.id;
+          const existing = await this.findExistingListing(product.productUrl || '', platformId);
+          if (existing) {
+            console.log('[ListingProcessor] Found existing listing created by parallel process, ID:', existing.id);
+            return existing;
+          }
+        }
+        // Re-throw if it's not a duplicate error
+        throw error;
+      }
 
       // KHÔNG tạo review từ Shopee data
       // Reviews sẽ được người dùng tự thêm hoặc import riêng
@@ -623,8 +721,14 @@ class ListingProcessorService {
   private fixVietnameseEncoding(text: string): string {
     if (!text) return text;
     
+    let fixed = text;
+    
+    // Fix specific encoding issues we're seeing
+    // "ĐIệN ThoạI" or "ĐiệN ThoạI" should be "Điện Thoại"
+    fixed = fixed.replace(/Đ[IiỊị][ệẸ][NnṆ]\s*[Tt]ho[ạẠ][IiỊị]/gi, 'Điện Thoại');
+    
     // Check if text contains encoding issues (� or question marks in unusual places)
-    if (text.includes('�') || /\?[a-z]/.test(text)) {
+    if (fixed.includes('�') || /\?[a-z]/.test(fixed)) {
       // Common Vietnamese character replacements
       const replacements: { [key: string]: string } = {
         '\\?i': 'Đi',
@@ -633,7 +737,6 @@ class ListingProcessorService {
         '\\?u': 'đu'
       };
       
-      let fixed = text;
       for (const [bad, good] of Object.entries(replacements)) {
         fixed = fixed.replace(new RegExp(bad, 'g'), good);
       }
@@ -648,22 +751,67 @@ class ListingProcessorService {
       } catch (e) {
         // Keep original if decoding fails
       }
-      
-      return fixed;
     }
     
-    return text;
+    // Normalize Vietnamese text properly
+    // Only fix casing for known product category prefixes
+    const productPrefixes = [
+      { pattern: /^\[?livestream\]?\s*/i, replacement: '[Livestream] ' },
+      { pattern: /^điện thoại\s+/i, replacement: 'Điện Thoại ' },
+      { pattern: /^máy tính\s+/i, replacement: 'Máy Tính ' },
+      { pattern: /^laptop\s+/i, replacement: 'Laptop ' },
+      { pattern: /^tai nghe\s+/i, replacement: 'Tai Nghe ' },
+      { pattern: /^phụ kiện\s+/i, replacement: 'Phụ Kiện ' }
+    ];
+    
+    for (const { pattern, replacement } of productPrefixes) {
+      if (pattern.test(fixed)) {
+        fixed = fixed.replace(pattern, replacement);
+        break; // Only apply first matching prefix
+      }
+    }
+    
+    return fixed.trim();
   }
 
   /**
    * Tạo slug từ title
    */
   private generateSlug(title: string): string {
-    return title
-      .toLowerCase()
+    // Vietnamese character map for slug generation
+    const vietnameseMap: { [key: string]: string } = {
+      'à': 'a', 'á': 'a', 'ả': 'a', 'ã': 'a', 'ạ': 'a',
+      'ă': 'a', 'ằ': 'a', 'ắ': 'a', 'ẳ': 'a', 'ẵ': 'a', 'ặ': 'a',
+      'â': 'a', 'ầ': 'a', 'ấ': 'a', 'ẩ': 'a', 'ẫ': 'a', 'ậ': 'a',
+      'đ': 'd',
+      'è': 'e', 'é': 'e', 'ẻ': 'e', 'ẽ': 'e', 'ẹ': 'e',
+      'ê': 'e', 'ề': 'e', 'ế': 'e', 'ể': 'e', 'ễ': 'e', 'ệ': 'e',
+      'ì': 'i', 'í': 'i', 'ỉ': 'i', 'ĩ': 'i', 'ị': 'i',
+      'ò': 'o', 'ó': 'o', 'ỏ': 'o', 'õ': 'o', 'ọ': 'o',
+      'ô': 'o', 'ồ': 'o', 'ố': 'o', 'ổ': 'o', 'ỗ': 'o', 'ộ': 'o',
+      'ơ': 'o', 'ờ': 'o', 'ớ': 'o', 'ở': 'o', 'ỡ': 'o', 'ợ': 'o',
+      'ù': 'u', 'ú': 'u', 'ủ': 'u', 'ũ': 'u', 'ụ': 'u',
+      'ư': 'u', 'ừ': 'u', 'ứ': 'u', 'ử': 'u', 'ữ': 'u', 'ự': 'u',
+      'ỳ': 'y', 'ý': 'y', 'ỷ': 'y', 'ỹ': 'y', 'ỵ': 'y'
+    };
+    
+    // Convert Vietnamese characters to ASCII
+    let slug = title.toLowerCase();
+    
+    // Replace Vietnamese characters
+    for (const [vietnamese, ascii] of Object.entries(vietnameseMap)) {
+      slug = slug.replace(new RegExp(vietnamese, 'g'), ascii);
+    }
+    
+    // Handle uppercase Đ separately
+    slug = slug.replace(/Đ/g, 'd');
+    
+    // Remove non-alphanumeric characters and convert to slug format
+    return slug
       .replace(/[^a-z0-9\s-]/g, '')
       .replace(/\s+/g, '-')
       .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '') // Remove leading/trailing hyphens
       .trim();
   }
 
@@ -1313,6 +1461,150 @@ class ListingProcessorService {
       console.error('[ListingProcessor] Error processing batch:', error);
       throw error;
     }
+  }
+
+  /**
+   * Extract model number from product title
+   */
+  private extractModelNumber(title: string): string | null {
+    // Common patterns: "S25 Ultra", "iPhone 15 Pro", "A54 5G", etc.
+    const patterns = [
+      /(?:Galaxy\s+)?([A-Z]\d{1,3}(?:\s+\w+)?)/i,  // Samsung: S25 Ultra, A54 5G
+      /iPhone\s+(\d+(?:\s+\w+)?)/i,                 // iPhone: iPhone 15 Pro
+      /Mi\s+(\d+\w*(?:\s+\w+)?)/i,                  // Xiaomi: Mi 11 Ultra
+      /(?:Redmi|Note)\s+(\d+(?:\s+\w+)?)/i,         // Xiaomi: Redmi Note 12
+      /(?:Pixel)\s+(\d+\w*)/i,                      // Google: Pixel 8 Pro
+      /(?:OnePlus)\s+(\d+\w*)/i,                    // OnePlus: OnePlus 12
+    ];
+    
+    for (const pattern of patterns) {
+      const match = title.match(pattern);
+      if (match && match[1]) {
+        return match[1].toUpperCase();
+      }
+    }
+    
+    return null;
+  }
+
+  /**
+   * Extract platform product ID from URL
+   */
+  private extractPlatformProductId(url: string): string | null {
+    if (!url) return null;
+    
+    if (url.includes('shopee.vn')) {
+      const shopId = this.extractShopId(url);
+      const productId = this.extractProductId(url);
+      return shopId && productId ? `shopee:${shopId}_${productId}` : null;
+    } else if (url.includes('lazada.vn')) {
+      const productId = this.extractProductId(url);
+      return productId ? `lazada:${productId}` : null;
+    } else if (url.includes('tiki.vn')) {
+      const productId = this.extractProductId(url);
+      return productId ? `tiki:${productId}` : null;
+    }
+    
+    return null;
+  }
+
+  /**
+   * Find similar item by title similarity
+   */
+  private findSimilarItem(items: any[], targetTitle: string): any {
+    if (!items || items.length === 0) return null;
+    
+    const normalizedTarget = this.normalizeTitle(targetTitle);
+    let bestMatch = null;
+    let bestScore = 0;
+    
+    for (const item of items) {
+      const normalizedItem = this.normalizeTitle(item.Title || '');
+      const score = this.calculateSimilarity(normalizedTarget, normalizedItem);
+      
+      // Threshold 0.8 (80% similarity)
+      if (score > 0.8 && score > bestScore) {
+        bestScore = score;
+        bestMatch = item;
+      }
+    }
+    
+    return bestMatch;
+  }
+
+  /**
+   * Normalize title for comparison
+   */
+  private normalizeTitle(title: string): string {
+    return title
+      .toLowerCase()
+      .replace(/\[.*?\]/g, '')  // Remove brackets content
+      .replace(/\(.*?\)/g, '')  // Remove parentheses content
+      .replace(/[^\w\s]/g, ' ')  // Remove special chars
+      .replace(/\s+/g, ' ')      // Multiple spaces to single
+      .trim();
+  }
+
+  /**
+   * Calculate similarity between two strings (Jaccard similarity)
+   */
+  private calculateSimilarity(str1: string, str2: string): number {
+    const set1 = new Set(str1.split(' '));
+    const set2 = new Set(str2.split(' '));
+    
+    const intersection = new Set([...set1].filter(x => set2.has(x)));
+    const union = new Set([...set1, ...set2]);
+    
+    return intersection.size / union.size;
+  }
+
+  /**
+   * Update Item with latest data from listing
+   */
+  private async updateItemWithLatestData(item: any, product: ShopeeProduct, locale: string): Promise<any> {
+    const platformId = product.productUrl ? this.extractPlatformProductId(product.productUrl) : null;
+    
+    // Build PlatformIdentifiers array
+    let platformIdentifiers = item.PlatformIdentifiers || {};
+    if (typeof platformIdentifiers === 'string') {
+      try {
+        platformIdentifiers = JSON.parse(platformIdentifiers);
+      } catch {
+        platformIdentifiers = {};
+      }
+    }
+    
+    if (platformId) {
+      const [platform, id] = platformId.split(':');
+      platformIdentifiers[platform] = id;
+    }
+    
+    const updatedItem = await this.strapi.entityService.update('api::item.item', item.id, {
+      data: {
+        Price: (product.price !== null && product.price !== undefined) ? product.price : (item.Price || 0),
+        Currency: product.currency || item.Currency || 'VND',
+        Score: product.rating !== null && product.rating !== undefined ? product.rating : (item.Score || 0),
+        Brand: product.brand ? product.brand.toUpperCase() : item.Brand,
+        ModelNumber: item.ModelNumber || this.extractModelNumber(product.title || ''),
+        PlatformIdentifiers: platformIdentifiers,
+        DynamicFields: {
+          ...(typeof item.DynamicFields === 'object' && item.DynamicFields ? item.DynamicFields : {}),
+          lastUpdated: new Date().toISOString(),
+          stock: product.stock,
+          soldCount: product.soldCount
+        }
+      },
+      locale: locale
+    });
+    
+    return updatedItem || item;
+  }
+
+  /**
+   * Update Item with new platform ID
+   */
+  private async updateItemWithPlatformId(item: any, product: ShopeeProduct, platformId: string, locale: string): Promise<any> {
+    return this.updateItemWithLatestData(item, product, locale);
   }
 }
 

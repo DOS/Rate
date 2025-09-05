@@ -2,6 +2,9 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## IMPORTANT: Language Requirement
+**ALWAYS respond in Vietnamese (Tiếng Việt) unless explicitly asked to use another language.**
+
 ## Project Overview
 
 Rate Platform is an anti-scam ecosystem for Vietnamese users, consisting of a Strapi CMS backend, Next.js frontend, browser extension, and data validation services in a Turborepo monorepo structure.

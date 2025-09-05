@@ -17,7 +17,7 @@ export class PublicClient extends BaseStrapiClient {
     }
 
     // Route override for single types to use local API handlers to avoid proxy edge-cases
-    const isSingleType = url === "/api/navbar" || url === "/api/footer"
+    const isSingleType = url.startsWith("/api/navbar") || url.startsWith("/api/footer")
     let completeUrl = isSingleType ? url : `/api/public-proxy${url}`
     if (typeof window === "undefined") {
       // SSR components do not support relative URLs, so we have to prefix it with local app URL

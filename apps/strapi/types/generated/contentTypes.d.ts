@@ -705,6 +705,12 @@ export interface ApiFooterFooter extends Struct.SingleTypeSchema {
           localized: true
         }
       }>
+    socialLinks: Schema.Attribute.Component<"utilities.link", true> &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: true
+        }
+      }>
     updatedAt: Schema.Attribute.DateTime
     updatedBy: Schema.Attribute.Relation<"oneToOne", "admin::user"> &
       Schema.Attribute.Private
@@ -767,10 +773,29 @@ export interface ApiItemItem extends Struct.CollectionTypeSchema {
     }
   }
   attributes: {
+    Barcode: Schema.Attribute.String &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: false
+        }
+      }>
+    Brand: Schema.Attribute.String &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: false
+        }
+      }>
     Category: Schema.Attribute.Relation<"manyToOne", "api::category.category">
     createdAt: Schema.Attribute.DateTime
     createdBy: Schema.Attribute.Relation<"oneToOne", "admin::user"> &
       Schema.Attribute.Private
+    Currency: Schema.Attribute.String &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: false
+        }
+      }> &
+      Schema.Attribute.DefaultTo<"VND">
     Description: Schema.Attribute.Blocks &
       Schema.Attribute.SetPluginOptions<{
         i18n: {
@@ -783,6 +808,7 @@ export interface ApiItemItem extends Struct.CollectionTypeSchema {
           localized: true
         }
       }>
+    Features: Schema.Attribute.Component<"business.feature", true>
     isActive: Schema.Attribute.Boolean &
       Schema.Attribute.SetPluginOptions<{
         i18n: {
@@ -822,6 +848,28 @@ export interface ApiItemItem extends Struct.CollectionTypeSchema {
     Listings: Schema.Attribute.Relation<"oneToMany", "api::listing.listing">
     locale: Schema.Attribute.String
     localizations: Schema.Attribute.Relation<"oneToMany", "api::item.item">
+    Location: Schema.Attribute.Component<"info.location", false>
+    MatchCode: Schema.Attribute.String &
+      Schema.Attribute.Unique &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: false
+        }
+      }>
+    MatchConfidence: Schema.Attribute.Decimal &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: false
+        }
+      }> &
+      Schema.Attribute.SetMinMax<
+        {
+          max: 1
+          min: 0
+        },
+        number
+      > &
+      Schema.Attribute.DefaultTo<0>
     Media: Schema.Attribute.Media<
       "images" | "files" | "videos" | "audios",
       true
@@ -831,6 +879,38 @@ export interface ApiItemItem extends Struct.CollectionTypeSchema {
           localized: true
         }
       }>
+    MenuItems: Schema.Attribute.Component<"business.menu-item", true>
+    ModelNumber: Schema.Attribute.String &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: false
+        }
+      }>
+    NormalizedTitle: Schema.Attribute.String &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: false
+        }
+      }>
+    OpeningHours: Schema.Attribute.Component<"business.opening-hour", true>
+    PlatformIdentifiers: Schema.Attribute.JSON &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: false
+        }
+      }>
+    Price: Schema.Attribute.Decimal &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: false
+        }
+      }> &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 0
+        },
+        number
+      >
     publishedAt: Schema.Attribute.DateTime
     QRCode: Schema.Attribute.String &
       Schema.Attribute.SetPluginOptions<{
@@ -844,7 +924,28 @@ export interface ApiItemItem extends Struct.CollectionTypeSchema {
     >
     Reports: Schema.Attribute.Relation<"oneToMany", "api::report.report">
     Reviews: Schema.Attribute.Relation<"oneToMany", "api::review.review">
+    Score: Schema.Attribute.Decimal &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: false
+        }
+      }> &
+      Schema.Attribute.SetMinMax<
+        {
+          max: 5
+          min: 0
+        },
+        number
+      > &
+      Schema.Attribute.DefaultTo<0>
+    SKU: Schema.Attribute.String &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: false
+        }
+      }>
     Slug: Schema.Attribute.UID<"Title">
+    SocialLinks: Schema.Attribute.Component<"seo-utilities.social-icons", true>
     Title: Schema.Attribute.String &
       Schema.Attribute.Required &
       Schema.Attribute.SetPluginOptions<{
@@ -1033,13 +1134,6 @@ export interface ApiListingListing extends Struct.CollectionTypeSchema {
         }
       }>
     Reviews: Schema.Attribute.Relation<"oneToMany", "api::review.review">
-    Slug: Schema.Attribute.String &
-      Schema.Attribute.Required &
-      Schema.Attribute.SetPluginOptions<{
-        i18n: {
-          localized: true
-        }
-      }>
     Stock: Schema.Attribute.Integer &
       Schema.Attribute.SetPluginOptions<{
         i18n: {

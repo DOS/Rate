@@ -1,5 +1,50 @@
 import type { Schema, Struct } from "@strapi/strapi"
 
+export interface BusinessFeature extends Struct.ComponentSchema {
+  collectionName: "components_business_features"
+  info: {
+    description: "Simple feature item"
+    displayName: "Feature"
+    icon: "check"
+  }
+  attributes: {
+    IconKey: Schema.Attribute.String
+    Label: Schema.Attribute.String & Schema.Attribute.Required
+  }
+}
+
+export interface BusinessMenuItem extends Struct.ComponentSchema {
+  collectionName: "components_business_menu_items"
+  info: {
+    description: "Menu item with price"
+    displayName: "Menu Item"
+    icon: "utensils"
+  }
+  attributes: {
+    Currency: Schema.Attribute.String & Schema.Attribute.DefaultTo<"VND">
+    Description: Schema.Attribute.Text
+    Name: Schema.Attribute.String & Schema.Attribute.Required
+    Price: Schema.Attribute.Decimal
+  }
+}
+
+export interface BusinessOpeningHour extends Struct.ComponentSchema {
+  collectionName: "components_business_opening_hours"
+  info: {
+    description: "Business opening hours"
+    displayName: "Opening Hour"
+    icon: "clock"
+  }
+  attributes: {
+    CloseTime: Schema.Attribute.String
+    Day: Schema.Attribute.Enumeration<
+      ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    >
+    IsClosed: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>
+    OpenTime: Schema.Attribute.String
+  }
+}
+
 export interface ElementsFooterItem extends Struct.ComponentSchema {
   collectionName: "components_elements_footer_items"
   info: {
@@ -647,6 +692,9 @@ export interface ViolationEvidence extends Struct.ComponentSchema {
 declare module "@strapi/strapi" {
   export module Public {
     export interface ComponentSchemas {
+      "business.feature": BusinessFeature
+      "business.menu-item": BusinessMenuItem
+      "business.opening-hour": BusinessOpeningHour
       "elements.footer-item": ElementsFooterItem
       "forms.contact-form": FormsContactForm
       "forms.newsletter-form": FormsNewsletterForm

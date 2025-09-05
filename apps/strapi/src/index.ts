@@ -34,6 +34,8 @@ export default {
         const neededActions = [
           'api::category.category.find',
           'api::category.category.findOne',
+          'api::item.item.find',
+          'api::item.item.findOne',
         ]
 
         const existing = new Set(

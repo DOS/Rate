@@ -108,7 +108,9 @@
       "Read(/D:\\Projects\\Rate\\apps\\strapi\\src\\services/**)",
       "Read(/D:\\Projects\\Rate\\apps\\strapi\\src\\services/**)",
       "Read(/D:\\Projects\\Rate\\apps\\strapi\\src\\services/**)",
-      "Read(/D:\\Projects\\Rate\\apps\\strapi/**)"
+      "Read(/D:\\Projects\\Rate\\apps\\strapi/**)",
+      "Read(//c/Users/JOY/OneDrive/Pictures/Screenshots 1/**)",
+      "Read(//tmp/SnagitTemp/**)"
     ],
     "deny": [
       "Bash(taskkill //F //IM node.exe)",

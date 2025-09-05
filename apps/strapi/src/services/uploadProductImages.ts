@@ -235,6 +235,9 @@ export async function uploadProductImages(
     fs.mkdirSync(tempDir, { recursive: true });
   }
 
+  // Track uploaded file IDs
+  const uploadedFiles: number[] = [];
+
   for (let i = 0; i < maxImages; i++) {
     let tempFilePath: string | null = null;
     
@@ -405,6 +408,14 @@ export async function uploadProductImages(
       fs.writeFileSync(tempFilePath, buffer);
 
       try {
+        // Check if file already exists to prevent duplicates
+        const existingFile = await checkDuplicateFile(strapi, fileName, buffer.length);
+        if (existingFile) {
+          console.log(`[ListingProcessor] ⚠️ Duplicate file found, reusing: ${fileName} (ID: ${existingFile.id})`);
+          uploadedFiles.push(existingFile.id);
+          continue; // Skip upload, reuse existing file
+        }
+        
         // Use Strapi's official upload service
         const uploadService = strapi.plugin('upload').service('upload');
         
@@ -434,15 +445,15 @@ export async function uploadProductImages(
         };
         
         // Use Strapi's upload service to handle everything properly
-        const uploadedFiles = await uploadService.upload({
+        const uploadResult = await uploadService.upload({
           data: fileData,
           files: fileObject
         });
         
-        const uploadedFile = Array.isArray(uploadedFiles) ? uploadedFiles[0] : uploadedFiles;
+        const uploadedFile = Array.isArray(uploadResult) ? uploadResult[0] : uploadResult;
 
         if (uploadedFile && uploadedFile.id) {
-          mediaIds.push(uploadedFile.id);
+          uploadedFiles.push(uploadedFile.id);
           console.log(`[ListingProcessor] ✅ Successfully uploaded image ${i + 1}, ID: ${uploadedFile.id}`);
           // Note: Strapi 5 không hỗ trợ upload vào folder cụ thể qua API
           // Files sẽ nằm trong "API Uploads" folder hoặc root
@@ -481,6 +492,29 @@ export async function uploadProductImages(
     console.log(`[ListingProcessor] Could not delete temp directory: ${tempDir}`);
   }
 
-  console.log(`[ListingProcessor] Successfully uploaded ${mediaIds.length} images`);
-  return mediaIds;
+  console.log(`[ListingProcessor] Successfully uploaded ${uploadedFiles.length} images`);
+  return uploadedFiles;
+}
+
+/**
+ * Check if a file with same name and size already exists in media library
+ * @param strapi Strapi instance
+ * @param fileName File name to check
+ * @param fileSize File size in bytes
+ * @returns Existing file object if found, null otherwise
+ */
+async function checkDuplicateFile(strapi: any, fileName: string, fileSize: number) {
+  try {
+    const existingFile = await strapi.db.query('plugin::upload.file').findOne({
+      where: {
+        name: fileName,
+        size: fileSize
+      }
+    });
+    
+    return existingFile;
+  } catch (error) {
+    console.warn('[ListingProcessor] Error checking duplicate file:', error);
+    return null; // On error, allow upload to proceed
+  }
 }

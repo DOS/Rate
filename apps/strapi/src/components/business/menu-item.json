@@ -1,0 +1,17 @@
+{
+  "collectionName": "components_business_menu_items",
+  "info": {
+    "displayName": "Menu Item",
+    "icon": "utensils",
+    "description": "Menu item with price"
+  },
+  "options": {},
+  "attributes": {
+    "Name": { "type": "string", "required": true },
+    "Description": { "type": "text" },
+    "Price": { "type": "decimal" },
+    "Currency": { "type": "string", "default": "VND" }
+  }
+}
+
+

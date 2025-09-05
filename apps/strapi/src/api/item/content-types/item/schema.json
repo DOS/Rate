@@ -96,6 +96,103 @@
         "Other"
       ]
     },
+    "Score": {
+      "type": "decimal",
+      "pluginOptions": {
+        "i18n": {
+          "localized": false
+        }
+      },
+      "default": 0,
+      "min": 0,
+      "max": 5
+    },
+    "Price": {
+      "type": "decimal",
+      "pluginOptions": {
+        "i18n": {
+          "localized": false
+        }
+      },
+      "min": 0
+    },
+    "Currency": {
+      "type": "string",
+      "pluginOptions": {
+        "i18n": {
+          "localized": false
+        }
+      },
+      "default": "VND"
+    },
+    "Brand": {
+      "type": "string",
+      "pluginOptions": {
+        "i18n": {
+          "localized": false
+        }
+      }
+    },
+    "ModelNumber": {
+      "type": "string",
+      "pluginOptions": {
+        "i18n": {
+          "localized": false
+        }
+      }
+    },
+    "SKU": {
+      "type": "string",
+      "pluginOptions": {
+        "i18n": {
+          "localized": false
+        }
+      }
+    },
+    "Barcode": {
+      "type": "string",
+      "pluginOptions": {
+        "i18n": {
+          "localized": false
+        }
+      }
+    },
+    "PlatformIdentifiers": {
+      "type": "json",
+      "pluginOptions": {
+        "i18n": {
+          "localized": false
+        }
+      }
+    },
+    "MatchCode": {
+      "type": "string",
+      "unique": true,
+      "pluginOptions": {
+        "i18n": {
+          "localized": false
+        }
+      }
+    },
+    "NormalizedTitle": {
+      "type": "string",
+      "pluginOptions": {
+        "i18n": {
+          "localized": false
+        }
+      }
+    },
+    "MatchConfidence": {
+      "type": "decimal",
+      "default": 0,
+      "min": 0,
+      "max": 1,
+      "pluginOptions": {
+        "i18n": {
+          "localized": false
+        }
+      }
+    },
     "ItemField": {
       "type": "dynamiczone",
       "pluginOptions": {
@@ -140,6 +237,31 @@
           "localized": true
         }
       }
+    },
+    "Location": {
+      "type": "component",
+      "repeatable": false,
+      "component": "info.location"
+    },
+    "OpeningHours": {
+      "type": "component",
+      "repeatable": true,
+      "component": "business.opening-hour"
+    },
+    "Features": {
+      "type": "component",
+      "repeatable": true,
+      "component": "business.feature"
+    },
+    "MenuItems": {
+      "type": "component",
+      "repeatable": true,
+      "component": "business.menu-item"
+    },
+    "SocialLinks": {
+      "type": "component",
+      "repeatable": true,
+      "component": "seo-utilities.social-icons"
     },
     "Reviews": {
       "type": "relation",

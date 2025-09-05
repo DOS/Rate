@@ -24,8 +24,8 @@ async function fetchNavbar(locale: string) {
   }
 }
 
-export default async function Home({ params }: { params: { locale: string } }) {
-  const { locale } = params
+export default async function Home({ params }: { params: Promise<{ locale: string }> }) {
+  const { locale } = await params
   const navbarData = await fetchNavbar(locale)
   const footerRes = await PublicStrapiClient.fetchOne("api::footer.footer", undefined, { locale: locale as any, populate: { sections: { populate: { links: true } }, links: true, socialLinks: true } })
   const footerData = footerRes?.data as any

@@ -1,0 +1,15 @@
+{
+  "collectionName": "components_business_features",
+  "info": {
+    "displayName": "Feature",
+    "icon": "check",
+    "description": "Simple feature item"
+  },
+  "options": {},
+  "attributes": {
+    "Label": { "type": "string", "required": true },
+    "IconKey": { "type": "string" }
+  }
+}
+
+
