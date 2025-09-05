@@ -11,69 +11,223 @@ import { Readable } from 'stream';
 export async function uploadProductImages(
   strapi: any,
   imageUrls: string[],
-  productTitle: string
+  productTitle: string,
+  existingMediaIds?: number[],
+  listingId?: string
 ): Promise<number[]> {
   if (!imageUrls || imageUrls.length === 0) {
     console.log('[ListingProcessor] No images to upload');
-    return [];
+    return existingMediaIds || [];
   }
 
   if (!strapi) {
     console.error('[ListingProcessor] Strapi instance not available');
-    return [];
+    return existingMediaIds || [];
+  }
+  
+  // If we have existing media, we'll replace them with new ones
+  // Comment out the skip logic to always process all images from product
+  /*
+  if (existingMediaIds && existingMediaIds.length > 0) {
+    console.log(`[ListingProcessor] Listing already has ${existingMediaIds.length} images, skipping upload`);
+    return existingMediaIds;
+  }
+  */
+  
+  // Always process all images regardless of existing media
+  if (existingMediaIds && existingMediaIds.length > 0) {
+    console.log(`[ListingProcessor] Listing has ${existingMediaIds.length} existing images, will replace with ${imageUrls.length} new images`);
   }
 
-  // Remove duplicates and filter out non-product images
-  const uniqueImages = Array.from(new Set(imageUrls)).filter(url => {
-    // Filter out common non-product image patterns (UI elements, badges, icons)
+  // First, normalize and clean URLs
+  const normalizedUrls = imageUrls.map(url => {
+    if (!url || typeof url !== 'string') return null;
+    // Remove query parameters that don't affect the image content
+    return url.split('?')[0];
+  }).filter(Boolean) as string[];
+
+  // Remove exact duplicates
+  const uniqueUrls = Array.from(new Set(normalizedUrls));
+  
+  // Separate images into main product images and thumbnails
+  const mainImages: string[] = [];
+  const thumbnailImages: string[] = [];
+  const processedHashes = new Set<string>();
+  
+  uniqueUrls.forEach(url => {
+    // Skip invalid URLs
+    if (!url || typeof url !== 'string') return;
+    
+    // Extract file hash/ID from Shopee URL patterns
+    // Shopee patterns: 
+    // - /file/hash (e.g., /file/vn-11134207-7ra0g-m8y6j0nx137r5e)
+    // - /file/32charhash (e.g., /file/3726d6431bdcf83820c359d9c5a773ad)
+    let fileId: string | null = null;
+    
+    // Try to extract the unique identifier
+    const fileMatch = url.match(/\/file\/([a-zA-Z0-9\-_]+)/);
+    if (fileMatch) {
+      fileId = fileMatch[1];
+      
+      // Skip if we've already processed this file ID
+      if (processedHashes.has(fileId)) {
+        console.log(`[ListingProcessor] Skipping duplicate file ID: ${fileId}`);
+        return;
+      }
+    }
+    
+    // Enhanced filter for non-product patterns
     const nonProductPatterns = [
-      'play_overlay', // Video overlay icons  
-      'video_cover',
-      'live_label', // Live streaming labels
+      // UI elements
+      'play_overlay',
+      'video_cover', 
+      'live_label',
       'promotion_label',
-      'flash_sale', 
+      'flash_sale',
       'free_shipping',
-      'icon', // Icon images
-      'badge', // Badge images
-      'logo', // Logo images
-      '.svg' // SVG files (usually icons/UI)
+      'icon',
+      'badge',
+      'logo',
+      'banner',
+      'watermark',
+      
+      // File types that are not product images
+      '.svg',
+      '.gif', // Usually animated badges/icons
+      
+      // Loading/placeholder images
+      'spinner',
+      'loading',
+      'placeholder',
+      'default',
+      'no-image',
+      
+      // Shopee-specific non-product patterns
+      'shopee-pcmall',
+      'sg-11134201', // Shopee UI assets
+      'ph-11134207', // Shopee UI assets  
+      'my-11134207', // Shopee UI assets
+      'id-11134207', // Shopee UI assets
+      'th-11134207', // Shopee UI assets
+      
+      // Shopee overlay/promotion patterns
+      'vn-11134004', // Shopee promotion overlays
+      'vn-11134258', // Shopee promotion overlays (confirmed from user)
+      // 'vn-50009109', // Shopee badges/labels - commented out, might be product images
+      
+      // Small icon indicators
+      '_icon',
+      '-icon',
+      'emoji',
+      'sticker'
     ];
-    
-    // Check if it's from valid domain (Shopee CDN)
-    const isFromValidDomain = url.includes('susercontent.com/file/') || 
-                              url.includes('cf.shopee') ||
-                              url.includes('down-vn.img');
-    
-    // Check if URL contains size parameters indicating product images
-    // Product images usually have resize parameters like @resize_w450, @resize_w900
-    const hasProductSizeParams = url.includes('@resize_w') || 
-                                  url.includes('_w450') || 
-                                  url.includes('_w900') ||
-                                  url.includes('_w82') || // Thumbnails but still product images
-                                  url.includes('_w164');
     
     // Check if it has non-product patterns
     const hasNonProductPattern = nonProductPatterns.some(pattern => 
       url.toLowerCase().includes(pattern)
     );
     
-    // Filter logic:
-    // 1. Must be from valid domain
-    // 2. Should not have non-product patterns
-    // 3. Preferably has size parameters (indicates it's a resizable product image)
-    return isFromValidDomain && !hasNonProductPattern && (hasProductSizeParams || !url.match(/\.(gif)$/i));
+    if (hasNonProductPattern) {
+      console.log(`[ListingProcessor] Filtered out non-product image: ${url.split('/').pop()}`);
+      return;
+    }
+    
+    // Skip 32-character hex hash patterns (usually icons/badges)
+    // Pattern: /file/[32 hex chars] like /file/3726d6431bdcf83820c359d9c5a773ad
+    if (url.match(/\/file\/[a-f0-9]{32}$/i)) {
+      console.log(`[ListingProcessor] Filtered out 32-char hex pattern (likely icon/badge): ${url.split('/').pop()}`);
+      return;
+    }
+    
+    // Check if it's from valid Shopee CDN domains
+    const validShopeedomains = [
+      'cf.shopee',
+      'down-vn.img.susercontent.com',
+      'down-th.img.susercontent.com',
+      'down-sg.img.susercontent.com',
+      'down-my.img.susercontent.com',
+      'down-ph.img.susercontent.com',
+      'down-id.img.susercontent.com'
+    ];
+    
+    const isFromShopee = validShopeedomains.some(domain => url.includes(domain));
+    
+    if (!isFromShopee) {
+      console.log(`[ListingProcessor] Filtered out non-Shopee domain: ${url}`);
+      return;
+    }
+    
+    // Mark this file ID as processed
+    if (fileId) {
+      processedHashes.add(fileId);
+    }
+    
+    // Categorize by URL pattern
+    // Thumbnails have _tn suffix, main images don't
+    if (url.includes('_tn')) {
+      // This is a thumbnail - only add if we don't have the main version
+      const mainVersion = url.replace('_tn', '');
+      const mainFileId = mainVersion.match(/\/file\/([a-zA-Z0-9\-_]+)/)?.[1];
+      
+      if (!mainFileId || !processedHashes.has(mainFileId)) {
+        thumbnailImages.push(url);
+      }
+    } else {
+      // This is a main product image
+      mainImages.push(url);
+    }
   });
   
-  console.log(`[ListingProcessor] Filtered ${imageUrls.length} images down to ${uniqueImages.length} unique product images`);
+  // Prefer main images, fall back to thumbnails if no main images
+  let imagesToUpload = mainImages.length > 0 ? mainImages : thumbnailImages;
+  
+  // Final deduplication based on file IDs
+  const finalImages: string[] = [];
+  const finalHashes = new Set<string>();
+  
+  imagesToUpload.forEach(url => {
+    // Extract file ID from Shopee URL: /file/[ID]
+    // Example: /file/vn-11134207-7ra0g-m8y6j0nx137r5e
+    const fileMatch = url.match(/\/file\/([a-zA-Z0-9\-_]+)/);
+    
+    if (fileMatch) {
+      const fileId = fileMatch[1];
+      // Remove any size/format suffixes (e.g., _tn, @resize_w82_nl)
+      const coreId = fileId.split('_')[0].split('@')[0];
+      
+      if (!finalHashes.has(coreId)) {
+        finalHashes.add(coreId);
+        finalImages.push(url);
+        console.log(`[ListingProcessor] Adding unique image: ${coreId}`);
+      } else {
+        console.log(`[ListingProcessor] Skipping duplicate image: ${coreId}`);
+      }
+    } else {
+      // If we can't extract ID, still check URL itself for duplicates
+      if (!finalHashes.has(url)) {
+        finalHashes.add(url);
+        finalImages.push(url);
+        console.log(`[ListingProcessor] Adding image without ID: ${url.split('/').pop()}`);
+      }
+    }
+  });
+  
+  console.log(`[ListingProcessor] Image categorization:`, {
+    totalUrls: uniqueUrls.length,
+    mainImages: mainImages.length,
+    thumbnailImages: thumbnailImages.length,
+    usingMainImages: mainImages.length > 0
+  });
+  
+  console.log(`[ListingProcessor] Filtered ${imageUrls.length} images down to ${finalImages.length} unique product images`);
+  console.log(`[ListingProcessor] Final images to upload:`, finalImages.map(url => url.split('/').pop()));
+  
+  const uniqueImages = finalImages;
 
   const mediaIds: number[] = [];
-  const maxImages = Math.min(uniqueImages.length, 5); // Limit to 5 images
+  const maxImages = Math.min(uniqueImages.length, 9); // Limit to 9 images (Shopee's standard)
   const maxImageSize = 10 * 1024 * 1024; // 10MB limit
   console.log(`[ListingProcessor] Attempting to upload ${maxImages} images`);
-
-  // Use the Items folder (ID 4) that was created in the database
-  let itemsFolderId = 4;
-  console.log('[ListingProcessor] Using Items folder with ID:', itemsFolderId);
 
   // Create temp directory for this batch
   const tempDir = path.join(os.tmpdir(), `strapi-upload-${Date.now()}`);
@@ -124,7 +278,7 @@ export async function uploadProductImages(
         }
         
         // Skip images that are too small (likely icons/badges)
-        const minImageSize = 10 * 1024; // 10KB minimum
+        const minImageSize = 5 * 1024; // 5KB minimum
         if (buffer.length < minImageSize) {
           console.log(`[ListingProcessor] Image ${i + 1} too small (${buffer.length} bytes), likely an icon/badge - skipping`);
           continue;
@@ -160,7 +314,7 @@ export async function uploadProductImages(
         }
         
         // Skip images that are too small (likely icons/badges)
-        const minImageSize = 10 * 1024; // 10KB minimum
+        const minImageSize = 5 * 1024; // 5KB minimum
         if (buffer.length < minImageSize) {
           console.log(`[ListingProcessor] Image ${i + 1} too small (${buffer.length} bytes), likely an icon/badge - skipping`);
           continue;
@@ -198,7 +352,7 @@ export async function uploadProductImages(
         }
         
         // Skip images that are too small (likely icons/badges)
-        const minImageSize = 10 * 1024; // 10KB minimum
+        const minImageSize = 5 * 1024; // 5KB minimum
         if (buffer.length < minImageSize) {
           console.log(`[ListingProcessor] Image ${i + 1} too small (${buffer.length} bytes), likely an icon/badge - skipping`);
           continue;
@@ -217,11 +371,32 @@ export async function uploadProductImages(
         continue;
       }
 
-      // Generate unique filename with MD5 hash
-      const timestamp = Date.now();
-      const slug = productTitle.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').trim();
-      const hash = crypto.createHash('md5').update(buffer).digest('hex').substring(0, 8);
-      const fileName = `shopee-${slug}-${timestamp}-${hash}.${extension}`;
+      // Generate smart filename for better management
+      // Format: listingId_slug_hash_index.ext
+      // Example: shopee-vn.65589552_27084669548_samsung-s25_m8y6j_01.jpg
+      
+      // Use ListingID (e.g., shopee-vn.65589552_27084669548) or generate fallback
+      let fileListingId = listingId;
+      if (!fileListingId) {
+        // Fallback to timestamp if no ListingID provided
+        fileListingId = `shopee_${Date.now()}`;
+      }
+      
+      // Create short slug from title (max 30 chars for readability)
+      const slug = productTitle
+        .toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, '')
+        .replace(/\s+/g, '-')
+        .trim()
+        .substring(0, 30);
+      
+      // Image index (01, 02, 03...)
+      const imageIndex = String(i + 1).padStart(2, '0');
+      
+      // Final filename - ListingID is already unique
+      // Replace dots with dashes for filesystem compatibility
+      const safeListingId = fileListingId.replace(/\./g, '-');
+      const fileName = `${safeListingId}_${imageIndex}_${slug}.${extension}`;
 
       console.log(`[ListingProcessor] Uploading ${fileName} (${buffer.length} bytes, ${mimeType})`);
 
@@ -233,30 +408,35 @@ export async function uploadProductImages(
         // Use Strapi's official upload service
         const uploadService = strapi.plugin('upload').service('upload');
         
-        // Create a proper file object for Strapi's upload service
+        // Create a proper file object with enhanced metadata for organization
         const fileData = {
           name: fileName,
-          alternativeText: productTitle || 'Product image',
+          alternativeText: `[ITEM] ${productTitle || 'Product image'}`,
           caption: `${productTitle} - Image ${i + 1}`,
-          folder: itemsFolderId, // Set folder to Items folder (ID 4)
+          // Add custom metadata that can be used for filtering in Media Library
+          // Even though we can't set folder via API, we can use these fields for organization
         };
 
         console.log(`[ListingProcessor] Attempting upload with official upload service:`, {
           name: fileName,
           mime: mimeType,
-          size: buffer.length,
-          folder: itemsFolderId
+          size: buffer.length
         });
 
+        // Create a file object that matches Strapi's expected format
+        const fileObject = {
+          filepath: tempFilePath, // Changed from 'path' to 'filepath'
+          originalFilename: fileName,
+          mimetype: mimeType,
+          size: buffer.length,
+          tmpWorkingDirectory: tempDir,
+          getStream: () => fs.createReadStream(tempFilePath!), // Add getStream function with non-null assertion
+        };
+        
         // Use Strapi's upload service to handle everything properly
         const uploadedFiles = await uploadService.upload({
           data: fileData,
-          files: {
-            path: tempFilePath,
-            name: fileName,
-            type: mimeType,
-            size: buffer.length,
-          }
+          files: fileObject
         });
         
         const uploadedFile = Array.isArray(uploadedFiles) ? uploadedFiles[0] : uploadedFiles;
@@ -264,6 +444,8 @@ export async function uploadProductImages(
         if (uploadedFile && uploadedFile.id) {
           mediaIds.push(uploadedFile.id);
           console.log(`[ListingProcessor] ✅ Successfully uploaded image ${i + 1}, ID: ${uploadedFile.id}`);
+          // Note: Strapi 5 không hỗ trợ upload vào folder cụ thể qua API
+          // Files sẽ nằm trong "API Uploads" folder hoặc root
         } else {
           console.log(`[ListingProcessor] ⚠️ No file returned from upload for image ${i + 1}`);
         }

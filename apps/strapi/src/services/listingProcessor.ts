@@ -117,11 +117,22 @@ class ListingProcessorService {
         const category = await this.findOrCreateCategory(fixedCategory, locale);
         const item = await this.findOrCreateItem(data.product, category, locale);
         
-        // Upload images to Strapi Media Library
+        // Check if listing already has media
+        const existingMediaIds = existingListing.Media && existingListing.Media.length > 0 
+          ? existingListing.Media.map((m: any) => typeof m === 'object' ? m.id : m)
+          : [];
+        
+        // Upload images to Strapi Media Library (skip if already has images)
+        console.log('[ListingProcessor] Existing media count:', existingMediaIds.length);
         console.log('[ListingProcessor] Starting image upload for existing listing:', data.product.title);
         console.log('[ListingProcessor] Product images array:', data.product.images);
         console.log('[ListingProcessor] Images count:', data.product.images ? data.product.images.length : 0);
-        const mediaIds = await this.uploadProductImages(data.product.images || [], data.product.title || '');
+        const mediaIds = await this.uploadProductImages(
+          data.product.images || [], 
+          data.product.title || '',
+          existingMediaIds,
+          existingListing.ListingID // Pass ListingID for smart filename
+        );
         console.log('[ListingProcessor] Image upload complete, IDs:', mediaIds);
         
         // Update existing listing with new data
@@ -446,7 +457,12 @@ class ListingProcessorService {
       console.log('[ListingProcessor] Starting image upload for product:', product.title);
       console.log('[ListingProcessor] Product images array:', product.images);
       console.log('[ListingProcessor] Images count:', product.images ? product.images.length : 0);
-      const mediaIds = await this.uploadProductImages(product.images || [], product.title || '');
+      const mediaIds = await this.uploadProductImages(
+        product.images || [], 
+        product.title || '',
+        undefined,
+        listingId || undefined // Pass ListingID for smart filename (handle null)
+      );
       console.log('[ListingProcessor] Image upload complete, IDs:', mediaIds);
       
       // Convert description to Blocks format for Strapi with encoding fix
@@ -806,10 +822,10 @@ class ListingProcessorService {
    * Upload product images to Strapi Media Library using internal upload service
    * Supports: http/https URLs, // protocol-relative URLs, data:image base64
    */
-  private async uploadProductImages(imageUrls: string[], productTitle: string): Promise<number[]> {
+  private async uploadProductImages(imageUrls: string[], productTitle: string, existingMediaIds?: number[], listingId?: string): Promise<number[]> {
     // Import the new upload function
     const { uploadProductImages } = require('./uploadProductImages');
-    return uploadProductImages(this.strapi, imageUrls, productTitle);
+    return uploadProductImages(this.strapi, imageUrls, productTitle, existingMediaIds, listingId);
   }
   
   /**

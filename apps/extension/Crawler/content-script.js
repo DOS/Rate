@@ -975,40 +975,76 @@ function getShopeeProductAndSellerInfo() {
   // Product images - lấy từ gallery carousel
   let productImages = [];
   try {
-    // Strategy 1: Tìm trong carousel gallery với các class patterns khác nhau
+    // Strategy 1: Lấy từ các blocks sản phẩm chính xác của Shopee
+    // Block 1: Main product view (.airUhU chứa thumbnails)
+    // Block 2: Gallery popup (.K02C_O chứa tất cả 9 hình)
     let imageElements = document.querySelectorAll(
-      '.YJBRVb img, ' + // Main gallery images
-      '.jmcg8C img, ' + // Thumbnail images 
-      '.ztkp_R img, ' + // Shopee gallery
-      '.yvbeI6 img, ' + // Product container
-      '[class*="gallery"] img, ' + // Any gallery class
-      '[class*="image-list"] img, ' + // Image list
-      '[class*="carousel"] img, ' + // Carousel
-      '.product-image img' // Generic product image
+      '.K02C_O .jA1mTx img, ' + // Gallery popup block (tất cả 9 hình khi click xem)
+      '.airUhU .jA1mTx img, ' + // Main thumbnails (5 hình hiển thị)
+      '.YM40Nc img, ' + // Product image container
+      '.UkIsx8 img' // Picture element images
     );
     
     console.log('[DEBUG] Found image elements with selectors:', imageElements.length);
     
-    // Strategy 2: Nếu không tìm thấy, tìm trực tiếp Shopee image URLs
-    if (imageElements.length === 0) {
-      imageElements = document.querySelectorAll('img[src*="img.susercontent.com"], img[data-src*="img.susercontent.com"]');
-      console.log('[DEBUG] Using fallback - found Shopee images:', imageElements.length);
+    // Strategy 2: Nếu chỉ có 5 hình (thumbnails), tìm thêm hình ẩn
+    if (imageElements.length <= 5) {
+      // Tìm tất cả containers có thể chứa hình (cả visible và hidden)
+      const allContainers = document.querySelectorAll('.UBG7wZ .jA1mTx img');
+      if (allContainers.length > imageElements.length) {
+        imageElements = allContainers;
+        console.log('[DEBUG] Found more images in UBG7wZ containers:', imageElements.length);
+      }
     }
     
+    // Strategy 3: Nếu vẫn không đủ, lấy tất cả hình product từ Shopee CDN
+    if (imageElements.length < 9) {
+      const allProductImages = document.querySelectorAll(
+        'img[src*="img.susercontent.com/file/"]:not([src*="shopee-pcmall"]):not([src*="sg-11134201"]):not([src*="icon"])'
+      );
+      if (allProductImages.length > imageElements.length) {
+        imageElements = allProductImages;
+        console.log('[DEBUG] Using all product images from CDN:', imageElements.length);
+      }
+    }
+    
+    // Fallback cuối cùng
+    if (imageElements.length === 0) {
+      imageElements = document.querySelectorAll('img[src*="img.susercontent.com"], img[data-src*="img.susercontent.com"]');
+      console.log('[DEBUG] Using final fallback - found Shopee images:', imageElements.length);
+    }
+    
+    // Process và remove duplicates
+    const uniqueUrls = new Set();
     productImages = Array.from(imageElements)
       .map(img => {
         // Get high-res version by removing size params from URL
         let src = img.src || img.dataset.src || img.getAttribute('src') || '';
-        // Remove query params that limit size
-        src = src.split('?')[0];
+        // Remove query params and size modifiers to get base URL
+        src = src.split('?')[0].split('@')[0];
         // Ensure we get full URL
         if (src && !src.startsWith('http')) {
           src = src.startsWith('//') ? 'https:' + src : 'https://down-vn.img.susercontent.com/file/' + src;
         }
         return src;
       })
-      .filter(src => src && src.includes('img.susercontent.com'))
-      .slice(0, 10); // Limit to 10 images
+      .filter(src => {
+        if (!src || !src.includes('img.susercontent.com')) return false;
+        
+        // Extract file ID from URL to check for duplicates
+        const fileMatch = src.match(/\/file\/([a-zA-Z0-9\-_]+)/);
+        if (fileMatch) {
+          const fileId = fileMatch[1];
+          // Skip if we already have this file ID
+          if (uniqueUrls.has(fileId)) {
+            console.log('[DEBUG] Skipping duplicate image:', fileId);
+            return false;
+          }
+          uniqueUrls.add(fileId);
+        }
+        return true;
+      })
+      .slice(0, 10); // Limit to 10 unique images
       
     console.log('[Shopee] Product images found:', productImages.length);
     if (productImages.length > 0) {
