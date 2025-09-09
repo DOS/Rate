@@ -13,22 +13,36 @@ import FooterDynamic from "./components/footer/FooterDynamic";
 import BackToTop from "./components/back-to-top";
 
 async function fetchNavbar(locale: string) {
-  const res = await PublicStrapiClient.fetchOne("api::navbar.navbar", undefined, {
-    locale: locale as any,
-    populate: { links: true },
-  })
-  const data = res?.data
-  return {
-    links: (data?.links ?? []) as any,
-    logoUrl: undefined as string | undefined,
+  try {
+    const res = await PublicStrapiClient.fetchOne("api::navbar.navbar", undefined, {
+      locale: locale as any,
+      populate: { links: true },
+    })
+    const data = res?.data
+    return {
+      links: (data?.links ?? []) as any,
+      logoUrl: undefined as string | undefined,
+    }
+  } catch (err) {
+    console.error("Error fetching navbar (fallback to defaults)", err)
+    return {
+      links: [] as any,
+      logoUrl: undefined as string | undefined,
+    }
   }
 }
 
 export default async function Home({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params
   const navbarData = await fetchNavbar(locale)
-  const footerRes = await PublicStrapiClient.fetchOne("api::footer.footer", undefined, { locale: locale as any, populate: { sections: { populate: { links: true } }, links: true, socialLinks: true } })
-  const footerData = footerRes?.data as any
+  let footerData: any = {}
+  try {
+    const footerRes = await PublicStrapiClient.fetchOne("api::footer.footer", undefined, { locale: locale as any, populate: { sections: { populate: { links: true } }, links: true, socialLinks: true } })
+    footerData = footerRes?.data as any
+  } catch (err) {
+    console.error("Error fetching footer (fallback to defaults)", err)
+    footerData = {}
+  }
   return (
     <>
      {/* Navbar UI template + dữ liệu Strapi */}

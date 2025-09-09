@@ -12,7 +12,7 @@
   },
   "pluginOptions": {
     "i18n": {
-      "localized": true
+      "localized": false
     }
   },
   "attributes": {
@@ -143,8 +143,7 @@
           "localized": false
         }
       },
-      "required": true,
-      "unique": true
+      "required": true
     },
     "Price": {
       "type": "decimal",

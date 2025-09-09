@@ -77,65 +77,116 @@ class RedisWorkerService {
 
     console.log('[RedisWorker] Starting to consume validation requests...');
     
-    // Track last processed message ID  
-    let lastId = '-'; // Start from beginning
+    // Process pending messages first (messages that were read but not acknowledged)
+    await this.processPendingMessages(client);
     
     while (this.isRunning) {
       try {
-        console.log('[RedisWorker] Attempting to read all messages from beginning...');
+        console.log('[RedisWorker] Reading new messages from stream...');
         
-        // Use XRANGE to read ALL messages from the beginning
-        // node-redis library syntax  
-        const messages = await client.xRange(
-          'validation_requests',
-          '-',   // From beginning
-          '+'    // To end
+        // Use XREADGROUP to read only NEW messages that haven't been delivered to this consumer group
+        const messages = await client.xReadGroup(
+          this.consumerGroup,
+          this.consumerName,
+          [
+            {
+              key: 'validation_requests',
+              id: '>' // Only read new messages
+            }
+          ],
+          {
+            COUNT: 10, // Process up to 10 messages at a time
+            BLOCK: 5000 // Block for 5 seconds if no messages
+          }
         );
 
-        console.log(`[RedisWorker] XRANGE returned: ${messages ? messages.length : 'null'} messages`);
-        
         if (messages && messages.length > 0) {
-          console.log(`[RedisWorker] Found ${messages.length} total messages in stream`);
+          console.log(`[RedisWorker] Received ${messages[0].messages.length} new messages`);
           
-          // Process only unprocessed messages
-          let processed = false;
-          for (const message of messages) {
-            const messageId = message.id;
-            const fields = message.message;
-            
-            // Skip already processed messages
-            if (lastId !== '-' && messageId <= lastId) {
-              continue;
+          for (const stream of messages) {
+            for (const message of stream.messages) {
+              const messageId = message.id;
+              const messageData = message.message;
+              
+              console.log(`[RedisWorker] Processing message ${messageId}`);
+              console.log(`[RedisWorker] Message data keys:`, Object.keys(messageData));
+              
+              try {
+                await this.processMessage(messageId, messageData);
+                
+                // Acknowledge the message after successful processing
+                await client.xAck('validation_requests', this.consumerGroup, messageId);
+                console.log(`[RedisWorker] Successfully processed and acknowledged message ${messageId}`);
+              } catch (error) {
+                console.error(`[RedisWorker] Failed to process message ${messageId}:`, error);
+                // Message will remain in pending list for retry
+              }
             }
-            
-            // Convert fields object to our format
-            const messageData: Record<string, string> = fields;
-            
-            console.log(`[RedisWorker] Processing message ${messageId}`);
-            console.log(`[RedisWorker] Message data keys:`, Object.keys(messageData));
-            
-            await this.processMessage(messageId, messageData);
-            
-            // Update last processed ID
-            lastId = messageId;
-            processed = true;
-            console.log(`[RedisWorker] Successfully processed message ${messageId}`);
-          }
-          
-          if (!processed) {
-            console.log('[RedisWorker] All messages already processed, waiting...');
-            await new Promise(resolve => setTimeout(resolve, 5000));
           }
         } else {
-          // No messages at all
-          console.log('[RedisWorker] No messages in stream, waiting...');
-          await new Promise(resolve => setTimeout(resolve, 5000));
+          console.log('[RedisWorker] No new messages, waiting...');
         }
       } catch (error) {
         console.error('[RedisWorker] Error consuming messages:', error);
         // Wait before retry
         await new Promise(resolve => setTimeout(resolve, 5000));
       }
+    }
+  }
+
+  /**
+   * Process pending messages (messages that were read but not acknowledged)
+   */
+  private async processPendingMessages(client: any) {
+    try {
+      console.log('[RedisWorker] Checking for pending messages...');
+      
+      const pending = await client.xPending('validation_requests', this.consumerGroup);
+      
+      if (pending && pending.pending > 0) {
+        console.log(`[RedisWorker] Found ${pending.pending} pending messages, processing...`);
+        
+        // Claim and process pending messages
+        const pendingMessages = await client.xPendingRange(
+          'validation_requests',
+          this.consumerGroup,
+          '-',
+          '+',
+          10 // Process up to 10 pending messages
+        );
+        
+        for (const msg of pendingMessages) {
+          // Claim the message for this consumer
+          const claimed = await client.xClaim(
+            'validation_requests',
+            this.consumerGroup,
+            this.consumerName,
+            60000, // 60 seconds idle time
+            msg.id
+          );
+          
+          if (claimed && claimed.length > 0) {
+            const messageId = claimed[0].id;
+            const messageData = claimed[0].message;
+            
+            console.log(`[RedisWorker] Reclaiming pending message ${messageId}`);
+            
+            try {
+              await this.processMessage(messageId, messageData);
+              
+              // Acknowledge the message
+              await client.xAck('validation_requests', this.consumerGroup, messageId);
+              console.log(`[RedisWorker] Successfully processed pending message ${messageId}`);
+            } catch (error) {
+              console.error(`[RedisWorker] Failed to process pending message ${messageId}:`, error);
+            }
+          }
+        }
+      } else {
+        console.log('[RedisWorker] No pending messages found');
+      }
+    } catch (error) {
+      console.error('[RedisWorker] Error processing pending messages:', error);
     }
   }
 
@@ -245,12 +296,23 @@ class RedisWorkerService {
           
           // Transform data format for listing processor
           // Extension sends data as: item.product.field, item.seller.field, item.review.field
+          // Validate if we have minimum required data
+          if (!firstItem.product?.title && !firstItem.review?.product?.productName) {
+            console.warn('[RedisWorker] Missing product title, skipping this product');
+            console.warn('[RedisWorker] Available data:', JSON.stringify(firstItem, null, 2));
+            results.push({
+              success: false,
+              error: 'Missing product title - insufficient data from extension'
+            });
+            continue;
+          }
+
           const shopeeData = {
             product: {
-              // Try multiple fields for product title
+              // Try multiple fields for product title - validate data
               title: firstItem.product?.title || 
                      firstItem.review?.product?.productName || 
-                     '[Livestream] Điện Thoại Samsung Galaxy S25 Ultra 256GB',
+                     '',
               productUrl: firstItem.product?.url || 
                          firstItem.review?.product?.productUrl || 
                          productUrl || '',  // Use the normalized URL
@@ -262,6 +324,9 @@ class RedisWorkerService {
               price: parsePrice(firstItem.product?.price) || 
                      firstItem.review?.product?.priceVND || 
                      parsePrice(firstItem.review?.product?.price) || 0,
+              // Handle originalPrice separately
+              originalPrice: parsePrice(firstItem.product?.originalPrice) || 
+                            parsePrice(firstItem.product?.price) || 0,
               currency: firstItem.product?.currency || 'VND',
               category: firstItem.product?.category || 
                        firstItem.review?.product?.categories?.join(' > ') || '',
@@ -276,7 +341,7 @@ class RedisWorkerService {
               soldCount: parseInt(String(firstItem.product?.soldCount || firstItem.review?.product?.soldCount || '0').replace(/[^0-9]/g, '')),
               // Add the missing fields - extension sends these directly
               productReviewCount: parseInt(String(firstItem.product?.productReviewCount || allReviews.length || '0')),
-              likedCount: parseInt(String(firstItem.product?.likedCount || '0'))
+              likedCount: parseInt(String(firstItem.product?.likedCount || firstItem.product?.favoriteCount || '0'))
             },
             seller: {
               name: firstItem.seller?.name || 

@@ -7,37 +7,45 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Rate Platform is an anti-scam ecosystem for Vietnamese users, consisting of a Strapi CMS backend, Next.js frontend, browser extension, and data validation services in a Turborepo monorepo structure.
+Rate Platform is an anti-scam ecosystem for Vietnamese users, built as a Turborepo monorepo with AI-powered features including fake review detection, sentiment analysis, and fraud prevention using GPT-4o-mini.
 
 ## Tech Stack
 
 - **Frontend**: Next.js 15 (App Router), React 18, TailwindCSS 4, Shadcn/ui
-- **Backend**: Strapi 5.20.0 (TypeScript), PostgreSQL 17
+- **Backend**: Strapi 5.23.1 (TypeScript), PostgreSQL 17
+- **AI Service**: OpenAI GPT-4o-mini for scam detection and analysis
 - **Languages**: Node.js 22.x, TypeScript 5.x, Python (validator)
-- **Package Manager**: Yarn 1.22.x workspaces
+- **Package Manager**: Yarn 1.22.x workspaces (NEVER use npm/npx)
+- **Infrastructure**: Docker, Redis, FlareSolverr
 
 ## Essential Commands
 
 ### Development
 
 ```bash
-# Install dependencies (use yarn, not npm)
+# Install dependencies (ALWAYS use yarn, NEVER npm)
 yarn install
 
 # Setup environment files
 yarn setup:apps
 
-# Start all services
+# Start all services (Strapi + Next.js)
 yarn dev
+
+# Start specific service
+yarn dev:strapi      # Backend only (port 1337)
+yarn dev:web         # Frontend only (port 3000)
 
 # Access points:
 # Frontend: http://localhost:3000
 # Strapi Admin: http://localhost:1337/admin
+# API: http://localhost:1337/api
+# GraphQL: http://localhost:1337/graphql
 
 # IMPORTANT: Only this project uses ports 3000 and 1337
-# If port conflict occurs, kill the process using the port:
-# Windows: powershell -Command "Stop-Process -Id [PID] -Force"
-# Check port usage: netstat -ano | grep [PORT]
+# If port conflict occurs, kill specific process by PID:
+# Windows: Get-Process node | Where-Object {$_.CommandLine -like "*1337*"}
+# Then: Stop-Process -Id [PID]
 ```
 
 ### Build & Deploy
@@ -47,34 +55,25 @@ yarn dev
 yarn build
 
 # Build specific app
-yarn build:ui        # Next.js frontend
 yarn build:strapi    # Strapi backend
+yarn build:web       # Next.js frontend
+
+# Type generation for Strapi
+yarn workspace @repo/strapi generate:types
 ```
 
 ### Code Quality
 
 ```bash
-# Lint code
-yarn lint
-
-# Format code
-yarn format
-
-# Type checking
-yarn type-check
-
 # Run all quality checks before commit
-yarn lint && yarn format && yarn type-check
-```
+yarn lint            # ESLint
+yarn format          # Prettier
+yarn type-check      # TypeScript
 
-### Testing
-
-```bash
-# Run automated test workflow (PowerShell)
-yarn auto-test
-
-# Run Playwright tests for smart-component-filter plugin
-yarn test-plugin
+# Run tests
+yarn test            # All tests
+yarn test-plugin     # Smart-component-filter plugin tests
+yarn auto-test       # PowerShell automated test workflow
 ```
 
 ## Architecture
@@ -83,127 +82,210 @@ yarn test-plugin
 
 ```
 apps/
-├── strapi/           # Strapi CMS with custom plugins
-│   └── src/plugins/smart-component-filter/  # Production plugin
-└── ui/               # Next.js frontend application
+├── strapi/              # Strapi CMS backend
+│   ├── src/api/         # API endpoints and content types
+│   ├── src/admin/       # Admin panel customizations
+│   ├── src/components/  # Strapi components
+│   ├── src/services/    # Business logic services
+│   └── config/          # Strapi configuration
+├── web/                 # Next.js frontend application
+│   ├── app/            # App Router pages and layouts
+│   ├── components/     # React components
+│   └── lib/            # Utilities and helpers
+└── importer/           # Data crawler with AI processing
 
-packages/             # Shared packages
-├── design-system/    # TailwindCSS and CkEditor configs
-├── eslint-config/    # Shared ESLint rules
-├── prettier-config/  # Shared Prettier rules
-├── typescript-config/# Shared TypeScript configs
-└── validator/        # TypeScript validation package
+packages/               # Shared packages
+├── ai/                 # OpenAI GPT-4o-mini integration
+├── design-system/      # TailwindCSS 4 and CKEditor configs
+├── eslint-config/      # Shared ESLint rules
+├── prettier-config/    # Shared Prettier rules
+├── shared-data/        # API contracts and TypeScript schemas
+├── typescript-config/  # Shared TypeScript configs
+└── validator/          # TypeScript validation package
 
-Modules/             # Independent services
-├── Extension/       # Browser extension (Manifest V3)
-├── Importer/        # Data crawler with FlareSolverr
-└── Validator/       # Python async validation worker
+Modules/                # Independent services (legacy structure)
+├── Extension/          # Browser extension (Manifest V3)
+├── Importer/          # Legacy crawler module
+└── Validator/         # Python async validation worker
 ```
 
 ### Key Architectural Patterns
 
-1. **Smart Component Filter Plugin**: Strapi plugin that reduces UI complexity by 43% through intelligent filtering
-2. **Mirror Fields Pattern**: Custom field mirroring system for data synchronization (see docs/architecture/)
-3. **Data Pipeline**: Crawler → Validator → Importer flow with quality scoring
-4. **Anti-Detection**: Browser extension uses stealth techniques for scam detection
+1. **Turborepo Monorepo**: Efficient build system with caching
+2. **Shared Data Package**: TypeScript API contracts between frontend and backend
+3. **AI Processing Pipeline**: Crawler → AI Analysis → Validator → Database
+4. **Redis Caching**: 90%+ cache hit rate for AI results
+5. **Docker Services**: PostgreSQL and Redis run in containers
 
 ### Database
 
-- PostgreSQL 17 with user `JOY` and database `rate_db`
-- UUID v7 extension for efficient ID generation
-- Migrations handled by Strapi
+- **PostgreSQL 17**: Container name `DB`, user `JOY`, database `rate_db`
+- **UUID v7 extension**: For efficient ID generation
+- **Migrations**: Handled by Strapi
+- **Access**: `docker exec DB psql -U JOY -d rate_db`
 
 ### Environment Variables
 
 Required `.env` files:
 
-- `apps/strapi/.env`: Database credentials, AWS S3, API keys
-- `apps/web/.env.local`: Strapi API URL/tokens, NextAuth secrets
+- `apps/strapi/.env`: Database credentials, AWS S3, API keys, Strapi secrets
+- `apps/web/.env.local`: Strapi API URL/tokens, NextAuth secrets, app URLs
+- Root `.env`: OpenAI API key and AI service configuration
+
+Key variables:
+```bash
+# Root .env
+OPENAI_API_KEY=sk-proj-xxxxx
+OPENAI_MODEL=gpt-4o-mini
+AI_CACHE_ENABLED=true
+
+# apps/strapi/.env
+DATABASE_CLIENT=postgres
+DATABASE_HOST=localhost
+DATABASE_PORT=5432
+DATABASE_NAME=ratebox
+DATABASE_USERNAME=JOY
+DATABASE_PASSWORD=<password>
+
+# apps/web/.env.local
+STRAPI_URL=http://127.0.0.1:1337
+STRAPI_REST_READONLY_API_KEY=<api-key>
+APP_PUBLIC_URL=http://localhost:3000
+```
 
 ## Development Guidelines
 
+### CRITICAL RULES - NEVER VIOLATE
+1. **NEVER hardcode fake/test data** - Always use real data from sources
+2. **NEVER use fallback values with fake content** - Use empty strings or skip processing
+3. **NEVER cheat or create fake listings** - Validate and reject if data insufficient
+4. **ALWAYS validate data completeness** - Skip/warn if missing critical fields
+5. **ALWAYS log clearly when data is missing** - Help debug data issues
+
 ### Package Management
 
-- **IMPORTANT**: Always use `yarn` commands, NEVER use `npm` or `npx` in this project
-- Add dependencies to specific workspace: `yarn workspace @app/ui add <package>`
+- **CRITICAL**: Always use `yarn`, NEVER use `npm` or `npx`
+- Add dependencies: `yarn workspace @repo/[workspace] add <package>`
 - Root dependencies: `yarn add -W <package>`
-- For TypeScript checks: Use `yarn` scripts, not `npx tsc`
+- Install: `yarn install` (NOT npm install)
+- Scripts: Use yarn scripts defined in package.json
 
 ### TypeScript
 
-- Strict mode enabled
-- Use path aliases configured in tsconfig.json
-- Validator package provides shared validation schemas
+- Strict mode enabled across all packages
+- Use path aliases from tsconfig.json
+- Generate Strapi types: `yarn workspace @repo/strapi generate:types`
+- Shared types in `packages/shared-data`
 
 ### Strapi Development
 
-- Custom plugins in `apps/strapi/src/plugins/`
-- API extensions in `apps/strapi/src/api/`
+- Custom content types in `apps/strapi/src/api/`
+- Services for business logic in `apps/strapi/src/services/`
 - Admin customizations in `apps/strapi/src/admin/`
+- API tokens required for frontend-backend communication
 
 ### Next.js Development
 
-- App Router with Server Components
+- App Router with Server Components (app/ directory)
 - TailwindCSS 4 with custom design system
-- Shadcn/ui components in `apps/web/components/ui/`
-- API routes in `apps/web/app/api/`
+- Shadcn/ui components in `components/ui/`
+- API routes in `app/api/`
+- Use environment variables from `.env.local`
+
+### AI Integration
+
+```bash
+# AI Processing Pipeline
+cd apps/importer
+
+# 1. Crawl data
+ts-node-esm Scripts/crawl.ts links
+ts-node-esm Scripts/crawl.ts crawl
+
+# 2. Process with AI (GPT-4o-mini)
+ts-node-esm Scripts/ai-batch-processor.ts \
+  -i ./Data/crawled \
+  -o ./Data/processed \
+  -b 50  # 50 records per batch
+
+# 3. Push to validation
+ts-node-esm Scripts/push-to-validation-with-ai.ts
+```
 
 ### Testing Approach
 
-- Playwright for E2E testing (smart-component-filter plugin)
-- PowerShell automation scripts for workflow testing
+- Playwright for E2E testing
+- Jest for unit tests
+- PowerShell automation scripts: `yarn auto-test`
 - Manual testing for browser extension
-
-## Module-Specific Information
-
-### Browser Extension (`Modules/Extension/`)
-
-- Manifest V3 for Chrome/Edge
-- Build: `npm run build` in Extension directory
-- Load unpacked extension from `dist/` folder
-
-### Data Importer (`Modules/Importer/`)
-
-- Requires FlareSolverr Docker container running
-- Config in `config.json`
-- Run: `python main.py`
-
-### Validator Service (`Modules/Validator/`)
-
-- Redis streams for job queue
-- PostgreSQL for data storage
-- Run: `python worker.py`
-
-## Production Deployment
-
-- **Frontend**: Vercel/Heroku with standalone Next.js output
-- **Backend**: Docker containers with managed PostgreSQL
-- **Storage**: AWS S3 for Strapi file uploads
-- **Monitoring**: Sentry integration for error tracking
-
-## Critical Notes
-
-1. **Node Version**: Must use Node.js 22.x (enforced by engines)
-2. **Database**: PostgreSQL 17 required (use Docker if needed)
-3. **Localization**: Vietnamese (vi), English (en), Czech (cs) supported
-4. **API Tokens**: Strapi API tokens required for frontend-backend communication
-5. **File Uploads**: Configure AWS S3 for production Strapi deployments
 
 ## Docker Services
 
-**IMPORTANT**: PostgreSQL and Redis run in Docker containers:
+**IMPORTANT**: Core services run in Docker:
 
-- **PostgreSQL**: Container name `DB`, user `JOY`, database `rate_db`
-- **Redis**: Container name `redis`, used for job queues and caching
-- Access PostgreSQL: `docker exec DB psql -U JOY -d rate_db -c "SQL_QUERY"`
-- Access Redis: `docker exec redis redis-cli COMMAND`
-- Luôn xài yarn trong workspace này
+- **PostgreSQL**: Container `DB`, port 5432
+- **Redis**: Container `redis`, port 6379
+- **FlareSolverr**: For anti-bot bypass, port 8191
+
+Docker commands:
+```bash
+# Start database
+cd apps/strapi && docker compose up -d db
+
+# Access PostgreSQL
+docker exec DB psql -U JOY -d rate_db
+
+# Access Redis
+docker exec redis redis-cli
+```
 
 ## Process Management
 
-**IMPORTANT**: NEVER kill all Node.js processes indiscriminately using commands like `Stop-Process -Name node -Force`
+**CRITICAL**: NEVER kill all Node.js processes indiscriminately
 
-- Always identify the specific process you need to terminate first
-- Use `Get-Process node` to list all Node processes with their IDs and command lines
-- Kill only the specific process by ID: `Stop-Process -Id <PID>`
-- Killing all Node processes can terminate critical services including Claude Code itself
+- Identify specific process: `Get-Process node`
+- Kill by PID only: `Stop-Process -Id <PID>`
+- Check port usage: `netstat -ano | findstr :[PORT]`
+
+## Common Development Tasks
+
+### Database Operations
+
+```bash
+# Backup database
+docker exec -t DB pg_dump -U JOY rate_db > backup.sql
+
+# Restore database
+docker exec -i DB psql -U JOY rate_db < backup.sql
+
+# Reset database
+docker exec DB psql -U JOY -d rate_db -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+```
+
+### Debugging
+
+```bash
+# Check service health
+curl http://localhost:1337/api/health
+curl http://localhost:3000/api/health
+
+# View logs
+docker logs DB
+docker logs redis
+
+# Clear caches
+yarn cache clean
+Remove-Item -Recurse -Force node_modules/.cache
+```
+
+## Critical Notes
+
+1. **Node Version**: Must use Node.js 22.x
+2. **Yarn Version**: Must use Yarn 1.22.x (enforced by preinstall script)
+3. **Never use npm**: Project uses Yarn workspaces exclusively
+4. **Database**: PostgreSQL 17 in Docker container named `DB`
+5. **Ports**: 3000 (Next.js), 1337 (Strapi) - ensure no conflicts
+6. **API Tokens**: Configure Strapi API tokens for frontend access
+7. **File Uploads**: AWS S3 configuration required for production
+8. **AI Service**: OpenAI API key required for scam detection features
+9. **Language**: Always respond in Vietnamese unless specified otherwise

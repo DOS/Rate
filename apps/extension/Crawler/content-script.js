@@ -665,13 +665,28 @@ function getShopeeProductAndSellerInfo() {
   let shipFrom = '';
   let stock = 0;
 
-  // Tên sản phẩm
+  // Tên sản phẩm - thêm nhiều selectors để tương thích khi Shopee đổi
   const nameNode = document.querySelector('.vR6K3w')
     || document.querySelector('h1[data-sqe="name"]')
     || document.querySelector('._44qnta')
-    || document.querySelector('.qaNIZv');
-  if (nameNode) productName = nameNode.textContent.trim();
-  else console.warn('[Shopee] Không tìm thấy tên sản phẩm');
+    || document.querySelector('.qaNIZv')
+    || document.querySelector('h1')  // Generic h1 fallback
+    || document.querySelector('[class*="product"][class*="name"]')  // Class contains product + name
+    || document.querySelector('[class*="item"][class*="title"]')  // Class contains item + title
+    || document.querySelector('.flex-auto.flex-column > div:first-child');  // Structure-based fallback
+  
+  if (nameNode) {
+    productName = nameNode.textContent.trim();
+    console.log('[Shopee] ✅ Product name found:', productName);
+  } else {
+    console.error('[Shopee] ❌ CRITICAL: Cannot find product title!');
+    console.error('[Shopee] Tried selectors: .vR6K3w, h1[data-sqe="name"], ._44qnta, .qaNIZv, h1, etc.');
+    // Debug help
+    const h1s = document.querySelectorAll('h1');
+    if (h1s.length > 0) {
+      console.log('[Shopee] Found', h1s.length, 'h1 elements. First h1:', h1s[0].textContent?.substring(0, 100));
+    }
+  }
 
   // Giá sản phẩm (nhiều khả năng Shopee đổi class)
   let priceNode = document.querySelector('.pmmxKx')

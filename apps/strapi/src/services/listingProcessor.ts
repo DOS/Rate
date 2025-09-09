@@ -62,8 +62,8 @@ interface ShopeeData {
 
 interface ProcessingResult {
   success: boolean;
-  action: 'existing_listing' | 'created_listing' | 'updated_existing_listing';
-  listingId?: number;
+  action: 'existing_listing' | 'created_listing' | 'updated_existing_listing' | 'skipped_duplicate';
+  listingId?: number | null;
   message: string;
 }
 
@@ -74,7 +74,7 @@ interface BatchResult {
     itemId: string;
     success: boolean;
     action?: string;
-    listingId?: number;
+    listingId?: number | null;
     message?: string;
     error?: string;
   }>;
@@ -176,6 +176,17 @@ class ListingProcessorService {
 
       // Tạo listing mới
       const newListing = await this.createNewListing(data, platform.id);
+      
+      // Check if listing was actually created (might be null due to duplicate key error)
+      if (!newListing) {
+        console.log('[ListingProcessor] ⚠️ Could not create listing - likely duplicate key error handled internally');
+        return {
+          success: false,
+          action: 'skipped_duplicate',
+          listingId: null,
+          message: 'Could not create listing - duplicate key error, but listing not found'
+        };
+      }
       
       console.log('[ListingProcessor] ✨ Created new listing:', newListing.id, 'ListingID:', newListing.ListingID);
       return {
@@ -448,15 +459,10 @@ class ListingProcessorService {
           ModelNumber: this.extractModelNumber(itemTitle),
           PlatformIdentifiers: platformIdentifiers,
           Category: category ? category.id : null,
-          DynamicFields: {
-            originalPrice: product.price,
-            createdAt: new Date().toISOString(),
-            stock: product.stock,
-            soldCount: product.soldCount
-          },
+          // Remove DynamicFields as it's not in schema
           publishedAt: new Date().toISOString()
         },
-        locale: locale
+        locale: locale || 'vi' // Locale should be outside data object
       } as any);
       
       console.log('[ListingProcessor] Created new Item with ID:', newItem.id, 'MatchCode:', matchCode);
@@ -524,8 +530,9 @@ class ListingProcessorService {
       const fixedCategory = this.fixVietnameseEncoding(product.category || '');
       const category = await this.findOrCreateCategory(fixedCategory, locale);
       
-      // Find or create Item for this product (Item is the generic representation)
-      const item = await this.findOrCreateItem(product, category, locale);
+      // NOTE: We'll create/find Item AFTER creating the listing successfully
+      // This prevents creating orphaned Items when listing creation fails
+      let item = null;
       
       // Upload images to Strapi Media Library (Items folder)
       console.log('[ListingProcessor] Starting image upload for product:', product.title);
@@ -553,8 +560,15 @@ class ListingProcessorService {
         }
       ] : [];
 
+      // Validate title exists - NEVER use fallback
+      if (!product.title || product.title.trim() === '') {
+        console.error('[ListingProcessor] Missing product title, cannot create listing');
+        console.error('[ListingProcessor] Product data:', JSON.stringify(product, null, 2));
+        throw new Error('Product title is required to create listing');
+      }
+      
       // Fix encoding issues with Vietnamese characters in title
-      const fixedTitle = this.fixVietnameseEncoding(product.title || 'Sản phẩm Shopee');
+      const fixedTitle = this.fixVietnameseEncoding(product.title);
       
       // Format proper Shopee product URL
       const formattedUrl = product.productUrl && product.productUrl.includes('shopee.vn/i.')
@@ -563,6 +577,7 @@ class ListingProcessorService {
       
       // Chuẩn bị listing data với tất cả fields mới
       const listingData: any = {
+        // Let Strapi 5 auto-generate document_id
         Title: fixedTitle,
         Slug: this.generateSlug(fixedTitle),
         URL: formattedUrl || '',
@@ -572,12 +587,13 @@ class ListingProcessorService {
         ReviewNotes: `Nhập từ Shopee. Giá: ${product.price?.toLocaleString('vi-VN')} ${product.currency}. Người bán: ${this.toTitleCase(this.fixVietnameseEncoding(seller.name || ''))}`,
         ListingID: listingId, // ID unique từ platform - use Strapi field name
         Platform: platformId, // Relation tới Platform
-        Item: item ? item.id : null, // Link to Item entity
+        Item: null, // Will be linked after listing is created successfully
         publishedAt: new Date().toISOString(), // Auto-publish the listing
+        // KHÔNG thêm locale vào data - locale phải ở trong params của entityService.create
         
         // Generic fields - data chung cho mọi platform
         Price: product.price || 0,
-        OriginalPrice: product.price || 0, // Add OriginalPrice (can be updated later if have discount info)
+        OriginalPrice: product.originalPrice || product.price || 0, // Use originalPrice if available
         Currency: product.currency || 'VND',
         PriceUnit: 'Item', // Default là per Item (capital I), có thể là 'Hour', 'Day', 'Month'
         AverageRating: product.rating || 0, // Rating from Shopee
@@ -654,12 +670,12 @@ class ListingProcessorService {
       };
 
       // Log the data being sent to Strapi
-      console.log('[ListingProcessor] Creating listing with locale:', listingData.locale);
+      console.log('[ListingProcessor] Creating listing with locale:', locale);
       console.log('[ListingProcessor] Full listing data:', JSON.stringify({
         Title: listingData.Title,
         ListingID: listingData.ListingID,
         Platform: listingData.Platform,
-        locale: listingData.locale,
+        locale: locale, // This is passed in params, not data
         Price: listingData.Price,
         Currency: listingData.Currency
       }, null, 2));
@@ -667,7 +683,7 @@ class ListingProcessorService {
       // Log final data before creating
       console.log('[ListingProcessor] Creating listing with data:', {
         Title: listingData.Title,
-        locale: listingData.locale,
+        locale: locale, // This will be in params
         Platform: listingData.Platform,
         ListingID: listingData.ListingID,
         Category: listingData.Category,
@@ -681,23 +697,79 @@ class ListingProcessorService {
       try {
         newListing = await this.strapi.entityService.create('api::listing.listing', {
           data: listingData,
-          locale: 'vi', // Force Vietnamese locale here
+          // locale: 'vi', // TEMPORARILY COMMENTED to test if locale is causing the issue
           populate: ['Media', 'Platform', 'Category'] // Populate relations to verify
         } as any);
         
         console.log('[ListingProcessor] Created listing with ID:', newListing.id, 'Locale:', 'vi');
         console.log('[ListingProcessor] Listing has Media:', mediaIds.length || 0, 'images uploaded');
+        
+        // Now find or create Item AFTER listing is successfully created
+        item = await this.findOrCreateItem(product, category, locale);
+        
+        // Update listing to link with Item if found/created
+        if (item) {
+          newListing = await this.strapi.entityService.update('api::listing.listing', newListing.id, {
+            data: {
+              Item: item.id
+            }
+            // locale: 'vi' // TEMPORARILY COMMENTED
+          } as any);
+          console.log('[ListingProcessor] Linked listing with Item ID:', item.id);
+        }
       } catch (error: any) {
+        // Log full error for debugging
+        console.log('[ListingProcessor] Error creating listing:', {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          name: error.name
+        });
+        
         // Check if it's a duplicate key error (PostgreSQL error code 23505)
         if (error.code === '23505' || error.message?.includes('duplicate key') || error.message?.includes('unique constraint')) {
-          console.log('[ListingProcessor] Duplicate listing detected, fetching existing one...');
+          console.log('[ListingProcessor] Duplicate listing detected, trying to find existing one...');
+          
+          // Wait a bit for the transaction to complete
+          await new Promise(resolve => setTimeout(resolve, 100));
           
           // Re-fetch the existing listing that was created by another parallel process
           const platformId = typeof platform.id === 'string' ? parseInt(platform.id) : platform.id;
           const existing = await this.findExistingListing(product.productUrl || '', platformId);
           if (existing) {
             console.log('[ListingProcessor] Found existing listing created by parallel process, ID:', existing.id);
-            return existing;
+            
+            // Find or create Item for this existing listing
+            item = await this.findOrCreateItem(product, category, locale);
+            
+            // Update the existing listing with new data and link Item
+            const updatedListing = await this.strapi.entityService.update('api::listing.listing', existing.id, {
+              data: {
+                UsageCount: product.soldCount || existing.UsageCount || 0,
+                LastUpdated: new Date().toISOString(),
+                Stock: product.stock || existing.Stock || 0,
+                AverageRating: product.rating || existing.AverageRating || 0,
+                TotalReviews: product.productReviewCount || existing.TotalReviews || 0,
+                FavoriteCount: product.likedCount || existing.FavoriteCount || 0,
+                Item: item ? item.id : existing.Item,
+                // Update Media if we have new images
+                Media: mediaIds.length > 0 ? mediaIds : existing.Media
+              }
+              // locale: 'vi' // TEMPORARILY COMMENTED
+            } as any);
+            
+            console.log('[ListingProcessor] Updated existing listing with latest data');
+            if (item) {
+              console.log('[ListingProcessor] Linked listing with Item ID:', item.id);
+            }
+            return updatedListing;
+          } else {
+            // If still can't find, log the details for debugging
+            console.error('[ListingProcessor] Could not find existing listing after duplicate key error');
+            console.error('[ListingProcessor] ListingID:', listingId);
+            console.error('[ListingProcessor] Platform:', platformId);
+            // Return null to indicate failure
+            return null;
           }
         }
         // Re-throw if it's not a duplicate error
@@ -971,9 +1043,15 @@ class ListingProcessorService {
    * Supports: http/https URLs, // protocol-relative URLs, data:image base64
    */
   private async uploadProductImages(imageUrls: string[], productTitle: string, existingMediaIds?: number[], listingId?: string): Promise<number[]> {
-    // Import the new upload function
-    const { uploadProductImages } = require('./uploadProductImages');
-    return uploadProductImages(this.strapi, imageUrls, productTitle, existingMediaIds, listingId);
+    // Import the new upload function (use dynamic import for TypeScript)
+    try {
+      const module = await import('./uploadProductImages');
+      return module.uploadProductImages(this.strapi, imageUrls, productTitle, existingMediaIds, listingId);
+    } catch (error) {
+      console.error('[ListingProcessor] Error importing uploadProductImages module:', error);
+      // Fallback to empty array if module not found
+      return [];
+    }
   }
   
   /**
