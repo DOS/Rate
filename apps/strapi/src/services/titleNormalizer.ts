@@ -98,10 +98,23 @@ export class TitleNormalizer {
     ];
     
     let category = '';
+    // Map to properly formatted category names
+    const categoryMap: Record<string, string> = {
+      'điện thoại': 'Điện thoại',
+      'laptop': 'Laptop',
+      'máy tính': 'Máy tính',
+      'tablet': 'Tablet',
+      'tai nghe': 'Tai nghe',
+      'loa': 'Loa',
+      'ốp lưng': 'Ốp lưng'
+    };
+
     for (const pattern of categoryPatterns) {
       const match = normalized.match(pattern);
       if (match) {
-        category = match[0];
+        // Get the standardized category name
+        const matchedText = match[0].toLowerCase();
+        category = categoryMap[matchedText] || match[0];
         break;
       }
     }
@@ -175,10 +188,11 @@ export class TitleNormalizer {
     }
     
     let result = parts.join(' ').trim();
-    
-    // Capitalize properly
-    result = result.replace(/\b\w/g, l => l.toUpperCase());
-    
+
+    // Don't auto-capitalize Vietnamese text as it breaks diacritics
+    // Category names are already properly formatted in categoryMap
+    // Brand and model names should keep their original casing
+
     return result || normalized.trim();
   }
   
