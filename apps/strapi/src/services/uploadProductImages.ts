@@ -39,7 +39,8 @@ async function checkDuplicateFile(strapi: any, fileName: string, fileSize?: numb
       }
     }
 
-    // Priority 2: Check by exact filename (might have been renamed by Strapi)
+    // Priority 2: Check by exact name in database (Strapi stores original name in 'name' column)
+    // Even though file is renamed with suffix, the 'name' column keeps original name
     let existingFile = await strapi.db.query('plugin::upload.file').findOne({
       where: {
         name: fileName
@@ -47,8 +48,30 @@ async function checkDuplicateFile(strapi: any, fileName: string, fileSize?: numb
     });
 
     if (existingFile) {
-      console.log(`[ListingProcessor] Found existing file by exact name: ${fileName} (ID: ${existingFile.id})`);
+      console.log(`[ListingProcessor] Found existing file by exact name in DB: ${fileName} (ID: ${existingFile.id}, actual file: ${existingFile.hash || existingFile.url})`);
       return existingFile;
+    }
+
+    // Priority 3: Check by base filename pattern (fallback for older uploads)
+    // This handles cases where the name might have slight variations
+    const baseFileName = fileName.replace(/\.[^.]+$/, ''); // Remove extension
+    const filesWithBaseName = await strapi.db.query('plugin::upload.file').findMany({
+      where: {
+        name: {
+          $startsWith: baseFileName.substring(0, 30) // Use first 30 chars for matching
+        }
+      },
+      limit: 5
+    });
+
+    if (filesWithBaseName && filesWithBaseName.length > 0) {
+      // Return the first match with same size
+      for (const file of filesWithBaseName) {
+        if (!fileSize || Math.abs(file.size - fileSize) < 100) {
+          console.log(`[ListingProcessor] Found existing file by pattern: ${file.name} (ID: ${file.id})`);
+          return file;
+        }
+      }
     }
 
     // If not found by name but we have size, check for very similar files

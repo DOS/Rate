@@ -4,6 +4,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { TitleNormalizer } from './titleNormalizer';
 import { ItemValidator } from './itemValidator';
+import { uploadProductImages } from './uploadProductImages';
 
 declare global {
   var strapi: Core.Strapi;
@@ -133,10 +134,27 @@ class ListingProcessorService {
           ? existingListing.Media.map((m: any) => typeof m === 'object' ? m.id : m)
           : [];
         
-        // Process external images (no download, just store URLs)
-        console.log('[ListingProcessor] Processing external images for existing listing:', data.product.title);
+        // Process and upload images for existing listing
+        console.log('[ListingProcessor] Processing images for existing listing:', data.product.title);
         console.log('[ListingProcessor] Product images array:', data.product.images);
         console.log('[ListingProcessor] Images count:', data.product.images ? data.product.images.length : 0);
+
+        // Upload images to Media Library if not already uploaded
+        let mediaIds = existingMediaIds;
+        if (data.product.images && data.product.images.length > 0) {
+          const fixedTitle = this.fixVietnameseEncoding(data.product.title || '');
+          console.log('[ListingProcessor] Uploading new images for existing listing:', fixedTitle);
+          mediaIds = await uploadProductImages(
+            this.strapi,
+            data.product.images || [],
+            fixedTitle || 'Product',
+            existingMediaIds, // Pass existing media to avoid duplicates
+            existingListing.ListingID || undefined
+          );
+          console.log('[ListingProcessor] Media IDs after upload:', mediaIds);
+        }
+
+        // Also process external image URLs
         const imageResult = await this.processExternalImages(data.product.images || []);
         console.log('[ListingProcessor] External images processed:', imageResult.urls.length, 'URLs');
         
@@ -147,13 +165,16 @@ class ListingProcessorService {
             UsageCount: data.product.soldCount || existingListing.UsageCount || 0,
             LastUpdated: new Date().toISOString(),
             ViewCount: (existingListing.ViewCount || 0) + 1,
-            
+
             // Update relations - Link Item if not already linked
             Item: item ? item.id : existingListing.Item,
 
-            // Store external image URLs (no local upload)
+            // Update Media with uploaded images
+            Media: mediaIds && mediaIds.length > 0 ? mediaIds : [],
+
+            // Store external image URLs
             ExternalImages: imageResult.urls,
-            
+
             // Update other fields that might have changed
             Stock: data.product.stock || existingListing.Stock || 0,
             AverageRating: data.product.rating || existingListing.AverageRating || 0,
@@ -193,6 +214,7 @@ class ListingProcessorService {
                   LastUpdated: new Date().toISOString(),
                   ViewCount: (enListing.ViewCount || 0) + 1,
                   Item: item ? item.id : (enListing as any).Item,
+                  Media: mediaIds && mediaIds.length > 0 ? mediaIds : [],
                   ExternalImages: imageResult.urls.length > 0 ? imageResult.urls : (enListing as any).ExternalImages,
                   Stock: data.product.stock || enListing.Stock || 0,
                   AverageRating: data.product.rating || enListing.AverageRating || 0,
@@ -979,10 +1001,26 @@ class ListingProcessorService {
       // This prevents creating orphaned Items when listing creation fails
       let item = null;
       
-      // Process external images (no download, just store URLs)
-      console.log('[ListingProcessor] Processing external images for product:', product.title);
+      // Get product title first (for media upload)
+      const rawTitle = product.title || (product as any).productName || '';
+      const fixedTitle = this.fixVietnameseEncoding(rawTitle);
+
+      // Upload product images to Media Library
+      console.log('[ListingProcessor] Uploading product images:', fixedTitle);
       console.log('[ListingProcessor] Product images array:', product.images);
       console.log('[ListingProcessor] Images count:', product.images ? product.images.length : 0);
+
+      // Upload images and get media IDs
+      const mediaIds = await uploadProductImages(
+        strapi,
+        product.images || [],
+        fixedTitle || 'Product',
+        [], // No existing media
+        listingId === null ? undefined : listingId
+      );
+      console.log('[ListingProcessor] Uploaded media IDs:', mediaIds);
+
+      // Also process external images for ExternalImages field
       const imageResult = await this.processExternalImages(product.images || []);
       console.log('[ListingProcessor] External images processed:', imageResult.urls.length, 'URLs');
       
@@ -1000,17 +1038,12 @@ class ListingProcessorService {
         }
       ] : [];
 
-      // Validate title exists - Check both 'title' and 'productName' fields
-      // Extension sends 'productName', some places use 'title'
-      const rawTitle = product.title || (product as any).productName || '';
+      // Validate title exists (already processed above)
       if (!rawTitle || rawTitle.trim() === '') {
         console.error('[ListingProcessor] Missing product title, cannot create listing');
         console.error('[ListingProcessor] Product data:', JSON.stringify(product, null, 2));
         throw new Error('Product title is required to create listing');
       }
-      
-      // Fix encoding issues with Vietnamese characters in title
-      const fixedTitle = this.fixVietnameseEncoding(rawTitle);
       
       // Get URL from either field (extension sends 'url', some places use 'productUrl')
       let rawUrl = product.url || product.productUrl || '';
@@ -1079,6 +1112,7 @@ class ListingProcessorService {
         
         // Relations
         Category: category ? category.id : null, // Link to category if found (use ID directly)
+        Media: mediaIds && mediaIds.length > 0 ? mediaIds : [], // Set uploaded media IDs
         ExternalImages: imageResult.urls, // Store external URLs
         
         // Dynamic Zone Properties - Shopee không cung cấp specs chi tiết
