@@ -665,27 +665,79 @@ function getShopeeProductAndSellerInfo() {
   let shipFrom = '';
   let stock = 0;
 
-  // Tên sản phẩm - thêm nhiều selectors để tương thích khi Shopee đổi
-  const nameNode = document.querySelector('.vR6K3w')
-    || document.querySelector('h1[data-sqe="name"]')
-    || document.querySelector('._44qnta')
-    || document.querySelector('.qaNIZv')
-    || document.querySelector('h1')  // Generic h1 fallback
-    || document.querySelector('[class*="product"][class*="name"]')  // Class contains product + name
-    || document.querySelector('[class*="item"][class*="title"]')  // Class contains item + title
-    || document.querySelector('.flex-auto.flex-column > div:first-child');  // Structure-based fallback
+  // Tên sản phẩm - Sử dụng nhiều chiến lược để tìm title
   
+  // Strategy 1: Tìm h1 tag đầu tiên (thường là title)
+  const h1Elements = document.querySelectorAll('h1');
+  let nameNode = null;
+  
+  // Ưu tiên h1 có nội dung dài nhất (thường là product title)
+  if (h1Elements.length > 0) {
+    nameNode = Array.from(h1Elements)
+      .filter(h1 => {
+        const text = h1.textContent?.trim() || '';
+        // Loại bỏ h1 quá ngắn hoặc chỉ là navigation
+        return text.length > 20 && !text.match(/^(Home|Shop|Cart|Login|Shopee)/i);
+      })
+      .sort((a, b) => (b.textContent?.length || 0) - (a.textContent?.length || 0))[0];
+  }
+  
+  // Strategy 2: Tìm theo structure - element gần với price/rating
+  if (!nameNode) {
+    const priceElement = document.querySelector('[class*="price" i], [data-sqe="price"]');
+    if (priceElement) {
+      // Tìm h1 hoặc div lớn gần price element
+      let parent = priceElement.parentElement;
+      let attempts = 5;
+      while (parent && attempts-- > 0) {
+        const titleCandidate = parent.querySelector('h1, [class*="title" i], [class*="name" i]');
+        if (titleCandidate && titleCandidate.textContent?.trim().length > 20) {
+          nameNode = titleCandidate;
+          break;
+        }
+        parent = parent.parentElement;
+      }
+    }
+  }
+  
+  // Strategy 3: Fallback to known selectors (vẫn giữ để tương thích)
+  if (!nameNode) {
+    nameNode = document.querySelector('.vR6K3w')
+      || document.querySelector('h1[data-sqe="name"]')
+      || document.querySelector('._44qnta')
+      || document.querySelector('.qaNIZv')
+      || document.querySelector('[class*="product"][class*="name"]')
+      || document.querySelector('[class*="item"][class*="title"]');
+  }
+  
+  // Strategy 4: Meta tags fallback
+  if (!nameNode) {
+    const ogTitle = document.querySelector('meta[property="og:title"]');
+    if (ogTitle && ogTitle.content && !ogTitle.content.includes('Mua và Bán Trên Ứng Dụng')) {
+      // Create a temporary element to hold the title
+      const tempDiv = document.createElement('div');
+      tempDiv.textContent = ogTitle.content.replace(' | Shopee Việt Nam', '').trim();
+      nameNode = tempDiv;
+    }
+  }
+
   if (nameNode) {
     productName = nameNode.textContent.trim();
-    console.log('[Shopee] ✅ Product name found:', productName);
-  } else {
-    console.error('[Shopee] ❌ CRITICAL: Cannot find product title!');
-    console.error('[Shopee] Tried selectors: .vR6K3w, h1[data-sqe="name"], ._44qnta, .qaNIZv, h1, etc.');
-    // Debug help
-    const h1s = document.querySelectorAll('h1');
-    if (h1s.length > 0) {
-      console.log('[Shopee] Found', h1s.length, 'h1 elements. First h1:', h1s[0].textContent?.substring(0, 100));
+    // Clean up common suffixes
+    productName = productName.replace(/\s*\|\s*Shopee.*$/i, '').trim();
+
+    // Skip if it's the generic Shopee title
+    if (productName.includes('Mua và Bán Trên Ứng Dụng')) {
+      productName = '';
+      console.error('[Shopee] ❌ Found generic Shopee title, will try API');
+    } else {
+      console.log('[Shopee] ✅ Product name found from DOM:', productName);
     }
+  }
+
+  // If still no product name, will get from API below
+  if (!productName) {
+    console.warn('[Shopee] ⚠️ Could not find product title from DOM, will use API fallback');
   }
 
   // Giá sản phẩm (nhiều khả năng Shopee đổi class)
@@ -1212,8 +1264,30 @@ function getShopeeProductAndSellerInfo() {
 
 
 // Hàm scrape review Shopee đang hiển thị trên DOM, gắn thêm info sản phẩm & seller
-function scrapeShopeeVisibleReviews() {
-  const productInfo = getShopeeProductAndSellerInfo();
+async function scrapeShopeeVisibleReviews() {
+  let productInfo = getShopeeProductAndSellerInfo();
+
+  // Enrich product info from API if title is missing or generic
+  if (!productInfo.productName || productInfo.productName.includes('Mua và Bán Trên Ứng Dụng')) {
+    try {
+      const apiInfo = await fetchShopeeProductViaAPI();
+      if (apiInfo && apiInfo.productName) {
+        productInfo = {
+          ...productInfo,
+          productName: apiInfo.productName,
+          price: productInfo.price || apiInfo.price,
+          priceRange: productInfo.priceRange || apiInfo.priceRange,
+          categories: (productInfo.categories && productInfo.categories.length ? productInfo.categories : apiInfo.categories) || [],
+          brand: productInfo.brand || apiInfo.brand,
+          productId: productInfo.productId || apiInfo.productId,
+          variants: apiInfo.variants || productInfo.variants
+        };
+        console.log('[Shopee] ✅ Enriched product info from API:', productInfo.productName);
+      }
+    } catch (e) {
+      console.warn('[Shopee] Could not enrich product info from API:', e);
+    }
+  }
 
   // Check if this is a livestream page
   const isLivestream = window.location.pathname.includes('Livestream') || document.querySelector('[class*="live-stream"], [class*="livestream"]');
@@ -1399,17 +1473,25 @@ async function enrichReviewsWithVariants(reviews) {
 }
 
 
+// Debounce to prevent multiple crawls
+let crawlerTimeout = null;
+
 // Wait for page to fully load, then check for scam data
 function initPassiveCrawler() {
+  // Clear any existing timeout
+  if (crawlerTimeout) {
+    clearTimeout(crawlerTimeout);
+  }
+
   // Gentle popup handling - only try once
   setTimeout(() => {
     handleDiscordPopup();
   }, 3000); // Wait longer before trying to auto-close
-  
-  // Then wait for dynamic content to load
-  setTimeout(() => {
+
+  // Then wait for dynamic content to load (debounced)
+  crawlerTimeout = setTimeout(async () => {
     // Shopee review scraping: chỉ scrape khi có review Shopee trên DOM
-    const shopeeReviews = scrapeShopeeVisibleReviews();
+    const shopeeReviews = await scrapeShopeeVisibleReviews();
     if (shopeeReviews && shopeeReviews.length > 0) {
       chrome.runtime.sendMessage({
         type: 'shopee-reviews-found',
@@ -1457,7 +1539,7 @@ function initPassiveCrawler() {
     if (window.location.host.includes('shopee.vn')) {
       try { renderRateScoreBadge(); } catch(_) {}
     }
-  }, 5000); // Wait 5s for AJAX content
+  }, 8000); // Wait 8s for AJAX content to fully load
 }
 
 // Initialize when DOM is ready
@@ -1508,39 +1590,118 @@ window.addEventListener('message', (e) => {
     }
     // Sniffer bulk stream
     if (m.type === 'EXT_SHOPEE_RATINGS_SNIFFED') {
-      const productInfo = getShopeeProductAndSellerInfo();
-      const reviews = Array.isArray(m.ratings) ? m.ratings.map(r => mapShopeeApiRatingToReview(r, productInfo)).filter(Boolean) : [];
-      if (reviews.length > 0) {
-        chrome.runtime.sendMessage({
-          type: 'shopee-reviews-found',
-          data: reviews,
-          url: window.location.href,
-          timestamp: new Date().toISOString()
-        });
-      }
+      (async () => {
+        let productInfo = getShopeeProductAndSellerInfo();
+
+        // Enrich product info from API if title is missing or generic
+        if (!productInfo.productName || productInfo.productName.includes('Mua và Bán Trên Ứng Dụng')) {
+          try {
+            const apiInfo = await fetchShopeeProductViaAPI();
+            if (apiInfo && apiInfo.productName) {
+              productInfo = {
+                ...productInfo,
+                productName: apiInfo.productName,
+                price: productInfo.price || apiInfo.price,
+                priceRange: productInfo.priceRange || apiInfo.priceRange,
+                categories: (productInfo.categories && productInfo.categories.length ? productInfo.categories : apiInfo.categories) || [],
+                brand: productInfo.brand || apiInfo.brand,
+                productId: productInfo.productId || apiInfo.productId,
+                variants: apiInfo.variants || productInfo.variants
+              };
+              console.log('[Shopee] ✅ Enriched product info from API (sniffer):', productInfo.productName);
+            }
+          } catch (e) {
+            console.warn('[Shopee] Could not enrich product info from API (sniffer):', e);
+          }
+        }
+
+        const reviews = Array.isArray(m.ratings) ? m.ratings.map(r => mapShopeeApiRatingToReview(r, productInfo)).filter(Boolean) : [];
+        if (reviews.length > 0) {
+          chrome.runtime.sendMessage({
+            type: 'shopee-reviews-found',
+            data: reviews,
+            url: window.location.href,
+            timestamp: new Date().toISOString()
+          });
+        }
+      })();
       return;
     }
     // Bridge chunked flow (from EXT_REQUEST_SHOPEE_RATINGS[_URL])
     if (m.type === 'EXT_SHOPEE_RATINGS_CHUNK') {
       window.__rateChunk = window.__rateChunk || [];
-      const productInfo = getShopeeProductAndSellerInfo();
-      const reviews = Array.isArray(m.ratings) ? m.ratings.map(r => mapShopeeApiRatingToReview(r, productInfo)).filter(Boolean) : [];
+      window.__rateProductInfo = window.__rateProductInfo || getShopeeProductAndSellerInfo();
+      const reviews = Array.isArray(m.ratings) ? m.ratings.map(r => mapShopeeApiRatingToReview(r, window.__rateProductInfo)).filter(Boolean) : [];
       if (reviews.length) {
         window.__rateChunk.push(...reviews);
       }
       return;
     }
     if (m.type === 'EXT_SHOPEE_RATINGS_DONE') {
-      const chunk = Array.isArray(window.__rateChunk) ? window.__rateChunk : [];
-      if (chunk.length) {
-        chrome.runtime.sendMessage({
-          type: 'shopee-reviews-found',
-          data: chunk,
-          url: window.location.href,
-          timestamp: new Date().toISOString()
-        });
-        window.__rateChunk = [];
-      }
+      (async () => {
+        const chunk = Array.isArray(window.__rateChunk) ? window.__rateChunk : [];
+        if (chunk.length) {
+          // Enrich product info if needed before sending
+          let productInfo = window.__rateProductInfo || getShopeeProductAndSellerInfo();
+          if (!productInfo.productName || productInfo.productName.includes('Mua và Bán Trên Ứng Dụng')) {
+            try {
+              const apiInfo = await fetchShopeeProductViaAPI();
+              if (apiInfo && apiInfo.productName) {
+                productInfo = {
+                  ...productInfo,
+                  productName: apiInfo.productName,
+                  price: productInfo.price || apiInfo.price,
+                  priceRange: productInfo.priceRange || apiInfo.priceRange,
+                  categories: (productInfo.categories && productInfo.categories.length ? productInfo.categories : apiInfo.categories) || [],
+                  brand: productInfo.brand || apiInfo.brand,
+                  productId: productInfo.productId || apiInfo.productId,
+                  variants: apiInfo.variants || productInfo.variants
+                };
+                console.log('[Shopee] ✅ Enriched product info from API (chunk):', productInfo.productName);
+
+                // Re-map reviews with enriched product info
+                const enrichedChunk = chunk.map(review => ({
+                  ...review,
+                  product: productInfo
+                }));
+                chrome.runtime.sendMessage({
+                  type: 'shopee-reviews-found',
+                  data: enrichedChunk,
+                  url: window.location.href,
+                  timestamp: new Date().toISOString()
+                });
+              } else {
+                // Send as is if API enrichment fails
+                chrome.runtime.sendMessage({
+                  type: 'shopee-reviews-found',
+                  data: chunk,
+                  url: window.location.href,
+                  timestamp: new Date().toISOString()
+                });
+              }
+            } catch (e) {
+              console.warn('[Shopee] Could not enrich product info from API (chunk):', e);
+              // Send as is if API enrichment fails
+              chrome.runtime.sendMessage({
+                type: 'shopee-reviews-found',
+                data: chunk,
+                url: window.location.href,
+                timestamp: new Date().toISOString()
+              });
+            }
+          } else {
+            // Product info already complete
+            chrome.runtime.sendMessage({
+              type: 'shopee-reviews-found',
+              data: chunk,
+              url: window.location.href,
+              timestamp: new Date().toISOString()
+            });
+          }
+          window.__rateChunk = [];
+          window.__rateProductInfo = null;
+        }
+      })();
       return;
     }
   } catch (_) {}

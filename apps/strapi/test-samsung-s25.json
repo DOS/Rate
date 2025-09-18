@@ -1,0 +1,52 @@
+{
+  "source": "shopee",
+  "items": [
+    {
+      "type": "product",
+      "product": {
+        "shopId": "65589552",
+        "productId": "26423481860",
+        "name": "Điện thoại Samsung Galaxy S25 Ultra | Điện thoại AI | 256GB | Video & camera đêm Nightography | S Pen đa nhiệm",
+        "title": "Điện thoại Samsung Galaxy S25 Ultra | Điện thoại AI | 256GB | Video & camera đêm Nightography | S Pen đa nhiệm",
+        "url": "https://shopee.vn/Điện-thoại-Samsung-Galaxy-S25-Ultra-Điện-thoại-AI-256GB-Video-camera-đêm-Nightography-S-Pen-đa-nhiệm-i.65589552.26423481860",
+        "price": 35990000,
+        "originalPrice": 35990000,
+        "currency": "VND",
+        "category": "Điện Thoại & Phụ Kiện",
+        "subCategory": "Điện thoại",
+        "images": [
+          "https://down-vn.img.susercontent.com/file/vn-11134207-7ras8-m2p5cbmgvjg761",
+          "https://down-vn.img.susercontent.com/file/vn-11134207-7ras8-m2p5cbmgwxxa05"
+        ],
+        "rating": 5,
+        "reviewCount": 7,
+        "soldCount": 15,
+        "location": "TP. Hồ Chí Minh",
+        "shopName": "Samsung Flagship Store"
+      }
+    },
+    {
+      "type": "product",
+      "product": {
+        "shopId": "65589552",
+        "productId": "27084669548",
+        "name": "[Livestream] Điện Thoại Samsung Galaxy S25 Ultra 256GB",
+        "title": "[Livestream] Điện Thoại Samsung Galaxy S25 Ultra 256GB",
+        "url": "https://shopee.vn/-Livestream-Điện-Thoại-Samsung-Galaxy-S25-Ultra-256GB-i.65589552.27084669548",
+        "price": 35990000,
+        "originalPrice": 35990000,
+        "currency": "VND",
+        "category": "Điện Thoại & Phụ Kiện",
+        "subCategory": "Điện thoại",
+        "images": [
+          "https://down-vn.img.susercontent.com/file/vn-11134207-7ras8-m2p5cbmgvjg761"
+        ],
+        "rating": 5,
+        "reviewCount": 2,
+        "soldCount": 8,
+        "location": "TP. Hồ Chí Minh",
+        "shopName": "Samsung Flagship Store"
+      }
+    }
+  ]
+}

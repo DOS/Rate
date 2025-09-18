@@ -1,0 +1,55 @@
+{
+  "source": "shopee",
+  "items": [
+    {
+      "type": "product",
+      "product": {
+        "shopId": "65589552",
+        "productId": "26423481861",
+        "listingId": "shopee.vn.26423481861",
+        "name": "Test Product 1 with Same Images",
+        "title": "Test Product 1 with Same Images",
+        "url": "https://shopee.vn/test1-i.65589552.26423481861",
+        "price": 35990000,
+        "originalPrice": 35990000,
+        "currency": "VND",
+        "category": "Điện Thoại & Phụ Kiện",
+        "subCategory": "Điện thoại",
+        "images": [
+          "https://down-vn.img.susercontent.com/file/vn-11134207-820l4-medt00nkow02d8",
+          "https://down-vn.img.susercontent.com/file/vn-11134207-7ras8-mdohyoueffld6f"
+        ],
+        "rating": 5,
+        "reviewCount": 7,
+        "soldCount": 15,
+        "location": "TP. Hồ Chí Minh",
+        "shopName": "Test Shop"
+      }
+    },
+    {
+      "type": "product",
+      "product": {
+        "shopId": "65589552",
+        "productId": "26423481862",
+        "listingId": "shopee.vn.26423481862",
+        "name": "Test Product 2 with Same Images (Different Order)",
+        "title": "Test Product 2 with Same Images (Different Order)",
+        "url": "https://shopee.vn/test2-i.65589552.26423481862",
+        "price": 35990000,
+        "originalPrice": 35990000,
+        "currency": "VND",
+        "category": "Điện Thoại & Phụ Kiện",
+        "subCategory": "Điện thoại",
+        "images": [
+          "https://down-vn.img.susercontent.com/file/vn-11134207-7ras8-mdohyoueffld6f",
+          "https://down-vn.img.susercontent.com/file/vn-11134207-820l4-medt00nkow02d8"
+        ],
+        "rating": 5,
+        "reviewCount": 2,
+        "soldCount": 8,
+        "location": "TP. Hồ Chí Minh",
+        "shopName": "Test Shop"
+      }
+    }
+  ]
+}

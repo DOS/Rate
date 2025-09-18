@@ -25,6 +25,14 @@
       },
       "required": true
     },
+    "Slug": {
+      "type": "string",
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
+      }
+    },
     "URL": {
       "type": "string",
       "pluginOptions": {
@@ -78,6 +86,14 @@
         "images",
         "videos"
       ]
+    },
+    "ExternalImages": {
+      "type": "json",
+      "pluginOptions": {
+        "i18n": {
+          "localized": false
+        }
+      }
     },
     "ReviewNotes": {
       "type": "text",

@@ -250,8 +250,8 @@ class RedisStreamService {
     try {
       console.log(`[RedisStream] Processing extension data for request: ${requestId}`);
       
-      // Import ListingProcessor service
-      const listingProcessor = new ListingProcessorService();
+      // Import ListingProcessor service - pass global strapi
+      const listingProcessor = new ListingProcessorService((global as any).strapi);
       
       // Xử lý batch data và tạo listings
       const result = await listingProcessor.processBatchFromRedis(data);

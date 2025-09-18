@@ -5,6 +5,90 @@ import * as os from 'os';
 import { Readable } from 'stream';
 
 /**
+ * Check if a file with same content already exists in media library
+ * This prevents duplicate uploads of the same image
+ * @param strapi Strapi instance
+ * @param fileName File name to check
+ * @param fileSize File size in bytes
+ * @param contentHash MD5 hash of file content
+ * @returns Existing file object if found, null otherwise
+ */
+async function checkDuplicateFile(strapi: any, fileName: string, fileSize?: number, contentHash?: string) {
+  try {
+    // Priority 1: Check by content hash in the filename (most reliable)
+    // Our filename format includes the content hash: shopee_xxx_[hash].jpg
+    if (contentHash) {
+      // Search for files that contain this content hash in their name
+      const filesWithHash = await strapi.db.query('plugin::upload.file').findMany({
+        where: {
+          name: {
+            $contains: contentHash.substring(0, 8) // Use first 8 chars of hash
+          }
+        },
+        limit: 10
+      });
+
+      if (filesWithHash && filesWithHash.length > 0) {
+        // Check if any have the exact same size (double verification)
+        for (const file of filesWithHash) {
+          if (!fileSize || Math.abs(file.size - fileSize) < 100) { // Allow small size difference due to compression
+            console.log(`[ListingProcessor] Found existing file by content hash: ${file.name} (ID: ${file.id})`);
+            return file;
+          }
+        }
+      }
+    }
+
+    // Priority 2: Check by exact filename (might have been renamed by Strapi)
+    let existingFile = await strapi.db.query('plugin::upload.file').findOne({
+      where: {
+        name: fileName
+      }
+    });
+
+    if (existingFile) {
+      console.log(`[ListingProcessor] Found existing file by exact name: ${fileName} (ID: ${existingFile.id})`);
+      return existingFile;
+    }
+
+    // If not found by name but we have size, check for very similar files
+    // This helps catch cases where naming scheme changed slightly
+    if (fileSize) {
+      // Check for files with same size and similar name pattern
+      const basePattern = fileName.split('_')[0]; // Get the prefix (e.g., 'shopee')
+      const possibleDuplicates = await strapi.db.query('plugin::upload.file').findMany({
+        where: {
+          size: fileSize,
+          name: {
+            $startsWith: basePattern
+          }
+        },
+        limit: 5
+      });
+
+      if (possibleDuplicates && possibleDuplicates.length > 0) {
+        // Check if any match our Shopee file ID pattern
+        for (const file of possibleDuplicates) {
+          // Extract Shopee file ID from both filenames
+          const existingMatch = file.name.match(/shopee_([a-zA-Z0-9\-]+)_/);
+          const newMatch = fileName.match(/shopee_([a-zA-Z0-9\-]+)_/);
+
+          if (existingMatch && newMatch && existingMatch[1] === newMatch[1]) {
+            console.log(`[ListingProcessor] Found existing file by pattern match: ${file.name} (ID: ${file.id})`);
+            return file;
+          }
+        }
+      }
+    }
+
+    return null;
+  } catch (error) {
+    console.warn('[ListingProcessor] Error checking duplicate file:', error);
+    return null; // On error, allow upload to proceed
+  }
+}
+
+/**
  * Upload product images to Strapi Media Library using the plugin service
  * Supports: http/https URLs, // protocol-relative URLs, data:image base64
  */
@@ -405,12 +489,12 @@ export async function uploadProductImages(
       // Image index (01, 02, 03...)
       const imageIndex = String(i + 1).padStart(2, '0');
       
-      // Final filename uses shopeeFileId to ensure consistency
-      // Format: prefix_index_slug_hash.ext
-      // If same image is uploaded again, it will have same filename
-      const fileName = shopeeFileId 
-        ? `shopee_${shopeeFileId}_${imageIndex}.${extension}` // Use Shopee's file ID for consistent naming
-        : `${filePrefix}_${imageIndex}_${slug}_${imageHash}.${extension}`; // Fallback with hash
+      // Final filename uses content hash to ensure consistency
+      // Format: shopee_fileId_hash.ext or prefix_hash.ext
+      // If same image is uploaded again, it will have same filename regardless of position
+      const fileName = shopeeFileId
+        ? `shopee_${shopeeFileId.replace(/-/g, '_')}_${imageHash}.${extension}` // Use file ID + hash for absolute uniqueness
+        : `${filePrefix}_${imageHash}.${extension}`; // Fallback with hash only
 
       console.log(`[ListingProcessor] Uploading ${fileName} (${buffer.length} bytes, ${mimeType})`);
 
@@ -420,9 +504,11 @@ export async function uploadProductImages(
 
       try {
         // Check if file already exists to prevent duplicates
-        const existingFile = await checkDuplicateFile(strapi, fileName, buffer.length);
+        // Pass the buffer hash to check by content, not just name
+        const contentHash = crypto.createHash('md5').update(buffer).digest('hex');
+        const existingFile = await checkDuplicateFile(strapi, fileName, buffer.length, contentHash);
         if (existingFile) {
-          console.log(`[ListingProcessor] ⚠️ Duplicate file found, reusing: ${fileName} (ID: ${existingFile.id})`);
+          console.log(`[ListingProcessor] ⚠️ Duplicate file found, reusing: ${existingFile.name} (ID: ${existingFile.id})`);
           uploadedFiles.push(existingFile.id);
           continue; // Skip upload, reuse existing file
         }
@@ -505,63 +591,4 @@ export async function uploadProductImages(
 
   console.log(`[ListingProcessor] Successfully uploaded ${uploadedFiles.length} images`);
   return uploadedFiles;
-}
-
-/**
- * Check if a file with same name already exists in media library
- * This prevents duplicate uploads of the same image
- * @param strapi Strapi instance
- * @param fileName File name to check (should be deterministic based on content)
- * @param fileSize File size in bytes (optional additional check)
- * @returns Existing file object if found, null otherwise
- */
-async function checkDuplicateFile(strapi: any, fileName: string, fileSize?: number) {
-  try {
-    // First check by exact filename (since we use deterministic names)
-    let existingFile = await strapi.db.query('plugin::upload.file').findOne({
-      where: {
-        name: fileName
-      }
-    });
-    
-    if (existingFile) {
-      console.log(`[ListingProcessor] Found existing file by name: ${fileName} (ID: ${existingFile.id})`);
-      return existingFile;
-    }
-    
-    // If not found by name but we have size, check for very similar files
-    // This helps catch cases where naming scheme changed slightly
-    if (fileSize) {
-      // Check for files with same size and similar name pattern
-      const basePattern = fileName.split('_')[0]; // Get the prefix (e.g., 'shopee')
-      const possibleDuplicates = await strapi.db.query('plugin::upload.file').findMany({
-        where: {
-          size: fileSize,
-          name: {
-            $startsWith: basePattern
-          }
-        },
-        limit: 5
-      });
-      
-      if (possibleDuplicates && possibleDuplicates.length > 0) {
-        // Check if any match our Shopee file ID pattern
-        for (const file of possibleDuplicates) {
-          // Extract Shopee file ID from both filenames
-          const existingMatch = file.name.match(/shopee_([a-zA-Z0-9\-]+)_/);
-          const newMatch = fileName.match(/shopee_([a-zA-Z0-9\-]+)_/);
-          
-          if (existingMatch && newMatch && existingMatch[1] === newMatch[1]) {
-            console.log(`[ListingProcessor] Found existing file by pattern match: ${file.name} (ID: ${file.id})`);
-            return file;
-          }
-        }
-      }
-    }
-    
-    return null;
-  } catch (error) {
-    console.warn('[ListingProcessor] Error checking duplicate file:', error);
-    return null; // On error, allow upload to proceed
-  }
 }

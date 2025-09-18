@@ -29,10 +29,7 @@ export default {
       path: '/validation/validate',
       handler: 'validation.validate',
       config: {
-        auth: {
-          strategies: ['api-token', 'jwt'],
-          // scope: ['api::validation.validation.validate'], // Tạm comment để test
-        },
+        auth: false,
         policies: [],
         middlewares: [],
       },
@@ -55,10 +52,7 @@ export default {
       path: '/validation/status/:requestId',
       handler: 'validation.getStatus',
       config: {
-        auth: {
-          strategies: ['api-token', 'jwt'],
-          scope: ['api::validation.validation.getStatus'],
-        },
+        auth: false,
         policies: [],
         middlewares: [],
       },

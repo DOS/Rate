@@ -3,7 +3,7 @@ import Link from 'next/link'
 
 import { FaDroplet, FaDumpsterFire, FaFan, FaHouseFire, FaMaskVentilator, FaOilCan, FaPlug, FaSmoking, FaToiletPaper, FaWheelchair, FaWifi } from 'react-icons/fa6'
 
-const data = [
+const defaultData = [
     {
         icon:FaOilCan,
         title:'Natural Gas'
@@ -50,7 +50,10 @@ const data = [
     },
 ]
 
-export default function Features() {
+interface FeatureItem { title: string }
+interface FeaturesProps { readonly items?: readonly FeatureItem[] | null }
+
+export default function Features({ items }: FeaturesProps) {
   return (
     <div className="listingSingleblock mb-4" id="features">
         <div className="SingleblockHeader">
@@ -62,11 +65,11 @@ export default function Features() {
                 <div className="interioramenities-block">
                     <div className="interioramenities-body">
                         <div className="row align-items-start justify-content-start g-3">
-                            {data.map((item,index)=>{
+                            {(items && items.length ? items : defaultData).map((item:any,index:number)=>{
                                 let Icon = item.icon
                                 return(
                                     <div className="col-xl-4 col-lg-4 col-md-4 col-sm-6" key={index}>
-                                        <div className="d-flex align-items-center"><Icon className="text-primary me-2"/>{item.title}</div>
+                                        <div className="d-flex align-items-center">{Icon ? <Icon className="text-primary me-2"/> : null}{item.title}</div>
                                     </div>
                                 )
                             })}

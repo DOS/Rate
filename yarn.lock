@@ -9567,6 +9567,19 @@ bullmq@^5.0.0:
     tslib "^2.0.0"
     uuid "^9.0.0"
 
+bullmq@^5.58.5:
+  version "5.58.5"
+  resolved "https://registry.yarnpkg.com/bullmq/-/bullmq-5.58.5.tgz#e4de41cadaa27c19128b573e8689ce958f2dd6ea"
+  integrity sha512-0A6Qjxdn8j7aOcxfRZY798vO/aMuwvoZwfE6a9EOXHb1pzpBVAogsc/OfRWeUf+5wMBoYB5nthstnJo/zrQOeQ==
+  dependencies:
+    cron-parser "^4.9.0"
+    ioredis "^5.4.1"
+    msgpackr "^1.11.2"
+    node-abort-controller "^3.1.1"
+    semver "^7.5.4"
+    tslib "^2.0.0"
+    uuid "^9.0.0"
+
 byte-size@8.1.1:
   version "8.1.1"
   resolved "https://registry.yarnpkg.com/byte-size/-/byte-size-8.1.1.tgz#3424608c62d59de5bfda05d31e0313c6174842ae"
@@ -13876,7 +13889,7 @@ invariant@2.2.4, invariant@^2.2.4:
   dependencies:
     loose-envify "^1.0.0"
 
-ioredis@^5.3.2, ioredis@^5.4.1, ioredis@^5.6.1:
+ioredis@^5.3.2, ioredis@^5.4.1, ioredis@^5.6.1, ioredis@^5.7.0:
   version "5.7.0"
   resolved "https://registry.yarnpkg.com/ioredis/-/ioredis-5.7.0.tgz#be8f4a09bfb67bfa84ead297ff625973a5dcefc3"
   integrity sha512-NUcA93i1lukyXU+riqEyPtSEkyFq8tX90uL659J+qpCZ3rEdViB/APC58oAhIh3+bJln2hzdlZbBZsGNrlsR8g==

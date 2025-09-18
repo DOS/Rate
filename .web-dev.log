@@ -1,0 +1,236 @@
+yarn run v1.22.22
+$ turbo run dev --filter=@repo/web
+turbo 2.5.6
+
+ΓÇó Packages in scope: @repo/web
+ΓÇó Running dev in 1 packages
+ΓÇó Remote caching disabled
+@repo/design-system:build: cache hit, replaying logs e25301c0952fb936
+@repo/design-system:build: [?9001h[?1004h[?25l[2J[m[H]0;C:\WINDOWS\system32\cmd.exe[?25h[1myarn run v1.22.22
+@repo/design-system:build: [22m[K[2m$ tailwindcss -i ./src/styles.css -o ./dist/styles.css && node ./src/build-ck-config.js
+@repo/design-system:build: [22m[34m[1m[3mΓëê[m tailwindcss [34mv4.1.12
+@repo/design-system:build: [m
+@repo/design-system:build: Done in [32m40ms
+@repo/design-system:build: [m[KDone in 1.76s.
+@repo/design-system:build: [?9001l[?1004l
+@repo/shared-data:build: cache hit, replaying logs b875fbf40669e10c
+@repo/shared-data:build: [?9001h[?1004h[?25l[2J[m[H]0;C:\WINDOWS\system32\cmd.exe[?25h[1myarn run v1.22.22
+@repo/shared-data:build: [22m[33mwarning [mpackage.json: No license field[K
+@repo/shared-data:build: [2m$ tsc[22m[K
+@repo/shared-data:build: [KDone in 1.85s.
+@repo/shared-data:build: [?9001l[?1004l
+@repo/web:dev: cache bypass, force executing 57f49f54defa4f24
+@repo/web:dev: yarn run v1.22.22
+@repo/web:dev: $ next dev --port 3000
+@repo/web:dev:    Γû▓ Next.js 15.5.0
+@repo/web:dev:    - Local:        http://localhost:3000
+@repo/web:dev:    - Network:      http://192.168.50.99:3000
+@repo/web:dev:    - Environments: .env.development.local, .env.local
+@repo/web:dev:    - Experiments (use with caution):
+@repo/web:dev:      Γ£ô externalDir
+@repo/web:dev: 
+@repo/web:dev:  Γ£ô Starting...
+@repo/web:dev:  Γùï Compiling /instrumentation ...
+@repo/web:dev:  Γ£ô Compiled /instrumentation in 906ms (1266 modules)
+@repo/web:dev:  Γ£ô Ready in 14.1s
+@repo/web:dev:  Γ£ô Compiled /middleware in 234ms (884 modules)
+@repo/web:dev:  Γùï Compiling /[locale] ...
+@repo/web:dev:  ΓÜá ../../node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+@repo/web:dev: Critical dependency: the request of a dependency is an expression
+@repo/web:dev: 
+@repo/web:dev: Import trace for requested module:
+@repo/web:dev: ../../node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+@repo/web:dev: ../../node_modules/@opentelemetry/instrumentation/build/esm/platform/node/index.js
+@repo/web:dev: ../../node_modules/@opentelemetry/instrumentation/build/esm/platform/index.js
+@repo/web:dev: ../../node_modules/@opentelemetry/instrumentation/build/esm/index.js
+@repo/web:dev: ../../node_modules/@sentry/nextjs/node_modules/@sentry/node/build/cjs/integrations/tracing/postgresjs.js
+@repo/web:dev: ../../node_modules/@sentry/nextjs/node_modules/@sentry/node/build/cjs/index.js
+@repo/web:dev: ../../node_modules/@sentry/nextjs/build/cjs/index.server.js
+@repo/web:dev:  GET / 200 in 4989ms
+@repo/web:dev:  ΓÜá ../../node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+@repo/web:dev: Critical dependency: the request of a dependency is an expression
+@repo/web:dev: 
+@repo/web:dev: Import trace for requested module:
+@repo/web:dev: ../../node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+@repo/web:dev: ../../node_modules/@opentelemetry/instrumentation/build/esm/platform/node/index.js
+@repo/web:dev: ../../node_modules/@opentelemetry/instrumentation/build/esm/platform/index.js
+@repo/web:dev: ../../node_modules/@opentelemetry/instrumentation/build/esm/index.js
+@repo/web:dev: ../../node_modules/@sentry/nextjs/node_modules/@sentry/node/build/cjs/integrations/tracing/postgresjs.js
+@repo/web:dev: ../../node_modules/@sentry/nextjs/node_modules/@sentry/node/build/cjs/index.js
+@repo/web:dev: ../../node_modules/@sentry/nextjs/build/cjs/index.server.js
+@repo/web:dev:  ΓÜá ../../node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+@repo/web:dev: Critical dependency: the request of a dependency is an expression
+@repo/web:dev: 
+@repo/web:dev: Import trace for requested module:
+@repo/web:dev: ../../node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+@repo/web:dev: ../../node_modules/@opentelemetry/instrumentation/build/esm/platform/node/index.js
+@repo/web:dev: ../../node_modules/@opentelemetry/instrumentation/build/esm/platform/index.js
+@repo/web:dev: ../../node_modules/@opentelemetry/instrumentation/build/esm/index.js
+@repo/web:dev: ../../node_modules/@sentry/nextjs/node_modules/@sentry/node/build/cjs/integrations/tracing/postgresjs.js
+@repo/web:dev: ../../node_modules/@sentry/nextjs/node_modules/@sentry/node/build/cjs/index.js
+@repo/web:dev: ../../node_modules/@sentry/nextjs/build/cjs/index.server.js
+@repo/web:dev:  GET /api/navbar?locale=en&populate%5Blinks%5D=true 200 in 1859ms
+@repo/web:dev:  ΓÜá ../../node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+@repo/web:dev: Critical dependency: the request of a dependency is an expression
+@repo/web:dev: 
+@repo/web:dev: Import trace for requested module:
+@repo/web:dev: ../../node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+@repo/web:dev: ../../node_modules/@opentelemetry/instrumentation/build/esm/platform/node/index.js
+@repo/web:dev: ../../node_modules/@opentelemetry/instrumentation/build/esm/platform/index.js
+@repo/web:dev: ../../node_modules/@opentelemetry/instrumentation/build/esm/index.js
+@repo/web:dev: ../../node_modules/@sentry/nextjs/node_modules/@sentry/node/build/cjs/integrations/tracing/postgresjs.js
+@repo/web:dev: ../../node_modules/@sentry/nextjs/node_modules/@sentry/node/build/cjs/index.js
+@repo/web:dev: ../../node_modules/@sentry/nextjs/build/cjs/index.server.js
+@repo/web:dev:  GET /api/navbar?locale=en&populate%5Blinks%5D=true 200 in 51ms
+@repo/web:dev:  ΓÜá ../../node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+@repo/web:dev: Critical dependency: the request of a dependency is an expression
+@repo/web:dev: 
+@repo/web:dev: Import trace for requested module:
+@repo/web:dev: ../../node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+@repo/web:dev: ../../node_modules/@opentelemetry/instrumentation/build/esm/platform/node/index.js
+@repo/web:dev: ../../node_modules/@opentelemetry/instrumentation/build/esm/platform/index.js
+@repo/web:dev: ../../node_modules/@opentelemetry/instrumentation/build/esm/index.js
+@repo/web:dev: ../../node_modules/@sentry/nextjs/node_modules/@sentry/node/build/cjs/integrations/tracing/postgresjs.js
+@repo/web:dev: ../../node_modules/@sentry/nextjs/node_modules/@sentry/node/build/cjs/index.js
+@repo/web:dev: ../../node_modules/@sentry/nextjs/build/cjs/index.server.js
+@repo/web:dev:  GET /api/footer?locale=en&populate%5Bsections%5D%5Bpopulate%5D%5Blinks%5D=true&populate%5Blinks%5D=true&populate%5BsocialLinks%5D=true 200 in 960ms
+@repo/web:dev:  GET /api/footer?locale=en&populate%5Bsections%5D%5Bpopulate%5D%5Blinks%5D=true&populate%5Blinks%5D=true&populate%5BsocialLinks%5D=true 200 in 1029ms
+@repo/web:dev: Deprecation warning: `useLocale` has returned a default from `useParams().locale` since no `NextIntlClientProvider` ancestor was found for the calling component. This behavior will be removed in the next major version. Please ensure all Client Components that use `next-intl` are wrapped in a `NextIntlClientProvider`.
+@repo/web:dev:  GET / 200 in 2051ms
+@repo/web:dev:  GET /api/navbar?locale=en&populate%5Blinks%5D=true 200 in 63ms
+@repo/web:dev:  GET /api/footer?locale=en&populate%5Bsections%5D%5Bpopulate%5D%5Blinks%5D=true&populate%5Blinks%5D=true&populate%5BsocialLinks%5D=true 200 in 47ms
+@repo/web:dev:  GET / 200 in 1033ms
+@repo/web:dev:  ΓÜá ../../node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+@repo/web:dev: Critical dependency: the request of a dependency is an expression
+@repo/web:dev: 
+@repo/web:dev: Import trace for requested module:
+@repo/web:dev: ../../node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+@repo/web:dev: ../../node_modules/@opentelemetry/instrumentation/build/esm/platform/node/index.js
+@repo/web:dev: ../../node_modules/@opentelemetry/instrumentation/build/esm/platform/index.js
+@repo/web:dev: ../../node_modules/@opentelemetry/instrumentation/build/esm/index.js
+@repo/web:dev: ../../node_modules/@sentry/nextjs/node_modules/@sentry/node/build/cjs/integrations/tracing/postgresjs.js
+@repo/web:dev: ../../node_modules/@sentry/nextjs/node_modules/@sentry/node/build/cjs/index.js
+@repo/web:dev: ../../node_modules/@sentry/nextjs/build/cjs/index.server.js
+@repo/web:dev:  ΓÜá ../../node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+@repo/web:dev: Critical dependency: the request of a dependency is an expression
+@repo/web:dev: 
+@repo/web:dev: Import trace for requested module:
+@repo/web:dev: ../../node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+@repo/web:dev: ../../node_modules/@opentelemetry/instrumentation/build/esm/platform/node/index.js
+@repo/web:dev: ../../node_modules/@opentelemetry/instrumentation/build/esm/platform/index.js
+@repo/web:dev: ../../node_modules/@opentelemetry/instrumentation/build/esm/index.js
+@repo/web:dev: ../../node_modules/@sentry/nextjs/node_modules/@sentry/node/build/cjs/integrations/tracing/postgresjs.js
+@repo/web:dev: ../../node_modules/@sentry/nextjs/node_modules/@sentry/node/build/cjs/index.js
+@repo/web:dev: ../../node_modules/@sentry/nextjs/build/cjs/index.server.js
+@repo/web:dev:  GET /api/categories?populate[Image]=true&populate[Directory][populate][Image]=true&filters[isActive][$eq]=true&sort[0]=Name:asc&locale=en 200 in 1755ms
+@repo/web:dev:  ΓÜá ../../node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+@repo/web:dev: Critical dependency: the request of a dependency is an expression
+@repo/web:dev: 
+@repo/web:dev: Import trace for requested module:
+@repo/web:dev: ../../node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+@repo/web:dev: ../../node_modules/@opentelemetry/instrumentation/build/esm/platform/node/index.js
+@repo/web:dev: ../../node_modules/@opentelemetry/instrumentation/build/esm/platform/index.js
+@repo/web:dev: ../../node_modules/@opentelemetry/instrumentation/build/esm/index.js
+@repo/web:dev: ../../node_modules/@sentry/nextjs/node_modules/@sentry/node/build/cjs/integrations/tracing/postgresjs.js
+@repo/web:dev: ../../node_modules/@sentry/nextjs/node_modules/@sentry/node/build/cjs/index.js
+@repo/web:dev: ../../node_modules/@sentry/nextjs/build/cjs/index.server.js
+@repo/web:dev:  GET /api/auth/session 200 in 2438ms
+@repo/web:dev:  ΓÜá ../../node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+@repo/web:dev: Critical dependency: the request of a dependency is an expression
+@repo/web:dev: 
+@repo/web:dev: Import trace for requested module:
+@repo/web:dev: ../../node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+@repo/web:dev: ../../node_modules/@opentelemetry/instrumentation/build/esm/platform/node/index.js
+@repo/web:dev: ../../node_modules/@opentelemetry/instrumentation/build/esm/platform/index.js
+@repo/web:dev: ../../node_modules/@opentelemetry/instrumentation/build/esm/index.js
+@repo/web:dev: ../../node_modules/@sentry/nextjs/node_modules/@sentry/node/build/cjs/integrations/tracing/postgresjs.js
+@repo/web:dev: ../../node_modules/@sentry/nextjs/node_modules/@sentry/node/build/cjs/index.js
+@repo/web:dev: ../../node_modules/@sentry/nextjs/build/cjs/index.server.js
+@repo/web:dev:  GET /img/placeholder.png 404 in 1035ms
+@repo/web:dev:  ΓÜá ../../node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+@repo/web:dev: Critical dependency: the request of a dependency is an expression
+@repo/web:dev: 
+@repo/web:dev: Import trace for requested module:
+@repo/web:dev: ../../node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+@repo/web:dev: ../../node_modules/@opentelemetry/instrumentation/build/esm/platform/node/index.js
+@repo/web:dev: ../../node_modules/@opentelemetry/instrumentation/build/esm/platform/index.js
+@repo/web:dev: ../../node_modules/@opentelemetry/instrumentation/build/esm/index.js
+@repo/web:dev: ../../node_modules/@sentry/nextjs/node_modules/@sentry/node/build/cjs/integrations/tracing/postgresjs.js
+@repo/web:dev: ../../node_modules/@sentry/nextjs/node_modules/@sentry/node/build/cjs/index.js
+@repo/web:dev: ../../node_modules/@sentry/nextjs/build/cjs/index.server.js
+@repo/web:dev:  ΓÜá ../../node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+@repo/web:dev: Critical dependency: the request of a dependency is an expression
+@repo/web:dev: 
+@repo/web:dev: Import trace for requested module:
+@repo/web:dev: ../../node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+@repo/web:dev: ../../node_modules/@opentelemetry/instrumentation/build/esm/platform/node/index.js
+@repo/web:dev: ../../node_modules/@opentelemetry/instrumentation/build/esm/platform/index.js
+@repo/web:dev: ../../node_modules/@opentelemetry/instrumentation/build/esm/index.js
+@repo/web:dev: ../../node_modules/@sentry/nextjs/node_modules/@sentry/node/build/cjs/integrations/tracing/postgresjs.js
+@repo/web:dev: ../../node_modules/@sentry/nextjs/node_modules/@sentry/node/build/cjs/index.js
+@repo/web:dev: ../../node_modules/@sentry/nextjs/build/cjs/index.server.js
+@repo/web:dev:  GET /single-listing-01 200 in 10360ms
+@repo/web:dev:  ΓÜá ../../node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+@repo/web:dev: Critical dependency: the request of a dependency is an expression
+@repo/web:dev: 
+@repo/web:dev: Import trace for requested module:
+@repo/web:dev: ../../node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+@repo/web:dev: ../../node_modules/@opentelemetry/instrumentation/build/esm/platform/node/index.js
+@repo/web:dev: ../../node_modules/@opentelemetry/instrumentation/build/esm/platform/index.js
+@repo/web:dev: ../../node_modules/@opentelemetry/instrumentation/build/esm/index.js
+@repo/web:dev: ../../node_modules/@sentry/nextjs/node_modules/@sentry/node/build/cjs/integrations/tracing/postgresjs.js
+@repo/web:dev: ../../node_modules/@sentry/nextjs/node_modules/@sentry/node/build/cjs/index.js
+@repo/web:dev: ../../node_modules/@sentry/nextjs/build/cjs/index.server.js
+@repo/web:dev:  ΓÜá ../../node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+@repo/web:dev: Critical dependency: the request of a dependency is an expression
+@repo/web:dev: 
+@repo/web:dev: Import trace for requested module:
+@repo/web:dev: ../../node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+@repo/web:dev: ../../node_modules/@opentelemetry/instrumentation/build/esm/platform/node/index.js
+@repo/web:dev: ../../node_modules/@opentelemetry/instrumentation/build/esm/platform/index.js
+@repo/web:dev: ../../node_modules/@opentelemetry/instrumentation/build/esm/index.js
+@repo/web:dev: ../../node_modules/@sentry/nextjs/node_modules/@sentry/node/build/cjs/integrations/tracing/postgresjs.js
+@repo/web:dev: ../../node_modules/@sentry/nextjs/node_modules/@sentry/node/build/cjs/index.js
+@repo/web:dev: ../../node_modules/@sentry/nextjs/build/cjs/index.server.js
+@repo/web:dev:  GET /single-listing-demo 200 in 3332ms
+@repo/web:dev:  GET /img/l-1.jpg 404 in 160ms
+@repo/web:dev:  GET /img/l-3.jpg 404 in 99ms
+@repo/web:dev:  GET /img/l-2.jpg 404 in 102ms
+@repo/web:dev:  GET /api/auth/session 200 in 84ms
+@repo/web:dev:  GET /api/auth/session 200 in 31ms
+@repo/web:dev:  Γ¿» ./src/app/[locale]/single-listing-demo/page.tsx
+@repo/web:dev: Error:   [31mx[0m Expected unicode escape
+@repo/web:dev:     ,-[[36;1;4mD:\Projects\Rate\apps\web\src\app\[locale]\single-listing-demo\page.tsx[0m:26:1]
+@repo/web:dev:  [2m23[0m | import BackToTop from '../components/back-to-top'
+@repo/web:dev:  [2m24[0m | 
+@repo/web:dev:  [2m25[0m | export default function SingleListingDemo() {
+@repo/web:dev:  [2m26[0m | \t// Demo data mapped to template structure with placeholders
+@repo/web:dev:     : [35;1m^[0m
+@repo/web:dev:  [2m27[0m | \tconst title = 'Cafe Horizon'
+@repo/web:dev:  [2m28[0m | \tconst description = 'A cozy spot offering artisan coffee and fresh pastries with a city view.'
+@repo/web:dev:  [2m28[0m | \tconst heroUrl = '/img/banner-6.jpg'
+@repo/web:dev:     `----
+@repo/web:dev: 
+@repo/web:dev: Caused by:
+@repo/web:dev:     Syntax Error
+@repo/web:dev: 
+@repo/web:dev: Import trace for requested module:
+@repo/web:dev: ./src/app/[locale]/single-listing-demo/page.tsx
+@repo/web:dev:  Γ¿» ./src/app/[locale]/single-listing-demo/page.tsx
+@repo/web:dev: Error:   [31mx[0m Expected unicode escape
+@repo/web:dev:     ,-[[36;1;4mD:\Projects\Rate\apps\web\src\app\[locale]\single-listing-demo\page.tsx[0m:26:1]
+@repo/web:dev:  [2m23[0m | import BackToTop from '../components/back-to-top'
+@repo/web:dev:  [2m24[0m | 
+@repo/web:dev:  [2m25[0m | export default function SingleListingDemo() {
+@repo/web:dev:  [2m26[0m | \t// Demo data mapped to template structure with placeholders
+@repo/web:dev:     : [35;1m^[0m
+@repo/web:dev:  [2m27[0m | \tconst title = 'Cafe Horizon'
+@repo/web:dev:  [2m28[0m | \tconst description = 'A cozy spot offering artisan coffee and fresh pastries with a city view.'
+@repo/web:dev:  [2m28[0m | \tconst heroUrl = '/img/banner-6.jpg'
+@repo/web:dev:     `----
+@repo/web:dev: 
+@repo/web:dev: Caused by:
+@repo/web:dev:     Syntax Error
+@repo/web:dev: 
+@repo/web:dev: Import trace for requested module:
+@repo/web:dev: ./src/app/[locale]/single-listing-demo/page.tsx

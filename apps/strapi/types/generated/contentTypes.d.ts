@@ -596,68 +596,6 @@ export interface ApiDirectoryDirectory extends Struct.CollectionTypeSchema {
   }
 }
 
-export interface ApiExampleFeatureExampleFeature
-  extends Struct.CollectionTypeSchema {
-  collectionName: "example_features"
-  info: {
-    description: "Example content type for demonstration"
-    displayName: "Example Feature"
-    pluralName: "example-features"
-    singularName: "example-feature"
-  }
-  options: {
-    draftAndPublish: true
-  }
-  attributes: {
-    attachments: Schema.Attribute.Media<"images" | "files", true>
-    category: Schema.Attribute.Enumeration<
-      ["technology", "finance", "education", "healthcare", "other"]
-    > &
-      Schema.Attribute.DefaultTo<"other">
-    createdAt: Schema.Attribute.DateTime
-    createdBy: Schema.Attribute.Relation<"oneToOne", "admin::user"> &
-      Schema.Attribute.Private
-    description: Schema.Attribute.Text &
-      Schema.Attribute.SetMinMaxLength<{
-        maxLength: 5000
-      }>
-    locale: Schema.Attribute.String & Schema.Attribute.Private
-    localizations: Schema.Attribute.Relation<
-      "oneToMany",
-      "api::example-feature.example-feature"
-    > &
-      Schema.Attribute.Private
-    metadata: Schema.Attribute.JSON
-    priority: Schema.Attribute.Integer &
-      Schema.Attribute.SetMinMax<
-        {
-          max: 10
-          min: 1
-        },
-        number
-      > &
-      Schema.Attribute.DefaultTo<5>
-    publishedAt: Schema.Attribute.DateTime
-    relatedFeatures: Schema.Attribute.Relation<
-      "manyToMany",
-      "api::example-feature.example-feature"
-    >
-    status: Schema.Attribute.Enumeration<["draft", "published", "archived"]> &
-      Schema.Attribute.DefaultTo<"draft">
-    tags: Schema.Attribute.JSON
-    thumbnail: Schema.Attribute.Media<"images">
-    title: Schema.Attribute.String &
-      Schema.Attribute.Required &
-      Schema.Attribute.SetMinMaxLength<{
-        maxLength: 200
-        minLength: 1
-      }>
-    updatedAt: Schema.Attribute.DateTime
-    updatedBy: Schema.Attribute.Relation<"oneToOne", "admin::user"> &
-      Schema.Attribute.Private
-  }
-}
-
 export interface ApiFooterFooter extends Struct.SingleTypeSchema {
   collectionName: "footers"
   info: {
@@ -1010,6 +948,12 @@ export interface ApiListingListing extends Struct.CollectionTypeSchema {
           localized: true
         }
       }>
+    ExternalImages: Schema.Attribute.JSON &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: false
+        }
+      }>
     FavoriteCount: Schema.Attribute.Integer &
       Schema.Attribute.SetPluginOptions<{
         i18n: {
@@ -1044,7 +988,6 @@ export interface ApiListingListing extends Struct.CollectionTypeSchema {
       }>
     ListingID: Schema.Attribute.String &
       Schema.Attribute.Required &
-      Schema.Attribute.Unique &
       Schema.Attribute.SetPluginOptions<{
         i18n: {
           localized: false
@@ -1134,6 +1077,12 @@ export interface ApiListingListing extends Struct.CollectionTypeSchema {
         }
       }>
     Reviews: Schema.Attribute.Relation<"oneToMany", "api::review.review">
+    Slug: Schema.Attribute.String &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: true
+        }
+      }>
     Stock: Schema.Attribute.Integer &
       Schema.Attribute.SetPluginOptions<{
         i18n: {
@@ -2163,7 +2112,6 @@ declare module "@strapi/strapi" {
       "api::category.category": ApiCategoryCategory
       "api::comment.comment": ApiCommentComment
       "api::directory.directory": ApiDirectoryDirectory
-      "api::example-feature.example-feature": ApiExampleFeatureExampleFeature
       "api::footer.footer": ApiFooterFooter
       "api::identity.identity": ApiIdentityIdentity
       "api::item.item": ApiItemItem

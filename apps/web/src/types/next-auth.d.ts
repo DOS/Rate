@@ -1,3 +1,28 @@
+import NextAuth, { DefaultSession } from "next-auth"
+
+declare module "next-auth" {
+  interface Session {
+    accessToken?: string
+    user: {
+      id?: string | number
+      name?: string | null
+      email?: string | null
+    } & DefaultSession["user"]
+  }
+
+  interface User {
+    strapiJwt?: string
+    strapiUser?: any
+  }
+}
+
+declare module "next-auth/jwt" {
+  interface JWT {
+    strapiJwt?: string
+    strapiUser?: any
+  }
+}
+
 // https://next-auth.js.org/getting-started/typescript
 
 import { DefaultSession } from "next-auth"

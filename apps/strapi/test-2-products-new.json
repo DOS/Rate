@@ -1,0 +1,51 @@
+{
+  "source": "shopee",
+  "items": [
+    {
+      "type": "product",
+      "product": {
+        "shopId": "88201679",
+        "productId": "1234567890",
+        "name": "iPhone 15 Pro Max 256GB Chính Hãng VN/A",
+        "title": "iPhone 15 Pro Max 256GB Chính Hãng VN/A",
+        "url": "https://shopee.vn/iPhone-15-Pro-Max-256GB-i.88201679.1234567890",
+        "price": 31990000,
+        "originalPrice": 34990000,
+        "currency": "VND",
+        "category": "Điện Thoại & Phụ Kiện",
+        "subCategory": "Điện thoại",
+        "images": [
+          "https://down-vn.img.susercontent.com/file/test1"
+        ],
+        "rating": 4.9,
+        "reviewCount": 150,
+        "soldCount": 200,
+        "location": "Hà Nội",
+        "shopName": "Apple Store VN"
+      }
+    },
+    {
+      "type": "product",
+      "product": {
+        "shopId": "88201679",
+        "productId": "9876543210",
+        "name": "iPad Pro M2 11 inch 128GB WiFi",
+        "title": "iPad Pro M2 11 inch 128GB WiFi",
+        "url": "https://shopee.vn/iPad-Pro-M2-11-inch-128GB-WiFi-i.88201679.9876543210",
+        "price": 21990000,
+        "originalPrice": 23990000,
+        "currency": "VND",
+        "category": "Điện Thoại & Phụ Kiện",
+        "subCategory": "Máy tính bảng",
+        "images": [
+          "https://down-vn.img.susercontent.com/file/test2"
+        ],
+        "rating": 4.8,
+        "reviewCount": 75,
+        "soldCount": 100,
+        "location": "Hà Nội",
+        "shopName": "Apple Store VN"
+      }
+    }
+  ]
+}

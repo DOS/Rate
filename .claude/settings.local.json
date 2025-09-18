@@ -98,7 +98,8 @@
       "Bash(set DATABASE_PASSWORD=)",
       "Bash(set DATABASE_URL=)",
       "Bash(Stop-Process -Id 70700 -Force)",
-      "Bash(/bashes)"
+      "Bash(/bashes)",
+      "Bash(taskkill:*)"
     ],
     "deny": [
       "Bash(git checkout:*)",

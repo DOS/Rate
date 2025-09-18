@@ -2,16 +2,25 @@ import React from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 
-interface Data{
-    image: string;
-    title: string;
-    tag: string;
-    price: string;
+interface MenuItem {
+    readonly image?: string | null;
+    readonly title: string;
+    readonly tag?: string | null;
+    readonly price?: string | number | null;
 }
 
-export default function Pricings() {
+interface PricingsProps {
+    readonly items?: readonly MenuItem[] | null
+}
 
-    const data = [
+export default function Pricings({ items }: PricingsProps) {
+
+    const data: MenuItem[] = items && items.length ? items.slice(0, 12).map((m) => ({
+        image: m.image ?? null,
+        title: m.title,
+        tag: m.tag ?? null,
+        price: m.price ?? null,
+    })) : [
         {
             image:'/img/prc-1.jpg',
             title:'Potato Slice',

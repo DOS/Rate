@@ -86,13 +86,13 @@ class StrapiClient {
   }
 
   /**
-   * Validate items through Strapi API
+   * Validate items through Strapi API (OLD - deprecated)
    * @param {Array|Object} items - Items to validate
    * @param {Object} options - Additional options
    * @returns {Promise<Object>} Validation response
    */
   async validate(items, options = {}) {
-    const url = `${this.baseUrl}/api/validation/validate`;
+    const url = `${this.baseUrl}/api/listings/create?source=extension`;
     
     const body = {
       items: Array.isArray(items) ? items : [items],
@@ -116,6 +116,43 @@ class StrapiClient {
       return data;
     } catch (error) {
       console.error('Validation error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Create listings from Shopee products (NEW - recommended)
+   * @param {Array|Object} items - Items to process
+   * @param {Object} options - Additional options
+   * @returns {Promise<Object>} Creation response
+   */
+  async createFromShopee(items, options = {}) {
+    const url = `${this.baseUrl}/api/listings/create-from-shopee`;
+    const params = new URLSearchParams({
+      source: options.source || 'extension',
+      queue: options.queue || 'auto' // auto, true, false
+    });
+    
+    const body = {
+      items: Array.isArray(items) ? items : [items]
+    };
+
+    try {
+      const response = await this.makeRequest(`${url}?${params}`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify(body)
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error?.message || data.errors?.join(', ') || 'Creation request failed');
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Create from Shopee error:', error);
       throw error;
     }
   }

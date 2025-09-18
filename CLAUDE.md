@@ -5,6 +5,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## IMPORTANT: Language Requirement
 **ALWAYS respond in Vietnamese (Tiếng Việt) unless explicitly asked to use another language.**
 
+## CRITICAL: Testing Requirement
+**LUÔN LUÔN TEST TRƯỚC KHI XÁC NHẬN HOÀN THÀNH BẤT KỲ TASK NÀO. KHÔNG BAO GIỜ BÁO "ĐÃ XONG" MÀ CHƯA TEST.**
+
 ## Project Overview
 
 Rate Platform is an anti-scam ecosystem for Vietnamese users, built as a Turborepo monorepo with AI-powered features including fake review detection, sentiment analysis, and fraud prevention using GPT-4o-mini.
@@ -119,10 +122,10 @@ Modules/                # Independent services (legacy structure)
 
 ### Database
 
-- **PostgreSQL 17**: Container name `DB`, user `JOY`, database `rate_db`
+- **PostgreSQL 17**: Container name `DB`, user `joy`, database `rate_db`
 - **UUID v7 extension**: For efficient ID generation
 - **Migrations**: Handled by Strapi
-- **Access**: `docker exec DB psql -U JOY -d rate_db`
+- **Access**: `docker exec DB psql -U joy -d rate_db`
 
 ### Environment Variables
 
@@ -144,7 +147,7 @@ DATABASE_CLIENT=postgres
 DATABASE_HOST=localhost
 DATABASE_PORT=5432
 DATABASE_NAME=ratebox
-DATABASE_USERNAME=JOY
+DATABASE_USERNAME=joy
 DATABASE_PASSWORD=<password>
 
 # apps/web/.env.local
@@ -233,7 +236,7 @@ Docker commands:
 cd apps/strapi && docker compose up -d db
 
 # Access PostgreSQL
-docker exec DB psql -U JOY -d rate_db
+docker exec DB psql -U joy -d rate_db
 
 # Access Redis
 docker exec redis redis-cli
@@ -247,19 +250,71 @@ docker exec redis redis-cli
 - Kill by PID only: `Stop-Process -Id <PID>`
 - Check port usage: `netstat -ano | findstr :[PORT]`
 
+## Strapi 5 i18n (Internationalization)
+
+### Creating Localized Content
+
+When creating content with multiple locales in Strapi 5:
+
+```javascript
+// 1. Create Vietnamese version first
+const viListing = await strapi.entityService.create('api::listing.listing', {
+  data: listingData,
+  locale: 'vi' // Specify locale in params, not in data
+});
+
+// 2. Create English version - Multiple approaches:
+
+// Option A: Use i18n plugin service (if available)
+const i18nPlugin = strapi.plugin('i18n');
+if (i18nPlugin?.service) {
+  const coreApiService = i18nPlugin.service('core-api');
+  if (coreApiService?.createLocalization) {
+    const enListing = await coreApiService.createLocalization({
+      id: viListing.id,
+      locale: 'en',
+      data: englishData
+    }, 'api::listing.listing');
+  }
+}
+
+// Option B: Create manually with same documentId
+const enListing = await strapi.entityService.create('api::listing.listing', {
+  data: {
+    ...englishData,
+    documentId: viListing.documentId // Link to Vietnamese version
+  },
+  locale: 'en'
+});
+```
+
+### Important Notes for i18n:
+
+1. **DocumentId Linking**: In Strapi 5, translations are linked via `documentId`
+2. **Locale Parameter**: Always specify locale in params, not in data
+3. **Finding Translations**: Use `documentId` to find content in other locales
+4. **Category Matching**: When linking categories across locales, match by `documentId` first, then fallback to similarity matching
+5. **Validation**: Some fields like `ListingID` must not be null - ensure proper extraction from URLs
+
+### Common i18n Issues:
+
+- **Duplicate Creation**: Check for existing content before creating
+- **Missing English Version**: Ensure i18n service is available or use manual creation
+- **Category Mismatch**: Use smart matching to find equivalent categories across locales
+
 ## Common Development Tasks
 
 ### Database Operations
 
 ```bash
 # Backup database
-docker exec -t DB pg_dump -U JOY rate_db > backup.sql
+docker exec -t DB pg_dump -U joy rate_db > backup.sql
 
 # Restore database
-docker exec -i DB psql -U JOY rate_db < backup.sql
+docker exec -i DB psql -U joy rate_db < backup.sql
 
 # Reset database
-docker exec DB psql -U JOY -d rate_db -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+docker exec DB psql -U joy -d rate_db -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
 ```
 
 ### Debugging

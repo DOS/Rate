@@ -61,15 +61,37 @@ class RedisWorkerService {
 
     // Create consumer group if not exists
     try {
-      // Use '0' to read ALL messages from the beginning of the stream
-      await client.xGroupCreate('validation_requests', this.consumerGroup, '0', {
+      // Use '$' to read only NEW messages, '0' to read ALL from beginning
+      await client.xGroupCreate('validation_requests', this.consumerGroup, '$', {
         MKSTREAM: true
       });
       console.log('[RedisWorker] Created consumer group:', this.consumerGroup);
+      
+      // Process existing messages that were added before group creation
+      console.log('[RedisWorker] Processing existing messages in stream...');
+      const existingMessages = await client.xRange('validation_requests', '-', '+', { COUNT: 100 });
+      
+      if (existingMessages && existingMessages.length > 0) {
+        console.log(`[RedisWorker] Found ${existingMessages.length} existing messages to process`);
+        for (const message of existingMessages) {
+          try {
+            await this.processMessage(message.id, message.message);
+            console.log(`[RedisWorker] Processed existing message ${message.id}`);
+          } catch (error) {
+            console.error(`[RedisWorker] Failed to process existing message ${message.id}:`, error);
+          }
+        }
+      }
     } catch (error: any) {
       if (error.message?.includes('BUSYGROUP')) {
         console.log('[RedisWorker] Consumer group already exists');
-        // Don't reset the group - let it continue from where it left off
+        // Reset the group to read from beginning
+        try {
+          await client.xGroupSetId('validation_requests', this.consumerGroup, '0');
+          console.log('[RedisWorker] Reset consumer group to read from beginning');
+        } catch (e) {
+          console.error('[RedisWorker] Failed to reset consumer group:', e);
+        }
       } else {
         console.error('[RedisWorker] Error creating consumer group:', error);
       }

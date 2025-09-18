@@ -84,6 +84,11 @@ const nextConfig = {
 const withConfig = (() => {
   let config = withNextIntl(withPlaiceholder(nextConfig))
 
+  // Only enable Sentry webpack wrapping when DSN is provided (e.g., in CI/production)
+  if (!env.NEXT_PUBLIC_SENTRY_DSN) {
+    return config
+  }
+
   config = withSentryConfig(config, {
     // For all available options, see:
     // https://github.com/getsentry/sentry-webpack-plugin#options

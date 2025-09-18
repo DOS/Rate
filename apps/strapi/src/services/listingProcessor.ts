@@ -133,18 +133,12 @@ class ListingProcessorService {
           ? existingListing.Media.map((m: any) => typeof m === 'object' ? m.id : m)
           : [];
         
-        // Upload images to Strapi Media Library (skip if already has images)
-        console.log('[ListingProcessor] Existing media count:', existingMediaIds.length);
-        console.log('[ListingProcessor] Starting image upload for existing listing:', data.product.title);
+        // Process external images (no download, just store URLs)
+        console.log('[ListingProcessor] Processing external images for existing listing:', data.product.title);
         console.log('[ListingProcessor] Product images array:', data.product.images);
         console.log('[ListingProcessor] Images count:', data.product.images ? data.product.images.length : 0);
-        const mediaIds = await this.uploadProductImages(
-          data.product.images || [], 
-          data.product.title || '',
-          existingMediaIds,
-          existingListing.ListingID // Pass ListingID for smart filename
-        );
-        console.log('[ListingProcessor] Image upload complete, IDs:', mediaIds);
+        const imageResult = await this.processExternalImages(data.product.images || []);
+        console.log('[ListingProcessor] External images processed:', imageResult.urls.length, 'URLs');
         
         // Update existing listing with new data
         const updatedListing = await this.strapi.entityService.update('api::listing.listing', existingListing.id, {
@@ -156,9 +150,9 @@ class ListingProcessorService {
             
             // Update relations - Link Item if not already linked
             Item: item ? item.id : existingListing.Item,
-            
-            // Update Media only if new images uploaded successfully
-            Media: mediaIds.length > 0 ? mediaIds : existingListing.Media,
+
+            // Store external image URLs (no local upload)
+            ExternalImages: imageResult.urls,
             
             // Update other fields that might have changed
             Stock: data.product.stock || existingListing.Stock || 0,
@@ -199,7 +193,7 @@ class ListingProcessorService {
                   LastUpdated: new Date().toISOString(),
                   ViewCount: (enListing.ViewCount || 0) + 1,
                   Item: item ? item.id : (enListing as any).Item,
-                  Media: mediaIds.length > 0 ? mediaIds : (enListing as any).Media,
+                  ExternalImages: imageResult.urls.length > 0 ? imageResult.urls : (enListing as any).ExternalImages,
                   Stock: data.product.stock || enListing.Stock || 0,
                   AverageRating: data.product.rating || enListing.AverageRating || 0,
                   TotalReviews: data.product.productReviewCount || enListing.TotalReviews || 0,
@@ -285,7 +279,7 @@ class ListingProcessorService {
                   Platform: viListing.Platform?.id || viListing.Platform,
                   Category: englishCategoryId || viListing.Category?.id || viListing.Category,
                   Item: viListing.Item?.id || viListing.Item,
-                  Media: mediaIds.length > 0 ? mediaIds : viListing.Media,
+                  ExternalImages: imageResult.urls.length > 0 ? imageResult.urls : viListing.ExternalImages,
                   UsageCount: data.product.soldCount || viListing.UsageCount || 0,
                   ViewCount: (viListing.ViewCount || 0) + 1,
                   AverageRating: data.product.rating || viListing.AverageRating || 0,
@@ -791,48 +785,81 @@ class ListingProcessorService {
           // Remove DynamicFields as it's not in schema
           publishedAt: new Date().toISOString()
         },
-        locale: locale || 'vi' // Locale should be outside data object
+        locale: locale || 'vi' // IMPORTANT: Specify locale to create Item in correct language
       } as any);
       
       console.log('[ListingProcessor] Created new Item with ID:', newItem.id, 'documentId:', newItem.documentId, 'MatchCode:', uniqueMatchCode);
 
-      // Create EN localization using the same documentId (Strapi 5 way)
-      const otherLocale = locale === 'vi' ? 'en' : 'vi';
-      if (newItem.documentId && otherLocale) {
+      // Create localizations for ALL enabled locales (not hardcoded)
+      if (newItem.documentId) {
         try {
-          console.log('[ListingProcessor] Creating', otherLocale, 'localization for documentId:', newItem.documentId);
+          // Get all enabled locales from i18n plugin
+          const i18nService = this.strapi.plugin('i18n')?.service('locales');
+          let allLocales = ['vi', 'en']; // Default fallback
 
-          // In Strapi 5, create localization by using same documentId but different locale
-          const localizationData = {
-            Title: coreProductName, // Keep same title for now
-            Slug: itemSlug,
-            MatchCode: uniqueMatchCode,
-            NormalizedTitle: normalizedTitle,
-            MatchConfidence: confidence,
-            Description: descriptionBlocks,
-            isActive: true,
-            isFeatured: false,
-            ItemType: 'Product',
-            Price: product.price || 0,
-            Currency: product.currency || 'VND',
-            Score: product.rating || 0,
-            Brand: product.brand ? this.titleNormalizer.normalizeBrand(product.brand) : null,
-            ModelNumber: this.extractModelNumber(itemTitle),
-            PlatformIdentifiers: platformIdentifiers,
-            Category: category ? category.id : null,
-            publishedAt: new Date().toISOString(),
-            documentId: newItem.documentId // Use same documentId for localization
-          };
+          if (i18nService && typeof i18nService.find === 'function') {
+            const localesData = await i18nService.find();
+            allLocales = localesData.map((l: any) => l.code);
+          }
 
-          // Create localization with same documentId
-          const otherLocaleItem = await this.strapi.entityService.create('api::item.item', {
-            data: localizationData,
-            locale: otherLocale
-          } as any);
+          console.log('[ListingProcessor] Creating Item localizations for locales:', allLocales);
 
-          console.log('[ListingProcessor] Created', otherLocale, 'Item localization, ID:', otherLocaleItem?.id);
-        } catch (localeError: any) {
-          console.log('[ListingProcessor] Could not create', otherLocale, 'Item localization:', localeError.message);
+          // Create Item for each locale (except the one already created)
+          for (const targetLocale of allLocales) {
+            if (targetLocale === locale) continue; // Skip the locale we already created
+
+            try {
+              console.log('[ListingProcessor] Creating', targetLocale, 'localization for documentId:', newItem.documentId);
+
+              // Find category for this locale if available
+              let localizedCategory = null;
+              if (category && category.documentId) {
+                const linkedCategories = await this.strapi.entityService.findMany('api::category.category', {
+                  filters: {
+                    documentId: category.documentId,
+                    locale: targetLocale
+                  },
+                  limit: 1
+                });
+                if (linkedCategories && linkedCategories.length > 0) {
+                  localizedCategory = linkedCategories[0];
+                }
+              }
+
+              const localizationData = {
+                Title: coreProductName, // Keep same title for now (could translate later)
+                Slug: itemSlug,
+                MatchCode: uniqueMatchCode,
+                NormalizedTitle: normalizedTitle,
+                MatchConfidence: confidence,
+                Description: descriptionBlocks,
+                isActive: true,
+                isFeatured: false,
+                ItemType: 'Product',
+                Price: product.price || 0,
+                Currency: product.currency || 'VND',
+                Score: product.rating || 0,
+                Brand: product.brand ? this.titleNormalizer.normalizeBrand(product.brand) : null,
+                ModelNumber: this.extractModelNumber(itemTitle),
+                PlatformIdentifiers: platformIdentifiers,
+                Category: localizedCategory ? localizedCategory.id : null,
+                publishedAt: new Date().toISOString(),
+                documentId: newItem.documentId // Use same documentId for localization
+              };
+
+              // Create localization with same documentId
+              const localizedItem = await this.strapi.entityService.create('api::item.item', {
+                data: localizationData,
+                locale: targetLocale
+              } as any);
+
+              console.log('[ListingProcessor] Created', targetLocale, 'Item localization, ID:', localizedItem?.id);
+            } catch (localeError: any) {
+              console.log('[ListingProcessor] Could not create', targetLocale, 'Item localization:', localeError.message);
+            }
+          }
+        } catch (error: any) {
+          console.log('[ListingProcessor] Error creating Item localizations:', error.message);
         }
       }
       
@@ -933,8 +960,10 @@ class ListingProcessorService {
       console.log('[ListingProcessor] FINAL locale set to:', locale, 'for platform:', platform.Name);
       
       // Extract IDs để tạo ListingID unique với format: platformIdentifier.uniqueId
-      const productId = this.extractProductId(product.productUrl || '');
-      const shopId = this.extractShopId(product.productUrl || '');
+      // Extension sends 'url' field, some places use 'productUrl'
+      const productUrl = product.url || product.productUrl || '';
+      const productId = this.extractProductId(productUrl);
+      const shopId = this.extractShopId(productUrl);
       const uniqueId = productId && shopId ? `${shopId}_${productId}` : null;
       // Use ListingID from product data if provided (from UnifiedValidationService)
       let listingId = product.ListingID || (uniqueId ? `${platformIdentifier}.${uniqueId}` : null);
@@ -950,17 +979,12 @@ class ListingProcessorService {
       // This prevents creating orphaned Items when listing creation fails
       let item = null;
       
-      // Upload images to Strapi Media Library (Items folder)
-      console.log('[ListingProcessor] Starting image upload for product:', product.title);
+      // Process external images (no download, just store URLs)
+      console.log('[ListingProcessor] Processing external images for product:', product.title);
       console.log('[ListingProcessor] Product images array:', product.images);
       console.log('[ListingProcessor] Images count:', product.images ? product.images.length : 0);
-      const mediaIds = await this.uploadProductImages(
-        product.images || [], 
-        product.title || '',
-        undefined,
-        listingId || undefined // Pass ListingID for smart filename (handle null)
-      );
-      console.log('[ListingProcessor] Image upload complete, IDs:', mediaIds);
+      const imageResult = await this.processExternalImages(product.images || []);
+      console.log('[ListingProcessor] External images processed:', imageResult.urls.length, 'URLs');
       
       // Convert description to Blocks format for Strapi with encoding fix
       const fixedDescription = this.fixVietnameseEncoding(product.description || '');
@@ -1055,7 +1079,7 @@ class ListingProcessorService {
         
         // Relations
         Category: category ? category.id : null, // Link to category if found (use ID directly)
-        Media: mediaIds, // Use Media field (not Images) as per schema
+        ExternalImages: imageResult.urls, // Store external URLs
         
         // Dynamic Zone Properties - Shopee không cung cấp specs chi tiết
         // Có thể extract từ description hoặc dùng AI sau
@@ -1147,15 +1171,14 @@ class ListingProcessorService {
           populate: ['Media', 'Platform', 'Category'], // Populate relations to verify
           locale: locale // Set locale in params for Strapi 5
         } as any);
+
+        console.log('[ListingProcessor] Created Vietnamese listing with ID:', newListing.id, 'DocumentId:', newListing.documentId);
         
-        console.log('[ListingProcessor] Created listing with ID:', newListing.id, 'Locale:', 'vi');
-        console.log('[ListingProcessor] Listing has Media:', mediaIds.length || 0, 'images uploaded');
-        
-        // Create English translation using proper i18n approach
-        // In Strapi 5, we need to use the i18n plugin to clone content
+        // Create English translation for the listing
+        // In Strapi 5, we need to create the English version separately
         try {
-          console.log('[ListingProcessor] Creating English translation using i18n clone');
-          
+          console.log('[ListingProcessor] Creating English translation for listing');
+
           // Find English category using smart matching
           let englishCategoryId = null;
           if (category) {
@@ -1168,13 +1191,13 @@ class ListingProcessorService {
                 },
                 limit: 1
               });
-              
+
               if (linkedEnCategory && linkedEnCategory.length > 0) {
                 englishCategoryId = linkedEnCategory[0].id;
                 console.log('[ListingProcessor] Found linked English category:', linkedEnCategory[0].Name);
               }
             }
-            
+
             // Fallback: Use similarity matching for English categories
             if (!englishCategoryId) {
               const allEnCategories = await this.strapi.entityService.findMany('api::category.category', {
@@ -1183,11 +1206,11 @@ class ListingProcessorService {
                 },
                 limit: 100
               });
-              
+
               if (allEnCategories && allEnCategories.length > 0) {
                 let bestMatch = null;
                 let bestScore = 0;
-                
+
                 // Try common translations first
                 const commonTranslations: { [key: string]: string[] } = {
                   'điện thoại': ['cellphones', 'cell phones', 'phones', 'mobile phones'],
@@ -1196,13 +1219,13 @@ class ListingProcessorService {
                   'tai nghe': ['headphones', 'earphones', 'audio'],
                   'phụ kiện': ['accessories', 'parts']
                 };
-                
+
                 const viCatNormalized = this.normalizeCategoryName(category.Name || '');
-                
+
                 for (const enCategory of allEnCategories) {
                   const enCatNormalized = this.normalizeCategoryName(enCategory.Name || '');
                   let similarity = 0;
-                  
+
                   // Check common translations
                   for (const [viKey, enValues] of Object.entries(commonTranslations)) {
                     if (viCatNormalized.includes(viKey)) {
@@ -1214,18 +1237,18 @@ class ListingProcessorService {
                       }
                     }
                   }
-                  
+
                   // If no translation match, use similarity algorithm
                   if (similarity === 0) {
                     similarity = this.calculateSimilarity(category.Slug || '', enCategory.Slug || '') * 0.7;
                   }
-                  
+
                   if (similarity > bestScore) {
                     bestScore = similarity;
                     bestMatch = enCategory;
                   }
                 }
-                
+
                 if (bestMatch && bestScore >= 0.5) {
                   englishCategoryId = bestMatch.id;
                   console.log(`[ListingProcessor] Found English category match: "${bestMatch.Name}" with score: ${(bestScore * 100).toFixed(1)}%`);
@@ -1233,50 +1256,118 @@ class ListingProcessorService {
               }
             }
           }
-          
-          // Use the i18n plugin service to create localized version
-          // The clone method ensures proper linking between locales
-          const i18nService = this.strapi.plugin('i18n').service('core-api');
-          
-          if (i18nService && i18nService.createLocalization) {
-            const englishListing = await i18nService.createLocalization({
-              id: newListing.id,
-              locale: 'en',
-              data: {
-                ...listingData,
-                // Override category with English version
-                Category: englishCategoryId || listingData.Category,
-                // Keep same data but can customize for English if needed
-                Title: listingData.Title // For now, use same title (can translate later)
+
+          // Create English version using Strapi 5's proper i18n approach
+          // The key is to use the i18n service's createLocalization method
+          const documentId = newListing.documentId;
+          console.log('[ListingProcessor] Creating English listing with same documentId:', documentId);
+
+          try {
+            // Check if i18n plugin is available and has the service we need
+            const i18nPlugin = this.strapi.plugin('i18n');
+            if (i18nPlugin && i18nPlugin.service) {
+              const coreApiService = i18nPlugin.service('core-api');
+
+              if (coreApiService && typeof coreApiService.createLocalization === 'function') {
+                // Use the official i18n createLocalization method
+                const englishListing = await coreApiService.createLocalization({
+                  id: newListing.id,
+                  locale: 'en',
+                  data: {
+                    ...listingData,
+                    Category: englishCategoryId || listingData.Category,
+                    Title: listingData.Title // Keep same title for now
+                  }
+                }, 'api::listing.listing');
+
+                console.log('[ListingProcessor] Created English listing using i18n service, ID:', englishListing?.id);
+              } else {
+                // Fallback: Create English listing manually with same documentId
+                console.log('[ListingProcessor] i18n service not available, creating English listing manually');
+
+                // First check if English version already exists (race condition)
+                const existingEnglish = await this.strapi.entityService.findMany('api::listing.listing', {
+                  filters: {
+                    documentId: documentId,
+                    locale: 'en'
+                  },
+                  limit: 1
+                } as any);
+
+                if (!existingEnglish || existingEnglish.length === 0) {
+                  // Prepare English listing data
+                  const englishListingData = {
+                    ...listingData,
+                    Category: englishCategoryId || listingData.Category,
+                    Title: listingData.Title,
+                    // IMPORTANT: Include documentId to link with Vietnamese version
+                    documentId: documentId
+                  };
+
+                  // Create English listing
+                  const englishListing = await this.strapi.entityService.create('api::listing.listing', {
+                    data: englishListingData,
+                    locale: 'en',
+                    populate: ['Category', 'Platform']
+                  } as any);
+
+                  console.log('[ListingProcessor] Created English listing manually with ID:', englishListing?.id);
+                } else {
+                  console.log('[ListingProcessor] English listing already exists for this documentId');
+                }
               }
-            }, 'api::listing.listing');
-            
-            console.log('[ListingProcessor] Created English translation with proper i18n linking, ID:', englishListing?.id);
-          } else {
-            // Fallback: Create using entityService with proper locale linking
-            // This requires the localizations field to be set correctly
-            console.log('[ListingProcessor] Using fallback method for English translation');
-            
-            // Get the document_id from the created listing to link translations
-            const documentId = newListing.documentId;
-            
-            if (documentId) {
-              // Create EN version with same document_id - this links them
-              const englishListing = await this.strapi.entityService.create('api::listing.listing', {
-                data: {
-                  ...listingData,
-                  // Override category with English version
-                  Category: englishCategoryId || listingData.Category,
-                  // Override the document_id to match the VI version
-                  documentId: documentId
-                },
-                populate: ['Media', 'Platform', 'Category'],
-                locale: 'en'
-              } as any);
-              
-              console.log('[ListingProcessor] Created English translation with documentId linking, ID:', englishListing?.id);
             } else {
-              console.log('[ListingProcessor] Could not get documentId for linking translations');
+              console.log('[ListingProcessor] i18n plugin not available');
+            }
+          } catch (enCreateError: any) {
+            console.log('[ListingProcessor] Error creating English listing:', enCreateError.message);
+
+            // If error is about duplicate documentId, try updating the locale directly in DB
+            if (enCreateError.message?.includes('duplicate') || enCreateError.message?.includes('unique')) {
+              console.log('[ListingProcessor] Attempting direct DB update for English locale...');
+              try {
+                // This is a last resort - directly insert English locale record
+                const knex = this.strapi.db.connection;
+
+                // Check if the listings table has the proper structure
+                const englishRecord = {
+                  ...listingData,
+                  document_id: documentId,
+                  locale: 'en',
+                  created_at: new Date(),
+                  updated_at: new Date(),
+                  published_at: new Date(),
+                  created_by_id: 1,
+                  updated_by_id: 1
+                };
+
+                // Remove fields that might cause issues
+                delete englishRecord.documentId;
+                delete englishRecord.Category;
+                delete englishRecord.Platform;
+                delete englishRecord.Item;
+
+                const [insertedId] = await knex('listings').insert(englishRecord).returning('id');
+
+                // Now add the relations
+                if (listingData.Platform) {
+                  await knex('listings_platform_lnk').insert({
+                    listing_id: insertedId,
+                    platform_id: listingData.Platform
+                  });
+                }
+
+                if (englishCategoryId || listingData.Category) {
+                  await knex('listings_category_lnk').insert({
+                    listing_id: insertedId,
+                    category_id: englishCategoryId || listingData.Category
+                  });
+                }
+
+                console.log('[ListingProcessor] Created English listing via direct DB insert, ID:', insertedId);
+              } catch (dbError: any) {
+                console.log('[ListingProcessor] Direct DB insert also failed:', dbError.message);
+              }
             }
           }
         } catch (enError: any) {
@@ -1288,42 +1379,47 @@ class ListingProcessorService {
         // Create Item for Vietnamese locale  
         item = await this.findOrCreateItem(product, category, 'vi');
         
-        // TEMPORARILY DISABLED: Also create English Item
-        // TODO: Fix issue with creating English items
-        let englishItem = null; // Keep this declaration outside comment for now
-        /*
+        // Also create English Item (re-enabled)
+        let englishItem = null;
         try {
-          // Find English category for Item
-          let englishCategoryForItem = null;
+          // Prefer finding English category via linked documentId
+          let englishCategoryForItem = null as any;
           if (category) {
-            const categoryTitle = category.Name || ''; // Use Name instead of Title
-            const categoryNameMap: { [key: string]: string } = {
-              'Điện Thoại': 'Cell Phones',
-              'Điện Thoại & Phụ Kiện': 'Cell Phones & Accessories',
-              'Máy Tính': 'Computers',
-              'Laptop': 'Laptops',
-              'Tai Nghe': 'Headphones',
-              'Phụ Kiện': 'Accessories'
-            };
-            const englishCategoryName = categoryNameMap[categoryTitle] || categoryTitle;
-            
-            const englishCategories = await this.strapi.entityService.findMany('api::category.category', {
-              filters: {
-                Name: englishCategoryName, // Use Name instead of Title
-                locale: 'en'
+            if (category.documentId) {
+              const linkedEn = await (this.strapi.entityService as any).findMany('api::category.category', {
+                filters: { documentId: { $eq: category.documentId } },
+                locale: 'en',
+                limit: 1
+              });
+              if (linkedEn && linkedEn.length > 0) {
+                englishCategoryForItem = linkedEn[0];
               }
-            });
-            
-            if (englishCategories && englishCategories.length > 0) {
-              englishCategoryForItem = englishCategories[0];
+            }
+            // Fallback by fuzzy matching on Slug/Name when no direct link
+            if (!englishCategoryForItem) {
+              const allEnCategories = await this.strapi.entityService.findMany('api::category.category', {
+                filters: { locale: 'en' },
+                limit: 100
+              });
+              if (allEnCategories && allEnCategories.length > 0) {
+                let best = null as any;
+                let score = 0;
+                const viSlug = (category.Slug || category.Name || '').toString().toLowerCase();
+                for (const enCat of allEnCategories) {
+                  const enSlug = (enCat.Slug || enCat.Name || '').toString().toLowerCase();
+                  const s = this.calculateSimilarity(viSlug, enSlug);
+                  if (s > score) { score = s; best = enCat; }
+                }
+                if (best && score >= 0.5) {
+                  englishCategoryForItem = best;
+                }
+              }
             }
           }
-          
           englishItem = await this.findOrCreateItem(product, englishCategoryForItem, 'en');
         } catch (enItemError: any) {
           console.log('[ListingProcessor] Could not create English Item:', enItemError.message);
         }
-        */
         
         // Update listing to link with Item if found/created
         if (item) {
@@ -1338,23 +1434,21 @@ class ListingProcessorService {
           console.log('[ListingProcessor] Linked listing with Item ID:', item.id);
         }
         
-        // TEMPORARILY DISABLED: Update English listing with English Item
-        // TODO: Re-enable when English translation is fixed
-        /*
+        // Update English listing with English Item if available
         if (englishItem) {
           try {
             const englishListings = await this.strapi.entityService.findMany('api::listing.listing', {
               filters: {
-                ListingID: listingId || '',
-                locale: 'en'
-              }
+                ListingID: listingId || ''
+              },
+              locale: 'en',
+              limit: 1
             } as any);
-            
             if (englishListings && englishListings.length > 0) {
               await this.strapi.entityService.update('api::listing.listing', englishListings[0].id, {
                 data: {
                   Item: englishItem.id,
-                  Title: englishListings[0].Title // Keep existing title
+                  Title: englishListings[0].Title
                 },
                 locale: 'en'
               } as any);
@@ -1364,7 +1458,6 @@ class ListingProcessorService {
             console.log('[ListingProcessor] Could not link English Item:', linkError.message);
           }
         }
-        */
       } catch (error: any) {
         // Log full error for debugging
         console.log('[ListingProcessor] Error creating listing:', {
@@ -1399,9 +1492,8 @@ class ListingProcessorService {
                 AverageRating: product.rating || existing.AverageRating || 0,
                 TotalReviews: product.productReviewCount || existing.TotalReviews || 0,
                 FavoriteCount: product.likedCount || existing.FavoriteCount || 0,
-                Item: item ? item.id : existing.Item,
-                // Update Media if we have new images
-                Media: mediaIds.length > 0 ? mediaIds : existing.Media
+                Item: item ? item.id : existing.Item
+                // External images handled in main flow, not here
               }
               // locale: 'vi' // TEMPORARILY COMMENTED
             } as any);
@@ -1792,8 +1884,37 @@ class ListingProcessorService {
   }
 
   /**
+   * Process external images for Shopee/Lazada/Tiki products
+   * Store URLs directly without downloading
+   */
+  private async processExternalImages(imageUrls: string[]): Promise<{ urls: string[], mediaIds: number[] }> {
+    try {
+      if (!imageUrls || imageUrls.length === 0) {
+        console.log('[ListingProcessor] No images to process');
+        return { urls: [], mediaIds: [] };
+      }
+
+      // Filter valid URLs and limit to 10 images
+      const validUrls = imageUrls
+        .filter(url => url && url.startsWith('http'))
+        .slice(0, 10);
+
+      console.log(`[ListingProcessor] Processing ${validUrls.length} external image URLs`);
+
+      return {
+        urls: validUrls,
+        mediaIds: [] // No local media IDs when using external URLs
+      };
+    } catch (error) {
+      console.error('[ListingProcessor] Error processing external images:', error);
+      return { urls: [], mediaIds: [] };
+    }
+  }
+
+  /**
    * Upload product images to Strapi Media Library using internal upload service
    * Supports: http/https URLs, // protocol-relative URLs, data:image base64
+   * NOTE: Only used for manual uploads from Rate platform, not for external platforms
    */
   private async uploadProductImages(imageUrls: string[], productTitle: string, existingMediaIds?: number[], listingId?: string): Promise<number[]> {
     // Import the new upload function (use dynamic import for TypeScript)
@@ -2428,7 +2549,36 @@ class ListingProcessorService {
     try {
       const rawItemTitle = product.title || (product as any).productName || '';
       const itemTitle = this.fixVietnameseEncoding(rawItemTitle);
-      const category = existingItem.Category;
+
+      // Find localized category for the target locale
+      let localizedCategory = null;
+      if (existingItem.Category) {
+        try {
+          // First check if existingItem.Category has documentId
+          const categoryDocumentId = existingItem.Category.documentId || existingItem.Category;
+
+          // Find the category in the target locale using documentId
+          const categories = await this.strapi.entityService.findMany('api::category.category', {
+            filters: {
+              documentId: {
+                $eq: categoryDocumentId
+              }
+            } as any,
+            locale: locale,
+            limit: 1
+          });
+
+          if (categories && categories.length > 0) {
+            localizedCategory = categories[0];
+            console.log('[ListingProcessor] Found localized category for locale', locale, ':', (localizedCategory as any).Title);
+          }
+        } catch (catError) {
+          console.log('[ListingProcessor] Could not find localized category:', catError);
+        }
+      }
+
+      // Use localized category if found, otherwise fallback to original
+      const category = localizedCategory || existingItem.Category;
 
       // Generate matching codes
       const categoryName = category?.Title || product.category || 'item';
@@ -2477,7 +2627,7 @@ class ListingProcessorService {
           if (clonedItem) {
             console.log('[ListingProcessor] Created Item localization using i18n service, ID:', clonedItem.id);
 
-            // Update the cloned item with correct data
+            // Update the cloned item with correct data and localized category
             const updatedItem = await this.strapi.entityService.update('api::item.item', clonedItem.id, {
               data: {
                 Title: coreProductName,
@@ -2491,7 +2641,9 @@ class ListingProcessorService {
                 Score: product.rating || 0,
                 Brand: product.brand ? (this.titleNormalizer.normalizeBrand(product.brand) || undefined) : undefined,
                 ModelNumber: this.extractModelNumber(itemTitle) || undefined,
-                PlatformIdentifiers: platformIdentifiers
+                PlatformIdentifiers: platformIdentifiers,
+                // Set the localized category if found
+                Category: localizedCategory ? localizedCategory.id : undefined
               },
               locale: locale
             });
@@ -2522,7 +2674,8 @@ class ListingProcessorService {
           Brand: product.brand ? this.titleNormalizer.normalizeBrand(product.brand) : null,
           ModelNumber: this.extractModelNumber(itemTitle),
           PlatformIdentifiers: platformIdentifiers,
-          Category: category ? category.id : null,
+          // Use localized category if found, otherwise don't set
+          Category: localizedCategory ? localizedCategory.id : null,
           publishedAt: new Date().toISOString(),
           documentId: existingItem.documentId // Use same documentId for proper localization
         },

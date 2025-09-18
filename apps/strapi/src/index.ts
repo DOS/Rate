@@ -1,12 +1,5 @@
 import type { Core } from "@strapi/strapi"
 
-import { registerAdminUserSubscriber } from "./lifeCycles/adminUser"
-import { registerPopulateDeepSubscriber } from "./lifeCycles/populateDeep"
-import { registerUserSubscriber } from "./lifeCycles/user"
-import { registerContentLifecycleHooks } from "./lifeCycles/contentHooks"
-import redisStreamService from "./services/redisStream"
-import redisWorkerService from "./services/redisWorker"
-
 export default {
   /**
    * An asynchronous register function that runs before
@@ -57,25 +50,18 @@ export default {
     } catch (e) {
       strapi.log.warn('Failed to ensure Public role permissions for Category:', e)
     }
-    // Temporarily disable all lifecycle hooks due to compilation issues
-    // registerAdminUserSubscriber({ strapi })
-    // registerUserSubscriber({ strapi })
-    // registerPopulateDeepSubscriber({ strapi })
-    // registerContentLifecycleHooks({ strapi })
     
     // Set strapi globally for services
     (global as any).strapi = strapi;
     
-    // Initialize Redis Stream Service
+    // Initialize BullMQ Queue Service with proper context
     try {
-      await redisStreamService.initialize()
-      strapi.log.info('Redis Stream Service initialized successfully')
-      
-      // Start Redis Worker to process validation requests
-      await redisWorkerService.start(strapi)
-      strapi.log.info('Redis Worker Service started successfully')
+      const bullmqService = require('./services/bullmqQueue');
+      await bullmqService.initializeQueue(strapi);
+      (global as any).bullmqService = bullmqService;
+      strapi.log.info('BullMQ Queue Service initialized with polling processor');
     } catch (error) {
-      strapi.log.warn('Redis services initialization failed, validation API will use fallback:', error)
+      strapi.log.error('BullMQ initialization failed:', error);
     }
   },
 }

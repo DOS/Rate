@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Rate Crawler",
-  "version": "1.0.50",
+  "version": "1.2.6",
   "description": "Passive crawler for scam data from checkscam sites",
   "permissions": [
     "storage",

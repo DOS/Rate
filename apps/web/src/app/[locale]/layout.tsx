@@ -1,6 +1,7 @@
 import { Metadata } from 'next'
 import { NextIntlClientProvider } from 'next-intl'
 import { getMessages, unstable_setRequestLocale } from 'next-intl/server'
+import { AppProviders } from '@/app/providers'
 
 export const metadata: Metadata = {
   title: "ListingHub - Next Ts Business Directory & Listing Template",
@@ -20,7 +21,9 @@ export default async function LocaleLayout({
 
   return (
     <NextIntlClientProvider locale={locale} messages={messages}>
-      {children}
+      <AppProviders>
+        {children}
+      </AppProviders>
     </NextIntlClientProvider>
   )
 }
