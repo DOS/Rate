@@ -970,8 +970,8 @@ function getShopeeProductAndSellerInfo() {
   let likedCount = 0;
   try {
     console.log('[DEBUG] Looking for liked count...');
-    
-    // Strategy 1: Find button with class w2JMKY containing "Đã thích (120)"
+
+    // Strategy 1: Find button with class w2JMKY containing "Favorite (120)" or "Đã thích (120)"
     const likeButton = document.querySelector('button.w2JMKY');
     console.log('[DEBUG] Looking for like button with .w2JMKY:', !!likeButton);
     if (likeButton) {
@@ -981,55 +981,67 @@ function getShopeeProductAndSellerInfo() {
       if (likeText) {
         const text = likeText.textContent || '';
         console.log('[DEBUG] Like text content:', text);
-        const match = text.match(/Đã thích\s*\((\d+(?:[,.]?\d+)*)\)/);
+        // Check for both "Favorite" and "Đã thích"
+        const match = text.match(/(?:Favorite|Đã thích)\s*\((\d+(?:[,.]?\d+)*)\)/i);
         if (match && match[1]) {
           likedCount = parseInt(match[1].replace(/[^\d]/g, ''));
-          console.log('[Shopee] ✅ Đã thích extracted (from button w2JMKY):', likedCount);
-        }
-      }
-    }
-    
-    // Strategy 2: Look for any button/div containing "Đã thích"
-    if (likedCount === 0) {
-      const likeButtons = document.querySelectorAll('button, div');
-      for (const btn of likeButtons) {
-        const text = btn.textContent || '';
-        const match = text.match(/Đã thích\s*\((\d+(?:[,.]?\d+)*)\)/);
-        if (match && match[1]) {
-          likedCount = parseInt(match[1].replace(/[^\d]/g, ''));
-          console.log('[Shopee] Đã thích (from generic search):', likedCount);
-          break;
-        }
-      }
-    }
-    
-    // If not found, search all elements
-    if (likedCount === 0) {
-      const allElements = Array.from(document.querySelectorAll('*'));
-      for (const el of allElements) {
-        const text = el.textContent || '';
-        if (text.includes('Đã thích')) {
-          const match = text.match(/Đã thích\s*\((\d+(?:[,.]?\d+)*)\)/);
-          if (match && match[1]) {
-            likedCount = parseInt(match[1].replace(/[^\d]/g, ''));
-            console.log('[Shopee] Đã thích (from text):', likedCount);
-            break;
+          console.log('[Shopee] ✅ Favorite/Đã thích extracted (from button w2JMKY):', likedCount);
+        } else if (text === 'Favorite' || text === 'Đã thích') {
+          // If just says "Favorite" without number, try to find number in parent or sibling
+          const parent = likeButton.parentElement;
+          if (parent) {
+            const parentText = parent.textContent || '';
+            const parentMatch = parentText.match(/\((\d+(?:[,.]?\d+)*)\)/);
+            if (parentMatch && parentMatch[1]) {
+              likedCount = parseInt(parentMatch[1].replace(/[^\d]/g, ''));
+              console.log('[Shopee] ✅ Favorite count from parent:', likedCount);
+            }
           }
         }
       }
     }
     
-    // Strategy 2: Tìm trong các stat elements  
+    // Strategy 2: Look for any button/div containing "Favorite" or "Đã thích"
     if (likedCount === 0) {
-      const statElements = document.querySelectorAll('.flex.aleSBU > div, .flex.YlOlLR > div');
+      const likeButtons = document.querySelectorAll('button, div');
+      for (const btn of likeButtons) {
+        const text = btn.textContent || '';
+        const match = text.match(/(?:Favorite|Đã thích)\s*\((\d+(?:[,.]?\d+)*)\)/i);
+        if (match && match[1]) {
+          likedCount = parseInt(match[1].replace(/[^\d]/g, ''));
+          console.log('[Shopee] Favorite/Đã thích (from generic search):', likedCount);
+          break;
+        }
+      }
+    }
+
+    // If not found, search all elements
+    if (likedCount === 0) {
+      const allElements = Array.from(document.querySelectorAll('*'));
+      for (const el of allElements) {
+        const text = el.textContent || '';
+        if (text.match(/(?:Favorite|Đã thích)/i)) {
+          const match = text.match(/(?:Favorite|Đã thích)\s*\((\d+(?:[,.]?\d+)*)\)/i);
+          if (match && match[1]) {
+            likedCount = parseInt(match[1].replace(/[^\d]/g, ''));
+            console.log('[Shopee] Favorite/Đã thích (from text):', likedCount);
+            break;
+          }
+        }
+      }
+    }
+
+    // Strategy 3: Find in stat elements
+    if (likedCount === 0) {
+      const statElements = document.querySelectorAll('.flex.aleSBU > div, .flex.YlOlLR > div, .flex.feDSnr');
       for (const stat of statElements) {
         const text = stat.textContent || '';
-        if (text.includes('Đã thích')) {
+        if (text.match(/(?:Favorite|Đã thích)/i)) {
           // Look for number in same or adjacent element
           const numberMatch = text.match(/\((\d+(?:[,.]?\d+)*)\)/);
           if (numberMatch) {
             likedCount = parseInt(numberMatch[1].replace(/[^\d]/g, ''));
-            console.log('[Shopee] Đã thích (from stat):', likedCount);
+            console.log('[Shopee] Favorite/Đã thích (from stat):', likedCount);
             break;
           }
         }
