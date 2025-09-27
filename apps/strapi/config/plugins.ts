@@ -76,6 +76,92 @@ export default ({ env }: any) => {
     //   },
     // },
 
+    redis: {
+      enabled: true,
+      config: {
+        connection: {
+          host: "localhost",
+          port: 6379,
+          db: 0,
+        },
+        settings: {
+          debug: false,
+        },
+      },
+    },
+
+    "rest-cache": {
+      enabled: true,
+      config: {
+        provider: {
+          name: "redis",
+          options: {
+            max: 32767,
+            ttl: 3600000, // 1 hour in milliseconds
+            connection: "default",
+          },
+        },
+        strategy: {
+          contentTypes: [
+            // List of content types to cache
+            {
+              contentType: "api::listing.listing",
+              maxAge: 3600000, // 1 hour
+              hitPass: false,
+              keys: {
+                useQueryParams: true,
+                useHeaders: ["Accept-Language"],
+              },
+              plugins: ["users-permissions"],
+            },
+            {
+              contentType: "api::category.category",
+              maxAge: 86400000, // 24 hours
+              hitPass: false,
+              keys: {
+                useQueryParams: true,
+                useHeaders: ["Accept-Language"],
+              },
+              plugins: ["users-permissions"],
+            },
+            {
+              contentType: "api::review.review",
+              maxAge: 1800000, // 30 minutes
+              hitPass: false,
+              keys: {
+                useQueryParams: true,
+                useHeaders: ["Accept-Language"],
+              },
+              plugins: ["users-permissions"],
+            },
+            {
+              contentType: "api::item.item",
+              maxAge: 3600000, // 1 hour
+              hitPass: false,
+              keys: {
+                useQueryParams: true,
+                useHeaders: ["Accept-Language"],
+              },
+              plugins: ["users-permissions"],
+            },
+            {
+              contentType: "api::platform.platform",
+              maxAge: 86400000, // 24 hours
+              hitPass: false,
+              keys: {
+                useQueryParams: true,
+                useHeaders: ["Accept-Language"],
+              },
+              plugins: ["users-permissions"],
+            },
+          ],
+          debug: env("NODE_ENV") === "development",
+          clearRelatedCache: true,
+          keysPrefix: "strapi-cache:",
+        },
+      },
+    },
+
     "users-permissions": {
       config: {
         jwt: {
