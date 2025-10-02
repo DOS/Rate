@@ -41,6 +41,10 @@
     // Do not include plugins in the server compilation
     "src/plugins/**",
     // https://docs.strapi.io/dev-docs/typescript/development#fix-build-issues-with-the-generated-types
-    "types/generated/**"
+    "types/generated/**",
+    // Exclude crawler standalone scripts (not part of Strapi runtime)
+    "src/crawlers/**",
+    "src/scripts/item-seeding/**",
+    "src/services/item-*.ts"
   ]
 }

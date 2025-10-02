@@ -76,91 +76,61 @@ export default ({ env }: any) => {
     //   },
     // },
 
+    // Configure Redis plugin first (required for rest-cache redis provider)
     redis: {
-      enabled: true,
       config: {
-        connection: {
-          host: "localhost",
-          port: 6379,
-          db: 0,
-        },
-        settings: {
-          debug: false,
+        connections: {
+          default: {
+            connection: {
+              host: 'localhost',
+              port: 6379,
+              db: 0,
+              // Redis connection settings
+              connectTimeout: 10000,
+              maxRetriesPerRequest: 3,
+              enableOfflineQueue: false,
+              lazyConnect: false,
+              retryStrategy: (times: number) => {
+                if (times > 3) {
+                  // Stop retrying after 3 attempts
+                  return undefined;
+                }
+                // Wait 1 second before retrying
+                return Math.min(times * 1000, 3000);
+              },
+            },
+            settings: {
+              debug: false,
+            },
+          },
         },
       },
     },
 
-    "rest-cache": {
-      enabled: true,
-      config: {
-        provider: {
-          name: "redis",
-          options: {
-            max: 32767,
-            ttl: 3600000, // 1 hour in milliseconds
-            connection: "default",
-          },
-        },
-        strategy: {
-          contentTypes: [
-            // List of content types to cache
-            {
-              contentType: "api::listing.listing",
-              maxAge: 3600000, // 1 hour
-              hitPass: false,
-              keys: {
-                useQueryParams: true,
-                useHeaders: ["Accept-Language"],
-              },
-              plugins: ["users-permissions"],
-            },
-            {
-              contentType: "api::category.category",
-              maxAge: 86400000, // 24 hours
-              hitPass: false,
-              keys: {
-                useQueryParams: true,
-                useHeaders: ["Accept-Language"],
-              },
-              plugins: ["users-permissions"],
-            },
-            {
-              contentType: "api::review.review",
-              maxAge: 1800000, // 30 minutes
-              hitPass: false,
-              keys: {
-                useQueryParams: true,
-                useHeaders: ["Accept-Language"],
-              },
-              plugins: ["users-permissions"],
-            },
-            {
-              contentType: "api::item.item",
-              maxAge: 3600000, // 1 hour
-              hitPass: false,
-              keys: {
-                useQueryParams: true,
-                useHeaders: ["Accept-Language"],
-              },
-              plugins: ["users-permissions"],
-            },
-            {
-              contentType: "api::platform.platform",
-              maxAge: 86400000, // 24 hours
-              hitPass: false,
-              keys: {
-                useQueryParams: true,
-                useHeaders: ["Accept-Language"],
-              },
-              plugins: ["users-permissions"],
-            },
-          ],
-          debug: env("NODE_ENV") === "development",
-          clearRelatedCache: true,
-          keysPrefix: "strapi-cache:",
-        },
-      },
-    },
+    // REST Cache plugin configuration with Redis
+    // TEMPORARILY DISABLED: provider-rest-cache-redis v5.0.0 has bug "Keyv is not a constructor"
+    // Will re-enable when package is fixed or downgrade to compatible version
+    // "rest-cache": {
+    //   config: {
+    //     provider: {
+    //       name: "redis",
+    //       options: {
+    //         max: 32767,
+    //         connection: "default",
+    //       },
+    //     },
+    //     strategy: {
+    //       keysPrefix: "strapi-cache:",
+    //       contentTypes: [
+    //         "api::listing.listing",
+    //         "api::category.category",
+    //         "api::review.review",
+    //         "api::item.item",
+    //         "api::platform.platform",
+    //       ],
+    //     },
+    //   },
+    // },
 
     "users-permissions": {
       config: {

@@ -162,7 +162,7 @@ export interface InfoSocial extends Struct.ComponentSchema {
 export interface PropertyPhoneBattery extends Struct.ComponentSchema {
   collectionName: "components_property_phone_batteries"
   info: {
-    displayName: "Phone Battery"
+    displayName: "Battery"
   }
   attributes: {
     Capacity: Schema.Attribute.Integer
@@ -181,7 +181,7 @@ export interface PropertyPhoneBattery extends Struct.ComponentSchema {
 export interface PropertyPhoneDisplay extends Struct.ComponentSchema {
   collectionName: "components_property_phone_displays"
   info: {
-    displayName: "Phone Display"
+    displayName: "Display"
     icon: "phone"
   }
   attributes: {

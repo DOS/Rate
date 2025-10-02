@@ -22,7 +22,10 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "jest --forceExit --detectOpenHandles",
-    "transfer": "strapi transfer"
+    "transfer": "strapi transfer",
+    "seed:item:test": "tsx src/scripts/item-seeding/seed-single-item.ts",
+    "test:playwright": "tsx src/scripts/item-seeding/test-playwright-crawler.ts",
+    "test:full-flow": "tsx src/scripts/item-seeding/test-full-flow-no-db.ts"
   },
   "jest": {
     "testEnvironment": "node",
@@ -38,8 +41,6 @@
     "@repo/design-system": "*",
     "@repo/shared-data": "*",
     "@strapi-community/plugin-redis": "^2.0.0",
-    "@strapi-community/plugin-rest-cache": "^5.0.1",
-    "@strapi-community/provider-rest-cache-redis": "^5.0.0",
     "@strapi/admin": "^5.24.1",
     "@strapi/content-manager": "^5.24.1",
     "@strapi/content-type-builder": "^5.24.1",
@@ -52,14 +53,18 @@
     "@strapi/provider-upload-aws-s3": "^5.24.1",
     "@strapi/strapi": "^5.24.1",
     "@strapi/upload": "^5.24.1",
+    "axios": "^1.12.2",
     "bullmq": "^5.58.5",
     "cache-manager": "^7.2.2",
+    "cheerio": "^1.1.2",
     "formdata-node": "^6.0.3",
     "ioredis": "^5.7.0",
-    "keyv": "^5.5.2",
+    "keyv": "^5.5.3",
     "lodash": "^4.17.21",
     "node-fetch": "^3.3.2",
+    "openai": "^6.0.0",
     "pg": "^8.13.1",
+    "playwright": "^1.55.1",
     "prismjs": "^1.30.0",
     "qs": "^6.13.0",
     "react": "^18.0.0",
@@ -72,10 +77,12 @@
     "styled-components": "^6.0.0"
   },
   "devDependencies": {
-    "@types/node": "^22",
+    "@types/node": "^24.6.1",
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "@types/react-select": "^5.0.1",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.20.6",
     "typescript": "^5"
   },
   "engines": {
