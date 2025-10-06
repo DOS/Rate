@@ -63,11 +63,11 @@ export default ({ env }: any) => {
     },
 
     // seo: {
-    //   enabled: true,
+    //   // enabled: true,
     // },
 
     // "config-sync": {
-    //   enabled: true,
+    //   // enabled: true,
     // },
 
     // "strapi-v5-plugin-populate-deep": {
@@ -141,7 +141,7 @@ export default ({ env }: any) => {
     },
 
     // sentry: {
-    //   enabled: true,
+    //   // enabled: true,
     //   config: {
     //     // Only set `dsn` property in production
     //     dsn: env("NODE_ENV") === "production" ? env("SENTRY_DSN") : null,
@@ -153,6 +153,12 @@ export default ({ env }: any) => {
     //   enabled: false,
     //   resolve: './src/plugins/smart-component-filter'
     // },
+
+    'rate-admin': {
+      enabled: true,
+      resolve: './src/plugins/rate-admin'
+    },
+
 
     // email: {
     //   config: {

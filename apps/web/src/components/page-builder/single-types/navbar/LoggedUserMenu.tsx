@@ -1,6 +1,7 @@
 import { LogOutIcon, User, UserRoundCogIcon } from "lucide-react"
 import { Session } from "next-auth"
 import { useTranslations } from "next-intl"
+import React from "react"
 
 import { Link } from "@/lib/navigation"
 import { Button } from "@/components/ui/button"
@@ -12,9 +13,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+// currency selector removed (wrong project change)
 
 export function LoggedUserMenu({ user }: { readonly user: Session["user"] }) {
   const t = useTranslations("navbar")
+  
 
   return (
     <DropdownMenu>
@@ -27,6 +30,8 @@ export function LoggedUserMenu({ user }: { readonly user: Session["user"] }) {
       <DropdownMenuContent className="w-56">
         <DropdownMenuLabel>{t("account")}</DropdownMenuLabel>
         <DropdownMenuSeparator />
+
+        
 
         <DropdownMenuItem>
           <Link

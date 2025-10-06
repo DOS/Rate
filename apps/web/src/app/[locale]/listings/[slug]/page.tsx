@@ -1,4 +1,5 @@
 import { PublicStrapiClient } from "@/lib/strapi-api"
+ 
 import React from 'react'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'

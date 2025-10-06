@@ -159,6 +159,14 @@
       "relation": "oneToMany",
       "target": "api::item.item",
       "mappedBy": "Category"
+    },
+    "PropertyList": {
+      "type": "json",
+      "pluginOptions": {
+        "i18n": {
+          "localized": false
+        }
+      }
     }
   }
 }

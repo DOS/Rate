@@ -96,7 +96,7 @@
         "Other"
       ]
     },
-    "Score": {
+    "RateScore": {
       "type": "decimal",
       "pluginOptions": {
         "i18n": {
@@ -167,12 +167,12 @@
     },
     "MatchCode": {
       "type": "string",
-      "unique": true,
       "pluginOptions": {
         "i18n": {
           "localized": false
         }
-      }
+      },
+      "unique": true
     },
     "NormalizedTitle": {
       "type": "string",
@@ -184,14 +184,37 @@
     },
     "MatchConfidence": {
       "type": "decimal",
-      "default": 0,
-      "min": 0,
-      "max": 1,
       "pluginOptions": {
         "i18n": {
           "localized": false
         }
+      },
+      "default": 0,
+      "min": 0,
+      "max": 1
+    },
+    "AnnouncedDate": {
+      "type": "date",
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
       }
+    },
+    "AvailabilityStatus": {
+      "type": "enumeration",
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
+      },
+      "enum": [
+        "Available",
+        "Coming Soon",
+        "Discontinued",
+        "Pre-order",
+        "Rumored"
+      ]
     },
     "ItemField": {
       "type": "dynamiczone",
@@ -240,34 +263,45 @@
     },
     "Location": {
       "type": "component",
-      "repeatable": false,
-      "component": "info.location"
-    },
-    "OpeningHours": {
-      "type": "component",
-      "repeatable": true,
-      "component": "business.opening-hour"
+      "component": "info.location",
+      "repeatable": false
     },
     "Features": {
       "type": "component",
-      "repeatable": true,
-      "component": "business.feature"
+      "component": "business.feature",
+      "repeatable": true
     },
     "MenuItems": {
       "type": "component",
-      "repeatable": true,
-      "component": "business.menu-item"
+      "component": "business.menu-item",
+      "repeatable": true
     },
     "SocialLinks": {
       "type": "component",
-      "repeatable": true,
-      "component": "seo-utilities.social-icons"
+      "component": "seo-utilities.social-icons",
+      "repeatable": true
     },
     "Reviews": {
       "type": "relation",
       "relation": "oneToMany",
       "target": "api::review.review",
       "mappedBy": "Item"
+    },
+    "PropertyList": {
+      "type": "dynamiczone",
+      "pluginOptions": {
+        "i18n": {
+          "localized": false
+        }
+      },
+      "components": [
+        "property.display",
+        "property.battery",
+        "property.hardware",
+        "property.camera",
+        "property.connectivity",
+        "property.design"
+      ]
     }
   }
 }

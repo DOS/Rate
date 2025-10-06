@@ -1,0 +1,875 @@
+[
+  {
+    "url": "https://www.phonearena.com/phones/Xiaomi-17_id12857",
+    "specs": {
+      "Availability": {
+        "Officially announced": "Oct 25, 2025"
+      },
+      "Design": {
+        "Dimensions": "5.95 x 2.83 x 0.32 inches 151.1 x 71.8 x 8.1 mm",
+        "Weight": "6.74 oz / 191.0 g",
+        "Materials": "Back: Glass Frame: Aluminum",
+        "Resistance": "Water, Dust; IP68",
+        "Biometrics": "Ultrasonic in-screen fingerprint",
+        "Keys": "Right: Volume control, Lock/Unlock key",
+        "Colors": "Black, Blue, Pink, White"
+      },
+      "Display": {
+        "Size": "6.3-inch, 89.41% screen-to-body",
+        "Type": "AMOLED, 120Hz, Dolby Vision, 3500 nits",
+        "Resolution": "2656x1220px, 19.5:5 ratio, 464 PPI",
+        "Features": "Ambient light sensor, Proximity sensor"
+      },
+      "Hardware": {
+        "System chip": "Snapdragon 8 Elite Gen 5 SM8850-AC (3 nm)",
+        "Processor": "Octa-core 2x4.6GHz Oryon V3 Phoenix L 6x3.62GHz Oryon V3 Phoenix M",
+        "GPU": "Adreno 840",
+        "Memory": "12GB/256GB (UFS 4.1) 12GB/512GB 16GB/512GB",
+        "Storage expansion": "not expandable",
+        "OS": "Android (16)"
+      },
+      "Battery": {
+        "Type": "7000 mAh, Si - Carbon",
+        "Charging": "Fast charging Qi wireless charging",
+        "Charge speed": "Wired: 100.0W Wireless: 50.0W"
+      },
+      "Camera": {
+        "Rear": "Triple camera",
+        "Main camera": "50 MP Aperture size: F1.7 Focal length: 23 mm Sensor size: 1/1.31\"",
+        "Second camera": "50 MP (Ultra-wide) Aperture size: F2.4 Focal Length: 17 mm Sensor size: 1/2.76\" Pixel size: 0.64 μm",
+        "Third camera": "50 MP Optical zoom: 2.6x Aperture size: F2.0 Focal Length: 60 mm Sensor size: 1/2.76\" Pixel size: 0.64 μm",
+        "Flash": "LED",
+        "Video recording": "8K UHD (30 fps), 4K UHD (60 fps), 1080p (960 fps)",
+        "Front": "50 MP"
+      },
+      "Connectivity & Features": {
+        "Bluetooth": "5.4",
+        "WLAN": "a,b,g,n,ac,Wi-Fi 6,Wi-Fi 7 Wi-Fi Direct, Hotspot",
+        "USB": "Type-C, USB 3.2",
+        "Sensors": "Accelerometer, Gyroscope, Compass, Barometer, Ambient light sensor, Proximity sensor",
+        "Location": "GPS, A-GPS, Glonass, Galileo, BeiDou, QZSS, NavIC, Cell ID, Wi-Fi positioning",
+        "Other": "NFC, Infrared"
+      },
+      "Multimedia": {
+        "Headphones": "No 3.5mm jack",
+        "Speakers": "Earpiece, Multiple speakers"
+      },
+      "Cellular": {
+        "5G Bands": "n1, n2, n3, n5, n7, n8, n12, n20, n25, n26, n28, n38, n40, n41, n48, n66, n77, n78, n80, n84, SA, NSA",
+        "4G (FDD) Bands": "1, 2, 3, 4, 5, 7, 8, 12, 17, 18, 19, 20, 25, 26, 28, 66",
+        "4G (TDD) Bands": "34, 38, 39, 40, 41, 42, 48",
+        "Data Speed": "LTE-A, HSDPA+ (4G) 42.2 Mbit/s",
+        "SIM type": "Dual Nano SIM"
+      }
+    }
+  },
+  {
+    "url": "https://www.phonearena.com/phones/Xiaomi-15T_id12847",
+    "specs": {
+      "Availability": {
+        "Officially announced": "Sep 24, 2025",
+        "Prices (MSRP)": "15GB/256GB - €649"
+      },
+      "Design": {
+        "Dimensions": "6.43 x 3.07 x 0.30 inches 163.2 x 78 x 7.5 mm",
+        "Weight": "6.84 oz / 194.0 g",
+        "Materials": "Back: Glass (Corning Gorilla Glass 7i) Frame: Plastic",
+        "Resistance": "Water, Dust; IP68",
+        "Biometrics": "Optical in-screen fingerprint",
+        "Keys": "Right: Volume control, Lock/Unlock key",
+        "Colors": "Black, Gray, Rose Gold"
+      },
+      "Display": {
+        "Size": "6.8-inch, 89.94% screen-to-body",
+        "Type": "AMOLED, 120Hz, HDR10+, 3200 nits",
+        "Resolution": "2772x1280px, 20:9 ratio, 447 PPI"
+      },
+      "Hardware": {
+        "System chip": "Mediatek Dimensity 8400 Ultra (4 nm)",
+        "Processor": "Octa-core 1x3.35GHz Cortex-A725 3x3.0​0GHz Cortex-A725 4x2.1​0GHz Cortex-A725",
+        "GPU": "Mali-G720 MC7",
+        "Memory": "12GB/256GB (UFS 4.1) 12GB/512GB",
+        "Storage expansion": "not expandable",
+        "OS": "Android (15)"
+      },
+      "Battery": {
+        "Type": "5500 mAh, Li - Ion",
+        "Charge speed": "Wired: 67.0W"
+      },
+      "Camera": {
+        "Rear": "Triple camera",
+        "Main camera": "50 MP (OIS, PDAF) Aperture size: F1.7 Focal length: 23 mm Sensor size: 1/1.55\" Pixel size: 1.0 μm",
+        "Second camera": "12 MP (Ultra-wide) Aperture size: F2.2 Focal Length: 15 mm Sensor size: 1/3.06\" Pixel size: 1.12 μm",
+        "Third camera": "50 MP (Telephoto, PDAF) Optical zoom: 2.0x Aperture size: F1.9 Focal Length: 46 mm Sensor size: 1/2.76\" Pixel size: 0.64 μm",
+        "Flash": "LED",
+        "Video recording": "4K UHD (60 fps)",
+        "Front": "32 MP"
+      },
+      "Connectivity & Features": {
+        "Bluetooth": "6.0",
+        "WLAN": "a,b,g,n,ac,Wi-Fi 6E Wi-Fi Direct, Hotspot",
+        "USB": "Type-C",
+        "Sensors": "Accelerometer, Gyroscope, Compass, Ambient light sensor, Proximity sensor",
+        "Location": "GPS, A-GPS, Glonass, Galileo, BeiDou, NavIC, Cell ID, Wi-Fi positioning",
+        "Other": "NFC, Infrared"
+      },
+      "Multimedia": {
+        "Headphones": "No 3.5mm jack",
+        "Speakers": "Earpiece, Multiple speakers"
+      },
+      "Cellular": {
+        "5G Bands": "n1, n2, n3, n5, n7, n8, n12, n20, n28, n38, n40, n41, n48, n66, n77, n78, SA, NSA",
+        "4G (FDD) Bands": "1, 2, 3, 4, 5, 7, 12, 13, 17, 18, 19, 20, 26, 28, 32, 66",
+        "4G (TDD) Bands": "38, 40, 41, 42",
+        "3G Bands": "1, 2, 4, 5, 6, 8",
+        "Data Speed": "LTE-A, HSDPA+ (4G) 42.2 Mbit/s",
+        "SIM type": "Nano SIM, eSIM"
+      }
+    }
+  },
+  {
+    "url": "https://www.phonearena.com/phones/DOOGEE-Fire-5_id12853",
+    "specs": {
+      "Design": {
+        "Dimensions": "6.95 x 3.24 x 0.74 inches 176.5 x 82.2 x 18.7 mm",
+        "Weight": "13.72 oz / 389.0 g",
+        "Resistance": "Water, Dust; IP69; MIL-STD-810 certified",
+        "Biometrics": "Fingerprint (touch)",
+        "Colors": "Black, Blue"
+      },
+      "Display": {
+        "Size": "6.6-inch, 72.03% screen-to-body",
+        "Type": "IPS LCD, 90Hz",
+        "Resolution": "1612x720px, 20:9 ratio, 267 PPI"
+      },
+      "Hardware": {
+        "System chip": "Unisoc SC9863A (28 nm)",
+        "Processor": "Octa-core 4x 1.6GHz Cortex-A55 4x 1.2GHz Cortex-A55",
+        "GPU": "PowerVR GE8322",
+        "Memory": "3GB (LPDDR5)/64GB",
+        "Storage expansion": "microSDXC up to 2048 GB",
+        "OS": "Android (15)"
+      },
+      "Battery": {
+        "Type": "13000 mAh, Li - Ion",
+        "Charge speed": "Wired: 10.0W"
+      },
+      "Camera": {
+        "Rear": "Dual camera",
+        "Main camera": "13 MP Aperture size: F1.8",
+        "Second camera": "0.1 MP CIF (288x352) (Night vision sensor)",
+        "Flash": "LED",
+        "Video recording": "Yes",
+        "Front": "8 MP"
+      },
+      "Connectivity & Features": {
+        "Bluetooth": "5.4",
+        "WLAN": "a,b,g,n,ac Wi-Fi Direct, Hotspot 802.11 a, b, g, n, ac",
+        "USB": "Type-C",
+        "Sensors": "Accelerometer, Ambient light sensor, Proximity sensor",
+        "Location": "GPS, A-GPS, Glonass, Galileo, BeiDou, Cell ID, Wi-Fi positioning"
+      },
+      "Multimedia": {
+        "Headphones": "No 3.5mm jack",
+        "Speakers": "Earpiece, Loudspeaker"
+      },
+      "Cellular": {
+        "4G (FDD) Bands": "1, 2, 3, 4, 5, 7, 8, 18, 19, 25, 26, 28, 66",
+        "4G (TDD) Bands": "38, 40, 41",
+        "3G Bands": "1, 2, 4, 5, 8",
+        "Dual SIM": "Yes"
+      }
+    }
+  },
+  {
+    "url": "https://www.phonearena.com/phones/Sony-Xperia-10-VII_id12843",
+    "specs": {
+      "Availability": {
+        "Officially announced": "Sep 14, 2025",
+        "Prices (MSRP)": "8GB/128GB - €449"
+      },
+      "Design": {
+        "Dimensions": "6.02 x 2.83 x 0.33 inches (~0.37 inches with camera bump) 153 x 72 x 8.3 mm (~9.4 mm with camera bump)",
+        "Materials": "Back: Plastic Frame: Plastic",
+        "Resistance": "Yes; IP68",
+        "Biometrics": "Fingerprint (touch)",
+        "Keys": "Right: Volume control, Lock/Unlock key, Other",
+        "Colors": "White, Turquoise, Charcoal"
+      },
+      "Display": {
+        "Size": "6.1-inch, 83.10% screen-to-body",
+        "Type": "OLED, 120Hz",
+        "Resolution": "2340x1080px, 19.5:9 ratio, 422 PPI",
+        "Protection": "Corning Gorilla Glass Armor 2",
+        "Features": "HDR support, Scratch-resistant glass, Ambient light sensor, Proximity sensor"
+      },
+      "Hardware": {
+        "System chip": "Snapdragon 6 Gen 3 SM6475-AB (4 nm)",
+        "Processor": "Octa-core 4x2.4GHz Cortex-A78 4x1.8G​Hz Cortex-A55",
+        "GPU": "Adreno 710",
+        "Memory": "8GB/128GB",
+        "Storage expansion": "microSDXC 2024",
+        "OS": "Android (15), up to 4 OS updates"
+      },
+      "Battery": {
+        "Type": "5000 mAh"
+      },
+      "Camera": {
+        "Rear": "Dual camera",
+        "Main camera": "50 MP (OIS, PDAF) Aperture size: F1.9 Focal length: 24 mm Sensor size: 1/1.56\"",
+        "Second camera": "13 MP (Ultra-wide) Aperture size: F2.4 Focal Length: 16 mm Sensor size: 1/3\"",
+        "Video recording": "4K UHD (30 fps)",
+        "Front": "8 MP"
+      },
+      "Connectivity & Features": {
+        "Bluetooth": "5.4",
+        "WLAN": "a,b,g,n,Wi-Fi 6E Wi-Fi Direct, Hotspot",
+        "USB": "Type-C, USB 2.0",
+        "Sensors": "Accelerometer, Gyroscope, Compass, Ambient light sensor, Proximity sensor",
+        "Location": "GPS, A-GPS, Glonass, Galileo, BeiDou, QZSS, Cell ID, Wi-Fi positioning",
+        "Other": "NFC"
+      },
+      "Multimedia": {
+        "Headphones": "3.5mm jack",
+        "Speakers": "Earpiece, Multiple speakers"
+      },
+      "Cellular": {
+        "5G Bands": "n1, n3, n5, n7, n8, n20, n28, n38, n40, n41, n77, n78, n79",
+        "4G (FDD) Bands": "1, 3, 4, 5, 7, 8, 20, 28",
+        "4G (TDD) Bands": "38, 39, 40, 41",
+        "Data Speed": "LTE-A, HSDPA+ (4G) 42.2 Mbit/s",
+        "SIM type": "Nano SIM, eSIM"
+      }
+    }
+  },
+  {
+    "url": "https://www.phonearena.com/phones/Apple-iPhone-Air_id12559",
+    "specs": {
+      "Availability": {
+        "Officially announced": "Sep 09, 2025",
+        "Prices (MSRP)": "12GB/256GB - $999 | €1199 12GB/512GB - $1199 | €1449 12GB/1TB - $1399 | €1699"
+      },
+      "Design": {
+        "Dimensions": "6.15 x 2.94 x 0.22 inches (~0.27 inches with camera bump) 156.2 x 74.7 x 5.64 (~6.9 mm with camera bump)",
+        "Weight": "5.82 oz / 165.0 g",
+        "Materials": "Back: Glass (Ceramic Shield) Frame: Titanium",
+        "Resistance": "Water, Dust; IP68",
+        "Biometrics": "3D Face unlock",
+        "Keys": "Left: Volume control, Other; Right: Lock/Unlock key, Other",
+        "Colors": "Space Black, Cloud White, Light Gold, Sky Blue"
+      },
+      "Display": {
+        "Size": "6.5-inch, 88.78% screen-to-body",
+        "Type": "OLED, 120Hz, HDR, 3000 nits",
+        "Resolution": "2736x1260px, 19.5:9 ratio, 463 PPI",
+        "Protection": "Gorilla Glass Ceramic 2",
+        "Features": "Super Retina XDR, HDR support, Oleophobic coating, Scratch-resistant glass, Ambient light sensor, Proximity sensor"
+      },
+      "Hardware": {
+        "System chip": "Apple A19 Pro (3 nm)",
+        "Processor": "Hexa-core",
+        "GPU": "Apple 5-core GPU",
+        "Memory": "12GB (LPDDR5)/256GB 12GB/512GB 12GB/1TB",
+        "Storage expansion": "not expandable",
+        "OS": "iOS (26.x)"
+      },
+      "Battery": {
+        "Type": "3149 mAh, Li - Ion",
+        "Charging": "Fast charging Qi2 wireless charging, MagSafe wireless charging",
+        "Charge speed": "Wired: 20.0W Wireless: 20.0W"
+      },
+      "Camera": {
+        "Rear": "Single camera",
+        "Main camera": "48 MP (Sensor-shift OIS, PDAF) Aperture size: F1.6 Focal length: 26 mm Pixel size: 1.0 μm",
+        "Flash": "Dual LED",
+        "Video recording": "4K UHD (60 fps), 1080p (240 fps) OIS, HDR, Dolby Vision HDR, Cinematic mode",
+        "Front": "18 MP (Time-of-Flight (ToF), Autofocus, HDR) Video capture: 4K UHD (60 fps)"
+      },
+      "Connectivity & Features": {
+        "Bluetooth": "6.0",
+        "WLAN": "a,b,g,n,ac,Wi-Fi 6,Wi-Fi 6E,Wi-Fi 7 Wi-Fi Direct, Hotspot 802.11 a, b, g, n, ac, ax",
+        "USB": "Type-C, USB 2.0",
+        "Sensors": "Accelerometer, Gyroscope, Compass, Barometer, Ambient light sensor, Proximity sensor",
+        "Hearing aid compatible": "M3/T4",
+        "Location": "GPS, A-GPS, Glonass, Galileo, BeiDou, Cell ID, Wi-Fi positioning",
+        "Other": "NFC, Ultra Wideband (UWB)"
+      },
+      "Multimedia": {
+        "Headphones": "No 3.5mm jack",
+        "Speakers": "Earpiece, Multiple speakers",
+        "Features": "Dolby Atmos"
+      },
+      "Cellular": {
+        "5G Bands": "n1, n2, n3, n5, n7, n8, n12, n14, n20, n25, n26, n28, n29, n30, n38, n40, n41, n48, n53, n66, n70, n71, n75, n77, n78, n79, SA, NSA, Sub-6",
+        "4G (FDD) Bands": "1, 2, 3, 4, 5, 7, 8, 12, 13, 14, 17, 18, 19, 20, 25, 26, 28, 29, 30, 32, 66, 71",
+        "4G (TDD) Bands": "34, 38, 39, 40, 41, 42, 48",
+        "Data Speed": "LTE-A, HSDPA+ (4G) 42.2 Mbit/s",
+        "SIM type": "eSIM",
+        "HD Voice": "Yes",
+        "VoLTE": "Yes"
+      },
+      "Regulatory Approval": {
+        "FCC approval": "Date approved: Sep 09, 2025 FCC ID value: BCG-E8948A",
+        "Measured SAR": "Head: 1.19 W/kg Body: 1.19 W/kg Simultaneous Transmission: 1.60 W/kg"
+      }
+    }
+  },
+  {
+    "url": "https://www.phonearena.com/phones/Apple-iPhone-17_id12493",
+    "specs": {
+      "Availability": {
+        "Officially announced": "Sep 09, 2025",
+        "Prices (MSRP)": "8GB/256GB - $799 | €949 8GB/512GB - $999 | €1199"
+      },
+      "Design": {
+        "Dimensions": "5.89 x 2.81 x 0.31 inches (~0.37 inches with camera bump) 149.6 x 71.5 x 7.95 mm (~9.3 mm with camera bump)",
+        "Weight": "6.24 oz / 177.0 g",
+        "Materials": "Back: Glass (Ceramic Shield) Frame: Aluminum",
+        "Resistance": "Water, Dust; IP68",
+        "Biometrics": "3D Face unlock",
+        "Keys": "Left: Volume control, Other; Right: Lock/Unlock key, Other",
+        "Colors": "Black, White, Sage, Lavender, Mist Blue"
+      },
+      "Display": {
+        "Size": "6.3-inch, 91.04% screen-to-body",
+        "Type": "OLED, 120Hz, HDR, 3000 nits",
+        "Resolution": "2622x1206px, 19.5:9 ratio, 458 PPI",
+        "Protection": "Gorilla Glass Ceramic 2",
+        "Features": "Super Retina XDR, HDR support, Oleophobic coating, Scratch-resistant glass, Ambient light sensor, Proximity sensor"
+      },
+      "Hardware": {
+        "System chip": "Apple A19 (3 nm)",
+        "Processor": "Hexa-core",
+        "GPU": "Apple 5-core GPU",
+        "Memory": "8GB (LPDDR5)/256GB 8GB/512GB",
+        "Storage expansion": "not expandable",
+        "OS": "iOS (26.x)"
+      },
+      "Battery": {
+        "Type": "3692 mAh, Li - Ion",
+        "Charging": "Fast charging Qi2 wireless charging, MagSafe wireless charging",
+        "Charge speed": "Wired: 40.0W Wireless: 25.0W"
+      },
+      "Camera": {
+        "Rear": "Dual camera",
+        "Main camera": "48 MP (Sensor-shift OIS, PDAF) Aperture size: F1.6 Focal length: 26 mm",
+        "Second camera": "48 MP (Ultra-wide, PDAF) Aperture size: F2.2 Focal Length: 13 mm",
+        "Flash": "Dual LED",
+        "Video recording": "4K UHD (60 fps), 1080p (240 fps) OIS, HDR, Dolby Vision HDR, Cinematic mode",
+        "Front": "18 MP (Time-of-Flight (ToF), Autofocus, HDR) Video capture: 4K UHD (60 fps)"
+      },
+      "Connectivity & Features": {
+        "Bluetooth": "6.0",
+        "WLAN": "a,b,g,n,ac,Wi-Fi 6,Wi-Fi 6E,Wi-Fi 7 Wi-Fi Direct, Hotspot 802.11 a, b, g, n, ac, ax",
+        "USB": "Type-C, USB 2.0",
+        "Sensors": "Accelerometer, Gyroscope, Compass, Barometer, Emergency SOS via satellite (SMS sending/receiving), Ambient light sensor, Proximity sensor",
+        "Hearing aid compatible": "M3/T4",
+        "Location": "GPS, A-GPS, Glonass, Galileo, BeiDou, Cell ID, Wi-Fi positioning",
+        "Other": "NFC, Ultra Wideband (UWB)"
+      },
+      "Multimedia": {
+        "Headphones": "No 3.5mm jack",
+        "Speakers": "Earpiece, Multiple speakers",
+        "Features": "Dolby Atmos"
+      },
+      "Cellular": {
+        "5G Bands": "n1, n2, n3, n5, n7, n8, n12, n14, n20, n25, n26, n28, n29, n30, n38, n40, n41, n48, n53, n66, n70, n71, n75, n77, n78, n79, n258, n260, n261, mmWave",
+        "4G (FDD) Bands": "1, 2, 3, 4, 5, 7, 8, 12, 13, 14, 17, 18, 19, 20, 25, 26, 28, 29, 30, 32, 66, 71",
+        "4G (TDD) Bands": "34, 38, 39, 40, 41, 42, 48",
+        "Data Speed": "LTE-A, HSDPA+ (4G) 42.2 Mbit/s",
+        "SIM type": "eSIM",
+        "HD Voice": "Yes",
+        "VoLTE": "Yes"
+      },
+      "Regulatory Approval": {
+        "FCC approval": "Date approved: Sep 09, 2025 FCC ID value: BCG-E8947A",
+        "Measured SAR": "Head: 1.19 W/kg Body: 1.19 W/kg Simultaneous Transmission: 1.54 W/kg"
+      }
+    }
+  },
+  {
+    "url": "https://www.phonearena.com/phones/Apple-iPhone-17-Pro_id12495",
+    "specs": {
+      "Availability": {
+        "Officially announced": "Sep 09, 2025",
+        "Prices (MSRP)": "12GB/256GB - $1099 | €1299 12GB/512GB - $1299 | €1549 12GB/1TB - $1499 | €1799"
+      },
+      "Design": {
+        "Dimensions": "5.91 x 2.83 x 0.34 inches (~0.39 inches with camera bump) 150.0 x 71.9 x 8.75 mm (~9.9 mm with camera bump)",
+        "Weight": "7.27 oz / 206.0 g",
+        "Materials": "Back: Glass (Ceramic Shield) Frame: Aluminum",
+        "Resistance": "Water, Dust; IP68",
+        "Biometrics": "3D Face unlock",
+        "Keys": "Left: Volume control, Other; Right: Lock/Unlock key",
+        "Colors": "Silver, Cosmic Orange, Deep Blue"
+      },
+      "Display": {
+        "Size": "6.3-inch, 90.09% screen-to-body",
+        "Type": "OLED, Variable 1-120Hz, HDR, 3000 nits",
+        "Resolution": "2622x1206px, 19.5:9 ratio, 458 PPI",
+        "Protection": "Gorilla Glass Ceramic 2",
+        "Features": "Super Retina XDR, HDR support, Oleophobic coating, Scratch-resistant glass, Ambient light sensor, Proximity sensor"
+      },
+      "Hardware": {
+        "System chip": "Apple A19 Pro (3 nm)",
+        "Processor": "Hexa-core",
+        "GPU": "Apple 6-core GPU",
+        "Memory": "12GB (LPDDR5)/256GB 12GB/512GB 12GB/1TB",
+        "Storage expansion": "not expandable",
+        "OS": "iOS (26.x)"
+      },
+      "Battery": {
+        "Type": "4252 mAh, Nano SIM model - 3988 mAh, Li - Ion",
+        "Charging": "Fast charging Qi2 wireless charging, Reverse wired charging, MagSafe wireless charging",
+        "Charge speed": "Wired: 40.0W Wireless: 25.0W"
+      },
+      "Camera": {
+        "Rear": "Triple camera",
+        "Main camera": "48 MP (Sensor-shift OIS, PDAF) Aperture size: F1.8 Focal length: 24 mm",
+        "Second camera": "48 MP (Ultra-wide, Sensor-shift OIS) Aperture size: F2.2 Focal Length: 13 mm",
+        "Third camera": "48 MP (Telephoto, OIS, PDAF) Optical zoom: 4.0x Aperture size: F2.8 Focal Length: 100 mm Sensor size: 1/2.55\" Pixel size: 0.7 μm",
+        "Flash": "Dual LED",
+        "Video recording": "4K UHD (120 fps), 1080p (240 fps) OIS, HDR, 10-bit HDR, Dolby Vision HDR, ProRes, Cinematic mode",
+        "Front": "18 MP (Time-of-Flight (ToF), Autofocus, HDR) Video capture: 4K UHD (60 fps)"
+      },
+      "Connectivity & Features": {
+        "Bluetooth": "6.0",
+        "WLAN": "a,b,g,n,ac,Wi-Fi 6,Wi-Fi 6E,Wi-Fi 7 Wi-Fi Direct, Hotspot 802.11 a, b, g, n, ac, ax",
+        "USB": "Type-C, USB 3.2",
+        "Sensors": "Accelerometer, Gyroscope, Compass, Barometer, Ambient light sensor, Proximity sensor",
+        "Hearing aid compatible": "M3/T4",
+        "Location": "GPS, A-GPS, Glonass, Galileo, BeiDou, QZSS, NavIC, Cell ID, Wi-Fi positioning, Emergency SOS via satellite (SMS sending/receiving)",
+        "Other": "NFC, Ultra Wideband (UWB)"
+      },
+      "Multimedia": {
+        "Headphones": "No 3.5mm jack",
+        "Speakers": "Earpiece, Multiple speakers",
+        "Features": "Dolby Atmos"
+      },
+      "Cellular": {
+        "5G Bands": "n1, n2, n3, n5, n7, n8, n12, n14, n20, n25, n26, n28, n29, n30, n38, n40, n41, n48, n53, n66, n70, n71, n75, n77, n78, n79, n258, n260, n261, mmWave",
+        "4G (FDD) Bands": "1, 2, 3, 5, 7, 8, 12, 13, 14, 17, 18, 19, 20, 25, 26, 28, 29, 30, 32, 66, 71",
+        "4G (TDD) Bands": "34, 38, 39, 40, 41, 42, 48, 53",
+        "Data Speed": "LTE-A, HSDPA+ (4G) 42.2 Mbit/s",
+        "SIM type": "eSIM",
+        "HD Voice": "Yes",
+        "VoLTE": "Yes"
+      },
+      "Regulatory Approval": {
+        "FCC approval": "Date approved: Sep 09, 2025 FCC ID value: BCG-E8949A",
+        "Measured SAR": "Head: 1.19 W/kg Body: 1.19 W/kg Simultaneous Transmission: 1.59 W/kg"
+      }
+    }
+  },
+  {
+    "url": "https://www.phonearena.com/phones/Apple-iPhone-17-Pro-Max_id12496",
+    "specs": {
+      "Availability": {
+        "Officially announced": "Sep 09, 2025",
+        "Prices (MSRP)": "12GB/256GB - $1199 | €1449 12GB/512GB - $1399 | €1699 12GB/1TB - $1599 | €1949 12GB/2TB - $1999 | €2449"
+      },
+      "Design": {
+        "Dimensions": "6.43 x 3.07 x 0.34 inches (~0.39 inches with camera bump) 163.4 x 78.0 x 8.75 mm (~9.9 mm with camera bump)",
+        "Weight": "8.22 oz / 233.0 g International version - 211 g",
+        "Materials": "Back: Glass (Ceramic Shield) Frame: Aluminum",
+        "Resistance": "Water, Dust; IP68",
+        "Biometrics": "3D Face unlock",
+        "Keys": "Left: Volume control, Other; Right: Lock/Unlock key",
+        "Colors": "Silver, Cosmic Orange, Deep Blue"
+      },
+      "Display": {
+        "Size": "6.9-inch, 91.60% screen-to-body",
+        "Type": "OLED, Variable 1-120Hz, HDR, 3000 nits",
+        "Resolution": "2868x1320px, 19.5:9 ratio, 458 PPI",
+        "Protection": "Gorilla Glass Ceramic 2",
+        "Features": "Super Retina XDR, HDR support, Oleophobic coating, Scratch-resistant glass, Ambient light sensor, Proximity sensor"
+      },
+      "Hardware": {
+        "System chip": "Apple A19 Pro (3 nm)",
+        "Processor": "Hexa-core",
+        "GPU": "Apple 6-core GPU",
+        "Memory": "12GB/256GB 12GB/512GB 12GB/1TB 12GB/2TB",
+        "Storage expansion": "not expandable",
+        "OS": "iOS (26.x)"
+      },
+      "Battery": {
+        "Type": "5088 mAh, Nano SIM model - 4832 mAh, Li - Ion",
+        "Charging": "Fast charging Qi2 wireless charging, Reverse wireless charging, MagSafe wireless charging",
+        "Charge speed": "Wired: 40.0W Wireless: 25.0W"
+      },
+      "Camera": {
+        "Rear": "Triple camera",
+        "Main camera": "48 MP (Sensor-shift OIS, PDAF) Aperture size: F1.8 Focal length: 24 mm",
+        "Second camera": "48 MP (Ultra-wide, Sensor-shift OIS) Aperture size: F2.2 Focal Length: 13 mm",
+        "Third camera": "48 MP (Telephoto, Periscope, OIS, PDAF) Optical zoom: 4.0x Aperture size: F2.8 Focal Length: 100 mm Sensor size: 1/2.55\" Pixel size: 0.7 μm",
+        "Flash": "Dual LED",
+        "Video recording": "4K UHD (120 fps), 1080p (240 fps) OIS, HDR, 10-bit HDR, Dolby Vision HDR, ProRes, Cinematic mode",
+        "Front": "18 MP (Time-of-Flight (ToF), Autofocus, HDR) Video capture: 4K UHD (60 fps)"
+      },
+      "Connectivity & Features": {
+        "Bluetooth": "6.0",
+        "WLAN": "a,b,g,n,ac,Wi-Fi 6,Wi-Fi 6E,Wi-Fi 7 Wi-Fi Direct, Hotspot 802.11 a, b, g, n, ac, ax",
+        "USB": "Type-C, USB 3.2",
+        "Sensors": "Accelerometer, Gyroscope, Compass, Barometer, Ambient light sensor, Proximity sensor",
+        "Hearing aid compatible": "M3/T4",
+        "Location": "GPS, A-GPS, Glonass, Galileo, BeiDou, QZSS, NavIC, Cell ID, Wi-Fi positioning, Emergency SOS via satellite (SMS sending/receiving)",
+        "Other": "NFC, Ultra Wideband (UWB)"
+      },
+      "Multimedia": {
+        "Headphones": "No 3.5mm jack",
+        "Speakers": "Earpiece, Multiple speakers",
+        "Features": "Dolby Atmos"
+      },
+      "Cellular": {
+        "5G Bands": "n1, n2, n3, n5, n7, n8, n12, n14, n20, n25, n26, n28, n29, n30, n38, n40, n41, n48, n53, n66, n70, n71, n75, n77, n78, n79, n258, n260, n261, SA, NSA, mmWave",
+        "4G (FDD) Bands": "1, 2, 3, 4, 5, 7, 8, 12, 13, 14, 17, 18, 19, 20, 25, 26, 28, 29, 30, 32, 66, 71",
+        "4G (TDD) Bands": "34, 38, 39, 40, 41, 42, 48, 53",
+        "Data Speed": "LTE-A, HSDPA+ (4G) 42.2 Mbit/s",
+        "SIM type": "eSIM",
+        "HD Voice": "Yes",
+        "VoLTE": "Yes"
+      },
+      "Regulatory Approval": {
+        "FCC approval": "Date approved: Sep 09, 2025 FCC ID value: BCG-E8950A",
+        "Measured SAR": "Head: 1.19 W/kg Body: 1.19 W/kg Simultaneous Transmission: 1.59 W/kg"
+      }
+    }
+  },
+  {
+    "url": "https://www.phonearena.com/phones/Apple-Watch-SE-3-40mm_id12831",
+    "specs": {
+      "Availability": {
+        "Officially announced": "Sep 09, 2025",
+        "Prices (MSRP)": "$249"
+      },
+      "Design": {
+        "Dimensions": "1.57 x 1.34 x 0.42 inches 40 x 34 x 10.7 mm",
+        "Weight": "0.93 oz / 26.4 g",
+        "Resistance": "Water (up to 50 meters)",
+        "Colors": "Starlight, Midnight"
+      },
+      "Display": {
+        "Size": "1.6-inch, 57.48% screen-to-body",
+        "Type": "OLED, 1000 nits",
+        "Resolution": "394x324px, 325 PPI",
+        "Features": "Pressure-sensitive, Scratch-resistant glass, Ambient light sensor"
+      },
+      "Hardware": {
+        "System chip": "Apple S10",
+        "Processor": "Dual-core",
+        "GPU": "PowerVR",
+        "Memory": "1GB/64GB",
+        "Storage expansion": "not expandable",
+        "OS": "watchOS (9.x, 8.x, 7.x)"
+      },
+      "Battery": {
+        "Type": "Li - Ion",
+        "Charging": "Magnetic charging"
+      },
+      "Connectivity & Features": {
+        "Bluetooth": "5.3",
+        "WLAN": "a,b,g,n,ac 802.11 b, g, n",
+        "Sensors": "Accelerometer, Gyroscope, Altimeter, Compass, Heart rate, Barometer, Ambient light sensor",
+        "Location": "GPS, Glonass",
+        "Other": "NFC"
+      },
+      "Multimedia": {
+        "Speakers": "Loudspeaker"
+      },
+      "Cellular": {
+        "5G Bands": "5G Ready",
+        "4G (FDD) Bands": "1, 2, 3, 4, 5, 7, 12, 13, 17, 18, 19, 25, 26, 66",
+        "4G (TDD) Bands": "39, 40, 41",
+        "3G Bands": "1, 2, 4, 5",
+        "Data Speed": "LTE, HSDPA+ (4G) 42.2 Mbit/s, HSUPA 5.76 Mbit/s",
+        "SIM type": "eSIM"
+      }
+    }
+  },
+  {
+    "url": "https://www.phonearena.com/phones/Apple-Watch-Ultra-3_id12263",
+    "specs": {
+      "Availability": {
+        "Officially announced": "Sep 09, 2025",
+        "Prices (MSRP)": "$799"
+      },
+      "Design": {
+        "Dimensions": "1.93 x 1.73 x 0.47 inches 49 x 44 x 12 mm",
+        "Weight": "2.17 oz / 61.6 g",
+        "Materials": "Back: Ceramic Frame: Titanium",
+        "Resistance": "Water, Dust; IP6X; MIL-STD-810 certified",
+        "Colors": "Natural, Black"
+      },
+      "Display": {
+        "Size": "1.9-inch",
+        "Type": "OLED, 3000 nits",
+        "Resolution": "502x410px, 338 PPI",
+        "Protection": "Sapphire"
+      },
+      "Hardware": {
+        "System chip": "Apple S10",
+        "Processor": "Dual-core",
+        "GPU": "PowerVR",
+        "Memory": "1GB/64GB",
+        "Storage expansion": "not expandable",
+        "OS": "watchOS (10.x)"
+      },
+      "Battery": {
+        "Type": "Li - Ion",
+        "Charging": "Qi wireless charging"
+      },
+      "Connectivity & Features": {
+        "Bluetooth": "5.3",
+        "WLAN": "a,b,g,n,ac 802.11 b, g, n",
+        "Sensors": "Accelerometer, Gyroscope, Altimeter, Compass, Heart rate, Thermometer, Barometer, ECG, Blood Oxygen",
+        "Location": "A-GPS, Glonass, Galileo, BeiDou, QZSS",
+        "Other": "NFC, Ultra Wideband (UWB)"
+      },
+      "Multimedia": {
+        "Speakers": "Multiple speakers"
+      },
+      "Cellular": {
+        "4G (FDD) Bands": "1, 2, 3, 4, 5, 7, 8, 12, 13, 14, 17, 18, 19, 25, 26, 66",
+        "4G (TDD) Bands": "39, 40, 41",
+        "3G Bands": "1, 2, 4, 5",
+        "Data Speed": "LTE-A, HSDPA+ (4G) 42.2 Mbit/s",
+        "SIM type": "eSIM"
+      }
+    }
+  },
+  {
+    "url": "https://www.phonearena.com/phones/Apple-Watch-Series-11-42mm_id12830",
+    "specs": {
+      "Availability": {
+        "Officially announced": "Sep 09, 2025",
+        "Prices (MSRP)": "$399"
+      },
+      "Design": {
+        "Dimensions": "1.65 x 1.42 x 0.38 inches 42 x 36 x 9.7 mm",
+        "Weight": "1.05 oz / 29.7 g",
+        "Materials": "Back: Ceramic Frame: Aluminum",
+        "Resistance": "Water, Dust; IP6X",
+        "Colors": "Rose Gold, Silver, Space Gray, Jet Black"
+      },
+      "Display": {
+        "Size": "1.8-inch",
+        "Type": "OLED, 2000 nits",
+        "Resolution": "496x416px, 366 PPI"
+      },
+      "Hardware": {
+        "System chip": "Apple S10",
+        "Processor": "Dual-core",
+        "GPU": "PowerVR",
+        "Memory": "1GB/64GB",
+        "Storage expansion": "not expandable",
+        "OS": "watchOS (10.x)"
+      },
+      "Battery": {
+        "Type": "Li - Ion",
+        "Charging": "Qi wireless charging"
+      },
+      "Connectivity & Features": {
+        "Bluetooth": "5.3",
+        "WLAN": "a,b,g,n,ac 802.11 b, g, n",
+        "Sensors": "Accelerometer, Gyroscope, Altimeter, Compass, Heart rate, Thermometer, Barometer, ECG, Blood Oxygen",
+        "Location": "A-GPS, Glonass, Galileo, BeiDou",
+        "Other": "NFC, Ultra Wideband (UWB)"
+      },
+      "Multimedia": {
+        "Speakers": "Loudspeaker"
+      },
+      "Cellular": {
+        "4G (FDD) Bands": "1, 2, 3, 4, 5, 7, 8, 18, 19, 20, 25, 26, 28, 66",
+        "4G (TDD) Bands": "39, 40, 41",
+        "3G Bands": "1, 2, 4, 5",
+        "Data Speed": "LTE, HSDPA+ (4G) 42.2 Mbit/s",
+        "SIM type": "eSIM"
+      }
+    }
+  },
+  {
+    "url": "https://www.phonearena.com/phones/Apple-Watch-SE-3-44mm_id12832",
+    "specs": {
+      "Availability": {
+        "Officially announced": "Sep 09, 2025",
+        "Prices (MSRP)": "$249"
+      },
+      "Design": {
+        "Dimensions": "1.73 x 1.50 x 0.42 inches 44 x 38 x 10.7 mm",
+        "Weight": "1.16 oz / 33.0 g",
+        "Resistance": "Water (up to 50 meters)",
+        "Colors": "Starlight, Midnight"
+      },
+      "Display": {
+        "Size": "1.8-inch",
+        "Type": "OLED, 1000 nits",
+        "Resolution": "394x368px, 303 PPI",
+        "Features": "Pressure-sensitive, Scratch-resistant glass, Ambient light sensor"
+      },
+      "Hardware": {
+        "System chip": "Apple S10",
+        "Processor": "Dual-core",
+        "GPU": "PowerVR",
+        "Memory": "1GB/64GB",
+        "Storage expansion": "not expandable",
+        "OS": "watchOS (9.x, 8.x, 7.x)"
+      },
+      "Battery": {
+        "Type": "Li - Ion",
+        "Charging": "Magnetic charging"
+      },
+      "Connectivity & Features": {
+        "Bluetooth": "5.3",
+        "WLAN": "a,b,g,n,ac 802.11 b, g, n",
+        "Sensors": "Accelerometer, Gyroscope, Altimeter, Compass, Heart rate, Barometer, Ambient light sensor",
+        "Location": "GPS, Glonass",
+        "Other": "NFC"
+      },
+      "Multimedia": {
+        "Speakers": "Loudspeaker"
+      },
+      "Cellular": {
+        "5G Bands": "5G Ready",
+        "4G (FDD) Bands": "1, 2, 3, 4, 5, 7, 12, 13, 17, 18, 19, 25, 26, 66",
+        "4G (TDD) Bands": "39, 40, 41",
+        "3G Bands": "1, 2, 4, 5",
+        "Data Speed": "LTE, HSDPA+ (4G) 42.2 Mbit/s, HSUPA 5.76 Mbit/s",
+        "SIM type": "eSIM"
+      }
+    }
+  },
+  {
+    "url": "https://www.phonearena.com/phones/Samsung-Galaxy-S25-FE_id12788",
+    "specs": {
+      "Availability": {
+        "Officially announced": "Sep 04, 2025",
+        "Prices (MSRP)": "8GB/128GB - $650"
+      },
+      "Design": {
+        "Dimensions": "6.35 x 3.02 x 0.29 inches (~0.35 inches with camera bump) 161.3 x 76.6 x 7.4 mm (~8.9 mm with camera bump)",
+        "Weight": "6.70 oz / 190.0 g",
+        "Materials": "Back: Glass (Corning Gorilla Glass Victus+) Frame: Aluminum",
+        "Resistance": "Water, Dust; IP68",
+        "Biometrics": "Optical in-screen fingerprint",
+        "Keys": "Right: Volume control, Lock/Unlock key",
+        "Colors": "Navy, Jetblack, White, Icyblue"
+      },
+      "Display": {
+        "Size": "6.7-inch, 88.06% screen-to-body",
+        "Type": "Dynamic AMOLED, 120Hz, 1900 nits",
+        "Resolution": "2340x1080px, 19.5:9 ratio, 385 PPI",
+        "Protection": "Corning Gorilla Glass Victus+"
+      },
+      "Hardware": {
+        "System chip": "Exynos 2400 S5E9945 (4 nm)",
+        "Processor": "Deca-core 1x3.2GHz Cortex-X4 2x2.9GH​z Cortex-A720 3x2.6​GHz Cortex-A720 4x1.9​5GHz Cortex-A520",
+        "GPU": "Xclipse 940",
+        "Memory": "8GB/128GB 8GB/256GB",
+        "Storage expansion": "not expandable",
+        "OS": "Android (16), up to 7 OS updates"
+      },
+      "Battery": {
+        "Type": "4900 mAh, Li - Ion",
+        "Charging": "Fast charging Reverse wired charging",
+        "Charge speed": "Wired: 45.0W Wireless: 15.0W"
+      },
+      "Camera": {
+        "Rear": "Triple camera",
+        "Main camera": "50 MP (OIS, PDAF) Aperture size: F1.8 Focal length: 24 mm Pixel size: 1.0 μm",
+        "Second camera": "12 MP (Ultra-wide) Aperture size: F2.2",
+        "Third camera": "8 MP (Telephoto) Optical zoom: 3.0x Aperture size: F2.4",
+        "Flash": "LED",
+        "Video recording": "Yes",
+        "Front": "12 MP Video capture: 4K UHD (60 fps)"
+      },
+      "Connectivity & Features": {
+        "Bluetooth": "5.4",
+        "WLAN": "a,b,g,n,ac,Wi-Fi 6,Wi-Fi 6E Wi-Fi Direct, Hotspot 802.11 a, b, g, n, ac, ax",
+        "USB": "Type-C",
+        "Sensors": "Accelerometer, Gyroscope, Compass, Ambient light sensor, Proximity sensor",
+        "Location": "GPS, A-GPS, Glonass, Galileo, BeiDou, Cell ID, Wi-Fi positioning",
+        "Other": "NFC"
+      },
+      "Multimedia": {
+        "Headphones": "No 3.5mm jack",
+        "Speakers": "Earpiece, Multiple speakers"
+      },
+      "Cellular": {
+        "5G Bands": "n1, n2, n3, n5, n7, n8, n12, n20, n25, n28, n38, n40, n41, n66, n75, n77, n78, SA, NSA, Sub-6",
+        "4G (FDD) Bands": "1, 2, 3, 4, 5, 7, 8, 12, 17, 18, 19, 20, 25, 26, 28, 32, 66",
+        "4G (TDD) Bands": "38, 40, 41",
+        "3G Bands": "2, 3, 5, 8",
+        "Data Speed": "LTE-A, HSDPA+ (4G) 42.2 Mbit/s",
+        "SIM type": "Nano SIM, eSIM",
+        "HD Voice": "Yes",
+        "VoLTE": "Yes"
+      }
+    }
+  },
+  {
+    "url": "https://www.phonearena.com/phones/Honor-Magic-V5_id12826",
+    "specs": {
+      "Availability": {
+        "Officially announced": "Jul 02, 2025",
+        "Prices (MSRP)": "€1999"
+      },
+      "Design": {
+        "Dimensions": "6.17 x 5.74 x 0.16 inches 156.8 x 145.9 x 4.1 mm",
+        "Folded": "(156.8 x 74.3 x 8.8 mm)",
+        "Weight": "7.65 oz / 217.0 g",
+        "Resistance": "Water, Dust; IP59",
+        "Biometrics": "Fingerprint (touch)",
+        "Colors": "Black, Ivory White, Dawn Gold, Reddish Brown"
+      },
+      "Display": {
+        "Size": "8.0-inch, 88.95% screen-to-body",
+        "Type": "AMOLED, 120Hz, HDR, 5000 nits",
+        "Resolution": "2352x2172px, 403 PPI",
+        "Features": "Folding inside the device, HDR support, Dolby Vision, Ambient light sensor, Proximity sensor",
+        "Front cover display": "6.4 inches 2376 x1060 px OLED 120Hz refresh rate, HDR support"
+      },
+      "Hardware": {
+        "System chip": "Snapdragon 8 Elite SM8750-AB (3 nm)",
+        "Processor": "Octa-core 1x3.3GHz Cortex-X4 3x3.2GH​z Cortex-A720 2x3.0GHz Cortex-A720 2x2.3 GHz Cortex-A520",
+        "GPU": "Adreno 750830",
+        "Memory": "12GB/256GB 16GB/512GB 16GB/1TB",
+        "Storage expansion": "not expandable",
+        "OS": "Android (15)"
+      },
+      "Battery": {
+        "Type": "5820 mAh, Si - Carbon",
+        "Charging": "Fast charging Qi wireless charging, Reverse wired charging",
+        "Charge speed": "Wired: 66.0W Wireless: 50.0W"
+      },
+      "Camera": {
+        "Rear": "Triple camera",
+        "Main camera": "50 MP (OIS, Laser and PDAF) Aperture size: F1.6 Focal length: 23 mm",
+        "Second camera": "50 MP (Ultra-wide, Autofocus) Aperture size: F2.0 Focal Length: 13 mm",
+        "Third camera": "64 MP (Telephoto, Periscope, OIS, PDAF) Optical zoom: 3.0x Aperture size: F2.5 Focal Length: 70 mm Sensor size: 1/2\"",
+        "Flash": "LED",
+        "Video recording": "4K UHD (60 fps)",
+        "Front": "20 MP Folded: 20 MP"
+      },
+      "Connectivity & Features": {
+        "Bluetooth": "6.0",
+        "WLAN": "a,b,g,n,ac,Wi-Fi 6,Wi-Fi 6E,Wi-Fi 7 Wi-Fi Direct, Hotspot 802.11 a, b, g, n, ac, ax",
+        "USB": "Type-C, USB 3.1",
+        "Sensors": "Accelerometer, Gyroscope, Compass, Ambient light sensor, Proximity sensor",
+        "Location": "GPS, A-GPS, Glonass, Galileo, BeiDou, QZSS, Cell ID, Wi-Fi positioning",
+        "Other": "NFC, Infrared"
+      },
+      "Multimedia": {
+        "Headphones": "No 3.5mm jack",
+        "Speakers": "Earpiece, Multiple speakers"
+      },
+      "Cellular": {
+        "5G Bands": "n1, n3, n5, n8, n28, n38, n41, n77, n78, 5G Ready",
+        "4G (FDD) Bands": "1, 2, 3, 4, 5, 7, 8, 12, 17, 18, 19, 20, 26, 28, 66",
+        "4G (TDD) Bands": "34, 38, 39, 40, 41",
+        "3G Bands": "1, 2, 4, 5, 6, 8",
+        "Data Speed": "LTE-A, HSDPA+ (4G) 42.2 Mbit/s",
+        "SIM type": "eSIM, Dual Nano SIM"
+      }
+    }
+  }
+]

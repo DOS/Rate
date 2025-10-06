@@ -1,5 +1,5 @@
 {
-  "name": "@repo/importer",
+  "name": "@repo/crawlers",
   "version": "1.0.0",
   "private": true,
   "description": "Data import tool for Rate platform with support for multiple data sources",

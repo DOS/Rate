@@ -682,10 +682,66 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       })();
       return true;
       
+    // Handle create listing from content script
+    case 'create-listing-from-product':
+      console.log('[Background] Creating listing from product:', message.data);
+      (async () => {
+        try {
+          // Prepare item in the format expected by the API - PASS ALL FIELDS
+          const item = {
+            product: {
+              productId: message.data.productId,
+              shopId: message.data.shopId,
+              title: message.data.productName || 'Unknown Product',
+              url: message.data.productUrl || '',
+              price: message.data.price || '',
+              platform: 'shopee',
+              // ADD ALL THE MISSING FIELDS
+              stock: message.data.stock || 0,
+              soldCount: message.data.soldCount || 0,
+              rating: message.data.rating || 0,
+              productReviewCount: message.data.reviewCount || 0,
+              likedCount: message.data.likedCount || 0,
+              images: message.data.images || [],
+              description: message.data.description || '',
+              brand: message.data.brand || '',
+              shopName: message.data.shopName || '',
+              // Any other fields from content script
+              ...message.data
+            }
+          };
+
+          const payload = {
+            items: [item],
+            priority: 'normal',
+            source: 'extension'
+          };
+
+          console.log('[Background] Sending to Strapi:', payload);
+
+          const response = await fetch('http://localhost:1337/api/listings/create?source=extension', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(payload)
+          });
+
+          const result = await response.json();
+          console.log('[Background] Strapi response:', result);
+
+          sendResponse({ success: result.success || !!result.data, data: result });
+        } catch (error) {
+          console.error('[Background] Error creating listing:', error);
+          sendResponse({ success: false, error: error.message });
+        }
+      })();
+      return true; // Keep channel open for async response
+
     default:
       console.log('[Background] Unknown message type:', message.type);
   }
-  
+
   return true; // Keep message channel open
 });
 

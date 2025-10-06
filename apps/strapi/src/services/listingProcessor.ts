@@ -100,13 +100,46 @@ class ListingProcessorService {
   }
 
   /**
+   * Parse price from Vietnamese format string (e.g., "39.999.000" -> 39999000)
+   */
+  private parseVietnamesePrice(price: any): number {
+    if (typeof price === 'number') {
+      return price;
+    }
+    if (typeof price === 'string') {
+      // Remove dots (thousand separators) and commas, then parse
+      const cleanPrice = price.replace(/[.,]/g, '');
+      const parsedPrice = parseFloat(cleanPrice);
+      if (!isNaN(parsedPrice)) {
+        console.log('[ListingProcessor] Parsed price from string:', price, '->', parsedPrice);
+        return parsedPrice;
+      }
+    }
+    console.log('[ListingProcessor] Could not parse price:', price, 'returning 0');
+    return 0;
+  }
+
+  /**
    * Xử lý data từ extension và tạo Listing
    */
   async processShopeeData(data: ShopeeData): Promise<ProcessingResult> {
     try {
+      // Parse price if it's in Vietnamese format
+      if (data.product.price !== undefined) {
+        data.product.price = this.parseVietnamesePrice(data.product.price);
+      }
+      if (data.product.originalPrice !== undefined) {
+        data.product.originalPrice = this.parseVietnamesePrice(data.product.originalPrice);
+      }
+
       const productUrl = data.product.url || data.product.productUrl || '';
       console.log('[ListingProcessor] Processing Shopee data for URL:', productUrl);
       console.log('[ListingProcessor] Product data received:', JSON.stringify(data.product, null, 2));
+      console.log('[ListingProcessor] Seller data received:', JSON.stringify(data.seller, null, 2));
+      console.log('[ListingProcessor] Stock value:', data.product.stock);
+      console.log('[ListingProcessor] Brand value:', data.product.brand);
+      console.log('[ListingProcessor] Seller name:', data.seller?.name);
+      console.log('[ListingProcessor] Parsed price:', data.product.price);
       
       // Lấy hoặc tạo Platform Shopee
       const platform = await this.getOrCreateShopeePlatform();
@@ -158,6 +191,19 @@ class ListingProcessorService {
         const imageResult = await this.processExternalImages(data.product.images || []);
         console.log('[ListingProcessor] External images processed:', imageResult.urls.length, 'URLs');
         
+        // Process description blocks for Strapi's blocks field
+        const descriptionBlocks = data.product.description ? [
+          {
+            type: 'paragraph',
+            children: [
+              {
+                type: 'text',
+                text: this.fixVietnameseEncoding(data.product.description)
+              }
+            ]
+          }
+        ] : existingListing.Description || [];
+
         // Update existing listing with new data
         const updatedListing = await this.strapi.entityService.update('api::listing.listing', existingListing.id, {
           data: {
@@ -175,8 +221,11 @@ class ListingProcessorService {
             // Store external image URLs
             ExternalImages: imageResult.urls,
 
-            // Update other fields that might have changed
-            Stock: data.product.stock || existingListing.Stock || 0,
+            // Update fields with new data from Shopee
+            Stock: data.product.stock !== undefined ? data.product.stock : (existingListing.Stock || 0),
+            Brand: this.extractBrandFromProductData(data.product) || existingListing.Brand || '',
+            PlatformOwnerName: data.seller ? this.toTitleCase(this.fixVietnameseEncoding(data.seller.name || '')) : existingListing.PlatformOwnerName || 'N/A',
+            Description: descriptionBlocks,
             AverageRating: data.product.rating || existingListing.AverageRating || 0,
             TotalReviews: data.product.productReviewCount || existingListing.TotalReviews || 0,
             FavoriteCount: data.product.likedCount || existingListing.FavoriteCount || 0
@@ -193,7 +242,7 @@ class ListingProcessorService {
           // Find English version using documentId
           const documentId = existingListing.documentId;
           if (documentId) {
-            const englishListing = await this.strapi.entityService.findMany('api::listing.listing', {
+            const englishListing: any = await this.strapi.entityService.findMany('api::listing.listing', {
               filters: {
                 documentId: {
                   $eq: documentId
@@ -202,11 +251,27 @@ class ListingProcessorService {
               locale: 'en',
               limit: 1
             });
-            
+
             if (englishListing && englishListing.length > 0) {
               const enListing = englishListing[0];
               console.log('[ListingProcessor] Found English listing to update:', enListing.id);
               
+              // Find English category if VI category exists
+              let englishCategoryId = null;
+              if (category && category.documentId) {
+                const linkedEnCategory = await this.strapi.entityService.findMany('api::category.category', {
+                  filters: {
+                    documentId: category.documentId,
+                    locale: 'en'
+                  },
+                  limit: 1
+                });
+                if (linkedEnCategory && linkedEnCategory.length > 0) {
+                  englishCategoryId = linkedEnCategory[0].id;
+                  console.log(`[ListingProcessor] Found linked English category for update: "${linkedEnCategory[0].Name}"`);
+                }
+              }
+
               // Update English version with same data
               await this.strapi.entityService.update('api::listing.listing', enListing.id, {
                 data: {
@@ -214,9 +279,13 @@ class ListingProcessorService {
                   LastUpdated: new Date().toISOString(),
                   ViewCount: (enListing.ViewCount || 0) + 1,
                   Item: item ? item.id : (enListing as any).Item,
+                  Category: englishCategoryId || (enListing as any).Category, // Add Category mapping
                   Media: mediaIds && mediaIds.length > 0 ? mediaIds : [],
                   ExternalImages: imageResult.urls.length > 0 ? imageResult.urls : (enListing as any).ExternalImages,
-                  Stock: data.product.stock || enListing.Stock || 0,
+                  Stock: data.product.stock !== undefined ? data.product.stock : (enListing.Stock || 0),
+                  Brand: this.extractBrandFromProductData(data.product) || enListing.Brand || '',
+                  PlatformOwnerName: data.seller ? this.toTitleCase(this.fixVietnameseEncoding(data.seller.name || '')) : enListing.PlatformOwnerName || 'N/A',
+                  Description: descriptionBlocks,
                   AverageRating: data.product.rating || enListing.AverageRating || 0,
                   TotalReviews: data.product.productReviewCount || enListing.TotalReviews || 0,
                   FavoriteCount: data.product.likedCount || enListing.FavoriteCount || 0
@@ -239,10 +308,10 @@ class ListingProcessorService {
               if (fullViListing) {
                 const viListing = fullViListing as any;
                 
-                // Find English category using smart matching
+                // Find English category using documentId (proper i18n approach)
                 let englishCategoryId = null;
                 if (viListing.Category) {
-                  // Try to find English category with same documentId
+                  // Only use documentId linking - no fallback
                   if (viListing.Category.documentId) {
                     const linkedEnCategory = await this.strapi.entityService.findMany('api::category.category', {
                       filters: {
@@ -251,43 +320,18 @@ class ListingProcessorService {
                       },
                       limit: 1
                     });
-                    
+
                     if (linkedEnCategory && linkedEnCategory.length > 0) {
                       englishCategoryId = linkedEnCategory[0].id;
+                      console.log(`[ListingProcessor] Found linked English category: "${linkedEnCategory[0].Name}" for Vietnamese category: "${viListing.Category.Name}"`);
+                    } else {
+                      console.log(`[ListingProcessor] Warning: No English category with documentId: ${viListing.Category.documentId}`);
                     }
-                  }
-                  
-                  // Fallback to similarity matching
-                  if (!englishCategoryId) {
-                    const allEnCategories = await this.strapi.entityService.findMany('api::category.category', {
-                      filters: { locale: 'en' },
-                      limit: 100
-                    });
-                    
-                    if (allEnCategories && allEnCategories.length > 0) {
-                      let bestMatch = null;
-                      let bestScore = 0;
-                      const viCatNormalized = this.normalizeCategoryName(viListing.Category.Name || '');
-                      
-                      for (const enCategory of allEnCategories) {
-                        const similarity = this.calculateSimilarity(
-                          viListing.Category.Slug || '',
-                          enCategory.Slug || ''
-                        ) * 0.8;
-                        
-                        if (similarity > bestScore) {
-                          bestScore = similarity;
-                          bestMatch = enCategory;
-                        }
-                      }
-                      
-                      if (bestMatch && bestScore >= 0.5) {
-                        englishCategoryId = bestMatch.id;
-                      }
-                    }
+                  } else {
+                    console.log(`[ListingProcessor] Warning: Vietnamese category "${viListing.Category.Name}" has no documentId`);
                   }
                 }
-                
+
                 const englishListingData: any = {
                   Title: viListing.Title,
                   Slug: viListing.Slug,
@@ -299,7 +343,7 @@ class ListingProcessorService {
                   Status: viListing.Status || 'active',
                   URL: viListing.URL,
                   Platform: viListing.Platform?.id || viListing.Platform,
-                  Category: englishCategoryId || viListing.Category?.id || viListing.Category,
+                  Category: englishCategoryId, // Only use English category, no fallback
                   Item: viListing.Item?.id || viListing.Item,
                   ExternalImages: imageResult.urls.length > 0 ? imageResult.urls : viListing.ExternalImages,
                   UsageCount: data.product.soldCount || viListing.UsageCount || 0,
@@ -462,7 +506,7 @@ class ListingProcessorService {
       
       // Try different search approaches for Strapi 5
       // Force Vietnamese locale for Shopee Vietnam
-      let listings = await this.strapi.entityService.findMany('api::listing.listing', {
+      let listings: any = await this.strapi.entityService.findMany('api::listing.listing', {
         filters: {
           Platform: { id: platformId },
           ListingID: listingId  // Use Strapi field name (capital letters)
@@ -484,7 +528,7 @@ class ListingProcessorService {
           },
           populate: '*' as any,
           locale: 'all' // Search all locales to find any duplicate
-        } as any);
+        } as any) as any;
         console.log('[ListingProcessor] Second query result:', listings ? listings.length : 'null');
       }
 
@@ -626,14 +670,14 @@ class ListingProcessorService {
       
       // 1. Try to find by MatchCode (primary matching) - check all locales
       // Use startsWith to match items with suffix too (e.g., samsung-galaxy-s25-ultra-123456)
-      const existingByCode = await this.strapi.entityService.findMany('api::item.item', {
+      const existingByCode: any = await this.strapi.entityService.findMany('api::item.item', {
         filters: {
           MatchCode: {
             $startsWith: matchCode
           }
           // Remove locale filter to find item in any language
-        },
-        populate: ['localizations']
+        }
+        // Remove populate to avoid join issues
       });
 
       if (existingByCode && existingByCode.length > 0) {
@@ -642,9 +686,7 @@ class ListingProcessorService {
 
         // IMPORTANT: Verify the item actually exists in DB (not just in cache)
         try {
-          const verifiedItem = await this.strapi.entityService.findOne('api::item.item', existingItem.id, {
-            populate: ['localizations']
-          });
+          const verifiedItem = await this.strapi.entityService.findOne('api::item.item', existingItem.id);
 
           if (!verifiedItem) {
             console.log('[ListingProcessor] Item found in cache but not in DB (was deleted), will create new Item');
@@ -657,7 +699,7 @@ class ListingProcessorService {
               return this.updateItemWithLatestData(verifiedItem, product, locale);
             } else {
               // Item exists but in different locale - check if current locale version exists
-              const currentLocaleItem = await this.strapi.entityService.findMany('api::item.item', {
+              const currentLocaleItem: any = await this.strapi.entityService.findMany('api::item.item', {
                 filters: {
                   documentId: verifiedItem.documentId,
                   locale: locale
@@ -682,13 +724,25 @@ class ListingProcessorService {
       }
       
       // 2. Try fuzzy matching with similar normalized titles
-      const similarItems = await this.strapi.entityService.findMany('api::item.item', {
-        filters: {
-          Category: category ? category.id : undefined,
-          locale: locale
-        },
-        limit: 50 // Check top 50 items in same category
-      });
+      let similarItems: any[] = [];
+      try {
+        // Simplify query to avoid join issues
+        if (category && category.id) {
+          similarItems = await this.strapi.entityService.findMany('api::item.item', {
+            filters: {
+              Category: category.id
+            },
+            locale: locale,
+            limit: 50 // Check top 50 items in same category
+          });
+        } else {
+          // If no category, skip fuzzy matching to avoid loading too many items
+          similarItems = [];
+        }
+      } catch (err) {
+        console.log('[ListingProcessor] Error loading similar items:', err);
+        similarItems = [];
+      }
       
       for (const item of similarItems || []) {
         const similarity = this.titleNormalizer.calculateSimilarity(itemTitle, item.Title || '');
@@ -713,7 +767,7 @@ class ListingProcessorService {
 
       // Check if MatchCode already exists in database (could be from a previous failed attempt)
       // Use startsWith to match items with suffix too
-      const existingWithMatchCode = await this.strapi.entityService.findMany('api::item.item', {
+      const existingWithMatchCode: any = await this.strapi.entityService.findMany('api::item.item', {
         filters: {
           MatchCode: {
             $startsWith: matchCode
@@ -727,7 +781,7 @@ class ListingProcessorService {
         const existingItem = existingWithMatchCode[0];
 
         // Check if other locales exist
-        const hasOtherLocales = await this.strapi.entityService.findMany('api::item.item', {
+        const hasOtherLocales: any = await this.strapi.entityService.findMany('api::item.item', {
           filters: {
             documentId: existingItem.documentId,
             locale: { $ne: locale }
@@ -1104,7 +1158,7 @@ class ListingProcessorService {
         Stock: product.stock || 0,
         PlatformOwnerID: shopId || '', // Shop ID là owner ID cho Shopee
         PlatformOwnerName: seller ? this.toTitleCase(this.fixVietnameseEncoding(seller.name || '')) : 'N/A', // Fix encoding and normalize to Title Case
-        Brand: this.fixVietnameseEncoding(product.brand || ''), // Fix encoding, keep original brand casing
+        Brand: this.extractBrandFromProductData(product), // Extract brand from product data or title
         Location: this.fixVietnameseEncoding(product.shipFrom || ''), // Fix encoding for location
         LastUpdated: new Date().toISOString(), // Add LastUpdated timestamp
         FavoriteCount: product.likedCount || 0, // Map likedCount from Shopee (Đã thích)
@@ -1232,62 +1286,11 @@ class ListingProcessorService {
               }
             }
 
-            // Fallback: Use similarity matching for English categories
+            // No fallback - categories must be properly linked via documentId
+            // This ensures data integrity and proper i18n structure
             if (!englishCategoryId) {
-              const allEnCategories = await this.strapi.entityService.findMany('api::category.category', {
-                filters: {
-                  locale: 'en'
-                },
-                limit: 100
-              });
-
-              if (allEnCategories && allEnCategories.length > 0) {
-                let bestMatch = null;
-                let bestScore = 0;
-
-                // Try common translations first
-                const commonTranslations: { [key: string]: string[] } = {
-                  'điện thoại': ['cellphones', 'cell phones', 'phones', 'mobile phones'],
-                  'laptop': ['laptops', 'notebooks', 'computers'],
-                  'máy tính': ['computers', 'pc', 'desktop'],
-                  'tai nghe': ['headphones', 'earphones', 'audio'],
-                  'phụ kiện': ['accessories', 'parts']
-                };
-
-                const viCatNormalized = this.normalizeCategoryName(category.Name || '');
-
-                for (const enCategory of allEnCategories) {
-                  const enCatNormalized = this.normalizeCategoryName(enCategory.Name || '');
-                  let similarity = 0;
-
-                  // Check common translations
-                  for (const [viKey, enValues] of Object.entries(commonTranslations)) {
-                    if (viCatNormalized.includes(viKey)) {
-                      for (const enValue of enValues) {
-                        if (enCatNormalized.includes(enValue)) {
-                          similarity = 0.9; // High confidence for known translations
-                          break;
-                        }
-                      }
-                    }
-                  }
-
-                  // If no translation match, use similarity algorithm
-                  if (similarity === 0) {
-                    similarity = this.calculateSimilarity(category.Slug || '', enCategory.Slug || '') * 0.7;
-                  }
-
-                  if (similarity > bestScore) {
-                    bestScore = similarity;
-                    bestMatch = enCategory;
-                  }
-                }
-
-                if (bestMatch && bestScore >= 0.5) {
-                  englishCategoryId = bestMatch.id;
-                  console.log(`[ListingProcessor] Found English category match: "${bestMatch.Name}" with score: ${(bestScore * 100).toFixed(1)}%`);
-                }
-              }
+              console.log(`[ListingProcessor] Warning: No English translation for category "${category.Name}" (ID: ${category.id}, documentId: ${category.documentId})`);
+              console.log(`[ListingProcessor] English listing will be created without category. Please create English category translation in admin panel.`);
             }
           }
 
@@ -1309,7 +1312,7 @@ class ListingProcessorService {
                   locale: 'en',
                   data: {
                     ...listingData,
-                    Category: englishCategoryId || listingData.Category,
+                    Category: englishCategoryId, // Use English category or null (don't fallback to Vietnamese)
                     Title: listingData.Title // Keep same title for now
                   }
                 }, 'api::listing.listing');
@@ -1320,7 +1323,7 @@ class ListingProcessorService {
                 console.log('[ListingProcessor] i18n service not available, creating English listing manually');
 
                 // First check if English version already exists (race condition)
-                const existingEnglish = await this.strapi.entityService.findMany('api::listing.listing', {
+                const existingEnglish: any = await this.strapi.entityService.findMany('api::listing.listing', {
                   filters: {
                     documentId: documentId,
                     locale: 'en'
@@ -1332,7 +1335,7 @@ class ListingProcessorService {
                   // Prepare English listing data
                   const englishListingData = {
                     ...listingData,
-                    Category: englishCategoryId || listingData.Category,
+                    Category: englishCategoryId, // Use English category or null (don't fallback to Vietnamese)
                     Title: listingData.Title,
                     // IMPORTANT: Include documentId to link with Vietnamese version
                     documentId: documentId
@@ -1471,7 +1474,7 @@ class ListingProcessorService {
         // Update English listing with English Item if available
         if (englishItem) {
           try {
-            const englishListings = await this.strapi.entityService.findMany('api::listing.listing', {
+            const englishListings: any = await this.strapi.entityService.findMany('api::listing.listing', {
               filters: {
                 ListingID: listingId || ''
               },
@@ -2743,6 +2746,56 @@ class ListingProcessorService {
    */
   private async updateItemWithPlatformId(item: any, product: ShopeeProduct, platformId: string, locale: string): Promise<any> {
     return this.updateItemWithLatestData(item, product, locale);
+  }
+
+  /**
+   * Extract brand from product data - try brand field first, then extract from title
+   */
+  private extractBrandFromProductData(product: ShopeeProduct): string {
+    // 1. First check if brand is provided directly
+    if (product.brand && product.brand.trim() !== '') {
+      console.log('[ListingProcessor] Brand found in data:', product.brand);
+      return this.fixVietnameseEncoding(product.brand);
+    }
+
+    // 2. Try to extract brand from title
+    const title = product.title || (product as any).productName || '';
+    const titleFixed = this.fixVietnameseEncoding(title);
+
+    console.log('[ListingProcessor] Extracting brand from title:', titleFixed);
+
+    // Common brands to look for in title
+    const knownBrands = [
+      'Apple', 'iPhone', 'Samsung', 'Galaxy', 'Xiaomi', 'Redmi', 'POCO',
+      'Oppo', 'Vivo', 'Realme', 'OnePlus', 'Nokia', 'Sony', 'LG',
+      'Huawei', 'Honor', 'Asus', 'ROG', 'Lenovo', 'Dell', 'HP',
+      'MSI', 'Acer', 'Razer', 'Google', 'Pixel', 'Nothing',
+      'TCL', 'Motorola', 'ZTE', 'Infinix', 'Tecno', 'Vsmart'
+    ];
+
+    // Check title for known brands (case-insensitive)
+    const titleLower = titleFixed.toLowerCase();
+    for (const brand of knownBrands) {
+      if (titleLower.includes(brand.toLowerCase())) {
+        console.log('[ListingProcessor] Extracted brand from title:', brand);
+        return brand;
+      }
+    }
+
+    // 3. Special handling for common patterns
+    // "Điện thoại Apple iPhone..." -> Apple
+    if (titleLower.includes('điện thoại apple') || titleLower.includes('iphone')) {
+      return 'Apple';
+    }
+    if (titleLower.includes('điện thoại samsung') || titleLower.includes('galaxy')) {
+      return 'Samsung';
+    }
+    if (titleLower.includes('điện thoại xiaomi') || titleLower.includes('redmi') || titleLower.includes('poco')) {
+      return 'Xiaomi';
+    }
+
+    console.log('[ListingProcessor] Could not extract brand from product data');
+    return ''; // Return empty string if no brand found
   }
 }
 

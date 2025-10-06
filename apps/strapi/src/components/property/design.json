@@ -1,0 +1,24 @@
+{
+  "collectionName": "components_property_designs",
+  "info": {
+    "displayName": "Design",
+    "icon": "cube"
+  },
+  "attributes": {
+    "Dimensions": {
+      "type": "string"
+    },
+    "Weight": {
+      "type": "decimal"
+    },
+    "Material": {
+      "type": "string"
+    },
+    "Colors": {
+      "type": "json"
+    },
+    "WaterResistance": {
+      "type": "string"
+    }
+  }
+}

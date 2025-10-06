@@ -29,7 +29,8 @@ function injectShopeeSniffer() {
 
 function getShopeeIdsFromUrl() {
   const url = window.location.href;
-  const m = url.match(/i\.(\d+)\.(\d+)/);
+  // Support both i. and a-i. URL formats
+  const m = url.match(/(?:a-)?i\.(\d+)\.(\d+)/);
   if (m) {
     return { shopId: m[1], itemId: m[2] };
   }
@@ -1142,17 +1143,35 @@ function getShopeeProductAndSellerInfo() {
       stock = parseInt(stockMatch[1].replace(/[^0-9]/g, ''));
       console.log('[Shopee] Stock found from regex:', stock);
     }
-    
-    // Strategy 2: Tìm trong các elements
+
+    // Strategy 2: Tìm text "Còn" (Còn xxx sản phẩm)
     if (!stock) {
-      const rows = Array.from(document.querySelectorAll('section div, .product-detail div, [class*="stock"] span'));
+      const availableMatch = allTexts.match(/Còn[\s]*([0-9]+(?:[.,]?[0-9]+)*)[\s]*sản phẩm/i);
+      if (availableMatch && availableMatch[1]) {
+        stock = parseInt(availableMatch[1].replace(/[^0-9]/g, ''));
+        console.log('[Shopee] Stock found from "Còn X sản phẩm":', stock);
+      }
+    }
+
+    // Strategy 3: Tìm text với số lượng giới hạn mua
+    if (!stock) {
+      const limitMatch = allTexts.match(/Số lượng[\s:]*([0-9]+(?:[.,]?[0-9]+)*)/i);
+      if (limitMatch && limitMatch[1]) {
+        stock = parseInt(limitMatch[1].replace(/[^0-9]/g, ''));
+        console.log('[Shopee] Stock found from "Số lượng":', stock);
+      }
+    }
+
+    // Strategy 4: Tìm trong các elements
+    if (!stock) {
+      const rows = Array.from(document.querySelectorAll('section div, .product-detail div, [class*="stock"] span, [class*="quantity"] span'));
       rows.forEach((el) => {
         const t = (el.textContent || '').replace(/\s+/g, ' ').trim();
         if (!t) return;
-        if (/^Kho(\s|$)/i.test(t)) {
+        if (/^Kho(\s|$)/i.test(t) || /^Còn(\s|$)/i.test(t) || /^Số lượng(\s|$)/i.test(t)) {
           const val = (el.nextElementSibling ? el.nextElementSibling.textContent : t).replace(/[^0-9]/g, '');
           const n = Number(val);
-          if (n) {
+          if (n && n > stock) { // Take larger value if multiple found
             stock = n;
             console.log('[Shopee] Stock found from element:', stock);
           }
@@ -1163,7 +1182,7 @@ function getShopeeProductAndSellerInfo() {
         }
       });
     }
-    
+
     console.log('[Shopee] Final stock value:', stock);
   } catch (e) {
     console.error('[Shopee] Error getting stock:', e);
@@ -1820,4 +1839,106 @@ async function renderRateScoreBadge() {
   } catch (error) {
     console.error('❌ Lỗi render Rate Score badge:', error);
   }
+}
+
+// Auto create listing when visiting Shopee product page
+async function autoCreateListing() {
+  // Only on Shopee product pages
+  if (!window.location.href.match(/shopee\.vn.*(?:a-)?i\.\d+\.\d+/)) return;
+
+  const ids = getShopeeIdsFromUrl();
+  if (!ids || !ids.shopId || !ids.itemId) return;
+
+  console.log('[Auto Create Listing] Processing product page:', ids);
+
+  try {
+    // Get full product info using existing functions
+    let productInfo = getShopeeProductAndSellerInfo();
+
+    // Try to enrich with API data
+    try {
+      const apiInfo = await fetchShopeeProductViaAPI();
+      if (apiInfo) {
+        productInfo = {
+          ...productInfo,
+          ...apiInfo,
+          // Keep DOM data if API missing
+          productName: apiInfo.productName || productInfo.productName,
+          price: apiInfo.price || productInfo.price,
+          shopName: apiInfo.sellerName || productInfo.sellerName,
+          soldCount: apiInfo.soldCount || productInfo.soldCount,
+          stock: apiInfo.stock || productInfo.stock,
+          rating: apiInfo.rating || productInfo.rating,
+          likedCount: apiInfo.likedCount || productInfo.likedCount
+        };
+        console.log('[Auto Create Listing] Enriched with API data');
+      }
+    } catch (e) {
+      console.log('[Auto Create Listing] API fetch failed, using DOM data only');
+    }
+
+    // Send to background for server submission - ensure ALL fields are mapped
+    const dataToSend = {
+      // Map all fields from getShopeeProductAndSellerInfo
+      productId: ids.itemId,
+      shopId: ids.shopId,
+      productName: productInfo.productName,
+      productUrl: productInfo.productUrl || window.location.href,
+      title: productInfo.productName, // Alias for compatibility
+      price: productInfo.price,
+      description: productInfo.description || '',
+      images: productInfo.images || [],
+      brand: productInfo.brand || '',
+      stock: productInfo.stock || 0,
+      soldCount: productInfo.soldCount || 0,
+      likedCount: productInfo.likedCount || 0,
+      productReviewCount: productInfo.productReviewCount || 0,
+      rating: productInfo.rating || 0,
+      categories: productInfo.categories || [],
+      shipFrom: productInfo.shipFrom || '',
+
+      // Seller info
+      sellerName: productInfo.sellerName || '',
+      shopName: productInfo.sellerName || '', // Alias
+      sellerLink: productInfo.sellerLink || '',
+      sellerAvatar: productInfo.sellerAvatar || '',
+      sellerReviewCount: productInfo.sellerReviewCount || '',
+      sellerFollowerCount: productInfo.sellerFollowerCount || '',
+      sellerResponseRate: productInfo.sellerResponseRate || '',
+      sellerResponseTime: productInfo.sellerResponseTime || '',
+      sellerJoinSince: productInfo.sellerJoinSince || '',
+      sellerProductCount: productInfo.sellerProductCount || ''
+    };
+
+    console.log('[Auto Create Listing] Sending full data to background:', dataToSend);
+
+    chrome.runtime.sendMessage({
+      type: 'create-listing-from-product',
+      data: dataToSend,
+      source: 'content-script'
+    }, (response) => {
+      if (chrome.runtime.lastError) {
+        console.error('[Auto Create Listing] Error:', chrome.runtime.lastError);
+        return;
+      }
+      console.log('[Auto Create Listing] Server response:', response);
+    });
+
+  } catch (error) {
+    console.error('[Auto Create Listing] Failed:', error);
+  }
+}
+
+// Auto create listing after page loads
+if (window.location.host.includes('shopee.vn')) {
+  setTimeout(autoCreateListing, 3000);
+
+  // Also monitor URL changes
+  let currentUrl = window.location.href;
+  setInterval(() => {
+    if (window.location.href !== currentUrl) {
+      currentUrl = window.location.href;
+      setTimeout(autoCreateListing, 2000);
+    }
+  }, 1000);
 }

@@ -1,0 +1,27 @@
+{
+  "collectionName": "components_property_cameras",
+  "info": {
+    "displayName": "Camera",
+    "icon": "camera"
+  },
+  "attributes": {
+    "RearCamera": {
+      "type": "string"
+    },
+    "RearFeatures": {
+      "type": "text"
+    },
+    "FrontCamera": {
+      "type": "string"
+    },
+    "VideoRecording": {
+      "type": "string"
+    },
+    "OpticalZoom": {
+      "type": "decimal"
+    },
+    "DigitalZoom": {
+      "type": "decimal"
+    }
+  }
+}

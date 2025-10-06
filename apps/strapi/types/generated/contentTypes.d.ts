@@ -524,6 +524,12 @@ export interface ApiCategoryCategory extends Struct.CollectionTypeSchema {
       "manyToOne",
       "api::category.category"
     >
+    PropertyList: Schema.Attribute.JSON &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: false
+        }
+      }>
     publishedAt: Schema.Attribute.DateTime
     Review: Schema.Attribute.Boolean &
       Schema.Attribute.SetPluginOptions<{
@@ -768,6 +774,20 @@ export interface ApiItemItem extends Struct.CollectionTypeSchema {
     }
   }
   attributes: {
+    AnnouncedDate: Schema.Attribute.Date &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: true
+        }
+      }>
+    AvailabilityStatus: Schema.Attribute.Enumeration<
+      ["Available", "Coming Soon", "Discontinued", "Pre-order", "Rumored"]
+    > &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: true
+        }
+      }>
     Barcode: Schema.Attribute.String &
       Schema.Attribute.SetPluginOptions<{
         i18n: {
@@ -887,7 +907,6 @@ export interface ApiItemItem extends Struct.CollectionTypeSchema {
           localized: false
         }
       }>
-    OpeningHours: Schema.Attribute.Component<"business.opening-hour", true>
     PlatformIdentifiers: Schema.Attribute.JSON &
       Schema.Attribute.SetPluginOptions<{
         i18n: {
@@ -906,6 +925,21 @@ export interface ApiItemItem extends Struct.CollectionTypeSchema {
         },
         number
       >
+    PropertyList: Schema.Attribute.DynamicZone<
+      [
+        "property.display",
+        "property.battery",
+        "property.hardware",
+        "property.camera",
+        "property.connectivity",
+        "property.design",
+      ]
+    > &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: false
+        }
+      }>
     publishedAt: Schema.Attribute.DateTime
     QRCode: Schema.Attribute.String &
       Schema.Attribute.SetPluginOptions<{
@@ -913,13 +947,7 @@ export interface ApiItemItem extends Struct.CollectionTypeSchema {
           localized: true
         }
       }>
-    RelatedIdentity: Schema.Attribute.Relation<
-      "manyToOne",
-      "api::identity.identity"
-    >
-    Reports: Schema.Attribute.Relation<"oneToMany", "api::report.report">
-    Reviews: Schema.Attribute.Relation<"oneToMany", "api::review.review">
-    Score: Schema.Attribute.Decimal &
+    RateScore: Schema.Attribute.Decimal &
       Schema.Attribute.SetPluginOptions<{
         i18n: {
           localized: false
@@ -933,6 +961,12 @@ export interface ApiItemItem extends Struct.CollectionTypeSchema {
         number
       > &
       Schema.Attribute.DefaultTo<0>
+    RelatedIdentity: Schema.Attribute.Relation<
+      "manyToOne",
+      "api::identity.identity"
+    >
+    Reports: Schema.Attribute.Relation<"oneToMany", "api::report.report">
+    Reviews: Schema.Attribute.Relation<"oneToMany", "api::review.review">
     SKU: Schema.Attribute.String &
       Schema.Attribute.SetPluginOptions<{
         i18n: {

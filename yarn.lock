@@ -3158,13 +3158,6 @@
   resolved "https://registry.yarnpkg.com/@juggle/resize-observer/-/resize-observer-3.4.0.tgz#08d6c5e20cf7e4cc02fd181c4b0c225cd31dbb60"
   integrity sha512-dfLbk+PwWvFzSxwk3n5ySL0hfBog779o8h68wK/7/APo/7cgyWp5jcXockbxdk5kFRkbeXWm4Fbi9FrdN381sA==
 
-"@keyv/redis@^3.0.1":
-  version "3.0.1"
-  resolved "https://registry.yarnpkg.com/@keyv/redis/-/redis-3.0.1.tgz#c62e88d056cdc993449332ca16d5153a6ec92df6"
-  integrity sha512-eyqzomQC76LjUOEkPP8rdR2Fk4eZBSS0Ma47i7CNiQuv8NCw3trZvghx8L5Xruk7XPEj/eRAMrAxP//xQFOPdQ==
-  dependencies:
-    ioredis "^5.4.1"
-
 "@keyv/redis@^5.1.2":
   version "5.1.2"
   resolved "https://registry.yarnpkg.com/@keyv/redis/-/redis-5.1.2.tgz#d75ce3079c304e946cb3729ccfad008f486e85e7"
@@ -6177,35 +6170,6 @@
     debug "4.3.5"
     ioredis "5.4.1"
     redlock "5.0.0-beta.2"
-
-"@strapi-community/plugin-rest-cache@^5.0.1":
-  version "5.0.1"
-  resolved "https://registry.yarnpkg.com/@strapi-community/plugin-rest-cache/-/plugin-rest-cache-5.0.1.tgz#9a6ed9da3e2d99216d5ebf5b0ac742f224e64ffb"
-  integrity sha512-xiM2xJo7ejlxvL0ODTUlb9nDKj8suLCl7UxkG+ZzwLYYabnh1i8ZNgkfn6YafhWDPRPBbnBp++oO4C1hEvABRQ==
-  dependencies:
-    "@strapi-community/provider-rest-cache-memory" "5.0.0"
-    chalk "^4.1.2"
-    debug "^4.4.1"
-    immer "^9.0.21"
-    lodash "^4.17.21"
-    prop-types "^15.8.1"
-    react-intl "^6.4.1"
-
-"@strapi-community/provider-rest-cache-memory@5.0.0":
-  version "5.0.0"
-  resolved "https://registry.yarnpkg.com/@strapi-community/provider-rest-cache-memory/-/provider-rest-cache-memory-5.0.0.tgz#1efc79152a590573160c90ccdf7d544d5046954b"
-  integrity sha512-u43BUhIaoFhUYuVPrmAUGacYjzObBvCiPgKw0+rmdXDdbanp5Dzn7w+Fn/Kx+yzORFrH6N3OA36LTP9JdixmHg==
-  dependencies:
-    cache-manager "^7.1.1"
-    quick-lru "7.0.1"
-
-"@strapi-community/provider-rest-cache-redis@^5.0.0":
-  version "5.0.0"
-  resolved "https://registry.yarnpkg.com/@strapi-community/provider-rest-cache-redis/-/provider-rest-cache-redis-5.0.0.tgz#34dc282541eba6042fd4d7ffc7bd13f2cac1a57b"
-  integrity sha512-2zSxlZzCZM9M3yZrlReOqrsy2Syp3HQbxLUHw3IOy0DQd/nB4ovJymYd3EezfwkBEJ52QeFneMXr7F69IAqbxw==
-  dependencies:
-    "@keyv/redis" "^3.0.1"
-    cache-manager "^7.1.1"
 
 "@strapi/admin@5.24.1", "@strapi/admin@^5.24.1":
   version "5.24.1"
@@ -9297,7 +9261,7 @@ axe-core@^4.10.0:
   resolved "https://registry.yarnpkg.com/axe-core/-/axe-core-4.10.3.tgz#04145965ac7894faddbac30861e5d8f11bfd14fc"
   integrity sha512-Xm7bpRXnDSX2YE2YFfBk2FnF0ep6tmG7xPh8iHee8MIcrgq762Nkce856dYtJYLkuIoYZvGfTs/PbZhideTcEg==
 
-axios@1.12.2, axios@^1.12.2:
+axios@1.12.2, axios@^1.12.2, axios@^1.7.9:
   version "1.12.2"
   resolved "https://registry.yarnpkg.com/axios/-/axios-1.12.2.tgz#6c307390136cf7a2278d09cec63b136dfc6e6da7"
   integrity sha512-vMJzPewAlRyOgxV2dU0Cuz2O8zzzx9VYtbJOaBgXFeLc4IV/Eg50n4LowmehOOR61S8ZMpc2K5Sa7g6A4jfkUw==
@@ -9687,7 +9651,7 @@ cache-content-type@^1.0.0:
     mime-types "^2.1.18"
     ylru "^1.2.0"
 
-cache-manager@^7.1.1, cache-manager@^7.2.2:
+cache-manager@^7.2.2:
   version "7.2.2"
   resolved "https://registry.yarnpkg.com/cache-manager/-/cache-manager-7.2.2.tgz#d6f4cdca9eb93d725645e793af9d55d48c11355d"
   integrity sha512-kI/pI0+ZX05CsEKH7Dt/mejgWK32R0h/is176IlmcZ6lJls9TdQ/xfYmrBdud7jh2yhlwa8WlBmCW1mjhcBf3g==
@@ -18112,11 +18076,6 @@ queue-microtask@^1.2.2:
   resolved "https://registry.yarnpkg.com/queue-microtask/-/queue-microtask-1.2.3.tgz#4929228bbc724dfac43e0efb058caf7b6cfb6243"
   integrity sha512-NuaNSa6flKT5JaSYQzJok04JzTL1CA6aGhv5rfLW3PgqA+M2ChpZQnAC8h8i4ZFkBS8X5RqkDBHA7r4hej3K9A==
 
-quick-lru@7.0.1:
-  version "7.0.1"
-  resolved "https://registry.yarnpkg.com/quick-lru/-/quick-lru-7.0.1.tgz#6df758a00721b9d619769b1b34689e65bea28c7e"
-  integrity sha512-kLjThirJMkWKutUKbZ8ViqFc09tDQhlbQo2MNuVeLWbRauqYP96Sm6nzlQ24F0HFjUNZ4i9+AgldJ9H6DZXi7g==
-
 quick-lru@^5.1.1:
   version "5.1.1"
   resolved "https://registry.yarnpkg.com/quick-lru/-/quick-lru-5.1.1.tgz#366493e6b3e42a3a6885e2e99d18f80fb7a8c932"
@@ -18324,7 +18283,7 @@ react-intl@6.6.2:
     intl-messageformat "10.5.11"
     tslib "^2.4.0"
 
-react-intl@^6.4.1, react-intl@^6.6.8:
+react-intl@^6.6.8:
   version "6.8.9"
   resolved "https://registry.yarnpkg.com/react-intl/-/react-intl-6.8.9.tgz#ef36b2a19a0eb97afbeaeab9679273fcbf2ea261"
   integrity sha512-TUfj5E7lyUDvz/GtovC9OMh441kBr08rtIbgh3p0R8iF3hVY+V2W9Am7rb8BpJ/29BH1utJOqOOhmvEVh3GfZg==
@@ -20944,6 +20903,11 @@ typescript@^5, typescript@^5.4.0, typescript@^5.5.3, typescript@latest:
   version "5.9.2"
   resolved "https://registry.yarnpkg.com/typescript/-/typescript-5.9.2.tgz#d93450cddec5154a2d5cabe3b8102b83316fb2a6"
   integrity sha512-CWBzXQrc/qOkhidw1OzBTQuYRbfyxDXJMVJ1XNwUHGROVmuaeiEm3OslpZ1RV96d7SKKjZKrSJu3+t/xlw3R9A==
+
+typescript@^5.7.2:
+  version "5.9.3"
+  resolved "https://registry.yarnpkg.com/typescript/-/typescript-5.9.3.tgz#5b4f59e15310ab17a216f5d6cf53ee476ede670f"
+  integrity sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==
 
 ua-parser-js@^1.0.33:
   version "1.0.41"

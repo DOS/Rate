@@ -1,0 +1,53 @@
+{
+  "version": "0.0.0",
+  "keywords": [],
+  "type": "commonjs",
+  "exports": {
+    "./strapi-server": {
+      "types": "./dist/server/src/index.d.ts",
+      "source": "./server/src/index.ts",
+      "import": "./dist/server/src/index.mjs",
+      "require": "./dist/server/src/index.js",
+      "default": "./dist/server/src/index.js"
+    },
+    "./strapi-admin": {
+      "types": "./dist/admin/src/index.d.ts",
+      "source": "./admin/src/index.tsx",
+      "import": "./dist/admin/src/index.mjs",
+      "require": "./dist/admin/src/index.js",
+      "default": "./dist/admin/src/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "strapi-plugin build",
+    "watch": "strapi-plugin watch",
+    "watch:link": "strapi-plugin watch:link",
+    "verify": "strapi-plugin verify"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@strapi/strapi": "^5.25.0",
+    "@strapi/sdk-plugin": "^5.3.2",
+    "prettier": "^3.6.2",
+    "@strapi/typescript-utils": "^5.25.0",
+    "typescript": "^5.9.3"
+  },
+  "peerDependencies": {
+    "@strapi/strapi": "^5.25.0",
+    "@strapi/sdk-plugin": "^5.3.2"
+  },
+  "strapi": {
+    "kind": "plugin",
+    "name": "Rate-Admin",
+    "displayName": "Rate Admin",
+    "description": "Rate Platform admin extensions with custom fields and property component management"
+  },
+  "name": "Rate-Admin",
+  "description": "Rate Platform admin extensions with custom fields and property component management",
+  "license": "MIT",
+  "author": "JOY <joy@joy.vn>"
+}

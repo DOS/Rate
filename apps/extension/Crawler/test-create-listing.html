@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Create Listing</title>
+</head>
+<body>
+    <h1>Test Create Listing API</h1>
+    <button onclick="testCreateListing()">Test Create Listing</button>
+    <div id="result"></div>
+
+    <script>
+    async function testCreateListing() {
+        console.log('Testing create listing...');
+
+        const item = {
+            product: {
+                productId: "27041370670",
+                shopId: "88201679",
+                title: "Test iPhone from HTML",
+                url: "https://shopee.vn/a-i.88201679.27041370670",
+                price: "49990000",
+                platform: "shopee"
+            }
+        };
+
+        const payload = {
+            items: [item],
+            priority: "normal",
+            source: "extension"
+        };
+
+        try {
+            console.log('Sending payload:', payload);
+
+            const response = await fetch('http://localhost:1337/api/listings/create?source=extension', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payload)
+            });
+
+            console.log('Response status:', response.status);
+
+            const result = await response.json();
+            console.log('Server response:', result);
+
+            document.getElementById('result').innerHTML = `
+                <h3>Result:</h3>
+                <pre>${JSON.stringify(result, null, 2)}</pre>
+            `;
+        } catch (error) {
+            console.error('Error:', error);
+            document.getElementById('result').innerHTML = `
+                <h3>Error:</h3>
+                <pre>${error.message}</pre>
+            `;
+        }
+    }
+    </script>
+</body>
+</html>

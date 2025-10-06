@@ -159,8 +159,8 @@ export interface InfoSocial extends Struct.ComponentSchema {
   }
 }
 
-export interface PropertyPhoneBattery extends Struct.ComponentSchema {
-  collectionName: "components_property_phone_batteries"
+export interface PropertyBattery extends Struct.ComponentSchema {
+  collectionName: "components_property_batteries"
   info: {
     displayName: "Battery"
   }
@@ -178,8 +178,56 @@ export interface PropertyPhoneBattery extends Struct.ComponentSchema {
   }
 }
 
-export interface PropertyPhoneDisplay extends Struct.ComponentSchema {
-  collectionName: "components_property_phone_displays"
+export interface PropertyCamera extends Struct.ComponentSchema {
+  collectionName: "components_property_cameras"
+  info: {
+    displayName: "Camera"
+    icon: "camera"
+  }
+  attributes: {
+    DigitalZoom: Schema.Attribute.Decimal
+    FrontCamera: Schema.Attribute.String
+    OpticalZoom: Schema.Attribute.Decimal
+    RearCamera: Schema.Attribute.String
+    RearFeatures: Schema.Attribute.Text
+    VideoRecording: Schema.Attribute.String
+  }
+}
+
+export interface PropertyConnectivity extends Struct.ComponentSchema {
+  collectionName: "components_property_connectivities"
+  info: {
+    displayName: "Connectivity"
+    icon: "wifi"
+  }
+  attributes: {
+    Bluetooth: Schema.Attribute.String
+    GPS: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>
+    Network: Schema.Attribute.String
+    NFC: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>
+    SIM: Schema.Attribute.String
+    USB: Schema.Attribute.String
+    WiFi: Schema.Attribute.String
+  }
+}
+
+export interface PropertyDesign extends Struct.ComponentSchema {
+  collectionName: "components_property_designs"
+  info: {
+    displayName: "Design"
+    icon: "cube"
+  }
+  attributes: {
+    Colors: Schema.Attribute.JSON
+    Dimensions: Schema.Attribute.String
+    Material: Schema.Attribute.String
+    WaterResistance: Schema.Attribute.String
+    Weight: Schema.Attribute.Decimal
+  }
+}
+
+export interface PropertyDisplay extends Struct.ComponentSchema {
+  collectionName: "components_property_displays"
   info: {
     displayName: "Display"
     icon: "phone"
@@ -207,10 +255,10 @@ export interface PropertyPhoneDisplay extends Struct.ComponentSchema {
   }
 }
 
-export interface PropertyPhonePerformance extends Struct.ComponentSchema {
-  collectionName: "components_property_phone_performances"
+export interface PropertyHardware extends Struct.ComponentSchema {
+  collectionName: "components_property_hardware"
   info: {
-    displayName: "Phone Performance"
+    displayName: "Hardware"
   }
   attributes: {
     ExpandableStorage: Schema.Attribute.Boolean &
@@ -703,9 +751,12 @@ declare module "@strapi/strapi" {
       "info.location": InfoLocation
       "info.organization": InfoOrganization
       "info.social": InfoSocial
-      "property.phone-battery": PropertyPhoneBattery
-      "property.phone-display": PropertyPhoneDisplay
-      "property.phone-performance": PropertyPhonePerformance
+      "property.battery": PropertyBattery
+      "property.camera": PropertyCamera
+      "property.connectivity": PropertyConnectivity
+      "property.design": PropertyDesign
+      "property.display": PropertyDisplay
+      "property.hardware": PropertyHardware
       "rating.criterion": RatingCriterion
       "review.pro-item": ReviewProItem
       "review.pros-cons": ReviewProsCons

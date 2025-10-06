@@ -15,14 +15,26 @@ import { Readable } from 'stream';
  */
 async function checkDuplicateFile(strapi: any, fileName: string, fileSize?: number, contentHash?: string) {
   try {
-    // Priority 1: Check by content hash in the filename (most reliable)
-    // Our filename format includes the content hash: shopee_xxx_[hash].jpg
+    // Priority 1: Check by full content hash (most reliable)
+    // Store and search by full hash to ensure exact content matching
     if (contentHash) {
-      // Search for files that contain this content hash in their name
+      // First check by hash field if it exists
+      const fileWithExactHash = await strapi.db.query('plugin::upload.file').findOne({
+        where: {
+          hash: contentHash
+        }
+      });
+
+      if (fileWithExactHash) {
+        console.log(`[ListingProcessor] Found existing file by exact hash match: ${fileWithExactHash.name} (ID: ${fileWithExactHash.id})`);
+        return fileWithExactHash;
+      }
+
+      // Search for files that contain the full content hash in their name
       const filesWithHash = await strapi.db.query('plugin::upload.file').findMany({
         where: {
           name: {
-            $contains: contentHash.substring(0, 8) // Use first 8 chars of hash
+            $contains: contentHash // Use full hash for better accuracy
           }
         },
         limit: 10
@@ -32,7 +44,7 @@ async function checkDuplicateFile(strapi: any, fileName: string, fileSize?: numb
         // Check if any have the exact same size (double verification)
         for (const file of filesWithHash) {
           if (!fileSize || Math.abs(file.size - fileSize) < 100) { // Allow small size difference due to compression
-            console.log(`[ListingProcessor] Found existing file by content hash: ${file.name} (ID: ${file.id})`);
+            console.log(`[ListingProcessor] Found existing file by content hash in name: ${file.name} (ID: ${file.id})`);
             return file;
           }
         }
@@ -74,31 +86,43 @@ async function checkDuplicateFile(strapi: any, fileName: string, fileSize?: numb
       }
     }
 
-    // If not found by name but we have size, check for very similar files
+    // Priority 4: Check for files with exact same size (potential duplicates with different names)
     // This helps catch cases where naming scheme changed slightly
-    if (fileSize) {
-      // Check for files with same size and similar name pattern
-      const basePattern = fileName.split('_')[0]; // Get the prefix (e.g., 'shopee')
-      const possibleDuplicates = await strapi.db.query('plugin::upload.file').findMany({
+    if (fileSize && fileSize > 5000) { // Only for files larger than 5KB to avoid false positives with small icons
+      // Check for files with exact same size
+      const sameSize = await strapi.db.query('plugin::upload.file').findMany({
         where: {
-          size: fileSize,
-          name: {
-            $startsWith: basePattern
-          }
+          size: fileSize
         },
-        limit: 5
+        limit: 20 // Increased limit to catch more potential matches
       });
 
-      if (possibleDuplicates && possibleDuplicates.length > 0) {
-        // Check if any match our Shopee file ID pattern
-        for (const file of possibleDuplicates) {
-          // Extract Shopee file ID from both filenames
-          const existingMatch = file.name.match(/shopee_([a-zA-Z0-9\-]+)_/);
-          const newMatch = fileName.match(/shopee_([a-zA-Z0-9\-]+)_/);
+      if (sameSize && sameSize.length > 0) {
+        for (const file of sameSize) {
+          // Additional verification: check if it's from Shopee domain in the URL or name
+          const hasShopeePattern = file.name.includes('shopee') ||
+                                  (file.url && file.url.includes('susercontent.com'));
 
-          if (existingMatch && newMatch && existingMatch[1] === newMatch[1]) {
-            console.log(`[ListingProcessor] Found existing file by pattern match: ${file.name} (ID: ${file.id})`);
-            return file;
+          if (hasShopeePattern) {
+            // Extract core identifiers from both filenames for comparison
+            const existingMatch = file.name.match(/shopee[_-]?([a-zA-Z0-9\-]+)[_-]?([a-f0-9]{8,})/i);
+            const newMatch = fileName.match(/shopee[_-]?([a-zA-Z0-9\-]+)[_-]?([a-f0-9]{8,})/i);
+
+            // If we can extract identifiers, compare them
+            if (existingMatch && newMatch) {
+              const existingId = existingMatch[1];
+              const newId = newMatch[1];
+
+              // If core IDs match, it's likely the same image
+              if (existingId === newId || existingId.includes(newId) || newId.includes(existingId)) {
+                console.log(`[ListingProcessor] Found existing file by size and pattern match: ${file.name} (ID: ${file.id})`);
+                return file;
+              }
+            } else {
+              // Fallback: if same size and both contain "shopee", might be duplicate
+              // But be more strict to avoid false positives
+              console.log(`[ListingProcessor] Found file with same size (${fileSize} bytes): ${file.name} - potential duplicate`);
+            }
           }
         }
       }
@@ -483,41 +507,47 @@ export async function uploadProductImages(
 
       // Generate deterministic filename based on image content
       // This ensures same image always gets same filename for deduplication
-      const imageHash = crypto.createHash('md5').update(buffer).digest('hex').substring(0, 8);
-      
+      // Use full hash for better duplicate detection
+      const fullImageHash = crypto.createHash('md5').update(buffer).digest('hex');
+      const shortImageHash = fullImageHash.substring(0, 12); // Use 12 chars for filename (balance between uniqueness and length)
+
       // Extract Shopee file ID from URL for consistent naming
       let shopeeFileId = '';
       const fileMatch = imageUrl.match(/\/file\/([a-zA-Z0-9\-_]+)/);
       if (fileMatch) {
         shopeeFileId = fileMatch[1].split('_')[0].split('@')[0]; // Get core ID
+        // Clean up the ID - remove size indicators and other suffixes
+        shopeeFileId = shopeeFileId.replace(/(_tn|@resize.*|_\d+x\d+)$/i, '');
       }
-      
+
       // Use ListingID or generate from URL
       let filePrefix = 'shopee';
       if (listingId) {
         // Replace dots with underscores for filesystem compatibility
         filePrefix = listingId.replace(/\./g, '_');
       } else if (shopeeFileId) {
-        filePrefix = `shopee_${shopeeFileId}`;
+        // Limit shopeeFileId length to prevent overly long filenames
+        const cleanId = shopeeFileId.substring(0, 20);
+        filePrefix = `shopee_${cleanId}`;
       }
-      
-      // Create short slug from title (max 20 chars for readability)
+
+      // Create short slug from title (max 15 chars for readability)
       const slug = productTitle
         .toLowerCase()
         .replace(/[^a-z0-9\s-]/g, '')
         .replace(/\s+/g, '-')
         .trim()
-        .substring(0, 20);
-      
+        .substring(0, 15);
+
       // Image index (01, 02, 03...)
       const imageIndex = String(i + 1).padStart(2, '0');
-      
+
       // Final filename uses content hash to ensure consistency
-      // Format: shopee_fileId_hash.ext or prefix_hash.ext
-      // If same image is uploaded again, it will have same filename regardless of position
+      // Format: shopee_[coreId]_[hash].ext
+      // Using consistent format ensures same image always gets same filename
       const fileName = shopeeFileId
-        ? `shopee_${shopeeFileId.replace(/-/g, '_')}_${imageHash}.${extension}` // Use file ID + hash for absolute uniqueness
-        : `${filePrefix}_${imageHash}.${extension}`; // Fallback with hash only
+        ? `shopee_${shopeeFileId.substring(0, 20)}_${shortImageHash}.${extension}` // Use cleaned file ID + hash
+        : `${filePrefix}_${shortImageHash}.${extension}`; // Fallback with hash only
 
       console.log(`[ListingProcessor] Uploading ${fileName} (${buffer.length} bytes, ${mimeType})`);
 
@@ -527,9 +557,9 @@ export async function uploadProductImages(
 
       try {
         // Check if file already exists to prevent duplicates
-        // Pass the buffer hash to check by content, not just name
-        const contentHash = crypto.createHash('md5').update(buffer).digest('hex');
-        const existingFile = await checkDuplicateFile(strapi, fileName, buffer.length, contentHash);
+        // Pass the full buffer hash to check by content, not just name
+        // Use the same full hash we calculated earlier for consistency
+        const existingFile = await checkDuplicateFile(strapi, fileName, buffer.length, fullImageHash);
         if (existingFile) {
           console.log(`[ListingProcessor] ⚠️ Duplicate file found, reusing: ${existingFile.name} (ID: ${existingFile.id})`);
           uploadedFiles.push(existingFile.id);

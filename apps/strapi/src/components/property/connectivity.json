@@ -1,0 +1,32 @@
+{
+  "collectionName": "components_property_connectivities",
+  "info": {
+    "displayName": "Connectivity",
+    "icon": "wifi"
+  },
+  "attributes": {
+    "Network": {
+      "type": "string"
+    },
+    "SIM": {
+      "type": "string"
+    },
+    "WiFi": {
+      "type": "string"
+    },
+    "Bluetooth": {
+      "type": "string"
+    },
+    "GPS": {
+      "type": "boolean",
+      "default": false
+    },
+    "NFC": {
+      "type": "boolean",
+      "default": false
+    },
+    "USB": {
+      "type": "string"
+    }
+  }
+}

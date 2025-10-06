@@ -1,0 +1,64 @@
+{
+  "url": "https://www.phonearena.com/phones/Xiaomi-17_id12857",
+  "specs": {
+    "Availability": {
+      "Officially announced": "Oct 25, 2025"
+    },
+    "Design": {
+      "Dimensions": "5.95 x 2.83 x 0.32 inches 151.1 x 71.8 x 8.1 mm",
+      "Weight": "6.74 oz / 191.0 g",
+      "Materials": "Back: Glass Frame: Aluminum",
+      "Resistance": "Water, Dust; IP68",
+      "Biometrics": "Ultrasonic in-screen fingerprint",
+      "Keys": "Right: Volume control, Lock/Unlock key",
+      "Colors": "Black, Blue, Pink, White"
+    },
+    "Display": {
+      "Size": "6.3-inch, 89.41% screen-to-body",
+      "Type": "AMOLED, 120Hz, Dolby Vision, 3500 nits",
+      "Resolution": "2656x1220px, 19.5:5 ratio, 464 PPI",
+      "Features": "Ambient light sensor, Proximity sensor"
+    },
+    "Hardware": {
+      "System chip": "Snapdragon 8 Elite Gen 5 SM8850-AC (3 nm)",
+      "Processor": "Octa-core 2x4.6GHz Oryon V3 Phoenix L 6x3.62GHz Oryon V3 Phoenix M",
+      "GPU": "Adreno 840",
+      "Memory": "12GB/256GB (UFS 4.1) 12GB/512GB 16GB/512GB",
+      "Storage expansion": "not expandable",
+      "OS": "Android (16)"
+    },
+    "Battery": {
+      "Type": "7000 mAh, Si - Carbon",
+      "Charging": "Fast charging Qi wireless charging",
+      "Charge speed": "Wired: 100.0W Wireless: 50.0W"
+    },
+    "Camera": {
+      "Rear": "Triple camera",
+      "Main camera": "50 MP Aperture size: F1.7 Focal length: 23 mm Sensor size: 1/1.31\"",
+      "Second camera": "50 MP (Ultra-wide) Aperture size: F2.4 Focal Length: 17 mm Sensor size: 1/2.76\" Pixel size: 0.64 μm",
+      "Third camera": "50 MP Optical zoom: 2.6x Aperture size: F2.0 Focal Length: 60 mm Sensor size: 1/2.76\" Pixel size: 0.64 μm",
+      "Flash": "LED",
+      "Video recording": "8K UHD (30 fps), 4K UHD (60 fps), 1080p (960 fps)",
+      "Front": "50 MP"
+    },
+    "Connectivity & Features": {
+      "Bluetooth": "5.4",
+      "WLAN": "a,b,g,n,ac,Wi-Fi 6,Wi-Fi 7 Wi-Fi Direct, Hotspot",
+      "USB": "Type-C, USB 3.2",
+      "Sensors": "Accelerometer, Gyroscope, Compass, Barometer, Ambient light sensor, Proximity sensor",
+      "Location": "GPS, A-GPS, Glonass, Galileo, BeiDou, QZSS, NavIC, Cell ID, Wi-Fi positioning",
+      "Other": "NFC, Infrared"
+    },
+    "Multimedia": {
+      "Headphones": "No 3.5mm jack",
+      "Speakers": "Earpiece, Multiple speakers"
+    },
+    "Cellular": {
+      "5G Bands": "n1, n2, n3, n5, n7, n8, n12, n20, n25, n26, n28, n38, n40, n41, n48, n66, n77, n78, n80, n84, SA, NSA",
+      "4G (FDD) Bands": "1, 2, 3, 4, 5, 7, 8, 12, 17, 18, 19, 20, 25, 26, 28, 66",
+      "4G (TDD) Bands": "34, 38, 39, 40, 41, 42, 48",
+      "Data Speed": "LTE-A, HSDPA+ (4G) 42.2 Mbit/s",
+      "SIM type": "Dual Nano SIM"
+    }
+  }
+}

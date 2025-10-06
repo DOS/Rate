@@ -1,0 +1,32 @@
+### 1. Get or Create Cellphones Category
+GET http://localhost:1337/api/categories?filters[Name][$eq]=Cellphones&populate=*
+Authorization: Bearer {{STRAPI_API_TOKEN}}
+
+### 2. Update Cellphones Category with AllowedSpecComponents
+PUT http://localhost:1337/api/categories/1
+Content-Type: application/json
+
+{
+  "data": {
+    "AllowedSpecComponents": [
+      "property.phone-display",
+      "property.phone-battery",
+      "property.phone-performance"
+    ]
+  }
+}
+
+### 3. Create new Item with Cellphones Category
+POST http://localhost:1337/api/items
+Content-Type: application/json
+
+{
+  "data": {
+    "Title": "Test iPhone Auto-Generate",
+    "Category": 1,
+    "ItemType": "Product"
+  }
+}
+
+### 4. Get Item with PropertyList populated
+GET http://localhost:1337/api/items/1?populate[PropertyList]=*&populate[Category][fields][0]=Name
