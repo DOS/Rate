@@ -77,35 +77,39 @@ export default ({ env }: any) => {
     // },
 
     // Configure Redis plugin first (required for rest-cache redis provider)
+    // TEMPORARILY DISABLED: Docker Desktop không chạy
     redis: {
-      config: {
-        connections: {
-          default: {
-            connection: {
-              host: 'localhost',
-              port: 6379,
-              db: 0,
-              // Redis connection settings
-              connectTimeout: 10000,
-              maxRetriesPerRequest: 3,
-              enableOfflineQueue: false,
-              lazyConnect: false,
-              retryStrategy: (times: number) => {
-                if (times > 3) {
-                  // Stop retrying after 3 attempts
-                  return undefined;
-                }
-                // Wait 1 second before retrying
-                return Math.min(times * 1000, 3000);
-              },
-            },
-            settings: {
-              debug: false,
-            },
-          },
-        },
-      },
+      enabled: false,
     },
+    // redis: {
+    //   config: {
+    //     connections: {
+    //       default: {
+    //         connection: {
+    //           host: 'localhost',
+    //           port: 6379,
+    //           db: 0,
+    //           // Redis connection settings
+    //           connectTimeout: 10000,
+    //           maxRetriesPerRequest: 3,
+    //           enableOfflineQueue: false,
+    //           lazyConnect: false,
+    //           retryStrategy: (times: number) => {
+    //             if (times > 3) {
+    //               // Stop retrying after 3 attempts
+    //               return undefined;
+    //             }
+    //             // Wait 1 second before retrying
+    //             return Math.min(times * 1000, 3000);
+    //           },
+    //         },
+    //         settings: {
+    //           debug: false,
+    //         },
+    //       },
+    //     },
+    //   },
+    // },
 
     // REST Cache plugin configuration with Redis
     // TEMPORARILY DISABLED: provider-rest-cache-redis v5.0.0 has bug "Keyv is not a constructor"

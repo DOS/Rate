@@ -2,7 +2,18 @@ import type { Core } from '@strapi/strapi';
 
 const register = ({ strapi }: { strapi: Core.Strapi }) => {
   strapi.log.info('🔧 Rate Admin plugin register() called');
-  
+
+  // Register custom field
+  strapi.customFields.register({
+    name: 'property-list-selector',
+    plugin: 'rate-admin',
+    type: 'json',
+    inputSize: {
+      default: 12,
+      isResizable: false,
+    },
+  });
+
   // Register routes
   strapi.server.routes([
     {
@@ -15,6 +26,8 @@ const register = ({ strapi }: { strapi: Core.Strapi }) => {
       },
     },
   ]);
+
+  strapi.log.info('✅ Rate Admin custom field registered');
 };
 
 const bootstrap = ({ strapi }: { strapi: Core.Strapi }) => {

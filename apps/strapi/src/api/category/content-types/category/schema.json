@@ -167,6 +167,28 @@
           "localized": false
         }
       }
+    },
+    "Property": {
+      "type": "customField",
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
+      },
+      "customField": "plugin::rate-admin.property-list-selector"
+    },
+    "EnumField": {
+      "type": "enumeration",
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
+      },
+      "enum": [
+        "Value A",
+        "Value B",
+        "Value C"
+      ]
     }
   }
 }

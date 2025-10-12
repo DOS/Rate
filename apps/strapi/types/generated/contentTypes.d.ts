@@ -476,6 +476,12 @@ export interface ApiCategoryCategory extends Struct.CollectionTypeSchema {
       "manyToOne",
       "api::directory.directory"
     >
+    EnumField: Schema.Attribute.Enumeration<["Value A", "Value B", "Value C"]> &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: true
+        }
+      }>
     Icon: Schema.Attribute.Media<"images">
     IconKey: Schema.Attribute.Enumeration<
       [
@@ -524,6 +530,13 @@ export interface ApiCategoryCategory extends Struct.CollectionTypeSchema {
       "manyToOne",
       "api::category.category"
     >
+    Property: Schema.Attribute.JSON &
+      Schema.Attribute.CustomField<"plugin::rate-admin.property-list-selector"> &
+      Schema.Attribute.SetPluginOptions<{
+        i18n: {
+          localized: true
+        }
+      }>
     PropertyList: Schema.Attribute.JSON &
       Schema.Attribute.SetPluginOptions<{
         i18n: {
