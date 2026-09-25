@@ -21,9 +21,11 @@ export async function PUT(
     // Check if user has admin role
     // For now, we'll check if user email ends with @admin.com or has specific role
     // In production, implement proper role checking
-    const isAdmin = session.user.email?.endsWith('@admin.com') || 
-                   session.user.role?.name === 'Admin' ||
-                   session.user.role?.type === 'admin'
+    const isAdmin = Boolean(
+      session.user.email?.endsWith('@admin.com') || 
+      (session.user as any).role?.name === 'Admin' ||
+      (session.user as any).role?.type === 'admin'
+    )
     
     if (!isAdmin) {
       return NextResponse.json(

@@ -46,8 +46,11 @@ export default function middleware(req: NextRequest) {
   // Handle HTTPS redirection in production in Heroku servers
   // Comment this block when running locally (using `next start`)
   const xForwardedProtoHeader = req.headers.get("x-forwarded-proto")
+  const host = req.headers.get("host") || ""
+  const isLocalHost = host.includes("localhost") || host.includes("127.0.0.1")
   if (
     !isDevelopment() &&
+    !isLocalHost &&
     (xForwardedProtoHeader === null ||
       xForwardedProtoHeader.includes("https") === false)
   ) {

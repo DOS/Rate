@@ -31,7 +31,7 @@ export function HeroOld({
           )}
           {component?.steps &&
             component?.steps?.length > 0 &&
-            component.steps.map((step) => (
+            component.steps.map((step: any) => (
               <div key={step.id} className="flex items-center gap-1 py-2">
                 <Check className="text-primary-500" />
                 <Paragraph>{step.text}</Paragraph>
@@ -40,7 +40,7 @@ export function HeroOld({
 
           {component.links && (
             <div className="space-x flex flex-col gap-2 pt-4 lg:flex-row">
-              {component.links.map((link, i) => (
+              {component.links.map((link: any, i: number) => (
                 <StrapiLink
                   key={i}
                   component={link}

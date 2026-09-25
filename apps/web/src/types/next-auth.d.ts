@@ -1,66 +1,36 @@
-import NextAuth, { DefaultSession } from "next-auth"
-
-declare module "next-auth" {
-  interface Session {
-    accessToken?: string
-    user: {
-      id?: string | number
-      name?: string | null
-      email?: string | null
-    } & DefaultSession["user"]
-  }
-
-  interface User {
-    strapiJwt?: string
-    strapiUser?: any
-  }
-}
-
-declare module "next-auth/jwt" {
-  interface JWT {
-    strapiJwt?: string
-    strapiUser?: any
-  }
-}
-
-// https://next-auth.js.org/getting-started/typescript
-
 import { DefaultSession } from "next-auth"
 
-type DefaultSessionUser = DefaultSession["user"]
-
-interface AppUser extends DefaultSessionUser {
+export interface AppUser {
+  id?: string | number
+  name?: string | null
+  email?: string | null
+  image?: string | null
   userId?: number
   strapiJWT?: string
+  strapiJwt?: string
   blocked?: boolean
 }
 
 export interface AppSession {
+  jwt?: string
   strapiJWT?: string
+  strapiJwt?: string
+  accessToken?: string
   user: AppUser
   error?: "invalid_strapi_token" | "different_provider" | "oauth_error"
 }
 
 declare module "next-auth" {
-  // Returned by `useSession`, `getSession` and received as a prop on the `SessionProvider` React Context
-  // eslint-disable-next-line no-unused-vars
-  interface Session extends AppSession {
-    user: User
-  }
-
-  /**
-   * The shape of the user object returned in the OAuth providers' `profile` callback,
-   * or the second parameter of the `session` callback, when using a database.
-   */
+  interface Session extends AppSession {}
   interface User extends AppUser {}
 }
 
 declare module "next-auth/jwt" {
-  // Returned by the `jwt` callback and `getToken`, when using JWT sessions
-  // eslint-disable-next-line no-unused-vars
   interface JWT {
     userId?: number
     strapiJWT?: string
+    strapiJwt?: string
+    jwt?: string
     blocked?: boolean
     error?: "invalid_strapi_token" | "different_provider" | "oauth_error"
   }

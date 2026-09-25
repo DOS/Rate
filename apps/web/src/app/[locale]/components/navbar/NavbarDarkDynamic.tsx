@@ -85,15 +85,27 @@ export function NavbarDarkDynamic({
               </div>
               <span className='nav-menus-wrapper-close-button' onClick={() => setToggle(!toggle)}>✕</span>
 
-              <ul className="nav-menu">
-                {(links || []).filter(l => l?.href && l?.label).map((link) => (
-                  <li key={String(link.id) + link.href}>
-                    <Link href={link.href!} target={link.newTab ? '_blank' : undefined}>
-                      {link.label}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
+              {(() => {
+                const defaultLinks: NavbarLinkItem[] = [
+                  { id: 'home', label: 'Trang chủ', href: '/' },
+                  { id: 'smartphones', label: 'Điện thoại', href: '/smartphones' },
+                  { id: 'compare', label: 'So sánh', href: '/compare' },
+                  { id: 'blog', label: 'Đánh giá & Tin tức', href: '/blog' },
+                ];
+                const validLinks = (links || []).filter((l) => l?.href && l?.label);
+                const navLinks = validLinks.length > 0 ? validLinks : defaultLinks;
+                return (
+                  <ul className="nav-menu">
+                    {navLinks.map((link) => (
+                      <li key={String(link.id) + link.href}>
+                        <Link href={link.href!} target={link.newTab ? '_blank' : undefined}>
+                          {link.label}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                );
+              })()}
 
               <ul className="nav-menu nav-menu-social align-to-right">
                 <li className="list-buttons">

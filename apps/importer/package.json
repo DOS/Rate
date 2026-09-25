@@ -28,6 +28,8 @@
   },
   "dependencies": {
     "@crawlee/playwright": "^3.13.5",
+    "@repo/shared-data": "workspace:*",
+    "@supabase/supabase-js": "^2.49.1",
     "@types/ioredis": "^4.28.10",
     "@types/node": "^20.0.0",
     "axios": "^1.9.0",

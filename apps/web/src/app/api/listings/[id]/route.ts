@@ -36,7 +36,7 @@ export async function DELETE(
     const listing = await checkResponse.json()
     
     // Check ownership
-    if (listing.data.attributes.CreatedBy?.data?.id !== session.user.id) {
+    if (listing.data.attributes.CreatedBy?.data?.id !== (session.user as any)?.id) {
       return NextResponse.json(
         { error: "You don't have permission to delete this listing" },
         { status: 403 }
@@ -103,7 +103,7 @@ export async function PUT(
     const listing = await checkResponse.json()
     
     // Check ownership
-    if (listing.data.attributes.CreatedBy?.data?.id !== session.user.id) {
+    if (listing.data.attributes.CreatedBy?.data?.id !== (session.user as any)?.id) {
       return NextResponse.json(
         { error: "You don't have permission to edit this listing" },
         { status: 403 }

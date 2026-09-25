@@ -107,7 +107,8 @@ export default function CategoryTwo() {
       product: FaBagShopping,
       scam: FaTriangleExclamation,
     }
-    if (explicit && byExplicit[explicit.toLowerCase()]) return byExplicit[explicit.toLowerCase()]
+    const explicitIcon = explicit ? byExplicit[explicit.toLowerCase()] : undefined
+    if (explicitIcon) return explicitIcon
 
     const name = `${getName(cat)} ${(cat?.attributes as any)?.Type ?? ''}`.toLowerCase()
     if (name.includes('real') || name.includes('estate')) return FaBuilding

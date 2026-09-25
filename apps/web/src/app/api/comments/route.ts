@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions)
   
-  if (!session) {
+  if (!session?.user) {
     return NextResponse.json(
       { error: "Unauthorized" },
       { status: 401 }
@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
     
     // Add author to comment data
     if (!body.data.Author) {
-      body.data.Author = session.user.id
+      body.data.Author = (session.user as any).id
     }
     
     const response = await fetch(

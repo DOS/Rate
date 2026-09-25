@@ -23,6 +23,10 @@ dist/
 
 # Backup directory
 /Backup/
+crawler_test/
+test-results/
+scratch/
+**/scratch/
 
 # debug
 npm-debug.log*
@@ -55,7 +59,7 @@ packages/*/.env
 
 #jetbrains IDEs
 .idea
-
+.claude/
 .cache
 
 .strapi-updater.json

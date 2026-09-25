@@ -7,8 +7,9 @@ const STRAPI_API_TOKEN = process.env.STRAPI_API_TOKEN
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   const session = await getServerSession(authOptions)
   
   if (!session) {
@@ -23,7 +24,7 @@ export async function POST(
     
     // First get the current review
     const reviewResponse = await fetch(
-      `${STRAPI_API_URL}/api/reviews/${params.id}`,
+      `${STRAPI_API_URL}/api/reviews/${id}`,
       {
         headers: {
           "Authorization": `Bearer ${STRAPI_API_TOKEN}`,
@@ -52,7 +53,7 @@ export async function POST(
     
     // Update the review
     const updateResponse = await fetch(
-      `${STRAPI_API_URL}/api/reviews/${params.id}`,
+      `${STRAPI_API_URL}/api/reviews/${id}`,
       {
         method: "PUT",
         headers: {

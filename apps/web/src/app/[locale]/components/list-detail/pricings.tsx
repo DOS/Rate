@@ -67,13 +67,13 @@ export default function Pricings({ items }: PricingsProps) {
             <div id="pricing" className="panel-collapse collapse show">
                 <div className="card-body p-4 pt-2">
                     <ul className="deatil_features row align-items-start g-3 p-0">
-                        {data.map((item:Data,index:number)=>{
+                        {data.map((item, index) => {
                             return(
                                 <li className="col-xl-4 col-lg-6 col-md-6" key={index}>
                                     <div className="pricingMenu d-block">
                                         <div className="d-flex align-items-center justify-content-between gap-2 border br-dashed rounded-pill p-2">
                                             <div className="pricingMain d-flex align-items-center justify-content-start gap-2">
-                                                <div className="pricingMenuthumb"><figure className="m-0"><Image src={item.image} width={48} height={48} className="img-fluid avatar-lg circle" alt=""/></figure></div>
+                                                <div className="pricingMenuthumb"><figure className="m-0"><Image src={item.image || '/img/prc-1.jpg'} width={48} height={48} className="img-fluid avatar-lg circle" alt=""/></figure></div>
                                                 
                                                 <div className="prcCaptions">
                                                     <h6 className="fw-medium mb-0">{item.title}</h6>

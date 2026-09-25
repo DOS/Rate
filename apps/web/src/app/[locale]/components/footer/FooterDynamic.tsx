@@ -81,7 +81,7 @@ export default function FooterDynamic({
               {col1?.title ? <h4 className="widget-title text-pri">{col1.title}</h4> : null}
               <ul className="footer-menu">
                 {(col1?.links || []).filter(l=>l?.href && l?.label).map((item, index) => (
-                  <li key={String(item.id) + index}><Link href={item.href!} target={item.newTab ? '_blank' : undefined}>{item.label}</Link></li>
+                  <li key={String((item as any).id ?? index)}><Link href={item.href!} target={(item as any).newTab ? '_blank' : undefined}>{item.label}</Link></li>
                 ))}
               </ul>
             </div>
@@ -93,7 +93,7 @@ export default function FooterDynamic({
               {col2?.title ? <h4 className="widget-title">{col2.title}</h4> : null}
               <ul className="footer-menu">
                 {(col2?.links || []).filter(l=>l?.href && l?.label).map((item, index) => (
-                  <li key={String(item.id) + index}><Link href={item.href!} target={item.newTab ? '_blank' : undefined}>{item.label}</Link></li>
+                  <li key={String((item as any).id ?? index)}><Link href={item.href!} target={(item as any).newTab ? '_blank' : undefined}>{item.label}</Link></li>
                 ))}
               </ul>
             </div>
@@ -105,7 +105,7 @@ export default function FooterDynamic({
               {col3?.title ? <h4 className="widget-title">{col3.title}</h4> : null}
               <ul className="footer-menu">
                 {(col3?.links || []).filter(l=>l?.href && l?.label).map((item, index) => (
-                  <li key={String(item.id) + index}><Link href={item.href!} target={item.newTab ? '_blank' : undefined}>{item.label}</Link></li>
+                  <li key={String((item as any).id ?? index)}><Link href={item.href!} target={(item as any).newTab ? '_blank' : undefined}>{item.label}</Link></li>
                 ))}
               </ul>
             </div>

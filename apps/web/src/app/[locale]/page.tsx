@@ -1,6 +1,7 @@
 import Link from "next/link";
 import NavbarDarkDynamic from "./components/navbar/NavbarDarkDynamic";
 import { PublicStrapiClient } from "@/lib/strapi-api";
+import { getMasterProducts } from "@/lib/rate-api";
 import { BsMouse } from "react-icons/bs";
 import { FaBagShopping, FaBowlRice, FaMagnifyingGlass, FaMartiniGlass, FaMugSaucer, FaSpa } from "react-icons/fa6";
 import BrandImage from "./components/brand-image";
@@ -42,6 +43,13 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
   } catch (err) {
     console.error("Error fetching footer (fallback to defaults)", err)
     footerData = {}
+  }
+
+  let masterProducts: any[] = []
+  try {
+    masterProducts = await getMasterProducts({ limit: 6 })
+  } catch (err) {
+    console.error("Error fetching master products for homepage:", err)
   }
   return (
     <>
@@ -104,6 +112,86 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
                <BrandImage/>
             </div>
         </section>
+
+        {/* Featured Smartphones from Supabase Master Products */}
+        {masterProducts.length > 0 && (
+          <section className="py-5 bg-white">
+            <div className="container">
+              <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 gap-3">
+                <div>
+                  <span className="badge bg-primary bg-opacity-10 text-primary px-3 py-2 rounded-pill fw-semibold mb-2">
+                    ⚡ Chuẩn Hóa 10 Nhóm Thông Số GSMArena &amp; PhoneArena
+                  </span>
+                  <h3 className="sectionHeading mb-1">
+                    Điện Thoại Thông Minh <span className="text-primary">Nổi Bật</span>
+                  </h3>
+                  <p className="text-muted mb-0">
+                    Dữ liệu đối chiếu từ các sàn TMĐT Shopee, Tiki, Lazada trên nền tảng Supabase Cloud
+                  </p>
+                </div>
+                <div className="d-flex gap-2">
+                  <Link href={`/${locale}/smartphones`} className="btn btn-outline-primary rounded-pill px-3 py-2 fw-medium">
+                    Xem tất cả ({masterProducts.length}) →
+                  </Link>
+                  {masterProducts.length >= 2 && (
+                    <Link
+                      href={`/${locale}/compare?slugs=${masterProducts.map((p) => p.slug).slice(0, 3).join(',')}`}
+                      className="btn btn-primary rounded-pill px-3 py-2 fw-medium"
+                    >
+                      ⚡ So sánh thông số
+                    </Link>
+                  )}
+                </div>
+              </div>
+
+              <div className="row g-4">
+                {masterProducts.map((item) => {
+                  const minPrice = Number(item.min_price).toLocaleString('vi-VN');
+                  const maxPrice = Number(item.max_price).toLocaleString('vi-VN');
+                  const priceText = item.min_price === item.max_price
+                    ? `${minPrice} ₫`
+                    : `${minPrice} ₫ - ${maxPrice} ₫`;
+                  const thumb = item.thumbnail || (item.images && item.images.length > 0 ? item.images[0] : '/img/placeholder.png');
+                  return (
+                    <div key={item.id} className="col-lg-4 col-md-6 col-12">
+                      <div className="card h-100 border rounded-4 shadow-sm p-3 transition" style={{ transition: 'all 0.2s ease-in-out' }}>
+                        <div className="d-flex justify-content-center align-items-center bg-light rounded-3 p-3 mb-3" style={{ minHeight: '200px' }}>
+                          <img
+                            src={thumb}
+                            alt={item.name}
+                            className="img-fluid rounded object-fit-contain"
+                            style={{ maxHeight: '170px' }}
+                          />
+                        </div>
+                        <div className="d-flex justify-content-between align-items-center mb-2">
+                          <span className="badge bg-secondary bg-opacity-10 text-secondary">{item.brand}</span>
+                          <span className="badge bg-primary bg-opacity-10 text-primary">{item.storage_gb}GB</span>
+                        </div>
+                        <h5 className="fw-bold mb-2">
+                          <Link href={`/${locale}/smartphones/${item.slug}`} className="text-dark text-decoration-none">
+                            {item.name}
+                          </Link>
+                        </h5>
+                        <div className="text-primary fw-bold fs-5 mb-3">
+                          {priceText}
+                        </div>
+                        <div className="d-flex justify-content-between align-items-center text-muted small mt-auto pt-3 border-top">
+                          <span>🏪 {item.merchant_count || 1} nơi bán</span>
+                          <span>⭐ {Number(item.average_rating || 5).toFixed(1)} ({item.total_reviews || 0} đánh giá)</span>
+                        </div>
+                        <div className="mt-3 d-grid">
+                          <Link href={`/${locale}/smartphones/${item.slug}`} className="btn btn-primary rounded-pill fw-medium">
+                            Xem 10 nhóm thông số &amp; nơi bán →
+                          </Link>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </section>
+        )}
 
         <section className="pb-0" id="mains">
             <div className="container">

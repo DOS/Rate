@@ -1,0 +1,8 @@
+{
+  "name": "@repo/strapi",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Legacy Strapi type definitions shim for backward compatibility",
+  "license": "MIT",
+  "types": "./index.d.ts"
+}

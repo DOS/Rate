@@ -1617,8 +1617,22 @@ window.addEventListener('message', (e) => {
           });
         }
       });
+    // Sniffer PDP product stream
+    if (m.type === 'EXT_SHOPEE_PDP_SNIFFED') {
+      try {
+        console.log('[Shopee] Received EXT_SHOPEE_PDP_SNIFFED:', m.product?.title);
+        chrome.runtime.sendMessage({
+          type: 'shopee-pdp-found',
+          data: m.product,
+          url: window.location.href,
+          timestamp: new Date().toISOString()
+        });
+      } catch (e) {
+        console.error('[Shopee] Error handling EXT_SHOPEE_PDP_SNIFFED:', e);
+      }
       return;
     }
+
     // Sniffer bulk stream
     if (m.type === 'EXT_SHOPEE_RATINGS_SNIFFED') {
       (async () => {

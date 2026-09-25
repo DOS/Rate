@@ -1,0 +1,54 @@
+name: rate-crawler-infra
+
+services:
+  # Redis - Job queue (BullMQ) & caching
+  crawler-redis:
+    container_name: rate-crawler-redis
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    command: redis-server --save "" --appendonly no --maxmemory 512mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-cache:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # FlareSolverr - Cloudflare bypass proxy for forum/site scraping
+  crawler-flaresolverr:
+    container_name: rate-crawler-flaresolverr
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    restart: unless-stopped
+    ports:
+      - "${FLARESOLVERR_PORT:-8191}:8191"
+    environment:
+      - LOG_LEVEL=info
+      - LOG_HTML=false
+      - CAPTCHA_SOLVER=none
+      - TZ=Asia/Ho_Chi_Minh
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8191/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # Crawl4AI - LLM-ready web crawler engine for news, specs, blogs
+  crawler-crawl4ai:
+    container_name: rate-crawler-crawl4ai
+    image: unclecode/crawl4ai:latest
+    restart: unless-stopped
+    ports:
+      - "${CRAWL4AI_PORT:-11235}:11235"
+    environment:
+      - CRAWL4AI_API_TOKEN=${CRAWL4AI_API_TOKEN:-rate-secret-token}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11235/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  redis-cache:

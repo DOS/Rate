@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
     
     // Add CreatedBy if user is authenticated
     if (session?.user && body.data) {
-      body.data.CreatedBy = session.user.id
+      body.data.CreatedBy = (session.user as any)?.id
     }
     
     // Forward request to Strapi
@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
           { status: 401 }
         )
       }
-      searchParams.set("filters[CreatedBy][id][$eq]", session.user.id.toString())
+      searchParams.set("filters[CreatedBy][id][$eq]", ((session.user as any)?.id ?? '').toString())
     }
     
     const queryString = searchParams.toString()

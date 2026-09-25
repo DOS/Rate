@@ -18,8 +18,8 @@
     "axios": "^1.7.9"
   },
   "devDependencies": {
-    "@repo/eslint-config": "*",
-    "@repo/typescript-config": "*",
+    "@repo/eslint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
     "typescript": "^5.7.2"
   }
 }

@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions)
   
-  if (!session) {
+  if (!session?.user) {
     return NextResponse.json(
       { error: "Unauthorized" },
       { status: 401 }
@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
     
     // Add reviewer to review data
     if (!body.data.Reviewer) {
-      body.data.Reviewer = session.user.id
+      body.data.Reviewer = (session.user as any).id
     }
     
     // Default to approved (you might want to change this)

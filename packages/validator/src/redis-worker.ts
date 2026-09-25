@@ -597,8 +597,8 @@ export class RedisStreamWorker {
           'STREAMS', this.streamKey, '>'
         );
 
-        if (messages && messages.length > 0) {
-          for (const [stream, streamMessages] of messages) {
+        if (messages && (messages as any).length > 0) {
+          for (const [stream, streamMessages] of (messages as any)) {
             for (const [messageId, data] of streamMessages) {
               const success = await this.processMessage(messageId, data);
               
@@ -636,7 +636,7 @@ export class RedisStreamWorker {
       if (pending && pending.length > 1) {
         const pendingMessages = pending.slice(1); // Skip the summary
         
-        for (const [messageId, consumer, idleTime] of pendingMessages) {
+        for (const [messageId, consumer, idleTime] of (pendingMessages as any)) {
           if (parseInt(idleTime) > minIdleTime) {
             // Claim the message
             const claimed = await this.redis.xclaim(
@@ -647,10 +647,10 @@ export class RedisStreamWorker {
               messageId
             );
 
-            if (claimed && claimed.length > 0) {
+            if (claimed && (claimed as any).length > 0) {
               console.log(`Claimed pending message: ${messageId}`);
               
-              for (const [msgId, data] of claimed) {
+              for (const [msgId, data] of (claimed as any)) {
                 const success = await this.processMessage(msgId, data);
                 if (success) {
                   await this.redis.xack(this.streamKey, this.consumerGroup, msgId);

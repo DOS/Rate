@@ -14,8 +14,11 @@
     "build": "tsc",
     "dev": "tsc"
   },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.1"
+  },
   "devDependencies": {
-    "@types/minimatch": "^6.0.0",
+    "@types/node": "^20.17.19",
     "typescript": "^5"
   }
 }

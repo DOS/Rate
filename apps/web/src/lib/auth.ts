@@ -154,8 +154,8 @@ export const authOptions: NextAuthOptions = {
         // data passed from here are not part of the JWT token and cookie
         session.error = token.error
         session.strapiJWT = token.strapiJWT
-        session.user.userId = token.userId
-        session.user.blocked = token.blocked
+        ;(session.user as any).userId = token.userId
+        ;(session.user as any).blocked = token.blocked
       }
 
       return session

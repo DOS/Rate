@@ -15,10 +15,9 @@
     "*://checkscam.com/*",
     "*://shopee.vn/*",
     "*://*.shopee.vn/*",
-    "http://localhost:1337/*",
-    "https://localhost:1337/*",
-    "http://127.0.0.1:1337/*",
-    "https://127.0.0.1:1337/*"
+    "https://*.supabase.co/*",
+    "http://localhost:3000/*",
+    "http://localhost:3001/*"
   ],
   "background": {
     "service_worker": "background.js",

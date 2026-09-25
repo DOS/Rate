@@ -1,19 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-export async function GET(request: NextRequest, { params }: { params: { path: string[] } }) {
-  return handleProxy(request, params.path, 'GET')
+export async function GET(request: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
+  const { path } = await params
+  return handleProxy(request, path, 'GET')
 }
 
-export async function POST(request: NextRequest, { params }: { params: { path: string[] } }) {
-  return handleProxy(request, params.path, 'POST')
+export async function POST(request: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
+  const { path } = await params
+  return handleProxy(request, path, 'POST')
 }
 
-export async function PUT(request: NextRequest, { params }: { params: { path: string[] } }) {
-  return handleProxy(request, params.path, 'PUT')
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
+  const { path } = await params
+  return handleProxy(request, path, 'PUT')
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: { path: string[] } }) {
-  return handleProxy(request, params.path, 'DELETE')
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
+  const { path } = await params
+  return handleProxy(request, path, 'DELETE')
 }
 
 async function handleProxy(request: NextRequest, pathSegments: string[], method: string) {

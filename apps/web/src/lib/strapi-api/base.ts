@@ -13,7 +13,7 @@ import { isDevelopment } from "@/lib/general-helpers"
 // Add endpoints here that are queried from the frontend.
 // Mapping of Strapi content type UIDs to API endpoint paths.
 // eslint-disable-next-line no-unused-vars
-export const API_ENDPOINTS: { [key in UID.ContentType]?: string } = {
+export const API_ENDPOINTS: Record<string, string> = {
   "api::page.page": "/pages",
   "api::footer.footer": "/footer",
   "api::navbar.navbar": "/navbar",
@@ -101,9 +101,9 @@ export default abstract class BaseStrapiClient {
     requestInit?: RequestInit,
     options?: CustomFetchOptions
   ): Promise<APIResponse<Result<TContentTypeUID, TParams>>> {
-    const path = this.getStrapiApiPathByUId(uid)
+    const path = this.getStrapiApiPathByUId(uid as any)
     const url = `${path}${documentId ? `/${documentId}` : ""}`
-    return await this.fetchAPI(url, params, requestInit, options)
+    return await this.fetchAPI(url, params as any, requestInit, options)
   }
 
   /**
@@ -118,12 +118,12 @@ export default abstract class BaseStrapiClient {
     requestInit?: RequestInit,
     options?: CustomFetchOptions
   ): Promise<APIResponseCollection<Result<TContentTypeUID, TParams>>> {
-    const path = this.getStrapiApiPathByUId(uid)
-    return await this.fetchAPI(path, params, requestInit, options)
+    const path = this.getStrapiApiPathByUId(uid as any)
+    return await this.fetchAPI(path, params as any, requestInit, options)
   }
 
   /**
-   * Fetches all documents
+   * Fetches multiple documents and continuously fetches remaining pages
    */
   public async fetchAll<
     TContentTypeUID extends UID.ContentType,
@@ -134,7 +134,7 @@ export default abstract class BaseStrapiClient {
     requestInit?: RequestInit,
     options?: CustomFetchOptions
   ): Promise<APIResponseCollection<Result<TContentTypeUID, TParams>>> {
-    const path = this.getStrapiApiPathByUId(uid)
+    const path = this.getStrapiApiPathByUId(uid as any)
 
     // Strapi can be configured in https://docs.strapi.io/dev-docs/configurations/api
     const maxPageSize = 100
@@ -142,7 +142,7 @@ export default abstract class BaseStrapiClient {
     const firstPage: APIResponseCollection<Result<TContentTypeUID, TParams>> =
       await this.fetchAPI(
         path,
-        { ...params, pagination: { page: 1, pageSize: maxPageSize } },
+        { ...(params as any), pagination: { page: 1, pageSize: maxPageSize } },
         requestInit,
         options
       )
@@ -157,7 +157,7 @@ export default abstract class BaseStrapiClient {
         this.fetchAPI(
           path,
           {
-            ...params,
+            ...(params as any),
             pagination: {
               ...firstPage.meta.pagination,
               page: i + 2,
@@ -197,11 +197,11 @@ export default abstract class BaseStrapiClient {
   ): Promise<APIResponse<Result<TContentTypeUID, TParams>>> {
     const slugFilter = slug && slug.length > 0 ? { $eq: slug } : { $null: true }
     const mergedParams = {
-      ...params,
+      ...(params as any),
       sort: { publishedAt: "desc" },
-      filters: { ...params?.filters, slug: slugFilter },
+      filters: { ...(params as any)?.filters, slug: slugFilter },
     }
-    const path = this.getStrapiApiPathByUId(uid)
+    const path = this.getStrapiApiPathByUId(uid as any)
     const response: APIResponseCollection<Result<TContentTypeUID, TParams>> =
       await this.fetchAPI(path, mergedParams, requestInit, options)
 
@@ -232,18 +232,17 @@ export default abstract class BaseStrapiClient {
     const slugFilter =
       fullPath && fullPath.length > 0 ? { $eq: fullPath } : { $null: true }
     const mergedParams = {
-      ...params,
+      ...(params as any),
       sort: { publishedAt: "desc" },
-      filters: { ...params?.filters, fullPath: slugFilter },
+      filters: { ...(params as any)?.filters, fullPath: slugFilter },
     }
-    const path = this.getStrapiApiPathByUId(uid)
+    const path = this.getStrapiApiPathByUId(uid as any)
 
     const response: APIResponseCollection<Result<TContentTypeUID, TParams>> =
       await this.fetchAPI(path, mergedParams, requestInit, options)
 
     // return last published entry
     return {
-      // @ts-expect-error localizations TODO @dominik-juriga
       data: response.data.pop() ?? null,
       meta: response.meta,
     }
@@ -263,7 +262,7 @@ export default abstract class BaseStrapiClient {
    * @param uid - UID of the Endpoint
    * @returns API Endpoint path
    */
-  public getStrapiApiPathByUId(uid: keyof typeof API_ENDPOINTS): string {
+  public getStrapiApiPathByUId(uid: string): string {
     const path = API_ENDPOINTS[uid]
     if (path) {
       return path

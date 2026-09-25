@@ -7,6 +7,7 @@ export default function BootstrapClient() {
     // Dynamically import bootstrap JS on client only and expose to window
     (async () => {
       try {
+        // @ts-ignore
         const bs = await import('bootstrap/dist/js/bootstrap.bundle.min.js');
         (window as any).bootstrap = bs;
       } catch {

@@ -7,3 +7,4 @@ export * from './user.schema';
 export * from './listing.schema';
 export * from './review.schema';
 export * from './common.schema';
+export * from './specs.schema';

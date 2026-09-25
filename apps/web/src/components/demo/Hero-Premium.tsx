@@ -65,7 +65,7 @@ export function HeroPremium({
                 {/* Steps with enhanced styling */}
                 {component?.steps && component?.steps?.length > 0 && (
                   <ul className="mb-8 space-y-3">
-                    {component.steps.map((step) => (
+                    {component.steps.map((step: any) => (
                       <li key={step.id} className="flex items-center gap-3">
                         <CheckIcon className="h-5 w-5 flex-shrink-0 text-emerald-500" />
                         <Paragraph className="text-gray-700 dark:text-gray-300">
@@ -79,7 +79,7 @@ export function HeroPremium({
                 {/* CTA Buttons */}
                 {component?.links && component?.links?.length > 0 && (
                   <div className="flex flex-col gap-4 sm:flex-row sm:gap-6">
-                    {component.links.map((link, index) => (
+                    {component.links.map((link: any, index: number) => (
                       <StrapiLink
                         key={link.id}
                         component={link}
