@@ -106,3 +106,4 @@ apps/strapi/public/admin/
 apps/web/node_modules*
 node_modules*
 volumes
+.env*

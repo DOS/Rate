@@ -1,0 +1,34 @@
+# Dependencies
+node_modules
+**/node_modules
+
+# Local docker and DB volumes
+volumes
+volumes/**
+supabase
+supabase/**
+.supabase/**
+
+# Unused root templates & demo kits
+ListingHub_NextJs_v1.0.0/**
+radiant-ts/**
+catalyst-ui-kit/**
+Backup/**
+crawler_test/**
+test-results/**
+scratch/**
+
+# Other apps and packages not needed for web
+apps/importer/**
+apps/strapi/**
+packages/validator/**
+packages/ai/**
+
+# Git and IDE
+.git
+.github/**
+.idea/**
+.claude/**
+.vscode/**
+*.log
+*.pem

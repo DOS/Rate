@@ -30,7 +30,7 @@
     "format:check": "prettier --check --cache --ignore-unknown \"**/*.{js,jsx,ts,tsx,md,css,scss}\"",
     "preinstall": "npx only-allow pnpm",
     "lint": "turbo lint",
-    "prepare": "husky",
+    "prepare": "husky || true",
     "start:web": "turbo run start --filter=@repo/web",
     "type-check": "turbo type-check"
   },
@@ -50,6 +50,7 @@
     "eslint": "^8.57.0",
     "husky": "^9.1.1",
     "lint-staged": "16.1.0",
+    "next": "^15.3.3",
     "prettier": "3.5.3",
     "turbo": "^2.0.9"
   },
