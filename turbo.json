@@ -9,6 +9,13 @@
     "SENTRY_SUPPRESS_GLOBAL_ERROR_HANDLER_FILE_WARNING",
     "WEBPACK_CACHE_TYPE"
   ],
+  "globalPassThroughEnv": [
+    "LOCALAPPDATA",
+    "APPDATA",
+    "USERPROFILE",
+    "TEMP",
+    "TMP"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

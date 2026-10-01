@@ -1,5 +1,6 @@
 import withPlaiceholder from "@plaiceholder/next"
-import { withSentryConfig } from "@sentry/nextjs"
+import * as Sentry from "@sentry/nextjs"
+const withSentryConfig = Sentry.withSentryConfig || Sentry.default?.withSentryConfig
 import plugin from "next-intl/plugin"
 import path from "path"
 import { fileURLToPath } from "url"

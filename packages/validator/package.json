@@ -13,10 +13,10 @@
   "author": "Rate Platform Team",
   "license": "MIT",
   "dependencies": {
-    "zod": "^3.22.4",
+    "zod": "^3.25.76",
     "ioredis": "^5.3.2",
     "pg": "^8.11.3",
-    "uuid": "^9.0.1"
+    "uuid": "^11.1.1"
   },
   "devDependencies": {
     "@types/minimatch": "^6.0.0",
@@ -24,7 +24,7 @@
     "@types/jest": "^29.5.14",
     "@types/node": "^24.0.7",
     "@types/pg": "^8.10.9",
-    "@types/uuid": "^9.0.7",
+    "@types/uuid": "^10.0.0",
     "@types/validator": "^13.15.2",
     "fuse.js": "^7.1.0",
     "geoip-lite": "^1.4.10",
@@ -32,7 +32,7 @@
     "libphonenumber-js": "^1.12.9",
     "ts-jest": "^29.1.1",
     "tsx": "^4.7.0",
-    "typescript": "^5.4.0",
+    "typescript": "^5.9.3",
     "validator": "^13.15.15"
   }
 }
