@@ -108,3 +108,4 @@ node_modules*
 volumes
 .env*
 ListingHub_NextJs_*
+vendor/
