@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { BsPersonCircle, BsBasket2, BsSearch, BsGeoAltFill } from 'react-icons/bs'
+import LocaleSwitcher from '@/components/elementary/LocaleSwitcher'
 
 export interface NavbarLinkItem {
   readonly id?: string | number
@@ -58,7 +59,10 @@ export function NavbarDarkDynamic({
               {logo}
               <div className="nav-toggle" onClick={() => setToggle(!toggle)}></div>
               <div className="mobile_nav">
-                <ul>
+                <ul className="d-flex align-items-center gap-1">
+                  <li className="me-1">
+                    <LocaleSwitcher />
+                  </li>
                   <li>
                     <Link href="#login" className="d-flex align-items-center" data-bs-toggle="modal" data-bs-target="#login">
                       <BsPersonCircle className="me-1" />
@@ -107,7 +111,10 @@ export function NavbarDarkDynamic({
                 );
               })()}
 
-              <ul className="nav-menu nav-menu-social align-to-right">
+              <ul className="nav-menu nav-menu-social align-to-right d-flex align-items-center">
+                <li className="d-flex align-items-center me-2">
+                  <LocaleSwitcher />
+                </li>
                 <li className="list-buttons">
                   <Link href="/register"><BsGeoAltFill className="fs-6 me-1" />Add Listing</Link>
                 </li>

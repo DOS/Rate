@@ -7,6 +7,7 @@ import { FiX } from 'react-icons/fi';
 import { BiSolidShoppingBagAlt } from 'react-icons/bi'
 import Link from 'next/link';
 import Image from 'next/image';
+import LocaleSwitcher from '@/components/elementary/LocaleSwitcher';
 
 export default function NavbarDark() {
     const [scroll,setScroll] = useState(false);
@@ -55,7 +56,10 @@ export default function NavbarDark() {
                         <Link className="nav-brand" href="/"><Image src='/img/logo.svg' width={0} height={0} sizes='100vw' style={{width:'166px', height:'auto'}} className="logo" alt=""/></Link>
                         <div className="nav-toggle" onClick={()=>setIsToggle(!toggle)}></div>
                         <div className="mobile_nav">
-                            <ul>
+                            <ul className="d-flex align-items-center gap-1">
+                                <li className="me-1">
+                                    <LocaleSwitcher/>
+                                </li>
                                 <li>
                                     <Link href="#login" className="d-flex align-items-center" data-bs-toggle="modal" data-bs-target="#login"><BsPersonCircle className="me-1"/></Link>
                                 </li>
@@ -189,6 +193,9 @@ export default function NavbarDark() {
                             </li>
                             <li>
                                 <Link href="#cartSlider" className="cart-content" data-bs-toggle="offcanvas" role="button" aria-controls="cartSlider"><BsBasket2  className=""/><span className="head-cart-counter">3</span></Link>
+                            </li>
+                            <li className="d-flex align-items-center me-2">
+                                <LocaleSwitcher/>
                             </li>
                             <li className="list-buttons">
                                 <Link href="/register"><BsGeoAlt className="fs-6 me-1"/>Add Listing</Link>
