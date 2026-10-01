@@ -107,3 +107,4 @@ apps/web/node_modules*
 node_modules*
 volumes
 .env*
+ListingHub_NextJs_*

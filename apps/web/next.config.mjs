@@ -18,10 +18,6 @@ const nextConfig = {
   reactStrictMode: true,
   experimental: { externalDir: true },
   transpilePackages: ["@repo/design-system"],
-  eslint: {
-    // Temporary: allow production build to pass while we clean up lint errors
-    ignoreDuringBuilds: true,
-  },
   typescript: {
     ignoreBuildErrors: true,
   },

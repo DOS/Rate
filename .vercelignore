@@ -10,7 +10,7 @@ supabase/**
 .supabase/**
 
 # Unused root templates & demo kits
-ListingHub_NextJs_v1.0.0/**
+ListingHub_NextJs_*/**
 radiant-ts/**
 catalyst-ui-kit/**
 Backup/**
