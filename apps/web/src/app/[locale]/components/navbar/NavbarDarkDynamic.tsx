@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
+import { useLocale } from 'next-intl'
 import { BsPersonCircle, BsBasket2, BsSearch, BsGeoAltFill } from 'react-icons/bs'
 import LocaleSwitcher from '@/components/elementary/LocaleSwitcher'
 
@@ -19,6 +20,7 @@ export function NavbarDarkDynamic({
   readonly links: readonly NavbarLinkItem[]
   readonly logoUrl?: string | null
 }) {
+  const locale = useLocale()
   const [scroll, setScroll] = useState(false)
   const [toggle, setToggle] = useState(false)
   const [windowWidth, setWindowWidth] = useState(0)
@@ -61,7 +63,7 @@ export function NavbarDarkDynamic({
               <div className="mobile_nav">
                 <ul className="d-flex align-items-center gap-1">
                   <li className="me-1">
-                    <LocaleSwitcher />
+                    <LocaleSwitcher isDarkHeader={false} compact={true} />
                   </li>
                   <li>
                     <Link href="#login" className="d-flex align-items-center" data-bs-toggle="modal" data-bs-target="#login">
@@ -91,10 +93,10 @@ export function NavbarDarkDynamic({
 
               {(() => {
                 const defaultLinks: NavbarLinkItem[] = [
-                  { id: 'home', label: 'Trang chủ', href: '/' },
-                  { id: 'smartphones', label: 'Điện thoại', href: '/smartphones' },
-                  { id: 'compare', label: 'So sánh', href: '/compare' },
-                  { id: 'blog', label: 'Đánh giá & Tin tức', href: '/blog' },
+                  { id: 'home', label: locale === 'vi' ? 'Trang chủ' : 'Home', href: '/' },
+                  { id: 'smartphones', label: locale === 'vi' ? 'Điện thoại' : 'Smartphones', href: '/smartphones' },
+                  { id: 'compare', label: locale === 'vi' ? 'So sánh' : 'Compare', href: '/compare' },
+                  { id: 'blog', label: locale === 'vi' ? 'Đánh giá & Tin tức' : 'Blog & News', href: '/blog' },
                 ];
                 const validLinks = (links || []).filter((l) => l?.href && l?.label);
                 const navLinks = validLinks.length > 0 ? validLinks : defaultLinks;
@@ -111,12 +113,12 @@ export function NavbarDarkDynamic({
                 );
               })()}
 
-              <ul className="nav-menu nav-menu-social align-to-right d-flex align-items-center">
-                <li className="d-flex align-items-center me-2">
-                  <LocaleSwitcher />
+              <ul className="nav-menu nav-menu-social align-to-right d-flex align-items-center mb-0">
+                <li className="d-flex align-items-center me-3">
+                  <LocaleSwitcher isDarkHeader={false} />
                 </li>
-                <li className="list-buttons">
-                  <Link href="/register"><BsGeoAltFill className="fs-6 me-1" />Add Listing</Link>
+                <li className="list-buttons d-flex align-items-center">
+                  <Link href="/register" className="d-inline-flex align-items-center"><BsGeoAltFill className="fs-6 me-1" />{locale === 'vi' ? 'Đăng tin' : 'Add Listing'}</Link>
                 </li>
               </ul>
             </div>

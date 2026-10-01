@@ -61,8 +61,18 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
                 <div className="row justify-content-center align-items-center">
                     <div className="col-xl-10 col-lg-11 col-md-12 col-sm-12">
                         <div className="position-relative text-center mb-4 pt-3 pb-3">
-                            <h1 className="fw-semibold mb-4">Explore <span className="text-light border border-light border-2 px-3 rounded-pill br-dashed">Your Perfect</span> Places</h1>
-                            <p className="fs-5 fw-light">Browse high-rated hotels, restaurants, attractions, activities and more!</p>
+                            <h1 className="fw-semibold mb-4">
+                              {locale === 'vi' ? (
+                                <>Khám Phá <span className="text-light border border-light border-2 px-3 rounded-pill br-dashed">Địa Điểm &amp; Sản Phẩm</span> Hàng Đầu</>
+                              ) : (
+                                <>Explore <span className="text-light border border-light border-2 px-3 rounded-pill br-dashed">Your Perfect</span> Places</>
+                              )}
+                            </h1>
+                            <p className="fs-5 fw-light">
+                              {locale === 'vi'
+                                ? 'Tra cứu thông số, so sánh giá đa sàn và xem đánh giá chân thực từ cộng đồng!'
+                                : 'Browse high-rated hotels, restaurants, attractions, activities and more!'}
+                            </p>
                         </div>
                     </div>
                 </div>
@@ -79,7 +89,7 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
                                     </div>
                                     <div className="col">
                                         <div className="form-group no-border position-relative mb-0">
-                                            <input type="text" className="form-control border-0 fw-medium rounded-pill ps-2" placeholder="Search for locality, project.."/>
+                                            <input type="text" className="form-control border-0 fw-medium rounded-pill ps-2" placeholder={locale === 'vi' ? "Tìm kiếm sản phẩm, thương hiệu, địa điểm..." : "Search for locality, project.."}/>
                                             <span className="position-absolute top-50 end-0 translate-middle"><label className="badge text-success bg-light-success rounded">22k+</label></span>
                                         </div>
                                     </div>
@@ -93,11 +103,11 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
 					 <div className="col-xl-7 col-lg-8 col-md-11 col-sm-12">
 						<div className="d-block position-relative mt-5">
 							<div className="popularSearches d-flex align-items-center justify-content-center gap-3 flex-wrap">
-								<div className="singleItem"><Link href="#" className="badge badge-transparent rounded-pill"><FaSpa className="me-2"/>Beauty & Spa</Link></div>	
-								<div className="singleItem"><Link href="#" className="badge badge-transparent rounded-pill"><FaBowlRice className="me-2"/>Eat & Drink</Link></div>	
-								<div className="singleItem"><Link href="#" className="badge badge-transparent rounded-pill"><FaBagShopping className="me-2"/>Shopping</Link></div>	
-								<div className="singleItem"><Link href="#" className="badge badge-transparent rounded-pill"><FaMartiniGlass className="me-2"/>Nightlife</Link></div>	
-								<div className="singleItem"><Link href="#" className="badge badge-transparent rounded-pill"><FaMugSaucer className="me-2"/>Coffee Shop</Link></div>	
+								<div className="singleItem"><Link href={`/${locale}/smartphones`} className="badge badge-transparent rounded-pill"><FaSpa className="me-2"/>{locale === 'vi' ? 'Điện thoại' : 'Smartphones'}</Link></div>	
+								<div className="singleItem"><Link href="#" className="badge badge-transparent rounded-pill"><FaBowlRice className="me-2"/>{locale === 'vi' ? 'Ẩm thực & Quán ăn' : 'Eat & Drink'}</Link></div>	
+								<div className="singleItem"><Link href="#" className="badge badge-transparent rounded-pill"><FaBagShopping className="me-2"/>{locale === 'vi' ? 'Mua sắm & TMĐT' : 'Shopping'}</Link></div>	
+								<div className="singleItem"><Link href="#" className="badge badge-transparent rounded-pill"><FaMartiniGlass className="me-2"/>{locale === 'vi' ? 'Giải trí & Bar' : 'Nightlife'}</Link></div>	
+								<div className="singleItem"><Link href="#" className="badge badge-transparent rounded-pill"><FaMugSaucer className="me-2"/>{locale === 'vi' ? 'Cà phê & Quán nước' : 'Coffee Shop'}</Link></div>	
 							</div>
 						</div>
 					 </div>
@@ -198,8 +208,18 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
                 <div className="row align-items-center justify-content-center">
                     <div className="col-xl-7 col-lg-8 col-md-11 col-sm-12">
                         <div className="secHeading-wrap text-center">
-                            <h3 className="sectionHeading">Hot & Trending <span className="text-primary">Categories</span></h3>
-                            <p>Explore all types of popular category for submit your listings</p>
+                            <h3 className="sectionHeading">
+                              {locale === 'vi' ? (
+                                <>Danh Mục <span className="text-primary">Nổi Bật &amp; Xu Hướng</span></>
+                              ) : (
+                                <>Hot &amp; Trending <span className="text-primary">Categories</span></>
+                              )}
+                            </h3>
+                            <p>
+                              {locale === 'vi'
+                                ? 'Khám phá tất cả các danh mục phổ biến để tra cứu thông tin và đánh giá'
+                                : 'Explore all types of popular category for submit your listings'}
+                            </p>
                         </div>
                     </div>
                 </div>
@@ -212,12 +232,22 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
                 <div className="row align-items-center justify-content-center">
                     <div className="col-xl-7 col-lg-8 col-md-11 col-sm-12">
                         <div className="secHeading-wrap text-center">
-                            <h3 className="sectionHeading">Trending & Popular <span className="text-primary">Listings</span></h3>
-                            <p>Explore Hot & Popular Business Listings</p>
+                            <h3 className="sectionHeading">
+                              {locale === 'vi' ? (
+                                <>Địa Điểm &amp; Doanh Nghiệp <span className="text-primary">Phổ Biến</span></>
+                              ) : (
+                                <>Trending &amp; Popular <span className="text-primary">Listings</span></>
+                              )}
+                            </h3>
+                            <p>
+                              {locale === 'vi'
+                                ? 'Khám phá các doanh nghiệp và địa điểm được đánh giá cao nhất'
+                                : 'Explore Hot & Popular Business Listings'}
+                            </p>
                         </div>
                     </div>
                 </div>
-                <PopularListingOne/>
+                <PopularListingOne locale={locale} />
             </div>
         </section>
         <section className="bg-light">
@@ -225,8 +255,18 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
                 <div className="row align-items-center justify-content-center">
                     <div className="col-xl-7 col-lg-8 col-md-11 col-sm-12">
                         <div className="secHeading-wrap text-center">
-                            <h3 className="sectionHeading">Our Great <span className="text-primary">Reviews</span></h3>
-                            <p>Our cliens love our services and give great & positive reviews</p>
+                            <h3 className="sectionHeading">
+                              {locale === 'vi' ? (
+                                <>Đánh Giá Từ <span className="text-primary">Cộng Đồng</span></>
+                              ) : (
+                                <>Our Great <span className="text-primary">Reviews</span></>
+                              )}
+                            </h3>
+                            <p>
+                              {locale === 'vi'
+                                ? 'Người dùng tin tưởng và chia sẻ những đánh giá khách quan, chân thực nhất'
+                                : 'Our cliens love our services and give great & positive reviews'}
+                            </p>
                         </div>
                     </div>
                 </div>
@@ -238,21 +278,32 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
                 <div className="row align-items-center justify-content-center">
                     <div className="col-xl-7 col-lg-8 col-md-11 col-sm-12">
                         <div className="secHeading-wrap text-center">
-                            <h3 className="sectionHeading">Latest Updates <span className="text-primary">News</span></h3>
-                            <p>Join ListingHub and get latest & trending updates about listing</p>
+                            <h3 className="sectionHeading">
+                              {locale === 'vi' ? (
+                                <>Tin Tức &amp; <span className="text-primary">Bài Viết Mới Nhất</span></>
+                              ) : (
+                                <>Latest Updates <span className="text-primary">News</span></>
+                              )}
+                            </h3>
+                            <p>
+                              {locale === 'vi'
+                                ? 'Cập nhật những xu hướng công nghệ, mẹo mua sắm và tin tức nóng hổi'
+                                : 'Join ListingHub and get latest & trending updates about listing'}
+                            </p>
                         </div>
                     </div>
                 </div>
-                <BlogOne/>
+                <BlogOne locale={locale} />
             </div>
         </section>
-        <FooterTop/>
+        <FooterTop locale={locale} />
         <FooterDynamic
           sections={(footerData?.sections ?? [])}
           links={(footerData?.links ?? [])}
           logoUrl={undefined}
           copyRight={footerData?.copyRight}
           socialLinks={(footerData?.socialLinks ?? [])}
+          locale={locale}
         />
         <BackToTop/>
     </>

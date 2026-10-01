@@ -31,7 +31,8 @@ interface ListData{
     instantBooking: boolean;
 }
 
-export default function PopularListingOne() {
+export default function PopularListingOne({ locale = 'vi' }: { locale?: string }) {
+  const isVi = locale === 'vi';
   return (
     <div className="row align-items-center justify-content-center">
         <div className="col-xl-12 col-lg-12 col-md-12 col-sm-12">
@@ -56,15 +57,19 @@ export default function PopularListingOne() {
                             <div className="listingitem-container">
                                 <div className="singlelisting-item">
                                     <div className="listing-top-item">
-                                        <Link href="/single-listing-01" className="topLink">
+                                        <Link href={`/${locale}/single-listing-01`} className="topLink">
                                             <div className="position-absolute start-0 top-0 ms-3 mt-3 z-2">
                                                 <div className="d-flex align-items-center justify-content-start gap-2">
-                                                    {item.status === 'open' ? (<span className="badge badge-xs text-uppercase listOpen">Open</span>) :(<span className="badge badge-xs text-uppercase listClose">Closed</span>)}
+                                                    {item.status === 'open' ? (
+                                                      <span className="badge badge-xs text-uppercase listOpen">{isVi ? 'Mở cửa' : 'Open'}</span>
+                                                    ) : (
+                                                      <span className="badge badge-xs text-uppercase listClose">{isVi ? 'Đóng cửa' : 'Closed'}</span>
+                                                    )}
 
                                                     <span className="badge badge-xs badge-transparent">$$$</span>
 
                                                     {item.featured === true && 
-                                                        <span className="badge badge-xs badge-transparent"><BsStar className="mb-0 me-1"/>Featured</span>
+                                                        <span className="badge badge-xs badge-transparent"><BsStar className="mb-0 me-1"/>{isVi ? 'Nổi bật' : 'Featured'}</span>
                                                     }
                                                 </div>
                                             </div>

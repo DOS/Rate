@@ -74,17 +74,36 @@ export default function CategoryTwo() {
     fetchCategories()
   }, [locale])
 
+  const fallbackCategories: StrapiCategory[] = locale === 'vi' ? [
+    { id: 1, Name: 'Điện thoại & Tablet', Image: { url: '/img/cats/catt-1.jpg' } },
+    { id: 2, Name: 'Thời trang & Làm đẹp', Image: { url: '/img/cats/catt-2.jpg' } },
+    { id: 3, Name: 'Ẩm thực & Nhà hàng', Image: { url: '/img/cats/catt-7.jpg' } },
+    { id: 4, Name: 'Cà phê & Quán nước', Image: { url: '/img/cats/catt-6.jpg' } },
+    { id: 5, Name: 'Cửa hàng & Dịch vụ', Image: { url: '/img/cats/catt-5.jpg' } },
+    { id: 6, Name: 'Sức khỏe & Làm đẹp', Image: { url: '/img/cats/catt-4.jpg' } },
+  ] : [
+    { id: 1, Name: 'Phones & Tablets', Image: { url: '/img/cats/catt-1.jpg' } },
+    { id: 2, Name: 'Fashion & Beauty', Image: { url: '/img/cats/catt-2.jpg' } },
+    { id: 3, Name: 'Food & Restaurants', Image: { url: '/img/cats/catt-7.jpg' } },
+    { id: 4, Name: 'Coffee Shop', Image: { url: '/img/cats/catt-6.jpg' } },
+    { id: 5, Name: 'Shop & Services', Image: { url: '/img/cats/catt-5.jpg' } },
+    { id: 6, Name: 'Health & Fitness', Image: { url: '/img/cats/catt-4.jpg' } },
+  ]
+
+  const displayCategories = categories.length > 0 ? categories : fallbackCategories
+
   const getImageUrl = (cat: StrapiCategory) => {
     const url =
       cat?.attributes?.Image?.data?.attributes?.url ||
       cat?.Image?.url ||
       cat?.attributes?.Directory?.data?.attributes?.Image?.data?.attributes?.url
     if (!url) return '/img/placeholder.png'
+    if (url.startsWith('/img/')) return url
     const clean = url.startsWith('/') ? url.substring(1) : url
     return `/api/asset/${clean}`
   }
 
-  const getName = (cat: StrapiCategory) => cat?.attributes?.Name || (cat as any)?.Name || 'Category'
+  const getName = (cat: StrapiCategory) => cat?.attributes?.Name || (cat as any)?.Name || (locale === 'vi' ? 'Danh mục' : 'Category')
 
   const pickIcon = (cat: StrapiCategory): IconType => {
     // Prefer explicit IconKey from Strapi if provided
@@ -154,7 +173,7 @@ export default function CategoryTwo() {
               1024: { slidesPerView: 6 },
             }}
           >
-            {categories.map((cat: StrapiCategory) => {
+            {displayCategories.map((cat: StrapiCategory) => {
               const Icon = pickIcon(cat)
               const svgPath = getIconSvgPath(cat)
               const iconKey = (cat as any)?.attributes?.IconKey as string | undefined

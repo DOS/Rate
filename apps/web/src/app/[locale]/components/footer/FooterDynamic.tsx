@@ -14,19 +14,31 @@ export default function FooterDynamic({
   logoUrl,
   copyRight,
   socialLinks,
+  locale = 'vi',
 }: {
   readonly sections: readonly FooterSection[]
   readonly links: readonly FooterSectionLink[]
   readonly logoUrl?: string | null
   readonly copyRight?: string | null
   readonly socialLinks?: readonly FooterSectionLink[] | null
+  readonly locale?: string
 }) {
+  const isVi = locale === 'vi'
   const yearText = new Date().getFullYear().toString()
-  const copy = (copyRight || `© {YEAR} ListingHub.`).replace('{YEAR}', yearText)
+  const copy = (copyRight || (isVi ? `© {YEAR} Rate.vn. Nền tảng Đánh giá & So sánh Hàng đầu Việt Nam.` : `© {YEAR} Rate.vn. All rights reserved.`)).replace('{YEAR}', yearText)
 
-  const fallback1 = { title: 'Community', links: ['About ListingHub','Submit Listing','ListingHub Report','Careers'].map((l)=>({ label: l, href: '#' })) }
-  const fallback2 = { title: 'Getting Started', links: ['Trust & Safety','Investor Relations','Terms of Services','Paid Advertising','ListingHub Blog'].map((l)=>({ label: l, href: '#' })) }
-  const fallback3 = { title: 'ListingHub Business', links: ['Trust & Safety','Investor Relations','Terms of Services','Paid Advertising','ListingHub Blog'].map((l)=>({ label: l, href: '#' })) }
+  const fallback1 = isVi
+    ? { title: 'Cộng đồng', links: ['Về Rate.vn', 'Đăng tin mới', 'Báo cáo vi phạm', 'Tuyển dụng'].map((l) => ({ label: l, href: '#' })) }
+    : { title: 'Community', links: ['About Rate.vn', 'Submit Listing', 'Rate Report', 'Careers'].map((l) => ({ label: l, href: '#' })) }
+
+  const fallback2 = isVi
+    ? { title: 'Bắt đầu', links: ['Tin cậy & An toàn', 'Quan hệ đối tác', 'Điều khoản dịch vụ', 'Quảng cáo', 'Cẩm nang Rate'].map((l) => ({ label: l, href: '#' })) }
+    : { title: 'Getting Started', links: ['Trust & Safety', 'Investor Relations', 'Terms of Services', 'Paid Advertising', 'Blog'].map((l) => ({ label: l, href: '#' })) }
+
+  const fallback3 = isVi
+    ? { title: 'Doanh nghiệp', links: ['Giải pháp cho Seller', 'Bảng giá dịch vụ', 'Chính sách bảo mật', 'Liên hệ hợp tác', 'Hỗ trợ khách hàng'].map((l) => ({ label: l, href: '#' })) }
+    : { title: 'Business', links: ['Business Solutions', 'Pricing', 'Privacy Policy', 'Partnership', 'Customer Support'].map((l) => ({ label: l, href: '#' })) }
+
   const [col1, col2, col3] = [sections?.[0] ?? fallback1, sections?.[1] ?? fallback2, sections?.[2] ?? fallback3]
 
   const getSocialIcon = (urlOrLabel?: string | null) => {
@@ -111,23 +123,23 @@ export default function FooterDynamic({
             </div>
           </div>
 
-          {/* Get In Touch (static to match template UI) */}
+          {/* Get In Touch */}
           <div className="col-6 col-md-4 col-lg-3 col-xl-2">
             <div className="footer-widget">
-              <h4 className="widget-title">Get In Touch</h4>
+              <h4 className="widget-title">{isVi ? 'Liên hệ' : 'Get In Touch'}</h4>
               <div className="contactInfowrap">
                 <div className="singleinfo">
                   <div className="icons"><BsGeoAltFill/></div>
                   <div className="caps">
-                    <h5 className="title">Angraster 7, Greenhorst<br/>Los Angeles QTC564</h5>
-                    <p className="subs">Reach Us</p>
+                    <h5 className="title">{isVi ? <>Tòa nhà Bitexco, Q.1<br/>TP. Hồ Chí Minh</> : <>Bitexco Tower, Dist. 1<br/>Ho Chi Minh City</>}</h5>
+                    <p className="subs">{isVi ? 'Địa chỉ' : 'Reach Us'}</p>
                   </div>
                 </div>
                 <div className="singleinfo">
                   <div className="icons"><BsTelephoneOutbound/></div>
                   <div className="caps">
-                    <h5 className="title">042 - 526 - 5263</h5>
-                    <p className="subs">Mon - Sat 10am - 6PM</p>
+                    <h5 className="title">1900 - 6868</h5>
+                    <p className="subs">{isVi ? 'Thứ 2 - Thứ 7: 8h - 18h' : 'Mon - Sat 8AM - 6PM'}</p>
                   </div>
                 </div>
               </div>
