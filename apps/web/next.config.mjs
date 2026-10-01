@@ -6,7 +6,7 @@ import { fileURLToPath } from "url"
 
 import { env } from "./src/env.mjs"
 
-const withNextIntl = plugin("./src/lib/i18n.ts")
+const withNextIntl = plugin("./src/i18n/request.ts")
 
 // ESM-safe __dirname
 const __filename = fileURLToPath(import.meta.url)
@@ -18,6 +18,11 @@ const nextConfig = {
   reactStrictMode: true,
   experimental: { externalDir: true },
   transpilePackages: ["@repo/design-system"],
+  turbopack: {
+    resolveAlias: {
+      "next-intl/config": "./src/i18n/request.ts",
+    },
+  },
   typescript: {
     ignoreBuildErrors: true,
   },
@@ -74,6 +79,7 @@ const nextConfig = {
     config.resolve = config.resolve || {}
     config.resolve.alias = {
       ...(config.resolve.alias || {}),
+      "next-intl/config": path.resolve(__dirname, "src/i18n/request.ts"),
       "react-use-measure": path.resolve(__dirname, "src/lib/react-use-measure.ts"),
     }
     return config

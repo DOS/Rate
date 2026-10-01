@@ -28,11 +28,8 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(data)
   } catch (error) {
-    console.error("Error fetching footer:", error)
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    )
+    console.warn("Strapi offline or unavailable, returning empty footer fallback")
+    return NextResponse.json({ data: null }, { status: 200 })
   }
 }
 
