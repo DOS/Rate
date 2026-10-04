@@ -172,14 +172,29 @@ export class ShopeeIngestionPipeline {
         platform_created_at: r.createdAt,
       }));
 
-      const { error: reviewErr } = await this.supabase
+      // The unique index on rate.reviews is PARTIAL ((product_id, platform_review_id)
+      // WHERE platform_review_id IS NOT NULL), which upsert onConflict cannot target;
+      // dedupe client-side and plain-insert the new rows instead.
+      const { data: existing, error: existingErr } = await this.supabase
         .from('reviews')
-        .upsert(reviewRows, { onConflict: 'platform_review_id', ignoreDuplicates: true });
+        .select('platform_review_id')
+        .eq('product_id', productId)
+        .not('platform_review_id', 'is', null);
+      if (existingErr) {
+        console.warn(`[ShopeeIngest] Warning: Could not fetch existing reviews: ${existingErr.message}`);
+      }
+      const seen = new Set<string>((existing || []).map((r: { platform_review_id: string }) => r.platform_review_id));
+      const newRows = reviewRows.filter((r) => !r.platform_review_id || !seen.has(r.platform_review_id));
 
-      if (reviewErr) {
-        console.warn(`[ShopeeIngest] Warning: Reviews insert partial error: ${reviewErr.message}`);
+      if (newRows.length === 0) {
+        console.log(`[ShopeeIngest] No new reviews to ingest (${seen.size} duplicates skipped).`);
       } else {
-        console.log(`[ShopeeIngest] Successfully ingested ${reviewRows.length} reviews.`);
+        const { error: reviewErr } = await this.supabase.from('reviews').insert(newRows);
+        if (reviewErr) {
+          console.warn(`[ShopeeIngest] Warning: Reviews insert partial error: ${reviewErr.message}`);
+        } else {
+          console.log(`[ShopeeIngest] Successfully ingested ${newRows.length} reviews (${reviewRows.length - newRows.length} duplicates skipped).`);
+        }
       }
     }
 
