@@ -19,12 +19,27 @@ export const DEFAULT_MPROXY_CONFIG: ProxyConfig = {
   resetUrl: 'https://mproxy.vn/capi/KteNfKBqVRx8aJ9lGNuQb1Dk7BjfXwhKXKx0Gf2IwlQ/key/***REMOVED-SECRET***/resetIp',
 };
 
+/**
+ * Env overrides for MPROXY_* (read lazily at construction time so
+ * dotenv.config() in the entry script takes effect after ESM imports).
+ */
+function mproxyEnvConfig(): Partial<ProxyConfig> {
+  const env = process.env;
+  const cfg: Partial<ProxyConfig> = {};
+  if (env.MPROXY_HOST) cfg.server = env.MPROXY_HOST;
+  if (env.MPROXY_PORT && !Number.isNaN(Number(env.MPROXY_PORT))) cfg.port = Number(env.MPROXY_PORT);
+  if (env.MPROXY_USER) cfg.username = env.MPROXY_USER;
+  if (env.MPROXY_PASS) cfg.password = env.MPROXY_PASS;
+  if (env.MPROXY_RESET_URL) cfg.resetUrl = env.MPROXY_RESET_URL;
+  return cfg;
+}
+
 export class ProxyManager {
   private config: ProxyConfig;
   private agent: HttpsProxyAgent<string>;
 
   constructor(config: Partial<ProxyConfig> = {}) {
-    this.config = { ...DEFAULT_MPROXY_CONFIG, ...config };
+    this.config = { ...DEFAULT_MPROXY_CONFIG, ...mproxyEnvConfig(), ...config };
     const auth = this.config.username && this.config.password
       ? `${this.config.username}:${this.config.password}@`
       : '';
