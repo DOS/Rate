@@ -2,6 +2,7 @@ import { spawn } from 'child_process';
 import https from 'https';
 import http from 'http';
 import { HttpsProxyAgent } from 'https-proxy-agent';
+import { anonymizeProxy, closeAnonymizedProxy } from 'proxy-chain';
 
 export interface ProxyConfig {
   server: string;
@@ -37,6 +38,7 @@ function mproxyEnvConfig(): Partial<ProxyConfig> {
 export class ProxyManager {
   private config: ProxyConfig;
   private agent: HttpsProxyAgent<string>;
+  private anonymizedProxyUrl: string | null = null;
 
   constructor(config: Partial<ProxyConfig> = {}) {
     this.config = { ...DEFAULT_MPROXY_CONFIG, ...mproxyEnvConfig(), ...config };
@@ -153,27 +155,43 @@ export class ProxyManager {
   }
 
   /**
-   * Launch Chrome Stable with CDP and MProxy
+   * Launch Chrome with CDP and MProxy
    */
-  public async launchChromeWithProxy(port = 9222, profileDir = 'C:\\chrome_bot_profile'): Promise<boolean> {
-    const chromePath = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
-    // Chromium's CDP auth interception cannot satisfy proxy CONNECT auth
-    // (ERR_INVALID_AUTH_CREDENTIALS), so credentials must be embedded in the URL.
+  public async launchChromeWithProxy(
+    port = 9222,
+    profileDir = 'C:\\chrome_bot_profile',
+    opts: { chromePath?: string; profileDirectory?: string } = {}
+  ): Promise<boolean> {
+    const chromePath = opts.chromePath || 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
+    // Chromium cannot authenticate to a proxy via --proxy-server (credentials in
+    // the URL are rejected with ERR_NO_SUPPORTED_PROXIES) and CDP-side auth
+    // interception cannot satisfy proxy CONNECT auth, so route Chrome through a
+    // local credential-free forwarder (proxy-chain) that authenticates upstream.
     const { username, password } = this.getCredentials();
-    const auth = username && password ? `${encodeURIComponent(username)}:${encodeURIComponent(password)}@` : '';
-    const proxyServer = `http://${auth}${this.config.server}:${this.config.port}`;
+    let proxyServer = this.getProxyServerString();
+    if (username && password) {
+      this.anonymizedProxyUrl = await anonymizeProxy({
+        url: `http://${encodeURIComponent(username)}:${encodeURIComponent(password)}@${this.config.server}:${this.config.port}`,
+        port: 0,
+      });
+      proxyServer = this.anonymizedProxyUrl;
+    }
 
-    console.log(`[ProxyManager] Launching Chrome CDP on port ${port} with proxy ${this.getProxyServerString()}...`);
+    console.log(`[ProxyManager] Launching Chrome CDP on port ${port} with proxy ${this.getProxyServerString()} (local forwarder: ${proxyServer})...`);
+    const args = [
+      `--remote-debugging-port=${port}`,
+      `--user-data-dir=${profileDir}`,
+      `--proxy-server=${proxyServer}`,
+      '--no-first-run',
+      '--no-default-browser-check',
+      '--disable-background-networking',
+    ];
+    if (opts.profileDirectory) {
+      args.push(`--profile-directory=${opts.profileDirectory}`);
+    }
     const proc = spawn(
       chromePath,
-      [
-        `--remote-debugging-port=${port}`,
-        `--user-data-dir=${profileDir}`,
-        `--proxy-server=${proxyServer}`,
-        '--no-first-run',
-        '--no-default-browser-check',
-        '--disable-background-networking',
-      ],
+      args,
       { detached: true, stdio: 'ignore' }
     );
     proc.unref();
@@ -194,5 +212,15 @@ export class ProxyManager {
 
     console.warn(`[ProxyManager] Chrome CDP on port ${port} did not respond within timeout.`);
     return false;
+  }
+
+  /**
+   * Stop the local credential-free proxy forwarder started by launchChromeWithProxy
+   */
+  public async stopLocalForwarder(): Promise<void> {
+    if (this.anonymizedProxyUrl) {
+      await closeAnonymizedProxy(this.anonymizedProxyUrl, true);
+      this.anonymizedProxyUrl = null;
+    }
   }
 }
