@@ -157,9 +157,13 @@ export class ProxyManager {
    */
   public async launchChromeWithProxy(port = 9222, profileDir = 'C:\\chrome_bot_profile'): Promise<boolean> {
     const chromePath = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
-    const proxyServer = this.getProxyServerString();
+    // Chromium's CDP auth interception cannot satisfy proxy CONNECT auth
+    // (ERR_INVALID_AUTH_CREDENTIALS), so credentials must be embedded in the URL.
+    const { username, password } = this.getCredentials();
+    const auth = username && password ? `${encodeURIComponent(username)}:${encodeURIComponent(password)}@` : '';
+    const proxyServer = `http://${auth}${this.config.server}:${this.config.port}`;
 
-    console.log(`[ProxyManager] Launching Chrome CDP on port ${port} with proxy ${proxyServer}...`);
+    console.log(`[ProxyManager] Launching Chrome CDP on port ${port} with proxy ${this.getProxyServerString()}...`);
     const proc = spawn(
       chromePath,
       [
