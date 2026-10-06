@@ -149,20 +149,59 @@ export class ShopeeIngestionPipeline {
     const productId = savedProduct.id;
     console.log(`[ShopeeIngest] Listing upserted -> ID: ${productId}`);
 
-    // 4. Insert price history entry
-    await this.supabase.from('price_history').insert({
-      product_id: productId,
-      price: product.priceMin,
-      price_original: product.priceBeforeDiscount || null,
-      recorded_at: new Date().toISOString(),
-      source: 'shopee_crawler',
-    });
+    // 4. Price history entry with a stable observation id (plan v7 §4.1,
+    // Codex #8): re-crawls of the same price on the same day upsert instead of
+    // duplicating, and insert errors are SURFACED (never silent).
+    const dayBucket = new Date().toISOString().slice(0, 10);
+    const observationId = 'px-' + crypto
+      .createHash('sha256')
+      // Scoped to the listing UUID (Codex: itemId alone is not cross-platform safe).
+      .update(`${productId}|${product.priceMin}|${product.priceBeforeDiscount || ''}|${dayBucket}`)
+      .digest('hex');
+    // The unique index on observation_id is PARTIAL, which ON CONFLICT cannot
+    // target (42P10, Codex blocker): dedupe client-side - fetch the id, insert
+    // only when absent. Errors are SURFACED (never silent).
+    const { data: existingPrice, error: priceLookupErr } = await this.supabase
+      .from('price_history')
+      .select('observation_id')
+      .eq('observation_id', observationId)
+      .limit(1);
+    if (priceLookupErr) {
+      throw new Error(`Failed to check existing price observation: ${priceLookupErr.message}`);
+    }
+    if (Array.isArray(existingPrice) && existingPrice.length > 0) {
+      console.log(`[ShopeeIngest] Price observation already recorded (${observationId}), skipping.`);
+    } else {
+      const { error: priceErr } = await this.supabase.from('price_history').insert({
+        product_id: productId,
+        observation_id: observationId,
+        price: product.priceMin,
+        price_original: product.priceBeforeDiscount || null,
+        recorded_at: new Date().toISOString(),
+        source: 'shopee_crawler',
+      });
+      if (priceErr) {
+        throw new Error(`Failed to record price history (observation ${observationId}): ${priceErr.message}`);
+      }
+    }
 
     // 5. Batch insert reviews if available
     if (product.reviews && product.reviews.length > 0) {
       const reviewRows = product.reviews.map((r) => ({
         product_id: productId,
-        platform_review_id: r.reviewId || undefined,
+        // Stable observation id fallback (plan v7 §4.1): reviews without a
+        // platform id must not be re-inserted on every crawl. createdAt is
+        // deliberately excluded from the hash - the scraper falls back to
+        // now() when Shopee gives no ctime, minting a fresh id every recrawl
+        // (Codex #7). author+comment is stable; two distinct reviews with
+        // identical author+comment dedupe to one (accepted).
+        platform_review_id:
+          r.reviewId ||
+          'rv-' +
+            crypto
+              .createHash('sha256')
+              .update(`${r.author || ''}|${r.comment || ''}`)
+              .digest('hex'),
         author_name: r.author,
         author_avatar: r.authorAvatar || null,
         rating_star: r.ratingStar,
@@ -172,14 +211,38 @@ export class ShopeeIngestionPipeline {
         platform_created_at: r.createdAt,
       }));
 
-      const { error: reviewErr } = await this.supabase
+      // The unique index on (product_id, platform_review_id) is PARTIAL
+      // (WHERE platform_review_id IS NOT NULL) so ON CONFLICT cannot target it
+      // (42P10): dedupe client-side against existing ids, plain-insert new rows.
+      const { data: existingReviews, error: existingErr } = await this.supabase
         .from('reviews')
-        .upsert(reviewRows, { onConflict: 'platform_review_id', ignoreDuplicates: true });
+        .select('platform_review_id')
+        .eq('product_id', productId)
+        .not('platform_review_id', 'is', null);
+      if (existingErr) {
+        throw new Error(`Failed to fetch existing reviews: ${existingErr.message}`);
+      }
+      const seen = new Set<string>((existingReviews || []).map((r: { platform_review_id: string }) => r.platform_review_id));
+      const newRows = reviewRows.filter((r) => {
+        if (!r.platform_review_id) return true;
+        if (seen.has(r.platform_review_id)) return false;
+        // In-batch dedupe (Codex round-2): two id-less reviews with the same
+        // author+comment hash to the same id - inserting both violates the
+        // partial unique index (23505). Keep the first, skip the rest.
+        seen.add(r.platform_review_id);
+        return true;
+      });
 
-      if (reviewErr) {
-        console.warn(`[ShopeeIngest] Warning: Reviews insert partial error: ${reviewErr.message}`);
+      if (newRows.length === 0) {
+        console.log(`[ShopeeIngest] No new reviews to ingest (${seen.size} duplicates skipped).`);
       } else {
-        console.log(`[ShopeeIngest] Successfully ingested ${reviewRows.length} reviews.`);
+        const { error: reviewErr } = await this.supabase.from('reviews').insert(newRows);
+        if (reviewErr) {
+          // Fail the whole ingestion (plan v7 §4.1, Codex blocker): a review
+          // write failure must NOT let the caller ack the job as done.
+          throw new Error(`Failed to insert reviews: ${reviewErr.message}`);
+        }
+        console.log(`[ShopeeIngest] Successfully ingested ${newRows.length} reviews (${reviewRows.length - newRows.length} duplicates skipped).`);
       }
     }
 
