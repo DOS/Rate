@@ -8,7 +8,8 @@ export interface NormalizedProductCandidate {
   model_key: string;
   name: string;
   slug: string;
-  storage_gb: number;
+  storage_gb: number | null; // null = unparseable from the title; identity carries ':unknown'
+  needs_review: boolean; // true when identity could not be confidently derived (plan v7 §5.2)
   ram_gb: number | null;
   screen_size_inch: number | null;
   battery_mah: number | null;
@@ -149,15 +150,66 @@ export class ProductNormalizer {
       model = tokens.slice(0, 3).join(' ');
     }
 
-    // 3. Extract Storage
-    let storageGb = 128; // Default
-    const tbMatch = title.match(/(\d+)\s*TB/i);
-    const gbMatch = title.match(/(\d+)\s*GB/i);
-    if (tbMatch && tbMatch[1]) {
-      storageGb = parseInt(tbMatch[1], 10) * 1024;
-    } else if (gbMatch && gbMatch[1]) {
-      storageGb = parseInt(gbMatch[1], 10);
+    // 3. Extract Storage - RAM-aware (plan v7 §5.2, Codex-reproduced bug:
+    // "Samsung Galaxy A55 8GB RAM 256GB" must be 256GB, not the first GB token).
+    // Decimal separator: dot or comma (Vietnamese titles use "1,5TB").
+    const sizeTokens = [...title.matchAll(/(\d+(?:[.,]\d+)?)\s*(TB|GB)/gi)].map((m) => ({
+      value: parseFloat(m[1].replace(',', '.')) * (m[2].toUpperCase() === 'TB' ? 1024 : 1),
+      index: m.index ?? 0,
+      raw: m[0],
+    }));
+    // RAM-word matching (replaces per-pattern heuristics after two review
+    // rounds found holes: "8GB RAM 12GB RAM", "RAM 8GB RAM 12GB", the shared
+    // "RAM" in "8GB RAM 256GB", "dung luong 8GB bo nho RAM 256GB"). Rule:
+    // every literal "RAM" word claims the nearest UNCLAIMED size token -
+    // preferring the one BEFORE it (suffix "<size> RAM"), else the one AFTER
+    // it ("RAM <size>"). Any token left unclaimed is a storage candidate.
+    // A prefix claim requires adjacency: only whitespace between the token
+    // and the RAM phrase. "256GB - RAM 8GB" (Codex round-4) separates the ROM
+    // size with a dash - claiming 256 as RAM there would publish a wrong
+    // identity, so non-adjacent tokens are left for the storage side. Phrases
+    // like "bộ nhớ RAM" span their full length (Codex round-4 regression:
+    // "dung lượng 8GB bộ nhớ RAM 256GB" - the phrase's own words sit between
+    // 8GB and the literal RAM word, so adjacency is measured to the PHRASE
+    // start and 8GB claims correctly).
+    const ramPhrases = [...title.matchAll(/bộ\s*nhớ\s*RAM|dung\s*lượng\s*RAM|RAM\b/gi)].map((m) => m.index ?? 0);
+    const claimable = sizeTokens.map((t) => ({ ...t, claimed: false }));
+    for (const p of ramPhrases) {
+      const before = [...claimable]
+        .filter((t) => !t.claimed && t.index + t.raw.length <= p && /^\s*$/.test(title.slice(t.index + t.raw.length, p)))
+        .sort((a, b) => b.index - a.index)[0];
+      const after = [...claimable].filter((t) => !t.claimed && t.index > p).sort((a, b) => a.index - b.index)[0];
+      const pick = before ?? after;
+      if (pick) pick.claimed = true;
     }
+    const storageCandidates = claimable.filter((t) => !t.claimed);
+
+    // ROM/storage markers, two confidence tiers (Codex round-6): an EXPLICIT
+    // "ROM"/"bộ nhớ trong" marker always wins - even when a separate RAM
+    // phrase follows ("ROM 256GB RAM 8GB" = storage 256, RAM 8). The LOOSE
+    // "dung lượng" marker is only trusted when not immediately followed by a
+    // RAM phrase ("dung lượng 8GB RAM 256GB" / "dung lượng 8GB dung lượng RAM
+    // 256GB" mean 8 is RAM, not storage).
+    const romExplicit = title.match(/(?:ROM|bộ nhớ trong)\s*[:\-]?\s*(\d+(?:[.,]\d+)?)\s*(TB|GB)/i);
+    const romLoose = title.match(
+      /dung lượng\s*[:\-]?\s*(\d+(?:[.,]\d+)?)\s*(TB|GB)(?!\s*(?:RAM|bộ\s*nhớ\s*RAM|dung\s*lượng\s*RAM))/i
+    );
+
+    let storageGb: number | null = null;
+    let storageConfident = false;
+    const marker = romExplicit ?? romLoose;
+    if (marker) {
+      // An explicit ROM marker always wins; the loose "dung lượng" marker has
+      // already been rejected when a RAM phrase follows its size.
+      storageGb = parseFloat(marker[1].replace(',', '.')) * (marker[2].toUpperCase() === 'TB' ? 1024 : 1);
+      storageConfident = true;
+    } else if (storageCandidates.length === 1) {
+      storageGb = storageCandidates[0].value;
+      storageConfident = true;
+    }
+    // Ambiguous (multiple unclaimed tokens, no ROM anchor) or nothing found:
+    // leave storageGb null -> ':unknown' identity + needs_review (never guess).
+    const storageKnown = storageGb !== null;
 
     // 4. Extract Colors from models / variations
     const colors: string[] = [];
@@ -169,17 +221,22 @@ export class ProductNormalizer {
       }
     }
 
-    // 5. Construct keys & slugs
+    // 5. Construct keys & slugs. Unknown storage keeps identity space explicit
+    // (':unknown') instead of guessing a default (plan v7 §5.2).
     const baseKey = `${slugify(brand)}:${slugify(model)}`;
-    const modelKey = `${baseKey}:${storageGb}gb`;
-    const storageDisplay = storageGb >= 1024 ? `${storageGb / 1024}TB` : `${storageGb}GB`;
-    const canonicalName = `${brand} ${model} ${storageDisplay}`;
+    const modelKey = storageKnown ? `${baseKey}:${storageGb}gb` : `${baseKey}:unknown`;
+    const storageDisplay = storageGb === null
+      ? 'Không rõ dung lượng'
+      : storageGb >= 1024
+        ? `${storageGb / 1024}TB`
+        : `${storageGb}GB`;
+    const canonicalName = storageKnown ? `${brand} ${model} ${storageDisplay}` : `${brand} ${model}`;
     const slug = slugify(canonicalName);
 
     // 6. Enrich with 10 Field Groups
     const benchmark = CANONICAL_PHONE_REGISTRY[baseKey];
 
-    const ramGb = benchmark ? benchmark.ram_gb : null;
+    const ramGb = benchmark ? benchmark.ram_gb : claimable.find((t) => t.claimed)?.value ?? null;
     const screenSize = benchmark ? benchmark.screen_size_inch : null;
     const batteryMah = benchmark ? benchmark.battery_mah : null;
     const has5g = benchmark ? benchmark.has_5g : true;
@@ -213,7 +270,7 @@ export class ProductNormalizer {
         cpu: benchmark?.cpu || undefined,
         gpu: benchmark?.gpu || undefined,
         ram_gb: ramGb || undefined,
-        storage_gb: storageGb,
+        storage_gb: storageGb !== null ? storageGb : undefined,
         storage_expansion: 'Không hỗ trợ thẻ nhớ',
         os: benchmark?.os || 'iOS 18',
       },
@@ -277,7 +334,8 @@ export class ProductNormalizer {
       model_key: modelKey,
       name: canonicalName,
       slug,
-      storage_gb: storageGb,
+      storage_gb: storageKnown ? storageGb : null,
+      needs_review: !storageConfident,
       ram_gb: ramGb,
       screen_size_inch: screenSize,
       battery_mah: batteryMah,

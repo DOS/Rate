@@ -1,26 +1,27 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import type { MasterProduct, ProductSpecifications, KeySpecs } from '@repo/shared-data';
 
-const SUPABASE_URL =
-  process.env.NEXT_PUBLIC_SUPABASE_URL ||
-  process.env.SUPABASE_URL ||
-  'https://gulptwduchsjcsbndmua.supabase.co';
+// Fail hard on missing env (plan v7 §5.4): a silent fallback to the PROD
+// project makes preview verification read prod and look healthy.
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
 
-const SUPABASE_ANON_KEY =
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-  process.env.SUPABASE_ANON_KEY ||
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd1bHB0d2R1Y2hzamNzYm5kbXVhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY1OTI4NzQsImV4cCI6MjA4MjE2ODg3NH0.rRf1P8DhC_iK9KM2TSOU0XnjwoXmlBgZymGuhUdPazs';
-
-let _client: SupabaseClient<any, 'rate'> | null = null;
+let _client: any = null;
 
 export function getRateClient(): SupabaseClient<any, 'rate'> {
-  if (!_client) {
-    const raw = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      auth: { persistSession: false },
-    });
-    _client = (raw as any).schema('rate');
+  if (_client) {
+    return _client as SupabaseClient<any, 'rate'>;
   }
-  return _client;
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    throw new Error(
+      'rate-api: NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY are not configured; refusing to fall back to a hardcoded project'
+    );
+  }
+  const raw = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { persistSession: false },
+  });
+  _client = (raw as any).schema('rate');
+  return _client as SupabaseClient<any, 'rate'>;
 }
 
 export interface MerchantOffer {
@@ -52,6 +53,8 @@ export interface ReviewItem {
   comment: string;
   variation: string | null;
   created_at: string;
+  verdict: 'authentic' | 'suspicious' | 'fake' | 'unanalyzed' | null;
+  fake_probability: number | null;
 }
 
 /**
@@ -83,8 +86,7 @@ export async function getMasterProducts(params?: {
 
   const { data, error } = await query;
   if (error) {
-    console.error('Error fetching master products:', error.message);
-    return [];
+    throw new Error(`rate-api: failed to fetch master products: ${error.message}`);
   }
   return (data as MasterProduct[]) || [];
 }
@@ -98,6 +100,7 @@ export async function getMasterProductBySlug(slug: string): Promise<MasterProduc
     .from('master_products')
     .select('*')
     .eq('slug', slug)
+    .eq('status', 'published')
     .maybeSingle();
 
   if (error || !data) {
@@ -172,33 +175,47 @@ export async function getMasterProductOffers(masterId: string): Promise<Merchant
 export async function getMasterProductReviews(masterId: string): Promise<ReviewItem[]> {
   const supabase = getRateClient();
   // First find all product IDs for this master
-  const { data: prods } = await supabase
+  const { data: prods, error: prodsErr } = await supabase
     .from('products')
     .select('id')
     .eq('cluster_id', masterId);
-
+  if (prodsErr) {
+    throw new Error(`rate-api: failed to resolve listings for master ${masterId}: ${prodsErr.message}`);
+  }
   if (!prods || prods.length === 0) return [];
 
   const productIds = prods.map((p: any) => p.id);
+  // review_flags is embedded via review_flags.review_id -> reviews.id
+  // (migration 20261005130001); absent rows mean "not yet analyzed".
   const { data: reviews, error } = await supabase
     .from('reviews')
-    .select('id, author_name, rating_star, comment, variation, created_at')
+    .select('id, author_name, rating_star, comment, variation, created_at, review_flags(verdict, fake_probability)')
     .in('product_id', productIds)
     .order('created_at', { ascending: false })
     .limit(30);
 
-  if (error || !reviews) {
+  if (error) {
+    throw new Error(`rate-api: failed to fetch reviews for master ${masterId}: ${error.message}`);
+  }
+  if (!reviews) {
     return [];
   }
 
-  return reviews.map((r: any) => ({
-    id: r.id,
-    author_name: r.author_name || 'Khách hàng',
-    rating_star: r.rating_star || 5,
-    comment: r.comment || '',
-    variation: r.variation || null,
-    created_at: r.created_at,
-  }));
+  return reviews.map((r: any) => {
+    // PostgREST returns an OBJECT for a 1:1 embed (review_flags.review_id is
+    // the PK), not an array - handle both defensively (Codex SHOULD).
+    const vf = Array.isArray(r.review_flags) ? r.review_flags[0] : r.review_flags;
+    return {
+      id: r.id,
+      author_name: r.author_name || 'Khách hàng',
+      rating_star: r.rating_star || 5,
+      comment: r.comment || '',
+      variation: r.variation || null,
+      created_at: r.created_at,
+      verdict: vf?.verdict ?? null,
+      fake_probability: vf?.fake_probability != null ? Number(vf.fake_probability) : null,
+    };
+  });
 }
 
 /**
@@ -210,7 +227,8 @@ export async function compareMasterProducts(slugs: string[]): Promise<MasterProd
   const { data, error } = await supabase
     .from('master_products')
     .select('*')
-    .in('slug', slugs);
+    .in('slug', slugs)
+    .eq('status', 'published');
 
   if (error || !data) {
     return [];
