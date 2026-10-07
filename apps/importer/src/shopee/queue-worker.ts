@@ -131,20 +131,25 @@ export class QueueDrivenShopeeCrawler {
     let leaseLost = false;
     let hbInFlight: Promise<void> | null = null;
     const hb = setInterval(() => {
-      // Chain onto any in-flight heartbeat: overlapping calls must not
-      // overwrite the tracked promise (Codex round-2) or teardown would
-      // await only the newest while an older one is still in the air.
-      hbInFlight = (hbInFlight as unknown as Promise<void> | undefined ?? Promise.resolve())
-        .then(() => this.heartbeat(job))
-        .then(
-          (ok) => {
-            if (!ok) {
-              leaseLost = true;
-              console.error(`[QueueWorker] lease LOST for job ${job.id}; abandoning work on next check`);
-            }
-          },
-          (e) => console.warn(`[QueueWorker] heartbeat error: ${e.message}`)
-        );
+      // Skip this tick if the previous heartbeat is still in flight (Codex
+      // round-3: chaining queued an unbounded backlog when RPCs were slow,
+      // and teardown would then await all of it). Heartbeats are periodic;
+      // skipping a tick only shortens the effective lease, and the lease is
+      // comfortably longer than the interval. Once leaseLost fires the
+      // interval keeps ticking but does nothing useful - processJob's checks
+      // abandon the job at the next section boundary either way.
+      if (hbInFlight) return;
+      hbInFlight = this.heartbeat(job).then(
+        (ok) => {
+          if (!ok) {
+            leaseLost = true;
+            console.error(`[QueueWorker] lease LOST for job ${job.id}; abandoning work on next check`);
+          }
+        },
+        (e) => console.warn(`[QueueWorker] heartbeat error: ${e.message}`)
+      ).finally(() => {
+        hbInFlight = null;
+      });
     }, hbMs);
 
     try {
@@ -181,9 +186,7 @@ export class QueueDrivenShopeeCrawler {
       await this.fail(job, message);
     } finally {
       clearInterval(hb);
-      // hbInFlight is assigned from an interval callback, so TS sees it as
-      // always-null here; the cast documents the runtime reality.
-      await (hbInFlight as unknown as Promise<void> | undefined)?.catch(() => {});
+      await Promise.resolve(hbInFlight).catch(() => {});
     }
   }
 
