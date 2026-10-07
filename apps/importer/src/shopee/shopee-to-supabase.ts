@@ -56,9 +56,15 @@ export class ShopeeIngestionPipeline {
   }
 
   /**
-   * Ingest a full Shopee product into rate schema with Master Product deduplication
+   * Ingest a full Shopee product into rate schema with Master Product deduplication.
+   * `report` (optional) is awaited after each section completes so a queue
+   * worker can checkpoint progress (plan v7 §4.1: a retry resumes from the
+   * first incomplete section instead of redoing everything).
    */
-  public async ingestProduct(product: ShopeeProduct): Promise<{
+  public async ingestProduct(
+    product: ShopeeProduct,
+    report?: (section: 'merchant' | 'master' | 'listing' | 'price' | 'reviews') => Promise<void>
+  ): Promise<{
     productId: string;
     merchantId: string;
     masterId: string;
@@ -98,6 +104,7 @@ export class ShopeeIngestionPipeline {
 
     const merchantId = merchant.id;
     console.log(`[ShopeeIngest] Merchant resolved: ${product.shop.name} -> ID: ${merchantId}`);
+    await report?.('merchant');
 
     // 2. Normalize Specs & Match / Seed Master Product
     const candidate = this.normalizer.normalize(product);
@@ -108,6 +115,7 @@ export class ShopeeIngestionPipeline {
       this.smartphoneCategoryId || undefined
     );
     console.log(`[ShopeeIngest] Master Product ${isNew ? 'CREATED' : 'LINKED'}: ID = ${masterId}`);
+    await report?.('master');
 
     // 3. Upsert product listing into rate.products (linked via cluster_id)
     const { data: savedProduct, error: productErr } = await this.supabase
@@ -148,6 +156,7 @@ export class ShopeeIngestionPipeline {
 
     const productId = savedProduct.id;
     console.log(`[ShopeeIngest] Listing upserted -> ID: ${productId}`);
+    await report?.('listing');
 
     // 4. Price history entry with a stable observation id (plan v7 §4.1,
     // Codex #8): re-crawls of the same price on the same day upsert instead of
@@ -184,6 +193,7 @@ export class ShopeeIngestionPipeline {
         throw new Error(`Failed to record price history (observation ${observationId}): ${priceErr.message}`);
       }
     }
+    await report?.('price');
 
     // 5. Batch insert reviews if available
     if (product.reviews && product.reviews.length > 0) {
@@ -244,6 +254,7 @@ export class ShopeeIngestionPipeline {
         }
         console.log(`[ShopeeIngest] Successfully ingested ${newRows.length} reviews (${reviewRows.length - newRows.length} duplicates skipped).`);
       }
+      await report?.('reviews');
     }
 
     console.log(`[ShopeeIngest] Product ingestion complete! (Master: ${masterId}, Product: ${productId})`);
