@@ -131,15 +131,20 @@ export class QueueDrivenShopeeCrawler {
     let leaseLost = false;
     let hbInFlight: Promise<void> | null = null;
     const hb = setInterval(() => {
-      hbInFlight = this.heartbeat(job).then(
-        (ok) => {
-          if (!ok) {
-            leaseLost = true;
-            console.error(`[QueueWorker] lease LOST for job ${job.id}; abandoning work on next check`);
-          }
-        },
-        (e) => console.warn(`[QueueWorker] heartbeat error: ${e.message}`)
-      );
+      // Chain onto any in-flight heartbeat: overlapping calls must not
+      // overwrite the tracked promise (Codex round-2) or teardown would
+      // await only the newest while an older one is still in the air.
+      hbInFlight = (hbInFlight as unknown as Promise<void> | undefined ?? Promise.resolve())
+        .then(() => this.heartbeat(job))
+        .then(
+          (ok) => {
+            if (!ok) {
+              leaseLost = true;
+              console.error(`[QueueWorker] lease LOST for job ${job.id}; abandoning work on next check`);
+            }
+          },
+          (e) => console.warn(`[QueueWorker] heartbeat error: ${e.message}`)
+        );
     }, hbMs);
 
     try {
@@ -151,6 +156,10 @@ export class QueueDrivenShopeeCrawler {
         if (leaseLost) throw new Error(QueueDrivenShopeeCrawler.LeaseLost);
         sections[section] = new Date().toISOString();
         await this.checkpoint(job, { [`${section}_at`]: sections[section] });
+        // Re-check AFTER the awaited checkpoint: the lease can die while it
+        // is in flight, and the pipeline must not start the next section's
+        // writes once it has (Codex round-2).
+        if (leaseLost) throw new Error(QueueDrivenShopeeCrawler.LeaseLost);
       });
       if (leaseLost) throw new Error(QueueDrivenShopeeCrawler.LeaseLost);
 
@@ -161,8 +170,10 @@ export class QueueDrivenShopeeCrawler {
       console.log(`[QueueWorker] job ${job.id} ACKED (product ${result.productId})`);
     } catch (err: any) {
       const message = err?.message || String(err);
-      if (message === QueueDrivenShopeeCrawler.LeaseLost) {
-        // Not ours anymore: the current owner owns the outcome. Do NOT ack/fail.
+      // A lost lease must NEVER reach fail_crawl_job even when the work
+      // itself threw a normal error afterwards (Codex round-2): the current
+      // owner owns the outcome.
+      if (message === QueueDrivenShopeeCrawler.LeaseLost || leaseLost) {
         console.error(`[QueueWorker] job ${job.id} abandoned (lease lost mid-work).`);
         return;
       }
