@@ -191,7 +191,13 @@ export class ShopeeIngestionPipeline {
         source: 'shopee_crawler',
       });
       if (priceErr) {
-        throw new Error(`Failed to record price history (observation ${observationId}): ${priceErr.message}`);
+        const pCode = (priceErr as { code?: string }).code || '';
+        if (pCode === '23505' || /duplicate key/i.test(priceErr.message)) {
+          // Concurrent worker recorded the same observation first - benign.
+          console.warn('[ShopeeIngest] Concurrent price observation insert lost the race; treated as dedupe.');
+        } else {
+          throw new Error(`Failed to record price history (observation ${observationId}): ${priceErr.message}`);
+        }
       }
     }
     await report?.('price');
@@ -250,9 +256,16 @@ export class ShopeeIngestionPipeline {
       } else {
         const { error: reviewErr } = await this.supabase.from('reviews').insert(newRows);
         if (reviewErr) {
-          // Fail the whole ingestion (plan v7 §4.1, Codex blocker): a review
-          // write failure must NOT let the caller ack the job as done.
-          throw new Error(`Failed to insert reviews: ${reviewErr.message}`);
+          // A concurrent worker inserting the same review loses to the unique
+          // index (23505) - that race is benign dedupe, not a failure (Qwen
+          // review: check-then-insert is not atomic; the DB index arbitrates).
+          // Any other error fails the whole ingestion (plan v7 §4.1): the
+          // caller must not ack the job as done.
+          const code = (reviewErr as { code?: string }).code || '';
+          if (code !== '23505' && !/duplicate key/i.test(reviewErr.message)) {
+            throw new Error(`Failed to insert reviews: ${reviewErr.message}`);
+          }
+          console.warn('[ShopeeIngest] Concurrent review insert lost the unique-index race; treated as dedupe.');
         }
         console.log(`[ShopeeIngest] Successfully ingested ${newRows.length} reviews (${reviewRows.length - newRows.length} duplicates skipped).`);
       }
