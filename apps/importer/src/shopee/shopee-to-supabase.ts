@@ -56,9 +56,16 @@ export class ShopeeIngestionPipeline {
   }
 
   /**
-   * Ingest a full Shopee product into rate schema with Master Product deduplication
+   * Ingest a full Shopee product into rate schema with Master Product deduplication.
+   * `report` (optional) is awaited after each section completes so a queue
+   * worker can checkpoint progress. Ingest sections are idempotent upserts,
+   * so a retried job simply re-runs them; the checkpoint trail is for
+   * observability (which section a crash died in), not selective resume.
    */
-  public async ingestProduct(product: ShopeeProduct): Promise<{
+  public async ingestProduct(
+    product: ShopeeProduct,
+    report?: (section: 'merchant' | 'master' | 'listing' | 'price' | 'reviews') => Promise<void>
+  ): Promise<{
     productId: string;
     merchantId: string;
     masterId: string;
@@ -98,6 +105,7 @@ export class ShopeeIngestionPipeline {
 
     const merchantId = merchant.id;
     console.log(`[ShopeeIngest] Merchant resolved: ${product.shop.name} -> ID: ${merchantId}`);
+    await report?.('merchant');
 
     // 2. Normalize Specs & Match / Seed Master Product
     const candidate = this.normalizer.normalize(product);
@@ -108,6 +116,7 @@ export class ShopeeIngestionPipeline {
       this.smartphoneCategoryId || undefined
     );
     console.log(`[ShopeeIngest] Master Product ${isNew ? 'CREATED' : 'LINKED'}: ID = ${masterId}`);
+    await report?.('master');
 
     // 3. Upsert product listing into rate.products (linked via cluster_id)
     const { data: savedProduct, error: productErr } = await this.supabase
@@ -148,6 +157,7 @@ export class ShopeeIngestionPipeline {
 
     const productId = savedProduct.id;
     console.log(`[ShopeeIngest] Listing upserted -> ID: ${productId}`);
+    await report?.('listing');
 
     // 4. Price history entry with a stable observation id (plan v7 §4.1,
     // Codex #8): re-crawls of the same price on the same day upsert instead of
@@ -181,11 +191,19 @@ export class ShopeeIngestionPipeline {
         source: 'shopee_crawler',
       });
       if (priceErr) {
-        throw new Error(`Failed to record price history (observation ${observationId}): ${priceErr.message}`);
+        const pCode = (priceErr as { code?: string }).code || '';
+        if (pCode === '23505' || /duplicate key/i.test(priceErr.message)) {
+          // Concurrent worker recorded the same observation first - benign.
+          console.warn('[ShopeeIngest] Concurrent price observation insert lost the race; treated as dedupe.');
+        } else {
+          throw new Error(`Failed to record price history (observation ${observationId}): ${priceErr.message}`);
+        }
       }
     }
+    await report?.('price');
 
-    // 5. Batch insert reviews if available
+    // 5. Batch insert reviews if available (the section checkpoint fires in
+    // both branches - a zero-review ingest is still a completed section).
     if (product.reviews && product.reviews.length > 0) {
       const reviewRows = product.reviews.map((r) => ({
         product_id: productId,
@@ -236,14 +254,45 @@ export class ShopeeIngestionPipeline {
       if (newRows.length === 0) {
         console.log(`[ShopeeIngest] No new reviews to ingest (${seen.size} duplicates skipped).`);
       } else {
-        const { error: reviewErr } = await this.supabase.from('reviews').insert(newRows);
-        if (reviewErr) {
-          // Fail the whole ingestion (plan v7 §4.1, Codex blocker): a review
-          // write failure must NOT let the caller ack the job as done.
-          throw new Error(`Failed to insert reviews: ${reviewErr.message}`);
+        // Batch inserts are atomic: one raced row rolls back the whole batch
+        // (Codex P1 - swallowing 23505 would drop genuinely-new reviews that
+        // share the batch). On 23505, re-read which ids now exist, drop them,
+        // and retry the remainder once.
+        let pending = newRows;
+        for (let pass = 0; pass < 2; pass++) {
+          const { error: reviewErr } = await this.supabase.from('reviews').insert(pending);
+          if (!reviewErr) {
+            console.log(`[ShopeeIngest] Successfully ingested ${pending.length} reviews (batch pass ${pass + 1}).`);
+            pending = [];
+            break;
+          }
+          const code = (reviewErr as { code?: string }).code || '';
+          const isRace = code === '23505' || /duplicate key/i.test(reviewErr.message);
+          if (!isRace || pass > 0) {
+            throw new Error(`Failed to insert reviews: ${reviewErr.message}`);
+          }
+          // Unique-index race: drop the ids that already exist now and retry
+          // the rest. Anything that vanishes here was inserted by the winner.
+          console.warn('[ShopeeIngest] Review batch hit a unique-index race; retrying the remainder.');
+          const { data: existingNow, error: refetchErr } = await this.supabase
+            .from('reviews')
+            .select('platform_review_id')
+            .eq('product_id', productId)
+            .not('platform_review_id', 'is', null);
+          if (refetchErr) {
+            throw new Error(`Failed to refetch reviews after race: ${refetchErr.message}`);
+          }
+          const nowSeen = new Set<string>((existingNow || []).map((r: { platform_review_id: string }) => r.platform_review_id));
+          pending = pending.filter((r) => !nowSeen.has(r.platform_review_id as string));
+          if (pending.length === 0) {
+            console.log('[ShopeeIngest] All raced reviews already stored by the winner.');
+          }
         }
-        console.log(`[ShopeeIngest] Successfully ingested ${newRows.length} reviews (${reviewRows.length - newRows.length} duplicates skipped).`);
+        if (pending.length > 0) {
+          throw new Error(`Failed to insert reviews: unexplained retry state (${pending.length} rows left)`);
+        }
       }
+      await report?.('reviews');
     }
 
     console.log(`[ShopeeIngest] Product ingestion complete! (Master: ${masterId}, Product: ${productId})`);
