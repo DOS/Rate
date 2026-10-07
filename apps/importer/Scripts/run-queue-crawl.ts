@@ -27,10 +27,13 @@ const WORKER_ID = `worker-${process.pid}-${new Date().toISOString().slice(0, 16)
 // Proven-safe cloned profile (Chrome refuses CDP on the default User Data dir).
 const PROFILE_DIR = process.env.CRAWL_PROFILE_DIR || 'C:\\chrome_cdp_profiles\\stable';
 
+// Single-driver assumption: this kills ANY chrome carrying CDP port 9222 that
+// uses one of our crawl profile dirs (never the user's own Chrome profiles).
+// Two drivers on one machine would fight over the port - run one at a time.
 function killCdpBrowser(): void {
   try {
     execSync(
-      `powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \\"Name='chrome.exe'\\" | Where-Object { $_.CommandLine -like '*remote-debugging-port=9222*' -and $_.CommandLine -notlike '*--type=*' } | ForEach-Object { taskkill /PID $_.ProcessId /T /F 2>&1 | Out-Null }"`,
+      `powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \\"Name='chrome.exe'\\" | Where-Object { $_.CommandLine -like '*remote-debugging-port=9222*' -and $_.CommandLine -notlike '*--type=*' -and ($_.CommandLine -like '*chrome_cdp_profiles*' -or $_.CommandLine -like '*chrome_bot*') } | ForEach-Object { taskkill /PID $_.ProcessId /T /F 2>&1 | Out-Null }"`,
       { stdio: 'ignore' }
     );
   } catch {}
@@ -38,7 +41,13 @@ function killCdpBrowser(): void {
 
 async function main() {
   const maxJobsArg = process.argv.indexOf('--max-jobs');
-  const maxJobs = maxJobsArg > -1 ? parseInt(process.argv[maxJobsArg + 1], 10) : undefined;
+  const parsed = maxJobsArg > -1 ? parseInt(process.argv[maxJobsArg + 1], 10) : NaN;
+  // NaN/absent -> unlimited (Codex SHOULD: NaN previously meant "process 0
+  // jobs and report success").
+  const maxJobs = Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+  if (maxJobsArg > -1 && maxJobs === undefined) {
+    console.error('[Run] --max-jobs needs a positive integer; running until the queue drains.');
+  }
   const use4g = process.env.USE_4G === '1';
 
   const admin = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
@@ -99,47 +108,54 @@ async function main() {
   }
   console.log(`[Run] crawl run=${runId}`);
 
-  const b = await chromium.connectOverCDP(CDP);
-  const ctx = b.contexts()[0];
-  const scraper = new ShopeeScraper({ cdpEndpoint: CDP, maxReviews: 10, timeoutMs: 90000, proxy: use4g, autoRotateOnBlock: true });
-  const pipeline = new ShopeeIngestionPipeline();
-  await pipeline.init();
-
-  const worker = new QueueDrivenShopeeCrawler({
-    supabase: db,
-    pipeline,
-    workerId: WORKER_ID,
-    platform: 'shopee',
-    getRunId: () => runId,
-    maxJobs,
-    idlePollMs: 15000,
-    maxIdlePolls: 2,
-    scrape: async (job) => {
-      const url = job.target_url;
-      if (!url) throw new Error('job has no target_url');
-      // Human-like warm-up FIRST (cold PDP jump is what risk control flags).
-      const probe = await ctx.newPage();
-      try {
-        await probe.goto('https://shopee.vn/samsung_official_store', { waitUntil: 'domcontentloaded', timeout: 60000 });
-        await probe.waitForTimeout(3000);
-        await probe.evaluate(() => window.scrollBy({ top: 800, behavior: 'smooth' }));
-        await probe.waitForTimeout(1000);
-      } catch (e: any) {
-        console.warn(`[Run] store warm-up skipped: ${e.message.split('\n')[0]}`);
-      } finally {
-        await probe.close().catch(() => {});
-      }
-      return scraper.scrapeProduct(url);
-    },
-  });
-
+  // Everything after run creation lives in try/finally: a setup crash must
+  // still finish the run and tear the browser down (Codex SHOULD).
   let processed = 0;
   try {
+    const b = await chromium.connectOverCDP(CDP);
+    const ctx = b.contexts()[0];
+    const scraper = new ShopeeScraper({ cdpEndpoint: CDP, maxReviews: 10, timeoutMs: 90000, proxy: use4g, autoRotateOnBlock: true });
+    const pipeline = new ShopeeIngestionPipeline();
+    await pipeline.init();
+
+    const worker = new QueueDrivenShopeeCrawler({
+      supabase: db,
+      pipeline,
+      workerId: WORKER_ID,
+      platform: 'shopee',
+      getRunId: () => runId,
+      maxJobs,
+      idlePollMs: 30000,
+      maxIdlePolls: 4,
+      scrape: async (job) => {
+        const url = job.target_url;
+        if (!url) throw new Error('job has no target_url');
+        // Human-like warm-up FIRST (cold PDP jump is what risk control flags).
+        const probe = await ctx.newPage();
+        try {
+          await probe.goto('https://shopee.vn/samsung_official_store', { waitUntil: 'domcontentloaded', timeout: 60000 });
+          await probe.waitForTimeout(3000);
+          await probe.evaluate(() => window.scrollBy({ top: 800, behavior: 'smooth' }));
+          await probe.waitForTimeout(1000);
+        } catch (e: any) {
+          console.warn(`[Run] store warm-up skipped: ${e.message.split('\n')[0]}`);
+        } finally {
+          await probe.close().catch(() => {});
+        }
+        return scraper.scrapeProduct(url);
+      },
+    });
+
     processed = await worker.run();
     console.log(`[Run] worker finished, processed=${processed}`);
   } finally {
-    await db.rpc('finish_crawl_run', { p_run_id: runId, p_stats: { processed } }).catch(() => {});
-    killCdpBrowser(); // only our CDP instance
+    try {
+      const { error: finErr } = await db.rpc('finish_crawl_run', { p_run_id: runId, p_stats: { processed } });
+      if (finErr) console.warn(`[Run] finish_crawl_run failed: ${finErr.message}`);
+    } catch (e: any) {
+      console.warn(`[Run] finish_crawl_run threw: ${e.message}`);
+    }
+    killCdpBrowser(); // only CDP-carrying chrome (remote-debugging-port=9222)
     await pm.stopLocalForwarder().catch(() => {});
     console.log('[Run] Chrome closed, forwarder stopped.');
   }

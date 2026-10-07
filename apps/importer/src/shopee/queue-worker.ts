@@ -34,7 +34,8 @@ export interface QueueWorkerOptions {
   maxJobs?: number;
   /** Sleep between polls when the queue is empty (ms). */
   idlePollMs?: number;
-  /** Give up idle-waiting after this many consecutive empty polls. */
+  /** Give up idle-waiting after this many consecutive empty polls. Jobs in
+   * exponential backoff may outlive this wait - a later run picks them up. */
   maxIdlePolls?: number;
   /** Default run id for ack'd jobs (start_crawl_run once per worker session). */
   getRunId?: () => string | null;
@@ -79,6 +80,10 @@ export class QueueDrivenShopeeCrawler {
     return data === true;
   }
 
+  /** Raised when the lease was lost (heartbeat rejected or ack refused):
+   * this worker no longer owns the job and must stop touching it. */
+  static LeaseLost = 'LEASE_LOST';
+
   public async checkpoint(job: QueueJobRow, progress: Record<string, unknown>): Promise<void> {
     const { error } = await this.db().rpc('checkpoint_crawl_job', {
       p_id: job.id,
@@ -112,17 +117,26 @@ export class QueueDrivenShopeeCrawler {
     return data === true;
   }
 
-  /** Process one claimed job end-to-end: scrape -> ingest (checkpointed) -> ack. */
+  /** Process one claimed job end-to-end: scrape -> ingest (checkpointed) -> ack.
+   * Lease enforcement (Codex blocker): a rejected heartbeat or a refused ack
+   * aborts the job with LEASE_LOST - a worker that lost its claim must never
+   * touch the listing again (the true owner is scraping it right now). */
   public async processJob(job: QueueJobRow): Promise<void> {
     const sections: Record<string, unknown> = { started_at: new Date().toISOString() };
     await this.checkpoint(job, { started: true });
 
-    // Heartbeat while scraping (long): independent interval, cleared on exit.
+    // Heartbeat while scraping (long): independent interval; the in-flight
+    // promise is tracked so teardown awaits it instead of cutting it mid-call.
     const hbMs = (this.opts.heartbeatSeconds ?? 120) * 1000;
+    let leaseLost = false;
+    let hbInFlight: Promise<void> | null = null;
     const hb = setInterval(() => {
-      this.heartbeat(job).then(
+      hbInFlight = this.heartbeat(job).then(
         (ok) => {
-          if (!ok) console.warn(`[QueueWorker] heartbeat rejected for job ${job.id} (lease lost?)`);
+          if (!ok) {
+            leaseLost = true;
+            console.error(`[QueueWorker] lease LOST for job ${job.id}; abandoning work on next check`);
+          }
         },
         (e) => console.warn(`[QueueWorker] heartbeat error: ${e.message}`)
       );
@@ -130,23 +144,35 @@ export class QueueDrivenShopeeCrawler {
 
     try {
       const product = await this.opts.scrape(job);
+      if (leaseLost) throw new Error(QueueDrivenShopeeCrawler.LeaseLost);
       sections.title = product.title;
 
       const result = await this.opts.pipeline.ingestProduct(product, async (section) => {
+        if (leaseLost) throw new Error(QueueDrivenShopeeCrawler.LeaseLost);
         sections[section] = new Date().toISOString();
         await this.checkpoint(job, { [`${section}_at`]: sections[section] });
       });
+      if (leaseLost) throw new Error(QueueDrivenShopeeCrawler.LeaseLost);
 
       sections.productId = result.productId;
       sections.masterId = result.masterId;
-      await this.ack(job, sections);
+      const acked = await this.ack(job, sections);
+      if (!acked) throw new Error(QueueDrivenShopeeCrawler.LeaseLost);
       console.log(`[QueueWorker] job ${job.id} ACKED (product ${result.productId})`);
     } catch (err: any) {
       const message = err?.message || String(err);
+      if (message === QueueDrivenShopeeCrawler.LeaseLost) {
+        // Not ours anymore: the current owner owns the outcome. Do NOT ack/fail.
+        console.error(`[QueueWorker] job ${job.id} abandoned (lease lost mid-work).`);
+        return;
+      }
       console.error(`[QueueWorker] job ${job.id} FAILED: ${message}`);
       await this.fail(job, message);
     } finally {
       clearInterval(hb);
+      // hbInFlight is assigned from an interval callback, so TS sees it as
+      // always-null here; the cast documents the runtime reality.
+      await (hbInFlight as unknown as Promise<void> | undefined)?.catch(() => {});
     }
   }
 
@@ -158,8 +184,8 @@ export class QueueDrivenShopeeCrawler {
     let processed = 0;
     let idlePolls = 0;
     const maxJobs = this.opts.maxJobs ?? Number.POSITIVE_INFINITY;
-    const idlePollMs = this.opts.idlePollMs ?? 15000;
-    const maxIdlePolls = this.opts.maxIdlePolls ?? 2;
+    const idlePollMs = this.opts.idlePollMs ?? 30000;
+    const maxIdlePolls = this.opts.maxIdlePolls ?? 4;
 
     while (processed < maxJobs) {
       let job: QueueJobRow | null = null;
@@ -177,7 +203,7 @@ export class QueueDrivenShopeeCrawler {
           console.log('[QueueWorker] queue empty, exiting.');
           break;
         }
-        console.log(`[QueueWorker] queue empty (${idlePolls}/${maxIdlePolls}), waiting...`);
+        console.log(`[QueueWorker] queue empty (${idlePolls}/${maxIdlePolls}); note: jobs in backoff may not be claimable yet, waiting...`);
         await sleep(idlePollMs);
         continue;
       }

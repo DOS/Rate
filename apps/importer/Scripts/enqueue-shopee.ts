@@ -35,13 +35,19 @@ async function main() {
     process.exit(1);
   }
 
-  const runId = await db.rpc('start_crawl_run', { p_source: 'enqueue-cli', p_params: { count: urls.length } });
-  console.log(`[Enqueue] run=${runId.data}`);
+  const { data: runId, error: runErr } = await db.rpc('start_crawl_run', { p_source: 'enqueue-cli', p_params: { count: urls.length } });
+  if (runErr || !runId) {
+    console.error(`[Enqueue] start_crawl_run failed: ${runErr?.message}`);
+    process.exit(1);
+  }
+  console.log(`[Enqueue] run=${runId}`);
 
+  let failures = 0;
   for (const url of urls) {
     const ids = parseItem(url);
     if (!ids) {
       console.error(`[Enqueue] SKIP unparseable: ${url}`);
+      failures += 1;
       continue;
     }
     const { data, error } = await db.rpc('enqueue_crawl_job', {
@@ -52,15 +58,18 @@ async function main() {
       p_platform_item_id: ids.itemId,
       p_platform_shop_id: ids.shopId,
       p_priority: 0,
-      p_run_id: runId.data,
+      p_run_id: runId,
     });
     if (error) {
       console.error(`[Enqueue] FAIL ${ids.itemId}: ${error.message}`);
+      failures += 1;
     } else {
       console.log(`[Enqueue] job=${data[0]?.job_id ?? data?.job_id} state=${data[0]?.state ?? data?.state} item=${ids.itemId}`);
     }
   }
-  process.exit(0);
+  // Non-zero exit when anything failed so automation cannot mistake a
+  // partially-failed or fully-skipped enqueue for success (Codex SHOULD).
+  process.exit(failures > 0 ? 1 : 0);
 }
 
 main().catch((e) => {

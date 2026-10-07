@@ -58,8 +58,9 @@ export class ShopeeIngestionPipeline {
   /**
    * Ingest a full Shopee product into rate schema with Master Product deduplication.
    * `report` (optional) is awaited after each section completes so a queue
-   * worker can checkpoint progress (plan v7 §4.1: a retry resumes from the
-   * first incomplete section instead of redoing everything).
+   * worker can checkpoint progress. Ingest sections are idempotent upserts,
+   * so a retried job simply re-runs them; the checkpoint trail is for
+   * observability (which section a crash died in), not selective resume.
    */
   public async ingestProduct(
     product: ShopeeProduct,
@@ -195,7 +196,8 @@ export class ShopeeIngestionPipeline {
     }
     await report?.('price');
 
-    // 5. Batch insert reviews if available
+    // 5. Batch insert reviews if available (the section checkpoint fires in
+    // both branches - a zero-review ingest is still a completed section).
     if (product.reviews && product.reviews.length > 0) {
       const reviewRows = product.reviews.map((r) => ({
         product_id: productId,
@@ -254,6 +256,8 @@ export class ShopeeIngestionPipeline {
         }
         console.log(`[ShopeeIngest] Successfully ingested ${newRows.length} reviews (${reviewRows.length - newRows.length} duplicates skipped).`);
       }
+      await report?.('reviews');
+    } else {
       await report?.('reviews');
     }
 
