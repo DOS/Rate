@@ -67,6 +67,10 @@ async function main() {
       console.log(`[Enqueue] job=${data[0]?.job_id ?? data?.job_id} state=${data[0]?.state ?? data?.state} item=${ids.itemId}`);
     }
   }
+  // Close the run: an enqueue-only run has no worker, so leaving it
+  // 'running' would linger until the 6h timeout aborts it.
+  await db.rpc('finish_crawl_run', { p_run_id: runId, p_stats: { enqueued: urls.length - failures, failed: failures } });
+
   // Non-zero exit when anything failed so automation cannot mistake a
   // partially-failed or fully-skipped enqueue for success (Codex SHOULD).
   process.exit(failures > 0 ? 1 : 0);
