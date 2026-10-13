@@ -10,6 +10,7 @@ import type { ShopeeProduct } from './types.js';
 import { ProductNormalizer } from './product-normalizer.js';
 import { EntityMatcher } from './entity-matcher.js';
 import { AiSpecEnricher, type AiSpecEnricherConfig } from './ai-spec-enricher.js';
+import { AiReviewAnalyzer } from './ai-review-analyzer.js';
 
 dotenv.config();
 
@@ -22,6 +23,7 @@ export class ShopeeIngestionPipeline {
   private normalizer: ProductNormalizer;
   private matcher: EntityMatcher;
   private enricher: AiSpecEnricher;
+  private reviewAnalyzer: AiReviewAnalyzer;
   private smartphoneCategoryId: string | null = null;
 
   constructor(aiConfig?: AiSpecEnricherConfig) {
@@ -40,6 +42,7 @@ export class ShopeeIngestionPipeline {
     this.supabase = (admin as any).schema('rate');
     this.normalizer = new ProductNormalizer();
     this.enricher = new AiSpecEnricher(aiConfig);
+    this.reviewAnalyzer = new AiReviewAnalyzer(aiConfig);
     this.matcher = new EntityMatcher(this.supabase, this.enricher);
   }
 
@@ -302,6 +305,47 @@ export class ShopeeIngestionPipeline {
         }
       }
       await report?.('reviews');
+    }
+
+    // 6. Review analysis + JReviews-style weighted rating + merchant risk score.
+    // Non-fatal: heuristic/AI failures must never fail an otherwise good ingest
+    // (the analysis is idempotent and can be re-run by a backfill job).
+    try {
+      const { data: storedReviews, error: storedErr } = await this.supabase
+        .from('reviews')
+        .select('id, author_name, rating_star, comment, variation, images, is_verified_buyer, reviewer_type, upvotes, downvotes, report_count, platform_created_at')
+        .eq('product_id', productId)
+        .order('created_at', { ascending: false })
+        .limit(200);
+
+      if (storedErr) {
+        console.warn(`[ShopeeIngest] Review analysis skipped (fetch failed): ${storedErr.message}`);
+      } else if (storedReviews && storedReviews.length > 0) {
+        const { data: masterRow } = await this.supabase
+          .from('master_products')
+          .select('min_price')
+          .eq('id', masterId)
+          .maybeSingle();
+
+        const { summary, merchantRisk } = await this.reviewAnalyzer.persistAnalysisToSupabase(this.supabase, {
+          productId,
+          masterId,
+          merchantId,
+          reviews: storedReviews,
+          entityName: candidate.name,
+          entityType: 'product',
+          platform: 'shopee',
+          listingPrice: product.priceMin,
+          canonicalMinPrice: masterRow?.min_price ? Number(masterRow.min_price) : undefined,
+          isOfficial: product.shop.isMall,
+          followerCount: product.shop.followerCount,
+        });
+        console.log(
+          `[ShopeeIngest] Review analysis: ${summary.authentic_review_count}/${summary.total_reviews_analyzed} authentic, weighted rating ${summary.user_rating_weighted}/5, merchant risk ${merchantRisk?.risk_score ?? 'n/a'} (${merchantRisk?.risk_level ?? 'n/a'}).`
+        );
+      }
+    } catch (err: any) {
+      console.warn(`[ShopeeIngest] Review analysis failed (non-fatal): ${err?.message || err}`);
     }
 
     console.log(`[ShopeeIngest] Product ingestion complete! (Master: ${masterId}, Product: ${productId})`);
