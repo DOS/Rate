@@ -9,6 +9,7 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import type { ShopeeProduct } from './shopee-scraper.js';
 import { ProductNormalizer } from './product-normalizer.js';
 import { EntityMatcher } from './entity-matcher.js';
+import { AiSpecEnricher, type AiSpecEnricherConfig } from './ai-spec-enricher.js';
 
 dotenv.config();
 
@@ -20,9 +21,10 @@ export class ShopeeIngestionPipeline {
   private supabase: SupabaseClient<any, 'rate'>;
   private normalizer: ProductNormalizer;
   private matcher: EntityMatcher;
+  private enricher: AiSpecEnricher;
   private smartphoneCategoryId: string | null = null;
 
-  constructor() {
+  constructor(aiConfig?: AiSpecEnricherConfig) {
     const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
     const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY || '';
 
@@ -37,7 +39,8 @@ export class ShopeeIngestionPipeline {
     // Scope to rate schema
     this.supabase = (admin as any).schema('rate');
     this.normalizer = new ProductNormalizer();
-    this.matcher = new EntityMatcher(this.supabase);
+    this.enricher = new AiSpecEnricher(aiConfig);
+    this.matcher = new EntityMatcher(this.supabase, this.enricher);
   }
 
   /**
@@ -53,6 +56,11 @@ export class ShopeeIngestionPipeline {
     if (cat) {
       this.smartphoneCategoryId = cat.id;
     }
+
+    const aiInfo = this.enricher.getProviderInfo();
+    console.log(
+      `[ShopeeIngest] AI Spec Enricher status: provider=${aiInfo.provider}, model=${aiInfo.model}, configured=${aiInfo.configured}`
+    );
   }
 
   /**
@@ -113,7 +121,8 @@ export class ShopeeIngestionPipeline {
 
     const { masterId, isNew } = await this.matcher.resolveOrCreateMasterProduct(
       candidate,
-      this.smartphoneCategoryId || undefined
+      this.smartphoneCategoryId || undefined,
+      product.title
     );
     console.log(`[ShopeeIngest] Master Product ${isNew ? 'CREATED' : 'LINKED'}: ID = ${masterId}`);
     await report?.('master');

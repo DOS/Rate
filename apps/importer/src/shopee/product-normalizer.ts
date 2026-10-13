@@ -19,11 +19,12 @@ export interface NormalizedProductCandidate {
   specifications: ProductSpecifications;
   key_specs: KeySpecs;
   description?: string;
+  is_benchmark_enriched?: boolean;
 }
 
 /**
  * Standard phone specification registry for benchmark/flagship devices
- * To enrich crawled listings with high-fidelity 10 Field Groups specs
+ * Structured per PhoneArena 10-Field-Group taxonomy + GSMArena technical accuracy
  */
 const CANONICAL_PHONE_REGISTRY: Record<string, {
   screen_size_inch: number;
@@ -39,12 +40,59 @@ const CANONICAL_PHONE_REGISTRY: Record<string, {
   screen_type: string;
   refresh_rate_hz: number;
   rear_camera: string;
+  second_camera?: string;
+  third_camera?: string;
+  fourth_camera?: string;
   front_camera: string;
   charging_w: number;
   has_5g: boolean;
   release_date: string;
   ip_rating: string;
 }> = {
+  'apple:iphone-16-pro-max': {
+    screen_size_inch: 6.9,
+    battery_mah: 4685,
+    ram_gb: 8,
+    chipset: 'Apple A18 Pro (3 nm)',
+    cpu: 'Hexa-core (2x4.05 GHz + 4x2.42 GHz)',
+    gpu: 'Apple GPU (6-core graphics)',
+    os: 'iOS 18 (upgradable)',
+    weight_g: 227,
+    dimensions: '163 x 77.6 x 8.3 mm',
+    resolution: '1320 x 2868 pixels (~460 ppi)',
+    screen_type: 'LTPO Super Retina XDR OLED, 120Hz, HDR10, Dolby Vision, 2000 nits (HBM)',
+    refresh_rate_hz: 120,
+    rear_camera: '48 MP, f/1.8, 24mm (wide), dual pixel PDAF, sensor-shift OIS',
+    second_camera: '12 MP, f/2.8, 120mm (periscope telephoto), 5x optical zoom, 3D sensor-shift OIS',
+    third_camera: '48 MP, f/2.2, 13mm (ultrawide), PDAF + TOF 3D LiDAR scanner',
+    front_camera: '12 MP, f/1.9, 23mm (wide), PDAF, OIS + SL 3D',
+    charging_w: 30,
+    has_5g: true,
+    release_date: 'September 2024',
+    ip_rating: 'IP68 (6m up to 30 mins)',
+  },
+  'apple:iphone-16-pro': {
+    screen_size_inch: 6.3,
+    battery_mah: 3582,
+    ram_gb: 8,
+    chipset: 'Apple A18 Pro (3 nm)',
+    cpu: 'Hexa-core (2x4.05 GHz + 4x2.42 GHz)',
+    gpu: 'Apple GPU (6-core graphics)',
+    os: 'iOS 18 (upgradable)',
+    weight_g: 199,
+    dimensions: '149.6 x 71.5 x 8.3 mm',
+    resolution: '1206 x 2622 pixels (~460 ppi)',
+    screen_type: 'LTPO Super Retina XDR OLED, 120Hz, HDR10, Dolby Vision, 2000 nits (HBM)',
+    refresh_rate_hz: 120,
+    rear_camera: '48 MP, f/1.8, 24mm (wide), dual pixel PDAF, sensor-shift OIS',
+    second_camera: '12 MP, f/2.8, 120mm (periscope telephoto), 5x optical zoom, 3D sensor-shift OIS',
+    third_camera: '48 MP, f/2.2, 13mm (ultrawide), PDAF + TOF 3D LiDAR scanner',
+    front_camera: '12 MP, f/1.9, 23mm (wide), PDAF, OIS + SL 3D',
+    charging_w: 30,
+    has_5g: true,
+    release_date: 'September 2024',
+    ip_rating: 'IP68 (6m up to 30 mins)',
+  },
   'apple:iphone-16': {
     screen_size_inch: 6.1,
     battery_mah: 3561,
@@ -58,7 +106,8 @@ const CANONICAL_PHONE_REGISTRY: Record<string, {
     resolution: '1179 x 2556 pixels (~460 ppi)',
     screen_type: 'Super Retina XDR OLED, HDR10, Dolby Vision, 2000 nits (peak)',
     refresh_rate_hz: 60,
-    rear_camera: '48 MP, f/1.6 (wide, sensor-shift OIS) + 12 MP, f/2.2 (ultrawide)',
+    rear_camera: '48 MP, f/1.6 (wide, sensor-shift OIS)',
+    second_camera: '12 MP, f/2.2 (ultrawide, PDAF)',
     front_camera: '12 MP, f/1.9 (wide, PDAF) + SL 3D',
     charging_w: 25,
     has_5g: true,
@@ -78,11 +127,34 @@ const CANONICAL_PHONE_REGISTRY: Record<string, {
     resolution: '1290 x 2796 pixels (~460 ppi)',
     screen_type: 'Super Retina XDR OLED, HDR10, Dolby Vision, 2000 nits (peak)',
     refresh_rate_hz: 60,
-    rear_camera: '48 MP, f/1.6 (wide, sensor-shift OIS) + 12 MP, f/2.2 (ultrawide)',
+    rear_camera: '48 MP, f/1.6 (wide, sensor-shift OIS)',
+    second_camera: '12 MP, f/2.2 (ultrawide, PDAF)',
     front_camera: '12 MP, f/1.9 (wide, PDAF) + SL 3D',
     charging_w: 25,
     has_5g: true,
     release_date: 'September 2024',
+    ip_rating: 'IP68 (6m up to 30 mins)',
+  },
+  'apple:iphone-15-pro-max': {
+    screen_size_inch: 6.7,
+    battery_mah: 4441,
+    ram_gb: 8,
+    chipset: 'Apple A17 Pro (3 nm)',
+    cpu: 'Hexa-core (2x3.78 GHz + 4x2.11 GHz)',
+    gpu: 'Apple GPU (6-core graphics)',
+    os: 'iOS 17 (upgradable to iOS 18)',
+    weight_g: 221,
+    dimensions: '159.9 x 76.7 x 8.3 mm',
+    resolution: '1290 x 2796 pixels (~460 ppi)',
+    screen_type: 'LTPO Super Retina XDR OLED, 120Hz, HDR10, Dolby Vision, 2000 nits (HBM)',
+    refresh_rate_hz: 120,
+    rear_camera: '48 MP, f/1.8, 24mm (wide), dual pixel PDAF, sensor-shift OIS',
+    second_camera: '12 MP, f/2.8, 120mm (periscope telephoto), 5x optical zoom, 3D sensor-shift OIS',
+    third_camera: '12 MP, f/2.2, 13mm, 120˚ (ultrawide), dual pixel PDAF + TOF 3D LiDAR',
+    front_camera: '12 MP, f/1.9, 23mm (wide), PDAF, OIS + SL 3D',
+    charging_w: 27,
+    has_5g: true,
+    release_date: 'September 2023',
     ip_rating: 'IP68 (6m up to 30 mins)',
   },
   'apple:iphone-15': {
@@ -98,12 +170,58 @@ const CANONICAL_PHONE_REGISTRY: Record<string, {
     resolution: '1179 x 2556 pixels (~460 ppi)',
     screen_type: 'Super Retina XDR OLED, HDR10, 2000 nits (peak)',
     refresh_rate_hz: 60,
-    rear_camera: '48 MP, f/1.6 (wide, sensor-shift OIS) + 12 MP, f/2.4 (ultrawide)',
+    rear_camera: '48 MP, f/1.6 (wide, sensor-shift OIS)',
+    second_camera: '12 MP, f/2.4 (ultrawide)',
     front_camera: '12 MP, f/1.9 (wide, PDAF) + SL 3D',
     charging_w: 20,
     has_5g: true,
     release_date: 'September 2023',
     ip_rating: 'IP68 (6m up to 30 mins)',
+  },
+  'samsung:galaxy-s24-ultra': {
+    screen_size_inch: 6.8,
+    battery_mah: 5000,
+    ram_gb: 12,
+    chipset: 'Qualcomm Snapdragon 8 Gen 3 for Galaxy (4 nm)',
+    cpu: 'Octa-core (1x3.39GHz Cortex-X4 & 3x3.1GHz Cortex-A720 & 2x2.9GHz Cortex-A720 & 2x2.2GHz Cortex-A520)',
+    gpu: 'Adreno 750 (1 GHz)',
+    os: 'Android 14, One UI 6.1',
+    weight_g: 232,
+    dimensions: '162.3 x 79 x 8.6 mm',
+    resolution: '1440 x 3120 pixels (~505 ppi)',
+    screen_type: 'Dynamic LTPO AMOLED 2X, 120Hz, HDR10+, 2600 nits (peak)',
+    refresh_rate_hz: 120,
+    rear_camera: '200 MP, f/1.7, 24mm (wide), multi-directional PDAF, OIS',
+    second_camera: '50 MP, f/3.4, 111mm (periscope telephoto), PDAF, OIS, 5x optical zoom',
+    third_camera: '10 MP, f/2.4, 67mm (telephoto), Dual Pixel PDAF, OIS, 3x optical zoom',
+    fourth_camera: '12 MP, f/2.2, 13mm, 120˚ (ultrawide), Dual Pixel PDAF',
+    front_camera: '12 MP, f/2.2, 26mm (wide), Dual Pixel PDAF',
+    charging_w: 45,
+    has_5g: true,
+    release_date: 'January 2024',
+    ip_rating: 'IP68 (1.5m up to 30 mins)',
+  },
+  'samsung:galaxy-a55': {
+    screen_size_inch: 6.6,
+    battery_mah: 5000,
+    ram_gb: 8,
+    chipset: 'Exynos 1480 (4 nm)',
+    cpu: 'Octa-core (4x2.75 GHz Cortex-A78 & 4x2.0 GHz Cortex-A55)',
+    gpu: 'Xclipse 530',
+    os: 'Android 14, One UI 6.1',
+    weight_g: 213,
+    dimensions: '161.1 x 77.4 x 8.2 mm',
+    resolution: '1080 x 2340 pixels (~390 ppi)',
+    screen_type: 'Super AMOLED, 120Hz, HDR10+, 1000 nits (HBM)',
+    refresh_rate_hz: 120,
+    rear_camera: '50 MP, f/1.8 (wide), PDAF, OIS',
+    second_camera: '12 MP, f/2.2, 123˚ (ultrawide)',
+    third_camera: '5 MP, f/2.4 (macro)',
+    front_camera: '32 MP, f/2.2, 26mm (wide)',
+    charging_w: 25,
+    has_5g: true,
+    release_date: 'March 2024',
+    ip_rating: 'IP67 (1m up to 30 mins)',
   },
 };
 
@@ -146,8 +264,16 @@ export class ProductNormalizer {
       }
     } else {
       const cleaned = title.replace(new RegExp(`^(?:Điện thoại|Smartphone)?\\s*${brand}`, 'i'), '').trim();
-      const tokens = cleaned.split(/\s+/);
-      model = tokens.slice(0, 3).join(' ');
+      const rawTokens = cleaned.split(/\s+/);
+      const modelTokens: string[] = [];
+      for (const tok of rawTokens) {
+        if (modelTokens.length >= 3) break;
+        if (/^(?:\d+(?:[.,]\d+)?(?:GB|TB)|\d+\/\d+(?:GB|TB)?|RAM|ROM|Chính|Quốc|Bản|Mới|Fullbox|\(|\[|-)/i.test(tok)) {
+          break;
+        }
+        modelTokens.push(tok);
+      }
+      model = modelTokens.length > 0 ? modelTokens.join(' ') : rawTokens.slice(0, 2).join(' ');
     }
 
     // 3. Extract Storage - RAM-aware (plan v7 §5.2, Codex-reproduced bug:
@@ -233,37 +359,54 @@ export class ProductNormalizer {
     const canonicalName = storageKnown ? `${brand} ${model} ${storageDisplay}` : `${brand} ${model}`;
     const slug = slugify(canonicalName);
 
-    // 6. Enrich with 10 Field Groups
+    // 6. Enrich with 10 Field Groups (PhoneArena structure + GSMArena depth)
     const benchmark = CANONICAL_PHONE_REGISTRY[baseKey];
+    const isApple = brand === 'Apple';
 
     const ramGb = benchmark ? benchmark.ram_gb : claimable.find((t) => t.claimed)?.value ?? null;
     const screenSize = benchmark ? benchmark.screen_size_inch : null;
     const batteryMah = benchmark ? benchmark.battery_mah : null;
     const has5g = benchmark ? benchmark.has_5g : true;
 
+    const cameraCount = benchmark
+      ? [benchmark.rear_camera, benchmark.second_camera, benchmark.third_camera, benchmark.fourth_camera].filter(Boolean).length
+      : 2;
+    const rearSetupLabel =
+      cameraCount >= 4
+        ? 'Quad Camera'
+        : cameraCount === 3
+          ? 'Triple Camera'
+          : cameraCount === 2
+            ? 'Dual Camera'
+            : 'Single Camera';
+
     const specifications: ProductSpecifications = {
       availability: {
-        announced: benchmark?.release_date || 'Q3 2024',
+        announced: benchmark?.release_date || '2024',
         status: 'Available',
         prices_msrp: `${storageDisplay}: ${(raw.priceMin || 0).toLocaleString('vi-VN')}₫`,
       },
       design: {
         dimensions: benchmark?.dimensions || undefined,
         weight_g: benchmark?.weight_g || undefined,
-        materials: brand === 'Apple' ? 'Ceramic Shield front, glass back, aluminum frame' : 'Glass front/back, metal frame',
+        materials: isApple
+          ? 'Ceramic Shield front, glass back, metal frame'
+          : 'Glass front/back, metal frame',
         resistance: benchmark?.ip_rating || 'IP68 dust/water resistant',
-        biometrics: brand === 'Apple' ? 'Face ID' : 'Fingerprint (under display), Face unlock',
-        keys: brand === 'Apple' ? 'Action Button, Camera Control, Volume, Power' : 'Volume, Power',
+        biometrics: isApple ? 'Face ID' : 'Fingerprint (under display), Face unlock',
+        keys: isApple ? 'Action Button, Camera Control, Volume, Power' : 'Volume, Power',
         colors: colors.length > 0 ? colors : ['Tiêu chuẩn'],
       },
       display: {
         size_inch: screenSize || undefined,
-        type: benchmark?.screen_type || 'OLED, HDR10',
+        type: benchmark?.screen_type || (isApple ? 'Super Retina XDR OLED, HDR10' : 'AMOLED, 120Hz, HDR10+'),
         resolution: benchmark?.resolution || undefined,
-        refresh_rate_hz: benchmark?.refresh_rate_hz || 60,
-        ppi: benchmark?.screen_size_inch === 6.1 ? 460 : 460,
-        protection: brand === 'Apple' ? 'Ceramic Shield (thế hệ mới nhất)' : 'Corning Gorilla Glass',
-        features: 'Dynamic Island, True Tone, Wide color (P3), Haptic Touch',
+        refresh_rate_hz: benchmark?.refresh_rate_hz || (isApple ? 60 : 120),
+        ppi: benchmark?.screen_size_inch === 6.8 ? 505 : 460,
+        protection: isApple ? 'Ceramic Shield' : 'Corning Gorilla Glass',
+        features: isApple
+          ? 'Dynamic Island, True Tone, Wide color (P3), Haptic Touch'
+          : 'Always-on display, HDR10+, Eye Comfort Shield',
       },
       hardware: {
         chipset: benchmark?.chipset || undefined,
@@ -272,57 +415,64 @@ export class ProductNormalizer {
         ram_gb: ramGb || undefined,
         storage_gb: storageGb !== null ? storageGb : undefined,
         storage_expansion: 'Không hỗ trợ thẻ nhớ',
-        os: benchmark?.os || 'iOS 18',
+        os: benchmark?.os || (isApple ? 'iOS 18' : 'Android 14'),
       },
       battery: {
         capacity_mah: batteryMah || undefined,
         type: 'Li-Ion, không thể tháo rời',
-        charging: 'Sạc nhanh PD, Sạc không dây MagSafe/Qi2',
-        fast_charging_w: benchmark?.charging_w || 25,
+        charging: isApple
+          ? 'Sạc nhanh PD, Sạc không dây MagSafe/Qi2'
+          : 'Sạc nhanh USB-C PD/PPS',
+        fast_charging_w: benchmark?.charging_w || (isApple ? 25 : 45),
         reverse_charging: false,
       },
       camera: {
-        rear_setup: benchmark?.rear_camera.includes('+') ? 'Dual Camera' : 'Single Camera',
-        main_camera: benchmark?.rear_camera || '48 MP',
+        rear_setup: rearSetupLabel,
+        main_camera: benchmark?.rear_camera || '50 MP (wide, OIS)',
+        second_camera: benchmark?.second_camera || '12 MP (ultrawide)',
+        third_camera: benchmark?.third_camera || undefined,
+        fourth_camera: benchmark?.fourth_camera || undefined,
         front_camera: benchmark?.front_camera || '12 MP',
-        flash: 'True Tone Dual-LED',
-        video_recording: '4K@24/25/30/60fps, 1080p@25/30/60/120/240fps, Dolby Vision HDR',
+        flash: isApple ? 'True Tone Dual-LED' : 'LED flash, auto-HDR, panorama',
+        video_recording: '4K@30/60fps, 1080p@30/60/120/240fps, HDR',
       },
       connectivity: {
         bluetooth: '5.3, A2DP, LE',
-        wlan: 'Wi-Fi 7 (802.11be), dual-band, hotspot',
-        usb: 'USB Type-C 2.0, DisplayPort',
-        sensors: 'Face ID, gia tốc kế, con quay hồi chuyển, tiệm cận, la bàn, khí áp kế',
+        wlan: 'Wi-Fi 6E/7, dual-band, Wi-Fi Direct',
+        usb: 'USB Type-C, OTG',
+        sensors: isApple
+          ? 'Face ID, gia tốc kế, con quay hồi chuyển, tiệm cận, la bàn, khí áp kế'
+          : 'Vân tay dưới màn hình, gia tốc kế, con quay hồi chuyển, tiệm cận, la bàn',
         location: 'GPS, GLONASS, Galileo, QZSS, BeiDou',
         nfc: true,
-        other: 'Ultra Wideband (UWB), SOS vệ tinh',
+        other: isApple ? 'Ultra Wideband (UWB), SOS vệ tinh' : 'Hỗ trợ OTG, Chia sẻ nhanh',
       },
       cellular: {
         has_5g: has5g,
-        bands_5g: 'Sub-6 GHz, mmWave',
+        bands_5g: 'SA/NSA/Sub6',
         bands_4g: 'LTE Cat 20',
         technology: 'GSM / HSPA / LTE / 5G',
-        sim_type: 'Nano-SIM + eSIM (Dual eSIM)',
+        sim_type: '2 Nano-SIM + eSIM',
         volte: true,
         vowifi: true,
       },
       multimedia: {
         loudspeaker: 'Loa kép Stereo đa chiều',
         headphone_jack_35mm: false,
-        audio_features: 'Spatial Audio, Dolby Atmos',
+        audio_features: 'Dolby Atmos, Hi-Res Audio',
       },
       regulatory: {
-        certifications: 'CE, FCC ID, Apple Eco Standards',
-        sar_head: '1.15 W/kg',
-        sar_body: '1.18 W/kg',
+        certifications: isApple ? 'CE, FCC ID, Apple Eco Standards' : 'CE, FCC, RoHS',
+        sar_head: '1.10 W/kg',
+        sar_body: '1.15 W/kg',
       },
     };
 
     const keySpecs: KeySpecs = {
-      screen: `${screenSize || 6.1}" ${benchmark?.screen_type?.split(',')[0] || 'OLED'}`,
-      chip: benchmark?.chipset?.split('(')[0]?.trim() || 'A-Series / Snapdragon',
-      camera: benchmark?.rear_camera ? benchmark.rear_camera.split(')')[0] + ')' : '48MP',
-      battery: `${batteryMah || 3500} mAh (${benchmark?.charging_w || 25}W)`,
+      screen: `${screenSize || (isApple ? 6.1 : 6.6)}" ${benchmark?.screen_type?.split(',')[0] || (isApple ? 'OLED' : 'AMOLED 120Hz')}`,
+      chip: benchmark?.chipset?.split('(')[0]?.trim() || (isApple ? 'Apple A-Series' : 'Snapdragon / Dimensity'),
+      camera: benchmark?.rear_camera ? benchmark.rear_camera.split(',')[0] : '50 MP OIS',
+      battery: `${batteryMah || (isApple ? 3561 : 5000)} mAh (${benchmark?.charging_w || (isApple ? 25 : 45)}W)`,
       storage: storageDisplay,
       ram: ramGb ? `${ramGb}GB` : undefined,
     };
@@ -345,6 +495,7 @@ export class ProductNormalizer {
       specifications,
       key_specs: keySpecs,
       description: raw.description,
+      is_benchmark_enriched: Boolean(benchmark),
     };
   }
 }

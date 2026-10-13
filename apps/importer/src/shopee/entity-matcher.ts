@@ -1,15 +1,24 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { NormalizedProductCandidate } from './product-normalizer.js';
+import { AiSpecEnricher } from './ai-spec-enricher.js';
 
 export class EntityMatcher {
-  constructor(private supabase: SupabaseClient<any, 'rate'>) {}
+  private enricher: AiSpecEnricher;
+
+  constructor(
+    private supabase: SupabaseClient<any, 'rate'>,
+    enricher?: AiSpecEnricher
+  ) {
+    this.enricher = enricher ?? new AiSpecEnricher();
+  }
 
   /**
    * Resolves an existing canonical Master Product or creates a new one using 3-tier matching
    */
   public async resolveOrCreateMasterProduct(
     candidate: NormalizedProductCandidate,
-    categoryId?: string
+    categoryId?: string,
+    rawTitle?: string
   ): Promise<{ masterId: string; isNew: boolean }> {
     // Tier 1: Deterministic model_key matching
     const { data: exactMatch, error: exactErr } = await this.supabase
@@ -58,7 +67,10 @@ export class EntityMatcher {
       console.log(`[EntityMatcher] Tier 2 best similarity ${(topMatch.similarity * 100).toFixed(1)}% < 70%: seeding as draft if new.`);
     }
 
-    // Tier 3: No existing master product matches -> Seed a new Master Product.
+    // Tier 3: No existing master product matches -> Enrich with AI Spec Enricher (if not in local benchmark registry)
+    // and seed a new Master Product.
+    candidate = await this.enricher.enrichCandidate(candidate, rawTitle);
+
     // - Upsert on model_key (unique) so a concurrent crawler inserting the same
     //   canonical entity resolves instead of crashing (plan v7 §5.1 / Gemini B3).
     // - Low-confidence identities (unparseable storage etc.) are seeded as
@@ -119,5 +131,56 @@ export class EntityMatcher {
     }
     console.log(`[EntityMatcher] Master product already existed (race): ${winner.id}`);
     return { masterId: winner.id, isNew: false };
+  }
+
+  /**
+   * Enriches an existing Master Product row in Supabase with full 10-Field-Group specs via AI
+   */
+  public async enrichMasterProductById(masterId: string): Promise<boolean> {
+    const { data: row, error: fetchErr } = await this.supabase
+      .from('master_products')
+      .select('id, brand, model, storage_gb, ram_gb, name, description, colors')
+      .eq('id', masterId)
+      .maybeSingle();
+
+    if (fetchErr || !row) {
+      throw new Error(`[EntityMatcher] Master product ${masterId} not found: ${fetchErr?.message}`);
+    }
+
+    const aiResult = await this.enricher.fetchSpecsFromAi({
+      brand: row.brand,
+      model: row.model,
+      storageGb: row.storage_gb,
+      ramGb: row.ram_gb,
+      rawTitle: row.name,
+      rawDescription: row.description,
+    });
+
+    if (!aiResult) {
+      return false;
+    }
+
+    if (Array.isArray(row.colors) && row.colors.length > 0 && aiResult.specifications.design) {
+      aiResult.specifications.design.colors = row.colors;
+    }
+
+    const { error: updateErr } = await this.supabase
+      .from('master_products')
+      .update({
+        ram_gb: row.ram_gb ?? aiResult.ram_gb,
+        screen_size_inch: aiResult.screen_size_inch,
+        battery_mah: aiResult.battery_mah,
+        has_5g: aiResult.has_5g,
+        specifications: aiResult.specifications,
+        key_specs: aiResult.key_specs,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', masterId);
+
+    if (updateErr) {
+      throw new Error(`[EntityMatcher] Failed to update enriched specs for ${masterId}: ${updateErr.message}`);
+    }
+
+    return true;
   }
 }
