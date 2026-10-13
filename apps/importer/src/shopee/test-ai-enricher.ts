@@ -10,7 +10,7 @@ import dotenv from 'dotenv';
 import { ProductSpecificationsSchema, KeySpecsSchema } from '@repo/shared-data';
 import { ProductNormalizer } from './product-normalizer.js';
 import { AiSpecEnricher, sanitizeSpecifications } from './ai-spec-enricher.js';
-import type { ShopeeProduct } from './shopee-scraper.js';
+import type { ShopeeProduct } from './types.js';
 
 dotenv.config();
 

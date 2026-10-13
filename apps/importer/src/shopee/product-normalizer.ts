@@ -1,5 +1,5 @@
 import type { ProductSpecifications, KeySpecs } from '@repo/shared-data';
-import type { ShopeeProduct } from './shopee-scraper.js';
+import type { ShopeeProduct } from './types.js';
 
 export interface NormalizedProductCandidate {
   brand: string;
