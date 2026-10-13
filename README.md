@@ -1,8 +1,8 @@
 # ⭐ Rate Platform - AI-Powered Review & Rating System
 
-![Commitlint](https://github.com/RateBox/Rate/actions/workflows/commitlint.yml/badge.svg?branch=dev)
-![PR Auto Label](https://github.com/RateBox/Rate/actions/workflows/pr-auto-label.yml/badge.svg?branch=dev)
-![Labels Sync](https://github.com/RateBox/Rate/actions/workflows/labels-sync.yml/badge.svg?branch=dev)
+![Commitlint](https://github.com/DOS/Rate/actions/workflows/commitlint.yml/badge.svg?branch=dev)
+![PR Auto Label](https://github.com/DOS/Rate/actions/workflows/pr-auto-label.yml/badge.svg?branch=dev)
+![Labels Sync](https://github.com/DOS/Rate/actions/workflows/labels-sync.yml/badge.svg?branch=dev)
 
 A comprehensive review and rating platform for businesses, services, and products with AI-powered fake review detection, sentiment analysis, and fraud prevention capabilities.
 
@@ -208,7 +208,7 @@ Admin Panel     Caching             Mobile Apps
 1. **Clone and Install**
 
 ```bash
-git clone https://github.com/RateBox/Rate.git
+git clone https://github.com/DOS/Rate.git
 cd Rate
 yarn install
 ```
