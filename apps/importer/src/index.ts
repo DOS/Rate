@@ -1,13 +1,10 @@
-// Importer Service Entry Point
-console.log('[Importer] Service starting...');
+/**
+ * @repo/importer — Open-Core Normalization, 3-Tier Deduplication & AI Spec Enricher Engine
+ * Note: Proprietary anti-detect scrapers, proxy rotators, and queue workers live in private repo DOS/Rate-Services.
+ */
 
-// Placeholder for importer functionality
-// TODO: Implement actual import logic
-
-export default {
-  name: '@repo/importer',
-  version: '1.0.0',
-  start: () => {
-    console.log('[Importer] Started successfully');
-  }
-};
+export * from './shopee/types.js';
+export * from './shopee/product-normalizer.js';
+export * from './shopee/entity-matcher.js';
+export * from './shopee/ai-spec-enricher.js';
+export * from './shopee/shopee-to-supabase.js';
