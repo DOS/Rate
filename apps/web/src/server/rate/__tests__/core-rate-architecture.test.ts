@@ -205,8 +205,11 @@ function runCoreArchitectureSuite() {
 
   assert.equal(RATE_ROUTES.SMARTWATCHES, '/smartwatches');
   assert.equal(RATE_ROUTES.EARBUDS, '/earbuds');
+  assert.equal(RATE_ROUTES.INSPECT, '/inspect');
   assert.equal(RATE_API_V1_ENDPOINTS.STATS, '/api/v1/rate/stats');
   assert.equal(RATE_API_V1_ENDPOINTS.COMPARE, '/api/v1/rate/compare');
+  assert.equal(RATE_API_V1_ENDPOINTS.INSPECT, '/api/v1/rate/inspect');
+  assert.equal(RATE_API_V1_ENDPOINTS.WATCHLIST, '/api/v1/rate/watchlist');
 
   const validSpecs = ProductSpecificationsSchema.safeParse({
     display: { size_inch: 6.1, refresh_rate_hz: 120 },

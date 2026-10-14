@@ -15,14 +15,19 @@ import CompareQuickToggle from '@/components/compare/CompareQuickToggle';
 
 interface WatchlistWorkspaceProps {
   catalogProducts: MasterProduct[];
+  locale?: string;
 }
 
 export default function WatchlistWorkspace({
   catalogProducts,
+  locale,
 }: WatchlistWorkspaceProps) {
   const [items, setItems] = useState<WatchlistItem[]>([]);
   const [editingSlug, setEditingSlug] = useState<string | null>(null);
   const [editTarget, setEditTarget] = useState<number>(0);
+  const [subscriberEmail, setSubscriberEmail] = useState<string>('');
+  const [cloudSyncStatus, setCloudSyncStatus] = useState<string | null>(null);
+  const [isSyncingCloud, setIsSyncingCloud] = useState<boolean>(false);
 
   useEffect(() => {
     const sync = () => setItems(getWatchlist());
@@ -53,12 +58,57 @@ export default function WatchlistWorkspace({
     });
   };
 
-  const handleUpdateTarget = (item: WatchlistItem) => {
+  const handleUpdateTarget = async (item: WatchlistItem) => {
+    const cleanTarget = Math.max(100000, Math.round(editTarget));
     upsertWatchlistItem({
       ...item,
-      targetPrice: Math.max(100000, Math.round(editTarget)),
+      targetPrice: cleanTarget,
     });
     setEditingSlug(null);
+    try {
+      await fetch('/api/v1/rate/watchlist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          slug: item.slug,
+          targetPrice: cleanTarget,
+          subscriberEmail: subscriberEmail.trim() || undefined,
+          locale: locale || 'vi',
+        }),
+      });
+    } catch {
+      // Local watchlist already updated
+    }
+  };
+
+  const handleSyncAllCloudAlerts = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (items.length === 0) return;
+    setIsSyncingCloud(true);
+    setCloudSyncStatus(null);
+    try {
+      await Promise.all(
+        items.map((item) =>
+          fetch('/api/v1/rate/watchlist', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              slug: item.slug,
+              targetPrice: item.targetPrice,
+              subscriberEmail: subscriberEmail.trim() || undefined,
+              locale: locale || 'vi',
+            }),
+          })
+        )
+      );
+      setCloudSyncStatus(
+        `Đã đồng bộ ${items.length} cảnh báo giá mục tiêu lên hệ thống Rate Cloud!`
+      );
+    } catch {
+      setCloudSyncStatus('Đã lưu cấu hình cảnh báo giá trên trình duyệt.');
+    } finally {
+      setIsSyncingCloud(false);
+    }
   };
 
   const reachedCount = items.filter((item) => {
@@ -85,6 +135,12 @@ export default function WatchlistWorkspace({
           </div>
           <div className="d-flex flex-wrap gap-2">
             <Link
+              href="/inspect"
+              className="btn btn-outline-light rounded-pill px-4"
+            >
+              🔬 Kiểm toán Link TMĐT
+            </Link>
+            <Link
               href="/smartphones"
               className="btn btn-outline-light rounded-pill px-4"
             >
@@ -103,6 +159,39 @@ export default function WatchlistWorkspace({
             )}
           </div>
         </div>
+
+        {items.length > 0 && (
+          <form
+            onSubmit={handleSyncAllCloudAlerts}
+            className="row g-2 align-items-center mt-3 pt-3 border-top border-secondary border-opacity-25"
+          >
+            <div className="col-md-8">
+              <input
+                type="email"
+                className="form-control form-control-sm rounded-pill px-3"
+                placeholder="Nhập email nhận thông báo khi giá chạm ngưỡng mục tiêu (Tùy chọn - Cloud Alert API)..."
+                value={subscriberEmail}
+                onChange={(e) => setSubscriberEmail(e.target.value)}
+              />
+            </div>
+            <div className="col-md-4 d-grid">
+              <button
+                type="submit"
+                disabled={isSyncingCloud}
+                className="btn btn-sm btn-danger rounded-pill fw-semibold"
+              >
+                {isSyncingCloud
+                  ? 'Đang đồng bộ Cloud...'
+                  : '☁️ Đồng Bộ Cảnh Báo Lên Rate Cloud'}
+              </button>
+            </div>
+            {cloudSyncStatus && (
+              <div className="col-12 small text-success fw-medium mt-1">
+                ✓ {cloudSyncStatus}
+              </div>
+            )}
+          </form>
+        )}
 
         {/* Summary KPI Strip */}
         <div className="row g-3 mt-3 pt-3 border-top border-secondary border-opacity-25">
