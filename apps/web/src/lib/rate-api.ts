@@ -828,3 +828,303 @@ export async function compareMasterProducts(slugs: string[]): Promise<MasterProd
   }
   return data as MasterProduct[];
 }
+
+export type DiscountVerdictType =
+  | 'fake_discount'
+  | 'suspicious_discount'
+  | 'genuine_deal'
+  | 'normal_price';
+
+export interface PriceHistoryPoint {
+  id: number;
+  product_id: string;
+  merchant_name: string;
+  platform: string;
+  is_official: boolean;
+  price: number;
+  price_original: number | null;
+  recorded_at: string;
+  source: string | null;
+}
+
+export interface OfferDiscountAnalysis {
+  product_id: string;
+  merchant_name: string;
+  platform: string;
+  price_current: number;
+  price_original: number | null;
+  claimed_discount_pct: number;
+  real_discount_vs_median_pct: number;
+  historical_min_price: number;
+  historical_max_price: number;
+  historical_median_price: number;
+  observation_count: number;
+  verdict: DiscountVerdictType;
+  badge_label: string;
+  explanation: string;
+}
+
+export interface MasterProductPriceHistorySummary {
+  points: PriceHistoryPoint[];
+  byOffer: Record<string, OfferDiscountAnalysis>;
+  lowestEverPrice: number | null;
+  lowestEverDate: string | null;
+  lowestEverMerchant: string | null;
+  highestEverPrice: number | null;
+  currentMinPrice: number | null;
+  fakeDiscountCount: number;
+  genuineDealCount: number;
+}
+
+interface RawPriceHistoryRow {
+  id: number | string;
+  product_id: string;
+  price: number | string;
+  price_original?: number | string | null;
+  recorded_at: string;
+  source?: string | null;
+}
+
+function computeMedian(values: number[]): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 1) {
+    return sorted[mid] ?? 0;
+  }
+  return Math.round(((sorted[mid - 1] ?? 0) + (sorted[mid] ?? 0)) / 2);
+}
+
+/**
+ * Fetch time-series price history across all merchant offers for a master product
+ * and run Fake Discount Detection (nâng khống giá gốc / giảm giá ảo).
+ */
+export async function getMasterProductPriceHistory(
+  masterId: string,
+  existingOffers?: MerchantOffer[]
+): Promise<MasterProductPriceHistorySummary> {
+  const offers = existingOffers ?? (await getMasterProductOffers(masterId));
+  if (offers.length === 0) {
+    return {
+      points: [],
+      byOffer: {},
+      lowestEverPrice: null,
+      lowestEverDate: null,
+      lowestEverMerchant: null,
+      highestEverPrice: null,
+      currentMinPrice: null,
+      fakeDiscountCount: 0,
+      genuineDealCount: 0,
+    };
+  }
+
+  const offerMap = new Map<string, MerchantOffer>();
+  for (const off of offers) {
+    offerMap.set(off.id, off);
+  }
+
+  const productIds = offers.map((o) => o.id);
+  const supabase = getRateClient();
+  const { data: rawRows, error } = await supabase
+    .from('price_history')
+    .select('id, product_id, price, price_original, recorded_at, source')
+    .in('product_id', productIds)
+    .order('recorded_at', { ascending: false })
+    .limit(500);
+
+  if (error) {
+    console.error(
+      `rate-api: failed to fetch price_history for master ${masterId}:`,
+      error.message
+    );
+  }
+
+  const chronologicalRows = [
+    ...((rawRows || []) as unknown as RawPriceHistoryRow[]),
+  ].sort(
+    (a, b) => new Date(a.recorded_at).getTime() - new Date(b.recorded_at).getTime()
+  );
+
+  const points: PriceHistoryPoint[] = [];
+  const pricesByOffer = new Map<string, number[]>();
+  const origPricesByOffer = new Map<string, number[]>();
+
+  for (const row of chronologicalRows) {
+    const off = offerMap.get(row.product_id);
+    if (!off) continue;
+    const price = Number(row.price || 0);
+    if (price <= 0) continue;
+    const priceOriginal =
+      row.price_original != null && Number(row.price_original) > 0
+        ? Number(row.price_original)
+        : null;
+
+    points.push({
+      id: Number(row.id),
+      product_id: row.product_id,
+      merchant_name: off.merchant.name,
+      platform: off.platform,
+      is_official: off.merchant.is_official,
+      price,
+      price_original: priceOriginal,
+      recorded_at: row.recorded_at,
+      source: row.source || null,
+    });
+
+    const list = pricesByOffer.get(row.product_id) ?? [];
+    list.push(price);
+    pricesByOffer.set(row.product_id, list);
+
+    if (priceOriginal) {
+      const origList = origPricesByOffer.get(row.product_id) ?? [];
+      origList.push(priceOriginal);
+      origPricesByOffer.set(row.product_id, origList);
+    }
+  }
+
+  // Ensure every active offer has at least its current price represented
+  const nowIso = new Date().toISOString();
+  for (const off of offers) {
+    const existingList = pricesByOffer.get(off.id);
+    if (!existingList || existingList.length === 0) {
+      pricesByOffer.set(off.id, [off.price_current]);
+      points.push({
+        id: -1 * (points.length + 1),
+        product_id: off.id,
+        merchant_name: off.merchant.name,
+        platform: off.platform,
+        is_official: off.merchant.is_official,
+        price: off.price_current,
+        price_original: off.price_original,
+        recorded_at: nowIso,
+        source: 'live_listing',
+      });
+    }
+  }
+
+  // Sort all points chronologically
+  points.sort(
+    (a, b) => new Date(a.recorded_at).getTime() - new Date(b.recorded_at).getTime()
+  );
+
+  // Market median across all current offers
+  const marketMedianPrice = computeMedian(offers.map((o) => o.price_current));
+
+  const byOffer: Record<string, OfferDiscountAnalysis> = {};
+  let fakeDiscountCount = 0;
+  let genuineDealCount = 0;
+
+  for (const off of offers) {
+    const histPrices = pricesByOffer.get(off.id) ?? [off.price_current];
+    const lastHistPrice = histPrices[histPrices.length - 1];
+    const rawSamples =
+      lastHistPrice === off.price_current
+        ? histPrices
+        : [...histPrices, off.price_current];
+    const allSamples = rawSamples.filter((p) => p > 0);
+    const histMin = Math.min(...allSamples);
+    const histMax = Math.max(...allSamples);
+    const histMedian = computeMedian(allSamples);
+    const referenceBasePrice =
+      histPrices.length >= 2 ? histMedian : Math.max(histMedian, marketMedianPrice);
+
+    const priceCurrent = off.price_current;
+    const priceOriginal =
+      off.price_original && off.price_original > priceCurrent
+        ? off.price_original
+        : null;
+
+    const claimedDiscountPct = priceOriginal
+      ? Math.round(((priceOriginal - priceCurrent) / priceOriginal) * 1000) / 10
+      : 0;
+
+    const realDiscountVsMedianPct =
+      referenceBasePrice > 0
+        ? Math.round(
+            ((referenceBasePrice - priceCurrent) / referenceBasePrice) * 1000
+          ) / 10
+        : 0;
+
+    let verdict: DiscountVerdictType = 'normal_price';
+    let badgeLabel = 'Giá ổn định';
+    let explanation = `Giá bán hiện tại (${priceCurrent.toLocaleString('vi-VN')} ₫) khớp với mức trung vị lịch sử (${histMedian.toLocaleString('vi-VN')} ₫).`;
+
+    if (priceOriginal && claimedDiscountPct >= 5) {
+      // Case 1: Shop claims >= 8% discount, but current price is at or above historical median
+      // AND original price was inflated above historical max actual selling price
+      if (
+        priceCurrent >= referenceBasePrice * 0.98 &&
+        (priceOriginal > histMax * 1.05 ||
+          claimedDiscountPct - realDiscountVsMedianPct >= 10)
+      ) {
+        verdict = 'fake_discount';
+        badgeLabel = 'Cảnh báo Giảm giá ảo';
+        explanation = `Gian hàng niêm yết giá gạch ngang ${priceOriginal.toLocaleString('vi-VN')} ₫ (-${claimedDiscountPct}%), nhưng giá bán thực tế lịch sử chưa từng vượt ${histMax.toLocaleString('vi-VN')} ₫ (trung vị: ${histMedian.toLocaleString('vi-VN')} ₫).`;
+        fakeDiscountCount += 1;
+      } else if (claimedDiscountPct - realDiscountVsMedianPct >= 6) {
+        verdict = 'suspicious_discount';
+        badgeLabel = 'Nghi nâng giá gốc';
+        explanation = `Mức giảm công bố (-${claimedDiscountPct}%) cao hơn đáng kể so với mức giảm thực tế (-${Math.max(0, realDiscountVsMedianPct)}%) khi đối chiếu lịch sử giá (${histMedian.toLocaleString('vi-VN')} ₫).`;
+        fakeDiscountCount += 1;
+      } else if (realDiscountVsMedianPct >= 3 || priceCurrent <= histMin) {
+        verdict = 'genuine_deal';
+        badgeLabel = 'Giảm giá thật';
+        explanation = `Giá hiện tại thấp hơn ${Math.max(realDiscountVsMedianPct, claimedDiscountPct)}% so với mức trung vị lịch sử (${histMedian.toLocaleString('vi-VN')} ₫).`;
+        genuineDealCount += 1;
+      }
+    } else if (
+      realDiscountVsMedianPct >= 3 ||
+      (histPrices.length >= 2 && priceCurrent <= histMin && histMin < histMax)
+    ) {
+      verdict = 'genuine_deal';
+      badgeLabel = 'Đáy giá lịch sử';
+      explanation = `Đang ở vùng giá thấp nhất ghi nhận được (${priceCurrent.toLocaleString('vi-VN')} ₫ so với đỉnh ${histMax.toLocaleString('vi-VN')} ₫).`;
+      genuineDealCount += 1;
+    }
+
+    byOffer[off.id] = {
+      product_id: off.id,
+      merchant_name: off.merchant.name,
+      platform: off.platform,
+      price_current: priceCurrent,
+      price_original: priceOriginal,
+      claimed_discount_pct: claimedDiscountPct,
+      real_discount_vs_median_pct: realDiscountVsMedianPct,
+      historical_min_price: histMin,
+      historical_max_price: histMax,
+      historical_median_price: histMedian,
+      observation_count: histPrices.length,
+      verdict,
+      badge_label: badgeLabel,
+      explanation,
+    };
+  }
+
+  let lowestPoint: PriceHistoryPoint | null = null;
+  let highestEverPrice: number | null = null;
+
+  for (const pt of points) {
+    if (!lowestPoint || pt.price < lowestPoint.price) {
+      lowestPoint = pt;
+    }
+    if (highestEverPrice === null || pt.price > highestEverPrice) {
+      highestEverPrice = pt.price;
+    }
+  }
+
+  const currentMinPrice =
+    offers.length > 0 ? Math.min(...offers.map((o) => o.price_current)) : null;
+
+  return {
+    points,
+    byOffer,
+    lowestEverPrice: lowestPoint ? lowestPoint.price : currentMinPrice,
+    lowestEverDate: lowestPoint ? lowestPoint.recorded_at : null,
+    lowestEverMerchant: lowestPoint ? lowestPoint.merchant_name : null,
+    highestEverPrice,
+    currentMinPrice,
+    fakeDiscountCount,
+    genuineDealCount,
+  };
+}
+

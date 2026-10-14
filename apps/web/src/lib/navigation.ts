@@ -11,6 +11,7 @@ export const routing = defineRouting({
 
   localePrefix: "as-needed",
   localeDetection: false,
+  localeCookie: false,
 })
 
 // https://next-intl-docs.vercel.app/docs/routing/navigation
