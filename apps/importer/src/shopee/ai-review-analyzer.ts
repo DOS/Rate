@@ -933,7 +933,7 @@ Return ONLY valid JSON matching:
       }
     }
 
-    // 4. Evaluate and update merchant risk_score if merchantId is provided
+    // 4. Evaluate and update merchant review_risk_score (leaving risk_score for DOSafe threat_intel)
     let merchantRisk: MerchantRiskEvaluation | undefined;
     if (params.merchantId) {
       merchantRisk = this.evaluateMerchantRisk({
@@ -947,15 +947,26 @@ Return ONLY valid JSON matching:
         rawReviews: params.reviews,
       });
 
+      const nowIso = new Date().toISOString();
       const { error: merchErr } = await supabase
         .from('merchants')
         .update({
-          risk_score: merchantRisk.risk_score,
-          updated_at: new Date().toISOString(),
+          review_risk_score: merchantRisk.risk_score,
+          review_risk_breakdown: {
+            risk_level: merchantRisk.risk_level,
+            trust_score: merchantRisk.trust_score,
+            seeding_ratio: merchantRisk.seeding_ratio,
+            coin_spam_ratio: merchantRisk.coin_spam_ratio,
+            sabotage_ratio: merchantRisk.sabotage_ratio,
+            price_anomaly_detected: merchantRisk.price_anomaly_detected,
+            reasons: merchantRisk.reasons,
+          },
+          review_risk_updated_at: nowIso,
+          updated_at: nowIso,
         })
         .eq('id', params.merchantId);
       if (merchErr) {
-        throw new Error(`[AiReviewAnalyzer] Failed to update merchant risk_score: ${merchErr.message}`);
+        throw new Error(`[AiReviewAnalyzer] Failed to update merchant review_risk_score: ${merchErr.message}`);
       }
     }
 

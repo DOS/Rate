@@ -293,10 +293,15 @@ async function run() {
     }
     assert.ok(calls.some((c) => c.table === 'review_analysis' && c.op === 'upsert' && c.payload.product_id === 'prod-1'));
     assert.ok(calls.some((c) => c.table === 'master_products' && c.op === 'update' && c.val === 'master-1' && 'user_rating_weighted' in c.payload));
-    assert.ok(calls.some((c) => c.table === 'merchants' && c.op === 'update' && c.val === 'merch-1' && typeof c.payload.risk_score === 'number'));
+    const merchUpdate = calls.find((c) => c.table === 'merchants' && c.op === 'update' && c.val === 'merch-1');
+    assert.ok(merchUpdate, 'merchants update called');
+    assert.equal(typeof merchUpdate.payload.review_risk_score, 'number');
+    assert.equal(typeof merchUpdate.payload.review_risk_breakdown, 'object');
+    assert.equal(typeof merchUpdate.payload.review_risk_updated_at, 'string');
+    assert.equal('risk_score' in merchUpdate.payload, false, 'must NOT overwrite DOSafe risk_score');
     assert.equal(calls.filter((c) => c.table === 'reviews' && c.op === 'update').length, 3, 'helpfulness_weight written per review');
     assert.ok(out.merchantRisk);
-    console.log('✅ [Persist] review_flags / review_analysis / master_products / merchants / reviews payloads valid');
+    console.log('✅ [Persist] review_flags / review_analysis / master_products / merchants (review_risk_score isolated) / reviews payloads valid');
 
     console.log('\n================================================================');
     console.log('7. castReviewVote (rate.review_votes per-user vote & report)');
