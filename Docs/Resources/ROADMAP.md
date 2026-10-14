@@ -61,8 +61,8 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc **4 T�
   - Khắc phục triệt để lỗi điều hướng `/en` bằng `localeCookie: false`.
 - [x] **4.2b. Đại Phẫu Kiến Trúc Monorepo & Chuẩn Hóa TypeScript 7.0.2 (Issue #17):**
   - Nâng cấp toàn bộ Monorepo lên **TypeScript 7.0.2**, xóa 4 gói Zombie (`packages/ai`, `importer`, `strapi-types`, `validator`) và toàn bộ route/component Strapi cũ, bật lại `typescript.ignoreBuildErrors: false`, bổ sung tầng `src/server/rate/` (`React.cache`) và REST API `/api/v1/rate/*`.
-- [ ] **4.3. Thanh Tìm Kiếm Thông Minh Autocomplete & Chọn Máy So Sánh Động (`/compare` - Issue #11):**
-  - Thêm ô tìm kiếm Autocomplete ngay trên trang `/compare` để người dùng tự thêm/bớt bất kỳ mẫu điện thoại nào vào bảng đối chiếu 10 nhóm thông số.
+- [x] **4.3. Thanh Tìm Kiếm Thông Minh Autocomplete & Chọn Máy So Sánh Động (`/compare` - Issue #11):**
+  - Triển khai `CompareWorkspace.tsx` (Autocomplete kết nối REST API `/api/v1/rate/products`, thêm/bớt/đổi tối đa 4 mẫu điện thoại, chế độ "Chỉ hiện điểm khác biệt" & "Tô sáng thông số vượt trội" trên ma trận 10 nhóm thông số) cùng `CompareQuickToggle.tsx` và khay nổi `CompareTrayBar.tsx` trên `/smartphones` và `/smartphones/[slug]`.
 
 ### 🔮 Phase 5: Mở Rộng Đa Sàn & Browser Extension MV3
 

@@ -10,6 +10,8 @@ import {
 } from '@/server/rate';
 import JReviewsSection from '@/components/reviews/JReviewsSection';
 import PriceHistorySection from '@/components/price-history/PriceHistorySection';
+import CompareQuickToggle from '@/components/compare/CompareQuickToggle';
+import CompareTrayBar from '@/components/compare/CompareTrayBar';
 import NavbarDarkDynamic from '../../components/navbar/NavbarDarkDynamic';
 import FooterTop from '../../components/footer-top';
 import FooterDynamic from '../../components/footer/FooterDynamic';
@@ -349,8 +351,22 @@ export default async function SmartphoneDetailPage({
                     href={`/compare?slugs=${product.slug}`}
                     className="btn btn-outline-dark rounded-pill px-3"
                   >
-                    So sánh máy này
+                    Bảng đối chiếu
                   </Link>
+                  <CompareQuickToggle
+                    size="md"
+                    item={{
+                      slug: product.slug,
+                      name: product.name,
+                      brand: product.brand,
+                      thumbnail:
+                        product.thumbnail ||
+                        (product.images && product.images.length > 0
+                          ? product.images[0] || null
+                          : null),
+                      min_price: Number(product.min_price || 0),
+                    }}
+                  />
                 </div>
               </div>
             </div>
@@ -792,6 +808,7 @@ export default async function SmartphoneDetailPage({
           summary={reviewSummary}
         />
       </div>
+      <CompareTrayBar />
       <FooterTop />
       <FooterDynamic sections={[]} links={[]} locale={locale} />
       <BackToTop />

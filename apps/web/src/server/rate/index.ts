@@ -45,6 +45,9 @@ export const getCachedMasterProductReviewSummary = cache(
 export const getCachedMasterProductPriceHistory = cache(
   _getMasterProductPriceHistory
 );
+export const getCachedCompareMasterProducts = cache((slugsCsv: string) =>
+  _compareMasterProducts(slugsCsv.split(','))
+);
 
 export {
   _getMasterProducts as getMasterProducts,

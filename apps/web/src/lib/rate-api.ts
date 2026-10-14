@@ -215,7 +215,8 @@ export async function getCategoryDirectoryFacets(
     .eq('status', 'published')
     .eq('category_id', currentCategory.id);
 
-  const rows = (prodRows as { brand: string; category_id: string | null }[]) || [];
+  const rows =
+    (prodRows as { brand: string; category_id: string | null }[]) || [];
 
   const brandCounts = new Map<string, number>();
   for (const r of rows) {
@@ -308,14 +309,18 @@ export async function getMasterProducts(
 
   const { data, error } = await query;
   if (error) {
-    throw new Error(`rate-api: failed to fetch master products: ${error.message}`);
+    throw new Error(
+      `rate-api: failed to fetch master products: ${error.message}`
+    );
   }
 
   let items = ((data as MasterProduct[]) || []).slice();
 
   // Multi-brand case-insensitive filter
   if (params?.brands && params.brands.length > 0) {
-    const allowedBrands = new Set(params.brands.map((b) => b.trim().toLowerCase()));
+    const allowedBrands = new Set(
+      params.brands.map((b) => b.trim().toLowerCase())
+    );
     items = items.filter((item) =>
       allowedBrands.has((item.brand || '').trim().toLowerCase())
     );
@@ -353,7 +358,10 @@ export async function getMasterProducts(
 
   // 10 Field Groups JSONB filters:
   // Display: refresh_rate_hz >= minRefreshRateHz
-  if (typeof params?.minRefreshRateHz === 'number' && params.minRefreshRateHz > 0) {
+  if (
+    typeof params?.minRefreshRateHz === 'number' &&
+    params.minRefreshRateHz > 0
+  ) {
     const minHz = params.minRefreshRateHz;
     items = items.filter((item) => {
       const hz = Number(item.specifications?.display?.refresh_rate_hz || 0);
@@ -364,7 +372,10 @@ export async function getMasterProducts(
   }
 
   // Battery: fast_charging_w >= minFastChargingW
-  if (typeof params?.minFastChargingW === 'number' && params.minFastChargingW > 0) {
+  if (
+    typeof params?.minFastChargingW === 'number' &&
+    params.minFastChargingW > 0
+  ) {
     const minW = params.minFastChargingW;
     items = items.filter((item) => {
       const w = Number(item.specifications?.battery?.fast_charging_w || 0);
@@ -380,7 +391,10 @@ export async function getMasterProducts(
   }
 
   // Display: compact screen <= maxScreenSizeInch
-  if (typeof params?.maxScreenSizeInch === 'number' && params.maxScreenSizeInch > 0) {
+  if (
+    typeof params?.maxScreenSizeInch === 'number' &&
+    params.maxScreenSizeInch > 0
+  ) {
     const maxInch = params.maxScreenSizeInch;
     items = items.filter((item) => {
       const size = Number(
@@ -415,7 +429,9 @@ export async function getMasterProducts(
 /**
  * Fetch a single master product by its slug
  */
-export async function getMasterProductBySlug(slug: string): Promise<MasterProduct | null> {
+export async function getMasterProductBySlug(
+  slug: string
+): Promise<MasterProduct | null> {
   const supabase = getRateClient();
   const { data, error } = await supabase
     .from('master_products')
@@ -480,7 +496,9 @@ interface RawOfferRow {
  * Queries `rate.v_products_with_merchant_trust` (granted to anon/authenticated)
  * and falls back to explicit non-PII column selection on `rate.merchants`.
  */
-export async function getMasterProductOffers(masterId: string): Promise<MerchantOffer[]> {
+export async function getMasterProductOffers(
+  masterId: string
+): Promise<MerchantOffer[]> {
   const supabase = getRateClient();
 
   const { data: viewData, error: viewErr } = await supabase
@@ -524,7 +542,8 @@ export async function getMasterProductOffers(masterId: string): Promise<Merchant
   // Fallback with explicit column list matching column-level SELECT grants on rate.merchants
   const { data, error } = await supabase
     .from('products')
-    .select(`
+    .select(
+      `
       id,
       platform,
       title,
@@ -544,12 +563,17 @@ export async function getMasterProductOffers(masterId: string): Promise<Merchant
         location,
         risk_score
       )
-    `)
+    `
+    )
     .eq('cluster_id', masterId)
     .order('price_current', { ascending: true });
 
   if (error || !data) {
-    console.error('Error fetching offers for masterId:', masterId, error?.message);
+    console.error(
+      'Error fetching offers for masterId:',
+      masterId,
+      error?.message
+    );
     return [];
   }
 
@@ -573,7 +597,9 @@ export async function getMasterProductOffers(masterId: string): Promise<Merchant
         name: merchantObj?.name || 'Gian hàng',
         platform: merchantObj?.platform || item.platform,
         is_official: Boolean(merchantObj?.is_official),
-        rating_star: merchantObj?.rating_star ? Number(merchantObj.rating_star) : null,
+        rating_star: merchantObj?.rating_star
+          ? Number(merchantObj.rating_star)
+          : null,
         follower_count: merchantObj?.follower_count || 0,
         location: merchantObj?.location || null,
         risk_score: dosafeRisk,
@@ -614,14 +640,18 @@ interface RawReviewRow {
  * Fetch reviews across listings grouped under a master product,
  * including JReviews vote metrics and AI transparency flags.
  */
-export async function getMasterProductReviews(masterId: string): Promise<ReviewItem[]> {
+export async function getMasterProductReviews(
+  masterId: string
+): Promise<ReviewItem[]> {
   const supabase = getRateClient();
   const { data: prods, error: prodsErr } = await supabase
     .from('products')
     .select('id')
     .eq('cluster_id', masterId);
   if (prodsErr) {
-    throw new Error(`rate-api: failed to resolve listings for master ${masterId}: ${prodsErr.message}`);
+    throw new Error(
+      `rate-api: failed to resolve listings for master ${masterId}: ${prodsErr.message}`
+    );
   }
   if (!prods || prods.length === 0) return [];
 
@@ -634,14 +664,18 @@ export async function getMasterProductReviews(masterId: string): Promise<ReviewI
     .limit(50);
 
   if (error) {
-    throw new Error(`rate-api: failed to fetch reviews for master ${masterId}: ${error.message}`);
+    throw new Error(
+      `rate-api: failed to fetch reviews for master ${masterId}: ${error.message}`
+    );
   }
   if (!reviews) {
     return [];
   }
 
   return (reviews as unknown as RawReviewRow[]).map((r) => {
-    const vf = Array.isArray(r.review_flags) ? r.review_flags[0] : r.review_flags;
+    const vf = Array.isArray(r.review_flags)
+      ? r.review_flags[0]
+      : r.review_flags;
     const verdict = vf?.verdict ?? null;
     const flagCategory: ReviewFlagCategory =
       vf?.flag_category ||
@@ -652,7 +686,7 @@ export async function getMasterProductReviews(masterId: string): Promise<ReviewI
           : 'authentic');
     const includeInRating = Boolean(
       vf?.include_in_rating ??
-        (flagCategory === 'authentic' && verdict !== 'fake')
+      (flagCategory === 'authentic' && verdict !== 'fake')
     );
     const upvotes = Number(r.upvotes ?? 0);
     const downvotes = Number(r.downvotes ?? 0);
@@ -684,7 +718,8 @@ export async function getMasterProductReviews(masterId: string): Promise<ReviewI
       include_in_rating: includeInRating,
       criteria_ratings: r.criteria_ratings || {},
       verdict,
-      fake_probability: vf?.fake_probability != null ? Number(vf.fake_probability) : null,
+      fake_probability:
+        vf?.fake_probability != null ? Number(vf.fake_probability) : null,
       flag_category: flagCategory,
       reason: vf?.reason || null,
       signals: vf?.signals || null,
@@ -710,7 +745,9 @@ export async function getMasterProductReviewSummary(
   reviewsFallback: ReviewItem[] = []
 ): Promise<ReviewAnalysisSummary> {
   const totalFromReviews = reviewsFallback.length;
-  const authenticFromReviews = reviewsFallback.filter((r) => r.include_in_rating).length;
+  const authenticFromReviews = reviewsFallback.filter(
+    (r) => r.include_in_rating
+  ).length;
   const fakeFromReviews = reviewsFallback.filter(
     (r) =>
       r.flag_category === 'seeding_fake' ||
@@ -762,7 +799,8 @@ export async function getMasterProductReviewSummary(
         const count = Number(row.total_reviews_analyzed || 0);
         totalAnalyzed += count;
         weightedAuthenticity +=
-          Number(row.authenticity_score ?? fallbackAuthenticPct) * Math.max(1, count);
+          Number(row.authenticity_score ?? fallbackAuthenticPct) *
+          Math.max(1, count);
         if (!latestSummary && row.ai_summary) {
           latestSummary = String(row.ai_summary);
         }
@@ -783,11 +821,14 @@ export async function getMasterProductReviewSummary(
         0
       );
       const avgAuthScore =
-        denom > 0 ? Math.round((weightedAuthenticity / denom) * 10) / 10 : fallbackAuthenticPct;
+        denom > 0
+          ? Math.round((weightedAuthenticity / denom) * 10) / 10
+          : fallbackAuthenticPct;
 
       return {
         total_analyzed: totalAnalyzed || totalFromReviews,
-        authentic_pct: totalFromReviews > 0 ? fallbackAuthenticPct : avgAuthScore,
+        authentic_pct:
+          totalFromReviews > 0 ? fallbackAuthenticPct : avgAuthScore,
         suspicious_pct: totalFromReviews > 0 ? fallbackSuspiciousPct : 0,
         fake_pct:
           totalFromReviews > 0
@@ -812,28 +853,36 @@ export async function getMasterProductReviewSummary(
 }
 
 /**
- * Fetch comparison data for multiple master products
+ * Fetch comparison data for multiple master products while preserving the requested slug order.
  */
-export async function compareMasterProducts(slugs: string[]): Promise<MasterProduct[]> {
+export async function compareMasterProducts(
+  slugs: string[]
+): Promise<MasterProduct[]> {
   if (!slugs || slugs.length === 0) return [];
+  const uniqueSlugs = Array.from(
+    new Set(slugs.map((s) => s.trim()).filter(Boolean))
+  ).slice(0, 4);
+  if (uniqueSlugs.length === 0) return [];
+
   const supabase = getRateClient();
   const { data, error } = await supabase
     .from('master_products')
     .select('*')
-    .in('slug', slugs)
+    .in('slug', uniqueSlugs)
     .eq('status', 'published');
 
   if (error || !data) {
     return [];
   }
-  return data as MasterProduct[];
+  const rows = data as MasterProduct[];
+  const bySlug = new Map(rows.map((r) => [r.slug, r]));
+  return uniqueSlugs
+    .map((slug) => bySlug.get(slug))
+    .filter((item): item is MasterProduct => Boolean(item));
 }
 
 export type DiscountVerdictType =
-  | 'fake_discount'
-  | 'suspicious_discount'
-  | 'genuine_deal'
-  | 'normal_price';
+  'fake_discount' | 'suspicious_discount' | 'genuine_deal' | 'normal_price';
 
 export interface PriceHistoryPoint {
   id: number;
@@ -942,7 +991,8 @@ export async function getMasterProductPriceHistory(
   const chronologicalRows = [
     ...((rawRows || []) as unknown as RawPriceHistoryRow[]),
   ].sort(
-    (a, b) => new Date(a.recorded_at).getTime() - new Date(b.recorded_at).getTime()
+    (a, b) =>
+      new Date(a.recorded_at).getTime() - new Date(b.recorded_at).getTime()
   );
 
   const points: PriceHistoryPoint[] = [];
@@ -1004,7 +1054,8 @@ export async function getMasterProductPriceHistory(
 
   // Sort all points chronologically
   points.sort(
-    (a, b) => new Date(a.recorded_at).getTime() - new Date(b.recorded_at).getTime()
+    (a, b) =>
+      new Date(a.recorded_at).getTime() - new Date(b.recorded_at).getTime()
   );
 
   // Market median across all current offers
@@ -1026,7 +1077,9 @@ export async function getMasterProductPriceHistory(
     const histMax = Math.max(...allSamples);
     const histMedian = computeMedian(allSamples);
     const referenceBasePrice =
-      histPrices.length >= 2 ? histMedian : Math.max(histMedian, marketMedianPrice);
+      histPrices.length >= 2
+        ? histMedian
+        : Math.max(histMedian, marketMedianPrice);
 
     const priceCurrent = off.price_current;
     const priceOriginal =
@@ -1127,4 +1180,3 @@ export async function getMasterProductPriceHistory(
     genuineDealCount,
   };
 }
-
