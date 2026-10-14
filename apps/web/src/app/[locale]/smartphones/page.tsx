@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { getMasterProducts } from '@/lib/rate-api';
+import type { KeySpecs } from '@repo/shared-data';
 
 type PageParams = Promise<{ locale: string }>;
 
@@ -53,7 +54,7 @@ export default async function SmartphonesCatalogPage({
         <div className="row g-4">
           {products.map((item) => {
             const minPriceFormatted = Number(item.min_price).toLocaleString('vi-VN');
-            const keySpecs = item.key_specs as any;
+            const keySpecs = item.key_specs as KeySpecs;
             const thumb =
               item.thumbnail ||
               (item.images && item.images.length > 0 ? item.images[0] : null);
@@ -90,13 +91,28 @@ export default async function SmartphonesCatalogPage({
 
                   {/* Body */}
                   <div className="card-body p-4 d-flex flex-column flex-grow-1">
-                    <div className="d-flex align-items-center gap-2 mb-2">
+                    <div className="d-flex flex-wrap align-items-center gap-2 mb-2">
                       <span className="badge bg-secondary-subtle text-secondary small fw-medium">
                         {item.brand}
                       </span>
                       {item.variant_name && (
                         <span className="badge bg-light text-muted border small">
                           {item.variant_name}
+                        </span>
+                      )}
+                      {Number(
+                        (item.user_rating_weighted && Number(item.user_rating_weighted) > 0
+                          ? item.user_rating_weighted
+                          : item.average_rating) ?? 0
+                      ) > 0 && (
+                        <span className="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle small ms-auto">
+                          ★{' '}
+                          {Number(
+                            (item.user_rating_weighted &&
+                            Number(item.user_rating_weighted) > 0
+                              ? item.user_rating_weighted
+                              : item.average_rating) ?? 0
+                          ).toFixed(1)}
                         </span>
                       )}
                     </div>
