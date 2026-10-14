@@ -3,10 +3,16 @@ import { notFound } from 'next/navigation';
 import {
   getMasterProductBySlug,
   getMasterProductOffers,
+  getMasterProductPriceHistory,
   getMasterProductReviews,
   getMasterProductReviewSummary,
 } from '@/lib/rate-api';
 import JReviewsSection from '@/components/reviews/JReviewsSection';
+import PriceHistorySection from '@/components/price-history/PriceHistorySection';
+import NavbarDarkDynamic from '../../components/navbar/NavbarDarkDynamic';
+import FooterTop from '../../components/footer-top';
+import FooterDynamic from '../../components/footer/FooterDynamic';
+import BackToTop from '../../components/back-to-top';
 import type { KeySpecs, ProductSpecifications } from '@repo/shared-data';
 
 type PageParams = Promise<{ locale: string; slug: string }>;
@@ -16,7 +22,7 @@ export default async function SmartphoneDetailPage({
 }: {
   params: PageParams;
 }) {
-  const { slug } = await params;
+  const { locale, slug } = await params;
   const product = await getMasterProductBySlug(slug);
 
   if (!product) {
@@ -27,7 +33,10 @@ export default async function SmartphoneDetailPage({
     getMasterProductOffers(product.id),
     getMasterProductReviews(product.id),
   ]);
-  const reviewSummary = await getMasterProductReviewSummary(product.id, reviews);
+  const [reviewSummary, priceHistory] = await Promise.all([
+    getMasterProductReviewSummary(product.id, reviews),
+    getMasterProductPriceHistory(product.id, offers),
+  ]);
 
   const specs = product.specifications as ProductSpecifications;
   const keySpecs = product.key_specs as KeySpecs;
@@ -47,7 +56,9 @@ export default async function SmartphoneDetailPage({
       : Number(product.average_rating || 0);
 
   return (
-    <div className="container py-5">
+    <>
+      <NavbarDarkDynamic links={[]} />
+      <div className="container py-5">
       {/* Breadcrumb */}
       <nav aria-label="breadcrumb" className="mb-4">
         <ol className="breadcrumb small">
@@ -155,6 +166,18 @@ export default async function SmartphoneDetailPage({
                 🛡️ Đã lọc {ignoredCount} Seeding / Spam xu
               </a>
             )}
+            <a
+              href="#price-history-section"
+              className={`badge text-decoration-none px-3 py-2 rounded-pill small ${
+                priceHistory.fakeDiscountCount > 0
+                  ? 'bg-danger text-white'
+                  : 'bg-info-subtle text-info-emphasis'
+              }`}
+            >
+              {priceHistory.fakeDiscountCount > 0
+                ? `🚨 Cảnh báo ${priceHistory.fakeDiscountCount} nơi nâng giá gốc`
+                : '📈 Lịch sử giá & Kiểm định Sale'}
+            </a>
           </div>
 
           {/* Quick specs grid */}
@@ -221,13 +244,30 @@ export default async function SmartphoneDetailPage({
                     </span>
                   )}
                 </div>
+                {priceHistory.lowestEverPrice != null && (
+                  <div className="small text-muted mt-1">
+                    Đáy lịch sử:{' '}
+                    <strong className="text-success">
+                      {priceHistory.lowestEverPrice.toLocaleString('vi-VN')} ₫
+                    </strong>
+                    {priceHistory.lowestEverMerchant
+                      ? ` (${priceHistory.lowestEverMerchant})`
+                      : ''}
+                  </div>
+                )}
               </div>
-              <div className="d-flex gap-2">
+              <div className="d-flex flex-wrap gap-2">
                 <a
                   href="#offers-table"
                   className="btn btn-danger px-4 rounded-pill fw-medium"
                 >
                   Xem {offers.length} nơi bán
+                </a>
+                <a
+                  href="#price-history-section"
+                  className="btn btn-outline-danger px-3 rounded-pill"
+                >
+                  📈 Biểu đồ giá
                 </a>
                 <Link
                   href={`/compare?slugs=${product.slug}`}
@@ -546,6 +586,24 @@ export default async function SmartphoneDetailPage({
                         ? 'bg-warning-subtle text-warning-emphasis'
                         : 'bg-danger-subtle text-danger';
 
+                  const discountAnalysis = priceHistory.byOffer[offer.id];
+                  const discountBadgeClass =
+                    discountAnalysis?.verdict === 'fake_discount'
+                      ? 'bg-danger text-white'
+                      : discountAnalysis?.verdict === 'suspicious_discount'
+                        ? 'bg-warning text-dark'
+                        : discountAnalysis?.verdict === 'genuine_deal'
+                          ? 'bg-success text-white'
+                          : 'bg-light text-secondary border';
+                  const discountIcon =
+                    discountAnalysis?.verdict === 'fake_discount'
+                      ? '🚨'
+                      : discountAnalysis?.verdict === 'suspicious_discount'
+                        ? '⚠️'
+                        : discountAnalysis?.verdict === 'genuine_deal'
+                          ? '✅'
+                          : '📊';
+
                   return (
                     <tr key={offer.id}>
                       <td>
@@ -594,6 +652,18 @@ export default async function SmartphoneDetailPage({
                             {origPrice} ₫
                           </div>
                         )}
+                        {discountAnalysis && (
+                          <div className="mt-1">
+                            <a
+                              href="#price-history-section"
+                              title={discountAnalysis.explanation}
+                              className={`badge ${discountBadgeClass} text-decoration-none rounded-pill small`}
+                              style={{ fontSize: '0.7rem' }}
+                            >
+                              {discountIcon} {discountAnalysis.badge_label}
+                            </a>
+                          </div>
+                        )}
                       </td>
                       <td className="text-end">
                         <a
@@ -614,6 +684,12 @@ export default async function SmartphoneDetailPage({
         )}
       </div>
 
+      {/* Time-Series Price History Chart & Fake Discount Detector */}
+      <PriceHistorySection
+        productName={product.name}
+        history={priceHistory}
+      />
+
       {/* JReviews Dual-Rating, AI Review Synthesis & Interactive Voting */}
       <JReviewsSection
         productName={product.name}
@@ -632,6 +708,10 @@ export default async function SmartphoneDetailPage({
         reviews={reviews}
         summary={reviewSummary}
       />
-    </div>
+      </div>
+      <FooterTop />
+      <FooterDynamic sections={[]} links={[]} locale={locale} />
+      <BackToTop />
+    </>
   );
 }

@@ -111,7 +111,13 @@ export async function POST(
         );
       }
     } else {
-      const votePayload =
+      const votePayload: {
+        review_id: string;
+        voter_id: string;
+        vote: 'up' | 'down' | null;
+        reported: boolean;
+        report_reason: ReportReason | null;
+      } =
         voteType === 'report'
           ? {
               review_id: reviewId,
