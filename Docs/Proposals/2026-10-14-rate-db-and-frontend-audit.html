@@ -331,11 +331,20 @@
           Mở rộng toàn diện cả 5 ngành hàng thiết bị công nghệ trong <code>rate.categories</code> (<code>smartphones</code>, <code>tablets</code>, <code>laptops</code>, <code>smartwatches</code>, <code>earbuds</code>) kèm bộ lọc 10 nhóm thông số chuyên biệt và bộ test tự động <code>core-rate-architecture.test.ts</code> chạy trực tiếp trong GitHub Actions CI.
         </li>
         <li>
+          <strong>Xóa sạch tàn dư Strapi cuối cùng &amp; Tích hợp Supabase Auth đa ngôn ngữ (Issue #22):</strong>
+          Loại bỏ toàn bộ biến <code>STRAPI_*</code> trong <code>env.mjs</code> và 12 component Strapi v4 cũ; tích hợp xác thực <code>Supabase Auth</code> trực tiếp vào <code>RateAuthPortal.tsx</code> cho <code>/login</code>, <code>/register</code>, <code>/forgot-password</code>, <code>/two-factor-auth</code>.
+        </li>
+        <li>
+          <strong>Trung tâm Kiểm toán Link Đa sàn (<code>/inspect</code>), Đồng bộ Cloud Watchlist (<code>/api/v1/rate/watchlist</code>) &amp; Quốc tế hóa <code>vi</code>/<code>en</code>/<code>cs</code> (Issue #23 &amp; #24):</strong>
+          Xây dựng trang kiểm toán chuyên sâu <code>/inspect</code> có khả năng chia sẻ link báo cáo (<code>/inspect?q=...</code>), mở rộng <code>/watchlist</code> cho cả 5 ngành hàng kèm migration <code>20261015010000_rate_price_alerts_and_watchlist_rpc.sql</code> và chuẩn hóa đa ngôn ngữ trên toàn hệ thống.
+        </li>
+        <li>
           <strong>Mở rộng REST API v1 phục vụ Web &amp; Browser Extension MV3:</strong>
           <ul>
             <li><code>GET /api/v1/rate/stats</code> - Số liệu thống kê kiểm toán trực tiếp toàn nền tảng (Master Products, Listings, Price Points, Verified Reviews, Merchants).</li>
             <li><code>GET /api/v1/rate/compare?slugs=...</code> - Đối chiếu trực tiếp ma trận 10 nhóm thông số, biên độ giá thật và điểm đánh giá 5 tiêu chí JReviews của tối đa 4 sản phẩm.</li>
             <li><code>GET /api/v1/rate/lookup?q=...</code> &amp; <code>GET /api/v1/rate/inspect?q=...</code> - Phân tích link TMĐT hoặc từ khóa tìm kiếm, trả về sản phẩm chuẩn hóa, gian hàng và cảnh báo giá ảo.</li>
+            <li><code>POST /api/v1/rate/watchlist</code> - Đăng ký và đồng bộ cảnh báo chạm ngưỡng giá mục tiêu (Target Price Alert) lên Rate Cloud.</li>
             <li><code>GET /api/v1/rate/merchants</code> - Danh sách gian hàng kèm điểm tín nhiệm kép và bộ lọc theo sàn/mức độ tin cậy.</li>
             <li><code>GET /api/v1/rate/merchants/[id]</code> - Chi tiết hồ sơ kiểm toán gian hàng theo UUID, slug hoặc <code>platform_shop_id</code>.</li>
             <li><code>POST /api/v1/rate/reviews</code> - Gửi đánh giá 5 tiêu chí JReviews kèm bộ lọc chống Seeding tự động.</li>

@@ -81,6 +81,14 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc **4 T�
   - Mở rộng đầy đủ 5/5 ngành hàng thiết bị công nghệ trong `rate.categories` với route chính thức `/smartwatches`, `/smartwatches/[slug]`, `/earbuds`, `/earbuds/[slug]` cùng bộ lọc chuyên biệt theo 10 nhóm thông số (`category-filters.ts`).
   - Bổ sung REST API v1 `GET /api/v1/rate/stats` (số liệu thống kê toàn nền tảng) và `GET /api/v1/rate/compare?slugs=...` (ma trận đối chiếu thông số, giá cả và điểm đánh giá JReviews).
   - Xây dựng bộ kiểm thử tự động `core-rate-architecture.test.ts` (kiểm định bộ lọc 5 ngành hàng, định tuyến chuẩn, phân tích URL TMĐT Shopee/Lazada/Tiki/TikTok Shop và từ điển đa ngôn ngữ `vi`/`en`/`cs`) tích hợp trực tiếp vào GitHub Actions CI (`.github/workflows/ci.yml`).
+- [x] **4.9. Xóa Sạch Tàn Dư Strapi Cuối Cùng (`env.mjs`, `auth/options.ts`, CkEditor, Dead Forms), Tích Hợp Supabase Auth & Chuẩn Hóa Đa Ngôn Ngữ Cụm Trang Xác Thực (Issue #22):**
+  - Loại bỏ hoàn toàn biến môi trường `STRAPI_*` khỏi `env.mjs`, `StrapiImageMedia` khỏi `types/api/index.ts` và 12 component Strapi v4 cũ không còn sử dụng.
+  - Nâng cấp `auth/options.ts` và xây dựng `RateAuthPortal.tsx` tích hợp trực tiếp **Supabase Auth** (`signInWithPassword`, `signUp`, `resetPasswordForEmail`, `verifyOtp`) đa ngôn ngữ `vi`/`en`/`cs` trên `/login`, `/register`, `/forgot-password`, `/two-factor-auth`, `/not-found`, `/error`, `/loading`.
+- [x] **4.10. Trung Tâm Kiểm Toán Link & Báo Cáo Giá Ảo Chuyên Sâu (`/inspect`), Đồng Bộ Canh Giá Đa Ngành (`/watchlist`) & Cloud Price Alerts API (Issue #23):**
+  - Xây dựng trang `/inspect` (`DeepInspectWorkspace.tsx`) và endpoint `GET /api/v1/rate/inspect` cho phép kiểm toán sâu bất kỳ URL Shopee/Lazada/Tiki/TikTok Shop kèm link báo cáo chia sẻ (`/inspect?q=...`).
+  - Nâng cấp `/watchlist` hỗ trợ cả 5 ngành hàng, tích hợp endpoint `POST /api/v1/rate/watchlist` và file migration chuẩn hóa `rate.price_alerts` (`20261015010000_rate_price_alerts_and_watchlist_rpc.sql`).
+- [x] **4.11. Quốc Tế Hóa Toàn Diện (`vi`/`en`/`cs`) Cho Danh Mục 5 Ngành Hàng, Hồ Sơ Gian Hàng (`/merchants`) & Chi Tiết Sản Phẩm (Issue #24):**
+  - Đồng bộ SEO Metadata, Breadcrumb và tiêu đề đa ngôn ngữ `vi`/`en`/`cs` trên `/merchants`, `/merchants/[id]`, `/smartphones` và `ProductDetailView` cho toàn bộ 5 ngành hàng.
 
 ### 🔮 Phase 5: Mở Rộng Đa Sàn & Browser Extension MV3
 

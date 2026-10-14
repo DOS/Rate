@@ -30,6 +30,8 @@ import {
 } from 'react-icons/bs';
 import type { KeySpecs, ProductSpecifications } from '@repo/shared-data';
 
+import { normalizeRateLocale } from '@/lib/rate-i18n';
+
 type SearchParamsInput = Record<string, string | string[] | undefined>;
 
 export async function generateMetadata({
@@ -38,20 +40,29 @@ export async function generateMetadata({
   params: Promise<{ locale: string }>;
 }): Promise<Metadata> {
   const { locale } = await params;
+  const lang = normalizeRateLocale(locale);
   const facets = await getCachedCategoryDirectoryFacets('smartphones');
   const totalModels = facets.totalUnfiltered;
   const canonicalUrl =
-    locale === 'vi'
+    lang === 'vi'
       ? 'https://rate.vn/smartphones'
-      : `https://rate.vn/${locale}/smartphones`;
+      : `https://rate.vn/${lang}/smartphones`;
 
   return {
     title:
-      totalModels > 0
-        ? `So sánh giá Điện thoại di động (${totalModels} mẫu máy chuẩn hóa) | Rate.vn`
-        : 'So sánh giá Điện thoại di động & Kiểm định khuyến mãi AI | Rate.vn',
+      lang === 'en'
+        ? `Smartphone Price Comparison & 10-Group Spec Filter (${totalModels} Models) | Rate.vn`
+        : lang === 'cs'
+          ? `Srovnání cen chytrých telefonů a filtr 10 skupin parametrů (${totalModels} modelů) | Rate.vn`
+          : totalModels > 0
+            ? `So sánh giá Điện thoại di động (${totalModels} mẫu máy chuẩn hóa) | Rate.vn`
+            : 'So sánh giá Điện thoại di động & Kiểm định khuyến mãi AI | Rate.vn',
     description:
-      'Tìm kiếm và lọc điện thoại theo 10 nhóm thông số kỹ thuật chuẩn PhoneArena/GSMArena, kiểm tra lịch sử giá thật và lọc đánh giá Seeding bằng AI trên Rate.vn.',
+      lang === 'en'
+        ? 'Filter smartphones by 10 standardized technical spec groups (PhoneArena/GSMArena), inspect true historical prices, and filter AI seeding reviews on Rate.vn.'
+        : lang === 'cs'
+          ? 'Filtrujte chytré telefony podle 10 skupin parametrů, zkontrolujte historii skutečných cen a filtrujte AI seeding recenze na Rate.vn.'
+          : 'Tìm kiếm và lọc điện thoại theo 10 nhóm thông số kỹ thuật chuẩn PhoneArena/GSMArena, kiểm tra lịch sử giá thật và lọc đánh giá Seeding bằng AI trên Rate.vn.',
     alternates: {
       canonical: canonicalUrl,
     },
