@@ -52,18 +52,34 @@ gh issue list -R DOS/Rate --state open
 gh issue list -R DOS/Rate-Services --state open
 ```
 
-- **Quy tắc tránh trùng lặp:**
-  - **TUYỆT ĐỐI KHÔNG** tự ý làm các Issue đang có nhãn `status:in-progress` hoặc `status:in-review` (trừ khi người dùng chỉ định rõ).
+- **Quy tắc Định danh Agent (Agent Nickname) & Tránh trùng lặp:**
+  - Vì mọi Agent đều chạy dưới tài khoản GitHub của JOY (`@me`), **MỖI AGENT PHẢI TỰ ĐẶT MỘT NICKNAME NGẮN GỌN** theo chuyên môn hoặc phiên làm việc (ví dụ: `Crawl`, `Web`, `Core`, `DB`, `QA`) và gắn cả **Nhãn `agent:<nickname>`** lẫn **Cột `Agent` trên GitHub Project #9**.
+  - **TUYỆT ĐỐI KHÔNG** tự ý làm các Issue đang có nhãn `status:in-progress`, `status:in-review` hoặc đã có nhãn `agent:<khác>` đang chạy (trừ khi JOY chỉ định rõ).
   - Ưu tiên chọn các Issue đang có nhãn `status:ready`.
   - Nếu yêu cầu của người dùng chưa có Issue tương ứng, **TẠO NGAY ISSUE MỚI** và gắn vào GitHub Project #9:
     ```powershell
-    gh issue create -R DOS/Rate --title "<Tiêu đề task>" --body "<Mô tả chi tiết>" --label "status:in-progress" --assignee "@me"
+    $agentNick = "Crawl" # Đặt nickname riêng của Agent (vd: Crawl, Web, Core...)
+    $agentLabel = "agent:$($agentNick.ToLower())"
+    gh label create $agentLabel -R DOS/Rate --color "D93F0B" --description "Claimed by Agent: $agentNick" --force
+    gh issue create -R DOS/Rate --title "<Tiêu đề task>" --body "<Mô tả chi tiết>" --label "status:in-progress,$agentLabel" --assignee "@me"
     gh project item-add 9 --owner DOS --url <ISSUE_URL>
     ```
-- **Chuyển trạng thái sang `In Progress` ngay khi bắt đầu:**
+- **Chuyển trạng thái sang `In Progress` & Ghi danh Agent ngay khi bắt đầu (BẮT BUỘC đồng bộ cả Issue lẫn Board Project #9):**
   ```powershell
-  gh issue edit <ISSUE_NUMBER> -R DOS/Rate --remove-label "status:ready" --add-label "status:in-progress" --add-assignee "@me"
-  gh issue comment <ISSUE_NUMBER> -R DOS/Rate --body "🤖 Agent bắt đầu thực hiện task này (Status: Ready -> In Progress)."
+  $agentNick = "Crawl" # Nickname của Agent hiện tại
+  $agentLabel = "agent:$($agentNick.ToLower())"
+  gh label create $agentLabel -R DOS/Rate --color "D93F0B" --description "Claimed by Agent: $agentNick" --force
+
+  # 1. Cập nhật nhãn Issue (status:in-progress + agent:<nick>) & comment ghi danh
+  gh issue edit <ISSUE_NUMBER> -R DOS/Rate --remove-label "status:ready" --add-label "status:in-progress,$agentLabel" --add-assignee "@me"
+  gh issue comment <ISSUE_NUMBER> -R DOS/Rate --body "🤖 **[Agent: $agentNick]** Bắt đầu thực hiện task này (Status: Ready -> In Progress)."
+
+  # 2. BẮT BUỘC cập nhật cột Status VÀ trường Agent trên bảng GitHub Project #9
+  # Project ID: PVT_kwDOA388Vc4Bm5Ml | Field Status: PVTSSF_lADOA388Vc4Bm5MlzhlgSt8 | Field Agent: PVTF_lADOA388Vc4Bm5MlzhlqBH8
+  # Status Option IDs: Backlog=f75ad846 | Ready=e18bf179 | In progress=47fc9ee4 | In review=aba860b9 | Done=98236657
+  $itemId = ((gh project item-list 9 --owner DOS --format json | ConvertFrom-Json).items | Where-Object { $_.content.number -eq <ISSUE_NUMBER> -and $_.content.repository -eq "DOS/Rate" }).id
+  gh project item-edit --project-id PVT_kwDOA388Vc4Bm5Ml --id $itemId --field-id PVTSSF_lADOA388Vc4Bm5MlzhlgSt8 --single-select-option-id 47fc9ee4
+  gh project item-edit --project-id PVT_kwDOA388Vc4Bm5Ml --id $itemId --field-id PVTF_lADOA388Vc4Bm5MlzhlqBH8 --text $agentNick
   ```
 
 ### Bước 2: Cập nhật trạng thái khi hoàn thành (`In Review` / `Done`)
@@ -73,12 +89,16 @@ Sau khi code xong, chạy pass toàn bộ bài test/build và qua bước review
 - **Trường hợp đang mở PR chờ CI / Reviewer tự động (`In Review`):**
   ```powershell
   gh issue edit <ISSUE_NUMBER> -R DOS/Rate --remove-label "status:in-progress" --add-label "status:in-review"
-  gh issue comment <ISSUE_NUMBER> -R DOS/Rate --body "🔍 Đã triển khai xong và pass test. Chuyển trạng thái sang In Review (Commit/PR: <SHA/URL>)."
+  gh issue comment <ISSUE_NUMBER> -R DOS/Rate --body "🔍 **[Agent: $agentNick]** Đã triển khai xong và pass test. Chuyển trạng thái sang In Review (Commit/PR: <SHA/URL>)."
+  $itemId = ((gh project item-list 9 --owner DOS --format json | ConvertFrom-Json).items | Where-Object { $_.content.number -eq <ISSUE_NUMBER> -and $_.content.repository -eq "DOS/Rate" }).id
+  gh project item-edit --project-id PVT_kwDOA388Vc4Bm5Ml --id $itemId --field-id PVTSSF_lADOA388Vc4Bm5MlzhlgSt8 --single-select-option-id aba860b9
   ```
 - **Trường hợp đã hoàn tất & merge xong (`Done`):**
   ```powershell
   gh issue edit <ISSUE_NUMBER> -R DOS/Rate --remove-label "status:in-progress,status:in-review" --add-label "status:done"
-  gh issue close <ISSUE_NUMBER> -R DOS/Rate --comment "✅ Hoàn tất task tại commit <SHA> (Status -> Done)."
+  gh issue close <ISSUE_NUMBER> -R DOS/Rate --comment "✅ **[Agent: $agentNick]** Hoàn tất task tại commit <SHA> (Status -> Done)."
+  $itemId = ((gh project item-list 9 --owner DOS --format json | ConvertFrom-Json).items | Where-Object { $_.content.number -eq <ISSUE_NUMBER> -and $_.content.repository -eq "DOS/Rate" }).id
+  gh project item-edit --project-id PVT_kwDOA388Vc4Bm5Ml --id $itemId --field-id PVTSSF_lADOA388Vc4Bm5MlzhlgSt8 --single-select-option-id 98236657
   ```
 
 ---

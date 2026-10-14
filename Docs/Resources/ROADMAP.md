@@ -77,4 +77,5 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc **4 T�
 ### 🔮 Phase 5: Mở Rộng Đa Sàn & Browser Extension MV3
 
 - [ ] **5.1. Mở rộng Scraper sang Lazada, Tiki, CellphoneS, Thế Giới Di Động (Issue #1 bên `DOS/Rate-Services`).**
-- [ ] **5.2. Nâng cấp Rate Browser Extension (Manifest V3) kết nối trực tiếp API `/api/v1/rate/lookup`, `/api/v1/rate/products/[slug]` & `/api/v1/rate/merchants/[id]` (Issue #12 - Đang thực hiện bởi Agent khác).**
+- [x] **5.2. Nâng cấp Rate Browser Extension (Manifest V3 - `apps/extension`) & Two-Speed Hybrid Lookup/Quarantine Ingest API (`/api/v1/rate/extension/lookup`, `/api/v1/rate/extension/ingest` - Issue #12):**
+  - Triển khai kiến trúc 2026 v2 đã qua kiểm định của OpenAI Codex (`gpt-6.1-sol`, `xhigh`): Shadow DOM Floating Trust Pill + Chrome Native Side Panel (`chrome.sidePanel`), URL Canonicalization cắt tham số theo dõi, Gatekeeper chặn phụ kiện/linh kiện, nhận diện biến thể dung lượng (`ambiguous_variant`), kết luận giá 5 mức dựa trên bằng chứng (`genuine_deal`, `fair_market_price`, `above_market`, `inflated_fake_sale`, `insufficient_data`), và hàng đợi cách ly Zero-Trust Opt-In (`rate.enqueue_crawl_job`).

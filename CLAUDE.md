@@ -21,11 +21,18 @@ This file provides guidance to Claude Code (claude.ai/code) and all AI Coding Ag
      gh issue list -R DOS/Rate --state open
      gh issue list -R DOS/Rate-Services --state open
      ```
-   - **Pick Issue** đang ở `status:ready` (hoặc **tạo Issue mới** nếu chưa có), gán cho `@me` và đổi nhãn ngay sang **`status:in-progress`** (cập nhật cột **In progress** trên Project #9) để các Agent khác không làm trùng:
+   - **Pick Issue** đang ở `status:ready` (hoặc **tạo Issue mới** nếu chưa có), tự đặt **Nickname riêng cho Agent** (vd: `Crawl`, `Web`, `Core`, `DB`), gắn nhãn **`agent:<nickname>` + `status:in-progress`** VÀ cập nhật cả **cột Status (`In progress`) lẫn cột `Agent` trên Board Project #9** ngay lập tức để các Agent khác không làm trùng:
      ```powershell
-     gh issue edit <ID> -R DOS/Rate --remove-label "status:ready" --add-label "status:in-progress" --add-assignee "@me"
+     $agentNick = "Crawl" # Đặt nickname riêng của Agent
+     $agentLabel = "agent:$($agentNick.ToLower())"
+     gh label create $agentLabel -R DOS/Rate --color "D93F0B" --description "Claimed by Agent: $agentNick" --force
+     gh issue edit <ID> -R DOS/Rate --remove-label "status:ready" --add-label "status:in-progress,$agentLabel" --add-assignee "@me"
+     $itemId = ((gh project item-list 9 --owner DOS --format json | ConvertFrom-Json).items | Where-Object { $_.content.number -eq <ID> -and $_.content.repository -eq "DOS/Rate" }).id
+     # Option IDs: Backlog=f75ad846 | Ready=e18bf179 | In progress=47fc9ee4 | In review=aba860b9 | Done=98236657
+     gh project item-edit --project-id PVT_kwDOA388Vc4Bm5Ml --id $itemId --field-id PVTSSF_lADOA388Vc4Bm5MlzhlgSt8 --single-select-option-id 47fc9ee4
+     gh project item-edit --project-id PVT_kwDOA388Vc4Bm5Ml --id $itemId --field-id PVTF_lADOA388Vc4Bm5MlzhlqBH8 --text $agentNick
      ```
-   - Khi làm xong: đổi trạng thái sang **`status:in-review`** hoặc **`status:done`** + đóng Issue kèm mã commit.
+   - Khi làm xong: đổi cả nhãn Issue lẫn cột Status trên Project #9 sang **`In review` (`aba860b9`)** hoặc **`Done` (`98236657`)** + đóng Issue kèm chữ ký `**[Agent: <Nickname>]**` và mã commit.
    - Sau khi hoàn thành mỗi task, luôn **gợi ý 1 task tiếp theo cụ thể** từ [`Docs/Resources/ROADMAP.md`](./Docs/Resources/ROADMAP.md) theo mẫu: `Next: <việc tiếp theo> - <lý do>. Bắt đầu chứ?`
 
 ---

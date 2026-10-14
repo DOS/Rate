@@ -15,7 +15,7 @@ import {
   parseEcommerceUrlOrQuery,
   getRateClient,
   computeJReviewsWeight,
-} from '@/lib/rate-api';
+} from '../../lib/rate-api';
 
 export type {
   CategoryDirectoryFacets,
@@ -36,7 +36,7 @@ export type {
   ReviewFlagCategory,
   ReviewItem,
   UrlInspectionResult,
-} from '@/lib/rate-api';
+} from '../../lib/rate-api';
 
 export { getRateClient, computeJReviewsWeight, parseEcommerceUrlOrQuery };
 
@@ -73,3 +73,24 @@ export {
   _getRatePlatformStats as getRatePlatformStats,
   _inspectProductOrShopUrl as inspectProductOrShopUrl,
 };
+
+export {
+  EXTENSION_CAPABILITY_MATRIX,
+  canonicalizeProductUrl,
+  detectAccessoryOrJunk,
+  detectPlatformFromInput,
+  evaluateExtensionPriceVerdict,
+  extractStorageAndAmbiguity,
+  ingestExtensionCrowdSignal,
+  lookupExtensionProduct,
+  type ExtensionCrowdIngestInput,
+  type ExtensionCrowdIngestResult,
+  type ExtensionLookupParams,
+  type ExtensionLookupResponse,
+  type ExtensionMatchStatus,
+  type ExtensionPriceAssessment,
+  type ExtensionPriceVerdict,
+  type ExtensionVariantCandidate,
+  type PlatformCapability,
+  type SupportedEcommercePlatform,
+} from './extension';

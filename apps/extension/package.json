@@ -1,0 +1,20 @@
+{
+  "name": "@repo/extension",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Rate.vn Browser Extension (Manifest V3) - Two-Speed Hybrid Price History, Fake Discount Detector & AI Review Trust Assistant",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --project tsconfig.json && node scripts/build.mjs",
+    "test": "tsx src/test-extension-pipeline.ts"
+  },
+  "dependencies": {
+    "@repo/shared-data": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^7.0.2"
+  }
+}
