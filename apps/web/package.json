@@ -15,9 +15,6 @@
     "not dead",
     "not op_mini all"
   ],
-  "resolutions": {
-    "**/sharp": "0.34.2"
-  },
   "dependencies": {
     "@headlessui/react": "^2.2.10",
     "@heroicons/react": "^2.2.0",
@@ -111,12 +108,13 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@types/react-scroll": "^1.8.10",
+    "eslint": "^8.57.0",
     "eslint-plugin-jsx-a11y": "^6.10.2",
     "postcss": "^8.5.28",
     "prettier-plugin-tailwindcss": "^0.8.1",
     "sass": "^1.105.1",
     "tailwindcss": "^4.3.3",
-    "typescript": "^5.9.3"
+    "typescript": "5.9.3"
   },
   "engines": {
     "node": ">=22.0.0"
