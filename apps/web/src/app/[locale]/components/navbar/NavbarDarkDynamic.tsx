@@ -1,6 +1,6 @@
 'use client'
 import React, { useEffect, useState } from 'react'
-import Link from 'next/link'
+import { Link } from '@/lib/navigation'
 import Image from 'next/image'
 import { useLocale } from 'next-intl'
 import { BsPersonCircle, BsBasket2, BsSearch, BsGeoAltFill } from 'react-icons/bs'
@@ -59,7 +59,15 @@ export function NavbarDarkDynamic({
           <nav id="navigation" className={windowWidth > 991 ? 'navigation navigation-landscape' : ' navigation navigation-portrait '}>
             <div className="nav-header">
               {logo}
-              <div className="nav-toggle" onClick={() => setToggle(!toggle)}></div>
+              <div
+                className="nav-toggle"
+                role="button"
+                tabIndex={0}
+                onClick={() => setToggle(!toggle)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') setToggle(!toggle)
+                }}
+              ></div>
               <div className="mobile_nav">
                 <ul className="d-flex align-items-center gap-1">
                   <li className="me-1">
@@ -89,7 +97,15 @@ export function NavbarDarkDynamic({
               <div className='mobLogos'>
                 <Image src={logoUrl || '/img/logo.svg'} width={0} height={0} sizes='100vw' style={{ width: '140px', height: 'auto' }} className='img-fluid lightLogo' alt='Logo' />
               </div>
-              <span className='nav-menus-wrapper-close-button' onClick={() => setToggle(!toggle)}>✕</span>
+              <span
+                className='nav-menus-wrapper-close-button'
+                role="button"
+                tabIndex={0}
+                onClick={() => setToggle(false)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') setToggle(false)
+                }}
+              >✕</span>
 
               {(() => {
                 const defaultLinks: NavbarLinkItem[] = [

@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { Link } from '@/lib/navigation';
 import { compareMasterProducts, getMasterProducts } from '@/lib/rate-api';
 import type { ProductSpecifications } from '@repo/shared-data';
 
@@ -8,10 +8,8 @@ type PageProps = {
 };
 
 export default async function ComparePhonesPage({
-  params,
   searchParams,
 }: PageProps) {
-  const { locale } = await params;
   const { slugs: slugsParam } = await searchParams;
 
   let requestedSlugs: string[] = [];
@@ -33,12 +31,12 @@ export default async function ComparePhonesPage({
         <nav aria-label="breadcrumb">
           <ol className="breadcrumb small mb-2">
             <li className="breadcrumb-item">
-              <Link href={`/${locale}`} className="text-decoration-none">
+              <Link href="/" className="text-decoration-none">
                 Trang chủ
               </Link>
             </li>
             <li className="breadcrumb-item">
-              <Link href={`/${locale}/smartphones`} className="text-decoration-none">
+              <Link href="/smartphones" className="text-decoration-none">
                 Điện thoại
               </Link>
             </li>
@@ -58,7 +56,7 @@ export default async function ComparePhonesPage({
           <p className="text-muted mb-3">
             Cần ít nhất 2 sản phẩm để thực hiện so sánh.
           </p>
-          <Link href={`/${locale}/smartphones`} className="btn btn-primary rounded-pill px-4 mx-auto">
+          <Link href="/smartphones" className="btn btn-primary rounded-pill px-4 mx-auto">
             Xem danh sách điện thoại
           </Link>
         </div>
@@ -95,14 +93,14 @@ export default async function ComparePhonesPage({
                             )}
                           </div>
                           <Link
-                            href={`/${locale}/smartphones/${p.slug}`}
+                            href={`/smartphones/${p.slug}`}
                             className="fw-bold text-dark text-decoration-none h6 mb-1 text-hover-primary"
                           >
                             {p.name}
                           </Link>
                           <div className="text-danger fw-bold mb-2">{minPrice} ₫</div>
                           <Link
-                            href={`/${locale}/smartphones/${p.slug}#offers-table`}
+                            href={`/smartphones/${p.slug}#offers-table`}
                             className="btn btn-sm btn-outline-danger rounded-pill px-3"
                           >
                             Xem nơi bán ({p.merchant_count})
@@ -125,14 +123,14 @@ export default async function ComparePhonesPage({
                   <td className="text-start text-muted small fw-medium">Kích thước màn hình</td>
                   {products.map((p) => {
                     const specs = p.specifications as ProductSpecifications;
-                    return <td key={p.id} className="fw-semibold">{specs?.display?.size_inch ? `${specs.display.size_inch}"` : '—'}</td>;
+                    return <td key={p.id} className="fw-semibold">{specs?.display?.size_inch ? `${specs.display.size_inch}"` : '-'}</td>;
                   })}
                 </tr>
                 <tr>
                   <td className="text-start text-muted small fw-medium">Công nghệ hiển thị</td>
                   {products.map((p) => {
                     const specs = p.specifications as ProductSpecifications;
-                    return <td key={p.id} className="small">{specs?.display?.type || '—'}</td>;
+                    return <td key={p.id} className="small">{specs?.display?.type || '-'}</td>;
                   })}
                 </tr>
                 <tr>
@@ -141,7 +139,7 @@ export default async function ComparePhonesPage({
                     const specs = p.specifications as ProductSpecifications;
                     return (
                       <td key={p.id} className="small">
-                        {specs?.display?.resolution || '—'}
+                        {specs?.display?.resolution || '-'}
                         {specs?.display?.refresh_rate_hz ? ` (${specs.display.refresh_rate_hz}Hz)` : ''}
                       </td>
                     );
@@ -158,7 +156,7 @@ export default async function ComparePhonesPage({
                   <td className="text-start text-muted small fw-medium">Vi xử lý (Chipset)</td>
                   {products.map((p) => {
                     const specs = p.specifications as ProductSpecifications;
-                    return <td key={p.id} className="fw-bold text-primary">{specs?.hardware?.chipset || '—'}</td>;
+                    return <td key={p.id} className="fw-bold text-primary">{specs?.hardware?.chipset || '-'}</td>;
                   })}
                 </tr>
                 <tr>
@@ -167,7 +165,7 @@ export default async function ComparePhonesPage({
                     return (
                       <td key={p.id} className="fw-semibold">
                         {p.ram_gb ? `${p.ram_gb}GB RAM / ` : ''}
-                        {p.storage_gb ? `${p.storage_gb}GB ROM` : '—'}
+                        {p.storage_gb ? `${p.storage_gb}GB ROM` : '-'}
                       </td>
                     );
                   })}
@@ -176,7 +174,7 @@ export default async function ComparePhonesPage({
                   <td className="text-start text-muted small fw-medium">Hệ điều hành</td>
                   {products.map((p) => {
                     const specs = p.specifications as ProductSpecifications;
-                    return <td key={p.id} className="small">{specs?.hardware?.os || '—'}</td>;
+                    return <td key={p.id} className="small">{specs?.hardware?.os || '-'}</td>;
                   })}
                 </tr>
 
@@ -190,14 +188,14 @@ export default async function ComparePhonesPage({
                   <td className="text-start text-muted small fw-medium">Camera chính sau</td>
                   {products.map((p) => {
                     const specs = p.specifications as ProductSpecifications;
-                    return <td key={p.id} className="small">{specs?.camera?.main_camera || '—'}</td>;
+                    return <td key={p.id} className="small">{specs?.camera?.main_camera || '-'}</td>;
                   })}
                 </tr>
                 <tr>
                   <td className="text-start text-muted small fw-medium">Camera trước</td>
                   {products.map((p) => {
                     const specs = p.specifications as ProductSpecifications;
-                    return <td key={p.id} className="small">{specs?.camera?.front_camera || '—'}</td>;
+                    return <td key={p.id} className="small">{specs?.camera?.front_camera || '-'}</td>;
                   })}
                 </tr>
 
@@ -213,7 +211,7 @@ export default async function ComparePhonesPage({
                     const specs = p.specifications as ProductSpecifications;
                     return (
                       <td key={p.id} className="fw-bold">
-                        {specs?.battery?.capacity_mah ? `${specs.battery.capacity_mah} mAh` : '—'}
+                        {specs?.battery?.capacity_mah ? `${specs.battery.capacity_mah} mAh` : '-'}
                       </td>
                     );
                   })}
@@ -224,7 +222,7 @@ export default async function ComparePhonesPage({
                     const specs = p.specifications as ProductSpecifications;
                     return (
                       <td key={p.id} className="small">
-                        {specs?.battery?.fast_charging_w ? `${specs.battery.fast_charging_w}W` : '—'}
+                        {specs?.battery?.fast_charging_w ? `${specs.battery.fast_charging_w}W` : '-'}
                       </td>
                     );
                   })}
@@ -242,7 +240,7 @@ export default async function ComparePhonesPage({
                     const specs = p.specifications as ProductSpecifications;
                     return (
                       <td key={p.id} className="small">
-                        {specs?.design?.dimensions || '—'}
+                        {specs?.design?.dimensions || '-'}
                         {specs?.design?.weight_g ? ` | ${specs.design.weight_g}g` : ''}
                       </td>
                     );
@@ -252,14 +250,14 @@ export default async function ComparePhonesPage({
                   <td className="text-start text-muted small fw-medium">Kháng nước &amp; Bụi</td>
                   {products.map((p) => {
                     const specs = p.specifications as ProductSpecifications;
-                    return <td key={p.id} className="fw-medium">{specs?.design?.resistance || '—'}</td>;
+                    return <td key={p.id} className="fw-medium">{specs?.design?.resistance || '-'}</td>;
                   })}
                 </tr>
                 <tr>
                   <td className="text-start text-muted small fw-medium">Bảo mật sinh trắc học</td>
                   {products.map((p) => {
                     const specs = p.specifications as ProductSpecifications;
-                    return <td key={p.id} className="small">{specs?.design?.biometrics || '—'}</td>;
+                    return <td key={p.id} className="small">{specs?.design?.biometrics || '-'}</td>;
                   })}
                 </tr>
 

@@ -141,38 +141,275 @@ export function computeJReviewsWeight(params: {
   return Math.round(Math.max(0, Math.min(3.0, weight)) * 100) / 100;
 }
 
-/**
- * Fetch list of master products with optional filtering
- */
-export async function getMasterProducts(params?: {
+export interface RateCategoryItem {
+  id: string;
+  parent_id: string | null;
+  name: string;
+  slug: string;
+  icon: string | null;
+  display_order: number;
+}
+
+export interface MasterProductFilterParams {
+  categorySlug?: string;
   brand?: string;
+  brands?: string[];
   search?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  minRating?: number;
+  ramGb?: number[];
+  storageGb?: number[];
+  minBatteryMah?: number;
+  minRefreshRateHz?: number;
+  minFastChargingW?: number;
+  has5g?: boolean;
+  hasNfc?: boolean;
+  maxScreenSizeInch?: number;
+  sort?:
+    | 'default'
+    | 'price_asc'
+    | 'price_desc'
+    | 'rating_desc'
+    | 'merchants_desc'
+    | 'newest';
   limit?: number;
-}): Promise<MasterProduct[]> {
+}
+
+export interface CategoryDirectoryFacets {
+  currentCategory: RateCategoryItem | null;
+  categories: RateCategoryItem[];
+  brands: { name: string; count: number }[];
+  totalUnfiltered: number;
+}
+
+/**
+ * Fetch categories and available brand facets for a given category slug
+ */
+export async function getCategoryDirectoryFacets(
+  categorySlug: string = 'smartphones'
+): Promise<CategoryDirectoryFacets> {
+  const supabase = getRateClient();
+
+  const { data: catRows } = await supabase
+    .from('categories')
+    .select('id, parent_id, name, slug, icon, display_order')
+    .order('display_order', { ascending: true });
+
+  const categories = (catRows as RateCategoryItem[]) || [];
+  const currentCategory =
+    categories.find((c) => c.slug === categorySlug) || null;
+
+  if (!currentCategory) {
+    return {
+      currentCategory: null,
+      categories,
+      brands: [],
+      totalUnfiltered: 0,
+    };
+  }
+
+  const { data: prodRows } = await supabase
+    .from('master_products')
+    .select('brand, category_id')
+    .eq('status', 'published')
+    .eq('category_id', currentCategory.id);
+
+  const rows = (prodRows as { brand: string; category_id: string | null }[]) || [];
+
+  const brandCounts = new Map<string, number>();
+  for (const r of rows) {
+    if (!r.brand) continue;
+    brandCounts.set(r.brand, (brandCounts.get(r.brand) || 0) + 1);
+  }
+
+  const brands = Array.from(brandCounts.entries())
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+
+  return {
+    currentCategory,
+    categories,
+    brands,
+    totalUnfiltered: rows.length,
+  };
+}
+
+/**
+ * Fetch list of master products with 10-Field-Groups multi-criteria filtering & sorting
+ */
+export async function getMasterProducts(
+  params?: MasterProductFilterParams
+): Promise<MasterProduct[]> {
   const supabase = getRateClient();
   let query = supabase
     .from('master_products')
     .select('*')
-    .eq('status', 'published')
-    .order('created_at', { ascending: false });
+    .eq('status', 'published');
 
-  if (params?.brand) {
+  if (params?.categorySlug) {
+    const { data: catRow } = await supabase
+      .from('categories')
+      .select('id')
+      .eq('slug', params.categorySlug)
+      .maybeSingle();
+
+    if (!catRow?.id) {
+      return [];
+    }
+    query = query.eq('category_id', catRow.id);
+  }
+
+  if (params?.brand && (!params.brands || params.brands.length === 0)) {
     query = query.ilike('brand', `%${params.brand}%`);
   }
 
-  if (params?.search) {
-    query = query.ilike('name', `%${params.search}%`);
+  if (typeof params?.minPrice === 'number' && params.minPrice > 0) {
+    query = query.gte('min_price', params.minPrice);
   }
 
-  if (params?.limit) {
-    query = query.limit(params.limit);
+  if (typeof params?.maxPrice === 'number' && params.maxPrice > 0) {
+    query = query.lte('min_price', params.maxPrice);
+  }
+
+  if (params?.ramGb && params.ramGb.length > 0) {
+    query = query.in('ram_gb', params.ramGb);
+  }
+
+  if (params?.storageGb && params.storageGb.length > 0) {
+    query = query.in('storage_gb', params.storageGb);
+  }
+
+  if (typeof params?.minBatteryMah === 'number' && params.minBatteryMah > 0) {
+    query = query.gte('battery_mah', params.minBatteryMah);
+  }
+
+  if (params?.has5g === true) {
+    query = query.eq('has_5g', true);
+  }
+
+  // Server-side sort where directly supported by top-level columns
+  switch (params?.sort) {
+    case 'price_asc':
+      query = query.order('min_price', { ascending: true });
+      break;
+    case 'price_desc':
+      query = query.order('min_price', { ascending: false });
+      break;
+    case 'merchants_desc':
+      query = query.order('merchant_count', { ascending: false });
+      break;
+    case 'newest':
+    case 'default':
+    default:
+      query = query.order('created_at', { ascending: false });
+      break;
   }
 
   const { data, error } = await query;
   if (error) {
     throw new Error(`rate-api: failed to fetch master products: ${error.message}`);
   }
-  return (data as MasterProduct[]) || [];
+
+  let items = ((data as MasterProduct[]) || []).slice();
+
+  // Multi-brand case-insensitive filter
+  if (params?.brands && params.brands.length > 0) {
+    const allowedBrands = new Set(params.brands.map((b) => b.trim().toLowerCase()));
+    items = items.filter((item) =>
+      allowedBrands.has((item.brand || '').trim().toLowerCase())
+    );
+  }
+
+  // Keyword search across name, brand, model, chipset, key_specs
+  if (params?.search && params.search.trim().length > 0) {
+    const q = params.search.trim().toLowerCase();
+    items = items.filter((item) => {
+      const haystacks = [
+        item.name,
+        item.brand,
+        item.model,
+        item.variant_name || '',
+        item.key_specs?.chip || '',
+        item.specifications?.hardware?.chipset || '',
+      ];
+      return haystacks.some((h) => h && h.toLowerCase().includes(q));
+    });
+  }
+
+  // Minimum effective rating filter (prefers JReviews weighted user rating -> expert rating -> average_rating)
+  if (typeof params?.minRating === 'number' && params.minRating > 0) {
+    const minRating = params.minRating;
+    items = items.filter((item) => {
+      const effectiveRating =
+        item.user_rating_weighted && Number(item.user_rating_weighted) > 0
+          ? Number(item.user_rating_weighted)
+          : item.expert_rating && Number(item.expert_rating) > 0
+            ? Number(item.expert_rating)
+            : Number(item.average_rating || 0);
+      return effectiveRating >= minRating;
+    });
+  }
+
+  // 10 Field Groups JSONB filters:
+  // Display: refresh_rate_hz >= minRefreshRateHz
+  if (typeof params?.minRefreshRateHz === 'number' && params.minRefreshRateHz > 0) {
+    const minHz = params.minRefreshRateHz;
+    items = items.filter((item) => {
+      const hz = Number(item.specifications?.display?.refresh_rate_hz || 0);
+      if (hz >= minHz) return true;
+      const screenText = (item.key_specs?.screen || '').toLowerCase();
+      return screenText.includes('120hz') || screenText.includes('144hz');
+    });
+  }
+
+  // Battery: fast_charging_w >= minFastChargingW
+  if (typeof params?.minFastChargingW === 'number' && params.minFastChargingW > 0) {
+    const minW = params.minFastChargingW;
+    items = items.filter((item) => {
+      const w = Number(item.specifications?.battery?.fast_charging_w || 0);
+      return w >= minW;
+    });
+  }
+
+  // Connectivity: nfc === true
+  if (params?.hasNfc === true) {
+    items = items.filter(
+      (item) => item.specifications?.connectivity?.nfc === true
+    );
+  }
+
+  // Display: compact screen <= maxScreenSizeInch
+  if (typeof params?.maxScreenSizeInch === 'number' && params.maxScreenSizeInch > 0) {
+    const maxInch = params.maxScreenSizeInch;
+    items = items.filter((item) => {
+      const size = Number(
+        item.screen_size_inch ?? item.specifications?.display?.size_inch ?? 0
+      );
+      return size > 0 && size <= maxInch;
+    });
+  }
+
+  // Sort by effective rating if requested
+  if (params?.sort === 'rating_desc') {
+    items.sort((a, b) => {
+      const ratingA =
+        a.user_rating_weighted && Number(a.user_rating_weighted) > 0
+          ? Number(a.user_rating_weighted)
+          : Number(a.average_rating || 0);
+      const ratingB =
+        b.user_rating_weighted && Number(b.user_rating_weighted) > 0
+          ? Number(b.user_rating_weighted)
+          : Number(b.average_rating || 0);
+      return ratingB - ratingA;
+    });
+  }
+
+  if (params?.limit && params.limit > 0) {
+    items = items.slice(0, params.limit);
+  }
+
+  return items;
 }
 
 /**

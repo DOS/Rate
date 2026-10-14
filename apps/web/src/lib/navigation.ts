@@ -10,6 +10,7 @@ export const routing = defineRouting({
   defaultLocale: "vi",
 
   localePrefix: "as-needed",
+  localeDetection: false,
 })
 
 // https://next-intl-docs.vercel.app/docs/routing/navigation
@@ -40,7 +41,7 @@ export const isAppLink = (link: string): boolean => {
 
     const url = new URL(link, baseUrl)
     return url.hostname === new URL(baseUrl).hostname
-  } catch (error) {
+  } catch {
     return false
   }
 }

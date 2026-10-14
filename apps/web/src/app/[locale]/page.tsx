@@ -1,7 +1,7 @@
-import Link from "next/link";
+import { Link } from "@/lib/navigation";
 import NavbarDarkDynamic from "./components/navbar/NavbarDarkDynamic";
-import { PublicStrapiClient } from "@/lib/strapi-api";
 import { getMasterProducts } from "@/lib/rate-api";
+import type { MasterProduct } from "@repo/shared-data";
 import { BsMouse } from "react-icons/bs";
 import { FaBagShopping, FaBowlRice, FaMagnifyingGlass, FaMartiniGlass, FaMugSaucer, FaSpa } from "react-icons/fa6";
 import BrandImage from "./components/brand-image";
@@ -13,39 +13,10 @@ import FooterTop from "./components/footer-top";
 import FooterDynamic from "./components/footer/FooterDynamic";
 import BackToTop from "./components/back-to-top";
 
-async function fetchNavbar(locale: string) {
-  try {
-    const res = await PublicStrapiClient.fetchOne("api::navbar.navbar", undefined, {
-      locale: locale as any,
-      populate: { links: true },
-    })
-    const data = res?.data
-    return {
-      links: (data?.links ?? []) as any,
-      logoUrl: undefined as string | undefined,
-    }
-  } catch (err) {
-    console.error("Error fetching navbar (fallback to defaults)", err)
-    return {
-      links: [] as any,
-      logoUrl: undefined as string | undefined,
-    }
-  }
-}
-
 export default async function Home({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params
-  const navbarData = await fetchNavbar(locale)
-  let footerData: any = {}
-  try {
-    const footerRes = await PublicStrapiClient.fetchOne("api::footer.footer", undefined, { locale: locale as any, populate: { sections: { populate: { links: true } }, links: true, socialLinks: true } })
-    footerData = footerRes?.data as any
-  } catch (err) {
-    console.error("Error fetching footer (fallback to defaults)", err)
-    footerData = {}
-  }
 
-  let masterProducts: any[] = []
+  let masterProducts: MasterProduct[] = []
   try {
     masterProducts = await getMasterProducts({ limit: 6 })
   } catch (err) {
@@ -53,8 +24,7 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
   }
   return (
     <>
-     {/* Navbar UI template + dữ liệu Strapi */}
-     <NavbarDarkDynamic links={navbarData.links} logoUrl={navbarData.logoUrl} />
+     <NavbarDarkDynamic links={[]} />
 
           <div className="image-cover hero-header position-relative overflow-hidden" style={{backgroundImage:`url('/img/banner-6.jpg')`}} data-overlay="6">
             <div className="container">
@@ -90,7 +60,7 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
                                     <div className="col">
                                         <div className="form-group no-border position-relative mb-0">
                                             <input type="text" className="form-control border-0 fw-medium rounded-pill ps-2" placeholder={locale === 'vi' ? "Tìm kiếm sản phẩm, thương hiệu, địa điểm..." : "Search for locality, project.."}/>
-                                            <span className="position-absolute top-50 end-0 translate-middle"><label className="badge text-success bg-light-success rounded">22k+</label></span>
+                                            <span className="position-absolute top-50 end-0 translate-middle"><span className="badge text-success bg-light-success rounded">22k+</span></span>
                                         </div>
                                     </div>
                                 </div>
@@ -103,7 +73,7 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
 					 <div className="col-xl-7 col-lg-8 col-md-11 col-sm-12">
 						<div className="d-block position-relative mt-5">
 							<div className="popularSearches d-flex align-items-center justify-content-center gap-3 flex-wrap">
-								<div className="singleItem"><Link href={`/${locale}/smartphones`} className="badge badge-transparent rounded-pill"><FaSpa className="me-2"/>{locale === 'vi' ? 'Điện thoại' : 'Smartphones'}</Link></div>	
+								<div className="singleItem"><Link href="/smartphones" className="badge badge-transparent rounded-pill"><FaSpa className="me-2"/>{locale === 'vi' ? 'Điện thoại' : 'Smartphones'}</Link></div>	
 								<div className="singleItem"><Link href="#" className="badge badge-transparent rounded-pill"><FaBowlRice className="me-2"/>{locale === 'vi' ? 'Ẩm thực & Quán ăn' : 'Eat & Drink'}</Link></div>	
 								<div className="singleItem"><Link href="#" className="badge badge-transparent rounded-pill"><FaBagShopping className="me-2"/>{locale === 'vi' ? 'Mua sắm & TMĐT' : 'Shopping'}</Link></div>	
 								<div className="singleItem"><Link href="#" className="badge badge-transparent rounded-pill"><FaMartiniGlass className="me-2"/>{locale === 'vi' ? 'Giải trí & Bar' : 'Nightlife'}</Link></div>	
@@ -140,12 +110,12 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
                   </p>
                 </div>
                 <div className="d-flex gap-2">
-                  <Link href={`/${locale}/smartphones`} className="btn btn-outline-primary rounded-pill px-3 py-2 fw-medium">
+                  <Link href="/smartphones" className="btn btn-outline-primary rounded-pill px-3 py-2 fw-medium">
                     Xem tất cả ({masterProducts.length}) →
                   </Link>
                   {masterProducts.length >= 2 && (
                     <Link
-                      href={`/${locale}/compare?slugs=${masterProducts.map((p) => p.slug).slice(0, 3).join(',')}`}
+                      href={`/compare?slugs=${masterProducts.map((p) => p.slug).slice(0, 3).join(',')}`}
                       className="btn btn-primary rounded-pill px-3 py-2 fw-medium"
                     >
                       ⚡ So sánh thông số
@@ -178,7 +148,7 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
                           <span className="badge bg-primary bg-opacity-10 text-primary">{item.storage_gb}GB</span>
                         </div>
                         <h5 className="fw-bold mb-2">
-                          <Link href={`/${locale}/smartphones/${item.slug}`} className="text-dark text-decoration-none">
+                          <Link href={`/smartphones/${item.slug}`} className="text-dark text-decoration-none">
                             {item.name}
                           </Link>
                         </h5>
@@ -190,7 +160,7 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
                           <span>⭐ {Number(item.average_rating || 5).toFixed(1)} ({item.total_reviews || 0} đánh giá)</span>
                         </div>
                         <div className="mt-3 d-grid">
-                          <Link href={`/${locale}/smartphones/${item.slug}`} className="btn btn-primary rounded-pill fw-medium">
+                          <Link href={`/smartphones/${item.slug}`} className="btn btn-primary rounded-pill fw-medium">
                             Xem 10 nhóm thông số &amp; nơi bán →
                           </Link>
                         </div>
@@ -298,11 +268,8 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
         </section>
         <FooterTop locale={locale} />
         <FooterDynamic
-          sections={(footerData?.sections ?? [])}
-          links={(footerData?.links ?? [])}
-          logoUrl={undefined}
-          copyRight={footerData?.copyRight}
-          socialLinks={(footerData?.socialLinks ?? [])}
+          sections={[]}
+          links={[]}
           locale={locale}
         />
         <BackToTop/>
