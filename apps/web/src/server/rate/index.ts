@@ -8,6 +8,11 @@ import {
   getMasterProductReviews as _getMasterProductReviews,
   getMasterProductReviewSummary as _getMasterProductReviewSummary,
   getMasterProducts as _getMasterProducts,
+  getMerchantProfileById as _getMerchantProfileById,
+  getMerchantsList as _getMerchantsList,
+  getRatePlatformStats as _getRatePlatformStats,
+  inspectProductOrShopUrl as _inspectProductOrShopUrl,
+  parseEcommerceUrlOrQuery,
   getRateClient,
   computeJReviewsWeight,
 } from '@/lib/rate-api';
@@ -18,20 +23,27 @@ export type {
   MasterProductFilterParams,
   MasterProductPriceHistorySummary,
   MerchantOffer,
+  MerchantProductListing,
+  MerchantProfileDetail,
+  MerchantRiskBreakdown,
+  MerchantSummary,
   OfferDiscountAnalysis,
+  ParsedEcommerceUrl,
   PriceHistoryPoint,
   RateCategoryItem,
+  RatePlatformStats,
   ReviewAnalysisSummary,
   ReviewFlagCategory,
   ReviewItem,
+  UrlInspectionResult,
 } from '@/lib/rate-api';
 
-export { getRateClient, computeJReviewsWeight };
+export { getRateClient, computeJReviewsWeight, parseEcommerceUrlOrQuery };
 
 /**
  * Per-request memoized Server Data Layer (React.cache) for Next.js 16 App Router.
  * Prevents duplicate Supabase round-trips when both generateMetadata() and Page()
- * query the same product or category facets during a single SSR render pass.
+ * query the same product, merchant, or category facets during a single SSR render pass.
  */
 export const getCachedMasterProductBySlug = cache(_getMasterProductBySlug);
 export const getCachedCategoryDirectoryFacets = cache(
@@ -48,8 +60,16 @@ export const getCachedMasterProductPriceHistory = cache(
 export const getCachedCompareMasterProducts = cache((slugsCsv: string) =>
   _compareMasterProducts(slugsCsv.split(','))
 );
+export const getCachedMerchantsList = cache(() => _getMerchantsList());
+export const getCachedMerchantProfileById = cache(_getMerchantProfileById);
+export const getCachedRatePlatformStats = cache(_getRatePlatformStats);
+export const getCachedInspectProductOrShopUrl = cache(_inspectProductOrShopUrl);
 
 export {
   _getMasterProducts as getMasterProducts,
   _compareMasterProducts as compareMasterProducts,
+  _getMerchantsList as getMerchantsList,
+  _getMerchantProfileById as getMerchantProfileById,
+  _getRatePlatformStats as getRatePlatformStats,
+  _inspectProductOrShopUrl as inspectProductOrShopUrl,
 };

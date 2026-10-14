@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="dark" />
+  <title>Báo Cáo Kiểm Toán DB Schema rate &amp; Kiến Trúc Frontend Đa Ngành Hàng (Issue #18)</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0f1113;
+      --surface: #16191d;
+      --surface-elevated: #1d2127;
+      --border: #2a2f37;
+      --text: #f3f4f6;
+      --text-muted: #9ca3af;
+      --accent: #FF2E29;
+      --accent-soft: rgba(255, 46, 41, 0.14);
+      --success: #10b981;
+      --warning: #f59e0b;
+      --info: #3b82f6;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 32px 20px 64px;
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+      line-height: 1.6;
+    }
+
+    .container {
+      max-width: 1120px;
+      margin: 0 auto;
+    }
+
+    .header-card {
+      background: linear-gradient(145deg, #16191d 0%, #1b1315 100%);
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--accent);
+      border-radius: 16px;
+      padding: 28px 32px;
+      margin-bottom: 28px;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      background: var(--accent-soft);
+      color: var(--accent);
+      border: 1px solid rgba(255, 46, 41, 0.35);
+      margin-bottom: 12px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 28px;
+      font-weight: 700;
+      color: #ffffff;
+    }
+
+    h2 {
+      font-size: 20px;
+      font-weight: 700;
+      margin: 0 0 16px;
+      color: #ffffff;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 10px;
+    }
+
+    h3 {
+      font-size: 16px;
+      font-weight: 600;
+      margin: 16px 0 8px;
+      color: #ffffff;
+    }
+
+    p {
+      margin: 0 0 12px;
+      color: var(--text-muted);
+    }
+
+    .section-card {
+      background-color: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 24px 28px;
+      margin-bottom: 24px;
+    }
+
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .stat-box {
+      background-color: var(--surface-elevated);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 20px;
+    }
+
+    .stat-value {
+      font-size: 26px;
+      font-weight: 700;
+      color: #ffffff;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      font-size: 14px;
+    }
+
+    th, td {
+      text-align: left;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+
+    th {
+      background-color: var(--surface-elevated);
+      color: #ffffff;
+      font-weight: 600;
+    }
+
+    code {
+      font-family: "JetBrains Mono", Consolas, monospace;
+      font-size: 13px;
+      background-color: #0b0c0e;
+      color: #ff8582;
+      padding: 2px 6px;
+      border-radius: 6px;
+      border: 1px solid #262930;
+    }
+
+    pre {
+      background-color: #0b0c0e;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      overflow-x: auto;
+      color: #e5e7eb;
+      font-size: 13px;
+    }
+
+    .status-pill {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .pill-ok {
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--success);
+      border: 1px solid rgba(16, 185, 129, 0.35);
+    }
+
+    .pill-warn {
+      background: rgba(245, 158, 11, 0.15);
+      color: var(--warning);
+      border: 1px solid rgba(245, 158, 11, 0.35);
+    }
+
+    .pill-danger {
+      background: rgba(255, 46, 41, 0.15);
+      color: var(--accent);
+      border: 1px solid rgba(255, 46, 41, 0.35);
+    }
+
+    ul {
+      margin: 8px 0 16px;
+      padding-left: 20px;
+      color: var(--text-muted);
+    }
+
+    li {
+      margin-bottom: 6px;
+    }
+
+    li strong {
+      color: var(--text);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header-card">
+      <span class="badge">DOS/Rate • Issue #18 • Kiến Trúc Frontend, API v1 &amp; Kiểm Toán DB</span>
+      <h1>Báo Cáo Kiểm Toán Schema <code>rate</code> &amp; Triển Khai Frontend Đa Ngành Hàng</h1>
+      <p>
+        Ngày thực hiện: 14/10/2026 • Dự án Supabase dùng chung: <code>gulptwduchsjcsbndmua</code> (Chỉ truy vấn <code>SELECT</code> read-only theo Hard Rule 0.1) • Tech Stack: Next.js 16.3.8 + React 19.3 + TypeScript 7.0.2
+      </p>
+    </div>
+
+    <div class="grid-4">
+      <div class="stat-box">
+        <div class="stat-value">3 Master / 3 Listing</div>
+        <div class="stat-label">Sản phẩm chuẩn hóa 10 nhóm thông số trên <code>rate.master_products</code></div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-value">30 Reviews / 12 Giá</div>
+        <div class="stat-label">Đánh giá người mua &amp; chuỗi thời gian lịch sử giá <code>rate.price_history</code></div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-value">4 Chỉ Mục Trùng</div>
+        <div class="stat-label">Đã viết lệnh <code>DROP INDEX IF EXISTS</code> trong file migration chuẩn</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-value">6 Trang &amp; 3 API Mới</div>
+        <div class="stat-label">Trang chủ dữ liệu thật, <code>/tablets</code>, <code>/laptops</code>, <code>/merchants</code> &amp; API v1</div>
+      </div>
+    </div>
+
+    <div class="section-card">
+      <h2>1. Kết Quả Kiểm Toán Trực Tiếp Schema <code>rate</code> Trên Supabase (Read-Only)</h2>
+      <p>
+        Qua kiểm tra trực tiếp <code>information_schema</code>, <code>pg_indexes</code> và <code>pg_policies</code> trên project <code>gulptwduchsjcsbndmua</code> (chỉ dùng câu lệnh <code>SELECT</code>), hệ thống phát hiện 3 vấn đề quan trọng cần khắc phục qua sổ cái migration tại <code>DOS-Me/supabase/migrations/</code>:
+      </p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Hạng mục phát hiện</th>
+            <th>Mức độ</th>
+            <th>Chi tiết bằng chứng kỹ thuật trên DB</th>
+            <th>Giải pháp khắc phục trong Migration</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>1. Dư quyền Ghi (Write Grants) cho <code>anon</code> &amp; <code>authenticated</code></strong></td>
+            <td><span class="status-pill pill-danger">Cao (Bảo mật)</span></td>
+            <td>
+              Mặc dù đã bật RLS, hai role <code>anon</code> và <code>authenticated</code> vẫn đang được cấp quyền <code>INSERT, UPDATE, DELETE, TRUNCATE, TRIGGER</code> trên toàn bộ các bảng <code>rate.master_products</code>, <code>rate.products</code>, <code>rate.merchants</code>, <code>rate.reviews</code>, <code>rate.crawl_jobs</code>, <code>rate.crawl_runs</code> và cả quyền <code>SELECT</code> trên các cột nhạy cảm (<code>phone</code>, <code>bank_account</code>, <code>bank_name</code>, <code>entity_hash</code>) của bảng <code>rate.merchants</code>.
+            </td>
+            <td>
+              Thu hồi toàn bộ quyền ghi của <code>anon</code> và <code>authenticated</code> (chỉ giữ quyền <code>SELECT</code> trên các bảng công khai và giới hạn cột an toàn trên <code>rate.merchants</code>). Chỉ cho phép ghi trên bảng <code>rate.review_votes</code> theo đúng RLS.
+            </td>
+          </tr>
+          <tr>
+            <td><strong>2. Tồn tại 4 Chỉ mục trùng lặp (Duplicate Indexes)</strong></td>
+            <td><span class="status-pill pill-warn">Trung bình (Hiệu năng)</span></td>
+            <td>
+              <ul>
+                <li><code>idx_rate_categories_slug</code> trùng hoàn toàn với <code>categories_slug_key</code></li>
+                <li><code>idx_master_products_model_key</code> trùng với <code>master_products_model_key_key</code></li>
+                <li><code>idx_master_products_slug</code> trùng với <code>master_products_slug_key</code></li>
+                <li><code>idx_products_cluster_id</code> trùng với <code>idx_rate_products_cluster</code></li>
+              </ul>
+            </td>
+            <td>
+              Xóa 4 chỉ mục dư thừa và bổ sung các chỉ mục phục vụ lọc đa tiêu chí + tìm kiếm mờ Trigram: <code>idx_master_products_status_cat_price</code>, <code>idx_master_products_status_rating</code>, <code>idx_master_products_search_trgm</code>, <code>idx_rate_merchants_slug</code>.
+            </td>
+          </tr>
+          <tr>
+            <td><strong>3. Tương thích ngược cột <code>review_risk_score</code></strong></td>
+            <td><span class="status-pill pill-ok">Đã xử lý an toàn</span></td>
+            <td>
+              File migration <code>20261014033000_rate_merchant_review_risk_separation.sql</code> chưa được deploy lên prod <code>gulptwduchsjcsbndmua</code> nên bảng <code>rate.merchants</code> trên prod hiện mới có cột <code>risk_score</code>.
+            </td>
+            <td>
+              Tầng truy vấn <code>apps/web/src/lib/rate-api.ts</code> đã được thiết kế chỉ <code>SELECT</code> các cột hiện hữu và tự động tính toán động <code>review_risk_score</code> + <code>review_risk_breakdown</code> từ bảng <code>rate.reviews</code> và <code>rate.review_flags</code>.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="section-card">
+      <h2>2. Chi Tiết Nâng Cấp Frontend, Server Data Layer &amp; REST API v1 (Issue #18)</h2>
+      <ul>
+        <li>
+          <strong>Trang chủ dữ liệu thật 100% (<code>apps/web/src/app/[locale]/page.tsx</code>):</strong>
+          Loại bỏ hoàn toàn các thành phần mẫu tĩnh (nhà hàng, khách sạn, quán ăn, blog giả lập). Thay thế bằng số liệu trực tiếp từ Supabase (<code>getCachedRatePlatformStats</code>), danh mục thiết bị công nghệ thực tế, danh sách sản phẩm chuẩn hóa 10 nhóm thông số có nút <code>+ So sánh</code>, hồ sơ tín nhiệm gian hàng (Dual Risk Score) và các đánh giá người mua đã qua kiểm duyệt AI.
+        </li>
+        <li>
+          <strong>Thanh Tìm Kiếm Thông Minh &amp; Kiểm Tra Link Đa Sàn (<code>apps/web/src/components/home/HeroSearchInspector.tsx</code>):</strong>
+          Hỗ trợ 2 chế độ ngay tại Hero trang chủ: (1) Tìm kiếm Autocomplete sản phẩm và gian hàng tức thì; (2) Dán trực tiếp URL sản phẩm/shop từ Shopee, Lazada, Tiki, TikTok Shop để kiểm tra giảm giá ảo và điểm rủi ro kép.
+        </li>
+        <li>
+          <strong>Mở rộng Danh mục Đa ngành hàng (<code>/tablets</code>, <code>/laptops</code>):</strong>
+          Tái cấu trúc <code>CategoryCatalogContent</code> để chia sẻ động cơ lọc 10 nhóm thông số kỹ thuật giữa <code>/smartphones</code>, <code>/tablets</code> và <code>/laptops</code>, đồng bộ thanh điều hướng <code>NavbarDarkDynamic.tsx</code> và sidebar <code>list-sidebar-one.tsx</code>.
+        </li>
+        <li>
+          <strong>Hồ sơ Tín nhiệm Gian hàng (<code>/merchants</code> &amp; <code>/merchants/[id]</code>):</strong>
+          Hiển thị minh bạch điểm rủi ro kép (<code>dosafe_risk_score</code> + <code>review_risk_score</code>), tỷ lệ phân bổ 5 hạng mục đánh giá AI (<code>authentic</code>, <code>low_value_coin_spam</code>, <code>seeding_fake</code>, <code>competitor_sabotage</code>, <code>review_bombing</code>), danh sách sản phẩm kèm cảnh báo nâng giá gốc và danh sách bình luận thực tế.
+        </li>
+        <li>
+          <strong>Mở rộng REST API v1 phục vụ Web &amp; Browser Extension MV3:</strong>
+          <ul>
+            <li><code>GET /api/v1/rate/lookup?q=...</code> - Phân tích link TMĐT hoặc từ khóa tìm kiếm, trả về sản phẩm chuẩn hóa, gian hàng và cảnh báo giá ảo.</li>
+            <li><code>GET /api/v1/rate/merchants</code> - Danh sách gian hàng kèm điểm tín nhiệm kép và bộ lọc theo sàn/mức độ tin cậy.</li>
+            <li><code>GET /api/v1/rate/merchants/[id]</code> - Chi tiết hồ sơ kiểm toán gian hàng theo UUID, slug hoặc <code>platform_shop_id</code>.</li>
+          </ul>
+        </li>
+      </ul>
+    </div>
+
+    <div class="section-card">
+      <h2>3. Hướng Dẫn Đồng Bộ Sổ Cái Migration Sang <code>DOS-Me</code></h2>
+      <p>
+        Tuân thủ nghiêm ngặt Hard Rule 0.1, file migration chuẩn hóa bảo mật, xóa chỉ mục trùng và thêm hàm RPC tìm kiếm đa năng đã được lưu tại:
+        <code>supabase/migrations/20261014231500_rate_search_rpc_and_security_hardening.sql</code>.
+        Khi cần áp dụng lên môi trường <code>beta</code> và <code>prod</code> (<code>gulptwduchsjcsbndmua</code>), chỉ cần sao chép file này sang <code>D:\Projects\DOS-Me\supabase\migrations\</code> cùng với <code>20261014033000_rate_merchant_review_risk_separation.sql</code> để chạy qua đường ống CI chính thức.
+      </p>
+    </div>
+  </div>
+</body>
+</html>

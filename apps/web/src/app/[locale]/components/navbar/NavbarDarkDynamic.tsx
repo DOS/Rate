@@ -1,42 +1,47 @@
-'use client'
-import React, { useEffect, useState } from 'react'
-import { Link } from '@/lib/navigation'
-import Image from 'next/image'
-import { useLocale } from 'next-intl'
-import { BsPersonCircle, BsBasket2, BsSearch, BsGeoAltFill } from 'react-icons/bs'
-import LocaleSwitcher from '@/components/elementary/LocaleSwitcher'
+'use client';
+import React, { useEffect, useState } from 'react';
+import { Link } from '@/lib/navigation';
+import Image from 'next/image';
+import { useLocale } from 'next-intl';
+import {
+  BsPersonCircle,
+  BsBasket2,
+  BsSearch,
+  BsGeoAltFill,
+} from 'react-icons/bs';
+import LocaleSwitcher from '@/components/elementary/LocaleSwitcher';
 
 export interface NavbarLinkItem {
-  readonly id?: string | number
-  readonly label?: string | null
-  readonly href?: string | null
-  readonly newTab?: boolean | null
+  readonly id?: string | number;
+  readonly label?: string | null;
+  readonly href?: string | null;
+  readonly newTab?: boolean | null;
 }
 
 export function NavbarDarkDynamic({
   links,
   logoUrl,
 }: {
-  readonly links: readonly NavbarLinkItem[]
-  readonly logoUrl?: string | null
+  readonly links: readonly NavbarLinkItem[];
+  readonly logoUrl?: string | null;
 }) {
-  const locale = useLocale()
-  const [scroll, setScroll] = useState(false)
-  const [toggle, setToggle] = useState(false)
-  const [windowWidth, setWindowWidth] = useState(0)
+  const locale = useLocale();
+  const [scroll, setScroll] = useState(false);
+  const [toggle, setToggle] = useState(false);
+  const [windowWidth, setWindowWidth] = useState(0);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return
-    const handlerScroll = () => setScroll(window.scrollY > 50)
-    const handleResize = () => setWindowWidth(window.innerWidth)
-    setWindowWidth(window.innerWidth)
-    window.addEventListener('scroll', handlerScroll)
-    window.addEventListener('resize', handleResize)
+    if (typeof window === 'undefined') return;
+    const handlerScroll = () => setScroll(window.scrollY > 50);
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    setWindowWidth(window.innerWidth);
+    window.addEventListener('scroll', handlerScroll);
+    window.addEventListener('resize', handleResize);
     return () => {
-      window.removeEventListener('scroll', handlerScroll)
-      window.removeEventListener('resize', handleResize)
-    }
-  }, [])
+      window.removeEventListener('scroll', handlerScroll);
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
 
   const logo = (
     <Link className="nav-brand" href="/">
@@ -50,13 +55,23 @@ export function NavbarDarkDynamic({
         alt="logo"
       />
     </Link>
-  )
+  );
 
   return (
     <>
-      <div className={`header header-light ${scroll ? 'header-fixed' : ''} `} data-sticky-element="">
+      <div
+        className={`header header-light ${scroll ? 'header-fixed' : ''} `}
+        data-sticky-element=""
+      >
         <div className="container-fluid">
-          <nav id="navigation" className={windowWidth > 991 ? 'navigation navigation-landscape' : ' navigation navigation-portrait '}>
+          <nav
+            id="navigation"
+            className={
+              windowWidth > 991
+                ? 'navigation navigation-landscape'
+                : 'navigation navigation-portrait'
+            }
+          >
             <div className="nav-header">
               {logo}
               <div
@@ -65,7 +80,7 @@ export function NavbarDarkDynamic({
                 tabIndex={0}
                 onClick={() => setToggle(!toggle)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') setToggle(!toggle)
+                  if (e.key === 'Enter' || e.key === ' ') setToggle(!toggle);
                 }}
               ></div>
               <div className="mobile_nav">
@@ -74,18 +89,35 @@ export function NavbarDarkDynamic({
                     <LocaleSwitcher isDarkHeader={false} compact={true} />
                   </li>
                   <li>
-                    <Link href="#login" className="d-flex align-items-center" data-bs-toggle="modal" data-bs-target="#login">
+                    <Link
+                      href="#login"
+                      className="d-flex align-items-center"
+                      data-bs-toggle="modal"
+                      data-bs-target="#login"
+                    >
                       <BsPersonCircle className="me-1" />
                     </Link>
                   </li>
                   <li>
-                    <Link href="#cartSlider" className="cart-content" data-bs-toggle="offcanvas" role="button" aria-controls="cartSlider">
+                    <Link
+                      href="#cartSlider"
+                      className="cart-content"
+                      data-bs-toggle="offcanvas"
+                      role="button"
+                      aria-controls="cartSlider"
+                    >
                       <BsBasket2 className="" />
                       <span className="head-cart-counter">3</span>
                     </Link>
                   </li>
                   <li>
-                    <Link href="#searchSlider" className="d-flex align-items-center" data-bs-toggle="offcanvas" role="button" aria-controls="searchSlider">
+                    <Link
+                      href="#searchSlider"
+                      className="d-flex align-items-center"
+                      data-bs-toggle="offcanvas"
+                      role="button"
+                      aria-controls="searchSlider"
+                    >
                       <BsSearch className="me-1" />
                     </Link>
                   </li>
@@ -93,34 +125,79 @@ export function NavbarDarkDynamic({
               </div>
             </div>
 
-            <div className={`nav-menus-wrapper  ${toggle ? 'nav-menus-wrapper-open' : ''}`} style={{ transitionProperty: toggle ? 'none' : 'left' }}>
-              <div className='mobLogos'>
-                <Image src={logoUrl || '/img/logo.svg'} width={0} height={0} sizes='100vw' style={{ width: '140px', height: 'auto' }} className='img-fluid lightLogo' alt='Logo' />
+            <div
+              className={`nav-menus-wrapper ${toggle ? 'nav-menus-wrapper-open' : ''}`}
+              style={{ transitionProperty: toggle ? 'none' : 'left' }}
+            >
+              <div className="mobLogos">
+                <Image
+                  src={logoUrl || '/img/logo.svg'}
+                  width={0}
+                  height={0}
+                  sizes="100vw"
+                  style={{ width: '140px', height: 'auto' }}
+                  className="img-fluid lightLogo"
+                  alt="Logo"
+                />
               </div>
               <span
-                className='nav-menus-wrapper-close-button'
+                className="nav-menus-wrapper-close-button"
                 role="button"
                 tabIndex={0}
                 onClick={() => setToggle(false)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') setToggle(false)
+                  if (e.key === 'Enter' || e.key === ' ') setToggle(false);
                 }}
-              >✕</span>
+              >
+                ✕
+              </span>
 
               {(() => {
                 const defaultLinks: NavbarLinkItem[] = [
-                  { id: 'home', label: locale === 'vi' ? 'Trang chủ' : 'Home', href: '/' },
-                  { id: 'smartphones', label: locale === 'vi' ? 'Điện thoại' : 'Smartphones', href: '/smartphones' },
-                  { id: 'compare', label: locale === 'vi' ? 'So sánh' : 'Compare', href: '/compare' },
-                  { id: 'blog', label: locale === 'vi' ? 'Đánh giá & Tin tức' : 'Blog & News', href: '/blog' },
+                  {
+                    id: 'home',
+                    label: locale === 'vi' ? 'Trang chủ' : 'Home',
+                    href: '/',
+                  },
+                  {
+                    id: 'smartphones',
+                    label: locale === 'vi' ? 'Điện thoại' : 'Smartphones',
+                    href: '/smartphones',
+                  },
+                  {
+                    id: 'laptops',
+                    label: locale === 'vi' ? 'Laptop' : 'Laptops',
+                    href: '/laptops',
+                  },
+                  {
+                    id: 'tablets',
+                    label: locale === 'vi' ? 'Máy tính bảng' : 'Tablets',
+                    href: '/tablets',
+                  },
+                  {
+                    id: 'merchants',
+                    label: locale === 'vi' ? 'Gian hàng' : 'Merchants',
+                    href: '/merchants',
+                  },
+                  {
+                    id: 'compare',
+                    label: locale === 'vi' ? 'So sánh' : 'Compare',
+                    href: '/compare',
+                  },
                 ];
-                const validLinks = (links || []).filter((l) => l?.href && l?.label);
-                const navLinks = validLinks.length > 0 ? validLinks : defaultLinks;
+                const validLinks = (links || []).filter(
+                  (l) => l?.href && l?.label
+                );
+                const navLinks =
+                  validLinks.length > 0 ? validLinks : defaultLinks;
                 return (
                   <ul className="nav-menu">
                     {navLinks.map((link) => (
                       <li key={String(link.id) + link.href}>
-                        <Link href={link.href!} target={link.newTab ? '_blank' : undefined}>
+                        <Link
+                          href={link.href!}
+                          target={link.newTab ? '_blank' : undefined}
+                        >
                           {link.label}
                         </Link>
                       </li>
@@ -134,7 +211,13 @@ export function NavbarDarkDynamic({
                   <LocaleSwitcher isDarkHeader={false} />
                 </li>
                 <li className="list-buttons d-flex align-items-center">
-                  <Link href="/register" className="d-inline-flex align-items-center"><BsGeoAltFill className="fs-6 me-1" />{locale === 'vi' ? 'Đăng tin' : 'Add Listing'}</Link>
+                  <Link
+                    href="/register"
+                    className="d-inline-flex align-items-center"
+                  >
+                    <BsGeoAltFill className="fs-6 me-1" />
+                    {locale === 'vi' ? 'Đăng tin' : 'Add Listing'}
+                  </Link>
                 </li>
               </ul>
             </div>
@@ -143,11 +226,7 @@ export function NavbarDarkDynamic({
       </div>
       <div className="clearfix"></div>
     </>
-  )
+  );
 }
 
-export default NavbarDarkDynamic
-
-
-
-
+export default NavbarDarkDynamic;
