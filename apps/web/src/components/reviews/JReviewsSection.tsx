@@ -13,6 +13,8 @@ type FilterTab = 'all' | 'authentic' | 'expert' | 'ignored';
 type SortMode = 'weight_desc' | 'newest' | 'rating_desc' | 'rating_asc';
 
 export interface JReviewsSectionProps {
+  masterProductId?: string;
+  productSlug?: string;
   productName: string;
   averageRating: number;
   userRatingWeighted: number | null;
@@ -23,6 +25,14 @@ export interface JReviewsSectionProps {
   reviews: ReviewItem[];
   summary: ReviewAnalysisSummary;
 }
+
+const CRITERIA_META = [
+  { key: 'screen', label: 'Màn hình & Hiển thị' },
+  { key: 'performance', label: 'Hiệu năng & Nhiệt độ' },
+  { key: 'camera', label: 'Camera & Quay chụp' },
+  { key: 'battery', label: 'Pin & Sạc nhanh' },
+  { key: 'value', label: 'Đáng đồng tiền' },
+] as const;
 
 const FLAG_META: Record<
   ReviewFlagCategory,
@@ -64,8 +74,11 @@ const FLAG_META: Record<
 };
 
 const STORAGE_KEY = 'rate_review_votes_v1';
+const LOCAL_REVIEWS_PREFIX = 'rate_community_reviews_v1_';
 
 export default function JReviewsSection({
+  masterProductId,
+  productSlug,
   productName,
   averageRating,
   userRatingWeighted,
@@ -83,6 +96,23 @@ export default function JReviewsSection({
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
   const [sortMode, setSortMode] = useState<SortMode>('weight_desc');
 
+  // 5-Criteria Write Review Form State
+  const [showWriteForm, setShowWriteForm] = useState(false);
+  const [authorName, setAuthorName] = useState('');
+  const [variation, setVariation] = useState('');
+  const [reviewerType, setReviewerType] = useState<'user' | 'expert'>('user');
+  const [comment, setComment] = useState('');
+  const [criteriaScores, setCriteriaScores] = useState<Record<string, number>>({
+    screen: 5,
+    performance: 5,
+    camera: 5,
+    battery: 5,
+    value: 5,
+  });
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
+
   useEffect(() => {
     try {
       const raw = window.localStorage.getItem(STORAGE_KEY);
@@ -92,10 +122,24 @@ export default function JReviewsSection({
           setUserVotes(parsed);
         }
       }
+      const cacheKey = `${LOCAL_REVIEWS_PREFIX}${masterProductId || productSlug || productName}`;
+      const savedLocal = window.localStorage.getItem(cacheKey);
+      if (savedLocal) {
+        const parsedLocal = JSON.parse(savedLocal);
+        if (Array.isArray(parsedLocal) && parsedLocal.length > 0) {
+          setReviews((prev) => {
+            const existingIds = new Set(prev.map((x) => x.id));
+            const uniqueNew = parsedLocal.filter(
+              (x: ReviewItem) => x && x.id && !existingIds.has(x.id)
+            );
+            return [...uniqueNew, ...prev];
+          });
+        }
+      }
     } catch {
       // Ignore storage access errors in private browsing
     }
-  }, []);
+  }, [masterProductId, productSlug, productName]);
 
   const counts = useMemo(() => {
     const authentic = reviews.filter(
@@ -331,6 +375,79 @@ export default function JReviewsSection({
     }
   }
 
+  async function handleSubmitCommunityReview(e: React.FormEvent) {
+    e.preventDefault();
+    setSubmitError(null);
+    setSubmitSuccess(null);
+
+    const cleanComment = comment.trim();
+    if (cleanComment.length < 15) {
+      setSubmitError('Vui lòng nhập ít nhất 15 ký tự mô tả trải nghiệm thực tế của bạn.');
+      return;
+    }
+
+    if (!masterProductId) {
+      setSubmitError('Không xác định được mã sản phẩm chuẩn hóa để gửi đánh giá.');
+      return;
+    }
+
+    setSubmittingReview(true);
+    try {
+      const avgStar = Math.round(
+        Object.values(criteriaScores).reduce((a, b) => a + b, 0) /
+          Object.values(criteriaScores).length
+      );
+      const res = await fetch('/api/v1/rate/reviews', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          masterProductId,
+          authorName: authorName.trim() || 'Người dùng Rate.vn',
+          variation: variation.trim() || undefined,
+          reviewerType,
+          ratingStar: avgStar,
+          comment: cleanComment,
+          criteriaRatings: criteriaScores,
+        }),
+      });
+
+      const payload = await res.json();
+      if (!res.ok || !payload?.ok || !payload?.review) {
+        setSubmitError(payload?.error || 'Không thể gửi đánh giá lúc này.');
+        return;
+      }
+
+      const newRev = payload.review as ReviewItem;
+      setReviews((prev) => [newRev, ...prev]);
+
+      try {
+        const cacheKey = `${LOCAL_REVIEWS_PREFIX}${masterProductId || productSlug || productName}`;
+        const existingLocal = JSON.parse(
+          window.localStorage.getItem(cacheKey) || '[]'
+        );
+        const nextLocal = [
+          newRev,
+          ...(Array.isArray(existingLocal) ? existingLocal : []),
+        ].slice(0, 20);
+        window.localStorage.setItem(cacheKey, JSON.stringify(nextLocal));
+      } catch {
+        // Ignore storage quota errors
+      }
+
+      setComment('');
+      setShowWriteForm(false);
+      setSubmitSuccess(
+        newRev.include_in_rating
+          ? `Đã đăng đánh giá thực chất thành công! Hệ thống AI chấm trọng số khởi tạo ${newRev.helpfulness_weight.toFixed(2)}x.`
+          : `Đánh giá của bạn đã được ghi nhận nhưng bị bộ lọc AI gắn cờ (${newRev.flag_category}) nên không tính vào điểm trung bình.`
+      );
+    } catch {
+      setSubmitError('Lỗi kết nối khi gửi đánh giá. Vui lòng thử lại.');
+    } finally {
+      setSubmittingReview(false);
+    }
+  }
+
   return (
     <div id="jreviews-section" className="card border-0 shadow-sm rounded-4 p-4 p-md-5">
       {/* Header */}
@@ -343,10 +460,182 @@ export default function JReviewsSection({
             Điểm sản phẩm {productName} chỉ tính các đánh giá thực chất và tự động điều chỉnh trọng số theo bình chọn Hữu ích của cộng đồng (tối đa 3.00x).
           </p>
         </div>
-        <span className="badge bg-dark text-white px-3 py-2 rounded-pill small">
-          Chuẩn JReviews Dual-Rating
-        </span>
+        <div className="d-flex flex-wrap align-items-center gap-2">
+          {masterProductId && (
+            <button
+              type="button"
+              onClick={() => {
+                setShowWriteForm((v) => !v);
+                setSubmitError(null);
+              }}
+              className="btn btn-primary btn-sm rounded-pill px-3 py-2 fw-medium"
+            >
+              {showWriteForm ? '✕ Đóng biểu mẫu' : '✍️ Viết đánh giá 5 tiêu chí'}
+            </button>
+          )}
+          <span className="badge bg-dark text-white px-3 py-2 rounded-pill small">
+            Chuẩn JReviews Dual-Rating
+          </span>
+        </div>
       </div>
+
+      {submitSuccess && (
+        <div className="alert alert-success py-2 px-3 small rounded-3 mb-4 d-flex justify-content-between align-items-center">
+          <span>✅ {submitSuccess}</span>
+          <button
+            type="button"
+            className="btn-close btn-sm"
+            aria-label="Đóng"
+            onClick={() => setSubmitSuccess(null)}
+          />
+        </div>
+      )}
+
+      {/* Interactive 5-Criteria Write Review Form */}
+      {showWriteForm && (
+        <form
+          onSubmit={handleSubmitCommunityReview}
+          className="border border-primary border-opacity-25 rounded-4 p-4 mb-4 bg-light"
+        >
+          <div className="d-flex justify-content-between align-items-center mb-3">
+            <h3 className="h6 fw-bold text-dark mb-0">
+              ✍️ Gửi Đánh Giá 5 Tiêu Chí Kỹ Thuật Cho {productName}
+            </h3>
+            <span className="badge bg-primary-subtle text-primary rounded-pill small">
+              Tự động kiểm duyệt Seeding bằng AI
+            </span>
+          </div>
+
+          {submitError && (
+            <div className="alert alert-danger py-2 px-3 small rounded-3 mb-3">
+              ⚠️ {submitError}
+            </div>
+          )}
+
+          <div className="row g-3 mb-3">
+            <div className="col-md-4 col-12">
+              <label className="form-label small fw-semibold mb-1">
+                Tên hiển thị của bạn
+              </label>
+              <input
+                type="text"
+                value={authorName}
+                onChange={(e) => setAuthorName(e.target.value)}
+                placeholder="VD: Minh Quân (Hà Nội)"
+                className="form-control form-control-sm rounded-3"
+                maxLength={80}
+              />
+            </div>
+            <div className="col-md-4 col-12">
+              <label className="form-label small fw-semibold mb-1">
+                Phiên bản / Dung lượng đang dùng
+              </label>
+              <input
+                type="text"
+                value={variation}
+                onChange={(e) => setVariation(e.target.value)}
+                placeholder="VD: Titan Tự Nhiên - 256GB"
+                className="form-control form-control-sm rounded-3"
+                maxLength={100}
+              />
+            </div>
+            <div className="col-md-4 col-12">
+              <label className="form-label small fw-semibold mb-1">
+                Phân loại người đánh giá
+              </label>
+              <select
+                value={reviewerType}
+                onChange={(e) =>
+                  setReviewerType(e.target.value === 'expert' ? 'expert' : 'user')
+                }
+                className="form-select form-select-sm rounded-3"
+              >
+                <option value="user">Người mua &amp; trải nghiệm thực tế</option>
+                <option value="expert">Reviewer / Chuyên gia kỹ thuật</option>
+              </select>
+            </div>
+          </div>
+
+          {/* 5 Criteria Sliders / Star Selectors */}
+          <div className="p-3 bg-white rounded-3 border mb-3">
+            <div className="small fw-semibold text-dark mb-2">
+              Chấm điểm chi tiết 5 nhóm trải nghiệm (1 - 5 sao):
+            </div>
+            <div className="row g-2">
+              {CRITERIA_META.map((crit) => {
+                const score = criteriaScores[crit.key] ?? 5;
+                return (
+                  <div key={crit.key} className="col-lg col-md-4 col-sm-6 col-12">
+                    <div className="p-2 rounded-3 bg-light border h-100">
+                      <div className="small text-muted mb-1">{crit.label}</div>
+                      <div className="d-flex align-items-center justify-content-between">
+                        <div className="btn-group btn-group-sm" role="group">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <button
+                              key={star}
+                              type="button"
+                              onClick={() =>
+                                setCriteriaScores((prev) => ({
+                                  ...prev,
+                                  [crit.key]: star,
+                                }))
+                              }
+                              className={`btn btn-sm px-2 py-0 ${
+                                star <= score
+                                  ? 'btn-warning text-dark'
+                                  : 'btn-outline-secondary'
+                              }`}
+                            >
+                              ★
+                            </button>
+                          ))}
+                        </div>
+                        <span className="fw-bold small ms-1">{score}/5</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="mb-3">
+            <label className="form-label small fw-semibold mb-1">
+              Chia sẻ chi tiết trải nghiệm thực tế (tối thiểu 30 ký tự để được tính trọng số JReviews cao)
+            </label>
+            <textarea
+              rows={3}
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              placeholder="Nhận xét thực tế về màn hình, nhiệt độ khi chơi game/tác vụ nặng, thời lượng pin thực tế và chất lượng camera..."
+              className="form-control form-control-sm rounded-3"
+              required
+            />
+          </div>
+
+          <div className="d-flex justify-content-between align-items-center">
+            <span className="text-muted small">
+              Điểm trung bình 5 tiêu chí:{' '}
+              <strong className="text-danger">
+                {(
+                  Object.values(criteriaScores).reduce((a, b) => a + b, 0) /
+                  Object.values(criteriaScores).length
+                ).toFixed(1)}{' '}
+                / 5.0 ★
+              </strong>
+            </span>
+            <button
+              type="submit"
+              disabled={submittingReview}
+              className="btn btn-primary btn-sm rounded-pill px-4 py-2 fw-medium"
+            >
+              {submittingReview
+                ? 'Đang kiểm duyệt AI & gửi...'
+                : 'Gửi đánh giá chuẩn JReviews'}
+            </button>
+          </div>
+        </form>
+      )}
 
       {authNotice && (
         <div className="alert alert-info py-2 px-3 small rounded-3 mb-4 d-flex justify-content-between align-items-center">
@@ -708,6 +997,25 @@ export default function JReviewsSection({
                         Phân loại: {rev.variation}
                       </div>
                     )}
+
+                    {rev.criteria_ratings &&
+                      Object.keys(rev.criteria_ratings).length > 0 && (
+                        <div className="d-flex flex-wrap gap-1 mb-2">
+                          {CRITERIA_META.map((crit) => {
+                            const val = rev.criteria_ratings?.[crit.key];
+                            if (val == null) return null;
+                            return (
+                              <span
+                                key={crit.key}
+                                className="badge bg-light text-dark border rounded-pill"
+                                style={{ fontSize: '0.7rem' }}
+                              >
+                                {crit.label.split(' ')[0]}: {val}/5 ★
+                              </span>
+                            );
+                          })}
+                        </div>
+                      )}
 
                     {/* Review Comment */}
                     <p

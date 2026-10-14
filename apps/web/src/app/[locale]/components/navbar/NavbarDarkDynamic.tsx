@@ -184,6 +184,11 @@ export function NavbarDarkDynamic({
                     label: locale === 'vi' ? 'So sánh' : 'Compare',
                     href: '/compare',
                   },
+                  {
+                    id: 'watchlist',
+                    label: locale === 'vi' ? 'Canh giá' : 'Watchlist',
+                    href: '/watchlist',
+                  },
                 ];
                 const validLinks = (links || []).filter(
                   (l) => l?.href && l?.label
@@ -212,11 +217,11 @@ export function NavbarDarkDynamic({
                 </li>
                 <li className="list-buttons d-flex align-items-center">
                   <Link
-                    href="/register"
+                    href="/watchlist"
                     className="d-inline-flex align-items-center"
                   >
                     <BsGeoAltFill className="fs-6 me-1" />
-                    {locale === 'vi' ? 'Đăng tin' : 'Add Listing'}
+                    {locale === 'vi' ? 'Canh giá thật' : 'Price Watch'}
                   </Link>
                 </li>
               </ul>

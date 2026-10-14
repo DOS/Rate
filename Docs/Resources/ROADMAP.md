@@ -67,8 +67,14 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc **4 T�
   - Thay thế toàn bộ mock template trên Trang chủ bằng dữ liệu thật 100% từ Supabase `rate` schema, tích hợp `HeroSearchInspector.tsx` (Autocomplete + Kiểm tra Link Shopee/Lazada/Tiki/TikTok Shop phát hiện giảm giá ảo & điểm rủi ro kép).
   - Triển khai trang Danh mục `/tablets`, `/laptops` dùng chung bộ lọc 10 nhóm thông số và trang Hồ sơ Tín nhiệm Gian hàng `/merchants`, `/merchants/[id]` (Dual Risk Score + phân tích Seeding).
   - Mở rộng REST API v1 (`/api/v1/rate/lookup`, `/api/v1/rate/merchants`, `/api/v1/rate/merchants/[id]`) và viết migration chuẩn hóa bảo mật quyền truy cập + tối ưu chỉ mục (`20261014231500_rate_search_rpc_and_security_hardening.sql`).
+- [x] **4.6. Chi Tiết Sản Phẩm Đa Danh Mục (`/tablets/[slug]`, `/laptops/[slug]`), Gửi Đánh Giá 5 Tiêu Chí JReviews (`POST /api/v1/rate/reviews`), Hệ Thống Canh Giá Thật (`/watchlist`), JSON-LD SEO & Dọn Dẹp 56 Route Template Dư Thừa (Issue #19):**
+  - Tách `ProductDetailView` dùng chung cho `/smartphones/[slug]`, `/tablets/[slug]`, `/laptops/[slug]` kèm Schema.org `@graph` (`Product`, `AggregateOffer`, `AggregateRating`, `BreadcrumbList`) và `OnlineStore` trên `/merchants/[id]`.
+  - Triển khai biểu mẫu viết đánh giá 5 tiêu chí JReviews (`Màn hình`, `Hiệu năng`, `Camera`, `Pin & Sạc`, `Đáng tiền`) trong `JReviewsSection.tsx`, API `POST /api/v1/rate/reviews` và migration RPC `rate.submit_community_review` (`20261014234500_rate_community_review_submission_rpc.sql`).
+  - Triển khai nút `PriceWatchButton.tsx` và trang `/watchlist` (`WatchlistWorkspace.tsx`) cho phép đặt mức giá mục tiêu và theo dõi biến động giá thật.
+  - Xóa 56 route demo khách sạn/nhà hàng dư thừa của template ListingHub, chuẩn hóa `FooterDynamic.tsx` và `sitemap.ts`.
+- [ ] **4.7. Trang Tổng Hợp Deal Thật Trong Ngày (`/deals`), Trang Tài Liệu Open-Core REST API v1 (`/developers`) & Đồng Bộ Từ Điển Đa Ngôn Ngữ (`vi`/`en`/`cs`) (Issue #20).**
 
 ### 🔮 Phase 5: Mở Rộng Đa Sàn & Browser Extension MV3
 
 - [ ] **5.1. Mở rộng Scraper sang Lazada, Tiki, CellphoneS, Thế Giới Di Động (Issue #1 bên `DOS/Rate-Services`).**
-- [ ] **5.2. Nâng cấp Rate Browser Extension (Manifest V3) kết nối trực tiếp API `/api/v1/rate/lookup`, `/api/v1/rate/products/[slug]` & `/api/v1/rate/merchants/[id]` (Issue #12).**
+- [ ] **5.2. Nâng cấp Rate Browser Extension (Manifest V3) kết nối trực tiếp API `/api/v1/rate/lookup`, `/api/v1/rate/products/[slug]` & `/api/v1/rate/merchants/[id]` (Issue #12 - Đang thực hiện bởi Agent khác).**

@@ -78,8 +78,65 @@ export default async function MerchantProfilePage({
       ? Math.round((brk.authentic_count / brk.total_reviews) * 1000) / 10
       : 100;
 
+  const canonicalUrl =
+    locale === 'vi'
+      ? `https://rate.vn/merchants/${merchant.id}`
+      : `https://rate.vn/${locale}/merchants/${merchant.id}`;
+
+  const merchantJsonLd = {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'BreadcrumbList',
+        itemListElement: [
+          {
+            '@type': 'ListItem',
+            position: 1,
+            name: 'Trang chủ',
+            item: 'https://rate.vn',
+          },
+          {
+            '@type': 'ListItem',
+            position: 2,
+            name: 'Gian hàng',
+            item: 'https://rate.vn/merchants',
+          },
+          {
+            '@type': 'ListItem',
+            position: 3,
+            name: merchant.name,
+            item: canonicalUrl,
+          },
+        ],
+      },
+      {
+        '@type': 'OnlineStore',
+        name: merchant.name,
+        url: canonicalUrl,
+        ...(merchant.url ? { sameAs: [merchant.url] } : {}),
+        ...(merchant.rating_star && merchant.rating_star > 0 && brk.total_reviews > 0
+          ? {
+              aggregateRating: {
+                '@type': 'AggregateRating',
+                ratingValue: Number(merchant.rating_star.toFixed(2)),
+                reviewCount: brk.total_reviews,
+                bestRating: 5,
+                worstRating: 1,
+              },
+            }
+          : {}),
+      },
+    ],
+  };
+
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(merchantJsonLd).replace(/</g, '\\u003c'),
+        }}
+      />
       <NavbarDarkDynamic links={[]} />
 
       <div className="container py-5">

@@ -1,5 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import type { MasterProduct } from '@repo/shared-data';
+export type { MasterProduct };
 
 type RateSchemaClient = ReturnType<SupabaseClient['schema']>;
 let _client: RateSchemaClient | null = null;
@@ -326,19 +327,25 @@ export async function getMasterProducts(
     );
   }
 
-  // Keyword search across name, brand, model, chipset, key_specs
+  // Keyword search across combined brand + name + model + chipset + key_specs (supports multi-token queries like "Apple iPhone 16 Pro Max")
   if (params?.search && params.search.trim().length > 0) {
     const q = params.search.trim().toLowerCase();
+    const tokens = q.split(/\s+/).filter((t) => t.length >= 2);
     items = items.filter((item) => {
-      const haystacks = [
-        item.name,
+      const combined = [
         item.brand,
+        item.name,
         item.model,
+        item.model_key,
         item.variant_name || '',
         item.key_specs?.chip || '',
         item.specifications?.hardware?.chipset || '',
-      ];
-      return haystacks.some((h) => h && h.toLowerCase().includes(q));
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      if (combined.includes(q)) return true;
+      return tokens.length > 0 && tokens.every((tok) => combined.includes(tok));
     });
   }
 

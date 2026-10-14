@@ -630,7 +630,7 @@ export async function CategoryCatalogContent({
                             {/* Top Image Area */}
                             <div className="listing-top-item">
                               <Link
-                                href={`/smartphones/${item.slug}`}
+                                href={`${basePath}/${item.slug}`}
                                 className="topLink d-flex align-items-center justify-content-center bg-light"
                                 style={{ height: '250px', padding: '20px' }}
                               >
@@ -701,7 +701,7 @@ export async function CategoryCatalogContent({
                               <div className="listing-details">
                                 <h4 className="listingTitle mb-1">
                                   <Link
-                                    href={`/smartphones/${item.slug}`}
+                                    href={`${basePath}/${item.slug}`}
                                     className="titleLink"
                                   >
                                     {item.name}
@@ -765,7 +765,7 @@ export async function CategoryCatalogContent({
                                 <div className="catdWraps">
                                   <div className="flex-start">
                                     <Link
-                                      href={`/smartphones/${item.slug}`}
+                                      href={`${basePath}/${item.slug}`}
                                       className="d-flex align-items-center justify-content-start gap-2"
                                     >
                                       <span className="catIcon cats-1">

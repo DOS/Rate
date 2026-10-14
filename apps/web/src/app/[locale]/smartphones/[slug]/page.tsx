@@ -12,19 +12,19 @@ import JReviewsSection from '@/components/reviews/JReviewsSection';
 import PriceHistorySection from '@/components/price-history/PriceHistorySection';
 import CompareQuickToggle from '@/components/compare/CompareQuickToggle';
 import CompareTrayBar from '@/components/compare/CompareTrayBar';
+import PriceWatchButton from '@/components/watchlist/PriceWatchButton';
 import NavbarDarkDynamic from '../../components/navbar/NavbarDarkDynamic';
 import FooterTop from '../../components/footer-top';
 import FooterDynamic from '../../components/footer/FooterDynamic';
 import BackToTop from '../../components/back-to-top';
 import type { KeySpecs, ProductSpecifications } from '@repo/shared-data';
 
-type PageParams = Promise<{ locale: string; slug: string }>;
+export type PageParams = Promise<{ locale: string; slug: string }>;
 
-export async function generateMetadata({
-  params,
-}: {
-  params: PageParams;
-}): Promise<Metadata> {
+export async function generateCategoryProductMetadata(
+  params: PageParams,
+  categoryBasePath = '/smartphones'
+): Promise<Metadata> {
   const { locale, slug } = await params;
   const product = await getCachedMasterProductBySlug(slug);
   if (!product) {
@@ -35,8 +35,8 @@ export async function generateMetadata({
   const minPrice = Number(product.min_price || 0).toLocaleString('vi-VN');
   const canonicalUrl =
     locale === 'vi'
-      ? `https://rate.vn/smartphones/${product.slug}`
-      : `https://rate.vn/${locale}/smartphones/${product.slug}`;
+      ? `https://rate.vn${categoryBasePath}/${product.slug}`
+      : `https://rate.vn/${locale}${categoryBasePath}/${product.slug}`;
 
   return {
     title: `${product.name} - Giá từ ${minPrice} ₫, Thông số 10 nhóm & Đánh giá thực chất | Rate.vn`,
@@ -54,10 +54,22 @@ export async function generateMetadata({
   };
 }
 
-export default async function SmartphoneDetailPage({
+export async function generateMetadata({
   params,
 }: {
   params: PageParams;
+}): Promise<Metadata> {
+  return generateCategoryProductMetadata(params, '/smartphones');
+}
+
+export async function ProductDetailView({
+  params,
+  categoryBasePath = '/smartphones',
+  categoryLabel = 'Điện thoại',
+}: {
+  params: PageParams;
+  categoryBasePath?: string;
+  categoryLabel?: string;
 }) {
   const { locale, slug } = await params;
   const product = await getCachedMasterProductBySlug(slug);
@@ -93,34 +105,66 @@ export default async function SmartphoneDetailPage({
       ? Number(product.user_rating_weighted)
       : Number(product.average_rating || 0);
 
-  const productJsonLd = {
+  const canonicalUrl =
+    locale === 'vi'
+      ? `https://rate.vn${categoryBasePath}/${product.slug}`
+      : `https://rate.vn/${locale}${categoryBasePath}/${product.slug}`;
+
+  const structuredDataGraph = {
     '@context': 'https://schema.org',
-    '@type': 'Product',
-    name: product.name,
-    brand: {
-      '@type': 'Brand',
-      name: product.brand,
-    },
-    sku: product.model_key,
-    image: product.images || [],
-    offers: {
-      '@type': 'AggregateOffer',
-      priceCurrency: 'VND',
-      lowPrice: Number(product.min_price || 0),
-      highPrice: Number(product.max_price || product.min_price || 0),
-      offerCount: offers.length || product.merchant_count || 1,
-    },
-    ...(displayUserRating > 0 && authenticCount > 0
-      ? {
-          aggregateRating: {
-            '@type': 'AggregateRating',
-            ratingValue: Number(displayUserRating.toFixed(2)),
-            reviewCount: authenticCount,
-            bestRating: 5,
-            worstRating: 1,
+    '@graph': [
+      {
+        '@type': 'BreadcrumbList',
+        itemListElement: [
+          {
+            '@type': 'ListItem',
+            position: 1,
+            name: 'Trang chủ',
+            item: 'https://rate.vn',
           },
-        }
-      : {}),
+          {
+            '@type': 'ListItem',
+            position: 2,
+            name: categoryLabel,
+            item: `https://rate.vn${categoryBasePath}`,
+          },
+          {
+            '@type': 'ListItem',
+            position: 3,
+            name: product.name,
+            item: canonicalUrl,
+          },
+        ],
+      },
+      {
+        '@type': 'Product',
+        name: product.name,
+        brand: {
+          '@type': 'Brand',
+          name: product.brand,
+        },
+        sku: product.model_key,
+        image: product.images || [],
+        offers: {
+          '@type': 'AggregateOffer',
+          priceCurrency: 'VND',
+          lowPrice: Number(product.min_price || 0),
+          highPrice: Number(product.max_price || product.min_price || 0),
+          offerCount: offers.length || product.merchant_count || 1,
+        },
+        ...(displayUserRating > 0 && authenticCount > 0
+          ? {
+              aggregateRating: {
+                '@type': 'AggregateRating',
+                ratingValue: Number(displayUserRating.toFixed(2)),
+                reviewCount: authenticCount,
+                bestRating: 5,
+                worstRating: 1,
+              },
+            }
+          : {}),
+      },
+    ],
   };
 
   return (
@@ -128,7 +172,7 @@ export default async function SmartphoneDetailPage({
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify(productJsonLd).replace(/</g, '\\u003c'),
+          __html: JSON.stringify(structuredDataGraph).replace(/</g, '\\u003c'),
         }}
       />
       <NavbarDarkDynamic links={[]} />
@@ -142,8 +186,8 @@ export default async function SmartphoneDetailPage({
               </Link>
             </li>
             <li className="breadcrumb-item">
-              <Link href="/smartphones" className="text-decoration-none">
-                Điện thoại
+              <Link href={categoryBasePath} className="text-decoration-none">
+                {categoryLabel}
               </Link>
             </li>
             <li className="breadcrumb-item active" aria-current="page">
@@ -353,6 +397,20 @@ export default async function SmartphoneDetailPage({
                   >
                     Bảng đối chiếu
                   </Link>
+                  <PriceWatchButton
+                    slug={product.slug}
+                    name={product.name}
+                    brand={product.brand}
+                    categoryPath={categoryBasePath}
+                    thumbnail={
+                      product.thumbnail ||
+                      (product.images && product.images.length > 0
+                        ? product.images[0] || null
+                        : null)
+                    }
+                    currentMinPrice={Number(product.min_price || 0)}
+                    size="md"
+                  />
                   <CompareQuickToggle
                     size="md"
                     item={{
@@ -809,6 +867,8 @@ export default async function SmartphoneDetailPage({
 
         {/* JReviews Dual-Rating, AI Review Synthesis & Interactive Voting */}
         <JReviewsSection
+          masterProductId={product.id}
+          productSlug={product.slug}
           productName={product.name}
           averageRating={Number(product.average_rating || 0)}
           userRatingWeighted={
@@ -828,9 +888,23 @@ export default async function SmartphoneDetailPage({
         />
       </div>
       <CompareTrayBar />
-      <FooterTop />
+      <FooterTop locale={locale} />
       <FooterDynamic sections={[]} links={[]} locale={locale} />
       <BackToTop />
     </>
+  );
+}
+
+export default async function SmartphoneDetailPage({
+  params,
+}: {
+  params: PageParams;
+}) {
+  return (
+    <ProductDetailView
+      params={params}
+      categoryBasePath="/smartphones"
+      categoryLabel="Điện thoại"
+    />
   );
 }
