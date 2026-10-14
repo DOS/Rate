@@ -17,6 +17,8 @@ import ListSidebarOne from '../components/list-sidebar-one';
 import FooterTop from '../components/footer-top';
 import FooterDynamic from '../components/footer/FooterDynamic';
 import BackToTop from '../components/back-to-top';
+import CompareQuickToggle from '@/components/compare/CompareQuickToggle';
+import CompareTrayBar from '@/components/compare/CompareTrayBar';
 import {
   BsCpu,
   BsLightningCharge,
@@ -651,6 +653,17 @@ export default async function SmartphonesCatalogPage({
                                   </div>
                                 )}
                               </Link>
+                              <div className="position-absolute end-0 top-0 z-2 me-3 mt-3">
+                                <CompareQuickToggle
+                                  item={{
+                                    slug: item.slug,
+                                    name: item.name,
+                                    brand: item.brand,
+                                    thumbnail: thumb ?? null,
+                                    min_price: Number(item.min_price || 0),
+                                  }}
+                                />
+                              </div>
                               <div className="position-absolute end-0 bottom-0 z-2 me-3 mb-3">
                                 <span className="badge bg-dark bg-opacity-75 rounded-pill small px-3 py-2 text-white">
                                   <BsShop className="me-1" />
@@ -785,6 +798,7 @@ export default async function SmartphonesCatalogPage({
         </div>
       </section>
 
+      <CompareTrayBar />
       <FooterTop />
       <FooterDynamic sections={[]} links={[]} locale={locale} />
       <BackToTop />
