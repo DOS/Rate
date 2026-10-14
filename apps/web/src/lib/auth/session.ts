@@ -7,12 +7,7 @@ export async function requireServerSession() {
   return session
 }
 
-export async function getStrapiJwtFromSession() {
+export async function getSupabaseAccessTokenFromSession() {
   const session = await getServerSession(nextAuthOptions)
   return (session as any)?.accessToken as string | undefined
 }
-
-
-
-
-

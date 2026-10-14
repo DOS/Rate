@@ -1,24 +1,12 @@
 import type { NextAuthOptions } from "next-auth"
 import Credentials from "next-auth/providers/credentials"
-import { env } from "@/env.mjs"
-
-interface StrapiAuthResponse {
-  jwt: string
-  user: {
-    id: number
-    username?: string
-    email?: string
-    confirmed?: boolean
-    blocked?: boolean
-    [key: string]: any
-  }
-}
+import { getPublicClient } from "@repo/shared-data"
 
 export const nextAuthOptions: NextAuthOptions = {
   session: { strategy: "jwt" },
   providers: [
     Credentials({
-      name: "Credentials",
+      name: "Supabase Credentials",
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
@@ -28,28 +16,32 @@ export const nextAuthOptions: NextAuthOptions = {
           return null
         }
         try {
-          const res = await fetch(`${env.STRAPI_URL}/api/auth/local`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              identifier: String(credentials.email),
-              password: String(credentials.password),
-            }),
+          const supabase = getPublicClient()
+          const { data, error } = await supabase.auth.signInWithPassword({
+            email: String(credentials.email).trim(),
+            password: String(credentials.password),
           })
-          if (!res.ok) {
-            return null
-          }
-          const data = (await res.json()) as StrapiAuthResponse
-          if (!data?.jwt || !data?.user) {
+
+          if (error || !data?.user || !data?.session) {
             return null
           }
 
+          const fullName =
+            (data.user.user_metadata?.full_name as string | undefined) ??
+            (data.user.user_metadata?.name as string | undefined) ??
+            data.user.email ??
+            "Rate User"
+
           return {
-            id: String(data.user.id),
-            name: data.user.username ?? data.user.email ?? "User",
+            id: data.user.id,
+            name: fullName,
             email: data.user.email,
-            strapiJwt: data.jwt,
-            strapiUser: data.user,
+            supabaseAccessToken: data.session.access_token,
+            supabaseUser: {
+              id: data.user.id,
+              email: data.user.email,
+              name: fullName,
+            },
           } as any
         } catch (_error) {
           return null
@@ -60,27 +52,23 @@ export const nextAuthOptions: NextAuthOptions = {
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        token.strapiJwt = (user as any).strapiJwt
-        token.strapiUser = (user as any).strapiUser
+        token.supabaseAccessToken = (user as any).supabaseAccessToken
+        token.supabaseUser = (user as any).supabaseUser
       }
       return token
     },
     async session({ session, token }) {
-      ;(session as any).accessToken = token.strapiJwt
+      ;(session as any).accessToken = token.supabaseAccessToken
       session.user = session.user ?? {}
-      ;(session.user as any).id = (token.strapiUser as any)?.id ?? token.sub
+      ;(session.user as any).id =
+        (token.supabaseUser as any)?.id ?? token.sub ?? null
       ;(session.user as any).name =
-        (token.strapiUser as any)?.username ?? session.user?.name ?? null
+        (token.supabaseUser as any)?.name ?? session.user?.name ?? null
       ;(session.user as any).email =
-        (token.strapiUser as any)?.email ?? session.user?.email ?? null
+        (token.supabaseUser as any)?.email ?? session.user?.email ?? null
       return session
     },
   },
 }
 
 export default nextAuthOptions
-
-
-
-
-
