@@ -63,5 +63,8 @@ jobs:
       - name: Typecheck @repo/web
         run: pnpm --filter @repo/web typecheck
 
+      - name: Run @repo/web Core Architecture Tests
+        run: pnpm --filter @repo/web test
+
       - name: Build @repo/web (Next.js 16)
         run: pnpm --filter @repo/web build

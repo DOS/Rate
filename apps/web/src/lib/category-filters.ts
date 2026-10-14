@@ -211,6 +211,112 @@ export const CATEGORY_FILTER_SCHEMAS: Record<string, CategoryFilterSchema> = {
       },
     ],
   },
+  smartwatches: {
+    categorySlug: 'smartwatches',
+    directorySlug: 'tech_electronics',
+    directoryName: 'Công nghệ & Thiết bị số',
+    categoryTitle: 'Đồng Hồ Thông Minh (Smartwatches)',
+    categorySubtitle:
+      'Đối chiếu cảm biến sức khỏe, chuẩn kháng nước, GPS đa băng tần và lịch sử giá đồng hồ thông minh chính hãng',
+    searchPlaceholder:
+      'Tìm Apple Watch, Galaxy Watch, Garmin, Xiaomi Watch, Huawei Watch...',
+    defaultBrands: ['Apple', 'Samsung', 'Garmin', 'Xiaomi', 'Huawei', 'Amazfit'],
+    ramOptionsGb: [1, 2, 4],
+    storageOptionsGb: [4, 16, 32, 64],
+    priceRangeMillion: {
+      min: 0,
+      max: 30,
+      step: 1,
+    },
+    pricePresets: [
+      { id: 'under-3m', label: 'Dưới 3 triệu', minVnd: 0, maxVnd: 3_000_000 },
+      {
+        id: '3m-8m',
+        label: '3 - 8 triệu',
+        minVnd: 3_000_000,
+        maxVnd: 8_000_000,
+      },
+      {
+        id: '8m-15m',
+        label: '8 - 15 triệu',
+        minVnd: 8_000_000,
+        maxVnd: 15_000_000,
+      },
+      {
+        id: 'over-15m',
+        label: 'Trên 15 triệu',
+        minVnd: 15_000_000,
+        maxVnd: 30_000_000,
+      },
+    ],
+    featureCheckboxes: [
+      {
+        key: 'has5g',
+        label: 'Hỗ trợ eSIM / LTE',
+        fieldGroup: 'cellular',
+        description: 'Nghe gọi độc lập qua eSIM không cần mang theo điện thoại',
+      },
+      {
+        key: 'hasNfc',
+        label: 'Có NFC / Thanh toán chạm',
+        fieldGroup: 'connectivity',
+        description: 'Hỗ trợ kết nối NFC và thanh toán không chạm',
+      },
+      {
+        key: 'fastCharge',
+        label: 'Sạc nhanh từ tính',
+        fieldGroup: 'battery',
+        description: 'Hỗ trợ sạc nhanh không dây nam châm',
+      },
+    ],
+  },
+  earbuds: {
+    categorySlug: 'earbuds',
+    directorySlug: 'tech_electronics',
+    directoryName: 'Công nghệ & Thiết bị số',
+    categoryTitle: 'Tai Nghe Không Dây & Chống Ồn ANC (Earbuds)',
+    categorySubtitle:
+      'So sánh khả năng chống ồn chủ động ANC, codec âm thanh Hi-Res (LDAC/aptX), thời lượng pin và giá bán thực tế đa sàn',
+    searchPlaceholder:
+      'Tìm AirPods Pro, Sony WF-1000XM5, Galaxy Buds, Bose, Sennheiser...',
+    defaultBrands: ['Apple', 'Sony', 'Samsung', 'Bose', 'Sennheiser', 'Xiaomi', 'JBL'],
+    ramOptionsGb: [],
+    storageOptionsGb: [],
+    priceRangeMillion: {
+      min: 0,
+      max: 15,
+      step: 1,
+    },
+    pricePresets: [
+      { id: 'under-1m', label: 'Dưới 1 triệu', minVnd: 0, maxVnd: 1_000_000 },
+      {
+        id: '1m-3m',
+        label: '1 - 3 triệu',
+        minVnd: 1_000_000,
+        maxVnd: 3_000_000,
+      },
+      {
+        id: '3m-6m',
+        label: '3 - 6 triệu',
+        minVnd: 3_000_000,
+        maxVnd: 6_000_000,
+      },
+      {
+        id: 'over-6m',
+        label: 'Trên 6 triệu',
+        minVnd: 6_000_000,
+        maxVnd: 15_000_000,
+      },
+    ],
+    featureCheckboxes: [
+      {
+        key: 'fastCharge',
+        label: 'Hộp sạc nhanh / MagSafe',
+        fieldGroup: 'battery',
+        description: 'Hỗ trợ sạc nhanh qua USB-C hoặc sạc không dây Qi/MagSafe',
+      },
+    ],
+  },
 };
 
 const DEFAULT_SMARTPHONE_SCHEMA: CategoryFilterSchema = {

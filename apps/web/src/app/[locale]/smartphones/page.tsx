@@ -823,7 +823,7 @@ export async function CategoryCatalogContent({
       </section>
 
       <CompareTrayBar />
-      <FooterTop />
+      <FooterTop locale={locale} />
       <FooterDynamic sections={[]} links={[]} locale={locale} />
       <BackToTop />
     </>
