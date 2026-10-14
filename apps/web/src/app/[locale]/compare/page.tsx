@@ -47,8 +47,16 @@ export async function generateMetadata({
     if (compared.length >= 2) {
       const names = compared.map((p) => p.name).join(' vs ');
       return {
-        title: `So sánh ${names} - 10 Nhóm Thông Số & Giá Thật | Rate.vn`,
-        description: `Đối chiếu chi tiết 10 nhóm thông số kỹ thuật chuẩn PhoneArena/GSMArena, giá bán thấp nhất và điểm đánh giá thực chất giữa ${names} trên Rate.vn.`,
+        title:
+          locale === 'vi'
+            ? `So sánh ${names} - 10 Nhóm Thông Số & Giá Thật | Rate.vn`
+            : locale === 'cs'
+              ? `Porovnání ${names} - 10 skupin parametrů a ceny | Rate.vn`
+              : `Compare ${names} - 10 Spec Groups & True Price | Rate.vn`,
+        description:
+          locale === 'vi'
+            ? `Đối chiếu chi tiết 10 nhóm thông số kỹ thuật chuẩn PhoneArena/GSMArena, giá bán thấp nhất và điểm đánh giá thực chất giữa ${names} trên Rate.vn.`
+            : `Side-by-side comparison across 10 standardized technical spec groups, lowest verified price, and JReviews rating for ${names} on Rate.vn.`,
         alternates: {
           canonical: canonicalUrl,
         },
@@ -58,9 +66,15 @@ export async function generateMetadata({
 
   return {
     title:
-      'So sánh Điện thoại Thông minh - 10 Nhóm Thông Số & Giá Bán | Rate.vn',
+      locale === 'vi'
+        ? 'So sánh Thiết bị Công nghệ - 10 Nhóm Thông Số & Giá Thật | Rate.vn'
+        : locale === 'cs'
+          ? 'Porovnání zařízení - 10 skupin parametrů a skutečné ceny | Rate.vn'
+          : 'Compare Tech Devices - 10 Spec Groups & True Price | Rate.vn',
     description:
-      'Tìm kiếm và đặt lên bàn cân tối đa 4 mẫu điện thoại theo chuẩn 10 nhóm thông số kỹ thuật PhoneArena/GSMArena, lọc điểm khác biệt và so sánh giá thật trên Rate.vn.',
+      locale === 'vi'
+        ? 'Tìm kiếm và đặt lên bàn cân tối đa 4 mẫu điện thoại, laptop, máy tính bảng theo chuẩn 10 nhóm thông số kỹ thuật PhoneArena/GSMArena và so sánh giá thật trên Rate.vn.'
+        : 'Compare up to 4 smartphones, laptops, or tablets side by side across 10 standardized technical specification groups and true historical prices on Rate.vn.',
     alternates: {
       canonical: canonicalUrl,
     },
@@ -76,7 +90,7 @@ export default async function ComparePhonesPage({
   const requestedSlugs = parseSlugsCsv(slugsParam);
 
   const [catalogCandidates, requestedProducts] = await Promise.all([
-    getMasterProducts({ categorySlug: 'smartphones', limit: 24 }),
+    getMasterProducts({ limit: 36 }),
     requestedSlugs.length > 0
       ? getCachedCompareMasterProducts(requestedSlugs.join(','))
       : Promise.resolve([]),
@@ -100,35 +114,65 @@ export default async function ComparePhonesPage({
                 <ol className="breadcrumb small mb-2">
                   <li className="breadcrumb-item">
                     <Link href="/" className="text-decoration-none">
-                      Trang chủ
+                      {locale === 'vi'
+                        ? 'Trang chủ'
+                        : locale === 'cs'
+                          ? 'Domů'
+                          : 'Home'}
                     </Link>
                   </li>
                   <li className="breadcrumb-item">
                     <Link href="/smartphones" className="text-decoration-none">
-                      Điện thoại
+                      {locale === 'vi'
+                        ? 'Danh mục thiết bị'
+                        : locale === 'cs'
+                          ? 'Katalog zařízení'
+                          : 'Device Catalog'}
                     </Link>
                   </li>
                   <li className="breadcrumb-item active" aria-current="page">
-                    So sánh 10 nhóm thông số
+                    {locale === 'vi'
+                      ? 'So sánh 10 nhóm thông số'
+                      : locale === 'cs'
+                        ? 'Porovnání 10 skupin parametrů'
+                        : '10-Group Spec Comparison'}
                   </li>
                 </ol>
               </nav>
               <h1 className="h2 fw-bold mb-1">
-                So Sánh Điện Thoại Thông Minh (10 Field Groups)
+                {locale === 'vi'
+                  ? 'Bàn Cân Đối Chiếu 10 Nhóm Thông Số Kỹ Thuật (10 Field Groups)'
+                  : locale === 'cs'
+                    ? 'Porovnání 10 skupin technických parametrů (10 Field Groups)'
+                    : 'Side-by-Side 10-Group Specification Comparison'}
               </h1>
               <p className="text-muted mb-0">
-                Tìm kiếm Autocomplete, thêm tối đa 4 mẫu máy để đối chiếu trực
-                quan 10 nhóm thông số chuẩn PhoneArena/GSMArena và giá bán thực
-                tế
+                {locale === 'vi'
+                  ? 'Tìm kiếm Autocomplete, thêm tối đa 4 mẫu Điện thoại, Laptop hoặc Máy tính bảng để đối chiếu trực quan 10 nhóm thông số chuẩn PhoneArena/GSMArena và giá bán thực tế'
+                  : locale === 'cs'
+                    ? 'Vyhledejte a porovnejte až 4 telefony, notebooky nebo tablety podle 10 standardizovaných skupin parametrů a skutečných cen'
+                    : 'Search and compare up to 4 Smartphones, Laptops, or Tablets across 10 standardized PhoneArena/GSMArena spec groups and verified marketplace prices'}
               </p>
             </div>
 
-            <div>
+            <div className="d-flex flex-wrap gap-2">
               <Link
                 href="/smartphones"
-                className="btn btn-outline-danger rounded-pill fw-medium px-4"
+                className="btn btn-outline-primary rounded-pill fw-medium px-3"
               >
-                ← Quay lại Danh mục Điện thoại
+                📱 {locale === 'vi' ? 'Điện thoại' : 'Smartphones'}
+              </Link>
+              <Link
+                href="/laptops"
+                className="btn btn-outline-primary rounded-pill fw-medium px-3"
+              >
+                💻 Laptop
+              </Link>
+              <Link
+                href="/tablets"
+                className="btn btn-outline-primary rounded-pill fw-medium px-3"
+              >
+                📟 {locale === 'vi' ? 'Máy tính bảng' : 'Tablets'}
               </Link>
             </div>
           </div>
@@ -141,7 +185,7 @@ export default async function ComparePhonesPage({
         </div>
       </div>
 
-      <FooterTop />
+      <FooterTop locale={locale} />
       <FooterDynamic sections={[]} links={[]} locale={locale} />
       <BackToTop />
     </>

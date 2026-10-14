@@ -72,7 +72,11 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc **4 T�
   - Triển khai biểu mẫu viết đánh giá 5 tiêu chí JReviews (`Màn hình`, `Hiệu năng`, `Camera`, `Pin & Sạc`, `Đáng tiền`) trong `JReviewsSection.tsx`, API `POST /api/v1/rate/reviews` và migration RPC `rate.submit_community_review` (`20261014234500_rate_community_review_submission_rpc.sql`).
   - Triển khai nút `PriceWatchButton.tsx` và trang `/watchlist` (`WatchlistWorkspace.tsx`) cho phép đặt mức giá mục tiêu và theo dõi biến động giá thật.
   - Xóa 56 route demo khách sạn/nhà hàng dư thừa của template ListingHub, chuẩn hóa `FooterDynamic.tsx` và `sitemap.ts`.
-- [ ] **4.7. Trang Tổng Hợp Deal Thật Trong Ngày (`/deals`), Trang Tài Liệu Open-Core REST API v1 (`/developers`) & Đồng Bộ Từ Điển Đa Ngôn Ngữ (`vi`/`en`/`cs`) (Issue #20).**
+- [x] **4.7. Củng Cố Core Architecture: Đa Ngôn Ngữ Toàn Diện (`vi`/`en`/`cs`), Cổng Tài Liệu & Sandbox Open-Core REST API v1 (`/developers`), Chuẩn Hóa Liên Kết Đa Danh Mục & Xóa Sạch 63 Component Template Dư Thừa (Issue #20):**
+  - Đồng bộ hóa bộ từ điển đa ngôn ngữ (`apps/web/locales/{vi,en,cs}.json` + `src/lib/rate-i18n.ts`) trên toàn bộ Root Layout Metadata, Navbar, Footer, Trang chủ, Trang So sánh và các trang thông tin nền tảng.
+  - Xây dựng Cổng Nhà Phát Triển `/developers` kèm `ApiPlaygroundClient.tsx` cho phép chạy thử trực tiếp các REST API v1 (`/api/v1/rate/products`, `/api/v1/rate/products/[slug]`, `/api/v1/rate/inspect`, `/api/v1/rate/merchants`) và tra cứu cấu trúc 10 Field Groups.
+  - Chuẩn hóa hàm `getMasterProductHref` tự động định tuyến `/smartphones/[slug]`, `/tablets/[slug]`, `/laptops/[slug]` trên toàn hệ thống và hỗ trợ so sánh đa ngành hàng trên `/compare`.
+  - Thay thế 4 trang thông tin lõi (`/about-us`, `/faq`, `/privacy-policy`, `/contact-us`) bằng nội dung kiểm toán dữ liệu thật của Rate.vn và xóa 63 component mẫu ListingHub không còn sử dụng.
 
 ### 🔮 Phase 5: Mở Rộng Đa Sàn & Browser Extension MV3
 

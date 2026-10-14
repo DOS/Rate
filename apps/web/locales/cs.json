@@ -1,21 +1,21 @@
 {
   "seo": {
-    "metaTitle": "DEV-TEMPLATE-SEO",
-    "metaDescription": "DEV-TEMPLATE-SEO",
-    "metaImageUrl": "DEV-TEMPLATE-SEO",
-    "keywords": "DEV-TEMPLATE-SEO",
-    "metaRobots": "DEV-TEMPLATE-SEO",
-    "applicationName": "DEV-TEMPLATE-SEO",
-    "siteName": "DEV-TEMPLATE-SEO",
-    "email": "DEV-TEMPLATE-SEO",
+    "metaTitle": "Rate.vn - Srovnání 10 skupin parametrů, historie skutečných cen a AI audit recenzí",
+    "metaDescription": "Ověřte si technické specifikace podle standardu GSMArena a PhoneArena, odhalte falešné slevy a filtrujte AI seeding recenze na Rate.vn.",
+    "metaImageUrl": "https://rate.vn/img/logo.svg",
+    "keywords": "rate.vn, srovnání parametrů, historie cen, falešné slevy, AI audit recenzí, důvěryhodnost obchodů, DOSafe",
+    "metaRobots": "index, follow",
+    "applicationName": "Rate.vn",
+    "siteName": "Rate.vn - Open-Core Product & Merchant Intelligence",
+    "email": "security@rate.vn",
     "twitter": {
-      "card": "DEV-TEMPLATE-SEO",
-      "title": "DEV-TEMPLATE-SEO",
-      "description": "DEV-TEMPLATE-SEO",
-      "siteId": "DEV-TEMPLATE-SEO",
-      "creator": "DEV-TEMPLATE-SEO",
-      "creatorId": "DEV-TEMPLATE-SEO",
-      "imageUrl": "DEV-TEMPLATE-SEO"
+      "card": "summary_large_image",
+      "title": "Rate.vn - Srovnání 10 skupin parametrů, historie skutečných cen a AI audit recenzí",
+      "description": "Standardizovaných 10 skupin technických parametrů, detekce falešných slev a duální skóre rizika DOSafe + AI Review.",
+      "siteId": "@rate_vn",
+      "creator": "@dos_ecosystem",
+      "creatorId": "@dos_ecosystem",
+      "imageUrl": "https://rate.vn/img/logo.svg"
     }
   },
 

@@ -12,6 +12,7 @@ import {
   FaTelegram,
 } from 'react-icons/fa6';
 import { BsShieldCheck, BsCodeSlash } from 'react-icons/bs';
+import { getRateCopy } from '@/lib/rate-i18n';
 
 export interface FooterSectionLink {
   id?: string | number;
@@ -40,80 +41,59 @@ export default function FooterDynamic({
   readonly socialLinks?: readonly FooterSectionLink[] | null;
   readonly locale?: string;
 }) {
-  const isVi = locale === 'vi';
+  const copyDict = getRateCopy(locale);
   const yearText = new Date().getFullYear().toString();
-  const copy = (
-    copyRight ||
-    (isVi
-      ? `© {YEAR} Rate.vn (DOS Ecosystem). Nền tảng Đối chiếu Thông số 10 Nhóm, Lịch sử Giá thật & Kiểm toán Đánh giá Đa sàn.`
-      : `© {YEAR} Rate.vn (DOS Ecosystem). Open-Core Product Spec Intelligence, True Price History & AI Review Auditing.`)
-  ).replace('{YEAR}', yearText);
+  const copy = (copyRight || copyDict.footer.copyRight).replace(
+    '{YEAR}',
+    yearText
+  );
 
-  const fallback1: FooterSection = isVi
-    ? {
-        title: 'Danh mục Công nghệ',
-        links: [
-          { label: 'Điện thoại thông minh', href: '/smartphones' },
-          { label: 'Laptop & Ultrabook', href: '/laptops' },
-          { label: 'Máy tính bảng (Tablet)', href: '/tablets' },
-          { label: 'Đồng hồ thông minh', href: '/smartphones?category=smartwatches' },
-          { label: 'Tai nghe chống ồn ANC', href: '/smartphones?category=earbuds' },
-        ],
-      }
-    : {
-        title: 'Tech Categories',
-        links: [
-          { label: 'Smartphones', href: '/smartphones' },
-          { label: 'Laptops & Ultrabooks', href: '/laptops' },
-          { label: 'Tablets', href: '/tablets' },
-          { label: 'Smartwatches', href: '/smartphones?category=smartwatches' },
-          { label: 'Wireless Earbuds', href: '/smartphones?category=earbuds' },
-        ],
-      };
+  const fallback1: FooterSection = {
+    title: copyDict.footer.col1Title,
+    links: [
+      { label: copyDict.footer.links.smartphones, href: '/smartphones' },
+      { label: copyDict.footer.links.laptops, href: '/laptops' },
+      { label: copyDict.footer.links.tablets, href: '/tablets' },
+      {
+        label: copyDict.footer.links.smartwatches,
+        href: '/smartphones?category=smartwatches',
+      },
+      {
+        label: copyDict.footer.links.earbuds,
+        href: '/smartphones?category=earbuds',
+      },
+    ],
+  };
 
-  const fallback2: FooterSection = isVi
-    ? {
-        title: 'Công cụ Bảo vệ Người mua',
-        links: [
-          { label: 'So sánh 10 nhóm thông số', href: '/compare' },
-          { label: 'Hồ sơ Tín nhiệm Gian hàng', href: '/merchants' },
-          { label: 'Danh sách Canh giá thật', href: '/watchlist' },
-          { label: 'REST API v1 (Products)', href: '/api/v1/rate/products', newTab: true },
-          { label: 'REST API v1 (Merchants)', href: '/api/v1/rate/merchants', newTab: true },
-        ],
-      }
-    : {
-        title: 'Buyer Protection Tools',
-        links: [
-          { label: '10-Group Spec Comparison', href: '/compare' },
-          { label: 'Merchant Trust Directory', href: '/merchants' },
-          { label: 'Price Drop Watchlist', href: '/watchlist' },
-          { label: 'REST API v1 (Products)', href: '/api/v1/rate/products', newTab: true },
-          { label: 'REST API v1 (Merchants)', href: '/api/v1/rate/merchants', newTab: true },
-        ],
-      };
+  const fallback2: FooterSection = {
+    title: copyDict.footer.col2Title,
+    links: [
+      { label: copyDict.footer.links.compare, href: '/compare' },
+      { label: copyDict.footer.links.merchants, href: '/merchants' },
+      { label: copyDict.footer.links.watchlist, href: '/watchlist' },
+      { label: copyDict.footer.links.developers, href: '/developers' },
+      {
+        label: copyDict.footer.links.apiProducts,
+        href: '/api/v1/rate/products',
+        newTab: true,
+      },
+    ],
+  };
 
-  const fallback3: FooterSection = isVi
-    ? {
-        title: 'Nền tảng & Minh bạch',
-        links: [
-          { label: 'Về Rate.vn', href: '/about-us' },
-          { label: 'Câu hỏi thường gặp (FAQ)', href: '/faq' },
-          { label: 'Chính sách bảo mật', href: '/privacy-policy' },
-          { label: 'Liên hệ & Báo cáo gian hàng', href: '/contact-us' },
-          { label: 'Mã nguồn mở DOS/Rate', href: 'https://github.com/DOS/Rate', newTab: true },
-        ],
-      }
-    : {
-        title: 'Platform & Transparency',
-        links: [
-          { label: 'About Rate.vn', href: '/about-us' },
-          { label: 'FAQ', href: '/faq' },
-          { label: 'Privacy Policy', href: '/privacy-policy' },
-          { label: 'Contact & Report Shop', href: '/contact-us' },
-          { label: 'Open-Core GitHub (DOS/Rate)', href: 'https://github.com/DOS/Rate', newTab: true },
-        ],
-      };
+  const fallback3: FooterSection = {
+    title: copyDict.footer.col3Title,
+    links: [
+      { label: copyDict.footer.links.about, href: '/about-us' },
+      { label: copyDict.footer.links.faq, href: '/faq' },
+      { label: copyDict.footer.links.privacy, href: '/privacy-policy' },
+      { label: copyDict.footer.links.contact, href: '/contact-us' },
+      {
+        label: copyDict.footer.links.github,
+        href: 'https://github.com/DOS/Rate',
+        newTab: true,
+      },
+    ],
+  };
 
   const [col1, col2, col3] = [
     sections?.[0] ?? fallback1,
@@ -189,12 +169,20 @@ export default function FooterDynamic({
                         </a>
                       </li>
                       <li>
-                        <Link href="/smartphones" className="social-link" aria-label="Smartphones">
-                          <FaFacebookF />
+                        <Link
+                          href="/developers"
+                          className="social-link"
+                          aria-label="REST API v1"
+                        >
+                          <BsCodeSlash />
                         </Link>
                       </li>
                       <li>
-                        <Link href="/merchants" className="social-link" aria-label="Merchants">
+                        <Link
+                          href="/merchants"
+                          className="social-link"
+                          aria-label="Merchants"
+                        >
                           <FaLinkedin />
                         </Link>
                       </li>
@@ -237,7 +225,9 @@ export default function FooterDynamic({
           {/* Column 2 */}
           <div className="col-6 col-md-4 col-lg-3 col-xl-2">
             <div className="footer-widget mb-5 mb-md-5 mb-lg-0">
-              {col2?.title ? <h4 className="widget-title">{col2.title}</h4> : null}
+              {col2?.title ? (
+                <h4 className="widget-title">{col2.title}</h4>
+              ) : null}
               <ul className="footer-menu">
                 {(col2?.links || [])
                   .filter((l) => l?.href && l?.label)
@@ -264,7 +254,9 @@ export default function FooterDynamic({
           {/* Column 3 */}
           <div className="col-6 col-md-4 col-lg-3 col-xl-2">
             <div className="footer-widget">
-              {col3?.title ? <h4 className="widget-title">{col3.title}</h4> : null}
+              {col3?.title ? (
+                <h4 className="widget-title">{col3.title}</h4>
+              ) : null}
               <ul className="footer-menu">
                 {(col3?.links || [])
                   .filter((l) => l?.href && l?.label)
@@ -291,9 +283,7 @@ export default function FooterDynamic({
           {/* Open-Core Architecture & Security Status */}
           <div className="col-6 col-md-4 col-lg-3 col-xl-2">
             <div className="footer-widget">
-              <h4 className="widget-title">
-                {isVi ? 'Chuẩn Minh Bạch' : 'Open-Core Trust'}
-              </h4>
+              <h4 className="widget-title">{copyDict.footer.trustTitle}</h4>
               <div className="contactInfowrap">
                 <div className="singleinfo">
                   <div className="icons">
@@ -301,23 +291,11 @@ export default function FooterDynamic({
                   </div>
                   <div className="caps">
                     <h5 className="title">
-                      {isVi ? (
-                        <>
-                          DOSafe &amp; AI Review
-                          <br />
-                          Dual Risk Score
-                        </>
-                      ) : (
-                        <>
-                          DOSafe &amp; AI Review
-                          <br />
-                          Dual Risk Score
-                        </>
-                      )}
+                      DOSafe &amp; AI Review
+                      <br />
+                      Dual Risk Score
                     </h5>
-                    <p className="subs">
-                      {isVi ? 'Chống Seeding & Giá Ảo' : 'Anti-Seeding & Fake Sale'}
-                    </p>
+                    <p className="subs">{copyDict.footer.antiSeedingSub}</p>
                   </div>
                 </div>
                 <div className="singleinfo">
@@ -326,11 +304,7 @@ export default function FooterDynamic({
                   </div>
                   <div className="caps">
                     <h5 className="title">Open-Core REST v1</h5>
-                    <p className="subs">
-                      {isVi
-                        ? '10 Nhóm Thông Số Chuẩn Hóa'
-                        : '10 Standardized Spec Groups'}
-                    </p>
+                    <p className="subs">{copyDict.footer.specGroupsSub}</p>
                   </div>
                 </div>
               </div>

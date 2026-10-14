@@ -1,240 +1,240 @@
 {
   "seo": {
-    "metaTitle": "DEV-TEMPLATE-SEO",
-    "metaDescription": "DEV-TEMPLATE-SEO",
-    "metaImageUrl": "DEV-TEMPLATE-SEO",
-    "keywords": "DEV-TEMPLATE-SEO",
-    "metaRobots": "DEV-TEMPLATE-SEO",
-    "applicationName": "DEV-TEMPLATE-SEO",
-    "siteName": "DEV-TEMPLATE-SEO",
-    "email": "DEV-TEMPLATE-SEO",
+    "metaTitle": "Rate.vn - Đối chiếu Thông số 10 Nhóm, Lịch sử Giá thật & Kiểm toán Đánh giá AI",
+    "metaDescription": "Tra cứu thông số kỹ thuật chuẩn GSMArena & PhoneArena, phát hiện nâng khống giá gốc và lọc bình luận Seeding bằng AI trên Shopee, Lazada, Tiki tại Rate.vn.",
+    "metaImageUrl": "https://rate.vn/img/logo.svg",
+    "keywords": "rate.vn, so sánh thông số, lịch sử giá thật, chống giảm giá ảo, lọc đánh giá seeding, hồ sơ tín nhiệm gian hàng, DOSafe",
+    "metaRobots": "index, follow",
+    "applicationName": "Rate.vn",
+    "siteName": "Rate.vn - Open-Core Product & Merchant Intelligence",
+    "email": "security@rate.vn",
     "twitter": {
-      "card": "DEV-TEMPLATE-SEO",
-      "title": "DEV-TEMPLATE-SEO",
-      "description": "DEV-TEMPLATE-SEO",
-      "siteId": "DEV-TEMPLATE-SEO",
-      "creator": "DEV-TEMPLATE-SEO",
-      "creatorId": "DEV-TEMPLATE-SEO",
-      "imageUrl": "DEV-TEMPLATE-SEO"
+      "card": "summary_large_image",
+      "title": "Rate.vn - Đối chiếu Thông số 10 Nhóm, Lịch sử Giá thật & Kiểm toán Đánh giá AI",
+      "description": "Chuẩn hóa 10 nhóm thông số kỹ thuật, phát hiện nâng khống giá gốc và chấm điểm rủi ro kép DOSafe + AI Review.",
+      "siteId": "@rate_vn",
+      "creator": "@dos_ecosystem",
+      "creatorId": "@dos_ecosystem",
+      "imageUrl": "https://rate.vn/img/logo.svg"
     }
   },
 
   "general": {
-    "noOptionsAvailable": "No options available",
-    "search": "Search",
-    "loading": "Loading",
-    "cancel": "Cancel",
-    "close": "Close",
-    "submitForm": "Submit",
-    "saveChanges": "Save changes"
+    "noOptionsAvailable": "Không có tùy chọn khả dụng",
+    "search": "Tìm kiếm",
+    "loading": "Đang tải...",
+    "cancel": "Hủy bỏ",
+    "close": "Đóng",
+    "submitForm": "Gửi đi",
+    "saveChanges": "Lưu thay đổi"
   },
 
   "tables": {
-    "previousPage": "Previous page",
-    "nextPage": "Next page",
-    "lastPage": "Last page",
-    "firstPage": "First page",
-    "rowsPerPage": "Rows per page",
-    "pageXOfY": "Page {x} of {y}",
-    "ascending": "Ascending",
-    "descending": "Descending",
-    "noData": "No data"
+    "previousPage": "Trang trước",
+    "nextPage": "Trang tiếp",
+    "lastPage": "Trang cuối",
+    "firstPage": "Trang đầu",
+    "rowsPerPage": "Số dòng mỗi trang",
+    "pageXOfY": "Trang {x} / {y}",
+    "ascending": "Tăng dần",
+    "descending": "Giảm dần",
+    "noData": "Chưa có dữ liệu"
   },
 
   "navbar": {
-    "account": "Account",
+    "account": "Tài khoản",
     "actions": {
-      "profile": "Profile",
-      "signOut": "Sign out",
-      "changePassword": "Change password",
-      "signIn": "Sign in"
+      "profile": "Hồ sơ cá nhân",
+      "signOut": "Đăng xuất",
+      "changePassword": "Đổi mật khẩu",
+      "signIn": "Đăng nhập"
     }
   },
 
   "comps": {
     "fileInput": {
-      "label": "Select file",
-      "dragAndDrop": "Add file by dragging or select by clicking",
-      "validFileTypes": "File must be in {validFileTypes} format",
-      "wrongFileType": "This file type is not supported",
-      "selectedFile": "Selected file: {fileName}",
-      "removeFile": "Remove file"
+      "label": "Chọn tệp tin",
+      "dragAndDrop": "Kéo thả tệp vào đây hoặc nhấn để chọn",
+      "validFileTypes": "Tệp phải thuộc định dạng {validFileTypes}",
+      "wrongFileType": "Định dạng tệp không được hỗ trợ",
+      "selectedFile": "Đã chọn tệp: {fileName}",
+      "removeFile": "Xóa tệp"
     },
     "datePicker": {
-      "label": "Select date"
+      "label": "Chọn ngày"
     },
     "dateRangePicker": {
-      "label": "Select date range"
+      "label": "Chọn khoảng thời gian"
     },
     "themeToggle": {
-      "label": "Toggle theme"
+      "label": "Chuyển giao diện sáng/tối"
     },
     "dialog": {
-      "confirmClose": "Do you want to close the dialog? You will lose all unsaved changes."
+      "confirmClose": "Bạn có muốn đóng hộp thoại? Mọi thay đổi chưa lưu sẽ bị hủy."
     }
   },
 
   "errors": {
     "global": {
-      "title": "An unknown error occurred",
-      "tryAgain": "Try again",
-      "invalidContent": "This content could not be displayed",
-      "somethingWentWrong": "Something went wrong 🥺"
+      "title": "Đã xảy ra lỗi không xác định",
+      "tryAgain": "Thử lại",
+      "invalidContent": "Không thể hiển thị nội dung này",
+      "somethingWentWrong": "Đã xảy ra sự cố ngoài ý muốn"
     },
 
     "notFound": {
-      "title": "Page not found",
-      "description": "The page you are looking for was not found.",
-      "solution": "Please check if you have entered the correct URL or return to the home page.",
-      "redirect": "Go to home page"
+      "title": "Không tìm thấy trang",
+      "description": "Trang hoặc sản phẩm bạn đang tìm kiếm không tồn tại hoặc đã được di chuyển.",
+      "solution": "Vui lòng kiểm tra lại đường dẫn URL hoặc quay về trang chủ Rate.vn.",
+      "redirect": "Quay về trang chủ"
     },
 
     "forms": {
-      "errorsInForm": "The form contains errors",
-      "checkFormForErrors": "Please check if any values are missing"
+      "errorsInForm": "Biểu mẫu chứa thông tin chưa hợp lệ",
+      "checkFormForErrors": "Vui lòng kiểm tra lại các trường bắt buộc"
     },
 
     "zodValidation": {
-      "invalid_type": "Expected type is {expected}, but received {received}",
-      "invalid_type_received_undefined": "Field is required",
-      "invalid_literal": "Invalid value, expected {expected}",
+      "invalid_type": "Kiểu dữ liệu yêu cầu là {expected}, nhưng nhận được {received}",
+      "invalid_type_received_undefined": "Trường này là bắt buộc",
+      "invalid_literal": "Giá trị không hợp lệ, yêu cầu {expected}",
 
       "invalid_string": {
-        "regex": "Invalid format"
+        "regex": "Định dạng không hợp lệ"
       },
       "too_small": {
         "string": {
-          "exact": "String must be exactly {minimum} characters",
-          "inclusive": "String must be at least {minimum} characters",
-          "not_inclusive": "String must be more than {minimum} characters"
+          "exact": "Chuỗi phải có đúng {minimum} ký tự",
+          "inclusive": "Chuỗi phải có ít nhất {minimum} ký tự",
+          "not_inclusive": "Chuỗi phải có nhiều hơn {minimum} ký tự"
         },
         "number": {
-          "exact": "Value must be exactly {minimum}",
-          "inclusive": "Minimum value is {minimum}",
-          "not_inclusive": "Number must be greater than {minimum}"
+          "exact": "Giá trị phải bằng đúng {minimum}",
+          "inclusive": "Giá trị tối thiểu là {minimum}",
+          "not_inclusive": "Số phải lớn hơn {minimum}"
         }
       },
       "too_big": {
         "string": {
-          "exact": "String must be exactly {maximum} characters",
-          "inclusive": "String must be at most {maximum} characters",
-          "not_inclusive": "String must be less than {maximum} characters"
+          "exact": "Chuỗi phải có đúng {maximum} ký tự",
+          "inclusive": "Chuỗi tối đa {maximum} ký tự",
+          "not_inclusive": "Chuỗi phải ít hơn {maximum} ký tự"
         },
         "number": {
-          "exact": "Value must be exactly {maximum}",
-          "inclusive": "Maximum value is {maximum}",
-          "not_inclusive": "Number must be less than {maximum}"
+          "exact": "Giá trị phải bằng đúng {maximum}",
+          "inclusive": "Giá trị tối đa là {maximum}",
+          "not_inclusive": "Số phải nhỏ hơn {maximum}"
         }
       },
       "custom": {
-        "password": "Passwords do not match",
-        "passwordWithNumber": "String must contain at least 1 number",
-        "phoneNumber": "This field must contain 9 numbers"
+        "password": "Mật khẩu xác nhận không khớp",
+        "passwordWithNumber": "Mật khẩu phải chứa ít nhất 1 chữ số",
+        "phoneNumber": "Số điện thoại phải chứa đủ chữ số hợp lệ"
       }
     }
   },
 
   "contactForm": {
-    "name": "First name and last name",
-    "namePlaceholder": "John Doe",
-    "email": "Email",
-    "emailPlaceholder": "john.doe@gmail.com",
-    "message": "Message",
-    "gdpr": "I agree to the processing of personal data",
-    "submit": "Send",
-    "success": "The form has been sent successfully.",
-    "error": "The form could not be sent. Please try again later.",
-    "gdprLink": "Read more about the processing of personal data"
+    "name": "Họ và tên",
+    "namePlaceholder": "Nguyễn Văn An",
+    "email": "Địa chỉ Email",
+    "emailPlaceholder": "an.nguyen@example.com",
+    "message": "Nội dung tin nhắn / Báo cáo",
+    "gdpr": "Tôi đồng ý với chính sách bảo mật và xử lý dữ liệu minh bạch",
+    "submit": "Gửi thông tin",
+    "success": "Đã gửi biểu mẫu thành công.",
+    "error": "Không thể gửi biểu mẫu. Vui lòng thử lại sau.",
+    "gdprLink": "Xem chi tiết chính sách bảo mật dữ liệu"
   },
 
   "auth": {
     "signIn": {
       "status": {
-        "fail": "Sign in failed",
-        "success": "Sign in successful",
-        "checkCredentials": "Please check your login credentials"
+        "fail": "Đăng nhập không thành công",
+        "success": "Đăng nhập thành công",
+        "checkCredentials": "Vui lòng kiểm tra lại thông tin đăng nhập"
       },
       "errors": {
-        "CredentialsSignin": "You have entered incorrect login credentials."
+        "CredentialsSignin": "Email hoặc mật khẩu không chính xác."
       },
-      "header": "Sign in",
-      "description": "Enter your login details.",
+      "header": "Đăng nhập",
+      "description": "Nhập thông tin tài khoản Rate.vn của bạn.",
       "email": "Email",
-      "password": "Password",
-      "submit": "Sign in",
-      "forgotPassword": "Forgot password",
-      "createAccount": "Create an account"
+      "password": "Mật khẩu",
+      "submit": "Đăng nhập",
+      "forgotPassword": "Quên mật khẩu?",
+      "createAccount": "Tạo tài khoản mới"
     },
 
     "register": {
       "status": {
-        "fail": "Registration failed",
-        "success": "Registration successful",
-        "checkCredentials": "Please check your credentials"
+        "fail": "Đăng ký không thành công",
+        "success": "Đăng ký thành công",
+        "checkCredentials": "Vui lòng kiểm tra lại thông tin đăng ký"
       },
       "errors": {
-        "credentials": "Incorrect credentials provided",
-        "unexpectedError": "Registration failed. Please try again later.",
-        "emailUsernameTaken": "Email is already taken. Please choose another one."
+        "credentials": "Thông tin cung cấp không hợp lệ",
+        "unexpectedError": "Đăng ký không thành công. Vui lòng thử lại sau.",
+        "emailUsernameTaken": "Email này đã được sử dụng. Vui lòng chọn email khác."
       },
-      "header": "Registration",
-      "description": "Create an account to access the system.",
-      "email": "E-mail address",
-      "password": "Create password",
-      "checkPassword": "Confirm password",
-      "submit": "Create account",
-      "forgotPassword": "Already have an account? Sign in.",
-      "checkEmail": "Follow instructions in your email to confirm your email address.",
-      "signInLinkLinkDescription": "Already have an account?",
-      "signInLink": "Sign in"
+      "header": "Đăng ký tài khoản",
+      "description": "Tạo tài khoản để tham gia cộng đồng đánh giá Rate.vn.",
+      "email": "Địa chỉ Email",
+      "password": "Tạo mật khẩu",
+      "checkPassword": "Xác nhận mật khẩu",
+      "submit": "Tạo tài khoản",
+      "forgotPassword": "Đã có tài khoản? Đăng nhập.",
+      "checkEmail": "Vui lòng kiểm tra hộp thư email để xác nhận tài khoản.",
+      "signInLinkLinkDescription": "Đã có tài khoản?",
+      "signInLink": "Đăng nhập"
     },
 
     "changePassword": {
       "errors": {
-        "invalidCurrentPassword": "Current password does not match",
-        "unexpectedError": "An unexpected error occurred. Please try again later.",
-        "newPasswordSameAsCurrent": "New password must be different from the current password"
+        "invalidCurrentPassword": "Mật khẩu hiện tại không khớp",
+        "unexpectedError": "Đã xảy ra lỗi không mong muốn. Vui lòng thử lại sau.",
+        "newPasswordSameAsCurrent": "Mật khẩu mới phải khác với mật khẩu hiện tại"
       },
-      "successfullyChanged": "Password successfully changed",
-      "header": "Change password",
-      "description": "Choose a new password to use for logging in.",
-      "currentPassword": "Current password",
-      "password": "New password",
-      "confirmPassword": "Confirm new password",
-      "submit": "Change password"
+      "successfullyChanged": "Đã đổi mật khẩu thành công",
+      "header": "Đổi mật khẩu",
+      "description": "Chọn mật khẩu mới để bảo vệ tài khoản của bạn.",
+      "currentPassword": "Mật khẩu hiện tại",
+      "password": "Mật khẩu mới",
+      "confirmPassword": "Xác nhận mật khẩu mới",
+      "submit": "Cập nhật mật khẩu"
     },
 
     "accountActivation": {
-      "successfullySet": "Account successfully activated. You can now sign in.",
+      "successfullySet": "Tài khoản đã được kích hoạt thành công. Bạn có thể đăng nhập ngay.",
       "errors": {
-        "Incorrect code provided": "An incorrect link was generated for you. Contact support."
+        "Incorrect code provided": "Liên kết kích hoạt không hợp lệ. Vui lòng liên hệ bộ phận hỗ trợ."
       },
-      "welcome": "Welcome",
-      "activateAccount": "A new account has been created with the email {email}.",
-      "invalidLink": "This link is not valid.",
-      "activate": "Activate account",
-      "header": "Set password",
-      "description": "Choose a password to use for logging in.",
-      "submit": "Activate account",
-      "password": "New password",
-      "confirmPassword": "Confirm password"
+      "welcome": "Chào mừng",
+      "activateAccount": "Tài khoản mới đã được tạo với email {email}.",
+      "invalidLink": "Liên kết này không còn hiệu lực.",
+      "activate": "Kích hoạt tài khoản",
+      "header": "Thiết lập mật khẩu",
+      "description": "Chọn mật khẩu để sử dụng khi đăng nhập.",
+      "submit": "Kích hoạt tài khoản",
+      "password": "Mật khẩu mới",
+      "confirmPassword": "Xác nhận mật khẩu"
     },
 
     "resetPassword": {
-      "successfullySet": "Password successfully changed.",
-      "header": "Reset password",
-      "description": "Choose a new password to use for logging in.",
-      "submit": "Set password",
-      "password": "New password",
-      "confirmPassword": "Confirm password"
+      "successfullySet": "Đã đặt lại mật khẩu thành công.",
+      "header": "Đặt lại mật khẩu",
+      "description": "Chọn mật khẩu mới cho tài khoản của bạn.",
+      "submit": "Lưu mật khẩu",
+      "password": "Mật khẩu mới",
+      "confirmPassword": "Xác nhận mật khẩu"
     },
 
     "forgotPassword": {
-      "passwordChangeEmailSent": "An email with password reset instructions has been sent to you.",
-      "header": "Forgot password",
-      "description": "Enter the email you usually use to sign in. We will send instructions to reset your password to this email.",
+      "passwordChangeEmailSent": "Email hướng dẫn đặt lại mật khẩu đã được gửi cho bạn.",
+      "header": "Quên mật khẩu",
+      "description": "Nhập địa chỉ email đã đăng ký. Hệ thống sẽ gửi liên kết khôi phục mật khẩu tới hộp thư của bạn.",
       "email": "Email",
-      "submit": "Recover account"
+      "submit": "Khôi phục mật khẩu"
     }
   },
 

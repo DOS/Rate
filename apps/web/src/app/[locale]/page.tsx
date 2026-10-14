@@ -1,6 +1,7 @@
 import { Link } from '@/lib/navigation';
 import NavbarDarkDynamic from './components/navbar/NavbarDarkDynamic';
-import { getMasterProducts } from '@/lib/rate-api';
+import { getMasterProductHref, getMasterProducts } from '@/lib/rate-api';
+import { getRateCopy } from '@/lib/rate-i18n';
 import {
   getCachedMerchantsList,
   getCachedRatePlatformStats,
@@ -54,6 +55,7 @@ export default async function Home({
   params: Promise<{ locale: string }>;
 }) {
   const { locale } = await params;
+  const copy = getRateCopy(locale);
 
   let masterProducts: MasterProduct[] = [];
   let merchants: MerchantSummary[] = [];
@@ -86,6 +88,11 @@ export default async function Home({
     );
   }
 
+  const catSlugById = new Map<string, string>();
+  for (const c of platformStats.categoriesWithCounts) {
+    catSlugById.set(c.id, c.slug);
+  }
+
   return (
     <>
       <NavbarDarkDynamic links={[]} />
@@ -105,35 +112,17 @@ export default async function Home({
               <div className="position-relative mb-4 pt-3 pb-2 text-center">
                 <div className="d-inline-flex align-items-center rounded-pill bg-dark bg-opacity-75 border-light border-opacity-25 text-light small fw-semibold mb-3 gap-2 border px-3 py-1">
                   <BsShieldCheck className="text-success" />
-                  <span>
-                    {locale === 'vi'
-                      ? 'Nền Tảng Đối Chiếu Thông Số, Lịch Sử Giá Thật & Kiểm Toán Đánh Giá Đa Sàn'
-                      : 'Cross-Platform Spec Intelligence, True Price History & AI Review Auditing'}
-                  </span>
+                  <span>{copy.home.heroBadge}</span>
                 </div>
                 <h1 className="fw-bold mb-3 text-white">
-                  {locale === 'vi' ? (
-                    <>
-                      Tra Cứu{' '}
-                      <span className="text-light border-light rounded-pill br-dashed border border-2 px-3">
-                        Giá Thật &amp; Điểm Tín Nhiệm
-                      </span>{' '}
-                      Trước Khi Mua
-                    </>
-                  ) : (
-                    <>
-                      Verify{' '}
-                      <span className="text-light border-light rounded-pill br-dashed border border-2 px-3">
-                        True Price &amp; Shop Trust
-                      </span>{' '}
-                      Before Buying
-                    </>
-                  )}
+                  {copy.home.heroTitlePrefix}{' '}
+                  <span className="text-light border-light rounded-pill br-dashed border border-2 px-3">
+                    {copy.home.heroTitleHighlight}
+                  </span>{' '}
+                  {copy.home.heroTitleSuffix}
                 </h1>
                 <p className="fs-5 fw-light text-opacity-75 mb-0 text-white">
-                  {locale === 'vi'
-                    ? 'Chuẩn hóa 10 nhóm thông số GSMArena & PhoneArena, phát hiện nâng khống giá gốc và lọc bình luận Seeding bằng AI.'
-                    : 'Standardized 10-group technical specs, fake discount detection, and AI-powered review seeding protection.'}
+                  {copy.home.heroSubtitle}
                 </p>
               </div>
             </div>
@@ -158,7 +147,7 @@ export default async function Home({
                       {platformStats.masterProductsCount}
                     </div>
                     <div className="small text-white-50">
-                      Sản phẩm chuẩn hóa 10 nhóm
+                      {copy.home.statProducts}
                     </div>
                   </div>
                 </div>
@@ -168,7 +157,7 @@ export default async function Home({
                       {platformStats.priceObservationsCount}
                     </div>
                     <div className="small text-white-50">
-                      Điểm đối chiếu lịch sử giá
+                      {copy.home.statPricePoints}
                     </div>
                   </div>
                 </div>
@@ -178,7 +167,7 @@ export default async function Home({
                       {platformStats.totalReviewsCount}
                     </div>
                     <div className="small text-white-50">
-                      Đánh giá đã kiểm duyệt AI
+                      {copy.home.statReviews}
                     </div>
                   </div>
                 </div>
@@ -188,7 +177,7 @@ export default async function Home({
                       {platformStats.merchantsCount}
                     </div>
                     <div className="small text-white-50">
-                      Gian hàng chấm điểm rủi ro kép
+                      {copy.home.statMerchants}
                     </div>
                   </div>
                 </div>
@@ -224,41 +213,40 @@ export default async function Home({
           <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-end mb-4 gap-3">
             <div>
               <span className="badge bg-primary bg-opacity-10 text-primary rounded-pill fw-semibold mb-2 px-3 py-2">
-                🗂️ Danh Mục Thiết Bị Công Nghệ Đa Sàn
+                {copy.home.catBadge}
               </span>
               <h3 className="sectionHeading mb-1">
-                Khám Phá Theo{' '}
-                <span className="text-primary">Ngành Hàng Chuẩn Hóa</span>
+                {copy.home.catTitlePrefix}{' '}
+                <span className="text-primary">
+                  {copy.home.catTitleHighlight}
+                </span>
               </h3>
-              <p className="text-muted mb-0">
-                Mọi danh mục đều hỗ trợ bộ lọc chuyên sâu theo 10 nhóm thông số
-                kỹ thuật và đối chiếu giá theo thời gian thực
-              </p>
+              <p className="text-muted mb-0">{copy.home.catSubtitle}</p>
             </div>
             <div className="d-flex flex-wrap gap-2">
               <Link
                 href="/smartphones"
                 className="btn btn-sm btn-outline-primary rounded-pill px-3"
               >
-                📱 Điện thoại
+                📱 {copy.nav.smartphones}
               </Link>
               <Link
                 href="/laptops"
                 className="btn btn-sm btn-outline-primary rounded-pill px-3"
               >
-                💻 Laptop
+                💻 {copy.nav.laptops}
               </Link>
               <Link
                 href="/tablets"
                 className="btn btn-sm btn-outline-primary rounded-pill px-3"
               >
-                📟 Máy tính bảng
+                📟 {copy.nav.tablets}
               </Link>
               <Link
                 href="/merchants"
                 className="btn btn-sm btn-outline-dark rounded-pill px-3"
               >
-                🏪 Hồ sơ gian hàng
+                🏪 {copy.nav.merchants}
               </Link>
             </div>
           </div>
@@ -280,8 +268,8 @@ export default async function Home({
                         }`}
                       >
                         {cat.productCount > 0
-                          ? `${cat.productCount} mẫu sẵn sàng`
-                          : 'Đang mở rộng'}
+                          ? `${cat.productCount} ${copy.home.catReadySuffix}`
+                          : copy.home.catExpanding}
                       </span>
                     </div>
                     <h5 className="fw-bold text-dark mb-1">{cat.name}</h5>
@@ -312,25 +300,22 @@ export default async function Home({
             <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 gap-3">
               <div>
                 <span className="badge bg-primary bg-opacity-10 text-primary rounded-pill fw-semibold mb-2 px-3 py-2">
-                  ⚡ Chuẩn Hóa 10 Nhóm Thông Số GSMArena &amp; PhoneArena
+                  {copy.home.featuredBadge}
                 </span>
                 <h3 className="sectionHeading mb-1">
-                  Sản Phẩm{' '}
+                  {copy.home.featuredTitlePrefix}{' '}
                   <span className="text-primary">
-                    Đã Kiểm Chứng Thông Số &amp; Lịch Sử Giá
+                    {copy.home.featuredTitleHighlight}
                   </span>
                 </h3>
-                <p className="text-muted mb-0">
-                  Dữ liệu chuẩn hóa từ hệ thống `rate.master_products` trên
-                  Supabase Cloud, kèm kiểm toán giá thật và đánh giá JReviews
-                </p>
+                <p className="text-muted mb-0">{copy.home.featuredSubtitle}</p>
               </div>
               <div className="d-flex flex-wrap gap-2">
                 <Link
                   href="/smartphones"
                   className="btn btn-outline-primary rounded-pill fw-medium px-3 py-2"
                 >
-                  Xem toàn bộ danh mục ({platformStats.masterProductsCount}) →
+                  {copy.home.viewAllCatalog} ({platformStats.masterProductsCount}) →
                 </Link>
                 {masterProducts.length >= 2 && (
                   <Link
@@ -340,8 +325,7 @@ export default async function Home({
                       .join(',')}`}
                     className="btn btn-primary rounded-pill fw-medium px-3 py-2"
                   >
-                    ⚖️ So sánh thông số ({Math.min(3, masterProducts.length)}{' '}
-                    máy)
+                    {copy.home.compareSpecsBtn} ({Math.min(3, masterProducts.length)})
                   </Link>
                 )}
               </div>
@@ -361,6 +345,7 @@ export default async function Home({
                     ? item.images[0]
                     : '/img/placeholder.png');
                 const keySpecs = item.key_specs || {};
+                const productHref = getMasterProductHref(item, catSlugById);
 
                 return (
                   <div key={item.id} className="col-lg-4 col-md-6 col-12">
@@ -406,7 +391,7 @@ export default async function Home({
 
                       <h5 className="fw-bold mb-2">
                         <Link
-                          href={`/smartphones/${item.slug}`}
+                          href={productHref}
                           className="text-dark text-decoration-none"
                         >
                           {item.name}
@@ -445,10 +430,10 @@ export default async function Home({
                       </div>
                       <div className="d-grid mt-3">
                         <Link
-                          href={`/smartphones/${item.slug}`}
+                          href={productHref}
                           className="btn btn-primary rounded-pill fw-medium"
                         >
-                          Xem 10 nhóm thông số &amp; lịch sử giá →
+                          {copy.home.viewSpecAndPriceBtn}
                         </Link>
                       </div>
                     </div>
@@ -466,24 +451,22 @@ export default async function Home({
           <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 gap-3">
             <div>
               <span className="badge bg-success bg-opacity-10 text-success rounded-pill fw-semibold mb-2 px-3 py-2">
-                🛡️ Hệ Thống Chấm Điểm Tín Nhiệm Kép (Dual Risk Score)
+                {copy.home.merchantBadge}
               </span>
               <h3 className="sectionHeading mb-1">
-                Hồ Sơ Tín Nhiệm{' '}
-                <span className="text-primary">Gian Hàng TMĐT</span>
+                {copy.home.merchantTitlePrefix}{' '}
+                <span className="text-primary">
+                  {copy.home.merchantTitleHighlight}
+                </span>
               </h3>
-              <p className="text-muted mb-0">
-                Tách bạch rõ ràng điểm rủi ro an ninh mạng (`DOSafe Threat
-                Intel`) và điểm rủi ro gian lận đánh giá (`AI Review Seeding
-                Risk`)
-              </p>
+              <p className="text-muted mb-0">{copy.home.merchantSubtitle}</p>
             </div>
             <div>
               <Link
                 href="/merchants"
                 className="btn btn-outline-primary rounded-pill fw-medium px-4 py-2"
               >
-                Tra cứu tất cả gian hàng ({platformStats.merchantsCount}) →
+                {copy.home.viewAllMerchants} ({platformStats.merchantsCount}) →
               </Link>
             </div>
           </div>
@@ -622,7 +605,7 @@ export default async function Home({
                         href={`/merchants/${merchant.id}`}
                         className="btn btn-sm btn-primary rounded-pill fw-medium px-3"
                       >
-                        Xem hồ sơ kiểm toán chi tiết →
+                        {copy.home.viewMerchantAuditBtn}
                       </Link>
                     </div>
                   </div>
@@ -640,17 +623,15 @@ export default async function Home({
             <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 gap-3">
               <div>
                 <span className="badge bg-info bg-opacity-10 text-info rounded-pill fw-semibold mb-2 px-3 py-2">
-                  🤖 Kiểm Duyệt Bởi AI Review Analyzer (5 Tầng Phân Loại)
+                  {copy.home.reviewsBadge}
                 </span>
                 <h3 className="sectionHeading mb-1">
-                  Đánh Giá Thực Tế{' '}
-                  <span className="text-primary">Đã Qua Sàng Lọc Seeding</span>
+                  {copy.home.reviewsTitlePrefix}{' '}
+                  <span className="text-primary">
+                    {copy.home.reviewsTitleHighlight}
+                  </span>
                 </h3>
-                <p className="text-muted mb-0">
-                  Mỗi đánh giá từ sàn TMĐT đều được AI chấm điểm độ tin cậy, tự
-                  động tách biệt bình luận rác cày xu (`low_value_coin_spam`) và
-                  bình luận ảo (`seeding_fake`)
-                </p>
+                <p className="text-muted mb-0">{copy.home.reviewsSubtitle}</p>
               </div>
               <div className="d-flex align-items-center flex-wrap gap-2">
                 <span className="badge bg-success bg-opacity-10 text-success rounded-pill px-3 py-2">
@@ -719,9 +700,9 @@ export default async function Home({
                       </p>
 
                       <div className="border-top d-flex justify-content-between align-items-center small mt-auto pt-2">
-                        {rev.masterSlug ? (
+                        {rev.masterRouteHref ? (
                           <Link
-                            href={`/smartphones/${rev.masterSlug}`}
+                            href={rev.masterRouteHref}
                             className="text-primary fw-semibold text-decoration-none text-truncate"
                             style={{ maxWidth: '70%' }}
                           >
@@ -752,16 +733,16 @@ export default async function Home({
           <div className="row justify-content-center mb-4">
             <div className="col-xl-8 col-lg-9 text-center">
               <span className="badge bg-primary bg-opacity-10 text-primary rounded-pill fw-semibold mb-2 px-3 py-2">
-                🔬 Kiến Trúc Minh Bạch Open-Core 2026
+                {copy.home.whyBadge}
               </span>
               <h3 className="sectionHeading mb-2">
-                Vì Sao Người Mua Tin Dùng{' '}
-                <span className="text-primary">Rate.vn</span>?
+                {copy.home.whyTitlePrefix}{' '}
+                <span className="text-primary">
+                  {copy.home.whyTitleHighlight}
+                </span>
+                ?
               </h3>
-              <p className="text-muted mb-0">
-                Ba lớp bảo vệ độc lập giúp bạn không bao giờ mua nhầm hàng nâng
-                giá ảo hoặc tin nhầm bình luận Seeding
-              </p>
+              <p className="text-muted mb-0">{copy.home.whySubtitle}</p>
             </div>
           </div>
 
