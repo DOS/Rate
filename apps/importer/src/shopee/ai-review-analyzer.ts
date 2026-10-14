@@ -50,6 +50,7 @@ export interface AnalyzedReviewResult {
   helpfulness_weight: number; // 0..3.00 (JReviews-style dynamic weight)
   reason: string;
   signals: ReviewSignals;
+  detector?: string;
 }
 
 export interface JReviewsProductSummary {
@@ -441,7 +442,6 @@ export class AiReviewAnalyzer {
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
 
     try {
-      const batch = reviews.slice(0, 25);
       const systemPrompt = `You are an expert e-commerce & service review fraud auditor for Rate.vn (inspired by JReviews).
 Classify each review into one of 5 exact flag_category values:
 1. "authentic": Genuine buyer/user feedback describing real product/service experience.
@@ -466,57 +466,86 @@ Return ONLY valid JSON matching:
   "ai_summary": "string (2-3 sentences in Vietnamese summarizing authentic buyer feedback)"
 }`;
 
-      const userPrompt = JSON.stringify({
-        entity_name: context?.entityName || 'Sản phẩm / Dịch vụ',
-        entity_type: context?.entityType || 'product',
-        platform: context?.platform || 'shopee',
-        reviews: batch.map((r, idx) => ({
-          review_id: r.id,
-          author: r.author_name,
-          rating_star: r.rating_star,
-          comment: r.comment,
-          is_verified_buyer: r.is_verified_buyer ?? true,
-          heuristic_hint: baseline[idx]?.flag_category,
-        })),
-      });
-
-      const response = await fetch(`${this.baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(this.apiKey ? { Authorization: `Bearer ${this.apiKey}` } : {}),
-        },
-        body: JSON.stringify({
-          model: this.model,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userPrompt },
-          ],
-          temperature: 0.1,
-          response_format: { type: 'json_object' },
-        }),
-        signal: controller.signal,
-      });
-
-      if (!response.ok) return null;
-      const data = (await response.json()) as any;
-      const rawContent: string | undefined = data?.choices?.[0]?.message?.content;
-      if (!rawContent) return null;
-
-      const parsed = JSON.parse(
-        rawContent
-          .trim()
-          .replace(/^```(?:json)?\s*/i, '')
-          .replace(/\s*```$/i, '')
-          .trim()
-      );
-
       const aiMap = new Map<string, any>();
-      if (Array.isArray(parsed.reviews)) {
-        for (const item of parsed.reviews) {
-          if (item?.review_id) aiMap.set(String(item.review_id), item);
+      const collectedPros: string[] = [];
+      const collectedCons: string[] = [];
+      let firstSummary = '';
+      let anyBatchSucceeded = false;
+
+      for (let offset = 0; offset < reviews.length; offset += 25) {
+        const batch = reviews.slice(offset, offset + 25);
+        const batchBaseline = baseline.slice(offset, offset + 25);
+        const userPrompt = JSON.stringify({
+          entity_name: context?.entityName || 'Sản phẩm / Dịch vụ',
+          entity_type: context?.entityType || 'product',
+          platform: context?.platform || 'shopee',
+          reviews: batch.map((r, idx) => ({
+            review_id: r.id,
+            author: r.author_name,
+            rating_star: r.rating_star,
+            comment: r.comment,
+            is_verified_buyer: r.is_verified_buyer ?? true,
+            heuristic_hint: batchBaseline[idx]?.flag_category,
+          })),
+        });
+
+        const response = await fetch(`${this.baseUrl}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(this.apiKey ? { Authorization: `Bearer ${this.apiKey}` } : {}),
+          },
+          body: JSON.stringify({
+            model: this.model,
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userPrompt },
+            ],
+            temperature: 0.1,
+            response_format: { type: 'json_object' },
+          }),
+          signal: controller.signal,
+        });
+
+        if (!response.ok) continue;
+        const data = (await response.json()) as any;
+        const rawContent: string | undefined = data?.choices?.[0]?.message?.content;
+        if (!rawContent) continue;
+
+        const parsed = JSON.parse(
+          rawContent
+            .trim()
+            .replace(/^```(?:json)?\s*/i, '')
+            .replace(/\s*```$/i, '')
+            .trim()
+        );
+
+        anyBatchSucceeded = true;
+        if (Array.isArray(parsed.reviews)) {
+          for (const item of parsed.reviews) {
+            if (item?.review_id) aiMap.set(String(item.review_id), item);
+          }
+        }
+        if (Array.isArray(parsed.pros)) {
+          for (const p of parsed.pros) {
+            if (typeof p === 'string' && p.trim() && !collectedPros.includes(p.trim())) {
+              collectedPros.push(p.trim());
+            }
+          }
+        }
+        if (Array.isArray(parsed.cons)) {
+          for (const c of parsed.cons) {
+            if (typeof c === 'string' && c.trim() && !collectedCons.includes(c.trim())) {
+              collectedCons.push(c.trim());
+            }
+          }
+        }
+        if (!firstSummary && typeof parsed.ai_summary === 'string' && parsed.ai_summary.trim()) {
+          firstSummary = parsed.ai_summary.trim();
         }
       }
+
+      if (!anyBatchSucceeded) return null;
 
       const validCategories = new Set<ReviewFlagCategory>([
         'authentic',
@@ -526,9 +555,12 @@ Return ONLY valid JSON matching:
         'review_bombing',
       ]);
 
+      const hybridDetector = `hybrid:${this.provider}:${this.model}`;
       const mergedResults = baseline.map((base, idx) => {
         const aiItem = aiMap.get(base.review_id);
-        if (!aiItem) return base;
+        if (!aiItem) {
+          return { ...base, detector: 'heuristic:v2-jreviews' };
+        }
 
         // If deterministic heuristic already caught an explicit phrase (e.g. "nhận xu" or duplicate seeding),
         // preserve high-confidence heuristic; otherwise adopt AI classification.
@@ -563,14 +595,15 @@ Return ONLY valid JSON matching:
           include_in_rating: weight > 0,
           helpfulness_weight: weight,
           reason: typeof aiItem.reason === 'string' && aiItem.reason.trim() ? aiItem.reason.trim() : base.reason,
+          detector: hybridDetector,
         };
       });
 
       return {
         results: mergedResults,
-        pros: Array.isArray(parsed.pros) ? parsed.pros.map(String) : [],
-        cons: Array.isArray(parsed.cons) ? parsed.cons.map(String) : [],
-        aiSummary: typeof parsed.ai_summary === 'string' ? parsed.ai_summary : '',
+        pros: collectedPros.slice(0, 6),
+        cons: collectedCons.slice(0, 6),
+        aiSummary: firstSummary,
       };
     } catch {
       return null;
@@ -677,7 +710,12 @@ Return ONLY valid JSON matching:
       overall_rating: overallRating,
       authenticity_score: authenticityScore,
       sentiment_positive_ratio: sentimentPositiveRatio,
-      pros: aiPros.length > 0 ? aiPros : ['Hiệu năng ổn định trong tầm giá', 'Đóng gói và giao hàng đúng mô tả'],
+      pros:
+        aiPros.length > 0
+          ? aiPros
+          : positiveAuthenticCount > 0
+            ? ['Nhận phản hồi tích cực từ người dùng thực tế']
+            : [],
       cons: aiCons.length > 0 ? aiCons : [],
       ai_summary: aiSummaryText || defaultSummary,
       breakdown_by_category: breakdown,
@@ -820,7 +858,9 @@ Return ONLY valid JSON matching:
         reason: r.reason,
         include_in_rating: r.include_in_rating,
         signals: r.signals,
-        detector: this.isConfigured() ? `hybrid:${this.provider}:${this.model}` : 'heuristic:v2-jreviews',
+        detector:
+          r.detector ||
+          (this.isConfigured() ? `hybrid:${this.provider}:${this.model}` : 'heuristic:v2-jreviews'),
         detector_version: '2.0.0',
         input_hash:
           '0x' +
@@ -840,10 +880,13 @@ Return ONLY valid JSON matching:
       }
 
       for (const r of results) {
-        await supabase
+        const { error: revErr } = await supabase
           .from('reviews')
           .update({ helpfulness_weight: r.helpfulness_weight })
           .eq('id', r.review_id);
+        if (revErr) {
+          throw new Error(`[AiReviewAnalyzer] Failed to update review helpfulness_weight: ${revErr.message}`);
+        }
       }
     }
 
@@ -876,7 +919,7 @@ Return ONLY valid JSON matching:
         if (!rpcErr) refreshedViaRpc = true;
       }
       if (!refreshedViaRpc) {
-        await supabase
+        const { error: masterErr } = await supabase
           .from('master_products')
           .update({
             user_rating_weighted: summary.user_rating_weighted,
@@ -884,6 +927,9 @@ Return ONLY valid JSON matching:
             updated_at: new Date().toISOString(),
           })
           .eq('id', params.masterId);
+        if (masterErr) {
+          throw new Error(`[AiReviewAnalyzer] Failed to update master_products rating: ${masterErr.message}`);
+        }
       }
     }
 
@@ -901,13 +947,16 @@ Return ONLY valid JSON matching:
         rawReviews: params.reviews,
       });
 
-      await supabase
+      const { error: merchErr } = await supabase
         .from('merchants')
         .update({
           risk_score: merchantRisk.risk_score,
           updated_at: new Date().toISOString(),
         })
         .eq('id', params.merchantId);
+      if (merchErr) {
+        throw new Error(`[AiReviewAnalyzer] Failed to update merchant risk_score: ${merchErr.message}`);
+      }
     }
 
     return { summary, merchantRisk };
