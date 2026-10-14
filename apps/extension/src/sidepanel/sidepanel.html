@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="vi" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="dark" />
+  <title>Rate.vn - Trợ Lý Lịch Sử Giá &amp; Chống Giảm Giá Ảo</title>
+  <style>
+    :root {
+      --bg-base: #0f1113;
+      --bg-card: #16191e;
+      --bg-card-alt: #1c2027;
+      --border: #2a2f3a;
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+      --accent: #FF2E29;
+      --green: #10b981;
+      --amber: #f59e0b;
+      --blue: #3b82f6;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      background: var(--bg-base);
+      color: var(--text-main);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 13.5px;
+      line-height: 1.55;
+      padding: 16px;
+    }
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: 12px;
+      margin-bottom: 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 800;
+      font-size: 16px;
+      color: #ffffff;
+    }
+    .brand-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 10px var(--accent);
+    }
+    .refresh-btn {
+      background: var(--bg-card-alt);
+      color: var(--text-main);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 5px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 12px;
+    }
+    .card-title {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+    .verdict-pill {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .verdict-inflated_fake_sale {
+      background: rgba(255, 46, 41, 0.18);
+      color: #ff6b67;
+      border: 1px solid rgba(255, 46, 41, 0.45);
+    }
+    .verdict-genuine_deal {
+      background: rgba(16, 185, 129, 0.18);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.45);
+    }
+    .verdict-above_market {
+      background: rgba(245, 158, 11, 0.18);
+      color: #fbbf24;
+      border: 1px solid rgba(245, 158, 11, 0.45);
+    }
+    .verdict-fair_market_price,
+    .verdict-insufficient_data,
+    .verdict-accessory_skip {
+      background: rgba(59, 130, 246, 0.18);
+      color: #60a5fa;
+      border: 1px solid rgba(59, 130, 246, 0.45);
+    }
+    .product-name {
+      font-size: 15px;
+      font-weight: 700;
+      color: #ffffff;
+      margin-bottom: 6px;
+    }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .stat-box {
+      background: var(--bg-card-alt);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+    .stat-label {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+    .stat-val {
+      font-size: 14px;
+      font-weight: 700;
+      color: #ffffff;
+    }
+    .variant-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+    }
+    .variant-btn {
+      background: var(--bg-card-alt);
+      color: var(--text-main);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 5px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .variant-btn.active {
+      border-color: var(--accent);
+      background: rgba(255, 46, 41, 0.18);
+      color: #ffffff;
+    }
+    .offer-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+      gap: 8px;
+    }
+    .offer-item:last-child {
+      border-bottom: none;
+    }
+    .offer-shop {
+      font-weight: 600;
+      color: #ffffff;
+      font-size: 13px;
+    }
+    .offer-meta {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+    .offer-price {
+      font-weight: 700;
+      color: #34d399;
+      white-space: nowrap;
+    }
+    .btn-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .btn-primary {
+      flex: 1;
+      background: var(--accent);
+      color: #ffffff;
+      border: none;
+      border-radius: 8px;
+      padding: 9px 12px;
+      font-size: 12.5px;
+      font-weight: 700;
+      cursor: pointer;
+      text-align: center;
+      text-decoration: none;
+    }
+    .btn-secondary {
+      flex: 1;
+      background: var(--bg-card-alt);
+      color: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 9px 12px;
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: center;
+      text-decoration: none;
+    }
+    .privacy-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 8px;
+    }
+    .input-url {
+      width: 100%;
+      background: var(--bg-card-alt);
+      color: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 7px 10px;
+      font-size: 12px;
+      margin-top: 6px;
+    }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand">
+      <span class="brand-dot"></span>
+      <span>Rate.vn Intelligence</span>
+    </div>
+    <button id="btn-refresh" class="refresh-btn" type="button">Làm mới</button>
+  </div>
+
+  <div id="panel-root">
+    <div class="card">
+      <p style="color: #9ca3af;">Đang đồng bộ thông tin sản phẩm từ trang đang mở...</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Quyền Riêng Tư &amp; Cấu Hình Kết Nối</div>
+    <label class="privacy-row">
+      <input type="checkbox" id="chk-crowd-optin" style="margin-top: 3px;" />
+      <span>
+        <strong>Đóng góp phát hiện sản phẩm mới (Opt-In):</strong>
+        Chỉ gửi URL sản phẩm công khai đã cắt sạch tham số theo dõi vào hàng đợi kiểm duyệt độc lập của Rate.vn.
+      </span>
+    </label>
+    <div style="margin-top: 10px;">
+      <label for="inp-api-base" style="font-size: 11.5px; color: #9ca3af;">Máy chủ Rate API BFF:</label>
+      <input id="inp-api-base" class="input-url" type="url" placeholder="http://localhost:3000" />
+    </div>
+  </div>
+
+  <script type="module" src="./sidepanel.js"></script>
+</body>
+</html>

@@ -1,0 +1,287 @@
+import type {
+  ExtensionLookupData,
+  ExtensionSettings,
+  ExtractedPageProductSignal,
+} from '../types.js';
+
+const DEFAULT_SETTINGS: ExtensionSettings = {
+  apiBaseUrl: 'http://localhost:3000',
+  crowdContributeOptIn: false,
+};
+
+async function getSettings(): Promise<ExtensionSettings> {
+  try {
+    const stored = await chrome.storage.local.get([
+      'apiBaseUrl',
+      'crowdContributeOptIn',
+    ]);
+    return {
+      apiBaseUrl:
+        typeof stored.apiBaseUrl === 'string' && stored.apiBaseUrl.trim()
+          ? stored.apiBaseUrl.trim().replace(/\/+$/, '')
+          : DEFAULT_SETTINGS.apiBaseUrl,
+      crowdContributeOptIn: Boolean(stored.crowdContributeOptIn ?? false),
+    };
+  } catch {
+    return DEFAULT_SETTINGS;
+  }
+}
+
+async function fetchExtensionLookup(
+  signal: ExtractedPageProductSignal,
+  mode: 'pill' | 'full'
+): Promise<ExtensionLookupData | null> {
+  const settings = await getSettings();
+  const params = new URLSearchParams();
+  params.set('platform', signal.platform);
+  params.set('url', signal.canonicalUrl);
+  params.set('title', signal.title);
+  params.set('mode', mode);
+  if (signal.externalItemId) params.set('externalId', signal.externalItemId);
+  if (signal.externalShopId) params.set('shopId', signal.externalShopId);
+  if (signal.selectedVariant) {
+    params.set('selectedVariant', signal.selectedVariant);
+  }
+  if (signal.price && signal.price > 0) {
+    params.set('price', String(signal.price));
+  }
+  if (signal.originalPrice && signal.originalPrice > 0) {
+    params.set('originalPrice', String(signal.originalPrice));
+  }
+
+  const endpoint = `${settings.apiBaseUrl}/api/v1/rate/extension/lookup?${params.toString()}`;
+  const response = await fetch(endpoint, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Rate-Extension-Version': '2.0.0',
+    },
+  });
+
+  if (!response.ok) return null;
+  const json = (await response.json()) as {
+    ok?: boolean;
+    data?: ExtensionLookupData;
+  };
+  return json.ok && json.data ? json.data : null;
+}
+
+async function maybeSendOptInCrowdSignal(
+  signal: ExtractedPageProductSignal
+): Promise<void> {
+  const settings = await getSettings();
+  // Strict Privacy Gate: Only send crowd verification signal if user explicitly opted in
+  // and platform is Shopee (where server-side verification worker is active)
+  if (!settings.crowdContributeOptIn) return;
+  if (signal.platform !== 'shopee') return;
+  if (!signal.externalItemId || !signal.price || signal.price <= 0) return;
+
+  try {
+    await fetch(`${settings.apiBaseUrl}/api/v1/rate/extension/ingest`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Rate-Extension-Version': '2.0.0',
+      },
+      body: JSON.stringify({
+        platform: signal.platform,
+        externalItemId: signal.externalItemId,
+        externalShopId: signal.externalShopId,
+        url: signal.canonicalUrl,
+        title: signal.title,
+        selectedVariant: signal.selectedVariant,
+        price: signal.price,
+        originalPrice: signal.originalPrice,
+        ratingStar: signal.ratingStar,
+        ratingCount: signal.ratingCount,
+        userConsentOptIn: true,
+      }),
+    });
+  } catch {
+    // Non-blocking background quarantine submission
+  }
+}
+
+async function updateActionBadge(
+  tabId: number | undefined,
+  lookup: ExtensionLookupData | null
+): Promise<void> {
+  if (!tabId) return;
+  try {
+    if (!lookup || lookup.matchStatus === 'not_found') {
+      await chrome.action.setBadgeText({ text: '', tabId });
+      return;
+    }
+    const verdict = lookup.priceAssessment.verdict;
+    if (verdict === 'inflated_fake_sale') {
+      await chrome.action.setBadgeText({ text: 'ẢO!', tabId });
+      await chrome.action.setBadgeBackgroundColor({ color: '#FF2E29', tabId });
+    } else if (verdict === 'genuine_deal') {
+      await chrome.action.setBadgeText({ text: 'TỐT', tabId });
+      await chrome.action.setBadgeBackgroundColor({ color: '#10b981', tabId });
+    } else if (verdict === 'above_market') {
+      await chrome.action.setBadgeText({ text: 'CAO', tabId });
+      await chrome.action.setBadgeBackgroundColor({ color: '#f59e0b', tabId });
+    } else {
+      await chrome.action.setBadgeText({ text: 'OK', tabId });
+      await chrome.action.setBadgeBackgroundColor({ color: '#3b82f6', tabId });
+    }
+  } catch {
+    // Ignore badge errors if tab closed
+  }
+}
+
+chrome.runtime.onInstalled.addListener(async () => {
+  try {
+    await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
+    const existing = await chrome.storage.local.get([
+      'apiBaseUrl',
+      'crowdContributeOptIn',
+    ]);
+    if (typeof existing.apiBaseUrl !== 'string') {
+      await chrome.storage.local.set({
+        apiBaseUrl: DEFAULT_SETTINGS.apiBaseUrl,
+        crowdContributeOptIn: DEFAULT_SETTINGS.crowdContributeOptIn,
+      });
+    }
+  } catch (err) {
+    console.error('[Rate Extension] Initialization error:', err);
+  }
+});
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  const msgType = message.type;
+
+  // CRITICAL MV3 Rule: Call chrome.sidePanel.open synchronously in the first turn
+  // before any await so the user gesture from clicking the Shadow DOM Pill is preserved!
+  if (msgType === 'RATE_OPEN_SIDE_PANEL') {
+    const tabId = sender.tab?.id;
+    const windowId = sender.tab?.windowId;
+    if (tabId) {
+      void chrome.sidePanel.open({ tabId });
+    } else if (windowId) {
+      void chrome.sidePanel.open({ windowId });
+    }
+    sendResponse({ ok: true });
+    return false;
+  }
+
+  if (msgType === 'RATE_PRODUCT_DETECTED') {
+    (async () => {
+      try {
+        const signal = message.signal as ExtractedPageProductSignal;
+        const tabId = sender.tab?.id;
+        const cacheKey = tabId ? `tab_${tabId}` : 'tab_latest';
+
+        // Store latest extracted signal in session storage (ephemeral SW safe)
+        await chrome.storage.session.set({
+          [cacheKey]: { signal, updatedAt: Date.now() },
+          tab_latest: { signal, updatedAt: Date.now() },
+        });
+
+        const lookup = await fetchExtensionLookup(signal, 'pill');
+        await updateActionBadge(tabId, lookup);
+
+        if (lookup) {
+          await chrome.storage.session.set({
+            [`lookup_${cacheKey}`]: lookup,
+            lookup_tab_latest: lookup,
+          });
+        }
+
+        // Fire-and-forget Opt-In Quarantine Crowd Signal if user enabled it
+        void maybeSendOptInCrowdSignal(signal);
+
+        sendResponse({ ok: true, data: lookup });
+      } catch (err) {
+        sendResponse({
+          ok: false,
+          error: err instanceof Error ? err.message : 'Lookup failed',
+        });
+      }
+    })();
+    return true;
+  }
+
+  if (msgType === 'RATE_SIDEPANEL_FETCH_FULL') {
+    (async () => {
+      try {
+        const overrideVariant =
+          typeof message.selectedVariant === 'string'
+            ? message.selectedVariant
+            : null;
+        const [activeTab] = await chrome.tabs.query({
+          active: true,
+          currentWindow: true,
+        });
+        const tabKey = activeTab?.id ? `tab_${activeTab.id}` : 'tab_latest';
+        const sessionData = await chrome.storage.session.get([
+          tabKey,
+          'tab_latest',
+        ]);
+        const entry = (sessionData[tabKey] || sessionData.tab_latest) as
+          { signal?: ExtractedPageProductSignal } | undefined;
+
+        const settings = await getSettings();
+
+        if (!entry?.signal) {
+          sendResponse({
+            ok: true,
+            settings,
+            signal: null,
+            data: null,
+          });
+          return;
+        }
+
+        const effectiveSignal: ExtractedPageProductSignal = overrideVariant
+          ? { ...entry.signal, selectedVariant: overrideVariant }
+          : entry.signal;
+
+        const fullLookup = await fetchExtensionLookup(effectiveSignal, 'full');
+        sendResponse({
+          ok: true,
+          settings,
+          signal: effectiveSignal,
+          data: fullLookup,
+        });
+      } catch (err) {
+        sendResponse({
+          ok: false,
+          error: err instanceof Error ? err.message : 'Full lookup failed',
+        });
+      }
+    })();
+    return true;
+  }
+
+  if (msgType === 'RATE_UPDATE_SETTINGS') {
+    (async () => {
+      try {
+        const nextSettings: Partial<ExtensionSettings> = {};
+        if (
+          typeof message.apiBaseUrl === 'string' &&
+          message.apiBaseUrl.trim()
+        ) {
+          nextSettings.apiBaseUrl = message.apiBaseUrl
+            .trim()
+            .replace(/\/+$/, '');
+        }
+        if (typeof message.crowdContributeOptIn === 'boolean') {
+          nextSettings.crowdContributeOptIn = message.crowdContributeOptIn;
+        }
+        await chrome.storage.local.set(nextSettings);
+        const updated = await getSettings();
+        sendResponse({ ok: true, settings: updated });
+      } catch (err) {
+        sendResponse({
+          ok: false,
+          error: err instanceof Error ? err.message : 'Settings update failed',
+        });
+      }
+    })();
+    return true;
+  }
+
+  return false;
+});
