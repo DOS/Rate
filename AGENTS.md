@@ -43,6 +43,7 @@ Bảng điều phối trung tâm: **[https://github.com/orgs/DOS/projects/9](htt
 Lộ trình chuẩn: **[`Docs/Resources/ROADMAP.md`](./Docs/Resources/ROADMAP.md)**
 
 ### Bước 1: Kiểm tra & Nhận Task (Pick / Create Issue -> `In Progress`)
+
 Trước khi viết bất kỳ dòng code nào, Agent phải kiểm tra danh sách Issue trên cả 2 repo:
 
 ```powershell
@@ -66,6 +67,7 @@ gh issue list -R DOS/Rate-Services --state open
   ```
 
 ### Bước 2: Cập nhật trạng thái khi hoàn thành (`In Review` / `Done`)
+
 Sau khi code xong, chạy pass toàn bộ bài test/build và qua bước review:
 
 - **Trường hợp đang mở PR chờ CI / Reviewer tự động (`In Review`):**
@@ -85,37 +87,49 @@ Sau khi code xong, chạy pass toàn bộ bài test/build và qua bước review
 
 Hệ thống Rate được tách thành **2 repositories riêng biệt** (và dùng chung DB với **`DOS/DOS.Me`**):
 
-| Repository | Độ riêng tư | Đường dẫn Local | Những gì ĐƯỢC PHÉP đặt tại đây |
-| :--- | :---: | :--- | :--- |
-| **[`DOS/Rate`](https://github.com/DOS/Rate)** | 🌍 **Public (Open-Core)** | `D:\Projects\Rate` | • **`apps/web`**: Giao diện Next.js 16 (`rate.vn`), i18n (`vi`, `en`, `cs`)<br/>• **`apps/extension`**: Giao diện Browser Extension MV3 minh bạch<br/>• **`packages/shared-data`**: Zod Schema 10 nhóm thông số (`specs.schema.ts`)<br/>• **`apps/importer`**: Bộ não chuẩn hóa & chấm điểm công khai (`types.ts`, `product-normalizer.ts`, `entity-matcher.ts`, `ai-spec-enricher.ts`, `ai-review-analyzer.ts`, `shopee-to-supabase.ts`)<br/>• **`supabase/migrations`**: Bản sao tham chiếu schema `rate` cho Open-Core (**KHÔNG chạy `db push` hay MCP `apply_migration` từ đây**) |
-| **[`DOS/Rate-Services`](https://github.com/DOS/Rate-Services)** | 🔒 **Private (Enterprise)** | `D:\Projects\Rate-Services` | • **Anti-Detect Scrapers**: `shopee-scraper.ts`, `shopee-search-scraper.ts`, `sniff-search-api.ts`<br/>• **Bypass & Proxy**: `shopee-captcha-solver.ts` (giải Captcha), `proxy-manager.ts` (`mproxy.vn`)<br/>• **Queue Workers**: `queue-worker.ts`, `crawl-smartphones-with-proxy.ts`<br/>• **GitHub Actions Cron**: `.github/workflows/scheduled-crawler.yml` |
-| **[`DOS/DOS.Me`](https://github.com/DOS/DOS.Me)** | 🔒 **Sole DB Authority** | `D:\Projects\DOS-Me` | • **`supabase/migrations/`**: Nơi **DUY NHẤT** được phép chứa migration chính thức và chạy CI deploy (`preview -> beta -> prod`) lên Supabase `gulptwduchsjcsbndmua`. |
+| Repository                                                      |         Độ riêng tư         | Đường dẫn Local             | Những gì ĐƯỢC PHÉP đặt tại đây                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| :-------------------------------------------------------------- | :-------------------------: | :-------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **[`DOS/Rate`](https://github.com/DOS/Rate)**                   |  🌍 **Public (Open-Core)**  | `D:\Projects\Rate`          | • **`apps/web`**: Giao diện Next.js 16.3.8 (`rate.vn`), i18n (`vi`, `en`, `cs`), Server Data Layer (`src/server/rate/`) & REST API v1 (`src/app/api/v1/rate/`)<br/>• **`apps/extension`**: Giao diện Browser Extension MV3 minh bạch<br/>• **`packages/shared-data`**: Zod Schema 10 nhóm thông số (`specs.schema.ts`)<br/>• **`apps/importer`**: Bộ não chuẩn hóa & chấm điểm công khai (`types.ts`, `product-normalizer.ts`, `entity-matcher.ts`, `ai-spec-enricher.ts`, `ai-review-analyzer.ts`, `shopee-to-supabase.ts`)<br/>• **`supabase/migrations`**: Bản sao tham chiếu schema `rate` cho Open-Core (**KHÔNG chạy `db push` hay MCP `apply_migration` từ đây**) |
+| **[`DOS/Rate-Services`](https://github.com/DOS/Rate-Services)** | 🔒 **Private (Enterprise)** | `D:\Projects\Rate-Services` | • **Anti-Detect Scrapers**: `shopee-scraper.ts`, `shopee-search-scraper.ts`, `sniff-search-api.ts`<br/>• **Bypass & Proxy**: `shopee-captcha-solver.ts` (giải Captcha), `proxy-manager.ts` (`mproxy.vn`)<br/>• **Queue Workers**: `queue-worker.ts`, `crawl-smartphones-with-proxy.ts`<br/>• **GitHub Actions Cron**: `.github/workflows/scheduled-crawler.yml`                                                                                                                                                                                                                                                                                                          |
+| **[`DOS/DOS.Me`](https://github.com/DOS/DOS.Me)**               |  🔒 **Sole DB Authority**   | `D:\Projects\DOS-Me`        | • **`supabase/migrations/`**: Nơi **DUY NHẤT** được phép chứa migration chính thức và chạy CI deploy (`preview -> beta -> prod`) lên Supabase `gulptwduchsjcsbndmua`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 
 > ⚠️ **CẤM TUYỆT ĐỐI:** Không bao giờ commit code giải Captcha, xoay Proxy, sniff API nội bộ của sàn, hoặc khoá bí mật (`SUPABASE_SERVICE_ROLE_KEY`, `AI_API_KEY`, `MPROXY_*`) vào `DOS/Rate`.
 
 ---
 
-## 3. Kiến Trúc Kỹ Thuật Cốt Lõi (Zero-Strapi 2026)
+## 3. Kiến Trúc Kỹ Thuật Cốt Lõi & 4-Layer Backend (Zero-Strapi 2026)
 
 - **Bỏ hoàn toàn Strapi CMS & Splink Python:** Không sử dụng hay khởi tạo lại các thành phần Strapi cũ.
-- **Pure PostgreSQL 17 trên Supabase Cloud (`rate` schema):**
-  - `rate.master_products`: Sản phẩm gốc chuẩn hóa (`model_key` duy nhất, `specifications` JSONB 10 nhóm, `key_specs`).
-  - `rate.products`: Gian hàng/Listing từ các sàn liên kết qua `cluster_id`.
-  - `rate.price_history`: Lịch sử giá chống trùng theo `observation_id`.
-  - `rate.reviews`, `rate.review_flags`, `rate.review_votes`: Đánh giá người dùng, phân tích seeding bằng AI, và bình chọn/báo cáo theo từng người dùng.
-- **Chuẩn 10 Field Groups:** Kết hợp cấu trúc sạch của **PhoneArena** (tách riêng `main_camera`, `second_camera`, `third_camera`, `fourth_camera`, `front_camera`) và độ sâu kỹ thuật của **GSMArena**.
-- **AI Provider-Agnostic:** Mọi module AI (`AiSpecEnricher`, `AiReviewAnalyzer`) phải hỗ trợ chuẩn OpenAI-compatible (`openai`, `dos-ai`, `gemini`, `deepseek`, `groq`, `openrouter`, `ollama`) qua biến môi trường `AI_PROVIDER`, `AI_API_KEY`, `AI_BASE_URL`, `AI_MODEL`.
+- **Chuẩn Ngôn Ngữ & Công Cụ (Ecosystem Standard 2026):**
+  - **TypeScript `^7.0.2`** (`strict: true`, `ignoreBuildErrors: false`), **Node.js >= 22 (v26 LTS)**, **pnpm `10.x`**, **Turborepo `^2.10.12`**.
+- **Kiến Trúc 4 Tầng Backend (4-Layer Composable Backend Architecture):**
+  1. **Layer 1 - Web BFF & REST API v1 (`apps/web`):**
+     - **Server Data Layer (`apps/web/src/server/rate/`):** Tầng truy vấn Server-only bọc `React.cache()` chống trùng lặp request giữa `generateMetadata()` và React Server Components (`page.tsx`).
+     - **JSON REST API v1 (`apps/web/src/app/api/v1/rate/*` & `/api/reviews/[id]/vote`):** Cung cấp REST API chuẩn (`GET /api/v1/rate/products`, `GET /api/v1/rate/products/[slug]`, `POST /api/reviews/[id]/vote`) phục vụ cả Web Client islands lẫn Browser Extension Manifest V3.
+  2. **Layer 2 - Open-Core Intelligence & Normalization Service (`apps/importer` + `packages/shared-data`):**
+     - `packages/shared-data/src/schemas/specs.schema.ts`: Chuẩn **10 Field Groups** bằng Zod (`^3.25.76`), kết hợp cấu trúc sạch của **PhoneArena** (tách riêng `main_camera`, `second_camera`, `third_camera`, `fourth_camera`, `front_camera`) và độ sâu kỹ thuật của **GSMArena**.
+     - `apps/importer/src/shopee/*`: `ProductNormalizer`, `EntityMatcher` (Dedupe 3 tầng: `model_key` -> `pg_trgm` -> LLM), `AiSpecEnricher`, `AiReviewAnalyzer`, `ShopeeToSupabasePipeline`.
+     - **AI Provider-Agnostic:** Hỗ trợ chuẩn OpenAI-compatible (`dos-ai` gateway `api.dos.ai` / vLLM Qwen, `openai`, `gemini`, `deepseek`, `groq`, `openrouter`, `ollama`) qua `AI_PROVIDER`, `AI_API_KEY`, `AI_BASE_URL`, `AI_MODEL`.
+  3. **Layer 3 - Private Anti-Detect Scraper & Queue Worker Service (`DOS/Rate-Services`):**
+     - Playwright Stealth, xoay IP `mproxy.vn`, giải Slider Captcha, và `queue-worker.ts` xử lý hàng đợi bất đồng bộ qua cơ chế khóa nguyên tử PostgreSQL `FOR UPDATE SKIP LOCKED`.
+  4. **Layer 4 - Database, Atomic Queue & In-DB Trigger Engine (`Supabase Cloud PostgreSQL 17` - `rate` schema):**
+     - `rate.master_products`: Sản phẩm gốc chuẩn hóa (`model_key` duy nhất, `specifications` JSONB 10 nhóm, `key_specs`).
+     - `rate.products`: Gian hàng/Listing từ các sàn liên kết qua `cluster_id`.
+     - `rate.price_history`: Lịch sử giá chống trùng theo `observation_id`.
+     - `rate.reviews`, `rate.review_flags`, `rate.review_votes`: Đánh giá người dùng, phân tích seeding bằng AI, bình chọn/báo cáo theo từng người dùng, và trigger `SECURITY DEFINER` tự động tính điểm.
 
 ---
 
 ## 4. Lệnh Kiểm Thử & Build Thường Dùng
 
 ```powershell
-# Tại D:\Projects\Rate (Monorepo dùng pnpm)
+# Tại D:\Projects\Rate (Monorepo dùng pnpm + TypeScript 7.0.2)
+pnpm --filter @repo/shared-data build
 pnpm --filter @repo/crawlers build
 pnpm --filter @repo/crawlers exec tsx src/shopee/test-ai-enricher.ts
 pnpm --filter @repo/crawlers exec tsx src/shopee/test-review-analyzer.ts
-pnpm --filter web build
+pnpm --filter @repo/web typecheck
+pnpm --filter @repo/web build
 
 # Tại D:\Projects\Rate-Services
 npm run build

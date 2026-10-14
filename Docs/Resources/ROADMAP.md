@@ -1,116 +1,70 @@
-# 🗺️ Rate Platform Roadmap — Kiến Trúc Zero-Strapi & Open-Core 2026
+# 🗺️ Rate Platform Roadmap - Kiến Trúc Zero-Strapi & Open-Core 2026
 
-> **Cập nhật lần cuối:** Tháng 10/2026  
-> **Kiến trúc hiện tại:** Next.js 16 + Pure PostgreSQL 17 (Supabase Cloud `rate` schema) + Open-Core 2 Repositories (`DOS/Rate` & `DOS/Rate-Services`)  
+> **Cập nhật lần cuối:** 14/10/2026  
+> **Tech Stack chuẩn hóa:** TypeScript 7.0.2 + Next.js 16.3.8 + React 19.3 + Pure PostgreSQL 17 (Supabase Cloud `rate` schema) + Open-Core 2 Repositories (`DOS/Rate` & `DOS/Rate-Services`)  
 > **GitHub Project Board (Multi-Agent Queue):** [https://github.com/orgs/DOS/projects/9](https://github.com/orgs/DOS/projects/9)  
-> **Trạng thái:** Đang triển khai Phase 3 (AI Review Intelligence & Data Backfill)
+> **Trạng thái hiện tại:** Đã hoàn thành Phase 1, Phase 2, Phase 3.1, Phase 3.2, Phase 4.1, Phase 4.2 & Đại phẫu Kiến trúc 2026 (Đang triển khai Phase 4.3 & Phase 3.3/5)
 
 ---
 
-## 1. Tầm Nhìn & Kiến Trúc Cốt Lõi (Zero-Strapi + Open-Core 2 Repos)
+## 1. Tầm Nhìn & Kiến Trúc Backend + Full-Stack 4 Tầng (Zero-Strapi 2026)
 
-Hệ thống **Rate Platform** đã chuyển dịch hoàn toàn khỏi mô hình Strapi CMS + Splink Python cũ sang kiến trúc **Pure PostgreSQL 17 (`rate` schema)**, đồng thời phân tách thành **2 Repositories** để vừa minh bạch thuật toán chấm điểm với cộng đồng, vừa bảo mật tuyệt đối công cụ cào dữ liệu:
+Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc **4 Tầng Chuyên Biệt (Composable 4-Layer Architecture)**, loại bỏ hoàn toàn Strapi CMS, Redis Streams và Python Splink cũ:
 
-- **Mô hình Open-Core 2 Repositories:**
-  - 🌍 **[`DOS/Rate`](https://github.com/DOS/Rate) (Public Open-Core — `D:\Projects\Rate`):** Chứa Web UI (`apps/web`), Browser Extension (`apps/extension`), chuẩn 10 nhóm thông số (`packages/shared-data`), Database Migrations (`supabase/migrations`), và bộ não chuẩn hóa/chấm điểm công khai (`product-normalizer.ts`, `entity-matcher.ts`, `ai-spec-enricher.ts`, `ai-review-analyzer.ts`, `shopee-to-supabase.ts`).
-  - 🔒 **[`DOS/Rate-Services`](https://github.com/DOS/Rate-Services) (Private Enterprise — `D:\Projects\Rate-Services`):** Chứa toàn bộ Scraper vượt tường lửa (`shopee-scraper.ts`, `shopee-search-scraper.ts`, `sniff-search-api.ts`), giải Captcha (`shopee-captcha-solver.ts`), xoay Proxy (`proxy-manager.ts`), và Queue Workers (`queue-worker.ts`) chạy định kỳ trên GitHub Actions Enterprise.
-- **Kiến trúc Sản phẩm 2 Tầng (Two-Tier Product Model):**
-  - **Tầng 1 — `rate.master_products` (Sản phẩm gốc chuẩn hóa):** Mỗi dòng máy + dung lượng (ví dụ `apple:iphone-16-pro-max:256gb`) là một thực thể chuẩn duy nhất, lưu trữ **10 Field Groups** thông số kỹ thuật (`JSONB` + GIN Index) và giá `min_price` / `max_price` tổng hợp từ toàn thị trường.
-  - **Tầng 2 — `rate.products` (Gian hàng / Chào giá từ các sàn):** Lưu các listing thực tế cào từ Shopee (và mở rộng sang Lazada, Tiki, đại lý bán lẻ), liên kết về sản phẩm gốc qua `cluster_id`, kèm lịch sử biến động giá (`rate.price_history`) và đánh giá người mua (`rate.reviews`).
-- **Chuẩn Thông Số Kỹ Thuật 10 Nhóm (PhoneArena Structure + GSMArena Depth):**
-  - Tổ chức thành 10 nhóm chuẩn: `availability`, `design`, `display`, `hardware`, `battery`, `camera`, `connectivity`, `cellular`, `multimedia`, `regulatory`.
-  - Tách bạch từng ống kính (`main_camera`, `second_camera`, `third_camera`, `fourth_camera`, `front_camera`) theo chuẩn PhoneArena, kết hợp độ sâu phần cứng của GSMArena.
-- **3-Tier Entity Matching & Provider-Agnostic AI Spec Enricher:**
-  - **Tier 1:** Khớp chính xác theo `model_key` (`brand:model:storage`).
-  - **Tier 2:** Khớp mờ qua PostgreSQL `pg_trgm` (`match_master_product` RPC, ngưỡng tương đồng $\ge 0.70$).
-  - **Tier 3:** Tự động gọi `AiSpecEnricher` (hỗ trợ đa provider: OpenAI, DOS-AI Gateway, Gemini, DeepSeek, Groq, OpenRouter, Ollama) để điền đầy đủ 10 nhóm thông số chuẩn trước khi khởi tạo Master Product mới.
-
-```mermaid
-flowchart LR
-    A["Shopee / E-commerce Scraper"] --> B["ProductNormalizer (RAM/ROM & Key)"]
-    B --> C{"EntityMatcher (3-Tier)"}
-    C -->|"Tier 1: Exact model_key"| E["Link cluster_id"]
-    C -->|"Tier 2: pg_trgm >= 0.70"| E
-    C -->|"Tier 3: New Device"| D["AiSpecEnricher (10 Field Groups)"]
-    D --> F["Seed rate.master_products"]
-    F --> E
-    E --> G["Upsert rate.products + price_history + reviews"]
-    G --> H["AI Review Analyzer & Risk Scorer"]
-```
+1. **Tầng 1 - Web BFF & REST API v1 (`apps/web` trong `DOS/Rate`):**
+   - Giao diện **Next.js 16.3.8** (App Router + Turbopack) + **React 19.3** + **Bootstrap 5.3.8** + **`next-intl`** (`vi` mặc định tại `/`, `en`, `cs`).
+   - Tầng Server Data (`apps/web/src/server/rate/`) tích hợp `React.cache()` deduplication và cung cấp các endpoints REST JSON (`/api/v1/rate/products`, `/api/v1/rate/products/[slug]`, `/api/reviews/[id]/vote`).
+2. **Tầng 2 - Open-Core Intelligence Engine (`apps/importer` & `packages/shared-data` trong `DOS/Rate`):**
+   - Chuẩn hóa **10 Field Groups** (`specs.schema.ts` với Zod `^3.25.76`).
+   - Bộ não `ProductNormalizer`, `EntityMatcher` (3-Tier Dedupe), `AiSpecEnricher` (đa LLM OpenAI-compatible) và `AiReviewAnalyzer` (lọc Seeding/Spam xu + tính điểm rủi ro kép `dosafe_risk_score` và `review_risk_score`).
+3. **Tầng 3 - Private Anti-Detect Scraper & Queue Worker (`DOS/Rate-Services`):**
+   - Chứa Playwright Stealth, giải Captcha (`shopee-captcha-solver.ts`), xoay IP `mproxy.vn` (`proxy-manager.ts`), và `queue-worker.ts` chạy định kỳ trên GitHub Actions Enterprise.
+4. **Tầng 4 - Database, Queue & Trigger Engine (`Supabase Cloud PostgreSQL 17` - Schema `rate`):**
+   - Sổ cái migration duy nhất tại `DOS-Me/supabase/migrations/`.
+   - Mô hình sản phẩm 2 tầng (`rate.master_products` + `rate.products`), lịch sử giá chống trùng (`rate.price_history`), và hệ thống đánh giá kép JReviews (`rate.reviews`, `rate.review_flags`, `rate.review_votes`).
 
 ---
 
-## 2. Lộ Trình Triển Khai Chi Tiết (Phases)
+## 2. Trạng Thái Triển Khai Chi Tiết Theo Từng Phase
 
 ### ✅ Phase 1: Nền Tảng Database PostgreSQL 17 & Schema 2 Tầng (Đã hoàn thành)
-- [x] Khởi tạo schema `rate` trên Supabase Cloud (`master_products`, `products`, `merchants`, `categories`, `price_history`, `reviews`, `review_flags`).
-- [x] Thiết lập hệ thống hàng đợi cào dữ liệu thuần Postgres (`rate.crawl_jobs`, `rate.crawl_runs`) với các `SECURITY DEFINER` RPCs (`dequeue_crawl_job`, `heartbeat_crawl_job`, `checkpoint_crawl_job`, `ack_crawl_job`, `fail_crawl_job`).
-- [x] Định nghĩa bộ Schema Zod & TypeScript cho **10 Field Groups** tại `packages/shared-data/src/schemas/specs.schema.ts`.
-- [x] Xây dựng hàm PostgreSQL `match_master_product` sử dụng `pg_trgm` kết hợp lọc cứng theo `brand` và `storage_gb`.
-- [x] Cấu hình triggers tự động cập nhật `min_price`, `max_price`, `merchant_count` trên `rate.master_products`.
 
----
+- [x] Khởi tạo schema `rate` trên Supabase Cloud (`master_products`, `products`, `merchants`, `categories`, `price_history`, `reviews`, `review_flags`, `review_votes`).
+- [x] Thiết lập hệ thống hàng đợi cào dữ liệu thuần Postgres (`rate.crawl_jobs`, `rate.crawl_runs`) với các `SECURITY DEFINER` RPCs (`dequeue_crawl_job`, `heartbeat_crawl_job`, `checkpoint_crawl_job`, `ack_crawl_job`, `fail_crawl_job`).
+- [x] Định nghĩa bộ Schema Zod & TypeScript 7.0 cho **10 Field Groups** tại `packages/shared-data/src/schemas/specs.schema.ts`.
+- [x] Xây dựng hàm PostgreSQL `match_master_product` sử dụng `pg_trgm` kết hợp lọc cứng theo `brand` và `storage_gb`.
+- [x] Cấu hình triggers tự động cập nhật `min_price`, `max_price`, `merchant_count` và điểm đánh giá trọng số JReviews trên `rate.master_products`.
 
 ### ✅ Phase 2: Pipeline Cào Dữ Liệu, Dedupe & AI Spec Enricher (Đã hoàn thành)
-- [x] **Shopee Scraper & Anti-Detect Proxy:** Tích hợp `mproxy.vn` xoay IP, xử lý trạng thái trượt captcha và bóc tách chi tiết sản phẩm, biến thể màu sắc, đánh giá người dùng (`shopee-scraper.ts`).
-- [x] **Queue-Driven Worker (`queue-worker.ts`):** Cơ chế nhận job theo lease, gửi heartbeat định kỳ, lưu checkpoint từng bước (`merchant` $\rightarrow$ `master` $\rightarrow$ `listing` $\rightarrow$ `price` $\rightarrow$ `reviews`) và chống trùng lặp `observation_id` cho lịch sử giá.
-- [x] **RAM/ROM-Aware `ProductNormalizer` (`product-normalizer.ts`):** Thuật toán nhận diện chính xác dung lượng RAM và ROM trong tiêu đề tiếng Việt phức tạp (ví dụ: `"Samsung Galaxy A55 8GB RAM 256GB"` $\rightarrow$ ROM `256GB`, RAM `8GB`).
-- [x] **Provider-Agnostic `AiSpecEnricher` (`ai-spec-enricher.ts`):**
-  - Hỗ trợ bất kỳ LLM nào qua giao thức chuẩn OpenAI-compatible (`openai`, `dos-ai`, `gemini`, `deepseek`, `groq`, `openrouter`, `ollama`).
-  - Sanitizer tự động ép kiểu số học/boolean và kiểm증 qua Zod Schema 10 nhóm.
-  - Tích hợp trực tiếp vào **Tier 3** của `EntityMatcher` + hỗ trợ hàm `enrichMasterProductById()` để backfill sản phẩm cũ.
-- [x] **Web UI Cơ Bản & Đa Ngôn Ngữ (`apps/web`):**
-  - Nâng cấp Next.js 16, React 19, đồng bộ chuyển đổi ngôn ngữ Tiếng Việt / Tiếng Anh / Tiếng Séc với SVG Flag.
-  - Xây dựng các trang `/smartphones` (danh mục Master Products), `/smartphones/[slug]` (chi tiết 10 nhóm thông số + so sánh nơi bán + đánh giá), và `/compare` (so sánh song song 2–3 máy).
 
----
+- [x] **Shopee Scraper & Anti-Detect Proxy (`DOS/Rate-Services`):** Tích hợp `mproxy.vn` xoay IP, xử lý trượt Captcha và bóc tách chi tiết sản phẩm, biến thể, đánh giá.
+- [x] **Queue-Driven Worker (`queue-worker.ts`):** Cơ chế nhận job theo lease, gửi heartbeat định kỳ, lưu checkpoint từng bước và chống trùng lặp `observation_id` cho lịch sử giá.
+- [x] **RAM/ROM-Aware `ProductNormalizer` (`product-normalizer.ts`):** Nhận diện chính xác dung lượng RAM và ROM trong tiêu đề tiếng Việt phức tạp.
+- [x] **Provider-Agnostic `AiSpecEnricher` (`ai-spec-enricher.ts`):** Hỗ trợ mọi LLM chuẩn OpenAI-compatible (`dos-ai`, `openai`, `gemini`, `deepseek`, `groq`, `openrouter`, `ollama`) kèm bộ Sanitizer + Zod validation.
 
-### 🔥 Phase 3: AI Review Intelligence, Chấm Điểm Rủi Ro Shop & Làm Giàu Dữ Liệu Thực Tế (Đang thực hiện — Ưu tiên tiếp theo)
-- [ ] **3.1. Module AI Review Analyzer (`apps/importer/src/shopee/ai-review-analyzer.ts`):**
-  - Phân tích các đánh giá trong `rate.reviews` chưa có bản ghi `rate.review_flags`.
-  - Phát hiện review seeding, spam nhận xu, văn mẫu lặp lại, hoặc bình luận không khớp sản phẩm.
-  - Ghi kết quả vào `rate.review_flags` (`verdict`: `'authentic' | 'suspicious' | 'fake'`, `fake_probability`: `0.0 - 1.0`, `reasons`).
-- [ ] **3.2. Module Merchant Risk Scorer (`rate.merchants.risk_score`):**
-  - Tính toán chỉ số rủi ro của gian hàng (`0 - 100`) dựa trên: tỷ lệ review ảo, độ lệch giá bất thường so với `min_price` thị trường, trạng thái Mall/Official, tuổi đời & số người theo dõi.
-  - Tự động cập nhật `rate.merchants.risk_score` và `rate.master_products.avg_trust_score`.
-- [ ] **3.3. Batch Crawl & Backfill Dữ Liệu Thực Tế Lên Supabase Cloud:**
-  - Chạy script backfill làm giàu toàn bộ `master_products` hiện có trên Supabase bằng `AiSpecEnricher`.
-  - Nạp thêm danh mục các dòng điện thoại phổ biến tại Việt Nam (iPhone 15/16 series, Samsung Galaxy S24/A55 series, Xiaomi 14/Redmi Note 13 series, OPPO Find X8/Reno12 series).
+### ✅ Phase 3: AI Review Intelligence, Dual Risk Score & JReviews Voting (Đã hoàn thành 3.1 & 3.2)
 
----
+- [x] **3.1. Module AI Review Analyzer (`apps/importer/src/shopee/ai-review-analyzer.ts` - Issue #6 & #7):**
+  - Phân loại chi tiết 5 hạng mục (`authentic`, `low_value_coin_spam`, `seeding_fake`, `competitor_sabotage`, `review_bombing`), tự động loại bỏ bình luận rác nhận xu khỏi điểm trung bình.
+- [x] **3.2. Tách biệt Dual Merchant Risk Score & JReviews Interactive Voting (Issue #15 & #16):**
+  - Tách `dosafe_risk_score` (từ `dosafe.threat_intel`) và `review_risk_score` (từ tỷ lệ review bất thường), kết hợp thành `risk_score` tổng hợp.
+  - Xây dựng bảng `rate.review_votes`, API `/api/reviews/[id]/vote` và giao diện `JReviewsSection.tsx` trên `/smartphones/[slug]`.
+- [ ] **3.3. Batch Crawl & Backfill Mở Rộng Danh Mục Lên Supabase Cloud (Issue #8):**
+  - Mở rộng seed & backfill thêm các dòng máy chủ lực mới lên Supabase Cloud.
 
-### 🚀 Phase 4: Nâng Cấp Trải Nghiệm Tìm Kiếm, Bộ Lọc 10 Nhóm & Biểu Đồ Giá Trên Web (`apps/web`)
-- [ ] **4.1. Bộ Lọc Đa Tiêu Chí Theo Thông Số (Faceted Spec Filter trên `/smartphones`):**
-  - Lọc trực tiếp trên cột số học và JSONB của `rate.master_products`:
-    - Hãng sản xuất (`Apple`, `Samsung`, `Xiaomi`, `OPPO`, `Vivo`, ...)
-    - Khoảng giá (`Dưới 7 triệu`, `7 - 15 triệu`, `Trên 15 triệu`)
-    - Dung lượng RAM (`8GB`, `12GB`, `16GB`) & Bộ nhớ trong (`128GB`, `256GB`, `512GB`, `1TB`)
-    - Dung lượng Pin ($\ge 5000\text{ mAh}$), Tần số quét màn hình ($120\text{Hz}$), Hỗ trợ 5G.
-  - Sắp xếp theo: Giá thấp nhất, Điểm tin cậy cao nhất, Nhiều nơi bán nhất, Mới ra mắt.
-- [ ] **4.2. Biểu Đồ Lịch Sử Giá (`Price History Chart` trên `/smartphones/[slug]`):**
-  - Truy vấn bảng `rate.price_history` và vẽ biểu đồ biến động giá theo ngày cho từng gian hàng.
-  - Cảnh báo chiêu trò **"Tăng giá gốc rồi gắn nhãn Siêu Sale"** (Fake Discount Detection).
-- [ ] **4.3. Thanh Tìm Kiếm Thông Minh & Chọn Máy So Sánh Động (`/compare`):**
-  - Thêm ô tìm kiếm Autocomplete ngay trên trang `/compare` và `/smartphones` để người dùng tự thêm/bớt bất kỳ mẫu điện thoại nào vào bảng đối chiếu 10 nhóm thông số.
+### ✅ Phase 4: Nâng Cấp Trải Nghiệm Directory Filter, Biểu Đồ Lịch Sử Giá & Kiến Trúc Next.js 16 (Đã hoàn thành 4.1, 4.2 & Arch 2026)
 
----
+- [x] **4.1. Bộ Lọc Đa Tiêu Chí Theo 10 Nhóm Thông Số (`/smartphones` - Issue #9):**
+  - Thiết kế `category-filters.ts` hỗ trợ lọc động theo từng Category (`smartphones`, `tablets`, `laptops`) kế thừa giao diện `ListingHub` (`list-sidebar-one.tsx` + `grid-layout-01`).
+- [x] **4.2. Biểu Đồ Lịch Sử Giá & Cảnh Báo Giảm Giá Ảo (`/smartphones/[slug]` - Issue #10):**
+  - Triển khai `getMasterProductPriceHistory` và `PriceHistorySection.tsx` (Biểu đồ SVG chuỗi thời gian + phát hiện nâng khống giá gốc).
+  - Khắc phục triệt để lỗi điều hướng `/en` bằng `localeCookie: false`.
+- [x] **4.2b. Đại Phẫu Kiến Trúc Monorepo & Chuẩn Hóa TypeScript 7.0.2 (Issue #17):**
+  - Nâng cấp toàn bộ Monorepo lên **TypeScript 7.0.2**, xóa 4 gói Zombie (`packages/ai`, `importer`, `strapi-types`, `validator`) và toàn bộ route/component Strapi cũ, bật lại `typescript.ignoreBuildErrors: false`, bổ sung tầng `src/server/rate/` (`React.cache`) và REST API `/api/v1/rate/*`.
+- [ ] **4.3. Thanh Tìm Kiếm Thông Minh Autocomplete & Chọn Máy So Sánh Động (`/compare` - Issue #11):**
+  - Thêm ô tìm kiếm Autocomplete ngay trên trang `/compare` để người dùng tự thêm/bớt bất kỳ mẫu điện thoại nào vào bảng đối chiếu 10 nhóm thông số.
 
-### 🔮 Phase 5: Mở Rộng Đa Sàn & Browser Extension
-- [ ] **5.1. Đa sàn thương mại điện tử & Chuỗi bán lẻ:**
-  - Mở rộng Importer sang **Lazada**, **Tiki**, **CellphoneS**, **Thế Giới Di Động**, **FPT Shop** — tất cả cùng gom về chung `rate.master_products` qua `EntityMatcher`.
-- [ ] **5.2. Rate Browser Extension (Manifest V3):**
-  - Khi người dùng đang xem một trang sản phẩm trên Shopee/Lazada, popup của Extension hiển thị ngay:
-    - Giá thấp nhất ở các sàn khác cho cùng mẫu máy (`master_product`).
-    - Điểm tin cậy thực tế & tỷ lệ review ảo (`review_flags`) của shop đó.
-    - Biểu đồ lịch sử giá 30/90 ngày qua.
+### 🔮 Phase 5: Mở Rộng Đa Sàn & Browser Extension MV3
 
----
-
-## 3. Thứ Tự Gợi Ý Các Task Tiếp Theo (Actionable Queue)
-
-| Thứ tự | Hạng mục (Task) | Module / File chính | Giá trị mang lại |
-| :---: | :--- | :--- | :--- |
-| **Task 1** | **Backfill & Seed Master Products với AI Spec Enricher** | `apps/importer/src/shopee/test-ai-enricher.ts` | Đảm bảo toàn bộ sản phẩm trên Supabase Cloud có đủ 10 nhóm thông số chuẩn hiển thị ngay trên Web |
-| **Task 2** | **Xây dựng AI Review Analyzer & Merchant Risk Scorer** | `apps/importer/src/shopee/ai-review-analyzer.ts` | Lấp đầy bảng `rate.review_flags` và `risk_score` để các nhãn *"Đánh giá thật / Nghi vấn seeding"* trên UI hoạt động thực tế |
-| **Task 3** | **Bộ lọc thông số (Faceted Filter) & Tìm kiếm trên `/smartphones`** | `apps/web/src/app/[locale]/smartphones/page.tsx` | Cho phép người dùng lọc điện thoại theo Hãng, Giá, RAM, ROM, Pin, 120Hz |
-| **Task 4** | **Biểu đồ Lịch sử giá (`price_history`) & Chọn máy so sánh động** | `apps/web/src/app/[locale]/smartphones/[slug]/page.tsx` | Hoàn thiện tính năng phát hiện giảm giá ảo và nâng cấp trang `/compare` |
+- [ ] **5.1. Mở rộng Scraper sang Lazada, Tiki, CellphoneS, Thế Giới Di Động (Issue #1 bên `DOS/Rate-Services`).**
+- [ ] **5.2. Nâng cấp Rate Browser Extension (Manifest V3) kết nối trực tiếp API `/api/v1/rate/products/[slug]` & Supabase `rate` schema (Issue #12).**

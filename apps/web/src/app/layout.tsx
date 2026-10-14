@@ -1,10 +1,15 @@
-import 'bootstrap/dist/css/bootstrap.css'
-import './style/scss/style.scss'
-import 'animate.css'
+import 'bootstrap/dist/css/bootstrap.css';
+import './style/scss/style.scss';
+import 'animate.css';
+import Script from 'next/script';
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
-    <html lang="en">
+    <html lang="vi">
       <head>
         <meta charSet="utf-8" />
         <link
@@ -14,11 +19,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           crossOrigin="anonymous"
           referrerPolicy="no-referrer"
         />
-        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
       </head>
       <body>
         {children}
+        <Script
+          src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+          strategy="afterInteractive"
+        />
       </body>
     </html>
-  )
+  );
 }

@@ -1,12 +1,13 @@
+import type { Metadata } from 'next';
 import { Link } from '@/lib/navigation';
 import { notFound } from 'next/navigation';
 import {
-  getMasterProductBySlug,
-  getMasterProductOffers,
-  getMasterProductPriceHistory,
-  getMasterProductReviews,
-  getMasterProductReviewSummary,
-} from '@/lib/rate-api';
+  getCachedMasterProductBySlug,
+  getCachedMasterProductOffers,
+  getCachedMasterProductPriceHistory,
+  getCachedMasterProductReviews,
+  getCachedMasterProductReviewSummary,
+} from '@/server/rate';
 import JReviewsSection from '@/components/reviews/JReviewsSection';
 import PriceHistorySection from '@/components/price-history/PriceHistorySection';
 import NavbarDarkDynamic from '../../components/navbar/NavbarDarkDynamic';
@@ -17,25 +18,59 @@ import type { KeySpecs, ProductSpecifications } from '@repo/shared-data';
 
 type PageParams = Promise<{ locale: string; slug: string }>;
 
+export async function generateMetadata({
+  params,
+}: {
+  params: PageParams;
+}): Promise<Metadata> {
+  const { locale, slug } = await params;
+  const product = await getCachedMasterProductBySlug(slug);
+  if (!product) {
+    return {
+      title: 'Không tìm thấy sản phẩm | Rate.vn',
+    };
+  }
+  const minPrice = Number(product.min_price || 0).toLocaleString('vi-VN');
+  const canonicalUrl =
+    locale === 'vi'
+      ? `https://rate.vn/smartphones/${product.slug}`
+      : `https://rate.vn/${locale}/smartphones/${product.slug}`;
+
+  return {
+    title: `${product.name} - Giá từ ${minPrice} ₫, Thông số 10 nhóm & Đánh giá thực chất | Rate.vn`,
+    description: `So sánh giá ${product.name} (${product.brand}) từ ${product.merchant_count || 1} gian hàng, biểu đồ lịch sử giá phát hiện giảm giá ảo và đánh giá thực chất đã lọc Seeding bằng AI trên Rate.vn.`,
+    alternates: {
+      canonical: canonicalUrl,
+    },
+    openGraph: {
+      title: `${product.name} - So sánh giá & Kiểm định khuyến mãi AI | Rate.vn`,
+      description: `Giá tốt nhất từ ${minPrice} ₫. Xem 10 nhóm thông số kỹ thuật chuẩn GSMArena/PhoneArena và biểu đồ lịch sử giá.`,
+      url: canonicalUrl,
+      images:
+        product.images && product.images.length > 0 ? [product.images[0]!] : [],
+    },
+  };
+}
+
 export default async function SmartphoneDetailPage({
   params,
 }: {
   params: PageParams;
 }) {
   const { locale, slug } = await params;
-  const product = await getMasterProductBySlug(slug);
+  const product = await getCachedMasterProductBySlug(slug);
 
   if (!product) {
     notFound();
   }
 
   const [offers, reviews] = await Promise.all([
-    getMasterProductOffers(product.id),
-    getMasterProductReviews(product.id),
+    getCachedMasterProductOffers(product.id),
+    getCachedMasterProductReviews(product.id),
   ]);
   const [reviewSummary, priceHistory] = await Promise.all([
-    getMasterProductReviewSummary(product.id, reviews),
-    getMasterProductPriceHistory(product.id, offers),
+    getCachedMasterProductReviewSummary(product.id, reviews),
+    getCachedMasterProductPriceHistory(product.id, offers),
   ]);
 
   const specs = product.specifications as ProductSpecifications;
@@ -46,7 +81,8 @@ export default async function SmartphoneDetailPage({
   const authenticCount =
     product.authentic_review_count && product.authentic_review_count > 0
       ? product.authentic_review_count
-      : reviews.filter((r) => r.include_in_rating && r.helpfulness_weight > 0).length;
+      : reviews.filter((r) => r.include_in_rating && r.helpfulness_weight > 0)
+          .length;
   const ignoredCount = reviews.filter(
     (r) => !r.include_in_rating || r.helpfulness_weight === 0
   ).length;
@@ -55,659 +91,706 @@ export default async function SmartphoneDetailPage({
       ? Number(product.user_rating_weighted)
       : Number(product.average_rating || 0);
 
+  const productJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    name: product.name,
+    brand: {
+      '@type': 'Brand',
+      name: product.brand,
+    },
+    sku: product.model_key,
+    image: product.images || [],
+    offers: {
+      '@type': 'AggregateOffer',
+      priceCurrency: 'VND',
+      lowPrice: Number(product.min_price || 0),
+      highPrice: Number(product.max_price || product.min_price || 0),
+      offerCount: offers.length || product.merchant_count || 1,
+    },
+    ...(displayUserRating > 0 && authenticCount > 0
+      ? {
+          aggregateRating: {
+            '@type': 'AggregateRating',
+            ratingValue: Number(displayUserRating.toFixed(2)),
+            reviewCount: authenticCount,
+            bestRating: 5,
+            worstRating: 1,
+          },
+        }
+      : {}),
+  };
+
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(productJsonLd).replace(/</g, '\\u003c'),
+        }}
+      />
       <NavbarDarkDynamic links={[]} />
       <div className="container py-5">
-      {/* Breadcrumb */}
-      <nav aria-label="breadcrumb" className="mb-4">
-        <ol className="breadcrumb small">
-          <li className="breadcrumb-item">
-            <Link href="/" className="text-decoration-none">
-              Trang chủ
-            </Link>
-          </li>
-          <li className="breadcrumb-item">
-            <Link href="/smartphones" className="text-decoration-none">
-              Điện thoại
-            </Link>
-          </li>
-          <li className="breadcrumb-item active" aria-current="page">
-            {product.name}
-          </li>
-        </ol>
-      </nav>
+        {/* Breadcrumb */}
+        <nav aria-label="breadcrumb" className="mb-4">
+          <ol className="breadcrumb small">
+            <li className="breadcrumb-item">
+              <Link href="/" className="text-decoration-none">
+                Trang chủ
+              </Link>
+            </li>
+            <li className="breadcrumb-item">
+              <Link href="/smartphones" className="text-decoration-none">
+                Điện thoại
+              </Link>
+            </li>
+            <li className="breadcrumb-item active" aria-current="page">
+              {product.name}
+            </li>
+          </ol>
+        </nav>
 
-      {/* Main Info Section */}
-      <div className="row g-4 mb-5">
-        {/* Left: Images */}
-        <div className="col-12 col-lg-5">
-          <div className="card border-0 shadow-sm rounded-4 p-4 text-center bg-light">
-            <div
-              className="d-flex align-items-center justify-content-center"
-              style={{ minHeight: '380px' }}
-            >
-              {product.images && product.images.length > 0 ? (
-                <img
-                  src={product.images[0]}
-                  alt={product.name}
-                  className="img-fluid rounded-3"
-                  style={{ maxHeight: '350px', objectFit: 'contain' }}
-                />
-              ) : (
-                <div className="text-muted">Chưa có ảnh sản phẩm</div>
+        {/* Main Info Section */}
+        <div className="row g-4 mb-5">
+          {/* Left: Images */}
+          <div className="col-lg-5 col-12">
+            <div className="card rounded-4 bg-light border-0 p-4 text-center shadow-sm">
+              <div
+                className="d-flex align-items-center justify-content-center"
+                style={{ minHeight: '380px' }}
+              >
+                {product.images && product.images.length > 0 ? (
+                  <img
+                    src={product.images[0]}
+                    alt={product.name}
+                    className="img-fluid rounded-3"
+                    style={{ maxHeight: '350px', objectFit: 'contain' }}
+                  />
+                ) : (
+                  <div className="text-muted">Chưa có ảnh sản phẩm</div>
+                )}
+              </div>
+
+              {/* Colors */}
+              {product.colors && product.colors.length > 0 && (
+                <div className="border-top mt-3 pt-3 text-start">
+                  <div className="small text-muted mb-2">Màu sắc có sẵn:</div>
+                  <div className="d-flex flex-wrap gap-2">
+                    {product.colors.map((c, i) => (
+                      <span
+                        key={i}
+                        className="badge text-dark rounded-pill small border bg-white px-3 py-2"
+                      >
+                        {c}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Right: Overview & Offers Highlights */}
+          <div className="col-lg-7 d-flex flex-column col-12">
+            <div className="d-flex align-items-center mb-2 gap-2">
+              <span className="badge bg-primary-subtle text-primary fw-semibold rounded-pill px-3 py-1">
+                {product.brand}
+              </span>
+              {product.has_5g && (
+                <span className="badge bg-dark rounded-pill px-2 py-1">5G</span>
+              )}
+              {product.variant_name && (
+                <span className="badge bg-light text-muted rounded-pill border px-2 py-1">
+                  {product.variant_name}
+                </span>
               )}
             </div>
 
-            {/* Colors */}
-            {product.colors && product.colors.length > 0 && (
-              <div className="mt-3 pt-3 border-top text-start">
-                <div className="small text-muted mb-2">Màu sắc có sẵn:</div>
-                <div className="d-flex flex-wrap gap-2">
-                  {product.colors.map((c, i) => (
-                    <span
-                      key={i}
-                      className="badge bg-white text-dark border px-3 py-2 rounded-pill small"
-                    >
-                      {c}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+            <h1 className="h2 fw-bold text-dark mb-2">{product.name}</h1>
 
-        {/* Right: Overview & Offers Highlights */}
-        <div className="col-12 col-lg-7 d-flex flex-column">
-          <div className="d-flex align-items-center gap-2 mb-2">
-            <span className="badge bg-primary-subtle text-primary fw-semibold px-3 py-1 rounded-pill">
-              {product.brand}
-            </span>
-            {product.has_5g && (
-              <span className="badge bg-dark px-2 py-1 rounded-pill">5G</span>
-            )}
-            {product.variant_name && (
-              <span className="badge bg-light text-muted border px-2 py-1 rounded-pill">
-                {product.variant_name}
-              </span>
-            )}
-          </div>
-
-          <h1 className="h2 fw-bold text-dark mb-2">{product.name}</h1>
-
-          {/* JReviews Dual Rating Quick Pill Strip */}
-          <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
-            <a
-              href="#jreviews-section"
-              className="badge bg-warning text-dark text-decoration-none px-3 py-2 rounded-pill small"
-            >
-              ★ {displayUserRating.toFixed(1)} / 5.0 (User thực chất)
-            </a>
-            {product.expert_rating != null && (
+            {/* JReviews Dual Rating Quick Pill Strip */}
+            <div className="d-flex align-items-center mb-3 flex-wrap gap-2">
               <a
                 href="#jreviews-section"
-                className="badge bg-dark text-white text-decoration-none px-3 py-2 rounded-pill small"
+                className="badge bg-warning text-dark text-decoration-none rounded-pill small px-3 py-2"
               >
-                🔬 Expert: {Number(product.expert_rating).toFixed(1)} / 5.0
+                ★ {displayUserRating.toFixed(1)} / 5.0 (User thực chất)
               </a>
-            )}
-            <a
-              href="#jreviews-section"
-              className="badge bg-success-subtle text-success text-decoration-none px-3 py-2 rounded-pill small"
-            >
-              ✓ {authenticCount} đánh giá thực chất
-            </a>
-            {ignoredCount > 0 && (
+              {product.expert_rating != null && (
+                <a
+                  href="#jreviews-section"
+                  className="badge bg-dark text-decoration-none rounded-pill small px-3 py-2 text-white"
+                >
+                  🔬 Expert: {Number(product.expert_rating).toFixed(1)} / 5.0
+                </a>
+              )}
               <a
                 href="#jreviews-section"
-                className="badge bg-danger-subtle text-danger text-decoration-none px-3 py-2 rounded-pill small"
+                className="badge bg-success-subtle text-success text-decoration-none rounded-pill small px-3 py-2"
               >
-                🛡️ Đã lọc {ignoredCount} Seeding / Spam xu
+                ✓ {authenticCount} đánh giá thực chất
               </a>
-            )}
-            <a
-              href="#price-history-section"
-              className={`badge text-decoration-none px-3 py-2 rounded-pill small ${
-                priceHistory.fakeDiscountCount > 0
-                  ? 'bg-danger text-white'
-                  : 'bg-info-subtle text-info-emphasis'
-              }`}
-            >
-              {priceHistory.fakeDiscountCount > 0
-                ? `🚨 Cảnh báo ${priceHistory.fakeDiscountCount} nơi nâng giá gốc`
-                : '📈 Lịch sử giá & Kiểm định Sale'}
-            </a>
-          </div>
+              {ignoredCount > 0 && (
+                <a
+                  href="#jreviews-section"
+                  className="badge bg-danger-subtle text-danger text-decoration-none rounded-pill small px-3 py-2"
+                >
+                  🛡️ Đã lọc {ignoredCount} Seeding / Spam xu
+                </a>
+              )}
+              <a
+                href="#price-history-section"
+                className={`badge text-decoration-none rounded-pill small px-3 py-2 ${
+                  priceHistory.fakeDiscountCount > 0
+                    ? 'bg-danger text-white'
+                    : 'bg-info-subtle text-info-emphasis'
+                }`}
+              >
+                {priceHistory.fakeDiscountCount > 0
+                  ? `🚨 Cảnh báo ${priceHistory.fakeDiscountCount} nơi nâng giá gốc`
+                  : '📈 Lịch sử giá & Kiểm định Sale'}
+              </a>
+            </div>
 
-          {/* Quick specs grid */}
-          <div className="row g-2 mb-4">
-            <div className="col-6 col-sm-4">
-              <div className="p-3 bg-light rounded-3">
-                <div className="text-muted small">Màn hình</div>
-                <div className="fw-semibold">{keySpecs?.screen || 'OLED'}</div>
+            {/* Quick specs grid */}
+            <div className="row g-2 mb-4">
+              <div className="col-sm-4 col-6">
+                <div className="bg-light rounded-3 p-3">
+                  <div className="text-muted small">Màn hình</div>
+                  <div className="fw-semibold">
+                    {keySpecs?.screen || 'OLED'}
+                  </div>
+                </div>
               </div>
-            </div>
-            <div className="col-6 col-sm-4">
-              <div className="p-3 bg-light rounded-3">
-                <div className="text-muted small">Vi xử lý</div>
-                <div className="fw-semibold">
-                  {keySpecs?.chip || 'Apple A-Series'}
+              <div className="col-sm-4 col-6">
+                <div className="bg-light rounded-3 p-3">
+                  <div className="text-muted small">Vi xử lý</div>
+                  <div className="fw-semibold">
+                    {keySpecs?.chip || 'Apple A-Series'}
+                  </div>
+                </div>
+              </div>
+              <div className="col-sm-4 col-6">
+                <div className="bg-light rounded-3 p-3">
+                  <div className="text-muted small">Camera chính</div>
+                  <div className="fw-semibold">
+                    {keySpecs?.camera || '48 MP'}
+                  </div>
+                </div>
+              </div>
+              <div className="col-sm-4 col-6">
+                <div className="bg-light rounded-3 p-3">
+                  <div className="text-muted small">Bộ nhớ (RAM/ROM)</div>
+                  <div className="fw-semibold">
+                    {product.ram_gb ? `${product.ram_gb}GB / ` : ''}
+                    {product.storage_gb ? `${product.storage_gb}GB` : ''}
+                  </div>
+                </div>
+              </div>
+              <div className="col-sm-4 col-6">
+                <div className="bg-light rounded-3 p-3">
+                  <div className="text-muted small">Pin &amp; Sạc</div>
+                  <div className="fw-semibold">
+                    {keySpecs?.battery || '3500 mAh'}
+                  </div>
+                </div>
+              </div>
+              <div className="col-sm-4 col-6">
+                <div className="bg-light rounded-3 p-3">
+                  <div className="text-muted small">Kháng nước/bụi</div>
+                  <div className="fw-semibold">
+                    {specs?.design?.resistance?.split(' ')[0] || 'IP68'}
+                  </div>
                 </div>
               </div>
             </div>
-            <div className="col-6 col-sm-4">
-              <div className="p-3 bg-light rounded-3">
-                <div className="text-muted small">Camera chính</div>
-                <div className="fw-semibold">{keySpecs?.camera || '48 MP'}</div>
-              </div>
-            </div>
-            <div className="col-6 col-sm-4">
-              <div className="p-3 bg-light rounded-3">
-                <div className="text-muted small">Bộ nhớ (RAM/ROM)</div>
-                <div className="fw-semibold">
-                  {product.ram_gb ? `${product.ram_gb}GB / ` : ''}
-                  {product.storage_gb ? `${product.storage_gb}GB` : ''}
-                </div>
-              </div>
-            </div>
-            <div className="col-6 col-sm-4">
-              <div className="p-3 bg-light rounded-3">
-                <div className="text-muted small">Pin &amp; Sạc</div>
-                <div className="fw-semibold">
-                  {keySpecs?.battery || '3500 mAh'}
-                </div>
-              </div>
-            </div>
-            <div className="col-6 col-sm-4">
-              <div className="p-3 bg-light rounded-3">
-                <div className="text-muted small">Kháng nước/bụi</div>
-                <div className="fw-semibold">
-                  {specs?.design?.resistance?.split(' ')[0] || 'IP68'}
-                </div>
-              </div>
-            </div>
-          </div>
 
-          {/* Price Range Box */}
-          <div className="card bg-danger-subtle border-0 rounded-4 p-4 mb-4">
-            <div className="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3">
-              <div>
-                <div className="text-danger-emphasis small fw-medium">
-                  Giá bán tốt nhất thị trường:
-                </div>
-                <div className="h3 fw-bold text-danger mb-0">
-                  {minPriceFormatted} ₫
-                  {product.min_price !== product.max_price && (
-                    <span className="fs-6 fw-normal text-muted ms-2">
-                      ~ {maxPriceFormatted} ₫
-                    </span>
+            {/* Price Range Box */}
+            <div className="card bg-danger-subtle rounded-4 mb-4 border-0 p-4">
+              <div className="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3">
+                <div>
+                  <div className="text-danger-emphasis small fw-medium">
+                    Giá bán tốt nhất thị trường:
+                  </div>
+                  <div className="h3 fw-bold text-danger mb-0">
+                    {minPriceFormatted} ₫
+                    {product.min_price !== product.max_price && (
+                      <span className="fs-6 fw-normal text-muted ms-2">
+                        ~ {maxPriceFormatted} ₫
+                      </span>
+                    )}
+                  </div>
+                  {priceHistory.lowestEverPrice != null && (
+                    <div className="small text-muted mt-1">
+                      Đáy lịch sử:{' '}
+                      <strong className="text-success">
+                        {priceHistory.lowestEverPrice.toLocaleString('vi-VN')} ₫
+                      </strong>
+                      {priceHistory.lowestEverMerchant
+                        ? ` (${priceHistory.lowestEverMerchant})`
+                        : ''}
+                    </div>
                   )}
                 </div>
-                {priceHistory.lowestEverPrice != null && (
-                  <div className="small text-muted mt-1">
-                    Đáy lịch sử:{' '}
-                    <strong className="text-success">
-                      {priceHistory.lowestEverPrice.toLocaleString('vi-VN')} ₫
-                    </strong>
-                    {priceHistory.lowestEverMerchant
-                      ? ` (${priceHistory.lowestEverMerchant})`
-                      : ''}
-                  </div>
-                )}
-              </div>
-              <div className="d-flex flex-wrap gap-2">
-                <a
-                  href="#offers-table"
-                  className="btn btn-danger px-4 rounded-pill fw-medium"
-                >
-                  Xem {offers.length} nơi bán
-                </a>
-                <a
-                  href="#price-history-section"
-                  className="btn btn-outline-danger px-3 rounded-pill"
-                >
-                  📈 Biểu đồ giá
-                </a>
-                <Link
-                  href={`/compare?slugs=${product.slug}`}
-                  className="btn btn-outline-dark px-3 rounded-pill"
-                >
-                  So sánh máy này
-                </Link>
-              </div>
-            </div>
-          </div>
-
-          <p className="text-muted small lh-base">
-            Mã định danh dữ liệu chuẩn (Canonical Model Key):{' '}
-            <code>{product.model_key}</code>
-          </p>
-        </div>
-      </div>
-
-      {/* 10 Field Groups Specifications */}
-      <div className="card border-0 shadow-sm rounded-4 p-4 p-md-5 mb-5">
-        <h2 className="h4 fw-bold mb-4 d-flex align-items-center gap-2">
-          <span>📋</span> Bảng Thông Số Kỹ Thuật Chi Tiết (10 Nhóm Chuẩn Hóa)
-        </h2>
-
-        <div className="row g-4">
-          {/* 1. Màn hình */}
-          <div className="col-12 col-md-6">
-            <div className="border rounded-4 p-4 h-100 bg-white">
-              <h3 className="h6 fw-bold text-primary mb-3">
-                1. Màn hình (Display)
-              </h3>
-              <dl className="row mb-0 small">
-                <dt className="col-5 text-muted">Kích thước</dt>
-                <dd className="col-7 fw-medium">
-                  {specs?.display?.size_inch
-                    ? `${specs.display.size_inch} inch`
-                    : '-'}
-                </dd>
-                <dt className="col-5 text-muted">Công nghệ</dt>
-                <dd className="col-7 fw-medium">
-                  {specs?.display?.type || '-'}
-                </dd>
-                <dt className="col-5 text-muted">Độ phân giải</dt>
-                <dd className="col-7 fw-medium">
-                  {specs?.display?.resolution || '-'}
-                </dd>
-                <dt className="col-5 text-muted">Tần số quét</dt>
-                <dd className="col-7 fw-medium">
-                  {specs?.display?.refresh_rate_hz
-                    ? `${specs.display.refresh_rate_hz} Hz`
-                    : '-'}
-                </dd>
-                <dt className="col-5 text-muted">Mật độ điểm ảnh</dt>
-                <dd className="col-7 fw-medium">
-                  {specs?.display?.ppi ? `${specs.display.ppi} ppi` : '-'}
-                </dd>
-                <dt className="col-5 text-muted">Kính bảo vệ</dt>
-                <dd className="col-7 fw-medium">
-                  {specs?.display?.protection || '-'}
-                </dd>
-                <dt className="col-5 text-muted">Tính năng</dt>
-                <dd className="col-7 fw-medium">
-                  {specs?.display?.features || '-'}
-                </dd>
-              </dl>
-            </div>
-          </div>
-
-          {/* 2. Phần cứng */}
-          <div className="col-12 col-md-6">
-            <div className="border rounded-4 p-4 h-100 bg-white">
-              <h3 className="h6 fw-bold text-primary mb-3">
-                2. Phần cứng &amp; Hiệu năng (Hardware)
-              </h3>
-              <dl className="row mb-0 small">
-                <dt className="col-5 text-muted">Chipset</dt>
-                <dd className="col-7 fw-medium">
-                  {specs?.hardware?.chipset || '-'}
-                </dd>
-                <dt className="col-5 text-muted">CPU</dt>
-                <dd className="col-7 fw-medium">
-                  {specs?.hardware?.cpu || '-'}
-                </dd>
-                <dt className="col-5 text-muted">GPU</dt>
-                <dd className="col-7 fw-medium">
-                  {specs?.hardware?.gpu || '-'}
-                </dd>
-                <dt className="col-5 text-muted">RAM</dt>
-                <dd className="col-7 fw-medium">
-                  {specs?.hardware?.ram_gb ? `${specs.hardware.ram_gb} GB` : '-'}
-                </dd>
-                <dt className="col-5 text-muted">Bộ nhớ trong</dt>
-                <dd className="col-7 fw-medium">
-                  {specs?.hardware?.storage_gb
-                    ? `${specs.hardware.storage_gb} GB`
-                    : '-'}
-                </dd>
-                <dt className="col-5 text-muted">Thẻ nhớ ngoài</dt>
-                <dd className="col-7 fw-medium">
-                  {specs?.hardware?.storage_expansion || '-'}
-                </dd>
-                <dt className="col-5 text-muted">Hệ điều hành</dt>
-                <dd className="col-7 fw-medium">
-                  {specs?.hardware?.os || '-'}
-                </dd>
-              </dl>
-            </div>
-          </div>
-
-          {/* 3. Camera */}
-          <div className="col-12 col-md-6">
-            <div className="border rounded-4 p-4 h-100 bg-white">
-              <h3 className="h6 fw-bold text-primary mb-3">
-                3. Máy ảnh (Camera)
-              </h3>
-              <dl className="row mb-0 small">
-                <dt className="col-5 text-muted">Cụm sau</dt>
-                <dd className="col-7 fw-medium">
-                  {specs?.camera?.rear_setup || '-'}
-                </dd>
-                <dt className="col-5 text-muted">Camera chính</dt>
-                <dd className="col-7 fw-medium">
-                  {specs?.camera?.main_camera || '-'}
-                </dd>
-                <dt className="col-5 text-muted">Camera trước</dt>
-                <dd className="col-7 fw-medium">
-                  {specs?.camera?.front_camera || '-'}
-                </dd>
-                <dt className="col-5 text-muted">Đèn Flash</dt>
-                <dd className="col-7 fw-medium">
-                  {specs?.camera?.flash || '-'}
-                </dd>
-                <dt className="col-5 text-muted">Quay video</dt>
-                <dd className="col-7 fw-medium">
-                  {specs?.camera?.video_recording || '-'}
-                </dd>
-              </dl>
-            </div>
-          </div>
-
-          {/* 4. Pin & Sạc */}
-          <div className="col-12 col-md-6">
-            <div className="border rounded-4 p-4 h-100 bg-white">
-              <h3 className="h6 fw-bold text-primary mb-3">
-                4. Pin &amp; Sạc (Battery)
-              </h3>
-              <dl className="row mb-0 small">
-                <dt className="col-5 text-muted">Dung lượng pin</dt>
-                <dd className="col-7 fw-medium">
-                  {specs?.battery?.capacity_mah
-                    ? `${specs.battery.capacity_mah} mAh`
-                    : '-'}
-                </dd>
-                <dt className="col-5 text-muted">Loại pin</dt>
-                <dd className="col-7 fw-medium">
-                  {specs?.battery?.type || '-'}
-                </dd>
-                <dt className="col-5 text-muted">Công nghệ sạc</dt>
-                <dd className="col-7 fw-medium">
-                  {specs?.battery?.charging || '-'}
-                </dd>
-                <dt className="col-5 text-muted">Công suất sạc nhanh</dt>
-                <dd className="col-7 fw-medium">
-                  {specs?.battery?.fast_charging_w
-                    ? `${specs.battery.fast_charging_w} W`
-                    : '-'}
-                </dd>
-              </dl>
-            </div>
-          </div>
-
-          {/* 5. Thiết kế */}
-          <div className="col-12 col-md-6">
-            <div className="border rounded-4 p-4 h-100 bg-white">
-              <h3 className="h6 fw-bold text-primary mb-3">
-                5. Thiết kế &amp; Độ bền (Design)
-              </h3>
-              <dl className="row mb-0 small">
-                <dt className="col-5 text-muted">Kích thước</dt>
-                <dd className="col-7 fw-medium">
-                  {specs?.design?.dimensions || '-'}
-                </dd>
-                <dt className="col-5 text-muted">Trọng lượng</dt>
-                <dd className="col-7 fw-medium">
-                  {specs?.design?.weight_g
-                    ? `${specs.design.weight_g} g`
-                    : '-'}
-                </dd>
-                <dt className="col-5 text-muted">Chất liệu</dt>
-                <dd className="col-7 fw-medium">
-                  {specs?.design?.materials || '-'}
-                </dd>
-                <dt className="col-5 text-muted">Kháng nước, bụi</dt>
-                <dd className="col-7 fw-medium">
-                  {specs?.design?.resistance || '-'}
-                </dd>
-                <dt className="col-5 text-muted">Bảo mật</dt>
-                <dd className="col-7 fw-medium">
-                  {specs?.design?.biometrics || '-'}
-                </dd>
-                <dt className="col-5 text-muted">Phím chức năng</dt>
-                <dd className="col-7 fw-medium">
-                  {specs?.design?.keys || '-'}
-                </dd>
-              </dl>
-            </div>
-          </div>
-
-          {/* 6. Kết nối & Mạng */}
-          <div className="col-12 col-md-6">
-            <div className="border rounded-4 p-4 h-100 bg-white">
-              <h3 className="h6 fw-bold text-primary mb-3">
-                6. Kết nối &amp; 5G (Cellular &amp; Connectivity)
-              </h3>
-              <dl className="row mb-0 small">
-                <dt className="col-5 text-muted">Hỗ trợ 5G</dt>
-                <dd className="col-7 fw-medium">
-                  {specs?.cellular?.has_5g ? 'Có (Sub-6 / mmWave)' : 'Không'}
-                </dd>
-                <dt className="col-5 text-muted">SIM</dt>
-                <dd className="col-7 fw-medium">
-                  {specs?.cellular?.sim_type || '-'}
-                </dd>
-                <dt className="col-5 text-muted">Wi-Fi</dt>
-                <dd className="col-7 fw-medium">
-                  {specs?.connectivity?.wlan || '-'}
-                </dd>
-                <dt className="col-5 text-muted">Bluetooth</dt>
-                <dd className="col-7 fw-medium">
-                  {specs?.connectivity?.bluetooth || '-'}
-                </dd>
-                <dt className="col-5 text-muted">Cổng kết nối</dt>
-                <dd className="col-7 fw-medium">
-                  {specs?.connectivity?.usb || '-'}
-                </dd>
-                <dt className="col-5 text-muted">NFC</dt>
-                <dd className="col-7 fw-medium">
-                  {specs?.connectivity?.nfc ? 'Có' : 'Không'}
-                </dd>
-              </dl>
-            </div>
-          </div>
-
-          {/* 7. Đa phương tiện & Quy chuẩn */}
-          <div className="col-12">
-            <div className="border rounded-4 p-4 bg-white">
-              <h3 className="h6 fw-bold text-primary mb-3">
-                7. Âm thanh, Pháp lý &amp; Phát hành (Misc &amp; Regulatory)
-              </h3>
-              <div className="row g-3 small">
-                <div className="col-12 col-md-6">
-                  <div className="text-muted">Âm thanh:</div>
-                  <div className="fw-medium">
-                    {specs?.multimedia?.loudspeaker || '-'} |{' '}
-                    {specs?.multimedia?.audio_features || '-'}
-                  </div>
+                <div className="d-flex flex-wrap gap-2">
+                  <a
+                    href="#offers-table"
+                    className="btn btn-danger rounded-pill fw-medium px-4"
+                  >
+                    Xem {offers.length} nơi bán
+                  </a>
+                  <a
+                    href="#price-history-section"
+                    className="btn btn-outline-danger rounded-pill px-3"
+                  >
+                    📈 Biểu đồ giá
+                  </a>
+                  <Link
+                    href={`/compare?slugs=${product.slug}`}
+                    className="btn btn-outline-dark rounded-pill px-3"
+                  >
+                    So sánh máy này
+                  </Link>
                 </div>
-                <div className="col-12 col-md-6">
-                  <div className="text-muted">
-                    Ngày phát hành &amp; Chứng nhận:
+              </div>
+            </div>
+
+            <p className="text-muted small lh-base">
+              Mã định danh dữ liệu chuẩn (Canonical Model Key):{' '}
+              <code>{product.model_key}</code>
+            </p>
+          </div>
+        </div>
+
+        {/* 10 Field Groups Specifications */}
+        <div className="card rounded-4 p-md-5 mb-5 border-0 p-4 shadow-sm">
+          <h2 className="h4 fw-bold d-flex align-items-center mb-4 gap-2">
+            <span>📋</span> Bảng Thông Số Kỹ Thuật Chi Tiết (10 Nhóm Chuẩn Hóa)
+          </h2>
+
+          <div className="row g-4">
+            {/* 1. Màn hình */}
+            <div className="col-md-6 col-12">
+              <div className="rounded-4 h-100 border bg-white p-4">
+                <h3 className="h6 fw-bold text-primary mb-3">
+                  1. Màn hình (Display)
+                </h3>
+                <dl className="row small mb-0">
+                  <dt className="text-muted col-5">Kích thước</dt>
+                  <dd className="fw-medium col-7">
+                    {specs?.display?.size_inch
+                      ? `${specs.display.size_inch} inch`
+                      : '-'}
+                  </dd>
+                  <dt className="text-muted col-5">Công nghệ</dt>
+                  <dd className="fw-medium col-7">
+                    {specs?.display?.type || '-'}
+                  </dd>
+                  <dt className="text-muted col-5">Độ phân giải</dt>
+                  <dd className="fw-medium col-7">
+                    {specs?.display?.resolution || '-'}
+                  </dd>
+                  <dt className="text-muted col-5">Tần số quét</dt>
+                  <dd className="fw-medium col-7">
+                    {specs?.display?.refresh_rate_hz
+                      ? `${specs.display.refresh_rate_hz} Hz`
+                      : '-'}
+                  </dd>
+                  <dt className="text-muted col-5">Mật độ điểm ảnh</dt>
+                  <dd className="fw-medium col-7">
+                    {specs?.display?.ppi ? `${specs.display.ppi} ppi` : '-'}
+                  </dd>
+                  <dt className="text-muted col-5">Kính bảo vệ</dt>
+                  <dd className="fw-medium col-7">
+                    {specs?.display?.protection || '-'}
+                  </dd>
+                  <dt className="text-muted col-5">Tính năng</dt>
+                  <dd className="fw-medium col-7">
+                    {specs?.display?.features || '-'}
+                  </dd>
+                </dl>
+              </div>
+            </div>
+
+            {/* 2. Phần cứng */}
+            <div className="col-md-6 col-12">
+              <div className="rounded-4 h-100 border bg-white p-4">
+                <h3 className="h6 fw-bold text-primary mb-3">
+                  2. Phần cứng &amp; Hiệu năng (Hardware)
+                </h3>
+                <dl className="row small mb-0">
+                  <dt className="text-muted col-5">Chipset</dt>
+                  <dd className="fw-medium col-7">
+                    {specs?.hardware?.chipset || '-'}
+                  </dd>
+                  <dt className="text-muted col-5">CPU</dt>
+                  <dd className="fw-medium col-7">
+                    {specs?.hardware?.cpu || '-'}
+                  </dd>
+                  <dt className="text-muted col-5">GPU</dt>
+                  <dd className="fw-medium col-7">
+                    {specs?.hardware?.gpu || '-'}
+                  </dd>
+                  <dt className="text-muted col-5">RAM</dt>
+                  <dd className="fw-medium col-7">
+                    {specs?.hardware?.ram_gb
+                      ? `${specs.hardware.ram_gb} GB`
+                      : '-'}
+                  </dd>
+                  <dt className="text-muted col-5">Bộ nhớ trong</dt>
+                  <dd className="fw-medium col-7">
+                    {specs?.hardware?.storage_gb
+                      ? `${specs.hardware.storage_gb} GB`
+                      : '-'}
+                  </dd>
+                  <dt className="text-muted col-5">Thẻ nhớ ngoài</dt>
+                  <dd className="fw-medium col-7">
+                    {specs?.hardware?.storage_expansion || '-'}
+                  </dd>
+                  <dt className="text-muted col-5">Hệ điều hành</dt>
+                  <dd className="fw-medium col-7">
+                    {specs?.hardware?.os || '-'}
+                  </dd>
+                </dl>
+              </div>
+            </div>
+
+            {/* 3. Camera */}
+            <div className="col-md-6 col-12">
+              <div className="rounded-4 h-100 border bg-white p-4">
+                <h3 className="h6 fw-bold text-primary mb-3">
+                  3. Máy ảnh (Camera)
+                </h3>
+                <dl className="row small mb-0">
+                  <dt className="text-muted col-5">Cụm sau</dt>
+                  <dd className="fw-medium col-7">
+                    {specs?.camera?.rear_setup || '-'}
+                  </dd>
+                  <dt className="text-muted col-5">Camera chính</dt>
+                  <dd className="fw-medium col-7">
+                    {specs?.camera?.main_camera || '-'}
+                  </dd>
+                  <dt className="text-muted col-5">Camera trước</dt>
+                  <dd className="fw-medium col-7">
+                    {specs?.camera?.front_camera || '-'}
+                  </dd>
+                  <dt className="text-muted col-5">Đèn Flash</dt>
+                  <dd className="fw-medium col-7">
+                    {specs?.camera?.flash || '-'}
+                  </dd>
+                  <dt className="text-muted col-5">Quay video</dt>
+                  <dd className="fw-medium col-7">
+                    {specs?.camera?.video_recording || '-'}
+                  </dd>
+                </dl>
+              </div>
+            </div>
+
+            {/* 4. Pin & Sạc */}
+            <div className="col-md-6 col-12">
+              <div className="rounded-4 h-100 border bg-white p-4">
+                <h3 className="h6 fw-bold text-primary mb-3">
+                  4. Pin &amp; Sạc (Battery)
+                </h3>
+                <dl className="row small mb-0">
+                  <dt className="text-muted col-5">Dung lượng pin</dt>
+                  <dd className="fw-medium col-7">
+                    {specs?.battery?.capacity_mah
+                      ? `${specs.battery.capacity_mah} mAh`
+                      : '-'}
+                  </dd>
+                  <dt className="text-muted col-5">Loại pin</dt>
+                  <dd className="fw-medium col-7">
+                    {specs?.battery?.type || '-'}
+                  </dd>
+                  <dt className="text-muted col-5">Công nghệ sạc</dt>
+                  <dd className="fw-medium col-7">
+                    {specs?.battery?.charging || '-'}
+                  </dd>
+                  <dt className="text-muted col-5">Công suất sạc nhanh</dt>
+                  <dd className="fw-medium col-7">
+                    {specs?.battery?.fast_charging_w
+                      ? `${specs.battery.fast_charging_w} W`
+                      : '-'}
+                  </dd>
+                </dl>
+              </div>
+            </div>
+
+            {/* 5. Thiết kế */}
+            <div className="col-md-6 col-12">
+              <div className="rounded-4 h-100 border bg-white p-4">
+                <h3 className="h6 fw-bold text-primary mb-3">
+                  5. Thiết kế &amp; Độ bền (Design)
+                </h3>
+                <dl className="row small mb-0">
+                  <dt className="text-muted col-5">Kích thước</dt>
+                  <dd className="fw-medium col-7">
+                    {specs?.design?.dimensions || '-'}
+                  </dd>
+                  <dt className="text-muted col-5">Trọng lượng</dt>
+                  <dd className="fw-medium col-7">
+                    {specs?.design?.weight_g
+                      ? `${specs.design.weight_g} g`
+                      : '-'}
+                  </dd>
+                  <dt className="text-muted col-5">Chất liệu</dt>
+                  <dd className="fw-medium col-7">
+                    {specs?.design?.materials || '-'}
+                  </dd>
+                  <dt className="text-muted col-5">Kháng nước, bụi</dt>
+                  <dd className="fw-medium col-7">
+                    {specs?.design?.resistance || '-'}
+                  </dd>
+                  <dt className="text-muted col-5">Bảo mật</dt>
+                  <dd className="fw-medium col-7">
+                    {specs?.design?.biometrics || '-'}
+                  </dd>
+                  <dt className="text-muted col-5">Phím chức năng</dt>
+                  <dd className="fw-medium col-7">
+                    {specs?.design?.keys || '-'}
+                  </dd>
+                </dl>
+              </div>
+            </div>
+
+            {/* 6. Kết nối & Mạng */}
+            <div className="col-md-6 col-12">
+              <div className="rounded-4 h-100 border bg-white p-4">
+                <h3 className="h6 fw-bold text-primary mb-3">
+                  6. Kết nối &amp; 5G (Cellular &amp; Connectivity)
+                </h3>
+                <dl className="row small mb-0">
+                  <dt className="text-muted col-5">Hỗ trợ 5G</dt>
+                  <dd className="fw-medium col-7">
+                    {specs?.cellular?.has_5g ? 'Có (Sub-6 / mmWave)' : 'Không'}
+                  </dd>
+                  <dt className="text-muted col-5">SIM</dt>
+                  <dd className="fw-medium col-7">
+                    {specs?.cellular?.sim_type || '-'}
+                  </dd>
+                  <dt className="text-muted col-5">Wi-Fi</dt>
+                  <dd className="fw-medium col-7">
+                    {specs?.connectivity?.wlan || '-'}
+                  </dd>
+                  <dt className="text-muted col-5">Bluetooth</dt>
+                  <dd className="fw-medium col-7">
+                    {specs?.connectivity?.bluetooth || '-'}
+                  </dd>
+                  <dt className="text-muted col-5">Cổng kết nối</dt>
+                  <dd className="fw-medium col-7">
+                    {specs?.connectivity?.usb || '-'}
+                  </dd>
+                  <dt className="text-muted col-5">NFC</dt>
+                  <dd className="fw-medium col-7">
+                    {specs?.connectivity?.nfc ? 'Có' : 'Không'}
+                  </dd>
+                </dl>
+              </div>
+            </div>
+
+            {/* 7. Đa phương tiện & Quy chuẩn */}
+            <div className="col-12">
+              <div className="rounded-4 border bg-white p-4">
+                <h3 className="h6 fw-bold text-primary mb-3">
+                  7. Âm thanh, Pháp lý &amp; Phát hành (Misc &amp; Regulatory)
+                </h3>
+                <div className="row g-3 small">
+                  <div className="col-md-6 col-12">
+                    <div className="text-muted">Âm thanh:</div>
+                    <div className="fw-medium">
+                      {specs?.multimedia?.loudspeaker || '-'} |{' '}
+                      {specs?.multimedia?.audio_features || '-'}
+                    </div>
                   </div>
-                  <div className="fw-medium">
-                    {specs?.availability?.announced || '-'} |{' '}
-                    {specs?.regulatory?.certifications || '-'}
+                  <div className="col-md-6 col-12">
+                    <div className="text-muted">
+                      Ngày phát hành &amp; Chứng nhận:
+                    </div>
+                    <div className="fw-medium">
+                      {specs?.availability?.announced || '-'} |{' '}
+                      {specs?.regulatory?.certifications || '-'}
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Offers Table */}
-      <div
-        id="offers-table"
-        className="card border-0 shadow-sm rounded-4 p-4 p-md-5 mb-5"
-      >
-        <h2 className="h4 fw-bold mb-4 d-flex align-items-center gap-2">
-          <span>🛒</span> So Sánh Nơi Bán &amp; Độ Tin Cậy Gian Hàng ({offers.length} sàn)
-        </h2>
+        {/* Offers Table */}
+        <div
+          id="offers-table"
+          className="card rounded-4 p-md-5 mb-5 border-0 p-4 shadow-sm"
+        >
+          <h2 className="h4 fw-bold d-flex align-items-center mb-4 gap-2">
+            <span>🛒</span> So Sánh Nơi Bán &amp; Độ Tin Cậy Gian Hàng (
+            {offers.length} sàn)
+          </h2>
 
-        {offers.length === 0 ? (
-          <p className="text-muted mb-0">
-            Hiện chưa có sàn bán nào liên kết với mẫu máy này.
-          </p>
-        ) : (
-          <div className="table-responsive">
-            <table className="table table-hover align-middle mb-0">
-              <thead className="table-light small">
-                <tr>
-                  <th scope="col" style={{ width: '25%' }}>
-                    Sàn &amp; Gian Hàng
-                  </th>
-                  <th scope="col">Tiêu đề niêm yết</th>
-                  <th scope="col">Độ tin cậy (DOSafe + AI Review)</th>
-                  <th scope="col">Giá bán</th>
-                  <th scope="col" className="text-end">
-                    Hành động
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {offers.map((offer) => {
-                  const price = offer.price_current.toLocaleString('vi-VN');
-                  const origPrice = offer.price_original
-                    ? offer.price_original.toLocaleString('vi-VN')
-                    : null;
-                  const trustScore = Math.max(
-                    0,
-                    100 - (offer.merchant.risk_score || 0)
-                  );
-                  const trustBadgeClass =
-                    trustScore >= 80
-                      ? 'bg-success-subtle text-success'
-                      : trustScore >= 50
-                        ? 'bg-warning-subtle text-warning-emphasis'
-                        : 'bg-danger-subtle text-danger';
+          {offers.length === 0 ? (
+            <p className="text-muted mb-0">
+              Hiện chưa có sàn bán nào liên kết với mẫu máy này.
+            </p>
+          ) : (
+            <div className="table-responsive">
+              <table className="table-hover mb-0 table align-middle">
+                <thead className="table-light small">
+                  <tr>
+                    <th scope="col" style={{ width: '25%' }}>
+                      Sàn &amp; Gian Hàng
+                    </th>
+                    <th scope="col">Tiêu đề niêm yết</th>
+                    <th scope="col">Độ tin cậy (DOSafe + AI Review)</th>
+                    <th scope="col">Giá bán</th>
+                    <th scope="col" className="text-end">
+                      Hành động
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {offers.map((offer) => {
+                    const price = offer.price_current.toLocaleString('vi-VN');
+                    const origPrice = offer.price_original
+                      ? offer.price_original.toLocaleString('vi-VN')
+                      : null;
+                    const trustScore = Math.max(
+                      0,
+                      100 - (offer.merchant.risk_score || 0)
+                    );
+                    const trustBadgeClass =
+                      trustScore >= 80
+                        ? 'bg-success-subtle text-success'
+                        : trustScore >= 50
+                          ? 'bg-warning-subtle text-warning-emphasis'
+                          : 'bg-danger-subtle text-danger';
 
-                  const discountAnalysis = priceHistory.byOffer[offer.id];
-                  const discountBadgeClass =
-                    discountAnalysis?.verdict === 'fake_discount'
-                      ? 'bg-danger text-white'
-                      : discountAnalysis?.verdict === 'suspicious_discount'
-                        ? 'bg-warning text-dark'
-                        : discountAnalysis?.verdict === 'genuine_deal'
-                          ? 'bg-success text-white'
-                          : 'bg-light text-secondary border';
-                  const discountIcon =
-                    discountAnalysis?.verdict === 'fake_discount'
-                      ? '🚨'
-                      : discountAnalysis?.verdict === 'suspicious_discount'
-                        ? '⚠️'
-                        : discountAnalysis?.verdict === 'genuine_deal'
-                          ? '✅'
-                          : '📊';
+                    const discountAnalysis = priceHistory.byOffer[offer.id];
+                    const discountBadgeClass =
+                      discountAnalysis?.verdict === 'fake_discount'
+                        ? 'bg-danger text-white'
+                        : discountAnalysis?.verdict === 'suspicious_discount'
+                          ? 'bg-warning text-dark'
+                          : discountAnalysis?.verdict === 'genuine_deal'
+                            ? 'bg-success text-white'
+                            : 'bg-light text-secondary border';
+                    const discountIcon =
+                      discountAnalysis?.verdict === 'fake_discount'
+                        ? '🚨'
+                        : discountAnalysis?.verdict === 'suspicious_discount'
+                          ? '⚠️'
+                          : discountAnalysis?.verdict === 'genuine_deal'
+                            ? '✅'
+                            : '📊';
 
-                  return (
-                    <tr key={offer.id}>
-                      <td>
-                        <div className="d-flex align-items-center gap-2">
-                          <span className="badge bg-danger text-uppercase small">
-                            {offer.platform}
-                          </span>
-                          <div>
-                            <div className="fw-semibold small">
-                              {offer.merchant.name}
-                            </div>
-                            {offer.merchant.is_official && (
-                              <span className="badge bg-success-subtle text-success small">
-                                Chính hãng (Mall)
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-                      <td
-                        className="small text-truncate"
-                        style={{ maxWidth: '280px' }}
-                      >
-                        {offer.title}
-                      </td>
-                      <td>
-                        <div className="d-flex flex-column gap-1">
-                          <div>
-                            <span className={`badge ${trustBadgeClass} small`}>
-                              Trust: {trustScore}%
+                    return (
+                      <tr key={offer.id}>
+                        <td>
+                          <div className="d-flex align-items-center gap-2">
+                            <span className="badge bg-danger text-uppercase small">
+                              {offer.platform}
                             </span>
+                            <div>
+                              <div className="fw-semibold small">
+                                {offer.merchant.name}
+                              </div>
+                              {offer.merchant.is_official && (
+                                <span className="badge bg-success-subtle text-success small">
+                                  Chính hãng (Mall)
+                                </span>
+                              )}
+                            </div>
                           </div>
-                          <div
-                            className="text-muted"
-                            style={{ fontSize: '0.72rem' }}
-                          >
-                            DOSafe: {offer.merchant.dosafe_risk_score}/100 | Review Risk:{' '}
-                            {offer.merchant.review_risk_score}/100
-                          </div>
-                        </div>
-                      </td>
-                      <td>
-                        <div className="fw-bold text-danger">{price} ₫</div>
-                        {origPrice && (
-                          <div className="text-muted small text-decoration-line-through">
-                            {origPrice} ₫
-                          </div>
-                        )}
-                        {discountAnalysis && (
-                          <div className="mt-1">
-                            <a
-                              href="#price-history-section"
-                              title={discountAnalysis.explanation}
-                              className={`badge ${discountBadgeClass} text-decoration-none rounded-pill small`}
-                              style={{ fontSize: '0.7rem' }}
-                            >
-                              {discountIcon} {discountAnalysis.badge_label}
-                            </a>
-                          </div>
-                        )}
-                      </td>
-                      <td className="text-end">
-                        <a
-                          href={offer.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="btn btn-sm btn-primary rounded-pill px-3"
+                        </td>
+                        <td
+                          className="small text-truncate"
+                          style={{ maxWidth: '280px' }}
                         >
-                          Tới nơi bán ↗
-                        </a>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+                          {offer.title}
+                        </td>
+                        <td>
+                          <div className="d-flex flex-column gap-1">
+                            <div>
+                              <span
+                                className={`badge ${trustBadgeClass} small`}
+                              >
+                                Trust: {trustScore}%
+                              </span>
+                            </div>
+                            <div
+                              className="text-muted"
+                              style={{ fontSize: '0.72rem' }}
+                            >
+                              DOSafe: {offer.merchant.dosafe_risk_score}/100 |
+                              Review Risk: {offer.merchant.review_risk_score}
+                              /100
+                            </div>
+                          </div>
+                        </td>
+                        <td>
+                          <div className="fw-bold text-danger">{price} ₫</div>
+                          {origPrice && (
+                            <div className="text-muted small text-decoration-line-through">
+                              {origPrice} ₫
+                            </div>
+                          )}
+                          {discountAnalysis && (
+                            <div className="mt-1">
+                              <a
+                                href="#price-history-section"
+                                title={discountAnalysis.explanation}
+                                className={`badge ${discountBadgeClass} text-decoration-none rounded-pill small`}
+                                style={{ fontSize: '0.7rem' }}
+                              >
+                                {discountIcon} {discountAnalysis.badge_label}
+                              </a>
+                            </div>
+                          )}
+                        </td>
+                        <td className="text-end">
+                          <a
+                            href={offer.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn btn-sm btn-primary rounded-pill px-3"
+                          >
+                            Tới nơi bán ↗
+                          </a>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
 
-      {/* Time-Series Price History Chart & Fake Discount Detector */}
-      <PriceHistorySection
-        productName={product.name}
-        history={priceHistory}
-      />
+        {/* Time-Series Price History Chart & Fake Discount Detector */}
+        <PriceHistorySection
+          productName={product.name}
+          history={priceHistory}
+        />
 
-      {/* JReviews Dual-Rating, AI Review Synthesis & Interactive Voting */}
-      <JReviewsSection
-        productName={product.name}
-        averageRating={Number(product.average_rating || 0)}
-        userRatingWeighted={
-          product.user_rating_weighted && Number(product.user_rating_weighted) > 0
-            ? Number(product.user_rating_weighted)
-            : null
-        }
-        expertRating={
-          product.expert_rating != null ? Number(product.expert_rating) : null
-        }
-        expertReviewSummary={product.expert_review_summary || null}
-        authenticReviewCount={authenticCount}
-        ignoredReviewCount={ignoredCount}
-        reviews={reviews}
-        summary={reviewSummary}
-      />
+        {/* JReviews Dual-Rating, AI Review Synthesis & Interactive Voting */}
+        <JReviewsSection
+          productName={product.name}
+          averageRating={Number(product.average_rating || 0)}
+          userRatingWeighted={
+            product.user_rating_weighted &&
+            Number(product.user_rating_weighted) > 0
+              ? Number(product.user_rating_weighted)
+              : null
+          }
+          expertRating={
+            product.expert_rating != null ? Number(product.expert_rating) : null
+          }
+          expertReviewSummary={product.expert_review_summary || null}
+          authenticReviewCount={authenticCount}
+          ignoredReviewCount={ignoredCount}
+          reviews={reviews}
+          summary={reviewSummary}
+        />
       </div>
       <FooterTop />
       <FooterDynamic sections={[]} links={[]} locale={locale} />

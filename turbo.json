@@ -4,8 +4,14 @@
   "globalEnv": [
     "NEXT_OUTPUT",
     "APP_PUBLIC_URL",
-    "STRAPI_URL",
-    "STRAPI_REST_READONLY_API_KEY",
+    "NEXT_PUBLIC_SUPABASE_URL",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+    "SUPABASE_URL",
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "AI_PROVIDER",
+    "AI_API_KEY",
+    "AI_BASE_URL",
+    "AI_MODEL",
     "SENTRY_SUPPRESS_GLOBAL_ERROR_HANDLER_FILE_WARNING",
     "WEBPACK_CACHE_TYPE"
   ],
@@ -20,6 +26,9 @@
     "build": {
       "dependsOn": ["^build"],
       "outputs": [".next/**", "!.next/cache/**", "dist/**", "public/**"]
+    },
+    "typecheck": {
+      "dependsOn": ["^build"]
     },
     "lint": {
       "dependsOn": ["^lint"]
