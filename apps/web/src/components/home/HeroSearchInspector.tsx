@@ -717,6 +717,12 @@ export default function HeroSearchInspector({
                             Xem 10 Nhóm Thông Số &amp; Lịch Sử Giá{' '}
                             <BsArrowRight className="ms-1" />
                           </Link>
+                          <Link
+                            href={`/inspect?q=${encodeURIComponent(inspectQuery)}`}
+                            className="btn btn-outline-danger btn-sm rounded-pill px-3 fw-medium"
+                          >
+                            🔬 Báo cáo Kiểm toán
+                          </Link>
                           {inspectResult.merchantProfile && (
                             <Link
                               href={`/merchants/${inspectResult.merchantProfile.id}`}
