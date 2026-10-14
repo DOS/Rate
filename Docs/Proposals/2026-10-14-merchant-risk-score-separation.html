@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="dark" />
+  <title>Đề xuất Kiến trúc DB: Tách Điểm Rủi Ro Gian Hàng (Rate vs DOSafe)</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0f1113;
+      --surface: #161a1e;
+      --surface-elevated: #1d2228;
+      --border: #2a313a;
+      --text: #e8edf2;
+      --text-muted: #9ba5b0;
+      --accent: #FF2E29;
+      --accent-soft: rgba(255, 46, 41, 0.14);
+      --green: #22c55e;
+      --green-soft: rgba(34, 197, 94, 0.14);
+      --amber: #f59e0b;
+      --amber-soft: rgba(245, 158, 11, 0.14);
+      --code-bg: #0b0d0f;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 36px 20px 64px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+      line-height: 1.65;
+    }
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+    }
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .badge-accent { background: var(--accent-soft); color: var(--accent); border: 1px solid rgba(255,46,41,0.35); }
+    .badge-green { background: var(--green-soft); color: var(--green); border: 1px solid rgba(34,197,94,0.35); }
+    .badge-amber { background: var(--amber-soft); color: var(--amber); border: 1px solid rgba(245,158,11,0.35); }
+    h1 {
+      font-size: 28px;
+      margin: 12px 0 8px;
+      letter-spacing: -0.02em;
+    }
+    h2 {
+      font-size: 20px;
+      margin: 32px 0 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+      color: #ffffff;
+    }
+    h3 {
+      font-size: 16px;
+      margin: 20px 0 8px;
+      color: #ffffff;
+    }
+    p, li { color: var(--text); }
+    .subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 24px; }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px 24px;
+      margin-bottom: 20px;
+    }
+    .card-recommend {
+      border-left: 4px solid var(--accent);
+      background: linear-gradient(90deg, rgba(255,46,41,0.08) 0%, var(--surface) 35%);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    th, td {
+      padding: 12px 14px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      font-size: 14px;
+      vertical-align: top;
+    }
+    th {
+      background: var(--surface-elevated);
+      color: #ffffff;
+      font-weight: 600;
+    }
+    code {
+      background: var(--code-bg);
+      color: #ff8582;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: "JetBrains Mono", Consolas, monospace;
+      font-size: 13px;
+    }
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      overflow-x: auto;
+      font-size: 13px;
+      line-height: 1.5;
+      color: #d7e0ea;
+    }
+    pre code {
+      background: transparent;
+      color: inherit;
+      padding: 0;
+    }
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <span class="badge badge-accent">DOS/Rate Issue #15 - Database Architecture Proposal</span>
+    <h1>Tách biệt Điểm Rủi Ro Gian Hàng: Rate Review vs DOSafe Threat Intel</h1>
+    <div class="subtitle">Ngày lập: 2026-10-14 | Schema: <code>rate.merchants</code> (Migration thực thi tại <code>DOS-Me/supabase/migrations/</code>)</div>
+
+    <div class="card card-recommend">
+      <span class="badge badge-green">Khuyến nghị chốt: Phương án B (Tách cột riêng + Gộp bằng GREATEST)</span>
+      <h3>Tóm tắt 30 giây cho JOY quyết định</h3>
+      <p>
+        <strong>Có nên tách cột ra không? -> CÓ, BẮT BUỘC NÊN TÁCH.</strong><br/>
+        Hiện tại cột <code>rate.merchants.risk_score</code> đang bị 2 nguồn khác nhau cùng ghi vào:
+        (1) <strong>DOSafe Threat Intel</strong> (cảnh báo lừa đảo/phishing bên ngoài) và
+        (2) <strong>Rate Review Analyzer</strong> (chấm điểm seeding/phá giá từ review sàn).
+        Nếu không tách, một shop lừa đảo bị DOSafe chấm <strong>90 điểm rủi ro</strong> chỉ cần bơm vài chục review sạch lên Shopee là hệ thống Rate sẽ ghi đè <code>risk_score</code> xuống còn <strong>15 điểm</strong> (làm mất cảnh báo lừa đảo của DOSafe).
+      </p>
+    </div>
+
+    <h2>1. Bằng chứng hiện trạng trong Database (`gulptwduchsjcsbndmua`)</h2>
+    <ul>
+      <li>
+        Trong file khởi tạo gốc <code>20260912120000_init_rate_schema.sql</code> tại <code>DOS-Me</code>:
+        <ul>
+          <li><code>rate.merchants.risk_score INTEGER DEFAULT 0</code> có ghi chú: <em>"Can be synced from DOSafe threat_intel"</em>.</li>
+          <li>View <code>rate.v_product_trust_summary</code> đang đọc <code>COALESCE(ti.risk_score, m.risk_score, 0) AS merchant_risk_score</code> (kết nối với <code>dosafe.threat_intel</code> theo mã băm tên shop).</li>
+        </ul>
+      </li>
+      <li>
+        Trong <code>AiReviewAnalyzer.persistAnalysisToSupabase</code> (vừa viết ở Phase 3.1/3.2):
+        <ul>
+          <li>Đang cập nhật trực tiếp <code>rate.merchants.risk_score</code> dựa trên tỷ lệ <code>seeding_fake</code>, phá giá bất thường (dump pricing), và tỷ lệ 1-2 sao thật.</li>
+        </ul>
+      </li>
+      <li>
+        <strong>Dữ liệu thực tế hiện tại:</strong> Toàn bộ <strong>4/4 dòng</strong> trong <code>rate.merchants</code> đang có <code>risk_score = 0</code> (chưa bị ghi đè dòng nào của DOSafe).
+      </li>
+    </ul>
+
+    <h2>2. So sánh 3 Phương Án Thiết Kế</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Tiêu chí</th>
+          <th>Phương án A: Giữ chung 1 cột <code>risk_score</code></th>
+          <th>Phương án B (KHUYẾN NGHỊ): Tách cột <code>review_risk_score</code> riêng</th>
+          <th>Phương án C: Nhét tất cả vào 1 cột <code>JSONB</code></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Cách hoạt động</strong></td>
+          <td>DOSafe và Rate cùng ghi đè vào <code>merchants.risk_score</code>.</td>
+          <td>
+            • <code>risk_score</code>: Giữ nguyên cho DOSafe Threat Intel.<br/>
+            • <code>review_risk_score</code>: Dành riêng cho Rate Review Analyzer.<br/>
+            • <code>review_risk_breakdown</code> (JSONB): Lưu chi tiết tỷ lệ seeding, phá giá, lý do.
+          </td>
+          <td>Bỏ cột số nguyên, lưu mọi thứ trong <code>risk_metadata JSONB</code>.</td>
+        </tr>
+        <tr>
+          <td><strong>Độ an toàn chống lừa đảo</strong></td>
+          <td><span class="badge badge-accent">Nguy hiểm</span><br/>Shop lừa đảo có thể dùng review mồi để xóa điểm phạt DOSafe.</td>
+          <td><span class="badge badge-green">An toàn tuyệt đối</span><br/>Điểm cuối lấy <code>GREATEST(dosafe, review)</code> - bên nào phát hiện rủi ro cao hơn sẽ quyết định mức cảnh báo.</td>
+          <td><span class="badge badge-amber">Trung bình</span><br/>Dễ sai lệch kiểu dữ liệu khi nhiều service cùng cập nhật JSONB.</td>
+        </tr>
+        <tr>
+          <td><strong>Tốc độ lọc & đánh Index SQL</strong></td>
+          <td>Nhanh nhưng sai số liệu.</td>
+          <td><strong>Rất nhanh</strong> (cột <code>INTEGER</code> thuần, có <code>CHECK (0..100)</code> rõ ràng).</td>
+          <td>Chậm hơn khi filter/sort trên bảng lớn.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>3. Thiết kế Chi tiết của Phương Án B (Đề xuất chốt)</h2>
+    <div class="grid-3">
+      <div class="card">
+        <h3>1. Nguồn DOSafe</h3>
+        <p>Giữ nguyên cột <code>rate.merchants.risk_score</code> và kết nối <code>dosafe.threat_intel</code>. Rate Importer tuyệt đối không ghi vào cột này.</p>
+      </div>
+      <div class="card">
+        <h3>2. Nguồn Rate Review</h3>
+        <p>Ghi vào 3 cột mới trên <code>rate.merchants</code>: <code>review_risk_score</code> (0-100), <code>review_risk_breakdown</code> (JSONB), và <code>review_risk_updated_at</code>.</p>
+      </div>
+      <div class="card">
+        <h3>3. Công thức gộp trên View</h3>
+        <p>Trong <code>rate.v_product_trust_summary</code>: <code>GREATEST(COALESCE(ti.risk_score, 0), COALESCE(m.risk_score, 0), COALESCE(m.review_risk_score, 0))</code>.</p>
+      </div>
+    </div>
+
+    <h3>Nội dung Migration dự kiến (sẽ tạo PR tại <code>DOS-Me/supabase/migrations/</code>)</h3>
+    <pre><code>ALTER TABLE rate.merchants
+  ADD COLUMN IF NOT EXISTS review_risk_score INTEGER DEFAULT 0
+    CHECK (review_risk_score &gt;= 0 AND review_risk_score &lt;= 100),
+  ADD COLUMN IF NOT EXISTS review_risk_breakdown JSONB DEFAULT '{}'::jsonb,
+  ADD COLUMN IF NOT EXISTS review_risk_updated_at TIMESTAMPTZ;
+
+CREATE OR REPLACE VIEW rate.v_product_trust_summary AS
+SELECT
+  p.id AS product_id,
+  p.title,
+  p.current_price,
+  p.platform,
+  p.sold_count,
+  m.name AS merchant_name,
+  m.is_official,
+  ra.authenticity_score,
+  ra.pros,
+  ra.cons,
+  ra.ai_summary,
+  GREATEST(
+    COALESCE(ti.risk_score, 0),
+    COALESCE(m.risk_score, 0),
+    COALESCE(m.review_risk_score, 0)
+  ) AS merchant_risk_score,
+  ti.category AS threat_category,
+  COALESCE(ti.risk_score, m.risk_score, 0) AS dosafe_risk_score,
+  COALESCE(m.review_risk_score, 0) AS review_risk_score,
+  m.review_risk_breakdown
+FROM rate.products p
+LEFT JOIN rate.merchants m ON p.merchant_id = m.id
+LEFT JOIN rate.review_analysis ra ON p.id = ra.product_id
+LEFT JOIN dosafe.threat_intel ti
+  ON encode( digest(lower(m.name), 'sha256'), 'hex' ) = ti.entity_hash;</code></pre>
+  </div>
+</body>
+</html>
