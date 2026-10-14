@@ -7,6 +7,7 @@ import type {
   MasterProduct,
   ProductSpecifications,
 } from '@repo/shared-data';
+import { getMasterProductHref } from '@/lib/rate-api';
 import {
   getCompareTray,
   MAX_COMPARE_ITEMS,
@@ -1217,7 +1218,7 @@ export default function CompareWorkspace({
                           </span>
 
                           <Link
-                            href={`/smartphones/${p.slug}`}
+                            href={getMasterProductHref(p)}
                             className="fw-bold text-dark text-decoration-none h6 mb-1"
                           >
                             {p.name}
@@ -1235,7 +1236,7 @@ export default function CompareWorkspace({
 
                           <div className="d-flex mt-1 gap-2">
                             <Link
-                              href={`/smartphones/${p.slug}#offers-table`}
+                              href={`${getMasterProductHref(p)}#offers-table`}
                               className="btn btn-sm btn-danger rounded-pill px-3"
                             >
                               Xem nơi bán ({p.merchant_count || 1})

@@ -2,6 +2,7 @@ import { Metadata } from 'next'
 import { NextIntlClientProvider } from 'next-intl'
 import { getMessages, setRequestLocale } from 'next-intl/server'
 import { AppProviders } from '@/app/providers'
+import { getRateCopy } from '@/lib/rate-i18n'
 
 export async function generateMetadata({
   params,
@@ -9,15 +10,17 @@ export async function generateMetadata({
   params: Promise<{ locale: string }>
 }): Promise<Metadata> {
   const { locale } = await params
-  if (locale === 'vi') {
-    return {
-      title: "Rate.vn - Nền tảng Đánh giá & So sánh Hàng đầu Việt Nam",
-      description: "Tra cứu thông số kỹ thuật, so sánh giá từ các sàn TMĐT Shopee, Tiki, Lazada và chia sẻ đánh giá khách quan tại Rate.vn",
-    }
-  }
+  const copy = getRateCopy(locale)
   return {
-    title: "Rate.vn - Leading Review & Product Comparison Platform",
-    description: "Browse high-rated products, compare prices across e-commerce platforms, and read authentic community reviews on Rate.vn",
+    title: copy.seo.siteTitle,
+    description: copy.seo.siteDescription,
+    alternates: {
+      languages: {
+        vi: 'https://rate.vn',
+        en: 'https://rate.vn/en',
+        cs: 'https://rate.vn/cs',
+      },
+    },
   }
 }
 

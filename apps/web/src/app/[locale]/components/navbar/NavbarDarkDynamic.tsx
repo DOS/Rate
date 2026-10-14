@@ -4,12 +4,12 @@ import { Link } from '@/lib/navigation';
 import Image from 'next/image';
 import { useLocale } from 'next-intl';
 import {
-  BsPersonCircle,
-  BsBasket2,
-  BsSearch,
-  BsGeoAltFill,
+  BsArrowLeftRight,
+  BsBellFill,
+  BsCodeSlash,
 } from 'react-icons/bs';
 import LocaleSwitcher from '@/components/elementary/LocaleSwitcher';
+import { getRateCopy } from '@/lib/rate-i18n';
 
 export interface NavbarLinkItem {
   readonly id?: string | number;
@@ -26,6 +26,7 @@ export function NavbarDarkDynamic({
   readonly logoUrl?: string | null;
 }) {
   const locale = useLocale();
+  const copy = getRateCopy(locale);
   const [scroll, setScroll] = useState(false);
   const [toggle, setToggle] = useState(false);
   const [windowWidth, setWindowWidth] = useState(0);
@@ -52,7 +53,7 @@ export function NavbarDarkDynamic({
         sizes="100vw"
         style={{ width: '166px', height: 'auto' }}
         className="logo"
-        alt="logo"
+        alt="Rate.vn Logo"
       />
     </Link>
   );
@@ -84,41 +85,35 @@ export function NavbarDarkDynamic({
                 }}
               ></div>
               <div className="mobile_nav">
-                <ul className="d-flex align-items-center gap-1">
+                <ul className="d-flex align-items-center gap-2">
                   <li className="me-1">
                     <LocaleSwitcher isDarkHeader={false} compact={true} />
                   </li>
                   <li>
                     <Link
-                      href="#login"
-                      className="d-flex align-items-center"
-                      data-bs-toggle="modal"
-                      data-bs-target="#login"
+                      href="/compare"
+                      className="d-flex align-items-center text-dark"
+                      aria-label={copy.nav.compare}
                     >
-                      <BsPersonCircle className="me-1" />
+                      <BsArrowLeftRight className="me-1" />
                     </Link>
                   </li>
                   <li>
                     <Link
-                      href="#cartSlider"
-                      className="cart-content"
-                      data-bs-toggle="offcanvas"
-                      role="button"
-                      aria-controls="cartSlider"
+                      href="/watchlist"
+                      className="d-flex align-items-center text-primary"
+                      aria-label={copy.nav.watchlist}
                     >
-                      <BsBasket2 className="" />
-                      <span className="head-cart-counter">3</span>
+                      <BsBellFill className="me-1" />
                     </Link>
                   </li>
                   <li>
                     <Link
-                      href="#searchSlider"
-                      className="d-flex align-items-center"
-                      data-bs-toggle="offcanvas"
-                      role="button"
-                      aria-controls="searchSlider"
+                      href="/developers"
+                      className="d-flex align-items-center text-dark"
+                      aria-label={copy.nav.developers}
                     >
-                      <BsSearch className="me-1" />
+                      <BsCodeSlash className="me-1" />
                     </Link>
                   </li>
                 </ul>
@@ -137,7 +132,7 @@ export function NavbarDarkDynamic({
                   sizes="100vw"
                   style={{ width: '140px', height: 'auto' }}
                   className="img-fluid lightLogo"
-                  alt="Logo"
+                  alt="Rate.vn Logo"
                 />
               </div>
               <span
@@ -156,38 +151,43 @@ export function NavbarDarkDynamic({
                 const defaultLinks: NavbarLinkItem[] = [
                   {
                     id: 'home',
-                    label: locale === 'vi' ? 'Trang chủ' : 'Home',
+                    label: copy.nav.home,
                     href: '/',
                   },
                   {
                     id: 'smartphones',
-                    label: locale === 'vi' ? 'Điện thoại' : 'Smartphones',
+                    label: copy.nav.smartphones,
                     href: '/smartphones',
                   },
                   {
                     id: 'laptops',
-                    label: locale === 'vi' ? 'Laptop' : 'Laptops',
+                    label: copy.nav.laptops,
                     href: '/laptops',
                   },
                   {
                     id: 'tablets',
-                    label: locale === 'vi' ? 'Máy tính bảng' : 'Tablets',
+                    label: copy.nav.tablets,
                     href: '/tablets',
                   },
                   {
                     id: 'merchants',
-                    label: locale === 'vi' ? 'Gian hàng' : 'Merchants',
+                    label: copy.nav.merchants,
                     href: '/merchants',
                   },
                   {
                     id: 'compare',
-                    label: locale === 'vi' ? 'So sánh' : 'Compare',
+                    label: copy.nav.compare,
                     href: '/compare',
                   },
                   {
                     id: 'watchlist',
-                    label: locale === 'vi' ? 'Canh giá' : 'Watchlist',
+                    label: copy.nav.watchlist,
                     href: '/watchlist',
+                  },
+                  {
+                    id: 'developers',
+                    label: copy.nav.developers,
+                    href: '/developers',
                   },
                 ];
                 const validLinks = (links || []).filter(
@@ -220,8 +220,8 @@ export function NavbarDarkDynamic({
                     href="/watchlist"
                     className="d-inline-flex align-items-center"
                   >
-                    <BsGeoAltFill className="fs-6 me-1" />
-                    {locale === 'vi' ? 'Canh giá thật' : 'Price Watch'}
+                    <BsBellFill className="fs-6 me-1" />
+                    {copy.nav.priceWatchCta}
                   </Link>
                 </li>
               </ul>

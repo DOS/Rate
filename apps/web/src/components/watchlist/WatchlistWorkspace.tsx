@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from '@/lib/navigation';
 import type { MasterProduct } from '@repo/shared-data';
+import { getMasterProductHref } from '@/lib/rate-api';
 import {
   getWatchlist,
   removeWatchlistItem,
@@ -38,11 +39,13 @@ export default function WatchlistWorkspace({
     const targetP = Math.round((minP * 0.95) / 100000) * 100000;
     const thumb =
       p.thumbnail || (p.images && p.images.length > 0 ? p.images[0] || null : null);
+    const resolvedHref = getMasterProductHref(p);
+    const resolvedCategoryPath = resolvedHref.replace(`/${p.slug}`, '') || '/smartphones';
     upsertWatchlistItem({
       slug: p.slug,
       name: p.name,
       brand: p.brand,
-      categoryPath: '/smartphones',
+      categoryPath: resolvedCategoryPath,
       thumbnail: thumb,
       priceWhenAdded: minP,
       targetPrice: targetP,
@@ -198,7 +201,9 @@ export default function WatchlistWorkspace({
             const diffFromAdded = currentMin - item.priceWhenAdded;
             const diffFromTarget = currentMin - item.targetPrice;
             const targetReached = currentMin > 0 && currentMin <= item.targetPrice;
-            const detailHref = `${item.categoryPath || '/smartphones'}/${item.slug}`;
+            const detailHref = live
+              ? getMasterProductHref(live)
+              : `${item.categoryPath || '/smartphones'}/${item.slug}`;
 
             return (
               <div key={item.slug} className="col-lg-6 col-12">

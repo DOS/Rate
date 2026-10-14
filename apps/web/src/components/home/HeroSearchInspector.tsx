@@ -3,7 +3,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useRouter } from '@/lib/navigation';
 import type { KeySpecs, MasterProduct } from '@repo/shared-data';
-import type { MerchantSummary, UrlInspectionResult } from '@/lib/rate-api';
+import {
+  getMasterProductHref,
+  type MerchantSummary,
+  type UrlInspectionResult,
+} from '@/lib/rate-api';
 import CompareQuickToggle from '@/components/compare/CompareQuickToggle';
 import {
   BsArrowRight,
@@ -162,7 +166,7 @@ export default function HeroSearchInspector({
       const target = filteredProducts[activeIndex];
       if (target) {
         setIsDropdownOpen(false);
-        router.push(`/smartphones/${target.slug}`);
+        router.push(getMasterProductHref(target));
         return;
       }
     }
@@ -364,7 +368,7 @@ export default function HeroSearchInspector({
                           }`}
                         >
                           <Link
-                            href={`/smartphones/${item.slug}`}
+                            href={getMasterProductHref(item)}
                             onClick={() => setIsDropdownOpen(false)}
                             className="d-flex align-items-center text-decoration-none text-dark flex-grow-1 gap-3"
                           >
@@ -635,7 +639,7 @@ export default function HeroSearchInspector({
 
                           <h4 className="h5 fw-bold mb-1">
                             <Link
-                              href={`/smartphones/${inspectResult.masterProduct.slug}`}
+                              href={getMasterProductHref(inspectResult.masterProduct)}
                               className="text-dark text-decoration-none"
                             >
                               {inspectResult.masterProduct.name}
@@ -707,7 +711,7 @@ export default function HeroSearchInspector({
 
                         <div className="d-flex flex-wrap gap-2">
                           <Link
-                            href={`/smartphones/${inspectResult.masterProduct.slug}`}
+                            href={getMasterProductHref(inspectResult.masterProduct)}
                             className="btn btn-primary btn-sm rounded-pill fw-semibold flex-grow-1 px-3"
                           >
                             Xem 10 Nhóm Thông Số &amp; Lịch Sử Giá{' '}

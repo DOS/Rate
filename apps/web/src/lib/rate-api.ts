@@ -1275,6 +1275,7 @@ export interface RatePlatformStats {
     ReviewItem & {
       productTitle: string;
       masterSlug: string | null;
+      masterRouteHref?: string | null;
     }
   >;
 }
@@ -1318,6 +1319,55 @@ function getCategoryRouteHref(slug: string): string {
     return `/${slug}`;
   }
   return `/smartphones?category=${encodeURIComponent(slug)}`;
+}
+
+/**
+ * Resolve the canonical product detail route (`/smartphones/[slug]`, `/tablets/[slug]`, or `/laptops/[slug]`)
+ * for a MasterProduct across categories.
+ */
+export function getMasterProductHref(
+  product: Pick<MasterProduct, 'slug'> & {
+    name?: string | null;
+    model?: string | null;
+    category_id?: string | null;
+    metadata?: Record<string, unknown> | null;
+  },
+  categorySlugById?: ReadonlyMap<string, string>
+): string {
+  const catSlugFromMap =
+    product.category_id && categorySlugById
+      ? categorySlugById.get(product.category_id)
+      : undefined;
+  const catSlugFromMeta =
+    typeof product.metadata?.category_slug === 'string'
+      ? product.metadata.category_slug
+      : undefined;
+  const resolvedCat = catSlugFromMap || catSlugFromMeta;
+
+  if (resolvedCat === 'tablets' || resolvedCat === 'laptops') {
+    return `/${resolvedCat}/${product.slug}`;
+  }
+  if (resolvedCat === 'smartphones') {
+    return `/smartphones/${product.slug}`;
+  }
+
+  const haystack = `${product.name || ''} ${product.model || ''} ${product.slug}`
+    .toLowerCase();
+  if (
+    /ipad|galaxy tab|xiaomi pad|matepad|redmi pad|tab s\d|tablet|máy tính bảng/i.test(
+      haystack
+    )
+  ) {
+    return `/tablets/${product.slug}`;
+  }
+  if (
+    /macbook|thinkpad|zenbook|vivobook|inspiron|xps|legion|rog|tuf|omen|pavilion|spectre|envy|gram|surface laptop|ultrabook|laptop/i.test(
+      haystack
+    )
+  ) {
+    return `/laptops/${product.slug}`;
+  }
+  return `/smartphones/${product.slug}`;
 }
 
 function computeDynamicReviewRisk(reviews: ReviewItem[]): {
@@ -1846,10 +1896,23 @@ export async function getRatePlatformStats(): Promise<RatePlatformStats> {
       cluster_id: string | null;
     }>) || [];
 
+  const catSlugById = new Map<string, string>();
+  for (const c of categories) {
+    catSlugById.set(c.id, c.slug);
+  }
+
   const countByCatId = new Map<string, number>();
   const masterSlugById = new Map<string, string>();
+  const masterRouteById = new Map<string, string>();
   for (const m of masterRows) {
     masterSlugById.set(m.id, m.slug);
+    masterRouteById.set(
+      m.id,
+      getMasterProductHref(
+        { slug: m.slug, name: m.name, category_id: m.category_id },
+        catSlugById
+      )
+    );
     if (m.category_id) {
       countByCatId.set(
         m.category_id,
@@ -1860,13 +1923,16 @@ export async function getRatePlatformStats(): Promise<RatePlatformStats> {
 
   const prodInfoById = new Map<
     string,
-    { title: string; masterSlug: string | null }
+    { title: string; masterSlug: string | null; masterRouteHref: string | null }
   >();
   for (const p of prodRows) {
     prodInfoById.set(p.id, {
       title: p.title,
       masterSlug: p.cluster_id
         ? masterSlugById.get(p.cluster_id) || null
+        : null,
+      masterRouteHref: p.cluster_id
+        ? masterRouteById.get(p.cluster_id) || null
         : null,
     });
   }
@@ -1925,6 +1991,7 @@ export async function getRatePlatformStats(): Promise<RatePlatformStats> {
         signals: vf?.signals || null,
         productTitle: pInfo?.title || 'Sản phẩm công nghệ',
         masterSlug: pInfo?.masterSlug || null,
+        masterRouteHref: pInfo?.masterRouteHref || null,
       };
     });
 
