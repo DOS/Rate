@@ -307,11 +307,28 @@
           Hiển thị minh bạch điểm rủi ro kép (<code>dosafe_risk_score</code> + <code>review_risk_score</code>), tỷ lệ phân bổ 5 hạng mục đánh giá AI (<code>authentic</code>, <code>low_value_coin_spam</code>, <code>seeding_fake</code>, <code>competitor_sabotage</code>, <code>review_bombing</code>), danh sách sản phẩm kèm cảnh báo nâng giá gốc và danh sách bình luận thực tế.
         </li>
         <li>
+          <strong>Chi tiết Sản phẩm Đa ngành hàng (<code>/tablets/[slug]</code>, <code>/laptops/[slug]</code>) &amp; JSON-LD Rich Results (Issue #19):</strong>
+          Tái cấu trúc <code>ProductDetailView</code> dùng chung cho cả 3 ngành hàng chủ lực, nhúng Schema.org <code>@graph</code> (<code>Product</code>, <code>AggregateOffer</code>, <code>AggregateRating</code>, <code>BreadcrumbList</code>) và <code>OnlineStore</code> trên <code>/merchants/[id]</code>.
+        </li>
+        <li>
+          <strong>Gửi Đánh giá Cộng đồng 5 Tiêu chí JReviews (<code>POST /api/v1/rate/reviews</code> + <code>rate.submit_community_review</code>):</strong>
+          Tích hợp biểu mẫu chấm điểm 5 tiêu chí kỹ thuật (<code>Màn hình</code>, <code>Hiệu năng</code>, <code>Camera</code>, <code>Pin &amp; Sạc</code>, <code>Đáng tiền</code>) ngay trong <code>JReviewsSection.tsx</code> kèm kiểm duyệt chống Spam cày xu / Seeding tự động.
+        </li>
+        <li>
+          <strong>Hệ thống Canh Giá Thật &amp; Cảnh Báo Giảm Giá (<code>/watchlist</code> + <code>PriceWatchButton.tsx</code>):</strong>
+          Cho phép người mua đặt ngưỡng giá mục tiêu (Target Price Alert) và đối chiếu trực tiếp với giá thấp nhất đa sàn theo thời gian thực.
+        </li>
+        <li>
+          <strong>Dọn dẹp 56 Route Template ListingHub dư thừa &amp; Chuẩn hóa <code>FooterDynamic.tsx</code> + <code>sitemap.ts</code>:</strong>
+          Xóa toàn bộ các trang mẫu khách sạn/nhà hàng không thuộc Rate.vn để làm sạch App Router và tăng tốc độ build Next.js 16.3.8.
+        </li>
+        <li>
           <strong>Mở rộng REST API v1 phục vụ Web &amp; Browser Extension MV3:</strong>
           <ul>
             <li><code>GET /api/v1/rate/lookup?q=...</code> - Phân tích link TMĐT hoặc từ khóa tìm kiếm, trả về sản phẩm chuẩn hóa, gian hàng và cảnh báo giá ảo.</li>
             <li><code>GET /api/v1/rate/merchants</code> - Danh sách gian hàng kèm điểm tín nhiệm kép và bộ lọc theo sàn/mức độ tin cậy.</li>
             <li><code>GET /api/v1/rate/merchants/[id]</code> - Chi tiết hồ sơ kiểm toán gian hàng theo UUID, slug hoặc <code>platform_shop_id</code>.</li>
+            <li><code>POST /api/v1/rate/reviews</code> - Gửi đánh giá 5 tiêu chí JReviews kèm bộ lọc chống Seeding tự động.</li>
           </ul>
         </li>
       </ul>
@@ -320,9 +337,9 @@
     <div class="section-card">
       <h2>3. Hướng Dẫn Đồng Bộ Sổ Cái Migration Sang <code>DOS-Me</code></h2>
       <p>
-        Tuân thủ nghiêm ngặt Hard Rule 0.1, file migration chuẩn hóa bảo mật, xóa chỉ mục trùng và thêm hàm RPC tìm kiếm đa năng đã được lưu tại:
-        <code>supabase/migrations/20261014231500_rate_search_rpc_and_security_hardening.sql</code>.
-        Khi cần áp dụng lên môi trường <code>beta</code> và <code>prod</code> (<code>gulptwduchsjcsbndmua</code>), chỉ cần sao chép file này sang <code>D:\Projects\DOS-Me\supabase\migrations\</code> cùng với <code>20261014033000_rate_merchant_review_risk_separation.sql</code> để chạy qua đường ống CI chính thức.
+        Tuân thủ nghiêm ngặt Hard Rule 0.1, các file migration chuẩn hóa bảo mật, xóa chỉ mục trùng và thêm hàm RPC tìm kiếm + gửi đánh giá cộng đồng đã được lưu tại:
+        <code>supabase/migrations/20261014231500_rate_search_rpc_and_security_hardening.sql</code> và <code>supabase/migrations/20261014234500_rate_community_review_submission_rpc.sql</code>.
+        Khi cần áp dụng lên môi trường <code>beta</code> và <code>prod</code> (<code>gulptwduchsjcsbndmua</code>), chỉ cần sao chép các file này sang <code>D:\Projects\DOS-Me\supabase\migrations\</code> cùng với <code>20261014033000_rate_merchant_review_risk_separation.sql</code> để chạy qua đường ống CI chính thức.
       </p>
     </div>
   </div>
