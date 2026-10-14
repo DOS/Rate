@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { Link } from '@/lib/navigation';
 import { notFound } from 'next/navigation';
 import {
   getMasterProductBySlug,
@@ -16,7 +16,7 @@ export default async function SmartphoneDetailPage({
 }: {
   params: PageParams;
 }) {
-  const { locale, slug } = await params;
+  const { slug } = await params;
   const product = await getMasterProductBySlug(slug);
 
   if (!product) {
@@ -52,12 +52,12 @@ export default async function SmartphoneDetailPage({
       <nav aria-label="breadcrumb" className="mb-4">
         <ol className="breadcrumb small">
           <li className="breadcrumb-item">
-            <Link href={`/${locale}`} className="text-decoration-none">
+            <Link href="/" className="text-decoration-none">
               Trang chủ
             </Link>
           </li>
           <li className="breadcrumb-item">
-            <Link href={`/${locale}/smartphones`} className="text-decoration-none">
+            <Link href="/smartphones" className="text-decoration-none">
               Điện thoại
             </Link>
           </li>
@@ -230,7 +230,7 @@ export default async function SmartphoneDetailPage({
                   Xem {offers.length} nơi bán
                 </a>
                 <Link
-                  href={`/${locale}/compare?slugs=${product.slug}`}
+                  href={`/compare?slugs=${product.slug}`}
                   className="btn btn-outline-dark px-3 rounded-pill"
                 >
                   So sánh máy này
