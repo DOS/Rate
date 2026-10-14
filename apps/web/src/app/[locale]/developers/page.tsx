@@ -67,10 +67,19 @@ const API_ENDPOINTS_SPEC = [
   },
   {
     method: 'GET',
-    path: '/api/v1/rate/inspect',
+    path: '/api/v1/rate/compare',
+    auth: 'Public (CORS Enabled)',
+    cache: 's-maxage=60, stale-while-revalidate=300',
+    queryParams: 'slugs (Danh sách tối đa 4 slug phân cách bằng dấu phẩy)',
+    summary:
+      'So sánh chéo tối đa 4 sản phẩm gốc trên toàn bộ 10 nhóm thông số kỹ thuật kèm đường dẫn chuẩn hóa đa ngành hàng.',
+  },
+  {
+    method: 'GET',
+    path: '/api/v1/rate/lookup',
     auth: 'Public (CORS Enabled)',
     cache: 's-maxage=30, stale-while-revalidate=120',
-    queryParams: 'url (Link Shopee/Lazada/Tiki hoặc từ khóa)',
+    queryParams: 'q hoặc url (Link Shopee/Lazada/Tiki hoặc từ khóa)',
     summary:
       'Phân tích đường dẫn sản phẩm hoặc gian hàng TMĐT, tự động đối chiếu với cụm sản phẩm chuẩn hóa và hồ sơ tín nhiệm gian hàng.',
   },
@@ -88,9 +97,37 @@ const API_ENDPOINTS_SPEC = [
     path: '/api/v1/rate/merchants/[id]',
     auth: 'Public (CORS Enabled)',
     cache: 's-maxage=60, stale-while-revalidate=300',
-    queryParams: 'id (UUID hoặc platform_shop_id)',
+    queryParams: 'id (UUID, slug hoặc platform_shop_id)',
     summary:
       'Hồ sơ kiểm toán chi tiết của một gian hàng, phân bổ rủi ro đánh giá AI và danh sách các sản phẩm đang niêm yết.',
+  },
+  {
+    method: 'GET',
+    path: '/api/v1/rate/stats',
+    auth: 'Public (CORS Enabled)',
+    cache: 's-maxage=60, stale-while-revalidate=300',
+    queryParams: 'Không yêu cầu tham số',
+    summary:
+      'Số liệu thống kê trực tiếp toàn nền tảng (số sản phẩm gốc, điểm lịch sử giá, tỷ lệ đánh giá thực chất và danh mục 5 ngành hàng).',
+  },
+  {
+    method: 'GET',
+    path: '/api/v1/rate/extension/lookup',
+    auth: 'Public (CORS Enabled)',
+    cache: 's-maxage=30, stale-while-revalidate=120',
+    queryParams: 'url, title, price, shopId, itemId',
+    summary:
+      'Endpoint chuyên dụng cho Rate Browser Extension MV3: chuẩn hóa URL, chặn phụ kiện/linh kiện và trả về kết luận giá 5 mức.',
+  },
+  {
+    method: 'POST',
+    path: '/api/v1/rate/reviews',
+    auth: 'Rate-Limited (SHA-256 Voter Hash)',
+    cache: 'no-store (RPC rate.submit_community_review)',
+    queryParams:
+      'Body JSON: { masterProductId, authorName, ratingStar, comment, criteriaRatings }',
+    summary:
+      'Gửi đánh giá cộng đồng 5 tiêu chí JReviews kèm bộ lọc chống spam/seeding tự động và cập nhật điểm trọng số.',
   },
   {
     method: 'POST',

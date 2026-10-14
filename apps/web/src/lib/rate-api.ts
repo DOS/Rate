@@ -1314,16 +1314,22 @@ interface RawProductRow {
   cluster_id?: string | null;
 }
 
-function getCategoryRouteHref(slug: string): string {
-  if (slug === 'smartphones' || slug === 'tablets' || slug === 'laptops') {
+export function getCategoryRouteHref(slug: string): string {
+  if (
+    slug === 'smartphones' ||
+    slug === 'tablets' ||
+    slug === 'laptops' ||
+    slug === 'smartwatches' ||
+    slug === 'earbuds'
+  ) {
     return `/${slug}`;
   }
   return `/smartphones?category=${encodeURIComponent(slug)}`;
 }
 
 /**
- * Resolve the canonical product detail route (`/smartphones/[slug]`, `/tablets/[slug]`, or `/laptops/[slug]`)
- * for a MasterProduct across categories.
+ * Resolve the canonical product detail route (`/smartphones/[slug]`, `/tablets/[slug]`, `/laptops/[slug]`, `/smartwatches/[slug]`, or `/earbuds/[slug]`)
+ * for a MasterProduct across all 5 categories.
  */
 export function getMasterProductHref(
   product: Pick<MasterProduct, 'slug'> & {
@@ -1344,7 +1350,12 @@ export function getMasterProductHref(
       : undefined;
   const resolvedCat = catSlugFromMap || catSlugFromMeta;
 
-  if (resolvedCat === 'tablets' || resolvedCat === 'laptops') {
+  if (
+    resolvedCat === 'tablets' ||
+    resolvedCat === 'laptops' ||
+    resolvedCat === 'smartwatches' ||
+    resolvedCat === 'earbuds'
+  ) {
     return `/${resolvedCat}/${product.slug}`;
   }
   if (resolvedCat === 'smartphones') {
@@ -1366,6 +1377,20 @@ export function getMasterProductHref(
     )
   ) {
     return `/laptops/${product.slug}`;
+  }
+  if (
+    /apple watch|galaxy watch|garmin|xiaomi watch|huawei watch|amazfit|smartwatch|đồng hồ thông minh/i.test(
+      haystack
+    )
+  ) {
+    return `/smartwatches/${product.slug}`;
+  }
+  if (
+    /airpods|galaxy buds|wf-1000xm|wh-1000xm|earbuds|tai nghe|freebuds|soundcore/i.test(
+      haystack
+    )
+  ) {
+    return `/earbuds/${product.slug}`;
   }
   return `/smartphones/${product.slug}`;
 }
@@ -2100,9 +2125,9 @@ export function parseEcommerceUrlOrQuery(raw: string): ParsedEcommerceUrl {
     };
   }
 
-  // Rate.vn internal URL: /smartphones/<slug>
+  // Rate.vn internal URL: /smartphones/<slug>, /tablets/<slug>, /laptops/<slug>, /smartwatches/<slug>, /earbuds/<slug>
   const rateSlugMatch = trimmed.match(
-    /\/(?:smartphones|tablets|laptops)\/([a-z0-9-]+)/i
+    /\/(?:smartphones|tablets|laptops|smartwatches|earbuds)\/([a-z0-9-]+)/i
   );
   if (rateSlugMatch) {
     return {

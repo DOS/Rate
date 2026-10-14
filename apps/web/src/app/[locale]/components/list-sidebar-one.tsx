@@ -332,7 +332,9 @@ export default function ListSidebarOne({
                                       if (
                                         cat.slug === 'smartphones' ||
                                         cat.slug === 'tablets' ||
-                                        cat.slug === 'laptops'
+                                        cat.slug === 'laptops' ||
+                                        cat.slug === 'smartwatches' ||
+                                        cat.slug === 'earbuds'
                                       ) {
                                         router.push(`/${cat.slug}`);
                                       } else {

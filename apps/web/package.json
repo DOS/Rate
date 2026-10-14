@@ -8,6 +8,7 @@
     "lint": "eslint .",
     "preview": "next build && next start",
     "start": "next start",
+    "test": "pnpm --filter @repo/crawlers exec tsx ../web/src/server/rate/__tests__/core-rate-architecture.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "browserslist": [

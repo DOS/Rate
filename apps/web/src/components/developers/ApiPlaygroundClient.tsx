@@ -23,7 +23,7 @@ const PRESET_ENDPOINTS: ApiPresetEndpoint[] = [
     id: 'list-products',
     method: 'GET',
     title: 'Danh sách Master Products (10 Nhóm Thông Số)',
-    path: '/api/v1/rate/products?limit=3&sort=rating-desc',
+    path: '/api/v1/rate/products?limit=3&sort=rating_desc',
     description:
       'Truy vấn danh sách sản phẩm gốc chuẩn hóa từ rate.master_products kèm lọc theo ngành hàng, thương hiệu, RAM/ROM và điểm JReviews.',
   },
@@ -31,15 +31,23 @@ const PRESET_ENDPOINTS: ApiPresetEndpoint[] = [
     id: 'product-detail',
     method: 'GET',
     title: 'Chi tiết Sản phẩm + Lịch sử Giá + Review AI',
-    path: '/api/v1/rate/products/iphone-15-pro-max-256gb',
+    path: '/api/v1/rate/products/apple-iphone-16-128gb',
     description:
       'Trả về toàn bộ 10 nhóm thông số kỹ thuật, danh sách gian hàng (rate.products), chuỗi thời gian giá 90 ngày (rate.price_history), phân tích giảm giá ảo và đánh giá đã kiểm duyệt AI.',
   },
   {
-    id: 'inspect-url',
+    id: 'compare-products',
+    method: 'GET',
+    title: 'So sánh Chéo 10 Nhóm Thông Số (/compare)',
+    path: '/api/v1/rate/compare?slugs=apple-iphone-16-128gb,apple-iphone-16-plus-256gb',
+    description:
+      'Đặt tối đa 4 sản phẩm gốc lên bàn cân 10 nhóm thông số kỹ thuật chuẩn GSMArena & PhoneArena chỉ với 1 truy vấn REST.',
+  },
+  {
+    id: 'lookup-url',
     method: 'GET',
     title: 'Kiểm định Link Sàn TMĐT (URL / Link Inspector)',
-    path: '/api/v1/rate/inspect?url=https://shopee.vn/product/88201679/24778652651',
+    path: '/api/v1/rate/lookup?q=https://shopee.vn/product/88201679/27110898667',
     description:
       'Bóc tách shop_id / item_id hoặc tên sản phẩm từ link Shopee, Lazada, Tiki và trả về kết quả kiểm định giảm giá ảo + điểm tín nhiệm gian hàng tức thì.',
   },
@@ -50,6 +58,22 @@ const PRESET_ENDPOINTS: ApiPresetEndpoint[] = [
     path: '/api/v1/rate/merchants',
     description:
       'Liệt kê toàn bộ gian hàng TMĐT kèm điểm Trust Score, DOSafe Threat Intel Risk và AI Review Seeding Risk.',
+  },
+  {
+    id: 'platform-stats',
+    method: 'GET',
+    title: 'Số liệu Thống kê Toàn Nền tảng (/stats)',
+    path: '/api/v1/rate/stats',
+    description:
+      'Trả về số lượng sản phẩm chuẩn hóa, bản ghi lịch sử giá, tỷ lệ đánh giá thực chất và số lượng mẫu theo từng ngành hàng.',
+  },
+  {
+    id: 'extension-lookup',
+    method: 'GET',
+    title: 'Browser Extension MV3 Hybrid Lookup',
+    path: '/api/v1/rate/extension/lookup?url=https://shopee.vn/product/88201679/27110898667',
+    description:
+      'Endpoint tốc độ cao phục vụ Rate Browser Extension MV3: chuẩn hóa URL, chặn phụ kiện/linh kiện và trả về kết luận giá 5 mức.',
   },
 ];
 

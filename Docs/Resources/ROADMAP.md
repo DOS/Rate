@@ -1,9 +1,9 @@
 # 🗺️ Rate Platform Roadmap - Kiến Trúc Zero-Strapi & Open-Core 2026
 
-> **Cập nhật lần cuối:** 14/10/2026  
+> **Cập nhật lần cuối:** 15/10/2026  
 > **Tech Stack chuẩn hóa:** TypeScript 7.0.2 + Next.js 16.3.8 + React 19.3 + Pure PostgreSQL 17 (Supabase Cloud `rate` schema) + Open-Core 2 Repositories (`DOS/Rate` & `DOS/Rate-Services`)  
 > **GitHub Project Board (Multi-Agent Queue):** [https://github.com/orgs/DOS/projects/9](https://github.com/orgs/DOS/projects/9)  
-> **Trạng thái hiện tại:** Đã hoàn thành Phase 1, Phase 2, Phase 3.1, Phase 3.2, Phase 4.1, Phase 4.2, Phase 4.3, Phase 4.4 & Đại phẫu Kiến trúc 2026 (Sẵn sàng cho Phase 3.3 & Phase 5)
+> **Trạng thái hiện tại:** Đã hoàn thành Phase 1, Phase 2, Phase 3.1, Phase 3.2, toàn bộ Phase 4 (4.1 -> 4.8), Phase 5.2 & Đại phẫu Kiến trúc 2026 (Sẵn sàng cho Phase 3.3 & Phase 5.1)
 
 ---
 
@@ -13,7 +13,7 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc **4 T�
 
 1. **Tầng 1 - Web BFF & REST API v1 (`apps/web` trong `DOS/Rate`):**
    - Giao diện **Next.js 16.3.8** (App Router + Turbopack) + **React 19.3** + **Bootstrap 5.3.8** + **`next-intl`** (`vi` mặc định tại `/`, `en`, `cs`).
-   - Tầng Server Data (`apps/web/src/server/rate/`) tích hợp `React.cache()` deduplication và cung cấp các endpoints REST JSON (`/api/v1/rate/products`, `/api/v1/rate/products/[slug]`, `/api/v1/rate/lookup`, `/api/v1/rate/merchants`, `/api/v1/rate/merchants/[id]`, `/api/reviews/[id]/vote`).
+   - Tầng Server Data (`apps/web/src/server/rate/`) tích hợp `React.cache()` deduplication và cung cấp đầy đủ các endpoints REST JSON (`/api/v1/rate/stats`, `/api/v1/rate/products`, `/api/v1/rate/products/[slug]`, `/api/v1/rate/compare`, `/api/v1/rate/lookup`, `/api/v1/rate/inspect`, `/api/v1/rate/merchants`, `/api/v1/rate/merchants/[id]`, `/api/v1/rate/reviews`, `/api/reviews/[id]/vote`, `/api/v1/rate/extension/lookup`, `/api/v1/rate/extension/ingest`).
 2. **Tầng 2 - Open-Core Intelligence Engine (`apps/importer` & `packages/shared-data` trong `DOS/Rate`):**
    - Chuẩn hóa **10 Field Groups** (`specs.schema.ts` với Zod `^3.25.76`).
    - Bộ não `ProductNormalizer`, `EntityMatcher` (3-Tier Dedupe), `AiSpecEnricher` (đa LLM OpenAI-compatible) và `AiReviewAnalyzer` (lọc Seeding/Spam xu + tính điểm rủi ro kép `dosafe_risk_score` và `review_risk_score`).
@@ -55,14 +55,14 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc **4 T�
 ### ✅ Phase 4: Nâng Cấp Trải Nghiệm Directory Filter, Biểu Đồ Lịch Sử Giá & Kiến Trúc Next.js 16 (Đã hoàn thành 100%)
 
 - [x] **4.1. Bộ Lọc Đa Tiêu Chí Theo 10 Nhóm Thông Số (`/smartphones` - Issue #9):**
-  - Thiết kế `category-filters.ts` hỗ trợ lọc động theo từng Category (`smartphones`, `tablets`, `laptops`) kế thừa giao diện `ListingHub` (`list-sidebar-one.tsx` + `grid-layout-01`).
+  - Thiết kế `category-filters.ts` hỗ trợ lọc động theo từng Category (`smartphones`, `tablets`, `laptops`, `smartwatches`, `earbuds`) kế thừa giao diện `ListingHub` (`list-sidebar-one.tsx` + `grid-layout-01`).
 - [x] **4.2. Biểu Đồ Lịch Sử Giá & Cảnh Báo Giảm Giá Ảo (`/smartphones/[slug]` - Issue #10):**
   - Triển khai `getMasterProductPriceHistory` và `PriceHistorySection.tsx` (Biểu đồ SVG chuỗi thời gian + phát hiện nâng khống giá gốc).
   - Khắc phục triệt để lỗi điều hướng `/en` bằng `localeCookie: false`.
 - [x] **4.2b. Đại Phẫu Kiến Trúc Monorepo & Chuẩn Hóa TypeScript 7.0.2 (Issue #17):**
   - Nâng cấp toàn bộ Monorepo lên **TypeScript 7.0.2**, xóa 4 gói Zombie (`packages/ai`, `importer`, `strapi-types`, `validator`) và toàn bộ route/component Strapi cũ, bật lại `typescript.ignoreBuildErrors: false`, bổ sung tầng `src/server/rate/` (`React.cache`) và REST API `/api/v1/rate/*`.
 - [x] **4.3. Thanh Tìm Kiếm Thông Minh Autocomplete & Chọn Máy So Sánh Động (`/compare` - Issue #11):**
-  - Triển khai `CompareWorkspace.tsx` (Autocomplete kết nối REST API `/api/v1/rate/products`, thêm/bớt/đổi tối đa 4 mẫu điện thoại, chế độ "Chỉ hiện điểm khác biệt" & "Tô sáng thông số vượt trội" trên ma trận 10 nhóm thông số) cùng `CompareQuickToggle.tsx` và khay nổi `CompareTrayBar.tsx` trên `/smartphones` và `/smartphones/[slug]`.
+  - Triển khai `CompareWorkspace.tsx` (Autocomplete kết nối REST API `/api/v1/rate/products`, thêm/bớt/đổi tối đa 4 mẫu thiết bị, chế độ "Chỉ hiện điểm khác biệt" & "Tô sáng thông số vượt trội" trên ma trận 10 nhóm thông số) cùng `CompareQuickToggle.tsx` và khay nổi `CompareTrayBar.tsx`.
 - [x] **4.4. Nâng Cấp Trang Chủ Dữ Liệu Thật, Hồ Sơ Tín Nhiệm Gian Hàng (`/merchants`), Danh Mục Đa Ngành (`/tablets`, `/laptops`) & Kiểm Toán DB (`rate` Schema - Issue #18):**
   - Thay thế toàn bộ mock template trên Trang chủ bằng dữ liệu thật 100% từ Supabase `rate` schema, tích hợp `HeroSearchInspector.tsx` (Autocomplete + Kiểm tra Link Shopee/Lazada/Tiki/TikTok Shop phát hiện giảm giá ảo & điểm rủi ro kép).
   - Triển khai trang Danh mục `/tablets`, `/laptops` dùng chung bộ lọc 10 nhóm thông số và trang Hồ sơ Tín nhiệm Gian hàng `/merchants`, `/merchants/[id]` (Dual Risk Score + phân tích Seeding).
@@ -74,9 +74,13 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc **4 T�
   - Xóa 56 route demo khách sạn/nhà hàng dư thừa của template ListingHub, chuẩn hóa `FooterDynamic.tsx` và `sitemap.ts`.
 - [x] **4.7. Củng Cố Core Architecture: Đa Ngôn Ngữ Toàn Diện (`vi`/`en`/`cs`), Cổng Tài Liệu & Sandbox Open-Core REST API v1 (`/developers`), Chuẩn Hóa Liên Kết Đa Danh Mục & Xóa Sạch 63 Component Template Dư Thừa (Issue #20):**
   - Đồng bộ hóa bộ từ điển đa ngôn ngữ (`apps/web/locales/{vi,en,cs}.json` + `src/lib/rate-i18n.ts`) trên toàn bộ Root Layout Metadata, Navbar, Footer, Trang chủ, Trang So sánh và các trang thông tin nền tảng.
-  - Xây dựng Cổng Nhà Phát Triển `/developers` kèm `ApiPlaygroundClient.tsx` cho phép chạy thử trực tiếp các REST API v1 (`/api/v1/rate/products`, `/api/v1/rate/products/[slug]`, `/api/v1/rate/inspect`, `/api/v1/rate/merchants`) và tra cứu cấu trúc 10 Field Groups.
-  - Chuẩn hóa hàm `getMasterProductHref` tự động định tuyến `/smartphones/[slug]`, `/tablets/[slug]`, `/laptops/[slug]` trên toàn hệ thống và hỗ trợ so sánh đa ngành hàng trên `/compare`.
+  - Xây dựng Cổng Nhà Phát Triển `/developers` kèm `ApiPlaygroundClient.tsx` cho phép chạy thử trực tiếp các REST API v1 và tra cứu cấu trúc 10 Field Groups.
+  - Chuẩn hóa hàm `getMasterProductHref` tự động định tuyến theo ngành hàng trên toàn hệ thống và hỗ trợ so sánh đa ngành hàng trên `/compare`.
   - Thay thế 4 trang thông tin lõi (`/about-us`, `/faq`, `/privacy-policy`, `/contact-us`) bằng nội dung kiểm toán dữ liệu thật của Rate.vn và xóa 63 component mẫu ListingHub không còn sử dụng.
+- [x] **4.8. Hoàn Thiện Core 5/5 Ngành Hàng (`/smartwatches`, `/earbuds`), Chuẩn Hóa REST API v1 (`/api/v1/rate/stats`, `/api/v1/rate/compare`) & Kiểm Thử Tự Động Core Logic (Issue #21):**
+  - Mở rộng đầy đủ 5/5 ngành hàng thiết bị công nghệ trong `rate.categories` với route chính thức `/smartwatches`, `/smartwatches/[slug]`, `/earbuds`, `/earbuds/[slug]` cùng bộ lọc chuyên biệt theo 10 nhóm thông số (`category-filters.ts`).
+  - Bổ sung REST API v1 `GET /api/v1/rate/stats` (số liệu thống kê toàn nền tảng) và `GET /api/v1/rate/compare?slugs=...` (ma trận đối chiếu thông số, giá cả và điểm đánh giá JReviews).
+  - Xây dựng bộ kiểm thử tự động `core-rate-architecture.test.ts` (kiểm định bộ lọc 5 ngành hàng, định tuyến chuẩn, phân tích URL TMĐT Shopee/Lazada/Tiki/TikTok Shop và từ điển đa ngôn ngữ `vi`/`en`/`cs`) tích hợp trực tiếp vào GitHub Actions CI (`.github/workflows/ci.yml`).
 
 ### 🔮 Phase 5: Mở Rộng Đa Sàn & Browser Extension MV3
 

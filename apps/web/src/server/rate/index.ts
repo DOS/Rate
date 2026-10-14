@@ -2,7 +2,9 @@ import { cache } from 'react';
 import {
   compareMasterProducts as _compareMasterProducts,
   getCategoryDirectoryFacets as _getCategoryDirectoryFacets,
+  getCategoryRouteHref,
   getMasterProductBySlug as _getMasterProductBySlug,
+  getMasterProductHref,
   getMasterProductOffers as _getMasterProductOffers,
   getMasterProductPriceHistory as _getMasterProductPriceHistory,
   getMasterProductReviews as _getMasterProductReviews,
@@ -15,6 +17,7 @@ import {
   parseEcommerceUrlOrQuery,
   getRateClient,
   computeJReviewsWeight,
+  type MasterProductFilterParams,
 } from '../../lib/rate-api';
 
 export type {
@@ -38,13 +41,28 @@ export type {
   UrlInspectionResult,
 } from '../../lib/rate-api';
 
-export { getRateClient, computeJReviewsWeight, parseEcommerceUrlOrQuery };
+export {
+  getRateClient,
+  computeJReviewsWeight,
+  parseEcommerceUrlOrQuery,
+  getCategoryRouteHref,
+  getMasterProductHref,
+};
 
 /**
  * Per-request memoized Server Data Layer (React.cache) for Next.js 16 App Router.
  * Prevents duplicate Supabase round-trips when both generateMetadata() and Page()
  * query the same product, merchant, or category facets during a single SSR render pass.
  */
+const _getCachedMasterProductsByKey = cache((serializedParams: string) => {
+  const parsed = JSON.parse(serializedParams) as MasterProductFilterParams;
+  return _getMasterProducts(parsed);
+});
+
+export function getCachedMasterProducts(params?: MasterProductFilterParams) {
+  return _getCachedMasterProductsByKey(JSON.stringify(params ?? {}));
+}
+
 export const getCachedMasterProductBySlug = cache(_getMasterProductBySlug);
 export const getCachedCategoryDirectoryFacets = cache(
   _getCategoryDirectoryFacets

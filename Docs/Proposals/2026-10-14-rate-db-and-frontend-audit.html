@@ -323,9 +323,19 @@
           Xóa toàn bộ các trang mẫu khách sạn/nhà hàng không thuộc Rate.vn để làm sạch App Router và tăng tốc độ build Next.js 16.3.8.
         </li>
         <li>
+          <strong>Đa ngôn ngữ toàn diện (<code>vi</code> / <code>en</code> / <code>cs</code>), Cổng Nhà Phát Triển (<code>/developers</code>) &amp; Xóa 63 Component mẫu ListingHub dư thừa (Issue #20):</strong>
+          Đồng bộ bộ từ điển 3 ngôn ngữ (<code>apps/web/locales/{vi,en,cs}.json</code> + <code>src/lib/rate-i18n.ts</code>), xây dựng Cổng Tài liệu &amp; Sandbox REST API v1 tại <code>/developers</code>, thay thế 4 trang thông tin cốt lõi (<code>/about-us</code>, <code>/faq</code>, <code>/privacy-policy</code>, <code>/contact-us</code>) bằng dữ liệu kiểm toán thực tế và xóa sạch 63 component template không sử dụng.
+        </li>
+        <li>
+          <strong>Hoàn thiện Core 5/5 Ngành hàng (<code>/smartwatches</code>, <code>/earbuds</code>), REST API v1 (<code>/stats</code>, <code>/compare</code>) &amp; Kiểm thử Tự động Core Logic (Issue #21):</strong>
+          Mở rộng toàn diện cả 5 ngành hàng thiết bị công nghệ trong <code>rate.categories</code> (<code>smartphones</code>, <code>tablets</code>, <code>laptops</code>, <code>smartwatches</code>, <code>earbuds</code>) kèm bộ lọc 10 nhóm thông số chuyên biệt và bộ test tự động <code>core-rate-architecture.test.ts</code> chạy trực tiếp trong GitHub Actions CI.
+        </li>
+        <li>
           <strong>Mở rộng REST API v1 phục vụ Web &amp; Browser Extension MV3:</strong>
           <ul>
-            <li><code>GET /api/v1/rate/lookup?q=...</code> - Phân tích link TMĐT hoặc từ khóa tìm kiếm, trả về sản phẩm chuẩn hóa, gian hàng và cảnh báo giá ảo.</li>
+            <li><code>GET /api/v1/rate/stats</code> - Số liệu thống kê kiểm toán trực tiếp toàn nền tảng (Master Products, Listings, Price Points, Verified Reviews, Merchants).</li>
+            <li><code>GET /api/v1/rate/compare?slugs=...</code> - Đối chiếu trực tiếp ma trận 10 nhóm thông số, biên độ giá thật và điểm đánh giá 5 tiêu chí JReviews của tối đa 4 sản phẩm.</li>
+            <li><code>GET /api/v1/rate/lookup?q=...</code> &amp; <code>GET /api/v1/rate/inspect?q=...</code> - Phân tích link TMĐT hoặc từ khóa tìm kiếm, trả về sản phẩm chuẩn hóa, gian hàng và cảnh báo giá ảo.</li>
             <li><code>GET /api/v1/rate/merchants</code> - Danh sách gian hàng kèm điểm tín nhiệm kép và bộ lọc theo sàn/mức độ tin cậy.</li>
             <li><code>GET /api/v1/rate/merchants/[id]</code> - Chi tiết hồ sơ kiểm toán gian hàng theo UUID, slug hoặc <code>platform_shop_id</code>.</li>
             <li><code>POST /api/v1/rate/reviews</code> - Gửi đánh giá 5 tiêu chí JReviews kèm bộ lọc chống Seeding tự động.</li>

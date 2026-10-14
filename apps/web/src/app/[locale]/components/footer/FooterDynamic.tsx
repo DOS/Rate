@@ -56,11 +56,11 @@ export default function FooterDynamic({
       { label: copyDict.footer.links.tablets, href: '/tablets' },
       {
         label: copyDict.footer.links.smartwatches,
-        href: '/smartphones?category=smartwatches',
+        href: '/smartwatches',
       },
       {
         label: copyDict.footer.links.earbuds,
-        href: '/smartphones?category=earbuds',
+        href: '/earbuds',
       },
     ],
   };
