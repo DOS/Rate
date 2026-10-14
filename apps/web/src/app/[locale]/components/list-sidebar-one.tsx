@@ -31,7 +31,9 @@ export default function ListSidebarOne({
     categorySlug,
     brandFacets.map((b) => b.name)
   );
-  const brandCountMap = new Map(brandFacets.map((b) => [b.name.toLowerCase(), b.count]));
+  const brandCountMap = new Map(
+    brandFacets.map((b) => [b.name.toLowerCase(), b.count])
+  );
 
   // Parse active filter state from URL query params
   const currentQ = searchParams?.get('q') || '';
@@ -56,7 +58,8 @@ export default function ListSidebarOne({
         sliderMax,
         Math.max(
           sliderMin,
-          Math.round(Number(searchParams.get('minPrice')) / 1_000_000) || sliderMin
+          Math.round(Number(searchParams.get('minPrice')) / 1_000_000) ||
+            sliderMin
         )
       )
     : sliderMin;
@@ -65,7 +68,8 @@ export default function ListSidebarOne({
         sliderMin,
         Math.min(
           sliderMax,
-          Math.round(Number(searchParams.get('maxPrice')) / 1_000_000) || sliderMax
+          Math.round(Number(searchParams.get('maxPrice')) / 1_000_000) ||
+            sliderMax
         )
       )
     : sliderMax;
@@ -157,7 +161,9 @@ export default function ListSidebarOne({
 
   const handlePricePresetClick = (minVnd?: number, maxVnd?: number) => {
     const isCurrentlySelected =
-      (minVnd ? Number(searchParams?.get('minPrice') || 0) === minVnd : !searchParams?.get('minPrice')) &&
+      (minVnd
+        ? Number(searchParams?.get('minPrice') || 0) === minVnd
+        : !searchParams?.get('minPrice')) &&
       (maxVnd && maxVnd < sliderMax * 1_000_000
         ? Number(searchParams?.get('maxPrice') || 0) === maxVnd
         : !searchParams?.get('maxPrice'));
@@ -234,14 +240,14 @@ export default function ListSidebarOne({
             <h3 className="h5 mb-0">Bộ lọc thông số</h3>
             <button
               type="button"
-              className="btn-close text-sm d-lg-none"
+              className="btn-close d-lg-none text-sm"
               data-bs-dismiss="offcanvas"
               data-bs-target="#filterSlider"
               aria-label="Close"
             ></button>
           </div>
           <div
-            className="offcanvas-body overflow-x-hidden p-4 p-lg-0"
+            className="offcanvas-body p-lg-0 overflow-x-hidden p-4"
             id="filterSliderLabel"
           >
             <div className="searchInner">
@@ -249,10 +255,10 @@ export default function ListSidebarOne({
                 {/* 1. Keyword Search Box */}
                 <div className="filter-search-box mb-4">
                   <div className="filtersearch-title d-flex justify-content-between align-items-center">
-                    <h6 className="mb-2 lh-base text-sm text-uppercase fw-medium">
+                    <h6 className="lh-base text-uppercase fw-medium mb-2 text-sm">
                       Từ khóa &amp; Chipset
                     </h6>
-                    <span className="badge bg-light text-muted border small">
+                    <span className="badge bg-light text-muted small border">
                       {schema.directoryName}
                     </span>
                   </div>
@@ -270,7 +276,7 @@ export default function ListSidebarOne({
                 {/* 2. Rating Filter (JReviews Weighted Score) */}
                 <div className="prtsTypes mb-4">
                   <div className="filtersearch-title">
-                    <h6 className="mb-2 lh-base text-sm text-uppercase fw-medium">
+                    <h6 className="lh-base text-uppercase fw-medium mb-2 text-sm">
                       Điểm đánh giá (JReviews)
                     </h6>
                   </div>
@@ -301,7 +307,7 @@ export default function ListSidebarOne({
                 {categories.length > 0 && (
                   <div className="filter-search-box mb-4">
                     <div className="filtersearch-title">
-                      <h6 className="mb-2 lh-base text-sm text-uppercase fw-medium">
+                      <h6 className="lh-base text-uppercase fw-medium mb-2 text-sm">
                         Danh mục thiết bị (Category)
                       </h6>
                     </div>
@@ -311,7 +317,10 @@ export default function ListSidebarOne({
                           {categories.map((cat) => {
                             const active = cat.slug === categorySlug;
                             return (
-                              <div className="form-checks flex-fill" key={cat.id}>
+                              <div
+                                className="form-checks flex-fill"
+                                key={cat.id}
+                              >
                                 <input
                                   type="radio"
                                   className="btn-check"
@@ -319,11 +328,17 @@ export default function ListSidebarOne({
                                   id={`cat-${cat.slug}`}
                                   checked={active}
                                   onChange={() => {
-                                    updateUrlParams((params) => {
-                                      if (cat.slug === 'smartphones') {
-                                        params.delete('category');
+                                    startTransition(() => {
+                                      if (
+                                        cat.slug === 'smartphones' ||
+                                        cat.slug === 'tablets' ||
+                                        cat.slug === 'laptops'
+                                      ) {
+                                        router.push(`/${cat.slug}`);
                                       } else {
-                                        params.set('category', cat.slug);
+                                        router.push(
+                                          `/smartphones?category=${encodeURIComponent(cat.slug)}`
+                                        );
                                       }
                                     });
                                   }}
@@ -346,13 +361,13 @@ export default function ListSidebarOne({
                 {/* 4. Brands Filter (Multi-select pills) */}
                 <div className="filter-search-box mb-4">
                   <div className="filtersearch-title">
-                    <h6 className="mb-2 lh-base text-sm text-uppercase fw-medium">
+                    <h6 className="lh-base text-uppercase fw-medium mb-2 text-sm">
                       Hãng sản xuất (Brand)
                     </h6>
                   </div>
                   <div className="row align-items-center justify-content-between gy-2">
                     <div className="col-xl-12 col-lg-12 col-md-12">
-                      <div className="d-flex align-items-center justify-content-center flex-wrap gap-2 mb-1">
+                      <div className="d-flex align-items-center justify-content-center mb-1 flex-wrap gap-2">
                         {schema.defaultBrands.map((brand) => {
                           const checked = currentBrands.some(
                             (b) => b.toLowerCase() === brand.toLowerCase()
@@ -366,7 +381,9 @@ export default function ListSidebarOne({
                                 className="btn-check"
                                 id={inputId}
                                 checked={checked}
-                                onChange={() => toggleMultiString('brands', brand)}
+                                onChange={() =>
+                                  toggleMultiString('brands', brand)
+                                }
                               />
                               <label
                                 className="btn btn-sm btn-secondary rounded-1 fw-medium full-width"
@@ -388,19 +405,22 @@ export default function ListSidebarOne({
                 {/* 5. Price Range in Million VND (Presets + rc-slider RangeSlider) */}
                 <div className="filter-search-box mb-4">
                   <div className="filtersearch-title">
-                    <h6 className="mb-2 lh-base text-sm text-uppercase fw-medium">
+                    <h6 className="lh-base text-uppercase fw-medium mb-2 text-sm">
                       Khoảng giá (Triệu VNĐ)
                     </h6>
                   </div>
-                  <div className="d-flex align-items-center justify-content-center flex-wrap gap-2 mb-3">
+                  <div className="d-flex align-items-center justify-content-center mb-3 flex-wrap gap-2">
                     {schema.pricePresets.map((preset) => {
                       const active =
                         (preset.minVnd
-                          ? Number(searchParams?.get('minPrice') || 0) === preset.minVnd
+                          ? Number(searchParams?.get('minPrice') || 0) ===
+                            preset.minVnd
                           : !searchParams?.get('minPrice')) &&
                         (preset.maxVnd && preset.maxVnd < sliderMax * 1_000_000
-                          ? Number(searchParams?.get('maxPrice') || 0) === preset.maxVnd
-                          : !searchParams?.get('maxPrice') && Boolean(preset.minVnd));
+                          ? Number(searchParams?.get('maxPrice') || 0) ===
+                            preset.maxVnd
+                          : !searchParams?.get('maxPrice') &&
+                            Boolean(preset.minVnd));
                       return (
                         <div className="form-checks flex-fill" key={preset.id}>
                           <input
@@ -409,7 +429,10 @@ export default function ListSidebarOne({
                             id={`price-${preset.id}`}
                             checked={active}
                             onChange={() =>
-                              handlePricePresetClick(preset.minVnd, preset.maxVnd)
+                              handlePricePresetClick(
+                                preset.minVnd,
+                                preset.maxVnd
+                              )
                             }
                           />
                           <label
@@ -440,7 +463,7 @@ export default function ListSidebarOne({
                 {/* 6. Hardware: RAM Filter */}
                 <div className="filter-search-box mb-4">
                   <div className="filtersearch-title">
-                    <h6 className="mb-2 lh-base text-sm text-uppercase fw-medium">
+                    <h6 className="lh-base text-uppercase fw-medium mb-2 text-sm">
                       Dung lượng RAM (Hardware)
                     </h6>
                   </div>
@@ -472,7 +495,7 @@ export default function ListSidebarOne({
                 {/* 7. Hardware: Storage (ROM) Filter */}
                 <div className="filter-search-box mb-4">
                   <div className="filtersearch-title">
-                    <h6 className="mb-2 lh-base text-sm text-uppercase fw-medium">
+                    <h6 className="lh-base text-uppercase fw-medium mb-2 text-sm">
                       Bộ nhớ trong (ROM)
                     </h6>
                   </div>
@@ -504,7 +527,7 @@ export default function ListSidebarOne({
                 {/* 8. 10 Field Groups Feature Checkboxes (Display, Battery, Cellular, Connectivity) */}
                 <div className="filter-search-box mb-4">
                   <div className="filtersearch-title">
-                    <h6 className="mb-2 lh-base text-sm text-uppercase fw-medium">
+                    <h6 className="lh-base text-uppercase fw-medium mb-2 text-sm">
                       Tính năng nổi bật (10 Field Groups)
                     </h6>
                   </div>
@@ -533,7 +556,7 @@ export default function ListSidebarOne({
                 </div>
 
                 {/* 9. Submit / Reset Actions */}
-                <div className="form-group filter_button mb-0 d-grid gap-2">
+                <div className="form-group filter_button d-grid mb-0 gap-2">
                   <button
                     type="submit"
                     className="btn btn-primary fw-medium full-width"
@@ -545,7 +568,7 @@ export default function ListSidebarOne({
                     <button
                       type="button"
                       onClick={handleResetAll}
-                      className="btn btn-light border fw-medium full-width text-muted"
+                      className="btn btn-light fw-medium full-width text-muted border"
                     >
                       Xóa tất cả bộ lọc
                     </button>

@@ -78,6 +78,7 @@ function parseCsvNumbers(val: string | string[] | undefined): number[] {
 }
 
 function buildFilterHref(
+  basePath: string,
   currentSearch: SearchParamsInput,
   overrides: Record<string, string | null | undefined>
 ): string {
@@ -96,7 +97,7 @@ function buildFilterHref(
     }
   }
   const qs = params.toString();
-  return qs ? `/smartphones?${qs}` : '/smartphones';
+  return qs ? `${basePath}?${qs}` : basePath;
 }
 
 interface ActiveFilterChip {
@@ -105,17 +106,19 @@ interface ActiveFilterChip {
   removeHref: string;
 }
 
-export default async function SmartphonesCatalogPage({
-  params,
-  searchParams,
+export async function CategoryCatalogContent({
+  locale,
+  rawSearch,
+  defaultCategorySlug = 'smartphones',
+  basePath = '/smartphones',
 }: {
-  params: Promise<{ locale: string }>;
-  searchParams: Promise<SearchParamsInput>;
+  locale: string;
+  rawSearch: SearchParamsInput;
+  defaultCategorySlug?: string;
+  basePath?: string;
 }) {
-  const { locale } = await params;
-  const rawSearch = await searchParams;
-
-  const categorySlug = getSingleParam(rawSearch.category) || 'smartphones';
+  const categorySlug =
+    getSingleParam(rawSearch.category) || defaultCategorySlug;
   const q = getSingleParam(rawSearch.q).trim();
   const brands = parseCsvStrings(rawSearch.brands);
   const singleBrand = getSingleParam(rawSearch.brand).trim();
@@ -150,7 +153,11 @@ export default async function SmartphonesCatalogPage({
     minRating: minRating > 0 ? minRating : undefined,
     ramGb: ramGb.length > 0 ? ramGb : undefined,
     storageGb: storageGb.length > 0 ? storageGb : undefined,
-    minBatteryMah: bigBattery ? 5000 : undefined,
+    minBatteryMah: bigBattery
+      ? categorySlug === 'tablets'
+        ? 8000
+        : 5000
+      : undefined,
     minRefreshRateHz: highRefresh ? 120 : undefined,
     minFastChargingW: fastCharge ? 45 : undefined,
     has5g: has5g ? true : undefined,
@@ -176,7 +183,7 @@ export default async function SmartphonesCatalogPage({
     activeChips.push({
       id: 'q',
       label: `Từ khóa: "${q}"`,
-      removeHref: buildFilterHref(rawSearch, { q: null }),
+      removeHref: buildFilterHref(basePath, rawSearch, { q: null }),
     });
   }
 
@@ -187,7 +194,7 @@ export default async function SmartphonesCatalogPage({
     activeChips.push({
       id: `brand-${b}`,
       label: `Hãng: ${b}`,
-      removeHref: buildFilterHref(rawSearch, {
+      removeHref: buildFilterHref(basePath, rawSearch, {
         brands: nextBrands.length > 0 ? nextBrands.join(',') : null,
         brand: null,
       }),
@@ -198,7 +205,7 @@ export default async function SmartphonesCatalogPage({
     activeChips.push({
       id: 'rating',
       label: `★ ${minRating.toFixed(1)}+`,
-      removeHref: buildFilterHref(rawSearch, { rating: null }),
+      removeHref: buildFilterHref(basePath, rawSearch, { rating: null }),
     });
   }
 
@@ -211,7 +218,7 @@ export default async function SmartphonesCatalogPage({
     activeChips.push({
       id: 'price',
       label: `Giá: ${minM} - ${maxM}`,
-      removeHref: buildFilterHref(rawSearch, {
+      removeHref: buildFilterHref(basePath, rawSearch, {
         minPrice: null,
         maxPrice: null,
       }),
@@ -223,7 +230,7 @@ export default async function SmartphonesCatalogPage({
     activeChips.push({
       id: `ram-${r}`,
       label: `RAM ${r}GB`,
-      removeHref: buildFilterHref(rawSearch, {
+      removeHref: buildFilterHref(basePath, rawSearch, {
         ram: nextRam.length > 0 ? nextRam.join(',') : null,
       }),
     });
@@ -234,7 +241,7 @@ export default async function SmartphonesCatalogPage({
     activeChips.push({
       id: `rom-${s}`,
       label: `ROM ${formatStorageLabel(s)}`,
-      removeHref: buildFilterHref(rawSearch, {
+      removeHref: buildFilterHref(basePath, rawSearch, {
         storage: nextStorage.length > 0 ? nextStorage.join(',') : null,
       }),
     });
@@ -255,7 +262,7 @@ export default async function SmartphonesCatalogPage({
     activeChips.push({
       id: `feat-${flag.key}`,
       label: def ? def.label : flag.key,
-      removeHref: buildFilterHref(rawSearch, { [flag.key]: null }),
+      removeHref: buildFilterHref(basePath, rawSearch, { [flag.key]: null }),
     });
   }
 
@@ -301,12 +308,10 @@ export default async function SmartphonesCatalogPage({
             <div className="col-xl-11 col-lg-12 col-md-12 col-12">
               <form
                 method="GET"
-                action={
-                  locale === 'vi' ? '/smartphones' : `/${locale}/smartphones`
-                }
+                action={locale === 'vi' ? basePath : `/${locale}${basePath}`}
                 className="heroSearch style-01 shadow-sm"
               >
-                {categorySlug !== 'smartphones' && (
+                {categorySlug !== defaultCategorySlug && (
                   <input type="hidden" name="category" value={categorySlug} />
                 )}
                 {sortParam !== 'default' && (
@@ -462,9 +467,9 @@ export default async function SmartphonesCatalogPage({
                       <div className="clearList ms-2">
                         <Link
                           href={
-                            categorySlug !== 'smartphones'
-                              ? `/smartphones?category=${categorySlug}`
-                              : '/smartphones'
+                            categorySlug !== defaultCategorySlug
+                              ? `${basePath}?category=${categorySlug}`
+                              : basePath
                           }
                           className="fw-medium text-primary text-md"
                         >
@@ -519,7 +524,7 @@ export default async function SmartphonesCatalogPage({
                           {SORT_OPTIONS.map((opt) => (
                             <li key={opt.value}>
                               <Link
-                                href={buildFilterHref(rawSearch, {
+                                href={buildFilterHref(basePath, rawSearch, {
                                   sort:
                                     opt.value === 'default' ? null : opt.value,
                                 })}
@@ -544,18 +549,37 @@ export default async function SmartphonesCatalogPage({
               {products.length === 0 ? (
                 <div className="card rounded-4 bg-light border-0 p-5 text-center shadow-sm">
                   <h5 className="fw-bold mb-2">
-                    Không tìm thấy sản phẩm khớp với bộ lọc hiện tại
+                    {facets.totalUnfiltered === 0
+                      ? `Danh mục "${schema.categoryTitle}" đang chờ đồng bộ dữ liệu sản phẩm mới`
+                      : 'Không tìm thấy sản phẩm khớp với bộ lọc hiện tại'}
                   </h5>
                   <p className="text-muted mb-3">
-                    Hãy thử nới lỏng khoảng giá hoặc bỏ bớt một vài tiêu chí
-                    phần cứng để xem thêm các dòng máy khác.
+                    {facets.totalUnfiltered === 0
+                      ? `Bộ khung chuẩn hóa 10 nhóm thông số cho ${schema.categoryTitle} (${schema.defaultBrands.join(', ')}) đã sẵn sàng. Trong lúc chờ đội ngũ Crawler nạp thêm dữ liệu danh mục này, bạn có thể khám phá danh mục Điện thoại hoặc Bảng so sánh.`
+                      : 'Hãy thử nới lỏng khoảng giá hoặc bỏ bớt một vài tiêu chí phần cứng để xem thêm các dòng máy khác.'}
                   </p>
-                  <div>
+                  <div className="d-flex justify-content-center flex-wrap gap-2">
+                    {activeChips.length > 0 && (
+                      <Link
+                        href={basePath}
+                        className="btn btn-primary rounded-pill fw-medium px-4"
+                      >
+                        Đặt lại bộ lọc
+                      </Link>
+                    )}
+                    {categorySlug !== 'smartphones' && (
+                      <Link
+                        href="/smartphones"
+                        className="btn btn-primary rounded-pill fw-medium px-4"
+                      >
+                        Xem danh mục Điện thoại đang có sẵn →
+                      </Link>
+                    )}
                     <Link
-                      href="/smartphones"
-                      className="btn btn-primary rounded-pill fw-medium px-4"
+                      href="/merchants"
+                      className="btn btn-outline-dark rounded-pill fw-medium px-4"
                     >
-                      Đặt lại bộ lọc
+                      Hồ sơ Tín nhiệm Gian hàng
                     </Link>
                   </div>
                 </div>
@@ -803,5 +827,24 @@ export default async function SmartphonesCatalogPage({
       <FooterDynamic sections={[]} links={[]} locale={locale} />
       <BackToTop />
     </>
+  );
+}
+
+export default async function SmartphonesCatalogPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ locale: string }>;
+  searchParams: Promise<SearchParamsInput>;
+}) {
+  const { locale } = await params;
+  const rawSearch = await searchParams;
+  return (
+    <CategoryCatalogContent
+      locale={locale}
+      rawSearch={rawSearch}
+      defaultCategorySlug="smartphones"
+      basePath="/smartphones"
+    />
   );
 }

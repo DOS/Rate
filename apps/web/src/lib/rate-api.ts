@@ -1180,3 +1180,1130 @@ export async function getMasterProductPriceHistory(
     genuineDealCount,
   };
 }
+
+export interface MerchantRiskBreakdown {
+  total_reviews: number;
+  authentic_count: number;
+  coin_spam_count: number;
+  seeding_fake_count: number;
+  sabotage_or_bombing_count: number;
+  suspicious_ratio_pct: number;
+}
+
+export interface MerchantSummary {
+  id: string;
+  platform: string;
+  platform_shop_id: string;
+  name: string;
+  slug: string | null;
+  url: string | null;
+  is_official: boolean;
+  rating_star: number | null;
+  follower_count: number;
+  location: string | null;
+  dosafe_risk_score: number;
+  review_risk_score: number;
+  risk_score: number;
+  trust_score: number;
+  product_count: number;
+  min_price: number | null;
+  max_price: number | null;
+  review_risk_breakdown: MerchantRiskBreakdown;
+  updated_at: string | null;
+}
+
+export interface MerchantProductListing {
+  id: string;
+  platform: string;
+  platform_item_id: string;
+  title: string;
+  price_current: number;
+  price_original: number | null;
+  stock: number;
+  historical_sold: number;
+  rating_star: number;
+  rating_count: number;
+  url: string;
+  image: string | null;
+  master_product: {
+    id: string;
+    slug: string;
+    name: string;
+    brand: string;
+    category_slug: string;
+    market_min_price: number;
+    market_max_price: number;
+    merchant_count: number;
+  } | null;
+  discount_analysis: OfferDiscountAnalysis | null;
+}
+
+export interface MerchantProfileDetail extends MerchantSummary {
+  listings: MerchantProductListing[];
+  recent_reviews: Array<
+    ReviewItem & {
+      product_id: string;
+      product_title: string;
+      master_slug: string | null;
+    }
+  >;
+}
+
+export interface RatePlatformStats {
+  masterProductsCount: number;
+  listingsCount: number;
+  merchantsCount: number;
+  priceObservationsCount: number;
+  totalReviewsCount: number;
+  authenticReviewsCount: number;
+  filteredSeedingCount: number;
+  authenticRatioPct: number;
+  categoriesWithCounts: Array<
+    RateCategoryItem & {
+      productCount: number;
+      routeHref: string;
+    }
+  >;
+  recentReviewsSample: Array<
+    ReviewItem & {
+      productTitle: string;
+      masterSlug: string | null;
+    }
+  >;
+}
+
+interface RawMerchantSafeRow {
+  id: string;
+  platform: string;
+  platform_shop_id: string;
+  name: string;
+  slug?: string | null;
+  url?: string | null;
+  is_official?: boolean | null;
+  rating_star?: number | string | null;
+  follower_count?: number | string | null;
+  location?: string | null;
+  risk_score?: number | string | null;
+  metadata?: Record<string, unknown> | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+interface RawProductRow {
+  id: string;
+  merchant_id: string;
+  platform: string;
+  platform_item_id: string;
+  title: string;
+  price_current: number | string;
+  price_original?: number | string | null;
+  stock?: number | null;
+  historical_sold?: number | null;
+  rating_star?: number | string | null;
+  rating_count?: number | null;
+  images?: string[] | null;
+  url: string;
+  cluster_id?: string | null;
+}
+
+function getCategoryRouteHref(slug: string): string {
+  if (slug === 'smartphones' || slug === 'tablets' || slug === 'laptops') {
+    return `/${slug}`;
+  }
+  return `/smartphones?category=${encodeURIComponent(slug)}`;
+}
+
+function computeDynamicReviewRisk(reviews: ReviewItem[]): {
+  reviewRiskScore: number;
+  breakdown: MerchantRiskBreakdown;
+} {
+  const total = reviews.length;
+  if (total === 0) {
+    return {
+      reviewRiskScore: 0,
+      breakdown: {
+        total_reviews: 0,
+        authentic_count: 0,
+        coin_spam_count: 0,
+        seeding_fake_count: 0,
+        sabotage_or_bombing_count: 0,
+        suspicious_ratio_pct: 0,
+      },
+    };
+  }
+
+  let authentic = 0;
+  let coinSpam = 0;
+  let seedingFake = 0;
+  let sabotageOrBombing = 0;
+
+  for (const r of reviews) {
+    if (r.flag_category === 'seeding_fake' || r.verdict === 'fake') {
+      seedingFake += 1;
+    } else if (
+      r.flag_category === 'competitor_sabotage' ||
+      r.flag_category === 'review_bombing'
+    ) {
+      sabotageOrBombing += 1;
+    } else if (
+      r.flag_category === 'low_value_coin_spam' ||
+      !r.include_in_rating
+    ) {
+      coinSpam += 1;
+    } else {
+      authentic += 1;
+    }
+  }
+
+  const flaggedTotal = coinSpam + seedingFake + sabotageOrBombing;
+  const suspiciousRatioPct = Math.round((flaggedTotal / total) * 1000) / 10;
+
+  // Weighted risk formula matching Rate review risk engine:
+  // seeding_fake carries heavy weight (1.0), coin_spam moderate (0.35), sabotage (0.5)
+  const weightedPenalty =
+    (seedingFake * 1.0 + coinSpam * 0.35 + sabotageOrBombing * 0.5) / total;
+  const reviewRiskScore = Math.min(
+    100,
+    Math.max(0, Math.round(weightedPenalty * 100))
+  );
+
+  return {
+    reviewRiskScore,
+    breakdown: {
+      total_reviews: total,
+      authentic_count: authentic,
+      coin_spam_count: coinSpam,
+      seeding_fake_count: seedingFake,
+      sabotage_or_bombing_count: sabotageOrBombing,
+      suspicious_ratio_pct: suspiciousRatioPct,
+    },
+  };
+}
+
+/**
+ * Fetch all tracked merchants with computed Dual Risk Scores (DOSafe + AI Review Risk)
+ * and active listing statistics. Uses explicit non-PII column selection.
+ */
+export async function getMerchantsList(params?: {
+  platform?: string;
+  officialOnly?: boolean;
+  limit?: number;
+}): Promise<MerchantSummary[]> {
+  const supabase = getRateClient();
+
+  let mQuery = supabase
+    .from('merchants')
+    .select(
+      'id, platform, platform_shop_id, name, slug, url, is_official, rating_star, follower_count, location, risk_score, metadata, updated_at'
+    )
+    .order('is_official', { ascending: false })
+    .order('follower_count', { ascending: false });
+
+  if (params?.platform) {
+    mQuery = mQuery.eq('platform', params.platform);
+  }
+  if (params?.officialOnly) {
+    mQuery = mQuery.eq('is_official', true);
+  }
+  if (params?.limit && params.limit > 0) {
+    mQuery = mQuery.limit(params.limit);
+  }
+
+  const [{ data: merchantRows }, { data: prodRows }, { data: reviewRows }] =
+    await Promise.all([
+      mQuery,
+      supabase.from('products').select('id, merchant_id, price_current'),
+      supabase
+        .from('reviews')
+        .select('*, review_flags(*)')
+        .order('created_at', { ascending: false })
+        .limit(200),
+    ]);
+
+  const merchants = (merchantRows as unknown as RawMerchantSafeRow[]) || [];
+  if (merchants.length === 0) return [];
+
+  const products =
+    (prodRows as Array<{
+      id: string;
+      merchant_id: string;
+      price_current: number | string;
+    }>) || [];
+
+  const prodToMerchant = new Map<string, string>();
+  const prodsByMerchant = new Map<string, number[]>();
+
+  for (const p of products) {
+    prodToMerchant.set(p.id, p.merchant_id);
+    const list = prodsByMerchant.get(p.merchant_id) ?? [];
+    const price = Number(p.price_current || 0);
+    if (price > 0) list.push(price);
+    prodsByMerchant.set(p.merchant_id, list);
+  }
+
+  const mappedReviewsByMerchant = new Map<string, ReviewItem[]>();
+  for (const r of (reviewRows as unknown as Array<
+    RawReviewRow & { product_id: string }
+  >) || []) {
+    const mId = prodToMerchant.get(r.product_id);
+    if (!mId) continue;
+    const vf = Array.isArray(r.review_flags)
+      ? r.review_flags[0]
+      : r.review_flags;
+    const verdict = vf?.verdict ?? null;
+    const flagCategory: ReviewFlagCategory =
+      vf?.flag_category ||
+      (verdict === 'fake'
+        ? 'seeding_fake'
+        : verdict === 'suspicious'
+          ? 'low_value_coin_spam'
+          : 'authentic');
+    const includeInRating = Boolean(
+      vf?.include_in_rating ??
+      (flagCategory === 'authentic' && verdict !== 'fake')
+    );
+    const upvotes = Number(r.upvotes ?? 0);
+    const downvotes = Number(r.downvotes ?? 0);
+    const reports = Number(r.report_count ?? 0);
+
+    const item: ReviewItem = {
+      id: r.id,
+      author_name: r.author_name || 'Khách hàng',
+      rating_star: Number(r.rating_star || 5),
+      comment: r.comment || '',
+      variation: r.variation || null,
+      created_at: r.created_at,
+      reviewer_type: r.reviewer_type === 'expert' ? 'expert' : 'user',
+      upvotes,
+      downvotes,
+      report_count: reports,
+      helpfulness_weight: includeInRating
+        ? Number(r.helpfulness_weight ?? 1)
+        : 0,
+      include_in_rating: includeInRating,
+      criteria_ratings: r.criteria_ratings || {},
+      verdict,
+      fake_probability:
+        vf?.fake_probability != null ? Number(vf.fake_probability) : null,
+      flag_category: flagCategory,
+      reason: vf?.reason || null,
+      signals: vf?.signals || null,
+    };
+
+    const existing = mappedReviewsByMerchant.get(mId) ?? [];
+    existing.push(item);
+    mappedReviewsByMerchant.set(mId, existing);
+  }
+
+  return merchants.map((m) => {
+    const prices = prodsByMerchant.get(m.id) ?? [];
+    const mReviews = mappedReviewsByMerchant.get(m.id) ?? [];
+    const { reviewRiskScore, breakdown } = computeDynamicReviewRisk(mReviews);
+    const dosafeRisk = Number(m.risk_score || 0);
+    const combinedRisk = Math.min(100, Math.max(dosafeRisk, reviewRiskScore));
+    const trustScore = Math.max(0, 100 - combinedRisk);
+
+    return {
+      id: m.id,
+      platform: m.platform,
+      platform_shop_id: m.platform_shop_id,
+      name: m.name,
+      slug: m.slug || null,
+      url:
+        m.url ||
+        (m.platform === 'shopee' && m.platform_shop_id
+          ? `https://shopee.vn/shop/${m.platform_shop_id}`
+          : null),
+      is_official: Boolean(m.is_official),
+      rating_star: m.rating_star != null ? Number(m.rating_star) : null,
+      follower_count: Number(m.follower_count || 0),
+      location: m.location || null,
+      dosafe_risk_score: dosafeRisk,
+      review_risk_score: reviewRiskScore,
+      risk_score: combinedRisk,
+      trust_score: trustScore,
+      product_count: prices.length,
+      min_price: prices.length > 0 ? Math.min(...prices) : null,
+      max_price: prices.length > 0 ? Math.max(...prices) : null,
+      review_risk_breakdown: breakdown,
+      updated_at: m.updated_at || m.created_at || null,
+    };
+  });
+}
+
+/**
+ * Fetch detailed profile for a single Merchant by UUID id, slug, or platform_shop_id,
+ * including all listings with Fake Discount verdicts and buyer reviews with AI flags.
+ */
+export async function getMerchantProfileById(
+  idOrSlug: string
+): Promise<MerchantProfileDetail | null> {
+  const cleaned = idOrSlug.trim();
+  if (!cleaned) return null;
+
+  const supabase = getRateClient();
+  const isUuid =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      cleaned
+    );
+
+  const selectCols =
+    'id, platform, platform_shop_id, name, slug, url, is_official, rating_star, follower_count, location, risk_score, metadata, created_at, updated_at';
+
+  let merchantRow: RawMerchantSafeRow | null = null;
+
+  if (isUuid) {
+    const { data } = await supabase
+      .from('merchants')
+      .select(selectCols)
+      .eq('id', cleaned)
+      .maybeSingle();
+    merchantRow = (data as unknown as RawMerchantSafeRow) || null;
+  }
+
+  if (!merchantRow) {
+    const { data } = await supabase
+      .from('merchants')
+      .select(selectCols)
+      .or(`slug.eq.${cleaned},platform_shop_id.eq.${cleaned}`)
+      .limit(1)
+      .maybeSingle();
+    merchantRow = (data as unknown as RawMerchantSafeRow) || null;
+  }
+
+  if (!merchantRow) {
+    return null;
+  }
+
+  const { data: prodRows } = await supabase
+    .from('products')
+    .select(
+      'id, merchant_id, platform, platform_item_id, title, price_current, price_original, stock, historical_sold, rating_star, rating_count, images, url, cluster_id'
+    )
+    .eq('merchant_id', merchantRow.id)
+    .order('price_current', { ascending: true });
+
+  const rawProducts = (prodRows as unknown as RawProductRow[]) || [];
+  const clusterIds = Array.from(
+    new Set(rawProducts.map((p) => p.cluster_id).filter(Boolean))
+  ) as string[];
+  const productIds = rawProducts.map((p) => p.id);
+
+  const [masterRes, catsRes, reviewsRes] = await Promise.all([
+    clusterIds.length > 0
+      ? supabase
+          .from('master_products')
+          .select(
+            'id, slug, name, brand, category_id, min_price, max_price, merchant_count'
+          )
+          .in('id', clusterIds)
+      : Promise.resolve({ data: [] }),
+    supabase.from('categories').select('id, slug'),
+    productIds.length > 0
+      ? supabase
+          .from('reviews')
+          .select('*, review_flags(*)')
+          .in('product_id', productIds)
+          .order('created_at', { ascending: false })
+          .limit(60)
+      : Promise.resolve({ data: [] }),
+  ]);
+
+  const catSlugById = new Map<string, string>();
+  for (const c of (catsRes.data || []) as Array<{ id: string; slug: string }>) {
+    catSlugById.set(c.id, c.slug);
+  }
+
+  const masterById = new Map<
+    string,
+    {
+      id: string;
+      slug: string;
+      name: string;
+      brand: string;
+      category_slug: string;
+      market_min_price: number;
+      market_max_price: number;
+      merchant_count: number;
+    }
+  >();
+
+  for (const m of (masterRes.data || []) as Array<{
+    id: string;
+    slug: string;
+    name: string;
+    brand: string;
+    category_id: string | null;
+    min_price: number | string;
+    max_price: number | string;
+    merchant_count: number | null;
+  }>) {
+    masterById.set(m.id, {
+      id: m.id,
+      slug: m.slug,
+      name: m.name,
+      brand: m.brand,
+      category_slug:
+        (m.category_id && catSlugById.get(m.category_id)) || 'smartphones',
+      market_min_price: Number(m.min_price || 0),
+      market_max_price: Number(m.max_price || 0),
+      merchant_count: Number(m.merchant_count || 1),
+    });
+  }
+
+  // Compute price history / Fake Discount analysis per master product
+  const discountByOfferId = new Map<string, OfferDiscountAnalysis>();
+  await Promise.all(
+    clusterIds.map(async (cId) => {
+      try {
+        const ph = await getMasterProductPriceHistory(cId);
+        for (const [offerId, analysis] of Object.entries(ph.byOffer)) {
+          discountByOfferId.set(offerId, analysis);
+        }
+      } catch {
+        // Ignore individual history errors
+      }
+    })
+  );
+
+  const listings: MerchantProductListing[] = rawProducts.map((p) => {
+    const masterInfo = p.cluster_id
+      ? masterById.get(p.cluster_id) || null
+      : null;
+    return {
+      id: p.id,
+      platform: p.platform,
+      platform_item_id: p.platform_item_id,
+      title: p.title,
+      price_current: Number(p.price_current || 0),
+      price_original:
+        p.price_original != null && Number(p.price_original) > 0
+          ? Number(p.price_original)
+          : null,
+      stock: Number(p.stock || 0),
+      historical_sold: Number(p.historical_sold || 0),
+      rating_star: Number(p.rating_star || 0),
+      rating_count: Number(p.rating_count || 0),
+      url: p.url,
+      image: p.images && p.images.length > 0 ? p.images[0] || null : null,
+      master_product: masterInfo,
+      discount_analysis: discountByOfferId.get(p.id) || null,
+    };
+  });
+
+  const prodById = new Map(listings.map((l) => [l.id, l]));
+  const recentReviews: MerchantProfileDetail['recent_reviews'] = (
+    (reviewsRes.data || []) as unknown as Array<
+      RawReviewRow & { product_id: string }
+    >
+  ).map((r) => {
+    const vf = Array.isArray(r.review_flags)
+      ? r.review_flags[0]
+      : r.review_flags;
+    const verdict = vf?.verdict ?? null;
+    const flagCategory: ReviewFlagCategory =
+      vf?.flag_category ||
+      (verdict === 'fake'
+        ? 'seeding_fake'
+        : verdict === 'suspicious'
+          ? 'low_value_coin_spam'
+          : 'authentic');
+    const includeInRating = Boolean(
+      vf?.include_in_rating ??
+      (flagCategory === 'authentic' && verdict !== 'fake')
+    );
+    const upvotes = Number(r.upvotes ?? 0);
+    const downvotes = Number(r.downvotes ?? 0);
+    const reports = Number(r.report_count ?? 0);
+    const computedWeight =
+      r.helpfulness_weight != null
+        ? Number(r.helpfulness_weight)
+        : computeJReviewsWeight({
+            upvotes,
+            downvotes,
+            reports,
+            flagCategory,
+            verdict,
+            includeInRating,
+          });
+    const prod = prodById.get(r.product_id);
+
+    return {
+      id: r.id,
+      product_id: r.product_id,
+      product_title: prod?.title || 'Sản phẩm niêm yết',
+      master_slug: prod?.master_product?.slug || null,
+      author_name: r.author_name || 'Khách hàng',
+      rating_star: Number(r.rating_star || 5),
+      comment: r.comment || '',
+      variation: r.variation || null,
+      created_at: r.created_at,
+      reviewer_type: r.reviewer_type === 'expert' ? 'expert' : 'user',
+      upvotes,
+      downvotes,
+      report_count: reports,
+      helpfulness_weight: includeInRating ? computedWeight : 0,
+      include_in_rating: includeInRating,
+      criteria_ratings: r.criteria_ratings || {},
+      verdict,
+      fake_probability:
+        vf?.fake_probability != null ? Number(vf.fake_probability) : null,
+      flag_category: flagCategory,
+      reason: vf?.reason || null,
+      signals: vf?.signals || null,
+    };
+  });
+
+  const { reviewRiskScore, breakdown } =
+    computeDynamicReviewRisk(recentReviews);
+  const dosafeRisk = Number(merchantRow.risk_score || 0);
+  const combinedRisk = Math.min(100, Math.max(dosafeRisk, reviewRiskScore));
+  const trustScore = Math.max(0, 100 - combinedRisk);
+  const prices = listings.map((l) => l.price_current).filter((p) => p > 0);
+
+  return {
+    id: merchantRow.id,
+    platform: merchantRow.platform,
+    platform_shop_id: merchantRow.platform_shop_id,
+    name: merchantRow.name,
+    slug: merchantRow.slug || null,
+    url:
+      merchantRow.url ||
+      (merchantRow.platform === 'shopee' && merchantRow.platform_shop_id
+        ? `https://shopee.vn/shop/${merchantRow.platform_shop_id}`
+        : null),
+    is_official: Boolean(merchantRow.is_official),
+    rating_star:
+      merchantRow.rating_star != null ? Number(merchantRow.rating_star) : null,
+    follower_count: Number(merchantRow.follower_count || 0),
+    location: merchantRow.location || null,
+    dosafe_risk_score: dosafeRisk,
+    review_risk_score: reviewRiskScore,
+    risk_score: combinedRisk,
+    trust_score: trustScore,
+    product_count: listings.length,
+    min_price: prices.length > 0 ? Math.min(...prices) : null,
+    max_price: prices.length > 0 ? Math.max(...prices) : null,
+    review_risk_breakdown: breakdown,
+    updated_at: merchantRow.updated_at || merchantRow.created_at || null,
+    listings,
+    recent_reviews: recentReviews,
+  };
+}
+
+/**
+ * Fetch live platform statistics, category product counts, and recent verified/flagged
+ * reviews from the `rate` schema to power the Homepage with 100% real database data.
+ */
+export async function getRatePlatformStats(): Promise<RatePlatformStats> {
+  const supabase = getRateClient();
+
+  const [
+    catsRes,
+    masterRes,
+    prodsRes,
+    merchantsRes,
+    priceHistCountRes,
+    reviewsRes,
+  ] = await Promise.all([
+    supabase
+      .from('categories')
+      .select('id, parent_id, name, slug, icon, display_order')
+      .order('display_order', { ascending: true }),
+    supabase
+      .from('master_products')
+      .select('id, slug, name, category_id')
+      .eq('status', 'published'),
+    supabase.from('products').select('id, title, cluster_id'),
+    supabase.from('merchants').select('id', { count: 'exact', head: true }),
+    supabase.from('price_history').select('id', { count: 'exact', head: true }),
+    supabase
+      .from('reviews')
+      .select('*, review_flags(*)')
+      .order('created_at', { ascending: false })
+      .limit(60),
+  ]);
+
+  const categories = (catsRes.data as RateCategoryItem[]) || [];
+  const masterRows =
+    (masterRes.data as Array<{
+      id: string;
+      slug: string;
+      name: string;
+      category_id: string | null;
+    }>) || [];
+  const prodRows =
+    (prodsRes.data as Array<{
+      id: string;
+      title: string;
+      cluster_id: string | null;
+    }>) || [];
+
+  const countByCatId = new Map<string, number>();
+  const masterSlugById = new Map<string, string>();
+  for (const m of masterRows) {
+    masterSlugById.set(m.id, m.slug);
+    if (m.category_id) {
+      countByCatId.set(
+        m.category_id,
+        (countByCatId.get(m.category_id) || 0) + 1
+      );
+    }
+  }
+
+  const prodInfoById = new Map<
+    string,
+    { title: string; masterSlug: string | null }
+  >();
+  for (const p of prodRows) {
+    prodInfoById.set(p.id, {
+      title: p.title,
+      masterSlug: p.cluster_id
+        ? masterSlugById.get(p.cluster_id) || null
+        : null,
+    });
+  }
+
+  const rawReviews =
+    (reviewsRes.data as unknown as Array<
+      RawReviewRow & { product_id: string }
+    >) || [];
+  let authenticCount = 0;
+  let filteredCount = 0;
+
+  const mappedReviews: RatePlatformStats['recentReviewsSample'] =
+    rawReviews.map((r) => {
+      const vf = Array.isArray(r.review_flags)
+        ? r.review_flags[0]
+        : r.review_flags;
+      const verdict = vf?.verdict ?? null;
+      const flagCategory: ReviewFlagCategory =
+        vf?.flag_category ||
+        (verdict === 'fake'
+          ? 'seeding_fake'
+          : verdict === 'suspicious'
+            ? 'low_value_coin_spam'
+            : 'authentic');
+      const includeInRating = Boolean(
+        vf?.include_in_rating ??
+        (flagCategory === 'authentic' && verdict !== 'fake')
+      );
+      if (includeInRating) {
+        authenticCount += 1;
+      } else {
+        filteredCount += 1;
+      }
+      const pInfo = prodInfoById.get(r.product_id);
+      return {
+        id: r.id,
+        author_name: r.author_name || 'Khách hàng',
+        rating_star: Number(r.rating_star || 5),
+        comment: r.comment || '',
+        variation: r.variation || null,
+        created_at: r.created_at,
+        reviewer_type: r.reviewer_type === 'expert' ? 'expert' : 'user',
+        upvotes: Number(r.upvotes ?? 0),
+        downvotes: Number(r.downvotes ?? 0),
+        report_count: Number(r.report_count ?? 0),
+        helpfulness_weight: includeInRating
+          ? Number(r.helpfulness_weight ?? 1)
+          : 0,
+        include_in_rating: includeInRating,
+        criteria_ratings: r.criteria_ratings || {},
+        verdict,
+        fake_probability:
+          vf?.fake_probability != null ? Number(vf.fake_probability) : null,
+        flag_category: flagCategory,
+        reason: vf?.reason || null,
+        signals: vf?.signals || null,
+        productTitle: pInfo?.title || 'Sản phẩm công nghệ',
+        masterSlug: pInfo?.masterSlug || null,
+      };
+    });
+
+  const totalRev = mappedReviews.length;
+  const authenticRatioPct =
+    totalRev > 0 ? Math.round((authenticCount / totalRev) * 1000) / 10 : 100;
+
+  return {
+    masterProductsCount: masterRows.length,
+    listingsCount: prodRows.length,
+    merchantsCount: merchantsRes.count ?? 1,
+    priceObservationsCount: priceHistCountRes.count ?? 0,
+    totalReviewsCount: totalRev,
+    authenticReviewsCount: authenticCount,
+    filteredSeedingCount: filteredCount,
+    authenticRatioPct,
+    categoriesWithCounts: categories.map((cat) => ({
+      ...cat,
+      productCount: countByCatId.get(cat.id) || 0,
+      routeHref: getCategoryRouteHref(cat.slug),
+    })),
+    recentReviewsSample: mappedReviews.slice(0, 6),
+  };
+}
+
+export interface ParsedEcommerceUrl {
+  isUrl: boolean;
+  platform: 'shopee' | 'lazada' | 'tiki' | 'tiktok' | 'rate' | null;
+  platformShopId: string | null;
+  platformItemId: string | null;
+  internalSlug: string | null;
+}
+
+export interface UrlInspectionResult {
+  query: string;
+  matchedType:
+    | 'product_listing'
+    | 'master_product'
+    | 'merchant'
+    | 'search_suggestions'
+    | 'not_found';
+  parsedUrl: ParsedEcommerceUrl;
+  masterProduct: MasterProduct | null;
+  matchedOffer: MerchantOffer | null;
+  allOffers: MerchantOffer[];
+  discountAnalysis: OfferDiscountAnalysis | null;
+  priceHistory: MasterProductPriceHistorySummary | null;
+  reviewSummary: ReviewAnalysisSummary | null;
+  merchantProfile: MerchantSummary | null;
+  suggestions: MasterProduct[];
+}
+
+export function parseEcommerceUrlOrQuery(raw: string): ParsedEcommerceUrl {
+  const trimmed = raw.trim();
+  const isUrl =
+    /^https?:\/\//i.test(trimmed) ||
+    /shopee\.vn|lazada\.vn|tiki\.vn|tiktok\.com|rate\.vn/i.test(trimmed);
+
+  // Shopee item pattern: ...-i.<shopId>.<itemId> or /product/<shopId>/<itemId>
+  const shopeeItemMatch =
+    trimmed.match(/(?:a-)?i\.(\d+)\.(\d+)/i) ||
+    trimmed.match(/shopee\.vn\/product\/(\d+)\/(\d+)/i);
+  if (shopeeItemMatch) {
+    return {
+      isUrl: true,
+      platform: 'shopee',
+      platformShopId: shopeeItemMatch[1] || null,
+      platformItemId: shopeeItemMatch[2] || null,
+      internalSlug: null,
+    };
+  }
+
+  // Shopee shop URL: shopee.vn/shop/<shopId>
+  const shopeeShopMatch = trimmed.match(/shopee\.vn\/shop\/(\d+)/i);
+  if (shopeeShopMatch) {
+    return {
+      isUrl: true,
+      platform: 'shopee',
+      platformShopId: shopeeShopMatch[1] || null,
+      platformItemId: null,
+      internalSlug: null,
+    };
+  }
+
+  // Lazada item pattern: -i<itemId>-s<shopId>.html or -i<itemId>.html
+  const lazadaMatch = trimmed.match(/-i(\d+)(?:-s(\d+))?\.html/i);
+  if (lazadaMatch) {
+    return {
+      isUrl: true,
+      platform: 'lazada',
+      platformShopId: lazadaMatch[2] || null,
+      platformItemId: lazadaMatch[1] || null,
+      internalSlug: null,
+    };
+  }
+
+  // Tiki item pattern: -p<itemId>.html
+  const tikiMatch = trimmed.match(/-p(\d+)\.html/i);
+  if (tikiMatch) {
+    return {
+      isUrl: true,
+      platform: 'tiki',
+      platformShopId: null,
+      platformItemId: tikiMatch[1] || null,
+      internalSlug: null,
+    };
+  }
+
+  // Rate.vn internal URL: /smartphones/<slug>
+  const rateSlugMatch = trimmed.match(
+    /\/(?:smartphones|tablets|laptops)\/([a-z0-9-]+)/i
+  );
+  if (rateSlugMatch) {
+    return {
+      isUrl: true,
+      platform: 'rate',
+      platformShopId: null,
+      platformItemId: null,
+      internalSlug: rateSlugMatch[1] || null,
+    };
+  }
+
+  return {
+    isUrl,
+    platform: null,
+    platformShopId: null,
+    platformItemId: null,
+    internalSlug: null,
+  };
+}
+
+/**
+ * Inspect an e-commerce product/shop URL (Shopee, Lazada, Tiki) or keyword:
+ * - Resolves exact `platform_item_id` or `url` against `rate.products`
+ * - Or resolves `platform_shop_id` / merchant name against `rate.merchants`
+ * - Or resolves product slug / keyword against `rate.master_products`
+ * Returns complete price comparison, Fake Discount analysis, JReviews summary, and Merchant Dual Risk Score.
+ */
+export async function inspectProductOrShopUrl(
+  rawQuery: string
+): Promise<UrlInspectionResult> {
+  const query = rawQuery.trim();
+  const parsedUrl = parseEcommerceUrlOrQuery(query);
+
+  if (!query) {
+    return {
+      query: '',
+      matchedType: 'not_found',
+      parsedUrl,
+      masterProduct: null,
+      matchedOffer: null,
+      allOffers: [],
+      discountAnalysis: null,
+      priceHistory: null,
+      reviewSummary: null,
+      merchantProfile: null,
+      suggestions: [],
+    };
+  }
+
+  const supabase = getRateClient();
+
+  // 1. Direct lookup by platform_item_id if parsed from URL
+  if (parsedUrl.platformItemId) {
+    const { data: prodRow } = await supabase
+      .from('products')
+      .select('id, cluster_id, merchant_id, platform_item_id')
+      .eq('platform_item_id', parsedUrl.platformItemId)
+      .maybeSingle();
+
+    const matchedProd = prodRow as {
+      id: string;
+      cluster_id: string | null;
+      merchant_id: string;
+      platform_item_id: string;
+    } | null;
+
+    if (matchedProd?.cluster_id) {
+      const { data: masterData } = await supabase
+        .from('master_products')
+        .select('*')
+        .eq('id', matchedProd.cluster_id)
+        .maybeSingle();
+
+      const masterProduct = (masterData as MasterProduct) || null;
+      if (masterProduct) {
+        const [offers, reviews, merchantsList] = await Promise.all([
+          getMasterProductOffers(masterProduct.id),
+          getMasterProductReviews(masterProduct.id),
+          getMerchantsList(),
+        ]);
+        const [priceHistory, reviewSummary] = await Promise.all([
+          getMasterProductPriceHistory(masterProduct.id, offers),
+          getMasterProductReviewSummary(masterProduct.id, reviews),
+        ]);
+        const matchedOffer =
+          offers.find((o) => o.id === matchedProd.id) || offers[0] || null;
+        const discountAnalysis = matchedOffer
+          ? priceHistory.byOffer[matchedOffer.id] || null
+          : null;
+        const merchantProfile =
+          merchantsList.find((m) => m.id === matchedProd.merchant_id) || null;
+
+        return {
+          query,
+          matchedType: 'product_listing',
+          parsedUrl,
+          masterProduct,
+          matchedOffer,
+          allOffers: offers,
+          discountAnalysis,
+          priceHistory,
+          reviewSummary,
+          merchantProfile,
+          suggestions: [],
+        };
+      }
+    }
+  }
+
+  // 2. Direct lookup by Shopee/platform shop ID if URL is a shop link
+  if (parsedUrl.platformShopId && !parsedUrl.platformItemId) {
+    const merchants = await getMerchantsList();
+    const matchedMerchant =
+      merchants.find((m) => m.platform_shop_id === parsedUrl.platformShopId) ||
+      null;
+    if (matchedMerchant) {
+      const suggestions = await getMasterProducts({ limit: 3 });
+      return {
+        query,
+        matchedType: 'merchant',
+        parsedUrl,
+        masterProduct: null,
+        matchedOffer: null,
+        allOffers: [],
+        discountAnalysis: null,
+        priceHistory: null,
+        reviewSummary: null,
+        merchantProfile: matchedMerchant,
+        suggestions,
+      };
+    }
+  }
+
+  // 3. Internal slug or exact master product slug match
+  const candidateSlug = parsedUrl.internalSlug || query.toLowerCase();
+  const exactMaster = await getMasterProductBySlug(candidateSlug);
+  if (exactMaster) {
+    const [offers, reviews, merchantsList] = await Promise.all([
+      getMasterProductOffers(exactMaster.id),
+      getMasterProductReviews(exactMaster.id),
+      getMerchantsList(),
+    ]);
+    const [priceHistory, reviewSummary] = await Promise.all([
+      getMasterProductPriceHistory(exactMaster.id, offers),
+      getMasterProductReviewSummary(exactMaster.id, reviews),
+    ]);
+    const matchedOffer = offers[0] || null;
+    const discountAnalysis = matchedOffer
+      ? priceHistory.byOffer[matchedOffer.id] || null
+      : null;
+    const merchantProfile = matchedOffer
+      ? merchantsList.find((m) => m.id === matchedOffer.merchant.id) || null
+      : null;
+
+    return {
+      query,
+      matchedType: 'master_product',
+      parsedUrl,
+      masterProduct: exactMaster,
+      matchedOffer,
+      allOffers: offers,
+      discountAnalysis,
+      priceHistory,
+      reviewSummary,
+      merchantProfile,
+      suggestions: [],
+    };
+  }
+
+  // 4. Search across merchants and master products by keyword
+  const [merchants, matchedProducts] = await Promise.all([
+    getMerchantsList(),
+    getMasterProducts({ search: query, limit: 6 }),
+  ]);
+
+  const lowerQ = query.toLowerCase();
+  const matchedMerchantByName =
+    merchants.find(
+      (m) =>
+        m.name.toLowerCase().includes(lowerQ) || m.platform_shop_id === query
+    ) || null;
+
+  if (matchedProducts.length === 1) {
+    const single = matchedProducts[0]!;
+    const [offers, reviews] = await Promise.all([
+      getMasterProductOffers(single.id),
+      getMasterProductReviews(single.id),
+    ]);
+    const [priceHistory, reviewSummary] = await Promise.all([
+      getMasterProductPriceHistory(single.id, offers),
+      getMasterProductReviewSummary(single.id, reviews),
+    ]);
+    const matchedOffer = offers[0] || null;
+    const discountAnalysis = matchedOffer
+      ? priceHistory.byOffer[matchedOffer.id] || null
+      : null;
+    const merchantProfile = matchedOffer
+      ? merchants.find((m) => m.id === matchedOffer.merchant.id) ||
+        matchedMerchantByName
+      : matchedMerchantByName;
+
+    return {
+      query,
+      matchedType: 'master_product',
+      parsedUrl,
+      masterProduct: single,
+      matchedOffer,
+      allOffers: offers,
+      discountAnalysis,
+      priceHistory,
+      reviewSummary,
+      merchantProfile,
+      suggestions: matchedProducts,
+    };
+  }
+
+  if (matchedProducts.length > 1) {
+    const top = matchedProducts[0]!;
+    const [offers, reviews] = await Promise.all([
+      getMasterProductOffers(top.id),
+      getMasterProductReviews(top.id),
+    ]);
+    const [priceHistory, reviewSummary] = await Promise.all([
+      getMasterProductPriceHistory(top.id, offers),
+      getMasterProductReviewSummary(top.id, reviews),
+    ]);
+    const matchedOffer = offers[0] || null;
+    const discountAnalysis = matchedOffer
+      ? priceHistory.byOffer[matchedOffer.id] || null
+      : null;
+
+    return {
+      query,
+      matchedType: 'search_suggestions',
+      parsedUrl,
+      masterProduct: top,
+      matchedOffer,
+      allOffers: offers,
+      discountAnalysis,
+      priceHistory,
+      reviewSummary,
+      merchantProfile: matchedMerchantByName,
+      suggestions: matchedProducts,
+    };
+  }
+
+  if (matchedMerchantByName) {
+    const fallbackProducts = await getMasterProducts({ limit: 3 });
+    return {
+      query,
+      matchedType: 'merchant',
+      parsedUrl,
+      masterProduct: null,
+      matchedOffer: null,
+      allOffers: [],
+      discountAnalysis: null,
+      priceHistory: null,
+      reviewSummary: null,
+      merchantProfile: matchedMerchantByName,
+      suggestions: fallbackProducts,
+    };
+  }
+
+  const fallbackSuggestions = await getMasterProducts({ limit: 3 });
+  return {
+    query,
+    matchedType: 'not_found',
+    parsedUrl,
+    masterProduct: null,
+    matchedOffer: null,
+    allOffers: [],
+    discountAnalysis: null,
+    priceHistory: null,
+    reviewSummary: null,
+    merchantProfile: null,
+    suggestions: fallbackSuggestions,
+  };
+}

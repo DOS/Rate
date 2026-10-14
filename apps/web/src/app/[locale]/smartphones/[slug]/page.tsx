@@ -708,7 +708,16 @@ export default async function SmartphoneDetailPage({
                             </span>
                             <div>
                               <div className="fw-semibold small">
-                                {offer.merchant.name}
+                                {offer.merchant.id ? (
+                                  <Link
+                                    href={`/merchants/${offer.merchant.id}`}
+                                    className="text-dark text-decoration-none"
+                                  >
+                                    {offer.merchant.name}
+                                  </Link>
+                                ) : (
+                                  offer.merchant.name
+                                )}
                               </div>
                               {offer.merchant.is_official && (
                                 <span className="badge bg-success-subtle text-success small">
@@ -727,11 +736,21 @@ export default async function SmartphoneDetailPage({
                         <td>
                           <div className="d-flex flex-column gap-1">
                             <div>
-                              <span
-                                className={`badge ${trustBadgeClass} small`}
-                              >
-                                Trust: {trustScore}%
-                              </span>
+                              {offer.merchant.id ? (
+                                <Link
+                                  href={`/merchants/${offer.merchant.id}`}
+                                  className={`badge ${trustBadgeClass} text-decoration-none small`}
+                                  title="Xem hồ sơ tín nhiệm gian hàng"
+                                >
+                                  Trust: {trustScore}% ↗
+                                </Link>
+                              ) : (
+                                <span
+                                  className={`badge ${trustBadgeClass} small`}
+                                >
+                                  Trust: {trustScore}%
+                                </span>
+                              )}
                             </div>
                             <div
                               className="text-muted"
