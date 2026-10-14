@@ -1,50 +1,71 @@
-"use client"
+'use client';
 
-// Error boundaries must be Client Components - https://nextjs.org/docs/14/app/building-your-application/routing/error-handling
-import { useEffect } from "react"
-import * as Sentry from "@sentry/nextjs"
-import { useTranslations } from "next-intl"
-
-import { isDevelopment } from "@/lib/general-helpers"
-import { Button } from "@/components/ui/button"
+import React, { useEffect } from 'react';
+import * as Sentry from '@sentry/nextjs';
+import { useTranslations } from 'next-intl';
+import { Link } from '@/lib/navigation';
+import { isDevelopment } from '@/lib/general-helpers';
 
 interface Props {
-  readonly error: Error
-  readonly reset: () => void
+  readonly error: Error;
+  readonly reset: () => void;
 }
 
 export default function Error({ error, reset }: Props) {
-  const t = useTranslations("errors.global")
+  const t = useTranslations('errors.global');
 
   useEffect(() => {
-    Sentry.captureException(error)
-  }, [error])
+    Sentry.captureException(error);
+  }, [error]);
 
-  const handleTryAgain = () => {
-    // Attempt to recover by trying to re-render the segment
-    reset()
-  }
-
-  const isDev = isDevelopment()
+  const isDev = isDevelopment();
 
   return (
-    <div className="w-full overflow-x-hidden">
-      <h1 className="text-xl font-semibold tracking-tight">
-        {t("somethingWentWrong")}
-      </h1>
-      <p className="mt-1 text-sm text-gray-600">
-        {t("invalidContent")}
-        {isDev ? `: ${error.message}` : null}
-      </p>
-      {isDev && (
-        <div className="mt-2 w-full overflow-x-auto bg-gray-100 p-3 text-xs">
-          <pre>{error.stack?.split("\n").slice(0, 7).join("\n")}</pre>
-        </div>
-      )}
+    <section className="bg-light py-5 min-vh-100 d-flex align-items-center">
+      <div className="container py-5">
+        <div className="row justify-content-center">
+          <div className="col-lg-7">
+            <div className="card border-0 rounded-4 shadow-sm p-4 p-md-5 text-center bg-white">
+              <div className="mb-3">
+                <span className="badge bg-danger bg-opacity-10 text-danger rounded-pill px-3 py-2 fw-semibold">
+                  Rate.vn System Guard
+                </span>
+              </div>
+              <h1 className="h3 fw-bold text-dark mb-2">
+                {t('somethingWentWrong')}
+              </h1>
+              <p className="text-muted mb-4">
+                {t('invalidContent')}
+                {isDev ? `: ${error.message}` : null}
+              </p>
 
-      <Button type="button" size="sm" onClick={handleTryAgain} className="mt-2">
-        {t("tryAgain")}
-      </Button>
-    </div>
-  )
+              {isDev && error.stack && (
+                <div className="text-start bg-dark text-light rounded-3 p-3 mb-4 small overflow-auto">
+                  <pre className="mb-0">
+                    {error.stack.split('\n').slice(0, 7).join('\n')}
+                  </pre>
+                </div>
+              )}
+
+              <div className="d-flex flex-wrap justify-content-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => reset()}
+                  className="btn btn-danger rounded-pill px-4 fw-semibold"
+                >
+                  🔄 {t('tryAgain')}
+                </button>
+                <Link
+                  href="/"
+                  className="btn btn-outline-dark rounded-pill px-4 fw-medium"
+                >
+                  🏠 Rate.vn Home
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
 }
