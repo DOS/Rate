@@ -868,14 +868,23 @@ Return ONLY valid JSON matching:
 
     // 3. Update master_products weighted rating & authentic count
     if (params.masterId) {
-      await supabase
-        .from('master_products')
-        .update({
-          user_rating_weighted: summary.user_rating_weighted,
-          authentic_review_count: summary.authentic_review_count,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', params.masterId);
+      let refreshedViaRpc = false;
+      if (typeof (supabase as any).rpc === 'function') {
+        const { error: rpcErr } = await (supabase as any).rpc('refresh_master_product_rating', {
+          p_master_id: params.masterId,
+        });
+        if (!rpcErr) refreshedViaRpc = true;
+      }
+      if (!refreshedViaRpc) {
+        await supabase
+          .from('master_products')
+          .update({
+            user_rating_weighted: summary.user_rating_weighted,
+            authentic_review_count: summary.authentic_review_count,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', params.masterId);
+      }
     }
 
     // 4. Evaluate and update merchant risk_score if merchantId is provided
@@ -902,5 +911,54 @@ Return ONLY valid JSON matching:
     }
 
     return { summary, merchantRisk };
+  }
+
+  /**
+   * Upserts or removes an authenticated user's vote/report on a review in `rate.review_votes`.
+   * Database triggers (`trg_review_votes_guard` & `trg_review_votes_after_change`) enforce
+   * rate-limiting (max 60 votes/hour/user) and automatically recompute `rate.reviews`
+   * counters + `helpfulness_weight` + `rate.master_products.user_rating_weighted`.
+   */
+  public async castReviewVote(
+    supabase: SupabaseClient<any, 'rate'>,
+    params: {
+      reviewId: string;
+      voterId: string;
+      vote?: 'up' | 'down' | null;
+      reported?: boolean;
+      reportReason?: 'spam' | 'fake' | 'offensive' | 'off_topic' | 'other' | null;
+    }
+  ): Promise<{ action: 'upserted' | 'deleted' }> {
+    const vote = params.vote ?? null;
+    const reported = Boolean(params.reported);
+    const reportReason = reported ? (params.reportReason ?? 'other') : null;
+
+    if (!vote && !reported) {
+      const { error } = await supabase
+        .from('review_votes')
+        .delete()
+        .eq('review_id', params.reviewId)
+        .eq('voter_id', params.voterId);
+      if (error) {
+        throw new Error(`[AiReviewAnalyzer] Failed to delete review_vote: ${error.message}`);
+      }
+      return { action: 'deleted' };
+    }
+
+    const { error } = await supabase.from('review_votes').upsert(
+      {
+        review_id: params.reviewId,
+        voter_id: params.voterId,
+        vote,
+        reported,
+        report_reason: reportReason,
+      },
+      { onConflict: 'review_id,voter_id' }
+    );
+
+    if (error) {
+      throw new Error(`[AiReviewAnalyzer] Failed to upsert review_vote: ${error.message}`);
+    }
+    return { action: 'upserted' };
   }
 }

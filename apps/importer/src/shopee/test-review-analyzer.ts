@@ -297,6 +297,61 @@ async function run() {
     assert.equal(calls.filter((c) => c.table === 'reviews' && c.op === 'update').length, 3, 'helpfulness_weight written per review');
     assert.ok(out.merchantRisk);
     console.log('✅ [Persist] review_flags / review_analysis / master_products / merchants / reviews payloads valid');
+
+    console.log('\n================================================================');
+    console.log('7. castReviewVote (rate.review_votes per-user vote & report)');
+    console.log('================================================================');
+
+    let lastVoteUpsert: any = null;
+    let deletedPair: { reviewId?: string; voterId?: string } = {};
+    const voteStub = {
+      from: (table: string) => {
+        assert.equal(table, 'review_votes');
+        return {
+          upsert: async (payload: any, opts: any) => {
+            lastVoteUpsert = { payload, opts };
+            return { error: null };
+          },
+          delete: () => ({
+            eq: (col1: string, val1: string) => {
+              if (col1 === 'review_id') deletedPair.reviewId = val1;
+              return {
+                eq: async (col2: string, val2: string) => {
+                  if (col2 === 'voter_id') deletedPair.voterId = val2;
+                  return { error: null };
+                },
+              };
+            },
+          }),
+        };
+      },
+    } as any;
+
+    const r1 = await llm.castReviewVote(voteStub, {
+      reviewId: 'rev-1',
+      voterId: 'user-1',
+      vote: 'up',
+      reported: false,
+    });
+    assert.equal(r1.action, 'upserted');
+    assert.deepEqual(lastVoteUpsert.payload, {
+      review_id: 'rev-1',
+      voter_id: 'user-1',
+      vote: 'up',
+      reported: false,
+      report_reason: null,
+    });
+    assert.equal(lastVoteUpsert.opts.onConflict, 'review_id,voter_id');
+
+    const r2 = await llm.castReviewVote(voteStub, {
+      reviewId: 'rev-1',
+      voterId: 'user-1',
+      vote: null,
+      reported: false,
+    });
+    assert.equal(r2.action, 'deleted');
+    assert.deepEqual(deletedPair, { reviewId: 'rev-1', voterId: 'user-1' });
+    console.log('✅ [Vote] castReviewVote upsert & delete verified');
   } finally {
     server.close();
   }
