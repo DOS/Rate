@@ -25,7 +25,7 @@ const nextConfig = {
     },
   },
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
   // Allow alternate dev origins (localhost, 127.0.0.1, LAN IP, MCP)
   allowedDevOrigins: [

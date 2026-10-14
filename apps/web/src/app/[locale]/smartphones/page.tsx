@@ -1,10 +1,11 @@
 import React, { Suspense } from 'react';
+import type { Metadata } from 'next';
 import { Link } from '@/lib/navigation';
 import {
-  getCategoryDirectoryFacets,
+  getCachedCategoryDirectoryFacets,
   getMasterProducts,
   type MasterProductFilterParams,
-} from '@/lib/rate-api';
+} from '@/server/rate';
 import {
   formatStorageLabel,
   getCategoryFilterSchema,
@@ -28,6 +29,32 @@ import {
 import type { KeySpecs, ProductSpecifications } from '@repo/shared-data';
 
 type SearchParamsInput = Record<string, string | string[] | undefined>;
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  const facets = await getCachedCategoryDirectoryFacets('smartphones');
+  const totalModels = facets.totalUnfiltered;
+  const canonicalUrl =
+    locale === 'vi'
+      ? 'https://rate.vn/smartphones'
+      : `https://rate.vn/${locale}/smartphones`;
+
+  return {
+    title:
+      totalModels > 0
+        ? `So sánh giá Điện thoại di động (${totalModels} mẫu máy chuẩn hóa) | Rate.vn`
+        : 'So sánh giá Điện thoại di động & Kiểm định khuyến mãi AI | Rate.vn',
+    description:
+      'Tìm kiếm và lọc điện thoại theo 10 nhóm thông số kỹ thuật chuẩn PhoneArena/GSMArena, kiểm tra lịch sử giá thật và lọc đánh giá Seeding bằng AI trên Rate.vn.',
+    alternates: {
+      canonical: canonicalUrl,
+    },
+  };
+}
 
 function getSingleParam(val: string | string[] | undefined): string {
   if (Array.isArray(val)) return val[0] || '';
@@ -104,7 +131,8 @@ export default async function SmartphonesCatalogPage({
   const hasNfc = getSingleParam(rawSearch.hasNfc) === '1';
   const compactScreen = getSingleParam(rawSearch.compactScreen) === '1';
 
-  const sortParam = (getSingleParam(rawSearch.sort) || 'default') as ProductSortOption;
+  const sortParam = (getSingleParam(rawSearch.sort) ||
+    'default') as ProductSortOption;
   const currentSortOption: { value: ProductSortOption; label: string } =
     SORT_OPTIONS.find((s) => s.value === sortParam) ?? {
       value: 'default',
@@ -130,7 +158,7 @@ export default async function SmartphonesCatalogPage({
   };
 
   const [facets, products] = await Promise.all([
-    getCategoryDirectoryFacets(categorySlug),
+    getCachedCategoryDirectoryFacets(categorySlug),
     getMasterProducts(filterParams),
   ]);
 
@@ -181,7 +209,10 @@ export default async function SmartphonesCatalogPage({
     activeChips.push({
       id: 'price',
       label: `Giá: ${minM} - ${maxM}`,
-      removeHref: buildFilterHref(rawSearch, { minPrice: null, maxPrice: null }),
+      removeHref: buildFilterHref(rawSearch, {
+        minPrice: null,
+        maxPrice: null,
+      }),
     });
   }
 
@@ -239,17 +270,20 @@ export default async function SmartphonesCatalogPage({
         <div className="container">
           <div className="row justify-content-center align-items-center">
             <div className="col-xl-12 col-lg-12 col-md-12 col-sm-12">
-              <div className="position-relative text-start mt-4">
-                <div className="d-flex flex-wrap align-items-center gap-2 mb-2">
+              <div className="position-relative mt-4 text-start">
+                <div className="d-flex align-items-center mb-2 flex-wrap gap-2">
                   <span className="badge badge-xs badge-transparent rounded-pill px-3 py-1">
                     📂 Directory: {schema.directoryName}
                   </span>
                   <span className="badge badge-xs listOpen rounded-pill px-3 py-1">
-                    Category: {facets.currentCategory?.name || schema.categoryTitle}
+                    Category:{' '}
+                    {facets.currentCategory?.name || schema.categoryTitle}
                   </span>
                 </div>
-                <h1 className="text-light fw-bold mb-2">{schema.categoryTitle}</h1>
-                <p className="fs-5 fw-light text-light opacity-90 mb-0">
+                <h1 className="text-light fw-bold mb-2">
+                  {schema.categoryTitle}
+                </h1>
+                <p className="fs-5 fw-light text-light mb-0 opacity-90">
                   {schema.categorySubtitle}
                 </p>
               </div>
@@ -265,7 +299,9 @@ export default async function SmartphonesCatalogPage({
             <div className="col-xl-11 col-lg-12 col-md-12 col-12">
               <form
                 method="GET"
-                action={locale === 'vi' ? '/smartphones' : `/${locale}/smartphones`}
+                action={
+                  locale === 'vi' ? '/smartphones' : `/${locale}/smartphones`
+                }
                 className="heroSearch style-01 shadow-sm"
               >
                 {categorySlug !== 'smartphones' && (
@@ -275,26 +311,50 @@ export default async function SmartphonesCatalogPage({
                   <input type="hidden" name="sort" value={sortParam} />
                 )}
                 {minRating > 0 && (
-                  <input type="hidden" name="rating" value={String(minRating)} />
+                  <input
+                    type="hidden"
+                    name="rating"
+                    value={String(minRating)}
+                  />
                 )}
                 {minPrice > 0 && (
-                  <input type="hidden" name="minPrice" value={String(minPrice)} />
+                  <input
+                    type="hidden"
+                    name="minPrice"
+                    value={String(minPrice)}
+                  />
                 )}
                 {maxPrice > 0 && (
-                  <input type="hidden" name="maxPrice" value={String(maxPrice)} />
+                  <input
+                    type="hidden"
+                    name="maxPrice"
+                    value={String(maxPrice)}
+                  />
                 )}
                 {ramGb.length > 0 && (
                   <input type="hidden" name="ram" value={ramGb.join(',')} />
                 )}
                 {storageGb.length > 0 && (
-                  <input type="hidden" name="storage" value={storageGb.join(',')} />
+                  <input
+                    type="hidden"
+                    name="storage"
+                    value={storageGb.join(',')}
+                  />
                 )}
                 {has5g && <input type="hidden" name="has5g" value="1" />}
-                {highRefresh && <input type="hidden" name="highRefresh" value="1" />}
-                {bigBattery && <input type="hidden" name="bigBattery" value="1" />}
-                {fastCharge && <input type="hidden" name="fastCharge" value="1" />}
+                {highRefresh && (
+                  <input type="hidden" name="highRefresh" value="1" />
+                )}
+                {bigBattery && (
+                  <input type="hidden" name="bigBattery" value="1" />
+                )}
+                {fastCharge && (
+                  <input type="hidden" name="fastCharge" value="1" />
+                )}
                 {hasNfc && <input type="hidden" name="hasNfc" value="1" />}
-                {compactScreen && <input type="hidden" name="compactScreen" value="1" />}
+                {compactScreen && (
+                  <input type="hidden" name="compactScreen" value="1" />
+                )}
                 <div className="row gx-lg-2 gx-md-2 gx-3 gy-sm-2 gy-2 align-items-center">
                   <div className="col-xl-9 col-lg-8 col-md-12">
                     <div className="row gx-lg-2 gx-md-2 gx-3 gy-sm-2 gy-2">
@@ -302,7 +362,9 @@ export default async function SmartphonesCatalogPage({
                         <div className="form-group mb-0">
                           <div className="mobSearch d-flex align-items-center justify-content-start">
                             <div className="flexStart ps-2">
-                              <span className="fw-semibold text-dark">Tìm máy</span>
+                              <span className="fw-semibold text-dark">
+                                Tìm máy
+                              </span>
                             </div>
                             <input
                               type="text"
@@ -318,7 +380,9 @@ export default async function SmartphonesCatalogPage({
                         <div className="form-group mb-0">
                           <div className="mobSearch d-flex align-items-center justify-content-start">
                             <div className="flexStart ps-2">
-                              <span className="fw-semibold text-dark">Hãng</span>
+                              <span className="fw-semibold text-dark">
+                                Hãng
+                              </span>
                             </div>
                             <input
                               type="text"
@@ -333,7 +397,7 @@ export default async function SmartphonesCatalogPage({
                     </div>
                   </div>
                   <div className="col-xl-3 col-lg-4 col-md-12 col-sm-12">
-                    <div className="form-group mb-0 d-flex gap-2">
+                    <div className="form-group d-flex mb-0 gap-2">
                       <button
                         type="submit"
                         className="btn btn-primary full-width fw-medium"
@@ -358,7 +422,7 @@ export default async function SmartphonesCatalogPage({
             <div className="col-xl-4 col-lg-4 col-md-12 col-sm-12">
               <Suspense
                 fallback={
-                  <div className="p-4 bg-light rounded-4 text-muted small">
+                  <div className="bg-light rounded-4 text-muted small p-4">
                     Đang tải bộ lọc thông số...
                   </div>
                 }
@@ -377,7 +441,7 @@ export default async function SmartphonesCatalogPage({
               {activeChips.length > 0 && (
                 <div className="row align-items-start mb-4">
                   <div className="col-xl-12 col-lg-12 col-md-12">
-                    <div className="d-flex align-items-center justify-content-start gap-2 flex-wrap">
+                    <div className="d-flex align-items-center justify-content-start flex-wrap gap-2">
                       {activeChips.map((chip) => (
                         <div
                           key={chip.id}
@@ -411,11 +475,14 @@ export default async function SmartphonesCatalogPage({
               )}
 
               {/* Results Header + Compare Button + Sort Dropdown */}
-              <div className="row align-items-center justify-content-between mb-4 g-2">
+              <div className="row align-items-center justify-content-between g-2 mb-4">
                 <div className="col-xl-6 col-lg-6 col-md-6 col-sm-12">
                   <div className="d-flex align-items-center flex-wrap gap-2">
                     <h6 className="m-0">
-                      Tìm thấy <span className="text-primary fw-bold">{products.length}</span>{' '}
+                      Tìm thấy{' '}
+                      <span className="text-primary fw-bold">
+                        {products.length}
+                      </span>{' '}
                       / {facets.totalUnfiltered} sản phẩm chuẩn hóa
                     </h6>
                     {products.length >= 2 && (
@@ -424,7 +491,7 @@ export default async function SmartphonesCatalogPage({
                           .map((p) => p.slug)
                           .slice(0, 3)
                           .join(',')}`}
-                        className="badge bg-primary-subtle text-primary text-decoration-none px-3 py-2 rounded-pill fw-semibold"
+                        className="badge bg-primary-subtle text-primary text-decoration-none rounded-pill fw-semibold px-3 py-2"
                       >
                         <BsLightningCharge className="me-1" />
                         So sánh nhanh {products.length >= 3 ? '3 máy' : '2 máy'}
@@ -438,7 +505,7 @@ export default async function SmartphonesCatalogPage({
                     <div className="dropdown d-inline-flex p-0">
                       <a
                         href="#shortfilter"
-                        className="py-2 px-3 dropdown-toggle toogleDrops"
+                        className="dropdown-toggle toogleDrops px-3 py-2"
                         id="shortfilter"
                         data-bs-toggle="dropdown"
                         aria-expanded="false"
@@ -446,15 +513,18 @@ export default async function SmartphonesCatalogPage({
                         Sắp xếp: {currentSortOption.label}
                       </a>
                       <div className="dropdown-menu dropdown-menu-end border shadow-sm">
-                        <ul className="card rounded-0 p-0 mb-0 list-unstyled">
+                        <ul className="card rounded-0 list-unstyled mb-0 p-0">
                           {SORT_OPTIONS.map((opt) => (
                             <li key={opt.value}>
                               <Link
                                 href={buildFilterHref(rawSearch, {
-                                  sort: opt.value === 'default' ? null : opt.value,
+                                  sort:
+                                    opt.value === 'default' ? null : opt.value,
                                 })}
                                 className={`dropdown-item ${
-                                  currentSortOption.value === opt.value ? 'active' : ''
+                                  currentSortOption.value === opt.value
+                                    ? 'active'
+                                    : ''
                                 }`}
                               >
                                 {opt.label}
@@ -470,17 +540,18 @@ export default async function SmartphonesCatalogPage({
 
               {/* Product Cards Grid matching `.singlelisting-item` in grid-layout-01 */}
               {products.length === 0 ? (
-                <div className="card border-0 shadow-sm rounded-4 p-5 text-center bg-light">
+                <div className="card rounded-4 bg-light border-0 p-5 text-center shadow-sm">
                   <h5 className="fw-bold mb-2">
                     Không tìm thấy sản phẩm khớp với bộ lọc hiện tại
                   </h5>
                   <p className="text-muted mb-3">
-                    Hãy thử nới lỏng khoảng giá hoặc bỏ bớt một vài tiêu chí phần cứng để xem thêm các dòng máy khác.
+                    Hãy thử nới lỏng khoảng giá hoặc bỏ bớt một vài tiêu chí
+                    phần cứng để xem thêm các dòng máy khác.
                   </p>
                   <div>
                     <Link
                       href="/smartphones"
-                      className="btn btn-primary rounded-pill px-4 fw-medium"
+                      className="btn btn-primary rounded-pill fw-medium px-4"
                     >
                       Đặt lại bộ lọc
                     </Link>
@@ -489,16 +560,24 @@ export default async function SmartphonesCatalogPage({
               ) : (
                 <div className="row align-items-stretch justify-content-start g-xl-4 g-3">
                   {products.map((item) => {
-                    const minPriceFormatted = Number(item.min_price).toLocaleString('vi-VN');
-                    const maxPriceFormatted = Number(item.max_price).toLocaleString('vi-VN');
+                    const minPriceFormatted = Number(
+                      item.min_price
+                    ).toLocaleString('vi-VN');
+                    const maxPriceFormatted = Number(
+                      item.max_price
+                    ).toLocaleString('vi-VN');
                     const keySpecs = (item.key_specs || {}) as KeySpecs;
-                    const specs = (item.specifications || {}) as ProductSpecifications;
+                    const specs = (item.specifications ||
+                      {}) as ProductSpecifications;
                     const thumb =
                       item.thumbnail ||
-                      (item.images && item.images.length > 0 ? item.images[0] : null);
+                      (item.images && item.images.length > 0
+                        ? item.images[0]
+                        : null);
 
                     const effectiveRating =
-                      item.user_rating_weighted && Number(item.user_rating_weighted) > 0
+                      item.user_rating_weighted &&
+                      Number(item.user_rating_weighted) > 0
                         ? Number(item.user_rating_weighted)
                         : Number(item.average_rating || 0);
 
@@ -521,7 +600,7 @@ export default async function SmartphonesCatalogPage({
                         key={item.id}
                       >
                         <div className="listingitem-container h-100">
-                          <div className="singlelisting-item h-100 d-flex flex-column">
+                          <div className="singlelisting-item d-flex flex-column h-100">
                             {/* Top Image Area */}
                             <div className="listing-top-item">
                               <Link
@@ -529,8 +608,8 @@ export default async function SmartphonesCatalogPage({
                                 className="topLink d-flex align-items-center justify-content-center bg-light"
                                 style={{ height: '250px', padding: '20px' }}
                               >
-                                <div className="position-absolute start-0 top-0 ms-3 mt-3 z-2">
-                                  <div className="d-flex align-items-center justify-content-start gap-2 flex-wrap">
+                                <div className="position-absolute start-0 top-0 z-2 ms-3 mt-3">
+                                  <div className="d-flex align-items-center justify-content-start flex-wrap gap-2">
                                     <span className="badge badge-xs text-uppercase listOpen">
                                       {item.brand}
                                     </span>
@@ -567,11 +646,13 @@ export default async function SmartphonesCatalogPage({
                                     }}
                                   />
                                 ) : (
-                                  <div className="text-muted small">Chưa có ảnh</div>
+                                  <div className="text-muted small">
+                                    Chưa có ảnh
+                                  </div>
                                 )}
                               </Link>
-                              <div className="position-absolute end-0 bottom-0 me-3 mb-3 z-2">
-                                <span className="badge bg-dark bg-opacity-75 text-white px-3 py-2 rounded-pill small">
+                              <div className="position-absolute end-0 bottom-0 z-2 me-3 mb-3">
+                                <span className="badge bg-dark bg-opacity-75 rounded-pill small px-3 py-2 text-white">
                                   <BsShop className="me-1" />
                                   {item.merchant_count || 1} nơi bán
                                 </span>
@@ -579,7 +660,7 @@ export default async function SmartphonesCatalogPage({
                             </div>
 
                             {/* Middle Spec & Price Area */}
-                            <div className="listing-middle-item flex-grow-1 d-flex flex-column">
+                            <div className="listing-middle-item d-flex flex-column flex-grow-1">
                               <div className="listing-details">
                                 <h4 className="listingTitle mb-1">
                                   <Link
@@ -606,29 +687,35 @@ export default async function SmartphonesCatalogPage({
                               <div className="listing-info-details mt-auto pt-2">
                                 <div className="d-flex flex-wrap gap-1">
                                   {(item.ram_gb || item.storage_gb) && (
-                                    <span className="badge bg-light text-dark border small fw-normal">
-                                      💾 {item.ram_gb ? `${item.ram_gb}GB / ` : ''}
+                                    <span className="badge bg-light text-dark small fw-normal border">
+                                      💾{' '}
+                                      {item.ram_gb ? `${item.ram_gb}GB / ` : ''}
                                       {item.storage_gb
-                                        ? formatStorageLabel(Number(item.storage_gb))
+                                        ? formatStorageLabel(
+                                            Number(item.storage_gb)
+                                          )
                                         : ''}
                                     </span>
                                   )}
-                                  {(keySpecs.chip || specs.hardware?.chipset) && (
-                                    <span className="badge bg-light text-dark border small fw-normal">
+                                  {(keySpecs.chip ||
+                                    specs.hardware?.chipset) && (
+                                    <span className="badge bg-light text-dark small fw-normal border">
                                       <BsCpu className="me-1" />
                                       {keySpecs.chip || specs.hardware?.chipset}
                                     </span>
                                   )}
                                   {item.battery_mah && (
-                                    <span className="badge bg-light text-dark border small fw-normal">
+                                    <span className="badge bg-light text-dark small fw-normal border">
                                       🔋 {item.battery_mah} mAh
                                       {fastChargeW ? ` (${fastChargeW}W)` : ''}
                                     </span>
                                   )}
-                                  {(keySpecs.screen || item.screen_size_inch) && (
-                                    <span className="badge bg-light text-dark border small fw-normal">
+                                  {(keySpecs.screen ||
+                                    item.screen_size_inch) && (
+                                    <span className="badge bg-light text-dark small fw-normal border">
                                       <BsPhone className="me-1" />
-                                      {keySpecs.screen || `${item.screen_size_inch}"`}
+                                      {keySpecs.screen ||
+                                        `${item.screen_size_inch}"`}
                                     </span>
                                   )}
                                 </div>
@@ -655,22 +742,32 @@ export default async function SmartphonesCatalogPage({
                                 </div>
                                 <div className="listing-rates">
                                   <div className="d-flex align-items-center justify-content-start gap-1">
-                                    {item.expert_rating && Number(item.expert_rating) > 0 && (
-                                      <span
-                                        className="badge bg-dark text-warning border border-warning small me-1"
-                                        title="Điểm chuyên gia Rate.vn"
-                                      >
-                                        Expert {Number(item.expert_rating).toFixed(1)}
-                                      </span>
-                                    )}
-                                    <span className={`ratingAvarage ${ratingColorClass}`}>
+                                    {item.expert_rating &&
+                                      Number(item.expert_rating) > 0 && (
+                                        <span
+                                          className="badge bg-dark text-warning border-warning small me-1 border"
+                                          title="Điểm chuyên gia Rate.vn"
+                                        >
+                                          Expert{' '}
+                                          {Number(item.expert_rating).toFixed(
+                                            1
+                                          )}
+                                        </span>
+                                      )}
+                                    <span
+                                      className={`ratingAvarage ${ratingColorClass}`}
+                                    >
                                       <BsStarFill className="me-1" />
                                       {effectiveRating > 0
                                         ? effectiveRating.toFixed(1)
                                         : 'Mới'}
                                     </span>
                                     <span className="overallrates">
-                                      ({item.authentic_review_count || item.total_reviews || 0})
+                                      (
+                                      {item.authentic_review_count ||
+                                        item.total_reviews ||
+                                        0}
+                                      )
                                     </span>
                                   </div>
                                 </div>

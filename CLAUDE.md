@@ -30,19 +30,19 @@ This file provides guidance to Claude Code (claude.ai/code) and all AI Coding Ag
 
 ---
 
-## 2. Kiến Trúc Open-Core 2 Repositories (Zero-Strapi 2026)
+## 2. Kiến Trúc Open-Core 2 Repositories & 4-Layer Backend (Zero-Strapi 2026)
 
-Hệ thống **Rate Platform (`rate.vn`)** đã loại bỏ hoàn toàn Strapi CMS & Splink Python cũ, chuyển sang **Pure PostgreSQL 17 trên Supabase Cloud (`rate` schema)** và tách thành 2 repositories (dùng chung DB authority tại `DOS/DOS.Me`):
+Hệ thống **Rate Platform (`rate.vn`)** đã loại bỏ hoàn toàn Strapi CMS & Splink Python cũ, chuẩn hóa lên **TypeScript 7.0.2**, **Next.js 16.3.8**, **React 19.3.0**, **Pure PostgreSQL 17 trên Supabase Cloud (`rate` schema)** và vận hành theo **Kiến trúc 4 Tầng Backend** trên 2 repositories (dùng chung DB authority tại `DOS/DOS.Me`):
 
 1. **🌍 `DOS/Rate` (Public Open-Core - `D:\Projects\Rate`):**
-   - `apps/web`: Giao diện Next.js 16 + React 19 (`rate.vn`), hỗ trợ đa ngôn ngữ (`vi`, `en`, `cs`).
+   - `apps/web`: Giao diện Next.js 16.3.8 + React 19.3.0 (`rate.vn`), đa ngôn ngữ (`vi`, `en`, `cs`), **Server Data Layer** (`src/server/rate/` bọc `React.cache()`) và **JSON REST API v1** (`GET /api/v1/rate/products`, `GET /api/v1/rate/products/[slug]`, `POST /api/reviews/[id]/vote`).
    - `apps/extension`: Giao diện Browser Extension Manifest V3.
    - `packages/shared-data`: Bộ Zod Schema chuẩn **10 Field Groups** (`specs.schema.ts` - PhoneArena structure + GSMArena depth).
    - `apps/importer`: Bộ não chuẩn hóa & chấm điểm công khai:
      - `src/shopee/types.ts`: Data Contract chuẩn cho sản phẩm & review.
      - `src/shopee/product-normalizer.ts`: Bóc tách RAM/ROM tiếng Việt & ánh xạ 10 nhóm thông số.
      - `src/shopee/entity-matcher.ts`: Dedupe 3 tầng (`model_key` -> `pg_trgm` -> AI Spec Enricher).
-     - `src/shopee/ai-spec-enricher.ts`: Làm giàu 10 nhóm thông số hỗ trợ đa LLM (`openai`, `dos-ai`, `gemini`, `deepseek`, `groq`, `openrouter`, `ollama`).
+     - `src/shopee/ai-spec-enricher.ts`: Làm giàu 10 nhóm thông số hỗ trợ đa LLM (`dos-ai`, `openai`, `gemini`, `deepseek`, `groq`, `openrouter`, `ollama`).
      - `src/shopee/ai-review-analyzer.ts`: Phân tích review 2 tầng (Heuristics + LLM), JReviews dual rating & chấm điểm rủi ro gian hàng.
      - `src/shopee/shopee-to-supabase.ts`: Pipeline lưu trữ vào schema `rate`.
    - `supabase/migrations`: Bản sao tham chiếu schema `rate` cho Open-Core (migration thực tế phải commit và chạy CI từ `D:\Projects\DOS-Me\supabase\migrations`).
@@ -53,16 +53,17 @@ Hệ thống **Rate Platform (`rate.vn`)** đã loại bỏ hoàn toàn Strapi C
 
 ---
 
-## 3. Các Lệnh Thiết Yếu (Package Manager: `pnpm`)
+## 3. Các Lệnh Thiết Yếu (Package Manager: `pnpm` + TypeScript `7.0.2`)
 
 ```powershell
 # Cài đặt dependencies
 pnpm install
 
 # Chạy Web UI (http://localhost:3000)
-pnpm --filter web dev
+pnpm --filter @repo/web dev
 
-# Build & Kiểm tra TypeScript cho Importer / Intelligence Engine
+# Build Shared Data & Importer Intelligence Engine
+pnpm --filter @repo/shared-data build
 pnpm --filter @repo/crawlers build
 
 # Chạy bộ kiểm thử AI Spec Enricher & Normalizer
@@ -71,6 +72,7 @@ pnpm --filter @repo/crawlers exec tsx src/shopee/test-ai-enricher.ts
 # Chạy bộ kiểm thử AI Review Analyzer & JReviews Voting
 pnpm --filter @repo/crawlers exec tsx src/shopee/test-review-analyzer.ts
 
-# Build Web Production
-pnpm --filter web build
+# Kiểm tra TypeScript 7.0.2 & Build Web Production
+pnpm --filter @repo/web typecheck
+pnpm --filter @repo/web build
 ```

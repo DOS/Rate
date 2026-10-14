@@ -1,6 +1,6 @@
 const path = require("path")
 
-const buildEslintCommand = (filenames) => {
+const buildPrettierCommand = (filenames) => {
   const files = filenames
     .filter(
       (f) =>
@@ -10,18 +10,17 @@ const buildEslintCommand = (filenames) => {
         f.endsWith(".jsx")
     )
     .map((f) => {
-      // lint-staged executes commands with cwd = directory of .lintstagedrc.js (__dirname)
       const relativePath = path.relative(__dirname, f).replace(/\\/g, "/")
       return `"${relativePath}"`
     })
 
   if (files.length === 0) {
-    return 'echo "No files to lint"'
+    return 'echo "No files to format"'
   }
 
-  return `eslint --fix --no-error-on-unmatched-pattern ${files.join(" ")}`
+  return `prettier --write --ignore-unknown ${files.join(" ")}`
 }
 
 module.exports = {
-  "src/**/*.{js,jsx,ts,tsx}": [buildEslintCommand],
+  "src/**/*.{js,jsx,ts,tsx}": [buildPrettierCommand],
 }
