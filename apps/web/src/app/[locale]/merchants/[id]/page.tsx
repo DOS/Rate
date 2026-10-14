@@ -18,6 +18,8 @@ import {
   BsStarFill,
 } from 'react-icons/bs';
 
+import { normalizeRateLocale } from '@/lib/rate-i18n';
+
 type PageParams = Promise<{ locale: string; id: string }>;
 
 export async function generateMetadata({
@@ -26,20 +28,36 @@ export async function generateMetadata({
   params: PageParams;
 }): Promise<Metadata> {
   const { locale, id } = await params;
+  const lang = normalizeRateLocale(locale);
   const merchant = await getCachedMerchantProfileById(id);
   if (!merchant) {
     return {
-      title: 'Không tìm thấy gian hàng | Rate.vn',
+      title:
+        lang === 'en'
+          ? 'Merchant Not Found | Rate.vn'
+          : lang === 'cs'
+            ? 'Obchod nenalezen | Rate.vn'
+            : 'Không tìm thấy gian hàng | Rate.vn',
     };
   }
   const canonicalUrl =
-    locale === 'vi'
+    lang === 'vi'
       ? `https://rate.vn/merchants/${merchant.id}`
-      : `https://rate.vn/${locale}/merchants/${merchant.id}`;
+      : `https://rate.vn/${lang}/merchants/${merchant.id}`;
 
   return {
-    title: `${merchant.name} (${merchant.platform.toUpperCase()}) - Trust ${merchant.trust_score}/100 & Kiểm định Giá | Rate.vn`,
-    description: `Hồ sơ tín nhiệm gian hàng ${merchant.name}: Điểm an toàn DOSafe (${merchant.dosafe_risk_score}/100), Điểm rủi ro đánh giá AI (${merchant.review_risk_score}/100) và kiểm định lịch sử giá ${merchant.product_count} sản phẩm trên Rate.vn.`,
+    title:
+      lang === 'en'
+        ? `${merchant.name} (${merchant.platform.toUpperCase()}) - Trust ${merchant.trust_score}/100 & Price Audit | Rate.vn`
+        : lang === 'cs'
+          ? `${merchant.name} (${merchant.platform.toUpperCase()}) - Důvěra ${merchant.trust_score}/100 a Audit Cen | Rate.vn`
+          : `${merchant.name} (${merchant.platform.toUpperCase()}) - Trust ${merchant.trust_score}/100 & Kiểm định Giá | Rate.vn`,
+    description:
+      lang === 'en'
+        ? `Merchant trust profile for ${merchant.name}: DOSafe Threat Score (${merchant.dosafe_risk_score}/100), AI Review Seeding Risk (${merchant.review_risk_score}/100), and historical price audit across ${merchant.product_count} products.`
+        : lang === 'cs'
+          ? `Profil důvěryhodnosti obchodu ${merchant.name}: DOSafe riziko (${merchant.dosafe_risk_score}/100), AI riziko recenzí (${merchant.review_risk_score}/100) a audit cen ${merchant.product_count} produktů.`
+          : `Hồ sơ tín nhiệm gian hàng ${merchant.name}: Điểm an toàn DOSafe (${merchant.dosafe_risk_score}/100), Điểm rủi ro đánh giá AI (${merchant.review_risk_score}/100) và kiểm định lịch sử giá ${merchant.product_count} sản phẩm trên Rate.vn.`,
     alternates: {
       canonical: canonicalUrl,
     },
@@ -52,6 +70,7 @@ export default async function MerchantProfilePage({
   params: PageParams;
 }) {
   const { locale, id } = await params;
+  const lang = normalizeRateLocale(locale);
   const merchant = await getCachedMerchantProfileById(id);
 
   if (!merchant) {
@@ -60,10 +79,22 @@ export default async function MerchantProfilePage({
 
   const trustLevelLabel =
     merchant.trust_score >= 80
-      ? 'Độ tin cậy cao (An toàn)'
+      ? lang === 'en'
+        ? 'High Trust (Verified Safe)'
+        : lang === 'cs'
+          ? 'Vysoká důvěryhodnost (Bezpečný)'
+          : 'Độ tin cậy cao (An toàn)'
       : merchant.trust_score >= 50
-        ? 'Độ tin cậy trung bình (Cần lưu ý)'
-        : 'Cảnh báo rủi ro cao';
+        ? lang === 'en'
+          ? 'Moderate Trust (Monitor)'
+          : lang === 'cs'
+            ? 'Střední důvěryhodnost'
+            : 'Độ tin cậy trung bình (Cần lưu ý)'
+        : lang === 'en'
+          ? 'High Risk Alert'
+          : lang === 'cs'
+            ? 'Varování: Vysoké riziko'
+            : 'Cảnh báo rủi ro cao';
 
   const trustBadgeClass =
     merchant.trust_score >= 80
@@ -114,7 +145,9 @@ export default async function MerchantProfilePage({
         name: merchant.name,
         url: canonicalUrl,
         ...(merchant.url ? { sameAs: [merchant.url] } : {}),
-        ...(merchant.rating_star && merchant.rating_star > 0 && brk.total_reviews > 0
+        ...(merchant.rating_star &&
+        merchant.rating_star > 0 &&
+        brk.total_reviews > 0
           ? {
               aggregateRating: {
                 '@type': 'AggregateRating',

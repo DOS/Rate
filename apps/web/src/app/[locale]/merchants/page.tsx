@@ -16,21 +16,33 @@ import {
   BsStarFill,
 } from 'react-icons/bs';
 
+import { normalizeRateLocale } from '@/lib/rate-i18n';
+
 export async function generateMetadata({
   params,
 }: {
   params: Promise<{ locale: string }>;
 }): Promise<Metadata> {
   const { locale } = await params;
+  const lang = normalizeRateLocale(locale);
   const canonicalUrl =
-    locale === 'vi'
+    lang === 'vi'
       ? 'https://rate.vn/merchants'
-      : `https://rate.vn/${locale}/merchants`;
+      : `https://rate.vn/${lang}/merchants`;
 
   return {
-    title: 'Hồ Sơ Tín Nhiệm Gian Hàng (DOSafe + AI Review Risk) | Rate.vn',
+    title:
+      lang === 'en'
+        ? 'E-Commerce Merchant Trust Directory (DOSafe + AI Review Risk) | Rate.vn'
+        : lang === 'cs'
+          ? 'Adresář důvěryhodnosti e-shopů (DOSafe + AI Review Risk) | Rate.vn'
+          : 'Hồ Sơ Tín Nhiệm Gian Hàng (DOSafe + AI Review Risk) | Rate.vn',
     description:
-      'Tra cứu độ tin cậy gian hàng Shopee, Lazada, Tiki với hệ thống chấm điểm rủi ro kép: dữ liệu chống lừa đảo DOSafe và AI lọc đánh giá Seeding trên Rate.vn.',
+      lang === 'en'
+        ? 'Verify Shopee, Lazada, and Tiki merchant trustworthiness with our Dual Risk Scoring Engine: DOSafe Threat Intel and AI Review Seeding detection.'
+        : lang === 'cs'
+          ? 'Ověřte důvěryhodnost obchodů pomocí duálního skóre rizika: DOSafe Threat Intel a AI detekce seedingu recenzí.'
+          : 'Tra cứu độ tin cậy gian hàng Shopee, Lazada, Tiki với hệ thống chấm điểm rủi ro kép: dữ liệu chống lừa đảo DOSafe và AI lọc đánh giá Seeding trên Rate.vn.',
     alternates: {
       canonical: canonicalUrl,
     },
@@ -43,7 +55,21 @@ export default async function MerchantsDirectoryPage({
   params: Promise<{ locale: string }>;
 }) {
   const { locale } = await params;
+  const lang = normalizeRateLocale(locale);
   const merchants = await getCachedMerchantsList();
+
+  const heroTitle =
+    lang === 'en'
+      ? 'Cross-Platform Merchant Trust Directory'
+      : lang === 'cs'
+        ? 'Adresář Důvěryhodnosti Obchodů Napříč Tržišti'
+        : 'Hồ Sơ Tín Nhiệm Gian Hàng Đa Sàn';
+  const heroSubtitle =
+    lang === 'en'
+      ? 'Cross-check DOSafe cybersecurity threat intelligence, AI Review Seeding ratios, and historical price integrity for every tracked seller'
+      : lang === 'cs'
+        ? 'Porovnejte kyberbezpečnostní skóre DOSafe, míru AI seedingu recenzí a integritu historie cen jednotlivých prodejců'
+        : 'Đối chiếu điểm rủi ro lừa đảo DOSafe, tỷ lệ đánh giá Seeding/Spam xu và lịch sử niêm yết giá của từng gian hàng';
 
   return (
     <>
@@ -66,12 +92,9 @@ export default async function MerchantsDirectoryPage({
                     Dual Merchant Risk Score
                   </span>
                 </div>
-                <h1 className="text-light fw-bold mb-2">
-                  Hồ Sơ Tín Nhiệm Gian Hàng Đa Sàn
-                </h1>
+                <h1 className="text-light fw-bold mb-2">{heroTitle}</h1>
                 <p className="fs-5 fw-light text-light mb-0 opacity-90">
-                  Đối chiếu điểm rủi ro lừa đảo DOSafe, tỷ lệ đánh giá
-                  Seeding/Spam xu và lịch sử niêm yết giá của từng gian hàng
+                  {heroSubtitle}
                 </p>
               </div>
             </div>
@@ -85,11 +108,19 @@ export default async function MerchantsDirectoryPage({
             <ol className="breadcrumb small mb-0">
               <li className="breadcrumb-item">
                 <Link href="/" className="text-decoration-none">
-                  Trang chủ
+                  {lang === 'en'
+                    ? 'Home'
+                    : lang === 'cs'
+                      ? 'Domů'
+                      : 'Trang chủ'}
                 </Link>
               </li>
               <li className="breadcrumb-item active" aria-current="page">
-                Gian hàng &amp; Hồ sơ tín nhiệm
+                {lang === 'en'
+                  ? 'Merchants & Trust Profiles'
+                  : lang === 'cs'
+                    ? 'Obchody a profily důvěryhodnosti'
+                    : 'Gian hàng & Hồ sơ tín nhiệm'}
               </li>
             </ol>
           </nav>
@@ -100,23 +131,63 @@ export default async function MerchantsDirectoryPage({
               <div className="col-lg-8">
                 <h2 className="h5 fw-bold d-flex align-items-center mb-1 gap-2">
                   <BsShieldCheck className="text-primary" />
-                  Cơ chế Chấm Điểm Rủi Ro Kép (Dual Risk Scoring Engine)
+                  {lang === 'en'
+                    ? 'Dual Risk Scoring Engine (DOSafe + AI Review Audit)'
+                    : lang === 'cs'
+                      ? 'Systém Duálního Hodnocení Rizik (Dual Risk Scoring Engine)'
+                      : 'Cơ chế Chấm Điểm Rủi Ro Kép (Dual Risk Scoring Engine)'}
                 </h2>
                 <p className="text-muted small mb-0">
-                  Rate.vn tách bạch hoàn toàn 2 nguồn tín hiệu độc lập: (1){' '}
-                  <strong>DOSafe Threat Risk</strong> đối chiếu danh sách cảnh
-                  báo lừa đảo từ <code>dosafe.threat_intel</code> và (2){' '}
-                  <strong>AI Review Risk</strong> đo lường tỷ lệ đánh giá ảo
-                  Seeding, bình luận rác nhận xu và hành vi nâng khống giá gốc
-                  trên các sản phẩm của shop.
+                  {lang === 'en' ? (
+                    <>
+                      Rate.vn separates two independent verification signals:
+                      (1) <strong>DOSafe Threat Risk</strong> cross-checking
+                      scam &amp; phishing intelligence from{' '}
+                      <code>dosafe.threat_intel</code>, and (2){' '}
+                      <strong>AI Review Risk</strong> measuring paid seeding,
+                      coin-farming spam, and inflated strikethrough pricing.
+                    </>
+                  ) : lang === 'cs' ? (
+                    <>
+                      Rate.vn odděluje dva nezávislé signály: (1){' '}
+                      <strong>DOSafe Threat Risk</strong> z databáze hrozeb{' '}
+                      <code>dosafe.threat_intel</code> a (2){' '}
+                      <strong>AI Review Risk</strong> měřící podíl falešného
+                      seedingu, spamu za mince a uměle navýšených slev.
+                    </>
+                  ) : (
+                    <>
+                      Rate.vn tách bạch hoàn toàn 2 nguồn tín hiệu độc lập: (1){' '}
+                      <strong>DOSafe Threat Risk</strong> đối chiếu danh sách
+                      cảnh báo lừa đảo từ <code>dosafe.threat_intel</code> và
+                      (2) <strong>AI Review Risk</strong> đo lường tỷ lệ đánh
+                      giá ảo Seeding, bình luận rác nhận xu và hành vi nâng
+                      khống giá gốc trên các sản phẩm của shop.
+                    </>
+                  )}
                 </p>
               </div>
-              <div className="col-lg-4 text-lg-end">
+              <div className="col-lg-4 text-lg-end d-flex justify-content-lg-end flex-wrap gap-2">
+                <Link
+                  href="/inspect"
+                  className="btn btn-danger rounded-pill fw-medium btn-sm px-3"
+                >
+                  🔬{' '}
+                  {lang === 'en'
+                    ? 'Inspect URL'
+                    : lang === 'cs'
+                      ? 'Audit URL'
+                      : 'Kiểm toán Link'}
+                </Link>
                 <Link
                   href="/smartphones"
-                  className="btn btn-outline-primary rounded-pill fw-medium px-4"
+                  className="btn btn-outline-primary rounded-pill fw-medium btn-sm px-3"
                 >
-                  Tra cứu theo Sản phẩm →
+                  {lang === 'en'
+                    ? 'Browse Products →'
+                    : lang === 'cs'
+                      ? 'Procházet produkty →'
+                      : 'Tra cứu theo Sản phẩm →'}
                 </Link>
               </div>
             </div>

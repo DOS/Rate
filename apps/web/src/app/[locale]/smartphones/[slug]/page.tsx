@@ -19,6 +19,8 @@ import FooterDynamic from '../../components/footer/FooterDynamic';
 import BackToTop from '../../components/back-to-top';
 import type { KeySpecs, ProductSpecifications } from '@repo/shared-data';
 
+import { normalizeRateLocale } from '@/lib/rate-i18n';
+
 export type PageParams = Promise<{ locale: string; slug: string }>;
 
 export async function generateCategoryProductMetadata(
@@ -26,26 +28,47 @@ export async function generateCategoryProductMetadata(
   categoryBasePath = '/smartphones'
 ): Promise<Metadata> {
   const { locale, slug } = await params;
+  const lang = normalizeRateLocale(locale);
   const product = await getCachedMasterProductBySlug(slug);
   if (!product) {
     return {
-      title: 'Không tìm thấy sản phẩm | Rate.vn',
+      title:
+        lang === 'en'
+          ? 'Product Not Found | Rate.vn'
+          : lang === 'cs'
+            ? 'Produkt nenalezen | Rate.vn'
+            : 'Không tìm thấy sản phẩm | Rate.vn',
     };
   }
   const minPrice = Number(product.min_price || 0).toLocaleString('vi-VN');
   const canonicalUrl =
-    locale === 'vi'
+    lang === 'vi'
       ? `https://rate.vn${categoryBasePath}/${product.slug}`
-      : `https://rate.vn/${locale}${categoryBasePath}/${product.slug}`;
+      : `https://rate.vn/${lang}${categoryBasePath}/${product.slug}`;
 
   return {
-    title: `${product.name} - Giá từ ${minPrice} ₫, Thông số 10 nhóm & Đánh giá thực chất | Rate.vn`,
-    description: `So sánh giá ${product.name} (${product.brand}) từ ${product.merchant_count || 1} gian hàng, biểu đồ lịch sử giá phát hiện giảm giá ảo và đánh giá thực chất đã lọc Seeding bằng AI trên Rate.vn.`,
+    title:
+      lang === 'en'
+        ? `${product.name} - From ${minPrice} ₫, 10-Group Specs & AI Review Audit | Rate.vn`
+        : lang === 'cs'
+          ? `${product.name} - Od ${minPrice} ₫, 10 skupin parametrů a AI audit recenzí | Rate.vn`
+          : `${product.name} - Giá từ ${minPrice} ₫, Thông số 10 nhóm & Đánh giá thực chất | Rate.vn`,
+    description:
+      lang === 'en'
+        ? `Compare ${product.name} (${product.brand}) prices across ${product.merchant_count || 1} merchants, inspect historical price charts for fake discounts, and read AI-verified buyer reviews on Rate.vn.`
+        : lang === 'cs'
+          ? `Porovnejte ceny ${product.name} (${product.brand}) z ${product.merchant_count || 1} obchodů, zkontrolujte historii cen a přečtěte si AI ověřené recenze na Rate.vn.`
+          : `So sánh giá ${product.name} (${product.brand}) từ ${product.merchant_count || 1} gian hàng, biểu đồ lịch sử giá phát hiện giảm giá ảo và đánh giá thực chất đã lọc Seeding bằng AI trên Rate.vn.`,
     alternates: {
       canonical: canonicalUrl,
     },
     openGraph: {
-      title: `${product.name} - So sánh giá & Kiểm định khuyến mãi AI | Rate.vn`,
+      title:
+        lang === 'en'
+          ? `${product.name} - 10-Group Specs & True Price History | Rate.vn`
+          : lang === 'cs'
+            ? `${product.name} - 10 skupin parametrů a historie cen | Rate.vn`
+            : `${product.name} - So sánh giá & Kiểm định khuyến mãi AI | Rate.vn`,
       description: `Giá tốt nhất từ ${minPrice} ₫. Xem 10 nhóm thông số kỹ thuật chuẩn GSMArena/PhoneArena và biểu đồ lịch sử giá.`,
       url: canonicalUrl,
       images:
