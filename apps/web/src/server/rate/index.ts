@@ -4,6 +4,7 @@ import {
   getCategoryDirectoryFacets as _getCategoryDirectoryFacets,
   getCategoryRouteHref,
   getMasterProductBySlug as _getMasterProductBySlug,
+  getMasterProductCategorySlug,
   getMasterProductHref,
   getMasterProductOffers as _getMasterProductOffers,
   getMasterProductPriceHistory as _getMasterProductPriceHistory,
@@ -15,12 +16,15 @@ import {
   getRatePlatformStats as _getRatePlatformStats,
   inspectProductOrShopUrl as _inspectProductOrShopUrl,
   parseEcommerceUrlOrQuery,
+  resolveProductImageUrl,
   getRateClient,
   computeJReviewsWeight,
+  type CanonicalCategorySlug,
   type MasterProductFilterParams,
 } from '../../lib/rate-api';
 
 export type {
+  CanonicalCategorySlug,
   CategoryDirectoryFacets,
   DiscountVerdictType,
   MasterProductFilterParams,
@@ -46,7 +50,9 @@ export {
   computeJReviewsWeight,
   parseEcommerceUrlOrQuery,
   getCategoryRouteHref,
+  getMasterProductCategorySlug,
   getMasterProductHref,
+  resolveProductImageUrl,
 };
 
 /**

@@ -2565,7 +2565,7 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     battery_mah: 6200,
     has_5g: false,
     colors: ['Trắng Scandinavia', 'Xám Zumaia'],
-    images: ['https://dlcdnwebimgs.asus.com/gain/b9d50e0e-57e7-448c-947f-3a2811675029/w800'],
+    images: ['/img/devices/apple-flagship-store-shopee.jpg'],
     expert_rating: 4.85,
     expert_review_summary:
       'Bước nhảy vọt về thời lượng pin và độ mát trên laptop Windows x86 nhờ kiến trúc Intel Lunar Lake 258V kết hợp chất liệu gốm nhôm Ceraluminum chống bám vân tay và màn hình 3K OLED 120Hz.',
@@ -3181,7 +3181,7 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     battery_mah: 410,
     has_5g: false,
     colors: ['Đen Xám', 'Xanh Aqua', 'Trắng Whitestone'],
-    images: ['https://res.garmin.com/en/products/010-02810-00/v/cf-lg.jpg'],
+    images: ['/img/devices/lenovo-thinkpad-x1-carbon-gen-12-512gb.jpg'],
     expert_rating: 4.85,
     expert_review_summary:
       'Chiếc đồng hồ chạy bộ tầm trung đáng mua nhất cho runner từ phong trào tới chuyên nghiệp: nhẹ 47g, màn hình AMOLED sắc nét, 5 nút bấm vật lý chuẩn xác khi tay ướt và pin thực tế gần 2 tuần.',

@@ -430,7 +430,7 @@ export async function getMasterProducts(
     items = items.slice(0, params.limit);
   }
 
-  return items;
+  return items.map(normalizeMasterProductRow);
 }
 
 /**
@@ -451,7 +451,7 @@ export async function getMasterProductBySlug(
     console.error(`Master product not found for slug: ${slug}`, error?.message);
     return null;
   }
-  return data as MasterProduct;
+  return normalizeMasterProductRow(data as MasterProduct);
 }
 
 interface RawTrustViewRow {
@@ -881,11 +881,19 @@ export async function compareMasterProducts(
   if (error || !data) {
     return [];
   }
-  const rows = data as MasterProduct[];
+  const rows = (data as MasterProduct[]).map(normalizeMasterProductRow);
   const bySlug = new Map(rows.map((r) => [r.slug, r]));
-  return uniqueSlugs
+  const ordered = uniqueSlugs
     .map((slug) => bySlug.get(slug))
     .filter((item): item is MasterProduct => Boolean(item));
+
+  if (ordered.length <= 1) {
+    return ordered;
+  }
+
+  // Enforce strict same-category comparison: lock to the first product's category
+  const primaryCat = getMasterProductCategorySlug(ordered[0]!);
+  return ordered.filter((p) => getMasterProductCategorySlug(p) === primaryCat);
 }
 
 export type DiscountVerdictType =
@@ -1327,11 +1335,58 @@ export function getCategoryRouteHref(slug: string): string {
   return `/smartphones?category=${encodeURIComponent(slug)}`;
 }
 
-/**
- * Resolve the canonical product detail route (`/smartphones/[slug]`, `/tablets/[slug]`, `/laptops/[slug]`, `/smartwatches/[slug]`, or `/earbuds/[slug]`)
- * for a MasterProduct across all 5 categories.
- */
-export function getMasterProductHref(
+export const KNOWN_LOCAL_DEVICE_IMAGES = new Set<string>([
+  'apple-airpods-pro-2-usb-c',
+  'apple-ipad-pro-m4-11-inch-256gb',
+  'apple-iphone-15-128gb',
+  'apple-iphone-16-128gb',
+  'apple-iphone-16-plus-256gb',
+  'apple-iphone-16-pro-256gb',
+  'apple-iphone-16-pro-max-256gb',
+  'apple-macbook-air-m3-13-inch-256gb',
+  'apple-watch-series-10-42mm-gps-64gb',
+  'apple-watch-ultra-2-64gb',
+  'asus-zenbook-s-14-1tb',
+  'garmin-forerunner-265-8gb',
+  'lenovo-thinkpad-x1-carbon-gen-12-512gb',
+  'oppo-find-x8-256gb',
+  'samsung-galaxy-a55-256gb',
+  'samsung-galaxy-buds3-pro',
+  'samsung-galaxy-s24-ultra-256gb',
+  'samsung-galaxy-tab-s10-ultra-5g-256gb',
+  'samsung-galaxy-watch-ultra-32gb',
+  'sony-wf-1000xm5',
+  'xiaomi-14-ultra-512gb',
+  'xiaomi-pad-6s-pro-256gb',
+]);
+
+export function resolveProductImageUrl(
+  slug?: string | null,
+  fallbackUrl?: string | null
+): string | null {
+  if (slug && KNOWN_LOCAL_DEVICE_IMAGES.has(slug)) {
+    return `/img/devices/${slug}.jpg`;
+  }
+  return fallbackUrl || null;
+}
+
+export function normalizeMasterProductRow(row: MasterProduct): MasterProduct {
+  if (!row?.slug) return row;
+  if (KNOWN_LOCAL_DEVICE_IMAGES.has(row.slug)) {
+    const localImg = `/img/devices/${row.slug}.jpg`;
+    return {
+      ...row,
+      thumbnail: localImg,
+      images: [localImg],
+    };
+  }
+  return row;
+}
+
+export type CanonicalCategorySlug =
+  'smartphones' | 'tablets' | 'laptops' | 'smartwatches' | 'earbuds';
+
+export function getMasterProductCategorySlug(
   product: Pick<MasterProduct, 'slug'> & {
     name?: string | null;
     model?: string | null;
@@ -1339,7 +1394,7 @@ export function getMasterProductHref(
     metadata?: Record<string, unknown> | null;
   },
   categorySlugById?: ReadonlyMap<string, string>
-): string {
+): CanonicalCategorySlug {
   const catSlugFromMap =
     product.category_id && categorySlugById
       ? categorySlugById.get(product.category_id)
@@ -1354,12 +1409,10 @@ export function getMasterProductHref(
     resolvedCat === 'tablets' ||
     resolvedCat === 'laptops' ||
     resolvedCat === 'smartwatches' ||
-    resolvedCat === 'earbuds'
+    resolvedCat === 'earbuds' ||
+    resolvedCat === 'smartphones'
   ) {
-    return `/${resolvedCat}/${product.slug}`;
-  }
-  if (resolvedCat === 'smartphones') {
-    return `/smartphones/${product.slug}`;
+    return resolvedCat;
   }
 
   const haystack =
@@ -1369,30 +1422,47 @@ export function getMasterProductHref(
       haystack
     )
   ) {
-    return `/tablets/${product.slug}`;
+    return 'tablets';
   }
   if (
     /macbook|thinkpad|zenbook|vivobook|inspiron|xps|legion|rog|tuf|omen|pavilion|spectre|envy|gram|surface laptop|ultrabook|laptop/i.test(
       haystack
     )
   ) {
-    return `/laptops/${product.slug}`;
+    return 'laptops';
   }
   if (
     /apple watch|galaxy watch|garmin|xiaomi watch|huawei watch|amazfit|smartwatch|đồng hồ thông minh/i.test(
       haystack
     )
   ) {
-    return `/smartwatches/${product.slug}`;
+    return 'smartwatches';
   }
   if (
     /airpods|galaxy buds|wf-1000xm|wh-1000xm|earbuds|tai nghe|freebuds|soundcore/i.test(
       haystack
     )
   ) {
-    return `/earbuds/${product.slug}`;
+    return 'earbuds';
   }
-  return `/smartphones/${product.slug}`;
+  return 'smartphones';
+}
+
+/**
+ * Resolve the canonical product detail route (`/smartphones/[slug]`, `/tablets/[slug]`, `/laptops/[slug]`, `/smartwatches/[slug]`, or `/earbuds/[slug]`)
+ * for a MasterProduct across all 5 categories.
+ */
+export function getMasterProductHref(
+  product: Pick<MasterProduct, 'slug'> & {
+    name?: string | null;
+    model?: string | null;
+    category_id?: string | null;
+    metadata?: Record<string, unknown> | null;
+  },
+  categorySlugById?: ReadonlyMap<string, string>
+): string {
+  const catSlug = getMasterProductCategorySlug(product, categorySlugById);
+  return `/${catSlug}/${product.slug}`;
 }
 
 function computeDynamicReviewRisk(reviews: ReviewItem[]): {

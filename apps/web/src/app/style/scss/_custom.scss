@@ -1,45 +1,69 @@
-// scss-docs-start theme-color-variables Customize your color option here
+// Rate.vn v3.0 Design System Tokens (Review & Rating-First Architecture)
 :root,
 [data-bs-theme=light] {
-  --bs-body-bg: #ffffff;
+  --bs-body-bg: #f8fafc;
   --bs-white: #ffffff;
-  --bs-body-bg-rgb: 255, 255, 255;
+  --bs-body-bg-rgb: 248, 250, 252;
   --bs-card-bg: #ffffff;
-  --bs-body-color: #2b2b2b;
-  --paragraphColor: #2b2b2b;
-  --bs-muted: #444c55;
-  --bs-muted-2: #444c55;
-  --bs-body-color-rgb: 43, 43, 43;
-  --bs-dark-text: #212529;
-  --bs-primary: #c71f37;
-  --bs-light: #f7f7f7;
-  --bs-light-gray: #ffffffa8;
-  --bs-dark: #212529;
-  --bs-primary-rgb: 226, 55, 68;
-  --bs-light-rgb: 247, 247, 247;
-  --bs-dark-rgb: 33, 37, 41;
-  --bs-primary-2: #d02b38;
-  --bs-primary-text-emphasis: #c71f37;
-  --bs-primary-bg-subtle: #fae8eb;
-  --bs-primary-bg-dark: #dd2e3b;
-  --bs-primary-border-subtle: #ffdee2;
-  --bs-danger-bg-subtle:#ffdee2;
-  --headingColor: #2b2b2b;
-  --bs-link-color: #212529;
-  --bs-link-color-rgb: 28, 28, 28;
-  --bs-link-hover-color: #c71f37;
-  --bs-link-hover-color-rgb: 226, 55, 68;
-  --bs-link-decoration: underline;
-  --bs-code-color: #c71f37;
-  --bs-highlight-color: #212529;
-  --bs-highlight-bg: #fff3cd;
-  --bs-border-color: #efefef;
-  --bs-border-color-translucent: rgba(0, 0, 0, 0.175);
-  --bs-nav-color: #212529;
-  --bs-dashboard-bg: #2e3338;
+  --bs-body-color: #0f172a;
+  --paragraphColor: #334155;
+  --bs-muted: #475569;
+  --bs-muted-2: #64748b;
+  --bs-body-color-rgb: 15, 23, 42;
+  --bs-dark-text: #0f172a;
+  --bs-primary: #e11d48;
+  --bs-light: #f1f5f9;
+  --bs-light-gray: rgba(255, 255, 255, 0.78);
+  --bs-dark: #0f1113;
+  --bs-primary-rgb: 225, 29, 72;
+  --bs-light-rgb: 241, 245, 249;
+  --bs-dark-rgb: 15, 17, 19;
+  --bs-primary-2: #0f1113;
+  --bs-primary-text-emphasis: #be123c;
+  --bs-primary-bg-subtle: #fff1f2;
+  --bs-primary-bg-dark: #be123c;
+  --bs-primary-border-subtle: #ffe4e6;
+  --bs-danger-bg-subtle: #fff1f2;
+  --headingColor: #0f172a;
+  --bs-link-color: #0f172a;
+  --bs-link-color-rgb: 15, 23, 42;
+  --bs-link-hover-color: #e11d48;
+  --bs-link-hover-color-rgb: 225, 29, 72;
+  --bs-link-decoration: none;
+  --bs-code-color: #4f46e5;
+  --bs-highlight-color: #0f172a;
+  --bs-highlight-bg: #fef3c7;
+  --bs-border-color: #e2e8f0;
+  --bs-border-color-translucent: rgba(15, 23, 42, 0.08);
+  --bs-nav-color: #0f172a;
+  --bs-dashboard-bg: #0f1113;
 
-  --body-font-family: 'Jost', 'Noto Sans', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  // Rate.vn v3.0 Semantic Tokens
+  --rate-bg-canvas: #f8fafc;
+  --rate-bg-surface: #ffffff;
+  --rate-bg-elevated: #f1f5f9;
+  --rate-bg-dark: #0f1113;
+  --rate-bg-dark-elevated: #161b26;
+  --rate-border-subtle: #e2e8f0;
+  --rate-border-strong: #cbd5e1;
+  --rate-border-dark: rgba(255, 255, 255, 0.09);
+  --rate-fg-primary: #0f172a;
+  --rate-fg-secondary: #475569;
+  --rate-fg-muted: #64748b;
+  --rate-brand: #ff2e29;
+  --rate-brand-hover: #e11d48;
+  --rate-score-user: #10b981;
+  --rate-score-user-bg: #ecfdf5;
+  --rate-score-expert: #6366f1;
+  --rate-score-expert-bg: #eef2ff;
+  --rate-score-star: #f59e0b;
+  --rate-risk-danger: #f43f5e;
+  --rate-risk-danger-bg: #fff1f2;
+
+  --body-font-family: 'Inter', 'Plus Jakarta Sans', 'Noto Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --heading-font-family: 'Inter', 'Plus Jakarta Sans', 'Noto Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --rate-font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
-// Import Font Family with Vietnamese support
-@import url('https://fonts.googleapis.com/css2?family=Jost:wght@200;300;400;500;600;700;800&family=Noto+Sans:wght@300;400;500;600;700&display=swap');
+// Import Modern Analytical Font Stack with full Vietnamese diacritics support
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap');

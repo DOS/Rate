@@ -10830,3 +10830,162 @@ Responsiveness Start
   background-color: transparent !important;
   color: var(--bs-white) !important;
 }
+
+/* ==========================================================================
+   Rate.vn v3.0 Design System - Review & Rating-First Product Intelligence
+   ========================================================================== */
+
+body {
+  background-color: var(--rate-bg-canvas);
+  color: var(--rate-fg-primary);
+  font-family: var(--body-font-family);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--heading-font-family);
+  letter-spacing: -0.02em;
+  color: var(--rate-fg-primary);
+}
+
+.rate-tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.rate-mono {
+  font-family: var(--rate-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.rate-card {
+  background-color: var(--rate-bg-surface);
+  border: 1px solid var(--rate-border-subtle);
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+}
+
+.rate-card-interactive:hover {
+  border-color: var(--rate-border-strong);
+  box-shadow: 0 8px 24px -6px rgba(15, 23, 42, 0.07);
+  transform: translateY(-2px);
+}
+
+.rate-scoreboard-dark {
+  background: linear-gradient(145deg, #0b0d11 0%, #121722 65%, #171e2e 100%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  color: #f8fafc;
+}
+
+.rate-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.65rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-radius: 9999px;
+  background-color: #f1f5f9;
+  color: #334155;
+  border: 1px solid #e2e8f0;
+}
+
+.rate-spec-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: #334155;
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.rate-score-badge-user {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #065f46;
+  background-color: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.rate-score-badge-expert {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #3730a3;
+  background-color: #eef2ff;
+  border: 1px solid #c7d2fe;
+  border-radius: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.rate-criteria-track {
+  width: 100%;
+  height: 7px;
+  background-color: rgba(148, 163, 184, 0.22);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.rate-criteria-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #6366f1 0%, #10b981 100%);
+}
+
+.rate-spec-group-card {
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.rate-spec-group-header {
+  background-color: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 0.75rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.rate-spec-table td {
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 0.86rem;
+  vertical-align: top;
+}
+
+.rate-spec-table tr:last-child td {
+  border-bottom: none;
+}
+
+.rate-spec-label {
+  width: 40%;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.rate-spec-value {
+  width: 60%;
+  color: #0f172a;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}

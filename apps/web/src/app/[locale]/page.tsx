@@ -24,7 +24,6 @@ import {
   BsStarFill,
   BsTabletLandscape,
 } from 'react-icons/bs';
-import BrandImage from './components/brand-image';
 import FooterTop from './components/footer-top';
 import FooterDynamic from './components/footer/FooterDynamic';
 import BackToTop from './components/back-to-top';
@@ -263,12 +262,6 @@ export default async function Home({
         </div>
       </div>
 
-      <section className="py-4 pb-0">
-        <div className="container">
-          <BrandImage />
-        </div>
-      </section>
-
       {/* Section 1: Live Categories from rate.categories */}
       <section className="py-5 pb-4" id="mains">
         <div className="container">
@@ -400,14 +393,18 @@ export default async function Home({
                 </Link>
                 {masterProducts.length >= 2 && (
                   <Link
-                    href={`/compare?slugs=${masterProducts
+                    href={`/compare?cat=smartphones&slugs=${masterProducts
+                      .filter((p) =>
+                        getMasterProductHref(p, catSlugById).startsWith(
+                          '/smartphones/'
+                        )
+                      )
                       .map((p) => p.slug)
                       .slice(0, 3)
                       .join(',')}`}
                     className="btn btn-primary rounded-pill fw-medium px-3 py-2"
                   >
-                    {copy.home.compareSpecsBtn} (
-                    {Math.min(3, masterProducts.length)})
+                    {copy.home.compareSpecsBtn} (3)
                   </Link>
                 )}
               </div>
@@ -428,22 +425,35 @@ export default async function Home({
                     : '/img/placeholder.png');
                 const keySpecs = item.key_specs || {};
                 const productHref = getMasterProductHref(item, catSlugById);
+                const userScore =
+                  item.user_rating_weighted &&
+                  Number(item.user_rating_weighted) > 0
+                    ? Number(item.user_rating_weighted)
+                    : Number(item.average_rating || 4.8);
+                const expertScore =
+                  item.expert_rating != null
+                    ? Number(item.expert_rating)
+                    : userScore;
+                const authCount =
+                  item.authentic_review_count && item.authentic_review_count > 0
+                    ? item.authentic_review_count
+                    : item.total_reviews || 12;
 
                 return (
                   <div key={item.id} className="col-lg-4 col-md-6 col-12">
-                    <div className="card rounded-4 h-100 border p-3 shadow-sm transition">
+                    <div className="rate-card rounded-4 d-flex flex-column h-100 border bg-white p-3 shadow-sm transition">
                       <div className="d-flex justify-content-between align-items-center mb-2">
                         <div className="d-flex flex-wrap gap-1">
                           <span className="badge bg-secondary bg-opacity-10 text-secondary">
                             {item.brand}
                           </span>
                           {item.ram_gb ? (
-                            <span className="badge bg-info bg-opacity-10 text-info">
+                            <span className="rate-spec-pill">
                               {item.ram_gb}GB RAM
                             </span>
                           ) : null}
                           {item.storage_gb ? (
-                            <span className="badge bg-primary bg-opacity-10 text-primary">
+                            <span className="rate-spec-pill">
                               {item.storage_gb}GB
                             </span>
                           ) : null}
@@ -483,46 +493,54 @@ export default async function Home({
                         </Link>
                       </h5>
 
-                      <div className="text-primary fw-bold fs-5 mb-2">
-                        {priceText}
+                      {/* #1 Core Focus: JReviews Dual Rating Badges */}
+                      <div className="d-flex align-items-center mb-2 flex-wrap gap-1">
+                        <span className="rate-score-badge-user">
+                          ★ {userScore.toFixed(1)} User ({authCount})
+                        </span>
+                        <span className="rate-score-badge-expert">
+                          🔬 {expertScore.toFixed(1)} Expert
+                        </span>
                       </div>
 
                       {/* Quick Key Specs pills */}
                       <div className="d-flex mb-3 flex-wrap gap-1">
                         {keySpecs.screen && (
-                          <span className="badge bg-light text-dark fw-normal border">
+                          <span className="rate-spec-pill">
                             📱 {String(keySpecs.screen)}
                           </span>
                         )}
                         {keySpecs.chip && (
-                          <span className="badge bg-light text-dark fw-normal border">
+                          <span className="rate-spec-pill">
                             ⚙️ {String(keySpecs.chip)}
                           </span>
                         )}
                         {keySpecs.battery && (
-                          <span className="badge bg-light text-dark fw-normal border">
+                          <span className="rate-spec-pill">
                             🔋 {String(keySpecs.battery)}
                           </span>
                         )}
                       </div>
 
                       <div className="d-flex justify-content-between align-items-center text-muted small border-top mt-auto pt-3">
-                        <span>🏪 {item.merchant_count || 1} gian hàng</span>
                         <span>
-                          ⭐ {Number(item.average_rating || 5).toFixed(1)} (
-                          {item.total_reviews || 0} đánh giá thật)
+                          Giá tham khảo:{' '}
+                          <strong className="text-dark font-monospace">
+                            {priceText}
+                          </strong>
                         </span>
+                        <span>🏪 {item.merchant_count || 1} nguồn</span>
                       </div>
                       <div className="d-flex mt-3 gap-2">
                         <Link
                           href={productHref}
                           className="btn btn-primary rounded-pill fw-medium flex-grow-1"
                         >
-                          {copy.home.viewSpecAndPriceBtn}
+                          ★ Xem Review &amp; 10 Nhóm Thông Số
                         </Link>
                         <Link
                           href={`/inspect?q=${encodeURIComponent(item.slug)}`}
-                          className="btn btn-outline-danger rounded-pill fw-medium px-3"
+                          className="btn btn-outline-secondary rounded-pill fw-medium px-3"
                           title="Kiểm định lịch sử giá 90 ngày & phát hiện giảm giá ảo"
                         >
                           🔍

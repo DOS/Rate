@@ -1,7 +1,9 @@
 import type { Metadata } from 'next';
 import { Link } from '@/lib/navigation';
 import {
+  type CanonicalCategorySlug,
   getCachedCompareMasterProducts,
+  getMasterProductCategorySlug,
   getMasterProducts,
 } from '@/server/rate';
 import CompareWorkspace from '@/components/compare/CompareWorkspace';
@@ -12,8 +14,23 @@ import BackToTop from '../components/back-to-top';
 
 type PageProps = {
   params: Promise<{ locale: string }>;
-  searchParams: Promise<{ slugs?: string }>;
+  searchParams: Promise<{ slugs?: string; category?: string }>;
 };
+
+const VALID_CATEGORIES = new Set<CanonicalCategorySlug>([
+  'smartphones',
+  'tablets',
+  'laptops',
+  'smartwatches',
+  'earbuds',
+]);
+
+function normalizeCategoryParam(raw?: string): CanonicalCategorySlug {
+  if (raw && VALID_CATEGORIES.has(raw as CanonicalCategorySlug)) {
+    return raw as CanonicalCategorySlug;
+  }
+  return 'smartphones';
+}
 
 function parseSlugsCsv(slugsParam?: string): string[] {
   if (!slugsParam) return [];
@@ -46,14 +63,14 @@ export async function generateMetadata({
       return {
         title:
           locale === 'vi'
-            ? `So sánh ${names} - 10 Nhóm Thông Số & Giá Thật | Rate.vn`
+            ? `So sánh ${names} - Điểm Đánh Giá & 10 Nhóm Thông Số | Rate.vn`
             : locale === 'cs'
-              ? `Porovnání ${names} - 10 skupin parametrů a ceny | Rate.vn`
-              : `Compare ${names} - 10 Spec Groups & True Price | Rate.vn`,
+              ? `Porovnání ${names} - Hodnocení a 10 skupin parametrů | Rate.vn`
+              : `Compare ${names} - Ratings & 10 Spec Groups | Rate.vn`,
         description:
           locale === 'vi'
-            ? `Đối chiếu chi tiết 10 nhóm thông số kỹ thuật chuẩn PhoneArena/GSMArena, giá bán thấp nhất và điểm đánh giá thực chất giữa ${names} trên Rate.vn.`
-            : `Side-by-side comparison across 10 standardized technical spec groups, lowest verified price, and JReviews rating for ${names} on Rate.vn.`,
+            ? `Đối chiếu điểm đánh giá thực chất (JReviews), 10 nhóm thông số kỹ thuật chuẩn PhoneArena/GSMArena và giá tham khảo giữa ${names} trên Rate.vn.`
+            : `Side-by-side comparison across JReviews ratings, 10 standardized technical spec groups, and verified prices for ${names} on Rate.vn.`,
         alternates: {
           canonical: canonicalUrl,
         },
@@ -64,14 +81,14 @@ export async function generateMetadata({
   return {
     title:
       locale === 'vi'
-        ? 'So sánh Thiết bị Công nghệ - 10 Nhóm Thông Số & Giá Thật | Rate.vn'
+        ? 'So sánh Thiết bị Cùng Danh Mục - Điểm Đánh Giá & 10 Nhóm Thông Số | Rate.vn'
         : locale === 'cs'
-          ? 'Porovnání zařízení - 10 skupin parametrů a skutečné ceny | Rate.vn'
-          : 'Compare Tech Devices - 10 Spec Groups & True Price | Rate.vn',
+          ? 'Porovnání zařízení ve stejné kategorii - 10 skupin parametrů | Rate.vn'
+          : 'Same-Category Device Comparison - Ratings & 10 Spec Groups | Rate.vn',
     description:
       locale === 'vi'
-        ? 'Tìm kiếm và đặt lên bàn cân tối đa 4 mẫu điện thoại, laptop, máy tính bảng theo chuẩn 10 nhóm thông số kỹ thuật PhoneArena/GSMArena và so sánh giá thật trên Rate.vn.'
-        : 'Compare up to 4 smartphones, laptops, or tablets side by side across 10 standardized technical specification groups and true historical prices on Rate.vn.',
+        ? 'Đặt lên bàn cân tối đa 4 thiết bị cùng danh mục (Điện thoại, Máy tính bảng, Laptop, Đồng hồ thông minh hoặc Tai nghe) theo điểm JReviews và 10 nhóm thông số kỹ thuật.'
+        : 'Compare up to 4 devices within the same category (Smartphones, Tablets, Laptops, Smartwatches, or Earbuds) across JReviews ratings and 10 technical specification groups.',
     alternates: {
       canonical: canonicalUrl,
     },
@@ -83,26 +100,41 @@ export default async function ComparePhonesPage({
   searchParams,
 }: PageProps) {
   const { locale } = await params;
-  const { slugs: slugsParam } = await searchParams;
+  const { slugs: slugsParam, category: categoryParam } = await searchParams;
   const requestedSlugs = parseSlugsCsv(slugsParam);
 
   const [catalogCandidates, requestedProducts] = await Promise.all([
-    getMasterProducts({ limit: 36 }),
+    getMasterProducts({ categorySlug: 'all', limit: 50 }),
     requestedSlugs.length > 0
       ? getCachedCompareMasterProducts(requestedSlugs.join(','))
       : Promise.resolve([]),
   ]);
 
+  const activeCategory: CanonicalCategorySlug =
+    requestedProducts.length > 0
+      ? getMasterProductCategorySlug(requestedProducts[0]!)
+      : normalizeCategoryParam(categoryParam);
+
+  // Strictly lock default products to the active category (never mix Smartphones with Earbuds/Laptops)
+  const sameCategoryCandidates = catalogCandidates.filter(
+    (c) => getMasterProductCategorySlug(c) === activeCategory
+  );
+
   const initialProducts =
     requestedProducts.length > 0
-      ? requestedProducts
-      : catalogCandidates.slice(0, 3);
+      ? requestedProducts.filter(
+          (p) => getMasterProductCategorySlug(p) === activeCategory
+        )
+      : sameCategoryCandidates.slice(0, 3);
 
   return (
     <>
       <NavbarDarkDynamic links={[]} />
 
-      <div className="bg-light min-vh-100 py-md-5 py-4">
+      <div
+        className="min-vh-100 py-md-5 py-4"
+        style={{ backgroundColor: 'var(--rate-bg-canvas)' }}
+      >
         <div className="container">
           {/* Header & Breadcrumb */}
           <div className="d-flex align-items-end justify-content-between mb-4 flex-wrap gap-3">
@@ -119,7 +151,10 @@ export default async function ComparePhonesPage({
                     </Link>
                   </li>
                   <li className="breadcrumb-item">
-                    <Link href="/smartphones" className="text-decoration-none">
+                    <Link
+                      href={`/${activeCategory}`}
+                      className="text-decoration-none"
+                    >
                       {locale === 'vi'
                         ? 'Danh mục thiết bị'
                         : locale === 'cs'
@@ -129,54 +164,35 @@ export default async function ComparePhonesPage({
                   </li>
                   <li className="breadcrumb-item active" aria-current="page">
                     {locale === 'vi'
-                      ? 'So sánh 10 nhóm thông số'
+                      ? 'Đối chiếu Điểm Đánh Giá & 10 Nhóm Thông Số'
                       : locale === 'cs'
-                        ? 'Porovnání 10 skupin parametrů'
-                        : '10-Group Spec Comparison'}
+                        ? 'Porovnání hodnocení a 10 skupin parametrů'
+                        : 'Rating & 10-Group Spec Comparison'}
                   </li>
                 </ol>
               </nav>
+              <div className="rate-eyebrow mb-2">
+                Chuẩn Đối Chiếu Cùng Danh Mục (Same-Category Lock)
+              </div>
               <h1 className="h2 fw-bold mb-1">
                 {locale === 'vi'
-                  ? 'Bàn Cân Đối Chiếu 10 Nhóm Thông Số Kỹ Thuật (10 Field Groups)'
+                  ? 'Bàn Cân Điểm Đánh Giá Đa Chiều & 10 Nhóm Thông Số Kỹ Thuật'
                   : locale === 'cs'
-                    ? 'Porovnání 10 skupin technických parametrů (10 Field Groups)'
-                    : 'Side-by-Side 10-Group Specification Comparison'}
+                    ? 'Porovnání hodnocení a 10 skupin technických parametrů'
+                    : 'Side-by-Side Rating & 10-Group Technical Specification Matrix'}
               </h1>
               <p className="text-muted mb-0">
                 {locale === 'vi'
-                  ? 'Tìm kiếm Autocomplete, thêm tối đa 4 mẫu Điện thoại, Laptop hoặc Máy tính bảng để đối chiếu trực quan 10 nhóm thông số chuẩn PhoneArena/GSMArena và giá bán thực tế'
-                  : locale === 'cs'
-                    ? 'Vyhledejte a porovnejte až 4 telefony, notebooky nebo tablety podle 10 standardizovaných skupin parametrů a skutečných cen'
-                    : 'Search and compare up to 4 Smartphones, Laptops, or Tablets across 10 standardized PhoneArena/GSMArena spec groups and verified marketplace prices'}
+                  ? 'Hệ thống tự động khóa cùng danh mục thiết bị (chỉ so sánh Điện thoại với Điện thoại, Tai nghe với Tai nghe, Laptop với Laptop) để đảm bảo kết quả chấm điểm và thông số chính xác tuyệt đối.'
+                  : 'Strictly locks comparison slots to the same device category so ratings, technical specs, and price floors are compared fairly.'}
               </p>
-            </div>
-
-            <div className="d-flex flex-wrap gap-2">
-              <Link
-                href="/smartphones"
-                className="btn btn-outline-primary rounded-pill fw-medium px-3"
-              >
-                📱 {locale === 'vi' ? 'Điện thoại' : 'Smartphones'}
-              </Link>
-              <Link
-                href="/laptops"
-                className="btn btn-outline-primary rounded-pill fw-medium px-3"
-              >
-                💻 Laptop
-              </Link>
-              <Link
-                href="/tablets"
-                className="btn btn-outline-primary rounded-pill fw-medium px-3"
-              >
-                📟 {locale === 'vi' ? 'Máy tính bảng' : 'Tablets'}
-              </Link>
             </div>
           </div>
 
           <CompareWorkspace
             initialProducts={initialProducts}
             catalogCandidates={catalogCandidates}
+            initialCategory={activeCategory}
             hasExplicitSlugs={requestedSlugs.length > 0}
           />
         </div>
