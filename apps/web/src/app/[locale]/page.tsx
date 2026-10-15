@@ -97,31 +97,63 @@ export default async function Home({
     <>
       <NavbarDarkDynamic links={[]} />
 
-      {/* Hero Section with Interactive Autocomplete & E-commerce Link Inspector */}
+      {/* Hero Section with Interactive Autocomplete & E-commerce Link Inspector (DESIGN.md v2.0 Dark Obsidian + DOS Crimson Glow) */}
       <div
-        className="image-cover hero-header position-relative overflow-hidden"
+        className="hero-header position-relative overflow-hidden"
         style={{
-          backgroundImage: `url('/img/banner-6.jpg')`,
-          paddingBottom: '5.5rem',
+          background:
+            'radial-gradient(circle at 20% 20%, rgba(255, 46, 41, 0.16), transparent 45%), radial-gradient(circle at 80% 15%, rgba(99, 102, 241, 0.14), transparent 42%), linear-gradient(180deg, #0f1113 0%, #141821 100%)',
+          paddingTop: '4.5rem',
+          paddingBottom: '5rem',
+          borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
         }}
-        data-overlay="7"
       >
-        <div className="container">
+        <div className="position-relative z-1 container">
           <div className="row justify-content-center align-items-center">
             <div className="col-xl-10 col-lg-11 col-md-12 col-sm-12">
-              <div className="position-relative mb-4 pt-3 pb-2 text-center">
-                <div className="d-inline-flex align-items-center rounded-pill bg-dark bg-opacity-75 border-light border-opacity-25 text-light small fw-semibold mb-3 gap-2 border px-3 py-1">
+              <div className="position-relative mb-4 pt-2 pb-2 text-center">
+                <div
+                  className="d-inline-flex align-items-center rounded-pill small fw-semibold mb-3 gap-2 px-3 py-2"
+                  style={{
+                    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+                    border: '1px solid rgba(255, 255, 255, 0.14)',
+                    color: '#f8fafc',
+                    backdropFilter: 'blur(12px)',
+                  }}
+                >
                   <BsShieldCheck className="text-success" />
                   <span>{copy.home.heroBadge}</span>
                 </div>
-                <h1 className="fw-bold mb-3 text-white">
+                <h1
+                  className="fw-bold mb-3 text-white"
+                  style={{
+                    fontSize: 'clamp(2rem, 4.2vw, 3.25rem)',
+                    letterSpacing: '-0.03em',
+                    lineHeight: 1.15,
+                  }}
+                >
                   {copy.home.heroTitlePrefix}{' '}
-                  <span className="text-light border-light rounded-pill br-dashed border border-2 px-3">
+                  <span
+                    className="rounded-3 d-inline-block px-3 py-1"
+                    style={{
+                      background:
+                        'linear-gradient(135deg, rgba(255, 46, 41, 0.22), rgba(225, 29, 72, 0.12))',
+                      border: '1px solid rgba(255, 46, 41, 0.45)',
+                      color: '#ff6b6b',
+                    }}
+                  >
                     {copy.home.heroTitleHighlight}
                   </span>{' '}
                   {copy.home.heroTitleSuffix}
                 </h1>
-                <p className="fs-5 fw-light text-opacity-75 mb-0 text-white">
+                <p
+                  className="fs-5 mb-0"
+                  style={{
+                    color: '#94a3b8',
+                    maxWidth: '780px',
+                    margin: '0 auto',
+                  }}
+                >
                   {copy.home.heroSubtitle}
                 </p>
               </div>
@@ -140,43 +172,87 @@ export default async function Home({
           {/* Live Platform Telemetry Strip */}
           <div className="row justify-content-center mt-4 pt-2">
             <div className="col-xl-9 col-lg-10 col-12">
-              <div className="row g-2 text-center">
+              <div className="row g-3 text-center">
                 <div className="col-md-3 col-6">
-                  <div className="rounded-3 bg-dark bg-opacity-50 border-light border-opacity-10 border p-2 text-white">
-                    <div className="fw-bold fs-5 text-warning">
+                  <div
+                    className="rounded-4 h-100 p-3 text-white"
+                    style={{
+                      backgroundColor: 'rgba(22, 25, 30, 0.78)',
+                      border: '1px solid rgba(255, 255, 255, 0.08)',
+                      backdropFilter: 'blur(12px)',
+                      fontVariantNumeric: 'tabular-nums',
+                    }}
+                  >
+                    <div
+                      className="fw-bold fs-4"
+                      style={{ color: '#ff6b6b', letterSpacing: '-0.02em' }}
+                    >
                       {platformStats.masterProductsCount}
                     </div>
-                    <div className="small text-white-50">
+                    <div className="small" style={{ color: '#94a3b8' }}>
                       {copy.home.statProducts}
                     </div>
                   </div>
                 </div>
                 <div className="col-md-3 col-6">
-                  <div className="rounded-3 bg-dark bg-opacity-50 border-light border-opacity-10 border p-2 text-white">
-                    <div className="fw-bold fs-5 text-info">
+                  <div
+                    className="rounded-4 h-100 p-3 text-white"
+                    style={{
+                      backgroundColor: 'rgba(22, 25, 30, 0.78)',
+                      border: '1px solid rgba(255, 255, 255, 0.08)',
+                      backdropFilter: 'blur(12px)',
+                      fontVariantNumeric: 'tabular-nums',
+                    }}
+                  >
+                    <div
+                      className="fw-bold fs-4"
+                      style={{ color: '#38bdf8', letterSpacing: '-0.02em' }}
+                    >
                       {platformStats.priceObservationsCount}
                     </div>
-                    <div className="small text-white-50">
+                    <div className="small" style={{ color: '#94a3b8' }}>
                       {copy.home.statPricePoints}
                     </div>
                   </div>
                 </div>
                 <div className="col-md-3 col-6">
-                  <div className="rounded-3 bg-dark bg-opacity-50 border-light border-opacity-10 border p-2 text-white">
-                    <div className="fw-bold fs-5 text-success">
+                  <div
+                    className="rounded-4 h-100 p-3 text-white"
+                    style={{
+                      backgroundColor: 'rgba(22, 25, 30, 0.78)',
+                      border: '1px solid rgba(255, 255, 255, 0.08)',
+                      backdropFilter: 'blur(12px)',
+                      fontVariantNumeric: 'tabular-nums',
+                    }}
+                  >
+                    <div
+                      className="fw-bold fs-4"
+                      style={{ color: '#10b981', letterSpacing: '-0.02em' }}
+                    >
                       {platformStats.totalReviewsCount}
                     </div>
-                    <div className="small text-white-50">
+                    <div className="small" style={{ color: '#94a3b8' }}>
                       {copy.home.statReviews}
                     </div>
                   </div>
                 </div>
                 <div className="col-md-3 col-6">
-                  <div className="rounded-3 bg-dark bg-opacity-50 border-light border-opacity-10 border p-2 text-white">
-                    <div className="fw-bold fs-5 text-light">
+                  <div
+                    className="rounded-4 h-100 p-3 text-white"
+                    style={{
+                      backgroundColor: 'rgba(22, 25, 30, 0.78)',
+                      border: '1px solid rgba(255, 255, 255, 0.08)',
+                      backdropFilter: 'blur(12px)',
+                      fontVariantNumeric: 'tabular-nums',
+                    }}
+                  >
+                    <div
+                      className="fw-bold fs-4"
+                      style={{ color: '#f8fafc', letterSpacing: '-0.02em' }}
+                    >
                       {platformStats.merchantsCount}
                     </div>
-                    <div className="small text-white-50">
+                    <div className="small" style={{ color: '#94a3b8' }}>
                       {copy.home.statMerchants}
                     </div>
                   </div>
@@ -184,20 +260,6 @@ export default async function Home({
               </div>
             </div>
           </div>
-        </div>
-        <div className="mousedrop d-none d-lg-block z-1">
-          <Link
-            href="#mains"
-            className="mousewheel center"
-            style={{
-              bottom: '24px',
-              position: 'absolute',
-              left: '50%',
-              transform: 'translateX(-50%)',
-            }}
-          >
-            <BsMouse className="" />
-          </Link>
         </div>
       </div>
 
