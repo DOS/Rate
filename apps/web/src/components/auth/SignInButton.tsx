@@ -1,17 +1,32 @@
 'use client';
 
-import { useSession } from 'next-auth/react';
 import { useParams, useRouter } from 'next/navigation';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { getPublicClient } from '@repo/shared-data';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
 
 export function SignInButton({ className }: { className?: string }) {
-  const { status } = useSession();
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const params = useParams<{ locale: string }>();
   const router = useRouter();
   const locale = normalizeRateLocale(params?.locale);
 
-  if (status === 'authenticated') return null;
+  useEffect(() => {
+    let active = true;
+    try {
+      const supabase = getPublicClient();
+      supabase.auth.getSession().then(({ data }) => {
+        if (active) setIsAuthenticated(Boolean(data.session));
+      });
+    } catch {
+      // Ignore client initialization errors in SSR/CI placeholder environments
+    }
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  if (isAuthenticated) return null;
 
   const targetHref = '/login';
   const label =

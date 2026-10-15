@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState } from 'react';
-import { signIn } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Link } from '@/lib/navigation';
 import { getPublicClient } from '@repo/shared-data';
@@ -22,10 +21,7 @@ import {
 } from 'react-icons/bs';
 
 export type RateAuthMode =
-  | 'login'
-  | 'register'
-  | 'forgot-password'
-  | 'two-factor-auth';
+  'login' | 'register' | 'forgot-password' | 'two-factor-auth';
 
 interface RateAuthPortalProps {
   mode: RateAuthMode;
@@ -97,13 +93,17 @@ const AUTH_COPY: Record<SupportedRateLocale, AuthLocaleText> = {
     feature3Desc:
       'Dữ liệu định danh được bảo vệ bởi Row Level Security (RLS) trên PostgreSQL 17 của hệ sinh thái DOS.',
     loginTitle: 'Đăng Nhập Tài Khoản Rate.vn',
-    loginSub: 'Sử dụng email và mật khẩu hoặc nhận mã xác thực OTP một lần qua email.',
+    loginSub:
+      'Sử dụng email và mật khẩu hoặc nhận mã xác thực OTP một lần qua email.',
     registerTitle: 'Tạo Tài Khoản Kiểm Toán Người Mua',
-    registerSub: 'Tham gia cộng đồng đánh giá thông số 10 nhóm và canh giá thật đa sàn.',
+    registerSub:
+      'Tham gia cộng đồng đánh giá thông số 10 nhóm và canh giá thật đa sàn.',
     forgotTitle: 'Khôi Phục Mật Khẩu Tài Khoản',
-    forgotSub: 'Nhập địa chỉ email đã đăng ký để nhận liên kết đặt lại mật khẩu an toàn từ Supabase Auth.',
+    forgotSub:
+      'Nhập địa chỉ email đã đăng ký để nhận liên kết đặt lại mật khẩu an toàn từ Supabase Auth.',
     otpTitle: 'Xác Thực Hai Lớp & Mã OTP Email',
-    otpSub: 'Nhập mã xác thực 6 chữ số được gửi tới hộp thư của bạn để hoàn tất đăng nhập bảo mật.',
+    otpSub:
+      'Nhập mã xác thực 6 chữ số được gửi tới hộp thư của bạn để hoàn tất đăng nhập bảo mật.',
     fullNameLabel: 'Họ và tên hiển thị',
     fullNamePlaceholder: 'Nguyễn Văn A',
     emailLabel: 'Địa chỉ Email',
@@ -128,7 +128,8 @@ const AUTH_COPY: Record<SupportedRateLocale, AuthLocaleText> = {
     errPasswordShort: `Mật khẩu phải có ít nhất ${PASSWORD_MIN_LENGTH} ký tự.`,
     errInvalidCredentials:
       'Email hoặc mật khẩu không chính xác, hoặc tài khoản chưa được kích hoạt.',
-    errGeneric: 'Không thể hoàn tất yêu cầu xác thực. Vui lòng kiểm tra lại thông tin.',
+    errGeneric:
+      'Không thể hoàn tất yêu cầu xác thực. Vui lòng kiểm tra lại thông tin.',
     okLogin: 'Đăng nhập thành công! Đang chuyển hướng...',
     okRegister:
       'Đăng ký tài khoản thành công! Vui lòng kiểm tra hộp thư email để xác nhận hoặc đăng nhập ngay.',
@@ -153,13 +154,17 @@ const AUTH_COPY: Record<SupportedRateLocale, AuthLocaleText> = {
     feature3Desc:
       'Your identity is protected by strict Row Level Security on the DOS Ecosystem Supabase infrastructure.',
     loginTitle: 'Sign In to Rate.vn',
-    loginSub: 'Sign in with your email and password or request a one-time email OTP code.',
+    loginSub:
+      'Sign in with your email and password or request a one-time email OTP code.',
     registerTitle: 'Create a Buyer Audit Account',
-    registerSub: 'Join the open community auditing 10-group specs and real historical prices.',
+    registerSub:
+      'Join the open community auditing 10-group specs and real historical prices.',
     forgotTitle: 'Reset Your Account Password',
-    forgotSub: 'Enter your registered email address to receive a password reset link via Supabase Auth.',
+    forgotSub:
+      'Enter your registered email address to receive a password reset link via Supabase Auth.',
     otpTitle: 'Two-Factor & Email OTP Verification',
-    otpSub: 'Enter the 6-digit verification code sent to your email inbox to complete sign-in.',
+    otpSub:
+      'Enter the 6-digit verification code sent to your email inbox to complete sign-in.',
     fullNameLabel: 'Display Name',
     fullNamePlaceholder: 'Alex Nguyen',
     emailLabel: 'Email Address',
@@ -184,7 +189,8 @@ const AUTH_COPY: Record<SupportedRateLocale, AuthLocaleText> = {
     errPasswordShort: `Password must be at least ${PASSWORD_MIN_LENGTH} characters long.`,
     errInvalidCredentials:
       'Invalid email or password, or the account has not been confirmed yet.',
-    errGeneric: 'Could not complete authentication request. Please verify your details.',
+    errGeneric:
+      'Could not complete authentication request. Please verify your details.',
     okLogin: 'Signed in successfully! Redirecting...',
     okRegister:
       'Account created! Please check your email inbox for confirmation or sign in directly.',
@@ -209,11 +215,14 @@ const AUTH_COPY: Record<SupportedRateLocale, AuthLocaleText> = {
     feature3Desc:
       'Vaše identita je chráněna politikami Row Level Security v infrastruktuře DOS.',
     loginTitle: 'Přihlášení k účtu Rate.vn',
-    loginSub: 'Přihlaste se pomocí e-mailu a hesla nebo jednorázového OTP kódu.',
+    loginSub:
+      'Přihlaste se pomocí e-mailu a hesla nebo jednorázového OTP kódu.',
     registerTitle: 'Vytvořit účet na Rate.vn',
-    registerSub: 'Připojte se ke komunitě kontrolující 10 skupin parametrů a skutečné ceny.',
+    registerSub:
+      'Připojte se ke komunitě kontrolující 10 skupin parametrů a skutečné ceny.',
     forgotTitle: 'Obnovení zapomenutého hesla',
-    forgotSub: 'Zadejte svůj registrovaný e-mail pro zaslání odkazu k obnovení hesla přes Supabase Auth.',
+    forgotSub:
+      'Zadejte svůj registrovaný e-mail pro zaslání odkazu k obnovení hesla přes Supabase Auth.',
     otpTitle: 'Dvoufázové ověření a e-mailový OTP kód',
     otpSub: 'Zadejte 6místný ověřovací kód zaslaný na váš e-mail.',
     fullNameLabel: 'Zobrazované jméno',
@@ -265,9 +274,7 @@ export default function RateAuthPortal({ mode, locale }: RateAuthPortalProps) {
   );
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  const redirectTarget =
-    searchParams.get('callbackUrl') ||
-    (normalizedLocale === 'vi' ? '/' : `/${normalizedLocale}`);
+  const redirectTarget = searchParams.get('callbackUrl') || '/';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -292,13 +299,7 @@ export default function RateAuthPortal({ mode, locale }: RateAuthPortalProps) {
             password,
           });
 
-        const nextAuthResult = await signIn('credentials', {
-          email: trimmedEmail,
-          password,
-          redirect: false,
-        });
-
-        if ((sbError && !nextAuthResult?.ok) || (!sbData?.session && !nextAuthResult?.ok)) {
+        if (sbError || !sbData?.session) {
           setErrorMessage(sbError?.message || copy.errInvalidCredentials);
           setLoading(false);
           return;
@@ -340,11 +341,6 @@ export default function RateAuthPortal({ mode, locale }: RateAuthPortalProps) {
 
         setSuccessMessage(copy.okRegister);
         if (data?.session) {
-          await signIn('credentials', {
-            email: trimmedEmail,
-            password,
-            redirect: false,
-          });
           router.push(redirectTarget);
         }
         setLoading(false);
@@ -353,10 +349,15 @@ export default function RateAuthPortal({ mode, locale }: RateAuthPortalProps) {
 
       if (mode === 'forgot-password') {
         const origin =
-          typeof window !== 'undefined' ? window.location.origin : 'https://rate.vn';
-        const { error } = await supabase.auth.resetPasswordForEmail(trimmedEmail, {
-          redirectTo: `${origin}/login`,
-        });
+          typeof window !== 'undefined'
+            ? window.location.origin
+            : 'https://rate.vn';
+        const { error } = await supabase.auth.resetPasswordForEmail(
+          trimmedEmail,
+          {
+            redirectTo: `${origin}/login`,
+          }
+        );
 
         if (error) {
           setErrorMessage(error.message || copy.errGeneric);
@@ -434,75 +435,83 @@ export default function RateAuthPortal({ mode, locale }: RateAuthPortalProps) {
     mode === 'login'
       ? copy.loginTitle
       : mode === 'register'
-      ? copy.registerTitle
-      : mode === 'forgot-password'
-      ? copy.forgotTitle
-      : copy.otpTitle;
+        ? copy.registerTitle
+        : mode === 'forgot-password'
+          ? copy.forgotTitle
+          : copy.otpTitle;
 
   const headingSub =
     mode === 'login'
       ? copy.loginSub
       : mode === 'register'
-      ? copy.registerSub
-      : mode === 'forgot-password'
-      ? copy.forgotSub
-      : copy.otpSub;
+        ? copy.registerSub
+        : mode === 'forgot-password'
+          ? copy.forgotSub
+          : copy.otpSub;
 
   return (
     <section className="bg-light py-5">
-      <div className="container py-lg-4">
+      <div className="py-lg-4 container">
         <div className="row g-4 align-items-stretch">
           {/* Left Column: Rate.vn Trust & Security Architecture */}
           <div className="col-lg-6 d-flex">
-            <div className="card border-0 rounded-4 shadow-sm bg-dark text-white p-4 p-xl-5 w-100 d-flex flex-column justify-content-between">
+            <div className="card rounded-4 bg-dark p-xl-5 d-flex flex-column justify-content-between w-100 border-0 p-4 text-white shadow-sm">
               <div>
-                <div className="d-inline-flex align-items-center gap-2 bg-danger bg-opacity-25 text-white px-3 py-1 rounded-pill small fw-medium mb-3">
+                <div className="d-inline-flex align-items-center bg-danger bg-opacity-25 rounded-pill small fw-medium mb-3 gap-2 px-3 py-1 text-white">
                   <BsShieldLockFill className="text-danger" />
                   <span>{copy.badge}</span>
                 </div>
-                <h1 className="h2 fw-bold text-white mb-3">{copy.trustTitle}</h1>
+                <h1 className="h2 fw-bold mb-3 text-white">
+                  {copy.trustTitle}
+                </h1>
                 <p className="text-white-50 mb-4">{copy.trustSubtitle}</p>
 
                 <div className="d-flex flex-column gap-3">
-                  <div className="p-3 rounded-3 bg-white bg-opacity-10 d-flex align-items-start gap-3">
-                    <div className="p-2 rounded-3 bg-danger text-white flex-shrink-0">
+                  <div className="rounded-3 bg-opacity-10 d-flex align-items-start gap-3 bg-white p-3">
+                    <div className="rounded-3 bg-danger flex-shrink-0 p-2 text-white">
                       <BsStarFill />
                     </div>
                     <div>
-                      <div className="fw-semibold text-white mb-1">
+                      <div className="fw-semibold mb-1 text-white">
                         {copy.feature1Title}
                       </div>
-                      <div className="small text-white-50">{copy.feature1Desc}</div>
+                      <div className="small text-white-50">
+                        {copy.feature1Desc}
+                      </div>
                     </div>
                   </div>
 
-                  <div className="p-3 rounded-3 bg-white bg-opacity-10 d-flex align-items-start gap-3">
-                    <div className="p-2 rounded-3 bg-primary text-white flex-shrink-0">
+                  <div className="rounded-3 bg-opacity-10 d-flex align-items-start gap-3 bg-white p-3">
+                    <div className="rounded-3 bg-primary flex-shrink-0 p-2 text-white">
                       <BsBellFill />
                     </div>
                     <div>
-                      <div className="fw-semibold text-white mb-1">
+                      <div className="fw-semibold mb-1 text-white">
                         {copy.feature2Title}
                       </div>
-                      <div className="small text-white-50">{copy.feature2Desc}</div>
+                      <div className="small text-white-50">
+                        {copy.feature2Desc}
+                      </div>
                     </div>
                   </div>
 
-                  <div className="p-3 rounded-3 bg-white bg-opacity-10 d-flex align-items-start gap-3">
-                    <div className="p-2 rounded-3 bg-success text-white flex-shrink-0">
+                  <div className="rounded-3 bg-opacity-10 d-flex align-items-start gap-3 bg-white p-3">
+                    <div className="rounded-3 bg-success flex-shrink-0 p-2 text-white">
                       <BsShieldCheck />
                     </div>
                     <div>
-                      <div className="fw-semibold text-white mb-1">
+                      <div className="fw-semibold mb-1 text-white">
                         {copy.feature3Title}
                       </div>
-                      <div className="small text-white-50">{copy.feature3Desc}</div>
+                      <div className="small text-white-50">
+                        {copy.feature3Desc}
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
 
-              <div className="mt-4 pt-3 border-top border-secondary border-opacity-25 d-flex flex-wrap gap-2">
+              <div className="border-top border-secondary border-opacity-25 d-flex mt-4 flex-wrap gap-2 pt-3">
                 <Link
                   href="/smartphones"
                   className="btn btn-sm btn-outline-light rounded-pill px-3"
@@ -533,13 +542,15 @@ export default function RateAuthPortal({ mode, locale }: RateAuthPortalProps) {
 
           {/* Right Column: Interactive Supabase Auth Form */}
           <div className="col-lg-6 d-flex">
-            <div className="card border-0 rounded-4 shadow-sm p-4 p-xl-5 w-100 bg-white">
+            <div className="card rounded-4 p-xl-5 w-100 border-0 bg-white p-4 shadow-sm">
               {/* Mode Switcher Pills */}
-              <div className="d-flex flex-wrap gap-2 mb-4 pb-3 border-bottom">
+              <div className="d-flex border-bottom mb-4 flex-wrap gap-2 pb-3">
                 <Link
                   href="/login"
                   className={`btn btn-sm rounded-pill px-3 ${
-                    mode === 'login' ? 'btn-danger fw-semibold' : 'btn-light text-muted'
+                    mode === 'login'
+                      ? 'btn-danger fw-semibold'
+                      : 'btn-light text-muted'
                   }`}
                 >
                   🔑 Login
@@ -581,7 +592,7 @@ export default function RateAuthPortal({ mode, locale }: RateAuthPortalProps) {
 
               {errorMessage && (
                 <div
-                  className="alert alert-danger d-flex align-items-center gap-2 rounded-3 py-2 small"
+                  className="alert alert-danger d-flex align-items-center rounded-3 small gap-2 py-2"
                   role="alert"
                 >
                   <BsExclamationTriangleFill className="flex-shrink-0" />
@@ -591,7 +602,7 @@ export default function RateAuthPortal({ mode, locale }: RateAuthPortalProps) {
 
               {successMessage && (
                 <div
-                  className="alert alert-success d-flex align-items-center gap-2 rounded-3 py-2 small"
+                  className="alert alert-success d-flex align-items-center rounded-3 small gap-2 py-2"
                   role="status"
                 >
                   <BsCheckCircleFill className="flex-shrink-0" />
@@ -599,14 +610,17 @@ export default function RateAuthPortal({ mode, locale }: RateAuthPortalProps) {
                 </div>
               )}
 
-              <form onSubmit={handleSubmit} className="d-flex flex-column gap-3">
+              <form
+                onSubmit={handleSubmit}
+                className="d-flex flex-column gap-3"
+              >
                 {mode === 'register' && (
                   <div>
                     <label
                       htmlFor="rate-auth-fullname"
                       className="form-label small fw-semibold text-dark"
                     >
-                      <BsPersonFill className="me-1 text-danger" />
+                      <BsPersonFill className="text-danger me-1" />
                       {copy.fullNameLabel}
                     </label>
                     <input
@@ -626,7 +640,7 @@ export default function RateAuthPortal({ mode, locale }: RateAuthPortalProps) {
                     htmlFor="rate-auth-email"
                     className="form-label small fw-semibold text-dark"
                   >
-                    <BsEnvelopeFill className="me-1 text-danger" />
+                    <BsEnvelopeFill className="text-danger me-1" />
                     {copy.emailLabel}
                   </label>
                   <input
@@ -647,7 +661,7 @@ export default function RateAuthPortal({ mode, locale }: RateAuthPortalProps) {
                         htmlFor="rate-auth-password"
                         className="form-label small fw-semibold text-dark mb-1"
                       >
-                        <BsLockFill className="me-1 text-danger" />
+                        <BsLockFill className="text-danger me-1" />
                         {copy.passwordLabel}
                       </label>
                       {mode === 'login' && (
@@ -678,7 +692,7 @@ export default function RateAuthPortal({ mode, locale }: RateAuthPortalProps) {
                       htmlFor="rate-auth-confirm"
                       className="form-label small fw-semibold text-dark"
                     >
-                      <BsKeyFill className="me-1 text-danger" />
+                      <BsKeyFill className="text-danger me-1" />
                       {copy.confirmPasswordLabel}
                     </label>
                     <input
@@ -701,14 +715,14 @@ export default function RateAuthPortal({ mode, locale }: RateAuthPortalProps) {
                         htmlFor="rate-auth-otp"
                         className="form-label small fw-semibold text-dark mb-0"
                       >
-                        <BsKeyFill className="me-1 text-danger" />
+                        <BsKeyFill className="text-danger me-1" />
                         {copy.otpLabel}
                       </label>
                       <button
                         type="button"
                         onClick={handleSendOtpCode}
                         disabled={loading || !email.trim()}
-                        className="btn btn-link btn-sm p-0 text-danger text-decoration-none fw-medium"
+                        className="btn btn-link btn-sm text-danger text-decoration-none fw-medium p-0"
                       >
                         {copy.sendMagicOtpBtn}
                       </button>
@@ -718,7 +732,7 @@ export default function RateAuthPortal({ mode, locale }: RateAuthPortalProps) {
                       type="text"
                       inputMode="numeric"
                       maxLength={8}
-                      className="form-control rounded-3 text-center fw-bold fs-5 letter-spacing-2"
+                      className="form-control rounded-3 fw-bold fs-5 letter-spacing-2 text-center"
                       placeholder={copy.otpPlaceholder}
                       value={otpToken}
                       onChange={(e) => setOtpToken(e.target.value)}
@@ -729,26 +743,26 @@ export default function RateAuthPortal({ mode, locale }: RateAuthPortalProps) {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="btn btn-danger rounded-pill py-2 fw-semibold d-flex align-items-center justify-content-center gap-2 mt-2"
+                  className="btn btn-danger rounded-pill fw-semibold d-flex align-items-center justify-content-center mt-2 gap-2 py-2"
                 >
                   <span>
                     {loading
                       ? copy.submitting
                       : mode === 'login'
-                      ? copy.loginBtn
-                      : mode === 'register'
-                      ? copy.registerBtn
-                      : mode === 'forgot-password'
-                      ? copy.forgotBtn
-                      : otpToken.trim()
-                      ? copy.otpVerifyBtn
-                      : copy.sendMagicOtpBtn}
+                        ? copy.loginBtn
+                        : mode === 'register'
+                          ? copy.registerBtn
+                          : mode === 'forgot-password'
+                            ? copy.forgotBtn
+                            : otpToken.trim()
+                              ? copy.otpVerifyBtn
+                              : copy.sendMagicOtpBtn}
                   </span>
                   <BsArrowRight />
                 </button>
               </form>
 
-              <div className="mt-4 pt-3 border-top d-flex flex-wrap justify-content-between align-items-center gap-2 small">
+              <div className="border-top d-flex justify-content-between align-items-center small mt-4 flex-wrap gap-2 pt-3">
                 {mode === 'login' ? (
                   <>
                     <Link
