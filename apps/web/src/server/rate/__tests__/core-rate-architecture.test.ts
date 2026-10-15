@@ -240,7 +240,36 @@ function runCoreArchitectureSuite() {
     10
   );
   console.log(
-    '  ✅ [7/7] OpenAPI 3.1.0 Specification (/api/v1/rate/openapi.json) passed'
+    '  ✅ [7/8] OpenAPI 3.1.0 Specification (/api/v1/rate/openapi.json) passed'
+  );
+
+  // 8. DESIGN.md v2.0 & Unprefixed Locale Routing (localePrefix: "never")
+  const fs = require('node:fs') as typeof import('node:fs');
+  const path = require('node:path') as typeof import('node:path');
+  const repoRoot = path.resolve(__dirname, '../../../../../..');
+  const designMdPath = path.join(repoRoot, 'DESIGN.md');
+  assert.equal(
+    fs.existsSync(designMdPath),
+    true,
+    'DESIGN.md must exist at repo root'
+  );
+  const designMd = fs.readFileSync(designMdPath, 'utf8');
+  assert.ok(designMd.includes('Rate.vn Design System'));
+  assert.ok(designMd.includes('10-Group Specification Matrix'));
+
+  const navTsPath = path.resolve(__dirname, '../../../lib/navigation.ts');
+  const navTs = fs.readFileSync(navTsPath, 'utf8');
+  assert.ok(
+    navTs.includes('localePrefix: "never"') ||
+      navTs.includes("localePrefix: 'never'"),
+    'navigation.ts must use localePrefix: "never" so switching languages never adds /en or /cs URL slugs'
+  );
+  assert.ok(
+    navTs.includes('NEXT_LOCALE'),
+    'navigation.ts must persist locale selection via NEXT_LOCALE cookie'
+  );
+  console.log(
+    '  ✅ [8/8] DESIGN.md v2.0 & Unprefixed Locale Routing (localePrefix: "never") passed'
   );
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
