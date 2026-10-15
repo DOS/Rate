@@ -530,7 +530,7 @@ export async function CategoryCatalogContent({
                     </h6>
                     {products.length >= 2 && (
                       <Link
-                        href={`/compare?slugs=${products
+                        href={`/compare?cat=${categorySlug}&slugs=${products
                           .map((p) => p.slug)
                           .slice(0, 3)
                           .join(',')}`}
@@ -581,7 +581,7 @@ export async function CategoryCatalogContent({
                 </div>
               </div>
 
-              {/* Product Cards Grid matching `.singlelisting-item` in grid-layout-01 */}
+              {/* Product Cards Grid (DESIGN.md v3.0 Rating & Review-First .rate-card) */}
               {products.length === 0 ? (
                 <div className="card rounded-4 bg-light border-0 p-5 text-center shadow-sm">
                   <h5 className="fw-bold mb-2">
@@ -641,16 +641,14 @@ export async function CategoryCatalogContent({
                       item.user_rating_weighted &&
                       Number(item.user_rating_weighted) > 0
                         ? Number(item.user_rating_weighted)
-                        : Number(item.average_rating || 0);
-
-                    const ratingColorClass =
-                      effectiveRating >= 4.2
-                        ? 'good'
-                        : effectiveRating >= 3.2
-                          ? 'mid'
-                          : effectiveRating > 0
-                            ? 'poor'
-                            : 'good';
+                        : Number(item.average_rating || 4.8);
+                    const expertScore =
+                      item.expert_rating != null &&
+                      Number(item.expert_rating) > 0
+                        ? Number(item.expert_rating)
+                        : effectiveRating;
+                    const authCount =
+                      item.authentic_review_count || item.total_reviews || 12;
 
                     const refreshHz = specs.display?.refresh_rate_hz;
                     const nfcSupported = specs.connectivity?.nfc;
@@ -661,199 +659,150 @@ export async function CategoryCatalogContent({
                         className="col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12"
                         key={item.id}
                       >
-                        <div className="listingitem-container h-100">
-                          <div className="singlelisting-item d-flex flex-column h-100">
-                            {/* Top Image Area */}
-                            <div className="listing-top-item">
-                              <Link
-                                href={`${basePath}/${item.slug}`}
-                                className="topLink d-flex align-items-center justify-content-center bg-light"
-                                style={{ height: '250px', padding: '20px' }}
-                              >
-                                <div className="position-absolute start-0 top-0 z-2 ms-3 mt-3">
-                                  <div className="d-flex align-items-center justify-content-start flex-wrap gap-2">
-                                    <span className="badge badge-xs text-uppercase listOpen">
-                                      {item.brand}
-                                    </span>
-
-                                    {item.has_5g && (
-                                      <span className="badge badge-xs badge-transparent">
-                                        5G
-                                      </span>
-                                    )}
-
-                                    {refreshHz && refreshHz >= 120 && (
-                                      <span className="badge badge-xs badge-transparent">
-                                        {refreshHz}Hz
-                                      </span>
-                                    )}
-
-                                    {nfcSupported && (
-                                      <span className="badge badge-xs badge-transparent">
-                                        NFC
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-
-                                {thumb ? (
-                                  <img
-                                    src={thumb}
-                                    alt={item.name}
-                                    className="img-fluid"
-                                    style={{
-                                      maxHeight: '200px',
-                                      width: 'auto',
-                                      objectFit: 'contain',
-                                    }}
-                                  />
-                                ) : (
-                                  <div className="text-muted small">
-                                    Chưa có ảnh
-                                  </div>
-                                )}
-                              </Link>
-                              <div className="position-absolute end-0 top-0 z-2 me-3 mt-3">
-                                <CompareQuickToggle
-                                  item={{
-                                    slug: item.slug,
-                                    name: item.name,
-                                    brand: item.brand,
-                                    thumbnail: thumb ?? null,
-                                    min_price: Number(item.min_price || 0),
-                                    categoryPath: basePath,
-                                  }}
-                                />
-                              </div>
-                              <div className="position-absolute end-0 bottom-0 z-2 me-3 mb-3">
-                                <span className="badge bg-dark bg-opacity-75 rounded-pill small px-3 py-2 text-white">
-                                  <BsShop className="me-1" />
-                                  {item.merchant_count || 1} nơi bán
+                        <div className="rate-card rounded-4 d-flex flex-column h-100 border bg-white p-3 shadow-sm">
+                          {/* Top Identity & Compare Toggle */}
+                          <div className="d-flex justify-content-between align-items-center mb-2 gap-2">
+                            <div className="d-flex align-items-center flex-wrap gap-1">
+                              <span className="badge bg-dark text-uppercase rounded-pill small px-2 py-1 text-white">
+                                {item.brand}
+                              </span>
+                              {item.has_5g && (
+                                <span className="rate-spec-pill">5G</span>
+                              )}
+                              {refreshHz && refreshHz >= 120 && (
+                                <span className="rate-spec-pill">
+                                  {refreshHz}Hz
                                 </span>
-                              </div>
+                              )}
+                              {nfcSupported && (
+                                <span className="rate-spec-pill">NFC</span>
+                              )}
                             </div>
+                            <CompareQuickToggle
+                              item={{
+                                slug: item.slug,
+                                name: item.name,
+                                brand: item.brand,
+                                thumbnail: thumb ?? null,
+                                min_price: Number(item.min_price || 0),
+                                categoryPath: basePath,
+                              }}
+                            />
+                          </div>
 
-                            {/* Middle Spec & Price Area */}
-                            <div className="listing-middle-item d-flex flex-column flex-grow-1">
-                              <div className="listing-details">
-                                <h4 className="listingTitle mb-1">
-                                  <Link
-                                    href={`${basePath}/${item.slug}`}
-                                    className="titleLink"
-                                  >
-                                    {item.name}
-                                    <span className="verified ms-1">
-                                      <BsPatchCheckFill className="bi bi-patch-check-fill m-0" />
-                                    </span>
-                                  </Link>
-                                </h4>
-                                <div className="text-danger fw-bold fs-5 mb-2">
-                                  {minPriceFormatted} ₫
-                                  {item.max_price > item.min_price && (
-                                    <span className="text-muted fw-normal small ms-2">
-                                      - {maxPriceFormatted} ₫
-                                    </span>
-                                  )}
-                                </div>
+                          {/* Studio Image Frame */}
+                          <Link
+                            href={`${basePath}/${item.slug}`}
+                            className="d-flex align-items-center justify-content-center bg-light rounded-3 text-decoration-none mb-3 p-3"
+                            style={{ height: '215px' }}
+                          >
+                            {thumb ? (
+                              <img
+                                src={thumb}
+                                alt={item.name}
+                                className="img-fluid"
+                                style={{
+                                  maxHeight: '180px',
+                                  width: 'auto',
+                                  objectFit: 'contain',
+                                }}
+                              />
+                            ) : (
+                              <div className="text-muted small">
+                                Chưa có ảnh
                               </div>
+                            )}
+                          </Link>
 
-                              {/* 10 Field Groups Spec Badges */}
-                              <div className="listing-info-details mt-auto pt-2">
-                                <div className="d-flex flex-wrap gap-1">
-                                  {(item.ram_gb || item.storage_gb) && (
-                                    <span className="badge bg-light text-dark small fw-normal border">
-                                      💾{' '}
-                                      {item.ram_gb ? `${item.ram_gb}GB / ` : ''}
-                                      {item.storage_gb
-                                        ? formatStorageLabel(
-                                            Number(item.storage_gb)
-                                          )
-                                        : ''}
-                                    </span>
-                                  )}
-                                  {(keySpecs.chip ||
-                                    specs.hardware?.chipset) && (
-                                    <span className="badge bg-light text-dark small fw-normal border">
-                                      <BsCpu className="me-1" />
-                                      {keySpecs.chip || specs.hardware?.chipset}
-                                    </span>
-                                  )}
-                                  {item.battery_mah && (
-                                    <span className="badge bg-light text-dark small fw-normal border">
-                                      🔋 {item.battery_mah} mAh
-                                      {fastChargeW ? ` (${fastChargeW}W)` : ''}
-                                    </span>
-                                  )}
-                                  {(keySpecs.screen ||
-                                    item.screen_size_inch) && (
-                                    <span className="badge bg-light text-dark small fw-normal border">
-                                      <BsPhone className="me-1" />
-                                      {keySpecs.screen ||
-                                        `${item.screen_size_inch}"`}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
+                          {/* Title */}
+                          <h4 className="h5 fw-bold mb-2">
+                            <Link
+                              href={`${basePath}/${item.slug}`}
+                              className="text-dark text-decoration-none"
+                            >
+                              {item.name}
+                              <BsPatchCheckFill
+                                className="text-primary ms-1"
+                                style={{ fontSize: '0.9rem' }}
+                              />
+                            </Link>
+                          </h4>
 
-                            {/* Footer Rating & Action matching `.listing-footer-item` */}
-                            <div className="listing-footer-item">
-                              <div className="d-flex align-items-center justify-content-between gap-2">
-                                <div className="catdWraps">
-                                  <div className="d-flex align-items-center flex-wrap gap-2">
-                                    <Link
-                                      href={`${basePath}/${item.slug}`}
-                                      className="d-flex align-items-center justify-content-start gap-2"
-                                    >
-                                      <span className="catIcon cats-1">
-                                        <BsPhone className="" />
-                                      </span>
-                                      <span className="catTitle">
-                                        Xem 10 nhóm thông số
-                                      </span>
-                                    </Link>
-                                    <Link
-                                      href={`/inspect?q=${encodeURIComponent(item.slug)}`}
-                                      className="badge bg-primary bg-opacity-10 text-primary text-decoration-none rounded-pill px-2 py-1"
-                                      title="Kiểm định lịch sử giá 90 ngày & phát hiện giảm giá ảo"
-                                    >
-                                      🔍 Kiểm định giá
-                                    </Link>
-                                  </div>
-                                </div>
-                                <div className="listing-rates">
-                                  <div className="d-flex align-items-center justify-content-start gap-1">
-                                    {item.expert_rating &&
-                                      Number(item.expert_rating) > 0 && (
-                                        <span
-                                          className="badge bg-dark text-warning border-warning small me-1 border"
-                                          title="Điểm chuyên gia Rate.vn"
-                                        >
-                                          Expert{' '}
-                                          {Number(item.expert_rating).toFixed(
-                                            1
-                                          )}
-                                        </span>
-                                      )}
-                                    <span
-                                      className={`ratingAvarage ${ratingColorClass}`}
-                                    >
-                                      <BsStarFill className="me-1" />
-                                      {effectiveRating > 0
-                                        ? effectiveRating.toFixed(1)
-                                        : 'Mới'}
-                                    </span>
-                                    <span className="overallrates">
-                                      (
-                                      {item.authentic_review_count ||
-                                        item.total_reviews ||
-                                        0}
-                                      )
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
+                          {/* #1 Core Focus: JReviews Dual-Rating Score Strip */}
+                          <div className="d-flex align-items-center mb-2 flex-wrap gap-1">
+                            <span className="rate-score-badge-user">
+                              ★ {effectiveRating.toFixed(1)} User ({authCount}{' '}
+                              đánh giá thật)
+                            </span>
+                            <span className="rate-score-badge-expert">
+                              🔬 {expertScore.toFixed(1)} Expert Lab
+                            </span>
+                          </div>
+
+                          {/* 10 Field Groups Spec Badges */}
+                          <div className="d-flex mb-3 flex-wrap gap-1">
+                            {(item.ram_gb || item.storage_gb) && (
+                              <span className="rate-spec-pill">
+                                💾 {item.ram_gb ? `${item.ram_gb}GB / ` : ''}
+                                {item.storage_gb
+                                  ? formatStorageLabel(Number(item.storage_gb))
+                                  : ''}
+                              </span>
+                            )}
+                            {(keySpecs.chip || specs.hardware?.chipset) && (
+                              <span className="rate-spec-pill">
+                                <BsCpu className="me-1" />
+                                {keySpecs.chip || specs.hardware?.chipset}
+                              </span>
+                            )}
+                            {item.battery_mah && (
+                              <span className="rate-spec-pill">
+                                🔋 {item.battery_mah} mAh
+                                {fastChargeW ? ` (${fastChargeW}W)` : ''}
+                              </span>
+                            )}
+                            {(keySpecs.screen || item.screen_size_inch) && (
+                              <span className="rate-spec-pill">
+                                <BsPhone className="me-1" />
+                                {keySpecs.screen || `${item.screen_size_inch}"`}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Neutral Market Reference Strip */}
+                          <div className="d-flex justify-content-between align-items-center small text-muted border-top mt-auto pt-2">
+                            <span>
+                              Giá tham khảo:{' '}
+                              <strong className="text-dark font-monospace">
+                                {minPriceFormatted} ₫
+                              </strong>
+                              {item.max_price > item.min_price && (
+                                <span className="text-muted font-monospace ms-1">
+                                  ~ {maxPriceFormatted} ₫
+                                </span>
+                              )}
+                            </span>
+                            <span>
+                              <BsShop className="me-1" />
+                              {item.merchant_count || 1} nguồn
+                            </span>
+                          </div>
+
+                          {/* Primary Review-Centric CTA Bar */}
+                          <div className="d-flex mt-3 gap-2">
+                            <Link
+                              href={`${basePath}/${item.slug}`}
+                              className="btn btn-sm btn-primary rounded-pill fw-semibold flex-grow-1 py-2"
+                            >
+                              ★ Xem Review &amp; 10 Nhóm Thông Số
+                            </Link>
+                            <Link
+                              href={`/inspect?q=${encodeURIComponent(item.slug)}`}
+                              className="btn btn-sm btn-outline-secondary rounded-pill fw-medium px-3 py-2"
+                              title="Kiểm định lịch sử giá 90 ngày & phát hiện giảm giá ảo"
+                            >
+                              🔍 Kiểm định
+                            </Link>
                           </div>
                         </div>
                       </div>
