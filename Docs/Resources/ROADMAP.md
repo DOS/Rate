@@ -3,7 +3,7 @@
 > **Cập nhật lần cuối:** 15/10/2026  
 > **Tech Stack chuẩn hóa:** TypeScript 7.0.2 + Next.js 16.3.8 + React 19.3 + Pure PostgreSQL 17 (Supabase Cloud `rate` schema) + Open-Core 2 Repositories (`DOS/Rate` & `DOS/Rate-Services`)  
 > **GitHub Project Board (Multi-Agent Queue):** [https://github.com/orgs/DOS/projects/9](https://github.com/orgs/DOS/projects/9)  
-> **Trạng thái hiện tại:** Đã hoàn thành Phase 1, Phase 2, Phase 3.1, Phase 3.2, toàn bộ Phase 4 (4.1 -> 4.8), Phase 5.2 & Đại phẫu Kiến trúc 2026 (Sẵn sàng cho Phase 3.3 & Phase 5.1)
+> **Trạng thái hiện tại:** Đã hoàn thành 100% toàn bộ Lộ trình Phase 1, Phase 2, Phase 3 (3.1 -> 3.3), Phase 4 (4.1 -> 4.11) & Phase 5 (5.1 & 5.2)
 
 ---
 
@@ -18,7 +18,7 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc **4 T�
    - Chuẩn hóa **10 Field Groups** (`specs.schema.ts` với Zod `^3.25.76`).
    - Bộ não `ProductNormalizer`, `EntityMatcher` (3-Tier Dedupe), `AiSpecEnricher` (đa LLM OpenAI-compatible) và `AiReviewAnalyzer` (lọc Seeding/Spam xu + tính điểm rủi ro kép `dosafe_risk_score` và `review_risk_score`).
 3. **Tầng 3 - Private Anti-Detect Scraper & Queue Worker (`DOS/Rate-Services`):**
-   - Chứa Playwright Stealth, giải Captcha (`shopee-captcha-solver.ts`), xoay IP `mproxy.vn` (`proxy-manager.ts`), và `queue-worker.ts` chạy định kỳ trên GitHub Actions Enterprise.
+   - Chứa Playwright Stealth, giải Captcha (`shopee-captcha-solver.ts`), xoay IP `mproxy.vn` (`proxy-manager.ts`), bộ định tuyến cào đa sàn 5 nền tảng (`MultiPlatformScraper`: Shopee, Lazada, Tiki, CellphoneS, Thế Giới Di Động) và `queue-worker.ts` chạy định kỳ trên GitHub Actions Enterprise.
 4. **Tầng 4 - Database, Queue & Trigger Engine (`Supabase Cloud PostgreSQL 17` - Schema `rate`):**
    - Sổ cái migration duy nhất tại `DOS-Me/supabase/migrations/`.
    - Mô hình sản phẩm 2 tầng (`rate.master_products` + `rate.products`), lịch sử giá chống trùng (`rate.price_history`), và hệ thống đánh giá kép JReviews (`rate.reviews`, `rate.review_flags`, `rate.review_votes`).
@@ -42,15 +42,15 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc **4 T�
 - [x] **RAM/ROM-Aware `ProductNormalizer` (`product-normalizer.ts`):** Nhận diện chính xác dung lượng RAM và ROM trong tiêu đề tiếng Việt phức tạp.
 - [x] **Provider-Agnostic `AiSpecEnricher` (`ai-spec-enricher.ts`):** Hỗ trợ mọi LLM chuẩn OpenAI-compatible (`dos-ai`, `openai`, `gemini`, `deepseek`, `groq`, `openrouter`, `ollama`) kèm bộ Sanitizer + Zod validation.
 
-### ✅ Phase 3: AI Review Intelligence, Dual Risk Score & JReviews Voting (Đã hoàn thành 3.1 & 3.2)
+### ✅ Phase 3: AI Review Intelligence, Dual Risk Score & JReviews Voting (Đã hoàn thành 100%)
 
 - [x] **3.1. Module AI Review Analyzer (`apps/importer/src/shopee/ai-review-analyzer.ts` - Issue #6 & #7):**
   - Phân loại chi tiết 5 hạng mục (`authentic`, `low_value_coin_spam`, `seeding_fake`, `competitor_sabotage`, `review_bombing`), tự động loại bỏ bình luận rác nhận xu khỏi điểm trung bình.
 - [x] **3.2. Tách biệt Dual Merchant Risk Score & JReviews Interactive Voting (Issue #15 & #16):**
   - Tách `dosafe_risk_score` (từ `dosafe.threat_intel`) và `review_risk_score` (từ tỷ lệ review bất thường), kết hợp thành `risk_score` tổng hợp.
   - Xây dựng bảng `rate.review_votes`, API `/api/reviews/[id]/vote` và giao diện `JReviewsSection.tsx` trên `/smartphones/[slug]`.
-- [ ] **3.3. Batch Crawl & Backfill Mở Rộng Danh Mục Lên Supabase Cloud (Issue #8):**
-  - Mở rộng seed & backfill thêm các dòng máy chủ lực mới lên Supabase Cloud.
+- [x] **3.3. Batch Crawl & Backfill Mở Rộng Danh Mục Lên Supabase Cloud (Issue #8):**
+  - Chuẩn hóa và Backfill đầy đủ 10/10 Field Groups (tách cụm camera rời chuẩn PhoneArena + chiều sâu kỹ thuật GSMArena) cho toàn bộ 13 sản phẩm gốc (`rate.master_products`) trải rộng trên cả 5 ngành hàng (`smartphones`, `tablets`, `laptops`, `smartwatches`, `earbuds`), 8 gian hàng đa sàn (`rate.merchants`), lịch sử giá 60 ngày (`rate.price_history`) và đánh giá JReviews chống Seeding (`flagship-seed-data.ts` + `test-ai-enricher.ts --backfill`).
 
 ### ✅ Phase 4: Nâng Cấp Trải Nghiệm Directory Filter, Biểu Đồ Lịch Sử Giá & Kiến Trúc Next.js 16 (Đã hoàn thành 100%)
 
@@ -89,9 +89,22 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc **4 T�
   - Nâng cấp `/watchlist` hỗ trợ cả 5 ngành hàng, tích hợp endpoint `POST /api/v1/rate/watchlist` và file migration chuẩn hóa `rate.price_alerts` (`20261015010000_rate_price_alerts_and_watchlist_rpc.sql`).
 - [x] **4.11. Quốc Tế Hóa Toàn Diện (`vi`/`en`/`cs`) Cho Danh Mục 5 Ngành Hàng, Hồ Sơ Gian Hàng (`/merchants`) & Chi Tiết Sản Phẩm (Issue #24):**
   - Đồng bộ SEO Metadata, Breadcrumb và tiêu đề đa ngôn ngữ `vi`/`en`/`cs` trên `/merchants`, `/merchants/[id]`, `/smartphones` và `ProductDetailView` cho toàn bộ 5 ngành hàng.
+- [x] **4.12. Bộ Lọc Tương Tác Danh Bạ Gian Hàng (`/merchants`), Chuẩn Hóa 5 Ngành Hàng Open-Core (`apps/importer`) & Kiểm Thử Tự Động CI (Issue #25):**
+  - Xây dựng `MerchantDirectoryExplorer.tsx` hỗ trợ tìm kiếm trực tiếp (`q`), lọc theo Sàn TMĐT, `Official Mall`, cấp độ rủi ro kép (`Dual Risk Score`) và sắp xếp theo `trust_score`, số lượng sản phẩm, tỷ lệ Seeding AI.
+  - Nâng cấp `ProductNormalizer` (`detectCategorySlug`) và `ShopeeToSupabasePipeline` hỗ trợ tự động phân loại cả 5 ngành hàng (`smartphones`, `tablets`, `laptops`, `smartwatches`, `earbuds`) kèm bộ kiểm thử tự động `open-core-intelligence.test.ts` trên CI.
+- [x] **4.13. Mở Rộng Rate Browser Extension MV3 Lên 10 Sàn/Đại Lý, Ô Tra Cứu Nhanh Side Panel & Tích Hợp CI (Issue #26):**
+  - Nâng cấp `apps/extension` và `apps/web/src/server/rate/extension.ts` hỗ trợ 10 nền tảng (`shopee`, `lazada`, `tiki`, `tiktok`, `cellphones`, `tgdd`, `fptshop`, `hoangha`, `didongviet`, `phongvu`), bổ sung ô tra cứu nhanh `RATE_SIDEPANEL_QUICK_QUERY` ngay trong Chrome Side Panel, thẻ tóm tắt `key_specs` 10 nhóm và đưa `@repo/extension build` + `test` vào `.github/workflows/ci.yml`.
+- [x] **4.14. Cổng Nhà Phát Triển (`/developers`): Đặc Tả OpenAPI 3.1.0 (`/api/v1/rate/openapi.json`) & Interactive API Playground (Issue #27):**
+  - Xuất bản tài liệu OpenAPI 3.1.0 chuẩn máy đọc (`GET /api/v1/rate/openapi.json`) cho toàn bộ 13 REST API v1 endpoints và nâng cấp `ApiPlaygroundClient.tsx` hỗ trợ cả `GET` lẫn `POST` (Zero-Trust Quarantine Ingest) kèm chuyển đổi mã lệnh `cURL` / `TS fetch()`.
+- [x] **4.15. Nút Theo Dõi Giá (`WatchlistQuickToggle`) & Kiểm Định Nhanh (`/inspect`) Trên Toàn Bộ Thẻ Sản Phẩm 5 Ngành Hàng + Trang Chủ (Issue #28):**
+  - Tích hợp `WatchlistQuickToggle.tsx` cạnh `CompareQuickToggle.tsx` trên mọi thẻ sản phẩm của cả 5 danh mục ngành hàng và Trang chủ, kèm liên kết kiểm định nhanh `/inspect?q=<slug>`.
+- [x] **4.16. Biểu Mẫu Đóng Góp Link & Báo Cáo Giá Ảo Cộng Đồng (`/contact-us`) Kết Nối Zero-Trust Quarantine (Issue #29):**
+  - Triển khai `CommunityQuarantineSubmitForm.tsx` trên `/[locale]/contact-us` kết nối trực tiếp tới `POST /api/v1/rate/extension/ingest` (`consentGranted = true`) để người mua gửi đường dẫn nghi vấn giảm giá ảo trên 10 sàn/đại lý vào hàng đợi `rate.crawl_jobs`.
 
-### 🔮 Phase 5: Mở Rộng Đa Sàn & Browser Extension MV3
+### ✅ Phase 5: Mở Rộng Đa Sàn & Browser Extension MV3 (Đã hoàn thành 100%)
 
-- [ ] **5.1. Mở rộng Scraper sang Lazada, Tiki, CellphoneS, Thế Giới Di Động (Issue #1 bên `DOS/Rate-Services`).**
-- [x] **5.2. Nâng cấp Rate Browser Extension (Manifest V3 - `apps/extension`) & Two-Speed Hybrid Lookup/Quarantine Ingest API (`/api/v1/rate/extension/lookup`, `/api/v1/rate/extension/ingest` - Issue #12):**
-  - Triển khai kiến trúc 2026 v2 đã qua kiểm định của OpenAI Codex (`gpt-6.1-sol`, `xhigh`): Shadow DOM Floating Trust Pill + Chrome Native Side Panel (`chrome.sidePanel`), URL Canonicalization cắt tham số theo dõi, Gatekeeper chặn phụ kiện/linh kiện, nhận diện biến thể dung lượng (`ambiguous_variant`), kết luận giá 5 mức dựa trên bằng chứng (`genuine_deal`, `fair_market_price`, `above_market`, `inflated_fake_sale`, `insufficient_data`), và hàng đợi cách ly Zero-Trust Opt-In (`rate.enqueue_crawl_job`).
+- [x] **5.1. Mở rộng Anti-Detect Scraper sang Lazada, Tiki, CellphoneS, Thế Giới Di Động (Issue #1 bên `DOS/Rate-Services`):**
+  - Xây dựng bộ 4 Scrapers chuyên biệt (`LazadaScraper`, `TikiScraper`, `CellphonesScraper`, `TgddScraper`) cùng bộ định tuyến tự động `MultiPlatformScraper` (`detectPlatformFromUrl`) và `queue-worker` đa nền tảng.
+  - Hỗ trợ bóc tách JSON-LD, REST API v2 (Tiki), `__moduleData__` (Lazada), bảng thông số kỹ thuật DOM, biến thể dung lượng và đánh giá người mua, tự động gộp chuẩn xác về cùng `model_key` trên `rate.master_products`.
+- [x] **5.2. Nâng cấp Rate Browser Extension (Manifest V3 - `apps/extension`) & Two-Speed Hybrid Lookup/Quarantine Ingest API (`/api/v1/rate/extension/lookup`, `/api/v1/rate/extension/ingest` - Issue #12 & Issue #26):**
+  - Triển khai kiến trúc 2026 v2 đã qua kiểm định của OpenAI Codex (`gpt-6.1-sol`, `xhigh`): Shadow DOM Floating Trust Pill + Chrome Native Side Panel (`chrome.sidePanel`) hỗ trợ 10 sàn/đại lý, URL Canonicalization cắt tham số theo dõi, Gatekeeper chặn phụ kiện/linh kiện, nhận diện biến thể dung lượng (`ambiguous_variant`), kết luận giá 5 mức dựa trên bằng chứng (`genuine_deal`, `fair_market_price`, `above_market`, `inflated_fake_sale`, `insufficient_data`), và hàng đợi cách ly Zero-Trust Opt-In (`rate.enqueue_crawl_job`).

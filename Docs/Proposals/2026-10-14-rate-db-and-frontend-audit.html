@@ -339,15 +339,32 @@
           Xây dựng trang kiểm toán chuyên sâu <code>/inspect</code> có khả năng chia sẻ link báo cáo (<code>/inspect?q=...</code>), mở rộng <code>/watchlist</code> cho cả 5 ngành hàng kèm migration <code>20261015010000_rate_price_alerts_and_watchlist_rpc.sql</code> và chuẩn hóa đa ngôn ngữ trên toàn hệ thống.
         </li>
         <li>
-          <strong>Mở rộng REST API v1 phục vụ Web &amp; Browser Extension MV3:</strong>
+          <strong>Bộ Lọc Tương Tác Danh Bạ Gian Hàng (<code>/merchants</code>), Chuẩn Hóa 5 Ngành Hàng Open-Core (<code>apps/importer</code>) &amp; CI (Issue #25):</strong>
+          Xây dựng <code>MerchantDirectoryExplorer.tsx</code> lọc theo sàn, <code>Official Mall</code>, cấp độ rủi ro kép và sắp xếp đa chiều; nâng cấp <code>ProductNormalizer</code> (<code>detectCategorySlug</code>) hỗ trợ tự động cả 5 ngành hàng kèm bộ kiểm thử <code>open-core-intelligence.test.ts</code>.
+        </li>
+        <li>
+          <strong>Mở Rộng Rate Browser Extension MV3 Lên 10 Sàn/Đại Lý, Ô Tra Cứu Nhanh Side Panel &amp; Tích Hợp CI (Issue #26):</strong>
+          Hỗ trợ 10 nền tảng (<code>shopee</code>, <code>lazada</code>, <code>tiki</code>, <code>tiktok</code>, <code>cellphones</code>, <code>tgdd</code>, <code>fptshop</code>, <code>hoangha</code>, <code>didongviet</code>, <code>phongvu</code>), bổ sung ô tra cứu trực tiếp trong Chrome Side Panel (<code>RATE_SIDEPANEL_QUICK_QUERY</code>), thẻ tóm tắt <code>key_specs</code> 10 nhóm và đưa <code>@repo/extension build</code> + <code>test</code> vào GitHub Actions CI.
+        </li>
+        <li>
+          <strong>Đặc Tả OpenAPI 3.1.0 (<code>/api/v1/rate/openapi.json</code>) &amp; Interactive API Playground Nâng Cấp (Issue #27):</strong>
+          Xuất bản schema OpenAPI 3.1.0 chuẩn máy đọc cho toàn bộ 13 REST API v1 endpoints và nâng cấp <code>ApiPlaygroundClient.tsx</code> trên <code>/developers</code> hỗ trợ cả <code>GET</code> lẫn <code>POST</code> kèm mã lệnh <code>cURL</code> / <code>TS fetch()</code>.
+        </li>
+        <li>
+          <strong>Tích Hợp <code>WatchlistQuickToggle</code>, Nút Kiểm Định Nhanh (<code>/inspect</code>) &amp; Biểu Mẫu Báo Cáo Giá Ảo Cộng Đồng (Issue #28 &amp; #29):</strong>
+          Tích hợp nút canh giá 1 chạm (<code>WatchlistQuickToggle.tsx</code>) và liên kết kiểm định nhanh lên toàn bộ thẻ sản phẩm 5 ngành hàng + Trang chủ; bổ sung biểu mẫu <code>CommunityQuarantineSubmitForm.tsx</code> trên <code>/contact-us</code> kết nối trực tiếp tới cổng <code>Zero-Trust Quarantine</code> (<code>POST /api/v1/rate/extension/ingest</code>).
+        </li>
+        <li>
+          <strong>Mở rộng REST API v1 phục vụ Web &amp; Browser Extension MV3 (13 Endpoints):</strong>
           <ul>
+            <li><code>GET /api/v1/rate/openapi.json</code> - Đặc tả OpenAPI 3.1.0 chuẩn máy đọc cho toàn bộ hệ thống REST API v1.</li>
             <li><code>GET /api/v1/rate/stats</code> - Số liệu thống kê kiểm toán trực tiếp toàn nền tảng (Master Products, Listings, Price Points, Verified Reviews, Merchants).</li>
             <li><code>GET /api/v1/rate/compare?slugs=...</code> - Đối chiếu trực tiếp ma trận 10 nhóm thông số, biên độ giá thật và điểm đánh giá 5 tiêu chí JReviews của tối đa 4 sản phẩm.</li>
-            <li><code>GET /api/v1/rate/lookup?q=...</code> &amp; <code>GET /api/v1/rate/inspect?q=...</code> - Phân tích link TMĐT hoặc từ khóa tìm kiếm, trả về sản phẩm chuẩn hóa, gian hàng và cảnh báo giá ảo.</li>
-            <li><code>POST /api/v1/rate/watchlist</code> - Đăng ký và đồng bộ cảnh báo chạm ngưỡng giá mục tiêu (Target Price Alert) lên Rate Cloud.</li>
-            <li><code>GET /api/v1/rate/merchants</code> - Danh sách gian hàng kèm điểm tín nhiệm kép và bộ lọc theo sàn/mức độ tin cậy.</li>
-            <li><code>GET /api/v1/rate/merchants/[id]</code> - Chi tiết hồ sơ kiểm toán gian hàng theo UUID, slug hoặc <code>platform_shop_id</code>.</li>
-            <li><code>POST /api/v1/rate/reviews</code> - Gửi đánh giá 5 tiêu chí JReviews kèm bộ lọc chống Seeding tự động.</li>
+            <li><code>GET /api/v1/rate/lookup?q=...</code> &amp; <code>GET /api/v1/rate/inspect?q=...</code> - Phân tích link TMĐT hoặc từ khóa tìm kiếm trên 10 sàn/đại lý, trả về sản phẩm chuẩn hóa, gian hàng và kết luận giá 5 mức.</li>
+            <li><code>GET /api/v1/rate/extension/lookup</code> &amp; <code>POST /api/v1/rate/extension/ingest</code> - Bộ đôi Hybrid Lookup tốc độ cao và cổng tiếp nhận Zero-Trust Quarantine cho Browser Extension MV3.</li>
+            <li><code>GET /api/v1/rate/watchlist</code> &amp; <code>POST /api/v1/rate/watchlist</code> - Truy vấn và đồng bộ cảnh báo chạm ngưỡng giá mục tiêu (Target Price Alert) lên Rate Cloud.</li>
+            <li><code>GET /api/v1/rate/merchants</code> &amp; <code>GET /api/v1/rate/merchants/[id]</code> - Danh bạ và hồ sơ kiểm toán gian hàng kèm điểm tín nhiệm kép (Dual Risk Score).</li>
+            <li><code>GET /api/v1/rate/reviews</code>, <code>POST /api/v1/rate/reviews</code> &amp; <code>POST /api/reviews/[id]/vote</code> - Đánh giá 5 tiêu chí JReviews và bình chọn chống trùng bằng SHA-256 voter hash.</li>
           </ul>
         </li>
       </ul>

@@ -5,6 +5,7 @@ import FooterTop from '../components/footer-top';
 import FooterDynamic from '../components/footer/FooterDynamic';
 import BackToTop from '../components/back-to-top';
 import HeroSearchInspector from '@/components/home/HeroSearchInspector';
+import CommunityQuarantineSubmitForm from '@/components/contact/CommunityQuarantineSubmitForm';
 import { getMasterProducts } from '@/lib/rate-api';
 import { getCachedMerchantsList } from '@/server/rate';
 import {
@@ -59,20 +60,20 @@ export default async function ContactUsPage({
 
       <section className="bg-dark border-bottom border-secondary border-opacity-25 py-5 text-white">
         <div className="container py-3">
-          <div className="row justify-content-center text-center mb-4">
+          <div className="row justify-content-center mb-4 text-center">
             <div className="col-lg-9">
               <span className="badge bg-danger rounded-pill fw-semibold mb-3 px-3 py-2">
-                <BsShieldExclamation className="me-1" /> Trung Tâm Tiếp Nhận Kiểm
-                Toán &amp; Phản Hồi Cộng Đồng
+                <BsShieldExclamation className="me-1" /> Trung Tâm Tiếp Nhận
+                Kiểm Toán &amp; Phản Hồi Cộng Đồng
               </span>
               <h1 className="display-6 fw-bold mb-3 text-white">
                 Kiểm Định Nhanh &amp; Báo Cáo Gian Hàng Bất Thường
               </h1>
               <p className="lead text-white-50 mb-0">
                 Dán trực tiếp đường dẫn sản phẩm hoặc gian hàng Shopee, Lazada,
-                Tiki vào bộ kiểm định bên dưới để kiểm tra ngay lịch sử giá và
-                tỷ lệ đánh giá thực chất, hoặc liên hệ với đội ngũ vận hành
-                Rate.vn.
+                Tiki, TikTok Shop, CellphoneS, TGDĐ, FPT Shop, Hoàng Hà, Di Động
+                Việt, Phong Vũ vào bộ kiểm định bên dưới để kiểm tra ngay lịch
+                sử giá hoặc gửi vào hàng đợi Zero-Trust Quarantine.
               </p>
             </div>
           </div>
@@ -90,6 +91,10 @@ export default async function ContactUsPage({
 
       <section className="bg-light py-5">
         <div className="container">
+          <div className="mb-4">
+            <CommunityQuarantineSubmitForm />
+          </div>
+
           <div className="row g-4">
             <div className="col-lg-4">
               <div className="card rounded-4 h-100 border bg-white p-4 shadow-sm">
@@ -145,7 +150,7 @@ export default async function ContactUsPage({
                   hóa <code>ProductNormalizer</code> hoặc báo lỗi kỹ thuật đều
                   được tiếp nhận công khai trên GitHub.
                 </p>
-                <div className="d-flex flex-wrap gap-2 mt-auto">
+                <div className="d-flex mt-auto flex-wrap gap-2">
                   <a
                     href="https://github.com/DOS/Rate/issues"
                     target="_blank"
@@ -165,7 +170,7 @@ export default async function ContactUsPage({
             </div>
           </div>
 
-          <div className="card rounded-4 border bg-white p-4 mt-4 shadow-sm">
+          <div className="card rounded-4 mt-4 border bg-white p-4 shadow-sm">
             <div className="row align-items-center g-3">
               <div className="col-lg-8">
                 <div className="d-flex align-items-center gap-3">
