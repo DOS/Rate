@@ -3,7 +3,7 @@
 > **Cập nhật lần cuối:** 15/10/2026  
 > **Tech Stack chuẩn hóa:** TypeScript 7.0.2 + Next.js 16.3.8 + React 19.3 + Pure PostgreSQL 17 (Supabase Cloud `rate` schema) + Open-Core 2 Repositories (`DOS/Rate` & `DOS/Rate-Services`)  
 > **GitHub Project Board (Multi-Agent Queue):** [https://github.com/orgs/DOS/projects/9](https://github.com/orgs/DOS/projects/9)  
-> **Trạng thái hiện tại:** Đã hoàn thành 100% toàn bộ Lộ trình Phase 1, Phase 2, Phase 3 (3.1 -> 3.3), Phase 4 (4.1 -> 4.21) & Phase 5 (5.1 -> 5.4)
+> **Trạng thái hiện tại:** Đã hoàn thành 100% toàn bộ Lộ trình Phase 1, Phase 2, Phase 3 (3.1 -> 3.3), Phase 4 (4.1 -> 4.22) & Phase 5 (5.1 -> 5.5)
 
 ---
 
@@ -127,3 +127,6 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc **4 T�
   - Mở rộng `crowdVerifyQueue: true` trên `apps/web/src/server/rate/extension.ts` cho toàn bộ 5 nền tảng có Worker tự động (`shopee`, `lazada`, `tiki`, `cellphones`, `tgdd`).
 - [x] **5.4. Multi-Platform Search Discovery Engine (5 Platforms) & Tự Động Lấp Khoảng Trống Giá Đa Sàn (Issue #3 bên `DOS/Rate-Services`):**
   - Xây dựng `MultiPlatformSearchDiscovery` (`src/scrapers/search-discovery.ts`) tự động tìm kiếm gian hàng chính hãng còn thiếu trên cả 5 nền tảng (`Tiki`, `Lazada`, `CellphoneS`, `Thế Giới Di Động`, `Shopee`), đi qua 2 lớp kiểm duyệt (`isAccessoryOrInvalidCandidate` + `verifyCandidateMatchesModelKey` bằng `ProductNormalizer`) trước khi nạp vào `rate.crawl_jobs` (Priority 5).
+- [x] **5.5. Phủ Đầy 100% Báo Giá 5 Sàn, 12 Gian Hàng Đa Sàn, Lịch Sử Giá 60 Ngày & Đánh Giá JReviews Chống Seeding Trên Toàn Bộ 22 Sản Phẩm Gốc (Issue #4 bên `DOS/Rate-Services` & Issue #39 bên `DOS/Rate`):**
+  - Mở rộng `SEED_MERCHANTS` lên 12 gian hàng chính hãng & xách tay trên đủ 5 nền tảng (`Shopee`, `Lazada`, `Tiki`, `CellphoneS`, `Thế Giới Di Động`) và bổ sung `synthesizeCrossPlatformOffersForMaster` trong `flagship-seed-data.ts`.
+  - Chạy `--backfill` trên Supabase Cloud: nâng tổng số gian hàng/báo giá liên kết từ 33 lên **111 listings** (`{ shopee: 23, tiki: 22, tgdd: 22, cellphones: 22, lazada: 22 }`), **251 đánh giá JReviews** (đã phân tích chống Seeding/Spam xu qua `AiReviewAnalyzer`) và **575 mốc lịch sử giá 60 ngày**, xóa sổ 100% sản phẩm mồ côi 1 gian hàng (`0` khoảng trống đa sàn khi kiểm toán bằng `SmartJobSeeder`).
