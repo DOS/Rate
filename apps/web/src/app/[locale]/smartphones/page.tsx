@@ -278,29 +278,57 @@ export async function CategoryCatalogContent({
     <>
       <NavbarDarkDynamic links={[]} />
 
-      {/* Hero Banner matching grid-layout-01 */}
+      {/* Hero Banner (DESIGN.md v2.0 Dark Obsidian + DOS Crimson Glow) */}
       <div
-        className="image-cover hero-banner bg-primary"
-        style={{ backgroundImage: `url(/img/banner-6.jpg)` }}
-        data-overlay="5"
+        className="hero-banner position-relative overflow-hidden"
+        style={{
+          background:
+            'radial-gradient(circle at 18% 22%, rgba(255, 46, 41, 0.16), transparent 45%), radial-gradient(circle at 82% 18%, rgba(99, 102, 241, 0.14), transparent 42%), linear-gradient(180deg, #0f1113 0%, #141821 100%)',
+          paddingTop: '3.5rem',
+          paddingBottom: '4.5rem',
+          borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+        }}
       >
-        <div className="container">
+        <div className="position-relative z-1 container">
           <div className="row justify-content-center align-items-center">
             <div className="col-xl-12 col-lg-12 col-md-12 col-sm-12">
-              <div className="position-relative mt-4 text-start">
-                <div className="d-flex align-items-center mb-2 flex-wrap gap-2">
-                  <span className="badge badge-xs badge-transparent rounded-pill px-3 py-1">
+              <div className="position-relative mt-2 text-start">
+                <div className="d-flex align-items-center mb-3 flex-wrap gap-2">
+                  <span
+                    className="badge rounded-pill px-3 py-2"
+                    style={{
+                      backgroundColor: 'rgba(255, 255, 255, 0.07)',
+                      border: '1px solid rgba(255, 255, 255, 0.14)',
+                      color: '#f8fafc',
+                    }}
+                  >
                     📂 Directory: {schema.directoryName}
                   </span>
-                  <span className="badge badge-xs listOpen rounded-pill px-3 py-1">
+                  <span
+                    className="badge rounded-pill px-3 py-2"
+                    style={{
+                      backgroundColor: 'rgba(255, 46, 41, 0.16)',
+                      border: '1px solid rgba(255, 46, 41, 0.38)',
+                      color: '#ff8585',
+                    }}
+                  >
                     Category:{' '}
                     {facets.currentCategory?.name || schema.categoryTitle}
                   </span>
                 </div>
-                <h1 className="text-light fw-bold mb-2">
+                <h1
+                  className="fw-bold mb-2 text-white"
+                  style={{
+                    fontSize: 'clamp(1.75rem, 3.2vw, 2.5rem)',
+                    letterSpacing: '-0.025em',
+                  }}
+                >
                   {schema.categoryTitle}
                 </h1>
-                <p className="fs-5 fw-light text-light mb-0 opacity-90">
+                <p
+                  className="fs-6 mb-0"
+                  style={{ color: '#94a3b8', maxWidth: '760px' }}
+                >
                   {schema.categorySubtitle}
                 </p>
               </div>
@@ -316,7 +344,7 @@ export async function CategoryCatalogContent({
             <div className="col-xl-11 col-lg-12 col-md-12 col-12">
               <form
                 method="GET"
-                action={locale === 'vi' ? basePath : `/${locale}${basePath}`}
+                action={basePath}
                 className="heroSearch style-01 shadow-sm"
               >
                 {categorySlug !== defaultCategorySlug && (

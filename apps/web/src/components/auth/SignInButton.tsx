@@ -13,14 +13,18 @@ export function SignInButton({ className }: { className?: string }) {
 
   if (status === 'authenticated') return null;
 
-  const targetHref = locale === 'vi' ? '/login' : `/${locale}/login`;
+  const targetHref = '/login';
   const label =
-    locale === 'en' ? 'Sign In' : locale === 'cs' ? 'Přihlásit se' : 'Đăng nhập';
+    locale === 'en'
+      ? 'Sign In'
+      : locale === 'cs'
+        ? 'Přihlásit se'
+        : 'Đăng nhập';
 
   return (
     <button
       type="button"
-      className={className ?? 'btn btn-outline-danger rounded-pill px-3 btn-sm'}
+      className={className ?? 'btn btn-outline-danger rounded-pill btn-sm px-3'}
       onClick={() => router.push(targetHref)}
       aria-label={label}
     >

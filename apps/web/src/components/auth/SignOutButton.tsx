@@ -9,9 +9,13 @@ import { normalizeRateLocale } from '@/lib/rate-i18n';
 export function SignOutButton({ className }: { className?: string }) {
   const params = useParams<{ locale: string }>();
   const locale = normalizeRateLocale(params?.locale);
-  const callbackUrl = locale === 'vi' ? '/' : `/${locale}`;
+  const callbackUrl = '/';
   const label =
-    locale === 'en' ? 'Sign Out' : locale === 'cs' ? 'Odhlásit se' : 'Đăng xuất';
+    locale === 'en'
+      ? 'Sign Out'
+      : locale === 'cs'
+        ? 'Odhlásit se'
+        : 'Đăng xuất';
 
   const handleSignOut = async () => {
     try {
@@ -26,7 +30,9 @@ export function SignOutButton({ className }: { className?: string }) {
   return (
     <button
       type="button"
-      className={className ?? 'btn btn-outline-secondary rounded-pill px-3 btn-sm'}
+      className={
+        className ?? 'btn btn-outline-secondary rounded-pill btn-sm px-3'
+      }
       onClick={handleSignOut}
       aria-label={label}
     >
