@@ -3,11 +3,8 @@
 -- Purpose:
 --   1. Create idempotent table rate.price_alerts for server-backed Target Price
 --      Watchlist alerts across all 5 tech device categories.
---   2. Configure strict RLS policies and SECURITY DEFINER RPC
---      rate.upsert_price_alert for web and browser extension clients.
--- Note:
---   Reference migration in DOS/Rate. Official deployment to gulptwduchsjcsbndmua
---   must go through DOS-Me/supabase/migrations/ CI pipeline (Hard Rule 0.1).
+--   2. Configure strict RLS policies (preventing subscriber_email PII leakage)
+--      and SECURITY DEFINER RPC rate.upsert_price_alert for web and extension.
 -- ============================================================================
 
 CREATE TABLE IF NOT EXISTS rate.price_alerts (
@@ -31,15 +28,26 @@ CREATE INDEX IF NOT EXISTS idx_rate_price_alerts_active_target
 
 ALTER TABLE rate.price_alerts ENABLE ROW LEVEL SECURITY;
 
+-- Never expose subscriber_email to anonymous readers; authenticated users may
+-- only read rows explicitly bound to their own auth.uid().
 DROP POLICY IF EXISTS "Allow public read own price alerts by fingerprint" ON rate.price_alerts;
-CREATE POLICY "Allow public read own price alerts by fingerprint"
+DROP POLICY IF EXISTS "Authenticated users read own price alerts" ON rate.price_alerts;
+CREATE POLICY "Authenticated users read own price alerts"
   ON rate.price_alerts
   FOR SELECT
-  TO anon, authenticated
-  USING (true);
+  TO authenticated
+  USING (user_id IS NOT NULL AND user_id = (SELECT auth.uid()));
 
-REVOKE ALL ON TABLE rate.price_alerts FROM anon, authenticated;
-GRANT SELECT ON TABLE rate.price_alerts TO anon, authenticated;
+DROP POLICY IF EXISTS "Service role full access price_alerts" ON rate.price_alerts;
+CREATE POLICY "Service role full access price_alerts"
+  ON rate.price_alerts
+  FOR ALL
+  TO service_role
+  USING (true)
+  WITH CHECK (true);
+
+REVOKE ALL ON TABLE rate.price_alerts FROM PUBLIC, anon, authenticated;
+GRANT SELECT ON TABLE rate.price_alerts TO authenticated;
 GRANT ALL ON TABLE rate.price_alerts TO service_role;
 
 CREATE OR REPLACE FUNCTION rate.upsert_price_alert(
@@ -52,19 +60,21 @@ CREATE OR REPLACE FUNCTION rate.upsert_price_alert(
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = rate, public
+SET search_path = rate, public, pg_temp
 AS $$
 DECLARE
   v_master rate.master_products%ROWTYPE;
   v_alert rate.price_alerts%ROWTYPE;
   v_clean_locale TEXT;
+  v_caller_uid UUID := auth.uid();
+  v_effective_fp TEXT;
 BEGIN
   IF p_product_slug IS NULL OR btrim(p_product_slug) = '' THEN
-    RAISE EXCEPTION 'Product slug is required';
+    RAISE EXCEPTION 'Product slug is required' USING ERRCODE = '22023';
   END IF;
 
   IF p_target_price IS NULL OR p_target_price <= 0 THEN
-    RAISE EXCEPTION 'Target price must be greater than 0';
+    RAISE EXCEPTION 'Target price must be greater than 0' USING ERRCODE = '22023';
   END IF;
 
   SELECT *
@@ -74,13 +84,21 @@ BEGIN
   LIMIT 1;
 
   IF NOT FOUND THEN
-    RAISE EXCEPTION 'Master product not found for slug: %', p_product_slug;
+    RAISE EXCEPTION 'Master product not found for slug: %', p_product_slug USING ERRCODE = 'P0002';
   END IF;
 
   v_clean_locale := CASE
     WHEN p_locale IN ('vi', 'en', 'cs') THEN p_locale
     ELSE 'vi'
   END;
+
+  -- Namespace fingerprint by caller identity so anonymous callers can never
+  -- collide with or overwrite an authenticated user's price alert.
+  IF v_caller_uid IS NOT NULL THEN
+    v_effective_fp := 'uid:' || v_caller_uid::text;
+  ELSE
+    v_effective_fp := 'anon:' || COALESCE(left(NULLIF(btrim(p_client_fingerprint), ''), 120), 'default');
+  END IF;
 
   INSERT INTO rate.price_alerts (
     master_product_id,
@@ -95,9 +113,9 @@ BEGIN
   )
   VALUES (
     v_master.id,
-    auth.uid(),
-    NULLIF(btrim(COALESCE(p_subscriber_email, '')), ''),
-    COALESCE(NULLIF(btrim(p_client_fingerprint), ''), 'anon'),
+    v_caller_uid,
+    NULLIF(left(btrim(COALESCE(p_subscriber_email, '')), 254), ''),
+    v_effective_fp,
     ROUND(p_target_price, 0),
     COALESCE(v_master.min_price, 0),
     v_clean_locale,
@@ -125,4 +143,5 @@ BEGIN
 END;
 $$;
 
+REVOKE ALL ON FUNCTION rate.upsert_price_alert(TEXT, NUMERIC, TEXT, TEXT, TEXT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION rate.upsert_price_alert(TEXT, NUMERIC, TEXT, TEXT, TEXT) TO anon, authenticated, service_role;
