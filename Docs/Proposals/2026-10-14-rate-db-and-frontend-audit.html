@@ -355,6 +355,10 @@
           Tích hợp nút canh giá 1 chạm (<code>WatchlistQuickToggle.tsx</code>) và liên kết kiểm định nhanh lên toàn bộ thẻ sản phẩm 5 ngành hàng + Trang chủ; bổ sung biểu mẫu <code>CommunityQuarantineSubmitForm.tsx</code> trên <code>/contact-us</code> kết nối trực tiếp tới cổng <code>Zero-Trust Quarantine</code> (<code>POST /api/v1/rate/extension/ingest</code>).
         </li>
         <li>
+          <strong>Đối Thủ Cùng Phân Khúc 1-Chạm, Kết Luận Bàn Cân Tự Động, Chuẩn Hóa <code>DESIGN.md</code> v2.0 &amp; Đổi Ngôn Ngữ Không Thêm Slug <code>/en</code>, <code>/cs</code> (Issue #30, #31, #32 &amp; #33):</strong>
+          Ban hành <code>DESIGN.md</code> v2.0 tại thư mục gốc, nâng cấp Hero Dark Obsidian + DOS Crimson Glow trên Trang chủ, 5 trang Danh mục và trang Gian hàng; chuyển <code>navigation.ts</code> sang <code>localePrefix: &quot;never&quot;</code> + cookie <code>NEXT_LOCALE</code> và redirect <code>308</code> mọi đường dẫn <code>/en</code>, <code>/cs</code>, <code>/vi</code> về URL gốc; hiển thị đầy đủ 10/10 nhóm thông số chuẩn hóa (tách cụm camera chuẩn PhoneArena) trên <code>ProductDetailView</code> kèm bộ kiểm thử tự động 8/8 suites.
+        </li>
+        <li>
           <strong>Mở rộng REST API v1 phục vụ Web &amp; Browser Extension MV3 (13 Endpoints):</strong>
           <ul>
             <li><code>GET /api/v1/rate/openapi.json</code> - Đặc tả OpenAPI 3.1.0 chuẩn máy đọc cho toàn bộ hệ thống REST API v1.</li>
