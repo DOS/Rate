@@ -13,6 +13,7 @@ import {
   MAX_COMPARE_ITEMS,
   setCompareTray,
 } from './compare-tray';
+import { upsertWatchlistItem } from '@/components/watchlist/watchlist-store';
 
 interface CompareWorkspaceProps {
   initialProducts: MasterProduct[];
@@ -817,6 +818,8 @@ export default function CompareWorkspace({
     }, 50);
   };
 
+  const [watchedAllToast, setWatchedAllToast] = useState(false);
+
   const handleCopyShareLink = async () => {
     if (typeof window === 'undefined') return;
     try {
@@ -828,12 +831,65 @@ export default function CompareWorkspace({
     }
   };
 
+  const handleWatchAllCompared = () => {
+    for (const p of products) {
+      const minP = Math.max(0, Number(p.min_price || 0));
+      const targetP =
+        minP > 0
+          ? Math.max(100_000, Math.round((minP * 0.95) / 100_000) * 100_000)
+          : 10_000_000;
+      const thumb =
+        p.thumbnail ||
+        (p.images && p.images.length > 0 ? p.images[0] || null : null);
+      const resolvedHref = getMasterProductHref(p);
+      const resolvedCategoryPath =
+        resolvedHref.replace(`/${p.slug}`, '') || '/smartphones';
+      upsertWatchlistItem({
+        slug: p.slug,
+        name: p.name,
+        brand: p.brand,
+        categoryPath: resolvedCategoryPath,
+        thumbnail: thumb,
+        priceWhenAdded: minP,
+        targetPrice: targetP,
+        addedAt: new Date().toISOString(),
+      });
+    }
+    setWatchedAllToast(true);
+    setTimeout(() => setWatchedAllToast(false), 2200);
+  };
+
   // Compute lowest price across compared products
   const lowestPriceAmongCompared = useMemo(() => {
     const prices = products
       .map((p) => Number(p.min_price || 0))
       .filter((n) => n > 0);
     return prices.length > 0 ? Math.min(...prices) : null;
+  }, [products]);
+
+  const headToHeadSummary = useMemo(() => {
+    if (products.length < 2) return null;
+    const byRating = [...products].sort(
+      (a, b) => getEffectiveRating(b) - getEffectiveRating(a)
+    );
+    const byPrice = [...products]
+      .filter((p) => Number(p.min_price || 0) > 0)
+      .sort((a, b) => Number(a.min_price || 0) - Number(b.min_price || 0));
+    const byMemory = [...products].sort(
+      (a, b) =>
+        Number(b.ram_gb || 0) * 1000 +
+        Number(b.storage_gb || 0) -
+        (Number(a.ram_gb || 0) * 1000 + Number(a.storage_gb || 0))
+    );
+    const byBattery = [...products].sort(
+      (a, b) => Number(b.battery_mah || 0) - Number(a.battery_mah || 0)
+    );
+    return {
+      bestRated: byRating[0] ?? null,
+      lowestPrice: byPrice[0] ?? null,
+      highestMemory: byMemory[0] ?? null,
+      bestBattery: byBattery[0] ?? null,
+    };
   }, [products]);
 
   return (
@@ -1066,6 +1122,18 @@ export default function CompareWorkspace({
                   ? '✓ Đã sao chép link!'
                   : '🔗 Sao chép link so sánh'}
               </button>
+
+              {products.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleWatchAllCompared}
+                  className="btn btn-sm btn-outline-success rounded-pill fw-medium px-3 py-2"
+                >
+                  {watchedAllToast
+                    ? '✓ Đã thêm vào Watchlist!'
+                    : `🔔 Canh giá cả nhóm (${products.length})`}
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -1093,6 +1161,103 @@ export default function CompareWorkspace({
           </div>
         )}
       </div>
+
+      {/* Automated Head-to-Head 10-Group Verdict Summary Card */}
+      {headToHeadSummary && (
+        <div className="card rounded-4 bg-dark p-md-4 mb-4 border-0 p-3 text-white shadow-sm">
+          <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+            <div>
+              <span className="badge bg-danger rounded-pill fw-semibold me-2 px-3 py-1">
+                ⚡ Tự động Phân tích Bàn cân 10 Nhóm
+              </span>
+              <span className="fw-bold">
+                Tóm Tắt Ưu Thế Giữa {products.length} Thiết Bị Đang Đối Chiếu
+              </span>
+            </div>
+            <Link
+              href="/watchlist"
+              className="btn btn-sm btn-outline-light rounded-pill px-3"
+            >
+              Mở Danh sách Canh giá →
+            </Link>
+          </div>
+          <div className="row g-3">
+            {headToHeadSummary.bestRated && (
+              <div className="col-lg-3 col-md-6">
+                <div className="rounded-3 bg-opacity-50 border-secondary border-opacity-25 h-100 border bg-black p-3">
+                  <div className="small text-warning fw-bold mb-1">
+                    🏆 Điểm Thực Chất Cao Nhất
+                  </div>
+                  <div className="fw-bold text-truncate text-white">
+                    {headToHeadSummary.bestRated.name}
+                  </div>
+                  <div className="small text-white-50">
+                    ⭐{' '}
+                    {getEffectiveRating(headToHeadSummary.bestRated).toFixed(1)}{' '}
+                    / 5.0 (đã lọc Seeding AI)
+                  </div>
+                </div>
+              </div>
+            )}
+            {headToHeadSummary.lowestPrice && (
+              <div className="col-lg-3 col-md-6">
+                <div className="rounded-3 bg-opacity-50 border-secondary border-opacity-25 h-100 border bg-black p-3">
+                  <div className="small text-success fw-bold mb-1">
+                    💰 Giá Thực Tế Thấp Nhất
+                  </div>
+                  <div className="fw-bold text-truncate text-white">
+                    {headToHeadSummary.lowestPrice.name}
+                  </div>
+                  <div className="small text-white-50">
+                    Từ{' '}
+                    {Number(
+                      headToHeadSummary.lowestPrice.min_price || 0
+                    ).toLocaleString('vi-VN')}{' '}
+                    ₫
+                  </div>
+                </div>
+              </div>
+            )}
+            {headToHeadSummary.highestMemory && (
+              <div className="col-lg-3 col-md-6">
+                <div className="rounded-3 bg-opacity-50 border-secondary border-opacity-25 h-100 border bg-black p-3">
+                  <div className="small text-info fw-bold mb-1">
+                    ⚙️ Bộ Nhớ RAM / ROM Cao Nhất
+                  </div>
+                  <div className="fw-bold text-truncate text-white">
+                    {headToHeadSummary.highestMemory.name}
+                  </div>
+                  <div className="small text-white-50">
+                    {headToHeadSummary.highestMemory.ram_gb
+                      ? `${headToHeadSummary.highestMemory.ram_gb}GB RAM • `
+                      : ''}
+                    {headToHeadSummary.highestMemory.storage_gb
+                      ? `${headToHeadSummary.highestMemory.storage_gb}GB`
+                      : 'Chuẩn hóa'}
+                  </div>
+                </div>
+              </div>
+            )}
+            {headToHeadSummary.bestBattery && (
+              <div className="col-lg-3 col-md-6">
+                <div className="rounded-3 bg-opacity-50 border-secondary border-opacity-25 h-100 border bg-black p-3">
+                  <div className="small text-danger fw-bold mb-1">
+                    🔋 Dung Lượng Pin Nổi Bật
+                  </div>
+                  <div className="fw-bold text-truncate text-white">
+                    {headToHeadSummary.bestBattery.name}
+                  </div>
+                  <div className="small text-white-50">
+                    {headToHeadSummary.bestBattery.battery_mah
+                      ? `${headToHeadSummary.bestBattery.battery_mah} mAh`
+                      : 'Chuẩn hóa 10 nhóm'}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Empty State if 0 products */}
       {products.length === 0 ? (
