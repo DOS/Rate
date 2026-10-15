@@ -3,7 +3,7 @@
 > **Cập nhật lần cuối:** 15/10/2026  
 > **Tech Stack chuẩn hóa:** TypeScript 7.0.2 + Next.js 16.3.8 + React 19.3 + Pure PostgreSQL 17 (Supabase Cloud `rate` schema) + Open-Core 2 Repositories (`DOS/Rate` & `DOS/Rate-Services`)  
 > **GitHub Project Board (Multi-Agent Queue):** [https://github.com/orgs/DOS/projects/9](https://github.com/orgs/DOS/projects/9)  
-> **Trạng thái hiện tại:** Đã hoàn thành 100% toàn bộ Lộ trình Phase 1, Phase 2, Phase 3 (3.1 -> 3.3), Phase 4 (4.1 -> 4.11) & Phase 5 (5.1 & 5.2)
+> **Trạng thái hiện tại:** Đã hoàn thành 100% toàn bộ Lộ trình Phase 1, Phase 2, Phase 3 (3.1 -> 3.3), Phase 4 (4.1 -> 4.21) & Phase 5 (5.1 -> 5.4)
 
 ---
 
@@ -116,3 +116,9 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc **4 T�
   - Hỗ trợ bóc tách JSON-LD, REST API v2 (Tiki), `__moduleData__` (Lazada), bảng thông số kỹ thuật DOM, biến thể dung lượng và đánh giá người mua, tự động gộp chuẩn xác về cùng `model_key` trên `rate.master_products`.
 - [x] **5.2. Nâng cấp Rate Browser Extension (Manifest V3 - `apps/extension`) & Two-Speed Hybrid Lookup/Quarantine Ingest API (`/api/v1/rate/extension/lookup`, `/api/v1/rate/extension/ingest` - Issue #12 & Issue #26):**
   - Triển khai kiến trúc 2026 v2 đã qua kiểm định của OpenAI Codex (`gpt-6.1-sol`, `xhigh`): Shadow DOM Floating Trust Pill + Chrome Native Side Panel (`chrome.sidePanel`) hỗ trợ 10 sàn/đại lý, URL Canonicalization cắt tham số theo dõi, Gatekeeper chặn phụ kiện/linh kiện, nhận diện biến thể dung lượng (`ambiguous_variant`), kết luận giá 5 mức dựa trên bằng chứng (`genuine_deal`, `fair_market_price`, `above_market`, `inflated_fake_sale`, `insufficient_data`), và hàng đợi cách ly Zero-Trust Opt-In (`rate.enqueue_crawl_job`).
+- [x] **5.3. Smart Tiered Job Seeder (`SmartJobSeeder`), Delta Price Compression & Mở Rộng Crowd-Verify Queue 5 Sàn (Issue #2 bên `DOS/Rate-Services`):**
+  - Xây dựng `SmartJobSeeder` (`src/scrapers/job-seeder.ts`) tự động nạp job theo 3 tầng ưu tiên (`Hot Watchlist Priority 8`, `Warm Stale Catalog Priority 3`, `Cross-Platform Coverage Gap Audit`) vào đầu mỗi chu kỳ `queue-worker` mà không cần đổ rác hàng vạn SKU.
+  - Triển khai **Delta Price Compression** trong `shopee-to-supabase.ts` (trên cả `DOS/Rate` và `DOS/Rate-Services`), tự động bỏ qua bản ghi `rate.price_history` trùng lặp khi giá bán và giá gốc không đổi trong vòng 7 ngày (tiết kiệm >85% dung lượng bảng lịch sử giá).
+  - Mở rộng `crowdVerifyQueue: true` trên `apps/web/src/server/rate/extension.ts` cho toàn bộ 5 nền tảng có Worker tự động (`shopee`, `lazada`, `tiki`, `cellphones`, `tgdd`).
+- [x] **5.4. Multi-Platform Search Discovery Engine (5 Platforms) & Tự Động Lấp Khoảng Trống Giá Đa Sàn (Issue #3 bên `DOS/Rate-Services`):**
+  - Xây dựng `MultiPlatformSearchDiscovery` (`src/scrapers/search-discovery.ts`) tự động tìm kiếm gian hàng chính hãng còn thiếu trên cả 5 nền tảng (`Tiki`, `Lazada`, `CellphoneS`, `Thế Giới Di Động`, `Shopee`), đi qua 2 lớp kiểm duyệt (`isAccessoryOrInvalidCandidate` + `verifyCandidateMatchesModelKey` bằng `ProductNormalizer`) trước khi nạp vào `rate.crawl_jobs` (Priority 5).
