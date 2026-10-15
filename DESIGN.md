@@ -1,140 +1,152 @@
-# 🎨 Rate.vn Design System & Frontend Engineering Guidelines (DESIGN.md)
+# Rate.vn Design System & Frontend Engineering Guidelines (DESIGN.md)
 
-> **Version:** 2.0.0  
-> **Target Audience:** Frontend Engineers, UI/UX Designers, AI Coding Agents  
-> **Core Concept:** _The Transparent Product Intelligence, Price Audit & Anti-Seeding Engine_  
-> **Aesthetic DNA:** Linear-clean • RTINGS-analytical •CamelCamelCamel-data-dense • DOS Ecosystem Dark-First Precision
-
----
-
-## 1. 🌟 Design Philosophy & Brand Identity
-
-**Rate.vn** (`DOS/Rate`) is an independent, AI-powered Product Intelligence & E-Commerce Verification Platform. Unlike cluttered affiliate marketplaces that push fake flash-sale banners, Rate.vn is built like a **financial-grade product terminal**: high-trust, evidence-backed, scannable, and zero-fluff.
-
-### Core Design Principles
-
-1. **Evidence First, Zero Fake Urgency:** Never use manipulative countdown timers or fake strikethrough prices. Every claim (Trust Score, Fake Discount Warning, Seeding Penalty, 10-Group Specs) must display verifiable telemetry (`tabular-nums`, confidence badges, merchant observation counts).
-2. **High-Density Analytical Scannability:** Inspired by **RTINGS**, **PhoneArena**, and **Linear**. Users comparing 4 devices across 10 canonical spec groups (`display`, `hardware`, `camera`, `battery`, `design`, `cellular`, `connectivity`, `multimedia`, `availability`, `regulatory`) must be able to scan winners, deltas, and lowest-ever prices in under 3 seconds.
-3. **Dual-Surface Precision (Dark Obsidian Header/Hero + Crisp Analytical Cards):**
-   - **Dark Surface (`#0f1113` / `#14171c`):** Used for the global navigation bar, hero command center, developer API playground, and executive HTML reports.
-   - **Light Analytical Canvas (`#f8f9fc` / `#ffffff`):** Used for high-density specification matrices, multi-merchant offer tables, and SVG historical price charts to maximize daytime readability.
-4. **Signature DOS Crimson Accent (`#FF2E29` / `#e11d48`):** Primary brand action color, paired with semantic verification tokens (Emerald for verified authentic/all-time-low, Amber for price volatility/seeding watch, Rose for fake-discount/spam alerts).
-5. **Universal Accessibility & Responsive Ergonomics (WCAG 2.1 AA):** Minimum 4.5:1 contrast ratio, keyboard-navigable command palettes and drawers, sticky comparison headers on mobile (`360px`) through ultra-wide (`1920px`).
+> **Version:** 3.0.0 (Review & Rating-First Product Intelligence Architecture)
+> **Target Audience:** Frontend Engineers, UI/UX Designers, AI Coding Agents
+> **Core Positioning:** _The Independent Product Rating, AI Anti-Seeding Review & Technical Audit Terminal_
+> **Aesthetic DNA:** RTINGS-analytical * Linear-monochrome * Vercel Geist-precision * Zero Affiliate Clutter
 
 ---
 
-## 2. 🎨 Color Tokens & Semantic Palette
+## 1. Design Philosophy & Core Product Positioning
 
-All new frontend components and design-system primitives must use semantic tokens rather than arbitrary inline colors.
+**Rate.vn** (`DOS/Rate`) is an independent **Product Rating, Community Review & Anti-Seeding Intelligence Platform**.
+It is **NOT** an affiliate shopping portal, coupon site, or legacy business directory. Every screen must look and behave like an authoritative **product lab & review audit terminal** (inspired by **RTINGS**, **Linear**, and **Wirecutter**).
 
-### 2.1 Brand & Accent Tokens
+### Non-Negotiable Principles
 
-| Token              | Hex       | Primary Usage                                                                    |
-| :----------------- | :-------- | :------------------------------------------------------------------------------- |
-| `--rate-brand-50`  | `#fff1f2` | Subtle crimson tint for active pills, price-watch badges, and highlighted states |
-| `--rate-brand-100` | `#ffe4e6` | Border highlights on active comparison cards                                     |
-| `--rate-brand-500` | `#ff2e29` | **DOS Signature Crimson** - Primary brand mark, focal accents, active indicators |
-| `--rate-brand-600` | `#e11d48` | **Primary CTA Buttons**, primary links, active filter chips                      |
-| `--rate-brand-700` | `#be123c` | Button hover/pressed states                                                      |
-
-### 2.2 Surface & Neutral Tokens
-
-| Role                                    | Dark Surface (`.theme-dark` / Hero / Reports) | Light Analytical Canvas (Default App) |
-| :-------------------------------------- | :-------------------------------------------- | :------------------------------------ |
-| **Page Canvas (`--bg-canvas`)**         | `#0f1113` (Obsidian Carbon)                   | `#f8f9fc` (Cool Alabaster)            |
-| **Elevated Card (`--bg-surface`)**      | `#16191e` (Elevated Slate)                    | `#ffffff` (Pure White)                |
-| **Subtle Surface (`--bg-muted`)**       | `#1e2229`                                     | `#f1f4f9`                             |
-| **Border / Hairline (`--border-line`)** | `rgba(255, 255, 255, 0.08)` / `#262b33`       | `#e2e8f0` / `rgba(15, 23, 42, 0.08)`  |
-| **Text - Primary (`--fg-primary`)**     | `#f8fafc`                                     | `#0f172a`                             |
-| **Text - Secondary (`--fg-secondary`)** | `#94a3b8`                                     | `#475569`                             |
-| **Text - Muted (`--fg-muted`)**         | `#64748b`                                     | `#64748b`                             |
-
-### 2.3 Verification & Telemetry Semantic Tokens
-
-- **Authentic / Verified Deal (`--status-authentic`):** Emerald `#10b981` (background `#ecfdf5` light / `rgba(16, 185, 129, 0.12)` dark) - Used for `authentic_review_count`, `isLowestEver`, and `status: 'authentic_discount'`.
-- **Caution / Moderate Seeding (`--status-warning`):** Amber `#f59e0b` (background `#fffbeb` light / `rgba(245, 158, 11, 0.12)` dark) - Used for minor price fluctuation or mixed review sentiment.
-- **Fake Discount / Seeding Alert (`--status-danger`):** Rose `#f43f5e` (background `#fff1f2` light / `rgba(244, 63, 94, 0.14)` dark) - Used for inflated list prices (`fakeDiscountCount > 0`) and filtered spam/seeding reviews (`include_in_rating = false`).
-- **Expert / AI Intelligence (`--status-ai`):** Indigo `#6366f1` (background `#eef2ff` light / `rgba(99, 102, 241, 0.12)` dark) - Used for `expert_rating`, 10-group AI enrichment badges, and model keys.
+1. **Rating & Review First - Never Affiliate First:**
+   - The primary value of Rate.vn is **unbiased multi-criteria ratings** (`User Weighted Score` + `Expert Lab Score`) and **AI-audited authentic reviews** (filtering out fake seeding, coin-farming spam, and paid bot reviews).
+   - Product pages must **never** place giant red/pink promotional price boxes or loud "Buy Now / Go to Store" affiliate buttons above the fold.
+   - Merchant listings and historical prices exist strictly as **price-manipulation & merchant-trust verification evidence** at the bottom of the page, never as commercial sales pitches.
+2. **Unified Monochrome + Semantic Precision (Zero "Bootstrap Rainbow Soup"):**
+   - Do not mix random Bootstrap utility colors (`bg-info`, `bg-warning`, `bg-danger-subtle`, `bg-primary`, `bg-success`) or decorative emojis inside analytical headers.
+   - Use a cohesive **Obsidian + Slate monochrome foundation** (`#0f1113`, `#151922`, `#f8fafc`, `#ffffff`) with `1px` crisp hairlines (`#e2e8f0` in light mode, `rgba(255,255,255,0.08)` in dark mode).
+   - Color is reserved strictly for **semantic telemetry**:
+     - **Emerald (`#10b981`)**: Verified Authentic Reviews, Pros, High Trust (`>= 85`), Verified Price Floor.
+     - **Indigo (`#6366f1`)**: Expert Lab Score, 5-Criteria Rating Bars, AI Enriched Specs.
+     - **Amber (`#f59e0b`)**: Moderate Seeding Watch, Star Rating Gold (`#f59e0b`), Minor Price Volatility.
+     - **Rose / Crimson (`#f43f5e` / `#ff2e29`)**: Seeding Spam Penalty, Cons, Fake Discount Alert, and Brand Focal Mark.
+3. **Zero Legacy Template Artifacts:**
+   - All remnants of the legacy _ListingHub_ directory template (`/img/brand/logo-*.png`, `<BrandImage />`, `/img/brand-section.png`, `.bg-primary-2` red background banners, `'Jost'` rounded geometric font) are **strictly banned**.
+4. **High-Density Tabular Scannability:**
+   - Every rating (`4.9 / 5.0`), criteria score (`9.6 / 10`), review percentage (`92% Authentic`), hardware metric (`120 Hz`, `5000 mAh`), and reference price must use `font-variant-numeric: tabular-nums`.
 
 ---
 
-## 3. 📐 Typography & Data Formatting
+## 2. Color Tokens & Surface Architecture
+
+All components in `apps/web` must reference the `--rate-*` CSS custom properties defined in `apps/web/src/app/style/scss/_custom.scss` and `style.scss`.
+
+### 2.1 Surface & Neutral Tokens
+
+| Token                  | Dark Command Surface (`.rate-surface-dark`) | Light Analytical Canvas (Default App) | Usage                                                                  |
+| :--------------------- | :------------------------------------------ | :------------------------------------ | :--------------------------------------------------------------------- |
+| `--rate-bg-canvas`     | `#0b0d11`                                   | `#f8fafc`                             | Page background canvas                                                 |
+| `--rate-bg-surface`    | `#12161f`                                   | `#ffffff`                             | Primary cards, review containers, spec tables                          |
+| `--rate-bg-elevated`   | `#181d29`                                   | `#f1f5f9`                             | Scoreboard wells, criteria bar tracks, table headers                   |
+| `--rate-border-subtle` | `rgba(255, 255, 255, 0.08)`                 | `#e2e8f0`                             | 1px structural borders (`border: 1px solid var(--rate-border-subtle)`) |
+| `--rate-border-strong` | `rgba(255, 255, 255, 0.16)`                 | `#cbd5e1`                             | Active card borders, focused inputs                                    |
+| `--rate-fg-primary`    | `#f8fafc`                                   | `#0f172a`                             | Headings, product titles, primary spec values                          |
+| `--rate-fg-secondary`  | `#94a3b8`                                   | `#475569`                             | Review body copy, spec labels, descriptions                            |
+| `--rate-fg-muted`      | `#64748b`                                   | `#64748b`                             | Timestamps, `model_key` metadata, secondary captions                   |
+
+### 2.2 Semantic Rating & Audit Tokens
+
+| Token                 | Value     | Soft Tint (Light / Dark)               | Strict Semantic Meaning                                              |
+| :-------------------- | :-------- | :------------------------------------- | :------------------------------------------------------------------- |
+| `--rate-brand`        | `#ff2e29` | `#fff1f2` / `rgba(255, 46, 41, 0.14)`  | Brand identity mark, primary review submission CTA                   |
+| `--rate-score-user`   | `#10b981` | `#ecfdf5` / `rgba(16, 185, 129, 0.14)` | **Authentic User Score** (post-seeding filter), Pros, Verified Buyer |
+| `--rate-score-expert` | `#6366f1` | `#eef2ff` / `rgba(99, 102, 241, 0.14)` | **Expert Lab Score**, 5-Criteria progress bars, AI Review Verdict    |
+| `--rate-score-star`   | `#f59e0b` | `#fffbeb` / `rgba(245, 158, 11, 0.14)` | Star rating icons, moderate caution indicators                       |
+| `--rate-risk-danger`  | `#f43f5e` | `#fff1f2` / `rgba(244, 63, 94, 0.14)`  | Seeding spam excluded (`include_in_rating = false`), Cons, Fake Sale |
+
+---
+
+## 3. Typography & Numeric Discipline
 
 ### Font Stack
 
-- **UI & Editorial Copy (`--font-sans`):** `'Inter'`, `'Plus Jakarta Sans'`, system-ui, `-apple-system`, `'Segoe UI'`, Roboto, sans-serif (full Vietnamese diacritics support required).
-- **Prices, Spec Numbers, Model Keys & Telemetry (`--font-mono`):** `'JetBrains Mono'`, `'Fira Code'`, ui-monospace, SFMono-Regular, monospace with `font-variant-numeric: tabular-nums`.
+- **Primary UI & Editorial Copy (`--body-font-family` / `--heading-font-family`):**
+  `'Inter'`, `'Plus Jakarta Sans'`, `'Noto Sans'`, system-ui, `-apple-system`, `'Segoe UI'`, sans-serif.
+  _(Legacy `'Jost'` font is removed to eliminate the dated directory-template look)._
+- **Scores, Telemetry & Spec Identifiers (`--rate-font-mono`):**
+  `'JetBrains Mono'`, `'Fira Code'`, ui-monospace, SFMono-Regular, monospace with `font-variant-numeric: tabular-nums`.
 
-### Typographic Hierarchy
+### Typographic Scale
 
-| Level                      | Size / Line-Height                      | Weight | Tracking   | Usage                                                           |
-| :------------------------- | :-------------------------------------- | :----- | :--------- | :-------------------------------------------------------------- |
-| **Display Hero**           | `clamp(2rem, 4.2vw, 3.25rem)` / `1.12`  | `800`  | `-0.03em`  | Homepage Hero, Category Command Header                          |
-| **Page Title (H1)**        | `clamp(1.5rem, 2.8vw, 2.25rem)` / `1.2` | `800`  | `-0.025em` | Product Detail Title, Workspace Header (`/compare`, `/inspect`) |
-| **Section Heading (H2)**   | `1.25rem - 1.5rem` / `1.3`              | `700`  | `-0.015em` | 10-Group Specs Header, Price History Header, JReviews Header    |
-| **Group Card Title (H3)**  | `1rem` (`16px`) / `1.4`                 | `700`  | `-0.01em`  | Individual Spec Group Title (`1. Màn hình (Display)`, etc.)     |
-| **Body / Spec Value**      | `0.875rem` (`14px`) / `1.55`            | `500`  | `0`        | Spec values, review content, merchant offer rows                |
-| **Micro / Telemetry Pill** | `0.75rem` (`12px`) / `1.35`             | `600`  | `0.02em`   | Platform badges, `model_key`, seeding flags, discount %         |
-
-### Mandatory Numeric Formatting Rules
-
-1. All prices (`min_price`, `max_price`, `lowestEverPrice`), scores (`4.8 / 5.0`, `88/100`), and hardware specs (`120 Hz`, `5000 mAh`, `8 GB / 256 GB`) **must** use `tabular-nums` so columns align vertically in tables and cards.
-2. Vietnamese currency is formatted as `XX.XXX.XXX ₫` (`toLocaleString('vi-VN') + ' ₫'`).
+| Element                      | Size / Line-Height                        | Weight | Tracking   | Design Rule                                                             |
+| :--------------------------- | :---------------------------------------- | :----- | :--------- | :---------------------------------------------------------------------- |
+| **Display Hero**             | `clamp(1.85rem, 3.6vw, 2.85rem)` / `1.14` | `800`  | `-0.03em`  | High-contrast editorial headline on dark Obsidian canvas                |
+| **Product H1 Title**         | `clamp(1.5rem, 2.5vw, 2.1rem)` / `1.2`    | `800`  | `-0.025em` | Clean device name without marketplace spam keywords                     |
+| **Scoreboard Giant Numeral** | `2.25rem - 2.75rem` / `1.0`               | `800`  | `-0.04em`  | `tabular-nums`, paired with `/ 5.0` denominator & confidence            |
+| **Section Heading (H2)**     | `1.25rem - 1.375rem` / `1.3`              | `700`  | `-0.015em` | Preceded by a subtle uppercase eyebrow pill (`0.72rem`, `0.06em`)       |
+| **Spec Label / Value**       | `0.875rem` (`14px`) / `1.5`               | `500`  | `0`        | Left label in `--rate-fg-secondary`, right value in `--rate-fg-primary` |
+| **Telemetry / Micro Badge**  | `0.75rem` (`12px`) / `1.35`               | `600`  | `0.02em`   | Pill radius `6px` (or `9999px` for status chips), `1px` border          |
 
 ---
 
-## 4. 🧩 Core Component Patterns
+## 4. Information Architecture: Product Detail Page (`/[category]/[slug]`)
 
-### 4.1 Product Intelligence Cards (Catalog & Related Competitors)
+To ensure Rate.vn is unmistakably a **Rating & Review Platform**, every Product Detail View across all 5 categories (`smartphones`, `tablets`, `laptops`, `smartwatches`, `earbuds`) must follow this exact vertical hierarchy:
 
-Every product card across Homepage, Category Catalogs (`/smartphones`, `/tablets`, `/laptops`, `/smartwatches`, `/earbuds`), and Competitor Strips must surface 5 non-negotiable signals without clutter:
+### 4.1 Above the Fold: The Rating & Review Command Card
 
-1. **Top Trust Strip:** Brand badge + `★ Weighted User Rating` (anti-seeding filtered) + `🔬 Expert Score` (when available).
-2. **Visual Thumbnail Container:** Clean `180px - 220px` padded container with `object-fit: contain` (never crop device hardware).
-3. **Key Hardware Pills:** Up to 3 real hardware badges (`RAM/Storage`, `Chipset`, `5G` or `Screen`) derived from actual data (never hardcoded placeholder strings).
-4. **Price & Merchant Telemetry:** Lowest verified price in bold crimson/dark tabular numerals + merchant count (`N sàn`).
-5. **1-Tap Utility Footer:** Instant `⚖️ So sánh` (`CompareQuickToggle`), `🔔 Canh giá` (`WatchlistQuickToggle`), and `🔍 Kiểm định` (`/inspect?q=<slug>`).
+1. **Left Column (4 cols) - Hardware Visual & Telemetry Identity:**
+   - Clean white/slate studio frame (`object-fit: contain`), canonical `model_key` badge, category pill, and quick-jump anchor tabs (`#jreviews-section`, `#specs-section`, `#price-history-section`).
+2. **Right Column (8 cols) - Dual Rating Scoreboard & AI Review Synthesis (THE CORE):**
+   - **Dual Scoreboard Panel (`.rate-scoreboard-panel`):**
+     - **Weighted Authentic User Score (`4.9 / 5.0`)**: Prominent Emerald/Dark badge showing total verified reviews vs. excluded seeding reviews.
+     - **Rate.vn Lab Expert Score (`4.9 / 5.0`)**: Prominent Indigo badge with expert calibration status.
+     - **5-Criteria Analytical Bars**: Horizontal progress bars (`0.0 - 5.0`, `tabular-nums`) for `Màn hình / Hiển thị`, `Hiệu năng`, `Camera / Cảm biến`, `Pin & Sạc`, and `Đáng tiền (Value)`.
+   - **AI Review Verdict & Pros/Cons Grid:**
+     - **Expert Verdict Summary** quote block.
+     - Two-column **Ưu điểm thực tế (Pros)** (Emerald checkmarks) vs. **Nhược điểm cần lưu ý (Cons)** (Rose alerts) synthesized from verified buyers and lab testing.
+   - **Primary Action Bar (Review-Centric CTAs):**
+     - Primary button: **Đọc & Chấm điểm Review (`#jreviews-section`)** + **Viết đánh giá 5 tiêu chí**.
+     - Secondary analytical actions: **So sánh đối đầu (`/compare`)**, **Kiểm định Link (`/inspect`)**, and **Theo dõi (`WatchlistQuickToggle`)**.
+   - **Compact Neutral Market Reference Strip:**
+     - A single, understated horizontal bar at the bottom of the card showing the reference market price range (`Giá tham khảo trung lập từ N nguồn kiểm định`) with a subtle link to `#price-history-section`. No flashy red discount banners.
 
-### 4.2 10-Group Specification Matrix (`ProductSpecifications`)
+### 4.2 Section #1 (Immediately Below Header): JReviews Community & Anti-Seeding Audit (`#jreviews-section`)
 
-Both the Product Detail View and the `/compare` Workspace must render all **10 canonical Field Groups** defined in `@repo/shared-data`:
+- Placed **first** in the page body so users immediately engage with community ratings, AI seeding flags, pros/cons, and the interactive 5-criteria review submission form.
+- Includes filter tabs (`Tất cả`, `Review thật đã xác thực`, `Nghi vấn Seeding bị loại trừ`), helpful/report voting (`POST /api/reviews/[id]/vote`), and per-review AI confidence telemetry.
 
-1. `1. Màn hình (Display)` (`size_inch`, `type`, `resolution`, `refresh_rate_hz`, `ppi`, `protection`, `features`)
-2. `2. Phần cứng & Hiệu năng (Hardware)` (`chipset`, `cpu`, `gpu`, `ram_gb`, `storage_gb`, `storage_expansion`, `os`)
-3. `3. Máy ảnh (Camera - PhoneArena Split Architecture)` (`rear_setup`, `main_camera`, `second_camera`, `third_camera`, `fourth_camera`, `front_camera`, `flash`, `video_recording`)
-4. `4. Pin & Sạc (Battery)` (`capacity_mah`, `type`, `charging`, `fast_charging_w`, `reverse_charging`)
-5. `5. Thiết kế & Độ bền (Design)` (`dimensions`, `weight_g`, `materials`, `build`, `resistance`, `biometrics`, `keys`, `colors`)
-6. `6. Mạng Di động & 5G (Cellular)` (`has_5g`, `technology`, `data_speed`, `sim_type`, `volte`, `vowifi`, `bands_5g`, `bands_4g`)
-7. `7. Kết nối & Cảm biến (Connectivity)` (`wlan`, `bluetooth`, `usb`, `nfc`, `location`, `sensors`, `other`)
-8. `8. Âm thanh & Đa phương tiện (Multimedia)` (`loudspeaker`, `headphone_jack_35mm`, `audio_features`)
-9. `9. Phát hành & Giá niêm yết (Availability)` (`announced`, `status`, `prices_msrp`)
-10. `10. Pháp lý, Chứng nhận & SAR (Regulatory)` (`certifications`, `fcc_approval`, `sar_head`, `sar_body`, `sar_simultaneous`)
+### 4.3 Section #2: 10-Group Canonical Technical Specifications (`#specs-section`)
 
-### 4.3 Multi-Platform Trust & Link Inspector (`/inspect` & Browser Extension MV3)
+- Renders all **10 canonical Field Groups** (`Display`, `Hardware`, `Camera`, `Battery`, `Design`, `Cellular`, `Connectivity`, `Multimedia`, `Availability`, `Regulatory`) in a unified **RTINGS/Linear two-column specification matrix**:
+  - Clean slate card header with group index badge (`01` .. `10`).
+  - Crisp `1px` row dividers, left column `38%` muted label, right column `62%` high-contrast tabular value.
+  - Zero rainbow Bootstrap badges inside specification rows.
 
-- Supports all **10 e-commerce & retail platforms**: Shopee, Lazada, Tiki, TikTok Shop, CellphoneS, Thế Giới Di Động, FPT Shop, Hoàng Hà Mobile, Di Động Việt, Phong Vũ.
-- Always displays a 3-pillar verdict:
-  1. **Real vs. Fake Sale Audit** (comparing current price against 90-day `price_history` average & lowest-ever floor).
-  2. **Review Authenticity Breakdown** (authentic buyer reviews vs. AI-flagged seeding/coin-spam reviews).
-  3. **Cross-Merchant Arbitrage Table** (showing if another verified retailer sells the exact `model_key` cheaper).
+### 4.4 Section #3 (Bottom Appendix): Price History Audit & Neutral Merchant Telemetry (`#price-history-section` & `#offers-table`)
+
+- Framed explicitly as **Kiểm định Lịch sử Giá & Độ Tin Cậy Gian Hàng (Price & Merchant Audit)**:
+  - **90-Day Price History SVG Chart** to expose fake flash-sale markups before campaign days.
+  - **Merchant Audit Table** showing `DOSafe Score`, `Review Risk`, `Stock Status`, and a muted, neutral verification link (`Đối chiếu nguồn ↗` using `.rate-btn-ghost` instead of a loud primary buy button).
 
 ---
 
-## 5. 🌐 Localization (i18n) & Content Rules
+## 5. Information Architecture: Homepage & Category Catalogs
 
-1. **Supported Locales (`vi`, `en`, `cs`):**
-   - Route localized links through `@/lib/navigation` (`Link`, `useRouter`, `usePathname`) so `/vi`, `/en`, and `/cs` prefixes remain consistent.
-   - Use `@/lib/rate-i18n` (`normalizeRateLocale`, `getRateShellCopy`) for shared shell, navigation, and metadata strings.
-2. **No Em-Dashes (`—` or `–`):**
+### 5.1 Homepage (`/[locale]/page.tsx`)
+
+- **Dark Obsidian Command Hero:** Focuses on **Tra cứu Điểm Đánh Giá Đa Tiêu Chí, Lọc Review Ảo (Anti-Seeding) & So Sánh Thông Số Chuẩn 10 Nhóm**.
+- **Product Intelligence Cards (`.rate-product-card`):**
+  - **Header Strip:** Brand + Category pill on the left; **Dual Rating Badge (`★ 4.9` User + `Lab 4.9`)** prominently on the right.
+  - **Review Authenticity Pill:** Shows `94% Review thật` (Emerald) and `5 tiêu chí chấm điểm` above hardware pills.
+  - **Clean Slate Hardware Pills:** Monochrome slate pills (`.rate-spec-pill`) for RAM/Storage, Chipset, Display/5G.
+  - **Footer:** Reference price in neutral dark tabular numerals + primary link `Xem đánh giá & chấm điểm ->` + 1-tap `Compare` / `Watchlist` toggles.
+- **No Legacy Brand Carousels:** `<BrandImage />` is permanently removed from the homepage.
+
+---
+
+## 6. Localization (i18n) & Content Rules
+
+1. **Cookie-Based Unprefixed Routing (`localePrefix: 'never'`):**
+   - Public URLs never include `/vi`, `/en`, or `/cs` slugs (`https://rate.vn/smartphones/iphone-16-pro-max-256gb`).
+   - Switching language updates the `NEXT_LOCALE` cookie and refreshes the current URL in place.
+2. **No Em-Dashes (`U+2014` or `U+2013`):**
    - Strictly forbidden across all UI copy, metadata, comments, and reports. Always use a standard hyphen `-`.
 3. **No Fake Category Fallbacks:**
-   - Never display smartphone-only defaults (such as `'Apple A-Series'` or `'48 MP'`) on Laptops, Tablets, Smartwatches, or Earbuds when a field is absent. Derive values cleanly from `key_specs` and `specifications`, or display a clean category-appropriate fallback (`'-'` or `'Đang cập nhật'`).
-
----
-
-## 6. 🚫 Strict "DON'Ts" for AI Agents & Engineers
-
-- ❌ **DO NOT** use heavy shadows, neon rainbow gradients, or generic directory-template filler text (e.g., "Lorem ipsum", fake restaurant/hotel listings from legacy templates).
-- ❌ **DO NOT** collapse the 10 canonical specification groups into fewer boxes or hide `second_camera`, `third_camera`, `fourth_camera`, `connectivity`, `availability`, or `regulatory` data.
-- ❌ **DO NOT** hardcode locale-breaking `<a href="/...">` tags for internal navigation; always use `<Link>` from `@/lib/navigation` (except for in-page `#anchor` jumps).
-- ❌ **DO NOT** ship any UI view without verifying mobile (`360px`), tablet (`768px`), and desktop (`1280px+`) layout integrity and passing `pnpm --filter @repo/web typecheck` + `pnpm --filter @repo/web build`.
+   - Never display smartphone-only defaults on Laptops, Tablets, Smartwatches, or Earbuds.

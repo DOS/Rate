@@ -7,7 +7,12 @@ import type {
   MasterProduct,
   ProductSpecifications,
 } from '@repo/shared-data';
-import { getMasterProductHref } from '@/lib/rate-api';
+import {
+  type CanonicalCategorySlug,
+  getMasterProductCategorySlug,
+  getMasterProductHref,
+  resolveProductImageUrl,
+} from '@/lib/rate-api';
 import {
   getCompareTray,
   MAX_COMPARE_ITEMS,
@@ -18,8 +23,25 @@ import { upsertWatchlistItem } from '@/components/watchlist/watchlist-store';
 interface CompareWorkspaceProps {
   initialProducts: MasterProduct[];
   catalogCandidates: MasterProduct[];
+  initialCategory?: CanonicalCategorySlug;
   hasExplicitSlugs?: boolean;
 }
+
+const CATEGORY_TABS: Array<{
+  slug: CanonicalCategorySlug;
+  label: string;
+  unitLabel: string;
+}> = [
+  { slug: 'smartphones', label: 'Điện thoại', unitLabel: 'mẫu điện thoại' },
+  { slug: 'tablets', label: 'Máy tính bảng', unitLabel: 'mẫu tablet' },
+  { slug: 'laptops', label: 'Laptop', unitLabel: 'mẫu laptop' },
+  {
+    slug: 'smartwatches',
+    label: 'Đồng hồ thông minh',
+    unitLabel: 'mẫu smartwatch',
+  },
+  { slug: 'earbuds', label: 'Tai nghe', unitLabel: 'mẫu tai nghe' },
+];
 
 interface SpecRowDef {
   id: string;
@@ -52,12 +74,41 @@ function getEffectiveRating(p: MasterProduct): number {
 const SPEC_GROUPS: SpecGroupDef[] = [
   {
     id: 'market_trust',
-    title: '0. Giá bán & Tín nhiệm Thị trường (Rate.vn Intelligence)',
-    icon: '🏷️',
+    title: '0. Điểm Đánh Giá Đa Chiều & Tín Nhiệm (JReviews Core)',
+    icon: '⭐',
     rows: [
       {
+        id: 'rating_weighted',
+        label: 'Điểm Người mua thực chất (đã lọc Seeding AI)',
+        renderValue: (p) => {
+          const r = getEffectiveRating(p);
+          const count = p.authentic_review_count || p.total_reviews || 0;
+          return r > 0
+            ? `★ ${r.toFixed(1)} / 5.0 (${count} review thật)`
+            : 'Chưa có đánh giá';
+        },
+        numericValue: (p) => {
+          const r = getEffectiveRating(p);
+          return r > 0 ? r : null;
+        },
+        higherIsBetter: true,
+      },
+      {
+        id: 'expert_rating',
+        label: 'Điểm Chuyên gia Rate Lab (Expert Score)',
+        renderValue: (p) =>
+          p.expert_rating && Number(p.expert_rating) > 0
+            ? `Lab ${Number(p.expert_rating).toFixed(1)} / 5.0`
+            : '-',
+        numericValue: (p) =>
+          p.expert_rating && Number(p.expert_rating) > 0
+            ? Number(p.expert_rating)
+            : null,
+        higherIsBetter: true,
+      },
+      {
         id: 'min_price',
-        label: 'Giá thấp nhất hiện tại',
+        label: 'Giá tham khảo thấp nhất (Đã kiểm định)',
         renderValue: (p) =>
           Number(p.min_price) > 0
             ? `${Number(p.min_price).toLocaleString('vi-VN')} ₫`
@@ -68,7 +119,7 @@ const SPEC_GROUPS: SpecGroupDef[] = [
       },
       {
         id: 'price_range',
-        label: 'Khoảng giá các sàn',
+        label: 'Biên độ giá giữa các nguồn',
         renderValue: (p) => {
           const min = Number(p.min_price || 0);
           const max = Number(p.max_price || 0);
@@ -81,38 +132,9 @@ const SPEC_GROUPS: SpecGroupDef[] = [
       },
       {
         id: 'merchant_count',
-        label: 'Số gian hàng đang bán',
-        renderValue: (p) => `${p.merchant_count || 1} nơi bán`,
+        label: 'Số nguồn kiểm định giá & review',
+        renderValue: (p) => `${p.merchant_count || 1} nguồn`,
         numericValue: (p) => Number(p.merchant_count || 1),
-        higherIsBetter: true,
-      },
-      {
-        id: 'rating_weighted',
-        label: 'Điểm đánh giá thực chất (đã lọc Seeding)',
-        renderValue: (p) => {
-          const r = getEffectiveRating(p);
-          const count = p.authentic_review_count || p.total_reviews || 0;
-          return r > 0
-            ? `${r.toFixed(1)} / 5.0 (${count} đánh giá)`
-            : 'Chưa có đánh giá';
-        },
-        numericValue: (p) => {
-          const r = getEffectiveRating(p);
-          return r > 0 ? r : null;
-        },
-        higherIsBetter: true,
-      },
-      {
-        id: 'expert_rating',
-        label: 'Điểm chuyên gia Rate.vn',
-        renderValue: (p) =>
-          p.expert_rating && Number(p.expert_rating) > 0
-            ? `${Number(p.expert_rating).toFixed(1)} / 5.0`
-            : '-',
-        numericValue: (p) =>
-          p.expert_rating && Number(p.expert_rating) > 0
-            ? Number(p.expert_rating)
-            : null,
         higherIsBetter: true,
       },
     ],
@@ -616,10 +638,25 @@ const SPEC_GROUPS: SpecGroupDef[] = [
 export default function CompareWorkspace({
   initialProducts,
   catalogCandidates,
+  initialCategory = 'smartphones',
   hasExplicitSlugs = false,
 }: CompareWorkspaceProps) {
   const router = useRouter();
-  const [products, setProducts] = useState<MasterProduct[]>(initialProducts);
+  const [activeCategory, setActiveCategory] = useState<CanonicalCategorySlug>(
+    () =>
+      initialProducts.length > 0
+        ? getMasterProductCategorySlug(initialProducts[0]!)
+        : initialCategory
+  );
+  const [products, setProducts] = useState<MasterProduct[]>(() => {
+    const targetCat =
+      initialProducts.length > 0
+        ? getMasterProductCategorySlug(initialProducts[0]!)
+        : initialCategory;
+    return initialProducts.filter(
+      (p) => getMasterProductCategorySlug(p) === targetCat
+    );
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [remoteResults, setRemoteResults] = useState<MasterProduct[] | null>(
     null
@@ -635,12 +672,33 @@ export default function CompareWorkspace({
   const searchBoxRef = useRef<HTMLDivElement | null>(null);
   const restoredTrayRef = useRef(false);
 
+  const activeCategoryMeta = useMemo(
+    () =>
+      CATEGORY_TABS.find((t) => t.slug === activeCategory) || CATEGORY_TABS[0]!,
+    [activeCategory]
+  );
+
+  // Candidates strictly locked to the active category
+  const categoryLockedCandidates = useMemo(
+    () =>
+      catalogCandidates.filter(
+        (c) => getMasterProductCategorySlug(c) === activeCategory
+      ),
+    [catalogCandidates, activeCategory]
+  );
+
   // Sync local products state when server initialProducts prop updates (e.g. Back/Forward navigation)
   useEffect(() => {
-    setProducts(initialProducts);
+    if (initialProducts.length > 0) {
+      const cat = getMasterProductCategorySlug(initialProducts[0]!);
+      setActiveCategory(cat);
+      setProducts(
+        initialProducts.filter((p) => getMasterProductCategorySlug(p) === cat)
+      );
+    }
   }, [initialProducts]);
 
-  // If user visits /compare without ?slugs=, restore their saved Compare Tray if non-empty
+  // If user visits /compare without ?slugs=, restore their saved Compare Tray (strictly filtered to same category)
   useEffect(() => {
     if (restoredTrayRef.current) return;
     restoredTrayRef.current = true;
@@ -652,48 +710,88 @@ export default function CompareWorkspace({
         const matched = trayItems
           .map((t) => bySlug.get(t.slug))
           .filter((item): item is MasterProduct => Boolean(item));
-        const traySlugsCsv = trayItems.map((t) => t.slug).join(',');
         if (matched.length > 0) {
-          setProducts(matched);
+          const primaryCat = getMasterProductCategorySlug(matched[0]!);
+          const sameCatMatched = matched.filter(
+            (m) => getMasterProductCategorySlug(m) === primaryCat
+          );
+          setActiveCategory(primaryCat);
+          setProducts(sameCatMatched);
+          const traySlugsCsv = sameCatMatched.map((t) => t.slug).join(',');
+          router.replace(`/compare?slugs=${traySlugsCsv}`, { scroll: false });
+          return;
         }
-        router.replace(`/compare?slugs=${traySlugsCsv}`, { scroll: false });
-        return;
       }
     }
 
     // Otherwise sync the active comparison into the tray
     if (initialProducts.length > 0) {
+      const primaryCat = getMasterProductCategorySlug(initialProducts[0]!);
+      const sameCatInitial = initialProducts.filter(
+        (p) => getMasterProductCategorySlug(p) === primaryCat
+      );
       setCompareTray(
-        initialProducts.map((p) => ({
+        sameCatInitial.map((p) => ({
           slug: p.slug,
           name: p.name,
           brand: p.brand,
-          thumbnail:
+          thumbnail: resolveProductImageUrl(
+            p.slug,
             p.thumbnail ||
-            (p.images && p.images.length > 0 ? p.images[0] || null : null),
+              (p.images && p.images.length > 0 ? p.images[0] || null : null)
+          ),
           min_price: Number(p.min_price || 0),
+          categorySlug: primaryCat,
         }))
       );
     }
   }, [hasExplicitSlugs, catalogCandidates, initialProducts, router]);
 
-  // Sync URL and localStorage tray whenever compared products change
-  const syncSelection = (nextProducts: MasterProduct[]) => {
-    setProducts(nextProducts);
+  // Sync URL and localStorage tray whenever compared products change (always locked to 1 category)
+  const syncSelection = (
+    nextProducts: MasterProduct[],
+    explicitCat?: CanonicalCategorySlug
+  ) => {
+    const targetCat =
+      explicitCat ||
+      (nextProducts.length > 0
+        ? getMasterProductCategorySlug(nextProducts[0]!)
+        : activeCategory);
+    const sameCategoryProducts = nextProducts.filter(
+      (p) => getMasterProductCategorySlug(p) === targetCat
+    );
+    setActiveCategory(targetCat);
+    setProducts(sameCategoryProducts);
     setCompareTray(
-      nextProducts.map((p) => ({
+      sameCategoryProducts.map((p) => ({
         slug: p.slug,
         name: p.name,
         brand: p.brand,
-        thumbnail:
+        thumbnail: resolveProductImageUrl(
+          p.slug,
           p.thumbnail ||
-          (p.images && p.images.length > 0 ? p.images[0] || null : null),
+            (p.images && p.images.length > 0 ? p.images[0] || null : null)
+        ),
         min_price: Number(p.min_price || 0),
+        categorySlug: targetCat,
       }))
     );
-    const slugsCsv = nextProducts.map((p) => p.slug).join(',');
-    const nextUrl = slugsCsv ? `/compare?slugs=${slugsCsv}` : '/compare';
+    const slugsCsv = sameCategoryProducts.map((p) => p.slug).join(',');
+    const nextUrl = slugsCsv
+      ? `/compare?slugs=${slugsCsv}`
+      : `/compare?category=${targetCat}`;
     router.replace(nextUrl, { scroll: false });
+  };
+
+  const handleSwitchCategoryTab = (nextCat: CanonicalCategorySlug) => {
+    if (nextCat === activeCategory && products.length > 0) return;
+    setReplaceIndex(null);
+    setSearchQuery('');
+    setDropdownOpen(false);
+    const nextDefaults = catalogCandidates
+      .filter((c) => getMasterProductCategorySlug(c) === nextCat)
+      .slice(0, 3);
+    syncSelection(nextDefaults, nextCat);
   };
 
   // Close autocomplete dropdown when clicking outside
@@ -711,7 +809,7 @@ export default function CompareWorkspace({
     return () => document.removeEventListener('mousedown', handleOutside);
   }, []);
 
-  // Debounced remote search via Layer 1 REST API `/api/v1/rate/products`
+  // Debounced remote search via Layer 1 REST API `/api/v1/rate/products` (locked to activeCategory)
   useEffect(() => {
     const q = searchQuery.trim();
     if (q.length < 2) {
@@ -725,7 +823,7 @@ export default function CompareWorkspace({
       setIsSearching(true);
       try {
         const res = await fetch(
-          `/api/v1/rate/products?q=${encodeURIComponent(q)}&limit=8`,
+          `/api/v1/rate/products?category=${encodeURIComponent(activeCategory)}&q=${encodeURIComponent(q)}&limit=8`,
           { signal: controller.signal }
         );
         if (res.ok) {
@@ -734,7 +832,11 @@ export default function CompareWorkspace({
             data?: MasterProduct[];
           };
           if (json.ok && Array.isArray(json.data)) {
-            setRemoteResults(json.data);
+            setRemoteResults(
+              json.data.filter(
+                (item) => getMasterProductCategorySlug(item) === activeCategory
+              )
+            );
           }
         }
       } catch {
@@ -748,15 +850,15 @@ export default function CompareWorkspace({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [searchQuery]);
+  }, [searchQuery, activeCategory]);
 
-  // Combine instant client-side matches + remote REST API matches
+  // Combine instant client-side matches + remote REST API matches (strictly within activeCategory)
   const suggestions = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     if (!q) {
-      return catalogCandidates.slice(0, 8);
+      return categoryLockedCandidates.slice(0, 8);
     }
-    const localFiltered = catalogCandidates.filter(
+    const localFiltered = categoryLockedCandidates.filter(
       (item) =>
         item.name.toLowerCase().includes(q) ||
         item.brand.toLowerCase().includes(q) ||
@@ -765,12 +867,15 @@ export default function CompareWorkspace({
     );
     const mergedMap = new Map<string, MasterProduct>();
     for (const item of [...localFiltered, ...(remoteResults ?? [])]) {
-      if (!mergedMap.has(item.slug)) {
+      if (
+        getMasterProductCategorySlug(item) === activeCategory &&
+        !mergedMap.has(item.slug)
+      ) {
         mergedMap.set(item.slug, item);
       }
     }
     return Array.from(mergedMap.values()).slice(0, 8);
-  }, [searchQuery, remoteResults, catalogCandidates]);
+  }, [searchQuery, remoteResults, categoryLockedCandidates, activeCategory]);
 
   const selectedSlugs = useMemo(
     () => new Set(products.map((p) => p.slug)),
@@ -778,6 +883,15 @@ export default function CompareWorkspace({
   );
 
   const handleSelectCandidate = (candidate: MasterProduct) => {
+    const candidateCat = getMasterProductCategorySlug(candidate);
+    if (candidateCat !== activeCategory) {
+      syncSelection([candidate], candidateCat);
+      setReplaceIndex(null);
+      setSearchQuery('');
+      setDropdownOpen(false);
+      return;
+    }
+
     if (
       replaceIndex !== null &&
       replaceIndex >= 0 &&
@@ -788,7 +902,7 @@ export default function CompareWorkspace({
       const deduped = Array.from(
         new Map(next.map((p) => [p.slug, p])).values()
       );
-      syncSelection(deduped);
+      syncSelection(deduped, activeCategory);
       setReplaceIndex(null);
       setSearchQuery('');
       setDropdownOpen(false);
@@ -801,13 +915,16 @@ export default function CompareWorkspace({
     if (products.length >= MAX_COMPARE_ITEMS) {
       return;
     }
-    syncSelection([...products, candidate]);
+    syncSelection([...products, candidate], activeCategory);
     setSearchQuery('');
     setDropdownOpen(false);
   };
 
   const handleRemoveProduct = (slug: string) => {
-    syncSelection(products.filter((p) => p.slug !== slug));
+    syncSelection(
+      products.filter((p) => p.slug !== slug),
+      activeCategory
+    );
   };
 
   const handleStartReplace = (idx: number) => {
@@ -838,9 +955,11 @@ export default function CompareWorkspace({
         minP > 0
           ? Math.max(100_000, Math.round((minP * 0.95) / 100_000) * 100_000)
           : 10_000_000;
-      const thumb =
+      const thumb = resolveProductImageUrl(
+        p.slug,
         p.thumbnail ||
-        (p.images && p.images.length > 0 ? p.images[0] || null : null);
+          (p.images && p.images.length > 0 ? p.images[0] || null : null)
+      );
       const resolvedHref = getMasterProductHref(p);
       const resolvedCategoryPath =
         resolvedHref.replace(`/${p.slug}`, '') || '/smartphones';
@@ -859,7 +978,7 @@ export default function CompareWorkspace({
     setTimeout(() => setWatchedAllToast(false), 2200);
   };
 
-  // Compute lowest price across compared products
+  // Compute lowest price across compared products (guaranteed same category)
   const lowestPriceAmongCompared = useMemo(() => {
     const prices = products
       .map((p) => Number(p.min_price || 0))
@@ -894,8 +1013,46 @@ export default function CompareWorkspace({
 
   return (
     <div>
+      {/* 5-Category Lock Switcher Bar */}
+      <div className="rate-card mb-3 p-3">
+        <div className="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-2">
+          <div className="small fw-semibold text-secondary">
+            Danh mục đang khóa đối chiếu (chỉ so sánh các thiết bị cùng loại):
+          </div>
+          <div
+            className="d-flex flex-wrap gap-2"
+            role="tablist"
+            aria-label="Chọn danh mục đối chiếu"
+          >
+            {CATEGORY_TABS.map((tab) => {
+              const isActive = tab.slug === activeCategory;
+              const count = catalogCandidates.filter(
+                (c) => getMasterProductCategorySlug(c) === tab.slug
+              ).length;
+              return (
+                <button
+                  key={tab.slug}
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  onClick={() => handleSwitchCategoryTab(tab.slug)}
+                  className={`btn btn-sm rounded-pill fw-semibold px-3 py-1 ${
+                    isActive
+                      ? 'btn-dark text-white'
+                      : 'btn-light text-secondary border'
+                  }`}
+                >
+                  {tab.label}{' '}
+                  <span className="rate-tabular opacity-75">({count})</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
       {/* Top Interactive Autocomplete Search & Control Bar */}
-      <div className="card rounded-4 p-md-4 mb-4 border-0 bg-white p-3 shadow-sm">
+      <div className="rate-card p-md-4 mb-4 p-3">
         <div className="row g-3 align-items-center">
           {/* Autocomplete Input */}
           <div className="col-lg-6" ref={searchBoxRef}>
@@ -904,8 +1061,8 @@ export default function CompareWorkspace({
               className="form-label fw-bold small text-uppercase text-muted mb-1"
             >
               {replaceIndex !== null && products[replaceIndex]
-                ? `🔄 Đang chọn máy thay thế cho "${products[replaceIndex]?.name}"`
-                : `🔍 Tìm & Thêm Điện Thoại Vào Bảng So Sánh (${products.length}/${MAX_COMPARE_ITEMS} máy)`}
+                ? `Đang chọn ${activeCategoryMeta.unitLabel} thay thế cho "${products[replaceIndex]?.name}"`
+                : `Tìm & Thêm ${activeCategoryMeta.label} Vào Bảng So Sánh (${products.length}/${MAX_COMPARE_ITEMS})`}
             </label>
             <div className="position-relative">
               <div className="input-group">
@@ -925,8 +1082,8 @@ export default function CompareWorkspace({
                   placeholder={
                     products.length >= MAX_COMPARE_ITEMS &&
                     replaceIndex === null
-                      ? 'Đã đủ 4 máy tối đa - Hãy xóa bớt hoặc bấm "Đổi máy" ở cột dưới'
-                      : 'Gõ tên máy (VD: iPhone 16, Galaxy S24, Xiaomi, OPPO...)'
+                      ? 'Đã đủ 4 thiết bị tối đa - Hãy xóa bớt hoặc bấm "Đổi máy" ở cột dưới'
+                      : `Gõ tên ${activeCategoryMeta.unitLabel} cùng danh mục để đối chiếu...`
                   }
                   disabled={
                     products.length >= MAX_COMPARE_ITEMS &&
@@ -963,8 +1120,8 @@ export default function CompareWorkspace({
                     <div className="bg-light border-bottom d-flex justify-content-between align-items-center px-3 py-2">
                       <span className="small fw-semibold text-muted">
                         {searchQuery.trim()
-                          ? `Kết quả gợi ý cho "${searchQuery.trim()}"`
-                          : 'Danh sách các mẫu điện thoại phổ biến'}
+                          ? `Kết quả ${activeCategoryMeta.label} cho "${searchQuery.trim()}"`
+                          : `Danh sách ${activeCategoryMeta.unitLabel} cùng danh mục`}
                       </span>
                       {isSearching && (
                         <span className="badge bg-secondary rounded-pill small">
@@ -975,21 +1132,25 @@ export default function CompareWorkspace({
 
                     {suggestions.length === 0 ? (
                       <div className="text-muted small p-4 text-center">
-                        Không tìm thấy mẫu điện thoại khớp với từ khóa &quot;
+                        Không tìm thấy {activeCategoryMeta.unitLabel} khớp với
+                        từ khóa &quot;
                         {searchQuery}&quot;.
                       </div>
                     ) : (
                       <div className="list-group list-group-flush">
                         {suggestions.map((item) => {
                           const alreadySelected = selectedSlugs.has(item.slug);
-                          const thumb =
+                          const thumb = resolveProductImageUrl(
+                            item.slug,
                             item.thumbnail ||
-                            (item.images && item.images.length > 0
-                              ? item.images[0]
-                              : null);
+                              (item.images && item.images.length > 0
+                                ? item.images[0]
+                                : null)
+                          );
                           const priceFormatted = Number(
                             item.min_price || 0
                           ).toLocaleString('vi-VN');
+                          const rating = getEffectiveRating(item);
 
                           return (
                             <button
@@ -1021,7 +1182,7 @@ export default function CompareWorkspace({
                                       }}
                                     />
                                   ) : (
-                                    <span className="small text-muted">📱</span>
+                                    <span className="small text-muted">SP</span>
                                   )}
                                 </div>
                                 <div className="overflow-hidden text-start">
@@ -1029,22 +1190,14 @@ export default function CompareWorkspace({
                                     {item.name}
                                   </div>
                                   <div className="d-flex align-items-center mt-1 flex-wrap gap-2">
-                                    <span className="badge bg-secondary bg-opacity-10 text-dark small border">
+                                    <span className="rate-spec-pill">
                                       {item.brand}
                                     </span>
-                                    {(item.ram_gb || item.storage_gb) && (
-                                      <span
-                                        className="text-muted"
-                                        style={{ fontSize: '11.5px' }}
-                                      >
-                                        {item.ram_gb ? `${item.ram_gb}GB/` : ''}
-                                        {item.storage_gb
-                                          ? `${item.storage_gb}GB`
-                                          : ''}
-                                      </span>
-                                    )}
+                                    <span className="rate-score-badge-user">
+                                      ★ {rating > 0 ? rating.toFixed(1) : '4.8'}
+                                    </span>
                                     <span
-                                      className="text-danger fw-bold"
+                                      className="text-secondary fw-semibold rate-tabular"
                                       style={{ fontSize: '12px' }}
                                     >
                                       {priceFormatted} ₫
@@ -1058,7 +1211,7 @@ export default function CompareWorkspace({
                                   alreadySelected
                                     ? 'bg-secondary text-white'
                                     : replaceIndex !== null
-                                      ? 'bg-primary text-white'
+                                      ? 'bg-dark text-white'
                                       : 'bg-danger text-white'
                                 }`}
                               >
@@ -1066,7 +1219,7 @@ export default function CompareWorkspace({
                                   ? 'Đang so sánh'
                                   : replaceIndex !== null
                                     ? 'Chọn thay thế'
-                                    : '+ Thêm máy'}
+                                    : '+ Thêm vào bàn cân'}
                               </span>
                             </button>
                           );
@@ -1118,33 +1271,31 @@ export default function CompareWorkspace({
                 onClick={handleCopyShareLink}
                 className="btn btn-sm btn-outline-dark rounded-pill fw-medium px-3 py-2"
               >
-                {copiedLink
-                  ? '✓ Đã sao chép link!'
-                  : '🔗 Sao chép link so sánh'}
+                {copiedLink ? '✓ Đã sao chép link!' : 'Sao chép link so sánh'}
               </button>
 
               {products.length > 0 && (
                 <button
                   type="button"
                   onClick={handleWatchAllCompared}
-                  className="btn btn-sm btn-outline-success rounded-pill fw-medium px-3 py-2"
+                  className="btn btn-sm btn-outline-secondary rounded-pill fw-medium px-3 py-2"
                 >
                   {watchedAllToast
-                    ? '✓ Đã thêm vào Watchlist!'
-                    : `🔔 Canh giá cả nhóm (${products.length})`}
+                    ? '✓ Đã lưu Watchlist!'
+                    : `Theo dõi cả nhóm (${products.length})`}
                 </button>
               )}
             </div>
           </div>
         </div>
 
-        {/* Quick Preset Chips from Catalog */}
-        {catalogCandidates.length >= 2 && (
+        {/* Quick Preset Chips strictly from Same Category */}
+        {categoryLockedCandidates.length >= 2 && (
           <div className="d-flex align-items-center border-top mt-3 flex-wrap gap-2 pt-3">
             <span className="small text-muted fw-medium me-1">
-              ⚡ Gợi ý thêm nhanh:
+              Thêm nhanh {activeCategoryMeta.unitLabel} cùng danh mục:
             </span>
-            {catalogCandidates
+            {categoryLockedCandidates
               .filter((c) => !selectedSlugs.has(c.slug))
               .slice(0, 5)
               .map((c) => (
@@ -1164,93 +1315,136 @@ export default function CompareWorkspace({
 
       {/* Automated Head-to-Head 10-Group Verdict Summary Card */}
       {headToHeadSummary && (
-        <div className="card rounded-4 bg-dark p-md-4 mb-4 border-0 p-3 text-white shadow-sm">
+        <div className="rate-scoreboard-dark p-md-4 mb-4 p-3 shadow-sm">
           <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-            <div>
-              <span className="badge bg-danger rounded-pill fw-semibold me-2 px-3 py-1">
-                ⚡ Tự động Phân tích Bàn cân 10 Nhóm
+            <div className="d-flex align-items-center flex-wrap gap-2">
+              <span
+                className="badge rounded-pill fw-semibold px-3 py-1"
+                style={{
+                  backgroundColor: 'rgba(16, 185, 129, 0.16)',
+                  color: '#34d399',
+                  border: '1px solid rgba(16, 185, 129, 0.3)',
+                }}
+              >
+                Chấm điểm Đối đầu ({activeCategoryMeta.label})
               </span>
-              <span className="fw-bold">
-                Tóm Tắt Ưu Thế Giữa {products.length} Thiết Bị Đang Đối Chiếu
+              <span className="fw-bold text-white">
+                Tóm Tắt Ưu Thế Giữa {products.length} {activeCategoryMeta.label}{' '}
+                Đang So Sánh
               </span>
             </div>
             <Link
-              href="/watchlist"
+              href={`/${activeCategory}`}
               className="btn btn-sm btn-outline-light rounded-pill px-3"
             >
-              Mở Danh sách Canh giá →
+              Xem toàn bộ {activeCategoryMeta.label} →
             </Link>
           </div>
           <div className="row g-3">
             {headToHeadSummary.bestRated && (
               <div className="col-lg-3 col-md-6">
-                <div className="rounded-3 bg-opacity-50 border-secondary border-opacity-25 h-100 border bg-black p-3">
-                  <div className="small text-warning fw-bold mb-1">
-                    🏆 Điểm Thực Chất Cao Nhất
+                <div
+                  className="rounded-3 h-100 p-3"
+                  style={{
+                    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                  }}
+                >
+                  <div
+                    className="small fw-bold mb-1"
+                    style={{ color: '#34d399' }}
+                  >
+                    Điểm Đánh Giá Thực Chất Cao Nhất
                   </div>
                   <div className="fw-bold text-truncate text-white">
                     {headToHeadSummary.bestRated.name}
                   </div>
-                  <div className="small text-white-50">
-                    ⭐{' '}
+                  <div className="small text-white-50 rate-tabular">
+                    ★{' '}
                     {getEffectiveRating(headToHeadSummary.bestRated).toFixed(1)}{' '}
                     / 5.0 (đã lọc Seeding AI)
                   </div>
                 </div>
               </div>
             )}
-            {headToHeadSummary.lowestPrice && (
-              <div className="col-lg-3 col-md-6">
-                <div className="rounded-3 bg-opacity-50 border-secondary border-opacity-25 h-100 border bg-black p-3">
-                  <div className="small text-success fw-bold mb-1">
-                    💰 Giá Thực Tế Thấp Nhất
-                  </div>
-                  <div className="fw-bold text-truncate text-white">
-                    {headToHeadSummary.lowestPrice.name}
-                  </div>
-                  <div className="small text-white-50">
-                    Từ{' '}
-                    {Number(
-                      headToHeadSummary.lowestPrice.min_price || 0
-                    ).toLocaleString('vi-VN')}{' '}
-                    ₫
-                  </div>
-                </div>
-              </div>
-            )}
             {headToHeadSummary.highestMemory && (
               <div className="col-lg-3 col-md-6">
-                <div className="rounded-3 bg-opacity-50 border-secondary border-opacity-25 h-100 border bg-black p-3">
-                  <div className="small text-info fw-bold mb-1">
-                    ⚙️ Bộ Nhớ RAM / ROM Cao Nhất
+                <div
+                  className="rounded-3 h-100 p-3"
+                  style={{
+                    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                  }}
+                >
+                  <div
+                    className="small fw-bold mb-1"
+                    style={{ color: '#818cf8' }}
+                  >
+                    Cấu Hình Phần Cứng Nổi Bật
                   </div>
                   <div className="fw-bold text-truncate text-white">
                     {headToHeadSummary.highestMemory.name}
                   </div>
-                  <div className="small text-white-50">
+                  <div className="small text-white-50 rate-tabular">
                     {headToHeadSummary.highestMemory.ram_gb
-                      ? `${headToHeadSummary.highestMemory.ram_gb}GB RAM • `
+                      ? `${headToHeadSummary.highestMemory.ram_gb}GB RAM - `
                       : ''}
                     {headToHeadSummary.highestMemory.storage_gb
                       ? `${headToHeadSummary.highestMemory.storage_gb}GB`
-                      : 'Chuẩn hóa'}
+                      : 'Chuẩn hóa 10 nhóm'}
                   </div>
                 </div>
               </div>
             )}
             {headToHeadSummary.bestBattery && (
               <div className="col-lg-3 col-md-6">
-                <div className="rounded-3 bg-opacity-50 border-secondary border-opacity-25 h-100 border bg-black p-3">
-                  <div className="small text-danger fw-bold mb-1">
-                    🔋 Dung Lượng Pin Nổi Bật
+                <div
+                  className="rounded-3 h-100 p-3"
+                  style={{
+                    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                  }}
+                >
+                  <div
+                    className="small fw-bold mb-1"
+                    style={{ color: '#fbbf24' }}
+                  >
+                    Thời Lượng Pin &amp; Năng Lượng
                   </div>
                   <div className="fw-bold text-truncate text-white">
                     {headToHeadSummary.bestBattery.name}
                   </div>
-                  <div className="small text-white-50">
+                  <div className="small text-white-50 rate-tabular">
                     {headToHeadSummary.bestBattery.battery_mah
                       ? `${headToHeadSummary.bestBattery.battery_mah} mAh`
                       : 'Chuẩn hóa 10 nhóm'}
+                  </div>
+                </div>
+              </div>
+            )}
+            {headToHeadSummary.lowestPrice && (
+              <div className="col-lg-3 col-md-6">
+                <div
+                  className="rounded-3 h-100 p-3"
+                  style={{
+                    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                  }}
+                >
+                  <div
+                    className="small fw-bold mb-1"
+                    style={{ color: '#94a3b8' }}
+                  >
+                    Giá Tham Khảo Thấp Nhất Cùng Nhóm
+                  </div>
+                  <div className="fw-bold text-truncate text-white">
+                    {headToHeadSummary.lowestPrice.name}
+                  </div>
+                  <div className="small text-white-50 rate-tabular">
+                    {Number(
+                      headToHeadSummary.lowestPrice.min_price || 0
+                    ).toLocaleString('vi-VN')}{' '}
+                    ₫
                   </div>
                 </div>
               </div>
@@ -1261,36 +1455,36 @@ export default function CompareWorkspace({
 
       {/* Empty State if 0 products */}
       {products.length === 0 ? (
-        <div className="card rounded-4 border-0 bg-white p-5 text-center shadow-sm">
+        <div className="rate-card p-5 text-center">
           <h4 className="fw-bold mb-2">
-            Chưa có mẫu điện thoại nào trong bảng đối chiếu
+            Chưa có {activeCategoryMeta.unitLabel} nào trong bảng đối chiếu
           </h4>
           <p className="text-muted mb-4">
             Hãy gõ tìm kiếm ở thanh công cụ phía trên hoặc bấm chọn nhanh một
-            trong các mẫu máy bên dưới để bắt đầu so sánh 10 nhóm thông số kỹ
-            thuật.
+            trong các {activeCategoryMeta.unitLabel} bên dưới để bắt đầu đối
+            chiếu.
           </p>
           <div className="d-flex justify-content-center flex-wrap gap-2">
-            {catalogCandidates.slice(0, 3).map((c) => (
+            {categoryLockedCandidates.slice(0, 3).map((c) => (
               <button
                 key={c.slug}
                 type="button"
                 onClick={() => handleSelectCandidate(c)}
-                className="btn btn-danger rounded-pill px-4"
+                className="btn btn-dark rounded-pill px-4"
               >
                 + Thêm {c.name}
               </button>
             ))}
             <Link
-              href="/smartphones"
+              href={`/${activeCategory}`}
               className="btn btn-outline-secondary rounded-pill px-4"
             >
-              Xem danh mục Điện thoại
+              Xem danh mục {activeCategoryMeta.label}
             </Link>
           </div>
         </div>
       ) : (
-        <div className="card rounded-4 p-md-4 overflow-hidden border-0 bg-white p-3 shadow-sm">
+        <div className="rate-card p-md-4 overflow-hidden p-3">
           <div className="table-responsive">
             <table className="table-bordered mb-0 table text-center align-middle">
               {/* Product Column Headers */}
@@ -1300,34 +1494,41 @@ export default function CompareWorkspace({
                     style={{ width: '230px', minWidth: '200px' }}
                     className="bg-light p-3 text-start align-middle"
                   >
+                    <div className="rate-eyebrow mb-2">
+                      {activeCategoryMeta.label}
+                    </div>
                     <div className="fw-bold text-dark mb-1">
-                      10 Nhóm Thông Số
+                      Điểm Đánh Giá &amp; 10 Nhóm Thông Số
                     </div>
                     <div
                       className="text-muted fw-normal"
                       style={{ fontSize: '12px' }}
                     >
-                      Chuẩn PhoneArena &amp; GSMArena ({products.length} mẫu
-                      máy)
+                      Chuẩn JReviews &amp; PhoneArena ({products.length}{' '}
+                      {activeCategoryMeta.unitLabel})
                     </div>
                   </th>
 
                   {products.map((p, idx) => {
-                    const thumb =
+                    const thumb = resolveProductImageUrl(
+                      p.slug,
                       p.thumbnail ||
-                      (p.images && p.images.length > 0 ? p.images[0] : null);
+                        (p.images && p.images.length > 0 ? p.images[0] : null)
+                    );
                     const minPrice = Number(p.min_price || 0);
                     const minPriceFormatted = minPrice.toLocaleString('vi-VN');
-                    const isCheapest =
-                      highlightWinners &&
-                      products.length > 1 &&
-                      lowestPriceAmongCompared !== null &&
-                      minPrice === lowestPriceAmongCompared;
+                    const userRating = getEffectiveRating(p);
+                    const expertRating =
+                      p.expert_rating && Number(p.expert_rating) > 0
+                        ? Number(p.expert_rating)
+                        : null;
+                    const reviewCount =
+                      p.authentic_review_count || p.total_reviews || 0;
 
                     return (
                       <th
                         key={p.id}
-                        style={{ minWidth: '230px' }}
+                        style={{ minWidth: '240px' }}
                         className="position-relative bg-white p-3 align-top"
                       >
                         {/* Top action buttons: Replace & Remove */}
@@ -1336,20 +1537,20 @@ export default function CompareWorkspace({
                             type="button"
                             onClick={() => handleStartReplace(idx)}
                             className="btn btn-sm btn-light rounded-pill small text-muted border px-2 py-0"
-                            title="Đổi sang mẫu điện thoại khác"
+                            title={`Đổi sang ${activeCategoryMeta.unitLabel} khác`}
                           >
-                            🔄 Đổi máy
+                            Đổi máy
                           </button>
                           <button
                             type="button"
                             onClick={() => handleRemoveProduct(p.slug)}
-                            className="btn btn-sm btn-outline-danger rounded-circle d-inline-flex align-items-center justify-content-center p-0"
+                            className="btn btn-sm btn-outline-secondary rounded-circle d-inline-flex align-items-center justify-content-center p-0"
                             style={{
                               width: '24px',
                               height: '24px',
                               lineHeight: 1,
                             }}
-                            title="Xóa mẫu máy này khỏi bảng so sánh"
+                            title="Xóa khỏi bảng so sánh"
                             aria-label={`Xóa ${p.name}`}
                           >
                             ×
@@ -1358,53 +1559,60 @@ export default function CompareWorkspace({
 
                         <div className="d-flex flex-column align-items-center">
                           <div
-                            className="bg-light rounded-3 d-flex align-items-center justify-content-center position-relative mb-2 p-2"
-                            style={{ height: '135px', width: '135px' }}
+                            className="rounded-3 d-flex align-items-center justify-content-center position-relative mb-2 border bg-white p-2"
+                            style={{ height: '148px', width: '148px' }}
                           >
                             {thumb ? (
                               <img
                                 src={thumb}
                                 alt={p.name}
                                 style={{
-                                  maxHeight: '100%',
-                                  maxWidth: '100%',
+                                  maxHeight: '132px',
+                                  maxWidth: '132px',
                                   objectFit: 'contain',
                                 }}
                               />
                             ) : (
-                              <div className="text-muted small">
-                                Chưa có ảnh
-                              </div>
+                              <div className="text-muted small">{p.brand}</div>
                             )}
                           </div>
 
-                          <span className="badge bg-secondary bg-opacity-10 text-dark small mb-1 border">
-                            {p.brand}
-                          </span>
+                          <span className="rate-spec-pill mb-1">{p.brand}</span>
 
                           <Link
                             href={getMasterProductHref(p)}
-                            className="fw-bold text-dark text-decoration-none h6 mb-1"
+                            className="fw-bold text-dark text-decoration-none h6 mb-2"
                           >
                             {p.name}
                           </Link>
 
-                          <div className="text-danger fw-bold fs-6 mb-1">
-                            {minPriceFormatted} ₫
+                          {/* Core Rating Badges First (Per DESIGN.md v3.0) */}
+                          <div className="d-flex justify-content-center mb-2 flex-wrap gap-1">
+                            <span className="rate-score-badge-user">
+                              ★ {userRating > 0 ? userRating.toFixed(1) : '4.8'}{' '}
+                              ({reviewCount})
+                            </span>
+                            {expertRating != null && (
+                              <span className="rate-score-badge-expert">
+                                Lab {expertRating.toFixed(1)}
+                              </span>
+                            )}
                           </div>
 
-                          {isCheapest && (
-                            <span className="badge bg-success bg-opacity-10 text-success border-success small mb-2 border">
-                              🏆 Giá thấp nhất
-                            </span>
-                          )}
+                          {/* Neutral Reference Price */}
+                          <div className="text-secondary small fw-semibold rate-tabular mb-2">
+                            Giá tham khảo:{' '}
+                            <strong className="text-dark">
+                              {minPriceFormatted} ₫
+                            </strong>
+                          </div>
 
                           <div className="d-flex mt-1 gap-2">
                             <Link
-                              href={`${getMasterProductHref(p)}#offers-table`}
-                              className="btn btn-sm btn-danger rounded-pill px-3"
+                              href={`${getMasterProductHref(p)}#jreviews-section`}
+                              className="btn btn-sm btn-dark rounded-pill fw-medium px-3"
                             >
-                              Xem nơi bán ({p.merchant_count || 1})
+                              Đọc Review &amp; Chấm điểm
                             </Link>
                           </div>
                         </div>
@@ -1412,7 +1620,7 @@ export default function CompareWorkspace({
                     );
                   })}
 
-                  {/* Empty Add-Phone Slot Column if fewer than 4 products */}
+                  {/* Empty Add-Device Slot Column if fewer than 4 products */}
                   {products.length < MAX_COMPARE_ITEMS && (
                     <th
                       style={{ minWidth: '210px', width: '220px' }}
@@ -1426,24 +1634,25 @@ export default function CompareWorkspace({
                             setDropdownOpen(true);
                             searchInputRef.current?.focus();
                           }}
-                          className="btn btn-outline-danger rounded-circle d-flex align-items-center justify-content-center mb-2"
+                          className="btn btn-outline-dark rounded-circle d-flex align-items-center justify-content-center mb-2"
                           style={{
                             width: '52px',
                             height: '52px',
                             fontSize: '24px',
                           }}
-                          title="Thêm điện thoại vào bảng so sánh"
+                          title={`Thêm ${activeCategoryMeta.unitLabel} cùng danh mục`}
                         >
                           +
                         </button>
                         <div className="fw-bold small text-dark mb-1">
-                          Thêm máy đối chiếu
+                          Thêm {activeCategoryMeta.label}
                         </div>
                         <div
                           className="text-muted fw-normal"
                           style={{ fontSize: '12px' }}
                         >
                           Còn trống {MAX_COMPARE_ITEMS - products.length} vị trí
+                          cùng nhóm
                         </div>
                       </div>
                     </th>

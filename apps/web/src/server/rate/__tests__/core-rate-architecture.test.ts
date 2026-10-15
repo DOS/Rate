@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict';
 import {
+  KNOWN_LOCAL_DEVICE_IMAGES,
   computeJReviewsWeight,
   getCategoryRouteHref,
+  getMasterProductCategorySlug,
   getMasterProductHref,
   parseEcommerceUrlOrQuery,
+  resolveProductImageUrl,
 } from '../../../lib/rate-api';
 import {
   formatStorageLabel,
@@ -261,7 +264,10 @@ function runCoreArchitectureSuite() {
   );
   const designMd = fs.readFileSync(designMdPath, 'utf8');
   assert.ok(designMd.includes('Rate.vn Design System'));
-  assert.ok(designMd.includes('10-Group Specification Matrix'));
+  assert.ok(
+    designMd.includes('10-Group Canonical Technical Specifications') ||
+      designMd.includes('10-Group Specification Matrix')
+  );
 
   // Guard against duplicate root middleware.ts shadowing src/middleware.ts
   const duplicateRootMiddleware = path.join(
@@ -369,7 +375,75 @@ function runCoreArchitectureSuite() {
   );
 
   console.log(
-    '  ✅ [8/8] DESIGN.md v2.0 & Unprefixed Locale Middleware Regression Suite (308 strip + NEXT_LOCALE vi/en/cs) passed'
+    '  ✅ [8/9] DESIGN.md v3.0 & Unprefixed Locale Middleware Regression Suite (308 strip + NEXT_LOCALE vi/en/cs) passed'
+  );
+
+  // 9. DESIGN.md v3.0 Rating-First Architecture, 22 Self-Hosted Studio Images & Same-Category Comparison Lock
+  const devicesDir = path.join(repoRoot, 'apps', 'web', 'public');
+  const deviceSlugs = Array.from(KNOWN_LOCAL_DEVICE_IMAGES);
+  assert.equal(
+    deviceSlugs.length,
+    22,
+    'Must have all 22 flagship device images mapped'
+  );
+  for (const slug of deviceSlugs) {
+    const relImgPath = `/img/devices/${slug}.jpg`;
+    const absImgPath = path.join(devicesDir, relImgPath);
+    assert.equal(
+      fs.existsSync(absImgPath),
+      true,
+      `Self-hosted image must exist on disk: ${relImgPath}`
+    );
+    const stat = fs.statSync(absImgPath);
+    assert.ok(
+      stat.size > 1000,
+      `Self-hosted image must be > 1KB: ${relImgPath}`
+    );
+    assert.equal(
+      resolveProductImageUrl(slug, 'https://image.oppo.com/broken-404.png'),
+      relImgPath
+    );
+  }
+
+  // Verify Same-Category classification prevents Smartphones vs Earbuds mixing
+  assert.equal(
+    getMasterProductCategorySlug({
+      slug: 'apple-iphone-16-pro-256gb',
+      name: 'Apple iPhone 16 Pro 256GB',
+    }),
+    'smartphones'
+  );
+  assert.equal(
+    getMasterProductCategorySlug({
+      slug: 'oppo-find-x8-16gb-256gb',
+      name: 'OPPO Find X8 5G 16GB/256GB',
+    }),
+    'smartphones'
+  );
+  assert.equal(
+    getMasterProductCategorySlug({
+      slug: 'samsung-galaxy-buds3-pro',
+      name: 'Samsung Galaxy Buds3 Pro',
+    }),
+    'earbuds'
+  );
+
+  // Verify ProductDetailView places JReviewsSection (SECTION #1) before #specs-section (SECTION #2) and #offers-table (SECTION #3)
+  const detailPagePath = path.resolve(
+    __dirname,
+    '../../../app/[locale]/smartphones/[slug]/page.tsx'
+  );
+  const detailPageSrc = fs.readFileSync(detailPagePath, 'utf8');
+  const idxJReviews = detailPageSrc.indexOf('<JReviewsSection');
+  const idxSpecs = detailPageSrc.indexOf('id="specs-section"');
+  const idxOffers = detailPageSrc.indexOf('id="offers-table"');
+  assert.ok(
+    idxJReviews > 0 && idxSpecs > idxJReviews && idxOffers > idxSpecs,
+    'ProductDetailView must render <JReviewsSection /> (Section #1) before #specs-section (Section #2) and #offers-table (Section #3)'
+  );
+
+  console.log(
+    '  ✅ [9/9] DESIGN.md v3.0 Rating-First Hierarchy, 22 Studio Images & Same-Category Comparison Lock passed'
   );
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
