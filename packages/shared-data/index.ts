@@ -1,2 +1,2 @@
-// This value must be in sync with the fullPath of root page in the Strapi
+// Canonical root path for Rate Platform routes
 export const ROOT_PAGE_PATH = "/"

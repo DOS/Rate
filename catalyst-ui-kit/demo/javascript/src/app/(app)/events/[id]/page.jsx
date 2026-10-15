@@ -9,7 +9,8 @@ import { ChevronLeftIcon } from '@heroicons/react/16/solid'
 import { notFound } from 'next/navigation'
 
 export async function generateMetadata({ params }) {
-  let event = await getEvent(params.id)
+  let { id } = await params
+  let event = await getEvent(id)
 
   return {
     title: event?.name,
@@ -17,8 +18,9 @@ export async function generateMetadata({ params }) {
 }
 
 export default async function Event({ params }) {
-  let event = await getEvent(params.id)
-  let orders = await getEventOrders(params.id)
+  let { id } = await params
+  let event = await getEvent(id)
+  let orders = await getEventOrders(id)
 
   if (!event) {
     notFound()

@@ -1,0 +1,1094 @@
+'use client';
+
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  computeJReviewsWeight,
+  type ReviewAnalysisSummary,
+  type ReviewFlagCategory,
+  type ReviewItem,
+} from '@/lib/rate-api';
+
+type VoteChoice = 'up' | 'down' | 'report';
+type FilterTab = 'all' | 'authentic' | 'expert' | 'ignored';
+type SortMode = 'weight_desc' | 'newest' | 'rating_desc' | 'rating_asc';
+
+export interface JReviewsSectionProps {
+  masterProductId?: string;
+  productSlug?: string;
+  productName: string;
+  averageRating: number;
+  userRatingWeighted: number | null;
+  expertRating: number | null;
+  expertReviewSummary?: string | null;
+  authenticReviewCount: number;
+  ignoredReviewCount: number;
+  reviews: ReviewItem[];
+  summary: ReviewAnalysisSummary;
+}
+
+const CRITERIA_META = [
+  { key: 'screen', label: 'Màn hình & Hiển thị' },
+  { key: 'performance', label: 'Hiệu năng & Nhiệt độ' },
+  { key: 'camera', label: 'Camera & Quay chụp' },
+  { key: 'battery', label: 'Pin & Sạc nhanh' },
+  { key: 'value', label: 'Đáng đồng tiền' },
+] as const;
+
+const FLAG_META: Record<
+  ReviewFlagCategory,
+  {
+    label: string;
+    badgeClass: string;
+    description: string;
+  }
+> = {
+  authentic: {
+    label: '✓ Đánh giá thực chất',
+    badgeClass: 'bg-success-subtle text-success border border-success-subtle',
+    description: 'Đánh giá hợp lệ, được tính vào điểm sản phẩm theo trọng số JReviews.',
+  },
+  low_value_coin_spam: {
+    label: '🪙 Spam cày xu (Bỏ qua khỏi điểm SP)',
+    badgeClass: 'bg-secondary-subtle text-secondary border border-secondary-subtle',
+    description:
+      'Bình luận chung chung để nhận xu thưởng, không mô tả trải nghiệm thực tế - trọng số = 0.',
+  },
+  seeding_fake: {
+    label: '🤖 Nghi vấn Seeding / Ảo (Bỏ qua khỏi điểm SP)',
+    badgeClass: 'bg-danger-subtle text-danger border border-danger-subtle',
+    description:
+      'Văn phong quảng cáo mẫu hoặc trùng lặp bất thường - trọng số = 0.',
+  },
+  competitor_sabotage: {
+    label: '⚔️ Nghi vấn đối thủ chơi xấu (Bỏ qua khỏi điểm SP)',
+    badgeClass: 'bg-warning-subtle text-warning-emphasis border border-warning-subtle',
+    description:
+      'Đánh giá 1-2 sao thiếu bằng chứng hoặc công kích cá nhân/dẫn khách sang shop khác - trọng số = 0.',
+  },
+  review_bombing: {
+    label: '💣 Bom đơn / Đánh giá bất thường (Bỏ qua khỏi điểm SP)',
+    badgeClass: 'bg-danger-subtle text-danger border border-danger-subtle',
+    description:
+      'Đánh giá tiêu cực hàng loạt từ người chưa sử dụng dịch vụ hoặc hủy đơn - trọng số = 0.',
+  },
+};
+
+const STORAGE_KEY = 'rate_review_votes_v1';
+const LOCAL_REVIEWS_PREFIX = 'rate_community_reviews_v1_';
+
+export default function JReviewsSection({
+  masterProductId,
+  productSlug,
+  productName,
+  averageRating,
+  userRatingWeighted,
+  expertRating,
+  expertReviewSummary,
+  authenticReviewCount,
+  ignoredReviewCount,
+  reviews: initialReviews,
+  summary,
+}: JReviewsSectionProps) {
+  const [reviews, setReviews] = useState<ReviewItem[]>(initialReviews);
+  const [userVotes, setUserVotes] = useState<Record<string, VoteChoice>>({});
+  const [pendingIds, setPendingIds] = useState<Record<string, boolean>>({});
+  const [authNotice, setAuthNotice] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<FilterTab>('all');
+  const [sortMode, setSortMode] = useState<SortMode>('weight_desc');
+
+  // 5-Criteria Write Review Form State
+  const [showWriteForm, setShowWriteForm] = useState(false);
+  const [authorName, setAuthorName] = useState('');
+  const [variation, setVariation] = useState('');
+  const [reviewerType, setReviewerType] = useState<'user' | 'expert'>('user');
+  const [comment, setComment] = useState('');
+  const [criteriaScores, setCriteriaScores] = useState<Record<string, number>>({
+    screen: 5,
+    performance: 5,
+    camera: 5,
+    battery: 5,
+    value: 5,
+  });
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') {
+          setUserVotes(parsed);
+        }
+      }
+      const cacheKey = `${LOCAL_REVIEWS_PREFIX}${masterProductId || productSlug || productName}`;
+      const savedLocal = window.localStorage.getItem(cacheKey);
+      if (savedLocal) {
+        const parsedLocal = JSON.parse(savedLocal);
+        if (Array.isArray(parsedLocal) && parsedLocal.length > 0) {
+          setReviews((prev) => {
+            const existingIds = new Set(prev.map((x) => x.id));
+            const uniqueNew = parsedLocal.filter(
+              (x: ReviewItem) => x && x.id && !existingIds.has(x.id)
+            );
+            return [...uniqueNew, ...prev];
+          });
+        }
+      }
+    } catch {
+      // Ignore storage access errors in private browsing
+    }
+  }, [masterProductId, productSlug, productName]);
+
+  const counts = useMemo(() => {
+    const authentic = reviews.filter(
+      (r) => r.include_in_rating && r.helpfulness_weight > 0
+    ).length;
+    const ignored = reviews.filter(
+      (r) => !r.include_in_rating || r.helpfulness_weight === 0
+    ).length;
+    const expert = reviews.filter((r) => r.reviewer_type === 'expert').length;
+    return {
+      all: reviews.length,
+      authentic: authentic || authenticReviewCount,
+      ignored: ignored || ignoredReviewCount,
+      expert,
+    };
+  }, [reviews, authenticReviewCount, ignoredReviewCount]);
+
+  // Live JReviews weighted scores based on current review weights
+  const liveScores = useMemo(() => {
+    const validUserReviews = reviews.filter(
+      (r) =>
+        r.reviewer_type !== 'expert' &&
+        r.include_in_rating &&
+        r.helpfulness_weight > 0
+    );
+    const validExpertReviews = reviews.filter(
+      (r) => r.reviewer_type === 'expert' && r.helpfulness_weight > 0
+    );
+
+    let computedUser: number | null =
+      userRatingWeighted && userRatingWeighted > 0 ? userRatingWeighted : null;
+    if (validUserReviews.length > 0) {
+      const weightSum = validUserReviews.reduce(
+        (acc, r) => acc + r.helpfulness_weight,
+        0
+      );
+      const weightedStars = validUserReviews.reduce(
+        (acc, r) => acc + r.rating_star * r.helpfulness_weight,
+        0
+      );
+      if (weightSum > 0) {
+        computedUser = Number((weightedStars / weightSum).toFixed(2));
+      }
+    } else if (computedUser == null && averageRating > 0) {
+      computedUser = Number(Number(averageRating).toFixed(2));
+    }
+
+    let computedExpert: number | null = expertRating;
+    if (validExpertReviews.length > 0) {
+      const expWeightSum = validExpertReviews.reduce(
+        (acc, r) => acc + r.helpfulness_weight,
+        0
+      );
+      const expStars = validExpertReviews.reduce(
+        (acc, r) => acc + r.rating_star * r.helpfulness_weight,
+        0
+      );
+      if (expWeightSum > 0) {
+        computedExpert = Number((expStars / expWeightSum).toFixed(2));
+      }
+    }
+
+    let overall = Number(averageRating || 0);
+    if (computedUser != null && computedExpert != null) {
+      overall = Number((computedUser * 0.6 + computedExpert * 0.4).toFixed(2));
+    } else if (computedUser != null) {
+      overall = computedUser;
+    } else if (computedExpert != null) {
+      overall = computedExpert;
+    }
+
+    return {
+      overall,
+      user: computedUser,
+      expert: computedExpert,
+    };
+  }, [reviews, averageRating, userRatingWeighted, expertRating]);
+
+  const filteredAndSortedReviews = useMemo(() => {
+    const filtered = reviews.filter((r) => {
+      if (activeTab === 'authentic') {
+        return r.include_in_rating && r.helpfulness_weight > 0;
+      }
+      if (activeTab === 'expert') {
+        return r.reviewer_type === 'expert';
+      }
+      if (activeTab === 'ignored') {
+        return !r.include_in_rating || r.helpfulness_weight === 0;
+      }
+      return true;
+    });
+
+    return [...filtered].sort((a, b) => {
+      if (sortMode === 'weight_desc') {
+        if (b.helpfulness_weight !== a.helpfulness_weight) {
+          return b.helpfulness_weight - a.helpfulness_weight;
+        }
+        return (
+          new Date(b.created_at || 0).getTime() -
+          new Date(a.created_at || 0).getTime()
+        );
+      }
+      if (sortMode === 'rating_desc') {
+        return b.rating_star - a.rating_star;
+      }
+      if (sortMode === 'rating_asc') {
+        return a.rating_star - b.rating_star;
+      }
+      return (
+        new Date(b.created_at || 0).getTime() -
+        new Date(a.created_at || 0).getTime()
+      );
+    });
+  }, [reviews, activeTab, sortMode]);
+
+  async function handleVote(reviewId: string, clickedVote: VoteChoice) {
+    if (pendingIds[reviewId]) return;
+
+    const prevVote: VoteChoice | null = userVotes[reviewId] || null;
+    const nextAction: VoteChoice | 'clear' =
+      prevVote === clickedVote ? 'clear' : clickedVote;
+
+    // Optimistic state update using the canonical SQL/Importer JReviews weight formula
+    setPendingIds((prev) => ({ ...prev, [reviewId]: true }));
+    setReviews((prevList) =>
+      prevList.map((r) => {
+        if (r.id !== reviewId) return r;
+        let u = r.upvotes;
+        let d = r.downvotes;
+        let rep = r.report_count;
+
+        if (prevVote === 'up') u = Math.max(0, u - 1);
+        if (prevVote === 'down') d = Math.max(0, d - 1);
+        if (prevVote === 'report') rep = Math.max(0, rep - 1);
+
+        if (nextAction === 'up') u += 1;
+        if (nextAction === 'down') d += 1;
+        if (nextAction === 'report') rep += 1;
+
+        const nextWeight = computeJReviewsWeight({
+          upvotes: u,
+          downvotes: d,
+          reports: rep,
+          flagCategory: r.flag_category,
+          verdict: r.verdict,
+          includeInRating: r.include_in_rating,
+        });
+        return {
+          ...r,
+          upvotes: u,
+          downvotes: d,
+          report_count: rep,
+          helpfulness_weight: nextWeight,
+        };
+      })
+    );
+
+    const updatedVotes = { ...userVotes };
+    if (nextAction === 'clear') {
+      delete updatedVotes[reviewId];
+    } else {
+      updatedVotes[reviewId] = nextAction;
+    }
+    setUserVotes(updatedVotes);
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedVotes));
+    } catch {
+      // Ignore storage errors
+    }
+
+    try {
+      let bearerToken = '';
+      try {
+        for (let i = 0; i < window.localStorage.length; i++) {
+          const k = window.localStorage.key(i);
+          if (k && k.startsWith('sb-') && k.endsWith('-auth-token')) {
+            const rawSession = window.localStorage.getItem(k);
+            if (rawSession) {
+              const parsedSession = JSON.parse(rawSession);
+              if (typeof parsedSession?.access_token === 'string') {
+                bearerToken = parsedSession.access_token;
+                break;
+              }
+            }
+          }
+        }
+      } catch {
+        // Ignore storage errors
+      }
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (bearerToken) {
+        headers.Authorization = `Bearer ${bearerToken}`;
+      }
+
+      const res = await fetch(`/api/reviews/${reviewId}/vote`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          voteType: nextAction,
+          reportReason: nextAction === 'report' ? 'spam' : undefined,
+        }),
+      });
+      if (res.ok) {
+        const payload = await res.json();
+        setAuthNotice(null);
+        if (payload && typeof payload.helpfulnessWeight === 'number') {
+          setReviews((prevList) =>
+            prevList.map((r) =>
+              r.id === reviewId
+                ? {
+                    ...r,
+                    upvotes: Number(payload.upvotes ?? r.upvotes),
+                    downvotes: Number(payload.downvotes ?? r.downvotes),
+                    report_count: Number(payload.reports ?? r.report_count),
+                    helpfulness_weight: Number(payload.helpfulnessWeight),
+                  }
+                : r
+            )
+          );
+        }
+      } else if (res.status === 401) {
+        setAuthNotice(
+          'Đã áp dụng mô phỏng trọng số JReviews trên trình duyệt của bạn. Đăng nhập tài khoản DOS ID để lưu bình chọn vĩnh viễn lên hệ thống.'
+        );
+      }
+    } catch (err) {
+      console.error('Failed to sync review vote:', err);
+    } finally {
+      setPendingIds((prev) => ({ ...prev, [reviewId]: false }));
+    }
+  }
+
+  async function handleSubmitCommunityReview(e: React.FormEvent) {
+    e.preventDefault();
+    setSubmitError(null);
+    setSubmitSuccess(null);
+
+    const cleanComment = comment.trim();
+    if (cleanComment.length < 15) {
+      setSubmitError('Vui lòng nhập ít nhất 15 ký tự mô tả trải nghiệm thực tế của bạn.');
+      return;
+    }
+
+    if (!masterProductId) {
+      setSubmitError('Không xác định được mã sản phẩm chuẩn hóa để gửi đánh giá.');
+      return;
+    }
+
+    setSubmittingReview(true);
+    try {
+      const avgStar = Math.round(
+        Object.values(criteriaScores).reduce((a, b) => a + b, 0) /
+          Object.values(criteriaScores).length
+      );
+      const res = await fetch('/api/v1/rate/reviews', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          masterProductId,
+          authorName: authorName.trim() || 'Người dùng Rate.vn',
+          variation: variation.trim() || undefined,
+          reviewerType,
+          ratingStar: avgStar,
+          comment: cleanComment,
+          criteriaRatings: criteriaScores,
+        }),
+      });
+
+      const payload = await res.json();
+      if (!res.ok || !payload?.ok || !payload?.review) {
+        setSubmitError(payload?.error || 'Không thể gửi đánh giá lúc này.');
+        return;
+      }
+
+      const newRev = payload.review as ReviewItem;
+      setReviews((prev) => [newRev, ...prev]);
+
+      try {
+        const cacheKey = `${LOCAL_REVIEWS_PREFIX}${masterProductId || productSlug || productName}`;
+        const existingLocal = JSON.parse(
+          window.localStorage.getItem(cacheKey) || '[]'
+        );
+        const nextLocal = [
+          newRev,
+          ...(Array.isArray(existingLocal) ? existingLocal : []),
+        ].slice(0, 20);
+        window.localStorage.setItem(cacheKey, JSON.stringify(nextLocal));
+      } catch {
+        // Ignore storage quota errors
+      }
+
+      setComment('');
+      setShowWriteForm(false);
+      setSubmitSuccess(
+        newRev.include_in_rating
+          ? `Đã đăng đánh giá thực chất thành công! Hệ thống AI chấm trọng số khởi tạo ${newRev.helpfulness_weight.toFixed(2)}x.`
+          : `Đánh giá của bạn đã được ghi nhận nhưng bị bộ lọc AI gắn cờ (${newRev.flag_category}) nên không tính vào điểm trung bình.`
+      );
+    } catch {
+      setSubmitError('Lỗi kết nối khi gửi đánh giá. Vui lòng thử lại.');
+    } finally {
+      setSubmittingReview(false);
+    }
+  }
+
+  return (
+    <div id="jreviews-section" className="card border-0 shadow-sm rounded-4 p-4 p-md-5">
+      {/* Header */}
+      <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4">
+        <div>
+          <h2 className="h4 fw-bold mb-1 d-flex align-items-center gap-2">
+            <span>⭐</span> Hệ Thống Đánh Giá Đa Chiều JReviews &amp; Chống Seeding AI
+          </h2>
+          <p className="text-muted small mb-0">
+            Điểm sản phẩm {productName} chỉ tính các đánh giá thực chất và tự động điều chỉnh trọng số theo bình chọn Hữu ích của cộng đồng (tối đa 3.00x).
+          </p>
+        </div>
+        <div className="d-flex flex-wrap align-items-center gap-2">
+          {masterProductId && (
+            <button
+              type="button"
+              onClick={() => {
+                setShowWriteForm((v) => !v);
+                setSubmitError(null);
+              }}
+              className="btn btn-primary btn-sm rounded-pill px-3 py-2 fw-medium"
+            >
+              {showWriteForm ? '✕ Đóng biểu mẫu' : '✍️ Viết đánh giá 5 tiêu chí'}
+            </button>
+          )}
+          <span className="badge bg-dark text-white px-3 py-2 rounded-pill small">
+            Chuẩn JReviews Dual-Rating
+          </span>
+        </div>
+      </div>
+
+      {submitSuccess && (
+        <div className="alert alert-success py-2 px-3 small rounded-3 mb-4 d-flex justify-content-between align-items-center">
+          <span>✅ {submitSuccess}</span>
+          <button
+            type="button"
+            className="btn-close btn-sm"
+            aria-label="Đóng"
+            onClick={() => setSubmitSuccess(null)}
+          />
+        </div>
+      )}
+
+      {/* Interactive 5-Criteria Write Review Form */}
+      {showWriteForm && (
+        <form
+          onSubmit={handleSubmitCommunityReview}
+          className="border border-primary border-opacity-25 rounded-4 p-4 mb-4 bg-light"
+        >
+          <div className="d-flex justify-content-between align-items-center mb-3">
+            <h3 className="h6 fw-bold text-dark mb-0">
+              ✍️ Gửi Đánh Giá 5 Tiêu Chí Kỹ Thuật Cho {productName}
+            </h3>
+            <span className="badge bg-primary-subtle text-primary rounded-pill small">
+              Tự động kiểm duyệt Seeding bằng AI
+            </span>
+          </div>
+
+          {submitError && (
+            <div className="alert alert-danger py-2 px-3 small rounded-3 mb-3">
+              ⚠️ {submitError}
+            </div>
+          )}
+
+          <div className="row g-3 mb-3">
+            <div className="col-md-4 col-12">
+              <label className="form-label small fw-semibold mb-1">
+                Tên hiển thị của bạn
+              </label>
+              <input
+                type="text"
+                value={authorName}
+                onChange={(e) => setAuthorName(e.target.value)}
+                placeholder="VD: Minh Quân (Hà Nội)"
+                className="form-control form-control-sm rounded-3"
+                maxLength={80}
+              />
+            </div>
+            <div className="col-md-4 col-12">
+              <label className="form-label small fw-semibold mb-1">
+                Phiên bản / Dung lượng đang dùng
+              </label>
+              <input
+                type="text"
+                value={variation}
+                onChange={(e) => setVariation(e.target.value)}
+                placeholder="VD: Titan Tự Nhiên - 256GB"
+                className="form-control form-control-sm rounded-3"
+                maxLength={100}
+              />
+            </div>
+            <div className="col-md-4 col-12">
+              <label className="form-label small fw-semibold mb-1">
+                Phân loại người đánh giá
+              </label>
+              <select
+                value={reviewerType}
+                onChange={(e) =>
+                  setReviewerType(e.target.value === 'expert' ? 'expert' : 'user')
+                }
+                className="form-select form-select-sm rounded-3"
+              >
+                <option value="user">Người mua &amp; trải nghiệm thực tế</option>
+                <option value="expert">Reviewer / Chuyên gia kỹ thuật</option>
+              </select>
+            </div>
+          </div>
+
+          {/* 5 Criteria Sliders / Star Selectors */}
+          <div className="p-3 bg-white rounded-3 border mb-3">
+            <div className="small fw-semibold text-dark mb-2">
+              Chấm điểm chi tiết 5 nhóm trải nghiệm (1 - 5 sao):
+            </div>
+            <div className="row g-2">
+              {CRITERIA_META.map((crit) => {
+                const score = criteriaScores[crit.key] ?? 5;
+                return (
+                  <div key={crit.key} className="col-lg col-md-4 col-sm-6 col-12">
+                    <div className="p-2 rounded-3 bg-light border h-100">
+                      <div className="small text-muted mb-1">{crit.label}</div>
+                      <div className="d-flex align-items-center justify-content-between">
+                        <div className="btn-group btn-group-sm" role="group">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <button
+                              key={star}
+                              type="button"
+                              onClick={() =>
+                                setCriteriaScores((prev) => ({
+                                  ...prev,
+                                  [crit.key]: star,
+                                }))
+                              }
+                              className={`btn btn-sm px-2 py-0 ${
+                                star <= score
+                                  ? 'btn-warning text-dark'
+                                  : 'btn-outline-secondary'
+                              }`}
+                            >
+                              ★
+                            </button>
+                          ))}
+                        </div>
+                        <span className="fw-bold small ms-1">{score}/5</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="mb-3">
+            <label className="form-label small fw-semibold mb-1">
+              Chia sẻ chi tiết trải nghiệm thực tế (tối thiểu 30 ký tự để được tính trọng số JReviews cao)
+            </label>
+            <textarea
+              rows={3}
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              placeholder="Nhận xét thực tế về màn hình, nhiệt độ khi chơi game/tác vụ nặng, thời lượng pin thực tế và chất lượng camera..."
+              className="form-control form-control-sm rounded-3"
+              required
+            />
+          </div>
+
+          <div className="d-flex justify-content-between align-items-center">
+            <span className="text-muted small">
+              Điểm trung bình 5 tiêu chí:{' '}
+              <strong className="text-danger">
+                {(
+                  Object.values(criteriaScores).reduce((a, b) => a + b, 0) /
+                  Object.values(criteriaScores).length
+                ).toFixed(1)}{' '}
+                / 5.0 ★
+              </strong>
+            </span>
+            <button
+              type="submit"
+              disabled={submittingReview}
+              className="btn btn-primary btn-sm rounded-pill px-4 py-2 fw-medium"
+            >
+              {submittingReview
+                ? 'Đang kiểm duyệt AI & gửi...'
+                : 'Gửi đánh giá chuẩn JReviews'}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {authNotice && (
+        <div className="alert alert-info py-2 px-3 small rounded-3 mb-4 d-flex justify-content-between align-items-center">
+          <span>ℹ️ {authNotice}</span>
+          <button
+            type="button"
+            className="btn-close btn-sm"
+            aria-label="Đóng"
+            onClick={() => setAuthNotice(null)}
+          />
+        </div>
+      )}
+
+      {/* 1. JReviews Dual Rating Scoreboard */}
+      <div className="row g-3 mb-4">
+        {/* Overall Combined Score */}
+        <div className="col-12 col-md-4">
+          <div className="border rounded-4 p-4 h-100 bg-light d-flex flex-column justify-content-between">
+            <div>
+              <div className="text-uppercase small fw-bold text-secondary mb-1">
+                Điểm Tổng Hợp Rate.vn
+              </div>
+              <div className="d-flex align-items-baseline gap-2 my-2">
+                <span className="display-5 fw-bold text-danger">
+                  {liveScores.overall > 0 ? liveScores.overall.toFixed(1) : 'N/A'}
+                </span>
+                <span className="text-muted fw-medium">/ 5.0</span>
+              </div>
+              <div className="text-warning fs-5 mb-2">
+                {'★'.repeat(Math.round(liveScores.overall || 5))}
+                <span className="text-muted opacity-25">
+                  {'★'.repeat(Math.max(0, 5 - Math.round(liveScores.overall || 5)))}
+                </span>
+              </div>
+            </div>
+            <div className="small text-muted border-top pt-2 mt-2">
+              {liveScores.expert != null
+                ? 'Tỷ trọng: 60% Người mua thực chất + 40% Chuyên gia Rate Lab'
+                : 'Tỷ trọng: 100% Người mua thực chất (đã lọc Seeding & Spam xu)'}
+            </div>
+          </div>
+        </div>
+
+        {/* Weighted Authentic User Score */}
+        <div className="col-12 col-md-4">
+          <div className="border rounded-4 p-4 h-100 bg-white d-flex flex-column justify-content-between">
+            <div>
+              <div className="d-flex justify-content-between align-items-center mb-1">
+                <span className="text-uppercase small fw-bold text-primary">
+                  Điểm Người Mua Thực Chất
+                </span>
+                <span className="badge bg-primary-subtle text-primary rounded-pill small">
+                  user_rating_weighted
+                </span>
+              </div>
+              <div className="d-flex align-items-baseline gap-2 my-2">
+                <span className="display-6 fw-bold text-dark">
+                  {liveScores.user != null ? liveScores.user.toFixed(2) : 'N/A'}
+                </span>
+                <span className="text-muted small">/ 5.0</span>
+              </div>
+              <div className="small text-secondary mb-2">
+                Tính trên <strong>{counts.authentic}</strong> đánh giá thực chất có trọng số.
+              </div>
+            </div>
+            <div className="d-flex flex-wrap gap-2 border-top pt-2 mt-2">
+              <span className="badge bg-success-subtle text-success small">
+                ✓ {counts.authentic} Hợp lệ
+              </span>
+              {counts.ignored > 0 && (
+                <span className="badge bg-danger-subtle text-danger small">
+                  🛡️ Đã chặn {counts.ignored} Seeding / Spam xu
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Expert Review Score */}
+        <div className="col-12 col-md-4">
+          <div className="border rounded-4 p-4 h-100 bg-white d-flex flex-column justify-content-between">
+            <div>
+              <div className="d-flex justify-content-between align-items-center mb-1">
+                <span className="text-uppercase small fw-bold text-dark">
+                  Điểm Chuyên Gia Rate Lab
+                </span>
+                <span className="badge bg-warning-subtle text-warning-emphasis rounded-pill small">
+                  expert_rating
+                </span>
+              </div>
+              {liveScores.expert != null ? (
+                <>
+                  <div className="d-flex align-items-baseline gap-2 my-2">
+                    <span className="display-6 fw-bold text-dark">
+                      {liveScores.expert.toFixed(1)}
+                    </span>
+                    <span className="text-muted small">/ 5.0</span>
+                  </div>
+                  <div className="small text-secondary">
+                    {expertReviewSummary ||
+                      'Đánh giá độc lập dựa trên bài kiểm tra hiệu năng, pin và nhiệt độ thực tế.'}
+                  </div>
+                </>
+              ) : (
+                <div className="my-3">
+                  <div className="fw-semibold text-secondary small mb-1">
+                    Đang cập nhật bài test phòng Lab
+                  </div>
+                  <p className="text-muted small mb-0">
+                    Khi chưa có điểm Expert, điểm tổng hợp sử dụng 100% điểm Người mua thực chất đã lọc Seeding.
+                  </p>
+                </div>
+              )}
+            </div>
+            <div className="small text-muted border-top pt-2 mt-2">
+              {counts.expert > 0
+                ? `${counts.expert} bài đánh giá từ Chuyên gia`
+                : 'Chưa bị pha loãng bởi đánh giá quảng cáo'}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 2. AI Review Synthesis (Pros / Cons / Authenticity Bar) */}
+      <div className="border rounded-4 p-4 mb-4 bg-light">
+        <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-2 mb-3">
+          <div className="fw-bold text-dark d-flex align-items-center gap-2">
+            <span>🤖</span> Phân Tích Độ Trung Thực &amp; Tổng Hợp Trải Nghiệm Bằng AI
+          </div>
+          <div className="d-flex flex-wrap gap-2 small">
+            <span className="badge bg-success text-white">
+              Thực chất: {summary.authentic_pct}%
+            </span>
+            <span className="badge bg-warning text-dark">
+              Cày xu / Nghi vấn: {summary.suspicious_pct}%
+            </span>
+            <span className="badge bg-danger text-white">
+              Seeding / Ảo: {summary.fake_pct}%
+            </span>
+          </div>
+        </div>
+
+        {/* Progress Bar */}
+        <div
+          className="progress rounded-pill mb-3"
+          style={{ height: '10px' }}
+          aria-label="Tỷ lệ độ trung thực của đánh giá"
+        >
+          <div
+            className="progress-bar bg-success"
+            style={{ width: `${summary.authentic_pct}%` }}
+            title={`Thực chất: ${summary.authentic_pct}%`}
+          />
+          <div
+            className="progress-bar bg-warning"
+            style={{ width: `${summary.suspicious_pct}%` }}
+            title={`Nghi vấn / Cày xu: ${summary.suspicious_pct}%`}
+          />
+          <div
+            className="progress-bar bg-danger"
+            style={{ width: `${summary.fake_pct}%` }}
+            title={`Seeding / Ảo: ${summary.fake_pct}%`}
+          />
+        </div>
+
+        {summary.ai_summary && (
+          <div className="p-3 bg-white rounded-3 border mb-3 small text-dark">
+            <strong>Tóm tắt AI:</strong> {summary.ai_summary}
+          </div>
+        )}
+
+        {(summary.pros.length > 0 || summary.cons.length > 0) && (
+          <div className="row g-3">
+            <div className="col-12 col-md-6">
+              <div className="p-3 bg-white rounded-3 border h-100">
+                <div className="fw-semibold text-success small mb-2">
+                  👍 Ưu điểm thực tế người mua ghi nhận
+                </div>
+                {summary.pros.length === 0 ? (
+                  <div className="text-muted small">
+                    Đang tổng hợp thêm từ người mua thực tế.
+                  </div>
+                ) : (
+                  <ul className="mb-0 ps-3 small text-secondary">
+                    {summary.pros.map((pro, idx) => (
+                      <li key={idx} className="mb-1">
+                        {pro}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+            <div className="col-12 col-md-6">
+              <div className="p-3 bg-white rounded-3 border h-100">
+                <div className="fw-semibold text-danger small mb-2">
+                  ⚠️ Nhược điểm &amp; Vấn đề cần lưu ý
+                </div>
+                {summary.cons.length === 0 ? (
+                  <div className="text-muted small">
+                    Chưa ghi nhận nhược điểm nghiêm trọng từ các đánh giá thực chất.
+                  </div>
+                ) : (
+                  <ul className="mb-0 ps-3 small text-secondary">
+                    {summary.cons.map((con, idx) => (
+                      <li key={idx} className="mb-1">
+                        {con}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 3. Filter Tabs & Sort Controls */}
+      <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4">
+        <div className="d-flex flex-wrap gap-2" role="tablist">
+          <button
+            type="button"
+            onClick={() => setActiveTab('all')}
+            className={`btn btn-sm rounded-pill px-3 ${
+              activeTab === 'all' ? 'btn-dark' : 'btn-outline-secondary'
+            }`}
+          >
+            Tất cả ({counts.all})
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('authentic')}
+            className={`btn btn-sm rounded-pill px-3 ${
+              activeTab === 'authentic' ? 'btn-success' : 'btn-outline-success'
+            }`}
+          >
+            ✓ Đánh giá thực chất ({counts.authentic})
+          </button>
+          {counts.expert > 0 && (
+            <button
+              type="button"
+              onClick={() => setActiveTab('expert')}
+              className={`btn btn-sm rounded-pill px-3 ${
+                activeTab === 'expert'
+                  ? 'btn-warning text-dark'
+                  : 'btn-outline-warning text-dark'
+              }`}
+            >
+              🔬 Chuyên gia ({counts.expert})
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setActiveTab('ignored')}
+            className={`btn btn-sm rounded-pill px-3 ${
+              activeTab === 'ignored' ? 'btn-danger' : 'btn-outline-danger'
+            }`}
+          >
+            🛡️ Đã lọc Seeding / Spam ({counts.ignored})
+          </button>
+        </div>
+
+        <div className="d-flex align-items-center gap-2 small">
+          <label
+            htmlFor="review-sort-select"
+            className="text-muted text-nowrap mb-0"
+          >
+            Sắp xếp:
+          </label>
+          <select
+            id="review-sort-select"
+            value={sortMode}
+            onChange={(e) => setSortMode(e.target.value as SortMode)}
+            className="form-select form-select-sm rounded-pill"
+            style={{ minWidth: '240px' }}
+          >
+            <option value="weight_desc">
+              Hữu ích nhất (Trọng số JReviews cao nhất)
+            </option>
+            <option value="newest">Mới nhất</option>
+            <option value="rating_desc">Số sao: Cao đến Thấp</option>
+            <option value="rating_asc">Số sao: Thấp đến Cao</option>
+          </select>
+        </div>
+      </div>
+
+      {/* 4. Review Cards List */}
+      {filteredAndSortedReviews.length === 0 ? (
+        <div className="text-center py-5 bg-light rounded-4">
+          <p className="text-muted mb-0">
+            Không có đánh giá nào trong bộ lọc này.
+          </p>
+        </div>
+      ) : (
+        <div className="row g-3">
+          {filteredAndSortedReviews.map((rev) => {
+            const flagMeta =
+              FLAG_META[rev.flag_category] || FLAG_META.authentic;
+            const myVote = userVotes[rev.id] || null;
+            const isPending = Boolean(pendingIds[rev.id]);
+            const isZeroWeight =
+              !rev.include_in_rating || rev.helpfulness_weight <= 0;
+
+            return (
+              <div key={rev.id} className="col-12 col-md-6">
+                <div
+                  className={`card rounded-4 p-3 h-100 d-flex flex-column justify-content-between ${
+                    isZeroWeight
+                      ? 'bg-light border border-danger-subtle opacity-75'
+                      : 'bg-white border shadow-sm'
+                  }`}
+                >
+                  <div>
+                    {/* Top Row: Author + Role + Star Rating */}
+                    <div className="d-flex justify-content-between align-items-start gap-2 mb-2">
+                      <div className="d-flex flex-wrap align-items-center gap-2">
+                        <span className="fw-semibold small text-dark">
+                          {rev.author_name}
+                        </span>
+                        {rev.reviewer_type === 'expert' ? (
+                          <span className="badge bg-warning text-dark rounded-pill small">
+                            🔬 Chuyên gia Rate
+                          </span>
+                        ) : (
+                          <span className="badge bg-light text-secondary border rounded-pill small">
+                            Người mua
+                          </span>
+                        )}
+                      </div>
+                      <span className="badge bg-warning text-dark small">
+                        {'★'.repeat(Math.max(1, Math.min(5, rev.rating_star)))}
+                      </span>
+                    </div>
+
+                    {/* Second Row: Flag Category Badge + JReviews Weight Badge */}
+                    <div className="d-flex flex-wrap align-items-center gap-2 mb-2">
+                      <span
+                        className={`badge rounded-pill small ${flagMeta.badgeClass}`}
+                        title={flagMeta.description}
+                      >
+                        {flagMeta.label}
+                      </span>
+                      <span
+                        className={`badge rounded-pill small ${
+                          isZeroWeight
+                            ? 'bg-secondary-subtle text-secondary'
+                            : rev.helpfulness_weight > 1
+                              ? 'bg-primary-subtle text-primary'
+                              : 'bg-light text-muted border'
+                        }`}
+                        title="Trọng số đóng góp của đánh giá này vào điểm sản phẩm cuối cùng"
+                      >
+                        Trọng số: {rev.helpfulness_weight.toFixed(2)}x
+                      </span>
+                    </div>
+
+                    {rev.variation && (
+                      <div className="text-muted small mb-2">
+                        Phân loại: {rev.variation}
+                      </div>
+                    )}
+
+                    {rev.criteria_ratings &&
+                      Object.keys(rev.criteria_ratings).length > 0 && (
+                        <div className="d-flex flex-wrap gap-1 mb-2">
+                          {CRITERIA_META.map((crit) => {
+                            const val = rev.criteria_ratings?.[crit.key];
+                            if (val == null) return null;
+                            return (
+                              <span
+                                key={crit.key}
+                                className="badge bg-light text-dark border rounded-pill"
+                                style={{ fontSize: '0.7rem' }}
+                              >
+                                {crit.label.split(' ')[0]}: {val}/5 ★
+                              </span>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                    {/* Review Comment */}
+                    <p
+                      className="small text-dark mb-2 lh-base"
+                      style={{ whiteSpace: 'pre-line' }}
+                    >
+                      {rev.comment || '(Không có nội dung bình luận)'}
+                    </p>
+
+                    {/* AI Flag Reason Transparency Note */}
+                    {rev.reason && (
+                      <div className="p-2 rounded-3 bg-light border small text-secondary mb-2">
+                        <strong>Giải thích AI:</strong> {rev.reason}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Bottom Row: JReviews Vote Bar (Helpful Up / Down / Report) */}
+                  <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 pt-2 mt-2 border-top">
+                    <span className="text-muted" style={{ fontSize: '0.75rem' }}>
+                      Đánh giá này có hữu ích?
+                    </span>
+                    <div className="d-flex align-items-center gap-1">
+                      <button
+                        type="button"
+                        disabled={isPending}
+                        onClick={() => handleVote(rev.id, 'up')}
+                        className={`btn btn-sm rounded-pill px-2 py-1 ${
+                          myVote === 'up'
+                            ? 'btn-success text-white'
+                            : 'btn-outline-secondary'
+                        }`}
+                        style={{ fontSize: '0.75rem' }}
+                        title="Vote Hữu ích - tăng trọng số của đánh giá này trong điểm sản phẩm (tối đa 3.00x)"
+                      >
+                        👍 Hữu ích ({rev.upvotes})
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isPending}
+                        onClick={() => handleVote(rev.id, 'down')}
+                        className={`btn btn-sm rounded-pill px-2 py-1 ${
+                          myVote === 'down'
+                            ? 'btn-warning text-dark'
+                            : 'btn-outline-secondary'
+                        }`}
+                        style={{ fontSize: '0.75rem' }}
+                        title="Vote Không hữu ích - giảm trọng số của đánh giá này"
+                      >
+                        👎 ({rev.downvotes})
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isPending}
+                        onClick={() => handleVote(rev.id, 'report')}
+                        className={`btn btn-sm rounded-pill px-2 py-1 ${
+                          myVote === 'report'
+                            ? 'btn-danger text-white'
+                            : 'btn-outline-danger'
+                        }`}
+                        style={{ fontSize: '0.75rem' }}
+                        title="Báo cáo đánh giá Seeding / Spam / Chơi xấu (-0.35 trọng số mỗi báo cáo)"
+                      >
+                        🚩 Báo cáo ({rev.report_count})
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}

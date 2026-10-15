@@ -1,5 +1,5 @@
 area:frontend:
-  - 'apps/ui/**'
+  - 'apps/web/**'
   - 'packages/design-system/**'
 
 area:backend:
@@ -13,7 +13,7 @@ area:shared:
 
 feature:
   - 'Docs/**'
-  - 'apps/ui/src/app/(features)/**'
+  - 'apps/web/src/app/(features)/**'
 
 breaking:api:
   - any: ['packages/shared-data/**']

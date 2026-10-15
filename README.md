@@ -1,357 +1,112 @@
-# ⭐ Rate Platform - AI-Powered Review & Rating System
+# ⭐ Rate Platform (`rate.vn`) - Open-Core Product Intelligence & Anti-Scam Ecosystem
 
-![Commitlint](https://github.com/RateBox/Rate/actions/workflows/commitlint.yml/badge.svg?branch=dev)
-![PR Auto Label](https://github.com/RateBox/Rate/actions/workflows/pr-auto-label.yml/badge.svg?branch=dev)
-![Labels Sync](https://github.com/RateBox/Rate/actions/workflows/labels-sync.yml/badge.svg?branch=dev)
+![Verify Build & Typecheck](https://github.com/DOS/Rate/actions/workflows/ci.yml/badge.svg?branch=dev)
+![Commitlint](https://github.com/DOS/Rate/actions/workflows/commitlint.yml/badge.svg?branch=dev)
+![PR Auto Label](https://github.com/DOS/Rate/actions/workflows/pr-auto-label.yml/badge.svg?branch=dev)
+![Labels Sync](https://github.com/DOS/Rate/actions/workflows/labels-sync.yml/badge.svg?branch=dev)
 
-A comprehensive review and rating platform for businesses, services, and products with AI-powered fake review detection, sentiment analysis, and fraud prevention capabilities.
+Nền tảng đối chiếu giá đa sàn, chuẩn hóa **10 nhóm thông số kỹ thuật (PhoneArena + GSMArena standard)**, kiểm chứng **Giảm giá ảo (Fake Discount Detector)** và **phát hiện đánh giá ảo (Seeding / Spam xu) & chấm điểm rủi ro gian hàng kép (DOSafe + AI Review)** theo triết lý **Open-Core minh bạch**.
 
-## 🏗️ System Architecture with AI Integration
+- 🌐 **Production Web:** [https://rate.vn](https://rate.vn)
+- 📋 **GitHub Project Board (Multi-Agent Task Queue):** [https://github.com/orgs/DOS/projects/9](https://github.com/orgs/DOS/projects/9)
+- 🗺️ **Roadmap chi tiết:** [`Docs/Resources/ROADMAP.md`](./Docs/Resources/ROADMAP.md)
+- 🔬 **Báo cáo Thiết kế Kiến trúc & Tech Stack 2026 (Dark HTML):** [`Docs/Proposals/2026-10-14-full-stack-tech-architecture-audit.html`](./Docs/Proposals/2026-10-14-full-stack-tech-architecture-audit.html)
+- 🤖 **Quy chuẩn làm việc cho AI Agents:** [`AGENTS.md`](./AGENTS.md)
+
+---
+
+## 🛠️ Tech Stack Chuẩn Hóa 2026 (Zero-Strapi Architecture)
+
+| Tầng Kiến Trúc                    | Công Nghệ & Phiên Bản Chuẩn                                                                                              | Vai Trò Cốt Lõi                                                                                                                                          |
+| :-------------------------------- | :----------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Ngôn ngữ & Trình biên dịch**    | **TypeScript 7.0 (`^7.0.2`)** + **Node.js `>= 22 / 26`**                                                                 | Kiểm tra kiểu dữ liệu nghiêm ngặt (`ignoreBuildErrors: false`) trên toàn Monorepo                                                                        |
+| **Monorepo & Build System**       | **`pnpm@10.34.5`** Workspaces + **`Turborepo ^2.10.12`**                                                                 | Điều phối build song song, bộ nhớ đệm `.turbo` cho `@repo/shared-data`, `@repo/crawlers`, `@repo/web`                                                    |
+| **Web Frontend & BFF Layer**      | **Next.js 16.3.8** (App Router + Turbopack) + **React 19.3.0** + **Bootstrap 5.3.8** + **`next-intl 4.14.8`**            | Server Components mặc định, URL-driven 10-Field-Group Faceted Filter, SVG Time-Series Price History Chart, JReviews Dual-Rating UI                       |
+| **Backend Server & REST API**     | **Next.js 16 Server Data Layer (`apps/web/src/server/rate/`)** + **Route Handlers (`/api/v1/rate/*`, `/api/reviews/*`)** | Deduplication với `React.cache()`, REST JSON API v1 phục vụ Web Client, Browser Extension MV3 và đối tác                                                 |
+| **Open-Core Intelligence Engine** | **`apps/importer` (`@repo/crawlers`)** + **`packages/shared-data`** (Zod `^3.25.76`)                                     | `ProductNormalizer` (RAM/ROM), `EntityMatcher` (3-Tier Dedupe), `AiSpecEnricher` (10 nhóm thông số), `AiReviewAnalyzer` (Anti-Seeding & Dual Risk Score) |
+| **AI Gateway & LLM Providers**    | **OpenAI-Compatible Multi-Provider SDK** (`dos-ai`, `openai`, `gemini`, `deepseek`, `groq`, `openrouter`, `ollama`)      | Kết nối trực tiếp DOS-AI Gateway (`api.dos.ai` / vLLM Qwen) hoặc bất kỳ LLM nào qua cấu hình biến môi trường                                             |
+| **Private Anti-Detect Workers**   | **`DOS/Rate-Services`** (Playwright Stealth + `mproxy.vn` + Slider Captcha Solver)                                       | Worker nhận job từ hàng đợi Postgres (`rate.crawl_jobs`), vượt tường lửa sàn TMĐT và đẩy dữ liệu thô về DB                                               |
+| **Database, Queue & Auth**        | **Supabase Cloud PostgreSQL 17 (`rate` schema)** + **DOS.Me Auth**                                                       | Kiến trúc sản phẩm 2 tầng, `JSONB` GIN Index, `pg_trgm` fuzzy matching, `SECURITY DEFINER` triggers & RLS                                                |
+
+---
+
+## 🏗️ Kiến Trúc Backend & Full-Stack 4 Tầng (Open-Core 2 Repositories)
 
 ```mermaid
-graph TB
-    %% User Interfaces
-    UI["`**Next.js Frontend**<br/>localhost:3000<br/>- User Dashboard<br/>- Admin Interface<br/>- Report Management`"]
-    EXT["`**Browser Extension**<br/>Chrome/Edge<br/>- Real-time Detection<br/>- Page Analysis<br/>- Quick Report`"]
+flowchart TB
+    subgraph PrivateRepo["🔒 Tầng 3 - Repo Private: DOS/Rate-Services (Anti-Detect Worker Engine)"]
+        S1["shopee-scraper.ts (Playwright Stealth)"]
+        S2["shopee-captcha-solver.ts (Slider Captcha Solver)"]
+        S3["proxy-manager.ts (mproxy.vn IP Rotation)"]
+        S4["queue-worker.ts (PostgreSQL SKIP LOCKED Consumer)"]
+    end
 
-    %% Core Platform
-    STRAPI["`**Strapi CMS**<br/>localhost:1337<br/>- Content Management<br/>- API Gateway<br/>- Admin Panel<br/>- Authentication`"]
+    subgraph PublicRepo["🌍 Tầng 1 & 2 - Repo Public: DOS/Rate (Open-Core Monorepo - TypeScript 7.0)"]
+        W1["apps/web: Next.js 16.3.8 + React 19.3 UI (rate.vn)"]
+        W2["apps/web/src/server/rate: Memoized Server Data Layer (React.cache)"]
+        W3["apps/web/src/app/api/v1/rate: REST JSON API v1 & Review Vote/Flag Handlers"]
+        P2["apps/extension: Browser Extension MV3"]
+        P3["packages/shared-data: 10 Field Groups Zod Schema & Supabase Client"]
+        P4["apps/importer (@repo/crawlers - Open Intelligence Engine):<br/>• product-normalizer.ts (RAM/ROM & Canonical Key)<br/>• entity-matcher.ts (3-Tier Dedupe)<br/>• ai-spec-enricher.ts (Multi-LLM 10 Groups)<br/>• ai-review-analyzer.ts (Anti-Seeding & Dual Risk Score)"]
+    end
 
-    %% AI Service
-    AI["`**AI Analysis Service**<br/>GPT-5-mini<br/>- Scam Detection<br/>- Fake Review Detection<br/>- Sentiment Analysis<br/>- Batch Processing`"]
+    subgraph DatabaseLayer["🗄️ Tầng 4 - Shared Supabase Cloud PostgreSQL 17 (DOS/DOS.Me - Schema: rate)"]
+        DB1[("rate.master_products & rate.categories<br/>(10-Group JSONB GIN + pg_trgm + JReviews Dual Rating)")]
+        DB2[("rate.products, rate.merchants & rate.price_history<br/>(Offers + DOSafe/Review Risk + Fake Discount Detection)")]
+        DB3[("rate.reviews, rate.review_flags & rate.review_votes<br/>(AI Seeding Filter + Weighted Helpfulness Triggers)")]
+        DB4[("rate.crawl_jobs & rate.crawl_runs<br/>(Atomic Postgres Queue RPCs)")]
+    end
 
-    %% Database
-    DB[("`**PostgreSQL**<br/>Docker Container<br/>- User Data<br/>- Reports<br/>- AI Analysis Results<br/>- Validation Results`")]
-
-    %% Services
-    CRAWLER["`**Importer/Crawler**<br/>TypeScript Service<br/>- Web Scraping<br/>- Data Collection<br/>- FlareSolverr Proxy<br/>- AI Batch Processing`"]
-
-    VALIDATOR["`**Validator Service**<br/>TypeScript/Python<br/>- Data Validation<br/>- Business Rules<br/>- Risk Scoring<br/>- Quality Check`"]
-
-    %% External Services
-    FLARE["`**FlareSolverr**<br/>Docker Service<br/>- Cloudflare Bypass<br/>- Proxy Service`"]
-
-    REDIS["`**Redis**<br/>Cache & Queue<br/>- AI Result Cache<br/>- Job Processing<br/>- Inter-service Comm`"]
-
-    %% User Flow
-    USER(["`**Users**<br/>End Users<br/>Administrators`"])
-
-    %% Connections
-    USER --> UI
-    USER --> EXT
-
-    UI --> STRAPI
-    EXT --> STRAPI
-
-    STRAPI --> DB
-    STRAPI --> VALIDATOR
-    
-    CRAWLER --> AI
-    CRAWLER --> FLARE
-    CRAWLER --> REDIS
-    CRAWLER --> DB
-
-    AI --> REDIS
-    AI --> DB
-
-    VALIDATOR --> REDIS
-    VALIDATOR --> DB
-
-    %% Styling
-    classDef frontend fill:#e1f5fe
-    classDef backend fill:#f3e5f5
-    classDef database fill:#e8f5e8
-    classDef service fill:#fff3e0
-    classDef external fill:#fce4ec
-    classDef ai fill:#fff9c4
-
-    class UI,EXT frontend
-    class STRAPI backend
-    class DB database
-    class CRAWLER,VALIDATOR service
-    class FLARE,REDIS external
-    class AI ai
+    PrivateRepo <-->|"Dequeue / Heartbeat / Checkpoint / Ack"| DB4
+    PrivateRepo -->|"Raw Scraped Payload"| P4
+    P4 <-->|"Upsert Canonical Specs, Offers, Price History & AI Flags"| DatabaseLayer
+    W2 <-->|"Read via PostgREST / RPC (rate schema)"| DatabaseLayer
+    W1 --> W2
+    W3 --> W2
+    P2 -->|"GET /api/v1/rate/products/[slug]"| W3
 ```
 
-## 🔄 Complete Data Processing Flow
+---
 
-### 1. Data Collection
+## 📊 Mô Hình Dữ Liệu 2 Tầng Trên PostgreSQL 17 (`rate` Schema)
+
+1. **Tầng 1 - `rate.master_products` (Sản phẩm gốc chuẩn hóa):**
+   - Định danh duy nhất qua `model_key` (`brand:model:storage`, ví dụ `samsung:galaxy-s24-ultra:256gb`).
+   - Lưu trữ **10 Field Groups** chuẩn hóa trong cột `specifications` (`JSONB` với GIN index): `availability`, `design`, `display`, `hardware`, `battery`, `camera`, `connectivity`, `cellular`, `multimedia`, `regulatory`.
+   - Tổng hợp tự động `min_price`, `max_price`, `merchant_count`, `user_rating_weighted`, `expert_rating`, `authentic_review_count`.
+2. **Tầng 2 - `rate.products` (Listings / Chào giá từ các sàn):**
+   - Lưu trữ từng gian hàng bán sản phẩm trên Shopee/Lazada/Tiki, liên kết về sản phẩm gốc qua `cluster_id`.
+   - Tách bạch điểm rủi ro gian hàng thành `dosafe_risk_score` (từ `dosafe.threat_intel`) và `review_risk_score` (từ tỷ lệ review seeding/ảo).
+   - Theo dõi lịch sử biến động giá theo thời gian (`rate.price_history`) để phát hiện hành vi nâng khống giá gốc trước ngày Sale.
+
+---
+
+## 🚀 Hướng Dẫn Cài Đặt & Phát Triển Nhanh
+
+### Yêu cầu hệ thống
+
+- **Node.js**: `>= 22.0.0` (khuyến nghị `24.x` / `26.x`)
+- **Package Manager**: `pnpm@10.34.5`
+- **TypeScript**: `7.0.2`
+
+### Các lệnh thường dùng (`D:\Projects\Rate`)
+
+```powershell
+# 1. Cài đặt dependencies toàn monorepo
+pnpm install
+
+# 2. Build gói schema dùng chung (@repo/shared-data)
+pnpm --filter @repo/shared-data build
+
+# 3. Kiểm tra kiểu dữ liệu TypeScript 7.0 & Build Web UI (Next.js 16)
+pnpm --filter @repo/web typecheck
+pnpm --filter @repo/web build
+
+# 4. Chạy Web UI ở chế độ Development (http://localhost:3000)
+pnpm --filter @repo/web dev
+
+# 5. Build & chạy kiểm thử bộ não chuẩn hóa AI (@repo/crawlers)
+pnpm --filter @repo/crawlers build
+pnpm --filter @repo/crawlers exec tsx src/shopee/test-ai-enricher.ts
+pnpm --filter @repo/crawlers exec tsx src/shopee/test-review-analyzer.ts
 ```
-Multiple Sources → Crawler/Importer → Raw Data Storage
-     ↓                    ↓                 ↓
-User Reviews         FlareSolverr      JSON Files
-Business Data        Anti-captcha      Structured Data
-Product Listings     Rate Limiting     Metadata
-```
-
-### 2. AI Processing Pipeline
-```
-Raw Data → AI Analysis (GPT-5-mini) → Enriched Data
-    ↓              ↓                      ↓
-Reviews      Fake Detection         Confidence Score
-Ratings      Sentiment Analysis     Categories
-Reports      Pattern Recognition    Severity Level
-```
-
-### 3. Validation & Storage
-```
-Enriched Data → Redis Queue → Validator → PostgreSQL
-      ↓             ↓            ↓           ↓
-AI Metadata    Async Jobs    Quality     Verified
-Confidence     Pub/Sub       Scoring     Reviews
-Categories     Caching       Dedup       Ratings
-```
-
-### 4. API Distribution
-```
-Strapi CMS → REST/GraphQL APIs → Client Applications
-     ↓              ↓                    ↓
-Content Mgmt    Endpoints          Next.js UI
-Auth/Perms      Rate Limiting      Browser Ext
-Admin Panel     Caching             Mobile Apps
-```
-
-## 📊 Key Features
-
-### Core Platform
-- **Review Management**: Multi-category reviews (businesses, products, services)
-- **Rating System**: 5-star ratings with weighted algorithms
-- **User Authentication**: JWT-based auth with social login support
-- **Content Moderation**: AI-powered content filtering and approval workflows
-
-### AI Capabilities (GPT-5-mini)
-- **Fake Review Detection**: 80%+ accuracy in identifying fake reviews
-- **Sentiment Analysis**: Understand customer emotions and feedback patterns
-- **Spam Filtering**: Automatic detection of spam and promotional content
-- **Fraud Prevention**: Identify scam patterns and suspicious activities
-- **Language Support**: Vietnamese and English analysis
-
-### Technical Features
-- **Batch Processing**: Handle 50+ reviews per batch (~12s processing)
-- **Redis Caching**: 90%+ cache hit rate for duplicate detection
-- **Real-time Updates**: WebSocket support for live notifications
-- **API Rate Limiting**: Protect against abuse and ensure fair usage
-- **Data Validation**: Multi-layer validation pipeline
-
-## 🚀 Performance Metrics
-
-- **AI Processing Speed**: 250 reviews/minute
-- **API Response Time**: < 100ms (cached), < 500ms (uncached)
-- **Cache Hit Rate**: 90%+ for duplicate content
-- **Uptime Target**: 99.9% availability
-- **Cost Efficiency**: ~$0.0003 per AI analysis (GPT-5-mini)
-
-## 📚 Documentation
-
-- **[Development Setup](./Docs/Guides/Development-Setup.md)** - Complete setup guide
-- **[Modules Overview](./Modules/README.md)** - Technical documentation for all modules
-- **[API Documentation](./apps/strapi/README.md)** - Strapi API endpoints and schemas
-- **[Frontend Guide](./apps/ui/README.md)** - Next.js UI development guide
-- **[AI Integration](./packages/ai/README.md)** - AI service documentation
-
-## 👀 Live demo
-
-- UI - [https://www.notum-dev.cz/](https://www.notum-dev.cz/)
-- Strapi - [https://api.notum-dev.cz/admin](https://api.notum-dev.cz/admin)
-- **Readonly user:**
-  - Email: [REDACTED]
-  - Password: [REDACTED]
-
-## 🥞 Tech Stack
-
-### Frontend
-- **[Next.js v15](https://nextjs.org/)** - React framework with App Router
-- **[TailwindCSS v4](https://tailwindcss.com/)** - Utility-first CSS framework
-- **[Shadcn/ui](https://ui.shadcn.com/)** - Beautiful UI components
-- **[TypeScript](https://www.typescriptlang.org/)** - Type-safe development
-
-### Backend
-- **[Strapi v5](https://strapi.io/)** - Headless CMS with REST & GraphQL
-- **[PostgreSQL 17](https://www.postgresql.org/)** - Primary database
-- **[Redis](https://redis.io/)** - Caching and message queue
-- **[Node.js 22](https://nodejs.org/)** - Runtime environment
-
-### AI & Processing
-- **[OpenAI GPT-5-mini](https://openai.com/)** - AI analysis engine
-- **[FlareSolverr](https://github.com/FlareSolverr/FlareSolverr)** - Anti-bot bypass
-- **[Playwright](https://playwright.dev/)** - Browser automation
-- **[TypeScript/Python](https://www.python.org/)** - Data processing
-
-### Infrastructure
-- **[Turborepo](https://turbo.build/)** - Monorepo management
-- **[Docker](https://www.docker.com/)** - Containerization
-- **[Yarn Workspaces](https://yarnpkg.com/)** - Package management
-
-## 🚀 Getting started
-
-### Prerequisites
-
-- **Node.js 22.x** - Required runtime
-- **Yarn 1.22.x** - Package manager (enforced)
-- **PostgreSQL 17** - Database (or use Docker)
-- **Docker** - For services (Redis, PostgreSQL, FlareSolverr)
-- **OpenAI API Key** - For AI features (GPT-5-mini)
-
-### Quick Start
-
-1. **Clone and Install**
-
-```bash
-git clone https://github.com/RateBox/Rate.git
-cd Rate
-yarn install
-```
-
-2. **Environment Setup**
-
-```bash
-# Copy environment templates
-yarn setup:apps
-
-# Configure AI service (root .env)
-echo "OPENAI_API_KEY=your-api-key" >> .env
-echo "OPENAI_MODEL=gpt-5-mini" >> .env
-echo "AI_CACHE_ENABLED=true" >> .env
-
-# Configure Strapi (apps/strapi/.env)
-# Configure Next.js (apps/ui/.env.local)
-```
-
-3. **Start Services**
-
-```bash
-# Start database (if not using local PostgreSQL)
-cd apps/strapi && docker compose up -d db && cd ../..
-
-# Start Redis for caching
-docker run -d --name redis -p 6379:6379 redis:alpine
-
-# Start all applications
-yarn dev
-```
-
-4. **Access Points**
-
-- **Frontend**: http://localhost:3000
-- **Admin Panel**: http://localhost:1337/admin
-- **API**: http://localhost:1337/api
-- **GraphQL**: http://localhost:1337/graphql
-
-### AI Processing Workflow
-
-```bash
-# 1. Crawl data
-cd apps/importer
-ts-node-esm Scripts/crawl.ts links
-ts-node-esm Scripts/crawl.ts crawl
-
-# 2. Process with AI
-ts-node-esm Scripts/ai-batch-processor.ts \
-  -i ./Data/crawled \
-  -o ./Data/processed
-
-# 3. Push to validation
-ts-node-esm Scripts/push-to-validation-with-ai.ts
-```
-
-
-## 📦 Project Structure
-
-### Apps
-- **`apps/strapi`** - Strapi v5 CMS backend with custom plugins
-- **`apps/ui`** - Next.js v15 frontend application
-- **`apps/importer`** - Data crawler and importer service
-
-### Packages
-- **`packages/ai`** - AI analysis service (GPT-5-mini integration)
-- **`packages/validator`** - TypeScript validation schemas
-- **`packages/design-system`** - Shared TailwindCSS and CKEditor configs
-- **`packages/eslint-config`** - Shared ESLint rules
-- **`packages/prettier-config`** - Shared Prettier configuration
-- **`packages/typescript-config`** - Shared TypeScript configurations
-
-### Modules
-- **`Modules/Extension`** - Browser extension for real-time detection
-- **`Modules/Validator`** - Python validation worker service
-
-
-## 🛠️ Development Commands
-
-```bash
-# Development
-yarn dev              # Start all services
-yarn dev:strapi       # Start Strapi only
-yarn dev:ui           # Start Next.js only
-
-# Building
-yarn build            # Build all apps
-yarn build:strapi     # Build Strapi
-yarn build:ui         # Build Next.js
-
-# Code Quality
-yarn lint             # Lint all code
-yarn format           # Format with Prettier
-yarn type-check       # TypeScript checking
-
-# Testing
-yarn test             # Run all tests
-yarn test-plugin      # Test smart-component-filter plugin
-```
-
-## 🚨 Troubleshooting
-
-### Common Issues
-
-**Port already in use:**
-```bash
-# Windows
-netstat -ano | findstr :1337
-taskkill /PID <PID> /F
-
-# Linux/Mac
-lsof -i :1337
-kill -9 <PID>
-```
-
-**Database connection failed:**
-```bash
-# Check PostgreSQL is running
-docker ps | grep postgres
-
-# Restart database
-docker restart rate-db
-```
-
-**AI Service errors:**
-- Check OpenAI API key in `.env`
-- Verify GPT-5-mini model access
-- Check Redis is running for caching
-
-## 📝 Contributing
-
-1. Fork the repository
-2. Create feature branch (`git checkout -b feat/amazing-feature`)
-3. Commit changes (`git commit -m 'feat: add amazing feature'`)
-4. Push to branch (`git push origin feat/amazing-feature`)
-5. Open Pull Request
-
-### Commit Convention
-We use [Conventional Commits](https://www.conventionalcommits.org/):
-- `feat:` New feature
-- `fix:` Bug fix
-- `docs:` Documentation
-- `style:` Code style
-- `refactor:` Code refactoring
-- `test:` Tests
-- `chore:` Maintenance
-
-## 📄 License
-
-MIT License - see [LICENSE](./LICENSE) file for details
-
-## 🙏 Acknowledgments
-
-- Based on [strapi-next-monorepo-starter](https://github.com/notum-cz/strapi-next-monorepo-starter)
-- AI powered by OpenAI GPT-5-mini
-- UI components by Shadcn/ui
-

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { UUIDv7Schema } from './common.schema';
+import { UUIDv7Schema } from './common.schema.js';
 
 /**
  * User-related schemas

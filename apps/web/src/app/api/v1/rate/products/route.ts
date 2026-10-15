@@ -1,0 +1,110 @@
+import { NextRequest, NextResponse } from 'next/server';
+import {
+  getCachedCategoryDirectoryFacets,
+  getMasterProducts,
+  type MasterProductFilterParams,
+} from '@/server/rate';
+
+function parseNumArray(raw: string | null): number[] | undefined {
+  if (!raw) return undefined;
+  const nums = raw
+    .split(',')
+    .map((s) => Number(s.trim()))
+    .filter((n) => !Number.isNaN(n) && n > 0);
+  return nums.length > 0 ? nums : undefined;
+}
+
+function parsePositiveNum(raw: string | null): number | undefined {
+  if (!raw) return undefined;
+  const n = Number(raw);
+  return !Number.isNaN(n) && n > 0 ? n : undefined;
+}
+
+function parseBooleanFlag(raw: string | null): boolean | undefined {
+  if (!raw) return undefined;
+  return raw === '1' || raw.toLowerCase() === 'true' ? true : undefined;
+}
+
+/**
+ * GET /api/v1/rate/products
+ * Structured JSON Backend API for Web Client, Browser Extension MV3, and Partners.
+ * Supports 10-Field-Groups multi-criteria filtering, sorting, and optional directory facets.
+ */
+export async function GET(request: NextRequest) {
+  try {
+    const sp = request.nextUrl.searchParams;
+    const categorySlug = sp.get('category') || 'smartphones';
+    const includeFacets =
+      sp.get('facets') === '1' || sp.get('facets') === 'true';
+
+    const brandsParam = sp.get('brands') || sp.get('brand');
+    const brands = brandsParam
+      ? brandsParam
+          .split(',')
+          .map((b) => b.trim())
+          .filter(Boolean)
+      : undefined;
+
+    const sortParam = sp.get('sort') as
+      MasterProductFilterParams['sort'] | null;
+    const limit = Math.min(parsePositiveNum(sp.get('limit')) ?? 24, 100);
+
+    const compactRaw = sp.get('compactScreen') || sp.get('compact');
+    const maxScreenSizeInch =
+      compactRaw === '1' || compactRaw?.toLowerCase() === 'true'
+        ? 6.2
+        : parsePositiveNum(compactRaw);
+
+    const filterParams: MasterProductFilterParams = {
+      categorySlug,
+      brands,
+      search: sp.get('q') || undefined,
+      minPrice: parsePositiveNum(sp.get('minPrice')),
+      maxPrice: parsePositiveNum(sp.get('maxPrice')),
+      minRating: parsePositiveNum(sp.get('rating')),
+      ramGb: parseNumArray(sp.get('ram')),
+      storageGb: parseNumArray(sp.get('storage') || sp.get('rom')),
+      minBatteryMah: parseBooleanFlag(sp.get('bigBattery'))
+        ? 5000
+        : parsePositiveNum(sp.get('battery')),
+      minRefreshRateHz: parseBooleanFlag(sp.get('highRefresh'))
+        ? 120
+        : parsePositiveNum(sp.get('hz')),
+      minFastChargingW: parseBooleanFlag(sp.get('fastCharge'))
+        ? 45
+        : parsePositiveNum(sp.get('charge')),
+      has5g: parseBooleanFlag(sp.get('has5g') || sp.get('5g')),
+      hasNfc: parseBooleanFlag(sp.get('hasNfc') || sp.get('nfc')),
+      maxScreenSizeInch,
+      sort: sortParam || 'default',
+      limit,
+    };
+
+    const [products, facets] = await Promise.all([
+      getMasterProducts(filterParams),
+      includeFacets
+        ? getCachedCategoryDirectoryFacets(categorySlug)
+        : Promise.resolve(null),
+    ]);
+
+    return NextResponse.json(
+      {
+        ok: true,
+        category: categorySlug,
+        count: products.length,
+        data: products,
+        ...(facets ? { facets } : {}),
+      },
+      {
+        status: 200,
+        headers: {
+          'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300',
+        },
+      }
+    );
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : 'Internal server error';
+    return NextResponse.json({ ok: false, error: message }, { status: 500 });
+  }
+}

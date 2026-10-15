@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="dark" />
+  <title>Báo Cáo Kiểm Toán &amp; Đề Xuất Tái Cấu Trúc Frontend Next.js 16 - Rate.vn</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg-primary: #0f1113;
+      --bg-secondary: #16191d;
+      --bg-tertiary: #1d2127;
+      --border-color: #2a2f37;
+      --text-primary: #f3f4f6;
+      --text-secondary: #9ca3af;
+      --text-muted: #6b7280;
+      --accent-red: #FF2E29;
+      --accent-red-soft: rgba(255, 46, 41, 0.14);
+      --accent-green: #10b981;
+      --accent-green-soft: rgba(16, 185, 129, 0.14);
+      --accent-amber: #f59e0b;
+      --accent-amber-soft: rgba(245, 158, 11, 0.14);
+      --accent-blue: #3b82f6;
+      --accent-blue-soft: rgba(59, 130, 246, 0.14);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-primary);
+      color: var(--text-primary);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, Helvetica, Arial, sans-serif;
+      line-height: 1.65;
+      padding: 40px 20px 80px;
+    }
+
+    .container {
+      max-width: 1120px;
+      margin: 0 auto;
+    }
+
+    header {
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 28px;
+      margin-bottom: 36px;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--accent-red-soft);
+      color: var(--accent-red);
+      border: 1px solid rgba(255, 46, 41, 0.35);
+      padding: 6px 14px;
+      border-radius: 999px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 16px;
+    }
+
+    h1 {
+      font-size: 2.15rem;
+      font-weight: 800;
+      line-height: 1.25;
+      margin-bottom: 12px;
+      color: #ffffff;
+    }
+
+    .subtitle {
+      color: var(--text-secondary);
+      font-size: 1.05rem;
+      max-width: 880px;
+    }
+
+    .meta-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      margin-top: 20px;
+      font-size: 0.88rem;
+      color: var(--text-secondary);
+    }
+
+    .meta-bar span strong {
+      color: var(--text-primary);
+    }
+
+    h2 {
+      font-size: 1.45rem;
+      font-weight: 700;
+      margin: 40px 0 18px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #ffffff;
+    }
+
+    h3 {
+      font-size: 1.12rem;
+      font-weight: 700;
+      margin-bottom: 10px;
+      color: #ffffff;
+    }
+
+    p {
+      margin-bottom: 14px;
+      color: var(--text-secondary);
+    }
+
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 16px;
+      margin: 24px 0 36px;
+    }
+
+    .kpi-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      padding: 20px;
+    }
+
+    .kpi-card.alert {
+      border-color: rgba(255, 46, 41, 0.45);
+      background: linear-gradient(180deg, rgba(255, 46, 41, 0.08) 0%, var(--bg-secondary) 100%);
+    }
+
+    .kpi-label {
+      font-size: 0.82rem;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 8px;
+    }
+
+    .kpi-value {
+      font-size: 1.85rem;
+      font-weight: 800;
+      color: #ffffff;
+      margin-bottom: 6px;
+    }
+
+    .kpi-card.alert .kpi-value {
+      color: var(--accent-red);
+    }
+
+    .kpi-desc {
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+    }
+
+    .card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+
+    .card-header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 700;
+    }
+
+    .badge-red {
+      background: var(--accent-red-soft);
+      color: var(--accent-red);
+      border: 1px solid rgba(255, 46, 41, 0.35);
+    }
+
+    .badge-amber {
+      background: var(--accent-amber-soft);
+      color: var(--accent-amber);
+      border: 1px solid rgba(245, 158, 11, 0.35);
+    }
+
+    .badge-green {
+      background: var(--accent-green-soft);
+      color: var(--accent-green);
+      border: 1px solid rgba(16, 185, 129, 0.35);
+    }
+
+    .badge-blue {
+      background: var(--accent-blue-soft);
+      color: var(--accent-blue);
+      border: 1px solid rgba(59, 130, 246, 0.35);
+    }
+
+    code {
+      font-family: "JetBrains Mono", Consolas, Monaco, monospace;
+      background: var(--bg-tertiary);
+      color: #fca5a5;
+      padding: 2px 7px;
+      border-radius: 6px;
+      font-size: 0.88em;
+    }
+
+    pre {
+      background: #090b0d;
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 16px;
+      overflow-x: auto;
+      margin: 12px 0 16px;
+      font-family: "JetBrains Mono", Consolas, Monaco, monospace;
+      font-size: 0.86rem;
+      color: #e5e7eb;
+    }
+
+    pre code {
+      background: transparent;
+      color: inherit;
+      padding: 0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0 24px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    th, td {
+      text-align: left;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border-color);
+      font-size: 0.92rem;
+    }
+
+    th {
+      background: var(--bg-tertiary);
+      color: #ffffff;
+      font-weight: 700;
+    }
+
+    td {
+      color: var(--text-secondary);
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    ul {
+      padding-left: 20px;
+      margin-bottom: 14px;
+      color: var(--text-secondary);
+    }
+
+    li {
+      margin-bottom: 8px;
+    }
+
+    li strong {
+      color: var(--text-primary);
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+      gap: 20px;
+    }
+
+    .callout {
+      border-left: 4px solid var(--accent-red);
+      background: var(--bg-secondary);
+      padding: 18px 20px;
+      border-radius: 0 12px 12px 0;
+      margin: 20px 0;
+    }
+
+    .callout.green {
+      border-left-color: var(--accent-green);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="eyebrow">⚡ Báo Cáo Kiểm Toán Kiến Trúc Frontend &amp; Next.js 16</div>
+      <h1>Đánh Giá Toàn Diện &amp; Lộ Trình Refactoring Next.js 16 Cho Rate.vn</h1>
+      <p class="subtitle">
+        Phân tích nguyên nhân gốc rễ lỗi điều hướng <code>https://rate.vn/en</code> và kiểm toán chuyên sâu kiến trúc <code>apps/web</code> (Next.js 16 + React 19 + Supabase PostgreSQL) nhằm loại bỏ nợ kỹ thuật Strapi cũ, tối ưu hiệu năng Core Web Vitals và chuẩn hóa khả năng mở rộng đa danh mục (Directory/Category Engine).
+      </p>
+      <div class="meta-bar">
+        <span><strong>Dự án:</strong> DOS/Rate (<code>apps/web</code>)</span>
+        <span><strong>Framework:</strong> Next.js 16.0.0-canary + React 19.1</span>
+        <span><strong>Ngày kiểm toán:</strong> 14/10/2026</span>
+        <span><strong>Trạng thái sửa lỗi <code>/en</code>:</strong> Đã khắc phục triệt để</span>
+      </div>
+    </header>
+
+    <!-- SECTION 1: ROOT CAUSE OF /en -->
+    <h2>1. Giải Thích &amp; Khắc Phục Triệt Để Hiện Tượng <code>https://rate.vn/en</code></h2>
+
+    <div class="card">
+      <div class="card-header">
+        <h3>Vì sao trình duyệt vẫn bị chuyển hướng về <code>https://rate.vn/en</code> dù đã bật <code>localeDetection: false</code>?</h3>
+        <span class="badge badge-green">Đã xử lý triệt để</span>
+      </div>
+      <p>
+        Qua kiểm chứng trực tiếp bằng <code>curl.exe -sI</code> vào máy chủ Production <code>https://rate.vn</code>, chúng ta xác định chính xác 2 nguyên nhân kết hợp:
+      </p>
+      <ul>
+        <li>
+          <strong>Nguyên nhân 1 - Cookie <code>NEXT_LOCALE=en</code> lưu cũ trong trình duyệt:</strong>
+          Trong thư viện <code>next-intl</code> v4, cấu hình <code>localeDetection: false</code> chỉ tắt việc đọc header <code>Accept-Language</code> của trình duyệt, nhưng <strong>vẫn mặc định bật <code>localeCookie: true</code></strong>. Khi trình duyệt của bạn từng truy cập <code>rate.vn</code> trước đây, trình duyệt đã lưu cookie <code>NEXT_LOCALE=en</code>. Mỗi lần bạn gõ <code>https://rate.vn</code>, middleware đọc cookie này và trả về <code>HTTP 307 Temporary Redirect -&gt; Location: /en</code>.
+        </li>
+        <li>
+          <strong>Nguyên nhân 2 - File <code>apps/web/src/app/page.tsx</code> ở cấp gốc xung đột với <code>src/app/[locale]/page.tsx</code>:</strong>
+          Cả 2 file cùng tồn tại trong App Router khiến đường dẫn gốc <code>/</code> bị tranh chấp giữa trang tĩnh bên ngoài và hệ thống định tuyến đa ngôn ngữ <code>[locale]</code>.
+        </li>
+      </ul>
+
+      <pre><code># Bằng chứng kiểm tra thực tế trên Production trước khi thêm localeCookie: false
+$ curl.exe -sI https://rate.vn
+HTTP/1.1 200 OK
+set-cookie: NEXT_LOCALE=vi; Path=/
+
+$ curl.exe -sI -H "Cookie: NEXT_LOCALE=en" https://rate.vn
+HTTP/1.1 307 Temporary Redirect
+location: /en</code></pre>
+
+      <div class="callout green">
+        <strong>Giải pháp đã áp dụng trong commit hiện tại:</strong>
+        <ul>
+          <li>Thêm <code>localeCookie: false</code> vào <code>defineRouting</code> trong <code>apps/web/src/lib/navigation.ts</code> để <code>next-intl</code> hoàn toàn bỏ qua mọi cookie <code>NEXT_LOCALE=en</code> cũ trong trình duyệt của người dùng. URL là nguồn sự thật duy nhất (<code>/</code> luôn là Tiếng Việt, chỉ khi gõ rõ <code>/en/...</code> hoặc <code>/cs/...</code> mới vào ngôn ngữ phụ).</li>
+          <li>Xóa file dư thừa <code>apps/web/src/app/page.tsx</code> để mọi request vào <code>/</code> đi thẳng vào <code>apps/web/src/app/[locale]/page.tsx</code> với <code>locale = "vi"</code>.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- SECTION 2: AUDIT METRICS -->
+    <h2>2. Số Liệu Kiểm Toán Thực Tế Tại <code>apps/web</code></h2>
+
+    <div class="kpi-grid">
+      <div class="kpi-card alert">
+        <div class="kpi-label">Routes &amp; Pages Dư Thừa</div>
+        <div class="kpi-value">55 / 62</div>
+        <div class="kpi-desc">Chỉ có 7 trang thật đang phục vụ Rate.vn; 55 trang còn lại là demo mẫu từ gói giao diện ListingHub (<code>home-2..10</code>, <code>grid-layout-01..06</code>, <code>half-map-*</code>).</div>
+      </div>
+      <div class="kpi-card alert">
+        <div class="kpi-label">Bộ UI Kits Trùng Lặp</div>
+        <div class="kpi-value">4 Bộ UI</div>
+        <div class="kpi-desc">Đang chứa cùng lúc <code>catalyst</code> (28 file), <code>radiant</code> (19 file), <code>salient</code> (16 file) bằng Tailwind và <code>ListingHub</code> (68 file) bằng Bootstrap 5.</div>
+      </div>
+      <div class="kpi-card alert">
+        <div class="kpi-label">Kiểm Tra Kiểu TypeScript</div>
+        <div class="kpi-value">Đang Tắt</div>
+        <div class="kpi-desc"><code>typescript.ignoreBuildErrors: true</code> đang bật trong <code>next.config.mjs</code> vì ~9 file Strapi/template cũ bị lỗi kiểu dữ liệu.</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">API Routes Cũ (Strapi)</div>
+        <div class="kpi-value">10 / 12</div>
+        <div class="kpi-desc">Chỉ có <code>/api/reviews/vote</code> và <code>/api/reviews/flag</code> là chuẩn Supabase mới; 10 route còn lại là proxy Strapi cũ không còn dùng.</div>
+      </div>
+    </div>
+
+    <!-- SECTION 3: 5 CRITICAL ISSUES -->
+    <h2>3. Năm Điểm Nghẽn Kiến Trúc Cần Refactor Để Scale Tốt Hơn</h2>
+
+    <div class="card">
+      <div class="card-header">
+        <h3>3.1. Tồn dư Strapi CMS &amp; 4 Bộ Giao Diện Demo Làm Chậm Build Và Phình Bundle</h3>
+        <span class="badge badge-red">Ưu tiên P0 - Nghiêm trọng</span>
+      </div>
+      <p>
+        Theo chuẩn <strong>Zero-Strapi 2026</strong> (<code>AGENTS.md</code> Mục 3), hệ thống đã chuyển hoàn toàn sang PostgreSQL 17 trên Supabase Cloud (schema <code>rate</code>). Tuy nhiên trong <code>apps/web</code> vẫn còn nguyên:
+      </p>
+      <ul>
+        <li><code>src/lib/strapi-api/</code>, <code>src/components/page-builder/</code> (33 component Strapi), <code>src/types/strapi.ts</code>, và gói <code>@repo/strapi</code> trong <code>package.json</code>.</li>
+        <li>10 API proxy routes gọi về <code>NEXT_PUBLIC_STRAPI_URL</code> (<code>/api/private-proxy</code>, <code>/api/public-proxy</code>, <code>/api/listings</code>, <code>/api/items</code>, v.v.).</li>
+        <li>63 file component Tailwind UI mẫu (<code>src/components/catalyst</code>, <code>radiant</code>, <code>salient</code>) và 55 trang demo <code>ListingHub</code> không thuộc nghiệp vụ Rate.vn nhưng Next.js vẫn phải phân tích và biên dịch trong mỗi lần build.</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h3>3.2. Cờ <code>typescript.ignoreBuildErrors: true</code> Trong <code>next.config.mjs</code></h3>
+        <span class="badge badge-red">Ưu tiên P0 - An toàn kiểu dữ liệu</span>
+      </div>
+      <p>
+        Hiện tại <code>apps/web/next.config.mjs</code> đang đặt <code>typescript: { ignoreBuildErrors: true }</code>. Khi chạy <code>pnpm --filter @repo/web exec tsc --noEmit</code>, toàn bộ code mới của Rate.vn (<code>rate-api.ts</code>, <code>category-filters.ts</code>, <code>/smartphones</code>, <code>/compare</code>, <code>JReviewsSection</code>, <code>PriceHistorySection</code>) đều sạch lỗi 100%, chỉ có ~9 file Strapi/template cũ báo lỗi <code>implicit any</code> hoặc <code>possibly undefined</code>.
+      </p>
+      <p>
+        Việc để <code>ignoreBuildErrors: true</code> rất nguy hiểm khi dự án mở rộng sang nhiều danh mục vì CI sẽ cho phép build thành công ngay cả khi có lỗi sai kiểu dữ liệu nghiêm trọng.
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h3>3.3. Lỗi Header <code>Content-Encoding: br</code> Giả Trong <code>middleware.ts</code> &amp; Script Chặn Render Ở <code>app/layout.tsx</code></h3>
+        <span class="badge badge-amber">Ưu tiên P1 - Hiệu năng &amp; Chuẩn Next.js 16</span>
+      </div>
+      <ul>
+        <li>
+          <strong>Hàm <code>withBrotli()</code> trong <code>src/middleware.ts</code>:</strong> Đang gán cứng header <code>res.headers.set("Content-Encoding", "br")</code> trên phản hồi của middleware dù nội dung không hề được nén ở tầng này (việc nén Brotli do Cloudflare / Reverse Proxy đảm nhiệm). Ngoài ra, trên Next.js 16, <code>middleware.ts</code> đã được khuyến nghị giản lược tối đa chỉ cho định tuyến i18n.
+        </li>
+        <li>
+          <strong>Root Layout (<code>src/app/layout.tsx</code>):</strong> Đang gán cứng <code>&lt;html lang="en"&gt;</code> thay vì lấy động theo <code>locale</code> (<code>vi</code>), đồng thời nhúng thẻ <code>&lt;script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"&gt;&lt;/script&gt;</code> đồng bộ ngay trong <code>&lt;head&gt;</code> gây chặn luồng dựng trang (render-blocking) và giảm điểm LCP.
+        </li>
+        <li>
+          <strong><code>src/app/providers.tsx</code>:</strong> Đang bọc toàn bộ ứng dụng trong <code>&lt;SessionProvider&gt;</code> của <code>next-auth</code> (vốn thiết kế cho Strapi JWT cũ) khiến mọi trang đều phát sinh request kiểm tra phiên <code>/api/auth/session</code> không cần thiết.
+        </li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h3>3.4. Chồng Chéo Thư Viện Trong <code>package.json</code> (CSS, Biểu Đồ, Icons, Ngày Tháng)</h3>
+        <span class="badge badge-amber">Ưu tiên P1 - Tối ưu Bundle Size</span>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Nhóm chức năng</th>
+            <th>Các thư viện đang cài trùng lặp trong <code>apps/web/package.json</code></th>
+            <th>Đề xuất chuẩn hóa</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>CSS &amp; UI Primitives</strong></td>
+            <td>Bootstrap 5.3.8 + Tailwind CSS v4 + <code>@radix-ui/*</code> (27 gói) + <code>@headlessui/react</code></td>
+            <td>Giữ <strong>Bootstrap 5 CSS</strong> (cho giao diện ListingHub hiện hữu) và giảm dần các gói <code>@headlessui/react</code>, <code>catalyst/radiant/salient</code> không dùng.</td>
+          </tr>
+          <tr>
+            <td><strong>Thư viện Biểu đồ</strong></td>
+            <td><code>apexcharts</code> + <code>react-apexcharts</code> + <code>recharts</code></td>
+            <td>Ưu tiên <strong>SVG thuần nhẹ (Zero-dependency)</strong> như <code>PriceHistorySection.tsx</code> vừa triển khai hoặc giữ duy nhất <code>recharts</code> khi cần biểu đồ phức tạp; gỡ bỏ <code>apexcharts</code> (~450KB).</td>
+          </tr>
+          <tr>
+            <td><strong>Thư viện Icons</strong></td>
+            <td><code>react-icons</code> + <code>lucide-react</code> + <code>@heroicons/react</code> + <code>@radix-ui/react-icons</code> + FontAwesome CDN</td>
+            <td>Chuẩn hóa về <strong><code>react-icons/bs</code></strong> + <strong><code>lucide-react</code></strong> (hỗ trợ tree-shaking tốt nhất trên Next.js 16).</td>
+          </tr>
+          <tr>
+            <td><strong>Xử lý Ngày tháng</strong></td>
+            <td><code>date-fns</code> + <code>dayjs</code> + <code>Intl.DateTimeFormat</code></td>
+            <td>Dùng <code>Intl.DateTimeFormat('vi-VN')</code> gốc của nền tảng hoặc giữ duy nhất 1 thư viện nhẹ.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h3>3.5. Lớp Truy Xuất Dữ Liệu <code>rate-api.ts</code> Cần Tách Module &amp; Bổ Sung Caching / Deduplication</h3>
+        <span class="badge badge-blue">Ưu tiên P2 - Khả năng Scale Đa Danh Mục</span>
+      </div>
+      <p>
+        File <code>apps/web/src/lib/rate-api.ts</code> hiện đã vượt mốc <strong>1.120 dòng code</strong>, đảm nhiệm tất cả: khởi tạo Supabase client, truy vấn danh sách Master Products, lọc 10 nhóm thông số, tính Facets động, lấy danh sách Offers, tổng hợp Reviews JReviews và phân tích Lịch sử giá.
+      </p>
+      <ul>
+        <li><strong>Thiếu <code>React.cache()</code>:</strong> Khi cả <code>generateMetadata()</code> và <code>Page()</code> cùng gọi <code>getMasterProductBySlug(slug)</code> trong một lượt render, hệ thống sẽ bắn 2 truy vấn giống hệt nhau lên Supabase nếu không bọc trong <code>React.cache()</code>.</li>
+        <li><strong>Thiếu Tag-based Caching (<code>unstable_cache</code> / <code>revalidateTag</code>):</strong> Các truy vấn nặng như <code>getCategoryDirectoryFacets('smartphones')</code> hoặc <code>getPlatformStats()</code> nên được cache theo chu kỳ 60-300 giây kèm tag <code>rate:facets:smartphones</code> thay vì quét lại bảng trên mỗi lượt tải trang.</li>
+        <li><strong>Chưa tách theo Domain Module:</strong> Nên tách <code>src/lib/rate-api.ts</code> thành thư mục <code>src/server/rate/</code> gồm <code>client.ts</code>, <code>products.ts</code>, <code>facets.ts</code>, <code>offers.ts</code>, <code>reviews.ts</code>, <code>price-history.ts</code> (vẫn giữ file <code>src/lib/rate-api.ts</code> làm barrel export để không gãy import hiện tại).</li>
+      </ul>
+    </div>
+
+    <!-- SECTION 4: TARGET ARCHITECTURE -->
+    <h2>4. Kiến Trúc Đích Đề Xuất Cho <code>apps/web</code> (Next.js 16 Modern Best Practices)</h2>
+
+    <div class="grid-2">
+      <div class="card">
+        <h3>Cấu Trúc Thư Mục Chuẩn Hóa (Feature &amp; Domain-Driven)</h3>
+        <pre><code>apps/web/src/
+├── app/
+│   ├── [locale]/
+│   │   ├── page.tsx                  # Trang chủ Rate.vn
+│   │   ├── [category]/               # Động hóa: smartphones, tablets, laptops
+│   │   │   ├── page.tsx              # Directory Listing + 10-Group Filter
+│   │   │   └── [slug]/page.tsx       # Product Detail + Price History + JReviews
+│   │   └── compare/page.tsx          # So sánh đối đầu 10 nhóm thông số
+│   └── api/
+│       └── reviews/                  # Route Handlers cho Vote &amp; Flag
+├── components/
+│   ├── layout/                       # NavbarDarkDynamic, Footer, BackToTop
+│   ├── directory/                    # ListSidebarOne, RangeSlider, ProductCard
+│   ├── price-history/                # PriceHistorySection (SVG + Fake Discount)
+│   └── reviews/                      # JReviewsSection (Dual-Rating + AI Filter)
+├── server/
+│   └── rate/                         # Tách từ rate-api.ts + React.cache()
+│       ├── client.ts
+│       ├── products.ts
+│       ├── facets.ts
+│       ├── price-history.ts
+│       └── reviews.ts
+└── lib/
+    ├── category-filters.ts           # Schema bộ lọc động theo từng Category
+    └── navigation.ts                 # next-intl (localePrefix: as-needed, localeCookie: false)</code></pre>
+      </div>
+
+      <div class="card">
+        <h3>Nguyên Tắc Vận Hành Cốt Lõi (Scale Từ Điện Thoại Sang Mọi Ngành Hàng)</h3>
+        <ul>
+          <li>
+            <strong>1. Động hóa Route từ <code>/smartphones</code> thành <code>/[category]</code>:</strong>
+            Hiện tại bạn đã có <code>CATEGORY_FILTER_SCHEMAS</code> hỗ trợ <code>smartphones</code>, <code>tablets</code>, <code>laptops</code> trong <code>category-filters.ts</code>. Bước tiếp theo chỉ cần gom <code>/[locale]/smartphones</code> vào route động hoặc dùng chung một <code>CategoryDirectoryView</code> để khi mở thêm <code>/tablets</code>, <code>/laptops</code>, <code>/accessories</code> không phải nhân bản code.
+          </li>
+          <li>
+            <strong>2. Server Components Mặc Định - Client Components Tối Thiểu:</strong>
+            Toàn bộ dữ liệu SEO (Thông số 10 nhóm, Bảng giá nơi bán, Lịch sử giá, Điểm JReviews) được render hoàn toàn trên Server. Chỉ các thành phần tương tác (Thanh trượt lọc giá, Biểu đồ SVG khi rê chuột, Nút bình chọn Review) mới chạy Client Component.
+          </li>
+          <li>
+            <strong>3. Bật <code>server-only</code> cho tầng truy vấn Supabase:</strong>
+            Đánh dấu <code>import 'server-only'</code> trong <code>src/server/rate/*</code> để đảm bảo không bao giờ lộ logic truy vấn hoặc biến môi trường Server ra trình duyệt.
+          </li>
+          <li>
+            <strong>4. Chuẩn SEO &amp; Structured Data (JSON-LD):</strong>
+            Tự động sinh <code>generateMetadata()</code> và schema <code>Product</code> + <code>AggregateOffer</code> + <code>AggregateRating</code> trên trang chi tiết để Google hiển thị sao đánh giá và khoảng giá trực tiếp trên kết quả tìm kiếm.
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- SECTION 5: PHASED ROADMAP -->
+    <h2>5. Lộ Trình Thực Thi Refactoring 4 Bước (An Toàn, Không Gián Đoạn)</h2>
+
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 14%">Giai đoạn</th>
+          <th style="width: 28%">Hạng mục công việc</th>
+          <th style="width: 38%">Chi tiết kỹ thuật</th>
+          <th style="width: 20%">Tác động kỳ vọng</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="badge badge-green">Bước 1 (Đã xong)</span></td>
+          <td><strong>Khắc phục triệt để <code>/en</code> &amp; Hoàn tất Biểu đồ Lịch sử giá (Issue #10)</strong></td>
+          <td>Thiết lập <code>localeCookie: false</code>, xóa <code>src/app/page.tsx</code> xung đột, triển khai <code>getMasterProductPriceHistory</code> và <code>PriceHistorySection.tsx</code>.</td>
+          <td>URL <code>rate.vn</code> giữ nguyên Tiếng Việt gốc 100%; có biểu đồ lịch sử giá &amp; cảnh báo giảm ảo.</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-red">Bước 2 (Đề xuất kế tiếp)</span></td>
+          <td><strong>Dọn dẹp Strapi cũ, bật lại kiểm tra TypeScript nghiêm ngặt</strong></td>
+          <td>Xóa 10 API proxy Strapi cũ, gỡ <code>catalyst/radiant/salient</code> không dùng, sửa dứt điểm các lỗi type còn sót và chuyển <code>ignoreBuildErrors: false</code> trong <code>next.config.mjs</code>.</td>
+          <td>Giảm ~60% số file thừa trong <code>apps/web</code>, tốc độ build nhanh gấp đôi, bảo vệ type-safety 100%.</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-amber">Bước 3</span></td>
+          <td><strong>Tối ưu <code>middleware.ts</code>, <code>layout.tsx</code>, <code>React.cache()</code> &amp; SEO Metadata</strong></td>
+          <td>Bỏ header Brotli giả trong <code>middleware.ts</code>, chuyển <code>lang={locale}</code> động, thêm <code>React.cache()</code> + <code>generateMetadata()</code> + JSON-LD <code>Product</code> cho <code>/smartphones/[slug]</code>.</td>
+          <td>Tăng điểm Core Web Vitals (LCP/INP) và hiển thị Rich Snippets (Sao + Giá) trên Google.</td>
+        </tr>
+        <tr>
+          <td><span class="badge badge-blue">Bước 4</span></td>
+          <td><strong>Mở rộng Directory Engine đa danh mục (<code>/tablets</code>, <code>/laptops</code>)</strong></td>
+          <td>Tách <code>rate-api.ts</code> thành các module trong <code>src/server/rate/</code> và dùng chung layout bộ lọc động cho mọi danh mục sản phẩm.</td>
+          <td>Thêm ngành hàng mới chỉ cần khai báo cấu hình trong <code>category-filters.ts</code>, không cần viết lại UI.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</body>
+</html>
