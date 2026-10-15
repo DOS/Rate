@@ -1,27 +1,38 @@
 area:frontend:
-  - 'apps/web/**'
-  - 'packages/design-system/**'
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'apps/web/**'
+          - 'packages/design-system/**'
 
-area:backend:
-  - 'apps/strapi/**'
+area:extension:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'apps/extension/**'
+
+area:crawlers:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'apps/importer/**'
+
+area:database:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'supabase/migrations/**'
 
 area:shared:
-  - 'packages/shared-data/**'
-  - 'packages/typescript-config/**'
-  - 'packages/eslint-config/**'
-  - 'packages/prettier-config/**'
-
-feature:
-  - 'Docs/**'
-  - 'apps/web/src/app/(features)/**'
-
-breaking:api:
-  - any: ['packages/shared-data/**']
-    changed-files: true
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'packages/shared-data/**'
+          - 'packages/typescript-config/**'
+          - 'packages/eslint-config/**'
+          - 'packages/prettier-config/**'
 
 ci:
-  - '.github/**'
+  - changed-files:
+      - any-glob-to-any-file:
+          - '.github/**'
 
 docs:
-  - 'Docs/**'
-
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'Docs/**'

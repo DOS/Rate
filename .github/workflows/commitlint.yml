@@ -11,21 +11,25 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 2
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.5
 
       - name: Use Node 22
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: pnpm
 
-      - name: Install commitlint deps
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint PR title and HEAD commit message
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
         run: |
-          yarn --version || npm i -g yarn@1.22.22
-          yarn add -D @commitlint/cli @commitlint/config-conventional typescript ts-node
-
-      - name: Lint commit messages
-        uses: wagoid/commitlint-github-action@v6
-        with:
-          configFile: commitlint.config.ts
-
-
+          echo "$PR_TITLE" | pnpm exec commitlint
+          git log -1 --pretty=%B | pnpm exec commitlint
