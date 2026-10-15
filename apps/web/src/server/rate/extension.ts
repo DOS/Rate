@@ -54,7 +54,7 @@ export const EXTENSION_CAPABILITY_MATRIX: Record<
     lookup: true,
     exactItemMatch: true,
     crossCatalogMatch: true,
-    crowdVerifyQueue: false,
+    crowdVerifyQueue: true,
   },
   tiki: {
     platform: 'tiki',
@@ -62,7 +62,7 @@ export const EXTENSION_CAPABILITY_MATRIX: Record<
     lookup: true,
     exactItemMatch: true,
     crossCatalogMatch: true,
-    crowdVerifyQueue: false,
+    crowdVerifyQueue: true,
   },
   tiktok: {
     platform: 'tiktok',
@@ -78,7 +78,7 @@ export const EXTENSION_CAPABILITY_MATRIX: Record<
     lookup: true,
     exactItemMatch: true,
     crossCatalogMatch: true,
-    crowdVerifyQueue: false,
+    crowdVerifyQueue: true,
   },
   tgdd: {
     platform: 'tgdd',
@@ -86,7 +86,7 @@ export const EXTENSION_CAPABILITY_MATRIX: Record<
     lookup: true,
     exactItemMatch: true,
     crossCatalogMatch: true,
-    crowdVerifyQueue: false,
+    crowdVerifyQueue: true,
   },
   fptshop: {
     platform: 'fptshop',
@@ -978,7 +978,7 @@ export async function ingestExtensionCrowdSignal(
       quarantinedForWorker: false,
       jobState: 'platform_worker_pending_phase_5_1',
       jobId: null,
-      reason: `Nền tảng ${input.platform} hiện chỉ hỗ trợ Tra cứu nhanh (Read-Only Lookup). Hàng đợi Worker xác minh tự động đang chỉ mở cho Shopee.`,
+      reason: `Nền tảng ${input.platform} hiện hỗ trợ Tra cứu nhanh (Read-Only Lookup). Hàng đợi Worker xác minh tự động đang mở cho 5 sàn: Shopee, Lazada, Tiki, CellphoneS và Thế Giới Di Động.`,
     };
   }
 
