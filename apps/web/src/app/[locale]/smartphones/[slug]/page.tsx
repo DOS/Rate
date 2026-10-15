@@ -7,6 +7,7 @@ import {
   getCachedMasterProductPriceHistory,
   getCachedMasterProductReviews,
   getCachedMasterProductReviewSummary,
+  getCachedMasterProducts,
 } from '@/server/rate';
 import JReviewsSection from '@/components/reviews/JReviewsSection';
 import PriceHistorySection from '@/components/price-history/PriceHistorySection';
@@ -101,14 +102,26 @@ export async function ProductDetailView({
     notFound();
   }
 
-  const [offers, reviews] = await Promise.all([
+  const categorySlug = categoryBasePath.replace(/^\//, '') || 'smartphones';
+  const [offers, reviews, categoryPeers] = await Promise.all([
     getCachedMasterProductOffers(product.id),
     getCachedMasterProductReviews(product.id),
+    getCachedMasterProducts({ categorySlug, limit: 10 }).catch(() => []),
   ]);
   const [reviewSummary, priceHistory] = await Promise.all([
     getCachedMasterProductReviewSummary(product.id, reviews),
     getCachedMasterProductPriceHistory(product.id, offers),
   ]);
+
+  const currentMinPrice = Number(product.min_price || 0);
+  const relatedCompetitors = categoryPeers
+    .filter((p) => p.slug !== product.slug)
+    .sort(
+      (a, b) =>
+        Math.abs(Number(a.min_price || 0) - currentMinPrice) -
+        Math.abs(Number(b.min_price || 0) - currentMinPrice)
+    )
+    .slice(0, 3);
 
   const specs = product.specifications as ProductSpecifications;
   const keySpecs = product.key_specs as KeySpecs;
@@ -864,14 +877,23 @@ export async function ProductDetailView({
                           )}
                         </td>
                         <td className="text-end">
-                          <a
-                            href={offer.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="btn btn-sm btn-primary rounded-pill px-3"
-                          >
-                            Tới nơi bán ↗
-                          </a>
+                          <div className="d-inline-flex align-items-center justify-content-end flex-wrap gap-1">
+                            <Link
+                              href={`/inspect?q=${encodeURIComponent(offer.url)}&price=${offer.price_current}`}
+                              className="btn btn-sm btn-outline-secondary rounded-pill px-2"
+                              title="Kiểm định trực tiếp listing này trong Trình Kiểm Định (/inspect)"
+                            >
+                              🔍 Kiểm định
+                            </Link>
+                            <a
+                              href={offer.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="btn btn-sm btn-primary rounded-pill px-3"
+                            >
+                              Tới nơi bán ↗
+                            </a>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -909,6 +931,125 @@ export async function ProductDetailView({
           reviews={reviews}
           summary={reviewSummary}
         />
+
+        {/* Related Competitors & 1-Click Head-to-Head Compare */}
+        {relatedCompetitors.length > 0 && (
+          <div className="card rounded-4 mt-4 border-0 bg-white p-4 shadow-sm">
+            <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+              <div>
+                <span className="badge bg-primary bg-opacity-10 text-primary rounded-pill fw-semibold mb-1 px-3 py-1">
+                  ⚖️ Đối Thủ Trực Tiếp Cùng Phân Khúc ({categoryLabel})
+                </span>
+                <h3 className="h5 fw-bold mb-0">
+                  So Sánh 1 Chạm Với {product.name}
+                </h3>
+              </div>
+              <Link
+                href={`/compare?slugs=${[product.slug, ...relatedCompetitors.map((c) => c.slug)].slice(0, 4).join(',')}`}
+                className="btn btn-sm btn-danger rounded-pill fw-semibold px-3"
+              >
+                ⚖️ Đặt Cả {Math.min(4, relatedCompetitors.length + 1)} Máy Lên
+                Bàn Cân 10 Nhóm →
+              </Link>
+            </div>
+
+            <div className="row g-3">
+              {relatedCompetitors.map((peer) => {
+                const peerPrice = Number(peer.min_price || 0);
+                const priceDelta = peerPrice - currentMinPrice;
+                const peerThumb =
+                  peer.thumbnail ||
+                  (peer.images && peer.images.length > 0
+                    ? peer.images[0]
+                    : null);
+                const peerRating =
+                  peer.user_rating_weighted &&
+                  Number(peer.user_rating_weighted) > 0
+                    ? Number(peer.user_rating_weighted)
+                    : Number(peer.average_rating || 5);
+
+                return (
+                  <div key={peer.id} className="col-lg-4 col-md-6 col-12">
+                    <div className="card rounded-4 bg-light h-100 border p-3">
+                      <div className="d-flex align-items-center mb-3 gap-3">
+                        <div
+                          className="rounded-3 d-flex align-items-center justify-content-center flex-shrink-0 border bg-white p-2"
+                          style={{ width: '68px', height: '68px' }}
+                        >
+                          {peerThumb ? (
+                            <img
+                              src={peerThumb}
+                              alt={peer.name}
+                              style={{
+                                maxWidth: '100%',
+                                maxHeight: '100%',
+                                objectFit: 'contain',
+                              }}
+                            />
+                          ) : (
+                            <span className="text-muted small">📱</span>
+                          )}
+                        </div>
+                        <div className="overflow-hidden">
+                          <div className="d-flex align-items-center mb-1 flex-wrap gap-1">
+                            <span className="badge bg-secondary-subtle text-secondary small">
+                              {peer.brand}
+                            </span>
+                            <span className="badge bg-warning-subtle text-dark small">
+                              ⭐ {peerRating.toFixed(1)}
+                            </span>
+                          </div>
+                          <h6 className="fw-bold text-truncate mb-1">
+                            <Link
+                              href={`${categoryBasePath}/${peer.slug}`}
+                              className="text-dark text-decoration-none"
+                            >
+                              {peer.name}
+                            </Link>
+                          </h6>
+                          <div className="d-flex align-items-center flex-wrap gap-2">
+                            <span className="text-danger fw-bold small">
+                              {peerPrice.toLocaleString('vi-VN')} ₫
+                            </span>
+                            {priceDelta !== 0 && currentMinPrice > 0 && (
+                              <span
+                                className={`badge rounded-pill ${
+                                  priceDelta < 0
+                                    ? 'bg-success-subtle text-success'
+                                    : 'bg-secondary-subtle text-secondary'
+                                }`}
+                                style={{ fontSize: '11px' }}
+                              >
+                                {priceDelta < 0
+                                  ? `Rẻ hơn ${Math.abs(priceDelta).toLocaleString('vi-VN')} ₫`
+                                  : `+${priceDelta.toLocaleString('vi-VN')} ₫`}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="d-flex mt-auto gap-2">
+                        <Link
+                          href={`/compare?slugs=${product.slug},${peer.slug}`}
+                          className="btn btn-sm btn-outline-primary rounded-pill fw-semibold flex-grow-1"
+                        >
+                          ⚖️ So sánh đối đầu 1-1
+                        </Link>
+                        <Link
+                          href={`${categoryBasePath}/${peer.slug}`}
+                          className="btn btn-sm btn-light rounded-pill border px-3"
+                        >
+                          Chi tiết
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
       <CompareTrayBar />
       <FooterTop locale={locale} />
