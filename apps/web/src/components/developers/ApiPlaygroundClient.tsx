@@ -5,6 +5,7 @@ import {
   BsCheck2,
   BsClipboard,
   BsCodeSlash,
+  BsFileEarmarkCode,
   BsLightningChargeFill,
   BsPlayFill,
   BsTerminal,
@@ -16,6 +17,7 @@ export interface ApiPresetEndpoint {
   title: string;
   path: string;
   description: string;
+  defaultBody?: string;
 }
 
 const PRESET_ENDPOINTS: ApiPresetEndpoint[] = [
@@ -44,20 +46,60 @@ const PRESET_ENDPOINTS: ApiPresetEndpoint[] = [
       'Đặt tối đa 4 sản phẩm gốc lên bàn cân 10 nhóm thông số kỹ thuật chuẩn GSMArena & PhoneArena chỉ với 1 truy vấn REST.',
   },
   {
-    id: 'lookup-url',
+    id: 'inspect-url',
     method: 'GET',
-    title: 'Kiểm định Link Sàn TMĐT (URL / Link Inspector)',
-    path: '/api/v1/rate/lookup?q=https://shopee.vn/product/88201679/27110898667',
+    title: 'Trình Kiểm Định Giá & Link Sàn (/inspect)',
+    path: '/api/v1/rate/inspect?q=https://shopee.vn/product/88201679/27110898667&price=21990000',
     description:
-      'Bóc tách shop_id / item_id hoặc tên sản phẩm từ link Shopee, Lazada, Tiki và trả về kết quả kiểm định giảm giá ảo + điểm tín nhiệm gian hàng tức thì.',
+      'Kiểm định trực tiếp URL hoặc tên máy trên 10 sàn/đại lý (Shopee, Lazada, Tiki, TikTok Shop, CellphoneS, TGDĐ, FPT Shop, Hoàng Hà, Di Động Việt, Phong Vũ) kèm kết luận giá 5 mức.',
+  },
+  {
+    id: 'extension-lookup',
+    method: 'GET',
+    title: 'Browser Extension MV3 Hybrid Lookup',
+    path: '/api/v1/rate/extension/lookup?url=https://shopee.vn/product/88201679/27110898667',
+    description:
+      'Endpoint tốc độ cao phục vụ Rate Browser Extension MV3: chuẩn hóa URL, chặn phụ kiện/linh kiện và trả về kết luận giá 5 mức.',
+  },
+  {
+    id: 'extension-ingest',
+    method: 'POST',
+    title: 'Zero-Trust Quarantine Ingest (POST)',
+    path: '/api/v1/rate/extension/ingest',
+    description:
+      'Gửi tín hiệu sản phẩm ẩn danh từ Browser Extension MV3 (bắt buộc consentGranted=true) qua bộ lọc Zero-Trust Quarantine trước khi đẩy vào hàng đợi rate.crawl_jobs.',
+    defaultBody: JSON.stringify(
+      {
+        url: 'https://cellphones.com.vn/iphone-16-pro-max.html?utm_source=extension_test',
+        platform: 'cellphones',
+        title: 'iPhone 16 Pro Max 256GB Chính hãng VN/A',
+        currentPrice: 30990000,
+        originalPrice: 34990000,
+        skuText: '256GB Titan Tự Nhiên',
+        sellerName: 'CellphoneS Official',
+        isOfficialMall: true,
+        consentGranted: true,
+        extensionVersion: '2.1.0',
+      },
+      null,
+      2
+    ),
   },
   {
     id: 'list-merchants',
     method: 'GET',
     title: 'Danh bạ Tín nhiệm Gian hàng (Dual Risk Score)',
-    path: '/api/v1/rate/merchants',
+    path: '/api/v1/rate/merchants?officialOnly=true',
     description:
       'Liệt kê toàn bộ gian hàng TMĐT kèm điểm Trust Score, DOSafe Threat Intel Risk và AI Review Seeding Risk.',
+  },
+  {
+    id: 'watchlist-check',
+    method: 'GET',
+    title: 'Theo dõi Biến động Giá (/watchlist)',
+    path: '/api/v1/rate/watchlist?slugs=apple-iphone-16-128gb,samsung-galaxy-s24-ultra-256gb',
+    description:
+      'Truy vấn hàng loạt giá thấp nhất hiện tại, trung vị 90 ngày và trạng thái giảm giá thật/ảo cho danh sách sản phẩm đang theo dõi.',
   },
   {
     id: 'platform-stats',
@@ -68,34 +110,41 @@ const PRESET_ENDPOINTS: ApiPresetEndpoint[] = [
       'Trả về số lượng sản phẩm chuẩn hóa, bản ghi lịch sử giá, tỷ lệ đánh giá thực chất và số lượng mẫu theo từng ngành hàng.',
   },
   {
-    id: 'extension-lookup',
+    id: 'openapi-spec',
     method: 'GET',
-    title: 'Browser Extension MV3 Hybrid Lookup',
-    path: '/api/v1/rate/extension/lookup?url=https://shopee.vn/product/88201679/27110898667',
+    title: 'Đặc tả OpenAPI 3.1.0 (/openapi.json)',
+    path: '/api/v1/rate/openapi.json',
     description:
-      'Endpoint tốc độ cao phục vụ Rate Browser Extension MV3: chuẩn hóa URL, chặn phụ kiện/linh kiện và trả về kết luận giá 5 mức.',
+      'Trả về tài liệu OpenAPI 3.1.0 chuẩn máy đọc (machine-readable JSON) cho toàn bộ 13 REST API v1 endpoints của Rate.vn.',
   },
 ];
 
 export default function ApiPlaygroundClient() {
   const [selectedId, setSelectedId] = useState<string>(PRESET_ENDPOINTS[0]!.id);
+  const [customMethod, setCustomMethod] = useState<'GET' | 'POST'>(
+    PRESET_ENDPOINTS[0]!.method
+  );
   const [customPath, setCustomPath] = useState<string>(
     PRESET_ENDPOINTS[0]!.path
   );
+  const [requestBody, setRequestBody] = useState<string>('');
+  const [snippetMode, setSnippetMode] = useState<'curl' | 'fetch'>('curl');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [statusCode, setStatusCode] = useState<number | null>(null);
   const [latencyMs, setLatencyMs] = useState<number | null>(null);
   const [responseJson, setResponseJson] = useState<string>(
     '// Bấm "Chạy thử Request trực tiếp" để xem dữ liệu JSON thực tế từ Supabase rate schema...'
   );
-  const [copiedCurl, setCopiedCurl] = useState<boolean>(false);
+  const [copiedSnippet, setCopiedSnippet] = useState<boolean>(false);
 
   const activePreset =
     PRESET_ENDPOINTS.find((p) => p.id === selectedId) ?? PRESET_ENDPOINTS[0]!;
 
   const handleSelectPreset = (preset: ApiPresetEndpoint) => {
     setSelectedId(preset.id);
+    setCustomMethod(preset.method);
     setCustomPath(preset.path);
+    setRequestBody(preset.defaultBody ?? '');
   };
 
   const handleRunRequest = async (e?: React.FormEvent) => {
@@ -106,7 +155,7 @@ export default function ApiPlaygroundClient() {
       setResponseJson(
         JSON.stringify(
           {
-            error: 'Đường dẫn thử nghiệm phải bắt đầu bằng /api/v1/rate/...',
+            error: 'Đường dẫn thử nghiệm phải bắt đầu bằng /api/...',
           },
           null,
           2
@@ -118,12 +167,20 @@ export default function ApiPlaygroundClient() {
     setIsLoading(true);
     const start = performance.now();
     try {
-      const res = await fetch(targetPath, {
-        method: 'GET',
+      const fetchInit: RequestInit = {
+        method: customMethod,
         headers: {
           Accept: 'application/json',
+          ...(customMethod === 'POST'
+            ? { 'Content-Type': 'application/json' }
+            : {}),
         },
-      });
+        ...(customMethod === 'POST' && requestBody.trim()
+          ? { body: requestBody }
+          : {}),
+      };
+
+      const res = await fetch(targetPath, fetchInit);
       const elapsed = Math.round(performance.now() - start);
       setStatusCode(res.status);
       setLatencyMs(elapsed);
@@ -146,13 +203,23 @@ export default function ApiPlaygroundClient() {
     }
   };
 
-  const curlSnippet = `curl -X GET "https://rate.vn${customPath}" \\\n  -H "Accept: application/json"`;
+  const curlSnippet =
+    customMethod === 'POST'
+      ? `curl -X POST "https://rate.vn${customPath}" \\\n  -H "Accept: application/json" \\\n  -H "Content-Type: application/json" \\\n  -d '${requestBody.replace(/\s+/g, ' ').trim()}'`
+      : `curl -X GET "https://rate.vn${customPath}" \\\n  -H "Accept: application/json"`;
 
-  const handleCopyCurl = async () => {
+  const fetchSnippet =
+    customMethod === 'POST'
+      ? `const res = await fetch("https://rate.vn${customPath}", {\n  method: "POST",\n  headers: { "Content-Type": "application/json" },\n  body: JSON.stringify(${requestBody.trim() || '{}'}),\n});\nconst data = await res.json();`
+      : `const res = await fetch("https://rate.vn${customPath}", {\n  headers: { Accept: "application/json" },\n});\nconst data = await res.json();`;
+
+  const activeSnippet = snippetMode === 'curl' ? curlSnippet : fetchSnippet;
+
+  const handleCopySnippet = async () => {
     try {
-      await navigator.clipboard.writeText(curlSnippet);
-      setCopiedCurl(true);
-      setTimeout(() => setCopiedCurl(false), 2000);
+      await navigator.clipboard.writeText(activeSnippet);
+      setCopiedSnippet(true);
+      setTimeout(() => setCopiedSnippet(false), 2000);
     } catch {
       // ignore clipboard errors
     }
@@ -161,7 +228,7 @@ export default function ApiPlaygroundClient() {
   return (
     <div className="card rounded-4 overflow-hidden border bg-white shadow-sm">
       <div className="card-header bg-dark d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-2 px-4 py-3 text-white">
-        <div className="d-flex align-items-center gap-2">
+        <div className="d-flex align-items-center flex-wrap gap-2">
           <BsTerminal className="text-danger fs-5" />
           <span className="fw-bold">
             Interactive Open-Core REST API v1 Playground
@@ -169,6 +236,14 @@ export default function ApiPlaygroundClient() {
           <span className="badge bg-success rounded-pill small">
             Live Supabase Rate Schema
           </span>
+          <a
+            href="/api/v1/rate/openapi.json"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="badge bg-primary text-decoration-none rounded-pill d-inline-flex align-items-center gap-1"
+          >
+            <BsFileEarmarkCode /> OpenAPI 3.1 JSON
+          </a>
         </div>
         <div className="small text-white-50">
           Không yêu cầu API Key cho các truy vấn đọc công khai (`GET`)
@@ -179,7 +254,7 @@ export default function ApiPlaygroundClient() {
         {/* Preset Selector Pills */}
         <div className="mb-3">
           <div className="small fw-bold text-uppercase text-muted mb-2">
-            Chọn nhanh Endpoint mẫu:
+            Chọn nhanh Endpoint mẫu (10 kịch bản thực tế):
           </div>
           <div className="d-flex flex-wrap gap-2">
             {PRESET_ENDPOINTS.map((preset) => {
@@ -193,7 +268,15 @@ export default function ApiPlaygroundClient() {
                     isSelected ? 'btn-danger' : 'btn-outline-secondary'
                   }`}
                 >
-                  <span className="badge bg-dark me-2">{preset.method}</span>
+                  <span
+                    className={`badge me-2 ${
+                      preset.method === 'POST'
+                        ? 'bg-warning text-dark'
+                        : 'bg-dark'
+                    }`}
+                  >
+                    {preset.method}
+                  </span>
                   {preset.title}
                 </button>
               );
@@ -208,9 +291,18 @@ export default function ApiPlaygroundClient() {
         {/* Request Bar */}
         <form onSubmit={handleRunRequest} className="mb-3">
           <div className="input-group">
-            <span className="input-group-text bg-dark fw-bold border-0 px-3 text-white">
-              GET
-            </span>
+            <select
+              value={customMethod}
+              onChange={(e) =>
+                setCustomMethod(e.target.value as 'GET' | 'POST')
+              }
+              className="form-select bg-dark fw-bold border-0 text-white"
+              style={{ maxWidth: '105px' }}
+              aria-label="HTTP Method"
+            >
+              <option value="GET">GET</option>
+              <option value="POST">POST</option>
+            </select>
             <input
               type="text"
               value={customPath}
@@ -225,33 +317,72 @@ export default function ApiPlaygroundClient() {
               className="btn btn-primary fw-semibold d-inline-flex align-items-center gap-2 px-4"
             >
               <BsPlayFill className="fs-5" />
-              {isLoading
-                ? 'Đang truy vấn...'
-                : 'Chạy thử Request trực tiếp'}
+              {isLoading ? 'Đang truy vấn...' : 'Chạy thử Request trực tiếp'}
             </button>
           </div>
+
+          {customMethod === 'POST' && (
+            <div className="mt-3">
+              <label className="form-label small fw-bold text-uppercase text-muted mb-1">
+                JSON Request Body (`application/json`):
+              </label>
+              <textarea
+                rows={6}
+                value={requestBody}
+                onChange={(e) => setRequestBody(e.target.value)}
+                className="form-control font-monospace small bg-light"
+                placeholder='{"consentGranted": true, ...}'
+              />
+            </div>
+          )}
         </form>
 
-        {/* cURL Snippet & Telemetry Bar */}
+        {/* cURL / Fetch Snippet & Telemetry Bar */}
         <div className="row g-3">
           <div className="col-lg-5">
             <div className="rounded-3 bg-dark h-100 p-3 text-white">
               <div className="d-flex justify-content-between align-items-center mb-2">
-                <span className="small fw-semibold text-white-50">
-                  <BsCodeSlash className="me-1" /> Lệnh cURL / BFF Integration
-                </span>
+                <div className="d-flex align-items-center gap-2">
+                  <span className="small fw-semibold text-white-50">
+                    <BsCodeSlash className="me-1" /> Code Snippet:
+                  </span>
+                  <div className="btn-group btn-group-sm">
+                    <button
+                      type="button"
+                      onClick={() => setSnippetMode('curl')}
+                      className={`btn btn-sm py-0 ${
+                        snippetMode === 'curl'
+                          ? 'btn-danger'
+                          : 'btn-outline-secondary text-light'
+                      }`}
+                    >
+                      cURL
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSnippetMode('fetch')}
+                      className={`btn btn-sm py-0 ${
+                        snippetMode === 'fetch'
+                          ? 'btn-danger'
+                          : 'btn-outline-secondary text-light'
+                      }`}
+                    >
+                      TS fetch()
+                    </button>
+                  </div>
+                </div>
                 <button
                   type="button"
-                  onClick={handleCopyCurl}
+                  onClick={handleCopySnippet}
                   className="btn btn-sm btn-outline-light rounded-pill py-0"
                 >
-                  {copiedCurl ? (
+                  {copiedSnippet ? (
                     <>
                       <BsCheck2 className="me-1" /> Đã sao chép
                     </>
                   ) : (
                     <>
-                      <BsClipboard className="me-1" /> Copy cURL
+                      <BsClipboard className="me-1" /> Copy
                     </>
                   )}
                 </button>
@@ -260,7 +391,7 @@ export default function ApiPlaygroundClient() {
                 className="font-monospace small text-warning mb-0"
                 style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}
               >
-                {curlSnippet}
+                {activeSnippet}
               </pre>
             </div>
           </div>

@@ -112,3 +112,10 @@ export {
   type PlatformCapability,
   type SupportedEcommercePlatform,
 } from './extension';
+
+export {
+  buildRateOpenApiSpec,
+  type OpenApiOperation,
+  type OpenApiParameter,
+  type RateOpenApiDocument,
+} from './openapi';
