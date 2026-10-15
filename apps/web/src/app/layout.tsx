@@ -2,14 +2,22 @@ import 'bootstrap/dist/css/bootstrap.css';
 import './style/scss/style.scss';
 import 'animate.css';
 import Script from 'next/script';
+import { getLocale } from 'next-intl/server';
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  let locale = 'vi';
+  try {
+    locale = await getLocale();
+  } catch {
+    locale = 'vi';
+  }
+
   return (
-    <html lang="vi">
+    <html lang={locale}>
       <head>
         <meta charSet="utf-8" />
         <link

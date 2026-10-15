@@ -37,6 +37,14 @@ export default function middleware(req: NextRequest) {
     return response;
   }
 
+  // Default to Vietnamese ('vi') when no valid NEXT_LOCALE cookie is present
+  // so browser Accept-Language headers do not unexpectedly override default locale,
+  // while still honoring explicit NEXT_LOCALE=vi|en|cs cookies via next-intl middleware.
+  const cookieLocale = req.cookies.get('NEXT_LOCALE')?.value;
+  if (!cookieLocale || !routing.locales.includes(cookieLocale as any)) {
+    req.cookies.set('NEXT_LOCALE', routing.defaultLocale);
+  }
+
   return intlMiddleware(req);
 }
 
@@ -44,6 +52,6 @@ export const config = {
   matcher: [
     '/',
     '/(cs|en|vi)/:path*',
-    '/((?!_next|_vercel|api|robots.txt|favicon.ico|sitemap|.*\\..*).*)',
+    '/((?!_next|_vercel|api|monitoring|robots.txt|favicon.ico|sitemap|.*\\..*).*)',
   ],
 };
