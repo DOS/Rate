@@ -9,13 +9,9 @@ export async function generateMetadata({
 }: {
   params: Promise<{ locale: string }>;
 }): Promise<Metadata> {
-  const { locale } = await params;
   const facets = await getCachedCategoryDirectoryFacets('smartwatches');
   const totalModels = facets.totalUnfiltered;
-  const canonicalUrl =
-    locale === 'vi'
-      ? 'https://rate.vn/smartwatches'
-      : `https://rate.vn/${locale}/smartwatches`;
+  const canonicalUrl = 'https://rate.vn/smartwatches';
 
   return {
     title:

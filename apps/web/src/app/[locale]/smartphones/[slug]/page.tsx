@@ -42,10 +42,7 @@ export async function generateCategoryProductMetadata(
     };
   }
   const minPrice = Number(product.min_price || 0).toLocaleString('vi-VN');
-  const canonicalUrl =
-    lang === 'vi'
-      ? `https://rate.vn${categoryBasePath}/${product.slug}`
-      : `https://rate.vn/${lang}${categoryBasePath}/${product.slug}`;
+  const canonicalUrl = `https://rate.vn${categoryBasePath}/${product.slug}`;
 
   return {
     title:
@@ -141,10 +138,7 @@ export async function ProductDetailView({
       ? Number(product.user_rating_weighted)
       : Number(product.average_rating || 0);
 
-  const canonicalUrl =
-    locale === 'vi'
-      ? `https://rate.vn${categoryBasePath}/${product.slug}`
-      : `https://rate.vn/${locale}${categoryBasePath}/${product.slug}`;
+  const canonicalUrl = `https://rate.vn${categoryBasePath}/${product.slug}`;
 
   const structuredDataGraph = {
     '@context': 'https://schema.org',
@@ -334,54 +328,87 @@ export async function ProductDetailView({
               </a>
             </div>
 
-            {/* Quick specs grid */}
+            {/* Quick specs grid (Category-adaptive per DESIGN.md v2.0) */}
             <div className="row g-2 mb-4">
               <div className="col-sm-4 col-6">
-                <div className="bg-light rounded-3 p-3">
-                  <div className="text-muted small">Màn hình</div>
+                <div className="bg-light rounded-3 h-100 p-3">
+                  <div className="text-muted small">
+                    {categorySlug === 'earbuds'
+                      ? 'Màng loa / Hiển thị'
+                      : 'Màn hình'}
+                  </div>
                   <div className="fw-semibold">
-                    {keySpecs?.screen || 'OLED'}
+                    {keySpecs?.screen ||
+                      (specs?.display?.size_inch
+                        ? `${specs.display.size_inch}" ${specs?.display?.type || ''}`.trim()
+                        : specs?.display?.type ||
+                          specs?.multimedia?.loudspeaker ||
+                          '-')}
                   </div>
                 </div>
               </div>
               <div className="col-sm-4 col-6">
-                <div className="bg-light rounded-3 p-3">
-                  <div className="text-muted small">Vi xử lý</div>
+                <div className="bg-light rounded-3 h-100 p-3">
+                  <div className="text-muted small">Vi xử lý (Chipset)</div>
                   <div className="fw-semibold">
-                    {keySpecs?.chip || 'Apple A-Series'}
+                    {keySpecs?.chip ||
+                      specs?.hardware?.chipset ||
+                      specs?.hardware?.cpu ||
+                      '-'}
                   </div>
                 </div>
               </div>
               <div className="col-sm-4 col-6">
-                <div className="bg-light rounded-3 p-3">
-                  <div className="text-muted small">Camera chính</div>
+                <div className="bg-light rounded-3 h-100 p-3">
+                  <div className="text-muted small">
+                    {categorySlug === 'earbuds' &&
+                    !keySpecs?.camera &&
+                    !specs?.camera?.main_camera
+                      ? 'Âm thanh / ANC'
+                      : 'Camera chính'}
+                  </div>
                   <div className="fw-semibold">
-                    {keySpecs?.camera || '48 MP'}
+                    {keySpecs?.camera ||
+                      specs?.camera?.main_camera ||
+                      specs?.multimedia?.audio_features ||
+                      '-'}
                   </div>
                 </div>
               </div>
               <div className="col-sm-4 col-6">
-                <div className="bg-light rounded-3 p-3">
+                <div className="bg-light rounded-3 h-100 p-3">
                   <div className="text-muted small">Bộ nhớ (RAM/ROM)</div>
                   <div className="fw-semibold">
-                    {product.ram_gb ? `${product.ram_gb}GB / ` : ''}
-                    {product.storage_gb ? `${product.storage_gb}GB` : ''}
+                    {(() => {
+                      const ram = product.ram_gb ?? specs?.hardware?.ram_gb;
+                      const rom =
+                        product.storage_gb ?? specs?.hardware?.storage_gb;
+                      if (ram && rom) return `${ram}GB / ${rom}GB`;
+                      if (ram) return `${ram}GB RAM`;
+                      if (rom) return `${rom}GB`;
+                      return keySpecs?.ram || keySpecs?.storage || '-';
+                    })()}
                   </div>
                 </div>
               </div>
               <div className="col-sm-4 col-6">
-                <div className="bg-light rounded-3 p-3">
+                <div className="bg-light rounded-3 h-100 p-3">
                   <div className="text-muted small">Pin &amp; Sạc</div>
                   <div className="fw-semibold">
-                    {keySpecs?.battery || '3500 mAh'}
+                    {keySpecs?.battery ||
+                      (specs?.battery?.capacity_mah
+                        ? `${specs.battery.capacity_mah} mAh`
+                        : specs?.battery?.charging || '-')}
                   </div>
                 </div>
               </div>
               <div className="col-sm-4 col-6">
-                <div className="bg-light rounded-3 p-3">
-                  <div className="text-muted small">Kháng nước/bụi</div>
+                <div className="bg-light rounded-3 h-100 p-3">
+                  <div className="text-muted small">Độ bền / Kháng nước</div>
                   <div className="fw-semibold">
-                    {specs?.design?.resistance?.split(' ')[0] || 'IP68'}
+                    {specs?.design?.resistance ||
+                      specs?.design?.materials ||
+                      '-'}
                   </div>
                 </div>
               </div>
@@ -472,14 +499,20 @@ export async function ProductDetailView({
           </div>
         </div>
 
-        {/* 10 Field Groups Specifications */}
+        {/* 10 Field Groups Specifications (Full 10/10 Canonical Schema per DESIGN.md v2.0) */}
         <div className="card rounded-4 p-md-5 mb-5 border-0 p-4 shadow-sm">
-          <h2 className="h4 fw-bold d-flex align-items-center mb-4 gap-2">
-            <span>📋</span> Bảng Thông Số Kỹ Thuật Chi Tiết (10 Nhóm Chuẩn Hóa)
-          </h2>
+          <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-2">
+            <h2 className="h4 fw-bold d-flex align-items-center mb-0 gap-2">
+              <span>📋</span> Bảng Thông Số Kỹ Thuật Chi Tiết (10 Nhóm Chuẩn
+              Hóa)
+            </h2>
+            <span className="badge bg-dark-subtle text-dark rounded-pill px-3 py-2">
+              Chuẩn PhoneArena Split Camera + GSMArena 10/10 Groups
+            </span>
+          </div>
 
           <div className="row g-4">
-            {/* 1. Màn hình */}
+            {/* 1. Màn hình (Display) */}
             <div className="col-md-6 col-12">
               <div className="rounded-4 h-100 border bg-white p-4">
                 <h3 className="h6 fw-bold text-primary mb-3">
@@ -490,11 +523,13 @@ export async function ProductDetailView({
                   <dd className="fw-medium col-7">
                     {specs?.display?.size_inch
                       ? `${specs.display.size_inch} inch`
-                      : '-'}
+                      : product.screen_size_inch
+                        ? `${product.screen_size_inch} inch`
+                        : '-'}
                   </dd>
-                  <dt className="text-muted col-5">Công nghệ</dt>
+                  <dt className="text-muted col-5">Công nghệ tấm nền</dt>
                   <dd className="fw-medium col-7">
-                    {specs?.display?.type || '-'}
+                    {specs?.display?.type || keySpecs?.screen || '-'}
                   </dd>
                   <dt className="text-muted col-5">Độ phân giải</dt>
                   <dd className="fw-medium col-7">
@@ -514,7 +549,7 @@ export async function ProductDetailView({
                   <dd className="fw-medium col-7">
                     {specs?.display?.protection || '-'}
                   </dd>
-                  <dt className="text-muted col-5">Tính năng</dt>
+                  <dt className="text-muted col-5">Tính năng hiển thị</dt>
                   <dd className="fw-medium col-7">
                     {specs?.display?.features || '-'}
                   </dd>
@@ -522,7 +557,7 @@ export async function ProductDetailView({
               </div>
             </div>
 
-            {/* 2. Phần cứng */}
+            {/* 2. Phần cứng & Hiệu năng (Hardware) */}
             <div className="col-md-6 col-12">
               <div className="rounded-4 h-100 border bg-white p-4">
                 <h3 className="h6 fw-bold text-primary mb-3">
@@ -531,7 +566,7 @@ export async function ProductDetailView({
                 <dl className="row small mb-0">
                   <dt className="text-muted col-5">Chipset</dt>
                   <dd className="fw-medium col-7">
-                    {specs?.hardware?.chipset || '-'}
+                    {specs?.hardware?.chipset || keySpecs?.chip || '-'}
                   </dd>
                   <dt className="text-muted col-5">CPU</dt>
                   <dd className="fw-medium col-7">
@@ -545,15 +580,19 @@ export async function ProductDetailView({
                   <dd className="fw-medium col-7">
                     {specs?.hardware?.ram_gb
                       ? `${specs.hardware.ram_gb} GB`
-                      : '-'}
+                      : product.ram_gb
+                        ? `${product.ram_gb} GB`
+                        : '-'}
                   </dd>
                   <dt className="text-muted col-5">Bộ nhớ trong</dt>
                   <dd className="fw-medium col-7">
                     {specs?.hardware?.storage_gb
                       ? `${specs.hardware.storage_gb} GB`
-                      : '-'}
+                      : product.storage_gb
+                        ? `${product.storage_gb} GB`
+                        : '-'}
                   </dd>
-                  <dt className="text-muted col-5">Thẻ nhớ ngoài</dt>
+                  <dt className="text-muted col-5">Mở rộng lưu trữ</dt>
                   <dd className="fw-medium col-7">
                     {specs?.hardware?.storage_expansion || '-'}
                   </dd>
@@ -565,38 +604,54 @@ export async function ProductDetailView({
               </div>
             </div>
 
-            {/* 3. Camera */}
+            {/* 3. Máy ảnh (Camera - PhoneArena Split Architecture) */}
             <div className="col-md-6 col-12">
               <div className="rounded-4 h-100 border bg-white p-4">
                 <h3 className="h6 fw-bold text-primary mb-3">
-                  3. Máy ảnh (Camera)
+                  3. Máy ảnh (Camera - PhoneArena Split)
                 </h3>
                 <dl className="row small mb-0">
-                  <dt className="text-muted col-5">Cụm sau</dt>
+                  <dt className="text-muted col-5">Cấu hình cụm sau</dt>
                   <dd className="fw-medium col-7">
                     {specs?.camera?.rear_setup || '-'}
                   </dd>
-                  <dt className="text-muted col-5">Camera chính</dt>
+                  <dt className="text-muted col-5">Camera chính (Wide)</dt>
                   <dd className="fw-medium col-7">
-                    {specs?.camera?.main_camera || '-'}
+                    {specs?.camera?.main_camera || keySpecs?.camera || '-'}
                   </dd>
-                  <dt className="text-muted col-5">Camera trước</dt>
+                  <dt className="text-muted col-5">Camera phụ 2 (Ultrawide)</dt>
+                  <dd className="fw-medium col-7">
+                    {specs?.camera?.second_camera || '-'}
+                  </dd>
+                  <dt className="text-muted col-5">Camera phụ 3 (Telephoto)</dt>
+                  <dd className="fw-medium col-7">
+                    {specs?.camera?.third_camera || '-'}
+                  </dd>
+                  {specs?.camera?.fourth_camera && (
+                    <>
+                      <dt className="text-muted col-5">
+                        Camera phụ 4 (Periscope/ToF)
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {specs.camera.fourth_camera}
+                      </dd>
+                    </>
+                  )}
+                  <dt className="text-muted col-5">Camera trước (Selfie)</dt>
                   <dd className="fw-medium col-7">
                     {specs?.camera?.front_camera || '-'}
                   </dd>
-                  <dt className="text-muted col-5">Đèn Flash</dt>
+                  <dt className="text-muted col-5">Quay video &amp; Flash</dt>
                   <dd className="fw-medium col-7">
-                    {specs?.camera?.flash || '-'}
-                  </dd>
-                  <dt className="text-muted col-5">Quay video</dt>
-                  <dd className="fw-medium col-7">
-                    {specs?.camera?.video_recording || '-'}
+                    {[specs?.camera?.video_recording, specs?.camera?.flash]
+                      .filter(Boolean)
+                      .join(' | ') || '-'}
                   </dd>
                 </dl>
               </div>
             </div>
 
-            {/* 4. Pin & Sạc */}
+            {/* 4. Pin & Sạc (Battery) */}
             <div className="col-md-6 col-12">
               <div className="rounded-4 h-100 border bg-white p-4">
                 <h3 className="h6 fw-bold text-primary mb-3">
@@ -607,7 +662,9 @@ export async function ProductDetailView({
                   <dd className="fw-medium col-7">
                     {specs?.battery?.capacity_mah
                       ? `${specs.battery.capacity_mah} mAh`
-                      : '-'}
+                      : product.battery_mah
+                        ? `${product.battery_mah} mAh`
+                        : keySpecs?.battery || '-'}
                   </dd>
                   <dt className="text-muted col-5">Loại pin</dt>
                   <dd className="fw-medium col-7">
@@ -623,11 +680,21 @@ export async function ProductDetailView({
                       ? `${specs.battery.fast_charging_w} W`
                       : '-'}
                   </dd>
+                  <dt className="text-muted col-5">Sạc ngược</dt>
+                  <dd className="fw-medium col-7">
+                    {typeof specs?.battery?.reverse_charging === 'string'
+                      ? specs.battery.reverse_charging
+                      : specs?.battery?.reverse_charging === true
+                        ? 'Có hỗ trợ'
+                        : specs?.battery?.reverse_charging === false
+                          ? 'Không'
+                          : '-'}
+                  </dd>
                 </dl>
               </div>
             </div>
 
-            {/* 5. Thiết kế */}
+            {/* 5. Thiết kế & Độ bền (Design) */}
             <div className="col-md-6 col-12">
               <div className="rounded-4 h-100 border bg-white p-4">
                 <h3 className="h6 fw-bold text-primary mb-3">
@@ -644,19 +711,21 @@ export async function ProductDetailView({
                       ? `${specs.design.weight_g} g`
                       : '-'}
                   </dd>
-                  <dt className="text-muted col-5">Chất liệu</dt>
+                  <dt className="text-muted col-5">Chất liệu &amp; Khung</dt>
                   <dd className="fw-medium col-7">
-                    {specs?.design?.materials || '-'}
+                    {[specs?.design?.materials, specs?.design?.build]
+                      .filter(Boolean)
+                      .join(' | ') || '-'}
                   </dd>
                   <dt className="text-muted col-5">Kháng nước, bụi</dt>
                   <dd className="fw-medium col-7">
                     {specs?.design?.resistance || '-'}
                   </dd>
-                  <dt className="text-muted col-5">Bảo mật</dt>
+                  <dt className="text-muted col-5">Bảo mật sinh trắc</dt>
                   <dd className="fw-medium col-7">
                     {specs?.design?.biometrics || '-'}
                   </dd>
-                  <dt className="text-muted col-5">Phím chức năng</dt>
+                  <dt className="text-muted col-5">Phím vật lý</dt>
                   <dd className="fw-medium col-7">
                     {specs?.design?.keys || '-'}
                   </dd>
@@ -664,22 +733,60 @@ export async function ProductDetailView({
               </div>
             </div>
 
-            {/* 6. Kết nối & Mạng */}
+            {/* 6. Mạng Di động & 5G (Cellular) */}
             <div className="col-md-6 col-12">
               <div className="rounded-4 h-100 border bg-white p-4">
                 <h3 className="h6 fw-bold text-primary mb-3">
-                  6. Kết nối &amp; 5G (Cellular &amp; Connectivity)
+                  6. Mạng Di động &amp; 5G (Cellular)
                 </h3>
                 <dl className="row small mb-0">
                   <dt className="text-muted col-5">Hỗ trợ 5G</dt>
                   <dd className="fw-medium col-7">
-                    {specs?.cellular?.has_5g ? 'Có (Sub-6 / mmWave)' : 'Không'}
+                    {(specs?.cellular?.has_5g ?? product.has_5g)
+                      ? 'Có (5G Sub-6 / mmWave)'
+                      : 'Không'}
                   </dd>
-                  <dt className="text-muted col-5">SIM</dt>
+                  <dt className="text-muted col-5">Công nghệ mạng</dt>
+                  <dd className="fw-medium col-7">
+                    {specs?.cellular?.technology || '-'}
+                  </dd>
+                  <dt className="text-muted col-5">Chuẩn SIM</dt>
                   <dd className="fw-medium col-7">
                     {specs?.cellular?.sim_type || '-'}
                   </dd>
-                  <dt className="text-muted col-5">Wi-Fi</dt>
+                  <dt className="text-muted col-5">Tốc độ dữ liệu</dt>
+                  <dd className="fw-medium col-7">
+                    {specs?.cellular?.data_speed || '-'}
+                  </dd>
+                  <dt className="text-muted col-5">Băng tần 5G / 4G</dt>
+                  <dd className="fw-medium col-7">
+                    {[specs?.cellular?.bands_5g, specs?.cellular?.bands_4g]
+                      .filter(Boolean)
+                      .join(' | ') || '-'}
+                  </dd>
+                  <dt className="text-muted col-5">VoLTE / VoWiFi</dt>
+                  <dd className="fw-medium col-7">
+                    {specs?.cellular?.volte || specs?.cellular?.vowifi
+                      ? [
+                          specs?.cellular?.volte ? 'VoLTE' : null,
+                          specs?.cellular?.vowifi ? 'VoWiFi' : null,
+                        ]
+                          .filter(Boolean)
+                          .join(' + ')
+                      : '-'}
+                  </dd>
+                </dl>
+              </div>
+            </div>
+
+            {/* 7. Kết nối & Cảm biến (Connectivity) */}
+            <div className="col-md-6 col-12">
+              <div className="rounded-4 h-100 border bg-white p-4">
+                <h3 className="h6 fw-bold text-primary mb-3">
+                  7. Kết nối &amp; Cảm biến (Connectivity)
+                </h3>
+                <dl className="row small mb-0">
+                  <dt className="text-muted col-5">Wi-Fi (WLAN)</dt>
                   <dd className="fw-medium col-7">
                     {specs?.connectivity?.wlan || '-'}
                   </dd>
@@ -687,42 +794,111 @@ export async function ProductDetailView({
                   <dd className="fw-medium col-7">
                     {specs?.connectivity?.bluetooth || '-'}
                   </dd>
-                  <dt className="text-muted col-5">Cổng kết nối</dt>
+                  <dt className="text-muted col-5">Cổng giao tiếp</dt>
                   <dd className="fw-medium col-7">
                     {specs?.connectivity?.usb || '-'}
                   </dd>
                   <dt className="text-muted col-5">NFC</dt>
                   <dd className="fw-medium col-7">
-                    {specs?.connectivity?.nfc ? 'Có' : 'Không'}
+                    {specs?.connectivity?.nfc === true
+                      ? 'Có'
+                      : specs?.connectivity?.nfc === false
+                        ? 'Không'
+                        : '-'}
+                  </dd>
+                  <dt className="text-muted col-5">Định vị (GPS)</dt>
+                  <dd className="fw-medium col-7">
+                    {specs?.connectivity?.location || '-'}
+                  </dd>
+                  <dt className="text-muted col-5">Cảm biến &amp; Khác</dt>
+                  <dd className="fw-medium col-7">
+                    {[specs?.connectivity?.sensors, specs?.connectivity?.other]
+                      .filter(Boolean)
+                      .join(' | ') || '-'}
                   </dd>
                 </dl>
               </div>
             </div>
 
-            {/* 7. Đa phương tiện & Quy chuẩn */}
-            <div className="col-12">
-              <div className="rounded-4 border bg-white p-4">
+            {/* 8. Âm thanh & Đa phương tiện (Multimedia) */}
+            <div className="col-md-6 col-12">
+              <div className="rounded-4 h-100 border bg-white p-4">
                 <h3 className="h6 fw-bold text-primary mb-3">
-                  7. Âm thanh, Pháp lý &amp; Phát hành (Misc &amp; Regulatory)
+                  8. Âm thanh &amp; Đa phương tiện (Multimedia)
                 </h3>
-                <div className="row g-3 small">
-                  <div className="col-md-6 col-12">
-                    <div className="text-muted">Âm thanh:</div>
-                    <div className="fw-medium">
-                      {specs?.multimedia?.loudspeaker || '-'} |{' '}
-                      {specs?.multimedia?.audio_features || '-'}
-                    </div>
-                  </div>
-                  <div className="col-md-6 col-12">
-                    <div className="text-muted">
-                      Ngày phát hành &amp; Chứng nhận:
-                    </div>
-                    <div className="fw-medium">
-                      {specs?.availability?.announced || '-'} |{' '}
-                      {specs?.regulatory?.certifications || '-'}
-                    </div>
-                  </div>
-                </div>
+                <dl className="row small mb-0">
+                  <dt className="text-muted col-5">Hệ thống loa</dt>
+                  <dd className="fw-medium col-7">
+                    {specs?.multimedia?.loudspeaker || '-'}
+                  </dd>
+                  <dt className="text-muted col-5">Jack tai nghe 3.5mm</dt>
+                  <dd className="fw-medium col-7">
+                    {specs?.multimedia?.headphone_jack_35mm === true
+                      ? 'Có'
+                      : specs?.multimedia?.headphone_jack_35mm === false
+                        ? 'Không'
+                        : '-'}
+                  </dd>
+                  <dt className="text-muted col-5">Công nghệ âm thanh</dt>
+                  <dd className="fw-medium col-7">
+                    {specs?.multimedia?.audio_features || '-'}
+                  </dd>
+                </dl>
+              </div>
+            </div>
+
+            {/* 9. Phát hành & Giá niêm yết (Availability) */}
+            <div className="col-md-6 col-12">
+              <div className="rounded-4 h-100 border bg-white p-4">
+                <h3 className="h6 fw-bold text-primary mb-3">
+                  9. Phát hành &amp; Giá niêm yết (Availability)
+                </h3>
+                <dl className="row small mb-0">
+                  <dt className="text-muted col-5">Ngày công bố</dt>
+                  <dd className="fw-medium col-7">
+                    {specs?.availability?.announced || '-'}
+                  </dd>
+                  <dt className="text-muted col-5">Trạng thái thương mại</dt>
+                  <dd className="fw-medium col-7">
+                    {specs?.availability?.status || 'Đang kinh doanh'}
+                  </dd>
+                  <dt className="text-muted col-5">Giá khởi điểm (MSRP)</dt>
+                  <dd className="fw-medium col-7">
+                    {specs?.availability?.prices_msrp || '-'}
+                  </dd>
+                </dl>
+              </div>
+            </div>
+
+            {/* 10. Pháp lý, Chứng nhận & SAR (Regulatory) */}
+            <div className="col-md-6 col-12">
+              <div className="rounded-4 h-100 border bg-white p-4">
+                <h3 className="h6 fw-bold text-primary mb-3">
+                  10. Pháp lý, Chứng nhận &amp; SAR (Regulatory)
+                </h3>
+                <dl className="row small mb-0">
+                  <dt className="text-muted col-5">Chứng nhận chất lượng</dt>
+                  <dd className="fw-medium col-7">
+                    {specs?.regulatory?.certifications || '-'}
+                  </dd>
+                  <dt className="text-muted col-5">Phê duyệt FCC / CE</dt>
+                  <dd className="fw-medium col-7">
+                    {specs?.regulatory?.fcc_approval || '-'}
+                  </dd>
+                  <dt className="text-muted col-5">Mức bức xạ SAR</dt>
+                  <dd className="fw-medium col-7">
+                    {[
+                      specs?.regulatory?.sar_head
+                        ? `Đầu: ${specs.regulatory.sar_head}`
+                        : null,
+                      specs?.regulatory?.sar_body
+                        ? `Thân: ${specs.regulatory.sar_body}`
+                        : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' | ') || '-'}
+                  </dd>
+                </dl>
               </div>
             </div>
           </div>

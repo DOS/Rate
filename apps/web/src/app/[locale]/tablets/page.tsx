@@ -9,13 +9,9 @@ export async function generateMetadata({
 }: {
   params: Promise<{ locale: string }>;
 }): Promise<Metadata> {
-  const { locale } = await params;
   const facets = await getCachedCategoryDirectoryFacets('tablets');
   const totalModels = facets.totalUnfiltered;
-  const canonicalUrl =
-    locale === 'vi'
-      ? 'https://rate.vn/tablets'
-      : `https://rate.vn/${locale}/tablets`;
+  const canonicalUrl = 'https://rate.vn/tablets';
 
   return {
     title:

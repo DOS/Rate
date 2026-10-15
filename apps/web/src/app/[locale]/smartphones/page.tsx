@@ -43,10 +43,7 @@ export async function generateMetadata({
   const lang = normalizeRateLocale(locale);
   const facets = await getCachedCategoryDirectoryFacets('smartphones');
   const totalModels = facets.totalUnfiltered;
-  const canonicalUrl =
-    lang === 'vi'
-      ? 'https://rate.vn/smartphones'
-      : `https://rate.vn/${lang}/smartphones`;
+  const canonicalUrl = 'https://rate.vn/smartphones';
 
   return {
     title:

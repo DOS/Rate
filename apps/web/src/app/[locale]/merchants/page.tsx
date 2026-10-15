@@ -19,10 +19,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { locale } = await params;
   const lang = normalizeRateLocale(locale);
-  const canonicalUrl =
-    lang === 'vi'
-      ? 'https://rate.vn/merchants'
-      : `https://rate.vn/${lang}/merchants`;
+  const canonicalUrl = 'https://rate.vn/merchants';
 
   return {
     title:
