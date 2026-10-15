@@ -249,7 +249,7 @@ export async function getMasterProducts(
     .select('*')
     .eq('status', 'published');
 
-  if (params?.categorySlug) {
+  if (params?.categorySlug && params.categorySlug !== 'all') {
     const { data: catRow } = await supabase
       .from('categories')
       .select('id')

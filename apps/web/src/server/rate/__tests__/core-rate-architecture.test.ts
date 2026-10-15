@@ -243,9 +243,15 @@ function runCoreArchitectureSuite() {
     '  ✅ [7/8] OpenAPI 3.1.0 Specification (/api/v1/rate/openapi.json) passed'
   );
 
-  // 8. DESIGN.md v2.0 & Unprefixed Locale Routing (localePrefix: "never")
+  // 8. DESIGN.md v2.0 & Unprefixed Locale Routing (localePrefix: "never") + Live Middleware Regression Suite
   const fs = require('node:fs') as typeof import('node:fs');
   const path = require('node:path') as typeof import('node:path');
+  const { NextRequest } =
+    require('next/server') as typeof import('next/server');
+  const middleware = require('../../../middleware').default as (
+    req: import('next/server').NextRequest
+  ) => import('next/server').NextResponse;
+
   const repoRoot = path.resolve(__dirname, '../../../../../..');
   const designMdPath = path.join(repoRoot, 'DESIGN.md');
   assert.equal(
@@ -257,6 +263,28 @@ function runCoreArchitectureSuite() {
   assert.ok(designMd.includes('Rate.vn Design System'));
   assert.ok(designMd.includes('10-Group Specification Matrix'));
 
+  // Guard against duplicate root middleware.ts shadowing src/middleware.ts
+  const duplicateRootMiddleware = path.join(
+    repoRoot,
+    'apps',
+    'web',
+    'middleware.ts'
+  );
+  assert.equal(
+    fs.existsSync(duplicateRootMiddleware),
+    false,
+    'apps/web/middleware.ts must not exist and shadow apps/web/src/middleware.ts'
+  );
+
+  // Guard RootLayout dynamic <html lang={locale}>
+  const rootLayoutPath = path.resolve(__dirname, '../../../app/layout.tsx');
+  const rootLayoutSrc = fs.readFileSync(rootLayoutPath, 'utf8');
+  assert.ok(
+    rootLayoutSrc.includes('getLocale') &&
+      rootLayoutSrc.includes('<html lang={locale}>'),
+    'RootLayout must dynamically resolve <html lang={locale}> via getLocale()'
+  );
+
   const navTsPath = path.resolve(__dirname, '../../../lib/navigation.ts');
   const navTs = fs.readFileSync(navTsPath, 'utf8');
   assert.ok(
@@ -265,11 +293,83 @@ function runCoreArchitectureSuite() {
     'navigation.ts must use localePrefix: "never" so switching languages never adds /en or /cs URL slugs'
   );
   assert.ok(
+    navTs.includes('localeDetection: true'),
+    'navigation.ts must enable localeDetection: true so next-intl resolves NEXT_LOCALE cookie'
+  );
+  assert.ok(
     navTs.includes('NEXT_LOCALE'),
     'navigation.ts must persist locale selection via NEXT_LOCALE cookie'
   );
+
+  // Execute middleware directly against NextRequest to verify 308 slug stripping & NEXT_LOCALE cookie rewrites
+  const redirectEn = middleware(
+    new NextRequest('https://rate.vn/en', {
+      headers: { 'x-forwarded-proto': 'https', host: 'rate.vn' },
+    })
+  );
+  assert.equal(redirectEn.status, 308);
+  assert.equal(redirectEn.headers.get('location'), 'https://rate.vn/');
+  assert.equal(redirectEn.cookies.get('NEXT_LOCALE')?.value, 'en');
+
+  const redirectCsCompare = middleware(
+    new NextRequest('https://rate.vn/cs/compare', {
+      headers: { 'x-forwarded-proto': 'https', host: 'rate.vn' },
+    })
+  );
+  assert.equal(redirectCsCompare.status, 308);
+  assert.equal(
+    redirectCsCompare.headers.get('location'),
+    'https://rate.vn/compare'
+  );
+  assert.equal(redirectCsCompare.cookies.get('NEXT_LOCALE')?.value, 'cs');
+
+  const unprefixedEnRes = middleware(
+    new NextRequest('https://rate.vn/', {
+      headers: {
+        'x-forwarded-proto': 'https',
+        host: 'rate.vn',
+        cookie: 'NEXT_LOCALE=en',
+      },
+    })
+  );
+  assert.equal(unprefixedEnRes.status, 200);
+  assert.equal(
+    unprefixedEnRes.headers.get('x-middleware-rewrite'),
+    'https://rate.vn/en'
+  );
+
+  const unprefixedCsRes = middleware(
+    new NextRequest('https://rate.vn/smartwatches', {
+      headers: {
+        'x-forwarded-proto': 'https',
+        host: 'rate.vn',
+        cookie: 'NEXT_LOCALE=cs',
+      },
+    })
+  );
+  assert.equal(unprefixedCsRes.status, 200);
+  assert.equal(
+    unprefixedCsRes.headers.get('x-middleware-rewrite'),
+    'https://rate.vn/cs/smartwatches'
+  );
+
+  const defaultViWithEnAcceptHeader = middleware(
+    new NextRequest('https://rate.vn/', {
+      headers: {
+        'x-forwarded-proto': 'https',
+        host: 'rate.vn',
+        'accept-language': 'en-US,en;q=0.9',
+      },
+    })
+  );
+  assert.equal(defaultViWithEnAcceptHeader.status, 200);
+  assert.equal(
+    defaultViWithEnAcceptHeader.headers.get('x-middleware-rewrite'),
+    'https://rate.vn/vi'
+  );
+
   console.log(
-    '  ✅ [8/8] DESIGN.md v2.0 & Unprefixed Locale Routing (localePrefix: "never") passed'
+    '  ✅ [8/8] DESIGN.md v2.0 & Unprefixed Locale Middleware Regression Suite (308 strip + NEXT_LOCALE vi/en/cs) passed'
   );
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
