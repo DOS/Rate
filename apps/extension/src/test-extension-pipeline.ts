@@ -227,18 +227,25 @@ async function runTests() {
   assert.equal(noConsentRes.accepted, false);
   assert.equal(noConsentRes.jobState, 'skipped_no_consent');
 
-  const nonShopeeRes = await ingestExtensionCrowdSignal({
-    platform: 'lazada',
-    externalItemId: '123456',
-    url: 'https://www.lazada.vn/products/iphone-16-pro-max-i123456.html',
+  const readOnlyPlatformRes = await ingestExtensionCrowdSignal({
+    platform: 'fptshop',
+    externalItemId: 'iphone-16-pro-max',
+    url: 'https://fptshop.com.vn/dien-thoai/iphone-16-pro-max',
     title: 'Điện thoại iPhone 16 Pro Max 256GB',
     price: 28990000,
     userConsentOptIn: true,
   });
-  assert.equal(nonShopeeRes.accepted, false);
-  assert.equal(nonShopeeRes.jobState, 'platform_worker_pending_phase_5_1');
+  assert.equal(readOnlyPlatformRes.accepted, false);
+  assert.equal(
+    readOnlyPlatformRes.jobState,
+    'platform_worker_pending_phase_5_1'
+  );
   assert.equal(EXTENSION_CAPABILITY_MATRIX.shopee.crowdVerifyQueue, true);
-  assert.equal(EXTENSION_CAPABILITY_MATRIX.lazada.crowdVerifyQueue, false);
+  assert.equal(EXTENSION_CAPABILITY_MATRIX.lazada.crowdVerifyQueue, true);
+  assert.equal(EXTENSION_CAPABILITY_MATRIX.tiki.crowdVerifyQueue, true);
+  assert.equal(EXTENSION_CAPABILITY_MATRIX.cellphones.crowdVerifyQueue, true);
+  assert.equal(EXTENSION_CAPABILITY_MATRIX.tgdd.crowdVerifyQueue, true);
+  assert.equal(EXTENSION_CAPABILITY_MATRIX.fptshop.crowdVerifyQueue, false);
   assert.equal(EXTENSION_CAPABILITY_MATRIX.tiktok.lookup, true);
   assert.equal(EXTENSION_CAPABILITY_MATRIX.hoangha.lookup, true);
   console.log(
