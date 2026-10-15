@@ -1,13 +1,18 @@
-import { getServerSession } from "next-auth"
-import nextAuthOptions from "@/lib/auth/options"
+import { getPublicClient } from '@repo/shared-data';
 
 export async function requireServerSession() {
-  const session = await getServerSession(nextAuthOptions)
-  if (!session) return null
-  return session
+  try {
+    const supabase = getPublicClient();
+    const { data } = await supabase.auth.getSession();
+    return data.session ?? null;
+  } catch {
+    return null;
+  }
 }
 
-export async function getSupabaseAccessTokenFromSession() {
-  const session = await getServerSession(nextAuthOptions)
-  return (session as any)?.accessToken as string | undefined
+export async function getSupabaseAccessTokenFromSession(): Promise<
+  string | undefined
+> {
+  const session = await requireServerSession();
+  return session?.access_token;
 }

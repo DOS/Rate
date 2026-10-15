@@ -1,13 +1,13 @@
 'use client';
 
-import { signOut } from 'next-auth/react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import React from 'react';
 import { getPublicClient } from '@repo/shared-data';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
 
 export function SignOutButton({ className }: { className?: string }) {
   const params = useParams<{ locale: string }>();
+  const router = useRouter();
   const locale = normalizeRateLocale(params?.locale);
   const callbackUrl = '/';
   const label =
@@ -22,9 +22,10 @@ export function SignOutButton({ className }: { className?: string }) {
       const supabase = getPublicClient();
       await supabase.auth.signOut();
     } catch {
-      // Ignore client sign-out error and proceed with NextAuth session sign-out
+      // Ignore client sign-out error
     }
-    await signOut({ callbackUrl });
+    router.push(callbackUrl);
+    router.refresh();
   };
 
   return (
