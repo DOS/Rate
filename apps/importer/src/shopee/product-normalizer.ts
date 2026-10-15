@@ -435,11 +435,166 @@ const CANONICAL_PHONE_REGISTRY: Record<
     screen_type: 'Industry-leading Dual-Processor ANC + Bone Conduction Sensor',
     refresh_rate_hz: 60,
     rear_camera: 'Dual feedback microphones per earbud',
+    second_camera: 'Feed-forward & feedback 6-mic array',
     front_camera: 'Bone conduction sensor + Wind noise reduction',
     charging_w: 5,
     has_5g: false,
     release_date: 'July 2023',
     ip_rating: 'IPX4 water resistant',
+    default_storage_gb: 1,
+  },
+  'samsung:galaxy-tab-s10-ultra': {
+    screen_size_inch: 14.6,
+    battery_mah: 11200,
+    ram_gb: 12,
+    chipset: 'MediaTek Dimensity 9300+ (4 nm)',
+    cpu: 'Octa-core (1x3.4 GHz Cortex-X4 & 3x2.8 GHz Cortex-X4 & 4x2.0 GHz Cortex-A720)',
+    gpu: 'Immortalis-G720 MC12',
+    os: 'Android 14, One UI 6.1.1 (Galaxy AI)',
+    weight_g: 718,
+    dimensions: '326.4 x 208.6 x 5.4 mm',
+    resolution: '1848 x 2960 pixels (~239 ppi)',
+    screen_type: 'Dynamic AMOLED 2X, 120Hz, HDR10+, Anti-Reflection coating',
+    refresh_rate_hz: 120,
+    rear_camera: '13 MP, f/2.0, 26mm (wide), AF',
+    second_camera: '8 MP, f/2.2 (ultrawide)',
+    front_camera: '12 MP, f/2.2 (wide) + 12 MP, f/2.4, 120˚ (ultrawide)',
+    charging_w: 45,
+    has_5g: true,
+    release_date: 'September 2024',
+    ip_rating: 'IP68 dust/water resistant (1.5m for 30 min) + Enhanced Armor Aluminum',
+    default_storage_gb: 256,
+  },
+  'xiaomi:pad-6s-pro': {
+    screen_size_inch: 12.4,
+    battery_mah: 10000,
+    ram_gb: 8,
+    chipset: 'Qualcomm SM8550-AB Snapdragon 8 Gen 2 (4 nm)',
+    cpu: 'Octa-core (1x3.2 GHz Cortex-X3 & 4x2.8 GHz & 3x2.0 GHz)',
+    gpu: 'Adreno 740',
+    os: 'Android 14, HyperOS',
+    weight_g: 590,
+    dimensions: '278.7 x 191.6 x 6.3 mm',
+    resolution: '2032 x 3048 pixels, 3:2 ratio (~295 ppi)',
+    screen_type: 'IPS LCD, 68B colors, 144Hz, HDR10, Dolby Vision, 900 nits',
+    refresh_rate_hz: 144,
+    rear_camera: '50 MP, f/1.8 (wide), PDAF',
+    second_camera: '2 MP, f/2.4 (depth)',
+    front_camera: '32 MP, f/2.2 (wide, FocusFrame)',
+    charging_w: 120,
+    has_5g: false,
+    release_date: 'February 2024',
+    ip_rating: 'All-metal unibody, Corning Gorilla Glass 5',
+    default_storage_gb: 256,
+  },
+  'asus:zenbook-s-14': {
+    screen_size_inch: 14.0,
+    battery_mah: 6200,
+    ram_gb: 32,
+    chipset: 'Intel Core Ultra 7 258V (Lunar Lake, 47 TOPS NPU)',
+    cpu: '8-core (4 P-cores + 4 LPE-cores, up to 4.8 GHz)',
+    gpu: 'Intel Arc 140V GPU',
+    os: 'Windows 11 Home Copilot+ PC',
+    weight_g: 1200,
+    dimensions: '310.3 x 214.7 x 11.9 mm',
+    resolution: '2880 x 1800 pixels, 16:10 (3K Lumina OLED)',
+    screen_type: 'ASUS Lumina OLED, 120Hz, 100% DCI-P3, DisplayHDR True Black 500',
+    refresh_rate_hz: 120,
+    rear_camera: 'Ambient light & color sensor + Dual-fan vapor chamber thermal array',
+    second_camera: 'IR depth camera for Windows Hello facial recognition',
+    front_camera: '1080p FHD AiSense IR Webcam with privacy shutter',
+    charging_w: 65,
+    has_5g: false,
+    release_date: 'September 2024',
+    ip_rating: 'Ceraluminum chassis, MIL-STD 810H military-grade standard',
+    default_storage_gb: 1024,
+  },
+  'lenovo:thinkpad-x1-carbon-gen-12': {
+    screen_size_inch: 14.0,
+    battery_mah: 4900,
+    ram_gb: 32,
+    chipset: 'Intel Core Ultra 7 155U / 165U (Intel AI Boost NPU)',
+    cpu: '12-core (2 P-cores + 8 E-cores + 2 LPE-cores, up to 4.8 GHz)',
+    gpu: 'Intel Graphics (Integrated)',
+    os: 'Windows 11 Pro 64-bit',
+    weight_g: 1090,
+    dimensions: '312.8 x 214.75 x 14.96 mm',
+    resolution: '2880 x 1800 pixels, 16:10 (2.8K OLED Anti-Glare)',
+    screen_type: '2.8K OLED, 120Hz, 400 nits, 100% DCI-P3, Dolby Vision, Eyesafe',
+    refresh_rate_hz: 120,
+    rear_camera: 'Ultrasonic human presence detection & PrivacyGuard sensor',
+    second_camera: 'Discrete IR camera for Windows Hello + ThinkShutter',
+    front_camera: 'FHD 1080p MIPI + IR discrete camera with physical shutter',
+    charging_w: 65,
+    has_5g: false,
+    release_date: 'March 2024',
+    ip_rating: 'Carbon fiber weave top + recycled magnesium chassis, MIL-STD-810H',
+    default_storage_gb: 512,
+  },
+  'samsung:galaxy-watch-ultra': {
+    screen_size_inch: 1.5,
+    battery_mah: 590,
+    ram_gb: 2,
+    chipset: 'Samsung Exynos W1000 (3 nm GAA)',
+    cpu: 'Penta-core (1x1.6 GHz Cortex-A78 & 4x1.5 GHz Cortex-A55)',
+    gpu: 'Mali-G68 MP2',
+    os: 'Wear OS 5, One UI Watch 6',
+    weight_g: 60.5,
+    dimensions: '47.4 x 47.4 x 12.1 mm',
+    resolution: '480 x 480 pixels (~327 ppi)',
+    screen_type: 'Super AMOLED, Sapphire crystal glass, 3000 nits (peak)',
+    refresh_rate_hz: 60,
+    rear_camera: 'Samsung BioActive Sensor (Optical Bio-signal + Electrical Heart Signal + BIA)',
+    second_camera: 'Infrared Temperature Sensor + Barometer + Altimeter',
+    front_camera: 'Ambient Light Sensor + Quick Button + 86dB Emergency Siren',
+    charging_w: 10,
+    has_5g: false,
+    release_date: 'July 2024',
+    ip_rating: 'IP68 + 10ATM water resistant (100m, MIL-STD-810H, Titanium Grade 4)',
+    default_storage_gb: 32,
+  },
+  'garmin:forerunner-265': {
+    screen_size_inch: 1.3,
+    battery_mah: 410,
+    ram_gb: 1,
+    chipset: 'Garmin Ultra-Low-Power Sports SoC + Multi-Band SatIQ GNSS',
+    cpu: 'Garmin Dual-Core RTOS + Firstbeat Analytics Engine',
+    gpu: 'AMOLED Display Controller',
+    os: 'Garmin OS (Connect IQ)',
+    weight_g: 47,
+    dimensions: '46.1 x 46.1 x 12.9 mm',
+    resolution: '416 x 416 pixels',
+    screen_type: 'AMOLED Touchscreen, Corning Gorilla Glass 3, Always-On Option',
+    refresh_rate_hz: 60,
+    rear_camera: 'Garmin Elevate Gen 4 Optical Heart Rate + Pulse Ox Blood Oxygen Sensor',
+    second_camera: 'Barometric Altimeter + Compass + Gyroscope + Thermometer',
+    front_camera: '5-Button Physical Lap/Start Control + AMOLED Touch',
+    charging_w: 5,
+    has_5g: false,
+    release_date: 'March 2023',
+    ip_rating: '5 ATM water resistant (50m swim-ready, fiber-reinforced polymer)',
+    default_storage_gb: 8,
+  },
+  'samsung:galaxy-buds3-pro': {
+    screen_size_inch: 1.0,
+    battery_mah: 515,
+    ram_gb: 1,
+    chipset: 'Samsung Proprietary Bluetooth 5.4 SoC + Dual Amplifier',
+    cpu: 'Galaxy AI Adaptive ANC & Real-Time Interpreter DSP',
+    gpu: 'Blade Lights LED Controller',
+    os: 'Galaxy Wearable (SSC UHQ 24-bit/96kHz)',
+    weight_g: 57.4,
+    dimensions: '48.7 x 58.9 x 24.4 mm (Case)',
+    resolution: 'Enhanced 2-Way Speaker (10.5mm Dynamic + 6.1mm Planar Tweeter)',
+    screen_type: 'Blade Lights LED Indicator + Transparent Cradle Lid',
+    refresh_rate_hz: 60,
+    rear_camera: '3 High-SNR Microphones + VPU (Voice Pickup Unit)',
+    second_camera: 'In-canal feedback mic + Siren/Voice Detect AI sensor',
+    front_camera: 'Pinch & Swipe Blade Touch Controls',
+    charging_w: 5,
+    has_5g: false,
+    release_date: 'July 2024',
+    ip_rating: 'IP57 dust and water resistant (1m up to 30 mins)',
     default_storage_gb: 1,
   },
 };
@@ -514,11 +669,25 @@ export class ProductNormalizer {
       model = 'WF-1000XM5';
     } else if (brand === 'Sony' && /wh-1000xm5/i.test(title)) {
       model = 'WH-1000XM5';
+    } else if (brand === 'Asus' && /zenbook\s*s\s*14/i.test(title)) {
+      model = 'Zenbook S 14';
+    } else if (brand === 'Lenovo' && /thinkpad\s*x1\s*carbon\s*gen\s*12/i.test(title)) {
+      model = 'ThinkPad X1 Carbon Gen 12';
+    } else if (brand === 'Garmin' && /forerunner\s*265/i.test(title)) {
+      model = 'Forerunner 265';
+    } else if (brand === 'Samsung' && /galaxy\s*watch\s*ultra/i.test(title)) {
+      model = 'Galaxy Watch Ultra';
+    } else if (brand === 'Samsung' && /galaxy\s*buds\s*3\s*pro/i.test(title)) {
+      model = 'Galaxy Buds3 Pro';
+    } else if (brand === 'Samsung' && /galaxy\s*tab\s*s10\s*ultra/i.test(title)) {
+      model = 'Galaxy Tab S10 Ultra';
+    } else if (brand === 'Xiaomi' && /pad\s*6s\s*pro/i.test(title)) {
+      model = 'Pad 6S Pro';
     } else {
       const cleaned = title
         .replace(
           new RegExp(
-            `^(?:Điện thoại|Smartphone|Máy tính bảng|Tablet|Laptop|Máy tính xách tay|Đồng hồ thông minh|Smartwatch|Tai nghe|Earbuds)?\\s*${brand}`,
+            `^(?:Điện thoại|Smartphone|Máy tính bảng|Tablet|Laptop|Máy tính xách tay|Đồng hồ thông minh|Smartwatch|Tai nghe(?:\\s*Bluetooth|\\s*chống\\s*ồn)?|Earbuds)?\\s*${brand}`,
             'i'
           ),
           ''
@@ -529,7 +698,7 @@ export class ProductNormalizer {
       for (const tok of rawTokens) {
         if (modelTokens.length >= 4) break;
         if (
-          /^(?:\d+(?:[.,]\d+)?(?:GB|TB)|\d+\/\d+(?:GB|TB)?|5G|4G|LTE|RAM|ROM|Chính|Quốc|Bản|Mới|Fullbox|\(|\[|-)/i.test(
+          /^(?:\d+(?:[.,]\d+)?(?:GB|TB)|\d+\/\d+(?:GB|TB)?|\d{2}mm|5G|4G|LTE|GPS|RAM|ROM|OLED|WiFi|Chính|Quốc|Bản|Mới|Fullbox|\(|\[|-)/i.test(
             tok
           )
         ) {
