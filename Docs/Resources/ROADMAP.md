@@ -100,6 +100,12 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc **4 T�
   - Tích hợp `WatchlistQuickToggle.tsx` cạnh `CompareQuickToggle.tsx` trên mọi thẻ sản phẩm của cả 5 danh mục ngành hàng và Trang chủ, kèm liên kết kiểm định nhanh `/inspect?q=<slug>`.
 - [x] **4.16. Biểu Mẫu Đóng Góp Link & Báo Cáo Giá Ảo Cộng Đồng (`/contact-us`) Kết Nối Zero-Trust Quarantine (Issue #29):**
   - Triển khai `CommunityQuarantineSubmitForm.tsx` trên `/[locale]/contact-us` kết nối trực tiếp tới `POST /api/v1/rate/extension/ingest` (`consentGranted = true`) để người mua gửi đường dẫn nghi vấn giảm giá ảo trên 10 sàn/đại lý vào hàng đợi `rate.crawl_jobs`.
+- [x] **4.17. Gợi Ý Đối Thủ Cùng Phân Khúc & So Sánh 1-Chạm Trên Chi Tiết Sản Phẩm + Thẻ Tóm Tắt Kết Luận So Sánh Tự Động Trên `/compare` (Issue #30):**
+  - Bổ sung khối `relatedCompetitors` ("Đối Thủ Trực Tiếp Cùng Phân Khúc & So Sánh 1-Chạm") và nút `🔍 Kiểm định` theo từng gian hàng trên `ProductDetailView`, cùng thẻ "Kết Luận Đối Chiếu Tự Động Theo 10 Nhóm Thông Số" và nút `🔔 Canh giá cả nhóm` trên `CompareWorkspace.tsx`.
+- [x] **4.18. Chuẩn Hóa `DESIGN.md` v2.0, Xóa Slug Ngôn Ngữ (`/en`, `/cs`) Khi Đổi Locale & Hiển Thị Đủ 10/10 Nhóm Thông Số Trên `ProductDetailView` (Issue #31):**
+  - Ban hành tài liệu thiết kế gốc `DESIGN.md` v2.0 tại thư mục gốc dự án; chuyển `routing` trong `navigation.ts` sang `localePrefix: "never"` kèm cookie `NEXT_LOCALE` và redirect `308` trong `middleware.ts` để đổi ngôn ngữ luôn giữ nguyên URL gốc; nâng cấp `ProductDetailView` hiển thị đủ 10/10 nhóm thông số chuẩn hóa (bao gồm tách rời cụm camera chuẩn PhoneArena `main_camera`, `second_camera`, `third_camera`, `fourth_camera`, `front_camera`).
+- [x] **4.19 & 4.20. Hiện Đại Hóa Giao Diện Hero, Telemetry Strip, 5 Trang Danh Mục & `/merchants` Theo `DESIGN.md` v2.0 + Test Regression Locale URL (Issue #32 & Issue #33):**
+  - Thay thế toàn bộ ảnh nền template cũ (`/img/banner-6.jpg`, `data-overlay`, `br-dashed`) trên Trang chủ, 5 trang Danh mục ngành hàng và trang Gian hàng bằng nền Dark Obsidian (`#0f1113` -> `#141821`) kết hợp Radial Glow đỏ `#FF2E29` / Indigo AI và thẻ kính mờ `tabular-nums`; bổ sung bài kiểm thử tự động `[8/8]` trong `core-rate-architecture.test.ts` đảm bảo `localePrefix: "never"`.
 
 ### ✅ Phase 5: Mở Rộng Đa Sàn & Browser Extension MV3 (Đã hoàn thành 100%)
 
