@@ -171,6 +171,58 @@ export const SEED_MERCHANTS: SeedMerchantProfile[] = [
     location: 'Hà Nội',
     dosafe_risk_score: 48,
   },
+  {
+    key: 'lazada_apple_flagship',
+    platform: 'lazada',
+    platform_shop_id: 'laz-apple-vn-01',
+    name: 'Apple Flagship Store LazMall',
+    slug: 'apple-flagship-store-lazmall',
+    url: 'https://www.lazada.vn/shop/apple-flagship-store',
+    is_official: true,
+    rating_star: 4.95,
+    follower_count: 960000,
+    location: 'TP. Hồ Chí Minh',
+    dosafe_risk_score: 2,
+  },
+  {
+    key: 'lazada_samsung_flagship',
+    platform: 'lazada',
+    platform_shop_id: 'laz-samsung-vn',
+    name: 'Samsung Flagship Store LazMall',
+    slug: 'samsung-flagship-store-lazmall',
+    url: 'https://www.lazada.vn/shop/samsung-flagship-store',
+    is_official: true,
+    rating_star: 4.94,
+    follower_count: 875000,
+    location: 'TP. Hồ Chí Minh',
+    dosafe_risk_score: 2,
+  },
+  {
+    key: 'tiki_viettel_store',
+    platform: 'tiki',
+    platform_shop_id: 'tiki-viettel-01',
+    name: 'Viettel Store Official Tiki',
+    slug: 'viettel-store-official-tiki',
+    url: 'https://tiki.vn/cua-hang/viettel-store-official',
+    is_official: true,
+    rating_star: 4.9,
+    follower_count: 420000,
+    location: 'Hà Nội & TP.HCM',
+    dosafe_risk_score: 3,
+  },
+  {
+    key: 'lazada_grey_market_365',
+    platform: 'lazada',
+    platform_shop_id: 'laz-grey-365',
+    name: 'Siêu Thị Điện Máy Xách Tay 365',
+    slug: 'sieu-thi-dien-may-xach-tay-365',
+    url: 'https://www.lazada.vn/shop/dien-may-xach-tay-365',
+    is_official: false,
+    rating_star: 4.28,
+    follower_count: 1420,
+    location: 'Hà Nội',
+    dosafe_risk_score: 52,
+  },
 ];
 
 /**
@@ -3629,3 +3681,179 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     ],
   },
 ];
+
+/**
+ * Deterministically synthesizes missing platform listings (across Shopee, Lazada, Tiki,
+ * CellphoneS, and Thế Giới Di Động) + 60-day price history + multi-platform JReviews
+ * (including authentic technical reviews and coin-spam / seeding samples) for any
+ * canonical `master_product` so that 100% of the 22 catalog devices have full 5-platform depth.
+ */
+export function synthesizeCrossPlatformOffersForMaster(params: {
+  modelKey: string;
+  name: string;
+  slug: string;
+  brand: string;
+  colors: string[];
+  basePrice: number;
+  existingPlatforms: Array<'shopee' | 'lazada' | 'tiki' | 'cellphones' | 'tgdd'>;
+  keySpecs?: KeySpecs | null;
+}): FlagshipDeviceSeed['listings'] {
+  const allPlatforms: Array<'shopee' | 'lazada' | 'tiki' | 'cellphones' | 'tgdd'> = [
+    'shopee',
+    'lazada',
+    'tiki',
+    'cellphones',
+    'tgdd',
+  ];
+  const present = new Set(params.existingPlatforms);
+  const brandLower = (params.brand || '').toLowerCase();
+  const primaryColor = params.colors?.[0] || 'Tiêu chuẩn';
+  const secondaryColor = params.colors?.[1] || primaryColor;
+  const base = Math.max(1_000_000, Math.round(params.basePrice / 10_000) * 10_000);
+  const slugSafe = (params.slug || params.modelKey.replace(/[^a-z0-9]+/gi, '-')).toLowerCase();
+
+  const screenInfo = params.keySpecs?.screen || 'màn hình sắc nét';
+  const chipInfo = params.keySpecs?.chip || 'vi xử lý thế hệ mới';
+  const batteryInfo = params.keySpecs?.battery || 'thời lượng pin ấn tượng';
+
+  const round10k = (val: number) => Math.round(val / 10_000) * 10_000;
+
+  const pickMerchantKey = (
+    platform: 'shopee' | 'lazada' | 'tiki' | 'cellphones' | 'tgdd'
+  ): string => {
+    if (platform === 'shopee') {
+      if (brandLower.includes('apple')) return 'shopee_apple_flagship';
+      if (brandLower.includes('samsung')) return 'shopee_samsung_official';
+      return 'shopee_xiaomi_official';
+    }
+    if (platform === 'lazada') {
+      if (brandLower.includes('apple')) return 'lazada_apple_flagship';
+      if (brandLower.includes('samsung')) return 'lazada_samsung_flagship';
+      return 'lazada_oppo_flagship';
+    }
+    if (platform === 'tiki') {
+      return brandLower.includes('apple') || brandLower.includes('samsung')
+        ? 'tiki_trading'
+        : 'tiki_viettel_store';
+    }
+    if (platform === 'cellphones') return 'cellphones_official';
+    return 'tgdd_official';
+  };
+
+  const buildUrl = (
+    platform: 'shopee' | 'lazada' | 'tiki' | 'cellphones' | 'tgdd',
+    itemId: string
+  ): string => {
+    switch (platform) {
+      case 'shopee':
+        return `https://shopee.vn/${slugSafe}-i.88201679.${itemId}`;
+      case 'lazada':
+        return `https://www.lazada.vn/products/${slugSafe}-i${itemId}.html`;
+      case 'tiki':
+        return `https://tiki.vn/${slugSafe}-p${itemId}.html`;
+      case 'cellphones':
+        return `https://cellphones.com.vn/${slugSafe}.html`;
+      case 'tgdd':
+        return `https://www.thegioididong.com/dtdd/${slugSafe}`;
+    }
+  };
+
+  const results: FlagshipDeviceSeed['listings'] = [];
+
+  for (const platform of allPlatforms) {
+    if (present.has(platform)) continue;
+
+    const multiplier =
+      platform === 'lazada'
+        ? 0.985
+        : platform === 'tiki'
+          ? 0.992
+          : platform === 'shopee'
+            ? 1.0
+            : platform === 'cellphones'
+              ? 1.012
+              : 1.024;
+
+    const priceCurrent = round10k(base * multiplier);
+    const priceOriginal = round10k(base * 1.12);
+    const itemId = `syn-${platform}-${slugSafe}`;
+
+    const reviews: FlagshipDeviceSeed['listings'][number]['reviews'] = [
+      {
+        reviewId: `syn-rv-${platform}-${slugSafe}-1`,
+        author:
+          platform === 'tiki'
+            ? 'Trần Hoàng Nam'
+            : platform === 'lazada'
+              ? 'Lê Minh Tuấn'
+              : platform === 'cellphones'
+                ? 'Nguyễn Quốc Bảo'
+                : platform === 'tgdd'
+                  ? 'Phạm Gia Huy'
+                  : 'hoang_long_tech',
+        ratingStar: 5,
+        comment: `Mua ${params.name} chính hãng nguyên seal, kích hoạt bảo hành điện tử chuẩn. Trải nghiệm thực tế ${screenInfo} và ${chipInfo} cực kỳ mượt, ${batteryInfo} đáp ứng trọn vẹn nhu cầu làm việc cả ngày.`,
+        variation: primaryColor,
+        daysAgo: 8,
+      },
+      {
+        reviewId: `syn-rv-${platform}-${slugSafe}-2`,
+        author:
+          platform === 'tiki'
+            ? 'Vũ Thanh Thảo'
+            : platform === 'lazada'
+              ? 'Đặng Thu Hà'
+              : platform === 'cellphones'
+                ? 'Bùi Đức Anh'
+                : platform === 'tgdd'
+                  ? 'Ngô Minh Châu'
+                  : 'linh_chi_official',
+        ratingStar: platform === 'tgdd' ? 4 : 5,
+        comment:
+          platform === 'tgdd'
+            ? `Nhân viên Thế Giới Di Động hỗ trợ chu đáo, máy ${params.name} hoàn thiện cao cấp, ${screenInfo} hiển thị ngoài trời rõ ràng, mức giá niêm yết nhỉnh hơn sàn TMĐT một chút nhưng yên tâm bảo hành.`
+            : `Đóng gói chống sốc kỹ, giao nhanh trong 24h. Máy ${params.name} chạy ${chipInfo} mát và ổn định, rất đáng tiền trong phân khúc.`,
+        variation: secondaryColor,
+        daysAgo: 4,
+      },
+    ];
+
+    // Add 1 coin-spam review on Lazada/Shopee so AiReviewAnalyzer flags low_value_coin_spam
+    if (platform === 'lazada' || platform === 'shopee') {
+      reviews.push({
+        reviewId: `syn-rv-${platform}-${slugSafe}-spam`,
+        author: 'user_nhan_xu_99',
+        ratingStar: 5,
+        comment:
+          'Hàng ok lắm nha shop ơi, bình luận nhanh cho đủ 50 ký tự để nhận 200 xu thôi chứ chưa khui hộp test kỹ.',
+        variation: primaryColor,
+        daysAgo: 2,
+      });
+    }
+
+    results.push({
+      platform,
+      platform_item_id: itemId,
+      merchant_key: pickMerchantKey(platform),
+      title: `${params.name} - Hàng Chính Hãng Bảo Hành 12 Tháng`,
+      price_current: priceCurrent,
+      price_original: priceOriginal,
+      historical_sold: platform === 'shopee' ? 420 : platform === 'lazada' ? 310 : 195,
+      stock: 45,
+      rating_star: 4.92,
+      rating_count: 140,
+      url: buildUrl(platform, itemId),
+      price_history: [
+        { daysAgo: 60, price: round10k(priceCurrent * 1.045), priceOriginal },
+        { daysAgo: 45, price: round10k(priceCurrent * 1.03), priceOriginal },
+        { daysAgo: 30, price: round10k(priceCurrent * 1.015), priceOriginal },
+        { daysAgo: 15, price: round10k(priceCurrent * 1.008), priceOriginal },
+        { daysAgo: 7, price: priceCurrent, priceOriginal },
+        { daysAgo: 0, price: priceCurrent, priceOriginal },
+      ],
+      reviews,
+    });
+  }
+
+  return results;
+}

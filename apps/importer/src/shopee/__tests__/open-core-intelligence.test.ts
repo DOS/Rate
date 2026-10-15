@@ -7,7 +7,11 @@
 import assert from 'node:assert/strict';
 import { ProductSpecificationsSchema } from '@repo/shared-data';
 import { ProductNormalizer, detectCategorySlug } from '../product-normalizer.js';
-import { FLAGSHIP_DEVICES_TO_SEED } from '../flagship-seed-data.js';
+import {
+  FLAGSHIP_DEVICES_TO_SEED,
+  SEED_MERCHANTS,
+  synthesizeCrossPlatformOffersForMaster,
+} from '../flagship-seed-data.js';
 import type { ShopeeProduct } from '../types.js';
 
 function createDummyShopeeProduct(title: string, priceMin = 25990000): ShopeeProduct {
@@ -206,7 +210,47 @@ function runSuite() {
       `Expected at least 3 flagship seed devices in category "${cat}", got ${countsByCat.get(cat) || 0}`
     );
   }
-  console.log('  ✅ [5/5] Flagship Seed Dataset Multi-Brand Coverage (>=3 per Category) passed');
+  console.log('  ✅ [5/6] Flagship Seed Dataset Multi-Brand Coverage (>=3 per Category) passed');
+
+  // 6. 5-Platform Merchant Coverage & Cross-Platform Offer/Review Synthesis
+  assert.ok(SEED_MERCHANTS.length >= 12, 'Expected >= 12 multi-platform seed merchants');
+  const merchantPlatforms = new Set(SEED_MERCHANTS.map(m => m.platform));
+  for (const plat of ['shopee', 'lazada', 'tiki', 'cellphones', 'tgdd'] as const) {
+    assert.ok(merchantPlatforms.has(plat), `SEED_MERCHANTS missing platform ${plat}`);
+  }
+
+  const synthOffers = synthesizeCrossPlatformOffersForMaster({
+    modelKey: 'apple:iphone-16:128gb',
+    name: 'Apple iPhone 16 128GB',
+    slug: 'apple-iphone-16-128gb',
+    brand: 'Apple',
+    colors: ['Xanh Lưu Ly', 'Đen'],
+    basePrice: 22_990_000,
+    existingPlatforms: ['shopee'],
+    keySpecs: {
+      screen: '6.1" Super Retina XDR OLED',
+      chip: 'Apple A18 (3 nm)',
+      camera: '48MP Fusion + 12MP Ultrawide',
+      battery: '3561 mAh',
+      storage: '128GB',
+      ram: '8GB',
+    },
+  });
+  assert.equal(synthOffers.length, 4, 'Should synthesize 4 missing platform offers');
+  assert.deepEqual(
+    synthOffers.map(o => o.platform),
+    ['lazada', 'tiki', 'cellphones', 'tgdd']
+  );
+  for (const offer of synthOffers) {
+    assert.ok(
+      offer.price_history.length >= 6,
+      'Each synthesized offer must have 60-day price history'
+    );
+    assert.ok(offer.reviews.length >= 2, 'Each synthesized offer must have multi-platform reviews');
+  }
+  console.log(
+    '  ✅ [6/6] 5-Platform Cross-Offer, 60-Day Price History & Multi-Review Synthesis passed'
+  );
   console.log('🎉 All @repo/crawlers Open-Core Intelligence tests passed!');
 }
 
