@@ -1,18 +1,21 @@
-import { env } from "@/env.mjs"
-import { createNavigation } from "next-intl/navigation"
-import { defineRouting } from "next-intl/routing"
+import { env } from '@/env.mjs';
+import { createNavigation } from 'next-intl/navigation';
+import { defineRouting } from 'next-intl/routing';
 
 export const routing = defineRouting({
   // A list of all locales that are supported
-  locales: ["cs", "en", "vi"],
+  locales: ['cs', 'en', 'vi'],
 
   // Used when no locale matches
-  defaultLocale: "vi",
+  defaultLocale: 'vi',
 
-  localePrefix: "as-needed",
+  localePrefix: 'never',
   localeDetection: false,
-  localeCookie: false,
-})
+  localeCookie: {
+    name: 'NEXT_LOCALE',
+    maxAge: 60 * 60 * 24 * 365,
+  },
+});
 
 // https://next-intl-docs.vercel.app/docs/routing/navigation
 export const {
@@ -20,53 +23,53 @@ export const {
   redirect: _redirect,
   usePathname,
   useRouter,
-} = createNavigation(routing)
+} = createNavigation(routing);
 
 // Help TypeScript detect unreachable code
 // https://next-intl-docs.vercel.app/docs/routing/navigation#redirect
-export const redirect: typeof _redirect = _redirect
+export const redirect: typeof _redirect = _redirect;
 
 export const getAppPublicUrl = () => {
   // Determine the base URL: use APP_PUBLIC_URL on the server or window.location.origin on the client
   const baseUrl =
-    typeof window === "undefined" ? env.APP_PUBLIC_URL : window.location.origin
-  return baseUrl
-}
+    typeof window === 'undefined' ? env.APP_PUBLIC_URL : window.location.origin;
+  return baseUrl;
+};
 
 export const isAppLink = (link: string): boolean => {
   try {
-    const baseUrl = getAppPublicUrl()
+    const baseUrl = getAppPublicUrl();
     if (!baseUrl) {
-      throw new Error("Base URL is not defined.")
+      throw new Error('Base URL is not defined.');
     }
 
-    const url = new URL(link, baseUrl)
-    return url.hostname === new URL(baseUrl).hostname
+    const url = new URL(link, baseUrl);
+    return url.hostname === new URL(baseUrl).hostname;
   } catch {
-    return false
+    return false;
   }
-}
+};
 
 export const formatHref = (href: string | undefined | null): string => {
-  if (!href || href === "#") {
+  if (!href || href === '#') {
     // Empty path -> return hash to prevent unwanted issues
-    return "#"
+    return '#';
   }
 
-  if (href.startsWith("http")) {
+  if (href.startsWith('http')) {
     // External or internal link that starts with http(s) -> return as is
-    return href
+    return href;
   }
 
   if (!isAppLink(href)) {
     // External link -> return as is
-    return href
+    return href;
   }
 
-  if (!href.startsWith("/")) {
+  if (!href.startsWith('/')) {
     // Ensure path starts with a slash
-    href = `/${href}`
+    href = `/${href}`;
   }
 
-  return href
-}
+  return href;
+};

@@ -40,10 +40,7 @@ export async function generateMetadata({
             : 'Không tìm thấy gian hàng | Rate.vn',
     };
   }
-  const canonicalUrl =
-    lang === 'vi'
-      ? `https://rate.vn/merchants/${merchant.id}`
-      : `https://rate.vn/${lang}/merchants/${merchant.id}`;
+  const canonicalUrl = `https://rate.vn/merchants/${merchant.id}`;
 
   return {
     title:
@@ -109,10 +106,7 @@ export default async function MerchantProfilePage({
       ? Math.round((brk.authentic_count / brk.total_reviews) * 1000) / 10
       : 100;
 
-  const canonicalUrl =
-    locale === 'vi'
-      ? `https://rate.vn/merchants/${merchant.id}`
-      : `https://rate.vn/${locale}/merchants/${merchant.id}`;
+  const canonicalUrl = `https://rate.vn/merchants/${merchant.id}`;
 
   const merchantJsonLd = {
     '@context': 'https://schema.org',

@@ -35,10 +35,7 @@ export async function generateMetadata({
   const { slugs: slugsParam } = await searchParams;
   const requestedSlugs = parseSlugsCsv(slugsParam);
 
-  const canonicalUrl =
-    locale === 'vi'
-      ? 'https://rate.vn/compare'
-      : `https://rate.vn/${locale}/compare`;
+  const canonicalUrl = 'https://rate.vn/compare';
 
   if (requestedSlugs.length >= 2) {
     const compared = await getCachedCompareMasterProducts(

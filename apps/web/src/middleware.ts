@@ -20,6 +20,23 @@ export default function middleware(req: NextRequest) {
     return NextResponse.redirect(`https://${host}${req.nextUrl.pathname}`, 301);
   }
 
+  // Strip any explicit /vi, /en, /cs URL prefix so URLs never contain a locale slug
+  const pathname = req.nextUrl.pathname;
+  const localePrefixMatch = pathname.match(/^\/(vi|en|cs)(\/.*)?$/);
+  if (localePrefixMatch) {
+    const matchedLocale = localePrefixMatch[1]!;
+    const cleanPath = localePrefixMatch[2] || '/';
+    const redirectUrl = req.nextUrl.clone();
+    redirectUrl.pathname = cleanPath;
+    const response = NextResponse.redirect(redirectUrl, 308);
+    response.cookies.set('NEXT_LOCALE', matchedLocale, {
+      path: '/',
+      maxAge: 60 * 60 * 24 * 365,
+      sameSite: 'lax',
+    });
+    return response;
+  }
+
   return intlMiddleware(req);
 }
 
