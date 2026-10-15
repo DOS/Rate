@@ -696,6 +696,7 @@ export async function CategoryCatalogContent({
                                     brand: item.brand,
                                     thumbnail: thumb ?? null,
                                     min_price: Number(item.min_price || 0),
+                                    categoryPath: basePath,
                                   }}
                                 />
                               </div>
@@ -774,7 +775,7 @@ export async function CategoryCatalogContent({
                             <div className="listing-footer-item">
                               <div className="d-flex align-items-center justify-content-between gap-2">
                                 <div className="catdWraps">
-                                  <div className="flex-start">
+                                  <div className="d-flex align-items-center flex-wrap gap-2">
                                     <Link
                                       href={`${basePath}/${item.slug}`}
                                       className="d-flex align-items-center justify-content-start gap-2"
@@ -785,6 +786,13 @@ export async function CategoryCatalogContent({
                                       <span className="catTitle">
                                         Xem 10 nhóm thông số
                                       </span>
+                                    </Link>
+                                    <Link
+                                      href={`/inspect?q=${encodeURIComponent(item.slug)}`}
+                                      className="badge bg-primary bg-opacity-10 text-primary text-decoration-none rounded-pill px-2 py-1"
+                                      title="Kiểm định lịch sử giá 90 ngày & phát hiện giảm giá ảo"
+                                    >
+                                      🔍 Kiểm định giá
                                     </Link>
                                   </div>
                                 </div>

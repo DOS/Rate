@@ -243,6 +243,24 @@ export default async function Home({
                 📟 {copy.nav.tablets}
               </Link>
               <Link
+                href="/smartwatches"
+                className="btn btn-sm btn-outline-primary rounded-pill px-3"
+              >
+                ⌚ {copy.nav.smartwatches}
+              </Link>
+              <Link
+                href="/earbuds"
+                className="btn btn-sm btn-outline-primary rounded-pill px-3"
+              >
+                🎧 {copy.nav.earbuds}
+              </Link>
+              <Link
+                href="/inspect"
+                className="btn btn-sm btn-outline-danger rounded-pill px-3"
+              >
+                🔍 {copy.nav.inspect}
+              </Link>
+              <Link
                 href="/merchants"
                 className="btn btn-sm btn-outline-dark rounded-pill px-3"
               >
@@ -315,7 +333,8 @@ export default async function Home({
                   href="/smartphones"
                   className="btn btn-outline-primary rounded-pill fw-medium px-3 py-2"
                 >
-                  {copy.home.viewAllCatalog} ({platformStats.masterProductsCount}) →
+                  {copy.home.viewAllCatalog} (
+                  {platformStats.masterProductsCount}) →
                 </Link>
                 {masterProducts.length >= 2 && (
                   <Link
@@ -325,7 +344,8 @@ export default async function Home({
                       .join(',')}`}
                     className="btn btn-primary rounded-pill fw-medium px-3 py-2"
                   >
-                    {copy.home.compareSpecsBtn} ({Math.min(3, masterProducts.length)})
+                    {copy.home.compareSpecsBtn} (
+                    {Math.min(3, masterProducts.length)})
                   </Link>
                 )}
               </div>
@@ -373,6 +393,9 @@ export default async function Home({
                             brand: item.brand,
                             thumbnail: thumb ?? null,
                             min_price: Number(item.min_price),
+                            categoryPath:
+                              productHref.replace(`/${item.slug}`, '') ||
+                              '/smartphones',
                           }}
                         />
                       </div>
@@ -428,12 +451,19 @@ export default async function Home({
                           {item.total_reviews || 0} đánh giá thật)
                         </span>
                       </div>
-                      <div className="d-grid mt-3">
+                      <div className="d-flex mt-3 gap-2">
                         <Link
                           href={productHref}
-                          className="btn btn-primary rounded-pill fw-medium"
+                          className="btn btn-primary rounded-pill fw-medium flex-grow-1"
                         >
                           {copy.home.viewSpecAndPriceBtn}
+                        </Link>
+                        <Link
+                          href={`/inspect?q=${encodeURIComponent(item.slug)}`}
+                          className="btn btn-outline-danger rounded-pill fw-medium px-3"
+                          title="Kiểm định lịch sử giá 90 ngày & phát hiện giảm giá ảo"
+                        >
+                          🔍
                         </Link>
                       </div>
                     </div>

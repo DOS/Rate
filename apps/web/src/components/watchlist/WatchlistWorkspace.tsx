@@ -43,9 +43,11 @@ export default function WatchlistWorkspace({
     const minP = Number(p.min_price || 0);
     const targetP = Math.round((minP * 0.95) / 100000) * 100000;
     const thumb =
-      p.thumbnail || (p.images && p.images.length > 0 ? p.images[0] || null : null);
+      p.thumbnail ||
+      (p.images && p.images.length > 0 ? p.images[0] || null : null);
     const resolvedHref = getMasterProductHref(p);
-    const resolvedCategoryPath = resolvedHref.replace(`/${p.slug}`, '') || '/smartphones';
+    const resolvedCategoryPath =
+      resolvedHref.replace(`/${p.slug}`, '') || '/smartphones';
     upsertWatchlistItem({
       slug: p.slug,
       name: p.name,
@@ -120,17 +122,19 @@ export default function WatchlistWorkspace({
   return (
     <div className="container py-5">
       {/* Header Banner */}
-      <div className="card border-0 rounded-4 shadow-sm p-4 p-md-5 mb-4 bg-dark text-white">
+      <div className="card rounded-4 p-md-5 bg-dark mb-4 border-0 p-4 text-white shadow-sm">
         <div className="d-flex flex-column flex-lg-row justify-content-between align-items-start align-items-lg-center gap-3">
           <div>
-            <span className="badge bg-danger text-white rounded-pill px-3 py-2 mb-2">
+            <span className="badge bg-danger rounded-pill mb-2 px-3 py-2 text-white">
               🔔 Hệ Thống Canh Giá Thật &amp; Cảnh Báo Chạm Đáy Lịch Sử
             </span>
-            <h1 className="h2 fw-bold text-white mb-2">
+            <h1 className="h2 fw-bold mb-2 text-white">
               Danh Sách Theo Dõi Biến Động Giá ({items.length})
             </h1>
             <p className="text-white-50 mb-0">
-              Đối chiếu giá thấp nhất trực tiếp từ `rate.master_products` và chuỗi thời gian `rate.price_history` để báo hiệu ngay khi chạm mức giá mục tiêu của bạn.
+              Đối chiếu giá thấp nhất trực tiếp từ `rate.master_products` và
+              chuỗi thời gian `rate.price_history` để báo hiệu ngay khi chạm mức
+              giá mục tiêu của bạn.
             </p>
           </div>
           <div className="d-flex flex-wrap gap-2">
@@ -152,7 +156,7 @@ export default function WatchlistWorkspace({
                   .slice(0, 4)
                   .map((x) => x.slug)
                   .join(',')}`}
-                className="btn btn-danger rounded-pill px-4 fw-medium"
+                className="btn btn-danger rounded-pill fw-medium px-4"
               >
                 ⚖️ So sánh {Math.min(4, items.length)} máy đang canh giá
               </Link>
@@ -163,7 +167,7 @@ export default function WatchlistWorkspace({
         {items.length > 0 && (
           <form
             onSubmit={handleSyncAllCloudAlerts}
-            className="row g-2 align-items-center mt-3 pt-3 border-top border-secondary border-opacity-25"
+            className="row g-2 align-items-center border-top border-secondary border-opacity-25 mt-3 pt-3"
           >
             <div className="col-md-8">
               <input
@@ -186,7 +190,7 @@ export default function WatchlistWorkspace({
               </button>
             </div>
             {cloudSyncStatus && (
-              <div className="col-12 small text-success fw-medium mt-1">
+              <div className="small text-success fw-medium col-12 mt-1">
                 ✓ {cloudSyncStatus}
               </div>
             )}
@@ -194,15 +198,17 @@ export default function WatchlistWorkspace({
         )}
 
         {/* Summary KPI Strip */}
-        <div className="row g-3 mt-3 pt-3 border-top border-secondary border-opacity-25">
+        <div className="row g-3 border-top border-secondary border-opacity-25 mt-3 pt-3">
           <div className="col-sm-4 col-12">
-            <div className="p-3 rounded-3 bg-white bg-opacity-10">
+            <div className="rounded-3 bg-opacity-10 bg-white p-3">
               <div className="small text-white-50">Sản phẩm đang theo dõi</div>
-              <div className="h4 fw-bold text-white mb-0">{items.length} mẫu</div>
+              <div className="h4 fw-bold mb-0 text-white">
+                {items.length} mẫu
+              </div>
             </div>
           </div>
           <div className="col-sm-4 col-12">
-            <div className="p-3 rounded-3 bg-white bg-opacity-10">
+            <div className="rounded-3 bg-opacity-10 bg-white p-3">
               <div className="small text-white-50">Đã chạm mục tiêu mua</div>
               <div className="h4 fw-bold text-success mb-0">
                 {reachedCount} mẫu đạt giá mục tiêu
@@ -210,7 +216,7 @@ export default function WatchlistWorkspace({
             </div>
           </div>
           <div className="col-sm-4 col-12">
-            <div className="p-3 rounded-3 bg-white bg-opacity-10">
+            <div className="rounded-3 bg-opacity-10 bg-white p-3">
               <div className="small text-white-50">Chống giảm giá ảo</div>
               <div className="h4 fw-bold text-info mb-0">
                 100% đối chiếu trung vị 90 ngày
@@ -222,32 +228,42 @@ export default function WatchlistWorkspace({
 
       {/* Empty State with Quick Add Suggestions */}
       {items.length === 0 ? (
-        <div className="card border rounded-4 shadow-sm p-4 p-md-5 text-center bg-white mb-4">
+        <div className="card rounded-4 p-md-5 mb-4 border bg-white p-4 text-center shadow-sm">
           <div className="display-5 mb-3">🔔</div>
           <h3 className="h5 fw-bold mb-2">
             Bạn chưa thêm sản phẩm nào vào danh sách canh giá
           </h3>
-          <p className="text-muted small mb-4 mx-auto" style={{ maxWidth: '560px' }}>
+          <p
+            className="text-muted small mx-auto mb-4"
+            style={{ maxWidth: '560px' }}
+          >
             Hãy chọn nhanh một mẫu máy bên dưới hoặc bấm nút{' '}
-            <strong>&ldquo;🔔 Theo dõi giảm giá&rdquo;</strong> trên bất kỳ trang chi tiết sản phẩm nào để thiết lập ngưỡng giá mục tiêu.
+            <strong>&ldquo;🔔 Theo dõi giảm giá&rdquo;</strong> trên bất kỳ
+            trang chi tiết sản phẩm nào để thiết lập ngưỡng giá mục tiêu.
           </p>
 
           {catalogProducts.length > 0 && (
-            <div className="row g-3 justify-content-center text-start mt-2">
+            <div className="row g-3 justify-content-center mt-2 text-start">
               {catalogProducts.slice(0, 3).map((p) => {
                 const minP = Number(p.min_price || 0);
                 const thumb =
                   p.thumbnail ||
-                  (p.images && p.images.length > 0 ? p.images[0] : '/img/placeholder.png');
+                  (p.images && p.images.length > 0
+                    ? p.images[0]
+                    : '/img/placeholder.png');
                 return (
                   <div key={p.id} className="col-lg-4 col-md-6 col-12">
-                    <div className="card h-100 border rounded-4 p-3 bg-light">
-                      <div className="d-flex align-items-center gap-3 mb-3">
+                    <div className="card rounded-4 bg-light h-100 border p-3">
+                      <div className="d-flex align-items-center mb-3 gap-3">
                         <img
                           src={thumb}
                           alt={p.name}
-                          className="rounded bg-white p-1 border"
-                          style={{ width: '64px', height: '64px', objectFit: 'contain' }}
+                          className="rounded border bg-white p-1"
+                          style={{
+                            width: '64px',
+                            height: '64px',
+                            objectFit: 'contain',
+                          }}
                         />
                         <div>
                           <span className="badge bg-secondary-subtle text-secondary small mb-1">
@@ -262,12 +278,12 @@ export default function WatchlistWorkspace({
                       <button
                         type="button"
                         onClick={() => handleQuickAddCatalog(p)}
-                        className="btn btn-sm btn-primary rounded-pill w-100 fw-medium"
+                        className="btn btn-sm btn-primary rounded-pill fw-medium w-100"
                       >
                         🔔 Canh giảm 5% (≤{' '}
-                        {(Math.round((minP * 0.95) / 100000) * 100000).toLocaleString(
-                          'vi-VN'
-                        )}{' '}
+                        {(
+                          Math.round((minP * 0.95) / 100000) * 100000
+                        ).toLocaleString('vi-VN')}{' '}
                         ₫)
                       </button>
                     </div>
@@ -289,7 +305,8 @@ export default function WatchlistWorkspace({
               : currentMin;
             const diffFromAdded = currentMin - item.priceWhenAdded;
             const diffFromTarget = currentMin - item.targetPrice;
-            const targetReached = currentMin > 0 && currentMin <= item.targetPrice;
+            const targetReached =
+              currentMin > 0 && currentMin <= item.targetPrice;
             const detailHref = live
               ? getMasterProductHref(live)
               : `${item.categoryPath || '/smartphones'}/${item.slug}`;
@@ -297,17 +314,17 @@ export default function WatchlistWorkspace({
             return (
               <div key={item.slug} className="col-lg-6 col-12">
                 <div
-                  className={`card h-100 rounded-4 shadow-sm p-4 bg-white ${
+                  className={`card rounded-4 h-100 bg-white p-4 shadow-sm ${
                     targetReached ? 'border-success border-2' : 'border'
                   }`}
                 >
-                  <div className="d-flex justify-content-between align-items-start gap-3 mb-3">
+                  <div className="d-flex justify-content-between align-items-start mb-3 gap-3">
                     <div className="d-flex align-items-center gap-3">
                       {item.thumbnail ? (
                         <img
                           src={item.thumbnail}
                           alt={item.name}
-                          className="rounded-3 bg-light p-2 border"
+                          className="rounded-3 bg-light border p-2"
                           style={{
                             width: '76px',
                             height: '76px',
@@ -316,25 +333,28 @@ export default function WatchlistWorkspace({
                         />
                       ) : (
                         <div
-                          className="rounded-3 bg-light border d-flex align-items-center justify-content-center text-muted small"
+                          className="rounded-3 bg-light d-flex align-items-center justify-content-center text-muted small border"
                           style={{ width: '76px', height: '76px' }}
                         >
                           No Img
                         </div>
                       )}
                       <div>
-                        <div className="d-flex align-items-center gap-2 flex-wrap mb-1">
+                        <div className="d-flex align-items-center mb-1 flex-wrap gap-2">
                           <span className="badge bg-secondary-subtle text-secondary">
                             {item.brand}
                           </span>
                           {targetReached ? (
-                            <span className="badge bg-success text-white rounded-pill">
+                            <span className="badge bg-success rounded-pill text-white">
                               🎉 Đã chạm giá mục tiêu!
                             </span>
                           ) : (
-                            <span className="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle rounded-pill">
+                            <span className="badge bg-warning-subtle text-warning-emphasis border-warning-subtle rounded-pill border">
                               ⏳ Đang chờ giảm thêm{' '}
-                              {Math.max(0, diffFromTarget).toLocaleString('vi-VN')} ₫
+                              {Math.max(0, diffFromTarget).toLocaleString(
+                                'vi-VN'
+                              )}{' '}
+                              ₫
                             </span>
                           )}
                         </div>
@@ -354,6 +374,7 @@ export default function WatchlistWorkspace({
                     </div>
 
                     <CompareQuickToggle
+                      includeWatchlist={false}
                       item={{
                         slug: item.slug,
                         name: item.name,
@@ -367,12 +388,17 @@ export default function WatchlistWorkspace({
                   {/* Price Comparison Grid */}
                   <div className="row g-2 mb-3">
                     <div className="col-sm-4 col-12">
-                      <div className="p-2 rounded-3 bg-light border text-center">
-                        <div className="small text-muted">Giá hiện tại thấp nhất</div>
+                      <div className="rounded-3 bg-light border p-2 text-center">
+                        <div className="small text-muted">
+                          Giá hiện tại thấp nhất
+                        </div>
                         <div className="fw-bold text-danger">
                           {currentMin.toLocaleString('vi-VN')} ₫
                         </div>
-                        <div className="text-muted" style={{ fontSize: '11px' }}>
+                        <div
+                          className="text-muted"
+                          style={{ fontSize: '11px' }}
+                        >
                           {currentMin !== currentMax
                             ? `Cao nhất: ${currentMax.toLocaleString('vi-VN')} ₫`
                             : `${live?.merchant_count || 1} nơi bán`}
@@ -380,8 +406,10 @@ export default function WatchlistWorkspace({
                       </div>
                     </div>
                     <div className="col-sm-4 col-12">
-                      <div className="p-2 rounded-3 bg-light border text-center">
-                        <div className="small text-muted">Giá lúc bắt đầu lưu</div>
+                      <div className="rounded-3 bg-light border p-2 text-center">
+                        <div className="small text-muted">
+                          Giá lúc bắt đầu lưu
+                        </div>
                         <div className="fw-semibold text-dark">
                           {item.priceWhenAdded.toLocaleString('vi-VN')} ₫
                         </div>
@@ -404,7 +432,7 @@ export default function WatchlistWorkspace({
                       </div>
                     </div>
                     <div className="col-sm-4 col-12">
-                      <div className="p-2 rounded-3 bg-primary-subtle border border-primary-subtle text-center">
+                      <div className="rounded-3 bg-primary-subtle border-primary-subtle border p-2 text-center">
                         <div className="small text-primary-emphasis">
                           Mức giá mục tiêu
                         </div>
@@ -419,7 +447,7 @@ export default function WatchlistWorkspace({
                             );
                             setEditTarget(item.targetPrice);
                           }}
-                          className="btn btn-link btn-sm p-0 text-decoration-none"
+                          className="btn btn-link btn-sm text-decoration-none p-0"
                           style={{ fontSize: '11px' }}
                         >
                           Đổi mức giá ✎
@@ -429,13 +457,15 @@ export default function WatchlistWorkspace({
                   </div>
 
                   {editingSlug === item.slug && (
-                    <div className="p-3 rounded-3 bg-light border mb-3 d-flex align-items-center gap-2">
+                    <div className="rounded-3 bg-light d-flex align-items-center mb-3 gap-2 border p-3">
                       <input
                         type="number"
                         step={100000}
                         min={100000}
                         value={editTarget}
-                        onChange={(e) => setEditTarget(Number(e.target.value || 0))}
+                        onChange={(e) =>
+                          setEditTarget(Number(e.target.value || 0))
+                        }
                         className="form-control form-control-sm fw-semibold"
                       />
                       <button
@@ -455,7 +485,7 @@ export default function WatchlistWorkspace({
                     </div>
                   )}
 
-                  <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 pt-2 border-top mt-auto">
+                  <div className="d-flex justify-content-between align-items-center border-top mt-auto flex-wrap gap-2 pt-2">
                     <button
                       type="button"
                       onClick={() => removeWatchlistItem(item.slug)}
@@ -472,7 +502,7 @@ export default function WatchlistWorkspace({
                       </Link>
                       <Link
                         href={detailHref}
-                        className="btn btn-sm btn-primary rounded-pill px-3 fw-medium"
+                        className="btn btn-sm btn-primary rounded-pill fw-medium px-3"
                       >
                         Xem nơi bán tốt nhất →
                       </Link>
