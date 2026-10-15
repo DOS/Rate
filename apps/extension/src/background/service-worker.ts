@@ -255,6 +255,91 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (msgType === 'RATE_SIDEPANEL_QUICK_QUERY') {
+    (async () => {
+      try {
+        const rawQuery =
+          typeof message.query === 'string' ? message.query.trim() : '';
+        const settings = await getSettings();
+        if (!rawQuery) {
+          sendResponse({
+            ok: false,
+            error: 'Vui lòng nhập tên sản phẩm hoặc dán link TMĐT.',
+          });
+          return;
+        }
+
+        const isUrl = /^https?:\/\//i.test(rawQuery);
+        const syntheticSignal: ExtractedPageProductSignal = {
+          platform: 'shopee',
+          canonicalUrl: isUrl ? rawQuery.split('?')[0] || rawQuery : '',
+          externalItemId: null,
+          externalShopId: null,
+          title: rawQuery,
+          selectedVariant: null,
+          price: null,
+          originalPrice: null,
+          ratingStar: null,
+          ratingCount: null,
+        };
+
+        const params = new URLSearchParams();
+        params.set('mode', 'full');
+        if (isUrl) {
+          params.set('url', syntheticSignal.canonicalUrl);
+        }
+        params.set('title', rawQuery);
+
+        const endpoint = `${settings.apiBaseUrl}/api/v1/rate/extension/lookup?${params.toString()}`;
+        const response = await fetch(endpoint, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Rate-Extension-Version': '2.0.0',
+          },
+        });
+
+        if (!response.ok) {
+          sendResponse({
+            ok: true,
+            settings,
+            signal: syntheticSignal,
+            data: null,
+          });
+          return;
+        }
+
+        const json = (await response.json()) as {
+          ok?: boolean;
+          data?: ExtensionLookupData;
+        };
+        const fullLookup = json.ok && json.data ? json.data : null;
+
+        if (fullLookup?.platform) {
+          syntheticSignal.platform = fullLookup.platform;
+        }
+
+        await chrome.storage.session.set({
+          tab_latest: { signal: syntheticSignal, updatedAt: Date.now() },
+        });
+
+        sendResponse({
+          ok: true,
+          settings,
+          signal: syntheticSignal,
+          data: fullLookup,
+        });
+      } catch (err) {
+        sendResponse({
+          ok: false,
+          error:
+            err instanceof Error ? err.message : 'Quick query lookup failed',
+        });
+      }
+    })();
+    return true;
+  }
+
   if (msgType === 'RATE_UPDATE_SETTINGS') {
     (async () => {
       try {

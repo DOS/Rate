@@ -33,9 +33,13 @@
     "https://shopee.vn/*",
     "https://*.lazada.vn/*",
     "https://tiki.vn/*",
+    "https://*.tiktok.com/*",
     "https://cellphones.com.vn/*",
     "https://*.thegioididong.com/*",
     "https://fptshop.com.vn/*",
+    "https://hoanghamobile.com/*",
+    "https://didongviet.vn/*",
+    "https://phongvu.vn/*",
     "https://rate.vn/*",
     "http://localhost:3000/*"
   ],
@@ -45,9 +49,13 @@
         "https://shopee.vn/*",
         "https://*.lazada.vn/*",
         "https://tiki.vn/*",
+        "https://*.tiktok.com/*",
         "https://cellphones.com.vn/*",
         "https://*.thegioididong.com/*",
-        "https://fptshop.com.vn/*"
+        "https://fptshop.com.vn/*",
+        "https://hoanghamobile.com/*",
+        "https://didongviet.vn/*",
+        "https://phongvu.vn/*"
       ],
       "js": ["content/content-script.js"],
       "run_at": "document_idle"

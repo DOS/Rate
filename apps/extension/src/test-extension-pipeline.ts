@@ -40,7 +40,7 @@ async function runTests() {
     '🧪 Running Rate Browser Extension MV3 & Hybrid Lookup/Quarantine Verification Suite...'
   );
 
-  // 1. Privacy Gate: URL Canonicalization & Tracking Stripping
+  // 1. Privacy Gate: URL Canonicalization & 10-Platform Extraction
   const dirtyShopeeUrl =
     'https://shopee.vn/Dien-thoai-iPhone-16-Pro-Max-256GB-i.88201679.29512841920?sp_atk=991823-abcd&xptdk=112233&utm_source=facebook';
   const cleanUrl = sanitizeProductUrl(dirtyShopeeUrl);
@@ -55,9 +55,40 @@ async function runTests() {
     externalShopId: '88201679',
     externalItemId: '29512841920',
   });
+  assert.equal(
+    detectEcommercePlatform(
+      'https://www.tiktok.com/@appleflagship/product/1729384756'
+    ),
+    'tiktok'
+  );
+  assert.deepEqual(
+    extractIdsFromUrl(
+      'tiktok',
+      'https://www.tiktok.com/@appleflagship/product/1729384756'
+    ),
+    {
+      externalShopId: 'appleflagship',
+      externalItemId: '1729384756',
+    }
+  );
+  assert.equal(
+    detectEcommercePlatform(
+      'https://hoanghamobile.com/dien-thoai/iphone-16-pro-max-256gb'
+    ),
+    'hoangha'
+  );
+  assert.equal(
+    detectEcommercePlatform('https://didongviet.vn/dien-thoai/iphone-16.html'),
+    'didongviet'
+  );
+  assert.equal(
+    detectEcommercePlatform('https://phongvu.vn/macbook-air-m3'),
+    'phongvu'
+  );
+  assert.equal(Object.keys(EXTENSION_CAPABILITY_MATRIX).length, 10);
   assert.equal(parseVndPriceText('28.990.000₫ - 34.990.000₫'), 28990000);
   console.log(
-    '  ✅ [1/6] URL Canonicalization & Multi-Platform ID Extraction passed'
+    '  ✅ [1/6] URL Canonicalization & 10-Platform ID Extraction passed'
   );
 
   // 2. Gatekeeper Layer 0: Accessory & Spare Part Rejection
@@ -208,46 +239,58 @@ async function runTests() {
   assert.equal(nonShopeeRes.jobState, 'platform_worker_pending_phase_5_1');
   assert.equal(EXTENSION_CAPABILITY_MATRIX.shopee.crowdVerifyQueue, true);
   assert.equal(EXTENSION_CAPABILITY_MATRIX.lazada.crowdVerifyQueue, false);
+  assert.equal(EXTENSION_CAPABILITY_MATRIX.tiktok.lookup, true);
+  assert.equal(EXTENSION_CAPABILITY_MATRIX.hoangha.lookup, true);
   console.log(
-    '  ✅ [5/6] Zero-Trust Quarantine, Opt-In Consent & Capability Matrix passed'
+    '  ✅ [5/6] Zero-Trust Quarantine, Opt-In Consent & 10-Platform Capability Matrix passed'
   );
 
-  // 6. Live Read-Only Lookup against Supabase `rate` schema
-  const { getMasterProducts } = await import('../../web/src/lib/rate-api.js');
-  const existingCatalog = await getMasterProducts({ limit: 5 });
-  const sampleMaster = existingCatalog[0];
+  // 6. Live Read-Only Lookup against Supabase `rate` schema (when real credentials are present)
+  const sbUrl =
+    process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '';
+  const isCiPlaceholder = !sbUrl || sbUrl.includes('example.supabase.co');
 
-  const liveLookup = await lookupExtensionProduct({
-    platform: 'shopee',
-    url: dirtyShopeeUrl,
-    title: sampleMaster
-      ? `Điện thoại ${sampleMaster.brand} ${sampleMaster.name} Chính hãng`
-      : 'Điện thoại Apple iPhone 16 Pro Max 256GB VN/A',
-    selectedVariant: sampleMaster?.storage_gb
-      ? `${sampleMaster.storage_gb}GB`
-      : '256GB',
-    price: sampleMaster ? Number(sampleMaster.min_price) : 28990000,
-    originalPrice: sampleMaster
-      ? Math.round(Number(sampleMaster.min_price) * 1.25)
-      : 34990000,
-    mode: 'full',
-  });
-  assert.equal(
-    liveLookup.canonicalUrl,
-    'https://shopee.vn/Dien-thoai-iPhone-16-Pro-Max-256GB-i.88201679.29512841920'
-  );
-  assert.equal(liveLookup.isAccessoryOrPart, false);
-  if (sampleMaster) {
-    assert.notEqual(
-      liveLookup.matchStatus,
-      'not_found',
-      `Must match existing catalog product "${sampleMaster.name}"`
+  if (isCiPlaceholder) {
+    console.log(
+      '  ✅ [6/6] Live Read-Only Lookup skipped in CI placeholder environment'
     );
-    assert.ok(liveLookup.masterProduct?.id);
+  } else {
+    const { getMasterProducts } = await import('../../web/src/lib/rate-api.js');
+    const existingCatalog = await getMasterProducts({ limit: 5 });
+    const sampleMaster = existingCatalog[0];
+
+    const liveLookup = await lookupExtensionProduct({
+      platform: 'shopee',
+      url: dirtyShopeeUrl,
+      title: sampleMaster
+        ? `Điện thoại ${sampleMaster.brand} ${sampleMaster.name} Chính hãng`
+        : 'Điện thoại Apple iPhone 16 Pro Max 256GB VN/A',
+      selectedVariant: sampleMaster?.storage_gb
+        ? `${sampleMaster.storage_gb}GB`
+        : '256GB',
+      price: sampleMaster ? Number(sampleMaster.min_price) : 28990000,
+      originalPrice: sampleMaster
+        ? Math.round(Number(sampleMaster.min_price) * 1.25)
+        : 34990000,
+      mode: 'full',
+    });
+    assert.equal(
+      liveLookup.canonicalUrl,
+      'https://shopee.vn/Dien-thoai-iPhone-16-Pro-Max-256GB-i.88201679.29512841920'
+    );
+    assert.equal(liveLookup.isAccessoryOrPart, false);
+    if (sampleMaster) {
+      assert.notEqual(
+        liveLookup.matchStatus,
+        'not_found',
+        `Must match existing catalog product "${sampleMaster.name}"`
+      );
+      assert.ok(liveLookup.masterProduct?.id);
+    }
+    console.log(
+      `  ✅ [6/6] Live Read-Only Lookup matched "${liveLookup.masterProduct?.name || 'N/A'}" (matchStatus=${liveLookup.matchStatus}, verdict=${liveLookup.priceAssessment.verdict}, offers=${liveLookup.allOffers.length})`
+    );
   }
-  console.log(
-    `  ✅ [6/6] Live Read-Only Lookup matched "${liveLookup.masterProduct?.name || 'N/A'}" (matchStatus=${liveLookup.matchStatus}, verdict=${liveLookup.priceAssessment.verdict}, offers=${liveLookup.allOffers.length})`
-  );
 
   console.log('🎉 All Rate Browser Extension MV3 v2 tests passed!');
 }

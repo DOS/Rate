@@ -62,7 +62,7 @@ function renderPanelContent(
       <div class="card">
         <div class="card-title">Chưa nhận diện trang sản phẩm</div>
         <p style="color: #9ca3af;">
-          Hãy mở một trang chi tiết sản phẩm trên <strong>Shopee, Lazada, Tiki, CellphoneS, Thế Giới Di Động</strong> hoặc <strong>FPT Shop</strong> rồi bấm <strong>Làm mới</strong>.
+          Hãy mở một trang chi tiết sản phẩm trên <strong>Shopee, Lazada, Tiki, TikTok Shop, CellphoneS, Thế Giới Di Động, FPT Shop, Hoàng Hà Mobile, Di Động Việt</strong> hoặc <strong>Phong Vũ</strong>, hoặc dán link/tên máy vào ô <strong>Tra cứu nhanh</strong> phía trên.
         </p>
       </div>
     `;
@@ -106,6 +106,39 @@ function renderPanelContent(
             `
             )
             .join('')}
+        </div>
+      </div>
+    `
+      : '';
+
+  const keySpecs = master?.key_specs;
+  const keySpecsHtml =
+    keySpecs &&
+    (keySpecs.screen || keySpecs.chip || keySpecs.camera || keySpecs.battery)
+      ? `
+      <div class="card">
+        <div class="card-title">Tóm Tắt 10 Nhóm Thông Số Chuẩn</div>
+        <div class="stats-grid">
+          ${
+            keySpecs.screen
+              ? `<div class="stat-box"><div class="stat-label">Màn hình</div><div class="stat-val" style="font-size:12px;">${escapeHtml(keySpecs.screen)}</div></div>`
+              : ''
+          }
+          ${
+            keySpecs.chip
+              ? `<div class="stat-box"><div class="stat-label">Vi xử lý</div><div class="stat-val" style="font-size:12px;">${escapeHtml(keySpecs.chip)}</div></div>`
+              : ''
+          }
+          ${
+            keySpecs.camera
+              ? `<div class="stat-box"><div class="stat-label">Camera</div><div class="stat-val" style="font-size:12px;">${escapeHtml(keySpecs.camera)}</div></div>`
+              : ''
+          }
+          ${
+            keySpecs.battery
+              ? `<div class="stat-box"><div class="stat-label">Pin &amp; Sạc</div><div class="stat-val" style="font-size:12px;">${escapeHtml(keySpecs.battery)}</div></div>`
+              : ''
+          }
         </div>
       </div>
     `
@@ -210,6 +243,12 @@ function renderPanelContent(
   const compareUrl = lookup.compareUrl
     ? `${settings.apiBaseUrl}${lookup.compareUrl}`
     : `${settings.apiBaseUrl}/compare`;
+  const inspectUrl = `${settings.apiBaseUrl}/inspect?q=${encodeURIComponent(
+    signal.canonicalUrl || master?.slug || signal.title
+  )}`;
+  const watchlistUrl = master?.slug
+    ? `${settings.apiBaseUrl}/watchlist?add=${encodeURIComponent(master.slug)}`
+    : `${settings.apiBaseUrl}/watchlist`;
 
   root.innerHTML = `
     <div class="card">
@@ -230,8 +269,13 @@ function renderPanelContent(
         <a class="btn-primary" href="${escapeHtml(detailUrl)}" target="_blank" rel="noopener noreferrer">Xem Trên Rate.vn</a>
         <a class="btn-secondary" href="${escapeHtml(compareUrl)}" target="_blank" rel="noopener noreferrer">So Sánh Cấu Hình</a>
       </div>
+      <div class="btn-row" style="margin-top: 6px;">
+        <a class="btn-secondary" href="${escapeHtml(inspectUrl)}" target="_blank" rel="noopener noreferrer">🔬 Kiểm Toán Sâu</a>
+        <a class="btn-secondary" href="${escapeHtml(watchlistUrl)}" target="_blank" rel="noopener noreferrer">🔔 Canh Giá Thật</a>
+      </div>
     </div>
     ${variantButtonsHtml}
+    ${keySpecsHtml}
     ${historyHtml}
     ${offersHtml}
     ${reviewHtml}
@@ -300,8 +344,60 @@ async function loadSidePanel(selectedVariant?: string): Promise<void> {
   }
 }
 
+async function runQuickQuery(query: string): Promise<void> {
+  const root = document.getElementById('panel-root');
+  if (!root || !query.trim()) return;
+
+  root.innerHTML = `
+    <div class="card">
+      <p style="color: #9ca3af;">Đang kiểm toán nhanh dữ liệu cho "${escapeHtml(query.trim())}"...</p>
+    </div>
+  `;
+
+  try {
+    const res = (await chrome.runtime.sendMessage({
+      type: 'RATE_SIDEPANEL_QUICK_QUERY',
+      query: query.trim(),
+    })) as {
+      ok?: boolean;
+      settings?: ExtensionSettings;
+      signal?: ExtractedPageProductSignal | null;
+      data?: ExtensionLookupData | null;
+      error?: string;
+    };
+
+    const settings: ExtensionSettings = res?.settings || {
+      apiBaseUrl: 'http://localhost:3000',
+      crowdContributeOptIn: false,
+    };
+
+    renderPanelContent(
+      root,
+      res?.signal || null,
+      res?.data || null,
+      settings,
+      (variantLabel) => {
+        void loadSidePanel(variantLabel);
+      }
+    );
+  } catch (err) {
+    root.innerHTML = `
+      <div class="card">
+        <div class="card-title">Lỗi tra cứu nhanh</div>
+        <p style="color: #9ca3af;">${escapeHtml(err instanceof Error ? err.message : 'Không thể kiểm tra sản phẩm.')}</p>
+      </div>
+    `;
+  }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   const btnRefresh = document.getElementById('btn-refresh');
+  const formQuickInspect = document.getElementById(
+    'form-quick-inspect'
+  ) as HTMLFormElement | null;
+  const inpQuickQuery = document.getElementById(
+    'inp-quick-query'
+  ) as HTMLInputElement | null;
   const chkOptIn = document.getElementById(
     'chk-crowd-optin'
   ) as HTMLInputElement | null;
@@ -311,6 +407,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   btnRefresh?.addEventListener('click', () => {
     void loadSidePanel();
+  });
+
+  formQuickInspect?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (inpQuickQuery?.value.trim()) {
+      void runQuickQuery(inpQuickQuery.value.trim());
+    }
   });
 
   chkOptIn?.addEventListener('change', async () => {

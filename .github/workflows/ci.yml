@@ -63,6 +63,12 @@ jobs:
       - name: Run @repo/crawlers Open-Core Intelligence Tests
         run: pnpm --filter @repo/crawlers test
 
+      - name: Build & Typecheck @repo/extension (MV3)
+        run: pnpm --filter @repo/extension build
+
+      - name: Run @repo/extension E2E Pipeline Tests
+        run: pnpm --filter @repo/extension test
+
       - name: Typecheck @repo/web
         run: pnpm --filter @repo/web typecheck
 

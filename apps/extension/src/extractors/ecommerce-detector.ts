@@ -25,9 +25,14 @@ export function detectEcommercePlatform(
   if (host.includes('shopee.vn')) return 'shopee';
   if (host.includes('lazada.vn')) return 'lazada';
   if (host.includes('tiki.vn')) return 'tiki';
+  if (host.includes('tiktok.com')) return 'tiktok';
   if (host.includes('cellphones.com.vn')) return 'cellphones';
-  if (host.includes('thegioididong.com')) return 'tgdd';
+  if (host.includes('thegioididong.com') || host.includes('topzone.vn'))
+    return 'tgdd';
   if (host.includes('fptshop.com.vn')) return 'fptshop';
+  if (host.includes('hoanghamobile.com')) return 'hoangha';
+  if (host.includes('didongviet.vn')) return 'didongviet';
+  if (host.includes('phongvu.vn')) return 'phongvu';
   return null;
 }
 
@@ -67,7 +72,19 @@ export function extractIdsFromUrl(
     }
   }
 
-  // For CellphoneS / TGDD / FPT Shop, use the last pathname slug as item identifier
+  if (platform === 'tiktok') {
+    const prodMatch =
+      canonicalUrl.match(/\/product\/(\d+)/i) ||
+      canonicalUrl.match(/\/view\/product\/(\d+)/i) ||
+      canonicalUrl.match(/\/video\/(\d+)/i);
+    const shopMatch = canonicalUrl.match(/\/@([a-zA-Z0-9_.-]+)/);
+    return {
+      externalItemId: prodMatch?.[1] || null,
+      externalShopId: shopMatch?.[1] || null,
+    };
+  }
+
+  // For CellphoneS / TGDD / FPT Shop / Hoàng Hà / Di Động Việt / Phong Vũ, use the last pathname slug as item identifier
   const parts = canonicalUrl.split('/').filter(Boolean);
   const lastSegment = parts[parts.length - 1]?.replace(/\.html?$/i, '') || null;
   return {
