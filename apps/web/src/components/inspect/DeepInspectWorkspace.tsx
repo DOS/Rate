@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useRouter } from '@/lib/navigation';
 import {
   getMasterProductHref,
+  resolveProductImageUrl,
   type UrlInspectionResult,
 } from '@/lib/rate-api';
 import { normalizeRateLocale, type SupportedRateLocale } from '@/lib/rate-i18n';
@@ -320,28 +321,26 @@ export default function DeepInspectWorkspace({
     <div className="bg-light py-5">
       <div className="container">
         {/* Top Hero Inspector Card */}
-        <div className="card border-0 rounded-4 shadow-sm bg-dark text-white p-4 p-lg-5 mb-4">
-          <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-            <span className="badge bg-danger text-white rounded-pill px-3 py-2 fw-semibold">
-              {copy.badge}
-            </span>
+        <div className="rate-scoreboard-dark p-lg-5 mb-4 p-4">
+          <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+            <span className="rate-eyebrow text-white">{copy.badge}</span>
             <button
               type="button"
               onClick={handleCopyReportLink}
-              className="btn btn-sm btn-outline-light rounded-pill px-3 d-inline-flex align-items-center gap-2"
+              className="btn btn-sm btn-outline-light rounded-pill d-inline-flex align-items-center gap-2 px-3"
             >
               <BsClipboardCheck />
               <span>{copied ? copy.copiedLinkBtn : copy.copyLinkBtn}</span>
             </button>
           </div>
 
-          <h1 className="h2 fw-bold text-white mb-2">{copy.title}</h1>
+          <h1 className="h2 fw-bold mb-2 text-white">{copy.title}</h1>
           <p className="text-white-50 mb-4">{copy.subtitle}</p>
 
           <form onSubmit={handleFormSubmit} className="row g-2 mb-3">
             <div className="col-lg-9">
               <div className="input-group input-group-lg">
-                <span className="input-group-text bg-white border-0 text-danger">
+                <span className="input-group-text text-danger border-0 bg-white">
                   <BsLink45Deg className="fs-4" />
                 </span>
                 <input
@@ -366,14 +365,14 @@ export default function DeepInspectWorkspace({
           </form>
 
           {/* Sample quick-test pills */}
-          <div className="d-flex flex-wrap align-items-center gap-2 pt-2">
+          <div className="d-flex align-items-center flex-wrap gap-2 pt-2">
             <span className="small text-white-50">{copy.sampleLabel}</span>
             {SAMPLE_AUDIT_URLS.map((s) => (
               <button
                 key={s.label}
                 type="button"
                 onClick={() => handleSelectSample(s.query)}
-                className="btn btn-sm btn-outline-light rounded-pill px-3 py-1 small"
+                className="btn btn-sm btn-outline-light rounded-pill small px-3 py-1"
               >
                 {s.label}
               </button>
@@ -382,7 +381,7 @@ export default function DeepInspectWorkspace({
         </div>
 
         {errorMsg && (
-          <div className="alert alert-danger rounded-4 p-4 mb-4">
+          <div className="alert alert-danger rounded-4 mb-4 p-4">
             <BsExclamationTriangleFill className="me-2" />
             {errorMsg}
           </div>
@@ -394,14 +393,14 @@ export default function DeepInspectWorkspace({
             <div className="col-lg-8 d-flex flex-column gap-4">
               {/* 1. Price & Fake Discount Verdict Card */}
               {(matchedOffer || priceHistory) && (
-                <div className="card border-0 rounded-4 shadow-sm p-4 bg-white">
-                  <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-                    <h2 className="h5 fw-bold text-dark mb-0 d-flex align-items-center gap-2">
+                <div className="card rounded-4 border-0 bg-white p-4 shadow-sm">
+                  <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                    <h2 className="h5 fw-bold text-dark d-flex align-items-center mb-0 gap-2">
                       <BsGraphDownArrow className="text-danger" />
                       <span>{copy.verdictTitle}</span>
                     </h2>
                     {discount?.verdict === 'fake_discount' ? (
-                      <span className="badge bg-danger text-white rounded-pill px-3 py-2">
+                      <span className="badge bg-danger rounded-pill px-3 py-2 text-white">
                         <BsExclamationTriangleFill className="me-1" />
                         {copy.fakeSaleWarning}
                       </span>
@@ -415,13 +414,15 @@ export default function DeepInspectWorkspace({
 
                   <div className="row g-3">
                     <div className="col-sm-6 col-md-3">
-                      <div className="p-3 rounded-3 bg-light h-100">
+                      <div className="rounded-3 bg-light h-100 p-3">
                         <div className="small text-muted mb-1">
                           {copy.currentPriceLabel}
                         </div>
-                        <div className="h5 fw-bold text-danger mb-0">
+                        <div className="h5 fw-bold text-danger font-monospace mb-0">
                           {Number(
-                            matchedOffer?.price_current || master?.min_price || 0
+                            matchedOffer?.price_current ||
+                              master?.min_price ||
+                              0
                           ).toLocaleString('vi-VN')}{' '}
                           ₫
                         </div>
@@ -429,11 +430,11 @@ export default function DeepInspectWorkspace({
                     </div>
 
                     <div className="col-sm-6 col-md-3">
-                      <div className="p-3 rounded-3 bg-light h-100">
+                      <div className="rounded-3 bg-light h-100 p-3">
                         <div className="small text-muted mb-1">
                           {copy.claimedOriginalLabel}
                         </div>
-                        <div className="h6 fw-semibold text-secondary text-decoration-line-through mb-0">
+                        <div className="h6 fw-semibold text-secondary text-decoration-line-through font-monospace mb-0">
                           {matchedOffer?.price_original
                             ? `${Number(
                                 matchedOffer.price_original
@@ -444,11 +445,11 @@ export default function DeepInspectWorkspace({
                     </div>
 
                     <div className="col-sm-6 col-md-3">
-                      <div className="p-3 rounded-3 bg-light h-100">
+                      <div className="rounded-3 bg-light h-100 p-3">
                         <div className="small text-muted mb-1">
                           {copy.historicalLowLabel}
                         </div>
-                        <div className="h6 fw-bold text-success mb-0">
+                        <div className="h6 fw-bold text-success font-monospace mb-0">
                           {priceHistory?.lowestEverPrice
                             ? `${Number(
                                 priceHistory.lowestEverPrice
@@ -461,11 +462,11 @@ export default function DeepInspectWorkspace({
                     </div>
 
                     <div className="col-sm-6 col-md-3">
-                      <div className="p-3 rounded-3 bg-light h-100">
+                      <div className="rounded-3 bg-light h-100 p-3">
                         <div className="small text-muted mb-1">
                           {copy.historicalHighLabel}
                         </div>
-                        <div className="h6 fw-bold text-dark mb-0">
+                        <div className="h6 fw-bold text-dark font-monospace mb-0">
                           {priceHistory?.highestEverPrice
                             ? `${Number(
                                 priceHistory.highestEverPrice
@@ -480,13 +481,14 @@ export default function DeepInspectWorkspace({
 
                   {discount?.explanation && (
                     <div
-                      className={`mt-3 p-3 rounded-3 small fw-medium ${
+                      className={`rounded-3 small fw-medium mt-3 p-3 ${
                         discount.verdict === 'fake_discount'
                           ? 'bg-danger bg-opacity-10 text-danger'
                           : 'bg-success bg-opacity-10 text-success'
                       }`}
                     >
-                      <strong>{discount.badge_label}:</strong> {discount.explanation}
+                      <strong>{discount.badge_label}:</strong>{' '}
+                      {discount.explanation}
                     </div>
                   )}
                 </div>
@@ -494,10 +496,10 @@ export default function DeepInspectWorkspace({
 
               {/* 2. Canonical Master Product Card */}
               {master && (
-                <div className="card border-0 rounded-4 shadow-sm p-4 bg-white">
-                  <div className="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+                <div className="card rounded-4 border-0 bg-white p-4 shadow-sm">
+                  <div className="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-3">
                     <div>
-                      <span className="badge bg-dark text-white rounded-pill px-3 py-1 mb-2">
+                      <span className="badge bg-dark rounded-pill mb-2 px-3 py-1 text-white">
                         {copy.masterProductSection}
                       </span>
                       <h3 className="h4 fw-bold text-dark mb-1">
@@ -515,8 +517,11 @@ export default function DeepInspectWorkspace({
                           slug: master.slug,
                           name: master.name,
                           brand: master.brand,
-                          thumbnail:
-                            master.thumbnail || master.images?.[0] || null,
+                          categoryPath: productCategoryPath,
+                          thumbnail: resolveProductImageUrl(
+                            master.slug,
+                            master.thumbnail || master.images?.[0] || null
+                          ),
                           min_price: Number(master.min_price || 0),
                         }}
                       />
@@ -525,9 +530,10 @@ export default function DeepInspectWorkspace({
                         name={master.name}
                         brand={master.brand}
                         categoryPath={productCategoryPath}
-                        thumbnail={
+                        thumbnail={resolveProductImageUrl(
+                          master.slug,
                           master.thumbnail || master.images?.[0] || null
-                        }
+                        )}
                         currentMinPrice={Number(master.min_price || 0)}
                       />
                     </div>
@@ -537,7 +543,7 @@ export default function DeepInspectWorkspace({
                   <div className="row g-2 mb-3">
                     {keySpecs.chip && (
                       <div className="col-sm-6 col-md-4">
-                        <div className="p-2 rounded-3 bg-light small">
+                        <div className="rounded-3 bg-light small p-2">
                           <BsCpu className="text-danger me-1" />
                           <strong>SoC:</strong> {keySpecs.chip}
                         </div>
@@ -545,7 +551,7 @@ export default function DeepInspectWorkspace({
                     )}
                     {keySpecs.ram && (
                       <div className="col-sm-6 col-md-4">
-                        <div className="p-2 rounded-3 bg-light small">
+                        <div className="rounded-3 bg-light small p-2">
                           <strong>RAM/ROM:</strong> {keySpecs.ram} /{' '}
                           {keySpecs.storage || ''}
                         </div>
@@ -553,30 +559,43 @@ export default function DeepInspectWorkspace({
                     )}
                     {keySpecs.battery && (
                       <div className="col-sm-6 col-md-4">
-                        <div className="p-2 rounded-3 bg-light small">
+                        <div className="rounded-3 bg-light small p-2">
                           <strong>Battery:</strong> {keySpecs.battery}
                         </div>
                       </div>
                     )}
                   </div>
 
-                  <div className="d-flex flex-wrap justify-content-between align-items-center pt-3 border-top gap-2">
-                    <div className="small text-muted">
-                      <BsStarFill className="text-warning me-1" />
-                      <strong>
-                        {Number(
-                          master.user_rating_weighted ||
-                            master.average_rating ||
-                            0
-                        ).toFixed(1)}
-                        /5.0
-                      </strong>{' '}
-                      ({master.authentic_review_count || master.total_reviews || 0}{' '}
-                      verified reviews)
+                  <div className="d-flex justify-content-between align-items-center border-top flex-wrap gap-2 pt-3">
+                    <div className="d-flex align-items-center flex-wrap gap-2">
+                      <span className="rate-score-badge-user">
+                        <BsStarFill className="text-warning" />
+                        <span>
+                          {Number(
+                            master.user_rating_weighted ||
+                              master.average_rating ||
+                              4.8
+                          ).toFixed(1)}
+                          /5.0
+                        </span>
+                      </span>
+                      <span className="rate-score-badge-expert">
+                        <span>
+                          Expert{' '}
+                          {Number(master.expert_rating || 9.0).toFixed(1)}/10
+                        </span>
+                      </span>
+                      <span className="small text-muted">
+                        (
+                        {master.authentic_review_count ||
+                          master.total_reviews ||
+                          0}{' '}
+                        verified reviews)
+                      </span>
                     </div>
                     <Link
                       href={productHref}
-                      className="btn btn-danger rounded-pill px-4 btn-sm fw-semibold d-inline-flex align-items-center gap-2"
+                      className="btn btn-danger rounded-pill btn-sm fw-semibold d-inline-flex align-items-center gap-2 px-4"
                     >
                       <span>{copy.viewFullSpecsBtn}</span>
                       <BsArrowRight />
@@ -587,12 +606,12 @@ export default function DeepInspectWorkspace({
 
               {/* 3. Cross-Merchant Offers Table */}
               {result.allOffers && result.allOffers.length > 0 && (
-                <div className="card border-0 rounded-4 shadow-sm p-4 bg-white">
+                <div className="card rounded-4 border-0 bg-white p-4 shadow-sm">
                   <h3 className="h5 fw-bold text-dark mb-3">
                     {copy.offersTableTitle} ({result.allOffers.length})
                   </h3>
                   <div className="table-responsive">
-                    <table className="table align-middle mb-0">
+                    <table className="mb-0 table align-middle">
                       <thead className="table-light">
                         <tr>
                           <th>{copy.colMerchant}</th>
@@ -613,9 +632,7 @@ export default function DeepInspectWorkspace({
                                 {offer.merchant?.platform || 'shopee'}
                               </span>
                             </td>
-                            <td className="small text-muted">
-                              {offer.title}
-                            </td>
+                            <td className="small text-muted">{offer.title}</td>
                             <td className="fw-bold text-danger">
                               {Number(offer.price_current).toLocaleString(
                                 'vi-VN'
@@ -651,19 +668,19 @@ export default function DeepInspectWorkspace({
             {/* Right 4 Columns: Merchant Dual Risk Profile & AI Review Taxonomy */}
             <div className="col-lg-4 d-flex flex-column gap-4">
               {merchant && (
-                <div className="card border-0 rounded-4 shadow-sm p-4 bg-white">
-                  <div className="d-flex align-items-center gap-2 mb-3">
+                <div className="card rounded-4 border-0 bg-white p-4 shadow-sm">
+                  <div className="d-flex align-items-center mb-3 gap-2">
                     <BsShop className="text-danger fs-4" />
                     <h3 className="h5 fw-bold text-dark mb-0">
                       {copy.merchantAuditSection}
                     </h3>
                   </div>
 
-                  <div className="p-3 rounded-3 bg-light mb-3">
+                  <div className="rounded-3 bg-light mb-3 p-3">
                     <div className="fw-bold text-dark fs-5 mb-1">
                       {merchant.name}
                     </div>
-                    <div className="d-flex flex-wrap gap-2 align-items-center small text-muted">
+                    <div className="d-flex align-items-center small text-muted flex-wrap gap-2">
                       <span className="badge bg-dark text-uppercase">
                         {merchant.platform}
                       </span>
@@ -726,7 +743,7 @@ export default function DeepInspectWorkspace({
 
                   <Link
                     href={`/merchants/${merchant.id}`}
-                    className="btn btn-outline-danger rounded-pill w-100 fw-semibold"
+                    className="btn btn-outline-danger rounded-pill fw-semibold w-100"
                   >
                     <BsShieldCheck className="me-2" />
                     {copy.viewMerchantProfileBtn}
@@ -735,33 +752,33 @@ export default function DeepInspectWorkspace({
               )}
 
               {reviewSummary && (
-                <div className="card border-0 rounded-4 shadow-sm p-4 bg-white">
-                  <div className="d-flex align-items-center gap-2 mb-3">
+                <div className="card rounded-4 border-0 bg-white p-4 shadow-sm">
+                  <div className="d-flex align-items-center mb-3 gap-2">
                     <BsShieldExclamation className="text-danger fs-4" />
                     <h3 className="h5 fw-bold text-dark mb-0">
                       {copy.reviewTaxonomySection}
                     </h3>
                   </div>
 
-                  <div className="d-flex flex-column gap-2 small">
-                    <div className="d-flex justify-content-between p-2 rounded-3 bg-success bg-opacity-10 text-success fw-semibold">
+                  <div className="d-flex flex-column small gap-2">
+                    <div className="d-flex justify-content-between rounded-3 bg-success bg-opacity-10 text-success fw-semibold p-2">
                       <span>✅ {copy.authenticLabel}</span>
                       <span>{reviewSummary.authentic_pct}%</span>
                     </div>
-                    <div className="d-flex justify-content-between p-2 rounded-3 bg-warning bg-opacity-10 text-dark">
+                    <div className="d-flex justify-content-between rounded-3 bg-warning bg-opacity-10 text-dark p-2">
                       <span>🪙 {copy.coinSpamLabel}</span>
                       <strong>{reviewSummary.suspicious_pct}%</strong>
                     </div>
-                    <div className="d-flex justify-content-between p-2 rounded-3 bg-danger bg-opacity-10 text-danger">
+                    <div className="d-flex justify-content-between rounded-3 bg-danger bg-opacity-10 text-danger p-2">
                       <span>🤖 {copy.seedingFakeLabel}</span>
                       <strong>{reviewSummary.fake_pct}%</strong>
                     </div>
-                    <div className="d-flex justify-content-between p-2 rounded-3 bg-secondary bg-opacity-10 text-secondary">
+                    <div className="d-flex justify-content-between rounded-3 bg-secondary bg-opacity-10 text-secondary p-2">
                       <span>📊 Total Audited</span>
                       <strong>{reviewSummary.total_analyzed}</strong>
                     </div>
                     {reviewSummary.ai_summary && (
-                      <div className="p-2 rounded-3 bg-light text-muted mt-1">
+                      <div className="rounded-3 bg-light text-muted mt-1 p-2">
                         {reviewSummary.ai_summary}
                       </div>
                     )}
@@ -772,19 +789,21 @@ export default function DeepInspectWorkspace({
           </div>
         ) : (
           !loading && (
-            <div className="card border-0 rounded-4 shadow-sm p-5 text-center bg-white">
-              <h2 className="h4 fw-bold text-dark mb-2">{copy.notFoundTitle}</h2>
+            <div className="card rounded-4 border-0 bg-white p-5 text-center shadow-sm">
+              <h2 className="h4 fw-bold text-dark mb-2">
+                {copy.notFoundTitle}
+              </h2>
               <p className="text-muted mb-4">{copy.notFoundDesc}</p>
               {result?.suggestions && result.suggestions.length > 0 && (
-                <div className="d-flex flex-wrap justify-content-center gap-2">
+                <div className="d-flex justify-content-center flex-wrap gap-2">
                   {result.suggestions.map((item) => (
                     <Link
                       key={item.id}
                       href={getMasterProductHref(item)}
-                      className="btn btn-outline-danger rounded-pill px-3 btn-sm"
+                      className="btn btn-outline-danger rounded-pill btn-sm px-3"
                     >
-                      {item.name} ({Number(item.min_price).toLocaleString('vi-VN')}{' '}
-                      ₫)
+                      {item.name} (
+                      {Number(item.min_price).toLocaleString('vi-VN')} ₫)
                     </Link>
                   ))}
                 </div>

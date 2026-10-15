@@ -1,6 +1,11 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { Link } from '@/lib/navigation';
+import {
+  getCategoryRouteHref,
+  getMasterProductCategorySlug,
+  resolveProductImageUrl,
+} from '@/lib/rate-api';
 import { getCachedMerchantProfileById } from '@/server/rate';
 import NavbarDarkDynamic from '../../components/navbar/NavbarDarkDynamic';
 import FooterTop from '../../components/footer-top';
@@ -186,14 +191,20 @@ export default async function MerchantProfilePage({
           </ol>
         </nav>
 
-        {/* Merchant Header Card */}
-        <div className="card rounded-4 bg-light p-md-5 mb-4 border-0 p-4 shadow-sm">
+        {/* Merchant Header Card (DESIGN.md v3.0 Dark Obsidian Command Header) */}
+        <div className="rate-scoreboard-dark p-md-5 mb-4 p-4">
           <div className="row g-4 align-items-center">
             <div className="col-lg-8">
               <div className="d-flex align-items-start gap-3">
                 <div
-                  className="rounded-4 bg-primary d-flex align-items-center justify-content-center fs-2 flex-shrink-0 text-white shadow-sm"
-                  style={{ width: '72px', height: '72px' }}
+                  className="rounded-4 d-flex align-items-center justify-content-center fs-2 flex-shrink-0 text-white shadow-sm"
+                  style={{
+                    width: '72px',
+                    height: '72px',
+                    background:
+                      'linear-gradient(135deg, rgba(255, 46, 41, 0.25), rgba(99, 102, 241, 0.25))',
+                    border: '1px solid rgba(255, 255, 255, 0.14)',
+                  }}
                 >
                   <BsShop />
                 </div>
@@ -203,30 +214,49 @@ export default async function MerchantProfilePage({
                       {merchant.platform}
                     </span>
                     {merchant.is_official && (
-                      <span className="badge bg-success-subtle text-success rounded-pill d-inline-flex align-items-center gap-1 px-3 py-1">
+                      <span
+                        className="badge rounded-pill d-inline-flex align-items-center gap-1 px-3 py-1"
+                        style={{
+                          backgroundColor: 'rgba(16, 185, 129, 0.16)',
+                          color: '#34d399',
+                          border: '1px solid rgba(16, 185, 129, 0.35)',
+                        }}
+                      >
                         <BsCheckCircleFill /> Gian hàng Chính hãng (Official
                         Mall)
                       </span>
                     )}
-                    <span className="badge text-muted rounded-pill border bg-white px-3 py-1">
+                    <span
+                      className="badge rounded-pill px-3 py-1"
+                      style={{
+                        backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                        color: '#cbd5e1',
+                        border: '1px solid rgba(255, 255, 255, 0.14)',
+                      }}
+                    >
                       Shop ID: <code>{merchant.platform_shop_id}</code>
                     </span>
                   </div>
-                  <h1 className="h2 fw-bold text-dark mb-2">{merchant.name}</h1>
-                  <div className="d-flex align-items-center text-muted small flex-wrap gap-3">
+                  <h1 className="h2 fw-bold mb-2 text-white">
+                    {merchant.name}
+                  </h1>
+                  <div
+                    className="d-flex align-items-center small flex-wrap gap-3"
+                    style={{ color: '#94a3b8' }}
+                  >
                     <span className="d-inline-flex align-items-center gap-1">
                       <BsStarFill className="text-warning" />
                       Điểm sàn:{' '}
-                      <strong className="text-dark">
+                      <strong className="font-monospace text-white">
                         {merchant.rating_star
                           ? `${merchant.rating_star.toFixed(2)} / 5.0`
                           : 'Chưa cập nhật'}
                       </strong>
                     </span>
                     <span className="d-inline-flex align-items-center gap-1">
-                      <BsPeopleFill className="text-primary" />
+                      <BsPeopleFill className="text-info" />
                       Người theo dõi:{' '}
-                      <strong className="text-dark">
+                      <strong className="font-monospace text-white">
                         {merchant.follower_count > 0
                           ? merchant.follower_count.toLocaleString('vi-VN')
                           : '-'}
@@ -235,7 +265,7 @@ export default async function MerchantProfilePage({
                     <span className="d-inline-flex align-items-center gap-1">
                       <BsBoxSeam className="text-success" />
                       Sản phẩm đang theo dõi:{' '}
-                      <strong className="text-dark">
+                      <strong className="font-monospace text-white">
                         {merchant.product_count} mẫu
                       </strong>
                     </span>
@@ -245,13 +275,21 @@ export default async function MerchantProfilePage({
             </div>
 
             <div className="col-lg-4 text-lg-end">
-              <div className="card rounded-4 border bg-white p-3 text-center shadow-sm">
-                <div className="small text-muted mb-1">
+              <div
+                className="rounded-4 p-3 text-center"
+                style={{
+                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid rgba(255, 255, 255, 0.12)',
+                }}
+              >
+                <div className="small mb-1" style={{ color: '#94a3b8' }}>
                   Chỉ số Tín nhiệm Tổng hợp (Rate Trust Score)
                 </div>
-                <div className="display-6 fw-bold text-dark mb-1">
+                <div className="display-6 fw-bold font-monospace mb-1 text-white">
                   {merchant.trust_score}
-                  <span className="fs-5 text-muted fw-normal">/100</span>
+                  <span className="fs-5 fw-normal" style={{ color: '#94a3b8' }}>
+                    /100
+                  </span>
                 </div>
                 <div className="mb-3">
                   <span
@@ -265,9 +303,9 @@ export default async function MerchantProfilePage({
                     href={merchant.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="btn btn-outline-primary btn-sm rounded-pill fw-medium"
+                    className="btn btn-outline-light btn-sm rounded-pill fw-medium"
                   >
-                    Xem gian hàng trên {merchant.platform.toUpperCase()} ↗
+                    Đối chiếu nguồn trên {merchant.platform.toUpperCase()} ↗
                   </a>
                 )}
               </div>
@@ -371,7 +409,7 @@ export default async function MerchantProfilePage({
               <div className="row g-2 mt-auto">
                 <div className="col-sm-3 col-6">
                   <div className="rounded-3 bg-success-subtle p-2 text-center">
-                    <div className="fw-bold text-success fs-5">
+                    <div className="fw-bold text-success fs-5 font-monospace">
                       {brk.authentic_count}
                     </div>
                     <div className="text-muted" style={{ fontSize: '0.72rem' }}>
@@ -381,7 +419,7 @@ export default async function MerchantProfilePage({
                 </div>
                 <div className="col-sm-3 col-6">
                   <div className="rounded-3 bg-warning-subtle p-2 text-center">
-                    <div className="fw-bold text-warning-emphasis fs-5">
+                    <div className="fw-bold text-warning-emphasis fs-5 font-monospace">
                       {brk.coin_spam_count}
                     </div>
                     <div className="text-muted" style={{ fontSize: '0.72rem' }}>
@@ -391,7 +429,7 @@ export default async function MerchantProfilePage({
                 </div>
                 <div className="col-sm-3 col-6">
                   <div className="rounded-3 bg-danger-subtle p-2 text-center">
-                    <div className="fw-bold text-danger fs-5">
+                    <div className="fw-bold text-danger fs-5 font-monospace">
                       {brk.seeding_fake_count}
                     </div>
                     <div className="text-muted" style={{ fontSize: '0.72rem' }}>
@@ -401,7 +439,7 @@ export default async function MerchantProfilePage({
                 </div>
                 <div className="col-sm-3 col-6">
                   <div className="rounded-3 bg-secondary-subtle p-2 text-center">
-                    <div className="fw-bold text-secondary fs-5">
+                    <div className="fw-bold text-secondary fs-5 font-monospace">
                       {brk.sabotage_or_bombing_count}
                     </div>
                     <div className="text-muted" style={{ fontSize: '0.72rem' }}>
@@ -414,17 +452,125 @@ export default async function MerchantProfilePage({
           </div>
         </div>
 
-        {/* Active Product Listings & Price Verification Table */}
+        {/* SECTION #1: Recent Buyer Reviews & AI Flags Section (Rating-First Priority) */}
+        <div className="card rounded-4 p-md-5 mb-5 border-0 p-4 shadow-sm">
+          <span className="rate-eyebrow text-primary d-block mb-1">
+            KIỂM TOÁN BÌNH LUẬN &amp; CHỐNG SEEDING BẰNG AI (JREVIEWS WEIGHTED)
+          </span>
+          <h2 className="h4 fw-bold mb-1">
+            💬 Nhật Ký Kiểm Định Đánh Giá Người Mua Tại Gian Hàng (
+            {merchant.recent_reviews.length})
+          </h2>
+          <p className="text-muted small mb-4">
+            Toàn bộ đánh giá được chấm trọng số JReviews và gắn nhãn tự động bởi
+            AI Review Analyzer trước khi tính vào điểm tín nhiệm
+          </p>
+
+          {merchant.recent_reviews.length === 0 ? (
+            <div className="text-muted py-4 text-center">
+              Chưa có đánh giá nào được ghi nhận cho gian hàng này.
+            </div>
+          ) : (
+            <div className="row g-3">
+              {merchant.recent_reviews.slice(0, 12).map((rev) => {
+                const isAuthentic = rev.include_in_rating;
+                const revCatSlug = rev.master_slug
+                  ? getMasterProductCategorySlug({
+                      slug: rev.master_slug,
+                      name: rev.product_title,
+                    })
+                  : 'smartphones';
+                const revCatBase = getCategoryRouteHref(revCatSlug);
+                const flagBadge =
+                  rev.flag_category === 'low_value_coin_spam'
+                    ? {
+                        label: '🪙 Bình luận rác nhận xu (Trọng số 0.0)',
+                        cls: 'bg-warning-subtle text-warning-emphasis',
+                      }
+                    : rev.flag_category === 'seeding_fake'
+                      ? {
+                          label: '🚨 Nghi vấn Seeding ảo (Trọng số 0.0)',
+                          cls: 'bg-danger-subtle text-danger',
+                        }
+                      : {
+                          label: `✓ Đánh giá thực chất (Trọng số ${rev.helpfulness_weight.toFixed(2)})`,
+                          cls: 'bg-success-subtle text-success',
+                        };
+
+                return (
+                  <div className="col-md-6 col-12" key={rev.id}>
+                    <div
+                      className={`rounded-4 h-100 border p-3 ${
+                        isAuthentic ? 'bg-white' : 'bg-light opacity-75'
+                      }`}
+                    >
+                      <div className="d-flex justify-content-between align-items-start mb-2 gap-2">
+                        <div>
+                          <div className="fw-bold small">{rev.author_name}</div>
+                          {rev.master_slug ? (
+                            <Link
+                              href={`${revCatBase}/${rev.master_slug}#jreviews-section`}
+                              className="text-primary text-decoration-none"
+                              style={{ fontSize: '0.75rem' }}
+                            >
+                              {rev.product_title}
+                            </Link>
+                          ) : (
+                            <div
+                              className="text-muted"
+                              style={{ fontSize: '0.75rem' }}
+                            >
+                              {rev.product_title}
+                            </div>
+                          )}
+                        </div>
+                        <span className="rate-score-badge-user">
+                          ★ {rev.rating_star}/5
+                        </span>
+                      </div>
+
+                      <p className="small text-dark mb-2">
+                        {rev.comment || '(Không có nội dung bình luận)'}
+                      </p>
+
+                      <div className="d-flex justify-content-between align-items-center border-top mt-auto flex-wrap gap-2 pt-2">
+                        <span
+                          className={`badge ${flagBadge.cls} rounded-pill`}
+                          style={{ fontSize: '0.72rem' }}
+                        >
+                          {flagBadge.label}
+                        </span>
+                        {rev.reason && (
+                          <span
+                            className="text-muted"
+                            style={{ fontSize: '0.72rem' }}
+                          >
+                            {rev.reason}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* SECTION #2: Active Product Listings & Neutral Price Audit Table */}
         <div className="card rounded-4 p-md-5 mb-5 border-0 p-4 shadow-sm">
           <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 gap-2">
             <div>
+              <span className="rate-eyebrow text-muted d-block mb-1">
+                KIỂM ĐỊNH BIÊN ĐỘ GIÁ &amp; PHÁT HIỆN NÂNG KHỐNG GIÁ GỐC
+              </span>
               <h2 className="h4 fw-bold mb-1">
-                📦 Sản Phẩm Đang Niêm Yết &amp; Kiểm Định Khuyến Mãi (
+                🛡️ Danh Sách Niêm Yết &amp; Đối Chiếu Lịch Sử Giá (
                 {merchant.listings.length})
               </h2>
               <p className="text-muted small mb-0">
-                Đối chiếu giá bán tại {merchant.name} với mức giá thấp nhất thị
-                trường và lịch sử giá thực tế
+                Đối chiếu giá ghi nhận tại {merchant.name} với mức giá thấp nhất
+                thị trường và trung vị lịch sử 90 ngày
               </p>
             </div>
           </div>
@@ -440,10 +586,10 @@ export default async function MerchantProfilePage({
                   <tr>
                     <th scope="col">Sản phẩm niêm yết</th>
                     <th scope="col">Dòng máy chuẩn hóa (Master Product)</th>
-                    <th scope="col">Giá tại Shop</th>
+                    <th scope="col">Giá ghi nhận</th>
                     <th scope="col">Kiểm định Khuyến mãi (Price History)</th>
                     <th scope="col" className="text-end">
-                      Hành động
+                      Kiểm định &amp; Nguồn
                     </th>
                   </tr>
                 </thead>
@@ -463,14 +609,25 @@ export default async function MerchantProfilePage({
                           : da?.verdict === 'genuine_deal'
                             ? 'bg-success text-white'
                             : 'bg-light text-secondary border';
+                    const resolvedImg = resolveProductImageUrl(
+                      item.master_product?.slug,
+                      item.image
+                    );
+                    const masterCatSlug = item.master_product
+                      ? getMasterProductCategorySlug({
+                          slug: item.master_product.slug,
+                          name: item.master_product.name,
+                        })
+                      : 'smartphones';
+                    const masterBaseHref = getCategoryRouteHref(masterCatSlug);
 
                     return (
                       <tr key={item.id}>
                         <td>
                           <div className="d-flex align-items-center gap-3">
-                            {item.image && (
+                            {resolvedImg && (
                               <img
-                                src={item.image}
+                                src={resolvedImg}
                                 alt={item.title}
                                 className="rounded border bg-white p-1"
                                 style={{
@@ -501,7 +658,7 @@ export default async function MerchantProfilePage({
                           {item.master_product ? (
                             <div>
                               <Link
-                                href={`/smartphones/${item.master_product.slug}`}
+                                href={`${masterBaseHref}/${item.master_product.slug}`}
                                 className="fw-semibold text-primary text-decoration-none small"
                               >
                                 {item.master_product.name}
@@ -511,7 +668,7 @@ export default async function MerchantProfilePage({
                                 style={{ fontSize: '0.75rem' }}
                               >
                                 Giá thấp nhất thị trường:{' '}
-                                <strong>
+                                <strong className="font-monospace">
                                   {item.master_product.market_min_price.toLocaleString(
                                     'vi-VN'
                                   )}{' '}
@@ -526,11 +683,11 @@ export default async function MerchantProfilePage({
                           )}
                         </td>
                         <td>
-                          <div className="fw-bold text-danger">
+                          <div className="fw-bold text-dark font-monospace">
                             {priceText} ₫
                           </div>
                           {origText && (
-                            <div className="text-muted small text-decoration-line-through">
+                            <div className="text-muted small text-decoration-line-through font-monospace">
                               {origText} ₫
                             </div>
                           )}
@@ -568,19 +725,19 @@ export default async function MerchantProfilePage({
                           <div className="d-flex justify-content-end gap-2">
                             {item.master_product && (
                               <Link
-                                href={`/smartphones/${item.master_product.slug}#price-history-section`}
+                                href={`${masterBaseHref}/${item.master_product.slug}#jreviews-section`}
                                 className="btn btn-sm btn-outline-primary rounded-pill px-3"
                               >
-                                📈 Biểu đồ giá
+                                ★ Xem Review &amp; Giá
                               </Link>
                             )}
                             <a
                               href={item.url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="btn btn-sm btn-primary rounded-pill px-3"
+                              className="btn btn-sm btn-outline-secondary rounded-pill px-3"
                             >
-                              Tới nơi bán ↗
+                              Đối chiếu nguồn ↗
                             </a>
                           </div>
                         </td>
@@ -592,105 +749,10 @@ export default async function MerchantProfilePage({
             </div>
           )}
         </div>
-
-        {/* Recent Buyer Reviews & AI Flags Section */}
-        <div className="card rounded-4 p-md-5 border-0 p-4 shadow-sm">
-          <h2 className="h4 fw-bold mb-1">
-            💬 Nhật Ký Kiểm Định Đánh Giá Người Mua Tại Gian Hàng (
-            {merchant.recent_reviews.length})
-          </h2>
-          <p className="text-muted small mb-4">
-            Toàn bộ đánh giá được chấm trọng số JReviews và gắn nhãn tự động bởi
-            AI Review Analyzer
-          </p>
-
-          {merchant.recent_reviews.length === 0 ? (
-            <div className="text-muted py-4 text-center">
-              Chưa có đánh giá nào được ghi nhận cho gian hàng này.
-            </div>
-          ) : (
-            <div className="row g-3">
-              {merchant.recent_reviews.slice(0, 12).map((rev) => {
-                const isAuthentic = rev.include_in_rating;
-                const flagBadge =
-                  rev.flag_category === 'low_value_coin_spam'
-                    ? {
-                        label: '🪙 Bình luận rác nhận xu (Trọng số 0.0)',
-                        cls: 'bg-warning-subtle text-warning-emphasis',
-                      }
-                    : rev.flag_category === 'seeding_fake'
-                      ? {
-                          label: '🚨 Nghi vấn Seeding ảo (Trọng số 0.0)',
-                          cls: 'bg-danger-subtle text-danger',
-                        }
-                      : {
-                          label: `✓ Đánh giá thực chất (Trọng số ${rev.helpfulness_weight.toFixed(2)})`,
-                          cls: 'bg-success-subtle text-success',
-                        };
-
-                return (
-                  <div className="col-md-6 col-12" key={rev.id}>
-                    <div
-                      className={`rounded-4 h-100 border p-3 ${
-                        isAuthentic ? 'bg-white' : 'bg-light opacity-75'
-                      }`}
-                    >
-                      <div className="d-flex justify-content-between align-items-start mb-2 gap-2">
-                        <div>
-                          <div className="fw-bold small">{rev.author_name}</div>
-                          {rev.master_slug ? (
-                            <Link
-                              href={`/smartphones/${rev.master_slug}#jreviews-section`}
-                              className="text-primary text-decoration-none"
-                              style={{ fontSize: '0.75rem' }}
-                            >
-                              {rev.product_title}
-                            </Link>
-                          ) : (
-                            <div
-                              className="text-muted"
-                              style={{ fontSize: '0.75rem' }}
-                            >
-                              {rev.product_title}
-                            </div>
-                          )}
-                        </div>
-                        <span className="badge bg-warning text-dark rounded-pill small">
-                          ★ {rev.rating_star}/5
-                        </span>
-                      </div>
-
-                      <p className="small text-dark mb-2">
-                        {rev.comment || '(Không có nội dung bình luận)'}
-                      </p>
-
-                      <div className="d-flex justify-content-between align-items-center border-top mt-auto flex-wrap gap-2 pt-2">
-                        <span
-                          className={`badge ${flagBadge.cls} rounded-pill`}
-                          style={{ fontSize: '0.72rem' }}
-                        >
-                          {flagBadge.label}
-                        </span>
-                        {rev.reason && (
-                          <span
-                            className="text-muted"
-                            style={{ fontSize: '0.72rem' }}
-                          >
-                            {rev.reason}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
       </div>
 
       <CompareTrayBar />
-      <FooterTop />
+      <FooterTop locale={locale} />
       <FooterDynamic sections={[]} links={[]} locale={locale} />
       <BackToTop />
     </>

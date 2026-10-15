@@ -1,5 +1,11 @@
 'use client';
 
+import {
+  getCategoryRouteHref,
+  getMasterProductCategorySlug,
+  resolveProductImageUrl,
+} from '@/lib/rate-api';
+
 export interface WatchlistItem {
   slug: string;
   name: string;
@@ -14,6 +20,21 @@ export interface WatchlistItem {
 const STORAGE_KEY = 'rate_price_watchlist_v1';
 const EVENT_NAME = 'rate:watchlist:change';
 
+function normalizeWatchlistItem(item: WatchlistItem): WatchlistItem {
+  const catSlug = getMasterProductCategorySlug({
+    slug: item.slug,
+    name: item.name,
+  });
+  return {
+    ...item,
+    categoryPath:
+      item.categoryPath && item.categoryPath.startsWith('/')
+        ? item.categoryPath
+        : getCategoryRouteHref(catSlug),
+    thumbnail: resolveProductImageUrl(item.slug, item.thumbnail),
+  };
+}
+
 export function getWatchlist(): WatchlistItem[] {
   if (typeof window === 'undefined') return [];
   try {
@@ -21,10 +42,13 @@ export function getWatchlist(): WatchlistItem[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
-      (item): item is WatchlistItem =>
-        Boolean(item && typeof item.slug === 'string' && typeof item.name === 'string')
-    );
+    return parsed
+      .filter((item): item is WatchlistItem =>
+        Boolean(
+          item && typeof item.slug === 'string' && typeof item.name === 'string'
+        )
+      )
+      .map(normalizeWatchlistItem);
   } catch {
     return [];
   }
@@ -41,12 +65,13 @@ function saveWatchlist(items: WatchlistItem[]) {
 }
 
 export function upsertWatchlistItem(item: WatchlistItem): WatchlistItem[] {
+  const normalized = normalizeWatchlistItem(item);
   const current = getWatchlist();
-  const idx = current.findIndex((x) => x.slug === item.slug);
+  const idx = current.findIndex((x) => x.slug === normalized.slug);
   const next =
     idx >= 0
-      ? current.map((x, i) => (i === idx ? item : x))
-      : [item, ...current];
+      ? current.map((x, i) => (i === idx ? normalized : x))
+      : [normalized, ...current];
   saveWatchlist(next);
   return next;
 }

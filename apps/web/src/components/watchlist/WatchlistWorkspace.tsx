@@ -121,8 +121,8 @@ export default function WatchlistWorkspace({
 
   return (
     <div className="container py-5">
-      {/* Header Banner */}
-      <div className="card rounded-4 p-md-5 bg-dark mb-4 border-0 p-4 text-white shadow-sm">
+      {/* Header Banner (DESIGN.md v3.0 Dark Obsidian Command Header) */}
+      <div className="rate-scoreboard-dark p-md-5 mb-4 p-4">
         <div className="d-flex flex-column flex-lg-row justify-content-between align-items-start align-items-lg-center gap-3">
           <div>
             <span className="badge bg-danger rounded-pill mb-2 px-3 py-2 text-white">
@@ -150,17 +150,26 @@ export default function WatchlistWorkspace({
             >
               + Thêm sản phẩm từ danh mục
             </Link>
-            {items.length >= 2 && (
-              <Link
-                href={`/compare?slugs=${items
-                  .slice(0, 4)
-                  .map((x) => x.slug)
-                  .join(',')}`}
-                className="btn btn-danger rounded-pill fw-medium px-4"
-              >
-                ⚖️ So sánh {Math.min(4, items.length)} máy đang canh giá
-              </Link>
-            )}
+            {(() => {
+              const firstCat = items[0]?.categoryPath || '/smartphones';
+              const sameCatItems = items.filter(
+                (x) => (x.categoryPath || '/smartphones') === firstCat
+              );
+              if (sameCatItems.length < 2) return null;
+              const catSlug = firstCat.replace(/^\//, '') || 'smartphones';
+              return (
+                <Link
+                  href={`/compare?cat=${catSlug}&slugs=${sameCatItems
+                    .slice(0, 4)
+                    .map((x) => x.slug)
+                    .join(',')}`}
+                  className="btn btn-danger rounded-pill fw-medium px-4"
+                >
+                  ⚖️ So sánh {Math.min(4, sameCatItems.length)} máy cùng danh
+                  mục
+                </Link>
+              );
+            })()}
           </div>
         </div>
 
