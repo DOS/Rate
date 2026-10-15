@@ -22,9 +22,7 @@ export async function POST(request: NextRequest) {
     const targetPrice = Math.round(Number(body.targetPrice || 0));
     const subscriberEmail = (body.subscriberEmail || '').trim();
     const clientFingerprint =
-      (body.clientFingerprint || '').trim() ||
-      request.headers.get('x-forwarded-for') ||
-      'web-anon';
+      (body.clientFingerprint || '').trim() || `web-${crypto.randomUUID()}`;
     const locale =
       body.locale === 'en' || body.locale === 'cs' ? body.locale : 'vi';
 

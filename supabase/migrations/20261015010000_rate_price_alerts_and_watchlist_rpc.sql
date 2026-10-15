@@ -67,6 +67,7 @@ DECLARE
   v_alert rate.price_alerts%ROWTYPE;
   v_clean_locale TEXT;
   v_caller_uid UUID := auth.uid();
+  v_raw_fp TEXT;
   v_effective_fp TEXT;
 BEGIN
   IF p_product_slug IS NULL OR btrim(p_product_slug) = '' THEN
@@ -93,11 +94,18 @@ BEGIN
   END;
 
   -- Namespace fingerprint by caller identity so anonymous callers can never
-  -- collide with or overwrite an authenticated user's price alert.
+  -- collide with or overwrite an authenticated user's price alert, and require
+  -- a distinct client_fingerprint (>= 8 chars) for anonymous callers so two
+  -- anonymous callers never share a fallback key.
   IF v_caller_uid IS NOT NULL THEN
     v_effective_fp := 'uid:' || v_caller_uid::text;
   ELSE
-    v_effective_fp := 'anon:' || COALESCE(left(NULLIF(btrim(p_client_fingerprint), ''), 120), 'default');
+    v_raw_fp := left(NULLIF(btrim(COALESCE(p_client_fingerprint, '')), ''), 120);
+    IF v_raw_fp IS NULL OR char_length(v_raw_fp) < 8 THEN
+      RAISE EXCEPTION 'A valid client_fingerprint (>= 8 chars) is required for anonymous price alerts'
+        USING ERRCODE = '22023';
+    END IF;
+    v_effective_fp := 'anon:' || v_raw_fp;
   END IF;
 
   INSERT INTO rate.price_alerts (
@@ -129,7 +137,18 @@ BEGIN
     locale = EXCLUDED.locale,
     is_active = TRUE,
     updated_at = NOW()
+  WHERE (rate.price_alerts.user_id IS NULL OR rate.price_alerts.user_id = v_caller_uid)
+    AND (
+      rate.price_alerts.subscriber_email IS NULL
+      OR EXCLUDED.subscriber_email IS NULL
+      OR lower(rate.price_alerts.subscriber_email) = lower(EXCLUDED.subscriber_email)
+    )
   RETURNING * INTO v_alert;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Cannot overwrite an existing price alert bound to a different subscriber'
+      USING ERRCODE = '42501';
+  END IF;
 
   RETURN jsonb_build_object(
     'id', v_alert.id,
