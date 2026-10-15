@@ -25,6 +25,7 @@ export class ShopeeIngestionPipeline {
   private enricher: AiSpecEnricher;
   private reviewAnalyzer: AiReviewAnalyzer;
   private smartphoneCategoryId: string | null = null;
+  private categoryIdsBySlug: Map<string, string> = new Map();
 
   constructor(aiConfig?: AiSpecEnricherConfig) {
     const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -47,17 +48,18 @@ export class ShopeeIngestionPipeline {
   }
 
   /**
-   * Initializes category lookup
+   * Initializes category lookup across all 5 canonical categories
    */
   public async init(): Promise<void> {
-    const { data: cat } = await this.supabase
-      .from('categories')
-      .select('id')
-      .eq('slug', 'smartphones')
-      .maybeSingle();
+    const { data: cats } = await this.supabase.from('categories').select('id, slug');
 
-    if (cat) {
-      this.smartphoneCategoryId = cat.id;
+    if (Array.isArray(cats)) {
+      for (const c of cats as Array<{ id: string; slug: string }>) {
+        if (c.slug && c.id) {
+          this.categoryIdsBySlug.set(c.slug, c.id);
+        }
+      }
+      this.smartphoneCategoryId = this.categoryIdsBySlug.get('smartphones') || null;
     }
 
     const aiInfo = this.enricher.getProviderInfo();
@@ -81,7 +83,7 @@ export class ShopeeIngestionPipeline {
     merchantId: string;
     masterId: string;
   }> {
-    if (!this.smartphoneCategoryId) {
+    if (!this.smartphoneCategoryId && this.categoryIdsBySlug.size === 0) {
       await this.init();
     }
 
@@ -120,11 +122,15 @@ export class ShopeeIngestionPipeline {
 
     // 2. Normalize Specs & Match / Seed Master Product
     const candidate = this.normalizer.normalize(product);
-    console.log(`[ShopeeIngest] Specs normalized -> Key: "${candidate.model_key}", RAM: ${candidate.ram_gb}GB, Storage: ${candidate.storage_gb}GB`);
+    const resolvedCategoryId =
+      this.categoryIdsBySlug.get(candidate.category_slug) || this.smartphoneCategoryId;
+    console.log(
+      `[ShopeeIngest] Specs normalized -> Category: "${candidate.category_slug}", Key: "${candidate.model_key}", RAM: ${candidate.ram_gb}GB, Storage: ${candidate.storage_gb}GB`
+    );
 
     const { masterId, isNew } = await this.matcher.resolveOrCreateMasterProduct(
       candidate,
-      this.smartphoneCategoryId || undefined,
+      resolvedCategoryId || undefined,
       product.title
     );
     console.log(`[ShopeeIngest] Master Product ${isNew ? 'CREATED' : 'LINKED'}: ID = ${masterId}`);
@@ -137,7 +143,7 @@ export class ShopeeIngestionPipeline {
         {
           merchant_id: merchantId,
           cluster_id: masterId, // FK to rate.master_products
-          category_id: this.smartphoneCategoryId,
+          category_id: resolvedCategoryId,
           platform: 'shopee',
           platform_item_id: product.itemId,
           title: product.title,
@@ -175,11 +181,15 @@ export class ShopeeIngestionPipeline {
     // Codex #8): re-crawls of the same price on the same day upsert instead of
     // duplicating, and insert errors are SURFACED (never silent).
     const dayBucket = new Date().toISOString().slice(0, 10);
-    const observationId = 'px-' + crypto
-      .createHash('sha256')
-      // Scoped to the listing UUID (Codex: itemId alone is not cross-platform safe).
-      .update(`${productId}|${product.priceMin}|${product.priceBeforeDiscount || ''}|${dayBucket}`)
-      .digest('hex');
+    const observationId =
+      'px-' +
+      crypto
+        .createHash('sha256')
+        // Scoped to the listing UUID (Codex: itemId alone is not cross-platform safe).
+        .update(
+          `${productId}|${product.priceMin}|${product.priceBeforeDiscount || ''}|${dayBucket}`
+        )
+        .digest('hex');
     // The unique index on observation_id is PARTIAL, which ON CONFLICT cannot
     // target (42P10, Codex blocker): dedupe client-side - fetch the id, insert
     // only when absent. Errors are SURFACED (never silent).
@@ -192,7 +202,9 @@ export class ShopeeIngestionPipeline {
       throw new Error(`Failed to check existing price observation: ${priceLookupErr.message}`);
     }
     if (Array.isArray(existingPrice) && existingPrice.length > 0) {
-      console.log(`[ShopeeIngest] Price observation already recorded (${observationId}), skipping.`);
+      console.log(
+        `[ShopeeIngest] Price observation already recorded (${observationId}), skipping.`
+      );
     } else {
       const { error: priceErr } = await this.supabase.from('price_history').insert({
         product_id: productId,
@@ -206,9 +218,13 @@ export class ShopeeIngestionPipeline {
         const pCode = (priceErr as { code?: string }).code || '';
         if (pCode === '23505' || /duplicate key/i.test(priceErr.message)) {
           // Concurrent worker recorded the same observation first - benign.
-          console.warn('[ShopeeIngest] Concurrent price observation insert lost the race; treated as dedupe.');
+          console.warn(
+            '[ShopeeIngest] Concurrent price observation insert lost the race; treated as dedupe.'
+          );
         } else {
-          throw new Error(`Failed to record price history (observation ${observationId}): ${priceErr.message}`);
+          throw new Error(
+            `Failed to record price history (observation ${observationId}): ${priceErr.message}`
+          );
         }
       }
     }
@@ -217,7 +233,7 @@ export class ShopeeIngestionPipeline {
     // 5. Batch insert reviews if available (the section checkpoint fires in
     // both branches - a zero-review ingest is still a completed section).
     if (product.reviews && product.reviews.length > 0) {
-      const reviewRows = product.reviews.map((r) => ({
+      const reviewRows = product.reviews.map(r => ({
         product_id: productId,
         // Stable observation id fallback (plan v7 §4.1): reviews without a
         // platform id must not be re-inserted on every crawl. createdAt is
@@ -252,8 +268,10 @@ export class ShopeeIngestionPipeline {
       if (existingErr) {
         throw new Error(`Failed to fetch existing reviews: ${existingErr.message}`);
       }
-      const seen = new Set<string>((existingReviews || []).map((r: { platform_review_id: string }) => r.platform_review_id));
-      const newRows = reviewRows.filter((r) => {
+      const seen = new Set<string>(
+        (existingReviews || []).map((r: { platform_review_id: string }) => r.platform_review_id)
+      );
+      const newRows = reviewRows.filter(r => {
         if (!r.platform_review_id) return true;
         if (seen.has(r.platform_review_id)) return false;
         // In-batch dedupe (Codex round-2): two id-less reviews with the same
@@ -274,7 +292,9 @@ export class ShopeeIngestionPipeline {
         for (let pass = 0; pass < 2; pass++) {
           const { error: reviewErr } = await this.supabase.from('reviews').insert(pending);
           if (!reviewErr) {
-            console.log(`[ShopeeIngest] Successfully ingested ${pending.length} reviews (batch pass ${pass + 1}).`);
+            console.log(
+              `[ShopeeIngest] Successfully ingested ${pending.length} reviews (batch pass ${pass + 1}).`
+            );
             pending = [];
             break;
           }
@@ -285,7 +305,9 @@ export class ShopeeIngestionPipeline {
           }
           // Unique-index race: drop the ids that already exist now and retry
           // the rest. Anything that vanishes here was inserted by the winner.
-          console.warn('[ShopeeIngest] Review batch hit a unique-index race; retrying the remainder.');
+          console.warn(
+            '[ShopeeIngest] Review batch hit a unique-index race; retrying the remainder.'
+          );
           const { data: existingNow, error: refetchErr } = await this.supabase
             .from('reviews')
             .select('platform_review_id')
@@ -294,14 +316,18 @@ export class ShopeeIngestionPipeline {
           if (refetchErr) {
             throw new Error(`Failed to refetch reviews after race: ${refetchErr.message}`);
           }
-          const nowSeen = new Set<string>((existingNow || []).map((r: { platform_review_id: string }) => r.platform_review_id));
-          pending = pending.filter((r) => !nowSeen.has(r.platform_review_id as string));
+          const nowSeen = new Set<string>(
+            (existingNow || []).map((r: { platform_review_id: string }) => r.platform_review_id)
+          );
+          pending = pending.filter(r => !nowSeen.has(r.platform_review_id as string));
           if (pending.length === 0) {
             console.log('[ShopeeIngest] All raced reviews already stored by the winner.');
           }
         }
         if (pending.length > 0) {
-          throw new Error(`Failed to insert reviews: unexplained retry state (${pending.length} rows left)`);
+          throw new Error(
+            `Failed to insert reviews: unexplained retry state (${pending.length} rows left)`
+          );
         }
       }
       await report?.('reviews');
@@ -313,7 +339,9 @@ export class ShopeeIngestionPipeline {
     try {
       const { data: storedReviews, error: storedErr } = await this.supabase
         .from('reviews')
-        .select('id, author_name, rating_star, comment, variation, images, is_verified_buyer, reviewer_type, upvotes, downvotes, report_count, platform_created_at')
+        .select(
+          'id, author_name, rating_star, comment, variation, images, is_verified_buyer, reviewer_type, upvotes, downvotes, report_count, platform_created_at'
+        )
         .eq('product_id', productId)
         .order('created_at', { ascending: false })
         .limit(200);
@@ -327,19 +355,22 @@ export class ShopeeIngestionPipeline {
           .eq('id', masterId)
           .maybeSingle();
 
-        const { summary, merchantRisk } = await this.reviewAnalyzer.persistAnalysisToSupabase(this.supabase, {
-          productId,
-          masterId,
-          merchantId,
-          reviews: storedReviews,
-          entityName: candidate.name,
-          entityType: 'product',
-          platform: 'shopee',
-          listingPrice: product.priceMin,
-          canonicalMinPrice: masterRow?.min_price ? Number(masterRow.min_price) : undefined,
-          isOfficial: product.shop.isMall,
-          followerCount: product.shop.followerCount,
-        });
+        const { summary, merchantRisk } = await this.reviewAnalyzer.persistAnalysisToSupabase(
+          this.supabase,
+          {
+            productId,
+            masterId,
+            merchantId,
+            reviews: storedReviews,
+            entityName: candidate.name,
+            entityType: 'product',
+            platform: 'shopee',
+            listingPrice: product.priceMin,
+            canonicalMinPrice: masterRow?.min_price ? Number(masterRow.min_price) : undefined,
+            isOfficial: product.shop.isMall,
+            followerCount: product.shop.followerCount,
+          }
+        );
         console.log(
           `[ShopeeIngest] Review analysis: ${summary.authentic_review_count}/${summary.total_reviews_analyzed} authentic, weighted rating ${summary.user_rating_weighted}/5, merchant risk ${merchantRisk?.risk_score ?? 'n/a'} (${merchantRisk?.risk_level ?? 'n/a'}).`
         );
@@ -348,7 +379,9 @@ export class ShopeeIngestionPipeline {
       console.warn(`[ShopeeIngest] Review analysis failed (non-fatal): ${err?.message || err}`);
     }
 
-    console.log(`[ShopeeIngest] Product ingestion complete! (Master: ${masterId}, Product: ${productId})`);
+    console.log(
+      `[ShopeeIngest] Product ingestion complete! (Master: ${masterId}, Product: ${productId})`
+    );
     return { productId, merchantId, masterId };
   }
 }

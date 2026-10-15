@@ -7,6 +7,7 @@ import {
   BsArrowLeftRight,
   BsBellFill,
   BsCodeSlash,
+  BsShieldCheck,
 } from 'react-icons/bs';
 import LocaleSwitcher from '@/components/elementary/LocaleSwitcher';
 import { getRateCopy } from '@/lib/rate-i18n';
@@ -91,6 +92,15 @@ export function NavbarDarkDynamic({
                   </li>
                   <li>
                     <Link
+                      href="/inspect"
+                      className="d-flex align-items-center text-danger"
+                      aria-label={copy.nav.inspect}
+                    >
+                      <BsShieldCheck className="me-1" />
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
                       href="/compare"
                       className="d-flex align-items-center text-dark"
                       aria-label={copy.nav.compare}
@@ -170,9 +180,24 @@ export function NavbarDarkDynamic({
                     href: '/tablets',
                   },
                   {
+                    id: 'smartwatches',
+                    label: copy.nav.smartwatches,
+                    href: '/smartwatches',
+                  },
+                  {
+                    id: 'earbuds',
+                    label: copy.nav.earbuds,
+                    href: '/earbuds',
+                  },
+                  {
                     id: 'merchants',
                     label: copy.nav.merchants,
                     href: '/merchants',
+                  },
+                  {
+                    id: 'inspect',
+                    label: copy.nav.inspect,
+                    href: '/inspect',
                   },
                   {
                     id: 'compare',
