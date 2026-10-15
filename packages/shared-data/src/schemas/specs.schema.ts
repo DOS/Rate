@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { StatusSchema } from './common.schema';
+import { StatusSchema } from './common.schema.js';
 
 /**
  * 10 Field Groups Specifications for Devices (PhoneArena + GSMArena unified schema)

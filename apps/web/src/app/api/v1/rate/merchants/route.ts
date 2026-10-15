@@ -8,16 +8,33 @@ import { getMerchantsList } from '@/server/rate';
 export async function GET(request: NextRequest) {
   try {
     const sp = request.nextUrl.searchParams;
+    const q = sp.get('q') || undefined;
     const platform = sp.get('platform') || undefined;
     const officialOnly =
       sp.get('official') === '1' || sp.get('official') === 'true';
+    const rawMinTrust = sp.get('min_trust');
+    const minTrust =
+      rawMinTrust != null && !Number.isNaN(Number(rawMinTrust))
+        ? Number(rawMinTrust)
+        : undefined;
+    const rawSort = sp.get('sort');
+    const sort =
+      rawSort === 'trust_desc' ||
+      rawSort === 'products_desc' ||
+      rawSort === 'seeding_asc' ||
+      rawSort === 'followers_desc'
+        ? rawSort
+        : undefined;
     const rawLimit = Number(sp.get('limit') || 50);
     const limit =
       !Number.isNaN(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 100) : 50;
 
     const merchants = await getMerchantsList({
+      q,
       platform,
       officialOnly,
+      minTrust,
+      sort,
       limit,
     });
 

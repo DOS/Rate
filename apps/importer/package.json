@@ -12,7 +12,7 @@
     "dev": "tsx watch src/index.ts",
     "lint": "eslint . --ext .ts",
     "format": "prettier --write \"src/**/*.ts\"",
-    "test": "vitest"
+    "test": "tsx src/shopee/__tests__/open-core-intelligence.test.ts && tsx src/shopee/test-review-analyzer.ts"
   },
   "keywords": [
     "product-normalizer",

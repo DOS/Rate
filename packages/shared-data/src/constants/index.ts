@@ -3,7 +3,7 @@
  */
 
 // Export route constants
-export * from './routes';
+export * from './routes.js';
 
 // API endpoints
 export const API_ENDPOINTS = {
@@ -23,7 +23,8 @@ export const API_ENDPOINTS = {
   REVIEWS: {
     BASE: '/reviews',
     BY_ID: (id: string) => `/reviews/${id}`,
-    BY_LISTING: (listingId: string) => `/reviews?filters[listingId][$eq]=${listingId}`,
+    BY_LISTING: (listingId: string) =>
+      `/reviews?filters[listingId][$eq]=${listingId}`,
   },
   UPLOAD: '/upload',
 } as const;
@@ -53,7 +54,11 @@ export const PAGINATION_DEFAULTS = {
 export const UPLOAD_LIMITS = {
   MAX_FILE_SIZE: 10 * 1024 * 1024, // 10MB
   ALLOWED_IMAGE_TYPES: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
-  ALLOWED_DOCUMENT_TYPES: ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+  ALLOWED_DOCUMENT_TYPES: [
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  ],
 } as const;
 
 // Cache TTL (in seconds)

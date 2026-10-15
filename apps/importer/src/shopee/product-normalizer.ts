@@ -1,7 +1,11 @@
 import type { ProductSpecifications, KeySpecs } from '@repo/shared-data';
 import type { ShopeeProduct } from './types.js';
 
+export type CanonicalCategorySlug =
+  'smartphones' | 'tablets' | 'laptops' | 'smartwatches' | 'earbuds';
+
 export interface NormalizedProductCandidate {
+  category_slug: CanonicalCategorySlug;
   brand: string;
   model: string;
   variant_name: string;
@@ -23,32 +27,72 @@ export interface NormalizedProductCandidate {
 }
 
 /**
- * Standard phone specification registry for benchmark/flagship devices
+ * Detect canonical category slug from product title across all 5 tech categories.
+ */
+export function detectCategorySlug(title: string): CanonicalCategorySlug {
+  const t = title.toLowerCase();
+  if (
+    /airpods|galaxy\s*buds|wf-\d+|wh-\d+|tai\s*nghe|earbuds?|freebuds|soundcore|quietcomfort|momentum\s*true/i.test(
+      t
+    )
+  ) {
+    return 'earbuds';
+  }
+  if (
+    /apple\s*watch|galaxy\s*watch|\bgarmin\b|forerunner|fenix|venu|watch\s*(?:ultra|series|gt|fit|se)|đồng\s*hồ\s*thông\s*minh|smartwatch|amazfit|coros/i.test(
+      t
+    )
+  ) {
+    return 'smartwatches';
+  }
+  if (
+    /macbook|thinkpad|ideapad|legion|vivobook|zenbook|rog\s*(?:strix|zephyrus|flow)|tuf\s*gaming|inspiron|\bxps\b|latitude|pavilion|envy|victus|omen|nitro\s*\d|swift|predator|surface\s*laptop|\blaptop\b|máy\s*tính\s*xách\s*tay|ultrabook/i.test(
+      t
+    )
+  ) {
+    return 'laptops';
+  }
+  if (
+    /\bipad\b|galaxy\s*tab|xiaomi\s*pad|redmi\s*pad|matepad|lenovo\s*tab|surface\s*pro|máy\s*tính\s*bảng|\btablet\b/i.test(
+      t
+    )
+  ) {
+    return 'tablets';
+  }
+  return 'smartphones';
+}
+
+/**
+ * Standard device specification registry for benchmark/flagship devices across 5 categories
  * Structured per PhoneArena 10-Field-Group taxonomy + GSMArena technical accuracy
  */
-const CANONICAL_PHONE_REGISTRY: Record<string, {
-  screen_size_inch: number;
-  battery_mah: number;
-  ram_gb: number;
-  chipset: string;
-  cpu: string;
-  gpu: string;
-  os: string;
-  weight_g: number;
-  dimensions: string;
-  resolution: string;
-  screen_type: string;
-  refresh_rate_hz: number;
-  rear_camera: string;
-  second_camera?: string;
-  third_camera?: string;
-  fourth_camera?: string;
-  front_camera: string;
-  charging_w: number;
-  has_5g: boolean;
-  release_date: string;
-  ip_rating: string;
-}> = {
+const CANONICAL_PHONE_REGISTRY: Record<
+  string,
+  {
+    screen_size_inch: number;
+    battery_mah: number;
+    ram_gb: number;
+    chipset: string;
+    cpu: string;
+    gpu: string;
+    os: string;
+    weight_g: number;
+    dimensions: string;
+    resolution: string;
+    screen_type: string;
+    refresh_rate_hz: number;
+    rear_camera: string;
+    second_camera?: string;
+    third_camera?: string;
+    fourth_camera?: string;
+    front_camera: string;
+    charging_w: number;
+    has_5g: boolean;
+    release_date: string;
+    ip_rating: string;
+    default_storage_gb?: number;
+  }
+> = {
   'apple:iphone-16-pro-max': {
     screen_size_inch: 6.9,
     battery_mah: 4685,
@@ -63,7 +107,8 @@ const CANONICAL_PHONE_REGISTRY: Record<string, {
     screen_type: 'LTPO Super Retina XDR OLED, 120Hz, HDR10, Dolby Vision, 2000 nits (HBM)',
     refresh_rate_hz: 120,
     rear_camera: '48 MP, f/1.8, 24mm (wide), dual pixel PDAF, sensor-shift OIS',
-    second_camera: '12 MP, f/2.8, 120mm (periscope telephoto), 5x optical zoom, 3D sensor-shift OIS',
+    second_camera:
+      '12 MP, f/2.8, 120mm (periscope telephoto), 5x optical zoom, 3D sensor-shift OIS',
     third_camera: '48 MP, f/2.2, 13mm (ultrawide), PDAF + TOF 3D LiDAR scanner',
     front_camera: '12 MP, f/1.9, 23mm (wide), PDAF, OIS + SL 3D',
     charging_w: 30,
@@ -85,7 +130,8 @@ const CANONICAL_PHONE_REGISTRY: Record<string, {
     screen_type: 'LTPO Super Retina XDR OLED, 120Hz, HDR10, Dolby Vision, 2000 nits (HBM)',
     refresh_rate_hz: 120,
     rear_camera: '48 MP, f/1.8, 24mm (wide), dual pixel PDAF, sensor-shift OIS',
-    second_camera: '12 MP, f/2.8, 120mm (periscope telephoto), 5x optical zoom, 3D sensor-shift OIS',
+    second_camera:
+      '12 MP, f/2.8, 120mm (periscope telephoto), 5x optical zoom, 3D sensor-shift OIS',
     third_camera: '48 MP, f/2.2, 13mm (ultrawide), PDAF + TOF 3D LiDAR scanner',
     front_camera: '12 MP, f/1.9, 23mm (wide), PDAF, OIS + SL 3D',
     charging_w: 30,
@@ -149,7 +195,8 @@ const CANONICAL_PHONE_REGISTRY: Record<string, {
     screen_type: 'LTPO Super Retina XDR OLED, 120Hz, HDR10, Dolby Vision, 2000 nits (HBM)',
     refresh_rate_hz: 120,
     rear_camera: '48 MP, f/1.8, 24mm (wide), dual pixel PDAF, sensor-shift OIS',
-    second_camera: '12 MP, f/2.8, 120mm (periscope telephoto), 5x optical zoom, 3D sensor-shift OIS',
+    second_camera:
+      '12 MP, f/2.8, 120mm (periscope telephoto), 5x optical zoom, 3D sensor-shift OIS',
     third_camera: '12 MP, f/2.2, 13mm, 120˚ (ultrawide), dual pixel PDAF + TOF 3D LiDAR',
     front_camera: '12 MP, f/1.9, 23mm (wide), PDAF, OIS + SL 3D',
     charging_w: 27,
@@ -201,6 +248,29 @@ const CANONICAL_PHONE_REGISTRY: Record<string, {
     release_date: 'January 2024',
     ip_rating: 'IP68 (1.5m up to 30 mins)',
   },
+  'samsung:galaxy-s25-ultra': {
+    screen_size_inch: 6.9,
+    battery_mah: 5000,
+    ram_gb: 12,
+    chipset: 'Qualcomm Snapdragon 8 Elite for Galaxy (3 nm)',
+    cpu: 'Octa-core (2x4.47 GHz Oryon V2 Phoenix L + 6x3.53 GHz Oryon V2 Phoenix M)',
+    gpu: 'Adreno 830',
+    os: 'Android 15, One UI 7',
+    weight_g: 218,
+    dimensions: '162.8 x 77.6 x 8.2 mm',
+    resolution: '1440 x 3120 pixels (~498 ppi)',
+    screen_type: 'Dynamic LTPO AMOLED 2X, 120Hz, HDR10+, 2600 nits (peak)',
+    refresh_rate_hz: 120,
+    rear_camera: '200 MP, f/1.7, 24mm (wide), multi-directional PDAF, OIS',
+    second_camera: '50 MP, f/3.4, 111mm (periscope telephoto), PDAF, OIS, 5x optical zoom',
+    third_camera: '10 MP, f/2.4, 67mm (telephoto), Dual Pixel PDAF, OIS, 3x optical zoom',
+    fourth_camera: '50 MP, f/1.9, 120˚ (ultrawide), Dual Pixel PDAF',
+    front_camera: '12 MP, f/2.2, 26mm (wide), Dual Pixel PDAF',
+    charging_w: 45,
+    has_5g: true,
+    release_date: 'January 2025',
+    ip_rating: 'IP68 (1.5m up to 30 mins)',
+  },
   'samsung:galaxy-a55': {
     screen_size_inch: 6.6,
     battery_mah: 5000,
@@ -223,6 +293,155 @@ const CANONICAL_PHONE_REGISTRY: Record<string, {
     release_date: 'March 2024',
     ip_rating: 'IP67 (1m up to 30 mins)',
   },
+  'xiaomi:14-ultra': {
+    screen_size_inch: 6.73,
+    battery_mah: 5000,
+    ram_gb: 16,
+    chipset: 'Qualcomm Snapdragon 8 Gen 3 (4 nm)',
+    cpu: 'Octa-core (1x3.3 GHz Cortex-X4 & 3x3.2 GHz Cortex-A720 & 2x3.0 GHz Cortex-A720 & 2x2.3 GHz Cortex-A520)',
+    gpu: 'Adreno 750',
+    os: 'Android 14, HyperOS',
+    weight_g: 219,
+    dimensions: '161.4 x 75.3 x 9.2 mm',
+    resolution: '1440 x 3200 pixels (~522 ppi)',
+    screen_type: 'LTPO AMOLED, 68B colors, 120Hz, Dolby Vision, HDR10+, 3000 nits (peak)',
+    refresh_rate_hz: 120,
+    rear_camera: '50 MP, f/1.6-f/4.0, 23mm (wide), 1.0"-type sensor, multi-directional PDAF, OIS',
+    second_camera: '50 MP, f/1.8, 75mm (telephoto), PDAF, OIS, 3.2x optical zoom',
+    third_camera: '50 MP, f/2.5, 120mm (periscope telephoto), PDAF, OIS, 5x optical zoom',
+    fourth_camera: '50 MP, f/1.8, 12mm, 122˚ (ultrawide), Dual-Pixel PDAF',
+    front_camera: '32 MP, f/2.0, 22mm (wide)',
+    charging_w: 90,
+    has_5g: true,
+    release_date: 'February 2024',
+    ip_rating: 'IP68 (1.5m up to 30 mins)',
+  },
+  'google:pixel-9-pro-xl': {
+    screen_size_inch: 6.8,
+    battery_mah: 5060,
+    ram_gb: 16,
+    chipset: 'Google Tensor G4 (4 nm)',
+    cpu: 'Octa-core (1x3.1 GHz Cortex-X4 & 3x2.6 GHz Cortex-A720 & 4x1.92 GHz Cortex-A520)',
+    gpu: 'Mali-G715 MC7',
+    os: 'Android 14 (7 major upgrades)',
+    weight_g: 221,
+    dimensions: '162.8 x 76.6 x 8.5 mm',
+    resolution: '1344 x 2992 pixels (~486 ppi)',
+    screen_type: 'LTPO OLED, 120Hz, HDR10+, 3000 nits (peak)',
+    refresh_rate_hz: 120,
+    rear_camera: '50 MP, f/1.7, 25mm (wide), multi-directional PDAF, OIS',
+    second_camera:
+      '48 MP, f/2.8, 113mm (periscope telephoto), Dual-Pixel PDAF, OIS, 5x optical zoom',
+    third_camera: '48 MP, f/1.7, 123˚ (ultrawide), Dual-Pixel PDAF',
+    front_camera: '42 MP, f/2.2, 17mm (ultrawide), PDAF',
+    charging_w: 37,
+    has_5g: true,
+    release_date: 'August 2024',
+    ip_rating: 'IP68 (1.5m up to 30 mins)',
+  },
+  'apple:ipad-pro-m4': {
+    screen_size_inch: 11.0,
+    battery_mah: 8160,
+    ram_gb: 8,
+    chipset: 'Apple M4 (3 nm)',
+    cpu: '9-core / 10-core Apple Silicon M4',
+    gpu: 'Apple 10-core GPU with hardware ray tracing',
+    os: 'iPadOS 17.5 (upgradable to iPadOS 18)',
+    weight_g: 444,
+    dimensions: '249.7 x 177.5 x 5.3 mm',
+    resolution: '1668 x 2420 pixels (~264 ppi)',
+    screen_type: 'Ultra Retina XDR Tandem OLED, 120Hz ProMotion, HDR10, Dolby Vision, 1600 nits',
+    refresh_rate_hz: 120,
+    rear_camera: '12 MP, f/1.8 (wide), dual pixel PDAF + TOF 3D LiDAR scanner',
+    front_camera: '12 MP, f/2.4, 122˚ (ultrawide, Center Stage) + Face ID',
+    charging_w: 30,
+    has_5g: false,
+    release_date: 'May 2024',
+    ip_rating: 'Aluminum unibody',
+  },
+  'apple:macbook-air-m3': {
+    screen_size_inch: 13.6,
+    battery_mah: 4580,
+    ram_gb: 16,
+    chipset: 'Apple M3 (3 nm)',
+    cpu: '8-core CPU (4 performance + 4 efficiency cores)',
+    gpu: '10-core Apple M3 GPU',
+    os: 'macOS Sequoia',
+    weight_g: 1240,
+    dimensions: '304.1 x 215 x 11.3 mm',
+    resolution: '2560 x 1664 pixels (~224 ppi)',
+    screen_type: 'Liquid Retina IPS, 500 nits, Wide color (P3), True Tone',
+    refresh_rate_hz: 60,
+    rear_camera: 'N/A',
+    front_camera: '1080p FaceTime HD camera',
+    charging_w: 70,
+    has_5g: false,
+    release_date: 'March 2024',
+    ip_rating: 'Recycled aluminum enclosure',
+  },
+  'apple:watch-ultra-2': {
+    screen_size_inch: 1.92,
+    battery_mah: 564,
+    ram_gb: 2,
+    chipset: 'Apple S9 SiP (Dual-core 64-bit)',
+    cpu: 'Dual-core + 4-core Neural Engine',
+    gpu: 'PowerVR',
+    os: 'watchOS 11',
+    weight_g: 61.4,
+    dimensions: '49 x 44 x 14.4 mm',
+    resolution: '502 x 410 pixels (~338 ppi)',
+    screen_type: 'Retina LTPO2 OLED, Sapphire crystal, 3000 nits (peak)',
+    refresh_rate_hz: 60,
+    rear_camera: 'Optical Heart Sensor, ECG, Blood Oxygen, Depth Gauge',
+    front_camera: 'N/A',
+    charging_w: 15,
+    has_5g: true,
+    release_date: 'September 2023',
+    ip_rating: 'IP6X + 100m water resistant (EN13319, MIL-STD 810H)',
+    default_storage_gb: 64,
+  },
+  'apple:airpods-pro-2': {
+    screen_size_inch: 1.0,
+    battery_mah: 523,
+    ram_gb: 1,
+    chipset: 'Apple H2 headphone chip + Apple U1 chip (MagSafe Case)',
+    cpu: 'Apple H2 custom acoustic DSP',
+    gpu: 'N/A',
+    os: 'iOS / macOS / Spatial Audio firmware',
+    weight_g: 50.8,
+    dimensions: '45.2 x 60.6 x 21.7 mm (Case)',
+    resolution: 'Custom high-excursion Apple driver',
+    screen_type: 'Active Noise Cancellation (2x ANC) + Adaptive Transparency',
+    refresh_rate_hz: 60,
+    rear_camera: 'Inward-facing microphone + skin-detect sensor',
+    front_camera: 'Beamforming dual microphones',
+    charging_w: 5,
+    has_5g: false,
+    release_date: 'September 2023',
+    ip_rating: 'IP54 dust, sweat, and water resistant',
+    default_storage_gb: 1,
+  },
+  'sony:wf-1000xm5': {
+    screen_size_inch: 1.0,
+    battery_mah: 500,
+    ram_gb: 1,
+    chipset: 'Sony Integrated Processor V2 + HD Noise Cancelling Processor QN2e',
+    cpu: 'Dual-processor 24-bit Audio DSP',
+    gpu: 'N/A',
+    os: 'Sony Sound Connect (LDAC / Multipoint)',
+    weight_g: 49,
+    dimensions: '64.6 x 40.0 x 26.5 mm (Case)',
+    resolution: '8.4 mm Dynamic Driver X (20Hz-40,000Hz LDAC)',
+    screen_type: 'Industry-leading Dual-Processor ANC + Bone Conduction Sensor',
+    refresh_rate_hz: 60,
+    rear_camera: 'Dual feedback microphones per earbud',
+    front_camera: 'Bone conduction sensor + Wind noise reduction',
+    charging_w: 5,
+    has_5g: false,
+    release_date: 'July 2023',
+    ip_rating: 'IPX4 water resistant',
+    default_storage_gb: 1,
+  },
 };
 
 function slugify(text: string): string {
@@ -237,38 +456,83 @@ function slugify(text: string): string {
 
 export class ProductNormalizer {
   /**
-   * Normalizes raw Shopee product into canonical master product candidate
+   * Normalizes raw Shopee product into canonical master product candidate across all 5 categories
    */
   public normalize(raw: ShopeeProduct): NormalizedProductCandidate {
     const title = raw.title;
+    const categorySlug = detectCategorySlug(title);
 
     // 1. Extract Brand
     let brand = 'Khác';
-    if (/apple|iphone/i.test(title)) brand = 'Apple';
+    if (/apple|iphone|ipad|macbook|airpods/i.test(title)) brand = 'Apple';
     else if (/samsung|galaxy/i.test(title)) brand = 'Samsung';
     else if (/xiaomi|redmi|poco/i.test(title)) brand = 'Xiaomi';
+    else if (/\bsony\b|wf-1000|wh-1000|xperia/i.test(title)) brand = 'Sony';
+    else if (/\bgarmin\b|forerunner|fenix|venu/i.test(title)) brand = 'Garmin';
+    else if (/\blenovo\b|thinkpad|ideapad|legion/i.test(title)) brand = 'Lenovo';
     else if (/oppo/i.test(title)) brand = 'OPPO';
     else if (/vivo/i.test(title)) brand = 'Vivo';
     else if (/realme/i.test(title)) brand = 'Realme';
     else if (/google|pixel/i.test(title)) brand = 'Google';
-    else if (/asus|rog/i.test(title)) brand = 'Asus';
+    else if (/\basus\b|\brog\b|zenbook|vivobook|tuf\s*gaming/i.test(title)) brand = 'Asus';
+    else if (/\bdell\b|inspiron|\bxps\b|alienware|latitude/i.test(title)) brand = 'Dell';
+    else if (/\bhp\b|pavilion|victus|omen|elitebook|envy/i.test(title)) brand = 'HP';
+    else if (/\bacer\b|nitro\s*\d|swift|predator|aspire/i.test(title)) brand = 'Acer';
+    else if (/\bmsi\b|katana|cyborg|stealth|prestige/i.test(title)) brand = 'MSI';
+    else if (/\bhuawei\b|matepad|freebuds|watch\s*gt/i.test(title)) brand = 'Huawei';
+    else if (/\bbose\b|quietcomfort/i.test(title)) brand = 'Bose';
+    else if (/\bjbl\b|tour\s*pro|tune\s*\d+/i.test(title)) brand = 'JBL';
+    else if (/sennheiser|momentum/i.test(title)) brand = 'Sennheiser';
+    else if (/oneplus/i.test(title)) brand = 'OnePlus';
+    else if (/\bhonor\b|magicbook/i.test(title)) brand = 'Honor';
 
     // 2. Extract Model
     let model = '';
     if (brand === 'Apple') {
       const iphoneMatch = title.match(/iphone\s*(\d+(?:\s*(?:pro\s*max|pro|plus|mini))?)/i);
+      const ipadMatch = title.match(/ipad\s*(pro\s*m\d+|air\s*m\d+|pro|air|mini|\d+)/i);
+      const macbookMatch = title.match(/macbook\s*(air\s*m\d+|pro\s*m\d+|air|pro)/i);
+      const watchMatch = title.match(
+        /(?:apple\s*)?watch\s*(ultra\s*\d+|series\s*\d+|se(?:\s*\d+)?)/i
+      );
+      const airpodsMatch = title.match(/airpods\s*(pro\s*\d+|max|\d+)/i);
+
       if (iphoneMatch && iphoneMatch[1]) {
         model = `iPhone ${iphoneMatch[1].trim()}`;
+      } else if (ipadMatch && ipadMatch[1]) {
+        model = `iPad ${ipadMatch[1].trim()}`;
+      } else if (macbookMatch && macbookMatch[1]) {
+        model = `MacBook ${macbookMatch[1].trim()}`;
+      } else if (watchMatch && watchMatch[1]) {
+        model = `Watch ${watchMatch[1].trim()}`;
+      } else if (airpodsMatch && airpodsMatch[1]) {
+        model = `AirPods ${airpodsMatch[1].trim()}`;
       } else {
         model = 'iPhone';
       }
+    } else if (brand === 'Sony' && /wf-1000xm5/i.test(title)) {
+      model = 'WF-1000XM5';
+    } else if (brand === 'Sony' && /wh-1000xm5/i.test(title)) {
+      model = 'WH-1000XM5';
     } else {
-      const cleaned = title.replace(new RegExp(`^(?:Điện thoại|Smartphone)?\\s*${brand}`, 'i'), '').trim();
+      const cleaned = title
+        .replace(
+          new RegExp(
+            `^(?:Điện thoại|Smartphone|Máy tính bảng|Tablet|Laptop|Máy tính xách tay|Đồng hồ thông minh|Smartwatch|Tai nghe|Earbuds)?\\s*${brand}`,
+            'i'
+          ),
+          ''
+        )
+        .trim();
       const rawTokens = cleaned.split(/\s+/);
       const modelTokens: string[] = [];
       for (const tok of rawTokens) {
-        if (modelTokens.length >= 3) break;
-        if (/^(?:\d+(?:[.,]\d+)?(?:GB|TB)|\d+\/\d+(?:GB|TB)?|RAM|ROM|Chính|Quốc|Bản|Mới|Fullbox|\(|\[|-)/i.test(tok)) {
+        if (modelTokens.length >= 4) break;
+        if (
+          /^(?:\d+(?:[.,]\d+)?(?:GB|TB)|\d+\/\d+(?:GB|TB)?|RAM|ROM|Chính|Quốc|Bản|Mới|Fullbox|\(|\[|-)/i.test(
+            tok
+          )
+        ) {
           break;
         }
         modelTokens.push(tok);
@@ -279,7 +543,7 @@ export class ProductNormalizer {
     // 3. Extract Storage - RAM-aware (plan v7 §5.2, Codex-reproduced bug:
     // "Samsung Galaxy A55 8GB RAM 256GB" must be 256GB, not the first GB token).
     // Decimal separator: dot or comma (Vietnamese titles use "1,5TB").
-    const sizeTokens = [...title.matchAll(/(\d+(?:[.,]\d+)?)\s*(TB|GB)/gi)].map((m) => ({
+    const sizeTokens = [...title.matchAll(/(\d+(?:[.,]\d+)?)\s*(TB|GB)/gi)].map(m => ({
       value: parseFloat(m[1].replace(',', '.')) * (m[2].toUpperCase() === 'TB' ? 1024 : 1),
       index: m.index ?? 0,
       raw: m[0],
@@ -298,17 +562,26 @@ export class ProductNormalizer {
     // "dung lượng 8GB bộ nhớ RAM 256GB" - the phrase's own words sit between
     // 8GB and the literal RAM word, so adjacency is measured to the PHRASE
     // start and 8GB claims correctly).
-    const ramPhrases = [...title.matchAll(/bộ\s*nhớ\s*RAM|dung\s*lượng\s*RAM|RAM\b/gi)].map((m) => m.index ?? 0);
-    const claimable = sizeTokens.map((t) => ({ ...t, claimed: false }));
+    const ramPhrases = [...title.matchAll(/bộ\s*nhớ\s*RAM|dung\s*lượng\s*RAM|RAM\b/gi)].map(
+      m => m.index ?? 0
+    );
+    const claimable = sizeTokens.map(t => ({ ...t, claimed: false }));
     for (const p of ramPhrases) {
       const before = [...claimable]
-        .filter((t) => !t.claimed && t.index + t.raw.length <= p && /^\s*$/.test(title.slice(t.index + t.raw.length, p)))
+        .filter(
+          t =>
+            !t.claimed &&
+            t.index + t.raw.length <= p &&
+            /^\s*$/.test(title.slice(t.index + t.raw.length, p))
+        )
         .sort((a, b) => b.index - a.index)[0];
-      const after = [...claimable].filter((t) => !t.claimed && t.index > p).sort((a, b) => a.index - b.index)[0];
+      const after = [...claimable]
+        .filter(t => !t.claimed && t.index > p)
+        .sort((a, b) => a.index - b.index)[0];
       const pick = before ?? after;
       if (pick) pick.claimed = true;
     }
-    const storageCandidates = claimable.filter((t) => !t.claimed);
+    const storageCandidates = claimable.filter(t => !t.claimed);
 
     // ROM/storage markers, two confidence tiers (Codex round-6): an EXPLICIT
     // "ROM"/"bộ nhớ trong" marker always wins - even when a separate RAM
@@ -321,16 +594,23 @@ export class ProductNormalizer {
       /dung lượng\s*[:\-]?\s*(\d+(?:[.,]\d+)?)\s*(TB|GB)(?!\s*(?:RAM|bộ\s*nhớ\s*RAM|dung\s*lượng\s*RAM))/i
     );
 
+    const baseKey = `${slugify(brand)}:${slugify(model)}`;
+    const benchmark = CANONICAL_PHONE_REGISTRY[baseKey];
+
     let storageGb: number | null = null;
     let storageConfident = false;
     const marker = romExplicit ?? romLoose;
     if (marker) {
       // An explicit ROM marker always wins; the loose "dung lượng" marker has
       // already been rejected when a RAM phrase follows its size.
-      storageGb = parseFloat(marker[1].replace(',', '.')) * (marker[2].toUpperCase() === 'TB' ? 1024 : 1);
+      storageGb =
+        parseFloat(marker[1].replace(',', '.')) * (marker[2].toUpperCase() === 'TB' ? 1024 : 1);
       storageConfident = true;
     } else if (storageCandidates.length === 1) {
       storageGb = storageCandidates[0].value;
+      storageConfident = true;
+    } else if (storageCandidates.length === 0 && benchmark?.default_storage_gb != null) {
+      storageGb = benchmark.default_storage_gb;
       storageConfident = true;
     }
     // Ambiguous (multiple unclaimed tokens, no ROM anchor) or nothing found:
@@ -349,27 +629,38 @@ export class ProductNormalizer {
 
     // 5. Construct keys & slugs. Unknown storage keeps identity space explicit
     // (':unknown') instead of guessing a default (plan v7 §5.2).
-    const baseKey = `${slugify(brand)}:${slugify(model)}`;
     const modelKey = storageKnown ? `${baseKey}:${storageGb}gb` : `${baseKey}:unknown`;
-    const storageDisplay = storageGb === null
-      ? 'Không rõ dung lượng'
-      : storageGb >= 1024
-        ? `${storageGb / 1024}TB`
-        : `${storageGb}GB`;
-    const canonicalName = storageKnown ? `${brand} ${model} ${storageDisplay}` : `${brand} ${model}`;
+    const storageDisplay =
+      categorySlug === 'earbuds' && storageGb === 1
+        ? 'Standard'
+        : storageGb === null
+          ? 'Không rõ dung lượng'
+          : storageGb >= 1024
+            ? `${storageGb / 1024}TB`
+            : `${storageGb}GB`;
+    const canonicalName =
+      categorySlug === 'earbuds' && storageGb === 1
+        ? `${brand} ${model}`
+        : storageKnown
+          ? `${brand} ${model} ${storageDisplay}`
+          : `${brand} ${model}`;
     const slug = slugify(canonicalName);
 
     // 6. Enrich with 10 Field Groups (PhoneArena structure + GSMArena depth)
-    const benchmark = CANONICAL_PHONE_REGISTRY[baseKey];
     const isApple = brand === 'Apple';
 
-    const ramGb = benchmark ? benchmark.ram_gb : claimable.find((t) => t.claimed)?.value ?? null;
+    const ramGb = benchmark ? benchmark.ram_gb : (claimable.find(t => t.claimed)?.value ?? null);
     const screenSize = benchmark ? benchmark.screen_size_inch : null;
     const batteryMah = benchmark ? benchmark.battery_mah : null;
-    const has5g = benchmark ? benchmark.has_5g : true;
+    const has5g = benchmark ? benchmark.has_5g : categorySlug === 'smartphones';
 
     const cameraCount = benchmark
-      ? [benchmark.rear_camera, benchmark.second_camera, benchmark.third_camera, benchmark.fourth_camera].filter(Boolean).length
+      ? [
+          benchmark.rear_camera,
+          benchmark.second_camera,
+          benchmark.third_camera,
+          benchmark.fourth_camera,
+        ].filter(Boolean).length
       : 2;
     const rearSetupLabel =
       cameraCount >= 4
@@ -399,7 +690,9 @@ export class ProductNormalizer {
       },
       display: {
         size_inch: screenSize || undefined,
-        type: benchmark?.screen_type || (isApple ? 'Super Retina XDR OLED, HDR10' : 'AMOLED, 120Hz, HDR10+'),
+        type:
+          benchmark?.screen_type ||
+          (isApple ? 'Super Retina XDR OLED, HDR10' : 'AMOLED, 120Hz, HDR10+'),
         resolution: benchmark?.resolution || undefined,
         refresh_rate_hz: benchmark?.refresh_rate_hz || (isApple ? 60 : 120),
         ppi: benchmark?.screen_size_inch === 6.8 ? 505 : 460,
@@ -420,9 +713,7 @@ export class ProductNormalizer {
       battery: {
         capacity_mah: batteryMah || undefined,
         type: 'Li-Ion, không thể tháo rời',
-        charging: isApple
-          ? 'Sạc nhanh PD, Sạc không dây MagSafe/Qi2'
-          : 'Sạc nhanh USB-C PD/PPS',
+        charging: isApple ? 'Sạc nhanh PD, Sạc không dây MagSafe/Qi2' : 'Sạc nhanh USB-C PD/PPS',
         fast_charging_w: benchmark?.charging_w || (isApple ? 25 : 45),
         reverse_charging: false,
       },
@@ -470,7 +761,9 @@ export class ProductNormalizer {
 
     const keySpecs: KeySpecs = {
       screen: `${screenSize || (isApple ? 6.1 : 6.6)}" ${benchmark?.screen_type?.split(',')[0] || (isApple ? 'OLED' : 'AMOLED 120Hz')}`,
-      chip: benchmark?.chipset?.split('(')[0]?.trim() || (isApple ? 'Apple A-Series' : 'Snapdragon / Dimensity'),
+      chip:
+        benchmark?.chipset?.split('(')[0]?.trim() ||
+        (isApple ? 'Apple A-Series' : 'Snapdragon / Dimensity'),
       camera: benchmark?.rear_camera ? benchmark.rear_camera.split(',')[0] : '50 MP OIS',
       battery: `${batteryMah || (isApple ? 3561 : 5000)} mAh (${benchmark?.charging_w || (isApple ? 25 : 45)}W)`,
       storage: storageDisplay,
@@ -478,6 +771,7 @@ export class ProductNormalizer {
     };
 
     return {
+      category_slug: categorySlug,
       brand,
       model,
       variant_name: storageDisplay,

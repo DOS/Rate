@@ -1362,8 +1362,8 @@ export function getMasterProductHref(
     return `/smartphones/${product.slug}`;
   }
 
-  const haystack = `${product.name || ''} ${product.model || ''} ${product.slug}`
-    .toLowerCase();
+  const haystack =
+    `${product.name || ''} ${product.model || ''} ${product.slug}`.toLowerCase();
   if (
     /ipad|galaxy tab|xiaomi pad|matepad|redmi pad|tab s\d|tablet|máy tính bảng/i.test(
       haystack
@@ -1467,8 +1467,11 @@ function computeDynamicReviewRisk(reviews: ReviewItem[]): {
  * and active listing statistics. Uses explicit non-PII column selection.
  */
 export async function getMerchantsList(params?: {
+  q?: string;
   platform?: string;
   officialOnly?: boolean;
+  minTrust?: number;
+  sort?: 'trust_desc' | 'products_desc' | 'seeding_asc' | 'followers_desc';
   limit?: number;
 }): Promise<MerchantSummary[]> {
   const supabase = getRateClient();
@@ -1481,8 +1484,8 @@ export async function getMerchantsList(params?: {
     .order('is_official', { ascending: false })
     .order('follower_count', { ascending: false });
 
-  if (params?.platform) {
-    mQuery = mQuery.eq('platform', params.platform);
+  if (params?.platform && params.platform !== 'all') {
+    mQuery = mQuery.eq('platform', params.platform.toLowerCase());
   }
   if (params?.officialOnly) {
     mQuery = mQuery.eq('is_official', true);
@@ -1577,7 +1580,7 @@ export async function getMerchantsList(params?: {
     mappedReviewsByMerchant.set(mId, existing);
   }
 
-  return merchants.map((m) => {
+  let results: MerchantSummary[] = merchants.map((m) => {
     const prices = prodsByMerchant.get(m.id) ?? [];
     const mReviews = mappedReviewsByMerchant.get(m.id) ?? [];
     const { reviewRiskScore, breakdown } = computeDynamicReviewRisk(mReviews);
@@ -1611,6 +1614,49 @@ export async function getMerchantsList(params?: {
       updated_at: m.updated_at || m.created_at || null,
     };
   });
+
+  if (params?.q && params.q.trim()) {
+    const kw = params.q.trim().toLowerCase();
+    results = results.filter(
+      (m) =>
+        m.name.toLowerCase().includes(kw) ||
+        m.platform_shop_id.toLowerCase().includes(kw) ||
+        m.platform.toLowerCase().includes(kw) ||
+        (m.slug && m.slug.toLowerCase().includes(kw))
+    );
+  }
+
+  if (typeof params?.minTrust === 'number' && !Number.isNaN(params.minTrust)) {
+    results = results.filter((m) => m.trust_score >= params.minTrust!);
+  }
+
+  if (params?.sort) {
+    results = [...results].sort((a, b) => {
+      switch (params.sort) {
+        case 'trust_desc':
+          return (
+            b.trust_score - a.trust_score || b.product_count - a.product_count
+          );
+        case 'products_desc':
+          return (
+            b.product_count - a.product_count || b.trust_score - a.trust_score
+          );
+        case 'seeding_asc':
+          return (
+            a.review_risk_score - b.review_risk_score ||
+            b.trust_score - a.trust_score
+          );
+        case 'followers_desc':
+          return (
+            b.follower_count - a.follower_count || b.trust_score - a.trust_score
+          );
+        default:
+          return 0;
+      }
+    });
+  }
+
+  return results;
 }
 
 /**

@@ -68,6 +68,7 @@ export default function FooterDynamic({
   const fallback2: FooterSection = {
     title: copyDict.footer.col2Title,
     links: [
+      { label: copyDict.footer.links.inspect, href: '/inspect' },
       { label: copyDict.footer.links.compare, href: '/compare' },
       { label: copyDict.footer.links.merchants, href: '/merchants' },
       { label: copyDict.footer.links.watchlist, href: '/watchlist' },
@@ -120,7 +121,7 @@ export default function FooterDynamic({
       <div className="container-fluid">
         <div className="row">
           {/* Logo + Copy + Social */}
-          <div className="col-12 col-md-5 col-lg-12 col-xl-4">
+          <div className="col-md-5 col-lg-12 col-xl-4 col-12">
             <div className="footer-widget pe-xl-4 mb-5">
               <div className="footerLogo">
                 <Image
@@ -194,8 +195,8 @@ export default function FooterDynamic({
           </div>
 
           {/* Column 1 */}
-          <div className="col-6 col-md-4 offset-md-3 col-lg-3 offset-lg-0 col-xl-2">
-            <div className="footer-widget mb-5 mb-md-5 mb-lg-0">
+          <div className="col-md-4 offset-md-3 col-lg-3 offset-lg-0 col-xl-2 col-6">
+            <div className="footer-widget mb-md-5 mb-lg-0 mb-5">
               {col1?.title ? (
                 <h4 className="widget-title text-pri">{col1.title}</h4>
               ) : null}
@@ -223,8 +224,8 @@ export default function FooterDynamic({
           </div>
 
           {/* Column 2 */}
-          <div className="col-6 col-md-4 col-lg-3 col-xl-2">
-            <div className="footer-widget mb-5 mb-md-5 mb-lg-0">
+          <div className="col-md-4 col-lg-3 col-xl-2 col-6">
+            <div className="footer-widget mb-md-5 mb-lg-0 mb-5">
               {col2?.title ? (
                 <h4 className="widget-title">{col2.title}</h4>
               ) : null}
@@ -252,7 +253,7 @@ export default function FooterDynamic({
           </div>
 
           {/* Column 3 */}
-          <div className="col-6 col-md-4 col-lg-3 col-xl-2">
+          <div className="col-md-4 col-lg-3 col-xl-2 col-6">
             <div className="footer-widget">
               {col3?.title ? (
                 <h4 className="widget-title">{col3.title}</h4>
@@ -281,7 +282,7 @@ export default function FooterDynamic({
           </div>
 
           {/* Open-Core Architecture & Security Status */}
-          <div className="col-6 col-md-4 col-lg-3 col-xl-2">
+          <div className="col-md-4 col-lg-3 col-xl-2 col-6">
             <div className="footer-widget">
               <h4 className="widget-title">{copyDict.footer.trustTitle}</h4>
               <div className="contactInfowrap">

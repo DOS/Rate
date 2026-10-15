@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { UUIDv7Schema, StatusSchema } from './common.schema';
+import { UUIDv7Schema, StatusSchema } from './common.schema.js';
 
 /**
  * Review-related schemas
@@ -24,11 +24,13 @@ export const ReviewSchema = z.object({
   helpfulCount: z.number().min(0).default(0),
   unhelpfulCount: z.number().min(0).default(0),
   reportCount: z.number().min(0).default(0),
-  reply: z.object({
-    content: z.string(),
-    createdAt: z.string().datetime(),
-    createdBy: UUIDv7Schema,
-  }).optional(),
+  reply: z
+    .object({
+      content: z.string(),
+      createdAt: z.string().datetime(),
+      createdBy: UUIDv7Schema,
+    })
+    .optional(),
   metadata: z.record(z.any()).optional(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),

@@ -60,6 +60,9 @@ jobs:
       - name: Build & Typecheck @repo/crawlers
         run: pnpm --filter @repo/crawlers build
 
+      - name: Run @repo/crawlers Open-Core Intelligence Tests
+        run: pnpm --filter @repo/crawlers test
+
       - name: Typecheck @repo/web
         run: pnpm --filter @repo/web typecheck
 

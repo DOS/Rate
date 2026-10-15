@@ -1,6 +1,8 @@
 export type SupportedRateLocale = 'vi' | 'en' | 'cs';
 
-export function normalizeRateLocale(locale?: string | null): SupportedRateLocale {
+export function normalizeRateLocale(
+  locale?: string | null
+): SupportedRateLocale {
   if (locale === 'en' || locale === 'cs') {
     return locale;
   }
@@ -18,7 +20,10 @@ export interface RateLocaleCopy {
     smartphones: string;
     laptops: string;
     tablets: string;
+    smartwatches: string;
+    earbuds: string;
     merchants: string;
+    inspect: string;
     compare: string;
     watchlist: string;
     developers: string;
@@ -38,6 +43,7 @@ export interface RateLocaleCopy {
       tablets: string;
       smartwatches: string;
       earbuds: string;
+      inspect: string;
       compare: string;
       merchants: string;
       watchlist: string;
@@ -108,7 +114,10 @@ const RATE_COPY_DICTIONARY: Record<SupportedRateLocale, RateLocaleCopy> = {
       smartphones: 'Điện thoại',
       laptops: 'Laptop',
       tablets: 'Máy tính bảng',
+      smartwatches: 'Đồng hồ',
+      earbuds: 'Tai nghe',
       merchants: 'Gian hàng',
+      inspect: 'Kiểm toán Link',
       compare: 'So sánh',
       watchlist: 'Canh giá',
       developers: 'API',
@@ -129,6 +138,7 @@ const RATE_COPY_DICTIONARY: Record<SupportedRateLocale, RateLocaleCopy> = {
         tablets: 'Máy tính bảng (Tablet)',
         smartwatches: 'Đồng hồ thông minh',
         earbuds: 'Tai nghe chống ồn ANC',
+        inspect: 'Kiểm toán sâu Link TMĐT (/inspect)',
         compare: 'So sánh 10 nhóm thông số',
         merchants: 'Hồ sơ Tín nhiệm Gian hàng',
         watchlist: 'Danh sách Canh giá thật',
@@ -205,7 +215,10 @@ const RATE_COPY_DICTIONARY: Record<SupportedRateLocale, RateLocaleCopy> = {
       smartphones: 'Smartphones',
       laptops: 'Laptops',
       tablets: 'Tablets',
+      smartwatches: 'Watches',
+      earbuds: 'Earbuds',
       merchants: 'Merchants',
+      inspect: 'Inspect URL',
       compare: 'Compare',
       watchlist: 'Watchlist',
       developers: 'API',
@@ -226,6 +239,7 @@ const RATE_COPY_DICTIONARY: Record<SupportedRateLocale, RateLocaleCopy> = {
         tablets: 'Tablets',
         smartwatches: 'Smartwatches',
         earbuds: 'ANC Wireless Earbuds',
+        inspect: 'Deep Link Inspector (/inspect)',
         compare: '10-Group Spec Comparison',
         merchants: 'Merchant Trust Directory',
         watchlist: 'Price Drop Watchlist',
@@ -237,7 +251,8 @@ const RATE_COPY_DICTIONARY: Record<SupportedRateLocale, RateLocaleCopy> = {
         contact: 'Contact & Report Merchant',
         github: 'Open-Core GitHub (DOS/Rate)',
       },
-      bannerTitle: 'Verify True Historical Price & AI Review Trust Before Buying',
+      bannerTitle:
+        'Verify True Historical Price & AI Review Trust Before Buying',
       bannerDesc:
         'Paste any Shopee, Lazada, or Tiki listing link or set a target price alert to avoid inflated fake sales.',
       bannerCta: 'Open Price Watchlist',
@@ -302,7 +317,10 @@ const RATE_COPY_DICTIONARY: Record<SupportedRateLocale, RateLocaleCopy> = {
       smartphones: 'Telefony',
       laptops: 'Notebooky',
       tablets: 'Tablety',
+      smartwatches: 'Hodinky',
+      earbuds: 'Sluchátka',
       merchants: 'Obchody',
+      inspect: 'Audit URL',
       compare: 'Porovnat',
       watchlist: 'Hlídání cen',
       developers: 'API',
@@ -323,6 +341,7 @@ const RATE_COPY_DICTIONARY: Record<SupportedRateLocale, RateLocaleCopy> = {
         tablets: 'Tablety',
         smartwatches: 'Chytré hodinky',
         earbuds: 'Bezdrátová sluchátka ANC',
+        inspect: 'Hloubkový audit odkazu (/inspect)',
         compare: 'Porovnání 10 skupin parametrů',
         merchants: 'Adresář důvěryhodnosti obchodů',
         watchlist: 'Seznam hlídaných cen',
