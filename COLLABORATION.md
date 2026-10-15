@@ -5,12 +5,14 @@ This document outlines the collaboration workflow between Claude Code and Cursor
 ## Agent Responsibilities
 
 ### Claude Code (Frontend Focus)
+
 - **Primary**: UI/UX implementation with React/Next.js
 - **Components**: Shadcn/ui, TailwindCSS styling
 - **Features**: User-facing features, responsive design
 - **Testing**: Frontend E2E tests with Playwright
 
 ### Cursor (Backend Focus)
+
 - **Primary**: Strapi API development
 - **Database**: PostgreSQL schema, migrations
 - **Services**: Business logic, data validation
@@ -19,6 +21,7 @@ This document outlines the collaboration workflow between Claude Code and Cursor
 ## Workflow
 
 ### 1. Feature Planning (10-15 minutes)
+
 ```
 1. Define feature requirements
 2. Design API contract in packages/shared-data
@@ -27,6 +30,7 @@ This document outlines the collaboration workflow between Claude Code and Cursor
 ```
 
 ### 2. Parallel Development
+
 ```
 Backend (Cursor):                Frontend (Claude):
 1. Create Strapi content type    1. Create UI structure
@@ -38,26 +42,29 @@ Backend (Cursor):                Frontend (Claude):
 ### 3. Integration Points
 
 #### Shared Data Package (`packages/shared-data`)
+
 - **Owner**: Both (Backend leads changes)
 - **Purpose**: API contracts, types, schemas
 - **Process**: Backend defines → Frontend consumes
 
 Example:
+
 ```typescript
+// Frontend imports and uses
+import { FeatureSchema } from "@repo/shared-data"
+
 // Backend adds new schema
 export const FeatureSchema = z.object({
   id: z.string(),
   name: z.string(),
   // ...
-});
-
-// Frontend imports and uses
-import { FeatureSchema } from '@repo/shared-data';
+})
 ```
 
 ### 4. Git Workflow
 
 #### Branch Naming
+
 ```
 feat/<area>-<short-description>
 fix/<area>-<issue-number>
@@ -65,11 +72,13 @@ chore/<area>-<task>
 ```
 
 Examples:
+
 - `feat/ui-user-profile`
 - `feat/api-authentication`
 - `fix/ui-responsive-layout`
 
 #### Commit Convention
+
 ```
 <type>(<scope>): <subject>
 
@@ -79,6 +88,7 @@ Examples:
 ```
 
 Examples:
+
 ```
 feat(ui): add user profile page
 fix(api): resolve N+1 query in listings
@@ -100,15 +110,17 @@ chore(shared): update Zod schemas
 ### 6. Avoiding Conflicts
 
 #### File Ownership
+
 ```
 Claude Code:                    Cursor:
-apps/ui/src/**                 apps/strapi/src/api/**
+apps/web/src/**                 apps/strapi/src/api/**
 Modules/Extension/**           apps/strapi/config/**
                               Modules/Importer/**
                               Modules/Validator/**
 ```
 
 #### Shared Areas (Coordinate First)
+
 - `packages/shared-data/` - Discuss schema changes
 - Root config files - Announce changes in PR
 - Documentation - Update collaboratively
@@ -116,6 +128,7 @@ Modules/Extension/**           apps/strapi/config/**
 ### 7. Communication Patterns
 
 #### API Changes
+
 ```typescript
 // packages/shared-data/CHANGELOG.md
 ## [1.1.0] - 2025-01-23
@@ -126,14 +139,18 @@ Modules/Extension/**           apps/strapi/config/**
 ```
 
 #### Feature Handoff
+
 ```markdown
 ## Feature: User Authentication
+
 ### Backend Complete ✓
+
 - [x] JWT implementation
 - [x] Refresh token logic
 - [x] Rate limiting
 
 ### Frontend TODO
+
 - [ ] Login/Register forms
 - [ ] Token management
 - [ ] Protected routes
@@ -142,16 +159,17 @@ Modules/Extension/**           apps/strapi/config/**
 ## Quick Reference
 
 ### Commands
+
 ```bash
 # Create feature branch
 git checkout -b feat/ui-dashboard
 
 # Run only your area
-yarn dev --filter=@repo/ui      # Claude
+yarn dev --filter=@repo/web      # Claude
 yarn dev --filter=@repo/strapi  # Cursor
 
 # Test your changes
-yarn build --filter=@repo/ui
+yarn build --filter=@repo/web
 yarn type-check --filter=@repo/strapi
 
 # Sync with main
@@ -160,28 +178,32 @@ git rebase origin/main
 ```
 
 ### Environment Separation (Optional)
+
 ```bash
 # Claude's env
 DATABASE_URL=postgresql://JOY@localhost/rate_db?schema=claude
 
-# Cursor's env  
+# Cursor's env
 DATABASE_URL=postgresql://JOY@localhost/rate_db?schema=cursor
 ```
 
 ## Troubleshooting
 
 ### Merge Conflicts
+
 1. Pull latest from main
 2. Resolve in feature branch
 3. Test both frontend and backend
 4. Request review from other agent
 
 ### API Contract Mismatch
+
 1. Check `packages/shared-data` version
 2. Rebuild packages: `yarn build --filter=@repo/shared-data`
 3. Restart dev servers
 
 ### Type Errors
+
 1. Regenerate types: `yarn strapi ts:generate-types`
 2. Update shared-data exports
 3. Clear TypeScript cache: `rm -rf node_modules/.cache`
@@ -199,6 +221,7 @@ DATABASE_URL=postgresql://JOY@localhost/rate_db?schema=cursor
 ### Feature: Product Reviews
 
 #### 1. API Contract (Both)
+
 ```typescript
 // packages/shared-data/src/schemas/product-review.schema.ts
 export const ProductReviewSchema = z.object({
@@ -206,28 +229,36 @@ export const ProductReviewSchema = z.object({
   productId: z.string(),
   rating: z.number().min(1).max(5),
   comment: z.string(),
-});
+})
 ```
 
 #### 2. Backend Implementation (Cursor)
+
 ```typescript
 // apps/strapi/src/api/product-review/
-- content-types/product-review/schema.json
-- controllers/product-review.ts
-- services/product-review.ts
-- routes/product-review.ts
+;-content -
+  types / product -
+  review / schema.json -
+  controllers / product -
+  review.ts -
+  services / product -
+  review.ts -
+  routes / product -
+  review.ts
 ```
 
 #### 3. Frontend Implementation (Claude)
+
 ```typescript
-// apps/ui/src/app/(features)/reviews/
-- components/ReviewList.tsx
-- components/ReviewForm.tsx
-- hooks/useReviews.ts
-- page.tsx
+// apps/web/src/app/(features)/reviews/
+;-components / ReviewList.tsx -
+  components / ReviewForm.tsx -
+  hooks / useReviews.ts -
+  page.tsx
 ```
 
 #### 4. Integration Test
+
 ```bash
 # Both agents test together
 yarn dev

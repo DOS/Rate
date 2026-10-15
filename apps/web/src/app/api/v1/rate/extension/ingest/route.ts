@@ -1,0 +1,138 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
+import {
+  ingestExtensionCrowdSignal,
+  type SupportedEcommercePlatform,
+} from '@/server/rate';
+
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, X-Rate-Extension-Version',
+};
+
+const CrowdIngestSchema = z.object({
+  platform: z.enum([
+    'shopee',
+    'lazada',
+    'tiki',
+    'cellphones',
+    'tgdd',
+    'fptshop',
+  ]),
+  externalItemId: z.string().trim().min(1).max(120),
+  externalShopId: z.string().trim().max(120).nullish(),
+  url: z.string().trim().url().max(1024),
+  title: z.string().trim().min(3).max(320),
+  selectedVariant: z.string().trim().max(160).nullish(),
+  price: z.number().int().positive().max(500_000_000),
+  originalPrice: z.number().int().positive().max(500_000_000).nullish(),
+  ratingStar: z.number().min(0).max(5).nullish(),
+  ratingCount: z.number().int().min(0).max(10_000_000).nullish(),
+  userConsentOptIn: z.boolean(),
+});
+
+// Lightweight per-IP sliding window rate limiter for crowd ingest quarantine
+const ingestRateBuckets = new Map<
+  string,
+  { count: number; windowResetAt: number }
+>();
+const RATE_WINDOW_MS = 60_000;
+const MAX_REQUESTS_PER_MINUTE = 15;
+
+function checkRateLimit(clientKey: string): boolean {
+  const now = Date.now();
+  const bucket = ingestRateBuckets.get(clientKey);
+  if (!bucket || now >= bucket.windowResetAt) {
+    ingestRateBuckets.set(clientKey, {
+      count: 1,
+      windowResetAt: now + RATE_WINDOW_MS,
+    });
+    return true;
+  }
+  if (bucket.count >= MAX_REQUESTS_PER_MINUTE) {
+    return false;
+  }
+  bucket.count += 1;
+  return true;
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: CORS_HEADERS,
+  });
+}
+
+/**
+ * POST /api/v1/rate/extension/ingest
+ * Zero-Trust Crowdsourced Signal Quarantine Endpoint (Two-Speed Hybrid Architecture v2).
+ * Enforces:
+ * - Explicit Opt-In Consent check (`userConsentOptIn === true`)
+ * - Zod schema validation & sliding-window IP rate limit
+ * - Accessory / Junk Gatekeeper
+ * - Platform Capability Matrix check (only queues platforms with active verification workers)
+ * - 100% Quarantine: Enqueues into `rate.crawl_jobs` via `enqueue_crawl_job` RPC; NEVER mutates canonical prices directly.
+ */
+export async function POST(request: NextRequest) {
+  try {
+    const forwardedFor = request.headers.get('x-forwarded-for');
+    const clientIp = forwardedFor
+      ? forwardedFor.split(',')[0]?.trim() || 'anon'
+      : 'anon';
+
+    if (!checkRateLimit(clientIp)) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: 'Rate limit exceeded. Maximum 15 crowd signals per minute.',
+        },
+        { status: 429, headers: CORS_HEADERS }
+      );
+    }
+
+    const body = await request.json();
+    const parsed = CrowdIngestSchema.safeParse(body);
+
+    if (!parsed.success) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: 'Invalid crowd signal payload.',
+          details: parsed.error.flatten(),
+        },
+        { status: 400, headers: CORS_HEADERS }
+      );
+    }
+
+    const payload = parsed.data;
+    const result = await ingestExtensionCrowdSignal({
+      platform: payload.platform as SupportedEcommercePlatform,
+      externalItemId: payload.externalItemId,
+      externalShopId: payload.externalShopId ?? null,
+      url: payload.url,
+      title: payload.title,
+      selectedVariant: payload.selectedVariant ?? null,
+      price: payload.price,
+      originalPrice: payload.originalPrice ?? null,
+      ratingStar: payload.ratingStar ?? null,
+      ratingCount: payload.ratingCount ?? null,
+      userConsentOptIn: payload.userConsentOptIn,
+    });
+
+    return NextResponse.json(
+      {
+        ok: true,
+        data: result,
+      },
+      { status: 200, headers: CORS_HEADERS }
+    );
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : 'Internal server error';
+    return NextResponse.json(
+      { ok: false, error: message },
+      { status: 500, headers: CORS_HEADERS }
+    );
+  }
+}

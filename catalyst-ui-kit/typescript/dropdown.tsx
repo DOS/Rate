@@ -135,13 +135,8 @@ export function DropdownDivider({
   )
 }
 
-export function DropdownLabel({
-  className,
-  ...props
-}: { className?: string } & Omit<Headless.LabelProps, 'as' | 'className'>) {
-  return (
-    <Headless.Label {...props} data-slot="label" className={clsx(className, 'col-start-2 row-start-1')} {...props} />
-  )
+export function DropdownLabel({ className, ...props }: React.ComponentPropsWithoutRef<'div'>) {
+  return <div {...props} data-slot="label" className={clsx(className, 'col-start-2 row-start-1')} {...props} />
 }
 
 export function DropdownDescription({

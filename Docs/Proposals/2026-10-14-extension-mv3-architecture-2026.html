@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="vi" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="dark" />
+  <title>Rate Browser Extension (MV3) - Đề Xuất Kiến Trúc Thế Hệ Mới 2026 (Hybrid Fast-Lookup &amp; Zero-Trust Crowdsourcing)</title>
+  <style>
+    :root {
+      --bg-base: #0f1113;
+      --bg-card: #16191e;
+      --bg-card-alt: #1c2027;
+      --border: #2a2f3a;
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+      --accent: #FF2E29;
+      --accent-soft: rgba(255, 46, 41, 0.14);
+      --green: #10b981;
+      --green-soft: rgba(16, 185, 129, 0.14);
+      --amber: #f59e0b;
+      --amber-soft: rgba(245, 158, 11, 0.14);
+      --blue: #3b82f6;
+      --blue-soft: rgba(59, 130, 246, 0.14);
+      --purple: #a855f7;
+      --purple-soft: rgba(168, 85, 247, 0.14);
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      background-color: var(--bg-base);
+      color: var(--text-main);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+      line-height: 1.65;
+      padding: 36px 20px 80px;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .header {
+      background: linear-gradient(135deg, rgba(255, 46, 41, 0.16) 0%, rgba(22, 25, 30, 0.96) 65%);
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--accent);
+      border-radius: 16px;
+      padding: 28px 32px;
+      margin-bottom: 28px;
+    }
+    .badge-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 5px 12px;
+      border-radius: 999px;
+    }
+    .badge-red { background: var(--accent-soft); color: #ff6b67; border: 1px solid rgba(255, 46, 41, 0.35); }
+    .badge-green { background: var(--green-soft); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.35); }
+    .badge-amber { background: var(--amber-soft); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.35); }
+    .badge-blue { background: var(--blue-soft); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.35); }
+    .badge-purple { background: var(--purple-soft); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.35); }
+
+    h1 {
+      font-size: 26px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 10px;
+      color: #ffffff;
+    }
+    h2 {
+      font-size: 20px;
+      font-weight: 700;
+      color: #ffffff;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    h3 {
+      font-size: 16px;
+      font-weight: 700;
+      color: #ffffff;
+      margin-bottom: 8px;
+    }
+    p {
+      color: var(--text-muted);
+      font-size: 14.5px;
+      margin-bottom: 12px;
+    }
+    .section {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 26px 28px;
+      margin-bottom: 24px;
+    }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+      gap: 18px;
+    }
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+    }
+    .card {
+      background: var(--bg-card-alt);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px 20px;
+    }
+    .card.highlight {
+      border-color: rgba(255, 46, 41, 0.45);
+      background: linear-gradient(180deg, rgba(255, 46, 41, 0.08) 0%, rgba(28, 32, 39, 1) 100%);
+    }
+    .card.good {
+      border-color: rgba(16, 185, 129, 0.4);
+    }
+    .card.warn {
+      border-color: rgba(245, 158, 11, 0.4);
+    }
+    ul {
+      padding-left: 18px;
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+    li {
+      margin-bottom: 7px;
+    }
+    li strong {
+      color: var(--text-main);
+    }
+    code {
+      font-family: "JetBrains Mono", Consolas, monospace;
+      font-size: 12.5px;
+      background: rgba(255, 255, 255, 0.07);
+      color: #f9fafb;
+      padding: 2px 6px;
+      border-radius: 5px;
+    }
+    pre {
+      background: #0b0d10;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      overflow-x: auto;
+      font-family: "JetBrains Mono", Consolas, monospace;
+      font-size: 12.5px;
+      color: #e5e7eb;
+      line-height: 1.55;
+      margin-top: 10px;
+      margin-bottom: 12px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      font-size: 13.5px;
+    }
+    th, td {
+      text-align: left;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    th {
+      background: rgba(255, 255, 255, 0.04);
+      color: #ffffff;
+      font-weight: 700;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    td {
+      color: var(--text-muted);
+    }
+    .flow-box {
+      background: #101318;
+      border: 1px dashed #374151;
+      border-radius: 12px;
+      padding: 18px 20px;
+      margin: 14px 0;
+    }
+    .step-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: #fff;
+      font-weight: 800;
+      font-size: 12px;
+      margin-right: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="badge-row">
+        <span class="badge badge-red">Rate Browser Extension MV3 - 2026 Edition</span>
+        <span class="badge badge-green">Two-Speed Hybrid Pipeline (&lt; 50ms Lookup + Zero-Trust Crowd Ingest)</span>
+        <span class="badge badge-blue">Shadow DOM Pill + Chrome Native Side Panel</span>
+        <span class="badge badge-purple">TypeScript 7.0.2 + Shared Zod Schema</span>
+      </div>
+      <h1>Đề Xuất Kiến Trúc Mới 2026 Cho Rate Browser Extension (Issue #12)</h1>
+      <p>
+        Thay vì rập khuôn theo mô hình 2025 cũ (nhét toàn bộ script cào nặng nề vào tab người dùng rồi đẩy thẳng JSON chưa kiểm chứng vào Strapi/Splink), kiến trúc <strong>Rate Extension 2026</strong> nâng cấp lên mô hình <strong>Two-Speed Hybrid Intelligence (Tra cứu Tức thì &lt; 50ms + Tín hiệu Đám đông Zero-Trust + Chrome Native Side Panel)</strong> - vừa nhanh gấp 10 lần cho người dùng, vừa chống đầu độc dữ liệu (Data Poisoning), vừa vượt qua 100% quy chuẩn kiểm duyệt khắt khe của Chrome Web Store 2026.
+      </p>
+    </div>
+
+    <!-- PHẦN 1: SO SÁNH TRIẾT LÝ CŨ 2025 VS TRIẾT LÝ MỚI 2026 -->
+    <div class="section">
+      <h2>1. Tại Sao Nên Bỏ Triết Lý Extension 2025 Cũ Và Nâng Cấp Lên Triết Lý 2026?</h2>
+      <p>
+        Nhìn lại thiết kế cũ năm 2025 (<code>apps/extension/Crawler</code> kết nối <code>POST /api/listings/create-from-shopee</code> + Strapi + Splink Python), có <strong>4 điểm nghẽn chí mạng</strong> nếu đem ra vận hành thực tế năm 2026:
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Khía cạnh</th>
+            <th>❌ Triết lý cũ (2025 - Strapi / Heavy Content Script)</th>
+            <th>✅ Triết lý mới đề xuất (2026 - Hybrid Fast-Lookup + Zero-Trust Crowd)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>1. Bảo mật &amp; Chống đầu độc dữ liệu (Anti-Poisoning)</strong></td>
+            <td>
+              Extension từ trình duyệt người dùng gửi thẳng <code>POST /api/listings/create-from-shopee</code> ghi đè trực tiếp <code>price</code>, <code>rating</code>, <code>reviews</code> vào DB chính. Gian thương chỉ cần mở DevTools bắn 1 request giả là làm sai lệch lịch sử giá hoặc bơm giá ảo!
+            </td>
+            <td>
+              <strong>Zero-Trust Crowdsourced Signal:</strong> Dữ liệu từ Extension chỉ được xem là <strong>"Tín hiệu quan sát (Crowd Observation)"</strong>. Nếu lệch bất thường so với giá chuẩn hoặc là sản phẩm mới, hệ thống tự động đẩy vào hàng đợi <code>rate.crawl_jobs</code> để Worker chống phát hiện (<code>DOS/Rate-Services</code>) xác thực độc lập từ phía Server!
+            </td>
+          </tr>
+          <tr>
+            <td><strong>2. Tốc độ phản hồi cho người dùng (Latency)</strong></td>
+            <td>
+              Mỗi lần mở trang Shopee phải chờ cào DOM, gửi lên Server chạy phân loại + gom cụm rồi mới trả kết quả (mất <code>1.5s - 4s</code>), gây giật lag trang mua sắm.
+            </td>
+            <td>
+              <strong>Two-Speed Pipeline (Luồng Kép 2 Tốc Độ):</strong>
+              <br/>• <strong>Luồng 1 - Fast Lookup (&lt; 50ms):</strong> Tra cứu tức thì qua <code>external_id</code> hoặc <code>ProductNormalizer(title) -&gt; model_key</code> để hiện ngay Biểu đồ giá, Cảnh báo giảm giá ảo, Top nơi bán rẻ hơn.
+              <br/>• <strong>Luồng 2 - Async Ingest (Chạy ngầm):</strong> Gửi tín hiệu giá mới về Backend xử lý bất đồng bộ, không bao giờ chặn UI người dùng.
+            </td>
+          </tr>
+          <tr>
+            <td><strong>3. Giao diện hiển thị trên sàn (UX &amp; Anti-Breakage)</strong></td>
+            <td>
+              Tiêm trực tiếp HTML/CSS thô vào giữa DOM của Shopee/Lazada và monkey-patch <code>window.fetch</code> ở Main World. Khi Shopee đổi class CSS hoặc chuyển trang SPA là vỡ giao diện và dễ bị Chrome Web Store từ chối duyệt.
+            </td>
+            <td>
+              <strong>Dual UI Surface (Shadow DOM Pill + Chrome Native Side Panel):</strong>
+              <br/>• <strong>Trên trang sàn:</strong> Chỉ gắn 1 <strong>Floating Trust Pill</strong> cô lập hoàn toàn trong <code>Shadow DOM (mode: 'open')</code> hiển thị nhanh: Điểm chuẩn AI, Cảnh báo giảm giá ảo, Số nơi bán rẻ hơn.
+              <br/>• <strong>Khi bấm vào Pill / Icon:</strong> Mở <strong>Chrome Native Side Panel (<code>chrome.sidePanel</code>)</strong> song song bên cạnh trang Shopee để xem toàn bộ Biểu đồ lịch sử giá 90 ngày, Bảng so sánh 10 nhóm thông số và Đánh giá đã lọc Seeding mà không che khuất trang mua hàng!
+            </td>
+          </tr>
+          <tr>
+            <td><strong>4. Bộ lọc Phụ kiện &amp; Gom cụm (Dedupe &amp; Classification)</strong></td>
+            <td>
+              Phụ thuộc vào Python Splink batch job chạy định kỳ, không nhận diện được ngay lập tức khi người dùng đang xem một chiếc ốp lưng hay cáp sạc giá 50.000đ có tiêu đề chứa chữ "iPhone 16 Pro Max".
+            </td>
+            <td>
+              <strong>Real-Time Edge Gatekeeper + 3-Tier Dedupe:</strong>
+              <br/>• <strong>Tầng 0 (Gatekeeper):</strong> Nhận diện tức thì Phụ kiện/Ốp lưng/Kính cường lực/Máy xác qua luật từ khóa + ngưỡng giá tối thiểu theo danh mục để không bao giờ gộp nhầm ốp lưng 50k vào máy iPhone 30 triệu.
+              <br/>• <strong>Tầng 1-3 (EntityMatcher):</strong> Khớp <code>model_key</code> chuẩn xác -&gt; <code>pg_trgm</code> similarity -&gt; AI LLM / Enqueue Worker.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- PHẦN 2: KIẾN TRÚC LUỒNG DỮ LIỆU 2 TỐC ĐỘ -->
+    <div class="section">
+      <h2>2. Kiến Trúc Luồng Kép 2 Tốc Độ (Two-Speed Hybrid Pipeline)</h2>
+      <p>
+        Khi người dùng lướt vào bất kỳ trang chi tiết sản phẩm nào trên <strong>Shopee, Lazada, Tiki, CellphoneS, Thế Giới Di Động, FPT Shop</strong>, Rate Extension vận hành theo 2 luồng tách biệt hoàn toàn:
+      </p>
+
+      <div class="flow-box">
+        <pre>
+[Trình duyệt người dùng đang mở Shopee / Lazada / Tiki / CellphoneS / TGDD]
+       │
+       ├──► LUỒNG 1: FAST-PATH LOOKUP (&lt; 50ms - Ưu tiên hiển thị tức thì)
+       │    GET /api/v1/rate/extension/lookup?platform=shopee&amp;externalId=123_456&amp;title=iPhone+16+Pro+Max+256GB&amp;price=28990000
+       │      ├─ Bước 1: Kiểm tra Gatekeeper (Có phải phụ kiện / ốp lưng / cáp sạc không? Nếu là phụ kiện -&gt; gắn nhãn Accessory, không ghép vào thân máy)
+       │      ├─ Bước 2: Tìm khớp trực tiếp theo (platform, external_id) trong rate.products
+       │      ├─ Bước 3: Nếu gian hàng này chưa từng có trong DB -&gt; chạy ProductNormalizer(title) lấy model_key / pg_trgm khớp ngay vào rate.master_products!
+       │      └─ Bước 4: Trả về ngay cho Shadow DOM Pill &amp; Side Panel:
+       │                 • Cảnh báo Giảm Giá Ảo (So sánh giá hiện tại trên trang vs Đáy 90 ngày &amp; Giá trung bình)
+       │                 • Danh sách 3-5 Nơi Bán Rẻ Hơn của cùng mẫu máy (Cross-Merchant Offers)
+       │                 • Điểm chuẩn Rate Score (đã trừ trọng số Seeding) + Tóm tắt Ưu/Nhược điểm AI
+       │                 • Link mở thẳng sang /compare?models=... trên rate.vn
+       │
+       └──► LUỒNG 2: ZERO-TRUST CROWDSOURCED INGEST (Chạy ngầm bất đồng bộ - Làm giàu dữ liệu)
+            POST /api/v1/rate/extension/ingest
+              ├─ Bước 1: Xác thực Schema bằng Zod + Rate Limit theo IP/Session chống spam
+              ├─ Bước 2: Phân loại Danh mục &amp; Chặn Rác (Accessory/Junk Filter)
+              ├─ Bước 3: Gom cụm 3 tầng (EntityMatcher: model_key -&gt; pg_trgm -&gt; LLM)
+              └─ Bước 4: Ghi nhận &amp; Điều phối thông minh:
+                         • Nếu giá hợp lệ trong biên độ tin cậy: Cập nhật giá quan sát &amp; thêm điểm lịch sử giá (observation_id chống trùng theo ngày)
+                         • Nếu là sản phẩm hoàn toàn mới HOẶC giá biến động sốc (&gt; 25%): Tự động đẩy vào bảng rate.crawl_jobs (priority cao) để DOS/Rate-Services Worker vào xác minh độc lập &amp; chạy AI Spec/Review Enricher!
+        </pre>
+      </div>
+    </div>
+
+    <!-- PHẦN 3: 4 ĐỘT PHÁ CÔNG NGHỆ NĂM 2026 CHO EXTENSION -->
+    <div class="section">
+      <h2>3. Bốn Đột Phá Công Nghệ &amp; Trải Nghiệm Của Rate Extension 2026</h2>
+      <div class="grid-2">
+        <div class="card highlight">
+          <h3><span class="step-num">1</span> Nhận Diện Ngay Cả Gian Hàng Mới Chưa Từng Cào (Zero-Cold-Start Matching)</h3>
+          <p>
+            Ở các công cụ theo dõi giá truyền thống (như BeeCost hay Keepa), nếu người dùng vào một gian hàng mới đăng bán trên Shopee mà hệ thống chưa kịp cào, tiện ích sẽ báo <em>"Chưa có dữ liệu"</em>.
+          </p>
+          <p>
+            Với Rate 2026, ngay cả khi <code>external_id</code> của shop đó chưa có trong DB, API <code>/api/v1/rate/extension/lookup</code> sẽ dùng ngay <code>ProductNormalizer</code> bóc tách tiêu đề trang để lấy <code>model_key</code> (ví dụ <code>apple-iphone-16-pro-max</code>), lập tức nối vào <code>rate.master_products</code> và trả về ngay <strong>Giá chuẩn thị trường, Điểm đánh giá thực chất và Các shop uy tín khác đang bán rẻ hơn</strong>!
+          </p>
+        </div>
+
+        <div class="card good">
+          <h3><span class="step-num">2</span> Bộ Chặn Phụ Kiện Thông Minh (Accessory &amp; Junk Guardrail)</h3>
+          <p>
+            Trên Shopee/Lazada có hàng triệu listing phụ kiện đặt tên kiểu: <em>"Ốp lưng chống sốc cho iPhone 16 Pro Max", "Kính cường lực Samsung S24 Ultra"</em>.
+          </p>
+          <p>
+            Tầng Gatekeeper mới kết hợp <strong>Danh sách từ khóa phủ định đa ngôn ngữ</strong> (<code>ốplưng, kính cường lực, bao da, dây cáp, củ sạc, miếng dán, thay màn, xác máy...</code>) + <strong>Kiểm tra ngưỡng giá sàn hợp lý (Price Floor Sanity Check)</strong> để nhận diện ngay đây là <code>accessory</code>, tuyệt đối không bao giờ làm bẩn biểu đồ giá của điện thoại chính hãng.
+          </p>
+        </div>
+
+        <div class="card good">
+          <h3><span class="step-num">3</span> Giao Diện Kép: Shadow DOM Trust Pill + Chrome Native Side Panel</h3>
+          <p>
+            Thay vì chèn một khối HTML khổng lồ làm xô lệch bố cục trang Shopee/CellphoneS:
+          </p>
+          <ul>
+            <li><strong>Shadow DOM Trust Pill (Nhỏ gọn ngay cạnh giá):</strong> Hiển thị tức thì huy hiệu <code>Giá Tốt Thực Sự</code> hoặc <code>Cảnh Báo Giảm Giá Ảo (+18% so với TB 90 ngày)</code> kèm nút <code>Có 3 nơi bán rẻ hơn (Tiết kiệm 1.400.000đ)</code>.</li>
+            <li><strong>Chrome Native Side Panel (<code>chrome.sidePanel</code>):</strong> Khi bấm vào Pill hoặc icon trên thanh công cụ, bảng phân tích chuyên sâu mở ra ở khung bên phải trình duyệt với đầy đủ: Biểu đồ lịch sử giá SVG, Điểm thành phần JReviews (Pin, Camera, Màn hình, Hiệu năng), Tỷ lệ đánh giá Seeding bị loại bỏ và nút thêm vào <code>/compare</code>.</li>
+          </ul>
+        </div>
+
+        <div class="card warn">
+          <h3><span class="step-num">4</span> Codebase TypeScript 7.0.2 Chia Sẻ Trực Tiếp <code>@repo/shared-data</code></h3>
+          <p>
+            Xoá bỏ hoàn toàn đống file JavaScript thuần trùng lặp (<code>background.js</code>, <code>background-simple.js</code>, <code>strapi-client.js</code>) trước đây.
+          </p>
+          <p>
+            <code>apps/extension</code> được viết 100% bằng <strong>TypeScript 7.0.2</strong>, đóng gói siêu nhẹ thành chuẩn <strong>Manifest V3</strong> (<code>dist/</code> sẵn sàng nạp vào Chrome), dùng chung kiểu dữ liệu với <code>apps/web</code> và <code>@repo/shared-data</code>, kèm sẵn tài liệu <code>CHROMEWEBSTORE.md</code> chuẩn bị cho việc xuất bản lên Chrome Web Store.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- PHẦN 4: KIẾN TRÚC THƯ MỤC & API CHI TIẾT SẼ TRIỂN KHAI TRONG ISSUE #12 -->
+    <div class="section">
+      <h2>4. Cấu Trúc Kỹ Thuật Triển Khai Trong Issue #12</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h3>A. Backend APIs Mới Trên <code>apps/web</code> (Layer 1 + Layer 2)</h3>
+          <ul>
+            <li>
+              <code>GET /api/v1/rate/extension/lookup</code>:
+              Tra cứu siêu tốc theo <code>(platform, externalId, url, title, price)</code>. Tích hợp Gatekeeper nhận diện phụ kiện, khớp <code>rate.products</code> hoặc fallback sang <code>ProductNormalizer -&gt; rate.master_products</code>, tính toán trực tiếp <strong>Fake Discount Verdict</strong> (<code>genuine_deal</code> | <code>normal_price</code> | <code>inflated_fake_sale</code> | <code>accessory_skip</code>).
+            </li>
+            <li>
+              <code>POST /api/v1/rate/extension/ingest</code>:
+              Nhận tín hiệu Crowdsourced đã qua kiểm tra Zod Schema. Nếu là điện thoại thật và giá nằm trong ngưỡng hợp lý, cập nhật <code>rate.products</code> / <code>rate.price_history</code> (chống trùng theo ngày) và tự động đẩy <code>rate.crawl_jobs</code> khi phát hiện sản phẩm mới hoặc biến động giá lớn.
+            </li>
+            <li>
+              Hỗ trợ đầy đủ <strong>CORS Headers</strong> an toàn cho Browser Extension MV3 và Web Client.
+            </li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <h3>B. Kiến Trúc Mới Của <code>apps/extension</code> (Manifest V3)</h3>
+          <pre>
+apps/extension/
+├── package.json              # TypeScript 7.0.2 + esbuild MV3 bundler
+├── tsconfig.json             # Strict TS 7.0.2
+├── manifest.json             # Manifest V3 chuẩn (sidePanel, storage, tabs)
+├── CHROMEWEBSTORE.md         # Hồ sơ xuất bản Chrome Web Store
+├── icons/                    # Bộ icon chuẩn 16x16, 48x48, 128x128 PNG
+└── src/
+    ├── types.ts              # Shared contracts với /api/v1/rate/extension/*
+    ├── extractors/           # Bộ trích xuất DOM &amp; JSON-LD đa sàn
+    │   └── ecommerce-detector.ts # Shopee, Lazada, Tiki, CellphoneS, TGDD, FPT
+    ├── background/
+    │   └── service-worker.ts # MV3 Service Worker (cache chrome.storage.session, mở SidePanel)
+    ├── content/
+    │   └── content-script.ts # Shadow DOM Floating Trust Pill (cô lập CSS 100%)
+    └── sidepanel/
+        ├── sidepanel.html    # Giao diện Dark Theme chuyên sâu
+        └── sidepanel.ts      # Biểu đồ giá SVG, Bảng so sánh giá, AI Review &amp; Nút /compare
+          </pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- PHẦN 5: PHẢN HỒI TỪ OPENAI CODEX REVIEW (GPT-6.1-SOL, XHIGH) & TINH CHỈNH KIẾN TRÚC V2 -->
+    <div class="section">
+      <h2>5. Đánh Giá Độc Lập Từ OpenAI Codex (<code>gpt-6.1-sol</code>, <code>xhigh</code>) &amp; Bản Tinh Chỉnh v2</h2>
+      <p>
+        Sau khi chạy <code>codex-review --effort xhigh</code> với câu hỏi mở khách quan, Codex đánh giá cao nền tảng <strong>REST BFF + Shared Schema + Tách biệt Lookup/Ingest + Shadow DOM/Side Panel</strong>, đồng thời chỉ ra <strong>6 lỗ hổng thực tế (2 P1 &amp; 4 P2)</strong> nếu triển khai nguyên bản. Dưới đây là toàn bộ 6 phát hiện của Codex và cách chúng ta điều chỉnh kiến trúc v2:
+      </p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Mức độ</th>
+            <th>Phát hiện của Codex (<code>gpt-6.1-sol</code>)</th>
+            <th>Điều chỉnh Kiến trúc v2 (Áp dụng ngay trong Issue #12)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="badge badge-red">P1 - Trust Boundary</span></td>
+            <td>
+              <strong>Cách ly Crowd Observation khỏi lịch sử giá chuẩn:</strong>
+              Nếu cho phép giá từ Extension lệch &lt; 25% ghi thẳng vào <code>rate.products</code> và <code>rate.price_history</code>, kẻ tấn công chỉ cần bơm nhiều request lệch 20% là kéo tụt trung vị giá từ 10 triệu xuống 8 triệu vì hàm <code>getMasterProductPriceHistory</code> hiện đọc mọi điểm giá không phân biệt độ tin cậy.
+            </td>
+            <td>
+              <strong>100% Quarantine trước khi Verify:</strong>
+              Extension <strong>TUYỆT ĐỐI KHÔNG</strong> ghi trực tiếp vào <code>rate.products</code> hay <code>rate.price_history</code>! Luồng <code>POST /api/v1/rate/extension/ingest</code> chỉ được phép đẩy yêu cầu xác minh vào hàng đợi <code>rate.crawl_jobs</code> (với <code>status = 'pending'</code>, chống trùng job). Chỉ khi Worker độc lập (<code>DOS/Rate-Services</code>) tự cào lại từ phía Server mới được ghi vào <code>rate.products</code> và <code>rate.price_history</code>.
+            </td>
+          </tr>
+          <tr>
+            <td><span class="badge badge-red">P1 - Side Effect</span></td>
+            <td>
+              <strong>Không gọi <code>EntityMatcher.resolveOrCreateMasterProduct</code> từ request trình duyệt:</strong>
+              Hàm <code>resolveOrCreateMasterProduct</code> hiện tại tự động gọi AI Spec Enricher rồi <code>UPSERT</code> vào <code>rate.master_products</code> với <code>status: published</code>. Nếu gọi trực tiếp từ request của Extension, trình duyệt có thể kích hoạt tốn quota AI và tạo sản phẩm rác trong catalog chính trước khi Worker xác minh.
+            </td>
+            <td>
+              <strong>Tách Read-Only Matcher cho Web/Extension:</strong>
+              Tầng Lookup/Ingest của Extension chỉ dùng <strong>Read-Only Matcher</strong> (chỉ <code>SELECT</code> khớp <code>rate.products</code> và <code>rate.master_products</code> sẵn có). Việc gọi AI Enricher và tạo mới <code>rate.master_products</code> chỉ diễn ra bên trong Private Worker sau khi cào xác thực thành công.
+            </td>
+          </tr>
+          <tr>
+            <td><span class="badge badge-amber">P2 - Variant Ambiguity</span></td>
+            <td>
+              <strong>Tránh gộp nhầm biến thể dung lượng (<code>256GB</code> vs <code>512GB</code> vs <code>1TB</code>):</strong>
+              Với các tiêu đề Shopee chung chung như <em>"iPhone 16 Pro Max 256GB/512GB"</em> mà người dùng chưa bấm chọn phân loại (SKU), <code>ProductNormalizer</code> trả về <code>storage_gb: null</code> (<code>:unknown</code>). Nếu ép khớp vào 1 dung lượng bất kỳ để báo giá rẻ hơn sẽ gây sai lệch giữa bản 256GB và 1TB.
+            </td>
+            <td>
+              <strong>Trích xuất SKU đang chọn trên DOM + Trạng thái <code>ambiguous_variant</code>:</strong>
+              1. Content Script đọc cả <strong>nhãn phân loại (Selected Tier Variation)</strong> trên trang Shopee/Lazada (ví dụ <code>256GB</code>) để gửi kèm.<br/>
+              2. Nếu vẫn không xác định được dung lượng và sản phẩm có nhiều mức giá theo bộ nhớ, API trả về trạng thái <code>ambiguous_variant</code> kèm danh sách các biến thể (<code>256GB / 512GB / 1TB</code>) để người dùng chọn ngay trong Side Panel trước khi kết luận đắt/rẻ.
+            </td>
+          </tr>
+          <tr>
+            <td><span class="badge badge-amber">P2 - Verdict Accuracy</span></td>
+            <td>
+              <strong>Phân biệt rõ "Bán đắt hơn thị trường (<code>above_market</code>)" với "Giảm giá ảo (<code>inflated_fake_sale</code>)":</strong>
+              Nếu chỉ truyền <code>price</code> hiện tại mà không truyền <code>originalPrice</code> (giá gạch ngang công bố khuyến mãi), một shop bán giá cao nhưng không hề treo biển giảm giá ảo sẽ bị kết luận oan là <code>inflated_fake_sale</code>.
+            </td>
+            <td>
+              <strong>Tách 5 mức Verdict minh bạch dựa trên bằng chứng:</strong>
+              Truyền đầy đủ <code>price</code> + <code>originalPrice</code> (giá gạch ngang trên DOM) và trả về:<br/>
+              • <code>genuine_deal</code>: Rẻ hơn hoặc ngang đáy 90 ngày<br/>
+              • <code>fair_market_price</code>: Nằm trong biên độ giá chuẩn thị trường<br/>
+              • <code>above_market</code>: Cao hơn trung vị thị trường nhưng không treo giá gạch ngang khống<br/>
+              • <code>inflated_fake_sale</code>: Có treo <code>originalPrice</code> gạch ngang cao bất thường so với lịch sử giá thực tế<br/>
+              • <code>insufficient_data</code> / <code>accessory_skip</code>: Chưa đủ lịch sử giá của đúng biến thể hoặc là phụ kiện.
+            </td>
+          </tr>
+          <tr>
+            <td><span class="badge badge-blue">P2 - Platform Matrix</span></td>
+            <td>
+              <strong>Giới hạn Queue Ingest theo nền tảng đã có Worker xác minh:</strong>
+              Hiện tại <code>DOS/Rate-Services</code> mới có Worker xác minh tự động cho <code>shopee</code> (Issue #1 mở rộng sang Lazada/Tiki/CellphoneS/TGDD đang ở trạng thái <code>ready</code>). Nếu đẩy job của 5 sàn kia vào <code>rate.crawl_jobs</code> ngay lúc này sẽ bị kẹt hàng đợi.
+            </td>
+            <td>
+              <strong>Capability Matrix rõ ràng:</strong>
+              • <strong>Fast Read-Only Lookup (Tra cứu chéo theo tên/model):</strong> Hoạt động trên cả 6 sàn (đang xem ở CellphoneS/Lazada vẫn thấy giá đối chiếu của cùng mẫu máy trên hệ thống Rate).<br/>
+              • <strong>Queue Verification Ingest:</strong> Chỉ enqueue vào <code>rate.crawl_jobs</code> đối với các nền tảng nằm trong <code>VERIFIABLE_PLATFORMS = ['shopee']</code> (và tự động mở khóa thêm khi hoàn thành <code>DOS/Rate-Services#1</code>).
+            </td>
+          </tr>
+          <tr>
+            <td><span class="badge badge-purple">P2 - CWS Privacy Gate</span></td>
+            <td>
+              <strong>Tuân thủ chính sách Quyền riêng tư của Chrome Web Store (Opt-In Crowd Signal &amp; URL Canonicalization):</strong>
+              Tự động gửi URL đang duyệt về Backend mà không cắt bỏ tracking params hoặc không có nút bật/tắt (Opt-In) sẽ vi phạm chính sách User Data Privacy của Chrome Web Store.
+            </td>
+            <td>
+              <strong>Privacy-First by Design:</strong>
+              1. <strong>URL Sanitization:</strong> Cắt bỏ 100% query/tracking params (<code>utm_*</code>, <code>sp_atk</code>, <code>xptdk</code>), chỉ gửi định danh sản phẩm chuẩn hóa.<br/>
+              2. <strong>Read-Only Lookup Mặc định, Crowd Ingest Opt-In:</strong> Chế độ mặc định chỉ gọi <code>GET</code> tra cứu giá/điểm tin cậy; tính năng đóng góp phát hiện sản phẩm mới (<code>POST /api/v1/rate/extension/ingest</code>) có công tắc bật/tắt rõ ràng trong Side Panel và được khai báo minh bạch trong <code>CHROMEWEBSTORE.md</code>.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</body>
+</html>

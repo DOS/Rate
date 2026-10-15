@@ -11,7 +11,7 @@ module.exports = {
     "apps/strapi/.cache/**",
     "apps/strapi/public/admin/**",
     "apps/strapi/types/generated/**",
-    "apps/ui/next-env.d.ts",
+    "apps/web/next-env.d.ts",
   ],
 }
 

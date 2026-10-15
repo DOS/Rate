@@ -1,11 +1,16 @@
 import { z } from 'zod';
-import { UUIDv7Schema, StatusSchema, LanguageSchema } from './common.schema';
+import { UUIDv7Schema, StatusSchema, LanguageSchema } from './common.schema.js';
 
 /**
  * Listing-related schemas
  */
 
-export const ListingTypeSchema = z.enum(['product', 'service', 'company', 'website']);
+export const ListingTypeSchema = z.enum([
+  'product',
+  'service',
+  'company',
+  'website',
+]);
 
 export const ListingCategorySchema = z.enum([
   'technology',

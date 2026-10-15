@@ -1,0 +1,45 @@
+// scss-docs-start theme-color-variables Customize your color option here
+:root,
+[data-bs-theme=light] {
+  --bs-body-bg: #ffffff;
+  --bs-white: #ffffff;
+  --bs-body-bg-rgb: 255, 255, 255;
+  --bs-card-bg: #ffffff;
+  --bs-body-color: #2b2b2b;
+  --paragraphColor: #2b2b2b;
+  --bs-muted: #444c55;
+  --bs-muted-2: #444c55;
+  --bs-body-color-rgb: 43, 43, 43;
+  --bs-dark-text: #212529;
+  --bs-primary: #c71f37;
+  --bs-light: #f7f7f7;
+  --bs-light-gray: #ffffffa8;
+  --bs-dark: #212529;
+  --bs-primary-rgb: 226, 55, 68;
+  --bs-light-rgb: 247, 247, 247;
+  --bs-dark-rgb: 33, 37, 41;
+  --bs-primary-2: #d02b38;
+  --bs-primary-text-emphasis: #c71f37;
+  --bs-primary-bg-subtle: #fae8eb;
+  --bs-primary-bg-dark: #dd2e3b;
+  --bs-primary-border-subtle: #ffdee2;
+  --bs-danger-bg-subtle:#ffdee2;
+  --headingColor: #2b2b2b;
+  --bs-link-color: #212529;
+  --bs-link-color-rgb: 28, 28, 28;
+  --bs-link-hover-color: #c71f37;
+  --bs-link-hover-color-rgb: 226, 55, 68;
+  --bs-link-decoration: underline;
+  --bs-code-color: #c71f37;
+  --bs-highlight-color: #212529;
+  --bs-highlight-bg: #fff3cd;
+  --bs-border-color: #efefef;
+  --bs-border-color-translucent: rgba(0, 0, 0, 0.175);
+  --bs-nav-color: #212529;
+  --bs-dashboard-bg: #2e3338;
+
+  --body-font-family: 'Jost', sans-serif;
+}
+
+// Import Font Family
+@import url('https://fonts.googleapis.com/css2?family=Jost:wght@200;300;400;500;600;700;800&display=swap');

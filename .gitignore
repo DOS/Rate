@@ -23,6 +23,10 @@ dist/
 
 # Backup directory
 /Backup/
+crawler_test/
+test-results/
+scratch/
+**/scratch/
 
 # debug
 npm-debug.log*
@@ -55,7 +59,7 @@ packages/*/.env
 
 #jetbrains IDEs
 .idea
-
+.claude/
 .cache
 
 .strapi-updater.json
@@ -85,11 +89,23 @@ quick-*.js
 # Node modules backups
 node_modules_backup_*
 node_modules_old_*
+node_modules.bak_*
+**/node_modules.bak_*
 
 # Strapi compiled config files (keep only TypeScript sources)
 apps/strapi/config/*.js
 node_modules_*
 node_modules_*
 
+# backup trash directories
+/.trash/
+**/.trash/
+
 # ignore compiled Strapi admin assets
 apps/strapi/public/admin/
+apps/web/node_modules*
+node_modules*
+volumes
+.env*
+ListingHub_NextJs_*
+vendor/

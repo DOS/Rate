@@ -1,4 +1,4 @@
-# Catalyst UI Kit
+   # Catalyst UI Kit
 
 Catalyst is a modern application UI kit built with [Tailwind CSS](https://tailwindcss.com) and [React](https://react.dev/), designed and built by the Tailwind CSS team and included as part of [Tailwind Plus](https://tailwindcss.com/plus).
 

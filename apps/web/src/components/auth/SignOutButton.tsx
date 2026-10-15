@@ -1,0 +1,43 @@
+'use client';
+
+import { useParams, useRouter } from 'next/navigation';
+import React from 'react';
+import { getPublicClient } from '@repo/shared-data';
+import { normalizeRateLocale } from '@/lib/rate-i18n';
+
+export function SignOutButton({ className }: { className?: string }) {
+  const params = useParams<{ locale: string }>();
+  const router = useRouter();
+  const locale = normalizeRateLocale(params?.locale);
+  const callbackUrl = '/';
+  const label =
+    locale === 'en'
+      ? 'Sign Out'
+      : locale === 'cs'
+        ? 'Odhlásit se'
+        : 'Đăng xuất';
+
+  const handleSignOut = async () => {
+    try {
+      const supabase = getPublicClient();
+      await supabase.auth.signOut();
+    } catch {
+      // Ignore client sign-out error
+    }
+    router.push(callbackUrl);
+    router.refresh();
+  };
+
+  return (
+    <button
+      type="button"
+      className={
+        className ?? 'btn btn-outline-secondary rounded-pill btn-sm px-3'
+      }
+      onClick={handleSignOut}
+      aria-label={label}
+    >
+      {label}
+    </button>
+  );
+}

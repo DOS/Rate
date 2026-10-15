@@ -3,7 +3,8 @@
  * All API contracts should be defined here
  */
 
-export * from './user.schema';
-export * from './listing.schema';
-export * from './review.schema';
-export * from './common.schema';
+export * from './user.schema.js';
+export * from './listing.schema.js';
+export * from './review.schema.js';
+export * from './common.schema.js';
+export * from './specs.schema.js';
