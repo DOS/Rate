@@ -7,11 +7,11 @@ import type { SupportedAiProvider, AiSpecEnricherConfig } from './ai-spec-enrich
  * (Shopee, Lazada, Tiki, TikTok Shop, Facebook Seller, Website, Rate.vn)
  */
 export type ReviewFlagCategory =
-  | 'authentic'            // Đánh giá thực tế có giá trị -> Tính vào điểm cuối (nhân với trọng số Vote Up/Down)
-  | 'low_value_coin_spam'  // Bình luận cày xu / văn mẫu vô thưởng vô phạt -> Skip khỏi điểm cuối (W=0), KHÔNG phạt shop
-  | 'seeding_fake'         // Buff đơn ảo / Seeding nâng bi có tổ chức -> Skip khỏi điểm cuối (W=0), PHẠT nặng Risk Score của shop
-  | 'competitor_sabotage'  // Đối thủ chơi xấu / Dìm hàng ác ý vô căn cứ -> Skip khỏi điểm cuối (W=0), bảo vệ shop khỏi bị dìm oan
-  | 'review_bombing';      // Bom review / Đánh giá khi chưa dùng dịch vụ hoặc hủy đơn -> Skip khỏi điểm cuối (W=0)
+  | 'authentic' // Đánh giá thực tế có giá trị -> Tính vào điểm cuối (nhân với trọng số Vote Up/Down)
+  | 'low_value_coin_spam' // Bình luận cày xu / văn mẫu vô thưởng vô phạt -> Skip khỏi điểm cuối (W=0), KHÔNG phạt shop
+  | 'seeding_fake' // Buff đơn ảo / Seeding nâng bi có tổ chức -> Skip khỏi điểm cuối (W=0), PHẠT nặng Risk Score của shop
+  | 'competitor_sabotage' // Đối thủ chơi xấu / Dìm hàng ác ý vô căn cứ -> Skip khỏi điểm cuối (W=0), bảo vệ shop khỏi bị dìm oan
+  | 'review_bombing'; // Bom review / Đánh giá khi chưa dùng dịch vụ hoặc hủy đơn -> Skip khỏi điểm cuối (W=0)
 
 export type ReviewVerdict = 'authentic' | 'suspicious' | 'fake' | 'unanalyzed';
 
@@ -19,11 +19,11 @@ export type ReviewVerdict = 'authentic' | 'suspicious' | 'fake' | 'unanalyzed';
  * Strictly conforms to PostgreSQL CHECK constraint `rate.signals_valid(signals)`
  */
 export interface ReviewSignals {
-  burst_pattern_score: number;     // 0..1
-  duplicate_text_ratio: number;    // 0..1
+  burst_pattern_score: number; // 0..1
+  duplicate_text_ratio: number; // 0..1
   account_age_bucket: 'low' | 'medium' | 'high' | 'unknown';
-  reviewer_history_score: number;  // 0..1
-  language_marker_score: number;   // 0..1
+  reviewer_history_score: number; // 0..1
+  language_marker_score: number; // 0..1
 }
 
 export interface ReviewInputItem {
@@ -60,8 +60,8 @@ export interface JReviewsProductSummary {
   raw_average_rating: number;
   user_rating_weighted: number; // JReviews weighted user rating (after skipping spam/seeding & applying upvote/downvote weights)
   expert_rating: number | null;
-  overall_rating: number;       // Combined Expert (40%) + Weighted User (60%) when expert_rating exists, else Weighted User
-  authenticity_score: number;   // 0..100
+  overall_rating: number; // Combined Expert (40%) + Weighted User (60%) when expert_rating exists, else Weighted User
+  authenticity_score: number; // 0..100
   sentiment_positive_ratio: number; // 0..100
   pros: string[];
   cons: string[];
@@ -82,12 +82,12 @@ export interface MerchantRiskInput {
 }
 
 export interface MerchantRiskEvaluation {
-  risk_score: number;        // 0..100 (Higher = More risky)
-  trust_score: number;       // 0..100 (100 - risk_score, JReviews/Rate Trust Index)
+  risk_score: number; // 0..100 (Higher = More risky)
+  trust_score: number; // 0..100 (100 - risk_score, JReviews/Rate Trust Index)
   risk_level: 'low' | 'moderate' | 'high' | 'critical';
-  seeding_ratio: number;     // 0..1
-  coin_spam_ratio: number;   // 0..1
-  sabotage_ratio: number;    // 0..1
+  seeding_ratio: number; // 0..1
+  coin_spam_ratio: number; // 0..1
+  sabotage_ratio: number; // 0..1
   price_anomaly_detected: boolean;
   reasons: string[];
 }
@@ -152,13 +152,7 @@ export function computeReviewWeight(params: {
   flagCategory: ReviewFlagCategory;
   verdict: ReviewVerdict;
 }): number {
-  const {
-    upvotes = 0,
-    downvotes = 0,
-    reportCount = 0,
-    flagCategory,
-    verdict,
-  } = params;
+  const { upvotes = 0, downvotes = 0, reportCount = 0, flagCategory, verdict } = params;
 
   if (
     flagCategory === 'low_value_coin_spam' ||
@@ -218,10 +212,7 @@ export class AiReviewAnalyzer {
     ).replace(/\/+$/, '');
 
     this.model =
-      config.model ||
-      process.env.AI_MODEL ||
-      process.env.OPENAI_MODEL ||
-      defaults.defaultModel;
+      config.model || process.env.AI_MODEL || process.env.OPENAI_MODEL || defaults.defaultModel;
 
     this.timeoutMs = config.timeoutMs ?? Number(process.env.AI_TIMEOUT_MS || 25000);
   }
@@ -271,14 +262,15 @@ export class AiReviewAnalyzer {
       }
     }
 
-    return reviews.map((r) => {
+    return reviews.map(r => {
       const comment = (r.comment || '').trim();
       const norm = normalizeTextForDedupe(comment);
       const distinctAuthorsWithSameText = commentCounts.get(norm)?.size ?? 1;
 
       // Default clean signals
       let burstScore = 0.05;
-      let duplicateRatio = distinctAuthorsWithSameText > 1 ? clamp01((distinctAuthorsWithSameText - 1) / 3) : 0;
+      let duplicateRatio =
+        distinctAuthorsWithSameText > 1 ? clamp01((distinctAuthorsWithSameText - 1) / 3) : 0;
       let languageMarker = 0.05;
       let flagCategory: ReviewFlagCategory = 'authentic';
       let verdict: ReviewVerdict = 'authentic';
@@ -295,8 +287,7 @@ export class AiReviewAnalyzer {
         /chưa\s*(?:dùng|xài|bóc|khui|mở\s*hộp|test)\s*(?:nên\s*chưa\s*biết|nhưng\s*cứ\s*cho\s*5\s*sao)/i.test(
           comment
         );
-      const isGibberishOrTooShort =
-        comment.length < 6 || /(.)\1{5,}/i.test(comment);
+      const isGibberishOrTooShort = comment.length < 6 || /(.)\1{5,}/i.test(comment);
 
       // Rule B: Competitor Sabotage (Đối thủ chơi xấu / chèo kéo sang shop khác / dìm 1 sao vô căn cứ)
       const isCompetitorSabotage =
@@ -304,7 +295,9 @@ export class AiReviewAnalyzer {
         (/qua\s*shop\s*[\w\s]+\s*mua|mua\s*bên\s*[\w\s]+\s*rẻ\s*hơn|đừng\s*mua\s*shop\s*này\s*qua\s*bên|ib\s*mình\s*bán\s*rẻ\s*hơn|liên\s*hệ\s*zalo\s*\d{8,}/i.test(
           comment
         ) ||
-          (r.is_verified_buyer === false && /lừa\s*đảo|hàng\s*đểu|phốt/i.test(comment) && comment.length < 30));
+          (r.is_verified_buyer === false &&
+            /lừa\s*đảo|hàng\s*đểu|phốt/i.test(comment) &&
+            comment.length < 30));
 
       // Rule C: Review Bombing (Bom review / hủy đơn chưa trải nghiệm dịch vụ / hùa theo drama)
       const isReviewBombing =
@@ -314,7 +307,8 @@ export class AiReviewAnalyzer {
         );
 
       // Rule D: Coordinated Seeding / Fake Boost (Văn mẫu trùng lặp giữa nhiều tài khoản khác nhau hoặc khen lố kịch bản)
-      const isDuplicateSeeding = distinctAuthorsWithSameText >= 2 && comment.length >= 15 && !isCoinSpamPhrase;
+      const isDuplicateSeeding =
+        distinctAuthorsWithSameText >= 2 && comment.length >= 15 && !isCoinSpamPhrase;
       const isScriptedPraise =
         r.rating_star === 5 &&
         /sản\s*phẩm\s*tuyệt\s*vời\s*đáng\s*đồng\s*tiền\s*bát\s*gạo\s*sẽ\s*ủng\s*hộ\s*shop\s*dài\s*dài\s*10\s*điểm/i.test(
@@ -327,7 +321,8 @@ export class AiReviewAnalyzer {
         verdict = 'fake';
         fakeProb = 0.88;
         languageMarker = 0.85;
-        reason = 'Phát hiện dấu hiệu đối thủ cạnh tranh không lành mạnh / điều hướng sang nơi bán khác.';
+        reason =
+          'Phát hiện dấu hiệu đối thủ cạnh tranh không lành mạnh / điều hướng sang nơi bán khác.';
       } else if (isReviewBombing) {
         flagCategory = 'review_bombing';
         verdict = 'fake';
@@ -346,7 +341,8 @@ export class AiReviewAnalyzer {
         verdict = 'suspicious';
         fakeProb = 0.65;
         languageMarker = 0.75;
-        reason = 'Bình luận mang tính chất nhận xu / chưa trải nghiệm thực tế (được bỏ qua khỏi điểm tổng, không phạt shop).';
+        reason =
+          'Bình luận mang tính chất nhận xu / chưa trải nghiệm thực tế (được bỏ qua khỏi điểm tổng, không phạt shop).';
       }
 
       const helpfulnessWeight = computeReviewWeight({
@@ -594,7 +590,10 @@ Return ONLY valid JSON matching:
           fake_probability: clamp01(Number(aiItem.fake_probability ?? base.fake_probability)),
           include_in_rating: weight > 0,
           helpfulness_weight: weight,
-          reason: typeof aiItem.reason === 'string' && aiItem.reason.trim() ? aiItem.reason.trim() : base.reason,
+          reason:
+            typeof aiItem.reason === 'string' && aiItem.reason.trim()
+              ? aiItem.reason.trim()
+              : base.reason,
           detector: hybridDetector,
         };
       });
@@ -689,11 +688,16 @@ Return ONLY valid JSON matching:
     const coinSpamCount = breakdown.low_value_coin_spam;
     const total = Math.max(1, reviews.length);
     const authenticityScore = Number(
-      Math.max(0, Math.min(100, 100 - (seedingCount / total) * 85 - (coinSpamCount / total) * 25)).toFixed(2)
+      Math.max(
+        0,
+        Math.min(100, 100 - (seedingCount / total) * 85 - (coinSpamCount / total) * 25)
+      ).toFixed(2)
     );
 
     const sentimentPositiveRatio =
-      authenticCount > 0 ? Number(((positiveAuthenticCount / authenticCount) * 100).toFixed(2)) : 100;
+      authenticCount > 0
+        ? Number(((positiveAuthenticCount / authenticCount) * 100).toFixed(2))
+        : 100;
 
     const defaultSummary =
       authenticCount > 0
@@ -729,10 +733,12 @@ Return ONLY valid JSON matching:
    */
   public evaluateMerchantRisk(input: MerchantRiskInput): MerchantRiskEvaluation {
     const total = Math.max(1, input.reviewResults.length);
-    const seedingCount = input.reviewResults.filter((r) => r.flag_category === 'seeding_fake').length;
-    const coinSpamCount = input.reviewResults.filter((r) => r.flag_category === 'low_value_coin_spam').length;
+    const seedingCount = input.reviewResults.filter(r => r.flag_category === 'seeding_fake').length;
+    const coinSpamCount = input.reviewResults.filter(
+      r => r.flag_category === 'low_value_coin_spam'
+    ).length;
     const sabotageCount = input.reviewResults.filter(
-      (r) => r.flag_category === 'competitor_sabotage' || r.flag_category === 'review_bombing'
+      r => r.flag_category === 'competitor_sabotage' || r.flag_category === 'review_bombing'
     ).length;
 
     const seedingRatio = Number((seedingCount / total).toFixed(3));
@@ -746,7 +752,9 @@ Return ONLY valid JSON matching:
     if (seedingRatio > 0) {
       const seedingPenalty = Math.min(45, Math.round(seedingRatio * 75));
       risk += seedingPenalty;
-      reasons.push(`Phát hiện ${(seedingRatio * 100).toFixed(0)}% đánh giá có dấu hiệu Seeding/Buff đơn ảo (+${seedingPenalty} điểm rủi ro).`);
+      reasons.push(
+        `Phát hiện ${(seedingRatio * 100).toFixed(0)}% đánh giá có dấu hiệu Seeding/Buff đơn ảo (+${seedingPenalty} điểm rủi ro).`
+      );
     }
 
     // 2. Price Anomaly Detection (Scam / Counterfeit dump pricing)
@@ -779,7 +787,9 @@ Return ONLY valid JSON matching:
       if (lowStarRatio >= 0.2) {
         const defectPenalty = Math.min(25, Math.round(lowStarRatio * 45));
         risk += defectPenalty;
-        reasons.push(`Tỷ lệ phàn nàn thực tế 1-2 sao cao (${(lowStarRatio * 100).toFixed(0)}%) (+${defectPenalty} điểm rủi ro).`);
+        reasons.push(
+          `Tỷ lệ phàn nàn thực tế 1-2 sao cao (${(lowStarRatio * 100).toFixed(0)}%) (+${defectPenalty} điểm rủi ro).`
+        );
       }
     }
 
@@ -789,7 +799,9 @@ Return ONLY valid JSON matching:
       reasons.push('Gian hàng Chính hãng (Mall / Official Store) (-15 điểm rủi ro).');
     } else if (input.platform === 'facebook' || input.platform === 'website') {
       risk += 10;
-      reasons.push(`Giao dịch qua kênh tự do (${input.platform}) cần kiểm tra kỹ thông tin thanh toán (+10 điểm rủi ro).`);
+      reasons.push(
+        `Giao dịch qua kênh tự do (${input.platform}) cần kiểm tra kỹ thông tin thanh toán (+10 điểm rủi ro).`
+      );
     }
 
     if ((input.followerCount ?? 0) >= 50000) {
@@ -805,7 +817,13 @@ Return ONLY valid JSON matching:
     const finalRisk = Math.max(0, Math.min(100, risk));
     const trustScore = 100 - finalRisk;
     const riskLevel: MerchantRiskEvaluation['risk_level'] =
-      finalRisk >= 70 ? 'critical' : finalRisk >= 45 ? 'high' : finalRisk >= 25 ? 'moderate' : 'low';
+      finalRisk >= 70
+        ? 'critical'
+        : finalRisk >= 45
+          ? 'high'
+          : finalRisk >= 25
+            ? 'moderate'
+            : 'low';
 
     return {
       risk_score: finalRisk,
@@ -885,7 +903,9 @@ Return ONLY valid JSON matching:
           .update({ helpfulness_weight: r.helpfulness_weight })
           .eq('id', r.review_id);
         if (revErr) {
-          throw new Error(`[AiReviewAnalyzer] Failed to update review helpfulness_weight: ${revErr.message}`);
+          throw new Error(
+            `[AiReviewAnalyzer] Failed to update review helpfulness_weight: ${revErr.message}`
+          );
         }
       }
     }
@@ -906,7 +926,9 @@ Return ONLY valid JSON matching:
     );
 
     if (analysisErr) {
-      throw new Error(`[AiReviewAnalyzer] Failed to upsert review_analysis: ${analysisErr.message}`);
+      throw new Error(
+        `[AiReviewAnalyzer] Failed to upsert review_analysis: ${analysisErr.message}`
+      );
     }
 
     // 3. Update master_products weighted rating & authentic count
@@ -928,7 +950,9 @@ Return ONLY valid JSON matching:
           })
           .eq('id', params.masterId);
         if (masterErr) {
-          throw new Error(`[AiReviewAnalyzer] Failed to update master_products rating: ${masterErr.message}`);
+          throw new Error(
+            `[AiReviewAnalyzer] Failed to update master_products rating: ${masterErr.message}`
+          );
         }
       }
     }
@@ -948,25 +972,47 @@ Return ONLY valid JSON matching:
       });
 
       const nowIso = new Date().toISOString();
+      const breakdownPayload = {
+        risk_level: merchantRisk.risk_level,
+        trust_score: merchantRisk.trust_score,
+        seeding_ratio: merchantRisk.seeding_ratio,
+        coin_spam_ratio: merchantRisk.coin_spam_ratio,
+        sabotage_ratio: merchantRisk.sabotage_ratio,
+        price_anomaly_detected: merchantRisk.price_anomaly_detected,
+        reasons: merchantRisk.reasons,
+      };
       const { error: merchErr } = await supabase
         .from('merchants')
         .update({
           review_risk_score: merchantRisk.risk_score,
-          review_risk_breakdown: {
-            risk_level: merchantRisk.risk_level,
-            trust_score: merchantRisk.trust_score,
-            seeding_ratio: merchantRisk.seeding_ratio,
-            coin_spam_ratio: merchantRisk.coin_spam_ratio,
-            sabotage_ratio: merchantRisk.sabotage_ratio,
-            price_anomaly_detected: merchantRisk.price_anomaly_detected,
-            reasons: merchantRisk.reasons,
-          },
+          review_risk_breakdown: breakdownPayload,
           review_risk_updated_at: nowIso,
           updated_at: nowIso,
         })
         .eq('id', params.merchantId);
       if (merchErr) {
-        throw new Error(`[AiReviewAnalyzer] Failed to update merchant review_risk_score: ${merchErr.message}`);
+        if (/review_risk_score|schema cache/i.test(merchErr.message)) {
+          const { error: fallbackErr } = await supabase
+            .from('merchants')
+            .update({
+              metadata: {
+                review_risk_score: merchantRisk.risk_score,
+                review_risk_breakdown: breakdownPayload,
+                review_risk_updated_at: nowIso,
+              },
+              updated_at: nowIso,
+            })
+            .eq('id', params.merchantId);
+          if (fallbackErr) {
+            throw new Error(
+              `[AiReviewAnalyzer] Failed to update merchant metadata risk fallback: ${fallbackErr.message}`
+            );
+          }
+        } else {
+          throw new Error(
+            `[AiReviewAnalyzer] Failed to update merchant review_risk_score: ${merchErr.message}`
+          );
+        }
       }
     }
 

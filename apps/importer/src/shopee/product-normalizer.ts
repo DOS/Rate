@@ -529,7 +529,7 @@ export class ProductNormalizer {
       for (const tok of rawTokens) {
         if (modelTokens.length >= 4) break;
         if (
-          /^(?:\d+(?:[.,]\d+)?(?:GB|TB)|\d+\/\d+(?:GB|TB)?|RAM|ROM|Chính|Quốc|Bản|Mới|Fullbox|\(|\[|-)/i.test(
+          /^(?:\d+(?:[.,]\d+)?(?:GB|TB)|\d+\/\d+(?:GB|TB)?|5G|4G|LTE|RAM|ROM|Chính|Quốc|Bản|Mới|Fullbox|\(|\[|-)/i.test(
             tok
           )
         ) {
@@ -548,20 +548,7 @@ export class ProductNormalizer {
       index: m.index ?? 0,
       raw: m[0],
     }));
-    // RAM-word matching (replaces per-pattern heuristics after two review
-    // rounds found holes: "8GB RAM 12GB RAM", "RAM 8GB RAM 12GB", the shared
-    // "RAM" in "8GB RAM 256GB", "dung luong 8GB bo nho RAM 256GB"). Rule:
-    // every literal "RAM" word claims the nearest UNCLAIMED size token -
-    // preferring the one BEFORE it (suffix "<size> RAM"), else the one AFTER
-    // it ("RAM <size>"). Any token left unclaimed is a storage candidate.
-    // A prefix claim requires adjacency: only whitespace between the token
-    // and the RAM phrase. "256GB - RAM 8GB" (Codex round-4) separates the ROM
-    // size with a dash - claiming 256 as RAM there would publish a wrong
-    // identity, so non-adjacent tokens are left for the storage side. Phrases
-    // like "bộ nhớ RAM" span their full length (Codex round-4 regression:
-    // "dung lượng 8GB bộ nhớ RAM 256GB" - the phrase's own words sit between
-    // 8GB and the literal RAM word, so adjacency is measured to the PHRASE
-    // start and 8GB claims correctly).
+
     const ramPhrases = [...title.matchAll(/bộ\s*nhớ\s*RAM|dung\s*lượng\s*RAM|RAM\b/gi)].map(
       m => m.index ?? 0
     );
@@ -581,14 +568,28 @@ export class ProductNormalizer {
       const pick = before ?? after;
       if (pick) pick.claimed = true;
     }
+
+    // Also support slash shorthand ("12GB/256GB", "8/256GB") and CellphoneS/TGDD
+    // adjacent RAM+ROM pairs ("12GB 256GB") when no explicit RAM keyword is present.
+    const slashRamRom = title.match(/\b(\d{1,2})\s*(?:GB)?\s*\/\s*(\d+(?:[.,]\d+)?)\s*(TB|GB)\b/i);
+    if (slashRamRom && ramPhrases.length === 0) {
+      const slashRam = parseInt(slashRamRom[1], 10);
+      for (const c of claimable) {
+        if (!c.claimed && c.value === slashRam) {
+          c.claimed = true;
+          break;
+        }
+      }
+    } else if (ramPhrases.length === 0 && claimable.filter(t => !t.claimed).length === 2) {
+      const [first, second] = claimable.filter(t => !t.claimed);
+      const between = title.slice(first.index + first.raw.length, second.index);
+      if (first.value <= 32 && second.value >= 64 && /^[\s\/\-]+$/.test(between)) {
+        first.claimed = true;
+      }
+    }
+
     const storageCandidates = claimable.filter(t => !t.claimed);
 
-    // ROM/storage markers, two confidence tiers (Codex round-6): an EXPLICIT
-    // "ROM"/"bộ nhớ trong" marker always wins - even when a separate RAM
-    // phrase follows ("ROM 256GB RAM 8GB" = storage 256, RAM 8). The LOOSE
-    // "dung lượng" marker is only trusted when not immediately followed by a
-    // RAM phrase ("dung lượng 8GB RAM 256GB" / "dung lượng 8GB dung lượng RAM
-    // 256GB" mean 8 is RAM, not storage).
     const romExplicit = title.match(/(?:ROM|bộ nhớ trong)\s*[:\-]?\s*(\d+(?:[.,]\d+)?)\s*(TB|GB)/i);
     const romLoose = title.match(
       /dung lượng\s*[:\-]?\s*(\d+(?:[.,]\d+)?)\s*(TB|GB)(?!\s*(?:RAM|bộ\s*nhớ\s*RAM|dung\s*lượng\s*RAM))/i
@@ -601,10 +602,13 @@ export class ProductNormalizer {
     let storageConfident = false;
     const marker = romExplicit ?? romLoose;
     if (marker) {
-      // An explicit ROM marker always wins; the loose "dung lượng" marker has
-      // already been rejected when a RAM phrase follows its size.
       storageGb =
         parseFloat(marker[1].replace(',', '.')) * (marker[2].toUpperCase() === 'TB' ? 1024 : 1);
+      storageConfident = true;
+    } else if (slashRamRom) {
+      storageGb =
+        parseFloat(slashRamRom[2].replace(',', '.')) *
+        (slashRamRom[3].toUpperCase() === 'TB' ? 1024 : 1);
       storageConfident = true;
     } else if (storageCandidates.length === 1) {
       storageGb = storageCandidates[0].value;
@@ -613,8 +617,6 @@ export class ProductNormalizer {
       storageGb = benchmark.default_storage_gb;
       storageConfident = true;
     }
-    // Ambiguous (multiple unclaimed tokens, no ROM anchor) or nothing found:
-    // leave storageGb null -> ':unknown' identity + needs_review (never guess).
     const storageKnown = storageGb !== null;
 
     // 4. Extract Colors from models / variations
