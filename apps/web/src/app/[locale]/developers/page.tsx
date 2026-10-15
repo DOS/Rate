@@ -38,8 +38,7 @@ export async function generateMetadata({
     };
   }
   return {
-    title:
-      'Tài Liệu Open-Core REST API v1 & Cổng Nhà Phát Triển | Rate.vn',
+    title: 'Tài Liệu Open-Core REST API v1 & Cổng Nhà Phát Triển | Rate.vn',
     description:
       'Tài liệu kỹ thuật và môi trường chạy thử trực tiếp (Playground) cho Rate.vn Open-Core REST API v1: Truy vấn 10 nhóm thông số chuẩn hóa, lịch sử giá thật và kiểm toán đánh giá AI.',
   };
@@ -76,12 +75,49 @@ const API_ENDPOINTS_SPEC = [
   },
   {
     method: 'GET',
+    path: '/api/v1/rate/watchlist',
+    auth: 'Public (CORS Enabled)',
+    cache: 's-maxage=30, stale-while-revalidate=120',
+    queryParams: 'slugs (Danh sách tối đa 20 slug đang theo dõi)',
+    summary:
+      'Truy vấn hàng loạt giá thấp nhất hiện tại, trung vị 90 ngày và trạng thái giảm giá thật/ảo cho danh sách sản phẩm trong Watchlist.',
+  },
+  {
+    method: 'GET',
     path: '/api/v1/rate/lookup',
     auth: 'Public (CORS Enabled)',
     cache: 's-maxage=30, stale-while-revalidate=120',
     queryParams: 'q hoặc url (Link Shopee/Lazada/Tiki hoặc từ khóa)',
     summary:
       'Phân tích đường dẫn sản phẩm hoặc gian hàng TMĐT, tự động đối chiếu với cụm sản phẩm chuẩn hóa và hồ sơ tín nhiệm gian hàng.',
+  },
+  {
+    method: 'GET',
+    path: '/api/v1/rate/inspect',
+    auth: 'Public (CORS Enabled)',
+    cache: 's-maxage=30, stale-while-revalidate=120',
+    queryParams: 'q (URL hoặc tên máy), price (Giá quan sát tùy chọn)',
+    summary:
+      'Trình Kiểm Định Giá & Link Sàn (/inspect): chuẩn hóa URL trên 10 sàn/đại lý, chặn phụ kiện/linh kiện, đối chiếu trung vị giá 90 ngày và trả về kết luận giá 5 mức.',
+  },
+  {
+    method: 'GET',
+    path: '/api/v1/rate/extension/lookup',
+    auth: 'Public (CORS Enabled)',
+    cache: 's-maxage=30, stale-while-revalidate=120',
+    queryParams: 'url, title, price, originalPrice, skuText',
+    summary:
+      'Endpoint tốc độ cao chuyên dụng cho Rate Browser Extension MV3 trên 10 sàn/đại lý (Shopee, Lazada, Tiki, TikTok Shop, CellphoneS, TGDĐ, FPT Shop, Hoàng Hà, Di Động Việt, Phong Vũ).',
+  },
+  {
+    method: 'POST',
+    path: '/api/v1/rate/extension/ingest',
+    auth: 'Zero-Trust Quarantine (Opt-In Consent)',
+    cache: 'no-store (Enqueue rate.crawl_jobs)',
+    queryParams:
+      'Body JSON: { url, platform, title, currentPrice, originalPrice, skuText, consentGranted: true }',
+    summary:
+      'Cổng tiếp nhận tín hiệu sản phẩm ẩn danh từ Browser Extension MV3: kiểm duyệt cấu trúc, xóa tham số định danh cá nhân (PII) và đẩy vào hàng đợi rate.crawl_jobs.',
   },
   {
     method: 'GET',
@@ -112,12 +148,12 @@ const API_ENDPOINTS_SPEC = [
   },
   {
     method: 'GET',
-    path: '/api/v1/rate/extension/lookup',
+    path: '/api/v1/rate/openapi.json',
     auth: 'Public (CORS Enabled)',
-    cache: 's-maxage=30, stale-while-revalidate=120',
-    queryParams: 'url, title, price, shopId, itemId',
+    cache: 's-maxage=3600, stale-while-revalidate=86400',
+    queryParams: 'Không yêu cầu tham số',
     summary:
-      'Endpoint chuyên dụng cho Rate Browser Extension MV3: chuẩn hóa URL, chặn phụ kiện/linh kiện và trả về kết luận giá 5 mức.',
+      'Đặc tả kỹ thuật OpenAPI 3.1.0 chuẩn máy đọc (machine-readable JSON) cho toàn bộ các REST API v1 endpoints của Rate.vn.',
   },
   {
     method: 'POST',
@@ -151,7 +187,8 @@ const TEN_FIELD_GROUPS = [
     order: 2,
     key: 'body',
     title: 'Body & Durability',
-    fields: 'dimensions, weight_g, build_materials, sim_type, ip_rating, colors',
+    fields:
+      'dimensions, weight_g, build_materials, sim_type, ip_rating, colors',
   },
   {
     order: 3,
@@ -225,7 +262,9 @@ export default async function DevelopersPage({
             <div className="col-lg-8">
               <div className="d-inline-flex align-items-center rounded-pill bg-danger bg-opacity-25 border-danger text-light small fw-semibold mb-3 gap-2 border px-3 py-1">
                 <BsCodeSquare className="text-danger" />
-                <span>Open-Core Composable Backend Architecture (Zero-Strapi 2026)</span>
+                <span>
+                  Open-Core Composable Backend Architecture (Zero-Strapi 2026)
+                </span>
               </div>
               <h1 className="display-6 fw-bold mb-3 text-white">
                 Cổng Nhà Phát Triển &amp;{' '}
@@ -235,8 +274,8 @@ export default async function DevelopersPage({
                 Truy cập mở vào dữ liệu chuẩn hóa 10 nhóm thông số kỹ thuật,
                 chuỗi thời gian lịch sử giá 90 ngày và kết quả kiểm toán đánh
                 giá AI trên schema <code>rate.*</code>. Phục vụ đồng thời Web
-                Client Islands, Browser Extension MV3 và cộng đồng nghiên cứu dữ
-                liệu TMĐT.
+                Client Islands, Browser Extension MV3 trên 10 sàn/đại lý và cộng
+                đồng nghiên cứu dữ liệu TMĐT.
               </p>
               <div className="d-flex flex-wrap gap-2">
                 <a
@@ -244,6 +283,14 @@ export default async function DevelopersPage({
                   className="btn btn-danger rounded-pill fw-semibold px-4 py-2"
                 >
                   ⚡ Chạy thử API Playground
+                </a>
+                <a
+                  href="/api/v1/rate/openapi.json"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn btn-outline-info rounded-pill fw-semibold px-4 py-2"
+                >
+                  📄 Tải OpenAPI 3.1.0 Spec (.json)
                 </a>
                 <a
                   href="https://github.com/DOS/Rate"
@@ -257,7 +304,7 @@ export default async function DevelopersPage({
             </div>
 
             <div className="col-lg-4">
-              <div className="card rounded-4 bg-black bg-opacity-50 border-secondary border-opacity-25 border p-4 text-white">
+              <div className="card rounded-4 bg-opacity-50 border-secondary border-opacity-25 border bg-black p-4 text-white">
                 <div className="small text-uppercase text-white-50 fw-bold mb-3">
                   Trạng thái Dữ liệu Trực tiếp (Supabase Cloud)
                 </div>
@@ -314,17 +361,17 @@ export default async function DevelopersPage({
       </section>
 
       {/* Endpoint Reference Table */}
-      <section className="bg-white border-top border-bottom py-5">
+      <section className="border-top border-bottom bg-white py-5">
         <div className="container">
           <div className="mb-4">
             <span className="badge bg-success bg-opacity-10 text-success rounded-pill fw-semibold mb-2 px-3 py-2">
               📡 Đặc Tả Giao Thức REST API v1
             </span>
-            <h2 className="h3 fw-bold mb-1">
-              Danh Sách Endpoints Chuẩn Hóa
-            </h2>
+            <h2 className="h3 fw-bold mb-1">Danh Sách Endpoints Chuẩn Hóa</h2>
             <p className="text-muted mb-0">
-              Tất cả các endpoint đọc dữ liệu đều hỗ trợ CORS (`Access-Control-Allow-Origin: *`) và bộ nhớ đệm biên (`Stale-While-Revalidate`).
+              Tất cả các endpoint đọc dữ liệu đều hỗ trợ CORS
+              (`Access-Control-Allow-Origin: *`) và bộ nhớ đệm biên
+              (`Stale-While-Revalidate`).
             </p>
           </div>
 
@@ -336,7 +383,9 @@ export default async function DevelopersPage({
                   <th style={{ minWidth: '250px' }}>Endpoint Path</th>
                   <th style={{ minWidth: '210px' }}>Tham số (Query / Body)</th>
                   <th>Mô tả &amp; Nguồn bảng dữ liệu</th>
-                  <th style={{ minWidth: '180px' }}>Cơ chế Cache &amp; Bảo mật</th>
+                  <th style={{ minWidth: '180px' }}>
+                    Cơ chế Cache &amp; Bảo mật
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -380,7 +429,7 @@ export default async function DevelopersPage({
       {/* 10 Field Groups Zod Specification Reference */}
       <section className="bg-light py-5">
         <div className="container">
-          <div className="row align-items-end mb-4 g-3">
+          <div className="row align-items-end g-3 mb-4">
             <div className="col-lg-8">
               <span className="badge bg-info bg-opacity-10 text-info rounded-pill fw-semibold mb-2 px-3 py-2">
                 📐 @repo/shared-data Zod Schema
@@ -390,8 +439,8 @@ export default async function DevelopersPage({
               </h2>
               <p className="text-muted mb-0">
                 Trường <code>specifications</code> (JSONB) trong bảng{' '}
-                <code>rate.master_products</code> tuân thủ nghiêm ngặt schema
-                10 nhóm dưới đây, cho phép so sánh chéo giữa các sàn mà không bị
+                <code>rate.master_products</code> tuân thủ nghiêm ngặt schema 10
+                nhóm dưới đây, cho phép so sánh chéo giữa các sàn mà không bị
                 nhiễu bởi cách đặt tên tự do của người bán.
               </p>
             </div>
@@ -431,9 +480,9 @@ export default async function DevelopersPage({
       </section>
 
       {/* 4-Layer Architecture Overview */}
-      <section className="bg-white border-top py-5">
+      <section className="border-top bg-white py-5">
         <div className="container">
-          <div className="text-center mb-4">
+          <div className="mb-4 text-center">
             <span className="badge bg-primary bg-opacity-10 text-primary rounded-pill fw-semibold mb-2 px-3 py-2">
               🏛️ Kiến Trúc 4 Tầng Độc Lập (4-Layer Composable Architecture)
             </span>
@@ -448,9 +497,9 @@ export default async function DevelopersPage({
                 <BsLayers className="text-primary fs-2 mb-3" />
                 <h5 className="fw-bold">Layer 1: Web BFF &amp; REST API v1</h5>
                 <p className="small text-muted mb-0">
-                  Next.js 16.3.8 Server Data Layer bọc <code>React.cache()</code>{' '}
-                  cùng hệ thống JSON REST API v1 phục vụ Web Client và Browser
-                  Extension MV3.
+                  Next.js 16.3.8 Server Data Layer bọc{' '}
+                  <code>React.cache()</code> cùng hệ thống JSON REST API v1 phục
+                  vụ Web Client và Browser Extension MV3.
                 </p>
               </div>
             </div>

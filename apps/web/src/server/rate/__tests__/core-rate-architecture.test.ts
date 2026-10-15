@@ -15,6 +15,7 @@ import {
   detectAccessoryOrJunk,
   evaluateExtensionPriceVerdict,
 } from '../extension';
+import { buildRateOpenApiSpec } from '../openapi';
 import {
   ProductSpecificationsSchema,
   RATE_API_V1_ENDPOINTS,
@@ -69,7 +70,7 @@ function runCoreArchitectureSuite() {
     flagCategory: 'authentic',
   });
   assert.equal(penalized, 0);
-  console.log('  ✅ [1/6] JReviews Logarithmic Weight Formula passed');
+  console.log('  ✅ [1/7] JReviews Logarithmic Weight Formula passed');
 
   // 2. Canonical 5-category routing
   assert.equal(getCategoryRouteHref('smartphones'), '/smartphones');
@@ -112,7 +113,7 @@ function runCoreArchitectureSuite() {
     '/laptops/macbook-air-m3-16gb'
   );
   console.log(
-    '  ✅ [2/6] Canonical 5-Category Routing (smartphones/tablets/laptops/smartwatches/earbuds) passed'
+    '  ✅ [2/7] Canonical 5-Category Routing (smartphones/tablets/laptops/smartwatches/earbuds) passed'
   );
 
   // 3. E-commerce URL and query parser
@@ -135,7 +136,7 @@ function runCoreArchitectureSuite() {
   );
   assert.equal(internalWatch.platform, 'rate');
   assert.equal(internalWatch.internalSlug, 'apple-watch-ultra-2');
-  console.log('  ✅ [3/6] E-Commerce URL & Internal Slug Parser passed');
+  console.log('  ✅ [3/7] E-Commerce URL & Internal Slug Parser passed');
 
   // 4. 10-Field-Groups category filter schemas
   for (const slug of [
@@ -153,7 +154,7 @@ function runCoreArchitectureSuite() {
   assert.equal(formatStorageLabel(256), '256GB');
   assert.equal(formatStorageLabel(1024), '1TB');
   assert.equal(formatStorageLabel(2048), '2TB');
-  console.log('  ✅ [4/6] 10-Field-Groups Category Filter Registry passed');
+  console.log('  ✅ [4/7] 10-Field-Groups Category Filter Registry passed');
 
   // 5. Multi-locale dictionary (vi, en, cs)
   assert.equal(normalizeRateLocale('vi'), 'vi');
@@ -168,7 +169,7 @@ function runCoreArchitectureSuite() {
     assert.ok(copy.nav.developers.length > 0);
     assert.ok(copy.footer.links.smartwatches.length > 0);
   }
-  console.log('  ✅ [5/6] Multi-Locale Dictionary (vi/en/cs) passed');
+  console.log('  ✅ [5/7] Multi-Locale Dictionary (vi/en/cs) passed');
 
   // 6. Extension gatekeeper, URL canonicalization, and 10-Field-Groups Zod schema
   const canon = canonicalizeProductUrl(
@@ -218,7 +219,28 @@ function runCoreArchitectureSuite() {
   });
   assert.equal(validSpecs.success, true);
   console.log(
-    '  ✅ [6/6] Extension Gatekeeper, Price Verdict & 10-Field-Groups Zod Schema passed'
+    '  ✅ [6/7] Extension Gatekeeper, Price Verdict & 10-Field-Groups Zod Schema passed'
+  );
+
+  // 7. OpenAPI 3.1.0 Specification verification
+  const openApi = buildRateOpenApiSpec('https://rate.vn');
+  assert.equal(openApi.openapi, '3.1.0');
+  assert.ok(Object.keys(openApi.paths).length >= 13);
+  assert.ok(openApi.paths['/api/v1/rate/products']?.get);
+  assert.ok(openApi.paths['/api/v1/rate/inspect']?.get);
+  assert.ok(openApi.paths['/api/v1/rate/extension/lookup']?.get);
+  assert.ok(openApi.paths['/api/v1/rate/extension/ingest']?.post);
+  assert.ok(openApi.paths['/api/v1/rate/openapi.json']?.get);
+  assert.equal(
+    (
+      openApi.components.schemas.SupportedEcommercePlatform as {
+        enum: string[];
+      }
+    ).enum.length,
+    10
+  );
+  console.log(
+    '  ✅ [7/7] OpenAPI 3.1.0 Specification (/api/v1/rate/openapi.json) passed'
   );
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
