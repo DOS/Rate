@@ -1,5 +1,14 @@
 export type SupportedEcommercePlatform =
-  'shopee' | 'lazada' | 'tiki' | 'cellphones' | 'tgdd' | 'fptshop';
+  | 'shopee'
+  | 'lazada'
+  | 'tiki'
+  | 'tiktok'
+  | 'cellphones'
+  | 'tgdd'
+  | 'fptshop'
+  | 'hoangha'
+  | 'didongviet'
+  | 'phongvu';
 
 export type ExtensionPriceVerdict =
   | 'genuine_deal'
@@ -96,6 +105,14 @@ export interface ExtensionLookupData {
     expert_rating: number | null;
     authentic_review_count: number;
     total_reviews: number;
+    key_specs?: {
+      screen?: string;
+      chip?: string;
+      camera?: string;
+      battery?: string;
+      storage?: string;
+      ram?: string;
+    } | null;
   } | null;
   matchedOffer: ExtensionOfferItem | null;
   topCheaperOffers: ExtensionOfferItem[];

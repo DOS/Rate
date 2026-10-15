@@ -16,7 +16,16 @@ import {
 } from '../../lib/rate-api';
 
 export type SupportedEcommercePlatform =
-  'shopee' | 'lazada' | 'tiki' | 'cellphones' | 'tgdd' | 'fptshop';
+  | 'shopee'
+  | 'lazada'
+  | 'tiki'
+  | 'tiktok'
+  | 'cellphones'
+  | 'tgdd'
+  | 'fptshop'
+  | 'hoangha'
+  | 'didongviet'
+  | 'phongvu';
 
 export interface PlatformCapability {
   platform: SupportedEcommercePlatform;
@@ -55,6 +64,14 @@ export const EXTENSION_CAPABILITY_MATRIX: Record<
     crossCatalogMatch: true,
     crowdVerifyQueue: false,
   },
+  tiktok: {
+    platform: 'tiktok',
+    displayName: 'TikTok Shop VN',
+    lookup: true,
+    exactItemMatch: true,
+    crossCatalogMatch: true,
+    crowdVerifyQueue: false,
+  },
   cellphones: {
     platform: 'cellphones',
     displayName: 'CellphoneS',
@@ -74,6 +91,30 @@ export const EXTENSION_CAPABILITY_MATRIX: Record<
   fptshop: {
     platform: 'fptshop',
     displayName: 'FPT Shop',
+    lookup: true,
+    exactItemMatch: true,
+    crossCatalogMatch: true,
+    crowdVerifyQueue: false,
+  },
+  hoangha: {
+    platform: 'hoangha',
+    displayName: 'Hoàng Hà Mobile',
+    lookup: true,
+    exactItemMatch: true,
+    crossCatalogMatch: true,
+    crowdVerifyQueue: false,
+  },
+  didongviet: {
+    platform: 'didongviet',
+    displayName: 'Di Động Việt',
+    lookup: true,
+    exactItemMatch: true,
+    crossCatalogMatch: true,
+    crowdVerifyQueue: false,
+  },
+  phongvu: {
+    platform: 'phongvu',
+    displayName: 'Phong Vũ',
     lookup: true,
     exactItemMatch: true,
     crossCatalogMatch: true,
@@ -228,9 +269,13 @@ export function detectPlatformFromInput(
     norm === 'shopee' ||
     norm === 'lazada' ||
     norm === 'tiki' ||
+    norm === 'tiktok' ||
     norm === 'cellphones' ||
     norm === 'tgdd' ||
-    norm === 'fptshop'
+    norm === 'fptshop' ||
+    norm === 'hoangha' ||
+    norm === 'didongviet' ||
+    norm === 'phongvu'
   ) {
     return norm;
   }
@@ -238,10 +283,14 @@ export function detectPlatformFromInput(
   if (u.includes('shopee.vn')) return 'shopee';
   if (u.includes('lazada.vn')) return 'lazada';
   if (u.includes('tiki.vn')) return 'tiki';
+  if (u.includes('tiktok.com')) return 'tiktok';
   if (u.includes('cellphones.com.vn')) return 'cellphones';
   if (u.includes('thegioididong.com') || u.includes('topzone.vn'))
     return 'tgdd';
   if (u.includes('fptshop.com.vn')) return 'fptshop';
+  if (u.includes('hoanghamobile.com')) return 'hoangha';
+  if (u.includes('didongviet.vn')) return 'didongviet';
+  if (u.includes('phongvu.vn')) return 'phongvu';
   return null;
 }
 
