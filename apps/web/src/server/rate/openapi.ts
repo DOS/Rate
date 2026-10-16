@@ -85,9 +85,9 @@ export function buildRateOpenApiSpec(
     openapi: '3.1.0',
     info: {
       title: 'Rate.vn Open-Core Intelligence REST API v1',
-      version: '1.6.0',
+      version: '1.7.0',
       summary:
-        'Standardized 10-Group Tech Specs, 90-Day Price History & AI Review Auditing API',
+        'Standardized 10-Group Tech Specs, 90-Day Price History, Product Deal Radar & AI Review Auditing API',
       description:
         'Official OpenAPI 3.1 specification for the Rate.vn 4-Layer Composable Backend Architecture (Zero-Strapi 2026). Powers Web Client Islands, the Rate Browser Extension Manifest V3 across 10 Vietnamese e-commerce/retail platforms, and open e-commerce transparency research.',
       license: {
@@ -928,6 +928,31 @@ export function buildRateOpenApiSpec(
             extensionVersion: {
               type: 'string',
               example: '2.1.0',
+            },
+          },
+        },
+        ProductDealRadarSignal: {
+          type: 'object',
+          required: ['verdict', 'savingsPct', 'fakeMarkupPct', 'spreadPct'],
+          description:
+            'Unified product-level Deal Radar signal embedded across product, leaderboard, comparison, inspection, and extension lookup endpoints.',
+          properties: {
+            verdict: {
+              type: 'string',
+              enum: ['genuine_deal', 'fake_sale_trap', 'none'],
+              example: 'genuine_deal',
+            },
+            savingsPct: {
+              type: 'number',
+              example: 8.5,
+            },
+            fakeMarkupPct: {
+              type: 'number',
+              example: 0,
+            },
+            spreadPct: {
+              type: 'number',
+              example: 12.4,
             },
           },
         },

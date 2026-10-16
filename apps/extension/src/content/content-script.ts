@@ -85,6 +85,16 @@ function renderShadowTrustPill(lookup: ExtensionLookupData): void {
         : assessment.marketMinPrice
           ? `Đáy thị trường: ${formatCurrencyVnd(assessment.marketMinPrice)}`
           : 'Bấm để xem lịch sử giá & lọc review ảo';
+    const radarSig = lookup.radarSignal;
+    const radarChipHtml = radarSig
+      ? radarSig.verdict === 'genuine_deal'
+        ? `<span class="radar-chip radar-deal">🔥 Đáy 60N (-${radarSig.savingsPct}%)</span>`
+        : radarSig.verdict === 'fake_sale_trap'
+          ? `<span class="radar-chip radar-trap">🚨 Bẫy Sale (+${radarSig.fakeMarkupPct}%)</span>`
+          : radarSig.spreadPct >= 5
+            ? `<span class="radar-chip radar-spread">📊 Lệch ${radarSig.spreadPct}%</span>`
+            : ''
+      : '';
 
     shadow.innerHTML = `
       <style>
@@ -108,7 +118,7 @@ function renderShadowTrustPill(lookup: ExtensionLookupData): void {
           box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
           cursor: pointer;
           transition: transform 0.16s ease, box-shadow 0.16s ease;
-          max-width: 440px;
+          max-width: 480px;
         }
         .pill-card:hover {
           transform: translateY(-2px);
@@ -143,6 +153,24 @@ function renderShadowTrustPill(lookup: ExtensionLookupData): void {
           border-radius: 999px;
           font-size: 11.5px;
         }
+        .radar-chip {
+          padding: 2px 7px;
+          border-radius: 999px;
+          font-size: 11px;
+          font-weight: 700;
+        }
+        .radar-deal {
+          background: rgba(16, 185, 129, 0.2);
+          color: #34d399;
+        }
+        .radar-trap {
+          background: rgba(255, 46, 41, 0.2);
+          color: #fca5a5;
+        }
+        .radar-spread {
+          background: rgba(56, 189, 248, 0.18);
+          color: #38bdf8;
+        }
         .rating-tag {
           color: #fbbf24;
           font-size: 11.5px;
@@ -173,6 +201,7 @@ function renderShadowTrustPill(lookup: ExtensionLookupData): void {
           <div class="top-row">
             <span>Rate.vn</span>
             <span class="verdict-badge">${escapeHtml(assessment.badgeLabel)}</span>
+            ${radarChipHtml}
             ${
               trustedRating
                 ? `<span class="rating-tag">★ ${Number(trustedRating).toFixed(1)} (${Number(authenticRatio ?? 100)}% thật)</span>`

@@ -1785,8 +1785,21 @@ function runCoreArchitectureSuite() {
       versusRouteRadarSrc.includes('deal_radar: radarExportFields'),
     'All REST API v1 product/leaderboard/compare/versus endpoints must embed deal_radar from the shared module (#119)'
   );
+  const extContentScriptSrc = fs.readFileSync(
+    path.join(repoRoot, 'apps/extension/src/content/content-script.ts'),
+    'utf8'
+  );
+  assert.ok(
+    extContentScriptSrc.includes('lookup.radarSignal') &&
+      extContentScriptSrc.includes('radarChipHtml'),
+    'Browser Extension Floating Shadow DOM Trust Pill must render product-level radarSignal (#121)'
+  );
+  assert.ok(
+    'ProductDealRadarSignal' in openApi.components.schemas,
+    'OpenAPI 3.1.0 components.schemas must document ProductDealRadarSignal (#121)'
+  );
   console.log(
-    '  ✅ [38/38] REST API v1 product-level Deal Radar parity across extension/lookup, inspect, products, leaderboard, compare & versus (#119) passed'
+    '  ✅ [38/38] REST API v1, Extension Shadow DOM Pill & OpenAPI 3.1.0 product-level Deal Radar parity (#119, #121) passed'
   );
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }

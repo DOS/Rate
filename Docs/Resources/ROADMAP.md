@@ -206,6 +206,9 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc **4 T�
 - [x] **4.73. Đồng Bộ 100% Tín Hiệu Deal Radar Cấp Sản Phẩm (`radarSignal` / `deal_radar`) Trên Toàn Bộ REST API v1 (`extension/lookup`, `inspect`, `products`, `leaderboard`, `compare`, `versus` - Issue #119):**
   - Bổ sung `radarSignal: computeProductRadarSignal(...)` vào `ExtensionLookupResponse` (`GET /api/v1/rate/extension/lookup`) và `GET /api/v1/rate/inspect`.
   - Nhúng `deal_radar: radarExportFields(getRadarSignal(radarIndex, slug))` từ nguồn chân lý duy nhất `@/lib/deal-radar` vào từng sản phẩm trả về bởi `GET /api/v1/rate/products`, `GET /api/v1/rate/leaderboard`, `GET /api/v1/rate/compare` và `GET /api/v1/rate/versus` (Suite `[38/38]`).
+- [x] **4.74. Tích Hợp Tín Hiệu Deal Radar Cấp Sản Phẩm Lên Huy Hiệu Nổi Shadow DOM (`content-script.ts`), Chrome Side Panel (`sidepanel.ts`) & Đặc Tả OpenAPI 3.1.0 `v1.7.0` (`ProductDealRadarSignal` - Issue #121):**
+  - Nâng cấp `apps/extension/src/content/content-script.ts` và `apps/extension/src/sidepanel/sidepanel.ts` hiển thị trực tiếp tín hiệu `lookup.radarSignal` (`🔥 Đáy 60N`, `🚨 Bẫy Sale`, `📊 Lệch 10 sàn`) ngay trên thanh nổi Shadow DOM và Side Panel khi người mua duyệt 10 sàn TMĐT/đại lý.
+  - Bổ sung schema `ProductDealRadarSignal` vào đặc tả OpenAPI 3.1.0 (`v1.7.0`, `apps/web/src/server/rate/openapi.ts`) và kiểm thử tự động trong `test-extension-pipeline.ts` + `core-rate-architecture.test.ts`.
 
 ### ✅ Phase 5: Mở Rộng Đa Sàn 10/10 Nền Tảng, Browser Extension MV3 & Tự Động Hóa Cảnh Báo Giá (Đã hoàn thành 100%)
 
