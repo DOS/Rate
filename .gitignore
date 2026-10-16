@@ -109,3 +109,9 @@ volumes
 .env*
 ListingHub_NextJs_*
 vendor/
+
+# Local Private Repo Junction & Multi-Root Workspace (Never commit private Rate-Services into public Open-Core repo)
+/Rate-Services
+/Rate-Services/
+Rate.code-workspace
+
