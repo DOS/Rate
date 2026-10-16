@@ -1,4 +1,5 @@
 export type SupportedRateLocale = 'vi' | 'en' | 'cs';
+export type RateLocale = SupportedRateLocale;
 
 export function normalizeRateLocale(
   locale?: string | null
@@ -22,6 +23,7 @@ export interface RateLocaleCopy {
     tablets: string;
     smartwatches: string;
     earbuds: string;
+    leaderboard: string;
     merchants: string;
     inspect: string;
     compare: string;
@@ -43,6 +45,7 @@ export interface RateLocaleCopy {
       tablets: string;
       smartwatches: string;
       earbuds: string;
+      leaderboard: string;
       inspect: string;
       compare: string;
       merchants: string;
@@ -116,6 +119,7 @@ const RATE_COPY_DICTIONARY: Record<SupportedRateLocale, RateLocaleCopy> = {
       tablets: 'Máy tính bảng',
       smartwatches: 'Đồng hồ',
       earbuds: 'Tai nghe',
+      leaderboard: 'Xếp hạng',
       merchants: 'Gian hàng',
       inspect: 'Kiểm toán Link',
       compare: 'So sánh',
@@ -138,6 +142,7 @@ const RATE_COPY_DICTIONARY: Record<SupportedRateLocale, RateLocaleCopy> = {
         tablets: 'Máy tính bảng (Tablet)',
         smartwatches: 'Đồng hồ thông minh',
         earbuds: 'Tai nghe chống ồn ANC',
+        leaderboard: 'Bảng xếp hạng Điểm Kép (/leaderboard)',
         inspect: 'Kiểm toán sâu Link TMĐT (/inspect)',
         compare: 'So sánh 10 nhóm thông số',
         merchants: 'Hồ sơ Tín nhiệm Gian hàng',
@@ -217,6 +222,7 @@ const RATE_COPY_DICTIONARY: Record<SupportedRateLocale, RateLocaleCopy> = {
       tablets: 'Tablets',
       smartwatches: 'Watches',
       earbuds: 'Earbuds',
+      leaderboard: 'Leaderboard',
       merchants: 'Merchants',
       inspect: 'Inspect URL',
       compare: 'Compare',
@@ -239,6 +245,7 @@ const RATE_COPY_DICTIONARY: Record<SupportedRateLocale, RateLocaleCopy> = {
         tablets: 'Tablets',
         smartwatches: 'Smartwatches',
         earbuds: 'ANC Wireless Earbuds',
+        leaderboard: 'Dual-Rating Leaderboard (/leaderboard)',
         inspect: 'Deep Link Inspector (/inspect)',
         compare: '10-Group Spec Comparison',
         merchants: 'Merchant Trust Directory',
@@ -319,6 +326,7 @@ const RATE_COPY_DICTIONARY: Record<SupportedRateLocale, RateLocaleCopy> = {
       tablets: 'Tablety',
       smartwatches: 'Hodinky',
       earbuds: 'Sluchátka',
+      leaderboard: 'Žebříček',
       merchants: 'Obchody',
       inspect: 'Audit URL',
       compare: 'Porovnat',
@@ -341,6 +349,7 @@ const RATE_COPY_DICTIONARY: Record<SupportedRateLocale, RateLocaleCopy> = {
         tablets: 'Tablety',
         smartwatches: 'Chytré hodinky',
         earbuds: 'Bezdrátová sluchátka ANC',
+        leaderboard: 'Žebříček hodnocení (/leaderboard)',
         inspect: 'Hloubkový audit odkazu (/inspect)',
         compare: 'Porovnání 10 skupin parametrů',
         merchants: 'Adresář důvěryhodnosti obchodů',

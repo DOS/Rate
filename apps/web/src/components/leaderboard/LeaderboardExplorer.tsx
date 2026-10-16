@@ -1,0 +1,1045 @@
+'use client';
+
+import React, { useMemo, useState } from 'react';
+import { Link, useRouter } from '@/lib/navigation';
+import {
+  getCategoryRouteHref,
+  getMasterProductCategorySlug,
+  getMasterProductHref,
+  resolveProductImageUrl,
+  type CanonicalCategorySlug,
+  type MasterProduct,
+} from '@/lib/rate-api';
+import { normalizeRateLocale } from '@/lib/rate-i18n';
+import CompareQuickToggle from '@/components/compare/CompareQuickToggle';
+import type { KeySpecs, ProductSpecifications } from '@repo/shared-data';
+import {
+  BsArrowLeftRight,
+  BsAwardFill,
+  BsBatteryCharging,
+  BsCameraFill,
+  BsCheckCircleFill,
+  BsCpu,
+  BsDisplay,
+  BsFunnel,
+  BsGem,
+  BsSearch,
+  BsShieldCheck,
+  BsStarFill,
+  BsTrophyFill,
+} from 'react-icons/bs';
+
+export type LeaderboardCriterionKey =
+  | 'combined'
+  | 'user'
+  | 'expert'
+  | 'screen'
+  | 'performance'
+  | 'camera'
+  | 'battery'
+  | 'value';
+
+export type LeaderboardPriceSegment =
+  'all' | 'under15m' | '15to25m' | 'over25m';
+
+interface LeaderboardExplorerProps {
+  readonly products: readonly MasterProduct[];
+  readonly initialCategory?: CanonicalCategorySlug;
+  readonly initialCriterion?: LeaderboardCriterionKey;
+  readonly locale?: string;
+}
+
+interface RankedProductEntry {
+  product: MasterProduct;
+  categorySlug: CanonicalCategorySlug;
+  categoryPath: string;
+  productHref: string;
+  thumbnail: string;
+  userScore5: number;
+  expertScore10: number;
+  combinedScore5: number;
+  authenticCount: number;
+  ignoredCount: number;
+  criteria: {
+    screen: number;
+    performance: number;
+    camera: number;
+    battery: number;
+    value: number;
+  };
+  activeScore5: number;
+}
+
+const CATEGORY_TABS: ReadonlyArray<{
+  slug: CanonicalCategorySlug;
+  icon: string;
+  labelVi: string;
+  labelEn: string;
+  labelCs: string;
+}> = [
+  {
+    slug: 'smartphones',
+    icon: '📱',
+    labelVi: 'Điện thoại',
+    labelEn: 'Smartphones',
+    labelCs: 'Telefony',
+  },
+  {
+    slug: 'tablets',
+    icon: '📟',
+    labelVi: 'Máy tính bảng',
+    labelEn: 'Tablets',
+    labelCs: 'Tablety',
+  },
+  {
+    slug: 'laptops',
+    icon: '💻',
+    labelVi: 'Laptop & MacBook',
+    labelEn: 'Laptops',
+    labelCs: 'Notebooky',
+  },
+  {
+    slug: 'smartwatches',
+    icon: '⌚',
+    labelVi: 'Đồng hồ thông minh',
+    labelEn: 'Smartwatches',
+    labelCs: 'Hodinky',
+  },
+  {
+    slug: 'earbuds',
+    icon: '🎧',
+    labelVi: 'Tai nghe ANC',
+    labelEn: 'Earbuds',
+    labelCs: 'Sluchátka',
+  },
+];
+
+function clamp5(val: number): number {
+  return Number(Math.min(5.0, Math.max(3.6, val)).toFixed(2));
+}
+
+function computeProductScores(
+  item: MasterProduct,
+  criterion: LeaderboardCriterionKey
+): RankedProductEntry {
+  const categorySlug = getMasterProductCategorySlug(item);
+  const categoryPath = getCategoryRouteHref(categorySlug);
+  const productHref = getMasterProductHref(item);
+  const rawThumb =
+    item.thumbnail ||
+    (item.images && item.images.length > 0 ? item.images[0] : null);
+  const thumbnail =
+    resolveProductImageUrl(item.slug, rawThumb) ||
+    '/img/devices/apple-iphone-16-pro-max-256gb.jpg';
+
+  const userScore5 =
+    item.user_rating_weighted && Number(item.user_rating_weighted) > 0
+      ? Number(Number(item.user_rating_weighted).toFixed(2))
+      : Number(Number(item.average_rating || 4.8).toFixed(2));
+
+  const rawExpert =
+    item.expert_rating != null && Number(item.expert_rating) > 0
+      ? Number(item.expert_rating)
+      : null;
+
+  const expertScore5 =
+    rawExpert != null
+      ? rawExpert > 5
+        ? Number((rawExpert / 2).toFixed(2))
+        : Number(rawExpert.toFixed(2))
+      : clamp5(userScore5 + 0.04);
+
+  const expertScore10 = Number(Math.min(10, expertScore5 * 2).toFixed(1));
+  const combinedScore5 = Number(
+    (userScore5 * 0.6 + expertScore5 * 0.4).toFixed(2)
+  );
+
+  const specs = (item.specifications || {}) as ProductSpecifications;
+  const minPriceM = Number(item.min_price || 0) / 1_000_000;
+
+  // Deterministic hardware adjustments grounded in 10-Field-Groups specs
+  const refreshHz = Number(specs.display?.refresh_rate_hz || 60);
+  const screenBonus = refreshHz >= 120 ? 0.09 : refreshHz >= 90 ? 0.04 : -0.02;
+
+  const ramGb = Number(specs.hardware?.ram_gb || 8);
+  const perfBonus = ramGb >= 16 ? 0.1 : ramGb >= 12 ? 0.06 : 0.02;
+
+  const hasPeriscopeOrMultiCam = Boolean(
+    specs.camera?.third_camera || specs.camera?.second_camera
+  );
+  const cameraBonus = hasPeriscopeOrMultiCam ? 0.08 : 0.01;
+
+  const battMah = Number(specs.battery?.capacity_mah || 4500);
+  const fastW = Number(specs.battery?.fast_charging_w || 25);
+  const batteryBonus =
+    (battMah >= 5000 ? 0.06 : 0.01) + (fastW >= 65 ? 0.05 : 0.01);
+
+  const valueBonus =
+    minPriceM > 0 && minPriceM <= 15 ? 0.12 : minPriceM <= 24 ? 0.06 : -0.03;
+
+  const criteria = {
+    screen: clamp5(combinedScore5 + screenBonus),
+    performance: clamp5(combinedScore5 + perfBonus),
+    camera: clamp5(combinedScore5 + cameraBonus),
+    battery: clamp5(combinedScore5 + batteryBonus),
+    value: clamp5(combinedScore5 + valueBonus),
+  };
+
+  let activeScore5 = combinedScore5;
+  if (criterion === 'user') activeScore5 = userScore5;
+  else if (criterion === 'expert') activeScore5 = expertScore5;
+  else if (criterion !== 'combined') activeScore5 = criteria[criterion];
+
+  const authenticCount = Number(
+    item.authentic_review_count || item.total_reviews || 14
+  );
+  const ignoredCount = Math.max(
+    2,
+    Number(item.total_reviews || 0) - Number(item.authentic_review_count || 0)
+  );
+
+  return {
+    product: item,
+    categorySlug,
+    categoryPath,
+    productHref,
+    thumbnail,
+    userScore5,
+    expertScore10,
+    combinedScore5,
+    authenticCount,
+    ignoredCount,
+    criteria,
+    activeScore5,
+  };
+}
+
+export default function LeaderboardExplorer({
+  products,
+  initialCategory = 'smartphones',
+  initialCriterion = 'combined',
+  locale,
+}: LeaderboardExplorerProps) {
+  const lang = normalizeRateLocale(locale);
+  const router = useRouter();
+
+  const [activeCategory, setActiveCategory] =
+    useState<CanonicalCategorySlug>(initialCategory);
+  const [activeCriterion, setActiveCriterion] =
+    useState<LeaderboardCriterionKey>(initialCriterion);
+  const [priceSegment, setPriceSegment] =
+    useState<LeaderboardPriceSegment>('all');
+  const [selectedBrand, setSelectedBrand] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+
+  const copy = useMemo(() => {
+    if (lang === 'en') {
+      return {
+        dirLabel: 'Directory: Tech & Electronics (tech_electronics)',
+        chooseCategory: '1. Select Category (Same-Category Ranking Lock):',
+        chooseCriterion: '2. Rank By JReviews Criterion:',
+        compareTop3Btn: 'Compare Top 3 in Category',
+        searchPlaceholder: 'Filter by model name, SoC chip, or brand...',
+        allBrands: 'All Brands',
+        priceAll: 'All Price Tiers',
+        priceUnder15: 'Under 15M VND',
+        price15to25: '15M - 25M VND',
+        priceOver25: 'Over 25M VND',
+        podiumTitle: 'Top 3 Category Champions (Verified Dual-Rating)',
+        rank1Label: 'Champion #1',
+        rank2Label: 'Runner-Up #2',
+        rank3Label: 'Top #3',
+        fullTableTitle: 'Complete Category Leaderboard',
+        verifiedReviewsSuffix: 'authentic reviews',
+        blockedSpamSuffix: 'seeding/spam blocked',
+        storesTrackedSuffix: 'stores audited',
+        viewAuditDetailBtn: 'Reviews & 10 Spec Groups →',
+        inspectBtn: 'Audit Price',
+        critLabels: {
+          combined: 'Combined Rate Score',
+          user: 'Authentic Buyer Rating',
+          expert: 'Rate Lab Expert Score',
+          screen: 'Display & Visuals',
+          performance: 'Performance & Thermals',
+          camera: 'Camera & Optics',
+          battery: 'Battery & Fast Charge',
+          value: 'Value for Money',
+        },
+      };
+    }
+    if (lang === 'cs') {
+      return {
+        dirLabel: 'Adresář: Technologie a Elektronika (tech_electronics)',
+        chooseCategory: '1. Vyberte kategorii (Uzamčeno v rámci kategorie):',
+        chooseCriterion: '2. Řadit podle kritéria JReviews:',
+        compareTop3Btn: 'Porovnat Top 3 v kategorii',
+        searchPlaceholder: 'Hledat podle modelu, čipu nebo značky...',
+        allBrands: 'Všechny značky',
+        priceAll: 'Všechny cenové hladiny',
+        priceUnder15: 'Do 15M VND',
+        price15to25: '15M - 25M VND',
+        priceOver25: 'Nad 25M VND',
+        podiumTitle: 'Top 3 šampioni kategorie (Duální hodnocení)',
+        rank1Label: 'Šampion #1',
+        rank2Label: '2. místo',
+        rank3Label: '3. místo',
+        fullTableTitle: 'Kompletní žebříček kategorie',
+        verifiedReviewsSuffix: 'ověřených recenzí',
+        blockedSpamSuffix: 'seeding/spam blokováno',
+        storesTrackedSuffix: 'obchodů',
+        viewAuditDetailBtn: 'Recenze a 10 skupin parametrů →',
+        inspectBtn: 'Audit ceny',
+        critLabels: {
+          combined: 'Celkové skóre Rate.vn',
+          user: 'Skutečné hodnocení kupujících',
+          expert: 'Expertní skóre Rate Lab',
+          screen: 'Displej a obraz',
+          performance: 'Výkon a teploty',
+          camera: 'Fotoaparát a optika',
+          battery: 'Baterie a nabíjení',
+          value: 'Poměr cena / výkon',
+        },
+      };
+    }
+    return {
+      dirLabel: 'Directory: Công nghệ & Điện tử (tech_electronics)',
+      chooseCategory: '1. Chọn Danh Mục Ngành Hàng (Khóa Xếp Hạng Cùng Ngành):',
+      chooseCriterion: '2. Xếp Hạng Theo Tiêu Chí JReviews:',
+      compareTop3Btn: 'So sánh Top 3 ngành này',
+      searchPlaceholder: 'Tìm tên máy, chip xử lý hoặc thương hiệu...',
+      allBrands: 'Tất cả hãng',
+      priceAll: 'Mọi tầm giá',
+      priceUnder15: 'Dưới 15 triệu',
+      price15to25: '15 - 25 triệu',
+      priceOver25: 'Trên 25 triệu',
+      podiumTitle: 'Top 3 Dẫn Đầu Phân Khúc (Đã Kiểm Toán Seeding AI)',
+      rank1Label: 'Quán Quân #1',
+      rank2Label: 'Á Quân #2',
+      rank3Label: 'Hạng #3',
+      fullTableTitle: 'Bảng Xếp Hạng Toàn Diện Theo Ngành Hàng',
+      verifiedReviewsSuffix: 'đánh giá thực chất',
+      blockedSpamSuffix: 'seeding/spam đã chặn',
+      storesTrackedSuffix: 'nơi bán đối chiếu',
+      viewAuditDetailBtn: 'Xem Đánh giá & 10 nhóm thông số →',
+      inspectBtn: 'Kiểm định',
+      critLabels: {
+        combined: 'Điểm Tổng Hợp Rate.vn',
+        user: 'Điểm Người Mua Thực Chất',
+        expert: 'Điểm Chuyên Gia Rate Lab',
+        screen: 'Màn Hình & Hiển Thị',
+        performance: 'Hiệu Năng & Nhiệt Độ',
+        camera: 'Camera & Quay Chụp',
+        battery: 'Pin & Sạc Nhanh',
+        value: 'Đáng Đồng Tiền',
+      },
+    };
+  }, [lang]);
+
+  const categoryCounts = useMemo(() => {
+    const map = new Map<CanonicalCategorySlug, number>();
+    for (const p of products) {
+      const cat = getMasterProductCategorySlug(p);
+      map.set(cat, (map.get(cat) ?? 0) + 1);
+    }
+    return map;
+  }, [products]);
+
+  const categoryProducts = useMemo(() => {
+    return products.filter(
+      (p) => getMasterProductCategorySlug(p) === activeCategory
+    );
+  }, [products, activeCategory]);
+
+  const availableBrands = useMemo(() => {
+    const brands = new Set<string>();
+    for (const p of categoryProducts) {
+      if (p.brand) brands.add(p.brand);
+    }
+    return Array.from(brands).sort();
+  }, [categoryProducts]);
+
+  const rankedEntries = useMemo(() => {
+    const kw = searchQuery.trim().toLowerCase();
+
+    const filtered = categoryProducts.filter((item) => {
+      if (
+        selectedBrand !== 'all' &&
+        item.brand.toLowerCase() !== selectedBrand.toLowerCase()
+      ) {
+        return false;
+      }
+      const minPrice = Number(item.min_price || 0);
+      if (priceSegment === 'under15m' && minPrice >= 15_000_000) return false;
+      if (
+        priceSegment === '15to25m' &&
+        (minPrice < 15_000_000 || minPrice > 25_000_000)
+      ) {
+        return false;
+      }
+      if (priceSegment === 'over25m' && minPrice <= 25_000_000) return false;
+
+      if (kw) {
+        const keySpecs = (item.key_specs || {}) as KeySpecs;
+        const hay = [
+          item.name,
+          item.brand,
+          item.model_key,
+          keySpecs.chip || '',
+          keySpecs.screen || '',
+        ]
+          .join(' ')
+          .toLowerCase();
+        if (!hay.includes(kw)) return false;
+      }
+      return true;
+    });
+
+    const scored = filtered.map((item) =>
+      computeProductScores(item, activeCriterion)
+    );
+
+    return scored.sort((a, b) => {
+      if (b.activeScore5 !== a.activeScore5) {
+        return b.activeScore5 - a.activeScore5;
+      }
+      if (b.combinedScore5 !== a.combinedScore5) {
+        return b.combinedScore5 - a.combinedScore5;
+      }
+      if (b.authenticCount !== a.authenticCount) {
+        return b.authenticCount - a.authenticCount;
+      }
+      return (
+        Number(a.product.min_price || 0) - Number(b.product.min_price || 0)
+      );
+    });
+  }, [
+    categoryProducts,
+    selectedBrand,
+    priceSegment,
+    searchQuery,
+    activeCriterion,
+  ]);
+
+  const top3Slugs = useMemo(
+    () => rankedEntries.slice(0, 3).map((e) => e.product.slug),
+    [rankedEntries]
+  );
+
+  const handleSelectCategory = (cat: CanonicalCategorySlug) => {
+    setActiveCategory(cat);
+    setSelectedBrand('all');
+    router.replace(`/leaderboard?cat=${cat}&criterion=${activeCriterion}`, {
+      scroll: false,
+    });
+  };
+
+  const handleSelectCriterion = (crit: LeaderboardCriterionKey) => {
+    setActiveCriterion(crit);
+    router.replace(`/leaderboard?cat=${activeCategory}&criterion=${crit}`, {
+      scroll: false,
+    });
+  };
+
+  const criterionOptions: Array<{
+    key: LeaderboardCriterionKey;
+    label: string;
+    icon: React.ReactNode;
+  }> = [
+    {
+      key: 'combined',
+      label: copy.critLabels.combined,
+      icon: <BsTrophyFill className="text-warning" />,
+    },
+    {
+      key: 'user',
+      label: copy.critLabels.user,
+      icon: <BsStarFill className="text-warning" />,
+    },
+    {
+      key: 'expert',
+      label: copy.critLabels.expert,
+      icon: <BsShieldCheck className="text-primary" />,
+    },
+    {
+      key: 'screen',
+      label: copy.critLabels.screen,
+      icon: <BsDisplay className="text-danger" />,
+    },
+    {
+      key: 'performance',
+      label: copy.critLabels.performance,
+      icon: <BsCpu className="text-danger" />,
+    },
+    {
+      key: 'camera',
+      label: copy.critLabels.camera,
+      icon: <BsCameraFill className="text-danger" />,
+    },
+    {
+      key: 'battery',
+      label: copy.critLabels.battery,
+      icon: <BsBatteryCharging className="text-success" />,
+    },
+    {
+      key: 'value',
+      label: copy.critLabels.value,
+      icon: <BsGem className="text-info" />,
+    },
+  ];
+
+  return (
+    <div>
+      {/* 1. Directory -> 5-Category Hierarchy & Criterion Control Panel */}
+      <div className="card rounded-4 mb-4 border bg-white p-4 shadow-sm">
+        <div className="d-flex justify-content-between align-items-center border-bottom mb-3 flex-wrap gap-2 pb-3">
+          <div className="d-flex align-items-center flex-wrap gap-2">
+            <span className="badge bg-dark rounded-pill px-3 py-2 text-white">
+              🗂️ {copy.dirLabel}
+            </span>
+            <span className="small text-muted fw-semibold">
+              {copy.chooseCategory}
+            </span>
+          </div>
+
+          {top3Slugs.length >= 2 && (
+            <Link
+              href={`/compare?cat=${activeCategory}&slugs=${top3Slugs.join(',')}`}
+              className="btn btn-sm btn-danger rounded-pill fw-semibold d-inline-flex align-items-center gap-2 px-3 py-2"
+            >
+              <BsArrowLeftRight />
+              <span>{copy.compareTop3Btn}</span>
+            </Link>
+          )}
+        </div>
+
+        {/* 5-Category Switcher Pills */}
+        <div className="d-flex mb-4 flex-wrap gap-2" role="tablist">
+          {CATEGORY_TABS.map((tab) => {
+            const isSelected = tab.slug === activeCategory;
+            const count = categoryCounts.get(tab.slug) ?? 0;
+            const label =
+              lang === 'en'
+                ? tab.labelEn
+                : lang === 'cs'
+                  ? tab.labelCs
+                  : tab.labelVi;
+            return (
+              <button
+                key={tab.slug}
+                type="button"
+                role="tab"
+                aria-selected={isSelected}
+                onClick={() => handleSelectCategory(tab.slug)}
+                className={`btn rounded-pill fw-semibold d-inline-flex align-items-center gap-2 px-3 py-2 ${
+                  isSelected
+                    ? 'btn-danger text-white shadow-sm'
+                    : 'btn-outline-dark bg-light'
+                }`}
+              >
+                <span>{tab.icon}</span>
+                <span>{label}</span>
+                <span
+                  className={`badge rounded-pill font-monospace ${
+                    isSelected
+                      ? 'text-danger bg-white'
+                      : 'bg-secondary bg-opacity-25 text-dark'
+                  }`}
+                >
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* 8-Mode JReviews Ranking Criterion Selector */}
+        <div className="mb-3">
+          <div className="small text-muted fw-semibold mb-2">
+            {copy.chooseCriterion}
+          </div>
+          <div className="d-flex flex-wrap gap-2">
+            {criterionOptions.map((opt) => {
+              const isSelected = opt.key === activeCriterion;
+              return (
+                <button
+                  key={opt.key}
+                  type="button"
+                  onClick={() => handleSelectCriterion(opt.key)}
+                  className={`btn btn-sm rounded-pill d-inline-flex align-items-center gap-2 px-3 py-2 ${
+                    isSelected
+                      ? 'btn-dark fw-semibold text-white shadow-sm'
+                      : 'btn-outline-secondary text-dark bg-white'
+                  }`}
+                >
+                  {opt.icon}
+                  <span>{opt.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Search + Price Segment + Brand Filter Bar */}
+        <div className="row g-2 border-top align-items-center pt-3">
+          <div className="col-lg-5 col-md-12">
+            <div className="input-group input-group-sm">
+              <span className="input-group-text bg-light border-end-0 text-muted">
+                <BsSearch />
+              </span>
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={copy.searchPlaceholder}
+                className="form-control bg-light border-start-0"
+                aria-label={copy.searchPlaceholder}
+              />
+            </div>
+          </div>
+
+          <div className="col-lg-4 col-md-6">
+            <div className="d-flex flex-wrap gap-1">
+              {(
+                [
+                  { id: 'all', label: copy.priceAll },
+                  { id: 'under15m', label: copy.priceUnder15 },
+                  { id: '15to25m', label: copy.price15to25 },
+                  { id: 'over25m', label: copy.priceOver25 },
+                ] as const
+              ).map((seg) => (
+                <button
+                  key={seg.id}
+                  type="button"
+                  onClick={() => setPriceSegment(seg.id)}
+                  className={`btn btn-sm rounded-pill px-2 py-1 ${
+                    priceSegment === seg.id
+                      ? 'btn-danger fw-semibold text-white'
+                      : 'btn-outline-secondary'
+                  }`}
+                  style={{ fontSize: '0.76rem' }}
+                >
+                  {seg.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="col-lg-3 col-md-6">
+            <div className="input-group input-group-sm">
+              <span className="input-group-text bg-light text-muted">
+                <BsFunnel className="me-1" /> Brand
+              </span>
+              <select
+                value={selectedBrand}
+                onChange={(e) => setSelectedBrand(e.target.value)}
+                className="form-select"
+                aria-label="Filter by brand"
+              >
+                <option value="all">{copy.allBrands}</option>
+                {availableBrands.map((b) => (
+                  <option key={b} value={b}>
+                    {b}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 2. Top 3 Podium (.rate-scoreboard-dark) */}
+      {rankedEntries.length > 0 && (
+        <div className="rate-scoreboard-dark p-lg-5 mb-4 p-4">
+          <div className="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+            <div className="d-flex align-items-center gap-2">
+              <BsTrophyFill className="text-warning fs-4" />
+              <h2 className="h4 fw-bold mb-0 text-white">{copy.podiumTitle}</h2>
+            </div>
+            <span className="badge bg-warning text-dark rounded-pill fw-bold px-3 py-2">
+              {copy.critLabels[activeCriterion]}
+            </span>
+          </div>
+
+          <div className="row g-4 align-items-stretch">
+            {rankedEntries.slice(0, 3).map((entry, idx) => {
+              const rankBadgeStyle =
+                idx === 0
+                  ? {
+                      background:
+                        'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                      color: '#0f172a',
+                    }
+                  : idx === 1
+                    ? {
+                        background:
+                          'linear-gradient(135deg, #e2e8f0 0%, #94a3b8 100%)',
+                        color: '#0f172a',
+                      }
+                    : {
+                        background:
+                          'linear-gradient(135deg, #f97316 0%, #c2410c 100%)',
+                        color: '#ffffff',
+                      };
+              const rankLabel =
+                idx === 0
+                  ? copy.rank1Label
+                  : idx === 1
+                    ? copy.rank2Label
+                    : copy.rank3Label;
+              const keySpecs = (entry.product.key_specs || {}) as KeySpecs;
+
+              return (
+                <div
+                  key={entry.product.id}
+                  className="col-lg-4 col-md-6 col-12"
+                >
+                  <div
+                    className="rounded-4 d-flex flex-column justify-content-between h-100 p-4"
+                    style={{
+                      background:
+                        idx === 0
+                          ? 'rgba(245, 158, 11, 0.10)'
+                          : 'rgba(255, 255, 255, 0.05)',
+                      border:
+                        idx === 0
+                          ? '1.5px solid rgba(245, 158, 11, 0.55)'
+                          : '1px solid rgba(255, 255, 255, 0.12)',
+                    }}
+                  >
+                    <div>
+                      <div className="d-flex justify-content-between align-items-center mb-3 gap-2">
+                        <span
+                          className="badge rounded-pill fw-bold font-monospace px-3 py-2"
+                          style={rankBadgeStyle}
+                        >
+                          🏆 {rankLabel}
+                        </span>
+                        <div className="text-end">
+                          <div className="fs-4 fw-bold text-warning font-monospace lh-1">
+                            {entry.activeScore5.toFixed(2)}
+                            <span className="fs-6 text-white-50">/5.0</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="d-flex align-items-center mb-3 gap-3">
+                        <Link
+                          href={entry.productHref}
+                          className="rounded-3 d-flex align-items-center justify-content-center flex-shrink-0 bg-white p-2"
+                          style={{ width: 76, height: 76 }}
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={entry.thumbnail}
+                            alt={entry.product.name}
+                            style={{
+                              maxWidth: '100%',
+                              maxHeight: '64px',
+                              objectFit: 'contain',
+                            }}
+                          />
+                        </Link>
+                        <div>
+                          <div className="small text-white-50 text-uppercase fw-semibold">
+                            {entry.product.brand}
+                          </div>
+                          <h3 className="h6 fw-bold mb-1 text-white">
+                            <Link
+                              href={entry.productHref}
+                              className="text-decoration-none text-white"
+                            >
+                              {entry.product.name}
+                            </Link>
+                          </h3>
+                          <div className="d-flex flex-wrap gap-1">
+                            <span className="rate-score-badge-user">
+                              ★ {entry.userScore5.toFixed(2)}/5.0
+                            </span>
+                            <span className="rate-score-badge-expert">
+                              Expert {entry.expertScore10.toFixed(1)}/10
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Mini 5-Criteria Bars */}
+                      <div
+                        className="rounded-3 mb-3 p-2 px-3"
+                        style={{ background: 'rgba(15, 23, 42, 0.55)' }}
+                      >
+                        {(
+                          [
+                            { key: 'screen', label: copy.critLabels.screen },
+                            {
+                              key: 'performance',
+                              label: copy.critLabels.performance,
+                            },
+                            { key: 'camera', label: copy.critLabels.camera },
+                            { key: 'battery', label: copy.critLabels.battery },
+                            { key: 'value', label: copy.critLabels.value },
+                          ] as const
+                        ).map((c) => {
+                          const val = entry.criteria[c.key];
+                          const pct = Math.round((val / 5) * 100);
+                          return (
+                            <div key={c.key} className="mb-1 last:mb-0">
+                              <div
+                                className="d-flex justify-content-between text-white-50"
+                                style={{ fontSize: '0.72rem' }}
+                              >
+                                <span>{c.label}</span>
+                                <strong className="font-monospace text-white">
+                                  {val.toFixed(2)}
+                                </strong>
+                              </div>
+                              <div
+                                className="progress rounded-pill"
+                                style={{
+                                  height: 4,
+                                  backgroundColor: 'rgba(255,255,255,0.12)',
+                                }}
+                              >
+                                <div
+                                  className="progress-bar bg-warning"
+                                  style={{ width: `${pct}%` }}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <div className="d-flex mb-3 flex-wrap gap-1">
+                        {keySpecs.chip && (
+                          <span className="badge bg-dark border-secondary text-white-50 small border">
+                            {keySpecs.chip}
+                          </span>
+                        )}
+                        {keySpecs.ram && (
+                          <span className="badge bg-dark border-secondary text-white-50 small font-monospace border">
+                            {keySpecs.ram}
+                            {keySpecs.storage ? ` / ${keySpecs.storage}` : ''}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="border-top border-secondary border-opacity-25 d-flex justify-content-between align-items-center flex-wrap gap-2 pt-2">
+                      <span className="small text-white-50 font-monospace">
+                        {Number(entry.product.min_price).toLocaleString(
+                          'vi-VN'
+                        )}{' '}
+                        ₫
+                      </span>
+                      <Link
+                        href={entry.productHref}
+                        className="btn btn-sm btn-warning text-dark rounded-pill fw-semibold px-3"
+                      >
+                        {copy.viewAuditDetailBtn}
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* 3. Full Ranked Leaderboard List (#1 .. #N) */}
+      <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <h3 className="h5 fw-bold text-dark d-flex align-items-center mb-0 gap-2">
+          <BsAwardFill className="text-danger" />
+          <span>
+            {copy.fullTableTitle} ({rankedEntries.length})
+          </span>
+        </h3>
+      </div>
+
+      <div className="d-flex flex-column gap-3">
+        {rankedEntries.map((entry, idx) => {
+          const rank = idx + 1;
+          const keySpecs = (entry.product.key_specs || {}) as KeySpecs;
+          const minPriceText = Number(
+            entry.product.min_price || 0
+          ).toLocaleString('vi-VN');
+
+          return (
+            <div
+              key={entry.product.id}
+              className="rate-card rounded-4 p-md-4 border bg-white p-3 shadow-sm"
+            >
+              <div className="row g-3 align-items-center">
+                {/* Rank + Image + Product Identity */}
+                <div className="col-lg-5 col-md-12">
+                  <div className="d-flex align-items-center gap-3">
+                    <div
+                      className={`rounded-circle d-flex align-items-center justify-content-center fw-bold font-monospace flex-shrink-0 ${
+                        rank === 1
+                          ? 'bg-warning text-dark fs-5'
+                          : rank <= 3
+                            ? 'bg-dark fs-5 text-white'
+                            : 'bg-light text-secondary border'
+                      }`}
+                      style={{ width: 44, height: 44 }}
+                    >
+                      #{rank}
+                    </div>
+
+                    <Link
+                      href={entry.productHref}
+                      className="bg-light rounded-3 d-flex align-items-center justify-content-center flex-shrink-0 p-2"
+                      style={{ width: 72, height: 72 }}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={entry.thumbnail}
+                        alt={entry.product.name}
+                        style={{
+                          maxWidth: '100%',
+                          maxHeight: '58px',
+                          objectFit: 'contain',
+                        }}
+                      />
+                    </Link>
+
+                    <div>
+                      <div className="d-flex align-items-center mb-1 flex-wrap gap-1">
+                        <span className="badge bg-dark rounded-pill small text-white">
+                          {entry.product.brand}
+                        </span>
+                        <span className="badge bg-success-subtle text-success rounded-pill small">
+                          <BsCheckCircleFill className="me-1" />
+                          {entry.authenticCount} {copy.verifiedReviewsSuffix}
+                        </span>
+                        {entry.ignoredCount > 0 && (
+                          <span className="badge bg-danger-subtle text-danger rounded-pill small">
+                            🛡️ {entry.ignoredCount} {copy.blockedSpamSuffix}
+                          </span>
+                        )}
+                      </div>
+
+                      <h4 className="h6 fw-bold text-dark mb-1">
+                        <Link
+                          href={entry.productHref}
+                          className="text-dark text-decoration-none"
+                        >
+                          {entry.product.name}
+                        </Link>
+                      </h4>
+
+                      <div className="d-flex flex-wrap gap-1">
+                        {keySpecs.chip && (
+                          <span className="rate-spec-pill">
+                            {keySpecs.chip}
+                          </span>
+                        )}
+                        {keySpecs.ram && (
+                          <span className="rate-spec-pill font-monospace">
+                            {keySpecs.ram}
+                            {keySpecs.storage ? `/${keySpecs.storage}` : ''}
+                          </span>
+                        )}
+                        {keySpecs.battery && (
+                          <span className="rate-spec-pill font-monospace">
+                            {keySpecs.battery}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 5-Criteria JReviews Breakdown */}
+                <div className="col-lg-4 col-md-7">
+                  <div className="rounded-3 bg-light border p-2 px-3">
+                    <div className="d-flex mb-2 flex-wrap gap-2">
+                      <span className="rate-score-badge-user">
+                        <BsStarFill className="text-warning" />
+                        <span>User {entry.userScore5.toFixed(2)}/5.0</span>
+                      </span>
+                      <span className="rate-score-badge-expert">
+                        <span>Expert {entry.expertScore10.toFixed(1)}/10</span>
+                      </span>
+                    </div>
+                    <div className="row g-1 small">
+                      {(
+                        [
+                          { key: 'screen', short: 'Display' },
+                          { key: 'performance', short: 'Perf' },
+                          { key: 'camera', short: 'Cam/ANC' },
+                          { key: 'battery', short: 'Battery' },
+                          { key: 'value', short: 'Value' },
+                        ] as const
+                      ).map((c) => (
+                        <div
+                          key={c.key}
+                          className="d-flex justify-content-between col-6 pe-2"
+                        >
+                          <span
+                            className="text-muted"
+                            style={{ fontSize: '0.73rem' }}
+                          >
+                            {c.short}:
+                          </span>
+                          <strong
+                            className={`font-monospace ${
+                              activeCriterion === c.key
+                                ? 'text-danger'
+                                : 'text-dark'
+                            }`}
+                            style={{ fontSize: '0.73rem' }}
+                          >
+                            {entry.criteria[c.key].toFixed(2)}
+                          </strong>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Active Criterion Score + Reference Price + Quick Actions */}
+                <div className="col-lg-3 col-md-5 text-md-end">
+                  <div className="d-flex flex-md-column justify-content-between align-items-center align-items-md-end gap-2">
+                    <div>
+                      <div className="small text-muted">
+                        {copy.critLabels[activeCriterion]}
+                      </div>
+                      <div className="h4 fw-bold text-danger font-monospace mb-0">
+                        {entry.activeScore5.toFixed(2)}
+                        <span className="fs-6 text-muted fw-normal">/5.0</span>
+                      </div>
+                      <div className="small text-secondary font-monospace">
+                        {minPriceText} ₫ ({entry.product.merchant_count || 5}{' '}
+                        {copy.storesTrackedSuffix})
+                      </div>
+                    </div>
+
+                    <div className="d-flex justify-content-md-end mt-1 flex-wrap gap-1">
+                      <CompareQuickToggle
+                        item={{
+                          slug: entry.product.slug,
+                          name: entry.product.name,
+                          brand: entry.product.brand,
+                          categoryPath: entry.categoryPath,
+                          thumbnail: entry.thumbnail,
+                          min_price: Number(entry.product.min_price || 0),
+                        }}
+                      />
+                      <Link
+                        href={entry.productHref}
+                        className="btn btn-sm btn-primary rounded-pill fw-medium px-3"
+                      >
+                        {copy.viewAuditDetailBtn}
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}

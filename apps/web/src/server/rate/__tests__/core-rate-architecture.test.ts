@@ -516,6 +516,43 @@ function runCoreArchitectureSuite() {
   console.log(
     '  ✅ [10/10] JReviews 5-Criteria Search/Filter, 9-Platform Merchant Explorer & Dead Strapi Template Purge passed'
   );
+
+  // 11. 4-Tier JReviews Leaderboard (/leaderboard) & Same-Category Top 3 Compare Lock
+  const leaderboardPageSource = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/app/[locale]/leaderboard/page.tsx'),
+    'utf8'
+  );
+  const leaderboardExplorerSource = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/components/leaderboard/LeaderboardExplorer.tsx'
+    ),
+    'utf8'
+  );
+  assert.ok(
+    leaderboardPageSource.includes('LeaderboardExplorer') &&
+      leaderboardPageSource.includes('ItemList'),
+    '/leaderboard page must render LeaderboardExplorer and Schema.org ItemList JSON-LD'
+  );
+  assert.ok(
+    leaderboardExplorerSource.includes('rate-scoreboard-dark') &&
+      leaderboardExplorerSource.includes('rate-score-badge-user') &&
+      leaderboardExplorerSource.includes('rate-score-badge-expert') &&
+      leaderboardExplorerSource.includes(
+        '/compare?cat=${activeCategory}&slugs='
+      ),
+    'LeaderboardExplorer must follow DESIGN.md v3.0 Dual-Rating tokens and lock 1-click Top 3 compare to activeCategory'
+  );
+  for (const locale of ['vi', 'en', 'cs'] as const) {
+    const dict = getRateCopy(locale);
+    assert.ok(
+      dict.nav.leaderboard && dict.nav.leaderboard.length > 0,
+      `Dictionary for ${locale} must define nav.leaderboard`
+    );
+  }
+  console.log(
+    '  ✅ [11/11] 4-Tier JReviews Dual-Rating Leaderboard (/leaderboard) & Same-Category Top 3 Compare Lock passed'
+  );
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
 
