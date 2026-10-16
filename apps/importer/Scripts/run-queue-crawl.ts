@@ -36,7 +36,9 @@ function killCdpBrowser(): void {
       `powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \\"Name='chrome.exe'\\" | Where-Object { $_.CommandLine -like '*remote-debugging-port=9222*' -and $_.CommandLine -notlike '*--type=*' -and ($_.CommandLine -like '*chrome_cdp_profiles*' -or $_.CommandLine -like '*chrome_bot*') } | ForEach-Object { taskkill /PID $_.ProcessId /T /F 2>&1 | Out-Null }"`,
       { stdio: 'ignore' }
     );
-  } catch {}
+  } catch {
+    // No matching Chrome process to kill.
+  }
 }
 
 async function main() {
@@ -74,14 +76,21 @@ async function main() {
       const http = await import('node:http');
       const proc = spawn(
         'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-        ['--remote-debugging-port=9222', `--user-data-dir=${PROFILE_DIR}`, '--no-first-run', '--no-default-browser-check'],
+        [
+          '--remote-debugging-port=9222',
+          `--user-data-dir=${PROFILE_DIR}`,
+          '--no-first-run',
+          '--no-default-browser-check',
+        ],
         { detached: true, stdio: 'ignore' }
       );
       proc.unref();
       for (let i = 0; i < 20; i++) {
-        await new Promise((r) => setTimeout(r, 500));
-        chromeUp = await new Promise<boolean>((resolve) => {
-          http.get(`${CDP}/json/version`, (res) => resolve(res.statusCode === 200)).on('error', () => resolve(false));
+        await new Promise(r => setTimeout(r, 500));
+        chromeUp = await new Promise<boolean>(resolve => {
+          http
+            .get(`${CDP}/json/version`, res => resolve(res.statusCode === 200))
+            .on('error', () => resolve(false));
         });
         if (chromeUp) break;
       }
@@ -114,7 +123,13 @@ async function main() {
   try {
     const b = await chromium.connectOverCDP(CDP);
     const ctx = b.contexts()[0];
-    const scraper = new ShopeeScraper({ cdpEndpoint: CDP, maxReviews: 10, timeoutMs: 90000, proxy: use4g, autoRotateOnBlock: true });
+    const scraper = new ShopeeScraper({
+      cdpEndpoint: CDP,
+      maxReviews: 10,
+      timeoutMs: 90000,
+      proxy: use4g,
+      autoRotateOnBlock: true,
+    });
     const pipeline = new ShopeeIngestionPipeline();
     await pipeline.init();
 
@@ -127,13 +142,16 @@ async function main() {
       maxJobs,
       idlePollMs: 30000,
       maxIdlePolls: 4,
-      scrape: async (job) => {
+      scrape: async job => {
         const url = job.target_url;
         if (!url) throw new Error('job has no target_url');
         // Human-like warm-up FIRST (cold PDP jump is what risk control flags).
         const probe = await ctx.newPage();
         try {
-          await probe.goto('https://shopee.vn/samsung_official_store', { waitUntil: 'domcontentloaded', timeout: 60000 });
+          await probe.goto('https://shopee.vn/samsung_official_store', {
+            waitUntil: 'domcontentloaded',
+            timeout: 60000,
+          });
           await probe.waitForTimeout(3000);
           await probe.evaluate(() => window.scrollBy({ top: 800, behavior: 'smooth' }));
           await probe.waitForTimeout(1000);
@@ -150,7 +168,10 @@ async function main() {
     console.log(`[Run] worker finished, processed=${processed}`);
   } finally {
     try {
-      const { error: finErr } = await db.rpc('finish_crawl_run', { p_run_id: runId, p_stats: { processed } });
+      const { error: finErr } = await db.rpc('finish_crawl_run', {
+        p_run_id: runId,
+        p_stats: { processed },
+      });
       if (finErr) console.warn(`[Run] finish_crawl_run failed: ${finErr.message}`);
     } catch (e: any) {
       console.warn(`[Run] finish_crawl_run threw: ${e.message}`);
@@ -162,7 +183,7 @@ async function main() {
   process.exit(0);
 }
 
-main().catch((e) => {
+main().catch(e => {
   console.error('[Run] FATAL:', e.message);
   process.exit(1);
 });

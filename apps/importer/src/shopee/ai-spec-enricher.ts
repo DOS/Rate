@@ -7,13 +7,7 @@ import {
 import type { NormalizedProductCandidate } from './product-normalizer.js';
 
 export type SupportedAiProvider =
-  | 'openai'
-  | 'dos-ai'
-  | 'gemini'
-  | 'deepseek'
-  | 'groq'
-  | 'openrouter'
-  | 'ollama';
+  'openai' | 'dos-ai' | 'gemini' | 'deepseek' | 'groq' | 'openrouter' | 'ollama';
 
 export interface AiSpecEnricherConfig {
   provider?: SupportedAiProvider;
@@ -273,10 +267,7 @@ export class AiSpecEnricher {
     ).replace(/\/+$/, '');
 
     this.model =
-      config.model ||
-      process.env.AI_MODEL ||
-      process.env.OPENAI_MODEL ||
-      defaults.defaultModel;
+      config.model || process.env.AI_MODEL || process.env.OPENAI_MODEL || defaults.defaultModel;
 
     this.timeoutMs = config.timeoutMs ?? Number(process.env.AI_TIMEOUT_MS || 25000);
     this.temperature = config.temperature ?? 0.1;
@@ -313,7 +304,12 @@ export class AiSpecEnricher {
     return this.apiKey.length > 0;
   }
 
-  public getProviderInfo(): { provider: SupportedAiProvider; model: string; baseUrl: string; configured: boolean } {
+  public getProviderInfo(): {
+    provider: SupportedAiProvider;
+    model: string;
+    baseUrl: string;
+    configured: boolean;
+  } {
     return {
       provider: this.provider,
       model: this.model,
@@ -433,7 +429,7 @@ REQUIRED JSON SCHEMA:
     }
   },
   "key_specs": {
-    "screen": "string (short summary, e.g. '6.8\" Dynamic AMOLED 2X 120Hz')",
+    "screen": "string (short summary, e.g. '6.8" Dynamic AMOLED 2X 120Hz')",
     "chip": "string (short summary, e.g. 'Snapdragon 8 Gen 3')",
     "camera": "string (short summary, e.g. '200MP + 50MP + 12MP + 10MP')",
     "battery": "string (short summary, e.g. '5000 mAh (45W)')",
@@ -568,14 +564,10 @@ REQUIRED JSON SCHEMA:
         null;
 
       const batteryMah =
-        toNumberOrUndefined(parsedJson.battery_mah) ??
-        specifications.battery?.capacity_mah ??
-        null;
+        toNumberOrUndefined(parsedJson.battery_mah) ?? specifications.battery?.capacity_mah ?? null;
 
       const has5g =
-        toBooleanOrUndefined(parsedJson.has_5g) ??
-        specifications.cellular?.has_5g ??
-        true;
+        toBooleanOrUndefined(parsedJson.has_5g) ?? specifications.cellular?.has_5g ?? true;
 
       if (specifications.hardware) {
         if (ramGb !== null) specifications.hardware.ram_gb = ramGb;

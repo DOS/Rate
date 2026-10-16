@@ -1095,16 +1095,16 @@ export class ProductNormalizer {
     } else if (ramPhrases.length === 0 && claimable.filter(t => !t.claimed).length === 2) {
       const [first, second] = claimable.filter(t => !t.claimed);
       const between = title.slice(first.index + first.raw.length, second.index);
-      if (first.value <= 32 && second.value >= 64 && /^[\s\/\-]+$/.test(between)) {
+      if (first.value <= 32 && second.value >= 64 && /^[\s/-]+$/.test(between)) {
         first.claimed = true;
       }
     }
 
     const storageCandidates = claimable.filter(t => !t.claimed);
 
-    const romExplicit = title.match(/(?:ROM|bộ nhớ trong)\s*[:\-]?\s*(\d+(?:[.,]\d+)?)\s*(TB|GB)/i);
+    const romExplicit = title.match(/(?:ROM|bộ nhớ trong)\s*[:-]?\s*(\d+(?:[.,]\d+)?)\s*(TB|GB)/i);
     const romLoose = title.match(
-      /dung lượng\s*[:\-]?\s*(\d+(?:[.,]\d+)?)\s*(TB|GB)(?!\s*(?:RAM|bộ\s*nhớ\s*RAM|dung\s*lượng\s*RAM))/i
+      /dung lượng\s*[:-]?\s*(\d+(?:[.,]\d+)?)\s*(TB|GB)(?!\s*(?:RAM|bộ\s*nhớ\s*RAM|dung\s*lượng\s*RAM))/i
     );
 
     const baseKey = `${slugify(brand)}:${slugify(model)}`;
