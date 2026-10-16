@@ -70,7 +70,7 @@ export const EXTENSION_CAPABILITY_MATRIX: Record<
     lookup: true,
     exactItemMatch: true,
     crossCatalogMatch: true,
-    crowdVerifyQueue: false,
+    crowdVerifyQueue: true,
   },
   cellphones: {
     platform: 'cellphones',

@@ -1038,12 +1038,12 @@ async function runBackfill() {
       `Master product ${row.name} (${row.model_key}) is missing camera.second_camera`
     );
     assert.ok(
-      Number(row.merchant_count) >= 9,
-      `Master product ${row.name} (${row.model_key}) must have >= 9 cross-platform offers (got ${row.merchant_count})`
+      Number(row.merchant_count) >= 10,
+      `Master product ${row.name} (${row.model_key}) must have >= 10 cross-platform offers (got ${row.merchant_count})`
     );
     assert.ok(
-      Number(row.authentic_review_count) >= 13,
-      `Master product ${row.name} (${row.model_key}) must have >= 13 authentic reviews (got ${row.authentic_review_count})`
+      Number(row.authentic_review_count) >= 15,
+      `Master product ${row.name} (${row.model_key}) must have >= 15 authentic reviews (got ${row.authentic_review_count})`
     );
     assert.ok(
       Number(row.user_rating_weighted) >= 4.5,

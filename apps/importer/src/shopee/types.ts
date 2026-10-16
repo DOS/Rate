@@ -8,6 +8,7 @@ export type SupportedEcommercePlatform =
   | 'shopee'
   | 'lazada'
   | 'tiki'
+  | 'tiktok'
   | 'cellphones'
   | 'tgdd'
   | 'fptshop'

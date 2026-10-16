@@ -1,9 +1,9 @@
 # 🗺️ Rate Platform Roadmap - Kiến Trúc Zero-Strapi & Open-Core 2026
 
-> **Cập nhật lần cuối:** 15/10/2026  
+> **Cập nhật lần cuối:** 16/10/2026  
 > **Tech Stack chuẩn hóa:** TypeScript 7.0.2 + Next.js 16.3.8 + React 19.3 + Pure PostgreSQL 17 (Supabase Cloud `rate` schema) + Open-Core 2 Repositories (`DOS/Rate` & `DOS/Rate-Services`)  
 > **GitHub Project Board (Multi-Agent Queue):** [https://github.com/orgs/DOS/projects/9](https://github.com/orgs/DOS/projects/9)  
-> **Trạng thái hiện tại:** Đã hoàn thành 100% toàn bộ Lộ trình Phase 1, Phase 2, Phase 3 (3.1 -> 3.3), Phase 4 (4.1 -> 4.22) & Phase 5 (5.1 -> 5.5)
+> **Trạng thái hiện tại:** Đã hoàn thành 100% toàn bộ Lộ trình Phase 1, Phase 2, Phase 3 (3.1 -> 3.3), Phase 4 (4.1 -> 4.23) & Phase 5 (5.1 -> 5.8)
 
 ---
 
@@ -13,12 +13,12 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc **4 T�
 
 1. **Tầng 1 - Web BFF & REST API v1 (`apps/web` trong `DOS/Rate`):**
    - Giao diện **Next.js 16.3.8** (App Router + Turbopack) + **React 19.3** + **Bootstrap 5.3.8** + **`next-intl`** (`vi` mặc định tại `/`, `en`, `cs`).
-   - Tầng Server Data (`apps/web/src/server/rate/`) tích hợp `React.cache()` deduplication và cung cấp đầy đủ các endpoints REST JSON (`/api/v1/rate/stats`, `/api/v1/rate/products`, `/api/v1/rate/products/[slug]`, `/api/v1/rate/compare`, `/api/v1/rate/lookup`, `/api/v1/rate/inspect`, `/api/v1/rate/merchants`, `/api/v1/rate/merchants/[id]`, `/api/v1/rate/reviews`, `/api/reviews/[id]/vote`, `/api/v1/rate/extension/lookup`, `/api/v1/rate/extension/ingest`).
+   - Tầng Server Data (`apps/web/src/server/rate/`) tích hợp `React.cache()` deduplication và cung cấp đầy đủ các endpoints REST JSON (`/api/v1/rate/stats`, `/api/v1/rate/products`, `/api/v1/rate/products/[slug]`, `/api/v1/rate/compare`, `/api/v1/rate/lookup`, `/api/v1/rate/inspect`, `/api/v1/rate/merchants`, `/api/v1/rate/merchants/[id]`, `/api/v1/rate/reviews`, `/api/reviews/[id]/vote`, `/api/v1/rate/watchlist`, `/api/v1/rate/extension/lookup`, `/api/v1/rate/extension/ingest`).
 2. **Tầng 2 - Open-Core Intelligence Engine (`apps/importer` & `packages/shared-data` trong `DOS/Rate`):**
    - Chuẩn hóa **10 Field Groups** (`specs.schema.ts` với Zod `^3.25.76`).
    - Bộ não `ProductNormalizer`, `EntityMatcher` (3-Tier Dedupe), `AiSpecEnricher` (đa LLM OpenAI-compatible) và `AiReviewAnalyzer` (lọc Seeding/Spam xu + tính điểm rủi ro kép `dosafe_risk_score` và `review_risk_score`).
 3. **Tầng 3 - Private Anti-Detect Scraper & Queue Worker (`DOS/Rate-Services`):**
-   - Chứa Playwright Stealth, giải Captcha (`shopee-captcha-solver.ts`), xoay IP `mproxy.vn` (`proxy-manager.ts`), bộ định tuyến cào đa sàn 5 nền tảng (`MultiPlatformScraper`: Shopee, Lazada, Tiki, CellphoneS, Thế Giới Di Động) và `queue-worker.ts` chạy định kỳ trên GitHub Actions Enterprise.
+   - Chứa Playwright Stealth, giải Captcha (`shopee-captcha-solver.ts`), xoay IP `mproxy.vn` (`proxy-manager.ts`), bộ định tuyến cào đa sàn **10/10 nền tảng** (`MultiPlatformScraper`: Shopee, Lazada, Tiki, TikTok Shop, CellphoneS, Thế Giới Di Động, FPT Shop, Hoàng Hà Mobile, Di Động Việt, Phong Vũ), bộ đánh giá cảnh báo giá tự động (`PriceAlertEvaluator`) và `queue-worker.ts` chạy định kỳ trên GitHub Actions Enterprise.
 4. **Tầng 4 - Database, Queue & Trigger Engine (`Supabase Cloud PostgreSQL 17` - Schema `rate`):**
    - Sổ cái migration duy nhất tại `DOS-Me/supabase/migrations/`.
    - Mô hình sản phẩm 2 tầng (`rate.master_products` + `rate.products`), lịch sử giá chống trùng (`rate.price_history`), và hệ thống đánh giá kép JReviews (`rate.reviews`, `rate.review_flags`, `rate.review_votes`).
@@ -113,12 +113,12 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc **4 T�
   - Tải và lưu trữ nội bộ **22/22 ảnh thiết bị chuẩn studio** tại `apps/web/public/img/devices/<slug>.jpg` kết hợp cơ chế tự phục hồi ảnh `resolveProductImageUrl` trong `normalizeMasterProductRow`, `compare-tray.ts` và `watchlist-store.ts` (chấm dứt 100% lỗi gãy ảnh do CDN ngoài chặn hotlink).
   - Khóa chặt **So sánh Cùng Ngành hàng (`Same-Category Comparison Lock`)** từ tầng dữ liệu (`compareMasterProducts`), khay nổi (`compare-tray.ts`), trang `/compare` (thanh chuyển đổi 5 ngành hàng độc lập + lọc tìm kiếm theo đúng `category`) đến danh mục 5 ngành hàng và `/watchlist` (không bao giờ trộn lẫn Điện thoại với Tai nghe/Laptop/Tablet/Smartwatch).
   - Tái cấu trúc `ProductDetailView`, Trang chủ, 5 trang Danh mục ngành hàng, `/merchants/[id]`, `/watchlist` và `/inspect` theo triết lý **Rating & Review-First**: đưa Bảng Điểm Kép JReviews (`User Rating / 5.0` + `Expert Score / 10` + 5 thanh điểm tiêu chí + kiểm toán AI Seeding) lên vị trí trung tâm, xếp `JReviewsSection` làm Khu vực #1, `10 Nhóm Thông Số Kỹ Thuật` làm Khu vực #2, và chuyển bảng giá các sàn xuống Khu vực #3 dưới dạng bảng đối chiếu nguồn dữ liệu trung lập (`"Đối chiếu nguồn ↗"`).
-- [x] **4.23. Nâng Cấp `JReviewsSection` (Ma Trận 5 Tiêu Chí + Tìm Kiếm Từ Khóa + Lọc Sao), Mở Rộng `/merchants` Lên 9 Sàn & Dọn Sạch 55 File Rác Template Strapi (Issue #42 & Issue #43):**
+- [x] **4.23. Nâng Cấp `JReviewsSection` (Ma Trận 5 Tiêu Chí + Tìm Kiếm Từ Khóa + Lọc Sao), Mở Rộng `/merchants` Lên 10 Sàn & Dọn Sạch 55 File Rác Template Strapi (Issue #42 & Issue #43):**
   - Bổ sung thanh điểm trung bình 5 tiêu chí JReviews (`criteriaAverages`), ô tìm kiếm nội dung bình luận (`searchKeyword`), bộ lọc theo mức sao (`starFilter`) và giao diện `.rate-scoreboard-dark` / `.rate-card` trong `JReviewsSection.tsx`.
-  - Mở rộng `MerchantDirectoryExplorer.tsx` hỗ trợ đủ **9 nền tảng** (`shopee`, `lazada`, `tiki`, `cellphones`, `tgdd`, `fptshop`, `hoangha`, `didongviet`, `phongvu`), đồng bộ `.rate-card` + `tabular-nums`, và xuất `locked_category` + `excluded_cross_category_slugs` trên `GET /api/v1/rate/compare`.
+  - Mở rộng `MerchantDirectoryExplorer.tsx` hỗ trợ đủ **10/10 nền tảng** (`shopee`, `lazada`, `tiki`, `tiktok`, `cellphones`, `tgdd`, `fptshop`, `hoangha`, `didongviet`, `phongvu`), đồng bộ `.rate-card` + `tabular-nums`, và xuất `locked_category` + `excluded_cross_category_slugs` trên `GET /api/v1/rate/compare`.
   - Xóa vĩnh viễn **55 file rác** của bộ khung Strapi cũ (`components/forms/*`, `components/typography/*`, `components/ui/*`, 15 file không dùng trong `components/elementary/*` và thư mục trùng lặp `app/[locale]/style/*`) kèm bài kiểm thử bảo vệ `[10/10]` trong `core-rate-architecture.test.ts`.
 
-### ✅ Phase 5: Mở Rộng Đa Sàn & Browser Extension MV3 (Đã hoàn thành 100%)
+### ✅ Phase 5: Mở Rộng Đa Sàn 10/10 Nền Tảng, Browser Extension MV3 & Tự Động Hóa Cảnh Báo Giá (Đã hoàn thành 100%)
 
 - [x] **5.1. Mở rộng Anti-Detect Scraper sang Lazada, Tiki, CellphoneS, Thế Giới Di Động (Issue #1 bên `DOS/Rate-Services`):**
   - Xây dựng bộ 4 Scrapers chuyên biệt (`LazadaScraper`, `TikiScraper`, `CellphonesScraper`, `TgddScraper`) cùng bộ định tuyến tự động `MultiPlatformScraper` (`detectPlatformFromUrl`) và `queue-worker` đa nền tảng.
@@ -138,3 +138,9 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc **4 T�
   - Xây dựng `RetailChainScraper` (`FptShopScraper`, `HoangHaScraper`, `DiDongVietScraper`, `PhongVuScraper` trong `src/scrapers/retail-chain-scraper.ts`) bóc tách giá bán, giá gốc gạch ngang, biến thể dung lượng/màu sắc, thông số kỹ thuật và đánh giá người mua từ `application/ld+json`, `__NEXT_DATA__` và DOM; tích hợp vào `MultiPlatformScraper`, `MultiPlatformSearchDiscovery` và `SmartJobSeeder`.
   - Bật `crowdVerifyQueue: true` trên `apps/web/src/server/rate/extension.ts` cho toàn bộ **9/10 nền tảng** có Worker tự động (`shopee`, `lazada`, `tiki`, `cellphones`, `tgdd`, `fptshop`, `hoangha`, `didongviet`, `phongvu`).
   - Mở rộng `SEED_MERCHANTS` lên **16 đại lý/gian hàng chính hãng** và chạy `--backfill` phủ đầy **9 nền tảng** cho toàn bộ 22 `master_products` (**199 listings**, **427 đánh giá JReviews**, **1.103 mốc lịch sử giá 60 ngày**).
+- [x] **5.7. Hoàn Thiện 10/10 Nền Tảng Với `TikTokShopScraper`, Crowd-Verify Queue 10/10 & Phủ Đầy 10 Sàn Cho 22 Sản Phẩm Gốc (Issue #6 bên `DOS/Rate-Services` & Issue #44 bên `DOS/Rate`):**
+  - Xây dựng `TikTokShopScraper` (`src/scrapers/tiktok-scraper.ts`) hỗ trợ bóc tách JSON-LD, `__UNIVERSAL_DATA_FOR_REHYDRATION__` / `SIGI_STATE`, DOM và Playwright Chromium fallback; tích hợp `tiktok` vào `MultiPlatformScraper`, `MultiPlatformSearchDiscovery` và `SmartJobSeeder` (đạt **10/10 nền tảng**).
+  - Bật `crowdVerifyQueue: true` cho `tiktok` trong `apps/web/src/server/rate/extension.ts` (đạt **10/10 nền tảng** có Worker tự động), mở rộng `SEED_MERCHANTS` lên **18 gian hàng chính hãng** (thêm `Viettel Store AAR TikTok Shop Mall` & `Samsung Vietnam Official TikTok Shop Mall`), và chạy `--backfill` phủ kín **10/10 nền tảng** cho toàn bộ 22 `master_products` (**221 listings**, **471 đánh giá JReviews**, **1.235 mốc lịch sử giá 60 ngày**).
+- [x] **5.8. Bộ Đánh Giá Cảnh Báo Giá Tự Động (`PriceAlertEvaluator`) & API Đối Chiếu Deal Thấp Nhất 10 Sàn Trên `/watchlist` (Issue #7 bên `DOS/Rate-Services` & Issue #45 bên `DOS/Rate`):**
+  - Xây dựng `PriceAlertEvaluator` (`src/scrapers/price-alert-evaluator.ts`) tự động đối chiếu các cảnh báo giá đang hoạt động trong `rate.price_alerts` với `rate.master_products.min_price` và gian hàng giá thấp nhất trên 10 sàn sau mỗi chu kỳ cào dữ liệu, cập nhật `last_triggered_at` (cooldown 24h) và bắn webhook thông báo bảo mật PII (`maskEmailForLog`).
+  - Nâng cấp `GET /api/v1/rate/watchlist?slugs=...` và `POST /api/v1/rate/watchlist` trả về thông tin deal tốt nhất (`best_offer`, `offer_platforms`, `platform_count`) cùng dải hiển thị **Deal Rẻ Nhất Đa Sàn** trực tiếp trên từng thẻ sản phẩm của `WatchlistWorkspace.tsx`.

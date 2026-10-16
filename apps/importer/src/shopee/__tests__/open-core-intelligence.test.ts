@@ -212,13 +212,14 @@ function runSuite() {
   }
   console.log('  ✅ [5/6] Flagship Seed Dataset Multi-Brand Coverage (>=3 per Category) passed');
 
-  // 6. 9-Platform Merchant Coverage & Cross-Platform Offer/Review Synthesis
-  assert.ok(SEED_MERCHANTS.length >= 16, 'Expected >= 16 multi-platform seed merchants');
+  // 6. 10-Platform Merchant Coverage & Cross-Platform Offer/Review Synthesis
+  assert.ok(SEED_MERCHANTS.length >= 18, 'Expected >= 18 multi-platform seed merchants');
   const merchantPlatforms = new Set(SEED_MERCHANTS.map(m => m.platform));
   for (const plat of [
     'shopee',
     'lazada',
     'tiki',
+    'tiktok',
     'cellphones',
     'tgdd',
     'fptshop',
@@ -246,10 +247,20 @@ function runSuite() {
       ram: '8GB',
     },
   });
-  assert.equal(synthOffers.length, 8, 'Should synthesize 8 missing platform offers');
+  assert.equal(synthOffers.length, 9, 'Should synthesize 9 missing platform offers');
   assert.deepEqual(
     synthOffers.map(o => o.platform),
-    ['lazada', 'tiki', 'cellphones', 'tgdd', 'fptshop', 'hoangha', 'didongviet', 'phongvu']
+    [
+      'lazada',
+      'tiki',
+      'tiktok',
+      'cellphones',
+      'tgdd',
+      'fptshop',
+      'hoangha',
+      'didongviet',
+      'phongvu',
+    ]
   );
   for (const offer of synthOffers) {
     assert.ok(
@@ -259,7 +270,7 @@ function runSuite() {
     assert.ok(offer.reviews.length >= 2, 'Each synthesized offer must have multi-platform reviews');
   }
   console.log(
-    '  ✅ [6/6] 9-Platform Cross-Offer, 60-Day Price History & Multi-Review Synthesis passed'
+    '  ✅ [6/6] 10-Platform Cross-Offer, 60-Day Price History & Multi-Review Synthesis passed'
   );
   console.log('🎉 All @repo/crawlers Open-Core Intelligence tests passed!');
 }

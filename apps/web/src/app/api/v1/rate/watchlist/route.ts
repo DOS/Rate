@@ -1,6 +1,142 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getRateClient } from '@repo/shared-data';
-import { getCachedMasterProductBySlug } from '@/server/rate';
+import {
+  getCachedMasterProductBySlug,
+  getCachedMasterProductOffers,
+} from '@/server/rate';
+
+export interface WatchlistBestOffer {
+  id: string;
+  title: string;
+  price: number;
+  original_price: number;
+  url: string;
+  platform: string;
+  merchant_name: string;
+  is_official_mall: boolean;
+}
+
+function selectBestOfferFromListings(
+  offers: Awaited<ReturnType<typeof getCachedMasterProductOffers>>
+): { bestOffer: WatchlistBestOffer | null; offerPlatforms: string[] } {
+  const valid = offers.filter(
+    (o) => Number(o.stock ?? 1) > 0 && Number(o.price_current) > 0
+  );
+  const platforms = Array.from(
+    new Set(
+      valid
+        .map((o) =>
+          String(o.merchant?.platform || o.platform || 'shopee').toLowerCase()
+        )
+        .filter(Boolean)
+    )
+  );
+  if (valid.length === 0) {
+    return { bestOffer: null, offerPlatforms: platforms };
+  }
+
+  const sorted = [...valid].sort((a, b) => {
+    const diff = Number(a.price_current) - Number(b.price_current);
+    if (diff !== 0) return diff;
+    const mallA = a.merchant?.is_official ? 1 : 0;
+    const mallB = b.merchant?.is_official ? 1 : 0;
+    return mallB - mallA;
+  });
+
+  const best = sorted[0]!;
+  return {
+    bestOffer: {
+      id: best.id,
+      title: best.title,
+      price: Number(best.price_current),
+      original_price: Number(best.price_original || best.price_current),
+      url: best.url,
+      platform: String(
+        best.merchant?.platform || best.platform || 'shopee'
+      ).toLowerCase(),
+      merchant_name: String(best.merchant?.name || 'Official Store'),
+      is_official_mall: Boolean(best.merchant?.is_official),
+    },
+    offerPlatforms: platforms,
+  };
+}
+
+/**
+ * GET /api/v1/rate/watchlist?slugs=samsung-galaxy-s24-ultra-256gb,apple-iphone-16-pro-max-256gb
+ * Evaluates live deal status across all 10 platforms for a list of watched product slugs,
+ * returning the lowest-price platform offer and multi-platform coverage metadata.
+ */
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const rawSlugs = (searchParams.get('slugs') || '').trim();
+    const slugs = Array.from(
+      new Set(
+        rawSlugs
+          .split(',')
+          .map((s) => s.trim().toLowerCase())
+          .filter(Boolean)
+      )
+    ).slice(0, 20);
+
+    if (slugs.length === 0) {
+      return NextResponse.json({
+        ok: true,
+        count: 0,
+        items: {},
+      });
+    }
+
+    const entries = await Promise.all(
+      slugs.map(async (slug) => {
+        const master = await getCachedMasterProductBySlug(slug);
+        if (!master) return null;
+        const offers = await getCachedMasterProductOffers(master.id);
+        const { bestOffer, offerPlatforms } =
+          selectBestOfferFromListings(offers);
+        const currentMinPrice = Number(
+          master.min_price || bestOffer?.price || 0
+        );
+        const currentMaxPrice = Number(
+          master.max_price || currentMinPrice || 0
+        );
+
+        return [
+          slug,
+          {
+            master_product_id: master.id,
+            slug: master.slug,
+            name: master.name,
+            brand: master.brand,
+            current_min_price: currentMinPrice,
+            current_max_price: currentMaxPrice,
+            merchant_count: Number(master.merchant_count || offers.length || 1),
+            platform_count: offerPlatforms.length,
+            offer_platforms: offerPlatforms,
+            best_offer: bestOffer,
+          },
+        ] as const;
+      })
+    );
+
+    const items: Record<string, NonNullable<(typeof entries)[number]>[1]> = {};
+    for (const entry of entries) {
+      if (entry) {
+        items[entry[0]] = entry[1];
+      }
+    }
+
+    return NextResponse.json({
+      ok: true,
+      count: Object.keys(items).length,
+      items,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : 'Internal server error';
+    return NextResponse.json({ ok: false, error: message }, { status: 500 });
+  }
+}
 
 /**
  * POST /api/v1/rate/watchlist
@@ -48,7 +184,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const currentMinPrice = Number(masterProduct.min_price || 0);
+    const offers = await getCachedMasterProductOffers(masterProduct.id);
+    const { bestOffer, offerPlatforms } = selectBestOfferFromListings(offers);
+    const currentMinPrice = Number(
+      masterProduct.min_price || bestOffer?.price || 0
+    );
     const isReached = currentMinPrice > 0 && currentMinPrice <= targetPrice;
 
     try {
@@ -68,7 +208,11 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({
           ok: true,
           persistedInCloud: true,
-          data: rpcData,
+          data: {
+            ...(typeof rpcData === 'object' ? rpcData : {}),
+            best_offer: bestOffer,
+            offer_platforms: offerPlatforms,
+          },
         });
       }
     } catch {
@@ -85,6 +229,8 @@ export async function POST(request: NextRequest) {
         target_price: targetPrice,
         current_min_price: currentMinPrice,
         is_reached: isReached,
+        best_offer: bestOffer,
+        offer_platforms: offerPlatforms,
         updated_at: new Date().toISOString(),
       },
     });
