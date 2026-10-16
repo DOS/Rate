@@ -9,6 +9,9 @@ import {
   type UrlInspectionResult,
 } from '@/lib/rate-api';
 import CompareQuickToggle from '@/components/compare/CompareQuickToggle';
+import RadarBadge from '@/components/radar/RadarBadge';
+import { useDealRadarIndex } from '@/components/radar/use-deal-radar';
+import { getRadarSignal } from '@/lib/deal-radar';
 import {
   BsArrowRight,
   BsCheckCircleFill,
@@ -62,6 +65,7 @@ export default function HeroSearchInspector({
   initialMerchants,
 }: HeroSearchInspectorProps) {
   const router = useRouter();
+  const radarIndex = useDealRadarIndex();
   const [mode, setMode] = useState<'search' | 'inspect'>('search');
   const [query, setQuery] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -412,6 +416,9 @@ export default function HeroSearchInspector({
                                     ★ {rating.toFixed(1)}
                                   </span>
                                 )}
+                                <RadarBadge
+                                  signal={getRadarSignal(radarIndex, item.slug)}
+                                />
                               </div>
                             </div>
                           </Link>
@@ -639,7 +646,9 @@ export default function HeroSearchInspector({
 
                           <h4 className="h5 fw-bold mb-1">
                             <Link
-                              href={getMasterProductHref(inspectResult.masterProduct)}
+                              href={getMasterProductHref(
+                                inspectResult.masterProduct
+                              )}
                               className="text-dark text-decoration-none"
                             >
                               {inspectResult.masterProduct.name}
@@ -711,7 +720,9 @@ export default function HeroSearchInspector({
 
                         <div className="d-flex flex-wrap gap-2">
                           <Link
-                            href={getMasterProductHref(inspectResult.masterProduct)}
+                            href={getMasterProductHref(
+                              inspectResult.masterProduct
+                            )}
                             className="btn btn-primary btn-sm rounded-pill fw-semibold flex-grow-1 px-3"
                           >
                             Xem 10 Nhóm Thông Số &amp; Lịch Sử Giá{' '}
@@ -719,7 +730,7 @@ export default function HeroSearchInspector({
                           </Link>
                           <Link
                             href={`/inspect?q=${encodeURIComponent(inspectQuery)}`}
-                            className="btn btn-outline-danger btn-sm rounded-pill px-3 fw-medium"
+                            className="btn btn-outline-danger btn-sm rounded-pill fw-medium px-3"
                           >
                             🔬 Báo cáo Kiểm toán
                           </Link>

@@ -1678,8 +1678,69 @@ function runCoreArchitectureSuite() {
     /categorySlug: 'all',[\s\S]{0,200}limit: 50/.test(dealsPageRadarLimitSrc),
     '/deals must request the maximum radar limit so every ranked card gets its badge (#116)'
   );
+  const homePageRadarCardSrc = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/app/[locale]/page.tsx'),
+    'utf8'
+  );
+  const heroSearchRadarSrc = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/components/home/HeroSearchInspector.tsx'),
+    'utf8'
+  );
+  assert.ok(
+    homePageRadarCardSrc.includes('RadarBadge') &&
+      homePageRadarCardSrc.includes('buildRadarIndex') &&
+      /categorySlug: 'all', limit: 50/.test(homePageRadarCardSrc),
+    'Homepage featured product cards must render RadarBadge from full catalog index (#117)'
+  );
+  assert.ok(
+    heroSearchRadarSrc.includes('RadarBadge') &&
+      heroSearchRadarSrc.includes('useDealRadarIndex'),
+    'HeroSearchInspector search cards must render RadarBadge (#117)'
+  );
+  const productRouteSrc = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/app/api/v1/rate/products/[slug]/route.ts'
+    ),
+    'utf8'
+  );
+  const productShareSrc = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/components/leaderboard/ProductShareAuditButton.tsx'
+    ),
+    'utf8'
+  );
+  const compareWorkspaceRadarExportSrc = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/components/compare/CompareWorkspace.tsx'),
+    'utf8'
+  );
+  const versusScoreboardRadarExportSrc = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/components/compare/VersusInteractiveScoreboard.tsx'
+    ),
+    'utf8'
+  );
+  assert.ok(
+    productRouteSrc.includes('computeProductRadarSignal') &&
+      productRouteSrc.includes('radarSignal'),
+    'GET /api/v1/rate/products/[slug] must include product-level radarSignal (#117)'
+  );
+  assert.ok(
+    productShareSrc.includes('RADAR_CSV_HEADERS') &&
+      productShareSrc.includes('radarExportFields'),
+    'ProductShareAuditButton must include product-level Deal Radar in exports (#117)'
+  );
+  assert.ok(
+    compareWorkspaceRadarExportSrc.includes('radarMarkdownCell') &&
+      compareWorkspaceRadarExportSrc.includes('dealRadar: radarExportFields') &&
+      versusScoreboardRadarExportSrc.includes('radarMarkdownCell') &&
+      versusScoreboardRadarExportSrc.includes('dealRadar: radarExportFields'),
+    'CompareWorkspace and VersusInteractiveScoreboard exports must include Deal Radar (#117)'
+  );
   console.log(
-    '  ✅ [37/37] Per-product Radar on ProductDetailView, catalog and /deals cards no longer limited to the top-N feed (#106, #116) passed'
+    '  ✅ [37/37] Per-product Radar across ProductDetailView, Homepage, HeroSearchInspector, catalog, /deals, /compare, /compare/[versus] & REST API (#106, #116, #117) passed'
   );
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }

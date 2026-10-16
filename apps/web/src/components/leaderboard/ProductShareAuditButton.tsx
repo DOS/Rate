@@ -1,6 +1,13 @@
 'use client';
 
 import React, { useState } from 'react';
+import {
+  RADAR_CSV_HEADERS,
+  radarCsvCells,
+  radarExportFields,
+  radarLabel,
+  type RadarSignal,
+} from '@/lib/deal-radar';
 
 interface ProductShareAuditButtonProps {
   readonly name: string;
@@ -12,6 +19,7 @@ interface ProductShareAuditButtonProps {
   readonly minPriceVnd: number;
   readonly offerCount: number;
   readonly keySpecLine?: string;
+  readonly radarSignal?: RadarSignal;
 }
 
 export default function ProductShareAuditButton({
@@ -24,6 +32,7 @@ export default function ProductShareAuditButton({
   minPriceVnd,
   offerCount,
   keySpecLine,
+  radarSignal,
 }: ProductShareAuditButtonProps) {
   const [copiedMd, setCopiedMd] = useState(false);
   const [copiedUrl, setCopiedUrl] = useState(false);
@@ -41,6 +50,9 @@ export default function ProductShareAuditButton({
         `- **Điểm Chuyên Gia Rate Lab:** ${expertScore10.toFixed(1)}/10`,
         ...(keySpecLine ? [`- **Cấu Hình Chuẩn Hóa:** ${keySpecLine}`] : []),
         `- **Giá Tham Khảo Thấp Nhất:** ${priceStr}`,
+        ...(radarSignal
+          ? [`- **Tín Hiệu Deal Radar 60N:** ${radarLabel(radarSignal)}`]
+          : []),
         `- **Mã Định Danh Chuẩn:** \`${modelKey}\``,
         `- **Xem chi tiết 10 nhóm thông số & lịch sử giá:** ${window.location.href}`,
       ];
@@ -82,6 +94,7 @@ export default function ProductShareAuditButton({
       'Giá Thấp Nhất (VND)',
       'Số Nguồn Kiểm Định',
       'Cấu Hình Chuẩn Hóa',
+      ...(radarSignal ? RADAR_CSV_HEADERS : []),
     ];
     const row = [
       name,
@@ -93,6 +106,7 @@ export default function ProductShareAuditButton({
       minPriceVnd,
       offerCount,
       keySpecLine || '',
+      ...(radarSignal ? radarCsvCells(radarSignal) : []),
     ];
     const csvContent = `\uFEFF${headers.map(escapeCsv).join(',')}\n${row.map(escapeCsv).join(',')}`;
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -119,6 +133,7 @@ export default function ProductShareAuditButton({
         minPriceVnd,
         offerCount,
         keySpecLine: keySpecLine || null,
+        dealRadar: radarSignal ? radarExportFields(radarSignal) : null,
       },
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], {

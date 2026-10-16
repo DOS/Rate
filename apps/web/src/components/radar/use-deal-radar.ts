@@ -8,7 +8,7 @@ import {
   type RadarIndex,
 } from '@/lib/deal-radar';
 
-const RADAR_ENDPOINT = '/api/v1/rate/deals?category=all&limit=36';
+const RADAR_ENDPOINT = '/api/v1/rate/deals?category=all&limit=50';
 let radarRequest: Promise<CrossPlatformDealRadarResponse | null> | null = null;
 
 /** One network request per page load, shared by every client consumer. */
