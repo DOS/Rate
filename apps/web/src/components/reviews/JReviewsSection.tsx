@@ -599,6 +599,31 @@ export default function JReviewsSection({
     URL.revokeObjectURL(url);
   };
 
+  const handleDownloadReviewsJson = () => {
+    if (
+      typeof document === 'undefined' ||
+      filteredAndSortedReviews.length === 0
+    )
+      return;
+    const payload = {
+      source: 'Rate.vn JReviews AI-Audited Buyer Reviews',
+      productSlug: productSlug || 'audit',
+      productName,
+      exportedAt: new Date().toISOString(),
+      reviewCount: filteredAndSortedReviews.length,
+      reviews: filteredAndSortedReviews,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: 'application/json;charset=utf-8;',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `rate-jreviews-${productSlug || 'audit'}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div
       id="jreviews-section"
@@ -635,6 +660,14 @@ export default function JReviewsSection({
             data-testid="download-reviews-csv-btn"
           >
             📥 Xuất CSV đánh giá
+          </button>
+          <button
+            type="button"
+            onClick={handleDownloadReviewsJson}
+            className="btn btn-outline-secondary btn-sm rounded-pill fw-semibold px-3 py-1"
+            data-testid="download-reviews-json-btn"
+          >
+            📦 Xuất JSON
           </button>
           {masterProductId && (
             <button

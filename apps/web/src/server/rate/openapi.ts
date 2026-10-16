@@ -833,6 +833,21 @@ export function buildRateOpenApiSpec(
           },
         },
       },
+      '/api/v1/rate/openapi.json': {
+        get: {
+          operationId: 'getOpenApiSpecificationJson',
+          summary:
+            'Retrieve this OpenAPI 3.1.0 machine-readable specification (JSON)',
+          description:
+            'Returns the complete OpenAPI 3.1.0 JSON schema for all Rate.vn REST API v1 endpoints.',
+          tags: ['Platform Telemetry'],
+          responses: {
+            '200': {
+              description: 'OpenAPI 3.1.0 JSON document.',
+            },
+          },
+        },
+      },
     },
     components: {
       schemas: {

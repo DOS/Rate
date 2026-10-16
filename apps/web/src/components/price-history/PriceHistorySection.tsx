@@ -337,6 +337,30 @@ export default function PriceHistorySection({
     URL.revokeObjectURL(url);
   };
 
+  const handleDownloadPriceHistoryJson = () => {
+    if (typeof document === 'undefined' || filteredPoints.length === 0) return;
+    const payload = {
+      source: 'Rate.vn 60-Day Price History & Fake Sale Audit',
+      productName,
+      exportedAt: new Date().toISOString(),
+      currentMinPriceVnd: history.currentMinPrice,
+      lowestEverPriceVnd: history.lowestEverPrice,
+      fakeDiscountCount: history.fakeDiscountCount,
+      genuineDealCount: history.genuineDealCount,
+      offerAnalyses,
+      points: filteredPoints,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: 'application/json;charset=utf-8;',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `rate-price-history-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const activeNode =
     chartGeometry && activePointIndex != null
       ? chartGeometry.mapped[activePointIndex] ||
@@ -379,6 +403,14 @@ export default function PriceHistorySection({
             data-testid="download-price-history-csv-btn"
           >
             📥 Xuất CSV lịch sử giá 60 ngày
+          </button>
+          <button
+            type="button"
+            onClick={handleDownloadPriceHistoryJson}
+            className="btn btn-sm btn-outline-secondary rounded-pill fw-semibold px-3 py-1"
+            data-testid="download-price-history-json-btn"
+          >
+            📦 Xuất JSON
           </button>
           {history.fakeDiscountCount > 0 ? (
             <span className="badge bg-danger rounded-pill small px-3 py-2 text-white">
