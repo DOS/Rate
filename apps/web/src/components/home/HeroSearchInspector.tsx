@@ -432,7 +432,7 @@ export default function HeroSearchInspector({
                                 className="text-muted"
                                 style={{ fontSize: '0.7rem' }}
                               >
-                                {item.merchant_count || 1} nơi bán
+                                {item.merchant_count || 0} nơi bán
                               </div>
                             </div>
                             <CompareQuickToggle
@@ -642,6 +642,15 @@ export default function HeroSearchInspector({
                                 {inspectResult.discountAnalysis.badge_label}
                               </span>
                             )}
+                            <RadarBadge
+                              signal={
+                                inspectResult.radarSignal ??
+                                getRadarSignal(
+                                  radarIndex,
+                                  inspectResult.masterProduct.slug
+                                )
+                              }
+                            />
                           </div>
 
                           <h4 className="h5 fw-bold mb-1">

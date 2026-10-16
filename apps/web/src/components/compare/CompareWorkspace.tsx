@@ -1427,7 +1427,10 @@ export default function CompareWorkspace({
                                       {item.brand}
                                     </span>
                                     <span className="rate-score-badge-user">
-                                      ★ {rating > 0 ? rating.toFixed(1) : '4.8'}
+                                      ★{' '}
+                                      {rating > 0
+                                        ? rating.toFixed(1)
+                                        : 'chưa có'}
                                     </span>
                                     <span
                                       className="text-secondary fw-semibold rate-tabular"

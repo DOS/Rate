@@ -2261,7 +2261,7 @@ export async function getRatePlatformStats(): Promise<RatePlatformStats> {
   return {
     masterProductsCount: masterRows.length,
     listingsCount: prodRows.length,
-    merchantsCount: merchantsRes.count ?? 1,
+    merchantsCount: merchantsRes.count ?? 0,
     priceObservationsCount: priceHistCountRes.count ?? 0,
     totalReviewsCount: totalRev,
     authenticReviewsCount: authenticCount,
@@ -2301,6 +2301,7 @@ export interface UrlInspectionResult {
   reviewSummary: ReviewAnalysisSummary | null;
   merchantProfile: MerchantSummary | null;
   suggestions: MasterProduct[];
+  radarSignal?: import('./deal-radar').RadarSignal | null;
 }
 
 export function parseEcommerceUrlOrQuery(raw: string): ParsedEcommerceUrl {

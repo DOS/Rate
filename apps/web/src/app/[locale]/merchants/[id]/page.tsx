@@ -10,7 +10,12 @@ import {
   getCachedMerchantProfileById,
   getCrossPlatformDealRadar,
 } from '@/server/rate';
-import { selectMerchantRadar } from '@/lib/deal-radar';
+import {
+  buildRadarIndex,
+  getRadarSignal,
+  selectMerchantRadar,
+} from '@/lib/deal-radar';
+import RadarBadge from '@/components/radar/RadarBadge';
 import NavbarDarkDynamic from '../../components/navbar/NavbarDarkDynamic';
 import FooterTop from '../../components/footer-top';
 import FooterDynamic from '../../components/footer/FooterDynamic';
@@ -80,13 +85,14 @@ export default async function MerchantProfilePage({
   const lang = normalizeRateLocale(locale);
   const [merchant, dealRadar] = await Promise.all([
     getCachedMerchantProfileById(id),
-    getCrossPlatformDealRadar({ categorySlug: 'all', limit: 36 }),
+    getCrossPlatformDealRadar({ categorySlug: 'all', limit: 50 }),
   ]);
 
   if (!merchant) {
     notFound();
   }
 
+  const radarIndex = buildRadarIndex(dealRadar);
   const merchantRadar = selectMerchantRadar(dealRadar, merchant);
   const merchantGenuineDeals = merchantRadar.genuineDeals;
   const merchantFakeTraps = merchantRadar.fakeSaleTraps;
@@ -791,12 +797,20 @@ export default async function MerchantProfilePage({
                         <td>
                           {item.master_product ? (
                             <div>
-                              <Link
-                                href={`${masterBaseHref}/${item.master_product.slug}`}
-                                className="fw-semibold text-primary text-decoration-none small"
-                              >
-                                {item.master_product.name}
-                              </Link>
+                              <div className="d-flex align-items-center flex-wrap gap-1">
+                                <Link
+                                  href={`${masterBaseHref}/${item.master_product.slug}`}
+                                  className="fw-semibold text-primary text-decoration-none small"
+                                >
+                                  {item.master_product.name}
+                                </Link>
+                                <RadarBadge
+                                  signal={getRadarSignal(
+                                    radarIndex,
+                                    item.master_product.slug
+                                  )}
+                                />
+                              </div>
                               <div
                                 className="text-muted"
                                 style={{ fontSize: '0.75rem' }}

@@ -1851,7 +1851,57 @@ function runCoreArchitectureSuite() {
     'rankMasterProductsForLeaderboard must exclude unrated products (#123)'
   );
   console.log(
-    '  ✅ [39/39] Zero fabricated ratings, review counts, offer counts or expert scores when data is missing (#123) passed'
+    '  ✅ [39/40] Zero fabricated ratings, review counts, offer counts or expert scores when data is missing (#123) passed'
+  );
+
+  // 40. Unified radarSignal in inspectProductOrShopUrl, RadarBadge in HeroSearchInspector Mode 2 / DeepInspectWorkspace / MerchantProfilePage, and real catalog presets in ApiPlaygroundClient (#126)
+  const serverRateIndexSrc = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/server/rate/index.ts'),
+    'utf8'
+  );
+  const deepInspectSrc126 = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/components/inspect/DeepInspectWorkspace.tsx'
+    ),
+    'utf8'
+  );
+  const heroSearchSrc126 = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/components/home/HeroSearchInspector.tsx'),
+    'utf8'
+  );
+  const apiPlaygroundSrc126 = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/components/developers/ApiPlaygroundClient.tsx'
+    ),
+    'utf8'
+  );
+  assert.ok(
+    serverRateIndexSrc.includes('inspectProductOrShopUrlWithRadar') &&
+      serverRateIndexSrc.includes('computeProductRadarSignal'),
+    'getCachedInspectProductOrShopUrl must attach product-level radarSignal from computeProductRadarSignal (#126)'
+  );
+  assert.ok(
+    deepInspectSrc126.includes('result?.radarSignal') &&
+      deepInspectSrc126.includes('<RadarBadge signal={radarSignal} />') &&
+      !deepInspectSrc126.includes('4.8'),
+    'DeepInspectWorkspace must use result.radarSignal, render RadarBadge, and have zero 4.8 fallbacks (#126)'
+  );
+  assert.ok(
+    heroSearchSrc126.includes('inspectResult.radarSignal') &&
+      !heroSearchSrc126.includes('merchant_count || 1'),
+    'HeroSearchInspector must render RadarBadge on Mode 2 inspection card and not fall back merchant_count to 1 (#126)'
+  );
+  assert.ok(
+    !apiPlaygroundSrc126.includes('iphone-18') &&
+      apiPlaygroundSrc126.includes(
+        'apple-iphone-16-128gb-vs-apple-iphone-16-plus-256gb'
+      ),
+    'ApiPlaygroundClient presets must reference real crawled catalog slugs (#126)'
+  );
+  console.log(
+    '  ✅ [40/40] Unified radarSignal in inspectProductOrShopUrl, RadarBadge in Inspector/Merchant & real API Playground presets (#126) passed'
   );
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
