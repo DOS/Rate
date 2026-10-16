@@ -134,3 +134,6 @@ next-env.d.ts
 
 # Redis
 dump.rdb
+
+# Local crawl dumps read by src/shopee/run-ingestion-test.ts (never commit scraped data)
+Results/

@@ -1,5 +1,7 @@
 # 3-Tier Scraping Strategy
 
+> ⚠️ **Tài liệu lỗi thời (thời Strapi CMS, 2025).** Trang này mô tả crawler cũ (CheckScam, FlareSolverr, Strapi, Splink) đã bị xóa khỏi `apps/importer` ở issue #137. Engine hiện tại là `@repo/crawlers`, xem [`apps/importer/README.md`](../../../apps/importer/README.md). Scraper và queue worker nằm trong repo private `DOS/Rate-Services`.
+
 **Updated**: October 2025
 **Status**: Implemented (Tier 1 ✅, Tier 2-3 in progress)
 
@@ -37,17 +39,18 @@ Tier 3: Paid APIs (Reliable, ~$0.05/product)
 
 ## Tier Comparison
 
-| Tier | Method | Cost/Product | Quality | Speed | Anti-Scrape | Use Case |
-|------|--------|--------------|---------|-------|-------------|----------|
-| **Tier 1** | Direct scraping | $0 | ⭐⭐⭐⭐⭐ | Fast | ❌ Some sites block | Known sites (PhoneArena, GSMArena) |
-| **Tier 2** | LLM extraction | ~$0.01 | ⭐⭐⭐⭐⭐ | Medium | ✅ Bypass | Unknown sites, fallback |
-| **Tier 3** | Paid APIs | ~$0.05 | ⭐⭐⭐⭐⭐ | Fast | ✅ Official | Critical products, last resort |
+| Tier       | Method          | Cost/Product | Quality    | Speed  | Anti-Scrape         | Use Case                           |
+| ---------- | --------------- | ------------ | ---------- | ------ | ------------------- | ---------------------------------- |
+| **Tier 1** | Direct scraping | $0           | ⭐⭐⭐⭐⭐ | Fast   | ❌ Some sites block | Known sites (PhoneArena, GSMArena) |
+| **Tier 2** | LLM extraction  | ~$0.01       | ⭐⭐⭐⭐⭐ | Medium | ✅ Bypass           | Unknown sites, fallback            |
+| **Tier 3** | Paid APIs       | ~$0.05       | ⭐⭐⭐⭐⭐ | Fast   | ✅ Official         | Critical products, last resort     |
 
 ## Data Source Analysis
 
 ### PhoneArena vs GSMArena
 
 **PhoneArena** (Preferred):
+
 ```json
 {
   "specs": {
@@ -72,6 +75,7 @@ Tier 3: Paid APIs (Reliable, ~$0.05/product)
 ```
 
 **Advantages**:
+
 - ✅ Logical categories (Design, Display, Hardware, Camera)
 - ✅ Human-friendly field names
 - ✅ Pricing information included
@@ -79,6 +83,7 @@ Tier 3: Paid APIs (Reliable, ~$0.05/product)
 - ✅ Consistent structure across all phones
 
 **GSMArena**:
+
 - More technical field names (Body, Platform, Comms)
 - Less structured camera specs
 - No pricing info
@@ -93,6 +98,7 @@ Tier 3: Paid APIs (Reliable, ~$0.05/product)
 **Location**: `apps/importer/phonearena/`
 
 **Files**:
+
 ```
 apps/importer/phonearena/
 ├── crawl-phonearena-list.ts    # Crawl danh sách phones
@@ -101,6 +107,7 @@ apps/importer/phonearena/
 ```
 
 **Flow**:
+
 ```
 1. Playwright navigate to PhoneArena
 2. Extract specs from HTML tables
@@ -112,6 +119,7 @@ apps/importer/phonearena/
 **Status**: ✅ **Working** (imported 15 phones successfully)
 
 **Example**:
+
 ```bash
 # Crawl list
 yarn tsx apps/importer/phonearena/crawl-phonearena-list.ts
@@ -131,11 +139,13 @@ yarn tsx apps/importer/phonearena/import.ts Data/crawled/phonearena-*.json
 ### Why LLM?
 
 **Problems with traditional scraping**:
+
 - Anti-scraping protection (Cloudflare, bot detection)
 - HTML structure varies across sites
 - Maintenance overhead (scrapers break)
 
 **LLM advantages**:
+
 - ✅ Flexible (works with any HTML structure)
 - ✅ Bypass anti-scraping (fetch HTML → LLM extract)
 - ✅ Universal (no need for site-specific scrapers)
@@ -148,6 +158,7 @@ yarn tsx apps/importer/phonearena/import.ts Data/crawled/phonearena-*.json
 **Method**: FlareSolverr → HTML → Clean → LLM Extract
 
 **Flow**:
+
 ```
 1. User provides URL
 2. Fetch HTML via FlareSolverr (bypass Cloudflare)
@@ -158,6 +169,7 @@ yarn tsx apps/importer/phonearena/import.ts Data/crawled/phonearena-*.json
 ```
 
 **Code Structure**:
+
 ```typescript
 class PhoneArenaLLMScraper implements IScraper {
   tier = 2;
@@ -172,11 +184,13 @@ class PhoneArenaLLMScraper implements IScraper {
     // 3. LLM extract
     const specs = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
-      messages: [{
-        role: 'user',
-        content: `Extract phone specs from HTML:\n${cleanHtml}`
-      }],
-      response_format: { type: 'json_object' }
+      messages: [
+        {
+          role: 'user',
+          content: `Extract phone specs from HTML:\n${cleanHtml}`,
+        },
+      ],
+      response_format: { type: 'json_object' },
     });
 
     return { success: true, data: specs };
@@ -185,6 +199,7 @@ class PhoneArenaLLMScraper implements IScraper {
 ```
 
 **Cache Strategy**:
+
 ```typescript
 Redis Cache:
 ├─ Key: scraper:tier2:{url_hash}
@@ -195,6 +210,7 @@ Redis Cache:
 **Status**: ⏳ **In Progress** (skeleton implemented, needs OpenAI API key)
 
 **Cost Estimate**:
+
 - Input: ~8,000 tokens (cleaned HTML)
 - Output: ~500 tokens (JSON specs)
 - Total: ~8,500 tokens × $0.15/1M = **$0.00128/product**
@@ -204,6 +220,7 @@ Redis Cache:
 ### TechSpecs.io Integration
 
 **API Details**:
+
 ```
 API ID: 68df4042df2a5a5447b6c193
 API Key: 3cd3d6de-6380-4d72-8e61-a1e8abdec083
@@ -211,6 +228,7 @@ Base URL: https://api.techspecs.io/v4
 ```
 
 **Coverage**:
+
 - Phones, tablets, laptops, smartwatches
 - 50,000+ devices
 - Official specs from manufacturers
@@ -218,6 +236,7 @@ Base URL: https://api.techspecs.io/v4
 **Pricing**: ~$0.05/request (estimated)
 
 **Flow**:
+
 ```
 1. Extract brand/model from URL
 2. Search device via TechSpecs API
@@ -227,6 +246,7 @@ Base URL: https://api.techspecs.io/v4
 ```
 
 **Implementation**:
+
 ```typescript
 class TechSpecsAPIScraper implements IScraper {
   tier = 3;
@@ -236,7 +256,7 @@ class TechSpecsAPIScraper implements IScraper {
 
     // Search device
     const results = await axios.get('/search', {
-      params: { brand, model }
+      params: { brand, model },
     });
 
     // Get specs
@@ -248,6 +268,7 @@ class TechSpecsAPIScraper implements IScraper {
 ```
 
 **Cache Strategy**:
+
 ```typescript
 Redis Cache:
 ├─ Key: scraper:tier3:{url_hash}
@@ -266,6 +287,7 @@ Redis Cache:
 **Purpose**: Coordinate 3-tier fallback strategy
 
 **Flow**:
+
 ```typescript
 async scrape(url: string): Promise<ScraperResult> {
   // 1. Check cache (all tiers)
@@ -300,6 +322,7 @@ async scrape(url: string): Promise<ScraperResult> {
 ```
 
 **Features**:
+
 - ✅ Automatic fallback
 - ✅ Cache with tier-based TTL
 - ✅ Progress logging
@@ -311,11 +334,11 @@ async scrape(url: string): Promise<ScraperResult> {
 
 ### TTL by Tier
 
-| Tier | TTL | Reason |
-|------|-----|--------|
-| Tier 1 | 7 days | Free, can re-scrape easily |
+| Tier   | TTL     | Reason                               |
+| ------ | ------- | ------------------------------------ |
+| Tier 1 | 7 days  | Free, can re-scrape easily           |
 | Tier 2 | 30 days | LLM costs, balance freshness vs cost |
-| Tier 3 | 90 days | API costs high, cache longest |
+| Tier 3 | 90 days | API costs high, cache longest        |
 
 ### Redis Structure
 
@@ -379,18 +402,18 @@ const result = await tier3Scraper.scrape(url);
 ```typescript
 // Cheap mode - Tier 1 only
 const orchestrator = new ScraperOrchestrator({
-  fallbackEnabled: false
+  fallbackEnabled: false,
 });
 
 // Balanced mode - Tier 1 → 2 (skip Tier 3)
 const orchestrator = new ScraperOrchestrator({
-  fallbackEnabled: true
+  fallbackEnabled: true,
 });
 // Don't register Tier 3 scraper
 
 // Premium mode - All tiers
 const orchestrator = new ScraperOrchestrator({
-  fallbackEnabled: true
+  fallbackEnabled: true,
 });
 orchestrator.registerScraper(tier1);
 orchestrator.registerScraper(tier2);
@@ -468,6 +491,7 @@ apps/importer/
 ## Roadmap
 
 ### Phase 1: Core (Current)
+
 - ✅ Tier 1: PhoneArena scraper
 - ✅ Orchestrator architecture
 - ✅ Cache manager
@@ -475,11 +499,13 @@ apps/importer/
 - ⏳ Tier 3: TechSpecs.io (needs testing)
 
 ### Phase 2: Expansion
+
 - ⏳ GSMArena Tier 1 scraper
 - ⏳ Official sites scrapers (Apple, Samsung)
 - ⏳ WebSearch fallback for unknown sites
 
 ### Phase 3: Optimization
+
 - ⏳ Redis cache implementation
 - ⏳ Batch processing optimization
 - ⏳ Cost monitoring dashboard
@@ -511,6 +537,7 @@ console.log(`
 ## Conclusion
 
 3-tier strategy cung cấp:
+
 - ✅ **Cost optimization**: Free Tier 1 for bulk, paid tiers for fallback
 - ✅ **Reliability**: Multiple fallback layers
 - ✅ **Flexibility**: LLM works with any site

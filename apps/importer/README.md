@@ -1,355 +1,64 @@
-# 🚀 Rate-Importer - CheckScam Crawler
+# `@repo/crawlers` - Engine Open-Core Của Rate Platform
 
-**Consolidated CheckScam.vn crawler with FlareSolverr integration for bypassing Cloudflare protection.**
+Thư mục `apps/importer` chứa package **`@repo/crawlers`**, bộ não chuẩn hóa và chấm điểm công khai của Rate Platform. Engine này không tự đi cào dữ liệu. Nó nhận dữ liệu thô (tiêu đề, thông số, đánh giá, giá), chuẩn hóa, gộp trùng, làm giàu thông số bằng AI, phân tích đánh giá và ghi vào schema `rate` trên Supabase.
 
-## ✨ Features
+> **Ranh giới Open-Core:** Scraper chống phát hiện (Playwright Stealth), giải Captcha, xoay Proxy và Queue Worker nằm trong repo private `DOS/Rate-Services`. Không đưa code bypass anti-bot / captcha / proxy vào package này. `DOS/Rate-Services` dùng package này qua git submodule `vendor/rate` (pnpm workspace).
 
-- 🔥 **FlareSolverr Integration**: Bypass Cloudflare protection automatically
-- 🎯 **Two-Stage Crawling**: Extract links first, then crawl detailed data
-- 📊 **Data Validation**: Quality scoring and validation for extracted data
-- 🗂️ **Organized Output**: Timestamped JSON files in Results directory
-- 🎮 **CLI Interface**: Simple commands via `crawl.js` runner
-- ⚡ **Rate Limiting**: Configurable delays to avoid detection
-- 🛡️ **Error Handling**: Robust error handling and retry mechanisms
+## Các Module (`src/shopee/`)
 
----
+| File                    | Vai trò                                                                                                                                                                                                                                                                     |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `types.ts`              | Data contract cho sản phẩm, gian hàng và đánh giá.                                                                                                                                                                                                                          |
+| `product-normalizer.ts` | `ProductNormalizer`, `detectCategorySlug`: bóc tách thương hiệu, dòng máy, RAM/ROM tiếng Việt, ngành hàng và `model_key`.                                                                                                                                                   |
+| `entity-matcher.ts`     | `EntityMatcher`: gộp trùng 3 tầng (`model_key` -> `pg_trgm` -> AI Spec Enricher).                                                                                                                                                                                           |
+| `ai-spec-enricher.ts`   | `AiSpecEnricher`: làm giàu 10 nhóm thông số (`@repo/shared-data` `ProductSpecificationsSchema`), hỗ trợ nhiều LLM.                                                                                                                                                          |
+| `ai-review-analyzer.ts` | `AiReviewAnalyzer`: phân tích đánh giá 2 tầng (Heuristics + LLM), trọng số JReviews, điểm rủi ro gian hàng.                                                                                                                                                                 |
+| `shopee-to-supabase.ts` | `ShopeeIngestionPipeline`: ghi master product, listing, giá và đánh giá vào schema `rate`.                                                                                                                                                                                  |
+| `arena-spec-syncer.ts`  | `parseGsmArenaHtmlToSpecs`, `extractPhoneArenaTableSpecs`, `parseGsmArenaBrandCatalogHtml`, `parsePhoneArenaCatalogHtml`: parse HTML GSMArena / PhoneArena (trang đã tải sẵn) sang 10 nhóm thông số; `ArenaSpecSyncer.auditCatalogAgainstArenaRegistry` đối chiếu danh mục. |
+| `flagship-seed-data.ts` | Dữ liệu tham chiếu thông số cho các thiết bị flagship.                                                                                                                                                                                                                      |
 
-## 🧩 Splink Deduplication Microservice (`/Splink`)
+## Entry Point Của Package
 
-A dedicated microservice for duplicate content detection using [Splink](https://moj-analytical-services.github.io/splink/) and PostgreSQL, shared across all modules (Rate-Importer, Rate-Extension, etc.).
+Build bằng `tsc` ra `dist/` (ESM, kèm `.d.ts`). Chỉ các entry sau được export:
 
-**Location:** `D:/Projects/JOY/Rate-Importer/Splink/`
+- `@repo/crawlers`: `types`, `product-normalizer`, `entity-matcher`, `ai-spec-enricher`, `ai-review-analyzer`, `shopee-to-supabase`.
+- `@repo/crawlers/shopee/arena-spec-syncer`
+- `@repo/crawlers/shopee/flagship-seed-data`
 
-- **Runs as a standalone Docker service** (connects to your main PostgreSQL container)
-- **REST API** for deduplication: `/resolve`
-- **Designed for easy integration and future expansion** (add more microservices to `/Splink`)
+Các file test chạy ngay khi import (`test-*.ts`, `run-ingestion-test.ts`) không được export. `pnpm --filter @repo/crawlers test:dist` kiểm tra điều này trong CI.
 
-### Example API Usage
-```http
-POST http://localhost:8090/resolve
-Content-Type: application/json
-{
-  "id": 123,
-  "title": "Scam Example",
-  "phone": "0912345678",
-  "bank_account": "123456789",
-  "name": "Nguyen Van A"
-}
-```
-**Response:**
-```json
-{"cluster_id": 1}
-```
+## Lệnh
 
-**To start the service:**
 ```bash
-cd Splink
-# Build and run Splink dedup microservice
-# (Ensure your main PostgreSQL container is running on port 5432)
-docker compose up -d --build
+pnpm --filter @repo/shared-data build   # build trước, @repo/crawlers phụ thuộc vào nó
+pnpm --filter @repo/crawlers build      # tsc -> dist/
+pnpm --filter @repo/crawlers test       # open-core-intelligence + review analyzer
+pnpm --filter @repo/crawlers test:dist  # smoke test entry point của dist/
+pnpm --filter @repo/crawlers lint       # lỗi làm fail CI, cảnh báo thì không
 ```
 
-> **Note:** All future shared microservices should be placed in `/Splink` for consistency and easy maintenance.
+Test AI Spec Enricher (mặc định chạy với mock server OpenAI-compatible cục bộ, không cần API key; `--backfill` và `--audit-only` đọc/ghi Supabase thật):
 
----
-
-## 🔧 Prerequisites
-
-### 1. FlareSolverr (Required)
-
-**Option A: Using Docker Compose (Recommended)**
 ```bash
-# Start FlareSolverr service
-docker compose up -d
-
-# Check status
-docker compose ps
-
-# View logs
-docker compose logs flaresolverr
-
-# Stop service
-docker compose down
+pnpm --filter @repo/crawlers exec tsx src/shopee/test-ai-enricher.ts
 ```
 
-**Option B: Using Docker Run**
+## Biến Môi Trường
+
+Sao chép `.env.example` thành `.env`. Không commit file `.env`.
+
+- **Supabase:** `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (chỉ dùng phía server).
+- **LLM:** `AI_PROVIDER` (`dos-ai`, `openai`, `gemini`, `deepseek`, `groq`, `openrouter`, `ollama`), `AI_API_KEY`, `AI_BASE_URL`, `AI_MODEL`, `AI_TIMEOUT_MS`. Nếu không đặt `AI_PROVIDER`, engine tự chọn theo key đang có, theo thứ tự `DOS_AI_API_KEY` / `DOS_AI_BASE_URL`, `OPENAI_API_KEY`, `GEMINI_API_KEY` / `GOOGLE_API_KEY`, `DEEPSEEK_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`, nếu không có thì dùng `openai`. Mỗi provider đọc key riêng của nó trước, `AI_API_KEY` là fallback chung (riêng `openai` đọc `AI_API_KEY` trước `OPENAI_API_KEY`).
+
+## Script Vận Hành
+
+`Scripts/enqueue-shopee.ts` đưa URL sản phẩm Shopee vào hàng đợi `rate.crawl_jobs` qua RPC `rate.enqueue_crawl_job`. Worker trong `DOS/Rate-Services` sẽ xử lý các job này.
+
 ```bash
-# Using Docker (Alternative)
-docker run -d \
-  --name=flaresolverr \
-  -p 8191:8191 \
-  -e LOG_LEVEL=info \
-  --restart unless-stopped \
-  ghcr.io/flaresolverr/flaresolverr:latest
+pnpm --filter @repo/crawlers exec tsx Scripts/enqueue-shopee.ts <url1> [url2 ...]
+pnpm --filter @repo/crawlers exec tsx Scripts/enqueue-shopee.ts --file targets.txt
 ```
 
-**Verify FlareSolverr is running:**
-```bash
-# Test endpoint
-curl http://localhost:8191/v1
+## Database
 
-# Or check in browser
-# http://localhost:8191/v1
-```
-
-### 2. Node.js Dependencies
-```bash
-npm install
-```
-
-### 3. Environment Configuration
-```bash
-# Copy and configure environment variables
-cp .env.example .env
-
-# Edit .env file with your settings
-# FLARESOLVERR_URL=http://localhost:8191/v1
-```
-
-## 🚀 Usage
-
-### Quick Start (Recommended)
-```bash
-# Get scammer links
-node crawl.js links
-
-# Crawl detailed data  
-node crawl.js crawl
-
-# Clean up project
-node crawl.js cleanup
-```
-
-### Direct Script Usage
-```bash
-# Step 1: Get Scammer Links
-node Scripts/crawl-with-flaresolverr.js
-
-# Step 2: Crawl Detailed Data
-node Scripts/crawl-main.js
-```
-
-### Advanced Usage
-```bash
-# Crawl specific number of scammers
-node Scripts/CheckScamCrawlerV2.js --file ../Results/scam_links_latest.json --max 20
-```
-
-## 📁 File Structure
-
-```
-Rate-Importer/
-├── crawl.js                      # Main command runner
-├── Scripts/                      # All crawler scripts
-│   ├── crawl-main.js            # Main crawler script
-│   ├── crawl-with-flaresolverr.js # Initial link extraction
-│   ├── CheckScamCrawlerV2.js    # Core crawler class
-│   └── cleanup.js               # Project cleanup
-├── Results/                      # Output directory
-│   ├── scam_links_*.json       # Extracted scammer links
-│   └── checkscam_crawl_*.json  # Detailed scammer data
-├── .env.example                 # Environment configuration template
-└── package.json
-```
-
-## 📊 Output Format
-
-### Scammer Links (`scam_links_*.json`)
-```json
-{
-  "timestamp": "2025-06-05T16:45:30.123Z",
-  "source": "https://checkscam.vn/category/danh-sach-scam/",
-  "total_links": 18,
-  "links": [
-    {
-      "name": "NGUYEN TIEN CONG",
-      "url": "https://checkscam.vn/nguyen-tien-cong-3/"
-    }
-  ]
-}
-```
-
-### Detailed Scammer Data (`checkscam_crawl_*.json`)
-```json
-{
-  "timestamp": "2025-06-05T16:50:36.137Z",
-  "total_processed": 18,
-  "successful": 17,
-  "failed": 1,
-  "scammers": [
-    {
-      "name": "NGUYEN TIEN CONG",
-      "phone": "N/A",
-      "bank": "MB Bank 278962",
-      "scam_amount": "N/A",
-      "content": "...",
-      "url": "https://checkscam.vn/nguyen-tien-cong-3/",
-      "quality_score": 100
-    }
-  ],
-  "summary": {
-    "high_quality": 4,
-    "medium_quality": 5,
-    "low_quality": 8
-  }
-}
-```
-
-## 📚 Documentation
-
-> **📍 All documentation has moved to the dedicated RateBox-Docs repository**
-> 
-> **Location**: `D:\Projects\JOY\RateBox-Docs\`  
-> **GitHub**: https://github.com/RateBox/Docs
-
-### 📖 Rate-Importer Documentation
-
-All module-specific documentation is now located in the centralized docs repository:
-
-- **[📋 Module Overview](../RateBox-Docs/modules/rate-importer/README.md)** - Complete crawler documentation
-- **[📡 API Reference](../RateBox-Docs/modules/rate-importer/api.md)** - CLI commands and data schemas  
-- **[🏛️ Architecture](../RateBox-Docs/modules/rate-importer/architecture.md)** - Technical implementation details
-- **[🚀 Deployment](../RateBox-Docs/modules/rate-importer/deployment.md)** - Setup and deployment guide
-- **[🗺️ Roadmap](../RateBox-Docs/modules/rate-importer/roadmap.md)** - Development phases and milestones
-
-### 🏗️ Platform Documentation
-
-- **[🎯 Platform Overview](../RateBox-Docs/platform/overview.md)** - Complete RateBox system architecture
-- **[📋 MVP Architecture](../RateBox-Docs/platform/mvp-architecture.md)** - 6-8 week development plan
-- **[🔗 Integration Guide](../RateBox-Docs/platform/integration-guide.md)** - Module integration patterns
-
-### 🚀 Quick Access
-
-```powershell
-# Navigate to documentation
-cd D:\Projects\JOY\RateBox-Docs
-
-# View crawler docs
-cat modules/rate-importer/README.md
-
-# View platform overview  
-cat platform/overview.md
-
-# Development setup
-cat guides/development-setup.md
-```
-
-**Migration Details**: See [DOCS-MOVED.md](./DOCS-MOVED.md) for complete migration information.
-
-## ⚙️ Configuration
-
-### Environment Variables (.env)
-```bash
-# FlareSolverr Configuration (Required)
-FLARESOLVERR_URL=http://localhost:8191/v1
-FLARESOLVERR_TIMEOUT=60000
-
-# CheckScam Crawler Configuration  
-CHECKSCAM_BASE_URL=https://checkscam.vn
-CRAWLER_DELAY_MS=5000       # Delay between requests
-CRAWLER_MAX_RETRIES=3       # Max retry attempts
-CRAWLER_TIMEOUT_MS=60000    # Request timeout
-```
-
-### Script Parameters
-```bash
-# CheckScamCrawlerV2 CLI options
---file <path>     # Input file with scammer links
---max <number>    # Maximum number of scammers to crawl
---delay <ms>      # Delay between requests (default: 5000)
---output <dir>    # Output directory (default: ../Results)
-```
-
-## 🔍 Troubleshooting
-
-### Common Issues
-
-#### 1. FlareSolverr Connection Error
-```
-Error: connect ECONNREFUSED 127.0.0.1:8191
-```
-**Solution**: Ensure FlareSolverr is running on port 8191
-```bash
-# Using Docker Compose
-docker compose ps
-docker compose up -d
-
-# Using Docker Run
-docker ps | grep flaresolverr
-curl http://localhost:8191/v1
-```
-
-#### 2. Cloudflare Challenge Failed
-```
-Error: FlareSolverr failed to solve challenge
-```
-**Solution**: 
-```bash
-# Using Docker Compose
-docker compose logs flaresolverr
-docker compose restart flaresolverr
-
-# Using Docker Run  
-docker logs flaresolverr
-docker restart flaresolverr
-```
-- Increase timeout in .env: `FLARESOLVERR_TIMEOUT=120000`
-
-#### 3. No Scammer Links Found
-```
-No scam link files found in Results directory
-```
-**Solution**: Run link extraction first:
-```bash
-node crawl.js links
-```
-
-#### 4. Rate Limiting / IP Blocked
-```
-Multiple 403/429 errors
-```
-**Solution**: 
-- Increase delay: `CRAWLER_DELAY_MS=10000`
-- Use different IP/VPN
-- Wait before retrying
-
-### Performance Tips
-
-1. **Optimal Settings**:
-   - Delay: 5-10 seconds between requests
-   - Timeout: 60-120 seconds for FlareSolverr
-   - Batch size: 10-20 scammers per run
-
-2. **Success Rate**:
-   - Expected: 80-95% with FlareSolverr
-   - Factors: Cloudflare difficulty, network stability
-   - Monitor: Check Results files for actual success rate
-
-3. **Resource Usage**:
-   - FlareSolverr: ~200-500MB RAM
-   - Chrome instances: ~100-200MB each
-   - Disk: ~1-5MB per 100 scammers crawled
-
-## 📈 Performance Metrics
-
-Recent test results:
-- **Success Rate**: 94.4% (17/18 successful)
-- **High Quality Data**: 4 scammers with 100% score
-- **Processing Time**: ~5 minutes for 18 scammers
-- **FlareSolverr Bypass**: 100% success rate
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create feature branch: `git checkout -b feature/new-feature`
-3. Commit changes: `git commit -am 'Add new feature'`
-4. Push to branch: `git push origin feature/new-feature`
-5. Submit pull request
-
-## 📄 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
----
-
-**⚠️ Disclaimer**: This tool is for educational and research purposes only. Please respect CheckScam.vn's terms of service and use responsibly.
+Schema `rate` dùng chung project Supabase `dos`. Migration chỉ được tạo và chạy qua CI của `DOS/DOS.Me` (`supabase/migrations/`). Không chạy DDL trực tiếp từ repo này.
