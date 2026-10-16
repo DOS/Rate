@@ -349,8 +349,10 @@ async function runTests() {
     assert.ok(radar.totalOffersAnalyzed >= 100);
     assert.ok(radar.genuineDeals.length >= 5);
     assert.ok(radar.genuineDeals[0]!.savingsVsMedianVnd > 0);
+    assert.ok(radar.priceSpreadLeaders.length >= 5);
+    assert.ok(radar.priceSpreadLeaders[0]!.spreadVnd > 0);
     console.log(
-      `  ✅ [7/9] Live Cross-Platform Deal Radar verified (${radar.totalClustersAnalyzed} clusters, ${radar.totalOffersAnalyzed} offers, ${radar.genuineDeals.length} genuine deals, ${radar.fakeSaleTraps.length} fake-sale traps)`
+      `  ✅ [7/9] Live Cross-Platform Deal Radar & Spread Leaders verified (${radar.totalClustersAnalyzed} clusters, ${radar.totalOffersAnalyzed} offers, ${radar.genuineDeals.length} genuine deals, ${radar.fakeSaleTraps.length} fake-sale traps, topSpread="${radar.priceSpreadLeaders[0]!.productName}" +${radar.priceSpreadLeaders[0]!.spreadVnd.toLocaleString('vi-VN')}₫)`
     );
 
     const openApiMod = await import('../../web/src/server/rate/openapi.js');
