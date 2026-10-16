@@ -1,5 +1,5 @@
 {
-  "eslint.workingDirectories": ["./apps/web", "./apps/strapi"],
+  "eslint.workingDirectories": ["./apps/web", "./apps/importer"],
   "tailwindCSS.classAttributes": [
     "class",
     "className",
@@ -7,7 +7,7 @@
     ".*Styles*",
     ".*ClassName*"
   ],
-  "npm.packageManager": "yarn",
+  "npm.packageManager": "pnpm",
   "editor.formatOnSave": true,
   // "[json]": {
   //   "editor.defaultFormatter": "esbenp.prettier-vscode"

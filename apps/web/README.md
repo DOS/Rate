@@ -33,14 +33,14 @@ Deploy Production trên Vercel theo `vercel.json` ở root (`pnpm@10.34.5`, `--f
 
 ## Biến Môi Trường
 
-Khai báo trong `src/env.mjs`. Đặt trong `apps/web/.env.local` khi chạy local, không commit.
+Khai báo trong `src/env.mjs`. Sao chép `apps/web/.env.example` thành `apps/web/.env.local` khi chạy local, không commit.
 
 - **Bắt buộc:** `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`. `src/lib/rate-api.ts` cố ý báo lỗi khi thiếu, để môi trường preview không âm thầm đọc nhầm project prod (giá trị mặc định trong `src/env.mjs` không được data layer dùng).
   `src/lib/rate-api.ts` chấp nhận `SUPABASE_URL` / `SUPABASE_ANON_KEY` làm fallback; route bình chọn đánh giá cũng chấp nhận `SUPABASE_URL`.
 - **Tùy chọn:**
   - `APP_PUBLIC_URL` (mặc định `https://rate.vn`), `NEXT_PUBLIC_SITE_URL` (URL gốc cho metadata của trang `/leaderboard`, mặc định `https://rate.vn`), `NEXT_OUTPUT`, `APP_ENV`;
   - Sentry: `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT`.
-- `SUPABASE_SERVICE_ROLE_KEY`: chỉ phía server, cho phần ghi dữ liệu của Extension (`src/server/rate/extension.ts`, chỉ đọc `NEXT_PUBLIC_SUPABASE_URL`, không có fallback). Thiếu key thì ingest trả về `quarantined_dry_run`. Không bao giờ đưa key này ra client.
+- `SUPABASE_SERVICE_ROLE_KEY`: chỉ phía server, không bao giờ đưa ra client. Dùng cho phần ghi dữ liệu của Extension (`src/server/rate/extension.ts`, chỉ đọc `NEXT_PUBLIC_SUPABASE_URL`, không có fallback; thiếu key thì ingest trả về `quarantined_dry_run`) và `POST /api/v1/rate/watchlist` (`getRateClient` của `@repo/shared-data`).
 
 ## Database
 

@@ -1,6 +1,6 @@
 import withPlaiceholder from "@plaiceholder/next"
-import * as Sentry from "@sentry/nextjs"
-const withSentryConfig = Sentry.withSentryConfig || Sentry.default?.withSentryConfig
+// @sentry/nextjs 11 exposes the build wrapper from the "/config" subpath only
+import { withSentryConfig } from "@sentry/nextjs/config"
 import plugin from "next-intl/plugin"
 import path from "path"
 import { fileURLToPath } from "url"
@@ -124,16 +124,15 @@ const withConfig = (() => {
     // side errors will fail.
     // tunnelRoute: "/monitoring",
 
-    // Hides source maps from generated client bundles
-    hideSourceMaps: true,
+    // Generated source maps are deleted after upload by default
+    // (sourcemaps.deleteSourcemapsAfterUpload), which replaces the removed hideSourceMaps option.
 
-    // sourcemaps: {
-    //   // To disable sourcemap plugin, set this to true
-    //   disable: true
-    // }
-
-    // Automatically tree-shake Sentry logger statements to reduce bundle size
-    disableLogger: true,
+    // Tree-shake Sentry SDK logger statements (replaces the removed disableLogger option; webpack builds only)
+    webpack: {
+      treeshake: {
+        removeDebugLogging: true,
+      },
+    },
   })
   return config
 })()
