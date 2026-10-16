@@ -1,6 +1,6 @@
-import React from "react"
-import { useTranslations } from "next-intl"
-import { z } from "zod"
+import React from 'react';
+import { useTranslations } from 'next-intl';
+import { z } from 'zod';
 
 /**
  * Hook that translates zod validation errors.
@@ -10,99 +10,105 @@ import { z } from "zod"
  */
 
 export function useTranslatedZod(zod: typeof z) {
-  const t = useTranslations("errors.zodValidation")
+  const t = useTranslations('errors.zodValidation');
 
   const errorMap: z.ZodErrorMap = React.useCallback(
     // eslint-disable-next-line no-unused-vars
     (issue, _ctx) => {
-      let message
+      let message;
       // eslint-disable-next-line no-unused-vars
-      const { code, ...values } = issue
+      const { code: _code, ...values } = issue;
       switch (issue.code) {
         case z.ZodIssueCode.invalid_type:
           if (issue.received === z.ZodParsedType.undefined) {
-            message = "invalid_type_received_undefined"
+            message = 'invalid_type_received_undefined';
           } else {
-            message = `invalid_type`
+            message = `invalid_type`;
           }
-          break
+          break;
         case z.ZodIssueCode.too_small:
-          if (issue.type === "string") {
+          if (issue.type === 'string') {
             if (issue.exact) {
-              message = "too_small.string.exact"
+              message = 'too_small.string.exact';
             } else {
               message = `too_small.string.${
-                issue.inclusive ? "inclusive" : "exclusive"
-              }`
+                issue.inclusive ? 'inclusive' : 'exclusive'
+              }`;
             }
-          } else if (issue.type === "number")
+          } else if (issue.type === 'number')
             if (issue.exact) {
-              message = "too_small.number.exact"
+              message = 'too_small.number.exact';
             } else {
               message = `too_small.number.${
-                issue.inclusive ? "inclusive" : "exclusive"
-              }`
+                issue.inclusive ? 'inclusive' : 'exclusive'
+              }`;
             }
-          else message = "invalid_type"
-          break
+          else message = 'invalid_type';
+          break;
         case z.ZodIssueCode.too_big:
-          if (issue.type === "string") {
+          if (issue.type === 'string') {
             if (issue.exact) {
-              message = "too_big.string.exact"
+              message = 'too_big.string.exact';
             } else {
               message = `too_big.string.${
-                issue.inclusive ? "inclusive" : "exclusive"
-              }`
+                issue.inclusive ? 'inclusive' : 'exclusive'
+              }`;
             }
-          } else if (issue.type === "number")
+          } else if (issue.type === 'number')
             if (issue.exact) {
-              message = "too_big.number.exact"
+              message = 'too_big.number.exact';
             } else {
               message = `too_big.number.${
-                issue.inclusive ? "inclusive" : "exclusive"
-              }`
+                issue.inclusive ? 'inclusive' : 'exclusive'
+              }`;
             }
-          else message = "invalid_type"
-          break
+          else message = 'invalid_type';
+          break;
         case z.ZodIssueCode.invalid_string:
-          if (typeof issue.validation === "object") {
-            if ("includes" in issue.validation) {
-              message = `Invalid input: must include "${issue.validation.includes}"`
+          if (typeof issue.validation === 'object') {
+            if ('includes' in issue.validation) {
+              message = `Invalid input: must include "${issue.validation.includes}"`;
 
-              if (typeof issue.validation.position === "number") {
-                message = `${message} at one or more positions greater than or equal to ${issue.validation.position}`
+              if (typeof issue.validation.position === 'number') {
+                message = `${message} at one or more positions greater than or equal to ${issue.validation.position}`;
               }
-            } else if ("startsWith" in issue.validation) {
-              message = `Invalid input: must start with "${issue.validation.startsWith}"`
-            } else if ("endsWith" in issue.validation) {
-              message = `Invalid input: must end with "${issue.validation.endsWith}"`
+            } else if ('startsWith' in issue.validation) {
+              message = `Invalid input: must start with "${issue.validation.startsWith}"`;
+            } else if ('endsWith' in issue.validation) {
+              message = `Invalid input: must end with "${issue.validation.endsWith}"`;
             } else {
-              z.util.assertNever(issue.validation)
+              z.util.assertNever(issue.validation);
             }
           } else {
-            message = `invalid_string.regex`
+            message = `invalid_string.regex`;
           }
-          break
+          break;
         case z.ZodIssueCode.custom:
-          if (issue.params?.type === "passwordNumber") {
-            message = "custom.passwordWithNumber"
-          } else if (issue.params?.type === "phoneNumber") {
-            message = "custom.phoneNumber"
-          } else if (issue.params?.type === "checkPassword") {
-            message = "custom.password"
+          if (issue.params?.type === 'passwordNumber') {
+            message = 'custom.passwordWithNumber';
+          } else if (issue.params?.type === 'phoneNumber') {
+            message = 'custom.phoneNumber';
+          } else if (issue.params?.type === 'checkPassword') {
+            message = 'custom.password';
           }
-          break
+          break;
         default:
-          message = issue.code
+          message = issue.code;
       }
-      return { message: t(message as any, values as any) }
+      return {
+        message: t(
+          message as Parameters<typeof t>[0],
+          // Issue fields are passed through as ICU interpolation values, as before.
+          values as unknown as Parameters<typeof t>[1]
+        ),
+      };
     },
     [t]
-  )
+  );
 
   React.useEffect(() => {
-    zod.setErrorMap(errorMap)
-  }, [errorMap, zod])
+    zod.setErrorMap(errorMap);
+  }, [errorMap, zod]);
 
-  return {}
+  return {};
 }

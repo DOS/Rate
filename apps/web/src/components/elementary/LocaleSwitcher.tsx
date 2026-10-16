@@ -104,7 +104,8 @@ export function LocaleSwitcher({
   isDarkHeader = false,
   compact = false,
 }: LocaleSwitcherProps) {
-  const currentLocale = (propLocale || useLocale()) as AppLocale;
+  const contextLocale = useLocale();
+  const currentLocale = (propLocale || contextLocale) as AppLocale;
   const [isOpen, setIsOpen] = useState(false);
   const [, startTransition] = useTransition();
   const dropdownRef = useRef<HTMLDivElement>(null);

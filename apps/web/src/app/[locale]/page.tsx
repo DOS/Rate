@@ -18,7 +18,6 @@ import {
   BsGraphUpArrow,
   BsHeadphones,
   BsLaptop,
-  BsMouse,
   BsPhone,
   BsShieldCheck,
   BsShieldExclamation,

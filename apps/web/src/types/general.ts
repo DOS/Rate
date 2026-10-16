@@ -14,7 +14,7 @@ export interface AppError {
   message: string | number;
   status: number;
   name?: string;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
 }
 
 export interface AppLink {
