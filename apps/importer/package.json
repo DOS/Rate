@@ -4,6 +4,18 @@
   "private": true,
   "description": "Open-Core Product Normalization, 3-Tier Entity Matching, AI 10-Group Spec Enricher & Anti-Seeding Review Intelligence Engine for Rate Platform",
   "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./shopee/*": {
+      "types": "./dist/shopee/*.d.ts",
+      "import": "./dist/shopee/*.js"
+    },
+    "./package.json": "./package.json"
+  },
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.json",
