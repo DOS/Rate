@@ -16,6 +16,33 @@ export type SupportedEcommercePlatform =
   | 'didongviet'
   | 'phongvu';
 
+/**
+ * Reviewer metadata scraped alongside a review. What each platform exposes differs
+ * (Shopee: user id + shop page; Tiki: join date, review count, purchase flag;
+ * retail chains: only a "đã mua" badge), so every field is optional and
+ * `undefined` means "the platform does not say", never "no".
+ */
+export interface ScrapedReviewer {
+  /** Pseudonymous stable key (keyed hash of platform + platform user id). Never the raw id. */
+  key?: string;
+  /** Platform marks the review as anonymous / hides the reviewer's identity. */
+  isAnonymous?: boolean;
+  /** Public profile page on the platform, when one exists. */
+  profileUrl?: string;
+  /** Account creation time on the platform (ISO 8601). */
+  joinedAt?: string;
+  /** Total reviews this account has written on the platform. */
+  totalReviews?: number;
+  /** Helpful / thank votes this account has received across its reviews. */
+  helpfulVotes?: number;
+  /** Platform confirms this reviewer bought the item. */
+  verifiedPurchase?: boolean;
+  /** Purchase time as reported by the platform (ISO 8601). */
+  purchasedAt?: string;
+  /** Platform flags the reviewer as a repeat buyer of this item/shop. */
+  repeatPurchase?: boolean;
+}
+
 export interface ShopeeReview {
   reviewId: string;
   author: string;
@@ -27,6 +54,9 @@ export interface ShopeeReview {
   images: string[];
   videos?: string[];
   sellerReply?: string;
+  /** Helpful/like count shown on the platform for this review. */
+  likeCount?: number;
+  reviewer?: ScrapedReviewer;
 }
 
 export interface ShopeeProduct {
