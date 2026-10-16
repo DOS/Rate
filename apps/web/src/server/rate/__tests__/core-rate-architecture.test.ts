@@ -819,7 +819,50 @@ function runCoreArchitectureSuite() {
     'GET /api/v1/rate/versus must exist and be documented in OpenAPI 3.1.0 spec'
   );
   console.log(
-    '  ✅ [17/17] 1-Click Shareable Audit Summary (#60) & GET /api/v1/rate/versus OpenAPI 3.1.0 (#61) passed'
+    '  ✅ [17/18] 1-Click Shareable Audit Summary (#60) & GET /api/v1/rate/versus OpenAPI 3.1.0 (#61) passed'
+  );
+
+  // 18. Value Efficiency & 2-Year Ownership Calculator (#62) & 1-Click Markdown Audit on /inspect + /merchants/[id] (#63)
+  const valueCalcSrc = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/components/leaderboard/ProductValueCalculator.tsx'
+    ),
+    'utf8'
+  );
+  assert.ok(
+    valueCalcSrc.includes('estimateResaleRetentionRatio') &&
+      smartphoneDetailSrc.includes('ProductValueCalculator') &&
+      compareWorkspaceSrc.includes('value_per_point') &&
+      compareWorkspaceSrc.includes('daily_cost_2y'),
+    'ProductValueCalculator and CompareWorkspace Value Efficiency rows must be wired'
+  );
+  const merchantShareSrc = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/components/merchants/MerchantShareAuditButton.tsx'
+    ),
+    'utf8'
+  );
+  const merchantPageSrc = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/app/[locale]/merchants/[id]/page.tsx'),
+    'utf8'
+  );
+  const inspectWorkspaceSrc = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/components/inspect/DeepInspectWorkspace.tsx'
+    ),
+    'utf8'
+  );
+  assert.ok(
+    merchantShareSrc.includes('handleCopyMerchantMarkdown') &&
+      merchantPageSrc.includes('MerchantShareAuditButton') &&
+      inspectWorkspaceSrc.includes('handleCopyAuditMarkdown'),
+    'MerchantProfilePage and DeepInspectWorkspace must provide 1-Click Markdown Audit export'
+  );
+  console.log(
+    '  ✅ [18/18] Value Efficiency & 2-Year Ownership Calculator (#62) & 1-Click Markdown Audit on /inspect + /merchants/[id] (#63) passed'
   );
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }

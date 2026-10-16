@@ -140,6 +140,54 @@ const SPEC_GROUPS: SpecGroupDef[] = [
         numericValue: (p) => Number(p.merchant_count || 1),
         higherIsBetter: true,
       },
+      {
+        id: 'value_per_point',
+        label: 'Hiệu suất Giá / Điểm JReviews (VND / 1.0 điểm thang 10)',
+        renderValue: (p) => {
+          const min = Number(p.min_price || 0);
+          if (min <= 0) return '-';
+          const u = getEffectiveRating(p) > 0 ? getEffectiveRating(p) : 4.5;
+          const e =
+            p.expert_rating && Number(p.expert_rating) > 0
+              ? Number(p.expert_rating) > 5
+                ? Number(p.expert_rating)
+                : Number(p.expert_rating) * 2
+              : u * 2;
+          const combined10 = u * 2 * 0.6 + e * 0.4;
+          if (combined10 <= 0) return '-';
+          const costPerPt = Math.round(min / combined10);
+          return `${costPerPt.toLocaleString('vi-VN')} ₫ / điểm`;
+        },
+        numericValue: (p) => {
+          const min = Number(p.min_price || 0);
+          if (min <= 0) return null;
+          const u = getEffectiveRating(p) > 0 ? getEffectiveRating(p) : 4.5;
+          const e =
+            p.expert_rating && Number(p.expert_rating) > 0
+              ? Number(p.expert_rating) > 5
+                ? Number(p.expert_rating)
+                : Number(p.expert_rating) * 2
+              : u * 2;
+          const combined10 = u * 2 * 0.6 + e * 0.4;
+          return combined10 > 0 ? Math.round(min / combined10) : null;
+        },
+        higherIsBetter: false,
+      },
+      {
+        id: 'daily_cost_2y',
+        label: 'Chi phí sở hữu quy đổi 24 tháng (VND / ngày)',
+        renderValue: (p) => {
+          const min = Number(p.min_price || 0);
+          if (min <= 0) return '-';
+          const daily = Math.round(min / 730);
+          return `${daily.toLocaleString('vi-VN')} ₫ / ngày`;
+        },
+        numericValue: (p) => {
+          const min = Number(p.min_price || 0);
+          return min > 0 ? Math.round(min / 730) : null;
+        },
+        higherIsBetter: false,
+      },
     ],
   },
   {

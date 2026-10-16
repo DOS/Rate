@@ -57,7 +57,7 @@ const PRESET_ENDPOINTS: ApiPresetEndpoint[] = [
     id: 'versus-head-to-head',
     method: 'GET',
     title: 'Đối đầu 1v1 JReviews & Trọng số Persona (/versus)',
-    path: '/api/v1/rate/versus?pair=apple-iphone-16-pro-max-256gb-vs-samsung-galaxy-s25-ultra-256gb&persona=balanced',
+    path: '/api/v1/rate/versus?pair=apple-iphone-18-pro-max-256gb-vs-samsung-galaxy-s26-ultra-256gb&persona=balanced',
     description:
       'Chấm điểm đối đầu 1v1 trực tiếp giữa 2 mẫu cùng ngành hàng theo 5 tiêu chí JReviews (Màn hình, Hiệu năng, Camera, Pin, Đáng tiền), hỗ trợ tùy biến trọng số Persona và tính độ lệch giá.',
   },

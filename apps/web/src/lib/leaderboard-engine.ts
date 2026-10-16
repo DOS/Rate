@@ -62,6 +62,8 @@ export interface ProductLeaderboardBadgeInfo {
   categorySlug: CanonicalCategorySlug;
 }
 
+export type ProductCategoryStandingBadge = ProductLeaderboardBadgeInfo;
+
 export const VALID_LEADERBOARD_CRITERIA: readonly LeaderboardCriterionKey[] = [
   'combined',
   'user',

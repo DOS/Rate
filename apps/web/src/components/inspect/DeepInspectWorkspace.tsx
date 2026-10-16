@@ -243,6 +243,7 @@ export default function DeepInspectWorkspace({
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [copiedMd, setCopiedMd] = useState(false);
 
   const runInspection = async (targetQuery: string) => {
     const clean = targetQuery.trim();
@@ -312,6 +313,59 @@ export default function DeepInspectWorkspace({
   const reviewSummary = result?.reviewSummary ?? null;
   const merchant = result?.merchantProfile ?? null;
 
+  const handleCopyAuditMarkdown = async () => {
+    if (typeof window === 'undefined') return;
+    try {
+      const shareUrl = `${window.location.origin}/inspect?q=${encodeURIComponent(
+        queryInput.trim()
+      )}`;
+      const currentListedPrice = Number(
+        matchedOffer?.price_current || master?.min_price || 0
+      );
+      const claimedOrigPrice = matchedOffer?.price_original
+        ? Number(matchedOffer.price_original)
+        : null;
+      const histLow = Number(
+        priceHistory?.lowestEverPrice || master?.min_price || 0
+      );
+      const histHigh = Number(
+        priceHistory?.highestEverPrice || master?.max_price || 0
+      );
+      const lines = [
+        `### 🔬 Biên Bản Kiểm Toán Giá & Tín Nhiệm (Rate.vn Inspector)`,
+        `- **Truy vấn kiểm định:** \`${queryInput.trim()}\``,
+        ...(master
+          ? [
+              `- **Thiết bị gốc chuẩn hóa:** ${master.name} (\`${master.model_key}\`)`,
+              `- **Điểm Người Mua Thực Chất (JReviews):** ★ ${Number(master.user_rating_weighted || master.average_rating || 0).toFixed(2)}/5.0 (${master.authentic_review_count || master.total_reviews || 0} đánh giá thật)`,
+            ]
+          : []),
+        ...(discount
+          ? [
+              `- **Kết luận kiểm định giá:** **${discount.badge_label}** (${discount.explanation})`,
+            ]
+          : []),
+        ...(currentListedPrice > 0
+          ? [
+              `- **Giá đang niêm yết:** ${currentListedPrice.toLocaleString('vi-VN')} ₫${claimedOrigPrice ? ` | Giá gạch ngang khai báo: ${claimedOrigPrice.toLocaleString('vi-VN')} ₫` : ''}`,
+              `- **Biên độ lịch sử giá thật:** Đáy ${histLow.toLocaleString('vi-VN')} ₫ - Đỉnh ${histHigh.toLocaleString('vi-VN')} ₫`,
+            ]
+          : []),
+        ...(merchant
+          ? [
+              `- **Gian hàng:** ${merchant.name} (${merchant.platform.toUpperCase()}) | Trust Score: **${merchant.trust_score}/100** (DOSafe Risk: ${merchant.dosafe_risk_score}/100, Seeding Risk: ${merchant.review_risk_score}/100)`,
+            ]
+          : []),
+        `- **Xem báo cáo trực tiếp:** ${shareUrl}`,
+      ];
+      await navigator.clipboard.writeText(lines.join('\n'));
+      setCopiedMd(true);
+      setTimeout(() => setCopiedMd(false), 2500);
+    } catch {
+      // Ignore clipboard permission errors
+    }
+  };
+
   const keySpecs = (master?.key_specs || {}) as KeySpecs;
   const productHref = master ? getMasterProductHref(master) : '/smartphones';
   const productCategoryPath =
@@ -324,14 +378,28 @@ export default function DeepInspectWorkspace({
         <div className="rate-scoreboard-dark p-lg-5 mb-4 p-4">
           <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
             <span className="rate-eyebrow text-white">{copy.badge}</span>
-            <button
-              type="button"
-              onClick={handleCopyReportLink}
-              className="btn btn-sm btn-outline-light rounded-pill d-inline-flex align-items-center gap-2 px-3"
-            >
-              <BsClipboardCheck />
-              <span>{copied ? copy.copiedLinkBtn : copy.copyLinkBtn}</span>
-            </button>
+            <div className="d-flex align-items-center flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={handleCopyAuditMarkdown}
+                className="btn btn-sm btn-danger rounded-pill d-inline-flex align-items-center fw-semibold gap-2 px-3"
+              >
+                <BsClipboardCheck />
+                <span>
+                  {copiedMd
+                    ? '✓ Đã chép biên bản Markdown!'
+                    : '📋 Sao chép biên bản Markdown'}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={handleCopyReportLink}
+                className="btn btn-sm btn-outline-light rounded-pill d-inline-flex align-items-center gap-2 px-3"
+              >
+                <BsClipboardCheck />
+                <span>{copied ? copy.copiedLinkBtn : copy.copyLinkBtn}</span>
+              </button>
+            </div>
           </div>
 
           <h1 className="h2 fw-bold mb-2 text-white">{copy.title}</h1>
