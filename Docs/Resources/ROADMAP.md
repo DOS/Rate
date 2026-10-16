@@ -175,6 +175,9 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc **4 T�
 - [x] **4.57 & 4.58. Tích Hợp Radar Kèo Thơm & Cảnh Báo Bẫy Nâng Giá Gốc Theo Ngành Hàng Trên Cả 5 Trang Danh Mục (`CategoryCatalogContent`) + Huy Hiệu Tín Hiệu Radar 10 Sàn Trên `/watchlist` (`WatchlistWorkspace`) (Issue #90 & Issue #91):**
   - Nâng cấp `CategoryCatalogContent` (`apps/web/src/app/[locale]/smartphones/page.tsx`) nạp song song `getCrossPlatformDealRadar({ categorySlug, limit: 3 })` và hiển thị thanh Radar kèo thơm & bẫy nâng giá gốc trực tiếp trên cả 5 trang danh mục ngành hàng (`/smartphones`, `/tablets`, `/laptops`, `/smartwatches`, `/earbuds`).
   - Nâng cấp `WatchlistWorkspace.tsx` (`/watchlist`) tự động đối chiếu danh sách sản phẩm đang theo dõi với `/api/v1/rate/deals` để hiển thị huy hiệu **🟢 Kèo đáy lịch sử** và **🚨 Cảnh báo sàn kê khống giá gốc** ngay trên từng thẻ sản phẩm.
+- [x] **4.59 & 4.60. Tích Hợp Huy Hiệu Radar Kèo Đáy & Bẫy Sale Ảo 10 Sàn Lên Bảng Xếp Hạng `/leaderboard` (`LeaderboardExplorer`) + Dòng Đối Chiếu Radar Kèo Đáy & Bẫy Sale Trên `/compare` (`CompareWorkspace`) và `/compare/[versus]` (`VersusInteractiveScoreboard`) (Issue #93 & Issue #94):**
+  - Nâng cấp `apps/web/src/app/[locale]/leaderboard/page.tsx` và `LeaderboardExplorer.tsx` nạp song song `getCrossPlatformDealRadar` và hiển thị huy hiệu **🔥 Đáy giá 60N** / **🚨 Cảnh báo Sale Ảo** (`leaderboard-radar-signal`) trực tiếp trên Bục Top 3 Podium và toàn bộ danh sách xếp hạng.
+  - Nâng cấp `CompareWorkspace.tsx` (`/compare`) và `VersusInteractiveScoreboard.tsx` (`/compare/[versus]`) tự động đối chiếu `/api/v1/rate/deals` để bổ sung dòng so sánh trực tiếp **🔥 Tín hiệu Radar Kèo Đáy & Bẫy Sale 10 Sàn (60N)** (`compare-radar-row` & `versus-radar-row`).
 
 ### ✅ Phase 5: Mở Rộng Đa Sàn 10/10 Nền Tảng, Browser Extension MV3 & Tự Động Hóa Cảnh Báo Giá (Đã hoàn thành 100%)
 

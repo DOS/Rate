@@ -1,7 +1,10 @@
 import React from 'react';
 import type { Metadata } from 'next';
 import { Link } from '@/lib/navigation';
-import { getCachedMasterProducts } from '@/server/rate';
+import {
+  getCachedMasterProducts,
+  getCrossPlatformDealRadar,
+} from '@/server/rate';
 import {
   getMasterProductHref,
   type CanonicalCategorySlug,
@@ -96,11 +99,17 @@ export default async function LeaderboardPage({
   const resolvedLocale: SupportedRateLocale = normalizeRateLocale(locale);
   const siteUrl = SITE_URL;
 
-  const products = await getCachedMasterProducts({
-    categorySlug: 'all',
-    limit: 100,
-    sort: 'rating_desc',
-  });
+  const [products, dealRadar] = await Promise.all([
+    getCachedMasterProducts({
+      categorySlug: 'all',
+      limit: 100,
+      sort: 'rating_desc',
+    }),
+    getCrossPlatformDealRadar({
+      categorySlug: 'all',
+      limit: 36,
+    }).catch(() => null),
+  ]);
 
   const rawCategory = (query.cat || 'smartphones')
     .toLowerCase()
@@ -388,6 +397,7 @@ export default async function LeaderboardPage({
         <section className="container mt-4">
           <LeaderboardExplorer
             products={products}
+            dealRadar={dealRadar}
             locale={resolvedLocale}
             initialCategory={initialCategory}
             initialCriterion={initialCriterion}
