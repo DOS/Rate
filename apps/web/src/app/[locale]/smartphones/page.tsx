@@ -687,6 +687,47 @@ export async function CategoryCatalogContent({
                         </div>
                       ))}
                     </div>
+                    {Array.isArray(categoryDealRadar.priceSpreadLeaders) &&
+                      categoryDealRadar.priceSpreadLeaders.length > 0 && (
+                        <div
+                          className="border-top mt-2 pt-2"
+                          data-testid="category-price-spread-leaders"
+                        >
+                          <div className="d-flex justify-content-between align-items-center mb-1 flex-wrap gap-1">
+                            <span className="small fw-semibold text-dark">
+                              📊 Độ lệch giá 10 sàn cao nhất (
+                              {schema.categoryTitle}):
+                            </span>
+                            <span className="small text-muted">
+                              Mua đúng sàn tiết kiệm hàng triệu đồng
+                            </span>
+                          </div>
+                          <div className="row g-2">
+                            {categoryDealRadar.priceSpreadLeaders
+                              .slice(0, 2)
+                              .map((sp) => (
+                                <div key={sp.productSlug} className="col-md-6">
+                                  <div className="rounded-3 bg-light d-flex justify-content-between align-items-center border px-2 py-1">
+                                    <Link
+                                      href={sp.productHref}
+                                      className="fw-semibold text-dark text-decoration-none text-truncate small me-2"
+                                    >
+                                      {sp.productName}{' '}
+                                      <span className="text-muted fw-normal">
+                                        ({sp.cheapestPlatform.toUpperCase()} vs{' '}
+                                        {sp.priciestPlatform.toUpperCase()})
+                                      </span>
+                                    </Link>
+                                    <span className="badge bg-warning-subtle text-dark border-warning-subtle flex-shrink-0 border">
+                                      Lệch +{sp.spreadPct}% (
+                                      {sp.spreadVnd.toLocaleString('vi-VN')} ₫)
+                                    </span>
+                                  </div>
+                                </div>
+                              ))}
+                          </div>
+                        </div>
+                      )}
                   </div>
                 )}
 
@@ -762,6 +803,17 @@ export async function CategoryCatalogContent({
                     const refreshHz = specs.display?.refresh_rate_hz;
                     const nfcSupported = specs.connectivity?.nfc;
                     const fastChargeW = specs.battery?.fast_charging_w;
+                    const genuineDealMatch =
+                      categoryDealRadar?.genuineDeals.find(
+                        (g) => g.productSlug === item.slug
+                      );
+                    const fakeTrapMatch = categoryDealRadar?.fakeSaleTraps.find(
+                      (t) => t.productSlug === item.slug
+                    );
+                    const spreadMatch =
+                      categoryDealRadar?.priceSpreadLeaders?.find(
+                        (s) => s.productSlug === item.slug
+                      );
 
                     return (
                       <div
@@ -846,6 +898,36 @@ export async function CategoryCatalogContent({
                             <span className="rate-score-badge-expert">
                               🔬 {expertScore.toFixed(1)} Expert Lab
                             </span>
+                            {genuineDealMatch && (
+                              <span
+                                className="badge bg-success-subtle text-success border-success-subtle rounded-pill border"
+                                data-testid="catalog-card-radar-badge"
+                              >
+                                🔥 Đáy giá -
+                                {genuineDealMatch.savingsVsMedianPct}% (
+                                {genuineDealMatch.platform.toUpperCase()})
+                              </span>
+                            )}
+                            {fakeTrapMatch && (
+                              <span
+                                className="badge bg-danger-subtle text-danger border-danger-subtle rounded-pill border"
+                                data-testid="catalog-card-radar-badge"
+                              >
+                                🚨 Cảnh báo Sale Ảo +
+                                {fakeTrapMatch.fakeMarkupPct}%
+                              </span>
+                            )}
+                            {!genuineDealMatch &&
+                              !fakeTrapMatch &&
+                              spreadMatch &&
+                              spreadMatch.spreadPct >= 10 && (
+                                <span
+                                  className="badge bg-warning-subtle text-dark border-warning-subtle rounded-pill border"
+                                  data-testid="catalog-card-radar-badge"
+                                >
+                                  📊 Lệch giá +{spreadMatch.spreadPct}% đa sàn
+                                </span>
+                              )}
                           </div>
 
                           {/* 10 Field Groups Spec Badges */}
