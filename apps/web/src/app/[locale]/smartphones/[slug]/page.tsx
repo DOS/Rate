@@ -1529,10 +1529,10 @@ export async function ProductDetailView({
 
                       <div className="d-flex mt-auto gap-2">
                         <Link
-                          href={`/compare?slugs=${product.slug},${peer.slug}`}
+                          href={`/compare/${product.slug}-vs-${peer.slug}`}
                           className="btn btn-sm btn-outline-primary rounded-pill fw-semibold flex-grow-1"
                         >
-                          ⚖️ So sánh đối đầu 1-1
+                          ⚔️ So sánh đối đầu 1-1
                         </Link>
                         <Link
                           href={`${categoryBasePath}/${peer.slug}`}

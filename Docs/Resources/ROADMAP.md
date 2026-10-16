@@ -3,7 +3,7 @@
 > **Cập nhật lần cuối:** 16/10/2026  
 > **Tech Stack chuẩn hóa:** TypeScript 7.0.2 + Next.js 16.3.8 + React 19.3 + Pure PostgreSQL 17 (Supabase Cloud `rate` schema) + Open-Core 2 Repositories (`DOS/Rate` & `DOS/Rate-Services`)  
 > **GitHub Project Board (Multi-Agent Queue):** [https://github.com/orgs/DOS/projects/9](https://github.com/orgs/DOS/projects/9)  
-> **Trạng thái hiện tại:** Đã hoàn thành 100% toàn bộ Lộ trình Phase 1, Phase 2, Phase 3 (3.1 -> 3.3), Phase 4 (4.1 -> 4.24) & Phase 5 (5.1 -> 5.8)
+> **Trạng thái hiện tại:** Đã hoàn thành 100% toàn bộ Lộ trình Phase 1, Phase 2, Phase 3 (3.1 -> 3.3), Phase 4 (4.1 -> 4.26) & Phase 5 (5.1 -> 5.9)
 
 ---
 
@@ -13,7 +13,7 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc **4 T�
 
 1. **Tầng 1 - Web BFF & REST API v1 (`apps/web` trong `DOS/Rate`):**
    - Giao diện **Next.js 16.3.8** (App Router + Turbopack) + **React 19.3** + **Bootstrap 5.3.8** + **`next-intl`** (`vi` mặc định tại `/`, `en`, `cs`).
-   - Tầng Server Data (`apps/web/src/server/rate/`) tích hợp `React.cache()` deduplication và cung cấp đầy đủ các endpoints REST JSON (`/api/v1/rate/stats`, `/api/v1/rate/products`, `/api/v1/rate/products/[slug]`, `/api/v1/rate/compare`, `/api/v1/rate/lookup`, `/api/v1/rate/inspect`, `/api/v1/rate/merchants`, `/api/v1/rate/merchants/[id]`, `/api/v1/rate/reviews`, `/api/reviews/[id]/vote`, `/api/v1/rate/watchlist`, `/api/v1/rate/extension/lookup`, `/api/v1/rate/extension/ingest`).
+   - Tầng Server Data (`apps/web/src/server/rate/`) tích hợp `React.cache()` deduplication và cung cấp đầy đủ các endpoints REST JSON (`/api/v1/rate/stats`, `/api/v1/rate/leaderboard`, `/api/v1/rate/products`, `/api/v1/rate/products/[slug]`, `/api/v1/rate/compare`, `/api/v1/rate/lookup`, `/api/v1/rate/inspect`, `/api/v1/rate/merchants`, `/api/v1/rate/merchants/[id]`, `/api/v1/rate/reviews`, `/api/reviews/[id]/vote`, `/api/v1/rate/watchlist`, `/api/v1/rate/extension/lookup`, `/api/v1/rate/extension/ingest`).
 2. **Tầng 2 - Open-Core Intelligence Engine (`apps/importer` & `packages/shared-data` trong `DOS/Rate`):**
    - Chuẩn hóa **10 Field Groups** (`specs.schema.ts` với Zod `^3.25.76`).
    - Bộ não `ProductNormalizer`, `EntityMatcher` (3-Tier Dedupe), `AiSpecEnricher` (đa LLM OpenAI-compatible) và `AiReviewAnalyzer` (lọc Seeding/Spam xu + tính điểm rủi ro kép `dosafe_risk_score` và `review_risk_score`).
@@ -120,6 +120,12 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc **4 T�
 - [x] **4.24. Bảng Xếp Hạng Thiết Bị 4 Tầng & Chấm Điểm Kép JReviews 5 Tiêu Chí (`/leaderboard` - Issue #46):**
   - Xây dựng trang `/leaderboard` (`apps/web/src/app/[locale]/leaderboard/page.tsx`) và `LeaderboardExplorer.tsx` theo cấu trúc phân cấp 4 tầng (`Directory: tech_electronics -> 5 Categories -> Master Products -> Verified Listings`) và hệ thống thiết kế `DESIGN.md` v3.0.
   - Hỗ trợ chuyển đổi trực tiếp giữa 5 danh mục độc lập (`smartphones`, `tablets`, `laptops`, `smartwatches`, `earbuds`) kèm nút **So sánh Top 3 cùng danh mục** (`/compare?cat=<category>&slugs=...`), 8 chế độ xếp hạng JReviews (`Điểm Tổng Hợp 10.0`, `Người Dùng Thật`, `Chuyên Gia Lab`, `Màn Hình`, `Hiệu Năng`, `Camera / Âm Thanh`, `Pin & Sạc`, `Đáng Tiền P/P`), bộ lọc phân khúc giá, lọc thương hiệu, Bục Vinh Danh Top 3 Podium (`.rate-scoreboard-dark`) và Schema.org `ItemList` JSON-LD.
+- [x] **4.25. REST API Xếp Hạng Công Khai (`GET /api/v1/rate/leaderboard`), Đặc Tả OpenAPI 3.1.0 & Huy Hiệu Thứ Hạng Trực Tiếp (`ProductLeaderboardBadges`) Trên `ProductDetailView` (Issue #51):**
+  - Xây dựng bộ máy tính điểm và xếp hạng dùng chung `apps/web/src/lib/leaderboard-engine.ts` (`scoreMasterProductForLeaderboard`, `rankMasterProductsForLeaderboard`, `computeProductStandingInCategory`).
+  - Xuất bản REST API v1 `GET /api/v1/rate/leaderboard` (`apps/web/src/app/api/v1/rate/leaderboard/route.ts`), cập nhật đặc tả OpenAPI 3.1.0 (`openapi.ts`), bổ sung preset chạy thử trên `/developers` (`ApiPlaygroundClient.tsx`), và hiển thị huy hiệu thứ hạng trực tiếp (`#1/N Điện thoại`, `#1 Camera / Âm thanh`, `#1 Hiệu năng`) ngay trong bảng điểm `.rate-scoreboard-dark` của `ProductDetailView`.
+- [x] **4.26. Gợi Ý Theo Nhu Cầu Thực Tế & Thanh Trượt Trọng Số 5 Tiêu Chí Trên `/leaderboard` + Trang Đối Đầu 1v1 Chuẩn SEO (`/compare/[versus]` - Issue #52 & Issue #53):**
+  - Nâng cấp `LeaderboardExplorer.tsx` với 6 chế độ gợi ý theo nhu cầu thực tế (`Chụp ảnh & Quay Vlog`, `Gaming & Đồ họa nặng`, `Pin trâu 2 ngày`, `Doanh nhân & Màn hình đẹp`, `Săn cấu hình / Giá tốt P/P`) và bộ 5 thanh trượt tùy chỉnh trọng số cá nhân hóa (`0..100%`).
+  - Xây dựng trang đối đầu 1v1 chuẩn SEO `apps/web/src/app/[locale]/compare/[versus]/page.tsx` (`/compare/<slugA>-vs-<slugB>`) kèm bảng đối chiếu nhanh 5 tiêu chí JReviews, khóa chặt so sánh cùng ngành hàng (`Same-Category Lock`), `Schema.org ItemList` JSON-LD và liên kết `⚔️ So sánh đối đầu 1-1` trực tiếp từ `ProductDetailView`.
 
 ### ✅ Phase 5: Mở Rộng Đa Sàn 10/10 Nền Tảng, Browser Extension MV3 & Tự Động Hóa Cảnh Báo Giá (Đã hoàn thành 100%)
 

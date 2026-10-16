@@ -634,6 +634,84 @@ export function buildRateOpenApiSpec(
           },
         },
       },
+      '/api/v1/rate/leaderboard': {
+        get: {
+          operationId: 'getJReviewsLeaderboard',
+          summary:
+            'Get 4-Tier JReviews Dual-Rating & 5-Criteria Leaderboard rankings',
+          description:
+            'Ranks standardized master products within a category (or across all 5 categories) by Combined 10.0 score, Verified User score, Lab Expert score, or any of the 5 JReviews sub-criteria (screen, performance, camera, battery, value) with zero affiliate weight.',
+          tags: ['Products & Specs'],
+          parameters: [
+            {
+              name: 'category',
+              in: 'query',
+              description:
+                'Canonical category slug (`smartphones`, `tablets`, `laptops`, `smartwatches`, `earbuds`, or `all`).',
+              schema: {
+                type: 'string',
+                enum: [...categorySlugs, 'all'],
+                default: 'smartphones',
+              },
+            },
+            {
+              name: 'criterion',
+              in: 'query',
+              description:
+                'JReviews ranking criterion (`combined`, `user`, `expert`, `screen`, `performance`, `camera`, `battery`, `value`).',
+              schema: {
+                type: 'string',
+                enum: [
+                  'combined',
+                  'user',
+                  'expert',
+                  'screen',
+                  'performance',
+                  'camera',
+                  'battery',
+                  'value',
+                ],
+                default: 'combined',
+              },
+            },
+            {
+              name: 'price',
+              in: 'query',
+              description:
+                'Price segment filter (`all`, `under15m`, `15to25m`, `over25m`).',
+              schema: {
+                type: 'string',
+                enum: ['all', 'under15m', '15to25m', 'over25m'],
+                default: 'all',
+              },
+            },
+            {
+              name: 'brand',
+              in: 'query',
+              description: 'Optional brand filter (e.g. `Apple`, `Samsung`).',
+              schema: {
+                type: 'string',
+                default: 'all',
+              },
+            },
+            {
+              name: 'limit',
+              in: 'query',
+              description: 'Max ranked items to return (1..50).',
+              schema: {
+                type: 'number',
+                default: 20,
+              },
+            },
+          ],
+          responses: {
+            '200': {
+              description:
+                '4-Tier JReviews Leaderboard ranking with Top 3 Podium and Same-Category compare URL.',
+            },
+          },
+        },
+      },
       '/api/v1/rate/openapi.json': {
         get: {
           operationId: 'getOpenApiSpecification',

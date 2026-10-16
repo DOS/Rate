@@ -231,6 +231,103 @@ export default function LeaderboardExplorer({
     useState<LeaderboardPriceSegment>('all');
   const [selectedBrand, setSelectedBrand] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [activePersona, setActivePersona] = useState<
+    | 'none'
+    | 'photography'
+    | 'gaming'
+    | 'endurance'
+    | 'business'
+    | 'value_hunter'
+    | 'custom'
+  >('none');
+  const [showWeightSliders, setShowWeightSliders] = useState<boolean>(false);
+  const [customWeights, setCustomWeights] = useState<{
+    screen: number;
+    performance: number;
+    camera: number;
+    battery: number;
+    value: number;
+  }>({
+    screen: 20,
+    performance: 20,
+    camera: 20,
+    battery: 20,
+    value: 20,
+  });
+
+  const applyPersonaPreset = (
+    persona:
+      | 'none'
+      | 'photography'
+      | 'gaming'
+      | 'endurance'
+      | 'business'
+      | 'value_hunter'
+  ) => {
+    setActivePersona(persona);
+    if (persona === 'none') {
+      setCustomWeights({
+        screen: 20,
+        performance: 20,
+        camera: 20,
+        battery: 20,
+        value: 20,
+      });
+      return;
+    }
+    if (persona === 'photography') {
+      setCustomWeights({
+        screen: 25,
+        performance: 15,
+        camera: 45,
+        battery: 10,
+        value: 5,
+      });
+    } else if (persona === 'gaming') {
+      setCustomWeights({
+        screen: 25,
+        performance: 45,
+        camera: 5,
+        battery: 20,
+        value: 5,
+      });
+    } else if (persona === 'endurance') {
+      setCustomWeights({
+        screen: 15,
+        performance: 15,
+        camera: 10,
+        battery: 45,
+        value: 15,
+      });
+    } else if (persona === 'business') {
+      setCustomWeights({
+        screen: 30,
+        performance: 25,
+        camera: 10,
+        battery: 25,
+        value: 10,
+      });
+    } else if (persona === 'value_hunter') {
+      setCustomWeights({
+        screen: 15,
+        performance: 20,
+        camera: 10,
+        battery: 15,
+        value: 40,
+      });
+    }
+  };
+
+  const updateSingleWeight = (
+    key: 'screen' | 'performance' | 'camera' | 'battery' | 'value',
+    val: number
+  ) => {
+    setActivePersona('custom');
+    setCustomWeights((prev) => ({
+      ...prev,
+      [key]: Math.max(0, Math.min(100, val)),
+    }));
+  };
 
   const copy = useMemo(() => {
     if (lang === 'en') {
@@ -238,6 +335,17 @@ export default function LeaderboardExplorer({
         dirLabel: 'Directory: Tech & Electronics (tech_electronics)',
         chooseCategory: '1. Select Category (Same-Category Ranking Lock):',
         chooseCriterion: '2. Rank By JReviews Criterion:',
+        personaTitle: '3. Smart Use-Case Persona Recommender & Custom Weights:',
+        customizeWeightsBtn: 'Custom 5-Criteria Sliders',
+        personaLabels: {
+          none: 'Standard Mode',
+          photography: '📸 Photography & Vlog',
+          gaming: '🎮 Hardcore Gaming',
+          endurance: '🔋 2-Day Battery Endurance',
+          business: '💼 Business & Display',
+          value_hunter: '💎 Best Value (P/P)',
+          custom: '🎛️ Custom Weighted Score',
+        },
         compareTop3Btn: 'Compare Top 3 in Category',
         searchPlaceholder: 'Filter by model name, SoC chip, or brand...',
         allBrands: 'All Brands',
@@ -272,6 +380,17 @@ export default function LeaderboardExplorer({
         dirLabel: 'Adresář: Technologie a Elektronika (tech_electronics)',
         chooseCategory: '1. Vyberte kategorii (Uzamčeno v rámci kategorie):',
         chooseCriterion: '2. Řadit podle kritéria JReviews:',
+        personaTitle: '3. Doporučení podle scénáře použití a vlastní váhy:',
+        customizeWeightsBtn: 'Vlastní váhy 5 kritérií',
+        personaLabels: {
+          none: 'Standardní režim',
+          photography: '📸 Fotografie a video',
+          gaming: '🎮 Náročné hraní her',
+          endurance: '🔋 Maximální výdrž baterie',
+          business: '💼 Práce a displej',
+          value_hunter: '💎 Nejlepší poměr cena/výkon',
+          custom: '🎛️ Vlastní vážené skóre',
+        },
         compareTop3Btn: 'Porovnat Top 3 v kategorii',
         searchPlaceholder: 'Hledat podle modelu, čipu nebo značky...',
         allBrands: 'Všechny značky',
@@ -305,6 +424,17 @@ export default function LeaderboardExplorer({
       dirLabel: 'Directory: Công nghệ & Điện tử (tech_electronics)',
       chooseCategory: '1. Chọn Danh Mục Ngành Hàng (Khóa Xếp Hạng Cùng Ngành):',
       chooseCriterion: '2. Xếp Hạng Theo Tiêu Chí JReviews:',
+      personaTitle: '3. Gợi Ý Theo Nhu Cầu Thực Tế & Trọng Số Tùy Chỉnh:',
+      customizeWeightsBtn: 'Tùy chỉnh thanh trượt 5 tiêu chí',
+      personaLabels: {
+        none: 'Mặc định theo tiêu chí',
+        photography: '📸 Chụp ảnh & Quay Vlog',
+        gaming: '🎮 Gaming & Đồ họa nặng',
+        endurance: '🔋 Pin trâu 2 ngày',
+        business: '💼 Doanh nhân & Màn hình đẹp',
+        value_hunter: '💎 Săn cấu hình / Giá tốt (P/P)',
+        custom: '🎛️ Trọng số cá nhân hóa',
+      },
       compareTop3Btn: 'So sánh Top 3 ngành này',
       searchPlaceholder: 'Tìm tên máy, chip xử lý hoặc thương hiệu...',
       allBrands: 'Tất cả hãng',
@@ -394,9 +524,33 @@ export default function LeaderboardExplorer({
       return true;
     });
 
-    const scored = filtered.map((item) =>
-      computeProductScores(item, activeCriterion)
-    );
+    const totalWeight =
+      customWeights.screen +
+      customWeights.performance +
+      customWeights.camera +
+      customWeights.battery +
+      customWeights.value;
+
+    const scored = filtered.map((item) => {
+      const base = computeProductScores(item, activeCriterion);
+      if (activePersona !== 'none' && totalWeight > 0) {
+        const weighted5 = Number(
+          (
+            (base.criteria.screen * customWeights.screen +
+              base.criteria.performance * customWeights.performance +
+              base.criteria.camera * customWeights.camera +
+              base.criteria.battery * customWeights.battery +
+              base.criteria.value * customWeights.value) /
+            totalWeight
+          ).toFixed(2)
+        );
+        return {
+          ...base,
+          activeScore5: weighted5,
+        };
+      }
+      return base;
+    });
 
     return scored.sort((a, b) => {
       if (b.activeScore5 !== a.activeScore5) {
@@ -418,6 +572,8 @@ export default function LeaderboardExplorer({
     priceSegment,
     searchQuery,
     activeCriterion,
+    activePersona,
+    customWeights,
   ]);
 
   const top3Slugs = useMemo(
@@ -564,9 +720,12 @@ export default function LeaderboardExplorer({
                 <button
                   key={opt.key}
                   type="button"
-                  onClick={() => handleSelectCriterion(opt.key)}
+                  onClick={() => {
+                    setActivePersona('none');
+                    handleSelectCriterion(opt.key);
+                  }}
                   className={`btn btn-sm rounded-pill d-inline-flex align-items-center gap-2 px-3 py-2 ${
-                    isSelected
+                    isSelected && activePersona === 'none'
                       ? 'btn-dark fw-semibold text-white shadow-sm'
                       : 'btn-outline-secondary text-dark bg-white'
                   }`}
@@ -577,6 +736,94 @@ export default function LeaderboardExplorer({
               );
             })}
           </div>
+        </div>
+
+        {/* 3. Smart Use-Case Persona Recommender & Custom 5-Criteria Weight Sliders (Issue #52) */}
+        <div className="border-top mb-3 pt-3">
+          <div className="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+            <div className="small text-muted fw-semibold">
+              {copy.personaTitle}
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowWeightSliders((v) => !v)}
+              className={`btn btn-sm rounded-pill px-3 py-1 ${
+                showWeightSliders || activePersona === 'custom'
+                  ? 'btn-primary fw-semibold text-white'
+                  : 'btn-outline-primary'
+              }`}
+              style={{ fontSize: '0.76rem' }}
+            >
+              🎛️ {copy.customizeWeightsBtn}
+            </button>
+          </div>
+
+          <div className="d-flex flex-wrap gap-2">
+            {(
+              [
+                'none',
+                'photography',
+                'gaming',
+                'endurance',
+                'business',
+                'value_hunter',
+              ] as const
+            ).map((presetKey) => {
+              const isSelected = activePersona === presetKey;
+              return (
+                <button
+                  key={presetKey}
+                  type="button"
+                  onClick={() => applyPersonaPreset(presetKey)}
+                  className={`btn btn-sm rounded-pill px-3 py-1 ${
+                    isSelected
+                      ? 'btn-danger fw-semibold text-white shadow-sm'
+                      : 'btn-outline-dark bg-light'
+                  }`}
+                  style={{ fontSize: '0.8rem' }}
+                >
+                  {copy.personaLabels[presetKey]}
+                </button>
+              );
+            })}
+          </div>
+
+          {showWeightSliders && (
+            <div className="rounded-3 bg-light mt-2 border p-3">
+              <div className="row g-3">
+                {(
+                  [
+                    { key: 'screen', label: copy.critLabels.screen },
+                    { key: 'performance', label: copy.critLabels.performance },
+                    { key: 'camera', label: copy.critLabels.camera },
+                    { key: 'battery', label: copy.critLabels.battery },
+                    { key: 'value', label: copy.critLabels.value },
+                  ] as const
+                ).map((slider) => (
+                  <div key={slider.key} className="col-md-4 col-sm-6">
+                    <div className="d-flex justify-content-between small fw-semibold mb-1">
+                      <span>{slider.label}</span>
+                      <span className="font-monospace text-danger">
+                        {customWeights[slider.key]}%
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      step={5}
+                      value={customWeights[slider.key]}
+                      onChange={(e) =>
+                        updateSingleWeight(slider.key, Number(e.target.value))
+                      }
+                      className="form-range"
+                      aria-label={slider.label}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Search + Price Segment + Brand Filter Bar */}
