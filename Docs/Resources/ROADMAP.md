@@ -151,6 +151,9 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc **4 T�
 - [x] **4.41 & 4.42. Xuất Đánh Giá Thực Chất JReviews Markdown/CSV Trên `JReviewsSection` + Xuất Lịch Sử Giá 60 Ngày & Kiểm Chứng Khuyến Mãi Ảo Markdown/CSV Trên `PriceHistorySection` (Issue #71 & Issue #72):**
   - Nâng cấp `JReviewsSection.tsx` với 2 nút `📋 Sao chép đánh giá Markdown` và `📥 Xuất CSV đánh giá` xuất danh sách bình luận đã qua kiểm duyệt Seeding AI kèm trọng số JReviews (`helpfulness_weight`).
   - Nâng cấp `PriceHistorySection.tsx` với 2 nút `📋 Sao chép lịch sử giá Markdown` và `📥 Xuất CSV lịch sử giá 60 ngày` xuất chuỗi quan sát giá theo thời gian và kết luận kiểm định Khuyến mãi ảo / Giá tốt thật của từng gian hàng.
+- [x] **4.43 & 4.44. Trình Tạo Snippet cURL/TS/Python & Tải JSON Trên `/developers` (`ApiPlaygroundClient`) + Xuất 10 Nhóm Thông Số Kỹ Thuật Markdown/JSON (`ProductSpecsExportToolbar`) Trên `ProductDetailView` (Issue #73 & Issue #74):**
+  - Nâng cấp `ApiPlaygroundClient.tsx` trên `/developers` bổ sung trình tạo mã `Python (requests)` bên cạnh `cURL` và `TS fetch()`, kèm 2 nút `📋 Copy JSON` và `📥 Tải JSON` cho kết quả phản hồi trực tiếp.
+  - Xây dựng `ProductSpecsExportToolbar.tsx` tích hợp tại `#specs-section` trên `ProductDetailView`, cho phép sao chép bảng 10 nhóm thông số chuẩn GSMArena & PhoneArena ra Markdown hoặc tải file JSON chuẩn hóa.
 
 ### ✅ Phase 5: Mở Rộng Đa Sàn 10/10 Nền Tảng, Browser Extension MV3 & Tự Động Hóa Cảnh Báo Giá (Đã hoàn thành 100%)
 
