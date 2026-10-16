@@ -14,5 +14,7 @@ export const fontJetBrainsMono = JetBrains_Mono({
   subsets: ['latin', 'vietnamese'],
   weight: ['500', '600', '700'],
   display: 'swap',
+  // Only .rate-mono uses it today; don't spend a preload on every page.
+  preload: false,
   variable: '--font-jetbrains-mono',
 });

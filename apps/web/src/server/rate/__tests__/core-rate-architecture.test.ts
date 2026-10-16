@@ -301,7 +301,7 @@ function runCoreArchitectureSuite() {
   const rootLayoutSrc = fs.readFileSync(rootLayoutPath, 'utf8');
   assert.ok(
     rootLayoutSrc.includes('getLocale') &&
-      /<html\s[^>]*lang=\{locale\}/.test(rootLayoutSrc),
+      /<html\b[^>]*\slang=\{locale\}/.test(rootLayoutSrc),
     'RootLayout must dynamically resolve <html lang={locale}> via getLocale()'
   );
 
@@ -2097,8 +2097,8 @@ function runCoreArchitectureSuite() {
   );
   assert.ok(
     !customScssSrc147.includes('fonts.googleapis.com') &&
-      customScssSrc147.includes('var(--font-inter)') &&
-      customScssSrc147.includes('var(--font-jetbrains-mono)') &&
+      customScssSrc147.includes('var(--font-inter') &&
+      customScssSrc147.includes('var(--font-jetbrains-mono') &&
       rootLayoutSrc145.includes('fontInter.variable') &&
       rootLayoutSrc145.includes('fontJetBrainsMono.variable'),
     'Inter and JetBrains Mono must come from next/font (src/lib/fonts.ts) via --font-inter / --font-jetbrains-mono, never a Google Fonts @import (#147)'
