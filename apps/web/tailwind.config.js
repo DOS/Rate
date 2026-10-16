@@ -2,7 +2,6 @@
 module.exports = {
   content: [
     './src/**/*.{js,ts,jsx,tsx,mdx}',
-    './node_modules/@radix-ui/react-*/**/*.{js,ts,jsx,tsx}',
   ],
   theme: {
     extend: {},

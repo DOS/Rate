@@ -75,13 +75,10 @@ const nextConfig = {
         type: env.WEBPACK_CACHE_TYPE || "filesystem",
       })
     }
-    // Alias a local shim for 'react-use-measure' to avoid adding external dep during setup
-    // This prevents build failures when the package isn't installed yet or is blocked by file locks
     config.resolve = config.resolve || {}
     config.resolve.alias = {
       ...(config.resolve.alias || {}),
       "next-intl/config": path.resolve(__dirname, "src/i18n/request.ts"),
-      "react-use-measure": path.resolve(__dirname, "src/lib/react-use-measure.ts"),
     }
     return config
   },
