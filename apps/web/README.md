@@ -33,7 +33,7 @@ Deploy Production trên Vercel theo `vercel.json` ở root (`pnpm@10.34.5`, `--f
 
 ## Biến Môi Trường
 
-Khai báo trong `src/env.mjs`. Đặt trong `apps/web/.env.local` khi chạy local, không commit.
+Khai báo trong `src/env.mjs`. Sao chép `apps/web/.env.example` thành `apps/web/.env.local` khi chạy local, không commit.
 
 - **Bắt buộc:** `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`. `src/lib/rate-api.ts` cố ý báo lỗi khi thiếu, để môi trường preview không âm thầm đọc nhầm project prod (giá trị mặc định trong `src/env.mjs` không được data layer dùng).
   `src/lib/rate-api.ts` chấp nhận `SUPABASE_URL` / `SUPABASE_ANON_KEY` làm fallback; route bình chọn đánh giá cũng chấp nhận `SUPABASE_URL`.
