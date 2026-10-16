@@ -8,6 +8,11 @@ import {
   type MasterProduct,
   type MerchantOffer,
 } from '../../lib/rate-api';
+import {
+  buildRadarIndex,
+  getRadarSignal,
+  type RadarSignal,
+} from '../../lib/deal-radar';
 
 export type DealRadarVerdict =
   'genuine_all_time_low' | 'best_market_deal' | 'inflated_fake_sale';
@@ -321,6 +326,22 @@ export function computeCrossPlatformDealRadarFromData(
     fakeSaleTraps: fakeSaleTraps.slice(0, limit),
     priceSpreadLeaders: priceSpreadLeaders.slice(0, limit),
   };
+}
+
+/**
+ * Radar signal for ONE product, computed from its own offers.
+ * Each cluster is analysed independently, so this equals the signal the
+ * global radar would produce, without the top-N truncation of the feed.
+ */
+export function computeProductRadarSignal(
+  master: MasterProduct,
+  offers: MerchantOffer[]
+): RadarSignal {
+  const radar = computeCrossPlatformDealRadarFromData([{ master, offers }], {
+    categorySlug: 'all',
+    limit: 50,
+  });
+  return getRadarSignal(buildRadarIndex(radar), master.slug);
 }
 
 export const getCrossPlatformDealRadar = cache(

@@ -194,6 +194,9 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc **4 T�
 - [x] **4.69. Refactor Radar Thành Một Nguồn Duy Nhất, Gỡ Code Lặp Ở 10 Component (Issue #104):**
   - Radar là thuộc tính của sản phẩm: gom toàn bộ logic vào `apps/web/src/lib/deal-radar.ts` (`buildRadarIndex`, `getRadarSignal`, `radarLabel`, `radarExportFields`, `radarCsvCells`, `selectMerchantRadar`, `unwrapRadarPayload`), `components/radar/RadarBadge.tsx` (một huy hiệu duy nhất) và `components/radar/use-deal-radar.ts` (`useDealRadarIndex` / `useDealRadarPayload`, chỉ gọi `/api/v1/rate/deals` một lần mỗi lần tải trang).
   - `LeaderboardExplorer`, `CategoryCatalogToolbar`, trang danh mục, `WatchlistWorkspace`, `DeepInspectWorkspace`, `MerchantDirectoryExplorer`, `/merchants/[id]`, `CompareWorkspace`, `VersusInteractiveScoreboard` đều dùng chung module này; Suite `[36/36]` chặn mọi tái xuất hiện của fetch/tra cứu Radar lặp.
+- [x] **4.70. Radar Theo Từng Sản Phẩm: Hiển Thị Trên ProductDetailView Và Sửa Lỗi Chỉ 3 Sản Phẩm Đầu Trang Danh Mục Có Huy Hiệu (Issue #106):**
+  - Thêm `computeProductRadarSignal(master, offers)` (`apps/web/src/server/rate/deals.ts`) tính tín hiệu Radar độc lập cho từng sản phẩm từ chính các offer đã tải, và hiển thị `RadarBadge` kèm lời giải thích ngay trên `ProductDetailView` (`pdv-radar-signal`).
+  - Sửa lỗi trang danh mục gọi Radar với `limit: 3` khiến chỉ 3 sản phẩm đầu có huy hiệu và cột Radar khi xuất; nay dùng `limit: 50` để mọi thẻ đều có tín hiệu. Suite `[37/37]` có kiểm thử chạy thật chống tái diễn.
 
 ### ✅ Phase 5: Mở Rộng Đa Sàn 10/10 Nền Tảng, Browser Extension MV3 & Tự Động Hóa Cảnh Báo Giá (Đã hoàn thành 100%)
 
