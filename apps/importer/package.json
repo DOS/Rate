@@ -10,9 +10,13 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./shopee/*": {
-      "types": "./dist/shopee/*.d.ts",
-      "import": "./dist/shopee/*.js"
+    "./shopee/arena-spec-syncer": {
+      "types": "./dist/shopee/arena-spec-syncer.d.ts",
+      "import": "./dist/shopee/arena-spec-syncer.js"
+    },
+    "./shopee/flagship-seed-data": {
+      "types": "./dist/shopee/flagship-seed-data.d.ts",
+      "import": "./dist/shopee/flagship-seed-data.js"
     },
     "./package.json": "./package.json"
   },
