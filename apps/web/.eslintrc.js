@@ -82,7 +82,6 @@ module.exports = {
         "tailwindcss/enforces-shorthand": "off",
         "react/jsx-curly-brace-presence": "off",
         "tailwindcss/no-unnecessary-arbitrary-value": "off",
-        "no-unused-vars": "off",
       },
     },
   ],
