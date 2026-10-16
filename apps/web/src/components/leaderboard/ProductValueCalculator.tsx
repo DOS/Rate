@@ -1,6 +1,12 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
+import {
+  RADAR_CSV_HEADERS,
+  radarCsvCells,
+  radarExportFields,
+  type RadarSignal,
+} from '@/lib/deal-radar';
 
 interface ProductValueCalculatorProps {
   readonly productName: string;
@@ -11,6 +17,7 @@ interface ProductValueCalculatorProps {
   readonly userScore5: number;
   readonly expertScore10: number | null;
   readonly valueCriterionScore5: number;
+  readonly radarSignal?: RadarSignal | null;
 }
 
 type HorizonMonths = 12 | 24 | 36;
@@ -46,6 +53,7 @@ export default function ProductValueCalculator({
   userScore5,
   expertScore10,
   valueCriterionScore5,
+  radarSignal,
 }: ProductValueCalculatorProps) {
   const [months, setMonths] = useState<HorizonMonths>(24);
   const [includeResale, setIncludeResale] = useState<boolean>(true);
@@ -119,6 +127,7 @@ export default function ProductValueCalculator({
       'Chi Phí Sở Hữu Thực (VND)',
       'Chi Phí Mỗi Tháng (VND)',
       'Chi Phí Mỗi Ngày (VND)',
+      ...(radarSignal ? RADAR_CSV_HEADERS : []),
     ];
     const horizons: HorizonMonths[] = [12, 24, 36];
     const rows = horizons.map((h) => {
@@ -135,6 +144,7 @@ export default function ProductValueCalculator({
         net,
         Math.round(net / h),
         Math.round(net / (h * 30.4)),
+        ...(radarSignal ? radarCsvCells(radarSignal) : []),
       ];
     });
     const csvContent = `\uFEFF${[
@@ -162,6 +172,7 @@ export default function ProductValueCalculator({
       minPriceVnd,
       maxPriceVnd,
       metrics,
+      dealRadar: radarSignal ? radarExportFields(radarSignal) : null,
       exportedAt: new Date().toISOString(),
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], {

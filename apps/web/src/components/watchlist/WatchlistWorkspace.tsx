@@ -12,7 +12,14 @@ import {
   type WatchlistItem,
 } from './watchlist-store';
 import CompareQuickToggle from '@/components/compare/CompareQuickToggle';
-import { getRadarSignal } from '@/lib/deal-radar';
+import {
+  getRadarSignal,
+  RADAR_CSV_HEADERS,
+  radarCsvCells,
+  radarExportFields,
+  radarMarkdownCell,
+  type RadarSignal,
+} from '@/lib/deal-radar';
 import { useDealRadarIndex } from '@/components/radar/use-deal-radar';
 
 interface WatchlistWorkspaceProps {
@@ -37,6 +44,7 @@ interface LiveWatchlistDeal {
     merchant_name: string;
     is_official_mall: boolean;
   } | null;
+  radar_signal?: RadarSignal;
 }
 
 const PLATFORM_DISPLAY_LABELS: Record<string, string> = {
@@ -224,12 +232,13 @@ export default function WatchlistWorkspace({
         `- **Tổng mức tiết kiệm chéo giữa các sàn:** ${portfolioStats.totalSpreadSavingsVnd.toLocaleString('vi-VN')} ₫`,
         `- **Điểm JReviews trung bình danh mục:** ★ ${avgPortfolioRating > 0 ? `${avgPortfolioRating.toFixed(2)}/5.0` : 'chưa có'}`,
         ``,
-        `| Thiết bị | Hãng | Giá thấp nhất hiện tại | Giá mục tiêu | Độ lệch 10 sàn | Trạng thái | Deal tốt nhất |`,
-        `| :--- | :--- | :---: | :---: | :---: | :---: | :--- |`,
+        `| Thiết bị | Hãng | Giá thấp nhất hiện tại | Giá mục tiêu | Độ lệch 10 sàn | Radar 60N | Trạng thái | Deal tốt nhất |`,
+        `| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :--- |`,
         ...items.map((item) => {
           const liveProd = productBySlug.get(item.slug);
           const liveDeal = liveDeals[item.slug];
-          const rSig = getRadarSignal(radarIndex, item.slug);
+          const rSig =
+            liveDeal?.radar_signal ?? getRadarSignal(radarIndex, item.slug);
           const curMin =
             liveDeal?.current_min_price ||
             (liveProd ? Number(liveProd.min_price || 0) : item.priceWhenAdded);
@@ -246,7 +255,7 @@ export default function WatchlistWorkspace({
           const bestOfferStr = liveDeal?.best_offer
             ? `${liveDeal.best_offer.merchant_name} (${liveDeal.best_offer.platform.toUpperCase()})`
             : `${liveProd?.merchant_count || 0} nguồn`;
-          return `| ${item.name} | ${item.brand} | ${curMin.toLocaleString('vi-VN')} ₫ | ${item.targetPrice.toLocaleString('vi-VN')} ₫ | ${spreadStr} | ${hit ? '✅ Đạt mục tiêu' : '⏳ Đang canh'} | ${bestOfferStr} |`;
+          return `| ${item.name} | ${item.brand} | ${curMin.toLocaleString('vi-VN')} ₫ | ${item.targetPrice.toLocaleString('vi-VN')} ₫ | ${spreadStr} | ${radarMarkdownCell(rSig)} | ${hit ? '✅ Đạt mục tiêu' : '⏳ Đang canh'} | ${bestOfferStr} |`;
         }),
       ];
       await navigator.clipboard.writeText(lines.join('\n'));
@@ -271,11 +280,13 @@ export default function WatchlistWorkspace({
       'Status',
       'Best Merchant',
       'Platform',
+      ...RADAR_CSV_HEADERS,
     ];
     const rows = items.map((item) => {
       const liveProd = productBySlug.get(item.slug);
       const liveDeal = liveDeals[item.slug];
-      const rSig = getRadarSignal(radarIndex, item.slug);
+      const rSig =
+        liveDeal?.radar_signal ?? getRadarSignal(radarIndex, item.slug);
       const curMin =
         liveDeal?.current_min_price ||
         (liveProd ? Number(liveProd.min_price || 0) : item.priceWhenAdded);
@@ -302,6 +313,7 @@ export default function WatchlistWorkspace({
         esc(hit ? 'TARGET_REACHED' : 'WATCHING'),
         esc(liveDeal?.best_offer?.merchant_name || ''),
         esc(liveDeal?.best_offer?.platform || ''),
+        ...radarCsvCells(rSig).map(esc),
       ].join(',');
     });
     const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\n');
@@ -325,7 +337,8 @@ export default function WatchlistWorkspace({
       items: items.map((item) => {
         const liveProd = productBySlug.get(item.slug);
         const liveDeal = liveDeals[item.slug];
-        const rSig = getRadarSignal(radarIndex, item.slug);
+        const rSig =
+          liveDeal?.radar_signal ?? getRadarSignal(radarIndex, item.slug);
         const curMin =
           liveDeal?.current_min_price ||
           (liveProd ? Number(liveProd.min_price || 0) : item.priceWhenAdded);
@@ -343,6 +356,7 @@ export default function WatchlistWorkspace({
                 ? Math.round(((curMax - curMin) / curMin) * 1000) / 10
                 : 0,
           },
+          dealRadar: radarExportFields(rSig),
           targetReached: curMin > 0 && curMin <= item.targetPrice,
           bestOffer: liveDeal?.best_offer || null,
         };
@@ -670,7 +684,8 @@ export default function WatchlistWorkspace({
             const bestOffer = dealInfo?.best_offer || null;
             const platformCount =
               dealInfo?.platform_count || live?.merchant_count || 0;
-            const radarSignal = getRadarSignal(radarIndex, item.slug);
+            const radarSignal =
+              dealInfo?.radar_signal ?? getRadarSignal(radarIndex, item.slug);
 
             return (
               <div key={item.slug} className="col-lg-6 col-12">

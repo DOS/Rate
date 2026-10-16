@@ -1901,7 +1901,91 @@ function runCoreArchitectureSuite() {
     'ApiPlaygroundClient presets must reference real crawled catalog slugs (#126)'
   );
   console.log(
-    '  ✅ [40/40] Unified radarSignal in inspectProductOrShopUrl, RadarBadge in Inspector/Merchant & real API Playground presets (#126) passed'
+    '  ✅ [40/41] Unified radarSignal in inspectProductOrShopUrl, RadarBadge in Inspector/Merchant & real API Playground presets (#126) passed'
+  );
+
+  // =========================================================================
+  // 41. Unified Deal Radar Exports in Watchlist API, WatchlistWorkspace,
+  //     DeepInspectWorkspace, ProductOffersExplorer & ProductValueCalculator (#127)
+  // =========================================================================
+  const watchlistRouteSrc127 = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/app/api/v1/rate/watchlist/route.ts'),
+    'utf-8'
+  );
+  const watchlistWorkspaceSrc127 = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/components/watchlist/WatchlistWorkspace.tsx'
+    ),
+    'utf-8'
+  );
+  const deepInspectSrc127 = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/components/inspect/DeepInspectWorkspace.tsx'
+    ),
+    'utf-8'
+  );
+  const offersExplorerSrc127 = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/components/leaderboard/ProductOffersExplorer.tsx'
+    ),
+    'utf-8'
+  );
+  const valueCalculatorSrc127 = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/components/leaderboard/ProductValueCalculator.tsx'
+    ),
+    'utf-8'
+  );
+  const pdvSrc127 = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/app/[locale]/smartphones/[slug]/page.tsx'
+    ),
+    'utf-8'
+  );
+
+  assert.ok(
+    watchlistRouteSrc127.includes('computeProductRadarSignal') &&
+      watchlistRouteSrc127.includes(
+        'deal_radar: radarExportFields(radarSignal)'
+      ) &&
+      watchlistRouteSrc127.includes('radar_signal: radarSignal'),
+    'GET and POST /api/v1/rate/watchlist must return deal_radar and radar_signal per watched product (#127)'
+  );
+  assert.ok(
+    watchlistWorkspaceSrc127.includes('RADAR_CSV_HEADERS') &&
+      watchlistWorkspaceSrc127.includes('radarCsvCells') &&
+      watchlistWorkspaceSrc127.includes('radarExportFields') &&
+      watchlistWorkspaceSrc127.includes('radarMarkdownCell'),
+    'WatchlistWorkspace exports (MD/CSV/JSON) must include unified Deal Radar columns (#127)'
+  );
+  assert.ok(
+    deepInspectSrc127.includes('RADAR_CSV_HEADERS') &&
+      deepInspectSrc127.includes('radarCsvCells') &&
+      deepInspectSrc127.includes('dealRadar: radarExportFields(radarSignal)') &&
+      deepInspectSrc127.includes('radarMarkdownCell(radarSignal)'),
+    'DeepInspectWorkspace exports (MD/CSV/JSON) must include unified Deal Radar columns (#127)'
+  );
+  assert.ok(
+    offersExplorerSrc127.includes('RADAR_CSV_HEADERS') &&
+      offersExplorerSrc127.includes('radarCsvCells') &&
+      offersExplorerSrc127.includes('radarExportFields') &&
+      valueCalculatorSrc127.includes('RADAR_CSV_HEADERS') &&
+      valueCalculatorSrc127.includes('radarCsvCells') &&
+      valueCalculatorSrc127.includes('radarExportFields'),
+    'ProductOffersExplorer and ProductValueCalculator must include unified Deal Radar columns in exports (#127)'
+  );
+  assert.ok(
+    pdvSrc127.includes('peerRadarIndex') &&
+      pdvSrc127.includes('getRadarSignal(peerRadarIndex, peer.slug)'),
+    'ProductDetailView relatedCompetitors cards must render per-product RadarBadge (#127)'
+  );
+  console.log(
+    '  ✅ [41/41] Unified Deal Radar exports across Watchlist API, WatchlistWorkspace, DeepInspectWorkspace, ProductOffersExplorer & ProductValueCalculator (#127) passed'
   );
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }

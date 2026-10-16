@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getRateClient } from '@repo/shared-data';
 import {
+  computeProductRadarSignal,
   getCachedMasterProductBySlug,
   getCachedMasterProductOffers,
 } from '@/server/rate';
+import { radarExportFields } from '@/lib/deal-radar';
 
 export interface WatchlistBestOffer {
   id: string;
@@ -62,9 +64,9 @@ function selectBestOfferFromListings(
 }
 
 /**
- * GET /api/v1/rate/watchlist?slugs=samsung-galaxy-s24-ultra-256gb,apple-iphone-16-pro-max-256gb
+ * GET /api/v1/rate/watchlist?slugs=apple-iphone-16-128gb,apple-iphone-16-pro-max-256gb
  * Evaluates live deal status across all 10 platforms for a list of watched product slugs,
- * returning the lowest-price platform offer and multi-platform coverage metadata.
+ * returning the lowest-price platform offer, multi-platform coverage metadata, and Deal Radar signal.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -94,6 +96,7 @@ export async function GET(request: NextRequest) {
         const offers = await getCachedMasterProductOffers(master.id);
         const { bestOffer, offerPlatforms } =
           selectBestOfferFromListings(offers);
+        const radarSignal = computeProductRadarSignal(master, offers);
         const currentMinPrice = Number(
           master.min_price || bestOffer?.price || 0
         );
@@ -114,6 +117,8 @@ export async function GET(request: NextRequest) {
             platform_count: offerPlatforms.length,
             offer_platforms: offerPlatforms,
             best_offer: bestOffer,
+            deal_radar: radarExportFields(radarSignal),
+            radar_signal: radarSignal,
           },
         ] as const;
       })
@@ -186,6 +191,7 @@ export async function POST(request: NextRequest) {
 
     const offers = await getCachedMasterProductOffers(masterProduct.id);
     const { bestOffer, offerPlatforms } = selectBestOfferFromListings(offers);
+    const radarSignal = computeProductRadarSignal(masterProduct, offers);
     const currentMinPrice = Number(
       masterProduct.min_price || bestOffer?.price || 0
     );
@@ -212,6 +218,8 @@ export async function POST(request: NextRequest) {
             ...(typeof rpcData === 'object' ? rpcData : {}),
             best_offer: bestOffer,
             offer_platforms: offerPlatforms,
+            deal_radar: radarExportFields(radarSignal),
+            radar_signal: radarSignal,
           },
         });
       }
@@ -231,6 +239,8 @@ export async function POST(request: NextRequest) {
         is_reached: isReached,
         best_offer: bestOffer,
         offer_platforms: offerPlatforms,
+        deal_radar: radarExportFields(radarSignal),
+        radar_signal: radarSignal,
         updated_at: new Date().toISOString(),
       },
     });
