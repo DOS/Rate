@@ -1,0 +1,9 @@
+{
+  // Used by `pnpm --filter @repo/web test` (tsx). Next compiles JSX with the automatic
+  // runtime, so most components no longer import React; tsx must do the same or any
+  // component a test imports throws "React is not defined".
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "jsx": "react-jsx"
+  }
+}

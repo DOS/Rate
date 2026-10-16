@@ -28,11 +28,15 @@ export default function RangeSlider({
     value ?? defaultValue
   );
 
+  // Depend on the two numbers, not the array, so a new array with the same
+  // bounds does not re-sync.
+  const valueMin = value?.[0];
+  const valueMax = value?.[1];
   useEffect(() => {
-    if (value && Array.isArray(value) && value.length === 2) {
-      setInternalRange([value[0], value[1]]);
+    if (valueMin !== undefined && valueMax !== undefined) {
+      setInternalRange([valueMin, valueMax]);
     }
-  }, [value?.[0], value?.[1]]);
+  }, [valueMin, valueMax]);
 
   const activeRange = value ?? internalRange;
 
