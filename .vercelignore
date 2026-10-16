@@ -12,7 +12,6 @@ supabase/**
 # Unused root templates & demo kits
 ListingHub_NextJs_*/**
 vendor/**
-radiant-ts/**
 Backup/**
 crawler_test/**
 test-results/**
