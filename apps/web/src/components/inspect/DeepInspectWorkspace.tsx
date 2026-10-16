@@ -10,11 +10,8 @@ import {
 import { normalizeRateLocale, type SupportedRateLocale } from '@/lib/rate-i18n';
 import CompareQuickToggle from '@/components/compare/CompareQuickToggle';
 import PriceWatchButton from '@/components/watchlist/PriceWatchButton';
-import type {
-  CrossPlatformDealRadarItem,
-  CrossPlatformDealRadarResponse,
-  CrossPlatformPriceSpreadItem,
-} from '@/server/rate/deals';
+import { getRadarSignal } from '@/lib/deal-radar';
+import { useDealRadarIndex } from '@/components/radar/use-deal-radar';
 import type { KeySpecs } from '@repo/shared-data';
 import {
   BsArrowRight,
@@ -249,27 +246,7 @@ export default function DeepInspectWorkspace({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [copiedMd, setCopiedMd] = useState(false);
-  const [radarData, setRadarData] =
-    useState<CrossPlatformDealRadarResponse | null>(null);
-
-  useEffect(() => {
-    let active = true;
-    fetch('/api/v1/rate/deals?category=all&limit=36')
-      .then((res) => (res.ok ? res.json() : null))
-      .then((json) => {
-        if (!active || !json) return;
-        const radarPayload = json?.data ?? json;
-        if (radarPayload && Array.isArray(radarPayload.genuineDeals)) {
-          setRadarData(radarPayload as CrossPlatformDealRadarResponse);
-        }
-      })
-      .catch(() => {
-        // Ignore background radar fetch errors
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
+  const radarIndex = useDealRadarIndex();
 
   const runInspection = async (targetQuery: string) => {
     const clean = targetQuery.trim();
@@ -339,22 +316,10 @@ export default function DeepInspectWorkspace({
   const reviewSummary = result?.reviewSummary ?? null;
   const merchant = result?.merchantProfile ?? null;
 
-  const matchedGenuineDeal: CrossPlatformDealRadarItem | null =
-    master && radarData
-      ? (radarData.genuineDeals.find((g) => g.productSlug === master.slug) ??
-        null)
-      : null;
-  const matchedFakeTrap: CrossPlatformDealRadarItem | null =
-    master && radarData
-      ? (radarData.fakeSaleTraps.find((t) => t.productSlug === master.slug) ??
-        null)
-      : null;
-  const matchedPriceSpread: CrossPlatformPriceSpreadItem | null =
-    master && radarData && Array.isArray(radarData.priceSpreadLeaders)
-      ? (radarData.priceSpreadLeaders.find(
-          (s) => s.productSlug === master.slug
-        ) ?? null)
-      : null;
+  const radarSignal = master ? getRadarSignal(radarIndex, master.slug) : null;
+  const matchedGenuineDeal = radarSignal?.genuineDeal ?? null;
+  const matchedFakeTrap = radarSignal?.fakeSaleTrap ?? null;
+  const matchedPriceSpread = radarSignal?.priceSpread ?? null;
 
   const handleCopyAuditMarkdown = async () => {
     if (typeof window === 'undefined') return;

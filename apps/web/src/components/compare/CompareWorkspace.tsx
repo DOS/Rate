@@ -13,10 +13,9 @@ import {
   getMasterProductHref,
   resolveProductImageUrl,
 } from '@/lib/rate-api';
-import type {
-  CrossPlatformDealRadarItem,
-  CrossPlatformDealRadarResponse,
-} from '@/server/rate/deals';
+import { getRadarSignal } from '@/lib/deal-radar';
+import RadarBadge from '@/components/radar/RadarBadge';
+import { useDealRadarIndex } from '@/components/radar/use-deal-radar';
 import {
   getCompareTray,
   MAX_COMPARE_ITEMS,
@@ -724,47 +723,7 @@ export default function CompareWorkspace({
   const [showDiffOnly, setShowDiffOnly] = useState(false);
   const [highlightWinners, setHighlightWinners] = useState(true);
   const [copiedLink, setCopiedLink] = useState(false);
-  const [dealRadar, setDealRadar] =
-    useState<CrossPlatformDealRadarResponse | null>(null);
-
-  useEffect(() => {
-    let active = true;
-    fetch('/api/v1/rate/deals?category=all&limit=36')
-      .then((res) => (res.ok ? res.json() : null))
-      .then((json) => {
-        const radarPayload = json?.data ?? json;
-        if (
-          active &&
-          radarPayload &&
-          Array.isArray(radarPayload.genuineDeals)
-        ) {
-          setDealRadar(radarPayload as CrossPlatformDealRadarResponse);
-        }
-      })
-      .catch(() => {
-        // Non-blocking fallback
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  const dealRadarBySlug = useMemo(() => {
-    const map = new Map<
-      string,
-      { type: 'genuine' | 'trap'; entry: CrossPlatformDealRadarItem }
-    >();
-    if (!dealRadar) return map;
-    for (const d of dealRadar.genuineDeals ?? []) {
-      map.set(d.productSlug, { type: 'genuine', entry: d });
-    }
-    for (const t of dealRadar.fakeSaleTraps ?? []) {
-      if (!map.has(t.productSlug)) {
-        map.set(t.productSlug, { type: 'trap', entry: t });
-      }
-    }
-    return map;
-  }, [dealRadar]);
+  const radarIndex = useDealRadarIndex();
 
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const searchBoxRef = useRef<HTMLDivElement | null>(null);
@@ -2000,24 +1959,15 @@ export default function CompareWorkspace({
                             </strong>
                           </div>
 
-                          {(() => {
-                            const radarSig = dealRadarBySlug.get(p.slug);
-                            if (!radarSig) return null;
-                            return (
-                              <div
-                                data-testid="compare-radar-signal"
-                                className={`badge rounded-pill font-monospace mb-2 ${
-                                  radarSig.type === 'genuine'
-                                    ? 'bg-success-subtle text-success border-success-subtle border'
-                                    : 'bg-danger-subtle text-danger border-danger-subtle border'
-                                }`}
-                              >
-                                {radarSig.type === 'genuine'
-                                  ? `🔥 Đáy giá 60N (-${Math.abs(radarSig.entry.savingsVsMedianPct).toFixed(1)}%)`
-                                  : `🚨 Bẫy Sale Ảo (+${Math.abs(radarSig.entry.fakeMarkupPct).toFixed(1)}%)`}
-                              </div>
-                            );
-                          })()}
+                          <div
+                            className="mb-2"
+                            data-testid="compare-radar-signal"
+                          >
+                            <RadarBadge
+                              signal={getRadarSignal(radarIndex, p.slug)}
+                              minSpreadPct={Infinity}
+                            />
+                          </div>
 
                           <div className="d-flex mt-1 gap-2">
                             <Link
@@ -2078,8 +2028,8 @@ export default function CompareWorkspace({
                     🔥 Tín hiệu Radar Kèo Đáy &amp; Bẫy Sale 10 Sàn (60N)
                   </td>
                   {products.map((p) => {
-                    const sig = dealRadarBySlug.get(p.slug);
-                    if (!sig) {
+                    const sig = getRadarSignal(radarIndex, p.slug);
+                    if (sig.verdict === 'none') {
                       return (
                         <td
                           key={`radar-${p.id}`}
@@ -2093,14 +2043,14 @@ export default function CompareWorkspace({
                       <td
                         key={`radar-${p.id}`}
                         className={`small fw-semibold ${
-                          sig.type === 'genuine'
+                          sig.verdict === 'genuine_deal'
                             ? 'bg-success bg-opacity-10 text-success'
                             : 'bg-danger bg-opacity-10 text-danger'
                         }`}
                       >
-                        {sig.type === 'genuine'
-                          ? `🔥 Đáy giá thật 60N (-${Math.abs(sig.entry.savingsVsMedianPct).toFixed(1)}% so với trung vị • ${sig.entry.platform.toUpperCase()})`
-                          : `🚨 Cảnh báo Nâng Giá Sale Ảo (+${Math.abs(sig.entry.fakeMarkupPct).toFixed(1)}% so với trung vị)`}
+                        {sig.verdict === 'genuine_deal'
+                          ? `🔥 Đáy giá thật 60N (-${sig.savingsPct.toFixed(1)}% so với trung vị • ${(sig.genuineDeal?.platform ?? '').toUpperCase()})`
+                          : `🚨 Cảnh báo Nâng Giá Sale Ảo (+${sig.fakeMarkupPct.toFixed(1)}% so với trung vị)`}
                       </td>
                     );
                   })}

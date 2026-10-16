@@ -3,7 +3,15 @@
 import React, { useMemo, useState } from 'react';
 import { Link } from '@/lib/navigation';
 import type { MasterProduct } from '@/lib/rate-api';
-import type { CrossPlatformDealRadarResponse } from '@/server/rate/deals';
+import {
+  getRadarSignal,
+  radarCsvCells,
+  radarExportFields,
+  radarMarkdownCell,
+  RADAR_CSV_HEADERS,
+  type CrossPlatformDealRadarResponse,
+} from '@/lib/deal-radar';
+import { useDealRadarIndex } from '@/components/radar/use-deal-radar';
 
 interface CategoryCatalogToolbarProps {
   readonly categorySlug: string;
@@ -22,19 +30,8 @@ export default function CategoryCatalogToolbar({
   const [slugB, setSlugB] = useState<string>('');
   const [copiedCatalogMd, setCopiedCatalogMd] = useState(false);
 
-  const radarFor = (slug: string) => {
-    const g = dealRadar?.genuineDeals?.find((d) => d.productSlug === slug);
-    const t = dealRadar?.fakeSaleTraps?.find((d) => d.productSlug === slug);
-    const sp = dealRadar?.priceSpreadLeaders?.find(
-      (d) => d.productSlug === slug
-    );
-    return {
-      verdict: g ? 'genuine_deal' : t ? 'fake_sale_trap' : 'none',
-      savingsPct: Math.abs(g?.savingsVsMedianPct || 0),
-      fakeMarkupPct: Math.abs(t?.fakeMarkupPct || 0),
-      spreadPct: sp?.spreadPct ?? 0,
-    };
-  };
+  const radarIndex = useDealRadarIndex(dealRadar);
+  const radarFor = (slug: string) => getRadarSignal(radarIndex, slug);
 
   const effectiveSlugA = useMemo(() => {
     if (slugA && products.some((p) => p.slug === slugA)) return slugA;
@@ -86,13 +83,7 @@ export default function CategoryCatalogToolbar({
         `${expertScore10.toFixed(1)}/10`,
         String(p.authentic_review_count || p.total_reviews || 12),
         p.min_price ? `${Number(p.min_price).toLocaleString('vi-VN')} ₫` : '-',
-        radar.verdict === 'genuine_deal'
-          ? `🔥 -${radar.savingsPct.toFixed(1)}%`
-          : radar.verdict === 'fake_sale_trap'
-            ? `🚨 +${radar.fakeMarkupPct.toFixed(1)}%`
-            : radar.spreadPct > 0
-              ? `📊 +${radar.spreadPct.toFixed(1)}%`
-              : '-',
+        radarMarkdownCell(radar),
       ];
     });
 
@@ -128,10 +119,7 @@ export default function CategoryCatalogToolbar({
       'MerchantCount',
       'MinPriceVND',
       'MaxPriceVND',
-      'RadarVerdict',
-      'RadarSavingsPct',
-      'RadarFakeMarkupPct',
-      'PriceSpreadPct',
+      ...RADAR_CSV_HEADERS,
     ];
     const rows = products.map((p, idx) => {
       const userRating =
@@ -158,10 +146,7 @@ export default function CategoryCatalogToolbar({
         String(p.merchant_count || 10),
         String(p.min_price || 0),
         String(p.max_price || 0),
-        radar.verdict,
-        radar.savingsPct.toFixed(1),
-        radar.fakeMarkupPct.toFixed(1),
-        radar.spreadPct.toFixed(1),
+        ...radarCsvCells(radar),
       ];
     });
 
@@ -199,7 +184,7 @@ export default function CategoryCatalogToolbar({
         userRating: Number(p.user_rating_weighted || p.average_rating || 4.8),
         expertRating: Number(p.expert_rating || 0),
         minPriceVnd: Number(p.min_price || 0),
-        dealRadar: radarFor(p.slug),
+        dealRadar: radarExportFields(radarFor(p.slug)),
       })),
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], {

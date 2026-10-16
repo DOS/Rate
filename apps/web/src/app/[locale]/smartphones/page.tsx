@@ -8,6 +8,8 @@ import {
   type MasterProductFilterParams,
 } from '@/server/rate';
 import type { CanonicalCategorySlug } from '@/lib/rate-api';
+import { buildRadarIndex, getRadarSignal } from '@/lib/deal-radar';
+import RadarBadge from '@/components/radar/RadarBadge';
 import {
   formatStorageLabel,
   getCategoryFilterSchema,
@@ -185,6 +187,8 @@ export async function CategoryCatalogContent({
       limit: 3,
     }),
   ]);
+
+  const radarIndex = buildRadarIndex(categoryDealRadar);
 
   const schema = getCategoryFilterSchema(
     categorySlug,
@@ -804,17 +808,7 @@ export async function CategoryCatalogContent({
                     const refreshHz = specs.display?.refresh_rate_hz;
                     const nfcSupported = specs.connectivity?.nfc;
                     const fastChargeW = specs.battery?.fast_charging_w;
-                    const genuineDealMatch =
-                      categoryDealRadar?.genuineDeals.find(
-                        (g) => g.productSlug === item.slug
-                      );
-                    const fakeTrapMatch = categoryDealRadar?.fakeSaleTraps.find(
-                      (t) => t.productSlug === item.slug
-                    );
-                    const spreadMatch =
-                      categoryDealRadar?.priceSpreadLeaders?.find(
-                        (s) => s.productSlug === item.slug
-                      );
+                    const radarSignal = getRadarSignal(radarIndex, item.slug);
 
                     return (
                       <div
@@ -899,36 +893,7 @@ export async function CategoryCatalogContent({
                             <span className="rate-score-badge-expert">
                               🔬 {expertScore.toFixed(1)} Expert Lab
                             </span>
-                            {genuineDealMatch && (
-                              <span
-                                className="badge bg-success-subtle text-success border-success-subtle rounded-pill border"
-                                data-testid="catalog-card-radar-badge"
-                              >
-                                🔥 Đáy giá -
-                                {genuineDealMatch.savingsVsMedianPct}% (
-                                {genuineDealMatch.platform.toUpperCase()})
-                              </span>
-                            )}
-                            {fakeTrapMatch && (
-                              <span
-                                className="badge bg-danger-subtle text-danger border-danger-subtle rounded-pill border"
-                                data-testid="catalog-card-radar-badge"
-                              >
-                                🚨 Cảnh báo Sale Ảo +
-                                {fakeTrapMatch.fakeMarkupPct}%
-                              </span>
-                            )}
-                            {!genuineDealMatch &&
-                              !fakeTrapMatch &&
-                              spreadMatch &&
-                              spreadMatch.spreadPct >= 10 && (
-                                <span
-                                  className="badge bg-warning-subtle text-dark border-warning-subtle rounded-pill border"
-                                  data-testid="catalog-card-radar-badge"
-                                >
-                                  📊 Lệch giá +{spreadMatch.spreadPct}% đa sàn
-                                </span>
-                              )}
+                            <RadarBadge signal={radarSignal} />
                           </div>
 
                           {/* 10 Field Groups Spec Badges */}
