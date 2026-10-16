@@ -502,6 +502,103 @@ export default function JReviewsSection({
     }
   }
 
+  const [copiedReviewsMd, setCopiedReviewsMd] = useState(false);
+
+  const handleCopyReviewsMarkdown = async () => {
+    if (
+      typeof navigator === 'undefined' ||
+      filteredAndSortedReviews.length === 0
+    )
+      return;
+    const headers = [
+      'Author',
+      'Type',
+      'Rating',
+      'JReviews Weight',
+      'AI Flag Category',
+      'Upvotes',
+      'Comment',
+    ];
+    const sep = headers.map(() => '---');
+    const rows = filteredAndSortedReviews.map((r) => [
+      r.author_name.replace(/\|/g, '-'),
+      r.reviewer_type === 'expert' ? 'Expert' : 'Verified Buyer',
+      `${r.rating_star}/5★`,
+      `${r.helpfulness_weight.toFixed(2)}x`,
+      r.flag_category,
+      String(r.upvotes),
+      r.comment.replace(/\|/g, '-').replace(/\r?\n/g, ' ').slice(0, 120),
+    ]);
+    const md = [
+      `### ⭐ Rate.vn JReviews AI-Audited Buyer Reviews: ${productName} (${filteredAndSortedReviews.length} reviews)`,
+      '',
+      `| ${headers.join(' | ')} |`,
+      `| ${sep.join(' | ')} |`,
+      ...rows.map((row) => `| ${row.join(' | ')} |`),
+    ].join('\n');
+
+    try {
+      await navigator.clipboard.writeText(md);
+      setCopiedReviewsMd(true);
+      setTimeout(() => setCopiedReviewsMd(false), 2500);
+    } catch {
+      // Ignore clipboard failure
+    }
+  };
+
+  const handleDownloadReviewsCsv = () => {
+    if (
+      typeof document === 'undefined' ||
+      filteredAndSortedReviews.length === 0
+    )
+      return;
+    const escapeCsv = (val: string) => `"${val.replace(/"/g, '""')}"`;
+    const headers = [
+      'ReviewID',
+      'Author',
+      'ReviewerType',
+      'RatingStar',
+      'HelpfulnessWeight',
+      'IncludeInRating',
+      'FlagCategory',
+      'Verdict',
+      'Upvotes',
+      'Downvotes',
+      'CreatedAt',
+      'Comment',
+    ];
+    const rows = filteredAndSortedReviews.map((r) => [
+      r.id,
+      r.author_name,
+      r.reviewer_type,
+      String(r.rating_star),
+      r.helpfulness_weight.toFixed(2),
+      r.include_in_rating ? 'true' : 'false',
+      r.flag_category,
+      r.verdict || 'authentic',
+      String(r.upvotes),
+      String(r.downvotes),
+      r.created_at,
+      r.comment.replace(/\r?\n/g, ' '),
+    ]);
+    const csvContent =
+      '\uFEFF' +
+      [
+        headers.map(escapeCsv).join(','),
+        ...rows.map((row) => row.map(escapeCsv).join(',')),
+      ].join('\r\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `rate-jreviews-${productSlug || 'audit'}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div
       id="jreviews-section"
@@ -521,6 +618,24 @@ export default function JReviewsSection({
           </p>
         </div>
         <div className="d-flex align-items-center flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={handleCopyReviewsMarkdown}
+            className="btn btn-outline-dark btn-sm rounded-pill fw-semibold px-3 py-1"
+            data-testid="copy-reviews-md-btn"
+          >
+            {copiedReviewsMd
+              ? '✅ Đã chép đánh giá MD!'
+              : '📋 Sao chép đánh giá Markdown'}
+          </button>
+          <button
+            type="button"
+            onClick={handleDownloadReviewsCsv}
+            className="btn btn-outline-secondary btn-sm rounded-pill fw-semibold px-3 py-1"
+            data-testid="download-reviews-csv-btn"
+          >
+            📥 Xuất CSV đánh giá
+          </button>
           {masterProductId && (
             <button
               type="button"

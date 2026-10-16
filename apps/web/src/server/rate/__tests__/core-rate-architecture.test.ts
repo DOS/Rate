@@ -960,6 +960,32 @@ function runCoreArchitectureSuite() {
   console.log(
     '  ✅ [21/21] 10-Platform Offers Explorer (#69) & Category Catalog 1v1 Picker + CSV Export (#70) passed'
   );
+
+  // 22. JReviews Audit Export (#71) & 60-Day Price History Markdown/CSV Export (#72)
+  const jreviewsSrcUpdated = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/components/reviews/JReviewsSection.tsx'),
+    'utf8'
+  );
+  const priceHistorySrcUpdated = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/components/price-history/PriceHistorySection.tsx'
+    ),
+    'utf8'
+  );
+  assert.ok(
+    jreviewsSrcUpdated.includes('handleCopyReviewsMarkdown') &&
+      jreviewsSrcUpdated.includes('handleDownloadReviewsCsv'),
+    'JReviewsSection must provide 1-Click Markdown and CSV export of AI-audited buyer reviews'
+  );
+  assert.ok(
+    priceHistorySrcUpdated.includes('handleCopyPriceHistoryMarkdown') &&
+      priceHistorySrcUpdated.includes('handleDownloadPriceHistoryCsv'),
+    'PriceHistorySection must provide 1-Click Markdown and CSV export of 60-day price history and Fake Sale audit verdicts'
+  );
+  console.log(
+    '  ✅ [22/22] JReviews Audit Export (#71) & 60-Day Price History Markdown/CSV Export (#72) passed'
+  );
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
 

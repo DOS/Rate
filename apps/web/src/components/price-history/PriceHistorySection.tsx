@@ -147,7 +147,10 @@ export default function PriceHistorySection({
     const rawMin = Math.min(...allValues);
     const rawMax = Math.max(...allValues);
     const span = Math.max(rawMax - rawMin, rawMin * 0.08, 500_000);
-    const minY = Math.max(0, Math.floor((rawMin - span * 0.15) / 100_000) * 100_000);
+    const minY = Math.max(
+      0,
+      Math.floor((rawMin - span * 0.15) / 100_000) * 100_000
+    );
     const maxY = Math.ceil((rawMax + span * 0.15) / 100_000) * 100_000;
     const yRange = Math.max(maxY - minY, 1);
 
@@ -254,6 +257,86 @@ export default function PriceHistorySection({
     };
   }, [filteredPoints, offerAnalyses, history.lowestEverPrice]);
 
+  const [copiedHistoryMd, setCopiedHistoryMd] = useState(false);
+
+  const handleCopyPriceHistoryMarkdown = async () => {
+    if (typeof navigator === 'undefined') return;
+    const headers = [
+      'Merchant',
+      'Platform',
+      'Current Price (VND)',
+      'Original Price (VND)',
+      '90d Median (VND)',
+      '90d Low (VND)',
+      'Audit Verdict',
+    ];
+    const sep = headers.map(() => '---');
+    const rows = offerAnalyses.map((oa) => [
+      oa.merchant_name.replace(/\|/g, '-'),
+      oa.platform.toUpperCase(),
+      formatVnd(oa.price_current),
+      formatVnd(oa.price_original),
+      formatVnd(oa.historical_median_price),
+      formatVnd(oa.historical_min_price),
+      oa.badge_label,
+    ]);
+    const md = [
+      `### 📈 Rate.vn 60-Day Price History & Fake Sale Audit: ${productName}`,
+      `- **Current Lowest Price**: ${formatVnd(history.currentMinPrice)}`,
+      `- **All-Time Lowest Recorded**: ${formatVnd(history.lowestEverPrice)}`,
+      `- **Fake Sale Alerts**: ${history.fakeDiscountCount} | **Genuine Deals**: ${history.genuineDealCount}`,
+      '',
+      `| ${headers.join(' | ')} |`,
+      `| ${sep.join(' | ')} |`,
+      ...rows.map((r) => `| ${r.join(' | ')} |`),
+    ].join('\n');
+
+    try {
+      await navigator.clipboard.writeText(md);
+      setCopiedHistoryMd(true);
+      setTimeout(() => setCopiedHistoryMd(false), 2500);
+    } catch {
+      // Ignore clipboard failure
+    }
+  };
+
+  const handleDownloadPriceHistoryCsv = () => {
+    if (typeof document === 'undefined' || filteredPoints.length === 0) return;
+    const escapeCsv = (val: string) => `"${val.replace(/"/g, '""')}"`;
+    const headers = [
+      'RecordedAt',
+      'ProductID',
+      'Platform',
+      'MerchantName',
+      'PriceVND',
+      'OriginalPriceVND',
+    ];
+    const rows = filteredPoints.map((pt) => [
+      pt.recorded_at,
+      pt.product_id,
+      pt.platform,
+      pt.merchant_name,
+      String(pt.price),
+      String(pt.price_original || ''),
+    ]);
+    const csvContent =
+      '\uFEFF' +
+      [
+        headers.map(escapeCsv).join(','),
+        ...rows.map((r) => r.map(escapeCsv).join(',')),
+      ].join('\r\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `rate-price-history-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   const activeNode =
     chartGeometry && activePointIndex != null
       ? chartGeometry.mapped[activePointIndex] ||
@@ -263,12 +346,12 @@ export default function PriceHistorySection({
   return (
     <div
       id="price-history-section"
-      className="card border-0 shadow-sm rounded-4 p-4 p-md-5 mb-5"
+      className="card rounded-4 p-md-5 mb-5 border-0 p-4 shadow-sm"
     >
       {/* Header & Summary Badges */}
-      <div className="d-flex flex-column flex-lg-row justify-content-between align-items-start align-items-lg-center gap-3 mb-4">
+      <div className="d-flex flex-column flex-lg-row justify-content-between align-items-start align-items-lg-center mb-4 gap-3">
         <div>
-          <h2 className="h4 fw-bold mb-1 d-flex align-items-center gap-2">
+          <h2 className="h4 fw-bold d-flex align-items-center mb-1 gap-2">
             <span>📈</span> Biểu Đồ Lịch Sử Giá &amp; Kiểm Chứng Giảm Giá Ảo
           </h2>
           <p className="text-muted small mb-0">
@@ -278,18 +361,37 @@ export default function PriceHistorySection({
           </p>
         </div>
 
-        <div className="d-flex flex-wrap align-items-center gap-2">
+        <div className="d-flex align-items-center flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={handleCopyPriceHistoryMarkdown}
+            className="btn btn-sm btn-outline-dark rounded-pill fw-semibold px-3 py-1"
+            data-testid="copy-price-history-md-btn"
+          >
+            {copiedHistoryMd
+              ? '✅ Đã chép lịch sử giá MD!'
+              : '📋 Sao chép lịch sử giá Markdown'}
+          </button>
+          <button
+            type="button"
+            onClick={handleDownloadPriceHistoryCsv}
+            className="btn btn-sm btn-outline-secondary rounded-pill fw-semibold px-3 py-1"
+            data-testid="download-price-history-csv-btn"
+          >
+            📥 Xuất CSV lịch sử giá 60 ngày
+          </button>
           {history.fakeDiscountCount > 0 ? (
-            <span className="badge bg-danger text-white px-3 py-2 rounded-pill small">
-              🚨 Phát hiện {history.fakeDiscountCount} nơi bán nâng giá gốc / giảm ảo
+            <span className="badge bg-danger rounded-pill small px-3 py-2 text-white">
+              🚨 Phát hiện {history.fakeDiscountCount} nơi bán nâng giá gốc /
+              giảm ảo
             </span>
           ) : (
-            <span className="badge bg-success-subtle text-success px-3 py-2 rounded-pill small">
+            <span className="badge bg-success-subtle text-success rounded-pill small px-3 py-2">
               ✓ Không phát hiện chiêu trò nâng khống giá gốc
             </span>
           )}
           {history.genuineDealCount > 0 && (
-            <span className="badge bg-success text-white px-3 py-2 rounded-pill small">
+            <span className="badge bg-success rounded-pill small px-3 py-2 text-white">
               🔥 {history.genuineDealCount} nơi bán đang ở vùng giá tốt thật
             </span>
           )}
@@ -298,8 +400,8 @@ export default function PriceHistorySection({
 
       {/* 4 KPI Summary Cards */}
       <div className="row g-3 mb-4">
-        <div className="col-6 col-lg-3">
-          <div className="border rounded-4 p-3 h-100 bg-light">
+        <div className="col-lg-3 col-6">
+          <div className="rounded-4 bg-light h-100 border p-3">
             <div className="text-muted small mb-1">Giá tốt nhất hiện tại</div>
             <div className="h5 fw-bold text-danger mb-1">
               {formatVnd(history.currentMinPrice)}
@@ -310,15 +412,18 @@ export default function PriceHistorySection({
           </div>
         </div>
 
-        <div className="col-6 col-lg-3">
-          <div className="border rounded-4 p-3 h-100 bg-success-subtle border-success-subtle">
+        <div className="col-lg-3 col-6">
+          <div className="rounded-4 bg-success-subtle border-success-subtle h-100 border p-3">
             <div className="text-success-emphasis small mb-1">
               Đáy giá lịch sử từng ghi nhận
             </div>
             <div className="h5 fw-bold text-success mb-1">
               {formatVnd(history.lowestEverPrice)}
             </div>
-            <div className="text-success-emphasis" style={{ fontSize: '0.75rem' }}>
+            <div
+              className="text-success-emphasis"
+              style={{ fontSize: '0.75rem' }}
+            >
               {history.lowestEverMerchant
                 ? `${history.lowestEverMerchant} (${history.lowestEverDate ? formatDateShort(history.lowestEverDate) : ''})`
                 : 'Dữ liệu chuẩn hóa Rate.vn'}
@@ -326,8 +431,8 @@ export default function PriceHistorySection({
           </div>
         </div>
 
-        <div className="col-6 col-lg-3">
-          <div className="border rounded-4 p-3 h-100 bg-light">
+        <div className="col-lg-3 col-6">
+          <div className="rounded-4 bg-light h-100 border p-3">
             <div className="text-muted small mb-1">Đỉnh giá thực tế</div>
             <div className="h5 fw-bold text-dark mb-1">
               {formatVnd(history.highestEverPrice)}
@@ -338,9 +443,9 @@ export default function PriceHistorySection({
           </div>
         </div>
 
-        <div className="col-6 col-lg-3">
+        <div className="col-lg-3 col-6">
           <div
-            className={`border rounded-4 p-3 h-100 ${
+            className={`rounded-4 h-100 border p-3 ${
               history.fakeDiscountCount > 0
                 ? 'bg-danger-subtle border-danger-subtle'
                 : 'bg-light'
@@ -364,8 +469,8 @@ export default function PriceHistorySection({
       </div>
 
       {/* Controls: Merchant Filter & Time Range */}
-      <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-3">
-        <div className="d-flex flex-wrap align-items-center gap-2">
+      <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-3 gap-3">
+        <div className="d-flex align-items-center flex-wrap gap-2">
           <span className="small text-muted fw-medium me-1">Gian hàng:</span>
           <button
             type="button"
@@ -382,7 +487,8 @@ export default function PriceHistorySection({
             Tất cả ({offerAnalyses.length})
           </button>
           {offerAnalyses.map((oa, idx) => {
-            const color = SERIES_COLORS[idx % SERIES_COLORS.length] || '#dc2626';
+            const color =
+              SERIES_COLORS[idx % SERIES_COLORS.length] || '#dc2626';
             const isSelected = selectedProductId === oa.product_id;
             return (
               <button
@@ -392,7 +498,7 @@ export default function PriceHistorySection({
                   setSelectedProductId(oa.product_id);
                   setActivePointIndex(null);
                 }}
-                className={`btn btn-sm rounded-pill px-3 d-inline-flex align-items-center gap-2 ${
+                className={`btn btn-sm rounded-pill d-inline-flex align-items-center gap-2 px-3 ${
                   isSelected ? 'btn-dark fw-semibold' : 'btn-outline-secondary'
                 }`}
               >
@@ -410,7 +516,11 @@ export default function PriceHistorySection({
           })}
         </div>
 
-        <div className="btn-group btn-group-sm" role="group" aria-label="Khoảng thời gian">
+        <div
+          className="btn-group btn-group-sm"
+          role="group"
+          aria-label="Khoảng thời gian"
+        >
           {(
             [
               { key: '30d', label: '30 ngày' },
@@ -437,10 +547,10 @@ export default function PriceHistorySection({
 
       {/* Interactive SVG Time-Series Chart */}
       {chartGeometry ? (
-        <div className="border rounded-4 p-3 bg-white mb-4">
-          <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2 px-2">
-            <div className="d-flex flex-wrap align-items-center gap-3 small">
-              <span className="d-inline-flex align-items-center gap-1 text-dark fw-medium">
+        <div className="rounded-4 mb-4 border bg-white p-3">
+          <div className="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2 px-2">
+            <div className="d-flex align-items-center small flex-wrap gap-3">
+              <span className="d-inline-flex align-items-center text-dark fw-medium gap-1">
                 <span
                   style={{
                     width: '18px',
@@ -451,7 +561,7 @@ export default function PriceHistorySection({
                 />
                 Giá bán thực tế (Actual Price)
               </span>
-              <span className="d-inline-flex align-items-center gap-1 text-muted">
+              <span className="d-inline-flex align-items-center text-muted gap-1">
                 <span
                   style={{
                     width: '18px',
@@ -462,7 +572,7 @@ export default function PriceHistorySection({
                 />
                 Giá gốc gạch ngang (Claimed Original)
               </span>
-              <span className="d-inline-flex align-items-center gap-1 text-success">
+              <span className="d-inline-flex align-items-center text-success gap-1">
                 <span
                   style={{
                     width: '18px',
@@ -476,7 +586,7 @@ export default function PriceHistorySection({
             </div>
 
             {activeNode && (
-              <div className="badge bg-light text-dark border px-3 py-2 rounded-pill small">
+              <div className="badge bg-light text-dark rounded-pill small border px-3 py-2">
                 📅 {formatDateShort(activeNode.pt.recorded_at)} -{' '}
                 <strong>{activeNode.pt.merchant_name}</strong>:{' '}
                 <span className="text-danger fw-bold">
@@ -484,7 +594,7 @@ export default function PriceHistorySection({
                 </span>
                 {activeNode.pt.price_original &&
                   activeNode.pt.price_original > activeNode.pt.price && (
-                    <span className="text-muted ms-2 text-decoration-line-through">
+                    <span className="text-muted text-decoration-line-through ms-2">
                       {formatVnd(activeNode.pt.price_original)}
                     </span>
                   )}
@@ -543,7 +653,10 @@ export default function PriceHistorySection({
                   .join(' ');
                 const origNodes = s.nodes.filter((n) => n.yOriginal != null);
                 const origPointsAttr = origNodes
-                  .map((n) => `${n.x.toFixed(1)},${(n.yOriginal ?? n.yPrice).toFixed(1)}`)
+                  .map(
+                    (n) =>
+                      `${n.x.toFixed(1)},${(n.yOriginal ?? n.yPrice).toFixed(1)}`
+                  )
                   .join(' ');
 
                 return (
@@ -624,7 +737,9 @@ export default function PriceHistorySection({
                     fontSize="11"
                     fill="#64748b"
                   >
-                    {formatDateShort(chartGeometry.mapped[0]?.pt.recorded_at || '')}
+                    {formatDateShort(
+                      chartGeometry.mapped[0]?.pt.recorded_at || ''
+                    )}
                   </text>
                 ) : (
                   <>
@@ -635,7 +750,9 @@ export default function PriceHistorySection({
                       fontSize="11"
                       fill="#64748b"
                     >
-                      {formatDateShort(chartGeometry.mapped[0]?.pt.recorded_at || '')}
+                      {formatDateShort(
+                        chartGeometry.mapped[0]?.pt.recorded_at || ''
+                      )}
                     </text>
                     {chartGeometry.mapped.length >= 3 && (
                       <text
@@ -679,37 +796,39 @@ export default function PriceHistorySection({
           </div>
         </div>
       ) : (
-        <div className="alert alert-light border rounded-4 text-muted small mb-4">
+        <div className="alert alert-light rounded-4 text-muted small mb-4 border">
           Chưa có dữ liệu chuỗi thời gian cho bộ lọc này.
         </div>
       )}
 
       {/* Per-Merchant Fake Discount Detector Cards */}
       <div>
-        <h3 className="h6 fw-bold mb-3 d-flex align-items-center gap-2">
+        <h3 className="h6 fw-bold d-flex align-items-center mb-3 gap-2">
           <span>🔍</span> Phân Tích Độ Trung Thực Giá Khuyến Mãi Từng Gian Hàng
         </h3>
         <div className="row g-3">
           {offerAnalyses.map((oa) => {
             const style = getVerdictBadgeStyle(oa.verdict);
             return (
-              <div key={oa.product_id} className="col-12 col-md-6">
-                <div className="border rounded-4 p-3 h-100 bg-white">
-                  <div className="d-flex justify-content-between align-items-start gap-2 mb-2">
+              <div key={oa.product_id} className="col-md-6 col-12">
+                <div className="rounded-4 h-100 border bg-white p-3">
+                  <div className="d-flex justify-content-between align-items-start mb-2 gap-2">
                     <div>
-                      <span className="badge bg-danger text-uppercase me-2 small">
+                      <span className="badge bg-danger text-uppercase small me-2">
                         {oa.platform}
                       </span>
                       <span className="fw-bold text-dark small">
                         {oa.merchant_name}
                       </span>
                     </div>
-                    <span className={`badge ${style.badgeClass} rounded-pill px-3 py-1 small`}>
+                    <span
+                      className={`badge ${style.badgeClass} rounded-pill small px-3 py-1`}
+                    >
                       {style.icon} {oa.badge_label}
                     </span>
                   </div>
 
-                  <div className="d-flex flex-wrap align-items-baseline gap-3 mb-2">
+                  <div className="d-flex align-items-baseline mb-2 flex-wrap gap-3">
                     <div>
                       <span className="text-muted small">Giá hiện tại: </span>
                       <span className="fw-bold text-danger">
@@ -718,30 +837,38 @@ export default function PriceHistorySection({
                     </div>
                     {oa.price_original && (
                       <div>
-                        <span className="text-muted small">Giá gạch ngang: </span>
+                        <span className="text-muted small">
+                          Giá gạch ngang:{' '}
+                        </span>
                         <span className="text-muted text-decoration-line-through small">
                           {formatVnd(oa.price_original)}
                         </span>
-                        <span className="badge bg-light text-dark border ms-1 small">
+                        <span className="badge bg-light text-dark small ms-1 border">
                           -{oa.claimed_discount_pct}% công bố
                         </span>
                       </div>
                     )}
                   </div>
 
-                  <div className="d-flex flex-wrap gap-3 text-muted mb-2" style={{ fontSize: '0.78rem' }}>
+                  <div
+                    className="d-flex text-muted mb-2 flex-wrap gap-3"
+                    style={{ fontSize: '0.78rem' }}
+                  >
                     <span>
-                      Trung vị lịch sử: <strong>{formatVnd(oa.historical_median_price)}</strong>
+                      Trung vị lịch sử:{' '}
+                      <strong>{formatVnd(oa.historical_median_price)}</strong>
                     </span>
                     <span>
-                      Thấp nhất: <strong>{formatVnd(oa.historical_min_price)}</strong>
+                      Thấp nhất:{' '}
+                      <strong>{formatVnd(oa.historical_min_price)}</strong>
                     </span>
                     <span>
-                      Cao nhất: <strong>{formatVnd(oa.historical_max_price)}</strong>
+                      Cao nhất:{' '}
+                      <strong>{formatVnd(oa.historical_max_price)}</strong>
                     </span>
                   </div>
 
-                  <p className="small text-secondary mb-0 lh-sm">
+                  <p className="small text-secondary lh-sm mb-0">
                     {oa.explanation}
                   </p>
                 </div>
