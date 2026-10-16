@@ -6,16 +6,16 @@ Thư mục `apps/importer` chứa package **`@repo/crawlers`**, bộ não chuẩ
 
 ## Các Module (`src/shopee/`)
 
-| File                    | Vai trò                                                                                                                   |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `types.ts`              | Data contract cho sản phẩm, gian hàng và đánh giá.                                                                        |
-| `product-normalizer.ts` | `ProductNormalizer`, `detectCategorySlug`: bóc tách thương hiệu, dòng máy, RAM/ROM tiếng Việt, ngành hàng và `model_key`. |
-| `entity-matcher.ts`     | `EntityMatcher`: gộp trùng 3 tầng (`model_key` -> `pg_trgm` -> AI Spec Enricher).                                         |
-| `ai-spec-enricher.ts`   | `AiSpecEnricher`: làm giàu 10 nhóm thông số (`@repo/shared-data` `ProductSpecificationsSchema`), hỗ trợ nhiều LLM.        |
-| `ai-review-analyzer.ts` | `AiReviewAnalyzer`: phân tích đánh giá 2 tầng (Heuristics + LLM), trọng số JReviews, điểm rủi ro gian hàng.               |
-| `shopee-to-supabase.ts` | `ShopeeIngestionPipeline`: ghi master product, listing, giá và đánh giá vào schema `rate`.                                |
-| `arena-spec-syncer.ts`  | `ArenaSpecSyncer`: parse HTML GSMArena / PhoneArena (trang đã tải sẵn) sang 10 nhóm thông số.                             |
-| `flagship-seed-data.ts` | Dữ liệu tham chiếu thông số cho các thiết bị flagship.                                                                    |
+| File                    | Vai trò                                                                                                                                                                                                                                                                     |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `types.ts`              | Data contract cho sản phẩm, gian hàng và đánh giá.                                                                                                                                                                                                                          |
+| `product-normalizer.ts` | `ProductNormalizer`, `detectCategorySlug`: bóc tách thương hiệu, dòng máy, RAM/ROM tiếng Việt, ngành hàng và `model_key`.                                                                                                                                                   |
+| `entity-matcher.ts`     | `EntityMatcher`: gộp trùng 3 tầng (`model_key` -> `pg_trgm` -> AI Spec Enricher).                                                                                                                                                                                           |
+| `ai-spec-enricher.ts`   | `AiSpecEnricher`: làm giàu 10 nhóm thông số (`@repo/shared-data` `ProductSpecificationsSchema`), hỗ trợ nhiều LLM.                                                                                                                                                          |
+| `ai-review-analyzer.ts` | `AiReviewAnalyzer`: phân tích đánh giá 2 tầng (Heuristics + LLM), trọng số JReviews, điểm rủi ro gian hàng.                                                                                                                                                                 |
+| `shopee-to-supabase.ts` | `ShopeeIngestionPipeline`: ghi master product, listing, giá và đánh giá vào schema `rate`.                                                                                                                                                                                  |
+| `arena-spec-syncer.ts`  | `parseGsmArenaHtmlToSpecs`, `extractPhoneArenaTableSpecs`, `parseGsmArenaBrandCatalogHtml`, `parsePhoneArenaCatalogHtml`: parse HTML GSMArena / PhoneArena (trang đã tải sẵn) sang 10 nhóm thông số; `ArenaSpecSyncer.auditCatalogAgainstArenaRegistry` đối chiếu danh mục. |
+| `flagship-seed-data.ts` | Dữ liệu tham chiếu thông số cho các thiết bị flagship.                                                                                                                                                                                                                      |
 
 ## Entry Point Của Package
 
@@ -37,7 +37,7 @@ pnpm --filter @repo/crawlers test:dist  # smoke test entry point của dist/
 pnpm --filter @repo/crawlers lint       # lỗi làm fail CI, cảnh báo thì không
 ```
 
-Test AI Spec Enricher (cần API key LLM, xem bên dưới):
+Test AI Spec Enricher (mặc định chạy với mock server OpenAI-compatible cục bộ, không cần API key; `--backfill` và `--audit-only` đọc/ghi Supabase thật):
 
 ```bash
 pnpm --filter @repo/crawlers exec tsx src/shopee/test-ai-enricher.ts
@@ -48,7 +48,7 @@ pnpm --filter @repo/crawlers exec tsx src/shopee/test-ai-enricher.ts
 Sao chép `.env.example` thành `.env`. Không commit file `.env`.
 
 - **Supabase:** `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (chỉ dùng phía server).
-- **LLM:** `AI_PROVIDER` (`dos-ai`, `openai`, `gemini`, `deepseek`, `groq`, `openrouter`, `ollama`), `AI_API_KEY`, `AI_BASE_URL`, `AI_MODEL`, `AI_TIMEOUT_MS`. Nếu không đặt `AI_PROVIDER`, engine tự chọn theo key đang có (`DOS_AI_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY` / `GOOGLE_API_KEY`, `DEEPSEEK_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`).
+- **LLM:** `AI_PROVIDER` (`dos-ai`, `openai`, `gemini`, `deepseek`, `groq`, `openrouter`, `ollama`), `AI_API_KEY`, `AI_BASE_URL`, `AI_MODEL`, `AI_TIMEOUT_MS`. Nếu không đặt `AI_PROVIDER`, engine tự chọn theo key đang có, theo thứ tự `DOS_AI_API_KEY` / `DOS_AI_BASE_URL`, `OPENAI_API_KEY`, `GEMINI_API_KEY` / `GOOGLE_API_KEY`, `DEEPSEEK_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`, nếu không có thì dùng `openai`. Mỗi provider đọc key riêng của nó trước, `AI_API_KEY` là fallback chung (riêng `openai` đọc `AI_API_KEY` trước `OPENAI_API_KEY`).
 
 ## Script Vận Hành
 
