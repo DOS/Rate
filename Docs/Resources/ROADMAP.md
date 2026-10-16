@@ -166,6 +166,9 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc **4 T�
 - [x] **4.51 & 4.52. Xuất Đánh Giá JReviews & Lịch Sử Giá 60 Ngày Ra JSON (`JReviewsSection` & `PriceHistorySection`) + Xuất Chỉ Số Hiệu Suất Đầu Tư & 10 Nhóm Thông Số Ra CSV/JSON (`ProductValueCalculator` & `ProductSpecsExportToolbar`) (Issue #82 & Issue #83):**
   - Nâng cấp `JReviewsSection.tsx` và `PriceHistorySection.tsx` bổ sung nút `📦 Xuất JSON` xuất toàn bộ dữ liệu kiểm toán Seeding AI và chuỗi lịch sử giá 60 ngày.
   - Nâng cấp `ProductValueCalculator.tsx` và `ProductSpecsExportToolbar.tsx` bổ sung đầy đủ 3 định dạng xuất dữ liệu (`📋 Markdown`, `📥 CSV`, `📦 JSON`), đạt độ phủ 100% 3 định dạng trên mọi phân khu của `ProductDetailView`.
+- [x] **4.53 & 4.54. Tích Hợp Trực Tiếp Radar Kèo Thơm Đáy Lịch Sử & Cảnh Báo Bẫy Nâng Giá Gốc 10 Sàn Vào `/deals` (`DealFinderWorkspace`) + Preset `/api/v1/rate/deals` & Xuất Danh Mục REST API v1 (`Markdown`, `CSV`, `JSON`) Trên `/developers` (`ApiPlaygroundClient`) (Issue #85 & Issue #86):**
+  - Nâng cấp `apps/web/src/app/[locale]/deals/page.tsx` và `DealFinderWorkspace.tsx` tích hợp trực tiếp `getCrossPlatformDealRadar` (`genuineDeals` + `fakeSaleTraps` trên 10 sàn) kèm bộ 3 nút xuất báo cáo Radar (`📋 Sao chép Radar MD`, `📥 Xuất Radar CSV`, `📦 Xuất Radar JSON`).
+  - Nâng cấp `ApiPlaygroundClient.tsx` trên `/developers` bổ sung kịch bản chạy thử `GET /api/v1/rate/deals` và 2 nút `📋 Sao chép API MD` + `📥 Xuất CSV Endpoints` bên cạnh đặc tả OpenAPI 3.1.0 JSON.
 
 ### ✅ Phase 5: Mở Rộng Đa Sàn 10/10 Nền Tảng, Browser Extension MV3 & Tự Động Hóa Cảnh Báo Giá (Đã hoàn thành 100%)
 

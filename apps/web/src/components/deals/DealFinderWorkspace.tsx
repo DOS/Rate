@@ -12,10 +12,15 @@ import {
   type ScoredLeaderboardItem,
 } from '@/lib/leaderboard-engine';
 import CompareQuickToggle from '@/components/compare/CompareQuickToggle';
+import type {
+  CrossPlatformDealRadarItem,
+  CrossPlatformDealRadarResponse,
+} from '@/server/rate/deals';
 
 interface DealFinderWorkspaceProps {
   readonly products: MasterProduct[];
   readonly initialCategory?: CanonicalCategorySlug | 'all';
+  readonly dealRadar?: CrossPlatformDealRadarResponse | null;
 }
 
 type PersonaKey =
@@ -47,6 +52,7 @@ const PERSONA_OPTIONS: Array<{
 export default function DealFinderWorkspace({
   products,
   initialCategory = 'all',
+  dealRadar = null,
 }: DealFinderWorkspaceProps) {
   const [categoryFilter, setCategoryFilter] = useState<
     CanonicalCategorySlug | 'all'
@@ -55,6 +61,127 @@ export default function DealFinderWorkspace({
   const [maxBudgetVnd, setMaxBudgetVnd] = useState<number>(65_000_000);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [copiedMarkdown, setCopiedMarkdown] = useState<boolean>(false);
+  const [copiedRadarMd, setCopiedRadarMd] = useState<boolean>(false);
+
+  const filteredGenuineDeals = useMemo<CrossPlatformDealRadarItem[]>(() => {
+    if (!dealRadar) return [];
+    return dealRadar.genuineDeals.filter(
+      (item) => categoryFilter === 'all' || item.categorySlug === categoryFilter
+    );
+  }, [dealRadar, categoryFilter]);
+
+  const filteredFakeSaleTraps = useMemo<CrossPlatformDealRadarItem[]>(() => {
+    if (!dealRadar) return [];
+    return dealRadar.fakeSaleTraps.filter(
+      (item) => categoryFilter === 'all' || item.categorySlug === categoryFilter
+    );
+  }, [dealRadar, categoryFilter]);
+
+  const handleCopyRadarMarkdown = async () => {
+    if (typeof window === 'undefined' || !dealRadar) return;
+    try {
+      const lines = [
+        `### 🔥 Radar Kèo Thơm Đáy Lịch Sử & Cảnh Báo Bẫy Nâng Giá Gốc 10 Sàn - Rate.vn`,
+        `- **Ngành hàng:** ${categoryFilter} | **Cụm sản phẩm phân tích:** ${dealRadar.totalClustersAnalyzed} (${dealRadar.totalOffersAnalyzed} gian hàng)`,
+        '',
+        '#### 🟢 Kèo Thơm Đáy Lịch Sử Thật (Genuine Deals)',
+        '| Thiết bị | Sàn / Gian hàng | Giá Bán Hiện Tại | Trung Vị 10 Sàn | Tiết Kiệm Thật | Điểm JReviews |',
+        '| --- | --- | --- | --- | --- | --- |',
+        ...filteredGenuineDeals.map(
+          (g) =>
+            `| ${g.productName} | ${g.platform.toUpperCase()} (${g.merchantName}) | **${g.priceCurrent.toLocaleString('vi-VN')} ₫** | ${g.marketMedianPrice.toLocaleString('vi-VN')} ₫ | -${g.savingsVsMedianVnd.toLocaleString('vi-VN')} ₫ (-${g.savingsVsMedianPct}%) | ${g.jreviewsScore10.toFixed(1)}/10 |`
+        ),
+        '',
+        '#### 🚨 Bẫy Nâng Khống Giá Gốc (Fake Sale Traps)',
+        '| Thiết bị | Sàn / Gian hàng | Giá Bán Thực Tế | Giá Gốc Kê Khống | Trung Vị 10 Sàn | Mức Thổi Phồng |',
+        '| --- | --- | --- | --- | --- | --- |',
+        ...filteredFakeSaleTraps.map(
+          (t) =>
+            `| ${t.productName} | ${t.platform.toUpperCase()} (${t.merchantName}) | ${t.priceCurrent.toLocaleString('vi-VN')} ₫ | ${(t.priceOriginal || t.priceCurrent).toLocaleString('vi-VN')} ₫ | ${t.marketMedianPrice.toLocaleString('vi-VN')} ₫ | **+${t.fakeMarkupPct}%** |`
+        ),
+      ];
+      await navigator.clipboard.writeText(lines.join('\n'));
+      setCopiedRadarMd(true);
+      setTimeout(() => setCopiedRadarMd(false), 2200);
+    } catch {
+      // Ignore clipboard errors
+    }
+  };
+
+  const handleDownloadRadarCsv = () => {
+    if (typeof window === 'undefined' || !dealRadar) return;
+    const escapeCsv = (val: string | number) => {
+      const str = String(val ?? '');
+      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+    const headers = [
+      'Phân Loại',
+      'Thiết Bị',
+      'Thương Hiệu',
+      'Danh Mục',
+      'Sàn',
+      'Gian Hàng',
+      'Official Mall',
+      'Giá Hiện Tại (VND)',
+      'Giá Gốc Niêm Yết (VND)',
+      'Trung Vị 10 Sàn (VND)',
+      'Tiết Kiệm So Trung Vị (%)',
+      'Thổi Phồng Giá Gốc (%)',
+      'Điểm JReviews (/10)',
+    ];
+    const allItems = [...filteredGenuineDeals, ...filteredFakeSaleTraps];
+    const rows = allItems.map((it) => [
+      it.verdict,
+      it.productName,
+      it.brand,
+      it.categorySlug,
+      it.platform,
+      it.merchantName,
+      it.isOfficialMall ? 'Mall' : 'Standard',
+      it.priceCurrent,
+      it.priceOriginal ?? it.priceCurrent,
+      it.marketMedianPrice,
+      it.savingsVsMedianPct,
+      it.fakeMarkupPct,
+      it.jreviewsScore10.toFixed(1),
+    ]);
+    const csvContent = `\uFEFF${[
+      headers.map(escapeCsv).join(','),
+      ...rows.map((r) => r.map(escapeCsv).join(',')),
+    ].join('\n')}`;
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `rate-deal-radar-${categoryFilter}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadRadarJson = () => {
+    if (typeof window === 'undefined' || !dealRadar) return;
+    const payload = {
+      source: 'Rate.vn 10-Platform Deal & Fake-Sale Anomaly Radar',
+      categoryFilter,
+      exportedAt: new Date().toISOString(),
+      totalClustersAnalyzed: dealRadar.totalClustersAnalyzed,
+      totalOffersAnalyzed: dealRadar.totalOffersAnalyzed,
+      genuineDeals: filteredGenuineDeals,
+      fakeSaleTraps: filteredFakeSaleTraps,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: 'application/json;charset=utf-8;',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `rate-deal-radar-${categoryFilter}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const rankedDeals = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -353,6 +480,144 @@ export default function DealFinderWorkspace({
           </div>
         </div>
       </div>
+
+      {/* Live Cross-Platform Deal & Fake-Sale Trap Radar */}
+      {dealRadar &&
+        (filteredGenuineDeals.length > 0 ||
+          filteredFakeSaleTraps.length > 0) && (
+          <div
+            className="rate-card p-md-4 mb-4 p-3"
+            data-testid="cross-platform-deal-radar"
+          >
+            <div className="d-flex justify-content-between align-items-center border-bottom mb-3 flex-wrap gap-2 pb-3">
+              <div>
+                <span className="badge bg-dark rounded-pill text-warning me-2">
+                  🔥 RADAR KÈO THƠM & BẪY SALE ẢO 10 SÀN
+                </span>
+                <strong className="text-dark">
+                  Đã quét {dealRadar.totalOffersAnalyzed} gian hàng trên{' '}
+                  {dealRadar.totalClustersAnalyzed} cụm sản phẩm
+                </strong>
+              </div>
+              <div className="d-flex align-items-center flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={handleCopyRadarMarkdown}
+                  data-testid="radar-copy-md-btn"
+                  className="btn btn-sm btn-outline-danger rounded-pill fw-semibold px-3"
+                >
+                  {copiedRadarMd
+                    ? '✓ Đã chép Radar MD!'
+                    : '📋 Sao chép Radar MD'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDownloadRadarCsv}
+                  data-testid="radar-export-csv-btn"
+                  className="btn btn-sm btn-outline-dark rounded-pill fw-semibold px-3"
+                >
+                  📥 Xuất Radar CSV
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDownloadRadarJson}
+                  data-testid="radar-export-json-btn"
+                  className="btn btn-sm btn-outline-dark rounded-pill fw-semibold px-3"
+                >
+                  📦 Xuất Radar JSON
+                </button>
+              </div>
+            </div>
+
+            <div className="row g-3">
+              <div className="col-lg-6">
+                <div className="rounded-3 border-success-subtle bg-success-subtle bg-opacity-10 h-100 border p-3">
+                  <div className="fw-bold text-success mb-2">
+                    🟢 Kèo Thơm Đáy Lịch Sử Thật ({filteredGenuineDeals.length})
+                  </div>
+                  <div className="d-flex flex-column gap-2">
+                    {filteredGenuineDeals.slice(0, 6).map((g) => (
+                      <div
+                        key={g.id}
+                        className="rounded-3 d-flex justify-content-between align-items-center border bg-white p-2"
+                      >
+                        <div className="overflow-hidden pe-2">
+                          <Link
+                            href={g.productHref}
+                            className="fw-bold text-dark text-decoration-none d-block text-truncate small"
+                          >
+                            {g.productName}
+                          </Link>
+                          <div className="text-secondary small">
+                            <span className="badge bg-dark text-uppercase me-1">
+                              {g.platform}
+                            </span>
+                            {g.merchantName} • Trung vị:{' '}
+                            {g.marketMedianPrice.toLocaleString('vi-VN')} ₫
+                          </div>
+                        </div>
+                        <div className="flex-shrink-0 text-end">
+                          <div className="fw-bold text-success font-monospace small">
+                            {g.priceCurrent.toLocaleString('vi-VN')} ₫
+                          </div>
+                          <span className="badge bg-success rounded-pill">
+                            -{g.savingsVsMedianPct}% so trung vị
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="col-lg-6">
+                <div className="rounded-3 border-danger-subtle bg-danger-subtle bg-opacity-10 h-100 border p-3">
+                  <div className="fw-bold text-danger mb-2">
+                    🚨 Cảnh Báo Nâng Khống Giá Gốc (
+                    {filteredFakeSaleTraps.length})
+                  </div>
+                  <div className="d-flex flex-column gap-2">
+                    {filteredFakeSaleTraps.slice(0, 6).map((t) => (
+                      <div
+                        key={t.id}
+                        className="rounded-3 d-flex justify-content-between align-items-center border bg-white p-2"
+                      >
+                        <div className="overflow-hidden pe-2">
+                          <Link
+                            href={t.productHref}
+                            className="fw-bold text-dark text-decoration-none d-block text-truncate small"
+                          >
+                            {t.productName}
+                          </Link>
+                          <div className="text-secondary small">
+                            <span className="badge bg-secondary text-uppercase me-1">
+                              {t.platform}
+                            </span>
+                            {t.merchantName} • Giá gốc kê:{' '}
+                            <span className="text-decoration-line-through">
+                              {(
+                                t.priceOriginal || t.priceCurrent
+                              ).toLocaleString('vi-VN')}{' '}
+                              ₫
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex-shrink-0 text-end">
+                          <div className="fw-bold text-danger font-monospace small">
+                            {t.priceCurrent.toLocaleString('vi-VN')} ₫
+                          </div>
+                          <span className="badge bg-danger rounded-pill">
+                            Kê khống +{t.fakeMarkupPct}%
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
       {/* Ranked Deals Grid */}
       {rankedDeals.length === 0 ? (

@@ -126,12 +126,20 @@ const PRESET_ENDPOINTS: ApiPresetEndpoint[] = [
       'Trả về số lượng sản phẩm chuẩn hóa, bản ghi lịch sử giá, tỷ lệ đánh giá thực chất và số lượng mẫu theo từng ngành hàng.',
   },
   {
+    id: 'deals-radar',
+    method: 'GET',
+    title: 'Radar Kèo Thơm & Bẫy Sale Ảo 10 Sàn (/deals)',
+    path: '/api/v1/rate/deals?category=all&limit=6',
+    description:
+      'Quét thời gian thực toàn bộ báo giá 10 sàn để phát hiện Kèo thơm đáy lịch sử thật (genuineDeals) và Bẫy nâng khống giá gốc (fakeSaleTraps).',
+  },
+  {
     id: 'openapi-spec',
     method: 'GET',
     title: 'Đặc tả OpenAPI 3.1.0 (/openapi.json)',
     path: '/api/v1/rate/openapi.json',
     description:
-      'Trả về tài liệu OpenAPI 3.1.0 chuẩn máy đọc (machine-readable JSON) cho toàn bộ 13 REST API v1 endpoints của Rate.vn.',
+      'Trả về tài liệu OpenAPI 3.1.0 chuẩn máy đọc (machine-readable JSON) cho toàn bộ 15 REST API v1 endpoints của Rate.vn.',
   },
 ];
 
@@ -155,6 +163,7 @@ export default function ApiPlaygroundClient() {
   );
   const [copiedSnippet, setCopiedSnippet] = useState<boolean>(false);
   const [copiedResponse, setCopiedResponse] = useState<boolean>(false);
+  const [copiedCatalogMd, setCopiedCatalogMd] = useState<boolean>(false);
 
   const activePreset =
     PRESET_ENDPOINTS.find((p) => p.id === selectedId) ?? PRESET_ENDPOINTS[0]!;
@@ -279,6 +288,58 @@ export default function ApiPlaygroundClient() {
     URL.revokeObjectURL(url);
   };
 
+  const handleCopyApiCatalogMarkdown = async () => {
+    if (typeof navigator === 'undefined') return;
+    try {
+      const lines = [
+        `### 🔌 Danh Mục Rate.vn Open-Core REST API v1 (${PRESET_ENDPOINTS.length} kịch bản mẫu)`,
+        '',
+        '| Phương thức | Đường dẫn mẫu | Chức năng | Mô tả kỹ thuật |',
+        '| --- | --- | --- | --- |',
+        ...PRESET_ENDPOINTS.map(
+          (ep) =>
+            `| \`${ep.method}\` | \`${ep.path}\` | **${ep.title}** | ${ep.description} |`
+        ),
+      ];
+      await navigator.clipboard.writeText(lines.join('\n'));
+      setCopiedCatalogMd(true);
+      setTimeout(() => setCopiedCatalogMd(false), 2200);
+    } catch {
+      // ignore clipboard errors
+    }
+  };
+
+  const handleDownloadApiCatalogCsv = () => {
+    if (typeof document === 'undefined') return;
+    const escapeCsv = (val: string) => {
+      if (val.includes(',') || val.includes('"') || val.includes('\n')) {
+        return `"${val.replace(/"/g, '""')}"`;
+      }
+      return val;
+    };
+    const headers = ['ID', 'Method', 'Path', 'Title', 'Description'];
+    const rows = PRESET_ENDPOINTS.map((ep) => [
+      ep.id,
+      ep.method,
+      ep.path,
+      ep.title,
+      ep.description,
+    ]);
+    const csvContent = `\uFEFF${[
+      headers.map(escapeCsv).join(','),
+      ...rows.map((r) => r.map(escapeCsv).join(',')),
+    ].join('\n')}`;
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'rate-rest-api-v1-catalog.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="card rounded-4 overflow-hidden border bg-white shadow-sm">
       <div className="card-header bg-dark d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-2 px-4 py-3 text-white">
@@ -299,8 +360,23 @@ export default function ApiPlaygroundClient() {
             <BsFileEarmarkCode /> OpenAPI 3.1 JSON
           </a>
         </div>
-        <div className="small text-white-50">
-          Không yêu cầu API Key cho các truy vấn đọc công khai (`GET`)
+        <div className="d-flex align-items-center flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={handleCopyApiCatalogMarkdown}
+            data-testid="copy-api-catalog-md-btn"
+            className="btn btn-sm btn-outline-light rounded-pill py-0"
+          >
+            {copiedCatalogMd ? '✓ Đã chép API MD!' : '📋 Sao chép API MD'}
+          </button>
+          <button
+            type="button"
+            onClick={handleDownloadApiCatalogCsv}
+            data-testid="download-api-catalog-csv-btn"
+            className="btn btn-sm btn-outline-info rounded-pill py-0"
+          >
+            📥 Xuất CSV Endpoints
+          </button>
         </div>
       </div>
 
@@ -308,7 +384,8 @@ export default function ApiPlaygroundClient() {
         {/* Preset Selector Pills */}
         <div className="mb-3">
           <div className="small fw-bold text-uppercase text-muted mb-2">
-            Chọn nhanh Endpoint mẫu (12 kịch bản thực tế):
+            Chọn nhanh Endpoint mẫu ({PRESET_ENDPOINTS.length} kịch bản thực
+            tế):
           </div>
           <div className="d-flex flex-wrap gap-2">
             {PRESET_ENDPOINTS.map((preset) => {
