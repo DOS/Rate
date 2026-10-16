@@ -1,7 +1,11 @@
-const globalConfig = require("@repo/prettier-config")
+const globalConfig = require('@repo/prettier-config');
 
 /** @type {import('prettier').Config} */
 module.exports = {
   ...globalConfig,
-  plugins: [...globalConfig.plugins, "prettier-plugin-tailwindcss"],
-}
+  // Resolve from this package (see packages/prettier-config/prettier.config.js).
+  plugins: [
+    ...globalConfig.plugins,
+    require.resolve('prettier-plugin-tailwindcss'),
+  ],
+};
