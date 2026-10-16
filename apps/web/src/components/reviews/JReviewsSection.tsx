@@ -7,6 +7,13 @@ import {
   type ReviewFlagCategory,
   type ReviewItem,
 } from '@/lib/rate-api';
+import {
+  RADAR_CSV_HEADERS,
+  radarCsvCells,
+  radarExportFields,
+  radarMarkdownCell,
+  type RadarSignal,
+} from '@/lib/deal-radar';
 
 type VoteChoice = 'up' | 'down' | 'report';
 type FilterTab = 'all' | 'authentic' | 'expert' | 'ignored';
@@ -24,6 +31,7 @@ export interface JReviewsSectionProps {
   ignoredReviewCount: number;
   reviews: ReviewItem[];
   summary: ReviewAnalysisSummary;
+  radarSignal?: RadarSignal | null;
 }
 
 const CRITERIA_META = [
@@ -91,6 +99,7 @@ export default function JReviewsSection({
   ignoredReviewCount,
   reviews: initialReviews,
   summary,
+  radarSignal,
 }: JReviewsSectionProps) {
   const [reviews, setReviews] = useState<ReviewItem[]>(initialReviews);
   const [userVotes, setUserVotes] = useState<Record<string, VoteChoice>>({});
@@ -525,6 +534,7 @@ export default function JReviewsSection({
     ]);
     const md = [
       `### ⭐ Rate.vn JReviews AI-Audited Buyer Reviews: ${productName} (${filteredAndSortedReviews.length} reviews)`,
+      `- **Deal Radar Signal:** ${radarMarkdownCell(radarSignal)}`,
       '',
       `| ${headers.join(' | ')} |`,
       `| ${sep.join(' | ')} |`,
@@ -559,6 +569,7 @@ export default function JReviewsSection({
       'Upvotes',
       'Downvotes',
       'CreatedAt',
+      ...RADAR_CSV_HEADERS,
       'Comment',
     ];
     const rows = filteredAndSortedReviews.map((r) => [
@@ -573,6 +584,7 @@ export default function JReviewsSection({
       String(r.upvotes),
       String(r.downvotes),
       r.created_at,
+      ...radarCsvCells(radarSignal),
       r.comment.replace(/\r?\n/g, ' '),
     ]);
     const csvContent =
@@ -604,6 +616,7 @@ export default function JReviewsSection({
       productSlug: productSlug || 'audit',
       productName,
       exportedAt: new Date().toISOString(),
+      deal_radar: radarExportFields(radarSignal),
       reviewCount: filteredAndSortedReviews.length,
       reviews: filteredAndSortedReviews,
     };

@@ -1985,7 +1985,91 @@ function runCoreArchitectureSuite() {
     'ProductDetailView relatedCompetitors cards must render per-product RadarBadge (#127)'
   );
   console.log(
-    '  ✅ [41/41] Unified Deal Radar exports across Watchlist API, WatchlistWorkspace, DeepInspectWorkspace, ProductOffersExplorer & ProductValueCalculator (#127) passed'
+    '  ✅ [41/42] Unified Deal Radar exports across Watchlist API, WatchlistWorkspace, DeepInspectWorkspace, ProductOffersExplorer & ProductValueCalculator (#127) passed'
+  );
+
+  // =========================================================================
+  // 42. Unified Deal Radar Exports in PriceHistorySection, JReviewsSection,
+  //     ProductSpecsExportToolbar, Compare/Versus CSVs & OpenAPI 3.1.0 (#128)
+  // =========================================================================
+  const priceHistorySrc128 = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/components/price-history/PriceHistorySection.tsx'
+    ),
+    'utf-8'
+  );
+  const specsToolbarSrc128 = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/components/leaderboard/ProductSpecsExportToolbar.tsx'
+    ),
+    'utf-8'
+  );
+  const jreviewsSrc128 = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/components/reviews/JReviewsSection.tsx'),
+    'utf-8'
+  );
+  const compareWorkspaceSrc128 = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/components/compare/CompareWorkspace.tsx'),
+    'utf-8'
+  );
+  const versusScoreboardSrc128 = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/components/compare/VersusInteractiveScoreboard.tsx'
+    ),
+    'utf-8'
+  );
+  const openApiSpec128 = buildRateOpenApiSpec();
+
+  assert.ok(
+    priceHistorySrc128.includes('RADAR_CSV_HEADERS') &&
+      priceHistorySrc128.includes('radarCsvCells') &&
+      priceHistorySrc128.includes('radarExportFields') &&
+      priceHistorySrc128.includes('radarMarkdownCell'),
+    'PriceHistorySection exports (MD/CSV/JSON) must include unified Deal Radar columns (#128)'
+  );
+  assert.ok(
+    specsToolbarSrc128.includes('RADAR_CSV_HEADERS') &&
+      specsToolbarSrc128.includes('radarCsvCells') &&
+      specsToolbarSrc128.includes('radarExportFields') &&
+      specsToolbarSrc128.includes('radarMarkdownCell'),
+    'ProductSpecsExportToolbar exports (MD/CSV/JSON) must include unified Deal Radar columns (#128)'
+  );
+  assert.ok(
+    jreviewsSrc128.includes('RADAR_CSV_HEADERS') &&
+      jreviewsSrc128.includes('radarCsvCells') &&
+      jreviewsSrc128.includes('radarExportFields') &&
+      jreviewsSrc128.includes('radarMarkdownCell'),
+    'JReviewsSection exports (MD/CSV/JSON) must include unified Deal Radar columns (#128)'
+  );
+  assert.ok(
+    compareWorkspaceSrc128.includes('RADAR_CSV_HEADERS.map') &&
+      compareWorkspaceSrc128.includes('radarCsvCells') &&
+      versusScoreboardSrc128.includes('RADAR_CSV_HEADERS.map') &&
+      versusScoreboardSrc128.includes('radarCsvCells'),
+    'CompareWorkspace and VersusInteractiveScoreboard CSV exports must include the 4 canonical RADAR_CSV_HEADERS rows (#128)'
+  );
+  assert.ok(
+    openApiSpec128.paths['/api/v1/rate/watchlist']?.post?.operationId ===
+      'registerWatchlistPriceAlert' &&
+      JSON.stringify(openApiSpec128.paths['/api/v1/rate/compare']).includes(
+        '#/components/schemas/ProductDealRadarSignal'
+      ) &&
+      JSON.stringify(openApiSpec128.paths['/api/v1/rate/versus']).includes(
+        '#/components/schemas/ProductDealRadarSignal'
+      ) &&
+      JSON.stringify(openApiSpec128.paths['/api/v1/rate/watchlist']).includes(
+        '#/components/schemas/ProductDealRadarSignal'
+      ) &&
+      JSON.stringify(openApiSpec128.paths['/api/v1/rate/inspect']).includes(
+        '#/components/schemas/ProductDealRadarSignal'
+      ),
+    'OpenAPI 3.1.0 spec must document POST /api/v1/rate/watchlist and reference ProductDealRadarSignal across all product/radar endpoints (#128)'
+  );
+  console.log(
+    '  ✅ [42/42] Unified Deal Radar exports in PriceHistorySection, JReviewsSection, ProductSpecsExportToolbar, Compare/Versus CSVs & OpenAPI 3.1.0 (#128) passed'
   );
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }

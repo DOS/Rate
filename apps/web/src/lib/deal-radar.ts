@@ -98,26 +98,31 @@ export function getRadarSignal(
 }
 
 /** Short human label shared by every badge and Markdown cell. */
-export function radarLabel(signal: RadarSignal, minSpreadPct = 0): string {
-  if (signal.verdict === 'genuine_deal') {
-    return `🔥 Đáy giá 60N (-${signal.savingsPct.toFixed(1)}%)`;
+export function radarLabel(
+  signal?: RadarSignal | null,
+  minSpreadPct = 0
+): string {
+  const sig = signal ?? EMPTY_RADAR_SIGNAL;
+  if (sig.verdict === 'genuine_deal') {
+    return `🔥 Đáy giá 60N (-${sig.savingsPct.toFixed(1)}%)`;
   }
-  if (signal.verdict === 'fake_sale_trap') {
-    return `🚨 Cảnh báo Sale Ảo (+${signal.fakeMarkupPct.toFixed(1)}%)`;
+  if (sig.verdict === 'fake_sale_trap') {
+    return `🚨 Cảnh báo Sale Ảo (+${sig.fakeMarkupPct.toFixed(1)}%)`;
   }
-  if (signal.spreadPct > 0 && signal.spreadPct >= minSpreadPct) {
-    return `📊 Lệch giá +${signal.spreadPct.toFixed(1)}% đa sàn`;
+  if (sig.spreadPct > 0 && sig.spreadPct >= minSpreadPct) {
+    return `📊 Lệch giá +${sig.spreadPct.toFixed(1)}% đa sàn`;
   }
   return '';
 }
 
 /** Flat fields used by every Markdown/CSV/JSON export. */
-export function radarExportFields(signal: RadarSignal) {
+export function radarExportFields(signal?: RadarSignal | null) {
+  const sig = signal ?? EMPTY_RADAR_SIGNAL;
   return {
-    verdict: signal.verdict,
-    savingsPct: signal.savingsPct,
-    fakeMarkupPct: signal.fakeMarkupPct,
-    spreadPct: signal.spreadPct,
+    verdict: sig.verdict,
+    savingsPct: sig.savingsPct,
+    fakeMarkupPct: sig.fakeMarkupPct,
+    spreadPct: sig.spreadPct,
   };
 }
 
@@ -128,17 +133,18 @@ export const RADAR_CSV_HEADERS = [
   'PriceSpreadPct',
 ] as const;
 
-export function radarCsvCells(signal: RadarSignal): string[] {
+export function radarCsvCells(signal?: RadarSignal | null): string[] {
+  const sig = signal ?? EMPTY_RADAR_SIGNAL;
   return [
-    signal.verdict,
-    signal.savingsPct.toFixed(1),
-    signal.fakeMarkupPct.toFixed(1),
-    signal.spreadPct.toFixed(1),
+    sig.verdict,
+    sig.savingsPct.toFixed(1),
+    sig.fakeMarkupPct.toFixed(1),
+    sig.spreadPct.toFixed(1),
   ];
 }
 
 /** Markdown cell content ('-' when there is no signal). */
-export function radarMarkdownCell(signal: RadarSignal): string {
+export function radarMarkdownCell(signal?: RadarSignal | null): string {
   return radarLabel(signal) || '-';
 }
 

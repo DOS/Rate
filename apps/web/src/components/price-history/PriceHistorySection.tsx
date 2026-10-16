@@ -7,10 +7,18 @@ import type {
   OfferDiscountAnalysis,
   PriceHistoryPoint,
 } from '@/lib/rate-api';
+import {
+  RADAR_CSV_HEADERS,
+  radarCsvCells,
+  radarExportFields,
+  radarMarkdownCell,
+  type RadarSignal,
+} from '@/lib/deal-radar';
 
 interface PriceHistorySectionProps {
   productName: string;
   history: MasterProductPriceHistorySummary;
+  radarSignal?: RadarSignal | null;
 }
 
 type TimeRangeKey = '30d' | '90d' | 'all';
@@ -82,6 +90,7 @@ function formatDateShort(iso: string): string {
 export default function PriceHistorySection({
   productName,
   history,
+  radarSignal,
 }: PriceHistorySectionProps) {
   const [selectedProductId, setSelectedProductId] = useState<string>('ALL');
   const [timeRange, setTimeRange] = useState<TimeRangeKey>('all');
@@ -285,6 +294,9 @@ export default function PriceHistorySection({
       `- **Current Lowest Price**: ${formatVnd(history.currentMinPrice)}`,
       `- **All-Time Lowest Recorded**: ${formatVnd(history.lowestEverPrice)}`,
       `- **Fake Sale Alerts**: ${history.fakeDiscountCount} | **Genuine Deals**: ${history.genuineDealCount}`,
+      ...(radarSignal
+        ? [`- **Deal Radar 60N**: ${radarMarkdownCell(radarSignal)}`]
+        : []),
       '',
       `| ${headers.join(' | ')} |`,
       `| ${sep.join(' | ')} |`,
@@ -310,6 +322,7 @@ export default function PriceHistorySection({
       'MerchantName',
       'PriceVND',
       'OriginalPriceVND',
+      ...(radarSignal ? RADAR_CSV_HEADERS : []),
     ];
     const rows = filteredPoints.map((pt) => [
       pt.recorded_at,
@@ -318,6 +331,7 @@ export default function PriceHistorySection({
       pt.merchant_name,
       String(pt.price),
       String(pt.price_original || ''),
+      ...(radarSignal ? radarCsvCells(radarSignal) : []),
     ]);
     const csvContent =
       '\uFEFF' +
@@ -347,6 +361,7 @@ export default function PriceHistorySection({
       lowestEverPriceVnd: history.lowestEverPrice,
       fakeDiscountCount: history.fakeDiscountCount,
       genuineDealCount: history.genuineDealCount,
+      dealRadar: radarSignal ? radarExportFields(radarSignal) : null,
       offerAnalyses,
       points: filteredPoints,
     };
