@@ -519,7 +519,7 @@ export async function CategoryCatalogContent({
 
               {/* Results Header + Compare Button + Sort Dropdown */}
               <div className="row align-items-center justify-content-between g-2 mb-4">
-                <div className="col-xl-6 col-lg-6 col-md-6 col-sm-12">
+                <div className="col-xl-7 col-lg-7 col-md-7 col-sm-12">
                   <div className="d-flex align-items-center flex-wrap gap-2">
                     <h6 className="m-0">
                       Tìm thấy{' '}
@@ -540,10 +540,24 @@ export async function CategoryCatalogContent({
                         So sánh nhanh {products.length >= 3 ? '3 máy' : '2 máy'}
                       </Link>
                     )}
+                    {products.length >= 2 && products[0] && products[1] && (
+                      <Link
+                        href={`/compare/${products[0].slug}-vs-${products[1].slug}`}
+                        className="badge bg-danger-subtle text-danger text-decoration-none rounded-pill fw-semibold px-3 py-2"
+                      >
+                        ⚔️ Kèo 1v1: {products[0].brand} vs {products[1].brand}
+                      </Link>
+                    )}
+                    <Link
+                      href={`/leaderboard?cat=${categorySlug}`}
+                      className="badge bg-dark text-decoration-none rounded-pill fw-semibold px-3 py-2 text-white"
+                    >
+                      🏆 Bảng Xếp Hạng
+                    </Link>
                   </div>
                 </div>
 
-                <div className="col-xl-6 col-lg-6 col-md-6 col-sm-12">
+                <div className="col-xl-5 col-lg-5 col-md-5 col-sm-12">
                   <div className="text-md-end">
                     <div className="dropdown d-inline-flex p-0">
                       <a

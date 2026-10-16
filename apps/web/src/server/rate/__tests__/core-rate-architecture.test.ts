@@ -759,7 +759,40 @@ function runCoreArchitectureSuite() {
     'sitemap.ts must include all 5 categories and curated 1v1 versus routes'
   );
   console.log(
-    '  ✅ [15/15] Popular 1v1 Battles Hub, Markdown Audit Export (#55) & Expanded Dynamic Sitemap (#56) passed'
+    '  ✅ [15/16] Popular 1v1 Battles Hub, Markdown Audit Export (#55) & Expanded Dynamic Sitemap (#56) passed'
+  );
+
+  // 16. Interactive 1v1 Weight Sliders (#57) & Homepage/Category 1v1 Showdowns (#58)
+  const versusScoreboardSrc = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/components/compare/VersusInteractiveScoreboard.tsx'
+    ),
+    'utf8'
+  );
+  assert.ok(
+    versusScoreboardSrc.includes('handleCopy1v1Markdown') &&
+      versusScoreboardSrc.includes('PERSONA_WEIGHTS') &&
+      versusPageSource.includes('VersusInteractiveScoreboard'),
+    'VersusInteractiveScoreboard must provide custom 5-criteria weights, Markdown 1v1 export, and A/B swap link'
+  );
+  const homePageSrc = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/app/[locale]/page.tsx'),
+    'utf8'
+  );
+  const categoryPageSrc = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/app/[locale]/smartphones/page.tsx'),
+    'utf8'
+  );
+  assert.ok(
+    homePageSrc.includes('popularHomeBattles') &&
+      categoryPageSrc.includes(
+        '/compare/${products[0].slug}-vs-${products[1].slug}'
+      ),
+    'Homepage and Category Catalogs must surface 1v1 Flagship Showdowns'
+  );
+  console.log(
+    '  ✅ [16/16] Interactive 1v1 Weight Sliders (#57) & Homepage/Category 1v1 Showdowns (#58) passed'
   );
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }

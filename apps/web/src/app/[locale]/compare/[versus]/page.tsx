@@ -16,6 +16,7 @@ import FooterDynamic from '../../components/footer/FooterDynamic';
 import BackToTop from '../../components/back-to-top';
 import CompareWorkspace from '@/components/compare/CompareWorkspace';
 import CompareTrayBar from '@/components/compare/CompareTrayBar';
+import VersusInteractiveScoreboard from '@/components/compare/VersusInteractiveScoreboard';
 
 export const revalidate = 60;
 
@@ -108,64 +109,6 @@ export default async function VersusComparePage({ params }: VersusPageProps) {
   const catSlug = getMasterProductCategorySlug(prodA);
   const scoreA = scoreMasterProductForLeaderboard(prodA, 'combined');
   const scoreB = scoreMasterProductForLeaderboard(prodB, 'combined');
-
-  const criteriaRows = [
-    {
-      key: 'screen',
-      label:
-        lang === 'en'
-          ? 'Display & Visuals'
-          : lang === 'cs'
-            ? 'Displej a obraz'
-            : 'Màn hình & Hiển thị',
-      aVal: scoreA.criteria.screen,
-      bVal: scoreB.criteria.screen,
-    },
-    {
-      key: 'performance',
-      label:
-        lang === 'en'
-          ? 'Performance & SoC'
-          : lang === 'cs'
-            ? 'Výkon a čipset'
-            : 'Hiệu năng & Nhiệt độ',
-      aVal: scoreA.criteria.performance,
-      bVal: scoreB.criteria.performance,
-    },
-    {
-      key: 'camera',
-      label:
-        lang === 'en'
-          ? 'Camera / Audio'
-          : lang === 'cs'
-            ? 'Fotoaparát / Zvuk'
-            : 'Camera / Âm thanh',
-      aVal: scoreA.criteria.camera,
-      bVal: scoreB.criteria.camera,
-    },
-    {
-      key: 'battery',
-      label:
-        lang === 'en'
-          ? 'Battery & Fast Charge'
-          : lang === 'cs'
-            ? 'Baterie a nabíjení'
-            : 'Pin & Sạc nhanh',
-      aVal: scoreA.criteria.battery,
-      bVal: scoreB.criteria.battery,
-    },
-    {
-      key: 'value',
-      label:
-        lang === 'en'
-          ? 'Value for Money (P/P)'
-          : lang === 'cs'
-            ? 'Poměr cena / výkon'
-            : 'Đáng đồng tiền (P/P)',
-      aVal: scoreA.criteria.value,
-      bVal: scoreB.criteria.value,
-    },
-  ] as const;
 
   const overallWinner =
     scoreA.combinedScore5 > scoreB.combinedScore5
@@ -264,82 +207,11 @@ export default async function VersusComparePage({ params }: VersusPageProps) {
                 : `Kết luận đối đầu 1v1 tự động: ${overallWinner.name} dẫn trước với điểm tổng hợp JReviews ${overallWinner.combinedScore5.toFixed(2)}/5.0 (${overallWinner.expertScore10.toFixed(1)}/10 Lab).`}
           </p>
 
-          {/* 5-Criteria 1v1 Head-to-Head Comparison Matrix */}
-          <div className="rate-scoreboard-dark rounded-4 p-4">
-            <div className="row g-3 align-items-center border-bottom border-secondary border-opacity-25 mb-3 pb-3">
-              <div className="col-5">
-                <Link
-                  href={scoreA.productHref}
-                  className="fw-bold text-decoration-none d-block text-white"
-                >
-                  {scoreA.name}
-                </Link>
-                <div className="d-flex mt-1 flex-wrap gap-2">
-                  <span className="rate-score-badge-user">
-                    ★ {scoreA.userScore5.toFixed(2)}/5.0
-                  </span>
-                  <span className="rate-score-badge-expert">
-                    Lab {scoreA.expertScore10.toFixed(1)}/10
-                  </span>
-                </div>
-              </div>
-              <div className="col-2 text-center">
-                <span className="badge bg-danger rounded-pill fw-bold px-3 py-2">
-                  VS
-                </span>
-              </div>
-              <div className="col-5 text-end">
-                <Link
-                  href={scoreB.productHref}
-                  className="fw-bold text-decoration-none d-block text-white"
-                >
-                  {scoreB.name}
-                </Link>
-                <div className="d-flex justify-content-end mt-1 flex-wrap gap-2">
-                  <span className="rate-score-badge-user">
-                    ★ {scoreB.userScore5.toFixed(2)}/5.0
-                  </span>
-                  <span className="rate-score-badge-expert">
-                    Lab {scoreB.expertScore10.toFixed(1)}/10
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {criteriaRows.map((row) => {
-              const aWins = row.aVal > row.bVal;
-              const bWins = row.bVal > row.aVal;
-              return (
-                <div
-                  key={row.key}
-                  className="row align-items-center g-2 border-bottom border-secondary border-opacity-10 py-2"
-                >
-                  <div className="col-4">
-                    <span
-                      className={`font-monospace fw-bold ${
-                        aWins ? 'text-success' : 'text-white-50'
-                      }`}
-                    >
-                      {row.aVal.toFixed(2)}/5.0 {aWins ? '✓' : ''}
-                    </span>
-                  </div>
-                  <div className="small text-light fw-semibold col-4 text-center">
-                    {row.label}
-                  </div>
-                  <div className="col-4 text-end">
-                    <span
-                      className={`font-monospace fw-bold ${
-                        bWins ? 'text-success' : 'text-white-50'
-                      }`}
-                    >
-                      {bWins ? '✓ ' : ''}
-                      {row.bVal.toFixed(2)}/5.0
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <VersusInteractiveScoreboard
+            scoreA={scoreA}
+            scoreB={scoreB}
+            locale={locale}
+          />
         </div>
       </section>
 
