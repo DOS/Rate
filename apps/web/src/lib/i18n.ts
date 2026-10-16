@@ -7,11 +7,12 @@ export default getRequestConfig(async ({ requestLocale }) => {
   // Resolved by next-intl middleware from NEXT_LOCALE cookie (localePrefix: "never")
   let locale = await requestLocale;
 
-  if (!locale || !routing.locales.includes(locale as any)) {
+  const supportedLocales: readonly string[] = routing.locales;
+  if (!locale || !supportedLocales.includes(locale)) {
     try {
       const cookieStore = await cookies();
       const cookieLocale = cookieStore.get('NEXT_LOCALE')?.value;
-      if (cookieLocale && routing.locales.includes(cookieLocale as any)) {
+      if (cookieLocale && supportedLocales.includes(cookieLocale)) {
         locale = cookieLocale;
       }
     } catch {
@@ -20,7 +21,7 @@ export default getRequestConfig(async ({ requestLocale }) => {
   }
 
   // Ensure that a valid locale is used
-  if (!locale || !routing.locales.includes(locale as any)) {
+  if (!locale || !supportedLocales.includes(locale)) {
     locale = routing.defaultLocale;
   }
 

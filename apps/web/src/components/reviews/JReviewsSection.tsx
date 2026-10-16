@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useId, useMemo, useState } from 'react';
 import {
   computeJReviewsWeight,
   type ReviewAnalysisSummary,
@@ -112,6 +112,7 @@ export default function JReviewsSection({
 
   // 5-Criteria Write Review Form State
   const [showWriteForm, setShowWriteForm] = useState(false);
+  const fieldId = useId();
   const [authorName, setAuthorName] = useState('');
   const [variation, setVariation] = useState('');
   const [reviewerType, setReviewerType] = useState<'user' | 'expert'>('user');
@@ -731,10 +732,14 @@ export default function JReviewsSection({
 
           <div className="row g-3 mb-3">
             <div className="col-md-4 col-12">
-              <label className="form-label small fw-semibold mb-1">
+              <label
+                className="form-label small fw-semibold mb-1"
+                htmlFor={`${fieldId}-author`}
+              >
                 Tên hiển thị của bạn
               </label>
               <input
+                id={`${fieldId}-author`}
                 type="text"
                 value={authorName}
                 onChange={(e) => setAuthorName(e.target.value)}
@@ -744,10 +749,14 @@ export default function JReviewsSection({
               />
             </div>
             <div className="col-md-4 col-12">
-              <label className="form-label small fw-semibold mb-1">
+              <label
+                className="form-label small fw-semibold mb-1"
+                htmlFor={`${fieldId}-variation`}
+              >
                 Phiên bản / Dung lượng đang dùng
               </label>
               <input
+                id={`${fieldId}-variation`}
                 type="text"
                 value={variation}
                 onChange={(e) => setVariation(e.target.value)}
@@ -757,10 +766,14 @@ export default function JReviewsSection({
               />
             </div>
             <div className="col-md-4 col-12">
-              <label className="form-label small fw-semibold mb-1">
+              <label
+                className="form-label small fw-semibold mb-1"
+                htmlFor={`${fieldId}-reviewer-type`}
+              >
                 Phân loại người đánh giá
               </label>
               <select
+                id={`${fieldId}-reviewer-type`}
                 value={reviewerType}
                 onChange={(e) =>
                   setReviewerType(
@@ -824,11 +837,15 @@ export default function JReviewsSection({
           </div>
 
           <div className="mb-3">
-            <label className="form-label small fw-semibold mb-1">
+            <label
+              className="form-label small fw-semibold mb-1"
+              htmlFor={`${fieldId}-comment`}
+            >
               Chia sẻ chi tiết trải nghiệm thực tế (tối thiểu 30 ký tự để được
               tính trọng số JReviews cao)
             </label>
             <textarea
+              id={`${fieldId}-comment`}
               rows={3}
               value={comment}
               onChange={(e) => setComment(e.target.value)}

@@ -1225,14 +1225,6 @@ export default function CompareWorkspace({
     setTimeout(() => setWatchedAllToast(false), 2200);
   };
 
-  // Compute lowest price across compared products (guaranteed same category)
-  const lowestPriceAmongCompared = useMemo(() => {
-    const prices = products
-      .map((p) => Number(p.min_price || 0))
-      .filter((n) => n > 0);
-    return prices.length > 0 ? Math.min(...prices) : null;
-  }, [products]);
-
   const headToHeadSummary = useMemo(() => {
     if (products.length < 2) return null;
     const byRating = [...products].sort(

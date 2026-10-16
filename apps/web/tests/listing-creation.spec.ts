@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 // Test tạo listing từ Redis Stream
 test.describe('Listing Creation Flow', () => {
   // Mock data giống như từ Extension
-  const mockShopeeData = {
+  const _mockShopeeData = {
     requestId: `test_${Date.now()}`,
     source: 'test',
     timestamp: new Date().toISOString(),
@@ -47,7 +47,7 @@ test.describe('Listing Creation Flow', () => {
 
   test('should create listing when data sent to Redis', async ({ request }) => {
     // 1. Clear old test data
-    const deleteResponse = await request.delete(
+    await request.delete(
       'http://localhost:1337/api/listings',
       {
         headers: {
@@ -178,7 +178,7 @@ test.describe('Listing Display in UI', () => {
 
 // Integration test with Redis
 test.describe('Redis Integration', () => {
-  test('should process messages from Redis stream', async ({ request }) => {
+  test('should process messages from Redis stream', async () => {
     // This test requires Redis client setup
     // Install: npm install redis
     

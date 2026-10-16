@@ -19,7 +19,6 @@ import {
   resolveProductImageUrl,
   getRateClient,
   computeJReviewsWeight,
-  type CanonicalCategorySlug,
   type MasterProductFilterParams,
 } from '../../lib/rate-api';
 

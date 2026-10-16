@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
 import {
   BsCheck2,
   BsClipboard,
@@ -151,6 +151,7 @@ export default function ApiPlaygroundClient() {
   const [customPath, setCustomPath] = useState<string>(
     PRESET_ENDPOINTS[0]!.path
   );
+  const fieldId = useId();
   const [requestBody, setRequestBody] = useState<string>('');
   const [snippetMode, setSnippetMode] = useState<'curl' | 'fetch' | 'python'>(
     'curl'
@@ -454,10 +455,14 @@ export default function ApiPlaygroundClient() {
 
           {customMethod === 'POST' && (
             <div className="mt-3">
-              <label className="form-label small fw-bold text-uppercase text-muted mb-1">
+              <label
+                className="form-label small fw-bold text-uppercase text-muted mb-1"
+                htmlFor={`${fieldId}-request-body`}
+              >
                 JSON Request Body (`application/json`):
               </label>
               <textarea
+                id={`${fieldId}-request-body`}
                 rows={6}
                 value={requestBody}
                 onChange={(e) => setRequestBody(e.target.value)}
