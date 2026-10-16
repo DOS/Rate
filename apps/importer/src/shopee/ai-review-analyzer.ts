@@ -188,8 +188,9 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 function accountAgeDays(r: ReviewInputItem): number | null {
   const joined = Date.parse(r.reviewer?.joinedAt || '');
   if (!Number.isFinite(joined)) return null;
-  const writtenParsed = Date.parse(r.platform_created_at || '');
-  const written = Number.isFinite(writtenParsed) ? writtenParsed : Date.now();
+  // Age at the time of writing; without a review date we would be measuring today's age.
+  const written = Date.parse(r.platform_created_at || '');
+  if (!Number.isFinite(written)) return null;
   const days = (written - joined) / DAY_MS;
   return days >= 0 ? days : null;
 }

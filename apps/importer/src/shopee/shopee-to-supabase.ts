@@ -350,6 +350,24 @@ export class ShopeeIngestionPipeline {
           );
         }
       }
+      // Rows stored before the platform's purchase flag was captured still carry the
+      // column default; refresh it for reviews already in the DB.
+      for (const verified of [true, false]) {
+        const ids = product.reviews
+          .filter(r => r.reviewer?.verifiedPurchase === verified)
+          .map(platformReviewIdFor);
+        if (ids.length === 0) continue;
+        const { error: verifiedErr } = await this.supabase
+          .from('reviews')
+          .update({ is_verified_buyer: verified })
+          .eq('product_id', productId)
+          .in('platform_review_id', ids);
+        if (verifiedErr) {
+          console.warn(
+            `[MultiPlatformIngest:${platform}] Could not refresh is_verified_buyer: ${verifiedErr.message}`
+          );
+        }
+      }
       await report?.('reviews');
     }
 

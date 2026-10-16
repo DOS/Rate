@@ -66,7 +66,12 @@ async function run() {
     0,
     'abuse reports must drive weight to 0'
   );
-  for (const cat of ['low_value_coin_spam', 'seeding_fake', 'competitor_sabotage', 'review_bombing'] as const) {
+  for (const cat of [
+    'low_value_coin_spam',
+    'seeding_fake',
+    'competitor_sabotage',
+    'review_bombing',
+  ] as const) {
     assert.equal(
       computeReviewWeight({ upvotes: 50, flagCategory: cat, verdict: 'authentic' }),
       0,
@@ -81,17 +86,49 @@ async function run() {
 
   const reviews: ReviewInputItem[] = [
     { id: 'coin', author_name: 'a1', rating_star: 5, comment: 'Nhận xu nhé shop ơi' },
-    { id: 'seed1', author_name: 'u_seed_1', rating_star: 5, comment: 'Shop uy tín giao hàng nhanh đóng gói cẩn thận' },
-    { id: 'seed2', author_name: 'u_seed_2', rating_star: 5, comment: 'Shop uy tín giao hàng nhanh đóng gói cẩn thận' },
-    { id: 'sabo', author_name: 'rival', rating_star: 1, comment: 'Hàng tệ, ib mình bán rẻ hơn nhé' },
-    { id: 'bomb', author_name: 'b1', rating_star: 1, comment: 'Mới đặt đã hủy đơn rồi, vào đánh 1 sao cho bõ ghét' },
-    { id: 'good', author_name: 'g1', rating_star: 5, comment: 'Máy chạy mượt, pin trâu dùng cả ngày, màn hình rất đẹp', upvotes: 10 },
-    { id: 'down', author_name: 'g2', rating_star: 4, comment: 'Camera tạm ổn nhưng loa hơi nhỏ so với tầm giá', downvotes: 4 },
+    {
+      id: 'seed1',
+      author_name: 'u_seed_1',
+      rating_star: 5,
+      comment: 'Shop uy tín giao hàng nhanh đóng gói cẩn thận',
+    },
+    {
+      id: 'seed2',
+      author_name: 'u_seed_2',
+      rating_star: 5,
+      comment: 'Shop uy tín giao hàng nhanh đóng gói cẩn thận',
+    },
+    {
+      id: 'sabo',
+      author_name: 'rival',
+      rating_star: 1,
+      comment: 'Hàng tệ, ib mình bán rẻ hơn nhé',
+    },
+    {
+      id: 'bomb',
+      author_name: 'b1',
+      rating_star: 1,
+      comment: 'Mới đặt đã hủy đơn rồi, vào đánh 1 sao cho bõ ghét',
+    },
+    {
+      id: 'good',
+      author_name: 'g1',
+      rating_star: 5,
+      comment: 'Máy chạy mượt, pin trâu dùng cả ngày, màn hình rất đẹp',
+      upvotes: 10,
+    },
+    {
+      id: 'down',
+      author_name: 'g2',
+      rating_star: 4,
+      comment: 'Camera tạm ổn nhưng loa hơi nhỏ so với tầm giá',
+      downvotes: 4,
+    },
   ];
 
   const analyzer = heuristicOnly();
   const res = analyzer.analyzeWithHeuristics(reviews);
-  const byId = new Map(res.map((r) => [r.review_id, r]));
+  const byId = new Map(res.map(r => [r.review_id, r]));
 
   assert.equal(byId.get('coin')!.flag_category, 'low_value_coin_spam');
   assert.equal(byId.get('coin')!.include_in_rating, false);
@@ -102,13 +139,22 @@ async function run() {
   assert.equal(byId.get('good')!.flag_category, 'authentic');
   assert.ok(byId.get('good')!.helpfulness_weight > 1.5);
   assert.equal(byId.get('down')!.flag_category, 'authentic');
-  assert.equal(byId.get('down')!.include_in_rating, false, 'heavily down-voted authentic review is zeroed');
+  assert.equal(
+    byId.get('down')!.include_in_rating,
+    false,
+    'heavily down-voted authentic review is zeroed'
+  );
 
   for (const r of res) {
-    assert.ok(signalsValid(r.signals as unknown as Record<string, unknown>), `signals for ${r.review_id} must satisfy rate.signals_valid`);
+    assert.ok(
+      signalsValid(r.signals as unknown as Record<string, unknown>),
+      `signals for ${r.review_id} must satisfy rate.signals_valid`
+    );
     assert.ok(r.fake_probability >= 0 && r.fake_probability <= 1);
   }
-  console.log('✅ [Heuristics] coin_spam / seeding / sabotage / bombing / authentic + vote weights OK');
+  console.log(
+    '✅ [Heuristics] coin_spam / seeding / sabotage / bombing / authentic + vote weights OK'
+  );
   console.log('✅ [Heuristics] every signals payload satisfies the DB CHECK rate.signals_valid');
 
   // Reviewer-derived signals come from scraped reviewer metadata, not constants.
@@ -119,13 +165,31 @@ async function run() {
     platform_created_at: '2026-10-01T00:00:00.000Z',
   };
   assert.equal(accountAgeBucket(base), 'unknown', 'no join date => unknown, not a guess');
-  assert.equal(accountAgeBucket({ ...base, reviewer: { joinedAt: '2026-09-25T00:00:00.000Z' } }), 'low');
-  assert.equal(accountAgeBucket({ ...base, reviewer: { joinedAt: '2026-03-01T00:00:00.000Z' } }), 'medium');
-  assert.equal(accountAgeBucket({ ...base, reviewer: { joinedAt: '2021-01-01T00:00:00.000Z' } }), 'high');
+  assert.equal(
+    accountAgeBucket({ ...base, reviewer: { joinedAt: '2026-09-25T00:00:00.000Z' } }),
+    'low'
+  );
+  assert.equal(
+    accountAgeBucket({ ...base, reviewer: { joinedAt: '2026-03-01T00:00:00.000Z' } }),
+    'medium'
+  );
+  assert.equal(
+    accountAgeBucket({ ...base, reviewer: { joinedAt: '2021-01-01T00:00:00.000Z' } }),
+    'high'
+  );
   assert.equal(
     accountAgeBucket({ ...base, reviewer: { joinedAt: '2027-01-01T00:00:00.000Z' } }),
     'unknown',
     'join date after the review is bad data, not a new account'
+  );
+  assert.equal(
+    accountAgeBucket({
+      id: 'rv',
+      rating_star: 5,
+      reviewer: { joinedAt: '2021-01-01T00:00:00.000Z' },
+    }),
+    'unknown',
+    'no review date => cannot tell the account age at writing time'
   );
   assert.equal(reviewerHistoryScore(base), 0.7, 'unknown history keeps the neutral prior');
   assert.equal(reviewerHistoryScore({ ...base, reviewer: { totalReviews: 0 } }), 0);
@@ -138,17 +202,35 @@ async function run() {
   assert.equal(withReviewer!.signals.account_age_bucket, 'low');
   assert.equal(withReviewer!.signals.reviewer_history_score, 0.151);
   assert.ok(signalsValid(withReviewer!.signals as unknown as Record<string, unknown>));
-  console.log('✅ [Reviewer] account age bucket & history score derived from scraped reviewer metadata');
+  console.log(
+    '✅ [Reviewer] account age bucket & history score derived from scraped reviewer metadata'
+  );
 
   console.log('\n================================================================');
   console.log('3. JReviews dual rating (Expert vs weighted authentic User)');
   console.log('================================================================');
 
   const jr: ReviewInputItem[] = [
-    { id: 'u1', author_name: 'x1', rating_star: 5, comment: 'Dùng được hai tuần rất hài lòng về hiệu năng' },
-    { id: 'u2', author_name: 'x2', rating_star: 5, comment: 'Pin bền hơn máy cũ của mình rất nhiều thật sự' },
+    {
+      id: 'u1',
+      author_name: 'x1',
+      rating_star: 5,
+      comment: 'Dùng được hai tuần rất hài lòng về hiệu năng',
+    },
+    {
+      id: 'u2',
+      author_name: 'x2',
+      rating_star: 5,
+      comment: 'Pin bền hơn máy cũ của mình rất nhiều thật sự',
+    },
     { id: 'spam', author_name: 'x3', rating_star: 1, comment: 'nhận xu' },
-    { id: 'exp', author_name: 'Tech Reviewer', rating_star: 4, comment: 'Đánh giá chuyên sâu sau một tháng sử dụng máy', reviewer_type: 'expert' },
+    {
+      id: 'exp',
+      author_name: 'Tech Reviewer',
+      rating_star: 4,
+      comment: 'Đánh giá chuyên sâu sau một tháng sử dụng máy',
+      reviewer_type: 'expert',
+    },
   ];
   const jrRes = heuristicOnly().analyzeWithHeuristics(jr);
   const summary = heuristicOnly().computeJReviewsSummary(jr, jrRes);
@@ -156,11 +238,17 @@ async function run() {
   assert.equal(summary.total_reviews_analyzed, 4);
   assert.equal(summary.authentic_review_count, 3);
   assert.equal(summary.ignored_review_count, 1);
-  assert.equal(summary.user_rating_weighted, 5, 'ignored spam must not drag the weighted user rating');
+  assert.equal(
+    summary.user_rating_weighted,
+    5,
+    'ignored spam must not drag the weighted user rating'
+  );
   assert.equal(summary.expert_rating, 4);
   assert.equal(summary.overall_rating, 4.6, 'overall = 40% expert + 60% weighted user');
   assert.equal(summary.breakdown_by_category.low_value_coin_spam, 1);
-  console.log(`✅ [JReviews] user=${summary.user_rating_weighted} expert=${summary.expert_rating} overall=${summary.overall_rating}`);
+  console.log(
+    `✅ [JReviews] user=${summary.user_rating_weighted} expert=${summary.expert_rating} overall=${summary.overall_rating}`
+  );
 
   console.log('\n================================================================');
   console.log('4. Merchant risk: fair to sellers, harsh on seeding & dump pricing');
@@ -174,7 +262,13 @@ async function run() {
     include_in_rating: flag === 'authentic',
     helpfulness_weight: flag === 'authentic' ? 1 : 0,
     reason: '',
-    signals: { burst_pattern_score: 0, duplicate_text_ratio: 0, account_age_bucket: 'medium', reviewer_history_score: 0.5, language_marker_score: 0 },
+    signals: {
+      burst_pattern_score: 0,
+      duplicate_text_ratio: 0,
+      account_age_bucket: 'medium',
+      reviewer_history_score: 0.5,
+      language_marker_score: 0,
+    },
   });
 
   const clean = analyzer.evaluateMerchantRisk({
@@ -196,10 +290,19 @@ async function run() {
   const sabotaged = analyzer.evaluateMerchantRisk({
     platform: 'shopee',
     isOfficial: false,
-    reviewResults: [mk('competitor_sabotage'), mk('review_bombing'), mk('low_value_coin_spam'), mk('authentic')],
+    reviewResults: [
+      mk('competitor_sabotage'),
+      mk('review_bombing'),
+      mk('low_value_coin_spam'),
+      mk('authentic'),
+    ],
   });
-  assert.equal(sabotaged.risk_score, 15, 'sabotage / bombing / coin spam must NOT penalise the seller');
-  assert.ok(sabotaged.reasons.some((r) => r.includes('bảo vệ')));
+  assert.equal(
+    sabotaged.risk_score,
+    15,
+    'sabotage / bombing / coin spam must NOT penalise the seller'
+  );
+  assert.ok(sabotaged.reasons.some(r => r.includes('bảo vệ')));
 
   const dump = analyzer.evaluateMerchantRisk({
     platform: 'shopee',
@@ -218,8 +321,14 @@ async function run() {
     canonicalMinPrice: 28_500_000,
     reviewResults: [mk('authentic')],
   });
-  assert.equal(mall.price_anomaly_detected, false, 'official stores are exempt from price-anomaly scoring');
-  console.log(`✅ [Risk] clean=${clean.risk_score} seeded=${seeded.risk_score} sabotaged=${sabotaged.risk_score} dump=${dump.risk_score} mall=${mall.risk_score}`);
+  assert.equal(
+    mall.price_anomaly_detected,
+    false,
+    'official stores are exempt from price-anomaly scoring'
+  );
+  console.log(
+    `✅ [Risk] clean=${clean.risk_score} seeded=${seeded.risk_score} sabotaged=${sabotaged.risk_score} dump=${dump.risk_score} mall=${mall.risk_score}`
+  );
 
   console.log('\n================================================================');
   console.log('5. Tier 2: LLM batch refinement via mock OpenAI-compatible server');
@@ -229,7 +338,7 @@ async function run() {
   const server = http.createServer((req, res) => {
     if (req.method === 'POST' && req.url === '/v1/chat/completions') {
       let body = '';
-      req.on('data', (c) => (body += c));
+      req.on('data', c => (body += c));
       req.on('end', () => {
         llmCalls++;
         const payload = JSON.parse(body);
@@ -240,7 +349,8 @@ async function run() {
             flag_category: r.review_id === 'llm-seed' ? 'seeding_fake' : 'authentic',
             verdict: r.review_id === 'llm-seed' ? 'fake' : 'authentic',
             fake_probability: r.review_id === 'llm-seed' ? 0.93 : 0.04,
-            reason: r.review_id === 'llm-seed' ? 'Văn phong quảng cáo, kịch bản lặp' : 'Trải nghiệm thật',
+            reason:
+              r.review_id === 'llm-seed' ? 'Văn phong quảng cáo, kịch bản lặp' : 'Trải nghiệm thật',
           })),
           pros: ['Pin trâu'],
           cons: ['Loa nhỏ'],
@@ -254,7 +364,7 @@ async function run() {
     res.writeHead(404);
     res.end();
   });
-  await new Promise<void>((r) => server.listen(0, '127.0.0.1', () => r()));
+  await new Promise<void>(r => server.listen(0, '127.0.0.1', () => r()));
   const port = (server.address() as { port: number }).port;
 
   try {
@@ -266,18 +376,36 @@ async function run() {
     });
 
     const input: ReviewInputItem[] = [
-      { id: 'llm-seed', author_name: 'n1', rating_star: 5, comment: 'Sản phẩm xuất sắc hoàn hảo mọi mặt nên mua ngay hôm nay' },
-      { id: 'llm-real', author_name: 'n2', rating_star: 4, comment: 'Pin dùng được cả ngày nhưng loa hơi nhỏ thôi' },
+      {
+        id: 'llm-seed',
+        author_name: 'n1',
+        rating_star: 5,
+        comment: 'Sản phẩm xuất sắc hoàn hảo mọi mặt nên mua ngay hôm nay',
+      },
+      {
+        id: 'llm-real',
+        author_name: 'n2',
+        rating_star: 4,
+        comment: 'Pin dùng được cả ngày nhưng loa hơi nhỏ thôi',
+      },
       { id: 'llm-coin', author_name: 'n3', rating_star: 5, comment: 'nhận xu' },
     ];
     const { results, summary: s } = await llm.analyzeReviews(input, { entityName: 'Test Phone' });
-    const m = new Map(results.map((r) => [r.review_id, r]));
+    const m = new Map(results.map(r => [r.review_id, r]));
 
     assert.equal(llmCalls, 1, 'one batch => one LLM call');
-    assert.equal(m.get('llm-seed')!.flag_category, 'seeding_fake', 'LLM may upgrade an authentic-by-heuristic review');
+    assert.equal(
+      m.get('llm-seed')!.flag_category,
+      'seeding_fake',
+      'LLM may upgrade an authentic-by-heuristic review'
+    );
     assert.equal(m.get('llm-seed')!.include_in_rating, false);
     assert.equal(m.get('llm-real')!.flag_category, 'authentic');
-    assert.equal(m.get('llm-coin')!.flag_category, 'low_value_coin_spam', 'high-confidence heuristic must not be overridden by LLM');
+    assert.equal(
+      m.get('llm-coin')!.flag_category,
+      'low_value_coin_spam',
+      'high-confidence heuristic must not be overridden by LLM'
+    );
     assert.deepEqual(s.pros, ['Pin trâu']);
     assert.deepEqual(s.cons, ['Loa nhỏ']);
     assert.equal(s.authentic_review_count, 1);
@@ -287,7 +415,8 @@ async function run() {
     console.log('6. persistAnalysisToSupabase payload shape (stubbed client)');
     console.log('================================================================');
 
-    const calls: Array<{ table: string; op: string; payload: any; col?: string; val?: string }> = [];
+    const calls: Array<{ table: string; op: string; payload: any; col?: string; val?: string }> =
+      [];
     const stub = {
       from: (table: string) => ({
         upsert: async (payload: any) => {
@@ -314,25 +443,57 @@ async function run() {
       isOfficial: false,
     });
 
-    const flagUpsert = calls.find((c) => c.table === 'review_flags' && c.op === 'upsert')!;
+    const flagUpsert = calls.find(c => c.table === 'review_flags' && c.op === 'upsert')!;
     assert.equal(flagUpsert.payload.length, 3);
     for (const row of flagUpsert.payload) {
-      assert.ok(['authentic', 'low_value_coin_spam', 'seeding_fake', 'competitor_sabotage', 'review_bombing'].includes(row.flag_category));
+      assert.ok(
+        [
+          'authentic',
+          'low_value_coin_spam',
+          'seeding_fake',
+          'competitor_sabotage',
+          'review_bombing',
+        ].includes(row.flag_category)
+      );
       assert.ok(['authentic', 'suspicious', 'fake', 'unanalyzed'].includes(row.verdict));
       assert.ok(signalsValid(row.signals));
       assert.match(row.input_hash, /^0x[0-9a-f]{64}$/);
     }
-    assert.ok(calls.some((c) => c.table === 'review_analysis' && c.op === 'upsert' && c.payload.product_id === 'prod-1'));
-    assert.ok(calls.some((c) => c.table === 'master_products' && c.op === 'update' && c.val === 'master-1' && 'user_rating_weighted' in c.payload));
-    const merchUpdate = calls.find((c) => c.table === 'merchants' && c.op === 'update' && c.val === 'merch-1');
+    assert.ok(
+      calls.some(
+        c => c.table === 'review_analysis' && c.op === 'upsert' && c.payload.product_id === 'prod-1'
+      )
+    );
+    assert.ok(
+      calls.some(
+        c =>
+          c.table === 'master_products' &&
+          c.op === 'update' &&
+          c.val === 'master-1' &&
+          'user_rating_weighted' in c.payload
+      )
+    );
+    const merchUpdate = calls.find(
+      c => c.table === 'merchants' && c.op === 'update' && c.val === 'merch-1'
+    );
     assert.ok(merchUpdate, 'merchants update called');
     assert.equal(typeof merchUpdate.payload.review_risk_score, 'number');
     assert.equal(typeof merchUpdate.payload.review_risk_breakdown, 'object');
     assert.equal(typeof merchUpdate.payload.review_risk_updated_at, 'string');
-    assert.equal('risk_score' in merchUpdate.payload, false, 'must NOT overwrite DOSafe risk_score');
-    assert.equal(calls.filter((c) => c.table === 'reviews' && c.op === 'update').length, 3, 'helpfulness_weight written per review');
+    assert.equal(
+      'risk_score' in merchUpdate.payload,
+      false,
+      'must NOT overwrite DOSafe risk_score'
+    );
+    assert.equal(
+      calls.filter(c => c.table === 'reviews' && c.op === 'update').length,
+      3,
+      'helpfulness_weight written per review'
+    );
     assert.ok(out.merchantRisk);
-    console.log('✅ [Persist] review_flags / review_analysis / master_products / merchants (review_risk_score isolated) / reviews payloads valid');
+    console.log(
+      '✅ [Persist] review_flags / review_analysis / master_products / merchants (review_risk_score isolated) / reviews payloads valid'
+    );
 
     console.log('\n================================================================');
     console.log('7. castReviewVote (rate.review_votes per-user vote & report)');
@@ -395,7 +556,7 @@ async function run() {
   console.log('\n🎉 ALL AI REVIEW ANALYZER TESTS PASSED!');
 }
 
-run().catch((err) => {
+run().catch(err => {
   console.error('❌ Test failed:', err);
   process.exit(1);
 });
