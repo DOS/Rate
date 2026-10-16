@@ -109,7 +109,7 @@ export default function DealFinderWorkspace({
         '| --- | --- | --- | --- | --- | --- |',
         ...filteredGenuineDeals.map(
           (g) =>
-            `| ${g.productName} | ${g.platform.toUpperCase()} (${g.merchantName}) | **${g.priceCurrent.toLocaleString('vi-VN')} ₫** | ${g.marketMedianPrice.toLocaleString('vi-VN')} ₫ | -${g.savingsVsMedianVnd.toLocaleString('vi-VN')} ₫ (-${g.savingsVsMedianPct}%) | ${g.jreviewsScore10.toFixed(1)}/10 |`
+            `| ${g.productName} | ${g.platform.toUpperCase()} (${g.merchantName}) | **${g.priceCurrent.toLocaleString('vi-VN')} ₫** | ${g.marketMedianPrice.toLocaleString('vi-VN')} ₫ | -${g.savingsVsMedianVnd.toLocaleString('vi-VN')} ₫ (-${g.savingsVsMedianPct}%) | ${g.jreviewsScore10 != null ? `${g.jreviewsScore10.toFixed(1)}/10` : 'Chưa có'} |`
         ),
         '',
         '#### 🚨 Bẫy Nâng Khống Giá Gốc (Fake Sale Traps)',
@@ -175,7 +175,7 @@ export default function DealFinderWorkspace({
         it.marketMedianPrice,
         it.savingsVsMedianPct,
         it.fakeMarkupPct,
-        it.jreviewsScore10.toFixed(1),
+        it.jreviewsScore10 != null ? it.jreviewsScore10.toFixed(1) : '',
       ]),
       ...filteredPriceSpreadLeaders.map((sp) => [
         'price_spread_leader',

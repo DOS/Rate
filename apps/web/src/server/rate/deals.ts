@@ -42,7 +42,7 @@ export interface CrossPlatformDealRadarItem {
   savingsVsMedianPct: number;
   claimedDiscountPct: number;
   fakeMarkupPct: number;
-  jreviewsScore10: number;
+  jreviewsScore10: number | null;
   explanationVi: string;
 }
 
@@ -144,11 +144,13 @@ export function computeCrossPlatformDealRadarFromData(
       master.expert_rating ||
         master.user_rating_weighted ||
         master.average_rating ||
-        4.8
+        0
     );
-    const jreviewsScore10 = Number(
-      (rawExpert <= 5 ? rawExpert * 2 : rawExpert).toFixed(1)
-    );
+    // No expert or user rating yet: leave the score empty instead of inventing one.
+    const jreviewsScore10 =
+      rawExpert > 0
+        ? Number((rawExpert <= 5 ? rawExpert * 2 : rawExpert).toFixed(1))
+        : null;
     const imageUrl = resolveProductImageUrl(master);
     const productHref = `/${categorySlug}/${master.slug}`;
 
