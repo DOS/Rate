@@ -2,6 +2,13 @@
 
 import React, { useState } from 'react';
 import type { KeySpecs, ProductSpecifications } from '@repo/shared-data';
+import {
+  RADAR_CSV_HEADERS,
+  radarCsvCells,
+  radarExportFields,
+  radarMarkdownCell,
+  type RadarSignal,
+} from '@/lib/deal-radar';
 
 interface ProductSpecsExportToolbarProps {
   readonly productName: string;
@@ -9,6 +16,7 @@ interface ProductSpecsExportToolbarProps {
   readonly brand: string;
   readonly specifications: ProductSpecifications;
   readonly keySpecs: KeySpecs;
+  readonly radarSignal?: RadarSignal | null;
 }
 
 export default function ProductSpecsExportToolbar({
@@ -17,6 +25,7 @@ export default function ProductSpecsExportToolbar({
   brand,
   specifications,
   keySpecs,
+  radarSignal,
 }: ProductSpecsExportToolbarProps) {
   const [copiedSpecsMd, setCopiedSpecsMd] = useState(false);
 
@@ -184,6 +193,7 @@ export default function ProductSpecsExportToolbar({
 
     const md = [
       `### 📋 Rate.vn 10-Field-Groups Technical Specifications: ${productName} (${brand})`,
+      `- **Deal Radar Signal:** ${radarMarkdownCell(radarSignal)}`,
       '',
       '| Field Group | Attribute | Specification |',
       '| --- | --- | --- |',
@@ -216,6 +226,7 @@ export default function ProductSpecsExportToolbar({
       'Slug',
       'Product',
       'Brand',
+      ...RADAR_CSV_HEADERS,
       'FieldGroup',
       'Attribute',
       'Value',
@@ -223,7 +234,15 @@ export default function ProductSpecsExportToolbar({
     const csvLines = [
       headers.join(','),
       ...rows.map(([grp, attr, val]) =>
-        [productSlug, productName, brand, grp, attr, val]
+        [
+          productSlug,
+          productName,
+          brand,
+          ...radarCsvCells(radarSignal),
+          grp,
+          attr,
+          val,
+        ]
           .map(escapeCsv)
           .join(',')
       ),
@@ -249,6 +268,7 @@ export default function ProductSpecsExportToolbar({
       brand,
       schema: 'Rate.vn 10-Field-Groups (GSMArena + PhoneArena)',
       exported_at: new Date().toISOString(),
+      deal_radar: radarExportFields(radarSignal),
       key_specs: keySpecs,
       specifications,
     };

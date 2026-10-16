@@ -5,6 +5,8 @@ import { Link } from '@/lib/navigation';
 import type { ScoredLeaderboardItem } from '@/lib/leaderboard-engine';
 import {
   getRadarSignal,
+  RADAR_CSV_HEADERS,
+  radarCsvCells,
   radarExportFields,
   radarLabel,
   radarMarkdownCell,
@@ -239,6 +241,8 @@ export default function VersusInteractiveScoreboard({
     };
     const sigA = getRadarSignal(radarIndex, scoreA.slug);
     const sigB = getRadarSignal(radarIndex, scoreB.slug);
+    const cellsA = radarCsvCells(sigA);
+    const cellsB = radarCsvCells(sigB);
     const headers = [
       'Tiêu Chí JReviews',
       'Trọng Số (%)',
@@ -298,6 +302,13 @@ export default function VersusInteractiveScoreboard({
             ? scoreB.name
             : '-',
       ],
+      ...RADAR_CSV_HEADERS.map((hdr, idx) => [
+        hdr,
+        '-',
+        cellsA[idx] ?? '',
+        cellsB[idx] ?? '',
+        '-',
+      ]),
     ];
     const csvContent = `\uFEFF${[
       headers.map(escapeCsv).join(','),

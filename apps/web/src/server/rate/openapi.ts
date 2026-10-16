@@ -229,7 +229,28 @@ export function buildRateOpenApiSpec(
           responses: {
             '200': {
               description:
-                'Paginated list of standardized master products with facet counts.',
+                'Paginated list of standardized master products with facet counts and per-product `deal_radar` / `radar_signal`.',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      ok: { type: 'boolean', example: true },
+                      data: {
+                        type: 'array',
+                        items: {
+                          type: 'object',
+                          properties: {
+                            radar_signal: {
+                              $ref: '#/components/schemas/ProductDealRadarSignal',
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
             },
           },
         },
@@ -240,7 +261,7 @@ export function buildRateOpenApiSpec(
           summary:
             'Get full master product detail, 10-group specs, offers, 90-day price history & AI reviews',
           description:
-            'Returns the canonical master product record, full 10-group specification JSONB, cross-marketplace merchant offers (`rate.products`), 90-day price history series (`rate.price_history`), fake-sale discount analysis, and AI-audited user reviews.',
+            'Returns the canonical master product record, full 10-group specification JSONB, cross-marketplace merchant offers (`rate.products`), 90-day price history series (`rate.price_history`), fake-sale discount analysis, canonical `deal_radar` / `radar_signal`, and AI-audited user reviews.',
           tags: ['Products & Specs'],
           parameters: [
             {
@@ -255,7 +276,20 @@ export function buildRateOpenApiSpec(
           responses: {
             '200': {
               description:
-                'Full product detail payload with 10-group specs, price history, and AI-audited reviews.',
+                'Full product detail payload with 10-group specs, price history, `radar_signal`, and AI-audited reviews.',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      ok: { type: 'boolean', example: true },
+                      radar_signal: {
+                        $ref: '#/components/schemas/ProductDealRadarSignal',
+                      },
+                    },
+                  },
+                },
+              },
             },
             '404': {
               description: 'Master product not found.',
@@ -283,7 +317,25 @@ export function buildRateOpenApiSpec(
           ],
           responses: {
             '200': {
-              description: 'Side-by-side comparison matrix for up to 4 models.',
+              description:
+                'Side-by-side comparison matrix for up to 4 models including per-product `deal_radar` and `radar_signal`.',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      ok: { type: 'boolean', example: true },
+                      data: { type: 'array', items: { type: 'object' } },
+                      deal_radar: {
+                        type: 'object',
+                        additionalProperties: {
+                          $ref: '#/components/schemas/ProductDealRadarSignal',
+                        },
+                      },
+                    },
+                  },
+                },
+              },
             },
           },
         },
@@ -294,7 +346,7 @@ export function buildRateOpenApiSpec(
           summary:
             'Get programmatic 1v1 Head-to-Head JReviews verdict, 5-criteria scoreboard & price delta',
           description:
-            'Evaluates two same-category master products (`?pair=<slugA>-vs-<slugB>` or `?slugA=...&slugB=...`) with optional persona/custom 5-criteria weights (`persona`, `w_screen`, `w_performance`, `w_camera`, `w_battery`, `w_value`) and returns the overall winner, per-criterion head-to-head breakdown, price delta, and 10-group specs.',
+            'Evaluates two same-category master products (`?pair=<slugA>-vs-<slugB>` or `?slugA=...&slugB=...`) with optional persona/custom 5-criteria weights (`persona`, `w_screen`, `w_performance`, `w_camera`, `w_battery`, `w_value`) and returns the overall winner, per-criterion head-to-head breakdown, price delta, Deal Radar signals (`deal_radar`), and 10-group specs.',
           tags: ['Comparison & Watchlist'],
           parameters: [
             {
@@ -335,7 +387,28 @@ export function buildRateOpenApiSpec(
           responses: {
             '200': {
               description:
-                '1v1 head-to-head JReviews verdict, 5-criteria breakdown, and price comparison.',
+                '1v1 head-to-head JReviews verdict, 5-criteria breakdown, Deal Radar signals (`deal_radar`), and price comparison.',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      ok: { type: 'boolean', example: true },
+                      deal_radar: {
+                        type: 'object',
+                        properties: {
+                          productA: {
+                            $ref: '#/components/schemas/ProductDealRadarSignal',
+                          },
+                          productB: {
+                            $ref: '#/components/schemas/ProductDealRadarSignal',
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
             },
             '400': {
               description: 'Missing or invalid 1v1 pair parameters.',
@@ -351,9 +424,9 @@ export function buildRateOpenApiSpec(
         get: {
           operationId: 'getWatchlistProducts',
           summary:
-            'Fetch real-time price and fake-sale verdict status for watched products',
+            'Fetch real-time price, Deal Radar signal & fake-sale verdict status for watched products',
           description:
-            'Batch-fetches current lowest prices, 90-day median prices, and fake-sale discount analysis for up to 20 watched product slugs.',
+            'Batch-fetches current lowest prices, 90-day median prices, fake-sale discount analysis, and canonical `deal_radar` / `radar_signal` telemetry for up to 20 watched product slugs.',
           tags: ['Comparison & Watchlist'],
           parameters: [
             {
@@ -366,7 +439,86 @@ export function buildRateOpenApiSpec(
           ],
           responses: {
             '200': {
-              description: 'Live watchlist product status array.',
+              description:
+                'Live watchlist product status array with per-item `deal_radar` and `radar_signal`.',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      ok: { type: 'boolean', example: true },
+                      data: {
+                        type: 'array',
+                        items: {
+                          type: 'object',
+                          properties: {
+                            radar_signal: {
+                              $ref: '#/components/schemas/ProductDealRadarSignal',
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        post: {
+          operationId: 'registerWatchlistPriceAlert',
+          summary:
+            'Register a target price alert for a canonical master product (`rate.upsert_price_alert`)',
+          description:
+            'Upserts a price alert threshold in VND (`targetPriceVnd`) for a watched master product and returns the latest `deal_radar` and `radar_signal` snapshot.',
+          tags: ['Comparison & Watchlist'],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  required: ['slug', 'targetPriceVnd'],
+                  properties: {
+                    slug: {
+                      type: 'string',
+                      example: 'apple-iphone-16-pro-max-256gb',
+                    },
+                    targetPriceVnd: {
+                      type: 'number',
+                      example: 28990000,
+                    },
+                    email: {
+                      type: 'string',
+                      nullable: true,
+                    },
+                    channel: {
+                      type: 'string',
+                      enum: ['web_push', 'email', 'extension'],
+                      default: 'web_push',
+                    },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            '200': {
+              description:
+                'Registered price alert confirmation with current product `deal_radar` and `radar_signal`.',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      ok: { type: 'boolean', example: true },
+                      radar_signal: {
+                        $ref: '#/components/schemas/ProductDealRadarSignal',
+                      },
+                    },
+                  },
+                },
+              },
             },
           },
         },
@@ -377,7 +529,7 @@ export function buildRateOpenApiSpec(
           summary:
             'Parse e-commerce URL or model query and match against master products & merchants',
           description:
-            'Extracts platform, shopId, itemId, or model keywords from an e-commerce URL or query string and returns matching master products and merchant trust profiles.',
+            'Extracts platform, shopId, itemId, or model keywords from an e-commerce URL or query string and returns matching master products, merchant trust profiles, and product-level `deal_radar` / `radar_signal`.',
           tags: ['URL Inspector & Extension MV3'],
           parameters: [
             {
@@ -392,7 +544,20 @@ export function buildRateOpenApiSpec(
           responses: {
             '200': {
               description:
-                'Parsed URL metadata, matched master products, and merchant audit summary.',
+                'Parsed URL metadata, matched master products, merchant audit summary, and `radar_signal`.',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      ok: { type: 'boolean', example: true },
+                      radar_signal: {
+                        $ref: '#/components/schemas/ProductDealRadarSignal',
+                      },
+                    },
+                  },
+                },
+              },
             },
           },
         },
@@ -403,7 +568,7 @@ export function buildRateOpenApiSpec(
           summary:
             'Full Web Product & URL Inspector with 5-level price verdict and 90-day chart',
           description:
-            'Runs the complete hybrid lookup pipeline for the `/inspect` web portal: canonicalizes 10 supported e-commerce/retailer platforms, blocks non-hardware accessories, resolves SKU variant capacity, computes the 5-level price verdict, and returns full product detail.',
+            'Runs the complete hybrid lookup pipeline for the `/inspect` web portal: canonicalizes 10 supported e-commerce/retailer platforms, blocks non-hardware accessories, resolves SKU variant capacity, computes the 5-level price verdict, and returns full product detail with `deal_radar` and `radar_signal`.',
           tags: ['URL Inspector & Extension MV3'],
           parameters: [
             {
@@ -424,7 +589,20 @@ export function buildRateOpenApiSpec(
           responses: {
             '200': {
               description:
-                'Complete inspection payload including extension lookup verdict, product detail, and capability matrix.',
+                'Complete inspection payload including extension lookup verdict, product detail, `radar_signal`, and capability matrix.',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      ok: { type: 'boolean', example: true },
+                      radar_signal: {
+                        $ref: '#/components/schemas/ProductDealRadarSignal',
+                      },
+                    },
+                  },
+                },
+              },
             },
           },
         },
@@ -435,7 +613,7 @@ export function buildRateOpenApiSpec(
           summary:
             'Low-latency Hybrid Lookup for Rate Browser Extension Manifest V3',
           description:
-            'Dedicated read-only lookup endpoint for the Rate Browser Extension MV3 across 10 platforms (`shopee`, `lazada`, `tiki`, `tiktok`, `cellphones`, `tgdd`, `fptshop`, `hoangha`, `didongviet`, `phongvu`). Performs deterministic `platform_item_id` lookup, canonical model fallback, accessory gatekeeping, and 5-level price verdict calculation.',
+            'Dedicated read-only lookup endpoint for the Rate Browser Extension MV3 across 10 platforms (`shopee`, `lazada`, `tiki`, `tiktok`, `cellphones`, `tgdd`, `fptshop`, `hoangha`, `didongviet`, `phongvu`). Performs deterministic `platform_item_id` lookup, canonical model fallback, accessory gatekeeping, 5-level price verdict calculation, and returns `deal_radar` / `radarSignal`.',
           tags: ['URL Inspector & Extension MV3'],
           parameters: [
             {
@@ -474,7 +652,20 @@ export function buildRateOpenApiSpec(
           responses: {
             '200': {
               description:
-                'Extension lookup verdict, matched master product, cross-marketplace offers, and merchant trust summary.',
+                'Extension lookup verdict, matched master product, `radar_signal`, cross-marketplace offers, and merchant trust summary.',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      ok: { type: 'boolean', example: true },
+                      radar_signal: {
+                        $ref: '#/components/schemas/ProductDealRadarSignal',
+                      },
+                    },
+                  },
+                },
+              },
             },
           },
         },
@@ -766,7 +957,33 @@ export function buildRateOpenApiSpec(
           responses: {
             '200': {
               description:
-                '4-Tier JReviews Leaderboard ranking with Top 3 Podium and Same-Category compare URL.',
+                '4-Tier JReviews Leaderboard ranking with Top 3 Podium, per-item `deal_radar` / `radar_signal`, and Same-Category compare URL.',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      ok: { type: 'boolean', example: true },
+                      data: {
+                        type: 'object',
+                        properties: {
+                          items: {
+                            type: 'array',
+                            items: {
+                              type: 'object',
+                              properties: {
+                                radar_signal: {
+                                  $ref: '#/components/schemas/ProductDealRadarSignal',
+                                },
+                              },
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
             },
           },
         },

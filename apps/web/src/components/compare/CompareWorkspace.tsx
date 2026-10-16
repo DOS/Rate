@@ -15,6 +15,8 @@ import {
 } from '@/lib/rate-api';
 import {
   getRadarSignal,
+  RADAR_CSV_HEADERS,
+  radarCsvCells,
   radarExportFields,
   radarLabel,
   radarMarkdownCell,
@@ -1105,6 +1107,9 @@ export default function CompareWorkspace({
       'Tiêu Chí Kỹ Thuật',
       ...products.map((p) => p.name),
     ];
+    const productRadarCells = products.map((p) =>
+      radarCsvCells(getRadarSignal(radarIndex, p.slug))
+    );
     const rows: string[] = [
       headers.map(escapeCsv).join(','),
       [
@@ -1114,6 +1119,15 @@ export default function CompareWorkspace({
       ]
         .map((c) => escapeCsv(c))
         .join(','),
+      ...RADAR_CSV_HEADERS.map((hdr, idx) =>
+        [
+          '0. Tín hiệu Deal Radar 10 Sàn (60N)',
+          hdr,
+          ...productRadarCells.map((cells) => cells[idx] ?? ''),
+        ]
+          .map((c) => escapeCsv(c))
+          .join(',')
+      ),
     ];
     for (const group of SPEC_GROUPS) {
       for (const row of group.rows) {

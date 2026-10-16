@@ -789,6 +789,7 @@ export async function ProductDetailView({
             ignoredReviewCount={ignoredCount}
             reviews={reviews}
             summary={reviewSummary}
+            radarSignal={radarSignal}
           />
         </div>
 
@@ -818,6 +819,7 @@ export async function ProductDetailView({
                     brand={product.brand}
                     specifications={specs || {}}
                     keySpecs={keySpecs || {}}
+                    radarSignal={radarSignal}
                   />
                   <span className="badge bg-dark-subtle text-dark rounded-pill px-3 py-2">
                     {specUi.sectionBadge}
@@ -1327,6 +1329,7 @@ export async function ProductDetailView({
         <PriceHistorySection
           productName={product.name}
           history={priceHistory}
+          radarSignal={radarSignal}
         />
 
         {/* Neutral Merchant Reference & Trust Audit Table */}
