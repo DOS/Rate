@@ -63,6 +63,9 @@ jobs:
       - name: Run @repo/crawlers Open-Core Intelligence Tests
         run: pnpm --filter @repo/crawlers test
 
+      - name: Lint @repo/crawlers (errors fail, warnings do not)
+        run: pnpm --filter @repo/crawlers lint
+
       - name: Verify @repo/crawlers dist entry points (consumed by DOS/Rate-Services)
         run: pnpm --filter @repo/crawlers test:dist
 
