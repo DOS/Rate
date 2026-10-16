@@ -986,6 +986,36 @@ function runCoreArchitectureSuite() {
   console.log(
     '  ✅ [22/22] JReviews Audit Export (#71) & 60-Day Price History Markdown/CSV Export (#72) passed'
   );
+
+  // 23. API Playground Python/JSON Export (#73) & 10-Group Specs Markdown/JSON Export (#74)
+  const apiPlaygroundSrcUpdated = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/components/developers/ApiPlaygroundClient.tsx'
+    ),
+    'utf8'
+  );
+  const specsExportToolbarSrc = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/components/leaderboard/ProductSpecsExportToolbar.tsx'
+    ),
+    'utf8'
+  );
+  assert.ok(
+    apiPlaygroundSrcUpdated.includes('pythonSnippet') &&
+      apiPlaygroundSrcUpdated.includes('handleCopyResponseJson') &&
+      apiPlaygroundSrcUpdated.includes('handleDownloadResponseJson'),
+    'ApiPlaygroundClient must provide cURL/TS/Python snippets and 1-Click JSON response copy/download'
+  );
+  assert.ok(
+    specsExportToolbarSrc.includes('handleCopySpecsMarkdown') &&
+      specsExportToolbarSrc.includes('handleDownloadSpecsJson'),
+    'ProductSpecsExportToolbar must provide 1-Click 10-Field-Groups Markdown and JSON export'
+  );
+  console.log(
+    '  ✅ [23/23] API Playground Python/JSON Export (#73) & 10-Group Specs Markdown/JSON Export (#74) passed'
+  );
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
 

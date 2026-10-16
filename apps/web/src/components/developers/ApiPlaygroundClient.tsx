@@ -144,7 +144,9 @@ export default function ApiPlaygroundClient() {
     PRESET_ENDPOINTS[0]!.path
   );
   const [requestBody, setRequestBody] = useState<string>('');
-  const [snippetMode, setSnippetMode] = useState<'curl' | 'fetch'>('curl');
+  const [snippetMode, setSnippetMode] = useState<'curl' | 'fetch' | 'python'>(
+    'curl'
+  );
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [statusCode, setStatusCode] = useState<number | null>(null);
   const [latencyMs, setLatencyMs] = useState<number | null>(null);
@@ -152,6 +154,7 @@ export default function ApiPlaygroundClient() {
     '// Bấm "Chạy thử Request trực tiếp" để xem dữ liệu JSON thực tế từ Supabase rate schema...'
   );
   const [copiedSnippet, setCopiedSnippet] = useState<boolean>(false);
+  const [copiedResponse, setCopiedResponse] = useState<boolean>(false);
 
   const activePreset =
     PRESET_ENDPOINTS.find((p) => p.id === selectedId) ?? PRESET_ENDPOINTS[0]!;
@@ -229,7 +232,17 @@ export default function ApiPlaygroundClient() {
       ? `const res = await fetch("https://rate.vn${customPath}", {\n  method: "POST",\n  headers: { "Content-Type": "application/json" },\n  body: JSON.stringify(${requestBody.trim() || '{}'}),\n});\nconst data = await res.json();`
       : `const res = await fetch("https://rate.vn${customPath}", {\n  headers: { Accept: "application/json" },\n});\nconst data = await res.json();`;
 
-  const activeSnippet = snippetMode === 'curl' ? curlSnippet : fetchSnippet;
+  const pythonSnippet =
+    customMethod === 'POST'
+      ? `import requests\n\nres = requests.post(\n    "https://rate.vn${customPath}",\n    json=${requestBody.trim() || '{}'},\n    timeout=15,\n)\nprint(res.status_code, res.json())`
+      : `import requests\n\nres = requests.get(\n    "https://rate.vn${customPath}",\n    headers={"Accept": "application/json"},\n    timeout=15,\n)\nprint(res.status_code, res.json())`;
+
+  const activeSnippet =
+    snippetMode === 'curl'
+      ? curlSnippet
+      : snippetMode === 'fetch'
+        ? fetchSnippet
+        : pythonSnippet;
 
   const handleCopySnippet = async () => {
     try {
@@ -239,6 +252,31 @@ export default function ApiPlaygroundClient() {
     } catch {
       // ignore clipboard errors
     }
+  };
+
+  const handleCopyResponseJson = async () => {
+    try {
+      await navigator.clipboard.writeText(responseJson);
+      setCopiedResponse(true);
+      setTimeout(() => setCopiedResponse(false), 2000);
+    } catch {
+      // ignore clipboard errors
+    }
+  };
+
+  const handleDownloadResponseJson = () => {
+    if (typeof document === 'undefined') return;
+    const blob = new Blob([responseJson], {
+      type: 'application/json;charset=utf-8;',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `rate-api-${selectedId}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -270,7 +308,7 @@ export default function ApiPlaygroundClient() {
         {/* Preset Selector Pills */}
         <div className="mb-3">
           <div className="small fw-bold text-uppercase text-muted mb-2">
-            Chọn nhanh Endpoint mẫu (10 kịch bản thực tế):
+            Chọn nhanh Endpoint mẫu (12 kịch bản thực tế):
           </div>
           <div className="d-flex flex-wrap gap-2">
             {PRESET_ENDPOINTS.map((preset) => {
@@ -353,14 +391,14 @@ export default function ApiPlaygroundClient() {
           )}
         </form>
 
-        {/* cURL / Fetch Snippet & Telemetry Bar */}
+        {/* cURL / Fetch / Python Snippet & Telemetry Bar */}
         <div className="row g-3">
           <div className="col-lg-5">
             <div className="rounded-3 bg-dark h-100 p-3 text-white">
-              <div className="d-flex justify-content-between align-items-center mb-2">
+              <div className="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-1">
                 <div className="d-flex align-items-center gap-2">
                   <span className="small fw-semibold text-white-50">
-                    <BsCodeSlash className="me-1" /> Code Snippet:
+                    <BsCodeSlash className="me-1" /> Code:
                   </span>
                   <div className="btn-group btn-group-sm">
                     <button
@@ -385,12 +423,24 @@ export default function ApiPlaygroundClient() {
                     >
                       TS fetch()
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => setSnippetMode('python')}
+                      className={`btn btn-sm py-0 ${
+                        snippetMode === 'python'
+                          ? 'btn-danger'
+                          : 'btn-outline-secondary text-light'
+                      }`}
+                    >
+                      Python
+                    </button>
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={handleCopySnippet}
                   className="btn btn-sm btn-outline-light rounded-pill py-0"
+                  data-testid="copy-api-snippet-btn"
                 >
                   {copiedSnippet ? (
                     <>
@@ -414,11 +464,11 @@ export default function ApiPlaygroundClient() {
 
           <div className="col-lg-7">
             <div className="rounded-3 bg-dark h-100 p-3 text-white">
-              <div className="d-flex justify-content-between align-items-center border-bottom border-secondary border-opacity-25 mb-2 pb-2">
+              <div className="d-flex justify-content-between align-items-center border-bottom border-secondary border-opacity-25 mb-2 flex-wrap gap-2 pb-2">
                 <span className="small fw-semibold text-white-50">
                   JSON Response Payload
                 </span>
-                <div className="d-flex align-items-center gap-2">
+                <div className="d-flex align-items-center flex-wrap gap-2">
                   {statusCode !== null && (
                     <span
                       className={`badge rounded-pill ${
@@ -435,6 +485,22 @@ export default function ApiPlaygroundClient() {
                       {latencyMs} ms
                     </span>
                   )}
+                  <button
+                    type="button"
+                    onClick={handleCopyResponseJson}
+                    className="btn btn-sm btn-outline-light rounded-pill py-0"
+                    data-testid="copy-api-response-btn"
+                  >
+                    {copiedResponse ? '✅ Đã chép JSON' : '📋 Copy JSON'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDownloadResponseJson}
+                    className="btn btn-sm btn-outline-info rounded-pill py-0"
+                    data-testid="download-api-response-btn"
+                  >
+                    📥 Tải JSON
+                  </button>
                 </div>
               </div>
               <pre

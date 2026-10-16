@@ -30,6 +30,7 @@ import ProductLeaderboardBadges from '@/components/leaderboard/ProductLeaderboar
 import ProductShareAuditButton from '@/components/leaderboard/ProductShareAuditButton';
 import ProductValueCalculator from '@/components/leaderboard/ProductValueCalculator';
 import ProductOffersExplorer from '@/components/leaderboard/ProductOffersExplorer';
+import ProductSpecsExportToolbar from '@/components/leaderboard/ProductSpecsExportToolbar';
 
 export type PageParams = Promise<{ locale: string; slug: string }>;
 
@@ -765,9 +766,18 @@ export async function ProductDetailView({
                     <span>📋</span> {specUi.sectionTitle}
                   </h2>
                 </div>
-                <span className="badge bg-dark-subtle text-dark rounded-pill px-3 py-2">
-                  {specUi.sectionBadge}
-                </span>
+                <div className="d-flex align-items-center flex-wrap gap-2">
+                  <ProductSpecsExportToolbar
+                    productName={product.name}
+                    productSlug={product.slug}
+                    brand={product.brand}
+                    specifications={specs || {}}
+                    keySpecs={keySpecs || {}}
+                  />
+                  <span className="badge bg-dark-subtle text-dark rounded-pill px-3 py-2">
+                    {specUi.sectionBadge}
+                  </span>
+                </div>
               </div>
 
               <div className="row g-4">
