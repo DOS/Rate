@@ -1269,9 +1269,8 @@ function runCoreArchitectureSuite() {
     'CategoryCatalogContent must fetch and render category-deal-radar (#90)'
   );
   assert.ok(
-    watchlistRadarSrc.includes('/api/v1/rate/deals') &&
-      watchlistRadarSrc.includes('watchlist-radar-signal') &&
-      watchlistRadarSrc.includes('radarSignals'),
+    watchlistRadarSrc.includes('useDealRadarIndex') &&
+      watchlistRadarSrc.includes('watchlist-radar-signal'),
     'WatchlistWorkspace must fetch /api/v1/rate/deals and render watchlist-radar-signal badges (#91)'
   );
   console.log(
@@ -1303,14 +1302,14 @@ function runCoreArchitectureSuite() {
   );
   assert.ok(
     leaderboardPageRadarSrc.includes('getCrossPlatformDealRadar') &&
-      leaderboardExplorerRadarSrc.includes('leaderboard-radar-signal') &&
-      leaderboardExplorerRadarSrc.includes('dealRadarBySlug'),
+      leaderboardExplorerRadarSrc.includes('RadarBadge') &&
+      leaderboardExplorerRadarSrc.includes('useDealRadarIndex'),
     'LeaderboardPage and LeaderboardExplorer must fetch and render leaderboard-radar-signal badges (#93)'
   );
   assert.ok(
-    compareWorkspaceRadarSrc.includes('/api/v1/rate/deals') &&
+    compareWorkspaceRadarSrc.includes('useDealRadarIndex') &&
       compareWorkspaceRadarSrc.includes('compare-radar-row') &&
-      versusScoreboardRadarSrc.includes('/api/v1/rate/deals') &&
+      versusScoreboardRadarSrc.includes('useDealRadarIndex') &&
       versusScoreboardRadarSrc.includes('versus-radar-row'),
     'CompareWorkspace and VersusInteractiveScoreboard must fetch /api/v1/rate/deals and render radar comparison rows (#94)'
   );
@@ -1366,11 +1365,11 @@ function runCoreArchitectureSuite() {
   );
   assert.ok(
     categoryCatalogSpreadSrc.includes('category-price-spread-leaders') &&
-      categoryCatalogSpreadSrc.includes('catalog-card-radar-badge'),
+      categoryCatalogSpreadSrc.includes('RadarBadge'),
     'CategoryCatalogContent must render category-price-spread-leaders and catalog-card-radar-badge (#97)'
   );
   assert.ok(
-    deepInspectRadarSrc.includes('/api/v1/rate/deals') &&
+    deepInspectRadarSrc.includes('useDealRadarIndex') &&
       deepInspectRadarSrc.includes('inspect-deal-radar-verdict') &&
       deepInspectRadarSrc.includes('dealRadarContext'),
     'DeepInspectWorkspace must fetch /api/v1/rate/deals, render inspect-deal-radar-verdict, and include dealRadarContext in exports (#98)'
@@ -1405,13 +1404,13 @@ function runCoreArchitectureSuite() {
     'MerchantDirectoryExplorer and MerchantProfilePage must integrate Deal Radar and render merchant-deal-radar-badge / merchant-profile-deal-radar (#99)'
   );
   assert.ok(
-    watchlistSpreadSrc.includes('priceSpreadLeaders') &&
+    watchlistSpreadSrc.includes('useDealRadarIndex') &&
       watchlistSpreadSrc.includes('watchlist-price-spread-badge') &&
       watchlistSpreadSrc.includes('Price Spread 10-Platform (%)'),
     'WatchlistWorkspace must integrate priceSpreadLeaders, render watchlist-price-spread-badge, and include spread columns in exports (#100)'
   );
   console.log(
-    '  ✅ [34/35] Merchant Deal Radar (#99) + Watchlist Price Spread Arbitrage (#100) passed'
+    '  ✅ [34/36] Merchant Deal Radar (#99) + Watchlist Price Spread Arbitrage (#100) passed'
   );
 
   // 35. Deal Radar columns in Leaderboard (#101) and Category Catalog (#102) exports
@@ -1431,18 +1430,127 @@ function runCoreArchitectureSuite() {
   );
   assert.ok(
     leaderboardExportSrc.includes('radarExportFields') &&
-      leaderboardExportSrc.includes('RadarVerdict') &&
-      leaderboardExportSrc.includes('dealRadar: radarExportFields'),
+      leaderboardExportSrc.includes('RADAR_CSV_HEADERS') &&
+      leaderboardExportSrc.includes('radarCsvCells'),
     'LeaderboardExplorer exports must include Deal Radar columns (#101)'
   );
   assert.ok(
-    catalogToolbarExportSrc.includes('radarFor') &&
-      catalogToolbarExportSrc.includes('RadarVerdict') &&
-      catalogToolbarExportSrc.includes('PriceSpreadPct'),
+    catalogToolbarExportSrc.includes('radarCsvCells') &&
+      catalogToolbarExportSrc.includes('RADAR_CSV_HEADERS') &&
+      catalogToolbarExportSrc.includes('radarMarkdownCell'),
     'CategoryCatalogToolbar exports must include Deal Radar columns (#102)'
   );
   console.log(
-    '  ✅ [35/35] Leaderboard (#101) + Category Catalog (#102) Deal Radar export columns passed'
+    '  ✅ [35/36] Leaderboard (#101) + Category Catalog (#102) Deal Radar export columns passed'
+  );
+
+  // 36. Deal Radar single source of truth (#104)
+  const radarLib =
+    require('../../../lib/deal-radar') as typeof import('../../../lib/deal-radar');
+  const mkItem = (slug: string, over: Record<string, unknown>) =>
+    ({
+      id: slug + '-' + String(over.platform ?? 'x'),
+      productSlug: slug,
+      merchantId: 'm1',
+      merchantName: 'Shop One',
+      platform: 'shopee',
+      savingsVsMedianPct: 0,
+      fakeMarkupPct: 0,
+      ...over,
+    }) as never;
+  const sample = {
+    genuineDeals: [mkItem('a', { savingsVsMedianPct: 12.34 })],
+    fakeSaleTraps: [
+      mkItem('a', { fakeMarkupPct: 40 }),
+      mkItem('b', {
+        fakeMarkupPct: 25.5,
+        merchantId: 'm2',
+        merchantName: 'Shop Two',
+      }),
+    ],
+    priceSpreadLeaders: [
+      { productSlug: 'b', spreadPct: 18.2, spreadVnd: 1_000_000 },
+      { productSlug: 'c', spreadPct: 6, spreadVnd: 300_000 },
+    ],
+  } as never;
+  const idx = radarLib.buildRadarIndex(sample);
+  assert.equal(
+    radarLib.getRadarSignal(idx, 'a').verdict,
+    'genuine_deal',
+    'A genuine deal must win over a fake-sale trap for the same product'
+  );
+  assert.equal(radarLib.getRadarSignal(idx, 'a').savingsPct, 12.34);
+  assert.equal(radarLib.getRadarSignal(idx, 'b').verdict, 'fake_sale_trap');
+  assert.equal(radarLib.getRadarSignal(idx, 'b').fakeMarkupPct, 25.5);
+  assert.equal(radarLib.getRadarSignal(idx, 'c').verdict, 'none');
+  assert.equal(radarLib.getRadarSignal(idx, 'c').spreadPct, 6);
+  assert.equal(radarLib.getRadarSignal(idx, 'zzz').verdict, 'none');
+  assert.equal(radarLib.getRadarSignal(null, 'a').verdict, 'none');
+  assert.equal(
+    radarLib.radarLabel(radarLib.getRadarSignal(idx, 'c'), 10),
+    '',
+    'Spread below the badge threshold must not render a label'
+  );
+  assert.ok(
+    radarLib.radarLabel(radarLib.getRadarSignal(idx, 'b'), 10).includes('🚨'),
+    'A verdict label must take priority over the spread label'
+  );
+  assert.ok(
+    radarLib.radarLabel(radarLib.getRadarSignal(idx, 'c'), 5).includes('📊'),
+    'Spread-only products render the spread label above the threshold'
+  );
+  assert.equal(radarLib.unwrapRadarPayload({ data: sample }) !== null, true);
+  assert.equal(radarLib.unwrapRadarPayload(sample) !== null, true);
+  assert.equal(radarLib.unwrapRadarPayload({ ok: false }), null);
+  assert.equal(
+    radarLib.radarCsvCells(radarLib.getRadarSignal(idx, 'a')).length,
+    radarLib.RADAR_CSV_HEADERS.length
+  );
+  const m1 = radarLib.selectMerchantRadar(sample, { id: 'm1', name: 'x' });
+  assert.equal(m1.genuineDealCount, 1);
+  assert.equal(m1.fakeTrapCount, 1);
+  const m2 = radarLib.selectMerchantRadar(sample, {
+    id: 'other',
+    name: 'shop two',
+  });
+  assert.equal(
+    m2.fakeTrapCount,
+    1,
+    'Merchant match must fall back to case-insensitive name'
+  );
+
+  // No component may re-implement radar fetch or slug lookup.
+  const webSrcRoot = path.join(repoRoot, 'apps/web/src');
+  const walk = (dir: string): string[] =>
+    fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+      const full = path.join(dir, e.name);
+      return e.isDirectory()
+        ? walk(full)
+        : /\.(ts|tsx)$/.test(e.name)
+          ? [full]
+          : [];
+    });
+  const offenders: string[] = [];
+  for (const f of walk(webSrcRoot)) {
+    const rel = path.relative(repoRoot, f).replace(/\\/g, '/');
+    if (rel.includes('__tests__')) continue;
+    const src = fs.readFileSync(f, 'utf8');
+    const fetchesRadar = /fetch\(\s*['"`]\/api\/v1\/rate\/deals/.test(src);
+    const isShared = rel.endsWith('components/radar/use-deal-radar.ts');
+    const isPlayground = rel.endsWith('ApiPlaygroundClient.tsx');
+    if (fetchesRadar && !isShared && !isPlayground)
+      offenders.push(rel + ' (fetch)');
+    if (/dealRadarBySlug|radarSignals\b/.test(src))
+      offenders.push(rel + ' (local lookup)');
+  }
+  assert.deepEqual(
+    offenders,
+    [],
+    'Radar must only be fetched/looked up via lib/deal-radar and use-deal-radar: ' +
+      offenders.join(', ')
+  );
+  console.log(
+    '  ✅ [36/36] Deal Radar single source of truth: shared index, labels, exports and no duplicated fetch/lookup (#104) passed'
   );
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }

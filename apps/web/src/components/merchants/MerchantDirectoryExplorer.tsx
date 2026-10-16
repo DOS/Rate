@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Link } from '@/lib/navigation';
 import type { MerchantSummary } from '@/server/rate';
-import type { CrossPlatformDealRadarItem } from '@/server/rate/deals';
+import { selectMerchantRadar } from '@/lib/deal-radar';
+import { useDealRadarPayload } from '@/components/radar/use-deal-radar';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
 import {
   BsArrowCounterclockwise,
@@ -50,86 +51,7 @@ export default function MerchantDirectoryExplorer({
   const [seedingTier, setSeedingTier] = useState<MerchantSeedingTier>('all');
   const [sortBy, setSortBy] = useState<MerchantSortOption>(initialSort);
   const [copiedMerchantsMd, setCopiedMerchantsMd] = useState(false);
-  const [merchantRadarMap, setMerchantRadarMap] = useState<
-    Record<
-      string,
-      {
-        genuineDealCount: number;
-        fakeTrapCount: number;
-        bestSavingsPct: number;
-      }
-    >
-  >({});
-
-  useEffect(() => {
-    let active = true;
-    fetch('/api/v1/rate/deals?category=all&limit=36')
-      .then((res) => (res.ok ? res.json() : null))
-      .then((json) => {
-        if (!active || !json) return;
-        const radarPayload = json?.data ?? json;
-        const genuineList: CrossPlatformDealRadarItem[] = Array.isArray(
-          radarPayload?.genuineDeals
-        )
-          ? radarPayload.genuineDeals
-          : [];
-        const trapList: CrossPlatformDealRadarItem[] = Array.isArray(
-          radarPayload?.fakeSaleTraps
-        )
-          ? radarPayload.fakeSaleTraps
-          : [];
-        const nextMap: typeof merchantRadarMap = {};
-        const addCount = (
-          key: string,
-          type: 'genuine' | 'trap',
-          savingsPct: number
-        ) => {
-          if (!key) return;
-          const prev = nextMap[key] || {
-            genuineDealCount: 0,
-            fakeTrapCount: 0,
-            bestSavingsPct: 0,
-          };
-          nextMap[key] = {
-            genuineDealCount:
-              prev.genuineDealCount + (type === 'genuine' ? 1 : 0),
-            fakeTrapCount: prev.fakeTrapCount + (type === 'trap' ? 1 : 0),
-            bestSavingsPct: Math.max(prev.bestSavingsPct, savingsPct),
-          };
-        };
-        for (const g of genuineList) {
-          if (g.merchantId) {
-            addCount(
-              g.merchantId,
-              'genuine',
-              Number(g.savingsVsMedianPct || 0)
-            );
-          }
-          if (g.merchantName) {
-            addCount(
-              g.merchantName.toLowerCase(),
-              'genuine',
-              Number(g.savingsVsMedianPct || 0)
-            );
-          }
-        }
-        for (const t of trapList) {
-          if (t.merchantId) {
-            addCount(t.merchantId, 'trap', 0);
-          }
-          if (t.merchantName) {
-            addCount(t.merchantName.toLowerCase(), 'trap', 0);
-          }
-        }
-        setMerchantRadarMap(nextMap);
-      })
-      .catch(() => {
-        // Ignore background radar fetch errors
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
+  const radarPayload = useDealRadarPayload();
 
   const labels = useMemo(() => {
     if (lang === 'en') {
@@ -411,13 +333,14 @@ export default function MerchantDirectoryExplorer({
     setSortBy('trust_desc');
   };
 
-  const getMerchantRadarStats = (m: MerchantSummary) =>
-    merchantRadarMap[m.id] ||
-    merchantRadarMap[m.name.toLowerCase()] || {
-      genuineDealCount: 0,
-      fakeTrapCount: 0,
-      bestSavingsPct: 0,
+  const getMerchantRadarStats = (m: MerchantSummary) => {
+    const r = selectMerchantRadar(radarPayload, m);
+    return {
+      genuineDealCount: r.genuineDealCount,
+      fakeTrapCount: r.fakeTrapCount,
+      bestSavingsPct: r.bestSavingsPct,
     };
+  };
 
   const handleCopyMerchantsMarkdown = async () => {
     if (typeof navigator === 'undefined' || filteredMerchants.length === 0)

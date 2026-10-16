@@ -12,6 +12,8 @@ import {
   type WatchlistItem,
 } from './watchlist-store';
 import CompareQuickToggle from '@/components/compare/CompareQuickToggle';
+import { getRadarSignal } from '@/lib/deal-radar';
+import { useDealRadarIndex } from '@/components/radar/use-deal-radar';
 
 interface WatchlistWorkspaceProps {
   catalogProducts: MasterProduct[];
@@ -58,30 +60,7 @@ export default function WatchlistWorkspace({
   const [liveDeals, setLiveDeals] = useState<Record<string, LiveWatchlistDeal>>(
     {}
   );
-  const [radarSignals, setRadarSignals] = useState<
-    Record<
-      string,
-      {
-        genuineDeal?: {
-          platform: string;
-          merchantName: string;
-          priceCurrent: number;
-          savingsVsMedianPct: number;
-        };
-        fakeSaleTrap?: {
-          platform: string;
-          merchantName: string;
-          fakeMarkupPct: number;
-        };
-        priceSpread?: {
-          spreadVnd: number;
-          spreadPct: number;
-          cheapestPlatform: string;
-          priciestPlatform: string;
-        };
-      }
-    >
-  >({});
+  const radarIndex = useDealRadarIndex();
   const [editingSlug, setEditingSlug] = useState<string | null>(null);
   const [editTarget, setEditTarget] = useState<number>(0);
   const [subscriberEmail, setSubscriberEmail] = useState<string>('');
@@ -108,65 +87,6 @@ export default function WatchlistWorkspace({
       })
       .catch(() => {
         // Fallback to SSR catalogProducts snapshot
-      });
-    fetch('/api/v1/rate/deals?category=all&limit=36')
-      .then((res) => (res.ok ? res.json() : null))
-      .then((json) => {
-        if (!cancelled && json) {
-          const nextMap: typeof radarSignals = {};
-          const radarPayload = json?.data ?? json;
-          const genuineList = Array.isArray(radarPayload?.genuineDeals)
-            ? radarPayload.genuineDeals
-            : [];
-          const trapList = Array.isArray(radarPayload?.fakeSaleTraps)
-            ? radarPayload.fakeSaleTraps
-            : [];
-          const spreadList = Array.isArray(radarPayload?.priceSpreadLeaders)
-            ? radarPayload.priceSpreadLeaders
-            : [];
-          for (const g of genuineList) {
-            if (g?.productSlug && !nextMap[g.productSlug]?.genuineDeal) {
-              nextMap[g.productSlug] = {
-                ...nextMap[g.productSlug],
-                genuineDeal: {
-                  platform: String(g.platform || ''),
-                  merchantName: String(g.merchantName || ''),
-                  priceCurrent: Number(g.priceCurrent || 0),
-                  savingsVsMedianPct: Number(g.savingsVsMedianPct || 0),
-                },
-              };
-            }
-          }
-          for (const t of trapList) {
-            if (t?.productSlug && !nextMap[t.productSlug]?.fakeSaleTrap) {
-              nextMap[t.productSlug] = {
-                ...nextMap[t.productSlug],
-                fakeSaleTrap: {
-                  platform: String(t.platform || ''),
-                  merchantName: String(t.merchantName || ''),
-                  fakeMarkupPct: Number(t.fakeMarkupPct || 0),
-                },
-              };
-            }
-          }
-          for (const sp of spreadList) {
-            if (sp?.productSlug && !nextMap[sp.productSlug]?.priceSpread) {
-              nextMap[sp.productSlug] = {
-                ...nextMap[sp.productSlug],
-                priceSpread: {
-                  spreadVnd: Number(sp.spreadVnd || 0),
-                  spreadPct: Number(sp.spreadPct || 0),
-                  cheapestPlatform: String(sp.cheapestPlatform || ''),
-                  priciestPlatform: String(sp.priciestPlatform || ''),
-                },
-              };
-            }
-          }
-          setRadarSignals(nextMap);
-        }
-      })
-      .catch(() => {
-        // Ignore Deal Radar fetch errors
       });
     return () => {
       cancelled = true;
@@ -305,7 +225,7 @@ export default function WatchlistWorkspace({
         ...items.map((item) => {
           const liveProd = productBySlug.get(item.slug);
           const liveDeal = liveDeals[item.slug];
-          const rSig = radarSignals[item.slug];
+          const rSig = getRadarSignal(radarIndex, item.slug);
           const curMin =
             liveDeal?.current_min_price ||
             (liveProd ? Number(liveProd.min_price || 0) : item.priceWhenAdded);
@@ -351,7 +271,7 @@ export default function WatchlistWorkspace({
     const rows = items.map((item) => {
       const liveProd = productBySlug.get(item.slug);
       const liveDeal = liveDeals[item.slug];
-      const rSig = radarSignals[item.slug];
+      const rSig = getRadarSignal(radarIndex, item.slug);
       const curMin =
         liveDeal?.current_min_price ||
         (liveProd ? Number(liveProd.min_price || 0) : item.priceWhenAdded);
@@ -401,7 +321,7 @@ export default function WatchlistWorkspace({
       items: items.map((item) => {
         const liveProd = productBySlug.get(item.slug);
         const liveDeal = liveDeals[item.slug];
-        const rSig = radarSignals[item.slug];
+        const rSig = getRadarSignal(radarIndex, item.slug);
         const curMin =
           liveDeal?.current_min_price ||
           (liveProd ? Number(liveProd.min_price || 0) : item.priceWhenAdded);
@@ -743,7 +663,7 @@ export default function WatchlistWorkspace({
             const bestOffer = dealInfo?.best_offer || null;
             const platformCount =
               dealInfo?.platform_count || live?.merchant_count || 1;
-            const radarSignal = radarSignals[item.slug];
+            const radarSignal = getRadarSignal(radarIndex, item.slug);
 
             return (
               <div key={item.slug} className="col-lg-6 col-12">
@@ -792,7 +712,9 @@ export default function WatchlistWorkspace({
                             </span>
                           )}
                         </div>
-                        {radarSignal && (
+                        {(radarSignal.genuineDeal ||
+                          radarSignal.fakeSaleTrap ||
+                          radarSignal.priceSpread) && (
                           <div
                             className="d-flex align-items-center mb-1 flex-wrap gap-1"
                             data-testid="watchlist-radar-signal"

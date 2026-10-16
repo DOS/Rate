@@ -10,6 +10,7 @@ import {
   getCachedMerchantProfileById,
   getCrossPlatformDealRadar,
 } from '@/server/rate';
+import { selectMerchantRadar } from '@/lib/deal-radar';
 import NavbarDarkDynamic from '../../components/navbar/NavbarDarkDynamic';
 import FooterTop from '../../components/footer-top';
 import FooterDynamic from '../../components/footer/FooterDynamic';
@@ -86,17 +87,9 @@ export default async function MerchantProfilePage({
     notFound();
   }
 
-  const merchantNameLower = merchant.name.toLowerCase();
-  const merchantGenuineDeals = dealRadar.genuineDeals.filter(
-    (g) =>
-      g.merchantId === merchant.id ||
-      g.merchantName.toLowerCase() === merchantNameLower
-  );
-  const merchantFakeTraps = dealRadar.fakeSaleTraps.filter(
-    (t) =>
-      t.merchantId === merchant.id ||
-      t.merchantName.toLowerCase() === merchantNameLower
-  );
+  const merchantRadar = selectMerchantRadar(dealRadar, merchant);
+  const merchantGenuineDeals = merchantRadar.genuineDeals;
+  const merchantFakeTraps = merchantRadar.fakeSaleTraps;
 
   const trustLevelLabel =
     merchant.trust_score >= 80

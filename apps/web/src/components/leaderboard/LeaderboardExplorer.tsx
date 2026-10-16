@@ -10,10 +10,16 @@ import {
   type CanonicalCategorySlug,
   type MasterProduct,
 } from '@/lib/rate-api';
-import type {
-  CrossPlatformDealRadarItem,
-  CrossPlatformDealRadarResponse,
-} from '@/server/rate/deals';
+import {
+  getRadarSignal,
+  radarCsvCells,
+  radarExportFields,
+  radarMarkdownCell,
+  RADAR_CSV_HEADERS,
+  type CrossPlatformDealRadarResponse,
+} from '@/lib/deal-radar';
+import RadarBadge from '@/components/radar/RadarBadge';
+import { useDealRadarIndex } from '@/components/radar/use-deal-radar';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
 import CompareQuickToggle from '@/components/compare/CompareQuickToggle';
 import type { KeySpecs, ProductSpecifications } from '@repo/shared-data';
@@ -229,22 +235,7 @@ export default function LeaderboardExplorer({
   const lang = normalizeRateLocale(locale);
   const router = useRouter();
 
-  const dealRadarBySlug = useMemo(() => {
-    const map = new Map<
-      string,
-      { type: 'genuine' | 'trap'; entry: CrossPlatformDealRadarItem }
-    >();
-    if (!dealRadar) return map;
-    for (const d of dealRadar.genuineDeals ?? []) {
-      map.set(d.productSlug, { type: 'genuine', entry: d });
-    }
-    for (const t of dealRadar.fakeSaleTraps ?? []) {
-      if (!map.has(t.productSlug)) {
-        map.set(t.productSlug, { type: 'trap', entry: t });
-      }
-    }
-    return map;
-  }, [dealRadar]);
+  const radarIndex = useDealRadarIndex(dealRadar);
 
   const [activeCategory, setActiveCategory] =
     useState<CanonicalCategorySlug>(initialCategory);
@@ -632,18 +623,6 @@ export default function LeaderboardExplorer({
     );
   }, [versusSlugB, effectiveVersusA, rankedEntries]);
 
-  const radarExportFields = (slug: string) => {
-    const sig = dealRadarBySlug.get(slug);
-    if (!sig) {
-      return { verdict: 'none', savingsPct: 0, fakeMarkupPct: 0 };
-    }
-    return {
-      verdict: sig.type === 'genuine' ? 'genuine_deal' : 'fake_sale_trap',
-      savingsPct: Math.abs(sig.entry.savingsVsMedianPct || 0),
-      fakeMarkupPct: Math.abs(sig.entry.fakeMarkupPct || 0),
-    };
-  };
-
   const handleCopyLeaderboardMarkdown = async () => {
     if (typeof navigator === 'undefined' || rankedEntries.length === 0) return;
     const headers = [
@@ -658,7 +637,7 @@ export default function LeaderboardExplorer({
     ];
     const sep = headers.map(() => '---');
     const rows = rankedEntries.map((entry, idx) => {
-      const radar = radarExportFields(entry.product.slug);
+      const radar = getRadarSignal(radarIndex, entry.product.slug);
       return [
         `#${idx + 1}`,
         entry.product.name.replace(/\|/g, '-'),
@@ -669,11 +648,7 @@ export default function LeaderboardExplorer({
         entry.product.min_price
           ? `${Number(entry.product.min_price).toLocaleString('vi-VN')} ₫`
           : '-',
-        radar.verdict === 'genuine_deal'
-          ? `🔥 -${radar.savingsPct.toFixed(1)}%`
-          : radar.verdict === 'fake_sale_trap'
-            ? `🚨 +${radar.fakeMarkupPct.toFixed(1)}%`
-            : '-',
+        radarMarkdownCell(radar),
       ];
     });
     const md = [
@@ -711,12 +686,10 @@ export default function LeaderboardExplorer({
       'Battery5',
       'Value5',
       'MinPriceVND',
-      'RadarVerdict',
-      'RadarSavingsPct',
-      'RadarFakeMarkupPct',
+      ...RADAR_CSV_HEADERS,
     ];
     const rows = rankedEntries.map((entry, idx) => {
-      const radar = radarExportFields(entry.product.slug);
+      const radar = getRadarSignal(radarIndex, entry.product.slug);
       return [
         String(idx + 1),
         entry.product.slug,
@@ -732,9 +705,7 @@ export default function LeaderboardExplorer({
         entry.criteria.battery.toFixed(1),
         entry.criteria.value.toFixed(1),
         String(entry.product.min_price || 0),
-        radar.verdict,
-        radar.savingsPct.toFixed(1),
-        radar.fakeMarkupPct.toFixed(1),
+        ...radarCsvCells(radar),
       ];
     });
     const csvContent =
@@ -774,7 +745,9 @@ export default function LeaderboardExplorer({
         expertScore10: entry.expertScore10,
         criteria: entry.criteria,
         minPriceVnd: Number(entry.product.min_price || 0),
-        dealRadar: radarExportFields(entry.product.slug),
+        dealRadar: radarExportFields(
+          getRadarSignal(radarIndex, entry.product.slug)
+        ),
       })),
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
@@ -1255,7 +1228,10 @@ export default function LeaderboardExplorer({
                     ? copy.rank2Label
                     : copy.rank3Label;
               const keySpecs = (entry.product.key_specs || {}) as KeySpecs;
-              const radarSignal = dealRadarBySlug.get(entry.product.slug);
+              const radarSignal = getRadarSignal(
+                radarIndex,
+                entry.product.slug
+              );
 
               return (
                 <div
@@ -1327,21 +1303,11 @@ export default function LeaderboardExplorer({
                             <span className="rate-score-badge-expert">
                               Expert {entry.expertScore10.toFixed(1)}/10
                             </span>
-                            {radarSignal && (
-                              <span
-                                data-testid="leaderboard-radar-signal"
-                                className={`badge rounded-pill font-monospace ${
-                                  radarSignal.type === 'genuine'
-                                    ? 'bg-success text-white'
-                                    : 'bg-danger text-white'
-                                }`}
-                                style={{ fontSize: '0.68rem' }}
-                              >
-                                {radarSignal.type === 'genuine'
-                                  ? `🔥 Đáy giá 60N (-${Math.abs(radarSignal.entry.savingsVsMedianPct).toFixed(1)}%)`
-                                  : `🚨 Bẫy Sale Ảo (+${Math.abs(radarSignal.entry.fakeMarkupPct).toFixed(1)}%)`}
-                              </span>
-                            )}
+                            <RadarBadge
+                              signal={radarSignal}
+                              minSpreadPct={Infinity}
+                              style={{ fontSize: '0.68rem' }}
+                            />
                           </div>
                         </div>
                       </div>
@@ -1558,7 +1524,7 @@ export default function LeaderboardExplorer({
           const minPriceText = Number(
             entry.product.min_price || 0
           ).toLocaleString('vi-VN');
-          const rowRadarSignal = dealRadarBySlug.get(entry.product.slug);
+          const rowRadarSignal = getRadarSignal(radarIndex, entry.product.slug);
 
           return (
             <div
@@ -1613,20 +1579,10 @@ export default function LeaderboardExplorer({
                             🛡️ {entry.ignoredCount} {copy.blockedSpamSuffix}
                           </span>
                         )}
-                        {rowRadarSignal && (
-                          <span
-                            data-testid="leaderboard-radar-signal"
-                            className={`badge rounded-pill small font-monospace ${
-                              rowRadarSignal.type === 'genuine'
-                                ? 'bg-success text-white'
-                                : 'bg-danger text-white'
-                            }`}
-                          >
-                            {rowRadarSignal.type === 'genuine'
-                              ? `🔥 Đáy giá 60N (-${Math.abs(rowRadarSignal.entry.savingsVsMedianPct).toFixed(1)}%)`
-                              : `🚨 Cảnh báo Sale Ảo (+${Math.abs(rowRadarSignal.entry.fakeMarkupPct).toFixed(1)}%)`}
-                          </span>
-                        )}
+                        <RadarBadge
+                          signal={rowRadarSignal}
+                          minSpreadPct={Infinity}
+                        />
                       </div>
 
                       <h4 className="h6 fw-bold text-dark mb-1">
