@@ -237,12 +237,71 @@ function renderPanelContent(
     `
     : '';
 
+  const categorySlug = lookup.categorySlug || 'smartphones';
+  const categoryNameMap: Record<string, string> = {
+    smartphones: 'Điện thoại',
+    tablets: 'Máy tính bảng',
+    laptops: 'Laptop',
+    smartwatches: 'Đồng hồ thông minh',
+    earbuds: 'Tai nghe không dây',
+  };
+  const focusLabelMap: Record<string, string> = {
+    combined: 'Tổng hợp',
+    screen: 'Màn hình',
+    performance: 'Hiệu năng',
+    camera: 'Camera / Âm thanh',
+    battery: 'Pin & Sạc',
+    value: 'Đáng tiền',
+  };
+
+  const standings = lookup.leaderboardStandings;
+  const overallBadge =
+    standings?.find((b) => b.criterion === 'combined') ||
+    standings?.[0] ||
+    null;
+  const subBadges = standings?.filter((b) => b.criterion !== 'combined') || [];
+  const leaderboardCardHtml = overallBadge
+    ? `
+      <div class="card">
+        <div class="card-title">Xếp Hạng Chuyên Sâu (${escapeHtml(categoryNameMap[categorySlug] || 'Thiết bị')})</div>
+        <div class="stats-grid">
+          <div class="stat-box">
+            <div class="stat-label">Hạng Danh Mục</div>
+            <div class="stat-val" style="color: #FF2E29;">#${overallBadge.rank} / ${overallBadge.totalInCategory}</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Điểm Tổng Hợp</div>
+            <div class="stat-val" style="color: #34d399;">${overallBadge.score10.toFixed(1)} / 10</div>
+          </div>
+        </div>
+        ${
+          subBadges.length > 0
+            ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;">
+                ${subBadges
+                  .map(
+                    (sr) =>
+                      `<span style="font-size:11px;background:#181c24;border:1px solid #2a2f3a;color:#e5e7eb;padding:3px 7px;border-radius:6px;">🏆 #${sr.rank} ${escapeHtml(focusLabelMap[sr.criterion] || sr.criterion)} (${sr.score10.toFixed(1)})</span>`
+                  )
+                  .join('')}
+              </div>`
+            : ''
+        }
+      </div>
+    `
+    : '';
+
   const detailUrl = lookup.productDetailUrl
     ? `${settings.apiBaseUrl}${lookup.productDetailUrl}`
-    : `${settings.apiBaseUrl}/smartphones`;
+    : `${settings.apiBaseUrl}/${categorySlug}`;
   const compareUrl = lookup.compareUrl
     ? `${settings.apiBaseUrl}${lookup.compareUrl}`
-    : `${settings.apiBaseUrl}/compare`;
+    : `${settings.apiBaseUrl}/compare?cat=${categorySlug}`;
+  const leaderboardUrl = lookup.leaderboardUrl
+    ? `${settings.apiBaseUrl}${lookup.leaderboardUrl}`
+    : `${settings.apiBaseUrl}/leaderboard?cat=${categorySlug}`;
+  const versusUrl = lookup.versusUrl
+    ? `${settings.apiBaseUrl}${lookup.versusUrl}`
+    : null;
   const inspectUrl = `${settings.apiBaseUrl}/inspect?q=${encodeURIComponent(
     signal.canonicalUrl || master?.slug || signal.title
   )}`;
@@ -270,10 +329,19 @@ function renderPanelContent(
         <a class="btn-secondary" href="${escapeHtml(compareUrl)}" target="_blank" rel="noopener noreferrer">So Sánh Cấu Hình</a>
       </div>
       <div class="btn-row" style="margin-top: 6px;">
+        <a class="btn-secondary" href="${escapeHtml(leaderboardUrl)}" target="_blank" rel="noopener noreferrer">🏆 Bảng Xếp Hạng</a>
+        ${
+          versusUrl
+            ? `<a class="btn-secondary" href="${escapeHtml(versusUrl)}" target="_blank" rel="noopener noreferrer">⚔️ Đối Đầu 1v1</a>`
+            : `<a class="btn-secondary" href="${escapeHtml(inspectUrl)}" target="_blank" rel="noopener noreferrer">🔬 Kiểm Toán Sâu</a>`
+        }
+      </div>
+      <div class="btn-row" style="margin-top: 6px;">
         <a class="btn-secondary" href="${escapeHtml(inspectUrl)}" target="_blank" rel="noopener noreferrer">🔬 Kiểm Toán Sâu</a>
         <a class="btn-secondary" href="${escapeHtml(watchlistUrl)}" target="_blank" rel="noopener noreferrer">🔔 Canh Giá Thật</a>
       </div>
     </div>
+    ${leaderboardCardHtml}
     ${variantButtonsHtml}
     ${keySpecsHtml}
     ${historyHtml}

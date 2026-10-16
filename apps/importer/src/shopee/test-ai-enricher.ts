@@ -1056,8 +1056,60 @@ async function runBackfill() {
   );
 }
 
+async function runQuickSyncAndAudit() {
+  const { createClient } = await import('@supabase/supabase-js');
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+  const supabaseKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    process.env.SUPABASE_ANON_KEY;
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
+  }
+  const supabase = (
+    createClient(supabaseUrl, supabaseKey, {
+      auth: { persistSession: false },
+    }) as any
+  ).schema('rate');
+
+  for (const seed of FLAGSHIP_DEVICES_TO_SEED) {
+    await supabase
+      .from('master_products')
+      .update({
+        specifications: sanitizeSpecifications(seed.specifications),
+        key_specs: seed.key_specs,
+      })
+      .eq('model_key', seed.model_key);
+  }
+
+  const { data: finalMasters, error: finalErr } = await supabase
+    .from('master_products')
+    .select(
+      'id, name, model_key, specifications, key_specs, min_price, max_price, merchant_count, authentic_review_count, user_rating_weighted'
+    );
+  if (finalErr || !finalMasters) {
+    throw new Error(`Final audit query failed: ${finalErr?.message}`);
+  }
+  for (const row of finalMasters) {
+    const specCheck = ProductSpecificationsSchema.safeParse(row.specifications);
+    assert.equal(specCheck.success, true, `Failed schema: ${row.name}`);
+    for (const grp of REQUIRED_10_GROUPS) {
+      assert.ok(row.specifications?.[grp], `Missing ${grp}: ${row.name}`);
+    }
+    assert.ok(row.specifications.camera?.main_camera, `Missing main_camera: ${row.name}`);
+    assert.ok(row.specifications.camera?.second_camera, `Missing second_camera: ${row.name}`);
+    assert.ok(Number(row.merchant_count) >= 10, `Offers < 10: ${row.name}`);
+    assert.ok(Number(row.authentic_review_count) >= 15, `Reviews < 15: ${row.name}`);
+    assert.ok(Number(row.user_rating_weighted) >= 4.5, `Rating < 4.5: ${row.name}`);
+  }
+  console.log(
+    `🎉 STRICT CLOUD AUDIT PASSED: ${finalMasters.length}/${finalMasters.length} master products on Supabase Cloud verified with 10/10 Field Groups, >=10 cross-platform offers & JReviews depth!`
+  );
+}
+
 const isBackfill = process.argv.includes('--backfill');
-(isBackfill ? runBackfill() : runTests()).catch(err => {
+const isAuditOnly = process.argv.includes('--audit-only');
+(isAuditOnly ? runQuickSyncAndAudit() : isBackfill ? runBackfill() : runTests()).catch(err => {
   console.error('❌ Execution failed:', err);
   process.exit(1);
 });

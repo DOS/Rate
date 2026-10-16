@@ -8,7 +8,8 @@ import {
   parseVndPriceText,
   sanitizeProductUrl,
 } from './extractors/ecommerce-detector.js';
-import {
+import * as extModule from '../../web/src/server/rate/extension.js';
+const {
   EXTENSION_CAPABILITY_MATRIX,
   canonicalizeProductUrl,
   detectAccessoryOrJunk,
@@ -16,7 +17,11 @@ import {
   extractStorageAndAmbiguity,
   ingestExtensionCrowdSignal,
   lookupExtensionProduct,
-} from '../../web/src/server/rate/extension.js';
+} = (
+  'EXTENSION_CAPABILITY_MATRIX' in extModule
+    ? extModule
+    : (extModule as unknown as { default: typeof extModule }).default
+) as typeof extModule;
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 for (const envCandidate of [
@@ -263,7 +268,12 @@ async function runTests() {
       '  ✅ [6/6] Live Read-Only Lookup skipped in CI placeholder environment'
     );
   } else {
-    const { getMasterProducts } = await import('../../web/src/lib/rate-api.js');
+    const rateApiMod = await import('../../web/src/lib/rate-api.js');
+    const { getMasterProducts } = (
+      'getMasterProducts' in rateApiMod
+        ? rateApiMod
+        : (rateApiMod as unknown as { default: typeof rateApiMod }).default
+    ) as typeof rateApiMod;
     const existingCatalog = await getMasterProducts({ limit: 5 });
     const sampleMaster = existingCatalog[0];
 
@@ -294,9 +304,37 @@ async function runTests() {
         `Must match existing catalog product "${sampleMaster.name}"`
       );
       assert.ok(liveLookup.masterProduct?.id);
+      assert.ok(liveLookup.categorySlug);
+      assert.ok(
+        liveLookup.productDetailUrl?.startsWith(`/${liveLookup.categorySlug}/`)
+      );
+      assert.ok(
+        liveLookup.leaderboardUrl?.includes(`cat=${liveLookup.categorySlug}`)
+      );
+      assert.ok(Array.isArray(liveLookup.leaderboardStandings));
+      assert.ok(liveLookup.leaderboardStandings.length >= 1);
+      assert.ok(liveLookup.leaderboardStandings[0]!.rank >= 1);
+      assert.ok(liveLookup.leaderboardStandings[0]!.score10 > 0);
     }
+
+    // Verify non-smartphone 5-category routing (e.g., Laptops -> `/laptops/...`)
+    const laptopLookup = await lookupExtensionProduct({
+      platform: 'fptshop',
+      url: 'https://fptshop.com.vn/may-tinh-xach-tay/macbook-air-m4-13-inch-256gb',
+      title: 'Laptop Apple MacBook Air M4 13 inch 256GB Chính Hãng SA/A',
+      selectedVariant: '256GB',
+      price: 25490000,
+      originalPrice: 26990000,
+      mode: 'pill',
+    });
+    if (laptopLookup.masterProduct) {
+      assert.equal(laptopLookup.categorySlug, 'laptops');
+      assert.ok(laptopLookup.productDetailUrl?.startsWith('/laptops/'));
+      assert.equal(laptopLookup.leaderboardUrl, '/leaderboard?cat=laptops');
+    }
+
     console.log(
-      `  ✅ [6/6] Live Read-Only Lookup matched "${liveLookup.masterProduct?.name || 'N/A'}" (matchStatus=${liveLookup.matchStatus}, verdict=${liveLookup.priceAssessment.verdict}, offers=${liveLookup.allOffers.length})`
+      `  ✅ [6/6] Live Read-Only Lookup matched "${liveLookup.masterProduct?.name || 'N/A'}" (cat=${liveLookup.categorySlug}, rank=#${liveLookup.leaderboardStandings?.[0]?.rank}/${liveLookup.leaderboardStandings?.[0]?.totalInCategory}, versus=${liveLookup.versusUrl}, offers=${liveLookup.allOffers.length})`
     );
   }
 

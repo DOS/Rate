@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import {
   getMasterProductBySlug,
+  getMasterProductCategorySlug,
   getMasterProductOffers,
   getMasterProductPriceHistory,
   getMasterProductReviews,
@@ -8,12 +9,17 @@ import {
   getMasterProducts,
   getMerchantsList,
   parseEcommerceUrlOrQuery,
+  type CanonicalCategorySlug,
   type MasterProduct,
   type MasterProductPriceHistorySummary,
   type MerchantOffer,
   type MerchantSummary,
   type ReviewAnalysisSummary,
 } from '../../lib/rate-api';
+import {
+  computeProductStandingInCategory,
+  type ProductLeaderboardBadgeInfo,
+} from '../../lib/leaderboard-engine';
 
 export type SupportedEcommercePlatform =
   | 'shopee'
@@ -179,6 +185,7 @@ export interface ExtensionLookupResponse {
   platform: SupportedEcommercePlatform | null;
   capability: PlatformCapability | null;
   canonicalUrl: string | null;
+  categorySlug?: CanonicalCategorySlug | null;
   detectedStorageGb: number | null;
   isAccessoryOrPart: boolean;
   accessoryReason: string | null;
@@ -193,6 +200,10 @@ export interface ExtensionLookupResponse {
   priceHistory: MasterProductPriceHistorySummary | null;
   compareUrl: string | null;
   productDetailUrl: string | null;
+  leaderboardUrl?: string | null;
+  versusUrl?: string | null;
+  topRivalName?: string | null;
+  leaderboardStandings?: ProductLeaderboardBadgeInfo[] | null;
 }
 
 const ACCESSORY_KEYWORDS_VI_EN = [
@@ -697,8 +708,13 @@ export async function lookupExtensionProduct(
       merchantProfile: null,
       reviewSummary: null,
       priceHistory: null,
+      categorySlug: 'smartphones',
       compareUrl: null,
       productDetailUrl: null,
+      leaderboardUrl: null,
+      versusUrl: null,
+      topRivalName: null,
+      leaderboardStandings: null,
     };
   }
 
@@ -790,8 +806,13 @@ export async function lookupExtensionProduct(
       merchantProfile: null,
       reviewSummary: null,
       priceHistory: null,
+      categorySlug: 'smartphones',
       compareUrl: null,
       productDetailUrl: null,
+      leaderboardUrl: null,
+      versusUrl: null,
+      topRivalName: null,
+      leaderboardStandings: null,
     };
   }
 
@@ -836,12 +857,22 @@ export async function lookupExtensionProduct(
     }
   }
 
-  const [priceHistory, reviews] = await Promise.all([
+  const categoryPath = getMasterProductCategorySlug(matchedMaster);
+
+  const [priceHistory, reviews, sameCategoryPeers] = await Promise.all([
     getMasterProductPriceHistory(matchedMaster.id, offers),
     mode === 'full'
       ? getMasterProductReviews(matchedMaster.id)
       : Promise.resolve([]),
+    getMasterProducts({ categorySlug: categoryPath, limit: 30 }),
   ]);
+
+  const leaderboardStandings = computeProductStandingInCategory(
+    matchedMaster,
+    sameCategoryPeers.length > 0 ? sameCategoryPeers : [matchedMaster]
+  );
+  const topRival =
+    sameCategoryPeers.find((peer) => peer.id !== matchedMaster!.id) || null;
 
   const totalRevs = Number(matchedMaster.total_reviews || 0);
   const authRevs = Number(matchedMaster.authentic_review_count ?? totalRevs);
@@ -892,8 +923,6 @@ export async function lookupExtensionProduct(
     ? merchantsList.find((m) => m.id === matchedOffer.merchant.id) || null
     : null;
 
-  const categoryPath = 'smartphones';
-
   return {
     matchStatus,
     platform,
@@ -911,8 +940,15 @@ export async function lookupExtensionProduct(
     merchantProfile,
     reviewSummary,
     priceHistory: mode === 'full' ? priceHistory : null,
-    compareUrl: `/compare?slugs=${encodeURIComponent(matchedMaster.slug)}`,
+    categorySlug: categoryPath,
+    compareUrl: `/compare?cat=${categoryPath}&slugs=${encodeURIComponent(matchedMaster.slug)}`,
     productDetailUrl: `/${categoryPath}/${encodeURIComponent(matchedMaster.slug)}`,
+    leaderboardUrl: `/leaderboard?cat=${categoryPath}`,
+    versusUrl: topRival
+      ? `/compare/${encodeURIComponent(matchedMaster.slug)}-vs-${encodeURIComponent(topRival.slug)}`
+      : null,
+    topRivalName: topRival?.name || null,
+    leaderboardStandings,
   };
 }
 
