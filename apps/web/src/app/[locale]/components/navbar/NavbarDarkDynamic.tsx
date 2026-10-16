@@ -1,5 +1,5 @@
 'use client';
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from '@/lib/navigation';
 import Image from 'next/image';
 import { useLocale } from 'next-intl';

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from '@/lib/navigation';
 import type { MasterProduct } from '@repo/shared-data';
 import {

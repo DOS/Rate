@@ -6,6 +6,7 @@ module.exports = {
   extends: [
     "@repo/eslint-config",
     "plugin:react/recommended",
+    "plugin:react/jsx-runtime",
     "plugin:react-hooks/recommended",
     "plugin:jsx-a11y/recommended",
   ],
@@ -23,10 +24,10 @@ module.exports = {
   },
   rules: {
     "no-console": ["warn", { allow: ["warn", "error"] }],
-    // Next.js compiles JSX with the automatic runtime; `React` need not be in scope.
-    "react/react-in-jsx-scope": "off",
     "@next/next/no-html-link-for-pages": "off",
-    "no-unused-vars": "warn",
+    // @typescript-eslint/no-unused-vars covers TS and JS; the base rule only duplicates it
+    // and misreports parameter names in TS function types.
+    "no-unused-vars": "off",
     // A leading underscore marks a binding as intentionally unused.
     "@typescript-eslint/no-unused-vars": [
       "error",

@@ -1,4 +1,3 @@
-import React from 'react';
 import { Link } from '@/lib/navigation';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
 import type { CanonicalCategorySlug } from '@/lib/rate-api';

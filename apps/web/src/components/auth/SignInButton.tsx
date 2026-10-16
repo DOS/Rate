@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { getPublicClient } from '@repo/shared-data';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
 
