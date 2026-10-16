@@ -19,12 +19,14 @@ import {
   setCompareTray,
 } from './compare-tray';
 import { upsertWatchlistItem } from '@/components/watchlist/watchlist-store';
+import { getSpecUiDictionary, localizeSpecValue } from '@/lib/spec-localizer';
 
 interface CompareWorkspaceProps {
   initialProducts: MasterProduct[];
   catalogCandidates: MasterProduct[];
   initialCategory?: CanonicalCategorySlug;
   hasExplicitSlugs?: boolean;
+  locale?: string;
 }
 
 const CATEGORY_TABS: Array<{
@@ -640,8 +642,10 @@ export default function CompareWorkspace({
   catalogCandidates,
   initialCategory = 'smartphones',
   hasExplicitSlugs = false,
+  locale = 'vi',
 }: CompareWorkspaceProps) {
   const router = useRouter();
+  const specDict = useMemo(() => getSpecUiDictionary(locale), [locale]);
   const [activeCategory, setActiveCategory] = useState<CanonicalCategorySlug>(
     () =>
       initialProducts.length > 0
@@ -1681,12 +1685,23 @@ export default function CompareWorkspace({
                     1 +
                     (products.length < MAX_COMPARE_ITEMS ? 1 : 0);
 
+                  const groupTitle =
+                    group.id in specDict.groups
+                      ? specDict.groups[
+                          group.id as keyof typeof specDict.groups
+                        ]
+                      : locale === 'en'
+                        ? '0. Multi-Dimensional Ratings & Market Trust (JReviews Core)'
+                        : locale === 'cs'
+                          ? '0. Víceúrovňové hodnocení a důvěryhodnost (JReviews Core)'
+                          : group.title;
+
                   return (
                     <React.Fragment key={group.id}>
                       <tr className="table-secondary fw-bold text-start">
                         <td colSpan={totalCols} className="px-3 py-2">
                           <span className="me-2">{group.icon}</span>
-                          {group.title}
+                          {groupTitle}
                         </td>
                       </tr>
 
@@ -1720,7 +1735,10 @@ export default function CompareWorkspace({
                               {row.label}
                             </td>
                             {products.map((p) => {
-                              const textVal = row.renderValue(p);
+                              const textVal = localizeSpecValue(
+                                row.renderValue(p),
+                                locale
+                              );
                               const numVal = row.numericValue?.(p) ?? null;
                               const isWinner =
                                 bestNumeric !== null &&
@@ -1742,7 +1760,11 @@ export default function CompareWorkspace({
                                       className="badge bg-success rounded-pill ms-1 text-white"
                                       style={{ fontSize: '10px' }}
                                     >
-                                      Tốt nhất
+                                      {locale === 'en'
+                                        ? 'Best'
+                                        : locale === 'cs'
+                                          ? 'Nejlepší'
+                                          : 'Tốt nhất'}
                                     </span>
                                   )}
                                 </td>

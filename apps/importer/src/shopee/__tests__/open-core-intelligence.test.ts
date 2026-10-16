@@ -44,7 +44,7 @@ function createDummyShopeeProduct(title: string, priceMin = 25990000): ShopeePro
   };
 }
 
-function runSuite() {
+async function runSuite() {
   console.log('🧪 Running @repo/crawlers Open-Core Multi-Category Normalizer Suite...');
   const normalizer = new ProductNormalizer();
 
@@ -270,9 +270,73 @@ function runSuite() {
     assert.ok(offer.reviews.length >= 2, 'Each synthesized offer must have multi-platform reviews');
   }
   console.log(
-    '  ✅ [6/6] 10-Platform Cross-Offer, 60-Day Price History & Multi-Review Synthesis passed'
+    '  ✅ [6/7] 10-Platform Cross-Offer, 60-Day Price History & Multi-Review Synthesis passed'
+  );
+
+  // 7. ArenaSpecSyncer (GSMArena [data-spec] + PhoneArena Split Camera) & 2026 Flagship Lineup
+  const { parseGsmArenaHtmlToSpecs, UPSTREAM_2026_ARENA_REFERENCE_URLS } =
+    await import('../arena-spec-syncer.js');
+
+  const sampleGsmHtml = `
+    <h1 data-spec="modelname">Xiaomi 18 Pro Max</h1>
+    <td data-spec="announced">2026, September 23</td>
+    <td data-spec="status">Available. Released 2026, September</td>
+    <td data-spec="dimensions">162.8 x 77.6 x 8.5 mm</td>
+    <td data-spec="weight">228 g (8.04 oz)</td>
+    <td data-spec="bodyother">IP69 dust tight and water resistant (high pressure water jets; immersible up to 2m for 30 min)</td>
+    <td data-spec="displaytype">LTPO AMOLED, 68B colors, 120Hz, Dolby Vision, 3500 nits (peak)</td>
+    <td data-spec="displaysize">6.9 inches, 114.5 cm2 (~91.2% screen-to-body ratio)</td>
+    <td data-spec="displayresolution">1440 x 3200 pixels, 20:9 ratio (~510 ppi density)</td>
+    <td data-spec="displayprotection">Xiaomi Dragon Crystal Glass 2</td>
+    <td data-spec="os">Android 17, HyperOS 4</td>
+    <td data-spec="chipset">Qualcomm Snapdragon 8 Elite Extreme Gen 6 (2 nm)</td>
+    <td data-spec="cpu">Octa-core (2x4.75 GHz Oryon V3 + 6x3.80 GHz)</td>
+    <td data-spec="gpu">Adreno 850</td>
+    <td data-spec="internalmemory">256GB 12GB RAM, 512GB 16GB RAM, 1TB 16GB RAM</td>
+    <td data-spec="memoryother">UFS 4.1</td>
+    <td data-spec="cam1modules">200 MP, f/1.6, 23mm (wide), 1/1.28", OIS<br>50 MP, f/2.0, 14mm, 115˚ (ultrawide)<br>200 MP, f/2.5, 75mm (periscope telephoto), 3.2x optical zoom, OIS</td>
+    <td data-spec="cam1video">8K@30fps, 4K@24/30/60/120fps, Dolby Vision HDR</td>
+    <td data-spec="cam2modules">32 MP, f/2.0, 22mm (wide)</td>
+    <td data-spec="batdescription1">Si/C Li-Ion 8500 mAh, non-removable</td>
+    <td data-spec="batcharging">100W wired, PD3.0, 50W wireless, 27W reverse wireless</td>
+    <td data-spec="wlan">Wi-Fi 802.11 a/b/g/n/ac/6e/7, tri-band</td>
+    <td data-spec="bluetooth">6.0, A2DP, LE, aptX HD, LHDC 5.0</td>
+    <td data-spec="usb">USB Type-C 3.2 Gen 2, DisplayPort, OTG</td>
+    <td data-spec="nfc">Yes</td>
+    <td data-spec="gps">GPS (L1+L5), GLONASS, BDS, GALILEO</td>
+    <td data-spec="sensors">Fingerprint (under display, ultrasonic), accelerometer, gyro, proximity, compass</td>
+  `;
+  const synced = parseGsmArenaHtmlToSpecs(sampleGsmHtml, {
+    gsmarenaUrl: 'https://www.gsmarena.com/xiaomi_18_pro_max-14288.php',
+    phonearenaUrl: 'https://www.phonearena.com/phones/Xiaomi-18-Pro-Max_id12894',
+  });
+  assert.equal(synced.brand, 'Xiaomi');
+  assert.equal(synced.model, '18 Pro Max');
+  assert.equal(synced.ramGb, 16);
+  assert.equal(synced.storageGb, 1024);
+  assert.equal(synced.screenSizeInch, 6.9);
+  assert.equal(synced.batteryMah, 8500);
+  assert.ok(synced.specifications.camera?.main_camera?.startsWith('200 MP'));
+  assert.ok(synced.specifications.camera?.second_camera?.startsWith('50 MP'));
+  assert.ok(synced.specifications.camera?.third_camera?.startsWith('200 MP'));
+  assert.equal(synced.specifications.battery?.fast_charging_w, 100);
+  assert.equal(synced.specifications.battery?.reverse_charging, true);
+
+  // Ensure all 6 canonical 2026 upstream devices are present in FLAGSHIP_DEVICES_TO_SEED
+  const seededModelKeys = new Set(FLAGSHIP_DEVICES_TO_SEED.map(d => d.model_key));
+  for (const ref of UPSTREAM_2026_ARENA_REFERENCE_URLS) {
+    assert.ok(
+      seededModelKeys.has(ref.model_key),
+      `Missing 2026 flagship ${ref.model_key} (${ref.name}) in FLAGSHIP_DEVICES_TO_SEED`
+    );
+  }
+  console.log(
+    '  ✅ [7/7] ArenaSpecSyncer (GSMArena/PhoneArena 10-Group Parser) & 2026 Flagship Lineup passed'
   );
   console.log('🎉 All @repo/crawlers Open-Core Intelligence tests passed!');
 }
 
-runSuite();
+runSuite().catch(err => {
+  console.error(err);
+  process.exit(1);
+});

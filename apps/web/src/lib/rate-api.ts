@@ -1343,6 +1343,8 @@ export const KNOWN_LOCAL_DEVICE_IMAGES = new Set<string>([
   'apple-iphone-16-plus-256gb',
   'apple-iphone-16-pro-256gb',
   'apple-iphone-16-pro-max-256gb',
+  'apple-iphone-18-pro-256gb',
+  'apple-iphone-18-pro-max-256gb',
   'apple-macbook-air-m3-13-inch-256gb',
   'apple-watch-series-10-42mm-gps-64gb',
   'apple-watch-ultra-2-64gb',
@@ -1350,22 +1352,48 @@ export const KNOWN_LOCAL_DEVICE_IMAGES = new Set<string>([
   'garmin-forerunner-265-8gb',
   'lenovo-thinkpad-x1-carbon-gen-12-512gb',
   'oppo-find-x8-256gb',
+  'oppo-find-x9-pro-512gb',
   'samsung-galaxy-a55-256gb',
   'samsung-galaxy-buds3-pro',
   'samsung-galaxy-s24-ultra-256gb',
+  'samsung-galaxy-s26-ultra-256gb',
   'samsung-galaxy-tab-s10-ultra-5g-256gb',
   'samsung-galaxy-watch-ultra-32gb',
   'sony-wf-1000xm5',
   'xiaomi-14-ultra-512gb',
+  'xiaomi-17-pro-max-512gb',
+  'xiaomi-18-pro-max-512gb',
   'xiaomi-pad-6s-pro-256gb',
 ]);
 
 export function resolveProductImageUrl(
-  slug?: string | null,
+  slugOrProduct?:
+    | string
+    | {
+        slug?: string | null;
+        thumbnail?: string | null;
+        images?: string[] | null;
+        [key: string]: unknown;
+      }
+    | null,
   fallbackUrl?: string | null
 ): string | null {
-  if (slug && KNOWN_LOCAL_DEVICE_IMAGES.has(slug)) {
-    return `/img/devices/${slug}.jpg`;
+  if (slugOrProduct && typeof slugOrProduct === 'object') {
+    const slug = slugOrProduct.slug;
+    if (slug && KNOWN_LOCAL_DEVICE_IMAGES.has(slug)) {
+      return `/img/devices/${slug}.jpg`;
+    }
+    return (
+      slugOrProduct.thumbnail ||
+      (Array.isArray(slugOrProduct.images) && slugOrProduct.images.length > 0
+        ? slugOrProduct.images[0] || null
+        : null) ||
+      fallbackUrl ||
+      null
+    );
+  }
+  if (slugOrProduct && KNOWN_LOCAL_DEVICE_IMAGES.has(slugOrProduct)) {
+    return `/img/devices/${slugOrProduct}.jpg`;
   }
   return fallbackUrl || null;
 }

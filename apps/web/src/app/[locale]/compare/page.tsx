@@ -194,6 +194,7 @@ export default async function ComparePhonesPage({
             catalogCandidates={catalogCandidates}
             initialCategory={activeCategory}
             hasExplicitSlugs={requestedSlugs.length > 0}
+            locale={locale}
           />
         </div>
       </div>
