@@ -29,6 +29,7 @@ import {
 import ProductLeaderboardBadges from '@/components/leaderboard/ProductLeaderboardBadges';
 import ProductShareAuditButton from '@/components/leaderboard/ProductShareAuditButton';
 import ProductValueCalculator from '@/components/leaderboard/ProductValueCalculator';
+import ProductOffersExplorer from '@/components/leaderboard/ProductOffersExplorer';
 
 export type PageParams = Promise<{ locale: string; slug: string }>;
 
@@ -1298,166 +1299,12 @@ export async function ProductDetailView({
               Hiện chưa có sàn bán nào liên kết với mẫu máy này.
             </p>
           ) : (
-            <div className="table-responsive">
-              <table className="table-hover mb-0 table align-middle">
-                <thead className="table-light small">
-                  <tr>
-                    <th scope="col" style={{ width: '25%' }}>
-                      Sàn &amp; Gian Hàng
-                    </th>
-                    <th scope="col">Tiêu đề niêm yết</th>
-                    <th scope="col">Độ tin cậy (DOSafe + AI Review)</th>
-                    <th scope="col">Giá ghi nhận</th>
-                    <th scope="col" className="text-end">
-                      Kiểm định &amp; Nguồn
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {offers.map((offer) => {
-                    const price = offer.price_current.toLocaleString('vi-VN');
-                    const origPrice = offer.price_original
-                      ? offer.price_original.toLocaleString('vi-VN')
-                      : null;
-                    const trustScore = Math.max(
-                      0,
-                      100 - (offer.merchant.risk_score || 0)
-                    );
-                    const trustBadgeClass =
-                      trustScore >= 80
-                        ? 'bg-success-subtle text-success'
-                        : trustScore >= 50
-                          ? 'bg-warning-subtle text-warning-emphasis'
-                          : 'bg-danger-subtle text-danger';
-
-                    const discountAnalysis = priceHistory.byOffer[offer.id];
-                    const discountBadgeClass =
-                      discountAnalysis?.verdict === 'fake_discount'
-                        ? 'bg-danger text-white'
-                        : discountAnalysis?.verdict === 'suspicious_discount'
-                          ? 'bg-warning text-dark'
-                          : discountAnalysis?.verdict === 'genuine_deal'
-                            ? 'bg-success text-white'
-                            : 'bg-light text-secondary border';
-                    const discountIcon =
-                      discountAnalysis?.verdict === 'fake_discount'
-                        ? '🚨'
-                        : discountAnalysis?.verdict === 'suspicious_discount'
-                          ? '⚠️'
-                          : discountAnalysis?.verdict === 'genuine_deal'
-                            ? '✅'
-                            : '📊';
-
-                    return (
-                      <tr key={offer.id}>
-                        <td>
-                          <div className="d-flex align-items-center gap-2">
-                            <span className="badge bg-dark text-uppercase small">
-                              {offer.platform}
-                            </span>
-                            <div>
-                              <div className="fw-semibold small">
-                                {offer.merchant.id ? (
-                                  <Link
-                                    href={`/merchants/${offer.merchant.id}`}
-                                    className="text-dark text-decoration-none"
-                                  >
-                                    {offer.merchant.name}
-                                  </Link>
-                                ) : (
-                                  offer.merchant.name
-                                )}
-                              </div>
-                              {offer.merchant.is_official && (
-                                <span className="badge bg-success-subtle text-success small">
-                                  Chính hãng (Mall)
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </td>
-                        <td
-                          className="small text-truncate"
-                          style={{ maxWidth: '280px' }}
-                        >
-                          {offer.title}
-                        </td>
-                        <td>
-                          <div className="d-flex flex-column gap-1">
-                            <div>
-                              {offer.merchant.id ? (
-                                <Link
-                                  href={`/merchants/${offer.merchant.id}`}
-                                  className={`badge ${trustBadgeClass} text-decoration-none small`}
-                                  title="Xem hồ sơ tín nhiệm gian hàng"
-                                >
-                                  Trust: {trustScore}% ↗
-                                </Link>
-                              ) : (
-                                <span
-                                  className={`badge ${trustBadgeClass} small`}
-                                >
-                                  Trust: {trustScore}%
-                                </span>
-                              )}
-                            </div>
-                            <div
-                              className="text-muted"
-                              style={{ fontSize: '0.72rem' }}
-                            >
-                              DOSafe: {offer.merchant.dosafe_risk_score}/100 |
-                              Review Risk: {offer.merchant.review_risk_score}
-                              /100
-                            </div>
-                          </div>
-                        </td>
-                        <td>
-                          <div className="fw-bold text-dark font-monospace">
-                            {price} ₫
-                          </div>
-                          {origPrice && (
-                            <div className="text-muted small text-decoration-line-through font-monospace">
-                              {origPrice} ₫
-                            </div>
-                          )}
-                          {discountAnalysis && (
-                            <div className="mt-1">
-                              <a
-                                href="#price-history-section"
-                                title={discountAnalysis.explanation}
-                                className={`badge ${discountBadgeClass} text-decoration-none rounded-pill small`}
-                                style={{ fontSize: '0.7rem' }}
-                              >
-                                {discountIcon} {discountAnalysis.badge_label}
-                              </a>
-                            </div>
-                          )}
-                        </td>
-                        <td className="text-end">
-                          <div className="d-inline-flex align-items-center justify-content-end flex-wrap gap-1">
-                            <Link
-                              href={`/inspect?q=${encodeURIComponent(offer.url)}&price=${offer.price_current}`}
-                              className="btn btn-sm btn-outline-primary rounded-pill px-2"
-                              title="Kiểm định trực tiếp listing này trong Trình Kiểm Định (/inspect)"
-                            >
-                              🔍 Kiểm định
-                            </Link>
-                            <a
-                              href={offer.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="btn btn-sm btn-outline-secondary rounded-pill px-3"
-                            >
-                              Đối chiếu nguồn ↗
-                            </a>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <ProductOffersExplorer
+              productName={product.name}
+              productSlug={product.slug}
+              offers={offers}
+              byOffer={priceHistory.byOffer}
+            />
           )}
         </div>
 

@@ -145,6 +145,9 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc **4 T�
 - [x] **4.37 & 4.38. Xuất Bảng Xếp Hạng Markdown/CSV & Chọn Nhanh Kèo 1v1 Trên `/leaderboard` + Bộ Lọc Rủi Ro Seeding AI & Xuất Danh Bạ CSV Trên `/merchants` (Issue #67 & Issue #68):**
   - Nâng cấp `LeaderboardExplorer.tsx` (`/leaderboard`) với 2 nút `📋 Sao chép BXH Markdown`, `📥 Xuất bảng CSV` và thanh **Quick 1v1 Matchup Picker** (`⚡ Chọn nhanh 2 máy bất kỳ trong BXH để đấu 1v1`) giúp người mua ghép cặp đối đầu bất kỳ 2 thiết bị nào trong bảng xếp hạng hiện tại.
   - Nâng cấp `MerchantDirectoryExplorer.tsx` (`/merchants`) với bộ lọc **Mức Seeding AI** (`Đánh giá sạch <= 15%` vs `Seeding cao > 15%`) cùng 2 nút `📋 Sao chép danh bạ Markdown` và `📥 Xuất danh bạ CSV`.
+- [x] **4.39 & 4.40. Bộ Lọc/Sắp Xếp & Xuất CSV Bảng Giá 10 Sàn (`ProductOffersExplorer`) Trên `ProductDetailView` + Thanh Chọn Kèo 1v1 & Xuất CSV Danh Mục (`CategoryCatalogToolbar`) Trên 5 Trang Ngành Hàng (Issue #69 & Issue #70):**
+  - Xây dựng `ProductOffersExplorer.tsx` tích hợp vào bảng `#offers-table` trên `ProductDetailView`, cho phép lọc nhanh theo Sàn, `Chỉ Official Mall`, `Chỉ gian hàng Trust >= 80%`, sắp xếp theo Giá thấp nhất / Độ tin cậy cao nhất / Giảm giá sâu nhất, và xuất bảng đối chiếu giá qua Markdown hoặc CSV.
+  - Xây dựng `CategoryCatalogToolbar.tsx` tích hợp trên cả 5 trang danh mục ngành hàng (`CategoryCatalogContent`), cho phép chọn nhanh 2 thiết bị bất kỳ cùng ngành hàng để đấu 1v1 và xuất toàn bộ danh mục sản phẩm đang lọc ra Markdown hoặc CSV.
 
 ### ✅ Phase 5: Mở Rộng Đa Sàn 10/10 Nền Tảng, Browser Extension MV3 & Tự Động Hóa Cảnh Báo Giá (Đã hoàn thành 100%)
 

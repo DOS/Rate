@@ -19,6 +19,7 @@ import FooterDynamic from '../components/footer/FooterDynamic';
 import BackToTop from '../components/back-to-top';
 import CompareQuickToggle from '@/components/compare/CompareQuickToggle';
 import CompareTrayBar from '@/components/compare/CompareTrayBar';
+import CategoryCatalogToolbar from '@/components/leaderboard/CategoryCatalogToolbar';
 import {
   BsCpu,
   BsLightningCharge,
@@ -594,6 +595,14 @@ export async function CategoryCatalogContent({
                   </div>
                 </div>
               </div>
+
+              <CategoryCatalogToolbar
+                categorySlug={categorySlug}
+                categoryTitle={
+                  facets.currentCategory?.name || schema.categoryTitle
+                }
+                products={products}
+              />
 
               {/* Product Cards Grid (DESIGN.md v3.0 Rating & Review-First .rate-card) */}
               {products.length === 0 ? (
