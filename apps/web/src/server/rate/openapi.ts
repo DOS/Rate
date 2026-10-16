@@ -85,7 +85,7 @@ export function buildRateOpenApiSpec(
     openapi: '3.1.0',
     info: {
       title: 'Rate.vn Open-Core Intelligence REST API v1',
-      version: '1.5.0',
+      version: '1.6.0',
       summary:
         'Standardized 10-Group Tech Specs, 90-Day Price History & AI Review Auditing API',
       description:
@@ -771,7 +771,55 @@ export function buildRateOpenApiSpec(
           },
         },
       },
-      '/api/v1/rate/openapi.json': {
+      '/api/v1/rate/deals': {
+        get: {
+          operationId: 'getCrossPlatformDealRadar',
+          summary:
+            'Cross-Platform Deal Radar & Fake-Sale Trap Feed across 10 platforms',
+          description:
+            'Returns real-time genuine all-time-low deals (`genuineDeals`) and inflated fake-sale traps (`fakeSaleTraps`) audited against 60-day price history and cross-retailer medians.',
+          tags: ['Products & Specs'],
+          parameters: [
+            {
+              name: 'category',
+              in: 'query',
+              description:
+                'Canonical category slug (`smartphones`, `tablets`, `laptops`, `smartwatches`, `earbuds`, or `all`).',
+              schema: {
+                type: 'string',
+                enum: [...categorySlugs, 'all'],
+                default: 'all',
+              },
+            },
+            {
+              name: 'platform',
+              in: 'query',
+              description: 'Optional retailer filter.',
+              schema: {
+                type: 'string',
+                enum: [...supportedPlatforms, 'all'],
+                default: 'all',
+              },
+            },
+            {
+              name: 'limit',
+              in: 'query',
+              description: 'Max items per list (1..50).',
+              schema: {
+                type: 'number',
+                default: 12,
+              },
+            },
+          ],
+          responses: {
+            '200': {
+              description:
+                'Genuine deal radar and fake-sale trap list across 10 retailers.',
+            },
+          },
+        },
+      },
+      '/api/v1/rate/openapi': {
         get: {
           operationId: 'getOpenApiSpecification',
           summary: 'Retrieve this OpenAPI 3.1.0 machine-readable specification',

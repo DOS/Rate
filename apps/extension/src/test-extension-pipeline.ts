@@ -334,7 +334,7 @@ async function runTests() {
     }
 
     console.log(
-      `  ✅ [6/7] Live Read-Only Lookup matched "${liveLookup.masterProduct?.name || 'N/A'}" (cat=${liveLookup.categorySlug}, rank=#${liveLookup.leaderboardStandings?.[0]?.rank}/${liveLookup.leaderboardStandings?.[0]?.totalInCategory}, versus=${liveLookup.versusUrl}, offers=${liveLookup.allOffers.length})`
+      `  ✅ [6/8] Live Read-Only Lookup matched "${liveLookup.masterProduct?.name || 'N/A'}" (cat=${liveLookup.categorySlug}, rank=#${liveLookup.leaderboardStandings?.[0]?.rank}/${liveLookup.leaderboardStandings?.[0]?.totalInCategory}, versus=${liveLookup.versusUrl}, offers=${liveLookup.allOffers.length})`
     );
 
     const dealsMod = await import('../../web/src/server/rate/deals.js');
@@ -350,7 +350,24 @@ async function runTests() {
     assert.ok(radar.genuineDeals.length >= 5);
     assert.ok(radar.genuineDeals[0]!.savingsVsMedianVnd > 0);
     console.log(
-      `  ✅ [7/7] Live Cross-Platform Deal Radar verified (${radar.totalClustersAnalyzed} clusters, ${radar.totalOffersAnalyzed} offers, ${radar.genuineDeals.length} genuine deals, ${radar.fakeSaleTraps.length} fake-sale traps)`
+      `  ✅ [7/8] Live Cross-Platform Deal Radar verified (${radar.totalClustersAnalyzed} clusters, ${radar.totalOffersAnalyzed} offers, ${radar.genuineDeals.length} genuine deals, ${radar.fakeSaleTraps.length} fake-sale traps)`
+    );
+
+    const openApiMod = await import('../../web/src/server/rate/openapi.js');
+    const { buildRateOpenApiSpec } = (
+      'buildRateOpenApiSpec' in openApiMod
+        ? openApiMod
+        : (openApiMod as unknown as { default: typeof openApiMod }).default
+    ) as typeof openApiMod;
+
+    const openApiSpec = buildRateOpenApiSpec('https://rate.vn');
+    assert.equal(openApiSpec.openapi, '3.1.0');
+    assert.equal(openApiSpec.info.version, '1.6.0');
+    assert.ok('/api/v1/rate/deals' in openApiSpec.paths);
+    assert.ok('/api/v1/rate/extension/lookup' in openApiSpec.paths);
+    assert.ok('/api/v1/rate/openapi' in openApiSpec.paths);
+    console.log(
+      `  ✅ [8/8] Public REST API v1 OpenAPI 3.1.0 Spec verified (${Object.keys(openApiSpec.paths).length} endpoints, ${Object.keys(openApiSpec.components.schemas).length} schemas)`
     );
   }
 
