@@ -97,6 +97,27 @@ async function runSuite() {
   assert.equal(ipad.model_key, 'apple:ipad-pro-m4:256gb');
   assert.equal(ipad.is_benchmark_enriched, true);
   assert.equal(ipad.specifications.hardware?.chipset, 'Apple M4 (3 nm)');
+  // Retail titles put the chip after the screen size; it must still reach the key.
+  for (const title of [
+    'Máy tính bảng Apple iPad Pro 11 inch M4 Wi-Fi 256GB',
+    'Apple iPad Pro 11 inch M4 WiFi 256GB - Chính hãng',
+  ]) {
+    assert.equal(
+      normalizer.normalize(createDummyShopeeProduct(title)).model_key,
+      'apple:ipad-pro-m4:256gb',
+      title
+    );
+  }
+  assert.equal(
+    normalizer.normalize(createDummyShopeeProduct('MacBook Air 13 inch M3 8GB 256GB')).model_key,
+    'apple:macbook-air-m3:256gb'
+  );
+  assert.equal(
+    normalizer.normalize(createDummyShopeeProduct('Tai nghe Apple AirPods Pro 2 USB-C MTJV3'))
+      .model_key,
+    normalizer.normalize(createDummyShopeeProduct('Apple AirPods Pro 2 USB-C')).model_key,
+    'part numbers such as MTJV3 must not read as a chip'
+  );
 
   const tabS10Ultra = normalizer.normalize(
     createDummyShopeeProduct('Máy tính bảng Samsung Galaxy Tab S10 Ultra 5G 12GB RAM 256GB')
