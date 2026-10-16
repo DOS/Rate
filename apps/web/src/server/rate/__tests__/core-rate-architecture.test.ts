@@ -14,6 +14,14 @@ import {
 } from '../../../lib/category-filters';
 import { getRateCopy, normalizeRateLocale } from '../../../lib/rate-i18n';
 import {
+  getSpecUiDictionary,
+  localizeSpecValue,
+} from '../../../lib/spec-localizer';
+import {
+  computeProductStandingInCategory,
+  rankMasterProductsForLeaderboard,
+} from '../../../lib/leaderboard-engine';
+import {
   canonicalizeProductUrl,
   detectAccessoryOrJunk,
   evaluateExtensionPriceVerdict,
@@ -378,13 +386,13 @@ function runCoreArchitectureSuite() {
     '  ✅ [8/9] DESIGN.md v3.0 & Unprefixed Locale Middleware Regression Suite (308 strip + NEXT_LOCALE vi/en/cs) passed'
   );
 
-  // 9. DESIGN.md v3.0 Rating-First Architecture, 22 Self-Hosted Studio Images & Same-Category Comparison Lock
+  // 9. DESIGN.md v3.0 Rating-First Architecture, 28 Self-Hosted Studio Images & Same-Category Comparison Lock
   const devicesDir = path.join(repoRoot, 'apps', 'web', 'public');
   const deviceSlugs = Array.from(KNOWN_LOCAL_DEVICE_IMAGES);
   assert.equal(
     deviceSlugs.length,
-    22,
-    'Must have all 22 flagship device images mapped'
+    28,
+    'Must have all 28 flagship device images mapped'
   );
   for (const slug of deviceSlugs) {
     const relImgPath = `/img/devices/${slug}.jpg`;
@@ -551,7 +559,172 @@ function runCoreArchitectureSuite() {
     );
   }
   console.log(
-    '  ✅ [11/11] 4-Tier JReviews Dual-Rating Leaderboard (/leaderboard) & Same-Category Top 3 Compare Lock passed'
+    '  ✅ [11/12] 4-Tier JReviews Dual-Rating Leaderboard (/leaderboard) & Same-Category Top 3 Compare Lock passed'
+  );
+
+  // 12. Multi-Locale 10-Group Specification Localizer (vi / en / cs) & 28/28 Studio Images
+  for (const loc of ['vi', 'en', 'cs'] as const) {
+    const specDict = getSpecUiDictionary(loc);
+    assert.equal(Object.keys(specDict.groups).length, 10);
+    assert.ok(specDict.fields.mainCamera.length > 0);
+  }
+  const rawCamEn =
+    '200 MP, f/1.6, 23mm (wide), 1/1.28", multi-directional PDAF, OIS, 3.2x optical zoom';
+  const camVi = localizeSpecValue(rawCamEn, 'vi');
+  assert.ok(
+    camVi.includes('(góc rộng)') &&
+      camVi.includes('lấy nét đa hướng PDAF') &&
+      camVi.includes('chống rung quang học OIS') &&
+      camVi.includes('zoom quang 3.2x'),
+    `Expected Vietnamese localized camera spec, got: ${camVi}`
+  );
+  const camCs = localizeSpecValue(rawCamEn, 'cs');
+  assert.ok(
+    camCs.includes('(širokoúhlý)') && camCs.includes('optický zoom'),
+    `Expected Czech localized camera spec, got: ${camCs}`
+  );
+  const rawVi =
+    '3 ống kính (Triple Camera Leica), kháng nước và bụi IP68 (ngâm nước sâu 1.5m trong 30 phút)';
+  const backToEn = localizeSpecValue(rawVi, 'en');
+  assert.ok(
+    backToEn.includes('Triple Camera') &&
+      backToEn.includes('IP68 dust/water resistant'),
+    `Expected English reverse-localized spec, got: ${backToEn}`
+  );
+
+  for (const slug2026 of [
+    'xiaomi-18-pro-max-512gb',
+    'xiaomi-17-pro-max-512gb',
+    'apple-iphone-18-pro-max-256gb',
+    'apple-iphone-18-pro-256gb',
+    'samsung-galaxy-s26-ultra-256gb',
+    'oppo-find-x9-pro-512gb',
+  ]) {
+    assert.ok(
+      KNOWN_LOCAL_DEVICE_IMAGES.has(slug2026),
+      `KNOWN_LOCAL_DEVICE_IMAGES must include 2026 flagship slug ${slug2026}`
+    );
+    assert.equal(
+      fs.existsSync(
+        path.join(repoRoot, 'apps/web/public/img/devices', `${slug2026}.jpg`)
+      ),
+      true,
+      `Missing local studio image for ${slug2026}.jpg`
+    );
+  }
+  console.log(
+    '  ✅ [12/13] Multi-Locale 10-Group Spec Localizer (vi/en/cs) & 28/28 Studio Device Images passed'
+  );
+
+  // 13. Leaderboard Engine, GET /api/v1/rate/leaderboard OpenAPI Spec & ProductDetailView Rank Badges
+  const openApiWithLeaderboard = buildRateOpenApiSpec('https://rate.vn');
+  assert.ok(
+    openApiWithLeaderboard.paths['/api/v1/rate/leaderboard']?.get,
+    'OpenAPI 3.1.0 must include GET /api/v1/rate/leaderboard'
+  );
+  const mockPeers = [
+    {
+      id: '00000000-0000-0000-0000-000000000001',
+      brand: 'Apple',
+      model: 'iPhone 18 Pro Max',
+      model_key: 'apple-iphone-18-pro-max-256gb',
+      name: 'Apple iPhone 18 Pro Max 256GB',
+      slug: 'apple-iphone-18-pro-max-256gb',
+      has_5g: true,
+      specifications: {
+        display: { refresh_rate_hz: 120 },
+        hardware: { ram_gb: 12 },
+        camera: { main_camera: '48MP', second_camera: '48MP' },
+      },
+      key_specs: {},
+      images: [],
+      colors: [],
+      min_price: 33990000,
+      max_price: 35990000,
+      merchant_count: 10,
+      total_reviews: 42,
+      average_rating: 4.9,
+      user_rating_weighted: 4.92,
+      expert_rating: 9.6,
+      authentic_review_count: 39,
+      status: 'published' as const,
+      metadata: {},
+    },
+    {
+      id: '00000000-0000-0000-0000-000000000002',
+      brand: 'Samsung',
+      model: 'Galaxy S26 Ultra',
+      model_key: 'samsung-galaxy-s26-ultra-256gb',
+      name: 'Samsung Galaxy S26 Ultra 256GB',
+      slug: 'samsung-galaxy-s26-ultra-256gb',
+      has_5g: true,
+      specifications: {
+        display: { refresh_rate_hz: 120 },
+        hardware: { ram_gb: 16 },
+        camera: { main_camera: '200MP', second_camera: '50MP' },
+      },
+      key_specs: {},
+      images: [],
+      colors: [],
+      min_price: 31990000,
+      max_price: 34990000,
+      merchant_count: 10,
+      total_reviews: 38,
+      average_rating: 4.85,
+      user_rating_weighted: 4.88,
+      expert_rating: 9.5,
+      authentic_review_count: 35,
+      status: 'published' as const,
+      metadata: {},
+    },
+  ];
+  const rankedList = rankMasterProductsForLeaderboard(mockPeers, {
+    category: 'smartphones',
+    criterion: 'combined',
+  });
+  assert.equal(rankedList.length, 2);
+  assert.equal(rankedList[0]?.rank, 1);
+  const standingBadges = computeProductStandingInCategory(
+    mockPeers[0]!,
+    mockPeers
+  );
+  assert.ok(
+    standingBadges.some((b) => b.criterion === 'combined' && b.rank === 1),
+    'computeProductStandingInCategory must compute overall rank #1 for top peer'
+  );
+  const smartphoneDetailSrc = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/app/[locale]/smartphones/[slug]/page.tsx'
+    ),
+    'utf8'
+  );
+  assert.ok(
+    smartphoneDetailSrc.includes('ProductLeaderboardBadges'),
+    'ProductDetailView must render ProductLeaderboardBadges inside .rate-scoreboard-dark'
+  );
+  console.log(
+    '  ✅ [13/14] Leaderboard Engine, GET /api/v1/rate/leaderboard OpenAPI 3.1.0 & ProductDetailView Rank Badges passed'
+  );
+
+  // 14. Smart Use-Case Persona Recommender (#52) & 1v1 Head-to-Head Versus Route (/compare/[versus] #53)
+  assert.ok(
+    leaderboardExplorerSource.includes('applyPersonaPreset') &&
+      leaderboardExplorerSource.includes('customWeights'),
+    'LeaderboardExplorer must support Smart Use-Case Persona Presets and Custom 5-Criteria Weight Sliders'
+  );
+  const versusPageSource = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/app/[locale]/compare/[versus]/page.tsx'),
+    'utf8'
+  );
+  assert.ok(
+    versusPageSource.includes('parseVersusSlugs') &&
+      versusPageSource.includes('1V1 HEAD-TO-HEAD AUDIT') &&
+      smartphoneDetailSrc.includes('/compare/${product.slug}-vs-${peer.slug}'),
+    '/compare/[versus] 1v1 route and ProductDetailView 1v1 links must be wired'
+  );
+  console.log(
+    '  ✅ [14/14] Smart Use-Case Persona Recommender (#52) & 1v1 Head-to-Head Versus SEO Route (/compare/[versus] #53) passed'
   );
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }

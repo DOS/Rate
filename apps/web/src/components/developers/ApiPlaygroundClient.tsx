@@ -38,6 +38,14 @@ const PRESET_ENDPOINTS: ApiPresetEndpoint[] = [
       'Trả về toàn bộ 10 nhóm thông số kỹ thuật, danh sách gian hàng (rate.products), chuỗi thời gian giá 90 ngày (rate.price_history), phân tích giảm giá ảo và đánh giá đã kiểm duyệt AI.',
   },
   {
+    id: 'leaderboard-ranking',
+    method: 'GET',
+    title: 'Bảng Xếp Hạng 4 Tầng JReviews (/leaderboard)',
+    path: '/api/v1/rate/leaderboard?category=smartphones&criterion=camera&limit=5',
+    description:
+      'Xếp hạng thiết bị theo cấu trúc 4 tầng (Directory -> Category -> Master Product -> Listing) theo 8 tiêu chí JReviews (Combined, User, Expert, Màn hình, Hiệu năng, Camera, Pin, Đáng tiền).',
+  },
+  {
     id: 'compare-products',
     method: 'GET',
     title: 'So sánh Chéo 10 Nhóm Thông Số (/compare)',
