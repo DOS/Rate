@@ -37,6 +37,29 @@ export default function ProductOffersExplorer({
     return Array.from(counts.entries());
   }, [offers]);
 
+  const priceSpreadAudit = useMemo(() => {
+    const valid = offers.filter((o) => Number(o.price_current || 0) > 0);
+    if (valid.length < 2) return null;
+    const sorted = [...valid].sort((a, b) => a.price_current - b.price_current);
+    const cheapest = sorted[0]!;
+    const priciest = sorted[sorted.length - 1]!;
+    const spreadVnd = Math.max(
+      0,
+      priciest.price_current - cheapest.price_current
+    );
+    if (spreadVnd <= 0) return null;
+    const spreadPct = Number(
+      ((spreadVnd / cheapest.price_current) * 100).toFixed(1)
+    );
+    return {
+      cheapest,
+      priciest,
+      spreadVnd,
+      spreadPct,
+      platformCount: platforms.length,
+    };
+  }, [offers, platforms.length]);
+
   const filteredOffers = useMemo(() => {
     const base = offers.filter((o) => {
       if (
@@ -105,9 +128,13 @@ export default function ProductOffersExplorer({
       ];
     });
 
+    const spreadLine = priceSpreadAudit
+      ? `- **Độ lệch giá đa sàn (${priceSpreadAudit.platformCount} sàn):** Tiết kiệm **${priceSpreadAudit.spreadVnd.toLocaleString('vi-VN')} ₫ (${priceSpreadAudit.spreadPct}%)** khi mua tại **${priceSpreadAudit.cheapest.platform.toUpperCase()} (${priceSpreadAudit.cheapest.merchant.name})** thay vì **${priceSpreadAudit.priciest.platform.toUpperCase()}**\n`
+      : '';
+
     const md = [
       `### 🛡️ Rate.vn Cross-Platform Price Audit: ${productName}`,
-      '',
+      spreadLine,
       `| ${headers.join(' | ')} |`,
       `| ${sep.join(' | ')} |`,
       ...rows.map((r) => `| ${r.join(' | ')} |`),
@@ -182,6 +209,18 @@ export default function ProductOffersExplorer({
       productName,
       exportedAt: new Date().toISOString(),
       offerCount: filteredOffers.length,
+      priceSpreadAudit: priceSpreadAudit
+        ? {
+            spreadVnd: priceSpreadAudit.spreadVnd,
+            spreadPct: priceSpreadAudit.spreadPct,
+            cheapestPlatform: priceSpreadAudit.cheapest.platform,
+            cheapestMerchantName: priceSpreadAudit.cheapest.merchant.name,
+            minPriceVnd: priceSpreadAudit.cheapest.price_current,
+            priciestPlatform: priceSpreadAudit.priciest.platform,
+            priciestMerchantName: priceSpreadAudit.priciest.merchant.name,
+            maxPriceVnd: priceSpreadAudit.priciest.price_current,
+          }
+        : null,
       offers: filteredOffers.map((o) => ({
         id: o.id,
         platform: o.platform,
@@ -207,6 +246,46 @@ export default function ProductOffersExplorer({
 
   return (
     <div>
+      {priceSpreadAudit && (
+        <div
+          data-testid="price-spread-audit-banner"
+          className="rounded-3 border-success-subtle bg-success-subtle bg-opacity-10 d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2 border p-3"
+        >
+          <div>
+            <span className="badge bg-success rounded-pill me-2 text-white">
+              📊 KIỂM TOÁN ĐỘ LỆCH GIÁ {priceSpreadAudit.platformCount} SÀN
+            </span>
+            <strong className="text-dark small">
+              Tiết kiệm ngay{' '}
+              <span className="text-success font-monospace">
+                {priceSpreadAudit.spreadVnd.toLocaleString('vi-VN')} ₫ (
+                {priceSpreadAudit.spreadPct}%)
+              </span>{' '}
+              khi mua tại{' '}
+              <span className="text-uppercase">
+                {priceSpreadAudit.cheapest.platform}
+              </span>{' '}
+              ({priceSpreadAudit.cheapest.merchant.name}) thay vì{' '}
+              <span className="text-uppercase">
+                {priceSpreadAudit.priciest.platform}
+              </span>
+            </strong>
+          </div>
+          <div className="small font-monospace text-secondary">
+            Đáy:{' '}
+            <strong className="text-success">
+              {priceSpreadAudit.cheapest.price_current.toLocaleString('vi-VN')}{' '}
+              ₫
+            </strong>{' '}
+            • Đỉnh:{' '}
+            <strong className="text-danger">
+              {priceSpreadAudit.priciest.price_current.toLocaleString('vi-VN')}{' '}
+              ₫
+            </strong>
+          </div>
+        </div>
+      )}
+
       {/* Interactive Filter, Sort & Export Toolbar */}
       <div className="rounded-3 bg-light mb-3 border p-3">
         <div className="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">

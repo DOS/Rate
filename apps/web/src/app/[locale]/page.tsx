@@ -771,6 +771,61 @@ export default async function Home({
                       </div>
                     </div>
                   </div>
+
+                  {Array.isArray(dealRadar.priceSpreadLeaders) &&
+                    dealRadar.priceSpreadLeaders.length > 0 && (
+                      <div
+                        data-testid="homepage-price-spread-leaders"
+                        className="rounded-3 bg-light mt-3 border p-3"
+                      >
+                        <div className="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                          <div className="fw-bold text-dark small">
+                            📊 Chênh Lệch Giá Đa Sàn Lớn Nhất (Tiết kiệm ngay
+                            khi chọn đúng đại lý kiểm định)
+                          </div>
+                          <Link
+                            href="/deals"
+                            className="small fw-semibold text-danger text-decoration-none"
+                          >
+                            Xem toàn bộ {dealRadar.priceSpreadLeaders.length}{' '}
+                            máy chênh giá →
+                          </Link>
+                        </div>
+                        <div className="row g-2">
+                          {dealRadar.priceSpreadLeaders.slice(0, 3).map((s) => (
+                            <div key={s.id} className="col-lg-4 col-md-6">
+                              <div className="rounded-3 d-flex justify-content-between align-items-center h-100 border bg-white p-2">
+                                <div className="overflow-hidden pe-2">
+                                  <Link
+                                    href={s.productHref}
+                                    className="fw-bold text-dark text-decoration-none d-block text-truncate small"
+                                  >
+                                    {s.productName}
+                                  </Link>
+                                  <div className="text-secondary small">
+                                    <span className="badge bg-success text-uppercase me-1">
+                                      {s.cheapestPlatform}
+                                    </span>
+                                    vs{' '}
+                                    <span className="badge bg-secondary text-uppercase">
+                                      {s.priciestPlatform}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="flex-shrink-0 text-end">
+                                  <div className="fw-bold text-success font-monospace small">
+                                    -{s.spreadVnd.toLocaleString('vi-VN')} ₫
+                                  </div>
+                                  <span className="badge bg-warning text-dark rounded-pill">
+                                    Chênh {s.spreadPct}%
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                 </div>
               )}
           </div>

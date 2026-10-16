@@ -178,6 +178,9 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc **4 T�
 - [x] **4.59 & 4.60. Tích Hợp Huy Hiệu Radar Kèo Đáy & Bẫy Sale Ảo 10 Sàn Lên Bảng Xếp Hạng `/leaderboard` (`LeaderboardExplorer`) + Dòng Đối Chiếu Radar Kèo Đáy & Bẫy Sale Trên `/compare` (`CompareWorkspace`) và `/compare/[versus]` (`VersusInteractiveScoreboard`) (Issue #93 & Issue #94):**
   - Nâng cấp `apps/web/src/app/[locale]/leaderboard/page.tsx` và `LeaderboardExplorer.tsx` nạp song song `getCrossPlatformDealRadar` và hiển thị huy hiệu **🔥 Đáy giá 60N** / **🚨 Cảnh báo Sale Ảo** (`leaderboard-radar-signal`) trực tiếp trên Bục Top 3 Podium và toàn bộ danh sách xếp hạng.
   - Nâng cấp `CompareWorkspace.tsx` (`/compare`) và `VersusInteractiveScoreboard.tsx` (`/compare/[versus]`) tự động đối chiếu `/api/v1/rate/deals` để bổ sung dòng so sánh trực tiếp **🔥 Tín hiệu Radar Kèo Đáy & Bẫy Sale 10 Sàn (60N)** (`compare-radar-row` & `versus-radar-row`).
+- [x] **4.61 & 4.62. Tích Hợp Bảng Xếp Hạng Chênh Lệch Giá Đa Sàn (`priceSpreadLeaders`) Trên `/deals` (`DealFinderWorkspace`) & Trang Chủ (`/`) + Bảng Kiểm Toán Độ Lệch Giá 10 Sàn (`price-spread-audit-banner`) Trên `ProductOffersExplorer` (Issue #95 & Issue #96):**
+  - Nâng cấp `DealFinderWorkspace.tsx` (`/deals`) và `apps/web/src/app/[locale]/page.tsx` (`/`) hiển thị trực tiếp khối **📊 Chênh Lệch Giá Đa Sàn Lớn Nhất (`deals-price-spread-leaders` & `homepage-price-spread-leaders`)** kèm tích hợp `priceSpreadLeaders` vào bộ 3 định dạng xuất báo cáo Radar (`Markdown`, `CSV`, `JSON`).
+  - Nâng cấp `ProductOffersExplorer.tsx` trên `ProductDetailView` tính toán tự động `priceSpreadAudit` (`spreadVnd = maxPrice - minPrice`, `spreadPct`, đại lý rẻ nhất vs đắt nhất) và hiển thị thanh **📊 Kiểm Toán Độ Lệch Giá Đa Sàn (`price-spread-audit-banner`)** kèm tích hợp vào xuất báo cáo `Markdown` / `JSON`.
 
 ### ✅ Phase 5: Mở Rộng Đa Sàn 10/10 Nền Tảng, Browser Extension MV3 & Tự Động Hóa Cảnh Báo Giá (Đã hoàn thành 100%)
 
