@@ -1,6 +1,6 @@
 # 3-Tier Scraping Strategy
 
-> ⚠️ **Tài liệu lỗi thời (thời Strapi CMS, 2025).** Trang này mô tả crawler cũ (CheckScam, FlareSolverr, Strapi, Splink) đã bị xóa khỏi `apps/importer` ở issue #137. Engine hiện tại là `@repo/crawlers`, xem [`apps/importer/README.md`](../../../apps/importer/README.md). Scraper và queue worker nằm trong repo private `DOS/Rate-Services`.
+> ⚠️ **Tài liệu lỗi thời (thời Strapi CMS, 2025).** Trang này mô tả crawler cũ (CheckScam, FlareSolverr, Strapi, Splink) đã bị xóa khỏi `apps/importer` ở issue #137. Engine hiện tại là `@repo/crawlers`, xem [`apps/importer/README.md`](../../../../../apps/importer/README.md). Scraper và queue worker nằm trong repo private `DOS/Rate-Services`.
 
 **Updated**: October 2025
 **Status**: Implemented (Tier 1 ✅, Tier 2-3 in progress)

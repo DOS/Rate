@@ -36,3 +36,8 @@ Kho tài liệu kiến trúc, đặc tả kỹ thuật và vận hành của **R
 - **[`Docs/Resources/ROADMAP.md`](./Resources/ROADMAP.md)**: Lộ trình phát triển chi tiết theo từng Phase và trạng thái hoàn thành thực tế.
 - **[`Docs/GSMARENA_VS_PHONEARENA_COMPARISON.md`](./GSMARENA_VS_PHONEARENA_COMPARISON.md)** & **[`Docs/PHONE_SPECS_COMPONENTS_V2.md`](./PHONE_SPECS_COMPONENTS_V2.md)**: Đặc tả 10 nhóm thông số kỹ thuật chuẩn hóa.
 - **[`AGENTS.md`](../AGENTS.md)** & **[`CLAUDE.md`](../CLAUDE.md)**: Quy chuẩn bắt buộc cho mọi AI Coding Agents.
+- **[`apps/web/README.md`](../apps/web/README.md)** & **[`apps/importer/README.md`](../apps/importer/README.md)**: Ứng dụng web `rate.vn` và engine Open-Core `@repo/crawlers`.
+
+## 🗄️ Lưu Trữ
+
+Tài liệu của kiến trúc 2025 (Strapi CMS, Redis Streams, Validator Worker, FlareSolverr, CheckScam) đã được chuyển vào [`Docs/Archive/2025-strapi-era/`](./Archive/README.md). Không làm theo các tài liệu đó.

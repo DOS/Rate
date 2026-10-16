@@ -22,3 +22,5 @@ ui-debug.log
 **/types/api/*d.ts
 **/types/generated/**
 **/.strapi/client/**
+# Archived docs are kept byte-for-byte as they were
+Docs/Archive/2025-strapi-era/

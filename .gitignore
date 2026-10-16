@@ -115,3 +115,6 @@ vendor/
 /Rate-Services/
 Rate.code-workspace
 
+
+# Playwright HTML report
+playwright-report/
