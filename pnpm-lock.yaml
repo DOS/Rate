@@ -12,7 +12,7 @@ overrides:
   '@swc/core': 1.13.3
   '@swc/core-win32-x64-msvc': 1.13.3
 
-pnpmfileChecksum: sha256-8sQUzFNFKmRfU9TIiTyrDXqwIg41HSCqYnWhxtGgI3A=
+pnpmfileChecksum: sha256-k+Zvh3fP7lc7vGzTwYKSXCsxpRec9HXBwanW0X8RJO0=
 
 importers:
 

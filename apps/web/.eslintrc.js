@@ -47,7 +47,8 @@ module.exports = {
   },
   overrides: [
     {
-      // Root-level JS config files are not in tsconfig.json; lint them untyped.
+      // .eslintrc.js and the JS files shadowed by same-named .ts files are not in
+      // the TypeScript project; no enabled rule needs type information anyway.
       files: ["*.js", "*.cjs", "*.mjs"],
       parserOptions: { project: null },
     },
