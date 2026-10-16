@@ -443,7 +443,78 @@ function runCoreArchitectureSuite() {
   );
 
   console.log(
-    '  ✅ [9/9] DESIGN.md v3.0 Rating-First Hierarchy, 22 Studio Images & Same-Category Comparison Lock passed'
+    '  ✅ [9/10] DESIGN.md v3.0 Rating-First Hierarchy, 22 Studio Images & Same-Category Comparison Lock passed'
+  );
+
+  // 10. JReviews 5-Criteria Search/Filter, 9-Platform Merchant Explorer & Dead Strapi Template Purge
+  const jreviewsSrc = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps',
+      'web',
+      'src',
+      'components',
+      'reviews',
+      'JReviewsSection.tsx'
+    ),
+    'utf8'
+  );
+  assert.ok(
+    jreviewsSrc.includes('criteriaAverages') &&
+      jreviewsSrc.includes('searchKeyword') &&
+      jreviewsSrc.includes('starFilter') &&
+      jreviewsSrc.includes('rate-scoreboard-dark'),
+    'JReviewsSection.tsx must include 5-criteria breakdown, keyword search, star filter, and DESIGN.md v3.0 scoreboard'
+  );
+
+  const merchantExplorerSrc = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps',
+      'web',
+      'src',
+      'components',
+      'merchants',
+      'MerchantDirectoryExplorer.tsx'
+    ),
+    'utf8'
+  );
+  for (const plat of [
+    'shopee',
+    'lazada',
+    'tiki',
+    'cellphones',
+    'tgdd',
+    'fptshop',
+    'hoangha',
+    'didongviet',
+    'phongvu',
+  ]) {
+    assert.ok(
+      merchantExplorerSrc.includes(`'${plat}'`),
+      `MerchantDirectoryExplorer.tsx must support platform ${plat}`
+    );
+  }
+  assert.ok(
+    merchantExplorerSrc.includes('rate-card'),
+    'MerchantDirectoryExplorer.tsx must use DESIGN.md v3.0 .rate-card'
+  );
+
+  for (const deadRel of [
+    'apps/web/src/components/forms',
+    'apps/web/src/components/typography',
+    'apps/web/src/components/ui',
+    'apps/web/src/app/[locale]/style',
+  ]) {
+    assert.equal(
+      fs.existsSync(path.join(repoRoot, deadRel)),
+      false,
+      `Dead Strapi template directory must remain purged: ${deadRel}`
+    );
+  }
+
+  console.log(
+    '  ✅ [10/10] JReviews 5-Criteria Search/Filter, 9-Platform Merchant Explorer & Dead Strapi Template Purge passed'
   );
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }

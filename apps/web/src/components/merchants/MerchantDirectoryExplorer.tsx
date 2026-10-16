@@ -82,12 +82,12 @@ export default function MerchantDirectoryExplorer({
         authenticLabel: 'Authentic:',
         filteredSpamSuffix: 'spam/seeding filtered',
         noAbnormalReviews: 'No abnormal review patterns detected',
-        priceRangeLabel: 'Listed price range:',
-        viewTrustProfileCta: 'View Trust Profile & Listings →',
-        openStorefrontCta: 'Original Store ↗',
+        priceRangeLabel: 'Reference price range:',
+        viewTrustProfileCta: 'View Audit Profile & Reviews →',
+        openStorefrontCta: 'Verify Source ↗',
         emptyTitle: 'No matching merchants found',
         emptySubtitle:
-          'Try clearing filters or paste a Shopee/Lazada/TikTok Shop URL into our Deep Inspector.',
+          'Try clearing filters or paste a Shopee/Lazada/Tiki/CellphoneS URL into our Deep Inspector.',
         inspectUrlCta: 'Inspect Any Store or Product Link →',
       };
     }
@@ -125,9 +125,9 @@ export default function MerchantDirectoryExplorer({
         authenticLabel: 'Autentické:',
         filteredSpamSuffix: 'spam/seeding odfiltrováno',
         noAbnormalReviews: 'Žádné podezřelé vzorce recenzí',
-        priceRangeLabel: 'Cenové rozpětí nabídek:',
-        viewTrustProfileCta: 'Zobrazit profil důvěryhodnosti →',
-        openStorefrontCta: 'Původní obchod ↗',
+        priceRangeLabel: 'Referenční cenové rozpětí:',
+        viewTrustProfileCta: 'Zobrazit audit a recenze →',
+        openStorefrontCta: 'Ověřit zdroj ↗',
         emptyTitle: 'Žádný odpovídající obchod nebyl nalezen',
         emptySubtitle:
           'Zkuste upravit filtry nebo vložte odkaz na obchod do hloubkového auditu.',
@@ -140,7 +140,7 @@ export default function MerchantDirectoryExplorer({
       highTrustShops: 'Độ tin cậy cao (>=80)',
       avgTrustScore: 'Điểm Trust trung bình',
       searchPlaceholder:
-        'Tìm tên gian hàng, mã shop_id hoặc sàn (Shopee, Lazada, TikTok)...',
+        'Tìm tên gian hàng, mã shop_id hoặc sàn (Shopee, Lazada, Tiki, CellphoneS, TGDĐ)...',
       allPlatforms: 'Tất cả sàn',
       officialMallOnly: 'Chỉ hiện Official Mall',
       riskFilterLabel: 'Mức tín nhiệm:',
@@ -168,9 +168,9 @@ export default function MerchantDirectoryExplorer({
       authenticLabel: 'Thực chất:',
       filteredSpamSuffix: 'spam/seeding đã lọc',
       noAbnormalReviews: 'Chưa phát hiện đánh giá bất thường',
-      priceRangeLabel: 'Khoảng giá niêm yết:',
-      viewTrustProfileCta: 'Xem Hồ sơ Tín nhiệm & Giá bán →',
-      openStorefrontCta: 'Mở gian hàng gốc ↗',
+      priceRangeLabel: 'Biên độ giá tham chiếu:',
+      viewTrustProfileCta: 'Xem Hồ sơ Kiểm toán & Đánh giá →',
+      openStorefrontCta: 'Đối chiếu nguồn ↗',
       emptyTitle: 'Không tìm thấy gian hàng phù hợp',
       emptySubtitle:
         'Hãy thử xóa bộ lọc hoặc dán trực tiếp link gian hàng/sản phẩm vào công cụ Kiểm toán sâu.',
@@ -188,7 +188,17 @@ export default function MerchantDirectoryExplorer({
   }, [initialMerchants]);
 
   const availablePlatforms = useMemo(() => {
-    const base = ['shopee', 'lazada', 'tiktok', 'tiki'];
+    const base = [
+      'shopee',
+      'lazada',
+      'tiki',
+      'cellphones',
+      'tgdd',
+      'fptshop',
+      'hoangha',
+      'didongviet',
+      'phongvu',
+    ];
     for (const p of platformCounts.keys()) {
       if (!base.includes(p)) base.push(p);
     }
@@ -506,7 +516,7 @@ export default function MerchantDirectoryExplorer({
 
             return (
               <div className="col-lg-6 col-12" key={merchant.id}>
-                <div className="card rounded-4 h-100 border p-4 shadow-sm">
+                <div className="rate-card rounded-4 d-flex flex-column h-100 border bg-white p-4 shadow-sm">
                   <div className="d-flex justify-content-between align-items-start mb-3 gap-3">
                     <div className="d-flex align-items-center gap-3">
                       <div
@@ -542,7 +552,7 @@ export default function MerchantDirectoryExplorer({
 
                     <div className="flex-shrink-0 text-end">
                       <span
-                        className={`badge ${trustBadgeClass} rounded-pill fs-6 px-3 py-2`}
+                        className={`badge ${trustBadgeClass} rounded-pill fs-6 font-monospace px-3 py-2`}
                       >
                         Trust: {merchant.trust_score}/100
                       </span>
@@ -559,7 +569,7 @@ export default function MerchantDirectoryExplorer({
                         >
                           {labels.platformRating}
                         </div>
-                        <div className="fw-bold small d-flex align-items-center gap-1">
+                        <div className="fw-bold small d-flex align-items-center font-monospace gap-1">
                           <BsStarFill className="text-warning" />
                           {merchant.rating_star
                             ? `${merchant.rating_star.toFixed(2)} / 5.0`
@@ -575,7 +585,7 @@ export default function MerchantDirectoryExplorer({
                         >
                           {labels.followers}
                         </div>
-                        <div className="fw-bold small d-flex align-items-center gap-1">
+                        <div className="fw-bold small d-flex align-items-center font-monospace gap-1">
                           <BsPeopleFill className="text-primary" />
                           {merchant.follower_count > 0
                             ? merchant.follower_count.toLocaleString('vi-VN')
@@ -591,7 +601,7 @@ export default function MerchantDirectoryExplorer({
                         >
                           {labels.trackedProducts}
                         </div>
-                        <div className="fw-bold small d-flex align-items-center gap-1">
+                        <div className="fw-bold small d-flex align-items-center font-monospace gap-1">
                           <BsBoxSeam className="text-success" />
                           {merchant.product_count} {labels.productsUnit}
                         </div>
@@ -608,7 +618,7 @@ export default function MerchantDirectoryExplorer({
                             🛡️ DOSafe Threat Risk
                           </span>
                           <span
-                            className={`badge rounded-pill ${
+                            className={`badge rounded-pill font-monospace ${
                               merchant.dosafe_risk_score === 0
                                 ? 'bg-success-subtle text-success'
                                 : 'bg-danger-subtle text-danger'
@@ -633,7 +643,7 @@ export default function MerchantDirectoryExplorer({
                             🤖 AI Review Risk
                           </span>
                           <span
-                            className={`badge rounded-pill ${
+                            className={`badge rounded-pill font-monospace ${
                               merchant.review_risk_score <= 15
                                 ? 'bg-success-subtle text-success'
                                 : merchant.review_risk_score <= 40
@@ -671,7 +681,7 @@ export default function MerchantDirectoryExplorer({
                   {minPriceText && (
                     <div className="small text-muted mb-3">
                       {labels.priceRangeLabel}{' '}
-                      <strong className="text-danger">
+                      <strong className="text-dark font-monospace">
                         {minPriceText}
                         {maxPriceText ? ` - ${maxPriceText}` : ''}
                       </strong>
