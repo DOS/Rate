@@ -67,7 +67,7 @@ interface RankedProductEntry {
   productHref: string;
   thumbnail: string;
   userScore5: number;
-  expertScore10: number;
+  expertScore10: number | null;
   combinedScore5: number;
   authenticCount: number;
   ignoredCount: number;
@@ -126,7 +126,8 @@ const CATEGORY_TABS: ReadonlyArray<{
 ];
 
 function clamp5(val: number): number {
-  return Number(Math.min(5.0, Math.max(3.6, val)).toFixed(2));
+  if (!Number.isFinite(val) || val <= 0) return 0;
+  return Number(Math.min(5.0, val).toFixed(2));
 }
 
 function computeProductScores(
@@ -143,36 +144,40 @@ function computeProductScores(
     resolveProductImageUrl(item.slug, rawThumb) ||
     '/img/devices/apple-iphone-16-pro-max-256gb.jpg';
 
-  const userScore5 =
-    item.user_rating_weighted && Number(item.user_rating_weighted) > 0
-      ? Number(Number(item.user_rating_weighted).toFixed(2))
-      : Number(Number(item.average_rating || 4.8).toFixed(2));
+  const rawUser = Number(item.user_rating_weighted || item.average_rating || 0);
+  const userScore5 = rawUser > 0 ? clamp5(rawUser) : 0;
 
   const rawExpert =
     item.expert_rating != null && Number(item.expert_rating) > 0
       ? Number(item.expert_rating)
       : null;
 
-  const expertScore5 =
+  const expertScore5: number | null =
     rawExpert != null
       ? rawExpert > 5
         ? Number((rawExpert / 2).toFixed(2))
         : Number(rawExpert.toFixed(2))
-      : clamp5(userScore5 + 0.04);
+      : null;
 
-  const expertScore10 = Number(Math.min(10, expertScore5 * 2).toFixed(1));
-  const combinedScore5 = Number(
-    (userScore5 * 0.6 + expertScore5 * 0.4).toFixed(2)
-  );
+  const expertScore10: number | null =
+    expertScore5 != null
+      ? Number(Math.min(10, expertScore5 * 2).toFixed(1))
+      : null;
+
+  const combinedScore5 =
+    userScore5 > 0 && expertScore5 != null
+      ? Number((userScore5 * 0.6 + expertScore5 * 0.4).toFixed(2))
+      : userScore5 > 0
+        ? userScore5
+        : (expertScore5 ?? 0);
 
   const specs = (item.specifications || {}) as ProductSpecifications;
   const minPriceM = Number(item.min_price || 0) / 1_000_000;
 
-  // Deterministic hardware adjustments grounded in 10-Field-Groups specs
-  const refreshHz = Number(specs.display?.refresh_rate_hz || 60);
+  const refreshHz = Number(specs.display?.refresh_rate_hz || 0);
   const screenBonus = refreshHz >= 120 ? 0.09 : refreshHz >= 90 ? 0.04 : -0.02;
 
-  const ramGb = Number(specs.hardware?.ram_gb || 8);
+  const ramGb = Number(specs.hardware?.ram_gb || 0);
   const perfBonus = ramGb >= 16 ? 0.1 : ramGb >= 12 ? 0.06 : 0.02;
 
   const hasPeriscopeOrMultiCam = Boolean(
@@ -180,32 +185,47 @@ function computeProductScores(
   );
   const cameraBonus = hasPeriscopeOrMultiCam ? 0.08 : 0.01;
 
-  const battMah = Number(specs.battery?.capacity_mah || 4500);
-  const fastW = Number(specs.battery?.fast_charging_w || 25);
+  const battMah = Number(specs.battery?.capacity_mah || 0);
+  const fastW = Number(specs.battery?.fast_charging_w || 0);
   const batteryBonus =
     (battMah >= 5000 ? 0.06 : 0.01) + (fastW >= 65 ? 0.05 : 0.01);
 
   const valueBonus =
-    minPriceM > 0 && minPriceM <= 15 ? 0.12 : minPriceM <= 24 ? 0.06 : -0.03;
+    minPriceM > 0 && minPriceM <= 15
+      ? 0.12
+      : minPriceM > 0 && minPriceM <= 24
+        ? 0.06
+        : minPriceM > 0
+          ? -0.03
+          : 0;
 
-  const criteria = {
-    screen: clamp5(combinedScore5 + screenBonus),
-    performance: clamp5(combinedScore5 + perfBonus),
-    camera: clamp5(combinedScore5 + cameraBonus),
-    battery: clamp5(combinedScore5 + batteryBonus),
-    value: clamp5(combinedScore5 + valueBonus),
-  };
+  const criteria =
+    combinedScore5 > 0
+      ? {
+          screen: clamp5(combinedScore5 + screenBonus),
+          performance: clamp5(combinedScore5 + perfBonus),
+          camera: clamp5(combinedScore5 + cameraBonus),
+          battery: clamp5(combinedScore5 + batteryBonus),
+          value: clamp5(combinedScore5 + valueBonus),
+        }
+      : {
+          screen: 0,
+          performance: 0,
+          camera: 0,
+          battery: 0,
+          value: 0,
+        };
 
   let activeScore5 = combinedScore5;
   if (criterion === 'user') activeScore5 = userScore5;
-  else if (criterion === 'expert') activeScore5 = expertScore5;
+  else if (criterion === 'expert') activeScore5 = expertScore5 ?? 0;
   else if (criterion !== 'combined') activeScore5 = criteria[criterion];
 
   const authenticCount = Number(
-    item.authentic_review_count || item.total_reviews || 14
+    item.authentic_review_count || item.total_reviews || 0
   );
   const ignoredCount = Math.max(
-    2,
+    0,
     Number(item.total_reviews || 0) - Number(item.authentic_review_count || 0)
   );
 
@@ -545,26 +565,36 @@ export default function LeaderboardExplorer({
       customWeights.battery +
       customWeights.value;
 
-    const scored = filtered.map((item) => {
-      const base = computeProductScores(item, activeCriterion);
-      if (activePersona !== 'none' && totalWeight > 0) {
-        const weighted5 = Number(
-          (
-            (base.criteria.screen * customWeights.screen +
-              base.criteria.performance * customWeights.performance +
-              base.criteria.camera * customWeights.camera +
-              base.criteria.battery * customWeights.battery +
-              base.criteria.value * customWeights.value) /
-            totalWeight
-          ).toFixed(2)
-        );
-        return {
-          ...base,
-          activeScore5: weighted5,
-        };
-      }
-      return base;
-    });
+    const scored = filtered
+      .map((item) => {
+        const base = computeProductScores(item, activeCriterion);
+        if (activePersona !== 'none' && totalWeight > 0) {
+          const weighted5 = Number(
+            (
+              (base.criteria.screen * customWeights.screen +
+                base.criteria.performance * customWeights.performance +
+                base.criteria.camera * customWeights.camera +
+                base.criteria.battery * customWeights.battery +
+                base.criteria.value * customWeights.value) /
+              totalWeight
+            ).toFixed(2)
+          );
+          return {
+            ...base,
+            activeScore5: weighted5,
+          };
+        }
+        return base;
+      })
+      .filter((entry) => {
+        if (activeCriterion === 'expert' && entry.expertScore10 == null) {
+          return false;
+        }
+        if (activeCriterion === 'user' && entry.userScore5 <= 0) {
+          return false;
+        }
+        return entry.activeScore5 > 0;
+      });
 
     return scored.sort((a, b) => {
       if (b.activeScore5 !== a.activeScore5) {
@@ -643,8 +673,10 @@ export default function LeaderboardExplorer({
         entry.product.name.replace(/\|/g, '-'),
         entry.product.brand || '-',
         entry.activeScore5.toFixed(2),
-        entry.userScore5.toFixed(1),
-        entry.expertScore10.toFixed(1),
+        entry.userScore5 > 0 ? entry.userScore5.toFixed(1) : 'chưa có',
+        entry.expertScore10 != null
+          ? entry.expertScore10.toFixed(1)
+          : 'chưa có',
         entry.product.min_price
           ? `${Number(entry.product.min_price).toLocaleString('vi-VN')} ₫`
           : '-',
@@ -697,13 +729,15 @@ export default function LeaderboardExplorer({
         entry.product.brand || '',
         entry.categorySlug,
         entry.activeScore5.toFixed(2),
-        entry.userScore5.toFixed(1),
-        entry.expertScore10.toFixed(1),
-        entry.criteria.screen.toFixed(1),
-        entry.criteria.performance.toFixed(1),
-        entry.criteria.camera.toFixed(1),
-        entry.criteria.battery.toFixed(1),
-        entry.criteria.value.toFixed(1),
+        entry.userScore5 > 0 ? entry.userScore5.toFixed(1) : '',
+        entry.expertScore10 != null ? entry.expertScore10.toFixed(1) : '',
+        entry.criteria.screen > 0 ? entry.criteria.screen.toFixed(1) : '',
+        entry.criteria.performance > 0
+          ? entry.criteria.performance.toFixed(1)
+          : '',
+        entry.criteria.camera > 0 ? entry.criteria.camera.toFixed(1) : '',
+        entry.criteria.battery > 0 ? entry.criteria.battery.toFixed(1) : '',
+        entry.criteria.value > 0 ? entry.criteria.value.toFixed(1) : '',
         String(entry.product.min_price || 0),
         ...radarCsvCells(radar),
       ];
@@ -1298,10 +1332,15 @@ export default function LeaderboardExplorer({
                           </h3>
                           <div className="d-flex flex-wrap gap-1">
                             <span className="rate-score-badge-user">
-                              ★ {entry.userScore5.toFixed(2)}/5.0
+                              ★{' '}
+                              {entry.userScore5 > 0
+                                ? `${entry.userScore5.toFixed(2)}/5.0`
+                                : 'chưa có'}
                             </span>
                             <span className="rate-score-badge-expert">
-                              Expert {entry.expertScore10.toFixed(1)}/10
+                              {entry.expertScore10 != null
+                                ? `Expert ${entry.expertScore10.toFixed(1)}/10`
+                                : 'Expert: chưa có'}
                             </span>
                             <RadarBadge
                               signal={radarSignal}
@@ -1622,10 +1661,18 @@ export default function LeaderboardExplorer({
                     <div className="d-flex mb-2 flex-wrap gap-2">
                       <span className="rate-score-badge-user">
                         <BsStarFill className="text-warning" />
-                        <span>User {entry.userScore5.toFixed(2)}/5.0</span>
+                        <span>
+                          {entry.userScore5 > 0
+                            ? `User ${entry.userScore5.toFixed(2)}/5.0`
+                            : 'User: chưa có'}
+                        </span>
                       </span>
                       <span className="rate-score-badge-expert">
-                        <span>Expert {entry.expertScore10.toFixed(1)}/10</span>
+                        <span>
+                          {entry.expertScore10 != null
+                            ? `Expert ${entry.expertScore10.toFixed(1)}/10`
+                            : 'Expert: chưa có'}
+                        </span>
                       </span>
                     </div>
                     <div className="row g-1 small">
@@ -1656,7 +1703,9 @@ export default function LeaderboardExplorer({
                             }`}
                             style={{ fontSize: '0.73rem' }}
                           >
-                            {entry.criteria[c.key].toFixed(2)}
+                            {entry.criteria[c.key] > 0
+                              ? entry.criteria[c.key].toFixed(2)
+                              : 'chưa có'}
                           </strong>
                         </div>
                       ))}
@@ -1676,7 +1725,7 @@ export default function LeaderboardExplorer({
                         <span className="fs-6 text-muted fw-normal">/5.0</span>
                       </div>
                       <div className="small text-secondary font-monospace">
-                        {minPriceText} ₫ ({entry.product.merchant_count || 5}{' '}
+                        {minPriceText} ₫ ({entry.product.merchant_count || 0}{' '}
                         {copy.storesTrackedSuffix})
                       </div>
                     </div>

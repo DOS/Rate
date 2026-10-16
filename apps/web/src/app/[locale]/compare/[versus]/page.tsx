@@ -133,13 +133,27 @@ export default async function VersusComparePage({ params }: VersusPageProps) {
         name: entry.name,
         brand: { '@type': 'Brand', name: entry.brand },
         url: `https://rate.vn${getMasterProductHref(entry.product)}`,
-        aggregateRating: {
-          '@type': 'AggregateRating',
-          ratingValue: entry.expertScore10,
-          bestRating: 10,
-          worstRating: 1,
-          ratingCount: Math.max(entry.authenticReviewCount, 1),
-        },
+        ...(entry.expertScore10 != null && entry.authenticReviewCount > 0
+          ? {
+              aggregateRating: {
+                '@type': 'AggregateRating',
+                ratingValue: entry.expertScore10,
+                bestRating: 10,
+                worstRating: 1,
+                ratingCount: entry.authenticReviewCount,
+              },
+            }
+          : entry.userScore5 > 0 && entry.authenticReviewCount > 0
+            ? {
+                aggregateRating: {
+                  '@type': 'AggregateRating',
+                  ratingValue: entry.userScore5,
+                  bestRating: 5,
+                  worstRating: 1,
+                  ratingCount: entry.authenticReviewCount,
+                },
+              }
+            : {}),
       },
     })),
   };
@@ -205,7 +219,7 @@ export default async function VersusComparePage({ params }: VersusPageProps) {
               ? `Automated 1v1 JReviews verdict: ${overallWinner.name} leads overall with ${overallWinner.combinedScore5.toFixed(2)}/5.0 Combined Score.`
               : lang === 'cs'
                 ? `Automatický verdikt 1v1 JReviews: ${overallWinner.name} vede s celkovým skóre ${overallWinner.combinedScore5.toFixed(2)}/5.0.`
-                : `Kết luận đối đầu 1v1 tự động: ${overallWinner.name} dẫn trước với điểm tổng hợp JReviews ${overallWinner.combinedScore5.toFixed(2)}/5.0 (${overallWinner.expertScore10.toFixed(1)}/10 Lab).`}
+                : `Kết luận đối đầu 1v1 tự động: ${overallWinner.name} dẫn trước với điểm tổng hợp JReviews ${overallWinner.combinedScore5.toFixed(2)}/5.0${overallWinner.expertScore10 != null ? ` (${overallWinner.expertScore10.toFixed(1)}/10 Lab)` : ''}.`}
           </p>
 
           <VersusInteractiveScoreboard

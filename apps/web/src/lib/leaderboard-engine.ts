@@ -40,7 +40,7 @@ export interface ScoredLeaderboardItem {
   productHref: string;
   thumbnail: string;
   userScore5: number;
-  expertScore10: number;
+  expertScore10: number | null;
   combinedScore5: number;
   activeScore5: number;
   activeScore10: number;
@@ -124,20 +124,26 @@ export function normalizeLeaderboardPriceSegment(
 }
 
 function clampScore5(value: number): number {
-  return Number(Math.min(5.0, Math.max(3.5, value)).toFixed(2));
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  return Number(Math.min(5.0, value).toFixed(2));
 }
 
 export function computeJReviewsCriteriaScores(
   item: MasterProduct,
   userScore5: number,
-  expertScore5: number
+  expertScore5: number | null
 ): LeaderboardCriteriaBreakdown {
   const rawCriteria = (item.expert_criteria_scores || {}) as Record<
     string,
     unknown
   >;
   const specs = (item.specifications || {}) as ProductSpecifications;
-  const base5 = Number((userScore5 * 0.55 + expertScore5 * 0.45).toFixed(2));
+  const base5 =
+    userScore5 > 0 && expertScore5 != null
+      ? Number((userScore5 * 0.55 + expertScore5 * 0.45).toFixed(2))
+      : userScore5 > 0
+        ? userScore5
+        : (expertScore5 ?? 0);
 
   const parseRaw = (keys: string[], fallbackDelta: number): number => {
     for (const k of keys) {
@@ -146,6 +152,7 @@ export function computeJReviewsCriteriaScores(
         return clampScore5(v > 5 ? v / 2 : v);
       }
     }
+    if (base5 <= 0) return 0;
     return clampScore5(base5 + fallbackDelta);
   };
 
@@ -163,9 +170,11 @@ export function computeJReviewsCriteriaScores(
   const valDelta =
     minPrice > 0 && minPrice <= 18_000_000
       ? 0.22
-      : minPrice <= 27_000_000
+      : minPrice > 0 && minPrice <= 27_000_000
         ? 0.08
-        : -0.05;
+        : minPrice > 0
+          ? -0.05
+          : 0;
 
   return {
     screen: parseRaw(['screen', 'display', 'man_hinh'], screenDelta),
@@ -194,46 +203,68 @@ export function scoreMasterProductForLeaderboard(
       images: item.images,
     }) || '/img/devices/apple-iphone-16-pro-max-256gb.jpg';
 
-  const userScore5 = clampScore5(
-    Number(item.user_rating_weighted || item.average_rating || 4.7)
-  );
+  const rawUser = Number(item.user_rating_weighted || item.average_rating || 0);
+  const userScore5 = rawUser > 0 ? clampScore5(rawUser) : 0;
+
   const rawExpert = Number(item.expert_rating || 0);
-  const expertScore10 = Number(
-    (rawExpert > 0
-      ? rawExpert > 5
-        ? rawExpert
-        : rawExpert * 2
-      : Math.min(9.8, userScore5 * 2 - 0.1)
-    ).toFixed(1)
-  );
-  const expertScore5 = Number((expertScore10 / 2).toFixed(2));
+  const expertScore10: number | null =
+    rawExpert > 0
+      ? Number(
+          Math.min(10, rawExpert > 5 ? rawExpert : rawExpert * 2).toFixed(1)
+        )
+      : null;
+  const expertScore5: number | null =
+    expertScore10 != null ? Number((expertScore10 / 2).toFixed(2)) : null;
+
   const criteria = computeJReviewsCriteriaScores(
     item,
     userScore5,
     expertScore5
   );
+  const criteriaValues = [
+    criteria.screen,
+    criteria.performance,
+    criteria.camera,
+    criteria.battery,
+    criteria.value,
+  ].filter((v) => v > 0);
   const criteriaAvg =
-    (criteria.screen +
-      criteria.performance +
-      criteria.camera +
-      criteria.battery +
-      criteria.value) /
-    5;
+    criteriaValues.length > 0
+      ? criteriaValues.reduce((a, b) => a + b, 0) / criteriaValues.length
+      : 0;
 
-  const combinedScore5 = clampScore5(
-    userScore5 * 0.45 + expertScore5 * 0.35 + criteriaAvg * 0.2
-  );
+  let combinedScore5 = 0;
+  if (userScore5 > 0 && expertScore5 != null) {
+    combinedScore5 =
+      criteriaAvg > 0
+        ? clampScore5(
+            userScore5 * 0.45 + expertScore5 * 0.35 + criteriaAvg * 0.2
+          )
+        : clampScore5(userScore5 * 0.6 + expertScore5 * 0.4);
+  } else if (userScore5 > 0) {
+    combinedScore5 =
+      criteriaAvg > 0
+        ? clampScore5(userScore5 * 0.8 + criteriaAvg * 0.2)
+        : userScore5;
+  } else if (expertScore5 != null) {
+    combinedScore5 =
+      criteriaAvg > 0
+        ? clampScore5(expertScore5 * 0.8 + criteriaAvg * 0.2)
+        : expertScore5;
+  } else if (criteriaAvg > 0) {
+    combinedScore5 = clampScore5(criteriaAvg);
+  }
 
   let activeScore5 = combinedScore5;
   if (criterion === 'user') activeScore5 = userScore5;
-  else if (criterion === 'expert') activeScore5 = expertScore5;
+  else if (criterion === 'expert') activeScore5 = expertScore5 ?? 0;
   else if (criterion !== 'combined') activeScore5 = criteria[criterion];
 
   const authenticReviewCount = Number(
-    item.authentic_review_count || item.total_reviews || 14
+    item.authentic_review_count || item.total_reviews || 0
   );
   const filteredNoiseReviewCount = Math.max(
-    2,
+    0,
     Number(item.total_reviews || 0) - Number(item.authentic_review_count || 0)
   );
 
@@ -255,7 +286,7 @@ export function scoreMasterProductForLeaderboard(
     filteredNoiseReviewCount,
     minPrice: Number(item.min_price || 0),
     maxPrice: Number(item.max_price || 0),
-    merchantCount: Number(item.merchant_count || 5),
+    merchantCount: Number(item.merchant_count || 0),
     criteria,
     product: item,
   };
@@ -282,6 +313,15 @@ export function rankMasterProductsForLeaderboard(
     .map((item) => scoreMasterProductForLeaderboard(item, criterion))
     .filter((entry) => {
       if (category !== 'all' && entry.categorySlug !== category) {
+        return false;
+      }
+      if (criterion === 'expert' && entry.expertScore10 == null) {
+        return false;
+      }
+      if (criterion === 'user' && entry.userScore5 <= 0) {
+        return false;
+      }
+      if (entry.activeScore5 <= 0) {
         return false;
       }
       if (

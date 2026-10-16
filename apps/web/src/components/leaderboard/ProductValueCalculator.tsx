@@ -9,7 +9,7 @@ interface ProductValueCalculatorProps {
   readonly minPriceVnd: number;
   readonly maxPriceVnd: number;
   readonly userScore5: number;
-  readonly expertScore10: number;
+  readonly expertScore10: number | null;
   readonly valueCriterionScore5: number;
 }
 
@@ -53,9 +53,13 @@ export default function ProductValueCalculator({
   const metrics = useMemo(() => {
     const safeMinPrice = Math.max(0, Number(minPriceVnd || 0));
     const safeMaxPrice = Math.max(safeMinPrice, Number(maxPriceVnd || 0));
-    const combined10 = Number(
-      (userScore5 * 2 * 0.6 + expertScore10 * 0.4 || 8.5).toFixed(2)
-    );
+    const rawCombined10 =
+      userScore5 > 0 && expertScore10 != null
+        ? userScore5 * 2 * 0.6 + expertScore10 * 0.4
+        : userScore5 > 0
+          ? userScore5 * 2
+          : (expertScore10 ?? 0);
+    const combined10 = rawCombined10 > 0 ? Number(rawCombined10.toFixed(2)) : 0;
     const costPerPoint10 =
       safeMinPrice > 0 && combined10 > 0
         ? Math.round(safeMinPrice / combined10)
@@ -185,8 +189,11 @@ export default function ProductValueCalculator({
           <p className="text-muted small mb-0">
             Quy đổi giá thấp nhất đã kiểm định (
             {minPriceVnd.toLocaleString('vi-VN')} ₫) trên mỗi điểm chất lượng
-            JReviews ({metrics.combined10}/10) và chi phí sử dụng thực tế theo
-            ngày.
+            JReviews (
+            {metrics.combined10 > 0
+              ? `${metrics.combined10}/10`
+              : 'chưa có điểm'}
+            ) và chi phí sử dụng thực tế theo ngày.
           </p>
         </div>
 
@@ -248,10 +255,14 @@ export default function ProductValueCalculator({
               Chi phí / 1.0 điểm JReviews
             </div>
             <div className="h5 fw-bold font-monospace text-dark rate-tabular mb-1">
-              {metrics.costPerPoint10.toLocaleString('vi-VN')} ₫
+              {metrics.costPerPoint10 > 0
+                ? `${metrics.costPerPoint10.toLocaleString('vi-VN')} ₫`
+                : 'Chưa có'}
             </div>
             <div className="small text-secondary">
-              Cho mỗi 1.0 điểm trên thang {metrics.combined10}/10
+              {metrics.combined10 > 0
+                ? `Cho mỗi 1.0 điểm trên thang ${metrics.combined10}/10`
+                : 'Chưa đủ dữ liệu điểm JReviews'}
             </div>
           </div>
         </div>
@@ -294,7 +305,9 @@ export default function ProductValueCalculator({
               Điểm Đáng tiền P/P &amp; Tiết kiệm chéo
             </div>
             <div className="h5 fw-bold font-monospace text-primary rate-tabular mb-1">
-              ★ {valueCriterionScore5.toFixed(1)}/5.0
+              {valueCriterionScore5 > 0
+                ? `★ ${valueCriterionScore5.toFixed(1)}/5.0`
+                : 'Chưa có'}
             </div>
             <div className="small text-secondary rate-tabular">
               {metrics.maxSpreadSavingsVnd > 0

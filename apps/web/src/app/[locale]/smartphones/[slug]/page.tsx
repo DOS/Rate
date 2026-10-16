@@ -65,10 +65,10 @@ export async function generateCategoryProductMetadata(
           : `${product.name} - Giá từ ${minPrice} ₫, Thông số 10 nhóm & Đánh giá thực chất | Rate.vn`,
     description:
       lang === 'en'
-        ? `Compare ${product.name} (${product.brand}) prices across ${product.merchant_count || 1} merchants, inspect historical price charts for fake discounts, and read AI-verified buyer reviews on Rate.vn.`
+        ? `Compare ${product.name} (${product.brand}) prices across ${product.merchant_count || 0} merchants, inspect historical price charts for fake discounts, and read AI-verified buyer reviews on Rate.vn.`
         : lang === 'cs'
-          ? `Porovnejte ceny ${product.name} (${product.brand}) z ${product.merchant_count || 1} obchodů, zkontrolujte historii cen a přečtěte si AI ověřené recenze na Rate.vn.`
-          : `So sánh giá ${product.name} (${product.brand}) từ ${product.merchant_count || 1} gian hàng, biểu đồ lịch sử giá phát hiện giảm giá ảo và đánh giá thực chất đã lọc Seeding bằng AI trên Rate.vn.`,
+          ? `Porovnejte ceny ${product.name} (${product.brand}) z ${product.merchant_count || 0} obchodů, zkontrolujte historii cen a přečtěte si AI ověřené recenze na Rate.vn.`
+          : `So sánh giá ${product.name} (${product.brand}) từ ${product.merchant_count || 0} gian hàng, biểu đồ lịch sử giá phát hiện giảm giá ảo và đánh giá thực chất đã lọc Seeding bằng AI trên Rate.vn.`,
     alternates: {
       canonical: canonicalUrl,
     },
@@ -198,7 +198,7 @@ export async function ProductDetailView({
           priceCurrency: 'VND',
           lowPrice: Number(product.min_price || 0),
           highPrice: Number(product.max_price || product.min_price || 0),
-          offerCount: offers.length || product.merchant_count || 1,
+          offerCount: offers.length || product.merchant_count || 0,
         },
         ...(displayUserRating > 0 && authenticCount > 0
           ? {
@@ -371,10 +371,14 @@ export async function ProductDetailView({
                         className="h2 fw-bold font-monospace mb-0 text-white"
                         style={{ letterSpacing: '-0.03em' }}
                       >
-                        {displayUserRating.toFixed(1)}
+                        {displayUserRating > 0
+                          ? displayUserRating.toFixed(1)
+                          : 'Chưa có'}
                       </span>
                       <span className="small" style={{ color: '#94a3b8' }}>
-                        / 5.0 ({authenticCount} bài kiểm chứng)
+                        {displayUserRating > 0
+                          ? `/ 5.0 (${authenticCount} bài kiểm chứng)`
+                          : `(${authenticCount} bài kiểm chứng)`}
                       </span>
                     </div>
                   </div>
@@ -397,12 +401,16 @@ export async function ProductDetailView({
                         className="h3 fw-bold font-monospace mb-0 text-white"
                         style={{ letterSpacing: '-0.03em' }}
                       >
-                        {product.expert_rating != null
+                        {product.expert_rating != null &&
+                        Number(product.expert_rating) > 0
                           ? Number(product.expert_rating).toFixed(1)
-                          : displayUserRating.toFixed(1)}
+                          : 'Chưa có'}
                       </span>
                       <span className="small" style={{ color: '#cbd5e1' }}>
-                        / 5.0 chuẩn 10 nhóm
+                        {product.expert_rating != null &&
+                        Number(product.expert_rating) > 0
+                          ? '/ 5.0 chuẩn 10 nhóm'
+                          : 'chuẩn 10 nhóm'}
                       </span>
                     </div>
                   </div>
@@ -424,20 +432,21 @@ export async function ProductDetailView({
                           r.helpfulness_weight > 0 &&
                           r.criteria_ratings
                       );
-                      const avgCrit = (key: string, fallbackOffset = 0) => {
+                      const expertCrit = product.expert_criteria_scores || {};
+                      const avgCrit = (key: string): number | null => {
                         const vals = validCriteriaReviews
                           .map((r) => Number(r.criteria_ratings?.[key] || 0))
                           .filter((v) => v >= 1 && v <= 5);
                         if (vals.length > 0) {
                           return vals.reduce((a, b) => a + b, 0) / vals.length;
                         }
-                        const base =
-                          product.expert_rating != null
-                            ? (displayUserRating +
-                                Number(product.expert_rating)) /
-                              2
-                            : displayUserRating;
-                        return Math.min(5, Math.max(4, base + fallbackOffset));
+                        const expVal = Number(
+                          (expertCrit as Record<string, unknown>)[key] || 0
+                        );
+                        if (expVal > 0) {
+                          return expVal > 5 ? expVal / 2 : expVal;
+                        }
+                        return null;
                       };
 
                       return [
@@ -446,31 +455,34 @@ export async function ProductDetailView({
                             categorySlug === 'earbuds'
                               ? 'Âm trường & Chất âm'
                               : 'Màn hình & Hiển thị',
-                          score: avgCrit('screen', 0.1),
+                          score: avgCrit('screen'),
                         },
                         {
                           label: 'Hiệu năng & Nhiệt độ',
-                          score: avgCrit('performance', 0.05),
+                          score: avgCrit('performance'),
                         },
                         {
                           label:
                             categorySlug === 'earbuds'
                               ? 'Chống ồn ANC & Mic'
                               : 'Camera & Quay chụp',
-                          score: avgCrit('camera', 0),
+                          score: avgCrit('camera'),
                         },
                         {
                           label: 'Pin & Sạc nhanh',
-                          score: avgCrit('battery', -0.05),
+                          score: avgCrit('battery'),
                         },
                         {
                           label: 'Đáng đồng tiền (Value)',
-                          score: avgCrit('value', 0),
+                          score: avgCrit('value'),
                         },
                       ];
                     })().map((crit) => {
-                      const val = Math.min(5, Math.max(1, Number(crit.score)));
-                      const pct = Math.round((val / 5) * 100);
+                      const val =
+                        crit.score != null
+                          ? Math.min(5, Math.max(1, Number(crit.score)))
+                          : null;
+                      const pct = val != null ? Math.round((val / 5) * 100) : 0;
                       return (
                         <div key={crit.label} className="mb-2 last:mb-0">
                           <div className="d-flex justify-content-between small mb-1">
@@ -478,7 +490,7 @@ export async function ProductDetailView({
                               {crit.label}
                             </span>
                             <span className="fw-bold font-monospace text-white">
-                              {val.toFixed(1)}/5
+                              {val != null ? `${val.toFixed(1)}/5` : 'Chưa có'}
                             </span>
                           </div>
                           <div
@@ -494,13 +506,15 @@ export async function ProductDetailView({
                               style={{
                                 width: `${pct}%`,
                                 backgroundColor:
-                                  val >= 4.5
-                                    ? '#10b981'
-                                    : val >= 3.8
-                                      ? '#f59e0b'
-                                      : '#f43f5e',
+                                  val == null
+                                    ? 'transparent'
+                                    : val >= 4.5
+                                      ? '#10b981'
+                                      : val >= 3.8
+                                        ? '#f59e0b'
+                                        : '#f43f5e',
                               }}
-                              aria-valuenow={val}
+                              aria-valuenow={val ?? 0}
                               aria-valuemin={0}
                               aria-valuemax={5}
                             />
@@ -706,15 +720,18 @@ export async function ProductDetailView({
                     brand={product.brand}
                     modelKey={product.model_key}
                     userScore5={Number(displayUserRating.toFixed(2))}
-                    expertScore10={Number(
-                      (
-                        (product.expert_rating != null
-                          ? Number(product.expert_rating) > 5
-                            ? Number(product.expert_rating) / 2
-                            : Number(product.expert_rating)
-                          : displayUserRating) * 2
-                      ).toFixed(1)
-                    )}
+                    expertScore10={
+                      product.expert_rating != null &&
+                      Number(product.expert_rating) > 0
+                        ? Number(
+                            (
+                              (Number(product.expert_rating) > 5
+                                ? Number(product.expert_rating) / 2
+                                : Number(product.expert_rating)) * 2
+                            ).toFixed(1)
+                          )
+                        : null
+                    }
                     authenticReviews={authenticCount}
                     minPriceVnd={Number(product.min_price || 0)}
                     offerCount={offers.length}
@@ -1403,7 +1420,7 @@ export async function ProductDetailView({
                   peer.user_rating_weighted &&
                   Number(peer.user_rating_weighted) > 0
                     ? Number(peer.user_rating_weighted)
-                    : Number(peer.average_rating || 5);
+                    : Number(peer.average_rating || 0);
                 const peerScore10 = peerRating * 2;
                 const currentScore10 = displayUserRating * 2;
                 const peerCostPerPoint =
@@ -1413,7 +1430,9 @@ export async function ProductDetailView({
                     ? Math.round(currentMinPrice / currentScore10)
                     : 0;
                 const costPerPointDelta =
-                  peerCostPerPoint - currentCostPerPoint;
+                  peerCostPerPoint > 0 && currentCostPerPoint > 0
+                    ? peerCostPerPoint - currentCostPerPoint
+                    : 0;
 
                 return (
                   <div key={peer.id} className="col-lg-4 col-md-6 col-12">
@@ -1443,7 +1462,10 @@ export async function ProductDetailView({
                               {peer.brand}
                             </span>
                             <span className="badge bg-warning-subtle text-dark small">
-                              ⭐ {peerRating.toFixed(1)}
+                              ⭐{' '}
+                              {peerRating > 0
+                                ? peerRating.toFixed(1)
+                                : 'chưa có'}
                             </span>
                           </div>
                           <h6 className="fw-bold text-truncate mb-1">

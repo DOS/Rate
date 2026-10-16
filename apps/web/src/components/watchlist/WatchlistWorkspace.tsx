@@ -188,14 +188,15 @@ export default function WatchlistWorkspace({
         liveDeal?.current_max_price ||
         (liveProd ? Number(liveProd.max_price || curMin) : curMin);
       const userR = liveProd
-        ? Number(
-            liveProd.user_rating_weighted || liveProd.average_rating || 4.7
-          )
-        : 4.7;
+        ? Number(liveProd.user_rating_weighted || liveProd.average_rating || 0)
+        : 0;
       acc.totalMinVnd += curMin;
       acc.totalTargetVnd += item.targetPrice;
       acc.totalSpreadSavingsVnd += Math.max(0, curMax - curMin);
-      acc.ratingSum += userR;
+      if (userR > 0) {
+        acc.ratingSum += userR;
+        acc.ratedCount += 1;
+      }
       return acc;
     },
     {
@@ -203,11 +204,14 @@ export default function WatchlistWorkspace({
       totalTargetVnd: 0,
       totalSpreadSavingsVnd: 0,
       ratingSum: 0,
+      ratedCount: 0,
     }
   );
   const avgPortfolioRating =
-    items.length > 0
-      ? Number((portfolioStats.ratingSum / items.length).toFixed(2))
+    portfolioStats.ratedCount > 0
+      ? Number(
+          (portfolioStats.ratingSum / portfolioStats.ratedCount).toFixed(2)
+        )
       : 0;
 
   const handleCopyPortfolioMarkdown = async () => {
@@ -218,7 +222,7 @@ export default function WatchlistWorkspace({
         `- **Tổng giá trị danh mục (Giá thấp nhất 10 sàn):** ${portfolioStats.totalMinVnd.toLocaleString('vi-VN')} ₫`,
         `- **Tổng ngân sách mục tiêu đặt canh:** ${portfolioStats.totalTargetVnd.toLocaleString('vi-VN')} ₫`,
         `- **Tổng mức tiết kiệm chéo giữa các sàn:** ${portfolioStats.totalSpreadSavingsVnd.toLocaleString('vi-VN')} ₫`,
-        `- **Điểm JReviews trung bình danh mục:** ★ ${avgPortfolioRating.toFixed(2)}/5.0`,
+        `- **Điểm JReviews trung bình danh mục:** ★ ${avgPortfolioRating > 0 ? `${avgPortfolioRating.toFixed(2)}/5.0` : 'chưa có'}`,
         ``,
         `| Thiết bị | Hãng | Giá thấp nhất hiện tại | Giá mục tiêu | Độ lệch 10 sàn | Trạng thái | Deal tốt nhất |`,
         `| :--- | :--- | :---: | :---: | :---: | :---: | :--- |`,
@@ -241,7 +245,7 @@ export default function WatchlistWorkspace({
           const hit = curMin > 0 && curMin <= item.targetPrice;
           const bestOfferStr = liveDeal?.best_offer
             ? `${liveDeal.best_offer.merchant_name} (${liveDeal.best_offer.platform.toUpperCase()})`
-            : `${liveProd?.merchant_count || 1} nguồn`;
+            : `${liveProd?.merchant_count || 0} nguồn`;
           return `| ${item.name} | ${item.brand} | ${curMin.toLocaleString('vi-VN')} ₫ | ${item.targetPrice.toLocaleString('vi-VN')} ₫ | ${spreadStr} | ${hit ? '✅ Đạt mục tiêu' : '⏳ Đang canh'} | ${bestOfferStr} |`;
         }),
       ];
@@ -502,7 +506,10 @@ export default function WatchlistWorkspace({
                   Điểm JReviews trung bình danh mục
                 </div>
                 <div className="h5 fw-bold font-monospace text-warning rate-tabular mb-0">
-                  ★ {avgPortfolioRating.toFixed(2)} / 5.0
+                  ★{' '}
+                  {avgPortfolioRating > 0
+                    ? `${avgPortfolioRating.toFixed(2)} / 5.0`
+                    : 'Chưa có'}
                 </div>
               </div>
             </div>
@@ -662,7 +669,7 @@ export default function WatchlistWorkspace({
               : `${item.categoryPath || '/smartphones'}/${item.slug}`;
             const bestOffer = dealInfo?.best_offer || null;
             const platformCount =
-              dealInfo?.platform_count || live?.merchant_count || 1;
+              dealInfo?.platform_count || live?.merchant_count || 0;
             const radarSignal = getRadarSignal(radarIndex, item.slug);
 
             return (

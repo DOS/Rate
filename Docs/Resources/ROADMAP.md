@@ -209,6 +209,8 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc **4 T�
 - [x] **4.74. Tích Hợp Tín Hiệu Deal Radar Cấp Sản Phẩm Lên Huy Hiệu Nổi Shadow DOM (`content-script.ts`), Chrome Side Panel (`sidepanel.ts`) & Đặc Tả OpenAPI 3.1.0 `v1.7.0` (`ProductDealRadarSignal` - Issue #121):**
   - Nâng cấp `apps/extension/src/content/content-script.ts` và `apps/extension/src/sidepanel/sidepanel.ts` hiển thị trực tiếp tín hiệu `lookup.radarSignal` (`🔥 Đáy 60N`, `🚨 Bẫy Sale`, `📊 Lệch 10 sàn`) ngay trên thanh nổi Shadow DOM và Side Panel khi người mua duyệt 10 sàn TMĐT/đại lý.
   - Bổ sung schema `ProductDealRadarSignal` vào đặc tả OpenAPI 3.1.0 (`v1.7.0`, `apps/web/src/server/rate/openapi.ts`) và kiểm thử tự động trong `test-extension-pipeline.ts` + `core-rate-architecture.test.ts`.
+- [x] **4.75. Chấm Dứt Bịa Điểm Đánh Giá, Số Bài Review, Số Gian Hàng & Điểm Expert Khi Thiếu Dữ Liệu Thật (`leaderboard-engine`, `LeaderboardExplorer`, `CategoryCatalogToolbar`, `CompareWorkspace`, `VersusInteractiveScoreboard`, `DealFinderWorkspace`, `ProductDetailView`, `JReviewsSection` - Issue #123):**
+  - Gỡ bỏ toàn bộ các giá trị mặc định giả tạo (`average_rating || 4.8`, `total_reviews || 12` / `14`, `merchant_count || 1`, `expertScore = userScore * 2`, `Math.max(3.8, baseCrit + offset)`) trên toàn bộ Web UI và bộ xuất dữ liệu (`Markdown`, `CSV`, `JSON`); trả về `null` / `0` và hiển thị rõ `"Chưa có"` khi sản phẩm chưa có điểm đánh giá hoặc chưa có điểm phòng Lab (`Suite [39/39]`).
 
 ### ✅ Phase 5: Mở Rộng Đa Sàn 10/10 Nền Tảng, Browser Extension MV3 & Tự Động Hóa Cảnh Báo Giá (Đã hoàn thành 100%)
 

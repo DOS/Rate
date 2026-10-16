@@ -798,14 +798,17 @@ export async function CategoryCatalogContent({
                       item.user_rating_weighted &&
                       Number(item.user_rating_weighted) > 0
                         ? Number(item.user_rating_weighted)
-                        : Number(item.average_rating || 4.8);
+                        : item.average_rating && Number(item.average_rating) > 0
+                          ? Number(item.average_rating)
+                          : null;
                     const expertScore =
                       item.expert_rating != null &&
                       Number(item.expert_rating) > 0
                         ? Number(item.expert_rating)
                         : null;
-                    const authCount =
-                      item.authentic_review_count || item.total_reviews || 12;
+                    const authCount = Number(
+                      item.authentic_review_count || item.total_reviews || 0
+                    );
 
                     const refreshHz = specs.display?.refresh_rate_hz;
                     const nfcSupported = specs.connectivity?.nfc;
@@ -889,8 +892,10 @@ export async function CategoryCatalogContent({
                           {/* #1 Core Focus: JReviews Dual-Rating Score Strip */}
                           <div className="d-flex align-items-center mb-2 flex-wrap gap-1">
                             <span className="rate-score-badge-user">
-                              ★ {effectiveRating.toFixed(1)} User ({authCount}{' '}
-                              đánh giá thật)
+                              ★{' '}
+                              {effectiveRating != null
+                                ? `${effectiveRating.toFixed(1)} User (${authCount} đánh giá thật)`
+                                : 'User: chưa có'}
                             </span>
                             <span className="rate-score-badge-expert">
                               🔬{' '}
@@ -946,7 +951,7 @@ export async function CategoryCatalogContent({
                             </span>
                             <span>
                               <BsShop className="me-1" />
-                              {item.merchant_count || 1} nguồn
+                              {item.merchant_count || 0} nguồn
                             </span>
                           </div>
 

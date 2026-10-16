@@ -144,8 +144,8 @@ const SPEC_GROUPS: SpecGroupDef[] = [
       {
         id: 'merchant_count',
         label: 'Số nguồn kiểm định giá & review',
-        renderValue: (p) => `${p.merchant_count || 1} nguồn`,
-        numericValue: (p) => Number(p.merchant_count || 1),
+        renderValue: (p) => `${p.merchant_count || 0} nguồn`,
+        numericValue: (p) => Number(p.merchant_count || 0),
         higherIsBetter: true,
       },
       {
@@ -154,14 +154,19 @@ const SPEC_GROUPS: SpecGroupDef[] = [
         renderValue: (p) => {
           const min = Number(p.min_price || 0);
           if (min <= 0) return '-';
-          const u = getEffectiveRating(p) > 0 ? getEffectiveRating(p) : 4.5;
+          const u = getEffectiveRating(p) > 0 ? getEffectiveRating(p) : null;
           const e =
-            p.expert_rating && Number(p.expert_rating) > 0
+            p.expert_rating != null && Number(p.expert_rating) > 0
               ? Number(p.expert_rating) > 5
                 ? Number(p.expert_rating)
                 : Number(p.expert_rating) * 2
-              : u * 2;
-          const combined10 = u * 2 * 0.6 + e * 0.4;
+              : null;
+          const combined10 =
+            u != null && e != null
+              ? u * 2 * 0.6 + e * 0.4
+              : u != null
+                ? u * 2
+                : (e ?? 0);
           if (combined10 <= 0) return '-';
           const costPerPt = Math.round(min / combined10);
           return `${costPerPt.toLocaleString('vi-VN')} ₫ / điểm`;
@@ -169,14 +174,19 @@ const SPEC_GROUPS: SpecGroupDef[] = [
         numericValue: (p) => {
           const min = Number(p.min_price || 0);
           if (min <= 0) return null;
-          const u = getEffectiveRating(p) > 0 ? getEffectiveRating(p) : 4.5;
+          const u = getEffectiveRating(p) > 0 ? getEffectiveRating(p) : null;
           const e =
-            p.expert_rating && Number(p.expert_rating) > 0
+            p.expert_rating != null && Number(p.expert_rating) > 0
               ? Number(p.expert_rating) > 5
                 ? Number(p.expert_rating)
                 : Number(p.expert_rating) * 2
-              : u * 2;
-          const combined10 = u * 2 * 0.6 + e * 0.4;
+              : null;
+          const combined10 =
+            u != null && e != null
+              ? u * 2 * 0.6 + e * 0.4
+              : u != null
+                ? u * 2
+                : (e ?? 0);
           return combined10 > 0 ? Math.round(min / combined10) : null;
         },
         higherIsBetter: false,
@@ -1032,18 +1042,17 @@ export default function CompareWorkspace({
         `| ${headerCols.join(' | ')} |`,
         `| ${sepCols.join(' | ')} |`,
         `| **Điểm Người Mua Thực Chất** | ${products
-          .map(
-            (p) =>
-              `★ ${getEffectiveRating(p).toFixed(1)}/5.0 (${
-                p.authentic_review_count || p.total_reviews || 0
-              } review)`
-          )
+          .map((p) => {
+            const r = getEffectiveRating(p);
+            const cnt = p.authentic_review_count || p.total_reviews || 0;
+            return r > 0 ? `★ ${r.toFixed(1)}/5.0 (${cnt} review)` : 'chưa có';
+          })
           .join(' | ')} |`,
         `| **Điểm Chuyên Gia Rate Lab** | ${products
           .map((p) =>
             p.expert_rating && Number(p.expert_rating) > 0
               ? `Lab ${Number(p.expert_rating).toFixed(1)}/5.0`
-              : '-'
+              : 'chưa có'
           )
           .join(' | ')} |`,
         `| **Giá Tham Khảo Thấp Nhất** | ${products
@@ -1133,15 +1142,22 @@ export default function CompareWorkspace({
       category: activeCategory,
       exportedAt: new Date().toISOString(),
       productCount: products.length,
-      products: products.map((p) => ({
-        slug: p.slug,
-        name: p.name,
-        brand: p.brand,
-        userRating: getEffectiveRating(p),
-        expertRating: Number(p.expert_rating || 0),
-        minPriceVnd: Number(p.min_price || 0),
-        dealRadar: radarExportFields(getRadarSignal(radarIndex, p.slug)),
-      })),
+      products: products.map((p) => {
+        const u = getEffectiveRating(p);
+        const e =
+          p.expert_rating != null && Number(p.expert_rating) > 0
+            ? Number(p.expert_rating)
+            : null;
+        return {
+          slug: p.slug,
+          name: p.name,
+          brand: p.brand,
+          userRating: u > 0 ? u : null,
+          expertRating: e,
+          minPriceVnd: Number(p.min_price || 0),
+          dealRadar: radarExportFields(getRadarSignal(radarIndex, p.slug)),
+        };
+      }),
       matrix: SPEC_GROUPS.map((group) => ({
         groupId: group.id,
         groupTitle: group.title,
@@ -1959,8 +1975,10 @@ export default function CompareWorkspace({
                           {/* Core Rating Badges First (Per DESIGN.md v3.0) */}
                           <div className="d-flex justify-content-center mb-2 flex-wrap gap-1">
                             <span className="rate-score-badge-user">
-                              ★ {userRating > 0 ? userRating.toFixed(1) : '4.8'}{' '}
-                              ({reviewCount})
+                              ★{' '}
+                              {userRating > 0
+                                ? `${userRating.toFixed(1)} (${reviewCount})`
+                                : 'chưa có'}
                             </span>
                             {expertRating != null && (
                               <span className="rate-score-badge-expert">
