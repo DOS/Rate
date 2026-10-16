@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="dark" />
+  <title>Đề xuất Phase 2: Lưu reviewer và đồ thị reviewer</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0f1113;
+      --surface: #161a1e;
+      --surface-elevated: #1d2228;
+      --border: #2a313a;
+      --text: #e8edf2;
+      --text-muted: #9ba5b0;
+      --accent: #FF2E29;
+      --accent-soft: rgba(255, 46, 41, 0.14);
+      --green: #22c55e;
+      --green-soft: rgba(34, 197, 94, 0.14);
+      --amber: #f59e0b;
+      --amber-soft: rgba(245, 158, 11, 0.14);
+      --code-bg: #0b0d0f;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 36px 16px 64px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+      line-height: 1.65;
+    }
+    .container { max-width: 960px; margin: 0 auto; }
+    .badge {
+      display: inline-block; padding: 4px 10px; border-radius: 6px;
+      font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+    }
+    .badge-accent { background: var(--accent-soft); color: var(--accent); border: 1px solid rgba(255,46,41,0.35); }
+    .badge-green { background: var(--green-soft); color: var(--green); border: 1px solid rgba(34,197,94,0.35); }
+    .badge-amber { background: var(--amber-soft); color: var(--amber); border: 1px solid rgba(245,158,11,0.35); }
+    h1 { font-size: 28px; margin: 12px 0 8px; letter-spacing: -0.02em; }
+    h2 { font-size: 20px; margin: 32px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); color: #fff; }
+    h3 { font-size: 16px; margin: 20px 0 8px; color: #fff; }
+    .subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 24px; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px 24px; margin-bottom: 20px; }
+    .card-recommend { border-left: 4px solid var(--accent); background: linear-gradient(90deg, rgba(255,46,41,0.08) 0%, var(--surface) 35%); }
+    .table-wrap { overflow-x: auto; margin: 16px 0; }
+    table { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+    th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); font-size: 14px; vertical-align: top; }
+    th { background: var(--surface-elevated); color: #fff; font-weight: 600; }
+    code { background: var(--code-bg); color: #ff8582; padding: 2px 6px; border-radius: 4px; font-family: "JetBrains Mono", Consolas, monospace; font-size: 13px; }
+    pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px; overflow-x: auto; font-size: 13px; line-height: 1.5; color: #d7e0ea; }
+    pre code { background: transparent; color: inherit; padding: 0; }
+    .muted { color: var(--text-muted); }
+    .yes { color: var(--green); font-weight: 600; }
+    .no { color: var(--text-muted); }
+    ol li, ul li { margin-bottom: 6px; }
+    a { color: #ff8582; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <span class="badge badge-accent">Cần JOY duyệt</span>
+  <span class="badge badge-amber">Migration DOS.Me</span>
+  <h1>Phase 2: Lưu reviewer và dựng đồ thị reviewer</h1>
+  <p class="subtitle">16/10/2026 · Agent: Core · Tiếp nối DOS/Rate#113 và DOS/Rate-Services#17</p>
+
+  <div class="card card-recommend">
+    <h3 style="margin-top:0">Tóm tắt</h3>
+    <ul>
+      <li>Phase 1 đã xong: mỗi sàn lấy thông tin người viết review theo cách riêng, bộ phân tích dùng tuổi tài khoản và số review thật thay cho hằng số cũ.</li>
+      <li>Hạn chế còn lại: thông tin reviewer chỉ tồn tại trong <b>một lần crawl</b>, không lưu xuống DB. Vì vậy chưa nhận ra được <b>cùng một người</b> viết review ở nhiều sản phẩm, là tín hiệu mạnh nhất để bắt nhóm seeding.</li>
+      <li>Đề xuất: một migration trong <code>DOS.Me</code> thêm 2 bảng riêng tư (chỉ <code>service_role</code> đọc được) và 1 RPC tổng hợp cho trang <code>/merchants</code>.</li>
+      <li>Anh cần quyết 2 việc: <b>duyệt migration</b> và <b>tạo secret <code>REVIEWER_KEY_SECRET</code></b> cho repo Rate-Services.</li>
+    </ul>
+  </div>
+
+  <h2>1. Hiện trạng sau Phase 1</h2>
+  <p>Mỗi sàn công khai một phần khác nhau về người viết. Bảng dưới là những gì scraper đang lấy:</p>
+  <div class="table-wrap">
+  <table>
+    <tr><th>Sàn</th><th>Định danh ổn định</th><th>Hồ sơ</th><th>Ngày tham gia</th><th>Số review</th><th>Lượt hữu ích</th><th>Đã mua</th><th>Mua lại</th></tr>
+    <tr><td>Shopee</td><td class="yes">userid (trừ review ẩn danh)</td><td class="yes">trang shop của người mua</td><td class="no">không</td><td class="no">không</td><td class="yes">like trên review</td><td class="yes">luôn đúng (chỉ người mua được đánh giá)</td><td class="yes">có</td></tr>
+    <tr><td>Tiki</td><td class="yes">created_by.id</td><td class="no">không</td><td class="yes">có</td><td class="yes">có</td><td class="yes">có</td><td class="yes">có, kèm ngày mua</td><td class="no">không</td></tr>
+    <tr><td>Lazada, TikTok Shop</td><td class="no">không công khai</td><td class="no">không</td><td class="no">không</td><td class="no">không</td><td class="no">không</td><td class="yes">luôn đúng</td><td class="no">không</td></tr>
+    <tr><td>Chuỗi bán lẻ (TGDĐ, CellphoneS, FPT Shop, Hoàng Hà, Di Động Việt, Phong Vũ)</td><td class="no">không</td><td class="no">không</td><td class="no">không</td><td class="no">không</td><td class="no">không</td><td class="yes">nhãn "Đã mua tại" ở phần đầu bình luận</td><td class="no">không</td></tr>
+  </table>
+  </div>
+  <p class="muted">API của Shopee và Tiki không có tài liệu chính thức. Workflow <code>probe-reviewers</code> trên GitHub Actions sẽ chạy thử trên dữ liệu thật để xác nhận tên trường trước khi dựa vào chúng.</p>
+
+  <h3>Nguyên tắc riêng tư đang áp dụng</h3>
+  <ul>
+    <li>ID gốc của người dùng trên sàn <b>không bao giờ</b> rời khỏi scraper. Chỉ lưu khóa băm HMAC của (sàn, id).</li>
+    <li>Thiếu <code>REVIEWER_KEY_SECRET</code> thì scraper <b>không tạo khóa</b>. Lý do: id trên sàn là số nguyên, băm bằng hằng số công khai thì dò ngược được.</li>
+    <li>Review ẩn danh trên Shopee không được gắn khóa, không lưu link hồ sơ.</li>
+    <li>Không có nhãn "đã mua" thì để <i>không rõ</i>, không bao giờ ghi "không phải người mua", để tránh loại oan một lời phàn nàn thật.</li>
+  </ul>
+
+  <h2>2. Đề xuất migration (DOS.Me)</h2>
+  <p>Viết theo quy tắc của DOS.Me: idempotent, chạy qua CI preview, beta rồi prod. Không chạy DDL tay lên prod.</p>
+
+  <h3>A. Bảng <code>rate.reviewers</code> (riêng tư)</h3>
+  <pre><code>CREATE TABLE IF NOT EXISTS rate.reviewers (
+  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  platform       TEXT NOT NULL,
+  reviewer_key   TEXT NOT NULL CHECK (reviewer_key ~ '^[0-9a-f]{32}$'),
+  profile_url    TEXT,
+  joined_at      TIMESTAMPTZ,
+  total_reviews  INTEGER CHECK (total_reviews IS NULL OR total_reviews &gt;= 0),
+  helpful_votes  INTEGER CHECK (helpful_votes IS NULL OR helpful_votes &gt;= 0),
+  first_seen_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  last_seen_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (platform, reviewer_key)
+);</code></pre>
+
+  <h3>B. Bảng <code>rate.review_reviewer</code> (riêng tư)</h3>
+  <p>Gắn mỗi review với người viết, kèm các dữ kiện theo từng review. <code>reviewer_id</code> được phép rỗng vì Lazada, TikTok Shop và review ẩn danh không có định danh nhưng vẫn có lượt hữu ích hoặc cờ mua lại.</p>
+  <pre><code>CREATE TABLE IF NOT EXISTS rate.review_reviewer (
+  review_id        UUID PRIMARY KEY REFERENCES rate.reviews(id) ON DELETE CASCADE,
+  reviewer_id      UUID REFERENCES rate.reviewers(id) ON DELETE SET NULL,
+  purchased_at     TIMESTAMPTZ,
+  repeat_purchase  BOOLEAN,
+  like_count       INTEGER CHECK (like_count IS NULL OR like_count &gt;= 0)
+);
+CREATE INDEX IF NOT EXISTS idx_rate_review_reviewer_reviewer
+  ON rate.review_reviewer (reviewer_id) WHERE reviewer_id IS NOT NULL;
+
+ALTER TABLE rate.reviewers       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE rate.review_reviewer ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON rate.reviewers, rate.review_reviewer FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON rate.reviewers, rate.review_reviewer TO service_role;</code></pre>
+  <p class="muted">Vì sao tách bảng thay vì thêm cột vào <code>rate.reviews</code>: bảng <code>rate.reviews</code> đang cho <code>anon</code> đọc toàn bộ cột. Thêm khóa reviewer vào đó thì ai cũng gom được mọi review của một người qua nhiều sản phẩm. Bên ngoài chỉ nên thấy kết quả đã tổng hợp (điểm tín hiệu trong <code>review_flags</code>).</p>
+
+  <h3>C. RPC tổng hợp gian hàng cho <code>/merchants</code></h3>
+  <p>Hiện <code>getMerchantsList</code> đọc phân trang toàn bộ <code>products</code> và <code>reviews</code> rồi tính trong Node. Cách này đúng (đã sửa lỗi cắt 1000 dòng ở #113) nhưng tốn băng thông khi bảng lớn, và nếu một trang lỗi giữa chừng thì kết quả chỉ có một phần. Đề xuất một hàm SQL <code>rate.merchant_list_stats()</code> trả về mỗi gian hàng: số sản phẩm, giá min/max, số review theo <code>flag_category</code> và <code>include_in_rating</code>. Một truy vấn, thành công hoặc thất bại trọn vẹn. Việc này giải quyết luôn 2 góp ý CodeRabbit còn mở trên #113.</p>
+
+  <h2>3. Thuật toán dùng được sau khi có dữ liệu (Phase 3)</h2>
+  <div class="table-wrap">
+  <table>
+    <tr><th>Tín hiệu</th><th>Cách tính</th><th>Bắt được gì</th></tr>
+    <tr><td>Đồng xuất hiện (co-review)</td><td>Cặp reviewer cùng đánh giá từ 3 sản phẩm trở lên của cùng một shop trong 14 ngày</td><td>Nhóm tài khoản seeding chạy theo đợt</td></tr>
+    <tr><td>Độ tập trung vào shop</td><td>Tỉ lệ review của một người dồn vào một shop</td><td>Tài khoản chỉ sống để khen một gian hàng</td></tr>
+    <tr><td>Lệch điểm</td><td>Tỉ lệ 5 sao trong toàn bộ review của người đó, so với mặt bằng ngành hàng</td><td>Tài khoản khen mọi thứ (dùng kèm tín hiệu khác, không dùng riêng)</td></tr>
+    <tr><td>Tài khoản mới viết dày</td><td>Tuổi tài khoản lúc viết thấp nhưng số review cao</td><td>Tài khoản nuôi để đánh giá</td></tr>
+  </table>
+  </div>
+  <p>Các ngưỡng trên (3 sản phẩm, 14 ngày) chỉ là điểm xuất phát. Trước khi cho tín hiệu mới ảnh hưởng tới điểm, cần một tập khoảng 200 review được gán nhãn tay để đo độ chính xác, giống nguyên tắc đã áp dụng ở Phase 1: không thêm hình phạt khi chưa có dữ liệu đánh giá. Tín hiệu mới cũng cần mở rộng danh sách khóa hợp lệ trong <code>rate.signals_valid</code>, làm trong migration riêng của Phase 3.</p>
+
+  <h2>4. Thứ tự triển khai nếu anh duyệt</h2>
+  <ol>
+    <li>PR vào <code>DOS.Me</code> (nhánh <code>dev</code>): migration A, B, C. Kiểm tra bằng Supabase Preview trên PR.</li>
+    <li>PR vào <code>DOS/Rate</code>: pipeline ghi <code>reviewers</code> và <code>review_reviewer</code> sau khi lưu review; <code>/merchants</code> chuyển sang gọi RPC.</li>
+    <li>Rate-Services nâng submodule, chạy worker vài chu kỳ để tích dữ liệu.</li>
+    <li>Phase 3: tính tín hiệu đồ thị, gán nhãn tập đánh giá, hiệu chỉnh ngưỡng.</li>
+  </ol>
+
+  <h2>5. Anh cần quyết</h2>
+  <div class="card">
+    <ol>
+      <li><b>Duyệt migration A, B, C</b> ở mục 2. Đây là thay đổi schema dùng chung nên em chưa tự làm.</li>
+      <li><b>Tạo secret <code>REVIEWER_KEY_SECRET</code></b> trong repo DOS/Rate-Services (Settings, Secrets and variables, Actions): một chuỗi ngẫu nhiên dài, đặt một lần và không đổi. Đổi secret sẽ làm mất liên kết giữa các lần crawl. Khi chưa có secret, scraper vẫn chạy bình thường nhưng không tạo khóa reviewer.</li>
+      <li><b>Hai quyết định sản phẩm còn treo</b> từ trước:
+        <ul>
+          <li>Công thức điểm tin cậy dùng <code>max(...)</code> nên điểm chỉ tăng, không giảm khi có bằng chứng xấu mới.</li>
+          <li>Ngưỡng chênh giá của PriceSpreadAuditor (12% / 2,5 triệu và 5% / 800 nghìn) đang đặt theo cảm tính, nên tính lại từ phân phối giá thật.</li>
+        </ul>
+      </li>
+    </ol>
+  </div>
+</div>
+</body>
+</html>
