@@ -20,6 +20,7 @@ import {
 } from './compare-tray';
 import { upsertWatchlistItem } from '@/components/watchlist/watchlist-store';
 import { getSpecUiDictionary, localizeSpecValue } from '@/lib/spec-localizer';
+import { buildPopular1v1BattlesForCategory } from '@/lib/leaderboard-engine';
 
 interface CompareWorkspaceProps {
   initialProducts: MasterProduct[];
@@ -940,6 +941,13 @@ export default function CompareWorkspace({
   };
 
   const [watchedAllToast, setWatchedAllToast] = useState(false);
+  const [copiedMarkdown, setCopiedMarkdown] = useState(false);
+
+  const popularBattles = useMemo(
+    () =>
+      buildPopular1v1BattlesForCategory(catalogCandidates, activeCategory, 3),
+    [catalogCandidates, activeCategory]
+  );
 
   const handleCopyShareLink = async () => {
     if (typeof window === 'undefined') return;
@@ -947,6 +955,68 @@ export default function CompareWorkspace({
       await navigator.clipboard.writeText(window.location.href);
       setCopiedLink(true);
       setTimeout(() => setCopiedLink(false), 2000);
+    } catch {
+      // Ignore clipboard permission errors
+    }
+  };
+
+  const handleCopyMarkdownReport = async () => {
+    if (typeof window === 'undefined' || products.length === 0) return;
+    try {
+      const headerCols = [
+        'Tiêu chí / Thông số',
+        ...products.map((p) => p.name),
+      ];
+      const sepCols = headerCols.map(() => '---');
+      const lines: string[] = [
+        `### 📊 Báo Cáo Đối Chiếu ${activeCategoryMeta.label} - Rate.vn`,
+        `- **Đường dẫn kiểm định:** ${window.location.href}`,
+        '',
+        `| ${headerCols.join(' | ')} |`,
+        `| ${sepCols.join(' | ')} |`,
+        `| **Điểm Người Mua Thực Chất** | ${products
+          .map(
+            (p) =>
+              `★ ${getEffectiveRating(p).toFixed(1)}/5.0 (${
+                p.authentic_review_count || p.total_reviews || 0
+              } review)`
+          )
+          .join(' | ')} |`,
+        `| **Điểm Chuyên Gia Rate Lab** | ${products
+          .map((p) =>
+            p.expert_rating && Number(p.expert_rating) > 0
+              ? `Lab ${Number(p.expert_rating).toFixed(1)}/5.0`
+              : '-'
+          )
+          .join(' | ')} |`,
+        `| **Giá Tham Khảo Thấp Nhất** | ${products
+          .map((p) =>
+            Number(p.min_price) > 0
+              ? `${Number(p.min_price).toLocaleString('vi-VN')} ₫`
+              : '-'
+          )
+          .join(' | ')} |`,
+        `| **Cấu Hình / Bộ Nhớ** | ${products
+          .map((p) => {
+            const ks = (p.key_specs || {}) as KeySpecs;
+            const parts = [
+              ks.chip,
+              p.ram_gb ? `${p.ram_gb}GB RAM` : ks.ram,
+              p.storage_gb ? `${p.storage_gb}GB` : ks.storage,
+            ].filter(Boolean);
+            return parts.length > 0 ? parts.join(' / ') : '-';
+          })
+          .join(' | ')} |`,
+        `| **Pin & Năng Lượng** | ${products
+          .map((p) => {
+            const ks = (p.key_specs || {}) as KeySpecs;
+            return p.battery_mah ? `${p.battery_mah} mAh` : ks.battery || '-';
+          })
+          .join(' | ')} |`,
+      ];
+      await navigator.clipboard.writeText(lines.join('\n'));
+      setCopiedMarkdown(true);
+      setTimeout(() => setCopiedMarkdown(false), 2200);
     } catch {
       // Ignore clipboard permission errors
     }
@@ -1281,6 +1351,27 @@ export default function CompareWorkspace({
               {products.length > 0 && (
                 <button
                   type="button"
+                  onClick={handleCopyMarkdownReport}
+                  className="btn btn-sm btn-outline-danger rounded-pill fw-medium px-3 py-2"
+                >
+                  {copiedMarkdown
+                    ? '✓ Đã sao chép Markdown!'
+                    : '📋 Sao chép bảng Markdown'}
+                </button>
+              )}
+
+              {products.length === 2 && products[0] && products[1] && (
+                <Link
+                  href={`/compare/${products[0].slug}-vs-${products[1].slug}`}
+                  className="btn btn-sm btn-dark rounded-pill fw-medium px-3 py-2"
+                >
+                  ⚡ Trang 1v1 chuyên sâu
+                </Link>
+              )}
+
+              {products.length > 0 && (
+                <button
+                  type="button"
                   onClick={handleWatchAllCompared}
                   className="btn btn-sm btn-outline-secondary rounded-pill fw-medium px-3 py-2"
                 >
@@ -1316,6 +1407,120 @@ export default function CompareWorkspace({
           </div>
         )}
       </div>
+
+      {/* Popular 1v1 Head-to-Head Battles Hub for Active Category */}
+      {popularBattles.length > 0 && (
+        <div className="rate-card p-md-4 mb-4 p-3">
+          <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+            <div>
+              <div className="rate-eyebrow mb-1">
+                Kèo Đối Đầu 1v1 Tiêu Điểm ({activeCategoryMeta.label})
+              </div>
+              <h2 className="h6 fw-bold text-dark mb-0">
+                Các Cặp So Kè Trực Tiếp Được Tìm Kiếm Nhiều Nhất Trong Nhóm{' '}
+                {activeCategoryMeta.label}
+              </h2>
+            </div>
+            <Link
+              href={`/leaderboard?cat=${activeCategory}`}
+              className="btn btn-sm btn-outline-dark rounded-pill px-3"
+            >
+              Xem Bảng Xếp Hạng {activeCategoryMeta.label} →
+            </Link>
+          </div>
+
+          <div className="row g-3">
+            {popularBattles.map((battle) => (
+              <div key={battle.versusSlug} className="col-lg-4 col-md-6">
+                <div className="rounded-4 d-flex flex-column justify-content-between bg-light h-100 border p-3">
+                  <div>
+                    <div className="d-flex justify-content-between align-items-center mb-2">
+                      <span className="badge bg-dark rounded-pill small text-white">
+                        #{battle.productA.rank} vs #{battle.productB.rank}{' '}
+                        {activeCategoryMeta.label}
+                      </span>
+                      <span className="badge bg-danger-subtle text-danger rounded-pill small font-monospace">
+                        Chênh {battle.scoreDelta5.toFixed(2)} đ
+                      </span>
+                    </div>
+
+                    <div className="d-flex align-items-center justify-content-between my-2 gap-2">
+                      <div className="d-flex align-items-center gap-2 overflow-hidden">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={battle.productA.thumbnail}
+                          alt={battle.productA.name}
+                          className="rounded-2 flex-shrink-0 border bg-white p-1"
+                          style={{
+                            width: 44,
+                            height: 44,
+                            objectFit: 'contain',
+                          }}
+                        />
+                        <div className="overflow-hidden">
+                          <div className="small fw-bold text-dark text-truncate">
+                            {battle.productA.name}
+                          </div>
+                          <div className="small text-secondary font-monospace">
+                            ★ {battle.productA.combinedScore5.toFixed(2)}
+                          </div>
+                        </div>
+                      </div>
+
+                      <span className="badge bg-secondary rounded-pill flex-shrink-0">
+                        VS
+                      </span>
+
+                      <div className="d-flex align-items-center gap-2 overflow-hidden text-end">
+                        <div className="overflow-hidden">
+                          <div className="small fw-bold text-dark text-truncate">
+                            {battle.productB.name}
+                          </div>
+                          <div className="small text-secondary font-monospace">
+                            ★ {battle.productB.combinedScore5.toFixed(2)}
+                          </div>
+                        </div>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={battle.productB.thumbnail}
+                          alt={battle.productB.name}
+                          className="rounded-2 flex-shrink-0 border bg-white p-1"
+                          style={{
+                            width: 44,
+                            height: 44,
+                            objectFit: 'contain',
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="d-flex justify-content-between align-items-center border-top mt-2 gap-2 pt-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        syncSelection(
+                          [battle.productA.product, battle.productB.product],
+                          activeCategory
+                        )
+                      }
+                      className="btn btn-sm btn-outline-secondary rounded-pill small px-3"
+                    >
+                      Nạp vào bàn cân
+                    </button>
+                    <Link
+                      href={battle.versusHref}
+                      className="btn btn-sm btn-dark rounded-pill small fw-semibold px-3"
+                    >
+                      So kè 1v1 →
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Automated Head-to-Head 10-Group Verdict Summary Card */}
       {headToHeadSummary && (

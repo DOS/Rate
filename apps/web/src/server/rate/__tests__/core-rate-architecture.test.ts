@@ -18,9 +18,11 @@ import {
   localizeSpecValue,
 } from '../../../lib/spec-localizer';
 import {
+  buildPopular1v1BattlesForCategory,
   computeProductStandingInCategory,
   rankMasterProductsForLeaderboard,
 } from '../../../lib/leaderboard-engine';
+
 import {
   canonicalizeProductUrl,
   detectAccessoryOrJunk,
@@ -724,7 +726,40 @@ function runCoreArchitectureSuite() {
     '/compare/[versus] 1v1 route and ProductDetailView 1v1 links must be wired'
   );
   console.log(
-    '  ✅ [14/14] Smart Use-Case Persona Recommender (#52) & 1v1 Head-to-Head Versus SEO Route (/compare/[versus] #53) passed'
+    '  ✅ [14/15] Smart Use-Case Persona Recommender (#52) & 1v1 Head-to-Head Versus SEO Route (/compare/[versus] #53) passed'
+  );
+
+  // 15. Popular 1v1 Battles Hub + Exportable Markdown Audit (#55) & Expanded Sitemap (#56)
+  const popularPairs = buildPopular1v1BattlesForCategory(
+    mockPeers,
+    'smartphones',
+    3
+  );
+  assert.equal(popularPairs.length, 1);
+  assert.equal(
+    popularPairs[0]?.versusHref,
+    '/compare/apple-iphone-18-pro-max-256gb-vs-samsung-galaxy-s26-ultra-256gb'
+  );
+  const compareWorkspaceSrc = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/components/compare/CompareWorkspace.tsx'),
+    'utf8'
+  );
+  assert.ok(
+    compareWorkspaceSrc.includes('handleCopyMarkdownReport') &&
+      compareWorkspaceSrc.includes('popularBattles'),
+    'CompareWorkspace must include 1-click Markdown Audit export and Popular 1v1 Battles Hub'
+  );
+  const sitemapSrc = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/app/sitemap.ts'),
+    'utf8'
+  );
+  assert.ok(
+    sitemapSrc.includes("categorySlug: 'all'") &&
+      sitemapSrc.includes('buildPopular1v1BattlesForCategory'),
+    'sitemap.ts must include all 5 categories and curated 1v1 versus routes'
+  );
+  console.log(
+    '  ✅ [15/15] Popular 1v1 Battles Hub, Markdown Audit Export (#55) & Expanded Dynamic Sitemap (#56) passed'
   );
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }

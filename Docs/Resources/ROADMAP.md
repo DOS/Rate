@@ -126,6 +126,10 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc **4 T�
 - [x] **4.26. Gợi Ý Theo Nhu Cầu Thực Tế & Thanh Trượt Trọng Số 5 Tiêu Chí Trên `/leaderboard` + Trang Đối Đầu 1v1 Chuẩn SEO (`/compare/[versus]` - Issue #52 & Issue #53):**
   - Nâng cấp `LeaderboardExplorer.tsx` với 6 chế độ gợi ý theo nhu cầu thực tế (`Chụp ảnh & Quay Vlog`, `Gaming & Đồ họa nặng`, `Pin trâu 2 ngày`, `Doanh nhân & Màn hình đẹp`, `Săn cấu hình / Giá tốt P/P`) và bộ 5 thanh trượt tùy chỉnh trọng số cá nhân hóa (`0..100%`).
   - Xây dựng trang đối đầu 1v1 chuẩn SEO `apps/web/src/app/[locale]/compare/[versus]/page.tsx` (`/compare/<slugA>-vs-<slugB>`) kèm bảng đối chiếu nhanh 5 tiêu chí JReviews, khóa chặt so sánh cùng ngành hàng (`Same-Category Lock`), `Schema.org ItemList` JSON-LD và liên kết `⚔️ So sánh đối đầu 1-1` trực tiếp từ `ProductDetailView`.
+- [x] **4.27 & 4.28. Trung Tâm Kèo Đối Đầu 1v1 Tiêu Điểm Trên `/compare` & `/leaderboard`, Xuất Bảng Báo Cáo Markdown 1-Chạm & Sitemap Động Đa Ngành (`sitemap.xml` - Issue #55 & Issue #56):**
+  - Bổ sung `buildPopular1v1BattlesForCategory` trong `leaderboard-engine.ts` tự động tổng hợp các cặp đối đầu 1v1 đỉnh cao cùng danh mục (`#1 vs #2`, `#1 vs #3`, `#2 vs #3`) hiển thị trực tiếp trên `/compare` (`CompareWorkspace.tsx`) và `/leaderboard` (`LeaderboardExplorer.tsx`).
+  - Triển khai nút `📋 Sao chép bảng Markdown` và `⚡ Trang 1v1 chuyên sâu` trên `CompareWorkspace.tsx` cho phép xuất báo cáo đối chiếu định dạng bảng Markdown chuẩn để chia sẻ nhanh lên diễn đàn/nhóm công nghệ.
+  - Mở rộng `apps/web/src/app/sitemap.ts` bao phủ toàn bộ 5 ngành hàng (`categorySlug: 'all'`), 22 thiết bị chuẩn hóa, `/leaderboard` và các đường dẫn đối đầu `/compare/<slugA>-vs-<slugB>` tiêu biểu của cả 5 danh mục.
 
 ### ✅ Phase 5: Mở Rộng Đa Sàn 10/10 Nền Tảng, Browser Extension MV3 & Tự Động Hóa Cảnh Báo Giá (Đã hoàn thành 100%)
 

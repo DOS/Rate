@@ -383,3 +383,72 @@ export function computeProductStandingInCategory(
 
   return badges.slice(0, 4);
 }
+
+export interface Flagship1v1BattlePair {
+  versusSlug: string;
+  versusHref: string;
+  categorySlug: CanonicalCategorySlug;
+  productA: ScoredLeaderboardItem;
+  productB: ScoredLeaderboardItem;
+  winnerSlug: string | null;
+  scoreDelta5: number;
+  priceDeltaVnd: number;
+}
+
+/**
+ * Deterministically build curated 1v1 Head-to-Head Flagship Showdown pairs
+ * strictly within the same canonical category (#1 vs #2, #1 vs #3, #2 vs #3, #3 vs #4)
+ * for `/compare`, `/leaderboard`, and dynamic `sitemap.xml`.
+ */
+export function buildPopular1v1BattlesForCategory(
+  products: MasterProduct[],
+  category: CanonicalCategorySlug,
+  maxPairs: number = 3
+): Flagship1v1BattlePair[] {
+  const ranked = rankMasterProductsForLeaderboard(products, {
+    category,
+    criterion: 'combined',
+  });
+  if (ranked.length < 2) return [];
+
+  const candidateIndices: Array<[number, number]> = [
+    [0, 1],
+    [0, 2],
+    [1, 2],
+    [2, 3],
+    [0, 3],
+  ];
+
+  const pairs: Flagship1v1BattlePair[] = [];
+  for (const [idxA, idxB] of candidateIndices) {
+    if (pairs.length >= maxPairs) break;
+    const itemA = ranked[idxA];
+    const itemB = ranked[idxB];
+    if (!itemA || !itemB || itemA.slug === itemB.slug) continue;
+
+    const versusSlug = `${itemA.slug}-vs-${itemB.slug}`;
+    const scoreDelta5 = Number(
+      Math.abs(itemA.combinedScore5 - itemB.combinedScore5).toFixed(2)
+    );
+    const priceDeltaVnd = Math.abs(itemA.minPrice - itemB.minPrice);
+    const winnerSlug =
+      itemA.combinedScore5 > itemB.combinedScore5
+        ? itemA.slug
+        : itemB.combinedScore5 > itemA.combinedScore5
+          ? itemB.slug
+          : null;
+
+    pairs.push({
+      versusSlug,
+      versusHref: `/compare/${versusSlug}`,
+      categorySlug: category,
+      productA: itemA,
+      productB: itemB,
+      winnerSlug,
+      scoreDelta5,
+      priceDeltaVnd,
+    });
+  }
+
+  return pairs;
+}

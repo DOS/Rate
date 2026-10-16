@@ -5,6 +5,10 @@ import {
   getMasterProducts,
   getMerchantsList,
 } from '@/lib/rate-api';
+import {
+  buildPopular1v1BattlesForCategory,
+  VALID_LEADERBOARD_CATEGORIES,
+} from '@/lib/leaderboard-engine';
 
 const baseUrl = (env.APP_PUBLIC_URL || 'https://rate.vn').replace(/\/$/, '');
 
@@ -111,7 +115,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   try {
     const [products, merchants] = await Promise.all([
-      getMasterProducts({ limit: 500 }),
+      getMasterProducts({ categorySlug: 'all', limit: 500 }),
       getMerchantsList({ limit: 200 }),
     ]);
 
@@ -122,6 +126,18 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.85,
     }));
 
+    const versusEntries: MetadataRoute.Sitemap =
+      VALID_LEADERBOARD_CATEGORIES.flatMap((category) =>
+        buildPopular1v1BattlesForCategory(products, category, 3).map(
+          (pair) => ({
+            url: `${baseUrl}${pair.versusHref}`,
+            lastModified: now,
+            changeFrequency: 'daily' as const,
+            priority: 0.83,
+          })
+        )
+      );
+
     const merchantEntries: MetadataRoute.Sitemap = merchants.map(
       (merchant) => ({
         url: `${baseUrl}/merchants/${merchant.id}`,
@@ -131,7 +147,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       })
     );
 
-    return [...staticEntries, ...productEntries, ...merchantEntries];
+    return [
+      ...staticEntries,
+      ...productEntries,
+      ...versusEntries,
+      ...merchantEntries,
+    ];
   } catch (err) {
     console.error('sitemap: failed to fetch dynamic entries:', err);
     return staticEntries;
