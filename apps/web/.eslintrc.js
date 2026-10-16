@@ -3,7 +3,8 @@ module.exports = {
   root: true,
   extends: ["@repo/eslint-config", "plugin:jsx-a11y/recommended"],
   parser: "@typescript-eslint/parser",
-  plugins: ["jsx-a11y"],
+  // @next/next is registered (not extended) so inline disables of its rules resolve.
+  plugins: ["jsx-a11y", "@next/next"],
   settings: {
     tailwindcss: {
       callees: ["cn"],
@@ -45,6 +46,12 @@ module.exports = {
     "jsx-a11y/no-autofocus": "off",
   },
   overrides: [
+    {
+      // .eslintrc.js and the JS files shadowed by same-named .ts files are not in
+      // the TypeScript project; no enabled rule needs type information anyway.
+      files: ["*.js", "*.cjs", "*.mjs"],
+      parserOptions: { project: null },
+    },
     {
       files: ["src/components/ui/*.tsx"],
       rules: {
