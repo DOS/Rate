@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { SupportedAiProvider, AiSpecEnricherConfig } from './ai-spec-enricher.js';
+import type { ScrapedReviewer } from './types.js';
 
 /**
  * 5-Category Classification for Reviews across Products & Services
@@ -39,6 +40,8 @@ export interface ReviewInputItem {
   downvotes?: number;
   report_count?: number;
   platform_created_at?: string | null;
+  /** Reviewer metadata from the scrape, when the platform exposes it. */
+  reviewer?: ScrapedReviewer | null;
 }
 
 export interface AnalyzedReviewResult {
@@ -177,6 +180,38 @@ export function computeReviewWeight(params: {
   weight -= reportCount * 0.35;
 
   return Number(Math.max(0, Math.min(3.0, weight)).toFixed(2));
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Age of the reviewer's account when the review was written, in days. */
+function accountAgeDays(r: ReviewInputItem): number | null {
+  const joined = Date.parse(r.reviewer?.joinedAt || '');
+  if (!Number.isFinite(joined)) return null;
+  const writtenParsed = Date.parse(r.platform_created_at || '');
+  const written = Number.isFinite(writtenParsed) ? writtenParsed : Date.now();
+  const days = (written - joined) / DAY_MS;
+  return days >= 0 ? days : null;
+}
+
+/** `unknown` when the platform does not expose the join date. */
+export function accountAgeBucket(r: ReviewInputItem): ReviewSignals['account_age_bucket'] {
+  const days = accountAgeDays(r);
+  if (days === null) return 'unknown';
+  if (days < 30) return 'low';
+  if (days < 365) return 'medium';
+  return 'high';
+}
+
+/**
+ * 0..1, higher = more established reviewer. Log-scaled on the account's total review
+ * count (0 -> 0, 9 -> 0.5, 99+ -> 1). Falls back to the old neutral prior when unknown.
+ */
+export function reviewerHistoryScore(r: ReviewInputItem): number {
+  if (r.reviewer_type === 'expert') return 1.0;
+  const total = r.reviewer?.totalReviews;
+  if (typeof total !== 'number' || !Number.isFinite(total) || total < 0) return 0.7;
+  return clamp01(Math.log10(1 + total) / 2);
 }
 
 function normalizeTextForDedupe(text: string): string {
@@ -369,8 +404,8 @@ export class AiReviewAnalyzer {
         signals: {
           burst_pattern_score: clamp01(burstScore),
           duplicate_text_ratio: clamp01(duplicateRatio),
-          account_age_bucket: r.is_verified_buyer === false ? 'low' : 'medium',
-          reviewer_history_score: r.reviewer_type === 'expert' ? 1.0 : 0.7,
+          account_age_bucket: accountAgeBucket(r),
+          reviewer_history_score: reviewerHistoryScore(r),
           language_marker_score: clamp01(languageMarker),
         },
       };
@@ -446,6 +481,8 @@ Classify each review into one of 5 exact flag_category values:
 4. "competitor_sabotage": Malicious 1-2 star attack promoting a rival shop or baseless defamation. Ignored in rating, protects seller.
 5. "review_bombing": Review left after cancelling an order without using the product/service, or mob brigading. Ignored in rating.
 
+Reviewer fields (verified_purchase, reviewer_anonymous, reviewer_account_age_days, reviewer_total_reviews, repeat_purchase) are null when the platform does not expose them; null is NOT evidence of fraud. A brand-new account with no other reviews posting generic praise is supporting evidence, never proof on its own.
+
 Return ONLY valid JSON matching:
 {
   "reviews": [
@@ -480,7 +517,14 @@ Return ONLY valid JSON matching:
             author: r.author_name,
             rating_star: r.rating_star,
             comment: r.comment,
-            is_verified_buyer: r.is_verified_buyer ?? true,
+            verified_purchase: r.reviewer?.verifiedPurchase ?? r.is_verified_buyer ?? null,
+            reviewer_anonymous: r.reviewer?.isAnonymous ?? null,
+            reviewer_account_age_days: (() => {
+              const days = accountAgeDays(r);
+              return days === null ? null : Math.round(days);
+            })(),
+            reviewer_total_reviews: r.reviewer?.totalReviews ?? null,
+            repeat_purchase: r.reviewer?.repeatPurchase ?? null,
             heuristic_hint: batchBaseline[idx]?.flag_category,
           })),
         });

@@ -6,7 +6,9 @@ import http from 'node:http';
 import assert from 'node:assert/strict';
 import {
   AiReviewAnalyzer,
+  accountAgeBucket,
   computeReviewWeight,
+  reviewerHistoryScore,
   type AnalyzedReviewResult,
   type ReviewFlagCategory,
   type ReviewInputItem,
@@ -108,6 +110,35 @@ async function run() {
   }
   console.log('✅ [Heuristics] coin_spam / seeding / sabotage / bombing / authentic + vote weights OK');
   console.log('✅ [Heuristics] every signals payload satisfies the DB CHECK rate.signals_valid');
+
+  // Reviewer-derived signals come from scraped reviewer metadata, not constants.
+  const base: ReviewInputItem = {
+    id: 'rv',
+    rating_star: 5,
+    comment: 'ok',
+    platform_created_at: '2026-10-01T00:00:00.000Z',
+  };
+  assert.equal(accountAgeBucket(base), 'unknown', 'no join date => unknown, not a guess');
+  assert.equal(accountAgeBucket({ ...base, reviewer: { joinedAt: '2026-09-25T00:00:00.000Z' } }), 'low');
+  assert.equal(accountAgeBucket({ ...base, reviewer: { joinedAt: '2026-03-01T00:00:00.000Z' } }), 'medium');
+  assert.equal(accountAgeBucket({ ...base, reviewer: { joinedAt: '2021-01-01T00:00:00.000Z' } }), 'high');
+  assert.equal(
+    accountAgeBucket({ ...base, reviewer: { joinedAt: '2027-01-01T00:00:00.000Z' } }),
+    'unknown',
+    'join date after the review is bad data, not a new account'
+  );
+  assert.equal(reviewerHistoryScore(base), 0.7, 'unknown history keeps the neutral prior');
+  assert.equal(reviewerHistoryScore({ ...base, reviewer: { totalReviews: 0 } }), 0);
+  assert.equal(reviewerHistoryScore({ ...base, reviewer: { totalReviews: 9 } }), 0.5);
+  assert.equal(reviewerHistoryScore({ ...base, reviewer: { totalReviews: 5000 } }), 1);
+  assert.equal(reviewerHistoryScore({ ...base, reviewer_type: 'expert' }), 1);
+  const [withReviewer] = heuristicOnly().analyzeWithHeuristics([
+    { ...base, reviewer: { joinedAt: '2026-09-28T00:00:00.000Z', totalReviews: 1 } },
+  ]);
+  assert.equal(withReviewer!.signals.account_age_bucket, 'low');
+  assert.equal(withReviewer!.signals.reviewer_history_score, 0.151);
+  assert.ok(signalsValid(withReviewer!.signals as unknown as Record<string, unknown>));
+  console.log('✅ [Reviewer] account age bucket & history score derived from scraped reviewer metadata');
 
   console.log('\n================================================================');
   console.log('3. JReviews dual rating (Expert vs weighted authentic User)');

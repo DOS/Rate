@@ -6,16 +6,27 @@
 import crypto from 'node:crypto';
 import dotenv from 'dotenv';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import type { ShopeeProduct, SupportedEcommercePlatform } from './types.js';
+import type { ShopeeProduct, ShopeeReview, SupportedEcommercePlatform } from './types.js';
 import { ProductNormalizer } from './product-normalizer.js';
 import { EntityMatcher } from './entity-matcher.js';
 import { AiSpecEnricher, type AiSpecEnricherConfig } from './ai-spec-enricher.js';
-import { AiReviewAnalyzer } from './ai-review-analyzer.js';
+import { AiReviewAnalyzer, type ReviewInputItem } from './ai-review-analyzer.js';
 
 dotenv.config();
 
 function hashEntity(val: string): string {
   return '0x' + crypto.createHash('sha256').update(val.toLowerCase()).digest('hex');
+}
+
+function platformReviewIdFor(r: ShopeeReview): string {
+  return (
+    r.reviewId ||
+    'rv-' +
+      crypto
+        .createHash('sha256')
+        .update(`${r.author || ''}|${r.comment || ''}`)
+        .digest('hex')
+  );
 }
 
 export class ShopeeIngestionPipeline {
@@ -267,19 +278,15 @@ export class ShopeeIngestionPipeline {
     if (product.reviews && product.reviews.length > 0) {
       const reviewRows = product.reviews.map(r => ({
         product_id: productId,
-        platform_review_id:
-          r.reviewId ||
-          'rv-' +
-            crypto
-              .createHash('sha256')
-              .update(`${r.author || ''}|${r.comment || ''}`)
-              .digest('hex'),
+        platform_review_id: platformReviewIdFor(r),
         author_name: r.author,
         author_avatar: r.authorAvatar || null,
         rating_star: r.ratingStar,
         comment: r.comment,
         variation: r.variation || null,
         images: r.images || [],
+        // null = the platform does not say (the column default `true` would claim a purchase we cannot confirm)
+        is_verified_buyer: r.reviewer?.verifiedPurchase ?? null,
         platform_created_at: r.createdAt,
       }));
 
@@ -351,11 +358,26 @@ export class ShopeeIngestionPipeline {
       const { data: storedReviews, error: storedErr } = await this.supabase
         .from('reviews')
         .select(
-          'id, author_name, rating_star, comment, variation, images, is_verified_buyer, reviewer_type, upvotes, downvotes, report_count, platform_created_at'
+          'id, platform_review_id, author_name, rating_star, comment, variation, images, is_verified_buyer, reviewer_type, upvotes, downvotes, report_count, platform_created_at'
         )
         .eq('product_id', productId)
         .order('created_at', { ascending: false })
         .limit(200);
+
+      // Reviewer metadata is not persisted yet; attach what this scrape saw so the analyzer can use it.
+      const reviewerByPlatformId = new Map(
+        (product.reviews || [])
+          .filter(r => r.reviewer)
+          .map(r => [platformReviewIdFor(r), r.reviewer] as const)
+      );
+      const analysisInput: ReviewInputItem[] = (storedReviews || []).map(
+        (row: ReviewInputItem & { platform_review_id?: string | null }) => ({
+          ...row,
+          reviewer: row.platform_review_id
+            ? reviewerByPlatformId.get(row.platform_review_id)
+            : undefined,
+        })
+      );
 
       if (storedErr) {
         console.warn(
@@ -374,7 +396,7 @@ export class ShopeeIngestionPipeline {
             productId,
             masterId,
             merchantId,
-            reviews: storedReviews,
+            reviews: analysisInput,
             entityName: candidate.name,
             entityType: 'product',
             platform,
