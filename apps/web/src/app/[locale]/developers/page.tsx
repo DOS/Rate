@@ -7,8 +7,6 @@ import BackToTop from '../components/back-to-top';
 import ApiPlaygroundClient from '@/components/developers/ApiPlaygroundClient';
 import { getCachedRatePlatformStats } from '@/server/rate';
 import {
-  BsBoxSeam,
-  BsCheckCircleFill,
   BsCodeSquare,
   BsCpu,
   BsDatabaseCheck,

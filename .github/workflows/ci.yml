@@ -75,6 +75,9 @@ jobs:
       - name: Typecheck @repo/web
         run: pnpm --filter @repo/web typecheck
 
+      - name: Lint @repo/web (errors fail, warnings do not)
+        run: pnpm --filter @repo/web lint
+
       - name: Run @repo/web Core Architecture Tests
         run: pnpm --filter @repo/web test
 

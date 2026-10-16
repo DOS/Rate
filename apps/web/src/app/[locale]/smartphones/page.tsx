@@ -31,7 +31,6 @@ import {
   BsPhone,
   BsSearch,
   BsShop,
-  BsStarFill,
 } from 'react-icons/bs';
 import type { KeySpecs, ProductSpecifications } from '@repo/shared-data';
 

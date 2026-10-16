@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
 import { Link } from '@/lib/navigation';
 import {
   BsCheckCircleFill,
@@ -18,6 +18,7 @@ interface QuarantineApiResult {
 }
 
 export default function CommunityQuarantineSubmitForm() {
+  const fieldId = useId();
   const [url, setUrl] = useState(
     'https://cellphones.com.vn/iphone-16-pro-max.html'
   );
@@ -100,10 +101,14 @@ export default function CommunityQuarantineSubmitForm() {
 
       <form onSubmit={handleSubmit} className="row g-3">
         <div className="col-md-7">
-          <label className="form-label small fw-bold text-secondary">
+          <label
+            className="form-label small fw-bold text-secondary"
+            htmlFor={`${fieldId}-url`}
+          >
             Đường dẫn sản phẩm TMĐT (URL) *
           </label>
           <input
+            id={`${fieldId}-url`}
             type="url"
             required
             value={url}
@@ -114,10 +119,14 @@ export default function CommunityQuarantineSubmitForm() {
         </div>
 
         <div className="col-md-5">
-          <label className="form-label small fw-bold text-secondary">
+          <label
+            className="form-label small fw-bold text-secondary"
+            htmlFor={`${fieldId}-title`}
+          >
             Tên sản phẩm hiển thị trên sàn *
           </label>
           <input
+            id={`${fieldId}-title`}
             type="text"
             required
             value={title}
@@ -128,10 +137,14 @@ export default function CommunityQuarantineSubmitForm() {
         </div>
 
         <div className="col-md-3 col-6">
-          <label className="form-label small fw-bold text-secondary">
+          <label
+            className="form-label small fw-bold text-secondary"
+            htmlFor={`${fieldId}-current-price`}
+          >
             Giá đang bán (VNĐ) *
           </label>
           <input
+            id={`${fieldId}-current-price`}
             type="number"
             required
             min={50000}
@@ -142,10 +155,14 @@ export default function CommunityQuarantineSubmitForm() {
         </div>
 
         <div className="col-md-3 col-6">
-          <label className="form-label small fw-bold text-secondary">
+          <label
+            className="form-label small fw-bold text-secondary"
+            htmlFor={`${fieldId}-original-price`}
+          >
             Giá gốc gạch ngang (VNĐ)
           </label>
           <input
+            id={`${fieldId}-original-price`}
             type="number"
             min={0}
             value={originalPrice}
@@ -156,10 +173,14 @@ export default function CommunityQuarantineSubmitForm() {
         </div>
 
         <div className="col-md-3 col-6">
-          <label className="form-label small fw-bold text-secondary">
+          <label
+            className="form-label small fw-bold text-secondary"
+            htmlFor={`${fieldId}-sku`}
+          >
             Phiên bản RAM / ROM (SKU)
           </label>
           <input
+            id={`${fieldId}-sku`}
             type="text"
             value={skuText}
             onChange={(e) => setSkuText(e.target.value)}
@@ -169,10 +190,14 @@ export default function CommunityQuarantineSubmitForm() {
         </div>
 
         <div className="col-md-3 col-6">
-          <label className="form-label small fw-bold text-secondary">
+          <label
+            className="form-label small fw-bold text-secondary"
+            htmlFor={`${fieldId}-seller`}
+          >
             Tên Gian hàng / Đại lý
           </label>
           <input
+            id={`${fieldId}-seller`}
             type="text"
             value={sellerName}
             onChange={(e) => setSellerName(e.target.value)}

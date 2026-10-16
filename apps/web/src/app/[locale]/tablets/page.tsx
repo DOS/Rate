@@ -4,11 +4,7 @@ import { CategoryCatalogContent } from '../smartphones/page';
 
 type SearchParamsInput = Record<string, string | string[] | undefined>;
 
-export async function generateMetadata({
-  params,
-}: {
-  params: Promise<{ locale: string }>;
-}): Promise<Metadata> {
+export async function generateMetadata(): Promise<Metadata> {
   const facets = await getCachedCategoryDirectoryFacets('tablets');
   const totalModels = facets.totalUnfiltered;
   const canonicalUrl = 'https://rate.vn/tablets';

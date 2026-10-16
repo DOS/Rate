@@ -1,24 +1,24 @@
-import Script from "next/script"
+import Script from 'next/script';
 
-import { isDevelopment } from "@/lib/general-helpers"
+import { isDevelopment } from '@/lib/general-helpers';
 
-// eslint-disable-next-line no-unused-vars
+// eslint-disable-next-line no-unused-vars, @typescript-eslint/no-unused-vars -- kept for future tracking scripts
 const TrackingScriptWrapper = ({
   id,
   scriptContent,
   scriptOptions,
   ignoreInDevelopment = true,
 }: {
-  scriptContent: string
-  id: string
+  scriptContent: string;
+  id: string;
   scriptOptions: Exclude<
     React.ComponentProps<typeof Script>,
-    "id" | "dangerouslySetInnerHTML"
-  >
-  ignoreInDevelopment?: boolean
+    'id' | 'dangerouslySetInnerHTML'
+  >;
+  ignoreInDevelopment?: boolean;
 }) => {
   if (ignoreInDevelopment && isDevelopment()) {
-    return null
+    return null;
   }
 
   return (
@@ -27,11 +27,11 @@ const TrackingScriptWrapper = ({
       dangerouslySetInnerHTML={{ __html: scriptContent }}
       {...scriptOptions}
     />
-  )
-}
+  );
+};
 
 const TrackingScripts = () => {
-  return <>{/* Tracking Scrips here */}</>
-}
+  return <>{/* Tracking Scrips here */}</>;
+};
 
-export default TrackingScripts
+export default TrackingScripts;

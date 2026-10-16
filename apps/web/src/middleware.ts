@@ -41,7 +41,10 @@ export default function middleware(req: NextRequest) {
   // so browser Accept-Language headers do not unexpectedly override default locale,
   // while still honoring explicit NEXT_LOCALE=vi|en|cs cookies via next-intl middleware.
   const cookieLocale = req.cookies.get('NEXT_LOCALE')?.value;
-  if (!cookieLocale || !routing.locales.includes(cookieLocale as any)) {
+  if (
+    !cookieLocale ||
+    !(routing.locales as readonly string[]).includes(cookieLocale)
+  ) {
     req.cookies.set('NEXT_LOCALE', routing.defaultLocale);
   }
 

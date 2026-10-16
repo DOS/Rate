@@ -25,7 +25,6 @@ import MerchantShareAuditButton from '@/components/merchants/MerchantShareAuditB
 import {
   BsBoxSeam,
   BsCheckCircleFill,
-  BsExclamationTriangleFill,
   BsGraphUpArrow,
   BsPeopleFill,
   BsShieldCheck,

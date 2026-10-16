@@ -21,7 +21,6 @@ import {
   BsSearch,
   BsShieldCheck,
   BsShop,
-  BsStarFill,
   BsXLg,
 } from 'react-icons/bs';
 

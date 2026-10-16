@@ -1,7 +1,14 @@
 /** @type {import("eslint").Linter.Config} */
 module.exports = {
   root: true,
-  extends: ["@repo/eslint-config", "plugin:jsx-a11y/recommended"],
+  // The react/react-hooks override in @repo/eslint-config (`apps/web/**/*`) is resolved
+  // relative to this directory and never matches, so the presets are applied here.
+  extends: [
+    "@repo/eslint-config",
+    "plugin:react/recommended",
+    "plugin:react-hooks/recommended",
+    "plugin:jsx-a11y/recommended",
+  ],
   parser: "@typescript-eslint/parser",
   // @next/next is registered (not extended) so inline disables of its rules resolve.
   plugins: ["jsx-a11y", "@next/next"],
@@ -16,8 +23,15 @@ module.exports = {
   },
   rules: {
     "no-console": ["warn", { allow: ["warn", "error"] }],
+    // Next.js compiles JSX with the automatic runtime; `React` need not be in scope.
+    "react/react-in-jsx-scope": "off",
     "@next/next/no-html-link-for-pages": "off",
     "no-unused-vars": "warn",
+    // A leading underscore marks a binding as intentionally unused.
+    "@typescript-eslint/no-unused-vars": [
+      "error",
+      { argsIgnorePattern: "^_", varsIgnorePattern: "^_", caughtErrorsIgnorePattern: "^_" },
+    ],
     "react/function-component-definition": "off",
     "react/hook-use-state": "off",
     "react/jsx-no-leaked-render": "off",
@@ -44,13 +58,22 @@ module.exports = {
       },
     ],
     "jsx-a11y/no-autofocus": "off",
+    // `interface X extends Y {}` is how next-intl message typings are declared.
+    "@typescript-eslint/no-empty-object-type": ["error", { allowInterfaces: "with-single-extends" }],
   },
   overrides: [
+    {
+      // The architecture suite lazily require()s each section's modules (CommonJS under tsx).
+      files: ["src/**/__tests__/**"],
+      rules: { "@typescript-eslint/no-require-imports": "off" },
+    },
     {
       // .eslintrc.js and the JS files shadowed by same-named .ts files are not in
       // the TypeScript project; no enabled rule needs type information anyway.
       files: ["*.js", "*.cjs", "*.mjs"],
       parserOptions: { project: null },
+      // apps/web is CommonJS ("type" is unset), so its .js config files use require().
+      rules: { "@typescript-eslint/no-require-imports": "off" },
     },
     {
       files: ["src/components/ui/*.tsx"],
