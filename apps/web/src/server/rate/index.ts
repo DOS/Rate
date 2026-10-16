@@ -84,10 +84,24 @@ export const getCachedMasterProductPriceHistory = cache(
 export const getCachedCompareMasterProducts = cache((slugsCsv: string) =>
   _compareMasterProducts(slugsCsv.split(','))
 );
+import { computeProductRadarSignal } from './deals';
+
+async function inspectProductOrShopUrlWithRadar(rawQuery: string) {
+  const res = await _inspectProductOrShopUrl(rawQuery);
+  return {
+    ...res,
+    radarSignal: res.masterProduct
+      ? computeProductRadarSignal(res.masterProduct, res.allOffers)
+      : null,
+  };
+}
+
 export const getCachedMerchantsList = cache(() => _getMerchantsList());
 export const getCachedMerchantProfileById = cache(_getMerchantProfileById);
 export const getCachedRatePlatformStats = cache(_getRatePlatformStats);
-export const getCachedInspectProductOrShopUrl = cache(_inspectProductOrShopUrl);
+export const getCachedInspectProductOrShopUrl = cache(
+  inspectProductOrShopUrlWithRadar
+);
 
 export {
   _getMasterProducts as getMasterProducts,
@@ -95,7 +109,7 @@ export {
   _getMerchantsList as getMerchantsList,
   _getMerchantProfileById as getMerchantProfileById,
   _getRatePlatformStats as getRatePlatformStats,
-  _inspectProductOrShopUrl as inspectProductOrShopUrl,
+  inspectProductOrShopUrlWithRadar as inspectProductOrShopUrl,
 };
 
 export {

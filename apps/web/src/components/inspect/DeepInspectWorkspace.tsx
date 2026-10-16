@@ -10,7 +10,8 @@ import {
 import { normalizeRateLocale, type SupportedRateLocale } from '@/lib/rate-i18n';
 import CompareQuickToggle from '@/components/compare/CompareQuickToggle';
 import PriceWatchButton from '@/components/watchlist/PriceWatchButton';
-import { getRadarSignal } from '@/lib/deal-radar';
+import RadarBadge from '@/components/radar/RadarBadge';
+import { EMPTY_RADAR_SIGNAL, getRadarSignal } from '@/lib/deal-radar';
 import { useDealRadarIndex } from '@/components/radar/use-deal-radar';
 import type { KeySpecs } from '@repo/shared-data';
 import {
@@ -316,10 +317,12 @@ export default function DeepInspectWorkspace({
   const reviewSummary = result?.reviewSummary ?? null;
   const merchant = result?.merchantProfile ?? null;
 
-  const radarSignal = master ? getRadarSignal(radarIndex, master.slug) : null;
-  const matchedGenuineDeal = radarSignal?.genuineDeal ?? null;
-  const matchedFakeTrap = radarSignal?.fakeSaleTrap ?? null;
-  const matchedPriceSpread = radarSignal?.priceSpread ?? null;
+  const radarSignal =
+    result?.radarSignal ??
+    (master ? getRadarSignal(radarIndex, master.slug) : EMPTY_RADAR_SIGNAL);
+  const matchedGenuineDeal = radarSignal.genuineDeal ?? null;
+  const matchedFakeTrap = radarSignal.fakeSaleTrap ?? null;
+  const matchedPriceSpread = radarSignal.priceSpread ?? null;
 
   const handleCopyAuditMarkdown = async () => {
     if (typeof window === 'undefined') return;
@@ -339,13 +342,16 @@ export default function DeepInspectWorkspace({
       const histHigh = Number(
         priceHistory?.highestEverPrice || master?.max_price || 0
       );
+      const masterUserRating = master
+        ? Number(master.user_rating_weighted || master.average_rating || 0)
+        : 0;
       const lines = [
         `### 🔬 Biên Bản Kiểm Toán Giá & Tín Nhiệm (Rate.vn Inspector)`,
         `- **Truy vấn kiểm định:** \`${queryInput.trim()}\``,
         ...(master
           ? [
               `- **Thiết bị gốc chuẩn hóa:** ${master.name} (\`${master.model_key}\`)`,
-              `- **Điểm Người Mua Thực Chất (JReviews):** ★ ${Number(master.user_rating_weighted || master.average_rating || 0).toFixed(2)}/5.0 (${master.authentic_review_count || master.total_reviews || 0} đánh giá thật)`,
+              `- **Điểm Người Mua Thực Chất (JReviews):** ${masterUserRating > 0 ? `★ ${masterUserRating.toFixed(2)}/5.0` : 'chưa có điểm'} (${master.authentic_review_count || master.total_reviews || 0} đánh giá thật)`,
             ]
           : []),
         ...(discount
@@ -809,9 +815,14 @@ export default function DeepInspectWorkspace({
                           {Number(
                             master.user_rating_weighted ||
                               master.average_rating ||
-                              4.8
-                          ).toFixed(1)}
-                          /5.0
+                              0
+                          ) > 0
+                            ? `${Number(
+                                master.user_rating_weighted ||
+                                  master.average_rating ||
+                                  0
+                              ).toFixed(1)}/5.0`
+                            : 'User: chưa có điểm'}
                         </span>
                       </span>
                       <span className="rate-score-badge-expert">
@@ -823,6 +834,7 @@ export default function DeepInspectWorkspace({
                             : 'chưa có điểm'}
                         </span>
                       </span>
+                      <RadarBadge signal={radarSignal} />
                       <span className="small text-muted">
                         (
                         {master.authentic_review_count ||

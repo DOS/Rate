@@ -57,7 +57,7 @@ const PRESET_ENDPOINTS: ApiPresetEndpoint[] = [
     id: 'versus-head-to-head',
     method: 'GET',
     title: 'Đối đầu 1v1 JReviews & Trọng số Persona (/versus)',
-    path: '/api/v1/rate/versus?pair=apple-iphone-18-pro-max-256gb-vs-samsung-galaxy-s26-ultra-256gb&persona=balanced',
+    path: '/api/v1/rate/versus?pair=apple-iphone-16-128gb-vs-apple-iphone-16-plus-256gb&persona=balanced',
     description:
       'Chấm điểm đối đầu 1v1 trực tiếp giữa 2 mẫu cùng ngành hàng theo 5 tiêu chí JReviews (Màn hình, Hiệu năng, Camera, Pin, Đáng tiền), hỗ trợ tùy biến trọng số Persona và tính độ lệch giá.',
   },
@@ -113,7 +113,7 @@ const PRESET_ENDPOINTS: ApiPresetEndpoint[] = [
     id: 'watchlist-check',
     method: 'GET',
     title: 'Theo dõi Biến động Giá (/watchlist)',
-    path: '/api/v1/rate/watchlist?slugs=apple-iphone-16-128gb,samsung-galaxy-s24-ultra-256gb',
+    path: '/api/v1/rate/watchlist?slugs=apple-iphone-16-128gb,apple-iphone-16-plus-256gb',
     description:
       'Truy vấn hàng loạt giá thấp nhất hiện tại, trung vị 90 ngày và trạng thái giảm giá thật/ảo cho danh sách sản phẩm đang theo dõi.',
   },
