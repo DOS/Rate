@@ -286,6 +286,37 @@ export default function WatchlistWorkspace({
     URL.revokeObjectURL(url);
   };
 
+  const handleDownloadPortfolioJson = () => {
+    if (typeof window === 'undefined' || items.length === 0) return;
+    const payload = {
+      source: 'Rate.vn Watchlist Portfolio',
+      exportedAt: new Date().toISOString(),
+      portfolioStats,
+      items: items.map((item) => {
+        const liveProd = productBySlug.get(item.slug);
+        const liveDeal = liveDeals[item.slug];
+        const curMin =
+          liveDeal?.current_min_price ||
+          (liveProd ? Number(liveProd.min_price || 0) : item.priceWhenAdded);
+        return {
+          ...item,
+          currentMinPriceVnd: curMin,
+          targetReached: curMin > 0 && curMin <= item.targetPrice,
+          bestOffer: liveDeal?.best_offer || null,
+        };
+      }),
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: 'application/json;charset=utf-8;',
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `rate-vn-watchlist-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="container py-5">
       {/* Header Banner (DESIGN.md v3.0 Dark Obsidian Command Header) */}
@@ -322,6 +353,14 @@ export default function WatchlistWorkspace({
                   className="btn btn-outline-light rounded-pill btn-sm fw-semibold px-3"
                 >
                   📥 Xuất bảng CSV
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDownloadPortfolioJson}
+                  data-testid="download-watchlist-json-btn"
+                  className="btn btn-outline-light rounded-pill btn-sm fw-semibold px-3"
+                >
+                  📦 Xuất JSON
                 </button>
               </>
             )}

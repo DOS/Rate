@@ -420,6 +420,26 @@ export default function MerchantDirectoryExplorer({
     URL.revokeObjectURL(url);
   };
 
+  const handleDownloadMerchantsJson = () => {
+    if (typeof document === 'undefined' || filteredMerchants.length === 0)
+      return;
+    const payload = {
+      source: 'Rate.vn Merchant Trust Directory',
+      exportedAt: new Date().toISOString(),
+      merchantCount: filteredMerchants.length,
+      merchants: filteredMerchants,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: 'application/json;charset=utf-8;',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `rate-merchants-audit-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div>
       {/* KPI Summary Strip */}
@@ -609,6 +629,14 @@ export default function MerchantDirectoryExplorer({
               data-testid="download-merchants-csv-btn"
             >
               {labels.exportCsvBtn}
+            </button>
+            <button
+              type="button"
+              onClick={handleDownloadMerchantsJson}
+              className="btn btn-sm btn-outline-secondary rounded-pill fw-semibold px-3 py-1"
+              data-testid="download-merchants-json-btn"
+            >
+              📦 JSON
             </button>
             <span className="small text-muted ms-1">
               {labels.showingCount}{' '}

@@ -174,6 +174,37 @@ export default function ProductOffersExplorer({
     URL.revokeObjectURL(url);
   };
 
+  const handleDownloadOffersJson = () => {
+    if (typeof document === 'undefined' || filteredOffers.length === 0) return;
+    const payload = {
+      source: 'Rate.vn Cross-Platform Offers Explorer',
+      productSlug,
+      productName,
+      exportedAt: new Date().toISOString(),
+      offerCount: filteredOffers.length,
+      offers: filteredOffers.map((o) => ({
+        id: o.id,
+        platform: o.platform,
+        merchantName: o.merchant.name,
+        isOfficialMall: o.merchant.is_official,
+        trustScorePercent: Math.max(0, 100 - (o.merchant.risk_score || 0)),
+        priceCurrentVnd: o.price_current,
+        priceOriginalVnd: o.price_original || null,
+        verdict: byOffer[o.id]?.verdict || 'normal',
+        url: o.url,
+      })),
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: 'application/json;charset=utf-8;',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `rate-offers-${productSlug}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div>
       {/* Interactive Filter, Sort & Export Toolbar */}
@@ -229,6 +260,15 @@ export default function ProductOffersExplorer({
               data-testid="download-offers-csv-btn"
             >
               📥 Xuất bảng giá CSV
+            </button>
+            <button
+              type="button"
+              onClick={handleDownloadOffersJson}
+              className="btn btn-sm btn-outline-secondary rounded-pill fw-semibold bg-white px-3 py-1"
+              style={{ fontSize: '0.76rem' }}
+              data-testid="download-offers-json-btn"
+            >
+              📦 Xuất JSON
             </button>
           </div>
         </div>
