@@ -47,16 +47,7 @@
   "dependencies": {
     "@repo/shared-data": "workspace:*",
     "@supabase/supabase-js": "^2.117.2",
-    "axios": "^1.9.0",
-    "cheerio": "^1.0.0-rc.12",
-    "dotenv": "^16.4.7",
-    "https-proxy-agent": "^7.0.6",
-    "playwright": "^1.52.0",
-    "proxy-chain": "^2.5.9",
-    "user-agents": "^1.1.560",
-    "uuid": "^11.1.0",
-    "winston": "^3.17.0",
-    "zod": "^3.25.76"
+    "dotenv": "^16.4.7"
   },
   "devDependencies": {
     "@types/node": "^26.6.3",
@@ -67,8 +58,6 @@
     "eslint-plugin-prettier": "^5.2.1",
     "prettier": "^3.9.6",
     "tsx": "^4.20.5",
-    "typescript": "^7.0.2",
-    "vite-tsconfig-paths": "^5.1.4",
-    "vitest": "^3.0.0"
+    "typescript": "^7.0.2"
   }
 }
