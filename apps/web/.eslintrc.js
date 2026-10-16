@@ -3,7 +3,8 @@ module.exports = {
   root: true,
   extends: ["@repo/eslint-config", "plugin:jsx-a11y/recommended"],
   parser: "@typescript-eslint/parser",
-  plugins: ["jsx-a11y"],
+  // @next/next is registered (not extended) so inline disables of its rules resolve.
+  plugins: ["jsx-a11y", "@next/next"],
   settings: {
     tailwindcss: {
       callees: ["cn"],
@@ -45,6 +46,11 @@ module.exports = {
     "jsx-a11y/no-autofocus": "off",
   },
   overrides: [
+    {
+      // Root-level JS config files are not in tsconfig.json; lint them untyped.
+      files: ["*.js", "*.cjs", "*.mjs"],
+      parserOptions: { project: null },
+    },
     {
       files: ["src/components/ui/*.tsx"],
       rules: {

@@ -73,11 +73,6 @@
       "@typescript-eslint/eslint-plugin": "^8.71.2",
       "@typescript-eslint/parser": "^8.71.2",
       "@typescript-eslint/typescript-estree": "^8.71.2",
-      "@typescript-eslint/eslint-plugin>typescript": "6.0.3",
-      "@typescript-eslint/parser>typescript": "6.0.3",
-      "@typescript-eslint/typescript-estree>typescript": "6.0.3",
-      "@typescript-eslint/type-utils>typescript": "6.0.3",
-      "ts-api-utils>typescript": "6.0.3",
       "@swc/core": "1.13.3",
       "@swc/core-win32-x64-msvc": "1.13.3"
     }
