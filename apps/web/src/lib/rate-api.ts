@@ -28,6 +28,37 @@ export function getRateClient(): RateSchemaClient {
   return _client;
 }
 
+/**
+ * PostgREST caps every response at the project's max-rows (1000 by default) and
+ * silently drops the rest, so unbounded table reads must be paged. Pages advance by
+ * the number of rows actually returned, which also works if max-rows is lowered.
+ * On error, logs and returns what was read so far (matching the old ignore-error reads).
+ */
+async function fetchAllRows<T>(
+  label: string,
+  buildPage: (
+    from: number,
+    to: number
+  ) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+  pageSize = 1000
+): Promise<T[]> {
+  const rows: T[] = [];
+  for (let from = 0; ;) {
+    const { data, error } = await buildPage(from, from + pageSize - 1);
+    if (error) {
+      console.error(
+        `rate-api: paged read of ${label} failed at row ${from}:`,
+        error.message
+      );
+      return rows;
+    }
+    const page = data ?? [];
+    if (page.length === 0) return rows;
+    rows.push(...page);
+    from += page.length;
+  }
+}
+
 export type ReviewFlagCategory =
   | 'authentic'
   | 'low_value_coin_spam'
@@ -1600,16 +1631,23 @@ export async function getMerchantsList(params?: {
     mQuery = mQuery.limit(params.limit);
   }
 
-  const [{ data: merchantRows }, { data: prodRows }, { data: reviewRows }] =
-    await Promise.all([
-      mQuery,
-      supabase.from('products').select('id, merchant_id, price_current'),
+  const [{ data: merchantRows }, prodRows, reviewRows] = await Promise.all([
+    mQuery,
+    fetchAllRows('products', (from, to) =>
+      supabase
+        .from('products')
+        .select('id, merchant_id, price_current')
+        .order('id')
+        .range(from, to)
+    ),
+    fetchAllRows('reviews', (from, to) =>
       supabase
         .from('reviews')
         .select('*, review_flags(*)')
-        .order('created_at', { ascending: false })
-        .limit(1000),
-    ]);
+        .order('id')
+        .range(from, to)
+    ),
+  ]);
 
   const merchants = (merchantRows as unknown as RawMerchantSafeRow[]) || [];
   if (merchants.length === 0) return [];
@@ -2074,11 +2112,21 @@ export async function getRatePlatformStats(): Promise<RatePlatformStats> {
       .from('categories')
       .select('id, parent_id, name, slug, icon, display_order')
       .order('display_order', { ascending: true }),
-    supabase
-      .from('master_products')
-      .select('id, slug, name, category_id')
-      .eq('status', 'published'),
-    supabase.from('products').select('id, title, cluster_id'),
+    fetchAllRows('master_products', (from, to) =>
+      supabase
+        .from('master_products')
+        .select('id, slug, name, category_id')
+        .eq('status', 'published')
+        .order('id')
+        .range(from, to)
+    ).then((data) => ({ data })),
+    fetchAllRows('products', (from, to) =>
+      supabase
+        .from('products')
+        .select('id, title, cluster_id')
+        .order('id')
+        .range(from, to)
+    ).then((data) => ({ data })),
     supabase.from('merchants').select('id', { count: 'exact', head: true }),
     supabase.from('price_history').select('id', { count: 'exact', head: true }),
     supabase
