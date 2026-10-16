@@ -228,9 +228,9 @@ async function runTests() {
   assert.equal(noConsentRes.jobState, 'skipped_no_consent');
 
   const readOnlyPlatformRes = await ingestExtensionCrowdSignal({
-    platform: 'fptshop',
-    externalItemId: 'iphone-16-pro-max',
-    url: 'https://fptshop.com.vn/dien-thoai/iphone-16-pro-max',
+    platform: 'tiktok',
+    externalItemId: '1729401928401',
+    url: 'https://shop.tiktok.com/view/product/1729401928401',
     title: 'Điện thoại iPhone 16 Pro Max 256GB',
     price: 28990000,
     userConsentOptIn: true,
@@ -245,7 +245,11 @@ async function runTests() {
   assert.equal(EXTENSION_CAPABILITY_MATRIX.tiki.crowdVerifyQueue, true);
   assert.equal(EXTENSION_CAPABILITY_MATRIX.cellphones.crowdVerifyQueue, true);
   assert.equal(EXTENSION_CAPABILITY_MATRIX.tgdd.crowdVerifyQueue, true);
-  assert.equal(EXTENSION_CAPABILITY_MATRIX.fptshop.crowdVerifyQueue, false);
+  assert.equal(EXTENSION_CAPABILITY_MATRIX.fptshop.crowdVerifyQueue, true);
+  assert.equal(EXTENSION_CAPABILITY_MATRIX.hoangha.crowdVerifyQueue, true);
+  assert.equal(EXTENSION_CAPABILITY_MATRIX.didongviet.crowdVerifyQueue, true);
+  assert.equal(EXTENSION_CAPABILITY_MATRIX.phongvu.crowdVerifyQueue, true);
+  assert.equal(EXTENSION_CAPABILITY_MATRIX.tiktok.crowdVerifyQueue, false);
   assert.equal(EXTENSION_CAPABILITY_MATRIX.tiktok.lookup, true);
   assert.equal(EXTENSION_CAPABILITY_MATRIX.hoangha.lookup, true);
   console.log(

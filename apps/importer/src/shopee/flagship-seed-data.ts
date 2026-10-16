@@ -28,7 +28,16 @@ export interface FlagshipDeviceSeed {
     value: number;
   };
   listings: Array<{
-    platform: 'shopee' | 'lazada' | 'tiki' | 'cellphones' | 'tgdd';
+    platform:
+      | 'shopee'
+      | 'lazada'
+      | 'tiki'
+      | 'cellphones'
+      | 'tgdd'
+      | 'fptshop'
+      | 'hoangha'
+      | 'didongviet'
+      | 'phongvu';
     platform_item_id: string;
     merchant_key: string;
     title: string;
@@ -54,7 +63,16 @@ export interface FlagshipDeviceSeed {
 
 export interface SeedMerchantProfile {
   key: string;
-  platform: 'shopee' | 'lazada' | 'tiki' | 'cellphones' | 'tgdd';
+  platform:
+    | 'shopee'
+    | 'lazada'
+    | 'tiki'
+    | 'cellphones'
+    | 'tgdd'
+    | 'fptshop'
+    | 'hoangha'
+    | 'didongviet'
+    | 'phongvu';
   platform_shop_id: string;
   name: string;
   slug: string;
@@ -222,6 +240,58 @@ export const SEED_MERCHANTS: SeedMerchantProfile[] = [
     follower_count: 1420,
     location: 'Hà Nội',
     dosafe_risk_score: 52,
+  },
+  {
+    key: 'fptshop_official',
+    platform: 'fptshop',
+    platform_shop_id: 'fpt-retail-vn',
+    name: 'FPT Shop Hệ Thống Bán Lẻ Kỹ Thuật Số',
+    slug: 'fpt-shop-official',
+    url: 'https://fptshop.com.vn',
+    is_official: true,
+    rating_star: 4.92,
+    follower_count: 1180000,
+    location: 'Toàn quốc (63 tỉnh thành)',
+    dosafe_risk_score: 2,
+  },
+  {
+    key: 'hoangha_official',
+    platform: 'hoangha',
+    platform_shop_id: 'hhm-retail-vn',
+    name: 'Hoàng Hà Mobile Hệ Thống Ủy Quyền Chính Hãng',
+    slug: 'hoang-ha-mobile-official',
+    url: 'https://hoanghamobile.com',
+    is_official: true,
+    rating_star: 4.91,
+    follower_count: 640000,
+    location: 'Toàn quốc (120+ chi nhánh)',
+    dosafe_risk_score: 3,
+  },
+  {
+    key: 'didongviet_official',
+    platform: 'didongviet',
+    platform_shop_id: 'ddv-retail-vn',
+    name: 'Di Động Việt Đại Lý Ủy Quyền Chính Hãng AAR',
+    slug: 'di-dong-viet-official',
+    url: 'https://didongviet.vn',
+    is_official: true,
+    rating_star: 4.9,
+    follower_count: 520000,
+    location: 'TP. Hồ Chí Minh & Hà Nội',
+    dosafe_risk_score: 3,
+  },
+  {
+    key: 'phongvu_official',
+    platform: 'phongvu',
+    platform_shop_id: 'pv-retail-vn',
+    name: 'Phong Vũ Hệ Thống Bán Lẻ Laptop & Công Nghệ',
+    slug: 'phong-vu-official',
+    url: 'https://phongvu.vn',
+    is_official: true,
+    rating_star: 4.93,
+    follower_count: 790000,
+    location: 'Toàn quốc (TP.HCM, Hà Nội, Đà Nẵng)',
+    dosafe_risk_score: 2,
   },
 ];
 
@@ -3695,15 +3765,39 @@ export function synthesizeCrossPlatformOffersForMaster(params: {
   brand: string;
   colors: string[];
   basePrice: number;
-  existingPlatforms: Array<'shopee' | 'lazada' | 'tiki' | 'cellphones' | 'tgdd'>;
+  existingPlatforms: Array<
+    | 'shopee'
+    | 'lazada'
+    | 'tiki'
+    | 'cellphones'
+    | 'tgdd'
+    | 'fptshop'
+    | 'hoangha'
+    | 'didongviet'
+    | 'phongvu'
+  >;
   keySpecs?: KeySpecs | null;
 }): FlagshipDeviceSeed['listings'] {
-  const allPlatforms: Array<'shopee' | 'lazada' | 'tiki' | 'cellphones' | 'tgdd'> = [
+  const allPlatforms: Array<
+    | 'shopee'
+    | 'lazada'
+    | 'tiki'
+    | 'cellphones'
+    | 'tgdd'
+    | 'fptshop'
+    | 'hoangha'
+    | 'didongviet'
+    | 'phongvu'
+  > = [
     'shopee',
     'lazada',
     'tiki',
     'cellphones',
     'tgdd',
+    'fptshop',
+    'hoangha',
+    'didongviet',
+    'phongvu',
   ];
   const present = new Set(params.existingPlatforms);
   const brandLower = (params.brand || '').toLowerCase();
@@ -3719,7 +3813,16 @@ export function synthesizeCrossPlatformOffersForMaster(params: {
   const round10k = (val: number) => Math.round(val / 10_000) * 10_000;
 
   const pickMerchantKey = (
-    platform: 'shopee' | 'lazada' | 'tiki' | 'cellphones' | 'tgdd'
+    platform:
+      | 'shopee'
+      | 'lazada'
+      | 'tiki'
+      | 'cellphones'
+      | 'tgdd'
+      | 'fptshop'
+      | 'hoangha'
+      | 'didongviet'
+      | 'phongvu'
   ): string => {
     if (platform === 'shopee') {
       if (brandLower.includes('apple')) return 'shopee_apple_flagship';
@@ -3737,11 +3840,24 @@ export function synthesizeCrossPlatformOffersForMaster(params: {
         : 'tiki_viettel_store';
     }
     if (platform === 'cellphones') return 'cellphones_official';
-    return 'tgdd_official';
+    if (platform === 'tgdd') return 'tgdd_official';
+    if (platform === 'fptshop') return 'fptshop_official';
+    if (platform === 'hoangha') return 'hoangha_official';
+    if (platform === 'didongviet') return 'didongviet_official';
+    return 'phongvu_official';
   };
 
   const buildUrl = (
-    platform: 'shopee' | 'lazada' | 'tiki' | 'cellphones' | 'tgdd',
+    platform:
+      | 'shopee'
+      | 'lazada'
+      | 'tiki'
+      | 'cellphones'
+      | 'tgdd'
+      | 'fptshop'
+      | 'hoangha'
+      | 'didongviet'
+      | 'phongvu',
     itemId: string
   ): string => {
     switch (platform) {
@@ -3755,6 +3871,14 @@ export function synthesizeCrossPlatformOffersForMaster(params: {
         return `https://cellphones.com.vn/${slugSafe}.html`;
       case 'tgdd':
         return `https://www.thegioididong.com/dtdd/${slugSafe}`;
+      case 'fptshop':
+        return `https://fptshop.com.vn/dien-thoai/${slugSafe}`;
+      case 'hoangha':
+        return `https://hoanghamobile.com/dien-thoai/${slugSafe}`;
+      case 'didongviet':
+        return `https://didongviet.vn/${slugSafe}.html`;
+      case 'phongvu':
+        return `https://phongvu.vn/${slugSafe}`;
     }
   };
 
@@ -3764,15 +3888,23 @@ export function synthesizeCrossPlatformOffersForMaster(params: {
     if (present.has(platform)) continue;
 
     const multiplier =
-      platform === 'lazada'
-        ? 0.985
-        : platform === 'tiki'
-          ? 0.992
-          : platform === 'shopee'
-            ? 1.0
-            : platform === 'cellphones'
-              ? 1.012
-              : 1.024;
+      platform === 'hoangha'
+        ? 0.978
+        : platform === 'didongviet'
+          ? 0.982
+          : platform === 'lazada'
+            ? 0.985
+            : platform === 'tiki'
+              ? 0.992
+              : platform === 'shopee'
+                ? 1.0
+                : platform === 'phongvu'
+                  ? 1.005
+                  : platform === 'cellphones'
+                    ? 1.012
+                    : platform === 'fptshop'
+                      ? 1.02
+                      : 1.024;
 
     const priceCurrent = round10k(base * multiplier);
     const priceOriginal = round10k(base * 1.12);
@@ -3790,7 +3922,15 @@ export function synthesizeCrossPlatformOffersForMaster(params: {
                 ? 'Nguyễn Quốc Bảo'
                 : platform === 'tgdd'
                   ? 'Phạm Gia Huy'
-                  : 'hoang_long_tech',
+                  : platform === 'fptshop'
+                    ? 'Đỗ Quang Vinh'
+                    : platform === 'hoangha'
+                      ? 'Trương Minh Khôi'
+                      : platform === 'didongviet'
+                        ? 'Lý Thanh Tùng'
+                        : platform === 'phongvu'
+                          ? 'Phan Tuấn Kiệt'
+                          : 'hoang_long_tech',
         ratingStar: 5,
         comment: `Mua ${params.name} chính hãng nguyên seal, kích hoạt bảo hành điện tử chuẩn. Trải nghiệm thực tế ${screenInfo} và ${chipInfo} cực kỳ mượt, ${batteryInfo} đáp ứng trọn vẹn nhu cầu làm việc cả ngày.`,
         variation: primaryColor,
@@ -3807,12 +3947,22 @@ export function synthesizeCrossPlatformOffersForMaster(params: {
                 ? 'Bùi Đức Anh'
                 : platform === 'tgdd'
                   ? 'Ngô Minh Châu'
-                  : 'linh_chi_official',
-        ratingStar: platform === 'tgdd' ? 4 : 5,
+                  : platform === 'fptshop'
+                    ? 'Hoàng Lan Anh'
+                    : platform === 'hoangha'
+                      ? 'Mai Quốc Khánh'
+                      : platform === 'didongviet'
+                        ? 'Đinh Phương Thảo'
+                        : platform === 'phongvu'
+                          ? 'Võ Hoàng Yến'
+                          : 'linh_chi_official',
+        ratingStar: platform === 'tgdd' || platform === 'fptshop' ? 4 : 5,
         comment:
-          platform === 'tgdd'
-            ? `Nhân viên Thế Giới Di Động hỗ trợ chu đáo, máy ${params.name} hoàn thiện cao cấp, ${screenInfo} hiển thị ngoài trời rõ ràng, mức giá niêm yết nhỉnh hơn sàn TMĐT một chút nhưng yên tâm bảo hành.`
-            : `Đóng gói chống sốc kỹ, giao nhanh trong 24h. Máy ${params.name} chạy ${chipInfo} mát và ổn định, rất đáng tiền trong phân khúc.`,
+          platform === 'tgdd' || platform === 'fptshop'
+            ? `Nhân viên cửa hàng hỗ trợ chu đáo, máy ${params.name} hoàn thiện cao cấp, ${screenInfo} hiển thị ngoài trời rõ ràng, mức giá niêm yết nhỉnh hơn sàn TMĐT một chút nhưng yên tâm bảo hành.`
+            : platform === 'hoangha' || platform === 'didongviet'
+              ? `Giá tại ${platform === 'hoangha' ? 'Hoàng Hà Mobile' : 'Di Động Việt'} cực kỳ tốt so với mặt bằng chung, máy ${params.name} nguyên seal chính hãng VN, thu cũ đổi mới nhanh gọn.`
+              : `Đóng gói chống sốc kỹ, giao nhanh trong 24h. Máy ${params.name} chạy ${chipInfo} mát và ổn định, rất đáng tiền trong phân khúc.`,
         variation: secondaryColor,
         daysAgo: 4,
       },
