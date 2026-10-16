@@ -301,7 +301,7 @@ function runCoreArchitectureSuite() {
   const rootLayoutSrc = fs.readFileSync(rootLayoutPath, 'utf8');
   assert.ok(
     rootLayoutSrc.includes('getLocale') &&
-      rootLayoutSrc.includes('<html lang={locale}>'),
+      /<html\s[^>]*lang=\{locale\}/.test(rootLayoutSrc),
     'RootLayout must dynamically resolve <html lang={locale}> via getLocale()'
   );
 
@@ -1985,7 +1985,7 @@ function runCoreArchitectureSuite() {
     'ProductDetailView relatedCompetitors cards must render per-product RadarBadge (#127)'
   );
   console.log(
-    '  ✅ [41/43] Unified Deal Radar exports across Watchlist API, WatchlistWorkspace, DeepInspectWorkspace, ProductOffersExplorer & ProductValueCalculator (#127) passed'
+    '  ✅ [41/44] Unified Deal Radar exports across Watchlist API, WatchlistWorkspace, DeepInspectWorkspace, ProductOffersExplorer & ProductValueCalculator (#127) passed'
   );
 
   // =========================================================================
@@ -2069,7 +2069,7 @@ function runCoreArchitectureSuite() {
     'OpenAPI 3.1.0 spec must document POST /api/v1/rate/watchlist and reference ProductDealRadarSignal across all product/radar endpoints (#128)'
   );
   console.log(
-    '  ✅ [42/43] Unified Deal Radar exports in PriceHistorySection, JReviewsSection, ProductSpecsExportToolbar, Compare/Versus CSVs & OpenAPI 3.1.0 (#128) passed'
+    '  ✅ [42/44] Unified Deal Radar exports in PriceHistorySection, JReviewsSection, ProductSpecsExportToolbar, Compare/Versus CSVs & OpenAPI 3.1.0 (#128) passed'
   );
   // 43. Bootstrap JS ships from the installed package, not a CDN script (#145)
   const rootLayoutSrc145 = fs.readFileSync(
@@ -2088,7 +2088,23 @@ function runCoreArchitectureSuite() {
     'Root layout must render BootstrapClient (bundled bootstrap JS) and must not load Bootstrap from cdn.jsdelivr.net (#145)'
   );
   console.log(
-    '  ✅ [43/43] Bootstrap JS bundled from the bootstrap package via BootstrapClient, no jsDelivr script in the root layout (#145) passed'
+    '  ✅ [43/44] Bootstrap JS bundled from the bootstrap package via BootstrapClient, no jsDelivr script in the root layout (#145) passed'
+  );
+  // 44. Fonts are self-hosted by next/font, not @import-ed from Google (#147)
+  const customScssSrc147 = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/app/style/scss/_custom.scss'),
+    'utf8'
+  );
+  assert.ok(
+    !customScssSrc147.includes('fonts.googleapis.com') &&
+      customScssSrc147.includes('var(--font-inter)') &&
+      customScssSrc147.includes('var(--font-jetbrains-mono)') &&
+      rootLayoutSrc145.includes('fontInter.variable') &&
+      rootLayoutSrc145.includes('fontJetBrainsMono.variable'),
+    'Inter and JetBrains Mono must come from next/font (src/lib/fonts.ts) via --font-inter / --font-jetbrains-mono, never a Google Fonts @import (#147)'
+  );
+  console.log(
+    '  ✅ [44/44] Inter & JetBrains Mono self-hosted via next/font, no Google Fonts @import (#147) passed'
   );
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
