@@ -57,7 +57,7 @@ Hệ thống **Rate Platform (`rate.vn`)** đã loại bỏ hoàn toàn Strapi C
 2. **🔒 `DOS/Rate-Services` (Private Enterprise - `D:\Projects\Rate-Services`):**
    - Chứa toàn bộ phần nhạy cảm: Playwright Stealth Scrapers (`shopee-scraper.ts`, `shopee-search-scraper.ts`, `sniff-search-api.ts`), Giải Captcha (`shopee-captcha-solver.ts`), Xoay Proxy (`proxy-manager.ts`), và Queue Workers (`queue-worker.ts`).
    - **TUYỆT ĐỐI KHÔNG** đưa code bypass anti-bot/captcha/proxy vào repo Public `DOS/Rate`.
-   - Engine Open-Core (`@repo/crawlers`, `@repo/shared-data`) được dùng qua git submodule `vendor/rate` (pnpm workspace). **KHÔNG** copy file engine sang Rate-Services; sửa engine tại `DOS/Rate` rồi bump submodule.
+   - Engine Open-Core (`@repo/crawlers`, `@repo/shared-data`) lấy từ `DOS/Rate` qua git submodule `vendor/rate` (pnpm workspace).
 
 ---
 

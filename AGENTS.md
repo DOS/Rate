@@ -115,7 +115,7 @@ Hệ thống Rate được tách thành **2 repositories riêng biệt** (và d�
 
 > ⚠️ **CẤM TUYỆT ĐỐI:** Không bao giờ commit code giải Captcha, xoay Proxy, sniff API nội bộ của sàn, hoặc khoá bí mật (`SUPABASE_SERVICE_ROLE_KEY`, `AI_API_KEY`, `MPROXY_*`) vào `DOS/Rate`.
 
-> 🔗 **Một nguồn sự thật cho Engine:** `DOS/Rate-Services` dùng `@repo/crawlers` (`apps/importer`) và `@repo/shared-data` (`packages/shared-data`) qua git submodule `vendor/rate` trỏ về `DOS/Rate` (pnpm workspace, import theo tên package, ví dụ `@repo/crawlers` hoặc `@repo/crawlers/shopee/arena-spec-syncer`). **KHÔNG** copy file engine sang Rate-Services. Cần dùng thêm module nào thì khai báo subpath tường minh trong `exports` của `apps/importer/package.json` (không dùng wildcard `./shopee/*` vì các script test chạy ngay khi import) và cập nhật `test:dist`. Mọi thay đổi engine phải merge vào `DOS/Rate` trước, sau đó bump submodule + chạy `pnpm install` để cập nhật `pnpm-lock.yaml` bên Rate-Services.
+> 🔗 **Engine dùng chung:** `DOS/Rate-Services` lấy `@repo/crawlers` (`apps/importer`) và `@repo/shared-data` (`packages/shared-data`) từ repo này qua git submodule `vendor/rate` (pnpm workspace). Module mới cần dùng bên đó thì thêm subpath vào `exports` của `apps/importer/package.json` và vào `test:dist`.
 
 ---
 
