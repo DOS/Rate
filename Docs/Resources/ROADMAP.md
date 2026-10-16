@@ -163,6 +163,9 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc **4 T�
 - [x] **4.49 & 4.50. Hoàn Tất Chuẩn Xuất Dữ Liệu 3 Định Dạng (`Markdown`, `CSV`, `JSON`) Trên Toàn Bộ Trang Sản Phẩm, Bảng Xếp Hạng, Danh Mục Ngành Hàng, Watchlist & Danh Bạ Gian Hàng (Issue #79 & Issue #80):**
   - Bổ sung xuất `📥 CSV` / `📦 JSON` trên `ProductShareAuditButton.tsx` và `📦 Xuất JSON` trên `ProductOffersExplorer.tsx`.
   - Bổ sung xuất `📦 JSON` trên `LeaderboardExplorer.tsx`, `CategoryCatalogToolbar.tsx`, `WatchlistWorkspace.tsx` và `MerchantDirectoryExplorer.tsx`.
+- [x] **4.51 & 4.52. Xuất Đánh Giá JReviews & Lịch Sử Giá 60 Ngày Ra JSON (`JReviewsSection` & `PriceHistorySection`) + Xuất Chỉ Số Hiệu Suất Đầu Tư & 10 Nhóm Thông Số Ra CSV/JSON (`ProductValueCalculator` & `ProductSpecsExportToolbar`) (Issue #82 & Issue #83):**
+  - Nâng cấp `JReviewsSection.tsx` và `PriceHistorySection.tsx` bổ sung nút `📦 Xuất JSON` xuất toàn bộ dữ liệu kiểm toán Seeding AI và chuỗi lịch sử giá 60 ngày.
+  - Nâng cấp `ProductValueCalculator.tsx` và `ProductSpecsExportToolbar.tsx` bổ sung đầy đủ 3 định dạng xuất dữ liệu (`📋 Markdown`, `📥 CSV`, `📦 JSON`), đạt độ phủ 100% 3 định dạng trên mọi phân khu của `ProductDetailView`.
 
 ### ✅ Phase 5: Mở Rộng Đa Sàn 10/10 Nền Tảng, Browser Extension MV3 & Tự Động Hóa Cảnh Báo Giá (Đã hoàn thành 100%)
 
@@ -207,4 +210,6 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc **4 T�
   - Xây dựng `getCrossPlatformDealRadar` (`apps/web/src/server/rate/deals.ts`) bọc `React.cache()` và endpoint `GET /api/v1/rate/deals` (`apps/web/src/app/api/v1/rate/deals/route.ts`), đối chiếu toàn bộ `36/36` Master Products trên 10 sàn để lọc ra danh sách **Kèo thơm đáy giá đa sàn (`genuineDeals`)** và **Bẫy nâng khống giá gốc (`fakeSaleTraps`)**.
   - Tích hợp bảng **🔥 Radar Kèo Thơm Đáy Lịch Sử 10 Sàn & Cảnh Báo Bẫy Nâng Giá Gốc** trực tiếp vào giao diện Chrome Side Panel của Rate Browser Extension MV3 (`apps/extension/src/sidepanel/sidepanel.ts`).
 - [x] **5.15. Bộ Kiểm Toán Chiến Dịch Seeding Đột Biến Theo Cụm Thời Gian (`ReviewBurstAuditor` - Issue #12 bên `DOS/Rate-Services`):**
-  - Xây dựng `ReviewBurstAuditor` (`src/scrapers/review-burst-auditor.ts`) và tích hợp vào Step 5 của `src/index.ts`, sử dụng cửa sổ trượt 48 giờ kết hợp độ tương đồng Jaccard từ vựng (`averagePairwiseSimilarity`) và nhận diện mẫu câu cày xu để phát hiện các chiến dịch Seeding 5 sao tập trung (`coordinated_seeding_burst`), tự động gắn cờ `is_seeding = true` trên `rate.reviews`.
+  - Xây dựng `ReviewBurstAuditor` (`src/scrapers/review-burst-auditor.ts`) và tích hợp vào Step 5 của `src/index.ts`, sử dụng cửa sổ trượt 48 giờ kết hợp độ tương đồng Jaccard từ vựng (`averagePairwiseSimilarity`) và nhận diện mẫu câu cày xu để phát hiện các chiến dịch Seeding 5 sao tập trung (`coordinated_seeding_burst`), tự động gắn cờ `review_flags` và cập nhật `metadata.review_burst_audit` trên `rate.products`.
+- [x] **5.16. Chuẩn Hóa Tài Liệu OpenAPI 3.1.0 Cho Toàn Bộ Rate REST API v1 (`GET /api/v1/rate/openapi` - Issue #84 bên `DOS/Rate`):**
+  - Xây dựng `buildRateOpenApiSpec` (`apps/web/src/server/rate/openapi.ts`) và route handler `GET /api/v1/rate/openapi` (`apps/web/src/app/api/v1/rate/openapi/route.ts`), xuất chuẩn đặc tả OpenAPI 3.1.0 cho toàn bộ 7 nhóm endpoint công khai (`/products`, `/products/{slug}`, `/deals`, `/watchlist`, `/extension/lookup`, `/extension/ingest`, `/openapi`) phục vụ tích hợp hệ sinh thái, MCP/AI Agent và cổng `/developers`.
