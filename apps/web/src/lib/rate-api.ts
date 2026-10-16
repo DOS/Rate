@@ -1337,7 +1337,9 @@ export function getCategoryRouteHref(slug: string): string {
 
 export const KNOWN_LOCAL_DEVICE_IMAGES = new Set<string>([
   'apple-airpods-pro-2-usb-c',
+  'apple-airpods-pro-3-usb-c',
   'apple-ipad-pro-m4-11-inch-256gb',
+  'apple-ipad-pro-m5-11-inch-256gb',
   'apple-iphone-15-128gb',
   'apple-iphone-16-128gb',
   'apple-iphone-16-plus-256gb',
@@ -1346,8 +1348,12 @@ export const KNOWN_LOCAL_DEVICE_IMAGES = new Set<string>([
   'apple-iphone-18-pro-256gb',
   'apple-iphone-18-pro-max-256gb',
   'apple-macbook-air-m3-13-inch-256gb',
+  'apple-macbook-air-m4-13-inch-256gb',
+  'apple-macbook-pro-m4-pro-14-inch-512gb',
   'apple-watch-series-10-42mm-gps-64gb',
+  'apple-watch-series-11-46mm-gps-64gb',
   'apple-watch-ultra-2-64gb',
+  'apple-watch-ultra-3-49mm-64gb',
   'asus-zenbook-s-14-1tb',
   'garmin-forerunner-265-8gb',
   'lenovo-thinkpad-x1-carbon-gen-12-512gb',
@@ -1360,10 +1366,12 @@ export const KNOWN_LOCAL_DEVICE_IMAGES = new Set<string>([
   'samsung-galaxy-tab-s10-ultra-5g-256gb',
   'samsung-galaxy-watch-ultra-32gb',
   'sony-wf-1000xm5',
+  'sony-wf-1000xm6',
   'xiaomi-14-ultra-512gb',
   'xiaomi-17-pro-max-512gb',
   'xiaomi-18-pro-max-512gb',
   'xiaomi-pad-6s-pro-256gb',
+  'xiaomi-pad-7-pro-256gb',
 ]);
 
 export function resolveProductImageUrl(
