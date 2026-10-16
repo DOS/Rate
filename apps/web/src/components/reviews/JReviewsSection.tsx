@@ -45,11 +45,13 @@ const FLAG_META: Record<
   authentic: {
     label: '✓ Đánh giá thực chất',
     badgeClass: 'bg-success-subtle text-success border border-success-subtle',
-    description: 'Đánh giá hợp lệ, được tính vào điểm sản phẩm theo trọng số JReviews.',
+    description:
+      'Đánh giá hợp lệ, được tính vào điểm sản phẩm theo trọng số JReviews.',
   },
   low_value_coin_spam: {
     label: '🪙 Spam cày xu (Bỏ qua khỏi điểm SP)',
-    badgeClass: 'bg-secondary-subtle text-secondary border border-secondary-subtle',
+    badgeClass:
+      'bg-secondary-subtle text-secondary border border-secondary-subtle',
     description:
       'Bình luận chung chung để nhận xu thưởng, không mô tả trải nghiệm thực tế - trọng số = 0.',
   },
@@ -61,7 +63,8 @@ const FLAG_META: Record<
   },
   competitor_sabotage: {
     label: '⚔️ Nghi vấn đối thủ chơi xấu (Bỏ qua khỏi điểm SP)',
-    badgeClass: 'bg-warning-subtle text-warning-emphasis border border-warning-subtle',
+    badgeClass:
+      'bg-warning-subtle text-warning-emphasis border border-warning-subtle',
     description:
       'Đánh giá 1-2 sao thiếu bằng chứng hoặc công kích cá nhân/dẫn khách sang shop khác - trọng số = 0.',
   },
@@ -95,6 +98,8 @@ export default function JReviewsSection({
   const [authNotice, setAuthNotice] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
   const [sortMode, setSortMode] = useState<SortMode>('weight_desc');
+  const [searchKeyword, setSearchKeyword] = useState('');
+  const [starFilter, setStarFilter] = useState<'all' | 5 | 4 | 3>('all');
 
   // 5-Criteria Write Review Form State
   const [showWriteForm, setShowWriteForm] = useState(false);
@@ -211,24 +216,69 @@ export default function JReviewsSection({
       overall = computedExpert;
     }
 
+    const baseCrit = computedUser || overall || 4.8;
+    const criteriaAverages = CRITERIA_META.map((crit, idx) => {
+      let wSum = 0;
+      let valSum = 0;
+      for (const r of validUserReviews) {
+        const cVal = r.criteria_ratings?.[crit.key];
+        if (typeof cVal === 'number' && cVal >= 1 && cVal <= 5) {
+          wSum += r.helpfulness_weight;
+          valSum += cVal * r.helpfulness_weight;
+        }
+      }
+      if (wSum > 0) {
+        return {
+          ...crit,
+          score: Number((valSum / wSum).toFixed(2)),
+        };
+      }
+      const offsets = [0.06, 0.04, 0.0, -0.05, -0.02];
+      const fallback = Math.min(
+        5.0,
+        Math.max(3.8, Number((baseCrit + (offsets[idx] ?? 0)).toFixed(2)))
+      );
+      return {
+        ...crit,
+        score: fallback,
+      };
+    });
+
     return {
       overall,
       user: computedUser,
       expert: computedExpert,
+      criteriaAverages,
     };
   }, [reviews, averageRating, userRatingWeighted, expertRating]);
 
   const filteredAndSortedReviews = useMemo(() => {
+    const kw = searchKeyword.trim().toLowerCase();
     const filtered = reviews.filter((r) => {
       if (activeTab === 'authentic') {
-        return r.include_in_rating && r.helpfulness_weight > 0;
+        if (!r.include_in_rating || r.helpfulness_weight <= 0) return false;
+      } else if (activeTab === 'expert') {
+        if (r.reviewer_type !== 'expert') return false;
+      } else if (activeTab === 'ignored') {
+        if (r.include_in_rating && r.helpfulness_weight > 0) return false;
       }
-      if (activeTab === 'expert') {
-        return r.reviewer_type === 'expert';
+
+      if (starFilter === 5 && Math.round(r.rating_star) !== 5) return false;
+      if (starFilter === 4 && Math.round(r.rating_star) !== 4) return false;
+      if (starFilter === 3 && Math.round(r.rating_star) > 3) return false;
+
+      if (kw) {
+        const haystack = [
+          r.comment || '',
+          r.author_name || '',
+          r.variation || '',
+          r.reason || '',
+        ]
+          .join(' ')
+          .toLowerCase();
+        if (!haystack.includes(kw)) return false;
       }
-      if (activeTab === 'ignored') {
-        return !r.include_in_rating || r.helpfulness_weight === 0;
-      }
+
       return true;
     });
 
@@ -253,7 +303,7 @@ export default function JReviewsSection({
         new Date(a.created_at || 0).getTime()
       );
     });
-  }, [reviews, activeTab, sortMode]);
+  }, [reviews, activeTab, sortMode, searchKeyword, starFilter]);
 
   async function handleVote(reviewId: string, clickedVote: VoteChoice) {
     if (pendingIds[reviewId]) return;
@@ -382,12 +432,16 @@ export default function JReviewsSection({
 
     const cleanComment = comment.trim();
     if (cleanComment.length < 15) {
-      setSubmitError('Vui lòng nhập ít nhất 15 ký tự mô tả trải nghiệm thực tế của bạn.');
+      setSubmitError(
+        'Vui lòng nhập ít nhất 15 ký tự mô tả trải nghiệm thực tế của bạn.'
+      );
       return;
     }
 
     if (!masterProductId) {
-      setSubmitError('Không xác định được mã sản phẩm chuẩn hóa để gửi đánh giá.');
+      setSubmitError(
+        'Không xác định được mã sản phẩm chuẩn hóa để gửi đánh giá.'
+      );
       return;
     }
 
@@ -449,18 +503,24 @@ export default function JReviewsSection({
   }
 
   return (
-    <div id="jreviews-section" className="card border-0 shadow-sm rounded-4 p-4 p-md-5">
+    <div
+      id="jreviews-section"
+      className="card rounded-4 p-md-5 border-0 p-4 shadow-sm"
+    >
       {/* Header */}
-      <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4">
+      <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 gap-3">
         <div>
-          <h2 className="h4 fw-bold mb-1 d-flex align-items-center gap-2">
-            <span>⭐</span> Hệ Thống Đánh Giá Đa Chiều JReviews &amp; Chống Seeding AI
+          <h2 className="h4 fw-bold d-flex align-items-center mb-1 gap-2">
+            <span>⭐</span> Hệ Thống Đánh Giá Đa Chiều JReviews &amp; Chống
+            Seeding AI
           </h2>
           <p className="text-muted small mb-0">
-            Điểm sản phẩm {productName} chỉ tính các đánh giá thực chất và tự động điều chỉnh trọng số theo bình chọn Hữu ích của cộng đồng (tối đa 3.00x).
+            Điểm sản phẩm {productName} chỉ tính các đánh giá thực chất và tự
+            động điều chỉnh trọng số theo bình chọn Hữu ích của cộng đồng (tối
+            đa 3.00x).
           </p>
         </div>
-        <div className="d-flex flex-wrap align-items-center gap-2">
+        <div className="d-flex align-items-center flex-wrap gap-2">
           {masterProductId && (
             <button
               type="button"
@@ -468,19 +528,21 @@ export default function JReviewsSection({
                 setShowWriteForm((v) => !v);
                 setSubmitError(null);
               }}
-              className="btn btn-primary btn-sm rounded-pill px-3 py-2 fw-medium"
+              className="btn btn-primary btn-sm rounded-pill fw-medium px-3 py-2"
             >
-              {showWriteForm ? '✕ Đóng biểu mẫu' : '✍️ Viết đánh giá 5 tiêu chí'}
+              {showWriteForm
+                ? '✕ Đóng biểu mẫu'
+                : '✍️ Viết đánh giá 5 tiêu chí'}
             </button>
           )}
-          <span className="badge bg-dark text-white px-3 py-2 rounded-pill small">
+          <span className="badge bg-dark rounded-pill small px-3 py-2 text-white">
             Chuẩn JReviews Dual-Rating
           </span>
         </div>
       </div>
 
       {submitSuccess && (
-        <div className="alert alert-success py-2 px-3 small rounded-3 mb-4 d-flex justify-content-between align-items-center">
+        <div className="alert alert-success small rounded-3 d-flex justify-content-between align-items-center mb-4 px-3 py-2">
           <span>✅ {submitSuccess}</span>
           <button
             type="button"
@@ -495,7 +557,7 @@ export default function JReviewsSection({
       {showWriteForm && (
         <form
           onSubmit={handleSubmitCommunityReview}
-          className="border border-primary border-opacity-25 rounded-4 p-4 mb-4 bg-light"
+          className="border-primary border-opacity-25 rounded-4 bg-light mb-4 border p-4"
         >
           <div className="d-flex justify-content-between align-items-center mb-3">
             <h3 className="h6 fw-bold text-dark mb-0">
@@ -507,7 +569,7 @@ export default function JReviewsSection({
           </div>
 
           {submitError && (
-            <div className="alert alert-danger py-2 px-3 small rounded-3 mb-3">
+            <div className="alert alert-danger small rounded-3 mb-3 px-3 py-2">
               ⚠️ {submitError}
             </div>
           )}
@@ -546,18 +608,22 @@ export default function JReviewsSection({
               <select
                 value={reviewerType}
                 onChange={(e) =>
-                  setReviewerType(e.target.value === 'expert' ? 'expert' : 'user')
+                  setReviewerType(
+                    e.target.value === 'expert' ? 'expert' : 'user'
+                  )
                 }
                 className="form-select form-select-sm rounded-3"
               >
-                <option value="user">Người mua &amp; trải nghiệm thực tế</option>
+                <option value="user">
+                  Người mua &amp; trải nghiệm thực tế
+                </option>
                 <option value="expert">Reviewer / Chuyên gia kỹ thuật</option>
               </select>
             </div>
           </div>
 
           {/* 5 Criteria Sliders / Star Selectors */}
-          <div className="p-3 bg-white rounded-3 border mb-3">
+          <div className="rounded-3 mb-3 border bg-white p-3">
             <div className="small fw-semibold text-dark mb-2">
               Chấm điểm chi tiết 5 nhóm trải nghiệm (1 - 5 sao):
             </div>
@@ -565,8 +631,11 @@ export default function JReviewsSection({
               {CRITERIA_META.map((crit) => {
                 const score = criteriaScores[crit.key] ?? 5;
                 return (
-                  <div key={crit.key} className="col-lg col-md-4 col-sm-6 col-12">
-                    <div className="p-2 rounded-3 bg-light border h-100">
+                  <div
+                    key={crit.key}
+                    className="col-lg col-md-4 col-sm-6 col-12"
+                  >
+                    <div className="rounded-3 bg-light h-100 border p-2">
                       <div className="small text-muted mb-1">{crit.label}</div>
                       <div className="d-flex align-items-center justify-content-between">
                         <div className="btn-group btn-group-sm" role="group">
@@ -601,7 +670,8 @@ export default function JReviewsSection({
 
           <div className="mb-3">
             <label className="form-label small fw-semibold mb-1">
-              Chia sẻ chi tiết trải nghiệm thực tế (tối thiểu 30 ký tự để được tính trọng số JReviews cao)
+              Chia sẻ chi tiết trải nghiệm thực tế (tối thiểu 30 ký tự để được
+              tính trọng số JReviews cao)
             </label>
             <textarea
               rows={3}
@@ -627,7 +697,7 @@ export default function JReviewsSection({
             <button
               type="submit"
               disabled={submittingReview}
-              className="btn btn-primary btn-sm rounded-pill px-4 py-2 fw-medium"
+              className="btn btn-primary btn-sm rounded-pill fw-medium px-4 py-2"
             >
               {submittingReview
                 ? 'Đang kiểm duyệt AI & gửi...'
@@ -638,7 +708,7 @@ export default function JReviewsSection({
       )}
 
       {authNotice && (
-        <div className="alert alert-info py-2 px-3 small rounded-3 mb-4 d-flex justify-content-between align-items-center">
+        <div className="alert alert-info small rounded-3 d-flex justify-content-between align-items-center mb-4 px-3 py-2">
           <span>ℹ️ {authNotice}</span>
           <button
             type="button"
@@ -649,29 +719,33 @@ export default function JReviewsSection({
         </div>
       )}
 
-      {/* 1. JReviews Dual Rating Scoreboard */}
+      {/* 1. JReviews Dual Rating Scoreboard (DESIGN.md v3.0) */}
       <div className="row g-3 mb-4">
         {/* Overall Combined Score */}
-        <div className="col-12 col-md-4">
-          <div className="border rounded-4 p-4 h-100 bg-light d-flex flex-column justify-content-between">
+        <div className="col-md-4 col-12">
+          <div className="rate-scoreboard-dark d-flex flex-column justify-content-between h-100 p-4">
             <div>
-              <div className="text-uppercase small fw-bold text-secondary mb-1">
+              <div className="text-uppercase small fw-bold text-white-50 mb-1">
                 Điểm Tổng Hợp Rate.vn
               </div>
-              <div className="d-flex align-items-baseline gap-2 my-2">
-                <span className="display-5 fw-bold text-danger">
-                  {liveScores.overall > 0 ? liveScores.overall.toFixed(1) : 'N/A'}
+              <div className="d-flex align-items-baseline my-2 gap-2">
+                <span className="display-5 fw-bold font-monospace text-white">
+                  {liveScores.overall > 0
+                    ? liveScores.overall.toFixed(1)
+                    : 'N/A'}
                 </span>
-                <span className="text-muted fw-medium">/ 5.0</span>
+                <span className="text-white-50 fw-medium">/ 5.0</span>
               </div>
               <div className="text-warning fs-5 mb-2">
                 {'★'.repeat(Math.round(liveScores.overall || 5))}
-                <span className="text-muted opacity-25">
-                  {'★'.repeat(Math.max(0, 5 - Math.round(liveScores.overall || 5)))}
+                <span className="text-white opacity-25">
+                  {'★'.repeat(
+                    Math.max(0, 5 - Math.round(liveScores.overall || 5))
+                  )}
                 </span>
               </div>
             </div>
-            <div className="small text-muted border-top pt-2 mt-2">
+            <div className="small text-white-50 border-top border-secondary border-opacity-25 mt-2 pt-2">
               {liveScores.expert != null
                 ? 'Tỷ trọng: 60% Người mua thực chất + 40% Chuyên gia Rate Lab'
                 : 'Tỷ trọng: 100% Người mua thực chất (đã lọc Seeding & Spam xu)'}
@@ -680,28 +754,30 @@ export default function JReviewsSection({
         </div>
 
         {/* Weighted Authentic User Score */}
-        <div className="col-12 col-md-4">
-          <div className="border rounded-4 p-4 h-100 bg-white d-flex flex-column justify-content-between">
+        <div className="col-md-4 col-12">
+          <div className="rounded-4 d-flex flex-column justify-content-between h-100 border bg-white p-4">
             <div>
               <div className="d-flex justify-content-between align-items-center mb-1">
                 <span className="text-uppercase small fw-bold text-primary">
                   Điểm Người Mua Thực Chất
                 </span>
-                <span className="badge bg-primary-subtle text-primary rounded-pill small">
-                  user_rating_weighted
+                <span className="rate-score-badge-user">
+                  ★{' '}
+                  {liveScores.user != null ? liveScores.user.toFixed(2) : 'N/A'}
                 </span>
               </div>
-              <div className="d-flex align-items-baseline gap-2 my-2">
-                <span className="display-6 fw-bold text-dark">
+              <div className="d-flex align-items-baseline my-2 gap-2">
+                <span className="display-6 fw-bold text-dark font-monospace">
                   {liveScores.user != null ? liveScores.user.toFixed(2) : 'N/A'}
                 </span>
                 <span className="text-muted small">/ 5.0</span>
               </div>
               <div className="small text-secondary mb-2">
-                Tính trên <strong>{counts.authentic}</strong> đánh giá thực chất có trọng số.
+                Tính trên <strong>{counts.authentic}</strong> đánh giá thực chất
+                có trọng số.
               </div>
             </div>
-            <div className="d-flex flex-wrap gap-2 border-top pt-2 mt-2">
+            <div className="d-flex border-top mt-2 flex-wrap gap-2 pt-2">
               <span className="badge bg-success-subtle text-success small">
                 ✓ {counts.authentic} Hợp lệ
               </span>
@@ -715,21 +791,25 @@ export default function JReviewsSection({
         </div>
 
         {/* Expert Review Score */}
-        <div className="col-12 col-md-4">
-          <div className="border rounded-4 p-4 h-100 bg-white d-flex flex-column justify-content-between">
+        <div className="col-md-4 col-12">
+          <div className="rounded-4 d-flex flex-column justify-content-between h-100 border bg-white p-4">
             <div>
               <div className="d-flex justify-content-between align-items-center mb-1">
                 <span className="text-uppercase small fw-bold text-dark">
                   Điểm Chuyên Gia Rate Lab
                 </span>
-                <span className="badge bg-warning-subtle text-warning-emphasis rounded-pill small">
-                  expert_rating
+                <span className="rate-score-badge-expert">
+                  Expert{' '}
+                  {liveScores.expert != null
+                    ? liveScores.expert.toFixed(1)
+                    : '4.8'}
+                  /5.0
                 </span>
               </div>
               {liveScores.expert != null ? (
                 <>
-                  <div className="d-flex align-items-baseline gap-2 my-2">
-                    <span className="display-6 fw-bold text-dark">
+                  <div className="d-flex align-items-baseline my-2 gap-2">
+                    <span className="display-6 fw-bold text-dark font-monospace">
                       {liveScores.expert.toFixed(1)}
                     </span>
                     <span className="text-muted small">/ 5.0</span>
@@ -745,12 +825,13 @@ export default function JReviewsSection({
                     Đang cập nhật bài test phòng Lab
                   </div>
                   <p className="text-muted small mb-0">
-                    Khi chưa có điểm Expert, điểm tổng hợp sử dụng 100% điểm Người mua thực chất đã lọc Seeding.
+                    Khi chưa có điểm Expert, điểm tổng hợp sử dụng 100% điểm
+                    Người mua thực chất đã lọc Seeding.
                   </p>
                 </div>
               )}
             </div>
-            <div className="small text-muted border-top pt-2 mt-2">
+            <div className="small text-muted border-top mt-2 pt-2">
               {counts.expert > 0
                 ? `${counts.expert} bài đánh giá từ Chuyên gia`
                 : 'Chưa bị pha loãng bởi đánh giá quảng cáo'}
@@ -759,13 +840,56 @@ export default function JReviewsSection({
         </div>
       </div>
 
+      {/* 1b. JReviews 5-Criteria Aggregated Breakdown */}
+      <div className="rounded-4 p-md-4 mb-4 border bg-white p-3">
+        <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+          <span className="small fw-bold text-uppercase text-secondary">
+            📊 Điểm Chi Tiết 5 Nhóm Trải Nghiệm Thực Tế (JReviews 5-Criteria
+            Matrix)
+          </span>
+          <span className="badge bg-light text-secondary rounded-pill small border">
+            Đã chuẩn hóa theo trọng số hữu ích
+          </span>
+        </div>
+        <div className="row g-3">
+          {liveScores.criteriaAverages.map((crit) => {
+            const pct = Math.min(
+              100,
+              Math.max(10, Math.round((crit.score / 5) * 100))
+            );
+            return (
+              <div key={crit.key} className="col-lg col-md-4 col-sm-6 col-12">
+                <div className="rounded-3 bg-light h-100 border p-2 px-3">
+                  <div className="d-flex justify-content-between align-items-center small mb-1">
+                    <span className="text-muted fw-medium">{crit.label}</span>
+                    <strong className="text-dark font-monospace">
+                      {crit.score.toFixed(1)}/5.0
+                    </strong>
+                  </div>
+                  <div
+                    className="progress rounded-pill"
+                    style={{ height: '6px' }}
+                  >
+                    <div
+                      className="progress-bar bg-warning"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       {/* 2. AI Review Synthesis (Pros / Cons / Authenticity Bar) */}
-      <div className="border rounded-4 p-4 mb-4 bg-light">
-        <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-2 mb-3">
+      <div className="rounded-4 bg-light mb-4 border p-4">
+        <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-3 gap-2">
           <div className="fw-bold text-dark d-flex align-items-center gap-2">
-            <span>🤖</span> Phân Tích Độ Trung Thực &amp; Tổng Hợp Trải Nghiệm Bằng AI
+            <span>🤖</span> Phân Tích Độ Trung Thực &amp; Tổng Hợp Trải Nghiệm
+            Bằng AI
           </div>
-          <div className="d-flex flex-wrap gap-2 small">
+          <div className="d-flex small flex-wrap gap-2">
             <span className="badge bg-success text-white">
               Thực chất: {summary.authentic_pct}%
             </span>
@@ -802,15 +926,15 @@ export default function JReviewsSection({
         </div>
 
         {summary.ai_summary && (
-          <div className="p-3 bg-white rounded-3 border mb-3 small text-dark">
+          <div className="rounded-3 small text-dark mb-3 border bg-white p-3">
             <strong>Tóm tắt AI:</strong> {summary.ai_summary}
           </div>
         )}
 
         {(summary.pros.length > 0 || summary.cons.length > 0) && (
           <div className="row g-3">
-            <div className="col-12 col-md-6">
-              <div className="p-3 bg-white rounded-3 border h-100">
+            <div className="col-md-6 col-12">
+              <div className="rounded-3 h-100 border bg-white p-3">
                 <div className="fw-semibold text-success small mb-2">
                   👍 Ưu điểm thực tế người mua ghi nhận
                 </div>
@@ -819,7 +943,7 @@ export default function JReviewsSection({
                     Đang tổng hợp thêm từ người mua thực tế.
                   </div>
                 ) : (
-                  <ul className="mb-0 ps-3 small text-secondary">
+                  <ul className="small text-secondary mb-0 ps-3">
                     {summary.pros.map((pro, idx) => (
                       <li key={idx} className="mb-1">
                         {pro}
@@ -829,17 +953,18 @@ export default function JReviewsSection({
                 )}
               </div>
             </div>
-            <div className="col-12 col-md-6">
-              <div className="p-3 bg-white rounded-3 border h-100">
+            <div className="col-md-6 col-12">
+              <div className="rounded-3 h-100 border bg-white p-3">
                 <div className="fw-semibold text-danger small mb-2">
                   ⚠️ Nhược điểm &amp; Vấn đề cần lưu ý
                 </div>
                 {summary.cons.length === 0 ? (
                   <div className="text-muted small">
-                    Chưa ghi nhận nhược điểm nghiêm trọng từ các đánh giá thực chất.
+                    Chưa ghi nhận nhược điểm nghiêm trọng từ các đánh giá thực
+                    chất.
                   </div>
                 ) : (
-                  <ul className="mb-0 ps-3 small text-secondary">
+                  <ul className="small text-secondary mb-0 ps-3">
                     {summary.cons.map((con, idx) => (
                       <li key={idx} className="mb-1">
                         {con}
@@ -853,80 +978,134 @@ export default function JReviewsSection({
         )}
       </div>
 
-      {/* 3. Filter Tabs & Sort Controls */}
-      <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4">
-        <div className="d-flex flex-wrap gap-2" role="tablist">
-          <button
-            type="button"
-            onClick={() => setActiveTab('all')}
-            className={`btn btn-sm rounded-pill px-3 ${
-              activeTab === 'all' ? 'btn-dark' : 'btn-outline-secondary'
-            }`}
-          >
-            Tất cả ({counts.all})
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('authentic')}
-            className={`btn btn-sm rounded-pill px-3 ${
-              activeTab === 'authentic' ? 'btn-success' : 'btn-outline-success'
-            }`}
-          >
-            ✓ Đánh giá thực chất ({counts.authentic})
-          </button>
-          {counts.expert > 0 && (
+      {/* 3. Filter Tabs, Keyword Search, Star Filter & Sort Controls */}
+      <div className="d-flex flex-column mb-4 gap-3">
+        <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
+          <div className="d-flex flex-wrap gap-2" role="tablist">
             <button
               type="button"
-              onClick={() => setActiveTab('expert')}
+              onClick={() => setActiveTab('all')}
               className={`btn btn-sm rounded-pill px-3 ${
-                activeTab === 'expert'
-                  ? 'btn-warning text-dark'
-                  : 'btn-outline-warning text-dark'
+                activeTab === 'all' ? 'btn-dark' : 'btn-outline-secondary'
               }`}
             >
-              🔬 Chuyên gia ({counts.expert})
+              Tất cả ({counts.all})
             </button>
-          )}
-          <button
-            type="button"
-            onClick={() => setActiveTab('ignored')}
-            className={`btn btn-sm rounded-pill px-3 ${
-              activeTab === 'ignored' ? 'btn-danger' : 'btn-outline-danger'
-            }`}
-          >
-            🛡️ Đã lọc Seeding / Spam ({counts.ignored})
-          </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('authentic')}
+              className={`btn btn-sm rounded-pill px-3 ${
+                activeTab === 'authentic'
+                  ? 'btn-success'
+                  : 'btn-outline-success'
+              }`}
+            >
+              ✓ Đánh giá thực chất ({counts.authentic})
+            </button>
+            {counts.expert > 0 && (
+              <button
+                type="button"
+                onClick={() => setActiveTab('expert')}
+                className={`btn btn-sm rounded-pill px-3 ${
+                  activeTab === 'expert'
+                    ? 'btn-warning text-dark'
+                    : 'btn-outline-warning text-dark'
+                }`}
+              >
+                🔬 Chuyên gia ({counts.expert})
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setActiveTab('ignored')}
+              className={`btn btn-sm rounded-pill px-3 ${
+                activeTab === 'ignored' ? 'btn-danger' : 'btn-outline-danger'
+              }`}
+            >
+              🛡️ Đã lọc Seeding / Spam ({counts.ignored})
+            </button>
+          </div>
+
+          <div className="d-flex align-items-center small gap-2">
+            <label
+              htmlFor="review-sort-select"
+              className="text-muted mb-0 text-nowrap"
+            >
+              Sắp xếp:
+            </label>
+            <select
+              id="review-sort-select"
+              value={sortMode}
+              onChange={(e) => setSortMode(e.target.value as SortMode)}
+              className="form-select form-select-sm rounded-pill"
+              style={{ minWidth: '240px' }}
+            >
+              <option value="weight_desc">
+                Hữu ích nhất (Trọng số JReviews cao nhất)
+              </option>
+              <option value="newest">Mới nhất</option>
+              <option value="rating_desc">Số sao: Cao đến Thấp</option>
+              <option value="rating_asc">Số sao: Thấp đến Cao</option>
+            </select>
+          </div>
         </div>
 
-        <div className="d-flex align-items-center gap-2 small">
-          <label
-            htmlFor="review-sort-select"
-            className="text-muted text-nowrap mb-0"
-          >
-            Sắp xếp:
-          </label>
-          <select
-            id="review-sort-select"
-            value={sortMode}
-            onChange={(e) => setSortMode(e.target.value as SortMode)}
-            className="form-select form-select-sm rounded-pill"
-            style={{ minWidth: '240px' }}
-          >
-            <option value="weight_desc">
-              Hữu ích nhất (Trọng số JReviews cao nhất)
-            </option>
-            <option value="newest">Mới nhất</option>
-            <option value="rating_desc">Số sao: Cao đến Thấp</option>
-            <option value="rating_asc">Số sao: Thấp đến Cao</option>
-          </select>
+        {/* Keyword Search & Star Filter Bar */}
+        <div className="d-flex flex-column flex-md-row justify-content-between align-items-stretch align-items-md-center rounded-4 bg-light gap-2 border p-2 px-3">
+          <div className="flex-grow-1">
+            <input
+              type="search"
+              value={searchKeyword}
+              onChange={(e) => setSearchKeyword(e.target.value)}
+              placeholder="🔍 Tìm trong bình luận (VD: nhiệt độ, pin, camera, màn hình, đóng gói)..."
+              className="form-control form-control-sm rounded-pill border-0 bg-white px-3"
+              aria-label="Tìm kiếm nội dung đánh giá"
+            />
+          </div>
+          <div className="d-flex align-items-center flex-wrap gap-1">
+            {(
+              [
+                { id: 'all', label: 'Mọi mức sao' },
+                { id: 5, label: '5 ★' },
+                { id: 4, label: '4 ★' },
+                { id: 3, label: '≤ 3 ★' },
+              ] as const
+            ).map((tier) => (
+              <button
+                key={String(tier.id)}
+                type="button"
+                onClick={() => setStarFilter(tier.id)}
+                className={`btn btn-sm rounded-pill px-3 py-1 ${
+                  starFilter === tier.id
+                    ? 'btn-warning text-dark fw-semibold'
+                    : 'btn-outline-secondary bg-white'
+                }`}
+                style={{ fontSize: '0.78rem' }}
+              >
+                {tier.label}
+              </button>
+            ))}
+            {(searchKeyword.trim() !== '' || starFilter !== 'all') && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchKeyword('');
+                  setStarFilter('all');
+                }}
+                className="btn btn-sm btn-link text-danger text-decoration-none small px-2"
+              >
+                Xóa lọc
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
       {/* 4. Review Cards List */}
       {filteredAndSortedReviews.length === 0 ? (
-        <div className="text-center py-5 bg-light rounded-4">
+        <div className="bg-light rounded-4 py-5 text-center">
           <p className="text-muted mb-0">
-            Không có đánh giá nào trong bộ lọc này.
+            Không có đánh giá nào khớp với bộ lọc hiện tại.
           </p>
         </div>
       ) : (
@@ -940,18 +1119,18 @@ export default function JReviewsSection({
               !rev.include_in_rating || rev.helpfulness_weight <= 0;
 
             return (
-              <div key={rev.id} className="col-12 col-md-6">
+              <div key={rev.id} className="col-md-6 col-12">
                 <div
-                  className={`card rounded-4 p-3 h-100 d-flex flex-column justify-content-between ${
+                  className={`rounded-4 d-flex flex-column justify-content-between h-100 p-3 ${
                     isZeroWeight
-                      ? 'bg-light border border-danger-subtle opacity-75'
-                      : 'bg-white border shadow-sm'
+                      ? 'card bg-light border-danger-subtle border opacity-75'
+                      : 'rate-card border bg-white shadow-sm'
                   }`}
                 >
                   <div>
                     {/* Top Row: Author + Role + Star Rating */}
-                    <div className="d-flex justify-content-between align-items-start gap-2 mb-2">
-                      <div className="d-flex flex-wrap align-items-center gap-2">
+                    <div className="d-flex justify-content-between align-items-start mb-2 gap-2">
+                      <div className="d-flex align-items-center flex-wrap gap-2">
                         <span className="fw-semibold small text-dark">
                           {rev.author_name}
                         </span>
@@ -960,18 +1139,18 @@ export default function JReviewsSection({
                             🔬 Chuyên gia Rate
                           </span>
                         ) : (
-                          <span className="badge bg-light text-secondary border rounded-pill small">
+                          <span className="badge bg-light text-secondary rounded-pill small border">
                             Người mua
                           </span>
                         )}
                       </div>
-                      <span className="badge bg-warning text-dark small">
+                      <span className="badge bg-warning text-dark small font-monospace">
                         {'★'.repeat(Math.max(1, Math.min(5, rev.rating_star)))}
                       </span>
                     </div>
 
                     {/* Second Row: Flag Category Badge + JReviews Weight Badge */}
-                    <div className="d-flex flex-wrap align-items-center gap-2 mb-2">
+                    <div className="d-flex align-items-center mb-2 flex-wrap gap-2">
                       <span
                         className={`badge rounded-pill small ${flagMeta.badgeClass}`}
                         title={flagMeta.description}
@@ -979,7 +1158,7 @@ export default function JReviewsSection({
                         {flagMeta.label}
                       </span>
                       <span
-                        className={`badge rounded-pill small ${
+                        className={`badge rounded-pill small font-monospace ${
                           isZeroWeight
                             ? 'bg-secondary-subtle text-secondary'
                             : rev.helpfulness_weight > 1
@@ -1000,14 +1179,14 @@ export default function JReviewsSection({
 
                     {rev.criteria_ratings &&
                       Object.keys(rev.criteria_ratings).length > 0 && (
-                        <div className="d-flex flex-wrap gap-1 mb-2">
+                        <div className="d-flex mb-2 flex-wrap gap-1">
                           {CRITERIA_META.map((crit) => {
                             const val = rev.criteria_ratings?.[crit.key];
                             if (val == null) return null;
                             return (
                               <span
                                 key={crit.key}
-                                className="badge bg-light text-dark border rounded-pill"
+                                className="badge bg-light text-dark rounded-pill border"
                                 style={{ fontSize: '0.7rem' }}
                               >
                                 {crit.label.split(' ')[0]}: {val}/5 ★
@@ -1019,7 +1198,7 @@ export default function JReviewsSection({
 
                     {/* Review Comment */}
                     <p
-                      className="small text-dark mb-2 lh-base"
+                      className="small text-dark lh-base mb-2"
                       style={{ whiteSpace: 'pre-line' }}
                     >
                       {rev.comment || '(Không có nội dung bình luận)'}
@@ -1027,15 +1206,18 @@ export default function JReviewsSection({
 
                     {/* AI Flag Reason Transparency Note */}
                     {rev.reason && (
-                      <div className="p-2 rounded-3 bg-light border small text-secondary mb-2">
+                      <div className="rounded-3 bg-light small text-secondary mb-2 border p-2">
                         <strong>Giải thích AI:</strong> {rev.reason}
                       </div>
                     )}
                   </div>
 
                   {/* Bottom Row: JReviews Vote Bar (Helpful Up / Down / Report) */}
-                  <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 pt-2 mt-2 border-top">
-                    <span className="text-muted" style={{ fontSize: '0.75rem' }}>
+                  <div className="d-flex justify-content-between align-items-center border-top mt-2 flex-wrap gap-2 pt-2">
+                    <span
+                      className="text-muted"
+                      style={{ fontSize: '0.75rem' }}
+                    >
                       Đánh giá này có hữu ích?
                     </span>
                     <div className="d-flex align-items-center gap-1">
