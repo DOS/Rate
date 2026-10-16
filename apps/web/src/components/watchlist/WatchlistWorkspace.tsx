@@ -73,6 +73,12 @@ export default function WatchlistWorkspace({
           merchantName: string;
           fakeMarkupPct: number;
         };
+        priceSpread?: {
+          spreadVnd: number;
+          spreadPct: number;
+          cheapestPlatform: string;
+          priciestPlatform: string;
+        };
       }
     >
   >({});
@@ -115,6 +121,9 @@ export default function WatchlistWorkspace({
           const trapList = Array.isArray(radarPayload?.fakeSaleTraps)
             ? radarPayload.fakeSaleTraps
             : [];
+          const spreadList = Array.isArray(radarPayload?.priceSpreadLeaders)
+            ? radarPayload.priceSpreadLeaders
+            : [];
           for (const g of genuineList) {
             if (g?.productSlug && !nextMap[g.productSlug]?.genuineDeal) {
               nextMap[g.productSlug] = {
@@ -136,6 +145,19 @@ export default function WatchlistWorkspace({
                   platform: String(t.platform || ''),
                   merchantName: String(t.merchantName || ''),
                   fakeMarkupPct: Number(t.fakeMarkupPct || 0),
+                },
+              };
+            }
+          }
+          for (const sp of spreadList) {
+            if (sp?.productSlug && !nextMap[sp.productSlug]?.priceSpread) {
+              nextMap[sp.productSlug] = {
+                ...nextMap[sp.productSlug],
+                priceSpread: {
+                  spreadVnd: Number(sp.spreadVnd || 0),
+                  spreadPct: Number(sp.spreadPct || 0),
+                  cheapestPlatform: String(sp.cheapestPlatform || ''),
+                  priciestPlatform: String(sp.priciestPlatform || ''),
                 },
               };
             }
@@ -278,19 +300,29 @@ export default function WatchlistWorkspace({
         `- **Tổng mức tiết kiệm chéo giữa các sàn:** ${portfolioStats.totalSpreadSavingsVnd.toLocaleString('vi-VN')} ₫`,
         `- **Điểm JReviews trung bình danh mục:** ★ ${avgPortfolioRating.toFixed(2)}/5.0`,
         ``,
-        `| Thiết bị | Hãng | Giá thấp nhất hiện tại | Giá mục tiêu | Trạng thái | Deal tốt nhất |`,
-        `| :--- | :--- | :---: | :---: | :---: | :--- |`,
+        `| Thiết bị | Hãng | Giá thấp nhất hiện tại | Giá mục tiêu | Độ lệch 10 sàn | Trạng thái | Deal tốt nhất |`,
+        `| :--- | :--- | :---: | :---: | :---: | :---: | :--- |`,
         ...items.map((item) => {
           const liveProd = productBySlug.get(item.slug);
           const liveDeal = liveDeals[item.slug];
+          const rSig = radarSignals[item.slug];
           const curMin =
             liveDeal?.current_min_price ||
             (liveProd ? Number(liveProd.min_price || 0) : item.priceWhenAdded);
+          const curMax =
+            liveDeal?.current_max_price ||
+            (liveProd ? Number(liveProd.max_price || curMin) : curMin);
+          const fallbackSpreadVnd = Math.max(0, curMax - curMin);
+          const spreadStr = rSig?.priceSpread
+            ? `+${rSig.priceSpread.spreadPct}% (${rSig.priceSpread.spreadVnd.toLocaleString('vi-VN')} ₫)`
+            : fallbackSpreadVnd > 0
+              ? `${fallbackSpreadVnd.toLocaleString('vi-VN')} ₫`
+              : '0 ₫';
           const hit = curMin > 0 && curMin <= item.targetPrice;
           const bestOfferStr = liveDeal?.best_offer
             ? `${liveDeal.best_offer.merchant_name} (${liveDeal.best_offer.platform.toUpperCase()})`
             : `${liveProd?.merchant_count || 1} nguồn`;
-          return `| ${item.name} | ${item.brand} | ${curMin.toLocaleString('vi-VN')} ₫ | ${item.targetPrice.toLocaleString('vi-VN')} ₫ | ${hit ? '✅ Đạt mục tiêu' : '⏳ Đang canh'} | ${bestOfferStr} |`;
+          return `| ${item.name} | ${item.brand} | ${curMin.toLocaleString('vi-VN')} ₫ | ${item.targetPrice.toLocaleString('vi-VN')} ₫ | ${spreadStr} | ${hit ? '✅ Đạt mục tiêu' : '⏳ Đang canh'} | ${bestOfferStr} |`;
         }),
       ];
       await navigator.clipboard.writeText(lines.join('\n'));
@@ -310,6 +342,8 @@ export default function WatchlistWorkspace({
       'Category Path',
       'Current Lowest Price (VND)',
       'Target Price (VND)',
+      'Price Spread 10-Platform (VND)',
+      'Price Spread 10-Platform (%)',
       'Status',
       'Best Merchant',
       'Platform',
@@ -317,9 +351,18 @@ export default function WatchlistWorkspace({
     const rows = items.map((item) => {
       const liveProd = productBySlug.get(item.slug);
       const liveDeal = liveDeals[item.slug];
+      const rSig = radarSignals[item.slug];
       const curMin =
         liveDeal?.current_min_price ||
         (liveProd ? Number(liveProd.min_price || 0) : item.priceWhenAdded);
+      const curMax =
+        liveDeal?.current_max_price ||
+        (liveProd ? Number(liveProd.max_price || curMin) : curMin);
+      const spreadVnd =
+        rSig?.priceSpread?.spreadVnd ?? Math.max(0, curMax - curMin);
+      const spreadPct =
+        rSig?.priceSpread?.spreadPct ??
+        (curMin > 0 ? Math.round(((curMax - curMin) / curMin) * 1000) / 10 : 0);
       const hit = curMin > 0 && curMin <= item.targetPrice;
       const esc = (v: string | number) =>
         `"${String(v ?? '').replace(/"/g, '""')}"`;
@@ -330,6 +373,8 @@ export default function WatchlistWorkspace({
         esc(item.categoryPath || '/smartphones'),
         esc(curMin),
         esc(item.targetPrice),
+        esc(spreadVnd),
+        esc(spreadPct),
         esc(hit ? 'TARGET_REACHED' : 'WATCHING'),
         esc(liveDeal?.best_offer?.merchant_name || ''),
         esc(liveDeal?.best_offer?.platform || ''),
@@ -356,12 +401,24 @@ export default function WatchlistWorkspace({
       items: items.map((item) => {
         const liveProd = productBySlug.get(item.slug);
         const liveDeal = liveDeals[item.slug];
+        const rSig = radarSignals[item.slug];
         const curMin =
           liveDeal?.current_min_price ||
           (liveProd ? Number(liveProd.min_price || 0) : item.priceWhenAdded);
+        const curMax =
+          liveDeal?.current_max_price ||
+          (liveProd ? Number(liveProd.max_price || curMin) : curMin);
         return {
           ...item,
           currentMinPriceVnd: curMin,
+          currentMaxPriceVnd: curMax,
+          priceSpread10Platform: rSig?.priceSpread ?? {
+            spreadVnd: Math.max(0, curMax - curMin),
+            spreadPct:
+              curMin > 0
+                ? Math.round(((curMax - curMin) / curMin) * 1000) / 10
+                : 0,
+          },
           targetReached: curMin > 0 && curMin <= item.targetPrice,
           bestOffer: liveDeal?.best_offer || null,
         };
@@ -757,6 +814,24 @@ export default function WatchlistWorkspace({
                                 {radarSignal.fakeSaleTrap.fakeMarkupPct}%
                               </span>
                             )}
+                            {radarSignal.priceSpread &&
+                              radarSignal.priceSpread.spreadPct >= 3 && (
+                                <span
+                                  className="badge bg-warning-subtle text-dark border-warning-subtle rounded-pill small border"
+                                  data-testid="watchlist-price-spread-badge"
+                                >
+                                  📊 Độ lệch 10 sàn +
+                                  {radarSignal.priceSpread.spreadPct}% (Chênh{' '}
+                                  {radarSignal.priceSpread.spreadVnd.toLocaleString(
+                                    'vi-VN'
+                                  )}{' '}
+                                  ₫ giữa{' '}
+                                  {radarSignal.priceSpread.cheapestPlatform.toUpperCase()}{' '}
+                                  &amp;{' '}
+                                  {radarSignal.priceSpread.priciestPlatform.toUpperCase()}
+                                  )
+                                </span>
+                              )}
                           </div>
                         )}
                         <h5 className="fw-bold mb-1">

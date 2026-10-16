@@ -15,6 +15,8 @@ interface MerchantShareAuditButtonProps {
   readonly totalReviews: number;
   readonly flaggedReviews: number;
   readonly productCount: number;
+  readonly genuineDealCount?: number;
+  readonly fakeSaleTrapCount?: number;
 }
 
 export default function MerchantShareAuditButton({
@@ -30,6 +32,8 @@ export default function MerchantShareAuditButton({
   totalReviews,
   flaggedReviews,
   productCount,
+  genuineDealCount = 0,
+  fakeSaleTrapCount = 0,
 }: MerchantShareAuditButtonProps) {
   const [copiedMd, setCopiedMd] = useState(false);
   const [copiedUrl, setCopiedUrl] = useState(false);
@@ -47,6 +51,7 @@ export default function MerchantShareAuditButton({
         `- **Chỉ số Tín nhiệm Tổng hợp (Rate Trust Score):** **${trustScore}/100** (${trustLevelLabel})`,
         `- **Rủi ro an ninh DOSafe Threat Intel:** ${dosafeRiskScore}/100`,
         `- **Rủi ro gian lận đánh giá (AI Review Seeding Risk):** ${reviewSeedingRiskScore}/100`,
+        `- **Kiểm toán Radar Giá 60 Ngày:** 🟢 ${genuineDealCount} kèo đáy lịch sử | 🚨 ${fakeSaleTrapCount} cảnh báo kê khống giá gốc`,
         `- **Tỷ lệ đánh giá người mua thật:** ${authenticPct}% (${authenticReviews}/${totalReviews} đánh giá thật, đã lọc ${flaggedReviews} bài Seeding/Spam)`,
         `- **Số thiết bị đang theo dõi giá:** ${productCount} mẫu chuẩn hóa`,
         `- **Hồ sơ kiểm toán trực tiếp trên Rate.vn:** ${window.location.href}`,
@@ -88,6 +93,8 @@ export default function MerchantShareAuditButton({
       'Mức Tín Nhiệm',
       'DOSafe Risk (/100)',
       'Seeding Risk (/100)',
+      'Kèo Đáy 60N',
+      'Cảnh Báo Kê Khống 60N',
       'Review Thật',
       'Tổng Review',
       'Review Bị Gắn Cờ',
@@ -102,6 +109,8 @@ export default function MerchantShareAuditButton({
       trustLevelLabel,
       dosafeRiskScore,
       reviewSeedingRiskScore,
+      genuineDealCount,
+      fakeSaleTrapCount,
       authenticReviews,
       totalReviews,
       flaggedReviews,
@@ -131,6 +140,8 @@ export default function MerchantShareAuditButton({
         trustLevelLabel,
         dosafeRiskScore,
         reviewSeedingRiskScore,
+        genuineDealCount,
+        fakeSaleTrapCount,
         authenticReviews,
         totalReviews,
         flaggedReviews,

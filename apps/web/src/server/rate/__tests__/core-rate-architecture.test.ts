@@ -1376,7 +1376,42 @@ function runCoreArchitectureSuite() {
     'DeepInspectWorkspace must fetch /api/v1/rate/deals, render inspect-deal-radar-verdict, and include dealRadarContext in exports (#98)'
   );
   console.log(
-    '  ✅ [33/33] Category Price Spread Leaders & Card Badges (#97) + DeepInspectWorkspace Deal Radar Verdict (#98) passed'
+    '  ✅ [33/34] Category Price Spread Leaders & Card Badges (#97) + DeepInspectWorkspace Deal Radar Verdict (#98) passed'
+  );
+
+  // 34. Merchant Directory/Profile Deal Radar (#99) + Watchlist 10-Platform Price Spread Arbitrage (#100)
+  const merchantDirRadarSrc = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/components/merchants/MerchantDirectoryExplorer.tsx'
+    ),
+    'utf8'
+  );
+  const merchantProfileRadarSrc = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/app/[locale]/merchants/[id]/page.tsx'),
+    'utf8'
+  );
+  const watchlistSpreadSrc = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/components/watchlist/WatchlistWorkspace.tsx'
+    ),
+    'utf8'
+  );
+  assert.ok(
+    merchantDirRadarSrc.includes('merchant-deal-radar-badge') &&
+      merchantDirRadarSrc.includes('GenuineDeals60D') &&
+      merchantProfileRadarSrc.includes('merchant-profile-deal-radar'),
+    'MerchantDirectoryExplorer and MerchantProfilePage must integrate Deal Radar and render merchant-deal-radar-badge / merchant-profile-deal-radar (#99)'
+  );
+  assert.ok(
+    watchlistSpreadSrc.includes('priceSpreadLeaders') &&
+      watchlistSpreadSrc.includes('watchlist-price-spread-badge') &&
+      watchlistSpreadSrc.includes('Price Spread 10-Platform (%)'),
+    'WatchlistWorkspace must integrate priceSpreadLeaders, render watchlist-price-spread-badge, and include spread columns in exports (#100)'
+  );
+  console.log(
+    '  ✅ [34/34] Merchant Deal Radar (#99) + Watchlist Price Spread Arbitrage (#100) passed'
   );
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
