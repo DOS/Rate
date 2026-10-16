@@ -216,8 +216,7 @@ export default function JReviewsSection({
       overall = computedExpert;
     }
 
-    const baseCrit = computedUser || overall || 4.8;
-    const criteriaAverages = CRITERIA_META.map((crit, idx) => {
+    const criteriaAverages = CRITERIA_META.map((crit) => {
       let wSum = 0;
       let valSum = 0;
       for (const r of validUserReviews) {
@@ -230,17 +229,12 @@ export default function JReviewsSection({
       if (wSum > 0) {
         return {
           ...crit,
-          score: Number((valSum / wSum).toFixed(2)),
+          score: Number((valSum / wSum).toFixed(2)) as number | null,
         };
       }
-      const offsets = [0.06, 0.04, 0.0, -0.05, -0.02];
-      const fallback = Math.min(
-        5.0,
-        Math.max(3.8, Number((baseCrit + (offsets[idx] ?? 0)).toFixed(2)))
-      );
       return {
         ...crit,
-        score: fallback,
+        score: null as number | null,
       };
     });
 
@@ -949,9 +943,8 @@ export default function JReviewsSection({
                 <span className="rate-score-badge-expert">
                   Expert{' '}
                   {liveScores.expert != null
-                    ? liveScores.expert.toFixed(1)
-                    : '4.8'}
-                  /5.0
+                    ? `${liveScores.expert.toFixed(1)}/5.0`
+                    : 'chưa có'}
                 </span>
               </div>
               {liveScores.expert != null ? (
@@ -1001,17 +994,22 @@ export default function JReviewsSection({
         </div>
         <div className="row g-3">
           {liveScores.criteriaAverages.map((crit) => {
-            const pct = Math.min(
-              100,
-              Math.max(10, Math.round((crit.score / 5) * 100))
-            );
+            const pct =
+              crit.score != null
+                ? Math.min(
+                    100,
+                    Math.max(10, Math.round((crit.score / 5) * 100))
+                  )
+                : 0;
             return (
               <div key={crit.key} className="col-lg col-md-4 col-sm-6 col-12">
                 <div className="rounded-3 bg-light h-100 border p-2 px-3">
                   <div className="d-flex justify-content-between align-items-center small mb-1">
                     <span className="text-muted fw-medium">{crit.label}</span>
                     <strong className="text-dark font-monospace">
-                      {crit.score.toFixed(1)}/5.0
+                      {crit.score != null
+                        ? `${crit.score.toFixed(1)}/5.0`
+                        : 'Chưa có'}
                     </strong>
                   </div>
                   <div

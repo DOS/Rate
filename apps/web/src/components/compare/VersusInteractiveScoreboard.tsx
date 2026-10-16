@@ -268,11 +268,17 @@ export default function VersusInteractiveScoreboard({
       [
         'Điểm Chuyên Gia Rate Lab (Thang 10)',
         '-',
-        scoreA.expertScore10.toFixed(1),
-        scoreB.expertScore10.toFixed(1),
-        scoreA.expertScore10 >= scoreB.expertScore10
-          ? scoreA.name
-          : scoreB.name,
+        scoreA.expertScore10 != null ? scoreA.expertScore10.toFixed(1) : '',
+        scoreB.expertScore10 != null ? scoreB.expertScore10.toFixed(1) : '',
+        scoreA.expertScore10 != null && scoreB.expertScore10 != null
+          ? scoreA.expertScore10 >= scoreB.expertScore10
+            ? scoreA.name
+            : scoreB.name
+          : scoreA.expertScore10 != null
+            ? scoreA.name
+            : scoreB.expertScore10 != null
+              ? scoreB.name
+              : '-',
       ],
       [
         'Giá Tham Khảo Thấp Nhất (VND)',
@@ -562,7 +568,9 @@ export default function VersusInteractiveScoreboard({
               ★ {weightedResult.finalA.toFixed(2)}/5.0
             </span>
             <span className="rate-score-badge-expert">
-              Lab {scoreA.expertScore10.toFixed(1)}/10
+              {scoreA.expertScore10 != null
+                ? `Lab ${scoreA.expertScore10.toFixed(1)}/10`
+                : 'Lab: chưa có'}
             </span>
           </div>
         </div>
@@ -583,7 +591,9 @@ export default function VersusInteractiveScoreboard({
               ★ {weightedResult.finalB.toFixed(2)}/5.0
             </span>
             <span className="rate-score-badge-expert">
-              Lab {scoreB.expertScore10.toFixed(1)}/10
+              {scoreB.expertScore10 != null
+                ? `Lab ${scoreB.expertScore10.toFixed(1)}/10`
+                : 'Lab: chưa có'}
             </span>
           </div>
         </div>

@@ -314,7 +314,7 @@ export default function DealFinderWorkspace({
           .slice(0, 20)
           .map(
             (d) =>
-              `| #${d.rank} | ${d.name} | ${d.brand} | **${d.personaScore5.toFixed(2)}/5.0** | ★ ${d.userScore5.toFixed(1)} (Lab ${d.expertScore10.toFixed(1)}/10) | **${d.minPrice.toLocaleString('vi-VN')} ₫** | ${d.spreadSavingsVnd > 0 ? `-${d.spreadSavingsVnd.toLocaleString('vi-VN')} ₫` : 'Đồng giá'} | ${radarMarkdownCell(getRadarSignal(radarIndex, d.slug))} |`
+              `| #${d.rank} | ${d.name} | ${d.brand} | **${d.personaScore5 > 0 ? `${d.personaScore5.toFixed(2)}/5.0` : 'chưa có'}** | ★ ${d.userScore5 > 0 ? d.userScore5.toFixed(1) : 'chưa có'} (${d.expertScore10 != null ? `Lab ${d.expertScore10.toFixed(1)}/10` : 'Lab: chưa có'}) | **${d.minPrice.toLocaleString('vi-VN')} ₫** | ${d.spreadSavingsVnd > 0 ? `-${d.spreadSavingsVnd.toLocaleString('vi-VN')} ₫` : 'Đồng giá'} | ${radarMarkdownCell(getRadarSignal(radarIndex, d.slug))} |`
           ),
       ];
       await navigator.clipboard.writeText(lines.join('\n'));
@@ -353,9 +353,9 @@ export default function DealFinderWorkspace({
       d.name,
       d.brand,
       d.categorySlug,
-      d.personaScore5.toFixed(2),
-      d.userScore5.toFixed(2),
-      d.expertScore10.toFixed(1),
+      d.personaScore5 > 0 ? d.personaScore5.toFixed(2) : '',
+      d.userScore5 > 0 ? d.userScore5.toFixed(2) : '',
+      d.expertScore10 != null ? d.expertScore10.toFixed(1) : '',
       d.minPrice,
       d.spreadSavingsVnd,
       d.costPerPointVnd,
@@ -745,10 +745,15 @@ export default function DealFinderWorkspace({
                       </span>
                       <span className="rate-spec-pill">{deal.brand}</span>
                       <span className="rate-score-badge-user">
-                        ★ {deal.personaScore5.toFixed(2)}/5.0
+                        ★{' '}
+                        {deal.personaScore5 > 0
+                          ? `${deal.personaScore5.toFixed(2)}/5.0`
+                          : 'chưa có'}
                       </span>
                       <span className="rate-score-badge-expert">
-                        Lab {deal.expertScore10.toFixed(1)}/10
+                        {deal.expertScore10 != null
+                          ? `Lab ${deal.expertScore10.toFixed(1)}/10`
+                          : 'Lab: chưa có'}
                       </span>
                       <RadarBadge
                         signal={getRadarSignal(radarIndex, deal.slug)}

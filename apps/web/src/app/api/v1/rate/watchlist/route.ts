@@ -110,7 +110,7 @@ export async function GET(request: NextRequest) {
             brand: master.brand,
             current_min_price: currentMinPrice,
             current_max_price: currentMaxPrice,
-            merchant_count: Number(master.merchant_count || offers.length || 1),
+            merchant_count: Number(master.merchant_count || offers.length || 0),
             platform_count: offerPlatforms.length,
             offer_platforms: offerPlatforms,
             best_offer: bestOffer,

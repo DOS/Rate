@@ -14,7 +14,7 @@ interface ProductShareAuditButtonProps {
   readonly brand: string;
   readonly modelKey: string;
   readonly userScore5: number;
-  readonly expertScore10: number;
+  readonly expertScore10: number | null;
   readonly authenticReviews: number;
   readonly minPriceVnd: number;
   readonly offerCount: number;
@@ -46,8 +46,8 @@ export default function ProductShareAuditButton({
           : 'Đang cập nhật';
       const lines = [
         `### 🛡️ Hồ Sơ Kiểm Định Thiết Bị: ${name} (${brand})`,
-        `- **Điểm Người Mua Thực Chất (JReviews):** ★ ${userScore5.toFixed(2)}/5.0 (${authenticReviews} đánh giá thật đã lọc Seeding AI)`,
-        `- **Điểm Chuyên Gia Rate Lab:** ${expertScore10.toFixed(1)}/10`,
+        `- **Điểm Người Mua Thực Chất (JReviews):** ${userScore5 > 0 ? `★ ${userScore5.toFixed(2)}/5.0 (${authenticReviews} đánh giá thật đã lọc Seeding AI)` : 'Chưa có đánh giá'}`,
+        `- **Điểm Chuyên Gia Rate Lab:** ${expertScore10 != null ? `${expertScore10.toFixed(1)}/10` : 'Chưa có'}`,
         ...(keySpecLine ? [`- **Cấu Hình Chuẩn Hóa:** ${keySpecLine}`] : []),
         `- **Giá Tham Khảo Thấp Nhất:** ${priceStr}`,
         ...(radarSignal
@@ -100,8 +100,8 @@ export default function ProductShareAuditButton({
       name,
       brand,
       modelKey,
-      userScore5.toFixed(2),
-      expertScore10.toFixed(1),
+      userScore5 > 0 ? userScore5.toFixed(2) : '',
+      expertScore10 != null ? expertScore10.toFixed(1) : '',
       authenticReviews,
       minPriceVnd,
       offerCount,
@@ -127,7 +127,7 @@ export default function ProductShareAuditButton({
         name,
         brand,
         modelKey,
-        userScore5,
+        userScore5: userScore5 > 0 ? userScore5 : null,
         expertScore10,
         authenticReviews,
         minPriceVnd,

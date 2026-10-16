@@ -63,22 +63,24 @@ export default function CategoryCatalogToolbar({
     ];
     const sep = headers.map(() => '---');
     const rows = products.map((p, idx) => {
-      const userRating =
-        p.user_rating_weighted && Number(p.user_rating_weighted) > 0
-          ? Number(p.user_rating_weighted)
-          : Number(p.average_rating || 4.8);
+      const rawUser = Number(p.user_rating_weighted || p.average_rating || 0);
+      const userRating = rawUser > 0 ? rawUser : null;
+      const rawExpert =
+        p.expert_rating != null && Number(p.expert_rating) > 0
+          ? Number(p.expert_rating)
+          : null;
       const expertScore10 =
-        p.expert_rating && Number(p.expert_rating) > 0
-          ? Number((Number(p.expert_rating) * 2).toFixed(1))
+        rawExpert != null
+          ? Number((rawExpert > 5 ? rawExpert : rawExpert * 2).toFixed(1))
           : null;
       const radar = radarFor(p.slug);
       return [
         String(idx + 1),
         p.name.replace(/\|/g, '-'),
         p.brand || '-',
-        `${userRating.toFixed(1)}/5.0`,
-        expertScore10 != null ? `${expertScore10.toFixed(1)}/10` : '-',
-        String(p.authentic_review_count || p.total_reviews || 12),
+        userRating != null ? `${userRating.toFixed(1)}/5.0` : 'chưa có',
+        expertScore10 != null ? `${expertScore10.toFixed(1)}/10` : 'chưa có',
+        String(p.authentic_review_count || p.total_reviews || 0),
         p.min_price ? `${Number(p.min_price).toLocaleString('vi-VN')} ₫` : '-',
         radarMarkdownCell(radar),
       ];
@@ -119,13 +121,15 @@ export default function CategoryCatalogToolbar({
       ...RADAR_CSV_HEADERS,
     ];
     const rows = products.map((p, idx) => {
-      const userRating =
-        p.user_rating_weighted && Number(p.user_rating_weighted) > 0
-          ? Number(p.user_rating_weighted)
-          : Number(p.average_rating || 4.8);
+      const rawUser = Number(p.user_rating_weighted || p.average_rating || 0);
+      const userRating = rawUser > 0 ? rawUser : null;
+      const rawExpert =
+        p.expert_rating != null && Number(p.expert_rating) > 0
+          ? Number(p.expert_rating)
+          : null;
       const expertScore10 =
-        p.expert_rating && Number(p.expert_rating) > 0
-          ? Number((Number(p.expert_rating) * 2).toFixed(1))
+        rawExpert != null
+          ? Number((rawExpert > 5 ? rawExpert : rawExpert * 2).toFixed(1))
           : null;
       const radar = radarFor(p.slug);
       return [
@@ -134,10 +138,10 @@ export default function CategoryCatalogToolbar({
         p.name,
         p.brand || '',
         categorySlug,
-        userRating.toFixed(1),
+        userRating != null ? userRating.toFixed(1) : '',
         expertScore10 != null ? expertScore10.toFixed(1) : '',
-        String(p.authentic_review_count || p.total_reviews || 12),
-        String(p.merchant_count || 10),
+        String(p.authentic_review_count || p.total_reviews || 0),
+        String(p.merchant_count || 0),
         String(p.min_price || 0),
         String(p.max_price || 0),
         ...radarCsvCells(radar),
@@ -170,16 +174,20 @@ export default function CategoryCatalogToolbar({
       categoryTitle,
       exportedAt: new Date().toISOString(),
       productCount: products.length,
-      products: products.map((p, idx) => ({
-        rank: idx + 1,
-        slug: p.slug,
-        name: p.name,
-        brand: p.brand,
-        userRating: Number(p.user_rating_weighted || p.average_rating || 4.8),
-        expertRating: Number(p.expert_rating || 0),
-        minPriceVnd: Number(p.min_price || 0),
-        dealRadar: radarExportFields(radarFor(p.slug)),
-      })),
+      products: products.map((p, idx) => {
+        const rawUser = Number(p.user_rating_weighted || p.average_rating || 0);
+        const rawExpert = Number(p.expert_rating || 0);
+        return {
+          rank: idx + 1,
+          slug: p.slug,
+          name: p.name,
+          brand: p.brand,
+          userRating: rawUser > 0 ? rawUser : null,
+          expertRating: rawExpert > 0 ? rawExpert : null,
+          minPriceVnd: Number(p.min_price || 0),
+          dealRadar: radarExportFields(radarFor(p.slug)),
+        };
+      }),
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
       type: 'application/json;charset=utf-8;',

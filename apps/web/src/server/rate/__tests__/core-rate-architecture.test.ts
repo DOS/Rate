@@ -21,6 +21,7 @@ import {
   buildPopular1v1BattlesForCategory,
   computeProductStandingInCategory,
   rankMasterProductsForLeaderboard,
+  scoreMasterProductForLeaderboard,
 } from '../../../lib/leaderboard-engine';
 
 import {
@@ -1799,7 +1800,58 @@ function runCoreArchitectureSuite() {
     'OpenAPI 3.1.0 components.schemas must document ProductDealRadarSignal (#121)'
   );
   console.log(
-    '  ✅ [38/38] REST API v1, Extension Shadow DOM Pill & OpenAPI 3.1.0 product-level Deal Radar parity (#119, #121) passed'
+    '  ✅ [38/39] REST API v1, Extension Shadow DOM Pill & OpenAPI 3.1.0 product-level Deal Radar parity (#119, #121) passed'
+  );
+
+  // 39. Zero fabricated ratings, review counts, offer counts or expert scores when data is missing (#123)
+  const unratedProduct = {
+    id: '00000000-0000-0000-0000-000000000099',
+    brand: 'Apple',
+    model: 'iPhone 18 Air',
+    model_key: 'apple-iphone-18-air-256gb',
+    name: 'Apple iPhone 18 Air 256GB',
+    slug: 'apple-iphone-18-air-256gb',
+    has_5g: true,
+    specifications: {},
+    key_specs: {},
+    images: [],
+    colors: [],
+    min_price: 25990000,
+    max_price: 25990000,
+    merchant_count: 0,
+    total_reviews: 0,
+    average_rating: 0,
+    user_rating_weighted: undefined,
+    expert_rating: null,
+    authentic_review_count: 0,
+    status: 'published' as const,
+    metadata: {},
+  };
+  const unratedScored = scoreMasterProductForLeaderboard(
+    unratedProduct,
+    'combined'
+  );
+  assert.equal(unratedScored.userScore5, 0);
+  assert.equal(unratedScored.expertScore10, null);
+  assert.equal(unratedScored.combinedScore5, 0);
+  assert.equal(unratedScored.authenticReviewCount, 0);
+  assert.equal(unratedScored.filteredNoiseReviewCount, 0);
+  assert.equal(unratedScored.merchantCount, 0);
+
+  const rankedWithUnrated = rankMasterProductsForLeaderboard(
+    [...mockPeers, unratedProduct],
+    {
+      category: 'smartphones',
+      criterion: 'combined',
+    }
+  );
+  assert.equal(
+    rankedWithUnrated.some((item) => item.product.slug === unratedProduct.slug),
+    false,
+    'rankMasterProductsForLeaderboard must exclude unrated products (#123)'
+  );
+  console.log(
+    '  ✅ [39/39] Zero fabricated ratings, review counts, offer counts or expert scores when data is missing (#123) passed'
   );
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }

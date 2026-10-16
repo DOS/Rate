@@ -440,19 +440,17 @@ export default async function Home({
                     : '/img/placeholder.png');
                 const keySpecs = item.key_specs || {};
                 const productHref = getMasterProductHref(item, catSlugById);
-                const userScore =
-                  item.user_rating_weighted &&
-                  Number(item.user_rating_weighted) > 0
-                    ? Number(item.user_rating_weighted)
-                    : Number(item.average_rating || 4.8);
+                const rawUser = Number(
+                  item.user_rating_weighted || item.average_rating || 0
+                );
+                const userScore = rawUser > 0 ? rawUser : null;
                 const expertScore =
                   item.expert_rating != null && Number(item.expert_rating) > 0
                     ? Number(item.expert_rating)
                     : null;
-                const authCount =
-                  item.authentic_review_count && item.authentic_review_count > 0
-                    ? item.authentic_review_count
-                    : item.total_reviews || 12;
+                const authCount = Number(
+                  item.authentic_review_count || item.total_reviews || 0
+                );
 
                 return (
                   <div key={item.id} className="col-lg-4 col-md-6 col-12">
@@ -511,7 +509,10 @@ export default async function Home({
                       {/* #1 Core Focus: JReviews Dual Rating Badges + Product Deal Radar */}
                       <div className="d-flex align-items-center mb-2 flex-wrap gap-1">
                         <span className="rate-score-badge-user">
-                          ★ {userScore.toFixed(1)} User ({authCount})
+                          ★{' '}
+                          {userScore != null
+                            ? `${userScore.toFixed(1)} User (${authCount})`
+                            : 'User: chưa có'}
                         </span>
                         <span className="rate-score-badge-expert">
                           🔬{' '}
@@ -550,7 +551,7 @@ export default async function Home({
                             {priceText}
                           </strong>
                         </span>
-                        <span>🏪 {item.merchant_count || 1} nguồn</span>
+                        <span>🏪 {item.merchant_count || 0} nguồn</span>
                       </div>
                       <div className="d-flex mt-3 gap-2">
                         <Link

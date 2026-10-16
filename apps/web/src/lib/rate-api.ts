@@ -1935,7 +1935,7 @@ export async function getMerchantProfileById(
         (m.category_id && catSlugById.get(m.category_id)) || 'smartphones',
       market_min_price: Number(m.min_price || 0),
       market_max_price: Number(m.max_price || 0),
-      merchant_count: Number(m.merchant_count || 1),
+      merchant_count: Number(m.merchant_count || 0),
     });
   }
 
