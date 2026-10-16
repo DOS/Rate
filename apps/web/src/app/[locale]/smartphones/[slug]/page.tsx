@@ -1344,22 +1344,35 @@ export async function ProductDetailView({
             <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
               <div>
                 <span className="badge bg-primary bg-opacity-10 text-primary rounded-pill fw-semibold mb-1 px-3 py-1">
-                  ⚖️ Đối Thủ Trực Tiếp Cùng Phân Khúc ({categoryLabel})
+                  ⚖️ Đối Thủ Trực Tiếp Cùng Phân Khúc &amp; Hiệu Suất Giá / Điểm
+                  ({categoryLabel})
                 </span>
                 <h3 className="h5 fw-bold mb-0">
-                  So Sánh 1 Chạm Với {product.name}
+                  So Sánh 1 Chạm &amp; Đối Chiếu Giá / Điểm JReviews Với{' '}
+                  {product.name}
                 </h3>
               </div>
-              <Link
-                href={`/compare?slugs=${[product.slug, ...relatedCompetitors.map((c) => c.slug)].slice(0, 4).join(',')}`}
-                className="btn btn-sm btn-danger rounded-pill fw-semibold px-3"
-              >
-                ⚖️ Đặt Cả {Math.min(4, relatedCompetitors.length + 1)} Máy Lên
-                Bàn Cân 10 Nhóm →
-              </Link>
+              <div className="d-flex flex-wrap gap-2">
+                <Link
+                  href="/deals"
+                  className="btn btn-sm btn-outline-dark rounded-pill fw-semibold px-3"
+                >
+                  💎 Trung Tâm Săn Deal 10 Sàn
+                </Link>
+                <Link
+                  href={`/compare?slugs=${[product.slug, ...relatedCompetitors.map((c) => c.slug)].slice(0, 4).join(',')}`}
+                  className="btn btn-sm btn-danger rounded-pill fw-semibold px-3"
+                >
+                  ⚖️ Đặt Cả {Math.min(4, relatedCompetitors.length + 1)} Máy Lên
+                  Bàn Cân 10 Nhóm →
+                </Link>
+              </div>
             </div>
 
-            <div className="row g-3">
+            <div
+              className="row g-3"
+              data-testid="same-category-value-alternatives"
+            >
               {relatedCompetitors.map((peer) => {
                 const peerPrice = Number(peer.min_price || 0);
                 const priceDelta = peerPrice - currentMinPrice;
@@ -1373,6 +1386,16 @@ export async function ProductDetailView({
                   Number(peer.user_rating_weighted) > 0
                     ? Number(peer.user_rating_weighted)
                     : Number(peer.average_rating || 5);
+                const peerScore10 = peerRating * 2;
+                const currentScore10 = displayUserRating * 2;
+                const peerCostPerPoint =
+                  peerScore10 > 0 ? Math.round(peerPrice / peerScore10) : 0;
+                const currentCostPerPoint =
+                  currentScore10 > 0
+                    ? Math.round(currentMinPrice / currentScore10)
+                    : 0;
+                const costPerPointDelta =
+                  peerCostPerPoint - currentCostPerPoint;
 
                 return (
                   <div key={peer.id} className="col-lg-4 col-md-6 col-12">
@@ -1414,7 +1437,7 @@ export async function ProductDetailView({
                             </Link>
                           </h6>
                           <div className="d-flex align-items-center flex-wrap gap-2">
-                            <span className="text-danger fw-bold small">
+                            <span className="text-danger fw-bold small font-monospace">
                               {peerPrice.toLocaleString('vi-VN')} ₫
                             </span>
                             {priceDelta !== 0 && currentMinPrice > 0 && (
@@ -1432,6 +1455,17 @@ export async function ProductDetailView({
                               </span>
                             )}
                           </div>
+                          {peerCostPerPoint > 0 && (
+                            <div className="text-muted small font-monospace mt-1">
+                              💎 {peerCostPerPoint.toLocaleString('vi-VN')} ₫ /
+                              1.0 điểm
+                              {costPerPointDelta < 0 && (
+                                <span className="text-success fw-semibold ms-1">
+                                  (Tối ưu P/P hơn)
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
 

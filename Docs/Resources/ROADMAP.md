@@ -169,6 +169,9 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc **4 T�
 - [x] **4.53 & 4.54. Tích Hợp Trực Tiếp Radar Kèo Thơm Đáy Lịch Sử & Cảnh Báo Bẫy Nâng Giá Gốc 10 Sàn Vào `/deals` (`DealFinderWorkspace`) + Preset `/api/v1/rate/deals` & Xuất Danh Mục REST API v1 (`Markdown`, `CSV`, `JSON`) Trên `/developers` (`ApiPlaygroundClient`) (Issue #85 & Issue #86):**
   - Nâng cấp `apps/web/src/app/[locale]/deals/page.tsx` và `DealFinderWorkspace.tsx` tích hợp trực tiếp `getCrossPlatformDealRadar` (`genuineDeals` + `fakeSaleTraps` trên 10 sàn) kèm bộ 3 nút xuất báo cáo Radar (`📋 Sao chép Radar MD`, `📥 Xuất Radar CSV`, `📦 Xuất Radar JSON`).
   - Nâng cấp `ApiPlaygroundClient.tsx` trên `/developers` bổ sung kịch bản chạy thử `GET /api/v1/rate/deals` và 2 nút `📋 Sao chép API MD` + `📥 Xuất CSV Endpoints` bên cạnh đặc tả OpenAPI 3.1.0 JSON.
+- [x] **4.55 & 4.56. Tích Hợp Radar Kèo Thơm & Cảnh Báo Bẫy Nâng Giá Gốc 10 Sàn Lên Trang Chủ (`/`) + Đối Chiếu Hiệu Suất Giá / Điểm JReviews Cùng Ngành Hàng Trên `ProductDetailView` (Issue #87 & Issue #88):**
+  - Tích hợp `getCrossPlatformDealRadar` trực tiếp lên Trang chủ (`apps/web/src/app/[locale]/page.tsx`) hiển thị các Kèo thơm đáy lịch sử thật (`genuineDeals`) và Cảnh báo nâng khống giá gốc (`fakeSaleTraps`) trên 10 sàn.
+  - Nâng cấp khối Đối thủ cùng ngành hàng trên `ProductDetailView` (`apps/web/src/app/[locale]/smartphones/[slug]/page.tsx`) tính toán trực tiếp chỉ số `₫ / 1.0 điểm JReviews` (`peerCostPerPoint`) và độ lệch hiệu suất đầu tư (`costPerPointDelta`).
 
 ### ✅ Phase 5: Mở Rộng Đa Sàn 10/10 Nền Tảng, Browser Extension MV3 & Tự Động Hóa Cảnh Báo Giá (Đã hoàn thành 100%)
 

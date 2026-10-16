@@ -6,6 +6,8 @@ import { buildPopular1v1BattlesForCategory } from '@/lib/leaderboard-engine';
 import {
   getCachedMerchantsList,
   getCachedRatePlatformStats,
+  getCrossPlatformDealRadar,
+  type CrossPlatformDealRadarResponse,
   type MerchantSummary,
   type RatePlatformStats,
 } from '@/server/rate';
@@ -59,6 +61,7 @@ export default async function Home({
 
   let masterProducts: MasterProduct[] = [];
   let merchants: MerchantSummary[] = [];
+  let dealRadar: CrossPlatformDealRadarResponse | null = null;
   let platformStats: RatePlatformStats = {
     masterProductsCount: 0,
     listingsCount: 0,
@@ -73,14 +76,16 @@ export default async function Home({
   };
 
   try {
-    const [productsRes, merchantsRes, statsRes] = await Promise.all([
+    const [productsRes, merchantsRes, statsRes, radarRes] = await Promise.all([
       getMasterProducts({ categorySlug: 'all', limit: 24 }),
       getCachedMerchantsList(),
       getCachedRatePlatformStats(),
+      getCrossPlatformDealRadar({ categorySlug: 'all', limit: 4 }),
     ]);
     masterProducts = productsRes;
     merchants = merchantsRes;
     platformStats = statsRes;
+    dealRadar = radarRes;
   } catch (err) {
     console.error(
       'Error fetching homepage data from Supabase rate schema:',
@@ -642,6 +647,132 @@ export default async function Home({
                 </div>
               </div>
             )}
+
+            {/* Section 2.6: Live Cross-Platform Deal & Fake-Sale Trap Radar (#87) */}
+            {dealRadar &&
+              (dealRadar.genuineDeals.length > 0 ||
+                dealRadar.fakeSaleTraps.length > 0) && (
+                <div
+                  className="rate-card p-md-4 mt-4 p-3"
+                  data-testid="homepage-deal-radar"
+                >
+                  <div className="d-flex justify-content-between align-items-center border-bottom mb-3 flex-wrap gap-2 pb-3">
+                    <div>
+                      <span className="badge bg-dark rounded-pill text-warning me-2">
+                        🔥 RADAR KÈO THƠM &amp; BẪY SALE ẢO 10 SÀN
+                      </span>
+                      <strong className="text-dark">
+                        Đối chiếu tự động {dealRadar.totalOffersAnalyzed} gian
+                        hàng trên {dealRadar.totalClustersAnalyzed} cụm sản phẩm
+                      </strong>
+                    </div>
+                    <div className="d-flex flex-wrap gap-2">
+                      <Link
+                        href="/deals"
+                        className="btn btn-sm btn-danger rounded-pill fw-semibold px-3"
+                      >
+                        💎 Trung Tâm Săn Deal 10 Sàn →
+                      </Link>
+                      <Link
+                        href="/inspect"
+                        className="btn btn-sm btn-outline-dark rounded-pill px-3"
+                      >
+                        🔬 Kiểm định link sale
+                      </Link>
+                    </div>
+                  </div>
+
+                  <div className="row g-3">
+                    <div className="col-lg-6">
+                      <div className="rounded-3 border-success-subtle bg-success-subtle bg-opacity-10 h-100 border p-3">
+                        <div className="fw-bold text-success mb-2">
+                          🟢 Kèo Thơm Đáy Lịch Sử Thật (
+                          {dealRadar.genuineDeals.length})
+                        </div>
+                        <div className="d-flex flex-column gap-2">
+                          {dealRadar.genuineDeals.slice(0, 3).map((g) => (
+                            <div
+                              key={g.id}
+                              className="rounded-3 d-flex justify-content-between align-items-center border bg-white p-2"
+                            >
+                              <div className="overflow-hidden pe-2">
+                                <Link
+                                  href={g.productHref}
+                                  className="fw-bold text-dark text-decoration-none d-block text-truncate small"
+                                >
+                                  {g.productName}
+                                </Link>
+                                <div className="text-secondary small">
+                                  <span className="badge bg-dark text-uppercase me-1">
+                                    {g.platform}
+                                  </span>
+                                  {g.merchantName} • Trung vị:{' '}
+                                  {g.marketMedianPrice.toLocaleString('vi-VN')}{' '}
+                                  ₫
+                                </div>
+                              </div>
+                              <div className="flex-shrink-0 text-end">
+                                <div className="fw-bold text-success font-monospace small">
+                                  {g.priceCurrent.toLocaleString('vi-VN')} ₫
+                                </div>
+                                <span className="badge bg-success rounded-pill">
+                                  -{g.savingsVsMedianPct}% so trung vị
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="col-lg-6">
+                      <div className="rounded-3 border-danger-subtle bg-danger-subtle bg-opacity-10 h-100 border p-3">
+                        <div className="fw-bold text-danger mb-2">
+                          🚨 Cảnh Báo Nâng Khống Giá Gốc (
+                          {dealRadar.fakeSaleTraps.length})
+                        </div>
+                        <div className="d-flex flex-column gap-2">
+                          {dealRadar.fakeSaleTraps.slice(0, 3).map((t) => (
+                            <div
+                              key={t.id}
+                              className="rounded-3 d-flex justify-content-between align-items-center border bg-white p-2"
+                            >
+                              <div className="overflow-hidden pe-2">
+                                <Link
+                                  href={t.productHref}
+                                  className="fw-bold text-dark text-decoration-none d-block text-truncate small"
+                                >
+                                  {t.productName}
+                                </Link>
+                                <div className="text-secondary small">
+                                  <span className="badge bg-secondary text-uppercase me-1">
+                                    {t.platform}
+                                  </span>
+                                  {t.merchantName} • Giá gốc kê:{' '}
+                                  <span className="text-decoration-line-through">
+                                    {(
+                                      t.priceOriginal || t.priceCurrent
+                                    ).toLocaleString('vi-VN')}{' '}
+                                    ₫
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="flex-shrink-0 text-end">
+                                <div className="fw-bold text-danger font-monospace small">
+                                  {t.priceCurrent.toLocaleString('vi-VN')} ₫
+                                </div>
+                                <span className="badge bg-danger rounded-pill">
+                                  Kê khống +{t.fakeMarkupPct}%
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
           </div>
         </section>
       )}
