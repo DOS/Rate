@@ -334,7 +334,7 @@ async function runTests() {
     }
 
     console.log(
-      `  ✅ [6/8] Live Read-Only Lookup matched "${liveLookup.masterProduct?.name || 'N/A'}" (cat=${liveLookup.categorySlug}, rank=#${liveLookup.leaderboardStandings?.[0]?.rank}/${liveLookup.leaderboardStandings?.[0]?.totalInCategory}, versus=${liveLookup.versusUrl}, offers=${liveLookup.allOffers.length})`
+      `  ✅ [6/9] Live Read-Only Lookup matched "${liveLookup.masterProduct?.name || 'N/A'}" (cat=${liveLookup.categorySlug}, rank=#${liveLookup.leaderboardStandings?.[0]?.rank}/${liveLookup.leaderboardStandings?.[0]?.totalInCategory}, versus=${liveLookup.versusUrl}, offers=${liveLookup.allOffers.length})`
     );
 
     const dealsMod = await import('../../web/src/server/rate/deals.js');
@@ -350,7 +350,7 @@ async function runTests() {
     assert.ok(radar.genuineDeals.length >= 5);
     assert.ok(radar.genuineDeals[0]!.savingsVsMedianVnd > 0);
     console.log(
-      `  ✅ [7/8] Live Cross-Platform Deal Radar verified (${radar.totalClustersAnalyzed} clusters, ${radar.totalOffersAnalyzed} offers, ${radar.genuineDeals.length} genuine deals, ${radar.fakeSaleTraps.length} fake-sale traps)`
+      `  ✅ [7/9] Live Cross-Platform Deal Radar verified (${radar.totalClustersAnalyzed} clusters, ${radar.totalOffersAnalyzed} offers, ${radar.genuineDeals.length} genuine deals, ${radar.fakeSaleTraps.length} fake-sale traps)`
     );
 
     const openApiMod = await import('../../web/src/server/rate/openapi.js');
@@ -367,7 +367,31 @@ async function runTests() {
     assert.ok('/api/v1/rate/extension/lookup' in openApiSpec.paths);
     assert.ok('/api/v1/rate/openapi' in openApiSpec.paths);
     console.log(
-      `  ✅ [8/8] Public REST API v1 OpenAPI 3.1.0 Spec verified (${Object.keys(openApiSpec.paths).length} endpoints, ${Object.keys(openApiSpec.components.schemas).length} schemas)`
+      `  ✅ [8/9] Public REST API v1 OpenAPI 3.1.0 Spec verified (${Object.keys(openApiSpec.paths).length} endpoints, ${Object.keys(openApiSpec.components.schemas).length} schemas)`
+    );
+
+    const rateServerMod = await import('../../web/src/server/rate/index.js');
+    const { getMerchantsList, getMerchantProfileById } = (
+      'getMerchantsList' in rateServerMod
+        ? rateServerMod
+        : (rateServerMod as unknown as { default: typeof rateServerMod })
+            .default
+    ) as typeof rateServerMod;
+
+    const merchantsList = await getMerchantsList({
+      sort: 'trust_desc',
+      limit: 20,
+    });
+    assert.ok(merchantsList.length >= 18);
+    assert.ok(merchantsList[0]!.trust_score >= 90);
+    const firstMerchantProfile = await getMerchantProfileById(
+      merchantsList[0]!.id
+    );
+    assert.ok(firstMerchantProfile);
+    assert.equal(firstMerchantProfile.id, merchantsList[0]!.id);
+    assert.ok(firstMerchantProfile.listings.length > 0);
+    console.log(
+      `  ✅ [9/9] Live Merchant Risk & Trust Directory verified (${merchantsList.length} merchants audited, top="${merchantsList[0]!.name}" trust=${merchantsList[0]!.trust_score}/100, listings=${firstMerchantProfile.listings.length})`
     );
   }
 

@@ -1608,7 +1608,7 @@ export async function getMerchantsList(params?: {
         .from('reviews')
         .select('*, review_flags(*)')
         .order('created_at', { ascending: false })
-        .limit(200),
+        .limit(1000),
     ]);
 
   const merchants = (merchantRows as unknown as RawMerchantSafeRow[]) || [];
@@ -1690,8 +1690,20 @@ export async function getMerchantsList(params?: {
     const prices = prodsByMerchant.get(m.id) ?? [];
     const mReviews = mappedReviewsByMerchant.get(m.id) ?? [];
     const { reviewRiskScore, breakdown } = computeDynamicReviewRisk(mReviews);
-    const dosafeRisk = Number(m.risk_score || 0);
-    const combinedRisk = Math.min(100, Math.max(dosafeRisk, reviewRiskScore));
+    const meta = (
+      m.metadata && typeof m.metadata === 'object' ? m.metadata : {}
+    ) as Record<string, unknown>;
+    const dosafeRisk =
+      typeof meta.dosafe_risk_score === 'number'
+        ? meta.dosafe_risk_score
+        : Number(m.risk_score || 0);
+    const persistedReviewRisk =
+      typeof meta.review_risk_score === 'number' ? meta.review_risk_score : 0;
+    const effectiveReviewRisk = Math.max(reviewRiskScore, persistedReviewRisk);
+    const combinedRisk = Math.min(
+      100,
+      Math.max(Number(m.risk_score || 0), dosafeRisk, effectiveReviewRisk)
+    );
     const trustScore = Math.max(0, 100 - combinedRisk);
 
     return {
@@ -1710,7 +1722,7 @@ export async function getMerchantsList(params?: {
       follower_count: Number(m.follower_count || 0),
       location: m.location || null,
       dosafe_risk_score: dosafeRisk,
-      review_risk_score: reviewRiskScore,
+      review_risk_score: effectiveReviewRisk,
       risk_score: combinedRisk,
       trust_score: trustScore,
       product_count: prices.length,
@@ -1990,8 +2002,26 @@ export async function getMerchantProfileById(
 
   const { reviewRiskScore, breakdown } =
     computeDynamicReviewRisk(recentReviews);
-  const dosafeRisk = Number(merchantRow.risk_score || 0);
-  const combinedRisk = Math.min(100, Math.max(dosafeRisk, reviewRiskScore));
+  const meta = (
+    merchantRow.metadata && typeof merchantRow.metadata === 'object'
+      ? merchantRow.metadata
+      : {}
+  ) as Record<string, unknown>;
+  const dosafeRisk =
+    typeof meta.dosafe_risk_score === 'number'
+      ? meta.dosafe_risk_score
+      : Number(merchantRow.risk_score || 0);
+  const persistedReviewRisk =
+    typeof meta.review_risk_score === 'number' ? meta.review_risk_score : 0;
+  const effectiveReviewRisk = Math.max(reviewRiskScore, persistedReviewRisk);
+  const combinedRisk = Math.min(
+    100,
+    Math.max(
+      Number(merchantRow.risk_score || 0),
+      dosafeRisk,
+      effectiveReviewRisk
+    )
+  );
   const trustScore = Math.max(0, 100 - combinedRisk);
   const prices = listings.map((l) => l.price_current).filter((p) => p > 0);
 
@@ -2012,7 +2042,7 @@ export async function getMerchantProfileById(
     follower_count: Number(merchantRow.follower_count || 0),
     location: merchantRow.location || null,
     dosafe_risk_score: dosafeRisk,
-    review_risk_score: reviewRiskScore,
+    review_risk_score: effectiveReviewRisk,
     risk_score: combinedRisk,
     trust_score: trustScore,
     product_count: listings.length,
