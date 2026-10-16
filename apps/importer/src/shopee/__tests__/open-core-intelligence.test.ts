@@ -273,9 +273,14 @@ async function runSuite() {
     '  ✅ [6/7] 10-Platform Cross-Offer, 60-Day Price History & Multi-Review Synthesis passed'
   );
 
-  // 7. ArenaSpecSyncer (GSMArena [data-spec] + PhoneArena Split Camera) & 2026 Flagship Lineup
-  const { parseGsmArenaHtmlToSpecs, UPSTREAM_2026_ARENA_REFERENCE_URLS } =
-    await import('../arena-spec-syncer.js');
+  // 7. ArenaSpecSyncer (GSMArena [data-spec] + PhoneArena Split Camera) & 14 2026 Multi-Category Flagships (36 Total Catalog)
+  const {
+    parseGsmArenaHtmlToSpecs,
+    parseGsmArenaBrandCatalogHtml,
+    parsePhoneArenaCatalogHtml,
+    countPopulatedFieldGroups,
+    UPSTREAM_2026_ARENA_REFERENCE_URLS,
+  } = await import('../arena-spec-syncer.js');
 
   const sampleGsmHtml = `
     <h1 data-spec="modelname">Xiaomi 18 Pro Max</h1>
@@ -321,8 +326,29 @@ async function runSuite() {
   assert.ok(synced.specifications.camera?.third_camera?.startsWith('200 MP'));
   assert.equal(synced.specifications.battery?.fast_charging_w, 100);
   assert.equal(synced.specifications.battery?.reverse_charging, true);
+  assert.equal(
+    countPopulatedFieldGroups(
+      synced.specifications as unknown as Record<string, unknown>
+    ),
+    10
+  );
 
-  // Ensure all 6 canonical 2026 upstream devices are present in FLAGSHIP_DEVICES_TO_SEED
+  const gsmBrandItems = parseGsmArenaBrandCatalogHtml(
+    `<div class="makers"><ul><li><a href="xiaomi_18_pro_max-14288.php"><strong><span>18 Pro Max</span></strong></a></li></ul></div>`,
+    'Xiaomi'
+  );
+  assert.equal(gsmBrandItems.length, 1);
+  assert.equal(gsmBrandItems[0]?.name, 'Xiaomi 18 Pro Max');
+
+  const paCatalogItems = parsePhoneArenaCatalogHtml(
+    `<a href="/phones/Samsung-Galaxy-S26-Ultra_id12621">Samsung Galaxy S26 Ultra</a>`
+  );
+  assert.equal(paCatalogItems.length, 1);
+  assert.equal(paCatalogItems[0]?.name, 'Samsung Galaxy S26 Ultra');
+
+  // Ensure all 14 canonical 2026 upstream devices across 5 categories are present in FLAGSHIP_DEVICES_TO_SEED (33 seed entries -> 36 total master products)
+  assert.equal(UPSTREAM_2026_ARENA_REFERENCE_URLS.length, 14);
+  assert.equal(FLAGSHIP_DEVICES_TO_SEED.length, 33);
   const seededModelKeys = new Set(FLAGSHIP_DEVICES_TO_SEED.map(d => d.model_key));
   for (const ref of UPSTREAM_2026_ARENA_REFERENCE_URLS) {
     assert.ok(
@@ -330,8 +356,33 @@ async function runSuite() {
       `Missing 2026 flagship ${ref.model_key} (${ref.name}) in FLAGSHIP_DEVICES_TO_SEED`
     );
   }
+
+  // Verify ProductNormalizer recognizes 2026 multi-category flagships
+  const normPad7 = normalizer.normalize({
+    itemId: 'p7',
+    shopId: 's1',
+    title: 'Máy tính bảng Xiaomi Pad 7 Pro (12GB/256GB) Màn hình 3.2K 144Hz Chính Hãng',
+    price: 12490000,
+    priceMin: 12490000,
+    priceMax: 13990000,
+    currency: 'VND',
+    stock: 20,
+    sold: 50,
+    historicalSold: 120,
+    ratingStar: 4.9,
+    ratingCount: 21,
+    images: [],
+    attributes: [],
+    models: [],
+    url: 'https://shopee.vn/p7',
+    crawledAt: new Date().toISOString(),
+  });
+  assert.equal(normPad7.model_key, 'xiaomi:pad-7-pro:256gb');
+  assert.equal(normPad7.category_slug, 'tablets');
+  assert.equal(normPad7.is_benchmark_enriched, true);
+
   console.log(
-    '  ✅ [7/7] ArenaSpecSyncer (GSMArena/PhoneArena 10-Group Parser) & 2026 Flagship Lineup passed'
+    '  ✅ [7/7] ArenaSpecSyncer (GSMArena/PhoneArena 10-Group Parser), 14 2026 Multi-Category Flagships & 36 Seeded Devices passed'
   );
   console.log('🎉 All @repo/crawlers Open-Core Intelligence tests passed!');
 }
