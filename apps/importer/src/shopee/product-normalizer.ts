@@ -612,7 +612,8 @@ const CANONICAL_PHONE_REGISTRY: Record<
     screen_type: 'LTPO AMOLED, 68B colors, 120Hz, Dolby Vision, HDR10+, 3500 nits (peak)',
     refresh_rate_hz: 120,
     rear_camera: '50 MP, f/1.4-4.0, 23mm (wide), 1.0"-type LYT-900, variable aperture, OIS',
-    second_camera: '200 MP, f/2.6, 100mm (periscope telephoto), multi-directional PDAF, OIS, 4.3x optical zoom',
+    second_camera:
+      '200 MP, f/2.6, 100mm (periscope telephoto), multi-directional PDAF, OIS, 4.3x optical zoom',
     third_camera: '50 MP, f/1.8, 14mm, 115˚ (ultrawide), dual pixel PDAF',
     front_camera: '32 MP, f/2.0, 22mm (wide), HDR, 4K@60fps',
     charging_w: 120,
@@ -655,10 +656,12 @@ const CANONICAL_PHONE_REGISTRY: Record<
     weight_g: 225,
     dimensions: '163.0 x 77.6 x 8.2 mm',
     resolution: '1320 x 2868 pixels (~460 ppi)',
-    screen_type: 'LTPO Super Retina XDR OLED, 120Hz ProMotion, Under-Display Face ID, 3000 nits (peak)',
+    screen_type:
+      'LTPO Super Retina XDR OLED, 120Hz ProMotion, Under-Display Face ID, 3000 nits (peak)',
     refresh_rate_hz: 120,
     rear_camera: '48 MP, f/1.4-2.8, 24mm (wide), variable aperture, sensor-shift OIS',
-    second_camera: '48 MP, f/2.6, 120mm (periscope telephoto), 5x optical zoom, 3D sensor-shift OIS',
+    second_camera:
+      '48 MP, f/2.6, 120mm (periscope telephoto), 5x optical zoom, 3D sensor-shift OIS',
     third_camera: '48 MP, f/2.0, 13mm (ultrawide), PDAF + TOF 3D LiDAR scanner',
     front_camera: '24 MP, f/1.9, 23mm (wide), PDAF, OIS + Under-Display SL 3D',
     charging_w: 45,
@@ -678,10 +681,12 @@ const CANONICAL_PHONE_REGISTRY: Record<
     weight_g: 198,
     dimensions: '149.6 x 71.5 x 8.2 mm',
     resolution: '1206 x 2622 pixels (~460 ppi)',
-    screen_type: 'LTPO Super Retina XDR OLED, 120Hz ProMotion, Under-Display Face ID, 3000 nits (peak)',
+    screen_type:
+      'LTPO Super Retina XDR OLED, 120Hz ProMotion, Under-Display Face ID, 3000 nits (peak)',
     refresh_rate_hz: 120,
     rear_camera: '48 MP, f/1.4-2.8, 24mm (wide), variable aperture, sensor-shift OIS',
-    second_camera: '48 MP, f/2.6, 120mm (periscope telephoto), 5x optical zoom, 3D sensor-shift OIS',
+    second_camera:
+      '48 MP, f/2.6, 120mm (periscope telephoto), 5x optical zoom, 3D sensor-shift OIS',
     third_camera: '48 MP, f/2.0, 13mm (ultrawide), PDAF + TOF 3D LiDAR scanner',
     front_camera: '24 MP, f/1.9, 23mm (wide), PDAF, OIS + Under-Display SL 3D',
     charging_w: 40,
@@ -728,7 +733,8 @@ const CANONICAL_PHONE_REGISTRY: Record<
     screen_type: 'LTPO AMOLED, 1B colors, 120Hz, Dolby Vision, HDR10+, 4500 nits (peak)',
     refresh_rate_hz: 120,
     rear_camera: '50 MP, f/1.6, 23mm (wide), Sony LYT-900, multi-directional PDAF, OIS',
-    second_camera: '200 MP, f/2.6, 85mm (periscope telephoto), Hasselblad Portrait, OIS, 3.7x optical zoom',
+    second_camera:
+      '200 MP, f/2.6, 85mm (periscope telephoto), Hasselblad Portrait, OIS, 3.7x optical zoom',
     third_camera: '50 MP, f/2.0, 15mm, 120˚ (ultrawide), PDAF',
     front_camera: '32 MP, f/2.4, 21mm (wide), PDAF, 4K@60fps',
     charging_w: 100,
@@ -748,7 +754,8 @@ const CANONICAL_PHONE_REGISTRY: Record<
     weight_g: 442,
     dimensions: '249.7 x 177.5 x 5.3 mm',
     resolution: '2420 x 1668 pixels (~264 ppi)',
-    screen_type: 'Ultra Retina XDR Tandem OLED, 120Hz ProMotion, HDR10, Dolby Vision, 1600 nits (peak)',
+    screen_type:
+      'Ultra Retina XDR Tandem OLED, 120Hz ProMotion, HDR10, Dolby Vision, 1600 nits (peak)',
     refresh_rate_hz: 120,
     rear_camera: '12 MP, f/1.8, (wide), dual pixel PDAF + TOF 3D LiDAR scanner',
     second_camera: 'Adaptive True Tone Flash for document scanning',
@@ -814,10 +821,12 @@ const CANONICAL_PHONE_REGISTRY: Record<
     weight_g: 1600,
     dimensions: '312.6 x 221.2 x 15.5 mm',
     resolution: '3024 x 1964 pixels (~254 ppi)',
-    screen_type: 'Liquid Retina XDR mini-LED, 120Hz ProMotion, 1600 nits (HDR peak), 1000 nits (SDR outdoor)',
+    screen_type:
+      'Liquid Retina XDR mini-LED, 120Hz ProMotion, 1600 nits (HDR peak), 1000 nits (SDR outdoor)',
     refresh_rate_hz: 120,
     rear_camera: '3x Thunderbolt 5 (120Gb/s) + HDMI 2.1 + SDXC + MagSafe 3',
-    second_camera: 'Studio-quality 3-mic array + 6-speaker sound system with force-cancelling woofers',
+    second_camera:
+      'Studio-quality 3-mic array + 6-speaker sound system with force-cancelling woofers',
     front_camera: '12MP Center Stage camera with Desk View (1080p HD)',
     charging_w: 96,
     has_5g: false,
@@ -838,7 +847,8 @@ const CANONICAL_PHONE_REGISTRY: Record<
     resolution: '496 x 416 pixels (~326 ppi)',
     screen_type: 'Wide-angle LTPO3 OLED Always-On Retina, 2200 nits (peak)',
     refresh_rate_hz: 60,
-    rear_camera: '3rd-gen Optical Heart Sensor + Electrical Heart Sensor (ECG) + Sleep Apnea Detection',
+    rear_camera:
+      '3rd-gen Optical Heart Sensor + Electrical Heart Sensor (ECG) + Sleep Apnea Detection',
     second_camera: 'Depth gauge (6m) + Water temperature sensor + Wrist temperature sensor',
     front_camera: 'Double Tap gesture + Digital Crown with haptic feedback',
     charging_w: 15,
@@ -860,7 +870,8 @@ const CANONICAL_PHONE_REGISTRY: Record<
     resolution: '502 x 410 pixels (~338 ppi)',
     screen_type: 'LTPO3 OLED Always-On Retina, Flat Sapphire Crystal, 3200 nits (peak)',
     refresh_rate_hz: 60,
-    rear_camera: '3rd-gen Optical Heart + ECG + Blood Pressure Trend Alert + Oceanic+ Dive Computer',
+    rear_camera:
+      '3rd-gen Optical Heart + ECG + Blood Pressure Trend Alert + Oceanic+ Dive Computer',
     second_camera: 'Depth gauge (40m EN13319 certified) + 86dB Emergency Siren',
     front_camera: 'Customizable Action Button + Titanium Crown Guard',
     charging_w: 18,
@@ -970,12 +981,22 @@ export class ProductNormalizer {
       );
       const airpodsMatch = title.match(/airpods\s*(pro\s*\d+|max|\d+)/i);
 
+      // Retail titles often put the chip after the screen size ("iPad Pro 11 inch M4",
+      // "MacBook Air 13 inch M3"); pick it up wherever it sits.
+      const chipMatch = title.match(/\b(M\d)(?:\s+(Pro|Max))?\b/i);
+      const chip = chipMatch ? chipMatch[1].toUpperCase() : '';
+
       if (iphoneMatch && iphoneMatch[1]) {
         model = `iPhone ${iphoneMatch[1].trim()}`;
       } else if (ipadMatch && ipadMatch[1]) {
-        model = `iPad ${ipadMatch[1].trim()}`;
+        const line = ipadMatch[1].trim();
+        model = /^(pro|air)$/i.test(line) && chip ? `iPad ${line} ${chip}` : `iPad ${line}`;
       } else if (macbookMatch && macbookMatch[1]) {
-        model = `MacBook ${macbookMatch[1].trim()}`;
+        const line = macbookMatch[1].trim();
+        model =
+          /^(pro|air)$/i.test(line) && chip
+            ? `MacBook ${line} ${chip}${chipMatch?.[2] ? ` ${chipMatch[2]}` : ''}`
+            : `MacBook ${line}`;
       } else if (watchMatch && watchMatch[1]) {
         model = `Watch ${watchMatch[1].trim()}`;
       } else if (airpodsMatch && airpodsMatch[1]) {
