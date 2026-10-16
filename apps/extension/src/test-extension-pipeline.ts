@@ -227,33 +227,30 @@ async function runTests() {
   assert.equal(noConsentRes.accepted, false);
   assert.equal(noConsentRes.jobState, 'skipped_no_consent');
 
-  const readOnlyPlatformRes = await ingestExtensionCrowdSignal({
+  const accessoryRejectRes = await ingestExtensionCrowdSignal({
     platform: 'tiktok',
     externalItemId: '1729401928401',
     url: 'https://shop.tiktok.com/view/product/1729401928401',
-    title: 'Điện thoại iPhone 16 Pro Max 256GB',
-    price: 28990000,
+    title: 'Ốp lưng chống sốc iPhone 16 Pro Max trong suốt',
+    price: 99000,
     userConsentOptIn: true,
   });
-  assert.equal(readOnlyPlatformRes.accepted, false);
-  assert.equal(
-    readOnlyPlatformRes.jobState,
-    'platform_worker_pending_phase_5_1'
-  );
+  assert.equal(accessoryRejectRes.accepted, false);
+  assert.equal(accessoryRejectRes.jobState, 'skipped_accessory');
   assert.equal(EXTENSION_CAPABILITY_MATRIX.shopee.crowdVerifyQueue, true);
   assert.equal(EXTENSION_CAPABILITY_MATRIX.lazada.crowdVerifyQueue, true);
   assert.equal(EXTENSION_CAPABILITY_MATRIX.tiki.crowdVerifyQueue, true);
+  assert.equal(EXTENSION_CAPABILITY_MATRIX.tiktok.crowdVerifyQueue, true);
   assert.equal(EXTENSION_CAPABILITY_MATRIX.cellphones.crowdVerifyQueue, true);
   assert.equal(EXTENSION_CAPABILITY_MATRIX.tgdd.crowdVerifyQueue, true);
   assert.equal(EXTENSION_CAPABILITY_MATRIX.fptshop.crowdVerifyQueue, true);
   assert.equal(EXTENSION_CAPABILITY_MATRIX.hoangha.crowdVerifyQueue, true);
   assert.equal(EXTENSION_CAPABILITY_MATRIX.didongviet.crowdVerifyQueue, true);
   assert.equal(EXTENSION_CAPABILITY_MATRIX.phongvu.crowdVerifyQueue, true);
-  assert.equal(EXTENSION_CAPABILITY_MATRIX.tiktok.crowdVerifyQueue, false);
   assert.equal(EXTENSION_CAPABILITY_MATRIX.tiktok.lookup, true);
   assert.equal(EXTENSION_CAPABILITY_MATRIX.hoangha.lookup, true);
   console.log(
-    '  ✅ [5/6] Zero-Trust Quarantine, Opt-In Consent & 10-Platform Capability Matrix passed'
+    '  ✅ [5/6] Zero-Trust Quarantine, Opt-In Consent & Full 10/10 Platform Capability Matrix passed'
   );
 
   // 6. Live Read-Only Lookup against Supabase `rate` schema (when real credentials are present)

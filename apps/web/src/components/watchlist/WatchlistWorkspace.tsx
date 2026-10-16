@@ -18,11 +18,46 @@ interface WatchlistWorkspaceProps {
   locale?: string;
 }
 
+interface LiveWatchlistDeal {
+  slug: string;
+  current_min_price: number;
+  current_max_price: number;
+  merchant_count: number;
+  platform_count: number;
+  offer_platforms: string[];
+  best_offer: {
+    id: string;
+    title: string;
+    price: number;
+    original_price: number;
+    url: string;
+    platform: string;
+    merchant_name: string;
+    is_official_mall: boolean;
+  } | null;
+}
+
+const PLATFORM_DISPLAY_LABELS: Record<string, string> = {
+  shopee: 'Shopee',
+  lazada: 'Lazada',
+  tiki: 'Tiki',
+  tiktok: 'TikTok Shop',
+  cellphones: 'CellphoneS',
+  tgdd: 'Thế Giới Di Động',
+  fptshop: 'FPT Shop',
+  hoangha: 'Hoàng Hà Mobile',
+  didongviet: 'Di Động Việt',
+  phongvu: 'Phong Vũ',
+};
+
 export default function WatchlistWorkspace({
   catalogProducts,
   locale,
 }: WatchlistWorkspaceProps) {
   const [items, setItems] = useState<WatchlistItem[]>([]);
+  const [liveDeals, setLiveDeals] = useState<Record<string, LiveWatchlistDeal>>(
+    {}
+  );
   const [editingSlug, setEditingSlug] = useState<string | null>(null);
   const [editTarget, setEditTarget] = useState<number>(0);
   const [subscriberEmail, setSubscriberEmail] = useState<string>('');
@@ -34,6 +69,25 @@ export default function WatchlistWorkspace({
     sync();
     return subscribeWatchlist(sync);
   }, []);
+
+  useEffect(() => {
+    if (items.length === 0) return;
+    const slugs = items.map((x) => x.slug).join(',');
+    let cancelled = false;
+    fetch(`/api/v1/rate/watchlist?slugs=${encodeURIComponent(slugs)}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => {
+        if (!cancelled && json?.ok && json.items) {
+          setLiveDeals(json.items as Record<string, LiveWatchlistDeal>);
+        }
+      })
+      .catch(() => {
+        // Fallback to SSR catalogProducts snapshot
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [items]);
 
   const productBySlug = new Map<string, MasterProduct>(
     catalogProducts.map((p) => [p.slug, p])
@@ -306,12 +360,17 @@ export default function WatchlistWorkspace({
         <div className="row g-4">
           {items.map((item) => {
             const live = productBySlug.get(item.slug);
-            const currentMin = live
-              ? Number(live.min_price || 0)
-              : item.priceWhenAdded;
-            const currentMax = live
-              ? Number(live.max_price || currentMin)
-              : currentMin;
+            const dealInfo = liveDeals[item.slug];
+            const currentMin = dealInfo?.current_min_price
+              ? Number(dealInfo.current_min_price)
+              : live
+                ? Number(live.min_price || 0)
+                : item.priceWhenAdded;
+            const currentMax = dealInfo?.current_max_price
+              ? Number(dealInfo.current_max_price)
+              : live
+                ? Number(live.max_price || currentMin)
+                : currentMin;
             const diffFromAdded = currentMin - item.priceWhenAdded;
             const diffFromTarget = currentMin - item.targetPrice;
             const targetReached =
@@ -319,6 +378,9 @@ export default function WatchlistWorkspace({
             const detailHref = live
               ? getMasterProductHref(live)
               : `${item.categoryPath || '/smartphones'}/${item.slug}`;
+            const bestOffer = dealInfo?.best_offer || null;
+            const platformCount =
+              dealInfo?.platform_count || live?.merchant_count || 1;
 
             return (
               <div key={item.slug} className="col-lg-6 col-12">
@@ -464,6 +526,42 @@ export default function WatchlistWorkspace({
                       </div>
                     </div>
                   </div>
+
+                  {bestOffer && (
+                    <div
+                      className={`rounded-3 d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2 border px-3 py-2 ${
+                        targetReached
+                          ? 'bg-success-subtle border-success-subtle text-success-emphasis'
+                          : 'bg-light text-dark'
+                      }`}
+                    >
+                      <div className="small">
+                        <span className="fw-semibold">
+                          🔥 Giá thấp nhất trên {platformCount} sàn/đại lý:
+                        </span>{' '}
+                        <span className="badge bg-dark rounded-pill me-1 text-white">
+                          {PLATFORM_DISPLAY_LABELS[bestOffer.platform] ||
+                            bestOffer.platform.toUpperCase()}
+                        </span>
+                        <span className="fw-medium">
+                          {bestOffer.merchant_name}
+                        </span>{' '}
+                        {bestOffer.is_official_mall && (
+                          <span className="badge bg-success-subtle text-success border-success-subtle border">
+                            Official Mall
+                          </span>
+                        )}
+                      </div>
+                      <a
+                        href={bestOffer.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="small fw-semibold text-primary text-decoration-none"
+                      >
+                        Mở deal {bestOffer.price.toLocaleString('vi-VN')} ₫ ↗
+                      </a>
+                    </div>
+                  )}
 
                   {editingSlug === item.slug && (
                     <div className="rounded-3 bg-light d-flex align-items-center mb-3 gap-2 border p-3">

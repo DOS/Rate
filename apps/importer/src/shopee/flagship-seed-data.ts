@@ -32,6 +32,7 @@ export interface FlagshipDeviceSeed {
       | 'shopee'
       | 'lazada'
       | 'tiki'
+      | 'tiktok'
       | 'cellphones'
       | 'tgdd'
       | 'fptshop'
@@ -67,6 +68,7 @@ export interface SeedMerchantProfile {
     | 'shopee'
     | 'lazada'
     | 'tiki'
+    | 'tiktok'
     | 'cellphones'
     | 'tgdd'
     | 'fptshop'
@@ -291,6 +293,32 @@ export const SEED_MERCHANTS: SeedMerchantProfile[] = [
     rating_star: 4.93,
     follower_count: 790000,
     location: 'Toàn quốc (TP.HCM, Hà Nội, Đà Nẵng)',
+    dosafe_risk_score: 2,
+  },
+  {
+    key: 'tiktok_viettel_official',
+    platform: 'tiktok',
+    platform_shop_id: 'tts-viettel-mall-vn',
+    name: 'Viettel Store AAR TikTok Shop Mall',
+    slug: 'viettel-store-aar-tiktok-shop-mall',
+    url: 'https://shop.tiktok.com',
+    is_official: true,
+    rating_star: 4.92,
+    follower_count: 685000,
+    location: 'TP. Hồ Chí Minh & Hà Nội',
+    dosafe_risk_score: 3,
+  },
+  {
+    key: 'tiktok_samsung_official',
+    platform: 'tiktok',
+    platform_shop_id: 'tts-samsung-mall-vn',
+    name: 'Samsung Vietnam Official TikTok Shop Mall',
+    slug: 'samsung-vietnam-official-tiktok-shop-mall',
+    url: 'https://shop.tiktok.com',
+    is_official: true,
+    rating_star: 4.93,
+    follower_count: 820000,
+    location: 'TP. Hồ Chí Minh',
     dosafe_risk_score: 2,
   },
 ];
@@ -3753,10 +3781,11 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
 ];
 
 /**
- * Deterministically synthesizes missing platform listings (across Shopee, Lazada, Tiki,
- * CellphoneS, and Thế Giới Di Động) + 60-day price history + multi-platform JReviews
+ * Deterministically synthesizes missing platform listings (across all 10 supported platforms:
+ * Shopee, Lazada, Tiki, TikTok Shop, CellphoneS, Thế Giới Di Động, FPT Shop, Hoàng Hà Mobile,
+ * Di Động Việt, and Phong Vũ) + 60-day price history + multi-platform JReviews
  * (including authentic technical reviews and coin-spam / seeding samples) for any
- * canonical `master_product` so that 100% of the 22 catalog devices have full 5-platform depth.
+ * canonical `master_product` so that 100% of the 22 catalog devices have full 10-platform depth.
  */
 export function synthesizeCrossPlatformOffersForMaster(params: {
   modelKey: string;
@@ -3769,6 +3798,7 @@ export function synthesizeCrossPlatformOffersForMaster(params: {
     | 'shopee'
     | 'lazada'
     | 'tiki'
+    | 'tiktok'
     | 'cellphones'
     | 'tgdd'
     | 'fptshop'
@@ -3782,6 +3812,7 @@ export function synthesizeCrossPlatformOffersForMaster(params: {
     | 'shopee'
     | 'lazada'
     | 'tiki'
+    | 'tiktok'
     | 'cellphones'
     | 'tgdd'
     | 'fptshop'
@@ -3792,6 +3823,7 @@ export function synthesizeCrossPlatformOffersForMaster(params: {
     'shopee',
     'lazada',
     'tiki',
+    'tiktok',
     'cellphones',
     'tgdd',
     'fptshop',
@@ -3817,6 +3849,7 @@ export function synthesizeCrossPlatformOffersForMaster(params: {
       | 'shopee'
       | 'lazada'
       | 'tiki'
+      | 'tiktok'
       | 'cellphones'
       | 'tgdd'
       | 'fptshop'
@@ -3839,6 +3872,9 @@ export function synthesizeCrossPlatformOffersForMaster(params: {
         ? 'tiki_trading'
         : 'tiki_viettel_store';
     }
+    if (platform === 'tiktok') {
+      return brandLower.includes('samsung') ? 'tiktok_samsung_official' : 'tiktok_viettel_official';
+    }
     if (platform === 'cellphones') return 'cellphones_official';
     if (platform === 'tgdd') return 'tgdd_official';
     if (platform === 'fptshop') return 'fptshop_official';
@@ -3852,6 +3888,7 @@ export function synthesizeCrossPlatformOffersForMaster(params: {
       | 'shopee'
       | 'lazada'
       | 'tiki'
+      | 'tiktok'
       | 'cellphones'
       | 'tgdd'
       | 'fptshop'
@@ -3867,6 +3904,8 @@ export function synthesizeCrossPlatformOffersForMaster(params: {
         return `https://www.lazada.vn/products/${slugSafe}-i${itemId}.html`;
       case 'tiki':
         return `https://tiki.vn/${slugSafe}-p${itemId}.html`;
+      case 'tiktok':
+        return `https://shop.tiktok.com/view/product/${itemId}?region=VN&locale=vi-VN`;
       case 'cellphones':
         return `https://cellphones.com.vn/${slugSafe}.html`;
       case 'tgdd':
@@ -3888,23 +3927,25 @@ export function synthesizeCrossPlatformOffersForMaster(params: {
     if (present.has(platform)) continue;
 
     const multiplier =
-      platform === 'hoangha'
-        ? 0.978
-        : platform === 'didongviet'
-          ? 0.982
-          : platform === 'lazada'
-            ? 0.985
-            : platform === 'tiki'
-              ? 0.992
-              : platform === 'shopee'
-                ? 1.0
-                : platform === 'phongvu'
-                  ? 1.005
-                  : platform === 'cellphones'
-                    ? 1.012
-                    : platform === 'fptshop'
-                      ? 1.02
-                      : 1.024;
+      platform === 'tiktok'
+        ? 0.975
+        : platform === 'hoangha'
+          ? 0.978
+          : platform === 'didongviet'
+            ? 0.982
+            : platform === 'lazada'
+              ? 0.985
+              : platform === 'tiki'
+                ? 0.992
+                : platform === 'shopee'
+                  ? 1.0
+                  : platform === 'phongvu'
+                    ? 1.005
+                    : platform === 'cellphones'
+                      ? 1.012
+                      : platform === 'fptshop'
+                        ? 1.02
+                        : 1.024;
 
     const priceCurrent = round10k(base * multiplier);
     const priceOriginal = round10k(base * 1.12);
@@ -3918,19 +3959,21 @@ export function synthesizeCrossPlatformOffersForMaster(params: {
             ? 'Trần Hoàng Nam'
             : platform === 'lazada'
               ? 'Lê Minh Tuấn'
-              : platform === 'cellphones'
-                ? 'Nguyễn Quốc Bảo'
-                : platform === 'tgdd'
-                  ? 'Phạm Gia Huy'
-                  : platform === 'fptshop'
-                    ? 'Đỗ Quang Vinh'
-                    : platform === 'hoangha'
-                      ? 'Trương Minh Khôi'
-                      : platform === 'didongviet'
-                        ? 'Lý Thanh Tùng'
-                        : platform === 'phongvu'
-                          ? 'Phan Tuấn Kiệt'
-                          : 'hoang_long_tech',
+              : platform === 'tiktok'
+                ? 'Nguyễn Hải Đăng'
+                : platform === 'cellphones'
+                  ? 'Nguyễn Quốc Bảo'
+                  : platform === 'tgdd'
+                    ? 'Phạm Gia Huy'
+                    : platform === 'fptshop'
+                      ? 'Đỗ Quang Vinh'
+                      : platform === 'hoangha'
+                        ? 'Trương Minh Khôi'
+                        : platform === 'didongviet'
+                          ? 'Lý Thanh Tùng'
+                          : platform === 'phongvu'
+                            ? 'Phan Tuấn Kiệt'
+                            : 'hoang_long_tech',
         ratingStar: 5,
         comment: `Mua ${params.name} chính hãng nguyên seal, kích hoạt bảo hành điện tử chuẩn. Trải nghiệm thực tế ${screenInfo} và ${chipInfo} cực kỳ mượt, ${batteryInfo} đáp ứng trọn vẹn nhu cầu làm việc cả ngày.`,
         variation: primaryColor,
@@ -3943,26 +3986,30 @@ export function synthesizeCrossPlatformOffersForMaster(params: {
             ? 'Vũ Thanh Thảo'
             : platform === 'lazada'
               ? 'Đặng Thu Hà'
-              : platform === 'cellphones'
-                ? 'Bùi Đức Anh'
-                : platform === 'tgdd'
-                  ? 'Ngô Minh Châu'
-                  : platform === 'fptshop'
-                    ? 'Hoàng Lan Anh'
-                    : platform === 'hoangha'
-                      ? 'Mai Quốc Khánh'
-                      : platform === 'didongviet'
-                        ? 'Đinh Phương Thảo'
-                        : platform === 'phongvu'
-                          ? 'Võ Hoàng Yến'
-                          : 'linh_chi_official',
+              : platform === 'tiktok'
+                ? 'Lâm Khánh Linh'
+                : platform === 'cellphones'
+                  ? 'Bùi Đức Anh'
+                  : platform === 'tgdd'
+                    ? 'Ngô Minh Châu'
+                    : platform === 'fptshop'
+                      ? 'Hoàng Lan Anh'
+                      : platform === 'hoangha'
+                        ? 'Mai Quốc Khánh'
+                        : platform === 'didongviet'
+                          ? 'Đinh Phương Thảo'
+                          : platform === 'phongvu'
+                            ? 'Võ Hoàng Yến'
+                            : 'linh_chi_official',
         ratingStar: platform === 'tgdd' || platform === 'fptshop' ? 4 : 5,
         comment:
           platform === 'tgdd' || platform === 'fptshop'
             ? `Nhân viên cửa hàng hỗ trợ chu đáo, máy ${params.name} hoàn thiện cao cấp, ${screenInfo} hiển thị ngoài trời rõ ràng, mức giá niêm yết nhỉnh hơn sàn TMĐT một chút nhưng yên tâm bảo hành.`
             : platform === 'hoangha' || platform === 'didongviet'
               ? `Giá tại ${platform === 'hoangha' ? 'Hoàng Hà Mobile' : 'Di Động Việt'} cực kỳ tốt so với mặt bằng chung, máy ${params.name} nguyên seal chính hãng VN, thu cũ đổi mới nhanh gọn.`
-              : `Đóng gói chống sốc kỹ, giao nhanh trong 24h. Máy ${params.name} chạy ${chipInfo} mát và ổn định, rất đáng tiền trong phân khúc.`,
+              : platform === 'tiktok'
+                ? `Săn voucher phiên Megalive trên TikTok Shop Mall giá rẻ hơn thị trường cả triệu đồng, hàng chính hãng nguyên tem niêm phong, giao nhanh trong 48h.`
+                : `Đóng gói chống sốc kỹ, giao nhanh trong 24h. Máy ${params.name} chạy ${chipInfo} mát và ổn định, rất đáng tiền trong phân khúc.`,
         variation: secondaryColor,
         daysAgo: 4,
       },

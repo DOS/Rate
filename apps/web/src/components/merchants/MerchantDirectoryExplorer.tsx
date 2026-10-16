@@ -192,6 +192,7 @@ export default function MerchantDirectoryExplorer({
       'shopee',
       'lazada',
       'tiki',
+      'tiktok',
       'cellphones',
       'tgdd',
       'fptshop',
