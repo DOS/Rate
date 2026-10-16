@@ -8,7 +8,9 @@ import {
   getCachedMasterProductReviews,
   getCachedMasterProductReviewSummary,
   getCachedMasterProducts,
+  computeProductRadarSignal,
 } from '@/server/rate';
+import RadarBadge from '@/components/radar/RadarBadge';
 import JReviewsSection from '@/components/reviews/JReviewsSection';
 import PriceHistorySection from '@/components/price-history/PriceHistorySection';
 import CompareQuickToggle from '@/components/compare/CompareQuickToggle';
@@ -119,6 +121,8 @@ export async function ProductDetailView({
     getCachedMasterProductReviewSummary(product.id, reviews),
     getCachedMasterProductPriceHistory(product.id, offers),
   ]);
+
+  const radarSignal = computeProductRadarSignal(product, offers);
 
   const leaderboardBadges = computeProductStandingInCategory(
     product,
@@ -330,8 +334,21 @@ export async function ProductDetailView({
                       🛡️ Đã loại bỏ {ignoredCount} Seeding / Spam xu
                     </span>
                   )}
+                  <RadarBadge signal={radarSignal} minSpreadPct={0} />
                 </div>
               </div>
+
+              {radarSignal.verdict !== 'none' && (
+                <div
+                  className="small mb-3"
+                  data-testid="pdv-radar-signal"
+                  style={{ color: '#cbd5e1' }}
+                >
+                  {radarSignal.verdict === 'genuine_deal'
+                    ? radarSignal.genuineDeal?.explanationVi
+                    : radarSignal.fakeSaleTrap?.explanationVi}
+                </div>
+              )}
 
               <div className="row g-3 align-items-stretch">
                 {/* Dual Score Boxes */}

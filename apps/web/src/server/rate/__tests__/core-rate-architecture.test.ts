@@ -1550,7 +1550,114 @@ function runCoreArchitectureSuite() {
       offenders.join(', ')
   );
   console.log(
-    '  ✅ [36/36] Deal Radar single source of truth: shared index, labels, exports and no duplicated fetch/lookup (#104) passed'
+    '  ✅ [36/37] Deal Radar single source of truth: shared index, labels, exports and no duplicated fetch/lookup (#104) passed'
+  );
+
+  // 37. Radar is a product property: per-product signal is independent of feed truncation (#106)
+  const dealsMod = require('../deals') as typeof import('../deals');
+  const mkMaster = (n: number) =>
+    ({
+      id: 'id-' + n,
+      slug: 'phone-' + n,
+      name: 'Phone ' + n,
+      brand: 'Brand',
+      category: 'smartphones',
+      min_price: 90 * n,
+      max_price: 110 * n,
+    }) as never;
+  const mkOffer = (
+    n: number,
+    i: number,
+    price: number,
+    original: number | null
+  ) =>
+    ({
+      id: 'o-' + n + '-' + i,
+      platform: ['shopee', 'lazada', 'tiki'][i],
+      url: 'https://example.test/' + n + '/' + i,
+      price_current: price * n,
+      price_original: original == null ? null : original * n,
+      merchant: {
+        id: 'm-' + i,
+        name: 'Shop ' + i,
+        risk_score: 5,
+        is_official: true,
+      },
+    }) as never;
+  const clusters = [1, 2, 3, 4, 5].map((n) => ({
+    master: mkMaster(n),
+    offers: [
+      mkOffer(n, 0, 90, null),
+      mkOffer(n, 1, 100, null),
+      mkOffer(n, 2, 110, 200),
+    ],
+  }));
+  const feed = dealsMod.computeCrossPlatformDealRadarFromData(
+    clusters as never,
+    {
+      categorySlug: 'all',
+      limit: 3,
+    }
+  );
+  assert.equal(
+    feed.genuineDeals.length,
+    3,
+    'The feed is truncated to the requested limit'
+  );
+  const feedIndex = radarLib.buildRadarIndex(feed);
+  const wrongFromFeed = clusters.filter(
+    (c) =>
+      radarLib.getRadarSignal(feedIndex, (c.master as { slug: string }).slug)
+        .verdict !== 'genuine_deal'
+  );
+  assert.ok(
+    wrongFromFeed.length > 0,
+    'Regression guard: an index built from a truncated feed gives wrong verdicts beyond the limit'
+  );
+  for (const c of clusters) {
+    const sig = dealsMod.computeProductRadarSignal(
+      c.master as never,
+      c.offers as never
+    );
+    assert.equal(
+      sig.verdict,
+      'genuine_deal',
+      'Every product must get its own signal: ' +
+        (c.master as { slug: string }).slug
+    );
+    assert.ok(
+      sig.fakeSaleTrap,
+      'Inflated strikethrough must be detected per product'
+    );
+    assert.ok(
+      sig.priceSpread && sig.spreadPct > 0,
+      'Spread must be computed per product'
+    );
+  }
+  const pdvSrc = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/app/[locale]/smartphones/[slug]/page.tsx'
+    ),
+    'utf8'
+  );
+  assert.ok(
+    pdvSrc.includes('computeProductRadarSignal') &&
+      pdvSrc.includes('RadarBadge'),
+    'ProductDetailView must show the product Radar signal (#106)'
+  );
+  const catalogSrc = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/app/[locale]/smartphones/page.tsx'),
+    'utf8'
+  );
+  assert.ok(
+    /categorySlug as CanonicalCategorySlug,[\s\S]{0,200}limit: 50/.test(
+      catalogSrc
+    ),
+    'Category catalog must request the maximum radar limit so every card gets its badge'
+  );
+  console.log(
+    '  ✅ [37/37] Per-product Radar signal on ProductDetailView + catalog badges no longer limited to top-3 (#106) passed'
   );
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }

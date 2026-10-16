@@ -128,6 +128,7 @@ export {
 
 export {
   computeCrossPlatformDealRadarFromData,
+  computeProductRadarSignal,
   getCrossPlatformDealRadar,
   type CrossPlatformDealRadarItem,
   type CrossPlatformDealRadarResponse,

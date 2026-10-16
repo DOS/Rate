@@ -184,7 +184,9 @@ export async function CategoryCatalogContent({
     getMasterProducts(filterParams),
     getCrossPlatformDealRadar({
       categorySlug: categorySlug as CanonicalCategorySlug,
-      limit: 3,
+      // Max page size: card badges and exports need a signal for EVERY product,
+      // the feed strips below slice their own top entries.
+      limit: 50,
     }),
   ]);
 
