@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import type { KeySpecs, ProductSpecifications } from '@repo/shared-data';
 import {
   RADAR_CSV_HEADERS,

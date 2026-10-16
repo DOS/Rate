@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from '@/lib/navigation';
 import {
   getWatchlist,
@@ -89,7 +89,7 @@ export default function PriceWatchButton({
 
       {showEditor && (
         <div
-          className="card shadow-lg border rounded-4 p-3 position-absolute bg-white text-dark"
+          className="card rounded-4 position-absolute text-dark border bg-white p-3 shadow-lg"
           style={{
             zIndex: 1050,
             top: 'calc(100% + 8px)',
@@ -114,11 +114,11 @@ export default function PriceWatchButton({
             </strong>
           </p>
 
-          <div className="d-flex gap-1 mb-2">
+          <div className="d-flex mb-2 gap-1">
             <button
               type="button"
               onClick={() => setTargetInput(preset5Pct)}
-              className="btn btn-sm btn-light border rounded-pill flex-fill"
+              className="btn btn-sm btn-light rounded-pill flex-fill border"
               style={{ fontSize: '0.75rem' }}
             >
               Giảm 5% ({preset5Pct.toLocaleString('vi-VN')} ₫)
@@ -126,7 +126,7 @@ export default function PriceWatchButton({
             <button
               type="button"
               onClick={() => setTargetInput(preset10Pct)}
-              className="btn btn-sm btn-light border rounded-pill flex-fill"
+              className="btn btn-sm btn-light rounded-pill flex-fill border"
               style={{ fontSize: '0.75rem' }}
             >
               Giảm 10% ({preset10Pct.toLocaleString('vi-VN')} ₫)
@@ -145,7 +145,7 @@ export default function PriceWatchButton({
             />
           </div>
 
-          <div className="d-flex justify-content-between align-items-center gap-2 mt-2">
+          <div className="d-flex justify-content-between align-items-center mt-2 gap-2">
             {watchedItem ? (
               <button
                 type="button"
@@ -165,7 +165,7 @@ export default function PriceWatchButton({
             <button
               type="button"
               onClick={() => handleSave(targetInput)}
-              className="btn btn-sm btn-primary rounded-pill px-3 fw-medium ms-auto"
+              className="btn btn-sm btn-primary rounded-pill fw-medium ms-auto px-3"
             >
               Lưu mức giá
             </button>

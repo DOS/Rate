@@ -1,4 +1,4 @@
-import React, { Suspense } from 'react';
+import { Suspense } from 'react';
 import type { Metadata } from 'next';
 import NavbarDarkDynamic from '../components/navbar/NavbarDarkDynamic';
 import FooterTop from '../components/footer-top';
@@ -19,8 +19,8 @@ export async function generateMetadata({
       lang === 'en'
         ? 'Reset Your Password | Rate.vn'
         : lang === 'cs'
-        ? 'Obnovení hesla | Rate.vn'
-        : 'Khôi Phục Mật Khẩu Tài Khoản | Rate.vn',
+          ? 'Obnovení hesla | Rate.vn'
+          : 'Khôi Phục Mật Khẩu Tài Khoản | Rate.vn',
   };
 }
 
@@ -33,7 +33,9 @@ export default async function ForgotPasswordPage({
   return (
     <>
       <NavbarDarkDynamic links={[]} />
-      <Suspense fallback={<div className="container py-5 text-center">Loading...</div>}>
+      <Suspense
+        fallback={<div className="container py-5 text-center">Loading...</div>}
+      >
         <RateAuthPortal mode="forgot-password" locale={locale} />
       </Suspense>
       <FooterTop locale={locale} />
