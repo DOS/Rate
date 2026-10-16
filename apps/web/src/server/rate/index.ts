@@ -131,5 +131,6 @@ export {
   getCrossPlatformDealRadar,
   type CrossPlatformDealRadarItem,
   type CrossPlatformDealRadarResponse,
+  type CrossPlatformPriceSpreadItem,
   type DealRadarVerdict,
 } from './deals';

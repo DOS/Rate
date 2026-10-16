@@ -69,6 +69,20 @@ interface DealRadarFeedItem {
   explanationVi: string;
 }
 
+interface PriceSpreadFeedItem {
+  id: string;
+  productSlug: string;
+  productName: string;
+  productHref: string;
+  minPrice: number;
+  maxPrice: number;
+  spreadVnd: number;
+  spreadPct: number;
+  cheapestPlatform: string;
+  cheapestOfferUrl: string;
+  priciestPlatform: string;
+}
+
 async function fetchAndRenderDealRadar(
   settings: ExtensionSettings,
   categorySlug?: string
@@ -89,11 +103,14 @@ async function fetchAndRenderDealRadar(
       data?: {
         genuineDeals?: DealRadarFeedItem[];
         fakeSaleTraps?: DealRadarFeedItem[];
+        priceSpreadLeaders?: PriceSpreadFeedItem[];
       };
     };
     const deals = json?.data?.genuineDeals || [];
     const traps = json?.data?.fakeSaleTraps || [];
-    if (deals.length === 0 && traps.length === 0) return;
+    const spreads = json?.data?.priceSpreadLeaders || [];
+    if (deals.length === 0 && traps.length === 0 && spreads.length === 0)
+      return;
 
     slot.innerHTML = `
       <div class="card">
@@ -120,6 +137,33 @@ async function fetchAndRenderDealRadar(
           `
           )
           .join('')}
+        ${
+          spreads.length > 0
+            ? `
+            <div style="margin-top:10px;padding-top:8px;border-top:1px solid #2a2f3a;">
+              <div class="card-title" style="color:#60a5fa;">📊 Chênh Lệch Giá Đa Sàn Lớn Nhất</div>
+              ${spreads
+                .slice(0, 2)
+                .map(
+                  (s) => `
+                  <div class="offer-item">
+                    <div>
+                      <div class="offer-shop">${escapeHtml(s.productName)}</div>
+                      <div class="offer-meta" style="color:#93c5fd;">
+                        ${escapeHtml(s.cheapestPlatform.toUpperCase())} (${formatVnd(s.minPrice)}) vs ${escapeHtml(s.priciestPlatform.toUpperCase())} (${formatVnd(s.maxPrice)})
+                      </div>
+                    </div>
+                    <a href="${escapeHtml(s.cheapestOfferUrl)}" target="_blank" rel="noopener noreferrer" class="offer-price" style="text-decoration:none;color:#60a5fa;">
+                      Lệch ${formatVnd(s.spreadVnd)}
+                    </a>
+                  </div>
+                `
+                )
+                .join('')}
+            </div>
+          `
+            : ''
+        }
         ${
           traps.length > 0
             ? `

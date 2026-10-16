@@ -41,6 +41,29 @@ export interface CrossPlatformDealRadarItem {
   explanationVi: string;
 }
 
+export interface CrossPlatformPriceSpreadItem {
+  id: string;
+  productSlug: string;
+  productName: string;
+  brand: string;
+  categorySlug: CanonicalCategorySlug;
+  productHref: string;
+  imageUrl: string | null;
+  platformCount: number;
+  offerCount: number;
+  minPrice: number;
+  maxPrice: number;
+  medianPrice: number;
+  spreadVnd: number;
+  spreadPct: number;
+  cheapestPlatform: string;
+  cheapestMerchantName: string;
+  cheapestOfferUrl: string;
+  priciestPlatform: string;
+  priciestMerchantName: string;
+  explanationVi: string;
+}
+
 export interface CrossPlatformDealRadarResponse {
   generatedAt: string;
   categoryFilter: CanonicalCategorySlug | 'all';
@@ -48,6 +71,7 @@ export interface CrossPlatformDealRadarResponse {
   totalOffersAnalyzed: number;
   genuineDeals: CrossPlatformDealRadarItem[];
   fakeSaleTraps: CrossPlatformDealRadarItem[];
+  priceSpreadLeaders: CrossPlatformPriceSpreadItem[];
 }
 
 function computeMedian(values: number[]): number {
@@ -69,6 +93,8 @@ function computeMedian(values: number[]): number {
  *    that sit significantly below the 10-platform market median.
  * 2. `fakeSaleTraps`: Offers claiming a strikethrough `price_original` that is inflated
  *    `>= 10%` above the 10-platform market median while the actual selling price is not a real deal.
+ * 3. `priceSpreadLeaders`: Products with the largest absolute price spread (`max_price - min_price`)
+ *    across 10 retailers so buyers can avoid overpriced listings and buy at the lowest verified retailer.
  */
 export function computeCrossPlatformDealRadarFromData(
   clusters: Array<{
@@ -85,6 +111,7 @@ export function computeCrossPlatformDealRadarFromData(
 
   const genuineDeals: CrossPlatformDealRadarItem[] = [];
   const fakeSaleTraps: CrossPlatformDealRadarItem[] = [];
+  const priceSpreadLeaders: CrossPlatformPriceSpreadItem[] = [];
   let totalClustersAnalyzed = 0;
   let totalOffersAnalyzed = 0;
 
@@ -124,6 +151,42 @@ export function computeCrossPlatformDealRadarFromData(
     const sortedByPrice = [...validOffers].sort(
       (a, b) => a.price_current - b.price_current
     );
+    const cheapestOffer = sortedByPrice[0]!;
+    const priciestOffer = sortedByPrice[sortedByPrice.length - 1]!;
+    const spreadVnd = Math.max(0, marketMaxPrice - marketMinPrice);
+    const spreadPct =
+      marketMinPrice > 0
+        ? Math.round((spreadVnd / marketMinPrice) * 1000) / 10
+        : 0;
+    const platformCount = new Set(
+      validOffers.map((o) => o.platform.toLowerCase())
+    ).size;
+
+    if (spreadVnd > 0) {
+      priceSpreadLeaders.push({
+        id: `spread-${master.slug}`,
+        productSlug: master.slug,
+        productName: master.name,
+        brand: master.brand,
+        categorySlug,
+        productHref,
+        imageUrl,
+        platformCount,
+        offerCount: validOffers.length,
+        minPrice: marketMinPrice,
+        maxPrice: marketMaxPrice,
+        medianPrice: marketMedianPrice,
+        spreadVnd,
+        spreadPct,
+        cheapestPlatform: cheapestOffer.platform,
+        cheapestMerchantName: cheapestOffer.merchant.name,
+        cheapestOfferUrl: cheapestOffer.url,
+        priciestPlatform: priciestOffer.platform,
+        priciestMerchantName: priciestOffer.merchant.name,
+        explanationVi: `Chênh lệch ${spreadVnd.toLocaleString('vi-VN')}₫ (${spreadPct}%) giữa ${cheapestOffer.platform.toUpperCase()} (${marketMinPrice.toLocaleString('vi-VN')}₫) và ${priciestOffer.platform.toUpperCase()} (${marketMaxPrice.toLocaleString('vi-VN')}₫).`,
+      });
+    }
+
     const bestOffer = sortedByPrice.find(
       (o) => Number(o.merchant?.risk_score ?? 10) <= 30
     );
@@ -245,6 +308,10 @@ export function computeCrossPlatformDealRadarFromData(
 
   fakeSaleTraps.sort((a, b) => b.fakeMarkupPct - a.fakeMarkupPct);
 
+  priceSpreadLeaders.sort(
+    (a, b) => b.spreadVnd - a.spreadVnd || b.spreadPct - a.spreadPct
+  );
+
   return {
     generatedAt: new Date().toISOString(),
     categoryFilter,
@@ -252,6 +319,7 @@ export function computeCrossPlatformDealRadarFromData(
     totalOffersAnalyzed,
     genuineDeals: genuineDeals.slice(0, limit),
     fakeSaleTraps: fakeSaleTraps.slice(0, limit),
+    priceSpreadLeaders: priceSpreadLeaders.slice(0, limit),
   };
 }
 
