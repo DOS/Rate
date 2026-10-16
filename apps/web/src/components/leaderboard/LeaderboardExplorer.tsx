@@ -581,6 +581,127 @@ export default function LeaderboardExplorer({
     [rankedEntries]
   );
 
+  const [copiedLeaderboardMd, setCopiedLeaderboardMd] = useState(false);
+  const [versusSlugA, setVersusSlugA] = useState<string>('');
+  const [versusSlugB, setVersusSlugB] = useState<string>('');
+
+  const effectiveVersusA = useMemo(() => {
+    if (
+      versusSlugA &&
+      rankedEntries.some((e) => e.product.slug === versusSlugA)
+    ) {
+      return versusSlugA;
+    }
+    return rankedEntries[0]?.product.slug ?? '';
+  }, [versusSlugA, rankedEntries]);
+
+  const effectiveVersusB = useMemo(() => {
+    if (
+      versusSlugB &&
+      versusSlugB !== effectiveVersusA &&
+      rankedEntries.some((e) => e.product.slug === versusSlugB)
+    ) {
+      return versusSlugB;
+    }
+    return (
+      rankedEntries.find((e) => e.product.slug !== effectiveVersusA)?.product
+        .slug ?? ''
+    );
+  }, [versusSlugB, effectiveVersusA, rankedEntries]);
+
+  const handleCopyLeaderboardMarkdown = async () => {
+    if (typeof navigator === 'undefined' || rankedEntries.length === 0) return;
+    const headers = [
+      'Rank',
+      'Product',
+      'Brand',
+      'Active Score (/5.0)',
+      'User Rating (/5.0)',
+      'Expert Score (/10)',
+      'Reference Price (VND)',
+    ];
+    const sep = headers.map(() => '---');
+    const rows = rankedEntries.map((entry, idx) => [
+      `#${idx + 1}`,
+      entry.product.name.replace(/\|/g, '-'),
+      entry.product.brand || '-',
+      entry.activeScore5.toFixed(2),
+      entry.userScore5.toFixed(1),
+      entry.expertScore10.toFixed(1),
+      entry.product.min_price
+        ? `${Number(entry.product.min_price).toLocaleString('vi-VN')} ₫`
+        : '-',
+    ]);
+    const md = [
+      `### 🏆 Rate.vn JReviews Leaderboard (${activeCategory.toUpperCase()} - ${copy.critLabels[activeCriterion]})`,
+      '',
+      `| ${headers.join(' | ')} |`,
+      `| ${sep.join(' | ')} |`,
+      ...rows.map((r) => `| ${r.join(' | ')} |`),
+    ].join('\n');
+
+    try {
+      await navigator.clipboard.writeText(md);
+      setCopiedLeaderboardMd(true);
+      setTimeout(() => setCopiedLeaderboardMd(false), 2500);
+    } catch {
+      // Ignore clipboard failure
+    }
+  };
+
+  const handleDownloadLeaderboardCsv = () => {
+    if (typeof document === 'undefined' || rankedEntries.length === 0) return;
+    const escapeCsv = (val: string) => `"${val.replace(/"/g, '""')}"`;
+    const headers = [
+      'Rank',
+      'Slug',
+      'Name',
+      'Brand',
+      'Category',
+      'ActiveScore5',
+      'UserScore5',
+      'ExpertScore10',
+      'Screen5',
+      'Performance5',
+      'Camera5',
+      'Battery5',
+      'Value5',
+      'MinPriceVND',
+    ];
+    const rows = rankedEntries.map((entry, idx) => [
+      String(idx + 1),
+      entry.product.slug,
+      entry.product.name,
+      entry.product.brand || '',
+      entry.categorySlug,
+      entry.activeScore5.toFixed(2),
+      entry.userScore5.toFixed(1),
+      entry.expertScore10.toFixed(1),
+      entry.criteria.screen.toFixed(1),
+      entry.criteria.performance.toFixed(1),
+      entry.criteria.camera.toFixed(1),
+      entry.criteria.battery.toFixed(1),
+      entry.criteria.value.toFixed(1),
+      String(entry.product.min_price || 0),
+    ]);
+    const csvContent =
+      '\uFEFF' +
+      [
+        headers.map(escapeCsv).join(','),
+        ...rows.map((r) => r.map(escapeCsv).join(',')),
+      ].join('\r\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `rate-leaderboard-${activeCategory}-${activeCriterion}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   const handleSelectCategory = (cat: CanonicalCategorySlug) => {
     setActiveCategory(cat);
     setSelectedBrand('all');
@@ -657,15 +778,47 @@ export default function LeaderboardExplorer({
             </span>
           </div>
 
-          {top3Slugs.length >= 2 && (
-            <Link
-              href={`/compare?cat=${activeCategory}&slugs=${top3Slugs.join(',')}`}
-              className="btn btn-sm btn-danger rounded-pill fw-semibold d-inline-flex align-items-center gap-2 px-3 py-2"
+          <div className="d-flex align-items-center flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={handleCopyLeaderboardMarkdown}
+              className="btn btn-sm btn-outline-dark rounded-pill fw-semibold px-3 py-1"
+              data-testid="copy-leaderboard-md-btn"
             >
-              <BsArrowLeftRight />
-              <span>{copy.compareTop3Btn}</span>
-            </Link>
-          )}
+              {copiedLeaderboardMd
+                ? lang === 'en'
+                  ? '✅ Copied Markdown!'
+                  : lang === 'cs'
+                    ? '✅ Zkopírováno!'
+                    : '✅ Đã chép BXH Markdown!'
+                : lang === 'en'
+                  ? '📋 Copy Leaderboard Markdown'
+                  : lang === 'cs'
+                    ? '📋 Kopírovat žebříček (MD)'
+                    : '📋 Sao chép BXH Markdown'}
+            </button>
+            <button
+              type="button"
+              onClick={handleDownloadLeaderboardCsv}
+              className="btn btn-sm btn-outline-secondary rounded-pill fw-semibold px-3 py-1"
+              data-testid="download-leaderboard-csv-btn"
+            >
+              {lang === 'en'
+                ? '📥 Export CSV'
+                : lang === 'cs'
+                  ? '📥 Exportovat CSV'
+                  : '📥 Xuất bảng CSV'}
+            </button>
+            {top3Slugs.length >= 2 && (
+              <Link
+                href={`/compare?cat=${activeCategory}&slugs=${top3Slugs.join(',')}`}
+                className="btn btn-sm btn-danger rounded-pill fw-semibold d-inline-flex align-items-center gap-2 px-3 py-1"
+              >
+                <BsArrowLeftRight />
+                <span>{copy.compareTop3Btn}</span>
+              </Link>
+            )}
+          </div>
         </div>
 
         {/* 5-Category Switcher Pills */}
@@ -892,6 +1045,80 @@ export default function LeaderboardExplorer({
             </div>
           </div>
         </div>
+
+        {/* Interactive Same-Category 1v1 Matchup Picker (Issue #67) */}
+        {rankedEntries.length >= 2 && (
+          <div className="border-top mt-3 pt-3">
+            <div className="row g-2 align-items-center">
+              <div className="col-lg-4 col-md-12">
+                <div className="small fw-semibold text-dark">
+                  ⚡{' '}
+                  {lang === 'en'
+                    ? 'Quick 1v1 Matchup Picker (Same Category):'
+                    : lang === 'cs'
+                      ? 'Rychlý 1v1 duel ze žebříčku:'
+                      : 'Chọn nhanh 2 máy bất kỳ trong BXH để đấu 1v1:'}
+                </div>
+              </div>
+              <div className="col-lg-3 col-md-5">
+                <select
+                  className="form-select form-select-sm"
+                  value={effectiveVersusA}
+                  onChange={(e) => setVersusSlugA(e.target.value)}
+                  aria-label="Select Device A for 1v1 Matchup"
+                >
+                  {rankedEntries.map((entry, idx) => (
+                    <option key={entry.product.slug} value={entry.product.slug}>
+                      #{idx + 1} {entry.product.name} (
+                      {entry.activeScore5.toFixed(2)}★)
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="col-lg-3 col-md-5">
+                <select
+                  className="form-select form-select-sm"
+                  value={effectiveVersusB}
+                  onChange={(e) => setVersusSlugB(e.target.value)}
+                  aria-label="Select Device B for 1v1 Matchup"
+                >
+                  {rankedEntries
+                    .filter((e) => e.product.slug !== effectiveVersusA)
+                    .map((entry) => {
+                      const rankIdx = rankedEntries.findIndex(
+                        (r) => r.product.slug === entry.product.slug
+                      );
+                      return (
+                        <option
+                          key={entry.product.slug}
+                          value={entry.product.slug}
+                        >
+                          #{rankIdx + 1} {entry.product.name} (
+                          {entry.activeScore5.toFixed(2)}★)
+                        </option>
+                      );
+                    })}
+                </select>
+              </div>
+              <div className="col-lg-2 col-md-2">
+                {effectiveVersusA && effectiveVersusB && (
+                  <Link
+                    href={`/compare/${effectiveVersusA}-vs-${effectiveVersusB}`}
+                    className="btn btn-sm btn-danger rounded-pill fw-bold w-100"
+                    data-testid="leaderboard-1v1-go-btn"
+                  >
+                    ⚔️{' '}
+                    {lang === 'en'
+                      ? '1v1 Battle'
+                      : lang === 'cs'
+                        ? 'Spustit 1v1'
+                        : 'Đấu 1v1'}
+                  </Link>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 2. Top 3 Podium (.rate-scoreboard-dark) */}

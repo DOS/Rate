@@ -22,6 +22,7 @@ export type MerchantSortOption =
   'trust_desc' | 'products_desc' | 'seeding_asc' | 'followers_desc';
 
 export type MerchantRiskTier = 'all' | 'safe' | 'moderate' | 'warning';
+export type MerchantSeedingTier = 'all' | 'low' | 'elevated';
 
 interface MerchantDirectoryExplorerProps {
   readonly initialMerchants: readonly MerchantSummary[];
@@ -45,7 +46,9 @@ export default function MerchantDirectoryExplorer({
   const [platform, setPlatform] = useState(initialPlatform.toLowerCase());
   const [officialOnly, setOfficialOnly] = useState(initialOfficialOnly);
   const [riskTier, setRiskTier] = useState<MerchantRiskTier>('all');
+  const [seedingTier, setSeedingTier] = useState<MerchantSeedingTier>('all');
   const [sortBy, setSortBy] = useState<MerchantSortOption>(initialSort);
+  const [copiedMerchantsMd, setCopiedMerchantsMd] = useState(false);
 
   const labels = useMemo(() => {
     if (lang === 'en') {
@@ -62,6 +65,12 @@ export default function MerchantDirectoryExplorer({
         riskSafe: 'Safe (>= 80)',
         riskModerate: 'Moderate (60-79)',
         riskWarning: 'Warning (< 60)',
+        seedingAll: 'All Review Risk',
+        seedingLow: 'Clean Reviews (<=15% Seeding)',
+        seedingElevated: 'Elevated Seeding (>15%)',
+        copyMdBtn: '📋 Copy Directory Markdown',
+        copiedMdBtn: '✅ Copied Markdown!',
+        exportCsvBtn: '📥 Export CSV',
         sortLabel: 'Sort by:',
         sortTrust: 'Highest Trust Score',
         sortProducts: 'Most Tracked Products',
@@ -105,6 +114,12 @@ export default function MerchantDirectoryExplorer({
         riskSafe: 'Bezpečné (>= 80)',
         riskModerate: 'Střední (60-79)',
         riskWarning: 'Varování (< 60)',
+        seedingAll: 'Všechna rizika recenzí',
+        seedingLow: 'Čisté recenze (<=15 % Seeding)',
+        seedingElevated: 'Vyšší Seeding (>15 %)',
+        copyMdBtn: '📋 Kopírovat seznam (MD)',
+        copiedMdBtn: '✅ Zkopírováno!',
+        exportCsvBtn: '📥 Exportovat CSV',
         sortLabel: 'Řadit dle:',
         sortTrust: 'Nejvyšší Trust Score',
         sortProducts: 'Nejvíce produktů',
@@ -148,6 +163,12 @@ export default function MerchantDirectoryExplorer({
       riskSafe: 'An toàn (>= 80)',
       riskModerate: 'Trung bình (60-79)',
       riskWarning: 'Cảnh báo (< 60)',
+      seedingAll: 'Mọi mức Seeding AI',
+      seedingLow: 'Đánh giá sạch (Seeding <= 15%)',
+      seedingElevated: 'Seeding cao (> 15%)',
+      copyMdBtn: '📋 Sao chép danh bạ Markdown',
+      copiedMdBtn: '✅ Đã chép Markdown!',
+      exportCsvBtn: '📥 Xuất danh bạ CSV',
       sortLabel: 'Sắp xếp:',
       sortTrust: 'Điểm Tin cậy cao nhất',
       sortProducts: 'Nhiều sản phẩm nhất',
@@ -241,6 +262,12 @@ export default function MerchantDirectoryExplorer({
       if (riskTier === 'warning' && m.trust_score >= 60) {
         return false;
       }
+      if (seedingTier === 'low' && m.review_risk_score > 15) {
+        return false;
+      }
+      if (seedingTier === 'elevated' && m.review_risk_score <= 15) {
+        return false;
+      }
       if (kw) {
         const matchName = m.name.toLowerCase().includes(kw);
         const matchShopId = m.platform_shop_id.toLowerCase().includes(kw);
@@ -276,13 +303,22 @@ export default function MerchantDirectoryExplorer({
           return 0;
       }
     });
-  }, [initialMerchants, query, platform, officialOnly, riskTier, sortBy]);
+  }, [
+    initialMerchants,
+    query,
+    platform,
+    officialOnly,
+    riskTier,
+    seedingTier,
+    sortBy,
+  ]);
 
   const hasActiveFilters =
     query.trim() !== '' ||
     platform !== 'all' ||
     officialOnly ||
     riskTier !== 'all' ||
+    seedingTier !== 'all' ||
     sortBy !== 'trust_desc';
 
   const handleReset = () => {
@@ -290,7 +326,98 @@ export default function MerchantDirectoryExplorer({
     setPlatform('all');
     setOfficialOnly(false);
     setRiskTier('all');
+    setSeedingTier('all');
     setSortBy('trust_desc');
+  };
+
+  const handleCopyMerchantsMarkdown = async () => {
+    if (typeof navigator === 'undefined' || filteredMerchants.length === 0)
+      return;
+    const headers = [
+      'Merchant',
+      'Platform',
+      'Official Mall',
+      'Trust Score (/100)',
+      'AI Seeding Risk (%)',
+      'Authentic Reviews',
+      'Tracked Products',
+    ];
+    const sep = headers.map(() => '---');
+    const rows = filteredMerchants.map((m) => [
+      m.name.replace(/\|/g, '-'),
+      m.platform.toUpperCase(),
+      m.is_official ? 'Yes' : 'No',
+      `${m.trust_score}/100`,
+      `${m.review_risk_score}%`,
+      String(m.review_risk_breakdown.authentic_count),
+      String(m.product_count),
+    ]);
+    const md = [
+      `### 🛡️ Rate.vn Merchant Trust Directory (${filteredMerchants.length} merchants)`,
+      '',
+      `| ${headers.join(' | ')} |`,
+      `| ${sep.join(' | ')} |`,
+      ...rows.map((r) => `| ${r.join(' | ')} |`),
+    ].join('\n');
+
+    try {
+      await navigator.clipboard.writeText(md);
+      setCopiedMerchantsMd(true);
+      setTimeout(() => setCopiedMerchantsMd(false), 2500);
+    } catch {
+      // Ignore clipboard error
+    }
+  };
+
+  const handleDownloadMerchantsCsv = () => {
+    if (typeof document === 'undefined' || filteredMerchants.length === 0)
+      return;
+    const escapeCsv = (val: string) => `"${val.replace(/"/g, '""')}"`;
+    const headers = [
+      'MerchantID',
+      'Name',
+      'Platform',
+      'ShopID',
+      'IsOfficial',
+      'TrustScore',
+      'ReviewRiskScorePercent',
+      'AuthenticReviewCount',
+      'IgnoredReviewCount',
+      'TrackedProducts',
+      'FollowerCount',
+    ];
+    const rows = filteredMerchants.map((m) => [
+      m.id,
+      m.name,
+      m.platform,
+      m.platform_shop_id,
+      m.is_official ? 'true' : 'false',
+      String(m.trust_score),
+      String(m.review_risk_score),
+      String(m.review_risk_breakdown.authentic_count),
+      String(
+        m.review_risk_breakdown.coin_spam_count +
+          m.review_risk_breakdown.seeding_fake_count
+      ),
+      String(m.product_count),
+      String(m.follower_count),
+    ]);
+    const csvContent =
+      '\uFEFF' +
+      [
+        headers.map(escapeCsv).join(','),
+        ...rows.map((r) => r.map(escapeCsv).join(',')),
+      ].join('\r\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `rate-merchants-audit-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -400,7 +527,7 @@ export default function MerchantDirectoryExplorer({
           </div>
         </div>
 
-        {/* Platform Pills + Official Toggle */}
+        {/* Platform Pills + Official Toggle + Seeding Risk Filter */}
         <div className="d-flex justify-content-between align-items-center border-top mt-3 flex-wrap gap-2 pt-3">
           <div className="d-flex align-items-center flex-wrap gap-2">
             <button
@@ -440,10 +567,50 @@ export default function MerchantDirectoryExplorer({
               <BsCheckCircleFill />
               {labels.officialMallOnly}
             </button>
+
+            <div className="btn-group btn-group-sm" role="group">
+              {(
+                [
+                  { id: 'all', label: labels.seedingAll },
+                  { id: 'low', label: labels.seedingLow },
+                  { id: 'elevated', label: labels.seedingElevated },
+                ] as const
+              ).map((tier) => (
+                <button
+                  key={tier.id}
+                  type="button"
+                  onClick={() => setSeedingTier(tier.id)}
+                  className={`btn rounded-pill ms-1 px-2 py-1 ${
+                    seedingTier === tier.id
+                      ? 'btn-primary fw-semibold text-white'
+                      : 'btn-outline-primary'
+                  }`}
+                  style={{ fontSize: '0.75rem' }}
+                >
+                  {tier.label}
+                </button>
+              ))}
+            </div>
           </div>
 
-          <div className="d-flex align-items-center gap-3">
-            <span className="small text-muted">
+          <div className="d-flex align-items-center flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={handleCopyMerchantsMarkdown}
+              className="btn btn-sm btn-outline-dark rounded-pill fw-semibold px-3 py-1"
+              data-testid="copy-merchants-md-btn"
+            >
+              {copiedMerchantsMd ? labels.copiedMdBtn : labels.copyMdBtn}
+            </button>
+            <button
+              type="button"
+              onClick={handleDownloadMerchantsCsv}
+              className="btn btn-sm btn-outline-secondary rounded-pill fw-semibold px-3 py-1"
+              data-testid="download-merchants-csv-btn"
+            >
+              {labels.exportCsvBtn}
+            </button>
+            <span className="small text-muted ms-1">
               {labels.showingCount}{' '}
               <strong className="text-dark">{filteredMerchants.length}</strong>{' '}
               {labels.ofCount} {initialMerchants.length} {labels.merchantsUnit}

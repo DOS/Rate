@@ -898,6 +898,37 @@ function runCoreArchitectureSuite() {
   console.log(
     '  ✅ [19/19] Same-Category 1v1 Matchup Switcher (#65) & Watchlist Portfolio Markdown/CSV Export (#66) passed'
   );
+
+  // 20. Leaderboard Export & 1v1 Matchup Picker (#67) + Merchant Seeding Filter & CSV Export (#68)
+  const leaderboardExplorerUpdated = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/components/leaderboard/LeaderboardExplorer.tsx'
+    ),
+    'utf8'
+  );
+  const merchantExplorerUpdated = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/components/merchants/MerchantDirectoryExplorer.tsx'
+    ),
+    'utf8'
+  );
+  assert.ok(
+    leaderboardExplorerUpdated.includes('handleCopyLeaderboardMarkdown') &&
+      leaderboardExplorerUpdated.includes('handleDownloadLeaderboardCsv') &&
+      leaderboardExplorerUpdated.includes('leaderboard-1v1-go-btn'),
+    'LeaderboardExplorer must provide 1-Click Markdown/CSV export and Interactive 1v1 Matchup Picker'
+  );
+  assert.ok(
+    merchantExplorerUpdated.includes('seedingTier') &&
+      merchantExplorerUpdated.includes('handleCopyMerchantsMarkdown') &&
+      merchantExplorerUpdated.includes('handleDownloadMerchantsCsv'),
+    'MerchantDirectoryExplorer must provide AI Seeding Risk filter and 1-Click Markdown/CSV export'
+  );
+  console.log(
+    '  ✅ [20/20] Leaderboard Markdown/CSV Export & 1v1 Matchup Picker (#67) + Merchant Seeding Filter & CSV Export (#68) passed'
+  );
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
 
