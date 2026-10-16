@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="dark" />
+  <title>Audit nguồn gốc dữ liệu catalog</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0f1113;
+      --surface: #161a1e;
+      --surface-elevated: #1d2228;
+      --border: #2a313a;
+      --text: #e8edf2;
+      --text-muted: #9ba5b0;
+      --accent: #FF2E29;
+      --accent-soft: rgba(255, 46, 41, 0.14);
+      --green: #22c55e;
+      --green-soft: rgba(34, 197, 94, 0.14);
+      --amber: #f59e0b;
+      --amber-soft: rgba(245, 158, 11, 0.14);
+      --code-bg: #0b0d0f;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 36px 16px 64px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+      line-height: 1.65;
+    }
+    .container { max-width: 960px; margin: 0 auto; }
+    .badge {
+      display: inline-block; padding: 4px 10px; border-radius: 6px;
+      font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+    }
+    .badge-accent { background: var(--accent-soft); color: var(--accent); border: 1px solid rgba(255,46,41,0.35); }
+    .badge-green { background: var(--green-soft); color: var(--green); border: 1px solid rgba(34,197,94,0.35); }
+    .badge-amber { background: var(--amber-soft); color: var(--amber); border: 1px solid rgba(245,158,11,0.35); }
+    h1 { font-size: 28px; margin: 12px 0 8px; letter-spacing: -0.02em; }
+    h2 { font-size: 20px; margin: 32px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); color: #fff; }
+    h3 { font-size: 16px; margin: 20px 0 8px; color: #fff; }
+    .subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 24px; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px 24px; margin-bottom: 20px; }
+    .card-recommend { border-left: 4px solid var(--accent); background: linear-gradient(90deg, rgba(255,46,41,0.08) 0%, var(--surface) 35%); }
+    .table-wrap { overflow-x: auto; margin: 16px 0; }
+    table { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+    th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); font-size: 14px; vertical-align: top; }
+    th { background: var(--surface-elevated); color: #fff; font-weight: 600; }
+    code { background: var(--code-bg); color: #ff8582; padding: 2px 6px; border-radius: 4px; font-family: "JetBrains Mono", Consolas, monospace; font-size: 13px; }
+    pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px; overflow-x: auto; font-size: 13px; line-height: 1.5; color: #d7e0ea; }
+    pre code { background: transparent; color: inherit; padding: 0; }
+    .muted { color: var(--text-muted); }
+    .yes { color: var(--green); font-weight: 600; }
+    .no { color: var(--text-muted); }
+    ol li, ul li { margin-bottom: 6px; }
+    a { color: #ff8582; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <span class="badge badge-accent">Nghiêm trọng</span>
+  <span class="badge badge-amber">Cần JOY quyết</span>
+  <h1>Audit nguồn gốc dữ liệu catalog trên production</h1>
+  <p class="subtitle">16/10/2026 · Agent: Core · Số liệu từ workflow <code>audit-catalog</code> (run 38897434738, chỉ đọc) trên DB <code>rate</code> production</p>
+
+  <div class="card card-recommend">
+    <h3 style="margin-top:0">Kết luận</h3>
+    <ul>
+      <li><b>87% listing, 89% review và 89% mốc giá</b> đang hiển thị trên rate.vn là dữ liệu do chính hệ thống tự tạo, không phải crawl từ sàn.</li>
+      <li>Chỉ <b>3 / 361</b> listing có nguồn crawl thật. Chỉ <b>3 / 36</b> sản phẩm gốc và <b>1 / 18</b> gian hàng có ít nhất một listing thật.</li>
+      <li>Pipeline crawl thật gần như chưa chạy được: cả hệ thống mới có 17 crawl job. Lần chạy định kỳ gần nhất chỉ xử lý 3 job Shopee và cả 3 đều bị Shopee chặn.</li>
+      <li>Mọi thuật toán (phát hiện seeding, điểm rủi ro gian hàng, kiểm tra chênh giá) hiện đang được tinh chỉnh và hiển thị trên dữ liệu giả. Làm giàu dữ liệu thật phải đi trước mọi việc khác.</li>
+    </ul>
+  </div>
+
+  <h2>1. Số liệu</h2>
+  <div class="table-wrap">
+  <table>
+    <tr><th>Nguồn gốc</th><th>Listing</th><th>Review</th><th>Mốc lịch sử giá</th></tr>
+    <tr><td><b>Giả lập</b> (id <code>syn-*</code>)</td><td>314</td><td>672</td><td>1.884</td></tr>
+    <tr><td><b>Crawl thật</b> (khớp một crawl job đã xong)</td><td>3</td><td>30</td><td>12</td></tr>
+    <tr><td><b>Chưa xác minh</b> (không phải <code>syn-*</code>, không có crawl job)</td><td>44</td><td>55</td><td>224</td></tr>
+    <tr><th>Tổng</th><th>361</th><th>757</th><th>2.120</th></tr>
+  </table>
+  </div>
+  <p>Theo sàn: Phong Vũ, Di Động Việt, Hoàng Hà và TikTok Shop có <b>100% listing giả lập</b> (36/36). FPT Shop 35/36, Tiki và Lazada 33/36, TGDĐ 32/36, CellphoneS 26/36. Shopee là sàn duy nhất có listing crawl thật (3), cùng 11 listing giả lập và 23 chưa xác minh.</p>
+  <p class="muted">Nhóm "chưa xác minh" gồm các listing viết tay trong file seed. Lần probe hôm nay thử mở URL mới nhất của từng sàn: Lazada, Tiki, CellphoneS, Hoàng Hà, Di Động Việt trả 404, FPT Shop và Phong Vũ trả 403. Nhiều khả năng phần lớn nhóm này cũng không tồn tại thật.</p>
+
+  <h2>2. Dữ liệu giả đến từ đâu</h2>
+  <ul>
+    <li>Hàm <code>synthesizeCrossPlatformOffersForMaster</code> trong <code>apps/importer/src/shopee/flagship-seed-data.ts</code>, chạy qua <code>test-ai-enricher.ts --backfill</code>. Workflow Rate-Services gọi bằng mode <code>backfill</code>, lệnh <code>pnpm run enrich:backfill</code>.</li>
+    <li>Với mỗi sản phẩm gốc, sàn nào chưa có listing thì hàm tạo một listing mới với:
+      <ul>
+        <li>giá = giá gốc nhân hệ số cố định theo sàn (ví dụ TikTok 0,975, FPT Shop 1,02);</li>
+        <li>lượt bán cố định 420 / 310 / 195, điểm 4,92, 140 lượt đánh giá;</li>
+        <li>lịch sử giá 60 ngày tính ngược từ giá hiện tại;</li>
+        <li>2 review 4 đến 5 sao với tên người viết bịa (ví dụ "Phạm Gia Huy" ở TGDĐ, "Đỗ Quang Vinh" ở FPT Shop). Shopee và Lazada có thêm 1 review "spam xu" cài sẵn để bộ phân tích bắt được.</li>
+      </ul>
+    </li>
+    <li>Sản phẩm gốc được upsert với <code>status: 'published'</code>, nên toàn bộ hiện công khai trên web.</li>
+    <li>ROADMAP mục 5.5 ghi việc này là thành tích "Phủ đầy 100% báo giá", không ghi rằng số liệu là giả lập.</li>
+    <li>Chế độ test mặc định của <code>test-ai-enricher.ts</code> không ghi DB. Chỉ <code>--backfill</code> ghi, nhưng cùng file đó được ROADMAP và các agent coi như công cụ "làm giàu dữ liệu".</li>
+  </ul>
+
+  <h2>3. Hệ quả</h2>
+  <ul>
+    <li><b>Người dùng bị hiển thị sai:</b> giá, lượt bán, lịch sử giá và review gắn tên các chuỗi bán lẻ thật (TGDĐ, FPT Shop, CellphoneS...) nhưng không có thật. Đây là rủi ro uy tín và pháp lý cho một sản phẩm tự nhận là trung lập.</li>
+    <li><b>Thuật toán bị hiệu chỉnh trên dữ liệu giả:</b> tỉ lệ seeding, điểm rủi ro gian hàng, ngưỡng chênh giá đều đang tính trên review và giá do hệ thống tự viết. Ví dụ, review "spam xu" được cài sẵn đúng để bộ phân tích bắt được.</li>
+    <li><b>Worker tốn lượt:</b> bộ nạp job (<code>SmartJobSeeder</code>) xếp lại cả listing giả vào hàng đợi làm mới, worker crawl URL không tồn tại.</li>
+  </ul>
+
+  <h2>4. Pipeline crawl thật hiện tại</h2>
+  <div class="table-wrap">
+  <table>
+    <tr><th>Chỉ số</th><th>Giá trị</th></tr>
+    <tr><td>Tổng crawl job từng tạo</td><td>17 (7 xong, 7 bỏ qua, 3 đang chờ, 0 lỗi)</td></tr>
+    <tr><td>Lần chạy định kỳ gần nhất (06:09 UTC hôm nay)</td><td>3 job Shopee, cả 3 thất bại: API trả mã chặn 90309999, bộ giải captcha không tìm thấy thanh trượt</td></tr>
+    <tr><td>9 sàn còn lại</td><td>Hàng đợi rỗng, 0 job</td></tr>
+  </table>
+  </div>
+  <p>Nghĩa là hiện chưa có đường nào đưa dữ liệu thật vào DB một cách đều đặn.</p>
+
+  <h2>5. Đề xuất</h2>
+  <h3>A. Dừng tạo dữ liệu giả (ngay khi anh đồng ý)</h3>
+  <ul>
+    <li>Gỡ phần ghi listing, review và lịch sử giá giả lập khỏi <code>test-ai-enricher.ts --backfill</code>. Giữ phần đồng bộ thông số kỹ thuật cho <code>master_products</code>.</li>
+    <li>Dữ liệu seed chỉ còn dùng trong bộ nhớ cho unit test.</li>
+    <li>Sửa ROADMAP mục 5.5 cho đúng sự thật.</li>
+  </ul>
+
+  <h3>B. Dọn dữ liệu production (cần anh duyệt, không đảo ngược được)</h3>
+  <ol>
+    <li>Sao lưu trước: xuất toàn bộ dòng sẽ xóa ra file JSON, lưu làm artifact của workflow.</li>
+    <li>Chạy thử (dry-run) để in số dòng sẽ xóa, đối chiếu với audit ở trên.</li>
+    <li>Xóa 314 listing <code>syn-*</code>. Khóa ngoại <code>ON DELETE CASCADE</code> sẽ xóa theo 672 review, 1.884 mốc giá và các <code>review_flags</code> liên quan.</li>
+    <li>Nhóm 44 listing chưa xác minh: cho worker crawl lại từng URL. Trang nào 404 thì xóa, trang nào còn sống thì giữ, kèm dữ liệu crawl thật.</li>
+    <li>Tính lại <code>min_price</code>, <code>max_price</code>, <code>merchant_count</code> của sản phẩm gốc. Sản phẩm gốc nào không còn listing thật thì chuyển sang ẩn (<code>draft</code>) cho tới khi crawl được.</li>
+  </ol>
+  <p class="muted">Đây là thao tác dữ liệu (DML) bằng service role qua workflow, không đổi schema, nên không cần migration DOS.Me. Sau khi dọn, rate.vn sẽ gần như trống cho tới khi pipeline thật chạy. Anh cần chấp nhận điều này, hoặc chọn phương án tạm: ẩn dữ liệu giả thay vì xóa.</p>
+
+  <h3>C. Làm pipeline crawl thật chạy được (việc chính tiếp theo)</h3>
+  <ul>
+    <li>Ưu tiên các sàn ít chặn trước: Tiki (API công khai), TGDĐ và CellphoneS (HTML). Bộ tìm kiếm (<code>MultiPlatformSearchDiscovery</code>) tìm URL thật theo tên sản phẩm gốc rồi nạp job.</li>
+    <li>Shopee đang chặn worker trên GitHub Actions. Cần điều tra riêng (proxy, cách gọi API) trước khi trông vào Shopee.</li>
+    <li>Thêm chỉ số theo dõi mỗi chu kỳ: số job, tỉ lệ thành công theo sàn, số listing thật mới, để không lặp lại tình trạng "chạy xanh nhưng không có dữ liệu".</li>
+  </ul>
+
+  <h2>6. Anh cần quyết</h2>
+  <div class="card">
+    <ol>
+      <li><b>Đồng ý mục A</b> (dừng tạo dữ liệu giả)? Em đề xuất làm ngay.</li>
+      <li><b>Mục B: xóa hay ẩn?</b> Xóa hẳn (có sao lưu), hay tạm ẩn dữ liệu giả khỏi web cho tới khi có dữ liệu thật thay thế.</li>
+      <li><b>Điểm chuyên gia</b> (<code>expert_rating</code>, <code>expert_review_summary</code>, điểm tiêu chí) của 36 sản phẩm gốc cũng nằm trong file seed do agent viết. Giữ lại như nội dung biên tập, hay gỡ cho tới khi có người thật chấm?</li>
+    </ol>
+  </div>
+</div>
+</body>
+</html>
