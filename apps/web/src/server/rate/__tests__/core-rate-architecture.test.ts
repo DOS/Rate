@@ -929,6 +929,37 @@ function runCoreArchitectureSuite() {
   console.log(
     '  ✅ [20/20] Leaderboard Markdown/CSV Export & 1v1 Matchup Picker (#67) + Merchant Seeding Filter & CSV Export (#68) passed'
   );
+
+  // 21. Interactive 10-Platform Offers Explorer (#69) & Category Catalog Toolbar (#70)
+  const offersExplorerSrc = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/components/leaderboard/ProductOffersExplorer.tsx'
+    ),
+    'utf8'
+  );
+  const catalogToolbarSrc = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/components/leaderboard/CategoryCatalogToolbar.tsx'
+    ),
+    'utf8'
+  );
+  assert.ok(
+    offersExplorerSrc.includes('handleCopyOffersMarkdown') &&
+      offersExplorerSrc.includes('handleDownloadOffersCsv') &&
+      offersExplorerSrc.includes('highTrustOnly'),
+    'ProductOffersExplorer must provide platform/Mall/trust filters and 1-Click Markdown/CSV export'
+  );
+  assert.ok(
+    catalogToolbarSrc.includes('handleCopyCatalogMarkdown') &&
+      catalogToolbarSrc.includes('handleDownloadCatalogCsv') &&
+      catalogToolbarSrc.includes('catalog-1v1-go-btn'),
+    'CategoryCatalogToolbar must provide Same-Category 1v1 Matchup Picker and Markdown/CSV catalog export'
+  );
+  console.log(
+    '  ✅ [21/21] 10-Platform Offers Explorer (#69) & Category Catalog 1v1 Picker + CSV Export (#70) passed'
+  );
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
 
