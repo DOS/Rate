@@ -71,6 +71,7 @@ for (const dts of [
   'dist/index.d.ts',
   'dist/shopee/types.d.ts',
   'dist/shopee/arena-spec-syncer.d.ts',
+  'dist/shopee/flagship-seed-data.d.ts',
 ]) {
   assert.ok(fs.existsSync(pkgDir + dts), `Missing type declarations: ${dts}`);
 }
