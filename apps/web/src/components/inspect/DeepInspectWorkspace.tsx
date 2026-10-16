@@ -366,6 +366,74 @@ export default function DeepInspectWorkspace({
     }
   };
 
+  const handleDownloadInspectCsv = () => {
+    if (typeof window === 'undefined' || !result) return;
+    const escapeCsv = (val: string | number) => {
+      const str = String(val ?? '');
+      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+    const headers = [
+      'Gian Hàng',
+      'Sàn',
+      'Tên Niêm Yết',
+      'Giá Hiện Tại (VND)',
+      'Giá Gạch Ngang (VND)',
+      'Đáy Lịch Sử (VND)',
+      'Đỉnh Lịch Sử (VND)',
+      'Kết Luận Kiểm Toán',
+    ];
+    const offers = result.allOffers || (matchedOffer ? [matchedOffer] : []);
+    const histLow = Number(
+      priceHistory?.lowestEverPrice || master?.min_price || 0
+    );
+    const histHigh = Number(
+      priceHistory?.highestEverPrice || master?.max_price || 0
+    );
+    const rows = offers.map((o) => [
+      o.merchant?.name || merchant?.name || 'Marketplace Shop',
+      (o.merchant?.platform || merchant?.platform || 'shopee').toUpperCase(),
+      o.title || master?.name || queryInput.trim(),
+      Number(o.price_current || 0),
+      Number(o.price_original || 0),
+      histLow,
+      histHigh,
+      discount?.badge_label || 'Đã kiểm định',
+    ]);
+    const csvContent = `\uFEFF${[
+      headers.map(escapeCsv).join(','),
+      ...rows.map((r) => r.map(escapeCsv).join(',')),
+    ].join('\n')}`;
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `rate-inspect-${master?.slug || 'audit'}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadInspectJson = () => {
+    if (typeof window === 'undefined' || !result) return;
+    const payload = {
+      source: 'Rate.vn Deep URL & Fake Discount Inspector',
+      query: queryInput.trim(),
+      exportedAt: new Date().toISOString(),
+      inspection: result,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: 'application/json;charset=utf-8;',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `rate-inspect-${master?.slug || 'audit'}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const keySpecs = (master?.key_specs || {}) as KeySpecs;
   const productHref = master ? getMasterProductHref(master) : '/smartphones';
   const productCategoryPath =
@@ -390,6 +458,22 @@ export default function DeepInspectWorkspace({
                     ? '✓ Đã chép biên bản Markdown!'
                     : '📋 Sao chép biên bản Markdown'}
                 </span>
+              </button>
+              <button
+                type="button"
+                onClick={handleDownloadInspectCsv}
+                data-testid="inspect-export-csv-btn"
+                className="btn btn-sm btn-outline-light rounded-pill fw-semibold px-3"
+              >
+                📥 Xuất CSV
+              </button>
+              <button
+                type="button"
+                onClick={handleDownloadInspectJson}
+                data-testid="inspect-export-json-btn"
+                className="btn btn-sm btn-outline-light rounded-pill fw-semibold px-3"
+              >
+                📦 Xuất JSON
               </button>
               <button
                 type="button"

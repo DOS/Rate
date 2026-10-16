@@ -1042,6 +1042,45 @@ function runCoreArchitectureSuite() {
   console.log(
     '  ✅ [24/24] Compare Matrix CSV/JSON Export (#75) & 1v1 Versus Scoreboard CSV/JSON Export (#76) passed'
   );
+
+  // 25. DealFinderWorkspace Markdown/CSV/JSON Export (#77) & Inspect/Merchant CSV/JSON Export (#78)
+  const dealFinderSrc = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/components/deals/DealFinderWorkspace.tsx'
+    ),
+    'utf8'
+  );
+  const inspectSrcUpdated = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/components/inspect/DeepInspectWorkspace.tsx'
+    ),
+    'utf8'
+  );
+  const merchantShareSrcUpdated = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/components/merchants/MerchantShareAuditButton.tsx'
+    ),
+    'utf8'
+  );
+  assert.ok(
+    dealFinderSrc.includes('handleCopyDealsMarkdown') &&
+      dealFinderSrc.includes('handleDownloadDealsCsv') &&
+      dealFinderSrc.includes('handleDownloadDealsJson'),
+    'DealFinderWorkspace on /deals must provide 1-Click Markdown, CSV, and JSON export'
+  );
+  assert.ok(
+    inspectSrcUpdated.includes('handleDownloadInspectCsv') &&
+      inspectSrcUpdated.includes('handleDownloadInspectJson') &&
+      merchantShareSrcUpdated.includes('handleDownloadMerchantCsv') &&
+      merchantShareSrcUpdated.includes('handleDownloadMerchantJson'),
+    'DeepInspectWorkspace (/inspect) and MerchantShareAuditButton (/merchants/[id]) must provide 1-Click CSV and JSON export'
+  );
+  console.log(
+    '  ✅ [25/25] DealFinderWorkspace Markdown/CSV/JSON Export (#77) & Inspect/Merchant CSV/JSON Export (#78) passed'
+  );
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
 
