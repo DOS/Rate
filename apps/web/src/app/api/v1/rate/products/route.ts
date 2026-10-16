@@ -1,9 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
   getCachedCategoryDirectoryFacets,
+  getCrossPlatformDealRadar,
   getMasterProducts,
+  type CanonicalCategorySlug,
   type MasterProductFilterParams,
 } from '@/server/rate';
+import {
+  buildRadarIndex,
+  getRadarSignal,
+  radarExportFields,
+} from '@/lib/deal-radar';
 
 function parseNumArray(raw: string | null): number[] | undefined {
   if (!raw) return undefined;
@@ -80,19 +87,27 @@ export async function GET(request: NextRequest) {
       limit,
     };
 
-    const [products, facets] = await Promise.all([
+    const [products, facets, dealRadar] = await Promise.all([
       getMasterProducts(filterParams),
       includeFacets
         ? getCachedCategoryDirectoryFacets(categorySlug)
         : Promise.resolve(null),
+      getCrossPlatformDealRadar({
+        categorySlug: (categorySlug as CanonicalCategorySlug) || 'all',
+        limit: 50,
+      }),
     ]);
+    const radarIndex = buildRadarIndex(dealRadar);
 
     return NextResponse.json(
       {
         ok: true,
         category: categorySlug,
         count: products.length,
-        data: products,
+        data: products.map((p) => ({
+          ...p,
+          deal_radar: radarExportFields(getRadarSignal(radarIndex, p.slug)),
+        })),
         ...(facets ? { facets } : {}),
       },
       {

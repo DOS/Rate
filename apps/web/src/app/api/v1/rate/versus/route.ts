@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
   getCachedCompareMasterProducts,
+  getCrossPlatformDealRadar,
   getMasterProductCategorySlug,
 } from '@/server/rate';
+import {
+  buildRadarIndex,
+  getRadarSignal,
+  radarExportFields,
+} from '@/lib/deal-radar';
 import {
   scoreMasterProductForLeaderboard,
   type LeaderboardCriteriaBreakdown,
@@ -280,6 +286,12 @@ export async function GET(req: NextRequest) {
           ? scoreB.slug
           : 'equal';
 
+    const dealRadar = await getCrossPlatformDealRadar({
+      categorySlug: category,
+      limit: 50,
+    });
+    const radarIndex = buildRadarIndex(dealRadar);
+
     return NextResponse.json(
       {
         directory: 'tech_electronics',
@@ -335,6 +347,7 @@ export async function GET(req: NextRequest) {
           merchant_count: scoreA.merchantCount,
           key_specs: prodA.key_specs || {},
           specifications: prodA.specifications || {},
+          deal_radar: radarExportFields(getRadarSignal(radarIndex, prodA.slug)),
         },
         product_b: {
           slug: scoreB.slug,
@@ -358,6 +371,7 @@ export async function GET(req: NextRequest) {
           merchant_count: scoreB.merchantCount,
           key_specs: prodB.key_specs || {},
           specifications: prodB.specifications || {},
+          deal_radar: radarExportFields(getRadarSignal(radarIndex, prodB.slug)),
         },
       },
       {

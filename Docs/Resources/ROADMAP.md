@@ -202,6 +202,9 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc **4 T�
 - [x] **4.72. Hoàn Tất Độ Phủ 100% Deal Radar Cấp Sản Phẩm Trên Thẻ Trang Chủ, Thanh Tìm Kiếm `HeroSearchInspector`, Xuất Hồ Sơ Kiểm Định (`ProductShareAuditButton`, `/compare`, `/compare/[versus]`) & REST API `GET /api/v1/rate/products/[slug]` (Issue #117):**
   - Hiển thị `<RadarBadge />` trực tiếp trên mọi thẻ sản phẩm nổi bật của Trang chủ (`apps/web/src/app/[locale]/page.tsx`, `limit: 50`) và danh sách gợi ý tìm kiếm của `HeroSearchInspector.tsx` (`useDealRadarIndex`).
   - Bổ sung `radarSignal: computeProductRadarSignal(product, offers)` vào phản hồi `GET /api/v1/rate/products/[slug]` và đồng bộ xuất dữ liệu Deal Radar (`Markdown`, `CSV`, `JSON`) trên `ProductShareAuditButton.tsx`, `CompareWorkspace.tsx` và `VersusInteractiveScoreboard.tsx`.
+- [x] **4.73. Đồng Bộ 100% Tín Hiệu Deal Radar Cấp Sản Phẩm (`radarSignal` / `deal_radar`) Trên Toàn Bộ REST API v1 (`extension/lookup`, `inspect`, `products`, `leaderboard`, `compare`, `versus` - Issue #119):**
+  - Bổ sung `radarSignal: computeProductRadarSignal(...)` vào `ExtensionLookupResponse` (`GET /api/v1/rate/extension/lookup`) và `GET /api/v1/rate/inspect`.
+  - Nhúng `deal_radar: radarExportFields(getRadarSignal(radarIndex, slug))` từ nguồn chân lý duy nhất `@/lib/deal-radar` vào từng sản phẩm trả về bởi `GET /api/v1/rate/products`, `GET /api/v1/rate/leaderboard`, `GET /api/v1/rate/compare` và `GET /api/v1/rate/versus` (Suite `[38/38]`).
 
 ### ✅ Phase 5: Mở Rộng Đa Sàn 10/10 Nền Tảng, Browser Extension MV3 & Tự Động Hóa Cảnh Báo Giá (Đã hoàn thành 100%)
 

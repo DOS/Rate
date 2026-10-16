@@ -1740,7 +1740,53 @@ function runCoreArchitectureSuite() {
     'CompareWorkspace and VersusInteractiveScoreboard exports must include Deal Radar (#117)'
   );
   console.log(
-    '  ✅ [37/37] Per-product Radar across ProductDetailView, Homepage, HeroSearchInspector, catalog, /deals, /compare, /compare/[versus] & REST API (#106, #116, #117) passed'
+    '  ✅ [37/38] Per-product Radar across ProductDetailView, Homepage, HeroSearchInspector, catalog, /deals, /compare, /compare/[versus] & REST API (#106, #116, #117) passed'
+  );
+
+  // 38. REST API v1 product-level Deal Radar parity across extension/lookup, inspect, products, leaderboard, compare, versus (#119)
+  const extensionServerRadarSrc = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/server/rate/extension.ts'),
+    'utf8'
+  );
+  const inspectRouteRadarSrc = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/app/api/v1/rate/inspect/route.ts'),
+    'utf8'
+  );
+  const productsRouteRadarSrc = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/app/api/v1/rate/products/route.ts'),
+    'utf8'
+  );
+  const leaderboardRouteRadarSrc = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/app/api/v1/rate/leaderboard/route.ts'),
+    'utf8'
+  );
+  const compareRouteRadarSrc = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/app/api/v1/rate/compare/route.ts'),
+    'utf8'
+  );
+  const versusRouteRadarSrc = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/app/api/v1/rate/versus/route.ts'),
+    'utf8'
+  );
+  assert.ok(
+    extensionServerRadarSrc.includes('computeProductRadarSignal') &&
+      extensionServerRadarSrc.includes('radarSignal'),
+    'Extension lookup must compute and return product-level radarSignal (#119)'
+  );
+  assert.ok(
+    inspectRouteRadarSrc.includes('computeProductRadarSignal') &&
+      inspectRouteRadarSrc.includes('radarSignal'),
+    'GET /api/v1/rate/inspect must include product-level radarSignal (#119)'
+  );
+  assert.ok(
+    productsRouteRadarSrc.includes('deal_radar: radarExportFields') &&
+      leaderboardRouteRadarSrc.includes('deal_radar: radarExportFields') &&
+      compareRouteRadarSrc.includes('deal_radar: radarExportFields') &&
+      versusRouteRadarSrc.includes('deal_radar: radarExportFields'),
+    'All REST API v1 product/leaderboard/compare/versus endpoints must embed deal_radar from the shared module (#119)'
+  );
+  console.log(
+    '  ✅ [38/38] REST API v1 product-level Deal Radar parity across extension/lookup, inspect, products, leaderboard, compare & versus (#119) passed'
   );
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }

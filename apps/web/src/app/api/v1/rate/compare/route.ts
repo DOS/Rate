@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
   getCachedCompareMasterProducts,
+  getCrossPlatformDealRadar,
   getMasterProductCategorySlug,
   getMasterProductHref,
 } from '@/server/rate';
+import {
+  buildRadarIndex,
+  getRadarSignal,
+  radarExportFields,
+} from '@/lib/deal-radar';
 
 /**
  * GET /api/v1/rate/compare?slugs=slug1,slug2
@@ -42,6 +48,11 @@ export async function GET(request: NextRequest) {
     const excludedCrossCategorySlugs = slugs.filter(
       (s) => !returnedSlugSet.has(s)
     );
+    const dealRadar = await getCrossPlatformDealRadar({
+      categorySlug: lockedCategory || 'all',
+      limit: 50,
+    });
+    const radarIndex = buildRadarIndex(dealRadar);
 
     return NextResponse.json(
       {
@@ -53,6 +64,7 @@ export async function GET(request: NextRequest) {
         data: products.map((p) => ({
           ...p,
           canonical_href: getMasterProductHref(p),
+          deal_radar: radarExportFields(getRadarSignal(radarIndex, p.slug)),
         })),
       },
       {

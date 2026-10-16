@@ -156,6 +156,12 @@ export interface ExtensionLookupData {
     score10: number;
     categorySlug: string;
   }> | null;
+  radarSignal?: {
+    verdict: 'genuine_deal' | 'fake_sale_trap' | 'none';
+    savingsPct: number;
+    fakeMarkupPct: number;
+    spreadPct: number;
+  } | null;
 }
 
 export interface ExtractedPageProductSignal {
