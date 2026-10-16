@@ -42,7 +42,10 @@ async function getPhoneListWithFlare(): Promise<string[]> {
 
       console.log(`🔍 Regex found ${matches.length} matches`);
       if (matches.length > 0) {
-        console.log(`📌 First 3 matches:`, matches.slice(0, 3).map(m => m[1]));
+        console.log(
+          `📌 First 3 matches:`,
+          matches.slice(0, 3).map(m => m[1])
+        );
       }
 
       const urls = matches
@@ -119,13 +122,17 @@ function parsePhoneArenaHTML(html: string): Record<string, any> {
 
     if (match) {
       const tbody = match[1];
-      const rowRegex = /<tr[^>]*>[\s\S]*?<th[^>]*>([^<]+)<\/th>[\s\S]*?<td[^>]*>([\s\S]*?)<\/td>[\s\S]*?<\/tr>/g;
+      const rowRegex =
+        /<tr[^>]*>[\s\S]*?<th[^>]*>([^<]+)<\/th>[\s\S]*?<td[^>]*>([\s\S]*?)<\/td>[\s\S]*?<\/tr>/g;
       let rowMatch;
       const categorySpecs: Record<string, string> = {};
 
       while ((rowMatch = rowRegex.exec(tbody)) !== null) {
         const key = rowMatch[1].trim();
-        let value = rowMatch[2].replace(/<[^>]+>/g, ' ').trim().replace(/\s+/g, ' ');
+        const value = rowMatch[2]
+          .replace(/<[^>]+>/g, ' ')
+          .trim()
+          .replace(/\s+/g, ' ');
 
         if (value && value !== 'N/A') {
           categorySpecs[key] = value;

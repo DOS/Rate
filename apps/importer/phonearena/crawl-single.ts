@@ -96,13 +96,17 @@ function parsePhoneArenaHTML(html: string): Record<string, any> {
       const tbody = match[1];
 
       // Extract rows
-      const rowRegex = /<tr[^>]*>[\s\S]*?<th[^>]*>([^<]+)<\/th>[\s\S]*?<td[^>]*>([\s\S]*?)<\/td>[\s\S]*?<\/tr>/g;
+      const rowRegex =
+        /<tr[^>]*>[\s\S]*?<th[^>]*>([^<]+)<\/th>[\s\S]*?<td[^>]*>([\s\S]*?)<\/td>[\s\S]*?<\/tr>/g;
       let rowMatch;
       const categorySpecs: Record<string, string> = {};
 
       while ((rowMatch = rowRegex.exec(tbody)) !== null) {
         const key = rowMatch[1].trim();
-        let value = rowMatch[2].replace(/<[^>]+>/g, ' ').trim().replace(/\s+/g, ' ');
+        const value = rowMatch[2]
+          .replace(/<[^>]+>/g, ' ')
+          .trim()
+          .replace(/\s+/g, ' ');
 
         if (value && value !== 'N/A') {
           categorySpecs[key] = value;
@@ -130,7 +134,9 @@ function printSpecs(specs: Record<string, Record<string, string>>) {
     const fields = specs[category];
     const fieldCount = Object.keys(fields).length;
 
-    console.log(`\n[${idx + 1}/${categories.length}] ${category.toUpperCase()} (${fieldCount} fields)`);
+    console.log(
+      `\n[${idx + 1}/${categories.length}] ${category.toUpperCase()} (${fieldCount} fields)`
+    );
     console.log('-'.repeat(80));
 
     Object.entries(fields).forEach(([key, value]) => {
@@ -153,21 +159,23 @@ if (!url) {
   process.exit(1);
 }
 
-crawlPhoneArenaWithFlare(url).then((result) => {
-  if (result) {
-    console.log(`\n✅ Successfully crawled: ${result.url}`);
-    printSpecs(result.specs);
+crawlPhoneArenaWithFlare(url)
+  .then(result => {
+    if (result) {
+      console.log(`\n✅ Successfully crawled: ${result.url}`);
+      printSpecs(result.specs);
 
-    // Save to JSON if output file specified
-    if (outputFile) {
-      fs.writeFileSync(outputFile, JSON.stringify(result, null, 2));
-      console.log(`\n💾 Saved to: ${outputFile}`);
+      // Save to JSON if output file specified
+      if (outputFile) {
+        fs.writeFileSync(outputFile, JSON.stringify(result, null, 2));
+        console.log(`\n💾 Saved to: ${outputFile}`);
+      }
+    } else {
+      console.log('\n❌ Failed to crawl PhoneArena');
+      process.exit(1);
     }
-  } else {
-    console.log('\n❌ Failed to crawl PhoneArena');
+  })
+  .catch(error => {
+    console.error('❌ Error:', error.message);
     process.exit(1);
-  }
-}).catch((error) => {
-  console.error('❌ Error:', error.message);
-  process.exit(1);
-});
+  });

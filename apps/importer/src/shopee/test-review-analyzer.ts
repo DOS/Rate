@@ -500,7 +500,7 @@ async function run() {
     console.log('================================================================');
 
     let lastVoteUpsert: any = null;
-    let deletedPair: { reviewId?: string; voterId?: string } = {};
+    const deletedPair: { reviewId?: string; voterId?: string } = {};
     const voteStub = {
       from: (table: string) => {
         assert.equal(table, 'review_votes');

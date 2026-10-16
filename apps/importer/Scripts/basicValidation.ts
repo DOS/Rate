@@ -25,7 +25,7 @@ export function applyBasicValidation(
   blacklistDomains: string[] = []
 ): RecordData {
   // Kiểm tra link hợp lệ
-  const urlRegex = /^(https?:\/\/)[\w.-]+(\.[\w\.-]+)+[\w\-\._~:/?#[\]@!$&'()*+,;=.]+$/;
+  const urlRegex = /^(https?:\/\/)[\w.-]+(\.[\w.-]+)+[\w\-._~:/?#[\]@!$&'()*+,;=.]+$/;
   if (!record.link || !urlRegex.test(record.link)) {
     return { ...record, flag: 'invalid_link', score: 0 };
   }
@@ -67,7 +67,7 @@ if (require.main === module) {
     { link: 'ftp://invalid.com', content: 'Sai định dạng link' },
     { link: 'https://example.com', content: '' },
     { link: 'https://unknown.com', content: 'Nội dung test' },
-    { link: 'https://example.com', content: '<script>alert(1)</script>' }
+    { link: 'https://example.com', content: '<script>alert(1)</script>' },
   ];
   for (const rec of testRecords) {
     console.log(applyBasicValidation(rec, whitelist, blacklist));
