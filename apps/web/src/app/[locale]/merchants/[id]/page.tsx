@@ -6,7 +6,10 @@ import {
   getMasterProductCategorySlug,
   resolveProductImageUrl,
 } from '@/lib/rate-api';
-import { getCachedMerchantProfileById } from '@/server/rate';
+import {
+  getCachedMerchantProfileById,
+  getCrossPlatformDealRadar,
+} from '@/server/rate';
 import NavbarDarkDynamic from '../../components/navbar/NavbarDarkDynamic';
 import FooterTop from '../../components/footer-top';
 import FooterDynamic from '../../components/footer/FooterDynamic';
@@ -74,11 +77,26 @@ export default async function MerchantProfilePage({
 }) {
   const { locale, id } = await params;
   const lang = normalizeRateLocale(locale);
-  const merchant = await getCachedMerchantProfileById(id);
+  const [merchant, dealRadar] = await Promise.all([
+    getCachedMerchantProfileById(id),
+    getCrossPlatformDealRadar({ categorySlug: 'all', limit: 36 }),
+  ]);
 
   if (!merchant) {
     notFound();
   }
+
+  const merchantNameLower = merchant.name.toLowerCase();
+  const merchantGenuineDeals = dealRadar.genuineDeals.filter(
+    (g) =>
+      g.merchantId === merchant.id ||
+      g.merchantName.toLowerCase() === merchantNameLower
+  );
+  const merchantFakeTraps = dealRadar.fakeSaleTraps.filter(
+    (t) =>
+      t.merchantId === merchant.id ||
+      t.merchantName.toLowerCase() === merchantNameLower
+  );
 
   const trustLevelLabel =
     merchant.trust_score >= 80
@@ -325,6 +343,8 @@ export default async function MerchantProfilePage({
                     brk.total_reviews - brk.authentic_count
                   )}
                   productCount={merchant.product_count}
+                  genuineDealCount={merchantGenuineDeals.length}
+                  fakeSaleTrapCount={merchantFakeTraps.length}
                 />
               </div>
             </div>
@@ -332,7 +352,7 @@ export default async function MerchantProfilePage({
         </div>
 
         {/* Dual Risk Breakdown Section */}
-        <div className="row g-4 mb-5">
+        <div className="row g-4 mb-4">
           {/* 1. DOSafe Threat Intelligence Card */}
           <div className="col-lg-6 col-12">
             <div className="card rounded-4 h-100 border p-4 shadow-sm">
@@ -468,6 +488,109 @@ export default async function MerchantProfilePage({
               </div>
             </div>
           </div>
+        </div>
+
+        {/* 10-Platform Deal Radar & Fake-Sale Trap Audit Card (#99) */}
+        <div
+          className="card rounded-4 mb-5 border bg-white p-4 shadow-sm"
+          data-testid="merchant-profile-deal-radar"
+        >
+          <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+            <div>
+              <span className="badge bg-dark rounded-pill text-warning me-2">
+                🔥 TÍN HIỆU RADAR KÈO ĐÁY &amp; KIỂM TOÁN GIÁ ẢO 60 NGÀY
+              </span>
+              <span className="small text-muted">
+                Đối chiếu tự động trên {dealRadar.totalOffersAnalyzed} gian hàng
+                đa sàn
+              </span>
+            </div>
+            <div className="d-flex align-items-center flex-wrap gap-2">
+              <span className="badge bg-success-subtle text-success border-success-subtle rounded-pill border px-3 py-1">
+                🟢 {merchantGenuineDeals.length} kèo đáy lịch sử 60N
+              </span>
+              <span
+                className={`badge rounded-pill border px-3 py-1 ${
+                  merchantFakeTraps.length > 0
+                    ? 'bg-danger-subtle text-danger border-danger-subtle'
+                    : 'bg-light text-secondary'
+                }`}
+              >
+                {merchantFakeTraps.length > 0
+                  ? `🚨 ${merchantFakeTraps.length} cảnh báo kê khống giá gốc`
+                  : '🛡️ 0 cảnh báo nâng khống giá gốc'}
+              </span>
+              <Link
+                href="/deals"
+                className="btn btn-sm btn-outline-danger rounded-pill fw-semibold px-3"
+              >
+                Mở Radar 10 sàn →
+              </Link>
+            </div>
+          </div>
+          {merchantGenuineDeals.length > 0 || merchantFakeTraps.length > 0 ? (
+            <div className="row g-2">
+              {merchantGenuineDeals.slice(0, 4).map((g) => (
+                <div key={g.id} className="col-md-6">
+                  <div className="rounded-3 border-success-subtle bg-success-subtle bg-opacity-10 d-flex justify-content-between align-items-center border p-2">
+                    <div className="overflow-hidden pe-2">
+                      <Link
+                        href={g.productHref}
+                        className="fw-bold text-dark text-decoration-none d-block text-truncate small"
+                      >
+                        🟢 {g.productName}
+                      </Link>
+                      <div className="text-secondary small">
+                        Đáy 60N: {g.marketMinPrice.toLocaleString('vi-VN')} ₫ •
+                        Trung vị: {g.marketMedianPrice.toLocaleString('vi-VN')}{' '}
+                        ₫
+                      </div>
+                    </div>
+                    <div className="flex-shrink-0 text-end">
+                      <div className="fw-bold text-success font-monospace small">
+                        {g.priceCurrent.toLocaleString('vi-VN')} ₫
+                      </div>
+                      <span className="badge bg-success rounded-pill">
+                        -{g.savingsVsMedianPct}% so trung vị
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {merchantFakeTraps.slice(0, 4).map((t) => (
+                <div key={t.id} className="col-md-6">
+                  <div className="rounded-3 border-danger-subtle bg-danger-subtle bg-opacity-10 d-flex justify-content-between align-items-center border p-2">
+                    <div className="overflow-hidden pe-2">
+                      <Link
+                        href={t.productHref}
+                        className="fw-bold text-dark text-decoration-none d-block text-truncate small"
+                      >
+                        🚨 {t.productName}
+                      </Link>
+                      <div className="text-secondary small">
+                        Giá gạch ngang kê khống:{' '}
+                        {(t.priceOriginal || 0).toLocaleString('vi-VN')} ₫
+                      </div>
+                    </div>
+                    <div className="flex-shrink-0 text-end">
+                      <div className="fw-bold text-danger font-monospace small">
+                        {t.priceCurrent.toLocaleString('vi-VN')} ₫
+                      </div>
+                      <span className="badge bg-danger rounded-pill">
+                        Kê khống +{t.fakeMarkupPct}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="small text-muted">
+              Gian hàng này hiện duy trì mức giá niêm yết ổn định quanh trung vị
+              thị trường 60 ngày, không có bản ghi nâng khống giá gốc bất
+              thường.
+            </div>
+          )}
         </div>
 
         {/* SECTION #1: Recent Buyer Reviews & AI Flags Section (Rating-First Priority) */}

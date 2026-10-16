@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from '@/lib/navigation';
 import type { MerchantSummary } from '@/server/rate';
+import type { CrossPlatformDealRadarItem } from '@/server/rate/deals';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
 import {
   BsArrowCounterclockwise,
@@ -49,6 +50,86 @@ export default function MerchantDirectoryExplorer({
   const [seedingTier, setSeedingTier] = useState<MerchantSeedingTier>('all');
   const [sortBy, setSortBy] = useState<MerchantSortOption>(initialSort);
   const [copiedMerchantsMd, setCopiedMerchantsMd] = useState(false);
+  const [merchantRadarMap, setMerchantRadarMap] = useState<
+    Record<
+      string,
+      {
+        genuineDealCount: number;
+        fakeTrapCount: number;
+        bestSavingsPct: number;
+      }
+    >
+  >({});
+
+  useEffect(() => {
+    let active = true;
+    fetch('/api/v1/rate/deals?category=all&limit=36')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => {
+        if (!active || !json) return;
+        const radarPayload = json?.data ?? json;
+        const genuineList: CrossPlatformDealRadarItem[] = Array.isArray(
+          radarPayload?.genuineDeals
+        )
+          ? radarPayload.genuineDeals
+          : [];
+        const trapList: CrossPlatformDealRadarItem[] = Array.isArray(
+          radarPayload?.fakeSaleTraps
+        )
+          ? radarPayload.fakeSaleTraps
+          : [];
+        const nextMap: typeof merchantRadarMap = {};
+        const addCount = (
+          key: string,
+          type: 'genuine' | 'trap',
+          savingsPct: number
+        ) => {
+          if (!key) return;
+          const prev = nextMap[key] || {
+            genuineDealCount: 0,
+            fakeTrapCount: 0,
+            bestSavingsPct: 0,
+          };
+          nextMap[key] = {
+            genuineDealCount:
+              prev.genuineDealCount + (type === 'genuine' ? 1 : 0),
+            fakeTrapCount: prev.fakeTrapCount + (type === 'trap' ? 1 : 0),
+            bestSavingsPct: Math.max(prev.bestSavingsPct, savingsPct),
+          };
+        };
+        for (const g of genuineList) {
+          if (g.merchantId) {
+            addCount(
+              g.merchantId,
+              'genuine',
+              Number(g.savingsVsMedianPct || 0)
+            );
+          }
+          if (g.merchantName) {
+            addCount(
+              g.merchantName.toLowerCase(),
+              'genuine',
+              Number(g.savingsVsMedianPct || 0)
+            );
+          }
+        }
+        for (const t of trapList) {
+          if (t.merchantId) {
+            addCount(t.merchantId, 'trap', 0);
+          }
+          if (t.merchantName) {
+            addCount(t.merchantName.toLowerCase(), 'trap', 0);
+          }
+        }
+        setMerchantRadarMap(nextMap);
+      })
+      .catch(() => {
+        // Ignore background radar fetch errors
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const labels = useMemo(() => {
     if (lang === 'en') {
@@ -330,6 +411,14 @@ export default function MerchantDirectoryExplorer({
     setSortBy('trust_desc');
   };
 
+  const getMerchantRadarStats = (m: MerchantSummary) =>
+    merchantRadarMap[m.id] ||
+    merchantRadarMap[m.name.toLowerCase()] || {
+      genuineDealCount: 0,
+      fakeTrapCount: 0,
+      bestSavingsPct: 0,
+    };
+
   const handleCopyMerchantsMarkdown = async () => {
     if (typeof navigator === 'undefined' || filteredMerchants.length === 0)
       return;
@@ -339,19 +428,26 @@ export default function MerchantDirectoryExplorer({
       'Official Mall',
       'Trust Score (/100)',
       'AI Seeding Risk (%)',
+      'Genuine Deals (60D)',
+      'Fake Sale Traps (60D)',
       'Authentic Reviews',
       'Tracked Products',
     ];
     const sep = headers.map(() => '---');
-    const rows = filteredMerchants.map((m) => [
-      m.name.replace(/\|/g, '-'),
-      m.platform.toUpperCase(),
-      m.is_official ? 'Yes' : 'No',
-      `${m.trust_score}/100`,
-      `${m.review_risk_score}%`,
-      String(m.review_risk_breakdown.authentic_count),
-      String(m.product_count),
-    ]);
+    const rows = filteredMerchants.map((m) => {
+      const rStats = getMerchantRadarStats(m);
+      return [
+        m.name.replace(/\|/g, '-'),
+        m.platform.toUpperCase(),
+        m.is_official ? 'Yes' : 'No',
+        `${m.trust_score}/100`,
+        `${m.review_risk_score}%`,
+        String(rStats.genuineDealCount),
+        String(rStats.fakeTrapCount),
+        String(m.review_risk_breakdown.authentic_count),
+        String(m.product_count),
+      ];
+    });
     const md = [
       `### 🛡️ Rate.vn Merchant Trust Directory (${filteredMerchants.length} merchants)`,
       '',
@@ -381,27 +477,34 @@ export default function MerchantDirectoryExplorer({
       'IsOfficial',
       'TrustScore',
       'ReviewRiskScorePercent',
+      'GenuineDeals60D',
+      'FakeSaleTraps60D',
       'AuthenticReviewCount',
       'IgnoredReviewCount',
       'TrackedProducts',
       'FollowerCount',
     ];
-    const rows = filteredMerchants.map((m) => [
-      m.id,
-      m.name,
-      m.platform,
-      m.platform_shop_id,
-      m.is_official ? 'true' : 'false',
-      String(m.trust_score),
-      String(m.review_risk_score),
-      String(m.review_risk_breakdown.authentic_count),
-      String(
-        m.review_risk_breakdown.coin_spam_count +
-          m.review_risk_breakdown.seeding_fake_count
-      ),
-      String(m.product_count),
-      String(m.follower_count),
-    ]);
+    const rows = filteredMerchants.map((m) => {
+      const rStats = getMerchantRadarStats(m);
+      return [
+        m.id,
+        m.name,
+        m.platform,
+        m.platform_shop_id,
+        m.is_official ? 'true' : 'false',
+        String(m.trust_score),
+        String(m.review_risk_score),
+        String(rStats.genuineDealCount),
+        String(rStats.fakeTrapCount),
+        String(m.review_risk_breakdown.authentic_count),
+        String(
+          m.review_risk_breakdown.coin_spam_count +
+            m.review_risk_breakdown.seeding_fake_count
+        ),
+        String(m.product_count),
+        String(m.follower_count),
+      ];
+    });
     const csvContent =
       '\uFEFF' +
       [
@@ -427,7 +530,10 @@ export default function MerchantDirectoryExplorer({
       source: 'Rate.vn Merchant Trust Directory',
       exportedAt: new Date().toISOString(),
       merchantCount: filteredMerchants.length,
-      merchants: filteredMerchants,
+      merchants: filteredMerchants.map((m) => ({
+        ...m,
+        dealRadarStats: getMerchantRadarStats(m),
+      })),
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
       type: 'application/json;charset=utf-8;',
@@ -875,7 +981,7 @@ export default function MerchantDirectoryExplorer({
                   </div>
 
                   {minPriceText && (
-                    <div className="small text-muted mb-3">
+                    <div className="small text-muted mb-2">
                       {labels.priceRangeLabel}{' '}
                       <strong className="text-dark font-monospace">
                         {minPriceText}
@@ -883,6 +989,32 @@ export default function MerchantDirectoryExplorer({
                       </strong>
                     </div>
                   )}
+
+                  {(() => {
+                    const rStats = getMerchantRadarStats(merchant);
+                    return (
+                      <div
+                        className="d-flex align-items-center mb-3 flex-wrap gap-1"
+                        data-testid="merchant-deal-radar-badge"
+                      >
+                        {rStats.genuineDealCount > 0 && (
+                          <span className="badge bg-success-subtle text-success border-success-subtle rounded-pill border px-2 py-1">
+                            🟢 {rStats.genuineDealCount} Kèo đáy lịch sử 60N (-
+                            {rStats.bestSavingsPct}%)
+                          </span>
+                        )}
+                        {rStats.fakeTrapCount > 0 ? (
+                          <span className="badge bg-danger-subtle text-danger border-danger-subtle rounded-pill border px-2 py-1">
+                            🚨 {rStats.fakeTrapCount} Cảnh báo kê khống giá gốc
+                          </span>
+                        ) : (
+                          <span className="badge bg-light text-secondary rounded-pill border px-2 py-1">
+                            🛡️ 0 cảnh báo nâng khống giá gốc (Radar 60N)
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })()}
 
                   <div className="d-flex justify-content-between align-items-center border-top mt-auto flex-wrap gap-2 pt-2">
                     <Link
