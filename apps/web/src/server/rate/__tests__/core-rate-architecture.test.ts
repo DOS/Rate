@@ -1315,7 +1315,41 @@ function runCoreArchitectureSuite() {
     'CompareWorkspace and VersusInteractiveScoreboard must fetch /api/v1/rate/deals and render radar comparison rows (#94)'
   );
   console.log(
-    '  ✅ [31/31] Leaderboard Deal Radar Badges (#93) & Compare/Versus Deal Radar Rows (#94) passed'
+    '  ✅ [31/32] Leaderboard Deal Radar Badges (#93) & Compare/Versus Deal Radar Rows (#94) passed'
+  );
+
+  // 32. Cross-Platform Price Spread Leaders in /deals & Homepage (#95) + Price Spread Audit Banner in ProductOffersExplorer (#96)
+  const dealsSpreadSrc = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/components/deals/DealFinderWorkspace.tsx'
+    ),
+    'utf8'
+  );
+  const homeSpreadSrc = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/app/[locale]/page.tsx'),
+    'utf8'
+  );
+  const offersSpreadSrc = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/components/leaderboard/ProductOffersExplorer.tsx'
+    ),
+    'utf8'
+  );
+  assert.ok(
+    dealsSpreadSrc.includes('filteredPriceSpreadLeaders') &&
+      dealsSpreadSrc.includes('deals-price-spread-leaders') &&
+      homeSpreadSrc.includes('homepage-price-spread-leaders'),
+    'DealFinderWorkspace and Homepage must render priceSpreadLeaders (#95)'
+  );
+  assert.ok(
+    offersSpreadSrc.includes('priceSpreadAudit') &&
+      offersSpreadSrc.includes('price-spread-audit-banner'),
+    'ProductOffersExplorer must compute priceSpreadAudit and render price-spread-audit-banner (#96)'
+  );
+  console.log(
+    '  ✅ [32/32] Price Spread Leaders in /deals & Homepage (#95) + Price Spread Audit Banner in ProductOffersExplorer (#96) passed'
   );
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }

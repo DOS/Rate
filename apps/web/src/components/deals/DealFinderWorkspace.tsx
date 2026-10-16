@@ -15,6 +15,7 @@ import CompareQuickToggle from '@/components/compare/CompareQuickToggle';
 import type {
   CrossPlatformDealRadarItem,
   CrossPlatformDealRadarResponse,
+  CrossPlatformPriceSpreadItem,
 } from '@/server/rate/deals';
 
 interface DealFinderWorkspaceProps {
@@ -77,6 +78,15 @@ export default function DealFinderWorkspace({
     );
   }, [dealRadar, categoryFilter]);
 
+  const filteredPriceSpreadLeaders = useMemo<
+    CrossPlatformPriceSpreadItem[]
+  >(() => {
+    if (!dealRadar || !Array.isArray(dealRadar.priceSpreadLeaders)) return [];
+    return dealRadar.priceSpreadLeaders.filter(
+      (item) => categoryFilter === 'all' || item.categorySlug === categoryFilter
+    );
+  }, [dealRadar, categoryFilter]);
+
   const handleCopyRadarMarkdown = async () => {
     if (typeof window === 'undefined' || !dealRadar) return;
     try {
@@ -98,6 +108,14 @@ export default function DealFinderWorkspace({
         ...filteredFakeSaleTraps.map(
           (t) =>
             `| ${t.productName} | ${t.platform.toUpperCase()} (${t.merchantName}) | ${t.priceCurrent.toLocaleString('vi-VN')} ₫ | ${(t.priceOriginal || t.priceCurrent).toLocaleString('vi-VN')} ₫ | ${t.marketMedianPrice.toLocaleString('vi-VN')} ₫ | **+${t.fakeMarkupPct}%** |`
+        ),
+        '',
+        '#### 📊 Chênh Lệch Giá Đa Sàn Lớn Nhất (Price Spread Leaders)',
+        '| Thiết bị | Sàn Rẻ Nhất | Sàn Đắt Nhất | Giá Thấp Nhất | Giá Cao Nhất | Chênh Lệch Tuyệt Đối |',
+        '| --- | --- | --- | --- | --- | --- |',
+        ...filteredPriceSpreadLeaders.map(
+          (s) =>
+            `| ${s.productName} | ${s.cheapestPlatform.toUpperCase()} (${s.cheapestMerchantName}) | ${s.priciestPlatform.toUpperCase()} (${s.priciestMerchantName}) | **${s.minPrice.toLocaleString('vi-VN')} ₫** | ${s.maxPrice.toLocaleString('vi-VN')} ₫ | **-${s.spreadVnd.toLocaleString('vi-VN')} ₫ (${s.spreadPct}%)** |`
         ),
       ];
       await navigator.clipboard.writeText(lines.join('\n'));
@@ -133,21 +151,38 @@ export default function DealFinderWorkspace({
       'Điểm JReviews (/10)',
     ];
     const allItems = [...filteredGenuineDeals, ...filteredFakeSaleTraps];
-    const rows = allItems.map((it) => [
-      it.verdict,
-      it.productName,
-      it.brand,
-      it.categorySlug,
-      it.platform,
-      it.merchantName,
-      it.isOfficialMall ? 'Mall' : 'Standard',
-      it.priceCurrent,
-      it.priceOriginal ?? it.priceCurrent,
-      it.marketMedianPrice,
-      it.savingsVsMedianPct,
-      it.fakeMarkupPct,
-      it.jreviewsScore10.toFixed(1),
-    ]);
+    const rows = [
+      ...allItems.map((it) => [
+        it.verdict,
+        it.productName,
+        it.brand,
+        it.categorySlug,
+        it.platform,
+        it.merchantName,
+        it.isOfficialMall ? 'Mall' : 'Standard',
+        it.priceCurrent,
+        it.priceOriginal ?? it.priceCurrent,
+        it.marketMedianPrice,
+        it.savingsVsMedianPct,
+        it.fakeMarkupPct,
+        it.jreviewsScore10.toFixed(1),
+      ]),
+      ...filteredPriceSpreadLeaders.map((sp) => [
+        'price_spread_leader',
+        sp.productName,
+        sp.brand,
+        sp.categorySlug,
+        `${sp.cheapestPlatform} vs ${sp.priciestPlatform}`,
+        sp.cheapestMerchantName,
+        'Verified',
+        sp.minPrice,
+        sp.maxPrice,
+        sp.medianPrice,
+        sp.spreadPct,
+        0,
+        '-',
+      ]),
+    ];
     const csvContent = `\uFEFF${[
       headers.map(escapeCsv).join(','),
       ...rows.map((r) => r.map(escapeCsv).join(',')),
@@ -171,6 +206,7 @@ export default function DealFinderWorkspace({
       totalOffersAnalyzed: dealRadar.totalOffersAnalyzed,
       genuineDeals: filteredGenuineDeals,
       fakeSaleTraps: filteredFakeSaleTraps,
+      priceSpreadLeaders: filteredPriceSpreadLeaders,
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
       type: 'application/json;charset=utf-8;',
@@ -616,6 +652,51 @@ export default function DealFinderWorkspace({
                 </div>
               </div>
             </div>
+
+            {filteredPriceSpreadLeaders.length > 0 && (
+              <div
+                data-testid="deals-price-spread-leaders"
+                className="rounded-3 bg-light mt-3 border p-3"
+              >
+                <div className="fw-bold text-dark small mb-2">
+                  📊 Bảng Xếp Hạng Chênh Lệch Giá Đa Sàn Lớn Nhất (
+                  {filteredPriceSpreadLeaders.length} thiết bị)
+                </div>
+                <div className="row g-2">
+                  {filteredPriceSpreadLeaders.slice(0, 6).map((s) => (
+                    <div key={s.id} className="col-lg-4 col-md-6">
+                      <div className="rounded-3 d-flex justify-content-between align-items-center h-100 border bg-white p-2">
+                        <div className="overflow-hidden pe-2">
+                          <Link
+                            href={s.productHref}
+                            className="fw-bold text-dark text-decoration-none d-block text-truncate small"
+                          >
+                            {s.productName}
+                          </Link>
+                          <div className="text-secondary small">
+                            <span className="badge bg-success text-uppercase me-1">
+                              {s.cheapestPlatform}
+                            </span>
+                            ({s.minPrice.toLocaleString('vi-VN')} ₫) vs{' '}
+                            <span className="badge bg-secondary text-uppercase">
+                              {s.priciestPlatform}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex-shrink-0 text-end">
+                          <div className="fw-bold text-success font-monospace small">
+                            -{s.spreadVnd.toLocaleString('vi-VN')} ₫
+                          </div>
+                          <span className="badge bg-warning text-dark rounded-pill">
+                            Chênh {s.spreadPct}%
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
