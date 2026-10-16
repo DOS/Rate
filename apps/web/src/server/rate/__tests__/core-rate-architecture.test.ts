@@ -1985,7 +1985,7 @@ function runCoreArchitectureSuite() {
     'ProductDetailView relatedCompetitors cards must render per-product RadarBadge (#127)'
   );
   console.log(
-    '  ✅ [41/42] Unified Deal Radar exports across Watchlist API, WatchlistWorkspace, DeepInspectWorkspace, ProductOffersExplorer & ProductValueCalculator (#127) passed'
+    '  ✅ [41/43] Unified Deal Radar exports across Watchlist API, WatchlistWorkspace, DeepInspectWorkspace, ProductOffersExplorer & ProductValueCalculator (#127) passed'
   );
 
   // =========================================================================
@@ -2069,7 +2069,26 @@ function runCoreArchitectureSuite() {
     'OpenAPI 3.1.0 spec must document POST /api/v1/rate/watchlist and reference ProductDealRadarSignal across all product/radar endpoints (#128)'
   );
   console.log(
-    '  ✅ [42/42] Unified Deal Radar exports in PriceHistorySection, JReviewsSection, ProductSpecsExportToolbar, Compare/Versus CSVs & OpenAPI 3.1.0 (#128) passed'
+    '  ✅ [42/43] Unified Deal Radar exports in PriceHistorySection, JReviewsSection, ProductSpecsExportToolbar, Compare/Versus CSVs & OpenAPI 3.1.0 (#128) passed'
+  );
+  // 43. Bootstrap JS ships from the installed package, not a CDN script (#145)
+  const rootLayoutSrc145 = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/app/layout.tsx'),
+    'utf8'
+  );
+  assert.ok(
+    !rootLayoutSrc145.includes('cdn.jsdelivr.net') &&
+      rootLayoutSrc145.includes('<BootstrapClient />') &&
+      fs
+        .readFileSync(
+          path.join(repoRoot, 'apps/web/src/app/BootstrapClient.tsx'),
+          'utf8'
+        )
+        .includes("import('bootstrap/dist/js/bootstrap.bundle.min.js')"),
+    'Root layout must render BootstrapClient (bundled bootstrap JS) and must not load Bootstrap from cdn.jsdelivr.net (#145)'
+  );
+  console.log(
+    '  ✅ [43/43] Bootstrap JS bundled from the bootstrap package via BootstrapClient, no jsDelivr script in the root layout (#145) passed'
   );
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
