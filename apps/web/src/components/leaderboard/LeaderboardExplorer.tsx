@@ -632,6 +632,18 @@ export default function LeaderboardExplorer({
     );
   }, [versusSlugB, effectiveVersusA, rankedEntries]);
 
+  const radarExportFields = (slug: string) => {
+    const sig = dealRadarBySlug.get(slug);
+    if (!sig) {
+      return { verdict: 'none', savingsPct: 0, fakeMarkupPct: 0 };
+    }
+    return {
+      verdict: sig.type === 'genuine' ? 'genuine_deal' : 'fake_sale_trap',
+      savingsPct: Math.abs(sig.entry.savingsVsMedianPct || 0),
+      fakeMarkupPct: Math.abs(sig.entry.fakeMarkupPct || 0),
+    };
+  };
+
   const handleCopyLeaderboardMarkdown = async () => {
     if (typeof navigator === 'undefined' || rankedEntries.length === 0) return;
     const headers = [
@@ -642,19 +654,28 @@ export default function LeaderboardExplorer({
       'User Rating (/5.0)',
       'Expert Score (/10)',
       'Reference Price (VND)',
+      'Deal Radar',
     ];
     const sep = headers.map(() => '---');
-    const rows = rankedEntries.map((entry, idx) => [
-      `#${idx + 1}`,
-      entry.product.name.replace(/\|/g, '-'),
-      entry.product.brand || '-',
-      entry.activeScore5.toFixed(2),
-      entry.userScore5.toFixed(1),
-      entry.expertScore10.toFixed(1),
-      entry.product.min_price
-        ? `${Number(entry.product.min_price).toLocaleString('vi-VN')} ₫`
-        : '-',
-    ]);
+    const rows = rankedEntries.map((entry, idx) => {
+      const radar = radarExportFields(entry.product.slug);
+      return [
+        `#${idx + 1}`,
+        entry.product.name.replace(/\|/g, '-'),
+        entry.product.brand || '-',
+        entry.activeScore5.toFixed(2),
+        entry.userScore5.toFixed(1),
+        entry.expertScore10.toFixed(1),
+        entry.product.min_price
+          ? `${Number(entry.product.min_price).toLocaleString('vi-VN')} ₫`
+          : '-',
+        radar.verdict === 'genuine_deal'
+          ? `🔥 -${radar.savingsPct.toFixed(1)}%`
+          : radar.verdict === 'fake_sale_trap'
+            ? `🚨 +${radar.fakeMarkupPct.toFixed(1)}%`
+            : '-',
+      ];
+    });
     const md = [
       `### 🏆 Rate.vn JReviews Leaderboard (${activeCategory.toUpperCase()} - ${copy.critLabels[activeCriterion]})`,
       '',
@@ -690,23 +711,32 @@ export default function LeaderboardExplorer({
       'Battery5',
       'Value5',
       'MinPriceVND',
+      'RadarVerdict',
+      'RadarSavingsPct',
+      'RadarFakeMarkupPct',
     ];
-    const rows = rankedEntries.map((entry, idx) => [
-      String(idx + 1),
-      entry.product.slug,
-      entry.product.name,
-      entry.product.brand || '',
-      entry.categorySlug,
-      entry.activeScore5.toFixed(2),
-      entry.userScore5.toFixed(1),
-      entry.expertScore10.toFixed(1),
-      entry.criteria.screen.toFixed(1),
-      entry.criteria.performance.toFixed(1),
-      entry.criteria.camera.toFixed(1),
-      entry.criteria.battery.toFixed(1),
-      entry.criteria.value.toFixed(1),
-      String(entry.product.min_price || 0),
-    ]);
+    const rows = rankedEntries.map((entry, idx) => {
+      const radar = radarExportFields(entry.product.slug);
+      return [
+        String(idx + 1),
+        entry.product.slug,
+        entry.product.name,
+        entry.product.brand || '',
+        entry.categorySlug,
+        entry.activeScore5.toFixed(2),
+        entry.userScore5.toFixed(1),
+        entry.expertScore10.toFixed(1),
+        entry.criteria.screen.toFixed(1),
+        entry.criteria.performance.toFixed(1),
+        entry.criteria.camera.toFixed(1),
+        entry.criteria.battery.toFixed(1),
+        entry.criteria.value.toFixed(1),
+        String(entry.product.min_price || 0),
+        radar.verdict,
+        radar.savingsPct.toFixed(1),
+        radar.fakeMarkupPct.toFixed(1),
+      ];
+    });
     const csvContent =
       '\uFEFF' +
       [
@@ -744,6 +774,7 @@ export default function LeaderboardExplorer({
         expertScore10: entry.expertScore10,
         criteria: entry.criteria,
         minPriceVnd: Number(entry.product.min_price || 0),
+        dealRadar: radarExportFields(entry.product.slug),
       })),
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
