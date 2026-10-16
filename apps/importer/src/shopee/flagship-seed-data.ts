@@ -4965,7 +4965,12 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     battery_mah: 5260,
     has_5g: false,
     expert_rating: 4.88,
-    colors: ['Xanh Da Trời (Sky Blue)', 'Đêm Xanh Thẫm (Midnight)', 'Ánh Sao (Starlight)', 'Bạc (Silver)'],
+    colors: [
+      'Xanh Da Trời (Sky Blue)',
+      'Đêm Xanh Thẫm (Midnight)',
+      'Ánh Sao (Starlight)',
+      'Bạc (Silver)',
+    ],
     images: ['/img/devices/apple-macbook-air-m4-13-inch-256gb.jpg'],
     description:
       'Apple MacBook Air 13 inch M4 (2025/2026) trang bị chip Apple M4 10 nhân CPU, 16GB RAM thống nhất mặc định, camera 12MP Center Stage hỗ trợ Desk View, xuất đồng thời 2 màn hình rời 6K ngay cả khi mở nắp máy và thời lượng pin 18 giờ.',
@@ -4998,6 +5003,8 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       camera: {
         rear_setup: 'Dual External 6K Display Engine via Thunderbolt 4',
         main_camera: '12MP Center Stage camera with support for Desk View',
+        second_camera:
+          'Desk View Top-Down Workspace Framing + Continuity Camera Wireless iPhone Array',
         video_recording: '1080p HD video recording with Advanced ISP',
         front_camera: '12MP Center Stage 1080p FaceTime HD camera',
       },
@@ -5032,7 +5039,8 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       multimedia: {
         loudspeaker: 'Four-speaker sound system with Spatial Audio & Dolby Atmos',
         headphone_jack_35mm: true,
-        audio_features: '3.5mm headphone jack with advanced support for high-impedance headphones, 3-mic array',
+        audio_features:
+          '3.5mm headphone jack with advanced support for high-impedance headphones, 3-mic array',
       },
       availability: {
         announced: '2025, March 05',
@@ -5109,7 +5117,8 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         resolution: '3024 x 1964 pixels (~254 ppi)',
         refresh_rate_hz: 120,
         ppi: 254,
-        features: '1000 nits sustained XDR, 1600 nits peak HDR, 1000 nits SDR outdoor, Nano-texture option',
+        features:
+          '1000 nits sustained XDR, 1600 nits peak HDR, 1000 nits SDR outdoor, Nano-texture option',
       },
       hardware: {
         chipset: 'Apple M4 Pro (3 nm)',
@@ -5123,6 +5132,8 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       camera: {
         rear_setup: '3x Thunderbolt 5 (120Gb/s) + HDMI 2.1 (8K@60Hz / 4K@240Hz) + SDXC',
         main_camera: '12MP Center Stage camera with Desk View support',
+        second_camera:
+          'Desk View Top-Down Workspace Framing + Studio-Quality 3-Mic Directional Array',
         video_recording: '1080p HD video recording with computational video ISP',
         front_camera: '12MP Center Stage 1080p FaceTime HD camera',
       },
@@ -5280,12 +5291,14 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         nfc: true,
         location: 'GPS, GLONASS, GALILEO, QZSS, BDS',
         other: '2nd-gen Ultra Wideband (UWB) Precision Finding',
-        sensors: 'Accelerometer, gyro, heart rate, barometer, always-on altimeter, compass, SpO2, VO2max, temperature (body & water), depth gauge',
+        sensors:
+          'Accelerometer, gyro, heart rate, barometer, always-on altimeter, compass, SpO2, VO2max, temperature (body & water), depth gauge',
       },
       multimedia: {
         loudspeaker: 'Yes (supports direct media playback & Voice Isolation calls)',
         headphone_jack_35mm: false,
-        audio_features: 'Built-in speaker for music/podcasts, directional mic with wind noise reduction',
+        audio_features:
+          'Built-in speaker for music/podcasts, directional mic with wind noise reduction',
       },
       availability: {
         announced: '2025, September 09',
@@ -5303,7 +5316,8 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         platform: 'tgdd',
         platform_item_id: 'tgdd-apple-watch-s11-46mm',
         merchant_key: 'tgdd_official',
-        title: 'Đồng hồ thông minh Apple Watch Series 11 GPS 46mm Viền Nhôm Dây Thể Thao Chính Hãng VN/A',
+        title:
+          'Đồng hồ thông minh Apple Watch Series 11 GPS 46mm Viền Nhôm Dây Thể Thao Chính Hãng VN/A',
         price_current: 11290000,
         price_original: 11990000,
         historical_sold: 410,
@@ -5393,7 +5407,8 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         dimensions: '49 x 44 x 14.2 mm',
         weight_g: 61.2,
         materials: 'Sapphire crystal front, ceramic/sapphire back, Grade 5 Titanium frame',
-        resistance: 'IP6X dust resistant, 100m water resistant (WR100), EN13319 dive 40m, MIL-STD 810H',
+        resistance:
+          'IP6X dust resistant, 100m water resistant (WR100), EN13319 dive 40m, MIL-STD 810H',
         biometrics: 'Wrist Detection + Passcode',
         keys: 'Customizable Action button, guarded Digital Crown, Side button',
         colors: ['Black Titanium', 'Natural Titanium'],
@@ -5411,7 +5426,8 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         nfc: true,
         location: 'Precision Dual-frequency GPS (L1 and L5), GLONASS, GALILEO, QZSS, BDS',
         other: '2nd-gen Ultra Wideband (UWB) chip, Satellite SOS messaging',
-        sensors: 'Accelerometer, gyro, heart rate, barometer, always-on altimeter (-500m to 9000m), compass, SpO2, VO2max, temperature, depth gauge',
+        sensors:
+          'Accelerometer, gyro, heart rate, barometer, always-on altimeter (-500m to 9000m), compass, SpO2, VO2max, temperature, depth gauge',
       },
       multimedia: {
         loudspeaker: 'Dual speakers (40% louder) + 86-decibel Siren (audible up to 180m)',
@@ -5434,7 +5450,8 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         platform: 'shopee',
         platform_item_id: '29920049064',
         merchant_key: 'shopee_apple_flagship',
-        title: 'Đồng hồ thông minh Apple Watch Ultra 3 49mm GPS + Cellular Viền Titan Đen Chính Hãng VN/A',
+        title:
+          'Đồng hồ thông minh Apple Watch Ultra 3 49mm GPS + Cellular Viền Titan Đen Chính Hãng VN/A',
         price_current: 22490000,
         price_original: 23990000,
         historical_sold: 230,
@@ -5494,7 +5511,8 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         type: 'Status LED Indicator + Built-in Find My Precision Speaker',
         resolution: 'Custom High-Excursion Apple Driver + High Dynamic Range Amplifier',
         refresh_rate_hz: 60,
-        features: 'Personalized Spatial Audio with dynamic head tracking, Lossless Audio (20-bit/48kHz & 24-bit/96kHz)',
+        features:
+          'Personalized Spatial Audio with dynamic head tracking, Lossless Audio (20-bit/48kHz & 24-bit/96kHz)',
       },
       hardware: {
         chipset: 'Apple H3 Headphone Chip (Earbuds) + Apple U2 Ultra Wideband (Charging Case)',
@@ -5514,7 +5532,8 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       battery: {
         capacity_mah: 540,
         type: 'Rechargeable Li-Ion (up to 6.5h listening with ANC / 32h total with MagSafe Case)',
-        charging: 'USB-C, MagSafe, Apple Watch charger, or Qi-certified wireless chargers (5 min = 1h)',
+        charging:
+          'USB-C, MagSafe, Apple Watch charger, or Qi-certified wireless chargers (5 min = 1h)',
         fast_charging_w: 5,
         reverse_charging: false,
       },
@@ -5538,12 +5557,14 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         usb: 'USB Type-C',
         nfc: false,
         location: 'Precision Finding via Apple U2 Ultra Wideband chip',
-        sensors: 'In-ear heart rate sensor, in-ear temperature sensor, skin-detect sensor, motion-detecting accelerometer, speech-detecting accelerometer',
+        sensors:
+          'In-ear heart rate sensor, in-ear temperature sensor, skin-detect sensor, motion-detecting accelerometer, speech-detecting accelerometer',
       },
       multimedia: {
         loudspeaker: 'Custom high-excursion Apple driver + Built-in Case speaker for Find My',
         headphone_jack_35mm: false,
-        audio_features: '3x Pro Active Noise Cancellation, Adaptive Audio, Transparency mode, Conversation Awareness, Clinical-Grade Hearing Aid',
+        audio_features:
+          '3x Pro Active Noise Cancellation, Adaptive Audio, Transparency mode, Conversation Awareness, Clinical-Grade Hearing Aid',
       },
       availability: {
         announced: '2025, September 09',
@@ -5560,7 +5581,8 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         platform: 'shopee',
         platform_item_id: '29930003001',
         merchant_key: 'shopee_apple_flagship',
-        title: 'Tai nghe Bluetooth Apple AirPods Pro 3 (Hộp sạc MagSafe USB-C) Chip H3 Chính Hãng VN/A',
+        title:
+          'Tai nghe Bluetooth Apple AirPods Pro 3 (Hộp sạc MagSafe USB-C) Chip H3 Chính Hãng VN/A',
         price_current: 5890000,
         price_original: 6490000,
         historical_sold: 1450,
@@ -5620,7 +5642,8 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         type: 'Ergonomic Matte Acoustic Housing + Tri-Color Case Status LED',
         resolution: '8.4mm Dynamic Driver X (20Hz - 40,000Hz LDAC 96kHz/24-bit 990kbps)',
         refresh_rate_hz: 60,
-        features: 'DSEE Ultimate AI upscaling, 360 Reality Audio with Head Tracking, 10-band EQ in Sony Sound Connect',
+        features:
+          'DSEE Ultimate AI upscaling, 360 Reality Audio with Head Tracking, 10-band EQ in Sony Sound Connect',
       },
       hardware: {
         chipset: 'Sony Integrated Processor V3 + QN3e HD Noise Cancelling Processor',
@@ -5634,7 +5657,8 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       camera: {
         rear_setup: '6-Microphone Dual Feedback & Bone Conduction Array',
         main_camera: 'Dual Feedback + Feedforward Microphones per earbud (6 mics total)',
-        second_camera: 'Precise Voice Pickup Bone Conduction Sensor + AI Beamforming Wind Reduction',
+        second_camera:
+          'Precise Voice Pickup Bone Conduction Sensor + AI Beamforming Wind Reduction',
         front_camera: 'Capacitive Touch Panels + Head Gesture Control (Nod/Shake)',
       },
       battery: {
@@ -5647,7 +5671,8 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       design: {
         dimensions: '64.0 x 40.0 x 25.8 mm (Case)',
         weight_g: 46.8,
-        materials: 'Recycled ABS matte texture body + Polyurethane foam noise isolation earbud tips (SS, S, M, L)',
+        materials:
+          'Recycled ABS matte texture body + Polyurethane foam noise isolation earbud tips (SS, S, M, L)',
         resistance: 'IPX4 splash and sweat resistant',
         biometrics: 'In-ear proximity sensor + Bone conduction speech vibration detector',
         keys: 'Left/Right capacitive touch sensors, Case pairing button',
@@ -5663,12 +5688,14 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         wlan: 'Fast Pair (Android) & Swift Pair (Windows 11)',
         usb: 'USB Type-C + Qi Wireless Charging',
         nfc: false,
-        sensors: 'Bone conduction sensor, dual proximity sensors, gyro/accelerometer for head gestures',
+        sensors:
+          'Bone conduction sensor, dual proximity sensors, gyro/accelerometer for head gestures',
       },
       multimedia: {
         loudspeaker: '8.4mm Dynamic Driver X with dome-edge dual-layer diaphragm',
         headphone_jack_35mm: false,
-        audio_features: 'Hi-Res Audio Wireless, LDAC 990kbps, DSEE Ultimate, Speak-to-Chat, Adaptive Sound Control, Auracast',
+        audio_features:
+          'Hi-Res Audio Wireless, LDAC 990kbps, DSEE Ultimate, Speak-to-Chat, Adaptive Sound Control, Auracast',
       },
       availability: {
         announced: '2025, June 12',
@@ -5988,4 +6015,3 @@ export function synthesizeCrossPlatformOffersForMaster(params: {
 
   return results;
 }
-

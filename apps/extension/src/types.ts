@@ -141,8 +141,21 @@ export interface ExtensionLookupData {
     highestEverPrice: number | null;
     currentMinPrice: number | null;
   } | null;
+  categorySlug?:
+    'smartphones' | 'tablets' | 'laptops' | 'smartwatches' | 'earbuds';
   compareUrl: string | null;
   productDetailUrl: string | null;
+  leaderboardUrl?: string | null;
+  versusUrl?: string | null;
+  topRivalName?: string | null;
+  leaderboardStandings?: Array<{
+    criterion: string;
+    rank: number;
+    totalInCategory: number;
+    score5: number;
+    score10: number;
+    categorySlug: string;
+  }> | null;
 }
 
 export interface ExtractedPageProductSignal {
