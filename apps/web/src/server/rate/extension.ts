@@ -20,6 +20,8 @@ import {
   computeProductStandingInCategory,
   type ProductLeaderboardBadgeInfo,
 } from '../../lib/leaderboard-engine';
+import { computeProductRadarSignal } from './deals';
+import type { RadarSignal } from '../../lib/deal-radar';
 
 export type SupportedEcommercePlatform =
   | 'shopee'
@@ -204,6 +206,7 @@ export interface ExtensionLookupResponse {
   versusUrl?: string | null;
   topRivalName?: string | null;
   leaderboardStandings?: ProductLeaderboardBadgeInfo[] | null;
+  radarSignal?: RadarSignal | null;
 }
 
 const ACCESSORY_KEYWORDS_VI_EN = [
@@ -715,6 +718,7 @@ export async function lookupExtensionProduct(
       versusUrl: null,
       topRivalName: null,
       leaderboardStandings: null,
+      radarSignal: null,
     };
   }
 
@@ -813,6 +817,7 @@ export async function lookupExtensionProduct(
       versusUrl: null,
       topRivalName: null,
       leaderboardStandings: null,
+      radarSignal: null,
     };
   }
 
@@ -922,6 +927,7 @@ export async function lookupExtensionProduct(
   const merchantProfile = matchedOffer
     ? merchantsList.find((m) => m.id === matchedOffer.merchant.id) || null
     : null;
+  const radarSignal = computeProductRadarSignal(matchedMaster, offers);
 
   return {
     matchStatus,
@@ -949,6 +955,7 @@ export async function lookupExtensionProduct(
       : null,
     topRivalName: topRival?.name || null,
     leaderboardStandings,
+    radarSignal,
   };
 }
 

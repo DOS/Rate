@@ -546,9 +546,23 @@ function renderPanelContent(
     ? `${settings.apiBaseUrl}/watchlist?add=${encodeURIComponent(master.slug)}`
     : `${settings.apiBaseUrl}/watchlist`;
 
+  const radarSig = lookup.radarSignal;
+  const radarPillHtml = radarSig
+    ? radarSig.verdict === 'genuine_deal'
+      ? `<span class="verdict-pill verdict-genuine_deal" style="margin-left:6px;">🔥 Đáy giá 60N (-${radarSig.savingsPct}%)</span>`
+      : radarSig.verdict === 'fake_sale_trap'
+        ? `<span class="verdict-pill verdict-inflated_fake_sale" style="margin-left:6px;">🚨 Cảnh báo Sale Ảo (+${radarSig.fakeMarkupPct}%)</span>`
+        : radarSig.spreadPct >= 5
+          ? `<span class="verdict-pill" style="margin-left:6px;background:#1e293b;color:#38bdf8;border:1px solid #0284c7;">📊 Lệch 10 sàn ${radarSig.spreadPct}%</span>`
+          : ''
+    : '';
+
   root.innerHTML = `
     <div class="card">
-      <span class="verdict-pill verdict-${assessment.verdict}">${escapeHtml(assessment.badgeLabel)}</span>
+      <div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;">
+        <span class="verdict-pill verdict-${assessment.verdict}">${escapeHtml(assessment.badgeLabel)}</span>
+        ${radarPillHtml}
+      </div>
       <div class="product-name">${escapeHtml(master?.name || signal.title)}</div>
       <p style="color: #d1d5db; font-size: 12.5px;">${escapeHtml(assessment.explanation)}</p>
       <div class="stats-grid">

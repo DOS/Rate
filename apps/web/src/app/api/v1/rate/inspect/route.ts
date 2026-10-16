@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCachedInspectProductOrShopUrl } from '@/server/rate';
+import { computeProductRadarSignal } from '@/server/rate/deals';
 import {
   canonicalizeProductUrl,
   detectAccessoryOrJunk,
@@ -58,6 +59,12 @@ export async function GET(request: NextRequest) {
       offers: inspection.allOffers,
       priceHistory: inspection.priceHistory,
     });
+    const radarSignal = inspection.masterProduct
+      ? computeProductRadarSignal(
+          inspection.masterProduct,
+          inspection.allOffers
+        )
+      : null;
 
     return NextResponse.json(
       {
@@ -67,6 +74,7 @@ export async function GET(request: NextRequest) {
           canonicalUrl,
           gatekeeper,
           priceVerdict,
+          radarSignal,
         },
       },
       {

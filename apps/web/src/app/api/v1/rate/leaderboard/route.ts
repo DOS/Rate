@@ -1,5 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getCachedMasterProducts } from '@/server/rate';
+import {
+  getCachedMasterProducts,
+  getCrossPlatformDealRadar,
+} from '@/server/rate';
+import {
+  buildRadarIndex,
+  getRadarSignal,
+  radarExportFields,
+} from '@/lib/deal-radar';
 import {
   normalizeLeaderboardCategory,
   normalizeLeaderboardCriterion,
@@ -34,11 +42,18 @@ export async function GET(req: NextRequest) {
       ? Math.min(Math.max(Math.trunc(limitParam), 1), 50)
       : 20;
 
-    const allProducts = await getCachedMasterProducts({
-      categorySlug: 'all',
-      limit: 100,
-      sort: 'rating_desc',
-    });
+    const [allProducts, dealRadar] = await Promise.all([
+      getCachedMasterProducts({
+        categorySlug: 'all',
+        limit: 100,
+        sort: 'rating_desc',
+      }),
+      getCrossPlatformDealRadar({
+        categorySlug: category,
+        limit: 50,
+      }),
+    ]);
+    const radarIndex = buildRadarIndex(dealRadar);
 
     const ranked = rankMasterProductsForLeaderboard(allProducts, {
       category,
@@ -70,6 +85,7 @@ export async function GET(req: NextRequest) {
       max_price: r.maxPrice,
       merchant_count: r.merchantCount,
       key_specs: r.product.key_specs || {},
+      deal_radar: radarExportFields(getRadarSignal(radarIndex, r.slug)),
     }));
 
     const top3Slugs = items.slice(0, 3).map((x) => x.slug);
