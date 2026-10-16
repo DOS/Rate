@@ -10,6 +10,10 @@ import {
   type CanonicalCategorySlug,
   type MasterProduct,
 } from '@/lib/rate-api';
+import type {
+  CrossPlatformDealRadarItem,
+  CrossPlatformDealRadarResponse,
+} from '@/server/rate/deals';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
 import CompareQuickToggle from '@/components/compare/CompareQuickToggle';
 import type { KeySpecs, ProductSpecifications } from '@repo/shared-data';
@@ -44,6 +48,7 @@ export type LeaderboardPriceSegment =
 
 interface LeaderboardExplorerProps {
   readonly products: readonly MasterProduct[];
+  readonly dealRadar?: CrossPlatformDealRadarResponse | null;
   readonly initialCategory?: CanonicalCategorySlug;
   readonly initialCriterion?: LeaderboardCriterionKey;
   readonly locale?: string;
@@ -216,12 +221,30 @@ function computeProductScores(
 
 export default function LeaderboardExplorer({
   products,
+  dealRadar,
   initialCategory = 'smartphones',
   initialCriterion = 'combined',
   locale,
 }: LeaderboardExplorerProps) {
   const lang = normalizeRateLocale(locale);
   const router = useRouter();
+
+  const dealRadarBySlug = useMemo(() => {
+    const map = new Map<
+      string,
+      { type: 'genuine' | 'trap'; entry: CrossPlatformDealRadarItem }
+    >();
+    if (!dealRadar) return map;
+    for (const d of dealRadar.genuineDeals ?? []) {
+      map.set(d.productSlug, { type: 'genuine', entry: d });
+    }
+    for (const t of dealRadar.fakeSaleTraps ?? []) {
+      if (!map.has(t.productSlug)) {
+        map.set(t.productSlug, { type: 'trap', entry: t });
+      }
+    }
+    return map;
+  }, [dealRadar]);
 
   const [activeCategory, setActiveCategory] =
     useState<CanonicalCategorySlug>(initialCategory);
@@ -1201,6 +1224,7 @@ export default function LeaderboardExplorer({
                     ? copy.rank2Label
                     : copy.rank3Label;
               const keySpecs = (entry.product.key_specs || {}) as KeySpecs;
+              const radarSignal = dealRadarBySlug.get(entry.product.slug);
 
               return (
                 <div
@@ -1272,6 +1296,21 @@ export default function LeaderboardExplorer({
                             <span className="rate-score-badge-expert">
                               Expert {entry.expertScore10.toFixed(1)}/10
                             </span>
+                            {radarSignal && (
+                              <span
+                                data-testid="leaderboard-radar-signal"
+                                className={`badge rounded-pill font-monospace ${
+                                  radarSignal.type === 'genuine'
+                                    ? 'bg-success text-white'
+                                    : 'bg-danger text-white'
+                                }`}
+                                style={{ fontSize: '0.68rem' }}
+                              >
+                                {radarSignal.type === 'genuine'
+                                  ? `🔥 Đáy giá 60N (-${Math.abs(radarSignal.entry.savingsVsMedianPct).toFixed(1)}%)`
+                                  : `🚨 Bẫy Sale Ảo (+${Math.abs(radarSignal.entry.fakeMarkupPct).toFixed(1)}%)`}
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1488,6 +1527,7 @@ export default function LeaderboardExplorer({
           const minPriceText = Number(
             entry.product.min_price || 0
           ).toLocaleString('vi-VN');
+          const rowRadarSignal = dealRadarBySlug.get(entry.product.slug);
 
           return (
             <div
@@ -1540,6 +1580,20 @@ export default function LeaderboardExplorer({
                         {entry.ignoredCount > 0 && (
                           <span className="badge bg-danger-subtle text-danger rounded-pill small">
                             🛡️ {entry.ignoredCount} {copy.blockedSpamSuffix}
+                          </span>
+                        )}
+                        {rowRadarSignal && (
+                          <span
+                            data-testid="leaderboard-radar-signal"
+                            className={`badge rounded-pill small font-monospace ${
+                              rowRadarSignal.type === 'genuine'
+                                ? 'bg-success text-white'
+                                : 'bg-danger text-white'
+                            }`}
+                          >
+                            {rowRadarSignal.type === 'genuine'
+                              ? `🔥 Đáy giá 60N (-${Math.abs(rowRadarSignal.entry.savingsVsMedianPct).toFixed(1)}%)`
+                              : `🚨 Cảnh báo Sale Ảo (+${Math.abs(rowRadarSignal.entry.fakeMarkupPct).toFixed(1)}%)`}
                           </span>
                         )}
                       </div>

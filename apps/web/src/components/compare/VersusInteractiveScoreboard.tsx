@@ -1,8 +1,12 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from '@/lib/navigation';
 import type { ScoredLeaderboardItem } from '@/lib/leaderboard-engine';
+import type {
+  CrossPlatformDealRadarItem,
+  CrossPlatformDealRadarResponse,
+} from '@/server/rate/deals';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
 
 type ScoredVersusItem = Omit<ScoredLeaderboardItem, 'rank'>;
@@ -72,6 +76,47 @@ export default function VersusInteractiveScoreboard({
   );
   const [showSliders, setShowSliders] = useState<boolean>(false);
   const [copiedVerdict, setCopiedVerdict] = useState<boolean>(false);
+  const [dealRadar, setDealRadar] =
+    useState<CrossPlatformDealRadarResponse | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    fetch('/api/v1/rate/deals?category=all&limit=36')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => {
+        const radarPayload = json?.data ?? json;
+        if (
+          active &&
+          radarPayload &&
+          Array.isArray(radarPayload.genuineDeals)
+        ) {
+          setDealRadar(radarPayload as CrossPlatformDealRadarResponse);
+        }
+      })
+      .catch(() => {
+        // Non-blocking fallback
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const dealRadarBySlug = useMemo(() => {
+    const map = new Map<
+      string,
+      { type: 'genuine' | 'trap'; entry: CrossPlatformDealRadarItem }
+    >();
+    if (!dealRadar) return map;
+    for (const d of dealRadar.genuineDeals ?? []) {
+      map.set(d.productSlug, { type: 'genuine', entry: d });
+    }
+    for (const t of dealRadar.fakeSaleTraps ?? []) {
+      if (!map.has(t.productSlug)) {
+        map.set(t.productSlug, { type: 'trap', entry: t });
+      }
+    }
+    return map;
+  }, [dealRadar]);
 
   const selectPersona = (next: Exclude<PersonaPresetKey, 'custom'>) => {
     setPersona(next);
@@ -625,6 +670,66 @@ export default function VersusInteractiveScoreboard({
           </div>
         );
       })}
+
+      {/* 1v1 Live Deal Radar & Fake-Sale Trap Comparison Row */}
+      <div
+        data-testid="versus-radar-row"
+        className="row align-items-center g-2 border-top border-secondary border-opacity-25 mt-2 pt-3"
+      >
+        <div className="col-4">
+          {(() => {
+            const sigA = dealRadarBySlug.get(scoreA.slug);
+            if (!sigA) {
+              return (
+                <span className="badge bg-dark border-secondary text-white-50 rounded-pill font-monospace border">
+                  ⚖️ Giá 60N ổn định
+                </span>
+              );
+            }
+            return (
+              <span
+                className={`badge rounded-pill font-monospace ${
+                  sigA.type === 'genuine'
+                    ? 'bg-success text-white'
+                    : 'bg-danger text-white'
+                }`}
+              >
+                {sigA.type === 'genuine'
+                  ? `🔥 Đáy giá 60N (-${Math.abs(sigA.entry.savingsVsMedianPct).toFixed(1)}%)`
+                  : `🚨 Bẫy Sale Ảo (+${Math.abs(sigA.entry.fakeMarkupPct).toFixed(1)}%)`}
+              </span>
+            );
+          })()}
+        </div>
+        <div className="small text-warning fw-semibold col-4 text-center">
+          🔥 Tín hiệu Radar Kèo Đáy &amp; Bẫy Sale 10 Sàn
+        </div>
+        <div className="col-4 text-end">
+          {(() => {
+            const sigB = dealRadarBySlug.get(scoreB.slug);
+            if (!sigB) {
+              return (
+                <span className="badge bg-dark border-secondary text-white-50 rounded-pill font-monospace border">
+                  ⚖️ Giá 60N ổn định
+                </span>
+              );
+            }
+            return (
+              <span
+                className={`badge rounded-pill font-monospace ${
+                  sigB.type === 'genuine'
+                    ? 'bg-success text-white'
+                    : 'bg-danger text-white'
+                }`}
+              >
+                {sigB.type === 'genuine'
+                  ? `🔥 Đáy giá 60N (-${Math.abs(sigB.entry.savingsVsMedianPct).toFixed(1)}%)`
+                  : `🚨 Bẫy Sale Ảo (+${Math.abs(sigB.entry.fakeMarkupPct).toFixed(1)}%)`}
+              </span>
+            );
+          })()}
+        </div>
+      </div>
     </div>
   );
 }

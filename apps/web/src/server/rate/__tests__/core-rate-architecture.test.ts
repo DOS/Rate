@@ -1275,7 +1275,47 @@ function runCoreArchitectureSuite() {
     'WatchlistWorkspace must fetch /api/v1/rate/deals and render watchlist-radar-signal badges (#91)'
   );
   console.log(
-    '  ✅ [30/30] Category-Scoped Deal Radar (#90) & Watchlist Deal Radar Signals (#91) passed'
+    '  ✅ [30/31] Category-Scoped Deal Radar (#90) & Watchlist Deal Radar Signals (#91) passed'
+  );
+
+  // 31. Leaderboard Deal Radar Badges (#93) & Compare/Versus Deal Radar Comparison Rows (#94)
+  const leaderboardPageRadarSrc = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/app/[locale]/leaderboard/page.tsx'),
+    'utf8'
+  );
+  const leaderboardExplorerRadarSrc = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/components/leaderboard/LeaderboardExplorer.tsx'
+    ),
+    'utf8'
+  );
+  const compareWorkspaceRadarSrc = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/components/compare/CompareWorkspace.tsx'),
+    'utf8'
+  );
+  const versusScoreboardRadarSrc = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/components/compare/VersusInteractiveScoreboard.tsx'
+    ),
+    'utf8'
+  );
+  assert.ok(
+    leaderboardPageRadarSrc.includes('getCrossPlatformDealRadar') &&
+      leaderboardExplorerRadarSrc.includes('leaderboard-radar-signal') &&
+      leaderboardExplorerRadarSrc.includes('dealRadarBySlug'),
+    'LeaderboardPage and LeaderboardExplorer must fetch and render leaderboard-radar-signal badges (#93)'
+  );
+  assert.ok(
+    compareWorkspaceRadarSrc.includes('/api/v1/rate/deals') &&
+      compareWorkspaceRadarSrc.includes('compare-radar-row') &&
+      versusScoreboardRadarSrc.includes('/api/v1/rate/deals') &&
+      versusScoreboardRadarSrc.includes('versus-radar-row'),
+    'CompareWorkspace and VersusInteractiveScoreboard must fetch /api/v1/rate/deals and render radar comparison rows (#94)'
+  );
+  console.log(
+    '  ✅ [31/31] Leaderboard Deal Radar Badges (#93) & Compare/Versus Deal Radar Rows (#94) passed'
   );
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
