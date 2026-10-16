@@ -1248,7 +1248,34 @@ function runCoreArchitectureSuite() {
     'ProductDetailView must compute and render Cost-Per-Point comparison for same-category peers (#88)'
   );
   console.log(
-    '  ✅ [29/29] Homepage Deal Radar (#87) & Same-Category Value Alternatives Cost-Per-Point (#88) passed'
+    '  ✅ [29/30] Homepage Deal Radar (#87) & Same-Category Value Alternatives Cost-Per-Point (#88) passed'
+  );
+
+  // 30. Category-Scoped Deal Radar across 5 Category Catalogs (#90) & Watchlist Deal Radar Signals (#91)
+  const categoryCatalogRadarSrc = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/app/[locale]/smartphones/page.tsx'),
+    'utf8'
+  );
+  const watchlistRadarSrc = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/components/watchlist/WatchlistWorkspace.tsx'
+    ),
+    'utf8'
+  );
+  assert.ok(
+    categoryCatalogRadarSrc.includes('getCrossPlatformDealRadar') &&
+      categoryCatalogRadarSrc.includes('category-deal-radar'),
+    'CategoryCatalogContent must fetch and render category-deal-radar (#90)'
+  );
+  assert.ok(
+    watchlistRadarSrc.includes('/api/v1/rate/deals') &&
+      watchlistRadarSrc.includes('watchlist-radar-signal') &&
+      watchlistRadarSrc.includes('radarSignals'),
+    'WatchlistWorkspace must fetch /api/v1/rate/deals and render watchlist-radar-signal badges (#91)'
+  );
+  console.log(
+    '  ✅ [30/30] Category-Scoped Deal Radar (#90) & Watchlist Deal Radar Signals (#91) passed'
   );
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }

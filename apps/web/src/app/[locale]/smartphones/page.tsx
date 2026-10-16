@@ -3,9 +3,11 @@ import type { Metadata } from 'next';
 import { Link } from '@/lib/navigation';
 import {
   getCachedCategoryDirectoryFacets,
+  getCrossPlatformDealRadar,
   getMasterProducts,
   type MasterProductFilterParams,
 } from '@/server/rate';
+import type { CanonicalCategorySlug } from '@/lib/rate-api';
 import {
   formatStorageLabel,
   getCategoryFilterSchema,
@@ -175,9 +177,13 @@ export async function CategoryCatalogContent({
     sort: currentSortOption.value,
   };
 
-  const [facets, products] = await Promise.all([
+  const [facets, products, categoryDealRadar] = await Promise.all([
     getCachedCategoryDirectoryFacets(categorySlug),
     getMasterProducts(filterParams),
+    getCrossPlatformDealRadar({
+      categorySlug: categorySlug as CanonicalCategorySlug,
+      limit: 3,
+    }),
   ]);
 
   const schema = getCategoryFilterSchema(
@@ -603,6 +609,86 @@ export async function CategoryCatalogContent({
                 }
                 products={products}
               />
+
+              {categoryDealRadar &&
+                (categoryDealRadar.genuineDeals.length > 0 ||
+                  categoryDealRadar.fakeSaleTraps.length > 0) && (
+                  <div
+                    className="rate-card mb-4 p-3"
+                    data-testid="category-deal-radar"
+                  >
+                    <div className="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                      <div>
+                        <span className="badge bg-dark rounded-pill text-warning me-2">
+                          🔥 RADAR KÈO THƠM &amp; BẪY SALE ẢO (
+                          {schema.categoryTitle})
+                        </span>
+                        <span className="small text-secondary">
+                          Đã kiểm toán {categoryDealRadar.totalOffersAnalyzed}{' '}
+                          gian hàng trên 10 sàn
+                        </span>
+                      </div>
+                      <Link
+                        href="/deals"
+                        className="btn btn-sm btn-outline-danger rounded-pill fw-semibold px-3"
+                      >
+                        💎 Xem toàn bộ Radar 10 sàn →
+                      </Link>
+                    </div>
+                    <div className="row g-2">
+                      {categoryDealRadar.genuineDeals.slice(0, 2).map((g) => (
+                        <div key={g.id} className="col-md-6">
+                          <div className="rounded-3 border-success-subtle bg-success-subtle bg-opacity-10 d-flex justify-content-between align-items-center border p-2">
+                            <div className="overflow-hidden pe-2">
+                              <Link
+                                href={g.productHref}
+                                className="fw-bold text-dark text-decoration-none d-block text-truncate small"
+                              >
+                                🟢 {g.productName}
+                              </Link>
+                              <div className="text-secondary small">
+                                {g.platform.toUpperCase()} • {g.merchantName}
+                              </div>
+                            </div>
+                            <div className="flex-shrink-0 text-end">
+                              <div className="fw-bold text-success font-monospace small">
+                                {g.priceCurrent.toLocaleString('vi-VN')} ₫
+                              </div>
+                              <span className="badge bg-success rounded-pill">
+                                -{g.savingsVsMedianPct}% so trung vị
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                      {categoryDealRadar.fakeSaleTraps.slice(0, 2).map((t) => (
+                        <div key={t.id} className="col-md-6">
+                          <div className="rounded-3 border-danger-subtle bg-danger-subtle bg-opacity-10 d-flex justify-content-between align-items-center border p-2">
+                            <div className="overflow-hidden pe-2">
+                              <Link
+                                href={t.productHref}
+                                className="fw-bold text-dark text-decoration-none d-block text-truncate small"
+                              >
+                                🚨 {t.productName}
+                              </Link>
+                              <div className="text-secondary small">
+                                {t.platform.toUpperCase()} • {t.merchantName}
+                              </div>
+                            </div>
+                            <div className="flex-shrink-0 text-end">
+                              <div className="fw-bold text-danger font-monospace small">
+                                {t.priceCurrent.toLocaleString('vi-VN')} ₫
+                              </div>
+                              <span className="badge bg-danger rounded-pill">
+                                Kê khống +{t.fakeMarkupPct}%
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
               {/* Product Cards Grid (DESIGN.md v3.0 Rating & Review-First .rate-card) */}
               {products.length === 0 ? (
