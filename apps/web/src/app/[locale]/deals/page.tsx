@@ -47,7 +47,8 @@ export default async function DealsPage({ params }: PageProps) {
     }),
     getCrossPlatformDealRadar({
       categorySlug: 'all',
-      limit: 16,
+      // Max page size so every ranked card gets its own Radar badge.
+      limit: 50,
     }),
   ]);
 

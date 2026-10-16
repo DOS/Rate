@@ -1656,8 +1656,30 @@ function runCoreArchitectureSuite() {
     ),
     'Category catalog must request the maximum radar limit so every card gets its badge'
   );
+  const dealFinderRadarCardSrc = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/components/deals/DealFinderWorkspace.tsx'
+    ),
+    'utf8'
+  );
+  const dealsPageRadarLimitSrc = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/app/[locale]/deals/page.tsx'),
+    'utf8'
+  );
+  assert.ok(
+    dealFinderRadarCardSrc.includes('RadarBadge') &&
+      dealFinderRadarCardSrc.includes('RADAR_CSV_HEADERS') &&
+      dealFinderRadarCardSrc.includes('radarMarkdownCell') &&
+      dealFinderRadarCardSrc.includes('dealRadar: radarExportFields'),
+    'DealFinderWorkspace ranked cards and exports must carry the per-product Radar (#116)'
+  );
+  assert.ok(
+    /categorySlug: 'all',[\s\S]{0,200}limit: 50/.test(dealsPageRadarLimitSrc),
+    '/deals must request the maximum radar limit so every ranked card gets its badge (#116)'
+  );
   console.log(
-    '  ✅ [37/37] Per-product Radar signal on ProductDetailView + catalog badges no longer limited to top-3 (#106) passed'
+    '  ✅ [37/37] Per-product Radar on ProductDetailView, catalog and /deals cards no longer limited to the top-N feed (#106, #116) passed'
   );
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }

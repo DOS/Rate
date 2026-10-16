@@ -12,6 +12,15 @@ import {
   type ScoredLeaderboardItem,
 } from '@/lib/leaderboard-engine';
 import CompareQuickToggle from '@/components/compare/CompareQuickToggle';
+import {
+  getRadarSignal,
+  radarCsvCells,
+  radarExportFields,
+  radarMarkdownCell,
+  RADAR_CSV_HEADERS,
+} from '@/lib/deal-radar';
+import RadarBadge from '@/components/radar/RadarBadge';
+import { useDealRadarIndex } from '@/components/radar/use-deal-radar';
 import type {
   CrossPlatformDealRadarItem,
   CrossPlatformDealRadarResponse,
@@ -63,6 +72,7 @@ export default function DealFinderWorkspace({
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [copiedMarkdown, setCopiedMarkdown] = useState<boolean>(false);
   const [copiedRadarMd, setCopiedRadarMd] = useState<boolean>(false);
+  const radarIndex = useDealRadarIndex(dealRadar);
 
   const filteredGenuineDeals = useMemo<CrossPlatformDealRadarItem[]>(() => {
     if (!dealRadar) return [];
@@ -298,13 +308,13 @@ export default function DealFinderWorkspace({
         `- **Ngân sách tối đa:** ${maxBudgetVnd.toLocaleString('vi-VN')} ₫ | **Hồ sơ nhu cầu:** ${persona}`,
         `- **Đường dẫn kiểm định:** ${window.location.href}`,
         '',
-        '| Hạng | Thiết bị | Hãng | Điểm Nhu Cầu | Điểm JReviews | Giá Thấp Nhất | Tiết Kiệm Chênh Sàn |',
-        '| --- | --- | --- | --- | --- | --- | --- |',
+        '| Hạng | Thiết bị | Hãng | Điểm Nhu Cầu | Điểm JReviews | Giá Thấp Nhất | Tiết Kiệm Chênh Sàn | Radar |',
+        '| --- | --- | --- | --- | --- | --- | --- | --- |',
         ...rankedDeals
           .slice(0, 20)
           .map(
             (d) =>
-              `| #${d.rank} | ${d.name} | ${d.brand} | **${d.personaScore5.toFixed(2)}/5.0** | ★ ${d.userScore5.toFixed(1)} (Lab ${d.expertScore10.toFixed(1)}/10) | **${d.minPrice.toLocaleString('vi-VN')} ₫** | ${d.spreadSavingsVnd > 0 ? `-${d.spreadSavingsVnd.toLocaleString('vi-VN')} ₫` : 'Đồng giá'} |`
+              `| #${d.rank} | ${d.name} | ${d.brand} | **${d.personaScore5.toFixed(2)}/5.0** | ★ ${d.userScore5.toFixed(1)} (Lab ${d.expertScore10.toFixed(1)}/10) | **${d.minPrice.toLocaleString('vi-VN')} ₫** | ${d.spreadSavingsVnd > 0 ? `-${d.spreadSavingsVnd.toLocaleString('vi-VN')} ₫` : 'Đồng giá'} | ${radarMarkdownCell(getRadarSignal(radarIndex, d.slug))} |`
           ),
       ];
       await navigator.clipboard.writeText(lines.join('\n'));
@@ -336,6 +346,7 @@ export default function DealFinderWorkspace({
       'Tiết Kiệm Chênh Sàn (VND)',
       'Chi Phí / Điểm JReviews (VND)',
       'Đường Dẫn',
+      ...RADAR_CSV_HEADERS,
     ];
     const rows = rankedDeals.map((d) => [
       d.rank,
@@ -349,6 +360,7 @@ export default function DealFinderWorkspace({
       d.spreadSavingsVnd,
       d.costPerPointVnd,
       `${window.location.origin}${d.productHref}`,
+      ...radarCsvCells(getRadarSignal(radarIndex, d.slug)),
     ]);
     const csvContent = `\uFEFF${[
       headers.map(escapeCsv).join(','),
@@ -378,6 +390,7 @@ export default function DealFinderWorkspace({
         name: d.name,
         brand: d.brand,
         category: d.categorySlug,
+        dealRadar: radarExportFields(getRadarSignal(radarIndex, d.slug)),
         personaScore5: d.personaScore5,
         userScore5: d.userScore5,
         expertScore10: d.expertScore10,
@@ -737,6 +750,10 @@ export default function DealFinderWorkspace({
                       <span className="rate-score-badge-expert">
                         Lab {deal.expertScore10.toFixed(1)}/10
                       </span>
+                      <RadarBadge
+                        signal={getRadarSignal(radarIndex, deal.slug)}
+                        minSpreadPct={Infinity}
+                      />
                     </div>
                     {deal.spreadSavingsVnd > 0 && (
                       <span className="badge bg-success-subtle text-success rounded-pill font-monospace">
