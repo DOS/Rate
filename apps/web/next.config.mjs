@@ -1,5 +1,5 @@
 import withPlaiceholder from "@plaiceholder/next"
-// @sentry/nextjs v10+ exposes the build wrapper from the "/config" subpath only
+// @sentry/nextjs 11 exposes the build wrapper from the "/config" subpath only
 import { withSentryConfig } from "@sentry/nextjs/config"
 import plugin from "next-intl/plugin"
 import path from "path"
