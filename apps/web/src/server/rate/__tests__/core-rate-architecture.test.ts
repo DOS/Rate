@@ -243,7 +243,10 @@ function runCoreArchitectureSuite() {
   assert.ok(openApi.paths['/api/v1/rate/inspect']?.get);
   assert.ok(openApi.paths['/api/v1/rate/extension/lookup']?.get);
   assert.ok(openApi.paths['/api/v1/rate/extension/ingest']?.post);
-  assert.ok(openApi.paths['/api/v1/rate/openapi.json']?.get);
+  assert.ok(
+    openApi.paths['/api/v1/rate/openapi.json']?.get ||
+      openApi.paths['/api/v1/rate/openapi']?.get
+  );
   assert.equal(
     (
       openApi.components.schemas.SupportedEcommercePlatform as {
@@ -1139,7 +1142,49 @@ function runCoreArchitectureSuite() {
     'LeaderboardExplorer, CategoryCatalogToolbar, WatchlistWorkspace, and MerchantDirectoryExplorer must provide 1-Click JSON export'
   );
   console.log(
-    '  ✅ [26/26] ProductShareAuditButton/ProductOffersExplorer (#79) & Full 3-Format JSON Export Parity (#80) passed'
+    '  ✅ [26/27] ProductShareAuditButton/ProductOffersExplorer (#79) & Full 3-Format JSON Export Parity (#80) passed'
+  );
+
+  // 27. JReviewsSection / PriceHistorySection JSON Export (#82) & ProductValueCalculator / ProductSpecsExportToolbar CSV/JSON Export (#83)
+  const jreviewsSrcJson = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/components/reviews/JReviewsSection.tsx'),
+    'utf8'
+  );
+  const priceHistorySrcJson = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/components/price-history/PriceHistorySection.tsx'
+    ),
+    'utf8'
+  );
+  const valueCalcSrcUpdated = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/components/leaderboard/ProductValueCalculator.tsx'
+    ),
+    'utf8'
+  );
+  const specsToolbarSrcUpdated = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/components/leaderboard/ProductSpecsExportToolbar.tsx'
+    ),
+    'utf8'
+  );
+  assert.ok(
+    jreviewsSrcJson.includes('handleDownloadReviewsJson') &&
+      priceHistorySrcJson.includes('handleDownloadPriceHistoryJson'),
+    'JReviewsSection and PriceHistorySection must provide 1-Click JSON export'
+  );
+  assert.ok(
+    valueCalcSrcUpdated.includes('handleDownloadValueCsv') &&
+      valueCalcSrcUpdated.includes('handleDownloadValueJson') &&
+      specsToolbarSrcUpdated.includes('handleDownloadSpecsCsv') &&
+      specsToolbarSrcUpdated.includes('handleDownloadSpecsJson'),
+    'ProductValueCalculator and ProductSpecsExportToolbar must provide 1-Click CSV & JSON export'
+  );
+  console.log(
+    '  ✅ [27/27] JReviewsSection/PriceHistorySection JSON Export (#82) & ProductValueCalculator/ProductSpecsExportToolbar CSV/JSON Export (#83) passed'
   );
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }

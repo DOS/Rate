@@ -98,6 +98,79 @@ export default function ProductValueCalculator({
     return null;
   }
 
+  const handleDownloadValueCsv = () => {
+    if (typeof window === 'undefined') return;
+    const escapeCsv = (val: string | number) => {
+      const str = String(val ?? '');
+      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+    const headers = [
+      'Chu Kỳ (Tháng)',
+      'Giá Mua Thấp Nhất (VND)',
+      'Tỷ Lệ Giữ Giá Dự Kiến (%)',
+      'Giá Trị Thu Hồi Dự Kiến (VND)',
+      'Chi Phí Sở Hữu Thực (VND)',
+      'Chi Phí Mỗi Tháng (VND)',
+      'Chi Phí Mỗi Ngày (VND)',
+    ];
+    const horizons: HorizonMonths[] = [12, 24, 36];
+    const rows = horizons.map((h) => {
+      const ratio = includeResale
+        ? estimateResaleRetentionRatio(brand, categorySlug, h)
+        : 0;
+      const resale = Math.round(minPriceVnd * ratio);
+      const net = Math.max(0, minPriceVnd - resale);
+      return [
+        h,
+        minPriceVnd,
+        Math.round(ratio * 100),
+        resale,
+        net,
+        Math.round(net / h),
+        Math.round(net / (h * 30.4)),
+      ];
+    });
+    const csvContent = `\uFEFF${[
+      headers.map(escapeCsv).join(','),
+      ...rows.map((r) => r.map(escapeCsv).join(',')),
+    ].join('\n')}`;
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `rate-tco-${categorySlug}-${months}m.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadValueJson = () => {
+    if (typeof window === 'undefined') return;
+    const payload = {
+      source: 'Rate.vn Value Efficiency & TCO Calculator',
+      productName,
+      brand,
+      categorySlug,
+      selectedHorizonMonths: months,
+      includeResale,
+      minPriceVnd,
+      maxPriceVnd,
+      metrics,
+      exportedAt: new Date().toISOString(),
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: 'application/json;charset=utf-8;',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `rate-tco-${categorySlug}-${months}m.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="rate-card mb-4 p-4">
       <div className="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-3">
@@ -147,6 +220,23 @@ export default function ProductValueCalculator({
             {includeResale
               ? `♻️ Có tính thu cũ đổi mới (~${metrics.retentionPct}%)`
               : '🔒 Không tính bán lại (Khấu hao 100%)'}
+          </button>
+
+          <button
+            type="button"
+            onClick={handleDownloadValueCsv}
+            data-testid="download-value-csv-btn"
+            className="btn btn-sm btn-outline-secondary rounded-pill fw-semibold px-3"
+          >
+            📥 CSV
+          </button>
+          <button
+            type="button"
+            onClick={handleDownloadValueJson}
+            data-testid="download-value-json-btn"
+            className="btn btn-sm btn-outline-secondary rounded-pill fw-semibold px-3"
+          >
+            📦 JSON
           </button>
         </div>
       </div>
