@@ -160,6 +160,9 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc **4 T�
 - [x] **4.47 & 4.48. Trung Tâm Săn Deal Đã Kiểm Định `/deals` (`DealFinderWorkspace`) Kèm Xuất Markdown/CSV/JSON + Xuất Biên Bản Kiểm Toán CSV/JSON Trên `/inspect` & `/merchants/[id]` (Issue #77 & Issue #78):**
   - Xây dựng trang `/deals` (`apps/web/src/app/[locale]/deals/page.tsx`) và `DealFinderWorkspace.tsx` lọc thiết bị theo ngân sách, ngành hàng và hồ sơ nhu cầu, kèm 3 nút `📋 Sao chép Markdown`, `📥 Xuất CSV`, `📦 Xuất JSON`.
   - Nâng cấp `DeepInspectWorkspace.tsx` (`/inspect`) và `MerchantShareAuditButton.tsx` (`/merchants/[id]`) bổ sung xuất biên bản kiểm toán ra `📥 CSV` và `📦 JSON`.
+- [x] **4.49 & 4.50. Hoàn Tất Chuẩn Xuất Dữ Liệu 3 Định Dạng (`Markdown`, `CSV`, `JSON`) Trên Toàn Bộ Trang Sản Phẩm, Bảng Xếp Hạng, Danh Mục Ngành Hàng, Watchlist & Danh Bạ Gian Hàng (Issue #79 & Issue #80):**
+  - Bổ sung xuất `📥 CSV` / `📦 JSON` trên `ProductShareAuditButton.tsx` và `📦 Xuất JSON` trên `ProductOffersExplorer.tsx`.
+  - Bổ sung xuất `📦 JSON` trên `LeaderboardExplorer.tsx`, `CategoryCatalogToolbar.tsx`, `WatchlistWorkspace.tsx` và `MerchantDirectoryExplorer.tsx`.
 
 ### ✅ Phase 5: Mở Rộng Đa Sàn 10/10 Nền Tảng, Browser Extension MV3 & Tự Động Hóa Cảnh Báo Giá (Đã hoàn thành 100%)
 
@@ -200,3 +203,8 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc **4 T�
   - Nâng cấp `lookupExtensionProduct` (`apps/web/src/server/rate/extension.ts`) và giao diện Chrome Side Panel (`apps/extension/src/sidepanel/sidepanel.ts`) tự động nhận diện đúng ngành hàng (`smartphones`, `tablets`, `laptops`, `smartwatches`, `earbuds`), trả về thứ hạng trực tiếp từ `computeProductStandingInCategory` (`leaderboardStandings`) cùng liên kết đối đầu 1v1 (`versusUrl`) với đối thủ đứng đầu cùng phân khúc.
 - [x] **5.13. Bộ Tái Chấm Điểm Rủi Ro Kép Gian Hàng & Seeding Tự Động (`MerchantRiskAuditor` - Issue #11 bên `DOS/Rate-Services`):**
   - Xây dựng `MerchantRiskAuditor` (`src/scrapers/merchant-risk-auditor.ts`) tự động tổng hợp toàn bộ báo giá (`rate.products`) và đánh giá đã phân tích AI (`rate.reviews`) của từng gian hàng trong `rate.merchants` sau mỗi chu kỳ `queue-worker` để tính toán lại `dosafe_risk_score` (tỷ lệ tin nâng khống giá gốc / phá giá bất thường), `review_risk_score` (tỷ lệ `suspected_seeding` + `low_value_coin_spam`) và `risk_score` tổng hợp.
+- [x] **5.14. Radar Kèo Thơm Đáy Lịch Sử & Cảnh Báo Bẫy Sale Ảo 10 Sàn (`GET /api/v1/rate/deals` & Browser Extension Side Panel - Issue #81 bên `DOS/Rate`):**
+  - Xây dựng `getCrossPlatformDealRadar` (`apps/web/src/server/rate/deals.ts`) bọc `React.cache()` và endpoint `GET /api/v1/rate/deals` (`apps/web/src/app/api/v1/rate/deals/route.ts`), đối chiếu toàn bộ `36/36` Master Products trên 10 sàn để lọc ra danh sách **Kèo thơm đáy giá đa sàn (`genuineDeals`)** và **Bẫy nâng khống giá gốc (`fakeSaleTraps`)**.
+  - Tích hợp bảng **🔥 Radar Kèo Thơm Đáy Lịch Sử 10 Sàn & Cảnh Báo Bẫy Nâng Giá Gốc** trực tiếp vào giao diện Chrome Side Panel của Rate Browser Extension MV3 (`apps/extension/src/sidepanel/sidepanel.ts`).
+- [x] **5.15. Bộ Kiểm Toán Chiến Dịch Seeding Đột Biến Theo Cụm Thời Gian (`ReviewBurstAuditor` - Issue #12 bên `DOS/Rate-Services`):**
+  - Xây dựng `ReviewBurstAuditor` (`src/scrapers/review-burst-auditor.ts`) và tích hợp vào Step 5 của `src/index.ts`, sử dụng cửa sổ trượt 48 giờ kết hợp độ tương đồng Jaccard từ vựng (`averagePairwiseSimilarity`) và nhận diện mẫu câu cày xu để phát hiện các chiến dịch Seeding 5 sao tập trung (`coordinated_seeding_burst`), tự động gắn cờ `is_seeding = true` trên `rate.reviews`.

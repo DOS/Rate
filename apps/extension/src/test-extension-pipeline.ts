@@ -334,7 +334,23 @@ async function runTests() {
     }
 
     console.log(
-      `  ✅ [6/6] Live Read-Only Lookup matched "${liveLookup.masterProduct?.name || 'N/A'}" (cat=${liveLookup.categorySlug}, rank=#${liveLookup.leaderboardStandings?.[0]?.rank}/${liveLookup.leaderboardStandings?.[0]?.totalInCategory}, versus=${liveLookup.versusUrl}, offers=${liveLookup.allOffers.length})`
+      `  ✅ [6/7] Live Read-Only Lookup matched "${liveLookup.masterProduct?.name || 'N/A'}" (cat=${liveLookup.categorySlug}, rank=#${liveLookup.leaderboardStandings?.[0]?.rank}/${liveLookup.leaderboardStandings?.[0]?.totalInCategory}, versus=${liveLookup.versusUrl}, offers=${liveLookup.allOffers.length})`
+    );
+
+    const dealsMod = await import('../../web/src/server/rate/deals.js');
+    const { getCrossPlatformDealRadar } = (
+      'getCrossPlatformDealRadar' in dealsMod
+        ? dealsMod
+        : (dealsMod as unknown as { default: typeof dealsMod }).default
+    ) as typeof dealsMod;
+
+    const radar = await getCrossPlatformDealRadar({ limit: 8 });
+    assert.ok(radar.totalClustersAnalyzed >= 10);
+    assert.ok(radar.totalOffersAnalyzed >= 100);
+    assert.ok(radar.genuineDeals.length >= 5);
+    assert.ok(radar.genuineDeals[0]!.savingsVsMedianVnd > 0);
+    console.log(
+      `  ✅ [7/7] Live Cross-Platform Deal Radar verified (${radar.totalClustersAnalyzed} clusters, ${radar.totalOffersAnalyzed} offers, ${radar.genuineDeals.length} genuine deals, ${radar.fakeSaleTraps.length} fake-sale traps)`
     );
   }
 

@@ -50,6 +50,108 @@ function buildSvgSparkline(points: ExtensionPriceHistoryPoint[]): string {
   `;
 }
 
+interface DealRadarFeedItem {
+  id: string;
+  verdict: string;
+  verdictBadgeVi: string;
+  productSlug: string;
+  productName: string;
+  categorySlug: string;
+  productHref: string;
+  platform: string;
+  merchantName: string;
+  offerUrl: string;
+  priceCurrent: number;
+  priceOriginal: number | null;
+  savingsVsMedianVnd: number;
+  savingsVsMedianPct: number;
+  fakeMarkupPct: number;
+  explanationVi: string;
+}
+
+async function fetchAndRenderDealRadar(
+  settings: ExtensionSettings,
+  categorySlug?: string
+): Promise<void> {
+  const slot = document.getElementById('deal-radar-slot');
+  if (!slot) return;
+
+  try {
+    const catParam = categorySlug
+      ? `&category=${encodeURIComponent(categorySlug)}`
+      : '';
+    const res = await fetch(
+      `${settings.apiBaseUrl}/api/v1/rate/deals?limit=4${catParam}`
+    );
+    if (!res.ok) return;
+    const json = (await res.json()) as {
+      ok?: boolean;
+      data?: {
+        genuineDeals?: DealRadarFeedItem[];
+        fakeSaleTraps?: DealRadarFeedItem[];
+      };
+    };
+    const deals = json?.data?.genuineDeals || [];
+    const traps = json?.data?.fakeSaleTraps || [];
+    if (deals.length === 0 && traps.length === 0) return;
+
+    slot.innerHTML = `
+      <div class="card">
+        <div class="card-title">🔥 Radar Kèo Thơm Đáy Lịch Sử 10 Sàn</div>
+        ${deals
+          .slice(0, 4)
+          .map(
+            (d) => `
+            <div class="offer-item">
+              <div>
+                <div class="offer-shop">
+                  <a href="${escapeHtml(settings.apiBaseUrl + d.productHref)}" target="_blank" rel="noopener noreferrer" style="color:#f3f4f6;text-decoration:none;">
+                    ${escapeHtml(d.productName)}
+                  </a>
+                </div>
+                <div class="offer-meta">
+                  ${escapeHtml(d.platform.toUpperCase())} (${escapeHtml(d.merchantName)}) - Tiết kiệm ${formatVnd(d.savingsVsMedianVnd)} (-${d.savingsVsMedianPct}%)
+                </div>
+              </div>
+              <a href="${escapeHtml(d.offerUrl)}" target="_blank" rel="noopener noreferrer" class="offer-price" style="text-decoration:none;color:#34d399;">
+                ${formatVnd(d.priceCurrent)}
+              </a>
+            </div>
+          `
+          )
+          .join('')}
+        ${
+          traps.length > 0
+            ? `
+            <div style="margin-top:10px;padding-top:8px;border-top:1px solid #2a2f3a;">
+              <div class="card-title" style="color:#f87171;">⚠️ Cảnh Báo Bẫy Nâng Giá Gốc (Fake Sale)</div>
+              ${traps
+                .slice(0, 2)
+                .map(
+                  (t) => `
+                  <div class="offer-item">
+                    <div>
+                      <div class="offer-shop">${escapeHtml(t.productName)}</div>
+                      <div class="offer-meta" style="color:#fca5a5;">
+                        ${escapeHtml(t.platform.toUpperCase())} - Giá gốc kê khống +${t.fakeMarkupPct}% (${formatVnd(t.priceOriginal)})
+                      </div>
+                    </div>
+                    <span class="offer-price" style="color:#f87171;">${formatVnd(t.priceCurrent)}</span>
+                  </div>
+                `
+                )
+                .join('')}
+            </div>
+          `
+            : ''
+        }
+      </div>
+    `;
+  } catch {
+    // Non-blocking radar feed
+  }
+}
+
 function renderPanelContent(
   root: HTMLElement,
   signal: ExtractedPageProductSignal | null,
@@ -65,7 +167,9 @@ function renderPanelContent(
           Hãy mở một trang chi tiết sản phẩm trên <strong>Shopee, Lazada, Tiki, TikTok Shop, CellphoneS, Thế Giới Di Động, FPT Shop, Hoàng Hà Mobile, Di Động Việt</strong> hoặc <strong>Phong Vũ</strong>, hoặc dán link/tên máy vào ô <strong>Tra cứu nhanh</strong> phía trên.
         </p>
       </div>
+      <div id="deal-radar-slot"></div>
     `;
+    void fetchAndRenderDealRadar(settings);
     return;
   }
 
@@ -78,7 +182,9 @@ function renderPanelContent(
           Kiểm tra lại địa chỉ máy chủ Rate API (${escapeHtml(settings.apiBaseUrl)}).
         </p>
       </div>
+      <div id="deal-radar-slot"></div>
     `;
+    void fetchAndRenderDealRadar(settings);
     return;
   }
 
@@ -348,7 +454,10 @@ function renderPanelContent(
     ${offersHtml}
     ${reviewHtml}
     ${merchantRiskHtml}
+    <div id="deal-radar-slot"></div>
   `;
+
+  void fetchAndRenderDealRadar(settings, categorySlug);
 
   root.querySelectorAll<HTMLButtonElement>('.variant-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
