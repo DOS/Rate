@@ -4,15 +4,15 @@
 
 ## Cấu Trúc Chính (`src/`)
 
-| Đường dẫn | Vai trò |
-| --- | --- |
-| `app/[locale]/` | Các trang: trang chủ, 5 ngành hàng (`smartphones`, `tablets`, `laptops`, `smartwatches`, `earbuds`), `compare`, `deals`, `inspect`, `leaderboard`, `merchants`, `watchlist`, `developers`... |
-| `app/api/v1/rate/` | REST API v1 công khai (danh sách bên dưới). |
-| `app/api/reviews/[id]/vote/` | Bình chọn đánh giá hữu ích (JReviews). |
-| `server/rate/` | Server Data Layer: các hàm `getCached*` bọc `React.cache()` để `generateMetadata()` và `Page()` không truy vấn trùng; `deals.ts` (Deal Radar), `extension.ts` (lookup / ingest cho Extension), `openapi.ts` (đặc tả OpenAPI 3.1.0). |
-| `lib/rate-api.ts` | Truy vấn Supabase cho sản phẩm, gian hàng, đánh giá, lịch sử giá. |
-| `middleware.ts`, `lib/navigation.ts` | Định tuyến locale (`localePrefix: "never"`, cookie `NEXT_LOCALE`). |
-| `../locales/{vi,en,cs}.json` | Chuỗi dịch. |
+| Đường dẫn                            | Vai trò                                                                                                                                                                                                                             |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `app/[locale]/`                      | Các trang: trang chủ, 5 ngành hàng (`smartphones`, `tablets`, `laptops`, `smartwatches`, `earbuds`), `compare`, `deals`, `inspect`, `leaderboard`, `merchants`, `watchlist`, `developers`...                                        |
+| `app/api/v1/rate/`                   | REST API v1 công khai (danh sách bên dưới).                                                                                                                                                                                         |
+| `app/api/reviews/[id]/vote/`         | Bình chọn đánh giá hữu ích (JReviews).                                                                                                                                                                                              |
+| `server/rate/`                       | Server Data Layer: các hàm `getCached*` bọc `React.cache()` để `generateMetadata()` và `Page()` không truy vấn trùng; `deals.ts` (Deal Radar), `extension.ts` (lookup / ingest cho Extension), `openapi.ts` (đặc tả OpenAPI 3.1.0). |
+| `lib/rate-api.ts`                    | Truy vấn Supabase cho sản phẩm, gian hàng, đánh giá, lịch sử giá.                                                                                                                                                                   |
+| `middleware.ts`, `lib/navigation.ts` | Định tuyến locale (`localePrefix: "never"`, cookie `NEXT_LOCALE`).                                                                                                                                                                  |
+| `../locales/{vi,en,cs}.json`         | Chuỗi dịch.                                                                                                                                                                                                                         |
 
 ## REST API v1 (`/api/v1/rate/...`)
 
@@ -36,11 +36,11 @@ Deploy Production trên Vercel theo `vercel.json` ở root (`pnpm@10.34.5`, `--f
 Khai báo trong `src/env.mjs`. Đặt trong `apps/web/.env.local` khi chạy local, không commit.
 
 - **Bắt buộc:** `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`. `src/lib/rate-api.ts` cố ý báo lỗi khi thiếu, để môi trường preview không âm thầm đọc nhầm project prod (giá trị mặc định trong `src/env.mjs` không được data layer dùng).
+  `src/lib/rate-api.ts` chấp nhận `SUPABASE_URL` / `SUPABASE_ANON_KEY` làm fallback; route bình chọn đánh giá cũng chấp nhận `SUPABASE_URL`.
 - **Tùy chọn:**
-  - `APP_PUBLIC_URL` (mặc định `https://rate.vn`), `NEXT_PUBLIC_REVALIDATE`, `NEXT_OUTPUT`, `APP_ENV`;
-  - Sentry: `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT`;
-  - reCAPTCHA: `NEXT_PUBLIC_RECAPTCHA_SITE_KEY`, `RECAPTCHA_SECRET_KEY`.
-- `SUPABASE_SERVICE_ROLE_KEY`: chỉ phía server, cho phần ghi dữ liệu của Extension (`src/server/rate/extension.ts`). Không bao giờ đưa key này ra client. `SUPABASE_URL` được dùng làm fallback khi thiếu `NEXT_PUBLIC_SUPABASE_URL`.
+  - `APP_PUBLIC_URL` (mặc định `https://rate.vn`), `NEXT_PUBLIC_SITE_URL` (URL gốc cho metadata của trang `/leaderboard`, mặc định `https://rate.vn`), `NEXT_OUTPUT`, `APP_ENV`;
+  - Sentry: `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT`.
+- `SUPABASE_SERVICE_ROLE_KEY`: chỉ phía server, cho phần ghi dữ liệu của Extension (`src/server/rate/extension.ts`, chỉ đọc `NEXT_PUBLIC_SUPABASE_URL`, không có fallback). Thiếu key thì ingest trả về `quarantined_dry_run`. Không bao giờ đưa key này ra client.
 
 ## Database
 

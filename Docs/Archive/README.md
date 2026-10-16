@@ -4,7 +4,7 @@
 
 ## `2025-strapi-era/`
 
-Tài liệu của kiến trúc 2025 đã bị gỡ bỏ hoàn toàn: Strapi CMS, Redis Streams, Validator Worker, FlareSolverr, crawler CheckScam, Splink, Browser Extension đời đầu dùng `StrapiClient` và stack Supabase tự host bằng Docker. Thư mục giữ nguyên cấu trúc cũ (`Guides/`, `Modules/`, `Notes/`, `Platform/`, `Resources/`, `root/`), được chuyển vào đây ở issue #139. Nhiều link nội bộ trong các trang này đã hỏng từ trước khi chuyển.
+Tài liệu của kiến trúc 2025 đã bị gỡ bỏ hoàn toàn: Strapi CMS, Redis Streams, Validator Worker, FlareSolverr, crawler CheckScam, Splink, Browser Extension đời đầu dùng `StrapiClient` và stack Supabase tự host bằng Docker. Các thư mục `Guides/`, `Modules/`, `Notes/`, `Platform/`, `Resources/` giữ nguyên cấu trúc cũ trong `Docs/`; `root/` chứa 3 file trước đây nằm ở thư mục gốc repo (`COLLABORATION.md`, `SUPABASE_SETUP.md`, `SUPABASE_MIGRATION.md`). Tất cả được chuyển vào đây ở issue #139. Link nội bộ trong các trang này không được cập nhật: phần lớn đã hỏng từ trước, và các link trỏ ra file nằm ngoài thư mục lưu trữ cũng hỏng sau khi chuyển.
 
 ## Tài Liệu Hiện Hành
 

@@ -22,5 +22,5 @@ ui-debug.log
 **/types/api/*d.ts
 **/types/generated/**
 **/.strapi/client/**
-# Archived docs are kept byte-for-byte as they were
+# Archived docs are kept as they were (not reformatted)
 Docs/Archive/2025-strapi-era/
