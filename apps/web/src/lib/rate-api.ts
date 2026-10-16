@@ -1640,10 +1640,14 @@ export async function getMerchantsList(params?: {
         .order('id')
         .range(from, to)
     ),
+    // Only the flag fields feed computeDynamicReviewRisk; keep this read narrow
+    // because it pages through every review.
     fetchAllRows('reviews', (from, to) =>
       supabase
         .from('reviews')
-        .select('*, review_flags(*)')
+        .select(
+          'id, product_id, review_flags(verdict, flag_category, include_in_rating)'
+        )
         .order('id')
         .range(from, to)
     ),
