@@ -154,6 +154,9 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc **4 T�
 - [x] **4.43 & 4.44. Trình Tạo Snippet cURL/TS/Python & Tải JSON Trên `/developers` (`ApiPlaygroundClient`) + Xuất 10 Nhóm Thông Số Kỹ Thuật Markdown/JSON (`ProductSpecsExportToolbar`) Trên `ProductDetailView` (Issue #73 & Issue #74):**
   - Nâng cấp `ApiPlaygroundClient.tsx` trên `/developers` bổ sung trình tạo mã `Python (requests)` bên cạnh `cURL` và `TS fetch()`, kèm 2 nút `📋 Copy JSON` và `📥 Tải JSON` cho kết quả phản hồi trực tiếp.
   - Xây dựng `ProductSpecsExportToolbar.tsx` tích hợp tại `#specs-section` trên `ProductDetailView`, cho phép sao chép bảng 10 nhóm thông số chuẩn GSMArena & PhoneArena ra Markdown hoặc tải file JSON chuẩn hóa.
+- [x] **4.45 & 4.46. Xuất Ma Trận Đối Chiếu Đa Sản Phẩm CSV/JSON Trên `/compare` (`CompareWorkspace`) + Xuất Bảng Chấm Điểm Đối Đầu 1v1 CSV/JSON Trên `/compare/[versus]` (`VersusInteractiveScoreboard`) (Issue #75 & Issue #76):**
+  - Nâng cấp `CompareWorkspace.tsx` với 2 nút `📥 CSV` và `📦 JSON` xuất toàn bộ ma trận 10 nhóm thông số kỹ thuật và điểm JReviews của tối đa 4 sản phẩm đang đối chiếu.
+  - Nâng cấp `VersusInteractiveScoreboard.tsx` trên `/compare/[versus]` với 2 nút `📥 CSV` và `📦 JSON` xuất bảng điểm đối đầu 1v1 theo trọng số cá nhân hóa và 5 tiêu chí cốt lõi.
 
 ### ✅ Phase 5: Mở Rộng Đa Sàn 10/10 Nền Tảng, Browser Extension MV3 & Tự Động Hóa Cảnh Báo Giá (Đã hoàn thành 100%)
 

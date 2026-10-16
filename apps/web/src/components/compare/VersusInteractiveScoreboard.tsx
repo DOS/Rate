@@ -216,6 +216,119 @@ export default function VersusInteractiveScoreboard({
     }
   };
 
+  const handleDownloadVersusCsv = () => {
+    if (typeof window === 'undefined') return;
+    const escapeCsv = (val: string | number) => {
+      const str = String(val ?? '');
+      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+    const headers = [
+      'Tiêu Chí JReviews',
+      'Trọng Số (%)',
+      scoreA.name,
+      scoreB.name,
+      'Ưu Thế',
+    ];
+    const rows: Array<Array<string | number>> = [
+      [
+        'Điểm Tổng Hợp Trọng Số (Thang 5.0)',
+        100,
+        weightedResult.finalA.toFixed(2),
+        weightedResult.finalB.toFixed(2),
+        weightedResult.winner.name,
+      ],
+      ...criteriaRows.map((r) => [
+        r.label,
+        weights[r.key],
+        r.aVal.toFixed(2),
+        r.bVal.toFixed(2),
+        r.aVal > r.bVal
+          ? scoreA.name
+          : r.bVal > r.aVal
+            ? scoreB.name
+            : 'Cân bằng',
+      ]),
+      [
+        'Điểm Chuyên Gia Rate Lab (Thang 10)',
+        '-',
+        scoreA.expertScore10.toFixed(1),
+        scoreB.expertScore10.toFixed(1),
+        scoreA.expertScore10 >= scoreB.expertScore10
+          ? scoreA.name
+          : scoreB.name,
+      ],
+      [
+        'Giá Tham Khảo Thấp Nhất (VND)',
+        '-',
+        scoreA.minPrice,
+        scoreB.minPrice,
+        scoreA.minPrice <= scoreB.minPrice ? scoreA.name : scoreB.name,
+      ],
+    ];
+    const csvContent = `\uFEFF${[
+      headers.map(escapeCsv).join(','),
+      ...rows.map((r) => r.map(escapeCsv).join(',')),
+    ].join('\n')}`;
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `rate-1v1-${scoreA.slug}-vs-${scoreB.slug}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadVersusJson = () => {
+    if (typeof window === 'undefined') return;
+    const payload = {
+      source: 'Rate.vn 1v1 Versus Scoreboard',
+      versusSlug: `${scoreA.slug}-vs-${scoreB.slug}`,
+      persona,
+      weights,
+      exportedAt: new Date().toISOString(),
+      winner: {
+        slug: weightedResult.winner.slug,
+        name: weightedResult.winner.name,
+        scoreDelta5: Number(weightedResult.delta),
+      },
+      productA: {
+        slug: scoreA.slug,
+        name: scoreA.name,
+        brand: scoreA.brand,
+        weightedScore5: weightedResult.finalA,
+        expertScore10: scoreA.expertScore10,
+        minPriceVnd: scoreA.minPrice,
+      },
+      productB: {
+        slug: scoreB.slug,
+        name: scoreB.name,
+        brand: scoreB.brand,
+        weightedScore5: weightedResult.finalB,
+        expertScore10: scoreB.expertScore10,
+        minPriceVnd: scoreB.minPrice,
+      },
+      criteriaBreakdown: criteriaRows.map((r) => ({
+        key: r.key,
+        label: r.label,
+        weightPercent: weights[r.key],
+        scoreA: r.aVal,
+        scoreB: r.bVal,
+      })),
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: 'application/json;charset=utf-8;',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `rate-1v1-${scoreA.slug}-vs-${scoreB.slug}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="rate-scoreboard-dark rounded-4 p-4">
       {/* Top Action & Persona Filter Strip */}
@@ -319,6 +432,22 @@ export default function VersusInteractiveScoreboard({
             {copiedVerdict
               ? '✓ Đã sao chép Markdown 1v1!'
               : '📋 Sao chép kết luận 1v1'}
+          </button>
+          <button
+            type="button"
+            onClick={handleDownloadVersusCsv}
+            data-testid="versus-export-csv-btn"
+            className="btn btn-sm btn-outline-light rounded-pill fw-semibold px-3"
+          >
+            📥 CSV
+          </button>
+          <button
+            type="button"
+            onClick={handleDownloadVersusJson}
+            data-testid="versus-export-json-btn"
+            className="btn btn-sm btn-outline-light rounded-pill fw-semibold px-3"
+          >
+            📦 JSON
           </button>
           <Link
             href={`/compare/${scoreB.slug}-vs-${scoreA.slug}`}

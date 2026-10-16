@@ -1016,6 +1016,32 @@ function runCoreArchitectureSuite() {
   console.log(
     '  ✅ [23/23] API Playground Python/JSON Export (#73) & 10-Group Specs Markdown/JSON Export (#74) passed'
   );
+
+  // 24. Compare Matrix CSV/JSON Export (#75) & 1v1 Versus Scoreboard CSV/JSON Export (#76)
+  const compareWorkspaceSrcUpdated = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/components/compare/CompareWorkspace.tsx'),
+    'utf8'
+  );
+  const versusScoreboardSrcUpdated = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/components/compare/VersusInteractiveScoreboard.tsx'
+    ),
+    'utf8'
+  );
+  assert.ok(
+    compareWorkspaceSrcUpdated.includes('handleDownloadCompareCsv') &&
+      compareWorkspaceSrcUpdated.includes('handleDownloadCompareJson'),
+    'CompareWorkspace must provide 1-Click CSV and JSON export of the multi-product 10-Group comparison matrix'
+  );
+  assert.ok(
+    versusScoreboardSrcUpdated.includes('handleDownloadVersusCsv') &&
+      versusScoreboardSrcUpdated.includes('handleDownloadVersusJson'),
+    'VersusInteractiveScoreboard must provide 1-Click CSV and JSON export of the 1v1 JReviews scoreboard'
+  );
+  console.log(
+    '  ✅ [24/24] Compare Matrix CSV/JSON Export (#75) & 1v1 Versus Scoreboard CSV/JSON Export (#76) passed'
+  );
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
 
