@@ -7,11 +7,7 @@
 import assert from 'node:assert/strict';
 import { ProductSpecificationsSchema } from '@repo/shared-data';
 import { ProductNormalizer, detectCategorySlug } from '../product-normalizer.js';
-import {
-  FLAGSHIP_DEVICES_TO_SEED,
-  SEED_MERCHANTS,
-  synthesizeCrossPlatformOffersForMaster,
-} from '../flagship-seed-data.js';
+import { FLAGSHIP_DEVICES_TO_SEED } from '../flagship-seed-data.js';
 import type { ShopeeProduct } from '../types.js';
 
 function createDummyShopeeProduct(title: string, priceMin = 25990000): ShopeeProduct {
@@ -212,66 +208,21 @@ async function runSuite() {
   }
   console.log('  ✅ [5/6] Flagship Seed Dataset Multi-Brand Coverage (>=3 per Category) passed');
 
-  // 6. 10-Platform Merchant Coverage & Cross-Platform Offer/Review Synthesis
-  assert.ok(SEED_MERCHANTS.length >= 18, 'Expected >= 18 multi-platform seed merchants');
-  const merchantPlatforms = new Set(SEED_MERCHANTS.map(m => m.platform));
-  for (const plat of [
-    'shopee',
-    'lazada',
-    'tiki',
-    'tiktok',
-    'cellphones',
-    'tgdd',
-    'fptshop',
-    'hoangha',
-    'didongviet',
-    'phongvu',
-  ] as const) {
-    assert.ok(merchantPlatforms.has(plat), `SEED_MERCHANTS missing platform ${plat}`);
+  // 6. Spec-only catalog: no fabricated listings, reviews, prices or expert scores
+  for (const dev of FLAGSHIP_DEVICES_TO_SEED) {
+    for (const field of [
+      'listings',
+      'expert_rating',
+      'expert_review_summary',
+      'expert_criteria_scores',
+    ]) {
+      assert.ok(
+        !(field in dev),
+        `Seed catalog entry ${dev.model_key} must not carry synthetic field "${field}"`
+      );
+    }
   }
-
-  const synthOffers = synthesizeCrossPlatformOffersForMaster({
-    modelKey: 'apple:iphone-16:128gb',
-    name: 'Apple iPhone 16 128GB',
-    slug: 'apple-iphone-16-128gb',
-    brand: 'Apple',
-    colors: ['Xanh Lưu Ly', 'Đen'],
-    basePrice: 22_990_000,
-    existingPlatforms: ['shopee'],
-    keySpecs: {
-      screen: '6.1" Super Retina XDR OLED',
-      chip: 'Apple A18 (3 nm)',
-      camera: '48MP Fusion + 12MP Ultrawide',
-      battery: '3561 mAh',
-      storage: '128GB',
-      ram: '8GB',
-    },
-  });
-  assert.equal(synthOffers.length, 9, 'Should synthesize 9 missing platform offers');
-  assert.deepEqual(
-    synthOffers.map(o => o.platform),
-    [
-      'lazada',
-      'tiki',
-      'tiktok',
-      'cellphones',
-      'tgdd',
-      'fptshop',
-      'hoangha',
-      'didongviet',
-      'phongvu',
-    ]
-  );
-  for (const offer of synthOffers) {
-    assert.ok(
-      offer.price_history.length >= 6,
-      'Each synthesized offer must have 60-day price history'
-    );
-    assert.ok(offer.reviews.length >= 2, 'Each synthesized offer must have multi-platform reviews');
-  }
-  console.log(
-    '  ✅ [6/7] 10-Platform Cross-Offer, 60-Day Price History & Multi-Review Synthesis passed'
-  );
+  console.log('  ✅ [6/7] Spec-Only Catalog (no synthetic listings or expert scores) passed');
 
   // 7. ArenaSpecSyncer (GSMArena [data-spec] + PhoneArena Split Camera) & 14 2026 Multi-Category Flagships (36 Total Catalog)
   const {
@@ -327,9 +278,7 @@ async function runSuite() {
   assert.equal(synced.specifications.battery?.fast_charging_w, 100);
   assert.equal(synced.specifications.battery?.reverse_charging, true);
   assert.equal(
-    countPopulatedFieldGroups(
-      synced.specifications as unknown as Record<string, unknown>
-    ),
+    countPopulatedFieldGroups(synced.specifications as unknown as Record<string, unknown>),
     10
   );
 

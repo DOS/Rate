@@ -817,7 +817,10 @@ export default function DeepInspectWorkspace({
                       <span className="rate-score-badge-expert">
                         <span>
                           Expert{' '}
-                          {Number(master.expert_rating || 9.0).toFixed(1)}/10
+                          {master.expert_rating != null &&
+                          Number(master.expert_rating) > 0
+                            ? `${Number(master.expert_rating).toFixed(1)}/10`
+                            : 'chưa có điểm'}
                         </span>
                       </span>
                       <span className="small text-muted">

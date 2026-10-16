@@ -185,7 +185,7 @@ export default async function LeaderboardPage({
       const ratingVal =
         Number(p.expert_rating || 0) > 0
           ? Number(p.expert_rating)
-          : Number(p.user_rating_weighted || p.average_rating || 4.7) * 2;
+          : Number(p.user_rating_weighted || p.average_rating || 0) * 2;
       return {
         '@type': 'ListItem',
         position: index + 1,
@@ -194,13 +194,18 @@ export default async function LeaderboardPage({
           name: p.name,
           brand: { '@type': 'Brand', name: p.brand },
           url: `${siteUrl}${getMasterProductHref(p)}`,
-          aggregateRating: {
-            '@type': 'AggregateRating',
-            ratingValue: Number(ratingVal.toFixed(1)),
-            bestRating: 10,
-            worstRating: 1,
-            ratingCount: Math.max(p.total_reviews || 1, 1),
-          },
+          // Unrated products get no aggregateRating instead of an invented score.
+          ...(ratingVal > 0
+            ? {
+                aggregateRating: {
+                  '@type': 'AggregateRating',
+                  ratingValue: Number(ratingVal.toFixed(1)),
+                  bestRating: 10,
+                  worstRating: 1,
+                  ratingCount: Math.max(p.total_reviews || 1, 1),
+                },
+              }
+            : {}),
         },
       };
     }),

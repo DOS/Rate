@@ -803,7 +803,7 @@ export async function CategoryCatalogContent({
                       item.expert_rating != null &&
                       Number(item.expert_rating) > 0
                         ? Number(item.expert_rating)
-                        : effectiveRating;
+                        : null;
                     const authCount =
                       item.authentic_review_count || item.total_reviews || 12;
 
@@ -893,7 +893,10 @@ export async function CategoryCatalogContent({
                               đánh giá thật)
                             </span>
                             <span className="rate-score-badge-expert">
-                              🔬 {expertScore.toFixed(1)} Expert Lab
+                              🔬{' '}
+                              {expertScore != null
+                                ? `${expertScore.toFixed(1)} Expert Lab`
+                                : 'Expert Lab: chưa có'}
                             </span>
                             <RadarBadge signal={radarSignal} />
                           </div>

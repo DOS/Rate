@@ -1,24 +1,24 @@
 /**
- * Verification & Backfill CLI for Provider-Agnostic AI Spec Enricher & Flagship Catalog Seeder
+ * Verification & Spec Catalog Sync CLI for Provider-Agnostic AI Spec Enricher
  * Usage:
- *   pnpm --filter @repo/crawlers exec tsx src/shopee/test-ai-enricher.ts
- *   pnpm --filter @repo/crawlers exec tsx src/shopee/test-ai-enricher.ts --backfill
+ *   pnpm --filter @repo/crawlers exec tsx src/shopee/test-ai-enricher.ts               (offline tests, no DB writes)
+ *   pnpm --filter @repo/crawlers exec tsx src/shopee/test-ai-enricher.ts --backfill    (spec-only catalog sync + audit)
+ *   pnpm --filter @repo/crawlers exec tsx src/shopee/test-ai-enricher.ts --audit-only  (catalog spec refresh + audit)
+ *
+ * The catalog sync only writes device specifications to rate.master_products. It never
+ * creates listings, merchants, reviews, price history or expert scores.
  */
 import http from 'node:http';
-import crypto from 'node:crypto';
 import assert from 'node:assert/strict';
 import dotenv from 'dotenv';
 import { ProductSpecificationsSchema, KeySpecsSchema } from '@repo/shared-data';
 import { ProductNormalizer } from './product-normalizer.js';
 import { AiSpecEnricher, sanitizeSpecifications } from './ai-spec-enricher.js';
-import { AiReviewAnalyzer } from './ai-review-analyzer.js';
 import {
-  SEED_MERCHANTS,
   CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY,
   FLAGSHIP_DEVICES_TO_SEED,
-  synthesizeCrossPlatformOffersForMaster,
 } from './flagship-seed-data.js';
-import type { ShopeeProduct, SupportedEcommercePlatform } from './types.js';
+import type { ShopeeProduct } from './types.js';
 
 dotenv.config();
 dotenv.config({ path: '../../.env' });
@@ -35,10 +35,6 @@ const REQUIRED_10_GROUPS = [
   'multimedia',
   'regulatory',
 ] as const;
-
-function hashEntity(val: string): string {
-  return '0x' + crypto.createHash('sha256').update(val.toLowerCase()).digest('hex');
-}
 
 function makeDummyShopeeProduct(title: string, priceMin = 24990000): ShopeeProduct {
   return {
@@ -339,6 +335,55 @@ async function runTests() {
   console.log('\n🎉 ALL AI SPEC ENRICHER TESTS PASSED!');
 }
 
+/**
+ * Spec-only audit: every master product must carry all 10 Field Groups and the main + second
+ * camera. It deliberately asserts nothing about offers, reviews or ratings: those come from
+ * real crawls and real people, so a catalog row with none of them is a valid state.
+ */
+async function auditMasterSpecs(supabase: any): Promise<number> {
+  const { data: rows, error } = await supabase
+    .from('master_products')
+    .select('id, name, model_key, specifications');
+
+  if (error || !rows) {
+    throw new Error(`Final audit query failed: ${error?.message}`);
+  }
+
+  const failures: string[] = [];
+  for (const row of rows) {
+    const label = `${row.name} (${row.model_key})`;
+    const specCheck = ProductSpecificationsSchema.safeParse(row.specifications);
+    if (!specCheck.success) {
+      failures.push(`${label} failed ProductSpecificationsSchema validation`);
+    }
+    for (const grp of REQUIRED_10_GROUPS) {
+      if (!row.specifications?.[grp]) {
+        failures.push(`${label} is missing specification group "${grp}"`);
+      }
+    }
+    if (!row.specifications?.camera?.main_camera) {
+      failures.push(`${label} is missing camera.main_camera`);
+    }
+    if (!row.specifications?.camera?.second_camera) {
+      failures.push(`${label} is missing camera.second_camera`);
+    }
+  }
+
+  assert.equal(
+    failures.length,
+    0,
+    `Spec audit failed (${failures.length}):\n  - ${failures.join('\n  - ')}`
+  );
+  return rows.length;
+}
+
+/**
+ * Spec-only catalog sync for rate.master_products.
+ *
+ * Never writes products, merchants, reviews, review_flags, review_analysis or price_history,
+ * and never touches status, prices, counts or expert scores of an existing master product.
+ * New catalog devices are inserted as drafts with no offers until real listings are crawled.
+ */
 async function runBackfill() {
   const { createClient } = await import('@supabase/supabase-js');
   const { EntityMatcher } = await import('./entity-matcher.js');
@@ -354,11 +399,10 @@ async function runBackfill() {
   );
   const enricher = new AiSpecEnricher();
   const matcher = new EntityMatcher(supabase, enricher);
-  const normalizer = new ProductNormalizer();
-  const reviewAnalyzer = new AiReviewAnalyzer();
 
   console.log('================================================================');
-  console.log('Running Phase 3.3 Master Products 10-Field-Group Backfill & Flagship Seed');
+  console.log('Running Spec-Only Catalog Sync for rate.master_products (10 Field Groups)');
+  console.log('No listings, merchants, reviews, price history or expert scores are written.');
   console.log('AI Provider:', enricher.getProviderInfo());
   console.log('================================================================');
 
@@ -378,263 +422,94 @@ async function runBackfill() {
     [...categoryIdBySlug.keys()].join(', ')
   );
 
-  // 2. Upsert multi-platform merchants
-  console.log('\n--- Step 1: Upserting Multi-Platform Merchants ---');
-  const merchantIdByKey = new Map<string, string>();
-  for (const m of SEED_MERCHANTS) {
-    const entityHash = hashEntity(`${m.platform}:${m.platform_shop_id}`);
-    const { data: row, error: mErr } = await supabase
-      .from('merchants')
-      .upsert(
-        {
-          platform: m.platform,
-          platform_shop_id: m.platform_shop_id,
-          name: m.name,
-          slug: m.slug,
-          url: m.url,
-          is_official: m.is_official,
-          rating_star: m.rating_star,
-          follower_count: m.follower_count,
-          location: m.location,
-          entity_hash: entityHash,
-          risk_score: m.dosafe_risk_score,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'platform,platform_shop_id' }
-      )
-      .select('id, name')
-      .single();
-
-    if (mErr || !row) {
-      throw new Error(`Failed to upsert merchant ${m.name}: ${mErr?.message}`);
-    }
-    merchantIdByKey.set(m.key, row.id);
-    console.log(`  -> [Merchant] ${m.name} (${m.platform}) -> ID: ${row.id}`);
-  }
-
-  // 3. Seed Flagship Devices + Multi-Platform Listings + Price History + Reviews
-  console.log('\n--- Step 2: Seeding Flagship Devices Across 5 Categories ---');
+  // 2. Sync catalog devices: update specs of existing masters, insert missing ones as drafts
+  console.log('\n--- Step 1: Syncing Spec Catalog Devices ---');
+  const catalogModelKeys = new Set<string>();
+  let catalogUpdated = 0;
+  let catalogInserted = 0;
   for (const device of FLAGSHIP_DEVICES_TO_SEED) {
+    catalogModelKeys.add(device.model_key);
     const categoryId = categoryIdBySlug.get(device.categorySlug) || null;
-    const prices = device.listings.map(l => l.price_current);
-    const minPrice = prices.length > 0 ? Math.min(...prices) : 0;
-    const maxPrice = prices.length > 0 ? Math.max(...prices) : 0;
+    const specFields = {
+      description: device.description,
+      ram_gb: device.ram_gb,
+      storage_gb: device.storage_gb,
+      screen_size_inch: device.screen_size_inch,
+      battery_mah: device.battery_mah,
+      has_5g: device.has_5g,
+      specifications: device.specifications,
+      key_specs: device.key_specs,
+      colors: device.colors,
+      ...(device.images.length > 0 ? { images: device.images, thumbnail: device.images[0] } : {}),
+      updated_at: new Date().toISOString(),
+    };
 
-    const { data: masterRow, error: masterErr } = await supabase
+    const { data: existing, error: lookupErr } = await supabase
       .from('master_products')
-      .upsert(
-        {
-          category_id: categoryId,
-          brand: device.brand,
-          model: device.model,
-          variant_name: device.variant_name,
-          model_key: device.model_key,
-          name: device.name,
-          slug: device.slug,
-          description: device.description,
-          ram_gb: device.ram_gb,
-          storage_gb: device.storage_gb,
-          screen_size_inch: device.screen_size_inch,
-          battery_mah: device.battery_mah,
-          has_5g: device.has_5g,
-          specifications: device.specifications,
-          key_specs: device.key_specs,
-          images: device.images,
-          thumbnail: device.images[0] || null,
-          colors: device.colors,
-          min_price: minPrice,
-          max_price: maxPrice,
-          merchant_count: device.listings.length,
-          expert_rating: device.expert_rating,
-          expert_review_summary: device.expert_review_summary,
-          expert_criteria_scores: device.expert_criteria_scores,
-          status: 'published',
-          metadata: { category_slug: device.categorySlug },
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'model_key' }
-      )
-      .select('id, name')
-      .single();
+      .select('id')
+      .eq('model_key', device.model_key)
+      .maybeSingle();
+    if (lookupErr) {
+      throw new Error(`Failed to look up master product ${device.model_key}: ${lookupErr.message}`);
+    }
 
-    if (masterErr || !masterRow) {
-      throw new Error(
-        `Failed to upsert flagship master product ${device.name}: ${masterErr?.message}`
+    if (existing) {
+      const { error: upErr } = await supabase
+        .from('master_products')
+        .update({ ...specFields, ...(categoryId ? { category_id: categoryId } : {}) })
+        .eq('id', existing.id);
+      if (upErr) {
+        throw new Error(`Failed to update specs of ${device.name}: ${upErr.message}`);
+      }
+      catalogUpdated++;
+      console.log(
+        `  -> [Catalog Specs] ${device.name} (${device.model_key}): UPDATED ✅ (camera=${device.specifications.camera?.rear_setup})`
+      );
+    } else {
+      // min_price / max_price are left to the column default: the catalog knows no real offer.
+      const { error: insErr } = await supabase.from('master_products').insert({
+        ...specFields,
+        category_id: categoryId,
+        brand: device.brand,
+        model: device.model,
+        variant_name: device.variant_name,
+        model_key: device.model_key,
+        name: device.name,
+        slug: device.slug,
+        merchant_count: 0,
+        status: 'draft',
+        metadata: { category_slug: device.categorySlug },
+      });
+      if (insErr) {
+        throw new Error(`Failed to insert catalog device ${device.name}: ${insErr.message}`);
+      }
+      catalogInserted++;
+      console.log(
+        `  -> [Catalog Draft] ${device.name} (${device.model_key}): INSERTED as draft ✅ (camera=${device.specifications.camera?.rear_setup})`
       );
     }
-    const masterId = masterRow.id;
-    console.log(
-      `  -> [Master Seed] ${device.name} (${device.categorySlug}) -> ID=${masterId}, camera=${device.specifications.camera?.rear_setup}`
-    );
-
-    // Upsert listings, price history, and reviews for each listing
-    for (const listing of device.listings) {
-      const merchantId = merchantIdByKey.get(listing.merchant_key);
-      if (!merchantId) {
-        throw new Error(`Unknown merchant_key: ${listing.merchant_key}`);
-      }
-
-      const { data: prodRow, error: prodErr } = await supabase
-        .from('products')
-        .upsert(
-          {
-            merchant_id: merchantId,
-            cluster_id: masterId,
-            category_id: categoryId,
-            platform: listing.platform,
-            platform_item_id: listing.platform_item_id,
-            title: listing.title,
-            brand: device.brand,
-            description: device.description,
-            price_current: listing.price_current,
-            price_min: listing.price_current,
-            price_max: listing.price_current,
-            price_original: listing.price_original,
-            currency: 'VND',
-            historical_sold: listing.historical_sold,
-            stock: listing.stock,
-            rating_star: listing.rating_star,
-            rating_count: listing.rating_count,
-            images: device.images,
-            models: device.colors.map((c, idx) => ({
-              modelId: `${listing.platform_item_id}-${idx + 1}`,
-              name: c,
-              price: listing.price_current,
-              stock: Math.max(5, Math.floor(listing.stock / Math.max(1, device.colors.length))),
-            })),
-            attributes: [],
-            url: listing.url,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: 'platform,platform_item_id' }
-        )
-        .select('id')
-        .single();
-
-      if (prodErr || !prodRow) {
-        throw new Error(`Failed to upsert listing ${listing.title}: ${prodErr?.message}`);
-      }
-      const productId = prodRow.id;
-
-      // Price history observations (time-series)
-      for (const pt of listing.price_history) {
-        const recordedDate = new Date(Date.now() - pt.daysAgo * 86400 * 1000);
-        const dayBucket = recordedDate.toISOString().slice(0, 10);
-        const observationId =
-          'px-' +
-          crypto
-            .createHash('sha256')
-            .update(`${productId}|${pt.price}|${pt.priceOriginal}|${dayBucket}`)
-            .digest('hex');
-
-        const { data: existingObs } = await supabase
-          .from('price_history')
-          .select('observation_id')
-          .eq('observation_id', observationId)
-          .limit(1);
-
-        if (!existingObs || existingObs.length === 0) {
-          const { error: phErr } = await supabase.from('price_history').insert({
-            product_id: productId,
-            observation_id: observationId,
-            price: pt.price,
-            price_original: pt.priceOriginal,
-            recorded_at: recordedDate.toISOString(),
-            source: `${listing.platform}_crawler`,
-          });
-          if (phErr && !/duplicate key/i.test(phErr.message)) {
-            console.warn(`     [PriceHistory] Warning for ${listing.title}: ${phErr.message}`);
-          }
-        }
-      }
-
-      // Reviews + AI Review Analysis
-      if (listing.reviews.length > 0) {
-        const { data: existingRevs } = await supabase
-          .from('reviews')
-          .select('platform_review_id')
-          .eq('product_id', productId)
-          .not('platform_review_id', 'is', null);
-
-        const seenRevIds = new Set<string>(
-          (existingRevs || []).map((r: { platform_review_id: string }) => r.platform_review_id)
-        );
-        const newRevRows = listing.reviews
-          .filter(r => !seenRevIds.has(r.reviewId))
-          .map(r => ({
-            product_id: productId,
-            platform_review_id: r.reviewId,
-            author_name: r.author,
-            rating_star: r.ratingStar,
-            comment: r.comment,
-            variation: r.variation,
-            images: [],
-            is_verified_buyer: true,
-            platform_created_at: new Date(Date.now() - r.daysAgo * 86400 * 1000).toISOString(),
-          }));
-
-        if (newRevRows.length > 0) {
-          const { error: revInsErr } = await supabase.from('reviews').insert(newRevRows);
-          if (revInsErr && !/duplicate key/i.test(revInsErr.message)) {
-            console.warn(`     [Reviews] Insert warning: ${revInsErr.message}`);
-          }
-        }
-
-        const { data: storedReviews } = await supabase
-          .from('reviews')
-          .select(
-            'id, author_name, rating_star, comment, variation, images, is_verified_buyer, reviewer_type, upvotes, downvotes, report_count, platform_created_at'
-          )
-          .eq('product_id', productId)
-          .order('created_at', { ascending: false })
-          .limit(200);
-
-        if (storedReviews && storedReviews.length > 0) {
-          const merchantProfile = SEED_MERCHANTS.find(m => m.key === listing.merchant_key);
-          await reviewAnalyzer.persistAnalysisToSupabase(supabase, {
-            productId,
-            masterId,
-            merchantId,
-            reviews: storedReviews,
-            entityName: device.name,
-            entityType: 'product',
-            platform: listing.platform,
-            listingPrice: listing.price_current,
-            canonicalMinPrice: minPrice,
-            isOfficial: merchantProfile?.is_official ?? true,
-            followerCount: merchantProfile?.follower_count ?? 100000,
-          });
-        }
-      }
-    }
   }
 
-  // 4. Backfill & Enrich ALL existing Master Products (including initial iPhone 15/16/16 Plus rows)
-  console.log(
-    '\n--- Step 3: Backfilling & Auditing 100% of rate.master_products (5-Platform Offers & JReviews) ---'
-  );
+  // 3. Spec backfill for existing masters outside the catalog (verified registry or AI only)
+  console.log('\n--- Step 2: Spec Backfill for Other rate.master_products ---');
   const { data: masters, error } = await supabase
     .from('master_products')
-    .select(
-      'id, category_id, name, slug, description, images, brand, model, model_key, storage_gb, ram_gb, colors, min_price, max_price, merchant_count, expert_rating, specifications, key_specs'
-    )
+    .select('id, name, model_key')
     .order('created_at', { ascending: false });
 
   if (error) {
     throw new Error(`Failed to fetch master_products: ${error.message}`);
   }
 
-  console.log(`Found ${masters?.length || 0} total master products to enrich & verify...`);
+  let skipped = 0;
   for (const m of masters || []) {
-    const canonicalEntry = CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY[m.model_key];
-    const flagEntry = FLAGSHIP_DEVICES_TO_SEED.find(f => f.model_key === m.model_key);
-    let activeKeySpecs = m.key_specs;
-    let activeColors: string[] =
-      Array.isArray(m.colors) && m.colors.length > 0 ? m.colors : ['Tiêu chuẩn'];
+    if (catalogModelKeys.has(m.model_key)) continue;
+
+    const canonicalEntry = Object.hasOwn(CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY, m.model_key)
+      ? CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY[m.model_key]
+      : undefined;
 
     if (canonicalEntry) {
-      activeKeySpecs = canonicalEntry.key_specs;
-      activeColors = canonicalEntry.colors;
       const { error: upErr } = await supabase
         .from('master_products')
         .update({
@@ -644,9 +519,6 @@ async function runBackfill() {
           battery_mah: canonicalEntry.battery_mah,
           has_5g: canonicalEntry.has_5g,
           colors: canonicalEntry.colors,
-          expert_rating: canonicalEntry.expert_rating,
-          expert_review_summary: canonicalEntry.expert_review_summary,
-          expert_criteria_scores: canonicalEntry.expert_criteria_scores,
           specifications: canonicalEntry.specifications,
           key_specs: canonicalEntry.key_specs,
           updated_at: new Date().toISOString(),
@@ -657,402 +529,25 @@ async function runBackfill() {
         throw new Error(`Failed to backfill ${m.name}: ${upErr.message}`);
       }
       console.log(
-        `  -> [Canonical Backfill] ${m.name} (${m.model_key}): UPDATED ✅ (10/10 groups, camera=${canonicalEntry.specifications.camera?.rear_setup})`
-      );
-    } else if (flagEntry) {
-      activeKeySpecs = flagEntry.key_specs;
-      activeColors = flagEntry.colors;
-      console.log(
-        `  -> [Flagship Verified] ${m.name} (${m.model_key}): VERIFIED ✅ (10/10 groups, camera=${flagEntry.specifications.camera?.rear_setup})`
+        `  -> [Canonical Specs] ${m.name} (${m.model_key}): UPDATED ✅ (camera=${canonicalEntry.specifications.camera?.rear_setup})`
       );
     } else if (enricher.isConfigured()) {
       const ok = await matcher.enrichMasterProductById(m.id);
       console.log(`  -> [AI Enrich] ${m.name} (${m.id}): ${ok ? 'UPDATED ✅' : 'SKIPPED ⚠️'}`);
     } else {
-      const candidate = normalizer.normalize(
-        makeDummyShopeeProduct(m.name, Number(m.min_price) || 20000000)
-      );
-      if (Array.isArray(m.colors) && m.colors.length > 0 && candidate.specifications.design) {
-        candidate.specifications.design.colors = m.colors;
-      }
-      activeKeySpecs = candidate.key_specs;
-      const { error: upErr } = await supabase
-        .from('master_products')
-        .update({
-          ram_gb: m.ram_gb ?? candidate.ram_gb,
-          screen_size_inch: candidate.screen_size_inch,
-          battery_mah: candidate.battery_mah,
-          has_5g: candidate.has_5g,
-          specifications: candidate.specifications,
-          key_specs: candidate.key_specs,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', m.id);
-      if (upErr) {
-        throw new Error(`Registry enrich failed for ${m.name}: ${upErr.message}`);
-      }
+      skipped++;
       console.log(
-        `  -> [Registry Enrich] ${m.name}: UPDATED ✅ (camera=${candidate.specifications.camera?.rear_setup})`
+        `  -> [Skipped] ${m.name} (${m.model_key}): no verified spec source and AI enricher not configured ⚠️`
       );
-    }
-
-    // Fetch existing listings for this master product
-    const { data: existingLinkedProducts } = await supabase
-      .from('products')
-      .select('id, platform, title, merchant_id, price_current, price_original, rating_count')
-      .eq('cluster_id', m.id);
-
-    const existingPlatforms: SupportedEcommercePlatform[] = Array.from(
-      new Set<SupportedEcommercePlatform>(
-        (existingLinkedProducts || []).map(
-          (lp: { platform: string }) => lp.platform as SupportedEcommercePlatform
-        )
-      )
-    );
-
-    const basePrice =
-      Number(m.min_price) || Number(existingLinkedProducts?.[0]?.price_current) || 22_990_000;
-
-    // Ensure existing listings have baseline price_history AND reviews
-    for (const lp of existingLinkedProducts || []) {
-      const { count: phCount } = await supabase
-        .from('price_history')
-        .select('id', { count: 'exact', head: true })
-        .eq('product_id', lp.id);
-
-      if (!phCount || phCount < 2) {
-        const lpPrice = Number(lp.price_current) || basePrice;
-        const origPrice = Number(lp.price_original) || Math.round(lpPrice * 1.08);
-        for (const daysAgo of [45, 30, 15, 0]) {
-          const d = new Date(Date.now() - daysAgo * 86400 * 1000);
-          const dayBucket = d.toISOString().slice(0, 10);
-          const stepPrice = daysAgo === 0 ? lpPrice : Math.round(lpPrice * (1 + daysAgo * 0.001));
-          const obsId =
-            'px-' +
-            crypto
-              .createHash('sha256')
-              .update(`${lp.id}|${stepPrice}|${origPrice}|${dayBucket}`)
-              .digest('hex');
-
-          await supabase.from('price_history').insert({
-            product_id: lp.id,
-            observation_id: obsId,
-            price: stepPrice,
-            price_original: origPrice,
-            recorded_at: d.toISOString(),
-            source: `${lp.platform}_backfill`,
-          });
-        }
-      }
-
-      const { count: revCount } = await supabase
-        .from('reviews')
-        .select('id', { count: 'exact', head: true })
-        .eq('product_id', lp.id);
-
-      if (!revCount || revCount === 0) {
-        const slugSafe = (m.slug || m.model_key.replace(/[^a-z0-9]+/gi, '-')).toLowerCase();
-        const screenInfo = activeKeySpecs?.screen || 'màn hình sắc nét';
-        const chipInfo = activeKeySpecs?.chip || 'vi xử lý mượt mà';
-        const seedRevs = [
-          {
-            product_id: lp.id,
-            platform_review_id: `bf-rv-${lp.platform}-${slugSafe}-1`,
-            author_name: 'Nguyễn Minh Quân',
-            rating_star: 5,
-            comment: `Mua ${m.name} chính hãng nguyên seal, kích hoạt bảo hành Apple/hãng đầy đủ. Màn hình ${screenInfo} và hiệu năng ${chipInfo} cực kỳ ổn định, đáng đồng tiền bát gạo.`,
-            variation: activeColors[0] || 'Tiêu chuẩn',
-            images: [],
-            is_verified_buyer: true,
-            platform_created_at: new Date(Date.now() - 6 * 86400 * 1000).toISOString(),
-          },
-          {
-            product_id: lp.id,
-            platform_review_id: `bf-rv-${lp.platform}-${slugSafe}-2`,
-            author_name: 'Trần Bảo Ngọc',
-            rating_star: 5,
-            comment: `Shop giao hàng hỏa tốc trong ngày, đóng gói 3 lớp xốp nổ. Máy ${m.name} cầm đầm tay, chụp ảnh sắc nét và pin dùng thoải mái cả ngày dài.`,
-            variation: activeColors[1] || activeColors[0] || 'Tiêu chuẩn',
-            images: [],
-            is_verified_buyer: true,
-            platform_created_at: new Date(Date.now() - 3 * 86400 * 1000).toISOString(),
-          },
-        ];
-        await supabase.from('reviews').insert(seedRevs);
-        const { data: storedReviews } = await supabase
-          .from('reviews')
-          .select(
-            'id, author_name, rating_star, comment, variation, images, is_verified_buyer, reviewer_type, upvotes, downvotes, report_count, platform_created_at'
-          )
-          .eq('product_id', lp.id)
-          .limit(200);
-        if (storedReviews && storedReviews.length > 0) {
-          await reviewAnalyzer.persistAnalysisToSupabase(supabase, {
-            productId: lp.id,
-            masterId: m.id,
-            merchantId: lp.merchant_id,
-            reviews: storedReviews,
-            entityName: m.name,
-            entityType: 'product',
-            platform: lp.platform,
-            listingPrice: Number(lp.price_current) || basePrice,
-            canonicalMinPrice: basePrice,
-            isOfficial: true,
-            followerCount: 250000,
-          });
-        }
-      }
-    }
-
-    // Synthesize & backfill missing platform offers so all 9 platforms (Shopee, Lazada, Tiki, CellphoneS, TGDĐ, FPT Shop, Hoàng Hà, Di Động Việt, Phong Vũ) are covered
-    const synthesizedListings = synthesizeCrossPlatformOffersForMaster({
-      modelKey: m.model_key,
-      name: m.name,
-      slug: m.slug || m.model_key.replace(/[^a-z0-9]+/gi, '-'),
-      brand: m.brand || 'Official',
-      colors: activeColors,
-      basePrice,
-      existingPlatforms,
-      keySpecs: activeKeySpecs,
-    });
-
-    for (const synListing of synthesizedListings) {
-      const merchantId = merchantIdByKey.get(synListing.merchant_key);
-      if (!merchantId) continue;
-
-      const { data: prodRow, error: prodErr } = await supabase
-        .from('products')
-        .upsert(
-          {
-            merchant_id: merchantId,
-            cluster_id: m.id,
-            category_id: m.category_id,
-            platform: synListing.platform,
-            platform_item_id: synListing.platform_item_id,
-            title: synListing.title,
-            brand: m.brand,
-            description: m.description || synListing.title,
-            price_current: synListing.price_current,
-            price_min: synListing.price_current,
-            price_max: synListing.price_current,
-            price_original: synListing.price_original,
-            currency: 'VND',
-            historical_sold: synListing.historical_sold,
-            stock: synListing.stock,
-            rating_star: synListing.rating_star,
-            rating_count: synListing.rating_count,
-            images: Array.isArray(m.images) ? m.images : [],
-            models: activeColors.map((c, idx) => ({
-              modelId: `${synListing.platform_item_id}-${idx + 1}`,
-              name: c,
-              price: synListing.price_current,
-              stock: 15,
-            })),
-            attributes: [],
-            url: synListing.url,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: 'platform,platform_item_id' }
-        )
-        .select('id')
-        .single();
-
-      if (prodErr || !prodRow) continue;
-      const productId = prodRow.id;
-
-      for (const pt of synListing.price_history) {
-        const recordedDate = new Date(Date.now() - pt.daysAgo * 86400 * 1000);
-        const dayBucket = recordedDate.toISOString().slice(0, 10);
-        const observationId =
-          'px-' +
-          crypto
-            .createHash('sha256')
-            .update(`${productId}|${pt.price}|${pt.priceOriginal}|${dayBucket}`)
-            .digest('hex');
-
-        const { data: existingObs } = await supabase
-          .from('price_history')
-          .select('observation_id')
-          .eq('observation_id', observationId)
-          .limit(1);
-
-        if (!existingObs || existingObs.length === 0) {
-          await supabase.from('price_history').insert({
-            product_id: productId,
-            observation_id: observationId,
-            price: pt.price,
-            price_original: pt.priceOriginal,
-            recorded_at: recordedDate.toISOString(),
-            source: `${synListing.platform}_crawler`,
-          });
-        }
-      }
-
-      if (synListing.reviews.length > 0) {
-        const { data: existingRevs } = await supabase
-          .from('reviews')
-          .select('platform_review_id')
-          .eq('product_id', productId)
-          .not('platform_review_id', 'is', null);
-
-        const seenRevIds = new Set<string>(
-          (existingRevs || []).map((r: { platform_review_id: string }) => r.platform_review_id)
-        );
-        const newRevRows = synListing.reviews
-          .filter(r => !seenRevIds.has(r.reviewId))
-          .map(r => ({
-            product_id: productId,
-            platform_review_id: r.reviewId,
-            author_name: r.author,
-            rating_star: r.ratingStar,
-            comment: r.comment,
-            variation: r.variation,
-            images: [],
-            is_verified_buyer: true,
-            platform_created_at: new Date(Date.now() - r.daysAgo * 86400 * 1000).toISOString(),
-          }));
-
-        if (newRevRows.length > 0) {
-          await supabase.from('reviews').insert(newRevRows);
-        }
-
-        const { data: storedReviews } = await supabase
-          .from('reviews')
-          .select(
-            'id, author_name, rating_star, comment, variation, images, is_verified_buyer, reviewer_type, upvotes, downvotes, report_count, platform_created_at'
-          )
-          .eq('product_id', productId)
-          .order('created_at', { ascending: false })
-          .limit(200);
-
-        if (storedReviews && storedReviews.length > 0) {
-          const merchantProfile = SEED_MERCHANTS.find(mp => mp.key === synListing.merchant_key);
-          await reviewAnalyzer.persistAnalysisToSupabase(supabase, {
-            productId,
-            masterId: m.id,
-            merchantId,
-            reviews: storedReviews,
-            entityName: m.name,
-            entityType: 'product',
-            platform: synListing.platform,
-            listingPrice: synListing.price_current,
-            canonicalMinPrice: basePrice,
-            isOfficial: merchantProfile?.is_official ?? true,
-            followerCount: merchantProfile?.follower_count ?? 150000,
-          });
-        }
-      }
-    }
-
-    // Recompute cross-platform aggregates across ALL linked products & reviews for this master product
-    const { data: allClusterProducts } = await supabase
-      .from('products')
-      .select('id, price_current, rating_count')
-      .eq('cluster_id', m.id);
-
-    if (allClusterProducts && allClusterProducts.length > 0) {
-      const clusterProductIds = allClusterProducts.map((cp: { id: string }) => cp.id);
-      const prices = allClusterProducts
-        .map((cp: { price_current: number }) => Number(cp.price_current))
-        .filter((p: number) => p > 0);
-      const minPriceAgg = prices.length > 0 ? Math.min(...prices) : basePrice;
-      const maxPriceAgg = prices.length > 0 ? Math.max(...prices) : basePrice;
-      const totalMarketReviews = allClusterProducts.reduce(
-        (acc: number, cp: { rating_count: number }) => acc + (Number(cp.rating_count) || 0),
-        0
-      );
-
-      const { data: allClusterReviews } = await supabase
-        .from('reviews')
-        .select('id, rating_star, helpfulness_weight')
-        .in('product_id', clusterProductIds);
-
-      const authenticRevs = (allClusterReviews || []).filter(
-        (r: { helpfulness_weight: number | null }) => Number(r.helpfulness_weight ?? 1) > 0
-      );
-      const totalWeight = authenticRevs.reduce(
-        (acc: number, r: { helpfulness_weight: number | null }) =>
-          acc + Number(r.helpfulness_weight ?? 1),
-        0
-      );
-      const weightedRating =
-        totalWeight > 0
-          ? Number(
-              (
-                authenticRevs.reduce(
-                  (acc: number, r: { rating_star: number; helpfulness_weight: number | null }) =>
-                    acc + Number(r.rating_star) * Number(r.helpfulness_weight ?? 1),
-                  0
-                ) / totalWeight
-              ).toFixed(2)
-            )
-          : 4.85;
-
-      await supabase
-        .from('master_products')
-        .update({
-          min_price: minPriceAgg,
-          max_price: maxPriceAgg,
-          merchant_count: allClusterProducts.length,
-          total_reviews: Math.max(totalMarketReviews, (allClusterReviews || []).length),
-          authentic_review_count: authenticRevs.length,
-          user_rating_weighted: weightedRating,
-          average_rating: weightedRating,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', m.id);
     }
   }
 
-  // 5. Final Strict Audit of Supabase Cloud state
-  console.log('\n--- Step 4: Final Strict Audit of rate.master_products on Supabase Cloud ---');
-  const { data: finalMasters, error: finalErr } = await supabase
-    .from('master_products')
-    .select(
-      'id, name, model_key, specifications, key_specs, min_price, max_price, merchant_count, authentic_review_count, user_rating_weighted'
-    );
-
-  if (finalErr || !finalMasters) {
-    throw new Error(`Final audit query failed: ${finalErr?.message}`);
-  }
-
-  for (const row of finalMasters) {
-    const specCheck = ProductSpecificationsSchema.safeParse(row.specifications);
-    assert.equal(
-      specCheck.success,
-      true,
-      `Master product ${row.name} (${row.model_key}) failed ProductSpecificationsSchema validation`
-    );
-    for (const grp of REQUIRED_10_GROUPS) {
-      assert.ok(
-        row.specifications && row.specifications[grp],
-        `Master product ${row.name} (${row.model_key}) is missing specification group "${grp}"`
-      );
-    }
-    assert.ok(
-      row.specifications.camera?.main_camera,
-      `Master product ${row.name} (${row.model_key}) is missing camera.main_camera`
-    );
-    assert.ok(
-      row.specifications.camera?.second_camera,
-      `Master product ${row.name} (${row.model_key}) is missing camera.second_camera`
-    );
-    assert.ok(
-      Number(row.merchant_count) >= 10,
-      `Master product ${row.name} (${row.model_key}) must have >= 10 cross-platform offers (got ${row.merchant_count})`
-    );
-    assert.ok(
-      Number(row.authentic_review_count) >= 15,
-      `Master product ${row.name} (${row.model_key}) must have >= 15 authentic reviews (got ${row.authentic_review_count})`
-    );
-    assert.ok(
-      Number(row.user_rating_weighted) >= 4.5,
-      `Master product ${row.name} (${row.model_key}) must have weighted user rating >= 4.5 (got ${row.user_rating_weighted})`
-    );
-  }
+  // 4. Final spec audit of Supabase Cloud state
+  console.log('\n--- Step 3: Final Spec Audit of rate.master_products on Supabase Cloud ---');
+  const total = await auditMasterSpecs(supabase);
 
   console.log(
-    `\n🎉 BACKFILL & SEED COMPLETE: ${finalMasters.length}/${finalMasters.length} master products on Supabase Cloud verified with 10/10 Field Groups, >=5 cross-platform offers & JReviews depth!`
+    `\n🎉 SPEC CATALOG SYNC COMPLETE: ${catalogUpdated} updated, ${catalogInserted} inserted as draft, ${skipped} skipped; ${total}/${total} master products verified with 10/10 Field Groups.`
   );
 }
 
@@ -1073,37 +568,21 @@ async function runQuickSyncAndAudit() {
   ).schema('rate');
 
   for (const seed of FLAGSHIP_DEVICES_TO_SEED) {
-    await supabase
+    const { error: upErr } = await supabase
       .from('master_products')
       .update({
         specifications: sanitizeSpecifications(seed.specifications),
         key_specs: seed.key_specs,
       })
       .eq('model_key', seed.model_key);
+    if (upErr) {
+      throw new Error(`Failed to sync specs of ${seed.model_key}: ${upErr.message}`);
+    }
   }
 
-  const { data: finalMasters, error: finalErr } = await supabase
-    .from('master_products')
-    .select(
-      'id, name, model_key, specifications, key_specs, min_price, max_price, merchant_count, authentic_review_count, user_rating_weighted'
-    );
-  if (finalErr || !finalMasters) {
-    throw new Error(`Final audit query failed: ${finalErr?.message}`);
-  }
-  for (const row of finalMasters) {
-    const specCheck = ProductSpecificationsSchema.safeParse(row.specifications);
-    assert.equal(specCheck.success, true, `Failed schema: ${row.name}`);
-    for (const grp of REQUIRED_10_GROUPS) {
-      assert.ok(row.specifications?.[grp], `Missing ${grp}: ${row.name}`);
-    }
-    assert.ok(row.specifications.camera?.main_camera, `Missing main_camera: ${row.name}`);
-    assert.ok(row.specifications.camera?.second_camera, `Missing second_camera: ${row.name}`);
-    assert.ok(Number(row.merchant_count) >= 10, `Offers < 10: ${row.name}`);
-    assert.ok(Number(row.authentic_review_count) >= 15, `Reviews < 15: ${row.name}`);
-    assert.ok(Number(row.user_rating_weighted) >= 4.5, `Rating < 4.5: ${row.name}`);
-  }
+  const total = await auditMasterSpecs(supabase);
   console.log(
-    `🎉 STRICT CLOUD AUDIT PASSED: ${finalMasters.length}/${finalMasters.length} master products on Supabase Cloud verified with 10/10 Field Groups, >=10 cross-platform offers & JReviews depth!`
+    `🎉 SPEC CLOUD AUDIT PASSED: ${total}/${total} master products on Supabase Cloud verified with 10/10 Field Groups (main + second camera).`
   );
 }
 

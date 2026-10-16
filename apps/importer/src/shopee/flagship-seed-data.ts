@@ -1,5 +1,9 @@
 import type { ProductSpecifications, KeySpecs } from '@repo/shared-data';
 
+/**
+ * Spec-only device catalog entry. It deliberately carries no listings, prices, merchants,
+ * reviews or expert scores: those must come from real crawls and real reviewers, never seed data.
+ */
 export interface FlagshipDeviceSeed {
   categorySlug: 'smartphones' | 'tablets' | 'laptops' | 'smartwatches' | 'earbuds';
   brand: string;
@@ -18,311 +22,7 @@ export interface FlagshipDeviceSeed {
   images: string[];
   specifications: ProductSpecifications;
   key_specs: KeySpecs;
-  expert_rating: number;
-  // Optional: newer 2026 entries ship without an expert write-up yet; the DB columns are nullable.
-  expert_review_summary?: string;
-  expert_criteria_scores?: {
-    display: number;
-    performance: number;
-    camera: number;
-    battery: number;
-    value: number;
-  };
-  listings: Array<{
-    platform:
-      | 'shopee'
-      | 'lazada'
-      | 'tiki'
-      | 'tiktok'
-      | 'cellphones'
-      | 'tgdd'
-      | 'fptshop'
-      | 'hoangha'
-      | 'didongviet'
-      | 'phongvu';
-    platform_item_id: string;
-    merchant_key: string;
-    title: string;
-    price_current: number;
-    price_original: number;
-    historical_sold: number;
-    stock: number;
-    rating_star: number;
-    rating_count: number;
-    url: string;
-    /** Price history points relative to today: { daysAgo, price, priceOriginal } */
-    price_history: Array<{ daysAgo: number; price: number; priceOriginal: number }>;
-    reviews: Array<{
-      reviewId: string;
-      author: string;
-      ratingStar: number;
-      comment: string;
-      variation: string;
-      daysAgo: number;
-    }>;
-  }>;
 }
-
-export interface SeedMerchantProfile {
-  key: string;
-  platform:
-    | 'shopee'
-    | 'lazada'
-    | 'tiki'
-    | 'tiktok'
-    | 'cellphones'
-    | 'tgdd'
-    | 'fptshop'
-    | 'hoangha'
-    | 'didongviet'
-    | 'phongvu';
-  platform_shop_id: string;
-  name: string;
-  slug: string;
-  url: string;
-  is_official: boolean;
-  rating_star: number;
-  follower_count: number;
-  location: string;
-  dosafe_risk_score: number;
-}
-
-export const SEED_MERCHANTS: SeedMerchantProfile[] = [
-  {
-    key: 'shopee_apple_flagship',
-    platform: 'shopee',
-    platform_shop_id: '88201679',
-    name: 'Apple Flagship Store',
-    slug: 'apple-flagship-store-shopee',
-    url: 'https://shopee.vn/apple_flagship_store',
-    is_official: true,
-    rating_star: 4.94,
-    follower_count: 1125000,
-    location: 'TP. Hồ Chí Minh',
-    dosafe_risk_score: 2,
-  },
-  {
-    key: 'shopee_samsung_official',
-    platform: 'shopee',
-    platform_shop_id: '65589552',
-    name: 'Samsung Official Store',
-    slug: 'samsung-official-store-shopee',
-    url: 'https://shopee.vn/samsung_official_store',
-    is_official: true,
-    rating_star: 4.92,
-    follower_count: 985000,
-    location: 'TP. Hồ Chí Minh',
-    dosafe_risk_score: 3,
-  },
-  {
-    key: 'shopee_xiaomi_official',
-    platform: 'shopee',
-    platform_shop_id: '139249852',
-    name: 'Xiaomi Official Store VN',
-    slug: 'xiaomi-official-store-vn-shopee',
-    url: 'https://shopee.vn/xiaomi.official.store.vn',
-    is_official: true,
-    rating_star: 4.91,
-    follower_count: 742000,
-    location: 'TP. Hồ Chí Minh',
-    dosafe_risk_score: 4,
-  },
-  {
-    key: 'lazada_oppo_flagship',
-    platform: 'lazada',
-    platform_shop_id: 'laz-oppo-vn-01',
-    name: 'OPPO Flagship Store LazMall',
-    slug: 'oppo-flagship-store-lazmall',
-    url: 'https://www.lazada.vn/shop/oppo-flagship-store',
-    is_official: true,
-    rating_star: 4.9,
-    follower_count: 530000,
-    location: 'TP. Hồ Chí Minh',
-    dosafe_risk_score: 4,
-  },
-  {
-    key: 'tiki_trading',
-    platform: 'tiki',
-    platform_shop_id: 'tiki-trading-1',
-    name: 'Tiki Trading Official',
-    slug: 'tiki-trading-official',
-    url: 'https://tiki.vn/cua-hang/tiki-trading',
-    is_official: true,
-    rating_star: 4.89,
-    follower_count: 890000,
-    location: 'TP. Hồ Chí Minh',
-    dosafe_risk_score: 5,
-  },
-  {
-    key: 'cellphones_official',
-    platform: 'cellphones',
-    platform_shop_id: 'cps-retail-vn',
-    name: 'CellphoneS Hệ Thống Bán Lẻ Ủy Quyền',
-    slug: 'cellphones-official',
-    url: 'https://cellphones.com.vn',
-    is_official: true,
-    rating_star: 4.93,
-    follower_count: 680000,
-    location: 'Toàn quốc (TP.HCM & Hà Nội)',
-    dosafe_risk_score: 3,
-  },
-  {
-    key: 'tgdd_official',
-    platform: 'tgdd',
-    platform_shop_id: 'tgdd-mwg-vn',
-    name: 'Thế Giới Di Động Official',
-    slug: 'the-gioi-di-dong-official',
-    url: 'https://www.thegioididong.com',
-    is_official: true,
-    rating_star: 4.91,
-    follower_count: 1450000,
-    location: 'Toàn quốc',
-    dosafe_risk_score: 2,
-  },
-  {
-    key: 'shopee_grey_market_247',
-    platform: 'shopee',
-    platform_shop_id: '998120441',
-    name: 'Kho Sỉ Công Nghệ Giá Rẻ 247',
-    slug: 'kho-si-cong-nghe-gia-re-247',
-    url: 'https://shopee.vn/kho_si_cong_nghe_247',
-    is_official: false,
-    rating_star: 4.35,
-    follower_count: 1840,
-    location: 'Hà Nội',
-    dosafe_risk_score: 48,
-  },
-  {
-    key: 'lazada_apple_flagship',
-    platform: 'lazada',
-    platform_shop_id: 'laz-apple-vn-01',
-    name: 'Apple Flagship Store LazMall',
-    slug: 'apple-flagship-store-lazmall',
-    url: 'https://www.lazada.vn/shop/apple-flagship-store',
-    is_official: true,
-    rating_star: 4.95,
-    follower_count: 960000,
-    location: 'TP. Hồ Chí Minh',
-    dosafe_risk_score: 2,
-  },
-  {
-    key: 'lazada_samsung_flagship',
-    platform: 'lazada',
-    platform_shop_id: 'laz-samsung-vn',
-    name: 'Samsung Flagship Store LazMall',
-    slug: 'samsung-flagship-store-lazmall',
-    url: 'https://www.lazada.vn/shop/samsung-flagship-store',
-    is_official: true,
-    rating_star: 4.94,
-    follower_count: 875000,
-    location: 'TP. Hồ Chí Minh',
-    dosafe_risk_score: 2,
-  },
-  {
-    key: 'tiki_viettel_store',
-    platform: 'tiki',
-    platform_shop_id: 'tiki-viettel-01',
-    name: 'Viettel Store Official Tiki',
-    slug: 'viettel-store-official-tiki',
-    url: 'https://tiki.vn/cua-hang/viettel-store-official',
-    is_official: true,
-    rating_star: 4.9,
-    follower_count: 420000,
-    location: 'Hà Nội & TP.HCM',
-    dosafe_risk_score: 3,
-  },
-  {
-    key: 'lazada_grey_market_365',
-    platform: 'lazada',
-    platform_shop_id: 'laz-grey-365',
-    name: 'Siêu Thị Điện Máy Xách Tay 365',
-    slug: 'sieu-thi-dien-may-xach-tay-365',
-    url: 'https://www.lazada.vn/shop/dien-may-xach-tay-365',
-    is_official: false,
-    rating_star: 4.28,
-    follower_count: 1420,
-    location: 'Hà Nội',
-    dosafe_risk_score: 52,
-  },
-  {
-    key: 'fptshop_official',
-    platform: 'fptshop',
-    platform_shop_id: 'fpt-retail-vn',
-    name: 'FPT Shop Hệ Thống Bán Lẻ Kỹ Thuật Số',
-    slug: 'fpt-shop-official',
-    url: 'https://fptshop.com.vn',
-    is_official: true,
-    rating_star: 4.92,
-    follower_count: 1180000,
-    location: 'Toàn quốc (63 tỉnh thành)',
-    dosafe_risk_score: 2,
-  },
-  {
-    key: 'hoangha_official',
-    platform: 'hoangha',
-    platform_shop_id: 'hhm-retail-vn',
-    name: 'Hoàng Hà Mobile Hệ Thống Ủy Quyền Chính Hãng',
-    slug: 'hoang-ha-mobile-official',
-    url: 'https://hoanghamobile.com',
-    is_official: true,
-    rating_star: 4.91,
-    follower_count: 640000,
-    location: 'Toàn quốc (120+ chi nhánh)',
-    dosafe_risk_score: 3,
-  },
-  {
-    key: 'didongviet_official',
-    platform: 'didongviet',
-    platform_shop_id: 'ddv-retail-vn',
-    name: 'Di Động Việt Đại Lý Ủy Quyền Chính Hãng AAR',
-    slug: 'di-dong-viet-official',
-    url: 'https://didongviet.vn',
-    is_official: true,
-    rating_star: 4.9,
-    follower_count: 520000,
-    location: 'TP. Hồ Chí Minh & Hà Nội',
-    dosafe_risk_score: 3,
-  },
-  {
-    key: 'phongvu_official',
-    platform: 'phongvu',
-    platform_shop_id: 'pv-retail-vn',
-    name: 'Phong Vũ Hệ Thống Bán Lẻ Laptop & Công Nghệ',
-    slug: 'phong-vu-official',
-    url: 'https://phongvu.vn',
-    is_official: true,
-    rating_star: 4.93,
-    follower_count: 790000,
-    location: 'Toàn quốc (TP.HCM, Hà Nội, Đà Nẵng)',
-    dosafe_risk_score: 2,
-  },
-  {
-    key: 'tiktok_viettel_official',
-    platform: 'tiktok',
-    platform_shop_id: 'tts-viettel-mall-vn',
-    name: 'Viettel Store AAR TikTok Shop Mall',
-    slug: 'viettel-store-aar-tiktok-shop-mall',
-    url: 'https://shop.tiktok.com',
-    is_official: true,
-    rating_star: 4.92,
-    follower_count: 685000,
-    location: 'TP. Hồ Chí Minh & Hà Nội',
-    dosafe_risk_score: 3,
-  },
-  {
-    key: 'tiktok_samsung_official',
-    platform: 'tiktok',
-    platform_shop_id: 'tts-samsung-mall-vn',
-    name: 'Samsung Vietnam Official TikTok Shop Mall',
-    slug: 'samsung-vietnam-official-tiktok-shop-mall',
-    url: 'https://shop.tiktok.com',
-    is_official: true,
-    rating_star: 4.93,
-    follower_count: 820000,
-    location: 'TP. Hồ Chí Minh',
-    dosafe_risk_score: 2,
-  },
-];
 
 /**
  * Authoritative 10-Field-Group specifications (PhoneArena structure + GSMArena depth)
@@ -337,15 +37,6 @@ export const CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY: Record<
     battery_mah: number | null;
     has_5g: boolean;
     colors: string[];
-    expert_rating: number;
-    expert_review_summary: string;
-    expert_criteria_scores: {
-      display: number;
-      performance: number;
-      camera: number;
-      battery: number;
-      value: number;
-    };
     specifications: ProductSpecifications;
     key_specs: KeySpecs;
   }
@@ -357,16 +48,6 @@ export const CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY: Record<
     battery_mah: 3561,
     has_5g: true,
     colors: ['Xanh Lưu Ly', 'Xanh Mòng Két', 'Hồng', 'Trắng', 'Đen'],
-    expert_rating: 4.6,
-    expert_review_summary:
-      'iPhone 16 tiêu chuẩn nâng cấp mạnh với chip A18 3nm (8GB RAM hỗ trợ Apple Intelligence), nút Action Button và Camera Control, nhưng màn hình vẫn giữ ở mức 60Hz.',
-    expert_criteria_scores: {
-      display: 8.2,
-      performance: 9.5,
-      camera: 8.9,
-      battery: 8.6,
-      value: 8.8,
-    },
     specifications: {
       availability: {
         announced: 'September 2024',
@@ -469,16 +150,6 @@ export const CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY: Record<
     battery_mah: 4674,
     has_5g: true,
     colors: ['Xanh Lưu Ly', 'Xanh Mòng Két', 'Hồng', 'Trắng', 'Đen'],
-    expert_rating: 4.7,
-    expert_review_summary:
-      'iPhone 16 Plus 256GB sở hữu thời lượng pin ấn tượng nhất dòng tiêu chuẩn (4674 mAh), màn hình lớn 6.7 inch và hiệu năng A18 mượt mà nhiều năm.',
-    expert_criteria_scores: {
-      display: 8.5,
-      performance: 9.5,
-      camera: 8.9,
-      battery: 9.6,
-      value: 8.9,
-    },
     specifications: {
       availability: {
         announced: 'September 2024',
@@ -578,16 +249,6 @@ export const CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY: Record<
     battery_mah: 3349,
     has_5g: true,
     colors: ['Hồng', 'Vàng', 'Xanh Lá', 'Xanh Dương', 'Đen'],
-    expert_rating: 4.5,
-    expert_review_summary:
-      'iPhone 15 128GB mang Dynamic Island, cổng USB-C và camera chính 48MP xuống phân khúc dễ tiếp cận hơn, là lựa chọn iOS đáng tiền dưới 20 triệu đồng.',
-    expert_criteria_scores: {
-      display: 8.1,
-      performance: 8.9,
-      camera: 8.7,
-      battery: 8.3,
-      value: 9.1,
-    },
     specifications: {
       availability: {
         announced: 'September 2023',
@@ -701,16 +362,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     images: [
       'https://images.samsung.com/is/image/samsung/p6pim/vn/2401/gallery/vn-galaxy-s24-s928-sm-s928bztcxxv-thumb-539291326',
     ],
-    expert_rating: 4.9,
-    expert_review_summary:
-      'Mẫu flagship Android toàn diện nhất năm với lớp kính Gorilla Armor chống phản chiếu xuất sắc, cụm 4 camera đa tiêu cự 200MP + 50MP 5x periscope và cam kết cập nhật 7 năm.',
-    expert_criteria_scores: {
-      display: 9.8,
-      performance: 9.6,
-      camera: 9.7,
-      battery: 9.3,
-      value: 9.1,
-    },
     specifications: {
       availability: {
         announced: 'January 2024',
@@ -808,116 +459,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       storage: '256GB',
       ram: '12GB',
     },
-    listings: [
-      {
-        platform: 'shopee',
-        platform_item_id: '24819203112',
-        merchant_key: 'shopee_samsung_official',
-        title: 'Điện thoại Samsung Galaxy S24 Ultra 5G 12GB/256GB Chính Hãng SSVN',
-        price_current: 25490000,
-        price_original: 29990000,
-        historical_sold: 1840,
-        stock: 85,
-        rating_star: 4.95,
-        rating_count: 612,
-        url: 'https://shopee.vn/product/65589552/24819203112',
-        price_history: [
-          { daysAgo: 60, price: 27990000, priceOriginal: 29990000 },
-          { daysAgo: 45, price: 27490000, priceOriginal: 29990000 },
-          { daysAgo: 30, price: 26990000, priceOriginal: 29990000 },
-          { daysAgo: 14, price: 26490000, priceOriginal: 29990000 },
-          { daysAgo: 7, price: 25990000, priceOriginal: 29990000 },
-          { daysAgo: 0, price: 25490000, priceOriginal: 29990000 },
-        ],
-        reviews: [
-          {
-            reviewId: 's24u-rv-1',
-            author: 'minh_quan_tech',
-            ratingStar: 5,
-            comment:
-              'Màn hình chống chói Gorilla Armor thực sự khác biệt khi dùng ngoài trời nắng Sài Gòn. Camera zoom 5x chụp sân khấu cực nét, pin 5000mAh trụ dư 1 ngày rưỡi với 7h onscreen.',
-            variation: 'Xám Titan, 256GB',
-            daysAgo: 12,
-          },
-          {
-            reviewId: 's24u-rv-2',
-            author: 'hoang_nam_88',
-            ratingStar: 5,
-            comment:
-              'Hàng chính hãng SSVN nguyên seal, kích hoạt bảo hành điện tử đủ 12 tháng. Bút S Pen ghi chú họp hành rất tiện, Galaxy AI dịch trực tiếp cuộc gọi hoạt động tốt.',
-            variation: 'Đen Titan, 256GB',
-            daysAgo: 6,
-          },
-          {
-            reviewId: 's24u-rv-3',
-            author: 'user_coin_991',
-            ratingStar: 5,
-            comment:
-              'Hình ảnh mang tính chất nhận xu, chưa khui hộp nhưng cứ cho shop 5 sao lấy 200 xu đã.',
-            variation: 'Xám Titan, 256GB',
-            daysAgo: 3,
-          },
-        ],
-      },
-      {
-        platform: 'cellphones',
-        platform_item_id: 'cps-s24-ultra-256',
-        merchant_key: 'cellphones_official',
-        title: 'Samsung Galaxy S24 Ultra 12GB 256GB Chính Hãng VN/A',
-        price_current: 25990000,
-        price_original: 29990000,
-        historical_sold: 950,
-        stock: 42,
-        rating_star: 4.92,
-        rating_count: 310,
-        url: 'https://cellphones.com.vn/samsung-galaxy-s24-ultra.html',
-        price_history: [
-          { daysAgo: 45, price: 27990000, priceOriginal: 29990000 },
-          { daysAgo: 15, price: 26490000, priceOriginal: 29990000 },
-          { daysAgo: 0, price: 25990000, priceOriginal: 29990000 },
-        ],
-        reviews: [
-          {
-            reviewId: 's24u-cps-1',
-            author: 'thanh_tung_hcm',
-            ratingStar: 4,
-            comment:
-              'Máy rất mạnh và màn phẳng dễ dán cường lực hơn S23 Ultra, chỉ hơi tiếc góc máy vuông nên cầm lâu bằng 1 tay hơi cấn nhẹ.',
-            variation: 'Tím Titan, 256GB',
-            daysAgo: 9,
-          },
-        ],
-      },
-      {
-        platform: 'shopee',
-        platform_item_id: '99812044101',
-        merchant_key: 'shopee_grey_market_247',
-        title: '[XẢ KHO GIẢM 40%] Điện thoại Samsung Galaxy S24 Ultra 256GB Quốc Tế Giá Sốc',
-        price_current: 26900000,
-        price_original: 39990000, // Inflated fake original price
-        historical_sold: 24,
-        stock: 5,
-        rating_star: 4.4,
-        rating_count: 15,
-        url: 'https://shopee.vn/product/998120441/99812044101',
-        price_history: [
-          { daysAgo: 30, price: 25500000, priceOriginal: 29990000 },
-          { daysAgo: 15, price: 25800000, priceOriginal: 29990000 },
-          { daysAgo: 0, price: 26900000, priceOriginal: 39990000 },
-        ],
-        reviews: [
-          {
-            reviewId: 's24u-grey-1',
-            author: 'seeding_acc_01',
-            ratingStar: 5,
-            comment:
-              'Shop uy tín nhất vịnh bắc bộ mua ngay kẻo lỡ tuyệt vời xuất sắc 10 điểm không có nhưng!',
-            variation: 'Đen Titan',
-            daysAgo: 2,
-          },
-        ],
-      },
-    ],
   },
 
   // 2. Apple iPhone 16 Pro Max 256GB (Triple Camera + LiDAR Flagship)
@@ -940,16 +481,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     images: [
       'https://store.storeimages.cdn-apple.com/8756/as-images.apple.com/is/iphone-16-pro-finish-select-202409-6-9inch-deserttitanium?wid=800&hei=800&fmt=jpeg',
     ],
-    expert_rating: 4.9,
-    expert_review_summary:
-      'Đỉnh cao công nghệ của Apple năm 2024 với thời lượng pin kỷ lục trên iPhone, quay video 4K@120fps ProRes, camera góc siêu rộng 48MP mới và hiệu năng đơn nhân dẫn đầu thị trường.',
-    expert_criteria_scores: {
-      display: 9.7,
-      performance: 9.9,
-      camera: 9.7,
-      battery: 9.7,
-      value: 9.0,
-    },
     specifications: {
       availability: {
         announced: 'September 2024',
@@ -1044,66 +575,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       storage: '256GB',
       ram: '8GB',
     },
-    listings: [
-      {
-        platform: 'shopee',
-        platform_item_id: '29104857123',
-        merchant_key: 'shopee_apple_flagship',
-        title: 'Điện thoại Apple iPhone 16 Pro Max 256GB Chính Hãng VN/A',
-        price_current: 32490000,
-        price_original: 34990000,
-        historical_sold: 3420,
-        stock: 60,
-        rating_star: 4.96,
-        rating_count: 1120,
-        url: 'https://shopee.vn/product/88201679/29104857123',
-        price_history: [
-          { daysAgo: 60, price: 34990000, priceOriginal: 34990000 },
-          { daysAgo: 45, price: 34290000, priceOriginal: 34990000 },
-          { daysAgo: 30, price: 33690000, priceOriginal: 34990000 },
-          { daysAgo: 15, price: 32990000, priceOriginal: 34990000 },
-          { daysAgo: 0, price: 32490000, priceOriginal: 34990000 },
-        ],
-        reviews: [
-          {
-            reviewId: 'ip16pm-rv-1',
-            author: 'duc_anh_photo',
-            ratingStar: 5,
-            comment:
-              'Màu Titan Sa Mạc ngoài đời cực sang, viền màn hình mỏng đến mức gần như tràn viền. Quay 4K 120fps slow-motion mượt kinh khủng, pin dùng hỗn hợp gần 2 ngày mới phải sạc.',
-            variation: 'Titan Sa Mạc, 256GB',
-            daysAgo: 10,
-          },
-          {
-            reviewId: 'ip16pm-rv-2',
-            author: 'linh_chi_nguyen',
-            ratingStar: 5,
-            comment:
-              'Giao hàng hoả tốc 2 tiếng ở Q1, nguyên seal Apple Việt Nam, check serial chuẩn ngày kích hoạt. Camera zoom 5x chụp chân dung xoá phông rất tự nhiên.',
-            variation: 'Titan Tự Nhiên, 256GB',
-            daysAgo: 4,
-          },
-        ],
-      },
-      {
-        platform: 'tgdd',
-        platform_item_id: 'tgdd-ip16pm-256',
-        merchant_key: 'tgdd_official',
-        title: 'Điện thoại iPhone 16 Pro Max 256GB VN/A',
-        price_current: 32990000,
-        price_original: 34990000,
-        historical_sold: 2150,
-        stock: 90,
-        rating_star: 4.94,
-        rating_count: 580,
-        url: 'https://www.thegioididong.com/dtdd/iphone-16-pro-max',
-        price_history: [
-          { daysAgo: 30, price: 33990000, priceOriginal: 34990000 },
-          { daysAgo: 0, price: 32990000, priceOriginal: 34990000 },
-        ],
-        reviews: [],
-      },
-    ],
   },
 
   // 3. Samsung Galaxy A55 5G 256GB (Mid-range Champion - Triple Camera)
@@ -1126,16 +597,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     images: [
       'https://images.samsung.com/is/image/samsung/p6pim/vn/sm-a556elbgxxv/gallery/vn-galaxy-a55-5g-sm-a556-sm-a556elbgxxv-thumb-540150082',
     ],
-    expert_rating: 4.5,
-    expert_review_summary:
-      'Chiếc máy tầm trung hoàn thiện tốt nhất của Samsung với khung nhôm phay xước, kính Victus+, bảo mật phần cứng Knox Vault và thời lượng pin 5000mAh cực kỳ bền bỉ.',
-    expert_criteria_scores: {
-      display: 8.8,
-      performance: 8.2,
-      camera: 8.3,
-      battery: 9.2,
-      value: 9.3,
-    },
     specifications: {
       availability: {
         announced: 'March 2024',
@@ -1227,57 +688,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       storage: '256GB',
       ram: '8GB',
     },
-    listings: [
-      {
-        platform: 'shopee',
-        platform_item_id: '25918273645',
-        merchant_key: 'shopee_samsung_official',
-        title: 'Điện thoại Samsung Galaxy A55 5G 8GB RAM 256GB Chính Hãng',
-        price_current: 8690000,
-        price_original: 10990000,
-        historical_sold: 4210,
-        stock: 150,
-        rating_star: 4.93,
-        rating_count: 1480,
-        url: 'https://shopee.vn/product/65589552/25918273645',
-        price_history: [
-          { daysAgo: 60, price: 9990000, priceOriginal: 10990000 },
-          { daysAgo: 45, price: 9690000, priceOriginal: 10990000 },
-          { daysAgo: 30, price: 9390000, priceOriginal: 10990000 },
-          { daysAgo: 15, price: 9190000, priceOriginal: 10990000 },
-          { daysAgo: 0, price: 8690000, priceOriginal: 10990000 },
-        ],
-        reviews: [
-          {
-            reviewId: 'a55-rv-1',
-            author: 'phuong_thao_95',
-            ratingStar: 5,
-            comment:
-              'Mua tặng bố mẹ cực kỳ ưng ý! Khung kim loại cầm đầm tay như dòng S, màn hình sáng rõ, pin trâu dùng 2 ngày mới sạc 1 lần.',
-            variation: 'Xanh Iceblue, 8GB/256GB',
-            daysAgo: 8,
-          },
-        ],
-      },
-      {
-        platform: 'tiki',
-        platform_item_id: 'tiki-a55-256',
-        merchant_key: 'tiki_trading',
-        title: 'Điện Thoại Samsung Galaxy A55 5G (8GB/256GB) - Hàng Chính Hãng',
-        price_current: 8890000,
-        price_original: 10990000,
-        historical_sold: 1120,
-        stock: 70,
-        rating_star: 4.9,
-        rating_count: 340,
-        url: 'https://tiki.vn/dien-thoai-samsung-galaxy-a55-5g-p274819201.html',
-        price_history: [
-          { daysAgo: 30, price: 9490000, priceOriginal: 10990000 },
-          { daysAgo: 0, price: 8890000, priceOriginal: 10990000 },
-        ],
-        reviews: [],
-      },
-    ],
   },
 
   // 4. Xiaomi 14 Ultra 5G 16GB/512GB (Quad Camera Leica 1-inch Sensor Flagship)
@@ -1300,16 +710,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     images: [
       'https://i02.appmifile.com/685_operator_sg/23/02/2024/c2b48fb43db8715808b90e440275996e.png',
     ],
-    expert_rating: 4.8,
-    expert_review_summary:
-      'Camera phone xuất sắc bậc nhất dành cho nhiếp ảnh gia di động nhờ cảm biến 1-inch LYT-900 khẩu độ biến thiên, 2 ống kính tele Leica 75mm & 120mm cùng sạc không dây 80W siêu tốc.',
-    expert_criteria_scores: {
-      display: 9.6,
-      performance: 9.6,
-      camera: 9.9,
-      battery: 9.1,
-      value: 9.0,
-    },
     specifications: {
       availability: {
         announced: 'February 2024',
@@ -1408,57 +808,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       storage: '512GB',
       ram: '16GB',
     },
-    listings: [
-      {
-        platform: 'shopee',
-        platform_item_id: '26401928374',
-        merchant_key: 'shopee_xiaomi_official',
-        title: 'Điện thoại Xiaomi 14 Ultra 5G 16GB RAM 512GB Chính Hãng Leica Summilux',
-        price_current: 26490000,
-        price_original: 29990000,
-        historical_sold: 460,
-        stock: 28,
-        rating_star: 4.94,
-        rating_count: 168,
-        url: 'https://shopee.vn/product/139249852/26401928374',
-        price_history: [
-          { daysAgo: 60, price: 29990000, priceOriginal: 29990000 },
-          { daysAgo: 45, price: 28990000, priceOriginal: 29990000 },
-          { daysAgo: 30, price: 27990000, priceOriginal: 29990000 },
-          { daysAgo: 15, price: 27490000, priceOriginal: 29990000 },
-          { daysAgo: 0, price: 26490000, priceOriginal: 29990000 },
-        ],
-        reviews: [
-          {
-            reviewId: 'mi14u-rv-1',
-            author: 'kiet_le_leica',
-            ratingStar: 5,
-            comment:
-              'Màu ảnh Leica Authentic cùng tiêu cự 75mm f/1.8 chụp chân dung và telemacro 10cm thực sự đỉnh cao, không cần hậu kỳ nhiều. Trong hộp tặng sẵn củ sạc nhanh 90W luôn.',
-            variation: 'Đen Da Thuần Chay, 16GB/512GB',
-            daysAgo: 11,
-          },
-        ],
-      },
-      {
-        platform: 'cellphones',
-        platform_item_id: 'cps-xiaomi-14-ultra-512',
-        merchant_key: 'cellphones_official',
-        title: 'Xiaomi 14 Ultra 5G 16GB 512GB Chính Hãng',
-        price_current: 26990000,
-        price_original: 29990000,
-        historical_sold: 310,
-        stock: 19,
-        rating_star: 4.92,
-        rating_count: 95,
-        url: 'https://cellphones.com.vn/xiaomi-14-ultra.html',
-        price_history: [
-          { daysAgo: 30, price: 27990000, priceOriginal: 29990000 },
-          { daysAgo: 0, price: 26990000, priceOriginal: 29990000 },
-        ],
-        reviews: [],
-      },
-    ],
   },
 
   // 5. OPPO Find X8 5G 16GB/256GB (Hasselblad Triple Periscope Flagship)
@@ -1481,16 +830,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     images: [
       'https://image.oppo.com/content/dam/oppo/common/mkt/v2-2/find-x8-series/navigation/find-x8-grey-440-440.png',
     ],
-    expert_rating: 4.8,
-    expert_review_summary:
-      'Bước nhảy vọt ấn tượng với thân máy mỏng 7.85mm nhưng chứa viên pin Silicon-Carbon 5630mAh và cụm 3 camera 50MP Hasselblad đồng đều cả 3 tiêu cự.',
-    expert_criteria_scores: {
-      display: 9.4,
-      performance: 9.6,
-      camera: 9.5,
-      battery: 9.7,
-      value: 9.2,
-    },
     specifications: {
       availability: {
         announced: 'October 2024',
@@ -1583,56 +922,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       storage: '256GB',
       ram: '16GB',
     },
-    listings: [
-      {
-        platform: 'lazada',
-        platform_item_id: 'laz-oppo-find-x8-256',
-        merchant_key: 'lazada_oppo_flagship',
-        title: 'Điện thoại OPPO Find X8 5G 16GB/256GB Camera Hasselblad Chính Hãng',
-        price_current: 20990000,
-        price_original: 22990000,
-        historical_sold: 520,
-        stock: 40,
-        rating_star: 4.95,
-        rating_count: 195,
-        url: 'https://www.lazada.vn/products/oppo-find-x8-5g-i284910293.html',
-        price_history: [
-          { daysAgo: 45, price: 22990000, priceOriginal: 22990000 },
-          { daysAgo: 30, price: 21990000, priceOriginal: 22990000 },
-          { daysAgo: 14, price: 21490000, priceOriginal: 22990000 },
-          { daysAgo: 0, price: 20990000, priceOriginal: 22990000 },
-        ],
-        reviews: [
-          {
-            reviewId: 'fx8-rv-1',
-            author: 'hai_dang_sg',
-            ratingStar: 5,
-            comment:
-              'Máy cầm cực gọn nhẹ mà pin 5630mAh dùng mãi không hết. ColorOS 15 vuốt chạm mượt ngang iOS, chụp chân dung Hasselblad lên màu da rất đẹp.',
-            variation: 'Xám Tinh Tú, 256GB',
-            daysAgo: 5,
-          },
-        ],
-      },
-      {
-        platform: 'tgdd',
-        platform_item_id: 'tgdd-oppo-find-x8-256',
-        merchant_key: 'tgdd_official',
-        title: 'Điện thoại OPPO Find X8 5G 16GB/256GB Chính Hãng',
-        price_current: 21490000,
-        price_original: 22990000,
-        historical_sold: 380,
-        stock: 55,
-        rating_star: 4.91,
-        rating_count: 112,
-        url: 'https://www.thegioididong.com/dtdd/oppo-find-x8',
-        price_history: [
-          { daysAgo: 30, price: 22490000, priceOriginal: 22990000 },
-          { daysAgo: 0, price: 21490000, priceOriginal: 22990000 },
-        ],
-        reviews: [],
-      },
-    ],
   },
 
   // 6. Apple iPad Pro M4 11 inch Wi-Fi 256GB (Tablets Flagship)
@@ -1655,16 +944,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     images: [
       'https://store.storeimages.cdn-apple.com/8756/as-images.apple.com/is/ipad-pro-finish-select-202405-11inch-spaceblack-wifi?wid=800&hei=800&fmt=jpeg',
     ],
-    expert_rating: 4.9,
-    expert_review_summary:
-      'Chiếc máy tính bảng tốt nhất thế giới hiện tại với tấm nền OLED 2 lớp (Tandem OLED) tuyệt đẹp, độ mỏng không tưởng 5.3mm và sức mạnh xử lý từ chip M4.',
-    expert_criteria_scores: {
-      display: 9.9,
-      performance: 9.9,
-      camera: 8.8,
-      battery: 9.1,
-      value: 8.7,
-    },
     specifications: {
       availability: {
         announced: 'May 2024',
@@ -1750,37 +1029,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       storage: '256GB',
       ram: '8GB',
     },
-    listings: [
-      {
-        platform: 'shopee',
-        platform_item_id: '28192039481',
-        merchant_key: 'shopee_apple_flagship',
-        title: 'Máy tính bảng Apple iPad Pro M4 2024 11 inch Wi-Fi 256GB Chính Hãng VN/A',
-        price_current: 26290000,
-        price_original: 28990000,
-        historical_sold: 640,
-        stock: 35,
-        rating_star: 4.97,
-        rating_count: 215,
-        url: 'https://shopee.vn/product/88201679/28192039481',
-        price_history: [
-          { daysAgo: 45, price: 27990000, priceOriginal: 28990000 },
-          { daysAgo: 20, price: 26990000, priceOriginal: 28990000 },
-          { daysAgo: 0, price: 26290000, priceOriginal: 28990000 },
-        ],
-        reviews: [
-          {
-            reviewId: 'ipad-m4-rv-1',
-            author: 'designer_minh_anh',
-            ratingStar: 5,
-            comment:
-              'Màn hình Tandem OLED màu đen sâu tuyệt đối, vẽ Procreate kết hợp Apple Pencil Pro cực kỳ nhạy. Máy mỏng nhẹ cầm đọc tài liệu cả buổi không mỏi tay.',
-            variation: 'Đen Không Gian, 256GB Wi-Fi',
-            daysAgo: 7,
-          },
-        ],
-      },
-    ],
   },
 
   // 7. Apple MacBook Air 13 inch M3 16GB/256GB (Laptops Flagship)
@@ -1803,16 +1051,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     images: [
       'https://store.storeimages.cdn-apple.com/8756/as-images.apple.com/is/mba13-midnight-select-202402?wid=800&hei=800&fmt=jpeg',
     ],
-    expert_rating: 4.9,
-    expert_review_summary:
-      'Chiếc ultrabook chuẩn mực cho công việc và học tập năm 2026 khi Apple đã nâng RAM mặc định lên 16GB, vận hành hoàn toàn yên tĩnh không quạt tản nhiệt và pin thực tế 15-18 giờ.',
-    expert_criteria_scores: {
-      display: 9.2,
-      performance: 9.5,
-      camera: 8.6,
-      battery: 9.8,
-      value: 9.5,
-    },
     specifications: {
       availability: {
         announced: 'March 2024 (16GB Standard Update Oct 2024)',
@@ -1896,37 +1134,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       storage: '256GB',
       ram: '16GB',
     },
-    listings: [
-      {
-        platform: 'shopee',
-        platform_item_id: '27591029384',
-        merchant_key: 'shopee_apple_flagship',
-        title: 'Laptop Apple MacBook Air 13 inch M3 16GB RAM 256GB SSD Chính Hãng SA/A',
-        price_current: 25490000,
-        price_original: 27990000,
-        historical_sold: 890,
-        stock: 48,
-        rating_star: 4.98,
-        rating_count: 340,
-        url: 'https://shopee.vn/product/88201679/27591029384',
-        price_history: [
-          { daysAgo: 60, price: 27490000, priceOriginal: 27990000 },
-          { daysAgo: 30, price: 26290000, priceOriginal: 27990000 },
-          { daysAgo: 0, price: 25490000, priceOriginal: 27990000 },
-        ],
-        reviews: [
-          {
-            reviewId: 'mba-m3-rv-1',
-            author: 'hoang_dev_vn',
-            ratingStar: 5,
-            comment:
-              'Bản 16GB RAM chính hãng quá hời ở mức 25.4 triệu! Chạy Docker nhẹ, VS Code mở 20 tab Chrome vẫn mát lạnh và pin trụ nguyên ngày làm việc ở quán cafe không cần mang sạc.',
-            variation: 'Xanh Đêm Midnight, 16GB/256GB',
-            daysAgo: 6,
-          },
-        ],
-      },
-    ],
   },
 
   // 8. Apple iPhone 16 Pro 256GB (Compact Flagship - Triple Camera 5x)
@@ -1949,16 +1156,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     images: [
       'https://store.storeimages.cdn-apple.com/8756/as-images.apple.com/is/iphone-16-pro-finish-select-202409-6-3inch-naturaltitanium?wid=800&hei=800&fmt=jpeg',
     ],
-    expert_rating: 4.8,
-    expert_review_summary:
-      'Lần đầu tiên dòng Pro nhỏ gọn 6.3 inch có trọn vẹn cụm camera tiềm vọng 5x và góc siêu rộng 48MP y hệt Pro Max, lý tưởng cho người thích thao tác một tay.',
-    expert_criteria_scores: {
-      display: 9.6,
-      performance: 9.9,
-      camera: 9.7,
-      battery: 8.9,
-      value: 9.1,
-    },
     specifications: {
       availability: {
         announced: 'September 2024',
@@ -2051,37 +1248,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       storage: '256GB',
       ram: '8GB',
     },
-    listings: [
-      {
-        platform: 'shopee',
-        platform_item_id: '29104857999',
-        merchant_key: 'shopee_apple_flagship',
-        title: 'Điện thoại Apple iPhone 16 Pro 256GB Chính Hãng VN/A',
-        price_current: 29490000,
-        price_original: 31990000,
-        historical_sold: 1620,
-        stock: 45,
-        rating_star: 4.95,
-        rating_count: 490,
-        url: 'https://shopee.vn/product/88201679/29104857999',
-        price_history: [
-          { daysAgo: 45, price: 31490000, priceOriginal: 31990000 },
-          { daysAgo: 20, price: 30290000, priceOriginal: 31990000 },
-          { daysAgo: 0, price: 29490000, priceOriginal: 31990000 },
-        ],
-        reviews: [
-          {
-            reviewId: 'ip16p-rv-1',
-            author: 'quoc_bao_hn',
-            ratingStar: 5,
-            comment:
-              'Kích thước 6.3 inch vừa vặn túi quần, không quá to như Pro Max nhưng năm nay đã có đủ camera 5x zoom xa rất thích.',
-            variation: 'Titan Tự Nhiên, 256GB',
-            daysAgo: 4,
-          },
-        ],
-      },
-    ],
   },
 
   // 9. Apple Watch Series 10 42mm GPS Viền Nhôm (Smartwatches Flagship)
@@ -2104,16 +1270,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     images: [
       'https://store.storeimages.cdn-apple.com/8756/as-images.apple.com/is/s10-case-unselect-gallery-1-202409?wid=800&hei=800&fmt=jpeg',
     ],
-    expert_rating: 4.8,
-    expert_review_summary:
-      'Kỷ niệm 10 năm Apple Watch với thân máy mỏng 9.7mm cực kỳ ôm cổ tay, màn hình Wide-angle OLED nhìn nghiêng sáng rõ và tốc độ sạc nhanh nhất từ trước đến nay.',
-    expert_criteria_scores: {
-      display: 9.7,
-      performance: 9.5,
-      camera: 8.0,
-      battery: 8.4,
-      value: 9.1,
-    },
     specifications: {
       availability: {
         announced: 'September 2024',
@@ -2200,37 +1356,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       storage: '64GB',
       ram: '2GB',
     },
-    listings: [
-      {
-        platform: 'shopee',
-        platform_item_id: '29581726354',
-        merchant_key: 'shopee_apple_flagship',
-        title: 'Đồng hồ thông minh Apple Watch Series 10 42mm GPS Viền Nhôm Chính Hãng VN/A',
-        price_current: 9990000,
-        price_original: 10990000,
-        historical_sold: 780,
-        stock: 65,
-        rating_star: 4.96,
-        rating_count: 245,
-        url: 'https://shopee.vn/product/88201679/29581726354',
-        price_history: [
-          { daysAgo: 30, price: 10690000, priceOriginal: 10990000 },
-          { daysAgo: 14, price: 10290000, priceOriginal: 10990000 },
-          { daysAgo: 0, price: 9990000, priceOriginal: 10990000 },
-        ],
-        reviews: [
-          {
-            reviewId: 'aws10-rv-1',
-            author: 'thao_vy_runner',
-            ratingStar: 5,
-            comment:
-              'Màu Đen Bóng Jet Black đẹp xuất sắc, đeo đi chạy bộ nhẹ tênh và sạc lúc tắm 25 phút là đầy pin để đeo đi ngủ theo dõi giấc ngủ luôn.',
-            variation: 'Đen Bóng Jet Black, 42mm GPS',
-            daysAgo: 5,
-          },
-        ],
-      },
-    ],
   },
 
   // 10. Apple AirPods Pro 2 USB-C MagSafe (Earbuds Flagship)
@@ -2253,16 +1378,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     images: [
       'https://store.storeimages.cdn-apple.com/8756/as-images.apple.com/is/MTJV3?wid=800&hei=800&fmt=jpeg',
     ],
-    expert_rating: 4.9,
-    expert_review_summary:
-      'Chiếc tai nghe True Wireless toàn diện nhất cho hệ sinh thái Apple với khả năng chống ồn ANC và xuyên âm tự nhiên hàng đầu phân khúc cùng hộp sạc USB-C tích hợp loa tìm kiếm UWB.',
-    expert_criteria_scores: {
-      display: 9.0,
-      performance: 9.8,
-      camera: 9.0,
-      battery: 9.3,
-      value: 9.4,
-    },
     specifications: {
       availability: {
         announced: 'September 2023',
@@ -2351,37 +1466,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       storage: 'USB-C / MagSafe',
       ram: 'Bluetooth 5.3',
     },
-    listings: [
-      {
-        platform: 'shopee',
-        platform_item_id: '23819203847',
-        merchant_key: 'shopee_apple_flagship',
-        title: 'Tai nghe Bluetooth Apple AirPods Pro 2 cổng USB-C MagSafe Chính Hãng VN/A',
-        price_current: 5490000,
-        price_original: 6190000,
-        historical_sold: 5640,
-        stock: 120,
-        rating_star: 4.97,
-        rating_count: 2150,
-        url: 'https://shopee.vn/product/88201679/23819203847',
-        price_history: [
-          { daysAgo: 60, price: 5890000, priceOriginal: 6190000 },
-          { daysAgo: 30, price: 5690000, priceOriginal: 6190000 },
-          { daysAgo: 0, price: 5490000, priceOriginal: 6190000 },
-        ],
-        reviews: [
-          {
-            reviewId: 'app2-rv-1',
-            author: 'tuan_kiet_music',
-            ratingStar: 5,
-            comment:
-              'Chống ồn trên máy bay và quán cafe cực kỳ đỉnh, bật chế độ Adaptive tự chuyển sang xuyên âm khi có người hỏi chuyện rất thông minh.',
-            variation: 'Bản USB-C VN/A',
-            daysAgo: 3,
-          },
-        ],
-      },
-    ],
   },
 
   // 11. Samsung Galaxy Tab S10 Ultra 5G 256GB (Tablet Flagship)
@@ -2404,16 +1488,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     images: [
       'https://images.samsung.com/is/image/samsung/p6pim/vn/sm-x926bzaaxxv/gallery/vn-galaxy-tab-s10-ultra-sm-x926-sm-x926bzaaxxv-543681122?$650_519_PNG$',
     ],
-    expert_rating: 4.8,
-    expert_review_summary:
-      'Mẫu tablet Android màn hình lớn xuất sắc nhất năm với lớp phủ chống phản chiếu Anti-Reflection, bút S Pen đi kèm sẵn trong hộp và khung Armor Aluminum kháng nước IP68.',
-    expert_criteria_scores: {
-      display: 9.8,
-      performance: 9.5,
-      camera: 8.8,
-      battery: 9.4,
-      value: 9.1,
-    },
     specifications: {
       availability: {
         announced: 'September 2024',
@@ -2500,55 +1574,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       storage: '256GB (+ microSD 1.5TB)',
       ram: '12GB',
     },
-    listings: [
-      {
-        platform: 'shopee',
-        platform_item_id: '29184756101',
-        merchant_key: 'shopee_samsung_official',
-        title: 'Máy tính bảng Samsung Galaxy Tab S10 Ultra 5G 12GB/256GB Kèm Bút S Pen Chính Hãng',
-        price_current: 28990000,
-        price_original: 33990000,
-        historical_sold: 185,
-        stock: 30,
-        rating_star: 4.95,
-        rating_count: 64,
-        url: 'https://shopee.vn/product/65589552/29184756101',
-        price_history: [
-          { daysAgo: 45, price: 30990000, priceOriginal: 33990000 },
-          { daysAgo: 20, price: 29690000, priceOriginal: 33990000 },
-          { daysAgo: 0, price: 28990000, priceOriginal: 33990000 },
-        ],
-        reviews: [
-          {
-            reviewId: 'tabs10u-rv-1',
-            author: 'architect_minh_quan',
-            ratingStar: 5,
-            comment:
-              'Màn hình 14.6 inch phủ chống lóa làm việc ngoài quán cafe sáng rõ không bị bóng gương, bật Samsung DeX nối màn hình rời thay thế laptop cực gọn.',
-            variation: 'Xám Moonstone, 12GB/256GB 5G',
-            daysAgo: 6,
-          },
-        ],
-      },
-      {
-        platform: 'cellphones',
-        platform_item_id: 'cps-tab-s10-ultra-256',
-        merchant_key: 'cellphones_official',
-        title: 'Samsung Galaxy Tab S10 Ultra 5G 12GB 256GB Chính Hãng',
-        price_current: 29490000,
-        price_original: 33990000,
-        historical_sold: 140,
-        stock: 22,
-        rating_star: 4.93,
-        rating_count: 42,
-        url: 'https://cellphones.com.vn/samsung-galaxy-tab-s10-ultra.html',
-        price_history: [
-          { daysAgo: 30, price: 30490000, priceOriginal: 33990000 },
-          { daysAgo: 0, price: 29490000, priceOriginal: 33990000 },
-        ],
-        reviews: [],
-      },
-    ],
   },
 
   // 12. Xiaomi Pad 6S Pro 12.4 256GB (Tablet High-Value Flagship)
@@ -2571,16 +1596,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     images: [
       'https://i02.appmifile.com/693_operator_sg/22/02/2024/e26b49788b7960986d6d28e97f0f9d49.png',
     ],
-    expert_rating: 4.7,
-    expert_review_summary:
-      'Vua hiệu năng trên giá thành ở phân khúc tablet tầm giá 12-14 triệu đồng với màn hình 3K 144Hz tỉ lệ 3:2 chuẩn văn phòng và sạc 120W đầy viên pin 10.000mAh chỉ trong 35 phút.',
-    expert_criteria_scores: {
-      display: 9.2,
-      performance: 9.3,
-      camera: 8.4,
-      battery: 9.6,
-      value: 9.7,
-    },
     specifications: {
       availability: {
         announced: 'February 2024',
@@ -2665,38 +1680,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       storage: '256GB UFS 4.0',
       ram: '8GB LPDDR5X',
     },
-    listings: [
-      {
-        platform: 'shopee',
-        platform_item_id: '28910293841',
-        merchant_key: 'shopee_xiaomi_official',
-        title:
-          'Máy tính bảng Xiaomi Pad 6S Pro 12.4 inch 8GB/256GB Màn hình 3K 144Hz Sạc 120W Chính Hãng',
-        price_current: 12490000,
-        price_original: 14990000,
-        historical_sold: 460,
-        stock: 40,
-        rating_star: 4.94,
-        rating_count: 158,
-        url: 'https://shopee.vn/product/139249852/28910293841',
-        price_history: [
-          { daysAgo: 45, price: 13490000, priceOriginal: 14990000 },
-          { daysAgo: 15, price: 12890000, priceOriginal: 14990000 },
-          { daysAgo: 0, price: 12490000, priceOriginal: 14990000 },
-        ],
-        reviews: [
-          {
-            reviewId: 'xpad6sp-rv-1',
-            author: 'hoang_nam_dev',
-            ratingStar: 5,
-            comment:
-              'Cục sạc 120W đi kèm trong hộp cắm 30 phút đầy luôn viên pin 10.000mAh. Màn hình 3:2 đọc PDF kỹ thuật và chia đôi cửa sổ trên HyperOS cực mượt.',
-            variation: 'Xám Graphite, 8GB/256GB',
-            daysAgo: 8,
-          },
-        ],
-      },
-    ],
   },
 
   // 13. ASUS Zenbook S 14 OLED UX5406 32GB/1TB (Ultrabook Copilot+ PC Flagship)
@@ -2717,16 +1700,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     has_5g: false,
     colors: ['Trắng Scandinavia', 'Xám Zumaia'],
     images: ['/img/devices/apple-flagship-store-shopee.jpg'],
-    expert_rating: 4.85,
-    expert_review_summary:
-      'Bước nhảy vọt về thời lượng pin và độ mát trên laptop Windows x86 nhờ kiến trúc Intel Lunar Lake 258V kết hợp chất liệu gốm nhôm Ceraluminum chống bám vân tay và màn hình 3K OLED 120Hz.',
-    expert_criteria_scores: {
-      display: 9.7,
-      performance: 9.4,
-      camera: 8.9,
-      battery: 9.5,
-      value: 9.2,
-    },
     specifications: {
       availability: {
         announced: 'September 2024',
@@ -2809,55 +1782,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       storage: '1TB PCIe 4.0 NVMe SSD',
       ram: '32GB LPDDR5X-8533',
     },
-    listings: [
-      {
-        platform: 'cellphones',
-        platform_item_id: 'cps-zenbook-s14-ux5406',
-        merchant_key: 'cellphones_official',
-        title: 'Laptop ASUS Zenbook S 14 OLED UX5406SA Ultra 7 258V 32GB 1TB Chính Hãng',
-        price_current: 42490000,
-        price_original: 44990000,
-        historical_sold: 95,
-        stock: 15,
-        rating_star: 4.96,
-        rating_count: 34,
-        url: 'https://cellphones.com.vn/laptop-asus-zenbook-s-14-oled-ux5406.html',
-        price_history: [
-          { daysAgo: 45, price: 44490000, priceOriginal: 44990000 },
-          { daysAgo: 20, price: 43290000, priceOriginal: 44990000 },
-          { daysAgo: 0, price: 42490000, priceOriginal: 44990000 },
-        ],
-        reviews: [
-          {
-            reviewId: 'zbs14-rv-1',
-            author: 'linh_product_lead',
-            ratingStar: 5,
-            comment:
-              'Vỏ gốm Ceraluminum sờ mịn và không hề bám vân tay. Chip Lunar Lake 258V chạy văn phòng + họp Zoom cả ngày được hơn 13 tiếng thực tế, máy mát lạnh.',
-            variation: 'Xám Zumaia, 32GB/1TB',
-            daysAgo: 5,
-          },
-        ],
-      },
-      {
-        platform: 'tgdd',
-        platform_item_id: 'tgdd-zenbook-s14-ux5406',
-        merchant_key: 'tgdd_official',
-        title: 'Laptop Asus Zenbook S 14 OLED UX5406SA Ultra 7 258V/32GB/1TB/Win11',
-        price_current: 42990000,
-        price_original: 44990000,
-        historical_sold: 78,
-        stock: 12,
-        rating_star: 4.94,
-        rating_count: 28,
-        url: 'https://www.thegioididong.com/laptop/asus-zenbook-s-14-oled-ux5406sa',
-        price_history: [
-          { daysAgo: 30, price: 43990000, priceOriginal: 44990000 },
-          { daysAgo: 0, price: 42990000, priceOriginal: 44990000 },
-        ],
-        reviews: [],
-      },
-    ],
   },
 
   // 14. Lenovo ThinkPad X1 Carbon Gen 12 32GB/512GB (Enterprise Ultrabook Flagship)
@@ -2880,16 +1804,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     images: [
       'https://p1-ofp.static.pub/fes/cms/2023/12/13/1d45h8m10c9c6b6y5f8e1a2z3x4v5b6n7m892512.png',
     ],
-    expert_rating: 4.85,
-    expert_review_summary:
-      'Chuẩn mực vàng của laptop doanh nhân siêu nhẹ 1.09kg với bàn phím tốt nhất thế giới, màn hình 2.8K OLED phủ chống chói Anti-Glare và bảo mật phần cứng dTPM 2.0.',
-    expert_criteria_scores: {
-      display: 9.4,
-      performance: 9.3,
-      camera: 9.0,
-      battery: 9.1,
-      value: 9.0,
-    },
     specifications: {
       availability: {
         announced: 'March 2024',
@@ -2972,38 +1886,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       storage: '512GB PCIe 4.0x4 NVMe SSD',
       ram: '32GB LPDDR5X',
     },
-    listings: [
-      {
-        platform: 'cellphones',
-        platform_item_id: 'cps-thinkpad-x1-gen12',
-        merchant_key: 'cellphones_official',
-        title:
-          'Laptop Lenovo ThinkPad X1 Carbon Gen 12 Ultra 7 155U 32GB 512GB 2.8K OLED Chính Hãng',
-        price_current: 47990000,
-        price_original: 51990000,
-        historical_sold: 62,
-        stock: 10,
-        rating_star: 4.97,
-        rating_count: 24,
-        url: 'https://cellphones.com.vn/laptop-lenovo-thinkpad-x1-carbon-gen-12.html',
-        price_history: [
-          { daysAgo: 45, price: 49990000, priceOriginal: 51990000 },
-          { daysAgo: 15, price: 48690000, priceOriginal: 51990000 },
-          { daysAgo: 0, price: 47990000, priceOriginal: 51990000 },
-        ],
-        reviews: [
-          {
-            reviewId: 'x1c12-rv-1',
-            author: 'cto_thanh_tung',
-            ratingStar: 5,
-            comment:
-              'Cầm bằng 1 tay nhẹ như quyển sổ, bàn phím gõ code cả ngày không mỏi ngón và màn OLED chống chói không bị mỏi mắt như màn gương.',
-            variation: 'Đen Carbon, 32GB/512GB',
-            daysAgo: 7,
-          },
-        ],
-      },
-    ],
   },
 
   // 15. Apple Watch Ultra 2 49mm GPS + Cellular 64GB (Smartwatch Rugged Flagship)
@@ -3026,16 +1908,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     images: [
       'https://store.storeimages.cdn-apple.com/8756/as-images.apple.com/is/watch-ultra2-digitalmat-gallery-1-202409?wid=800&hei=800&fmt=png-alpha',
     ],
-    expert_rating: 4.9,
-    expert_review_summary:
-      'Chiếc đồng hồ thông minh bền bỉ và toàn diện nhất cho vận động viên chạy trail, lặn biển và người dùng iPhone yêu cầu thời lượng pin nhiều ngày cùng GPS L1+L5 siêu chính xác.',
-    expert_criteria_scores: {
-      display: 9.9,
-      performance: 9.7,
-      camera: 9.3,
-      battery: 9.4,
-      value: 9.0,
-    },
     specifications: {
       availability: {
         announced: 'September 2023 (Black Titanium September 2024)',
@@ -3127,38 +1999,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       storage: '64GB',
       ram: '2GB',
     },
-    listings: [
-      {
-        platform: 'shopee',
-        platform_item_id: '29581729901',
-        merchant_key: 'shopee_apple_flagship',
-        title:
-          'Đồng hồ thông minh Apple Watch Ultra 2 49mm GPS + Cellular Viền Titan Chính Hãng VN/A',
-        price_current: 20490000,
-        price_original: 21990000,
-        historical_sold: 420,
-        stock: 35,
-        rating_star: 4.98,
-        rating_count: 165,
-        url: 'https://shopee.vn/product/88201679/29581729901',
-        price_history: [
-          { daysAgo: 45, price: 21490000, priceOriginal: 21990000 },
-          { daysAgo: 15, price: 20890000, priceOriginal: 21990000 },
-          { daysAgo: 0, price: 20490000, priceOriginal: 21990000 },
-        ],
-        reviews: [
-          {
-            reviewId: 'awu2-rv-1',
-            author: 'duc_trail_marathon',
-            ratingStar: 5,
-            comment:
-              'Đeo chạy cự ly 42km bật GPS tần số kép L1+L5 suốt 5 tiếng rưỡi chỉ tốn 32% pin, tracklog cực chuẩn không bị lệch dưới tán cây.',
-            variation: 'Titan Đen, Dây Trail Loop',
-            daysAgo: 4,
-          },
-        ],
-      },
-    ],
   },
 
   // 16. Samsung Galaxy Watch Ultra 47mm LTE 32GB (Smartwatch Android Flagship)
@@ -3181,16 +2021,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     images: [
       'https://images.samsung.com/is/image/samsung/p6pim/vn/2407/gallery/vn-galaxy-watch-ultra-l705-sm-l705fdaaxxv-542169674?$650_519_PNG$',
     ],
-    expert_rating: 4.8,
-    expert_review_summary:
-      'Bước tiến lớn nhất của smartwatch Wear OS nhờ chip Exynos W1000 tiến trình 3nm siêu mượt, vỏ Cushion Titanium chịu áp suất 10ATM và viên pin 590mAh.',
-    expert_criteria_scores: {
-      display: 9.7,
-      performance: 9.5,
-      camera: 9.2,
-      battery: 9.2,
-      value: 9.1,
-    },
     specifications: {
       availability: {
         announced: 'July 2024',
@@ -3282,37 +2112,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       storage: '32GB',
       ram: '2GB',
     },
-    listings: [
-      {
-        platform: 'shopee',
-        platform_item_id: '29581731102',
-        merchant_key: 'shopee_samsung_official',
-        title: 'Đồng hồ thông minh Samsung Galaxy Watch Ultra 47mm LTE Viền Titanium Chính Hãng',
-        price_current: 14490000,
-        price_original: 16990000,
-        historical_sold: 310,
-        stock: 40,
-        rating_star: 4.94,
-        rating_count: 112,
-        url: 'https://shopee.vn/product/65589552/29581731102',
-        price_history: [
-          { daysAgo: 45, price: 15990000, priceOriginal: 16990000 },
-          { daysAgo: 20, price: 14990000, priceOriginal: 16990000 },
-          { daysAgo: 0, price: 14490000, priceOriginal: 16990000 },
-        ],
-        reviews: [
-          {
-            reviewId: 'gwu-rv-1',
-            author: 'hung_triathlon',
-            ratingStar: 5,
-            comment:
-              'Chip W1000 3nm vuốt chạm mượt khác hẳn các đời Watch 5/6 trước đây, đo BIA cơ mỡ mỗi sáng rất tiện và nút Quick Button chuyển môn bơi-đạp-chạy cực nhanh.',
-            variation: 'Xám Titan, 47mm LTE',
-            daysAgo: 6,
-          },
-        ],
-      },
-    ],
   },
 
   // 17. Garmin Forerunner 265 Music 46mm 8GB (Running Smartwatch Benchmark)
@@ -3333,16 +2132,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     has_5g: false,
     colors: ['Đen Xám', 'Xanh Aqua', 'Trắng Whitestone'],
     images: ['/img/devices/lenovo-thinkpad-x1-carbon-gen-12-512gb.jpg'],
-    expert_rating: 4.85,
-    expert_review_summary:
-      'Chiếc đồng hồ chạy bộ tầm trung đáng mua nhất cho runner từ phong trào tới chuyên nghiệp: nhẹ 47g, màn hình AMOLED sắc nét, 5 nút bấm vật lý chuẩn xác khi tay ướt và pin thực tế gần 2 tuần.',
-    expert_criteria_scores: {
-      display: 9.3,
-      performance: 9.6,
-      camera: 9.4,
-      battery: 9.8,
-      value: 9.5,
-    },
     specifications: {
       availability: {
         announced: 'March 2023',
@@ -3428,37 +2217,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       storage: '8GB (Lưu nhạc Spotify Offline)',
       ram: '1GB',
     },
-    listings: [
-      {
-        platform: 'cellphones',
-        platform_item_id: 'cps-garmin-fr265',
-        merchant_key: 'cellphones_official',
-        title: 'Đồng hồ thông minh Garmin Forerunner 265 Music Chính hãng FPT',
-        price_current: 10490000,
-        price_original: 11690000,
-        historical_sold: 520,
-        stock: 45,
-        rating_star: 4.97,
-        rating_count: 184,
-        url: 'https://cellphones.com.vn/dong-ho-thong-minh-garmin-forerunner-265.html',
-        price_history: [
-          { daysAgo: 60, price: 11290000, priceOriginal: 11690000 },
-          { daysAgo: 30, price: 10790000, priceOriginal: 11690000 },
-          { daysAgo: 0, price: 10490000, priceOriginal: 11690000 },
-        ],
-        reviews: [
-          {
-            reviewId: 'fr265-rv-1',
-            author: 'runner_hanoi_fm',
-            ratingStar: 5,
-            comment:
-              'Từ FR245 nâng cấp lên FR265 thấy màn AMOLED quá đẹp, chỉ số Training Readiness và HRV buổi sáng báo cực sát tình trạng cơ thể trước mỗi bài tempo.',
-            variation: 'Đen Xám, Bản Tiếng Việt FPT',
-            daysAgo: 9,
-          },
-        ],
-      },
-    ],
   },
 
   // 18. Sony WF-1000XM5 (True Wireless ANC Earbuds Flagship)
@@ -3481,16 +2239,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     images: [
       'https://www.sony.com.vn/image/6145c1d32e6ac8e63a46c912dc33c5bb?fmt=pjpeg&wid=800&hei=800',
     ],
-    expert_rating: 4.85,
-    expert_review_summary:
-      'Ông vua chất âm Hi-Res LDAC và khả năng triệt tiêu tiếng ồn dải trầm lẫn dải trung cao nhờ cặp vi xử lý kép V2 + QN2e cùng nút tai bọt biển Polyurethane cách âm vượt trội.',
-    expert_criteria_scores: {
-      display: 9.0,
-      performance: 9.7,
-      camera: 9.2,
-      battery: 9.5,
-      value: 9.3,
-    },
     specifications: {
       availability: {
         announced: 'July 2023',
@@ -3577,55 +2325,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       storage: 'LDAC Hi-Res / Multipoint 2 thiết bị',
       ram: 'Bluetooth 5.3',
     },
-    listings: [
-      {
-        platform: 'cellphones',
-        platform_item_id: 'cps-sony-wf1000xm5',
-        merchant_key: 'cellphones_official',
-        title: 'Tai nghe Bluetooth chống ồn Sony WF-1000XM5 Chính Hãng Sony Việt Nam',
-        price_current: 5490000,
-        price_original: 6990000,
-        historical_sold: 890,
-        stock: 55,
-        rating_star: 4.95,
-        rating_count: 310,
-        url: 'https://cellphones.com.vn/tai-nghe-khong-day-sony-wf-1000xm5.html',
-        price_history: [
-          { daysAgo: 60, price: 5990000, priceOriginal: 6990000 },
-          { daysAgo: 30, price: 5690000, priceOriginal: 6990000 },
-          { daysAgo: 0, price: 5490000, priceOriginal: 6990000 },
-        ],
-        reviews: [
-          {
-            reviewId: 'xm5-rv-1',
-            author: 'audiophile_khanh',
-            ratingStar: 5,
-            comment:
-              'Bật LDAC trên Android nghe nhạc Lossless chi tiết hơn hẳn các dòng TWS khác, đeo 3-4 tiếng không bị cấn tai như đời XM4 và pin trâu đúng 8 tiếng bật ANC.',
-            variation: 'Bạc Platinum',
-            daysAgo: 5,
-          },
-        ],
-      },
-      {
-        platform: 'tiki',
-        platform_item_id: 'tiki-sony-wf1000xm5',
-        merchant_key: 'tiki_trading',
-        title: 'Tai Nghe True Wireless Chống Ồn Sony WF-1000XM5 Hàng Chính Hãng',
-        price_current: 5590000,
-        price_original: 6990000,
-        historical_sold: 410,
-        stock: 30,
-        rating_star: 4.93,
-        rating_count: 145,
-        url: 'https://tiki.vn/tai-nghe-sony-wf-1000xm5.html',
-        price_history: [
-          { daysAgo: 30, price: 5790000, priceOriginal: 6990000 },
-          { daysAgo: 0, price: 5590000, priceOriginal: 6990000 },
-        ],
-        reviews: [],
-      },
-    ],
   },
 
   // 19. Samsung Galaxy Buds3 Pro (True Wireless Planar Dual-Amp Flagship)
@@ -3648,16 +2347,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     images: [
       'https://images.samsung.com/is/image/samsung/p6pim/vn/2407/gallery/vn-galaxy-buds3-pro-r630-sm-r630nzaaxxv-542134812?$650_519_PNG$',
     ],
-    expert_rating: 4.8,
-    expert_review_summary:
-      'Sự lột xác toàn diện của dòng Galaxy Buds với màng loa từ phẳng Planar Tweeter + Dual Amp cho dải treb sắc bén, chất lượng đàm thoại AI xuất sắc và chuẩn kháng nước bụi IP57.',
-    expert_criteria_scores: {
-      display: 9.1,
-      performance: 9.5,
-      camera: 9.4,
-      battery: 9.1,
-      value: 9.3,
-    },
     specifications: {
       availability: {
         announced: 'July 2024',
@@ -3747,37 +2436,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
       storage: 'SSC UHQ 24-bit/96kHz + Chuẩn IP57',
       ram: 'Bluetooth 5.4',
     },
-    listings: [
-      {
-        platform: 'shopee',
-        platform_item_id: '29581735509',
-        merchant_key: 'shopee_samsung_official',
-        title: 'Tai nghe Bluetooth True Wireless Samsung Galaxy Buds3 Pro AI Chống Ồn Chính Hãng',
-        price_current: 4490000,
-        price_original: 5490000,
-        historical_sold: 670,
-        stock: 60,
-        rating_star: 4.94,
-        rating_count: 215,
-        url: 'https://shopee.vn/product/65589552/29581735509',
-        price_history: [
-          { daysAgo: 45, price: 4990000, priceOriginal: 5490000 },
-          { daysAgo: 15, price: 4690000, priceOriginal: 5490000 },
-          { daysAgo: 0, price: 4490000, priceOriginal: 5490000 },
-        ],
-        reviews: [
-          {
-            reviewId: 'buds3p-rv-1',
-            author: 'minh_tri_galaxy',
-            ratingStar: 5,
-            comment:
-              'Ghép với S24 Ultra bật UHQ 96kHz nghe nhạc tách lớp cực kỳ rõ nhờ loa Planar Tweeter mới. Đàm thoại ngoài đường gió to mà đầu dây bên kia nghe như ngồi trong phòng kín.',
-            variation: 'Bạc Silver',
-            daysAgo: 4,
-          },
-        ],
-      },
-    ],
   },
   // ============================================================================
   // 2026 UPSTREAM FLAGSHIP LINEUP (GSMArena & PhoneArena Synced)
@@ -3799,16 +2457,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     has_5g: true,
     colors: ['Đen Huyền Vũ', 'Trắng Gốm Leica', 'Xanh Ngọc Lục Bảo'],
     images: ['/img/devices/xiaomi-18-pro-max-512gb.jpg'],
-    expert_rating: 4.9,
-    expert_review_summary:
-      'Kỳ quan công nghệ năm 2026 với viên pin Silicon-Carbon 8500mAh kỷ lục trong thân máy 8.5mm đạt chuẩn IP69, kết hợp cặp cảm biến kép 200MP Leica (góc rộng 1/1.28" + tiềm vọng 75mm) và chip Snapdragon 8 Elite Extreme Gen 6 2nm.',
-    expert_criteria_scores: {
-      display: 9.8,
-      performance: 9.9,
-      camera: 9.8,
-      battery: 10.0,
-      value: 9.5,
-    },
     key_specs: {
       screen: '6.9" LTPO AMOLED 2K 120Hz (3500 nits) + Màn phụ 2.1" AMOLED',
       chip: 'Snapdragon 8 Elite Extreme Gen 6 (2 nm)',
@@ -3899,47 +2547,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         certifications: 'CE, FCC, RoHS, TÜV Rheinland Flicker-Free, QCVN (BTTTT Vietnam)',
       },
     },
-    listings: [
-      {
-        platform: 'shopee',
-        platform_item_id: '29880018512',
-        merchant_key: 'shopee_xiaomi_official',
-        title:
-          'Điện thoại Xiaomi 18 Pro Max 512GB (16GB RAM) Chip Snapdragon 8 Elite Gen 6 Pin 8500mAh Chính Hãng',
-        price_current: 29990000,
-        price_original: 32990000,
-        historical_sold: 540,
-        stock: 38,
-        rating_star: 4.97,
-        rating_count: 186,
-        url: 'https://shopee.vn/product/139249852/29880018512',
-        price_history: [
-          { daysAgo: 30, price: 31490000, priceOriginal: 32990000 },
-          { daysAgo: 15, price: 30490000, priceOriginal: 32990000 },
-          { daysAgo: 0, price: 29990000, priceOriginal: 32990000 },
-        ],
-        reviews: [
-          {
-            reviewId: 'xm18pm-rv-1',
-            author: 'leica_master_vn',
-            ratingStar: 5,
-            comment:
-              'Viên pin Silicon-Carbon 8500mAh trên Xiaomi 18 Pro Max thực sự vô đối, mình bật 5G và màn hình 2K 120Hz dùng liên tục gần 2 ngày rưỡi mới phải cắm sạc 100W. Cụm tele tiềm vọng 200MP chụp chân dung xóa phông quang học cực đỉnh.',
-            variation: 'Trắng Gốm Leica',
-            daysAgo: 5,
-          },
-          {
-            reviewId: 'xm18pm-rv-2',
-            author: 'hoang_nam_2026',
-            ratingStar: 5,
-            comment:
-              'Chip Snapdragon 8 Elite Extreme Gen 6 tiến trình 2nm chạy cực mát, màn hình phụ phía sau tiện chụp selfie bằng camera chính 200MP Leica. Giao hàng Shopee Mall nguyên seal chính hãng.',
-            variation: 'Đen Huyền Vũ',
-            daysAgo: 3,
-          },
-        ],
-      },
-    ],
   },
   {
     categorySlug: 'smartphones',
@@ -3958,16 +2565,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     has_5g: true,
     colors: ['Đen Titan', 'Trắng Sứ', 'Xanh Rêu Leica'],
     images: ['/img/devices/xiaomi-17-pro-max-512gb.jpg'],
-    expert_rating: 4.8,
-    expert_review_summary:
-      'Flagship khởi đầu dòng Pro Max của Xiaomi với màn hình phụ độc đáo, pin 7500mAh bền bỉ và hệ thống 3 ống kính 50MP Leica đồng đều ở mọi tiêu cự.',
-    expert_criteria_scores: {
-      display: 9.6,
-      performance: 9.7,
-      camera: 9.5,
-      battery: 9.8,
-      value: 9.6,
-    },
     key_specs: {
       screen: '6.9" LTPO AMOLED 120Hz (3500 nits) + Màn phụ mặt lưng',
       chip: 'Snapdragon 8 Elite Gen 5 (3 nm)',
@@ -4053,38 +2650,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         certifications: 'CE, FCC, RoHS, QCVN (BTTTT Vietnam)',
       },
     },
-    listings: [
-      {
-        platform: 'shopee',
-        platform_item_id: '29880017512',
-        merchant_key: 'shopee_xiaomi_official',
-        title:
-          'Điện thoại Xiaomi 17 Pro Max 512GB (16GB RAM) Snapdragon 8 Elite Gen 5 Pin 7500mAh Chính Hãng',
-        price_current: 24490000,
-        price_original: 26990000,
-        historical_sold: 820,
-        stock: 52,
-        rating_star: 4.95,
-        rating_count: 310,
-        url: 'https://shopee.vn/product/139249852/29880017512',
-        price_history: [
-          { daysAgo: 45, price: 25990000, priceOriginal: 26990000 },
-          { daysAgo: 15, price: 24990000, priceOriginal: 26990000 },
-          { daysAgo: 0, price: 24490000, priceOriginal: 26990000 },
-        ],
-        reviews: [
-          {
-            reviewId: 'xm17pm-rv-1',
-            author: 'minh_khoa_mi',
-            ratingStar: 5,
-            comment:
-              'Mức giá giảm sâu khi bản 18 Pro Max vừa ra, cấu hình Snapdragon 8 Elite Gen 5 kèm pin 7500mAh vẫn quá dư dả cho 3-4 năm tới. Màn hình phụ phía sau hiển thị thông báo cực tiện.',
-            variation: 'Xanh Rêu Leica',
-            daysAgo: 7,
-          },
-        ],
-      },
-    ],
   },
   {
     categorySlug: 'smartphones',
@@ -4103,16 +2668,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     has_5g: true,
     colors: ['Titan Đen Không Gian', 'Titan Trắng Ánh Sao', 'Titan Tự Nhiên', 'Titan Đỏ Burgundy'],
     images: ['/img/devices/apple-iphone-18-pro-max-256gb.jpg'],
-    expert_rating: 4.9,
-    expert_review_summary:
-      'Bước nhảy vọt thế hệ 2nm đầu tiên của Apple với chip A20 Pro, camera chính 48MP khẩu độ biến thiên vật lý f/1.4-f/4.0, Dynamic Island thu gọn nhờ Face ID dưới màn hình và thời lượng pin 5567mAh vượt trội.',
-    expert_criteria_scores: {
-      display: 9.9,
-      performance: 10.0,
-      camera: 9.9,
-      battery: 9.7,
-      value: 9.2,
-    },
     key_specs: {
       screen: '6.9" LTPO Super Retina XDR OLED 120Hz (3000 nits, Ceramic Shield 2)',
       chip: 'Apple A20 Pro (2 nm TSMC N2)',
@@ -4209,37 +2764,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         certifications: 'FCC, CE, IC, QCVN (BTTTT Vietnam - Mã VN/A)',
       },
     },
-    listings: [
-      {
-        platform: 'shopee',
-        platform_item_id: '29880018999',
-        merchant_key: 'shopee_apple_flagship',
-        title: 'Điện thoại Apple iPhone 18 Pro Max 256GB Chính Hãng VN/A Chip A20 Pro 2nm',
-        price_current: 34490000,
-        price_original: 35990000,
-        historical_sold: 1420,
-        stock: 64,
-        rating_star: 4.98,
-        rating_count: 520,
-        url: 'https://shopee.vn/product/88201679/29880018999',
-        price_history: [
-          { daysAgo: 30, price: 35990000, priceOriginal: 35990000 },
-          { daysAgo: 15, price: 34990000, priceOriginal: 35990000 },
-          { daysAgo: 0, price: 34490000, priceOriginal: 35990000 },
-        ],
-        reviews: [
-          {
-            reviewId: 'ip18pm-rv-1',
-            author: 'quoc_huy_apple',
-            ratingStar: 5,
-            comment:
-              'Camera khẩu độ biến thiên f/1.4-f/4.0 trên iPhone 18 Pro Max chụp đêm và chụp tài liệu gần không bị mờ viền nữa. Chip A20 Pro 2nm mát lạnh, pin 5567mAh trụ thoải mái gần 2 ngày.',
-            variation: 'Titan Đỏ Burgundy',
-            daysAgo: 4,
-          },
-        ],
-      },
-    ],
   },
   {
     categorySlug: 'smartphones',
@@ -4258,16 +2782,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     has_5g: true,
     colors: ['Titan Đen Không Gian', 'Titan Trắng Ánh Sao', 'Titan Tự Nhiên', 'Titan Đỏ Burgundy'],
     images: ['/img/devices/apple-iphone-18-pro-256gb.jpg'],
-    expert_rating: 4.8,
-    expert_review_summary:
-      'Sức mạnh trọn vẹn của iPhone 18 Pro Max (chip A20 Pro 2nm + 3 camera 48MP khẩu độ biến thiên + tele 5x) gói gọn trong thân máy 6.3 inch cầm nắm hoàn hảo bằng một tay.',
-    expert_criteria_scores: {
-      display: 9.8,
-      performance: 9.9,
-      camera: 9.8,
-      battery: 9.2,
-      value: 9.3,
-    },
     key_specs: {
       screen: '6.3" LTPO Super Retina XDR OLED 120Hz (3000 nits, Ceramic Shield 2)',
       chip: 'Apple A20 Pro (2 nm TSMC N2)',
@@ -4361,37 +2875,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         certifications: 'FCC, CE, IC, QCVN (BTTTT Vietnam - Mã VN/A)',
       },
     },
-    listings: [
-      {
-        platform: 'shopee',
-        platform_item_id: '29880018888',
-        merchant_key: 'shopee_apple_flagship',
-        title: 'Điện thoại Apple iPhone 18 Pro 256GB Chính Hãng VN/A Chip A20 Pro 2nm',
-        price_current: 28790000,
-        price_original: 29990000,
-        historical_sold: 910,
-        stock: 50,
-        rating_star: 4.96,
-        rating_count: 340,
-        url: 'https://shopee.vn/product/88201679/29880018888',
-        price_history: [
-          { daysAgo: 30, price: 29990000, priceOriginal: 29990000 },
-          { daysAgo: 15, price: 29190000, priceOriginal: 29990000 },
-          { daysAgo: 0, price: 28790000, priceOriginal: 29990000 },
-        ],
-        reviews: [
-          {
-            reviewId: 'ip18p-rv-1',
-            author: 'thanh_ha_design',
-            ratingStar: 5,
-            comment:
-              'Kích thước 6.3 inch cầm gọn tay nhưng cấu hình y hệt bản Pro Max, RAM 12GB chạy Apple Intelligence mượt mà, camera trước 24MP nét căng.',
-            variation: 'Titan Tự Nhiên',
-            daysAgo: 5,
-          },
-        ],
-      },
-    ],
   },
   {
     categorySlug: 'smartphones',
@@ -4410,16 +2893,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     has_5g: true,
     colors: ['Titan Đen Tuyền', 'Titan Xám Bạc', 'Titan Xanh Băng Giá', 'Titan Tím Ánh Kim'],
     images: ['/img/devices/samsung-galaxy-s26-ultra-256gb.jpg'],
-    expert_rating: 4.9,
-    expert_review_summary:
-      'Đỉnh cao dòng Galaxy Ultra 2026 với kính chống chói Gorilla Armor 2 tốt nhất thế giới, nâng cấp RAM 16GB tiêu chuẩn, sạc nhanh tăng lên 65W và hệ thống 4 ống kính 200MP đa tiêu cự cùng bút S-Pen.',
-    expert_criteria_scores: {
-      display: 10.0,
-      performance: 9.8,
-      camera: 9.8,
-      battery: 9.4,
-      value: 9.4,
-    },
     key_specs: {
       screen: '6.9" Dynamic LTPO AMOLED 2X 120Hz (3200 nits, Gorilla Armor 2)',
       chip: 'Snapdragon 8 Elite Gen 5 for Galaxy (3 nm)',
@@ -4509,38 +2982,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         certifications: 'FCC, CE, QCVN (Samsung Electronics Vietnam Thái Nguyên)',
       },
     },
-    listings: [
-      {
-        platform: 'shopee',
-        platform_item_id: '29880026256',
-        merchant_key: 'shopee_samsung_official',
-        title:
-          'Điện thoại Samsung Galaxy S26 Ultra 5G (16GB/256GB) Snapdragon 8 Elite Gen 5 Chính Hãng',
-        price_current: 28990000,
-        price_original: 33990000,
-        historical_sold: 1180,
-        stock: 75,
-        rating_star: 4.96,
-        rating_count: 460,
-        url: 'https://shopee.vn/product/65589552/29880026256',
-        price_history: [
-          { daysAgo: 45, price: 31490000, priceOriginal: 33990000 },
-          { daysAgo: 15, price: 29990000, priceOriginal: 33990000 },
-          { daysAgo: 0, price: 28990000, priceOriginal: 33990000 },
-        ],
-        reviews: [
-          {
-            reviewId: 's26u-rv-1',
-            author: 'duc_thang_s_pen',
-            ratingStar: 5,
-            comment:
-              'Lớp phủ chống chói Gorilla Armor 2 trên S26 Ultra nhìn ngoài nắng trưa rõ như giấy in. Bản năm nay lên sẵn 16GB RAM và sạc nhanh 65W nên trải nghiệm hoàn hảo không còn điểm chê.',
-            variation: 'Titan Xanh Băng Giá',
-            daysAgo: 6,
-          },
-        ],
-      },
-    ],
   },
   {
     categorySlug: 'smartphones',
@@ -4559,16 +3000,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     has_5g: true,
     colors: ['Trắng Ngọc Trai', 'Đen Vũ Trụ', 'Xanh Titan'],
     images: ['/img/devices/oppo-find-x9-pro-512gb.jpg'],
-    expert_rating: 4.8,
-    expert_review_summary:
-      'Chuyên gia chân dung Hasselblad thế hệ 2026 với camera tele tiềm vọng 200MP thu sáng vượt trội, kết hợp viên pin Glacier 6500mAh và màn hình 4500 nits siêu sáng.',
-    expert_criteria_scores: {
-      display: 9.7,
-      performance: 9.6,
-      camera: 9.8,
-      battery: 9.7,
-      value: 9.5,
-    },
     key_specs: {
       screen: '6.82" LTPO AMOLED 120Hz (4500 nits, Dolby Vision)',
       chip: 'MediaTek Dimensity 9500 (3 nm)',
@@ -4654,38 +3085,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         certifications: 'CE, RoHS, QCVN (BTTTT Vietnam)',
       },
     },
-    listings: [
-      {
-        platform: 'lazada',
-        platform_item_id: '29880099512',
-        merchant_key: 'lazada_oppo_flagship',
-        title:
-          'Điện thoại OPPO Find X9 Pro 5G (16GB/512GB) Camera Hasselblad 200MP Pin 6500mAh Chính Hãng',
-        price_current: 24990000,
-        price_original: 26990000,
-        historical_sold: 380,
-        stock: 42,
-        rating_star: 4.95,
-        rating_count: 165,
-        url: 'https://www.lazada.vn/products/oppo-find-x9-pro-512gb-i29880099512.html',
-        price_history: [
-          { daysAgo: 45, price: 26490000, priceOriginal: 26990000 },
-          { daysAgo: 15, price: 25490000, priceOriginal: 26990000 },
-          { daysAgo: 0, price: 24990000, priceOriginal: 26990000 },
-        ],
-        reviews: [
-          {
-            reviewId: 'fx9p-rv-1',
-            author: 'nhiep_anh_hasselblad',
-            ratingStar: 5,
-            comment:
-              'Màu ảnh Hasselblad trên Find X9 Pro cộng với ống kính tiềm vọng 200MP chụp chân dung ban đêm quá xuất sắc. Pin Glacier 6500mAh rất trâu mà máy vẫn mỏng nhẹ.',
-            variation: 'Trắng Ngọc Trai',
-            daysAgo: 5,
-          },
-        ],
-      },
-    ],
   },
   // 29. Apple iPad Pro M5 11 inch 256GB (2025/2026 Flagship Tablet)
   {
@@ -4701,7 +3100,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     screen_size_inch: 11.1,
     battery_mah: 8300,
     has_5g: true,
-    expert_rating: 4.91,
     colors: ['Đen Không Gian (Space Black)', 'Bạc (Silver)'],
     images: ['/img/devices/apple-ipad-pro-m5-11-inch-256gb.jpg'],
     description:
@@ -4789,37 +3187,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         certifications: 'CE, FCC, Energy Star, QCVN (BTTTT Vietnam)',
       },
     },
-    listings: [
-      {
-        platform: 'shopee',
-        platform_item_id: '29910011256',
-        merchant_key: 'shopee_apple_flagship',
-        title: 'Máy tính bảng Apple iPad Pro M5 11 inch Wi-Fi 256GB (2025) Chính Hãng VN/A',
-        price_current: 27490000,
-        price_original: 28990000,
-        historical_sold: 310,
-        stock: 35,
-        rating_star: 4.97,
-        rating_count: 128,
-        url: 'https://shopee.vn/product/88201679/29910011256',
-        price_history: [
-          { daysAgo: 45, price: 28990000, priceOriginal: 28990000 },
-          { daysAgo: 15, price: 27990000, priceOriginal: 28990000 },
-          { daysAgo: 0, price: 27490000, priceOriginal: 28990000 },
-        ],
-        reviews: [
-          {
-            reviewId: 'ipadm5-rv-1',
-            author: 'designer_minh_anh',
-            ratingStar: 5,
-            comment:
-              'Màn Tandem OLED trên iPad Pro M5 đẹp xuất sắc, độ mỏng 5.3mm cầm nhẹ như quyển sổ, RAM 16GB chạy Procreate hàng trăm layer và dựng video 4K ProRes mượt tuyệt đối.',
-            variation: 'Space Black',
-            daysAgo: 4,
-          },
-        ],
-      },
-    ],
   },
   // 30. Xiaomi Pad 7 Pro 256GB (2025/2026 Flagship Android Tablet)
   {
@@ -4835,7 +3202,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     screen_size_inch: 11.2,
     battery_mah: 8850,
     has_5g: false,
-    expert_rating: 4.82,
     colors: ['Xám (Gray)', 'Xanh Lục (Green)', 'Xanh Dương (Blue)'],
     images: ['/img/devices/xiaomi-pad-7-pro-256gb.jpg'],
     description:
@@ -4919,37 +3285,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         certifications: 'CE, RoHS, TÜV Low Blue Light, QCVN (BTTTT Vietnam)',
       },
     },
-    listings: [
-      {
-        platform: 'cellphones',
-        platform_item_id: 'cps-xiaomi-pad-7-pro-256',
-        merchant_key: 'cellphones_official',
-        title: 'Máy tính bảng Xiaomi Pad 7 Pro (12GB/256GB) Màn hình 3.2K 144Hz Chính Hãng',
-        price_current: 12490000,
-        price_original: 13990000,
-        historical_sold: 420,
-        stock: 50,
-        rating_star: 4.94,
-        rating_count: 175,
-        url: 'https://cellphones.com.vn/may-tinh-bang-xiaomi-pad-7-pro.html',
-        price_history: [
-          { daysAgo: 45, price: 13490000, priceOriginal: 13990000 },
-          { daysAgo: 15, price: 12890000, priceOriginal: 13990000 },
-          { daysAgo: 0, price: 12490000, priceOriginal: 13990000 },
-        ],
-        reviews: [
-          {
-            reviewId: 'xmpad7p-rv-1',
-            author: 'hoang_long_tech',
-            ratingStar: 5,
-            comment:
-              'Tỷ lệ màn hình 3:2 độ phân giải 3.2K 144Hz đọc tài liệu PDF và chia đôi màn hình làm việc cực kỳ sướng. Chip 8s Gen 3 chơi Genshin mát rượi, sạc 67W rất nhanh.',
-            variation: 'Xám',
-            daysAgo: 6,
-          },
-        ],
-      },
-    ],
   },
   // 31. Apple MacBook Air M4 13 inch 256GB (2025/2026 Flagship Ultrabook)
   {
@@ -4965,7 +3300,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     screen_size_inch: 13.6,
     battery_mah: 5260,
     has_5g: false,
-    expert_rating: 4.88,
     colors: [
       'Xanh Da Trời (Sky Blue)',
       'Đêm Xanh Thẫm (Midnight)',
@@ -5052,37 +3386,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         certifications: 'ENERGY STAR, EPEAT Gold, CE, FCC, QCVN (BTTTT Vietnam)',
       },
     },
-    listings: [
-      {
-        platform: 'fptshop',
-        platform_item_id: 'fpt-macbook-air-m4-13-256',
-        merchant_key: 'fptshop_official',
-        title: 'Laptop Apple MacBook Air 13 inch M4 2025 (10CPU/8GPU/16GB/256GB) Chính Hãng SA/A',
-        price_current: 25490000,
-        price_original: 26990000,
-        historical_sold: 520,
-        stock: 60,
-        rating_star: 4.98,
-        rating_count: 240,
-        url: 'https://fptshop.com.vn/may-tinh-xach-tay/macbook-air-m4-13-inch-256gb',
-        price_history: [
-          { daysAgo: 45, price: 26990000, priceOriginal: 26990000 },
-          { daysAgo: 15, price: 25990000, priceOriginal: 26990000 },
-          { daysAgo: 0, price: 25490000, priceOriginal: 26990000 },
-        ],
-        reviews: [
-          {
-            reviewId: 'mbam4-rv-1',
-            author: 'nguyen_duc_dev',
-            ratingStar: 5,
-            comment:
-              'Màu Sky Blue mới cực đẹp, không bám vân tay. Có sẵn 16GB RAM mặc định và xuất được 2 màn hình rời khi mở nắp máy là nâng cấp đáng tiền nhất trên dòng Air M4.',
-            variation: 'Sky Blue',
-            daysAgo: 5,
-          },
-        ],
-      },
-    ],
   },
   // 32. Apple MacBook Pro M4 Pro 14 inch 512GB (2025/2026 Flagship Workstation Laptop)
   {
@@ -5098,7 +3401,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     screen_size_inch: 14.2,
     battery_mah: 7240,
     has_5g: false,
-    expert_rating: 4.94,
     colors: ['Đen Không Gian (Space Black)', 'Bạc (Silver)'],
     images: ['/img/devices/apple-macbook-pro-m4-pro-14-inch-512gb.jpg'],
     description:
@@ -5180,37 +3482,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         certifications: 'ENERGY STAR, EPEAT Gold, CE, FCC, QCVN (BTTTT Vietnam)',
       },
     },
-    listings: [
-      {
-        platform: 'cellphones',
-        platform_item_id: 'cps-macbook-pro-14-m4-pro-512',
-        merchant_key: 'cellphones_official',
-        title: 'Apple MacBook Pro 14 inch M4 Pro 2024 (12CPU/16GPU/24GB/512GB) Chính Hãng SA/A',
-        price_current: 47990000,
-        price_original: 49990000,
-        historical_sold: 260,
-        stock: 28,
-        rating_star: 4.99,
-        rating_count: 115,
-        url: 'https://cellphones.com.vn/macbook-pro-14-inch-m4-pro-24gb-512gb.html',
-        price_history: [
-          { daysAgo: 45, price: 49990000, priceOriginal: 49990000 },
-          { daysAgo: 15, price: 48490000, priceOriginal: 49990000 },
-          { daysAgo: 0, price: 47990000, priceOriginal: 49990000 },
-        ],
-        reviews: [
-          {
-            reviewId: 'mbpm4p-rv-1',
-            author: 'ai_engineer_hcm',
-            ratingStar: 5,
-            comment:
-              'Băng thông RAM 273GB/s trên M4 Pro cộng với 24GB RAM chạy local LLM và build Xcode nhanh gấp đôi M2 Pro cũ. Màn hình XDR ra nắng lên được 1000 nits SDR nhìn rõ mồn một.',
-            variation: 'Space Black',
-            daysAgo: 3,
-          },
-        ],
-      },
-    ],
   },
   // 33. Apple Watch Series 11 46mm GPS 64GB (2025/2026 Flagship Smartwatch)
   {
@@ -5226,7 +3497,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     screen_size_inch: 1.96,
     battery_mah: 345,
     has_5g: false,
-    expert_rating: 4.85,
     colors: ['Đen Bóng (Jet Black)', 'Vàng Hồng (Rose Gold)', 'Bạc (Silver)'],
     images: ['/img/devices/apple-watch-series-11-46mm-gps-64gb.jpg'],
     description:
@@ -5312,38 +3582,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         certifications: 'FDA Cleared ECG & Sleep Apnea, CE, FCC, QCVN (BTTTT Vietnam)',
       },
     },
-    listings: [
-      {
-        platform: 'tgdd',
-        platform_item_id: 'tgdd-apple-watch-s11-46mm',
-        merchant_key: 'tgdd_official',
-        title:
-          'Đồng hồ thông minh Apple Watch Series 11 GPS 46mm Viền Nhôm Dây Thể Thao Chính Hãng VN/A',
-        price_current: 11290000,
-        price_original: 11990000,
-        historical_sold: 410,
-        stock: 55,
-        rating_star: 4.96,
-        rating_count: 162,
-        url: 'https://www.thegioididong.com/dong-ho-thong-minh/apple-watch-s11-gps-46mm',
-        price_history: [
-          { daysAgo: 45, price: 11990000, priceOriginal: 11990000 },
-          { daysAgo: 15, price: 11590000, priceOriginal: 11990000 },
-          { daysAgo: 0, price: 11290000, priceOriginal: 11990000 },
-        ],
-        reviews: [
-          {
-            reviewId: 'aws11-rv-1',
-            author: 'runner_thanh_tuan',
-            ratingStar: 5,
-            comment:
-              'Series 11 mỏng nhẹ đeo đi ngủ theo dõi ngưng thở rất thoải mái, sáng dậy cắm sạc lúc đánh răng rửa mặt 25 phút đã đầy hơn 80% pin.',
-            variation: 'Jet Black',
-            daysAgo: 4,
-          },
-        ],
-      },
-    ],
   },
   // 34. Apple Watch Ultra 3 49mm 64GB (2025/2026 Flagship Adventure Smartwatch)
   {
@@ -5359,7 +3597,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     screen_size_inch: 1.98,
     battery_mah: 580,
     has_5g: true,
-    expert_rating: 4.91,
     colors: ['Titan Đen (Black Titanium)', 'Titan Tự Nhiên (Natural Titanium)'],
     images: ['/img/devices/apple-watch-ultra-3-49mm-64gb.jpg'],
     description:
@@ -5446,38 +3683,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         certifications: 'MIL-STD-810H, EN13319 Dive Certified, CE, FCC, QCVN (BTTTT Vietnam)',
       },
     },
-    listings: [
-      {
-        platform: 'shopee',
-        platform_item_id: '29920049064',
-        merchant_key: 'shopee_apple_flagship',
-        title:
-          'Đồng hồ thông minh Apple Watch Ultra 3 49mm GPS + Cellular Viền Titan Đen Chính Hãng VN/A',
-        price_current: 22490000,
-        price_original: 23990000,
-        historical_sold: 230,
-        stock: 30,
-        rating_star: 4.98,
-        rating_count: 98,
-        url: 'https://shopee.vn/product/88201679/29920049064',
-        price_history: [
-          { daysAgo: 45, price: 23990000, priceOriginal: 23990000 },
-          { daysAgo: 15, price: 22990000, priceOriginal: 23990000 },
-          { daysAgo: 0, price: 22490000, priceOriginal: 23990000 },
-        ],
-        reviews: [
-          {
-            reviewId: 'awu3-rv-1',
-            author: 'trail_runner_dalat',
-            ratingStar: 5,
-            comment:
-              'Màn LTPO3 trên Ultra 3 sáng rực giữa nắng trưa Đà Lạt, GPS băng tần kép L1+L5 bắt sóng cực chuẩn dưới tán rừng thông, pin chạy trail 70km vẫn còn dư 40%.',
-            variation: 'Black Titanium',
-            daysAgo: 5,
-          },
-        ],
-      },
-    ],
   },
   // 35. Apple AirPods Pro 3 USB-C (2025/2026 Flagship ANC Earbuds)
   {
@@ -5493,7 +3698,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     screen_size_inch: 1.0,
     battery_mah: 540,
     has_5g: false,
-    expert_rating: 4.88,
     colors: ['Trắng (White)'],
     images: ['/img/devices/apple-airpods-pro-3-usb-c.jpg'],
     description:
@@ -5577,38 +3781,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         certifications: 'FDA OTC Hearing Aid Authorized, IP54, CE, FCC, QCVN (BTTTT Vietnam)',
       },
     },
-    listings: [
-      {
-        platform: 'shopee',
-        platform_item_id: '29930003001',
-        merchant_key: 'shopee_apple_flagship',
-        title:
-          'Tai nghe Bluetooth Apple AirPods Pro 3 (Hộp sạc MagSafe USB-C) Chip H3 Chính Hãng VN/A',
-        price_current: 5890000,
-        price_original: 6490000,
-        historical_sold: 1450,
-        stock: 120,
-        rating_star: 4.98,
-        rating_count: 640,
-        url: 'https://shopee.vn/product/88201679/29930003001',
-        price_history: [
-          { daysAgo: 45, price: 6490000, priceOriginal: 6490000 },
-          { daysAgo: 15, price: 6090000, priceOriginal: 6490000 },
-          { daysAgo: 0, price: 5890000, priceOriginal: 6490000 },
-        ],
-        reviews: [
-          {
-            reviewId: 'app3-rv-1',
-            author: 'audiophile_hanoi',
-            ratingStar: 5,
-            comment:
-              'Chip H3 trên AirPods Pro 3 chống ồn tiếng động cơ máy bay và quán cafe tốt hơn hẳn bản Pro 2, lại có thêm cảm biến đo nhịp tim trực tiếp khi chạy bộ rất tiện.',
-            variation: 'Trắng USB-C',
-            daysAgo: 3,
-          },
-        ],
-      },
-    ],
   },
   // 36. Sony WF-1000XM6 (2025/2026 Flagship Hi-Res LDAC ANC Earbuds)
   {
@@ -5624,7 +3796,6 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
     screen_size_inch: 1.0,
     battery_mah: 550,
     has_5g: false,
-    expert_rating: 4.88,
     colors: ['Đen (Black)', 'Bạc Платина (Platinum Silver)', 'Hồng Khói (Smoky Pink)'],
     images: ['/img/devices/sony-wf-1000xm6.jpg'],
     description:
@@ -5708,311 +3879,5 @@ export const FLAGSHIP_DEVICES_TO_SEED: FlagshipDeviceSeed[] = [
         certifications: 'Hi-Res Audio Wireless Certified, IPX4, CE, FCC, QCVN (BTTTT Vietnam)',
       },
     },
-    listings: [
-      {
-        platform: 'cellphones',
-        platform_item_id: 'cps-sony-wf-1000xm6',
-        merchant_key: 'cellphones_official',
-        title: 'Tai nghe Bluetooth chống ồn Sony WF-1000XM6 Hi-Res LDAC Chính Hãng Sony Việt Nam',
-        price_current: 6190000,
-        price_original: 6990000,
-        historical_sold: 380,
-        stock: 45,
-        rating_star: 4.96,
-        rating_count: 154,
-        url: 'https://cellphones.com.vn/tai-nghe-khong-day-sony-wf-1000xm6.html',
-        price_history: [
-          { daysAgo: 45, price: 6990000, priceOriginal: 6990000 },
-          { daysAgo: 15, price: 6490000, priceOriginal: 6990000 },
-          { daysAgo: 0, price: 6190000, priceOriginal: 6990000 },
-        ],
-        reviews: [
-          {
-            reviewId: 'wf1000xm6-rv-1',
-            author: 'nhac_lossless_vn',
-            ratingStar: 5,
-            comment:
-              'Vỏ nhám mới trên WF-1000XM6 cầm chắc tay không bị trơn như đời XM5. Chất âm LDAC chi tiết tách bạch, chống ồn dải trầm và giọng nói xung quanh gần như tuyệt đối.',
-            variation: 'Đen',
-            daysAgo: 4,
-          },
-        ],
-      },
-    ],
   },
 ];
-
-/**
- * Deterministically synthesizes missing platform listings (across all 10 supported platforms:
- * Shopee, Lazada, Tiki, TikTok Shop, CellphoneS, Thế Giới Di Động, FPT Shop, Hoàng Hà Mobile,
- * Di Động Việt, and Phong Vũ) + 60-day price history + multi-platform JReviews
- * (including authentic technical reviews and coin-spam / seeding samples) for any
- * canonical `master_product` so that 100% of the 22 catalog devices have full 10-platform depth.
- */
-export function synthesizeCrossPlatformOffersForMaster(params: {
-  modelKey: string;
-  name: string;
-  slug: string;
-  brand: string;
-  colors: string[];
-  basePrice: number;
-  existingPlatforms: Array<
-    | 'shopee'
-    | 'lazada'
-    | 'tiki'
-    | 'tiktok'
-    | 'cellphones'
-    | 'tgdd'
-    | 'fptshop'
-    | 'hoangha'
-    | 'didongviet'
-    | 'phongvu'
-  >;
-  keySpecs?: KeySpecs | null;
-}): FlagshipDeviceSeed['listings'] {
-  const allPlatforms: Array<
-    | 'shopee'
-    | 'lazada'
-    | 'tiki'
-    | 'tiktok'
-    | 'cellphones'
-    | 'tgdd'
-    | 'fptshop'
-    | 'hoangha'
-    | 'didongviet'
-    | 'phongvu'
-  > = [
-    'shopee',
-    'lazada',
-    'tiki',
-    'tiktok',
-    'cellphones',
-    'tgdd',
-    'fptshop',
-    'hoangha',
-    'didongviet',
-    'phongvu',
-  ];
-  const present = new Set(params.existingPlatforms);
-  const brandLower = (params.brand || '').toLowerCase();
-  const primaryColor = params.colors?.[0] || 'Tiêu chuẩn';
-  const secondaryColor = params.colors?.[1] || primaryColor;
-  const base = Math.max(1_000_000, Math.round(params.basePrice / 10_000) * 10_000);
-  const slugSafe = (params.slug || params.modelKey.replace(/[^a-z0-9]+/gi, '-')).toLowerCase();
-
-  const screenInfo = params.keySpecs?.screen || 'màn hình sắc nét';
-  const chipInfo = params.keySpecs?.chip || 'vi xử lý thế hệ mới';
-  const batteryInfo = params.keySpecs?.battery || 'thời lượng pin ấn tượng';
-
-  const round10k = (val: number) => Math.round(val / 10_000) * 10_000;
-
-  const pickMerchantKey = (
-    platform:
-      | 'shopee'
-      | 'lazada'
-      | 'tiki'
-      | 'tiktok'
-      | 'cellphones'
-      | 'tgdd'
-      | 'fptshop'
-      | 'hoangha'
-      | 'didongviet'
-      | 'phongvu'
-  ): string => {
-    if (platform === 'shopee') {
-      if (brandLower.includes('apple')) return 'shopee_apple_flagship';
-      if (brandLower.includes('samsung')) return 'shopee_samsung_official';
-      return 'shopee_xiaomi_official';
-    }
-    if (platform === 'lazada') {
-      if (brandLower.includes('apple')) return 'lazada_apple_flagship';
-      if (brandLower.includes('samsung')) return 'lazada_samsung_flagship';
-      return 'lazada_oppo_flagship';
-    }
-    if (platform === 'tiki') {
-      return brandLower.includes('apple') || brandLower.includes('samsung')
-        ? 'tiki_trading'
-        : 'tiki_viettel_store';
-    }
-    if (platform === 'tiktok') {
-      return brandLower.includes('samsung') ? 'tiktok_samsung_official' : 'tiktok_viettel_official';
-    }
-    if (platform === 'cellphones') return 'cellphones_official';
-    if (platform === 'tgdd') return 'tgdd_official';
-    if (platform === 'fptshop') return 'fptshop_official';
-    if (platform === 'hoangha') return 'hoangha_official';
-    if (platform === 'didongviet') return 'didongviet_official';
-    return 'phongvu_official';
-  };
-
-  const buildUrl = (
-    platform:
-      | 'shopee'
-      | 'lazada'
-      | 'tiki'
-      | 'tiktok'
-      | 'cellphones'
-      | 'tgdd'
-      | 'fptshop'
-      | 'hoangha'
-      | 'didongviet'
-      | 'phongvu',
-    itemId: string
-  ): string => {
-    switch (platform) {
-      case 'shopee':
-        return `https://shopee.vn/${slugSafe}-i.88201679.${itemId}`;
-      case 'lazada':
-        return `https://www.lazada.vn/products/${slugSafe}-i${itemId}.html`;
-      case 'tiki':
-        return `https://tiki.vn/${slugSafe}-p${itemId}.html`;
-      case 'tiktok':
-        return `https://shop.tiktok.com/view/product/${itemId}?region=VN&locale=vi-VN`;
-      case 'cellphones':
-        return `https://cellphones.com.vn/${slugSafe}.html`;
-      case 'tgdd':
-        return `https://www.thegioididong.com/dtdd/${slugSafe}`;
-      case 'fptshop':
-        return `https://fptshop.com.vn/dien-thoai/${slugSafe}`;
-      case 'hoangha':
-        return `https://hoanghamobile.com/dien-thoai/${slugSafe}`;
-      case 'didongviet':
-        return `https://didongviet.vn/${slugSafe}.html`;
-      case 'phongvu':
-        return `https://phongvu.vn/${slugSafe}`;
-    }
-  };
-
-  const results: FlagshipDeviceSeed['listings'] = [];
-
-  for (const platform of allPlatforms) {
-    if (present.has(platform)) continue;
-
-    const multiplier =
-      platform === 'tiktok'
-        ? 0.975
-        : platform === 'hoangha'
-          ? 0.978
-          : platform === 'didongviet'
-            ? 0.982
-            : platform === 'lazada'
-              ? 0.985
-              : platform === 'tiki'
-                ? 0.992
-                : platform === 'shopee'
-                  ? 1.0
-                  : platform === 'phongvu'
-                    ? 1.005
-                    : platform === 'cellphones'
-                      ? 1.012
-                      : platform === 'fptshop'
-                        ? 1.02
-                        : 1.024;
-
-    const priceCurrent = round10k(base * multiplier);
-    const priceOriginal = round10k(base * 1.12);
-    const itemId = `syn-${platform}-${slugSafe}`;
-
-    const reviews: FlagshipDeviceSeed['listings'][number]['reviews'] = [
-      {
-        reviewId: `syn-rv-${platform}-${slugSafe}-1`,
-        author:
-          platform === 'tiki'
-            ? 'Trần Hoàng Nam'
-            : platform === 'lazada'
-              ? 'Lê Minh Tuấn'
-              : platform === 'tiktok'
-                ? 'Nguyễn Hải Đăng'
-                : platform === 'cellphones'
-                  ? 'Nguyễn Quốc Bảo'
-                  : platform === 'tgdd'
-                    ? 'Phạm Gia Huy'
-                    : platform === 'fptshop'
-                      ? 'Đỗ Quang Vinh'
-                      : platform === 'hoangha'
-                        ? 'Trương Minh Khôi'
-                        : platform === 'didongviet'
-                          ? 'Lý Thanh Tùng'
-                          : platform === 'phongvu'
-                            ? 'Phan Tuấn Kiệt'
-                            : 'hoang_long_tech',
-        ratingStar: 5,
-        comment: `Mua ${params.name} chính hãng nguyên seal, kích hoạt bảo hành điện tử chuẩn. Trải nghiệm thực tế ${screenInfo} và ${chipInfo} cực kỳ mượt, ${batteryInfo} đáp ứng trọn vẹn nhu cầu làm việc cả ngày.`,
-        variation: primaryColor,
-        daysAgo: 8,
-      },
-      {
-        reviewId: `syn-rv-${platform}-${slugSafe}-2`,
-        author:
-          platform === 'tiki'
-            ? 'Vũ Thanh Thảo'
-            : platform === 'lazada'
-              ? 'Đặng Thu Hà'
-              : platform === 'tiktok'
-                ? 'Lâm Khánh Linh'
-                : platform === 'cellphones'
-                  ? 'Bùi Đức Anh'
-                  : platform === 'tgdd'
-                    ? 'Ngô Minh Châu'
-                    : platform === 'fptshop'
-                      ? 'Hoàng Lan Anh'
-                      : platform === 'hoangha'
-                        ? 'Mai Quốc Khánh'
-                        : platform === 'didongviet'
-                          ? 'Đinh Phương Thảo'
-                          : platform === 'phongvu'
-                            ? 'Võ Hoàng Yến'
-                            : 'linh_chi_official',
-        ratingStar: platform === 'tgdd' || platform === 'fptshop' ? 4 : 5,
-        comment:
-          platform === 'tgdd' || platform === 'fptshop'
-            ? `Nhân viên cửa hàng hỗ trợ chu đáo, máy ${params.name} hoàn thiện cao cấp, ${screenInfo} hiển thị ngoài trời rõ ràng, mức giá niêm yết nhỉnh hơn sàn TMĐT một chút nhưng yên tâm bảo hành.`
-            : platform === 'hoangha' || platform === 'didongviet'
-              ? `Giá tại ${platform === 'hoangha' ? 'Hoàng Hà Mobile' : 'Di Động Việt'} cực kỳ tốt so với mặt bằng chung, máy ${params.name} nguyên seal chính hãng VN, thu cũ đổi mới nhanh gọn.`
-              : platform === 'tiktok'
-                ? `Săn voucher phiên Megalive trên TikTok Shop Mall giá rẻ hơn thị trường cả triệu đồng, hàng chính hãng nguyên tem niêm phong, giao nhanh trong 48h.`
-                : `Đóng gói chống sốc kỹ, giao nhanh trong 24h. Máy ${params.name} chạy ${chipInfo} mát và ổn định, rất đáng tiền trong phân khúc.`,
-        variation: secondaryColor,
-        daysAgo: 4,
-      },
-    ];
-
-    // Add 1 coin-spam review on Lazada/Shopee so AiReviewAnalyzer flags low_value_coin_spam
-    if (platform === 'lazada' || platform === 'shopee') {
-      reviews.push({
-        reviewId: `syn-rv-${platform}-${slugSafe}-spam`,
-        author: 'user_nhan_xu_99',
-        ratingStar: 5,
-        comment:
-          'Hàng ok lắm nha shop ơi, bình luận nhanh cho đủ 50 ký tự để nhận 200 xu thôi chứ chưa khui hộp test kỹ.',
-        variation: primaryColor,
-        daysAgo: 2,
-      });
-    }
-
-    results.push({
-      platform,
-      platform_item_id: itemId,
-      merchant_key: pickMerchantKey(platform),
-      title: `${params.name} - Hàng Chính Hãng Bảo Hành 12 Tháng`,
-      price_current: priceCurrent,
-      price_original: priceOriginal,
-      historical_sold: platform === 'shopee' ? 420 : platform === 'lazada' ? 310 : 195,
-      stock: 45,
-      rating_star: 4.92,
-      rating_count: 140,
-      url: buildUrl(platform, itemId),
-      price_history: [
-        { daysAgo: 60, price: round10k(priceCurrent * 1.045), priceOriginal },
-        { daysAgo: 45, price: round10k(priceCurrent * 1.03), priceOriginal },
-        { daysAgo: 30, price: round10k(priceCurrent * 1.015), priceOriginal },
-        { daysAgo: 15, price: round10k(priceCurrent * 1.008), priceOriginal },
-        { daysAgo: 7, price: priceCurrent, priceOriginal },
-        { daysAgo: 0, price: priceCurrent, priceOriginal },
-      ],
-      reviews,
-    });
-  }
-
-  return results;
-}
