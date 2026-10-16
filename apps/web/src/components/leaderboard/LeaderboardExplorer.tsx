@@ -1093,6 +1093,117 @@ export default function LeaderboardExplorer({
         </div>
       )}
 
+      {/* 2.5. Top 1v1 Head-to-Head Battles among Current Leaderboard */}
+      {rankedEntries.length >= 2 && (
+        <div className="rate-card rounded-4 p-md-4 mb-4 border bg-white p-3 shadow-sm">
+          <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+            <div>
+              <div className="rate-eyebrow mb-1">
+                {lang === 'vi'
+                  ? 'Kèo Đối Đầu 1v1 Từ Bảng Xếp Hạng'
+                  : lang === 'cs'
+                    ? 'Přímé duely 1v1 z žebříčku'
+                    : 'Direct 1v1 Showdowns From Leaderboard'}
+              </div>
+              <h3 className="h6 fw-bold text-dark mb-0">
+                {lang === 'vi'
+                  ? 'So Kè Trực Tiếp Các Thiết Bị Dẫn Đầu Cùng Danh Mục'
+                  : lang === 'cs'
+                    ? 'Přímé porovnání nejlepších zařízení ve stejné kategorii'
+                    : 'Head-to-Head Matchups Between Top-Ranked Devices'}
+              </h3>
+            </div>
+            <Link
+              href={`/compare?category=${activeCategory}&slugs=${encodeURIComponent(
+                rankedEntries
+                  .slice(0, 2)
+                  .map((e: RankedProductEntry) => e.product.slug)
+                  .join(',')
+              )}`}
+              className="btn btn-sm btn-outline-dark rounded-pill px-3"
+            >
+              {lang === 'vi'
+                ? 'Mở Bàn Cân Đa Chiều →'
+                : lang === 'cs'
+                  ? 'Otevřít porovnání →'
+                  : 'Open Comparison Matrix →'}
+            </Link>
+          </div>
+
+          <div className="row g-3">
+            {(
+              [
+                [0, 1],
+                [0, 2],
+                [1, 2],
+              ] as const
+            )
+              .filter(
+                ([iA, iB]) =>
+                  Boolean(rankedEntries[iA]) && Boolean(rankedEntries[iB])
+              )
+              .map(([iA, iB]) => {
+                const a = rankedEntries[iA]!;
+                const b = rankedEntries[iB]!;
+                const vHref = `/compare/${a.product.slug}-vs-${b.product.slug}`;
+                const delta = Math.abs(a.activeScore5 - b.activeScore5).toFixed(
+                  2
+                );
+                return (
+                  <div key={vHref} className="col-lg-4 col-md-6">
+                    <div className="rounded-4 d-flex flex-column justify-content-between bg-light h-100 border p-3">
+                      <div className="d-flex justify-content-between align-items-center mb-2">
+                        <span className="badge bg-dark rounded-pill small text-white">
+                          #{iA + 1} vs #{iB + 1}
+                        </span>
+                        <span className="badge bg-danger-subtle text-danger rounded-pill small font-monospace">
+                          Δ {delta} / 5.0
+                        </span>
+                      </div>
+
+                      <div className="d-flex align-items-center justify-content-between my-2 gap-2">
+                        <div className="overflow-hidden">
+                          <div className="small fw-bold text-dark text-truncate">
+                            {a.product.name}
+                          </div>
+                          <div className="small text-secondary font-monospace">
+                            ★ {a.activeScore5.toFixed(2)}
+                          </div>
+                        </div>
+                        <span className="badge bg-secondary rounded-pill flex-shrink-0">
+                          VS
+                        </span>
+                        <div className="overflow-hidden text-end">
+                          <div className="small fw-bold text-dark text-truncate">
+                            {b.product.name}
+                          </div>
+                          <div className="small text-secondary font-monospace">
+                            ★ {b.activeScore5.toFixed(2)}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="border-top mt-2 pt-2 text-end">
+                        <Link
+                          href={vHref}
+                          className="btn btn-sm btn-dark rounded-pill small fw-semibold w-100"
+                        >
+                          <BsArrowLeftRight className="me-1" />
+                          {lang === 'vi'
+                            ? 'Xem Đối Đầu 1v1 Chuyên Sâu'
+                            : lang === 'cs'
+                              ? 'Zobrazit 1v1 duel'
+                              : 'View 1v1 Head-to-Head'}
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+      )}
+
       {/* 3. Full Ranked Leaderboard List (#1 .. #N) */}
       <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
         <h3 className="h5 fw-bold text-dark d-flex align-items-center mb-0 gap-2">
