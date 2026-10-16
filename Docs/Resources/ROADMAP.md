@@ -199,6 +199,9 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc **4 T�
   - Sửa lỗi trang danh mục gọi Radar với `limit: 3` khiến chỉ 3 sản phẩm đầu có huy hiệu và cột Radar khi xuất; nay dùng `limit: 50` để mọi thẻ đều có tín hiệu. Suite `[37/37]` có kiểm thử chạy thật chống tái diễn.
 - [x] **4.71. Radar Theo Từng Sản Phẩm Trên Thẻ Xếp Hạng /deals Và Trong Xuất Dữ Liệu (Issue #116):**
   - `DealFinderWorkspace` hiển thị `RadarBadge` trên mỗi thẻ xếp hạng và thêm cột Radar vào xuất Markdown, CSV, JSON; `/deals` dùng `limit: 50` để mọi thẻ đều có tín hiệu. `ProductOffersExplorer` giữ nguyên vì Radar thuộc cấp sản phẩm và đã hiển thị trên `ProductDetailView`.
+- [x] **4.72. Hoàn Tất Độ Phủ 100% Deal Radar Cấp Sản Phẩm Trên Thẻ Trang Chủ, Thanh Tìm Kiếm `HeroSearchInspector`, Xuất Hồ Sơ Kiểm Định (`ProductShareAuditButton`, `/compare`, `/compare/[versus]`) & REST API `GET /api/v1/rate/products/[slug]` (Issue #117):**
+  - Hiển thị `<RadarBadge />` trực tiếp trên mọi thẻ sản phẩm nổi bật của Trang chủ (`apps/web/src/app/[locale]/page.tsx`, `limit: 50`) và danh sách gợi ý tìm kiếm của `HeroSearchInspector.tsx` (`useDealRadarIndex`).
+  - Bổ sung `radarSignal: computeProductRadarSignal(product, offers)` vào phản hồi `GET /api/v1/rate/products/[slug]` và đồng bộ xuất dữ liệu Deal Radar (`Markdown`, `CSV`, `JSON`) trên `ProductShareAuditButton.tsx`, `CompareWorkspace.tsx` và `VersusInteractiveScoreboard.tsx`.
 
 ### ✅ Phase 5: Mở Rộng Đa Sàn 10/10 Nền Tảng, Browser Extension MV3 & Tự Động Hóa Cảnh Báo Giá (Đã hoàn thành 100%)
 

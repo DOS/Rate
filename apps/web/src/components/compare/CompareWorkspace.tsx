@@ -13,7 +13,12 @@ import {
   getMasterProductHref,
   resolveProductImageUrl,
 } from '@/lib/rate-api';
-import { getRadarSignal } from '@/lib/deal-radar';
+import {
+  getRadarSignal,
+  radarExportFields,
+  radarLabel,
+  radarMarkdownCell,
+} from '@/lib/deal-radar';
 import RadarBadge from '@/components/radar/RadarBadge';
 import { useDealRadarIndex } from '@/components/radar/use-deal-radar';
 import {
@@ -1048,6 +1053,9 @@ export default function CompareWorkspace({
               : '-'
           )
           .join(' | ')} |`,
+        `| **Tín Hiệu Deal Radar 60N** | ${products
+          .map((p) => radarMarkdownCell(getRadarSignal(radarIndex, p.slug)))
+          .join(' | ')} |`,
         `| **Cấu Hình / Bộ Nhớ** | ${products
           .map((p) => {
             const ks = (p.key_specs || {}) as KeySpecs;
@@ -1088,7 +1096,16 @@ export default function CompareWorkspace({
       'Tiêu Chí Kỹ Thuật',
       ...products.map((p) => p.name),
     ];
-    const rows: string[] = [headers.map(escapeCsv).join(',')];
+    const rows: string[] = [
+      headers.map(escapeCsv).join(','),
+      [
+        '0. Tín hiệu Deal Radar 10 Sàn (60N)',
+        'Phán quyết & Độ lệch giá',
+        ...products.map((p) => radarLabel(getRadarSignal(radarIndex, p.slug))),
+      ]
+        .map((c) => escapeCsv(c))
+        .join(','),
+    ];
     for (const group of SPEC_GROUPS) {
       for (const row of group.rows) {
         const vals = products.map((p) => row.renderValue(p));
@@ -1123,6 +1140,7 @@ export default function CompareWorkspace({
         userRating: getEffectiveRating(p),
         expertRating: Number(p.expert_rating || 0),
         minPriceVnd: Number(p.min_price || 0),
+        dealRadar: radarExportFields(getRadarSignal(radarIndex, p.slug)),
       })),
       matrix: SPEC_GROUPS.map((group) => ({
         groupId: group.id,

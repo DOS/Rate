@@ -3,7 +3,12 @@
 import React, { useMemo, useState } from 'react';
 import { Link } from '@/lib/navigation';
 import type { ScoredLeaderboardItem } from '@/lib/leaderboard-engine';
-import { getRadarSignal } from '@/lib/deal-radar';
+import {
+  getRadarSignal,
+  radarExportFields,
+  radarLabel,
+  radarMarkdownCell,
+} from '@/lib/deal-radar';
 import RadarBadge from '@/components/radar/RadarBadge';
 import { useDealRadarIndex } from '@/components/radar/use-deal-radar';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
@@ -193,6 +198,8 @@ export default function VersusInteractiveScoreboard({
   const handleCopy1v1Markdown = async () => {
     if (typeof window === 'undefined') return;
     try {
+      const sigA = getRadarSignal(radarIndex, scoreA.slug);
+      const sigB = getRadarSignal(radarIndex, scoreB.slug);
       const lines = [
         `### ⚔️ Kết Luận Đối Đầu 1v1: ${scoreA.name} vs ${scoreB.name}`,
         `- **Thiết bị dẫn trước:** **${weightedResult.winner.name}** (${weightedResult.finalA >= weightedResult.finalB ? weightedResult.finalA.toFixed(2) : weightedResult.finalB.toFixed(2)}/5.0 - Chênh lệch ${weightedResult.delta} điểm)`,
@@ -211,6 +218,7 @@ export default function VersusInteractiveScoreboard({
           return `| ${r.label} | ${r.aVal.toFixed(2)}/5.0 | ${r.bVal.toFixed(2)}/5.0 | ${winName} |`;
         }),
         `| **Giá Tham Khảo Thấp Nhất** | ${scoreA.minPrice.toLocaleString('vi-VN')} ₫ | ${scoreB.minPrice.toLocaleString('vi-VN')} ₫ | ${scoreA.minPrice <= scoreB.minPrice ? scoreA.name : scoreB.name} |`,
+        `| **Tín Hiệu Deal Radar 60N** | ${radarMarkdownCell(sigA)} | ${radarMarkdownCell(sigB)} | ${sigA.verdict === 'genuine_deal' ? scoreA.name : sigB.verdict === 'genuine_deal' ? scoreB.name : '-'} |`,
       ];
       await navigator.clipboard.writeText(lines.join('\n'));
       setCopiedVerdict(true);
@@ -229,6 +237,8 @@ export default function VersusInteractiveScoreboard({
       }
       return str;
     };
+    const sigA = getRadarSignal(radarIndex, scoreA.slug);
+    const sigB = getRadarSignal(radarIndex, scoreB.slug);
     const headers = [
       'Tiêu Chí JReviews',
       'Trọng Số (%)',
@@ -271,6 +281,17 @@ export default function VersusInteractiveScoreboard({
         scoreB.minPrice,
         scoreA.minPrice <= scoreB.minPrice ? scoreA.name : scoreB.name,
       ],
+      [
+        'Tín Hiệu Deal Radar 60N',
+        '-',
+        radarLabel(sigA),
+        radarLabel(sigB),
+        sigA.verdict === 'genuine_deal'
+          ? scoreA.name
+          : sigB.verdict === 'genuine_deal'
+            ? scoreB.name
+            : '-',
+      ],
     ];
     const csvContent = `\uFEFF${[
       headers.map(escapeCsv).join(','),
@@ -287,6 +308,8 @@ export default function VersusInteractiveScoreboard({
 
   const handleDownloadVersusJson = () => {
     if (typeof window === 'undefined') return;
+    const sigA = getRadarSignal(radarIndex, scoreA.slug);
+    const sigB = getRadarSignal(radarIndex, scoreB.slug);
     const payload = {
       source: 'Rate.vn 1v1 Versus Scoreboard',
       versusSlug: `${scoreA.slug}-vs-${scoreB.slug}`,
@@ -305,6 +328,7 @@ export default function VersusInteractiveScoreboard({
         weightedScore5: weightedResult.finalA,
         expertScore10: scoreA.expertScore10,
         minPriceVnd: scoreA.minPrice,
+        dealRadar: radarExportFields(sigA),
       },
       productB: {
         slug: scoreB.slug,
@@ -313,6 +337,7 @@ export default function VersusInteractiveScoreboard({
         weightedScore5: weightedResult.finalB,
         expertScore10: scoreB.expertScore10,
         minPriceVnd: scoreB.minPrice,
+        dealRadar: radarExportFields(sigB),
       },
       criteriaBreakdown: criteriaRows.map((r) => ({
         key: r.key,

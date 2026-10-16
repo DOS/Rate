@@ -33,6 +33,8 @@ import BackToTop from './components/back-to-top';
 import HeroSearchInspector from '@/components/home/HeroSearchInspector';
 import CompareQuickToggle from '@/components/compare/CompareQuickToggle';
 import CompareTrayBar from '@/components/compare/CompareTrayBar';
+import RadarBadge from '@/components/radar/RadarBadge';
+import { buildRadarIndex, getRadarSignal } from '@/lib/deal-radar';
 
 function getCategoryIcon(slug: string) {
   switch (slug) {
@@ -80,7 +82,7 @@ export default async function Home({
       getMasterProducts({ categorySlug: 'all', limit: 24 }),
       getCachedMerchantsList(),
       getCachedRatePlatformStats(),
-      getCrossPlatformDealRadar({ categorySlug: 'all', limit: 4 }),
+      getCrossPlatformDealRadar({ categorySlug: 'all', limit: 50 }),
     ]);
     masterProducts = productsRes;
     merchants = merchantsRes;
@@ -98,6 +100,7 @@ export default async function Home({
     'smartphones',
     3
   );
+  const radarIndex = buildRadarIndex(dealRadar);
 
   const catSlugById = new Map<string, string>();
   for (const c of platformStats.categoriesWithCounts) {
@@ -505,7 +508,7 @@ export default async function Home({
                         </Link>
                       </h5>
 
-                      {/* #1 Core Focus: JReviews Dual Rating Badges */}
+                      {/* #1 Core Focus: JReviews Dual Rating Badges + Product Deal Radar */}
                       <div className="d-flex align-items-center mb-2 flex-wrap gap-1">
                         <span className="rate-score-badge-user">
                           ★ {userScore.toFixed(1)} User ({authCount})
@@ -513,6 +516,9 @@ export default async function Home({
                         <span className="rate-score-badge-expert">
                           🔬 {expertScore.toFixed(1)} Expert
                         </span>
+                        <RadarBadge
+                          signal={getRadarSignal(radarIndex, item.slug)}
+                        />
                       </div>
 
                       {/* Quick Key Specs pills */}

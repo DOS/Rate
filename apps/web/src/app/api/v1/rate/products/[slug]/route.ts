@@ -6,6 +6,7 @@ import {
   getMasterProductReviews,
   getMasterProductReviewSummary,
 } from '@/lib/rate-api';
+import { computeProductRadarSignal } from '@/server/rate/deals';
 
 type RouteContext = {
   params: Promise<{ slug: string }>;
@@ -38,6 +39,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
       getMasterProductReviewSummary(product.id, reviews),
       getMasterProductPriceHistory(product.id, offers),
     ]);
+    const radarSignal = computeProductRadarSignal(product, offers);
 
     return NextResponse.json(
       {
@@ -48,6 +50,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
           priceHistory,
           reviewSummary,
           reviews,
+          radarSignal,
         },
       },
       {

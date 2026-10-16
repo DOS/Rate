@@ -38,7 +38,7 @@ export async function GET(request: Request) {
 
     const rawLimit = Number(searchParams.get('limit') || 10);
     const limit =
-      Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 36) : 10;
+      Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 50) : 10;
 
     const radar = await getCrossPlatformDealRadar({
       categorySlug,

@@ -726,6 +726,7 @@ export async function ProductDetailView({
                     ]
                       .filter(Boolean)
                       .join(' • ')}
+                    radarSignal={radarSignal}
                   />
                 </div>
               </div>
