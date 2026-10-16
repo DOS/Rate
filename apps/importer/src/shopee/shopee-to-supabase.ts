@@ -29,6 +29,14 @@ function platformReviewIdFor(r: ShopeeReview): string {
   );
 }
 
+export interface IngestOptions {
+  /**
+   * Master product this listing is already known to belong to. Used when it exists;
+   * otherwise the listing goes through entity matching as usual.
+   */
+  masterIdHint?: string | null;
+}
+
 export class ShopeeIngestionPipeline {
   private supabase: SupabaseClient<any, 'rate'>;
   private normalizer: ProductNormalizer;
@@ -83,7 +91,8 @@ export class ShopeeIngestionPipeline {
    */
   public async ingestProduct(
     product: ShopeeProduct,
-    report?: (section: 'merchant' | 'master' | 'listing' | 'price' | 'reviews') => Promise<void>
+    report?: (section: 'merchant' | 'master' | 'listing' | 'price' | 'reviews') => Promise<void>,
+    options: IngestOptions = {}
   ): Promise<{
     productId: string;
     merchantId: string;
@@ -142,13 +151,27 @@ export class ShopeeIngestionPipeline {
       `[MultiPlatformIngest:${platform}] Specs normalized -> Key: "${candidate.model_key}", Category: ${candidate.category_slug || 'smartphones'}, RAM: ${candidate.ram_gb}GB, Storage: ${candidate.storage_gb}GB`
     );
 
-    const { masterId, isNew } = await this.matcher.resolveOrCreateMasterProduct(
-      candidate,
-      resolvedCategoryId || undefined,
-      product.title
-    );
+    // A caller that already verified the master (coverage discovery, or a refresh of
+    // a listing that is already clustered) keeps the listing on it instead of
+    // re-matching every crawl, which can split it onto a new draft master.
+    let hinted: { masterId: string; isNew: boolean } | null = null;
+    if (options.masterIdHint) {
+      const { data: hintRow } = await this.supabase
+        .from('master_products')
+        .select('id')
+        .eq('id', options.masterIdHint)
+        .maybeSingle();
+      if (hintRow?.id) hinted = { masterId: hintRow.id, isNew: false };
+    }
+    const { masterId, isNew } =
+      hinted ??
+      (await this.matcher.resolveOrCreateMasterProduct(
+        candidate,
+        resolvedCategoryId || undefined,
+        product.title
+      ));
     console.log(
-      `[MultiPlatformIngest:${platform}] Master Product ${isNew ? 'CREATED' : 'LINKED'}: ID = ${masterId}`
+      `[MultiPlatformIngest:${platform}] Master Product ${hinted ? 'LINKED (caller hint)' : isNew ? 'CREATED' : 'LINKED'}: ID = ${masterId}`
     );
     await report?.('master');
 
