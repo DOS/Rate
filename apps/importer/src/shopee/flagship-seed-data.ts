@@ -19,8 +19,9 @@ export interface FlagshipDeviceSeed {
   specifications: ProductSpecifications;
   key_specs: KeySpecs;
   expert_rating: number;
-  expert_review_summary: string;
-  expert_criteria_scores: {
+  // Optional: newer 2026 entries ship without an expert write-up yet; the DB columns are nullable.
+  expert_review_summary?: string;
+  expert_criteria_scores?: {
     display: number;
     performance: number;
     camera: number;
