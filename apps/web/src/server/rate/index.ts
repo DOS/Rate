@@ -125,3 +125,11 @@ export {
   type OpenApiParameter,
   type RateOpenApiDocument,
 } from './openapi';
+
+export {
+  computeCrossPlatformDealRadarFromData,
+  getCrossPlatformDealRadar,
+  type CrossPlatformDealRadarItem,
+  type CrossPlatformDealRadarResponse,
+  type DealRadarVerdict,
+} from './deals';

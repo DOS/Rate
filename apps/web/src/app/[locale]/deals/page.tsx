@@ -1,7 +1,10 @@
 import React from 'react';
 import type { Metadata } from 'next';
 import { Link } from '@/lib/navigation';
-import { getCachedMasterProducts } from '@/server/rate';
+import {
+  getCachedMasterProducts,
+  getCrossPlatformDealRadar,
+} from '@/server/rate';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
 import NavbarDarkDynamic from '../components/navbar/NavbarDarkDynamic';
 import FooterTop from '../components/footer-top';
@@ -36,11 +39,17 @@ export async function generateMetadata({
 export default async function DealsPage({ params }: PageProps) {
   const { locale } = await params;
   normalizeRateLocale(locale);
-  const products = await getCachedMasterProducts({
-    categorySlug: 'all',
-    limit: 100,
-    sort: 'rating_desc',
-  });
+  const [products, dealRadar] = await Promise.all([
+    getCachedMasterProducts({
+      categorySlug: 'all',
+      limit: 100,
+      sort: 'rating_desc',
+    }),
+    getCrossPlatformDealRadar({
+      categorySlug: 'all',
+      limit: 16,
+    }),
+  ]);
 
   return (
     <main className="bg-light min-vh-100">
@@ -79,7 +88,7 @@ export default async function DealsPage({ params }: PageProps) {
             </div>
           </div>
 
-          <DealFinderWorkspace products={products} />
+          <DealFinderWorkspace products={products} dealRadar={dealRadar} />
         </div>
       </section>
       <CompareTrayBar />

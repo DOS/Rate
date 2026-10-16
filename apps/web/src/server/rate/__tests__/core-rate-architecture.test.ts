@@ -1184,7 +1184,44 @@ function runCoreArchitectureSuite() {
     'ProductValueCalculator and ProductSpecsExportToolbar must provide 1-Click CSV & JSON export'
   );
   console.log(
-    '  ✅ [27/27] JReviewsSection/PriceHistorySection JSON Export (#82) & ProductValueCalculator/ProductSpecsExportToolbar CSV/JSON Export (#83) passed'
+    '  ✅ [27/28] JReviewsSection/PriceHistorySection JSON Export (#82) & ProductValueCalculator/ProductSpecsExportToolbar CSV/JSON Export (#83) passed'
+  );
+
+  // 28. Live Cross-Platform Deal Radar in /deals (#85) & Deal Radar Preset + 3-Format Catalog Export in /developers (#86)
+  const dealsPageSrc = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/app/[locale]/deals/page.tsx'),
+    'utf8'
+  );
+  const dealFinderRadarSrc = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/components/deals/DealFinderWorkspace.tsx'
+    ),
+    'utf8'
+  );
+  const apiPlaygroundCatalogSrc = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/components/developers/ApiPlaygroundClient.tsx'
+    ),
+    'utf8'
+  );
+  assert.ok(
+    dealsPageSrc.includes('getCrossPlatformDealRadar') &&
+      dealFinderRadarSrc.includes('cross-platform-deal-radar') &&
+      dealFinderRadarSrc.includes('handleCopyRadarMarkdown') &&
+      dealFinderRadarSrc.includes('handleDownloadRadarCsv') &&
+      dealFinderRadarSrc.includes('handleDownloadRadarJson'),
+    'DealsPage and DealFinderWorkspace must render Cross-Platform Deal Radar and provide 3-format Radar export'
+  );
+  assert.ok(
+    apiPlaygroundCatalogSrc.includes('deals-radar') &&
+      apiPlaygroundCatalogSrc.includes('handleCopyApiCatalogMarkdown') &&
+      apiPlaygroundCatalogSrc.includes('handleDownloadApiCatalogCsv'),
+    'ApiPlaygroundClient must include deals-radar preset and 3-format API catalog export'
+  );
+  console.log(
+    '  ✅ [28/28] Live Cross-Platform Deal Radar in /deals (#85) & API Catalog Export in /developers (#86) passed'
   );
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
