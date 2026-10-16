@@ -58,6 +58,24 @@ export default function WatchlistWorkspace({
   const [liveDeals, setLiveDeals] = useState<Record<string, LiveWatchlistDeal>>(
     {}
   );
+  const [radarSignals, setRadarSignals] = useState<
+    Record<
+      string,
+      {
+        genuineDeal?: {
+          platform: string;
+          merchantName: string;
+          priceCurrent: number;
+          savingsVsMedianPct: number;
+        };
+        fakeSaleTrap?: {
+          platform: string;
+          merchantName: string;
+          fakeMarkupPct: number;
+        };
+      }
+    >
+  >({});
   const [editingSlug, setEditingSlug] = useState<string | null>(null);
   const [editTarget, setEditTarget] = useState<number>(0);
   const [subscriberEmail, setSubscriberEmail] = useState<string>('');
@@ -84,6 +102,49 @@ export default function WatchlistWorkspace({
       })
       .catch(() => {
         // Fallback to SSR catalogProducts snapshot
+      });
+    fetch('/api/v1/rate/deals?category=all&limit=36')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => {
+        if (!cancelled && json) {
+          const nextMap: typeof radarSignals = {};
+          const radarPayload = json?.data ?? json;
+          const genuineList = Array.isArray(radarPayload?.genuineDeals)
+            ? radarPayload.genuineDeals
+            : [];
+          const trapList = Array.isArray(radarPayload?.fakeSaleTraps)
+            ? radarPayload.fakeSaleTraps
+            : [];
+          for (const g of genuineList) {
+            if (g?.productSlug && !nextMap[g.productSlug]?.genuineDeal) {
+              nextMap[g.productSlug] = {
+                ...nextMap[g.productSlug],
+                genuineDeal: {
+                  platform: String(g.platform || ''),
+                  merchantName: String(g.merchantName || ''),
+                  priceCurrent: Number(g.priceCurrent || 0),
+                  savingsVsMedianPct: Number(g.savingsVsMedianPct || 0),
+                },
+              };
+            }
+          }
+          for (const t of trapList) {
+            if (t?.productSlug && !nextMap[t.productSlug]?.fakeSaleTrap) {
+              nextMap[t.productSlug] = {
+                ...nextMap[t.productSlug],
+                fakeSaleTrap: {
+                  platform: String(t.platform || ''),
+                  merchantName: String(t.merchantName || ''),
+                  fakeMarkupPct: Number(t.fakeMarkupPct || 0),
+                },
+              };
+            }
+          }
+          setRadarSignals(nextMap);
+        }
+      })
+      .catch(() => {
+        // Ignore Deal Radar fetch errors
       });
     return () => {
       cancelled = true;
@@ -625,6 +686,7 @@ export default function WatchlistWorkspace({
             const bestOffer = dealInfo?.best_offer || null;
             const platformCount =
               dealInfo?.platform_count || live?.merchant_count || 1;
+            const radarSignal = radarSignals[item.slug];
 
             return (
               <div key={item.slug} className="col-lg-6 col-12">
@@ -673,6 +735,30 @@ export default function WatchlistWorkspace({
                             </span>
                           )}
                         </div>
+                        {radarSignal && (
+                          <div
+                            className="d-flex align-items-center mb-1 flex-wrap gap-1"
+                            data-testid="watchlist-radar-signal"
+                          >
+                            {radarSignal.genuineDeal && (
+                              <span className="badge bg-success-subtle text-success rounded-pill small">
+                                🟢 Kèo đáy lịch sử (-
+                                {radarSignal.genuineDeal.savingsVsMedianPct}% so
+                                trung vị tại{' '}
+                                {radarSignal.genuineDeal.platform.toUpperCase()}
+                                )
+                              </span>
+                            )}
+                            {radarSignal.fakeSaleTrap && (
+                              <span className="badge bg-danger-subtle text-danger rounded-pill small">
+                                🚨 Cảnh báo sàn{' '}
+                                {radarSignal.fakeSaleTrap.platform.toUpperCase()}{' '}
+                                kê khống +
+                                {radarSignal.fakeSaleTrap.fakeMarkupPct}%
+                              </span>
+                            )}
+                          </div>
+                        )}
                         <h5 className="fw-bold mb-1">
                           <Link
                             href={detailHref}
