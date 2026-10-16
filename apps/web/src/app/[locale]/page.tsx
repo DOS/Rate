@@ -2,6 +2,7 @@ import { Link } from '@/lib/navigation';
 import NavbarDarkDynamic from './components/navbar/NavbarDarkDynamic';
 import { getMasterProductHref, getMasterProducts } from '@/lib/rate-api';
 import { getRateCopy } from '@/lib/rate-i18n';
+import { buildPopular1v1BattlesForCategory } from '@/lib/leaderboard-engine';
 import {
   getCachedMerchantsList,
   getCachedRatePlatformStats,
@@ -73,7 +74,7 @@ export default async function Home({
 
   try {
     const [productsRes, merchantsRes, statsRes] = await Promise.all([
-      getMasterProducts({ limit: 6 }),
+      getMasterProducts({ categorySlug: 'all', limit: 24 }),
       getCachedMerchantsList(),
       getCachedRatePlatformStats(),
     ]);
@@ -86,6 +87,12 @@ export default async function Home({
       err
     );
   }
+
+  const popularHomeBattles = buildPopular1v1BattlesForCategory(
+    masterProducts,
+    'smartphones',
+    3
+  );
 
   const catSlugById = new Map<string, string>();
   for (const c of platformStats.categoriesWithCounts) {
@@ -411,7 +418,7 @@ export default async function Home({
             </div>
 
             <div className="row g-4">
-              {masterProducts.map((item) => {
+              {masterProducts.slice(0, 6).map((item) => {
                 const minPrice = Number(item.min_price).toLocaleString('vi-VN');
                 const maxPrice = Number(item.max_price).toLocaleString('vi-VN');
                 const priceText =
@@ -551,6 +558,90 @@ export default async function Home({
                 );
               })}
             </div>
+
+            {/* Section 2.5: Popular 1v1 Head-to-Head Flagship Showdowns (#58) */}
+            {popularHomeBattles.length > 0 && (
+              <div className="rate-scoreboard-dark rounded-4 p-md-4 mt-5 p-3">
+                <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                  <div>
+                    <span className="badge bg-danger rounded-pill fw-semibold mb-1 px-3 py-1">
+                      ⚔️ Kèo Đối Đầu 1v1 Tâm Điểm
+                    </span>
+                    <h4 className="h5 fw-bold mb-0 text-white">
+                      Đặt Lên Bàn Cân Các Flagship Đang Được So Kè Nhiều Nhất
+                    </h4>
+                  </div>
+                  <div className="d-flex flex-wrap gap-2">
+                    <Link
+                      href="/leaderboard"
+                      className="btn btn-sm btn-outline-warning rounded-pill px-3"
+                    >
+                      🏆 Bảng Xếp Hạng 5 Ngành →
+                    </Link>
+                    <Link
+                      href="/compare"
+                      className="btn btn-sm btn-outline-light rounded-pill px-3"
+                    >
+                      Bàn Cân 10 Nhóm Thông Số →
+                    </Link>
+                  </div>
+                </div>
+
+                <div className="row g-3">
+                  {popularHomeBattles.map((battle) => (
+                    <div key={battle.versusSlug} className="col-lg-4 col-md-6">
+                      <div
+                        className="rounded-4 d-flex flex-column justify-content-between h-100 p-3"
+                        style={{
+                          background: 'rgba(255,255,255,0.05)',
+                          border: '1px solid rgba(255,255,255,0.12)',
+                        }}
+                      >
+                        <div className="d-flex justify-content-between align-items-center mb-2">
+                          <span className="badge bg-warning text-dark rounded-pill small fw-bold">
+                            #{battle.productA.rank} vs #{battle.productB.rank}
+                          </span>
+                          <span className="small text-white-50 font-monospace">
+                            Chênh {battle.scoreDelta5.toFixed(2)}/5.0
+                          </span>
+                        </div>
+
+                        <div className="d-flex align-items-center justify-content-between my-2 gap-2">
+                          <div className="overflow-hidden">
+                            <div className="small fw-bold text-truncate text-white">
+                              {battle.productA.name}
+                            </div>
+                            <div className="small text-warning font-monospace">
+                              ★ {battle.productA.combinedScore5.toFixed(2)}/5.0
+                            </div>
+                          </div>
+                          <span className="badge bg-danger rounded-pill flex-shrink-0">
+                            VS
+                          </span>
+                          <div className="overflow-hidden text-end">
+                            <div className="small fw-bold text-truncate text-white">
+                              {battle.productB.name}
+                            </div>
+                            <div className="small text-warning font-monospace">
+                              ★ {battle.productB.combinedScore5.toFixed(2)}/5.0
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="border-top border-secondary border-opacity-25 mt-2 pt-2 text-end">
+                          <Link
+                            href={battle.versusHref}
+                            className="btn btn-sm btn-danger rounded-pill fw-semibold w-100"
+                          >
+                            ⚡ Xem Chấm Điểm Đối Đầu 1v1 →
+                          </Link>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </section>
       )}

@@ -130,6 +130,9 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc **4 T�
   - Bổ sung `buildPopular1v1BattlesForCategory` trong `leaderboard-engine.ts` tự động tổng hợp các cặp đối đầu 1v1 đỉnh cao cùng danh mục (`#1 vs #2`, `#1 vs #3`, `#2 vs #3`) hiển thị trực tiếp trên `/compare` (`CompareWorkspace.tsx`) và `/leaderboard` (`LeaderboardExplorer.tsx`).
   - Triển khai nút `📋 Sao chép bảng Markdown` và `⚡ Trang 1v1 chuyên sâu` trên `CompareWorkspace.tsx` cho phép xuất báo cáo đối chiếu định dạng bảng Markdown chuẩn để chia sẻ nhanh lên diễn đàn/nhóm công nghệ.
   - Mở rộng `apps/web/src/app/sitemap.ts` bao phủ toàn bộ 5 ngành hàng (`categorySlug: 'all'`), 22 thiết bị chuẩn hóa, `/leaderboard` và các đường dẫn đối đầu `/compare/<slugA>-vs-<slugB>` tiêu biểu của cả 5 danh mục.
+- [x] **4.29 & 4.30. Bảng Điểm Đối Đầu 1v1 Tương Tác Trọng Số (`VersusInteractiveScoreboard` Trên `/compare/[versus]`) & Khối Kèo Đối Đầu 1v1 Tâm Điểm Trên Trang Chủ + Danh Mục 5 Ngành Hàng (Issue #57 & Issue #58):**
+  - Xây dựng `VersusInteractiveScoreboard.tsx` trên `/compare/[versus]` hỗ trợ chọn nhanh 5 kịch bản nhu cầu (`Cân bằng`, `Chụp ảnh / Âm thanh`, `Chiến Game nặng`, `Pin trâu 2 ngày`, `Ngon-Bổ-Rẻ P/P`), thanh trượt tùy chỉnh trọng số 5 tiêu chí JReviews (`0..100%`), nút `📋 Sao chép kết luận 1v1` và `⇄ Đảo chiều A/B` (`/compare/<slugB>-vs-<slugA>`).
+  - Bổ sung khu vực **Kèo Đối Đầu 1v1 Tâm Điểm** (`popularHomeBattles`) ngay trên Trang chủ (`apps/web/src/app/[locale]/page.tsx`) và liên kết `⚔️ Kèo 1v1` + `🏆 Bảng Xếp Hạng` trực tiếp trên thanh tiêu đề của cả 5 trang Danh mục ngành hàng (`CategoryCatalogContent`).
 
 ### ✅ Phase 5: Mở Rộng Đa Sàn 10/10 Nền Tảng, Browser Extension MV3 & Tự Động Hóa Cảnh Báo Giá (Đã hoàn thành 100%)
 
