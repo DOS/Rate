@@ -136,6 +136,9 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc **4 T�
 - [x] **4.31 & 4.32. Nút Chia Sẻ & Xuất Hồ Sơ Kiểm Toán 1-Chạm (`ProductShareAuditButton`) Trên `ProductDetailView` + REST API Đối Đầu 1v1 (`GET /api/v1/rate/versus` & OpenAPI 3.1.0 - Issue #60 & Issue #61):**
   - Xây dựng `ProductShareAuditButton.tsx` tích hợp ngay trong bảng điểm `.rate-scoreboard-dark` của `ProductDetailView`, cho phép sao chép hồ sơ kiểm toán Markdown đầy đủ (Điểm kép JReviews, 5 tiêu chí, tỷ lệ bình luận thật và giá đáy 10 sàn) hoặc chia sẻ liên kết trực tiếp qua Web Share API.
   - Xuất bản REST API v1 `GET /api/v1/rate/versus?pair=<slugA>-vs-<slugB>` (`apps/web/src/app/api/v1/rate/versus/route.ts`) hỗ trợ chấm điểm đối đầu 1v1 theo Persona/trọng số tùy biến, khóa chặt so sánh cùng ngành hàng (`Same-Category Lock`), cập nhật đặc tả OpenAPI 3.1.0 (`v1.5.0`) và bổ sung kịch bản chạy thử trực tiếp trên `/developers` (`ApiPlaygroundClient.tsx`).
+- [x] **4.33 & 4.34. Bộ Tính Hiệu Suất Đầu Tư & Chi Phí Sở Hữu 12-36 Tháng (`ProductValueCalculator`) + Xuất Biên Bản Kiểm Định Markdown 1-Chạm Trên `/inspect` & `/merchants/[id]` (Issue #62 & Issue #63):**
+  - Xây dựng `ProductValueCalculator.tsx` trên `ProductDetailView` và bổ sung 2 hàng chỉ số kinh tế (`Hiệu suất Giá / Điểm JReviews` và `Chi phí sở hữu quy đổi 24 tháng`) trên `CompareWorkspace.tsx`, giúp định lượng chi phí trên mỗi `1.0` điểm JReviews và chi phí thực tế mỗi ngày có tính thu cũ đổi mới.
+  - Xây dựng `MerchantShareAuditButton.tsx` trên `/merchants/[id]` và tích hợp nút `📋 Sao chép biên bản Markdown` trên `DeepInspectWorkspace.tsx` (`/inspect`), cho phép xuất nhanh biên bản kiểm toán giá 5 mức và điểm rủi ro kép của gian hàng.
 
 ### ✅ Phase 5: Mở Rộng Đa Sàn 10/10 Nền Tảng, Browser Extension MV3 & Tự Động Hóa Cảnh Báo Giá (Đã hoàn thành 100%)
 

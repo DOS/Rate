@@ -12,6 +12,7 @@ import FooterTop from '../../components/footer-top';
 import FooterDynamic from '../../components/footer/FooterDynamic';
 import BackToTop from '../../components/back-to-top';
 import CompareTrayBar from '@/components/compare/CompareTrayBar';
+import MerchantShareAuditButton from '@/components/merchants/MerchantShareAuditButton';
 import {
   BsBoxSeam,
   BsCheckCircleFill,
@@ -308,6 +309,23 @@ export default async function MerchantProfilePage({
                     Đối chiếu nguồn trên {merchant.platform.toUpperCase()} ↗
                   </a>
                 )}
+                <MerchantShareAuditButton
+                  merchantName={merchant.name}
+                  platform={merchant.platform}
+                  platformShopId={merchant.platform_shop_id}
+                  isOfficial={merchant.is_official}
+                  trustScore={merchant.trust_score}
+                  trustLevelLabel={trustLevelLabel}
+                  dosafeRiskScore={merchant.dosafe_risk_score}
+                  reviewSeedingRiskScore={merchant.review_risk_score}
+                  authenticReviews={brk.authentic_count}
+                  totalReviews={brk.total_reviews}
+                  flaggedReviews={Math.max(
+                    0,
+                    brk.total_reviews - brk.authentic_count
+                  )}
+                  productCount={merchant.product_count}
+                />
               </div>
             </div>
           </div>

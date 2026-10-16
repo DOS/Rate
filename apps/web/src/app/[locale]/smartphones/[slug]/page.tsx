@@ -22,9 +22,13 @@ import type { KeySpecs, ProductSpecifications } from '@repo/shared-data';
 
 import { normalizeRateLocale } from '@/lib/rate-i18n';
 import { getSpecUiDictionary, localizeSpecValue } from '@/lib/spec-localizer';
-import { computeProductStandingInCategory } from '@/lib/leaderboard-engine';
+import {
+  computeProductStandingInCategory,
+  scoreMasterProductForLeaderboard,
+} from '@/lib/leaderboard-engine';
 import ProductLeaderboardBadges from '@/components/leaderboard/ProductLeaderboardBadges';
 import ProductShareAuditButton from '@/components/leaderboard/ProductShareAuditButton';
+import ProductValueCalculator from '@/components/leaderboard/ProductValueCalculator';
 
 export type PageParams = Promise<{ locale: string; slug: string }>;
 
@@ -1456,6 +1460,26 @@ export async function ProductDetailView({
             </div>
           )}
         </div>
+
+        {/* Interactive Value Efficiency & 2-Year Ownership Calculator (#62) */}
+        {(() => {
+          const lbScored = scoreMasterProductForLeaderboard(
+            product,
+            'combined'
+          );
+          return (
+            <ProductValueCalculator
+              productName={product.name}
+              brand={product.brand}
+              categorySlug={categorySlug}
+              minPriceVnd={Number(product.min_price || 0)}
+              maxPriceVnd={Number(product.max_price || product.min_price || 0)}
+              userScore5={lbScored.userScore5}
+              expertScore10={lbScored.expertScore10}
+              valueCriterionScore5={lbScored.criteria.value}
+            />
+          );
+        })()}
 
         {/* Related Competitors & 1-Click Head-to-Head Compare */}
         {relatedCompetitors.length > 0 && (
