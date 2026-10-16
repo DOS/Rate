@@ -1,4 +1,3 @@
-import React from 'react';
 import { getTranslations } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
 import NavbarDarkDynamic from './components/navbar/NavbarDarkDynamic';
@@ -15,9 +14,9 @@ export default async function NotFound() {
         <div className="container py-5">
           <div className="row justify-content-center">
             <div className="col-lg-8">
-              <div className="card border-0 rounded-4 shadow-sm p-4 p-md-5 text-center bg-white">
+              <div className="card rounded-4 p-md-5 border-0 bg-white p-4 text-center shadow-sm">
                 <div className="mb-3">
-                  <span className="badge bg-danger bg-opacity-10 text-danger rounded-pill px-3 py-2 fw-semibold">
+                  <span className="badge bg-danger bg-opacity-10 text-danger rounded-pill fw-semibold px-3 py-2">
                     404 - Rate.vn Catalog
                   </span>
                 </div>
@@ -25,28 +24,28 @@ export default async function NotFound() {
                 <p className="text-muted mb-2">{t('description')}</p>
                 <p className="small text-secondary mb-4">{t('solution')}</p>
 
-                <div className="d-flex flex-wrap justify-content-center gap-2 mb-4">
+                <div className="d-flex justify-content-center mb-4 flex-wrap gap-2">
                   <Link
                     href="/"
-                    className="btn btn-danger rounded-pill px-4 fw-semibold"
+                    className="btn btn-danger rounded-pill fw-semibold px-4"
                   >
                     {t('redirect')}
                   </Link>
                   <Link
                     href="/compare"
-                    className="btn btn-outline-dark rounded-pill px-4 fw-medium"
+                    className="btn btn-outline-dark rounded-pill fw-medium px-4"
                   >
                     ⚖️ Compare 10 Spec Groups
                   </Link>
                   <Link
                     href="/merchants"
-                    className="btn btn-outline-secondary rounded-pill px-4 fw-medium"
+                    className="btn btn-outline-secondary rounded-pill fw-medium px-4"
                   >
                     🛡️ Merchant Trust
                   </Link>
                 </div>
 
-                <div className="pt-4 border-top d-flex flex-wrap justify-content-center gap-2">
+                <div className="border-top d-flex justify-content-center flex-wrap gap-2 pt-4">
                   <Link
                     href="/smartphones"
                     className="btn btn-sm btn-light rounded-pill px-3"

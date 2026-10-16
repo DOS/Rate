@@ -1,4 +1,3 @@
-import React from 'react';
 import { Link } from '@/lib/navigation';
 import Image from 'next/image';
 import { FaFacebookF, FaInstagram } from 'react-icons/fa';

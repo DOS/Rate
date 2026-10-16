@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import * as Sentry from '@sentry/nextjs';
 import { useTranslations } from 'next-intl';
 import { Link } from '@/lib/navigation';
@@ -21,13 +21,13 @@ export default function Error({ error, reset }: Props) {
   const isDev = isDevelopment();
 
   return (
-    <section className="bg-light py-5 min-vh-100 d-flex align-items-center">
+    <section className="bg-light min-vh-100 d-flex align-items-center py-5">
       <div className="container py-5">
         <div className="row justify-content-center">
           <div className="col-lg-7">
-            <div className="card border-0 rounded-4 shadow-sm p-4 p-md-5 text-center bg-white">
+            <div className="card rounded-4 p-md-5 border-0 bg-white p-4 text-center shadow-sm">
               <div className="mb-3">
-                <span className="badge bg-danger bg-opacity-10 text-danger rounded-pill px-3 py-2 fw-semibold">
+                <span className="badge bg-danger bg-opacity-10 text-danger rounded-pill fw-semibold px-3 py-2">
                   Rate.vn System Guard
                 </span>
               </div>
@@ -40,24 +40,24 @@ export default function Error({ error, reset }: Props) {
               </p>
 
               {isDev && error.stack && (
-                <div className="text-start bg-dark text-light rounded-3 p-3 mb-4 small overflow-auto">
+                <div className="bg-dark text-light rounded-3 small mb-4 overflow-auto p-3 text-start">
                   <pre className="mb-0">
                     {error.stack.split('\n').slice(0, 7).join('\n')}
                   </pre>
                 </div>
               )}
 
-              <div className="d-flex flex-wrap justify-content-center gap-2">
+              <div className="d-flex justify-content-center flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={() => reset()}
-                  className="btn btn-danger rounded-pill px-4 fw-semibold"
+                  className="btn btn-danger rounded-pill fw-semibold px-4"
                 >
                   🔄 {t('tryAgain')}
                 </button>
                 <Link
                   href="/"
-                  className="btn btn-outline-dark rounded-pill px-4 fw-medium"
+                  className="btn btn-outline-dark rounded-pill fw-medium px-4"
                 >
                   🏠 Rate.vn Home
                 </Link>

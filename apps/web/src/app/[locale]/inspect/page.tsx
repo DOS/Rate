@@ -1,4 +1,4 @@
-import React, { Suspense } from 'react';
+import { Suspense } from 'react';
 import type { Metadata } from 'next';
 import { getCachedInspectProductOrShopUrl } from '@/server/rate';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
@@ -21,14 +21,14 @@ export async function generateMetadata({
       lang === 'en'
         ? 'Deep URL & Fake Discount Inspector | Rate.vn'
         : lang === 'cs'
-        ? 'Hloubkový audit URL a falešných slev | Rate.vn'
-        : 'Trung Tâm Kiểm Toán Link Đa Sàn & Phát Hiện Giảm Giá Ảo | Rate.vn',
+          ? 'Hloubkový audit URL a falešných slev | Rate.vn'
+          : 'Trung Tâm Kiểm Toán Link Đa Sàn & Phát Hiện Giảm Giá Ảo | Rate.vn',
     description:
       lang === 'en'
         ? 'Paste any Shopee, Lazada, Tiki, or TikTok Shop link to verify true historical prices, Dual Merchant Risk Scores, and AI Review Seeding analysis.'
         : lang === 'cs'
-        ? 'Vložte odkaz ze Shopee, Lazada nebo Tiki a ověřte skutečnou historii cen, duální skóre rizika obchodu a AI analýzu recenzí.'
-        : 'Dán link sản phẩm Shopee, Lazada, Tiki, TikTok Shop để kiểm tra lịch sử giá thật, phát hiện nâng khống giá gốc và chấm điểm rủi ro kép của gian hàng.',
+          ? 'Vložte odkaz ze Shopee, Lazada nebo Tiki a ověřte skutečnou historii cen, duální skóre rizika obchodu a AI analýzu recenzí.'
+          : 'Dán link sản phẩm Shopee, Lazada, Tiki, TikTok Shop để kiểm tra lịch sử giá thật, phát hiện nâng khống giá gốc và chấm điểm rủi ro kép của gian hàng.',
   };
 }
 
@@ -51,7 +51,9 @@ export default async function InspectPage({
   return (
     <>
       <NavbarDarkDynamic links={[]} />
-      <Suspense fallback={<div className="container py-5 text-center">Loading...</div>}>
+      <Suspense
+        fallback={<div className="container py-5 text-center">Loading...</div>}
+      >
         <DeepInspectWorkspace
           initialQuery={initialQuery}
           initialInspection={initialInspection}
