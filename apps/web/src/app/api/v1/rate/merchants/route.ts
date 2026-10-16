@@ -1,6 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getMerchantsList } from '@/server/rate';
 
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+};
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: CORS_HEADERS });
+}
+
 /**
  * GET /api/v1/rate/merchants
  * Returns tracked merchants with Dual Risk Scores (DOSafe + AI Review Risk) and listing counts.
@@ -47,6 +57,7 @@ export async function GET(request: NextRequest) {
       {
         status: 200,
         headers: {
+          ...CORS_HEADERS,
           'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300',
         },
       }
@@ -54,6 +65,9 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : 'Internal server error';
-    return NextResponse.json({ ok: false, error: message }, { status: 500 });
+    return NextResponse.json(
+      { ok: false, error: message },
+      { status: 500, headers: CORS_HEADERS }
+    );
   }
 }

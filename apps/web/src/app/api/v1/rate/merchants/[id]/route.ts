@@ -1,6 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCachedMerchantProfileById } from '@/server/rate';
 
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+};
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: CORS_HEADERS });
+}
+
 type RouteContext = {
   params: Promise<{ id: string }>;
 };
@@ -21,7 +31,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
           ok: false,
           error: `Merchant not found for id/slug: ${id}`,
         },
-        { status: 404 }
+        { status: 404, headers: CORS_HEADERS }
       );
     }
 
@@ -33,6 +43,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
       {
         status: 200,
         headers: {
+          ...CORS_HEADERS,
           'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300',
         },
       }
@@ -40,6 +51,9 @@ export async function GET(_request: NextRequest, context: RouteContext) {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : 'Internal server error';
-    return NextResponse.json({ ok: false, error: message }, { status: 500 });
+    return NextResponse.json(
+      { ok: false, error: message },
+      { status: 500, headers: CORS_HEADERS }
+    );
   }
 }

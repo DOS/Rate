@@ -152,6 +152,89 @@ async function fetchAndRenderDealRadar(
   }
 }
 
+interface MerchantTrustFeedItem {
+  id: string;
+  platform: string;
+  name: string;
+  slug: string | null;
+  is_official: boolean;
+  dosafe_risk_score: number;
+  review_risk_score: number;
+  risk_score: number;
+  trust_score: number;
+  product_count: number;
+}
+
+async function fetchAndRenderMerchantTrustDirectory(
+  settings: ExtensionSettings,
+  platform?: string
+): Promise<void> {
+  const slot = document.getElementById('merchant-trust-slot');
+  if (!slot) return;
+
+  try {
+    const res = await fetch(
+      `${settings.apiBaseUrl}/api/v1/rate/merchants?sort=trust_desc&limit=18`
+    );
+    if (!res.ok) return;
+    const json = (await res.json()) as {
+      ok?: boolean;
+      data?: MerchantTrustFeedItem[];
+    };
+    const allMerchants = json?.data || [];
+    if (allMerchants.length === 0) return;
+
+    const sorted = [...allMerchants].sort((a, b) => {
+      if (platform) {
+        const aMatch =
+          a.platform.toLowerCase() === platform.toLowerCase() ? 1 : 0;
+        const bMatch =
+          b.platform.toLowerCase() === platform.toLowerCase() ? 1 : 0;
+        if (aMatch !== bMatch) return bMatch - aMatch;
+      }
+      return b.trust_score - a.trust_score || b.product_count - a.product_count;
+    });
+
+    slot.innerHTML = `
+      <div class="card">
+        <div class="card-title">🛡️ Kiểm Toán Độ Tin Cậy Đại Lý 10 Sàn (${allMerchants.length})</div>
+        ${sorted
+          .slice(0, 5)
+          .map((m) => {
+            const detailHref = `${settings.apiBaseUrl}/merchants/${encodeURIComponent(m.slug || m.id)}`;
+            const trustColor =
+              m.trust_score >= 85
+                ? '#34d399'
+                : m.trust_score >= 65
+                  ? '#fbbf24'
+                  : '#f87171';
+            return `
+              <div class="offer-item">
+                <div>
+                  <div class="offer-shop">
+                    <a href="${escapeHtml(detailHref)}" target="_blank" rel="noopener noreferrer" style="color:#f3f4f6;text-decoration:none;">
+                      ${escapeHtml(m.name)}
+                    </a>
+                    ${m.is_official ? '<span style="color:#34d399;font-size:11px;">[Mall]</span>' : ''}
+                  </div>
+                  <div class="offer-meta">
+                    ${escapeHtml(m.platform.toUpperCase())} (${m.product_count} SP) - DOSafe: ${m.dosafe_risk_score} | Seeding: ${m.review_risk_score}
+                  </div>
+                </div>
+                <a href="${escapeHtml(detailHref)}" target="_blank" rel="noopener noreferrer" class="offer-price" style="text-decoration:none;color:${trustColor};">
+                  Trust ${m.trust_score}/100
+                </a>
+              </div>
+            `;
+          })
+          .join('')}
+      </div>
+    `;
+  } catch {
+    // Non-blocking merchant trust directory
+  }
+}
+
 function renderPanelContent(
   root: HTMLElement,
   signal: ExtractedPageProductSignal | null,
@@ -168,8 +251,10 @@ function renderPanelContent(
         </p>
       </div>
       <div id="deal-radar-slot"></div>
+      <div id="merchant-trust-slot"></div>
     `;
     void fetchAndRenderDealRadar(settings);
+    void fetchAndRenderMerchantTrustDirectory(settings);
     return;
   }
 
@@ -183,8 +268,10 @@ function renderPanelContent(
         </p>
       </div>
       <div id="deal-radar-slot"></div>
+      <div id="merchant-trust-slot"></div>
     `;
     void fetchAndRenderDealRadar(settings);
+    void fetchAndRenderMerchantTrustDirectory(settings, signal.platform);
     return;
   }
 
@@ -455,9 +542,11 @@ function renderPanelContent(
     ${reviewHtml}
     ${merchantRiskHtml}
     <div id="deal-radar-slot"></div>
+    <div id="merchant-trust-slot"></div>
   `;
 
   void fetchAndRenderDealRadar(settings, categorySlug);
+  void fetchAndRenderMerchantTrustDirectory(settings, signal.platform);
 
   root.querySelectorAll<HTMLButtonElement>('.variant-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
