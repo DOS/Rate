@@ -133,6 +133,9 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc **4 T�
 - [x] **4.29 & 4.30. Bảng Điểm Đối Đầu 1v1 Tương Tác Trọng Số (`VersusInteractiveScoreboard` Trên `/compare/[versus]`) & Khối Kèo Đối Đầu 1v1 Tâm Điểm Trên Trang Chủ + Danh Mục 5 Ngành Hàng (Issue #57 & Issue #58):**
   - Xây dựng `VersusInteractiveScoreboard.tsx` trên `/compare/[versus]` hỗ trợ chọn nhanh 5 kịch bản nhu cầu (`Cân bằng`, `Chụp ảnh / Âm thanh`, `Chiến Game nặng`, `Pin trâu 2 ngày`, `Ngon-Bổ-Rẻ P/P`), thanh trượt tùy chỉnh trọng số 5 tiêu chí JReviews (`0..100%`), nút `📋 Sao chép kết luận 1v1` và `⇄ Đảo chiều A/B` (`/compare/<slugB>-vs-<slugA>`).
   - Bổ sung khu vực **Kèo Đối Đầu 1v1 Tâm Điểm** (`popularHomeBattles`) ngay trên Trang chủ (`apps/web/src/app/[locale]/page.tsx`) và liên kết `⚔️ Kèo 1v1` + `🏆 Bảng Xếp Hạng` trực tiếp trên thanh tiêu đề của cả 5 trang Danh mục ngành hàng (`CategoryCatalogContent`).
+- [x] **4.31 & 4.32. Nút Chia Sẻ & Xuất Hồ Sơ Kiểm Toán 1-Chạm (`ProductShareAuditButton`) Trên `ProductDetailView` + REST API Đối Đầu 1v1 (`GET /api/v1/rate/versus` & OpenAPI 3.1.0 - Issue #60 & Issue #61):**
+  - Xây dựng `ProductShareAuditButton.tsx` tích hợp ngay trong bảng điểm `.rate-scoreboard-dark` của `ProductDetailView`, cho phép sao chép hồ sơ kiểm toán Markdown đầy đủ (Điểm kép JReviews, 5 tiêu chí, tỷ lệ bình luận thật và giá đáy 10 sàn) hoặc chia sẻ liên kết trực tiếp qua Web Share API.
+  - Xuất bản REST API v1 `GET /api/v1/rate/versus?pair=<slugA>-vs-<slugB>` (`apps/web/src/app/api/v1/rate/versus/route.ts`) hỗ trợ chấm điểm đối đầu 1v1 theo Persona/trọng số tùy biến, khóa chặt so sánh cùng ngành hàng (`Same-Category Lock`), cập nhật đặc tả OpenAPI 3.1.0 (`v1.5.0`) và bổ sung kịch bản chạy thử trực tiếp trên `/developers` (`ApiPlaygroundClient.tsx`).
 
 ### ✅ Phase 5: Mở Rộng Đa Sàn 10/10 Nền Tảng, Browser Extension MV3 & Tự Động Hóa Cảnh Báo Giá (Đã hoàn thành 100%)
 

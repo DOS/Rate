@@ -24,6 +24,7 @@ import { normalizeRateLocale } from '@/lib/rate-i18n';
 import { getSpecUiDictionary, localizeSpecValue } from '@/lib/spec-localizer';
 import { computeProductStandingInCategory } from '@/lib/leaderboard-engine';
 import ProductLeaderboardBadges from '@/components/leaderboard/ProductLeaderboardBadges';
+import ProductShareAuditButton from '@/components/leaderboard/ProductShareAuditButton';
 
 export type PageParams = Promise<{ locale: string; slug: string }>;
 
@@ -677,6 +678,32 @@ export async function ProductDetailView({
                   >
                     📈 Kiểm định giá ({offers.length} nguồn)
                   </a>
+                  <ProductShareAuditButton
+                    name={product.name}
+                    brand={product.brand}
+                    modelKey={product.model_key}
+                    userScore5={Number(displayUserRating.toFixed(2))}
+                    expertScore10={Number(
+                      (
+                        (product.expert_rating != null
+                          ? Number(product.expert_rating) > 5
+                            ? Number(product.expert_rating) / 2
+                            : Number(product.expert_rating)
+                          : displayUserRating) * 2
+                      ).toFixed(1)
+                    )}
+                    authenticReviews={authenticCount}
+                    minPriceVnd={Number(product.min_price || 0)}
+                    offerCount={offers.length}
+                    keySpecLine={[
+                      keySpecs?.chip,
+                      keySpecs?.ram,
+                      keySpecs?.storage,
+                      keySpecs?.battery,
+                    ]
+                      .filter(Boolean)
+                      .join(' • ')}
+                  />
                 </div>
               </div>
             </div>
