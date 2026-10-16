@@ -35,7 +35,7 @@ Deploy Production trên Vercel theo `vercel.json` ở root (`pnpm@10.34.5`, `--f
 
 Khai báo trong `src/env.mjs`. Đặt trong `apps/web/.env.local` khi chạy local, không commit.
 
-- **Bắt buộc:** `NEXT_PUBLIC_SUPABASE_ANON_KEY`. `NEXT_PUBLIC_SUPABASE_URL` mặc định là project Supabase dùng chung `dos`, chỉ cần đặt khi trỏ sang project khác.
+- **Bắt buộc:** `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`. `src/lib/rate-api.ts` cố ý báo lỗi khi thiếu, để môi trường preview không âm thầm đọc nhầm project prod (giá trị mặc định trong `src/env.mjs` không được data layer dùng).
 - **Tùy chọn:**
   - `APP_PUBLIC_URL` (mặc định `https://rate.vn`), `NEXT_PUBLIC_REVALIDATE`, `NEXT_OUTPUT`, `APP_ENV`;
   - Sentry: `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT`;
