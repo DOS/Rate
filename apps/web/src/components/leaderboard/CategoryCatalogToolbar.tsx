@@ -67,20 +67,17 @@ export default function CategoryCatalogToolbar({
         p.user_rating_weighted && Number(p.user_rating_weighted) > 0
           ? Number(p.user_rating_weighted)
           : Number(p.average_rating || 4.8);
-      const expertScore10 = Number(
-        (
-          (p.expert_rating && Number(p.expert_rating) > 0
-            ? Number(p.expert_rating)
-            : userRating) * 2
-        ).toFixed(1)
-      );
+      const expertScore10 =
+        p.expert_rating && Number(p.expert_rating) > 0
+          ? Number((Number(p.expert_rating) * 2).toFixed(1))
+          : null;
       const radar = radarFor(p.slug);
       return [
         String(idx + 1),
         p.name.replace(/\|/g, '-'),
         p.brand || '-',
         `${userRating.toFixed(1)}/5.0`,
-        `${expertScore10.toFixed(1)}/10`,
+        expertScore10 != null ? `${expertScore10.toFixed(1)}/10` : '-',
         String(p.authentic_review_count || p.total_reviews || 12),
         p.min_price ? `${Number(p.min_price).toLocaleString('vi-VN')} ₫` : '-',
         radarMarkdownCell(radar),
@@ -126,13 +123,10 @@ export default function CategoryCatalogToolbar({
         p.user_rating_weighted && Number(p.user_rating_weighted) > 0
           ? Number(p.user_rating_weighted)
           : Number(p.average_rating || 4.8);
-      const expertScore10 = Number(
-        (
-          (p.expert_rating && Number(p.expert_rating) > 0
-            ? Number(p.expert_rating)
-            : userRating) * 2
-        ).toFixed(1)
-      );
+      const expertScore10 =
+        p.expert_rating && Number(p.expert_rating) > 0
+          ? Number((Number(p.expert_rating) * 2).toFixed(1))
+          : null;
       const radar = radarFor(p.slug);
       return [
         String(idx + 1),
@@ -141,7 +135,7 @@ export default function CategoryCatalogToolbar({
         p.brand || '',
         categorySlug,
         userRating.toFixed(1),
-        expertScore10.toFixed(1),
+        expertScore10 != null ? expertScore10.toFixed(1) : '',
         String(p.authentic_review_count || p.total_reviews || 12),
         String(p.merchant_count || 10),
         String(p.min_price || 0),

@@ -443,9 +443,9 @@ export default async function Home({
                     ? Number(item.user_rating_weighted)
                     : Number(item.average_rating || 4.8);
                 const expertScore =
-                  item.expert_rating != null
+                  item.expert_rating != null && Number(item.expert_rating) > 0
                     ? Number(item.expert_rating)
-                    : userScore;
+                    : null;
                 const authCount =
                   item.authentic_review_count && item.authentic_review_count > 0
                     ? item.authentic_review_count
@@ -511,7 +511,10 @@ export default async function Home({
                           ★ {userScore.toFixed(1)} User ({authCount})
                         </span>
                         <span className="rate-score-badge-expert">
-                          🔬 {expertScore.toFixed(1)} Expert
+                          🔬{' '}
+                          {expertScore != null
+                            ? `${expertScore.toFixed(1)} Expert`
+                            : 'Expert: chưa có'}
                         </span>
                       </div>
 
