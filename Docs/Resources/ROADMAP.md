@@ -157,6 +157,9 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc **4 T�
 - [x] **4.45 & 4.46. Xuất Ma Trận Đối Chiếu Đa Sản Phẩm CSV/JSON Trên `/compare` (`CompareWorkspace`) + Xuất Bảng Chấm Điểm Đối Đầu 1v1 CSV/JSON Trên `/compare/[versus]` (`VersusInteractiveScoreboard`) (Issue #75 & Issue #76):**
   - Nâng cấp `CompareWorkspace.tsx` với 2 nút `📥 CSV` và `📦 JSON` xuất toàn bộ ma trận 10 nhóm thông số kỹ thuật và điểm JReviews của tối đa 4 sản phẩm đang đối chiếu.
   - Nâng cấp `VersusInteractiveScoreboard.tsx` trên `/compare/[versus]` với 2 nút `📥 CSV` và `📦 JSON` xuất bảng điểm đối đầu 1v1 theo trọng số cá nhân hóa và 5 tiêu chí cốt lõi.
+- [x] **4.47 & 4.48. Trung Tâm Săn Deal Đã Kiểm Định `/deals` (`DealFinderWorkspace`) Kèm Xuất Markdown/CSV/JSON + Xuất Biên Bản Kiểm Toán CSV/JSON Trên `/inspect` & `/merchants/[id]` (Issue #77 & Issue #78):**
+  - Xây dựng trang `/deals` (`apps/web/src/app/[locale]/deals/page.tsx`) và `DealFinderWorkspace.tsx` lọc thiết bị theo ngân sách, ngành hàng và hồ sơ nhu cầu, kèm 3 nút `📋 Sao chép Markdown`, `📥 Xuất CSV`, `📦 Xuất JSON`.
+  - Nâng cấp `DeepInspectWorkspace.tsx` (`/inspect`) và `MerchantShareAuditButton.tsx` (`/merchants/[id]`) bổ sung xuất biên bản kiểm toán ra `📥 CSV` và `📦 JSON`.
 
 ### ✅ Phase 5: Mở Rộng Đa Sàn 10/10 Nền Tảng, Browser Extension MV3 & Tự Động Hóa Cảnh Báo Giá (Đã hoàn thành 100%)
 

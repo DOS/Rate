@@ -70,6 +70,84 @@ export default function MerchantShareAuditButton({
     }
   };
 
+  const handleDownloadMerchantCsv = () => {
+    if (typeof window === 'undefined') return;
+    const escapeCsv = (val: string | number) => {
+      const str = String(val ?? '');
+      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+    const headers = [
+      'Tên Gian Hàng',
+      'Sàn',
+      'Shop ID',
+      'Phân Loại',
+      'Trust Score (/100)',
+      'Mức Tín Nhiệm',
+      'DOSafe Risk (/100)',
+      'Seeding Risk (/100)',
+      'Review Thật',
+      'Tổng Review',
+      'Review Bị Gắn Cờ',
+      'Số Thiết Bị Theo Dõi',
+    ];
+    const row = [
+      merchantName,
+      platform.toUpperCase(),
+      platformShopId,
+      isOfficial ? 'Official Mall' : 'Standard',
+      trustScore,
+      trustLevelLabel,
+      dosafeRiskScore,
+      reviewSeedingRiskScore,
+      authenticReviews,
+      totalReviews,
+      flaggedReviews,
+      productCount,
+    ];
+    const csvContent = `\uFEFF${headers.map(escapeCsv).join(',')}\n${row.map(escapeCsv).join(',')}`;
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `rate-merchant-${platform}-${platformShopId}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadMerchantJson = () => {
+    if (typeof window === 'undefined') return;
+    const payload = {
+      source: 'Rate.vn Merchant Dual-Risk Audit',
+      exportedAt: new Date().toISOString(),
+      merchant: {
+        name: merchantName,
+        platform,
+        platformShopId,
+        isOfficial,
+        trustScore,
+        trustLevelLabel,
+        dosafeRiskScore,
+        reviewSeedingRiskScore,
+        authenticReviews,
+        totalReviews,
+        flaggedReviews,
+        productCount,
+      },
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: 'application/json;charset=utf-8;',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `rate-merchant-${platform}-${platformShopId}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="d-flex justify-content-center mt-2 flex-wrap gap-2">
       <button
@@ -81,6 +159,22 @@ export default function MerchantShareAuditButton({
         {copiedMd
           ? '✓ Đã chép biên bản Markdown!'
           : '📋 Sao chép biên bản tín nhiệm'}
+      </button>
+      <button
+        type="button"
+        onClick={handleDownloadMerchantCsv}
+        data-testid="merchant-export-csv-btn"
+        className="btn btn-outline-light btn-sm rounded-pill fw-semibold px-3"
+      >
+        📥 CSV
+      </button>
+      <button
+        type="button"
+        onClick={handleDownloadMerchantJson}
+        data-testid="merchant-export-json-btn"
+        className="btn btn-outline-light btn-sm rounded-pill fw-semibold px-3"
+      >
+        📦 JSON
       </button>
       <button
         type="button"
