@@ -197,6 +197,8 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc **4 T�
 - [x] **4.70. Radar Theo Từng Sản Phẩm: Hiển Thị Trên ProductDetailView Và Sửa Lỗi Chỉ 3 Sản Phẩm Đầu Trang Danh Mục Có Huy Hiệu (Issue #106):**
   - Thêm `computeProductRadarSignal(master, offers)` (`apps/web/src/server/rate/deals.ts`) tính tín hiệu Radar độc lập cho từng sản phẩm từ chính các offer đã tải, và hiển thị `RadarBadge` kèm lời giải thích ngay trên `ProductDetailView` (`pdv-radar-signal`).
   - Sửa lỗi trang danh mục gọi Radar với `limit: 3` khiến chỉ 3 sản phẩm đầu có huy hiệu và cột Radar khi xuất; nay dùng `limit: 50` để mọi thẻ đều có tín hiệu. Suite `[37/37]` có kiểm thử chạy thật chống tái diễn.
+- [x] **4.71. Radar Theo Từng Sản Phẩm Trên Thẻ Xếp Hạng /deals Và Trong Xuất Dữ Liệu (Issue #116):**
+  - `DealFinderWorkspace` hiển thị `RadarBadge` trên mỗi thẻ xếp hạng và thêm cột Radar vào xuất Markdown, CSV, JSON; `/deals` dùng `limit: 50` để mọi thẻ đều có tín hiệu. `ProductOffersExplorer` giữ nguyên vì Radar thuộc cấp sản phẩm và đã hiển thị trên `ProductDetailView`.
 
 ### ✅ Phase 5: Mở Rộng Đa Sàn 10/10 Nền Tảng, Browser Extension MV3 & Tự Động Hóa Cảnh Báo Giá (Đã hoàn thành 100%)
 
