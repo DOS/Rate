@@ -18,7 +18,7 @@ import {
   FLAGSHIP_DEVICES_TO_SEED,
   synthesizeCrossPlatformOffersForMaster,
 } from './flagship-seed-data.js';
-import type { ShopeeProduct } from './types.js';
+import type { ShopeeProduct, SupportedEcommercePlatform } from './types.js';
 
 dotenv.config();
 dotenv.config({ path: '../../.env' });
@@ -702,11 +702,10 @@ async function runBackfill() {
       .select('id, platform, title, merchant_id, price_current, price_original, rating_count')
       .eq('cluster_id', m.id);
 
-    const existingPlatforms = Array.from(
-      new Set(
+    const existingPlatforms: SupportedEcommercePlatform[] = Array.from(
+      new Set<SupportedEcommercePlatform>(
         (existingLinkedProducts || []).map(
-          (lp: { platform: string }) =>
-            lp.platform as 'shopee' | 'lazada' | 'tiki' | 'cellphones' | 'tgdd'
+          (lp: { platform: string }) => lp.platform as SupportedEcommercePlatform
         )
       )
     );
@@ -805,7 +804,7 @@ async function runBackfill() {
       }
     }
 
-    // Synthesize & backfill missing platform offers so all 5 platforms (Shopee, Lazada, Tiki, CellphoneS, TGDĐ) are covered
+    // Synthesize & backfill missing platform offers so all 9 platforms (Shopee, Lazada, Tiki, CellphoneS, TGDĐ, FPT Shop, Hoàng Hà, Di Động Việt, Phong Vũ) are covered
     const synthesizedListings = synthesizeCrossPlatformOffersForMaster({
       modelKey: m.model_key,
       name: m.name,
@@ -1039,12 +1038,12 @@ async function runBackfill() {
       `Master product ${row.name} (${row.model_key}) is missing camera.second_camera`
     );
     assert.ok(
-      Number(row.merchant_count) >= 5,
-      `Master product ${row.name} (${row.model_key}) must have >= 5 cross-platform offers (got ${row.merchant_count})`
+      Number(row.merchant_count) >= 9,
+      `Master product ${row.name} (${row.model_key}) must have >= 9 cross-platform offers (got ${row.merchant_count})`
     );
     assert.ok(
-      Number(row.authentic_review_count) >= 5,
-      `Master product ${row.name} (${row.model_key}) must have >= 5 authentic reviews (got ${row.authentic_review_count})`
+      Number(row.authentic_review_count) >= 13,
+      `Master product ${row.name} (${row.model_key}) must have >= 13 authentic reviews (got ${row.authentic_review_count})`
     );
     assert.ok(
       Number(row.user_rating_weighted) >= 4.5,

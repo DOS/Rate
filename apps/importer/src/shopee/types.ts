@@ -4,7 +4,16 @@
  * from private scraper implementations (see DOS/Rate-Services).
  */
 
-export type SupportedEcommercePlatform = 'shopee' | 'lazada' | 'tiki' | 'cellphones' | 'tgdd';
+export type SupportedEcommercePlatform =
+  | 'shopee'
+  | 'lazada'
+  | 'tiki'
+  | 'cellphones'
+  | 'tgdd'
+  | 'fptshop'
+  | 'hoangha'
+  | 'didongviet'
+  | 'phongvu';
 
 export interface ShopeeReview {
   reviewId: string;

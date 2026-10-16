@@ -94,7 +94,7 @@ export const EXTENSION_CAPABILITY_MATRIX: Record<
     lookup: true,
     exactItemMatch: true,
     crossCatalogMatch: true,
-    crowdVerifyQueue: false,
+    crowdVerifyQueue: true,
   },
   hoangha: {
     platform: 'hoangha',
@@ -102,7 +102,7 @@ export const EXTENSION_CAPABILITY_MATRIX: Record<
     lookup: true,
     exactItemMatch: true,
     crossCatalogMatch: true,
-    crowdVerifyQueue: false,
+    crowdVerifyQueue: true,
   },
   didongviet: {
     platform: 'didongviet',
@@ -110,7 +110,7 @@ export const EXTENSION_CAPABILITY_MATRIX: Record<
     lookup: true,
     exactItemMatch: true,
     crossCatalogMatch: true,
-    crowdVerifyQueue: false,
+    crowdVerifyQueue: true,
   },
   phongvu: {
     platform: 'phongvu',
@@ -118,7 +118,7 @@ export const EXTENSION_CAPABILITY_MATRIX: Record<
     lookup: true,
     exactItemMatch: true,
     crossCatalogMatch: true,
-    crowdVerifyQueue: false,
+    crowdVerifyQueue: true,
   },
 };
 
