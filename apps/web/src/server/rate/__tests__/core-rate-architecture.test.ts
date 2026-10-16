@@ -862,7 +862,41 @@ function runCoreArchitectureSuite() {
     'MerchantProfilePage and DeepInspectWorkspace must provide 1-Click Markdown Audit export'
   );
   console.log(
-    '  ✅ [18/18] Value Efficiency & 2-Year Ownership Calculator (#62) & 1-Click Markdown Audit on /inspect + /merchants/[id] (#63) passed'
+    '  ✅ [18/19] Value Efficiency & 2-Year Ownership Calculator (#62) & 1-Click Markdown Audit on /inspect + /merchants/[id] (#63) passed'
+  );
+
+  // 19. Same-Category 1v1 Matchup Switcher (#65) & Watchlist Portfolio Markdown/CSV Export (#66)
+  const matchupSwitcherSrc = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/components/compare/VersusMatchupSwitcher.tsx'
+    ),
+    'utf8'
+  );
+  const versusPageSrcUpdated = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/app/[locale]/compare/[versus]/page.tsx'),
+    'utf8'
+  );
+  const watchlistWorkspaceSrc = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/components/watchlist/WatchlistWorkspace.tsx'
+    ),
+    'utf8'
+  );
+  assert.ok(
+    matchupSwitcherSrc.includes('getMasterProductCategorySlug') &&
+      versusPageSrcUpdated.includes('VersusMatchupSwitcher'),
+    'VersusMatchupSwitcher must enforce Same-Category Lock and be rendered on /compare/[versus]'
+  );
+  assert.ok(
+    watchlistWorkspaceSrc.includes('handleCopyPortfolioMarkdown') &&
+      watchlistWorkspaceSrc.includes('handleDownloadPortfolioCsv') &&
+      watchlistWorkspaceSrc.includes('portfolioStats'),
+    'WatchlistWorkspace must provide Portfolio Value Summary and 1-Click Markdown/CSV export'
+  );
+  console.log(
+    '  ✅ [19/19] Same-Category 1v1 Matchup Switcher (#65) & Watchlist Portfolio Markdown/CSV Export (#66) passed'
   );
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }

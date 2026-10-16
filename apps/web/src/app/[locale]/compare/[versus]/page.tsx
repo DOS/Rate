@@ -17,6 +17,7 @@ import BackToTop from '../../components/back-to-top';
 import CompareWorkspace from '@/components/compare/CompareWorkspace';
 import CompareTrayBar from '@/components/compare/CompareTrayBar';
 import VersusInteractiveScoreboard from '@/components/compare/VersusInteractiveScoreboard';
+import VersusMatchupSwitcher from '@/components/compare/VersusMatchupSwitcher';
 
 export const revalidate = 60;
 
@@ -210,6 +211,14 @@ export default async function VersusComparePage({ params }: VersusPageProps) {
           <VersusInteractiveScoreboard
             scoreA={scoreA}
             scoreB={scoreB}
+            locale={locale}
+          />
+
+          <VersusMatchupSwitcher
+            currentSlugA={scoreA.slug}
+            currentSlugB={scoreB.slug}
+            categorySlug={catSlug}
+            catalogCandidates={directory}
             locale={locale}
           />
         </div>

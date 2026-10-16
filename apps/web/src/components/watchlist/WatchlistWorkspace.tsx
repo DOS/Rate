@@ -63,6 +63,7 @@ export default function WatchlistWorkspace({
   const [subscriberEmail, setSubscriberEmail] = useState<string>('');
   const [cloudSyncStatus, setCloudSyncStatus] = useState<string | null>(null);
   const [isSyncingCloud, setIsSyncingCloud] = useState<boolean>(false);
+  const [copiedPortfolioMd, setCopiedPortfolioMd] = useState<boolean>(false);
 
   useEffect(() => {
     const sync = () => setItems(getWatchlist());
@@ -173,6 +174,118 @@ export default function WatchlistWorkspace({
     return currentMin > 0 && currentMin <= item.targetPrice;
   }).length;
 
+  const portfolioStats = items.reduce(
+    (acc, item) => {
+      const liveProd = productBySlug.get(item.slug);
+      const liveDeal = liveDeals[item.slug];
+      const curMin =
+        liveDeal?.current_min_price ||
+        (liveProd ? Number(liveProd.min_price || 0) : item.priceWhenAdded);
+      const curMax =
+        liveDeal?.current_max_price ||
+        (liveProd ? Number(liveProd.max_price || curMin) : curMin);
+      const userR = liveProd
+        ? Number(
+            liveProd.user_rating_weighted || liveProd.average_rating || 4.7
+          )
+        : 4.7;
+      acc.totalMinVnd += curMin;
+      acc.totalTargetVnd += item.targetPrice;
+      acc.totalSpreadSavingsVnd += Math.max(0, curMax - curMin);
+      acc.ratingSum += userR;
+      return acc;
+    },
+    {
+      totalMinVnd: 0,
+      totalTargetVnd: 0,
+      totalSpreadSavingsVnd: 0,
+      ratingSum: 0,
+    }
+  );
+  const avgPortfolioRating =
+    items.length > 0
+      ? Number((portfolioStats.ratingSum / items.length).toFixed(2))
+      : 0;
+
+  const handleCopyPortfolioMarkdown = async () => {
+    if (typeof window === 'undefined' || items.length === 0) return;
+    try {
+      const lines = [
+        `### 🔔 Danh Mục Theo Dõi Giá & Kiểm Toán Thiết Bị (Rate.vn Watchlist - ${items.length} mẫu)`,
+        `- **Tổng giá trị danh mục (Giá thấp nhất 10 sàn):** ${portfolioStats.totalMinVnd.toLocaleString('vi-VN')} ₫`,
+        `- **Tổng ngân sách mục tiêu đặt canh:** ${portfolioStats.totalTargetVnd.toLocaleString('vi-VN')} ₫`,
+        `- **Tổng mức tiết kiệm chéo giữa các sàn:** ${portfolioStats.totalSpreadSavingsVnd.toLocaleString('vi-VN')} ₫`,
+        `- **Điểm JReviews trung bình danh mục:** ★ ${avgPortfolioRating.toFixed(2)}/5.0`,
+        ``,
+        `| Thiết bị | Hãng | Giá thấp nhất hiện tại | Giá mục tiêu | Trạng thái | Deal tốt nhất |`,
+        `| :--- | :--- | :---: | :---: | :---: | :--- |`,
+        ...items.map((item) => {
+          const liveProd = productBySlug.get(item.slug);
+          const liveDeal = liveDeals[item.slug];
+          const curMin =
+            liveDeal?.current_min_price ||
+            (liveProd ? Number(liveProd.min_price || 0) : item.priceWhenAdded);
+          const hit = curMin > 0 && curMin <= item.targetPrice;
+          const bestOfferStr = liveDeal?.best_offer
+            ? `${liveDeal.best_offer.merchant_name} (${liveDeal.best_offer.platform.toUpperCase()})`
+            : `${liveProd?.merchant_count || 1} nguồn`;
+          return `| ${item.name} | ${item.brand} | ${curMin.toLocaleString('vi-VN')} ₫ | ${item.targetPrice.toLocaleString('vi-VN')} ₫ | ${hit ? '✅ Đạt mục tiêu' : '⏳ Đang canh'} | ${bestOfferStr} |`;
+        }),
+      ];
+      await navigator.clipboard.writeText(lines.join('\n'));
+      setCopiedPortfolioMd(true);
+      setTimeout(() => setCopiedPortfolioMd(false), 2200);
+    } catch {
+      // Ignore clipboard permission errors
+    }
+  };
+
+  const handleDownloadPortfolioCsv = () => {
+    if (typeof window === 'undefined' || items.length === 0) return;
+    const headers = [
+      'Slug',
+      'Product Name',
+      'Brand',
+      'Category Path',
+      'Current Lowest Price (VND)',
+      'Target Price (VND)',
+      'Status',
+      'Best Merchant',
+      'Platform',
+    ];
+    const rows = items.map((item) => {
+      const liveProd = productBySlug.get(item.slug);
+      const liveDeal = liveDeals[item.slug];
+      const curMin =
+        liveDeal?.current_min_price ||
+        (liveProd ? Number(liveProd.min_price || 0) : item.priceWhenAdded);
+      const hit = curMin > 0 && curMin <= item.targetPrice;
+      const esc = (v: string | number) =>
+        `"${String(v ?? '').replace(/"/g, '""')}"`;
+      return [
+        esc(item.slug),
+        esc(item.name),
+        esc(item.brand),
+        esc(item.categoryPath || '/smartphones'),
+        esc(curMin),
+        esc(item.targetPrice),
+        esc(hit ? 'TARGET_REACHED' : 'WATCHING'),
+        esc(liveDeal?.best_offer?.merchant_name || ''),
+        esc(liveDeal?.best_offer?.platform || ''),
+      ].join(',');
+    });
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `rate-vn-watchlist-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="container py-5">
       {/* Header Banner (DESIGN.md v3.0 Dark Obsidian Command Header) */}
@@ -192,6 +305,26 @@ export default function WatchlistWorkspace({
             </p>
           </div>
           <div className="d-flex flex-wrap gap-2">
+            {items.length > 0 && (
+              <>
+                <button
+                  type="button"
+                  onClick={handleCopyPortfolioMarkdown}
+                  className="btn btn-outline-light rounded-pill btn-sm fw-semibold px-3"
+                >
+                  {copiedPortfolioMd
+                    ? '✓ Đã sao chép Markdown!'
+                    : '📋 Sao chép danh mục Markdown'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDownloadPortfolioCsv}
+                  className="btn btn-outline-light rounded-pill btn-sm fw-semibold px-3"
+                >
+                  📥 Xuất bảng CSV
+                </button>
+              </>
+            )}
             <Link
               href="/inspect"
               className="btn btn-outline-light rounded-pill px-4"
@@ -226,6 +359,78 @@ export default function WatchlistWorkspace({
             })()}
           </div>
         </div>
+
+        {/* Portfolio Value & Savings Summary Strip (#66) */}
+        {items.length > 0 && (
+          <div className="row g-3 border-top border-secondary border-opacity-25 mt-3 pt-3">
+            <div className="col-md-3 col-6">
+              <div
+                className="rounded-3 h-100 p-3"
+                style={{
+                  background: 'rgba(255,255,255,0.04)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                }}
+              >
+                <div className="small text-white-50 mb-1">
+                  Tổng giá trị danh mục (Giá đáy)
+                </div>
+                <div className="h5 fw-bold font-monospace rate-tabular mb-0 text-white">
+                  {portfolioStats.totalMinVnd.toLocaleString('vi-VN')} ₫
+                </div>
+              </div>
+            </div>
+            <div className="col-md-3 col-6">
+              <div
+                className="rounded-3 h-100 p-3"
+                style={{
+                  background: 'rgba(255,255,255,0.04)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                }}
+              >
+                <div className="small text-white-50 mb-1">
+                  Tổng ngân sách mục tiêu
+                </div>
+                <div className="h5 fw-bold font-monospace text-info rate-tabular mb-0">
+                  {portfolioStats.totalTargetVnd.toLocaleString('vi-VN')} ₫
+                </div>
+              </div>
+            </div>
+            <div className="col-md-3 col-6">
+              <div
+                className="rounded-3 h-100 p-3"
+                style={{
+                  background: 'rgba(16,185,129,0.1)',
+                  border: '1px solid rgba(16,185,129,0.28)',
+                }}
+              >
+                <div className="small text-white-50 mb-1">
+                  Tiết kiệm chéo giữa 10 sàn
+                </div>
+                <div className="h5 fw-bold font-monospace text-success rate-tabular mb-0">
+                  +
+                  {portfolioStats.totalSpreadSavingsVnd.toLocaleString('vi-VN')}{' '}
+                  ₫
+                </div>
+              </div>
+            </div>
+            <div className="col-md-3 col-6">
+              <div
+                className="rounded-3 h-100 p-3"
+                style={{
+                  background: 'rgba(255,255,255,0.04)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                }}
+              >
+                <div className="small text-white-50 mb-1">
+                  Điểm JReviews trung bình danh mục
+                </div>
+                <div className="h5 fw-bold font-monospace text-warning rate-tabular mb-0">
+                  ★ {avgPortfolioRating.toFixed(2)} / 5.0
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {items.length > 0 && (
           <form
