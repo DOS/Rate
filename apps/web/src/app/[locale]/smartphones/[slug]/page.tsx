@@ -21,6 +21,9 @@ import BackToTop from '../../components/back-to-top';
 import type { KeySpecs, ProductSpecifications } from '@repo/shared-data';
 
 import { normalizeRateLocale } from '@/lib/rate-i18n';
+import { getSpecUiDictionary, localizeSpecValue } from '@/lib/spec-localizer';
+import { computeProductStandingInCategory } from '@/lib/leaderboard-engine';
+import ProductLeaderboardBadges from '@/components/leaderboard/ProductLeaderboardBadges';
 
 export type PageParams = Promise<{ locale: string; slug: string }>;
 
@@ -103,13 +106,17 @@ export async function ProductDetailView({
   const [offers, reviews, categoryPeers] = await Promise.all([
     getCachedMasterProductOffers(product.id),
     getCachedMasterProductReviews(product.id),
-    getCachedMasterProducts({ categorySlug, limit: 10 }).catch(() => []),
+    getCachedMasterProducts({ categorySlug, limit: 50 }).catch(() => []),
   ]);
   const [reviewSummary, priceHistory] = await Promise.all([
     getCachedMasterProductReviewSummary(product.id, reviews),
     getCachedMasterProductPriceHistory(product.id, offers),
   ]);
 
+  const leaderboardBadges = computeProductStandingInCategory(
+    product,
+    categoryPeers
+  );
   const currentMinPrice = Number(product.min_price || 0);
   const relatedCompetitors = categoryPeers
     .filter((p) => p.slug !== product.slug)
@@ -533,6 +540,11 @@ export async function ProductDetailView({
                   }}
                 />
               </div>
+
+              <ProductLeaderboardBadges
+                badges={leaderboardBadges}
+                locale={locale}
+              />
             </div>
 
             {/* Quick specs grid (Category-adaptive per DESIGN.md v3.0) */}
@@ -703,412 +715,526 @@ export async function ProductDetailView({
         </div>
 
         {/* SECTION #2: 10 Field Groups Specifications (Full 10/10 Canonical Schema per DESIGN.md v3.0) */}
-        <div
-          id="specs-section"
-          className="card rounded-4 p-md-5 mb-5 border-0 p-4 shadow-sm"
-        >
-          <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-2">
-            <h2 className="h4 fw-bold d-flex align-items-center mb-0 gap-2">
-              <span>📋</span> Bảng Thông Số Kỹ Thuật Chi Tiết (10 Nhóm Chuẩn
-              Hóa)
-            </h2>
-            <span className="badge bg-dark-subtle text-dark rounded-pill px-3 py-2">
-              Chuẩn PhoneArena Split Camera + GSMArena 10/10 Groups
-            </span>
-          </div>
-
-          <div className="row g-4">
-            {/* 1. Màn hình (Display) */}
-            <div className="col-md-6 col-12">
-              <div className="rounded-4 h-100 border bg-white p-4">
-                <h3 className="h6 fw-bold text-primary mb-3">
-                  1. Màn hình (Display)
-                </h3>
-                <dl className="row small mb-0">
-                  <dt className="text-muted col-5">Kích thước</dt>
-                  <dd className="fw-medium col-7">
-                    {specs?.display?.size_inch
-                      ? `${specs.display.size_inch} inch`
-                      : product.screen_size_inch
-                        ? `${product.screen_size_inch} inch`
-                        : '-'}
-                  </dd>
-                  <dt className="text-muted col-5">Công nghệ tấm nền</dt>
-                  <dd className="fw-medium col-7">
-                    {specs?.display?.type || keySpecs?.screen || '-'}
-                  </dd>
-                  <dt className="text-muted col-5">Độ phân giải</dt>
-                  <dd className="fw-medium col-7">
-                    {specs?.display?.resolution || '-'}
-                  </dd>
-                  <dt className="text-muted col-5">Tần số quét</dt>
-                  <dd className="fw-medium col-7">
-                    {specs?.display?.refresh_rate_hz
-                      ? `${specs.display.refresh_rate_hz} Hz`
-                      : '-'}
-                  </dd>
-                  <dt className="text-muted col-5">Mật độ điểm ảnh</dt>
-                  <dd className="fw-medium col-7">
-                    {specs?.display?.ppi ? `${specs.display.ppi} ppi` : '-'}
-                  </dd>
-                  <dt className="text-muted col-5">Kính bảo vệ</dt>
-                  <dd className="fw-medium col-7">
-                    {specs?.display?.protection || '-'}
-                  </dd>
-                  <dt className="text-muted col-5">Tính năng hiển thị</dt>
-                  <dd className="fw-medium col-7">
-                    {specs?.display?.features || '-'}
-                  </dd>
-                </dl>
+        {(() => {
+          const specUi = getSpecUiDictionary(locale);
+          const loc = (v: string | number | boolean | null | undefined) =>
+            localizeSpecValue(v, locale);
+          return (
+            <div
+              id="specs-section"
+              className="card rounded-4 p-md-5 mb-5 border-0 p-4 shadow-sm"
+            >
+              <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-2">
+                <div>
+                  <span className="rate-eyebrow text-muted d-block mb-1">
+                    {specUi.sectionEyebrow}
+                  </span>
+                  <h2 className="h4 fw-bold d-flex align-items-center mb-0 gap-2">
+                    <span>📋</span> {specUi.sectionTitle}
+                  </h2>
+                </div>
+                <span className="badge bg-dark-subtle text-dark rounded-pill px-3 py-2">
+                  {specUi.sectionBadge}
+                </span>
               </div>
-            </div>
 
-            {/* 2. Phần cứng & Hiệu năng (Hardware) */}
-            <div className="col-md-6 col-12">
-              <div className="rounded-4 h-100 border bg-white p-4">
-                <h3 className="h6 fw-bold text-primary mb-3">
-                  2. Phần cứng &amp; Hiệu năng (Hardware)
-                </h3>
-                <dl className="row small mb-0">
-                  <dt className="text-muted col-5">Chipset</dt>
-                  <dd className="fw-medium col-7">
-                    {specs?.hardware?.chipset || keySpecs?.chip || '-'}
-                  </dd>
-                  <dt className="text-muted col-5">CPU</dt>
-                  <dd className="fw-medium col-7">
-                    {specs?.hardware?.cpu || '-'}
-                  </dd>
-                  <dt className="text-muted col-5">GPU</dt>
-                  <dd className="fw-medium col-7">
-                    {specs?.hardware?.gpu || '-'}
-                  </dd>
-                  <dt className="text-muted col-5">RAM</dt>
-                  <dd className="fw-medium col-7">
-                    {specs?.hardware?.ram_gb
-                      ? `${specs.hardware.ram_gb} GB`
-                      : product.ram_gb
-                        ? `${product.ram_gb} GB`
-                        : '-'}
-                  </dd>
-                  <dt className="text-muted col-5">Bộ nhớ trong</dt>
-                  <dd className="fw-medium col-7">
-                    {specs?.hardware?.storage_gb
-                      ? `${specs.hardware.storage_gb} GB`
-                      : product.storage_gb
-                        ? `${product.storage_gb} GB`
-                        : '-'}
-                  </dd>
-                  <dt className="text-muted col-5">Mở rộng lưu trữ</dt>
-                  <dd className="fw-medium col-7">
-                    {specs?.hardware?.storage_expansion || '-'}
-                  </dd>
-                  <dt className="text-muted col-5">Hệ điều hành</dt>
-                  <dd className="fw-medium col-7">
-                    {specs?.hardware?.os || '-'}
-                  </dd>
-                </dl>
-              </div>
-            </div>
-
-            {/* 3. Máy ảnh (Camera - PhoneArena Split Architecture) */}
-            <div className="col-md-6 col-12">
-              <div className="rounded-4 h-100 border bg-white p-4">
-                <h3 className="h6 fw-bold text-primary mb-3">
-                  3. Máy ảnh (Camera - PhoneArena Split)
-                </h3>
-                <dl className="row small mb-0">
-                  <dt className="text-muted col-5">Cấu hình cụm sau</dt>
-                  <dd className="fw-medium col-7">
-                    {specs?.camera?.rear_setup || '-'}
-                  </dd>
-                  <dt className="text-muted col-5">Camera chính (Wide)</dt>
-                  <dd className="fw-medium col-7">
-                    {specs?.camera?.main_camera || keySpecs?.camera || '-'}
-                  </dd>
-                  <dt className="text-muted col-5">Camera phụ 2 (Ultrawide)</dt>
-                  <dd className="fw-medium col-7">
-                    {specs?.camera?.second_camera || '-'}
-                  </dd>
-                  <dt className="text-muted col-5">Camera phụ 3 (Telephoto)</dt>
-                  <dd className="fw-medium col-7">
-                    {specs?.camera?.third_camera || '-'}
-                  </dd>
-                  {specs?.camera?.fourth_camera && (
-                    <>
+              <div className="row g-4">
+                {/* 1. Display */}
+                <div className="col-md-6 col-12">
+                  <div className="rounded-4 h-100 border bg-white p-4">
+                    <h3 className="h6 fw-bold text-primary mb-3">
+                      {specUi.groups.display}
+                    </h3>
+                    <dl className="row small mb-0">
                       <dt className="text-muted col-5">
-                        Camera phụ 4 (Periscope/ToF)
+                        {specUi.fields.screenSize}
                       </dt>
                       <dd className="fw-medium col-7">
-                        {specs.camera.fourth_camera}
+                        {specs?.display?.size_inch
+                          ? `${specs.display.size_inch} inch`
+                          : product.screen_size_inch
+                            ? `${product.screen_size_inch} inch`
+                            : '-'}
                       </dd>
-                    </>
-                  )}
-                  <dt className="text-muted col-5">Camera trước (Selfie)</dt>
-                  <dd className="fw-medium col-7">
-                    {specs?.camera?.front_camera || '-'}
-                  </dd>
-                  <dt className="text-muted col-5">Quay video &amp; Flash</dt>
-                  <dd className="fw-medium col-7">
-                    {[specs?.camera?.video_recording, specs?.camera?.flash]
-                      .filter(Boolean)
-                      .join(' | ') || '-'}
-                  </dd>
-                </dl>
-              </div>
-            </div>
-
-            {/* 4. Pin & Sạc (Battery) */}
-            <div className="col-md-6 col-12">
-              <div className="rounded-4 h-100 border bg-white p-4">
-                <h3 className="h6 fw-bold text-primary mb-3">
-                  4. Pin &amp; Sạc (Battery)
-                </h3>
-                <dl className="row small mb-0">
-                  <dt className="text-muted col-5">Dung lượng pin</dt>
-                  <dd className="fw-medium col-7">
-                    {specs?.battery?.capacity_mah
-                      ? `${specs.battery.capacity_mah} mAh`
-                      : product.battery_mah
-                        ? `${product.battery_mah} mAh`
-                        : keySpecs?.battery || '-'}
-                  </dd>
-                  <dt className="text-muted col-5">Loại pin</dt>
-                  <dd className="fw-medium col-7">
-                    {specs?.battery?.type || '-'}
-                  </dd>
-                  <dt className="text-muted col-5">Công nghệ sạc</dt>
-                  <dd className="fw-medium col-7">
-                    {specs?.battery?.charging || '-'}
-                  </dd>
-                  <dt className="text-muted col-5">Công suất sạc nhanh</dt>
-                  <dd className="fw-medium col-7">
-                    {specs?.battery?.fast_charging_w
-                      ? `${specs.battery.fast_charging_w} W`
-                      : '-'}
-                  </dd>
-                  <dt className="text-muted col-5">Sạc ngược</dt>
-                  <dd className="fw-medium col-7">
-                    {typeof specs?.battery?.reverse_charging === 'string'
-                      ? specs.battery.reverse_charging
-                      : specs?.battery?.reverse_charging === true
-                        ? 'Có hỗ trợ'
-                        : specs?.battery?.reverse_charging === false
-                          ? 'Không'
+                      <dt className="text-muted col-5">
+                        {specUi.fields.panelType}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.display?.type || keySpecs?.screen)}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.resolution}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.display?.resolution)}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.refreshRate}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {specs?.display?.refresh_rate_hz
+                          ? `${specs.display.refresh_rate_hz} Hz`
                           : '-'}
-                  </dd>
-                </dl>
-              </div>
-            </div>
+                      </dd>
+                      <dt className="text-muted col-5">{specUi.fields.ppi}</dt>
+                      <dd className="fw-medium col-7">
+                        {specs?.display?.ppi ? `${specs.display.ppi} ppi` : '-'}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.protection}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.display?.protection)}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.displayFeatures}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.display?.features)}
+                      </dd>
+                    </dl>
+                  </div>
+                </div>
 
-            {/* 5. Thiết kế & Độ bền (Design) */}
-            <div className="col-md-6 col-12">
-              <div className="rounded-4 h-100 border bg-white p-4">
-                <h3 className="h6 fw-bold text-primary mb-3">
-                  5. Thiết kế &amp; Độ bền (Design)
-                </h3>
-                <dl className="row small mb-0">
-                  <dt className="text-muted col-5">Kích thước</dt>
-                  <dd className="fw-medium col-7">
-                    {specs?.design?.dimensions || '-'}
-                  </dd>
-                  <dt className="text-muted col-5">Trọng lượng</dt>
-                  <dd className="fw-medium col-7">
-                    {specs?.design?.weight_g
-                      ? `${specs.design.weight_g} g`
-                      : '-'}
-                  </dd>
-                  <dt className="text-muted col-5">Chất liệu &amp; Khung</dt>
-                  <dd className="fw-medium col-7">
-                    {[specs?.design?.materials, specs?.design?.build]
-                      .filter(Boolean)
-                      .join(' | ') || '-'}
-                  </dd>
-                  <dt className="text-muted col-5">Kháng nước, bụi</dt>
-                  <dd className="fw-medium col-7">
-                    {specs?.design?.resistance || '-'}
-                  </dd>
-                  <dt className="text-muted col-5">Bảo mật sinh trắc</dt>
-                  <dd className="fw-medium col-7">
-                    {specs?.design?.biometrics || '-'}
-                  </dd>
-                  <dt className="text-muted col-5">Phím vật lý</dt>
-                  <dd className="fw-medium col-7">
-                    {specs?.design?.keys || '-'}
-                  </dd>
-                </dl>
-              </div>
-            </div>
+                {/* 2. Hardware */}
+                <div className="col-md-6 col-12">
+                  <div className="rounded-4 h-100 border bg-white p-4">
+                    <h3 className="h6 fw-bold text-primary mb-3">
+                      {specUi.groups.hardware}
+                    </h3>
+                    <dl className="row small mb-0">
+                      <dt className="text-muted col-5">
+                        {specUi.fields.chipset}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.hardware?.chipset || keySpecs?.chip)}
+                      </dd>
+                      <dt className="text-muted col-5">{specUi.fields.cpu}</dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.hardware?.cpu)}
+                      </dd>
+                      <dt className="text-muted col-5">{specUi.fields.gpu}</dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.hardware?.gpu)}
+                      </dd>
+                      <dt className="text-muted col-5">{specUi.fields.ram}</dt>
+                      <dd className="fw-medium col-7">
+                        {specs?.hardware?.ram_gb
+                          ? `${specs.hardware.ram_gb} GB`
+                          : product.ram_gb
+                            ? `${product.ram_gb} GB`
+                            : '-'}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.storage}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {specs?.hardware?.storage_gb
+                          ? `${specs.hardware.storage_gb} GB`
+                          : product.storage_gb
+                            ? `${product.storage_gb} GB`
+                            : '-'}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.storageExpansion}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.hardware?.storage_expansion)}
+                      </dd>
+                      <dt className="text-muted col-5">{specUi.fields.os}</dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.hardware?.os)}
+                      </dd>
+                    </dl>
+                  </div>
+                </div>
 
-            {/* 6. Mạng Di động & 5G (Cellular) */}
-            <div className="col-md-6 col-12">
-              <div className="rounded-4 h-100 border bg-white p-4">
-                <h3 className="h6 fw-bold text-primary mb-3">
-                  6. Mạng Di động &amp; 5G (Cellular)
-                </h3>
-                <dl className="row small mb-0">
-                  <dt className="text-muted col-5">Hỗ trợ 5G</dt>
-                  <dd className="fw-medium col-7">
-                    {(specs?.cellular?.has_5g ?? product.has_5g)
-                      ? 'Có (5G Sub-6 / mmWave)'
-                      : 'Không'}
-                  </dd>
-                  <dt className="text-muted col-5">Công nghệ mạng</dt>
-                  <dd className="fw-medium col-7">
-                    {specs?.cellular?.technology || '-'}
-                  </dd>
-                  <dt className="text-muted col-5">Chuẩn SIM</dt>
-                  <dd className="fw-medium col-7">
-                    {specs?.cellular?.sim_type || '-'}
-                  </dd>
-                  <dt className="text-muted col-5">Tốc độ dữ liệu</dt>
-                  <dd className="fw-medium col-7">
-                    {specs?.cellular?.data_speed || '-'}
-                  </dd>
-                  <dt className="text-muted col-5">Băng tần 5G / 4G</dt>
-                  <dd className="fw-medium col-7">
-                    {[specs?.cellular?.bands_5g, specs?.cellular?.bands_4g]
-                      .filter(Boolean)
-                      .join(' | ') || '-'}
-                  </dd>
-                  <dt className="text-muted col-5">VoLTE / VoWiFi</dt>
-                  <dd className="fw-medium col-7">
-                    {specs?.cellular?.volte || specs?.cellular?.vowifi
-                      ? [
-                          specs?.cellular?.volte ? 'VoLTE' : null,
-                          specs?.cellular?.vowifi ? 'VoWiFi' : null,
+                {/* 3. Camera (PhoneArena Split Architecture) */}
+                <div className="col-md-6 col-12">
+                  <div className="rounded-4 h-100 border bg-white p-4">
+                    <h3 className="h6 fw-bold text-primary mb-3">
+                      {specUi.groups.camera}
+                    </h3>
+                    <dl className="row small mb-0">
+                      <dt className="text-muted col-5">
+                        {specUi.fields.rearSetup}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.camera?.rear_setup)}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.mainCamera}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.camera?.main_camera || keySpecs?.camera)}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.secondCamera}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.camera?.second_camera)}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.thirdCamera}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.camera?.third_camera)}
+                      </dd>
+                      {specs?.camera?.fourth_camera && (
+                        <>
+                          <dt className="text-muted col-5">
+                            {specUi.fields.fourthCamera}
+                          </dt>
+                          <dd className="fw-medium col-7">
+                            {loc(specs.camera.fourth_camera)}
+                          </dd>
+                        </>
+                      )}
+                      <dt className="text-muted col-5">
+                        {specUi.fields.frontCamera}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.camera?.front_camera)}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.videoAndFlash}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(
+                          [specs?.camera?.video_recording, specs?.camera?.flash]
+                            .filter(Boolean)
+                            .join(' | ')
+                        )}
+                      </dd>
+                    </dl>
+                  </div>
+                </div>
+
+                {/* 4. Battery */}
+                <div className="col-md-6 col-12">
+                  <div className="rounded-4 h-100 border bg-white p-4">
+                    <h3 className="h6 fw-bold text-primary mb-3">
+                      {specUi.groups.battery}
+                    </h3>
+                    <dl className="row small mb-0">
+                      <dt className="text-muted col-5">
+                        {specUi.fields.batteryCapacity}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {specs?.battery?.capacity_mah
+                          ? `${specs.battery.capacity_mah} mAh`
+                          : product.battery_mah
+                            ? `${product.battery_mah} mAh`
+                            : loc(keySpecs?.battery)}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.batteryType}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.battery?.type)}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.chargingTech}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.battery?.charging)}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.fastCharging}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {specs?.battery?.fast_charging_w
+                          ? `${specs.battery.fast_charging_w} W`
+                          : '-'}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.reverseCharging}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {typeof specs?.battery?.reverse_charging === 'string'
+                          ? loc(specs.battery.reverse_charging)
+                          : specs?.battery?.reverse_charging === true
+                            ? specUi.supported
+                            : specs?.battery?.reverse_charging === false
+                              ? specUi.no
+                              : '-'}
+                      </dd>
+                    </dl>
+                  </div>
+                </div>
+
+                {/* 5. Design */}
+                <div className="col-md-6 col-12">
+                  <div className="rounded-4 h-100 border bg-white p-4">
+                    <h3 className="h6 fw-bold text-primary mb-3">
+                      {specUi.groups.design}
+                    </h3>
+                    <dl className="row small mb-0">
+                      <dt className="text-muted col-5">
+                        {specUi.fields.dimensions}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.design?.dimensions)}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.weight}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {specs?.design?.weight_g
+                          ? `${specs.design.weight_g} g`
+                          : '-'}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.materialsAndBuild}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(
+                          [specs?.design?.materials, specs?.design?.build]
+                            .filter(Boolean)
+                            .join(' | ')
+                        )}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.resistance}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.design?.resistance)}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.biometrics}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.design?.biometrics)}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.physicalKeys}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.design?.keys)}
+                      </dd>
+                    </dl>
+                  </div>
+                </div>
+
+                {/* 6. Cellular */}
+                <div className="col-md-6 col-12">
+                  <div className="rounded-4 h-100 border bg-white p-4">
+                    <h3 className="h6 fw-bold text-primary mb-3">
+                      {specUi.groups.cellular}
+                    </h3>
+                    <dl className="row small mb-0">
+                      <dt className="text-muted col-5">
+                        {specUi.fields.support5g}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {(specs?.cellular?.has_5g ?? product.has_5g)
+                          ? specUi.has5gYes
+                          : specUi.no}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.networkTech}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.cellular?.technology)}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.simType}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.cellular?.sim_type)}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.dataSpeed}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.cellular?.data_speed)}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.bands5g4g}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(
+                          [specs?.cellular?.bands_5g, specs?.cellular?.bands_4g]
+                            .filter(Boolean)
+                            .join(' | ')
+                        )}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.volteVowifi}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {specs?.cellular?.volte || specs?.cellular?.vowifi
+                          ? [
+                              specs?.cellular?.volte ? 'VoLTE' : null,
+                              specs?.cellular?.vowifi ? 'VoWiFi' : null,
+                            ]
+                              .filter(Boolean)
+                              .join(' + ')
+                          : '-'}
+                      </dd>
+                    </dl>
+                  </div>
+                </div>
+
+                {/* 7. Connectivity */}
+                <div className="col-md-6 col-12">
+                  <div className="rounded-4 h-100 border bg-white p-4">
+                    <h3 className="h6 fw-bold text-primary mb-3">
+                      {specUi.groups.connectivity}
+                    </h3>
+                    <dl className="row small mb-0">
+                      <dt className="text-muted col-5">{specUi.fields.wlan}</dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.connectivity?.wlan)}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.bluetooth}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.connectivity?.bluetooth)}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.usbPort}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.connectivity?.usb)}
+                      </dd>
+                      <dt className="text-muted col-5">{specUi.fields.nfc}</dt>
+                      <dd className="fw-medium col-7">
+                        {specs?.connectivity?.nfc === true
+                          ? specUi.yes
+                          : specs?.connectivity?.nfc === false
+                            ? specUi.no
+                            : '-'}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.locationGps}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.connectivity?.location)}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.sensorsAndOther}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(
+                          [
+                            specs?.connectivity?.sensors,
+                            specs?.connectivity?.other,
+                          ]
+                            .filter(Boolean)
+                            .join(' | ')
+                        )}
+                      </dd>
+                    </dl>
+                  </div>
+                </div>
+
+                {/* 8. Multimedia */}
+                <div className="col-md-6 col-12">
+                  <div className="rounded-4 h-100 border bg-white p-4">
+                    <h3 className="h6 fw-bold text-primary mb-3">
+                      {specUi.groups.multimedia}
+                    </h3>
+                    <dl className="row small mb-0">
+                      <dt className="text-muted col-5">
+                        {specUi.fields.loudspeaker}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.multimedia?.loudspeaker)}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.jack35mm}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {specs?.multimedia?.headphone_jack_35mm === true
+                          ? specUi.yes
+                          : specs?.multimedia?.headphone_jack_35mm === false
+                            ? specUi.no
+                            : '-'}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.audioFeatures}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.multimedia?.audio_features)}
+                      </dd>
+                    </dl>
+                  </div>
+                </div>
+
+                {/* 9. Availability */}
+                <div className="col-md-6 col-12">
+                  <div className="rounded-4 h-100 border bg-white p-4">
+                    <h3 className="h6 fw-bold text-primary mb-3">
+                      {specUi.groups.availability}
+                    </h3>
+                    <dl className="row small mb-0">
+                      <dt className="text-muted col-5">
+                        {specUi.fields.announcedDate}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.availability?.announced)}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.commercialStatus}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {specs?.availability?.status
+                          ? loc(specs.availability.status)
+                          : specUi.availableStatus}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.msrpPrice}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.availability?.prices_msrp)}
+                      </dd>
+                    </dl>
+                  </div>
+                </div>
+
+                {/* 10. Regulatory */}
+                <div className="col-md-6 col-12">
+                  <div className="rounded-4 h-100 border bg-white p-4">
+                    <h3 className="h6 fw-bold text-primary mb-3">
+                      {specUi.groups.regulatory}
+                    </h3>
+                    <dl className="row small mb-0">
+                      <dt className="text-muted col-5">
+                        {specUi.fields.certifications}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.regulatory?.certifications)}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.fccApproval}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {loc(specs?.regulatory?.fcc_approval)}
+                      </dd>
+                      <dt className="text-muted col-5">
+                        {specUi.fields.sarLevel}
+                      </dt>
+                      <dd className="fw-medium col-7">
+                        {[
+                          specs?.regulatory?.sar_head
+                            ? `${specUi.fields.sarHeadPrefix}: ${specs.regulatory.sar_head}`
+                            : null,
+                          specs?.regulatory?.sar_body
+                            ? `${specUi.fields.sarBodyPrefix}: ${specs.regulatory.sar_body}`
+                            : null,
                         ]
                           .filter(Boolean)
-                          .join(' + ')
-                      : '-'}
-                  </dd>
-                </dl>
+                          .join(' | ') || '-'}
+                      </dd>
+                    </dl>
+                  </div>
+                </div>
               </div>
             </div>
-
-            {/* 7. Kết nối & Cảm biến (Connectivity) */}
-            <div className="col-md-6 col-12">
-              <div className="rounded-4 h-100 border bg-white p-4">
-                <h3 className="h6 fw-bold text-primary mb-3">
-                  7. Kết nối &amp; Cảm biến (Connectivity)
-                </h3>
-                <dl className="row small mb-0">
-                  <dt className="text-muted col-5">Wi-Fi (WLAN)</dt>
-                  <dd className="fw-medium col-7">
-                    {specs?.connectivity?.wlan || '-'}
-                  </dd>
-                  <dt className="text-muted col-5">Bluetooth</dt>
-                  <dd className="fw-medium col-7">
-                    {specs?.connectivity?.bluetooth || '-'}
-                  </dd>
-                  <dt className="text-muted col-5">Cổng giao tiếp</dt>
-                  <dd className="fw-medium col-7">
-                    {specs?.connectivity?.usb || '-'}
-                  </dd>
-                  <dt className="text-muted col-5">NFC</dt>
-                  <dd className="fw-medium col-7">
-                    {specs?.connectivity?.nfc === true
-                      ? 'Có'
-                      : specs?.connectivity?.nfc === false
-                        ? 'Không'
-                        : '-'}
-                  </dd>
-                  <dt className="text-muted col-5">Định vị (GPS)</dt>
-                  <dd className="fw-medium col-7">
-                    {specs?.connectivity?.location || '-'}
-                  </dd>
-                  <dt className="text-muted col-5">Cảm biến &amp; Khác</dt>
-                  <dd className="fw-medium col-7">
-                    {[specs?.connectivity?.sensors, specs?.connectivity?.other]
-                      .filter(Boolean)
-                      .join(' | ') || '-'}
-                  </dd>
-                </dl>
-              </div>
-            </div>
-
-            {/* 8. Âm thanh & Đa phương tiện (Multimedia) */}
-            <div className="col-md-6 col-12">
-              <div className="rounded-4 h-100 border bg-white p-4">
-                <h3 className="h6 fw-bold text-primary mb-3">
-                  8. Âm thanh &amp; Đa phương tiện (Multimedia)
-                </h3>
-                <dl className="row small mb-0">
-                  <dt className="text-muted col-5">Hệ thống loa</dt>
-                  <dd className="fw-medium col-7">
-                    {specs?.multimedia?.loudspeaker || '-'}
-                  </dd>
-                  <dt className="text-muted col-5">Jack tai nghe 3.5mm</dt>
-                  <dd className="fw-medium col-7">
-                    {specs?.multimedia?.headphone_jack_35mm === true
-                      ? 'Có'
-                      : specs?.multimedia?.headphone_jack_35mm === false
-                        ? 'Không'
-                        : '-'}
-                  </dd>
-                  <dt className="text-muted col-5">Công nghệ âm thanh</dt>
-                  <dd className="fw-medium col-7">
-                    {specs?.multimedia?.audio_features || '-'}
-                  </dd>
-                </dl>
-              </div>
-            </div>
-
-            {/* 9. Phát hành & Giá niêm yết (Availability) */}
-            <div className="col-md-6 col-12">
-              <div className="rounded-4 h-100 border bg-white p-4">
-                <h3 className="h6 fw-bold text-primary mb-3">
-                  9. Phát hành &amp; Giá niêm yết (Availability)
-                </h3>
-                <dl className="row small mb-0">
-                  <dt className="text-muted col-5">Ngày công bố</dt>
-                  <dd className="fw-medium col-7">
-                    {specs?.availability?.announced || '-'}
-                  </dd>
-                  <dt className="text-muted col-5">Trạng thái thương mại</dt>
-                  <dd className="fw-medium col-7">
-                    {specs?.availability?.status || 'Đang kinh doanh'}
-                  </dd>
-                  <dt className="text-muted col-5">Giá khởi điểm (MSRP)</dt>
-                  <dd className="fw-medium col-7">
-                    {specs?.availability?.prices_msrp || '-'}
-                  </dd>
-                </dl>
-              </div>
-            </div>
-
-            {/* 10. Pháp lý, Chứng nhận & SAR (Regulatory) */}
-            <div className="col-md-6 col-12">
-              <div className="rounded-4 h-100 border bg-white p-4">
-                <h3 className="h6 fw-bold text-primary mb-3">
-                  10. Pháp lý, Chứng nhận &amp; SAR (Regulatory)
-                </h3>
-                <dl className="row small mb-0">
-                  <dt className="text-muted col-5">Chứng nhận chất lượng</dt>
-                  <dd className="fw-medium col-7">
-                    {specs?.regulatory?.certifications || '-'}
-                  </dd>
-                  <dt className="text-muted col-5">Phê duyệt FCC / CE</dt>
-                  <dd className="fw-medium col-7">
-                    {specs?.regulatory?.fcc_approval || '-'}
-                  </dd>
-                  <dt className="text-muted col-5">Mức bức xạ SAR</dt>
-                  <dd className="fw-medium col-7">
-                    {[
-                      specs?.regulatory?.sar_head
-                        ? `Đầu: ${specs.regulatory.sar_head}`
-                        : null,
-                      specs?.regulatory?.sar_body
-                        ? `Thân: ${specs.regulatory.sar_body}`
-                        : null,
-                    ]
-                      .filter(Boolean)
-                      .join(' | ') || '-'}
-                  </dd>
-                </dl>
-              </div>
-            </div>
-          </div>
-        </div>
+          );
+        })()}
 
         {/* SECTION #3: Time-Series Price History Chart, Fake Discount Detector & Neutral Merchant Audit */}
         <PriceHistorySection
