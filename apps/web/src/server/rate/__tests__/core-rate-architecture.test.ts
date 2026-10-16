@@ -1349,7 +1349,34 @@ function runCoreArchitectureSuite() {
     'ProductOffersExplorer must compute priceSpreadAudit and render price-spread-audit-banner (#96)'
   );
   console.log(
-    '  ✅ [32/32] Price Spread Leaders in /deals & Homepage (#95) + Price Spread Audit Banner in ProductOffersExplorer (#96) passed'
+    '  ✅ [32/33] Price Spread Leaders in /deals & Homepage (#95) + Price Spread Audit Banner in ProductOffersExplorer (#96) passed'
+  );
+
+  // 33. Category Price Spread Leaders & Card Radar Badges (#97) + DeepInspectWorkspace Deal Radar Verdict (#98)
+  const categoryCatalogSpreadSrc = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/app/[locale]/smartphones/page.tsx'),
+    'utf8'
+  );
+  const deepInspectRadarSrc = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/components/inspect/DeepInspectWorkspace.tsx'
+    ),
+    'utf8'
+  );
+  assert.ok(
+    categoryCatalogSpreadSrc.includes('category-price-spread-leaders') &&
+      categoryCatalogSpreadSrc.includes('catalog-card-radar-badge'),
+    'CategoryCatalogContent must render category-price-spread-leaders and catalog-card-radar-badge (#97)'
+  );
+  assert.ok(
+    deepInspectRadarSrc.includes('/api/v1/rate/deals') &&
+      deepInspectRadarSrc.includes('inspect-deal-radar-verdict') &&
+      deepInspectRadarSrc.includes('dealRadarContext'),
+    'DeepInspectWorkspace must fetch /api/v1/rate/deals, render inspect-deal-radar-verdict, and include dealRadarContext in exports (#98)'
+  );
+  console.log(
+    '  ✅ [33/33] Category Price Spread Leaders & Card Badges (#97) + DeepInspectWorkspace Deal Radar Verdict (#98) passed'
   );
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }

@@ -10,6 +10,11 @@ import {
 import { normalizeRateLocale, type SupportedRateLocale } from '@/lib/rate-i18n';
 import CompareQuickToggle from '@/components/compare/CompareQuickToggle';
 import PriceWatchButton from '@/components/watchlist/PriceWatchButton';
+import type {
+  CrossPlatformDealRadarItem,
+  CrossPlatformDealRadarResponse,
+  CrossPlatformPriceSpreadItem,
+} from '@/server/rate/deals';
 import type { KeySpecs } from '@repo/shared-data';
 import {
   BsArrowRight,
@@ -244,6 +249,27 @@ export default function DeepInspectWorkspace({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [copiedMd, setCopiedMd] = useState(false);
+  const [radarData, setRadarData] =
+    useState<CrossPlatformDealRadarResponse | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    fetch('/api/v1/rate/deals?category=all&limit=36')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => {
+        if (!active || !json) return;
+        const radarPayload = json?.data ?? json;
+        if (radarPayload && Array.isArray(radarPayload.genuineDeals)) {
+          setRadarData(radarPayload as CrossPlatformDealRadarResponse);
+        }
+      })
+      .catch(() => {
+        // Ignore background radar fetch errors
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const runInspection = async (targetQuery: string) => {
     const clean = targetQuery.trim();
@@ -313,6 +339,23 @@ export default function DeepInspectWorkspace({
   const reviewSummary = result?.reviewSummary ?? null;
   const merchant = result?.merchantProfile ?? null;
 
+  const matchedGenuineDeal: CrossPlatformDealRadarItem | null =
+    master && radarData
+      ? (radarData.genuineDeals.find((g) => g.productSlug === master.slug) ??
+        null)
+      : null;
+  const matchedFakeTrap: CrossPlatformDealRadarItem | null =
+    master && radarData
+      ? (radarData.fakeSaleTraps.find((t) => t.productSlug === master.slug) ??
+        null)
+      : null;
+  const matchedPriceSpread: CrossPlatformPriceSpreadItem | null =
+    master && radarData && Array.isArray(radarData.priceSpreadLeaders)
+      ? (radarData.priceSpreadLeaders.find(
+          (s) => s.productSlug === master.slug
+        ) ?? null)
+      : null;
+
   const handleCopyAuditMarkdown = async () => {
     if (typeof window === 'undefined') return;
     try {
@@ -351,6 +394,21 @@ export default function DeepInspectWorkspace({
               `- **Biên độ lịch sử giá thật:** Đáy ${histLow.toLocaleString('vi-VN')} ₫ - Đỉnh ${histHigh.toLocaleString('vi-VN')} ₫`,
             ]
           : []),
+        ...(matchedGenuineDeal
+          ? [
+              `- **Tín hiệu Radar Kèo Thơm 10 Sàn:** 🔥 Đáy giá -${matchedGenuineDeal.savingsVsMedianPct}% so trung vị tại ${matchedGenuineDeal.platform.toUpperCase()} (${matchedGenuineDeal.merchantName})`,
+            ]
+          : []),
+        ...(matchedFakeTrap
+          ? [
+              `- **Cảnh báo Radar Bẫy Sale Ảo 10 Sàn:** 🚨 Kê khống giá gốc +${matchedFakeTrap.fakeMarkupPct}% tại ${matchedFakeTrap.platform.toUpperCase()} (${matchedFakeTrap.merchantName})`,
+            ]
+          : []),
+        ...(matchedPriceSpread
+          ? [
+              `- **Kiểm toán Độ lệch giá 10 sàn:** Chênh lệch **+${matchedPriceSpread.spreadPct}%** (${matchedPriceSpread.spreadVnd.toLocaleString('vi-VN')} ₫) giữa ${matchedPriceSpread.cheapestPlatform.toUpperCase()} (${matchedPriceSpread.minPrice.toLocaleString('vi-VN')} ₫) và ${matchedPriceSpread.priciestPlatform.toUpperCase()} (${matchedPriceSpread.maxPrice.toLocaleString('vi-VN')} ₫)`,
+            ]
+          : []),
         ...(merchant
           ? [
               `- **Gian hàng:** ${merchant.name} (${merchant.platform.toUpperCase()}) | Trust Score: **${merchant.trust_score}/100** (DOSafe Risk: ${merchant.dosafe_risk_score}/100, Seeding Risk: ${merchant.review_risk_score}/100)`,
@@ -383,6 +441,7 @@ export default function DeepInspectWorkspace({
       'Giá Gạch Ngang (VND)',
       'Đáy Lịch Sử (VND)',
       'Đỉnh Lịch Sử (VND)',
+      'Độ Lệch Giá 10 Sàn (%)',
       'Kết Luận Kiểm Toán',
     ];
     const offers = result.allOffers || (matchedOffer ? [matchedOffer] : []);
@@ -400,6 +459,7 @@ export default function DeepInspectWorkspace({
       Number(o.price_original || 0),
       histLow,
       histHigh,
+      matchedPriceSpread?.spreadPct ?? 0,
       discount?.badge_label || 'Đã kiểm định',
     ]);
     const csvContent = `\uFEFF${[
@@ -421,6 +481,11 @@ export default function DeepInspectWorkspace({
       source: 'Rate.vn Deep URL & Fake Discount Inspector',
       query: queryInput.trim(),
       exportedAt: new Date().toISOString(),
+      dealRadarContext: {
+        genuineDeal: matchedGenuineDeal,
+        fakeSaleTrap: matchedFakeTrap,
+        priceSpread: matchedPriceSpread,
+      },
       inspection: result,
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
@@ -641,6 +706,59 @@ export default function DeepInspectWorkspace({
                     >
                       <strong>{discount.badge_label}:</strong>{' '}
                       {discount.explanation}
+                    </div>
+                  )}
+
+                  {(matchedGenuineDeal ||
+                    matchedFakeTrap ||
+                    matchedPriceSpread) && (
+                    <div
+                      className="rounded-3 bg-light mt-3 border p-3"
+                      data-testid="inspect-deal-radar-verdict"
+                    >
+                      <div className="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                        <span className="badge bg-dark rounded-pill text-warning">
+                          🔥 TÍN HIỆU RADAR 10 SÀN &amp; CHÊNH LỆCH GIÁ
+                        </span>
+                        <Link
+                          href="/deals"
+                          className="small fw-semibold text-danger text-decoration-none"
+                        >
+                          Mở Radar Kèo Thơm 10 Sàn →
+                        </Link>
+                      </div>
+                      <div className="d-flex align-items-center flex-wrap gap-2">
+                        {matchedGenuineDeal && (
+                          <span className="badge bg-success-subtle text-success border-success-subtle rounded-pill border px-3 py-2">
+                            🟢 Kèo thơm đáy giá -
+                            {matchedGenuineDeal.savingsVsMedianPct}% tại{' '}
+                            {matchedGenuineDeal.platform.toUpperCase()} (
+                            {matchedGenuineDeal.priceCurrent.toLocaleString(
+                              'vi-VN'
+                            )}{' '}
+                            ₫)
+                          </span>
+                        )}
+                        {matchedFakeTrap && (
+                          <span className="badge bg-danger-subtle text-danger border-danger-subtle rounded-pill border px-3 py-2">
+                            🚨 Cảnh báo Sale Ảo +{matchedFakeTrap.fakeMarkupPct}
+                            % tại {matchedFakeTrap.platform.toUpperCase()}
+                          </span>
+                        )}
+                        {matchedPriceSpread && (
+                          <span className="badge bg-warning-subtle text-dark border-warning-subtle rounded-pill border px-3 py-2">
+                            📊 Độ lệch giá 10 sàn: +
+                            {matchedPriceSpread.spreadPct}% (Chênh{' '}
+                            {matchedPriceSpread.spreadVnd.toLocaleString(
+                              'vi-VN'
+                            )}{' '}
+                            ₫ giữa{' '}
+                            {matchedPriceSpread.cheapestPlatform.toUpperCase()}{' '}
+                            và{' '}
+                            {matchedPriceSpread.priciestPlatform.toUpperCase()})
+                          </span>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
