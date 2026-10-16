@@ -11,7 +11,14 @@ import { normalizeRateLocale, type SupportedRateLocale } from '@/lib/rate-i18n';
 import CompareQuickToggle from '@/components/compare/CompareQuickToggle';
 import PriceWatchButton from '@/components/watchlist/PriceWatchButton';
 import RadarBadge from '@/components/radar/RadarBadge';
-import { EMPTY_RADAR_SIGNAL, getRadarSignal } from '@/lib/deal-radar';
+import {
+  EMPTY_RADAR_SIGNAL,
+  getRadarSignal,
+  RADAR_CSV_HEADERS,
+  radarCsvCells,
+  radarExportFields,
+  radarMarkdownCell,
+} from '@/lib/deal-radar';
 import { useDealRadarIndex } from '@/components/radar/use-deal-radar';
 import type { KeySpecs } from '@repo/shared-data';
 import {
@@ -352,6 +359,7 @@ export default function DeepInspectWorkspace({
           ? [
               `- **Thiết bị gốc chuẩn hóa:** ${master.name} (\`${master.model_key}\`)`,
               `- **Điểm Người Mua Thực Chất (JReviews):** ${masterUserRating > 0 ? `★ ${masterUserRating.toFixed(2)}/5.0` : 'chưa có điểm'} (${master.authentic_review_count || master.total_reviews || 0} đánh giá thật)`,
+              `- **Tín hiệu Deal Radar 60N:** ${radarMarkdownCell(radarSignal)}`,
             ]
           : []),
         ...(discount
@@ -414,6 +422,7 @@ export default function DeepInspectWorkspace({
       'Đỉnh Lịch Sử (VND)',
       'Độ Lệch Giá 10 Sàn (%)',
       'Kết Luận Kiểm Toán',
+      ...RADAR_CSV_HEADERS,
     ];
     const offers = result.allOffers || (matchedOffer ? [matchedOffer] : []);
     const histLow = Number(
@@ -432,6 +441,7 @@ export default function DeepInspectWorkspace({
       histHigh,
       matchedPriceSpread?.spreadPct ?? 0,
       discount?.badge_label || 'Đã kiểm định',
+      ...radarCsvCells(radarSignal),
     ]);
     const csvContent = `\uFEFF${[
       headers.map(escapeCsv).join(','),
@@ -452,6 +462,7 @@ export default function DeepInspectWorkspace({
       source: 'Rate.vn Deep URL & Fake Discount Inspector',
       query: queryInput.trim(),
       exportedAt: new Date().toISOString(),
+      dealRadar: radarExportFields(radarSignal),
       dealRadarContext: {
         genuineDeal: matchedGenuineDeal,
         fakeSaleTrap: matchedFakeTrap,

@@ -6,12 +6,20 @@ import type {
   MasterProductPriceHistorySummary,
   MerchantOffer,
 } from '@/lib/rate-api';
+import {
+  RADAR_CSV_HEADERS,
+  radarCsvCells,
+  radarExportFields,
+  radarMarkdownCell,
+  type RadarSignal,
+} from '@/lib/deal-radar';
 
 interface ProductOffersExplorerProps {
   readonly productName: string;
   readonly productSlug: string;
   readonly offers: readonly MerchantOffer[];
   readonly byOffer: MasterProductPriceHistorySummary['byOffer'];
+  readonly radarSignal?: RadarSignal | null;
 }
 
 export type OfferSortKey = 'price_asc' | 'trust_desc' | 'discount_desc';
@@ -21,6 +29,7 @@ export default function ProductOffersExplorer({
   productSlug,
   offers,
   byOffer,
+  radarSignal,
 }: ProductOffersExplorerProps) {
   const [selectedPlatform, setSelectedPlatform] = useState<string>('all');
   const [officialOnly, setOfficialOnly] = useState(false);
@@ -128,13 +137,16 @@ export default function ProductOffersExplorer({
       ];
     });
 
+    const radarLine = radarSignal
+      ? `- **Tín hiệu Deal Radar 60N:** ${radarMarkdownCell(radarSignal)}\n`
+      : '';
     const spreadLine = priceSpreadAudit
       ? `- **Độ lệch giá đa sàn (${priceSpreadAudit.platformCount} sàn):** Tiết kiệm **${priceSpreadAudit.spreadVnd.toLocaleString('vi-VN')} ₫ (${priceSpreadAudit.spreadPct}%)** khi mua tại **${priceSpreadAudit.cheapest.platform.toUpperCase()} (${priceSpreadAudit.cheapest.merchant.name})** thay vì **${priceSpreadAudit.priciest.platform.toUpperCase()}**\n`
       : '';
 
     const md = [
       `### 🛡️ Rate.vn Cross-Platform Price Audit: ${productName}`,
-      spreadLine,
+      radarLine + spreadLine,
       `| ${headers.join(' | ')} |`,
       `| ${sep.join(' | ')} |`,
       ...rows.map((r) => `| ${r.join(' | ')} |`),
@@ -164,6 +176,7 @@ export default function ProductOffersExplorer({
       'PriceOriginalVND',
       'PriceVerdict',
       'OfferURL',
+      ...(radarSignal ? RADAR_CSV_HEADERS : []),
     ];
     const rows = filteredOffers.map((o) => {
       const trust = Math.max(0, 100 - (o.merchant.risk_score || 0));
@@ -180,6 +193,7 @@ export default function ProductOffersExplorer({
         String(o.price_original || ''),
         analysis?.verdict || 'normal',
         o.url,
+        ...(radarSignal ? radarCsvCells(radarSignal) : []),
       ];
     });
 
@@ -209,6 +223,7 @@ export default function ProductOffersExplorer({
       productName,
       exportedAt: new Date().toISOString(),
       offerCount: filteredOffers.length,
+      dealRadar: radarSignal ? radarExportFields(radarSignal) : null,
       priceSpreadAudit: priceSpreadAudit
         ? {
             spreadVnd: priceSpreadAudit.spreadVnd,

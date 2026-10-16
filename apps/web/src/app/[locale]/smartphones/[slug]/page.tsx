@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Link } from '@/lib/navigation';
 import { notFound } from 'next/navigation';
 import {
+  getCrossPlatformDealRadar,
   getCachedMasterProductBySlug,
   getCachedMasterProductOffers,
   getCachedMasterProductPriceHistory,
@@ -9,8 +10,10 @@ import {
   getCachedMasterProductReviewSummary,
   getCachedMasterProducts,
   computeProductRadarSignal,
+  type CanonicalCategorySlug,
 } from '@/server/rate';
 import RadarBadge from '@/components/radar/RadarBadge';
+import { buildRadarIndex, getRadarSignal } from '@/lib/deal-radar';
 import JReviewsSection from '@/components/reviews/JReviewsSection';
 import PriceHistorySection from '@/components/price-history/PriceHistorySection';
 import CompareQuickToggle from '@/components/compare/CompareQuickToggle';
@@ -112,17 +115,24 @@ export async function ProductDetailView({
   }
 
   const categorySlug = categoryBasePath.replace(/^\//, '') || 'smartphones';
-  const [offers, reviews, categoryPeers] = await Promise.all([
-    getCachedMasterProductOffers(product.id),
-    getCachedMasterProductReviews(product.id),
-    getCachedMasterProducts({ categorySlug, limit: 50 }).catch(() => []),
-  ]);
+  const [offers, reviews, categoryPeers, categoryDealRadar] = await Promise.all(
+    [
+      getCachedMasterProductOffers(product.id),
+      getCachedMasterProductReviews(product.id),
+      getCachedMasterProducts({ categorySlug, limit: 50 }).catch(() => []),
+      getCrossPlatformDealRadar({
+        categorySlug: categorySlug as CanonicalCategorySlug,
+        limit: 50,
+      }).catch(() => null),
+    ]
+  );
   const [reviewSummary, priceHistory] = await Promise.all([
     getCachedMasterProductReviewSummary(product.id, reviews),
     getCachedMasterProductPriceHistory(product.id, offers),
   ]);
 
   const radarSignal = computeProductRadarSignal(product, offers);
+  const peerRadarIndex = buildRadarIndex(categoryDealRadar);
 
   const leaderboardBadges = computeProductStandingInCategory(
     product,
@@ -1349,6 +1359,7 @@ export async function ProductDetailView({
               productSlug={product.slug}
               offers={offers}
               byOffer={priceHistory.byOffer}
+              radarSignal={radarSignal}
             />
           )}
         </div>
@@ -1369,6 +1380,7 @@ export async function ProductDetailView({
               userScore5={lbScored.userScore5}
               expertScore10={lbScored.expertScore10}
               valueCriterionScore5={lbScored.criteria.value}
+              radarSignal={radarSignal}
             />
           );
         })()}
@@ -1467,6 +1479,9 @@ export async function ProductDetailView({
                                 ? peerRating.toFixed(1)
                                 : 'chưa có'}
                             </span>
+                            <RadarBadge
+                              signal={getRadarSignal(peerRadarIndex, peer.slug)}
+                            />
                           </div>
                           <h6 className="fw-bold text-truncate mb-1">
                             <Link
