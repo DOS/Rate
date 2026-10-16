@@ -702,6 +702,38 @@ export default function LeaderboardExplorer({
     URL.revokeObjectURL(url);
   };
 
+  const handleDownloadLeaderboardJson = () => {
+    if (typeof document === 'undefined' || rankedEntries.length === 0) return;
+    const payload = {
+      source: 'Rate.vn JReviews Leaderboard',
+      category: activeCategory,
+      criterion: activeCriterion,
+      persona: activePersona,
+      exportedAt: new Date().toISOString(),
+      count: rankedEntries.length,
+      items: rankedEntries.map((entry, idx) => ({
+        rank: idx + 1,
+        slug: entry.product.slug,
+        name: entry.product.name,
+        brand: entry.product.brand,
+        activeScore5: entry.activeScore5,
+        userScore5: entry.userScore5,
+        expertScore10: entry.expertScore10,
+        criteria: entry.criteria,
+        minPriceVnd: Number(entry.product.min_price || 0),
+      })),
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: 'application/json;charset=utf-8;',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `rate-leaderboard-${activeCategory}-${activeCriterion}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const handleSelectCategory = (cat: CanonicalCategorySlug) => {
     setActiveCategory(cat);
     setSelectedBrand('all');
@@ -808,6 +840,14 @@ export default function LeaderboardExplorer({
                 : lang === 'cs'
                   ? '📥 Exportovat CSV'
                   : '📥 Xuất bảng CSV'}
+            </button>
+            <button
+              type="button"
+              onClick={handleDownloadLeaderboardJson}
+              className="btn btn-sm btn-outline-secondary rounded-pill fw-semibold px-3 py-1"
+              data-testid="download-leaderboard-json-btn"
+            >
+              📦 JSON
             </button>
             {top3Slugs.length >= 2 && (
               <Link

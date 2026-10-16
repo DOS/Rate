@@ -1081,6 +1081,66 @@ function runCoreArchitectureSuite() {
   console.log(
     '  ✅ [25/25] DealFinderWorkspace Markdown/CSV/JSON Export (#77) & Inspect/Merchant CSV/JSON Export (#78) passed'
   );
+
+  // 26. ProductShareAuditButton/ProductOffersExplorer (#79) & Leaderboard/Catalog/Watchlist/Merchants JSON Export (#80)
+  const shareAuditSrcUpdated = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/components/leaderboard/ProductShareAuditButton.tsx'
+    ),
+    'utf8'
+  );
+  const offersExplorerSrcUpdated = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/components/leaderboard/ProductOffersExplorer.tsx'
+    ),
+    'utf8'
+  );
+  const leaderboardSrcUpdated = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/components/leaderboard/LeaderboardExplorer.tsx'
+    ),
+    'utf8'
+  );
+  const catalogToolbarSrcUpdated = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/components/leaderboard/CategoryCatalogToolbar.tsx'
+    ),
+    'utf8'
+  );
+  const watchlistSrcUpdated = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/components/watchlist/WatchlistWorkspace.tsx'
+    ),
+    'utf8'
+  );
+  const merchantDirSrcUpdated = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/components/merchants/MerchantDirectoryExplorer.tsx'
+    ),
+    'utf8'
+  );
+  assert.ok(
+    shareAuditSrcUpdated.includes('handleDownloadProductCsv') &&
+      shareAuditSrcUpdated.includes('handleDownloadProductJson') &&
+      offersExplorerSrcUpdated.includes('handleDownloadOffersJson'),
+    'ProductShareAuditButton and ProductOffersExplorer must provide CSV/JSON export'
+  );
+  assert.ok(
+    leaderboardSrcUpdated.includes('handleDownloadLeaderboardJson') &&
+      catalogToolbarSrcUpdated.includes('handleDownloadCategoryJson') &&
+      watchlistSrcUpdated.includes('handleDownloadPortfolioJson') &&
+      merchantDirSrcUpdated.includes('handleDownloadMerchantsJson'),
+    'LeaderboardExplorer, CategoryCatalogToolbar, WatchlistWorkspace, and MerchantDirectoryExplorer must provide 1-Click JSON export'
+  );
+  console.log(
+    '  ✅ [26/26] ProductShareAuditButton/ProductOffersExplorer (#79) & Full 3-Format JSON Export Parity (#80) passed'
+  );
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
 

@@ -63,6 +63,75 @@ export default function ProductShareAuditButton({
     }
   };
 
+  const handleDownloadProductCsv = () => {
+    if (typeof window === 'undefined') return;
+    const escapeCsv = (val: string | number) => {
+      const str = String(val ?? '');
+      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+    const headers = [
+      'Thiết Bị',
+      'Thương Hiệu',
+      'Model Key',
+      'Điểm Người Mua (/5.0)',
+      'Điểm Chuyên Gia (/10)',
+      'Review Thật',
+      'Giá Thấp Nhất (VND)',
+      'Số Nguồn Kiểm Định',
+      'Cấu Hình Chuẩn Hóa',
+    ];
+    const row = [
+      name,
+      brand,
+      modelKey,
+      userScore5.toFixed(2),
+      expertScore10.toFixed(1),
+      authenticReviews,
+      minPriceVnd,
+      offerCount,
+      keySpecLine || '',
+    ];
+    const csvContent = `\uFEFF${headers.map(escapeCsv).join(',')}\n${row.map(escapeCsv).join(',')}`;
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `rate-product-${modelKey || 'audit'}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadProductJson = () => {
+    if (typeof window === 'undefined') return;
+    const payload = {
+      source: 'Rate.vn Product Audit Summary',
+      exportedAt: new Date().toISOString(),
+      product: {
+        name,
+        brand,
+        modelKey,
+        userScore5,
+        expertScore10,
+        authenticReviews,
+        minPriceVnd,
+        offerCount,
+        keySpecLine: keySpecLine || null,
+      },
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: 'application/json;charset=utf-8;',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `rate-product-${modelKey || 'audit'}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="d-inline-flex align-items-center flex-wrap gap-2">
       <button
@@ -74,6 +143,22 @@ export default function ProductShareAuditButton({
         {copiedMd
           ? '✓ Đã sao chép hồ sơ Markdown!'
           : '📋 Sao chép hồ sơ kiểm định'}
+      </button>
+      <button
+        type="button"
+        onClick={handleDownloadProductCsv}
+        data-testid="product-export-csv-btn"
+        className="btn btn-sm btn-outline-secondary rounded-pill fw-medium px-3"
+      >
+        📥 CSV
+      </button>
+      <button
+        type="button"
+        onClick={handleDownloadProductJson}
+        data-testid="product-export-json-btn"
+        className="btn btn-sm btn-outline-secondary rounded-pill fw-medium px-3"
+      >
+        📦 JSON
       </button>
       <button
         type="button"

@@ -148,6 +148,35 @@ export default function CategoryCatalogToolbar({
     URL.revokeObjectURL(url);
   };
 
+  const handleDownloadCategoryJson = () => {
+    if (typeof document === 'undefined' || products.length === 0) return;
+    const payload = {
+      source: 'Rate.vn Category Catalog',
+      categorySlug,
+      categoryTitle,
+      exportedAt: new Date().toISOString(),
+      productCount: products.length,
+      products: products.map((p, idx) => ({
+        rank: idx + 1,
+        slug: p.slug,
+        name: p.name,
+        brand: p.brand,
+        userRating: Number(p.user_rating_weighted || p.average_rating || 4.8),
+        expertRating: Number(p.expert_rating || 0),
+        minPriceVnd: Number(p.min_price || 0),
+      })),
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: 'application/json;charset=utf-8;',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `rate-catalog-${categorySlug}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   if (products.length === 0) return null;
 
   return (
@@ -221,6 +250,15 @@ export default function CategoryCatalogToolbar({
             data-testid="download-catalog-csv-btn"
           >
             📥 Xuất CSV ngành hàng
+          </button>
+          <button
+            type="button"
+            onClick={handleDownloadCategoryJson}
+            className="btn btn-sm btn-outline-secondary rounded-pill fw-semibold px-3 py-1"
+            style={{ fontSize: '0.76rem' }}
+            data-testid="download-catalog-json-btn"
+          >
+            📦 Xuất JSON
           </button>
         </div>
       </div>
