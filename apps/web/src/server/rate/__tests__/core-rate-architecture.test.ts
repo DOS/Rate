@@ -1411,7 +1411,38 @@ function runCoreArchitectureSuite() {
     'WatchlistWorkspace must integrate priceSpreadLeaders, render watchlist-price-spread-badge, and include spread columns in exports (#100)'
   );
   console.log(
-    '  ✅ [34/34] Merchant Deal Radar (#99) + Watchlist Price Spread Arbitrage (#100) passed'
+    '  ✅ [34/35] Merchant Deal Radar (#99) + Watchlist Price Spread Arbitrage (#100) passed'
+  );
+
+  // 35. Deal Radar columns in Leaderboard (#101) and Category Catalog (#102) exports
+  const leaderboardExportSrc = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/components/leaderboard/LeaderboardExplorer.tsx'
+    ),
+    'utf8'
+  );
+  const catalogToolbarExportSrc = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/components/leaderboard/CategoryCatalogToolbar.tsx'
+    ),
+    'utf8'
+  );
+  assert.ok(
+    leaderboardExportSrc.includes('radarExportFields') &&
+      leaderboardExportSrc.includes('RadarVerdict') &&
+      leaderboardExportSrc.includes('dealRadar: radarExportFields'),
+    'LeaderboardExplorer exports must include Deal Radar columns (#101)'
+  );
+  assert.ok(
+    catalogToolbarExportSrc.includes('radarFor') &&
+      catalogToolbarExportSrc.includes('RadarVerdict') &&
+      catalogToolbarExportSrc.includes('PriceSpreadPct'),
+    'CategoryCatalogToolbar exports must include Deal Radar columns (#102)'
+  );
+  console.log(
+    '  ✅ [35/35] Leaderboard (#101) + Category Catalog (#102) Deal Radar export columns passed'
   );
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }

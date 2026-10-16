@@ -608,6 +608,7 @@ export async function CategoryCatalogContent({
                   facets.currentCategory?.name || schema.categoryTitle
                 }
                 products={products}
+                dealRadar={categoryDealRadar}
               />
 
               {categoryDealRadar &&

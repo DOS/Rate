@@ -188,6 +188,10 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc **4 T�
   - Nâng cấp `MerchantDirectoryExplorer.tsx` (`/merchants`), `apps/web/src/app/[locale]/merchants/[id]/page.tsx` (`/merchants/[id]`) và `MerchantShareAuditButton.tsx` đối chiếu trực tiếp `getCrossPlatformDealRadar` để hiển thị huy hiệu **🟢 Kèo đáy lịch sử 60N / 🚨 Cảnh báo kê khống giá gốc (`merchant-deal-radar-badge` & `merchant-profile-deal-radar`)** và đồng bộ vào cả 3 định dạng xuất báo cáo (`Markdown`, `CSV`, `JSON`).
   - Nâng cấp `WatchlistWorkspace.tsx` (`/watchlist`) tích hợp `priceSpreadLeaders` từ `/api/v1/rate/deals` hiển thị huy hiệu **📊 Độ lệch 10 sàn (`watchlist-price-spread-badge`)** trên từng thẻ sản phẩm đang canh giá và bổ sung cột độ lệch giá đa sàn vào xuất `Markdown`, `CSV`, `JSON`.
 
+- [x] **4.67 & 4.68. Cột Radar Kèo Đáy / Bẫy Sale Ảo / Độ Lệch Giá Trong Xuất Dữ Liệu Của `/leaderboard` (`LeaderboardExplorer`) Và 5 Trang Danh Mục (`CategoryCatalogToolbar`) (Issue #101 & Issue #102):**
+  - Bổ sung cột `Deal Radar` (Markdown) và `RadarVerdict` / `RadarSavingsPct` / `RadarFakeMarkupPct` (CSV, JSON `dealRadar`) vào bộ xuất dữ liệu bảng xếp hạng.
+  - Truyền `categoryDealRadar` vào `CategoryCatalogToolbar` và bổ sung cột Radar cùng `PriceSpreadPct` vào xuất Markdown, CSV, JSON của 5 trang danh mục.
+
 ### ✅ Phase 5: Mở Rộng Đa Sàn 10/10 Nền Tảng, Browser Extension MV3 & Tự Động Hóa Cảnh Báo Giá (Đã hoàn thành 100%)
 
 - [x] **5.1. Mở rộng Anti-Detect Scraper sang Lazada, Tiki, CellphoneS, Thế Giới Di Động (Issue #1 bên `DOS/Rate-Services`):**
