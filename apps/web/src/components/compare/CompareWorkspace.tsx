@@ -1070,6 +1070,79 @@ export default function CompareWorkspace({
     }
   };
 
+  const handleDownloadCompareCsv = () => {
+    if (typeof window === 'undefined' || products.length === 0) return;
+    const escapeCsv = (val: string | number) => {
+      const str = String(val ?? '');
+      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+    const headers = [
+      'Nhóm Thông Số',
+      'Tiêu Chí Kỹ Thuật',
+      ...products.map((p) => p.name),
+    ];
+    const rows: string[] = [headers.map(escapeCsv).join(',')];
+    for (const group of SPEC_GROUPS) {
+      for (const row of group.rows) {
+        const vals = products.map((p) => row.renderValue(p));
+        if (vals.every((v) => !v || v === '-')) continue;
+        rows.push(
+          [group.title, row.label, ...vals].map((c) => escapeCsv(c)).join(',')
+        );
+      }
+    }
+    const blob = new Blob([`\uFEFF${rows.join('\n')}`], {
+      type: 'text/csv;charset=utf-8;',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `rate-compare-${activeCategory}-${products.map((p) => p.slug).join('-vs-')}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadCompareJson = () => {
+    if (typeof window === 'undefined' || products.length === 0) return;
+    const payload = {
+      source: 'Rate.vn Compare Matrix',
+      category: activeCategory,
+      exportedAt: new Date().toISOString(),
+      productCount: products.length,
+      products: products.map((p) => ({
+        slug: p.slug,
+        name: p.name,
+        brand: p.brand,
+        userRating: getEffectiveRating(p),
+        expertRating: Number(p.expert_rating || 0),
+        minPriceVnd: Number(p.min_price || 0),
+      })),
+      matrix: SPEC_GROUPS.map((group) => ({
+        groupId: group.id,
+        groupTitle: group.title,
+        rows: group.rows.map((row) => ({
+          id: row.id,
+          label: row.label,
+          values: Object.fromEntries(
+            products.map((p) => [p.slug, row.renderValue(p)])
+          ),
+        })),
+      })),
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: 'application/json;charset=utf-8;',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `rate-compare-${activeCategory}-${products.map((p) => p.slug).join('-vs-')}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const handleWatchAllCompared = () => {
     for (const p of products) {
       const minP = Math.max(0, Number(p.min_price || 0));
@@ -1397,15 +1470,33 @@ export default function CompareWorkspace({
               </button>
 
               {products.length > 0 && (
-                <button
-                  type="button"
-                  onClick={handleCopyMarkdownReport}
-                  className="btn btn-sm btn-outline-danger rounded-pill fw-medium px-3 py-2"
-                >
-                  {copiedMarkdown
-                    ? '✓ Đã sao chép Markdown!'
-                    : '📋 Sao chép bảng Markdown'}
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={handleCopyMarkdownReport}
+                    className="btn btn-sm btn-outline-danger rounded-pill fw-medium px-3 py-2"
+                  >
+                    {copiedMarkdown
+                      ? '✓ Đã sao chép Markdown!'
+                      : '📋 Sao chép bảng Markdown'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDownloadCompareCsv}
+                    data-testid="compare-export-csv-btn"
+                    className="btn btn-sm btn-outline-dark rounded-pill fw-medium px-3 py-2"
+                  >
+                    📥 CSV ({products.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDownloadCompareJson}
+                    data-testid="compare-export-json-btn"
+                    className="btn btn-sm btn-outline-dark rounded-pill fw-medium px-3 py-2"
+                  >
+                    📦 JSON ({products.length})
+                  </button>
+                </>
               )}
 
               {products.length === 2 && products[0] && products[1] && (
