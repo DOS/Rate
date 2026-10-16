@@ -1,8 +1,11 @@
 # Rate Importer Module
 
+> ⚠️ **Tài liệu lỗi thời (thời Strapi CMS, 2025).** Trang này mô tả crawler cũ (CheckScam, FlareSolverr, Strapi, Splink) đã bị xóa khỏi `apps/importer` ở issue #137. Engine hiện tại là `@repo/crawlers`, xem [`apps/importer/README.md`](../../../apps/importer/README.md). Scraper và queue worker nằm trong repo private `DOS/Rate-Services`.
+
 ## 📋 Overview
 
 The Rate Importer module is responsible for:
+
 1. **Scam Data Extraction**: Crawling scam reports from CheckScam.vn and other fraud databases
 2. **E-commerce Data Crawling**: Extracting product listings from Shopee, Lazada, Tiki (via Browser Extension)
 3. **Item Database Seeding**: Building authoritative product database from trusted sources (GSMArena, PhoneArena, Official Brand Sites)
@@ -12,16 +15,19 @@ The Rate Importer module is responsible for:
 ### Components
 
 #### 1. Scam Data Pipeline
+
 - **CheckScam Crawler**: Main crawler for checkscam.vn
 - **FlareSolverr Integration**: Cloudflare bypass proxy
 - **Core Validator**: Data validation and enrichment
 
 #### 2. E-commerce Data Pipeline
+
 - **Browser Extension**: Chrome/Edge extension for Shopee/Lazada/Tiki
 - **Content Script**: Extract listing data from product pages
 - **Background Service**: Send data to Strapi API
 
 #### 3. Item Seeding Pipeline (NEW)
+
 - **Trusted Source Crawlers**: GSMArena, PhoneArena, Official Sites
 - **AI Normalizer**: GPT-4o-mini for data normalization & translation
 - **Multi-source Merger**: Combine data from multiple sources by priority
@@ -62,6 +68,7 @@ Copy-Item .env.example .env  # cấu hình env
 ### Usage
 
 #### Scam Data Crawling
+
 ```bash
 # Extract scammer links
 node crawl.js links
@@ -74,6 +81,7 @@ node crawl.js cleanup
 ```
 
 #### Item Database Seeding
+
 ```bash
 # One-time initial seeding (5000 popular products)
 yarn seed:items:initial
@@ -94,6 +102,7 @@ yarn seed:items:validate
 ```
 
 #### E-commerce Extension
+
 ```bash
 # Load extension in browser
 1. Open chrome://extensions/
@@ -106,17 +115,20 @@ yarn seed:items:validate
 ## 📊 Current Status
 
 ### Scam Data Pipeline
+
 - ✅ **Working**: CheckScam.vn crawler with FlareSolverr
 - ✅ **Integrated**: Docker Compose setup
 - ✅ **Documented**: Complete API and deployment docs
 
 ### E-commerce Data Pipeline
+
 - ✅ **Working**: Shopee extension with auto-extraction
 - ✅ **Integrated**: Strapi API integration
 - ✅ **Working**: AI processing with GPT-4o-mini
 - ✅ **Working**: Redis caching for AI results
 
 ### Item Seeding Pipeline
+
 - 🔄 **In Progress**: Trusted source crawler design
 - ⏳ **Planned**: GSMArena crawler implementation
 - ⏳ **Planned**: PhoneArena crawler implementation
@@ -169,6 +181,7 @@ apps/strapi/src/scripts/
 ## 🎯 Item Seeding Roadmap
 
 ### Phase 1: Foundation (Week 1-2)
+
 **Goal**: Build initial Item database with 5000 popular products
 
 - [ ] Implement GSMArena crawler with search + specs extraction
@@ -182,6 +195,7 @@ apps/strapi/src/scripts/
 - [ ] Validate database quality (>90% completeness target)
 
 ### Phase 2: Auto-growth (Week 3-4)
+
 **Goal**: Automatically create Items from incoming Listings
 
 - [ ] Implement auto-item-creator service
@@ -192,6 +206,7 @@ apps/strapi/src/scripts/
 - [ ] Add admin dashboard for review queue
 
 ### Phase 3: Enhancement (Month 2)
+
 **Goal**: Continuously improve Item quality
 
 - [ ] Implement item-enhancer service
@@ -202,6 +217,7 @@ apps/strapi/src/scripts/
 - [ ] Track Item improvement metrics
 
 ### Phase 4: Maintenance (Ongoing)
+
 **Goal**: Keep Item database fresh and accurate
 
 - [ ] Daily: Check for new flagship products
@@ -255,12 +271,14 @@ networks:
 ## 📈 Performance Metrics
 
 ### Scam Data Crawler
+
 - **Success Rate**: ~85% with FlareSolverr
 - **Speed**: ~100 records/hour
 - **Accuracy**: 95%+ data validation
 - **Reliability**: Auto-retry with exponential backoff
 
 ### Item Seeding Crawler
+
 - **Throughput**: 50-100 items/hour (with multi-source crawl)
 - **Success Rate**: ~90% (GSMArena primary, fallback to others)
 - **Data Quality**: >90% completeness target
@@ -268,6 +286,7 @@ networks:
 - **Cache Hit Rate**: 90%+ for AI normalization (Redis)
 
 ### E-commerce Extension
+
 - **Extraction Speed**: Real-time on page load
 - **Success Rate**: 95%+ for Shopee
 - **Data Quality**: High (structured API data)
