@@ -63,6 +63,9 @@ jobs:
       - name: Run @repo/crawlers Open-Core Intelligence Tests
         run: pnpm --filter @repo/crawlers test
 
+      - name: Verify @repo/crawlers dist entry points (consumed by DOS/Rate-Services)
+        run: pnpm --filter @repo/crawlers test:dist
+
       - name: Build & Typecheck @repo/extension (MV3)
         run: pnpm --filter @repo/extension build
 
