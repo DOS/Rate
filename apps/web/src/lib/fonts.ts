@@ -1,7 +1,20 @@
-import { Roboto } from "next/font/google"
+import { Inter, JetBrains_Mono } from 'next/font/google';
 
-export const fontRoboto = Roboto({
-  subsets: ["latin"],
-  weight: ["100", "300", "400", "500", "700"],
-  variable: "--font-roboto",
-})
+// Self-hosted at build time by next/font: no request to Google at runtime,
+// preloaded, with a metric-matched fallback. The CSS variables feed
+// --body-font-family, --heading-font-family and --rate-font-mono (_custom.scss).
+export const fontInter = Inter({
+  subsets: ['latin', 'vietnamese'],
+  weight: ['400', '500', '600', '700', '800'],
+  display: 'swap',
+  variable: '--font-inter',
+});
+
+export const fontJetBrainsMono = JetBrains_Mono({
+  subsets: ['latin', 'vietnamese'],
+  weight: ['500', '600', '700'],
+  display: 'swap',
+  // Only .rate-mono uses it today; don't spend a preload on every page.
+  preload: false,
+  variable: '--font-jetbrains-mono',
+});
