@@ -142,6 +142,9 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc **4 T�
 - [x] **4.35 & 4.36. Bộ Đổi Nhanh Cặp Đấu 1v1 Cùng Ngành Hàng (`VersusMatchupSwitcher`) Trên `/compare/[versus]` + Tổng Hợp Danh Mục & Xuất Markdown/CSV Trên `/watchlist` (Issue #65 & Issue #66):**
   - Xây dựng `VersusMatchupSwitcher.tsx` trên `/compare/[versus]` cho phép người mua chọn nhanh bất kỳ Thiết bị A và Thiết bị B nào cùng danh mục (`Same-Category Lock`) để chuyển thẳng tới trang đối đầu `/compare/<slugA>-vs-<slugB>`.
   - Nâng cấp `WatchlistWorkspace.tsx` (`/watchlist`) với thanh tổng hợp **Portfolio Value & Savings Summary** (Tổng giá trị danh mục giá đáy, Tổng ngân sách mục tiêu, Tiết kiệm chéo 10 sàn, Điểm JReviews trung bình) cùng 2 nút `📋 Sao chép danh mục Markdown` và `📥 Xuất bảng CSV`.
+- [x] **4.37 & 4.38. Xuất Bảng Xếp Hạng Markdown/CSV & Chọn Nhanh Kèo 1v1 Trên `/leaderboard` + Bộ Lọc Rủi Ro Seeding AI & Xuất Danh Bạ CSV Trên `/merchants` (Issue #67 & Issue #68):**
+  - Nâng cấp `LeaderboardExplorer.tsx` (`/leaderboard`) với 2 nút `📋 Sao chép BXH Markdown`, `📥 Xuất bảng CSV` và thanh **Quick 1v1 Matchup Picker** (`⚡ Chọn nhanh 2 máy bất kỳ trong BXH để đấu 1v1`) giúp người mua ghép cặp đối đầu bất kỳ 2 thiết bị nào trong bảng xếp hạng hiện tại.
+  - Nâng cấp `MerchantDirectoryExplorer.tsx` (`/merchants`) với bộ lọc **Mức Seeding AI** (`Đánh giá sạch <= 15%` vs `Seeding cao > 15%`) cùng 2 nút `📋 Sao chép danh bạ Markdown` và `📥 Xuất danh bạ CSV`.
 
 ### ✅ Phase 5: Mở Rộng Đa Sàn 10/10 Nền Tảng, Browser Extension MV3 & Tự Động Hóa Cảnh Báo Giá (Đã hoàn thành 100%)
 
