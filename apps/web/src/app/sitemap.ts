@@ -48,6 +48,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.88,
     },
     {
+      url: `${baseUrl}/leaderboard`,
+      lastModified: now,
+      changeFrequency: 'daily',
+      priority: 0.92,
+    },
+    {
       url: `${baseUrl}/merchants`,
       lastModified: now,
       changeFrequency: 'daily',
@@ -116,12 +122,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.85,
     }));
 
-    const merchantEntries: MetadataRoute.Sitemap = merchants.map((merchant) => ({
-      url: `${baseUrl}/merchants/${merchant.id}`,
-      lastModified: merchant.updated_at ? new Date(merchant.updated_at) : now,
-      changeFrequency: 'daily',
-      priority: 0.82,
-    }));
+    const merchantEntries: MetadataRoute.Sitemap = merchants.map(
+      (merchant) => ({
+        url: `${baseUrl}/merchants/${merchant.id}`,
+        lastModified: merchant.updated_at ? new Date(merchant.updated_at) : now,
+        changeFrequency: 'daily',
+        priority: 0.82,
+      })
+    );
 
     return [...staticEntries, ...productEntries, ...merchantEntries];
   } catch (err) {

@@ -3,7 +3,7 @@
 > **Cập nhật lần cuối:** 16/10/2026  
 > **Tech Stack chuẩn hóa:** TypeScript 7.0.2 + Next.js 16.3.8 + React 19.3 + Pure PostgreSQL 17 (Supabase Cloud `rate` schema) + Open-Core 2 Repositories (`DOS/Rate` & `DOS/Rate-Services`)  
 > **GitHub Project Board (Multi-Agent Queue):** [https://github.com/orgs/DOS/projects/9](https://github.com/orgs/DOS/projects/9)  
-> **Trạng thái hiện tại:** Đã hoàn thành 100% toàn bộ Lộ trình Phase 1, Phase 2, Phase 3 (3.1 -> 3.3), Phase 4 (4.1 -> 4.23) & Phase 5 (5.1 -> 5.8)
+> **Trạng thái hiện tại:** Đã hoàn thành 100% toàn bộ Lộ trình Phase 1, Phase 2, Phase 3 (3.1 -> 3.3), Phase 4 (4.1 -> 4.24) & Phase 5 (5.1 -> 5.8)
 
 ---
 
@@ -117,6 +117,9 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc **4 T�
   - Bổ sung thanh điểm trung bình 5 tiêu chí JReviews (`criteriaAverages`), ô tìm kiếm nội dung bình luận (`searchKeyword`), bộ lọc theo mức sao (`starFilter`) và giao diện `.rate-scoreboard-dark` / `.rate-card` trong `JReviewsSection.tsx`.
   - Mở rộng `MerchantDirectoryExplorer.tsx` hỗ trợ đủ **10/10 nền tảng** (`shopee`, `lazada`, `tiki`, `tiktok`, `cellphones`, `tgdd`, `fptshop`, `hoangha`, `didongviet`, `phongvu`), đồng bộ `.rate-card` + `tabular-nums`, và xuất `locked_category` + `excluded_cross_category_slugs` trên `GET /api/v1/rate/compare`.
   - Xóa vĩnh viễn **55 file rác** của bộ khung Strapi cũ (`components/forms/*`, `components/typography/*`, `components/ui/*`, 15 file không dùng trong `components/elementary/*` và thư mục trùng lặp `app/[locale]/style/*`) kèm bài kiểm thử bảo vệ `[10/10]` trong `core-rate-architecture.test.ts`.
+- [x] **4.24. Bảng Xếp Hạng Thiết Bị 4 Tầng & Chấm Điểm Kép JReviews 5 Tiêu Chí (`/leaderboard` - Issue #46):**
+  - Xây dựng trang `/leaderboard` (`apps/web/src/app/[locale]/leaderboard/page.tsx`) và `LeaderboardExplorer.tsx` theo cấu trúc phân cấp 4 tầng (`Directory: tech_electronics -> 5 Categories -> Master Products -> Verified Listings`) và hệ thống thiết kế `DESIGN.md` v3.0.
+  - Hỗ trợ chuyển đổi trực tiếp giữa 5 danh mục độc lập (`smartphones`, `tablets`, `laptops`, `smartwatches`, `earbuds`) kèm nút **So sánh Top 3 cùng danh mục** (`/compare?cat=<category>&slugs=...`), 8 chế độ xếp hạng JReviews (`Điểm Tổng Hợp 10.0`, `Người Dùng Thật`, `Chuyên Gia Lab`, `Màn Hình`, `Hiệu Năng`, `Camera / Âm Thanh`, `Pin & Sạc`, `Đáng Tiền P/P`), bộ lọc phân khúc giá, lọc thương hiệu, Bục Vinh Danh Top 3 Podium (`.rate-scoreboard-dark`) và Schema.org `ItemList` JSON-LD.
 
 ### ✅ Phase 5: Mở Rộng Đa Sàn 10/10 Nền Tảng, Browser Extension MV3 & Tự Động Hóa Cảnh Báo Giá (Đã hoàn thành 100%)
 

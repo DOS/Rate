@@ -68,6 +68,7 @@ export default function FooterDynamic({
   const fallback2: FooterSection = {
     title: copyDict.footer.col2Title,
     links: [
+      { label: copyDict.footer.links.leaderboard, href: '/leaderboard' },
       { label: copyDict.footer.links.inspect, href: '/inspect' },
       { label: copyDict.footer.links.compare, href: '/compare' },
       { label: copyDict.footer.links.merchants, href: '/merchants' },

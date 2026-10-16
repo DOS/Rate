@@ -190,6 +190,11 @@ export function NavbarDarkDynamic({
                     href: '/earbuds',
                   },
                   {
+                    id: 'leaderboard',
+                    label: copy.nav.leaderboard,
+                    href: '/leaderboard',
+                  },
+                  {
                     id: 'merchants',
                     label: copy.nav.merchants,
                     href: '/merchants',
