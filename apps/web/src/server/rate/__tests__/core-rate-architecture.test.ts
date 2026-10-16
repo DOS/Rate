@@ -1221,7 +1221,34 @@ function runCoreArchitectureSuite() {
     'ApiPlaygroundClient must include deals-radar preset and 3-format API catalog export'
   );
   console.log(
-    '  ✅ [28/28] Live Cross-Platform Deal Radar in /deals (#85) & API Catalog Export in /developers (#86) passed'
+    '  ✅ [28/29] Live Cross-Platform Deal Radar in /deals (#85) & API Catalog Export in /developers (#86) passed'
+  );
+
+  // 29. Homepage Cross-Platform Deal Radar (#87) & Same-Category Value Alternatives Cost-Per-Point on ProductDetailView (#88)
+  const homePageRadarSrc = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/app/[locale]/page.tsx'),
+    'utf8'
+  );
+  const productDetailValuePeersSrc = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/app/[locale]/smartphones/[slug]/page.tsx'
+    ),
+    'utf8'
+  );
+  assert.ok(
+    homePageRadarSrc.includes('getCrossPlatformDealRadar') &&
+      homePageRadarSrc.includes('homepage-deal-radar'),
+    'Homepage must fetch and render getCrossPlatformDealRadar (#87)'
+  );
+  assert.ok(
+    productDetailValuePeersSrc.includes('same-category-value-alternatives') &&
+      productDetailValuePeersSrc.includes('peerCostPerPoint') &&
+      productDetailValuePeersSrc.includes('costPerPointDelta'),
+    'ProductDetailView must compute and render Cost-Per-Point comparison for same-category peers (#88)'
+  );
+  console.log(
+    '  ✅ [29/29] Homepage Deal Radar (#87) & Same-Category Value Alternatives Cost-Per-Point (#88) passed'
   );
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
