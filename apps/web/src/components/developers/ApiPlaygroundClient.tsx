@@ -54,6 +54,14 @@ const PRESET_ENDPOINTS: ApiPresetEndpoint[] = [
       'Đặt tối đa 4 sản phẩm gốc lên bàn cân 10 nhóm thông số kỹ thuật chuẩn GSMArena & PhoneArena chỉ với 1 truy vấn REST.',
   },
   {
+    id: 'versus-head-to-head',
+    method: 'GET',
+    title: 'Đối đầu 1v1 JReviews & Trọng số Persona (/versus)',
+    path: '/api/v1/rate/versus?pair=apple-iphone-16-pro-max-256gb-vs-samsung-galaxy-s25-ultra-256gb&persona=balanced',
+    description:
+      'Chấm điểm đối đầu 1v1 trực tiếp giữa 2 mẫu cùng ngành hàng theo 5 tiêu chí JReviews (Màn hình, Hiệu năng, Camera, Pin, Đáng tiền), hỗ trợ tùy biến trọng số Persona và tính độ lệch giá.',
+  },
+  {
     id: 'inspect-url',
     method: 'GET',
     title: 'Trình Kiểm Định Giá & Link Sàn (/inspect)',

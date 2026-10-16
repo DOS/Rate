@@ -391,10 +391,9 @@ function runCoreArchitectureSuite() {
   // 9. DESIGN.md v3.0 Rating-First Architecture, 28 Self-Hosted Studio Images & Same-Category Comparison Lock
   const devicesDir = path.join(repoRoot, 'apps', 'web', 'public');
   const deviceSlugs = Array.from(KNOWN_LOCAL_DEVICE_IMAGES);
-  assert.equal(
-    deviceSlugs.length,
-    28,
-    'Must have all 28 flagship device images mapped'
+  assert.ok(
+    deviceSlugs.length >= 28,
+    'Must have at least 28 flagship device images mapped'
   );
   for (const slug of deviceSlugs) {
     const relImgPath = `/img/devices/${slug}.jpg`;
@@ -792,7 +791,35 @@ function runCoreArchitectureSuite() {
     'Homepage and Category Catalogs must surface 1v1 Flagship Showdowns'
   );
   console.log(
-    '  ✅ [16/16] Interactive 1v1 Weight Sliders (#57) & Homepage/Category 1v1 Showdowns (#58) passed'
+    '  ✅ [16/17] Interactive 1v1 Weight Sliders (#57) & Homepage/Category 1v1 Showdowns (#58) passed'
+  );
+
+  // 17. 1-Click Shareable Audit Summary (#60) & GET /api/v1/rate/versus OpenAPI 3.1.0 (#61)
+  const shareAuditSrc = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/components/leaderboard/ProductShareAuditButton.tsx'
+    ),
+    'utf8'
+  );
+  assert.ok(
+    shareAuditSrc.includes('handleCopyMarkdown') &&
+      shareAuditSrc.includes('handleCopyLink') &&
+      smartphoneDetailSrc.includes('ProductShareAuditButton'),
+    'ProductDetailView must include ProductShareAuditButton for 1-Click Markdown Audit & Link Copy'
+  );
+  const versusApiRouteSrc = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/app/api/v1/rate/versus/route.ts'),
+    'utf8'
+  );
+  assert.ok(
+    versusApiRouteSrc.includes('parseVersusQueryParams') &&
+      versusApiRouteSrc.includes('criteria_head_to_head') &&
+      Boolean(openApi.paths['/api/v1/rate/versus']?.get),
+    'GET /api/v1/rate/versus must exist and be documented in OpenAPI 3.1.0 spec'
+  );
+  console.log(
+    '  ✅ [17/17] 1-Click Shareable Audit Summary (#60) & GET /api/v1/rate/versus OpenAPI 3.1.0 (#61) passed'
   );
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }

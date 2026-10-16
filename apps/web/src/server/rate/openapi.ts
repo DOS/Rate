@@ -85,7 +85,7 @@ export function buildRateOpenApiSpec(
     openapi: '3.1.0',
     info: {
       title: 'Rate.vn Open-Core Intelligence REST API v1',
-      version: '1.4.0',
+      version: '1.5.0',
       summary:
         'Standardized 10-Group Tech Specs, 90-Day Price History & AI Review Auditing API',
       description:
@@ -284,6 +284,65 @@ export function buildRateOpenApiSpec(
           responses: {
             '200': {
               description: 'Side-by-side comparison matrix for up to 4 models.',
+            },
+          },
+        },
+      },
+      '/api/v1/rate/versus': {
+        get: {
+          operationId: 'getHeadToHeadVersusVerdict',
+          summary:
+            'Get programmatic 1v1 Head-to-Head JReviews verdict, 5-criteria scoreboard & price delta',
+          description:
+            'Evaluates two same-category master products (`?pair=<slugA>-vs-<slugB>` or `?slugA=...&slugB=...`) with optional persona/custom 5-criteria weights (`persona`, `w_screen`, `w_performance`, `w_camera`, `w_battery`, `w_value`) and returns the overall winner, per-criterion head-to-head breakdown, price delta, and 10-group specs.',
+          tags: ['Comparison & Watchlist'],
+          parameters: [
+            {
+              name: 'pair',
+              in: 'query',
+              required: false,
+              description:
+                'Canonical 1v1 pair slug in the format `<slugA>-vs-<slugB>` (e.g. `apple-iphone-16-pro-max-256gb-vs-samsung-galaxy-s25-ultra-256gb`).',
+              schema: { type: 'string' },
+            },
+            {
+              name: 'slugA',
+              in: 'query',
+              required: false,
+              description: 'First product slug if `pair` is not provided.',
+              schema: { type: 'string' },
+            },
+            {
+              name: 'slugB',
+              in: 'query',
+              required: false,
+              description: 'Second product slug if `pair` is not provided.',
+              schema: { type: 'string' },
+            },
+            {
+              name: 'persona',
+              in: 'query',
+              required: false,
+              description:
+                'Optional use-case persona preset (`balanced`, `gamer`, `creator`, `traveler`, `budget`).',
+              schema: {
+                type: 'string',
+                enum: ['balanced', 'gamer', 'creator', 'traveler', 'budget'],
+                default: 'balanced',
+              },
+            },
+          ],
+          responses: {
+            '200': {
+              description:
+                '1v1 head-to-head JReviews verdict, 5-criteria breakdown, and price comparison.',
+            },
+            '400': {
+              description: 'Missing or invalid 1v1 pair parameters.',
+            },
+            '404': {
+              description:
+                'Products not found or violated Same-Category Comparison Lock.',
             },
           },
         },
