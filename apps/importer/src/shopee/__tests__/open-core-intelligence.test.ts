@@ -354,7 +354,52 @@ async function runSuite() {
   const benchmarkCandidate = await enricher.enrichCandidate(s24);
   assert.equal(benchmarkCandidate.spec_source, 'benchmark_registry');
   console.log(
-    '  ✅ [8/8] AiSpecEnricher Fail-Closed Validation, Provenance & Batch Retry Hardening (K4, C8) (#164) passed'
+    '  ✅ [8/9] AiSpecEnricher Fail-Closed Validation, Provenance & Batch Retry Hardening (K4, C8) (#164) passed'
+  );
+
+  // 9. Data Contract Hardening: Numeric Bounds, MasterProduct Defaults & ScrapedProductSchema (Audit T15) (#171)
+  const { MasterProductSchema, ScrapedProductSchema } = await import('@repo/shared-data');
+  assert.equal(
+    ProductSpecificationsSchema.safeParse({
+      hardware: { ram_gb: -8 },
+    }).success,
+    false,
+    'Negative ram_gb must fail ProductSpecificationsSchema'
+  );
+  assert.equal(
+    ProductSpecificationsSchema.safeParse({
+      battery: { capacity_mah: 9999999 },
+    }).success,
+    false,
+    'Out-of-bounds capacity_mah must fail ProductSpecificationsSchema'
+  );
+
+  const defaultMaster = MasterProductSchema.parse({
+    id: '00000000-0000-4000-8000-000000000001',
+    brand: 'Apple',
+    model: 'iPhone 18 Pro Max',
+    model_key: 'apple:iphone-18-pro-max:256gb',
+    name: 'Apple iPhone 18 Pro Max 256GB',
+    slug: 'apple-iphone-18-pro-max-256gb',
+  });
+  assert.equal(defaultMaster.status, 'draft', 'MasterProductSchema must default to draft');
+  assert.equal(
+    defaultMaster.user_rating_weighted,
+    undefined,
+    'MasterProductSchema must not fabricate 0 for user_rating_weighted when omitted'
+  );
+
+  const validScraped = ScrapedProductSchema.safeParse(
+    createDummyShopeeProduct('Điện thoại Apple iPhone 16 Pro Max 256GB')
+  );
+  assert.equal(validScraped.success, true, 'Valid ShopeeProduct fixture must pass ScrapedProductSchema');
+  const invalidScraped = ScrapedProductSchema.safeParse({
+    ...createDummyShopeeProduct('Invalid Product'),
+    priceMin: -100,
+  });
+  assert.equal(invalidScraped.success, false, 'Negative priceMin must fail ScrapedProductSchema');
+  console.log(
+    '  ✅ [9/9] Data Contract Hardening: Numeric Bounds, Draft/Null Defaults & ScrapedProductSchema (Audit T15) (#171) passed'
   );
 
   console.log('🎉 All @repo/crawlers Open-Core Intelligence tests passed!');

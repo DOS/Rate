@@ -3,6 +3,12 @@
  * Decouples the public Normalization, Entity Matching & AI Spec Enricher engine
  * from private scraper implementations (see DOS/Rate-Services).
  */
+export {
+  SupportedEcommercePlatformSchema,
+  ScrapedReviewerSchema,
+  ScrapedReviewSchema,
+  ScrapedProductSchema,
+} from '@repo/shared-data';
 
 export type SupportedEcommercePlatform =
   | 'shopee'
