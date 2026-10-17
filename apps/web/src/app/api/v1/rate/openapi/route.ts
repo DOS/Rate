@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
 import { buildRateOpenApiSpec } from '@/server/rate/openapi';
+import { createLogger, serializeError } from '@/lib/logger';
+
+const log = createLogger('api.openapi');
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -25,7 +28,7 @@ export async function GET(request: Request) {
       },
     });
   } catch (err) {
-    console.error('[API /api/v1/rate/openapi] Unexpected error:', err);
+    log.error('openapi build failed', { error: serializeError(err) });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500, headers: CORS_HEADERS }

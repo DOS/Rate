@@ -12,6 +12,9 @@ import {
   mapRpcRejection,
   type RpcRejection,
 } from '@/server/rate/request-auth';
+import { createLogger, serializeError } from '@/lib/logger';
+
+const log = createLogger('api.watchlist');
 
 // SQLSTATEs raised deliberately by rate.upsert_price_alert
 // (DOS-Me 20261017130000_rate_price_alert_auth_gate.sql).
@@ -254,11 +257,10 @@ export async function POST(request: NextRequest) {
     }
 
     if (rpcError && !isMissingRpcError(rpcError)) {
-      console.error(
-        '[watchlist] upsert_price_alert failed',
-        rpcError.code,
-        rpcError.message
-      );
+      log.error('upsert_price_alert failed', {
+        code: rpcError.code,
+        message: rpcError.message,
+      });
       return NextResponse.json(
         {
           ok: false,
@@ -303,7 +305,7 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('[watchlist] POST failed', error);
+    log.error('POST failed', { error: serializeError(error) });
     return NextResponse.json(
       { ok: false, error: 'Internal server error' },
       { status: 500 }

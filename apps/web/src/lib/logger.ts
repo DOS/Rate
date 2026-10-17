@@ -1,0 +1,81 @@
+/**
+ * Structured server logger: one JSON object per line, so Vercel / log drains can
+ * filter by level and scope. Values under secret-looking keys are redacted and
+ * error stacks are kept out of production logs.
+ */
+
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+export type LogFields = Record<string, unknown>;
+
+const SECRET_KEY =
+  /token|secret|password|passwd|authorization|cookie|api[-_]?key|service[-_]?role|anon[-_]?key/i;
+const MAX_DEPTH = 4;
+const MAX_STRING = 2000;
+
+function isProduction(): boolean {
+  return process.env.NODE_ENV === 'production';
+}
+
+export function serializeError(err: unknown): LogFields {
+  if (err instanceof Error) {
+    const withCode = err as Error & { code?: unknown; digest?: unknown };
+    return {
+      name: err.name,
+      message: err.message.slice(0, MAX_STRING),
+      ...(withCode.code !== undefined ? { code: withCode.code } : {}),
+      ...(withCode.digest !== undefined ? { digest: withCode.digest } : {}),
+      ...(isProduction() ? {} : { stack: err.stack }),
+    };
+  }
+  if (err && typeof err === 'object') {
+    // PostgREST / Supabase errors are plain objects: { code, message, details, hint }.
+    return redact(err, 1) as LogFields;
+  }
+  return { message: String(err).slice(0, MAX_STRING) };
+}
+
+export function redact(value: unknown, depth = 0): unknown {
+  if (value instanceof Error) return serializeError(value);
+  if (typeof value === 'string') return value.slice(0, MAX_STRING);
+  if (value === null || typeof value !== 'object') return value;
+  if (depth >= MAX_DEPTH) return '[truncated]';
+  if (Array.isArray(value))
+    return value.slice(0, 50).map((v) => redact(v, depth + 1));
+  const out: LogFields = {};
+  for (const [key, v] of Object.entries(value)) {
+    out[key] = SECRET_KEY.test(key) ? '[redacted]' : redact(v, depth + 1);
+  }
+  return out;
+}
+
+export interface Logger {
+  debug(msg: string, fields?: LogFields): void;
+  info(msg: string, fields?: LogFields): void;
+  warn(msg: string, fields?: LogFields): void;
+  error(msg: string, fields?: LogFields): void;
+}
+
+export function createLogger(scope: string): Logger {
+  const write = (level: LogLevel, msg: string, fields?: LogFields) => {
+    if (level === 'debug' && isProduction()) return;
+    const line = JSON.stringify({
+      ts: new Date().toISOString(),
+      level,
+      scope,
+      msg,
+      ...((fields ? redact(fields) : {}) as LogFields),
+    });
+    if (level === 'error' || level === 'warn') {
+      console.error(line);
+    } else {
+      // eslint-disable-next-line no-console -- the logger is the one sanctioned console writer
+      console.log(line);
+    }
+  };
+  return {
+    debug: (msg, fields) => write('debug', msg, fields),
+    info: (msg, fields) => write('info', msg, fields),
+    warn: (msg, fields) => write('warn', msg, fields),
+    error: (msg, fields) => write('error', msg, fields),
+  };
+}
