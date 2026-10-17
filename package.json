@@ -91,7 +91,7 @@
   "dependencies": {
     "@typescript-eslint/eslint-plugin": "^8.71.2",
     "@typescript-eslint/parser": "^8.71.2",
-    "eslint-config-prettier": "10.1.5",
+    "eslint-config-prettier": "10.1.8",
     "lucide-react": "0.513.0",
     "playwright": "^1.52.0",
     "zod": "^4.6.5"
