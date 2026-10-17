@@ -308,7 +308,8 @@ async function runTests() {
       unenrichedCandidate,
       'Điện thoại Xiaomi 14 Ultra 16GB RAM 512GB'
     );
-    assert.equal(enriched.is_benchmark_enriched, true);
+    assert.equal(enriched.is_benchmark_enriched, false);
+    assert.equal(enriched.spec_source, 'ai_unverified');
     assert.equal(enriched.screen_size_inch, 6.73);
     assert.equal(enriched.battery_mah, 5000);
     assert.equal(
