@@ -7,6 +7,9 @@ import {
   mapRpcRejection,
   type RpcRejection,
 } from '@/server/rate/request-auth';
+import { createLogger, serializeError } from '@/lib/logger';
+
+const log = createLogger('api.reviews');
 
 const CRITERIA_KEYS = [
   'screen',
@@ -221,11 +224,10 @@ export async function POST(request: NextRequest) {
           { status: rejection.status }
         );
       }
-      console.error(
-        '[reviews] submit_community_review failed',
-        rpcError.code,
-        rpcError.message
-      );
+      log.error('submit_community_review failed', {
+        code: rpcError.code,
+        message: rpcError.message,
+      });
       return NextResponse.json(
         {
           ok: false,
@@ -237,7 +239,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!rpcData || typeof rpcData !== 'object' || !('id' in rpcData)) {
-      console.error('[reviews] submit_community_review returned no review id');
+      log.error('submit_community_review returned no review id');
       return NextResponse.json(
         {
           ok: false,
@@ -254,7 +256,7 @@ export async function POST(request: NextRequest) {
       review: toReviewItem(rpcData as Record<string, unknown>, criteria),
     });
   } catch (err) {
-    console.error('[reviews] POST failed', err);
+    log.error('POST failed', { error: serializeError(err) });
     return NextResponse.json(
       { ok: false, error: 'Failed to submit review' },
       { status: 500 }

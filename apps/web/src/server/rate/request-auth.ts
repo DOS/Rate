@@ -9,6 +9,9 @@ import {
   hasSupabaseAuthCookie,
   type CookieRecord,
 } from '@/lib/supabase/cookies';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('server.rpc');
 
 type RateSchemaClient = ReturnType<SupabaseClient['schema']>;
 
@@ -176,11 +179,10 @@ export function mapRpcRejection(
   const rejection = (error?.code && table[error.code]) || null;
   if (rejection) {
     // Native Postgres errors can share these SQLSTATEs; keep the real text in logs.
-    console.warn(
-      '[rate-rpc] rejected',
-      error?.code,
-      (error as { message?: string })?.message
-    );
+    log.warn('rpc rejected', {
+      code: error?.code,
+      message: (error as { message?: string })?.message,
+    });
   }
   return rejection;
 }

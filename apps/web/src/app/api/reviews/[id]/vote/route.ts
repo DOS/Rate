@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { sanitizePublicApiError } from '@/server/rate/api-handler';
+import { createLogger, serializeError } from '@/lib/logger';
+
+const log = createLogger('api.reviews.vote');
 
 type VoteAction = 'up' | 'down' | 'report' | 'clear';
 type ReportReason = 'spam' | 'fake' | 'offensive' | 'off_topic' | 'other';
@@ -237,7 +240,7 @@ export async function POST(
       helpfulnessWeight: Number(updatedReview.helpfulness_weight ?? 1),
     });
   } catch (error) {
-    console.error('Error voting on review:', error);
+    log.error('vote failed', { error: serializeError(error) });
     return NextResponse.json(
       { error: sanitizePublicApiError(error, 'Failed to vote on review') },
       { status: 500 }
