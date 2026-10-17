@@ -49,6 +49,10 @@ All components in `apps/web` must reference the `--rate-*` CSS custom properties
 | `--rate-fg-primary`    | `#f8fafc`                                   | `#0f172a`                             | Headings, product titles, primary spec values                          |
 | `--rate-fg-secondary`  | `#94a3b8`                                   | `#475569`                             | Review body copy, spec labels, descriptions                            |
 | `--rate-fg-muted`      | `#64748b`                                   | `#64748b`                             | Timestamps, `model_key` metadata, secondary captions                   |
+| `--rate-fg-paragraph`  | `#cbd5e1`                                   | `#334155`                             | Eyebrow and spec pill text, long-form copy                             |
+| `--rate-crimson-text`  | `#ff6b6b`                                   | `#e11d48`                             | Crimson links and labels that must hold 4.5:1 on the surface           |
+
+Wrap an obsidian section in `.rate-surface-dark` (defined in `_custom.scss`) and every token above switches to its dark value, so `.rate-card`, `.rate-eyebrow`, `.rate-spec-pill`, `.rate-spec-group-card` and the score badges render correctly inside it. `--rate-fg-muted` stays `#64748b` and reaches only about 4.1:1 on the dark canvas: keep it for non-essential captions there.
 
 ### 2.2 Semantic Rating & Audit Tokens
 
@@ -59,6 +63,8 @@ All components in `apps/web` must reference the `--rate-*` CSS custom properties
 | `--rate-score-expert` | `#6366f1` | `#eef2ff` / `rgba(99, 102, 241, 0.14)` | **Expert Lab Score**, 5-Criteria progress bars, AI Review Verdict    |
 | `--rate-score-star`   | `#f59e0b` | `#fffbeb` / `rgba(245, 158, 11, 0.14)` | Star rating icons, moderate caution indicators                       |
 | `--rate-risk-danger`  | `#f43f5e` | `#fff1f2` / `rgba(244, 63, 94, 0.14)`  | Seeding spam excluded (`include_in_rating = false`), Cons, Fake Sale |
+
+The soft tints are the `-bg` tokens: `--rate-brand-bg`, `--rate-score-user-bg`, `--rate-score-expert-bg`, `--rate-score-star-bg`, `--rate-risk-danger-bg` (light value at `:root`, dark value inside `.rate-surface-dark`).
 
 ---
 
