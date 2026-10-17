@@ -85,7 +85,12 @@ export async function generateCategoryProductMetadata(
           : lang === 'cs'
             ? `${product.name} - 10 skupin parametrů a historie cen | Rate.vn`
             : `${product.name} - So sánh giá & Kiểm định khuyến mãi AI | Rate.vn`,
-      description: `Giá tốt nhất từ ${minPrice} ₫. Xem 10 nhóm thông số kỹ thuật chuẩn GSMArena/PhoneArena và biểu đồ lịch sử giá.`,
+      description:
+        lang === 'en'
+          ? `Best price from ${minPrice} ₫. See the 10 standardized GSMArena/PhoneArena spec groups and the price history chart.`
+          : lang === 'cs'
+            ? `Nejlepší cena od ${minPrice} ₫. Prohlédněte si 10 standardizovaných skupin parametrů GSMArena/PhoneArena a graf historie cen.`
+            : `Giá tốt nhất từ ${minPrice} ₫. Xem 10 nhóm thông số kỹ thuật chuẩn GSMArena/PhoneArena và biểu đồ lịch sử giá.`,
       url: canonicalUrl,
       images:
         product.images && product.images.length > 0
