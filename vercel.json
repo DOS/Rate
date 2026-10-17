@@ -3,5 +3,5 @@
   "framework": "nextjs",
   "buildCommand": "npx --yes pnpm@10.34.5 --filter @repo/web... build",
   "outputDirectory": "apps/web/.next",
-  "installCommand": "npx --yes pnpm@10.34.5 install"
+  "installCommand": "npx --yes pnpm@10.34.5 install --no-frozen-lockfile"
 }
