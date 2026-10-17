@@ -2557,7 +2557,36 @@ async function runCoreArchitectureSuite() {
     'CLAUDE.md must reference AGENTS.md without duplicating Project #9 field IDs (#175)'
   );
   console.log(
-    '  ✅ [52/52] Local Config Untracking, .gitignore Asset Rule & CLAUDE.md Deduplication (Audit Low, #175) passed'
+    '  ✅ [52/53] Local Config Untracking, .gitignore Asset Rule & CLAUDE.md Deduplication (Audit Low, #175) passed'
+  );
+
+  // 53. Issue #176: Audit T4, T6, T7, T8 reference migration & price_history limit(1000)
+  const mig176Src = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'supabase/migrations/20261018003000_rate_audit_t4_t6_t7_t8_hardening.sql'
+    ),
+    'utf8'
+  );
+  assert.ok(
+    mig176Src.includes('idx_price_history_recorded_at_brin') &&
+      mig176Src.includes('ON DELETE RESTRICT') &&
+      mig176Src.includes('SECURITY INVOKER') &&
+      mig176Src.includes("SET search_path = ''") &&
+      mig176Src.includes("ESCAPE ''\\''"),
+    "20261018003000_rate_audit_t4_t6_t7_t8_hardening.sql must enforce BRIN index, ON DELETE RESTRICT, SECURITY INVOKER, search_path='' & escaped ILIKE wildcards (#176)"
+  );
+  const rateApiSrc176 = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/lib/rate-api.ts'),
+    'utf8'
+  );
+  assert.ok(
+    rateApiSrc176.includes(".from('price_history')") &&
+      rateApiSrc176.includes('.limit(1000)'),
+    'getMasterProductPriceHistory must fetch up to 1000 price_history observations per master product (Audit T6, #176)'
+  );
+  console.log(
+    '  ✅ [53/53] DB Hardening Reference Migration (Audit T4, T6, T7, T8) & 1000-Row Price History Window (#176) passed'
   );
 
   console.log('🎉 All Rate.vn Core Architecture tests passed!');

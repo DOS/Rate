@@ -1119,7 +1119,7 @@ export async function getMasterProductPriceHistory(
     .select('id, product_id, price, price_original, recorded_at, source')
     .in('product_id', productIds)
     .order('recorded_at', { ascending: false })
-    .limit(500);
+    .limit(1000);
 
   if (error) {
     console.error(
