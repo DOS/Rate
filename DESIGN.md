@@ -28,6 +28,7 @@ It is **NOT** an affiliate shopping portal, coupon site, or legacy business dire
      - **Rose / Crimson (`#f43f5e` / `#ff2e29`)**: Seeding Spam Penalty, Cons, Fake Discount Alert, and Brand Focal Mark.
 3. **Zero Legacy Template Artifacts:**
    - All remnants of the legacy _ListingHub_ directory template (`/img/brand/logo-*.png`, `<BrandImage />`, `/img/brand-section.png`, `.bg-primary-2` red background banners, `'Jost'` rounded geometric font) are **strictly banned**.
+   - **Brand mark:** use `<RateWordmark />` (`src/components/brand/RateWordmark.tsx`): the Rate mark (a `#ff2e29` dot on a `#12151a` disc, radii `0.24` / `0.46` of the size, the same geometry as the extension icon) followed by "Rate.vn" in Inter 800. `tone="ink"` on light grounds, `tone="light"` on obsidian grounds. The app icon files (`src/app/icon.svg`, `favicon.ico`, `apple-icon.png`) and `public/img/rate-mark.svg` / `rate-mark-512.png` carry the same mark.
 4. **High-Density Tabular Scannability:**
    - Every rating (`4.9 / 5.0`), criteria score (`9.6 / 10`), review percentage (`92% Authentic`), hardware metric (`120 Hz`, `5000 mAh`), and reference price must use `font-variant-numeric: tabular-nums`.
 

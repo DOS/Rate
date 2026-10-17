@@ -10986,4 +10986,33 @@ h1, h2, h3, h4, h5, h6 {
   color: #0f172a;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-}
+}
+/* Rate.vn wordmark (src/components/brand/RateWordmark.tsx) */
+.rate-wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  font-family: var(--heading-font-family);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  white-space: nowrap;
+}
+
+.rate-wordmark .rate-mark {
+  flex-shrink: 0;
+}
+
+.rate-wordmark-ink {
+  color: var(--rate-fg-primary);
+}
+
+.rate-wordmark-light {
+  color: #f8fafc;
+}
+
+/* On obsidian grounds the #12151a disc needs a hairline to stay visible */
+.rate-wordmark-light .rate-mark circle:first-child {
+  stroke: rgba(255, 255, 255, 0.16);
+  stroke-width: 3;
+}
