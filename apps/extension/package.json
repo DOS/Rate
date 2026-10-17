@@ -7,7 +7,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "build": "tsc --project tsconfig.json && node scripts/build.mjs",
-    "test": "tsx src/test-extension-pipeline.ts"
+    "test": "tsx --tsconfig ../web/tsconfig.test.json src/test-extension-pipeline.ts"
   },
   "dependencies": {
     "@repo/shared-data": "workspace:*"
