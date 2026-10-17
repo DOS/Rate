@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useId, useMemo, useState } from 'react';
+import { escapeCsvCell } from '@/lib/csv-safe';
 import {
   computeCombinedDualScore,
   computeJReviewsWeight,
@@ -605,7 +606,6 @@ export default function JReviewsSection({
       filteredAndSortedReviews.length === 0
     )
       return;
-    const escapeCsv = (val: string) => `"${val.replace(/"/g, '""')}"`;
     const headers = [
       'ReviewID',
       'Author',
@@ -639,8 +639,8 @@ export default function JReviewsSection({
     const csvContent =
       '\uFEFF' +
       [
-        headers.map(escapeCsv).join(','),
-        ...rows.map((row) => row.map(escapeCsv).join(',')),
+        headers.map(escapeCsvCell).join(','),
+        ...rows.map((row) => row.map(escapeCsvCell).join(',')),
       ].join('\r\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });

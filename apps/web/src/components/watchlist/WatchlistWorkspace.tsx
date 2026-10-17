@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { Link } from '@/lib/navigation';
+import { escapeCsvCell } from '@/lib/csv-safe';
 import type { MasterProduct } from '@repo/shared-data';
 import { getMasterProductHref } from '@/lib/rate-domain';
 import {
@@ -337,24 +338,23 @@ export default function WatchlistWorkspace({
         rSig?.priceSpread?.spreadPct ??
         (curMin > 0 ? Math.round(((curMax - curMin) / curMin) * 1000) / 10 : 0);
       const hit = curMin > 0 && curMin <= item.targetPrice;
-      const esc = (v: string | number) =>
-        `"${String(v ?? '').replace(/"/g, '""')}"`;
       return [
-        esc(item.slug),
-        esc(item.name),
-        esc(item.brand),
-        esc(item.categoryPath || '/smartphones'),
-        esc(curMin),
-        esc(item.targetPrice),
-        esc(spreadVnd),
-        esc(spreadPct),
-        esc(hit ? 'TARGET_REACHED' : 'WATCHING'),
-        esc(liveDeal?.best_offer?.merchant_name || ''),
-        esc(liveDeal?.best_offer?.platform || ''),
-        ...radarCsvCells(rSig).map(esc),
+        escapeCsvCell(item.slug),
+        escapeCsvCell(item.name),
+        escapeCsvCell(item.brand),
+        escapeCsvCell(item.categoryPath || '/smartphones'),
+        escapeCsvCell(curMin),
+        escapeCsvCell(item.targetPrice),
+        escapeCsvCell(spreadVnd),
+        escapeCsvCell(spreadPct),
+        escapeCsvCell(hit ? 'TARGET_REACHED' : 'WATCHING'),
+        escapeCsvCell(liveDeal?.best_offer?.merchant_name || ''),
+        escapeCsvCell(liveDeal?.best_offer?.platform || ''),
+        ...radarCsvCells(rSig).map(escapeCsvCell),
       ].join(',');
     });
-    const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\n');
+    const csvContent =
+      '\uFEFF' + [headers.map(escapeCsvCell).join(','), ...rows].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
