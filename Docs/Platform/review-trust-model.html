@@ -200,15 +200,16 @@
   </table></div>
 
   <h3>Trục F: Tín hiệu cộng đồng</h3>
-  <p>Tính từ <b>vote hữu dụng</b> (đã lọc spam, mục 9), là số vote đã nhân trọng số người vote, nên có thể là số lẻ:</p>
+  <p>Tính từ <b>vote hữu dụng</b> (đã lọc spam, mục 9), là số vote đã nhân trọng số người vote, nên có thể là số lẻ. Trước P3 chưa có trọng số người vote, nên F dùng số vote thô (mỗi tài khoản một vote, như hiện nay):</p>
 <pre><code>net⁺ = max(0, up_hữu_dụng − down_hữu_dụng)
 net⁻ = max(0, down_hữu_dụng − up_hữu_dụng)
-F    = clamp(1 + 0.45 · ln(1 + net⁺) − 0.30 · net⁻ − 0.35 · báo_cáo_hữu_dụng, 0, 2)</code></pre>
-  <p>Hệ số 0,45 / 0,30 / 0,35 giữ nguyên như <code>rate.compute_review_weight</code> hiện tại. Có ba thay đổi:</p>
+F    = clamp(1 + 0.45 · ln(1 + net⁺) − 0.30 · net⁻ − 0.35 · báo_cáo_hữu_dụng, 0.1, 2)</code></pre>
+  <p>Hệ số 0,45 / 0,30 / 0,35 giữ nguyên như <code>rate.compute_review_weight</code> hiện tại. Có bốn thay đổi:</p>
   <ul>
     <li><b>Nhân thay vì cộng.</b> Hiện nay vote được <i>cộng</i> vào trọng số gốc (0,25 + 0,45 × ln(1 + net)), nên một review chỉ chấm sao có 12 vote nặng 1,4, hơn cả một review chi tiết không có vote. Đề xuất <i>nhân</i>: vote khuếch đại chất lượng sẵn có chứ không thay thế nó.</li>
     <li>Vote được tính theo trọng số người vote (mục 9).</li>
     <li>F có trần là 2, tổng trọng số vẫn có trần 3.</li>
+    <li><b>F có sàn là 0,1.</b> Hiện nay 4 vote xuống là đủ đưa trọng số về 0. Theo nguyên tắc 2, chỉ cổng chặn G mới được đưa về 0, nên vote chỉ làm review nhẹ đi. Review bị báo cáo nhiều được đưa vào hàng đợi kiểm duyệt (L5, mục 10), và người kiểm duyệt quyết định có đóng cổng chặn hay không.</li>
   </ul>
 
   <h2 id="loai">4. Bảng các loại review</h2>
@@ -251,7 +252,7 @@ B  tính độc lập             (trục B)
 C  độ sâu nội dung          (trục C, tối đa 1,5)
 D  uy tín người viết        (trục D)
 E  bối cảnh                 (trục E)
-F  tín hiệu cộng đồng       (trục F, 0 đến 2)</code></pre>
+F  tín hiệu cộng đồng       (trục F, 0,1 đến 2)</code></pre>
   <ul>
     <li>Các hệ số là giá trị khởi điểm đề xuất. Sẽ hiệu chỉnh khi có dữ liệu thật: lấy mẫu có người gán nhãn, đo độ chính xác của từng bộ phát hiện.</li>
     <li>Mọi hệ số được lưu kèm từng review trong <code>weight_breakdown</code>, và giao diện hiển thị được lý do.</li>
@@ -394,7 +395,7 @@ ALTER TABLE rate.review_flags
   ADD COLUMN IF NOT EXISTS relevance NUMERIC(4,3),     -- 0..1, mức liên quan đến sản phẩm
   ADD COLUMN IF NOT EXISTS aspects JSONB DEFAULT '{}'::jsonb,   -- {"battery": {"sentiment": -1, "evidence": "..."}, "shipping": {...}}
   ADD COLUMN IF NOT EXISTS ai_generated_prob NUMERIC(4,3),
-  ADD COLUMN IF NOT EXISTS base_weight NUMERIC(5,2),   -- G×A×B×C×D×E, chưa nhân vote
+  ADD COLUMN IF NOT EXISTS base_weight NUMERIC(6,4),   -- G×A×B×C×D×E, chưa nhân vote, chưa làm tròn (JS và SQL chỉ làm tròn w cuối cùng)
   ADD COLUMN IF NOT EXISTS weight_breakdown JSONB DEFAULT '{}'::jsonb;
 
 -- B. Hàm SQL dùng base_weight khi có, giữ bảng tra theo verdict cho dữ liệu cũ
@@ -428,7 +429,7 @@ CREATE TABLE IF NOT EXISTS rate.reviewer_ratings (...);     -- đánh giá về 
     <li><code>filler</code>, và câu hỏi đăng nhầm chỗ: <code>low_value_coin_spam</code>.</li>
     <li>Còn lại là <code>authentic</code>.</li>
   </ul>
-  <p>Bất kỳ review nào có G = 0 (kể cả <code>conflict_of_interest</code> của người bán, nhà sản xuất, và cổng chặn của trục E) đều phải có <code>include_in_rating = false</code>, để không lọt vào điểm sản phẩm lẫn tỷ lệ khiếu nại của gian hàng.</p>
+  <p>Bất kỳ review nào có G = 0 (kể cả <code>conflict_of_interest</code> của người bán, nhà sản xuất, và cổng chặn của trục E) đều phải có <code>include_in_rating = false</code>, để không lọt vào điểm sản phẩm lẫn tỷ lệ khiếu nại của gian hàng. <code>evaluateMerchantRisk</code> chỉ đếm khiếu nại từ review có <code>include_in_rating = true</code> (sửa cùng PR này, DOS/Rate#160).</p>
 
   <h2 id="lo-trinh">13. Lộ trình</h2>
   <div class="table-wrap"><table>
@@ -471,7 +472,7 @@ interface WeightBreakdown {
   depth: number;                // C (gồm cộng thêm ảnh thật / dài hạn, tối đa 1.5)
   reviewer: number;             // D
   context: number;              // E
-  community: number;            // F (0..2)
+  community: number;            // F (0.1..2)
   weight: number;               // tích, giới hạn [0, 3]
   explanationVi: string;        // hiển thị cho người đọc
 }

@@ -858,7 +858,8 @@ Return ONLY valid JSON matching:
       for (let i = 0; i < input.rawReviews.length; i++) {
         const rev = input.rawReviews[i];
         const flag = input.reviewResults[i];
-        if (rev.rating_star <= 2 && flag?.flag_category === 'authentic') {
+        if (rev.rating_star <= 2 && flag?.flag_category === 'authentic' && flag.include_in_rating) {
+          // A review left out of the rating (e.g. voted down to weight 0) is no complaint either.
           // A low star with no text describes no defect: it counts at the same reduced weight
           // as in the rating, not as a full complaint.
           authenticLowStarCount += isRatingOnlyComment(rev.comment) ? 0.25 : 1;
