@@ -236,81 +236,118 @@ export class ShopeeIngestionPipeline {
 
     await report?.('listing');
 
-    // 4. Smart Delta Price Compression + stable observation_id
-    // Only record a new row in rate.price_history when:
-    //   (a) there is no prior observation, OR
-    //   (b) price or price_original changed vs the latest observation, OR
-    //   (c) the latest observation is >= 7 days old (weekly heartbeat anchor for charts)
-    const { data: latestObsRows } = await this.supabase
-      .from('price_history')
-      .select('observation_id, price, price_original, recorded_at')
-      .eq('product_id', productId)
-      .order('recorded_at', { ascending: false })
-      .limit(1);
+    // 4. Smart Delta Price Compression + stable observation_id (Audit M7)
+    // Prefer single-round-trip `rate.record_price_observation` RPC (performs 7-day delta
+    // check + `ON CONFLICT (observation_id) WHERE observation_id IS NOT NULL DO NOTHING`).
+    const dayBucket = new Date().toISOString().slice(0, 10);
+    const observationId =
+      'px-' +
+      crypto
+        .createHash('sha256')
+        .update(
+          `${productId}|${product.priceMin}|${product.priceBeforeDiscount || ''}|${dayBucket}`
+        )
+        .digest('hex');
 
-    const latestObs =
-      Array.isArray(latestObsRows) && latestObsRows.length > 0 ? latestObsRows[0] : null;
-    const currentPrice = Number(product.priceMin);
-    const currentOriginal = Number(product.priceBeforeDiscount || 0);
-    const prevPrice = latestObs ? Number(latestObs.price) : -1;
-    const prevOriginal = latestObs ? Number(latestObs.price_original || 0) : -1;
-    const ageMs =
-      latestObs && latestObs.recorded_at
-        ? Date.now() - new Date(latestObs.recorded_at).getTime()
-        : Number.POSITIVE_INFINITY;
-    const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
-
-    if (
-      latestObs &&
-      prevPrice === currentPrice &&
-      prevOriginal === currentOriginal &&
-      ageMs < sevenDaysMs
-    ) {
-      console.log(
-        `[MultiPlatformIngest:${platform}] Delta Price Compression: price unchanged (${currentPrice.toLocaleString('vi-VN')}₫, last anchor ${String(latestObs.recorded_at).slice(0, 10)}), skipping redundant history row.`
+    let handledByObservationRpc = false;
+    if (typeof (this.supabase as any).rpc === 'function') {
+      const { data: obsStatus, error: obsRpcErr } = await (this.supabase as any).rpc(
+        'record_price_observation',
+        {
+          p_product_id: productId,
+          p_price: product.priceMin,
+          p_price_original: product.priceBeforeDiscount || null,
+          p_source: `${platform}_crawler`,
+          p_observation_id: observationId,
+          p_promotion_id: null,
+        }
       );
-    } else {
-      const dayBucket = new Date().toISOString().slice(0, 10);
-      const observationId =
-        'px-' +
-        crypto
-          .createHash('sha256')
-          .update(
-            `${productId}|${product.priceMin}|${product.priceBeforeDiscount || ''}|${dayBucket}`
-          )
-          .digest('hex');
 
-      const { data: existingPrice, error: priceLookupErr } = await this.supabase
-        .from('price_history')
-        .select('observation_id')
-        .eq('observation_id', observationId)
-        .limit(1);
-      if (priceLookupErr) {
-        throw new Error(`Failed to check existing price observation: ${priceLookupErr.message}`);
+      if (!obsRpcErr && typeof obsStatus === 'string') {
+        handledByObservationRpc = true;
+        if (obsStatus === 'unchanged_delta') {
+          console.log(
+            `[MultiPlatformIngest:${platform}] Delta Price Compression (RPC): price unchanged (${Number(product.priceMin).toLocaleString('vi-VN')}₫), skipping redundant history row.`
+          );
+        } else if (obsStatus === 'deduped_conflict') {
+          console.log(
+            `[MultiPlatformIngest:${platform}] Price observation already recorded via RPC (${observationId}), skipping.`
+          );
+        }
+      } else if (
+        obsRpcErr &&
+        !/function .*record_price_observation.* does not exist|PGRST202/i.test(
+          `${obsRpcErr.code || ''} ${obsRpcErr.message || ''}`
+        )
+      ) {
+        console.warn(
+          `[MultiPlatformIngest:${platform}] record_price_observation RPC warning (${obsRpcErr.message}); falling back to client-side delta check.`
+        );
       }
-      if (Array.isArray(existingPrice) && existingPrice.length > 0) {
+    }
+
+    if (!handledByObservationRpc) {
+      const { data: latestObsRows } = await this.supabase
+        .from('price_history')
+        .select('observation_id, price, price_original, recorded_at')
+        .eq('product_id', productId)
+        .order('recorded_at', { ascending: false })
+        .limit(1);
+
+      const latestObs =
+        Array.isArray(latestObsRows) && latestObsRows.length > 0 ? latestObsRows[0] : null;
+      const currentPrice = Number(product.priceMin);
+      const currentOriginal = Number(product.priceBeforeDiscount || 0);
+      const prevPrice = latestObs ? Number(latestObs.price) : -1;
+      const prevOriginal = latestObs ? Number(latestObs.price_original || 0) : -1;
+      const ageMs =
+        latestObs && latestObs.recorded_at
+          ? Date.now() - new Date(latestObs.recorded_at).getTime()
+          : Number.POSITIVE_INFINITY;
+      const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+
+      if (
+        latestObs &&
+        prevPrice === currentPrice &&
+        prevOriginal === currentOriginal &&
+        ageMs < sevenDaysMs
+      ) {
         console.log(
-          `[MultiPlatformIngest:${platform}] Price observation already recorded (${observationId}), skipping.`
+          `[MultiPlatformIngest:${platform}] Delta Price Compression: price unchanged (${currentPrice.toLocaleString('vi-VN')}₫, last anchor ${String(latestObs.recorded_at).slice(0, 10)}), skipping redundant history row.`
         );
       } else {
-        const { error: priceErr } = await this.supabase.from('price_history').insert({
-          product_id: productId,
-          observation_id: observationId,
-          price: product.priceMin,
-          price_original: product.priceBeforeDiscount || null,
-          recorded_at: new Date().toISOString(),
-          source: `${platform}_crawler`,
-        });
-        if (priceErr) {
-          const pCode = (priceErr as { code?: string }).code || '';
-          if (pCode === '23505' || /duplicate key/i.test(priceErr.message)) {
-            console.warn(
-              '[MultiPlatformIngest] Concurrent price observation insert lost the race; treated as dedupe.'
-            );
-          } else {
-            throw new Error(
-              `Failed to record price history (observation ${observationId}): ${priceErr.message}`
-            );
+        const { data: existingPrice, error: priceLookupErr } = await this.supabase
+          .from('price_history')
+          .select('observation_id')
+          .eq('observation_id', observationId)
+          .limit(1);
+        if (priceLookupErr) {
+          throw new Error(`Failed to check existing price observation: ${priceLookupErr.message}`);
+        }
+        if (Array.isArray(existingPrice) && existingPrice.length > 0) {
+          console.log(
+            `[MultiPlatformIngest:${platform}] Price observation already recorded (${observationId}), skipping.`
+          );
+        } else {
+          const { error: priceErr } = await this.supabase.from('price_history').insert({
+            product_id: productId,
+            observation_id: observationId,
+            price: product.priceMin,
+            price_original: product.priceBeforeDiscount || null,
+            recorded_at: new Date().toISOString(),
+            source: `${platform}_crawler`,
+          });
+          if (priceErr) {
+            const pCode = (priceErr as { code?: string }).code || '';
+            if (pCode === '23505' || /duplicate key/i.test(priceErr.message)) {
+              console.warn(
+                '[MultiPlatformIngest] Concurrent price observation insert lost the race; treated as dedupe.'
+              );
+            } else {
+              throw new Error(
+                `Failed to record price history (observation ${observationId}): ${priceErr.message}`
+              );
+            }
           }
         }
       }
