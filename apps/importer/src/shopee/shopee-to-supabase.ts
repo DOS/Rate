@@ -194,7 +194,7 @@ export class ShopeeIngestionPipeline {
           price_original: product.priceBeforeDiscount || null,
           currency: product.currency || 'VND',
           historical_sold: product.historicalSold || 0,
-          stock: product.stock || 0,
+          stock: product.stock ?? null,
           rating_star: product.ratingStar || 0,
           rating_count: product.ratingCount || 0,
           images: product.images || [],
