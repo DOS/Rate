@@ -3,6 +3,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { getMessages, setRequestLocale } from 'next-intl/server';
 import { AppProviders } from '@/app/providers';
 import { getRateCopy } from '@/lib/rate-i18n';
+import { defaultOpenGraph } from '@/lib/seo';
 
 export async function generateMetadata({
   params,
@@ -11,40 +12,20 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { locale } = await params;
   const copy = getRateCopy(locale);
-  const shareImage = {
-    url: '/img/rate-og.png',
-    width: 1200,
-    height: 630,
-    alt: copy.seo.siteTitle,
-  };
   return {
     metadataBase: new URL('https://rate.vn'),
     title: copy.seo.siteTitle,
     description: copy.seo.siteDescription,
-    // Default share card; pages that set their own openGraph/twitter replace it.
-    openGraph: {
-      type: 'website',
-      siteName: 'Rate.vn',
-      locale: OG_LOCALES[locale] ?? OG_LOCALES.vi,
-      title: copy.seo.siteTitle,
-      description: copy.seo.siteDescription,
-      images: [shareImage],
-    },
+    // Default share card. og:title/description come from each page's own
+    // title/description, and Next fills the Twitter title, description and
+    // image from the page's resolved openGraph, so neither is set here.
+    openGraph: defaultOpenGraph(locale),
     twitter: {
       card: 'summary_large_image',
       site: '@rate_vn',
-      title: copy.seo.siteTitle,
-      description: copy.seo.siteDescription,
-      images: [shareImage.url],
     },
   };
 }
-
-const OG_LOCALES: Record<string, string> = {
-  vi: 'vi_VN',
-  en: 'en_US',
-  cs: 'cs_CZ',
-};
 
 export default async function LocaleLayout({
   children,
