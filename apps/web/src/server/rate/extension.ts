@@ -1,4 +1,3 @@
-import { createClient } from '@supabase/supabase-js';
 import {
   getMasterProductBySlug,
   getMasterProductCategorySlug,
@@ -8,6 +7,7 @@ import {
   getMasterProductReviewSummary,
   getMasterProducts,
   getMerchantsList,
+  getRateClient,
   parseEcommerceUrlOrQuery,
   type CanonicalCategorySlug,
   type MasterProduct,
@@ -959,6 +959,16 @@ export async function lookupExtensionProduct(
   };
 }
 
+export interface CrowdIngestRpcClient {
+  rpc: (
+    fn: string,
+    args: Record<string, unknown>
+  ) => PromiseLike<{
+    data: unknown;
+    error: { message?: string; code?: string } | null;
+  }>;
+}
+
 export interface ExtensionCrowdIngestInput {
   platform: SupportedEcommercePlatform;
   externalItemId: string;
@@ -971,6 +981,8 @@ export interface ExtensionCrowdIngestInput {
   ratingStar?: number | null;
   ratingCount?: number | null;
   userConsentOptIn: boolean;
+  /** Optional caller-scoped rate schema client (for authenticated requests or unit tests). */
+  rateClient?: CrowdIngestRpcClient | null;
 }
 
 export interface ExtensionCrowdIngestResult {
@@ -983,11 +995,12 @@ export interface ExtensionCrowdIngestResult {
 
 /**
  * Zero-Trust Crowdsourced Signal Quarantine (`POST /api/v1/rate/extension/ingest`).
- * Per Codex Review [P1]:
+ * Per Codex Review [P1] & Issue #159:
  * 1. NEVER writes directly to `rate.products` or `rate.price_history` from browser input.
- * 2. NEVER calls `EntityMatcher.resolveOrCreateMasterProduct` or AI Spec Enricher from browser input.
+ * 2. NEVER uses service-role credentials in `apps/web`.
  * 3. Checks user privacy Opt-In consent, Accessory Gatekeeper, and Platform Capability Matrix.
- * 4. Enqueues a quarantined verification job via `rate.enqueue_crawl_job` for independent server-side scraping by `DOS/Rate-Services`.
+ * 4. Enqueues a quarantined verification job via narrow `SECURITY DEFINER` RPC `rate.enqueue_crowd_verify_signal`
+ *    under the anon/authenticated role, and never echoes raw database `error.message` to callers.
  */
 export async function ingestExtensionCrowdSignal(
   input: ExtensionCrowdIngestInput
@@ -1021,7 +1034,7 @@ export async function ingestExtensionCrowdSignal(
       quarantinedForWorker: false,
       jobState: 'platform_worker_pending_phase_5_1',
       jobId: null,
-      reason: `Nền tảng ${input.platform} hiện hỗ trợ Tra cứu nhanh (Read-Only Lookup). Hàng đợi Worker xác minh tự động đang mở cho 5 sàn: Shopee, Lazada, Tiki, CellphoneS và Thế Giới Di Động.`,
+      reason: `Nền tảng ${input.platform} hiện hỗ trợ Tra cứu nhanh (Read-Only Lookup).`,
     };
   }
 
@@ -1041,32 +1054,36 @@ export async function ingestExtensionCrowdSignal(
     };
   }
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  let rpcClient: CrowdIngestRpcClient | null = input.rateClient ?? null;
+  if (!rpcClient) {
+    const supabaseUrl =
+      process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+    const supabaseAnonKey =
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+      process.env.SUPABASE_ANON_KEY;
 
-  if (!supabaseUrl || !serviceRoleKey) {
-    return {
-      accepted: true,
-      quarantinedForWorker: false,
-      jobState: 'quarantined_dry_run',
-      jobId: null,
-      reason:
-        'Đã ghi nhận tín hiệu ở chế độ cách ly (Quarantine Dry-Run) - chờ Worker xác minh độc lập.',
-    };
+    if (!supabaseUrl || !supabaseAnonKey) {
+      return {
+        accepted: true,
+        quarantinedForWorker: false,
+        jobState: 'quarantined_dry_run',
+        jobId: null,
+        reason:
+          'Đã ghi nhận tín hiệu ở chế độ cách ly (Quarantine Dry-Run) - chờ Worker xác minh độc lập.',
+      };
+    }
+    rpcClient = getRateClient() as unknown as CrowdIngestRpcClient;
   }
-
-  const serviceClient = createClient(supabaseUrl, serviceRoleKey, {
-    db: { schema: 'rate' },
-    auth: { persistSession: false },
-  });
 
   const normalizedItemId = input.externalShopId
     ? `${input.externalShopId}_${input.externalItemId}`
     : input.externalItemId;
 
-  const { data, error } = await serviceClient.rpc('enqueue_crawl_job', {
-    p_type: 'extension_crowd_verify',
+  const { data, error } = await rpcClient.rpc('enqueue_crowd_verify_signal', {
     p_platform: input.platform,
+    p_target_url: canonicalUrl,
+    p_platform_item_id: normalizedItemId,
+    p_platform_shop_id: input.externalShopId || null,
     p_payload: {
       source: 'extension_mv3_quarantine',
       canonical_url: canonicalUrl,
@@ -1078,20 +1095,21 @@ export async function ingestExtensionCrowdSignal(
       observed_rating_count: input.ratingCount || null,
       submitted_at: new Date().toISOString(),
     },
-    p_target_url: canonicalUrl,
-    p_platform_item_id: normalizedItemId,
-    p_platform_shop_id: input.externalShopId || null,
-    p_priority: 5,
-    p_run_id: null,
   });
 
   if (error) {
+    console.warn(
+      '[extension-ingest] enqueue_crowd_verify_signal rejected:',
+      error.code,
+      error.message
+    );
     return {
       accepted: false,
       quarantinedForWorker: false,
       jobState: 'queue_error',
       jobId: null,
-      reason: `Không thể đưa vào hàng đợi xác minh: ${error.message}`,
+      reason:
+        'Không thể đưa tín hiệu vào hàng đợi xác minh lúc này. Vui lòng thử lại sau.',
     };
   }
 

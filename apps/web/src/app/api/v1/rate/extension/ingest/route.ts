@@ -4,11 +4,13 @@ import {
   ingestExtensionCrowdSignal,
   type SupportedEcommercePlatform,
 } from '@/server/rate';
+import { jsonApiError } from '@/server/rate/api-handler';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, X-Rate-Extension-Version',
+  'Access-Control-Allow-Headers':
+    'Content-Type, Authorization, X-Rate-Extension-Version',
 };
 
 const CrowdIngestSchema = z.object({
@@ -16,9 +18,13 @@ const CrowdIngestSchema = z.object({
     'shopee',
     'lazada',
     'tiki',
+    'tiktok',
     'cellphones',
     'tgdd',
     'fptshop',
+    'hoangha',
+    'didongviet',
+    'phongvu',
   ]),
   externalItemId: z.string().trim().min(1).max(120),
   externalShopId: z.string().trim().max(120).nullish(),
@@ -69,10 +75,10 @@ export async function OPTIONS() {
  * Zero-Trust Crowdsourced Signal Quarantine Endpoint (Two-Speed Hybrid Architecture v2).
  * Enforces:
  * - Explicit Opt-In Consent check (`userConsentOptIn === true`)
- * - Zod schema validation & sliding-window IP rate limit
+ * - Zod schema validation & sliding-window IP rate limit + DB-side global rate limit
  * - Accessory / Junk Gatekeeper
  * - Platform Capability Matrix check (only queues platforms with active verification workers)
- * - 100% Quarantine: Enqueues into `rate.crawl_jobs` via `enqueue_crawl_job` RPC; NEVER mutates canonical prices directly.
+ * - 100% Quarantine: Enqueues into `rate.crawl_jobs` via narrow `enqueue_crowd_verify_signal` RPC without `service_role`; NEVER mutates canonical prices directly.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -128,11 +134,11 @@ export async function POST(request: NextRequest) {
       { status: 200, headers: CORS_HEADERS }
     );
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : 'Internal server error';
-    return NextResponse.json(
-      { ok: false, error: message },
-      { status: 500, headers: CORS_HEADERS }
+    return jsonApiError(
+      500,
+      'Failed to process extension crowd signal.',
+      error,
+      CORS_HEADERS
     );
   }
 }

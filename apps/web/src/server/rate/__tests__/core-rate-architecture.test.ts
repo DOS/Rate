@@ -2381,7 +2381,81 @@ async function runCoreArchitectureSuite() {
     );
   }
   console.log(
-    '  ✅ [48/48] Unified API v1 Error Sanitizer & Bounded Query Parsers (T9) + Pure Domain Module rate-domain.ts (T12) (#170) passed'
+    '  ✅ [48/49] Unified API v1 Error Sanitizer & Bounded Query Parsers (T9) + Pure Domain Module rate-domain.ts (T12) (#170) passed'
+  );
+
+  // 49. Issue #159: POST /api/v1/rate/extension/ingest never uses SUPABASE_SERVICE_ROLE_KEY, calls narrow enqueue_crowd_verify_signal RPC, and never echoes raw DB error.message
+  const extensionServerSrc = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/server/rate/extension.ts'),
+    'utf8'
+  );
+  assert.ok(
+    !extensionServerSrc.includes('SUPABASE_SERVICE_ROLE_KEY'),
+    'apps/web/src/server/rate/extension.ts must never reference SUPABASE_SERVICE_ROLE_KEY (#159)'
+  );
+  const eslintSrc = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/.eslintrc.js'),
+    'utf8'
+  );
+  assert.ok(
+    eslintSrc.includes('SUPABASE_SERVICE_ROLE_KEY'),
+    'apps/web/.eslintrc.js must ban SUPABASE_SERVICE_ROLE_KEY in src/app/** and src/server/** (#159)'
+  );
+
+  const { ingestExtensionCrowdSignal } =
+    require('../extension') as typeof import('../extension');
+  const rpcCalls159: Array<{ fn: string; args: Record<string, unknown> }> = [];
+  const okIngest159 = await ingestExtensionCrowdSignal({
+    platform: 'shopee',
+    externalItemId: '29512841920',
+    externalShopId: '88201679',
+    url: 'https://shopee.vn/product/88201679/29512841920?utm_source=ads',
+    title: 'Điện thoại Samsung Galaxy S24 Ultra 12GB 256GB Chính Hãng',
+    price: 25_690_000,
+    userConsentOptIn: true,
+    rateClient: {
+      rpc: async (fn, args) => {
+        rpcCalls159.push({ fn, args });
+        return {
+          data: [{ job_id: 'job-crowd-159', state: 'enqueued' }],
+          error: null,
+        };
+      },
+    },
+  });
+  assert.equal(okIngest159.accepted, true);
+  assert.equal(okIngest159.quarantinedForWorker, true);
+  assert.equal(okIngest159.jobId, 'job-crowd-159');
+  assert.equal(rpcCalls159.length, 1);
+  assert.equal(rpcCalls159[0]?.fn, 'enqueue_crowd_verify_signal');
+  assert.equal(rpcCalls159[0]?.args.p_platform, 'shopee');
+
+  const errIngest159 = await ingestExtensionCrowdSignal({
+    platform: 'tiki',
+    externalItemId: '274019283',
+    url: 'https://tiki.vn/dien-thoai-samsung-galaxy-s24-ultra-p274019283.html',
+    title: 'Điện thoại Samsung Galaxy S24 Ultra 12GB 256GB Chính Hãng',
+    price: 25_690_000,
+    userConsentOptIn: true,
+    rateClient: {
+      rpc: async () => ({
+        data: null,
+        error: {
+          code: '42501',
+          message:
+            'permission denied for table rate.crawl_jobs_internal_secret',
+        },
+      }),
+    },
+  });
+  assert.equal(errIngest159.accepted, false);
+  assert.equal(errIngest159.jobState, 'queue_error');
+  assert.ok(
+    !errIngest159.reason.includes('crawl_jobs_internal_secret'),
+    'queue_error reason must never echo raw database error.message (#159)'
+  );
+  console.log(
+    '  ✅ [49/49] Zero-Service-Role Extension Crowd Ingest, enqueue_crowd_verify_signal RPC & Error Sanitization (#159) passed'
   );
 
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
