@@ -11,6 +11,7 @@ import {
   getRadarSignal,
   radarExportFields,
 } from '@/lib/deal-radar';
+import { jsonApiError, parseBoundedIntParam } from '@/server/rate/api-handler';
 
 function parseNumArray(raw: string | null): number[] | undefined {
   if (!raw) return undefined;
@@ -54,7 +55,7 @@ export async function GET(request: NextRequest) {
 
     const sortParam = sp.get('sort') as
       MasterProductFilterParams['sort'] | null;
-    const limit = Math.min(parsePositiveNum(sp.get('limit')) ?? 24, 100);
+    const limit = parseBoundedIntParam(sp.get('limit'), 24, 1, 100);
 
     const compactRaw = sp.get('compactScreen') || sp.get('compact');
     const maxScreenSizeInch =
@@ -118,8 +119,6 @@ export async function GET(request: NextRequest) {
       }
     );
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : 'Internal server error';
-    return NextResponse.json({ ok: false, error: message }, { status: 500 });
+    return jsonApiError(500, 'Failed to fetch products catalog', error);
   }
 }

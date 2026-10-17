@@ -1,0 +1,38 @@
+/**
+ * Audit T12: Client-safe pure domain functions and types for Rate.vn.
+ * Client Components can import from `@/lib/rate-domain` for pure scoring,
+ * routing, image resolution, and URL parsing helpers.
+ */
+export {
+  BAYESIAN_PRIOR_K,
+  BAYESIAN_PRIOR_MEAN,
+  KNOWN_LOCAL_DEVICE_IMAGES,
+  computeBayesianRatingSummary,
+  computeJReviewsWeight,
+  getCategoryRouteHref,
+  getMasterProductCategorySlug,
+  getMasterProductHref,
+  parseEcommerceUrlOrQuery,
+  resolveProductImageUrl,
+  sanitizePostgrestFilterToken,
+  type BayesianConfidenceTier,
+  type BayesianRatingSummary,
+  type CanonicalCategorySlug,
+  type CategoryDirectoryFacets,
+  type DiscountVerdictType,
+  type MasterProduct,
+  type MasterProductFilterParams,
+  type MasterProductPriceHistorySummary,
+  type MerchantOffer,
+  type MerchantProfileDetail,
+  type MerchantRiskBreakdown,
+  type MerchantSummary,
+  type OfferDiscountAnalysis,
+  type ParsedEcommerceUrl,
+  type PriceHistoryPoint,
+  type RateCategoryItem,
+  type RatePlatformStats,
+  type ReviewAnalysisSummary,
+  type ReviewItem,
+  type UrlInspectionResult,
+} from './rate-api';

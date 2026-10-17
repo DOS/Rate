@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getCrossPlatformDealRadar } from '../../../../../server/rate/deals';
 import type { CanonicalCategorySlug } from '../../../../../lib/rate-api';
+import { jsonApiError, parseBoundedIntParam } from '@/server/rate/api-handler';
 
 const VALID_CATEGORIES = new Set<CanonicalCategorySlug>([
   'smartphones',
@@ -36,9 +37,7 @@ export async function GET(request: Request) {
       ? (rawCat as CanonicalCategorySlug)
       : 'all';
 
-    const rawLimit = Number(searchParams.get('limit') || 10);
-    const limit =
-      Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 50) : 10;
+    const limit = parseBoundedIntParam(searchParams.get('limit'), 10, 1, 50);
 
     const radar = await getCrossPlatformDealRadar({
       categorySlug,
@@ -59,15 +58,11 @@ export async function GET(request: Request) {
       }
     );
   } catch (err) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error:
-          err instanceof Error
-            ? err.message
-            : 'Failed to load Cross-Platform Deal Radar',
-      },
-      { status: 500, headers: CORS_HEADERS }
+    return jsonApiError(
+      500,
+      'Failed to load Cross-Platform Deal Radar',
+      err,
+      CORS_HEADERS
     );
   }
 }

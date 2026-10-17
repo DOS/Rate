@@ -6,6 +6,7 @@ import {
   detectAccessoryOrJunk,
   evaluateExtensionPriceVerdict,
 } from '@/server/rate/extension';
+import { jsonApiError } from '@/server/rate/api-handler';
 
 /**
  * GET /api/v1/rate/inspect?q=<url_or_keyword>
@@ -85,8 +86,6 @@ export async function GET(request: NextRequest) {
       }
     );
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : 'Internal server error';
-    return NextResponse.json({ ok: false, error: message }, { status: 500 });
+    return jsonApiError(500, 'Failed to inspect URL or query', error);
   }
 }

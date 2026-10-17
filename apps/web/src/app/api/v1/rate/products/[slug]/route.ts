@@ -7,6 +7,7 @@ import {
   getMasterProductReviewSummary,
 } from '@/lib/rate-api';
 import { computeProductRadarSignal } from '@/server/rate/deals';
+import { jsonApiError } from '@/server/rate/api-handler';
 
 type RouteContext = {
   params: Promise<{ slug: string }>;
@@ -61,8 +62,6 @@ export async function GET(_request: NextRequest, context: RouteContext) {
       }
     );
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : 'Internal server error';
-    return NextResponse.json({ ok: false, error: message }, { status: 500 });
+    return jsonApiError(500, 'Failed to fetch product detail', error);
   }
 }

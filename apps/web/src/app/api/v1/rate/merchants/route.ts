@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getMerchantsList } from '@/server/rate';
+import {
+  jsonApiError,
+  parseBoundedIntParam,
+  parseBoundedNumberParam,
+} from '@/server/rate/api-handler';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -22,11 +27,7 @@ export async function GET(request: NextRequest) {
     const platform = sp.get('platform') || undefined;
     const officialOnly =
       sp.get('official') === '1' || sp.get('official') === 'true';
-    const rawMinTrust = sp.get('min_trust');
-    const minTrust =
-      rawMinTrust != null && !Number.isNaN(Number(rawMinTrust))
-        ? Number(rawMinTrust)
-        : undefined;
+    const minTrust = parseBoundedNumberParam(sp.get('min_trust'), 0, 100);
     const rawSort = sp.get('sort');
     const sort =
       rawSort === 'trust_desc' ||
@@ -35,9 +36,7 @@ export async function GET(request: NextRequest) {
       rawSort === 'followers_desc'
         ? rawSort
         : undefined;
-    const rawLimit = Number(sp.get('limit') || 50);
-    const limit =
-      !Number.isNaN(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 100) : 50;
+    const limit = parseBoundedIntParam(sp.get('limit'), 50, 1, 100);
 
     const merchants = await getMerchantsList({
       q,
@@ -63,11 +62,11 @@ export async function GET(request: NextRequest) {
       }
     );
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : 'Internal server error';
-    return NextResponse.json(
-      { ok: false, error: message },
-      { status: 500, headers: CORS_HEADERS }
+    return jsonApiError(
+      500,
+      'Failed to fetch merchants list',
+      error,
+      CORS_HEADERS
     );
   }
 }
