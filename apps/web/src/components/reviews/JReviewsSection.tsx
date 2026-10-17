@@ -1,8 +1,13 @@
 'use client';
 
 import React, { useEffect, useId, useMemo, useState } from 'react';
+import { escapeCsvCell } from '@/lib/csv-safe';
 import {
+  computeCombinedDualScore,
   computeJReviewsWeight,
+  computeWilsonLowerBound,
+  detectStarDistributionAnomaly,
+  evaluateReviewTrustAssessment,
   type ReviewAnalysisSummary,
   type ReviewFlagCategory,
   type ReviewItem,
@@ -14,6 +19,7 @@ import {
   radarMarkdownCell,
   type RadarSignal,
 } from '@/lib/deal-radar';
+import { getBrowserAccessToken } from '@/lib/auth/access-token';
 
 type VoteChoice = 'up' | 'down' | 'report';
 type FilterTab = 'all' | 'authentic' | 'expert' | 'ignored';
@@ -115,7 +121,6 @@ export default function JReviewsSection({
   const fieldId = useId();
   const [authorName, setAuthorName] = useState('');
   const [variation, setVariation] = useState('');
-  const [reviewerType, setReviewerType] = useState<'user' | 'expert'>('user');
   const [comment, setComment] = useState('');
   const [criteriaScores, setCriteriaScores] = useState<Record<string, number>>({
     screen: 5,
@@ -250,14 +255,13 @@ export default function JReviewsSection({
       }
     }
 
-    let overall = Number(averageRating || 0);
-    if (computedUser != null && computedExpert != null) {
-      overall = Number((computedUser * 0.6 + computedExpert * 0.4).toFixed(2));
-    } else if (computedUser != null) {
-      overall = computedUser;
-    } else if (computedExpert != null) {
-      overall = computedExpert;
-    }
+    const dualScore = computeCombinedDualScore({
+      userScore: computedUser,
+      expertScore: computedExpert,
+      userConfidence: bayesianConfidence,
+      fallbackAverage: averageRating,
+    });
+    const starAnomaly = detectStarDistributionAnomaly(reviews);
 
     const criteriaAverages = CRITERIA_META.map((crit) => {
       let wSum = 0;
@@ -282,7 +286,10 @@ export default function JReviewsSection({
     });
 
     return {
-      overall,
+      overall: dualScore.overall,
+      isBlended: dualScore.isBlended,
+      blendFormulaNoteVi: dualScore.blendFormulaNoteVi,
+      starAnomaly,
       user: computedUser,
       bayesianUser: bayesianUserScore,
       bayesianConfidence,
@@ -326,6 +333,15 @@ export default function JReviewsSection({
 
     return [...filtered].sort((a, b) => {
       if (sortMode === 'weight_desc') {
+        const wilsonA = computeWilsonLowerBound(a.upvotes, a.downvotes);
+        const wilsonB = computeWilsonLowerBound(b.upvotes, b.downvotes);
+        if (
+          a.include_in_rating &&
+          b.include_in_rating &&
+          Math.abs(wilsonB - wilsonA) >= 0.005
+        ) {
+          return wilsonB - wilsonA;
+        }
         if (b.helpfulness_weight !== a.helpfulness_weight) {
           return b.helpfulness_weight - a.helpfulness_weight;
         }
@@ -403,24 +419,7 @@ export default function JReviewsSection({
     }
 
     try {
-      let bearerToken = '';
-      try {
-        for (let i = 0; i < window.localStorage.length; i++) {
-          const k = window.localStorage.key(i);
-          if (k && k.startsWith('sb-') && k.endsWith('-auth-token')) {
-            const rawSession = window.localStorage.getItem(k);
-            if (rawSession) {
-              const parsedSession = JSON.parse(rawSession);
-              if (typeof parsedSession?.access_token === 'string') {
-                bearerToken = parsedSession.access_token;
-                break;
-              }
-            }
-          }
-        }
-      } catch {
-        // Ignore storage errors
-      }
+      const bearerToken = await getBrowserAccessToken();
 
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
@@ -487,6 +486,14 @@ export default function JReviewsSection({
       return;
     }
 
+    const accessToken = await getBrowserAccessToken();
+    if (!accessToken) {
+      setSubmitError(
+        'Bạn cần đăng nhập tài khoản DOS ID để gửi đánh giá. Mỗi tài khoản chỉ gửi một đánh giá cho mỗi sản phẩm.'
+      );
+      return;
+    }
+
     setSubmittingReview(true);
     try {
       const avgStar = Math.round(
@@ -495,12 +502,14 @@ export default function JReviewsSection({
       );
       const res = await fetch('/api/v1/rate/reviews', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
         body: JSON.stringify({
           masterProductId,
           authorName: authorName.trim() || 'Người dùng Rate.vn',
           variation: variation.trim() || undefined,
-          reviewerType,
           ratingStar: avgStar,
           comment: cleanComment,
           criteriaRatings: criteriaScores,
@@ -533,9 +542,11 @@ export default function JReviewsSection({
       setComment('');
       setShowWriteForm(false);
       setSubmitSuccess(
-        newRev.include_in_rating
-          ? `Đã đăng đánh giá thực chất thành công! Hệ thống AI chấm trọng số khởi tạo ${newRev.helpfulness_weight.toFixed(2)}x.`
-          : `Đánh giá của bạn đã được ghi nhận nhưng bị bộ lọc AI gắn cờ (${newRev.flag_category}) nên không tính vào điểm trung bình.`
+        newRev.verdict === 'unanalyzed'
+          ? 'Đã lưu đánh giá của bạn. Đánh giá chỉ được tính vào điểm trung bình sau khi hệ thống kiểm duyệt xong.'
+          : newRev.include_in_rating
+            ? `Đã đăng đánh giá thực chất thành công! Hệ thống AI chấm trọng số khởi tạo ${newRev.helpfulness_weight.toFixed(2)}x.`
+            : `Đánh giá của bạn đã được ghi nhận nhưng bị bộ lọc AI gắn cờ (${newRev.flag_category}) nên không tính vào điểm trung bình.`
       );
     } catch {
       setSubmitError('Lỗi kết nối khi gửi đánh giá. Vui lòng thử lại.');
@@ -595,7 +606,6 @@ export default function JReviewsSection({
       filteredAndSortedReviews.length === 0
     )
       return;
-    const escapeCsv = (val: string) => `"${val.replace(/"/g, '""')}"`;
     const headers = [
       'ReviewID',
       'Author',
@@ -629,8 +639,8 @@ export default function JReviewsSection({
     const csvContent =
       '\uFEFF' +
       [
-        headers.map(escapeCsv).join(','),
-        ...rows.map((row) => row.map(escapeCsv).join(',')),
+        headers.map(escapeCsvCell).join(','),
+        ...rows.map((row) => row.map(escapeCsvCell).join(',')),
       ].join('\r\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -769,7 +779,7 @@ export default function JReviewsSection({
           )}
 
           <div className="row g-3 mb-3">
-            <div className="col-md-4 col-12">
+            <div className="col-md-6 col-12">
               <label
                 className="form-label small fw-semibold mb-1"
                 htmlFor={`${fieldId}-author`}
@@ -786,7 +796,7 @@ export default function JReviewsSection({
                 maxLength={80}
               />
             </div>
-            <div className="col-md-4 col-12">
+            <div className="col-md-6 col-12">
               <label
                 className="form-label small fw-semibold mb-1"
                 htmlFor={`${fieldId}-variation`}
@@ -802,29 +812,6 @@ export default function JReviewsSection({
                 className="form-control form-control-sm rounded-3"
                 maxLength={100}
               />
-            </div>
-            <div className="col-md-4 col-12">
-              <label
-                className="form-label small fw-semibold mb-1"
-                htmlFor={`${fieldId}-reviewer-type`}
-              >
-                Phân loại người đánh giá
-              </label>
-              <select
-                id={`${fieldId}-reviewer-type`}
-                value={reviewerType}
-                onChange={(e) =>
-                  setReviewerType(
-                    e.target.value === 'expert' ? 'expert' : 'user'
-                  )
-                }
-                className="form-select form-select-sm rounded-3"
-              >
-                <option value="user">
-                  Người mua &amp; trải nghiệm thực tế
-                </option>
-                <option value="expert">Reviewer / Chuyên gia kỹ thuật</option>
-              </select>
             </div>
           </div>
 
@@ -956,9 +943,7 @@ export default function JReviewsSection({
               </div>
             </div>
             <div className="small text-white-50 border-top border-secondary border-opacity-25 mt-2 pt-2">
-              {liveScores.expert != null
-                ? 'Tỷ trọng: 60% Người mua thực chất + 40% Chuyên gia Rate Lab'
-                : 'Tỷ trọng: 100% Người mua thực chất (đã lọc Seeding & Spam xu)'}
+              {liveScores.blendFormulaNoteVi}
             </div>
           </div>
         </div>
@@ -1124,6 +1109,17 @@ export default function JReviewsSection({
         </div>
       </div>
 
+      {liveScores.starAnomaly.isAnomalous &&
+        liveScores.starAnomaly.warningLabelVi && (
+          <div
+            className="alert alert-warning rounded-4 small d-flex align-items-center mb-4 gap-2 px-3 py-2"
+            data-testid="star-distribution-anomaly-alert"
+          >
+            <span>⚠️</span>
+            <span>{liveScores.starAnomaly.warningLabelVi}</span>
+          </div>
+        )}
+
       {/* 2. AI Review Synthesis (Pros / Cons / Authenticity Bar) */}
       <div className="rounded-4 bg-light mb-4 border p-4">
         <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-3 gap-2">
@@ -1283,7 +1279,7 @@ export default function JReviewsSection({
               style={{ minWidth: '240px' }}
             >
               <option value="weight_desc">
-                Hữu ích nhất (Trọng số JReviews cao nhất)
+                Hữu ích nhất (Wilson Bound &amp; Trọng số 6 trục)
               </option>
               <option value="newest">Mới nhất</option>
               <option value="rating_desc">Số sao: Cao đến Thấp</option>
@@ -1355,6 +1351,8 @@ export default function JReviewsSection({
           {filteredAndSortedReviews.map((rev) => {
             const flagMeta =
               FLAG_META[rev.flag_category] || FLAG_META.authentic;
+            const assessment =
+              rev.trust_assessment ?? evaluateReviewTrustAssessment(rev);
             const myVote = userVotes[rev.id] || null;
             const isPending = Boolean(pendingIds[rev.id]);
             const isZeroWeight =
@@ -1385,6 +1383,16 @@ export default function JReviewsSection({
                             Người mua
                           </span>
                         )}
+                        {assessment.sponsorshipBadgeVi && (
+                          <span className="badge bg-warning-subtle text-warning-emphasis border-warning-subtle rounded-pill small border">
+                            📢 {assessment.sponsorshipBadgeVi}
+                          </span>
+                        )}
+                        {assessment.routesTo === 'merchant' && (
+                          <span className="badge bg-info-subtle text-info-emphasis border-info-subtle rounded-pill small border">
+                            🚚 Chuyển sang điểm người bán
+                          </span>
+                        )}
                       </div>
                       <span className="badge bg-warning text-dark small font-monospace">
                         {'★'.repeat(Math.max(1, Math.min(5, rev.rating_star)))}
@@ -1407,9 +1415,11 @@ export default function JReviewsSection({
                               ? 'bg-primary-subtle text-primary'
                               : 'bg-light text-muted border'
                         }`}
-                        title="Trọng số đóng góp của đánh giá này vào điểm sản phẩm cuối cùng"
+                        title={assessment.breakdown.explanationVi}
+                        data-testid="review-6axis-breakdown"
                       >
-                        Trọng số: {rev.helpfulness_weight.toFixed(2)}x
+                        Trọng số: {rev.helpfulness_weight.toFixed(2)}x ·{' '}
+                        {assessment.breakdown.explanationVi}
                       </span>
                     </div>
 

@@ -18,15 +18,13 @@ import {
   radarExportFields,
   radarMarkdownCell,
   RADAR_CSV_HEADERS,
+  type CrossPlatformDealRadarItem,
+  type CrossPlatformDealRadarResponse,
+  type CrossPlatformPriceSpreadItem,
 } from '@/lib/deal-radar';
 import RadarBadge from '@/components/radar/RadarBadge';
 import { useDealRadarIndex } from '@/components/radar/use-deal-radar';
 import { escapeCsvCell } from '@/lib/csv-safe';
-import type {
-  CrossPlatformDealRadarItem,
-  CrossPlatformDealRadarResponse,
-  CrossPlatformPriceSpreadItem,
-} from '@/server/rate/deals';
 
 interface DealFinderWorkspaceProps {
   readonly products: MasterProduct[];

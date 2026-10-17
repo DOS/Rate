@@ -10887,9 +10887,9 @@ h1, h2, h3, h4, h5, h6 {
   text-transform: uppercase;
   letter-spacing: 0.06em;
   border-radius: 9999px;
-  background-color: #f1f5f9;
-  color: #334155;
-  border: 1px solid #e2e8f0;
+  background-color: var(--rate-bg-elevated);
+  color: var(--rate-fg-paragraph);
+  border: 1px solid var(--rate-border-subtle);
 }
 
 .rate-spec-pill {
@@ -10899,9 +10899,9 @@ h1, h2, h3, h4, h5, h6 {
   padding: 0.2rem 0.55rem;
   font-size: 0.74rem;
   font-weight: 600;
-  color: #334155;
-  background-color: #f8fafc;
-  border: 1px solid #e2e8f0;
+  color: var(--rate-fg-paragraph);
+  background-color: var(--rate-bg-canvas);
+  border: 1px solid var(--rate-border-subtle);
   border-radius: 6px;
   font-variant-numeric: tabular-nums;
 }
@@ -10949,15 +10949,15 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .rate-spec-group-card {
-  background-color: #ffffff;
-  border: 1px solid #e2e8f0;
+  background-color: var(--rate-bg-surface);
+  border: 1px solid var(--rate-border-subtle);
   border-radius: 12px;
   overflow: hidden;
 }
 
 .rate-spec-group-header {
-  background-color: #f8fafc;
-  border-bottom: 1px solid #e2e8f0;
+  background-color: var(--rate-bg-canvas);
+  border-bottom: 1px solid var(--rate-border-subtle);
   padding: 0.75rem 1rem;
   display: flex;
   align-items: center;
@@ -10966,7 +10966,7 @@ h1, h2, h3, h4, h5, h6 {
 
 .rate-spec-table td {
   padding: 0.6rem 1rem;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid var(--rate-bg-elevated);
   font-size: 0.86rem;
   vertical-align: top;
 }
@@ -10977,13 +10977,43 @@ h1, h2, h3, h4, h5, h6 {
 
 .rate-spec-label {
   width: 40%;
-  color: #64748b;
+  color: var(--rate-fg-muted);
   font-weight: 500;
 }
 
 .rate-spec-value {
   width: 60%;
-  color: #0f172a;
+  color: var(--rate-fg-primary);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-}
+}
+
+/* Rate.vn wordmark (src/components/brand/RateWordmark.tsx) */
+.rate-wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  font-family: var(--heading-font-family);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  white-space: nowrap;
+}
+
+.rate-wordmark .rate-mark {
+  flex-shrink: 0;
+}
+
+.rate-wordmark-ink {
+  color: var(--rate-fg-primary);
+}
+
+.rate-wordmark-light {
+  color: #f8fafc;
+}
+
+/* On obsidian grounds the #12151a disc needs a hairline to stay visible */
+.rate-wordmark-light .rate-mark circle:first-child {
+  stroke: rgba(255, 255, 255, 0.16);
+  stroke-width: 3;
+}

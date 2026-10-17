@@ -283,3 +283,17 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc **4 T�
   - `@repo/web` và `@repo/crawlers` về 0 lỗi ESLint, bật `react/jsx-runtime` + `react-hooks`, lint chạy trong CI (lỗi làm fail CI, cảnh báo thì không - PR #130, #132, #134, #136).
   - Gỡ khỏi `apps/importer` toàn bộ crawler CheckScam thời 2025 (FlareSolverr bypass Cloudflare, worker Playwright + proxy, script Strapi, Splink) và 9 dependency không dùng, viết lại `README.md` + `.env.example` cho engine `@repo/crawlers` (PR #138).
   - Chuyển khoảng 40 tài liệu thời Strapi / Redis / Validator vào `Docs/Archive/2025-strapi-era/`, xóa artifact `playwright-report/`, `schema.json` và `scripts/` chết, viết lại `apps/web/README.md` (PR #141).
+
+### ✅ Phase 6 & 7: Review Trust Model v2 (6 Trục), Củng Cố Bảo Mật Tầng Server & Cache Đa Tầng (Đã hoàn thành)
+
+- [x] **6.1. Giao diện Review Trust Model v2 6 Trục, Sắp Xếp Wilson Lower Bound, Cổng Tin Cậy Điểm Kép & Cảnh Báo Phân Bố Sao Bất Thường (`DOS/Rate#184`):**
+  - Bổ sung `computeWilsonLowerBound`, `evaluateReviewTrustAssessment` (6 trục `A, B, C, D, E, F`, định tuyến bình luận thuần vận chuyển `routesTo: 'merchant'` với `E = 0`, huy hiệu tài trợ `'Quảng cáo'` / `'Có tài trợ'` / `'Tiếp thị liên kết'` / `'Đổi quà / Nhận ưu đãi'`), `computeCombinedDualScore` (cổng `userConfidence >= 0.6` trước khi trộn 60% Người mua + 40% Chuyên gia) và `detectStarDistributionAnomaly` trong `apps/web/src/lib/rate-api.ts` và `JReviewsSection.tsx` (Suite `[57/61]`).
+- [x] **6.2. Cưỡng Chế Ranh Giới `server-only` & Chuẩn Hóa Chống CSV Formula Injection Trên 16/16 Thành Phần Xuất CSV (`DOS/Rate#185`):**
+  - Tạo `apps/web/src/server/rate/server-only.ts` và gắn `import 'server-only'` vào toàn bộ các module dưới `apps/web/src/server/rate/`, đảm bảo 0 Client Component import trực tiếp `@/server/rate`.
+  - Đồng bộ `escapeCsvCell` và `buildSafeCsvContent` (`@/lib/csv-safe`) trên toàn bộ **16/16** thành phần xuất CSV trong `apps/web/src/components/` (Suite `[58/61]`).
+- [x] **6.3. Cache Đa Tầng Next.js (`withRateDataCache`) & Webhook Xóa Cache Theo Thẻ `POST /api/v1/rate/revalidate` (`DOS/Rate#186`):**
+  - Xây dựng `apps/web/src/server/rate/cache-tags.ts` (`RATE_CACHE_TAGS`, `productCacheTag`, `categoryCacheTag`, `merchantCacheTag`, `withRateDataCache`) tích hợp vào `apps/web/src/server/rate/index.ts` và route `POST /api/v1/rate/revalidate` xác thực token hằng thời gian (`timingSafeEqual`) kèm tài liệu OpenAPI 3.1.0 (Suite `[59/61]`).
+- [x] **6.4. Kiểm Thử Hành Vi `NextRequest -> NextResponse` Toàn Diện Cho Toàn Bộ REST API v1 & Tách CLI `backfill-specs.ts` (`DOS/Rate#187`, `#188`):**
+  - Bổ sung Suite `[60/61]` kiểm thử trực tiếp toàn bộ các Route Handlers (`/api/health`, `/api/v1/rate/openapi`, `/api/v1/rate/openapi.json`, `/api/v1/rate/products`, `/api/v1/rate/products/[slug]`, `/api/v1/rate/deals`, `/api/v1/rate/leaderboard`, `/api/v1/rate/merchants`, `/api/v1/rate/merchants/[id]`, `/api/v1/rate/stats`).
+  - Tách riêng `apps/importer/src/shopee/jobs/backfill-specs.ts` với cơ chế bảo vệ mặc định `dry-run` (`--apply` mới ghi DB) và kiểm toán bảo mật toàn bộ 11 file migration tham chiếu trong `supabase/migrations/` (Suite `[61/61]`).
+

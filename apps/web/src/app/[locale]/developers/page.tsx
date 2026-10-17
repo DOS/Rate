@@ -165,17 +165,17 @@ const API_ENDPOINTS_SPEC = [
   {
     method: 'POST',
     path: '/api/v1/rate/reviews',
-    auth: 'Rate-Limited (SHA-256 Voter Hash)',
+    auth: 'Bearer token (Supabase Auth)',
     cache: 'no-store (RPC rate.submit_community_review)',
     queryParams:
-      'Body JSON: { masterProductId, authorName, ratingStar, comment, criteriaRatings }',
+      'Header Authorization: Bearer <access token>; Body JSON: { masterProductId, authorName, ratingStar, comment, criteriaRatings }',
     summary:
       'Gửi đánh giá cộng đồng 5 tiêu chí JReviews kèm bộ lọc chống spam/seeding tự động và cập nhật điểm trọng số.',
   },
   {
     method: 'POST',
     path: '/api/reviews/[id]/vote',
-    auth: 'Rate-Limited (SHA-256 Voter Hash)',
+    auth: 'Bearer token (Supabase Auth)',
     cache: 'no-store (Real-time In-DB Trigger)',
     queryParams: 'Body JSON: { "action": "helpful" | "report" }',
     summary:

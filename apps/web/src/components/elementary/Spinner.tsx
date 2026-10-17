@@ -1,24 +1,25 @@
-import { cn } from "@/lib/utils"
-
 interface Props {
-  readonly className?: string
-  readonly borderColorClass?: string
-  readonly borderWidthClass?: string
+  /** Extra Bootstrap classes, e.g. `text-danger` for the ring color. */
+  readonly className?: string;
+  /** Ring diameter in px. */
+  readonly size?: number;
+  /** Accessible label announced while loading. */
+  readonly label?: string;
 }
 
+/** Bootstrap 5 border spinner; the ring takes the current text color. */
 export function Spinner({
-  className = "",
-  borderColorClass = "border-white",
-  borderWidthClass = "border",
+  className = '',
+  size = 32,
+  label = 'Loading',
 }: Props) {
   return (
     <span
-      className={cn(
-        "box-border inline-block min-h-2 min-w-2 animate-spin rounded-full border-solid border-b-transparent",
-        borderWidthClass,
-        borderColorClass,
-        className
-      )}
-    />
-  )
+      className={`spinner-border ${className}`.trim()}
+      style={{ width: size, height: size }}
+      role="status"
+    >
+      <span className="visually-hidden">{label}</span>
+    </span>
+  );
 }

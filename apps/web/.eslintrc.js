@@ -13,17 +13,25 @@ module.exports = {
   parser: "@typescript-eslint/parser",
   // @next/next is registered (not extended) so inline disables of its rules resolve.
   plugins: ["jsx-a11y", "@next/next"],
-  settings: {
-    tailwindcss: {
-      callees: ["cn"],
-      config: "tailwind.config.js",
-    },
-  },
   parserOptions: {
     project: true,
   },
   rules: {
     "no-console": ["warn", { allow: ["warn", "error"] }],
+    // Service-role clients bypass RLS. Web routes must act as the anon role or as the
+    // signed-in user (src/server/rate/request-auth.ts), never as service_role.
+    "no-restricted-imports": [
+      "error",
+      {
+        paths: [
+          {
+            name: "@repo/shared-data/server",
+            message:
+              "Service-role clients bypass RLS. Use the anon client (lib/rate-api) or authenticateRateRequest (server/rate/request-auth).",
+          },
+        ],
+      },
+    ],
     "@next/next/no-html-link-for-pages": "off",
     // @typescript-eslint/no-unused-vars covers TS and JS; the base rule only duplicates it
     // and misreports parameter names in TS function types.
@@ -45,7 +53,6 @@ module.exports = {
         customValidators: [],
       },
     ],
-    "tailwindcss/no-custom-classname": "off",
     "turbo/no-undeclared-env-vars": "off",
     "no-extra-boolean-cast": "warn",
     "jsx-a11y/alt-text": [
@@ -96,6 +103,8 @@ module.exports = {
         "no-restricted-imports": [
           "error",
           {
+            // An override replaces the top-level rule options, so the
+            // service-role ban is repeated here.
             paths: [
               {
                 name: "@/lib/rate-api",
@@ -107,17 +116,14 @@ module.exports = {
                 message:
                   "Client Components must import pure helpers and types from '@/lib/rate-domain' instead of '@/server/rate' (Audit T12).",
               },
+              {
+                name: "@repo/shared-data/server",
+                message:
+                  "Service-role clients bypass RLS. Use the anon client or the signed-in user's token (lib/auth/access-token).",
+              },
             ],
           },
         ],
-      },
-    },
-    {
-      files: ["src/components/ui/*.tsx"],
-      rules: {
-        "tailwindcss/enforces-shorthand": "off",
-        "react/jsx-curly-brace-presence": "off",
-        "tailwindcss/no-unnecessary-arbitrary-value": "off",
       },
     },
   ],

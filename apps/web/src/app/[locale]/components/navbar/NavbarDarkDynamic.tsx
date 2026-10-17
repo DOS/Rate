@@ -10,6 +10,7 @@ import {
   BsShieldCheck,
 } from 'react-icons/bs';
 import LocaleSwitcher from '@/components/elementary/LocaleSwitcher';
+import RateWordmark from '@/components/brand/RateWordmark';
 import { getRateCopy } from '@/lib/rate-i18n';
 
 export interface NavbarLinkItem {
@@ -46,16 +47,20 @@ export function NavbarDarkDynamic({
   }, []);
 
   const logo = (
-    <Link className="nav-brand" href="/">
-      <Image
-        src={logoUrl || '/img/logo.svg'}
-        width={0}
-        height={0}
-        sizes="100vw"
-        style={{ width: '166px', height: 'auto' }}
-        className="logo"
-        alt="Rate.vn Logo"
-      />
+    <Link className="nav-brand" href="/" aria-label="Rate.vn">
+      {logoUrl ? (
+        <Image
+          src={logoUrl}
+          width={0}
+          height={0}
+          sizes="100vw"
+          style={{ width: '166px', height: 'auto' }}
+          className="logo"
+          alt="Rate.vn Logo"
+        />
+      ) : (
+        <RateWordmark tone="ink" size={30} />
+      )}
     </Link>
   );
 
@@ -135,15 +140,19 @@ export function NavbarDarkDynamic({
               style={{ transitionProperty: toggle ? 'none' : 'left' }}
             >
               <div className="mobLogos">
-                <Image
-                  src={logoUrl || '/img/logo.svg'}
-                  width={0}
-                  height={0}
-                  sizes="100vw"
-                  style={{ width: '140px', height: 'auto' }}
-                  className="img-fluid lightLogo"
-                  alt="Rate.vn Logo"
-                />
+                {logoUrl ? (
+                  <Image
+                    src={logoUrl}
+                    width={0}
+                    height={0}
+                    sizes="100vw"
+                    style={{ width: '140px', height: 'auto' }}
+                    className="img-fluid lightLogo"
+                    alt="Rate.vn Logo"
+                  />
+                ) : (
+                  <RateWordmark tone="ink" size={26} />
+                )}
               </div>
               <span
                 className="nav-menus-wrapper-close-button"

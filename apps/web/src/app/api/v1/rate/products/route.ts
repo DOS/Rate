@@ -11,7 +11,18 @@ import {
   getRadarSignal,
   radarExportFields,
 } from '@/lib/deal-radar';
-import { jsonApiError, parseBoundedIntParam } from '@/server/rate/api-handler';
+import {
+  PUBLIC_API_CORS_HEADERS,
+  jsonApiError,
+  parseBoundedIntParam,
+} from '@/server/rate/api-handler';
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: PUBLIC_API_CORS_HEADERS,
+  });
+}
 
 function parseNumArray(raw: string | null): number[] | undefined {
   if (!raw) return undefined;

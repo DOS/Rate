@@ -18,6 +18,10 @@
       "types": "./dist/shopee/flagship-seed-data.d.ts",
       "import": "./dist/shopee/flagship-seed-data.js"
     },
+    "./shopee/jobs/backfill-specs": {
+      "types": "./dist/shopee/jobs/backfill-specs.d.ts",
+      "import": "./dist/shopee/jobs/backfill-specs.js"
+    },
     "./package.json": "./package.json"
   },
   "type": "module",
@@ -28,6 +32,7 @@
     "dev": "tsx watch src/index.ts",
     "lint": "eslint . --ext .ts",
     "format": "prettier --write \"src/**/*.ts\"",
+    "backfill:specs": "tsx src/shopee/jobs/backfill-specs.ts",
     "test": "tsx src/shopee/__tests__/open-core-intelligence.test.ts && tsx src/shopee/__tests__/entity-matcher.test.ts && tsx src/shopee/test-review-analyzer.ts",
     "test:dist": "node src/shopee/__tests__/dist-exports.smoke.mjs"
   },
