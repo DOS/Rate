@@ -9,7 +9,7 @@ import {
   resolveProductImageUrl,
   type CanonicalCategorySlug,
   type MasterProduct,
-} from '@/lib/rate-api';
+} from '@/lib/rate-domain';
 import {
   getRadarSignal,
   radarCsvCells,

@@ -6,7 +6,7 @@ import type {
   MasterProductPriceHistorySummary,
   OfferDiscountAnalysis,
   PriceHistoryPoint,
-} from '@/lib/rate-api';
+} from '@/lib/rate-domain';
 import {
   RADAR_CSV_HEADERS,
   radarCsvCells,

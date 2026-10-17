@@ -6,7 +6,7 @@ import {
   getMasterProductCategorySlug,
   type CanonicalCategorySlug,
   type MasterProduct,
-} from '@/lib/rate-api';
+} from '@/lib/rate-domain';
 
 interface VersusMatchupSwitcherProps {
   readonly currentSlugA: string;

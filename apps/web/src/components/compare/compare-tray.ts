@@ -4,7 +4,7 @@ import {
   type CanonicalCategorySlug,
   getMasterProductCategorySlug,
   resolveProductImageUrl,
-} from '@/lib/rate-api';
+} from '@/lib/rate-domain';
 
 export interface CompareTrayItem {
   slug: string;

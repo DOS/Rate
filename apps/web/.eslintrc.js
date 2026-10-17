@@ -91,6 +91,23 @@ module.exports = {
       },
     },
     {
+      files: ["src/components/**"],
+      rules: {
+        "no-restricted-imports": [
+          "error",
+          {
+            paths: [
+              {
+                name: "@/lib/rate-api",
+                message:
+                  "Client Components in src/components/** must import pure helpers and types from '@/lib/rate-domain' instead of '@/lib/rate-api' (Audit T12).",
+              },
+            ],
+          },
+        ],
+      },
+    },
+    {
       files: ["src/components/ui/*.tsx"],
       rules: {
         "tailwindcss/enforces-shorthand": "off",

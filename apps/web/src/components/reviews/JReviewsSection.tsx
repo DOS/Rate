@@ -6,7 +6,7 @@ import {
   type ReviewAnalysisSummary,
   type ReviewFlagCategory,
   type ReviewItem,
-} from '@/lib/rate-api';
+} from '@/lib/rate-domain';
 import {
   RADAR_CSV_HEADERS,
   radarCsvCells,

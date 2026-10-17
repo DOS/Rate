@@ -1,6 +1,6 @@
 import { Link } from '@/lib/navigation';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
-import type { CanonicalCategorySlug } from '@/lib/rate-api';
+import type { CanonicalCategorySlug } from '@/lib/rate-domain';
 import type {
   LeaderboardCriterionKey,
   ProductLeaderboardBadgeInfo,

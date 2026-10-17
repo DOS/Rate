@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from '@/lib/navigation';
 import type { MasterProduct } from '@repo/shared-data';
-import { getMasterProductHref } from '@/lib/rate-api';
+import { getMasterProductHref } from '@/lib/rate-domain';
 import {
   getWatchlist,
   removeWatchlistItem,

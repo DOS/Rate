@@ -82,7 +82,8 @@
       "source-map-js@>=1.0.0 <1.2.2": "^1.2.2",
       "fast-uri@>=3.0.0 <3.1.8": "^3.1.8",
       "ajv@>=6.0.0 <6.14.0": "^6.14.0",
-      "postcss-selector-parser@<7.1.6": "^7.1.6"
+      "postcss-selector-parser@<7.1.6": "^7.1.6",
+      "js-yaml@<4.1.0": "^4.1.1"
     }
   },
   "dependencies": {

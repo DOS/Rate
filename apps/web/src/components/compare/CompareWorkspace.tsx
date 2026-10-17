@@ -12,7 +12,7 @@ import {
   getMasterProductCategorySlug,
   getMasterProductHref,
   resolveProductImageUrl,
-} from '@/lib/rate-api';
+} from '@/lib/rate-domain';
 import {
   getRadarSignal,
   RADAR_CSV_HEADERS,
