@@ -2964,6 +2964,114 @@ async function runCoreArchitectureSuite() {
     '  ✅ [58/58] Baseline Queue/Master Migrations Sync & M3/M4/M5/M7 Queue/Observation RPCs (#215) passed'
   );
 
+  // ---------------------------------------------------------------------------
+  // 57. Review Trust Model v2 Web Domain & 6-Axis Breakdown (#184)
+  // ---------------------------------------------------------------------------
+  const {
+    computeCombinedDualScore,
+    computeWilsonLowerBound,
+    detectStarDistributionAnomaly,
+    evaluateReviewTrustAssessment,
+  } = await import('../../../lib/rate-domain');
+
+  assert.equal(computeWilsonLowerBound(0, 0), 0);
+  const wilsonSingleVote = computeWilsonLowerBound(1, 0);
+  const wilsonManyVotes = computeWilsonLowerBound(50, 2);
+  assert.ok(
+    wilsonManyVotes > wilsonSingleVote,
+    `Wilson lower bound for 50/52 (${wilsonManyVotes}) must exceed 1/1 (${wilsonSingleVote})`
+  );
+
+  const shippingOnlyEval = evaluateReviewTrustAssessment({
+    rating_star: 1,
+    comment: 'Giao hàng quá chậm, đóng gói hộp móp méo, shipper thái độ kém',
+    reviewer_type: 'user',
+    upvotes: 5,
+    downvotes: 0,
+    report_count: 0,
+    flag_category: 'authentic',
+    verdict: 'authentic',
+    include_in_rating: true,
+    signals: null,
+  });
+  assert.equal(shippingOnlyEval.routesTo, 'merchant');
+  assert.equal(shippingOnlyEval.breakdown.context, 0);
+  assert.equal(shippingOnlyEval.breakdown.gate, 0);
+  assert.equal(shippingOnlyEval.breakdown.weight, 0);
+
+  const sponsoredPromoEval = evaluateReviewTrustAssessment({
+    rating_star: 5,
+    comment:
+      'Bài viết được tài trợ bởi hãng: Màn hình 120Hz siêu đẹp, camera chụp nét, pin 5000mAh cực trâu!',
+    reviewer_type: 'user',
+    upvotes: 0,
+    downvotes: 0,
+    report_count: 0,
+    flag_category: 'authentic',
+    verdict: 'authentic',
+    include_in_rating: true,
+    signals: null,
+  });
+  assert.equal(sponsoredPromoEval.independence, 'sponsored_promo');
+  assert.equal(sponsoredPromoEval.sponsorshipBadgeVi, 'Quảng cáo');
+  assert.equal(sponsoredPromoEval.breakdown.independence, 0.1);
+
+  const sponsoredBalancedEval = evaluateReviewTrustAssessment({
+    rating_star: 4,
+    comment:
+      'Nhận sản phẩm từ hãng để trải nghiệm: Màn hình OLED 120Hz rất đẹp nhưng nhược điểm là máy hơi nóng khi quay video 4K.',
+    reviewer_type: 'user',
+    upvotes: 3,
+    downvotes: 0,
+    report_count: 0,
+    flag_category: 'authentic',
+    verdict: 'authentic',
+    include_in_rating: true,
+    signals: null,
+  });
+  assert.equal(sponsoredBalancedEval.independence, 'sponsored_balanced');
+  assert.equal(sponsoredBalancedEval.sponsorshipBadgeVi, 'Có tài trợ');
+  assert.equal(sponsoredBalancedEval.breakdown.independence, 0.5);
+
+  const gatedLowConfidenceDual = computeCombinedDualScore({
+    userScore: 5.0,
+    expertScore: 4.2,
+    userConfidence: 0.29,
+    fallbackAverage: 4.5,
+  });
+  assert.equal(gatedLowConfidenceDual.isBlended, false);
+  assert.equal(gatedLowConfidenceDual.overall, 4.2);
+
+  const blendedHighConfidenceDual = computeCombinedDualScore({
+    userScore: 4.5,
+    expertScore: 4.0,
+    userConfidence: 0.75,
+    fallbackAverage: 4.2,
+  });
+  assert.equal(blendedHighConfidenceDual.isBlended, true);
+  assert.equal(blendedHighConfidenceDual.overall, 4.3);
+
+  const anomalousCluster = detectStarDistributionAnomaly([
+    { rating_star: 5, comment: '', flag_category: 'authentic' },
+    { rating_star: 5, comment: 'Cực kì hài lòng', flag_category: 'authentic' },
+    { rating_star: 5, comment: 'Tốt', flag_category: 'authentic' },
+    { rating_star: 5, comment: 'Ok lắm', flag_category: 'authentic' },
+    {
+      rating_star: 5,
+      comment: 'Pin 5000mAh dùng ổn định cả ngày, màn hình sáng đẹp',
+      flag_category: 'authentic',
+    },
+  ]);
+  assert.equal(anomalousCluster.isAnomalous, true);
+  assert.equal(anomalousCluster.fiveStarRatioPct, 100);
+  assert.ok(
+    anomalousCluster.warningLabelVi?.includes('Cảnh báo phân bố sao bất thường')
+  );
+
+  console.log(
+    '  ✅ [57/57] Review Trust Model v2 6-axis breakdown, Wilson sort & confidence gate (#184) passed'
+  );
+
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
 
