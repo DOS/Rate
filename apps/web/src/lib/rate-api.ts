@@ -173,6 +173,100 @@ export function computeJReviewsWeight(params: {
   return Math.round(Math.max(0, Math.min(3.0, weight)) * 100) / 100;
 }
 
+export type BayesianConfidenceTier =
+  'high' | 'medium' | 'low' | 'insufficient_data';
+
+export interface BayesianRatingSummary {
+  bayesianRating: number;
+  rawWeightedMean: number;
+  effectiveWeightSum: number;
+  confidenceRatio: number;
+  confidenceTier: BayesianConfidenceTier;
+  tierLabelVi: string;
+}
+
+export const BAYESIAN_PRIOR_K = 3;
+export const BAYESIAN_PRIOR_MEAN = 4.2;
+
+/**
+ * Review Trust Model P1 (Docs/Platform/review-trust-model.html):
+ * S_bayesian = (k * mu + sum(w_i * r_i)) / (k + sum(w_i)), c = sum(w_i) / (sum(w_i) + k)
+ * Prior k = 3, mu = 4.2.
+ */
+export function computeBayesianRatingSummary(
+  reviews: ReadonlyArray<{
+    rating_star: number;
+    helpfulness_weight: number;
+    include_in_rating: boolean;
+  }>,
+  fallbackWeightedRating = 0
+): BayesianRatingSummary {
+  let effectiveWeightSum = 0;
+  let weightedStarSum = 0;
+
+  for (const r of reviews) {
+    if (!r.include_in_rating) continue;
+    const w = Number(r.helpfulness_weight || 0);
+    const star = Number(r.rating_star || 0);
+    if (w > 0 && star >= 1 && star <= 5) {
+      effectiveWeightSum += w;
+      weightedStarSum += w * star;
+    }
+  }
+
+  effectiveWeightSum = Math.round(effectiveWeightSum * 100) / 100;
+
+  if (effectiveWeightSum <= 0) {
+    const safeFallback =
+      fallbackWeightedRating > 0
+        ? Math.round(fallbackWeightedRating * 100) / 100
+        : 0;
+    return {
+      bayesianRating: safeFallback,
+      rawWeightedMean: safeFallback,
+      effectiveWeightSum: 0,
+      confidenceRatio: 0,
+      confidenceTier: 'insufficient_data',
+      tierLabelVi: 'Ít mẫu kiểm chứng (Bayesian Prior)',
+    };
+  }
+
+  const rawWeightedMean =
+    Math.round((weightedStarSum / effectiveWeightSum) * 100) / 100;
+  const bayesianRating =
+    Math.round(
+      ((BAYESIAN_PRIOR_K * BAYESIAN_PRIOR_MEAN + weightedStarSum) /
+        (BAYESIAN_PRIOR_K + effectiveWeightSum)) *
+        100
+    ) / 100;
+  const confidenceRatio =
+    Math.round(
+      (effectiveWeightSum / (effectiveWeightSum + BAYESIAN_PRIOR_K)) * 100
+    ) / 100;
+
+  let confidenceTier: BayesianConfidenceTier = 'insufficient_data';
+  let tierLabelVi = 'Ít mẫu kiểm chứng (Đã làm mượt Bayesian)';
+  if (effectiveWeightSum >= 12) {
+    confidenceTier = 'high';
+    tierLabelVi = 'Độ tin cậy cao (Bayesian High)';
+  } else if (effectiveWeightSum >= 4) {
+    confidenceTier = 'medium';
+    tierLabelVi = 'Độ tin cậy trung bình (Bayesian Medium)';
+  } else if (effectiveWeightSum >= 1.5) {
+    confidenceTier = 'low';
+    tierLabelVi = 'Độ tin cậy thấp (Bayesian Low)';
+  }
+
+  return {
+    bayesianRating,
+    rawWeightedMean,
+    effectiveWeightSum,
+    confidenceRatio,
+    confidenceTier,
+    tierLabelVi,
+  };
+}
+
 export interface RateCategoryItem {
   id: string;
   parent_id: string | null;

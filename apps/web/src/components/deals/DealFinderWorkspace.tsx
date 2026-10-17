@@ -21,6 +21,7 @@ import {
 } from '@/lib/deal-radar';
 import RadarBadge from '@/components/radar/RadarBadge';
 import { useDealRadarIndex } from '@/components/radar/use-deal-radar';
+import { escapeCsvCell } from '@/lib/csv-safe';
 import type {
   CrossPlatformDealRadarItem,
   CrossPlatformDealRadarResponse,
@@ -138,13 +139,7 @@ export default function DealFinderWorkspace({
 
   const handleDownloadRadarCsv = () => {
     if (typeof window === 'undefined' || !dealRadar) return;
-    const escapeCsv = (val: string | number) => {
-      const str = String(val ?? '');
-      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-        return `"${str.replace(/"/g, '""')}"`;
-      }
-      return str;
-    };
+    const escapeCsv = escapeCsvCell;
     const headers = [
       'Phân Loại',
       'Thiết Bị',
@@ -327,13 +322,7 @@ export default function DealFinderWorkspace({
 
   const handleDownloadDealsCsv = () => {
     if (typeof window === 'undefined' || rankedDeals.length === 0) return;
-    const escapeCsv = (val: string | number) => {
-      const str = String(val ?? '');
-      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-        return `"${str.replace(/"/g, '""')}"`;
-      }
-      return str;
-    };
+    const escapeCsv = escapeCsvCell;
     const headers = [
       'Hạng',
       'Thiết Bị',

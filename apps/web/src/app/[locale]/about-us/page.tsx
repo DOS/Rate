@@ -21,18 +21,30 @@ export async function generateMetadata({
   params: Promise<{ locale: string }>;
 }): Promise<Metadata> {
   const { locale } = await params;
+  const alternates = {
+    canonical: 'https://rate.vn/about-us',
+    languages: {
+      vi: 'https://rate.vn/about-us',
+      en: 'https://rate.vn/about-us',
+      cs: 'https://rate.vn/about-us',
+    },
+  };
   if (locale === 'en') {
     return {
-      title: 'About Rate.vn - Open-Core Product Spec & Price Intelligence | Rate.vn',
+      title:
+        'About Rate.vn - Open-Core Product Spec & Price Intelligence | Rate.vn',
       description:
         'Learn how Rate.vn standardizes 10 technical specification groups, detects inflated fake discounts, and audits marketplace reviews with AI.',
+      alternates,
     };
   }
   if (locale === 'cs') {
     return {
-      title: 'O platformě Rate.vn - Open-Core analýza parametrů a cen | Rate.vn',
+      title:
+        'O platformě Rate.vn - Open-Core analýza parametrů a cen | Rate.vn',
       description:
         'Zjistěte, jak Rate.vn standardizuje 10 skupin technických parametrů, odhaluje falešné slevy a provádí AI audit recenzí.',
+      alternates,
     };
   }
   return {
@@ -40,6 +52,7 @@ export async function generateMetadata({
       'Về Kiến Trúc Rate.vn - Nền Tảng Đối Chiếu Thông Số, Giá Thật & Kiểm Toán Đánh Giá | Rate.vn',
     description:
       'Tìm hiểu kiến trúc Open-Core 4 tầng của Rate.vn: Chuẩn hóa 10 nhóm thông số GSMArena & PhoneArena, phát hiện nâng khống giá gốc và lọc bình luận Seeding bằng AI.',
+    alternates,
   };
 }
 
@@ -90,7 +103,7 @@ export default async function AboutUsPage({
             </div>
 
             <div className="col-lg-4">
-              <div className="card rounded-4 bg-black bg-opacity-50 border-secondary border-opacity-25 border p-4 text-white">
+              <div className="card rounded-4 bg-opacity-50 border-secondary border-opacity-25 border bg-black p-4 text-white">
                 <div className="small text-uppercase text-white-50 fw-bold mb-3">
                   Số Liệu Kiểm Toán Thực Tế (Live DB)
                 </div>
@@ -137,7 +150,7 @@ export default async function AboutUsPage({
       {/* 3 Pillars of Verification */}
       <section className="bg-light py-5">
         <div className="container">
-          <div className="text-center mb-5">
+          <div className="mb-5 text-center">
             <h2 className="h3 fw-bold mb-2">
               Ba Trụ Cột Kỹ Thuật Cốt Lõi Của Rate.vn
             </h2>
@@ -161,7 +174,8 @@ export default async function AboutUsPage({
                   hàng bán cùng một mẫu máy về một thực thể gốc duy nhất (
                   <code>rate.master_products</code>) thông qua khóa chuẩn hóa{' '}
                   <code>model_key</code>, độ tương đồng <code>pg_trgm</code> và
-                  trích xuất AI theo chuẩn 10 nhóm của GSMArena &amp; PhoneArena.
+                  trích xuất AI theo chuẩn 10 nhóm của GSMArena &amp;
+                  PhoneArena.
                 </p>
                 <div className="mt-auto pt-2">
                   <Link
@@ -229,7 +243,7 @@ export default async function AboutUsPage({
       </section>
 
       {/* Open-Core Transparency Section */}
-      <section className="bg-white border-top py-5">
+      <section className="border-top bg-white py-5">
         <div className="container">
           <div className="row align-items-center g-4">
             <div className="col-lg-7">
@@ -247,8 +261,8 @@ export default async function AboutUsPage({
                 17. Không một cá nhân hay nhà tài trợ nào có thể can thiệp thủ
                 công để làm đẹp điểm số.
               </p>
-              <ul className="list-unstyled d-flex flex-column gap-2 mb-0">
-                <li className="d-flex align-items-center gap-2 small">
+              <ul className="list-unstyled d-flex flex-column mb-0 gap-2">
+                <li className="d-flex align-items-center small gap-2">
                   <BsCheckCircleFill className="text-success flex-shrink-0" />
                   <span>
                     <strong>Schema công khai:</strong> Toàn bộ định nghĩa bảng,
@@ -256,7 +270,7 @@ export default async function AboutUsPage({
                     đều mở tại <code>supabase/migrations</code>.
                   </span>
                 </li>
-                <li className="d-flex align-items-center gap-2 small">
+                <li className="d-flex align-items-center small gap-2">
                   <BsDatabaseCheck className="text-primary flex-shrink-0" />
                   <span>
                     <strong>Bảo vệ quyền riêng tư:</strong> Tách biệt hoàn toàn
@@ -264,7 +278,7 @@ export default async function AboutUsPage({
                     công khai thông qua Row-Level Security (RLS).
                   </span>
                 </li>
-                <li className="d-flex align-items-center gap-2 small">
+                <li className="d-flex align-items-center small gap-2">
                   <BsCodeSlash className="text-danger flex-shrink-0" />
                   <span>
                     <strong>REST API v1 miễn phí:</strong> Cung cấp chuẩn JSON
@@ -284,25 +298,25 @@ export default async function AboutUsPage({
                 <div className="d-grid gap-2">
                   <Link
                     href="/smartphones"
-                    className="btn btn-outline-dark text-start rounded-3 px-3 py-2"
+                    className="btn btn-outline-dark rounded-3 px-3 py-2 text-start"
                   >
                     📱 Danh mục Điện thoại thông minh
                   </Link>
                   <Link
                     href="/laptops"
-                    className="btn btn-outline-dark text-start rounded-3 px-3 py-2"
+                    className="btn btn-outline-dark rounded-3 px-3 py-2 text-start"
                   >
                     💻 Danh mục Laptop &amp; Ultrabook
                   </Link>
                   <Link
                     href="/tablets"
-                    className="btn btn-outline-dark text-start rounded-3 px-3 py-2"
+                    className="btn btn-outline-dark rounded-3 px-3 py-2 text-start"
                   >
                     📟 Danh mục Máy tính bảng (Tablet)
                   </Link>
                   <Link
                     href="/faq"
-                    className="btn btn-outline-primary text-start rounded-3 px-3 py-2"
+                    className="btn btn-outline-primary rounded-3 px-3 py-2 text-start"
                   >
                     ❓ Câu hỏi thường gặp về phương pháp tính điểm
                   </Link>

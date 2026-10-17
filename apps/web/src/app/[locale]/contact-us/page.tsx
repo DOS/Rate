@@ -22,11 +22,20 @@ export async function generateMetadata({
   params: Promise<{ locale: string }>;
 }): Promise<Metadata> {
   const { locale } = await params;
+  const alternates = {
+    canonical: 'https://rate.vn/contact-us',
+    languages: {
+      vi: 'https://rate.vn/contact-us',
+      en: 'https://rate.vn/contact-us',
+      cs: 'https://rate.vn/contact-us',
+    },
+  };
   if (locale === 'en') {
     return {
       title: 'Contact & Report Suspicious Marketplace Merchant | Rate.vn',
       description:
         'Report fake discounts, review seeding campaigns, or request a merchant trust re-audit on Rate.vn.',
+      alternates,
     };
   }
   if (locale === 'cs') {
@@ -34,12 +43,14 @@ export async function generateMetadata({
       title: 'Kontakt a nahlášení podezřelého obchodu | Rate.vn',
       description:
         'Nahlaste falešné slevy, AI seeding kampaně nebo požádejte o opětovný audit důvěryhodnosti obchodu na Rate.vn.',
+      alternates,
     };
   }
   return {
     title: 'Liên Hệ & Báo Cáo Gian Hàng Nghi Vấn Seeding / Giá Ảo | Rate.vn',
     description:
       'Gửi đường dẫn sản phẩm hoặc gian hàng Shopee, Lazada, Tiki có dấu hiệu nâng khống giá gốc hoặc chạy Seeding đánh giá ảo để hệ thống Rate.vn kiểm định.',
+    alternates,
   };
 }
 
