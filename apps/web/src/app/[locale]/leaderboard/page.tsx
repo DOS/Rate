@@ -9,6 +9,7 @@ import {
   type CanonicalCategorySlug,
 } from '@/lib/rate-api';
 import { normalizeRateLocale, type SupportedRateLocale } from '@/lib/rate-i18n';
+import { defaultOpenGraph } from '@/lib/seo';
 import NavbarDarkDynamic from '../components/navbar/NavbarDarkDynamic';
 import FooterTop from '../components/footer-top';
 import FooterDynamic from '../components/footer/FooterDynamic';
@@ -80,11 +81,10 @@ export async function generateMetadata({
       canonical: `${siteUrl}/leaderboard`,
     },
     openGraph: {
+      ...defaultOpenGraph(resolvedLocale),
       title: titleByLocale[resolvedLocale],
       description: descByLocale[resolvedLocale],
       url: `${siteUrl}/leaderboard`,
-      siteName: 'Rate.vn',
-      type: 'website',
     },
   };
 }
