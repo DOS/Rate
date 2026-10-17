@@ -8,6 +8,7 @@ import {
   getMasterProductHref,
 } from '@/server/rate';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
+import { defaultOpenGraph } from '@/lib/seo';
 import { scoreMasterProductForLeaderboard } from '@/lib/leaderboard-engine';
 import NavbarDarkDynamic from '../../components/navbar/NavbarDarkDynamic';
 import FooterTop from '../../components/footer-top';
@@ -74,11 +75,10 @@ export async function generateMetadata({
       canonical: canonicalUrl,
     },
     openGraph: {
+      ...defaultOpenGraph(lang),
       title,
       description,
       url: canonicalUrl,
-      siteName: 'Rate.vn',
-      type: 'website',
     },
   };
 }

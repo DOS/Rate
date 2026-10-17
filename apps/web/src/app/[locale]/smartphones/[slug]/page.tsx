@@ -15,6 +15,7 @@ import {
 import { computeBayesianRatingSummary } from '@/lib/rate-api';
 import RadarBadge from '@/components/radar/RadarBadge';
 import { buildRadarIndex, getRadarSignal } from '@/lib/deal-radar';
+import { defaultOpenGraph, SHARE_IMAGE } from '@/lib/seo';
 import JReviewsSection from '@/components/reviews/JReviewsSection';
 import PriceHistorySection from '@/components/price-history/PriceHistorySection';
 import CompareQuickToggle from '@/components/compare/CompareQuickToggle';
@@ -77,6 +78,7 @@ export async function generateCategoryProductMetadata(
       canonical: canonicalUrl,
     },
     openGraph: {
+      ...defaultOpenGraph(lang),
       title:
         lang === 'en'
           ? `${product.name} - 10-Group Specs & True Price History | Rate.vn`
@@ -86,7 +88,9 @@ export async function generateCategoryProductMetadata(
       description: `Giá tốt nhất từ ${minPrice} ₫. Xem 10 nhóm thông số kỹ thuật chuẩn GSMArena/PhoneArena và biểu đồ lịch sử giá.`,
       url: canonicalUrl,
       images:
-        product.images && product.images.length > 0 ? [product.images[0]!] : [],
+        product.images && product.images.length > 0
+          ? [product.images[0]!]
+          : [SHARE_IMAGE],
     },
   };
 }

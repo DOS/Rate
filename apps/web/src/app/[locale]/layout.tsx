@@ -3,6 +3,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { getMessages, setRequestLocale } from 'next-intl/server';
 import { AppProviders } from '@/app/providers';
 import { getRateCopy } from '@/lib/rate-i18n';
+import { defaultOpenGraph } from '@/lib/seo';
 
 export async function generateMetadata({
   params,
@@ -15,6 +16,14 @@ export async function generateMetadata({
     metadataBase: new URL('https://rate.vn'),
     title: copy.seo.siteTitle,
     description: copy.seo.siteDescription,
+    // Default share card. og:title/description come from each page's own
+    // title/description, and Next fills the Twitter title, description and
+    // image from the page's resolved openGraph, so neither is set here.
+    openGraph: defaultOpenGraph(locale),
+    twitter: {
+      card: 'summary_large_image',
+      site: '@rate_vn',
+    },
   };
 }
 
