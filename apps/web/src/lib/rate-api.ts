@@ -1425,6 +1425,8 @@ interface RawMerchantSafeRow {
   follower_count?: number | string | null;
   location?: string | null;
   risk_score?: number | string | null;
+  review_risk_score?: number | string | null;
+  review_risk_breakdown?: MerchantRiskBreakdown | null;
   metadata?: Record<string, unknown> | null;
   created_at?: string | null;
   updated_at?: string | null;
@@ -1725,30 +1727,19 @@ export async function getMerchantsList(params?: {
     mQuery = mQuery.limit(params.limit);
   }
 
-  const [{ data: merchantRows }, prodRows, reviewRows] = await Promise.all([
-    mQuery,
-    fetchAllRows('products', (from, to) =>
-      supabase
-        .from('products')
-        .select('id, merchant_id, price_current')
-        .order('id')
-        .range(from, to)
-    ),
-    // Only the flag fields feed computeDynamicReviewRisk; keep this read narrow
-    // because it pages through every review.
-    fetchAllRows('reviews', (from, to) =>
-      supabase
-        .from('reviews')
-        .select(
-          'id, product_id, review_flags(verdict, flag_category, include_in_rating)'
-        )
-        .order('id')
-        .range(from, to)
-    ),
-  ]);
-
+  const { data: merchantRows } = await mQuery;
   const merchants = (merchantRows as unknown as RawMerchantSafeRow[]) || [];
   if (merchants.length === 0) return [];
+
+  const merchantIds = merchants.map((m) => m.id);
+  const prodRows = await fetchAllRows('products', (from, to) =>
+    supabase
+      .from('products')
+      .select('id, merchant_id, price_current')
+      .in('merchant_id', merchantIds)
+      .order('id')
+      .range(from, to)
+  );
 
   const products =
     (prodRows as Array<{
@@ -1759,6 +1750,7 @@ export async function getMerchantsList(params?: {
 
   const prodToMerchant = new Map<string, string>();
   const prodsByMerchant = new Map<string, number[]>();
+  const productIdsByMerchant = new Map<string, string[]>();
 
   for (const p of products) {
     prodToMerchant.set(p.id, p.merchant_id);
@@ -1766,66 +1758,115 @@ export async function getMerchantsList(params?: {
     const price = Number(p.price_current || 0);
     if (price > 0) list.push(price);
     prodsByMerchant.set(p.merchant_id, list);
+
+    const idList = productIdsByMerchant.get(p.merchant_id) ?? [];
+    idList.push(p.id);
+    productIdsByMerchant.set(p.merchant_id, idList);
+  }
+
+  const extractPersistedBreakdown = (
+    m: RawMerchantSafeRow
+  ): MerchantRiskBreakdown | null => {
+    const candidate =
+      m.review_risk_breakdown ??
+      (m.metadata && typeof m.metadata === 'object'
+        ? (m.metadata.review_risk_breakdown as
+            MerchantRiskBreakdown | undefined)
+        : undefined);
+    if (
+      candidate &&
+      typeof candidate === 'object' &&
+      typeof candidate.total_reviews === 'number'
+    ) {
+      return candidate;
+    }
+    return null;
+  };
+
+  const unscoredProductIds: string[] = [];
+  for (const m of merchants) {
+    if (!extractPersistedBreakdown(m)) {
+      const mProdIds = productIdsByMerchant.get(m.id);
+      if (mProdIds && mProdIds.length > 0) {
+        unscoredProductIds.push(...mProdIds);
+      }
+    }
   }
 
   const mappedReviewsByMerchant = new Map<string, ReviewItem[]>();
-  for (const r of (reviewRows as unknown as Array<
-    RawReviewRow & { product_id: string }
-  >) || []) {
-    const mId = prodToMerchant.get(r.product_id);
-    if (!mId) continue;
-    const vf = Array.isArray(r.review_flags)
-      ? r.review_flags[0]
-      : r.review_flags;
-    const verdict = vf?.verdict ?? null;
-    const flagCategory: ReviewFlagCategory =
-      vf?.flag_category ||
-      (verdict === 'fake'
-        ? 'seeding_fake'
-        : verdict === 'suspicious'
-          ? 'low_value_coin_spam'
-          : 'authentic');
-    const includeInRating = Boolean(
-      vf?.include_in_rating ??
-      (flagCategory === 'authentic' && verdict !== 'fake')
+  if (unscoredProductIds.length > 0) {
+    const reviewRows = await fetchAllRows('reviews', (from, to) =>
+      supabase
+        .from('reviews')
+        .select(
+          'id, product_id, review_flags(verdict, flag_category, include_in_rating)'
+        )
+        .in('product_id', unscoredProductIds)
+        .order('id')
+        .range(from, to)
     );
-    const upvotes = Number(r.upvotes ?? 0);
-    const downvotes = Number(r.downvotes ?? 0);
-    const reports = Number(r.report_count ?? 0);
 
-    const item: ReviewItem = {
-      id: r.id,
-      author_name: r.author_name || 'Khách hàng',
-      rating_star: Number(r.rating_star || 5),
-      comment: r.comment || '',
-      variation: r.variation || null,
-      created_at: r.created_at,
-      reviewer_type: r.reviewer_type === 'expert' ? 'expert' : 'user',
-      upvotes,
-      downvotes,
-      report_count: reports,
-      helpfulness_weight: includeInRating
-        ? Number(r.helpfulness_weight ?? 1)
-        : 0,
-      include_in_rating: includeInRating,
-      criteria_ratings: r.criteria_ratings || {},
-      verdict,
-      fake_probability:
-        vf?.fake_probability != null ? Number(vf.fake_probability) : null,
-      flag_category: flagCategory,
-      reason: vf?.reason || null,
-      signals: vf?.signals || null,
-    };
+    for (const r of (reviewRows as unknown as Array<
+      RawReviewRow & { product_id: string }
+    >) || []) {
+      const mId = prodToMerchant.get(r.product_id);
+      if (!mId) continue;
+      const vf = Array.isArray(r.review_flags)
+        ? r.review_flags[0]
+        : r.review_flags;
+      const verdict = vf?.verdict ?? null;
+      const flagCategory: ReviewFlagCategory =
+        vf?.flag_category ||
+        (verdict === 'fake'
+          ? 'seeding_fake'
+          : verdict === 'suspicious'
+            ? 'low_value_coin_spam'
+            : 'authentic');
+      const includeInRating = Boolean(
+        vf?.include_in_rating ??
+        (flagCategory === 'authentic' && verdict !== 'fake')
+      );
+      const upvotes = Number(r.upvotes ?? 0);
+      const downvotes = Number(r.downvotes ?? 0);
+      const reports = Number(r.report_count ?? 0);
 
-    const existing = mappedReviewsByMerchant.get(mId) ?? [];
-    existing.push(item);
-    mappedReviewsByMerchant.set(mId, existing);
+      const item: ReviewItem = {
+        id: r.id,
+        author_name: r.author_name || 'Khách hàng',
+        rating_star: Number(r.rating_star || 5),
+        comment: r.comment || '',
+        variation: r.variation || null,
+        created_at: r.created_at,
+        reviewer_type: r.reviewer_type === 'expert' ? 'expert' : 'user',
+        upvotes,
+        downvotes,
+        report_count: reports,
+        helpfulness_weight: includeInRating
+          ? Number(r.helpfulness_weight ?? 1)
+          : 0,
+        include_in_rating: includeInRating,
+        criteria_ratings: r.criteria_ratings || {},
+        verdict,
+        fake_probability:
+          vf?.fake_probability != null ? Number(vf.fake_probability) : null,
+        flag_category: flagCategory,
+        reason: vf?.reason || null,
+        signals: vf?.signals || null,
+      };
+
+      const existing = mappedReviewsByMerchant.get(mId) ?? [];
+      existing.push(item);
+      mappedReviewsByMerchant.set(mId, existing);
+    }
   }
 
   let results: MerchantSummary[] = merchants.map((m) => {
     const prices = prodsByMerchant.get(m.id) ?? [];
+    const persistedBreakdown = extractPersistedBreakdown(m);
     const mReviews = mappedReviewsByMerchant.get(m.id) ?? [];
-    const { reviewRiskScore, breakdown } = computeDynamicReviewRisk(mReviews);
+    const dynamicRisk = persistedBreakdown
+      ? null
+      : computeDynamicReviewRisk(mReviews);
     const meta = (
       m.metadata && typeof m.metadata === 'object' ? m.metadata : {}
     ) as Record<string, unknown>;
@@ -1834,8 +1875,24 @@ export async function getMerchantsList(params?: {
         ? meta.dosafe_risk_score
         : Number(m.risk_score || 0);
     const persistedReviewRisk =
-      typeof meta.review_risk_score === 'number' ? meta.review_risk_score : 0;
-    const effectiveReviewRisk = Math.max(reviewRiskScore, persistedReviewRisk);
+      m.review_risk_score != null
+        ? Number(m.review_risk_score)
+        : typeof meta.review_risk_score === 'number'
+          ? meta.review_risk_score
+          : 0;
+    const effectiveReviewRisk = Math.max(
+      dynamicRisk?.reviewRiskScore ?? 0,
+      persistedReviewRisk
+    );
+    const breakdown = persistedBreakdown ??
+      dynamicRisk?.breakdown ?? {
+        total_reviews: 0,
+        authentic_count: 0,
+        coin_spam_count: 0,
+        seeding_fake_count: 0,
+        sabotage_or_bombing_count: 0,
+        suspicious_ratio_pct: 0,
+      };
     const combinedRisk = Math.min(
       100,
       Math.max(Number(m.risk_score || 0), dosafeRisk, effectiveReviewRisk)

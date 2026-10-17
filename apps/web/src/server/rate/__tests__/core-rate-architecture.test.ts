@@ -36,7 +36,7 @@ import {
   RATE_ROUTES,
 } from '@repo/shared-data';
 
-function runCoreArchitectureSuite() {
+async function runCoreArchitectureSuite() {
   console.log(
     '🧪 Running Rate.vn Core Architecture & Multi-Category Verification Suite...'
   );
@@ -2240,7 +2240,78 @@ function runCoreArchitectureSuite() {
     'Product Detail Scoreboard must display Bayesian confidence tier badge (#166)'
   );
   console.log(
-    '  ✅ [46/46] Static Page SEO Canonicals, Workspace CSV Formula Guards & Product Scoreboard Bayesian Confidence (#166) passed'
+    '  ✅ [46/47] Static Page SEO Canonicals, Workspace CSV Formula Guards & Product Scoreboard Bayesian Confidence (#166) passed'
+  );
+
+  // 47. getMerchantsList Scoped Query (C2), /api/health, global-error.tsx, Root Layout CSS Cleanup, Turbo Outputs (T14) & Dependabot (#168)
+  const rateApiSrc168 = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/lib/rate-api.ts'),
+    'utf8'
+  );
+  assert.ok(
+    rateApiSrc168.includes(".in('merchant_id', merchantIds)") &&
+      rateApiSrc168.includes('extractPersistedBreakdown') &&
+      rateApiSrc168.includes(".in('product_id', unscoredProductIds)"),
+    'getMerchantsList must scope products by merchantIds and only query reviews for unscoredProductIds (C2)'
+  );
+
+  const healthRoute =
+    require('../../../app/api/health/route') as typeof import('../../../app/api/health/route');
+  const healthRes = await healthRoute.GET();
+  assert.equal(healthRes.status, 200);
+  const healthBody = (await healthRes.json()) as {
+    status: string;
+    service: string;
+  };
+  assert.equal(healthBody.status, 'ok');
+  assert.equal(healthBody.service, 'rate-web');
+  assert.ok(
+    (healthRes.headers.get('cache-control') || '').includes('no-store'),
+    'GET /api/health must return Cache-Control: no-store'
+  );
+
+  assert.ok(
+    fs.existsSync(path.join(repoRoot, 'apps/web/src/app/global-error.tsx')) &&
+      fs.existsSync(path.join(repoRoot, '.nvmrc')),
+    'global-error.tsx and .nvmrc must exist (Audit Section 7)'
+  );
+
+  const rootLayoutSrc168 = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/app/layout.tsx'),
+    'utf8'
+  );
+  assert.ok(
+    !rootLayoutSrc168.includes('animate.css') &&
+      !rootLayoutSrc168.includes('font-awesome'),
+    'apps/web/src/app/layout.tsx must not load unused animate.css or Font Awesome CDN'
+  );
+
+  const turboJsonSrc168 = fs.readFileSync(
+    path.join(repoRoot, 'turbo.json'),
+    'utf8'
+  );
+  assert.ok(
+    !turboJsonSrc168.includes('"public/**"'),
+    'turbo.json build.outputs must not include public/** (T14)'
+  );
+
+  const dependabotSrc168 = fs.readFileSync(
+    path.join(repoRoot, '.github/dependabot.yml'),
+    'utf8'
+  );
+  const codeownersSrc168 = fs.readFileSync(
+    path.join(repoRoot, 'CODEOWNERS'),
+    'utf8'
+  );
+  assert.ok(
+    dependabotSrc168.includes('github-actions') &&
+      !dependabotSrc168.includes('/apps/strapi') &&
+      !codeownersSrc168.includes('/apps/strapi') &&
+      !codeownersSrc168.includes('@claude-code'),
+    'dependabot.yml and CODEOWNERS must match the current Open-Core monorepo without legacy Strapi or ghost handles'
+  );
+  console.log(
+    '  ✅ [47/47] getMerchantsList Scoped Query (C2), /api/health, global-error.tsx, Layout CSS Cleanup, Turbo Outputs (T14) & Dependabot (#168) passed'
   );
 
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
