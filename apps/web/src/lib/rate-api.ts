@@ -1,5 +1,8 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import type { MasterProduct } from '@repo/shared-data';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('rate-api');
 export type { MasterProduct };
 
 type RateSchemaClient = ReturnType<SupabaseClient['schema']>;
@@ -46,10 +49,11 @@ async function fetchAllRows<T>(
   for (let from = 0; ;) {
     const { data, error } = await buildPage(from, from + pageSize - 1);
     if (error) {
-      console.error(
-        `rate-api: paged read of ${label} failed at row ${from}:`,
-        error.message
-      );
+      log.error('paged read failed', {
+        table: label,
+        row: from,
+        message: error.message,
+      });
       return rows;
     }
     const page = data ?? [];
@@ -1089,7 +1093,7 @@ export async function getMasterProductBySlug(
     .maybeSingle();
 
   if (error || !data) {
-    console.error(`Master product not found for slug: ${slug}`, error?.message);
+    log.warn('master product not found', { slug, message: error?.message });
     return null;
   }
   return normalizeMasterProductRow(data as MasterProduct);
@@ -1217,11 +1221,7 @@ export async function getMasterProductOffers(
     .order('price_current', { ascending: true });
 
   if (error || !data) {
-    console.error(
-      'Error fetching offers for masterId:',
-      masterId,
-      error?.message
-    );
+    log.error('offers fetch failed', { masterId, message: error?.message });
     return [];
   }
 
@@ -1640,10 +1640,10 @@ export async function getMasterProductPriceHistory(
     .limit(1000);
 
   if (error) {
-    console.error(
-      `rate-api: failed to fetch price_history for master ${masterId}:`,
-      error.message
-    );
+    log.error('price_history fetch failed', {
+      masterId,
+      message: error.message,
+    });
   }
 
   const chronologicalRows = [

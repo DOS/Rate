@@ -23,6 +23,9 @@ import {
 } from '../../lib/leaderboard-engine';
 import { computeProductRadarSignal } from './deals';
 import type { RadarSignal } from '../../lib/deal-radar';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('server.extension');
 
 export type SupportedEcommercePlatform =
   | 'shopee'
@@ -1099,11 +1102,10 @@ export async function ingestExtensionCrowdSignal(
   });
 
   if (error) {
-    console.warn(
-      '[extension-ingest] enqueue_crowd_verify_signal rejected:',
-      error.code,
-      error.message
-    );
+    log.warn('enqueue_crowd_verify_signal rejected', {
+      code: error.code,
+      message: error.message,
+    });
     return {
       accepted: false,
       quarantinedForWorker: false,
