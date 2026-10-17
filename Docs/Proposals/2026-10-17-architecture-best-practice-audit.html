@@ -1,0 +1,430 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Audit kiến trúc Rate 2026</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0f1113;
+    --surface: #16191d;
+    --surface-2: #1d2127;
+    --border: #2a2f37;
+    --text: #f3f4f6;
+    --muted: #a1a8b3;
+    --accent: #FF2E29;
+    --accent-soft: rgba(255, 46, 41, 0.14);
+    --high: #f97316;
+    --high-soft: rgba(249, 115, 22, 0.14);
+    --mid: #f59e0b;
+    --mid-soft: rgba(245, 158, 11, 0.13);
+    --low: #60a5fa;
+    --low-soft: rgba(96, 165, 250, 0.13);
+    --ok: #10b981;
+    --ok-soft: rgba(16, 185, 129, 0.13);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 32px 16px 72px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+    font-size: 15px;
+    line-height: 1.62;
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; }
+  header.hero {
+    background: linear-gradient(145deg, #16191d 0%, #1b1315 100%);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--accent);
+    border-radius: 16px;
+    padding: 26px 28px;
+    margin-bottom: 24px;
+  }
+  .eyebrow { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .pill {
+    display: inline-block; padding: 3px 11px; border-radius: 999px;
+    font-size: 12px; font-weight: 700; letter-spacing: .02em;
+    border: 1px solid transparent; white-space: nowrap;
+  }
+  .p-crit { background: var(--accent-soft); color: #ff6b67; border-color: rgba(255,46,41,.4); }
+  .p-high { background: var(--high-soft); color: #fb923c; border-color: rgba(249,115,22,.4); }
+  .p-mid { background: var(--mid-soft); color: #fbbf24; border-color: rgba(245,158,11,.4); }
+  .p-low { background: var(--low-soft); color: #93c5fd; border-color: rgba(96,165,250,.4); }
+  .p-ok { background: var(--ok-soft); color: #34d399; border-color: rgba(16,185,129,.4); }
+  h1 { font-size: 27px; line-height: 1.25; margin: 0 0 8px; color: #fff; letter-spacing: -.01em; }
+  h2 {
+    font-size: 20px; color: #fff; margin: 0 0 14px; padding-bottom: 9px;
+    border-bottom: 1px solid var(--border);
+  }
+  h3 { font-size: 16px; color: #fff; margin: 18px 0 8px; }
+  p { margin: 0 0 11px; color: var(--muted); }
+  p strong, li strong, td strong { color: var(--text); }
+  .meta { font-size: 13px; color: var(--muted); }
+  section.card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; padding: 22px 24px; margin-bottom: 20px;
+  }
+  .verdict {
+    border-left: 4px solid var(--accent); background: var(--surface-2);
+    border-radius: 10px; padding: 14px 18px; margin: 4px 0 14px;
+  }
+  .verdict p { color: var(--text); margin-bottom: 6px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin: 6px 0 4px; }
+  .stat { background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+  .stat .v { font-size: 24px; font-weight: 800; color: #fff; font-variant-numeric: tabular-nums; }
+  .stat .v.red { color: #ff6b67; }
+  .stat .l { font-size: 12.5px; color: var(--muted); }
+  ul, ol { margin: 6px 0 12px; padding-left: 20px; color: var(--muted); }
+  li { margin-bottom: 6px; }
+  .tbl { width: 100%; overflow-x: auto; margin: 8px 0 6px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.8px; min-width: 640px; }
+  th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+  th { background: var(--surface-2); color: #e5e7eb; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  td { color: var(--muted); }
+  tr:last-child td { border-bottom: none; }
+  td.id { color: #fff; font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  code {
+    font-family: "JetBrains Mono", Consolas, monospace; font-size: 12.3px;
+    background: #0b0c0e; color: #ff8582; padding: 1px 5px; border-radius: 5px;
+    border: 1px solid #262930; word-break: break-word;
+  }
+  .ev { display: block; margin-top: 4px; font-size: 12.5px; color: #8b93a0; }
+  .tag-i { color: var(--mid); font-weight: 700; font-size: 12px; }
+  .phase { border: 1px solid var(--border); border-radius: 12px; padding: 14px 18px; margin-bottom: 12px; background: var(--surface-2); }
+  .phase h3 { margin-top: 0; }
+  .phase.p0 { border-left: 4px solid var(--accent); }
+  .phase.p1 { border-left: 4px solid var(--high); }
+  .phase.p2 { border-left: 4px solid var(--mid); }
+  .phase.p3 { border-left: 4px solid var(--low); }
+  .toc a { color: #ff8582; text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  a { color: #ff8582; }
+  footer { font-size: 12.5px; color: #7c8490; margin-top: 26px; }
+  @media (max-width: 640px) {
+    body { padding: 20px 16px 56px; font-size: 14.5px; }
+    header.hero, section.card { padding: 18px 16px; }
+    h1 { font-size: 22px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <div class="eyebrow">
+    <span class="pill p-crit">4 Nghiêm trọng</span>
+    <span class="pill p-high">10 Cao</span>
+    <span class="pill p-mid">15 Trung bình</span>
+    <span class="pill p-low">10 Thấp</span>
+    <span class="pill p-ok">Chỉ đọc, không sửa code</span>
+  </div>
+  <h1>Audit kiến trúc, database và codebase Rate so với best practice 2026</h1>
+  <p class="meta">17/10/2026 · Agent: Audit (Claude Code) · Mốc kiểm tra: <code>DOS/Rate@origin/dev 39d2800</code> (#154), ledger <code>DOS/DOS.Me</code> nhánh <code>main</code> và <code>dev</code>, <code>DOS/Rate-Services@origin/main</code>. Không chạy DDL, không truy vấn DB live.</p>
+</header>
+
+<section class="card">
+  <h2>1. Kết luận</h2>
+  <div class="verdict">
+    <p><strong>Hướng kiến trúc đúng và khá hiện đại; phần thực thi thì chưa đạt best practice ở 4 chỗ quan trọng.</strong></p>
+    <p>Phần tốt: Next.js 16 với Server Components, Postgres làm trung tâm, hàng đợi <code>FOR UPDATE SKIP LOCKED</code>, RLS bật ở mọi bảng, tách open-core / private và chỉ một sổ migration.</p>
+    <p>4 chỗ cần sửa: (1) đường ghi dữ liệu công khai chưa được bảo vệ (review, watchlist), (2) lọc và tổng hợp dữ liệu bằng JavaScript thay vì SQL và không có cache giữa các request, (3) thông số do AI tự sinh được publish mà không ghi nguồn, (4) repo public chưa có branch protection và secret scanning.</p>
+  </div>
+  <div class="grid">
+    <div class="stat"><div class="v">~52k</div><div class="l">dòng TS/TSX (web 39k, importer 10k, extension 2,5k)</div></div>
+    <div class="stat"><div class="v red">0</div><div class="l">cache giữa các request (<code>use cache</code>, <code>unstable_cache</code>, <code>cacheTag</code>)</div></div>
+    <div class="stat"><div class="v red">1 / 18</div><div class="l">API route có validate input bằng zod</div></div>
+    <div class="stat"><div class="v red">234</div><div class="l">assert trong test web chỉ grep mã nguồn (<code>.includes</code> / <code>.match</code>)</div></div>
+  </div>
+
+  <h3>Chấm điểm theo mảng</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>Mảng</th><th>Đánh giá</th><th>Tóm tắt</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Kiến trúc tổng thể</strong></td><td><span class="pill p-ok">Tốt</span></td><td>4 tầng rõ ràng, có ranh giới open-core, DB là nguồn sự thật. Thiếu một tầng "domain" tách khỏi data access.</td></tr>
+      <tr><td><strong>Database design</strong></td><td><span class="pill p-mid">Khá</span></td><td>Có <code>timestamptz</code>, NUMERIC cho tiền, CHECK enum, queue fencing, grant theo cột. Yếu ở: write path của review, các cột tổng hợp có nhiều nơi cùng ghi, chỉ mục không dùng được, migration lệch giữa 2 repo.</td></tr>
+      <tr><td><strong>Bảo mật</strong></td><td><span class="pill p-crit">Cần sửa gấp</span></td><td>Anon ghi review có trọng số. Route public dùng service role. Auth chỉ chạy ở client. Không có CSP. Repo không được bảo vệ.</td></tr>
+      <tr><td><strong>Web / Next.js</strong></td><td><span class="pill p-mid">Khá</span></td><td>RSC đúng chỗ, <code>params</code> async, JSON-LD được escape. Nhưng mọi trang render động, quét toàn bảng ở trang chủ, chưa dùng Cache Components / <code>proxy.ts</code>.</td></tr>
+      <tr><td><strong>AI / Data pipeline</strong></td><td><span class="pill p-high">Cần cải thiện</span></td><td>Chưa dùng structured output. Validate kiểu fail-open. Thông số AI tự publish. <code>model_key</code> gộp nhầm hàng cũ / xách tay.</td></tr>
+      <tr><td><strong>Testing</strong></td><td><span class="pill p-high">Yếu</span></td><td>Test là script <code>tsx</code> tự viết, phần lớn kiểm tra chuỗi trong mã nguồn. Không có test cho route, data layer hay E2E. File test bị loại khỏi typecheck.</td></tr>
+      <tr><td><strong>Tooling / CI</strong></td><td><span class="pill p-mid">Khá, đang tiến bộ</span></td><td>13 commit gần nhất đã đưa lint vào CI và dọn dependency. Còn lại: ESLint 8 (eslintrc), Turbo cấu hình sai output, Dependabot còn trỏ tới yarn / strapi.</td></tr>
+      <tr><td><strong>Quản trị repo</strong></td><td><span class="pill p-crit">Yếu</span></td><td>Không có ruleset, secret scanning tắt, CODEOWNERS ghi người không tồn tại. ROADMAP thực chất là changelog với 0 việc mở.</td></tr>
+    </tbody>
+  </table></div>
+  <p class="toc">Mục lục: <a href="#tot">2. Đã làm tốt</a> · <a href="#dasua">3. Đã sửa gần đây</a> · <a href="#crit">4. Nghiêm trọng</a> · <a href="#high">5. Cao</a> · <a href="#mid">6. Trung bình</a> · <a href="#low">7. Thấp</a> · <a href="#plan">8. Lộ trình</a> · <a href="#decide">9. Cần JOY quyết</a> · <a href="#method">10. Phương pháp</a></p>
+</section>
+
+<section class="card" id="tot">
+  <h2>2. Những gì đã đạt best practice</h2>
+  <ul>
+    <li><strong>Hàng đợi crawl thuần Postgres</strong> dùng <code>FOR UPDATE SKIP LOCKED</code>, lease, heartbeat có <code>claim_token</code>, backoff mũ, và job "zombie" được chuyển sang <code>failed</code>. DML trực tiếp bị thu hồi cả với <code>service_role</code>. Thiết kế này đáng giữ: pgmq / Supabase Queues không có dedup theo danh tính và không có fencing token.</li>
+    <li><strong>RLS và grant:</strong> RLS bật ở mọi bảng <code>rate</code>. Policy dùng <code>(SELECT auth.uid())</code> và <code>TO authenticated</code>, đúng khuyến nghị hiệu năng của Supabase. Grant theo cột ẩn <code>phone</code> / <code>bank_account</code> của merchant.</li>
+    <li><strong>Kiểu dữ liệu:</strong> <code>timestamptz</code>, NUMERIC cho tiền, enum dạng text + CHECK. <code>price_history</code> chống trùng bằng <code>observation_id</code> tất định và delta compression.</li>
+    <li><strong>Migration</strong> idempotent, có contract guard dừng lại khi phát hiện drift, và chỉ có một sổ ledger ở DOS-Me.</li>
+    <li><strong>Next.js:</strong> mọi <code>page.tsx</code> là Server Component, client component nằm ở lá, <code>Promise.all</code> chạy fetch song song, <code>React.cache</code> dedup giữa metadata và page.</li>
+    <li><strong>Vote route</strong> xác thực JWT bằng <code>auth.getUser</code>, validate UUID, mỗi user một phiếu nhờ PK ghép. <strong>Ingest</strong> từ extension đi qua zod, consent và hàng đợi cách ly, không ghi giá trực tiếp.</li>
+    <li><strong>Entity matcher</strong> fail-closed khi hạ tầng lỗi. Dung lượng không đọc được thì gán <code>:unknown</code> kèm <code>needs_review</code> thay vì đoán.</li>
+    <li><strong>Extension</strong> dùng tsconfig strict với <code>noUncheckedIndexedAccess</code>, 0 <code>any</code>, Shadow DOM, và đóng góp dữ liệu mặc định là tắt.</li>
+    <li><strong>Tooling:</strong> pnpm được pin, <code>--frozen-lockfile</code>, <code>ignoreBuildErrors: false</code>. Shim <code>.pnpmfile.cjs</code> cho typescript-eslint có giới hạn hẹp và ghi chú rõ. Commitlint chạy cả local lẫn CI.</li>
+  </ul>
+</section>
+
+<section class="card" id="dasua">
+  <h2>3. Đã được sửa trong 13 commit gần nhất (không cần làm lại)</h2>
+  <p>Audit chạy trên <code>18ac058</code>, sau đó tôi đối chiếu lại với <code>origin/dev 39d2800</code>. Các điểm sau đã được agent khác xử lý (#130 đến #154):</p>
+  <ul>
+    <li>Lint web và importer đã chạy trong CI (#130, #136). Rule react-hooks được enforce.</li>
+    <li>Bootstrap JS được bundle thay vì tải từ jsDelivr (#146). Font tự host bằng <code>next/font</code> (#148).</li>
+    <li>Gỡ 52 dependency web không ai dùng (#150). Dependency anti-bot của importer đã được gỡ khỏi package public.</li>
+    <li>Tài liệu thời Strapi được archive. Crawler Splink / CheckScam bị xóa. Các file <code>.js</code> do tsc sinh ra nằm cạnh <code>.ts</code> đã được dọn (#138, #141, #142).</li>
+    <li>Đang làm dở: issue <a href="https://github.com/DOS/Rate/issues/153">DOS/Rate#153</a> viết lại lịch sử git để xóa dữ liệu nhạy cảm (đang chờ force-push).</li>
+  </ul>
+</section>
+
+<section class="card" id="crit">
+  <h2>4. Nghiêm trọng <span class="pill p-crit">4</span></h2>
+  <div class="tbl"><table>
+    <thead><tr><th>#</th><th>Vấn đề và bằng chứng</th><th>Khuyến nghị</th></tr></thead>
+    <tbody>
+      <tr><td class="id">K1</td><td><strong>Ai cũng gửi được review có trọng số, có thể tự xưng "expert", và lỗi thì bị che bằng một thông báo thành công giả.</strong>
+        <ul>
+          <li><code>submit_community_review</code> cấp EXECUTE cho <code>anon</code>. Câu INSERT không set <code>is_verified_buyer</code>, nên lấy mặc định <code>true</code>.</li>
+          <li>Comment dài 30 ký tự trở lên, không chứa từ khóa spam, được tính <code>authentic</code> với trọng số 1,0 và cộng ngay vào điểm.</li>
+          <li>Route nhận <code>reviewerType: 'expert'</code> từ body, không có auth, captcha hay rate limit. Khi RPC lỗi, route vẫn trả <code>ok: true, mode: 'verified_preview'</code> kèm một UUID ngẫu nhiên.</li>
+        </ul>
+        <span class="ev"><code>supabase/migrations/20261014234500_rate_community_review_submission_rpc.sql:202-204</code>, <code>20260912000000_init_rate_schema.sql:121</code>, <code>apps/web/src/app/api/v1/rate/reviews/route.ts:170-171, 179, 208</code></span>
+        <span class="ev">Migration này hiện chỉ có trên <code>DOS.Me/dev</code>, chưa có trên <code>main</code>. <span class="tag-i">[Suy luận]</span> Nếu đúng như vậy, Prod chưa bị lộ lỗ hổng anon, nhưng review người dùng gửi lên Prod đang bị mất trong khi UI báo thành công. Cần đối chiếu migration history của Prod để khẳng định.</span></td>
+        <td><ul>
+          <li>Thu hồi quyền của <code>anon</code> và bắt buộc <code>auth.uid()</code>.</li>
+          <li>Thêm cột <code>submitted_by</code> với <code>UNIQUE(master_product_id, submitted_by)</code>, giới hạn số review mỗi ngày trong SQL.</li>
+          <li><code>is_verified_buyer=false</code>. Review mới để ở trạng thái <code>unanalyzed</code> cho đến khi được chấm.</li>
+          <li><code>reviewer_type</code> xác định ở server. Route trả lỗi 5xx thật thay vì giả thành công.</li>
+          <li><strong>Chặn promote DOS-Me dev → prod cho đến khi sửa xong.</strong></li>
+        </ul></td></tr>
+      <tr><td class="id">K2</td><td><strong>Route public dùng client service-role (bỏ qua RLS).</strong>
+        <ul>
+          <li><code>POST /api/v1/rate/watchlist</code> import <code>getRateClient</code> từ <code>@repo/shared-data</code>, client này dùng <code>SUPABASE_SERVICE_ROLE_KEY</code>. Route không có auth, nhận email tùy ý không validate, và fingerprint do client tự đặt.</li>
+          <li><code>getPublicClient()</code> fallback sang service key khi thiếu anon key.</li>
+        </ul>
+        <span class="ev"><code>apps/web/src/app/api/v1/rate/watchlist/route.ts:2</code>, <code>packages/shared-data/src/clients/supabase.ts:8, 34, 53</code></span></td>
+        <td><ul>
+          <li>Dùng anon client hoặc client mang JWT của user.</li>
+          <li>Tách admin client ra entry <code>@repo/shared-data/server</code> có <code>import 'server-only'</code> và cấm import nó trong <code>apps/web</code>.</li>
+          <li>Bỏ fallback service key, thiếu anon key thì throw.</li>
+          <li>Email phải qua double opt-in. Thêm zod và rate limit bền vững.</li>
+        </ul></td></tr>
+      <tr><td class="id">K3</td><td><strong>Repo public không có lớp bảo vệ.</strong> <code>DOS/Rate</code> là repo public. Cả <code>main</code> và <code>dev</code> đều trả về "Branch not protected", rulesets là <code>[]</code>. Secret scanning, push protection và Dependabot security updates đều <code>disabled</code>. CodeQL chưa cấu hình. Trong khi đó nhiều agent tự merge PR song song.
+        <span class="ev">Kiểm tra bằng <code>gh api repos/DOS/Rate</code> và <code>gh api repos/DOS/Rate/branches/main/protection</code> lúc audit. Liên quan tới <a href="https://github.com/DOS/Rate/issues/153">DOS/Rate#153</a>.</span></td>
+        <td><ul>
+          <li>Bật secret scanning và push protection.</li>
+          <li>Tạo ruleset cho <code>main</code> và <code>dev</code>: bắt buộc qua PR, bắt buộc check CI và commitlint xanh, cấm force-push (sau khi #153 xong).</li>
+          <li>Bật CodeQL default setup.</li>
+          <li>Đây là thay đổi cấu hình repo, cần JOY cho phép (mục 9).</li>
+        </ul></td></tr>
+      <tr><td class="id">K4</td><td><strong>Thông số do AI "nhớ ra" được publish thẳng lên catalog.</strong> Cùng loại rủi ro với vụ dữ liệu tổng hợp đã phải xóa ngày 16/10.
+        <ul>
+          <li>Prompt yêu cầu model dùng "authoritative knowledge" về PhoneArena / GSMArena, tức là trả lời từ trí nhớ, không có tài liệu nguồn.</li>
+          <li>Khi <code>safeParse</code> thất bại, code vẫn trả về candidate chưa được validate.</li>
+          <li><code>has_5g</code> mặc định là <code>true</code> khi model không trả lời.</li>
+          <li>Master mới được tạo với trạng thái <code>published</code>.</li>
+        </ul>
+        <span class="ev"><code>apps/importer/src/shopee/ai-spec-enricher.ts:245, 578, 613</code>, <code>entity-matcher.ts:79</code></span></td>
+        <td><ul>
+          <li>Thông số chỉ có từ AI thì để <code>draft</code>.</li>
+          <li>Ghi nguồn cho từng thông số: <code>spec_source</code>, <code>confidence</code>, <code>model</code>.</li>
+          <li>Validate fail-closed, bỏ mặc định <code>has_5g</code>.</li>
+          <li>Ưu tiên trích xuất từ trang nguồn đã tải về, có trích dẫn, thay vì dựa vào trí nhớ của model.</li>
+        </ul></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section class="card" id="high">
+  <h2>5. Mức cao <span class="pill p-high">10</span></h2>
+  <div class="tbl"><table>
+    <thead><tr><th>#</th><th>Vấn đề và bằng chứng</th><th>Khuyến nghị</th></tr></thead>
+    <tbody>
+      <tr><td class="id">C1</td><td><strong>Catalog được lọc, sắp xếp và cắt bằng JavaScript.</strong> Code <code>select('*')</code> toàn bộ sản phẩm đã publish, kể cả JSONB <code>specifications</code>, rồi lọc brand, giá, NFC, màn hình... và <code>slice</code> trong JS. Khi vượt <code>max_rows</code> (mặc định 1000) của PostgREST, kết quả bị cắt mà không báo.
+        <span class="ev"><code>apps/web/src/lib/rate-api.ts:279-464</code>, facet ở <code>244-262</code></span></td>
+        <td>Viết một RPC <code>search_master_products(...)</code> (SECURITY INVOKER) có phân trang và <code>GROUP BY brand</code>. Đưa các thông số hay lọc thành generated column, hoặc dùng <code>@&gt;</code> với chỉ mục GIN.</td></tr>
+      <tr><td class="id">C2</td><td><strong>Quét toàn bảng ở mỗi request trang chủ, <code>/merchants</code> và <code>/inspect</code>.</strong> <code>getMerchantsList</code> đọc hết <code>products</code> và <code>reviews</code> để tính lại rủi ro bằng JS, bỏ qua cột <code>review_risk_score</code> đã lưu. <code>getRatePlatformStats</code> dùng <code>count: 'exact'</code> trên <code>price_history</code>. Endpoint public <code>/merchants</code> vì thế khuếch đại tải.
+        <span class="ev"><code>rate-api.ts:1636-1655, 2119-2135</code>, trang chủ <code>[locale]/page.tsx:81-86</code></span></td>
+        <td>Đọc cột rủi ro đã lưu. Tạo materialized view <code>merchant_stats</code>, refresh bằng importer hoặc <code>pg_cron</code>. Dùng <code>count: 'estimated'</code>. Kết hợp với C3.</td></tr>
+      <tr><td class="id">C3</td><td><strong>Không có cache giữa các request, mọi trang render động.</strong> Grep ra 0 lần dùng <code>use cache</code>, <code>cacheLife</code>, <code>cacheTag</code>, <code>unstable_cache</code> hay <code>generateStaticParams</code>. <code>React.cache</code> chỉ dedup trong một request. Root layout gọi <code>getLocale()</code> (dựa vào header) nên các <code>export const revalidate = 60</code> <span class="tag-i">[Suy luận từ <code>.next/prerender-manifest.json</code> của build local]</span> không có tác dụng.
+        <span class="ev"><code>apps/web/src/app/layout.tsx:15</code>, <code>server/rate/index.ts:62-101</code></span></td>
+        <td>Bật <code>cacheComponents: true</code> (Next.js 16.4 cho biết đây sẽ là mặc định ở Next 17). Bọc data layer bằng <code>"use cache"</code> + <code>cacheLife('minutes')</code> + <code>cacheTag('product:&lt;id&gt;')</code>. Importer gọi revalidate theo tag khi ghi dữ liệu.</td></tr>
+      <tr><td class="id">C4</td><td><strong>Auth chỉ chạy ở client, và không có security header.</strong> Dự án không dùng <code>@supabase/ssr</code>, không dùng cookie. <code>JReviewsSection</code> duyệt localStorage để lấy <code>access_token</code>. <code>next.config.mjs</code> không có <code>headers()</code>: không CSP, không HSTS, không frame-ancestors. Token nằm trong localStorage nên bất kỳ lỗi XSS nào cũng dẫn tới chiếm tài khoản.
+        <span class="ev"><code>components/.../JReviewsSection.tsx:369-376</code>, <code>RateAuthPortal.tsx:297</code></span></td>
+        <td>Dùng <code>@supabase/ssr</code> <code>createServerClient</code> với cookie. Refresh session trong <code>proxy.ts</code>, server dùng <code>getClaims()</code>. Thêm CSP dùng nonce và các header chuẩn. Xóa phần còn sót của NextAuth.</td></tr>
+      <tr><td class="id">C5</td><td><strong>Các cột tổng hợp không có một nơi chịu trách nhiệm duy nhất.</strong>
+        <ul>
+          <li><code>min_price</code> / <code>max_price</code> / <code>merchant_count</code> chỉ được ghi bởi một batch job của Rate-Services, theo kiểu đọc-sửa-ghi cả JSONB <code>key_specs</code>, nên có thể mất cập nhật.</li>
+          <li><code>user_rating_weighted</code> có 3 nơi cùng ghi.</li>
+          <li><code>GRANT ALL ON review_flags TO service_role</code> mở lại đường ghi trực tiếp mà <code>commit_review_verdict</code> đã khóa.</li>
+        </ul>
+        <span class="ev"><code>20261013192302_jreviews...sql:89</code>, <code>ai-review-analyzer.ts:937-996</code>, <code>Rate-Services/src/scrapers/price-spread-auditor.ts:255-277</code></span></td>
+        <td>Một hàm SQL <code>refresh_master_market_stats(id)</code>, gọi khi ingest và trong job đêm. Chuyển <code>price_spread_audit</code> ra cột có kiểu hoặc bảng riêng. Thu hồi lại DML trên <code>review_flags</code>. Xóa các fallback viết bằng TS.</td></tr>
+      <tr><td class="id">C6</td><td><strong>Định danh sản phẩm gộp nhầm các SKU khác nhau.</strong> <code>model_key = brand:model:storage</code>, không có tình trạng (mới / cũ / 99%), xuất xứ (VN/A / xách tay) hay RAM. Ngưỡng trigram không nhất quán: RPC dùng 0,65, chỗ chấp nhận dùng 0,70. Không có test nào cho <code>EntityMatcher</code>.
+        <span class="ev"><code>product-normalizer.ts:1110, 1146</code>, <code>entity-matcher.ts:24-58</code></span></td>
+        <td>Thêm chiều tình trạng và xuất xứ, hoặc gắn cờ ở listing để loại khỏi giá chuẩn. Thống nhất ngưỡng. Lập bộ cặp sản phẩm có gán nhãn để đo precision / recall.</td></tr>
+      <tr><td class="id">C7</td><td><strong>Extension: kênh cài đặt không kiểm tra người gửi.</strong> <code>RATE_UPDATE_SETTINGS</code> nhận <code>apiBaseUrl</code> từ bất kỳ sender nào, kể cả content script chạy trên 10 sàn. Giá trị mặc định là <code>http://localhost:3000</code>. Mỗi lần xem trang sản phẩm, extension gửi URL, tiêu đề và giá qua query GET mà người dùng không opt-in.
+        <span class="ev"><code>apps/extension/src/background/service-worker.ts:8, 33-52, 340-354</code></span></td>
+        <td>Từ chối message có <code>sender.tab</code>. Chỉ cho phép <code>https://rate.vn</code>, override chỉ có ở bản dev. Bỏ localhost khỏi manifest prod. Chuyển sang POST và hiện thông báo minh bạch ở lần chạy đầu. Thu hẹp <code>permissions</code>.</td></tr>
+      <tr><td class="id">C8</td><td><strong>Pipeline LLM phân tích review còn mong manh.</strong> Một <code>AbortController</code> 25 giây dùng chung cho mọi batch. Một lần <code>JSON.parse</code> lỗi làm mất cả các batch đã chạy xong. Không retry, không validate đầu ra. Text review không tin cậy đi thẳng vào <code>ai_summary</code> hiển thị công khai (rủi ro prompt injection).
+        <span class="ev"><code>ai-review-analyzer.ts:473-474, 551, 556, 652</code></span></td>
+        <td>Dùng <code>response_format: json_schema, strict</code>, sinh schema từ Zod 4 <code>z.toJSONSchema</code>. Timeout riêng cho từng batch, retry có jitter khi gặp 429 / 5xx, giữ lại kết quả từng phần. Lọc URL và số điện thoại khỏi text sinh ra.</td></tr>
+      <tr><td class="id">C9</td><td><strong>Bản copy migration ở repo Rate đã lệch khỏi ledger.</strong>
+        <ul>
+          <li>Thiếu 3 file định nghĩa <code>master_products</code>, <code>crawl_jobs</code>, <code>review_flags</code>, nên không thể replay độc lập.</li>
+          <li>File init khác cả timestamp lẫn nội dung (bản Rate cấp <code>GRANT SELECT</code> toàn bảng cho anon).</li>
+          <li>Không có test pgTAP / replay riêng cho schema <code>rate</code>.</li>
+        </ul>
+        <span class="ev">So sánh <code>Rate/supabase/migrations</code> với <code>DOS.Me@origin/dev</code></span></td>
+        <td>Bản copy hoặc được sinh tự động từ ledger (script đồng bộ, CI kiểm tra lệch), hoặc thay bằng <code>schema.sql</code> dump kèm README. Thêm test pgTAP cho RLS / grant ở DOS-Me.</td></tr>
+      <tr><td class="id">C10</td><td><strong>SEO: canonical của mọi trang đều trỏ về trang chủ.</strong> <code>[locale]/layout.tsx</code> đặt <code>canonical: 'https://rate.vn'</code>, nên các trang không tự khai báo (deals, inspect, faq...) bị Google coi là bản trùng của trang chủ. Sitemap được prerender lúc build và không bao giờ revalidate.
+        <span class="ev"><code>apps/web/src/app/[locale]/layout.tsx:18</code>, <code>app/sitemap.ts</code></span></td>
+        <td>Đặt <code>metadataBase</code>, canonical riêng cho từng trang kèm <code>hreflang</code>. Cho sitemap <code>revalidate = 3600</code>.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section class="card" id="mid">
+  <h2>6. Mức trung bình <span class="pill p-mid">15</span></h2>
+  <div class="tbl"><table>
+    <thead><tr><th>#</th><th>Vấn đề</th><th>Bằng chứng</th><th>Khuyến nghị</th></tr></thead>
+    <tbody>
+      <tr><td class="id">T1</td><td>Test chủ yếu grep mã nguồn: 101 lần <code>readFileSync</code> và 234 assert dạng <code>.includes</code> trong một file 2.077 dòng. Không có test cho route, data layer hay E2E.</td><td><code>apps/web/src/server/rate/__tests__/core-rate-architecture.test.ts</code></td><td>Vitest cho các engine thuần. Test route với Supabase mock (401, 400, 429). Playwright smoke chạy trên preview build. Bỏ dần các assert grep.</td></tr>
+      <tr><td class="id">T2</td><td>File test bị loại khỏi typecheck (đang ẩn 2 lỗi type). <code>test-ai-enricher.ts --backfill</code> ghi vào DB và Rate-Services chạy nó như một job thật.</td><td><code>apps/importer/tsconfig.json:21</code></td><td>Có <code>tsconfig.test.json</code> riêng. Tách backfill thành CLI trong <code>jobs/</code> với cờ <code>--apply</code> rõ ràng.</td></tr>
+      <tr><td class="id">T3</td><td>Mỗi lượt vote kích hoạt tính lại toàn bộ review của master và UPDATE vào một dòng duy nhất, nên tranh chấp khóa. Flood guard chỉ đếm INSERT.</td><td><code>20261014011054_review_votes.sql:41-65, 130-137, 169-172</code></td><td>Cập nhật counter tăng dần, đánh dấu master "dirty" và tính lại theo batch bằng <code>pg_cron</code>. Rate limit áp dụng cả cho UPDATE.</td></tr>
+      <tr><td class="id">T4</td><td>Hàm SECURITY DEFINER đặt <code>search_path = rate, public, ...</code> thay vì <code>''</code>. <code>v_products_with_merchant_trust</code> là view security-definer, bị linter Supabase báo lỗi.</td><td><code>search_rpc...sql:111</code>, <code>price_alerts...sql:63</code></td><td><code>SET search_path = ''</code> với tên đầy đủ. Dùng INVOKER khi chỉ đọc dữ liệu public.</td></tr>
+      <tr><td class="id">T5</td><td><code>price_alerts</code> lưu email từ anon mà không opt-in. <code>user_id</code> không có FK tới <code>auth.users</code>, không có chính sách lưu giữ.</td><td><code>20261015010000_...sql:13, 125</code></td><td>Opt-in có token, FK <code>ON DELETE CASCADE</code>, job tự xóa dữ liệu hết hạn.</td></tr>
+      <tr><td class="id">T6</td><td><code>price_history</code>: <code>recorded_at</code> cho phép null, không có BRIN, không partition, không retention. Query biểu đồ lấy 500 dòng chung cho mọi offer nên chuỗi bị cắt.</td><td><code>init:97-104</code>, <code>rate-api.ts:1024-1028</code></td><td><code>NOT NULL</code>, BRIN trên <code>recorded_at</code>. Partition theo tháng khi lên hàng chục triệu dòng. Viết hàm SQL trả chuỗi theo ngày cho mỗi sản phẩm.</td></tr>
+      <tr><td class="id">T7</td><td>Chỉ mục trigram trên biểu thức ghép không được dùng (RPC lọc bằng nhiều <code>ILIKE</code> riêng). <code>match_master_product</code> dùng <code>similarity() &gt;=</code> nên không dùng được index. Thiếu index cho 4 FK. Input không escape <code>%</code> / <code>_</code>.</td><td><code>search_rpc...sql:55-82, 150-156</code></td><td>Dùng toán tử <code>%</code> / <code>word_similarity</code> trên cột đã có index. Thêm index cho FK. Kiểm tra bằng <code>pg_stat_user_indexes</code>.</td></tr>
+      <tr><td class="id">T8</td><td>Xóa một merchant sẽ CASCADE xuống products → price_history, reviews, votes.</td><td><code>init:61</code></td><td><code>RESTRICT</code> kết hợp soft-delete (<code>archived_at</code>).</td></tr>
+      <tr><td class="id">T9</td><td>API không thống nhất: zod chỉ có ở 1/18 route, envelope response khác nhau, 15+ route trả thẳng thông báo lỗi DB. Rate limiter dùng <code>Map</code> trong RAM, key là <code>x-forwarded-for</code> (dễ giả mạo, vô tác dụng trên serverless).</td><td><code>extension/ingest/route.ts:36-88</code></td><td>Một wrapper <code>withApiHandler</code> dùng chung: zod, envelope có kiểu, map lỗi, CORS. Rate limit lưu ở DB hoặc Upstash.</td></tr>
+      <tr><td class="id">T10</td><td>Nối chuỗi vào filter PostgREST: <code>.or(`slug.eq.${cleaned},...`)</code>.</td><td><code>rate-api.ts:1856</code></td><td>Validate slug bằng regex, hoặc tách thành 2 lần <code>.eq()</code>.</td></tr>
+      <tr><td class="id">T11</td><td>Code export CSV bị chép lại 17 lần và không chống CSV formula injection, trong khi có xuất cả review do người dùng viết.</td><td><code>JReviewsSection.tsx:559</code> và 15 component khác</td><td>Một module <code>lib/export/</code> dùng chung, escape các ký tự đầu <code>= + - @</code>.</td></tr>
+      <tr><td class="id">T12</td><td>Data layer không có ranh giới <code>server-only</code>. <code>lib/rate-api.ts</code> dài 2.643 dòng và bị 16 client component import. Web có 4 nơi khác nhau tạo Supabase client.</td><td>Grep ra 0 lần <code>import 'server-only'</code></td><td>Tách hàm thuần sang <code>lib/rate-domain.ts</code>, query chuyển vào <code>server/rate/*</code> có <code>server-only</code>, chỉ giữ một factory tạo client.</td></tr>
+      <tr><td class="id">T13</td><td>Chưa theo quy ước Next 16: vẫn dùng <code>middleware.ts</code> (đã đổi tên thành <code>proxy.ts</code>). <code>env.mjs</code> là object thường, mặc định trỏ URL Prod. <code>@t3-oss/env-nextjs</code> đã cài mà không dùng.</td><td><code>apps/web/src/middleware.ts</code>, <code>src/env.mjs:9-11</code></td><td>Đổi sang <code>proxy.ts</code>. Dùng <code>createEnv</code> tách server / client, không đặt giá trị mặc định là Prod.</td></tr>
+      <tr><td class="id">T14</td><td>Tooling:
+        <ul>
+          <li>ESLint 8 với eslintrc. ESLint 10 đã bỏ hẳn eslintrc, và trang chủ ESLint báo v9 hết hỗ trợ ngày 06/08/2026.</li>
+          <li><code>turbo.json</code> khai báo <code>public/**</code> là output, nên khi cache hit có thể ghi đè file nguồn.</li>
+          <li><code>globalEnv</code> chứa secret, nên mỗi lần xoay key là mất toàn bộ cache.</li>
+          <li>CI không chạy qua turbo, cache key tính theo SHA.</li>
+        </ul></td><td><code>turbo.json:28</code>, <code>.github/workflows/ci.yml</code></td><td>Chuyển sang flat config (giữ typescript-eslint trên TS6 API cho tới khi upstream hỗ trợ TS7). Output khai báo riêng cho từng package. Biến môi trường để trong <code>env</code> của từng task. <code>turbo run ... --affected</code>.</td></tr>
+      <tr><td class="id">T15</td><td>Data contract:
+        <ul>
+          <li>Đang dùng Zod 3 (bản 3.25 đã có sẵn <code>zod/v4</code>).</li>
+          <li>Mọi field của 10 nhóm thông số là optional, không giới hạn giá trị số.</li>
+          <li><code>MasterProductSchema</code> mặc định <code>status: 'published'</code> và rating bằng 0, mâu thuẫn với nguyên tắc "không bịa điểm" của PR #123.</li>
+          <li>Hợp đồng dữ liệu scraper → engine là interface viết tay, không được validate lúc chạy.</li>
+        </ul></td><td><code>packages/shared-data/src/schemas/*</code>, <code>apps/importer/src/shopee/types.ts</code></td><td>Chuyển lên Zod 4. Thêm <code>ScrapedProductSchema</code> và parse ngay lúc ingest. Mặc định <code>null</code> / <code>draft</code>. Pipeline ingest gói trong một RPC transaction, upsert theo batch.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section class="card" id="low">
+  <h2>7. Mức thấp <span class="pill p-low">10</span></h2>
+  <ul>
+    <li><strong>Quản trị repo:</strong>
+      <ul>
+        <li>Dependabot còn trỏ tới <code>yarn</code> và <code>/apps/strapi</code>, không có <code>github-actions</code>.</li>
+        <li>CODEOWNERS ghi <code>@team-lead</code>, <code>@claude-code</code>, là những người không tồn tại.</li>
+        <li>Action dùng tag thay vì pin SHA, workflow không có khối <code>permissions:</code>.</li>
+      </ul></li>
+    <li><strong>File rác vẫn được track:</strong> <code>memory-bank/</code>, <code>.cursor/rules/*</code>, <code>mcp.json</code>, <code>.claude/settings.local.json</code> (chứa đường dẫn máy cá nhân, nằm trong repo public). <code>.gitignore</code> chặn <code>*.png</code> trên toàn repo.</li>
+    <li><strong>Frontend thừa:</strong> CSS Font Awesome tải từ CDN nhưng 0 class <code>fa-</code> được dùng. <code>animate.css</code> được import nhưng 0 class <code>animate__</code>. <code>style.scss</code> của template dài khoảng 11 nghìn dòng được nạp ở mọi trang. <code>images.unoptimized</code> kèm <code>hostname: '*'</code>.</li>
+    <li><strong>Component quá lớn:</strong> CompareWorkspace 2.235 dòng, LeaderboardExplorer 1.760, trang PDP 1.572. Có 283 chỗ dùng <code>style={{}}</code>. Nên tách thành server shell bao các island nhỏ và bật <code>reactCompiler</code>.</li>
+    <li><strong>i18n đi hai đường:</strong> <code>rate-i18n.ts</code> tự viết (29 file dùng) song song next-intl (3 file). Khoảng 1.459 dòng tsx có tiếng Việt viết cứng. Toàn bộ messages được gửi xuống client.</li>
+    <li><strong>Extension:</strong> tự build bằng cách dùng regex xóa <code>import</code> / <code>export</code> trong <code>scripts/build.mjs</code>. Nên chuyển sang WXT hoặc esbuild xuất IIFE. Link không chặn scheme <code>javascript:</code>.</li>
+    <li><strong>Kiểu và khóa:</strong> UUIDv4 trên các bảng ghi nhiều làm phân mảnh B-tree (PG17 nên dùng identity bigint, <code>uuidv7()</code> chỉ có từ PG18). Độ chính xác NUMERIC không đồng nhất (15,2 và 14,2). Nhiều <code>created_at</code> cho phép null. Không có trigger cập nhật <code>updated_at</code>.</li>
+    <li><strong>Queue:</strong> job ở trạng thái done / failed không bao giờ được dọn. Nên thêm job purge bằng <code>pg_cron</code>, không cần chuyển sang pgmq.</li>
+    <li><strong>Vận hành:</strong> không có <code>/api/health</code>, không có logger có cấu trúc (55 <code>console.*</code> ở web, 116 ở importer). Không có <code>global-error.tsx</code>. Không có <code>.nvmrc</code> (CI chạy Node 22, tài liệu ghi v26).</li>
+    <li><strong>Tài liệu:</strong>
+      <ul>
+        <li>ROADMAP nặng 70 KB với 87 mục đã xong và 0 mục mở, thực chất là changelog. Nên tách thành ROADMAP (việc sắp làm) và CHANGELOG.</li>
+        <li>AGENTS.md và CLAUDE.md lặp lại ID của Project #9. Nên để CLAUDE.md chỉ trỏ sang AGENTS.md.</li>
+      </ul></li>
+  </ul>
+</section>
+
+<section class="card" id="plan">
+  <h2>8. Lộ trình đề xuất</h2>
+  <div class="phase p0">
+    <h3>Đợt 0 - Chặn rủi ro (1 đến 2 ngày, làm trước khi promote rate migration của DOS-Me lên Prod)</h3>
+    <ul>
+      <li><strong>K1:</strong> migration sửa <code>submit_community_review</code> và <code>upsert_price_alert</code> trong DOS-Me (thu hồi anon, bắt buộc <code>auth.uid()</code>, unique, <code>is_verified_buyer=false</code>). Route reviews trả lỗi thật, <code>reviewer_type</code> xác định ở server.</li>
+      <li><strong>K2:</strong> watchlist dùng client anon / user. Tách admin client có <code>server-only</code>, bỏ fallback service key.</li>
+      <li><strong>K3:</strong> bật secret scanning và push protection ngay. Ruleset bật sau khi #153 force-push xong.</li>
+      <li><strong>K4:</strong> thông số AI vào trạng thái <code>draft</code>, validate fail-closed, bỏ <code>has_5g=true</code>.</li>
+    </ul>
+  </div>
+  <div class="phase p1">
+    <h3>Đợt 1 - Hiệu năng và nền dữ liệu (1 đến 2 tuần)</h3>
+    <ul>
+      <li>C1, C2, C5: RPC tìm kiếm có phân trang, materialized view <code>merchant_stats</code>, một hàm <code>refresh_master_market_stats</code> duy nhất (DOS-Me migration).</li>
+      <li>C3: Cache Components + <code>use cache</code> / <code>cacheTag</code>. Importer revalidate theo tag.</li>
+      <li>C4, T13: <code>@supabase/ssr</code>, <code>proxy.ts</code>, CSP. C10: canonical và sitemap.</li>
+      <li>C7: kiểm tra sender trong extension, allowlist base URL.</li>
+    </ul>
+  </div>
+  <div class="phase p2">
+    <h3>Đợt 2 - Chất lượng và độ tin cậy (2 đến 3 tuần)</h3>
+    <ul>
+      <li>T1, T2: Vitest, test route, Playwright smoke, test được typecheck.</li>
+      <li>C8, T15: structured output với Zod 4, retry, <code>ScrapedProductSchema</code>, ingest gói trong transaction.</li>
+      <li>C6: <code>model_key</code> có tình trạng / xuất xứ, kèm bộ dữ liệu đo precision / recall.</li>
+      <li>T9, T11, T12: wrapper API, module export dùng chung, ranh giới <code>server-only</code>.</li>
+      <li>T14: ESLint flat config, sửa Turbo, Dependabot, pin action.</li>
+    </ul>
+  </div>
+  <div class="phase p3">
+    <h3>Đợt 3 - Dọn dẹp dài hạn</h3>
+    <ul>
+      <li>T3 đến T8: tối ưu vote, <code>search_path=''</code>, BRIN / partition cho <code>price_history</code>, index cho FK, <code>RESTRICT</code> thay cho CASCADE.</li>
+      <li>i18n chỉ dùng next-intl, tách component lớn, bỏ CSS template, bỏ Font Awesome / animate.css.</li>
+      <li>C9: tự động đồng bộ bản copy migration, thêm test pgTAP. Tách ROADMAP và CHANGELOG.</li>
+    </ul>
+  </div>
+</section>
+
+<section class="card" id="decide">
+  <h2>9. Cần JOY quyết</h2>
+  <ol>
+    <li><strong>Bật bảo vệ cho repo <code>DOS/Rate</code></strong> (secret scanning, push protection, CodeQL; ruleset bật sau khi #153 xong). Đây là thay đổi cấu hình repo nên cần JOY cho phép.</li>
+    <li><strong>Gửi review có bắt buộc đăng nhập không?</strong> Đề xuất: bắt buộc đăng nhập kèm Turnstile. Đây là quyết định sản phẩm vì nó ảnh hưởng tỷ lệ người dùng gửi review.</li>
+    <li><strong>Chính sách cho thông số do AI sinh ra:</strong> đề xuất chỉ publish khi có nguồn trích dẫn hoặc đã được duyệt. Hệ quả là catalog sẽ hiện ít thông số hơn trong thời gian đầu.</li>
+    <li><strong>Tạm dừng promote 3 rate migration đang ở <code>DOS.Me/dev</code> lên Prod</strong> cho đến khi có bản sửa K1 / K2.</li>
+  </ol>
+</section>
+
+<section class="card" id="method">
+  <h2>10. Phương pháp và giới hạn</h2>
+  <ul>
+    <li>4 agent audit song song (DB, web, importer / extension, tooling / CI), chỉ đọc. Mọi phát hiện Nghiêm trọng / Cao đều được tôi đối chiếu lại với <code>origin/dev 39d2800</code>. Các dòng ghi <span class="tag-i">[Suy luận]</span> là chưa kiểm chứng trực tiếp.</li>
+    <li><strong>Không truy vấn DB live:</strong> Supabase MCP chưa được xác thực trong phiên này. Vì vậy chưa xác nhận được: migration history của Prod, chỉ mục không dùng (<code>pg_stat_user_indexes</code>), và số dòng thực tế.</li>
+    <li>Kết luận "mọi trang render động" dựa trên <code>.next/prerender-manifest.json</code> của một bản build local, có thể không đúng hoàn toàn với HEAD. Cần build lại hoặc kiểm tra header <code>x-nextjs-cache</code> trên rate.vn.</li>
+    <li>Nguồn tham chiếu best practice:
+      <a href="https://nextjs.org/blog/next-16">Next.js 16</a>,
+      <a href="https://nextjs.org/docs/app/guides/migrating-to-cache-components">Cache Components</a>,
+      <a href="https://supabase.com/docs/guides/auth/server-side/nextjs">Supabase SSR auth</a>,
+      <a href="https://supabase.com/docs/guides/database/postgres/row-level-security-performance">RLS performance</a>,
+      <a href="https://supabase.com/docs/guides/database/functions">Database functions / search_path</a>,
+      <a href="https://supabase.com/docs/guides/queues">Supabase Queues</a>,
+      <a href="https://www.postgresql.org/docs/18/functions-uuid.html">PG18 uuidv7</a>,
+      <a href="https://zod.dev/json-schema">Zod 4 JSON Schema</a>,
+      <a href="https://eslint.org/blog/2026/02/eslint-v10.0.0-released/">ESLint v10</a>,
+      <a href="https://github.com/typescript-eslint/typescript-eslint/issues/10940">typescript-eslint TS7</a>,
+      <a href="https://turborepo.dev/docs/crafting-your-repository/using-environment-variables">Turborepo env</a>,
+      <a href="https://wellarchitected.github.com/library/application-security/recommendations/actions-security">GitHub Actions security</a>.</li>
+  </ul>
+</section>
+
+<footer>DOS/Rate · Docs/Proposals/2026-10-17-architecture-best-practice-audit.html · Agent: Audit</footer>
+</div>
+</body>
+</html>

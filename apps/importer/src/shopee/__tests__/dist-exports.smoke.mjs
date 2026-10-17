@@ -41,6 +41,19 @@ assert.ok(
   'flagship-seed-data subpath export is empty'
 );
 
+const { runMasterSpecsBackfill, auditMasterSpecs } =
+  await import('@repo/crawlers/shopee/jobs/backfill-specs');
+assert.equal(
+  typeof runMasterSpecsBackfill,
+  'function',
+  'runMasterSpecsBackfill subpath export is broken'
+);
+assert.equal(
+  typeof auditMasterSpecs,
+  'function',
+  'auditMasterSpecs subpath export is broken'
+);
+
 const { ProductSpecificationsSchema } = await import('@repo/shared-data');
 assert.equal(
   typeof ProductSpecificationsSchema?.safeParse,
@@ -72,6 +85,7 @@ for (const dts of [
   'dist/shopee/types.d.ts',
   'dist/shopee/arena-spec-syncer.d.ts',
   'dist/shopee/flagship-seed-data.d.ts',
+  'dist/shopee/jobs/backfill-specs.d.ts',
 ]) {
   assert.ok(fs.existsSync(pkgDir + dts), `Missing type declarations: ${dts}`);
 }
@@ -79,3 +93,4 @@ for (const dts of [
 console.log(
   '✅ @repo/crawlers & @repo/shared-data dist entry points resolve by package name.'
 );
+

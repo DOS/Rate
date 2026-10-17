@@ -2964,7 +2964,557 @@ async function runCoreArchitectureSuite() {
     '  ✅ [58/58] Baseline Queue/Master Migrations Sync & M3/M4/M5/M7 Queue/Observation RPCs (#215) passed'
   );
 
+  // ---------------------------------------------------------------------------
+  // 57. Review Trust Model v2 Web Domain & 6-Axis Breakdown (#184)
+  // ---------------------------------------------------------------------------
+  const {
+    computeCombinedDualScore,
+    computeWilsonLowerBound,
+    detectStarDistributionAnomaly,
+    evaluateReviewTrustAssessment,
+  } = await import('../../../lib/rate-domain');
+
+  assert.equal(computeWilsonLowerBound(0, 0), 0);
+  const wilsonSingleVote = computeWilsonLowerBound(1, 0);
+  const wilsonManyVotes = computeWilsonLowerBound(50, 2);
+  assert.ok(
+    wilsonManyVotes > wilsonSingleVote,
+    `Wilson lower bound for 50/52 (${wilsonManyVotes}) must exceed 1/1 (${wilsonSingleVote})`
+  );
+
+  const shippingOnlyEval = evaluateReviewTrustAssessment({
+    rating_star: 1,
+    comment: 'Giao hàng quá chậm, đóng gói hộp móp méo, shipper thái độ kém',
+    reviewer_type: 'user',
+    upvotes: 5,
+    downvotes: 0,
+    report_count: 0,
+    flag_category: 'authentic',
+    verdict: 'authentic',
+    include_in_rating: true,
+    signals: null,
+  });
+  assert.equal(shippingOnlyEval.routesTo, 'merchant');
+  assert.equal(shippingOnlyEval.breakdown.context, 0);
+  assert.equal(shippingOnlyEval.breakdown.gate, 0);
+  assert.equal(shippingOnlyEval.breakdown.weight, 0);
+
+  const sponsoredPromoEval = evaluateReviewTrustAssessment({
+    rating_star: 5,
+    comment:
+      'Bài viết được tài trợ bởi hãng: Màn hình 120Hz siêu đẹp, camera chụp nét, pin 5000mAh cực trâu!',
+    reviewer_type: 'user',
+    upvotes: 0,
+    downvotes: 0,
+    report_count: 0,
+    flag_category: 'authentic',
+    verdict: 'authentic',
+    include_in_rating: true,
+    signals: null,
+  });
+  assert.equal(sponsoredPromoEval.independence, 'sponsored_promo');
+  assert.equal(sponsoredPromoEval.sponsorshipBadgeVi, 'Quảng cáo');
+  assert.equal(sponsoredPromoEval.breakdown.independence, 0.1);
+
+  const sponsoredBalancedEval = evaluateReviewTrustAssessment({
+    rating_star: 4,
+    comment:
+      'Nhận sản phẩm từ hãng để trải nghiệm: Màn hình OLED 120Hz rất đẹp nhưng nhược điểm là máy hơi nóng khi quay video 4K.',
+    reviewer_type: 'user',
+    upvotes: 3,
+    downvotes: 0,
+    report_count: 0,
+    flag_category: 'authentic',
+    verdict: 'authentic',
+    include_in_rating: true,
+    signals: null,
+  });
+  assert.equal(sponsoredBalancedEval.independence, 'sponsored_balanced');
+  assert.equal(sponsoredBalancedEval.sponsorshipBadgeVi, 'Có tài trợ');
+  assert.equal(sponsoredBalancedEval.breakdown.independence, 0.5);
+
+  const gatedLowConfidenceDual = computeCombinedDualScore({
+    userScore: 5.0,
+    expertScore: 4.2,
+    userConfidence: 0.29,
+    fallbackAverage: 4.5,
+  });
+  assert.equal(gatedLowConfidenceDual.isBlended, false);
+  assert.equal(gatedLowConfidenceDual.overall, 4.2);
+
+  const blendedHighConfidenceDual = computeCombinedDualScore({
+    userScore: 4.5,
+    expertScore: 4.0,
+    userConfidence: 0.75,
+    fallbackAverage: 4.2,
+  });
+  assert.equal(blendedHighConfidenceDual.isBlended, true);
+  assert.equal(blendedHighConfidenceDual.overall, 4.3);
+
+  const anomalousCluster = detectStarDistributionAnomaly([
+    { rating_star: 5, comment: '', flag_category: 'authentic' },
+    { rating_star: 5, comment: 'Cực kì hài lòng', flag_category: 'authentic' },
+    { rating_star: 5, comment: 'Tốt', flag_category: 'authentic' },
+    { rating_star: 5, comment: 'Ok lắm', flag_category: 'authentic' },
+    {
+      rating_star: 5,
+      comment: 'Pin 5000mAh dùng ổn định cả ngày, màn hình sáng đẹp',
+      flag_category: 'authentic',
+    },
+  ]);
+  assert.equal(anomalousCluster.isAnomalous, true);
+  assert.equal(anomalousCluster.fiveStarRatioPct, 100);
+  assert.ok(
+    anomalousCluster.warningLabelVi?.includes('Cảnh báo phân bố sao bất thường')
+  );
+
+  console.log(
+    '  ✅ [57/57] Review Trust Model v2 6-axis breakdown, Wilson sort & confidence gate (#184) passed'
+  );
+
+  // 58. Server-only boundary enforcement & 16/16 CSV formula-injection guard (#185 - Audit T11, T12)
+  const { buildSafeCsvContent } = await import('../../../lib/csv-safe');
+  const { assertServerOnlyBoundary } = await import('../server-only');
+
+  assert.equal(escapeCsvCell("=CMD|'/C calc'!A0"), "'=CMD|'/C calc'!A0");
+  assert.equal(escapeCsvCell('+SUM(A1:A2)'), "'+SUM(A1:A2)");
+  assert.equal(
+    escapeCsvCell('@HYPERLINK("http://evil")'),
+    `"'@HYPERLINK(""http://evil"")"`
+  );
+  assert.equal(escapeCsvCell('-15.4%'), '-15.4%');
+  assert.equal(escapeCsvCell(-250000), '-250000');
+  const safeCsvDoc = buildSafeCsvContent(
+    ['Model', 'FormulaPayload', 'Savings'],
+    [['iPhone 16 Pro Max', '=1+1', '-12.5%']],
+    '\n'
+  );
+  assert.ok(safeCsvDoc.startsWith('\uFEFFModel,FormulaPayload,Savings\n'));
+  assert.ok(safeCsvDoc.includes("iPhone 16 Pro Max,'=1+1,-12.5%"));
+
+  assert.doesNotThrow(() => assertServerOnlyBoundary());
+
+  const fs58 = await import('node:fs');
+  const path58 = await import('node:path');
+  const webSrcRoot58 = path58.resolve(__dirname, '../../..');
+
+  const serverRateModules58 = [
+    'index.ts',
+    'extension.ts',
+    'deals.ts',
+    'openapi.ts',
+    'api-handler.ts',
+    'cache-tags.ts',
+  ];
+  for (const modName of serverRateModules58) {
+    const modSource = fs58.readFileSync(
+      path58.join(webSrcRoot58, 'server', 'rate', modName),
+      'utf8'
+    );
+    assert.ok(
+      modSource.includes("import 'server-only';"),
+      `Expected src/server/rate/${modName} to import 'server-only'`
+    );
+  }
+
+  const csvComponents58: string[] = [];
+  const clientServerRateLeaks58: string[] = [];
+  function walkSrc58(dir: string) {
+    for (const entry of fs58.readdirSync(dir, { withFileTypes: true })) {
+      const fullPath = path58.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name !== '__tests__') walkSrc58(fullPath);
+      } else if (entry.name.endsWith('.tsx') || entry.name.endsWith('.ts')) {
+        const content = fs58.readFileSync(fullPath, 'utf8');
+        const rel = path58.relative(webSrcRoot58, fullPath).replace(/\\/g, '/');
+        if (content.includes('text/csv')) {
+          csvComponents58.push(rel);
+          assert.ok(
+            content.includes('@/lib/csv-safe'),
+            `Expected CSV export component ${rel} to import @/lib/csv-safe`
+          );
+        }
+        if (
+          (content.includes("'use client'") ||
+            content.includes('"use client"')) &&
+          content.includes('@/server/rate')
+        ) {
+          clientServerRateLeaks58.push(rel);
+        }
+      }
+    }
+  }
+  walkSrc58(webSrcRoot58);
+  assert.ok(
+    csvComponents58.length >= 16,
+    `Expected at least 16 CSV export components using @/lib/csv-safe, found ${csvComponents58.length}`
+  );
+  assert.deepEqual(
+    clientServerRateLeaks58,
+    [],
+    `Client components must not import @/server/rate directly: ${clientServerRateLeaks58.join(', ')}`
+  );
+
+  console.log(
+    `  ✅ [58/58] Server-only boundary across 5 server/rate modules & ${csvComponents58.length}/16 CSV formula guards (#185) passed`
+  );
+
+  // 59. Cross-request Data Cache tags & POST /api/v1/rate/revalidate webhook (#186 - Audit C3)
+  const {
+    RATE_CACHE_TAGS,
+    productCacheTag,
+    categoryCacheTag,
+    merchantCacheTag,
+    withRateDataCache,
+  } = await import('../cache-tags');
+  const revalidateRoute = await import(
+    '../../../app/api/v1/rate/revalidate/route'
+  );
+
+  assert.equal(
+    productCacheTag('  Apple-iPhone-16-Pro-Max '),
+    'rate:product:apple-iphone-16-pro-max'
+  );
+  assert.equal(categoryCacheTag('Smartphones'), 'rate:category:smartphones');
+  assert.equal(
+    merchantCacheTag('Shopee-88201679'),
+    'rate:merchant:shopee-88201679'
+  );
+
+  let fallbackInvocations = 0;
+  const wrappedProbe = withRateDataCache(
+    async (slug: string) => {
+      fallbackInvocations += 1;
+      return { slug, ok: true };
+    },
+    ['rate-test-probe'],
+    { revalidate: 120, tags: [RATE_CACHE_TAGS.PRODUCTS] }
+  );
+  const probeResult = await wrappedProbe('samsung-galaxy-s24-ultra');
+  assert.equal(probeResult.slug, 'samsung-galaxy-s24-ultra');
+  assert.equal(fallbackInvocations, 1);
+
+  const revalOptionsRes = await revalidateRoute.OPTIONS();
+  assert.equal(revalOptionsRes.status, 204);
+
+  const prevRevalSecret = process.env.RATE_REVALIDATE_SECRET;
+  process.env.RATE_REVALIDATE_SECRET = 'test-revalidate-secret-2026';
+  try {
+    const unauthReq = new NextRequest(
+      'https://rate.vn/api/v1/rate/revalidate',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer wrong-secret',
+        },
+        body: JSON.stringify({ tags: ['rate:products'] }),
+      }
+    );
+    const unauthRes = await revalidateRoute.POST(unauthReq);
+    assert.equal(unauthRes.status, 401);
+
+    const emptyPayloadReq = new NextRequest(
+      'https://rate.vn/api/v1/rate/revalidate',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer test-revalidate-secret-2026',
+        },
+        body: JSON.stringify({}),
+      }
+    );
+    const emptyPayloadRes = await revalidateRoute.POST(emptyPayloadReq);
+    assert.equal(emptyPayloadRes.status, 400);
+
+    const validRevalReq = new NextRequest(
+      'https://rate.vn/api/v1/rate/revalidate',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Rate-Revalidate-Token': 'test-revalidate-secret-2026',
+        },
+        body: JSON.stringify({
+          slugs: ['apple-iphone-16-pro-max'],
+          categories: ['smartphones'],
+          merchants: ['shopee-88201679'],
+          paths: ['/smartphones/apple-iphone-16-pro-max'],
+        }),
+      }
+    );
+    const validRevalRes = await revalidateRoute.POST(validRevalReq);
+    assert.equal(validRevalRes.status, 200);
+    const validRevalBody = (await validRevalRes.json()) as {
+      ok: boolean;
+      data: {
+        revalidated: boolean;
+        tags: string[];
+        paths: string[];
+      };
+    };
+    assert.equal(validRevalBody.ok, true);
+    assert.equal(validRevalBody.data.revalidated, true);
+    assert.ok(
+      validRevalBody.data.tags.includes('rate:product:apple-iphone-16-pro-max')
+    );
+    assert.ok(validRevalBody.data.tags.includes('rate:products'));
+    assert.ok(validRevalBody.data.tags.includes('rate:deals'));
+    assert.ok(validRevalBody.data.tags.includes('rate:category:smartphones'));
+    assert.ok(validRevalBody.data.tags.includes('rate:merchant:shopee-88201679'));
+    assert.deepEqual(validRevalBody.data.paths, [
+      '/smartphones/apple-iphone-16-pro-max',
+    ]);
+  } finally {
+    if (prevRevalSecret === undefined) {
+      delete process.env.RATE_REVALIDATE_SECRET;
+    } else {
+      process.env.RATE_REVALIDATE_SECRET = prevRevalSecret;
+    }
+  }
+
+  assert.ok(
+    openApi.paths['/api/v1/rate/revalidate']?.post,
+    'OpenAPI 3.1.0 must document POST /api/v1/rate/revalidate'
+  );
+
+  console.log(
+    '  ✅ [59/59] Cross-request Data Cache tags & POST /api/v1/rate/revalidate webhook (#186) passed'
+  );
+
+  // 60. Complete behavioral NextRequest -> NextResponse coverage for all remaining REST API v1 routes (#187 - Audit T1)
+  const healthRoute60 = await import('../../../app/api/health/route');
+  const openApiRoute = await import('../../../app/api/v1/rate/openapi/route');
+  const openApiJsonRoute = await import(
+    '../../../app/api/v1/rate/openapi.json/route'
+  );
+  const productsRoute = await import('../../../app/api/v1/rate/products/route');
+  const productDetailRoute = await import(
+    '../../../app/api/v1/rate/products/[slug]/route'
+  );
+  const dealsRoute = await import('../../../app/api/v1/rate/deals/route');
+  const leaderboardRoute = await import(
+    '../../../app/api/v1/rate/leaderboard/route'
+  );
+  const merchantsRoute = await import(
+    '../../../app/api/v1/rate/merchants/route'
+  );
+  const merchantDetailRoute = await import(
+    '../../../app/api/v1/rate/merchants/[id]/route'
+  );
+  const statsRoute = await import('../../../app/api/v1/rate/stats/route');
+
+  // 60.1 /api/health
+  const healthRes60 = await healthRoute60.GET();
+  assert.equal(healthRes60.status, 200);
+  assert.equal(
+    healthRes60.headers.get('Cache-Control'),
+    'no-store, max-age=0'
+  );
+  const healthBody60 = (await healthRes60.json()) as {
+    status: string;
+    service: string;
+  };
+  assert.equal(healthBody60.status, 'ok');
+  assert.equal(healthBody60.service, 'rate-web');
+
+  // 60.2 /api/v1/rate/openapi & /api/v1/rate/openapi.json
+  const openApiOpt = await openApiRoute.OPTIONS();
+  assert.equal(openApiOpt.status, 204);
+  const openApiGet = await openApiRoute.GET(
+    new Request('https://rate.vn/api/v1/rate/openapi')
+  );
+  assert.equal(openApiGet.status, 200);
+  const openApiDoc = (await openApiGet.json()) as {
+    openapi: string;
+    servers: Array<{ url: string }>;
+  };
+  assert.equal(openApiDoc.openapi, '3.1.0');
+  assert.equal(openApiDoc.servers[0]?.url, 'https://rate.vn');
+
+  const openApiJsonOpt = await openApiJsonRoute.OPTIONS();
+  assert.equal(openApiJsonOpt.status, 204);
+  const openApiJsonGet = await openApiJsonRoute.GET(
+    new NextRequest('https://rate.vn/api/v1/rate/openapi.json')
+  );
+  assert.equal(openApiJsonGet.status, 200);
+
+  // 60.3 /api/v1/rate/products & /api/v1/rate/products/[slug]
+  const productsOpt = await productsRoute.OPTIONS();
+  assert.equal(productsOpt.status, 204);
+  const productsGet = await productsRoute.GET(
+    new NextRequest(
+      'https://rate.vn/api/v1/rate/products?category=smartphones&limit=5&ram=8,12&has5g=true'
+    )
+  );
+  assert.ok([200, 500].includes(productsGet.status));
+  const productsBody = (await productsGet.json()) as {
+    ok: boolean;
+    error?: string;
+    count?: number;
+  };
+  if (productsGet.status === 200) {
+    assert.equal(productsBody.ok, true);
+    assert.equal(typeof productsBody.count, 'number');
+  } else {
+    assert.equal(productsBody.ok, false);
+    assert.ok(!/PGRST|relation|schema/i.test(productsBody.error ?? ''));
+  }
+
+  const prodDetailOpt = await productDetailRoute.OPTIONS();
+  assert.equal(prodDetailOpt.status, 204);
+  const prodDetailBadSlug = await productDetailRoute.GET(
+    new NextRequest('https://rate.vn/api/v1/rate/products/bad'),
+    { params: Promise.resolve({ slug: '../etc/passwd' }) }
+  );
+  assert.equal(prodDetailBadSlug.status, 400);
+
+  const prodDetailMissing = await productDetailRoute.GET(
+    new NextRequest(
+      'https://rate.vn/api/v1/rate/products/non-existent-device-slug-2099'
+    ),
+    { params: Promise.resolve({ slug: 'non-existent-device-slug-2099' }) }
+  );
+  assert.ok([404, 500].includes(prodDetailMissing.status));
+
+  // 60.4 /api/v1/rate/deals, /api/v1/rate/leaderboard, /api/v1/rate/stats
+  const dealsOpt = await dealsRoute.OPTIONS();
+  assert.equal(dealsOpt.status, 204);
+  const dealsGet = await dealsRoute.GET(
+    new Request('https://rate.vn/api/v1/rate/deals?category=smartphones&limit=4')
+  );
+  assert.ok([200, 500].includes(dealsGet.status));
+
+  const leaderboardGet = await leaderboardRoute.GET(
+    new NextRequest(
+      'https://rate.vn/api/v1/rate/leaderboard?category=smartphones&criterion=overall&limit=5'
+    )
+  );
+  assert.ok([200, 500].includes(leaderboardGet.status));
+
+  const statsGet = await statsRoute.GET();
+  assert.ok([200, 500].includes(statsGet.status));
+
+  // 60.5 /api/v1/rate/merchants & /api/v1/rate/merchants/[id]
+  const merchantsOpt = await merchantsRoute.OPTIONS();
+  assert.equal(merchantsOpt.status, 204);
+  const merchantsGet = await merchantsRoute.GET(
+    new NextRequest(
+      'https://rate.vn/api/v1/rate/merchants?platform=shopee&official=1&min_trust=70&limit=10'
+    )
+  );
+  assert.ok([200, 500].includes(merchantsGet.status));
+
+  const merchDetailOpt = await merchantDetailRoute.OPTIONS();
+  assert.equal(merchDetailOpt.status, 204);
+  const merchDetailBadId = await merchantDetailRoute.GET(
+    new NextRequest('https://rate.vn/api/v1/rate/merchants/bad'),
+    { params: Promise.resolve({ id: 'invalid/id with spaces' }) }
+  );
+  assert.equal(merchDetailBadId.status, 400);
+
+  const merchDetailMissing = await merchantDetailRoute.GET(
+    new NextRequest(
+      'https://rate.vn/api/v1/rate/merchants/non-existent-merchant-999999'
+    ),
+    { params: Promise.resolve({ id: 'non-existent-merchant-999999' }) }
+  );
+  assert.ok([404, 500].includes(merchDetailMissing.status));
+
+  console.log(
+    '  ✅ [60/60] Complete behavioral NextRequest->NextResponse test coverage across all REST API v1 routes (#187) passed'
+  );
+
+  // 61. Dedicated backfill-specs CLI with --apply guard & migration security audit (#188 - Audit T2, C9)
+  const importerBackfillPath = path.join(
+    repoRoot,
+    'apps',
+    'importer',
+    'src',
+    'shopee',
+    'jobs',
+    'backfill-specs.ts'
+  );
+  const importerTestEnricherPath = path.join(
+    repoRoot,
+    'apps',
+    'importer',
+    'src',
+    'shopee',
+    'test-ai-enricher.ts'
+  );
+  assert.equal(
+    fs.existsSync(importerBackfillPath),
+    true,
+    'apps/importer/src/shopee/jobs/backfill-specs.ts must exist (Audit T2)'
+  );
+  const backfillSource = fs.readFileSync(importerBackfillPath, 'utf8');
+  assert.ok(
+    backfillSource.includes('const apply = options.apply === true;'),
+    'backfill-specs.ts must default to dry-run (apply = false) unless --apply is passed'
+  );
+  assert.ok(
+    backfillSource.includes('export async function runMasterSpecsBackfill') &&
+      backfillSource.includes('export async function auditMasterSpecs'),
+    'backfill-specs.ts must export runMasterSpecsBackfill and auditMasterSpecs'
+  );
+
+  const testEnricherSource = fs.readFileSync(importerTestEnricherPath, 'utf8');
+  assert.ok(
+    !testEnricherSource.includes(".from('master_products')") &&
+      !testEnricherSource.includes('.insert(') &&
+      !testEnricherSource.includes('.update('),
+    'test-ai-enricher.ts must not contain direct master_products DB mutations (Audit T2)'
+  );
+  assert.ok(
+    testEnricherSource.includes('./jobs/backfill-specs.js'),
+    'test-ai-enricher.ts must delegate --backfill and --audit-only to ./jobs/backfill-specs.js'
+  );
+
+  // Verify reference migrations in supabase/migrations/ enforce Audit C9, T3, T4, T6, T7, T8
+  const migrationsDir = path.join(repoRoot, 'supabase', 'migrations');
+  const migrationFiles = fs
+    .readdirSync(migrationsDir)
+    .filter((f) => f.endsWith('.sql'))
+    .sort();
+  assert.ok(
+    migrationFiles.length >= 11,
+    `Expected at least 11 reference migrations in supabase/migrations/, found ${migrationFiles.length}`
+  );
+  const combinedMigrationsSql = migrationFiles
+    .map((f) => fs.readFileSync(path.join(migrationsDir, f), 'utf8'))
+    .join('\n');
+
+  assert.ok(
+    combinedMigrationsSql.includes(
+      'REVOKE SELECT ON rate.merchants FROM anon, authenticated'
+    ),
+    'Migrations must revoke table-wide SELECT on rate.merchants from anon and authenticated (Audit C9)'
+  );
+  assert.ok(
+    combinedMigrationsSql.includes('SET search_path = rate, public, pg_temp') ||
+      combinedMigrationsSql.includes('SET search_path = rate, pg_temp'),
+    'SECURITY DEFINER functions must pin search_path'
+  );
+  assert.ok(
+    combinedMigrationsSql.includes('refresh_master_market_stats'),
+    'Migrations must define canonical refresh_master_market_stats RPC (Audit C5)'
+  );
+  assert.ok(
+    combinedMigrationsSql.includes('search_master_products') &&
+      combinedMigrationsSql.includes('get_category_brand_facets'),
+    'Migrations must define search_master_products and get_category_brand_facets RPCs (Audit C1)'
+  );
+
+  console.log(
+    '  ✅ [61/61] Dedicated backfill-specs CLI (--apply guard) & reference migration security audit (#188) passed'
+  );
+
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
 
 runCoreArchitectureSuite();
+
+
+
