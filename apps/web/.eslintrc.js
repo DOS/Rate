@@ -77,6 +77,20 @@ module.exports = {
       rules: { "@typescript-eslint/no-require-imports": "off" },
     },
     {
+      files: ["src/app/**", "src/server/**"],
+      rules: {
+        "no-restricted-syntax": [
+          "error",
+          {
+            selector:
+              "MemberExpression[property.name='SUPABASE_SERVICE_ROLE_KEY']",
+            message:
+              "Never use SUPABASE_SERVICE_ROLE_KEY in apps/web (src/app/** or src/server/**). Use the anon client (getRateClient) or a user-scoped client.",
+          },
+        ],
+      },
+    },
+    {
       files: ["src/components/ui/*.tsx"],
       rules: {
         "tailwindcss/enforces-shorthand": "off",
