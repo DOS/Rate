@@ -8,14 +8,13 @@ const coerceRevalidate = (v) => {
 export const env = {
   APP_PUBLIC_URL: process.env.APP_PUBLIC_URL ?? "https://rate.vn",
   NEXT_PUBLIC_SUPABASE_URL:
-    process.env.NEXT_PUBLIC_SUPABASE_URL ??
-    "https://gulptwduchsjcsbndmua.supabase.co",
+    process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? "",
   NEXT_PUBLIC_SUPABASE_ANON_KEY:
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "",
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
+    process.env.SUPABASE_ANON_KEY ??
+    "",
   NEXT_OUTPUT: process.env.NEXT_OUTPUT,
   WEBPACK_CACHE_TYPE: process.env.WEBPACK_CACHE_TYPE,
-  NEXTAUTH_URL: process.env.NEXTAUTH_URL,
-  NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET,
   SENTRY_AUTH_TOKEN: process.env.SENTRY_AUTH_TOKEN,
   SENTRY_ORG: process.env.SENTRY_ORG,
   SENTRY_PROJECT: process.env.SENTRY_PROJECT,
