@@ -21,6 +21,7 @@ import {
   radarLabel,
   radarMarkdownCell,
 } from '@/lib/deal-radar';
+import { escapeCsvCell } from '@/lib/csv-safe';
 import RadarBadge from '@/components/radar/RadarBadge';
 import { useDealRadarIndex } from '@/components/radar/use-deal-radar';
 import {
@@ -1095,13 +1096,6 @@ export default function CompareWorkspace({
 
   const handleDownloadCompareCsv = () => {
     if (typeof window === 'undefined' || products.length === 0) return;
-    const escapeCsv = (val: string | number) => {
-      const str = String(val ?? '');
-      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-        return `"${str.replace(/"/g, '""')}"`;
-      }
-      return str;
-    };
     const headers = [
       'Nhóm Thông Số',
       'Tiêu Chí Kỹ Thuật',
@@ -1111,13 +1105,13 @@ export default function CompareWorkspace({
       radarCsvCells(getRadarSignal(radarIndex, p.slug))
     );
     const rows: string[] = [
-      headers.map(escapeCsv).join(','),
+      headers.map(escapeCsvCell).join(','),
       [
         '0. Tín hiệu Deal Radar 10 Sàn (60N)',
         'Phán quyết & Độ lệch giá',
         ...products.map((p) => radarLabel(getRadarSignal(radarIndex, p.slug))),
       ]
-        .map((c) => escapeCsv(c))
+        .map((c) => escapeCsvCell(c))
         .join(','),
       ...RADAR_CSV_HEADERS.map((hdr, idx) =>
         [
@@ -1125,7 +1119,7 @@ export default function CompareWorkspace({
           hdr,
           ...productRadarCells.map((cells) => cells[idx] ?? ''),
         ]
-          .map((c) => escapeCsv(c))
+          .map((c) => escapeCsvCell(c))
           .join(',')
       ),
     ];
@@ -1134,7 +1128,9 @@ export default function CompareWorkspace({
         const vals = products.map((p) => row.renderValue(p));
         if (vals.every((v) => !v || v === '-')) continue;
         rows.push(
-          [group.title, row.label, ...vals].map((c) => escapeCsv(c)).join(',')
+          [group.title, row.label, ...vals]
+            .map((c) => escapeCsvCell(c))
+            .join(',')
         );
       }
     }

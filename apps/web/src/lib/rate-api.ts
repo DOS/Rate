@@ -1820,6 +1820,14 @@ export async function getMerchantsList(params?: {
 }
 
 /**
+ * Sanitize user-supplied identifier before interpolating into a PostgREST `.or()` filter
+ * so commas, parentheses, dots, or spaces cannot inject arbitrary PostgREST operators.
+ */
+export function sanitizePostgrestFilterToken(raw: string): string {
+  return raw.replace(/[^a-zA-Z0-9_-]/g, '');
+}
+
+/**
  * Fetch detailed profile for a single Merchant by UUID id, slug, or platform_shop_id,
  * including all listings with Fake Discount verdicts and buyer reviews with AI flags.
  */
@@ -1850,10 +1858,14 @@ export async function getMerchantProfileById(
   }
 
   if (!merchantRow) {
+    const safeToken = sanitizePostgrestFilterToken(cleaned);
+    if (!safeToken) {
+      return null;
+    }
     const { data } = await supabase
       .from('merchants')
       .select(selectCols)
-      .or(`slug.eq.${cleaned},platform_shop_id.eq.${cleaned}`)
+      .or(`slug.eq.${safeToken},platform_shop_id.eq.${safeToken}`)
       .limit(1)
       .maybeSingle();
     merchantRow = (data as unknown as RawMerchantSafeRow) || null;
@@ -2132,7 +2144,9 @@ export async function getRatePlatformStats(): Promise<RatePlatformStats> {
         .range(from, to)
     ).then((data) => ({ data })),
     supabase.from('merchants').select('id', { count: 'exact', head: true }),
-    supabase.from('price_history').select('id', { count: 'exact', head: true }),
+    supabase
+      .from('price_history')
+      .select('id', { count: 'estimated', head: true }),
     supabase
       .from('reviews')
       .select('*, review_flags(*)')

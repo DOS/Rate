@@ -2104,8 +2104,74 @@ function runCoreArchitectureSuite() {
     'Inter and JetBrains Mono must come from next/font (src/lib/fonts.ts) via --font-inter / --font-jetbrains-mono, never a Google Fonts @import (#147)'
   );
   console.log(
-    '  ✅ [44/44] Inter & JetBrains Mono self-hosted via next/font, no Google Fonts @import (#147) passed'
+    '  ✅ [44/45] Inter & JetBrains Mono self-hosted via next/font, no Google Fonts @import (#147) passed'
   );
+
+  // 45. Web Security Headers (C4), Per-Page SEO Canonicals & Sitemap Revalidation (C10), PostgREST Filter Sanitization (T10) & CSV Formula Guard (T11) (#163)
+  const { escapeCsvCell } =
+    require('../../../lib/csv-safe') as typeof import('../../../lib/csv-safe');
+  const { sanitizePostgrestFilterToken } =
+    require('../../../lib/rate-api') as typeof import('../../../lib/rate-api');
+  assert.equal(
+    escapeCsvCell("=cmd|'/C calc'!A0"),
+    "'=cmd|'/C calc'!A0",
+    'Must neutralize leading = formula injection in CSV text cells'
+  );
+  assert.equal(escapeCsvCell('+SUM(A1:A2)'), "'+SUM(A1:A2)");
+  assert.equal(escapeCsvCell('@IMPORTXML()'), "'@IMPORTXML()");
+  assert.equal(
+    escapeCsvCell(-15.4),
+    '-15.4',
+    'Must preserve negative numbers without prepending a single quote'
+  );
+  assert.equal(
+    escapeCsvCell('-12.5%'),
+    '-12.5%',
+    'Must preserve negative percentage strings'
+  );
+  assert.equal(
+    sanitizePostgrestFilterToken('apple-flagship,id.eq.1234()'),
+    'apple-flagshipideq1234',
+    'Must strip PostgREST operator delimiters (commas, dots, parens) from .or() filter tokens'
+  );
+
+  const nextConfigSrc163 = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/next.config.mjs'),
+    'utf8'
+  );
+  assert.ok(
+    nextConfigSrc163.includes('X-Content-Type-Options') &&
+      nextConfigSrc163.includes('X-Frame-Options') &&
+      nextConfigSrc163.includes('Referrer-Policy') &&
+      nextConfigSrc163.includes('Permissions-Policy') &&
+      nextConfigSrc163.includes('Strict-Transport-Security') &&
+      nextConfigSrc163.includes("frame-ancestors 'self'"),
+    'next.config.mjs must configure HTTP security headers (C4)'
+  );
+
+  const localeLayoutSrc163 = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/app/[locale]/layout.tsx'),
+    'utf8'
+  );
+  assert.ok(
+    localeLayoutSrc163.includes("metadataBase: new URL('https://rate.vn')") &&
+      !localeLayoutSrc163.includes("canonical: 'https://rate.vn'"),
+    '[locale]/layout.tsx must set metadataBase and not force canonical: https://rate.vn onto all subpages (C10)'
+  );
+
+  const sitemapSrc163 = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/app/sitemap.ts'),
+    'utf8'
+  );
+  assert.ok(
+    sitemapSrc163.includes('export const revalidate = 3600') &&
+      sitemapSrc163.includes('/deals'),
+    'sitemap.ts must export revalidate = 3600 and include /deals (C10)'
+  );
+  console.log(
+    '  ✅ [45/45] HTTP Security Headers (C4), Per-Page SEO Canonicals & Sitemap Revalidation (C10), PostgREST Filter Sanitization (T10) & CSV Formula Guard (T11) (#163) passed'
+  );
+
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
 

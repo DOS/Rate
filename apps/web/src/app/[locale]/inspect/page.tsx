@@ -29,6 +29,9 @@ export async function generateMetadata({
         : lang === 'cs'
           ? 'Vložte odkaz ze Shopee, Lazada nebo Tiki a ověřte skutečnou historii cen, duální skóre rizika obchodu a AI analýzu recenzí.'
           : 'Dán link sản phẩm Shopee, Lazada, Tiki, TikTok Shop để kiểm tra lịch sử giá thật, phát hiện nâng khống giá gốc và chấm điểm rủi ro kép của gian hàng.',
+    alternates: {
+      canonical: 'https://rate.vn/inspect',
+    },
   };
 }
 

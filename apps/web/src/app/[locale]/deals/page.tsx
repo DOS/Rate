@@ -32,6 +32,9 @@ export async function generateMetadata({
           : 'Săn Deal Công Nghệ Đã Kiểm Định Giá Thật 10 Sàn | Rate.vn',
     description:
       'Tìm kiếm thiết bị công nghệ đáng tiền nhất theo ngân sách và nhu cầu sử dụng, đã đối chiếu lịch sử giá 60 ngày và lọc khuyến mãi ảo trên 10 sàn TMĐT.',
+    alternates: {
+      canonical: 'https://rate.vn/deals',
+    },
   };
 }
 

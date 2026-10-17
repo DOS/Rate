@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { Link } from '@/lib/navigation';
 import NavbarDarkDynamic from './components/navbar/NavbarDarkDynamic';
 import { getMasterProductHref, getMasterProducts } from '@/lib/rate-api';
@@ -34,6 +35,22 @@ import CompareQuickToggle from '@/components/compare/CompareQuickToggle';
 import CompareTrayBar from '@/components/compare/CompareTrayBar';
 import RadarBadge from '@/components/radar/RadarBadge';
 import { buildRadarIndex, getRadarSignal } from '@/lib/deal-radar';
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  const copy = getRateCopy(locale);
+  return {
+    title: copy.seo.siteTitle,
+    description: copy.seo.siteDescription,
+    alternates: {
+      canonical: 'https://rate.vn',
+    },
+  };
+}
 
 function getCategoryIcon(slug: string) {
   switch (slug) {

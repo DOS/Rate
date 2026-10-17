@@ -12,6 +12,8 @@ import {
 
 const baseUrl = (env.APP_PUBLIC_URL || 'https://rate.vn').replace(/\/$/, '');
 
+export const revalidate = 3600;
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date();
   const staticEntries: MetadataRoute.Sitemap = [
@@ -50,6 +52,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       lastModified: now,
       changeFrequency: 'daily',
       priority: 0.88,
+    },
+    {
+      url: `${baseUrl}/deals`,
+      lastModified: now,
+      changeFrequency: 'hourly',
+      priority: 0.92,
     },
     {
       url: `${baseUrl}/leaderboard`,

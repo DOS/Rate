@@ -26,6 +26,9 @@ export async function generateMetadata({
       title: 'Open-Core REST API v1 & Developer Portal | Rate.vn',
       description:
         'Official documentation and live interactive playground for Rate.vn Open-Core REST API v1: 10-group standardized product specs, historical price observations, and AI review auditing.',
+      alternates: {
+        canonical: 'https://rate.vn/developers',
+      },
     };
   }
   if (locale === 'cs') {
@@ -33,12 +36,18 @@ export async function generateMetadata({
       title: 'Open-Core REST API v1 a portál pro vývojáře | Rate.vn',
       description:
         'Oficiální dokumentace a interaktivní pískoviště pro Rate.vn Open-Core REST API v1: 10 skupin parametrů, historie cen a AI audit recenzí.',
+      alternates: {
+        canonical: 'https://rate.vn/developers',
+      },
     };
   }
   return {
     title: 'Tài Liệu Open-Core REST API v1 & Cổng Nhà Phát Triển | Rate.vn',
     description:
       'Tài liệu kỹ thuật và môi trường chạy thử trực tiếp (Playground) cho Rate.vn Open-Core REST API v1: Truy vấn 10 nhóm thông số chuẩn hóa, lịch sử giá thật và kiểm toán đánh giá AI.',
+    alternates: {
+      canonical: 'https://rate.vn/developers',
+    },
   };
 }
 
