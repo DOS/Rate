@@ -1,0 +1,348 @@
+/**
+ * Dedicated Spec-Only Catalog Backfill & Cloud Spec Audit Job (Audit T2)
+ *
+ * Usage:
+ *   pnpm --filter @repo/crawlers exec tsx src/shopee/jobs/backfill-specs.ts              (Dry-run + audit, zero DB writes)
+ *   pnpm --filter @repo/crawlers exec tsx src/shopee/jobs/backfill-specs.ts --apply      (Apply spec updates to rate.master_products)
+ *   pnpm --filter @repo/crawlers exec tsx src/shopee/jobs/backfill-specs.ts --audit-only (Read-only 10-Field-Group audit)
+ *
+ * Safety invariant:
+ * - Dry-run by default (`apply = false`): never mutates `rate.master_products` unless `--apply` is passed.
+ * - Never writes listings (`rate.products`), merchants, reviews, price_history, or fabricated scores.
+ */
+import assert from 'node:assert/strict';
+import { pathToFileURL } from 'node:url';
+import dotenv from 'dotenv';
+import { ProductSpecificationsSchema } from '@repo/shared-data';
+import { AiSpecEnricher, sanitizeSpecifications } from '../ai-spec-enricher.js';
+import {
+  CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY,
+  FLAGSHIP_DEVICES_TO_SEED,
+} from '../flagship-seed-data.js';
+
+export const REQUIRED_10_SPEC_GROUPS = [
+  'availability',
+  'design',
+  'display',
+  'hardware',
+  'battery',
+  'camera',
+  'connectivity',
+  'cellular',
+  'multimedia',
+  'regulatory',
+] as const;
+
+export interface BackfillSpecsOptions {
+  readonly apply?: boolean;
+}
+
+export interface BackfillSpecsResult {
+  readonly apply: boolean;
+  readonly catalogUpdated: number;
+  readonly catalogInserted: number;
+  readonly skipped: number;
+  readonly totalAudited: number;
+}
+
+/**
+ * Spec-only audit: every master product must carry all 10 Field Groups and the main + second
+ * camera. Deliberately asserts nothing about offers, reviews or ratings.
+ */
+export async function auditMasterSpecs(supabase: any): Promise<number> {
+  const { data: rows, error } = await supabase
+    .from('master_products')
+    .select('id, name, model_key, specifications');
+
+  if (error || !rows) {
+    throw new Error(`Final audit query failed: ${error?.message}`);
+  }
+
+  const failures: string[] = [];
+  for (const row of rows) {
+    const label = `${row.name} (${row.model_key})`;
+    const specCheck = ProductSpecificationsSchema.safeParse(row.specifications);
+    if (!specCheck.success) {
+      failures.push(`${label} failed ProductSpecificationsSchema validation`);
+    }
+    for (const grp of REQUIRED_10_SPEC_GROUPS) {
+      if (!row.specifications?.[grp]) {
+        failures.push(`${label} is missing specification group "${grp}"`);
+      }
+    }
+    if (!row.specifications?.camera?.main_camera) {
+      failures.push(`${label} is missing camera.main_camera`);
+    }
+    if (!row.specifications?.camera?.second_camera) {
+      failures.push(`${label} is missing camera.second_camera`);
+    }
+  }
+
+  assert.equal(
+    failures.length,
+    0,
+    `Spec audit failed (${failures.length}):\n  - ${failures.join('\n  - ')}`
+  );
+  return rows.length;
+}
+
+/**
+ * Spec-only catalog sync for `rate.master_products`.
+ * Defaults to dry-run (`apply = false`) unless explicitly invoked with `{ apply: true }`.
+ */
+export async function runMasterSpecsBackfill(
+  options: BackfillSpecsOptions = {}
+): Promise<BackfillSpecsResult> {
+  const apply = options.apply === true;
+  const { createClient } = await import('@supabase/supabase-js');
+  const { EntityMatcher } = await import('../entity-matcher.js');
+
+  const url =
+    process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+  const key =
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY || '';
+  if (!url || !key) {
+    throw new Error(
+      'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in environment.'
+    );
+  }
+
+  const supabase = (
+    createClient(url, key, { auth: { persistSession: false } }) as any
+  ).schema('rate');
+  const enricher = new AiSpecEnricher();
+  const matcher = new EntityMatcher(supabase, enricher);
+
+  console.log('================================================================');
+  console.log(
+    `Running Spec-Only Catalog Sync for rate.master_products [mode=${apply ? 'APPLY' : 'DRY-RUN'}]`
+  );
+  console.log(
+    'No listings, merchants, reviews, price history or expert scores are written.'
+  );
+  console.log('AI Provider:', enricher.getProviderInfo());
+  console.log('================================================================');
+
+  const { data: categories, error: catErr } = await supabase
+    .from('categories')
+    .select('id, slug, name');
+  if (catErr) {
+    throw new Error(`Failed to fetch categories: ${catErr.message}`);
+  }
+  const categoryIdBySlug = new Map<string, string>();
+  for (const c of categories || []) {
+    categoryIdBySlug.set(c.slug, c.id);
+  }
+
+  const catalogModelKeys = new Set<string>();
+  let catalogUpdated = 0;
+  let catalogInserted = 0;
+
+  for (const device of FLAGSHIP_DEVICES_TO_SEED) {
+    catalogModelKeys.add(device.model_key);
+    const categoryId = categoryIdBySlug.get(device.categorySlug) || null;
+    const specFields = {
+      description: device.description,
+      ram_gb: device.ram_gb,
+      storage_gb: device.storage_gb,
+      screen_size_inch: device.screen_size_inch,
+      battery_mah: device.battery_mah,
+      has_5g: device.has_5g,
+      specifications: device.specifications,
+      key_specs: device.key_specs,
+      colors: device.colors,
+      ...(device.images.length > 0
+        ? { images: device.images, thumbnail: device.images[0] }
+        : {}),
+      updated_at: new Date().toISOString(),
+    };
+
+    const { data: existing, error: lookupErr } = await supabase
+      .from('master_products')
+      .select('id')
+      .eq('model_key', device.model_key)
+      .maybeSingle();
+    if (lookupErr) {
+      throw new Error(
+        `Failed to look up master product ${device.model_key}: ${lookupErr.message}`
+      );
+    }
+
+    if (existing) {
+      if (apply) {
+        const { error: upErr } = await supabase
+          .from('master_products')
+          .update({
+            ...specFields,
+            ...(categoryId ? { category_id: categoryId } : {}),
+          })
+          .eq('id', existing.id);
+        if (upErr) {
+          throw new Error(
+            `Failed to update specs of ${device.name}: ${upErr.message}`
+          );
+        }
+      }
+      catalogUpdated++;
+      console.log(
+        `  -> [Catalog Specs] ${device.name} (${device.model_key}): ${apply ? 'UPDATED ✅' : 'DRY-RUN WOULD UPDATE ℹ️'}`
+      );
+    } else {
+      if (apply) {
+        const { error: insErr } = await supabase.from('master_products').insert({
+          ...specFields,
+          category_id: categoryId,
+          brand: device.brand,
+          model: device.model,
+          variant_name: device.variant_name,
+          model_key: device.model_key,
+          name: device.name,
+          slug: device.slug,
+          merchant_count: 0,
+          status: 'draft',
+          metadata: { category_slug: device.categorySlug },
+        });
+        if (insErr) {
+          throw new Error(
+            `Failed to insert catalog device ${device.name}: ${insErr.message}`
+          );
+        }
+      }
+      catalogInserted++;
+      console.log(
+        `  -> [Catalog Draft] ${device.name} (${device.model_key}): ${apply ? 'INSERTED as draft ✅' : 'DRY-RUN WOULD INSERT ℹ️'}`
+      );
+    }
+  }
+
+  const { data: masters, error } = await supabase
+    .from('master_products')
+    .select('id, name, model_key')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    throw new Error(`Failed to fetch master_products: ${error.message}`);
+  }
+
+  let skipped = 0;
+  for (const m of masters || []) {
+    if (catalogModelKeys.has(m.model_key)) continue;
+
+    const canonicalEntry = Object.hasOwn(
+      CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY,
+      m.model_key
+    )
+      ? CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY[m.model_key]
+      : undefined;
+
+    if (canonicalEntry) {
+      if (apply) {
+        const { error: upErr } = await supabase
+          .from('master_products')
+          .update({
+            ram_gb: canonicalEntry.ram_gb,
+            storage_gb: canonicalEntry.storage_gb,
+            screen_size_inch: canonicalEntry.screen_size_inch,
+            battery_mah: canonicalEntry.battery_mah,
+            has_5g: canonicalEntry.has_5g,
+            colors: canonicalEntry.colors,
+            specifications: canonicalEntry.specifications,
+            key_specs: canonicalEntry.key_specs,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', m.id);
+
+        if (upErr) {
+          throw new Error(`Failed to backfill ${m.name}: ${upErr.message}`);
+        }
+      }
+      console.log(
+        `  -> [Canonical Specs] ${m.name} (${m.model_key}): ${apply ? 'UPDATED ✅' : 'DRY-RUN WOULD UPDATE ℹ️'}`
+      );
+    } else if (apply && enricher.isConfigured()) {
+      const ok = await matcher.enrichMasterProductById(m.id);
+      console.log(
+        `  -> [AI Enrich] ${m.name} (${m.id}): ${ok ? 'UPDATED ✅' : 'SKIPPED ⚠️'}`
+      );
+    } else {
+      skipped++;
+    }
+  }
+
+  const totalAudited = await auditMasterSpecs(supabase);
+  console.log(
+    `\n🎉 SPEC CATALOG SYNC COMPLETE [mode=${apply ? 'APPLY' : 'DRY-RUN'}]: ${catalogUpdated} updated, ${catalogInserted} inserted as draft, ${skipped} skipped; ${totalAudited}/${totalAudited} master products verified with 10/10 Field Groups.`
+  );
+
+  return {
+    apply,
+    catalogUpdated,
+    catalogInserted,
+    skipped,
+    totalAudited,
+  };
+}
+
+export async function runQuickSpecSyncAndAudit(
+  options: BackfillSpecsOptions = {}
+): Promise<number> {
+  const apply = options.apply === true;
+  const { createClient } = await import('@supabase/supabase-js');
+  const supabaseUrl =
+    process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+  const supabaseKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    process.env.SUPABASE_ANON_KEY;
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
+  }
+  const supabase = (
+    createClient(supabaseUrl, supabaseKey, {
+      auth: { persistSession: false },
+    }) as any
+  ).schema('rate');
+
+  if (apply) {
+    for (const seed of FLAGSHIP_DEVICES_TO_SEED) {
+      const { error: upErr } = await supabase
+        .from('master_products')
+        .update({
+          specifications: sanitizeSpecifications(seed.specifications),
+          key_specs: seed.key_specs,
+        })
+        .eq('model_key', seed.model_key);
+      if (upErr) {
+        throw new Error(
+          `Failed to sync specs of ${seed.model_key}: ${upErr.message}`
+        );
+      }
+    }
+  }
+
+  const total = await auditMasterSpecs(supabase);
+  console.log(
+    `🎉 SPEC CLOUD AUDIT PASSED [mode=${apply ? 'APPLY' : 'AUDIT-ONLY'}]: ${total}/${total} master products on Supabase Cloud verified with 10/10 Field Groups (main + second camera).`
+  );
+  return total;
+}
+
+const isDirectExecution =
+  typeof process !== 'undefined' &&
+  Array.isArray(process.argv) &&
+  Boolean(process.argv[1]) &&
+  import.meta.url === pathToFileURL(process.argv[1]!).href;
+
+if (isDirectExecution) {
+  dotenv.config();
+  dotenv.config({ path: '../../.env' });
+  const applyFlag = process.argv.includes('--apply');
+  const auditOnlyFlag = process.argv.includes('--audit-only');
+  (auditOnlyFlag
+    ? runQuickSpecSyncAndAudit({ apply: applyFlag })
+    : runMasterSpecsBackfill({ apply: applyFlag })
+  ).catch((err) => {
+    console.error('❌ Spec backfill/audit execution failed:', err);
+    process.exit(1);
+  });
+}
