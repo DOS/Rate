@@ -24,6 +24,20 @@ module.exports = {
   },
   rules: {
     "no-console": ["warn", { allow: ["warn", "error"] }],
+    // Service-role clients bypass RLS. Web routes must act as the anon role or as the
+    // signed-in user (src/server/rate/request-auth.ts), never as service_role.
+    "no-restricted-imports": [
+      "error",
+      {
+        paths: [
+          {
+            name: "@repo/shared-data/server",
+            message:
+              "Service-role clients bypass RLS. Use the anon client (lib/rate-api) or authenticateRateRequest (server/rate/request-auth).",
+          },
+        ],
+      },
+    ],
     "@next/next/no-html-link-for-pages": "off",
     // @typescript-eslint/no-unused-vars covers TS and JS; the base rule only duplicates it
     // and misreports parameter names in TS function types.

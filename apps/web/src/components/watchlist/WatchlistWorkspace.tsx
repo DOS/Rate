@@ -21,6 +21,7 @@ import {
   type RadarSignal,
 } from '@/lib/deal-radar';
 import { useDealRadarIndex } from '@/components/radar/use-deal-radar';
+import { authorizedJsonHeaders } from '@/lib/auth/access-token';
 
 interface WatchlistWorkspaceProps {
   catalogProducts: MasterProduct[];
@@ -71,8 +72,10 @@ export default function WatchlistWorkspace({
   const radarIndex = useDealRadarIndex();
   const [editingSlug, setEditingSlug] = useState<string | null>(null);
   const [editTarget, setEditTarget] = useState<number>(0);
-  const [subscriberEmail, setSubscriberEmail] = useState<string>('');
-  const [cloudSyncStatus, setCloudSyncStatus] = useState<string | null>(null);
+  const [cloudSyncStatus, setCloudSyncStatus] = useState<{
+    ok: boolean;
+    message: string;
+  } | null>(null);
   const [isSyncingCloud, setIsSyncingCloud] = useState<boolean>(false);
   const [copiedPortfolioMd, setCopiedPortfolioMd] = useState<boolean>(false);
 
@@ -133,14 +136,16 @@ export default function WatchlistWorkspace({
       targetPrice: cleanTarget,
     });
     setEditingSlug(null);
+    // Cloud alerts need a signed-in account; signed-out users keep the local watchlist.
+    const headers = await authorizedJsonHeaders();
+    if (!headers) return;
     try {
       await fetch('/api/v1/rate/watchlist', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           slug: item.slug,
           targetPrice: cleanTarget,
-          subscriberEmail: subscriberEmail.trim() || undefined,
           locale: locale || 'vi',
         }),
       });
@@ -152,28 +157,55 @@ export default function WatchlistWorkspace({
   const handleSyncAllCloudAlerts = async (e: React.FormEvent) => {
     e.preventDefault();
     if (items.length === 0) return;
-    setIsSyncingCloud(true);
     setCloudSyncStatus(null);
+    const headers = await authorizedJsonHeaders();
+    if (!headers) {
+      setCloudSyncStatus({
+        ok: false,
+        message:
+          'Vui lòng đăng nhập tài khoản DOS ID để lưu cảnh báo giá lên Rate Cloud. Danh sách theo dõi vẫn được lưu trên trình duyệt này.',
+      });
+      return;
+    }
+    setIsSyncingCloud(true);
     try {
-      await Promise.all(
-        items.map((item) =>
-          fetch('/api/v1/rate/watchlist', {
+      const results = await Promise.all(
+        items.map(async (item) => {
+          const res = await fetch('/api/v1/rate/watchlist', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers,
             body: JSON.stringify({
               slug: item.slug,
               targetPrice: item.targetPrice,
-              subscriberEmail: subscriberEmail.trim() || undefined,
               locale: locale || 'vi',
             }),
-          })
-        )
+          });
+          const payload = (await res.json().catch(() => null)) as {
+            ok?: boolean;
+            persistedInCloud?: boolean;
+          } | null;
+          return (
+            res.ok && payload?.ok === true && payload.persistedInCloud === true
+          );
+        })
       );
+      const saved = results.filter(Boolean).length;
       setCloudSyncStatus(
-        `Đã đồng bộ ${items.length} cảnh báo giá mục tiêu lên hệ thống Rate Cloud!`
+        saved === items.length
+          ? {
+              ok: true,
+              message: `Đã lưu ${saved} cảnh báo giá lên Rate Cloud. Thông báo sẽ gửi tới email tài khoản của bạn.`,
+            }
+          : {
+              ok: false,
+              message: `Chỉ lưu được ${saved}/${items.length} cảnh báo lên Rate Cloud. Các cảnh báo còn lại vẫn nằm trên trình duyệt này.`,
+            }
       );
     } catch {
-      setCloudSyncStatus('Đã lưu cấu hình cảnh báo giá trên trình duyệt.');
+      setCloudSyncStatus({
+        ok: false,
+        message: 'Lỗi kết nối, chưa lưu được cảnh báo lên Rate Cloud.',
+      });
     } finally {
       setIsSyncingCloud(false);
     }
@@ -535,14 +567,9 @@ export default function WatchlistWorkspace({
             onSubmit={handleSyncAllCloudAlerts}
             className="row g-2 align-items-center border-top border-secondary border-opacity-25 mt-3 pt-3"
           >
-            <div className="col-md-8">
-              <input
-                type="email"
-                className="form-control form-control-sm rounded-pill px-3"
-                placeholder="Nhập email nhận thông báo khi giá chạm ngưỡng mục tiêu (Tùy chọn - Cloud Alert API)..."
-                value={subscriberEmail}
-                onChange={(e) => setSubscriberEmail(e.target.value)}
-              />
+            <div className="col-md-8 small text-secondary">
+              Cảnh báo trên Rate Cloud gắn với tài khoản DOS ID đã đăng nhập và
+              gửi tới email của tài khoản đó khi giá chạm ngưỡng mục tiêu.
             </div>
             <div className="col-md-4 d-grid">
               <button
@@ -556,8 +583,13 @@ export default function WatchlistWorkspace({
               </button>
             </div>
             {cloudSyncStatus && (
-              <div className="small text-success fw-medium col-12 mt-1">
-                ✓ {cloudSyncStatus}
+              <div
+                role="status"
+                className={`small fw-medium col-12 mt-1 ${
+                  cloudSyncStatus.ok ? 'text-success' : 'text-warning'
+                }`}
+              >
+                {cloudSyncStatus.ok ? '✓' : '⚠'} {cloudSyncStatus.message}
               </div>
             )}
           </form>

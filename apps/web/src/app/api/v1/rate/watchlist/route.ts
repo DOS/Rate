@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getRateClient } from '@repo/shared-data';
+import { z } from 'zod';
 import {
   computeProductRadarSignal,
   getCachedMasterProductBySlug,
   getCachedMasterProductOffers,
 } from '@/server/rate';
 import { radarExportFields } from '@/lib/deal-radar';
+import {
+  authenticateRateRequest,
+  isMissingRpcError,
+} from '@/server/rate/request-auth';
 
 export interface WatchlistBestOffer {
   id: string;
@@ -143,43 +147,49 @@ export async function GET(request: NextRequest) {
   }
 }
 
+const PriceAlertBodySchema = z.object({
+  slug: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .max(160)
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Invalid product slug'),
+  targetPrice: z.coerce
+    .number()
+    .finite()
+    .positive('targetPrice must be greater than 0')
+    .max(10_000_000_000)
+    .transform((v) => Math.round(v)),
+  locale: z.enum(['vi', 'en', 'cs']).catch('vi'),
+});
+
 /**
  * POST /api/v1/rate/watchlist
- * Register or update a server-backed Target Price Alert for a canonical master product.
- * Falls back gracefully to live master_products status if rate.upsert_price_alert RPC
- * has not yet been deployed to the target environment via DOS-Me.
+ * Register or update the signed-in user's Target Price Alert for a canonical master product.
+ * Requires a Supabase access token (Authorization: Bearer). The RPC runs as that user, so
+ * the alert is keyed to auth.uid() and notifications go to the account's own email; the
+ * request body cannot choose the recipient.
+ * Returns persistedInCloud: false only when rate.upsert_price_alert is not deployed yet.
  */
 export async function POST(request: NextRequest) {
   try {
-    const body = (await request.json()) as {
-      slug?: string;
-      targetPrice?: number;
-      subscriberEmail?: string;
-      clientFingerprint?: string;
-      locale?: string;
-    };
+    const rawBody: unknown = await request.json().catch(() => null);
 
-    const slug = (body.slug || '').trim();
-    const targetPrice = Math.round(Number(body.targetPrice || 0));
-    const subscriberEmail = (body.subscriberEmail || '').trim();
-    const clientFingerprint =
-      (body.clientFingerprint || '').trim() || `web-${crypto.randomUUID()}`;
-    const locale =
-      body.locale === 'en' || body.locale === 'cs' ? body.locale : 'vi';
+    const auth = await authenticateRateRequest(request, 'save a price alert');
+    if (!auth.ok) return auth.response;
 
-    if (!slug) {
+    const parsed = PriceAlertBodySchema.safeParse(rawBody ?? {});
+    if (!parsed.success) {
       return NextResponse.json(
-        { ok: false, error: 'Missing product slug' },
+        {
+          ok: false,
+          error: parsed.error.issues[0]?.message || 'Invalid request body',
+          code: 'INVALID_BODY',
+        },
         { status: 400 }
       );
     }
-
-    if (!Number.isFinite(targetPrice) || targetPrice <= 0) {
-      return NextResponse.json(
-        { ok: false, error: 'targetPrice must be greater than 0' },
-        { status: 400 }
-      );
-    }
+    const { slug, targetPrice, locale } = parsed.data;
 
     const masterProduct = await getCachedMasterProductBySlug(slug);
     if (!masterProduct) {
@@ -197,36 +207,50 @@ export async function POST(request: NextRequest) {
     );
     const isReached = currentMinPrice > 0 && currentMinPrice <= targetPrice;
 
-    try {
-      const supabase = getRateClient();
-      const { data: rpcData, error: rpcError } = await supabase.rpc(
-        'upsert_price_alert',
-        {
-          p_product_slug: slug,
-          p_target_price: targetPrice,
-          p_client_fingerprint: clientFingerprint,
-          p_subscriber_email: subscriberEmail || null,
-          p_locale: locale,
-        }
-      );
-
-      if (!rpcError && rpcData) {
-        return NextResponse.json({
-          ok: true,
-          persistedInCloud: true,
-          data: {
-            ...(typeof rpcData === 'object' ? rpcData : {}),
-            best_offer: bestOffer,
-            offer_platforms: offerPlatforms,
-            deal_radar: radarExportFields(radarSignal),
-            radar_signal: radarSignal,
-          },
-        });
+    const { data: rpcData, error: rpcError } = await auth.rateClient.rpc(
+      'upsert_price_alert',
+      {
+        p_product_slug: slug,
+        p_target_price: targetPrice,
+        // The RPC keys signed-in callers by auth.uid(); the fingerprint is not used for them.
+        p_client_fingerprint: `user:${auth.userId}`,
+        p_subscriber_email: auth.email,
+        p_locale: locale,
       }
-    } catch {
-      // Fallback to verified live snapshot when RPC is pending deployment
+    );
+
+    if (rpcError && !isMissingRpcError(rpcError)) {
+      console.error(
+        '[watchlist] upsert_price_alert failed',
+        rpcError.code,
+        rpcError.message
+      );
+      return NextResponse.json(
+        {
+          ok: false,
+          error: 'Could not save the price alert',
+          code: 'PERSIST_FAILED',
+        },
+        { status: 502 }
+      );
     }
 
+    if (!rpcError && rpcData) {
+      return NextResponse.json({
+        ok: true,
+        persistedInCloud: true,
+        data: {
+          ...(typeof rpcData === 'object' ? rpcData : {}),
+          best_offer: bestOffer,
+          offer_platforms: offerPlatforms,
+          deal_radar: radarExportFields(radarSignal),
+          radar_signal: radarSignal,
+        },
+      });
+    }
+
+    // rate.upsert_price_alert is not deployed in this environment yet: report the live
+    // status and say plainly that nothing was stored.
     return NextResponse.json({
       ok: true,
       persistedInCloud: false,
@@ -245,8 +269,10 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : 'Internal server error';
-    return NextResponse.json({ ok: false, error: message }, { status: 500 });
+    console.error('[watchlist] POST failed', error);
+    return NextResponse.json(
+      { ok: false, error: 'Internal server error' },
+      { status: 500 }
+    );
   }
 }
