@@ -307,13 +307,30 @@ async function runTests() {
     ['storage', 'sidePanel'],
     'manifest.json must request only least-privilege storage and sidePanel permissions without tabs (Audit C7, #174)'
   );
-  const distGuardsPath = path.resolve(__dirname, '../dist/security-guards.js');
   if (fs.existsSync(path.resolve(__dirname, '../dist/manifest.json'))) {
-    assert.equal(
-      fs.existsSync(distGuardsPath),
-      true,
-      'dist/security-guards.js must be bundled alongside dist/background/service-worker.js and dist/sidepanel/sidepanel.js (#174)'
-    );
+    // esbuild bundles each entry (#238): no output may import another file,
+    // and the content script (no module support in MV3) must not use import/export.
+    for (const rel of [
+      'background/service-worker.js',
+      'sidepanel/sidepanel.js',
+      'content/content-script.js',
+    ]) {
+      const out = fs.readFileSync(
+        path.resolve(__dirname, '../dist', rel),
+        'utf8'
+      );
+      assert.ok(
+        !/^\s*import\s|^\s*export\s|from\s+['"]\.{1,2}\//m.test(out),
+        `dist/${rel} must be a self-contained bundle (#238, replaces #174's security-guards copy)`
+      );
+      // The worker and panel inline the security guards (rate.vn allowlist);
+      // the content script inlines the marketplace detector.
+      const marker = rel.startsWith('content/') ? 'shopee' : 'rate.vn';
+      assert.ok(
+        out.includes(marker),
+        `dist/${rel} must contain its bundled dependencies ("${marker}")`
+      );
+    }
   }
   console.log(
     '  ✅ [5/6] Zero-Trust Quarantine, Opt-In Consent, MV3 Security Guards (C7) & Full 10/10 Platform Capability Matrix passed'

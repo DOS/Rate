@@ -2,11 +2,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
+import { build } from 'esbuild';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, '..');
 const distDir = path.join(rootDir, 'dist');
-const esmDir = path.join(distDir, 'esm');
+const srcDir = path.join(rootDir, 'src');
 
 /**
  * Generate a valid RGBA PNG buffer at exact pixel dimensions (size x size)
@@ -100,10 +101,9 @@ function ensureDir(dir) {
   fs.mkdirSync(dir, { recursive: true });
 }
 
-function main() {
+async function main() {
+  fs.rmSync(distDir, { recursive: true, force: true });
   ensureDir(path.join(distDir, 'icons'));
-  ensureDir(path.join(distDir, 'background'));
-  ensureDir(path.join(distDir, 'content'));
   ensureDir(path.join(distDir, 'sidepanel'));
 
   // 1. Copy manifest.json
@@ -118,49 +118,46 @@ function main() {
     fs.writeFileSync(path.join(distDir, 'icons', `icon-${size}.png`), png);
   }
 
-  // 3. Copy security-guards.js, service-worker.js & sidepanel.js + sidepanel.html
+  // 3. Bundle each entry with esbuild so every output is self-contained.
+  //    The service worker and side panel load as ES modules (manifest
+  //    "type": "module", <script type="module">); content scripts cannot use
+  //    import, so that entry is an IIFE.
+  const common = {
+    bundle: true,
+    platform: 'browser',
+    target: ['chrome116'],
+    charset: 'utf8',
+    legalComments: 'none',
+    logLevel: 'warning',
+  };
+  await build({
+    ...common,
+    format: 'esm',
+    entryPoints: {
+      'background/service-worker': path.join(srcDir, 'background', 'service-worker.ts'),
+      'sidepanel/sidepanel': path.join(srcDir, 'sidepanel', 'sidepanel.ts'),
+    },
+    outdir: distDir,
+  });
+  await build({
+    ...common,
+    format: 'iife',
+    entryPoints: {
+      'content/content-script': path.join(srcDir, 'content', 'content-script.ts'),
+    },
+    outdir: distDir,
+  });
   fs.copyFileSync(
-    path.join(esmDir, 'security-guards.js'),
-    path.join(distDir, 'security-guards.js')
-  );
-  fs.copyFileSync(
-    path.join(esmDir, 'background', 'service-worker.js'),
-    path.join(distDir, 'background', 'service-worker.js')
-  );
-  fs.copyFileSync(
-    path.join(esmDir, 'sidepanel', 'sidepanel.js'),
-    path.join(distDir, 'sidepanel', 'sidepanel.js')
-  );
-  fs.copyFileSync(
-    path.join(rootDir, 'src', 'sidepanel', 'sidepanel.html'),
+    path.join(srcDir, 'sidepanel', 'sidepanel.html'),
     path.join(distDir, 'sidepanel', 'sidepanel.html')
   );
-
-  // 4. Bundle content-script.js as a self-contained IIFE (MV3 content scripts cannot use top-level import)
-  const detectorCode = fs
-    .readFileSync(
-      path.join(esmDir, 'extractors', 'ecommerce-detector.js'),
-      'utf8'
-    )
-    .replace(/^export\s+/gm, '');
-
-  const contentCode = fs
-    .readFileSync(path.join(esmDir, 'content', 'content-script.js'), 'utf8')
-    .replace(/^import\s+.*from\s+['"].*['"];?\s*$/gm, '');
-
-  const bundledContentScript = `(() => {\n"use strict";\n${detectorCode}\n${contentCode}\n})();\n`;
-  fs.writeFileSync(
-    path.join(distDir, 'content', 'content-script.js'),
-    bundledContentScript,
-    'utf8'
-  );
-
-  // Remove intermediate dist/esm directory so dist/ is a clean unpacked MV3 extension folder
-  fs.rmSync(esmDir, { recursive: true, force: true });
 
   console.log(
     '✅ Built Rate Browser Extension (Manifest V3) into apps/extension/dist'
   );
 }
 
-main();
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
