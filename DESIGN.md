@@ -4,6 +4,7 @@
 > **Target Audience:** Frontend Engineers, UI/UX Designers, AI Coding Agents
 > **Core Positioning:** _The Independent Product Rating, AI Anti-Seeding Review & Technical Audit Terminal_
 > **Aesthetic DNA:** RTINGS-analytical * Linear-monochrome * Vercel Geist-precision * Zero Affiliate Clutter
+> **Token & component inventory:** [`Docs/Resources/design-system/`](./Docs/Resources/design-system/README.md) (`tokens.json`, brand book, component guidelines and previews, icons and logos)
 
 ---
 
