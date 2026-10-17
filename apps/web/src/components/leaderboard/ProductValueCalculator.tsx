@@ -7,6 +7,7 @@ import {
   radarExportFields,
   type RadarSignal,
 } from '@/lib/deal-radar';
+import { escapeCsvCell } from '@/lib/csv-safe';
 
 interface ProductValueCalculatorProps {
   readonly productName: string;
@@ -112,13 +113,7 @@ export default function ProductValueCalculator({
 
   const handleDownloadValueCsv = () => {
     if (typeof window === 'undefined') return;
-    const escapeCsv = (val: string | number) => {
-      const str = String(val ?? '');
-      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-        return `"${str.replace(/"/g, '""')}"`;
-      }
-      return str;
-    };
+    const escapeCsv = escapeCsvCell;
     const headers = [
       'Chu Kỳ (Tháng)',
       'Giá Mua Thấp Nhất (VND)',

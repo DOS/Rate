@@ -2169,7 +2169,78 @@ function runCoreArchitectureSuite() {
     'sitemap.ts must export revalidate = 3600 and include /deals (C10)'
   );
   console.log(
-    '  ✅ [45/45] HTTP Security Headers (C4), Per-Page SEO Canonicals & Sitemap Revalidation (C10), PostgREST Filter Sanitization (T10) & CSV Formula Guard (T11) (#163) passed'
+    '  ✅ [45/46] HTTP Security Headers (C4), Per-Page SEO Canonicals & Sitemap Revalidation (C10), PostgREST Filter Sanitization (T10) & CSV Formula Guard (T11) (#163) passed'
+  );
+
+  // 46. Static Page SEO Canonicals, Workspace CSV Formula Guards & Product Scoreboard Bayesian Confidence (#166)
+  const { computeBayesianRatingSummary } =
+    require('../../../lib/rate-api') as typeof import('../../../lib/rate-api');
+  const bayesianSparse = computeBayesianRatingSummary([
+    { rating_star: 5, helpfulness_weight: 0.9, include_in_rating: true },
+  ]);
+  assert.equal(bayesianSparse.bayesianRating, 4.38);
+  assert.equal(bayesianSparse.confidenceTier, 'insufficient_data');
+
+  const bayesianMedium = computeBayesianRatingSummary([
+    { rating_star: 5, helpfulness_weight: 2.0, include_in_rating: true },
+    { rating_star: 4, helpfulness_weight: 2.5, include_in_rating: true },
+    { rating_star: 5, helpfulness_weight: 0, include_in_rating: false },
+  ]);
+  assert.equal(bayesianMedium.effectiveWeightSum, 4.5);
+  assert.equal(bayesianMedium.confidenceTier, 'medium');
+  assert.ok(
+    bayesianMedium.bayesianRating > 4.2 && bayesianMedium.bayesianRating < 4.5,
+    'Bayesian shrinkage must pull small-sample weighted ratings toward prior mu=4.2'
+  );
+
+  for (const staticRoute of [
+    'about-us',
+    'faq',
+    'privacy-policy',
+    'contact-us',
+  ]) {
+    const pageSrc = fs.readFileSync(
+      path.join(repoRoot, `apps/web/src/app/[locale]/${staticRoute}/page.tsx`),
+      'utf8'
+    );
+    assert.ok(
+      pageSrc.includes(`canonical: 'https://rate.vn/${staticRoute}'`),
+      `${staticRoute}/page.tsx must define per-page canonical URL (C10)`
+    );
+  }
+
+  for (const csvComponentPath of [
+    'apps/web/src/components/deals/DealFinderWorkspace.tsx',
+    'apps/web/src/components/leaderboard/LeaderboardExplorer.tsx',
+    'apps/web/src/components/inspect/DeepInspectWorkspace.tsx',
+    'apps/web/src/components/leaderboard/ProductOffersExplorer.tsx',
+    'apps/web/src/components/leaderboard/ProductValueCalculator.tsx',
+  ]) {
+    const compSrc = fs.readFileSync(
+      path.join(repoRoot, csvComponentPath),
+      'utf8'
+    );
+    assert.ok(
+      compSrc.includes("from '@/lib/csv-safe'") &&
+        compSrc.includes('escapeCsvCell'),
+      `${csvComponentPath} must use shared escapeCsvCell formula guard (T11)`
+    );
+  }
+
+  const pdvSrc166 = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/app/[locale]/smartphones/[slug]/page.tsx'
+    ),
+    'utf8'
+  );
+  assert.ok(
+    pdvSrc166.includes('computeBayesianRatingSummary') &&
+      pdvSrc166.includes('pdv-bayesian-confidence'),
+    'Product Detail Scoreboard must display Bayesian confidence tier badge (#166)'
+  );
+  console.log(
+    '  ✅ [46/46] Static Page SEO Canonicals, Workspace CSV Formula Guards & Product Scoreboard Bayesian Confidence (#166) passed'
   );
 
   console.log('🎉 All Rate.vn Core Architecture tests passed!');

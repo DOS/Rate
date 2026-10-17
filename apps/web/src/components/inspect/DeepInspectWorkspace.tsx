@@ -20,6 +20,7 @@ import {
   radarMarkdownCell,
 } from '@/lib/deal-radar';
 import { useDealRadarIndex } from '@/components/radar/use-deal-radar';
+import { escapeCsvCell } from '@/lib/csv-safe';
 import type { KeySpecs } from '@repo/shared-data';
 import {
   BsArrowRight,
@@ -405,13 +406,7 @@ export default function DeepInspectWorkspace({
 
   const handleDownloadInspectCsv = () => {
     if (typeof window === 'undefined' || !result) return;
-    const escapeCsv = (val: string | number) => {
-      const str = String(val ?? '');
-      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-        return `"${str.replace(/"/g, '""')}"`;
-      }
-      return str;
-    };
+    const escapeCsv = escapeCsvCell;
     const headers = [
       'Gian Hàng',
       'Sàn',

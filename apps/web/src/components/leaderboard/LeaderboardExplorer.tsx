@@ -22,6 +22,7 @@ import RadarBadge from '@/components/radar/RadarBadge';
 import { useDealRadarIndex } from '@/components/radar/use-deal-radar';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
 import CompareQuickToggle from '@/components/compare/CompareQuickToggle';
+import { escapeCsvCell } from '@/lib/csv-safe';
 import type { KeySpecs, ProductSpecifications } from '@repo/shared-data';
 import {
   BsArrowLeftRight,
@@ -702,7 +703,7 @@ export default function LeaderboardExplorer({
 
   const handleDownloadLeaderboardCsv = () => {
     if (typeof document === 'undefined' || rankedEntries.length === 0) return;
-    const escapeCsv = (val: string) => `"${val.replace(/"/g, '""')}"`;
+    const escapeCsv = escapeCsvCell;
     const headers = [
       'Rank',
       'Slug',

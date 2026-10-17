@@ -12,6 +12,7 @@ import {
   computeProductRadarSignal,
   type CanonicalCategorySlug,
 } from '@/server/rate';
+import { computeBayesianRatingSummary } from '@/lib/rate-api';
 import RadarBadge from '@/components/radar/RadarBadge';
 import { buildRadarIndex, getRadarSignal } from '@/lib/deal-radar';
 import JReviewsSection from '@/components/reviews/JReviewsSection';
@@ -161,10 +162,15 @@ export async function ProductDetailView({
   const ignoredCount = reviews.filter(
     (r) => !r.include_in_rating || r.helpfulness_weight === 0
   ).length;
-  const displayUserRating =
+  const rawUserRating =
     product.user_rating_weighted && Number(product.user_rating_weighted) > 0
       ? Number(product.user_rating_weighted)
       : Number(product.average_rating || 0);
+  const bayesianSummary = computeBayesianRatingSummary(reviews, rawUserRating);
+  const displayUserRating =
+    bayesianSummary.effectiveWeightSum > 0
+      ? bayesianSummary.bayesianRating
+      : rawUserRating;
 
   const canonicalUrl = `https://rate.vn${categoryBasePath}/${product.slug}`;
 
@@ -390,6 +396,42 @@ export async function ProductDetailView({
                           ? `/ 5.0 (${authenticCount} bài kiểm chứng)`
                           : `(${authenticCount} bài kiểm chứng)`}
                       </span>
+                    </div>
+                    <div
+                      className="d-flex align-items-center mt-2 flex-wrap gap-2"
+                      data-testid="pdv-bayesian-confidence"
+                    >
+                      <span
+                        className="badge rounded-pill px-2 py-1"
+                        style={{
+                          fontSize: '0.7rem',
+                          backgroundColor:
+                            bayesianSummary.confidenceTier === 'high'
+                              ? 'rgba(16, 185, 129, 0.2)'
+                              : bayesianSummary.confidenceTier === 'medium'
+                                ? 'rgba(56, 189, 248, 0.2)'
+                                : 'rgba(251, 191, 36, 0.18)',
+                          color:
+                            bayesianSummary.confidenceTier === 'high'
+                              ? '#6ee7b7'
+                              : bayesianSummary.confidenceTier === 'medium'
+                                ? '#7dd3fc'
+                                : '#fde68a',
+                          border: '1px solid rgba(255, 255, 255, 0.14)',
+                        }}
+                      >
+                        ⚖️ {bayesianSummary.tierLabelVi}
+                      </span>
+                      {bayesianSummary.effectiveWeightSum > 0 && (
+                        <span
+                          className="small font-monospace"
+                          style={{ fontSize: '0.72rem', color: '#94a3b8' }}
+                        >
+                          Σw={bayesianSummary.effectiveWeightSum.toFixed(2)} |
+                          c=
+                          {Math.round(bayesianSummary.confidenceRatio * 100)}%
+                        </span>
+                      )}
                     </div>
                   </div>
 

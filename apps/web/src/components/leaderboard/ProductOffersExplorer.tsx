@@ -13,6 +13,7 @@ import {
   radarMarkdownCell,
   type RadarSignal,
 } from '@/lib/deal-radar';
+import { escapeCsvCell } from '@/lib/csv-safe';
 
 interface ProductOffersExplorerProps {
   readonly productName: string;
@@ -163,7 +164,7 @@ export default function ProductOffersExplorer({
 
   const handleDownloadOffersCsv = () => {
     if (typeof document === 'undefined' || filteredOffers.length === 0) return;
-    const escapeCsv = (val: string) => `"${val.replace(/"/g, '""')}"`;
+    const escapeCsv = escapeCsvCell;
     const headers = [
       'OfferID',
       'Platform',

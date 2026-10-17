@@ -12,11 +12,20 @@ export async function generateMetadata({
   params: Promise<{ locale: string }>;
 }): Promise<Metadata> {
   const { locale } = await params;
+  const alternates = {
+    canonical: 'https://rate.vn/faq',
+    languages: {
+      vi: 'https://rate.vn/faq',
+      en: 'https://rate.vn/faq',
+      cs: 'https://rate.vn/faq',
+    },
+  };
   if (locale === 'en') {
     return {
       title: 'Frequently Asked Questions (FAQ) - Methodology & Trust | Rate.vn',
       description:
         'Detailed answers on how Rate.vn standardizes 10 specification groups, calculates JReviews weighted ratings, detects fake discounts, and scores merchant risk.',
+      alternates,
     };
   }
   if (locale === 'cs') {
@@ -24,6 +33,7 @@ export async function generateMetadata({
       title: 'Často kladené otázky (FAQ) - Metodika a důvěra | Rate.vn',
       description:
         'Podrobné odpovědi na to, jak Rate.vn standardizuje 10 skupin parametrů, počítá vážené hodnocení JReviews a odhaluje falešné slevy.',
+      alternates,
     };
   }
   return {
@@ -31,6 +41,7 @@ export async function generateMetadata({
       'Câu Hỏi Thường Gặp (FAQ) - Phương Pháp Chấm Điểm & Kiểm Toán | Rate.vn',
     description:
       'Giải đáp chi tiết cách Rate.vn chuẩn hóa 10 nhóm thông số kỹ thuật, công thức điểm trọng số JReviews, thuật toán phát hiện giảm giá ảo và điểm rủi ro kép.',
+    alternates,
   };
 }
 
@@ -112,7 +123,7 @@ export default async function FaqPage({
                 ))}
               </div>
 
-              <div className="card rounded-4 bg-white border-primary border-opacity-25 mt-4 border p-4 shadow-sm">
+              <div className="card rounded-4 border-primary border-opacity-25 mt-4 border bg-white p-4 shadow-sm">
                 <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
                   <div>
                     <h4 className="h5 fw-bold mb-1">

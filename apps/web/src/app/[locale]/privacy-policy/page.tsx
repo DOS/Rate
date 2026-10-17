@@ -12,11 +12,20 @@ export async function generateMetadata({
   params: Promise<{ locale: string }>;
 }): Promise<Metadata> {
   const { locale } = await params;
+  const alternates = {
+    canonical: 'https://rate.vn/privacy-policy',
+    languages: {
+      vi: 'https://rate.vn/privacy-policy',
+      en: 'https://rate.vn/privacy-policy',
+      cs: 'https://rate.vn/privacy-policy',
+    },
+  };
   if (locale === 'en') {
     return {
       title: 'Privacy Policy & Data Governance | Rate.vn',
       description:
         'Rate.vn privacy policy and data governance: database-level PII protection, SHA-256 anonymous voter hashing, and local browser watchlist storage.',
+      alternates,
     };
   }
   if (locale === 'cs') {
@@ -24,12 +33,14 @@ export async function generateMetadata({
       title: 'Ochrana soukromí a správa dat | Rate.vn',
       description:
         'Zásady ochrany osobních údajů Rate.vn: ochrana PII na úrovni databáze, anonymní SHA-256 hashování hlasů a lokální ukládání sledovaných cen.',
+      alternates,
     };
   }
   return {
     title: 'Chính Sách Bảo Mật & Quản Trị Dữ Liệu | Rate.vn',
     description:
       'Cam kết bảo mật và quản trị dữ liệu của Rate.vn: Bảo vệ thông tin định danh (PII) bằng Row-Level Security, ẩn danh hóa bình chọn bằng SHA-256 và lưu trữ canh giá cục bộ.',
+    alternates,
   };
 }
 
@@ -65,15 +76,15 @@ export default async function PrivacyPolicyPage({
         <div className="container">
           <div className="row g-4">
             <div className="col-lg-8">
-              <div className="card rounded-4 border bg-white p-4 p-md-5 shadow-sm">
+              <div className="card rounded-4 p-md-5 border bg-white p-4 shadow-sm">
                 <h3 className="h5 fw-bold mb-3">
                   1. Nguyên Tắc Không Thu Thập Thông Tin Định Danh Người Mua
                 </h3>
                 <p className="text-secondary mb-4">
-                  Khi bạn truy cập <code>rate.vn</code> để tra cứu sản phẩm,
-                  dán link kiểm định hoặc sử dụng Open-Core REST API v1, hệ
-                  thống không yêu cầu tạo tài khoản và không gắn cookie theo dõi
-                  quảng cáo của bên thứ ba.
+                  Khi bạn truy cập <code>rate.vn</code> để tra cứu sản phẩm, dán
+                  link kiểm định hoặc sử dụng Open-Core REST API v1, hệ thống
+                  không yêu cầu tạo tài khoản và không gắn cookie theo dõi quảng
+                  cáo của bên thứ ba.
                 </p>
 
                 <h3 className="h5 fw-bold mb-3">
@@ -93,11 +104,11 @@ export default async function PrivacyPolicyPage({
                 <p className="text-secondary mb-4">
                   Khi bạn bấm nút <strong>&ldquo;Hữu ích&rdquo;</strong> hoặc{' '}
                   <strong>&ldquo;Báo cáo Seeding&rdquo;</strong> trên một đánh
-                  giá tại trang chi tiết sản phẩm, địa chỉ IP và chuỗi User-Agent
-                  của bạn không bao giờ được lưu dưới dạng văn bản thuần. Tầng
-                  BFF biến đổi thông tin này thành chuỗi băm một chiều{' '}
-                  <code>SHA-256 (voter_hash)</code> kèm muối bảo mật chỉ để
-                  chống spam bình chọn trùng lặp trong bảng{' '}
+                  giá tại trang chi tiết sản phẩm, địa chỉ IP và chuỗi
+                  User-Agent của bạn không bao giờ được lưu dưới dạng văn bản
+                  thuần. Tầng BFF biến đổi thông tin này thành chuỗi băm một
+                  chiều <code>SHA-256 (voter_hash)</code> kèm muối bảo mật chỉ
+                  để chống spam bình chọn trùng lặp trong bảng{' '}
                   <code>rate.review_votes</code>.
                 </p>
 
@@ -117,7 +128,7 @@ export default async function PrivacyPolicyPage({
             </div>
 
             <div className="col-lg-4">
-              <div className="card rounded-4 border bg-white p-4 shadow-sm mb-4">
+              <div className="card rounded-4 mb-4 border bg-white p-4 shadow-sm">
                 <BsDatabaseLock className="text-primary fs-1 mb-3" />
                 <h4 className="h5 fw-bold mb-2">
                   Kiểm Chứng Mã Nguồn Công Khai
@@ -138,7 +149,7 @@ export default async function PrivacyPolicyPage({
 
               <div className="card rounded-4 bg-dark border-0 p-4 text-white shadow-sm">
                 <BsShieldCheck className="text-success fs-2 mb-2" />
-                <h5 className="fw-bold text-white mb-2">
+                <h5 className="fw-bold mb-2 text-white">
                   Yêu Cầu Đính Chính Dữ Liệu Gian Hàng
                 </h5>
                 <p className="small text-white-50 mb-3">
