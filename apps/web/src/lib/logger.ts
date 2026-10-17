@@ -8,7 +8,14 @@ export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 export type LogFields = Record<string, unknown>;
 
 const SECRET_KEY =
-  /token|secret|password|passwd|authorization|cookie|api[-_]?key|service[-_]?role|anon[-_]?key/i;
+  /token|secret|password|passwd|authorization|cookie|api[-_]?key|service[-_]?role|anon[-_]?key|e-?mail/i;
+// Postgres error text can echo user input ("Key (email)=(a@b.c) ..."); emails
+// are personal data, so they are masked inside any logged string.
+const EMAIL_IN_TEXT = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
+
+function scrubText(text: string): string {
+  return text.slice(0, MAX_STRING).replace(EMAIL_IN_TEXT, '[email]');
+}
 const MAX_DEPTH = 4;
 const MAX_STRING = 2000;
 
@@ -21,7 +28,7 @@ export function serializeError(err: unknown): LogFields {
     const withCode = err as Error & { code?: unknown; digest?: unknown };
     return {
       name: err.name,
-      message: err.message.slice(0, MAX_STRING),
+      message: scrubText(err.message),
       ...(withCode.code !== undefined ? { code: withCode.code } : {}),
       ...(withCode.digest !== undefined ? { digest: withCode.digest } : {}),
       ...(isProduction() ? {} : { stack: err.stack }),
@@ -31,12 +38,12 @@ export function serializeError(err: unknown): LogFields {
     // PostgREST / Supabase errors are plain objects: { code, message, details, hint }.
     return redact(err, 1) as LogFields;
   }
-  return { message: String(err).slice(0, MAX_STRING) };
+  return { message: scrubText(String(err)) };
 }
 
 export function redact(value: unknown, depth = 0): unknown {
   if (value instanceof Error) return serializeError(value);
-  if (typeof value === 'string') return value.slice(0, MAX_STRING);
+  if (typeof value === 'string') return scrubText(value);
   if (value === null || typeof value !== 'object') return value;
   if (depth >= MAX_DEPTH) return '[truncated]';
   if (Array.isArray(value))

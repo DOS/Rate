@@ -60,8 +60,21 @@ function main() {
     // debug is dropped in production
     assert.equal(capture(() => createLogger('x').debug('hidden')).length, 0);
   } finally {
-    env.NODE_ENV = prevEnv;
+    if (prevEnv === undefined) delete env.NODE_ENV;
+    else env.NODE_ENV = prevEnv;
   }
+
+  // Emails are personal data: masked under email keys and inside any string.
+  const pii = redact({
+    subscriber_email: 'a@rate.test',
+    message:
+      'duplicate key: Key (email)=(Victim.User@Example.com) already exists',
+  }) as Record<string, unknown>;
+  assert.equal(pii.subscriber_email, '[redacted]');
+  assert.equal(
+    pii.message,
+    'duplicate key: Key (email)=([email]) already exists'
+  );
   // PostgREST errors are plain objects
   assert.deepEqual(
     serializeError({ code: 'PGRST202', message: 'missing', apikey: 'x' }),
