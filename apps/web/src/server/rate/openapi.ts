@@ -17,6 +17,7 @@ export interface OpenApiOperation {
   summary: string;
   description: string;
   tags: string[];
+  security?: Array<Record<string, string[]>>;
   parameters?: OpenApiParameter[];
   requestBody?: {
     required: boolean;
@@ -65,6 +66,7 @@ export interface RateOpenApiDocument {
   }>;
   paths: Record<string, Record<string, OpenApiOperation>>;
   components: {
+    securitySchemes?: Record<string, Record<string, unknown>>;
     schemas: Record<string, Record<string, unknown>>;
   };
 }
@@ -470,32 +472,29 @@ export function buildRateOpenApiSpec(
           summary:
             'Register a target price alert for a canonical master product (`rate.upsert_price_alert`)',
           description:
-            'Upserts a price alert threshold in VND (`targetPriceVnd`) for a watched master product and returns the latest `deal_radar` and `radar_signal` snapshot.',
+            "Upserts the signed-in user's price alert threshold in VND (`targetPrice`) for a watched master product and returns the latest `deal_radar` and `radar_signal` snapshot. Requires a Supabase access token; alerts are keyed to the account and notify the account's own email. `persistedInCloud: false` means `rate.upsert_price_alert` is not deployed in this environment and nothing was stored.",
           tags: ['Comparison & Watchlist'],
+          security: [{ bearerAuth: [] }],
           requestBody: {
             required: true,
             content: {
               'application/json': {
                 schema: {
                   type: 'object',
-                  required: ['slug', 'targetPriceVnd'],
+                  required: ['slug', 'targetPrice'],
                   properties: {
                     slug: {
                       type: 'string',
                       example: 'apple-iphone-16-pro-max-256gb',
                     },
-                    targetPriceVnd: {
+                    targetPrice: {
                       type: 'number',
                       example: 28990000,
                     },
-                    email: {
+                    locale: {
                       type: 'string',
-                      nullable: true,
-                    },
-                    channel: {
-                      type: 'string',
-                      enum: ['web_push', 'email', 'extension'],
-                      default: 'web_push',
+                      enum: ['vi', 'en', 'cs'],
+                      default: 'vi',
                     },
                   },
                 },
@@ -795,36 +794,41 @@ export function buildRateOpenApiSpec(
           summary:
             'Submit a 5-criteria JReviews community review with automated anti-seeding check',
           description:
-            'Submits a community review via `rate.submit_community_review` with SHA-256 voter hash rate-limiting and recalculates logarithmic product scores.',
+            'Submits a community review for the signed-in user via `rate.submit_community_review`, which applies the anti-spam classification and recalculates product scores. Requires a Supabase access token. The reviewer type is decided by the database; the request cannot claim `expert`. Any failure to store the review is returned as an error.',
           tags: ['Community Reviews & Voting'],
+          security: [{ bearerAuth: [] }],
           requestBody: {
             required: true,
             content: {
               'application/json': {
                 schema: {
                   type: 'object',
-                  required: [
-                    'masterProductId',
-                    'authorName',
-                    'ratingStar',
-                    'comment',
-                  ],
+                  required: ['masterProductId', 'comment'],
                   properties: {
                     masterProductId: { type: 'string', format: 'uuid' },
-                    authorName: { type: 'string' },
+                    authorName: { type: 'string', maxLength: 80 },
                     ratingStar: { type: 'integer', minimum: 1, maximum: 5 },
-                    comment: { type: 'string', minLength: 15 },
-                    pros: { type: 'array', items: { type: 'string' } },
-                    cons: { type: 'array', items: { type: 'string' } },
+                    comment: { type: 'string', minLength: 15, maxLength: 3000 },
+                    variation: { type: 'string', maxLength: 120 },
+                    criteriaRatings: {
+                      type: 'object',
+                      description:
+                        'Scores 1-5 for screen, performance, camera, battery, value',
+                      additionalProperties: { type: 'number' },
+                    },
                   },
                 },
               },
             },
           },
           responses: {
-            '201': {
-              description: 'Community review created and audited.',
+            '200': {
+              description: 'Community review stored and audited.',
             },
+            '400': { description: 'Invalid body or rejected by the RPC.' },
+            '401': { description: 'Missing or invalid access token.' },
+            '502': { description: 'The review could not be stored.' },
+            '503': { description: 'Review submission is not deployed here.' },
           },
         },
       },
@@ -1067,6 +1071,14 @@ export function buildRateOpenApiSpec(
       },
     },
     components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+          description: 'Supabase Auth access token of the signed-in user.',
+        },
+      },
       schemas: {
         SupportedEcommercePlatform: {
           type: 'string',
