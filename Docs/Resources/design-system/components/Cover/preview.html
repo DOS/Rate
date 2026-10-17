@@ -1,0 +1,45 @@
+<!-- @dsCard height=288 -->
+<style>
+  html, body { margin: 0; }
+  body { width: 960px; height: 288px; position: relative; overflow: hidden; background: var(--rate-bg-canvas); }
+  svg { position: absolute; left: 0; top: 0; }
+  .slab { fill: var(--rate-fg-primary); }
+  .brand { fill: var(--rate-brand); }
+  .user { fill: var(--rate-score-user); }
+  .star { fill: var(--rate-score-star); }
+  .expert { fill: var(--rate-score-expert); }
+  .track { fill: var(--rate-criteria-track); }
+  .card { rx: var(--radius-card); }
+  .text { position: absolute; left: 40px; bottom: 32px; max-width: 440px; }
+  .name { margin: 0; font-family: var(--font-sans); font-weight: 800; font-size: 100px; line-height: 0.92; letter-spacing: -0.04em; color: var(--rate-fg-primary); }
+  .tag { margin: 16px 0 0; font-family: var(--font-sans); font-size: 14px; line-height: 1.4; color: var(--rate-fg-secondary); }
+</style>
+<!--
+  blocks: rate-fg-primary slab 320x320 (bleeds top and bottom), rate-brand 144x144, rate-score-user 64x112, rate-score-star 64x112; corners radius-card.
+  arrangement: one tall slab with satellites, flush right from x = 480, satellites stacked at spacer-3 (16px) gaps.
+  pattern: literal motif, the five criteria bars (pills from radius-pill) in rate-score-expert on rate-criteria-track, plus the brand dot from the app icon; chosen because the 5-criteria score is the thing Rate.vn shows on every product.
+  steps and radii: bar pitch 28px, bar height 12px (pill radius 6), gaps spacer-3 (16px), radius-card 14px, dot r 24.
+-->
+<svg width="960" height="288" viewBox="0 0 960 288" aria-hidden="true">
+  <rect class="slab card" x="480" y="-16" width="320" height="320"/>
+  <circle class="brand" cx="536" cy="56" r="24"/>
+  <g>
+    <rect class="track" x="512" y="120" width="256" height="12" rx="6"/>
+    <rect class="expert" x="512" y="120" width="251" height="12" rx="6"/>
+    <rect class="track" x="512" y="148" width="256" height="12" rx="6"/>
+    <rect class="expert" x="512" y="148" width="246" height="12" rx="6"/>
+    <rect class="track" x="512" y="176" width="256" height="12" rx="6"/>
+    <rect class="expert" x="512" y="176" width="236" height="12" rx="6"/>
+    <rect class="track" x="512" y="204" width="256" height="12" rx="6"/>
+    <rect class="expert" x="512" y="204" width="215" height="12" rx="6"/>
+    <rect class="track" x="512" y="232" width="256" height="12" rx="6"/>
+    <rect class="expert" x="512" y="232" width="200" height="12" rx="6"/>
+  </g>
+  <rect class="brand card" x="816" y="-14" width="160" height="158"/>
+  <rect class="user card" x="816" y="160" width="64" height="144"/>
+  <rect class="star card" x="896" y="160" width="80" height="144"/>
+</svg>
+<div class="text">
+  <h1 class="name">Rate.vn</h1>
+  <p class="tag">Product rating, anti-seeding review &amp; technical audit terminal.</p>
+</div>
