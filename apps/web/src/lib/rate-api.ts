@@ -335,11 +335,35 @@ export async function getCategoryDirectoryFacets(
     };
   }
 
+  // Audit C1: Prefer server-side GROUP BY brand RPC `get_category_brand_facets`
+  if (typeof (supabase as any).rpc === 'function') {
+    const { data: facetRows, error: facetErr } = await (supabase as any).rpc(
+      'get_category_brand_facets',
+      { p_category_id: currentCategory.id }
+    );
+    if (!facetErr && Array.isArray(facetRows)) {
+      const brands = (facetRows as { brand: string; count: number }[]).map(
+        (r) => ({
+          name: r.brand,
+          count: Number(r.count) || 0,
+        })
+      );
+      const totalUnfiltered = brands.reduce((acc, b) => acc + b.count, 0);
+      return {
+        currentCategory,
+        categories,
+        brands,
+        totalUnfiltered,
+      };
+    }
+  }
+
   const { data: prodRows } = await supabase
     .from('master_products')
     .select('brand, category_id')
     .eq('status', 'published')
-    .eq('category_id', currentCategory.id);
+    .eq('category_id', currentCategory.id)
+    .limit(500);
 
   const rows =
     (prodRows as { brand: string; category_id: string | null }[]) || [];
@@ -369,10 +393,7 @@ export async function getMasterProducts(
   params?: MasterProductFilterParams
 ): Promise<MasterProduct[]> {
   const supabase = getRateClient();
-  let query = supabase
-    .from('master_products')
-    .select('*')
-    .eq('status', 'published');
+  let resolvedCategoryId: string | null = null;
 
   if (params?.categorySlug && params.categorySlug !== 'all') {
     const { data: catRow } = await supabase
@@ -384,10 +405,66 @@ export async function getMasterProducts(
     if (!catRow?.id) {
       return [];
     }
-    query = query.eq('category_id', catRow.id);
+    resolvedCategoryId = catRow.id;
   }
 
-  if (params?.brand && (!params.brands || params.brands.length === 0)) {
+  const brandList =
+    params?.brands && params.brands.length > 0
+      ? params.brands.map((b) => b.trim()).filter(Boolean)
+      : params?.brand
+        ? [params.brand.trim()]
+        : null;
+  const boundedLimit =
+    params?.limit && params.limit > 0 ? Math.min(params.limit, 500) : 200;
+
+  // Audit C1: Prefer server-side SQL RPC `search_master_products` when deployed
+  if (typeof (supabase as any).rpc === 'function') {
+    const { data: rpcRows, error: rpcErr } = await (supabase as any).rpc(
+      'search_master_products',
+      {
+        p_category_id: resolvedCategoryId,
+        p_brands: brandList,
+        p_search: params?.search?.trim() || null,
+        p_min_price: params?.minPrice ?? null,
+        p_max_price: params?.maxPrice ?? null,
+        p_min_rating: params?.minRating ?? null,
+        p_ram_gb:
+          params?.ramGb && params.ramGb.length > 0 ? params.ramGb : null,
+        p_storage_gb:
+          params?.storageGb && params.storageGb.length > 0
+            ? params.storageGb
+            : null,
+        p_min_battery_mah: params?.minBatteryMah ?? null,
+        p_min_refresh_rate_hz: params?.minRefreshRateHz ?? null,
+        p_min_fast_charging_w: params?.minFastChargingW ?? null,
+        p_has_5g: params?.has5g ?? null,
+        p_has_nfc: params?.hasNfc ?? null,
+        p_max_screen_size_inch: params?.maxScreenSizeInch ?? null,
+        p_sort: params?.sort || 'default',
+        p_limit: boundedLimit,
+        p_offset: 0,
+      }
+    );
+    if (!rpcErr && Array.isArray(rpcRows)) {
+      return rpcRows as MasterProduct[];
+    }
+  }
+
+  let query = supabase
+    .from('master_products')
+    .select('*')
+    .eq('status', 'published');
+
+  if (resolvedCategoryId) {
+    query = query.eq('category_id', resolvedCategoryId);
+  }
+
+  if (params?.brands && params.brands.length > 0) {
+    query = query.in(
+      'brand',
+      params.brands.map((b) => b.trim()).filter(Boolean)
+    );
+  } else if (params?.brand) {
     query = query.ilike('brand', `%${params.brand}%`);
   }
 
@@ -426,12 +503,17 @@ export async function getMasterProducts(
     case 'merchants_desc':
       query = query.order('merchant_count', { ascending: false });
       break;
+    case 'rating_desc':
+      query = query.order('user_rating_weighted', { ascending: false });
+      break;
     case 'newest':
     case 'default':
     default:
       query = query.order('created_at', { ascending: false });
       break;
   }
+
+  query = query.limit(boundedLimit);
 
   const { data, error } = await query;
   if (error) {

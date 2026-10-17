@@ -2617,7 +2617,43 @@ async function runCoreArchitectureSuite() {
     'ShopeeIngestionPipeline.ingestProduct must invoke refresh_master_market_stats RPC (#177)'
   );
   console.log(
-    '  ✅ [54/54] Canonical refresh_master_market_stats RPC & Review Votes UPDATE Flood Guard (Audit C5/T3, #177) passed'
+    '  ✅ [54/55] Canonical refresh_master_market_stats RPC & Review Votes UPDATE Flood Guard (Audit C5/T3, #177) passed'
+  );
+
+  // 55. Issue #178: Audit C1 (get_category_brand_facets & search_master_products RPCs + getMasterProducts pushdown) & ROADMAP/CHANGELOG split
+  const mig178Src = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'supabase/migrations/20261018013000_rate_audit_c1_catalog_search_and_facets_rpc.sql'
+    ),
+    'utf8'
+  );
+  assert.ok(
+    mig178Src.includes(
+      'CREATE OR REPLACE FUNCTION rate.get_category_brand_facets(p_category_id UUID)'
+    ) &&
+      mig178Src.includes(
+        'CREATE OR REPLACE FUNCTION rate.search_master_products('
+      ) &&
+      mig178Src.includes('idx_master_products_specs_gin') &&
+      mig178Src.includes('SECURITY INVOKER'),
+    '20261018013000_rate_audit_c1_catalog_search_and_facets_rpc.sql must define get_category_brand_facets and search_master_products with SECURITY INVOKER (#178)'
+  );
+  assert.ok(
+    rateApiSrc176.includes("'get_category_brand_facets'") &&
+      rateApiSrc176.includes("'search_master_products'") &&
+      rateApiSrc176.includes('query = query.limit(boundedLimit);'),
+    'rate-api.ts must invoke get_category_brand_facets and search_master_products RPCs and enforce bounded .limit() (#178)'
+  );
+  assert.ok(
+    fs.existsSync(path.join(repoRoot, 'Docs/Resources/CHANGELOG.md')) &&
+      fs
+        .readFileSync(path.join(repoRoot, 'Docs/Resources/ROADMAP.md'), 'utf8')
+        .includes('CHANGELOG.md'),
+    'Docs/Resources/ROADMAP.md must link to Docs/Resources/CHANGELOG.md and keep forward-looking Phase 6 & 7 items (#178)'
+  );
+  console.log(
+    '  ✅ [55/55] Catalog Search/Facets SQL RPCs (Audit C1) & ROADMAP/CHANGELOG Split (Audit Low, #178) passed'
   );
 
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
