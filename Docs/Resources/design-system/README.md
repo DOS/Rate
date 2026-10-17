@@ -61,7 +61,7 @@ Rate.vn is an independent product rating, anti-seeding review and technical audi
 ### Motion and states
 
 - Transitions are short: 0.16s ease on cards, 0.4s on buttons. No decorative animation in analytical sections.
-- Hover: buttons darken to `bs-primary-bg-dark`; outline and light buttons fill with `bs-primary`. Inputs focus by switching the border to `bs-primary-border-subtle`, with no shadow. Buttons show no focus ring in the app today (`.btn:focus` removes Bootstrap's); `shadow-focus` and the 2px `bs-primary` outline in `bundle.css` are a recommended addition, not yet in the app.
+- Hover: buttons darken to `bs-primary-bg-dark`; outline and light buttons fill with `bs-primary`. Keyboard focus is a solid 2px `rate-focus-ring` outline on every link, button, `.btn` and form control (`:focus-visible`, offset 2px, 1px on inputs); mouse clicks on buttons and links show no ring. Inputs also switch their border to `bs-primary-border-subtle`. Never remove the ring with `outline: 0`.
 - Disabled: keep the fill, drop opacity per Bootstrap defaults.
 
 ## Iconography

@@ -64,6 +64,8 @@
   --rate-score-star-bg: #fffbeb;
   // Crimson text for links and labels on white surfaces (#e11d48 is 4.7:1 on white)
   --rate-crimson-text: #e11d48;
+  // Keyboard focus ring: 4.7:1 on white, 4.0:1 on #0f1113 (WCAG 2.4.7 / 1.4.11)
+  --rate-focus-ring: #e11d48;
 
   --body-font-family: var(--font-inter, 'Inter'), 'Plus Jakarta Sans', 'Noto Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --heading-font-family: var(--font-inter, 'Inter'), 'Plus Jakarta Sans', 'Noto Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -93,6 +95,7 @@
   --rate-risk-danger-bg: rgba(244, 63, 94, 0.14);
   // #e11d48 is only ~3.9:1 on #12161f; the hero highlight color reads ~6:1
   --rate-crimson-text: #ff6b6b;
+  --rate-focus-ring: #ff6b6b;
   --headingColor: #f8fafc;
   // Element rules in style.scss read these Bootstrap/template variables directly
   --paragraphColor: #cbd5e1;
