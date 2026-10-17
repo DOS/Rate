@@ -710,8 +710,10 @@ Return ONLY valid JSON matching:
     }
 
     const rawAvg = reviews.length > 0 ? Number((rawSum / reviews.length).toFixed(2)) : 0;
+    // No user review carries weight: there is no weighted rating (0, as refresh_master_product_rating
+    // writes), not the raw average of the reviews that were just excluded.
     const weightedUserRating =
-      totalUserWeight > 0 ? Number((weightedUserSum / totalUserWeight).toFixed(2)) : rawAvg;
+      totalUserWeight > 0 ? Number((weightedUserSum / totalUserWeight).toFixed(2)) : 0;
 
     const computedExpertRating =
       expertRatingInput !== null

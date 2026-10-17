@@ -50,7 +50,8 @@ export interface ShopeeReview {
   ratingStar: number;
   comment: string;
   variation?: string;
-  createdAt: string;
+  /** When the review was posted. Unset when the page does not show it; never the crawl time. */
+  createdAt?: string;
   images: string[];
   videos?: string[];
   sellerReply?: string;

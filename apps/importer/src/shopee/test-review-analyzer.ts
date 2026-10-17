@@ -250,6 +250,24 @@ async function run() {
     `✅ [JReviews] user=${summary.user_rating_weighted} expert=${summary.expert_rating} overall=${summary.overall_rating}`
   );
 
+  const allIgnored: ReviewInputItem[] = [
+    { id: 'i1', author_name: 'y1', rating_star: 5, comment: 'nhận xu' },
+    { id: 'i2', author_name: 'y2', rating_star: 5, comment: 'ok' },
+  ];
+  const ignoredSummary = heuristicOnly().computeJReviewsSummary(
+    allIgnored,
+    heuristicOnly().analyzeWithHeuristics(allIgnored)
+  );
+  assert.equal(ignoredSummary.authentic_review_count, 0);
+  assert.equal(ignoredSummary.raw_average_rating, 5);
+  assert.equal(
+    ignoredSummary.user_rating_weighted,
+    0,
+    'no counted review means no weighted rating, not the raw average of excluded ones'
+  );
+  assert.equal(ignoredSummary.overall_rating, 0);
+  console.log('✅ [JReviews] every review excluded -> weighted rating 0 (matches the SQL refresh)');
+
   console.log('\n================================================================');
   console.log('4. Merchant risk: fair to sellers, harsh on seeding & dump pricing');
   console.log('================================================================');

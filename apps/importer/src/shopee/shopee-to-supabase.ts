@@ -310,7 +310,7 @@ export class ShopeeIngestionPipeline {
         images: r.images || [],
         // null = the platform does not say (the column default `true` would claim a purchase we cannot confirm)
         is_verified_buyer: r.reviewer?.verifiedPurchase ?? null,
-        platform_created_at: r.createdAt,
+        platform_created_at: r.createdAt || null,
       }));
 
       const { data: existingReviews, error: existingErr } = await this.supabase
