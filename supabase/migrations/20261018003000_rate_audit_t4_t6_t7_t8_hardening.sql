@@ -81,7 +81,10 @@ BEGIN
   END IF;
 END $$;
 
--- 5. Audit T4 & T7: Upgrade rate.search_catalog_autocomplete to SECURITY INVOKER, SET search_path = '', and escape ILIKE wildcards
+-- 5. Audit T4 & T7: rate.search_catalog_autocomplete gets SET search_path = '' and escaped ILIKE wildcards.
+--    It stays SECURITY DEFINER: pg_trgm lives in schema `sign` on prod, where anon
+--    has no USAGE, so an INVOKER version fails with "permission denied for schema
+--    sign" for every anonymous search. It reads only published catalog rows.
 CREATE OR REPLACE FUNCTION rate.search_catalog_autocomplete(
   p_query TEXT,
   p_limit INTEGER DEFAULT 8
@@ -103,12 +106,13 @@ RETURNS TABLE (
 )
 LANGUAGE plpgsql
 STABLE
-SECURITY INVOKER
+SECURITY DEFINER
 SET search_path = ''
 AS $$
 DECLARE
   v_trgm_schema TEXT;
-  v_clean_q TEXT := pg_catalog.btrim(COALESCE(p_query, ''));
+  -- anon-callable: cap the query so similarity() never runs on huge input.
+  v_clean_q TEXT := pg_catalog.left(pg_catalog.btrim(COALESCE(p_query, '')), 100);
   v_escaped_q TEXT;
   v_limit INTEGER := LEAST(GREATEST(COALESCE(p_limit, 8), 1), 25);
 BEGIN

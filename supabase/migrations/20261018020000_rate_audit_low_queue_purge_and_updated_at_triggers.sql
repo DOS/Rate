@@ -2,8 +2,8 @@
 -- Migration: Rate Architecture Audit Section 7 (Low) Hardening
 --   * 1. Queue Maintenance RPC: `rate.purge_completed_crawl_jobs(p_retention_days INTEGER DEFAULT 14)`
 --        (`SECURITY DEFINER`, `SET search_path = ''`, callable by `service_role`)
---        purges terminal `done` and `failed` rows from `rate.crawl_jobs` (and
---        cascading `rate.crawl_runs`) older than `GREATEST(3, p_retention_days)` days
+--        purges terminal `done`, `failed` and `skipped` rows from `rate.crawl_jobs`
+--        (crawl_runs are kept) older than `GREATEST(3, p_retention_days)` days
 --        in bounded batches (`LIMIT 5000`) to prevent unbounded queue table bloat.
 --   * 2. Automatic `updated_at` Trigger: `rate.set_updated_at_timestamp()`
 --        (`SET search_path = ''`) attached to `rate.master_products`, `rate.products`,
@@ -78,9 +78,11 @@ BEGIN
   WITH stale_jobs AS (
     SELECT id
     FROM rate.crawl_jobs
-    WHERE state IN ('done', 'failed')
-      AND COALESCE(finished_at, updated_at, created_at) < now() - make_interval(days => v_days)
-    ORDER BY COALESCE(finished_at, updated_at, created_at) ASC
+    -- crawl_jobs has `status` (pending/running/done/failed/skipped) and no
+    -- finished_at; updated_at is set on every terminal transition.
+    WHERE status IN ('done', 'failed', 'skipped')
+      AND updated_at < now() - make_interval(days => v_days)
+    ORDER BY updated_at ASC
     LIMIT 5000
   ),
   deleted AS (
