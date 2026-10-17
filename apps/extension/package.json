@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "build": "tsc --project tsconfig.json && node scripts/build.mjs",
+    "build": "tsc --project tsconfig.json --noEmit && node scripts/build.mjs",
     "test": "tsx --tsconfig ../web/tsconfig.test.json src/test-extension-pipeline.ts"
   },
   "dependencies": {
@@ -14,6 +14,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
+    "esbuild": "^0.28.2",
     "tsx": "^4.19.2",
     "typescript": "^7.0.2"
   }
