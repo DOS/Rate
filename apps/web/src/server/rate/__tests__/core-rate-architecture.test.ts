@@ -265,7 +265,9 @@ async function runCoreArchitectureSuite() {
   const path = require('node:path') as typeof import('node:path');
   const { NextRequest } =
     require('next/server') as typeof import('next/server');
-  const middleware = require('../../../middleware').default as (
+  // Next.js 16 renamed middleware.ts to proxy.ts; the locale routing it runs
+  // first is exported synchronously as localeProxy.
+  const middleware = require('../../../proxy').localeProxy as (
     req: import('next/server').NextRequest
   ) => import('next/server').NextResponse;
 
@@ -293,7 +295,12 @@ async function runCoreArchitectureSuite() {
   assert.equal(
     fs.existsSync(duplicateRootMiddleware),
     false,
-    'apps/web/middleware.ts must not exist and shadow apps/web/src/middleware.ts'
+    'apps/web/middleware.ts must not exist and shadow apps/web/src/proxy.ts'
+  );
+  assert.equal(
+    fs.existsSync(path.join(repoRoot, 'apps', 'web', 'src', 'middleware.ts')),
+    false,
+    'src/middleware.ts must not exist next to src/proxy.ts (Next.js 16)'
   );
 
   // Guard RootLayout dynamic <html lang={locale}>

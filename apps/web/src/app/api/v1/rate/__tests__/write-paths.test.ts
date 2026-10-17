@@ -14,6 +14,19 @@ const SUPABASE_URL = 'https://stub.supabase.test';
 const ANON_KEY = 'anon-test-key';
 const SERVICE_KEY = 'service-role-test-key';
 const GOOD_TOKEN = 'good-user-token';
+// A JWT-shaped access token for the cookie session (supabase-js reads its exp).
+const b64url = (o: unknown) =>
+  Buffer.from(JSON.stringify(o)).toString('base64url');
+const COOKIE_JWT = [
+  b64url({ alg: 'HS256', typ: 'JWT' }),
+  b64url({
+    sub: '11111111-2222-4333-8444-555555555555',
+    role: 'authenticated',
+    email: 'owner@rate.test',
+    exp: Math.floor(Date.now() / 1000) + 3600,
+  }),
+  'test-signature',
+].join('.');
 const USER = {
   id: '11111111-2222-4333-8444-555555555555',
   email: 'owner@rate.test',
@@ -71,7 +84,8 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
 
   const { pathname } = new URL(url);
   if (pathname === '/auth/v1/user') {
-    return headers.authorization === `Bearer ${GOOD_TOKEN}`
+    return headers.authorization === `Bearer ${GOOD_TOKEN}` ||
+      headers.authorization === `Bearer ${COOKIE_JWT}`
       ? jsonResponse(200, {
           ...USER,
           aud: 'authenticated',
@@ -435,10 +449,102 @@ function testSharedDataClients() {
   );
 }
 
+/** Builds the Cookie header the web app's @supabase/ssr browser client would send. */
+async function cookieSessionHeader(): Promise<string> {
+  const { createServerClient } = await import('@supabase/ssr');
+  const jar = new Map<string, string>();
+  const client = createServerClient(SUPABASE_URL, ANON_KEY, {
+    cookies: {
+      getAll: () => [...jar].map(([name, value]) => ({ name, value })),
+      setAll: (cookies) => {
+        for (const { name, value } of cookies) jar.set(name, value);
+      },
+    },
+  });
+  const { error } = await client.auth.setSession({
+    access_token: COOKIE_JWT,
+    refresh_token: 'test-refresh-token',
+  });
+  assert.equal(error, null, 'setSession must store the cookie session');
+  assert.ok(
+    jar.size > 0,
+    'the session must be written to sb-*-auth-token cookies'
+  );
+  return [...jar].map(([n, v]) => `${n}=${v}`).join('; ');
+}
+
+function postWithCookies(
+  url: string,
+  body: unknown,
+  cookie: string,
+  origin?: string
+) {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Cookie: cookie,
+    Host: 'localhost',
+  };
+  if (origin) headers.Origin = origin;
+  return new Request(`http://localhost${url}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+  });
+}
+
+async function testCookieSessions() {
+  const { POST } = await import('../watchlist/route');
+  type Req = Parameters<typeof POST>[0];
+  const body = { slug: 'apple-iphone-16-128gb', targetPrice: 19000000 };
+  const cookie = await cookieSessionHeader();
+  rpcResponder = () => ({
+    status: 200,
+    json: { id: 'alert-2', target_price: 19000000 },
+  });
+
+  calls = [];
+  let res = await POST(
+    postWithCookies(
+      '/api/v1/rate/watchlist',
+      body,
+      cookie,
+      'http://localhost'
+    ) as Req
+  );
+  assert.equal(res.status, 200, 'a same-origin cookie session is accepted');
+  const [rpc] = rpcCalls('upsert_price_alert');
+  assert.ok(rpc, 'the RPC runs for the cookie session');
+  assert.equal(
+    rpc.headers.authorization,
+    `Bearer ${COOKIE_JWT}`,
+    'the RPC carries the cookie session JWT'
+  );
+  assert.equal(rpc.headers.apikey, ANON_KEY);
+
+  for (const origin of ['https://evil.example', undefined]) {
+    calls = [];
+    res = await POST(
+      postWithCookies('/api/v1/rate/watchlist', body, cookie, origin) as Req
+    );
+    assert.equal(
+      res.status,
+      403,
+      `cookie session from origin ${origin ?? '(none)'} is rejected`
+    );
+    assert.equal((await res.json()).code, 'CROSS_SITE');
+    assert.equal(rpcCalls('upsert_price_alert').length, 0);
+  }
+
+  console.log(
+    '  ✅ Cookie sessions (@supabase/ssr) work same-origin and are rejected cross-site'
+  );
+}
+
 async function main() {
   console.log('🧪 Public write-path security suite (#155)');
   await testReviews();
   await testWatchlist();
+  await testCookieSessions();
   testSharedDataClients();
   console.log('✅ Public write-path security suite passed');
 }

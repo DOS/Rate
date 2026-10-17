@@ -1,7 +1,13 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { parseCookieHeader } from '@supabase/ssr';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import {
+  createCookieSupabase,
+  hasSupabaseAuthCookie,
+  type CookieRecord,
+} from '@/lib/supabase/cookies';
 
-type RateSchemaClient = ReturnType<ReturnType<typeof createClient>['schema']>;
+type RateSchemaClient = ReturnType<SupabaseClient['schema']>;
 
 export interface AuthenticatedRateRequest {
   ok: true;
@@ -21,10 +27,39 @@ export function readBearerToken(request: Request): string {
   return header.startsWith('Bearer ') ? header.slice(7).trim() : '';
 }
 
+function readCookies(request: Request): CookieRecord[] {
+  return parseCookieHeader(request.headers.get('cookie') ?? '').map((c) => ({
+    name: c.name,
+    value: c.value ?? '',
+  }));
+}
+
 /**
- * Verifies the caller's Supabase access token and returns a client that acts as
- * that user. Write routes use this instead of a service-role client, so the
- * database sees the real caller (auth.uid()) and RLS / grants stay in force.
+ * Cookies ride along on cross-site requests, so a cookie-authenticated write must
+ * come from this site. Browsers send Origin on every POST fetch.
+ */
+export function isSameOriginRequest(request: Request): boolean {
+  const origin = request.headers.get('origin');
+  if (!origin) return false;
+  const host =
+    request.headers.get('x-forwarded-host') ||
+    request.headers.get('host') ||
+    new URL(request.url).host;
+  try {
+    return new URL(origin).host === host;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Verifies the caller's Supabase session and returns a client that acts as that
+ * user. Write routes use this instead of a service-role client, so the database
+ * sees the real caller (auth.uid()) and RLS / grants stay in force.
+ *
+ * Accepts an `Authorization: Bearer` access token (browser extension, API
+ * clients) or the cookie session set by the web app's browser client. Cookie
+ * sessions must come from a same-origin request.
  */
 export async function authenticateRateRequest(
   request: Request,
@@ -52,17 +87,7 @@ export async function authenticateRateRequest(
 
   const token = readBearerToken(request);
   if (!token) {
-    return {
-      ok: false,
-      response: NextResponse.json(
-        {
-          ok: false,
-          error: `Authentication required to ${action}`,
-          code: 'AUTH_REQUIRED',
-        },
-        { status: 401 }
-      ),
-    };
+    return authenticateCookieSession(request, action);
   }
 
   const baseClient = createClient(supabaseUrl, anonKey, {
@@ -116,6 +141,54 @@ export function mapRpcRejection(
     );
   }
   return rejection;
+}
+
+function rejected(
+  status: number,
+  code: string,
+  error: string
+): RejectedRateRequest {
+  return {
+    ok: false,
+    response: NextResponse.json({ ok: false, error, code }, { status }),
+  };
+}
+
+async function authenticateCookieSession(
+  request: Request,
+  action: string
+): Promise<AuthenticatedRateRequest | RejectedRateRequest> {
+  const cookies = readCookies(request);
+  if (!hasSupabaseAuthCookie(cookies)) {
+    return rejected(
+      401,
+      'AUTH_REQUIRED',
+      `Authentication required to ${action}`
+    );
+  }
+  if (!isSameOriginRequest(request)) {
+    return rejected(403, 'CROSS_SITE', 'Cross-site request rejected');
+  }
+  // Route handlers do not refresh the session (proxy.ts does), so no setAll.
+  const supabase = createCookieSupabase({ getAll: () => cookies });
+  if (!supabase) {
+    return rejected(500, 'CONFIG_MISSING', 'Missing Supabase configuration');
+  }
+  const { data, error } = await supabase.auth.getUser();
+  const user = data?.user;
+  if (error || !user?.id) {
+    return rejected(
+      401,
+      'AUTH_INVALID',
+      'Invalid or expired authentication token'
+    );
+  }
+  return {
+    ok: true,
+    userId: user.id,
+    email: user.email ?? null,
+    rateClient: supabase.schema('rate'),
+  };
 }
 
 /** PostgREST reports a function missing from its schema cache as PGRST202. */
