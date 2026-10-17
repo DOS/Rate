@@ -6,7 +6,12 @@
 import crypto from 'node:crypto';
 import dotenv from 'dotenv';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import type { ShopeeProduct, ShopeeReview, SupportedEcommercePlatform } from './types.js';
+import {
+  ScrapedProductSchema,
+  type ShopeeProduct,
+  type ShopeeReview,
+  type SupportedEcommercePlatform,
+} from './types.js';
 import { ProductNormalizer } from './product-normalizer.js';
 import { EntityMatcher } from './entity-matcher.js';
 import { AiSpecEnricher, type AiSpecEnricherConfig } from './ai-spec-enricher.js';
@@ -90,7 +95,7 @@ export class ShopeeIngestionPipeline {
    * with canonical Master Product deduplication.
    */
   public async ingestProduct(
-    product: ShopeeProduct,
+    rawProduct: ShopeeProduct,
     report?: (section: 'merchant' | 'master' | 'listing' | 'price' | 'reviews') => Promise<void>,
     options: IngestOptions = {}
   ): Promise<{
@@ -99,6 +104,7 @@ export class ShopeeIngestionPipeline {
     masterId: string;
     platform: SupportedEcommercePlatform;
   }> {
+    const product = ScrapedProductSchema.parse(rawProduct);
     if (this.categoryIdBySlug.size === 0) {
       await this.init();
     }

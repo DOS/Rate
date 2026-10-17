@@ -14,7 +14,7 @@ export const AvailabilitySchema = z.object({
 
 export const DesignSchema = z.object({
   dimensions: z.string().optional(),
-  weight_g: z.number().optional(),
+  weight_g: z.number().positive().max(25000).optional(),
   materials: z.string().optional(),
   build: z.string().optional(),
   resistance: z.string().optional(),
@@ -24,11 +24,11 @@ export const DesignSchema = z.object({
 });
 
 export const DisplaySchema = z.object({
-  size_inch: z.number().optional(),
+  size_inch: z.number().positive().max(120).optional(),
   type: z.string().optional(),
   resolution: z.string().optional(),
-  refresh_rate_hz: z.number().optional(),
-  ppi: z.number().optional(),
+  refresh_rate_hz: z.number().positive().max(1000).optional(),
+  ppi: z.number().positive().max(5000).optional(),
   protection: z.string().optional(),
   features: z.string().optional(),
 });
@@ -37,17 +37,17 @@ export const HardwareSchema = z.object({
   chipset: z.string().optional(),
   cpu: z.string().optional(),
   gpu: z.string().optional(),
-  ram_gb: z.number().optional(),
-  storage_gb: z.number().optional(),
+  ram_gb: z.number().positive().max(2048).optional(),
+  storage_gb: z.number().positive().max(65536).optional(),
   storage_expansion: z.string().optional(),
   os: z.string().optional(),
 });
 
 export const BatterySchema = z.object({
-  capacity_mah: z.number().optional(),
+  capacity_mah: z.number().positive().max(500000).optional(),
   type: z.string().optional(),
   charging: z.string().optional(),
-  fast_charging_w: z.number().optional(),
+  fast_charging_w: z.number().nonnegative().max(1000).optional(),
   reverse_charging: z.union([z.boolean(), z.string()]).optional(),
 });
 
@@ -131,31 +131,122 @@ export const MasterProductSchema = z.object({
   name: z.string().min(1),
   slug: z.string().min(1),
   description: z.string().nullable().optional(),
-  ram_gb: z.number().nullable().optional(),
-  storage_gb: z.number().nullable().optional(),
-  screen_size_inch: z.number().nullable().optional(),
-  battery_mah: z.number().nullable().optional(),
+  ram_gb: z.number().positive().nullable().optional(),
+  storage_gb: z.number().positive().nullable().optional(),
+  screen_size_inch: z.number().positive().nullable().optional(),
+  battery_mah: z.number().positive().nullable().optional(),
   has_5g: z.boolean().default(false),
   specifications: ProductSpecificationsSchema.default({}),
   key_specs: KeySpecsSchema.default({}),
   images: z.array(z.string()).default([]),
   thumbnail: z.string().nullable().optional(),
   colors: z.array(z.string()).default([]),
-  min_price: z.number().default(0),
-  max_price: z.number().default(0),
-  merchant_count: z.number().default(0),
-  total_reviews: z.number().default(0),
-  average_rating: z.number().default(0),
+  min_price: z.number().nonnegative().default(0),
+  max_price: z.number().nonnegative().default(0),
+  merchant_count: z.number().int().nonnegative().default(0),
+  total_reviews: z.number().int().nonnegative().default(0),
+  average_rating: z.number().min(0).max(5).nullable().default(0),
   entity_type: z.enum(['product', 'service']).default('product').optional(),
-  expert_rating: z.number().nullable().optional(),
+  expert_rating: z.number().min(0).max(5).nullable().optional(),
   expert_review_summary: z.string().nullable().optional(),
   expert_criteria_scores: z.record(z.any()).default({}).optional(),
-  user_rating_weighted: z.number().default(0).optional(),
-  authentic_review_count: z.number().default(0).optional(),
-  status: StatusSchema.default('published'),
+  user_rating_weighted: z.number().min(0).max(5).nullable().optional(),
+  authentic_review_count: z.number().int().nonnegative().default(0).optional(),
+  status: StatusSchema.default('draft'),
   metadata: z.record(z.any()).default({}),
   created_at: z.string().optional(),
   updated_at: z.string().optional(),
+});
+
+/**
+ * Runtime Zod Contract for Scraper -> Open-Core Engine Ingestion (Audit T15)
+ */
+export const SupportedEcommercePlatformSchema = z.enum([
+  'shopee',
+  'lazada',
+  'tiki',
+  'tiktok',
+  'cellphones',
+  'tgdd',
+  'fptshop',
+  'hoangha',
+  'didongviet',
+  'phongvu',
+]);
+
+export const ScrapedReviewerSchema = z.object({
+  key: z.string().optional(),
+  isAnonymous: z.boolean().optional(),
+  profileUrl: z.string().optional(),
+  joinedAt: z.string().optional(),
+  totalReviews: z.number().int().nonnegative().optional(),
+  helpfulVotes: z.number().int().nonnegative().optional(),
+  verifiedPurchase: z.boolean().optional(),
+  purchasedAt: z.string().optional(),
+  repeatPurchase: z.boolean().optional(),
+});
+
+export const ScrapedReviewSchema = z.object({
+  reviewId: z.string(),
+  author: z.string(),
+  authorAvatar: z.string().optional(),
+  ratingStar: z.number().min(1).max(5),
+  comment: z.string(),
+  variation: z.string().optional(),
+  createdAt: z.string().optional(),
+  images: z.array(z.string()).default([]),
+  videos: z.array(z.string()).optional(),
+  sellerReply: z.string().optional(),
+  likeCount: z.number().int().nonnegative().optional(),
+  reviewer: ScrapedReviewerSchema.optional(),
+});
+
+export const ScrapedProductSchema = z.object({
+  platform: SupportedEcommercePlatformSchema.optional(),
+  itemId: z.string().min(1),
+  shopId: z.string().min(1),
+  url: z.string().min(1),
+  title: z.string().min(1),
+  description: z.string().optional(),
+  priceMin: z.number().nonnegative(),
+  priceMax: z.number().nonnegative(),
+  priceBeforeDiscount: z.number().nonnegative().optional(),
+  currency: z.string().min(1).default('VND'),
+  historicalSold: z.number().int().nonnegative().default(0),
+  stock: z.number().int().nonnegative().optional(),
+  ratingStar: z.number().min(0).max(5).default(0),
+  ratingCount: z.number().int().nonnegative().default(0),
+  ratingScoreDistribution: z.array(z.number().int().nonnegative()).optional(),
+  images: z.array(z.string()).default([]),
+  models: z
+    .array(
+      z.object({
+        modelId: z.string(),
+        name: z.string(),
+        price: z.number().nonnegative(),
+        stock: z.number().int().nonnegative().optional(),
+        sku: z.string().optional(),
+      })
+    )
+    .default([]),
+  attributes: z
+    .array(
+      z.object({
+        name: z.string(),
+        value: z.string(),
+      })
+    )
+    .default([]),
+  shop: z.object({
+    shopId: z.string().min(1),
+    name: z.string().min(1),
+    isMall: z.boolean(),
+    ratingStar: z.number().min(0).max(5).optional(),
+    followerCount: z.number().int().nonnegative().optional(),
+    location: z.string().optional(),
+    url: z.string().optional(),
+  }),
+  reviews: z.array(ScrapedReviewSchema).default([]),
 });
 
 export type Availability = z.infer<typeof AvailabilitySchema>;
@@ -171,3 +262,4 @@ export type Regulatory = z.infer<typeof RegulatorySchema>;
 export type ProductSpecifications = z.infer<typeof ProductSpecificationsSchema>;
 export type KeySpecs = z.infer<typeof KeySpecsSchema>;
 export type MasterProduct = z.infer<typeof MasterProductSchema>;
+export type ValidatedScrapedProduct = z.infer<typeof ScrapedProductSchema>;
