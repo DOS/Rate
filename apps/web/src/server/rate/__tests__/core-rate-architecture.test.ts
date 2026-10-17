@@ -3426,9 +3426,95 @@ async function runCoreArchitectureSuite() {
     '  ✅ [60/60] Complete behavioral NextRequest->NextResponse test coverage across all REST API v1 routes (#187) passed'
   );
 
+  // 61. Dedicated backfill-specs CLI with --apply guard & migration security audit (#188 - Audit T2, C9)
+  const importerBackfillPath = path.join(
+    repoRoot,
+    'apps',
+    'importer',
+    'src',
+    'shopee',
+    'jobs',
+    'backfill-specs.ts'
+  );
+  const importerTestEnricherPath = path.join(
+    repoRoot,
+    'apps',
+    'importer',
+    'src',
+    'shopee',
+    'test-ai-enricher.ts'
+  );
+  assert.equal(
+    fs.existsSync(importerBackfillPath),
+    true,
+    'apps/importer/src/shopee/jobs/backfill-specs.ts must exist (Audit T2)'
+  );
+  const backfillSource = fs.readFileSync(importerBackfillPath, 'utf8');
+  assert.ok(
+    backfillSource.includes('const apply = options.apply === true;'),
+    'backfill-specs.ts must default to dry-run (apply = false) unless --apply is passed'
+  );
+  assert.ok(
+    backfillSource.includes('export async function runMasterSpecsBackfill') &&
+      backfillSource.includes('export async function auditMasterSpecs'),
+    'backfill-specs.ts must export runMasterSpecsBackfill and auditMasterSpecs'
+  );
+
+  const testEnricherSource = fs.readFileSync(importerTestEnricherPath, 'utf8');
+  assert.ok(
+    !testEnricherSource.includes(".from('master_products')") &&
+      !testEnricherSource.includes('.insert(') &&
+      !testEnricherSource.includes('.update('),
+    'test-ai-enricher.ts must not contain direct master_products DB mutations (Audit T2)'
+  );
+  assert.ok(
+    testEnricherSource.includes('./jobs/backfill-specs.js'),
+    'test-ai-enricher.ts must delegate --backfill and --audit-only to ./jobs/backfill-specs.js'
+  );
+
+  // Verify reference migrations in supabase/migrations/ enforce Audit C9, T3, T4, T6, T7, T8
+  const migrationsDir = path.join(repoRoot, 'supabase', 'migrations');
+  const migrationFiles = fs
+    .readdirSync(migrationsDir)
+    .filter((f) => f.endsWith('.sql'))
+    .sort();
+  assert.ok(
+    migrationFiles.length >= 11,
+    `Expected at least 11 reference migrations in supabase/migrations/, found ${migrationFiles.length}`
+  );
+  const combinedMigrationsSql = migrationFiles
+    .map((f) => fs.readFileSync(path.join(migrationsDir, f), 'utf8'))
+    .join('\n');
+
+  assert.ok(
+    combinedMigrationsSql.includes(
+      'REVOKE SELECT ON rate.merchants FROM anon, authenticated'
+    ),
+    'Migrations must revoke table-wide SELECT on rate.merchants from anon and authenticated (Audit C9)'
+  );
+  assert.ok(
+    combinedMigrationsSql.includes('SET search_path = rate, public, pg_temp') ||
+      combinedMigrationsSql.includes('SET search_path = rate, pg_temp'),
+    'SECURITY DEFINER functions must pin search_path'
+  );
+  assert.ok(
+    combinedMigrationsSql.includes('refresh_master_market_stats'),
+    'Migrations must define canonical refresh_master_market_stats RPC (Audit C5)'
+  );
+  assert.ok(
+    combinedMigrationsSql.includes('search_master_products') &&
+      combinedMigrationsSql.includes('get_category_brand_facets'),
+    'Migrations must define search_master_products and get_category_brand_facets RPCs (Audit C1)'
+  );
+
+  console.log(
+    '  ✅ [61/61] Dedicated backfill-specs CLI (--apply guard) & reference migration security audit (#188) passed'
+  );
+
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
 
 runCoreArchitectureSuite();
+
 
 
