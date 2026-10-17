@@ -110,6 +110,8 @@ module.exports = {
         "no-restricted-imports": [
           "error",
           {
+            // An override replaces the top-level rule options, so the
+            // service-role ban is repeated here.
             paths: [
               {
                 name: "@/lib/rate-api",
@@ -120,6 +122,11 @@ module.exports = {
                 name: "@/server/rate",
                 message:
                   "Client Components must import pure helpers and types from '@/lib/rate-domain' instead of '@/server/rate' (Audit T12).",
+              },
+              {
+                name: "@repo/shared-data/server",
+                message:
+                  "Service-role clients bypass RLS. Use the anon client or the signed-in user's token (lib/auth/access-token).",
               },
             ],
           },
