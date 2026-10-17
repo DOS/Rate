@@ -627,7 +627,9 @@ Return ONLY valid JSON matching:
       const hybridDetector = `hybrid:${this.provider}:${this.model}`;
       const mergedResults = baseline.map((base, idx) => {
         const aiItem = aiMap.get(base.review_id);
-        if (!aiItem) {
+        // Stars without text give the model nothing to judge: keep the heuristic's low fake
+        // probability and "Chỉ chấm sao" reason instead of the model's guess.
+        if (!aiItem || isRatingOnlyComment(reviews[idx]?.comment)) {
           return { ...base, detector: 'heuristic:v2-jreviews' };
         }
 
