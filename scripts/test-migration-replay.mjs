@@ -37,11 +37,19 @@ const sql = (input) =>
   docker(['exec', '-i', container, 'psql', '-XqAt', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres'], { input });
 const asRole = (role, query) => sql(`SET ROLE ${role}; ${query}; RESET ROLE;`);
 
+for (const signal of ['SIGINT', 'SIGTERM']) {
+  process.on(signal, () => {
+    spawnSync('docker', ['rm', '--force', container], { timeout: 30_000 });
+    process.exit(130);
+  });
+}
+
 try {
+  // Set before `docker run`: a timed-out run may still have created the container.
+  started = true;
   docker(['run', '--detach', '--rm', '--name', container, '-e', 'POSTGRES_PASSWORD=local-test-only', 'postgres:17-alpine'], {
     timeout: 120_000,
   });
-  started = true;
   const deadline = Date.now() + 60_000;
   for (;;) {
     const logs = spawnSync('docker', ['logs', container], { encoding: 'utf8', timeout: 5_000 });
@@ -137,9 +145,18 @@ try {
   sql(`ALTER TABLE rate.crawl_jobs DISABLE TRIGGER USER;
     UPDATE rate.crawl_jobs SET status = 'done', updated_at = now() - interval '30 days';
     ALTER TABLE rate.crawl_jobs ENABLE TRIGGER USER;`);
-  const before = Number(sql(`SELECT count(*) FROM rate.crawl_jobs`));
-  assert.ok(before > 0, 'the crowd signal above created a crawl job');
-  assert.equal(asRole('service_role', 'SELECT rate.purge_completed_crawl_jobs(14)'), String(before));
+  const stale = Number(sql(`SELECT count(*) FROM rate.crawl_jobs`));
+  assert.ok(stale > 0, 'the crowd signal above created a crawl job');
+  for (const item of ['item_12', 'item_13']) {
+    asRole('anon', `SELECT state FROM rate.enqueue_crowd_verify_signal('shopee', 'https://shopee.vn/${item}', '${item}', NULL, '{}'::jsonb)`);
+  }
+  sql(`UPDATE rate.crawl_jobs SET status = 'done' WHERE platform_item_id = 'item_13';`);
+  assert.equal(asRole('service_role', 'SELECT rate.purge_completed_crawl_jobs(14)'), String(stale));
+  assert.equal(
+    sql(`SELECT string_agg(platform_item_id || ':' || status, ',' ORDER BY platform_item_id) FROM rate.crawl_jobs`),
+    'item_12:pending,item_13:done',
+    'pending and recently finished jobs survive the purge'
+  );
 
   console.log(`Rate migration replay passed: ${migrations.length} migrations applied twice on PostgreSQL 17, catalog/queue/vote RPCs exercised`);
 } finally {

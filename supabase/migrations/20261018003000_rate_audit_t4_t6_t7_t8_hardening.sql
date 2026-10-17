@@ -111,7 +111,8 @@ SET search_path = ''
 AS $$
 DECLARE
   v_trgm_schema TEXT;
-  v_clean_q TEXT := pg_catalog.btrim(COALESCE(p_query, ''));
+  -- anon-callable: cap the query so similarity() never runs on huge input.
+  v_clean_q TEXT := pg_catalog.left(pg_catalog.btrim(COALESCE(p_query, '')), 100);
   v_escaped_q TEXT;
   v_limit INTEGER := LEAST(GREATEST(COALESCE(p_limit, 8), 1), 25);
 BEGIN
