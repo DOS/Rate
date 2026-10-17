@@ -299,6 +299,22 @@ async function runTests() {
     escapeSafeExternalHref('https://shopee.vn/item?a=1&b=2'),
     'https://shopee.vn/item?a=1&amp;b=2'
   );
+  const manifestJson = JSON.parse(
+    fs.readFileSync(path.resolve(__dirname, '../manifest.json'), 'utf8')
+  ) as { permissions?: string[] };
+  assert.deepEqual(
+    manifestJson.permissions,
+    ['storage', 'sidePanel'],
+    'manifest.json must request only least-privilege storage and sidePanel permissions without tabs (Audit C7, #174)'
+  );
+  const distGuardsPath = path.resolve(__dirname, '../dist/security-guards.js');
+  if (fs.existsSync(path.resolve(__dirname, '../dist/manifest.json'))) {
+    assert.equal(
+      fs.existsSync(distGuardsPath),
+      true,
+      'dist/security-guards.js must be bundled alongside dist/background/service-worker.js and dist/sidepanel/sidepanel.js (#174)'
+    );
+  }
   console.log(
     '  ✅ [5/6] Zero-Trust Quarantine, Opt-In Consent, MV3 Security Guards (C7) & Full 10/10 Platform Capability Matrix passed'
   );
