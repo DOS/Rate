@@ -1070,6 +1070,67 @@ export function buildRateOpenApiSpec(
           },
         },
       },
+      '/api/v1/rate/revalidate': {
+        post: {
+          operationId: 'revalidateRateDataCache',
+          summary:
+            'On-demand Next.js Data Cache & ISR tag/path revalidation webhook',
+          description:
+            'Surgically invalidates deterministic Next.js Data Cache tags (`rate:products`, `rate:product:<slug>`, `rate:merchants`, `rate:deals`, etc.) or route paths after crawler queue workers or database triggers update master products, offers, or reviews. Requires `Authorization: Bearer <RATE_REVALIDATE_SECRET>` or `X-Rate-Revalidate-Token`.',
+          tags: ['Platform Telemetry'],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    tags: {
+                      type: 'array',
+                      items: { type: 'string' },
+                      example: ['rate:products', 'rate:deals'],
+                    },
+                    slugs: {
+                      type: 'array',
+                      items: { type: 'string' },
+                      example: ['apple-iphone-16-pro-max'],
+                    },
+                    categories: {
+                      type: 'array',
+                      items: { type: 'string' },
+                      example: ['smartphones'],
+                    },
+                    merchants: {
+                      type: 'array',
+                      items: { type: 'string' },
+                      example: ['shopee-88201679'],
+                    },
+                    paths: {
+                      type: 'array',
+                      items: { type: 'string' },
+                      example: ['/smartphones/apple-iphone-16-pro-max'],
+                    },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            '200': {
+              description:
+                'Successfully invalidated requested cache tags and paths.',
+            },
+            '400': {
+              description:
+                'Malformed JSON or empty revalidation target lists.',
+            },
+            '401': {
+              description:
+                'Missing or invalid `RATE_REVALIDATE_SECRET` / `CRON_SECRET` token.',
+            },
+          },
+        },
+      },
     },
     components: {
       securitySchemes: {

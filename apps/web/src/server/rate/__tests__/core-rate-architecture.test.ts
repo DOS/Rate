@@ -3104,6 +3104,7 @@ async function runCoreArchitectureSuite() {
     'deals.ts',
     'openapi.ts',
     'api-handler.ts',
+    'cache-tags.ts',
   ];
   for (const modName of serverRateModules58) {
     const modSource = fs58.readFileSync(
@@ -3158,7 +3159,132 @@ async function runCoreArchitectureSuite() {
     `  ✅ [58/58] Server-only boundary across 5 server/rate modules & ${csvComponents58.length}/16 CSV formula guards (#185) passed`
   );
 
+  // 59. Cross-request Data Cache tags & POST /api/v1/rate/revalidate webhook (#186 - Audit C3)
+  const {
+    RATE_CACHE_TAGS,
+    productCacheTag,
+    categoryCacheTag,
+    merchantCacheTag,
+    withRateDataCache,
+  } = await import('../cache-tags');
+  const revalidateRoute = await import(
+    '../../../app/api/v1/rate/revalidate/route'
+  );
+
+  assert.equal(
+    productCacheTag('  Apple-iPhone-16-Pro-Max '),
+    'rate:product:apple-iphone-16-pro-max'
+  );
+  assert.equal(categoryCacheTag('Smartphones'), 'rate:category:smartphones');
+  assert.equal(
+    merchantCacheTag('Shopee-88201679'),
+    'rate:merchant:shopee-88201679'
+  );
+
+  let fallbackInvocations = 0;
+  const wrappedProbe = withRateDataCache(
+    async (slug: string) => {
+      fallbackInvocations += 1;
+      return { slug, ok: true };
+    },
+    ['rate-test-probe'],
+    { revalidate: 120, tags: [RATE_CACHE_TAGS.PRODUCTS] }
+  );
+  const probeResult = await wrappedProbe('samsung-galaxy-s24-ultra');
+  assert.equal(probeResult.slug, 'samsung-galaxy-s24-ultra');
+  assert.equal(fallbackInvocations, 1);
+
+  const revalOptionsRes = await revalidateRoute.OPTIONS();
+  assert.equal(revalOptionsRes.status, 204);
+
+  const prevRevalSecret = process.env.RATE_REVALIDATE_SECRET;
+  process.env.RATE_REVALIDATE_SECRET = 'test-revalidate-secret-2026';
+  try {
+    const unauthReq = new NextRequest(
+      'https://rate.vn/api/v1/rate/revalidate',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer wrong-secret',
+        },
+        body: JSON.stringify({ tags: ['rate:products'] }),
+      }
+    );
+    const unauthRes = await revalidateRoute.POST(unauthReq);
+    assert.equal(unauthRes.status, 401);
+
+    const emptyPayloadReq = new NextRequest(
+      'https://rate.vn/api/v1/rate/revalidate',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer test-revalidate-secret-2026',
+        },
+        body: JSON.stringify({}),
+      }
+    );
+    const emptyPayloadRes = await revalidateRoute.POST(emptyPayloadReq);
+    assert.equal(emptyPayloadRes.status, 400);
+
+    const validRevalReq = new NextRequest(
+      'https://rate.vn/api/v1/rate/revalidate',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Rate-Revalidate-Token': 'test-revalidate-secret-2026',
+        },
+        body: JSON.stringify({
+          slugs: ['apple-iphone-16-pro-max'],
+          categories: ['smartphones'],
+          merchants: ['shopee-88201679'],
+          paths: ['/smartphones/apple-iphone-16-pro-max'],
+        }),
+      }
+    );
+    const validRevalRes = await revalidateRoute.POST(validRevalReq);
+    assert.equal(validRevalRes.status, 200);
+    const validRevalBody = (await validRevalRes.json()) as {
+      ok: boolean;
+      data: {
+        revalidated: boolean;
+        tags: string[];
+        paths: string[];
+      };
+    };
+    assert.equal(validRevalBody.ok, true);
+    assert.equal(validRevalBody.data.revalidated, true);
+    assert.ok(
+      validRevalBody.data.tags.includes('rate:product:apple-iphone-16-pro-max')
+    );
+    assert.ok(validRevalBody.data.tags.includes('rate:products'));
+    assert.ok(validRevalBody.data.tags.includes('rate:deals'));
+    assert.ok(validRevalBody.data.tags.includes('rate:category:smartphones'));
+    assert.ok(validRevalBody.data.tags.includes('rate:merchant:shopee-88201679'));
+    assert.deepEqual(validRevalBody.data.paths, [
+      '/smartphones/apple-iphone-16-pro-max',
+    ]);
+  } finally {
+    if (prevRevalSecret === undefined) {
+      delete process.env.RATE_REVALIDATE_SECRET;
+    } else {
+      process.env.RATE_REVALIDATE_SECRET = prevRevalSecret;
+    }
+  }
+
+  assert.ok(
+    openApi.paths['/api/v1/rate/revalidate']?.post,
+    'OpenAPI 3.1.0 must document POST /api/v1/rate/revalidate'
+  );
+
+  console.log(
+    '  ✅ [59/59] Cross-request Data Cache tags & POST /api/v1/rate/revalidate webhook (#186) passed'
+  );
+
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
 
 runCoreArchitectureSuite();
+
