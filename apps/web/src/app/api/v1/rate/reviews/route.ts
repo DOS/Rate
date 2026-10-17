@@ -31,7 +31,7 @@ const SubmitReviewSchema = z.object({
     .min(15, 'Nội dung đánh giá phải có độ dài từ 15 đến 3.000 ký tự.')
     .max(3000, 'Nội dung đánh giá phải có độ dài từ 15 đến 3.000 ký tự.'),
   variation: z.string().optional(),
-  criteriaRatings: z.record(z.unknown()).optional(),
+  criteriaRatings: z.record(z.string(), z.unknown()).optional(),
 });
 
 const FLAG_CATEGORIES = new Set<ReviewFlagCategory>([
