@@ -11,6 +11,7 @@ import {
   radarLabel,
   radarMarkdownCell,
 } from '@/lib/deal-radar';
+import { escapeCsvCell } from '@/lib/csv-safe';
 import RadarBadge from '@/components/radar/RadarBadge';
 import { useDealRadarIndex } from '@/components/radar/use-deal-radar';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
@@ -232,13 +233,6 @@ export default function VersusInteractiveScoreboard({
 
   const handleDownloadVersusCsv = () => {
     if (typeof window === 'undefined') return;
-    const escapeCsv = (val: string | number) => {
-      const str = String(val ?? '');
-      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-        return `"${str.replace(/"/g, '""')}"`;
-      }
-      return str;
-    };
     const sigA = getRadarSignal(radarIndex, scoreA.slug);
     const sigB = getRadarSignal(radarIndex, scoreB.slug);
     const cellsA = radarCsvCells(sigA);
@@ -311,8 +305,8 @@ export default function VersusInteractiveScoreboard({
       ]),
     ];
     const csvContent = `\uFEFF${[
-      headers.map(escapeCsv).join(','),
-      ...rows.map((r) => r.map(escapeCsv).join(',')),
+      headers.map(escapeCsvCell).join(','),
+      ...rows.map((r) => r.map(escapeCsvCell).join(',')),
     ].join('\n')}`;
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);

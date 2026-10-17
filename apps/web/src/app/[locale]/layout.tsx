@@ -12,11 +12,9 @@ export async function generateMetadata({
   const { locale } = await params;
   const copy = getRateCopy(locale);
   return {
+    metadataBase: new URL('https://rate.vn'),
     title: copy.seo.siteTitle,
     description: copy.seo.siteDescription,
-    alternates: {
-      canonical: 'https://rate.vn',
-    },
   };
 }
 

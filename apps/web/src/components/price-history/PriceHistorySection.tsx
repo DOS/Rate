@@ -14,6 +14,7 @@ import {
   radarMarkdownCell,
   type RadarSignal,
 } from '@/lib/deal-radar';
+import { escapeCsvCell } from '@/lib/csv-safe';
 
 interface PriceHistorySectionProps {
   productName: string;
@@ -314,7 +315,6 @@ export default function PriceHistorySection({
 
   const handleDownloadPriceHistoryCsv = () => {
     if (typeof document === 'undefined' || filteredPoints.length === 0) return;
-    const escapeCsv = (val: string) => `"${val.replace(/"/g, '""')}"`;
     const headers = [
       'RecordedAt',
       'ProductID',
@@ -336,8 +336,8 @@ export default function PriceHistorySection({
     const csvContent =
       '\uFEFF' +
       [
-        headers.map(escapeCsv).join(','),
-        ...rows.map((r) => r.map(escapeCsv).join(',')),
+        headers.map(escapeCsvCell).join(','),
+        ...rows.map((r) => r.map(escapeCsvCell).join(',')),
       ].join('\r\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });

@@ -20,14 +20,17 @@ export async function generateMetadata({
       lang === 'en'
         ? 'True Price Watchlist & Target Drop Alerts | Rate.vn'
         : lang === 'cs'
-        ? 'Seznam hlídaných cen a upozornění na slevy | Rate.vn'
-        : 'Danh Sách Canh Giá Thật & Cảnh Báo Giảm Giá Đa Ngành | Rate.vn',
+          ? 'Seznam hlídaných cen a upozornění na slevy | Rate.vn'
+          : 'Danh Sách Canh Giá Thật & Cảnh Báo Giảm Giá Đa Ngành | Rate.vn',
     description:
       lang === 'en'
         ? 'Track real-time historical price drops across all 5 tech categories, set target price alerts, and avoid inflated fake discounts on Shopee, Lazada, and Tiki.'
         : lang === 'cs'
-        ? 'Sledujte vývoj skutečných cen v reálném čase, nastavte si cílovou cenu a vyhněte se falešným slevám.'
-        : 'Theo dõi biến động giá theo thời gian thực trên cả 5 ngành hàng, đặt mức giá mục tiêu và chống chiêu trò nâng giá gốc giảm ảo trên Shopee, Lazada, Tiki.',
+          ? 'Sledujte vývoj skutečných cen v reálném čase, nastavte si cílovou cenu a vyhněte se falešným slevám.'
+          : 'Theo dõi biến động giá theo thời gian thực trên cả 5 ngành hàng, đặt mức giá mục tiêu và chống chiêu trò nâng giá gốc giảm ảo trên Shopee, Lazada, Tiki.',
+    alternates: {
+      canonical: 'https://rate.vn/watchlist',
+    },
   };
 }
 

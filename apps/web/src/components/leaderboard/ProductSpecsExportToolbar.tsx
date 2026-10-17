@@ -9,6 +9,7 @@ import {
   radarMarkdownCell,
   type RadarSignal,
 } from '@/lib/deal-radar';
+import { escapeCsvCell } from '@/lib/csv-safe';
 
 interface ProductSpecsExportToolbarProps {
   readonly productName: string;
@@ -214,13 +215,6 @@ export default function ProductSpecsExportToolbar({
 
   const handleDownloadSpecsCsv = () => {
     if (typeof document === 'undefined') return;
-    const escapeCsv = (val: string | number) => {
-      const str = String(val ?? '');
-      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-        return `"${str.replace(/"/g, '""')}"`;
-      }
-      return str;
-    };
     const rows = buildSpecRows();
     const headers = [
       'Slug',
@@ -232,7 +226,7 @@ export default function ProductSpecsExportToolbar({
       'Value',
     ];
     const csvLines = [
-      headers.join(','),
+      headers.map(escapeCsvCell).join(','),
       ...rows.map(([grp, attr, val]) =>
         [
           productSlug,
@@ -243,7 +237,7 @@ export default function ProductSpecsExportToolbar({
           attr,
           val,
         ]
-          .map(escapeCsv)
+          .map(escapeCsvCell)
           .join(',')
       ),
     ];
