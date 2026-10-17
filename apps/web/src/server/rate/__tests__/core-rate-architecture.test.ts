@@ -2905,7 +2905,63 @@ async function runCoreArchitectureSuite() {
     'list-sidebar-one.tsx and MerchantDirectoryExplorer.tsx must import from @/lib/rate-domain and ESLint must ban @/lib/rate-api & @/server/rate in Client Component folders (#189)'
   );
   console.log(
-    '  ✅ [57/57] Zero Server-Import Client Component Boundary (Audit T12) & Queue Purge + updated_at Triggers (Audit Low, #189) passed'
+    '  ✅ [57/58] Zero Server-Import Client Component Boundary (Audit T12) & Queue Purge + updated_at Triggers (Audit Low, #189) passed'
+  );
+
+  // 58. Issue #215: Baseline master/queue migrations sync & Audit M3/M4/M5/M7 queue/observation RPCs
+  const migMaster215 = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'supabase/migrations/20261005130000_rate_recover_master_products.sql'
+    ),
+    'utf8'
+  );
+  const migPlatform215 = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'supabase/migrations/20261005130001_rate_platform_tables.sql'
+    ),
+    'utf8'
+  );
+  assert.ok(
+    migMaster215.includes('CREATE TABLE IF NOT EXISTS rate.master_products') &&
+      migPlatform215.includes('CREATE TABLE IF NOT EXISTS rate.crawl_jobs') &&
+      migPlatform215.includes('CREATE TABLE IF NOT EXISTS rate.crawl_runs'),
+    'Baseline master_products and crawl_jobs/crawl_runs migrations must be present in supabase/migrations/ (#215)'
+  );
+  const mig215Src = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'supabase/migrations/20261018023000_rate_audit_m3_m4_m5_m7_queue_and_observation_rpc.sql'
+    ),
+    'utf8'
+  );
+  assert.ok(
+    mig215Src.includes('CREATE OR REPLACE FUNCTION rate.cancel_crawl_jobs(') &&
+      mig215Src.includes(
+        'CREATE OR REPLACE FUNCTION rate.release_crawl_job('
+      ) &&
+      mig215Src.includes(
+        'CREATE OR REPLACE FUNCTION rate.record_price_observation('
+      ) &&
+      mig215Src.includes('idx_crawl_jobs_claimable_platform') &&
+      mig215Src.includes('uq_crawl_jobs_live_target_url') &&
+      mig215Src.includes('idx_price_history_promotion_id') &&
+      mig215Src.includes('idx_crawl_jobs_run_id') &&
+      mig215Src.includes('idx_promotions_product_id') &&
+      mig215Src.includes("SET search_path = ''"),
+    '20261018023000_rate_audit_m3_m4_m5_m7_queue_and_observation_rpc.sql must define cancel_crawl_jobs, release_crawl_job, record_price_observation, queue/FK indexes, and Linter 0011 search_path hardening (#215)'
+  );
+  const ingest215Src = fs.readFileSync(
+    path.join(repoRoot, 'apps/importer/src/shopee/shopee-to-supabase.ts'),
+    'utf8'
+  );
+  assert.ok(
+    ingest215Src.includes("'record_price_observation'"),
+    'apps/importer/src/shopee/shopee-to-supabase.ts must invoke record_price_observation RPC (Audit M7, #215)'
+  );
+  console.log(
+    '  ✅ [58/58] Baseline Queue/Master Migrations Sync & M3/M4/M5/M7 Queue/Observation RPCs (#215) passed'
   );
 
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
