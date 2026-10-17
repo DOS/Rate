@@ -579,19 +579,13 @@ export function computeVoterWeight(params: {
   trustScore?: number | null;
   isVerifiedContact?: boolean;
 }): number {
-  const {
-    accountAgeDays,
-    verifiedReviewCount,
-    trustScore,
-    isVerifiedContact = true,
-  } = params;
+  const { accountAgeDays, verifiedReviewCount, trustScore, isVerifiedContact = true } = params;
   if (!isVerifiedContact) return 0;
   if (accountAgeDays !== null && accountAgeDays < 7) return 0;
   if ((accountAgeDays !== null && accountAgeDays < 30) || verifiedReviewCount <= 0) {
     return 0.1;
   }
-  const rawT =
-    typeof trustScore === 'number' && Number.isFinite(trustScore) ? trustScore : 0.5;
+  const rawT = typeof trustScore === 'number' && Number.isFinite(trustScore) ? trustScore : 0.5;
   return Number(Math.max(0.1, Math.min(1.0, rawT)).toFixed(3));
 }
 
@@ -611,10 +605,7 @@ export function computeWilsonLowerBound(
   if (n <= 0) return 0;
   const pHat = pos / n;
   const z2 = z * z;
-  const numerator =
-    pHat +
-    z2 / (2 * n) -
-    z * Math.sqrt((pHat * (1 - pHat) + z2 / (4 * n)) / n);
+  const numerator = pHat + z2 / (2 * n) - z * Math.sqrt((pHat * (1 - pHat) + z2 / (4 * n)) / n);
   const denominator = 1 + z2 / n;
   return Number(Math.max(0, Math.min(1, numerator / denominator)).toFixed(4));
 }
@@ -993,10 +984,7 @@ export class AiReviewAnalyzer {
         !isCoinSpamPhrase &&
         !isRatingOnly;
       const isCopiedSeeding =
-        !isDuplicateSeeding &&
-        maxShingleSim >= 0.65 &&
-        !isCoinSpamPhrase &&
-        !isRatingOnly;
+        !isDuplicateSeeding && maxShingleSim >= 0.65 && !isCoinSpamPhrase && !isRatingOnly;
       const isScriptedPraise =
         r.rating_star === 5 &&
         /sản\s*phẩm\s*tuyệt\s*vời\s*đáng\s*đồng\s*tiền\s*bát\s*gạo\s*sẽ\s*ủng\s*hộ\s*shop\s*dài\s*dài\s*10\s*điểm/i.test(
@@ -1818,16 +1806,19 @@ Return ONLY valid JSON matching:
       );
     }
 
-    // 3. Update master_products weighted rating & authentic count
+    // 3. Update master_products weighted rating & authentic count via canonical SQL RPC (Audit C5)
     if (params.masterId) {
-      let refreshedViaRpc = false;
       if (typeof (supabase as any).rpc === 'function') {
         const { error: rpcErr } = await (supabase as any).rpc('refresh_master_product_rating', {
           p_master_id: params.masterId,
         });
-        if (!rpcErr) refreshedViaRpc = true;
-      }
-      if (!refreshedViaRpc) {
+        if (rpcErr) {
+          throw new Error(
+            `[AiReviewAnalyzer] Failed to refresh master_products rating via RPC: ${rpcErr.message}`
+          );
+        }
+      } else {
+        // Unit-test stub fallback when .rpc() is not provided on the mock client
         const { error: masterErr } = await supabase
           .from('master_products')
           .update({
