@@ -21,10 +21,15 @@ async function refreshSupabaseSession(
   if (!hasSupabaseAuthCookie(req.cookies.getAll())) return;
   const supabase = createCookieSupabase({
     getAll: () => req.cookies.getAll(),
-    setAll: (cookies) => {
+    setAll: (cookies, headers) => {
       for (const { name, value, options } of cookies) {
         req.cookies.set(name, value);
         response.cookies.set(name, value, options);
+      }
+      // A response carrying a refreshed session must never be cached and
+      // replayed to another visitor.
+      for (const [header, value] of Object.entries(headers)) {
+        response.headers.set(header, value);
       }
     },
   });

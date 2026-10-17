@@ -12,8 +12,11 @@ export interface CookieWriteOptions {
 
 export interface CookieAdapter {
   getAll(): CookieRecord[];
+  /** `headers` are the cache headers @supabase/ssr requires on any response
+   * that sets auth cookies (Cache-Control: private, no-store, ...). */
   setAll?(
-    cookies: { name: string; value: string; options: CookieWriteOptions }[]
+    cookies: { name: string; value: string; options: CookieWriteOptions }[],
+    headers: Record<string, string>
   ): void;
 }
 
@@ -43,7 +46,7 @@ export function createCookieSupabase(
   return createServerClient(env.url, env.anonKey, {
     cookies: {
       getAll: () => adapter.getAll(),
-      setAll: (cookies) => adapter.setAll?.(cookies),
+      setAll: (cookies, headers) => adapter.setAll?.(cookies, headers ?? {}),
     },
   });
 }

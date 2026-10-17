@@ -520,6 +520,10 @@ async function testCookieSessions() {
     'the RPC carries the cookie session JWT'
   );
   assert.equal(rpc.headers.apikey, ANON_KEY);
+  assert.ok(
+    calls.every((c) => !c.url.includes('/auth/v1/token')),
+    'route handlers never refresh (and burn) the cookie session refresh token'
+  );
 
   for (const origin of ['https://evil.example', undefined]) {
     calls = [];

@@ -1,8 +1,11 @@
 import { NextResponse } from 'next/server';
-import { parseCookieHeader } from '@supabase/ssr';
+import {
+  combineChunks,
+  parseCookieHeader,
+  stringFromBase64URL,
+} from '@supabase/ssr';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import {
-  createCookieSupabase,
   hasSupabaseAuthCookie,
   type CookieRecord,
 } from '@/lib/supabase/cookies';
@@ -32,6 +35,38 @@ function readCookies(request: Request): CookieRecord[] {
     name: c.name,
     value: c.value ?? '',
   }));
+}
+
+const AUTH_COOKIE_RE = /^(sb-[^.]+-auth-token)(?:\.\d+)?$/;
+const BASE64_PREFIX = 'base64-';
+
+/**
+ * Reads the access token from the @supabase/ssr session cookie
+ * (`sb-<ref>-auth-token`, possibly split into `.0`, `.1` chunks and
+ * `base64-` encoded) without touching the network.
+ */
+export async function readCookieAccessToken(
+  cookies: CookieRecord[]
+): Promise<string | null> {
+  const byName = new Map(cookies.map((c) => [c.name, c.value]));
+  const key = cookies
+    .map((c) => AUTH_COOKIE_RE.exec(c.name)?.[1])
+    .find((k): k is string => Boolean(k));
+  if (!key) return null;
+  const raw = await combineChunks(key, (name) => byName.get(name));
+  if (!raw) return null;
+  try {
+    const json = raw.startsWith(BASE64_PREFIX)
+      ? stringFromBase64URL(raw.slice(BASE64_PREFIX.length))
+      : raw;
+    const session = JSON.parse(json) as { access_token?: unknown };
+    return typeof session.access_token === 'string' &&
+      session.access_token.length > 0
+      ? session.access_token
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -85,11 +120,18 @@ export async function authenticateRateRequest(
     };
   }
 
-  const token = readBearerToken(request);
-  if (!token) {
-    return authenticateCookieSession(request, action);
+  const bearer = readBearerToken(request);
+  if (bearer) {
+    return authenticateAccessToken(bearer, supabaseUrl, anonKey);
   }
+  return authenticateCookieSession(request, action, supabaseUrl, anonKey);
+}
 
+async function authenticateAccessToken(
+  token: string,
+  supabaseUrl: string,
+  anonKey: string
+): Promise<AuthenticatedRateRequest | RejectedRateRequest> {
   const baseClient = createClient(supabaseUrl, anonKey, {
     auth: { persistSession: false, autoRefreshToken: false },
     global: { headers: { Authorization: `Bearer ${token}` } },
@@ -156,7 +198,9 @@ function rejected(
 
 async function authenticateCookieSession(
   request: Request,
-  action: string
+  action: string,
+  supabaseUrl: string,
+  anonKey: string
 ): Promise<AuthenticatedRateRequest | RejectedRateRequest> {
   const cookies = readCookies(request);
   if (!hasSupabaseAuthCookie(cookies)) {
@@ -169,26 +213,19 @@ async function authenticateCookieSession(
   if (!isSameOriginRequest(request)) {
     return rejected(403, 'CROSS_SITE', 'Cross-site request rejected');
   }
-  // Route handlers do not refresh the session (proxy.ts does), so no setAll.
-  const supabase = createCookieSupabase({ getAll: () => cookies });
-  if (!supabase) {
-    return rejected(500, 'CONFIG_MISSING', 'Missing Supabase configuration');
-  }
-  const { data, error } = await supabase.auth.getUser();
-  const user = data?.user;
-  if (error || !user?.id) {
+  // Validate the stored access token as is. A Supabase client here would refresh
+  // an expired session and drop the rotated tokens (route handlers cannot set
+  // the browser's cookies), which burns the refresh token. An expired token gets
+  // a 401 and the browser client refreshes it.
+  const token = await readCookieAccessToken(cookies);
+  if (!token) {
     return rejected(
       401,
       'AUTH_INVALID',
       'Invalid or expired authentication token'
     );
   }
-  return {
-    ok: true,
-    userId: user.id,
-    email: user.email ?? null,
-    rateClient: supabase.schema('rate'),
-  };
+  return authenticateAccessToken(token, supabaseUrl, anonKey);
 }
 
 /** PostgREST reports a function missing from its schema cache as PGRST202. */
