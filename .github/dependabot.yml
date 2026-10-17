@@ -1,15 +1,10 @@
 version: 2
 updates:
+  # One npm entry at the workspace root: Dependabot updates every pnpm
+  # workspace package and the single root pnpm-lock.yaml together. Per-app
+  # entries changed apps/*/package.json without the lockfile (frozen install failed).
   - package-ecosystem: "npm"
     directory: "/"
-    schedule:
-      interval: "weekly"
-  - package-ecosystem: "npm"
-    directory: "/apps/web"
-    schedule:
-      interval: "weekly"
-  - package-ecosystem: "npm"
-    directory: "/apps/importer"
     schedule:
       interval: "weekly"
   - package-ecosystem: "github-actions"
