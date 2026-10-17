@@ -393,13 +393,15 @@ export class AiReviewAnalyzer {
         languageMarker = 0.8;
         reason = `Nội dung văn mẫu seeding trùng lặp giữa ${distinctAuthorsWithSameText} tài khoản khác nhau.`;
       } else if (isRatingOnly) {
-        // Stars without text: nothing to check, so it stays out of the weighted rating, but it is
-        // not evidence of fraud either (no seller penalty, low fake probability).
-        flagCategory = 'low_value_coin_spam';
+        // Stars without text are a real rating (many platforms do not ask for a comment) with
+        // nothing to verify, so they count at reduced weight: 'authentic' + 'suspicious' is the
+        // 0.25 base weight in both computeReviewWeight and the SQL rate.compute_review_weight.
+        // No seller penalty, low fake probability.
+        flagCategory = 'authentic';
         verdict = 'suspicious';
         fakeProb = 0.3;
         reason =
-          'Chỉ chấm sao, không có nội dung để kiểm chứng (không tính vào điểm tổng, không phạt shop).';
+          'Chỉ chấm sao, không có nội dung: vẫn tính vào điểm nhưng với trọng số thấp (25% một đánh giá có nội dung).';
       } else if (isCoinSpamPhrase || isUnopenedFiller || isGibberishOrTooShort) {
         flagCategory = 'low_value_coin_spam';
         verdict = 'suspicious';
@@ -857,7 +859,9 @@ Return ONLY valid JSON matching:
         const rev = input.rawReviews[i];
         const flag = input.reviewResults[i];
         if (rev.rating_star <= 2 && flag?.flag_category === 'authentic') {
-          authenticLowStarCount++;
+          // A low star with no text describes no defect: it counts at the same reduced weight
+          // as in the rating, not as a full complaint.
+          authenticLowStarCount += isRatingOnlyComment(rev.comment) ? 0.25 : 1;
         }
       }
       const lowStarRatio = authenticLowStarCount / total;
