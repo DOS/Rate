@@ -443,6 +443,7 @@ async function run() {
         comment: 'Pin dùng được cả ngày nhưng loa hơi nhỏ thôi',
       },
       { id: 'llm-coin', author_name: 'n3', rating_star: 5, comment: 'nhận xu' },
+      { id: 'llm-stars', author_name: 'n4', rating_star: 5, comment: '' },
     ];
     const { results, summary: s } = await llm.analyzeReviews(input, { entityName: 'Test Phone' });
     const m = new Map(results.map(r => [r.review_id, r]));
@@ -460,6 +461,12 @@ async function run() {
       'low_value_coin_spam',
       'high-confidence heuristic must not be overridden by LLM'
     );
+    assert.equal(
+      m.get('llm-stars')!.fake_probability,
+      0.3,
+      'a star-only rating keeps the heuristic probability'
+    );
+    assert.match(m.get('llm-stars')!.reason, /Chỉ chấm sao/, "not the model's guess");
     assert.deepEqual(s.pros, ['Pin trâu']);
     assert.deepEqual(s.cons, ['Loa nhỏ']);
     assert.equal(s.authentic_review_count, 1);
@@ -498,7 +505,7 @@ async function run() {
     });
 
     const flagUpsert = calls.find(c => c.table === 'review_flags' && c.op === 'upsert')!;
-    assert.equal(flagUpsert.payload.length, 3);
+    assert.equal(flagUpsert.payload.length, input.length);
     for (const row of flagUpsert.payload) {
       assert.ok(
         [
@@ -541,7 +548,7 @@ async function run() {
     );
     assert.equal(
       calls.filter(c => c.table === 'reviews' && c.op === 'update').length,
-      3,
+      input.length,
       'helpfulness_weight written per review'
     );
     assert.ok(out.merchantRisk);
