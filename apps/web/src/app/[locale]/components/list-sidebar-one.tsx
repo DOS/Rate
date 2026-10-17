@@ -9,7 +9,7 @@ import {
   getCategoryFilterSchema,
   RATING_FILTER_OPTIONS,
 } from '@/lib/category-filters';
-import type { RateCategoryItem } from '@/lib/rate-api';
+import type { RateCategoryItem } from '@/lib/rate-domain';
 
 export interface ListSidebarOneProps {
   categorySlug?: string;

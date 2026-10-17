@@ -91,7 +91,7 @@ module.exports = {
       },
     },
     {
-      files: ["src/components/**"],
+      files: ["src/components/**", "src/app/[locale]/components/**"],
       rules: {
         "no-restricted-imports": [
           "error",
@@ -100,7 +100,12 @@ module.exports = {
               {
                 name: "@/lib/rate-api",
                 message:
-                  "Client Components in src/components/** must import pure helpers and types from '@/lib/rate-domain' instead of '@/lib/rate-api' (Audit T12).",
+                  "Client Components must import pure helpers and types from '@/lib/rate-domain' instead of '@/lib/rate-api' (Audit T12).",
+              },
+              {
+                name: "@/server/rate",
+                message:
+                  "Client Components must import pure helpers and types from '@/lib/rate-domain' instead of '@/server/rate' (Audit T12).",
               },
             ],
           },

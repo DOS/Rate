@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { Link } from '@/lib/navigation';
-import type { MerchantSummary } from '@/server/rate';
+import type { MerchantSummary } from '@/lib/rate-domain';
 import { selectMerchantRadar } from '@/lib/deal-radar';
 import { useDealRadarPayload } from '@/components/radar/use-deal-radar';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
