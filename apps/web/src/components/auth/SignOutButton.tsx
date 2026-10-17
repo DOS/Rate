@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import { getPublicClient } from '@repo/shared-data';
+import { getBrowserSupabase } from '@/lib/supabase/browser';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
 
 export function SignOutButton({ className }: { className?: string }) {
@@ -18,7 +18,7 @@ export function SignOutButton({ className }: { className?: string }) {
 
   const handleSignOut = async () => {
     try {
-      const supabase = getPublicClient();
+      const supabase = getBrowserSupabase();
       await supabase.auth.signOut();
     } catch {
       // Ignore client sign-out error

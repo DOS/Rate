@@ -2,7 +2,7 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { getPublicClient } from '@repo/shared-data';
+import { getBrowserSupabase } from '@/lib/supabase/browser';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
 
 export function SignInButton({ className }: { className?: string }) {
@@ -14,7 +14,7 @@ export function SignInButton({ className }: { className?: string }) {
   useEffect(() => {
     let active = true;
     try {
-      const supabase = getPublicClient();
+      const supabase = getBrowserSupabase();
       supabase.auth.getSession().then(({ data }) => {
         if (active) setIsAuthenticated(Boolean(data.session));
       });
