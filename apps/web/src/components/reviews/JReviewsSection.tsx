@@ -186,21 +186,54 @@ export default function JReviewsSection({
 
     let computedUser: number | null =
       userRatingWeighted && userRatingWeighted > 0 ? userRatingWeighted : null;
+    let userWeightSum = 0;
+    let userWeightedStars = 0;
     if (validUserReviews.length > 0) {
-      const weightSum = validUserReviews.reduce(
+      userWeightSum = validUserReviews.reduce(
         (acc, r) => acc + r.helpfulness_weight,
         0
       );
-      const weightedStars = validUserReviews.reduce(
+      userWeightedStars = validUserReviews.reduce(
         (acc, r) => acc + r.rating_star * r.helpfulness_weight,
         0
       );
-      if (weightSum > 0) {
-        computedUser = Number((weightedStars / weightSum).toFixed(2));
+      if (userWeightSum > 0) {
+        computedUser = Number((userWeightedStars / userWeightSum).toFixed(2));
       }
     } else if (computedUser == null && averageRating > 0) {
       computedUser = Number(Number(averageRating).toFixed(2));
     }
+
+    const priorMean = 4.2;
+    const priorStrength = 3;
+    const bayesianUserScore =
+      userWeightSum > 0
+        ? Number(
+            (
+              (priorStrength * priorMean + userWeightedStars) /
+              (priorStrength + userWeightSum)
+            ).toFixed(2)
+          )
+        : computedUser;
+    const bayesianConfidence = Number(
+      (userWeightSum / (userWeightSum + priorStrength)).toFixed(2)
+    );
+    const confidenceTier: 'insufficient_data' | 'low' | 'medium' | 'high' =
+      bayesianConfidence < 0.3
+        ? 'insufficient_data'
+        : bayesianConfidence < 0.6
+          ? 'low'
+          : bayesianConfidence < 0.85
+            ? 'medium'
+            : 'high';
+    const confidenceLabelVi =
+      confidenceTier === 'insufficient_data'
+        ? 'Chưa đủ dữ liệu'
+        : confidenceTier === 'low'
+          ? 'Độ tin cậy thấp'
+          : confidenceTier === 'medium'
+            ? 'Độ tin cậy: Trung bình'
+            : 'Độ tin cậy: Cao';
 
     let computedExpert: number | null = expertRating;
     if (validExpertReviews.length > 0) {
@@ -251,6 +284,11 @@ export default function JReviewsSection({
     return {
       overall,
       user: computedUser,
+      bayesianUser: bayesianUserScore,
+      bayesianConfidence,
+      confidenceTier,
+      confidenceLabelVi,
+      userWeightSum: Number(userWeightSum.toFixed(2)),
       expert: computedExpert,
       criteriaAverages,
     };
@@ -939,17 +977,45 @@ export default function JReviewsSection({
                 </span>
               </div>
               <div className="d-flex align-items-baseline my-2 gap-2">
-                <span className="display-6 fw-bold text-dark font-monospace">
-                  {liveScores.user != null ? liveScores.user.toFixed(2) : 'N/A'}
+                <span
+                  className={`display-6 fw-bold text-dark font-monospace ${
+                    liveScores.confidenceTier === 'insufficient_data'
+                      ? 'opacity-50'
+                      : ''
+                  }`}
+                >
+                  {liveScores.bayesianUser != null
+                    ? liveScores.bayesianUser.toFixed(2)
+                    : 'N/A'}
                 </span>
-                <span className="text-muted small">/ 5.0</span>
+                <span className="text-muted small">/ 5.0 (Bayes)</span>
               </div>
               <div className="small text-secondary mb-2">
                 Tính trên <strong>{counts.authentic}</strong> đánh giá thực chất
-                có trọng số.
+                (Σw = <strong>{liveScores.userWeightSum}</strong> · TB trọng số:{' '}
+                <strong>
+                  {liveScores.user != null ? liveScores.user.toFixed(2) : 'N/A'}
+                </strong>
+                ).
               </div>
             </div>
             <div className="d-flex border-top mt-2 flex-wrap gap-2 pt-2">
+              <span
+                className={`badge small ${
+                  liveScores.confidenceTier === 'high' ||
+                  liveScores.confidenceTier === 'medium'
+                    ? 'bg-primary-subtle text-primary'
+                    : liveScores.confidenceTier === 'low'
+                      ? 'bg-warning-subtle text-warning-emphasis'
+                      : 'bg-secondary-subtle text-secondary'
+                }`}
+                title={`Độ tin cậy Bayes c = Σw / (Σw + 3) = ${Math.round(
+                  liveScores.bayesianConfidence * 100
+                )}%`}
+              >
+                📊 {liveScores.confidenceLabelVi} (
+                {Math.round(liveScores.bayesianConfidence * 100)}%)
+              </span>
               <span className="badge bg-success-subtle text-success small">
                 ✓ {counts.authentic} Hợp lệ
               </span>
