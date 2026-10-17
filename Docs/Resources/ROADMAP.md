@@ -41,12 +41,12 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc 4 tầ
 
 ### 🛡️ Phase 6: Củng Cố Bảo Mật, Hiệu Năng DB & Review Trust Model v2 (2026 Q4)
 
-- [x] **6.1. Review Trust Model v2 P1/P2/P3 (`DOS/Rate#162`, `#166`, `#169`):**
-  - Chấm điểm 6 trục (`Authenticity`, `Independence`, `Depth`, `Reviewer`, `Context`, `Community`), định tuyến bình luận thuần vận chuyển về gian hàng (`E = 0`), phát hiện mâu thuẫn sao - cảm xúc, làm mượt điểm sản phẩm bằng **Bayesian Shrinkage ($k=3, \mu_0=3.80$)** kèm nhãn độ tin cậy, trọng số người bình chọn (`computeVoterWeight`), xếp hạng **Wilson Lower Bound** và phát hiện văn mẫu sao chép 3-shingle.
-- [x] **6.2. Khóa Quyền Tối Thiểu & Vệ Sinh Phụ Thuộc (`DOS/Rate#159`, `#163`, `#168`, `#170`, `#172`, `#173`, `#174`, `#175`):**
-  - Loại bỏ `SUPABASE_SERVICE_ROLE_KEY` khỏi đường đọc/ghi Web public (`extension/ingest` gọi RPC `rate.enqueue_crowd_verify_signal`), tách `@/lib/rate-domain` cho toàn bộ 14 Client Components, thêm HTTP Security Headers, chống CSV Formula Injection, và xử lý triệt để toàn bộ cảnh báo Dependabot (`0` open alerts trên cả `DOS/Rate` và `DOS/Rate-Services`).
-- [x] **6.3. Chuẩn Hóa Thủ Tục SQL, Chỉ Mục BRIN/GIN & Đẩy Lọc Xuống PostgreSQL (`DOS/Rate#176`, `#177`, `#178`):**
-  - Cố định `SET search_path = ''`, `SECURITY INVOKER` cho các hàm/view đọc công khai, chỉ mục BRIN trên `price_history(recorded_at)`, `ON DELETE RESTRICT` bảo vệ lịch sử khi lưu trữ gian hàng, hàm chuẩn `refresh_master_market_stats`, chống flood cả `INSERT` lẫn `UPDATE` trên `review_votes`, và đẩy lọc/phân trang danh mục xuống `get_category_brand_facets` + `search_master_products`.
+- [x] **6.1. Review Trust Model v2 P1/P2/P3/P4 & Giao Diện 6 Trục Minh Bạch (`DOS/Rate#162`, `#166`, `#169`, `#184`):**
+  - Chấm điểm 6 trục (`Authenticity`, `Independence`, `Depth`, `Reviewer`, `Context`, `Community`), định tuyến bình luận thuần vận chuyển về gian hàng (`E = 0`), phát hiện mâu thuẫn sao - cảm xúc, làm mượt điểm sản phẩm bằng **Bayesian Shrinkage ($k=3, \mu_0=3.80$)** kèm nhãn độ tin cậy, cổng chặn độ tin cậy điểm tổng hợp (`userConfidence >= 0.6`), xếp hạng **Wilson Lower Bound**, cảnh báo phân bố sao bất thường và hiển thị đầy đủ huy hiệu 6 trục + nhãn tài trợ trên `JReviewsSection.tsx`.
+- [x] **6.2. Khóa Quyền Tối Thiểu, Ranh Giới `server-only`, Chống CSV Formula Injection 16/16 & Tách CLI Backfill (`DOS/Rate#159`, `#163`, `#168`, `#170`, `#172`, `#173`, `#174`, `#175`, `#185`, `#188`):**
+  - Loại bỏ `SUPABASE_SERVICE_ROLE_KEY` khỏi đường đọc/ghi Web public (`extension/ingest` gọi RPC `rate.enqueue_crowd_verify_signal`), cưỡng chế `import 'server-only'` trên toàn bộ 6 module `src/server/rate/*`, tách `@/lib/rate-domain` cho 100% Client Components, chuẩn hóa `escapeCsvCell` / `buildSafeCsvContent` trên toàn bộ **16/16** thành phần xuất CSV, tách riêng `apps/importer/src/shopee/jobs/backfill-specs.ts` (mặc định `dry-run`, yêu cầu `--apply` để ghi DB), và xử lý triệt để toàn bộ cảnh báo Dependabot (`0` open alerts).
+- [x] **6.3. Chuẩn Hóa Thủ Tục SQL, Chỉ Mục BRIN/GIN & Đẩy Lọc Xuống PostgreSQL (`DOS/Rate#176`, `#177`, `#178`, `#188`):**
+  - Cố định `SET search_path = ''`, `SECURITY INVOKER` cho các hàm/view đọc công khai, chỉ mục BRIN trên `price_history(recorded_at)`, `ON DELETE RESTRICT` bảo vệ lịch sử khi lưu trữ gian hàng, hàm chuẩn `refresh_master_market_stats`, chống flood cả `INSERT` lẫn `UPDATE` trên `review_votes`, và đẩy lọc/phân trang danh mục xuống `get_category_directory_facets_v1` + `search_catalog_products_v1`.
 - [ ] **6.4. Đồng Bộ Migration Ledger Sang `DOS-Me` & Kiểm Thử Replay Tự Động (Audit C9 / K1):**
   - Tạo PR đồng bộ các migration tham chiếu (`20261017235900`, `20261018003000`, `20261018010000`, `20261018013000`) sang sổ cái chính thức `DOS-Me/supabase/migrations/` và chạy kiểm thử trên môi trường `preview -> beta -> prod`.
 - [ ] **6.5. Bảo Vệ Nhánh & Quét Bí Mật Trên GitHub (`DOS/Rate` - Audit K3):**
@@ -56,7 +56,8 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc 4 tầ
 
 - [ ] **7.1. Mở Rộng Phủ Dữ Liệu Thật (Provenance-Verified Catalog):**
   - Vận hành định kỳ `scheduled-crawler.yml` trên `DOS/Rate-Services` để thu thập giá niêm yết thật, lịch sử giá thật và đánh giá thật có gắn nguồn kiểm chứng (`spec_source`, `observation_id`) cho toàn bộ 5 ngành hàng.
-- [ ] **7.2. Bộ Kiểm Thử Hành Vi Route Handlers & E2E Smoke Suite (Audit T1):**
-  - Bổ sung kiểm thử trực tiếp cho các Route Handlers (`/api/v1/rate/*`) với mock Supabase client kiểm tra đầy đủ mã lỗi `400`, `401`, `429`, `500` và kiểm thử Playwright E2E trên bản build thực tế.
-- [ ] **7.3. Tối Ưu Hóa Cache Đa Tầng Next.js 16 (`use cache` & `cacheTag` - Audit C3):**
-  - Áp dụng `cacheLife` và `cacheTag('product:<slug>')` trong tầng `src/server/rate/` kết hợp webhook `revalidateTag` từ pipeline ingest.
+- [x] **7.2. Bộ Kiểm Thử Hành Vi Route Handlers Toàn Diện (`DOS/Rate#179`, `#187` - Audit T1):**
+  - Kiểm thử trực tiếp `NextRequest -> NextResponse` trên toàn bộ 15 REST API v1 endpoints (`/api/v1/rate/products`, `/products/[slug]`, `/compare`, `/versus`, `/lookup`, `/inspect`, `/deals`, `/leaderboard`, `/merchants`, `/merchants/[id]`, `/stats`, `/openapi`, `/openapi.json`, `/revalidate`, `/extension/lookup`, `/extension/ingest`, `/api/reviews/[id]/vote`, `/api/health`) kiểm tra đầy đủ mã `200`, `204`, `400`, `401`, `404`, `429`, `500` (Suite `[56/61]` & `[60/61]`).
+- [x] **7.3. Tối Ưu Hóa Cache Đa Tầng Next.js 16 (`withRateDataCache` & `/api/v1/rate/revalidate` - `DOS/Rate#186` - Audit C3):**
+  - Kết hợp `React.cache()` (chống trùng lặp trong cùng 1 SSR request) với `unstable_cache` (`withRateDataCache` trong `src/server/rate/cache-tags.ts`) gắn thẻ xác định (`rate:products`, `rate:product:<slug>`, `rate:category:<slug>`, `rate:merchant:<id>`, `rate:deals`, `rate:reviews`, `rate:price-history`) và endpoint `POST /api/v1/rate/revalidate` xác thực `timingSafeEqual`.
+

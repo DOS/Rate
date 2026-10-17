@@ -1,17 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
-  getMasterProductBySlug,
-  getMasterProductOffers,
-  getMasterProductPriceHistory,
-  getMasterProductReviews,
-  getMasterProductReviewSummary,
-} from '@/lib/rate-api';
+  getCachedMasterProductBySlug,
+  getCachedMasterProductOffers,
+  getCachedMasterProductPriceHistory,
+  getCachedMasterProductReviews,
+  getCachedMasterProductReviewSummary,
+} from '@/server/rate';
 import { computeProductRadarSignal } from '@/server/rate/deals';
-import { jsonApiError } from '@/server/rate/api-handler';
+import {
+  PUBLIC_API_CORS_HEADERS,
+  jsonApiError,
+} from '@/server/rate/api-handler';
 
 type RouteContext = {
   params: Promise<{ slug: string }>;
 };
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: PUBLIC_API_CORS_HEADERS,
+  });
+}
 
 /**
  * GET /api/v1/rate/products/[slug]
@@ -22,23 +32,32 @@ type RouteContext = {
 export async function GET(_request: NextRequest, context: RouteContext) {
   try {
     const { slug } = await context.params;
-    const product = await getMasterProductBySlug(slug);
+    const cleanSlug = (slug ?? '').trim();
+    if (
+      !cleanSlug ||
+      cleanSlug.length > 120 ||
+      !/^[a-zA-Z0-9._-]+$/.test(cleanSlug)
+    ) {
+      return jsonApiError(400, 'Invalid product slug');
+    }
+
+    const product = await getCachedMasterProductBySlug(cleanSlug);
 
     if (!product) {
       return NextResponse.json(
         { ok: false, error: 'Product not found', code: 'NOT_FOUND' },
-        { status: 404 }
+        { status: 404, headers: PUBLIC_API_CORS_HEADERS }
       );
     }
 
     const [offers, reviews] = await Promise.all([
-      getMasterProductOffers(product.id),
-      getMasterProductReviews(product.id),
+      getCachedMasterProductOffers(product.id),
+      getCachedMasterProductReviews(product.id),
     ]);
 
     const [reviewSummary, priceHistory] = await Promise.all([
-      getMasterProductReviewSummary(product.id, reviews),
-      getMasterProductPriceHistory(product.id, offers),
+      getCachedMasterProductReviewSummary(product.id, reviews),
+      getCachedMasterProductPriceHistory(product.id, offers),
     ]);
     const radarSignal = computeProductRadarSignal(product, offers);
 
@@ -57,6 +76,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
       {
         status: 200,
         headers: {
+          ...PUBLIC_API_CORS_HEADERS,
           'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300',
         },
       }
@@ -65,3 +85,4 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     return jsonApiError(500, 'Failed to fetch product detail', error);
   }
 }
+

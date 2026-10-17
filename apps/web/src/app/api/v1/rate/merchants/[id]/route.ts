@@ -24,13 +24,23 @@ type RouteContext = {
 export async function GET(_request: NextRequest, context: RouteContext) {
   try {
     const { id } = await context.params;
-    const profile = await getCachedMerchantProfileById(id);
+    const cleanId = (id ?? '').trim();
+    if (
+      !cleanId ||
+      cleanId.length > 120 ||
+      !/^[a-zA-Z0-9._-]+$/.test(cleanId)
+    ) {
+      return jsonApiError(400, 'Invalid merchant identifier', undefined, CORS_HEADERS);
+    }
+
+    const profile = await getCachedMerchantProfileById(cleanId);
 
     if (!profile) {
       return NextResponse.json(
         {
           ok: false,
-          error: `Merchant not found for id/slug: ${id}`,
+          error: 'Merchant not found',
+          code: 'NOT_FOUND',
         },
         { status: 404, headers: CORS_HEADERS }
       );
