@@ -9,7 +9,33 @@ import { radarExportFields } from '@/lib/deal-radar';
 import {
   authenticateRateRequest,
   isMissingRpcError,
+  mapRpcRejection,
+  type RpcRejection,
 } from '@/server/rate/request-auth';
+
+// SQLSTATEs raised deliberately by rate.upsert_price_alert
+// (DOS-Me 20261017130000_rate_price_alert_auth_gate.sql).
+const RPC_REJECTIONS: Record<string, RpcRejection> = {
+  // the body is validated above, so this is the missing confirmed email
+  '22023': {
+    status: 422,
+    code: 'EMAIL_NOT_VERIFIED',
+    error: 'Tài khoản cần có email đã xác minh để nhận cảnh báo giá.',
+  },
+  P0002: { status: 404, code: 'NOT_FOUND', error: 'Không tìm thấy sản phẩm.' },
+  // not signed in, a Supabase anonymous sign-in, or another user's alert
+  '42501': {
+    status: 403,
+    code: 'FORBIDDEN',
+    error: 'Bạn cần đăng nhập bằng tài khoản thật để lưu cảnh báo giá.',
+  },
+  // more than 100 active alerts
+  '54000': {
+    status: 429,
+    code: 'RATE_LIMITED',
+    error: 'Bạn đã có quá 100 cảnh báo giá đang hoạt động.',
+  },
+};
 
 export interface WatchlistBestOffer {
   id: string;
@@ -218,6 +244,14 @@ export async function POST(request: NextRequest) {
         p_locale: locale,
       }
     );
+
+    const rejection = mapRpcRejection(rpcError, RPC_REJECTIONS);
+    if (rejection) {
+      return NextResponse.json(
+        { ok: false, error: rejection.error, code: rejection.code },
+        { status: rejection.status }
+      );
+    }
 
     if (rpcError && !isMissingRpcError(rpcError)) {
       console.error(

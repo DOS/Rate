@@ -183,13 +183,19 @@ export default function WatchlistWorkspace({
           const payload = (await res.json().catch(() => null)) as {
             ok?: boolean;
             persistedInCloud?: boolean;
+            error?: string;
           } | null;
-          return (
-            res.ok && payload?.ok === true && payload.persistedInCloud === true
-          );
+          return {
+            saved:
+              res.ok &&
+              payload?.ok === true &&
+              payload.persistedInCloud === true,
+            error: typeof payload?.error === 'string' ? payload.error : null,
+          };
         })
       );
-      const saved = results.filter(Boolean).length;
+      const saved = results.filter((r) => r.saved).length;
+      const firstError = results.find((r) => !r.saved && r.error)?.error;
       setCloudSyncStatus(
         saved === items.length
           ? {
@@ -198,7 +204,7 @@ export default function WatchlistWorkspace({
             }
           : {
               ok: false,
-              message: `Chỉ lưu được ${saved}/${items.length} cảnh báo lên Rate Cloud. Các cảnh báo còn lại vẫn nằm trên trình duyệt này.`,
+              message: `Chỉ lưu được ${saved}/${items.length} cảnh báo lên Rate Cloud${firstError ? ` (${firstError})` : ''}. Các cảnh báo còn lại vẫn nằm trên trình duyệt này.`,
             }
       );
     } catch {

@@ -4,6 +4,8 @@ import type { ReviewFlagCategory, ReviewItem } from '@/lib/rate-api';
 import {
   authenticateRateRequest,
   isMissingRpcError,
+  mapRpcRejection,
+  type RpcRejection,
 } from '@/server/rate/request-auth';
 
 const CRITERIA_KEYS = [
@@ -42,12 +44,37 @@ const FLAG_CATEGORIES = new Set<ReviewFlagCategory>([
 
 // SQLSTATEs raised deliberately by rate.submit_community_review
 // (DOS-Me 20261014234500 and the auth gate in 20261017120000).
-const RPC_REJECTIONS: Record<string, { status: number; code: string }> = {
-  '22023': { status: 400, code: 'REJECTED' }, // invalid length / stars / product id
-  P0002: { status: 400, code: 'REJECTED' }, // no listing for this master product
-  '42501': { status: 403, code: 'FORBIDDEN' }, // not signed in or anonymous sign-in
-  '23505': { status: 409, code: 'DUPLICATE_REVIEW' }, // one review per user and product
-  '54000': { status: 429, code: 'RATE_LIMITED' }, // more than 5 reviews in 24h
+const RPC_REJECTIONS: Record<string, RpcRejection> = {
+  // invalid length / stars / product id
+  '22023': {
+    status: 400,
+    code: 'REJECTED',
+    error: 'Dữ liệu đánh giá không hợp lệ.',
+  },
+  // no listing for this master product
+  P0002: {
+    status: 400,
+    code: 'REJECTED',
+    error: 'Sản phẩm này chưa có nơi bán để gắn đánh giá.',
+  },
+  // not signed in, or a Supabase anonymous sign-in
+  '42501': {
+    status: 403,
+    code: 'FORBIDDEN',
+    error: 'Bạn cần đăng nhập bằng tài khoản thật để gửi đánh giá.',
+  },
+  // one review per user and product
+  '23505': {
+    status: 409,
+    code: 'DUPLICATE_REVIEW',
+    error: 'Bạn đã gửi đánh giá cho sản phẩm này.',
+  },
+  // more than 5 reviews in 24h
+  '54000': {
+    status: 429,
+    code: 'RATE_LIMITED',
+    error: 'Bạn đã gửi quá 5 đánh giá trong 24 giờ, vui lòng thử lại sau.',
+  },
 };
 
 function sanitizeCriteria(raw: Record<string, unknown> | undefined) {
@@ -187,10 +214,10 @@ export async function POST(request: NextRequest) {
         );
       }
       // Errors the RPC raises on purpose carry a user-facing Vietnamese message.
-      const rejection = RPC_REJECTIONS[rpcError.code ?? ''];
+      const rejection = mapRpcRejection(rpcError, RPC_REJECTIONS);
       if (rejection) {
         return NextResponse.json(
-          { ok: false, error: rpcError.message, code: rejection.code },
+          { ok: false, error: rejection.error, code: rejection.code },
           { status: rejection.status }
         );
       }

@@ -244,6 +244,11 @@ async function testReviews() {
     const rejected = await res.json();
     assert.equal(rejected.ok, false);
     assert.equal(rejected.code, code);
+    assert.notEqual(
+      rejected.error,
+      'rejected by rpc',
+      'database error text must never be echoed'
+    );
   }
 
   // The auth-gated RPC stores new reviews unanalyzed and excluded from ratings.
@@ -352,6 +357,25 @@ async function testWatchlist() {
   const pending = await res.json();
   assert.equal(pending.ok, true);
   assert.equal(pending.persistedInCloud, false);
+
+  // Deliberate rejections from the DOS-Me price alert auth gate.
+  for (const [sqlstate, status, code] of [
+    ['22023', 422, 'EMAIL_NOT_VERIFIED'],
+    ['42501', 403, 'FORBIDDEN'],
+    ['54000', 429, 'RATE_LIMITED'],
+    ['P0002', 404, 'NOT_FOUND'],
+  ] as const) {
+    rpcResponder = () => ({
+      status: 400,
+      json: { code: sqlstate, message: 'rejected by rpc' },
+    });
+    res = await POST(post('/api/v1/rate/watchlist', body, GOOD_TOKEN) as Req);
+    assert.equal(res.status, status, `SQLSTATE ${sqlstate}`);
+    const rejected = await res.json();
+    assert.equal(rejected.ok, false);
+    assert.equal(rejected.code, code);
+    assert.notEqual(rejected.error, 'rejected by rpc');
+  }
 
   console.log(
     '  ✅ POST /api/v1/rate/watchlist requires a user, ignores client-chosen email and reports failures'

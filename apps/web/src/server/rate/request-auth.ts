@@ -93,6 +93,22 @@ export async function authenticateRateRequest(
   };
 }
 
+export interface RpcRejection {
+  status: number;
+  code: string;
+  /** Fixed user-facing text. The database message is never echoed: native
+   * errors with the same SQLSTATE would leak schema and constraint names. */
+  error: string;
+}
+
+/** Maps a deliberate RPC SQLSTATE to an HTTP rejection, or null for other errors. */
+export function mapRpcRejection(
+  error: { code?: string } | null | undefined,
+  table: Record<string, RpcRejection>
+): RpcRejection | null {
+  return (error?.code && table[error.code]) || null;
+}
+
 /** PostgREST reports a function missing from its schema cache as PGRST202. */
 export function isMissingRpcError(
   error: { code?: string } | null | undefined
