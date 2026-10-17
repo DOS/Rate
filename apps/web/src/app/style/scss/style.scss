@@ -11041,3 +11041,22 @@ textarea:focus-visible {
   outline: 2px solid var(--rate-focus-ring) !important;
   outline-offset: 1px;
 }
+
+/* Toggle pills: focus sits on the visually hidden .btn-check input, so draw the
+   ring on its label (Bootstrap's focus shadow is empty on a bare .btn). */
+.btn-check:focus-visible + .btn {
+  outline: 2px solid var(--rate-focus-ring) !important;
+  outline-offset: 2px;
+}
+
+/* Links that fill a clipping box (text-truncate rows, the 320px mobile drawer)
+   would lose the outer ring; draw it inside instead. */
+.text-truncate:focus-visible,
+.navigation-portrait .nav-menu > li > a:focus-visible {
+  outline-offset: -2px;
+}
+
+/* One ring only: drop the slider handle's own blue halo. */
+.rc-slider-handle:focus-visible {
+  box-shadow: none !important;
+}
