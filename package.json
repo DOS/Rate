@@ -42,7 +42,7 @@
   "prettier": "@repo/prettier-config",
   "devDependencies": {
     "@commitlint/cli": "19.8.1",
-    "@commitlint/config-conventional": "19.8.1",
+    "@commitlint/config-conventional": "21.2.3",
     "@playwright/test": "^1.52.0",
     "@repo/eslint-config": "workspace:*",
     "@repo/prettier-config": "workspace:*",
