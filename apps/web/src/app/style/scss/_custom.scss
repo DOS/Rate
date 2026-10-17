@@ -62,7 +62,7 @@
   --rate-fg-paragraph: #334155;
   --rate-brand-bg: #fff1f2;
   --rate-score-star-bg: #fffbeb;
-  // Crimson text that holds 4.5:1 on the surrounding surface (#e11d48 is 4.7:1 on white)
+  // Crimson text for links and labels on white surfaces (#e11d48 is 4.7:1 on white)
   --rate-crimson-text: #e11d48;
 
   --body-font-family: var(--font-inter, 'Inter'), 'Plus Jakarta Sans', 'Noto Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -94,6 +94,14 @@
   // #e11d48 is only ~3.9:1 on #12161f; the hero highlight color reads ~6:1
   --rate-crimson-text: #ff6b6b;
   --headingColor: #f8fafc;
+  // Element rules in style.scss read these Bootstrap/template variables directly
+  --paragraphColor: #cbd5e1;
+  --bs-body-color: #f8fafc;
+  --bs-body-color-rgb: 248, 250, 252;
+  --bs-link-color: #f8fafc;
+  --bs-link-color-rgb: 248, 250, 252;
+  --bs-link-hover-color: #ff6b6b;
+  --bs-link-hover-color-rgb: 255, 107, 107;
   background-color: var(--rate-bg-canvas);
   color: var(--rate-fg-primary);
 }
@@ -110,4 +118,10 @@
   color: #a5b4fc;
   background-color: var(--rate-score-expert-bg);
   border-color: #6366f1;
+}
+
+// --rate-fg-muted stays #64748b (about 3.8:1 on #12161f): spec labels are body
+// text, so they take --rate-fg-secondary on the dark surface (about 7:1).
+.rate-surface-dark .rate-spec-label {
+  color: var(--rate-fg-secondary);
 }

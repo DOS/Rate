@@ -52,7 +52,7 @@ All components in `apps/web` must reference the `--rate-*` CSS custom properties
 | `--rate-fg-paragraph`  | `#cbd5e1`                                   | `#334155`                             | Eyebrow and spec pill text, long-form copy                             |
 | `--rate-crimson-text`  | `#ff6b6b`                                   | `#e11d48`                             | Crimson links and labels that must hold 4.5:1 on the surface           |
 
-Wrap an obsidian section in `.rate-surface-dark` (defined in `_custom.scss`) and every token above switches to its dark value, so `.rate-card`, `.rate-eyebrow`, `.rate-spec-pill`, `.rate-spec-group-card` and the score badges render correctly inside it. `--rate-fg-muted` stays `#64748b` and reaches only about 4.1:1 on the dark canvas: keep it for non-essential captions there.
+Wrap an obsidian section in `.rate-surface-dark` (defined in `_custom.scss`) and every token above switches to its dark value, so `.rate-card`, `.rate-eyebrow`, `.rate-spec-pill`, `.rate-spec-group-card` and the score badges render correctly inside it. `--rate-fg-muted` stays `#64748b` and reaches only about 4.1:1 on the dark canvas and 3.8:1 on the dark surface: keep it for non-essential captions there (spec labels switch to `--rate-fg-secondary` inside the scope).
 
 ### 2.2 Semantic Rating & Audit Tokens
 
