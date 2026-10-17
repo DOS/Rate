@@ -1,3 +1,4 @@
+import 'server-only';
 import { EXTENSION_CAPABILITY_MATRIX } from './extension';
 
 export interface OpenApiParameter {

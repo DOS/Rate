@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useId, useState } from 'react';
+import { escapeCsvCell } from '@/lib/csv-safe';
 import {
   BsCheck2,
   BsClipboard,
@@ -312,12 +313,6 @@ export default function ApiPlaygroundClient() {
 
   const handleDownloadApiCatalogCsv = () => {
     if (typeof document === 'undefined') return;
-    const escapeCsv = (val: string) => {
-      if (val.includes(',') || val.includes('"') || val.includes('\n')) {
-        return `"${val.replace(/"/g, '""')}"`;
-      }
-      return val;
-    };
     const headers = ['ID', 'Method', 'Path', 'Title', 'Description'];
     const rows = PRESET_ENDPOINTS.map((ep) => [
       ep.id,
@@ -327,8 +322,8 @@ export default function ApiPlaygroundClient() {
       ep.description,
     ]);
     const csvContent = `\uFEFF${[
-      headers.map(escapeCsv).join(','),
-      ...rows.map((r) => r.map(escapeCsv).join(',')),
+      headers.map(escapeCsvCell).join(','),
+      ...rows.map((r) => r.map(escapeCsvCell).join(',')),
     ].join('\n')}`;
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);

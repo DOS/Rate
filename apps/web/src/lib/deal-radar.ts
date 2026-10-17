@@ -170,4 +170,8 @@ export function selectMerchantRadar(
   };
 }
 
-export type { CrossPlatformDealRadarResponse };
+export type {
+  CrossPlatformDealRadarItem,
+  CrossPlatformDealRadarResponse,
+  CrossPlatformPriceSpreadItem,
+};

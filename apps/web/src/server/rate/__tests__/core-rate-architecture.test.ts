@@ -3072,6 +3072,92 @@ async function runCoreArchitectureSuite() {
     '  ✅ [57/57] Review Trust Model v2 6-axis breakdown, Wilson sort & confidence gate (#184) passed'
   );
 
+  // 58. Server-only boundary enforcement & 16/16 CSV formula-injection guard (#185 - Audit T11, T12)
+  const { buildSafeCsvContent } = await import('../../../lib/csv-safe');
+  const { assertServerOnlyBoundary } = await import('../server-only');
+
+  assert.equal(escapeCsvCell("=CMD|'/C calc'!A0"), "'=CMD|'/C calc'!A0");
+  assert.equal(escapeCsvCell('+SUM(A1:A2)'), "'+SUM(A1:A2)");
+  assert.equal(
+    escapeCsvCell('@HYPERLINK("http://evil")'),
+    `"'@HYPERLINK(""http://evil"")"`
+  );
+  assert.equal(escapeCsvCell('-15.4%'), '-15.4%');
+  assert.equal(escapeCsvCell(-250000), '-250000');
+  const safeCsvDoc = buildSafeCsvContent(
+    ['Model', 'FormulaPayload', 'Savings'],
+    [['iPhone 16 Pro Max', '=1+1', '-12.5%']],
+    '\n'
+  );
+  assert.ok(safeCsvDoc.startsWith('\uFEFFModel,FormulaPayload,Savings\n'));
+  assert.ok(safeCsvDoc.includes("iPhone 16 Pro Max,'=1+1,-12.5%"));
+
+  assert.doesNotThrow(() => assertServerOnlyBoundary());
+
+  const fs58 = await import('node:fs');
+  const path58 = await import('node:path');
+  const webSrcRoot58 = path58.resolve(__dirname, '../../..');
+
+  const serverRateModules58 = [
+    'index.ts',
+    'extension.ts',
+    'deals.ts',
+    'openapi.ts',
+    'api-handler.ts',
+  ];
+  for (const modName of serverRateModules58) {
+    const modSource = fs58.readFileSync(
+      path58.join(webSrcRoot58, 'server', 'rate', modName),
+      'utf8'
+    );
+    assert.ok(
+      modSource.includes("import 'server-only';"),
+      `Expected src/server/rate/${modName} to import 'server-only'`
+    );
+  }
+
+  const csvComponents58: string[] = [];
+  const clientServerRateLeaks58: string[] = [];
+  function walkSrc58(dir: string) {
+    for (const entry of fs58.readdirSync(dir, { withFileTypes: true })) {
+      const fullPath = path58.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name !== '__tests__') walkSrc58(fullPath);
+      } else if (entry.name.endsWith('.tsx') || entry.name.endsWith('.ts')) {
+        const content = fs58.readFileSync(fullPath, 'utf8');
+        const rel = path58.relative(webSrcRoot58, fullPath).replace(/\\/g, '/');
+        if (content.includes('text/csv')) {
+          csvComponents58.push(rel);
+          assert.ok(
+            content.includes('@/lib/csv-safe'),
+            `Expected CSV export component ${rel} to import @/lib/csv-safe`
+          );
+        }
+        if (
+          (content.includes("'use client'") ||
+            content.includes('"use client"')) &&
+          content.includes('@/server/rate')
+        ) {
+          clientServerRateLeaks58.push(rel);
+        }
+      }
+    }
+  }
+  walkSrc58(webSrcRoot58);
+  assert.ok(
+    csvComponents58.length >= 16,
+    `Expected at least 16 CSV export components using @/lib/csv-safe, found ${csvComponents58.length}`
+  );
+  assert.deepEqual(
+    clientServerRateLeaks58,
+    [],
+    `Client components must not import @/server/rate directly: ${clientServerRateLeaks58.join(', ')}`
+  );
+
+  console.log(
+    `  ✅ [58/58] Server-only boundary across 5 server/rate modules & ${csvComponents58.length}/16 CSV formula guards (#185) passed`
+  );
+
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
 
