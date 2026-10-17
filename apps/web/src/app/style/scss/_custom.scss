@@ -59,6 +59,11 @@
   --rate-score-star: #f59e0b;
   --rate-risk-danger: #f43f5e;
   --rate-risk-danger-bg: #fff1f2;
+  --rate-fg-paragraph: #334155;
+  --rate-brand-bg: #fff1f2;
+  --rate-score-star-bg: #fffbeb;
+  // Crimson text for links and labels on white surfaces (#e11d48 is 4.7:1 on white)
+  --rate-crimson-text: #e11d48;
 
   --body-font-family: var(--font-inter, 'Inter'), 'Plus Jakarta Sans', 'Noto Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --heading-font-family: var(--font-inter, 'Inter'), 'Plus Jakarta Sans', 'Noto Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -67,3 +72,56 @@
 
 // Inter and JetBrains Mono (with Vietnamese subsets) are self-hosted by next/font
 // (src/lib/fonts.ts) and exposed as --font-inter / --font-jetbrains-mono on <html>.
+
+// Rate.vn v3.0 Dark Command Surface (DESIGN.md section 2): wrap an obsidian
+// section in .rate-surface-dark and every --rate-* token below resolves to
+// its dark value, so .rate-card, .rate-eyebrow, .rate-spec-* read correctly.
+.rate-surface-dark {
+  --rate-bg-canvas: #0b0d11;
+  --rate-bg-surface: #12161f;
+  --rate-bg-elevated: #181d29;
+  --rate-border-subtle: rgba(255, 255, 255, 0.08);
+  --rate-border-strong: rgba(255, 255, 255, 0.16);
+  --rate-fg-primary: #f8fafc;
+  --rate-fg-secondary: #94a3b8;
+  --rate-fg-muted: #64748b;
+  --rate-fg-paragraph: #cbd5e1;
+  --rate-brand-bg: rgba(255, 46, 41, 0.14);
+  --rate-score-user-bg: rgba(16, 185, 129, 0.14);
+  --rate-score-expert-bg: rgba(99, 102, 241, 0.14);
+  --rate-score-star-bg: rgba(245, 158, 11, 0.14);
+  --rate-risk-danger-bg: rgba(244, 63, 94, 0.14);
+  // #e11d48 is only ~3.9:1 on #12161f; the hero highlight color reads ~6:1
+  --rate-crimson-text: #ff6b6b;
+  --headingColor: #f8fafc;
+  // Element rules in style.scss read these Bootstrap/template variables directly
+  --paragraphColor: #cbd5e1;
+  --bs-body-color: #f8fafc;
+  --bs-body-color-rgb: 248, 250, 252;
+  --bs-link-color: #f8fafc;
+  --bs-link-color-rgb: 248, 250, 252;
+  --bs-link-hover-color: #ff6b6b;
+  --bs-link-hover-color-rgb: 255, 107, 107;
+  background-color: var(--rate-bg-canvas);
+  color: var(--rate-fg-primary);
+}
+
+// The score badges carry light-only literal tints; on the dark surface they
+// switch to the soft tints above with the light inks used on obsidian grounds.
+.rate-surface-dark .rate-score-badge-user {
+  color: #34d399;
+  background-color: var(--rate-score-user-bg);
+  border-color: #10b981;
+}
+
+.rate-surface-dark .rate-score-badge-expert {
+  color: #a5b4fc;
+  background-color: var(--rate-score-expert-bg);
+  border-color: #6366f1;
+}
+
+// --rate-fg-muted stays #64748b (about 3.8:1 on #12161f): spec labels are body
+// text, so they take --rate-fg-secondary on the dark surface (about 7:1).
+.rate-surface-dark .rate-spec-label {
+  color: var(--rate-fg-secondary);
+}
