@@ -46,7 +46,7 @@ export const ListingSchema = z.object({
   viewCount: z.number().min(0).default(0),
   isFeatured: z.boolean().default(false),
   isVerified: z.boolean().default(false),
-  metadata: z.record(z.any()).optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
   tags: z.array(z.string()).optional(),
   publishedAt: z.string().datetime().optional(),
   createdAt: z.string().datetime(),

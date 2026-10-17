@@ -31,7 +31,7 @@ export const ReviewSchema = z.object({
       createdBy: UUIDv7Schema,
     })
     .optional(),
-  metadata: z.record(z.any()).optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
