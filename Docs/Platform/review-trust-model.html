@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="dark" />
+  <title>Mô hình tin cậy review</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0f1113;
+      --surface: #161a1e;
+      --surface-elevated: #1d2228;
+      --border: #2a313a;
+      --text: #e8edf2;
+      --text-muted: #9ba5b0;
+      --accent: #FF2E29;
+      --accent-soft: rgba(255, 46, 41, 0.14);
+      --green: #22c55e;
+      --green-soft: rgba(34, 197, 94, 0.14);
+      --amber: #f59e0b;
+      --amber-soft: rgba(245, 158, 11, 0.14);
+      --code-bg: #0b0d0f;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 36px 16px 64px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+      line-height: 1.65;
+    }
+    .container { max-width: 1000px; margin: 0 auto; }
+    .badge {
+      display: inline-block; padding: 4px 10px; border-radius: 6px;
+      font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+    }
+    .badge-accent { background: var(--accent-soft); color: var(--accent); border: 1px solid rgba(255,46,41,0.35); }
+    .badge-green { background: var(--green-soft); color: var(--green); border: 1px solid rgba(34,197,94,0.35); }
+    .badge-amber { background: var(--amber-soft); color: var(--amber); border: 1px solid rgba(245,158,11,0.35); }
+    h1 { font-size: 28px; margin: 12px 0 8px; letter-spacing: -0.02em; }
+    h2 { font-size: 20px; margin: 36px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); color: #fff; }
+    h3 { font-size: 16px; margin: 22px 0 8px; color: #fff; }
+    .subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 24px; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px 24px; margin-bottom: 20px; }
+    .card-recommend { border-left: 4px solid var(--accent); background: linear-gradient(90deg, rgba(255,46,41,0.08) 0%, var(--surface) 35%); }
+    .card-amber { border-left: 4px solid var(--amber); }
+    .table-wrap { overflow-x: auto; margin: 16px 0; }
+    table { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+    th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); font-size: 14px; vertical-align: top; }
+    th { background: var(--surface-elevated); color: #fff; font-weight: 600; }
+    td.num, th.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    code { background: var(--code-bg); color: #ff8582; padding: 2px 6px; border-radius: 4px; font-family: "JetBrains Mono", Consolas, monospace; font-size: 13px; }
+    pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px; overflow-x: auto; font-size: 13px; line-height: 1.5; color: #d7e0ea; }
+    pre code { background: transparent; color: inherit; padding: 0; }
+    .muted { color: var(--text-muted); }
+    .yes { color: var(--green); font-weight: 600; }
+    .part { color: var(--amber); font-weight: 600; }
+    .no { color: var(--accent); font-weight: 600; }
+    ol li, ul li { margin-bottom: 6px; }
+    a { color: #ff8582; }
+    .toc { columns: 2; column-gap: 32px; }
+    .toc li { break-inside: avoid; }
+    @media (max-width: 640px) { .toc { columns: 1; } }
+  </style>
+</head>
+<body>
+<div class="container">
+  <span class="badge badge-accent">Đặc tả</span>
+  <span class="badge badge-amber">Đề xuất, chờ JOY duyệt</span>
+  <h1>Mô hình tin cậy review của Rate</h1>
+  <div class="subtitle">17/10/2026 · Agent Crawl · DOS/Rate#158 · Áp dụng cho mọi nguồn review: sàn TMĐT, chuỗi bán lẻ, cộng đồng Rate.vn, chuyên gia</div>
+
+  <div class="card card-recommend">
+    <h3 style="margin-top:0">Tóm tắt</h3>
+    <ul>
+      <li><b>Một review không chỉ có một nhãn.</b> Hiện tại mỗi review được xếp vào 1 trong 5 nhóm (<code>authentic</code>, <code>low_value_coin_spam</code>, <code>seeding_fake</code>, <code>competitor_sabotage</code>, <code>review_bombing</code>). Như vậy không diễn tả được những review vừa có tài trợ, vừa chi tiết, vừa do chuyên gia viết. Đề xuất chấm mỗi review trên <b>6 trục độc lập</b>: tính xác thực, tính độc lập, độ sâu nội dung, uy tín người viết, bối cảnh, tín hiệu cộng đồng.</li>
+      <li><b>Trọng số là tích của 6 trục</b>, có cổng chặn về 0 cho review giả, cày xu, chép, phá hoại và xung đột lợi ích. Không xóa review thật nào. Review kém chỉ nhẹ ký hơn, và mỗi trọng số đều có lời giải thích hiển thị được.</li>
+      <li><b>Điểm sản phẩm dùng trung bình Bayes kèm độ tin cậy</b>, để 5 đánh giá chỉ chấm sao không còn ra 5/5 tròn trịa. Bên cạnh điểm luôn hiện độ tin cậy (chưa đủ dữ liệu, thấp, trung bình, cao).</li>
+      <li><b>Mọi thứ đều review được</b>, theo kiểu related listing của JReviews: sản phẩm, listing, thương hiệu, người bán, người viết review, chuyên gia, và cả từng review. Nhà sản xuất và người bán được lên tiếng bằng <b>phản hồi chính thức</b>, nhưng không được tính vào điểm độc lập.</li>
+      <li><b>Uy tín người viết và lượt vote đều có trọng số.</b> Vote của tài khoản đáng tin nặng hơn. Vòng vote qua lại, tài khoản mới tạo và vote dồn dập bị gộp hoặc loại.</li>
+    </ul>
+  </div>
+
+  <h3>Mục lục</h3>
+  <ol class="toc">
+    <li><a href="#nguyen-tac">Nguyên tắc</a></li>
+    <li><a href="#doi-tuong">Mọi thứ đều review được</a></li>
+    <li><a href="#truc">6 trục chấm một review</a></li>
+    <li><a href="#loai">Bảng các loại review</a></li>
+    <li><a href="#trong-so">Công thức trọng số</a></li>
+    <li><a href="#vi-du">Ví dụ tính</a></li>
+    <li><a href="#diem">Điểm sản phẩm và độ tin cậy</a></li>
+    <li><a href="#reviewer">Uy tín người viết và chuyên gia</a></li>
+    <li><a href="#vote">Vote và chống thao túng</a></li>
+    <li><a href="#pipeline">Pipeline phát hiện</a></li>
+    <li><a href="#hien-trang">Hiện trạng và lỗ hổng</a></li>
+    <li><a href="#schema">Thay đổi dữ liệu</a></li>
+    <li><a href="#lo-trinh">Lộ trình</a></li>
+    <li><a href="#quyet-dinh">Cần JOY quyết</a></li>
+    <li><a href="#phu-luc">Phụ lục: kiểu dữ liệu</a></li>
+  </ol>
+
+  <h2 id="nguyen-tac">1. Nguyên tắc</h2>
+  <ol>
+    <li><b>Dữ liệu thật, không bịa.</b> Thiếu thông tin thì ghi là không rõ, không điền giá trị mặc định.</li>
+    <li><b>Không xóa review thật.</b> Review kém chất lượng chỉ bị giảm trọng số. Chỉ những review đi qua cổng chặn mới về 0: có bằng chứng là giả, phá hoại, chép từ nơi khác, viết cho có để lấy xu, sai sản phẩm, hoặc người viết có xung đột lợi ích. Chúng vẫn được giữ lại để làm tín hiệu (ví dụ phạt gian hàng seeding). Review chỉ nói về giao hàng không bị bỏ mà được chuyển sang điểm người bán.</li>
+    <li><b>Nhiều trục, không một nhãn.</b> Mỗi trục được đánh giá riêng và có thể kiểm chứng riêng.</li>
+    <li><b>Giải thích được.</b> Mỗi review có <code>weight_breakdown</code> nêu rõ từng hệ số, hiển thị dạng: "Trọng số 0,25: chỉ chấm sao, không có nội dung".</li>
+    <li><b>Độc lập với người bán.</b> Gian hàng, nhà sản xuất và đối tác của họ không có cách nào tác động lên điểm độc lập, kể cả trả tiền cho Rate.</li>
+    <li><b>Ít dữ liệu thì ít tự tin.</b> Điểm luôn đi kèm độ tin cậy, và co về trung bình ngành khi bằng chứng còn mỏng.</li>
+    <li><b>Mô hình công khai, ngưỡng có thể riêng tư.</b> Công thức và khoảng giá trị nằm trong repo open-core này. Danh sách cụm từ, ngưỡng chi tiết của bộ phát hiện và dữ liệu đồ thị reviewer có thể cấu hình riêng (env, Rate-Services) để kẻ gian khó lách. Xem quyết định số 6.</li>
+    <li><b>Riêng tư.</b> ID gốc của người dùng trên sàn không lưu, chỉ lưu khóa HMAC, theo đề xuất reviewer graph Phase 2.</li>
+  </ol>
+
+  <h2 id="doi-tuong">2. Mọi thứ đều review được (related listings)</h2>
+  <p>Giống JReviews và danhgia.net: một đối tượng có thể vừa được review, vừa đi review đối tượng khác. Đề xuất một khái niệm chung là <b>chủ thể review</b> (<code>subject</code>), gồm loại và id.</p>
+  <div class="table-wrap"><table>
+    <tr><th>Chủ thể (<code>subject_kind</code>)</th><th>Ví dụ</th><th>Điểm được tính</th></tr>
+    <tr><td><code>master_product</code></td><td>iPhone 16 Pro Max 256GB. Dịch vụ cũng là master với <code>entity_type = 'service'</code> như hiện có</td><td>Điểm người dùng, điểm chuyên gia, điểm theo tiêu chí (màn hình, pin, camera, hiệu năng, giá trị)</td></tr>
+    <tr><td><code>listing</code></td><td>Listing đó trên Tiki của gian hàng X</td><td>Gộp lên master. Riêng phần về giao hàng và đóng gói thì chuyển sang người bán</td></tr>
+    <tr><td><code>brand</code></td><td>Apple, Samsung (nhà sản xuất)</td><td>Bảo hành, hậu mãi, độ bền theo dòng sản phẩm</td></tr>
+    <tr><td><code>merchant</code></td><td>Gian hàng trên sàn, chuỗi bán lẻ</td><td>Dịch vụ, giao hàng, đúng mô tả, xử lý khiếu nại (tách khỏi <code>dosafe_risk_score</code>)</td></tr>
+    <tr><td><code>reviewer</code></td><td>Một người viết review (người dùng Rate hoặc reviewer ẩn danh trên sàn)</td><td>Độ tin cậy, độ hữu ích</td></tr>
+    <tr><td><code>expert</code></td><td>Chuyên gia hoặc đơn vị truyền thông đã xác minh</td><td>Độ chính xác, độ độc lập</td></tr>
+    <tr><td><code>review</code></td><td>Một review cụ thể</td><td>Vote hữu ích hay không, báo cáo vi phạm (đã có <code>rate.review_votes</code>)</td></tr>
+  </table></div>
+
+  <h3>Ai được review ai</h3>
+  <div class="table-wrap"><table>
+    <tr><th>Người viết \ Chủ thể</th><th>Sản phẩm / listing</th><th>Thương hiệu</th><th>Người bán</th><th>Reviewer / chuyên gia</th><th>Review</th></tr>
+    <tr><td>Người dùng</td><td class="yes">Review, tính điểm</td><td class="yes">Review</td><td class="yes">Review</td><td class="yes">Đánh giá độ tin cậy (trọng số nhỏ)</td><td class="yes">Vote, báo cáo</td></tr>
+    <tr><td>Chuyên gia đã xác minh</td><td class="yes">Review chuyên gia (nhóm điểm riêng)</td><td class="yes">Review</td><td class="part">Như người dùng</td><td class="part">Như người dùng</td><td class="yes">Vote</td></tr>
+    <tr><td>Nhà sản xuất (tài khoản doanh nghiệp đã xác minh)</td><td class="part">Phản hồi chính thức, không tính điểm</td><td class="no">Không tự review mình</td><td class="part">Nhận xét về đại lý: hiện riêng, không tính điểm</td><td class="part">Báo cáo vi phạm</td><td class="part">Phản hồi chính thức, không vote review sản phẩm của mình</td></tr>
+    <tr><td>Người bán (tài khoản doanh nghiệp)</td><td class="part">Phản hồi chính thức, không tính điểm</td><td class="part">Nhận xét về nhà cung cấp: hiện riêng, không tính điểm</td><td class="no">Không tự review mình</td><td class="part">Báo cáo người mua tống tiền, chỉ làm tín hiệu kiểm duyệt</td><td class="part">Phản hồi chính thức</td></tr>
+  </table></div>
+  <p><b>Quy tắc xung đột lợi ích:</b> review mà người viết có quan hệ với chủ thể (chính người bán, nhà sản xuất, nhân viên, agency, đối thủ trực tiếp) đi qua <b>cổng chặn</b>. Chúng không tính vào điểm độc lập, nhưng vẫn hiển thị ở mục "Phản hồi chính thức" có nhãn rõ ràng. Quan hệ được xác định qua tài khoản doanh nghiệp đã xác minh trên DOS.Me, khai báo của người dùng và tín hiệu đồ thị (cùng thiết bị, cùng nhóm vote).</p>
+
+  <h2 id="truc">3. Sáu trục chấm một review</h2>
+
+  <h3>Trục A: Tính xác thực, có phải trải nghiệm thật của người viết không</h3>
+  <div class="table-wrap"><table>
+    <tr><th>Giá trị</th><th>Ý nghĩa</th><th>Hệ số A</th></tr>
+    <tr><td><code>genuine</code></td><td>Không có dấu hiệu bất thường (xác suất giả dưới 0,35)</td><td class="num">1,0</td></tr>
+    <tr><td><code>doubtful</code></td><td>Có dấu hiệu nhưng chưa đủ bằng chứng (0,35 đến dưới 0,65)</td><td class="num">0,5</td></tr>
+    <tr><td><code>fabricated</code></td><td>Seeding, bot, trang trại review, văn mẫu trùng giữa nhiều tài khoản, brushing</td><td class="num">Cổng chặn 0</td></tr>
+    <tr><td><code>sabotage</code></td><td>Đối thủ dìm hàng, điều hướng sang shop khác</td><td class="num">Cổng chặn 0</td></tr>
+    <tr><td><code>bombing</code></td><td>Chưa dùng sản phẩm, hủy đơn rồi chê, hùa theo đám đông</td><td class="num">Cổng chặn 0</td></tr>
+    <tr><td><code>copied</code></td><td>Chép từ nơi khác, kể cả dịch lại</td><td class="num">Cổng chặn 0</td></tr>
+  </table></div>
+  <p class="muted">Xác suất ở đây là xác suất mới cho riêng trục A: "đây không phải trải nghiệm thật của người viết". Cột <code>fake_probability</code> hiện có không dùng thẳng được, vì nó đang mang nghĩa khác (review cày xu có 0,65, RPC review cộng đồng ghi 0,65 hoặc 0,85). Dữ liệu cũ được chuyển sang trục mới qua <code>flag_category</code> (mục 12).</p>
+
+  <h3>Trục B: Tính độc lập, người viết có nhận lợi ích không</h3>
+  <div class="table-wrap"><table>
+    <tr><th>Giá trị</th><th>Ý nghĩa</th><th>Hệ số B</th></tr>
+    <tr><td><code>organic</code></td><td>Tự mua, tự viết, không nhận gì</td><td class="num">1,0</td></tr>
+    <tr><td><code>affiliate</code></td><td>Có link tiếp thị liên kết, hưởng hoa hồng khi người khác mua</td><td class="num">0,7</td></tr>
+    <tr><td><code>incentivized</code></td><td>Nhận xu, voucher, quà, hoàn tiền để viết review, nhưng nội dung vẫn là trải nghiệm thật</td><td class="num">0,5</td></tr>
+    <tr><td><code>sponsored_balanced</code></td><td>Có tài trợ và đã công bố, có nêu cả ưu lẫn nhược điểm</td><td class="num">0,5</td></tr>
+    <tr><td><code>sponsored_promo</code></td><td>Có tài trợ và chỉ khen, văn phong quảng cáo. Gắn nhãn "Quảng cáo"</td><td class="num">0,1</td></tr>
+    <tr><td><code>undisclosed_paid</code></td><td>Có bằng chứng nhận tiền nhưng giấu: coi như seeding, phạt cả gian hàng lẫn người viết</td><td class="num">Cổng chặn 0</td></tr>
+    <tr><td><code>conflict_of_interest</code></td><td>Người bán, nhà sản xuất, nhân viên, agency, đối thủ trực tiếp</td><td class="num">Cổng chặn 0 (hiện ở mục phản hồi chính thức)</td></tr>
+  </table></div>
+
+  <h3>Trục C: Độ sâu nội dung, review cho người đọc biết được gì</h3>
+  <div class="table-wrap"><table>
+    <tr><th>Giá trị</th><th>Ý nghĩa</th><th>Hệ số C</th></tr>
+    <tr><td><code>stars_only</code></td><td>Chỉ chấm sao, không viết gì (đang áp dụng từ #157)</td><td class="num">0,25</td></tr>
+    <tr><td><code>platform_label</code></td><td>Chỉ có nhãn sàn tự điền theo số sao ("Cực kì hài lòng")</td><td class="num">0,25</td></tr>
+    <tr><td><code>filler</code></td><td>Viết cho có để lấy xu, không liên quan sản phẩm ("nhận xu", thơ, công thức nấu ăn, chuỗi ký tự đệm)</td><td class="num">Cổng chặn 0 (sao không phản ánh trải nghiệm)</td></tr>
+    <tr><td><code>low_effort</code></td><td>Thật nhưng hời hợt: "cũng được", "tạm được", "xài ngon", viết vừa đủ số ký tự tối thiểu</td><td class="num">0,5</td></tr>
+    <tr><td><code>specific_short</code></td><td>Ngắn nhưng có ít nhất một chi tiết kiểm chứng được ("pin hết sau 6 tiếng chơi game")</td><td class="num">0,8</td></tr>
+    <tr><td><code>detailed</code></td><td>Nhiều khía cạnh, có bối cảnh sử dụng, có cả ưu lẫn nhược điểm</td><td class="num">1,0</td></tr>
+    <tr><td><code>expert_depth</code></td><td>Có số đo, so sánh, phương pháp kiểm tra, thuật ngữ đúng</td><td class="num">1,2</td></tr>
+  </table></div>
+  <p>Cộng thêm, tối đa C = 1,5: <b>ảnh hoặc video thật</b> của sản phẩm (không phải ảnh mẫu) +0,1; <b>review dài hạn</b> (đã dùng từ 3 tháng trở lên, hoặc cập nhật sau một thời gian) +0,2.</p>
+
+  <h3>Trục D: Uy tín người viết</h3>
+  <div class="table-wrap"><table>
+    <tr><th>Mức</th><th>Điều kiện</th><th>Hệ số D</th></tr>
+    <tr><td>Không rõ</td><td>Ẩn danh, sàn không cho biết gì</td><td class="num">0,8</td></tr>
+    <tr><td>Đã mua</td><td>Sàn xác nhận đã mua, hoặc có nhãn "Đã mua tại" của chuỗi bán lẻ</td><td class="num">1,0</td></tr>
+    <tr><td>Có lịch sử tốt</td><td>Đã mua và có điểm tin cậy T ≥ 0,7 (mục 8)</td><td class="num">1,1</td></tr>
+    <tr><td>Am hiểu ngành hàng</td><td>Điểm tin cậy theo ngành hàng ≥ 0,8, tức review trong ngành này thường được vote hữu ích</td><td class="num">1,3</td></tr>
+    <tr><td>Tài khoản mới, hoạt động dồn dập</td><td>Tuổi tài khoản dưới 30 ngày và nhiều review trong thời gian ngắn</td><td class="num">0,5</td></tr>
+    <tr><td>Có tiền sử xấu</td><td>Trên 20% review cũ bị xác định là giả</td><td class="num">0,3</td></tr>
+  </table></div>
+  <p><b>Chuyên gia đã xác minh không nằm trong trục này.</b> Review của họ vào một nhóm điểm riêng (điểm chuyên gia), như JReviews tách điểm biên tập và điểm người dùng.</p>
+
+  <h3>Trục E: Bối cảnh</h3>
+  <div class="table-wrap"><table>
+    <tr><th>Tình huống</th><th>Hệ số E</th></tr>
+    <tr><td>Đúng sản phẩm, đúng phiên bản</td><td class="num">1,0</td></tr>
+    <tr><td>Phiên bản khác cùng model (128GB thay vì 256GB, màu khác)</td><td class="num">0,8</td></tr>
+    <tr><td>Review cũ hơn 24 tháng, sản phẩm đã có bản sửa đổi</td><td class="num">0,7</td></tr>
+    <tr><td>Chỉ nói về giao hàng, đóng gói hoặc người bán</td><td class="num">0 cho sản phẩm, chuyển sang điểm người bán</td></tr>
+    <tr><td>Sai sản phẩm, listing bị tái sử dụng (review cũ của sản phẩm khác)</td><td class="num">Cổng chặn 0</td></tr>
+    <tr><td>Ngày review trước ngày mua hoặc trước ngày ra mắt sản phẩm</td><td class="num">Cổng chặn 0</td></tr>
+  </table></div>
+
+  <h3>Trục F: Tín hiệu cộng đồng</h3>
+  <p>Tính từ <b>vote hữu dụng</b> (đã lọc spam, mục 9), là số vote đã nhân trọng số người vote, nên có thể là số lẻ. Trước P3 chưa có trọng số người vote, nên F dùng số vote thô (mỗi tài khoản một vote, như hiện nay):</p>
+<pre><code>net⁺ = max(0, up_hữu_dụng − down_hữu_dụng)
+net⁻ = max(0, down_hữu_dụng − up_hữu_dụng)
+F    = clamp(1 + 0.45 · ln(1 + net⁺) − 0.30 · net⁻ − 0.35 · báo_cáo_hữu_dụng, 0.1, 2)</code></pre>
+  <p>Hệ số 0,45 / 0,30 / 0,35 giữ nguyên như <code>rate.compute_review_weight</code> hiện tại. Có bốn thay đổi:</p>
+  <ul>
+    <li><b>Nhân thay vì cộng.</b> Hiện nay vote được <i>cộng</i> vào trọng số gốc (0,25 + 0,45 × ln(1 + net)), nên một review chỉ chấm sao có 12 vote nặng 1,4, hơn cả một review chi tiết không có vote. Đề xuất <i>nhân</i>: vote khuếch đại chất lượng sẵn có chứ không thay thế nó.</li>
+    <li>Vote được tính theo trọng số người vote (mục 9).</li>
+    <li>F có trần là 2, tổng trọng số vẫn có trần 3.</li>
+    <li><b>F có sàn là 0,1.</b> Hiện nay 4 vote xuống là đủ đưa trọng số về 0. Theo nguyên tắc 2, chỉ cổng chặn G mới được đưa về 0, nên vote chỉ làm review nhẹ đi. Review bị báo cáo nhiều được đưa vào hàng đợi kiểm duyệt (L5, mục 10), và người kiểm duyệt quyết định có đóng cổng chặn hay không.</li>
+  </ul>
+
+  <h2 id="loai">4. Bảng các loại review</h2>
+  <p>Các loại anh liệt kê, cộng thêm các loại thường bị sót. Cột "Xử lý" ghi giá trị trên các trục và trọng số điển hình (người viết đã mua, D = 1, chưa có vote).</p>
+  <div class="table-wrap"><table>
+    <tr><th>#</th><th>Loại review</th><th>Xử lý</th><th class="num">Trọng số</th><th>Phát hiện bằng</th></tr>
+    <tr><td>1</td><td>Review giả (seeding, bot, trang trại)</td><td>A = <code>fabricated</code>, cổng chặn. Phạt rủi ro gian hàng</td><td class="num">0</td><td>Văn mẫu trùng, đợt dồn dập, đồ thị reviewer, phân bố sao bất thường, LLM</td></tr>
+    <tr><td>2</td><td>Comment cho có, không liên quan, để lấy xu</td><td>C = <code>filler</code>, cổng chặn. Không phạt gian hàng</td><td class="num">0</td><td>Cụm từ, ký tự đệm, LLM chấm mức liên quan</td></tr>
+    <tr><td>3</td><td>Chỉ chấm sao</td><td>C = <code>stars_only</code></td><td class="num">0,25</td><td>Không có chữ</td></tr>
+    <tr><td>4</td><td>Thật nhưng hời hợt, viết vừa đủ ký tự</td><td>C = <code>low_effort</code></td><td class="num">0,5</td><td>Độ dài, không nêu khía cạnh nào, cụm từ chung chung</td></tr>
+    <tr><td>5</td><td>Tài trợ, chỉ khen</td><td>B = <code>sponsored_promo</code>, nhãn "Quảng cáo"</td><td class="num">0,1</td><td>Câu công bố tài trợ, link tiếp thị, không có nhược điểm, văn quảng cáo</td></tr>
+    <tr><td>6</td><td>Tài trợ nhưng công tâm</td><td>B = <code>sponsored_balanced</code>, nhãn "Có tài trợ"</td><td class="num">0,5</td><td>Câu công bố + có cả ưu lẫn nhược</td></tr>
+    <tr><td>7</td><td>Chi tiết, hữu ích</td><td>C = <code>detailed</code></td><td class="num">1,0</td><td>Số khía cạnh, chi tiết cụ thể, ảnh thật</td></tr>
+    <tr><td>8</td><td>Chi tiết, chuyên môn sâu, do người dùng viết</td><td>C = <code>expert_depth</code>, D tăng dần nếu thường xuyên như vậy</td><td class="num">1,2 (đến 1,95 khi D = 1,3 và có cộng thêm)</td><td>LLM: số đo, phương pháp, thuật ngữ</td></tr>
+    <tr><td>9</td><td>Chi tiết, chuyên môn sâu, do chuyên gia trong ngành viết</td><td>Nhóm điểm chuyên gia, trọng số theo uy tín chuyên gia</td><td class="num">Nhóm riêng</td><td>Hồ sơ đã xác minh, không dựa vào văn bản</td></tr>
+    <tr><td>10</td><td>Hữu ích, được vote cao</td><td>F tối đa 2</td><td class="num">Đến 3</td><td>Vote đã lọc spam</td></tr>
+    <tr><td>11</td><td>Viết bằng AI, không có trải nghiệm thật</td><td>A = <code>doubtful</code>, hoặc <code>fabricated</code> nếu kèm tín hiệu khác</td><td class="num">0,5 hoặc 0</td><td>Văn phong LLM, không có chi tiết riêng, trùng ý giữa nhiều review</td></tr>
+    <tr><td>12</td><td>Chép hoặc dịch từ nơi khác</td><td>A = <code>copied</code></td><td class="num">0</td><td>MinHash/SimHash so với kho review</td></tr>
+    <tr><td>13</td><td>Chỉ nói về giao hàng, đóng gói, shop</td><td>Chuyển sang điểm người bán</td><td class="num">0 cho sản phẩm</td><td>Trích khía cạnh</td></tr>
+    <tr><td>14</td><td>Sai sản phẩm, sai phiên bản, listing tái sử dụng</td><td>E = 0 hoặc 0,8</td><td class="num">0 hoặc 0,8</td><td>So model trong review với model của listing; review cũ hơn ngày ra mắt</td></tr>
+    <tr><td>15</td><td>Sao và nội dung trái nhau (5 sao nhưng chê, châm biếm)</td><td>Dùng sao suy ra từ nội dung, hoặc A = <code>doubtful</code></td><td class="num">1 hoặc 0,5</td><td>LLM phân tích cảm xúc so với số sao</td></tr>
+    <tr><td>16</td><td>Đổi review lấy quà (thẻ "đánh giá 5 sao nhận quà" trong hộp)</td><td>B = <code>incentivized</code>. Nếu cả loạt giống nhau: phạt gian hàng</td><td class="num">0,5</td><td>Nhắc đến quà, voucher, hoàn tiền; tỷ lệ 5 sao tăng đột biến</td></tr>
+    <tr><td>17</td><td>Brushing (đơn ảo gửi cho người lạ, có nhãn "đã mua")</td><td>A = <code>fabricated</code> khi đồ thị cho thấy cụm</td><td class="num">0</td><td>Cụm reviewer cùng mua cùng shop, không có chi tiết sử dụng</td></tr>
+    <tr><td>18</td><td>Review đã sửa (đổi sao sau khi được xử lý, hoặc bị shop ép)</td><td>Dùng phiên bản mới, lưu lịch sử. Shop ép sửa: tín hiệu xấu cho gian hàng</td><td class="num">Theo bản mới</td><td>So sánh các lần crawl</td></tr>
+    <tr><td>19</td><td>Tống tiền bằng review ("hoàn tiền không thì 1 sao")</td><td>A = <code>doubtful</code>, gian hàng được báo cáo qua kênh chính thức</td><td class="num">0,5</td><td>Cụm từ, báo cáo của gian hàng</td></tr>
+    <tr><td>20</td><td>KOL, influencer</td><td>Như loại 5 và 6, B theo việc có công bố tài trợ</td><td class="num">0,1 đến 1</td><td>Hồ sơ, câu công bố</td></tr>
+    <tr><td>21</td><td>Câu hỏi bị đăng ở chỗ review</td><td>Không phải review, chuyển sang hỏi đáp</td><td class="num">0</td><td>Câu hỏi, không có trải nghiệm</td></tr>
+    <tr><td>22</td><td>Review dài hạn (dùng nhiều tháng)</td><td>C +0,2</td><td class="num">1,2 đến 1,5</td><td>Nhắc thời gian sử dụng, cập nhật sau</td></tr>
+    <tr><td>23</td><td>Cùng một người đăng ở nhiều sàn</td><td>Gộp làm một trải nghiệm</td><td class="num">Tính một lần</td><td>Khóa reviewer, văn bản gần giống</td></tr>
+    <tr><td>24</td><td>Sàn ẩn bớt review xấu (thiên lệch sống sót)</td><td>Không sửa được từng review. Cảnh báo ở cấp listing khi phân bố sao toàn 5 sao bất thường</td><td class="num">Không áp dụng</td><td>Phân bố sao, so giữa các sàn</td></tr>
+    <tr><td>25</td><td>Review của nhà sản xuất hoặc người bán về chính mình</td><td>B = <code>conflict_of_interest</code>, hiện ở mục phản hồi chính thức</td><td class="num">0</td><td>Tài khoản doanh nghiệp đã xác minh</td></tr>
+  </table></div>
+
+  <h2 id="trong-so">5. Công thức trọng số</h2>
+<pre><code>w = G × A × B × C × D × E × F,   giới hạn trong [0, 3]
+
+G  cổng chặn: 0 nếu bất kỳ trục nào rơi vào ô "cổng chặn", ngược lại 1
+A  tính xác thực            (mục 3, trục A)
+B  tính độc lập             (trục B)
+C  độ sâu nội dung          (trục C, tối đa 1,5)
+D  uy tín người viết        (trục D)
+E  bối cảnh                 (trục E)
+F  tín hiệu cộng đồng       (trục F, 0,1 đến 2)</code></pre>
+  <ul>
+    <li>Các hệ số là giá trị khởi điểm đề xuất. Sẽ hiệu chỉnh khi có dữ liệu thật: lấy mẫu có người gán nhãn, đo độ chính xác của từng bộ phát hiện.</li>
+    <li>Mọi hệ số được lưu kèm từng review trong <code>weight_breakdown</code>, và giao diện hiển thị được lý do.</li>
+    <li>Tương thích ngược: hiện nay <code>verdict = 'suspicious'</code> cho trọng số gốc 0,25, gộp chung A và C (review chỉ chấm sao đang dùng cách này). Khi có cột <code>base_weight</code> (mục 12), hàm SQL sẽ dùng <code>base_weight × F</code> thay cho bảng tra theo verdict, nên JS và SQL luôn ra cùng một số.</li>
+  </ul>
+
+  <h2 id="vi-du">6. Ví dụ tính</h2>
+  <div class="table-wrap"><table>
+    <tr><th>Review</th><th>A</th><th>B</th><th>C</th><th>D</th><th>E</th><th>F</th><th class="num">w</th></tr>
+    <tr><td>Chi tiết, có ảnh thật, người viết có lịch sử tốt, 12 vote hữu dụng</td><td>1</td><td>1</td><td>1,1</td><td>1,1</td><td>1</td><td>2 (đạt trần)</td><td class="num">2,42</td></tr>
+    <tr><td>Chuyên môn sâu, người viết am hiểu ngành, 3 vote hữu dụng</td><td>1</td><td>1</td><td>1,2</td><td>1,3</td><td>1</td><td>1,62</td><td class="num">2,53</td></tr>
+    <tr><td>Chi tiết nhưng có dấu hiệu nghi vấn, người viết không rõ</td><td>0,5</td><td>1</td><td>1</td><td>0,8</td><td>1</td><td>1</td><td class="num">0,40</td></tr>
+    <tr><td>Tài trợ công tâm, chi tiết, người viết có lịch sử tốt</td><td>1</td><td>0,5</td><td>1</td><td>1,1</td><td>1</td><td>1</td><td class="num">0,55</td></tr>
+    <tr><td>"Cũng được, xài ngon", đã mua</td><td>1</td><td>1</td><td>0,5</td><td>1</td><td>1</td><td>1</td><td class="num">0,50</td></tr>
+    <tr><td>Chỉ chấm sao, đã mua</td><td>1</td><td>1</td><td>0,25</td><td>1</td><td>1</td><td>1</td><td class="num">0,25</td></tr>
+    <tr><td>Tài trợ, chỉ khen, người viết có lịch sử tốt</td><td>1</td><td>0,1</td><td>1</td><td>1,1</td><td>1</td><td>1</td><td class="num">0,11</td></tr>
+    <tr><td>"5 sao nhận xu ......"</td><td colspan="6">C = <code>filler</code>, cổng chặn</td><td class="num">0</td></tr>
+    <tr><td>Người bán tự review sản phẩm của mình</td><td colspan="6">B = <code>conflict_of_interest</code>, cổng chặn, hiện ở phản hồi chính thức</td><td class="num">0</td></tr>
+  </table></div>
+  <p class="muted">Cách tính dòng 2: F = 1 + 0,45 × ln(4) ≈ 1,62, và w = 1,2 × 1,3 × 1,62 ≈ 2,53.</p>
+
+  <h2 id="diem">7. Điểm sản phẩm và độ tin cậy</h2>
+  <h3>Trung bình Bayes</h3>
+<pre><code>S = (k · μ + Σ wᵢ · rᵢ) / (k + Σ wᵢ)
+
+rᵢ  số sao của review i
+wᵢ  trọng số của review i (mục 5)
+μ   trung bình có trọng số của cả ngành hàng (điện thoại, tai nghe...)
+k   độ mạnh của giả định ban đầu, đề xuất k = 3 (tương đương 3 review chi tiết)
+
+Độ tin cậy  c = Σ wᵢ / (Σ wᵢ + k)</code></pre>
+  <div class="table-wrap"><table>
+    <tr><th>c</th><th>Nhãn</th><th>Hiển thị</th></tr>
+    <tr><td>Dưới 0,3</td><td>Chưa đủ dữ liệu</td><td>Điểm làm mờ, kèm số lượng và loại review</td></tr>
+    <tr><td>0,3 đến dưới 0,6</td><td>Độ tin cậy thấp</td><td>Điểm kèm cảnh báo</td></tr>
+    <tr><td>0,6 đến dưới 0,85</td><td>Trung bình</td><td>Bình thường</td></tr>
+    <tr><td>Từ 0,85</td><td>Cao</td><td>Bình thường (cần Σw từ khoảng 17)</td></tr>
+  </table></div>
+  <p><b>Ví dụ trên dữ liệu thật hôm nay</b> (lấy μ = 4,2):</p>
+  <ul>
+    <li><b>Một listing CellphoneS có 5 review chỉ chấm sao, đều 5 sao:</b> Σw = 1,25 và S = (3 × 4,2 + 6,25) / 4,25 ≈ 4,4. Độ tin cậy c ≈ 0,29, tức "chưa đủ dữ liệu". Hiện nay listing này đang hiện 5,0.</li>
+    <li><b>Tiki AirPods Pro 3:</b> 5 review có chữ (1, 4, 5, 5, 5 sao) cộng 6 review chỉ chấm 5 sao. Tính theo trọng số hiện tại (review có chữ = 1, chỉ chấm sao = 0,25, chưa áp 6 trục) thì Σw = 6,5 và Σwr = 27,5. S = (12,6 + 27,5) / 9,5 ≈ 4,2, độ tin cậy c ≈ 0,68 (trung bình). Hiện nay điểm là 4,23.</li>
+  </ul>
+  <h3>Hiển thị</h3>
+  <ul>
+    <li>Luôn hiện cạnh điểm: số review, cơ cấu loại review và nhãn độ tin cậy. Ví dụ: "4,4 · 5 đánh giá, đều chỉ chấm sao · Chưa đủ dữ liệu".</li>
+    <li><b>Điểm người dùng và điểm chuyên gia tách riêng</b>, như JReviews. Điểm tổng (40% chuyên gia, 60% người dùng, như hiện có) chỉ hiện khi có cả hai và độ tin cậy của điểm người dùng từ mức trung bình trở lên.</li>
+    <li><b>Điểm theo tiêu chí</b> (màn hình, pin, camera, hiệu năng, giá trị) tính theo cùng trọng số. Nguồn là <code>criteria_ratings</code> và các khía cạnh LLM trích được từ nội dung.</li>
+    <li><b>Cảnh báo phân bố sao bất thường</b> ở cấp listing: gần như toàn 5 sao, không có review thấp, khác hẳn cùng sản phẩm ở sàn khác.</li>
+  </ul>
+
+  <h2 id="reviewer">8. Uy tín người viết và chuyên gia</h2>
+  <h3>Điểm tin cậy người viết T (0 đến 1)</h3>
+  <p>Khởi điểm 0,5 với người mới. Cập nhật định kỳ (job hằng đêm) từ các tín hiệu sau. Trọng số ban đầu đề xuất, sẽ hiệu chỉnh:</p>
+  <div class="table-wrap"><table>
+    <tr><th>Tín hiệu</th><th>Ảnh hưởng</th></tr>
+    <tr><td>Tỷ lệ review có xác nhận đã mua</td><td>Tăng</td></tr>
+    <tr><td>Tuổi tài khoản, số review (thang log)</td><td>Tăng, có trần</td></tr>
+    <tr><td>Độ hữu ích: cận dưới Wilson của tỷ lệ vote hữu ích nhận được, vote đã nhân trọng số người vote</td><td>Tăng mạnh</td></tr>
+    <tr><td>Tiền sử bị kiểm duyệt: tỷ lệ review bị xác định là giả</td><td>Giảm mạnh (T = max(0, T × (1 − 2 × tỷ lệ)))</td></tr>
+    <tr><td>Tính nhất quán: chấm 5 sao hoặc 1 sao cho mọi thứ, nhiều sản phẩm không liên quan trong thời gian ngắn</td><td>Giảm</td></tr>
+    <tr><td>Mức xác minh danh tính trên DOS.Me (email, số điện thoại, KYC)</td><td>Tăng</td></tr>
+    <tr><td>Đánh giá của người khác về reviewer này, có nhân trọng số và giới hạn tần suất</td><td>Tăng hoặc giảm nhẹ</td></tr>
+    <tr><td>Lan truyền tin cậy kiểu EigenTrust: được người đáng tin vote hữu ích thì tăng nhiều hơn được tài khoản mới vote</td><td>Tăng</td></tr>
+  </table></div>
+  <p><b>Tin cậy theo ngành hàng:</b> tính T riêng cho từng ngành (điện thoại, laptop, mỹ phẩm...). Một người rành điện thoại không mặc nhiên rành mỹ phẩm.</p>
+  <p><b>Reviewer trên sàn</b> (Shopee, Tiki...) chỉ có dữ liệu sàn công khai: tuổi tài khoản, số review, lượt hữu ích, đã mua hay chưa. Họ được gắn khóa HMAC theo đề xuất reviewer graph Phase 2 (<code>Docs/Proposals/2026-10-16-reviewer-graph-phase2.html</code>, đang chờ duyệt).</p>
+
+  <h3>Review về người viết review</h3>
+  <ul>
+    <li>Người dùng đã đăng nhập chấm 1 đến 5 cho "độ tin cậy" của một reviewer, kèm lý do bắt buộc. Mỗi cặp chỉ được chấm một lần và có thể sửa.</li>
+    <li>Trọng số của từng lượt chấm bằng T của người chấm. Lượt chấm của người từng tương tác qua lại nhiều với reviewer (dấu hiệu vòng vote) bị bỏ.</li>
+    <li>Phần này chỉ đóng góp nhỏ vào T (trần ±0,15), để chống một nhóm hội đồng dìm một người.</li>
+  </ul>
+
+  <h3>Chuyên gia</h3>
+  <div class="table-wrap"><table>
+    <tr><th>Mức</th><th>Điều kiện</th><th>Cách tính</th></tr>
+    <tr><td>E1: Tự khai chuyên môn</td><td>Hồ sơ có link portfolio hoặc bài viết</td><td>Vẫn là người dùng. Chỉ tăng D khi đạt "am hiểu ngành hàng"</td></tr>
+    <tr><td>E2: Đã xác minh</td><td>KYC trên DOS.Me + xác minh nghề nghiệp (nơi làm việc, tòa soạn, chứng chỉ)</td><td>Review vào nhóm điểm chuyên gia</td></tr>
+    <tr><td>E3: Đối tác biên tập</td><td>Đơn vị truyền thông, phòng lab có quy trình kiểm tra công khai</td><td>Như E2, trọng số khởi điểm cao hơn</td></tr>
+  </table></div>
+  <ul>
+    <li><b>Bắt buộc khai tài trợ từng bài</b> (nhận máy, nhận tiền, quan hệ với hãng). Phát hiện giấu tài trợ thì hạ mức và áp B = <code>undisclosed_paid</code> cho các bài liên quan.</li>
+    <li><b>Độ chính xác theo thời gian:</b> so điểm chuyên gia với điểm dài hạn của người dùng đã mua (sau 6 đến 12 tháng). Chuyên gia hay lệch hẳn về một phía (luôn cao hơn với một hãng) bị giảm trọng số.</li>
+    <li>Người dùng chấm được chuyên gia như chấm reviewer, nhưng chỉ ảnh hưởng nhỏ.</li>
+  </ul>
+
+  <h2 id="vote">9. Vote và chống thao túng vote</h2>
+  <div class="table-wrap"><table>
+    <tr><th>Cơ chế</th><th>Mô tả</th><th>Trạng thái</th></tr>
+    <tr><td>Mỗi tài khoản một vote cho mỗi review</td><td>Bảng <code>rate.review_votes</code> theo từng người dùng, phải đăng nhập mới vote được</td><td class="yes">Đã có</td></tr>
+    <tr><td>Giới hạn tần suất</td><td>Tối đa 60 vote mới mỗi giờ cho mỗi tài khoản (trigger <code>review_votes_guard</code>)</td><td class="yes">Đã có</td></tr>
+    <tr><td>Không tự vote</td><td>Người viết không vote review của mình. Người bán và nhà sản xuất không vote review về sản phẩm của họ</td><td class="no">Chưa có: review chưa gắn tài khoản tác giả (cần <code>author_user_id</code>, migration E)</td></tr>
+    <tr><td>Điều kiện để được vote</td><td>Tài khoản từ 7 ngày tuổi, đã xác minh email hoặc số điện thoại</td><td class="no">Chưa có</td></tr>
+    <tr><td>Trọng số người vote</td><td>Mỗi vote nhân với trọng số người vote: bằng T (tối thiểu 0,1), riêng tài khoản dưới 30 ngày tuổi hoặc chưa có review nào được xác nhận thì cố định 0,1, không dùng T khởi điểm 0,5. Vote của tài khoản mới gần như không ảnh hưởng</td><td class="no">Chưa có</td></tr>
+    <tr><td>Phát hiện vòng vote</td><td>Đồ thị vote: A thường vote B và B thường vote A, hoặc một nhóm cùng vote giống nhau trong thời gian ngắn. Cả nhóm bị gộp lại thành một vote</td><td class="no">Chưa có</td></tr>
+    <tr><td>Phát hiện vote dồn dập</td><td>Vote tăng đột biến từ tài khoản mới trong vài phút hoặc vài giờ: tạm giữ, chờ xét</td><td class="no">Chưa có</td></tr>
+    <tr><td>Xếp hạng "hữu ích nhất"</td><td>Dùng cận dưới khoảng tin cậy Wilson của tỷ lệ hữu ích trên vote có trọng số, không dùng hiệu số up trừ down, để review ít vote không nhảy lên đầu</td><td class="no">Chưa có</td></tr>
+    <tr><td>Uy tín người báo cáo</td><td>Báo cáo vi phạm nhân với tỷ lệ báo cáo đúng trong quá khứ của người báo cáo. Báo cáo sai nhiều thì báo cáo mất tác dụng</td><td class="no">Chưa có</td></tr>
+    <tr><td>Lợi ích giảm dần</td><td>F dùng log và có trần là 2, nên một review không thể chiếm trọn điểm nhờ vote</td><td class="part">Có log, chưa có trần 2</td></tr>
+  </table></div>
+
+  <h2 id="pipeline">10. Pipeline phát hiện</h2>
+  <div class="table-wrap"><table>
+    <tr><th>Tầng</th><th>Làm gì</th><th>Trục được chấm</th><th>Ở đâu</th></tr>
+    <tr><td>L0. Nguồn gốc</td><td>Đã mua, ngày mua, phiên bản, ngày review so với ngày ra mắt, có ảnh thật hay không</td><td>D, E</td><td>Scraper (Rate-Services), importer</td></tr>
+    <tr><td>L1. Luật cố định</td><td>Cụm từ cày xu, ký tự đệm, nhãn sao, độ dài, văn mẫu trùng trong cùng listing, chỉ chấm sao</td><td>A, C</td><td><code>analyzeWithHeuristics</code> (đã có)</td></tr>
+    <tr><td>L2. Thống kê và hành vi</td><td>Đợt dồn dập 48 giờ, phân bố sao bất thường, trùng văn bản giữa các listing (MinHash), cụm reviewer cùng mua cùng shop, vòng vote</td><td>A, F</td><td>ReviewBurstAuditor (đã có), job đồ thị reviewer (Phase 2)</td></tr>
+    <tr><td>L3. LLM</td><td>Mức liên quan đến sản phẩm, độ cụ thể, trích khía cạnh, sao và nội dung có khớp không, câu công bố tài trợ và link tiếp thị, khả năng do AI viết, châm biếm</td><td>A, B, C, E</td><td><code>refineBatchWithAi</code> (có sẵn nhưng đang tắt vì thiếu <code>AI_API_KEY</code>)</td></tr>
+    <tr><td>L4. Cộng đồng</td><td>Vote, báo cáo, đánh giá về reviewer</td><td>F, D</td><td>Web, RPC</td></tr>
+    <tr><td>L5. Kiểm duyệt bởi người</td><td>Hàng đợi các ca lưng chừng (xác suất giả 0,5 đến 0,75), kênh khiếu nại cho gian hàng và người viết</td><td>Tất cả</td><td>Chưa có</td></tr>
+  </table></div>
+  <p>Mỗi kết luận lưu kèm <code>detector</code> và <code>detector_version</code>. LLM không được ghi đè các kết luận chắc chắn của tầng luật (đã áp dụng cho review chỉ chấm sao từ #154).</p>
+
+  <h2 id="hien-trang">11. Hiện trạng và lỗ hổng (17/10/2026)</h2>
+  <div class="table-wrap"><table>
+    <tr><th>Hạng mục</th><th>Hiện trạng</th></tr>
+    <tr><td>Phân loại 5 nhóm và trọng số theo verdict</td><td class="yes">Có (JS và SQL khớp nhau)</td></tr>
+    <tr><td>Review chỉ chấm sao, nhãn sao của sàn</td><td class="yes">Trọng số 0,25, không bị coi là seeding (#152, #157)</td></tr>
+    <tr><td>Không bịa ngày, sao, số liệu gian hàng</td><td class="yes">Có (DOS/Rate-Services#29)</td></tr>
+    <tr><td>Tầng LLM</td><td class="no">Đang tắt: repo Rate-Services chưa có secret <code>AI_API_KEY</code></td></tr>
+    <tr><td>Độ sâu nội dung (trục C)</td><td class="part">Mới có mức chỉ chấm sao. Chưa phân biệt hời hợt, chi tiết, chuyên sâu</td></tr>
+    <tr><td>Tài trợ, tiếp thị liên kết (trục B)</td><td class="no">Chưa có</td></tr>
+    <tr><td>Trung bình Bayes và độ tin cậy</td><td class="no">Chưa có: 5 đánh giá chỉ chấm sao vẫn ra 5,0</td></tr>
+    <tr><td>Uy tín người viết, đồ thị reviewer</td><td class="part">Có tuổi tài khoản và số review trong một lần crawl. Chưa lưu (Phase 2 chờ duyệt)</td></tr>
+    <tr><td>Trọng số vote và chống spam vote</td><td class="part">Phải đăng nhập, mỗi người một vote, tối đa 60 vote mỗi giờ. Vote nào cũng nặng như nhau</td></tr>
+    <tr><td>Review cộng đồng trên Rate.vn</td><td class="no">RPC <code>submit_community_review</code> cho cả <code>anon</code> gọi, nhận tên tác giả dạng chữ tự do, chưa gắn với tài khoản DOS.Me. Nó từ chối hẳn review dưới 15 ký tự (không lưu), còn review 15 đến 29 ký tự bị gắn <code>low_value_coin_spam</code> với trọng số 0, trái với chính sách giảm trọng số</td></tr>
+    <tr><td>Chuyên gia</td><td class="part">Có <code>reviewer_type = 'expert'</code> nhưng chỉ service_role tạo được, chưa có quy trình xác minh</td></tr>
+    <tr><td>Related listings (review người bán, thương hiệu, reviewer)</td><td class="no">Chưa có. Review chỉ gắn với listing (<code>product_id</code>)</td></tr>
+  </table></div>
+
+  <h2 id="schema">12. Thay đổi dữ liệu (migration ở DOS.Me, không chạy từ repo này)</h2>
+  <p>Theo quy tắc: mỗi thay đổi là một migration idempotent trong <code>DOS-Me/supabase/migrations/</code>, đi qua <code>dev</code> (beta) rồi mới lên <code>main</code> (prod). Dưới đây là phác thảo, sẽ chia thành từng PR theo lộ trình.</p>
+<pre><code>-- A. Các trục chấm và trọng số đã giải thích cho từng review
+ALTER TABLE rate.review_flags
+  ADD COLUMN IF NOT EXISTS authenticity TEXT,          -- genuine | doubtful | fabricated | sabotage | bombing | copied
+  ADD COLUMN IF NOT EXISTS independence TEXT,          -- organic | affiliate | incentivized | sponsored_balanced | sponsored_promo | undisclosed_paid | conflict_of_interest
+  ADD COLUMN IF NOT EXISTS depth TEXT,                 -- stars_only | platform_label | filler | low_effort | specific_short | detailed | expert_depth
+  ADD COLUMN IF NOT EXISTS relevance NUMERIC(4,3),     -- 0..1, mức liên quan đến sản phẩm
+  ADD COLUMN IF NOT EXISTS aspects JSONB DEFAULT '{}'::jsonb,   -- {"battery": {"sentiment": -1, "evidence": "..."}, "shipping": {...}}
+  ADD COLUMN IF NOT EXISTS ai_generated_prob NUMERIC(4,3),
+  ADD COLUMN IF NOT EXISTS base_weight NUMERIC(6,4),   -- G×A×B×C×D×E, chưa nhân vote, chưa làm tròn (JS và SQL chỉ làm tròn w cuối cùng)
+  ADD COLUMN IF NOT EXISTS weight_breakdown JSONB DEFAULT '{}'::jsonb;
+
+-- B. Hàm SQL dùng base_weight khi có, giữ bảng tra theo verdict cho dữ liệu cũ
+--    rate.compute_review_weight(...) → COALESCE(base_weight, bảng tra verdict) × F, trần 3
+
+-- C. Vote có trọng số
+ALTER TABLE rate.review_votes ADD COLUMN IF NOT EXISTS voter_weight NUMERIC(4,3);
+
+-- D. Người viết (nối tiếp Phase 2: rate.reviewers, rate.review_reviewer)
+ALTER TABLE rate.reviewers
+  ADD COLUMN IF NOT EXISTS trust_score NUMERIC(4,3),
+  ADD COLUMN IF NOT EXISTS category_trust JSONB DEFAULT '{}'::jsonb,
+  ADD COLUMN IF NOT EXISTS verification_level TEXT;   -- none | email | phone | kyc
+
+-- E. Related listings: chủ thể review dạng đa hình, product_id giữ cho listing
+ALTER TABLE rate.reviews
+  ADD COLUMN IF NOT EXISTS subject_kind TEXT DEFAULT 'listing',
+  ADD COLUMN IF NOT EXISTS subject_id UUID,
+  ADD COLUMN IF NOT EXISTS author_user_id UUID;        -- tài khoản DOS.Me cho review cộng đồng
+
+-- F. Chuyên gia, phản hồi chính thức, khai tài trợ
+CREATE TABLE IF NOT EXISTS rate.experts (...);              -- hồ sơ, mức E1..E3, ngành hàng
+CREATE TABLE IF NOT EXISTS rate.official_responses (...);   -- người bán, nhà sản xuất trả lời review
+CREATE TABLE IF NOT EXISTS rate.review_disclosures (...);   -- tài trợ tự khai theo từng review
+CREATE TABLE IF NOT EXISTS rate.reviewer_ratings (...);     -- đánh giá về reviewer / chuyên gia</code></pre>
+  <p>Năm giá trị <code>flag_category</code> hiện có vẫn giữ để tương thích. Chúng được suy ra từ các trục mới. Thứ tự áp dụng quan trọng, vì <code>evaluateMerchantRisk</code> chỉ coi <code>seeding_fake</code> là seeding và coi mọi review <code>authentic</code> từ 2 sao trở xuống là khiếu nại thật của gian hàng:</p>
+  <ul>
+    <li><code>fabricated</code>, <code>undisclosed_paid</code>, <code>copied</code>: <code>seeding_fake</code> (phạt gian hàng như seeding).</li>
+    <li><code>sabotage</code>, và <code>conflict_of_interest</code> khi người viết là đối thủ: <code>competitor_sabotage</code>.</li>
+    <li><code>bombing</code>: <code>review_bombing</code>.</li>
+    <li><code>filler</code>, và câu hỏi đăng nhầm chỗ: <code>low_value_coin_spam</code>.</li>
+    <li>Còn lại là <code>authentic</code>.</li>
+  </ul>
+  <p>Bất kỳ review nào có G = 0 (kể cả <code>conflict_of_interest</code> của người bán, nhà sản xuất, và cổng chặn của trục E) đều phải có <code>include_in_rating = false</code>, để không lọt vào điểm sản phẩm lẫn tỷ lệ khiếu nại của gian hàng. <code>evaluateMerchantRisk</code> chỉ đếm khiếu nại từ review có <code>include_in_rating = true</code> (sửa cùng PR này, DOS/Rate#160).</p>
+
+  <h2 id="lo-trinh">13. Lộ trình</h2>
+  <div class="table-wrap"><table>
+    <tr><th>Giai đoạn</th><th>Nội dung</th><th>Phụ thuộc</th><th>Trạng thái</th></tr>
+    <tr><td>P0</td><td>Luật cố định, chỉ chấm sao 0,25, nhãn sao của sàn, không bịa dữ liệu, chống burst giả</td><td>Không</td><td class="yes">Xong 17/10</td></tr>
+    <tr><td>P1</td><td>Trung bình Bayes và nhãn độ tin cậy trên web. Bộ chấm độ sâu bằng luật (độ dài, từ khóa khía cạnh, số liệu, cụm từ chung chung). Đánh dấu review chỉ nói về giao hàng (trong <code>aspects</code>) và loại khỏi điểm sản phẩm. Phát hiện sao trái nội dung đơn giản</td><td>Migration A, B</td><td>Kế tiếp</td></tr>
+    <tr><td>P2</td><td>Bật tầng LLM: mức liên quan, tài trợ và tiếp thị liên kết, trích khía cạnh, khả năng do AI viết, châm biếm</td><td>Secret <code>AI_API_KEY</code> (<code>AI_MODEL</code> tùy chọn, mỗi nhà cung cấp có model mặc định)</td><td>Chờ key</td></tr>
+    <tr><td>P3</td><td>Đồ thị reviewer, điểm tin cậy T, trọng số vote, điều kiện để được vote, chống vòng vote và vote dồn dập, cận dưới Wilson, uy tín người báo cáo, phát hiện văn bản chép giữa các listing (MinHash)</td><td>Phase 2 (DOS/Rate#114), secret <code>REVIEWER_KEY_SECRET</code>, migration C, D</td><td>Chờ duyệt</td></tr>
+    <tr><td>P4</td><td>Related listings: review người bán (nhận cả các review giao hàng đã đánh dấu ở P1), thương hiệu, reviewer. Phản hồi chính thức. Chặn người bán và nhà sản xuất vote review về sản phẩm của họ. Review cộng đồng gắn tài khoản DOS.Me, có ô khai tài trợ, chặn tự vote. Sửa RPC review cộng đồng (review 15 đến 29 ký tự dùng trọng số hời hợt thay vì 0)</td><td>Migration E, F. Review về reviewer trên sàn cần P3</td><td>Sau P1, P3</td></tr>
+    <tr><td>P5</td><td>Chương trình chuyên gia (xác minh E2, E3, khai tài trợ, đo độ chính xác). Màn hình kiểm duyệt và kênh khiếu nại</td><td>P3, P4</td><td>Sau</td></tr>
+  </table></div>
+
+  <h2 id="quyet-dinh">14. Cần JOY quyết</h2>
+  <ol>
+    <li><b>Duyệt mô hình 6 trục và các hệ số khởi điểm</b> ở mục 3, đặc biệt: hời hợt 0,5; tài trợ công tâm 0,5; tài trợ chỉ khen 0,1; người viết có tiền sử xấu 0,3.</li>
+    <li><b>Trung bình Bayes với k = 3, kèm nhãn độ tin cậy.</b> Hệ quả: điểm các listing ít review bị kéo về gần trung bình ngành (điểm cao giảm, điểm thấp tăng; ví dụ 2 review 1 sao có chữ đi từ 1,0 lên 2,9) và có nhãn "chưa đủ dữ liệu".</li>
+    <li><b>Review của nhà sản xuất và người bán không tính điểm</b>, chỉ hiện ở mục phản hồi chính thức.</li>
+    <li><b>Điểm tổng 40% chuyên gia, 60% người dùng</b> chỉ hiện khi điểm người dùng có độ tin cậy từ mức trung bình trở lên. Nếu không thì hiện riêng hai điểm.</li>
+    <li><b>Chuyên gia mức E2 cần KYC và xác minh nghề nghiệp</b> qua DOS.Me.</li>
+    <li><b>Mức công khai:</b> đề xuất công khai công thức và khoảng giá trị (repo này), còn danh sách cụm từ và ngưỡng chi tiết của bộ phát hiện để trong cấu hình riêng, cho kẻ gian khó lách. Hay anh muốn công khai toàn bộ?</li>
+  </ol>
+
+  <h2 id="phu-luc">15. Phụ lục: kiểu dữ liệu cho agent</h2>
+<pre><code>// apps/importer: kết quả chấm một review theo mô hình này
+type Authenticity = 'genuine' | 'doubtful' | 'fabricated' | 'sabotage' | 'bombing' | 'copied';
+type Independence =
+  | 'organic' | 'affiliate' | 'incentivized'
+  | 'sponsored_balanced' | 'sponsored_promo' | 'undisclosed_paid' | 'conflict_of_interest';
+type Depth =
+  | 'stars_only' | 'platform_label' | 'filler' | 'low_effort'
+  | 'specific_short' | 'detailed' | 'expert_depth';
+type SubjectKind =
+  | 'master_product' | 'listing' | 'brand' | 'merchant' | 'reviewer' | 'expert' | 'review';
+
+interface WeightBreakdown {
+  gate: 0 | 1;
+  gateReason?: string;          // ví dụ 'conflict_of_interest'
+  authenticity: number;         // A
+  independence: number;         // B
+  depth: number;                // C (gồm cộng thêm ảnh thật / dài hạn, tối đa 1.5)
+  reviewer: number;             // D
+  context: number;              // E
+  community: number;            // F (0.1..2)
+  weight: number;               // tích, giới hạn [0, 3]
+  explanationVi: string;        // hiển thị cho người đọc
+}
+
+interface ReviewAssessment {
+  authenticity: Authenticity;
+  independence: Independence;
+  depth: Depth;
+  relevance: number;            // 0..1
+  aspects: Record&lt;string, { sentiment: -1 | 0 | 1; evidence: string; routesTo: 'product' | 'merchant' }&gt;;
+  aiGeneratedProb?: number;
+  breakdown: WeightBreakdown;
+  detector: string;
+  detectorVersion: string;
+}</code></pre>
+  <p class="muted">Tài liệu liên quan: <a href="../Proposals/2026-10-16-reviewer-graph-phase2.html">Reviewer graph Phase 2</a> · <a href="../Proposals/2026-10-14-merchant-risk-score-separation.html">Tách điểm rủi ro gian hàng</a> · mã nguồn <code>apps/importer/src/shopee/ai-review-analyzer.ts</code>.</p>
+</div>
+</body>
+</html>

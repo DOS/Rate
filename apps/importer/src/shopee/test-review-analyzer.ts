@@ -417,6 +417,20 @@ async function run() {
     rawReviews: textLow,
   });
   assert.ok(describedLow.risk_score > 15, 'a described defect still counts in full');
+  const buriedLow = [{ ...textLow[0]!, downvotes: 4 }, ...textLow.slice(1)];
+  const buriedResults = analyzer.analyzeWithHeuristics(buriedLow);
+  assert.equal(buriedResults[0]!.include_in_rating, false);
+  const buried = analyzer.evaluateMerchantRisk({
+    platform: 'tiki',
+    isOfficial: false,
+    reviewResults: buriedResults,
+    rawReviews: buriedLow,
+  });
+  assert.equal(
+    buried.risk_score,
+    15,
+    'a complaint voted down out of the rating adds no defect penalty'
+  );
 
   const dump = analyzer.evaluateMerchantRisk({
     platform: 'shopee',
