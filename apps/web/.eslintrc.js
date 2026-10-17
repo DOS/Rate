@@ -13,12 +13,6 @@ module.exports = {
   parser: "@typescript-eslint/parser",
   // @next/next is registered (not extended) so inline disables of its rules resolve.
   plugins: ["jsx-a11y", "@next/next"],
-  settings: {
-    tailwindcss: {
-      callees: ["cn"],
-      config: "tailwind.config.js",
-    },
-  },
   parserOptions: {
     project: true,
   },
@@ -45,7 +39,6 @@ module.exports = {
         customValidators: [],
       },
     ],
-    "tailwindcss/no-custom-classname": "off",
     "turbo/no-undeclared-env-vars": "off",
     "no-extra-boolean-cast": "warn",
     "jsx-a11y/alt-text": [
@@ -110,14 +103,6 @@ module.exports = {
             ],
           },
         ],
-      },
-    },
-    {
-      files: ["src/components/ui/*.tsx"],
-      rules: {
-        "tailwindcss/enforces-shorthand": "off",
-        "react/jsx-curly-brace-presence": "off",
-        "tailwindcss/no-unnecessary-arbitrary-value": "off",
       },
     },
   ],
