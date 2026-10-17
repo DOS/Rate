@@ -16,17 +16,21 @@ export const PaginationSchema = z.object({
 export const ApiResponseSchema = <T extends z.ZodType>(dataSchema: T) =>
   z.object({
     data: dataSchema,
-    meta: z.object({
-      pagination: PaginationSchema.optional(),
-      timestamp: z.string().datetime(),
-      version: z.string().optional(),
-    }).optional(),
-    error: z.object({
-      status: z.number(),
-      name: z.string(),
-      message: z.string(),
-      details: z.record(z.any()).optional(),
-    }).optional(),
+    meta: z
+      .object({
+        pagination: PaginationSchema.optional(),
+        timestamp: z.string().datetime(),
+        version: z.string().optional(),
+      })
+      .optional(),
+    error: z
+      .object({
+        status: z.number(),
+        name: z.string(),
+        message: z.string(),
+        details: z.record(z.string(), z.any()).optional(),
+      })
+      .optional(),
   });
 
 // Common filters
