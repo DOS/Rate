@@ -11017,3 +11017,27 @@ h1, h2, h3, h4, h5, h6 {
   stroke: rgba(255, 255, 255, 0.16);
   stroke-width: 3;
 }
+
+/* Visible keyboard focus (WCAG 2.4.7). The template strips outlines and box-shadows
+   from .btn and .form-control on :focus; :focus-visible restores a solid ring for
+   keyboard users only, so mouse clicks on buttons and links stay unchanged.
+   !important beats the template's nested `outline: 0` rules. */
+a:focus-visible,
+button:focus-visible,
+.btn:focus-visible,
+summary:focus-visible,
+[role="button"]:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--rate-focus-ring) !important;
+  outline-offset: 2px;
+}
+
+.form-control:focus-visible,
+.form-select:focus-visible,
+.form-check-input:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--rate-focus-ring) !important;
+  outline-offset: 1px;
+}
