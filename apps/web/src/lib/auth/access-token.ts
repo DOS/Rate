@@ -1,6 +1,6 @@
 'use client';
 
-import { getPublicClient } from '@repo/shared-data';
+import { getBrowserSupabase } from '@/lib/supabase/browser';
 
 /**
  * Returns the signed-in user's Supabase access token, or null when nobody is signed
@@ -8,7 +8,7 @@ import { getPublicClient } from '@repo/shared-data';
  */
 export async function getBrowserAccessToken(): Promise<string | null> {
   try {
-    const { data } = await getPublicClient().auth.getSession();
+    const { data } = await getBrowserSupabase().auth.getSession();
     return data.session?.access_token ?? null;
   } catch {
     return null;

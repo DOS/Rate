@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Link } from '@/lib/navigation';
-import { getPublicClient } from '@repo/shared-data';
+import { getBrowserSupabase } from '@/lib/supabase/browser';
 import { PASSWORD_MIN_LENGTH } from '@/lib/constants';
 import { normalizeRateLocale, type SupportedRateLocale } from '@/lib/rate-i18n';
 import {
@@ -283,7 +283,7 @@ export default function RateAuthPortal({ mode, locale }: RateAuthPortalProps) {
     setLoading(true);
 
     try {
-      const supabase = getPublicClient();
+      const supabase = getBrowserSupabase();
       const trimmedEmail = email.trim();
 
       if (mode === 'login') {
@@ -415,7 +415,7 @@ export default function RateAuthPortal({ mode, locale }: RateAuthPortalProps) {
     setSuccessMessage(null);
     setLoading(true);
     try {
-      const supabase = getPublicClient();
+      const supabase = getBrowserSupabase();
       const { error } = await supabase.auth.signInWithOtp({
         email: trimmedEmail,
       });
