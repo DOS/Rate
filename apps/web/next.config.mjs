@@ -17,6 +17,8 @@ const __dirname = path.dirname(__filename)
 const nextConfig = {
   output: env.NEXT_OUTPUT || undefined,
   reactStrictMode: true,
+  // React Compiler (stable in Next.js 16) memoizes components and hooks at build time.
+  reactCompiler: true,
   experimental: { externalDir: true },
   transpilePackages: ["@repo/design-system"],
   turbopack: {
