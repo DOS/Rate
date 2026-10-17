@@ -106,7 +106,16 @@ export function mapRpcRejection(
   error: { code?: string } | null | undefined,
   table: Record<string, RpcRejection>
 ): RpcRejection | null {
-  return (error?.code && table[error.code]) || null;
+  const rejection = (error?.code && table[error.code]) || null;
+  if (rejection) {
+    // Native Postgres errors can share these SQLSTATEs; keep the real text in logs.
+    console.warn(
+      '[rate-rpc] rejected',
+      error?.code,
+      (error as { message?: string })?.message
+    );
+  }
+  return rejection;
 }
 
 /** PostgREST reports a function missing from its schema cache as PGRST202. */
