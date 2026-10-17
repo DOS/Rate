@@ -2532,7 +2532,32 @@ async function runCoreArchitectureSuite() {
     );
   }
   console.log(
-    '  ✅ [51/51] Dependabot Alert #724 (sprintf-js) Removal & Full Client Component @/lib/rate-domain Migration (Audit T12, #173) passed'
+    '  ✅ [51/52] Dependabot Alert #724 (sprintf-js) Removal & Full Client Component @/lib/rate-domain Migration (Audit T12, #173) passed'
+  );
+
+  // 52. Issue #175: .gitignore unblocks apps/web/public/**/*.png & ignores local machine configs, CLAUDE.md points to AGENTS.md
+  const gitignoreSrc175 = fs.readFileSync(
+    path.join(repoRoot, '.gitignore'),
+    'utf8'
+  );
+  assert.ok(
+    gitignoreSrc175.includes('/*.png') &&
+      gitignoreSrc175.includes('!apps/web/public/**/*.png') &&
+      gitignoreSrc175.includes('mcp.json') &&
+      gitignoreSrc175.includes('memory-bank/'),
+    '.gitignore must scope/*.png to root and ignore local machine configs (#175)'
+  );
+  const claudeMdSrc175 = fs.readFileSync(
+    path.join(repoRoot, 'CLAUDE.md'),
+    'utf8'
+  );
+  assert.ok(
+    claudeMdSrc175.includes('AGENTS.md') &&
+      !claudeMdSrc175.includes('PVTSSF_lADOA388Vc4Bm5MlzhlgSt8'),
+    'CLAUDE.md must reference AGENTS.md without duplicating Project #9 field IDs (#175)'
+  );
+  console.log(
+    '  ✅ [52/52] Local Config Untracking, .gitignore Asset Rule & CLAUDE.md Deduplication (Audit Low, #175) passed'
   );
 
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
