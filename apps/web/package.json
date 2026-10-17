@@ -22,7 +22,6 @@
     "@repo/shared-data": "workspace:*",
     "@sentry/nextjs": "^11.1.0",
     "@supabase/supabase-js": "^2.117.2",
-    "animate.css": "^4.1.1",
     "bootstrap": "^5.3.8",
     "clsx": "^2.1.1",
     "dayjs": "^1.11.23",

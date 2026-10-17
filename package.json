@@ -81,15 +81,13 @@
       "tmp@<0.2.6": "^0.2.7",
       "source-map-js@>=1.0.0 <1.2.2": "^1.2.2",
       "fast-uri@>=3.0.0 <3.1.8": "^3.1.8",
-      "ajv@>=6.0.0 <6.14.0": "^6.14.0"
+      "ajv@>=6.0.0 <6.14.0": "^6.14.0",
+      "postcss-selector-parser@<7.1.6": "^7.1.6"
     }
   },
   "dependencies": {
-    "@next/eslint-plugin-next": "15.3.3",
     "@typescript-eslint/eslint-plugin": "^8.71.2",
     "@typescript-eslint/parser": "^8.71.2",
-    "animate.css": "^4.1.1",
-    "axios": "^1.9.0",
     "eslint-config-prettier": "10.1.5",
     "lucide-react": "0.513.0",
     "playwright": "^1.52.0",

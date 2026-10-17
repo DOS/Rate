@@ -2455,7 +2455,47 @@ async function runCoreArchitectureSuite() {
     'queue_error reason must never echo raw database error.message (#159)'
   );
   console.log(
-    '  ✅ [49/49] Zero-Service-Role Extension Crowd Ingest, enqueue_crowd_verify_signal RPC & Error Sanitization (#159) passed'
+    '  ✅ [49/50] Zero-Service-Role Extension Crowd Ingest, enqueue_crowd_verify_signal RPC & Error Sanitization (#159) passed'
+  );
+
+  // 50. Issue #172: env.mjs removes Prod URL default & NEXTAUTH_*, postcss-selector-parser override, .nvmrc & CI permissions
+  const envMjsSrc = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/env.mjs'),
+    'utf8'
+  );
+  assert.ok(
+    !envMjsSrc.includes('gulptwduchsjcsbndmua.supabase.co'),
+    'apps/web/src/env.mjs must not default NEXT_PUBLIC_SUPABASE_URL to Production project (#172)'
+  );
+  assert.ok(
+    !envMjsSrc.includes('NEXTAUTH_'),
+    'apps/web/src/env.mjs must not include legacy NEXTAUTH_* variables (#172)'
+  );
+  const rootPkgSrc172 = fs.readFileSync(
+    path.join(repoRoot, 'package.json'),
+    'utf8'
+  );
+  assert.ok(
+    rootPkgSrc172.includes('"postcss-selector-parser@<7.1.6": "^7.1.6"') &&
+      !rootPkgSrc172.includes('"animate.css"') &&
+      !rootPkgSrc172.includes('"axios"'),
+    'root package.json must override postcss-selector-parser>=7.1.6 and drop unused animate.css/axios (#172)'
+  );
+  const nvmrcSrc = fs
+    .readFileSync(path.join(repoRoot, '.nvmrc'), 'utf8')
+    .trim();
+  assert.equal(nvmrcSrc, '22', '.nvmrc must pin Node 22 LTS (#172)');
+  const ciYmlSrc172 = fs.readFileSync(
+    path.join(repoRoot, '.github/workflows/ci.yml'),
+    'utf8'
+  );
+  assert.ok(
+    ciYmlSrc172.includes('permissions:') &&
+      ciYmlSrc172.includes('contents: read'),
+    '.github/workflows/ci.yml must declare least-privilege permissions: contents: read (#172)'
+  );
+  console.log(
+    '  ✅ [50/50] Dependabot Alert #722 Override, env.mjs Prod Fallback Removal (T13), .nvmrc & CI Least-Privilege Permissions (#172) passed'
   );
 
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
