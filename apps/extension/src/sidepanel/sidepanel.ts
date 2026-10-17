@@ -4,6 +4,10 @@ import type {
   ExtensionSettings,
   ExtractedPageProductSignal,
 } from '../types.js';
+import {
+  DEFAULT_API_BASE_URL,
+  escapeSafeExternalHref,
+} from '../security-guards.js';
 
 function formatVnd(val: number | null | undefined): string {
   if (!val || val <= 0) return 'Chưa có';
@@ -122,7 +126,7 @@ async function fetchAndRenderDealRadar(
             <div class="offer-item">
               <div>
                 <div class="offer-shop">
-                  <a href="${escapeHtml(settings.apiBaseUrl + d.productHref)}" target="_blank" rel="noopener noreferrer" style="color:#f3f4f6;text-decoration:none;">
+                  <a href="${escapeSafeExternalHref(settings.apiBaseUrl + d.productHref)}" target="_blank" rel="noopener noreferrer" style="color:#f3f4f6;text-decoration:none;">
                     ${escapeHtml(d.productName)}
                   </a>
                 </div>
@@ -130,7 +134,7 @@ async function fetchAndRenderDealRadar(
                   ${escapeHtml(d.platform.toUpperCase())} (${escapeHtml(d.merchantName)}) - Tiết kiệm ${formatVnd(d.savingsVsMedianVnd)} (-${d.savingsVsMedianPct}%)
                 </div>
               </div>
-              <a href="${escapeHtml(d.offerUrl)}" target="_blank" rel="noopener noreferrer" class="offer-price" style="text-decoration:none;color:#34d399;">
+              <a href="${escapeSafeExternalHref(d.offerUrl)}" target="_blank" rel="noopener noreferrer" class="offer-price" style="text-decoration:none;color:#34d399;">
                 ${formatVnd(d.priceCurrent)}
               </a>
             </div>
@@ -153,7 +157,7 @@ async function fetchAndRenderDealRadar(
                         ${escapeHtml(s.cheapestPlatform.toUpperCase())} (${formatVnd(s.minPrice)}) vs ${escapeHtml(s.priciestPlatform.toUpperCase())} (${formatVnd(s.maxPrice)})
                       </div>
                     </div>
-                    <a href="${escapeHtml(s.cheapestOfferUrl)}" target="_blank" rel="noopener noreferrer" class="offer-price" style="text-decoration:none;color:#60a5fa;">
+                    <a href="${escapeSafeExternalHref(s.cheapestOfferUrl)}" target="_blank" rel="noopener noreferrer" class="offer-price" style="text-decoration:none;color:#60a5fa;">
                       Lệch ${formatVnd(s.spreadVnd)}
                     </a>
                   </div>
@@ -256,7 +260,7 @@ async function fetchAndRenderMerchantTrustDirectory(
               <div class="offer-item">
                 <div>
                   <div class="offer-shop">
-                    <a href="${escapeHtml(detailHref)}" target="_blank" rel="noopener noreferrer" style="color:#f3f4f6;text-decoration:none;">
+                    <a href="${escapeSafeExternalHref(detailHref)}" target="_blank" rel="noopener noreferrer" style="color:#f3f4f6;text-decoration:none;">
                       ${escapeHtml(m.name)}
                     </a>
                     ${m.is_official ? '<span style="color:#34d399;font-size:11px;">[Mall]</span>' : ''}
@@ -265,7 +269,7 @@ async function fetchAndRenderMerchantTrustDirectory(
                     ${escapeHtml(m.platform.toUpperCase())} (${m.product_count} SP) - DOSafe: ${m.dosafe_risk_score} | Seeding: ${m.review_risk_score}
                   </div>
                 </div>
-                <a href="${escapeHtml(detailHref)}" target="_blank" rel="noopener noreferrer" class="offer-price" style="text-decoration:none;color:${trustColor};">
+                <a href="${escapeSafeExternalHref(detailHref)}" target="_blank" rel="noopener noreferrer" class="offer-price" style="text-decoration:none;color:${trustColor};">
                   Trust ${m.trust_score}/100
                 </a>
               </div>
@@ -403,7 +407,7 @@ function renderPanelContent(
                   ${escapeHtml(off.platform.toUpperCase())} - ★ ${Number(off.rating_star || 0).toFixed(1)} - Rủi ro shop: ${off.merchant.risk_score}/100
                 </div>
               </div>
-              <a href="${escapeHtml(off.url)}" target="_blank" rel="noopener noreferrer" class="offer-price" style="text-decoration:none;">
+              <a href="${escapeSafeExternalHref(off.url)}" target="_blank" rel="noopener noreferrer" class="offer-price" style="text-decoration:none;">
                 ${formatVnd(off.price_current)}
               </a>
             </div>
@@ -576,20 +580,20 @@ function renderPanelContent(
         </div>
       </div>
       <div class="btn-row">
-        <a class="btn-primary" href="${escapeHtml(detailUrl)}" target="_blank" rel="noopener noreferrer">Xem Trên Rate.vn</a>
-        <a class="btn-secondary" href="${escapeHtml(compareUrl)}" target="_blank" rel="noopener noreferrer">So Sánh Cấu Hình</a>
+        <a class="btn-primary" href="${escapeSafeExternalHref(detailUrl)}" target="_blank" rel="noopener noreferrer">Xem Trên Rate.vn</a>
+        <a class="btn-secondary" href="${escapeSafeExternalHref(compareUrl)}" target="_blank" rel="noopener noreferrer">So Sánh Cấu Hình</a>
       </div>
       <div class="btn-row" style="margin-top: 6px;">
-        <a class="btn-secondary" href="${escapeHtml(leaderboardUrl)}" target="_blank" rel="noopener noreferrer">🏆 Bảng Xếp Hạng</a>
+        <a class="btn-secondary" href="${escapeSafeExternalHref(leaderboardUrl)}" target="_blank" rel="noopener noreferrer">🏆 Bảng Xếp Hạng</a>
         ${
           versusUrl
-            ? `<a class="btn-secondary" href="${escapeHtml(versusUrl)}" target="_blank" rel="noopener noreferrer">⚔️ Đối Đầu 1v1</a>`
-            : `<a class="btn-secondary" href="${escapeHtml(inspectUrl)}" target="_blank" rel="noopener noreferrer">🔬 Kiểm Toán Sâu</a>`
+            ? `<a class="btn-secondary" href="${escapeSafeExternalHref(versusUrl)}" target="_blank" rel="noopener noreferrer">⚔️ Đối Đầu 1v1</a>`
+            : `<a class="btn-secondary" href="${escapeSafeExternalHref(inspectUrl)}" target="_blank" rel="noopener noreferrer">🔬 Kiểm Toán Sâu</a>`
         }
       </div>
       <div class="btn-row" style="margin-top: 6px;">
-        <a class="btn-secondary" href="${escapeHtml(inspectUrl)}" target="_blank" rel="noopener noreferrer">🔬 Kiểm Toán Sâu</a>
-        <a class="btn-secondary" href="${escapeHtml(watchlistUrl)}" target="_blank" rel="noopener noreferrer">🔔 Canh Giá Thật</a>
+        <a class="btn-secondary" href="${escapeSafeExternalHref(inspectUrl)}" target="_blank" rel="noopener noreferrer">🔬 Kiểm Toán Sâu</a>
+        <a class="btn-secondary" href="${escapeSafeExternalHref(watchlistUrl)}" target="_blank" rel="noopener noreferrer">🔔 Canh Giá Thật</a>
       </div>
     </div>
     ${leaderboardCardHtml}
@@ -638,7 +642,7 @@ async function loadSidePanel(selectedVariant?: string): Promise<void> {
     };
 
     const settings: ExtensionSettings = res?.settings || {
-      apiBaseUrl: 'http://localhost:3000',
+      apiBaseUrl: DEFAULT_API_BASE_URL,
       crowdContributeOptIn: false,
     };
 
@@ -691,7 +695,7 @@ async function runQuickQuery(query: string): Promise<void> {
     };
 
     const settings: ExtensionSettings = res?.settings || {
-      apiBaseUrl: 'http://localhost:3000',
+      apiBaseUrl: DEFAULT_API_BASE_URL,
       crowdContributeOptIn: false,
     };
 

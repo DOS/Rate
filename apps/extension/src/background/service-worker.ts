@@ -3,9 +3,14 @@ import type {
   ExtensionSettings,
   ExtractedPageProductSignal,
 } from '../types.js';
+import {
+  DEFAULT_API_BASE_URL,
+  isPrivilegedExtensionSender,
+  normalizeAllowedApiBaseUrl,
+} from '../security-guards.js';
 
 const DEFAULT_SETTINGS: ExtensionSettings = {
-  apiBaseUrl: 'http://localhost:3000',
+  apiBaseUrl: DEFAULT_API_BASE_URL,
   crowdContributeOptIn: false,
 };
 
@@ -16,10 +21,9 @@ async function getSettings(): Promise<ExtensionSettings> {
       'crowdContributeOptIn',
     ]);
     return {
-      apiBaseUrl:
-        typeof stored.apiBaseUrl === 'string' && stored.apiBaseUrl.trim()
-          ? stored.apiBaseUrl.trim().replace(/\/+$/, '')
-          : DEFAULT_SETTINGS.apiBaseUrl,
+      apiBaseUrl: normalizeAllowedApiBaseUrl(
+        typeof stored.apiBaseUrl === 'string' ? stored.apiBaseUrl : null
+      ),
       crowdContributeOptIn: Boolean(stored.crowdContributeOptIn ?? false),
     };
   } catch {
@@ -341,6 +345,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (msgType === 'RATE_UPDATE_SETTINGS') {
+    if (!isPrivilegedExtensionSender(sender)) {
+      sendResponse({
+        ok: false,
+        error: 'Settings can only be updated from the Rate extension sidepanel',
+      });
+      return false;
+    }
     (async () => {
       try {
         const nextSettings: Partial<ExtensionSettings> = {};
@@ -348,9 +359,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           typeof message.apiBaseUrl === 'string' &&
           message.apiBaseUrl.trim()
         ) {
-          nextSettings.apiBaseUrl = message.apiBaseUrl
-            .trim()
-            .replace(/\/+$/, '');
+          nextSettings.apiBaseUrl = normalizeAllowedApiBaseUrl(
+            message.apiBaseUrl
+          );
         }
         if (typeof message.crowdContributeOptIn === 'boolean') {
           nextSettings.crowdContributeOptIn = message.crowdContributeOptIn;
