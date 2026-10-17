@@ -226,6 +226,55 @@ async function testReviews() {
   assert.equal(res.status, 503);
   assert.equal((await res.json()).ok, false);
 
+  // Deliberate RPC rejections from the DOS-Me auth gate keep their meaning.
+  for (const [sqlstate, status, code] of [
+    ['42501', 403, 'FORBIDDEN'],
+    ['23505', 409, 'DUPLICATE_REVIEW'],
+    ['54000', 429, 'RATE_LIMITED'],
+    ['22023', 400, 'REJECTED'],
+  ] as const) {
+    rpcResponder = () => ({
+      status: 400,
+      json: { code: sqlstate, message: 'rejected by rpc' },
+    });
+    res = await POST(
+      post('/api/v1/rate/reviews', validReview, GOOD_TOKEN) as Req
+    );
+    assert.equal(res.status, status, `SQLSTATE ${sqlstate}`);
+    const rejected = await res.json();
+    assert.equal(rejected.ok, false);
+    assert.equal(rejected.code, code);
+  }
+
+  // The auth-gated RPC stores new reviews unanalyzed and excluded from ratings.
+  rpcResponder = () => ({
+    status: 200,
+    json: {
+      id: 'bbbbbbbb-cccc-4ddd-8eee-ffffffffffff',
+      author_name: 'Tester',
+      rating_star: 5,
+      comment: validReview.comment,
+      reviewer_type: 'user',
+      criteria_ratings: {},
+      verdict: 'unanalyzed',
+      flag_category: null,
+      fake_probability: null,
+      include_in_rating: false,
+      helpfulness_weight: 0,
+      reason: null,
+      created_at: '2026-10-17T00:00:00Z',
+    },
+  });
+  res = await POST(
+    post('/api/v1/rate/reviews', validReview, GOOD_TOKEN) as Req
+  );
+  assert.equal(res.status, 200);
+  const unanalyzed = (await res.json()).review;
+  assert.equal(unanalyzed.verdict, 'unanalyzed');
+  assert.equal(unanalyzed.include_in_rating, false);
+  assert.equal(unanalyzed.helpfulness_weight, 0);
+  assert.equal(unanalyzed.fake_probability, null);
+
   console.log(
     '  ✅ POST /api/v1/rate/reviews requires a user, runs as that user and never fakes success'
   );

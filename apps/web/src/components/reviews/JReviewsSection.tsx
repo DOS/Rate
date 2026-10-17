@@ -526,9 +526,11 @@ export default function JReviewsSection({
       setComment('');
       setShowWriteForm(false);
       setSubmitSuccess(
-        newRev.include_in_rating
-          ? `Đã đăng đánh giá thực chất thành công! Hệ thống AI chấm trọng số khởi tạo ${newRev.helpfulness_weight.toFixed(2)}x.`
-          : `Đánh giá của bạn đã được ghi nhận nhưng bị bộ lọc AI gắn cờ (${newRev.flag_category}) nên không tính vào điểm trung bình.`
+        newRev.verdict === 'unanalyzed'
+          ? 'Đã lưu đánh giá của bạn. Đánh giá chỉ được tính vào điểm trung bình sau khi hệ thống kiểm duyệt xong.'
+          : newRev.include_in_rating
+            ? `Đã đăng đánh giá thực chất thành công! Hệ thống AI chấm trọng số khởi tạo ${newRev.helpfulness_weight.toFixed(2)}x.`
+            : `Đánh giá của bạn đã được ghi nhận nhưng bị bộ lọc AI gắn cờ (${newRev.flag_category}) nên không tính vào điểm trung bình.`
       );
     } catch {
       setSubmitError('Lỗi kết nối khi gửi đánh giá. Vui lòng thử lại.');
