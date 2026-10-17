@@ -1391,7 +1391,7 @@ export class ProductNormalizer {
       key_specs: keySpecs,
       description: raw.description,
       is_benchmark_enriched: Boolean(benchmark),
-      spec_source: Boolean(benchmark) ? 'benchmark_registry' : 'crawled_title',
+      spec_source: benchmark ? 'benchmark_registry' : 'crawled_title',
     };
   }
 }
