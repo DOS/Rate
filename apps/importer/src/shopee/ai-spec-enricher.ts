@@ -236,7 +236,7 @@ export function sanitizeSpecifications(raw: any): ProductSpecifications {
   };
 
   const parsed = ProductSpecificationsSchema.safeParse(candidateSpecs);
-  return parsed.success ? parsed.data : candidateSpecs;
+  return parsed.success ? parsed.data : {};
 }
 
 /**
@@ -566,8 +566,7 @@ REQUIRED JSON SCHEMA:
       const batteryMah =
         toNumberOrUndefined(parsedJson.battery_mah) ?? specifications.battery?.capacity_mah ?? null;
 
-      const has5g =
-        toBooleanOrUndefined(parsedJson.has_5g) ?? specifications.cellular?.has_5g ?? true;
+      const has5g = toBooleanOrUndefined(parsedJson.has_5g) ?? specifications.cellular?.has_5g;
 
       if (specifications.hardware) {
         if (ramGb !== null) specifications.hardware.ram_gb = ramGb;
@@ -602,7 +601,7 @@ REQUIRED JSON SCHEMA:
       };
 
       const keySpecsParsed = KeySpecsSchema.safeParse(keySpecsCandidate);
-      const keySpecs = keySpecsParsed.success ? keySpecsParsed.data : keySpecsCandidate;
+      const keySpecs: KeySpecs = keySpecsParsed.success ? keySpecsParsed.data : {};
 
       const result: AiEnrichmentResponse = {
         ram_gb: ramGb,
@@ -638,7 +637,10 @@ REQUIRED JSON SCHEMA:
     rawTitle?: string
   ): Promise<NormalizedProductCandidate> {
     if (candidate.is_benchmark_enriched) {
-      return candidate;
+      return {
+        ...candidate,
+        spec_source: candidate.spec_source ?? 'benchmark_registry',
+      };
     }
 
     const aiResult = await this.fetchSpecsFromAi({
@@ -670,7 +672,12 @@ REQUIRED JSON SCHEMA:
         ...candidate.key_specs,
         ...aiResult.key_specs,
       },
-      is_benchmark_enriched: true,
+      spec_source: 'ai_unverified',
+      spec_enrichment_meta: {
+        provider: this.provider,
+        model: this.model,
+        enriched_at: new Date().toISOString(),
+      },
     };
   }
 }
