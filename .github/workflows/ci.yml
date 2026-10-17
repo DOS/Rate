@@ -57,6 +57,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Replay rate migrations on PostgreSQL 17 (Docker)
+        run: node scripts/test-migration-replay.mjs
+
       - name: Build @repo/shared-data
         run: pnpm --filter @repo/shared-data build
 

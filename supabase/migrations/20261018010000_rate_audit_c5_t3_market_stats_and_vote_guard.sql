@@ -110,11 +110,14 @@ AS $$
         / NULLIF(sum(r.helpfulness_weight) FILTER (WHERE r.reviewer_type = 'user'), 0),
         2
       ) AS weighted,
-      count(*)::INTEGER AS n
+      (count(*) FILTER (WHERE r.reviewer_type = 'user'))::INTEGER AS n
     FROM rate.products p
     JOIN rate.reviews r ON r.product_id = p.id
     JOIN rate.review_flags f ON f.review_id = r.id
     WHERE p.cluster_id = p_master_id
+      -- Reviews excluded from the rating (unanalyzed community reviews,
+      -- flagged ones) never count, whatever their weight (20261014033000).
+      AND COALESCE(f.include_in_rating, true)
       AND r.helpfulness_weight > 0
   ) s
   WHERE m.id = p_master_id;
@@ -132,6 +135,7 @@ DECLARE
   v_rep INTEGER;
   v_cat TEXT;
   v_verdict TEXT;
+  v_inc BOOLEAN;
   v_master UUID;
 BEGIN
   SELECT
@@ -142,19 +146,25 @@ BEGIN
   FROM rate.review_votes
   WHERE review_id = p_review_id;
 
-  SELECT f.flag_category, f.verdict INTO v_cat, v_verdict
+  SELECT f.flag_category, f.verdict, COALESCE(f.include_in_rating, true)
+  INTO v_cat, v_verdict, v_inc
   FROM rate.review_flags f
   WHERE f.review_id = p_review_id;
 
+  -- Votes cannot lift a review that is excluded from the rating
+  -- (20261014033000, relied on by 20261017120000's unanalyzed reviews).
   UPDATE rate.reviews
   SET upvotes = v_up,
       downvotes = v_down,
       report_count = v_rep,
-      helpfulness_weight = rate.compute_review_weight(
-        v_up, v_down, v_rep,
-        COALESCE(v_cat, 'authentic'),
-        COALESCE(v_verdict, 'unanalyzed')
-      )
+      helpfulness_weight = CASE
+        WHEN NOT COALESCE(v_inc, true) THEN 0.00
+        ELSE rate.compute_review_weight(
+          v_up, v_down, v_rep,
+          COALESCE(v_cat, 'authentic'),
+          COALESCE(v_verdict, 'unanalyzed')
+        )
+      END
   WHERE id = p_review_id;
 
   SELECT p.cluster_id INTO v_master
