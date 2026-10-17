@@ -8,6 +8,12 @@ import {
   parseVndPriceText,
   sanitizeProductUrl,
 } from './extractors/ecommerce-detector.js';
+import {
+  DEFAULT_API_BASE_URL,
+  escapeSafeExternalHref,
+  isPrivilegedExtensionSender,
+  normalizeAllowedApiBaseUrl,
+} from './security-guards.js';
 import * as extModule from '../../web/src/server/rate/extension.js';
 const {
   EXTENSION_CAPABILITY_MATRIX,
@@ -254,8 +260,47 @@ async function runTests() {
   assert.equal(EXTENSION_CAPABILITY_MATRIX.phongvu.crowdVerifyQueue, true);
   assert.equal(EXTENSION_CAPABILITY_MATRIX.tiktok.lookup, true);
   assert.equal(EXTENSION_CAPABILITY_MATRIX.hoangha.lookup, true);
+  assert.equal(DEFAULT_API_BASE_URL, 'https://rate.vn');
+  assert.equal(
+    normalizeAllowedApiBaseUrl('https://evil.example.com/steal'),
+    'https://rate.vn',
+    'Must reject untrusted API base origins and fall back to https://rate.vn'
+  );
+  assert.equal(
+    normalizeAllowedApiBaseUrl('https://rate.vn/'),
+    'https://rate.vn'
+  );
+  assert.equal(
+    normalizeAllowedApiBaseUrl('http://localhost:3000/'),
+    'http://localhost:3000'
+  );
+  assert.equal(
+    isPrivilegedExtensionSender({ tab: { id: 42 } }),
+    false,
+    'Content script sender with sender.tab must NOT be allowed to update settings'
+  );
+  assert.equal(
+    isPrivilegedExtensionSender({
+      tab: undefined,
+      url: 'chrome-extension://abcdefghijklmnop/sidepanel/sidepanel.html',
+    }),
+    true
+  );
+  assert.equal(
+    escapeSafeExternalHref('javascript:alert(1)'),
+    'https://rate.vn',
+    'Must neutralize javascript: URLs in sidepanel links'
+  );
+  assert.equal(
+    escapeSafeExternalHref('data:text/html,<script>alert(1)</script>'),
+    'https://rate.vn'
+  );
+  assert.equal(
+    escapeSafeExternalHref('https://shopee.vn/item?a=1&b=2'),
+    'https://shopee.vn/item?a=1&amp;b=2'
+  );
   console.log(
-    '  ✅ [5/6] Zero-Trust Quarantine, Opt-In Consent & Full 10/10 Platform Capability Matrix passed'
+    '  ✅ [5/6] Zero-Trust Quarantine, Opt-In Consent, MV3 Security Guards (C7) & Full 10/10 Platform Capability Matrix passed'
   );
 
   // 6. Live Read-Only Lookup against Supabase `rate` schema (when real credentials are present)

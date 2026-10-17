@@ -41,7 +41,7 @@
     "https://didongviet.vn/*",
     "https://phongvu.vn/*",
     "https://rate.vn/*",
-    "http://localhost:3000/*"
+    "https://www.rate.vn/*"
   ],
   "content_scripts": [
     {
