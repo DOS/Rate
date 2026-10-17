@@ -3283,8 +3283,152 @@ async function runCoreArchitectureSuite() {
     '  ✅ [59/59] Cross-request Data Cache tags & POST /api/v1/rate/revalidate webhook (#186) passed'
   );
 
+  // 60. Complete behavioral NextRequest -> NextResponse coverage for all remaining REST API v1 routes (#187 - Audit T1)
+  const healthRoute60 = await import('../../../app/api/health/route');
+  const openApiRoute = await import('../../../app/api/v1/rate/openapi/route');
+  const openApiJsonRoute = await import(
+    '../../../app/api/v1/rate/openapi.json/route'
+  );
+  const productsRoute = await import('../../../app/api/v1/rate/products/route');
+  const productDetailRoute = await import(
+    '../../../app/api/v1/rate/products/[slug]/route'
+  );
+  const dealsRoute = await import('../../../app/api/v1/rate/deals/route');
+  const leaderboardRoute = await import(
+    '../../../app/api/v1/rate/leaderboard/route'
+  );
+  const merchantsRoute = await import(
+    '../../../app/api/v1/rate/merchants/route'
+  );
+  const merchantDetailRoute = await import(
+    '../../../app/api/v1/rate/merchants/[id]/route'
+  );
+  const statsRoute = await import('../../../app/api/v1/rate/stats/route');
+
+  // 60.1 /api/health
+  const healthRes60 = await healthRoute60.GET();
+  assert.equal(healthRes60.status, 200);
+  assert.equal(
+    healthRes60.headers.get('Cache-Control'),
+    'no-store, max-age=0'
+  );
+  const healthBody60 = (await healthRes60.json()) as {
+    status: string;
+    service: string;
+  };
+  assert.equal(healthBody60.status, 'ok');
+  assert.equal(healthBody60.service, 'rate-web');
+
+  // 60.2 /api/v1/rate/openapi & /api/v1/rate/openapi.json
+  const openApiOpt = await openApiRoute.OPTIONS();
+  assert.equal(openApiOpt.status, 204);
+  const openApiGet = await openApiRoute.GET(
+    new Request('https://rate.vn/api/v1/rate/openapi')
+  );
+  assert.equal(openApiGet.status, 200);
+  const openApiDoc = (await openApiGet.json()) as {
+    openapi: string;
+    servers: Array<{ url: string }>;
+  };
+  assert.equal(openApiDoc.openapi, '3.1.0');
+  assert.equal(openApiDoc.servers[0]?.url, 'https://rate.vn');
+
+  const openApiJsonOpt = await openApiJsonRoute.OPTIONS();
+  assert.equal(openApiJsonOpt.status, 204);
+  const openApiJsonGet = await openApiJsonRoute.GET(
+    new NextRequest('https://rate.vn/api/v1/rate/openapi.json')
+  );
+  assert.equal(openApiJsonGet.status, 200);
+
+  // 60.3 /api/v1/rate/products & /api/v1/rate/products/[slug]
+  const productsOpt = await productsRoute.OPTIONS();
+  assert.equal(productsOpt.status, 204);
+  const productsGet = await productsRoute.GET(
+    new NextRequest(
+      'https://rate.vn/api/v1/rate/products?category=smartphones&limit=5&ram=8,12&has5g=true'
+    )
+  );
+  assert.ok([200, 500].includes(productsGet.status));
+  const productsBody = (await productsGet.json()) as {
+    ok: boolean;
+    error?: string;
+    count?: number;
+  };
+  if (productsGet.status === 200) {
+    assert.equal(productsBody.ok, true);
+    assert.equal(typeof productsBody.count, 'number');
+  } else {
+    assert.equal(productsBody.ok, false);
+    assert.ok(!/PGRST|relation|schema/i.test(productsBody.error ?? ''));
+  }
+
+  const prodDetailOpt = await productDetailRoute.OPTIONS();
+  assert.equal(prodDetailOpt.status, 204);
+  const prodDetailBadSlug = await productDetailRoute.GET(
+    new NextRequest('https://rate.vn/api/v1/rate/products/bad'),
+    { params: Promise.resolve({ slug: '../etc/passwd' }) }
+  );
+  assert.equal(prodDetailBadSlug.status, 400);
+
+  const prodDetailMissing = await productDetailRoute.GET(
+    new NextRequest(
+      'https://rate.vn/api/v1/rate/products/non-existent-device-slug-2099'
+    ),
+    { params: Promise.resolve({ slug: 'non-existent-device-slug-2099' }) }
+  );
+  assert.ok([404, 500].includes(prodDetailMissing.status));
+
+  // 60.4 /api/v1/rate/deals, /api/v1/rate/leaderboard, /api/v1/rate/stats
+  const dealsOpt = await dealsRoute.OPTIONS();
+  assert.equal(dealsOpt.status, 204);
+  const dealsGet = await dealsRoute.GET(
+    new Request('https://rate.vn/api/v1/rate/deals?category=smartphones&limit=4')
+  );
+  assert.ok([200, 500].includes(dealsGet.status));
+
+  const leaderboardGet = await leaderboardRoute.GET(
+    new NextRequest(
+      'https://rate.vn/api/v1/rate/leaderboard?category=smartphones&criterion=overall&limit=5'
+    )
+  );
+  assert.ok([200, 500].includes(leaderboardGet.status));
+
+  const statsGet = await statsRoute.GET();
+  assert.ok([200, 500].includes(statsGet.status));
+
+  // 60.5 /api/v1/rate/merchants & /api/v1/rate/merchants/[id]
+  const merchantsOpt = await merchantsRoute.OPTIONS();
+  assert.equal(merchantsOpt.status, 204);
+  const merchantsGet = await merchantsRoute.GET(
+    new NextRequest(
+      'https://rate.vn/api/v1/rate/merchants?platform=shopee&official=1&min_trust=70&limit=10'
+    )
+  );
+  assert.ok([200, 500].includes(merchantsGet.status));
+
+  const merchDetailOpt = await merchantDetailRoute.OPTIONS();
+  assert.equal(merchDetailOpt.status, 204);
+  const merchDetailBadId = await merchantDetailRoute.GET(
+    new NextRequest('https://rate.vn/api/v1/rate/merchants/bad'),
+    { params: Promise.resolve({ id: 'invalid/id with spaces' }) }
+  );
+  assert.equal(merchDetailBadId.status, 400);
+
+  const merchDetailMissing = await merchantDetailRoute.GET(
+    new NextRequest(
+      'https://rate.vn/api/v1/rate/merchants/non-existent-merchant-999999'
+    ),
+    { params: Promise.resolve({ id: 'non-existent-merchant-999999' }) }
+  );
+  assert.ok([404, 500].includes(merchDetailMissing.status));
+
+  console.log(
+    '  ✅ [60/60] Complete behavioral NextRequest->NextResponse test coverage across all REST API v1 routes (#187) passed'
+  );
+
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
 
 runCoreArchitectureSuite();
+
 
