@@ -2586,7 +2586,38 @@ async function runCoreArchitectureSuite() {
     'getMasterProductPriceHistory must fetch up to 1000 price_history observations per master product (Audit T6, #176)'
   );
   console.log(
-    '  ✅ [53/53] DB Hardening Reference Migration (Audit T4, T6, T7, T8) & 1000-Row Price History Window (#176) passed'
+    '  ✅ [53/54] DB Hardening Reference Migration (Audit T4, T6, T7, T8) & 1000-Row Price History Window (#176) passed'
+  );
+
+  // 54. Issue #177: Audit C5 & T3 (refresh_master_market_stats RPC, review_votes UPDATE flood guard & search_path='')
+  const mig177Src = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'supabase/migrations/20261018010000_rate_audit_c5_t3_market_stats_and_vote_guard.sql'
+    ),
+    'utf8'
+  );
+  assert.ok(
+    mig177Src.includes(
+      'CREATE OR REPLACE FUNCTION rate.refresh_master_market_stats(p_master_id UUID)'
+    ) &&
+      mig177Src.includes('idx_rate_review_votes_voter_updated') &&
+      mig177Src.includes("AND updated_at > now() - interval '1 hour'") &&
+      mig177Src.includes(
+        'REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON rate.review_flags FROM PUBLIC, anon, authenticated;'
+      ),
+    '20261018010000_rate_audit_c5_t3_market_stats_and_vote_guard.sql must define refresh_master_market_stats, UPDATE flood guard on review_votes, and revoke public DML on review_flags (#177)'
+  );
+  const ingestSrc177 = fs.readFileSync(
+    path.join(repoRoot, 'apps/importer/src/shopee/shopee-to-supabase.ts'),
+    'utf8'
+  );
+  assert.ok(
+    ingestSrc177.includes("'refresh_master_market_stats'"),
+    'ShopeeIngestionPipeline.ingestProduct must invoke refresh_master_market_stats RPC (#177)'
+  );
+  console.log(
+    '  ✅ [54/54] Canonical refresh_master_market_stats RPC & Review Votes UPDATE Flood Guard (Audit C5/T3, #177) passed'
   );
 
   console.log('🎉 All Rate.vn Core Architecture tests passed!');

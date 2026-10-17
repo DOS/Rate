@@ -220,6 +220,20 @@ export class ShopeeIngestionPipeline {
 
     const productId = savedProduct.id;
     console.log(`[MultiPlatformIngest:${platform}] Listing upserted -> ID: ${productId}`);
+
+    // 3b. Refresh canonical master_products market stats (min_price, max_price, merchant_count) via SQL RPC (Audit C5)
+    if (typeof (this.supabase as any).rpc === 'function') {
+      const { error: marketStatsErr } = await (this.supabase as any).rpc(
+        'refresh_master_market_stats',
+        { p_master_id: masterId }
+      );
+      if (marketStatsErr) {
+        console.warn(
+          `[MultiPlatformIngest:${platform}] Could not refresh master market stats via RPC: ${marketStatsErr.message}`
+        );
+      }
+    }
+
     await report?.('listing');
 
     // 4. Smart Delta Price Compression + stable observation_id

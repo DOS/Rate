@@ -635,8 +635,36 @@ async function run() {
       'helpfulness_weight written per review'
     );
     assert.ok(out.merchantRisk);
+
+    // 6b. When .rpc() is available on the Supabase client, persistAnalysisToSupabase delegates
+    // master rating refresh to canonical SQL RPC `refresh_master_product_rating` (Audit C5)
+    const rpcCalls: Array<{ fn: string; args: any }> = [];
+    const rpcStub = {
+      ...stub,
+      rpc: async (fn: string, args: any) => {
+        rpcCalls.push({ fn, args });
+        return { error: null };
+      },
+    } as any;
+    await llm.persistAnalysisToSupabase(rpcStub, {
+      productId: 'prod-rpc-1',
+      masterId: 'master-rpc-1',
+      merchantId: 'merch-1',
+      reviews: input,
+      platform: 'shopee',
+    });
+    assert.deepEqual(rpcCalls, [
+      { fn: 'refresh_master_product_rating', args: { p_master_id: 'master-rpc-1' } },
+    ]);
+    assert.equal(
+      calls.some(
+        c => c.table === 'master_products' && c.op === 'update' && c.val === 'master-rpc-1'
+      ),
+      false,
+      'When .rpc() is provided, master_products rating is updated exclusively by SQL RPC'
+    );
     console.log(
-      '✅ [Persist] review_flags / review_analysis / master_products / merchants (review_risk_score isolated) / reviews payloads valid'
+      '✅ [Persist] review_flags / review_analysis / master_products (RPC & stub) / merchants (review_risk_score isolated) / reviews payloads valid'
     );
 
     console.log('\n================================================================');
@@ -894,7 +922,9 @@ async function run() {
   );
 
   console.log('\n================================================================');
-  console.log('9. Review Trust Model P2 & P3 (Voter weight, Wilson bound, Shingle copy, Affiliate)');
+  console.log(
+    '9. Review Trust Model P2 & P3 (Voter weight, Wilson bound, Shingle copy, Affiliate)'
+  );
   console.log('================================================================');
 
   // 9.1 Voter Weight (Section 9)
@@ -936,8 +966,7 @@ async function run() {
   // 9.3 Near-Duplicate 3-Shingle Copy Seeding Detection (Section 10 L2)
   const tplA =
     'Máy nguyên seal chính hãng dùng cực kỳ mượt mà, pin trâu dùng cả ngày không nóng máy';
-  const tplB =
-    'Máy nguyên seal chính hãng dùng cực kỳ mượt mà, pin trâu dùng cả ngày rất mát máy';
+  const tplB = 'Máy nguyên seal chính hãng dùng cực kỳ mượt mà, pin trâu dùng cả ngày rất mát máy';
   const shingleSim = computeTextShingleSimilarity(tplA, tplB, 3);
   assert.ok(shingleSim >= 0.65, `Expected shingle similarity >= 0.65, got ${shingleSim}`);
 
