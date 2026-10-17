@@ -1156,19 +1156,25 @@ export class AiReviewAnalyzer {
   } | null> {
     const sanitizePromptText = (raw: string | null | undefined, maxLen = 1500): string => {
       if (!raw) return '';
-      return raw
-        .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, ' ')
-        .trim()
-        .slice(0, maxLen);
+      return (
+        raw
+          // eslint-disable-next-line no-control-regex -- stripping control characters is the point
+          .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, ' ')
+          .trim()
+          .slice(0, maxLen)
+      );
     };
 
     const sanitizeOutputText = (raw: unknown, maxLen = 400): string => {
       if (typeof raw !== 'string') return '';
-      return raw
-        .replace(/<[^>]*>/g, '')
-        .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, ' ')
-        .trim()
-        .slice(0, maxLen);
+      return (
+        raw
+          .replace(/<[^>]*>/g, '')
+          // eslint-disable-next-line no-control-regex -- stripping control characters is the point
+          .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, ' ')
+          .trim()
+          .slice(0, maxLen)
+      );
     };
 
     try {

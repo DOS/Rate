@@ -336,8 +336,8 @@ export async function getCategoryDirectoryFacets(
   }
 
   // Audit C1: Prefer server-side GROUP BY brand RPC `get_category_brand_facets`
-  if (typeof (supabase as any).rpc === 'function') {
-    const { data: facetRows, error: facetErr } = await (supabase as any).rpc(
+  {
+    const { data: facetRows, error: facetErr } = await supabase.rpc(
       'get_category_brand_facets',
       { p_category_id: currentCategory.id }
     );
@@ -418,8 +418,8 @@ export async function getMasterProducts(
     params?.limit && params.limit > 0 ? Math.min(params.limit, 500) : 200;
 
   // Audit C1: Prefer server-side SQL RPC `search_master_products` when deployed
-  if (typeof (supabase as any).rpc === 'function') {
-    const { data: rpcRows, error: rpcErr } = await (supabase as any).rpc(
+  {
+    const { data: rpcRows, error: rpcErr } = await supabase.rpc(
       'search_master_products',
       {
         p_category_id: resolvedCategoryId,
