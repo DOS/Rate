@@ -2860,7 +2860,52 @@ async function runCoreArchitectureSuite() {
     'POST /api/v1/rate/extension/ingest must return 429 after 15 requests/min from the same IP'
   );
   console.log(
-    '  ✅ [56/56] Route Handler Behavioral Test Suite (200/204/400/401/429) & Voter Eligibility Gate (Audit T1/T9, #179) passed'
+    '  ✅ [56/57] Route Handler Behavioral Test Suite (200/204/400/401/429) & Voter Eligibility Gate (Audit T1/T9, #179) passed'
+  );
+
+  // 57. Issue #189: Audit T12 (Complete Client Component boundary) & Audit Low (purge_completed_crawl_jobs RPC & updated_at triggers)
+  const mig189Src = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'supabase/migrations/20261018020000_rate_audit_low_queue_purge_and_updated_at_triggers.sql'
+    ),
+    'utf8'
+  );
+  assert.ok(
+    mig189Src.includes(
+      'CREATE OR REPLACE FUNCTION rate.purge_completed_crawl_jobs('
+    ) &&
+      mig189Src.includes(
+        'CREATE OR REPLACE FUNCTION rate.set_updated_at_timestamp()'
+      ) &&
+      mig189Src.includes("SET search_path = ''"),
+    '20261018020000_rate_audit_low_queue_purge_and_updated_at_triggers.sql must define purge_completed_crawl_jobs and set_updated_at_timestamp (#189)'
+  );
+  const sidebarSrc189 = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/app/[locale]/components/list-sidebar-one.tsx'
+    ),
+    'utf8'
+  );
+  const merchDirSrc189 = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/components/merchants/MerchantDirectoryExplorer.tsx'
+    ),
+    'utf8'
+  );
+  assert.ok(
+    sidebarSrc189.includes("from '@/lib/rate-domain'") &&
+      !sidebarSrc189.includes("from '@/lib/rate-api'") &&
+      merchDirSrc189.includes("from '@/lib/rate-domain'") &&
+      !merchDirSrc189.includes("from '@/server/rate'") &&
+      eslintSrc.includes('src/app/[locale]/components/**') &&
+      eslintSrc.includes('@/server/rate'),
+    'list-sidebar-one.tsx and MerchantDirectoryExplorer.tsx must import from @/lib/rate-domain and ESLint must ban @/lib/rate-api & @/server/rate in Client Component folders (#189)'
+  );
+  console.log(
+    '  ✅ [57/57] Zero Server-Import Client Component Boundary (Audit T12) & Queue Purge + updated_at Triggers (Audit Low, #189) passed'
   );
 
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
