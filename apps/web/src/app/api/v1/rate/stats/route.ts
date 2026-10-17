@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getCachedRatePlatformStats } from '@/server/rate';
+import { jsonApiError } from '@/server/rate/api-handler';
 
 /**
  * GET /api/v1/rate/stats
@@ -23,8 +24,6 @@ export async function GET() {
       }
     );
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : 'Internal server error';
-    return NextResponse.json({ ok: false, error: message }, { status: 500 });
+    return jsonApiError(500, 'Failed to fetch platform stats', error);
   }
 }

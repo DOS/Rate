@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCachedMerchantProfileById } from '@/server/rate';
+import { jsonApiError } from '@/server/rate/api-handler';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -49,11 +50,11 @@ export async function GET(_request: NextRequest, context: RouteContext) {
       }
     );
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : 'Internal server error';
-    return NextResponse.json(
-      { ok: false, error: message },
-      { status: 500, headers: CORS_HEADERS }
+    return jsonApiError(
+      500,
+      'Failed to fetch merchant profile',
+      error,
+      CORS_HEADERS
     );
   }
 }

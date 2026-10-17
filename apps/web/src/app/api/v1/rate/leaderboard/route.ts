@@ -14,6 +14,10 @@ import {
   normalizeLeaderboardPriceSegment,
   rankMasterProductsForLeaderboard,
 } from '@/lib/leaderboard-engine';
+import {
+  parseBoundedIntParam,
+  sanitizePublicApiError,
+} from '@/server/rate/api-handler';
 
 export const revalidate = 60;
 
@@ -37,10 +41,7 @@ export async function GET(req: NextRequest) {
     );
     const brand = (searchParams.get('brand') || 'all').trim();
     const query = (searchParams.get('q') || '').trim();
-    const limitParam = Number(searchParams.get('limit') || 20);
-    const limit = Number.isFinite(limitParam)
-      ? Math.min(Math.max(Math.trunc(limitParam), 1), 50)
-      : 20;
+    const limit = parseBoundedIntParam(searchParams.get('limit'), 20, 1, 50);
 
     const [allProducts, dealRadar] = await Promise.all([
       getCachedMasterProducts({
@@ -119,8 +120,11 @@ export async function GET(req: NextRequest) {
   } catch (err) {
     return NextResponse.json(
       {
-        error: 'Failed to compute JReviews leaderboard ranking',
-        details: err instanceof Error ? err.message : String(err),
+        ok: false,
+        error: sanitizePublicApiError(
+          err,
+          'Failed to compute JReviews leaderboard ranking'
+        ),
       },
       { status: 500 }
     );

@@ -382,10 +382,15 @@ export async function GET(req: NextRequest) {
       }
     );
   } catch (err) {
+    const { sanitizePublicApiError } =
+      await import('@/server/rate/api-handler');
     return NextResponse.json(
       {
-        error: 'Failed to compute 1v1 Head-to-Head JReviews versus verdict',
-        details: err instanceof Error ? err.message : String(err),
+        ok: false,
+        error: sanitizePublicApiError(
+          err,
+          'Failed to compute 1v1 Head-to-Head JReviews versus verdict'
+        ),
       },
       { status: 500 }
     );

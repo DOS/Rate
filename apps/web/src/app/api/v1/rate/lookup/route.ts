@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCachedInspectProductOrShopUrl } from '@/server/rate';
+import { jsonApiError } from '@/server/rate/api-handler';
 
 /**
  * GET /api/v1/rate/lookup?q=<url_or_keyword>
@@ -37,8 +38,6 @@ export async function GET(request: NextRequest) {
       }
     );
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : 'Internal server error';
-    return NextResponse.json({ ok: false, error: message }, { status: 500 });
+    return jsonApiError(500, 'Failed to lookup product or shop URL', error);
   }
 }

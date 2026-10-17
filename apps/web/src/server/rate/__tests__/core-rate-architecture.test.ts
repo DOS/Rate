@@ -2311,7 +2311,77 @@ async function runCoreArchitectureSuite() {
     'dependabot.yml and CODEOWNERS must match the current Open-Core monorepo without legacy Strapi or ghost handles'
   );
   console.log(
-    '  ✅ [47/47] getMerchantsList Scoped Query (C2), /api/health, global-error.tsx, Layout CSS Cleanup, Turbo Outputs (T14) & Dependabot (#168) passed'
+    '  ✅ [47/48] getMerchantsList Scoped Query (C2), /api/health, global-error.tsx, Layout CSS Cleanup, Turbo Outputs (T14) & Dependabot (#168) passed'
+  );
+
+  // 48. Unified API v1 Error Sanitizer & Bounded Query Parsers (T9) + Pure Domain Module rate-domain.ts (T12) (#170)
+  const {
+    sanitizePublicApiError,
+    jsonApiError,
+    parseBoundedIntParam,
+    parseBoundedNumberParam,
+  } = require('../api-handler') as typeof import('../api-handler');
+  assert.equal(
+    sanitizePublicApiError(
+      new Error('PGRST204: relation "rate.master_products" does not exist'),
+      'Failed to fetch products catalog'
+    ),
+    'Failed to fetch products catalog',
+    'Must mask internal PostgreSQL/PostgREST error messages from public API responses (T9)'
+  );
+  assert.equal(
+    sanitizePublicApiError(
+      new Error('Missing required slug parameter'),
+      'Fallback error'
+    ),
+    'Missing required slug parameter',
+    'Must preserve short, non-DB validation messages'
+  );
+  assert.equal(parseBoundedIntParam('999', 24, 1, 100), 100);
+  assert.equal(parseBoundedIntParam('-5', 24, 1, 100), 1);
+  assert.equal(parseBoundedIntParam('abc', 24, 1, 100), 24);
+  assert.equal(parseBoundedNumberParam('125', 0, 100), 100);
+  assert.equal(parseBoundedNumberParam(null, 0, 100), undefined);
+
+  const errRes170 = jsonApiError(
+    500,
+    'Failed to fetch merchants list',
+    new Error('permission denied for schema "rate"')
+  );
+  assert.equal(errRes170.status, 500);
+  const errBody170 = (await errRes170.json()) as { ok: boolean; error: string };
+  assert.equal(errBody170.ok, false);
+  assert.equal(errBody170.error, 'Failed to fetch merchants list');
+
+  const rateDomain =
+    require('../../../lib/rate-domain') as typeof import('../../../lib/rate-domain');
+  assert.equal(typeof rateDomain.computeBayesianRatingSummary, 'function');
+  assert.equal(typeof rateDomain.computeJReviewsWeight, 'function');
+  assert.equal(typeof rateDomain.getMasterProductCategorySlug, 'function');
+  assert.equal(typeof rateDomain.resolveProductImageUrl, 'function');
+
+  for (const apiRouteRel of [
+    'apps/web/src/app/api/v1/rate/products/route.ts',
+    'apps/web/src/app/api/v1/rate/products/[slug]/route.ts',
+    'apps/web/src/app/api/v1/rate/compare/route.ts',
+    'apps/web/src/app/api/v1/rate/deals/route.ts',
+    'apps/web/src/app/api/v1/rate/inspect/route.ts',
+    'apps/web/src/app/api/v1/rate/leaderboard/route.ts',
+    'apps/web/src/app/api/v1/rate/lookup/route.ts',
+    'apps/web/src/app/api/v1/rate/merchants/route.ts',
+    'apps/web/src/app/api/v1/rate/merchants/[id]/route.ts',
+    'apps/web/src/app/api/v1/rate/stats/route.ts',
+    'apps/web/src/app/api/v1/rate/versus/route.ts',
+    'apps/web/src/app/api/v1/rate/extension/lookup/route.ts',
+  ]) {
+    const routeSrc = fs.readFileSync(path.join(repoRoot, apiRouteRel), 'utf8');
+    assert.ok(
+      routeSrc.includes('@/server/rate/api-handler'),
+      `${apiRouteRel} must use @/server/rate/api-handler error sanitizer (T9)`
+    );
+  }
+  console.log(
+    '  ✅ [48/48] Unified API v1 Error Sanitizer & Bounded Query Parsers (T9) + Pure Domain Module rate-domain.ts (T12) (#170) passed'
   );
 
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
