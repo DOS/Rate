@@ -37,9 +37,15 @@ export default async function LocaleLayout({
   const { locale } = await params;
   setRequestLocale(locale);
   const messages = await getMessages();
+  // Only Client Components need messages in the browser, and the only client
+  // consumer is the error boundary (errors.global). Server Components read the
+  // full catalog through getTranslations, so nothing else is shipped.
+  const clientMessages = {
+    errors: { global: (messages.errors as Record<string, unknown>)?.global },
+  };
 
   return (
-    <NextIntlClientProvider locale={locale} messages={messages}>
+    <NextIntlClientProvider locale={locale} messages={clientMessages}>
       <AppProviders>{children}</AppProviders>
     </NextIntlClientProvider>
   );
