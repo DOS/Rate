@@ -4,6 +4,9 @@ import type { ShopeeProduct } from './types.js';
 export type CanonicalCategorySlug =
   'smartphones' | 'tablets' | 'laptops' | 'smartwatches' | 'earbuds';
 
+export type ProductCondition = 'new' | 'like_new_99' | 'used' | 'refurbished';
+export type ProductOrigin = 'official_vna' | 'imported' | 'unknown';
+
 export interface NormalizedProductCandidate {
   category_slug: CanonicalCategorySlug;
   brand: string;
@@ -13,7 +16,9 @@ export interface NormalizedProductCandidate {
   name: string;
   slug: string;
   storage_gb: number | null; // null = unparseable from the title; identity carries ':unknown'
-  needs_review: boolean; // true when identity could not be confidently derived (plan v7 §5.2)
+  needs_review: boolean; // true when identity could not be confidently derived or listing is non-new (plan v7 §5.2, Audit C6)
+  condition?: ProductCondition;
+  origin?: ProductOrigin;
   ram_gb: number | null;
   screen_size_inch: number | null;
   battery_mah: number | null;
@@ -30,6 +35,77 @@ export interface NormalizedProductCandidate {
     model: string;
     enriched_at: string;
   };
+}
+
+/**
+ * Detect listing physical condition from product title and optional description (Audit C6).
+ * Strips promotional trade-in phrases ("thu cũ đổi mới") before matching so new retail listings
+ * offering trade-in programs are not misclassified as used devices.
+ */
+export function detectProductCondition(title: string, description?: string): ProductCondition {
+  const cleanTitle = title.replace(/thu\s*cũ\s*đổi\s*mới/gi, ' ');
+  const cleanDesc = (description || '').replace(/thu\s*cũ\s*đổi\s*mới/gi, ' ');
+
+  const checkSource = (text: string): ProductCondition | null => {
+    if (
+      /(?:\brefurbished\b|tân\s*trang|hàng\s*đổi\s*bảo\s*hành|trả\s*bảo\s*hành|\bcpo\b|certified\s*pre-?owned)/i.test(
+        text
+      )
+    ) {
+      return 'refurbished';
+    }
+    if (
+      /(?:\blike\s*new\b|\blikenew\b|mới\s*9[5-9]%|đẹp\s*9[5-9]%|zin\s*9[5-9]%|\b9[89]%|siêu\s*lướt|hàng\s*lướt|máy\s*lướt|hàng\s*trưng\s*bày|máy\s*trưng\s*bày|\bopen\s*box\b|đã\s*kích\s*hoạt\s*bảo\s*hành)/i.test(
+        text
+      )
+    ) {
+      return 'like_new_99';
+    }
+    if (
+      /(?:máy\s*cũ|hàng\s*cũ|điện\s*thoại\s*cũ|đã\s*qua\s*sử\s*dụng|\bsecond\s*hand\b|\b2nd\b|thanh\s*lý\s*máy\s*cũ|máy\s*trần\s*cũ)/i.test(
+        text
+      )
+    ) {
+      return 'used';
+    }
+    return null;
+  };
+
+  const fromTitle = checkSource(cleanTitle);
+  if (fromTitle) return fromTitle;
+
+  const explicitlyNewInTitle =
+    /(?:mới\s*100%|nguyên\s*seal|fullbox\s*nguyên\s*seal|chưa\s*active|chưa\s*kích\s*hoạt)/i.test(
+      cleanTitle
+    );
+  if (!explicitlyNewInTitle && cleanDesc) {
+    const fromDesc = checkSource(cleanDesc);
+    if (fromDesc) return fromDesc;
+  }
+
+  return 'new';
+}
+
+/**
+ * Detect product distribution origin (official VN/A vs parallel import vs unknown) (Audit C6).
+ */
+export function detectProductOrigin(title: string, description?: string): ProductOrigin {
+  const combined = `${title} ${description || ''}`;
+  if (
+    /(?:xách\s*tay|bản\s*mỹ|\bll\/a\b|\bzp\/a\b|\bza\/a\b|\bch\/a\b|\bkh\/a\b|\bj\/a\b|bản\s*hàn|bản\s*nhật|bản\s*trung|nội\s*địa(?:\s*trung|\s*nhật|\s*hàn)?|quốc\s*tế\s*mỹ)/i.test(
+      combined
+    )
+  ) {
+    return 'imported';
+  }
+  if (
+    /(?:\bvn\/a\b|\bvna\b|chính\s*hãng|phân\s*phối\s*chính\s*hãng|apple\s*việt\s*nam)/i.test(
+      combined
+    )
+  ) {
+    return 'official_vna';
+  }
+  return 'unknown';
 }
 
 /**
@@ -1047,7 +1123,7 @@ export class ProductNormalizer {
       for (const tok of rawTokens) {
         if (modelTokens.length >= 4) break;
         if (
-          /^(?:\d+(?:[.,]\d+)?(?:GB|TB)|\d+\/\d+(?:GB|TB)?|\d{2}mm|5G|4G|LTE|GPS|RAM|ROM|OLED|WiFi|Chính|Quốc|Bản|Mới|Fullbox|\(|\[|-)/i.test(
+          /^(?:\d+(?:[.,]\d+)?(?:GB|TB)|\d+\/\d+(?:GB|TB)?|\d{2}mm|5G|4G|LTE|GPS|RAM|ROM|OLED|WiFi|Chính|Quốc|Bản|Mới|Fullbox|Likenew|Like|Cũ|99%|98%|VN\/A|VNA|LL\/A|\(|\[|-)/i.test(
             tok
           )
         ) {
@@ -1290,6 +1366,9 @@ export class ProductNormalizer {
       ram: ramGb ? `${ramGb}GB` : undefined,
     };
 
+    const condition = detectProductCondition(title, raw.description);
+    const origin = detectProductOrigin(title, raw.description);
+
     return {
       category_slug: categorySlug,
       brand,
@@ -1299,7 +1378,9 @@ export class ProductNormalizer {
       name: canonicalName,
       slug,
       storage_gb: storageKnown ? storageGb : null,
-      needs_review: !storageConfident,
+      needs_review: !storageConfident || condition !== 'new',
+      condition,
+      origin,
       ram_gb: ramGb,
       screen_size_inch: screenSize,
       battery_mah: batteryMah,
@@ -1310,6 +1391,7 @@ export class ProductNormalizer {
       key_specs: keySpecs,
       description: raw.description,
       is_benchmark_enriched: Boolean(benchmark),
+      spec_source: Boolean(benchmark) ? 'benchmark_registry' : 'crawled_title',
     };
   }
 }

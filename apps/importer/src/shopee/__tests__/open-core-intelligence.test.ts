@@ -24,7 +24,7 @@ function createDummyShopeeProduct(title: string, priceMin = 25990000): ShopeePro
     ratingStar: 4.9,
     ratingCount: 85,
     images: ['https://rate.vn/img/placeholder.png'],
-    models: [{ name: 'Titan Tự Nhiên', price: priceMin, stock: 10 }],
+    models: [{ modelId: 'm-1', name: 'Titan Tự Nhiên', price: priceMin, stock: 10 }],
     attributes: [],
     shop: {
       shopId: '20001',
@@ -36,7 +36,6 @@ function createDummyShopeeProduct(title: string, priceMin = 25990000): ShopeePro
     },
     reviews: [],
     url: 'https://shopee.vn/product/20001/10001',
-    scrapedAt: new Date().toISOString(),
   };
 }
 
@@ -328,25 +327,12 @@ async function runSuite() {
   }
 
   // Verify ProductNormalizer recognizes 2026 multi-category flagships
-  const normPad7 = normalizer.normalize({
-    itemId: 'p7',
-    shopId: 's1',
-    title: 'Máy tính bảng Xiaomi Pad 7 Pro (12GB/256GB) Màn hình 3.2K 144Hz Chính Hãng',
-    price: 12490000,
-    priceMin: 12490000,
-    priceMax: 13990000,
-    currency: 'VND',
-    stock: 20,
-    sold: 50,
-    historicalSold: 120,
-    ratingStar: 4.9,
-    ratingCount: 21,
-    images: [],
-    attributes: [],
-    models: [],
-    url: 'https://shopee.vn/p7',
-    crawledAt: new Date().toISOString(),
-  });
+  const normPad7 = normalizer.normalize(
+    createDummyShopeeProduct(
+      'Máy tính bảng Xiaomi Pad 7 Pro (12GB/256GB) Màn hình 3.2K 144Hz Chính Hãng',
+      12490000
+    )
+  );
   assert.equal(normPad7.model_key, 'xiaomi:pad-7-pro:256gb');
   assert.equal(normPad7.category_slug, 'tablets');
   assert.equal(normPad7.is_benchmark_enriched, true);
