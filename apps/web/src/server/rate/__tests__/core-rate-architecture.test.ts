@@ -2653,7 +2653,214 @@ async function runCoreArchitectureSuite() {
     'Docs/Resources/ROADMAP.md must link to Docs/Resources/CHANGELOG.md and keep forward-looking Phase 6 & 7 items (#178)'
   );
   console.log(
-    '  ✅ [55/55] Catalog Search/Facets SQL RPCs (Audit C1) & ROADMAP/CHANGELOG Split (Audit Low, #178) passed'
+    '  ✅ [55/56] Catalog Search/Facets SQL RPCs (Audit C1) & ROADMAP/CHANGELOG Split (Audit Low, #178) passed'
+  );
+
+  // 56. Issue #179: Audit T1/T9 Route Handler Behavioral Test Suite (200/204/400/401/429) & Voter Eligibility Gate
+  const voteRoute =
+    require('../../../app/api/reviews/[id]/vote/route') as typeof import('../../../app/api/reviews/[id]/vote/route');
+  const compareRoute =
+    require('../../../app/api/v1/rate/compare/route') as typeof import('../../../app/api/v1/rate/compare/route');
+  const versusRoute =
+    require('../../../app/api/v1/rate/versus/route') as typeof import('../../../app/api/v1/rate/versus/route');
+  const lookupRoute =
+    require('../../../app/api/v1/rate/lookup/route') as typeof import('../../../app/api/v1/rate/lookup/route');
+  const inspectRoute =
+    require('../../../app/api/v1/rate/inspect/route') as typeof import('../../../app/api/v1/rate/inspect/route');
+  const extLookupRoute =
+    require('../../../app/api/v1/rate/extension/lookup/route') as typeof import('../../../app/api/v1/rate/extension/lookup/route');
+  const extIngestRoute =
+    require('../../../app/api/v1/rate/extension/ingest/route') as typeof import('../../../app/api/v1/rate/extension/ingest/route');
+
+  // 56.1 Voter Eligibility Gate (Review Trust Model Section 9)
+  assert.equal(
+    voteRoute.evaluateVoterEligibility({
+      created_at: new Date(Date.now() - 2 * 86_400_000).toISOString(),
+      email_confirmed_at: new Date().toISOString(),
+      phone_confirmed_at: null,
+    }).eligible,
+    false,
+    'Account < 7 days old must be rejected by evaluateVoterEligibility'
+  );
+  assert.equal(
+    voteRoute.evaluateVoterEligibility({
+      created_at: new Date(Date.now() - 30 * 86_400_000).toISOString(),
+      email_confirmed_at: null,
+      phone_confirmed_at: null,
+    }).eligible,
+    false,
+    'Account with neither confirmed email nor confirmed phone must be rejected'
+  );
+  assert.equal(
+    voteRoute.evaluateVoterEligibility({
+      created_at: new Date(Date.now() - 30 * 86_400_000).toISOString(),
+      email_confirmed_at: new Date().toISOString(),
+      phone_confirmed_at: null,
+    }).eligible,
+    true,
+    'Confirmed account >= 7 days old must be eligible to vote'
+  );
+
+  // 56.2 POST /api/reviews/[id]/vote -> 400 Invalid UUID & 401 Missing Bearer Token
+  const badUuidVoteRes = await voteRoute.POST(
+    new NextRequest('https://rate.vn/api/reviews/not-a-uuid/vote', {
+      method: 'POST',
+      body: JSON.stringify({ voteType: 'up' }),
+    }),
+    { params: Promise.resolve({ id: 'not-a-uuid' }) }
+  );
+  assert.equal(badUuidVoteRes.status, 400);
+
+  const prevUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const prevAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  process.env.NEXT_PUBLIC_SUPABASE_URL =
+    process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://example.supabase.co';
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY =
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'anon-test-key';
+  try {
+    const unauthVoteRes = await voteRoute.POST(
+      new NextRequest(
+        'https://rate.vn/api/reviews/11111111-2222-3333-4444-555555555555/vote',
+        {
+          method: 'POST',
+          body: JSON.stringify({ voteType: 'up' }),
+        }
+      ),
+      {
+        params: Promise.resolve({
+          id: '11111111-2222-3333-4444-555555555555',
+        }),
+      }
+    );
+    assert.equal(unauthVoteRes.status, 401);
+    const unauthVoteBody = (await unauthVoteRes.json()) as { code?: string };
+    assert.equal(unauthVoteBody.code, 'AUTH_REQUIRED');
+  } finally {
+    if (prevUrl === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+    else process.env.NEXT_PUBLIC_SUPABASE_URL = prevUrl;
+    if (prevAnon === undefined)
+      delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    else process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = prevAnon;
+  }
+
+  // 56.3 GET /api/v1/rate/compare, /versus, /lookup, /inspect -> 400 Bad Request on missing params
+  const compare400Res = await compareRoute.GET(
+    new NextRequest('https://rate.vn/api/v1/rate/compare')
+  );
+  assert.equal(compare400Res.status, 400);
+
+  const versus400Res = await versusRoute.GET(
+    new NextRequest('https://rate.vn/api/v1/rate/versus?pair=same-vs-same')
+  );
+  assert.equal(versus400Res.status, 400);
+
+  const lookup400Res = await lookupRoute.GET(
+    new NextRequest('https://rate.vn/api/v1/rate/lookup')
+  );
+  assert.equal(lookup400Res.status, 400);
+
+  const inspect400Res = await inspectRoute.GET(
+    new NextRequest('https://rate.vn/api/v1/rate/inspect')
+  );
+  assert.equal(inspect400Res.status, 400);
+
+  // 56.4 Extension Lookup & Ingest OPTIONS (204), 400 Validation, Opt-In Gate (200) & 429 Rate Limit
+  const extLookupOptRes = await extLookupRoute.OPTIONS();
+  assert.equal(extLookupOptRes.status, 204);
+  const extLookup400Res = await extLookupRoute.GET(
+    new NextRequest('https://rate.vn/api/v1/rate/extension/lookup')
+  );
+  assert.equal(extLookup400Res.status, 400);
+
+  const extIngestOptRes = await extIngestRoute.OPTIONS();
+  assert.equal(extIngestOptRes.status, 204);
+
+  const extIngest400Res = await extIngestRoute.POST(
+    new NextRequest('https://rate.vn/api/v1/rate/extension/ingest', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-forwarded-for': '203.0.113.10',
+      },
+      body: JSON.stringify({ platform: 'invalid_platform' }),
+    })
+  );
+  assert.equal(extIngest400Res.status, 400);
+
+  const extIngestOptOutRes = await extIngestRoute.POST(
+    new NextRequest('https://rate.vn/api/v1/rate/extension/ingest', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-forwarded-for': '203.0.113.11',
+      },
+      body: JSON.stringify({
+        platform: 'shopee',
+        externalItemId: '123456',
+        url: 'https://shopee.vn/i.1.123456',
+        title: 'Apple iPhone 16 Pro Max 256GB Chính hãng VN/A',
+        price: 28990000,
+        userConsentOptIn: false,
+      }),
+    })
+  );
+  assert.equal(extIngestOptOutRes.status, 200);
+  const extIngestOptOutBody = (await extIngestOptOutRes.json()) as {
+    ok: boolean;
+    data: { accepted: boolean; jobState: string };
+  };
+  assert.equal(extIngestOptOutBody.data.accepted, false);
+  assert.equal(extIngestOptOutBody.data.jobState, 'skipped_no_consent');
+
+  const extIngestAccessoryRes = await extIngestRoute.POST(
+    new NextRequest('https://rate.vn/api/v1/rate/extension/ingest', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-forwarded-for': '203.0.113.12',
+      },
+      body: JSON.stringify({
+        platform: 'shopee',
+        externalItemId: '999999',
+        url: 'https://shopee.vn/i.1.999999',
+        title: 'Ốp lưng silicon iPhone 16 Pro Max chống sốc',
+        price: 55000,
+        userConsentOptIn: true,
+      }),
+    })
+  );
+  assert.equal(extIngestAccessoryRes.status, 200);
+  const extIngestAccessoryBody = (await extIngestAccessoryRes.json()) as {
+    ok: boolean;
+    data: { accepted: boolean; jobState: string };
+  };
+  assert.equal(extIngestAccessoryBody.data.accepted, false);
+  assert.equal(extIngestAccessoryBody.data.jobState, 'skipped_accessory');
+
+  let hit429 = false;
+  for (let i = 0; i < 16; i++) {
+    const rlRes = await extIngestRoute.POST(
+      new NextRequest('https://rate.vn/api/v1/rate/extension/ingest', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-forwarded-for': '203.0.113.99',
+        },
+        body: JSON.stringify({ platform: 'invalid_platform' }),
+      })
+    );
+    if (rlRes.status === 429) {
+      hit429 = true;
+      break;
+    }
+  }
+  assert.equal(
+    hit429,
+    true,
+    'POST /api/v1/rate/extension/ingest must return 429 after 15 requests/min from the same IP'
+  );
+  console.log(
+    '  ✅ [56/56] Route Handler Behavioral Test Suite (200/204/400/401/429) & Voter Eligibility Gate (Audit T1/T9, #179) passed'
   );
 
   console.log('🎉 All Rate.vn Core Architecture tests passed!');

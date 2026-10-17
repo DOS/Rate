@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { sanitizePublicApiError } from '@/server/rate/api-handler';
 
 type VoteAction = 'up' | 'down' | 'report' | 'clear';
 type ReportReason = 'spam' | 'fake' | 'offensive' | 'off_topic' | 'other';
@@ -14,6 +15,43 @@ const VALID_REPORT_REASONS = new Set<ReportReason>([
   'off_topic',
   'other',
 ]);
+
+/**
+ * Review Trust Model Section 9: Voter Eligibility Gate
+ * - Account must be at least 7 days old when `created_at` is present
+ * - Account must have a confirmed email or phone when confirmation fields are present
+ */
+export function evaluateVoterEligibility(user: {
+  created_at?: string | null;
+  email_confirmed_at?: string | null;
+  phone_confirmed_at?: string | null;
+}): { eligible: boolean; reason?: string } {
+  if (
+    'email_confirmed_at' in user &&
+    'phone_confirmed_at' in user &&
+    !user.email_confirmed_at &&
+    !user.phone_confirmed_at
+  ) {
+    return {
+      eligible: false,
+      reason: 'Verified email or phone number is required to vote on reviews.',
+    };
+  }
+  if (typeof user.created_at === 'string' && user.created_at.trim()) {
+    const createdMs = Date.parse(user.created_at);
+    if (Number.isFinite(createdMs)) {
+      const ageDays = (Date.now() - createdMs) / 86_400_000;
+      if (ageDays < 7) {
+        return {
+          eligible: false,
+          reason:
+            'Account must be at least 7 days old to vote or report reviews.',
+        };
+      }
+    }
+  }
+  return { eligible: true };
+}
 
 export async function POST(
   request: NextRequest,
@@ -31,7 +69,9 @@ export async function POST(
   const supabaseUrl =
     process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '';
   const anonKey =
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '';
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    process.env.SUPABASE_ANON_KEY ||
+    '';
 
   if (!supabaseUrl || !anonKey) {
     return NextResponse.json(
@@ -86,14 +126,27 @@ export async function POST(
     });
     const rateClient = baseClient.schema('rate');
 
-    const { data: userRes, error: authErr } = await baseClient.auth.getUser(
-      bearerToken
-    );
+    const { data: userRes, error: authErr } =
+      await baseClient.auth.getUser(bearerToken);
     const voterId = userRes?.user?.id;
-    if (authErr || !voterId) {
+    if (authErr || !voterId || !userRes?.user) {
       return NextResponse.json(
-        { error: 'Invalid or expired authentication token', code: 'AUTH_INVALID' },
+        {
+          error: 'Invalid or expired authentication token',
+          code: 'AUTH_INVALID',
+        },
         { status: 401 }
+      );
+    }
+
+    const eligibility = evaluateVoterEligibility(userRes.user);
+    if (!eligibility.eligible) {
+      return NextResponse.json(
+        {
+          error: eligibility.reason || 'Voter account is not eligible to vote',
+          code: 'VOTER_NOT_ELIGIBLE',
+        },
+        { status: 403 }
       );
     }
 
@@ -106,7 +159,12 @@ export async function POST(
 
       if (delErr) {
         return NextResponse.json(
-          { error: `Failed to clear vote: ${delErr.message}` },
+          {
+            error: sanitizePublicApiError(
+              delErr,
+              'Failed to clear review vote'
+            ),
+          },
           { status: 400 }
         );
       }
@@ -141,7 +199,15 @@ export async function POST(
       if (upsertErr) {
         const isRateLimit = upsertErr.code === '54000';
         return NextResponse.json(
-          { error: upsertErr.message, code: upsertErr.code },
+          {
+            error: isRateLimit
+              ? 'Rate limit exceeded (maximum 60 vote actions per hour)'
+              : sanitizePublicApiError(
+                  upsertErr,
+                  'Failed to record review vote'
+                ),
+            code: isRateLimit ? 'RATE_LIMIT_EXCEEDED' : 'VOTE_REJECTED',
+          },
           { status: isRateLimit ? 429 : 400 }
         );
       }
@@ -155,7 +221,7 @@ export async function POST(
 
     if (selectErr || !updatedReview) {
       return NextResponse.json(
-        { error: selectErr?.message || 'Review not found after vote update' },
+        { error: 'Review not found after vote update' },
         { status: 404 }
       );
     }
@@ -173,7 +239,7 @@ export async function POST(
   } catch (error) {
     console.error('Error voting on review:', error);
     return NextResponse.json(
-      { error: 'Failed to vote on review' },
+      { error: sanitizePublicApiError(error, 'Failed to vote on review') },
       { status: 500 }
     );
   }
