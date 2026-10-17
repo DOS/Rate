@@ -19,7 +19,7 @@ CREATE OR REPLACE FUNCTION rate.enqueue_crowd_verify_signal(
 RETURNS TABLE(job_id UUID, state TEXT)
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = rate, public, pg_temp
+SET search_path = ''
 AS $$
 DECLARE
   v_clean_platform TEXT := lower(btrim(COALESCE(p_platform, '')));
@@ -43,6 +43,13 @@ BEGIN
 
   IF v_clean_item_id = '' OR char_length(v_clean_item_id) > 240 THEN
     RAISE EXCEPTION 'Invalid platform item identifier'
+      USING ERRCODE = '22023';
+  END IF;
+
+  -- anon can call this; keep the stored payload small and an object.
+  IF p_payload IS NOT NULL
+     AND (jsonb_typeof(p_payload) <> 'object' OR octet_length(p_payload::text) > 16384) THEN
+    RAISE EXCEPTION 'Invalid crowd verification payload'
       USING ERRCODE = '22023';
   END IF;
 

@@ -36,7 +36,29 @@ CREATE TABLE IF NOT EXISTS rate.merchants (
 
 CREATE INDEX IF NOT EXISTS idx_rate_merchants_platform ON rate.merchants (platform);
 CREATE INDEX IF NOT EXISTS idx_rate_merchants_entity_hash ON rate.merchants (entity_hash);
-CREATE INDEX IF NOT EXISTS idx_rate_merchants_name_trgm ON rate.merchants USING gin (name gin_trgm_ops);
+-- pg_trgm's operator class is schema-qualified per installation: production
+-- keeps the extension in schema "sign" while fresh installs use "extensions",
+-- so an unqualified gin_trgm_ops is not always on the session search_path
+-- (SQLSTATE 42704 on replay). Resolve the extension's actual schema.
+DO $rate_merchants_trgm$
+DECLARE
+  v_trgm_schema text;
+BEGIN
+  SELECT n.nspname INTO v_trgm_schema
+    FROM pg_extension e
+    JOIN pg_namespace n ON n.oid = e.extnamespace
+   WHERE e.extname = 'pg_trgm';
+
+  IF v_trgm_schema IS NULL THEN
+    RAISE EXCEPTION 'rate schema: pg_trgm extension is not installed';
+  END IF;
+
+  EXECUTE format(
+    'CREATE INDEX IF NOT EXISTS idx_rate_merchants_name_trgm ON rate.merchants USING gin (name %I.gin_trgm_ops)',
+    v_trgm_schema
+  );
+END
+$rate_merchants_trgm$;
 
 -- ------------------------------------------------------------------------------
 -- 2. Categories
@@ -89,7 +111,25 @@ CREATE INDEX IF NOT EXISTS idx_rate_products_merchant ON rate.products (merchant
 CREATE INDEX IF NOT EXISTS idx_rate_products_category ON rate.products (category_id);
 CREATE INDEX IF NOT EXISTS idx_rate_products_cluster ON rate.products (cluster_id);
 CREATE INDEX IF NOT EXISTS idx_rate_products_price ON rate.products (price_current);
-CREATE INDEX IF NOT EXISTS idx_rate_products_title_trgm ON rate.products USING gin (title gin_trgm_ops);
+DO $rate_products_trgm$
+DECLARE
+  v_trgm_schema text;
+BEGIN
+  SELECT n.nspname INTO v_trgm_schema
+    FROM pg_extension e
+    JOIN pg_namespace n ON n.oid = e.extnamespace
+   WHERE e.extname = 'pg_trgm';
+
+  IF v_trgm_schema IS NULL THEN
+    RAISE EXCEPTION 'rate schema: pg_trgm extension is not installed';
+  END IF;
+
+  EXECUTE format(
+    'CREATE INDEX IF NOT EXISTS idx_rate_products_title_trgm ON rate.products USING gin (title %I.gin_trgm_ops)',
+    v_trgm_schema
+  );
+END
+$rate_products_trgm$;
 
 -- ------------------------------------------------------------------------------
 -- 4. Price History (Time-series / Price tracking)
@@ -144,8 +184,12 @@ CREATE TABLE IF NOT EXISTS rate.review_analysis (
 -- ------------------------------------------------------------------------------
 -- 7. Cross-schema View with DOSafe Threat Intelligence
 -- ------------------------------------------------------------------------------
-CREATE OR REPLACE VIEW rate.v_products_with_merchant_trust 
-WITH (security_invoker = true) AS
+CREATE OR REPLACE VIEW rate.v_products_with_merchant_trust AS
+-- Deliberately NOT security_invoker: the view joins dosafe.threat_intel, whose
+-- table grant is intentionally not given to anon/authenticated (internal risk
+-- data, owned by the DOSafe schema). Running with owner privileges keeps the
+-- join working for every reader while the view only exposes the safe columns
+-- listed below - none of the merchants PII (phone, bank_account, bank_name).
 SELECT 
   p.id,
   p.merchant_id,
@@ -234,6 +278,30 @@ CREATE POLICY "Service role write review_analysis" ON rate.review_analysis FOR A
 -- 9. Grants
 -- ------------------------------------------------------------------------------
 GRANT USAGE ON SCHEMA rate TO anon, authenticated, service_role;
-GRANT SELECT ON ALL TABLES IN SCHEMA rate TO anon, authenticated;
 GRANT ALL ON ALL TABLES IN SCHEMA rate TO service_role;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA rate TO service_role;
+-- Public read, EXCEPT the merchants PII columns (phone, bank_account,
+-- bank_name): those stay service_role-only. rate.merchants gets COLUMN-level
+-- grants only (a full-table grant could not be narrowed by a column revoke);
+-- every other rate table gets a plain full-table SELECT.
+REVOKE SELECT ON rate.merchants FROM anon, authenticated;
+GRANT SELECT (id, platform, platform_shop_id, name, slug, url, is_official, rating_star,
+              follower_count, location, entity_hash, risk_score, metadata,
+              created_at, updated_at)
+  ON rate.merchants TO anon, authenticated;
+GRANT SELECT ON rate.categories, rate.products, rate.price_history, rate.reviews, rate.review_analysis
+  TO anon, authenticated;
+-- The trust view exposes only safe columns (merchant name/official/location +
+-- threat risk fields), never the PII columns above.
+GRANT SELECT ON rate.v_products_with_merchant_trust TO anon, authenticated;
+
+-- Late-apply re-add of the rate schema. The original migration
+-- 20260912120000_init_rate_schema.sql was merged in #788 but carries a
+-- timestamp OLDER than migrations already applied to production
+-- (supabase db push skips out-of-order older-timestamp files by default),
+-- so it never reached any live environment. This copy is byte-identical
+-- content-wise and fully idempotent: on a fresh environment both files
+-- run (the second is a no-op); on the shared prod/beta this file is the
+-- one that actually creates the schema. Tested in disposable Postgres:
+-- replays cleanly, anon is blocked on merchants PII columns, the trust
+-- view is readable.

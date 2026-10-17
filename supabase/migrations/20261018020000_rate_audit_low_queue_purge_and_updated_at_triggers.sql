@@ -78,9 +78,11 @@ BEGIN
   WITH stale_jobs AS (
     SELECT id
     FROM rate.crawl_jobs
-    WHERE state IN ('done', 'failed')
-      AND COALESCE(finished_at, updated_at, created_at) < now() - make_interval(days => v_days)
-    ORDER BY COALESCE(finished_at, updated_at, created_at) ASC
+    -- crawl_jobs has `status` (pending/running/done/failed/skipped) and no
+    -- finished_at; updated_at is set on every terminal transition.
+    WHERE status IN ('done', 'failed', 'skipped')
+      AND updated_at < now() - make_interval(days => v_days)
+    ORDER BY updated_at ASC
     LIMIT 5000
   ),
   deleted AS (

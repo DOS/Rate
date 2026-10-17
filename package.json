@@ -20,6 +20,8 @@
   ],
   "scripts": {
     "build": "turbo build --cache-dir=.turbo",
+    "check:migrations": "node scripts/check-migration-drift.mjs",
+    "test:migrations": "node scripts/test-migration-replay.mjs",
     "build:web": "turbo run build --filter=@repo/web",
     "build:crawler": "turbo run build --filter=@repo/crawlers",
     "commit": "git-cz",
