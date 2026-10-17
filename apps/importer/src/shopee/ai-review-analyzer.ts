@@ -27,6 +27,75 @@ export interface ReviewSignals {
   language_marker_score: number; // 0..1
 }
 
+export type Authenticity =
+  'genuine' | 'doubtful' | 'fabricated' | 'sabotage' | 'bombing' | 'copied';
+
+export type Independence =
+  | 'organic'
+  | 'affiliate'
+  | 'incentivized'
+  | 'sponsored_balanced'
+  | 'sponsored_promo'
+  | 'undisclosed_paid'
+  | 'conflict_of_interest';
+
+export type Depth =
+  | 'stars_only'
+  | 'platform_label'
+  | 'filler'
+  | 'low_effort'
+  | 'specific_short'
+  | 'detailed'
+  | 'expert_depth';
+
+export type SubjectKind =
+  'master_product' | 'listing' | 'brand' | 'merchant' | 'reviewer' | 'expert' | 'review';
+
+export interface WeightBreakdown {
+  gate: 0 | 1;
+  gateReason?: string;
+  authenticity: number; // A (0, 0.5, 1.0)
+  independence: number; // B (0, 0.1, 0.5, 0.7, 1.0)
+  depth: number; // C (0, 0.25, 0.5, 0.8, 1.0, 1.2 + media/long-term bonus up to 1.5)
+  reviewer: number; // D (0.3, 0.5, 0.8, 1.0, 1.1, 1.3)
+  context: number; // E (0, 0.7, 0.8, 1.0)
+  community: number; // F (0.1..2.0)
+  base_weight: number; // G * A * B * C * D * E (unrounded product before community multiplier)
+  weight: number; // clamp(round(base_weight * F, 2), 0, 3.0)
+  explanationVi: string;
+}
+
+export interface ReviewAspectSignal {
+  sentiment: -1 | 0 | 1;
+  evidence: string;
+  routesTo: 'product' | 'merchant';
+}
+
+export interface ReviewAssessment {
+  authenticity: Authenticity;
+  independence: Independence;
+  depth: Depth;
+  relevance: number; // 0..1
+  aspects: Record<string, ReviewAspectSignal>;
+  aiGeneratedProb?: number;
+  breakdown: WeightBreakdown;
+  detector: string;
+  detectorVersion: string;
+}
+
+export type BayesianConfidenceTier = 'insufficient_data' | 'low' | 'medium' | 'high';
+
+export interface BayesianRatingResult {
+  score: number; // S = (k * mu + sum(w_i * r_i)) / (k + sum(w_i))
+  confidence: number; // c = sum(w_i) / (sum(w_i) + k), 0..1
+  confidence_tier: BayesianConfidenceTier;
+  confidence_label_vi: string;
+  prior_mean: number; // mu (default 4.2)
+  prior_strength: number; // k (default 3)
+  effective_weight_sum: number; // sum(w_i)
+  raw_weighted_average: number; // sum(w_i * r_i) / sum(w_i) or 0 when sum(w_i) === 0
+}
+
 export interface ReviewInputItem {
   id: string;
   author_name?: string | null;
@@ -54,6 +123,7 @@ export interface AnalyzedReviewResult {
   reason: string;
   signals: ReviewSignals;
   detector?: string;
+  assessment?: ReviewAssessment;
 }
 
 export interface JReviewsProductSummary {
@@ -70,6 +140,7 @@ export interface JReviewsProductSummary {
   cons: string[];
   ai_summary: string;
   breakdown_by_category: Record<ReviewFlagCategory, number>;
+  bayesian_rating?: BayesianRatingResult;
 }
 
 export interface MerchantRiskInput {
@@ -139,6 +210,206 @@ const PROVIDER_DEFAULTS: Record<
 function clamp01(n: number): number {
   if (Number.isNaN(n)) return 0;
   return Math.max(0, Math.min(1, Number(n.toFixed(3))));
+}
+
+/**
+ * Maps 6-axis classifications to legacy 5-category `ReviewFlagCategory`
+ * following the exact precedence order in Section 12 of `Docs/Platform/review-trust-model.html`.
+ */
+export function deriveFlagCategoryFromAxes(
+  authenticity: Authenticity,
+  independence: Independence,
+  depth: Depth
+): ReviewFlagCategory {
+  if (
+    authenticity === 'fabricated' ||
+    authenticity === 'copied' ||
+    independence === 'undisclosed_paid'
+  ) {
+    return 'seeding_fake';
+  }
+  if (authenticity === 'sabotage' || independence === 'conflict_of_interest') {
+    return 'competitor_sabotage';
+  }
+  if (authenticity === 'bombing') {
+    return 'review_bombing';
+  }
+  if (depth === 'filler') {
+    return 'low_value_coin_spam';
+  }
+  return 'authentic';
+}
+
+/**
+ * Computes the 6-axis multiplicative review weight breakdown (`G * A * B * C * D * E * F`, clamped to `[0, 3]`)
+ * as specified in Sections 3, 5, and 6 of `Docs/Platform/review-trust-model.html`.
+ */
+export function compute6AxisWeightBreakdown(params: {
+  authenticity: Authenticity;
+  independence: Independence;
+  depth: Depth;
+  hasRealMedia?: boolean;
+  hasLongTermUsage?: boolean;
+  reviewerMultiplier?: number;
+  contextMultiplier?: number;
+  gateOverrideReason?: string;
+  upvotes?: number;
+  downvotes?: number;
+  reportCount?: number;
+}): WeightBreakdown {
+  const {
+    authenticity,
+    independence,
+    depth,
+    hasRealMedia = false,
+    hasLongTermUsage = false,
+    reviewerMultiplier = 1.0,
+    contextMultiplier = 1.0,
+    gateOverrideReason,
+    upvotes = 0,
+    downvotes = 0,
+    reportCount = 0,
+  } = params;
+
+  const authenticityMap: Record<Authenticity, number> = {
+    genuine: 1.0,
+    doubtful: 0.5,
+    fabricated: 0,
+    sabotage: 0,
+    bombing: 0,
+    copied: 0,
+  };
+  const independenceMap: Record<Independence, number> = {
+    organic: 1.0,
+    affiliate: 0.7,
+    incentivized: 0.5,
+    sponsored_balanced: 0.5,
+    sponsored_promo: 0.1,
+    undisclosed_paid: 0,
+    conflict_of_interest: 0,
+  };
+  const depthBaseMap: Record<Depth, number> = {
+    stars_only: 0.25,
+    platform_label: 0.25,
+    filler: 0,
+    low_effort: 0.5,
+    specific_short: 0.8,
+    detailed: 1.0,
+    expert_depth: 1.2,
+  };
+
+  const A = authenticityMap[authenticity];
+  const B = independenceMap[independence];
+  let C = depthBaseMap[depth];
+  if (depth === 'specific_short' || depth === 'detailed' || depth === 'expert_depth') {
+    if (hasRealMedia) C += 0.1;
+    if (hasLongTermUsage) C += 0.2;
+    C = Math.min(1.5, Number(C.toFixed(2)));
+  }
+  const D = Number(Math.max(0.1, Math.min(1.5, reviewerMultiplier)).toFixed(2));
+  const E = Number(Math.max(0, Math.min(1.0, contextMultiplier)).toFixed(2));
+
+  const netPos = Math.max(0, upvotes - downvotes);
+  const netNeg = Math.max(0, downvotes - upvotes);
+  const rawF = 1 + 0.45 * Math.log(1 + netPos) - 0.3 * netNeg - 0.35 * reportCount;
+  const F = Number(Math.max(0.1, Math.min(2.0, rawF)).toFixed(4));
+
+  let gate: 0 | 1 = 1;
+  let gateReason: string | undefined = gateOverrideReason;
+  if (gateReason) {
+    gate = 0;
+  } else if (A === 0) {
+    gate = 0;
+    gateReason = `authenticity:${authenticity}`;
+  } else if (B === 0) {
+    gate = 0;
+    gateReason = `independence:${independence}`;
+  } else if (C === 0) {
+    gate = 0;
+    gateReason = `depth:${depth}`;
+  } else if (E === 0) {
+    gate = 0;
+    gateReason = 'context:non_product_or_invalid';
+  }
+
+  const baseWeight = gate === 0 ? 0 : Number((A * B * C * D * E).toFixed(4));
+  const finalWeight =
+    gate === 0 ? 0 : Number(Math.max(0, Math.min(3.0, baseWeight * F)).toFixed(2));
+
+  const explanationParts: string[] = [];
+  if (gate === 0) {
+    explanationParts.push(`Cổng chặn G=0 (${gateReason}) -> Trọng số w=0`);
+  } else {
+    explanationParts.push(
+      `A=${A} (${authenticity}), B=${B} (${independence}), C=${C} (${depth}), D=${D}, E=${E}, F=${Number(F.toFixed(2))} -> w=${finalWeight}`
+    );
+  }
+
+  return {
+    gate,
+    ...(gateReason ? { gateReason } : {}),
+    authenticity: A,
+    independence: B,
+    depth: C,
+    reviewer: D,
+    context: E,
+    community: Number(F.toFixed(2)),
+    base_weight: baseWeight,
+    weight: finalWeight,
+    explanationVi: explanationParts.join(' | '),
+  };
+}
+
+/**
+ * Computes the Bayesian Shrinkage Product Rating `S = (k * mu + sum(w_i * r_i)) / (k + sum(w_i))`
+ * and confidence `c = sum(w_i) / (sum(w_i) + k)` per Section 7 of `Docs/Platform/review-trust-model.html`.
+ */
+export function computeBayesianProductRating(
+  items: Array<{ rating_star: number; weight: number }>,
+  options: { priorMean?: number; priorStrength?: number } = {}
+): BayesianRatingResult {
+  const mu = options.priorMean ?? 4.2;
+  const k = options.priorStrength ?? 3;
+
+  let weightSum = 0;
+  let weightedRatingSum = 0;
+  for (const item of items) {
+    const w = Number.isFinite(item.weight) && item.weight > 0 ? item.weight : 0;
+    if (w <= 0) continue;
+    weightSum += w;
+    weightedRatingSum += w * item.rating_star;
+  }
+
+  const rawWeightedAverage = weightSum > 0 ? Number((weightedRatingSum / weightSum).toFixed(2)) : 0;
+  const bayesianScore = Number(((k * mu + weightedRatingSum) / (k + weightSum)).toFixed(2));
+  const confidence = Number((weightSum / (weightSum + k)).toFixed(2));
+
+  let tier: BayesianConfidenceTier;
+  let labelVi: string;
+  if (confidence < 0.3) {
+    tier = 'insufficient_data';
+    labelVi = 'Chưa đủ dữ liệu';
+  } else if (confidence < 0.6) {
+    tier = 'low';
+    labelVi = 'Độ tin cậy thấp';
+  } else if (confidence < 0.85) {
+    tier = 'medium';
+    labelVi = 'Trung bình';
+  } else {
+    tier = 'high';
+    labelVi = 'Cao';
+  }
+
+  return {
+    score: bayesianScore,
+    confidence,
+    confidence_tier: tier,
+    confidence_label_vi: labelVi,
+    prior_mean: mu,
+    prior_strength: k,
+    effective_weight_sum: Number(weightSum.toFixed(2)),
+    raw_weighted_average: rawWeightedAverage,
+  };
 }
 
 /**
@@ -228,6 +499,248 @@ export function isRatingOnlyComment(comment: string | null | undefined): boolean
     .replace(/[\s.!,]+$/u, '')
     .trim();
   return text.length === 0 || RATING_LABEL_RE.test(text);
+}
+
+const SHIPPING_ASPECT_RE =
+  /(?:giao\s*hàng|ship(?:per)?|vận\s*chuyển|đóng\s*gói|bọc\s*chống\s*sốc|hộp\s*(?:bị\s*)?(?:móp|rách|nát)|giao\s*(?:nhanh|chậm|trễ|lâu)|nhân\s*viên\s*giao|đơn\s*vị\s*vận\s*chuyển)/i;
+
+const PRODUCT_ASPECT_RE =
+  /(?:máy|điện\s*thoại|tai\s*nghe|sản\s*phẩm|pin|màn(?:\s*hình)?|cam(?:era)?|loa|mic|chất\s*âm|chống\s*ồn|cảm\s*ứng|hiệu\s*năng|cấu\s*hình|chip|ram|rom|sạc|dùng|xài|sử\s*dụng|trải\s*nghiệm|chạy|mượt|lag|giật|nóng|ấm|lỗi|hỏng|hư|bền|đẹp|xịn|chính\s*hãng|nguyên\s*seal|bảo\s*hành|chất\s*lượng|vân\s*tay|wifi|5g|bluetooth|nhiệt\s*độ|tần\s*số)/i;
+
+/**
+ * Detects reviews that only discuss shipping, packaging, or courier behavior without mentioning
+ * any product attribute or usage experience (Section 4 #13 & Section 13 P1).
+ */
+export function isShippingOnlyComment(comment: string | null | undefined): boolean {
+  const text = (comment || '').normalize('NFC').trim();
+  if (text.length < 6 || isRatingOnlyComment(text)) return false;
+  return SHIPPING_ASPECT_RE.test(text) && !PRODUCT_ASPECT_RE.test(text);
+}
+
+/**
+ * Detects clear contradictions between the numeric star rating and the text sentiment
+ * (e.g. 5 stars complaining that the device is dead/counterfeit, or 1 star with pure praise).
+ */
+export function hasStarSentimentContradiction(
+  ratingStar: number,
+  comment: string | null | undefined
+): boolean {
+  const text = (comment || '').normalize('NFC').trim();
+  if (text.length < 10 || isRatingOnlyComment(text)) return false;
+
+  if (ratingStar >= 5) {
+    const severeNegative =
+      /(?:máy\s*(?:bị\s*)?(?:lỗi|hỏng|hư|chết\s*nguồn|sập\s*nguồn)|hàng\s*(?:giả|nhái|dựng|lỗi|hỏng|kém\s*chất\s*lượng)|không\s*(?:dùng|xài|lên\s*nguồn|sạc)\s*được|lừa\s*đảo|rất\s*tệ|quá\s*tệ|cực\s*kỳ\s*tệ|chấm\s*5\s*sao\s*để\s*(?:nổi|mọi\s*người\s*thấy))/i.test(
+        text
+      );
+    return severeNegative;
+  }
+
+  if (ratingStar <= 1) {
+    const hasPositivePraise =
+      /(?:rất\s*(?:tốt|hài\s*lòng|đẹp|mượt|ưng\s*ý|thích)|cực\s*k[ìỳ]\s*(?:tốt|ưng|đẹp|mượt)|dùng\s*(?:rất\s*)?(?:tốt|mượt|ngon|ổn\s*định|bền)|tuyệt\s*vời|hoàn\s*hảo|10\s*điểm)/i.test(
+        text
+      );
+    const hasAnyNegative =
+      /(?:không|chưa|nhưng|tuy\s*nhiên|lỗi|hỏng|hư|tệ|kém|chậm|móp|rách|giả|nhái|dựng|đắt|nóng|lag|giật|hủy|thất\s*vọng|chán|bực|rè|yếu|tụt|lừa|trầy|xước|cũ|bẩn)/i.test(
+        text
+      );
+    return hasPositivePraise && !hasAnyNegative;
+  }
+
+  return false;
+}
+
+const TECHNICAL_MEASUREMENT_RE =
+  /(?:\b\d+(?:[.,]\d+)?\s*(?:mah|wh|w|watt|hz|nit|nits|db|fps|gb|tb|mah|mm|gram|g|°c|độ\s*c|tiếng|giờ\s*on\s*screen|sot)\b|geekbench|antutu|3dmark|pcmark|đo\s*thực\s*tế|test\s*thực\s*tế)/i;
+
+const LONG_TERM_USAGE_RE =
+  /(?:sau\s*(?:[3-9]|\d{2,})\s*tháng|dùng\s*(?:được\s*)?(?:[3-9]|\d{2,})\s*tháng|xài\s*(?:được\s*)?(?:[3-9]|\d{2,})\s*tháng|nửa\s*năm|[1-9]\s*năm\s*sử\s*dụng|dùng\s*hơn\s*[1-9]\s*năm)/i;
+
+const SPONSORED_DISCLOSURE_RE =
+  /(?:được\s*(?:nhãn\s*hàng|hãng|shop)\s*(?:tài\s*trợ|gửi\s*tặng|cho\s*mượn)|bài\s*viết\s*có\s*tài\s*trợ|sponsored|#ad\b|quà\s*tặng\s*từ\s*nhãn\s*hàng)/i;
+
+const INCENTIVIZED_DISCLOSURE_RE =
+  /(?:đánh\s*giá\s*5\s*sao\s*(?:để\s*)?nhận\s*(?:quà|voucher|hoàn\s*tiền)|thẻ\s*cào\s*hoàn\s*tiền|tặng\s*voucher\s*khi\s*đánh\s*giá)/i;
+
+const AFFILIATE_DISCLOSURE_RE =
+  /(?:link\s*(?:mua|bio|affiliate|tiếp\s*thị)|mã\s*giới\s*thiệu|ref\s*link)/i;
+
+/**
+ * Rule-based 6-axis evaluator (`assessReview6Axes`) implementing P1 of `Docs/Platform/review-trust-model.html`.
+ */
+export function assessReview6Axes(
+  review: ReviewInputItem,
+  options: {
+    distinctAuthorsWithSameText?: number;
+    isCoinSpam?: boolean;
+    isCompetitorSabotage?: boolean;
+    isReviewBombing?: boolean;
+    isDuplicateSeeding?: boolean;
+    isConflictOfInterest?: boolean;
+  } = {}
+): ReviewAssessment {
+  const comment = (review.comment || '').normalize('NFC').trim();
+  const cleanText = comment.replace(/[\s.!,]+$/u, '').trim();
+
+  // 1. Extract aspects & routing
+  const aspects: Record<string, ReviewAspectSignal> = {};
+  const defaultSentiment: -1 | 0 | 1 =
+    review.rating_star >= 4 ? 1 : review.rating_star <= 2 ? -1 : 0;
+
+  if (SHIPPING_ASPECT_RE.test(comment)) {
+    aspects.shipping = {
+      sentiment: defaultSentiment,
+      evidence: comment.slice(0, 120),
+      routesTo: 'merchant',
+    };
+  }
+  if (/\bpin\b|sạc|mah|on\s*screen/i.test(comment)) {
+    aspects.battery = {
+      sentiment: defaultSentiment,
+      evidence: comment.slice(0, 120),
+      routesTo: 'product',
+    };
+  }
+  if (/màn(?:\s*hình)?|tần\s*số\s*quét|nit|hiển\s*thị|ám\s*màu/i.test(comment)) {
+    aspects.display = {
+      sentiment: defaultSentiment,
+      evidence: comment.slice(0, 120),
+      routesTo: 'product',
+    };
+  }
+  if (/cam(?:era)?|chụp|quay\s*video|zoom|chống\s*rung/i.test(comment)) {
+    aspects.camera = {
+      sentiment: defaultSentiment,
+      evidence: comment.slice(0, 120),
+      routesTo: 'product',
+    };
+  }
+  if (/loa|mic|chất\s*âm|chống\s*ồn|bass|treble|âm\s*thanh/i.test(comment)) {
+    aspects.audio = {
+      sentiment: defaultSentiment,
+      evidence: comment.slice(0, 120),
+      routesTo: 'product',
+    };
+  }
+  if (/hiệu\s*năng|chip|mượt|lag|giật|nóng|nhiệt\s*độ|fps|game/i.test(comment)) {
+    aspects.performance = {
+      sentiment: defaultSentiment,
+      evidence: comment.slice(0, 120),
+      routesTo: 'product',
+    };
+  }
+
+  const productAspectCount = Object.values(aspects).filter(a => a.routesTo === 'product').length;
+  const shippingOnly = isShippingOnlyComment(comment);
+  const contradiction = hasStarSentimentContradiction(review.rating_star, comment);
+
+  // 2. Axis A: Authenticity
+  let authenticity: Authenticity = 'genuine';
+  if (options.isCompetitorSabotage) {
+    authenticity = 'sabotage';
+  } else if (options.isReviewBombing) {
+    authenticity = 'bombing';
+  } else if (options.isDuplicateSeeding) {
+    authenticity = 'fabricated';
+  } else if (contradiction) {
+    authenticity = 'doubtful';
+  }
+
+  // 3. Axis B: Independence
+  let independence: Independence = 'organic';
+  if (options.isConflictOfInterest) {
+    independence = 'conflict_of_interest';
+  } else if (SPONSORED_DISCLOSURE_RE.test(comment)) {
+    const hasBalancedCriticism = /(?:nhưng|tuy\s*nhiên|nhược\s*điểm|điểm\s*trừ|hơi\s*tiếc)/i.test(
+      comment
+    );
+    independence = hasBalancedCriticism ? 'sponsored_balanced' : 'sponsored_promo';
+  } else if (INCENTIVIZED_DISCLOSURE_RE.test(comment)) {
+    independence = 'incentivized';
+  } else if (AFFILIATE_DISCLOSURE_RE.test(comment)) {
+    independence = 'affiliate';
+  }
+
+  // 4. Axis C: Depth
+  let depth: Depth;
+  if (cleanText.length === 0) {
+    depth = 'stars_only';
+  } else if (RATING_LABEL_RE.test(cleanText)) {
+    depth = 'platform_label';
+  } else if (options.isCoinSpam) {
+    depth = 'filler';
+  } else if (
+    review.reviewer_type === 'expert' ||
+    TECHNICAL_MEASUREMENT_RE.test(comment) ||
+    (comment.length >= 240 && productAspectCount >= 2)
+  ) {
+    depth = 'expert_depth';
+  } else if (
+    (comment.length >= 90 && (productAspectCount >= 1 || PRODUCT_ASPECT_RE.test(comment))) ||
+    productAspectCount >= 2
+  ) {
+    depth = 'detailed';
+  } else if (productAspectCount >= 1 || PRODUCT_ASPECT_RE.test(comment)) {
+    depth = comment.length >= 30 ? 'specific_short' : 'low_effort';
+  } else {
+    depth = 'low_effort';
+  }
+
+  const hasRealMedia = Array.isArray(review.images) && review.images.length > 0;
+  const hasLongTermUsage = LONG_TERM_USAGE_RE.test(comment);
+
+  // 5. Axis D: Reviewer credibility
+  let reviewerMultiplier = 1.0;
+  const ageBucket = accountAgeBucket(review);
+  const totalReviews = review.reviewer?.totalReviews;
+  if (review.reviewer_type === 'expert') {
+    reviewerMultiplier = 1.3;
+  } else if (ageBucket === 'low' && (totalReviews === undefined || totalReviews <= 2)) {
+    reviewerMultiplier = 0.5;
+  } else if (typeof totalReviews === 'number' && totalReviews >= 10) {
+    reviewerMultiplier = 1.1;
+  } else if (review.is_verified_buyer === false && review.reviewer?.verifiedPurchase === false) {
+    reviewerMultiplier = 0.8;
+  }
+
+  // 6. Axis E: Context & relevance
+  let contextMultiplier = 1.0;
+  let relevance = 0.85;
+  if (shippingOnly) {
+    contextMultiplier = 0;
+    relevance = 0.1;
+  } else if (depth === 'filler') {
+    relevance = 0.05;
+  } else if (depth === 'stars_only' || depth === 'platform_label') {
+    relevance = 0.5;
+  } else if (productAspectCount >= 2 || depth === 'expert_depth') {
+    relevance = 1.0;
+  }
+
+  const breakdown = compute6AxisWeightBreakdown({
+    authenticity,
+    independence,
+    depth,
+    hasRealMedia,
+    hasLongTermUsage,
+    reviewerMultiplier,
+    contextMultiplier,
+    upvotes: review.upvotes ?? 0,
+    downvotes: review.downvotes ?? 0,
+    reportCount: review.report_count ?? 0,
+  });
+
+  return {
+    authenticity,
+    independence,
+    depth,
+    relevance: clamp01(relevance),
+    aspects,
+    breakdown,
+    detector: 'heuristic:v2.1-6axis',
+    detectorVersion: '2.1.0',
+  };
 }
 
 function normalizeTextForDedupe(text: string): string {
@@ -372,6 +885,9 @@ export class AiReviewAnalyzer {
         ) &&
         distinctAuthorsWithSameText >= 2;
 
+      const isShippingOnly = isShippingOnlyComment(comment);
+      const hasContradiction = hasStarSentimentContradiction(r.rating_star, comment);
+
       if (isCompetitorSabotage) {
         flagCategory = 'competitor_sabotage';
         verdict = 'fake';
@@ -409,18 +925,40 @@ export class AiReviewAnalyzer {
         languageMarker = 0.75;
         reason =
           'Bình luận mang tính chất nhận xu / chưa trải nghiệm thực tế (được bỏ qua khỏi điểm tổng, không phạt shop).';
+      } else if (isShippingOnly) {
+        flagCategory = 'authentic';
+        verdict = 'suspicious';
+        fakeProb = 0.15;
+        reason =
+          'Đánh giá chỉ nhận xét về giao hàng/đóng gói (chuyển về điểm nhà bán, không tính vào điểm sản phẩm).';
+      } else if (hasContradiction) {
+        flagCategory = 'authentic';
+        verdict = 'suspicious';
+        fakeProb = 0.45;
+        reason =
+          'Số sao mâu thuẫn với nội dung nhận xét (nghi vấn chấm nhầm sao hoặc châm biếm, giảm trọng số tin cậy).';
       }
 
-      const helpfulnessWeight = computeReviewWeight({
-        upvotes: r.upvotes ?? 0,
-        downvotes: r.downvotes ?? 0,
-        reportCount: r.report_count ?? 0,
-        flagCategory,
-        verdict,
+      const assessment = assessReview6Axes(r, {
+        distinctAuthorsWithSameText,
+        isCoinSpam: isCoinSpamPhrase || isUnopenedFiller || isGibberishOrTooShort,
+        isCompetitorSabotage,
+        isReviewBombing,
+        isDuplicateSeeding: isDuplicateSeeding || isScriptedPraise,
       });
 
+      const helpfulnessWeight = isShippingOnly
+        ? 0
+        : computeReviewWeight({
+            upvotes: r.upvotes ?? 0,
+            downvotes: r.downvotes ?? 0,
+            reportCount: r.report_count ?? 0,
+            flagCategory,
+            verdict,
+          });
+
       const includeInRating = helpfulnessWeight > 0;
-      if (!includeInRating && flagCategory === 'authentic') {
+      if (!includeInRating && flagCategory === 'authentic' && !isShippingOnly) {
         reason = 'Đánh giá bị cộng đồng Vote Down / Báo cáo nhiều nên giảm trọng số về 0.';
       }
 
@@ -439,6 +977,7 @@ export class AiReviewAnalyzer {
           reviewer_history_score: reviewerHistoryScore(r),
           language_marker_score: clamp01(languageMarker),
         },
+        assessment,
       };
     });
   }
@@ -715,6 +1254,7 @@ Return ONLY valid JSON matching:
     let authenticCount = 0;
     let ignoredCount = 0;
     let positiveAuthenticCount = 0;
+    const bayesianInputs: Array<{ rating_star: number; weight: number }> = [];
 
     for (let i = 0; i < reviews.length; i++) {
       const r = reviews[i];
@@ -738,6 +1278,10 @@ Return ONLY valid JSON matching:
       } else {
         weightedUserSum += r.rating_star * res.helpfulness_weight;
         totalUserWeight += res.helpfulness_weight;
+        bayesianInputs.push({
+          rating_star: r.rating_star,
+          weight: res.helpfulness_weight,
+        });
       }
     }
 
@@ -746,6 +1290,8 @@ Return ONLY valid JSON matching:
     // writes), not the raw average of the reviews that were just excluded.
     const weightedUserRating =
       totalUserWeight > 0 ? Number((weightedUserSum / totalUserWeight).toFixed(2)) : 0;
+
+    const bayesianRating = computeBayesianProductRating(bayesianInputs);
 
     const computedExpertRating =
       expertRatingInput !== null
@@ -802,6 +1348,7 @@ Return ONLY valid JSON matching:
       cons: aiCons.length > 0 ? aiCons : [],
       ai_summary: aiSummaryText || defaultSummary,
       breakdown_by_category: breakdown,
+      bayesian_rating: bayesianRating,
     };
   }
 

@@ -7,8 +7,14 @@ import assert from 'node:assert/strict';
 import {
   AiReviewAnalyzer,
   accountAgeBucket,
+  assessReview6Axes,
+  compute6AxisWeightBreakdown,
+  computeBayesianProductRating,
   computeReviewWeight,
+  deriveFlagCategoryFromAxes,
+  hasStarSentimentContradiction,
   isRatingOnlyComment,
+  isShippingOnlyComment,
   reviewerHistoryScore,
   type AnalyzedReviewResult,
   type ReviewFlagCategory,
@@ -687,6 +693,202 @@ async function run() {
   } finally {
     server.close();
   }
+
+  console.log('\n================================================================');
+  console.log('8. Review Trust Model P1 (6-axis scoring, shipping routing, Bayesian rating)');
+  console.log('================================================================');
+
+  // Section 6 worked examples from Docs/Platform/review-trust-model.html
+  const ex1 = compute6AxisWeightBreakdown({
+    authenticity: 'genuine',
+    independence: 'organic',
+    depth: 'detailed',
+    hasRealMedia: true,
+    reviewerMultiplier: 1.1,
+    contextMultiplier: 1.0,
+    upvotes: 12,
+  });
+  assert.equal(ex1.depth, 1.1);
+  assert.equal(ex1.community, 2.0, '12 upvotes reaches F cap of 2.0');
+  assert.equal(ex1.weight, 2.42, '1 * 1 * 1.1 * 1.1 * 1 * 2 = 2.42');
+
+  const ex2 = compute6AxisWeightBreakdown({
+    authenticity: 'genuine',
+    independence: 'organic',
+    depth: 'expert_depth',
+    reviewerMultiplier: 1.3,
+    contextMultiplier: 1.0,
+    upvotes: 3,
+  });
+  assert.equal(ex2.weight, 2.53, '1.2 * 1.3 * (1 + 0.45 * ln(4)) ≈ 2.53');
+
+  const ex3 = compute6AxisWeightBreakdown({
+    authenticity: 'doubtful',
+    independence: 'organic',
+    depth: 'detailed',
+    reviewerMultiplier: 0.8,
+    contextMultiplier: 1.0,
+  });
+  assert.equal(ex3.weight, 0.4, '0.5 * 1 * 1 * 0.8 * 1 * 1 = 0.40');
+
+  const ex4 = compute6AxisWeightBreakdown({
+    authenticity: 'genuine',
+    independence: 'sponsored_balanced',
+    depth: 'detailed',
+    reviewerMultiplier: 1.1,
+    contextMultiplier: 1.0,
+  });
+  assert.equal(ex4.weight, 0.55, '1 * 0.5 * 1 * 1.1 * 1 * 1 = 0.55');
+
+  const ex5 = compute6AxisWeightBreakdown({
+    authenticity: 'genuine',
+    independence: 'organic',
+    depth: 'low_effort',
+    reviewerMultiplier: 1.0,
+    contextMultiplier: 1.0,
+  });
+  assert.equal(ex5.weight, 0.5, 'low_effort -> 0.50');
+
+  const ex7 = compute6AxisWeightBreakdown({
+    authenticity: 'genuine',
+    independence: 'sponsored_promo',
+    depth: 'detailed',
+    reviewerMultiplier: 1.1,
+    contextMultiplier: 1.0,
+  });
+  assert.equal(ex7.weight, 0.11, '1 * 0.1 * 1 * 1.1 = 0.11');
+
+  const ex8 = compute6AxisWeightBreakdown({
+    authenticity: 'genuine',
+    independence: 'organic',
+    depth: 'filler',
+  });
+  assert.equal(ex8.gate, 0);
+  assert.equal(ex8.weight, 0);
+
+  const ex9 = compute6AxisWeightBreakdown({
+    authenticity: 'genuine',
+    independence: 'conflict_of_interest',
+    depth: 'detailed',
+  });
+  assert.equal(ex9.gate, 0);
+  assert.equal(ex9.weight, 0);
+
+  // Section 12 flag_category derivation
+  assert.equal(deriveFlagCategoryFromAxes('fabricated', 'organic', 'detailed'), 'seeding_fake');
+  assert.equal(
+    deriveFlagCategoryFromAxes('genuine', 'undisclosed_paid', 'detailed'),
+    'seeding_fake'
+  );
+  assert.equal(
+    deriveFlagCategoryFromAxes('sabotage', 'organic', 'detailed'),
+    'competitor_sabotage'
+  );
+  assert.equal(
+    deriveFlagCategoryFromAxes('genuine', 'conflict_of_interest', 'detailed'),
+    'competitor_sabotage'
+  );
+  assert.equal(deriveFlagCategoryFromAxes('bombing', 'organic', 'low_effort'), 'review_bombing');
+  assert.equal(deriveFlagCategoryFromAxes('genuine', 'organic', 'filler'), 'low_value_coin_spam');
+  assert.equal(deriveFlagCategoryFromAxes('doubtful', 'organic', 'low_effort'), 'authentic');
+
+  // Shipping-only routing & Star-vs-sentiment contradiction
+  assert.equal(
+    isShippingOnlyComment('Giao hàng chậm, đóng gói sơ sài làm hộp bị móp'),
+    true,
+    'pure shipping/packaging comment is shipping-only'
+  );
+  assert.equal(
+    isShippingOnlyComment('Giao hàng nhanh, đóng gói kỹ, máy mới nguyên seal'),
+    false,
+    'comment mentioning product condition is NOT shipping-only'
+  );
+  assert.equal(
+    hasStarSentimentContradiction(5, 'Máy bị lỗi sập nguồn liên tục, hàng giả không dùng được'),
+    true
+  );
+  assert.equal(hasStarSentimentContradiction(1, 'Máy dùng rất tốt mượt mà hoàn hảo 10 điểm'), true);
+  assert.equal(hasStarSentimentContradiction(5, 'Máy dùng rất tốt, pin trâu mượt mà'), false);
+
+  const p1Reviews: ReviewInputItem[] = [
+    {
+      id: 'ship-only',
+      rating_star: 2,
+      comment: 'Giao hàng quá chậm, shipper thái độ, đóng gói móp hộp',
+    },
+    {
+      id: 'contradict',
+      rating_star: 5,
+      comment: 'Máy bị lỗi hỏng hoàn toàn không lên nguồn được, chấm 5 sao để nổi',
+    },
+    {
+      id: 'expert-tech',
+      rating_star: 5,
+      comment:
+        'Sau 4 tháng sử dụng thực tế: pin 5000 mAh trụ được 8.5 giờ on screen, màn hình 120Hz sáng 1800 nit rất đẹp nhưng camera chụp đêm hơi bệt.',
+      images: ['https://example.com/photo1.jpg'],
+      reviewer: { totalReviews: 25, verifiedPurchase: true },
+    },
+  ];
+  const p1Analyzed = analyzer.analyzeWithHeuristics(p1Reviews);
+  const shipRes = p1Analyzed.find(r => r.review_id === 'ship-only')!;
+  assert.equal(shipRes.include_in_rating, false, 'shipping-only excluded from product rating');
+  assert.equal(shipRes.helpfulness_weight, 0);
+  assert.equal(shipRes.assessment?.breakdown.context, 0);
+  assert.equal(shipRes.assessment?.aspects.shipping?.routesTo, 'merchant');
+
+  const contraRes = p1Analyzed.find(r => r.review_id === 'contradict')!;
+  assert.equal(contraRes.verdict, 'suspicious');
+  assert.equal(contraRes.assessment?.authenticity, 'doubtful');
+  assert.equal(contraRes.assessment?.breakdown.authenticity, 0.5);
+
+  const techRes = p1Analyzed.find(r => r.review_id === 'expert-tech')!;
+  assert.equal(techRes.assessment?.depth, 'expert_depth');
+  assert.equal(
+    techRes.assessment?.breakdown.depth,
+    1.5,
+    'expert_depth (1.2) + real photo (0.1) + long-term usage >= 3 months (0.2) = 1.5'
+  );
+  assert.equal(techRes.assessment?.breakdown.reviewer, 1.1, 'totalReviews >= 10 -> D = 1.1');
+
+  // Section 7 Bayesian worked examples
+  // Example 1: CellphoneS listing with 5 star-only 5-star reviews (w = 0.25 each, sum(w) = 1.25)
+  const cellphonesBayes = computeBayesianProductRating([
+    { rating_star: 5, weight: 0.25 },
+    { rating_star: 5, weight: 0.25 },
+    { rating_star: 5, weight: 0.25 },
+    { rating_star: 5, weight: 0.25 },
+    { rating_star: 5, weight: 0.25 },
+  ]);
+  assert.equal(cellphonesBayes.effective_weight_sum, 1.25);
+  assert.equal(Number(cellphonesBayes.score.toFixed(1)), 4.4);
+  assert.equal(cellphonesBayes.confidence, 0.29);
+  assert.equal(cellphonesBayes.confidence_tier, 'insufficient_data');
+  assert.equal(cellphonesBayes.confidence_label_vi, 'Chưa đủ dữ liệu');
+
+  // Example 2: Tiki AirPods Pro 3: 5 text reviews (1, 4, 5, 5, 5 stars, w = 1) + 6 star-only 5-star reviews (w = 0.25)
+  const tikiBayes = computeBayesianProductRating([
+    { rating_star: 1, weight: 1 },
+    { rating_star: 4, weight: 1 },
+    { rating_star: 5, weight: 1 },
+    { rating_star: 5, weight: 1 },
+    { rating_star: 5, weight: 1 },
+    { rating_star: 5, weight: 0.25 },
+    { rating_star: 5, weight: 0.25 },
+    { rating_star: 5, weight: 0.25 },
+    { rating_star: 5, weight: 0.25 },
+    { rating_star: 5, weight: 0.25 },
+    { rating_star: 5, weight: 0.25 },
+  ]);
+  assert.equal(tikiBayes.effective_weight_sum, 6.5);
+  assert.equal(Number(tikiBayes.score.toFixed(1)), 4.2);
+  assert.equal(tikiBayes.confidence, 0.68);
+  assert.equal(tikiBayes.confidence_tier, 'medium');
+  assert.equal(tikiBayes.confidence_label_vi, 'Trung bình');
+
+  console.log(
+    `✅ [P1 Trust Model] 6-axis weights, shipping-only routing, contradiction & Bayesian rating (CellphoneS=${cellphonesBayes.score}/${cellphonesBayes.confidence_tier}, Tiki=${tikiBayes.score}/${tikiBayes.confidence_tier}) verified`
+  );
 
   console.log('\n🎉 ALL AI REVIEW ANALYZER TESTS PASSED!');
 }
