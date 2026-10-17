@@ -215,6 +215,21 @@ export function reviewerHistoryScore(r: ReviewInputItem): number {
   return clamp01(Math.log10(1 + total) / 2);
 }
 
+/**
+ * Text a platform fills in from the star rating itself (Tiki titles every review "Cực kì hài lòng" /
+ * "Hài lòng" / "Bình thường" / "Không hài lòng" / "Rất không hài lòng"). It says nothing beyond the
+ * stars, so a review whose whole comment is one of these is a star-only rating.
+ */
+const RATING_LABEL_RE = /^(?:(?:cực\s*k[ìỳ]|rất)\s+)?(?:không\s+)?hài\s+lòng$|^bình\s+thường$/i;
+
+export function isRatingOnlyComment(comment: string | null | undefined): boolean {
+  const text = (comment || '')
+    .normalize('NFC')
+    .replace(/[\s.!,]+$/u, '')
+    .trim();
+  return text.length === 0 || RATING_LABEL_RE.test(text);
+}
+
 function normalizeTextForDedupe(text: string): string {
   return text
     .toLowerCase()
@@ -291,7 +306,8 @@ export class AiReviewAnalyzer {
     const commentCounts = new Map<string, Set<string>>();
     for (const r of reviews) {
       const norm = normalizeTextForDedupe(r.comment || '');
-      if (norm.length >= 15) {
+      // Rating labels repeat across buyers because the platform writes them, not because of seeding.
+      if (norm.length >= 15 && !isRatingOnlyComment(r.comment)) {
         const authors = commentCounts.get(norm) || new Set<string>();
         authors.add((r.author_name || r.id).toLowerCase());
         commentCounts.set(norm, authors);
@@ -323,6 +339,7 @@ export class AiReviewAnalyzer {
         /chưa\s*(?:dùng|xài|bóc|khui|mở\s*hộp|test)\s*(?:nên\s*chưa\s*biết|nhưng\s*cứ\s*cho\s*5\s*sao)/i.test(
           comment
         );
+      const isRatingOnly = isRatingOnlyComment(comment);
       const isGibberishOrTooShort = comment.length < 6 || /(.)\1{5,}/i.test(comment);
 
       // Rule B: Competitor Sabotage (Đối thủ chơi xấu / chèo kéo sang shop khác / dìm 1 sao vô căn cứ)
@@ -344,7 +361,10 @@ export class AiReviewAnalyzer {
 
       // Rule D: Coordinated Seeding / Fake Boost (Văn mẫu trùng lặp giữa nhiều tài khoản khác nhau hoặc khen lố kịch bản)
       const isDuplicateSeeding =
-        distinctAuthorsWithSameText >= 2 && comment.length >= 15 && !isCoinSpamPhrase;
+        distinctAuthorsWithSameText >= 2 &&
+        comment.length >= 15 &&
+        !isCoinSpamPhrase &&
+        !isRatingOnly;
       const isScriptedPraise =
         r.rating_star === 5 &&
         /sản\s*phẩm\s*tuyệt\s*vời\s*đáng\s*đồng\s*tiền\s*bát\s*gạo\s*sẽ\s*ủng\s*hộ\s*shop\s*dài\s*dài\s*10\s*điểm/i.test(
@@ -372,6 +392,14 @@ export class AiReviewAnalyzer {
         duplicateRatio = Math.max(0.85, duplicateRatio);
         languageMarker = 0.8;
         reason = `Nội dung văn mẫu seeding trùng lặp giữa ${distinctAuthorsWithSameText} tài khoản khác nhau.`;
+      } else if (isRatingOnly) {
+        // Stars without text: nothing to check, so it stays out of the weighted rating, but it is
+        // not evidence of fraud either (no seller penalty, low fake probability).
+        flagCategory = 'low_value_coin_spam';
+        verdict = 'suspicious';
+        fakeProb = 0.3;
+        reason =
+          'Chỉ chấm sao, không có nội dung để kiểm chứng (không tính vào điểm tổng, không phạt shop).';
       } else if (isCoinSpamPhrase || isUnopenedFiller || isGibberishOrTooShort) {
         flagCategory = 'low_value_coin_spam';
         verdict = 'suspicious';
@@ -710,8 +738,10 @@ Return ONLY valid JSON matching:
     }
 
     const rawAvg = reviews.length > 0 ? Number((rawSum / reviews.length).toFixed(2)) : 0;
+    // No user review carries weight: there is no weighted rating (0, as refresh_master_product_rating
+    // writes), not the raw average of the reviews that were just excluded.
     const weightedUserRating =
-      totalUserWeight > 0 ? Number((weightedUserSum / totalUserWeight).toFixed(2)) : rawAvg;
+      totalUserWeight > 0 ? Number((weightedUserSum / totalUserWeight).toFixed(2)) : 0;
 
     const computedExpertRating =
       expertRatingInput !== null

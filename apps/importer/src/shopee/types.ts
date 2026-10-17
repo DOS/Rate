@@ -50,7 +50,8 @@ export interface ShopeeReview {
   ratingStar: number;
   comment: string;
   variation?: string;
-  createdAt: string;
+  /** When the review was posted. Unset when the page does not show it; never the crawl time. */
+  createdAt?: string;
   images: string[];
   videos?: string[];
   sellerReply?: string;
@@ -72,7 +73,8 @@ export interface ShopeeProduct {
   priceBeforeDiscount?: number;
   currency: string;
   historicalSold: number;
-  stock: number;
+  /** Units in stock. Unset when the page does not show it (stored as null, not 0 = sold out). */
+  stock?: number;
   ratingStar: number;
   ratingCount: number;
   ratingScoreDistribution?: number[];
@@ -81,7 +83,7 @@ export interface ShopeeProduct {
     modelId: string;
     name: string;
     price: number;
-    stock: number;
+    stock?: number;
     sku?: string;
   }>;
   attributes: Array<{
