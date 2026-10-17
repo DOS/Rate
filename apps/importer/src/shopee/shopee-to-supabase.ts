@@ -194,7 +194,7 @@ export class ShopeeIngestionPipeline {
           price_original: product.priceBeforeDiscount || null,
           currency: product.currency || 'VND',
           historical_sold: product.historicalSold || 0,
-          stock: product.stock || 0,
+          stock: product.stock ?? null,
           rating_star: product.ratingStar || 0,
           rating_count: product.ratingCount || 0,
           images: product.images || [],
@@ -310,7 +310,7 @@ export class ShopeeIngestionPipeline {
         images: r.images || [],
         // null = the platform does not say (the column default `true` would claim a purchase we cannot confirm)
         is_verified_buyer: r.reviewer?.verifiedPurchase ?? null,
-        platform_created_at: r.createdAt,
+        platform_created_at: r.createdAt || null,
       }));
 
       const { data: existingReviews, error: existingErr } = await this.supabase

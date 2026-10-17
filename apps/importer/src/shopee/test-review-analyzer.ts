@@ -8,6 +8,7 @@ import {
   AiReviewAnalyzer,
   accountAgeBucket,
   computeReviewWeight,
+  isRatingOnlyComment,
   reviewerHistoryScore,
   type AnalyzedReviewResult,
   type ReviewFlagCategory,
@@ -157,6 +158,41 @@ async function run() {
   );
   console.log('✅ [Heuristics] every signals payload satisfies the DB CHECK rate.signals_valid');
 
+  // Tiki writes the star label ("Cực kì hài lòng") as the title of every star-only review; the
+  // same label from many buyers is the platform talking, not a seeding template.
+  for (const label of [
+    'Cực kì hài lòng',
+    'Cực kỳ hài lòng.',
+    'Hài lòng',
+    'Bình thường',
+    'Không hài lòng',
+    'Rất không hài lòng',
+    '',
+    '  ',
+  ]) {
+    assert.equal(isRatingOnlyComment(label), true, `"${label}" is a star-only rating`);
+  }
+  assert.equal(isRatingOnlyComment('Rất hài lòng về pin và camera'), false);
+  const starOnly: ReviewInputItem[] = [
+    { id: 't1', author_name: 'k1', rating_star: 5, comment: 'Cực kì hài lòng' },
+    { id: 't2', author_name: 'k2', rating_star: 5, comment: 'Cực kì hài lòng' },
+    { id: 't3', author_name: 'k3', rating_star: 5, comment: 'Cực kì hài lòng' },
+    { id: 't4', author_name: 'k4', rating_star: 4, comment: '' },
+  ];
+  for (const r of analyzer.analyzeWithHeuristics(starOnly)) {
+    assert.notEqual(
+      r.flag_category,
+      'seeding_fake',
+      `${r.review_id}: a rating label is not seeding`
+    );
+    assert.equal(r.flag_category, 'low_value_coin_spam');
+    assert.equal(r.include_in_rating, false, 'stars without text stay out of the weighted rating');
+    assert.ok(r.fake_probability < 0.65, 'not counted as seeding by the burst auditor (>= 0.65)');
+    assert.equal(r.signals.duplicate_text_ratio, 0);
+    assert.match(r.reason, /Chỉ chấm sao/);
+  }
+  console.log('✅ [Heuristics] star-only ratings and platform rating labels are not seeding');
+
   // Reviewer-derived signals come from scraped reviewer metadata, not constants.
   const base: ReviewInputItem = {
     id: 'rv',
@@ -249,6 +285,24 @@ async function run() {
   console.log(
     `✅ [JReviews] user=${summary.user_rating_weighted} expert=${summary.expert_rating} overall=${summary.overall_rating}`
   );
+
+  const allIgnored: ReviewInputItem[] = [
+    { id: 'i1', author_name: 'y1', rating_star: 5, comment: 'nhận xu' },
+    { id: 'i2', author_name: 'y2', rating_star: 5, comment: 'ok' },
+  ];
+  const ignoredSummary = heuristicOnly().computeJReviewsSummary(
+    allIgnored,
+    heuristicOnly().analyzeWithHeuristics(allIgnored)
+  );
+  assert.equal(ignoredSummary.authentic_review_count, 0);
+  assert.equal(ignoredSummary.raw_average_rating, 5);
+  assert.equal(
+    ignoredSummary.user_rating_weighted,
+    0,
+    'no counted review means no weighted rating, not the raw average of excluded ones'
+  );
+  assert.equal(ignoredSummary.overall_rating, 0);
+  console.log('✅ [JReviews] every review excluded -> weighted rating 0 (matches the SQL refresh)');
 
   console.log('\n================================================================');
   console.log('4. Merchant risk: fair to sellers, harsh on seeding & dump pricing');
