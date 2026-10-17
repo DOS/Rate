@@ -11047,6 +11047,12 @@ textarea:focus-visible {
 .btn-check:focus-visible + .btn {
   outline: 2px solid var(--rate-focus-ring) !important;
   outline-offset: 2px;
+  box-shadow: none !important; /* one ring: drop Bootstrap's grey btn-secondary halo */
+}
+
+/* The rating segmented control clips its pills (overflow: hidden, same height). */
+.filterButton .btn-check:focus-visible + .btn {
+  outline-offset: -2px;
 }
 
 /* Links that fill a clipping box (text-truncate rows, the 320px mobile drawer)
