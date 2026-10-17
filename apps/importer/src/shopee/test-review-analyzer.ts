@@ -185,13 +185,34 @@ async function run() {
       'seeding_fake',
       `${r.review_id}: a rating label is not seeding`
     );
-    assert.equal(r.flag_category, 'low_value_coin_spam');
-    assert.equal(r.include_in_rating, false, 'stars without text stay out of the weighted rating');
+    assert.equal(r.flag_category, 'authentic', 'a star-only rating is a real rating');
+    assert.equal(r.verdict, 'suspicious');
+    assert.equal(r.include_in_rating, true, 'stars without text count in the weighted rating');
+    assert.equal(r.helpfulness_weight, 0.25, 'at a quarter of a text review (same as SQL)');
     assert.ok(r.fake_probability < 0.65, 'not counted as seeding by the burst auditor (>= 0.65)');
     assert.equal(r.signals.duplicate_text_ratio, 0);
     assert.match(r.reason, /Chỉ chấm sao/);
   }
-  console.log('✅ [Heuristics] star-only ratings and platform rating labels are not seeding');
+  const starMix: ReviewInputItem[] = [
+    {
+      id: 'm1',
+      author_name: 'w1',
+      rating_star: 5,
+      comment: 'Pin dùng được cả ngày, màn hình rất đẹp',
+    },
+    { id: 'm2', author_name: 'w2', rating_star: 1, comment: '' },
+  ];
+  const mixSummary = analyzer.computeJReviewsSummary(
+    starMix,
+    analyzer.analyzeWithHeuristics(starMix)
+  );
+  assert.equal(mixSummary.authentic_review_count, 2);
+  assert.equal(
+    mixSummary.user_rating_weighted,
+    4.2,
+    '(5 x 1 + 1 x 0.25) / 1.25: the star-only 1 star weighs less'
+  );
+  console.log('✅ [Heuristics] star-only ratings are not seeding and count at 0.25 weight');
 
   // Reviewer-derived signals come from scraped reviewer metadata, not constants.
   const base: ReviewInputItem = {
@@ -358,6 +379,45 @@ async function run() {
   );
   assert.ok(sabotaged.reasons.some(r => r.includes('bảo vệ')));
 
+  // A one-star rating with no text is a weak signal, not a defect report.
+  const lowStars: ReviewInputItem[] = [
+    { id: 'l1', author_name: 'z1', rating_star: 1, comment: '' },
+    {
+      id: 'l2',
+      author_name: 'z2',
+      rating_star: 5,
+      comment: 'Máy chạy ổn định, pin dùng được hai ngày',
+    },
+    {
+      id: 'l3',
+      author_name: 'z3',
+      rating_star: 5,
+      comment: 'Giao hàng nhanh, đóng gói kỹ, máy mới nguyên seal',
+    },
+  ];
+  const starOnlyLow = analyzer.evaluateMerchantRisk({
+    platform: 'tiki',
+    isOfficial: false,
+    reviewResults: analyzer.analyzeWithHeuristics(lowStars),
+    rawReviews: lowStars,
+  });
+  assert.equal(
+    starOnlyLow.risk_score,
+    15,
+    'a text-less 1 star (0.25 of 3 < 20%) adds no defect penalty'
+  );
+  const textLow = [
+    { ...lowStars[0]!, comment: 'Máy lỗi màn hình sau hai ngày, shop không bảo hành' },
+    ...lowStars.slice(1),
+  ];
+  const describedLow = analyzer.evaluateMerchantRisk({
+    platform: 'tiki',
+    isOfficial: false,
+    reviewResults: analyzer.analyzeWithHeuristics(textLow),
+    rawReviews: textLow,
+  });
+  assert.ok(describedLow.risk_score > 15, 'a described defect still counts in full');
+
   const dump = analyzer.evaluateMerchantRisk({
     platform: 'shopee',
     isOfficial: false,
@@ -469,7 +529,7 @@ async function run() {
     assert.match(m.get('llm-stars')!.reason, /Chỉ chấm sao/, "not the model's guess");
     assert.deepEqual(s.pros, ['Pin trâu']);
     assert.deepEqual(s.cons, ['Loa nhỏ']);
-    assert.equal(s.authentic_review_count, 1);
+    assert.equal(s.authentic_review_count, 2, 'the real review and the star-only rating');
     console.log('✅ [LLM] batch refinement merged correctly; heuristic precedence preserved');
 
     console.log('\n================================================================');
