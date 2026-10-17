@@ -23,12 +23,12 @@
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc -p tsconfig.typecheck.json --noEmit",
     "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",
     "lint": "eslint . --ext .ts",
     "format": "prettier --write \"src/**/*.ts\"",
-    "test": "tsx src/shopee/__tests__/open-core-intelligence.test.ts && tsx src/shopee/test-review-analyzer.ts",
+    "test": "tsx src/shopee/__tests__/open-core-intelligence.test.ts && tsx src/shopee/__tests__/entity-matcher.test.ts && tsx src/shopee/test-review-analyzer.ts",
     "test:dist": "node src/shopee/__tests__/dist-exports.smoke.mjs"
   },
   "keywords": [

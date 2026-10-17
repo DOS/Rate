@@ -2,6 +2,11 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { NormalizedProductCandidate } from './product-normalizer.js';
 import { AiSpecEnricher } from './ai-spec-enricher.js';
 
+/** Minimum pg_trgm similarity returned from RPC so ambiguous near-misses (0.65..0.69) can be flagged as draft */
+export const ENTITY_MATCH_CANDIDATE_FLOOR = 0.65;
+/** Minimum pg_trgm similarity required to auto-merge into an existing Master Product */
+export const ENTITY_MATCH_ACCEPT_THRESHOLD = 0.7;
+
 export class EntityMatcher {
   private enricher: AiSpecEnricher;
 
@@ -48,7 +53,7 @@ export class EntityMatcher {
         p_brand: candidate.brand,
         p_model: candidate.model,
         p_storage_gb: candidate.storage_gb,
-        p_similarity_threshold: 0.65,
+        p_similarity_threshold: ENTITY_MATCH_CANDIDATE_FLOOR,
       }
     );
 
@@ -60,7 +65,7 @@ export class EntityMatcher {
     let ambiguousFuzzy = false;
     if (Array.isArray(fuzzyMatches) && fuzzyMatches.length > 0) {
       const topMatch = fuzzyMatches[0];
-      if (topMatch.similarity >= 0.7) {
+      if (topMatch.similarity >= ENTITY_MATCH_ACCEPT_THRESHOLD) {
         console.log(
           `[EntityMatcher] Tier 2 Fuzzy Match found: "${candidate.name}" ~= "${topMatch.name}" (similarity: ${(topMatch.similarity * 100).toFixed(1)}%) -> ID: ${topMatch.master_id}`
         );
@@ -70,7 +75,7 @@ export class EntityMatcher {
       // uncertain -> seed as draft (plan v7 §5.1), never auto-publish.
       ambiguousFuzzy = true;
       console.log(
-        `[EntityMatcher] Tier 2 best similarity ${(topMatch.similarity * 100).toFixed(1)}% < 70%: seeding as draft if new.`
+        `[EntityMatcher] Tier 2 best similarity ${(topMatch.similarity * 100).toFixed(1)}% < ${(ENTITY_MATCH_ACCEPT_THRESHOLD * 100).toFixed(0)}%: seeding as draft if new.`
       );
     }
 
@@ -80,15 +85,18 @@ export class EntityMatcher {
 
     // - Upsert on model_key (unique) so a concurrent crawler inserting the same
     //   canonical entity resolves instead of crashing (plan v7 §5.1 / Gemini B3).
-    // - Low-confidence identities (unparseable storage etc.) are seeded as
+    // - Low-confidence identities (unparseable storage, non-new condition,
+    //   ambiguous trigram match, or unverified AI/heuristic specs) are seeded as
     //   'draft', never auto-published; the live status CHECK allows only
     //   draft/published/archived, so 'draft' is the needs-review state.
+    const isUnverifiedSpec =
+      candidate.spec_source === 'ai_unverified' ||
+      candidate.spec_source === 'crawled_title' ||
+      !candidate.is_benchmark_enriched;
     const seedStatus =
-      candidate.needs_review || ambiguousFuzzy || candidate.spec_source === 'ai_unverified'
-        ? 'draft'
-        : 'published';
+      candidate.needs_review || ambiguousFuzzy || isUnverifiedSpec ? 'draft' : 'published';
     console.log(
-      `[EntityMatcher] Tier 3: Creating new canonical Master Product: ${candidate.name} (status: ${seedStatus})...`
+      `[EntityMatcher] Tier 3: Creating new canonical Master Product: ${candidate.name} (status: ${seedStatus}, spec_source: ${candidate.spec_source ?? 'unknown'})...`
     );
 
     // Insert-only with ignoreDuplicates: the LOSING worker must refetch the
