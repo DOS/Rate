@@ -6,7 +6,7 @@ import {
   getMasterProductHref,
   resolveProductImageUrl,
   type UrlInspectionResult,
-} from '@/lib/rate-api';
+} from '@/lib/rate-domain';
 import { normalizeRateLocale, type SupportedRateLocale } from '@/lib/rate-i18n';
 import CompareQuickToggle from '@/components/compare/CompareQuickToggle';
 import PriceWatchButton from '@/components/watchlist/PriceWatchButton';

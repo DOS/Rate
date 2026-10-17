@@ -5,7 +5,7 @@ import { Link } from '@/lib/navigation';
 import type {
   MasterProductPriceHistorySummary,
   MerchantOffer,
-} from '@/lib/rate-api';
+} from '@/lib/rate-domain';
 import {
   RADAR_CSV_HEADERS,
   radarCsvCells,

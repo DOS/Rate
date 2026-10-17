@@ -4,7 +4,7 @@ import {
   getCategoryRouteHref,
   getMasterProductCategorySlug,
   resolveProductImageUrl,
-} from '@/lib/rate-api';
+} from '@/lib/rate-domain';
 
 export interface WatchlistItem {
   slug: string;

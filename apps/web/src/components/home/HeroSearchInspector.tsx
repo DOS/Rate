@@ -7,7 +7,7 @@ import {
   getMasterProductHref,
   type MerchantSummary,
   type UrlInspectionResult,
-} from '@/lib/rate-api';
+} from '@/lib/rate-domain';
 import CompareQuickToggle from '@/components/compare/CompareQuickToggle';
 import RadarBadge from '@/components/radar/RadarBadge';
 import { useDealRadarIndex } from '@/components/radar/use-deal-radar';

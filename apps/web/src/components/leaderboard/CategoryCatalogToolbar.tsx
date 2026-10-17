@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { Link } from '@/lib/navigation';
-import type { MasterProduct } from '@/lib/rate-api';
+import type { MasterProduct } from '@/lib/rate-domain';
 import {
   getRadarSignal,
   radarCsvCells,

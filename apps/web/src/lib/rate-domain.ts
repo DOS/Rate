@@ -33,6 +33,7 @@ export {
   type RateCategoryItem,
   type RatePlatformStats,
   type ReviewAnalysisSummary,
+  type ReviewFlagCategory,
   type ReviewItem,
   type UrlInspectionResult,
 } from './rate-api';

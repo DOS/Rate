@@ -2495,7 +2495,44 @@ async function runCoreArchitectureSuite() {
     '.github/workflows/ci.yml must declare least-privilege permissions: contents: read (#172)'
   );
   console.log(
-    '  ✅ [50/50] Dependabot Alert #722 Override, env.mjs Prod Fallback Removal (T13), .nvmrc & CI Least-Privilege Permissions (#172) passed'
+    '  ✅ [50/51] Dependabot Alert #722 Override, env.mjs Prod Fallback Removal (T13), .nvmrc & CI Least-Privilege Permissions (#172) passed'
+  );
+
+  // 51. Issue #173: js-yaml>=4.1.1 override eliminates sprintf-js (#724) & all Client Components in src/components/** import @/lib/rate-domain instead of @/lib/rate-api (Audit T12)
+  assert.ok(
+    rootPkgSrc172.includes('"js-yaml@<4.1.0": "^4.1.1"'),
+    'root package.json must override js-yaml@<4.1.0 to ^4.1.1 to eliminate sprintf-js (#173)'
+  );
+  assert.ok(
+    eslintSrc.includes('no-restricted-imports') &&
+      eslintSrc.includes('@/lib/rate-api'),
+    'apps/web/.eslintrc.js must forbid @/lib/rate-api in src/components/** (#173)'
+  );
+  for (const compRel of [
+    'apps/web/src/components/compare/CompareWorkspace.tsx',
+    'apps/web/src/components/compare/VersusMatchupSwitcher.tsx',
+    'apps/web/src/components/compare/compare-tray.ts',
+    'apps/web/src/components/deals/DealFinderWorkspace.tsx',
+    'apps/web/src/components/home/HeroSearchInspector.tsx',
+    'apps/web/src/components/inspect/DeepInspectWorkspace.tsx',
+    'apps/web/src/components/leaderboard/CategoryCatalogToolbar.tsx',
+    'apps/web/src/components/leaderboard/LeaderboardExplorer.tsx',
+    'apps/web/src/components/leaderboard/ProductLeaderboardBadges.tsx',
+    'apps/web/src/components/leaderboard/ProductOffersExplorer.tsx',
+    'apps/web/src/components/price-history/PriceHistorySection.tsx',
+    'apps/web/src/components/reviews/JReviewsSection.tsx',
+    'apps/web/src/components/watchlist/WatchlistWorkspace.tsx',
+    'apps/web/src/components/watchlist/watchlist-store.ts',
+  ]) {
+    const compSrc = fs.readFileSync(path.join(repoRoot, compRel), 'utf8');
+    assert.ok(
+      !compSrc.includes("from '@/lib/rate-api'") &&
+        compSrc.includes("from '@/lib/rate-domain'"),
+      `${compRel} must import from @/lib/rate-domain instead of @/lib/rate-api (Audit T12, #173)`
+    );
+  }
+  console.log(
+    '  ✅ [51/51] Dependabot Alert #724 (sprintf-js) Removal & Full Client Component @/lib/rate-domain Migration (Audit T12, #173) passed'
   );
 
   console.log('🎉 All Rate.vn Core Architecture tests passed!');

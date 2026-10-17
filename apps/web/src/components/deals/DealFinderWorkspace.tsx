@@ -6,7 +6,7 @@ import type { MasterProduct } from '@repo/shared-data';
 import {
   type CanonicalCategorySlug,
   getMasterProductCategorySlug,
-} from '@/lib/rate-api';
+} from '@/lib/rate-domain';
 import {
   scoreMasterProductForLeaderboard,
   type ScoredLeaderboardItem,
