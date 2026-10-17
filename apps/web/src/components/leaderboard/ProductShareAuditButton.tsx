@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { escapeCsvCell } from '@/lib/csv-safe';
 import {
   RADAR_CSV_HEADERS,
   radarCsvCells,
@@ -77,13 +78,6 @@ export default function ProductShareAuditButton({
 
   const handleDownloadProductCsv = () => {
     if (typeof window === 'undefined') return;
-    const escapeCsv = (val: string | number) => {
-      const str = String(val ?? '');
-      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-        return `"${str.replace(/"/g, '""')}"`;
-      }
-      return str;
-    };
     const headers = [
       'Thiết Bị',
       'Thương Hiệu',
@@ -108,7 +102,7 @@ export default function ProductShareAuditButton({
       keySpecLine || '',
       ...(radarSignal ? radarCsvCells(radarSignal) : []),
     ];
-    const csvContent = `\uFEFF${headers.map(escapeCsv).join(',')}\n${row.map(escapeCsv).join(',')}`;
+    const csvContent = `\uFEFF${headers.map(escapeCsvCell).join(',')}\n${row.map(escapeCsvCell).join(',')}`;
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

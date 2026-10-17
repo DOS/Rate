@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { Link } from '@/lib/navigation';
+import { escapeCsvCell } from '@/lib/csv-safe';
 import type { MasterProduct } from '@/lib/rate-domain';
 import {
   getRadarSignal,
@@ -105,7 +106,6 @@ export default function CategoryCatalogToolbar({
 
   const handleDownloadCatalogCsv = () => {
     if (typeof document === 'undefined' || products.length === 0) return;
-    const escapeCsv = (val: string) => `"${val.replace(/"/g, '""')}"`;
     const headers = [
       'Rank',
       'Slug',
@@ -151,8 +151,8 @@ export default function CategoryCatalogToolbar({
     const csvContent =
       '\uFEFF' +
       [
-        headers.map(escapeCsv).join(','),
-        ...rows.map((r) => r.map(escapeCsv).join(',')),
+        headers.map(escapeCsvCell).join(','),
+        ...rows.map((r) => r.map(escapeCsvCell).join(',')),
       ].join('\r\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });

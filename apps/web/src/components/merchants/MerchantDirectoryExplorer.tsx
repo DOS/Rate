@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { Link } from '@/lib/navigation';
+import { escapeCsvCell } from '@/lib/csv-safe';
 import type { MerchantSummary } from '@/lib/rate-domain';
 import { selectMerchantRadar } from '@/lib/deal-radar';
 import { useDealRadarPayload } from '@/components/radar/use-deal-radar';
@@ -391,7 +392,6 @@ export default function MerchantDirectoryExplorer({
   const handleDownloadMerchantsCsv = () => {
     if (typeof document === 'undefined' || filteredMerchants.length === 0)
       return;
-    const escapeCsv = (val: string) => `"${val.replace(/"/g, '""')}"`;
     const headers = [
       'MerchantID',
       'Name',
@@ -431,8 +431,8 @@ export default function MerchantDirectoryExplorer({
     const csvContent =
       '\uFEFF' +
       [
-        headers.map(escapeCsv).join(','),
-        ...rows.map((r) => r.map(escapeCsv).join(',')),
+        headers.map(escapeCsvCell).join(','),
+        ...rows.map((r) => r.map(escapeCsvCell).join(',')),
       ].join('\r\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });

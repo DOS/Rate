@@ -21,3 +21,16 @@ export function escapeCsvCell(value: unknown): string {
   }
   return str;
 }
+
+/**
+ * Builds a UTF-8 BOM CSV string from headers and rows with formula-injection protection.
+ */
+export function buildSafeCsvContent(
+  headers: readonly unknown[],
+  rows: readonly (readonly unknown[])[],
+  lineEnding: '\n' | '\r\n' = '\r\n'
+): string {
+  const headerLine = headers.map(escapeCsvCell).join(',');
+  const rowLines = rows.map((row) => row.map(escapeCsvCell).join(','));
+  return `\uFEFF${[headerLine, ...rowLines].join(lineEnding)}`;
+}
