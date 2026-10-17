@@ -2401,12 +2401,12 @@ async function runCoreArchitectureSuite() {
     'apps/web/src/server/rate/extension.ts must never reference SUPABASE_SERVICE_ROLE_KEY (#159)'
   );
   const eslintSrc = fs.readFileSync(
-    path.join(repoRoot, 'apps/web/.eslintrc.js'),
+    path.join(repoRoot, 'apps/web/eslint.config.mjs'),
     'utf8'
   );
   assert.ok(
     eslintSrc.includes('SUPABASE_SERVICE_ROLE_KEY'),
-    'apps/web/.eslintrc.js must ban SUPABASE_SERVICE_ROLE_KEY in src/app/** and src/server/** (#159)'
+    'apps/web/eslint.config.mjs must ban SUPABASE_SERVICE_ROLE_KEY in src/app/** and src/server/** (#159)'
   );
 
   const { ingestExtensionCrowdSignal } =
@@ -2513,7 +2513,7 @@ async function runCoreArchitectureSuite() {
   assert.ok(
     eslintSrc.includes('no-restricted-imports') &&
       eslintSrc.includes('@/lib/rate-api'),
-    'apps/web/.eslintrc.js must forbid @/lib/rate-api in src/components/** (#173)'
+    'apps/web/eslint.config.mjs must forbid @/lib/rate-api in src/components/** (#173)'
   );
   for (const compRel of [
     'apps/web/src/components/compare/CompareWorkspace.tsx',
@@ -2907,7 +2907,8 @@ async function runCoreArchitectureSuite() {
       !sidebarSrc189.includes("from '@/lib/rate-api'") &&
       merchDirSrc189.includes("from '@/lib/rate-domain'") &&
       !merchDirSrc189.includes("from '@/server/rate'") &&
-      eslintSrc.includes('src/app/[locale]/components/**') &&
+      // minimatch treats [locale] as a character class; the flat config escapes it.
+      eslintSrc.includes('src/app/[[]locale]/components/**') &&
       eslintSrc.includes('@/server/rate'),
     'list-sidebar-one.tsx and MerchantDirectoryExplorer.tsx must import from @/lib/rate-domain and ESLint must ban @/lib/rate-api & @/server/rate in Client Component folders (#189)'
   );
@@ -3174,9 +3175,8 @@ async function runCoreArchitectureSuite() {
     merchantCacheTag,
     withRateDataCache,
   } = await import('../cache-tags');
-  const revalidateRoute = await import(
-    '../../../app/api/v1/rate/revalidate/route'
-  );
+  const revalidateRoute =
+    await import('../../../app/api/v1/rate/revalidate/route');
 
   assert.equal(
     productCacheTag('  Apple-iPhone-16-Pro-Max '),
@@ -3269,7 +3269,9 @@ async function runCoreArchitectureSuite() {
     assert.ok(validRevalBody.data.tags.includes('rate:products'));
     assert.ok(validRevalBody.data.tags.includes('rate:deals'));
     assert.ok(validRevalBody.data.tags.includes('rate:category:smartphones'));
-    assert.ok(validRevalBody.data.tags.includes('rate:merchant:shopee-88201679'));
+    assert.ok(
+      validRevalBody.data.tags.includes('rate:merchant:shopee-88201679')
+    );
     assert.deepEqual(validRevalBody.data.paths, [
       '/smartphones/apple-iphone-16-pro-max',
     ]);
@@ -3293,32 +3295,24 @@ async function runCoreArchitectureSuite() {
   // 60. Complete behavioral NextRequest -> NextResponse coverage for all remaining REST API v1 routes (#187 - Audit T1)
   const healthRoute60 = await import('../../../app/api/health/route');
   const openApiRoute = await import('../../../app/api/v1/rate/openapi/route');
-  const openApiJsonRoute = await import(
-    '../../../app/api/v1/rate/openapi.json/route'
-  );
+  const openApiJsonRoute =
+    await import('../../../app/api/v1/rate/openapi.json/route');
   const productsRoute = await import('../../../app/api/v1/rate/products/route');
-  const productDetailRoute = await import(
-    '../../../app/api/v1/rate/products/[slug]/route'
-  );
+  const productDetailRoute =
+    await import('../../../app/api/v1/rate/products/[slug]/route');
   const dealsRoute = await import('../../../app/api/v1/rate/deals/route');
-  const leaderboardRoute = await import(
-    '../../../app/api/v1/rate/leaderboard/route'
-  );
-  const merchantsRoute = await import(
-    '../../../app/api/v1/rate/merchants/route'
-  );
-  const merchantDetailRoute = await import(
-    '../../../app/api/v1/rate/merchants/[id]/route'
-  );
+  const leaderboardRoute =
+    await import('../../../app/api/v1/rate/leaderboard/route');
+  const merchantsRoute =
+    await import('../../../app/api/v1/rate/merchants/route');
+  const merchantDetailRoute =
+    await import('../../../app/api/v1/rate/merchants/[id]/route');
   const statsRoute = await import('../../../app/api/v1/rate/stats/route');
 
   // 60.1 /api/health
   const healthRes60 = await healthRoute60.GET();
   assert.equal(healthRes60.status, 200);
-  assert.equal(
-    healthRes60.headers.get('Cache-Control'),
-    'no-store, max-age=0'
-  );
+  assert.equal(healthRes60.headers.get('Cache-Control'), 'no-store, max-age=0');
   const healthBody60 = (await healthRes60.json()) as {
     status: string;
     service: string;
@@ -3389,7 +3383,9 @@ async function runCoreArchitectureSuite() {
   const dealsOpt = await dealsRoute.OPTIONS();
   assert.equal(dealsOpt.status, 204);
   const dealsGet = await dealsRoute.GET(
-    new Request('https://rate.vn/api/v1/rate/deals?category=smartphones&limit=4')
+    new Request(
+      'https://rate.vn/api/v1/rate/deals?category=smartphones&limit=4'
+    )
   );
   assert.ok([200, 500].includes(dealsGet.status));
 
@@ -3522,6 +3518,3 @@ async function runCoreArchitectureSuite() {
 }
 
 runCoreArchitectureSuite();
-
-
-
