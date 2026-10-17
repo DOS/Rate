@@ -118,7 +118,11 @@ function main() {
     fs.writeFileSync(path.join(distDir, 'icons', `icon-${size}.png`), png);
   }
 
-  // 3. Copy service-worker.js & sidepanel.js + sidepanel.html
+  // 3. Copy security-guards.js, service-worker.js & sidepanel.js + sidepanel.html
+  fs.copyFileSync(
+    path.join(esmDir, 'security-guards.js'),
+    path.join(distDir, 'security-guards.js')
+  );
   fs.copyFileSync(
     path.join(esmDir, 'background', 'service-worker.js'),
     path.join(distDir, 'background', 'service-worker.js')

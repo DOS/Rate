@@ -70,14 +70,27 @@ async function fetchExtensionLookup(
   return json.ok && json.data ? json.data : null;
 }
 
+const SUPPORTED_CROWD_PLATFORMS = new Set([
+  'shopee',
+  'lazada',
+  'tiki',
+  'tiktok',
+  'cellphones',
+  'tgdd',
+  'fptshop',
+  'hoangha',
+  'didongviet',
+  'phongvu',
+]);
+
 async function maybeSendOptInCrowdSignal(
   signal: ExtractedPageProductSignal
 ): Promise<void> {
   const settings = await getSettings();
   // Strict Privacy Gate: Only send crowd verification signal if user explicitly opted in
-  // and platform is Shopee (where server-side verification worker is active)
+  // and platform is in the 10-platform capability matrix
   if (!settings.crowdContributeOptIn) return;
-  if (signal.platform !== 'shopee') return;
+  if (!SUPPORTED_CROWD_PLATFORMS.has(signal.platform)) return;
   if (!signal.externalItemId || !signal.price || signal.price <= 0) return;
 
   try {
