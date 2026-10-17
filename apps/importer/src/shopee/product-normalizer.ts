@@ -24,6 +24,12 @@ export interface NormalizedProductCandidate {
   key_specs: KeySpecs;
   description?: string;
   is_benchmark_enriched?: boolean;
+  spec_source?: 'benchmark_registry' | 'ai_unverified' | 'crawled_title';
+  spec_enrichment_meta?: {
+    provider: string;
+    model: string;
+    enriched_at: string;
+  };
 }
 
 /**

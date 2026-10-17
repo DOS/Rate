@@ -34,18 +34,23 @@ export class EntityMatcher {
     }
 
     if (exactMatch) {
-      console.log(`[EntityMatcher] Tier 1 Exact Match found: ${exactMatch.name} (${exactMatch.model_key}) -> ID: ${exactMatch.id}`);
+      console.log(
+        `[EntityMatcher] Tier 1 Exact Match found: ${exactMatch.name} (${exactMatch.model_key}) -> ID: ${exactMatch.id}`
+      );
       return { masterId: exactMatch.id, isNew: false };
     }
 
     // Tier 2: Trigram Fuzzy Match using Postgres pg_trgm (strictly constrained by brand and model series)
-    const { data: fuzzyMatches, error: fuzzyErr } = await this.supabase.rpc('match_master_product', {
-      search_title: candidate.name,
-      p_brand: candidate.brand,
-      p_model: candidate.model,
-      p_storage_gb: candidate.storage_gb,
-      p_similarity_threshold: 0.65,
-    });
+    const { data: fuzzyMatches, error: fuzzyErr } = await this.supabase.rpc(
+      'match_master_product',
+      {
+        search_title: candidate.name,
+        p_brand: candidate.brand,
+        p_model: candidate.model,
+        p_storage_gb: candidate.storage_gb,
+        p_similarity_threshold: 0.65,
+      }
+    );
 
     // Same rule for Tier 2: RPC/infra failure aborts; only a genuine
     // "no match above threshold" reaches Tier 3 (plan v7 §5.1).
@@ -55,7 +60,7 @@ export class EntityMatcher {
     let ambiguousFuzzy = false;
     if (Array.isArray(fuzzyMatches) && fuzzyMatches.length > 0) {
       const topMatch = fuzzyMatches[0];
-      if (topMatch.similarity >= 0.70) {
+      if (topMatch.similarity >= 0.7) {
         console.log(
           `[EntityMatcher] Tier 2 Fuzzy Match found: "${candidate.name}" ~= "${topMatch.name}" (similarity: ${(topMatch.similarity * 100).toFixed(1)}%) -> ID: ${topMatch.master_id}`
         );
@@ -64,7 +69,9 @@ export class EntityMatcher {
       // Candidates exist but all below the accept threshold: identity is
       // uncertain -> seed as draft (plan v7 §5.1), never auto-publish.
       ambiguousFuzzy = true;
-      console.log(`[EntityMatcher] Tier 2 best similarity ${(topMatch.similarity * 100).toFixed(1)}% < 70%: seeding as draft if new.`);
+      console.log(
+        `[EntityMatcher] Tier 2 best similarity ${(topMatch.similarity * 100).toFixed(1)}% < 70%: seeding as draft if new.`
+      );
     }
 
     // Tier 3: No existing master product matches -> Enrich with AI Spec Enricher (if not in local benchmark registry)
@@ -76,8 +83,13 @@ export class EntityMatcher {
     // - Low-confidence identities (unparseable storage etc.) are seeded as
     //   'draft', never auto-published; the live status CHECK allows only
     //   draft/published/archived, so 'draft' is the needs-review state.
-    const seedStatus = candidate.needs_review || ambiguousFuzzy ? 'draft' : 'published';
-    console.log(`[EntityMatcher] Tier 3: Creating new canonical Master Product: ${candidate.name} (status: ${seedStatus})...`);
+    const seedStatus =
+      candidate.needs_review || ambiguousFuzzy || candidate.spec_source === 'ai_unverified'
+        ? 'draft'
+        : 'published';
+    console.log(
+      `[EntityMatcher] Tier 3: Creating new canonical Master Product: ${candidate.name} (status: ${seedStatus})...`
+    );
 
     // Insert-only with ignoreDuplicates: the LOSING worker must refetch the
     // winner WITHOUT overwriting its canonical metadata or status (Codex
@@ -178,7 +190,9 @@ export class EntityMatcher {
       .eq('id', masterId);
 
     if (updateErr) {
-      throw new Error(`[EntityMatcher] Failed to update enriched specs for ${masterId}: ${updateErr.message}`);
+      throw new Error(
+        `[EntityMatcher] Failed to update enriched specs for ${masterId}: ${updateErr.message}`
+      );
     }
 
     return true;

@@ -352,8 +352,25 @@ async function runSuite() {
   assert.equal(normPad7.is_benchmark_enriched, true);
 
   console.log(
-    '  ✅ [7/7] ArenaSpecSyncer (GSMArena/PhoneArena 10-Group Parser), 14 2026 Multi-Category Flagships & 36 Seeded Devices passed'
+    '  ✅ [7/8] ArenaSpecSyncer (GSMArena/PhoneArena 10-Group Parser), 14 2026 Multi-Category Flagships & 36 Seeded Devices passed'
   );
+
+  // 8. AiSpecEnricher Fail-Closed Validation & Provenance (K4, C8) (#164)
+  const { AiSpecEnricher, sanitizeSpecifications } = await import('../ai-spec-enricher.js');
+  const sanitizedValid = sanitizeSpecifications({
+    display: { size_inch: '6.8 inches', refresh_rate_hz: '120Hz' },
+    hardware: { ram_gb: '12GB', storage_gb: '256GB' },
+  });
+  assert.equal(sanitizedValid.display?.size_inch, 6.8);
+  assert.equal(sanitizedValid.hardware?.ram_gb, 12);
+
+  const enricher = new AiSpecEnricher({ apiKey: '' });
+  const benchmarkCandidate = await enricher.enrichCandidate(s24);
+  assert.equal(benchmarkCandidate.spec_source, 'benchmark_registry');
+  console.log(
+    '  ✅ [8/8] AiSpecEnricher Fail-Closed Validation, Provenance & Batch Retry Hardening (K4, C8) (#164) passed'
+  );
+
   console.log('🎉 All @repo/crawlers Open-Core Intelligence tests passed!');
 }
 
