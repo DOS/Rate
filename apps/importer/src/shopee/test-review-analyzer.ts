@@ -379,6 +379,45 @@ async function run() {
   );
   assert.ok(sabotaged.reasons.some(r => r.includes('bảo vệ')));
 
+  // A one-star rating with no text is a weak signal, not a defect report.
+  const lowStars: ReviewInputItem[] = [
+    { id: 'l1', author_name: 'z1', rating_star: 1, comment: '' },
+    {
+      id: 'l2',
+      author_name: 'z2',
+      rating_star: 5,
+      comment: 'Máy chạy ổn định, pin dùng được hai ngày',
+    },
+    {
+      id: 'l3',
+      author_name: 'z3',
+      rating_star: 5,
+      comment: 'Giao hàng nhanh, đóng gói kỹ, máy mới nguyên seal',
+    },
+  ];
+  const starOnlyLow = analyzer.evaluateMerchantRisk({
+    platform: 'tiki',
+    isOfficial: false,
+    reviewResults: analyzer.analyzeWithHeuristics(lowStars),
+    rawReviews: lowStars,
+  });
+  assert.equal(
+    starOnlyLow.risk_score,
+    15,
+    'a text-less 1 star (0.25 of 3 < 20%) adds no defect penalty'
+  );
+  const textLow = [
+    { ...lowStars[0]!, comment: 'Máy lỗi màn hình sau hai ngày, shop không bảo hành' },
+    ...lowStars.slice(1),
+  ];
+  const describedLow = analyzer.evaluateMerchantRisk({
+    platform: 'tiki',
+    isOfficial: false,
+    reviewResults: analyzer.analyzeWithHeuristics(textLow),
+    rawReviews: textLow,
+  });
+  assert.ok(describedLow.risk_score > 15, 'a described defect still counts in full');
+
   const dump = analyzer.evaluateMerchantRisk({
     platform: 'shopee',
     isOfficial: false,

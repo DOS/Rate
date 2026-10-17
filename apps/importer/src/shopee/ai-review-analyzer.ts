@@ -859,7 +859,9 @@ Return ONLY valid JSON matching:
         const rev = input.rawReviews[i];
         const flag = input.reviewResults[i];
         if (rev.rating_star <= 2 && flag?.flag_category === 'authentic') {
-          authenticLowStarCount++;
+          // A low star with no text describes no defect: it counts at the same reduced weight
+          // as in the rating, not as a full complaint.
+          authenticLowStarCount += isRatingOnlyComment(rev.comment) ? 0.25 : 1;
         }
       }
       const lowStarRatio = authenticLowStarCount / total;
