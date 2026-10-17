@@ -564,10 +564,104 @@ const INCENTIVIZED_DISCLOSURE_RE =
   /(?:đánh\s*giá\s*5\s*sao\s*(?:để\s*)?nhận\s*(?:quà|voucher|hoàn\s*tiền)|thẻ\s*cào\s*hoàn\s*tiền|tặng\s*voucher\s*khi\s*đánh\s*giá)/i;
 
 const AFFILIATE_DISCLOSURE_RE =
-  /(?:link\s*(?:mua|bio|affiliate|tiếp\s*thị)|mã\s*giới\s*thiệu|ref\s*link)/i;
+  /(?:link\s*(?:mua|bio|affiliate|tiếp\s*thị)|mã\s*giới\s*thiệu|ref\s*link|\b(?:shope\.ee|s\.shopee\.vn|s\.lazada\.vn|vt\.tiktok\.com|bio\.link|beacons\.ai|linktr\.ee)\b)/i;
 
 /**
- * Rule-based 6-axis evaluator (`assessReview6Axes`) implementing P1 of `Docs/Platform/review-trust-model.html`.
+ * Computes the weight of a community voter per Section 9 of `Docs/Platform/review-trust-model.html`:
+ * - Gate: Account must be >= 7 days old and have verified email/phone (`isVerifiedContact !== false`), else `0`.
+ * - New/Unproven Voter Cap: Accounts < 30 days old OR with `0` verified reviews receive a fixed weight of `0.1`
+ *   (never the neutral 0.5 prior), so fresh accounts cannot brigade votes.
+ * - Established Voter: Uses reviewer trust score `T` clamped to `[0.1, 1.0]` (defaults to `0.5` when `T` is unset).
+ */
+export function computeVoterWeight(params: {
+  accountAgeDays: number | null;
+  verifiedReviewCount: number;
+  trustScore?: number | null;
+  isVerifiedContact?: boolean;
+}): number {
+  const {
+    accountAgeDays,
+    verifiedReviewCount,
+    trustScore,
+    isVerifiedContact = true,
+  } = params;
+  if (!isVerifiedContact) return 0;
+  if (accountAgeDays !== null && accountAgeDays < 7) return 0;
+  if ((accountAgeDays !== null && accountAgeDays < 30) || verifiedReviewCount <= 0) {
+    return 0.1;
+  }
+  const rawT =
+    typeof trustScore === 'number' && Number.isFinite(trustScore) ? trustScore : 0.5;
+  return Number(Math.max(0.1, Math.min(1.0, rawT)).toFixed(3));
+}
+
+/**
+ * Computes the 95% Wilson score confidence interval lower bound for ranking "Most Helpful" reviews
+ * over weighted upvotes and downvotes (Section 9 of `Docs/Platform/review-trust-model.html`).
+ * Prevents a review with 1 upvote / 0 downvotes from outranking a review with 50 upvotes / 2 downvotes.
+ */
+export function computeWilsonLowerBound(
+  helpfulWeight: number,
+  unhelpfulWeight: number,
+  z = 1.96
+): number {
+  const pos = Number.isFinite(helpfulWeight) && helpfulWeight > 0 ? helpfulWeight : 0;
+  const neg = Number.isFinite(unhelpfulWeight) && unhelpfulWeight > 0 ? unhelpfulWeight : 0;
+  const n = pos + neg;
+  if (n <= 0) return 0;
+  const pHat = pos / n;
+  const z2 = z * z;
+  const numerator =
+    pHat +
+    z2 / (2 * n) -
+    z * Math.sqrt((pHat * (1 - pHat) + z2 / (4 * n)) / n);
+  const denominator = 1 + z2 / n;
+  return Number(Math.max(0, Math.min(1, numerator / denominator)).toFixed(4));
+}
+
+function normalizeTextForDedupe(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Computes word k-shingle Jaccard similarity (`[0, 1]`) between two review texts (Section 10 L2 / P3).
+ * Used to detect paraphrased or reordered seeding templates across distinct accounts/listings.
+ */
+export function computeTextShingleSimilarity(textA: string, textB: string, k = 3): number {
+  const normA = normalizeTextForDedupe(textA);
+  const normB = normalizeTextForDedupe(textB);
+  if (!normA || !normB) return 0;
+  if (normA === normB) return 1;
+
+  const wordsA = normA.split(' ').filter(Boolean);
+  const wordsB = normB.split(' ').filter(Boolean);
+  if (wordsA.length < k || wordsB.length < k) {
+    return 0;
+  }
+
+  const shinglesA = new Set<string>();
+  for (let i = 0; i <= wordsA.length - k; i++) {
+    shinglesA.add(wordsA.slice(i, i + k).join(' '));
+  }
+  const shinglesB = new Set<string>();
+  for (let i = 0; i <= wordsB.length - k; i++) {
+    shinglesB.add(wordsB.slice(i, i + k).join(' '));
+  }
+
+  let intersection = 0;
+  for (const s of shinglesA) {
+    if (shinglesB.has(s)) intersection++;
+  }
+  const union = shinglesA.size + shinglesB.size - intersection;
+  return union > 0 ? Number((intersection / union).toFixed(4)) : 0;
+}
+
+/**
+ * Rule-based 6-axis evaluator (`assessReview6Axes`) implementing P1/P2/P3 of `Docs/Platform/review-trust-model.html`.
  */
 export function assessReview6Axes(
   review: ReviewInputItem,
@@ -577,6 +671,7 @@ export function assessReview6Axes(
     isCompetitorSabotage?: boolean;
     isReviewBombing?: boolean;
     isDuplicateSeeding?: boolean;
+    isCopiedSeeding?: boolean;
     isConflictOfInterest?: boolean;
   } = {}
 ): ReviewAssessment {
@@ -643,6 +738,8 @@ export function assessReview6Axes(
     authenticity = 'bombing';
   } else if (options.isDuplicateSeeding) {
     authenticity = 'fabricated';
+  } else if (options.isCopiedSeeding) {
+    authenticity = 'copied';
   } else if (contradiction) {
     authenticity = 'doubtful';
   }
@@ -743,14 +840,6 @@ export function assessReview6Axes(
   };
 }
 
-function normalizeTextForDedupe(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
 /**
  * Provider-Agnostic AI Review Analyzer & JReviews Scoring Engine
  * Supports Products & Services across Shopee, Lazada, Tiki, TikTok Shop, Facebook, Website
@@ -817,13 +906,33 @@ export class AiReviewAnalyzer {
   public analyzeWithHeuristics(reviews: ReviewInputItem[]): AnalyzedReviewResult[] {
     // 1. Pre-compute duplicate comment frequency across distinct authors
     const commentCounts = new Map<string, Set<string>>();
+    const substantiveByAuthor: Array<{ id: string; authorKey: string; norm: string }> = [];
     for (const r of reviews) {
       const norm = normalizeTextForDedupe(r.comment || '');
       // Rating labels repeat across buyers because the platform writes them, not because of seeding.
       if (norm.length >= 15 && !isRatingOnlyComment(r.comment)) {
+        const authorKey = (r.author_name || r.id).toLowerCase();
         const authors = commentCounts.get(norm) || new Set<string>();
-        authors.add((r.author_name || r.id).toLowerCase());
+        authors.add(authorKey);
         commentCounts.set(norm, authors);
+        if (norm.length >= 25) {
+          substantiveByAuthor.push({ id: r.id, authorKey, norm });
+        }
+      }
+    }
+
+    // 1b. Near-duplicate shingle similarity across distinct authors (Section 10 L2 / P3)
+    const maxShingleSimByReviewId = new Map<string, number>();
+    for (let i = 0; i < substantiveByAuthor.length; i++) {
+      const a = substantiveByAuthor[i];
+      for (let j = i + 1; j < substantiveByAuthor.length; j++) {
+        const b = substantiveByAuthor[j];
+        if (a.authorKey === b.authorKey || a.norm === b.norm) continue;
+        const sim = computeTextShingleSimilarity(a.norm, b.norm, 3);
+        if (sim >= 0.65) {
+          maxShingleSimByReviewId.set(a.id, Math.max(maxShingleSimByReviewId.get(a.id) ?? 0, sim));
+          maxShingleSimByReviewId.set(b.id, Math.max(maxShingleSimByReviewId.get(b.id) ?? 0, sim));
+        }
       }
     }
 
@@ -831,11 +940,16 @@ export class AiReviewAnalyzer {
       const comment = (r.comment || '').trim();
       const norm = normalizeTextForDedupe(comment);
       const distinctAuthorsWithSameText = commentCounts.get(norm)?.size ?? 1;
+      const maxShingleSim = maxShingleSimByReviewId.get(r.id) ?? 0;
 
       // Default clean signals
       let burstScore = 0.05;
       let duplicateRatio =
-        distinctAuthorsWithSameText > 1 ? clamp01((distinctAuthorsWithSameText - 1) / 3) : 0;
+        distinctAuthorsWithSameText > 1
+          ? clamp01((distinctAuthorsWithSameText - 1) / 3)
+          : maxShingleSim >= 0.65
+            ? clamp01(maxShingleSim)
+            : 0;
       let languageMarker = 0.05;
       let flagCategory: ReviewFlagCategory = 'authentic';
       let verdict: ReviewVerdict = 'authentic';
@@ -878,6 +992,11 @@ export class AiReviewAnalyzer {
         comment.length >= 15 &&
         !isCoinSpamPhrase &&
         !isRatingOnly;
+      const isCopiedSeeding =
+        !isDuplicateSeeding &&
+        maxShingleSim >= 0.65 &&
+        !isCoinSpamPhrase &&
+        !isRatingOnly;
       const isScriptedPraise =
         r.rating_star === 5 &&
         /sản\s*phẩm\s*tuyệt\s*vời\s*đáng\s*đồng\s*tiền\s*bát\s*gạo\s*sẽ\s*ủng\s*hộ\s*shop\s*dài\s*dài\s*10\s*điểm/i.test(
@@ -908,6 +1027,13 @@ export class AiReviewAnalyzer {
         duplicateRatio = Math.max(0.85, duplicateRatio);
         languageMarker = 0.8;
         reason = `Nội dung văn mẫu seeding trùng lặp giữa ${distinctAuthorsWithSameText} tài khoản khác nhau.`;
+      } else if (isCopiedSeeding) {
+        flagCategory = 'seeding_fake';
+        verdict = 'fake';
+        fakeProb = 0.85;
+        duplicateRatio = Math.max(0.75, duplicateRatio);
+        languageMarker = 0.78;
+        reason = `Nội dung sao chép / xào nấu văn mẫu seeding giữa các tài khoản (tương đồng cấu trúc ${(maxShingleSim * 100).toFixed(0)}%).`;
       } else if (isRatingOnly) {
         // Stars without text are a real rating (many platforms do not ask for a comment) with
         // nothing to verify, so they count at reduced weight: 'authentic' + 'suspicious' is the
@@ -945,6 +1071,7 @@ export class AiReviewAnalyzer {
         isCompetitorSabotage,
         isReviewBombing,
         isDuplicateSeeding: isDuplicateSeeding || isScriptedPraise,
+        isCopiedSeeding,
       });
 
       const helpfulnessWeight = isShippingOnly
@@ -1076,6 +1203,11 @@ Return ONLY valid JSON matching:
       "flag_category": "authentic" | "low_value_coin_spam" | "seeding_fake" | "competitor_sabotage" | "review_bombing",
       "verdict": "authentic" | "suspicious" | "fake",
       "fake_probability": number (0.0 to 1.0),
+      "authenticity"?: "genuine" | "doubtful" | "fabricated" | "sabotage" | "bombing" | "copied",
+      "independence"?: "organic" | "affiliate" | "incentivized" | "sponsored_balanced" | "sponsored_promo" | "undisclosed_paid" | "conflict_of_interest",
+      "depth"?: "stars_only" | "platform_label" | "filler" | "low_effort" | "specific_short" | "detailed" | "expert_depth",
+      "relevance"?: number (0.0 to 1.0),
+      "ai_generated_prob"?: number (0.0 to 1.0),
       "reason": "short Vietnamese explanation"
     }
   ],
@@ -1203,24 +1335,115 @@ Return ONLY valid JSON matching:
         'competitor_sabotage',
         'review_bombing',
       ]);
+      const validAuthenticity = new Set<Authenticity>([
+        'genuine',
+        'doubtful',
+        'fabricated',
+        'sabotage',
+        'bombing',
+        'copied',
+      ]);
+      const validIndependence = new Set<Independence>([
+        'organic',
+        'affiliate',
+        'incentivized',
+        'sponsored_balanced',
+        'sponsored_promo',
+        'undisclosed_paid',
+        'conflict_of_interest',
+      ]);
+      const validDepth = new Set<Depth>([
+        'stars_only',
+        'platform_label',
+        'filler',
+        'low_effort',
+        'specific_short',
+        'detailed',
+        'expert_depth',
+      ]);
 
       const hybridDetector = `hybrid:${this.provider}:${this.model}`;
       const mergedResults = baseline.map((base, idx) => {
         const aiItem = aiMap.get(base.review_id);
-        // Stars without text give the model nothing to judge: keep the heuristic's low fake
-        // probability and "Chỉ chấm sao" reason instead of the model's guess.
-        if (!aiItem || isRatingOnlyComment(reviews[idx]?.comment)) {
+        const srcReview = reviews[idx];
+        // Stars without text or shipping-only comments are deterministic L1 rules:
+        // LLM must never override them (Section 10).
+        if (
+          !aiItem ||
+          isRatingOnlyComment(srcReview?.comment) ||
+          isShippingOnlyComment(srcReview?.comment)
+        ) {
           return { ...base, detector: 'heuristic:v2-jreviews' };
         }
 
+        const heuristicLocked = base.flag_category !== 'authentic';
+        let updatedAssessment = base.assessment;
+        if (updatedAssessment && !heuristicLocked) {
+          const nextAuth: Authenticity = validAuthenticity.has(aiItem.authenticity)
+            ? aiItem.authenticity
+            : updatedAssessment.authenticity;
+          const nextInd: Independence = validIndependence.has(aiItem.independence)
+            ? aiItem.independence
+            : updatedAssessment.independence;
+          const nextDepth: Depth = validDepth.has(aiItem.depth)
+            ? aiItem.depth
+            : updatedAssessment.depth;
+          const nextRel =
+            typeof aiItem.relevance === 'number' && Number.isFinite(aiItem.relevance)
+              ? clamp01(aiItem.relevance)
+              : updatedAssessment.relevance;
+          const nextAiProb =
+            typeof aiItem.ai_generated_prob === 'number' &&
+            Number.isFinite(aiItem.ai_generated_prob)
+              ? clamp01(aiItem.ai_generated_prob)
+              : updatedAssessment.aiGeneratedProb;
+
+          const hasRealMedia = Array.isArray(srcReview?.images) && srcReview.images.length > 0;
+          const hasLongTermUsage = LONG_TERM_USAGE_RE.test(srcReview?.comment || '');
+          const nextBreakdown = compute6AxisWeightBreakdown({
+            authenticity: nextAuth,
+            independence: nextInd,
+            depth: nextDepth,
+            hasRealMedia,
+            hasLongTermUsage,
+            reviewerMultiplier: updatedAssessment.breakdown.reviewer,
+            contextMultiplier: updatedAssessment.breakdown.context,
+            upvotes: srcReview?.upvotes ?? 0,
+            downvotes: srcReview?.downvotes ?? 0,
+            reportCount: srcReview?.report_count ?? 0,
+          });
+          updatedAssessment = {
+            ...updatedAssessment,
+            authenticity: nextAuth,
+            independence: nextInd,
+            depth: nextDepth,
+            relevance: nextRel,
+            ...(nextAiProb !== undefined ? { aiGeneratedProb: nextAiProb } : {}),
+            breakdown: nextBreakdown,
+            detector: hybridDetector,
+            detectorVersion: '2.2.0',
+          };
+        }
+
         // If deterministic heuristic already caught an explicit phrase (e.g. "nhận xu" or duplicate seeding),
-        // preserve high-confidence heuristic; otherwise adopt AI classification.
-        const cat: ReviewFlagCategory =
-          base.flag_category !== 'authentic'
-            ? base.flag_category
-            : validCategories.has(aiItem.flag_category)
-              ? aiItem.flag_category
-              : base.flag_category;
+        // preserve high-confidence heuristic; otherwise adopt AI classification or 6-axis derived category.
+        const derivedFromAxes =
+          updatedAssessment && !heuristicLocked
+            ? deriveFlagCategoryFromAxes(
+                updatedAssessment.authenticity,
+                updatedAssessment.independence,
+                updatedAssessment.depth
+              )
+            : 'authentic';
+        const cat: ReviewFlagCategory = heuristicLocked
+          ? base.flag_category
+          : validCategories.has(aiItem.flag_category) && aiItem.flag_category !== 'authentic'
+            ? aiItem.flag_category
+            : derivedFromAxes !== 'authentic'
+              ? derivedFromAxes
+              : validCategories.has(aiItem.flag_category)
+                ? aiItem.flag_category
+                : base.flag_category;
 
         const verdict: ReviewVerdict =
           cat === 'seeding_fake' || cat === 'competitor_sabotage' || cat === 'review_bombing'
@@ -1229,7 +1452,6 @@ Return ONLY valid JSON matching:
               ? 'suspicious'
               : 'authentic';
 
-        const srcReview = reviews[idx];
         const weight = computeReviewWeight({
           upvotes: srcReview?.upvotes ?? 0,
           downvotes: srcReview?.downvotes ?? 0,
@@ -1248,6 +1470,7 @@ Return ONLY valid JSON matching:
           helpfulness_weight: weight,
           reason: cleanReason || base.reason,
           detector: hybridDetector,
+          assessment: updatedAssessment,
         };
       });
 
