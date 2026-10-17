@@ -11,6 +11,9 @@ import {
   compute6AxisWeightBreakdown,
   computeBayesianProductRating,
   computeReviewWeight,
+  computeTextShingleSimilarity,
+  computeVoterWeight,
+  computeWilsonLowerBound,
   deriveFlagCategoryFromAxes,
   hasStarSentimentContradiction,
   isRatingOnlyComment,
@@ -888,6 +891,77 @@ async function run() {
 
   console.log(
     `✅ [P1 Trust Model] 6-axis weights, shipping-only routing, contradiction & Bayesian rating (CellphoneS=${cellphonesBayes.score}/${cellphonesBayes.confidence_tier}, Tiki=${tikiBayes.score}/${tikiBayes.confidence_tier}) verified`
+  );
+
+  console.log('\n================================================================');
+  console.log('9. Review Trust Model P2 & P3 (Voter weight, Wilson bound, Shingle copy, Affiliate)');
+  console.log('================================================================');
+
+  // 9.1 Voter Weight (Section 9)
+  assert.equal(
+    computeVoterWeight({ accountAgeDays: 3, verifiedReviewCount: 5, isVerifiedContact: true }),
+    0,
+    'Account < 7 days old cannot vote (weight = 0)'
+  );
+  assert.equal(
+    computeVoterWeight({ accountAgeDays: 90, verifiedReviewCount: 5, isVerifiedContact: false }),
+    0,
+    'Unverified email/phone cannot vote (weight = 0)'
+  );
+  assert.equal(
+    computeVoterWeight({ accountAgeDays: 15, verifiedReviewCount: 5, trustScore: 0.8 }),
+    0.1,
+    'Account < 30 days old is capped at 0.1 regardless of prior'
+  );
+  assert.equal(
+    computeVoterWeight({ accountAgeDays: 180, verifiedReviewCount: 0, trustScore: 0.5 }),
+    0.1,
+    'Account with 0 verified reviews is capped at 0.1 (never uses 0.5 starting prior)'
+  );
+  assert.equal(
+    computeVoterWeight({ accountAgeDays: 180, verifiedReviewCount: 4, trustScore: 0.85 }),
+    0.85,
+    'Established voter uses trust score T'
+  );
+
+  // 9.2 Wilson Score Lower Bound (Section 9)
+  const wilson1of1 = computeWilsonLowerBound(1, 0);
+  const wilson50of52 = computeWilsonLowerBound(50, 2);
+  assert.ok(
+    wilson50of52 > wilson1of1,
+    `50/52 helpful (${wilson50of52}) must rank higher than 1/1 helpful (${wilson1of1})`
+  );
+  assert.equal(computeWilsonLowerBound(0, 0), 0);
+
+  // 9.3 Near-Duplicate 3-Shingle Copy Seeding Detection (Section 10 L2)
+  const tplA =
+    'Máy nguyên seal chính hãng dùng cực kỳ mượt mà, pin trâu dùng cả ngày không nóng máy';
+  const tplB =
+    'Máy nguyên seal chính hãng dùng cực kỳ mượt mà, pin trâu dùng cả ngày rất mát máy';
+  const shingleSim = computeTextShingleSimilarity(tplA, tplB, 3);
+  assert.ok(shingleSim >= 0.65, `Expected shingle similarity >= 0.65, got ${shingleSim}`);
+
+  const copiedBatch = analyzer.analyzeWithHeuristics([
+    { id: 'copy-1', author_name: 'seeder_a', rating_star: 5, comment: tplA },
+    { id: 'copy-2', author_name: 'seeder_b', rating_star: 5, comment: tplB },
+  ]);
+  assert.equal(copiedBatch[0].flag_category, 'seeding_fake');
+  assert.equal(copiedBatch[0].assessment?.authenticity, 'copied');
+  assert.equal(copiedBatch[0].include_in_rating, false);
+  assert.equal(copiedBatch[1].flag_category, 'seeding_fake');
+  assert.equal(copiedBatch[1].assessment?.authenticity, 'copied');
+
+  // 9.4 Affiliate Shortlink Detection (Section 3 Axis B / P2)
+  const affAssess = assessReview6Axes({
+    id: 'aff-shortlink',
+    rating_star: 5,
+    comment: 'Máy dùng rất mượt, mình săn sale tại https://s.shopee.vn/4f8abc giá rẻ hơn 2 triệu',
+  });
+  assert.equal(affAssess.independence, 'affiliate');
+  assert.equal(affAssess.breakdown.independence, 0.7);
+
+  console.log(
+    `✅ [P2/P3 Trust Model] Voter weight, Wilson lower bound (50/52=${wilson50of52} > 1/1=${wilson1of1}), shingle copy seeding (sim=${shingleSim}) & affiliate shortlinks verified`
   );
 
   console.log('\n🎉 ALL AI REVIEW ANALYZER TESTS PASSED!');
