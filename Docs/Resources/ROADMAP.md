@@ -47,10 +47,22 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc 4 tầ
   - Loại bỏ `SUPABASE_SERVICE_ROLE_KEY` khỏi đường đọc/ghi Web public (`extension/ingest` gọi RPC `rate.enqueue_crowd_verify_signal`), cưỡng chế `import 'server-only'` trên toàn bộ 6 module `src/server/rate/*`, tách `@/lib/rate-domain` cho 100% Client Components, chuẩn hóa `escapeCsvCell` / `buildSafeCsvContent` trên toàn bộ **16/16** thành phần xuất CSV, tách riêng `apps/importer/src/shopee/jobs/backfill-specs.ts` (mặc định `dry-run`, yêu cầu `--apply` để ghi DB), và xử lý triệt để toàn bộ cảnh báo Dependabot (`0` open alerts).
 - [x] **6.3. Chuẩn Hóa Thủ Tục SQL, Chỉ Mục BRIN/GIN & Đẩy Lọc Xuống PostgreSQL (`DOS/Rate#176`, `#177`, `#178`, `#188`):**
   - Cố định `SET search_path = ''`, `SECURITY INVOKER` cho các hàm/view đọc công khai, chỉ mục BRIN trên `price_history(recorded_at)`, `ON DELETE RESTRICT` bảo vệ lịch sử khi lưu trữ gian hàng, hàm chuẩn `refresh_master_market_stats`, chống flood cả `INSERT` lẫn `UPDATE` trên `review_votes`, và đẩy lọc/phân trang danh mục xuống `get_category_directory_facets_v1` + `search_catalog_products_v1`.
-- [ ] **6.4. Đồng Bộ Migration Ledger Sang `DOS-Me` & Kiểm Thử Replay Tự Động (Audit C9 / K1):**
-  - Tạo PR đồng bộ các migration tham chiếu (`20261017235900`, `20261018003000`, `20261018010000`, `20261018013000`) sang sổ cái chính thức `DOS-Me/supabase/migrations/` và chạy kiểm thử trên môi trường `preview -> beta -> prod`.
-- [ ] **6.5. Bảo Vệ Nhánh & Quét Bí Mật Trên GitHub (`DOS/Rate` - Audit K3):**
-  - Bật GitHub Secret Scanning, Push Protection, CodeQL và Branch Rulesets cho `main` và `dev` sau khi hoàn tất làm sạch lịch sử git (`#153`).
+- [ ] **6.4. Đồng Bộ Migration Ledger Sang `DOS-Me` & Kiểm Thử Replay Tự Động (Audit C9 / K1 - `DOS/Rate#193`):**
+  - [x] Replay PostgreSQL 17 cho bản copy tham chiếu chạy trong CI (`pnpm test:migrations`, `DOS/Rate#226`). Replay đã bắt và sửa 4 lỗi: autocomplete mất quyền dùng `pg_trgm` trong schema `sign` khi chuyển sang `SECURITY INVOKER`; vote nâng review bị loại lên trọng số 1,31; `purge_completed_crawl_jobs` sai tên cột; payload crowd verify không giới hạn.
+  - [x] Script so sánh với ledger `pnpm check:migrations`.
+  - [ ] Đồng bộ 6 migration `20261017235900` → `20261018023000` (bản đã sửa) cùng migration khóa `upsert_price_alert` (`20261017130000`) sang `DOS-Me/supabase/migrations/`, sau khi `DOS/DOS.Me#1213` merge. Hiện các RPC này chưa tồn tại ở môi trường nào.
+- [ ] **6.5. Bảo Vệ Nhánh & Quét Bí Mật Trên GitHub (`DOS/Rate` - Audit K3 - `DOS/Rate#191`):**
+  - [x] Dependabot security updates và CodeQL default setup đã bật.
+  - [ ] Secret Scanning + Push Protection: bị chính sách enterprise của org chặn (`422`), cần chủ enterprise bật.
+  - [ ] Branch Rulesets cho `main` và `dev`: bật sau khi làm sạch lịch sử git (`#153`).
+- [x] **6.6. Khóa Đường Ghi Công Khai Theo Người Dùng & Phiên Cookie (`DOS/Rate#155`, `#194` - Audit K1, K2, C4, T13):**
+  - `POST /api/v1/rate/reviews` và `/watchlist` bắt buộc đăng nhập, gọi RPC dưới quyền người dùng (không còn service role), không báo thành công giả, mã lỗi RPC → 403/409/422/429. Client service role tách sang `@repo/shared-data/server` (ESLint cấm trong `apps/web`).
+  - Phiên đăng nhập lưu trong cookie qua `@supabase/ssr`; `middleware.ts` → `proxy.ts` (Next.js 16) refresh phiên; request dùng cookie phải cùng origin.
+- [x] **6.7. Nền Tảng Tooling 2026 (`DOS/Rate#192`, `#195`, `#196`, `#234`, `#238`, `#239`, `#240`):**
+  - Pin GitHub Actions theo SHA, secret ra khỏi hash của Turbo; Zod 4 toàn monorepo; ESLint 9 flat config (sửa glob `[locale]` chưa từng được áp); Dependabot một mục npm ở gốc; extension bundle bằng esbuild; bật React Compiler; logger JSON có che secret/email cho code server.
+- [ ] **6.8. Đa Ngôn Ngữ Đầy Đủ (`DOS/Rate#241`, `#251`-`#255`):**
+  - [x] Một catalog next-intl (namespace `rate` có kiểm tra kiểu), client chỉ nhận namespace cần dùng (`DOS/Rate#250`).
+  - [ ] Đưa khoảng 1.469 dòng chuỗi tiếng Việt viết cứng trong khoảng 40 component vào catalog vi/en/cs, theo 5 nhóm.
 
 ### 🚀 Phase 7: Mở Rộng Độ Phủ Dữ Liệu Thật Đa Sàn & Kiểm Thử E2E (2027 Q1)
 
@@ -60,4 +72,3 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc 4 tầ
   - Kiểm thử trực tiếp `NextRequest -> NextResponse` trên toàn bộ 15 REST API v1 endpoints (`/api/v1/rate/products`, `/products/[slug]`, `/compare`, `/versus`, `/lookup`, `/inspect`, `/deals`, `/leaderboard`, `/merchants`, `/merchants/[id]`, `/stats`, `/openapi`, `/openapi.json`, `/revalidate`, `/extension/lookup`, `/extension/ingest`, `/api/reviews/[id]/vote`, `/api/health`) kiểm tra đầy đủ mã `200`, `204`, `400`, `401`, `404`, `429`, `500` (Suite `[56/61]` & `[60/61]`).
 - [x] **7.3. Tối Ưu Hóa Cache Đa Tầng Next.js 16 (`withRateDataCache` & `/api/v1/rate/revalidate` - `DOS/Rate#186` - Audit C3):**
   - Kết hợp `React.cache()` (chống trùng lặp trong cùng 1 SSR request) với `unstable_cache` (`withRateDataCache` trong `src/server/rate/cache-tags.ts`) gắn thẻ xác định (`rate:products`, `rate:product:<slug>`, `rate:category:<slug>`, `rate:merchant:<id>`, `rate:deals`, `rate:reviews`, `rate:price-history`) và endpoint `POST /api/v1/rate/revalidate` xác thực `timingSafeEqual`.
-
