@@ -194,7 +194,7 @@ h6 {
   text-decoration: none;
   transition: all ease 0.4s;
 }
-/* Keyboard focus ring (style.scss): 2px rate-focus-ring, offset 2px; 1px on form controls. */
+/* Keyboard focus ring (style.scss): 2px rate-focus-ring, offset 2px on links and buttons. */
 .btn:focus-visible,
 a:focus-visible {
   outline: 2px solid var(--rate-focus-ring);
