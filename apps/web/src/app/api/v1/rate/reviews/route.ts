@@ -1,159 +1,179 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
+import type { ReviewFlagCategory, ReviewItem } from '@/lib/rate-api';
 import {
-  getRateClient,
-  type ReviewFlagCategory,
-  type ReviewItem,
-} from '@/lib/rate-api';
+  authenticateRateRequest,
+  isMissingRpcError,
+  mapRpcRejection,
+  type RpcRejection,
+} from '@/server/rate/request-auth';
 
-const UUID_REGEX =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const CRITERIA_KEYS = [
+  'screen',
+  'performance',
+  'camera',
+  'battery',
+  'value',
+] as const;
 
-interface SubmitReviewPayload {
-  masterProductId?: string;
-  authorName?: string;
-  ratingStar?: number;
-  comment?: string;
-  variation?: string;
-  reviewerType?: 'user' | 'expert';
-  criteriaRatings?: Record<string, number>;
+// Unknown fields (including a client-sent `reviewerType`) are stripped: the reviewer
+// type is decided by the database, never by the request body.
+const SubmitReviewSchema = z.object({
+  masterProductId: z
+    .string()
+    .trim()
+    .uuid('Mã sản phẩm chuẩn hóa (masterProductId) không hợp lệ.'),
+  authorName: z.string().optional(),
+  ratingStar: z.coerce.number().optional(),
+  comment: z
+    .string()
+    .trim()
+    .min(15, 'Nội dung đánh giá phải có độ dài từ 15 đến 3.000 ký tự.')
+    .max(3000, 'Nội dung đánh giá phải có độ dài từ 15 đến 3.000 ký tự.'),
+  variation: z.string().optional(),
+  criteriaRatings: z.record(z.unknown()).optional(),
+});
+
+const FLAG_CATEGORIES = new Set<ReviewFlagCategory>([
+  'authentic',
+  'low_value_coin_spam',
+  'seeding_fake',
+  'competitor_sabotage',
+  'review_bombing',
+]);
+
+// SQLSTATEs raised deliberately by rate.submit_community_review
+// (DOS-Me 20261014234500 and the auth gate in 20261017120000).
+const RPC_REJECTIONS: Record<string, RpcRejection> = {
+  // invalid length / stars / product id
+  '22023': {
+    status: 400,
+    code: 'REJECTED',
+    error: 'Dữ liệu đánh giá không hợp lệ.',
+  },
+  // no listing for this master product
+  P0002: {
+    status: 400,
+    code: 'REJECTED',
+    error: 'Sản phẩm này chưa có nơi bán để gắn đánh giá.',
+  },
+  // not signed in, or a Supabase anonymous sign-in
+  '42501': {
+    status: 403,
+    code: 'FORBIDDEN',
+    error: 'Bạn cần đăng nhập bằng tài khoản thật để gửi đánh giá.',
+  },
+  // one review per user and product
+  '23505': {
+    status: 409,
+    code: 'DUPLICATE_REVIEW',
+    error: 'Bạn đã gửi đánh giá cho sản phẩm này.',
+  },
+  // more than 5 reviews in 24h
+  '54000': {
+    status: 429,
+    code: 'RATE_LIMITED',
+    error: 'Bạn đã gửi quá 5 đánh giá trong 24 giờ, vui lòng thử lại sau.',
+  },
+};
+
+function sanitizeCriteria(raw: Record<string, unknown> | undefined) {
+  const out: Record<string, number> = {};
+  for (const key of CRITERIA_KEYS) {
+    const val = Number(raw?.[key]);
+    if (Number.isFinite(val) && val >= 1 && val <= 5) {
+      out[key] = Math.round(val * 10) / 10;
+    }
+  }
+  return out;
 }
 
-function classifySubmittedReview(
-  comment: string,
-  ratingStar: number,
-  criteriaRatings: Record<string, number>
-): {
-  verdict: 'authentic' | 'suspicious' | 'fake';
-  flagCategory: ReviewFlagCategory;
-  fakeProbability: number;
-  includeInRating: boolean;
-  helpfulnessWeight: number;
-  reason: string;
-} {
-  const normalized = comment.trim();
-  const len = normalized.length;
-  const criteriaCount = Object.keys(criteriaRatings).length;
+function asNumber(value: unknown, fallback: number): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
 
-  if (
-    /(nhận xu|kiếm xu|lấy xu|comment lấy xu|hình ảnh chỉ mang tính chất|video chỉ mang tính chất)/i.test(
-      normalized
-    )
-  ) {
-    return {
-      verdict: 'suspicious',
-      flagCategory: 'low_value_coin_spam',
-      fakeProbability: 0.85,
-      includeInRating: false,
-      helpfulnessWeight: 0,
-      reason:
-        'Phát hiện cụm từ bình luận cày xu mẫu, tự động loại khỏi điểm trung bình JReviews.',
-    };
-  }
-
-  if (
-    /(inbox zalo|liên hệ zalo|nhắn zalo|https?:\/\/|shopee\.ee|s\.shopee)/i.test(
-      normalized
-    )
-  ) {
-    return {
-      verdict: 'fake',
-      flagCategory: 'seeding_fake',
-      fakeProbability: 0.92,
-      includeInRating: false,
-      helpfulnessWeight: 0,
-      reason:
-        'Phát hiện đường dẫn quảng cáo hoặc điều hướng ngoài luồng nghi vấn Seeding.',
-    };
-  }
-
-  if (
-    ratingStar <= 2 &&
-    /(shop lừa đảo sang shop|mua bên shop khác tốt hơn|đừng mua shop này qua shop)/i.test(
-      normalized
-    )
-  ) {
-    return {
-      verdict: 'suspicious',
-      flagCategory: 'competitor_sabotage',
-      fakeProbability: 0.78,
-      includeInRating: false,
-      helpfulnessWeight: 0,
-      reason:
-        'Nghi vấn bình luận điều hướng sang đối thủ cạnh tranh thiếu bằng chứng trải nghiệm sản phẩm.',
-    };
-  }
-
-  if (len < 30) {
-    return {
-      verdict: 'suspicious',
-      flagCategory: 'low_value_coin_spam',
-      fakeProbability: 0.65,
-      includeInRating: false,
-      helpfulnessWeight: 0,
-      reason:
-        'Nội dung đánh giá quá ngắn (< 30 ký tự), chưa đủ chi tiết kỹ thuật để tính vào điểm chuẩn JReviews.',
-    };
-  }
-
-  const bonusWeight = criteriaCount >= 4 && len >= 80 ? 1.25 : 1.1;
+/**
+ * Builds the response item from what rate.submit_community_review stored, so the
+ * verdict and weight shown to the user are the ones the database applied.
+ */
+function toReviewItem(
+  record: Record<string, unknown>,
+  criteria: Record<string, number>
+): ReviewItem {
+  const verdict = record.verdict;
+  const flag = record.flag_category as ReviewFlagCategory;
   return {
-    verdict: 'authentic',
-    flagCategory: 'authentic',
-    fakeProbability: criteriaCount >= 4 ? 0.04 : 0.08,
-    includeInRating: true,
-    helpfulnessWeight: bonusWeight,
-    reason: `Đánh giá thực chất từ cộng đồng Rate.vn (${criteriaCount}/5 tiêu chí kỹ thuật, ${len} ký tự).`,
+    id: String(record.id),
+    author_name: String(record.author_name ?? ''),
+    rating_star: asNumber(record.rating_star, 0),
+    comment: String(record.comment ?? ''),
+    variation: typeof record.variation === 'string' ? record.variation : null,
+    created_at:
+      typeof record.created_at === 'string'
+        ? record.created_at
+        : new Date().toISOString(),
+    reviewer_type: record.reviewer_type === 'expert' ? 'expert' : 'user',
+    upvotes: 0,
+    downvotes: 0,
+    report_count: 0,
+    helpfulness_weight: asNumber(record.helpfulness_weight, 0),
+    include_in_rating: record.include_in_rating === true,
+    criteria_ratings:
+      record.criteria_ratings && typeof record.criteria_ratings === 'object'
+        ? (record.criteria_ratings as Record<string, number>)
+        : criteria,
+    verdict:
+      verdict === 'authentic' ||
+      verdict === 'suspicious' ||
+      verdict === 'fake' ||
+      verdict === 'unanalyzed'
+        ? verdict
+        : null,
+    fake_probability:
+      record.fake_probability == null
+        ? null
+        : asNumber(record.fake_probability, 0),
+    flag_category: FLAG_CATEGORIES.has(flag) ? flag : 'authentic',
+    reason: typeof record.reason === 'string' ? record.reason : null,
+    signals: {
+      source: 'rate_community_jreviews',
+      criteria_count: Object.keys(criteria).length,
+      comment_length: String(record.comment ?? '').length,
+    },
   };
 }
 
+/**
+ * POST /api/v1/rate/reviews
+ * Submits a 5-criteria JReviews evaluation for the signed-in user
+ * (Authorization: Bearer <Supabase access token>). The RPC runs as that user;
+ * anti-spam classification and the rating weight are applied in the database.
+ * Returns an error whenever the review was not stored.
+ */
 export async function POST(request: NextRequest) {
   try {
-    const body = (await request
-      .json()
-      .catch(() => ({}))) as SubmitReviewPayload;
+    const rawBody: unknown = await request.json().catch(() => null);
 
-    const masterProductId = (body.masterProductId || '').trim();
-    if (!masterProductId || !UUID_REGEX.test(masterProductId)) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: 'Mã sản phẩm chuẩn hóa (masterProductId) không hợp lệ.',
-        },
-        { status: 400 }
-      );
-    }
+    const auth = await authenticateRateRequest(request, 'submit a review');
+    if (!auth.ok) return auth.response;
 
-    const authorName =
-      (body.authorName || '').trim().slice(0, 80) || 'Người dùng Rate.vn';
-    const comment = (body.comment || '').trim();
-    if (comment.length < 15 || comment.length > 3000) {
+    const parsed = SubmitReviewSchema.safeParse(rawBody ?? {});
+    if (!parsed.success) {
       return NextResponse.json(
         {
           ok: false,
           error:
-            'Nội dung đánh giá phải có độ dài từ 15 đến 3.000 ký tự để đảm bảo tính khách quan.',
+            parsed.error.issues[0]?.message || 'Dữ liệu đánh giá không hợp lệ.',
+          code: 'INVALID_BODY',
         },
         { status: 400 }
       );
     }
+    const body = parsed.data;
 
-    const rawCriteria = body.criteriaRatings || {};
-    const allowedKeys = [
-      'screen',
-      'performance',
-      'camera',
-      'battery',
-      'value',
-    ] as const;
-    const sanitizedCriteria: Record<string, number> = {};
-    for (const k of allowedKeys) {
-      const val = Number(rawCriteria[k]);
-      if (Number.isFinite(val) && val >= 1 && val <= 5) {
-        sanitizedCriteria[k] = Math.round(val * 10) / 10;
-      }
-    }
-
-    const criteriaValues = Object.values(sanitizedCriteria);
+    const criteria = sanitizeCriteria(body.criteriaRatings);
+    const criteriaValues = Object.values(criteria);
     const computedAvgStar =
       criteriaValues.length > 0
         ? Math.round(
@@ -161,87 +181,83 @@ export async function POST(request: NextRequest) {
               criteriaValues.length
           )
         : 5;
-
     const ratingStar = Math.max(
       1,
-      Math.min(5, Math.round(Number(body.ratingStar || computedAvgStar)))
+      Math.min(5, Math.round(asNumber(body.ratingStar, computedAvgStar)))
     );
+    const authorName =
+      (body.authorName || '').trim().slice(0, 80) || 'Người dùng Rate.vn';
     const variation = (body.variation || '').trim().slice(0, 120) || null;
-    const reviewerType: 'user' | 'expert' =
-      body.reviewerType === 'expert' ? 'expert' : 'user';
 
-    const classification = classifySubmittedReview(
-      comment,
-      ratingStar,
-      sanitizedCriteria
+    const { data: rpcData, error: rpcError } = await auth.rateClient.rpc(
+      'submit_community_review',
+      {
+        p_master_product_id: body.masterProductId,
+        p_author_name: authorName,
+        p_rating_star: ratingStar,
+        p_comment: body.comment,
+        p_variation: variation,
+        p_reviewer_type: 'user',
+        p_criteria_ratings: criteria,
+      }
     );
 
-    let persistedMode: 'supabase_rpc' | 'verified_preview' = 'verified_preview';
-    let reviewId = crypto.randomUUID();
-    let createdAt = new Date().toISOString();
-
-    try {
-      const supabase = getRateClient();
-      const { data: rpcData, error: rpcErr } = await supabase.rpc(
-        'submit_community_review',
-        {
-          p_master_product_id: masterProductId,
-          p_author_name: authorName,
-          p_rating_star: ratingStar,
-          p_comment: comment,
-          p_variation: variation,
-          p_reviewer_type: reviewerType,
-          p_criteria_ratings: sanitizedCriteria,
-        }
-      );
-
-      if (!rpcErr && rpcData && typeof rpcData === 'object') {
-        const record = rpcData as Record<string, unknown>;
-        if (typeof record.id === 'string') {
-          reviewId = record.id;
-          persistedMode = 'supabase_rpc';
-        }
-        if (typeof record.created_at === 'string') {
-          createdAt = record.created_at;
-        }
+    if (rpcError) {
+      if (isMissingRpcError(rpcError)) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: 'Chức năng gửi đánh giá chưa sẵn sàng trên môi trường này.',
+            code: 'REVIEWS_UNAVAILABLE',
+          },
+          { status: 503 }
+        );
       }
-    } catch {
-      // Fallback to verified_preview when RPC migration is pending deployment on DOS-Me
+      // Errors the RPC raises on purpose carry a user-facing Vietnamese message.
+      const rejection = mapRpcRejection(rpcError, RPC_REJECTIONS);
+      if (rejection) {
+        return NextResponse.json(
+          { ok: false, error: rejection.error, code: rejection.code },
+          { status: rejection.status }
+        );
+      }
+      console.error(
+        '[reviews] submit_community_review failed',
+        rpcError.code,
+        rpcError.message
+      );
+      return NextResponse.json(
+        {
+          ok: false,
+          error: 'Không thể lưu đánh giá lúc này.',
+          code: 'PERSIST_FAILED',
+        },
+        { status: 502 }
+      );
     }
 
-    const reviewItem: ReviewItem = {
-      id: reviewId,
-      author_name: authorName,
-      rating_star: ratingStar,
-      comment,
-      variation,
-      created_at: createdAt,
-      reviewer_type: reviewerType,
-      upvotes: 0,
-      downvotes: 0,
-      report_count: 0,
-      helpfulness_weight: classification.helpfulnessWeight,
-      include_in_rating: classification.includeInRating,
-      criteria_ratings: sanitizedCriteria,
-      verdict: classification.verdict,
-      fake_probability: classification.fakeProbability,
-      flag_category: classification.flagCategory,
-      reason: classification.reason,
-      signals: {
-        source: 'rate_community_jreviews',
-        criteria_count: criteriaValues.length,
-        comment_length: comment.length,
-      },
-    };
+    if (!rpcData || typeof rpcData !== 'object' || !('id' in rpcData)) {
+      console.error('[reviews] submit_community_review returned no review id');
+      return NextResponse.json(
+        {
+          ok: false,
+          error: 'Không thể lưu đánh giá lúc này.',
+          code: 'PERSIST_FAILED',
+        },
+        { status: 502 }
+      );
+    }
 
     return NextResponse.json({
       ok: true,
-      mode: persistedMode,
-      review: reviewItem,
+      mode: 'supabase_rpc',
+      review: toReviewItem(rpcData as Record<string, unknown>, criteria),
     });
   } catch (err) {
-    const message =
-      err instanceof Error ? err.message : 'Failed to submit review';
-    return NextResponse.json({ ok: false, error: message }, { status: 500 });
+    console.error('[reviews] POST failed', err);
+    return NextResponse.json(
+      { ok: false, error: 'Failed to submit review' },
+      { status: 500 }
+    );
   }
 }

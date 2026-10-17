@@ -14,6 +14,7 @@ import {
   radarMarkdownCell,
   type RadarSignal,
 } from '@/lib/deal-radar';
+import { getBrowserAccessToken } from '@/lib/auth/access-token';
 
 type VoteChoice = 'up' | 'down' | 'report';
 type FilterTab = 'all' | 'authentic' | 'expert' | 'ignored';
@@ -115,7 +116,6 @@ export default function JReviewsSection({
   const fieldId = useId();
   const [authorName, setAuthorName] = useState('');
   const [variation, setVariation] = useState('');
-  const [reviewerType, setReviewerType] = useState<'user' | 'expert'>('user');
   const [comment, setComment] = useState('');
   const [criteriaScores, setCriteriaScores] = useState<Record<string, number>>({
     screen: 5,
@@ -403,24 +403,7 @@ export default function JReviewsSection({
     }
 
     try {
-      let bearerToken = '';
-      try {
-        for (let i = 0; i < window.localStorage.length; i++) {
-          const k = window.localStorage.key(i);
-          if (k && k.startsWith('sb-') && k.endsWith('-auth-token')) {
-            const rawSession = window.localStorage.getItem(k);
-            if (rawSession) {
-              const parsedSession = JSON.parse(rawSession);
-              if (typeof parsedSession?.access_token === 'string') {
-                bearerToken = parsedSession.access_token;
-                break;
-              }
-            }
-          }
-        }
-      } catch {
-        // Ignore storage errors
-      }
+      const bearerToken = await getBrowserAccessToken();
 
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
@@ -487,6 +470,14 @@ export default function JReviewsSection({
       return;
     }
 
+    const accessToken = await getBrowserAccessToken();
+    if (!accessToken) {
+      setSubmitError(
+        'Bạn cần đăng nhập tài khoản DOS ID để gửi đánh giá. Mỗi tài khoản chỉ gửi một đánh giá cho mỗi sản phẩm.'
+      );
+      return;
+    }
+
     setSubmittingReview(true);
     try {
       const avgStar = Math.round(
@@ -495,12 +486,14 @@ export default function JReviewsSection({
       );
       const res = await fetch('/api/v1/rate/reviews', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
         body: JSON.stringify({
           masterProductId,
           authorName: authorName.trim() || 'Người dùng Rate.vn',
           variation: variation.trim() || undefined,
-          reviewerType,
           ratingStar: avgStar,
           comment: cleanComment,
           criteriaRatings: criteriaScores,
@@ -533,9 +526,11 @@ export default function JReviewsSection({
       setComment('');
       setShowWriteForm(false);
       setSubmitSuccess(
-        newRev.include_in_rating
-          ? `Đã đăng đánh giá thực chất thành công! Hệ thống AI chấm trọng số khởi tạo ${newRev.helpfulness_weight.toFixed(2)}x.`
-          : `Đánh giá của bạn đã được ghi nhận nhưng bị bộ lọc AI gắn cờ (${newRev.flag_category}) nên không tính vào điểm trung bình.`
+        newRev.verdict === 'unanalyzed'
+          ? 'Đã lưu đánh giá của bạn. Đánh giá chỉ được tính vào điểm trung bình sau khi hệ thống kiểm duyệt xong.'
+          : newRev.include_in_rating
+            ? `Đã đăng đánh giá thực chất thành công! Hệ thống AI chấm trọng số khởi tạo ${newRev.helpfulness_weight.toFixed(2)}x.`
+            : `Đánh giá của bạn đã được ghi nhận nhưng bị bộ lọc AI gắn cờ (${newRev.flag_category}) nên không tính vào điểm trung bình.`
       );
     } catch {
       setSubmitError('Lỗi kết nối khi gửi đánh giá. Vui lòng thử lại.');
@@ -769,7 +764,7 @@ export default function JReviewsSection({
           )}
 
           <div className="row g-3 mb-3">
-            <div className="col-md-4 col-12">
+            <div className="col-md-6 col-12">
               <label
                 className="form-label small fw-semibold mb-1"
                 htmlFor={`${fieldId}-author`}
@@ -786,7 +781,7 @@ export default function JReviewsSection({
                 maxLength={80}
               />
             </div>
-            <div className="col-md-4 col-12">
+            <div className="col-md-6 col-12">
               <label
                 className="form-label small fw-semibold mb-1"
                 htmlFor={`${fieldId}-variation`}
@@ -802,29 +797,6 @@ export default function JReviewsSection({
                 className="form-control form-control-sm rounded-3"
                 maxLength={100}
               />
-            </div>
-            <div className="col-md-4 col-12">
-              <label
-                className="form-label small fw-semibold mb-1"
-                htmlFor={`${fieldId}-reviewer-type`}
-              >
-                Phân loại người đánh giá
-              </label>
-              <select
-                id={`${fieldId}-reviewer-type`}
-                value={reviewerType}
-                onChange={(e) =>
-                  setReviewerType(
-                    e.target.value === 'expert' ? 'expert' : 'user'
-                  )
-                }
-                className="form-select form-select-sm rounded-3"
-              >
-                <option value="user">
-                  Người mua &amp; trải nghiệm thực tế
-                </option>
-                <option value="expert">Reviewer / Chuyên gia kỹ thuật</option>
-              </select>
             </div>
           </div>
 
