@@ -2,7 +2,7 @@
   "seo": {
     "metaTitle": "Rate.vn - Srovnání 10 skupin parametrů, historie skutečných cen a AI audit recenzí",
     "metaDescription": "Ověřte si technické specifikace podle standardu GSMArena a PhoneArena, odhalte falešné slevy a filtrujte AI seeding recenze na Rate.vn.",
-    "metaImageUrl": "https://rate.vn/img/logo.svg",
+    "metaImageUrl": "https://rate.vn/img/rate-mark-512.png",
     "keywords": "rate.vn, srovnání parametrů, historie cen, falešné slevy, AI audit recenzí, důvěryhodnost obchodů, DOSafe",
     "metaRobots": "index, follow",
     "applicationName": "Rate.vn",
@@ -15,7 +15,7 @@
       "siteId": "@rate_vn",
       "creator": "@dos_ecosystem",
       "creatorId": "@dos_ecosystem",
-      "imageUrl": "https://rate.vn/img/logo.svg"
+      "imageUrl": "https://rate.vn/img/rate-mark-512.png"
     }
   },
 

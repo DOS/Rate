@@ -12,6 +12,7 @@ import {
 } from 'react-icons/fa6';
 import { BsShieldCheck, BsCodeSlash } from 'react-icons/bs';
 import { getRateCopy } from '@/lib/rate-i18n';
+import RateWordmark from '@/components/brand/RateWordmark';
 
 export interface FooterSectionLink {
   id?: string | number;
@@ -124,15 +125,19 @@ export default function FooterDynamic({
           <div className="col-md-5 col-lg-12 col-xl-4 col-12">
             <div className="footer-widget pe-xl-4 mb-5">
               <div className="footerLogo">
-                <Image
-                  src={logoUrl || '/img/logo-light.svg'}
-                  width={0}
-                  height={0}
-                  sizes="100vw"
-                  style={{ width: '160px', height: 'auto' }}
-                  className="img-fluid"
-                  alt="Rate.vn Logo"
-                />
+                {logoUrl ? (
+                  <Image
+                    src={logoUrl}
+                    width={0}
+                    height={0}
+                    sizes="100vw"
+                    style={{ width: '160px', height: 'auto' }}
+                    className="img-fluid"
+                    alt="Rate.vn Logo"
+                  />
+                ) : (
+                  <RateWordmark tone="light" size={30} />
+                )}
               </div>
               <div className="footerText">
                 <p>{copy}</p>

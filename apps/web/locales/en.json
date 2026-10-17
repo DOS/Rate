@@ -2,7 +2,7 @@
   "seo": {
     "metaTitle": "Rate.vn - 10-Group Spec Intelligence, True Price History & AI Review Auditing",
     "metaDescription": "Compare standardized 10-group technical specifications, detect inflated fake discounts, and filter AI seeding reviews across Shopee, Lazada, and Tiki on Rate.vn.",
-    "metaImageUrl": "https://rate.vn/img/logo.svg",
+    "metaImageUrl": "https://rate.vn/img/rate-mark-512.png",
     "keywords": "rate.vn, spec comparison, true price history, fake discount detector, ai review auditing, merchant trust score, DOSafe",
     "metaRobots": "index, follow",
     "applicationName": "Rate.vn",
@@ -15,7 +15,7 @@
       "siteId": "@rate_vn",
       "creator": "@dos_ecosystem",
       "creatorId": "@dos_ecosystem",
-      "imageUrl": "https://rate.vn/img/logo.svg"
+      "imageUrl": "https://rate.vn/img/rate-mark-512.png"
     }
   },
 
