@@ -2,7 +2,11 @@
 
 import React, { useEffect, useId, useMemo, useState } from 'react';
 import {
+  computeCombinedDualScore,
   computeJReviewsWeight,
+  computeWilsonLowerBound,
+  detectStarDistributionAnomaly,
+  evaluateReviewTrustAssessment,
   type ReviewAnalysisSummary,
   type ReviewFlagCategory,
   type ReviewItem,
@@ -250,14 +254,13 @@ export default function JReviewsSection({
       }
     }
 
-    let overall = Number(averageRating || 0);
-    if (computedUser != null && computedExpert != null) {
-      overall = Number((computedUser * 0.6 + computedExpert * 0.4).toFixed(2));
-    } else if (computedUser != null) {
-      overall = computedUser;
-    } else if (computedExpert != null) {
-      overall = computedExpert;
-    }
+    const dualScore = computeCombinedDualScore({
+      userScore: computedUser,
+      expertScore: computedExpert,
+      userConfidence: bayesianConfidence,
+      fallbackAverage: averageRating,
+    });
+    const starAnomaly = detectStarDistributionAnomaly(reviews);
 
     const criteriaAverages = CRITERIA_META.map((crit) => {
       let wSum = 0;
@@ -282,7 +285,10 @@ export default function JReviewsSection({
     });
 
     return {
-      overall,
+      overall: dualScore.overall,
+      isBlended: dualScore.isBlended,
+      blendFormulaNoteVi: dualScore.blendFormulaNoteVi,
+      starAnomaly,
       user: computedUser,
       bayesianUser: bayesianUserScore,
       bayesianConfidence,
@@ -326,6 +332,15 @@ export default function JReviewsSection({
 
     return [...filtered].sort((a, b) => {
       if (sortMode === 'weight_desc') {
+        const wilsonA = computeWilsonLowerBound(a.upvotes, a.downvotes);
+        const wilsonB = computeWilsonLowerBound(b.upvotes, b.downvotes);
+        if (
+          a.include_in_rating &&
+          b.include_in_rating &&
+          Math.abs(wilsonB - wilsonA) >= 0.005
+        ) {
+          return wilsonB - wilsonA;
+        }
         if (b.helpfulness_weight !== a.helpfulness_weight) {
           return b.helpfulness_weight - a.helpfulness_weight;
         }
@@ -928,9 +943,7 @@ export default function JReviewsSection({
               </div>
             </div>
             <div className="small text-white-50 border-top border-secondary border-opacity-25 mt-2 pt-2">
-              {liveScores.expert != null
-                ? 'Tỷ trọng: 60% Người mua thực chất + 40% Chuyên gia Rate Lab'
-                : 'Tỷ trọng: 100% Người mua thực chất (đã lọc Seeding & Spam xu)'}
+              {liveScores.blendFormulaNoteVi}
             </div>
           </div>
         </div>
@@ -1096,6 +1109,17 @@ export default function JReviewsSection({
         </div>
       </div>
 
+      {liveScores.starAnomaly.isAnomalous &&
+        liveScores.starAnomaly.warningLabelVi && (
+          <div
+            className="alert alert-warning rounded-4 small d-flex align-items-center mb-4 gap-2 px-3 py-2"
+            data-testid="star-distribution-anomaly-alert"
+          >
+            <span>⚠️</span>
+            <span>{liveScores.starAnomaly.warningLabelVi}</span>
+          </div>
+        )}
+
       {/* 2. AI Review Synthesis (Pros / Cons / Authenticity Bar) */}
       <div className="rounded-4 bg-light mb-4 border p-4">
         <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-3 gap-2">
@@ -1255,7 +1279,7 @@ export default function JReviewsSection({
               style={{ minWidth: '240px' }}
             >
               <option value="weight_desc">
-                Hữu ích nhất (Trọng số JReviews cao nhất)
+                Hữu ích nhất (Wilson Bound &amp; Trọng số 6 trục)
               </option>
               <option value="newest">Mới nhất</option>
               <option value="rating_desc">Số sao: Cao đến Thấp</option>
@@ -1327,6 +1351,8 @@ export default function JReviewsSection({
           {filteredAndSortedReviews.map((rev) => {
             const flagMeta =
               FLAG_META[rev.flag_category] || FLAG_META.authentic;
+            const assessment =
+              rev.trust_assessment ?? evaluateReviewTrustAssessment(rev);
             const myVote = userVotes[rev.id] || null;
             const isPending = Boolean(pendingIds[rev.id]);
             const isZeroWeight =
@@ -1357,6 +1383,16 @@ export default function JReviewsSection({
                             Người mua
                           </span>
                         )}
+                        {assessment.sponsorshipBadgeVi && (
+                          <span className="badge bg-warning-subtle text-warning-emphasis border-warning-subtle rounded-pill small border">
+                            📢 {assessment.sponsorshipBadgeVi}
+                          </span>
+                        )}
+                        {assessment.routesTo === 'merchant' && (
+                          <span className="badge bg-info-subtle text-info-emphasis border-info-subtle rounded-pill small border">
+                            🚚 Chuyển sang điểm người bán
+                          </span>
+                        )}
                       </div>
                       <span className="badge bg-warning text-dark small font-monospace">
                         {'★'.repeat(Math.max(1, Math.min(5, rev.rating_star)))}
@@ -1379,9 +1415,11 @@ export default function JReviewsSection({
                               ? 'bg-primary-subtle text-primary'
                               : 'bg-light text-muted border'
                         }`}
-                        title="Trọng số đóng góp của đánh giá này vào điểm sản phẩm cuối cùng"
+                        title={assessment.breakdown.explanationVi}
+                        data-testid="review-6axis-breakdown"
                       >
-                        Trọng số: {rev.helpfulness_weight.toFixed(2)}x
+                        Trọng số: {rev.helpfulness_weight.toFixed(2)}x ·{' '}
+                        {assessment.breakdown.explanationVi}
                       </span>
                     </div>
 
