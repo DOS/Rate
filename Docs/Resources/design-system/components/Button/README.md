@@ -7,7 +7,7 @@ Bootstrap 5.3 `.btn` with the Rate theme overrides; review-centric actions, most
 - Primary (`.btn-primary`): the one review action per view ("Đọc & Chấm điểm Review", "Viết đánh giá 5 tiêu chí"). Never "Mua ngay".
 - Outline primary / light primary: secondary analytical actions ("So sánh đối đầu", "Kiểm định Link").
 - Outline dark on light grounds, outline light and outline warning on `rate-bg-dark` (scoreboard links).
-- Add `.rounded-pill` and `.btn-sm` for in-card actions; the default 56px height is for hero search and forms.
+- Buttons always use `radius-btn` (8px), never a pill; `.rounded-pill` on a `.btn` is overridden to 8px. Use `.btn-sm` for in-card actions; the default 56px height is for hero search and forms.
 
 ## Consumer provides
 

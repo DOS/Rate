@@ -9,7 +9,7 @@ body {
   background-color: var(--rate-bg-canvas);
   color: var(--rate-fg-primary);
   font-family: var(--font-sans);
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -67,7 +67,7 @@ h6 {
   align-items: center;
   gap: 0.375rem;
   padding: 0.25rem 0.65rem;
-  font-size: 0.72rem;
+  font-size: 0.8125rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -83,7 +83,7 @@ h6 {
   align-items: center;
   gap: 0.25rem;
   padding: 0.2rem 0.55rem;
-  font-size: 0.74rem;
+  font-size: 0.8125rem;
   font-weight: 600;
   color: var(--rate-fg-paragraph);
   background-color: var(--rate-bg-canvas);
@@ -99,7 +99,7 @@ h6 {
   align-items: center;
   gap: 0.3rem;
   padding: 0.25rem 0.6rem;
-  font-size: 0.78rem;
+  font-size: 0.875rem;
   font-weight: 700;
   border-radius: var(--radius-badge);
   border: 1px solid transparent;
@@ -156,7 +156,7 @@ h6 {
 .rate-spec-table td {
   padding: var(--space-spec-cell-y) 1rem;
   border-bottom: 1px solid var(--rate-bg-elevated);
-  font-size: 0.86rem;
+  font-size: 0.9375rem;
   vertical-align: top;
 }
 .rate-spec-table tr:last-child td {
@@ -187,7 +187,7 @@ h6 {
   font-weight: 400;
   line-height: 1.5;
   border: 1px solid transparent;
-  border-radius: var(--radius-control);
+  border-radius: var(--radius-btn);
   background: transparent;
   color: var(--rate-fg-primary);
   cursor: pointer;
@@ -208,15 +208,18 @@ a:focus-visible {
 .btn-sm {
   height: var(--control-height-sm);
   padding: 0.25rem 1rem;
-  font-size: 12px;
+  font-size: 14px;
 }
 .btn-xs {
   height: var(--control-height-xs);
   padding: 0.2rem 0.5rem;
-  font-size: 10px;
+  font-size: 13px;
 }
 .rounded-pill {
   border-radius: var(--radius-pill) !important;
+}
+.btn.rounded-pill {
+  border-radius: var(--radius-btn) !important;
 }
 .btn-primary {
   background: var(--bs-primary);
@@ -321,8 +324,4 @@ a:focus-visible {
 }
 .rate-wordmark-light {
   color: var(--rate-fg-on-dark);
-}
-.rate-wordmark-light .rate-mark circle:first-child {
-  stroke: rgba(255, 255, 255, 0.16);
-  stroke-width: 3;
 }

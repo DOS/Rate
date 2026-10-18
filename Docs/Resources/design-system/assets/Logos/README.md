@@ -1,9 +1,8 @@
 # Logos
 
-The Rate.vn mark: a `rate-brand` (#ff2e29) dot (radius 0.24 of the size) centered on a #12151a disc (radius 0.46), transparent corners. The same geometry is used by the extension icon build (`apps/extension/scripts/build.mjs`), the web favicon and `src/app/icon.svg`.
+The official Rate star (`apps/web/public/img/rate-logo-512.png`, 512x512, transparent): red #d83030 and green #2dba69 split by a white cut. Masters live in Drive `Biz/Rate/Marketing/Logo/Final` (PNG; the PDF wraps a raster).
 
-- `rate-mark.svg`: the vector mark (`apps/web/public/img/rate-mark.svg`); use it for any new surface.
-- `rate-dot-icon-128.png`, `rate-dot-icon-48.png`: the extension's raster icons.
-- Pair the mark with the name "Rate.vn" in `sans` 800 as the wordmark (see the Wordmark component); there is no separate wordmark file.
-- On `rate-bg-dark` the dark disc nearly merges: add a 16% white hairline around it, as the footer does.
-- Never use the ListingHub template logos.
+- Use the PNG as-is; never redraw or recolor the star.
+- Pair it with "Rate.vn" in `sans` 800 for the wordmark (see the Wordmark component).
+- It reads on `rate-bg-canvas`, `rate-bg-surface` and `rate-bg-dark` without a border.
+- The "AhReview" options and the ListingHub template logos are retired.
