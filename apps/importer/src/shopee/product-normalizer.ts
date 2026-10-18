@@ -1062,7 +1062,9 @@ export class ProductNormalizer {
         /(?:apple\s*)?watch\s*(ultra\s*\d+|series\s*\d+|se(?:\s*\d+)?)/i
       );
       const airpodsMatch = title.match(
-        /airpods\s*(?:(pro)(?:\s*(?:gen|thế\s*hệ)?\s*(\d+))?|(max)|(?:gen|thế\s*hệ)?\s*(\d+))/i
+        // Each run of spaces has exactly one `\s*` that can match it, so long
+        // whitespace cannot backtrack polynomially (CodeQL js/polynomial-redos).
+        /airpods\s*(?:(pro)(?:\s*(?:(?:gen|thế\s*hệ)\s*)?(\d+))?|(max)|(?:(?:gen|thế\s*hệ)\s*)?(\d+))/i
       );
 
       // Retail titles often put the chip after the screen size ("iPad Pro 11 inch M4",
