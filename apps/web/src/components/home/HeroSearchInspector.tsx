@@ -7,9 +7,9 @@ import { startNavigationProgress } from '@/components/elementary/NavigationProgr
 import type { KeySpecs, MasterProduct } from '@repo/shared-data';
 import {
   getMasterProductHref,
-  type MerchantSummary,
   type UrlInspectionResult,
 } from '@/lib/rate-domain';
+import type { HeroMerchantSuggestion } from '@/lib/hero-merchants';
 import CompareQuickToggle from '@/components/compare/CompareQuickToggle';
 import RadarBadge from '@/components/radar/RadarBadge';
 import { useDealRadarIndex } from '@/components/radar/use-deal-radar';
@@ -28,7 +28,7 @@ import {
 
 interface HeroSearchInspectorProps {
   initialProducts: MasterProduct[];
-  initialMerchants: MerchantSummary[];
+  initialMerchants: HeroMerchantSuggestion[];
 }
 
 const SAMPLE_INSPECT_LINKS = [
