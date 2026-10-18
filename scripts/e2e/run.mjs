@@ -14,8 +14,8 @@
 // Needs Docker and a Playwright Chromium (`pnpm exec playwright install chromium`).
 
 import { spawn, spawnSync } from 'node:child_process';
-import { createHmac } from 'node:crypto';
-import { readFileSync, rmSync } from 'node:fs';
+import { createHash, createHmac } from 'node:crypto';
+import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import http from 'node:http';
 import net from 'node:net';
 import path from 'node:path';
@@ -29,7 +29,6 @@ const playwrightArgs = args.includes('--')
   ? args.slice(args.indexOf('--') + 1)
   : [];
 
-const SUPABASE_PORT = Number(process.env.E2E_SUPABASE_PORT || 54399);
 const POSTGREST_IMAGE =
   'postgrest/postgrest:v16.4@sha256:d155c6718ed9a9f990d159a2ab7c0a3f16944dbb6d0a0344557421042acfe0df';
 // Not a secret: it only signs tokens for the throwaway PostgREST below. Fixed so
@@ -97,6 +96,44 @@ function freePort() {
       server.close(() => resolve(port));
     });
   });
+}
+
+/** Whether 127.0.0.1:port can be bound right now. */
+function isPortFree(port) {
+  return new Promise((resolve) => {
+    const server = net.createServer();
+    server.once('error', () => resolve(false));
+    server.listen(port, '127.0.0.1', () => server.close(() => resolve(true)));
+  });
+}
+
+// The proxy URL is inlined into the build, so its port must be known before
+// building and reused by --skip-build. Each checkout prefers its own port
+// (stable, so turbo can reuse the build), and falls back to any free port
+// when another run, e.g. another agent's worktree, holds it.
+const SUPABASE_PORT_FILE = path.join(
+  repoRoot,
+  'apps',
+  'web',
+  '.next',
+  'e2e-supabase-port'
+);
+async function resolveSupabasePort() {
+  if (process.env.E2E_SUPABASE_PORT)
+    return Number(process.env.E2E_SUPABASE_PORT);
+  if (skipBuild) {
+    try {
+      return Number(readFileSync(SUPABASE_PORT_FILE, 'utf8'));
+    } catch {
+      throw new Error(
+        '--skip-build needs a previous full run in this checkout (no recorded proxy port); or set E2E_SUPABASE_PORT'
+      );
+    }
+  }
+  const preferred =
+    54000 +
+    (createHash('sha256').update(repoRoot).digest().readUInt16BE(0) % 1000);
+  return (await isPortFree(preferred)) ? preferred : freePort();
 }
 
 async function waitForHttp(url, label, timeoutMs, child) {
@@ -213,7 +250,7 @@ const FAULT_RULES = [
     url.startsWith('/rest/v1/price_history?') &&
     url.includes('product_id=in.(cccccccc-cccc-4ccc-8ccc-ccccccccfa17)'),
 ];
-function startProxy(upstreamPort) {
+function startProxy(upstreamPort, SUPABASE_PORT) {
   proxyServer = http.createServer((req, res) => {
     if (!req.url?.startsWith('/rest/v1/')) {
       res.writeHead(404, { 'content-type': 'application/json' });
@@ -312,12 +349,13 @@ try {
     ],
     { timeout: 120_000 }
   );
-  const supabaseUrl = `http://127.0.0.1:${SUPABASE_PORT}`;
+  const supabasePort = await resolveSupabasePort();
+  const supabaseUrl = `http://127.0.0.1:${supabasePort}`;
   try {
     const restPort = Number(
       docker(['port', restName, '3000/tcp']).split('\n')[0].split(':').pop()
     );
-    await startProxy(restPort);
+    await startProxy(restPort, supabasePort);
     await waitForHttp(
       `${supabaseUrl}/rest/v1/categories?select=slug`,
       'PostgREST',
@@ -361,6 +399,7 @@ try {
       );
       await sleep(attempt * 15_000);
     }
+    writeFileSync(SUPABASE_PORT_FILE, String(supabasePort));
   }
 
   // unstable_cache persists in .next/cache/fetch-cache, outside the build
