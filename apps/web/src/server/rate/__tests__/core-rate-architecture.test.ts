@@ -4942,7 +4942,77 @@ async function runCoreArchitectureSuite() {
   }
 
   console.log(
-    '  ✅ [68/68] Leaderboard Engine price segment guards, 10-point user normalization & category-aware criteria (#399) passed'
+    '  ✅ [68/69] Leaderboard Engine price segment guards, 10-point user normalization & category-aware criteria (#399) passed'
+  );
+
+  // =========================================================================
+  // 69. Public Write Routes Hardening: Voter Eligibility, Malformed Ingest JSON, CORS & Stats Cache Revalidation (#402)
+  // =========================================================================
+  {
+    const voteRoute402 = await import('@/app/api/reviews/[id]/vote/route');
+    const ingestRoute402 =
+      await import('@/app/api/v1/rate/extension/ingest/route');
+
+    // 69.1 evaluateVoterEligibility rejects is_anonymous: true and single-field email_confirmed_at: null (when phone_confirmed_at is omitted)
+    assert.equal(
+      voteRoute402.evaluateVoterEligibility({
+        created_at: new Date(Date.now() - 30 * 86_400_000).toISOString(),
+        email_confirmed_at: new Date().toISOString(),
+        is_anonymous: true,
+      }).eligible,
+      false,
+      'Anonymous accounts must be rejected by evaluateVoterEligibility (#402)'
+    );
+    assert.equal(
+      voteRoute402.evaluateVoterEligibility({
+        created_at: new Date(Date.now() - 30 * 86_400_000).toISOString(),
+        email_confirmed_at: null,
+      }).eligible,
+      false,
+      'Account with email_confirmed_at: null and omitted phone_confirmed_at must be rejected (#402)'
+    );
+
+    // 69.2 POST /api/v1/rate/extension/ingest with malformed JSON returns 400 Bad Request + CORS instead of 500
+    const badJsonIngestRes = await ingestRoute402.POST(
+      new NextRequest('https://rate.vn/api/v1/rate/extension/ingest', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-forwarded-for': '203.0.113.42',
+        },
+        body: '{invalid-json-payload',
+      })
+    );
+    assert.equal(
+      badJsonIngestRes.status,
+      400,
+      'POST /api/v1/rate/extension/ingest with malformed JSON must return 400 instead of 500 (#402)'
+    );
+    assert.equal(
+      badJsonIngestRes.headers.get('access-control-allow-origin'),
+      '*',
+      'POST /api/v1/rate/extension/ingest 400 response must include Access-Control-Allow-Origin: * (#402)'
+    );
+
+    // 69.3 POST /api/v1/rate/reviews & POST /api/reviews/[id]/vote revalidate RATE_CACHE_TAGS.STATS
+    const reviewsRouteSrc402 = fs.readFileSync(
+      path.join(repoRoot, 'apps/web/src/app/api/v1/rate/reviews/route.ts'),
+      'utf8'
+    );
+    const voteRouteSrc402 = fs.readFileSync(
+      path.join(repoRoot, 'apps/web/src/app/api/reviews/[id]/vote/route.ts'),
+      'utf8'
+    );
+    assert.ok(
+      reviewsRouteSrc402.includes('RATE_CACHE_TAGS.STATS') &&
+        voteRouteSrc402.includes('RATE_CACHE_TAGS.STATS') &&
+        voteRouteSrc402.includes('authenticateRateRequest('),
+      'POST /api/v1/rate/reviews and POST /api/reviews/[id]/vote must revalidate RATE_CACHE_TAGS.STATS and use authenticateRateRequest (#402)'
+    );
+  }
+
+  console.log(
+    '  ✅ [69/69] Public write routes hardening: cookie-session voting, voter eligibility, malformed ingest JSON & stats cache revalidation (#402) passed'
   );
 
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
