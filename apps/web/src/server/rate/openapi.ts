@@ -795,7 +795,7 @@ export function buildRateOpenApiSpec(
           summary:
             'Submit a 5-criteria JReviews community review with automated anti-seeding check',
           description:
-            'Submits a community review for the signed-in user via `rate.submit_community_review`, which applies the anti-spam classification and recalculates product scores. Requires a Supabase access token. The reviewer type is decided by the database; the request cannot claim `expert`. Any failure to store the review is returned as an error.',
+            'Submits a community review for the signed-in user via `rate.submit_community_review`. The review is stored unanalyzed and does not change product scores until it is analyzed; keyword spam is flagged at once. Requires a Supabase access token. The reviewer type is decided by the database; the request cannot claim `expert`. Any failure to store the review is returned as an error.',
           tags: ['Community Reviews & Voting'],
           security: [{ bearerAuth: [] }],
           requestBody: {
@@ -824,10 +824,19 @@ export function buildRateOpenApiSpec(
           },
           responses: {
             '200': {
-              description: 'Community review stored and audited.',
+              description:
+                'Community review stored with verdict `unanalyzed` and excluded from the rating until it is analyzed.',
             },
             '400': { description: 'Invalid body or rejected by the RPC.' },
             '401': { description: 'Missing or invalid access token.' },
+            '403': {
+              description:
+                'Guest (anonymous) sign-ins and cross-site cookie requests cannot submit reviews.',
+            },
+            '409': { description: 'This user already reviewed the product.' },
+            '429': {
+              description: 'More than 5 reviews by this user in 24 hours.',
+            },
             '502': { description: 'The review could not be stored.' },
             '503': { description: 'Review submission is not deployed here.' },
           },
@@ -1121,8 +1130,7 @@ export function buildRateOpenApiSpec(
                 'Successfully invalidated requested cache tags and paths.',
             },
             '400': {
-              description:
-                'Malformed JSON or empty revalidation target lists.',
+              description: 'Malformed JSON or empty revalidation target lists.',
             },
             '401': {
               description:

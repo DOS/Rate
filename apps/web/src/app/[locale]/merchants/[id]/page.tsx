@@ -32,6 +32,7 @@ import {
   BsShop,
   BsStarFill,
 } from 'react-icons/bs';
+import { isPendingReview } from '@/lib/review-display';
 
 type PageParams = Promise<{ locale: string; id: string }>;
 
@@ -606,8 +607,12 @@ export default async function MerchantProfilePage({
                     })
                   : 'smartphones';
                 const revCatBase = getCategoryRouteHref(revCatSlug);
-                const flagBadge =
-                  rev.flag_category === 'low_value_coin_spam'
+                const flagBadge = isPendingReview(rev)
+                  ? {
+                      label: t('flagPendingAnalysis'),
+                      cls: 'bg-info-subtle text-info-emphasis',
+                    }
+                  : rev.flag_category === 'low_value_coin_spam'
                     ? {
                         label: t('flagCoinSpam'),
                         cls: 'bg-warning-subtle text-warning-emphasis',

@@ -36,6 +36,7 @@ import CompareQuickToggle from '@/components/compare/CompareQuickToggle';
 import CompareTrayBar from '@/components/compare/CompareTrayBar';
 import RadarBadge from '@/components/radar/RadarBadge';
 import { buildRadarIndex, getRadarSignal } from '@/lib/deal-radar';
+import { isPendingReview } from '@/lib/review-display';
 
 export async function generateMetadata({
   params,
@@ -1102,8 +1103,10 @@ export default async function Home({
 
             <div className="row g-4">
               {platformStats.recentReviewsSample.map((rev) => {
+                const isPending = isPendingReview(rev);
                 const isFlagged =
-                  !rev.include_in_rating || rev.flag_category !== 'authentic';
+                  !isPending &&
+                  (!rev.include_in_rating || rev.flag_category !== 'authentic');
                 const confidencePct =
                   rev.fake_probability != null
                     ? Math.round((1 - Number(rev.fake_probability)) * 100)
@@ -1125,7 +1128,11 @@ export default async function Home({
                             ))}
                           </div>
                         </div>
-                        {isFlagged ? (
+                        {isPending ? (
+                          <span className="badge bg-info bg-opacity-10 text-info-emphasis border-info rounded-pill small border px-2 py-1">
+                            {tHome('pendingAnalysisBadge')}
+                          </span>
+                        ) : isFlagged ? (
                           <span className="badge bg-warning bg-opacity-10 text-warning border-warning rounded-pill small border px-2 py-1">
                             <BsShieldExclamation className="me-1" />
                             {rev.flag_category === 'low_value_coin_spam'

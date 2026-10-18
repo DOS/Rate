@@ -14,6 +14,7 @@ import {
   type CanonicalCategorySlug,
 } from '@/server/rate';
 import { computeBayesianRatingSummary } from '@/lib/rate-api';
+import { isFilteredOutReview } from '@/lib/review-display';
 import RadarBadge from '@/components/radar/RadarBadge';
 import { buildRadarIndex, getRadarSignal } from '@/lib/deal-radar';
 import { defaultOpenGraph, SHARE_IMAGE } from '@/lib/seo';
@@ -161,9 +162,7 @@ export async function ProductDetailView({
       ? product.authentic_review_count
       : reviews.filter((r) => r.include_in_rating && r.helpfulness_weight > 0)
           .length;
-  const ignoredCount = reviews.filter(
-    (r) => !r.include_in_rating || r.helpfulness_weight === 0
-  ).length;
+  const ignoredCount = reviews.filter(isFilteredOutReview).length;
   const rawUserRating =
     product.user_rating_weighted && Number(product.user_rating_weighted) > 0
       ? Number(product.user_rating_weighted)
