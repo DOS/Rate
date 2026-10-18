@@ -1,3 +1,12 @@
 echo '🏗️👷 Styling your changes before committing 👷‍♂️🏗️'
- 
+
 git rev-parse -q --no-revs --verify MERGE_HEAD || npx lint-staged --verbose --concurrent false
+
+# Block staged secrets before they reach the remote (DOS/Rate#153). CI runs the
+# same scan on every pull request; this only gives an earlier answer, so a
+# machine without gitleaks is told how to get it instead of being blocked.
+if command -v gitleaks >/dev/null 2>&1; then
+  gitleaks git --staged --redact --no-banner --exit-code 1 . || exit 1
+else
+  echo 'gitleaks not installed: staged secrets are not checked locally (https://github.com/gitleaks/gitleaks#installing)'
+fi

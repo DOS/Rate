@@ -123,3 +123,24 @@ Rate.code-workspace
 
 # Playwright HTML report
 playwright-report/
+
+# Secrets and local data that must never be committed (DOS/Rate#153):
+# Windows Explorer copies ("x - Copy.env", ".env - Copy.local"), any *.env
+# file, database dumps, captured request headers and browser sessions.
+*.env
+*.env.*
+* - Copy*
+*backup*.sql
+*dump*.sql
+*.dump
+*.sql.gz
+*.har
+header*.txt
+cookies*.json
+storage-state*.json
+storageState*.json
+
+# Example env files stay tracked. These negations must stay at the end of the
+# file: the ".env*" and "*.env.*" patterns above would otherwise win.
+!.env.example
+!*.env.example
