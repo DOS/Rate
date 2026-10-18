@@ -8,9 +8,7 @@
  */
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-const SUPABASE_URL =
-  process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? '';
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
+export type SchemaScopedSupabaseClient = ReturnType<SupabaseClient['schema']>;
 
 let _adminClient: SupabaseClient | null = null;
 
@@ -19,12 +17,15 @@ let _adminClient: SupabaseClient | null = null;
  */
 export function getAdminClient(): SupabaseClient {
   if (!_adminClient) {
-    if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
+    const supabaseUrl =
+      process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? '';
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
+    if (!supabaseUrl || !supabaseServiceKey) {
       throw new Error(
         'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables.'
       );
     }
-    _adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
+    _adminClient = createClient(supabaseUrl, supabaseServiceKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
   }
@@ -34,17 +35,13 @@ export function getAdminClient(): SupabaseClient {
 /**
  * Get a client scoped to the 'rate' schema with admin privileges.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function getRateClient(): SupabaseClient<any, 'rate'> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (getAdminClient() as any).schema('rate');
+export function getRateClient(): SchemaScopedSupabaseClient {
+  return getAdminClient().schema('rate');
 }
 
 /**
  * Get a client scoped to the 'dosafe' schema for querying threat intelligence.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function getDosafeClient(): SupabaseClient<any, 'dosafe'> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (getAdminClient() as any).schema('dosafe');
+export function getDosafeClient(): SchemaScopedSupabaseClient {
+  return getAdminClient().schema('dosafe');
 }
