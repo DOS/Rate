@@ -2961,7 +2961,19 @@ export async function getRatePlatformStats(): Promise<RatePlatformStats> {
 
 export interface ParsedEcommerceUrl {
   isUrl: boolean;
-  platform: 'shopee' | 'lazada' | 'tiki' | 'tiktok' | 'rate' | null;
+  platform:
+    | 'shopee'
+    | 'lazada'
+    | 'tiki'
+    | 'tiktok'
+    | 'cellphones'
+    | 'tgdd'
+    | 'fptshop'
+    | 'hoangha'
+    | 'didongviet'
+    | 'phongvu'
+    | 'rate'
+    | null;
   platformShopId: string | null;
   platformItemId: string | null;
   internalSlug: string | null;
@@ -2987,16 +2999,181 @@ export interface UrlInspectionResult {
   radarSignal?: import('./deal-radar').RadarSignal | null;
 }
 
+function isDomainOrSubdomain(host: string, domain: string): boolean {
+  return host === domain || host.endsWith(`.${domain}`);
+}
+
 export function parseEcommerceUrlOrQuery(raw: string): ParsedEcommerceUrl {
   const trimmed = raw.trim();
-  const isUrl =
-    /^https?:\/\//i.test(trimmed) ||
-    /shopee\.vn|lazada\.vn|tiki\.vn|tiktok\.com|rate\.vn/i.test(trimmed);
+  const hasHttpProtocol = /^https?:\/\//i.test(trimmed);
+  const hasKnownDomainToken =
+    /(?:^|\/\/|\.)(?:shopee\.vn|lazada\.vn|tiki\.vn|tiktok\.com|cellphones\.com\.vn|thegioididong\.com|topzone\.vn|dienmayxanh\.com|fptshop\.com\.vn|hoanghamobile\.com|didongviet\.vn|phongvu\.vn|rate\.vn)(?:\/|$)/i.test(
+      trimmed
+    );
+  const isUrl = hasHttpProtocol || hasKnownDomainToken;
 
-  // Shopee item pattern: ...-i.<shopId>.<itemId> or /product/<shopId>/<itemId>
-  const shopeeItemMatch =
-    trimmed.match(/(?:a-)?i\.(\d+)\.(\d+)/i) ||
-    trimmed.match(/shopee\.vn\/product\/(\d+)\/(\d+)/i);
+  let parsedHost: string | null = null;
+  let parsedPathname = trimmed;
+  if (hasHttpProtocol || hasKnownDomainToken) {
+    try {
+      const parsed = new URL(
+        hasHttpProtocol ? trimmed : `https://${trimmed.replace(/^\/+/, '')}`
+      );
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        return {
+          isUrl: false,
+          platform: null,
+          platformShopId: null,
+          platformItemId: null,
+          internalSlug: null,
+        };
+      }
+      parsedHost = parsed.hostname.toLowerCase();
+      parsedPathname = parsed.pathname;
+    } catch {
+      parsedHost = null;
+    }
+  }
+
+  // If a full HTTP/HTTPS URL was supplied, verify host against known domains first
+  if (parsedHost) {
+    if (isDomainOrSubdomain(parsedHost, 'shopee.vn')) {
+      const itemMatch =
+        parsedPathname.match(/(?:a-)?i\.(\d+)\.(\d+)/i) ||
+        parsedPathname.match(/\/product\/(\d+)\/(\d+)/i);
+      if (itemMatch) {
+        return {
+          isUrl: true,
+          platform: 'shopee',
+          platformShopId: itemMatch[1] || null,
+          platformItemId: itemMatch[2] || null,
+          internalSlug: null,
+        };
+      }
+      const shopMatch = parsedPathname.match(/\/shop\/(\d+)/i);
+      if (shopMatch) {
+        return {
+          isUrl: true,
+          platform: 'shopee',
+          platformShopId: shopMatch[1] || null,
+          platformItemId: null,
+          internalSlug: null,
+        };
+      }
+      return {
+        isUrl: true,
+        platform: 'shopee',
+        platformShopId: null,
+        platformItemId: null,
+        internalSlug: null,
+      };
+    }
+
+    if (isDomainOrSubdomain(parsedHost, 'lazada.vn')) {
+      const lazadaMatch = parsedPathname.match(/-i(\d+)(?:-s(\d+))?\.html/i);
+      return {
+        isUrl: true,
+        platform: 'lazada',
+        platformShopId: lazadaMatch?.[2] || null,
+        platformItemId: lazadaMatch?.[1] || null,
+        internalSlug: null,
+      };
+    }
+
+    if (isDomainOrSubdomain(parsedHost, 'tiki.vn')) {
+      const tikiMatch = parsedPathname.match(/-p(\d+)\.html/i);
+      return {
+        isUrl: true,
+        platform: 'tiki',
+        platformShopId: null,
+        platformItemId: tikiMatch?.[1] || null,
+        internalSlug: null,
+      };
+    }
+
+    if (isDomainOrSubdomain(parsedHost, 'tiktok.com')) {
+      const prodMatch =
+        parsedPathname.match(/\/product\/(\d+)/i) ||
+        parsedPathname.match(/\/view\/product\/(\d+)/i) ||
+        parsedPathname.match(/\/video\/(\d+)/i);
+      const shopMatch = parsedPathname.match(/\/@([a-zA-Z0-9_.-]+)/);
+      return {
+        isUrl: true,
+        platform: 'tiktok',
+        platformShopId: shopMatch?.[1] || null,
+        platformItemId: prodMatch?.[1] || null,
+        internalSlug: null,
+      };
+    }
+
+    const retailPlatform: ParsedEcommerceUrl['platform'] = isDomainOrSubdomain(
+      parsedHost,
+      'cellphones.com.vn'
+    )
+      ? 'cellphones'
+      : isDomainOrSubdomain(parsedHost, 'thegioididong.com') ||
+          isDomainOrSubdomain(parsedHost, 'topzone.vn') ||
+          isDomainOrSubdomain(parsedHost, 'dienmayxanh.com')
+        ? 'tgdd'
+        : isDomainOrSubdomain(parsedHost, 'fptshop.com.vn')
+          ? 'fptshop'
+          : isDomainOrSubdomain(parsedHost, 'hoanghamobile.com')
+            ? 'hoangha'
+            : isDomainOrSubdomain(parsedHost, 'didongviet.vn')
+              ? 'didongviet'
+              : isDomainOrSubdomain(parsedHost, 'phongvu.vn')
+                ? 'phongvu'
+                : null;
+
+    if (retailPlatform) {
+      const segments = parsedPathname.split('/').filter(Boolean);
+      const lastSeg =
+        segments[segments.length - 1]?.replace(/\.html?$/i, '') || null;
+      const isValidItemSlug =
+        lastSeg &&
+        lastSeg !== 'search' &&
+        lastSeg !== 'tim-kiem' &&
+        lastSeg.length >= 2;
+      return {
+        isUrl: true,
+        platform: retailPlatform,
+        platformShopId: null,
+        platformItemId: isValidItemSlug ? lastSeg : null,
+        internalSlug: null,
+      };
+    }
+
+    if (
+      isDomainOrSubdomain(parsedHost, 'rate.vn') ||
+      parsedHost === 'localhost' ||
+      parsedHost === '127.0.0.1'
+    ) {
+      const rateSlugMatch = parsedPathname.match(
+        /\/(?:smartphones|tablets|laptops|smartwatches|earbuds)\/([a-z0-9-]+)/i
+      );
+      if (rateSlugMatch) {
+        return {
+          isUrl: true,
+          platform: 'rate',
+          platformShopId: null,
+          platformItemId: null,
+          internalSlug: rateSlugMatch[1] || null,
+        };
+      }
+    }
+
+    // Full URL to an unknown/unrelated domain (e.g., https://google.com/search?q=shopee.vn or https://shopee.vn.evil.com/...)
+    return {
+      isUrl: true,
+      platform: null,
+      platformShopId: null,
+      platformItemId: null,
+      internalSlug: null,
+    };
+  }
+
+  // Fallback for relative paths / raw product tokens without hostname
+  const shopeeItemMatch = trimmed.match(/(?:a-)?i\.(\d+)\.(\d+)/i);
   if (shopeeItemMatch) {
     return {
       isUrl: true,
@@ -3007,19 +3184,6 @@ export function parseEcommerceUrlOrQuery(raw: string): ParsedEcommerceUrl {
     };
   }
 
-  // Shopee shop URL: shopee.vn/shop/<shopId>
-  const shopeeShopMatch = trimmed.match(/shopee\.vn\/shop\/(\d+)/i);
-  if (shopeeShopMatch) {
-    return {
-      isUrl: true,
-      platform: 'shopee',
-      platformShopId: shopeeShopMatch[1] || null,
-      platformItemId: null,
-      internalSlug: null,
-    };
-  }
-
-  // Lazada item pattern: -i<itemId>-s<shopId>.html or -i<itemId>.html
   const lazadaMatch = trimmed.match(/-i(\d+)(?:-s(\d+))?\.html/i);
   if (lazadaMatch) {
     return {
@@ -3031,7 +3195,6 @@ export function parseEcommerceUrlOrQuery(raw: string): ParsedEcommerceUrl {
     };
   }
 
-  // Tiki item pattern: -p<itemId>.html
   const tikiMatch = trimmed.match(/-p(\d+)\.html/i);
   if (tikiMatch) {
     return {
@@ -3043,7 +3206,7 @@ export function parseEcommerceUrlOrQuery(raw: string): ParsedEcommerceUrl {
     };
   }
 
-  // Rate.vn internal URL: /smartphones/<slug>, /tablets/<slug>, /laptops/<slug>, /smartwatches/<slug>, /earbuds/<slug>
+  // Rate.vn internal relative URL: /smartphones/<slug>, /tablets/<slug>, /laptops/<slug>, /smartwatches/<slug>, /earbuds/<slug>
   const rateSlugMatch = trimmed.match(
     /\/(?:smartphones|tablets|laptops|smartwatches|earbuds)\/([a-z0-9-]+)/i
   );
@@ -3066,8 +3229,20 @@ export function parseEcommerceUrlOrQuery(raw: string): ParsedEcommerceUrl {
   };
 }
 
+const PLATFORM_ITEM_ID_PREFIX: Partial<
+  Record<NonNullable<ParsedEcommerceUrl['platform']>, string>
+> = {
+  tiktok: 'tts-',
+  cellphones: 'cps-',
+  tgdd: 'tgdd-',
+  fptshop: 'fpt-',
+  hoangha: 'hhm-',
+  didongviet: 'ddv-',
+  phongvu: 'pv-',
+};
+
 /**
- * Inspect an e-commerce product/shop URL (Shopee, Lazada, Tiki) or keyword:
+ * Inspect an e-commerce product/shop URL (all 10 platforms) or keyword:
  * - Resolves exact `platform_item_id` or `url` against `rate.products`
  * - Or resolves `platform_shop_id` / merchant name against `rate.merchants`
  * - Or resolves product slug / keyword against `rate.master_products`
@@ -3099,10 +3274,24 @@ export async function inspectProductOrShopUrl(
 
   // 1. Direct lookup by platform_item_id if parsed from URL
   if (parsedUrl.platformItemId) {
+    const candidateIds = new Set<string>([parsedUrl.platformItemId]);
+    if (parsedUrl.platformShopId) {
+      candidateIds.add(
+        `${parsedUrl.platformShopId}_${parsedUrl.platformItemId}`
+      );
+    }
+    const prefix = parsedUrl.platform
+      ? PLATFORM_ITEM_ID_PREFIX[parsedUrl.platform]
+      : undefined;
+    if (prefix && !parsedUrl.platformItemId.startsWith(prefix)) {
+      candidateIds.add(`${prefix}${parsedUrl.platformItemId}`);
+    }
+
     const { data: prodRow } = await supabase
       .from('products')
       .select('id, cluster_id, merchant_id, platform_item_id')
-      .eq('platform_item_id', parsedUrl.platformItemId)
+      .in('platform_item_id', Array.from(candidateIds))
+      .limit(1)
       .maybeSingle();
 
     const matchedProd = prodRow as {

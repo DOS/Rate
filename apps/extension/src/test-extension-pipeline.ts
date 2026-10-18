@@ -15,10 +15,12 @@ import {
   normalizeAllowedApiBaseUrl,
 } from './security-guards.js';
 import * as extModule from '../../web/src/server/rate/extension.js';
+import * as rateApiRootMod from '../../web/src/lib/rate-api.js';
 const {
   EXTENSION_CAPABILITY_MATRIX,
   canonicalizeProductUrl,
   detectAccessoryOrJunk,
+  detectPlatformFromInput,
   evaluateExtensionPriceVerdict,
   extractStorageAndAmbiguity,
   ingestExtensionCrowdSignal,
@@ -28,6 +30,11 @@ const {
     ? extModule
     : (extModule as unknown as { default: typeof extModule }).default
 ) as typeof extModule;
+const { parseEcommerceUrlOrQuery } = (
+  'parseEcommerceUrlOrQuery' in rateApiRootMod
+    ? rateApiRootMod
+    : (rateApiRootMod as unknown as { default: typeof rateApiRootMod }).default
+) as typeof rateApiRootMod;
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 for (const envCandidate of [
@@ -119,6 +126,102 @@ async function runTests() {
     null,
     'Must reject non-URL strings'
   );
+  assert.equal(
+    detectPlatformFromInput(null, 'https://shopee.vn.evil.com/item-i.1.2'),
+    null,
+    'Server detectPlatformFromInput must reject spoofed subdomain prefixes'
+  );
+  assert.equal(
+    detectPlatformFromInput(null, 'https://www.dienmayxanh.com/dtdd/iphone-16'),
+    'tgdd'
+  );
+  assert.deepEqual(
+    parseEcommerceUrlOrQuery(
+      'https://www.tiktok.com/@appleflagship/product/1729384756'
+    ),
+    {
+      isUrl: true,
+      platform: 'tiktok',
+      platformShopId: 'appleflagship',
+      platformItemId: '1729384756',
+      internalSlug: null,
+    }
+  );
+  assert.deepEqual(
+    parseEcommerceUrlOrQuery(
+      'https://cellphones.com.vn/iphone-16-pro-max.html'
+    ),
+    {
+      isUrl: true,
+      platform: 'cellphones',
+      platformShopId: null,
+      platformItemId: 'iphone-16-pro-max',
+      internalSlug: null,
+    }
+  );
+  assert.deepEqual(
+    parseEcommerceUrlOrQuery(
+      'https://www.topzone.vn/iphone/iphone-16-pro-max-256gb'
+    ),
+    {
+      isUrl: true,
+      platform: 'tgdd',
+      platformShopId: null,
+      platformItemId: 'iphone-16-pro-max-256gb',
+      internalSlug: null,
+    }
+  );
+  assert.deepEqual(
+    parseEcommerceUrlOrQuery(
+      'https://fptshop.com.vn/dien-thoai/iphone-16-pro-max'
+    ),
+    {
+      isUrl: true,
+      platform: 'fptshop',
+      platformShopId: null,
+      platformItemId: 'iphone-16-pro-max',
+      internalSlug: null,
+    }
+  );
+  assert.deepEqual(
+    parseEcommerceUrlOrQuery(
+      'https://hoanghamobile.com/dien-thoai/iphone-16-pro-max'
+    ),
+    {
+      isUrl: true,
+      platform: 'hoangha',
+      platformShopId: null,
+      platformItemId: 'iphone-16-pro-max',
+      internalSlug: null,
+    }
+  );
+  assert.deepEqual(
+    parseEcommerceUrlOrQuery(
+      'https://didongviet.vn/dien-thoai/iphone-16-pro-max.html'
+    ),
+    {
+      isUrl: true,
+      platform: 'didongviet',
+      platformShopId: null,
+      platformItemId: 'iphone-16-pro-max',
+      internalSlug: null,
+    }
+  );
+  assert.deepEqual(
+    parseEcommerceUrlOrQuery('https://phongvu.vn/macbook-air-m3'),
+    {
+      isUrl: true,
+      platform: 'phongvu',
+      platformShopId: null,
+      platformItemId: 'macbook-air-m3',
+      internalSlug: null,
+    }
+  );
+  assert.equal(
+    parseEcommerceUrlOrQuery('https://shopee.vn.evil.com/item-i.1.2').platform,
+    null,
+    'parseEcommerceUrlOrQuery must reject spoofed domains'
+  );
   assert.equal(Object.keys(EXTENSION_CAPABILITY_MATRIX).length, 10);
   assert.equal(parseVndPriceText('28.990.000₫ - 34.990.000₫'), 28990000);
   console.log(
@@ -137,6 +240,22 @@ async function runTests() {
     price: 350000,
   });
   assert.equal(lowPriceCheck.isAccessory, true);
+
+  const realEarbudsCheck = detectAccessoryOrJunk({
+    title: 'Tai nghe Bluetooth Sony WF-C700N Chính hãng',
+    price: 890000,
+  });
+  assert.equal(
+    realEarbudsCheck.isAccessory,
+    false,
+    'Genuine wireless earbuds >= 400k VND must not be rejected by phone 1.2M VND floor'
+  );
+
+  const fakeEarbudsAccessoryCheck = detectAccessoryOrJunk({
+    title: 'Tai nghe Bluetooth AirPods Pro 2',
+    price: 150000,
+  });
+  assert.equal(fakeEarbudsAccessoryCheck.isAccessory, true);
 
   const realPhoneCheck = detectAccessoryOrJunk({
     title: 'Điện thoại Apple iPhone 16 Pro Max 256GB Chính hãng VN/A',
@@ -271,6 +390,21 @@ async function runTests() {
   });
   assert.equal(accessoryRejectRes.accepted, false);
   assert.equal(accessoryRejectRes.jobState, 'skipped_accessory');
+
+  const mismatchedDomainRes = await ingestExtensionCrowdSignal({
+    platform: 'shopee',
+    externalItemId: '29512841920',
+    url: 'https://www.lazada.vn/products/iphone-16-i29512841920.html',
+    title: 'Điện thoại iPhone 16 Pro Max 256GB',
+    price: 28990000,
+    userConsentOptIn: true,
+  });
+  assert.equal(mismatchedDomainRes.accepted, false);
+  assert.equal(
+    mismatchedDomainRes.jobState,
+    'rejected_invalid_url',
+    'Must reject crowd ingest when URL domain does not match declared platform'
+  );
   assert.equal(EXTENSION_CAPABILITY_MATRIX.shopee.crowdVerifyQueue, true);
   assert.equal(EXTENSION_CAPABILITY_MATRIX.lazada.crowdVerifyQueue, true);
   assert.equal(EXTENSION_CAPABILITY_MATRIX.tiki.crowdVerifyQueue, true);
