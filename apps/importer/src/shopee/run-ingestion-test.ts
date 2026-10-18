@@ -5,7 +5,7 @@ import dotenv from 'dotenv';
 import { ShopeeIngestionPipeline } from './shopee-to-supabase.js';
 import { createImporterLogger } from './logger.js';
 
-dotenv.config();
+dotenv.config({ quiet: true });
 
 const logger = createImporterLogger('RunIngestionTest');
 const __filename = fileURLToPath(import.meta.url);

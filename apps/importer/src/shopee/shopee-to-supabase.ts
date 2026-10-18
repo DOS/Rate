@@ -20,7 +20,7 @@ import { AiSpecEnricher, type AiSpecEnricherConfig } from './ai-spec-enricher.js
 import { AiReviewAnalyzer, type ReviewInputItem } from './ai-review-analyzer.js';
 import { createImporterLogger } from './logger.js';
 
-dotenv.config();
+dotenv.config({ quiet: true });
 
 const logger = createImporterLogger('ShopeeIngestionPipeline');
 
