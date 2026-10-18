@@ -1585,7 +1585,9 @@
       "emptyMatchingDesc": "Hãy thử nới lỏng khoảng giá hoặc bỏ bớt một vài tiêu chí phần cứng để xem thêm các dòng máy khác.",
       "resetFiltersBtn": "Đặt lại bộ lọc",
       "browseSmartphonesBtn": "Xem danh mục Điện thoại đang có sẵn →",
-      "merchantProfilesBtn": "Hồ sơ Tín nhiệm Gian hàng"
+      "merchantProfilesBtn": "Hồ sơ Tín nhiệm Gian hàng",
+      "radarDealsTitle": "Giá tốt thật",
+      "radarTrapsTitle": "Cảnh báo nâng khống giá gốc"
     },
     "toolbar": {
       "unratedText": "chưa có",

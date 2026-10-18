@@ -1585,7 +1585,9 @@
       "emptyMatchingDesc": "Try widening the price range or relaxing hardware filter criteria to see more models.",
       "resetFiltersBtn": "Reset filters",
       "browseSmartphonesBtn": "Browse available Smartphones →",
-      "merchantProfilesBtn": "Merchant Trust Profiles"
+      "merchantProfilesBtn": "Merchant Trust Profiles",
+      "radarDealsTitle": "Real lows",
+      "radarTrapsTitle": "Inflated list-price warnings"
     },
     "toolbar": {
       "unratedText": "N/A",

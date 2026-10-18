@@ -1585,7 +1585,9 @@
       "emptyMatchingDesc": "Zkuste rozšířit cenové rozpětí nebo uvolnit hardwarová kritéria pro zobrazení dalších modelů.",
       "resetFiltersBtn": "Obnovit filtry",
       "browseSmartphonesBtn": "Prohlédnout dostupné telefony →",
-      "merchantProfilesBtn": "Profily důvěryhodnosti prodejců"
+      "merchantProfilesBtn": "Profily důvěryhodnosti prodejců",
+      "radarDealsTitle": "Skutečná minima",
+      "radarTrapsTitle": "Varování: navýšené původní ceny"
     },
     "toolbar": {
       "unratedText": "N/A",

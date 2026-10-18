@@ -36,6 +36,8 @@ import {
   BsPhone,
   BsSearch,
   BsTrophy,
+  BsGraphDownArrow,
+  BsExclamationTriangle,
 } from 'react-icons/bs';
 import type { KeySpecs, ProductSpecifications } from '@repo/shared-data';
 
@@ -628,7 +630,13 @@ export async function CategoryCatalogContent({
                       </Link>
                     </div>
 
-                    <ul className="rate-radar-list mt-3">
+                    {categoryDealRadar.genuineDeals.length > 0 && (
+                      <h3 className="rate-radar-list-title is-good mt-3">
+                        <BsGraphDownArrow aria-hidden="true" />
+                        {t('page.radarDealsTitle')}
+                      </h3>
+                    )}
+                    <ul className="rate-radar-list">
                       {categoryDealRadar.genuineDeals.slice(0, 2).map((g) => (
                         <li key={g.id}>
                           <div className="rate-radar-item-main">
@@ -657,6 +665,14 @@ export async function CategoryCatalogContent({
                           </div>
                         </li>
                       ))}
+                    </ul>
+                    {categoryDealRadar.fakeSaleTraps.length > 0 && (
+                      <h3 className="rate-radar-list-title is-bad mt-3">
+                        <BsExclamationTriangle aria-hidden="true" />
+                        {t('page.radarTrapsTitle')}
+                      </h3>
+                    )}
+                    <ul className="rate-radar-list">
                       {categoryDealRadar.fakeSaleTraps
                         .slice(0, 2)
                         .map((trap) => (
@@ -696,12 +712,12 @@ export async function CategoryCatalogContent({
                           data-testid="category-price-spread-leaders"
                         >
                           <div className="rate-radar-spread-head">
-                            <h5 className="rate-radar-list-title">
+                            <h3 className="rate-radar-list-title">
                               <BsArrowLeftRight aria-hidden="true" />
                               {t('page.spreadHeader', {
                                 title: schema.categoryTitle,
                               })}
-                            </h5>
+                            </h3>
                             <span className="rate-radar-item-meta mb-3">
                               {t('page.spreadSub')}
                             </span>

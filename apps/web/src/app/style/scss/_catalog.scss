@@ -110,3 +110,8 @@
     }
   }
 }
+
+// A radar list with no rows (e.g. no inflated-price traps) renders nothing.
+.rate-radar-list:empty {
+  display: none;
+}
