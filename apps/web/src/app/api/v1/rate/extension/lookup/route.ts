@@ -8,6 +8,7 @@ import {
   extractClientRateLimitKey,
   jsonApiError,
   parseBoundedStringParam,
+  parseOptionalVndPriceParam,
 } from '@/server/rate/api-handler';
 
 const CORS_HEADERS = {
@@ -21,13 +22,6 @@ const lookupRateLimiter = new BoundedSlidingWindowRateLimiter({
   maxRequests: 60,
   maxBuckets: 2_000,
 });
-
-function parseOptionalVndPriceParam(raw: string | null): number | null {
-  if (!raw || !raw.trim()) return null;
-  const n = Number(raw);
-  if (!Number.isFinite(n) || n <= 0) return null;
-  return Math.min(Math.round(n), 500_000_000);
-}
 
 export async function OPTIONS() {
   return new NextResponse(null, {

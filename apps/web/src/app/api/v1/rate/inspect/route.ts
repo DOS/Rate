@@ -10,6 +10,7 @@ import {
   PUBLIC_API_CORS_HEADERS,
   jsonApiError,
   parseBoundedStringParam,
+  parseOptionalVndPriceParam,
 } from '@/server/rate/api-handler';
 
 export async function OPTIONS() {
@@ -17,13 +18,6 @@ export async function OPTIONS() {
     status: 204,
     headers: PUBLIC_API_CORS_HEADERS,
   });
-}
-
-function parseOptionalVndPriceParam(raw: string | null): number | null {
-  if (!raw || !raw.trim()) return null;
-  const n = Number(raw);
-  if (!Number.isFinite(n) || n <= 0) return null;
-  return Math.min(Math.round(n), 500_000_000);
 }
 
 /**
@@ -41,12 +35,7 @@ export async function GET(request: NextRequest) {
     );
 
     if (!rawQuery) {
-      return jsonApiError(
-        400,
-        'Missing query parameter ?q= or ?url=',
-        undefined,
-        PUBLIC_API_CORS_HEADERS
-      );
+      return jsonApiError(400, 'Missing query parameter ?q= or ?url=');
     }
 
     const queryPrice = parseOptionalVndPriceParam(sp.get('price'));

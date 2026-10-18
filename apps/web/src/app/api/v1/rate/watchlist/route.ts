@@ -4,9 +4,14 @@ import {
   computeProductRadarSignal,
   getCachedMasterProductBySlug,
   getCachedMasterProductOffers,
+  getMasterProductOffersBatch,
 } from '@/server/rate';
 import { radarExportFields } from '@/lib/deal-radar';
-import { jsonApiError } from '@/server/rate/api-handler';
+import {
+  PUBLIC_API_CORS_HEADERS,
+  jsonApiError,
+  parseWatchlistSlugsParam,
+} from '@/server/rate/api-handler';
 import {
   authenticateRateRequest,
   isMissingRpcError,
@@ -16,6 +21,18 @@ import {
 import { createLogger, serializeError } from '@/lib/logger';
 
 const log = createLogger('api.watchlist');
+
+const WATCHLIST_CORS_HEADERS: Record<string, string> = {
+  ...PUBLIC_API_CORS_HEADERS,
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+};
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: WATCHLIST_CORS_HEADERS,
+  });
+}
 
 // SQLSTATEs raised deliberately by rate.upsert_price_alert
 // (DOS-Me 20261017130000_rate_price_alert_auth_gate.sql).
@@ -105,71 +122,84 @@ function selectBestOfferFromListings(
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const rawSlugs = (searchParams.get('slugs') || '').trim();
-    const slugs = Array.from(
-      new Set(
-        rawSlugs
-          .split(',')
-          .map((s) => s.trim().toLowerCase())
-          .filter(Boolean)
-      )
-    ).slice(0, 20);
+    const slugs = parseWatchlistSlugsParam(searchParams.get('slugs'), 20);
 
     if (slugs.length === 0) {
-      return NextResponse.json({
-        ok: true,
-        count: 0,
-        items: {},
-      });
+      return NextResponse.json(
+        {
+          ok: true,
+          count: 0,
+          items: {},
+        },
+        {
+          status: 200,
+          headers: {
+            ...WATCHLIST_CORS_HEADERS,
+            'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=120',
+          },
+        }
+      );
     }
 
-    const entries = await Promise.all(
+    const masterEntries = await Promise.all(
       slugs.map(async (slug) => {
         const master = await getCachedMasterProductBySlug(slug);
-        if (!master) return null;
-        const offers = await getCachedMasterProductOffers(master.id);
-        const { bestOffer, offerPlatforms } =
-          selectBestOfferFromListings(offers);
-        const radarSignal = computeProductRadarSignal(master, offers);
-        const currentMinPrice = Number(
-          master.min_price || bestOffer?.price || 0
-        );
-        const currentMaxPrice = Number(
-          master.max_price || currentMinPrice || 0
-        );
-
-        return [
-          slug,
-          {
-            master_product_id: master.id,
-            slug: master.slug,
-            name: master.name,
-            brand: master.brand,
-            current_min_price: currentMinPrice,
-            current_max_price: currentMaxPrice,
-            merchant_count: Number(master.merchant_count || offers.length || 0),
-            platform_count: offerPlatforms.length,
-            offer_platforms: offerPlatforms,
-            best_offer: bestOffer,
-            deal_radar: radarExportFields(radarSignal),
-            radar_signal: radarSignal,
-          },
-        ] as const;
+        return master ? ([slug, master] as const) : null;
       })
     );
+    const validMasterEntries = masterEntries.filter(
+      (entry): entry is NonNullable<(typeof masterEntries)[number]> =>
+        entry !== null
+    );
+    const offersByMaster = await getMasterProductOffersBatch(
+      validMasterEntries.map(([, master]) => master.id)
+    );
 
-    const items: Record<string, NonNullable<(typeof entries)[number]>[1]> = {};
-    for (const entry of entries) {
-      if (entry) {
-        items[entry[0]] = entry[1];
-      }
+    const entries = validMasterEntries.map(([slug, master]) => {
+      const offers = offersByMaster.get(master.id) ?? [];
+      const { bestOffer, offerPlatforms } = selectBestOfferFromListings(offers);
+      const radarSignal = computeProductRadarSignal(master, offers);
+      const currentMinPrice = Number(master.min_price || bestOffer?.price || 0);
+      const currentMaxPrice = Number(master.max_price || currentMinPrice || 0);
+
+      return [
+        slug,
+        {
+          master_product_id: master.id,
+          slug: master.slug,
+          name: master.name,
+          brand: master.brand,
+          current_min_price: currentMinPrice,
+          current_max_price: currentMaxPrice,
+          merchant_count: Number(master.merchant_count || offers.length || 0),
+          platform_count: offerPlatforms.length,
+          offer_platforms: offerPlatforms,
+          best_offer: bestOffer,
+          deal_radar: radarExportFields(radarSignal),
+          radar_signal: radarSignal,
+        },
+      ] as const;
+    });
+
+    const items: Record<string, (typeof entries)[number][1]> = {};
+    for (const [slug, item] of entries) {
+      items[slug] = item;
     }
 
-    return NextResponse.json({
-      ok: true,
-      count: Object.keys(items).length,
-      items,
-    });
+    return NextResponse.json(
+      {
+        ok: true,
+        count: Object.keys(items).length,
+        items,
+      },
+      {
+        status: 200,
+        headers: {
+          ...WATCHLIST_CORS_HEADERS,
+          'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=120',
+        },
+      }
+    );
   } catch (error) {
     return jsonApiError(500, 'Failed to fetch watchlist products', error);
   }
@@ -305,9 +335,6 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     log.error('POST failed', { error: serializeError(error) });
-    return NextResponse.json(
-      { ok: false, error: 'Internal server error' },
-      { status: 500 }
-    );
+    return jsonApiError(500, 'Internal server error', error);
   }
 }
