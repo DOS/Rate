@@ -264,7 +264,7 @@ export default function CategoryCatalogToolbar({
             type="button"
             onClick={handleCopyCatalogMarkdown}
             className="btn btn-sm btn-outline-dark rounded-pill fw-semibold px-3 py-1"
-            style={{ fontSize: '0.76rem' }}
+            style={{ fontSize: '0.8125rem' }}
             data-testid="copy-catalog-md-btn"
           >
             {copiedCatalogMd
@@ -275,7 +275,7 @@ export default function CategoryCatalogToolbar({
             type="button"
             onClick={handleDownloadCatalogCsv}
             className="btn btn-sm btn-outline-secondary rounded-pill fw-semibold px-3 py-1"
-            style={{ fontSize: '0.76rem' }}
+            style={{ fontSize: '0.8125rem' }}
             data-testid="download-catalog-csv-btn"
           >
             {t('toolbar.exportCsvBtn')}
@@ -284,7 +284,7 @@ export default function CategoryCatalogToolbar({
             type="button"
             onClick={handleDownloadCategoryJson}
             className="btn btn-sm btn-outline-secondary rounded-pill fw-semibold px-3 py-1"
-            style={{ fontSize: '0.76rem' }}
+            style={{ fontSize: '0.8125rem' }}
             data-testid="download-catalog-json-btn"
           >
             {t('toolbar.exportJsonBtn')}

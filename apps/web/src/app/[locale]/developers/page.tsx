@@ -378,7 +378,7 @@ export default async function DevelopersPage({
                       </div>
                       <div
                         className="font-monospace text-muted"
-                        style={{ fontSize: '0.72rem' }}
+                        style={{ fontSize: '0.8125rem' }}
                       >
                         {ep.cache}
                       </div>

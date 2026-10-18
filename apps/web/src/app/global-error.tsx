@@ -73,10 +73,10 @@ export default function GlobalError({
           <div
             style={{
               display: 'inline-block',
-              backgroundColor: 'rgba(255, 46, 41, 0.15)',
-              color: '#ff2e29',
+              backgroundColor: 'rgba(216, 48, 48, 0.15)',
+              color: '#ff6b6b',
               fontWeight: 700,
-              fontSize: '12px',
+              fontSize: '0.8125rem',
               padding: '6px 12px',
               borderRadius: '999px',
               marginBottom: '16px',
@@ -104,7 +104,7 @@ export default function GlobalError({
             type="button"
             onClick={() => reset()}
             style={{
-              backgroundColor: '#ff2e29',
+              backgroundColor: '#d83030',
               color: '#ffffff',
               border: 'none',
               borderRadius: '999px',

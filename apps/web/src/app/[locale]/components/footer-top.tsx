@@ -31,10 +31,10 @@ export default async function FooterTop({
                 <span
                   className="badge rounded-pill d-inline-flex align-items-center gap-1 px-3 py-1"
                   style={{
-                    backgroundColor: 'rgba(16, 185, 129, 0.14)',
+                    backgroundColor: 'rgba(45, 186, 105, 0.14)',
                     color: '#34d399',
-                    border: '1px solid rgba(16, 185, 129, 0.3)',
-                    fontSize: '0.75rem',
+                    border: '1px solid rgba(45, 186, 105, 0.3)',
+                    fontSize: '0.8125rem',
                     fontWeight: 600,
                   }}
                 >
@@ -63,7 +63,7 @@ export default async function FooterTop({
                 href="/inspect"
                 className="btn rounded-pill fw-semibold d-inline-flex align-items-center gap-2 px-4 py-2 text-white"
                 style={{
-                  backgroundColor: '#e11d48',
+                  backgroundColor: 'var(--bs-primary)',
                   border: '1px solid rgba(255, 255, 255, 0.12)',
                 }}
               >

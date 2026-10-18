@@ -1,3 +1,5 @@
+import Image from 'next/image';
+
 interface RateWordmarkProps {
   /** `ink` for light grounds (navbar), `light` for obsidian grounds (footer). */
   readonly tone?: 'ink' | 'light';
@@ -7,8 +9,8 @@ interface RateWordmarkProps {
 }
 
 /**
- * The Rate.vn wordmark: the brand mark (a #ff2e29 dot on a #12151a disc,
- * the same geometry as the extension icon) followed by "Rate.vn" in Inter 800.
+ * The Rate.vn wordmark: the official split star (red #D83030 / green #2DBA69,
+ * from the brand logo files) followed by "Rate.vn" in Inter 800.
  */
 export default function RateWordmark({
   tone = 'ink',
@@ -26,18 +28,19 @@ export default function RateWordmark({
   );
 }
 
+/** The official star mark alone (public/img/rate-logo-64.png, resized from the 512px master; enough for 2x at 30px). */
 export function RateMark({ size = 28 }: { readonly size?: number }) {
   return (
-    <svg
+    <Image
       className="rate-mark"
+      src="/img/rate-logo-64.png"
       width={size}
       height={size}
-      viewBox="0 0 100 100"
+      // Inline size beats the template's `.nav-brand img` / `.footerLogo img` widths
+      style={{ width: size, height: size }}
+      alt=""
       aria-hidden="true"
-      focusable="false"
-    >
-      <circle cx="50" cy="50" r="46" fill="#12151a" />
-      <circle cx="50" cy="50" r="24" fill="#ff2e29" />
-    </svg>
+      priority
+    />
   );
 }

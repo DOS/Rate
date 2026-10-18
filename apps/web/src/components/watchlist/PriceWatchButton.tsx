@@ -111,7 +111,7 @@ export default function PriceWatchButton({
               aria-label={t('closeAria')}
             />
           </div>
-          <p className="text-muted mb-2" style={{ fontSize: '0.78rem' }}>
+          <p className="text-muted mb-2" style={{ fontSize: '0.8125rem' }}>
             {t('currentBestPrice')}{' '}
             <strong className="text-danger">
               {currentMinPrice.toLocaleString('vi-VN')} ₫
@@ -123,7 +123,7 @@ export default function PriceWatchButton({
               type="button"
               onClick={() => setTargetInput(preset5Pct)}
               className="btn btn-sm btn-light rounded-pill flex-fill border"
-              style={{ fontSize: '0.75rem' }}
+              style={{ fontSize: '0.8125rem' }}
             >
               {t('preset5Pct', { price: preset5Pct.toLocaleString('vi-VN') })}
             </button>
@@ -131,7 +131,7 @@ export default function PriceWatchButton({
               type="button"
               onClick={() => setTargetInput(preset10Pct)}
               className="btn btn-sm btn-light rounded-pill flex-fill border"
-              style={{ fontSize: '0.75rem' }}
+              style={{ fontSize: '0.8125rem' }}
             >
               {t('preset10Pct', { price: preset10Pct.toLocaleString('vi-VN') })}
             </button>

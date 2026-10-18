@@ -25,15 +25,15 @@ function getVerdictTheme(verdict: string): {
   switch (verdict) {
     case 'inflated_fake_sale':
       return {
-        bg: 'rgba(255, 46, 41, 0.16)',
-        border: '#FF2E29',
-        dot: '#FF2E29',
+        bg: 'rgba(216, 48, 48, 0.16)',
+        border: '#d83030',
+        dot: '#d83030',
       };
     case 'genuine_deal':
       return {
-        bg: 'rgba(16, 185, 129, 0.16)',
-        border: '#10b981',
-        dot: '#10b981',
+        bg: 'rgba(45, 186, 105, 0.16)',
+        border: '#2dba69',
+        dot: '#2dba69',
       };
     case 'above_market':
       return {
@@ -140,31 +140,31 @@ function renderShadowTrustPill(lookup: ExtensionLookupData): void {
         }
         .top-row {
           display: flex;
+          flex-wrap: wrap;
           align-items: center;
-          gap: 8px;
-          font-size: 12.5px;
+          gap: 4px 8px;
+          font-size: 13px;
           font-weight: 700;
-          white-space: nowrap;
         }
         .verdict-badge {
           background: ${theme.bg};
           color: #ffffff;
           padding: 2px 8px;
           border-radius: 999px;
-          font-size: 11.5px;
+          font-size: 13px;
         }
         .radar-chip {
           padding: 2px 7px;
           border-radius: 999px;
-          font-size: 11px;
+          font-size: 13px;
           font-weight: 700;
         }
         .radar-deal {
-          background: rgba(16, 185, 129, 0.2);
+          background: rgba(45, 186, 105, 0.2);
           color: #34d399;
         }
         .radar-trap {
-          background: rgba(255, 46, 41, 0.2);
+          background: rgba(216, 48, 48, 0.2);
           color: #fca5a5;
         }
         .radar-spread {
@@ -173,23 +173,23 @@ function renderShadowTrustPill(lookup: ExtensionLookupData): void {
         }
         .rating-tag {
           color: #fbbf24;
-          font-size: 11.5px;
+          font-size: 13px;
           font-weight: 700;
         }
         .sub-row {
-          font-size: 11.5px;
+          font-size: 13px;
           color: #9ca3af;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
         }
         .cta-btn {
-          background: #FF2E29;
+          background: #d83030;
           color: #ffffff;
           border: none;
           border-radius: 999px;
           padding: 6px 11px;
-          font-size: 11px;
+          font-size: 13px;
           font-weight: 700;
           cursor: pointer;
           flex-shrink: 0;

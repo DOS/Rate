@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import type {
   DiscountVerdictType,
@@ -133,14 +133,36 @@ export default function PriceHistorySection({
     return pts;
   }, [history.points, selectedProductId, timeRange, latestTimestampMs]);
 
+  // Axis labels are sized in viewBox units; scale them so they render at 13px
+  // (the text floor) whatever width the chart is drawn at.
+  // A callback ref re-attaches the observer whenever the SVG remounts (it is
+  // unmounted while the selected offer has no points).
+  const [labelUnits, setLabelUnits] = useState(13);
+  const chartObserver = useRef<ResizeObserver | null>(null);
+  const chartRef = useCallback((el: SVGSVGElement | null) => {
+    chartObserver.current?.disconnect();
+    chartObserver.current = null;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const update = () => {
+      const rect = el.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+      const scale = Math.min(rect.width / 820, rect.height / 280);
+      setLabelUnits(Math.round((13 / scale) * 10) / 10);
+    };
+    update();
+    chartObserver.current = new ResizeObserver(update);
+    chartObserver.current.observe(el);
+  }, []);
+
   // SVG Chart dimensions & coordinate mapping
   const chartGeometry = useMemo(() => {
     const width = 820;
     const height = 280;
-    const padLeft = 72;
+    // Room for the y labels and x labels grows with their size
+    const padLeft = Math.round(30 + 3.3 * labelUnits);
     const padRight = 28;
     const padTop = 26;
-    const padBottom = 42;
+    const padBottom = Math.round(16 + 2 * labelUnits);
     const plotW = width - padLeft - padRight;
     const plotH = height - padTop - padBottom;
 
@@ -267,7 +289,7 @@ export default function PriceHistorySection({
       yTicks,
       lowestEverY,
     };
-  }, [filteredPoints, offerAnalyses, history.lowestEverPrice]);
+  }, [filteredPoints, offerAnalyses, history.lowestEverPrice, labelUnits]);
 
   const [copiedHistoryMd, setCopiedHistoryMd] = useState(false);
 
@@ -459,7 +481,7 @@ export default function PriceHistorySection({
             <div className="h5 fw-bold text-danger mb-1">
               {formatVnd(history.currentMinPrice)}
             </div>
-            <div className="text-muted" style={{ fontSize: '0.75rem' }}>
+            <div className="text-muted" style={{ fontSize: '0.8125rem' }}>
               {t('priceHistoryKpiCurrentMinSub', {
                 count: offerAnalyses.length,
               })}
@@ -477,7 +499,7 @@ export default function PriceHistorySection({
             </div>
             <div
               className="text-success-emphasis"
-              style={{ fontSize: '0.75rem' }}
+              style={{ fontSize: '0.8125rem' }}
             >
               {history.lowestEverMerchant
                 ? `${history.lowestEverMerchant} (${history.lowestEverDate ? formatDateShort(history.lowestEverDate) : ''})`
@@ -494,7 +516,7 @@ export default function PriceHistorySection({
             <div className="h5 fw-bold text-dark mb-1">
               {formatVnd(history.highestEverPrice)}
             </div>
-            <div className="text-muted" style={{ fontSize: '0.75rem' }}>
+            <div className="text-muted" style={{ fontSize: '0.8125rem' }}>
               {t('priceHistoryKpiHighestEverSub', {
                 count: history.points.length,
               })}
@@ -524,7 +546,7 @@ export default function PriceHistorySection({
                   })
                 : t('priceHistoryKpiAiAuditTransparent')}
             </div>
-            <div className="text-muted" style={{ fontSize: '0.75rem' }}>
+            <div className="text-muted" style={{ fontSize: '0.8125rem' }}>
               {t('priceHistoryKpiAiAuditSub')}
             </div>
           </div>
@@ -673,6 +695,7 @@ export default function PriceHistorySection({
 
           <div className="table-responsive">
             <svg
+              ref={chartRef}
               viewBox={`0 0 ${chartGeometry.width} ${chartGeometry.height}`}
               className="w-100"
               style={{ minWidth: '580px', maxHeight: '300px' }}
@@ -694,7 +717,7 @@ export default function PriceHistorySection({
                     x={chartGeometry.padLeft - 8}
                     y={tk.y + 4}
                     textAnchor="end"
-                    fontSize="11"
+                    fontSize={labelUnits}
                     fill="#64748b"
                   >
                     {formatCompactVnd(tk.value)}
@@ -803,7 +826,7 @@ export default function PriceHistorySection({
                     x={chartGeometry.padLeft + chartGeometry.plotW / 2}
                     y={chartGeometry.height - 12}
                     textAnchor="middle"
-                    fontSize="11"
+                    fontSize={labelUnits}
                     fill="#64748b"
                   >
                     {formatDateShort(
@@ -816,7 +839,7 @@ export default function PriceHistorySection({
                       x={chartGeometry.mapped[0]?.x ?? chartGeometry.padLeft}
                       y={chartGeometry.height - 12}
                       textAnchor="start"
-                      fontSize="11"
+                      fontSize={labelUnits}
                       fill="#64748b"
                     >
                       {formatDateShort(
@@ -832,7 +855,7 @@ export default function PriceHistorySection({
                         }
                         y={chartGeometry.height - 12}
                         textAnchor="middle"
-                        fontSize="11"
+                        fontSize={labelUnits}
                         fill="#64748b"
                       >
                         {formatDateShort(
@@ -850,7 +873,7 @@ export default function PriceHistorySection({
                         }
                         y={chartGeometry.height - 12}
                         textAnchor="end"
-                        fontSize="11"
+                        fontSize={labelUnits}
                         fill="#64748b"
                       >
                         {formatDateShort(
@@ -925,7 +948,7 @@ export default function PriceHistorySection({
 
                   <div
                     className="d-flex text-muted mb-2 flex-wrap gap-3"
-                    style={{ fontSize: '0.78rem' }}
+                    style={{ fontSize: '0.8125rem' }}
                   >
                     <span>
                       {t('priceHistoryMedianLabel')}{' '}

@@ -143,10 +143,10 @@ async function updateActionBadge(
     const verdict = lookup.priceAssessment.verdict;
     if (verdict === 'inflated_fake_sale') {
       await chrome.action.setBadgeText({ text: 'ẢO!', tabId });
-      await chrome.action.setBadgeBackgroundColor({ color: '#FF2E29', tabId });
+      await chrome.action.setBadgeBackgroundColor({ color: '#d83030', tabId });
     } else if (verdict === 'genuine_deal') {
       await chrome.action.setBadgeText({ text: 'TỐT', tabId });
-      await chrome.action.setBadgeBackgroundColor({ color: '#10b981', tabId });
+      await chrome.action.setBadgeBackgroundColor({ color: '#2dba69', tabId });
     } else if (verdict === 'above_market') {
       await chrome.action.setBadgeText({ text: 'CAO', tabId });
       await chrome.action.setBadgeBackgroundColor({ color: '#f59e0b', tabId });
