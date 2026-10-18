@@ -159,16 +159,93 @@ export function escapeSafeExternalHref(
   }
 }
 
-export function formatSafeExtensionVnd(val: number | null | undefined): string {
+export function formatSafeExtensionVnd(
+  val: number | null | undefined,
+  fallbackText = 'Chưa có'
+): string {
   if (
     typeof val !== 'number' ||
     !Number.isFinite(val) ||
     val <= 0 ||
     val > MAX_VALID_EXTENSION_VND_PRICE
   ) {
-    return 'Chưa có';
+    return fallbackText;
   }
   return `${Math.round(val).toLocaleString('vi-VN')} ₫`;
+}
+
+export function resolveSafeApiRelativeUrl(
+  apiBaseUrl: string | null | undefined,
+  pathOrUrl: unknown,
+  fallbackPath = '/'
+): string {
+  const safeBase = normalizeAllowedApiBaseUrl(apiBaseUrl);
+  const safeFallbackPath =
+    typeof fallbackPath === 'string' &&
+    fallbackPath.startsWith('/') &&
+    !fallbackPath.startsWith('//') &&
+    !fallbackPath.startsWith('/\\')
+      ? fallbackPath
+      : '/';
+  const fallbackHref = escapeSafeExternalHref(
+    `${safeBase}${safeFallbackPath}`,
+    safeBase
+  );
+
+  if (typeof pathOrUrl !== 'string') return fallbackHref;
+  const trimmed = pathOrUrl.trim();
+  if (!trimmed) return fallbackHref;
+
+  try {
+    if (trimmed.startsWith('/')) {
+      if (trimmed.startsWith('//') || trimmed.startsWith('/\\')) {
+        return fallbackHref;
+      }
+      const resolved = new URL(trimmed, safeBase);
+      if (resolved.origin.toLowerCase() !== safeBase.toLowerCase()) {
+        return fallbackHref;
+      }
+      return escapeSafeExternalHref(resolved.href, fallbackHref);
+    }
+
+    if (/^https?:\/\//i.test(trimmed)) {
+      const resolved = new URL(trimmed);
+      if (resolved.origin.toLowerCase() !== safeBase.toLowerCase()) {
+        return fallbackHref;
+      }
+      return escapeSafeExternalHref(resolved.href, fallbackHref);
+    }
+
+    return fallbackHref;
+  } catch {
+    return fallbackHref;
+  }
+}
+
+export function formatSafeNumber(
+  val: unknown,
+  options: {
+    min?: number;
+    max?: number;
+    decimals?: number;
+    fallback?: number;
+  } = {}
+): string {
+  const fallback = options.fallback ?? 0;
+  const num =
+    typeof val === 'number'
+      ? val
+      : typeof val === 'string' && val.trim() !== ''
+        ? Number(val)
+        : NaN;
+  const resolved = Number.isFinite(num) ? num : fallback;
+  const min = options.min ?? -Infinity;
+  const max = options.max ?? Infinity;
+  const clamped = Math.min(max, Math.max(min, resolved));
+  if (typeof options.decimals === 'number' && options.decimals >= 0) {
+    return clamped.toFixed(Math.min(6, Math.floor(options.decimals)));
+  }
+  return String(Math.round(clamped));
 }
 
 const ALLOWED_VERDICT_CLASS_SUFFIXES = new Set([

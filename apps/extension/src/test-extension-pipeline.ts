@@ -1842,6 +1842,8 @@ async function runTests() {
     formatSafeExtensionVnd,
     sanitizeVerdictClassSuffix,
     filterValidSparklinePrices,
+    resolveSafeApiRelativeUrl,
+    formatSafeNumber,
   } = await import('./security-guards.js');
 
   assert.equal(
@@ -1854,11 +1856,79 @@ async function runTests() {
     'formatSafeExtensionVnd must reject Infinity'
   );
   assert.equal(
+    formatSafeExtensionVnd(0, 'Đang cập nhật'),
+    'Đang cập nhật',
+    'formatSafeExtensionVnd must support custom fallbackText'
+  );
+  assert.equal(
     formatSafeExtensionVnd(2_000_000_000),
     'Chưa có',
     'formatSafeExtensionVnd must reject prices > MAX_VALID_EXTENSION_VND_PRICE'
   );
   assert.equal(formatSafeExtensionVnd(0), 'Chưa có');
+
+  assert.equal(
+    resolveSafeApiRelativeUrl(
+      'https://rate.vn',
+      '/smartphones/iphone-16-pro-max',
+      '/leaderboard'
+    ),
+    'https://rate.vn/smartphones/iphone-16-pro-max'
+  );
+  assert.equal(
+    resolveSafeApiRelativeUrl(
+      'https://rate.vn',
+      '.evil.com/phish',
+      '/leaderboard'
+    ),
+    'https://rate.vn/leaderboard',
+    'resolveSafeApiRelativeUrl must prevent origin confusion (.evil.com/phish)'
+  );
+  assert.equal(
+    resolveSafeApiRelativeUrl(
+      'https://rate.vn',
+      '//evil.com/phish',
+      '/leaderboard'
+    ),
+    'https://rate.vn/leaderboard',
+    'resolveSafeApiRelativeUrl must reject protocol-relative //evil.com URLs'
+  );
+  assert.equal(
+    resolveSafeApiRelativeUrl(
+      'https://rate.vn',
+      'https://evil.com/phish',
+      '/leaderboard'
+    ),
+    'https://rate.vn/leaderboard',
+    'resolveSafeApiRelativeUrl must reject cross-origin absolute URLs'
+  );
+  assert.equal(
+    resolveSafeApiRelativeUrl(
+      'https://rate.vn',
+      'https://rate.vn/laptops/macbook-air-m4',
+      '/leaderboard'
+    ),
+    'https://rate.vn/laptops/macbook-air-m4',
+    'resolveSafeApiRelativeUrl must allow same-origin absolute URLs'
+  );
+
+  assert.equal(
+    formatSafeNumber(9.156, { decimals: 1, min: 0, max: 10 }),
+    '9.2'
+  );
+  assert.equal(
+    formatSafeNumber('<img src=x onerror=alert(1)>', {
+      decimals: 1,
+      fallback: '0.0',
+    }),
+    '0.0',
+    'formatSafeNumber must reject non-numeric strings and return fallback'
+  );
+  assert.equal(
+    formatSafeNumber(150, { decimals: 0, min: 0, max: 100 }),
+    '100',
+    'formatSafeNumber must clamp values to [min, max]'
+  );
 
   assert.equal(sanitizeVerdictClassSuffix('genuine_deal'), 'genuine_deal');
   assert.equal(
@@ -1893,7 +1963,7 @@ async function runTests() {
   );
 
   console.log(
-    '  ✅ [Extension Signal & Sender Guards] sanitizeExtensionProductSignal, formatSafeExtensionVnd & sanitizeVerdictClassSuffix passed (#382, #393)'
+    '  ✅ [Extension Signal & Sender Guards] sanitizeExtensionProductSignal, formatSafeExtensionVnd, resolveSafeApiRelativeUrl, formatSafeNumber & sanitizeVerdictClassSuffix passed (#382, #393, #401)'
   );
 
   console.log('🎉 All Rate Browser Extension MV3 v2 tests passed!');

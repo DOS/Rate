@@ -1716,8 +1716,51 @@ async function run() {
     'mergeKeySpecs in backfill-specs.ts must preserve price_spread_audit while updating canonical key_specs'
   );
 
+  // 16f. DOS/Rate#401: Recursive computeImporterAlgorithmMetadata paramsHash and sanitizeLogMeta Error & header redaction
+  const { computeImporterAlgorithmMetadata, sanitizeLogMeta } = await import('./logger.js');
+  const algoMetaOrderA = computeImporterAlgorithmMetadata('review-trust-6axis', '2.1.0', {
+    thresholds: { fake: 0.75, suspicious: 0.45 },
+    weights: [{ axis: 'A', cap: 1.0, bonus: 0.2 }],
+  });
+  const algoMetaOrderB = computeImporterAlgorithmMetadata('review-trust-6axis', '2.1.0', {
+    weights: [{ bonus: 0.2, cap: 1.0, axis: 'A' }],
+    thresholds: { suspicious: 0.45, fake: 0.75 },
+  });
+  assert.equal(
+    algoMetaOrderA.paramsHash,
+    algoMetaOrderB.paramsHash,
+    'computeImporterAlgorithmMetadata must produce identical paramsHash regardless of nested object key order'
+  );
+
+  const sanitizedMeta401 = sanitizeLogMeta({
+    err: new Error('Request failed with Bearer secret-jwt-token-1234567890'),
+    authorization: 'Bearer raw-auth-header',
+    sessionCookie: 'SPC_EC=super-secret-cookie',
+    clientCredential: 'cred-xyz',
+    userJwt: 'eyJhbGciOiJIUzI1NiJ9',
+    nested: {
+      cause: new TypeError('Invalid token sk-abcdef1234567890abcdef'),
+    },
+  });
+  assert.deepEqual(sanitizedMeta401, {
+    err: {
+      name: 'Error',
+      message: 'Request failed with Bearer [REDACTED]',
+    },
+    authorization: '[REDACTED]',
+    sessionCookie: '[REDACTED]',
+    clientCredential: '[REDACTED]',
+    userJwt: '[REDACTED]',
+    nested: {
+      cause: {
+        name: 'TypeError',
+        message: 'Invalid token [REDACTED_KEY]',
+      },
+    },
+  });
+
   console.log(
-    `✅ [P2/P3 Trust Model & #292/#352/#356/#359/#379/#382] Voter weight, Wilson lower bound (50/52=${wilson50of52} > 1/1=${wilson1of1}), shingle copy seeding (sim=${shingleSim}), affiliate shortlinks, peer floor, ArenaSpecSyncer & Importer hardening (#352, #356, #359, #379, #382) verified`
+    `✅ [P2/P3 Trust Model & #292/#352/#356/#359/#379/#382/#401] Voter weight, Wilson lower bound (50/52=${wilson50of52} > 1/1=${wilson1of1}), shingle copy seeding (sim=${shingleSim}), affiliate shortlinks, peer floor, ArenaSpecSyncer, Importer & Logger hardening (#352, #356, #359, #379, #382, #401) verified`
   );
 
   console.log('\n🎉 ALL AI REVIEW ANALYZER TESTS PASSED!');
