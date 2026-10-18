@@ -2528,7 +2528,14 @@ export async function getMerchantsList(
     if (params?.platformShopIds) {
       q = q.in('platform_shop_id', [...params.platformShopIds]);
     }
-    if (params?.nameContains) q = q.ilike('name', `%${params.nameContains}%`);
+    if (params?.nameContains) {
+      // A literal substring: escape LIKE's own wildcards, and drop '*' which
+      // PostgREST also turns into '%'.
+      const literal = params.nameContains
+        .replace(/[\\%_]/g, (c) => `\\${c}`)
+        .replace(/\*/g, '');
+      q = q.ilike('name', `%${literal}%`);
+    }
     return q;
   };
   if (params?.ids?.length === 0 || params?.platformShopIds?.length === 0) {
@@ -3837,8 +3844,15 @@ export async function inspectProductOrShopUrl(
   // lookups are filtered in the database: this public endpoint must not read
   // the whole directory on every request.
   const [nameMatches, shopMatches, matchedProducts] = await Promise.all([
-    getMerchantsList({ nameContains: query, limit: 1 }),
-    getMerchantsList({ platformShopIds: [query], limit: 1 }),
+    // No merchant name is this long; skipping also keeps a 1024-char query out
+    // of the request URL.
+    query.length <= 200
+      ? getMerchantsList({ nameContains: query, limit: 1 })
+      : Promise.resolve([]),
+    // Only shop-id-shaped input reaches the in() filter syntax.
+    /^[A-Za-z0-9_.-]{1,64}$/.test(query)
+      ? getMerchantsList({ platformShopIds: [query], limit: 1 })
+      : Promise.resolve([]),
     getMasterProducts({ search: query, limit: 6 }),
   ]);
   const matchedMerchantByName = nameMatches[0] ?? shopMatches[0] ?? null;

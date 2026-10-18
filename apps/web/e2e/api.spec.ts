@@ -55,3 +55,12 @@ test('inspect keyword search finds a merchant by name', async ({ request }) => {
   expect(res.status()).toBe(200);
   expect(await res.text()).toContain('last-ranked-shop');
 });
+
+test('inspect treats LIKE wildcards in a keyword literally', async ({
+  request,
+}) => {
+  const res = await request.get('/api/v1/rate/inspect?q=%25');
+  expect(res.status()).toBe(200);
+  const body = await res.json();
+  expect(body.data.matchedType).not.toBe('merchant');
+});
