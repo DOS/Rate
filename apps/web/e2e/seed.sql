@@ -9,7 +9,9 @@ VALUES ('c0000000-0000-4000-8000-000000000001', 'Điện thoại', 'smartphones'
 INSERT INTO rate.merchants (id, platform, platform_shop_id, name, slug, is_official)
 VALUES
   ('11111111-1111-4111-8111-111111111111', 'shopee', 'shop_1', 'Apple Flagship Store', 'apple-flagship-store', true),
-  ('11111111-1111-4111-8111-111111111112', 'tiki', 'shop_2', 'Samsung Official Store', 'samsung-official-store', true);
+  ('11111111-1111-4111-8111-111111111112', 'tiki', 'shop_2', 'Samsung Official Store', 'samsung-official-store', true),
+  -- Its listing query fails on purpose (FAULT_MARKERS in scripts/e2e/run.mjs).
+  ('eeeeeeee-eeee-4eee-8eee-eeeeeeeefa17', 'shopee', 'shop_fault', 'Faulty Listings Store', 'faulty-listings-store', false);
 
 INSERT INTO rate.master_products
   (id, category_id, brand, model, model_key, name, slug, ram_gb, storage_gb, screen_size_inch, battery_mah, has_5g,

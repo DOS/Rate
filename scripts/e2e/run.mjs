@@ -155,11 +155,16 @@ function run(command, commandArgs, env) {
 
 /**
  * Serves PostgREST at /rest/v1 like Supabase; every other path is a 404. Any
- * query containing FAULT_MARKER answers 500 (a 503 would also trip
+ * query containing one of FAULT_MARKERS answers 500 (a 503 would also trip
  * postgrest-js retries and only slow the spec down), so a spec can simulate a database
  * outage for one URL without disturbing specs running in parallel.
  */
-const FAULT_MARKER = 'e2e-fault';
+// Second marker: the listing query of the seeded "faulty-listings-store"
+// merchant only (eq., so batch reads of all merchants with in.() still work).
+const FAULT_MARKERS = [
+  'e2e-fault',
+  'merchant_id=eq.eeeeeeee-eeee-4eee-8eee-eeeeeeeefa17',
+];
 function startProxy(upstreamPort) {
   proxyServer = http.createServer((req, res) => {
     if (!req.url?.startsWith('/rest/v1/')) {
@@ -167,7 +172,7 @@ function startProxy(upstreamPort) {
       res.end('{"message":"not served by the e2e stack"}');
       return;
     }
-    if (req.url.includes(FAULT_MARKER)) {
+    if (FAULT_MARKERS.some((marker) => req.url.includes(marker))) {
       res.writeHead(500, { 'content-type': 'application/json' });
       res.end('{"message":"simulated outage","code":"XX000"}');
       return;

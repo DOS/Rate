@@ -2685,13 +2685,18 @@ export async function getMerchantProfileById(
     return null;
   }
 
-  const { data: prodRows } = await supabase
+  // Secondary reads throw too: a profile with silently empty listings or
+  // reviews would otherwise be cached as if it were true (DOS/Rate#329).
+  const { data: prodRows, error: prodError } = await supabase
     .from('products')
     .select(
       'id, merchant_id, platform, platform_item_id, title, price_current, price_original, stock, historical_sold, rating_star, rating_count, images, url, cluster_id'
     )
     .eq('merchant_id', merchantRow.id)
     .order('price_current', { ascending: true });
+  if (prodError) {
+    throw new RateDataUnavailableError('merchant listings', prodError);
+  }
 
   const rawProducts = (prodRows as unknown as RawProductRow[]) || [];
   const clusterIds = Array.from(
@@ -2707,7 +2712,7 @@ export async function getMerchantProfileById(
             'id, slug, name, brand, category_id, min_price, max_price, merchant_count'
           )
           .in('id', clusterIds)
-      : Promise.resolve({ data: [] }),
+      : Promise.resolve({ data: [], error: null }),
     supabase.from('categories').select('id, slug'),
     productIds.length > 0
       ? supabase
@@ -2716,8 +2721,12 @@ export async function getMerchantProfileById(
           .in('product_id', productIds)
           .order('created_at', { ascending: false })
           .limit(60)
-      : Promise.resolve({ data: [] }),
+      : Promise.resolve({ data: [], error: null }),
   ]);
+  const secondaryError = masterRes.error ?? catsRes.error ?? reviewsRes.error;
+  if (secondaryError) {
+    throw new RateDataUnavailableError('merchant profile', secondaryError);
+  }
 
   const catSlugById = new Map<string, string>();
   for (const c of (catsRes.data || []) as Array<{ id: string; slug: string }>) {

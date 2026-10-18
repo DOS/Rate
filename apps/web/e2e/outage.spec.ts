@@ -11,6 +11,9 @@ for (const path of [
   '/merchants/e2e-fault-shop',
   '/compare/e2e-fault-a-vs-e2e-fault-b',
   '/api/v1/rate/products/e2e-fault-product',
+  // Merchant found, but its listings query fails (DOS/Rate#329).
+  '/merchants/faulty-listings-store',
+  '/api/v1/rate/merchants/faulty-listings-store',
 ]) {
   test(`database outage on ${path} is a 5xx, not a 404`, async ({
     request,
