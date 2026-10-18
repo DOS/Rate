@@ -106,13 +106,19 @@ jobs:
       - name: Run @repo/web Core Architecture Tests
         run: pnpm --filter @repo/web test
 
+      # next/font fetches Google Fonts at build time. Retry only that failure,
+      # with backoff; any other build error fails at once.
       - name: Build @repo/web (Next.js 16)
         run: |
-          pnpm --filter @repo/web build || (
-            echo "Transient Next.js build failure (e.g. Google Fonts fetch timeout); retrying in 3s..."
-            sleep 3
-            pnpm --filter @repo/web build
-          )
+          for attempt in 1 2 3; do
+            if pnpm --filter @repo/web build 2>&1 | tee web-build.log; then exit 0; fi
+            grep -qiE 'font/google|from Google Fonts|fonts\.(googleapis|gstatic)\.com' web-build.log || exit 1
+            if [ "$attempt" -lt 3 ]; then
+              echo "Google Fonts fetch failed; retrying in $((attempt * 15))s..."
+              sleep $((attempt * 15))
+            fi
+          done
+          exit 1
 
   e2e:
     name: E2E (Playwright)
