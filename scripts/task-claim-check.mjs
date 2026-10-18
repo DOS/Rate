@@ -10,9 +10,11 @@ import { appendFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
 const CLAIM_STATUSES = ['status:in-progress', 'status:in-review'];
+const MAX_CLOSING_ISSUES = 25;
 
 // `pr` is the shape the GraphQL query below returns.
 export function evaluateClaim(pr) {
+  // The dev to main promotion has base main, so it is exempt here too.
   if (pr.baseRefName !== 'dev') {
     return {
       ok: true,
@@ -23,8 +25,23 @@ export function evaluateClaim(pr) {
   if (pr.author === 'dependabot[bot]' || pr.author === 'dependabot') {
     return { ok: true, exempt: true, reason: 'Dependabot PR' };
   }
-  if (pr.headRefName === 'dev' && !pr.isCrossRepository) {
-    return { ok: true, exempt: true, reason: 'dev to main promotion' };
+  // Fail closed when some closing issues could not be read: an unclaimed one
+  // may be among them.
+  if (pr.truncated) {
+    return {
+      ok: false,
+      exempt: false,
+      reason: `closes more than ${MAX_CLOSING_ISSUES} issues, so not every claim can be verified`,
+    };
+  }
+  if (pr.unreadable > 0) {
+    return {
+      ok: false,
+      exempt: false,
+      reason:
+        `${pr.unreadable} closing issue(s) are not readable with the workflow ` +
+        'token (another repository?), so their claims cannot be verified',
+    };
   }
 
   const issues = pr.closingIssues ?? [];
@@ -88,9 +105,9 @@ const QUERY = `query($owner: String!, $name: String!, $number: Int!) {
     pullRequest(number: $number) {
       baseRefName
       headRefName
-      isCrossRepository
       author { login }
-      closingIssuesReferences(first: 25) {
+      closingIssuesReferences(first: ${MAX_CLOSING_ISSUES}) {
+        totalCount
         nodes {
           number
           repository { nameWithOwner }
@@ -112,18 +129,27 @@ async function fetchPr({ token, repo, number }) {
     body: JSON.stringify({ query: QUERY, variables: { owner, name, number } }),
   });
   const body = await res.json();
-  if (!res.ok || body.errors) {
+  // A closing issue the token cannot read (for example in a private repo)
+  // comes back as a null node plus an error under closingIssuesReferences.
+  // Those are counted as unreadable; any other error aborts.
+  const fatal = (body.errors ?? []).filter(
+    (e) => !(e.path ?? []).includes('closingIssuesReferences')
+  );
+  const pr = body.data?.repository?.pullRequest;
+  if (!res.ok || fatal.length > 0 || !pr?.closingIssuesReferences) {
     throw new Error(
       `GraphQL request failed (${res.status}): ${JSON.stringify(body.errors ?? body)}`
     );
   }
-  const pr = body.data.repository.pullRequest;
+  const refs = pr.closingIssuesReferences;
+  const readable = refs.nodes.filter((n) => n?.repository && n?.labels);
   return {
     baseRefName: pr.baseRefName,
     headRefName: pr.headRefName,
-    isCrossRepository: pr.isCrossRepository,
     author: pr.author?.login ?? '',
-    closingIssues: pr.closingIssuesReferences.nodes.map((n) => ({
+    truncated: refs.totalCount > refs.nodes.length,
+    unreadable: refs.nodes.length - readable.length,
+    closingIssues: readable.map((n) => ({
       number: n.number,
       repository: n.repository.nameWithOwner,
       labels: n.labels.nodes.map((l) => l.name),

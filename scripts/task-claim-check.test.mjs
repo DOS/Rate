@@ -6,7 +6,6 @@ import { evaluateClaim, renderSummary } from './task-claim-check.mjs';
 const pr = (overrides = {}) => ({
   baseRefName: 'dev',
   headRefName: 'fix/something',
-  isCrossRepository: false,
   author: 'JOY',
   closingIssues: [],
   ...overrides,
@@ -85,27 +84,34 @@ test('exempts Dependabot PRs', () => {
   assert.equal(r.exempt, true);
 });
 
-test('exempts the dev to main promotion and PRs outside dev', () => {
-  assert.equal(
-    evaluateClaim(pr({ baseRefName: 'main', headRefName: 'dev' })).exempt,
-    true
+test('exempts the dev to main promotion', () => {
+  const r = evaluateClaim(
+    pr({ baseRefName: 'main', headRefName: 'dev', closingIssues: [issue([])] })
   );
-  assert.equal(
-    evaluateClaim(pr({ headRefName: 'dev', closingIssues: [issue([])] }))
-      .exempt,
-    true
-  );
+  assert.equal(r.ok, true);
+  assert.equal(r.exempt, true);
 });
 
-test('does not exempt a fork branch named dev', () => {
+test('fails closed when the closing issue list is truncated', () => {
   const r = evaluateClaim(
     pr({
-      headRefName: 'dev',
-      isCrossRepository: true,
-      closingIssues: [issue([])],
+      truncated: true,
+      closingIssues: [issue(['agent:web', 'status:in-progress'])],
     })
   );
   assert.equal(r.ok, false);
+  assert.match(r.reason, /more than 25/);
+});
+
+test('fails closed when a closing issue is not readable', () => {
+  const r = evaluateClaim(
+    pr({
+      unreadable: 1,
+      closingIssues: [issue(['agent:web', 'status:in-progress'])],
+    })
+  );
+  assert.equal(r.ok, false);
+  assert.match(r.reason, /not readable/);
 });
 
 test('summary names the unclaimed issue and how to fix it', () => {
