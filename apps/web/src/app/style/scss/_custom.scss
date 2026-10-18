@@ -93,21 +93,26 @@
   --rate-ink-info: #0a6c7d;
 
   --body-font-family:
-    var(--font-inter-vi, 'Inter'), var(--font-inter, 'Inter'),
+    var(--font-inter-vi, 'Inter'), var(--font-inter-ext, 'Inter'),
+    var(--font-inter-greek, 'Inter'), var(--font-inter, 'Inter'),
     'Plus Jakarta Sans', 'Noto Sans', -apple-system, BlinkMacSystemFont,
     'Segoe UI', Roboto, sans-serif;
   --heading-font-family:
-    var(--font-inter-vi, 'Inter'), var(--font-inter, 'Inter'),
+    var(--font-inter-vi, 'Inter'), var(--font-inter-ext, 'Inter'),
+    var(--font-inter-greek, 'Inter'), var(--font-inter, 'Inter'),
     'Plus Jakarta Sans', 'Noto Sans', -apple-system, BlinkMacSystemFont,
     'Segoe UI', Roboto, sans-serif;
   --rate-font-mono:
     var(--font-jetbrains-mono-vi, 'JetBrains Mono'),
+    var(--font-jetbrains-mono-ext, 'JetBrains Mono'),
     var(--font-jetbrains-mono, 'JetBrains Mono'), 'Fira Code', ui-monospace,
     SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
-// Inter and JetBrains Mono (with Vietnamese subsets) are self-hosted by next/font
-// (src/lib/fonts.ts) and exposed as --font-inter / --font-jetbrains-mono on <html>.
+// Inter and JetBrains Mono are self-hosted from local files by next/font
+// (src/lib/fonts.ts): one face per subset, exposed on <html> as --font-inter-vi,
+// --font-inter-ext, --font-inter-greek, --font-inter (and the -mono
+// equivalents). The stacks above must keep that order; see fonts.ts.
 
 // Rate.vn v3.0 Dark Command Surface (DESIGN.md section 2): wrap an obsidian
 // section in .rate-surface-dark and every --rate-* token below resolves to
