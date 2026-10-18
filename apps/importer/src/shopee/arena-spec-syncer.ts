@@ -49,11 +49,13 @@ function stripHtmlTags(raw: string): string {
  */
 export function extractGsmArenaDataSpecs(html: string): Record<string, string> {
   const specs: Record<string, string> = {};
-  // Scan opening tags, then find the matching close with indexOf. A single
+  // Scan opening tags, then search for the matching close from there. A single
   // regex with `[^>]*\bdata-spec=` and a lazy body backtracks polynomially on
   // hostile pages (CodeQL js/polynomial-redos).
   const openTag = /<([a-z0-9]+)\b([^<>]*)>/gi;
-  const lowerHtml = html.toLowerCase();
+  // Close tags are searched on the original string with a case-insensitive
+  // regex; lowercasing the page instead would shift offsets (e.g. U+0130).
+  const closeTags = new Map<string, RegExp>();
   // A close tag missing after one position is missing after every later one,
   // so unclosed tags are searched for once rather than once per opening.
   const unclosed = new Set<string>();
@@ -61,19 +63,26 @@ export function extractGsmArenaDataSpecs(html: string): Record<string, string> {
   while ((match = openTag.exec(html)) !== null) {
     const keyMatch = /\bdata-spec=["']([^"']+)["']/i.exec(match[2] || '');
     if (!keyMatch) continue;
-    const close = `</${match[1].toLowerCase()}>`;
-    if (unclosed.has(close)) continue;
-    const closeAt = lowerHtml.indexOf(close, openTag.lastIndex);
-    if (closeAt === -1) {
-      unclosed.add(close);
+    const tag = match[1].toLowerCase();
+    if (unclosed.has(tag)) continue;
+    let closeTag = closeTags.get(tag);
+    if (!closeTag) {
+      // `tag` is [a-z0-9]+, so it needs no escaping.
+      closeTag = new RegExp(`</${tag}>`, 'gi');
+      closeTags.set(tag, closeTag);
+    }
+    closeTag.lastIndex = openTag.lastIndex;
+    const close = closeTag.exec(html);
+    if (!close) {
+      unclosed.add(tag);
       continue;
     }
     const key = keyMatch[1]?.trim();
-    const val = stripHtmlTags(html.slice(openTag.lastIndex, closeAt));
+    const val = stripHtmlTags(html.slice(openTag.lastIndex, close.index));
     if (key && val && !specs[key]) {
       specs[key] = val;
     }
-    openTag.lastIndex = closeAt + close.length;
+    openTag.lastIndex = closeTag.lastIndex;
   }
   return specs;
 }
@@ -348,7 +357,8 @@ export function parseGsmArenaBrandCatalogHtml(
         ? `${brandHint} ${rawName}`
         : rawName;
     const imgSrc = [...inner.matchAll(/<img\b([^<>]*)>/gi)]
-      .map(img => /\bsrc=["']([^"']+)["']/i.exec(img[1] || '')?.[1])
+      // `(?:^|\s)` so `data-src` lazy-load placeholders are not taken for src.
+      .map(img => /(?:^|\s)src=["']([^"']+)["']/i.exec(img[1] || '')?.[1])
       .find(Boolean);
     const url = href.startsWith('http')
       ? href
