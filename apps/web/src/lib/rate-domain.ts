@@ -50,3 +50,23 @@ export {
   type StarDistributionAnomalySummary,
   type UrlInspectionResult,
 } from './rate-api';
+
+export {
+  VALID_LEADERBOARD_CATEGORIES,
+  VALID_LEADERBOARD_CRITERIA,
+  buildPopular1v1BattlesForCategory,
+  computeJReviewsCriteriaScores,
+  computeProductStandingInCategory,
+  normalizeLeaderboardCategory,
+  normalizeLeaderboardCriterion,
+  normalizeLeaderboardPriceSegment,
+  rankMasterProductsForLeaderboard,
+  scoreMasterProductForLeaderboard,
+  type Flagship1v1BattlePair,
+  type LeaderboardCriteriaBreakdown,
+  type LeaderboardCriterionKey,
+  type LeaderboardPriceSegment,
+  type ProductCategoryStandingBadge,
+  type ProductLeaderboardBadgeInfo,
+  type ScoredLeaderboardItem,
+} from './leaderboard-engine';

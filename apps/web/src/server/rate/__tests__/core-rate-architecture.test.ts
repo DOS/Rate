@@ -4788,7 +4788,161 @@ async function runCoreArchitectureSuite() {
   }
 
   console.log(
-    '  ✅ [67/67] Worst Fake-Sale Trap selection, Canonical Cache Keys/Tag Cascade & OpenAPI parity (#396) passed'
+    '  ✅ [67/68] Worst Fake-Sale Trap selection, Canonical Cache Keys/Tag Cascade & OpenAPI parity (#396) passed'
+  );
+
+  // =========================================================================
+  // 68. Leaderboard Engine Price Segment Guards, 10-Point User Normalization & Category-Aware Criteria (#399)
+  // =========================================================================
+  {
+    const {
+      scoreMasterProductForLeaderboard: scoreFromDomain,
+      rankMasterProductsForLeaderboard: rankFromDomain,
+      computeJReviewsCriteriaScores: criteriaFromDomain,
+    } = await import('@/lib/rate-domain');
+
+    assert.equal(
+      typeof scoreFromDomain,
+      'function',
+      'rate-domain.ts must re-export scoreMasterProductForLeaderboard (#399)'
+    );
+    assert.equal(
+      typeof rankFromDomain,
+      'function',
+      'rate-domain.ts must re-export rankMasterProductsForLeaderboard (#399)'
+    );
+    assert.equal(
+      typeof criteriaFromDomain,
+      'function',
+      'rate-domain.ts must re-export computeJReviewsCriteriaScores (#399)'
+    );
+
+    // 68.1 10-point scale user rating normalization (9.2 -> 4.60 instead of clamped 5.00)
+    const tenPointUserProduct = {
+      id: '00000000-0000-0000-0000-000000000399',
+      brand: 'Sony',
+      model: 'WF-1000XM5',
+      model_key: 'sony-wf-1000xm5',
+      name: 'Sony WF-1000XM5 Wireless Earbuds',
+      slug: 'sony-wf-1000xm5',
+      has_5g: false,
+      specifications: {
+        design: { resistance: 'IPX4', weight_g: 11.8 },
+        connectivity: { bluetooth: '5.3' },
+        multimedia: { audio_features: 'ANC, LDAC, Hi-Res Audio' },
+        battery: { capacity_mah: 500, charging: 'USB-C & Qi Wireless' },
+      },
+      key_specs: { chip: 'Integrated Processor V2' },
+      images: [],
+      colors: [],
+      min_price: 5_490_000,
+      max_price: 5_990_000,
+      merchant_count: 6,
+      total_reviews: 28,
+      average_rating: 4.6,
+      user_rating_weighted: 9.2,
+      expert_rating: 9.0,
+      authentic_review_count: 25,
+      status: 'published' as const,
+      metadata: { category_slug: 'earbuds' },
+    };
+
+    const scoredEarbud = scoreFromDomain(tenPointUserProduct, 'combined');
+    assert.equal(
+      scoredEarbud.userScore5,
+      4.6,
+      'scoreMasterProductForLeaderboard must normalize 10-point user_rating_weighted (9.2 -> 4.6) instead of clamping to 5.0 (#399)'
+    );
+    assert.equal(scoredEarbud.categorySlug, 'earbuds');
+
+    // 68.2 Category-aware criteria fallback deltas for earbuds (no -0.04 penalty for missing refresh_rate_hz)
+    // base5 = 4.6 * 0.55 + 4.5 * 0.45 = 2.53 + 2.025 = 4.56
+    assert.ok(
+      scoredEarbud.criteria.screen > 4.56,
+      `Earbuds with IPX4 design must receive positive screen/design delta (${scoredEarbud.criteria.screen} > 4.56) instead of -0.04 smartphone refresh rate penalty (#399)`
+    );
+    assert.ok(
+      scoredEarbud.criteria.camera >= 4.7,
+      `Earbuds with ANC + LDAC must receive positive audio criterion delta (${scoredEarbud.criteria.camera}) (#399)`
+    );
+    assert.ok(
+      scoredEarbud.criteria.battery >= 4.7,
+      `Earbuds with 500mAh case must receive positive battery delta (${scoredEarbud.criteria.battery}) (#399)`
+    );
+
+    // 68.3 Unpriced (min_price = 0) products excluded from non-'all' priceSegments & sorted after priced ties
+    const unpricedClone = {
+      ...tenPointUserProduct,
+      id: '00000000-0000-0000-0000-000000000400',
+      slug: 'aaa-unpriced-earbud',
+      name: 'AAA Unpriced Earbud',
+      min_price: 0,
+      max_price: 0,
+      // Give unpriced clone identical criteria via explicit expert_criteria_scores so scores tie
+      expert_criteria_scores: { ...scoredEarbud.criteria },
+    };
+    const pricedClone = {
+      ...tenPointUserProduct,
+      id: '00000000-0000-0000-0000-000000000401',
+      slug: 'zzz-priced-earbud',
+      name: 'ZZZ Priced Earbud',
+      min_price: 5_490_000,
+      max_price: 5_990_000,
+      expert_criteria_scores: { ...scoredEarbud.criteria },
+    };
+
+    const under15mRanked = rankFromDomain([unpricedClone, pricedClone], {
+      category: 'earbuds',
+      criterion: 'combined',
+      priceSegment: 'under15m',
+    });
+    assert.equal(
+      under15mRanked.length,
+      1,
+      'under15m priceSegment must exclude unpriced (min_price = 0) products (#399)'
+    );
+    assert.equal(under15mRanked[0]?.slug, 'zzz-priced-earbud');
+
+    const allSegmentTiedRanked = rankFromDomain([unpricedClone, pricedClone], {
+      category: 'earbuds',
+      criterion: 'combined',
+      priceSegment: 'all',
+    });
+    assert.equal(allSegmentTiedRanked.length, 2);
+    assert.equal(
+      allSegmentTiedRanked[0]?.slug,
+      'zzz-priced-earbud',
+      'Priced product must win tie-breaker over unpriced (min_price = 0) product (#399)'
+    );
+    assert.equal(allSegmentTiedRanked[1]?.slug, 'aaa-unpriced-earbud');
+
+    // 68.4 Search query matches key_specs.chip in rankMasterProductsForLeaderboard & LeaderboardExplorer uses scoreMasterProductForLeaderboard
+    const chipSearched = rankFromDomain([pricedClone], {
+      category: 'earbuds',
+      query: 'processor v2',
+    });
+    assert.equal(
+      chipSearched.length,
+      1,
+      'rankMasterProductsForLeaderboard query must match key_specs.chip (#399)'
+    );
+
+    const lbExplorerSrc399 = fs.readFileSync(
+      path.join(
+        repoRoot,
+        'apps/web/src/components/leaderboard/LeaderboardExplorer.tsx'
+      ),
+      'utf8'
+    );
+    assert.ok(
+      lbExplorerSrc399.includes('scoreMasterProductForLeaderboard(') &&
+        lbExplorerSrc399.includes('if (minPrice <= 0) return false;'),
+      'LeaderboardExplorer.tsx must delegate scoring to scoreMasterProductForLeaderboard and guard minPrice <= 0 in price segments (#399)'
+    );
+  }
+
+  console.log(
+    '  ✅ [68/68] Leaderboard Engine price segment guards, 10-point user normalization & category-aware criteria (#399) passed'
   );
 
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
