@@ -693,7 +693,13 @@ export default function PriceHistorySection({
             )}
           </div>
 
-          <div className="table-responsive">
+          {/* Scrolls sideways on phones; focusable so keyboard users can scroll it. */}
+          <div
+            className="table-responsive"
+            tabIndex={0}
+            role="region"
+            aria-label={t('priceHistoryChartAria', { name: productName })}
+          >
             <svg
               ref={chartRef}
               viewBox={`0 0 ${chartGeometry.width} ${chartGeometry.height}`}
