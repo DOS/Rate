@@ -314,7 +314,7 @@ export default function ProductOffersExplorer({
                   ? 'btn-dark fw-semibold text-white'
                   : 'btn-outline-dark bg-white'
               }`}
-              style={{ fontSize: '0.75rem' }}
+              style={{ fontSize: '0.8125rem' }}
             >
               Tất cả ({offers.length})
             </button>
@@ -328,7 +328,7 @@ export default function ProductOffersExplorer({
                     ? 'btn-danger fw-semibold text-white'
                     : 'btn-outline-secondary bg-white'
                 }`}
-                style={{ fontSize: '0.73rem' }}
+                style={{ fontSize: '0.8125rem' }}
               >
                 {plat} ({count})
               </button>
@@ -340,7 +340,7 @@ export default function ProductOffersExplorer({
               type="button"
               onClick={handleCopyOffersMarkdown}
               className="btn btn-sm btn-outline-dark rounded-pill fw-semibold bg-white px-3 py-1"
-              style={{ fontSize: '0.76rem' }}
+              style={{ fontSize: '0.8125rem' }}
               data-testid="copy-offers-md-btn"
             >
               {copiedOffersMd
@@ -351,7 +351,7 @@ export default function ProductOffersExplorer({
               type="button"
               onClick={handleDownloadOffersCsv}
               className="btn btn-sm btn-outline-secondary rounded-pill fw-semibold bg-white px-3 py-1"
-              style={{ fontSize: '0.76rem' }}
+              style={{ fontSize: '0.8125rem' }}
               data-testid="download-offers-csv-btn"
             >
               📥 Xuất bảng giá CSV
@@ -360,7 +360,7 @@ export default function ProductOffersExplorer({
               type="button"
               onClick={handleDownloadOffersJson}
               className="btn btn-sm btn-outline-secondary rounded-pill fw-semibold bg-white px-3 py-1"
-              style={{ fontSize: '0.76rem' }}
+              style={{ fontSize: '0.8125rem' }}
               data-testid="download-offers-json-btn"
             >
               📦 Xuất JSON
@@ -378,7 +378,7 @@ export default function ProductOffersExplorer({
                   ? 'btn-success fw-semibold text-white'
                   : 'btn-outline-success bg-white'
               }`}
-              style={{ fontSize: '0.75rem' }}
+              style={{ fontSize: '0.8125rem' }}
             >
               ✓ Chỉ Official Mall
             </button>
@@ -390,7 +390,7 @@ export default function ProductOffersExplorer({
                   ? 'btn-primary fw-semibold text-white'
                   : 'btn-outline-primary bg-white'
               }`}
-              style={{ fontSize: '0.75rem' }}
+              style={{ fontSize: '0.8125rem' }}
             >
               🛡️ Chỉ gian hàng Trust &gt;= 80%
             </button>
@@ -533,7 +533,7 @@ export default function ProductOffersExplorer({
                         </div>
                         <div
                           className="text-muted"
-                          style={{ fontSize: '0.72rem' }}
+                          style={{ fontSize: '0.8125rem' }}
                         >
                           DOSafe: {offer.merchant.dosafe_risk_score}/100 |
                           Review Risk: {offer.merchant.review_risk_score}
@@ -556,7 +556,7 @@ export default function ProductOffersExplorer({
                             href="#price-history-section"
                             title={discountAnalysis.explanation}
                             className={`badge ${discountBadgeClass} text-decoration-none rounded-pill small`}
-                            style={{ fontSize: '0.7rem' }}
+                            style={{ fontSize: '0.8125rem' }}
                           >
                             {discountIcon} {discountAnalysis.badge_label}
                           </a>

@@ -55,7 +55,7 @@ export default async function ProductLeaderboardBadges({
       <span
         className="d-inline-flex align-items-center fw-semibold gap-1"
         style={{
-          fontSize: '12px',
+          fontSize: '0.8125rem',
           color: '#cbd5e1',
           letterSpacing: '0.02em',
         }}
@@ -77,7 +77,7 @@ export default async function ProductLeaderboardBadges({
             href={`/leaderboard?cat=${b.categorySlug}&criterion=${b.criterion}`}
             className="text-decoration-none d-inline-flex align-items-center rounded-pill gap-1 px-3 py-1"
             style={{
-              fontSize: '12px',
+              fontSize: '0.8125rem',
               fontWeight: 700,
               background: isFirst
                 ? 'linear-gradient(135deg, rgba(245,158,11,0.22) 0%, rgba(255,46,41,0.22) 100%)'
@@ -106,7 +106,7 @@ export default async function ProductLeaderboardBadges({
               style={{
                 opacity: 0.85,
                 fontFamily: 'var(--font-mono, monospace)',
-                fontSize: '11px',
+                fontSize: '0.8125rem',
               }}
             >
               ({b.score5.toFixed(2)}/5.0) ↗

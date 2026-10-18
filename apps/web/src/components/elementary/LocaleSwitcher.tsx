@@ -181,7 +181,11 @@ export function LocaleSwitcher({
         <span className="d-flex align-items-center">{active.flag}</span>
         <span style={{ letterSpacing: '0.5px' }}>{active.short}</span>
         <FaChevronDown
-          style={{ fontSize: '10px', opacity: 0.8, marginLeft: '1px' }}
+          style={{
+            fontSize: '0.8125rem',
+            opacity: 0.8,
+            marginLeft: '0.8125rem',
+          }}
         />
       </button>
 

@@ -316,7 +316,7 @@ export default function HeroSearchInspector({
                 <div className="d-flex justify-content-between align-items-center mb-2 px-2">
                   <span
                     className="text-muted text-uppercase fw-bold"
-                    style={{ fontSize: '0.72rem' }}
+                    style={{ fontSize: '0.8125rem' }}
                   >
                     📱 Sản phẩm chuẩn hóa ({filteredProducts.length})
                   </span>
@@ -399,7 +399,7 @@ export default function HeroSearchInspector({
                               </div>
                               <div
                                 className="text-muted d-flex align-items-center flex-wrap gap-2"
-                                style={{ fontSize: '0.75rem' }}
+                                style={{ fontSize: '0.8125rem' }}
                               >
                                 <span className="badge bg-light text-secondary border">
                                   {item.brand}
@@ -429,7 +429,7 @@ export default function HeroSearchInspector({
                               </div>
                               <div
                                 className="text-muted"
-                                style={{ fontSize: '0.7rem' }}
+                                style={{ fontSize: '0.8125rem' }}
                               >
                                 {item.merchant_count || 0} nơi bán
                               </div>
@@ -455,7 +455,7 @@ export default function HeroSearchInspector({
                     <div className="d-flex justify-content-between align-items-center mb-1 px-2">
                       <span
                         className="text-muted text-uppercase fw-bold"
-                        style={{ fontSize: '0.72rem' }}
+                        style={{ fontSize: '0.8125rem' }}
                       >
                         🏪 Gian hàng &amp; Hồ sơ Tín nhiệm (
                         {filteredMerchants.length})
@@ -492,7 +492,7 @@ export default function HeroSearchInspector({
                           </span>
                           <span
                             className="text-muted"
-                            style={{ fontSize: '0.75rem' }}
+                            style={{ fontSize: '0.8125rem' }}
                           >
                             DOSafe: {m.dosafe_risk_score}/100
                           </span>

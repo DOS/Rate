@@ -36,6 +36,8 @@ export function RateMark({ size = 28 }: { readonly size?: number }) {
       src="/img/rate-logo-512.png"
       width={size}
       height={size}
+      // Inline size beats the template's `.nav-brand img` / `.footerLogo img` widths
+      style={{ width: size, height: size }}
       alt=""
       aria-hidden="true"
       priority

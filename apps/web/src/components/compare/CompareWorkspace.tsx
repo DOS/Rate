@@ -1491,7 +1491,7 @@ export default function CompareWorkspace({
                                     </span>
                                     <span
                                       className="text-secondary fw-semibold rate-tabular"
-                                      style={{ fontSize: '12px' }}
+                                      style={{ fontSize: '0.8125rem' }}
                                     >
                                       {priceFormatted} ₫
                                     </span>
@@ -1957,7 +1957,7 @@ export default function CompareWorkspace({
                     </div>
                     <div
                       className="text-muted fw-normal"
-                      style={{ fontSize: '12px' }}
+                      style={{ fontSize: '0.8125rem' }}
                     >
                       {t('matrixHeaderSubtitle', {
                         count: products.length,
@@ -2124,7 +2124,7 @@ export default function CompareWorkspace({
                         </div>
                         <div
                           className="text-muted fw-normal"
-                          style={{ fontSize: '12px' }}
+                          style={{ fontSize: '0.8125rem' }}
                         >
                           {t('remainingSlotsSub', {
                             remaining: MAX_COMPARE_ITEMS - products.length,
@@ -2268,7 +2268,7 @@ export default function CompareWorkspace({
                                   {isWinner && (
                                     <span
                                       className="badge bg-success rounded-pill ms-1 text-white"
-                                      style={{ fontSize: '10px' }}
+                                      style={{ fontSize: '0.8125rem' }}
                                     >
                                       {t('bestBadge')}
                                     </span>

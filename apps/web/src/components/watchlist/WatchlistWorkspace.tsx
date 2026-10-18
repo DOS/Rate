@@ -872,7 +872,7 @@ export default function WatchlistWorkspace({
                         </div>
                         <div
                           className="text-muted"
-                          style={{ fontSize: '11px' }}
+                          style={{ fontSize: '0.8125rem' }}
                         >
                           {currentMin !== currentMax
                             ? t('highestPriceSub', {
@@ -900,7 +900,7 @@ export default function WatchlistWorkspace({
                                 ? 'text-danger'
                                 : 'text-muted'
                           }
-                          style={{ fontSize: '11px' }}
+                          style={{ fontSize: '0.8125rem' }}
                         >
                           {diffFromAdded === 0
                             ? t('diffUnchanged')
@@ -933,7 +933,7 @@ export default function WatchlistWorkspace({
                             setEditTarget(item.targetPrice);
                           }}
                           className="btn btn-link btn-sm text-decoration-none p-0"
-                          style={{ fontSize: '11px' }}
+                          style={{ fontSize: '0.8125rem' }}
                         >
                           {t('editTargetBtn')}
                         </button>

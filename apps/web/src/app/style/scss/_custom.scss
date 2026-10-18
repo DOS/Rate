@@ -61,6 +61,10 @@
   --rate-risk-danger: #f43f5e;
   --rate-risk-danger-bg: #fff1f2;
   --rate-fg-paragraph: #334155;
+  // Buttons use a small corner radius (no pill buttons)
+  --rate-radius-btn: 8px;
+  // Smallest UI text size (labels, chips, captions)
+  --rate-text-min: 0.8125rem;
   --rate-brand-bg: #fff1f2;
   --rate-score-star-bg: #fffbeb;
   // Crimson text for links and labels on white surfaces (#d83030 is 4.8:1 on white)

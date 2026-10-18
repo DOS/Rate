@@ -30,7 +30,7 @@ export default function FooterTop({ locale = 'vi' }: { locale?: string }) {
                     backgroundColor: 'rgba(45, 186, 105, 0.14)',
                     color: '#34d399',
                     border: '1px solid rgba(45, 186, 105, 0.3)',
-                    fontSize: '0.75rem',
+                    fontSize: '0.8125rem',
                     fontWeight: 600,
                   }}
                 >

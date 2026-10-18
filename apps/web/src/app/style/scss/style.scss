@@ -35,7 +35,7 @@ Default Style
 body {
   background: var(--bs-body-bg);
   color: var(--bs-body-color);
-  font-size: 15px;
+  font-size: 16px;
   font-family: var(--body-font-family);
   margin: 0;
   overflow-x: hidden !important;
@@ -224,17 +224,17 @@ section.min {
 } 
 
 .text-sm-muted {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--bs-gray);
 }
 
 .text-xs {
-  font-size: 10px;
+  font-size: 13px;
 }
 
 .text-sm {
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .text-md {
@@ -523,7 +523,7 @@ blockquote:not(:last-child) {
   -webkit-transition: all ease 0.4s;
   -o-transition: all ease 0.4s;
   transition: all ease 0.4s;
-  border-radius: 0.375rem;
+  border-radius: var(--rate-radius-btn);
   overflow: hidden;
   animation-delay: 0.7s;
   animation-duration: 0.5s;
@@ -581,7 +581,7 @@ blockquote:not(:last-child) {
 .btn-sm {
   padding: .25rem 1rem;
   height: 40px;
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .btn-rounded.btn-xxl {
@@ -644,7 +644,7 @@ blockquote:not(:last-child) {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .btn-filter {
@@ -656,7 +656,7 @@ blockquote:not(:last-child) {
 .btn-xs {
   padding: .2rem .5rem;
   height: 30px;
-  font-size: 10px;
+  font-size: 13px;
 }
 
 .btn-rounded {
@@ -1820,7 +1820,7 @@ textarea.form-control {
 }
 
 .selections .selected {
-  font-size: 12px;
+  font-size: 13px;
   color: #6e7b8d;
   font-weight: 500;
 }
@@ -1869,7 +1869,7 @@ textarea.form-control {
   overflow: hidden;
   white-space: nowrap;
   max-width: calc(100% - 16px);
-  font-size: 12px;
+  font-size: 13px;
   background: var(--bs-body-bg);
   padding: 0 4px;
   z-index: 2;
@@ -1880,7 +1880,7 @@ textarea.form-control {
 }
 
 .search-wrap.with-label .form-group label {
-  font-size: 12px;
+  font-size: 13px;
   color: #4e5f70;
   letter-spacing: 0;
   text-align: left;
@@ -3307,11 +3307,11 @@ div[data-overlay] p {
 }
 
 .text-xs {
-  font-size: 10px;
+  font-size: 13px;
 }
 
 .text-sm {
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .text-md {
@@ -3609,7 +3609,7 @@ table.table tr th {
 }
 
 .badge-xs {
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
 }
 
 
@@ -5349,7 +5349,7 @@ nav a {
 }
 
 .cart-content .head-cart-counter {
-  font-size: 10px;
+  font-size: 13px;
   background: var(--bs-primary);
   width: 16px;
   height: 16px;
@@ -5905,7 +5905,7 @@ span.noti-status {
           display: inline-block;
           border-radius: 50%;
           padding: 1px 6px;
-          font-size: 12px;
+          font-size: 13px;
           color: var(--bs-white);
           position: absolute !important;
           transform: translate(-50%, -50%) !important;
@@ -5994,7 +5994,7 @@ span.noti-status {
             display: inline-block;
             border-radius: 50%;
             padding: 1px 6px;
-            font-size: 12px;
+            font-size: 13px;
             color: var(--bs-white);
             position: absolute !important;
             transform: translate(-50%, -50%) !important;
@@ -6245,7 +6245,7 @@ a.mousewheel.center {
     color: rgba(255, 255, 255, 0.7);
     font-weight: 600;
     text-transform: uppercase;
-    font-size: 12px;
+    font-size: 13px;
     letter-spacing: 0.4px;
     padding: 0.5rem 1rem;
     width: auto;
@@ -6269,7 +6269,7 @@ a.mousewheel.center {
 .dropdown-toggle.toogleDrops {
   background: #f4f5f7;
   border: 1px solid #e4e7ed;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 500;
   text-transform: uppercase;
   border-radius: 50px;
@@ -6328,14 +6328,14 @@ a.mousewheel.center {
 .alert.tag-alert {
   border-radius: 50px;
   padding: 5px 25px 5px 10px;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
   margin: 0;
   color: var(--bs-body-color);
 
   .btn-close {
     padding: 10px 8px;
-    font-size: 9px;
+    font-size: 13px;
     outline: none;
     box-shadow: none;
   }
@@ -6666,7 +6666,7 @@ ListingHub Elements Styles
         align-items: center;
         justify-content: center;
         border-radius: 50%;
-        font-size: 10px;
+        font-size: 13px;
         font-weight: 400;
         border: 2px solid var(--bs-border-color);
         color: var(--bs-muted);
@@ -6687,7 +6687,7 @@ ListingHub Elements Styles
         color: var(--bs-white);
         background-color: var(--bs-dark);
         border-radius: 0.28rem;
-        font-size: 12px;
+        font-size: 13px;
         font-weight: 500;
 
         &.excellent {
@@ -6972,7 +6972,7 @@ ListingHub Elements Styles
   }
 
   .categorycounter {
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 500;
     color: var(--bs-muted);
     border-radius: 50px;
@@ -7727,7 +7727,7 @@ ListingHub Elements Styles
   background-color: var(--bs-white);
   border: none;
   text-overflow: ellipsis;
-  font-size: 12px;
+  font-size: 13px;
   -webkit-transition: border-color 0.2s ease;
   transition: border-color 0.2s ease;
   text-align: left;
@@ -8227,7 +8227,7 @@ ListingHub Elements Styles
         display: inline-flex;
         height: 36px;
         padding: 2px 14px;
-        font-size: 12px;
+        font-size: 13px;
         font-weight: 500;
         background: var(--bs-light);
         align-items: center;
@@ -8266,7 +8266,7 @@ ListingHub Elements Styles
         height: 40px;
         width: 40px;
         padding: 2px;
-        font-size: 12px;
+        font-size: 13px;
         font-weight: 500;
         background: var(--bs-light);
         align-items: center;
@@ -8387,7 +8387,7 @@ ListingHub Elements Styles
         align-items: center;
         justify-content: center;
         height: 26px;
-        font-size: 12px;
+        font-size: 13px;
         font-weight: 500;
         padding: 2px 12px;
         border-radius: 50px;
@@ -8471,7 +8471,7 @@ ListingHub Elements Styles
 
       .shippingType {
         height: 24px;
-        font-size: 11px;
+        font-size: 13px;
         padding: 2px 10px;
         border-radius: 50px;
         display: inline-flex;
@@ -8773,7 +8773,7 @@ ListingHub Elements Styles
 
       .Bookscats {
         margin-left: 05px;
-        font-size: 12px;
+        font-size: 13px;
         font-weight: 500;
         padding: 6px 12px;
         background: var(--bs-primary-bg-subtle);
@@ -8936,7 +8936,7 @@ ListingHub Elements Styles
 
       .unread {
         font-weight: 500;
-        font-size: 12px;
+        font-size: 13px;
         height: 24px;
         padding: 0 12px;
         display: inline-flex;
@@ -9042,7 +9042,7 @@ ListingHub Elements Styles
     label {
       color: #aab8c2;
       font-weight: 600;
-      font-size: 12px;
+      font-size: 13px;
       text-align: center;
       margin: 15px 0;
       width: 100%;
@@ -9082,7 +9082,7 @@ ListingHub Elements Styles
 
         span {
           color: #aab8c2;
-          font-size: 11px;
+          font-size: 13px;
           position: absolute;
           right: 0;
           bottom: -22px;
@@ -9378,7 +9378,7 @@ footer {
 
     .widget-title {
       margin-bottom: 20px;
-      font-size: 12px;
+      font-size: 13px;
       color: var(--headingColor);
       font-weight: 500;
       text-transform: uppercase;
@@ -10321,7 +10321,7 @@ Responsiveness Start
     float: left;
     font-weight: 600;
     text-transform: uppercase;
-    font-size: 12px;
+    font-size: 13px;
   }
 
   table td:last-child {
@@ -10423,7 +10423,7 @@ Responsiveness Start
   }
 
   .devider-text {
-    font-size: 12px;
+    font-size: 13px;
   }
 
   #loginmodal .social-login .row .col {
@@ -10515,7 +10515,7 @@ Responsiveness Start
   }
 
   .filterButton .filterFlex .btn {
-    font-size: 12px;
+    font-size: 13px;
     padding: 8px 9px;
   }
 
@@ -10545,7 +10545,7 @@ Responsiveness Start
   .singlelisting-item .listing-footer-item .listing-shares .smallLinks {
     width: 30px;
     height: 30px;
-    font-size: 12px;
+    font-size: 13px;
   }
 
   .bookingActivities .bookingTitle .titlesName {
@@ -10597,7 +10597,7 @@ Responsiveness Start
   .search-wrap .nav-pills.medium .nav-link {
     padding: 0.6rem 0.8rem;
     margin-right: 6px;
-    font-size: 12px;
+    font-size: 13px;
   }
 
   .btn-lg {
@@ -10664,13 +10664,13 @@ Responsiveness Start
     }
 
     .os-app-caps .text-sm {
-      font-size: 10px !important;
+      font-size: 13px !important;
     }
   }
 
   .nav.nav-pills.small .nav-link {
     padding: 0.5rem 0.6rem;
-    font-size: 10px;
+    font-size: 13px;
   }
 }
 
@@ -10882,7 +10882,7 @@ h1, h2, h3, h4, h5, h6 {
   align-items: center;
   gap: 0.375rem;
   padding: 0.25rem 0.65rem;
-  font-size: 0.72rem;
+  font-size: var(--rate-text-min);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -10897,7 +10897,7 @@ h1, h2, h3, h4, h5, h6 {
   align-items: center;
   gap: 0.25rem;
   padding: 0.2rem 0.55rem;
-  font-size: 0.74rem;
+  font-size: var(--rate-text-min);
   font-weight: 600;
   color: var(--rate-fg-paragraph);
   background-color: var(--rate-bg-canvas);
@@ -10911,7 +10911,7 @@ h1, h2, h3, h4, h5, h6 {
   align-items: center;
   gap: 0.3rem;
   padding: 0.25rem 0.6rem;
-  font-size: 0.78rem;
+  font-size: 0.875rem;
   font-weight: 700;
   color: #065f46;
   background-color: #ecfdf5;
@@ -10925,7 +10925,7 @@ h1, h2, h3, h4, h5, h6 {
   align-items: center;
   gap: 0.3rem;
   padding: 0.25rem 0.6rem;
-  font-size: 0.78rem;
+  font-size: 0.875rem;
   font-weight: 700;
   color: #3730a3;
   background-color: #eef2ff;
@@ -10967,7 +10967,7 @@ h1, h2, h3, h4, h5, h6 {
 .rate-spec-table td {
   padding: 0.6rem 1rem;
   border-bottom: 1px solid var(--rate-bg-elevated);
-  font-size: 0.86rem;
+  font-size: 0.9375rem;
   vertical-align: top;
 }
 
@@ -11060,4 +11060,18 @@ textarea:focus-visible {
 /* One ring only: drop the slider handle's own blue halo. */
 .rc-slider-handle:focus-visible {
   box-shadow: none !important;
+}
+
+/* Buttons use a small corner radius, never a pill (JOY, 2026-10-18).
+   Bootstrap's .rounded-pill is !important, so match it on .btn. */
+.btn.rounded-pill {
+  border-radius: var(--rate-radius-btn) !important;
+}
+
+/* Nested small text (code or small inside .small) never drops below the 13px floor. */
+small,
+.small,
+code,
+kbd {
+  font-size: max(0.875em, var(--rate-text-min));
 }

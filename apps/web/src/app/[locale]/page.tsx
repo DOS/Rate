@@ -990,7 +990,7 @@ export default async function Home({
                           </div>
                           <div
                             className="text-muted"
-                            style={{ fontSize: '11px' }}
+                            style={{ fontSize: '0.8125rem' }}
                           >
                             {tHome('noScamDetected')}
                           </div>
@@ -1006,7 +1006,7 @@ export default async function Home({
                           </div>
                           <div
                             className="text-muted"
-                            style={{ fontSize: '11px' }}
+                            style={{ fontSize: '0.8125rem' }}
                           >
                             {tHome('flaggedReviewsRatio', {
                               flagged: flaggedRevCount,
@@ -1027,7 +1027,7 @@ export default async function Home({
                           </div>
                           <div
                             className="text-muted"
-                            style={{ fontSize: '11px' }}
+                            style={{ fontSize: '0.8125rem' }}
                           >
                             {merchant.follower_count > 0
                               ? tHome('followersCountText', {

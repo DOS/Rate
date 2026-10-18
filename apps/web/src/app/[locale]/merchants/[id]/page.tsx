@@ -431,7 +431,10 @@ export default async function MerchantProfilePage({
                     <div className="fw-bold text-success fs-5 font-monospace">
                       {brk.authentic_count}
                     </div>
-                    <div className="text-muted" style={{ fontSize: '0.72rem' }}>
+                    <div
+                      className="text-muted"
+                      style={{ fontSize: '0.8125rem' }}
+                    >
                       {t('statAuthentic')}
                     </div>
                   </div>
@@ -441,7 +444,10 @@ export default async function MerchantProfilePage({
                     <div className="fw-bold text-warning-emphasis fs-5 font-monospace">
                       {brk.coin_spam_count}
                     </div>
-                    <div className="text-muted" style={{ fontSize: '0.72rem' }}>
+                    <div
+                      className="text-muted"
+                      style={{ fontSize: '0.8125rem' }}
+                    >
                       {t('statCoinSpam')}
                     </div>
                   </div>
@@ -451,7 +457,10 @@ export default async function MerchantProfilePage({
                     <div className="fw-bold text-danger fs-5 font-monospace">
                       {brk.seeding_fake_count}
                     </div>
-                    <div className="text-muted" style={{ fontSize: '0.72rem' }}>
+                    <div
+                      className="text-muted"
+                      style={{ fontSize: '0.8125rem' }}
+                    >
                       {t('statSeedingFake')}
                     </div>
                   </div>
@@ -461,7 +470,10 @@ export default async function MerchantProfilePage({
                     <div className="fw-bold text-secondary fs-5 font-monospace">
                       {brk.sabotage_or_bombing_count}
                     </div>
-                    <div className="text-muted" style={{ fontSize: '0.72rem' }}>
+                    <div
+                      className="text-muted"
+                      style={{ fontSize: '0.8125rem' }}
+                    >
                       {t('statSabotage')}
                     </div>
                   </div>
@@ -638,14 +650,14 @@ export default async function MerchantProfilePage({
                             <Link
                               href={`${revCatBase}/${rev.master_slug}#jreviews-section`}
                               className="text-primary text-decoration-none"
-                              style={{ fontSize: '0.75rem' }}
+                              style={{ fontSize: '0.8125rem' }}
                             >
                               {rev.product_title}
                             </Link>
                           ) : (
                             <div
                               className="text-muted"
-                              style={{ fontSize: '0.75rem' }}
+                              style={{ fontSize: '0.8125rem' }}
                             >
                               {rev.product_title}
                             </div>
@@ -663,14 +675,14 @@ export default async function MerchantProfilePage({
                       <div className="d-flex justify-content-between align-items-center border-top mt-auto flex-wrap gap-2 pt-2">
                         <span
                           className={`badge ${flagBadge.cls} rounded-pill`}
-                          style={{ fontSize: '0.72rem' }}
+                          style={{ fontSize: '0.8125rem' }}
                         >
                           {flagBadge.label}
                         </span>
                         {rev.reason && (
                           <span
                             className="text-muted"
-                            style={{ fontSize: '0.72rem' }}
+                            style={{ fontSize: '0.8125rem' }}
                           >
                             {rev.reason}
                           </span>
@@ -770,7 +782,7 @@ export default async function MerchantProfilePage({
                               </div>
                               <div
                                 className="text-muted"
-                                style={{ fontSize: '0.75rem' }}
+                                style={{ fontSize: '0.8125rem' }}
                               >
                                 {t('itemMetaLine')}{' '}
                                 <code>{item.platform_item_id}</code> •{' '}
@@ -801,7 +813,7 @@ export default async function MerchantProfilePage({
                               </div>
                               <div
                                 className="text-muted"
-                                style={{ fontSize: '0.75rem' }}
+                                style={{ fontSize: '0.8125rem' }}
                               >
                                 {t('lowestMarketPriceLabel')}{' '}
                                 <strong className="font-monospace">
@@ -840,7 +852,7 @@ export default async function MerchantProfilePage({
                               <div
                                 className="text-muted mt-1"
                                 style={{
-                                  fontSize: '0.73rem',
+                                  fontSize: '0.8125rem',
                                   maxWidth: '280px',
                                 }}
                               >

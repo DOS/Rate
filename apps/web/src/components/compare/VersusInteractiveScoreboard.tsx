@@ -373,7 +373,7 @@ export default function VersusInteractiveScoreboard({
                   ? 'btn-danger fw-bold text-white'
                   : 'btn-outline-light text-white-50'
               }`}
-              style={{ fontSize: '0.76rem' }}
+              style={{ fontSize: '0.8125rem' }}
             >
               {item.label}
             </button>
@@ -386,7 +386,7 @@ export default function VersusInteractiveScoreboard({
                 ? 'btn-warning text-dark fw-bold'
                 : 'btn-outline-secondary text-light'
             }`}
-            style={{ fontSize: '0.76rem' }}
+            style={{ fontSize: '0.8125rem' }}
           >
             🎛️ {t('customWeightsBtn')}
           </button>

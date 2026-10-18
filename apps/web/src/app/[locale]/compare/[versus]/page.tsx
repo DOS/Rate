@@ -181,7 +181,7 @@ export default async function VersusComparePage({ params }: VersusPageProps) {
                 background: 'rgba(255,46,41,0.16)',
                 border: '1px solid rgba(255,46,41,0.4)',
                 color: '#ff6b66',
-                fontSize: '11px',
+                fontSize: '0.8125rem',
                 fontWeight: 700,
               }}
             >

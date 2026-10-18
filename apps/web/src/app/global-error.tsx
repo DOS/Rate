@@ -44,7 +44,7 @@ export default function GlobalError({
               backgroundColor: 'rgba(216, 48, 48, 0.15)',
               color: '#d83030',
               fontWeight: 700,
-              fontSize: '12px',
+              fontSize: '0.8125rem',
               padding: '6px 12px',
               borderRadius: '999px',
               marginBottom: '16px',

@@ -410,7 +410,7 @@ export async function ProductDetailView({
                       <span
                         className="badge rounded-pill px-2 py-1"
                         style={{
-                          fontSize: '0.7rem',
+                          fontSize: '0.8125rem',
                           backgroundColor:
                             bayesianSummary.confidenceTier === 'high'
                               ? 'rgba(45, 186, 105, 0.2)'
@@ -431,7 +431,7 @@ export async function ProductDetailView({
                       {bayesianSummary.effectiveWeightSum > 0 && (
                         <span
                           className="small font-monospace"
-                          style={{ fontSize: '0.72rem', color: '#94a3b8' }}
+                          style={{ fontSize: '0.8125rem', color: '#94a3b8' }}
                         >
                           Σw={bayesianSummary.effectiveWeightSum.toFixed(2)} |
                           c=
@@ -1559,7 +1559,7 @@ export async function ProductDetailView({
                                     ? 'bg-success-subtle text-success'
                                     : 'bg-secondary-subtle text-secondary'
                                 }`}
-                                style={{ fontSize: '11px' }}
+                                style={{ fontSize: '0.8125rem' }}
                               >
                                 {priceDelta < 0
                                   ? t('cheaperByBadge', {

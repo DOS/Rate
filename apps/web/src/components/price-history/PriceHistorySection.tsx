@@ -453,7 +453,7 @@ export default function PriceHistorySection({
             <div className="h5 fw-bold text-danger mb-1">
               {formatVnd(history.currentMinPrice)}
             </div>
-            <div className="text-muted" style={{ fontSize: '0.75rem' }}>
+            <div className="text-muted" style={{ fontSize: '0.8125rem' }}>
               Tổng hợp từ {offerAnalyses.length} gian hàng
             </div>
           </div>
@@ -469,7 +469,7 @@ export default function PriceHistorySection({
             </div>
             <div
               className="text-success-emphasis"
-              style={{ fontSize: '0.75rem' }}
+              style={{ fontSize: '0.8125rem' }}
             >
               {history.lowestEverMerchant
                 ? `${history.lowestEverMerchant} (${history.lowestEverDate ? formatDateShort(history.lowestEverDate) : ''})`
@@ -484,7 +484,7 @@ export default function PriceHistorySection({
             <div className="h5 fw-bold text-dark mb-1">
               {formatVnd(history.highestEverPrice)}
             </div>
-            <div className="text-muted" style={{ fontSize: '0.75rem' }}>
+            <div className="text-muted" style={{ fontSize: '0.8125rem' }}>
               Dựa trên {history.points.length} mốc quan sát giá
             </div>
           </div>
@@ -508,7 +508,7 @@ export default function PriceHistorySection({
                 ? `${history.fakeDiscountCount} Cảnh báo ảo`
                 : '100% Minh bạch'}
             </div>
-            <div className="text-muted" style={{ fontSize: '0.75rem' }}>
+            <div className="text-muted" style={{ fontSize: '0.8125rem' }}>
               So sánh giá gạch ngang vs lịch sử thực
             </div>
           </div>
@@ -672,7 +672,7 @@ export default function PriceHistorySection({
                     x={chartGeometry.padLeft - 8}
                     y={t.y + 4}
                     textAnchor="end"
-                    fontSize="11"
+                    fontSize="13"
                     fill="#64748b"
                   >
                     {formatCompactVnd(t.value)}
@@ -781,7 +781,7 @@ export default function PriceHistorySection({
                     x={chartGeometry.padLeft + chartGeometry.plotW / 2}
                     y={chartGeometry.height - 12}
                     textAnchor="middle"
-                    fontSize="11"
+                    fontSize="13"
                     fill="#64748b"
                   >
                     {formatDateShort(
@@ -794,7 +794,7 @@ export default function PriceHistorySection({
                       x={chartGeometry.mapped[0]?.x ?? chartGeometry.padLeft}
                       y={chartGeometry.height - 12}
                       textAnchor="start"
-                      fontSize="11"
+                      fontSize="13"
                       fill="#64748b"
                     >
                       {formatDateShort(
@@ -810,7 +810,7 @@ export default function PriceHistorySection({
                         }
                         y={chartGeometry.height - 12}
                         textAnchor="middle"
-                        fontSize="11"
+                        fontSize="13"
                         fill="#64748b"
                       >
                         {formatDateShort(
@@ -828,7 +828,7 @@ export default function PriceHistorySection({
                         }
                         y={chartGeometry.height - 12}
                         textAnchor="end"
-                        fontSize="11"
+                        fontSize="13"
                         fill="#64748b"
                       >
                         {formatDateShort(
@@ -899,7 +899,7 @@ export default function PriceHistorySection({
 
                   <div
                     className="d-flex text-muted mb-2 flex-wrap gap-3"
-                    style={{ fontSize: '0.78rem' }}
+                    style={{ fontSize: '0.8125rem' }}
                   >
                     <span>
                       Trung vị lịch sử:{' '}

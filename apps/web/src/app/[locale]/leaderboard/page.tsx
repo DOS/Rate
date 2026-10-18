@@ -238,7 +238,7 @@ export default async function LeaderboardPage({
                     background: 'rgba(216, 48, 48,0.14)',
                     border: '1px solid rgba(216, 48, 48,0.35)',
                     color: '#ff6b66',
-                    fontSize: '11px',
+                    fontSize: '0.8125rem',
                     fontWeight: 700,
                     letterSpacing: '0.06em',
                   }}
@@ -290,7 +290,7 @@ export default async function LeaderboardPage({
                       >
                         {products.length}
                       </div>
-                      <div style={{ fontSize: '11px', color: '#94a3b8' }}>
+                      <div style={{ fontSize: '0.8125rem', color: '#94a3b8' }}>
                         {copy.statProducts}
                       </div>
                     </div>
@@ -305,7 +305,7 @@ export default async function LeaderboardPage({
                       >
                         5
                       </div>
-                      <div style={{ fontSize: '11px', color: '#94a3b8' }}>
+                      <div style={{ fontSize: '0.8125rem', color: '#94a3b8' }}>
                         {copy.statCategories}
                       </div>
                     </div>
@@ -320,7 +320,7 @@ export default async function LeaderboardPage({
                       >
                         8
                       </div>
-                      <div style={{ fontSize: '11px', color: '#94a3b8' }}>
+                      <div style={{ fontSize: '0.8125rem', color: '#94a3b8' }}>
                         {copy.statCriteria}
                       </div>
                     </div>
@@ -332,7 +332,7 @@ export default async function LeaderboardPage({
                       style={{
                         background: 'rgba(45, 186, 105,0.15)',
                         color: '#34d399',
-                        fontSize: '11px',
+                        fontSize: '0.8125rem',
                       }}
                     >
                       🛡️ {copy.statZeroBias}
@@ -341,7 +341,7 @@ export default async function LeaderboardPage({
                       <Link
                         href="/compare"
                         className="btn btn-sm btn-outline-light rounded-pill px-3"
-                        style={{ fontSize: '12px', fontWeight: 600 }}
+                        style={{ fontSize: '0.8125rem', fontWeight: 600 }}
                       >
                         ⚖️ {copy.compareCta}
                       </Link>
@@ -351,7 +351,7 @@ export default async function LeaderboardPage({
                         style={{
                           background: '#d83030',
                           color: '#ffffff',
-                          fontSize: '12px',
+                          fontSize: '0.8125rem',
                           fontWeight: 600,
                         }}
                       >
