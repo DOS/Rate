@@ -335,9 +335,9 @@ export async function ProductDetailView({
                   <span
                     className="badge rounded-pill px-3 py-1"
                     style={{
-                      backgroundColor: 'rgba(16, 185, 129, 0.16)',
+                      backgroundColor: 'rgba(45, 186, 105, 0.16)',
                       color: '#34d399',
-                      border: '1px solid rgba(16, 185, 129, 0.35)',
+                      border: '1px solid rgba(45, 186, 105, 0.35)',
                     }}
                   >
                     {t('authenticReviewsBadge', { count: authenticCount })}
@@ -413,7 +413,7 @@ export async function ProductDetailView({
                           fontSize: '0.7rem',
                           backgroundColor:
                             bayesianSummary.confidenceTier === 'high'
-                              ? 'rgba(16, 185, 129, 0.2)'
+                              ? 'rgba(45, 186, 105, 0.2)'
                               : bayesianSummary.confidenceTier === 'medium'
                                 ? 'rgba(56, 189, 248, 0.2)'
                                 : 'rgba(251, 191, 36, 0.18)',
@@ -569,7 +569,7 @@ export async function ProductDetailView({
                                   val == null
                                     ? 'transparent'
                                     : val >= 4.5
-                                      ? '#10b981'
+                                      ? '#2dba69'
                                       : val >= 3.8
                                         ? '#f59e0b'
                                         : '#f43f5e',

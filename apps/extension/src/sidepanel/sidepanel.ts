@@ -46,7 +46,7 @@ function buildSvgSparkline(points: ExtensionPriceHistoryPoint[]): string {
     <svg viewBox="0 0 ${width} ${height}" width="100%" height="${height}" style="background: #101318; border-radius: 8px; border: 1px solid #2a2f3a; margin-top: 8px;">
       <polyline
         fill="none"
-        stroke="#FF2E29"
+        stroke="#d83030"
         stroke-width="2.2"
         points="${coords.join(' ')}"
       />
@@ -508,7 +508,7 @@ function renderPanelContent(
         <div class="stats-grid">
           <div class="stat-box">
             <div class="stat-label">Hạng Danh Mục</div>
-            <div class="stat-val" style="color: #FF2E29;">#${overallBadge.rank} / ${overallBadge.totalInCategory}</div>
+            <div class="stat-val" style="color: #d83030;">#${overallBadge.rank} / ${overallBadge.totalInCategory}</div>
           </div>
           <div class="stat-box">
             <div class="stat-label">Điểm Tổng Hợp</div>

@@ -134,7 +134,7 @@ export default async function Home({
         className="hero-header position-relative overflow-hidden"
         style={{
           background:
-            'radial-gradient(circle at 20% 20%, rgba(255, 46, 41, 0.16), transparent 45%), radial-gradient(circle at 80% 15%, rgba(99, 102, 241, 0.14), transparent 42%), linear-gradient(180deg, #0f1113 0%, #141821 100%)',
+            'radial-gradient(circle at 20% 20%, rgba(216, 48, 48, 0.16), transparent 45%), radial-gradient(circle at 80% 15%, rgba(99, 102, 241, 0.14), transparent 42%), linear-gradient(180deg, #0f1113 0%, #141821 100%)',
           paddingTop: '4.5rem',
           paddingBottom: '5rem',
           borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
@@ -169,8 +169,8 @@ export default async function Home({
                     className="rounded-3 d-inline-block px-3 py-1"
                     style={{
                       background:
-                        'linear-gradient(135deg, rgba(255, 46, 41, 0.22), rgba(225, 29, 72, 0.12))',
-                      border: '1px solid rgba(255, 46, 41, 0.45)',
+                        'linear-gradient(135deg, rgba(216, 48, 48, 0.22), rgba(225, 29, 72, 0.12))',
+                      border: '1px solid rgba(216, 48, 48, 0.45)',
                       color: '#ff6b6b',
                     }}
                   >
@@ -259,7 +259,7 @@ export default async function Home({
                   >
                     <div
                       className="fw-bold fs-4"
-                      style={{ color: '#10b981', letterSpacing: '-0.02em' }}
+                      style={{ color: '#2dba69', letterSpacing: '-0.02em' }}
                     >
                       {platformStats.totalReviewsCount}
                     </div>

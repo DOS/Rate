@@ -295,7 +295,7 @@ export async function CategoryCatalogContent({
         className="hero-banner position-relative overflow-hidden"
         style={{
           background:
-            'radial-gradient(circle at 18% 22%, rgba(255, 46, 41, 0.16), transparent 45%), radial-gradient(circle at 82% 18%, rgba(99, 102, 241, 0.14), transparent 42%), linear-gradient(180deg, #0f1113 0%, #141821 100%)',
+            'radial-gradient(circle at 18% 22%, rgba(216, 48, 48, 0.16), transparent 45%), radial-gradient(circle at 82% 18%, rgba(99, 102, 241, 0.14), transparent 42%), linear-gradient(180deg, #0f1113 0%, #141821 100%)',
           paddingTop: '3.5rem',
           paddingBottom: '4.5rem',
           borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
@@ -319,8 +319,8 @@ export async function CategoryCatalogContent({
                   <span
                     className="badge rounded-pill px-3 py-2"
                     style={{
-                      backgroundColor: 'rgba(255, 46, 41, 0.16)',
-                      border: '1px solid rgba(255, 46, 41, 0.38)',
+                      backgroundColor: 'rgba(216, 48, 48, 0.16)',
+                      border: '1px solid rgba(216, 48, 48, 0.38)',
                       color: '#ff8585',
                     }}
                   >

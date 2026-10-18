@@ -25,15 +25,15 @@ function getVerdictTheme(verdict: string): {
   switch (verdict) {
     case 'inflated_fake_sale':
       return {
-        bg: 'rgba(255, 46, 41, 0.16)',
-        border: '#FF2E29',
-        dot: '#FF2E29',
+        bg: 'rgba(216, 48, 48, 0.16)',
+        border: '#d83030',
+        dot: '#d83030',
       };
     case 'genuine_deal':
       return {
-        bg: 'rgba(16, 185, 129, 0.16)',
-        border: '#10b981',
-        dot: '#10b981',
+        bg: 'rgba(45, 186, 105, 0.16)',
+        border: '#2dba69',
+        dot: '#2dba69',
       };
     case 'above_market':
       return {
@@ -160,11 +160,11 @@ function renderShadowTrustPill(lookup: ExtensionLookupData): void {
           font-weight: 700;
         }
         .radar-deal {
-          background: rgba(16, 185, 129, 0.2);
+          background: rgba(45, 186, 105, 0.2);
           color: #34d399;
         }
         .radar-trap {
-          background: rgba(255, 46, 41, 0.2);
+          background: rgba(216, 48, 48, 0.2);
           color: #fca5a5;
         }
         .radar-spread {
@@ -184,7 +184,7 @@ function renderShadowTrustPill(lookup: ExtensionLookupData): void {
           text-overflow: ellipsis;
         }
         .cta-btn {
-          background: #FF2E29;
+          background: #d83030;
           color: #ffffff;
           border: none;
           border-radius: 999px;

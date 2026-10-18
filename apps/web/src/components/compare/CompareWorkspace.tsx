@@ -1774,9 +1774,9 @@ export default function CompareWorkspace({
               <span
                 className="badge rounded-pill fw-semibold px-3 py-1"
                 style={{
-                  backgroundColor: 'rgba(16, 185, 129, 0.16)',
+                  backgroundColor: 'rgba(45, 186, 105, 0.16)',
                   color: '#34d399',
-                  border: '1px solid rgba(16, 185, 129, 0.3)',
+                  border: '1px solid rgba(45, 186, 105, 0.3)',
                 }}
               >
                 {t('verdictBadge', { category: activeCategoryMeta.label })}

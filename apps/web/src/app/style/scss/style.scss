@@ -702,7 +702,7 @@ blockquote:not(:last-child) {
 .btn-light-primary {
   background: var(--bs-primary-bg-subtle);
   border-color: var(--bs-primary-border-subtle);
-  color: var(--bs-primary);
+  color: var(--bs-primary-text-emphasis);
 
   &:hover {
     background: var(--bs-primary) !important;
@@ -10945,7 +10945,7 @@ h1, h2, h3, h4, h5, h6 {
 .rate-criteria-fill {
   height: 100%;
   border-radius: 999px;
-  background: linear-gradient(90deg, #6366f1 0%, #10b981 100%);
+  background: linear-gradient(90deg, #6366f1 0%, #2dba69 100%);
 }
 
 .rate-spec-group-card {
@@ -11012,11 +11012,6 @@ h1, h2, h3, h4, h5, h6 {
   color: #f8fafc;
 }
 
-/* On obsidian grounds the #12151a disc needs a hairline to stay visible */
-.rate-wordmark-light .rate-mark circle:first-child {
-  stroke: rgba(255, 255, 255, 0.16);
-  stroke-width: 3;
-}
 
 /* Visible keyboard focus (WCAG 2.4.7). The template strips outlines and box-shadows
    from .btn and .form-control on :focus; :focus-visible restores a solid ring for

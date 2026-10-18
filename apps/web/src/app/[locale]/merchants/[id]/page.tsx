@@ -200,7 +200,7 @@ export default async function MerchantProfilePage({
                     width: '72px',
                     height: '72px',
                     background:
-                      'linear-gradient(135deg, rgba(255, 46, 41, 0.25), rgba(99, 102, 241, 0.25))',
+                      'linear-gradient(135deg, rgba(216, 48, 48, 0.25), rgba(99, 102, 241, 0.25))',
                     border: '1px solid rgba(255, 255, 255, 0.14)',
                   }}
                 >
@@ -215,9 +215,9 @@ export default async function MerchantProfilePage({
                       <span
                         className="badge rounded-pill d-inline-flex align-items-center gap-1 px-3 py-1"
                         style={{
-                          backgroundColor: 'rgba(16, 185, 129, 0.16)',
+                          backgroundColor: 'rgba(45, 186, 105, 0.16)',
                           color: '#34d399',
-                          border: '1px solid rgba(16, 185, 129, 0.35)',
+                          border: '1px solid rgba(45, 186, 105, 0.35)',
                         }}
                       >
                         <BsCheckCircleFill /> {t('officialMallLabel')}

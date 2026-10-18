@@ -27,9 +27,9 @@ export default function FooterTop({ locale = 'vi' }: { locale?: string }) {
                 <span
                   className="badge rounded-pill d-inline-flex align-items-center gap-1 px-3 py-1"
                   style={{
-                    backgroundColor: 'rgba(16, 185, 129, 0.14)',
+                    backgroundColor: 'rgba(45, 186, 105, 0.14)',
                     color: '#34d399',
-                    border: '1px solid rgba(16, 185, 129, 0.3)',
+                    border: '1px solid rgba(45, 186, 105, 0.3)',
                     fontSize: '0.75rem',
                     fontWeight: 600,
                   }}
