@@ -357,3 +357,112 @@ export function parseVersusQueryParams(
 
   return null;
 }
+
+const UUID_PARAM_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Parses and validates query parameters for `GET /api/v1/rate/reviews`.
+ * Rejects missing parameters, malformed `masterProductId` UUIDs (even when `slug` is also present),
+ * and overlong or non-canonical `slug` strings (`null`).
+ */
+export function parseReviewsQueryParams(
+  searchParams: Pick<URLSearchParams, 'get'>
+): {
+  masterProductId: string | null;
+  slug: string | null;
+  hideFake: boolean;
+} | null {
+  const hideFakeRaw = searchParams.get('hideFake');
+  const hideFake =
+    hideFakeRaw === '1' || hideFakeRaw?.trim().toLowerCase() === 'true';
+
+  const rawMasterId = searchParams.get('masterProductId');
+  if (rawMasterId != null && rawMasterId.trim() !== '') {
+    const trimmedId = rawMasterId.trim();
+    if (!UUID_PARAM_REGEX.test(trimmedId)) {
+      return null;
+    }
+    return { masterProductId: trimmedId, slug: null, hideFake };
+  }
+
+  const rawSlug = searchParams.get('slug');
+  if (rawSlug != null && rawSlug.trim() !== '') {
+    const trimmedSlug = rawSlug.trim();
+    if (
+      trimmedSlug.length > 120 ||
+      !CANONICAL_PRODUCT_SLUG_REGEX.test(trimmedSlug)
+    ) {
+      return null;
+    }
+    return { masterProductId: null, slug: trimmedSlug, hideFake };
+  }
+
+  return null;
+}
+
+const VALID_PRODUCT_CATEGORY_SLUGS = new Set([
+  'all',
+  'smartphones',
+  'tablets',
+  'laptops',
+  'smartwatches',
+  'earbuds',
+]);
+
+const VALID_BRAND_TOKEN_REGEX = /^[\p{L}\p{N}\s.+-]+$/u;
+
+/**
+ * Validates and normalizes `category`, `brands`/`brand`, and `minPrice`/`maxPrice` bounds
+ * for `GET /api/v1/rate/products`. Returns `null` when `category` is unknown or `minPrice > maxPrice`.
+ */
+export function parseProductsFilterBounds(
+  searchParams: Pick<URLSearchParams, 'get'>,
+  maxBrands = 15
+): {
+  categorySlug: string;
+  brands: string[] | undefined;
+  minPrice: number | undefined;
+  maxPrice: number | undefined;
+} | null {
+  const rawCategory = searchParams.get('category');
+  const categorySlug =
+    rawCategory == null || rawCategory.trim() === ''
+      ? 'smartphones'
+      : rawCategory.trim().toLowerCase();
+  if (!VALID_PRODUCT_CATEGORY_SLUGS.has(categorySlug)) {
+    return null;
+  }
+
+  const rawBrands = parseBoundedStringParam(
+    searchParams.get('brands') || searchParams.get('brand'),
+    400
+  );
+  let brands: string[] | undefined;
+  if (rawBrands) {
+    const list: string[] = [];
+    const seen = new Set<string>();
+    for (const part of rawBrands.split(',')) {
+      const b = part.trim();
+      if (!b || b.length > 40 || !VALID_BRAND_TOKEN_REGEX.test(b)) continue;
+      const lower = b.toLowerCase();
+      if (seen.has(lower)) continue;
+      seen.add(lower);
+      list.push(b);
+      if (list.length >= maxBrands) break;
+    }
+    if (list.length > 0) {
+      brands = list;
+    }
+  }
+
+  const minPrice =
+    parseOptionalVndPriceParam(searchParams.get('minPrice')) ?? undefined;
+  const maxPrice =
+    parseOptionalVndPriceParam(searchParams.get('maxPrice')) ?? undefined;
+  if (minPrice !== undefined && maxPrice !== undefined && minPrice > maxPrice) {
+    return null;
+  }
+
+  return { categorySlug, brands, minPrice, maxPrice };
+}
