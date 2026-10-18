@@ -489,8 +489,59 @@ async function runTests() {
       );
     }
   }
+  const apiHandlerMod =
+    await import('../../web/src/server/rate/api-handler.js');
+  const {
+    BoundedSlidingWindowRateLimiter,
+    extractClientRateLimitKey,
+    parseBoundedStringParam,
+  } = (
+    'BoundedSlidingWindowRateLimiter' in apiHandlerMod
+      ? apiHandlerMod
+      : (apiHandlerMod as unknown as { default: typeof apiHandlerMod }).default
+  ) as typeof apiHandlerMod;
+
+  const limiter = new BoundedSlidingWindowRateLimiter({
+    windowMs: 60_000,
+    maxRequests: 2,
+    maxBuckets: 3,
+  });
+  assert.equal(limiter.allow('1.2.3.4', 1_000), true);
+  assert.equal(limiter.allow('1.2.3.4', 2_000), true);
+  assert.equal(
+    limiter.allow('1.2.3.4', 3_000),
+    false,
+    'Must reject once maxRequests is reached within windowMs'
+  );
+  assert.equal(
+    limiter.allow('1.2.3.4', 61_001),
+    true,
+    'Must reset window after windowMs elapses'
+  );
+  assert.equal(limiter.allow('2.2.2.2', 62_000), true);
+  assert.equal(limiter.allow('3.3.3.3', 62_000), true);
+  assert.equal(limiter.allow('4.4.4.4', 62_000), true);
+  assert.equal(
+    limiter.size,
+    3,
+    'BoundedSlidingWindowRateLimiter must never exceed maxBuckets'
+  );
+  assert.equal(
+    extractClientRateLimitKey(
+      new Headers({ 'x-forwarded-for': ' 203.0.113.7 , 10.0.0.1 ' })
+    ),
+    '203.0.113.7'
+  );
+  assert.equal(
+    extractClientRateLimitKey(new Headers({ 'x-real-ip': '198.51.100.9' })),
+    '198.51.100.9'
+  );
+  assert.equal(extractClientRateLimitKey(new Headers()), 'anon');
+  assert.equal(parseBoundedStringParam('  hello world  ', 5), 'hello');
+  assert.equal(parseBoundedStringParam('   ', 10), null);
+
   console.log(
-    '  ✅ [5/6] Zero-Trust Quarantine, Opt-In Consent, MV3 Security Guards (C7) & Full 10/10 Platform Capability Matrix passed'
+    '  ✅ [5/6] Zero-Trust Quarantine, Opt-In Consent, Bounded Rate Limiter, MV3 Security Guards (C7) & Full 10/10 Platform Capability Matrix passed'
   );
 
   // 6. Live Read-Only Lookup against Supabase `rate` schema (when real credentials are present)
