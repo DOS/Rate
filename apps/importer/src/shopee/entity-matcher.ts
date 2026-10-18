@@ -186,7 +186,9 @@ export class EntityMatcher {
   public async enrichMasterProductById(masterId: string): Promise<boolean> {
     const { data: row, error: fetchErr } = await this.supabase
       .from('master_products')
-      .select('id, brand, model, storage_gb, ram_gb, name, description, colors')
+      .select(
+        'id, brand, model, storage_gb, ram_gb, screen_size_inch, battery_mah, has_5g, name, description, colors'
+      )
       .eq('id', masterId)
       .maybeSingle();
 
@@ -215,9 +217,9 @@ export class EntityMatcher {
       .from('master_products')
       .update({
         ram_gb: row.ram_gb ?? aiResult.ram_gb,
-        screen_size_inch: aiResult.screen_size_inch,
-        battery_mah: aiResult.battery_mah,
-        has_5g: aiResult.has_5g,
+        screen_size_inch: row.screen_size_inch ?? aiResult.screen_size_inch,
+        battery_mah: row.battery_mah ?? aiResult.battery_mah,
+        has_5g: aiResult.has_5g ?? row.has_5g,
         specifications: aiResult.specifications,
         key_specs: aiResult.key_specs,
         updated_at: new Date().toISOString(),
