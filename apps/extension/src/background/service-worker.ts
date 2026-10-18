@@ -1,8 +1,14 @@
+import { RATE_API_V1_ENDPOINTS } from '@repo/shared-data';
 import type {
   ExtensionLookupData,
   ExtensionSettings,
   ExtractedPageProductSignal,
 } from '../types.js';
+import {
+  detectEcommercePlatform,
+  extractIdsFromUrl,
+  sanitizeProductUrl,
+} from '../extractors/ecommerce-detector.js';
 import {
   DEFAULT_API_BASE_URL,
   isPrivilegedExtensionSender,
@@ -53,13 +59,14 @@ async function fetchExtensionLookup(
     params.set('originalPrice', String(signal.originalPrice));
   }
 
-  const endpoint = `${settings.apiBaseUrl}/api/v1/rate/extension/lookup?${params.toString()}`;
+  const endpoint = `${settings.apiBaseUrl}${RATE_API_V1_ENDPOINTS.EXTENSION_LOOKUP}?${params.toString()}`;
   const response = await fetch(endpoint, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
       'X-Rate-Extension-Version': '2.0.0',
     },
+    signal: AbortSignal.timeout(10_000),
   });
 
   if (!response.ok) return null;
@@ -94,26 +101,30 @@ async function maybeSendOptInCrowdSignal(
   if (!signal.externalItemId || !signal.price || signal.price <= 0) return;
 
   try {
-    await fetch(`${settings.apiBaseUrl}/api/v1/rate/extension/ingest`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Rate-Extension-Version': '2.0.0',
-      },
-      body: JSON.stringify({
-        platform: signal.platform,
-        externalItemId: signal.externalItemId,
-        externalShopId: signal.externalShopId,
-        url: signal.canonicalUrl,
-        title: signal.title,
-        selectedVariant: signal.selectedVariant,
-        price: signal.price,
-        originalPrice: signal.originalPrice,
-        ratingStar: signal.ratingStar,
-        ratingCount: signal.ratingCount,
-        userConsentOptIn: true,
-      }),
-    });
+    await fetch(
+      `${settings.apiBaseUrl}${RATE_API_V1_ENDPOINTS.EXTENSION_INGEST}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Rate-Extension-Version': '2.0.0',
+        },
+        signal: AbortSignal.timeout(8_000),
+        body: JSON.stringify({
+          platform: signal.platform,
+          externalItemId: signal.externalItemId,
+          externalShopId: signal.externalShopId,
+          url: signal.canonicalUrl,
+          title: signal.title,
+          selectedVariant: signal.selectedVariant,
+          price: signal.price,
+          originalPrice: signal.originalPrice,
+          ratingStar: signal.ratingStar,
+          ratingCount: signal.ratingCount,
+          userConsentOptIn: true,
+        }),
+      }
+    );
   } catch {
     // Non-blocking background quarantine submission
   }
@@ -161,8 +172,8 @@ chrome.runtime.onInstalled.addListener(async () => {
         crowdContributeOptIn: DEFAULT_SETTINGS.crowdContributeOptIn,
       });
     }
-  } catch (err) {
-    console.error('[Rate Extension] Initialization error:', err);
+  } catch {
+    // Ignore sidePanel or storage init errors during extension reload
   }
 });
 
@@ -287,11 +298,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
 
         const isUrl = /^https?:\/\//i.test(rawQuery);
+        const canonicalUrl = isUrl
+          ? sanitizeProductUrl(rawQuery) || rawQuery.split('?')[0] || rawQuery
+          : '';
+        const detectedPlatform = isUrl
+          ? detectEcommercePlatform(canonicalUrl)
+          : null;
+        const extractedIds =
+          isUrl && detectedPlatform
+            ? extractIdsFromUrl(detectedPlatform, canonicalUrl)
+            : { externalItemId: null, externalShopId: null };
+
         const syntheticSignal: ExtractedPageProductSignal = {
-          platform: 'shopee',
-          canonicalUrl: isUrl ? rawQuery.split('?')[0] || rawQuery : '',
-          externalItemId: null,
-          externalShopId: null,
+          platform: detectedPlatform || 'shopee',
+          canonicalUrl,
+          externalItemId: extractedIds.externalItemId,
+          externalShopId: extractedIds.externalShopId,
           title: rawQuery,
           selectedVariant: null,
           price: null,
@@ -302,18 +324,28 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         const params = new URLSearchParams();
         params.set('mode', 'full');
+        if (detectedPlatform) {
+          params.set('platform', detectedPlatform);
+        }
         if (isUrl) {
           params.set('url', syntheticSignal.canonicalUrl);
         }
+        if (extractedIds.externalItemId) {
+          params.set('externalId', extractedIds.externalItemId);
+        }
+        if (extractedIds.externalShopId) {
+          params.set('shopId', extractedIds.externalShopId);
+        }
         params.set('title', rawQuery);
 
-        const endpoint = `${settings.apiBaseUrl}/api/v1/rate/extension/lookup?${params.toString()}`;
+        const endpoint = `${settings.apiBaseUrl}${RATE_API_V1_ENDPOINTS.EXTENSION_LOOKUP}?${params.toString()}`;
         const response = await fetch(endpoint, {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
             'X-Rate-Extension-Version': '2.0.0',
           },
+          signal: AbortSignal.timeout(10_000),
         });
 
         if (!response.ok) {
