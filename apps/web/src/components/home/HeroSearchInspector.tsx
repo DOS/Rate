@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Link, useRouter } from '@/lib/navigation';
+import { startNavigationProgress } from '@/components/elementary/NavigationProgress';
 import type { KeySpecs, MasterProduct } from '@repo/shared-data';
 import {
   getMasterProductHref,
@@ -156,6 +157,7 @@ export default function HeroSearchInspector({
     e.preventDefault();
     const trimmed = query.trim();
     if (!trimmed) {
+      startNavigationProgress('/smartphones');
       router.push('/smartphones');
       return;
     }
@@ -169,11 +171,13 @@ export default function HeroSearchInspector({
       const target = filteredProducts[activeIndex];
       if (target) {
         setIsDropdownOpen(false);
+        startNavigationProgress(getMasterProductHref(target));
         router.push(getMasterProductHref(target));
         return;
       }
     }
     setIsDropdownOpen(false);
+    startNavigationProgress(`/smartphones?q=${encodeURIComponent(trimmed)}`);
     router.push(`/smartphones?q=${encodeURIComponent(trimmed)}`);
   };
 

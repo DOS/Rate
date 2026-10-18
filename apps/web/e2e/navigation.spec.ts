@@ -1,33 +1,66 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
 // Seeded in apps/web/e2e/seed.sql.
 const SLUG = 'iphone-16-pro-max-256gb';
 
-test('navigation progress shows during a slow client navigation', async ({
-  page,
-}) => {
-  await page.goto('/smartphones');
-  // Hold the destination's RSC payload so the pending state is observable.
+/**
+ * Holds RSC responses for URLs matching `pattern` until `release()`, so the
+ * pending state of a client navigation is observable. Installed before
+ * page.goto so viewport prefetches are held too and cannot make the
+ * navigation instant.
+ */
+async function holdRsc(page: Page, pattern: string | RegExp) {
   let release!: () => void;
   const held = new Promise<void>((resolve) => (release = resolve));
-  await page.route(`**/smartphones/${SLUG}*`, async (route) => {
+  await page.route(pattern, async (route) => {
     if (route.request().headers()['rsc']) await held;
     await route.continue();
   });
+  return release;
+}
 
-  const bar = page.getByTestId('navigation-progress');
-  await expect(bar).toHaveCount(0);
-  await page
-    .locator(`a[href$="/${SLUG}"]`)
-    .filter({ visible: true })
-    .first()
-    .click();
-  await expect(bar).toBeVisible();
+test('navigation progress shows during a slow link navigation', async ({
+  page,
+}) => {
+  const release = await holdRsc(page, `**/smartphones/${SLUG}*`);
+  try {
+    await page.goto('/smartphones');
+    const bar = page.getByTestId('navigation-progress');
+    await expect(bar).toHaveCount(0);
+    await page
+      .locator(`a[href$="/${SLUG}"]`)
+      .filter({ visible: true })
+      .first()
+      .click();
+    await expect(bar).toBeVisible();
 
-  release();
-  await expect(page).toHaveURL(new RegExp(`/smartphones/${SLUG}$`));
-  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-  await expect(bar).toHaveCount(0);
+    release();
+    await expect(page).toHaveURL(new RegExp(`/smartphones/${SLUG}$`));
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await expect(bar).toHaveCount(0);
+  } finally {
+    release();
+  }
+});
+
+test('navigation progress shows for a programmatic search navigation', async ({
+  page,
+}) => {
+  const release = await holdRsc(page, /\/smartphones\?q=/);
+  try {
+    await page.goto('/');
+    const search = page.locator('form.search-wrap input[type="text"]');
+    await search.fill('Galaxy');
+    await search.press('Enter');
+    const bar = page.getByTestId('navigation-progress');
+    await expect(bar).toBeVisible();
+
+    release();
+    await expect(page).toHaveURL(/\/smartphones\?q=Galaxy$/);
+    await expect(bar).toHaveCount(0);
+  } finally {
+    release();
+  }
 });
 
 test('same-page and external links do not start the progress bar', async ({
@@ -49,5 +82,7 @@ test('same-page and external links do not start the progress bar', async ({
   });
   await page.getByText('hash', { exact: true }).click();
   await page.getByText('external', { exact: true }).click();
-  await expect(page.getByTestId('navigation-progress')).toHaveCount(0);
+  // Checked immediately: the bar would otherwise hide itself after 8 s and a
+  // retrying assertion with a longer timeout could pass anyway.
+  expect(await page.getByTestId('navigation-progress').count()).toBe(0);
 });

@@ -4,6 +4,7 @@ import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { BsFunnel, BsStarFill } from 'react-icons/bs';
 import { Link, usePathname, useRouter } from '@/lib/navigation';
+import { startNavigationProgress } from '@/components/elementary/NavigationProgress';
 import RangeSlider from './range-slider';
 import {
   formatStorageLabel,
@@ -340,6 +341,7 @@ export default function ListSidebarOne({
                                         cat.slug === 'smartwatches' ||
                                         cat.slug === 'earbuds'
                                       ) {
+                                        startNavigationProgress(`/${cat.slug}`);
                                         router.push(`/${cat.slug}`);
                                       } else {
                                         router.push(
