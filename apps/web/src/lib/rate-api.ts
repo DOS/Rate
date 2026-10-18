@@ -2989,10 +2989,6 @@ export async function getMerchantProfileById(
   };
 }
 
-/**
- * Fetch live platform statistics, category product counts, and recent verified/flagged
- * reviews from the `rate` schema to power the Homepage with 100% real database data.
- */
 /** Counters shown when platform stats cannot be read; never cached. */
 export const EMPTY_RATE_PLATFORM_STATS: RatePlatformStats = {
   masterProductsCount: 0,
@@ -3007,6 +3003,10 @@ export const EMPTY_RATE_PLATFORM_STATS: RatePlatformStats = {
   recentReviewsSample: [],
 };
 
+/**
+ * Fetch live platform statistics, category product counts, and recent verified/flagged
+ * reviews from the `rate` schema to power the Homepage with 100% real database data.
+ */
 export async function getRatePlatformStats(): Promise<RatePlatformStats> {
   const supabase = getRateClient();
 
