@@ -2415,6 +2415,11 @@ export interface MerchantListFilterParams {
   minTrust?: number;
   sort?: 'trust_desc' | 'products_desc' | 'seeding_asc' | 'followers_desc';
   limit?: number;
+  /** Database-side filters, so a lookup reads only the merchants it needs. */
+  ids?: readonly string[];
+  platformShopIds?: readonly string[];
+  /** Case-insensitive substring of the merchant name. */
+  nameContains?: string;
 }
 
 function extractPersistedBreakdown(
@@ -2519,8 +2524,16 @@ export async function getMerchantsList(
     if (params?.officialOnly) {
       q = q.eq('is_official', true);
     }
+    if (params?.ids) q = q.in('id', [...params.ids]);
+    if (params?.platformShopIds) {
+      q = q.in('platform_shop_id', [...params.platformShopIds]);
+    }
+    if (params?.nameContains) q = q.ilike('name', `%${params.nameContains}%`);
     return q;
   };
+  if (params?.ids?.length === 0 || params?.platformShopIds?.length === 0) {
+    return [];
+  }
   const hasPostQueryFilterOrSort = Boolean(
     (params?.q && params.q.trim()) ||
     (typeof params?.minTrust === 'number' && !Number.isNaN(params.minTrust)) ||
@@ -3725,7 +3738,7 @@ export async function inspectProductOrShopUrl(
         const [offers, reviews, merchantsList] = await Promise.all([
           getMasterProductOffers(masterProduct.id),
           getMasterProductReviews(masterProduct.id),
-          getMerchantsList(),
+          getMerchantsList({ ids: [matchedProd.merchant_id] }),
         ]);
         const [priceHistory, reviewSummary] = await Promise.all([
           getMasterProductPriceHistory(masterProduct.id, offers),
@@ -3758,7 +3771,9 @@ export async function inspectProductOrShopUrl(
 
   // 2. Direct lookup by Shopee/platform shop ID if URL is a shop link
   if (parsedUrl.platformShopId && !parsedUrl.platformItemId) {
-    const merchants = await getMerchantsList();
+    const merchants = await getMerchantsList({
+      platformShopIds: [parsedUrl.platformShopId],
+    });
     const matchedMerchant =
       merchants.find((m) => m.platform_shop_id === parsedUrl.platformShopId) ||
       null;
@@ -3784,16 +3799,18 @@ export async function inspectProductOrShopUrl(
   const candidateSlug = parsedUrl.internalSlug || query.toLowerCase();
   const exactMaster = await getMasterProductBySlug(candidateSlug);
   if (exactMaster) {
-    const [offers, reviews, merchantsList] = await Promise.all([
+    const [offers, reviews] = await Promise.all([
       getMasterProductOffers(exactMaster.id),
       getMasterProductReviews(exactMaster.id),
-      getMerchantsList(),
-    ]);
-    const [priceHistory, reviewSummary] = await Promise.all([
-      getMasterProductPriceHistory(exactMaster.id, offers),
-      getMasterProductReviewSummary(exactMaster.id, reviews),
     ]);
     const matchedOffer = offers[0] || null;
+    const [priceHistory, reviewSummary, merchantsList] = await Promise.all([
+      getMasterProductPriceHistory(exactMaster.id, offers),
+      getMasterProductReviewSummary(exactMaster.id, reviews),
+      getMerchantsList({
+        ids: matchedOffer ? [matchedOffer.merchant.id] : [],
+      }),
+    ]);
     const discountAnalysis = matchedOffer
       ? priceHistory.byOffer[matchedOffer.id] || null
       : null;
@@ -3816,18 +3833,17 @@ export async function inspectProductOrShopUrl(
     };
   }
 
-  // 4. Search across merchants and master products by keyword
-  const [merchants, matchedProducts] = await Promise.all([
-    getMerchantsList(),
+  // 4. Search across merchants and master products by keyword. Merchant
+  // lookups are filtered in the database: this public endpoint must not read
+  // the whole directory on every request.
+  const [nameMatches, shopMatches, matchedProducts] = await Promise.all([
+    getMerchantsList({ nameContains: query, limit: 1 }),
+    getMerchantsList({ platformShopIds: [query], limit: 1 }),
     getMasterProducts({ search: query, limit: 6 }),
   ]);
-
-  const lowerQ = query.toLowerCase();
-  const matchedMerchantByName =
-    merchants.find(
-      (m) =>
-        m.name.toLowerCase().includes(lowerQ) || m.platform_shop_id === query
-    ) || null;
+  const matchedMerchantByName = nameMatches[0] ?? shopMatches[0] ?? null;
+  const merchantById = async (id: string) =>
+    (await getMerchantsList({ ids: [id] }))[0] ?? null;
 
   if (matchedProducts.length === 1) {
     const single = matchedProducts[0]!;
@@ -3844,8 +3860,7 @@ export async function inspectProductOrShopUrl(
       ? priceHistory.byOffer[matchedOffer.id] || null
       : null;
     const merchantProfile = matchedOffer
-      ? merchants.find((m) => m.id === matchedOffer.merchant.id) ||
-        matchedMerchantByName
+      ? (await merchantById(matchedOffer.merchant.id)) || matchedMerchantByName
       : matchedMerchantByName;
 
     return {

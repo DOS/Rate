@@ -848,12 +848,9 @@ export async function lookupExtensionProduct(
 
   // Step 3: Search candidate Master Products in DB (Read-Only)
   const searchKeyword = cleanModelSearchQuery || effectiveTitle || '';
-  const [catalogCandidates, merchantsList] = await Promise.all([
-    searchKeyword
-      ? getMasterProducts({ search: searchKeyword, limit: 8 })
-      : Promise.resolve([]),
-    getMerchantsList(),
-  ]);
+  const catalogCandidates = searchKeyword
+    ? await getMasterProducts({ search: searchKeyword, limit: 8 })
+    : [];
 
   let matchedMaster: MasterProduct | null = null;
   let matchStatus: ExtensionMatchStatus = 'not_found';
@@ -1073,8 +1070,10 @@ export async function lookupExtensionProduct(
         .slice(0, 4)
     : offers.slice(0, 4);
 
+  // Only the matched offer's merchant: this public endpoint used to read the
+  // whole merchant directory on every lookup.
   const merchantProfile = matchedOffer
-    ? merchantsList.find((m) => m.id === matchedOffer.merchant.id) || null
+    ? ((await getMerchantsList({ ids: [matchedOffer.merchant.id] }))[0] ?? null)
     : null;
   const radarSignal = computeProductRadarSignal(matchedMaster, offers);
 
