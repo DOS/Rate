@@ -1,11 +1,19 @@
 import { extractProductSignalFromDom } from '../extractors/ecommerce-detector.js';
+import {
+  formatSafeExtensionVnd,
+  formatSafeNumber,
+} from '../security-guards.js';
 import type { ExtensionLookupData } from '../types.js';
 
 const HOST_ID = 'rate-vn-trust-pill-host';
 
+function removeTrustPillHost(): void {
+  const existing = document.getElementById(HOST_ID);
+  if (existing) existing.remove();
+}
+
 function formatCurrencyVnd(amount: number | null | undefined): string {
-  if (!amount || amount <= 0) return 'Đang cập nhật';
-  return `${amount.toLocaleString('vi-VN')} ₫`;
+  return formatSafeExtensionVnd(amount, 'Đang cập nhật');
 }
 
 function escapeHtml(raw: string): string {
@@ -56,8 +64,7 @@ function getVerdictTheme(verdict: string): {
  */
 function renderShadowTrustPill(lookup: ExtensionLookupData): void {
   if (lookup.isAccessoryOrPart || lookup.matchStatus === 'accessory_skip') {
-    const existing = document.getElementById(HOST_ID);
-    if (existing) existing.remove();
+    removeTrustPillHost();
     return;
   }
 
@@ -73,26 +80,33 @@ function renderShadowTrustPill(lookup: ExtensionLookupData): void {
     const assessment = lookup.priceAssessment;
     const theme = getVerdictTheme(assessment.verdict);
 
-    const trustedRating =
+    const rawRating =
       lookup.masterProduct?.user_rating_weighted ||
       lookup.masterProduct?.average_rating ||
       null;
+    const trustedRating =
+      typeof rawRating === 'number' &&
+      Number.isFinite(rawRating) &&
+      rawRating > 0
+        ? rawRating
+        : null;
     const authenticRatio = lookup.reviewSummary?.authentic_pct ?? null;
 
     const cheaperSummary =
       assessment.cheaperOfferCount > 0 && assessment.maxSavingsAmount > 0
-        ? `Rẻ hơn tại ${assessment.cheaperOfferCount} nơi (-${formatCurrencyVnd(assessment.maxSavingsAmount)})`
+        ? `Rẻ hơn tại ${formatSafeNumber(assessment.cheaperOfferCount, { min: 1 })} nơi (-${formatCurrencyVnd(assessment.maxSavingsAmount)})`
         : assessment.marketMinPrice
           ? `Đáy thị trường: ${formatCurrencyVnd(assessment.marketMinPrice)}`
           : 'Bấm để xem lịch sử giá & lọc review ảo';
     const radarSig = lookup.radarSignal;
+    const radarSpreadPct = Number(radarSig?.spreadPct ?? 0);
     const radarChipHtml = radarSig
       ? radarSig.verdict === 'genuine_deal'
-        ? `<span class="radar-chip radar-deal">🔥 Đáy 60N (-${radarSig.savingsPct}%)</span>`
+        ? `<span class="radar-chip radar-deal">🔥 Đáy 60N (-${formatSafeNumber(radarSig.savingsPct, { min: 0, max: 100 })}%)</span>`
         : radarSig.verdict === 'fake_sale_trap'
-          ? `<span class="radar-chip radar-trap">🚨 Bẫy Sale (+${radarSig.fakeMarkupPct}%)</span>`
-          : radarSig.spreadPct >= 5
-            ? `<span class="radar-chip radar-spread">📊 Lệch ${radarSig.spreadPct}%</span>`
+          ? `<span class="radar-chip radar-trap">🚨 Bẫy Sale (+${formatSafeNumber(radarSig.fakeMarkupPct, { min: 0, max: 10000 })}%)</span>`
+          : Number.isFinite(radarSpreadPct) && radarSpreadPct >= 5
+            ? `<span class="radar-chip radar-spread">📊 Lệch ${formatSafeNumber(radarSig.spreadPct, { min: 0, max: 10000 })}%</span>`
             : ''
       : '';
 
@@ -204,20 +218,27 @@ function renderShadowTrustPill(lookup: ExtensionLookupData): void {
             ${radarChipHtml}
             ${
               trustedRating
-                ? `<span class="rating-tag">★ ${Number(trustedRating).toFixed(1)} (${Number(authenticRatio ?? 100)}% thật)</span>`
+                ? `<span class="rating-tag">★ ${formatSafeNumber(trustedRating, { min: 0, max: 5, decimals: 1 })} (${formatSafeNumber(authenticRatio ?? 100, { min: 0, max: 100, fallback: 100 })}% thật)</span>`
                 : ''
             }
           </div>
           <div class="sub-row">${escapeHtml(cheaperSummary)}</div>
         </div>
-        <button class="cta-btn" type="button">Chi tiết</button>
+        <span class="cta-btn" aria-hidden="true">Chi tiết</span>
       </div>
     `;
 
     const trigger = shadow.getElementById('rate-pill-trigger');
     if (trigger) {
-      trigger.addEventListener('click', () => {
+      const openSidePanel = () => {
         void chrome.runtime.sendMessage({ type: 'RATE_OPEN_SIDE_PANEL' });
+      };
+      trigger.addEventListener('click', openSidePanel);
+      trigger.addEventListener('keydown', (event: KeyboardEvent) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          openSidePanel();
+        }
       });
     }
   });
@@ -228,7 +249,11 @@ let lastProcessedSignature = '';
 async function inspectCurrentPage(): Promise<void> {
   requestAnimationFrame(async () => {
     const signal = extractProductSignalFromDom(document, window.location.href);
-    if (!signal) return;
+    if (!signal) {
+      lastProcessedSignature = '';
+      removeTrustPillHost();
+      return;
+    }
 
     const signature = `${signal.canonicalUrl}|${signal.selectedVariant || ''}|${signal.price || ''}`;
     if (signature === lastProcessedSignature) return;
@@ -242,6 +267,8 @@ async function inspectCurrentPage(): Promise<void> {
 
       if (response?.ok && response.data) {
         renderShadowTrustPill(response.data);
+      } else if (response?.ok && !response.data) {
+        removeTrustPillHost();
       }
     } catch {
       // Ignore transient messaging errors during page unload

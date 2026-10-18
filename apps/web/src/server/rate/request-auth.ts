@@ -4,13 +4,18 @@ import {
   parseCookieHeader,
   stringFromBase64URL,
 } from '@supabase/ssr';
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import {
+  createClient,
+  type SupabaseClient,
+  type User,
+} from '@supabase/supabase-js';
 import type { Database } from '@repo/shared-data';
 import {
   hasSupabaseAuthCookie,
   type CookieRecord,
 } from '@/lib/supabase/cookies';
 import { createLogger } from '@/lib/logger';
+import { PUBLIC_API_CORS_HEADERS } from './api-handler';
 
 const log = createLogger('server.rpc');
 
@@ -22,6 +27,7 @@ export interface AuthenticatedRateRequest {
   ok: true;
   userId: string;
   email: string | null;
+  user: User;
   /** `rate` schema client that sends the caller's JWT, so RLS and auth.uid() apply. */
   rateClient: RateSchemaClient;
 }
@@ -104,8 +110,13 @@ export function isSameOriginRequest(request: Request): boolean {
  */
 export async function authenticateRateRequest(
   request: Request,
-  action: string
+  action: string,
+  corsHeaders?: Record<string, string>
 ): Promise<AuthenticatedRateRequest | RejectedRateRequest> {
+  const responseHeaders = {
+    ...PUBLIC_API_CORS_HEADERS,
+    ...corsHeaders,
+  };
   const supabaseUrl =
     process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '';
   const anonKey =
@@ -113,30 +124,37 @@ export async function authenticateRateRequest(
     process.env.SUPABASE_ANON_KEY ||
     '';
   if (!supabaseUrl || !anonKey) {
-    return {
-      ok: false,
-      response: NextResponse.json(
-        {
-          ok: false,
-          error: 'Missing Supabase configuration',
-          code: 'CONFIG_MISSING',
-        },
-        { status: 500 }
-      ),
-    };
+    return rejected(
+      500,
+      'CONFIG_MISSING',
+      'Missing Supabase configuration',
+      responseHeaders
+    );
   }
 
   const bearer = readBearerToken(request);
   if (bearer) {
-    return authenticateAccessToken(bearer, supabaseUrl, anonKey);
+    return authenticateAccessToken(
+      bearer,
+      supabaseUrl,
+      anonKey,
+      responseHeaders
+    );
   }
-  return authenticateCookieSession(request, action, supabaseUrl, anonKey);
+  return authenticateCookieSession(
+    request,
+    action,
+    supabaseUrl,
+    anonKey,
+    responseHeaders
+  );
 }
 
 async function authenticateAccessToken(
   token: string,
   supabaseUrl: string,
-  anonKey: string
+  anonKey: string,
+  responseHeaders: Record<string, string>
 ): Promise<AuthenticatedRateRequest | RejectedRateRequest> {
   const baseClient = createClient<Database>(supabaseUrl, anonKey, {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -145,23 +163,19 @@ async function authenticateAccessToken(
   const { data, error } = await baseClient.auth.getUser(token);
   const user = data?.user;
   if (error || !user?.id) {
-    return {
-      ok: false,
-      response: NextResponse.json(
-        {
-          ok: false,
-          error: 'Invalid or expired authentication token',
-          code: 'AUTH_INVALID',
-        },
-        { status: 401 }
-      ),
-    };
+    return rejected(
+      401,
+      'AUTH_INVALID',
+      'Invalid or expired authentication token',
+      responseHeaders
+    );
   }
 
   return {
     ok: true,
     userId: user.id,
     email: user.email ?? null,
+    user,
     rateClient: rateSchemaOf(baseClient),
   };
 }
@@ -193,11 +207,15 @@ export function mapRpcRejection(
 function rejected(
   status: number,
   code: string,
-  error: string
+  error: string,
+  headers: Record<string, string>
 ): RejectedRateRequest {
   return {
     ok: false,
-    response: NextResponse.json({ ok: false, error, code }, { status }),
+    response: NextResponse.json(
+      { ok: false, error, code },
+      { status, headers }
+    ),
   };
 }
 
@@ -205,18 +223,25 @@ async function authenticateCookieSession(
   request: Request,
   action: string,
   supabaseUrl: string,
-  anonKey: string
+  anonKey: string,
+  responseHeaders: Record<string, string>
 ): Promise<AuthenticatedRateRequest | RejectedRateRequest> {
   const cookies = readCookies(request);
   if (!hasSupabaseAuthCookie(cookies)) {
     return rejected(
       401,
       'AUTH_REQUIRED',
-      `Authentication required to ${action}`
+      `Authentication required to ${action}`,
+      responseHeaders
     );
   }
   if (!isSameOriginRequest(request)) {
-    return rejected(403, 'CROSS_SITE', 'Cross-site request rejected');
+    return rejected(
+      403,
+      'CROSS_SITE',
+      'Cross-site request rejected',
+      responseHeaders
+    );
   }
   // Validate the stored access token as is. A Supabase client here would refresh
   // an expired session and drop the rotated tokens (route handlers cannot set
@@ -227,10 +252,11 @@ async function authenticateCookieSession(
     return rejected(
       401,
       'AUTH_INVALID',
-      'Invalid or expired authentication token'
+      'Invalid or expired authentication token',
+      responseHeaders
     );
   }
-  return authenticateAccessToken(token, supabaseUrl, anonKey);
+  return authenticateAccessToken(token, supabaseUrl, anonKey, responseHeaders);
 }
 
 /** PostgREST reports a function missing from its schema cache as PGRST202. */

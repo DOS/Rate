@@ -98,6 +98,21 @@ export async function auditMasterSpecs(supabase: RateSupabaseClient): Promise<nu
   return rows.length;
 }
 
+export function mergeKeySpecs(
+  existing: unknown,
+  incoming: Record<string, unknown> | null | undefined
+): Record<string, unknown> {
+  const base =
+    existing && typeof existing === 'object' && !Array.isArray(existing)
+      ? (existing as Record<string, unknown>)
+      : {};
+  const next = incoming && typeof incoming === 'object' && !Array.isArray(incoming) ? incoming : {};
+  return {
+    ...base,
+    ...next,
+  };
+}
+
 /**
  * Spec-only catalog sync for `rate.master_products`.
  * Defaults to dry-run (`apply = false`) unless explicitly invoked with `{ apply: true }`.
@@ -165,7 +180,7 @@ export async function runMasterSpecsBackfill(
 
     const { data: existing, error: lookupErr } = await supabase
       .from('master_products')
-      .select('id')
+      .select('id, key_specs')
       .eq('model_key', device.model_key)
       .maybeSingle();
     if (lookupErr) {
@@ -178,6 +193,10 @@ export async function runMasterSpecsBackfill(
           .from('master_products')
           .update({
             ...specFields,
+            key_specs: mergeKeySpecs(
+              (existing as { key_specs?: unknown }).key_specs,
+              device.key_specs as unknown as Record<string, unknown>
+            ),
             ...(categoryId ? { category_id: categoryId } : {}),
           })
           .eq('id', existing.id);
@@ -222,7 +241,7 @@ export async function runMasterSpecsBackfill(
   const masters = await fetchAllPages('Failed to fetch master_products', (from, to) =>
     supabase
       .from('master_products')
-      .select('id, name, model_key')
+      .select('id, name, model_key, key_specs')
       .order('created_at', { ascending: false })
       .order('id')
       .range(from, to)
@@ -248,7 +267,10 @@ export async function runMasterSpecsBackfill(
             has_5g: canonicalEntry.has_5g,
             colors: canonicalEntry.colors,
             specifications: canonicalEntry.specifications,
-            key_specs: canonicalEntry.key_specs,
+            key_specs: mergeKeySpecs(
+              (m as { key_specs?: unknown }).key_specs,
+              canonicalEntry.key_specs as unknown as Record<string, unknown>
+            ),
             updated_at: new Date().toISOString(),
           })
           .eq('id', m.id);
@@ -257,6 +279,7 @@ export async function runMasterSpecsBackfill(
           throw new Error(`Failed to backfill ${m.name}: ${upErr.message}`);
         }
       }
+      catalogUpdated++;
       logger.info(
         'backfill.canonical_updated',
         `[Canonical Specs] ${m.name} (${m.model_key}): ${apply ? 'UPDATED' : 'DRY-RUN WOULD UPDATE'}`,
@@ -264,6 +287,11 @@ export async function runMasterSpecsBackfill(
       );
     } else if (apply && enricher.isConfigured()) {
       const ok = await matcher.enrichMasterProductById(m.id);
+      if (ok) {
+        catalogUpdated++;
+      } else {
+        skipped++;
+      }
       logger.info(
         'backfill.ai_enriched',
         `[AI Enrich] ${m.name} (${m.id}): ${ok ? 'UPDATED' : 'SKIPPED'}`,
@@ -311,11 +339,19 @@ export async function runQuickSpecSyncAndAudit(
 
   if (apply) {
     for (const seed of FLAGSHIP_DEVICES_TO_SEED) {
+      const { data: existingRow } = await supabase
+        .from('master_products')
+        .select('id, key_specs')
+        .eq('model_key', seed.model_key)
+        .maybeSingle();
       const { error: upErr } = await supabase
         .from('master_products')
         .update({
           specifications: sanitizeSpecifications(seed.specifications),
-          key_specs: seed.key_specs,
+          key_specs: mergeKeySpecs(
+            (existingRow as { key_specs?: unknown } | null)?.key_specs,
+            seed.key_specs as unknown as Record<string, unknown>
+          ),
         })
         .eq('model_key', seed.model_key);
       if (upErr) {

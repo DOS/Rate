@@ -743,7 +743,7 @@ export default function DealFinderWorkspace({
               <div className="rate-card d-flex flex-column justify-content-between h-100 p-3">
                 <div>
                   <div className="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
-                    <div className="d-flex align-items-center gap-2">
+                    <div className="d-flex align-items-center flex-wrap gap-2">
                       <span className="badge bg-dark rounded-pill text-white">
                         {t('rankDealBadge', { rank: deal.rank })}
                       </span>

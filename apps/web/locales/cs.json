@@ -890,7 +890,8 @@
     "mdRadarLine": "- **60denní cenový radar:** 🟢 {genuine} reálných minim | 🚨 {traps} falešných slev",
     "mdAuthenticLine": "- **Podíl reálných recenzí:** {pct}% ({auth}/{total} autentických, odfiltrováno {flagged} Seeding/Spam)",
     "mdProductsLine": "- **Sledované standardizované modely:** {count} modelů",
-    "mdUrlLine": "- **Živý profil auditu na Rate.vn:** {url}"
+    "mdUrlLine": "- **Živý profil auditu na Rate.vn:** {url}",
+    "showMoreMerchants": "Zobrazit další ({count} obchodů)"
   },
   "productDetail": {
     "notFoundTitle": "Produkt nenalezen | Rate.vn",

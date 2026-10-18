@@ -1761,6 +1761,211 @@ async function runTests() {
     '  ✅ [Merchant Dual-Risk & Deal Radar Bounds] Metadata review_risk extraction, price_history Infinity guard, and 1B VND Deal Radar bounds verified (#371)'
   );
 
+  // 26. Extension Signal Sanitization & Runtime ID Sender Guard (#382)
+  const { sanitizeExtensionProductSignal, MAX_VALID_EXTENSION_VND_PRICE } =
+    await import('./security-guards.js');
+  assert.equal(MAX_VALID_EXTENSION_VND_PRICE, 1_000_000_000);
+
+  const glitchedSignal = sanitizeExtensionProductSignal({
+    platform: 'shopee',
+    canonicalUrl: 'https://shopee.vn/product/123/456',
+    externalItemId: '456',
+    externalShopId: '123',
+    title: '  Apple iPhone 16 Pro Max 256GB  ',
+    selectedVariant: '   ',
+    price: 2_899_000_000_000, // > 1B VND unscaled glitch
+    originalPrice: 30_000_000,
+    ratingStar: 6.2, // > 5 out of bounds
+    ratingCount: -5, // negative out of bounds
+  });
+  assert.equal(glitchedSignal.title, 'Apple iPhone 16 Pro Max 256GB');
+  assert.equal(glitchedSignal.selectedVariant, null);
+  assert.equal(
+    glitchedSignal.price,
+    null,
+    'sanitizeExtensionProductSignal must drop price > MAX_VALID_EXTENSION_VND_PRICE so lookup does not 400'
+  );
+  assert.equal(glitchedSignal.originalPrice, 30_000_000);
+  assert.equal(
+    glitchedSignal.ratingStar,
+    null,
+    'ratingStar > 5 must be dropped'
+  );
+  assert.equal(
+    glitchedSignal.ratingCount,
+    null,
+    'negative ratingCount must be dropped'
+  );
+
+  const invertedSignal = sanitizeExtensionProductSignal({
+    platform: 'tiki',
+    canonicalUrl: 'https://tiki.vn/iphone-p123.html',
+    externalItemId: '123',
+    externalShopId: null,
+    title: 'iPhone 16 Pro Max',
+    selectedVariant: 'Titan Tự Nhiên',
+    price: 28_990_000,
+    originalPrice: 20_000_000, // < price
+    ratingStar: 4.888,
+    ratingCount: 42,
+  });
+  assert.equal(invertedSignal.price, 28_990_000);
+  assert.equal(
+    invertedSignal.originalPrice,
+    null,
+    'sanitizeExtensionProductSignal must drop inverted originalPrice < price'
+  );
+  assert.equal(invertedSignal.ratingStar, 4.89);
+  assert.equal(invertedSignal.ratingCount, 42);
+
+  assert.equal(
+    isPrivilegedExtensionSender(
+      { id: 'ext-other', url: 'chrome-extension://ext-other/sidepanel.html' },
+      'ext-rate-own'
+    ),
+    false,
+    'isPrivilegedExtensionSender must reject messages from a foreign extension runtime ID'
+  );
+  assert.equal(
+    isPrivilegedExtensionSender(
+      {
+        id: 'ext-rate-own',
+        url: 'chrome-extension://ext-rate-own/sidepanel.html',
+      },
+      'ext-rate-own'
+    ),
+    true,
+    'isPrivilegedExtensionSender must accept messages matching the own extension runtime ID'
+  );
+
+  const {
+    formatSafeExtensionVnd,
+    sanitizeVerdictClassSuffix,
+    filterValidSparklinePrices,
+    resolveSafeApiRelativeUrl,
+    formatSafeNumber,
+  } = await import('./security-guards.js');
+
+  assert.equal(
+    formatSafeExtensionVnd(28_990_000),
+    `${(28_990_000).toLocaleString('vi-VN')} ₫`
+  );
+  assert.equal(
+    formatSafeExtensionVnd(Number.POSITIVE_INFINITY),
+    'Chưa có',
+    'formatSafeExtensionVnd must reject Infinity'
+  );
+  assert.equal(
+    formatSafeExtensionVnd(0, 'Đang cập nhật'),
+    'Đang cập nhật',
+    'formatSafeExtensionVnd must support custom fallbackText'
+  );
+  assert.equal(
+    formatSafeExtensionVnd(2_000_000_000),
+    'Chưa có',
+    'formatSafeExtensionVnd must reject prices > MAX_VALID_EXTENSION_VND_PRICE'
+  );
+  assert.equal(formatSafeExtensionVnd(0), 'Chưa có');
+
+  assert.equal(
+    resolveSafeApiRelativeUrl(
+      'https://rate.vn',
+      '/smartphones/iphone-16-pro-max',
+      '/leaderboard'
+    ),
+    'https://rate.vn/smartphones/iphone-16-pro-max'
+  );
+  assert.equal(
+    resolveSafeApiRelativeUrl(
+      'https://rate.vn',
+      '.evil.com/phish',
+      '/leaderboard'
+    ),
+    'https://rate.vn/leaderboard',
+    'resolveSafeApiRelativeUrl must prevent origin confusion (.evil.com/phish)'
+  );
+  assert.equal(
+    resolveSafeApiRelativeUrl(
+      'https://rate.vn',
+      '//evil.com/phish',
+      '/leaderboard'
+    ),
+    'https://rate.vn/leaderboard',
+    'resolveSafeApiRelativeUrl must reject protocol-relative //evil.com URLs'
+  );
+  assert.equal(
+    resolveSafeApiRelativeUrl(
+      'https://rate.vn',
+      'https://evil.com/phish',
+      '/leaderboard'
+    ),
+    'https://rate.vn/leaderboard',
+    'resolveSafeApiRelativeUrl must reject cross-origin absolute URLs'
+  );
+  assert.equal(
+    resolveSafeApiRelativeUrl(
+      'https://rate.vn',
+      'https://rate.vn/laptops/macbook-air-m4',
+      '/leaderboard'
+    ),
+    'https://rate.vn/laptops/macbook-air-m4',
+    'resolveSafeApiRelativeUrl must allow same-origin absolute URLs'
+  );
+
+  assert.equal(
+    formatSafeNumber(9.156, { decimals: 1, min: 0, max: 10 }),
+    '9.2'
+  );
+  assert.equal(
+    formatSafeNumber('<img src=x onerror=alert(1)>', {
+      decimals: 1,
+      fallback: '0.0',
+    }),
+    '0.0',
+    'formatSafeNumber must reject non-numeric strings and return fallback'
+  );
+  assert.equal(
+    formatSafeNumber(150, { decimals: 0, min: 0, max: 100 }),
+    '100',
+    'formatSafeNumber must clamp values to [min, max]'
+  );
+
+  assert.equal(sanitizeVerdictClassSuffix('genuine_deal'), 'genuine_deal');
+  assert.equal(
+    sanitizeVerdictClassSuffix('fair_market_price'),
+    'fair_market_price'
+  );
+  assert.equal(sanitizeVerdictClassSuffix('above_market'), 'above_market');
+  assert.equal(
+    sanitizeVerdictClassSuffix('inflated_fake_sale'),
+    'inflated_fake_sale'
+  );
+  assert.equal(
+    sanitizeVerdictClassSuffix('insufficient_data'),
+    'insufficient_data'
+  );
+  assert.equal(sanitizeVerdictClassSuffix('accessory_skip'), 'accessory_skip');
+  assert.equal(
+    sanitizeVerdictClassSuffix('evil" onclick="alert(1)'),
+    'insufficient_data',
+    'sanitizeVerdictClassSuffix must reject non-allowlisted class suffixes and fall back to insufficient_data'
+  );
+
+  assert.deepEqual(
+    filterValidSparklinePrices([
+      { price: 25_000_000 },
+      { price: 0 },
+      { price: Number.POSITIVE_INFINITY },
+      { price: 1_500_000_000 },
+      { price: 24_500_000 },
+    ]),
+    [25_000_000, 24_500_000]
+  );
+
+  console.log(
+    '  ✅ [Extension Signal & Sender Guards] sanitizeExtensionProductSignal, formatSafeExtensionVnd, resolveSafeApiRelativeUrl, formatSafeNumber & sanitizeVerdictClassSuffix passed (#382, #393, #401)'
+  );
+
   console.log('🎉 All Rate Browser Extension MV3 v2 tests passed!');
 }
 

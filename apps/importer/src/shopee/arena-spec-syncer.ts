@@ -32,14 +32,58 @@ export interface ArenaSyncedDeviceSpec {
   keySpecs: KeySpecs;
 }
 
-function stripHtmlTags(raw: string): string {
+const NAMED_ARENA_ENTITIES: Readonly<Record<string, string>> = {
+  '&nbsp;': ' ',
+  '&amp;': '&',
+  '&quot;': '"',
+  '&apos;': "'",
+  '&#039;': "'",
+  '&#39;': "'",
+  '&lt;': '<',
+  '&gt;': '>',
+  '&ndash;': '-',
+  '&mdash;': '-',
+  '&times;': 'x',
+  '&deg;': '°',
+  '&micro;': 'µ',
+};
+
+function decodeArenaHtmlEntities(raw: string): string {
   return raw
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<[^<>]+>/g, ' ')
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/&quot;/gi, '"')
-    .replace(/&#039;/gi, "'")
+    .replace(
+      /&(?:nbsp|amp|quot|apos|#0?39|lt|gt|ndash|mdash|times|deg|micro);/gi,
+      m => NAMED_ARENA_ENTITIES[m.toLowerCase()] ?? m
+    )
+    .replace(/&#(x[0-9a-fA-F]{1,6}|\d{1,7});/g, (full, code: string) => {
+      const cp =
+        code.startsWith('x') || code.startsWith('X')
+          ? Number.parseInt(code.slice(1), 16)
+          : Number.parseInt(code, 10);
+      if (!Number.isFinite(cp) || cp < 0x20 || cp > 0x10ffff || (cp >= 0xd800 && cp <= 0xdfff)) {
+        return full;
+      }
+      return String.fromCodePoint(cp);
+    });
+}
+
+function escapeRegExp(raw: string): string {
+  return raw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function toBoundedNumber(
+  raw: number | null | undefined,
+  min: number,
+  max: number,
+  integer = false
+): number | undefined {
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) return undefined;
+  const val = integer ? Math.round(raw) : raw;
+  if (val < min || val > max) return undefined;
+  return val;
+}
+
+function stripHtmlTags(raw: string): string {
+  return decodeArenaHtmlEntities(raw.replace(/<br\s*\/?>/gi, '\n').replace(/<[^<>]+>/g, ' '))
     .replace(/[ \t]+/g, ' ')
     .trim();
 }
@@ -123,24 +167,34 @@ export function parseGsmArenaHtmlToSpecs(
   const pa = meta?.phonearenaHtml ? extractPhoneArenaTableSpecs(meta.phonearenaHtml) : {};
   const modelName = d['modelname'] || pa['device name'] || 'Unknown Device';
   const brand = modelName.split(/\s+/)[0] || 'Generic';
-  const model = modelName.replace(new RegExp(`^${brand}\\s+`, 'i'), '').trim() || modelName;
+  const model =
+    modelName.replace(new RegExp(`^${escapeRegExp(brand)}\\s+`, 'i'), '').trim() || modelName;
 
   // Display parsing
   const sizeMatch = (d['displaysize'] || pa['screen size'] || '').match(
     /(\d+(?:\.\d+)?)\s*inches/i
   );
-  const screenSizeInch = sizeMatch ? Number(sizeMatch[1]) : null;
+  const screenSizeInch = toBoundedNumber(sizeMatch ? Number(sizeMatch[1]) : null, 0.5, 120) ?? null;
   const refreshMatch = (d['displaytype'] || pa['refresh rate'] || '').match(/(\d+)\s*Hz/i);
-  const refreshRateHz = refreshMatch ? Number(refreshMatch[1]) : undefined;
+  const refreshRateHz = toBoundedNumber(
+    refreshMatch ? Number(refreshMatch[1]) : null,
+    1,
+    1000,
+    true
+  );
   const ppiMatch = (d['displayresolution'] || pa['pixel density'] || '').match(/~?(\d+)\s*ppi/i);
-  const ppi = ppiMatch ? Number(ppiMatch[1]) : undefined;
+  const ppi = toBoundedNumber(ppiMatch ? Number(ppiMatch[1]) : null, 10, 2000, true);
 
   // Hardware & memory parsing (`256GB 12GB RAM, 512GB 16GB RAM`)
   const memRaw = d['internalmemory'] || `${pa['internal storage'] || ''} ${pa['ram'] || ''}`.trim();
-  const ramMatches = Array.from(memRaw.matchAll(/(\d+)\s*GB\s*RAM/gi)).map(m => Number(m[1]));
-  const storageMatches = Array.from(memRaw.matchAll(/(\d+)\s*(GB|TB)(?!\s*RAM)/gi)).map(m =>
-    m[2]?.toUpperCase() === 'TB' ? Number(m[1]) * 1024 : Number(m[1])
-  );
+  const ramMatches = Array.from(memRaw.matchAll(/(\d+(?:\.\d+)?)\s*GB\s*RAM/gi))
+    .map(m => toBoundedNumber(Number(m[1]), 0.125, 2048))
+    .filter((v): v is number => v !== undefined);
+  const storageMatches = Array.from(memRaw.matchAll(/(\d+(?:\.\d+)?)\s*(GB|TB)(?!\s*RAM)/gi))
+    .map(m =>
+      toBoundedNumber(m[2]?.toUpperCase() === 'TB' ? Number(m[1]) * 1024 : Number(m[1]), 0.5, 65536)
+    )
+    .filter((v): v is number => v !== undefined);
 
   const ramGb = ramMatches.length > 0 ? Math.max(...ramMatches) : null;
   const storageGb = storageMatches.length > 0 ? Math.max(...storageMatches) : null;
@@ -156,15 +210,20 @@ export function parseGsmArenaHtmlToSpecs(
 
   // Battery parsing
   const batRaw = d['batdescription1'] || pa['capacity'] || '';
-  const batMatch = batRaw.match(/(\d{3,5})\s*mAh/i);
-  const batteryMah = batMatch ? Number(batMatch[1]) : null;
+  const batMatch = batRaw.match(/(\d{2,6})\s*mAh/i);
+  const batteryMah =
+    toBoundedNumber(batMatch ? Number(batMatch[1]) : null, 10, 200000, true) ?? null;
   const chargingRaw = d['batcharging'] || pa['charging'] || batRaw;
-  const fastChargeMatch = chargingRaw.match(/(\d+)\s*W\s*wired/i);
-  const fastChargingW = fastChargeMatch ? Number(fastChargeMatch[1]) : undefined;
+  const fastChargeMatch = chargingRaw.match(/(\d+(?:\.\d+)?)\s*W\s*wired/i);
+  const fastChargingW = toBoundedNumber(
+    fastChargeMatch ? Number(fastChargeMatch[1]) : null,
+    1,
+    1000
+  );
 
   // Weight parsing
   const weightMatch = (d['weight'] || pa['weight'] || '').match(/(\d+(?:\.\d+)?)\s*g\b/i);
-  const weightG = weightMatch ? Number(weightMatch[1]) : undefined;
+  const weightG = toBoundedNumber(weightMatch ? Number(weightMatch[1]) : null, 1, 50000);
 
   // Resistance parsing
   const resistanceMatch = (d['bodyother'] || pa['water resistance'] || '').match(
@@ -342,6 +401,10 @@ export function parseGsmArenaBrandCatalogHtml(
   brandHint?: string
 ): DiscoveredArenaCatalogItem[] {
   const results: DiscoveredArenaCatalogItem[] = [];
+  const trimmedBrand = brandHint?.trim() || '';
+  const brandPrefixRe = trimmedBrand
+    ? new RegExp(`^${escapeRegExp(trimmedBrand)}(?:\\s|$)`, 'i')
+    : null;
   // The link body cannot contain another <a> or <li>, so a page of unclosed
   // items cannot make each attempt rescan to the end (polynomial-redos).
   const itemRegex =
@@ -353,17 +416,25 @@ export function parseGsmArenaBrandCatalogHtml(
     const nameMatch = inner.match(/<span[^<>]*>((?:(?!<\/?span\b)[\s\S])*)<\/span>/i);
     const rawName = stripHtmlTags(nameMatch ? nameMatch[1] || '' : inner);
     if (!rawName || !href) continue;
+    let url = '';
+    try {
+      const parsed = new URL(href, 'https://www.gsmarena.com/');
+      if (
+        (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') ||
+        !/(?:^|\.)gsmarena\.com$/i.test(parsed.hostname)
+      ) {
+        continue;
+      }
+      url = parsed.href;
+    } catch {
+      continue;
+    }
     const fullName =
-      brandHint && !new RegExp(`^${brandHint}\\b`, 'i').test(rawName)
-        ? `${brandHint} ${rawName}`
-        : rawName;
+      brandPrefixRe && !brandPrefixRe.test(rawName) ? `${trimmedBrand} ${rawName}` : rawName;
     const imgSrc = [...inner.matchAll(/<img\b([^<>]*)>/gi)]
       // `(?:^|\s)` so `data-src` lazy-load placeholders are not taken for src.
       .map(img => /(?:^|\s)src=["']([^"']+)["']/i.exec(img[1] || '')?.[1])
       .find(Boolean);
-    const url = href.startsWith('http')
-      ? href
-      : `https://www.gsmarena.com/${href.replace(/^\/+/, '')}`;
     results.push({
       source: 'gsmarena',
       name: fullName,
@@ -417,6 +488,13 @@ const CANONICAL_10_SPEC_GROUPS = [
   'regulatory',
 ] as const;
 
+function isPopulatedSpecFieldValue(v: unknown): boolean {
+  if (v === null || v === undefined || v === '') return false;
+  if (Array.isArray(v)) return v.length > 0;
+  if (typeof v === 'object') return Object.keys(v as object).length > 0;
+  return true;
+}
+
 export function countPopulatedFieldGroups(
   specs: Record<string, unknown> | null | undefined
 ): number {
@@ -427,9 +505,8 @@ export function countPopulatedFieldGroups(
     if (
       group &&
       typeof group === 'object' &&
-      Object.values(group as Record<string, unknown>).some(
-        v => v !== null && v !== undefined && v !== ''
-      )
+      !Array.isArray(group) &&
+      Object.values(group as Record<string, unknown>).some(isPopulatedSpecFieldValue)
     ) {
       count += 1;
     }

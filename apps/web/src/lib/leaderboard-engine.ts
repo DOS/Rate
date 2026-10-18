@@ -6,7 +6,7 @@ import {
   type CanonicalCategorySlug,
   type MasterProduct,
 } from './rate-api';
-import type { ProductSpecifications } from '@repo/shared-data';
+import type { KeySpecs, ProductSpecifications } from '@repo/shared-data';
 
 export type LeaderboardCriterionKey =
   | 'combined'
@@ -138,6 +138,7 @@ export function computeJReviewsCriteriaScores(
     unknown
   >;
   const specs = (item.specifications || {}) as ProductSpecifications;
+  const categorySlug = getMasterProductCategorySlug(item);
   const base5 =
     userScore5 > 0 && expertScore5 != null
       ? Number((userScore5 * 0.55 + expertScore5 * 0.45).toFixed(2))
@@ -161,25 +162,137 @@ export function computeJReviewsCriteriaScores(
   const batteryMah = Number(
     item.battery_mah || specs.battery?.capacity_mah || 0
   );
+  const fastChargingW = Number(specs.battery?.fast_charging_w || 0);
   const minPrice = Number(item.min_price || 0);
+  const displayType = String(specs.display?.type || '').toLowerCase();
+  const displayProtection = String(
+    specs.display?.protection || ''
+  ).toLowerCase();
+  const resistance = String(specs.design?.resistance || '').toLowerCase();
+  const audioFeatures = String(
+    specs.multimedia?.audio_features || ''
+  ).toLowerCase();
+  const sensors = String(specs.connectivity?.sensors || '').toLowerCase();
+  const location = String(specs.connectivity?.location || '').toLowerCase();
 
-  const screenDelta = refreshHz >= 120 ? 0.14 : refreshHz >= 90 ? 0.05 : -0.04;
-  const perfDelta = ramGb >= 16 ? 0.16 : ramGb >= 12 ? 0.08 : 0.02;
-  const camDelta = specs.camera?.second_camera ? 0.12 : 0.03;
-  const batDelta = batteryMah >= 5500 ? 0.18 : batteryMah >= 4800 ? 0.09 : 0.02;
-  const valDelta =
-    minPrice > 0 && minPrice <= 18_000_000
-      ? 0.22
-      : minPrice > 0 && minPrice <= 27_000_000
-        ? 0.08
-        : minPrice > 0
-          ? -0.05
-          : 0;
+  let screenDelta: number;
+  let perfDelta: number;
+  let camDelta: number;
+  let batDelta: number;
+  let valDelta: number;
+
+  if (categorySlug === 'earbuds') {
+    screenDelta =
+      resistance.includes('ip') || Number(specs.design?.weight_g || 0) > 0
+        ? 0.12
+        : 0.04;
+    perfDelta =
+      String(specs.connectivity?.bluetooth || '').includes('5.') ||
+      Boolean(specs.hardware?.chipset)
+        ? 0.14
+        : 0.04;
+    camDelta =
+      audioFeatures.includes('anc') ||
+      audioFeatures.includes('ldac') ||
+      audioFeatures.includes('spatial') ||
+      audioFeatures.includes('dolby') ||
+      Boolean(specs.multimedia?.audio_features)
+        ? 0.16
+        : 0.06;
+    batDelta =
+      batteryMah >= 500
+        ? 0.16
+        : batteryMah >= 300 || Boolean(specs.battery?.charging)
+          ? 0.09
+          : 0.03;
+    valDelta =
+      minPrice > 0 && minPrice <= 3_500_000
+        ? 0.22
+        : minPrice > 0 && minPrice <= 6_500_000
+          ? 0.1
+          : minPrice > 0
+            ? -0.03
+            : 0;
+  } else if (categorySlug === 'smartwatches') {
+    screenDelta =
+      refreshHz >= 60 ||
+      displayType.includes('oled') ||
+      displayType.includes('amoled') ||
+      displayProtection.includes('sapphire')
+        ? 0.12
+        : 0.03;
+    perfDelta = Boolean(specs.hardware?.chipset) || ramGb >= 2 ? 0.12 : 0.03;
+    camDelta =
+      sensors.includes('ecg') ||
+      sensors.includes('spo2') ||
+      location.includes('dual') ||
+      location.includes('l1') ||
+      Boolean(specs.connectivity?.sensors)
+        ? 0.14
+        : 0.04;
+    batDelta = batteryMah >= 500 ? 0.18 : batteryMah >= 300 ? 0.09 : 0.02;
+    valDelta =
+      minPrice > 0 && minPrice <= 7_000_000
+        ? 0.2
+        : minPrice > 0 && minPrice <= 15_000_000
+          ? 0.08
+          : minPrice > 0
+            ? -0.04
+            : 0;
+  } else if (categorySlug === 'laptops') {
+    screenDelta =
+      refreshHz >= 120
+        ? 0.15
+        : refreshHz >= 90 ||
+            displayType.includes('oled') ||
+            displayType.includes('mini-led')
+          ? 0.09
+          : 0.02;
+    perfDelta = ramGb >= 32 ? 0.18 : ramGb >= 16 ? 0.12 : 0.02;
+    camDelta =
+      specs.camera?.front_camera || specs.multimedia?.loudspeaker ? 0.08 : 0.02;
+    batDelta =
+      batteryMah >= 7000 || fastChargingW >= 90
+        ? 0.16
+        : batteryMah >= 4500 || fastChargingW >= 65
+          ? 0.09
+          : 0.02;
+    valDelta =
+      minPrice > 0 && minPrice <= 25_000_000
+        ? 0.2
+        : minPrice > 0 && minPrice <= 42_000_000
+          ? 0.08
+          : minPrice > 0
+            ? -0.04
+            : 0;
+  } else {
+    screenDelta = refreshHz >= 120 ? 0.14 : refreshHz >= 90 ? 0.05 : -0.04;
+    perfDelta = ramGb >= 16 ? 0.16 : ramGb >= 12 ? 0.08 : 0.02;
+    camDelta = specs.camera?.second_camera ? 0.12 : 0.03;
+    batDelta = batteryMah >= 5500 ? 0.18 : batteryMah >= 4800 ? 0.09 : 0.02;
+    valDelta =
+      minPrice > 0 && minPrice <= 18_000_000
+        ? 0.22
+        : minPrice > 0 && minPrice <= 27_000_000
+          ? 0.08
+          : minPrice > 0
+            ? -0.05
+            : 0;
+  }
 
   return {
-    screen: parseRaw(['screen', 'display', 'man_hinh'], screenDelta),
-    performance: parseRaw(['performance', 'hardware', 'hieu_nang'], perfDelta),
-    camera: parseRaw(['camera', 'audio', 'multimedia'], camDelta),
+    screen: parseRaw(
+      ['screen', 'display', 'man_hinh', 'design', 'comfort'],
+      screenDelta
+    ),
+    performance: parseRaw(
+      ['performance', 'hardware', 'hieu_nang', 'connectivity'],
+      perfDelta
+    ),
+    camera: parseRaw(
+      ['camera', 'audio', 'multimedia', 'sound', 'sensors'],
+      camDelta
+    ),
     battery: parseRaw(['battery', 'pin', 'endurance'], batDelta),
     value: parseRaw(['value', 'price_value', 'dang_tien'], valDelta),
   };
@@ -204,7 +317,8 @@ export function scoreMasterProductForLeaderboard(
     }) || '/img/devices/apple-iphone-16-pro-max-256gb.jpg';
 
   const rawUser = Number(item.user_rating_weighted || item.average_rating || 0);
-  const userScore5 = rawUser > 0 ? clampScore5(rawUser) : 0;
+  const normalizedUser5 = rawUser > 5 ? rawUser / 2 : rawUser;
+  const userScore5 = rawUser > 0 ? clampScore5(normalizedUser5) : 0;
 
   const rawExpert = Number(item.expert_rating || 0);
   const expertScore10: number | null =
@@ -331,6 +445,9 @@ export function rankMasterProductsForLeaderboard(
         return false;
       }
       if (priceSegment !== 'all') {
+        if (entry.minPrice <= 0) {
+          return false;
+        }
         if (priceSegment === 'under15m' && entry.minPrice >= 15_000_000) {
           return false;
         }
@@ -345,8 +462,18 @@ export function rankMasterProductsForLeaderboard(
         }
       }
       if (q) {
-        const hay =
-          `${entry.name} ${entry.brand} ${entry.model} ${entry.slug}`.toLowerCase();
+        const keySpecs = (entry.product.key_specs || {}) as KeySpecs;
+        const hay = [
+          entry.name,
+          entry.brand,
+          entry.model,
+          entry.slug,
+          entry.product.model_key || '',
+          keySpecs.chip || '',
+          keySpecs.screen || '',
+        ]
+          .join(' ')
+          .toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
@@ -361,7 +488,16 @@ export function rankMasterProductsForLeaderboard(
       if (b.authenticReviewCount !== a.authenticReviewCount) {
         return b.authenticReviewCount - a.authenticReviewCount;
       }
-      return a.minPrice - b.minPrice;
+      if (a.minPrice > 0 && b.minPrice > 0 && a.minPrice !== b.minPrice) {
+        return a.minPrice - b.minPrice;
+      }
+      if (a.minPrice > 0 && b.minPrice <= 0) {
+        return -1;
+      }
+      if (a.minPrice <= 0 && b.minPrice > 0) {
+        return 1;
+      }
+      return a.slug.localeCompare(b.slug);
     })
     .map((entry, idx) => ({
       ...entry,

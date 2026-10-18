@@ -290,7 +290,8 @@ export function computeCrossPlatformDealRadarFromData(
       });
     }
 
-    // 2. Identify fake-sale traps (inflated strikethrough original price)
+    // 2. Identify the worst fake-sale trap (highest inflated strikethrough markup) for this cluster (#396)
+    let worstTrap: CrossPlatformDealRadarItem | null = null;
     for (const off of validOffers) {
       if (
         platformFilter !== 'all' &&
@@ -314,7 +315,7 @@ export function computeCrossPlatformDealRadarFromData(
 
       // Flag when original price is >= 11% above market median and current price is >= market median
       if (fakeMarkupPct >= 11 && off.price_current >= marketMedianPrice) {
-        fakeSaleTraps.push({
+        const candidateTrap: CrossPlatformDealRadarItem = {
           id: `trap-${master.slug}-${off.platform}-${off.id}`,
           verdict: 'inflated_fake_sale',
           verdictBadgeVi: `⚠️ Nâng giá gốc +${fakeMarkupPct}%`,
@@ -346,9 +347,24 @@ export function computeCrossPlatformDealRadarFromData(
           fakeMarkupPct,
           jreviewsScore10,
           explanationVi: `Gian hàng treo giá gốc gạch ngang ${validOrig.toLocaleString('vi-VN')}₫ (cao hơn trung vị thị trường +${fakeMarkupPct}%) để tạo cảm giác giảm ${claimedDiscountPct}%, nhưng giá thực bán cao hơn đáy thị trường ${(off.price_current - marketMinPrice).toLocaleString('vi-VN')}₫.`,
-        });
-        break;
+        };
+
+        if (
+          !worstTrap ||
+          candidateTrap.fakeMarkupPct > worstTrap.fakeMarkupPct ||
+          (candidateTrap.fakeMarkupPct === worstTrap.fakeMarkupPct &&
+            (candidateTrap.claimedDiscountPct > worstTrap.claimedDiscountPct ||
+              (candidateTrap.claimedDiscountPct ===
+                worstTrap.claimedDiscountPct &&
+                candidateTrap.priceCurrent > worstTrap.priceCurrent)))
+        ) {
+          worstTrap = candidateTrap;
+        }
       }
+    }
+
+    if (worstTrap) {
+      fakeSaleTraps.push(worstTrap);
     }
   }
 
@@ -393,22 +409,17 @@ export function computeProductRadarSignal(
   return getRadarSignal(buildRadarIndex(radar), master.slug);
 }
 
-export const getCrossPlatformDealRadar = cache(
-  async (options?: {
-    categorySlug?: CanonicalCategorySlug | 'all';
-    platform?: string;
-    limit?: number;
-  }): Promise<CrossPlatformDealRadarResponse> => {
-    const categorySlug = options?.categorySlug || 'all';
-    const platformFilter =
-      (options?.platform || 'all').trim().toLowerCase() || 'all';
-    const limit = Math.max(1, Math.min(options?.limit || 12, 50));
-
-    return withRateDataCache(
+const _getCrossPlatformDealRadarByKey = cache(
+  (
+    categorySlug: CanonicalCategorySlug | 'all',
+    platformFilter: string,
+    limit: number
+  ): Promise<CrossPlatformDealRadarResponse> =>
+    withRateDataCache(
       async (cat: CanonicalCategorySlug | 'all', plat: string, lim: number) => {
         const masters = await getMasterProducts({
           categorySlug: cat === 'all' ? undefined : cat,
-          limit: 36,
+          limit: Math.max(36, lim * 2),
         });
 
         const offersByMaster = await getMasterProductOffersBatch(
@@ -441,6 +452,17 @@ export const getCrossPlatformDealRadar = cache(
           ...(categorySlug !== 'all' ? [categoryCacheTag(categorySlug)] : []),
         ],
       }
-    )(categorySlug, platformFilter, limit);
-  }
+    )(categorySlug, platformFilter, limit)
 );
+
+export function getCrossPlatformDealRadar(options?: {
+  categorySlug?: CanonicalCategorySlug | 'all';
+  platform?: string;
+  limit?: number;
+}): Promise<CrossPlatformDealRadarResponse> {
+  const categorySlug = options?.categorySlug || 'all';
+  const platformFilter =
+    (options?.platform || 'all').trim().toLowerCase() || 'all';
+  const limit = Math.max(1, Math.min(options?.limit || 12, 50));
+  return _getCrossPlatformDealRadarByKey(categorySlug, platformFilter, limit);
+}

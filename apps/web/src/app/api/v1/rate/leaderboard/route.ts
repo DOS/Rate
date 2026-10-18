@@ -1,13 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
+  computeProductRadarSignal,
   getCachedMasterProducts,
-  getCrossPlatformDealRadar,
+  getMasterProductOffersBatch,
 } from '@/server/rate';
-import {
-  buildRadarIndex,
-  getRadarSignal,
-  radarExportFields,
-} from '@/lib/deal-radar';
+import { radarExportFields } from '@/lib/deal-radar';
 import {
   normalizeLeaderboardCategory,
   normalizeLeaderboardCriterion,
@@ -51,18 +48,11 @@ export async function GET(req: NextRequest) {
     const query = (searchParams.get('q') || '').trim();
     const limit = parseBoundedIntParam(searchParams.get('limit'), 20, 1, 50);
 
-    const [allProducts, dealRadar] = await Promise.all([
-      getCachedMasterProducts({
-        categorySlug: category,
-        limit: 100,
-        sort: 'rating_desc',
-      }),
-      getCrossPlatformDealRadar({
-        categorySlug: category,
-        limit: 50,
-      }),
-    ]);
-    const radarIndex = buildRadarIndex(dealRadar);
+    const allProducts = await getCachedMasterProducts({
+      categorySlug: category,
+      limit: 100,
+      sort: 'rating_desc',
+    });
 
     const ranked = rankMasterProductsForLeaderboard(allProducts, {
       category,
@@ -72,8 +62,14 @@ export async function GET(req: NextRequest) {
       query,
     });
 
-    const items = ranked.slice(0, limit).map((r) => {
-      const rawSignal = getRadarSignal(radarIndex, r.slug);
+    const pageRanked = ranked.slice(0, limit);
+    const offersByMasterId = await getMasterProductOffersBatch(
+      pageRanked.map((r) => r.product.id)
+    );
+
+    const items = pageRanked.map((r) => {
+      const offers = offersByMasterId.get(r.product.id) ?? [];
+      const rawSignal = computeProductRadarSignal(r.product, offers);
       return {
         rank: r.rank,
         slug: r.slug,
@@ -140,7 +136,8 @@ export async function GET(req: NextRequest) {
     return jsonApiError(
       500,
       'Failed to compute JReviews leaderboard ranking',
-      err
+      err,
+      PUBLIC_API_CORS_HEADERS
     );
   }
 }

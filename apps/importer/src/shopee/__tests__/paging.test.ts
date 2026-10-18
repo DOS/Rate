@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { fetchAllPages } from '../paging.js';
+import { fetchAllPages, parseShopeeEnqueueUrl } from '../paging.js';
 
 // A fake query over `total` rows that, like PostgREST, never returns more than
 // `maxRows` per response whatever range is asked for.
@@ -15,7 +15,7 @@ function fakeTable(total: number, maxRows: number) {
 }
 
 async function run() {
-  console.log('🧪 fetchAllPages suite');
+  console.log('🧪 fetchAllPages & parseShopeeEnqueueUrl suite');
 
   const big = fakeTable(2500, 1000);
   const all = await fetchAllPages('rows', big.page);
@@ -36,7 +36,49 @@ async function run() {
     /Failed to read: boom/
   );
 
-  console.log('✅ fetchAllPages suite passed');
+  // Exact boundary: 3 non-empty pages followed by an empty page with maxPages=3 succeeds
+  const exactBoundary = fakeTable(30, 10);
+  const boundaryRows = await fetchAllPages('boundary', exactBoundary.page, 10, 3);
+  assert.equal(boundaryRows.length, 30);
+
+  // Server ignoring .range() and always returning non-empty rows throws after maxPages
+  await assert.rejects(
+    fetchAllPages('broken_range', () => Promise.resolve({ data: [{ id: 1 }], error: null }), 10, 3),
+    /broken_range: exceeded maxPages \(3\)/
+  );
+
+  // parseShopeeEnqueueUrl tests (#393)
+  assert.deepEqual(
+    parseShopeeEnqueueUrl('https://shopee.vn/Điện-thoại-Apple-iPhone-16-i.88201679.27110898667'),
+    {
+      shopId: '88201679',
+      itemId: '27110898667',
+      normalizedUrl:
+        'https://shopee.vn/%C4%90i%E1%BB%87n-tho%E1%BA%A1i-Apple-iPhone-16-i.88201679.27110898667',
+    }
+  );
+  assert.deepEqual(parseShopeeEnqueueUrl('https://shopee.vn/product/88201679/27110898667'), {
+    shopId: '88201679',
+    itemId: '27110898667',
+    normalizedUrl: 'https://shopee.vn/product/88201679/27110898667',
+  });
+  assert.deepEqual(parseShopeeEnqueueUrl('https://shopee.vn/opaanlp/88201679/27110898667'), {
+    shopId: '88201679',
+    itemId: '27110898667',
+    normalizedUrl: 'https://shopee.vn/opaanlp/88201679/27110898667',
+  });
+  assert.equal(
+    parseShopeeEnqueueUrl('https://evil.com/i.88201679.27110898667'),
+    null,
+    'must reject non-Shopee host'
+  );
+  assert.equal(
+    parseShopeeEnqueueUrl('javascript:alert(1)//i.88201679.27110898667'),
+    null,
+    'must reject non-HTTP(S) scheme'
+  );
+
+  console.log('✅ fetchAllPages & parseShopeeEnqueueUrl suite passed');
 }
 
 run().catch(err => {

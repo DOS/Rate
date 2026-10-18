@@ -162,6 +162,7 @@ export function NavbarDarkDynamic({
                 className="nav-menus-wrapper-close-button"
                 role="button"
                 tabIndex={0}
+                aria-label="Close navigation"
                 onClick={() => setToggle(false)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') setToggle(false);

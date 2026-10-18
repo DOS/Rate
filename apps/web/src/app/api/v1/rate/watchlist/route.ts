@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import {
+  MAX_VALID_VND_PRICE,
+  normalizeOfferOriginalPrice,
+} from '@/lib/rate-api';
+import {
   computeProductRadarSignal,
   getCachedMasterProductBySlug,
   getCachedMasterProductOffers,
@@ -72,9 +76,15 @@ export interface WatchlistBestOffer {
 function selectBestOfferFromListings(
   offers: Awaited<ReturnType<typeof getCachedMasterProductOffers>>
 ): { bestOffer: WatchlistBestOffer | null; offerPlatforms: string[] } {
-  const valid = offers.filter(
-    (o) => Number(o.stock ?? 1) > 0 && Number(o.price_current) > 0
-  );
+  const valid = offers.filter((o) => {
+    const price = Number(o.price_current);
+    return (
+      Number(o.stock ?? 1) > 0 &&
+      Number.isFinite(price) &&
+      price > 0 &&
+      price <= MAX_VALID_VND_PRICE
+    );
+  });
   const platforms = Array.from(
     new Set(
       valid
@@ -97,12 +107,14 @@ function selectBestOfferFromListings(
   });
 
   const best = sorted[0]!;
+  const bestPrice = Number(best.price_current);
+  const validOrig = normalizeOfferOriginalPrice(bestPrice, best.price_original);
   return {
     bestOffer: {
       id: best.id,
       title: best.title,
-      price: Number(best.price_current),
-      original_price: Number(best.price_original || best.price_current),
+      price: bestPrice,
+      original_price: validOrig ?? bestPrice,
       url: best.url,
       platform: String(
         best.merchant?.platform || best.platform || 'shopee'
@@ -201,7 +213,12 @@ export async function GET(request: NextRequest) {
       }
     );
   } catch (error) {
-    return jsonApiError(500, 'Failed to fetch watchlist products', error);
+    return jsonApiError(
+      500,
+      'Failed to fetch watchlist products',
+      error,
+      WATCHLIST_CORS_HEADERS
+    );
   }
 }
 
@@ -211,12 +228,12 @@ const PriceAlertBodySchema = z.object({
     .trim()
     .toLowerCase()
     .max(160)
-    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Invalid product slug'),
+    .regex(/^[a-z0-9]+(?:[._-][a-z0-9]+)*$/, 'Invalid product slug'),
   targetPrice: z.coerce
     .number()
     .finite()
     .positive('targetPrice must be greater than 0')
-    .max(10_000_000_000)
+    .max(MAX_VALID_VND_PRICE)
     .transform((v) => Math.round(v)),
   locale: z.enum(['vi', 'en', 'cs']).catch('vi'),
 });
@@ -224,16 +241,20 @@ const PriceAlertBodySchema = z.object({
 /**
  * POST /api/v1/rate/watchlist
  * Register or update the signed-in user's Target Price Alert for a canonical master product.
- * Requires a Supabase access token (Authorization: Bearer). The RPC runs as that user, so
- * the alert is keyed to auth.uid() and notifications go to the account's own email; the
- * request body cannot choose the recipient.
+ * Requires a Supabase access token (Authorization: Bearer) or same-origin @supabase/ssr cookie session.
+ * The RPC runs as that user, so the alert is keyed to auth.uid() and notifications go to the account's
+ * own email; the request body cannot choose the recipient.
  * Returns persistedInCloud: false only when rate.upsert_price_alert is not deployed yet.
  */
 export async function POST(request: NextRequest) {
   try {
     const rawBody: unknown = await request.json().catch(() => null);
 
-    const auth = await authenticateRateRequest(request, 'save a price alert');
+    const auth = await authenticateRateRequest(
+      request,
+      'save a price alert',
+      WATCHLIST_CORS_HEADERS
+    );
     if (!auth.ok) return auth.response;
 
     const parsed = PriceAlertBodySchema.safeParse(rawBody ?? {});
@@ -244,7 +265,7 @@ export async function POST(request: NextRequest) {
           error: parsed.error.issues[0]?.message || 'Invalid request body',
           code: 'INVALID_BODY',
         },
-        { status: 400 }
+        { status: 400, headers: WATCHLIST_CORS_HEADERS }
       );
     }
     const { slug, targetPrice, locale } = parsed.data;
@@ -253,7 +274,7 @@ export async function POST(request: NextRequest) {
     if (!masterProduct) {
       return NextResponse.json(
         { ok: false, error: `Master product not found for slug: ${slug}` },
-        { status: 404 }
+        { status: 404, headers: WATCHLIST_CORS_HEADERS }
       );
     }
 
@@ -281,7 +302,7 @@ export async function POST(request: NextRequest) {
     if (rejection) {
       return NextResponse.json(
         { ok: false, error: rejection.error, code: rejection.code },
-        { status: rejection.status }
+        { status: rejection.status, headers: WATCHLIST_CORS_HEADERS }
       );
     }
 
@@ -296,45 +317,56 @@ export async function POST(request: NextRequest) {
           error: 'Could not save the price alert',
           code: 'PERSIST_FAILED',
         },
-        { status: 502 }
+        { status: 502, headers: WATCHLIST_CORS_HEADERS }
       );
     }
 
     if (!rpcError && rpcData) {
-      return NextResponse.json({
-        ok: true,
-        persistedInCloud: true,
-        data: {
-          ...(typeof rpcData === 'object' ? rpcData : {}),
-          best_offer: bestOffer,
-          offer_platforms: offerPlatforms,
-          deal_radar: radarExportFields(radarSignal),
-          radar_signal: radarSignal,
+      return NextResponse.json(
+        {
+          ok: true,
+          persistedInCloud: true,
+          data: {
+            ...(typeof rpcData === 'object' ? rpcData : {}),
+            best_offer: bestOffer,
+            offer_platforms: offerPlatforms,
+            deal_radar: radarExportFields(radarSignal),
+            radar_signal: radarSignal,
+          },
         },
-      });
+        { status: 200, headers: WATCHLIST_CORS_HEADERS }
+      );
     }
 
     // rate.upsert_price_alert is not deployed in this environment yet: report the live
     // status and say plainly that nothing was stored.
-    return NextResponse.json({
-      ok: true,
-      persistedInCloud: false,
-      data: {
-        master_product_id: masterProduct.id,
-        slug: masterProduct.slug,
-        name: masterProduct.name,
-        target_price: targetPrice,
-        current_min_price: currentMinPrice,
-        is_reached: isReached,
-        best_offer: bestOffer,
-        offer_platforms: offerPlatforms,
-        deal_radar: radarExportFields(radarSignal),
-        radar_signal: radarSignal,
-        updated_at: new Date().toISOString(),
+    return NextResponse.json(
+      {
+        ok: true,
+        persistedInCloud: false,
+        data: {
+          master_product_id: masterProduct.id,
+          slug: masterProduct.slug,
+          name: masterProduct.name,
+          target_price: targetPrice,
+          current_min_price: currentMinPrice,
+          is_reached: isReached,
+          best_offer: bestOffer,
+          offer_platforms: offerPlatforms,
+          deal_radar: radarExportFields(radarSignal),
+          radar_signal: radarSignal,
+          updated_at: new Date().toISOString(),
+        },
       },
-    });
+      { status: 200, headers: WATCHLIST_CORS_HEADERS }
+    );
   } catch (error) {
     log.error('POST failed', { error: serializeError(error) });
-    return jsonApiError(500, 'Internal server error', error);
+    return jsonApiError(
+      500,
+      'Internal server error',
+      error,
+      WATCHLIST_CORS_HEADERS
+    );
   }
 }
