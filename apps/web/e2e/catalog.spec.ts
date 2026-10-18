@@ -67,6 +67,7 @@ for (const path of [
   '/smartphones/does-not-exist-e2e',
   '/laptops/does-not-exist-e2e',
   '/merchants/00000000-0000-4000-8000-000000000000',
+  '/compare/no-such-a-vs-no-such-b',
 ]) {
   test(`unknown ${path} is a real 404`, async ({ request }) => {
     for (const userAgent of [undefined, BINGBOT]) {
