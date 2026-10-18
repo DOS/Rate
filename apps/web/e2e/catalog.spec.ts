@@ -110,6 +110,17 @@ test('merchant with hundreds of listings loads every chunk', async ({
   expect(await res.text()).toContain('Đóng gói cẩn thận, giao nhanh.');
 });
 
+// The merchant directory reads reviews for every unscored listing, including
+// the 250 of bulk-listings-store: chunked, it still loads (DOS/Rate#333).
+test('merchant directory loads with a merchant of hundreds of listings', async ({
+  request,
+}) => {
+  expect((await request.get('/merchants')).status()).toBe(200);
+  const res = await request.get('/api/v1/rate/merchants');
+  expect(res.status()).toBe(200);
+  expect(await res.text()).toContain('bulk-listings-store');
+});
+
 // Positive controls for the 404 specs: the same routes resolve seeded rows.
 test('merchant and versus pages resolve seeded rows', async ({ request }) => {
   for (const path of [

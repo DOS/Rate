@@ -2,7 +2,11 @@ import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
 import NavbarDarkDynamic from './components/navbar/NavbarDarkDynamic';
-import { getMasterProductHref, getMasterProducts } from '@/lib/rate-api';
+import {
+  EMPTY_RATE_PLATFORM_STATS,
+  getMasterProductHref,
+  getMasterProducts,
+} from '@/lib/rate-api';
 import { buildPopular1v1BattlesForCategory } from '@/lib/leaderboard-engine';
 import {
   getCachedMerchantsList,
@@ -84,35 +88,28 @@ export default async function Home({
   let masterProducts: MasterProduct[] = [];
   let merchants: MerchantSummary[] = [];
   let dealRadar: CrossPlatformDealRadarResponse | null = null;
-  let platformStats: RatePlatformStats = {
-    masterProductsCount: 0,
-    listingsCount: 0,
-    merchantsCount: 0,
-    priceObservationsCount: 0,
-    totalReviewsCount: 0,
-    authenticReviewsCount: 0,
-    filteredSeedingCount: 0,
-    authenticRatioPct: 100,
-    categoriesWithCounts: [],
-    recentReviewsSample: [],
-  };
+  let platformStats: RatePlatformStats = EMPTY_RATE_PLATFORM_STATS;
 
-  try {
-    const [productsRes, merchantsRes, statsRes, radarRes] = await Promise.all([
+  // Each section degrades on its own: one failed read (nothing is cached for
+  // it) must not blank the sections that did load.
+  const [productsRes, merchantsRes, statsRes, radarRes] =
+    await Promise.allSettled([
       getMasterProducts({ categorySlug: 'all', limit: 24 }),
       getCachedMerchantsList(),
       getCachedRatePlatformStats(),
       getCrossPlatformDealRadar({ categorySlug: 'all', limit: 50 }),
     ]);
-    masterProducts = productsRes;
-    merchants = merchantsRes;
-    platformStats = statsRes;
-    dealRadar = radarRes;
-  } catch (err) {
-    console.error(
-      'Error fetching homepage data from Supabase rate schema:',
-      err
-    );
+  if (productsRes.status === 'fulfilled') masterProducts = productsRes.value;
+  if (merchantsRes.status === 'fulfilled') merchants = merchantsRes.value;
+  if (statsRes.status === 'fulfilled') platformStats = statsRes.value;
+  if (radarRes.status === 'fulfilled') dealRadar = radarRes.value;
+  for (const res of [productsRes, merchantsRes, statsRes, radarRes]) {
+    if (res.status === 'rejected') {
+      console.error(
+        'Error fetching homepage data from Supabase rate schema:',
+        res.reason
+      );
+    }
   }
 
   const popularHomeBattles = buildPopular1v1BattlesForCategory(

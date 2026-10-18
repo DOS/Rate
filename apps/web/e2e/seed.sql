@@ -55,6 +55,21 @@ SELECT id, 'authentic', true, 'e2e-seed', 'v1', 'seed-' || id FROM rate.reviews;
 
 SELECT rate.refresh_master_product_rating(id) FROM rate.master_products;
 
+-- A published phone whose price history read fails on purpose (FAULT_RULES in
+-- scripts/e2e/run.mjs); everything else about it reads normally.
+INSERT INTO rate.master_products
+  (id, category_id, brand, model, model_key, name, slug, min_price, max_price, merchant_count, status, metadata)
+VALUES ('22222222-2222-4222-8222-22222222fa17', 'c0000000-0000-4000-8000-000000000001', 'E2E', 'Price Fault Phone',
+  'e2e_price_fault_phone', 'E2E Price Fault Phone', 'e2e-price-fault-phone', 1000000, 1000000, 1, 'published',
+  '{"category_slug": "smartphones"}');
+-- Sold by its own merchant, so no other seeded profile reads its history.
+INSERT INTO rate.merchants (id, platform, platform_shop_id, name, slug, is_official)
+VALUES ('dddddddd-dddd-4ddd-8ddd-ddddddddfa17', 'shopee', 'shop_price_fault', 'Price Fault Store', 'price-fault-store', false);
+INSERT INTO rate.products (id, merchant_id, platform, platform_item_id, title, category_id, price_current, url, cluster_id)
+VALUES ('cccccccc-cccc-4ccc-8ccc-ccccccccfa17', 'dddddddd-dddd-4ddd-8ddd-ddddddddfa17', 'shopee', 'item_fault',
+  'E2E Price Fault Phone', 'c0000000-0000-4000-8000-000000000001', 1000000, 'https://shopee.vn/item-fault',
+  '22222222-2222-4222-8222-22222222fa17');
+
 -- A merchant with 250 listings: reads that pass every listing id to one in.()
 -- would exceed the request-line limit the E2E proxy enforces. The only review
 -- sits on the last listing, so it shows only if every chunk is read.

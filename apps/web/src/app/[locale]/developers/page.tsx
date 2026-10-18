@@ -6,6 +6,7 @@ import FooterTop from '../components/footer-top';
 import FooterDynamic from '../components/footer/FooterDynamic';
 import BackToTop from '../components/back-to-top';
 import ApiPlaygroundClient from '@/components/developers/ApiPlaygroundClient';
+import { EMPTY_RATE_PLATFORM_STATS } from '@/lib/rate-api';
 import { getCachedRatePlatformStats } from '@/server/rate';
 import {
   BsCodeSquare,
@@ -106,7 +107,8 @@ export default async function DevelopersPage({
 }) {
   const { locale } = await params;
   const [stats, t] = await Promise.all([
-    getCachedRatePlatformStats(),
+    // Counters are decorative here: show zeros rather than an error page.
+    getCachedRatePlatformStats().catch(() => EMPTY_RATE_PLATFORM_STATS),
     getTranslations({ locale, namespace: 'developers' }),
   ]);
 

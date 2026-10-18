@@ -37,7 +37,8 @@ export function getRateClient(): RateSchemaClient {
  * PostgREST caps every response at the project's max-rows (1000 by default) and
  * silently drops the rest, so unbounded table reads must be paged. Pages advance by
  * the number of rows actually returned, which also works if max-rows is lowered.
- * On error, logs and returns what was read so far (matching the old ignore-error reads).
+ * A failed page throws RateDataUnavailableError: a partial list would otherwise
+ * be cached as if it were complete (DOS/Rate#333).
  */
 async function fetchAllRows<T>(
   label: string,
@@ -56,7 +57,7 @@ async function fetchAllRows<T>(
         row: from,
         message: error.message,
       });
-      return rows;
+      throw new RateDataUnavailableError(label, error);
     }
     const page = data ?? [];
     if (page.length === 0) return rows;
@@ -1739,6 +1740,26 @@ function computeMedian(values: number[]): number {
   return Math.round(((sorted[mid - 1] ?? 0) + (sorted[mid] ?? 0)) / 2);
 }
 
+/** fetchAllRows over `ids` in chunks, so no in() overflows the request line. */
+async function fetchAllRowsInChunks<T>(
+  label: string,
+  ids: readonly string[],
+  buildPage: (
+    chunk: string[],
+    from: number,
+    to: number
+  ) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>
+): Promise<T[]> {
+  const rows: T[] = [];
+  for (let i = 0; i < ids.length; i += IN_FILTER_CHUNK_SIZE) {
+    const chunk = ids.slice(i, i + IN_FILTER_CHUNK_SIZE);
+    rows.push(
+      ...(await fetchAllRows(label, (from, to) => buildPage(chunk, from, to)))
+    );
+  }
+  return rows;
+}
+
 /**
  * Fetch time-series price history across all merchant offers for a master product
  * and run Fake Discount Detection (nâng khống giá gốc / giảm giá ảo).
@@ -1781,6 +1802,8 @@ export async function getMasterProductPriceHistory(
       masterId,
       message: error.message,
     });
+    // An empty history would be cached and shown as "no price data".
+    throw new RateDataUnavailableError('price history', error);
   }
 
   const chronologicalRows = [
@@ -2384,18 +2407,24 @@ export async function getMerchantsList(params?: {
     mQuery = mQuery.limit(params.limit);
   }
 
-  const { data: merchantRows } = await mQuery;
+  const { data: merchantRows, error: merchantsError } = await mQuery;
+  if (merchantsError) {
+    throw new RateDataUnavailableError('merchants', merchantsError);
+  }
   const merchants = (merchantRows as unknown as RawMerchantSafeRow[]) || [];
   if (merchants.length === 0) return [];
 
   const merchantIds = merchants.map((m) => m.id);
-  const prodRows = await fetchAllRows('products', (from, to) =>
-    supabase
-      .from('products')
-      .select('id, merchant_id, price_current')
-      .in('merchant_id', merchantIds)
-      .order('id')
-      .range(from, to)
+  const prodRows = await fetchAllRowsInChunks(
+    'products',
+    merchantIds,
+    (chunk, from, to) =>
+      supabase
+        .from('products')
+        .select('id, merchant_id, price_current')
+        .in('merchant_id', chunk)
+        .order('id')
+        .range(from, to)
   );
 
   const products =
@@ -2452,15 +2481,18 @@ export async function getMerchantsList(params?: {
 
   const mappedReviewsByMerchant = new Map<string, ReviewItem[]>();
   if (unscoredProductIds.length > 0) {
-    const reviewRows = await fetchAllRows('reviews', (from, to) =>
-      supabase
-        .from('reviews')
-        .select(
-          'id, product_id, review_flags(verdict, flag_category, include_in_rating)'
-        )
-        .in('product_id', unscoredProductIds)
-        .order('id')
-        .range(from, to)
+    const reviewRows = await fetchAllRowsInChunks(
+      'reviews',
+      unscoredProductIds,
+      (chunk, from, to) =>
+        supabase
+          .from('reviews')
+          .select(
+            'id, product_id, review_flags(verdict, flag_category, include_in_rating)'
+          )
+          .in('product_id', chunk)
+          .order('id')
+          .range(from, to)
     );
 
     for (const r of (reviewRows as unknown as Array<
@@ -2805,14 +2837,11 @@ export async function getMerchantProfileById(
   // Compute price history / Fake Discount analysis per master product
   const discountByOfferId = new Map<string, OfferDiscountAnalysis>();
   await Promise.all(
+    // A failure throws: the profile must not be cached without its analysis.
     clusterIds.map(async (cId) => {
-      try {
-        const ph = await getMasterProductPriceHistory(cId);
-        for (const [offerId, analysis] of Object.entries(ph.byOffer)) {
-          discountByOfferId.set(offerId, analysis);
-        }
-      } catch {
-        // Ignore individual history errors
+      const ph = await getMasterProductPriceHistory(cId);
+      for (const [offerId, analysis] of Object.entries(ph.byOffer)) {
+        discountByOfferId.set(offerId, analysis);
       }
     })
   );
@@ -2960,6 +2989,20 @@ export async function getMerchantProfileById(
   };
 }
 
+/** Counters shown when platform stats cannot be read; never cached. */
+export const EMPTY_RATE_PLATFORM_STATS: RatePlatformStats = {
+  masterProductsCount: 0,
+  listingsCount: 0,
+  merchantsCount: 0,
+  priceObservationsCount: 0,
+  totalReviewsCount: 0,
+  authenticReviewsCount: 0,
+  filteredSeedingCount: 0,
+  authenticRatioPct: 100,
+  categoriesWithCounts: [],
+  recentReviewsSample: [],
+};
+
 /**
  * Fetch live platform statistics, category product counts, and recent verified/flagged
  * reviews from the `rate` schema to power the Homepage with 100% real database data.
@@ -3004,6 +3047,15 @@ export async function getRatePlatformStats(): Promise<RatePlatformStats> {
       .order('created_at', { ascending: false })
       .limit(60),
   ]);
+  // Zero counters would otherwise be cached as the platform's real totals.
+  const statsError =
+    catsRes.error ??
+    merchantsRes.error ??
+    priceHistCountRes.error ??
+    reviewsRes.error;
+  if (statsError) {
+    throw new RateDataUnavailableError('platform stats', statsError);
+  }
 
   const categories = (catsRes.data as RateCategoryItem[]) || [];
   const masterRows =
