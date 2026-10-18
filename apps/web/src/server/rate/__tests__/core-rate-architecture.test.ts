@@ -2578,7 +2578,7 @@ async function runCoreArchitectureSuite() {
   const mig176Src = fs.readFileSync(
     path.join(
       repoRoot,
-      'supabase/migrations/20261018003000_rate_audit_t4_t6_t7_t8_hardening.sql'
+      'supabase/migrations/20261018120102_rate_audit_t4_t6_t7_t8_hardening.sql'
     ),
     'utf8'
   );
@@ -2588,7 +2588,7 @@ async function runCoreArchitectureSuite() {
       mig176Src.includes('SECURITY INVOKER') &&
       mig176Src.includes("SET search_path = ''") &&
       mig176Src.includes("ESCAPE ''\\''"),
-    "20261018003000_rate_audit_t4_t6_t7_t8_hardening.sql must enforce BRIN index, ON DELETE RESTRICT, SECURITY INVOKER, search_path='' & escaped ILIKE wildcards (#176)"
+    "20261018120102_rate_audit_t4_t6_t7_t8_hardening.sql must enforce BRIN index, ON DELETE RESTRICT, SECURITY INVOKER, search_path='' & escaped ILIKE wildcards (#176)"
   );
   const rateApiSrc176 = fs.readFileSync(
     path.join(repoRoot, 'apps/web/src/lib/rate-api.ts'),
@@ -2607,7 +2607,7 @@ async function runCoreArchitectureSuite() {
   const mig177Src = fs.readFileSync(
     path.join(
       repoRoot,
-      'supabase/migrations/20261018010000_rate_audit_c5_t3_market_stats_and_vote_guard.sql'
+      'supabase/migrations/20261018120103_rate_audit_c5_t3_market_stats_and_vote_guard.sql'
     ),
     'utf8'
   );
@@ -2620,7 +2620,7 @@ async function runCoreArchitectureSuite() {
       mig177Src.includes(
         'REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON rate.review_flags FROM PUBLIC, anon, authenticated;'
       ),
-    '20261018010000_rate_audit_c5_t3_market_stats_and_vote_guard.sql must define refresh_master_market_stats, UPDATE flood guard on review_votes, and revoke public DML on review_flags (#177)'
+    '20261018120103_rate_audit_c5_t3_market_stats_and_vote_guard.sql must define refresh_master_market_stats, UPDATE flood guard on review_votes, and revoke public DML on review_flags (#177)'
   );
   const ingestSrc177 = fs.readFileSync(
     path.join(repoRoot, 'apps/importer/src/shopee/shopee-to-supabase.ts'),
@@ -2638,7 +2638,7 @@ async function runCoreArchitectureSuite() {
   const mig178Src = fs.readFileSync(
     path.join(
       repoRoot,
-      'supabase/migrations/20261018013000_rate_audit_c1_catalog_search_and_facets_rpc.sql'
+      'supabase/migrations/20261018120104_rate_audit_c1_catalog_search_and_facets_rpc.sql'
     ),
     'utf8'
   );
@@ -2651,7 +2651,7 @@ async function runCoreArchitectureSuite() {
       ) &&
       mig178Src.includes('idx_master_products_specs_gin') &&
       mig178Src.includes('SECURITY INVOKER'),
-    '20261018013000_rate_audit_c1_catalog_search_and_facets_rpc.sql must define get_category_brand_facets and search_master_products with SECURITY INVOKER (#178)'
+    '20261018120104_rate_audit_c1_catalog_search_and_facets_rpc.sql must define get_category_brand_facets and search_master_products with SECURITY INVOKER (#178)'
   );
   assert.ok(
     rateApiSrc176.includes("'get_category_brand_facets'") &&
@@ -2881,7 +2881,7 @@ async function runCoreArchitectureSuite() {
   const mig189Src = fs.readFileSync(
     path.join(
       repoRoot,
-      'supabase/migrations/20261018020000_rate_audit_low_queue_purge_and_updated_at_triggers.sql'
+      'supabase/migrations/20261018120105_rate_audit_low_queue_purge_and_updated_at_triggers.sql'
     ),
     'utf8'
   );
@@ -2893,7 +2893,7 @@ async function runCoreArchitectureSuite() {
         'CREATE OR REPLACE FUNCTION rate.set_updated_at_timestamp()'
       ) &&
       mig189Src.includes("SET search_path = ''"),
-    '20261018020000_rate_audit_low_queue_purge_and_updated_at_triggers.sql must define purge_completed_crawl_jobs and set_updated_at_timestamp (#189)'
+    '20261018120105_rate_audit_low_queue_purge_and_updated_at_triggers.sql must define purge_completed_crawl_jobs and set_updated_at_timestamp (#189)'
   );
   const sidebarSrc189 = fs.readFileSync(
     path.join(
@@ -2947,7 +2947,7 @@ async function runCoreArchitectureSuite() {
   const mig215Src = fs.readFileSync(
     path.join(
       repoRoot,
-      'supabase/migrations/20261018023000_rate_audit_m3_m4_m5_m7_queue_and_observation_rpc.sql'
+      'supabase/migrations/20261018120106_rate_audit_m3_m4_m5_m7_queue_and_observation_rpc.sql'
     ),
     'utf8'
   );
@@ -2965,7 +2965,7 @@ async function runCoreArchitectureSuite() {
       mig215Src.includes('idx_crawl_jobs_run_id') &&
       mig215Src.includes('idx_promotions_product_id') &&
       mig215Src.includes("SET search_path = ''"),
-    '20261018023000_rate_audit_m3_m4_m5_m7_queue_and_observation_rpc.sql must define cancel_crawl_jobs, release_crawl_job, record_price_observation, queue/FK indexes, and Linter 0011 search_path hardening (#215)'
+    '20261018120106_rate_audit_m3_m4_m5_m7_queue_and_observation_rpc.sql must define cancel_crawl_jobs, release_crawl_job, record_price_observation, queue/FK indexes, and Linter 0011 search_path hardening (#215)'
   );
   const ingest215Src = fs.readFileSync(
     path.join(repoRoot, 'apps/importer/src/shopee/shopee-to-supabase.ts'),

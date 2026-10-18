@@ -1,5 +1,5 @@
 -- ============================================================================
--- Migration: 20261017235900_rate_crowd_verify_signal_rpc.sql
+-- Migration: 20261018120101_rate_crowd_verify_signal_rpc.sql
 -- Purpose (Issue #159 / Audit T9):
 --   Provide a narrow, rate-limited SECURITY DEFINER wrapper RPC
 --   `rate.enqueue_crowd_verify_signal` callable by `anon` and `authenticated`
@@ -27,6 +27,7 @@ DECLARE
   v_clean_item_id TEXT := btrim(COALESCE(p_platform_item_id, ''));
   v_clean_shop_id TEXT := NULLIF(btrim(COALESCE(p_platform_shop_id, '')), '');
   v_recent_crowd_count INTEGER := 0;
+  v_host_pattern TEXT;
 BEGIN
   IF v_clean_platform NOT IN (
     'shopee', 'lazada', 'tiki', 'tiktok', 'cellphones',
@@ -38,6 +39,29 @@ BEGIN
 
   IF v_clean_url = '' OR char_length(v_clean_url) > 1024 OR v_clean_url !~* '^https?://' THEN
     RAISE EXCEPTION 'Invalid target product URL'
+      USING ERRCODE = '22023';
+  END IF;
+
+  -- The worker fetches target_url: only the marketplace's own host is accepted.
+  v_host_pattern := CASE v_clean_platform
+    WHEN 'shopee' THEN 'shopee\.vn'
+    WHEN 'lazada' THEN 'lazada\.vn'
+    WHEN 'tiki' THEN 'tiki\.vn'
+    WHEN 'tiktok' THEN 'tiktok\.com'
+    WHEN 'cellphones' THEN 'cellphones\.com\.vn'
+    WHEN 'tgdd' THEN 'thegioididong\.com'
+    WHEN 'fptshop' THEN 'fptshop\.com\.vn'
+    WHEN 'hoangha' THEN 'hoanghamobile\.com'
+    WHEN 'didongviet' THEN 'didongviet\.vn'
+    WHEN 'phongvu' THEN 'phongvu\.vn'
+  END;
+  -- Fail closed if a platform is ever allowed above without a host here.
+  IF v_host_pattern IS NULL THEN
+    RAISE EXCEPTION 'No host allowlist for platform %', v_clean_platform
+      USING ERRCODE = '22023';
+  END IF;
+  IF v_clean_url !~* ('^https?://([a-z0-9-]+\.)*' || v_host_pattern || '(:443)?(/|\?|#|$)') THEN
+    RAISE EXCEPTION 'Target URL host does not match the platform'
       USING ERRCODE = '22023';
   END IF;
 
@@ -66,6 +90,21 @@ BEGIN
       USING ERRCODE = 'P0001';
   END IF;
 
+  -- A live crawl of the same item (any other job type) already covers this
+  -- signal. enqueue_crawl_job would supersede it, so an anonymous caller could
+  -- cancel scheduled crawls; return without enqueueing instead.
+  IF EXISTS (
+    SELECT 1
+    FROM rate.crawl_jobs cj
+    WHERE cj.platform = v_clean_platform
+      AND cj.platform_item_id = v_clean_item_id
+      AND cj.status IN ('pending', 'running')
+      AND cj.type <> 'extension_crowd_verify'
+  ) THEN
+    RETURN QUERY SELECT NULL::uuid, 'already_queued'::text;
+    RETURN;
+  END IF;
+
   -- Delegate to canonical queue RPC with fixed type='extension_crowd_verify' and priority=5
   RETURN QUERY
   SELECT eq.job_id, eq.state
@@ -84,6 +123,10 @@ BEGIN
     ) AS eq;
 END;
 $$;
+
+-- Supports the per-minute flood guard above.
+CREATE INDEX IF NOT EXISTS idx_crawl_jobs_type_created
+  ON rate.crawl_jobs (type, created_at DESC);
 
 REVOKE ALL ON FUNCTION rate.enqueue_crowd_verify_signal(TEXT, TEXT, TEXT, TEXT, JSONB) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION rate.enqueue_crowd_verify_signal(TEXT, TEXT, TEXT, TEXT, JSONB) TO anon, authenticated, service_role;
