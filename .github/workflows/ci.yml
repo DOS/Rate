@@ -112,7 +112,7 @@ jobs:
         run: |
           for attempt in 1 2 3; do
             if pnpm --filter @repo/web build 2>&1 | tee web-build.log; then exit 0; fi
-            grep -qiE 'font/google|fonts\.(googleapis|gstatic)\.com' web-build.log || exit 1
+            grep -qiE 'font/google|from Google Fonts|fonts\.(googleapis|gstatic)\.com' web-build.log || exit 1
             if [ "$attempt" -lt 3 ]; then
               echo "Google Fonts fetch failed; retrying in $((attempt * 15))s..."
               sleep $((attempt * 15))

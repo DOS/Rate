@@ -146,7 +146,9 @@ function start(command, commandArgs, env) {
 
 // next/font downloads Google Fonts during the build; a failed fetch surfaces
 // as one of these. Only such failures are worth retrying.
-const FONT_FETCH_ERROR = /font\/google|fonts\.(googleapis|gstatic)\.com/i;
+// (Turbopack names next/font/google; webpack says "... from Google Fonts".)
+const FONT_FETCH_ERROR =
+  /font\/google|from Google Fonts|fonts\.(googleapis|gstatic)\.com/i;
 
 /** Like run(), but also returns the tail of the output to classify failures. */
 function runCapturingTail(command, commandArgs, env) {
@@ -172,7 +174,8 @@ function runCapturingTail(command, commandArgs, env) {
     child.stdout.on('data', (c) => keep(c, process.stdout));
     child.stderr.on('data', (c) => keep(c, process.stderr));
     child.on('error', reject);
-    child.on('exit', (code) => resolve({ code, tail }));
+    // 'close', not 'exit': it fires after stdout/stderr drain, so the tail is complete.
+    child.on('close', (code) => resolve({ code, tail }));
   });
 }
 
