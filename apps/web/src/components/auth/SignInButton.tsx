@@ -1,20 +1,19 @@
 'use client';
 
-import { useParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { getPublicClient } from '@repo/shared-data';
-import { normalizeRateLocale } from '@/lib/rate-i18n';
+import { useTranslations } from 'next-intl';
+import { getBrowserSupabase } from '@/lib/supabase/browser';
 
 export function SignInButton({ className }: { className?: string }) {
+  const t = useTranslations('authPortal');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const params = useParams<{ locale: string }>();
   const router = useRouter();
-  const locale = normalizeRateLocale(params?.locale);
 
   useEffect(() => {
     let active = true;
     try {
-      const supabase = getPublicClient();
+      const supabase = getBrowserSupabase();
       supabase.auth.getSession().then(({ data }) => {
         if (active) setIsAuthenticated(Boolean(data.session));
       });
@@ -29,12 +28,7 @@ export function SignInButton({ className }: { className?: string }) {
   if (isAuthenticated) return null;
 
   const targetHref = '/login';
-  const label =
-    locale === 'en'
-      ? 'Sign In'
-      : locale === 'cs'
-        ? 'Přihlásit se'
-        : 'Đăng nhập';
+  const label = t('signInBtnLabel');
 
   return (
     <button

@@ -35,7 +35,7 @@ export interface ArenaSyncedDeviceSpec {
 function stripHtmlTags(raw: string): string {
   return raw
     .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<[^>]+>/g, ' ')
+    .replace(/<[^<>]+>/g, ' ')
     .replace(/&nbsp;/gi, ' ')
     .replace(/&amp;/gi, '&')
     .replace(/&quot;/gi, '"')
@@ -49,15 +49,41 @@ function stripHtmlTags(raw: string): string {
  */
 export function extractGsmArenaDataSpecs(html: string): Record<string, string> {
   const specs: Record<string, string> = {};
-  const regex =
-    /<([a-z0-9]+)\b[^>]*\bdata-spec=["']([^"']+)["'][^>]*>([\s\S]*?)<\/\1>/gi;
+  // Scan opening tags, then search for the matching close from there. A single
+  // regex with `[^>]*\bdata-spec=` and a lazy body backtracks polynomially on
+  // hostile pages (CodeQL js/polynomial-redos).
+  const openTag = /<([a-z0-9]+)\b([^<>]*)>/gi;
+  // Index every close tag once (offsets into the original string, so case
+  // folding cannot shift them). Openings are visited left to right, so a
+  // per-tag cursor finds the first close after each opening in amortized
+  // constant time and the whole scan stays linear.
+  const closesByTag = new Map<string, { at: number; end: number }[]>();
+  for (const close of html.matchAll(/<\/([a-z0-9]+)>/gi)) {
+    const tag = close[1].toLowerCase();
+    const list = closesByTag.get(tag) ?? [];
+    const at = close.index ?? 0;
+    list.push({ at, end: at + close[0].length });
+    closesByTag.set(tag, list);
+  }
+  const cursors = new Map<string, number>();
   let match: RegExpExecArray | null;
-  while ((match = regex.exec(html)) !== null) {
-    const key = match[2]?.trim();
-    const val = stripHtmlTags(match[3] || '');
+  while ((match = openTag.exec(html)) !== null) {
+    const keyMatch = /\bdata-spec=["']([^"']+)["']/i.exec(match[2] || '');
+    if (!keyMatch) continue;
+    const tag = match[1].toLowerCase();
+    const list = closesByTag.get(tag);
+    if (!list) continue;
+    let cursor = cursors.get(tag) ?? 0;
+    while (cursor < list.length && list[cursor].at < openTag.lastIndex) cursor++;
+    cursors.set(tag, cursor);
+    const close = list[cursor];
+    if (!close) continue;
+    const key = keyMatch[1]?.trim();
+    const val = stripHtmlTags(html.slice(openTag.lastIndex, close.at));
     if (key && val && !specs[key]) {
       specs[key] = val;
     }
+    openTag.lastIndex = close.end;
   }
   return specs;
 }
@@ -74,8 +100,8 @@ export function splitCameraModulesToPhoneArenaFormat(rawModules: string): {
 } {
   const lines = rawModules
     .split(/\r?\n|;\s*(?=\d+\s*MP)/i)
-    .map((l) => l.trim())
-    .filter((l) => l.length > 0);
+    .map(l => l.trim())
+    .filter(l => l.length > 0);
 
   return {
     main_camera: lines[0],
@@ -86,96 +112,103 @@ export function splitCameraModulesToPhoneArenaFormat(rawModules: string): {
 }
 
 /**
- * Parses a GSMArena specification HTML document into validated 10-Field-Group
- * `ProductSpecifications` and `KeySpecs`.
+ * Parses a GSMArena specification HTML document (and optional PhoneArena table HTML)
+ * into validated 10-Field-Group `ProductSpecifications` and `KeySpecs`.
  */
 export function parseGsmArenaHtmlToSpecs(
   html: string,
-  meta?: { gsmarenaUrl?: string; phonearenaUrl?: string }
+  meta?: { gsmarenaUrl?: string; phonearenaUrl?: string; phonearenaHtml?: string }
 ): ArenaSyncedDeviceSpec {
   const d = extractGsmArenaDataSpecs(html);
-  const modelName = d['modelname'] || 'Unknown Device';
+  const pa = meta?.phonearenaHtml ? extractPhoneArenaTableSpecs(meta.phonearenaHtml) : {};
+  const modelName = d['modelname'] || pa['device name'] || 'Unknown Device';
   const brand = modelName.split(/\s+/)[0] || 'Generic';
-  const model =
-    modelName.replace(new RegExp(`^${brand}\\s+`, 'i'), '').trim() || modelName;
+  const model = modelName.replace(new RegExp(`^${brand}\\s+`, 'i'), '').trim() || modelName;
 
   // Display parsing
-  const sizeMatch = (d['displaysize'] || '').match(/(\d+(?:\.\d+)?)\s*inches/i);
+  const sizeMatch = (d['displaysize'] || pa['screen size'] || '').match(
+    /(\d+(?:\.\d+)?)\s*inches/i
+  );
   const screenSizeInch = sizeMatch ? Number(sizeMatch[1]) : null;
-  const refreshMatch = (d['displaytype'] || '').match(/(\d+)\s*Hz/i);
+  const refreshMatch = (d['displaytype'] || pa['refresh rate'] || '').match(/(\d+)\s*Hz/i);
   const refreshRateHz = refreshMatch ? Number(refreshMatch[1]) : undefined;
-  const ppiMatch = (d['displayresolution'] || '').match(/~?(\d+)\s*ppi/i);
+  const ppiMatch = (d['displayresolution'] || pa['pixel density'] || '').match(/~?(\d+)\s*ppi/i);
   const ppi = ppiMatch ? Number(ppiMatch[1]) : undefined;
 
   // Hardware & memory parsing (`256GB 12GB RAM, 512GB 16GB RAM`)
-  const memRaw = d['internalmemory'] || '';
-  const ramMatches = Array.from(memRaw.matchAll(/(\d+)\s*GB\s*RAM/gi)).map((m) =>
-    Number(m[1])
-  );
-  const storageMatches = Array.from(
-    memRaw.matchAll(/(\d+)\s*(GB|TB)(?!\s*RAM)/gi)
-  ).map((m) =>
+  const memRaw = d['internalmemory'] || `${pa['internal storage'] || ''} ${pa['ram'] || ''}`.trim();
+  const ramMatches = Array.from(memRaw.matchAll(/(\d+)\s*GB\s*RAM/gi)).map(m => Number(m[1]));
+  const storageMatches = Array.from(memRaw.matchAll(/(\d+)\s*(GB|TB)(?!\s*RAM)/gi)).map(m =>
     m[2]?.toUpperCase() === 'TB' ? Number(m[1]) * 1024 : Number(m[1])
   );
 
   const ramGb = ramMatches.length > 0 ? Math.max(...ramMatches) : null;
-  const storageGb =
-    storageMatches.length > 0 ? Math.max(...storageMatches) : null;
+  const storageGb = storageMatches.length > 0 ? Math.max(...storageMatches) : null;
 
-  // Camera parsing (PhoneArena split format)
-  const camSplit = splitCameraModulesToPhoneArenaFormat(d['cam1modules'] || '');
+  // Camera parsing (PhoneArena split format + PhoneArena table overrides)
+  const camSplitRaw = splitCameraModulesToPhoneArenaFormat(d['cam1modules'] || '');
+  const camSplit = {
+    main_camera: pa['main camera'] || camSplitRaw.main_camera,
+    second_camera: pa['second camera'] || pa['ultra-wide camera'] || camSplitRaw.second_camera,
+    third_camera: pa['third camera'] || pa['telephoto camera'] || camSplitRaw.third_camera,
+    fourth_camera: pa['fourth camera'] || pa['periscope camera'] || camSplitRaw.fourth_camera,
+  };
 
   // Battery parsing
-  const batRaw = d['batdescription1'] || '';
+  const batRaw = d['batdescription1'] || pa['capacity'] || '';
   const batMatch = batRaw.match(/(\d{3,5})\s*mAh/i);
   const batteryMah = batMatch ? Number(batMatch[1]) : null;
-  const chargingRaw = d['batcharging'] || batRaw;
+  const chargingRaw = d['batcharging'] || pa['charging'] || batRaw;
   const fastChargeMatch = chargingRaw.match(/(\d+)\s*W\s*wired/i);
   const fastChargingW = fastChargeMatch ? Number(fastChargeMatch[1]) : undefined;
 
   // Weight parsing
-  const weightMatch = (d['weight'] || '').match(/(\d+(?:\.\d+)?)\s*g\b/i);
+  const weightMatch = (d['weight'] || pa['weight'] || '').match(/(\d+(?:\.\d+)?)\s*g\b/i);
   const weightG = weightMatch ? Number(weightMatch[1]) : undefined;
 
   // Resistance parsing
-  const resistanceMatch = (d['bodyother'] || '').match(
+  const resistanceMatch = (d['bodyother'] || pa['water resistance'] || '').match(
     /IP\d{2}[A-Z]?[^.;\n]*/i
   );
 
   // 5G check
-  const netTech = `${d['nettech'] || ''} ${d['speed'] || ''} ${d['5g'] || ''}`;
-  const has5g = /5G|NR|SA\/NSA/i.test(netTech) || true;
+  const netTech = `${d['nettech'] || ''} ${d['speed'] || ''} ${d['5g'] || ''} ${d['net5g'] || ''}`;
+  const has5g = /5G|NR|SA\/NSA/i.test(netTech);
+
+  // 3.5mm headphone jack check
+  const jackRaw = d['jack'] || d['3.5mm jack'] || pa['headphones'] || '';
+  const has35mmJack = jackRaw ? /^yes\b|3\.5\s*mm\s*jack/i.test(jackRaw.trim()) : false;
 
   const rawSpecs: ProductSpecifications = {
     display: {
       size_inch: screenSizeInch ?? undefined,
-      type: d['displaytype'] || undefined,
-      resolution: d['displayresolution'] || undefined,
+      type: d['displaytype'] || pa['display type'] || undefined,
+      resolution: d['displayresolution'] || pa['resolution'] || undefined,
       refresh_rate_hz: refreshRateHz,
       ppi,
       protection: d['displayprotection'] || undefined,
       features: d['displayother'] || d['displaytype'] || undefined,
     },
     hardware: {
-      chipset: d['chipset'] || undefined,
-      cpu: d['cpu'] || undefined,
-      gpu: d['gpu'] || undefined,
+      chipset: d['chipset'] || pa['system chip'] || undefined,
+      cpu: d['cpu'] || pa['processor'] || undefined,
+      gpu: d['gpu'] || pa['gpu'] || undefined,
       ram_gb: ramGb ?? undefined,
       storage_gb: storageGb ?? undefined,
       storage_expansion: d['memoryother']
         ? `${d['memoryslot'] || 'No'} (${d['memoryother']})`
         : d['memoryslot'] || 'No',
-      os: d['os'] || undefined,
+      os: d['os'] || pa['os'] || undefined,
     },
     camera: {
       main_camera: camSplit.main_camera,
       second_camera: camSplit.second_camera,
       third_camera: camSplit.third_camera,
       fourth_camera: camSplit.fourth_camera,
-      video_recording: d['cam1video'] || undefined,
+      video_recording: d['cam1video'] || pa['video recording'] || undefined,
       front_camera: d['cam2modules']
         ? d['cam2modules'].replace(/\r?\n/g, ' | ')
-        : undefined,
+        : pa['front camera'] || undefined,
       flash: d['cam1features'] || 'LED Flash, HDR, Panorama',
     },
     battery: {
@@ -183,45 +216,42 @@ export function parseGsmArenaHtmlToSpecs(
       type: batRaw || undefined,
       charging: chargingRaw ? chargingRaw.replace(/\r?\n/g, ', ') : undefined,
       fast_charging_w: fastChargingW,
-      reverse_charging: /reverse\s+wireless/i.test(chargingRaw)
-        ? true
-        : undefined,
+      reverse_charging: /reverse\s+wireless/i.test(chargingRaw) ? true : undefined,
     },
     design: {
-      dimensions: d['dimensions'] || undefined,
+      dimensions: d['dimensions'] || pa['dimensions'] || undefined,
       weight_g: weightG,
       materials: d['build'] || d['bodyother'] || undefined,
       resistance: resistanceMatch ? resistanceMatch[0].trim() : undefined,
-      biometrics: /fingerprint/i.test(d['sensors'] || '')
+      biometrics: /fingerprint/i.test(d['sensors'] || pa['biometrics'] || '')
         ? 'Under-display ultrasonic fingerprint, Face Unlock'
         : 'Face ID / Biometric sensor',
       colors: d['colors']
         ? d['colors']
             .split(',')
-            .map((c) => c.trim())
+            .map(c => c.trim())
             .filter(Boolean)
         : undefined,
     },
     cellular: {
       has_5g: has5g,
-      bands_5g: d['net5g'] || '5G SA/NSA/Sub6',
-      sim_type: d['sim'] || 'Dual SIM (Nano-SIM + eSIM)',
-      data_speed: d['speed'] || '5G, LTE-A',
-      technology: d['nettech'] || 'GSM / HSPA / LTE / 5G',
+      bands_5g: has5g ? d['net5g'] || '5G SA/NSA/Sub6' : d['net5g'] || undefined,
+      sim_type: d['sim'] || (has5g ? 'Dual SIM (Nano-SIM + eSIM)' : 'No cellular connectivity'),
+      data_speed: d['speed'] || (has5g ? '5G, LTE-A' : 'Wi-Fi Only'),
+      technology: d['nettech'] || (has5g ? 'GSM / HSPA / LTE / 5G' : 'No cellular connectivity'),
     },
     connectivity: {
-      bluetooth: d['bluetooth'] || undefined,
-      wlan: d['wlan'] || undefined,
-      usb: d['usb'] || undefined,
+      bluetooth: d['bluetooth'] || pa['bluetooth'] || undefined,
+      wlan: d['wlan'] || pa['wi-fi'] || undefined,
+      usb: d['usb'] || pa['usb'] || undefined,
       nfc: d['nfc'] ? /yes|true/i.test(d['nfc']) : true,
       location: d['gps'] || undefined,
       sensors: d['sensors'] || undefined,
     },
     multimedia: {
       loudspeaker: d['loudspeaker'] || 'Stereo speakers, Dolby Atmos',
-      headphone_jack_35mm: false,
-      audio_features:
-        d['soundother'] || '24-bit/192kHz Hi-Res & Hi-Res Wireless audio',
+      headphone_jack_35mm: has35mmJack,
+      audio_features: d['soundother'] || '24-bit/192kHz Hi-Res & Hi-Res Wireless audio',
     },
     availability: {
       announced: d['announced'] || undefined,
@@ -240,13 +270,13 @@ export function parseGsmArenaHtmlToSpecs(
     screen: screenSizeInch
       ? `${screenSizeInch}" ${d['displaytype']?.split(',')[0] || 'LTPO OLED'} ${refreshRateHz ? `${refreshRateHz}Hz` : ''}`.trim()
       : d['displaytype'],
-    chip: d['chipset'] || undefined,
+    chip: d['chipset'] || pa['system chip'] || undefined,
     ram: ramGb ? `${ramGb}GB` : undefined,
     storage: storageGb ? `${storageGb}GB` : undefined,
     camera: camSplit.main_camera
       ? [camSplit.main_camera, camSplit.second_camera, camSplit.third_camera]
           .filter(Boolean)
-          .map((c) => c?.split(',')[0]?.trim())
+          .map(c => c?.split(',')[0]?.trim())
           .join(' + ')
       : undefined,
     battery: batteryMah
@@ -255,7 +285,7 @@ export function parseGsmArenaHtmlToSpecs(
   });
 
   return {
-    source: meta?.phonearenaUrl ? 'hybrid' : 'gsmarena',
+    source: meta?.phonearenaUrl || meta?.phonearenaHtml ? 'hybrid' : 'gsmarena',
     gsmarenaUrl: meta?.gsmarenaUrl,
     phonearenaUrl: meta?.phonearenaUrl,
     brand,
@@ -277,15 +307,17 @@ export function parseGsmArenaHtmlToSpecs(
  * Parses a PhoneArena specification table HTML (`<tr><th>Field</th><td>Value</td></tr>`)
  * and merges/overrides split camera & hardware fields.
  */
-export function extractPhoneArenaTableSpecs(
-  html: string
-): Record<string, string> {
+export function extractPhoneArenaTableSpecs(html: string): Record<string, string> {
   const out: Record<string, string> = {};
+  // Cell bodies cannot contain another tr/th/td tag, so each attempt stops at
+  // the next cell instead of rescanning the rest of the page (polynomial-redos).
   const rowRegex =
-    /<tr[^>]*>\s*<(?:th|td)[^>]*>([\s\S]*?)<\/(?:th|td)>\s*<td[^>]*>([\s\S]*?)<\/td>\s*<\/tr>/gi;
+    /<tr[^<>]*>\s*<(?:th|td)[^<>]*>((?:(?!<\/?t[rhd]\b)[\s\S])*)<\/(?:th|td)>\s*<td[^<>]*>((?:(?!<\/?t[rhd]\b)[\s\S])*)<\/td>\s*<\/tr>/gi;
   let match: RegExpExecArray | null;
   while ((match = rowRegex.exec(html)) !== null) {
-    const label = stripHtmlTags(match[1] || '').replace(/:$/, '').toLowerCase();
+    const label = stripHtmlTags(match[1] || '')
+      .replace(/:$/, '')
+      .toLowerCase();
     const val = stripHtmlTags(match[2] || '');
     if (label && val && !out[label]) {
       out[label] = val;
@@ -310,20 +342,25 @@ export function parseGsmArenaBrandCatalogHtml(
   brandHint?: string
 ): DiscoveredArenaCatalogItem[] {
   const results: DiscoveredArenaCatalogItem[] = [];
+  // The link body cannot contain another <a> or <li>, so a page of unclosed
+  // items cannot make each attempt rescan to the end (polynomial-redos).
   const itemRegex =
-    /<li[^>]*>\s*<a\s+href=["']([^"']+\.php)["'][^>]*>([\s\S]*?)<\/a>\s*<\/li>/gi;
+    /<li[^<>]*>\s*<a\s+href=["']([^"'<>]+\.php)["'][^<>]*>((?:(?!<\/?(?:a|li)\b)[\s\S])*)<\/a>\s*<\/li>/gi;
   let match: RegExpExecArray | null;
   while ((match = itemRegex.exec(html)) !== null) {
     const href = match[1]?.trim() || '';
     const inner = match[2] || '';
-    const nameMatch = inner.match(/<span[^>]*>([\s\S]*?)<\/span>/i);
+    const nameMatch = inner.match(/<span[^<>]*>((?:(?!<\/?span\b)[\s\S])*)<\/span>/i);
     const rawName = stripHtmlTags(nameMatch ? nameMatch[1] || '' : inner);
     if (!rawName || !href) continue;
     const fullName =
       brandHint && !new RegExp(`^${brandHint}\\b`, 'i').test(rawName)
         ? `${brandHint} ${rawName}`
         : rawName;
-    const imgMatch = inner.match(/<img[^>]+src=["']([^"']+)["']/i);
+    const imgSrc = [...inner.matchAll(/<img\b([^<>]*)>/gi)]
+      // `(?:^|\s)` so `data-src` lazy-load placeholders are not taken for src.
+      .map(img => /(?:^|\s)src=["']([^"']+)["']/i.exec(img[1] || '')?.[1])
+      .find(Boolean);
     const url = href.startsWith('http')
       ? href
       : `https://www.gsmarena.com/${href.replace(/^\/+/, '')}`;
@@ -331,7 +368,7 @@ export function parseGsmArenaBrandCatalogHtml(
       source: 'gsmarena',
       name: fullName,
       url,
-      imageUrl: imgMatch?.[1],
+      imageUrl: imgSrc,
     });
   }
   return results;
@@ -340,22 +377,22 @@ export function parseGsmArenaBrandCatalogHtml(
 /**
  * Parses a PhoneArena device finder HTML block to discover newly announced devices.
  */
-export function parsePhoneArenaCatalogHtml(
-  html: string
-): DiscoveredArenaCatalogItem[] {
+export function parsePhoneArenaCatalogHtml(html: string): DiscoveredArenaCatalogItem[] {
   const results: DiscoveredArenaCatalogItem[] = [];
-  const linkRegex =
-    /<a[^>]+href=["'](https?:\/\/www\.phonearena\.com\/phones\/[^"'#?]+|\/phones\/[^"'#?]+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+  // Match the whole <a> first (attributes cannot span tags, the body cannot
+  // contain another <a>), then read href from the attributes. One regex with
+  // `[^>]+href=` backtracks polynomially on repeated attributes.
+  const linkRegex = /<a\s([^<>]*)>((?:(?!<\/?a\b)[\s\S])*)<\/a>/gi;
+  const hrefRegex =
+    /(?:^|\s)href=["'](https?:\/\/www\.phonearena\.com\/phones\/[^"'#?]+|\/phones\/[^"'#?]+)["']/i;
   const seen = new Set<string>();
   let match: RegExpExecArray | null;
   while ((match = linkRegex.exec(html)) !== null) {
-    const rawHref = match[1]?.trim() || '';
+    const rawHref = hrefRegex.exec(match[1] || '')?.[1]?.trim() || '';
     const text = stripHtmlTags(match[2] || '');
     if (!rawHref || !text || text.length < 4) continue;
     if (/compare|benchmarks|size-compare|reviews/i.test(rawHref)) continue;
-    const url = rawHref.startsWith('http')
-      ? rawHref
-      : `https://www.phonearena.com${rawHref}`;
+    const url = rawHref.startsWith('http') ? rawHref : `https://www.phonearena.com${rawHref}`;
     if (seen.has(url)) continue;
     seen.add(url);
     results.push({
@@ -391,7 +428,7 @@ export function countPopulatedFieldGroups(
       group &&
       typeof group === 'object' &&
       Object.values(group as Record<string, unknown>).some(
-        (v) => v !== null && v !== undefined && v !== ''
+        v => v !== null && v !== undefined && v !== ''
       )
     ) {
       count += 1;
@@ -424,9 +461,20 @@ export class ArenaSpecSyncer {
    * Audits `rate.master_products` against the canonical 2026 Multi-Category Arena
    * Registry and flags any master products with < 10 populated specification field groups.
    */
-  public async auditCatalogAgainstArenaRegistry(
-    supabase: any
-  ): Promise<ArenaCatalogAuditReport> {
+  public async auditCatalogAgainstArenaRegistry(supabase: {
+    from: (table: string) => {
+      select: (columns: string) => PromiseLike<{
+        data: Array<{
+          id: string;
+          name: string;
+          slug?: string | null;
+          model_key: string;
+          specifications?: Record<string, unknown> | null;
+        }> | null;
+        error: { message: string } | null;
+      }>;
+    };
+  }): Promise<ArenaCatalogAuditReport> {
     const { data: rows, error } = await supabase
       .from('master_products')
       .select('id, name, slug, model_key, specifications');
@@ -442,8 +490,7 @@ export class ArenaSpecSyncer {
 
     const existingKeys = new Set<string>();
     const existingSlugs = new Set<string>();
-    const incompleteSpecMasters: ArenaCatalogAuditReport['incompleteSpecMasters'] =
-      [];
+    const incompleteSpecMasters: ArenaCatalogAuditReport['incompleteSpecMasters'] = [];
 
     for (const r of rows) {
       if (r.model_key) existingKeys.add(String(r.model_key).toLowerCase());
@@ -460,15 +507,13 @@ export class ArenaSpecSyncer {
     }
 
     const missingFromDatabase = UPSTREAM_2026_ARENA_REFERENCE_URLS.filter(
-      (ref) =>
-        !existingKeys.has(ref.model_key.toLowerCase()) &&
-        !existingSlugs.has(ref.slug.toLowerCase())
+      ref =>
+        !existingKeys.has(ref.model_key.toLowerCase()) && !existingSlugs.has(ref.slug.toLowerCase())
     );
 
     return {
       totalArena2026Flagships: UPSTREAM_2026_ARENA_REFERENCE_URLS.length,
-      presentInDatabase:
-        UPSTREAM_2026_ARENA_REFERENCE_URLS.length - missingFromDatabase.length,
+      presentInDatabase: UPSTREAM_2026_ARENA_REFERENCE_URLS.length - missingFromDatabase.length,
       missingFromDatabase,
       incompleteSpecMasters,
     };
@@ -476,12 +521,7 @@ export class ArenaSpecSyncer {
 }
 
 export const UPSTREAM_2026_ARENA_REFERENCE_URLS: ReadonlyArray<{
-  category_slug:
-    | 'smartphones'
-    | 'tablets'
-    | 'laptops'
-    | 'smartwatches'
-    | 'earbuds';
+  category_slug: 'smartphones' | 'tablets' | 'laptops' | 'smartwatches' | 'earbuds';
   model_key: string;
   slug: string;
   name: string;
@@ -514,8 +554,7 @@ export const UPSTREAM_2026_ARENA_REFERENCE_URLS: ReadonlyArray<{
     name: 'Apple iPhone 18 Pro Max 256GB',
     announced: '2026, September 18',
     gsmarenaUrl: 'https://www.gsmarena.com/apple_iphone_18_pro_max-14210.php',
-    phonearenaUrl:
-      'https://www.phonearena.com/phones/Apple-iPhone-18-Pro-Max_id12540',
+    phonearenaUrl: 'https://www.phonearena.com/phones/Apple-iPhone-18-Pro-Max_id12540',
   },
   {
     category_slug: 'smartphones',
@@ -524,8 +563,7 @@ export const UPSTREAM_2026_ARENA_REFERENCE_URLS: ReadonlyArray<{
     name: 'Apple iPhone 18 Pro 256GB',
     announced: '2026, September 18',
     gsmarenaUrl: 'https://www.gsmarena.com/apple_iphone_18_pro-14209.php',
-    phonearenaUrl:
-      'https://www.phonearena.com/phones/Apple-iPhone-18-Pro_id12539',
+    phonearenaUrl: 'https://www.phonearena.com/phones/Apple-iPhone-18-Pro_id12539',
   },
   {
     category_slug: 'smartphones',
@@ -534,8 +572,7 @@ export const UPSTREAM_2026_ARENA_REFERENCE_URLS: ReadonlyArray<{
     name: 'Samsung Galaxy S26 Ultra 256GB',
     announced: '2026, February 25',
     gsmarenaUrl: 'https://www.gsmarena.com/samsung_galaxy_s26_ultra-14015.php',
-    phonearenaUrl:
-      'https://www.phonearena.com/phones/Samsung-Galaxy-S26-Ultra_id12621',
+    phonearenaUrl: 'https://www.phonearena.com/phones/Samsung-Galaxy-S26-Ultra_id12621',
   },
   {
     category_slug: 'smartphones',
@@ -553,11 +590,10 @@ export const UPSTREAM_2026_ARENA_REFERENCE_URLS: ReadonlyArray<{
     name: 'Apple iPad Pro M5 11 inch 256GB',
     announced: '2025, October 30',
     gsmarenaUrl: 'https://www.gsmarena.com/apple_ipad_pro_11_(2025)-14102.php',
-    phonearenaUrl:
-      'https://www.phonearena.com/ tablets/Apple-iPad-Pro-11-inch-M5_id12750'.replace(
-        /\s+/g,
-        ''
-      ),
+    phonearenaUrl: 'https://www.phonearena.com/ tablets/Apple-iPad-Pro-11-inch-M5_id12750'.replace(
+      /\s+/g,
+      ''
+    ),
   },
   {
     category_slug: 'tablets',
@@ -583,10 +619,8 @@ export const UPSTREAM_2026_ARENA_REFERENCE_URLS: ReadonlyArray<{
     slug: 'apple-macbook-pro-m4-pro-14-inch-512gb',
     name: 'Apple MacBook Pro M4 Pro 14 inch 512GB',
     announced: '2024, October 30',
-    gsmarenaUrl:
-      'https://www.gsmarena.com/apple_macbook_pro_14_m4_pro-13510.php',
-    phonearenaUrl:
-      'https://www.phonearena.com/macbooks/Apple-MacBook-Pro-14-M4-Pro',
+    gsmarenaUrl: 'https://www.gsmarena.com/apple_macbook_pro_14_m4_pro-13510.php',
+    phonearenaUrl: 'https://www.phonearena.com/macbooks/Apple-MacBook-Pro-14-M4-Pro',
   },
   {
     category_slug: 'smartwatches',
@@ -595,8 +629,7 @@ export const UPSTREAM_2026_ARENA_REFERENCE_URLS: ReadonlyArray<{
     name: 'Apple Watch Series 11 46mm GPS 64GB',
     announced: '2025, September 09',
     gsmarenaUrl: 'https://www.gsmarena.com/apple_watch_series_11-14050.php',
-    phonearenaUrl:
-      'https://www.phonearena.com/wearables/Apple-Watch-Series-11_id12690',
+    phonearenaUrl: 'https://www.phonearena.com/wearables/Apple-Watch-Series-11_id12690',
   },
   {
     category_slug: 'smartwatches',
@@ -605,8 +638,7 @@ export const UPSTREAM_2026_ARENA_REFERENCE_URLS: ReadonlyArray<{
     name: 'Apple Watch Ultra 3 49mm 64GB',
     announced: '2025, September 09',
     gsmarenaUrl: 'https://www.gsmarena.com/apple_watch_ultra_3-14051.php',
-    phonearenaUrl:
-      'https://www.phonearena.com/wearables/Apple-Watch-Ultra-3_id12691',
+    phonearenaUrl: 'https://www.phonearena.com/wearables/Apple-Watch-Ultra-3_id12691',
   },
   {
     category_slug: 'earbuds',
@@ -615,8 +647,7 @@ export const UPSTREAM_2026_ARENA_REFERENCE_URLS: ReadonlyArray<{
     name: 'Apple AirPods Pro 3 USB-C',
     announced: '2025, September 09',
     gsmarenaUrl: 'https://www.gsmarena.com/apple_airpods_pro_3-14055.php',
-    phonearenaUrl:
-      'https://www.phonearena.com/accessories/Apple-AirPods-Pro-3',
+    phonearenaUrl: 'https://www.phonearena.com/accessories/Apple-AirPods-Pro-3',
   },
   {
     category_slug: 'earbuds',
@@ -628,5 +659,3 @@ export const UPSTREAM_2026_ARENA_REFERENCE_URLS: ReadonlyArray<{
     phonearenaUrl: 'https://www.phonearena.com/accessories/Sony-WF-1000XM6',
   },
 ];
-
-

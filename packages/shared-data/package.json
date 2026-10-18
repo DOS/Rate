@@ -4,9 +4,14 @@
   "type": "module",
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
-      "require": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "require": "./dist/index.js"
+    },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "import": "./dist/server.js",
+      "require": "./dist/server.js"
     }
   },
   "main": "dist/index.js",
@@ -14,14 +19,18 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc",
+    "lint": "eslint . --max-warnings 0",
+    "test": "tsc && node dist/__tests__/shared-data.test.js",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",
-    "zod": "^3.25.76"
+    "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@types/node": "^26.6.3",
+    "@repo/eslint-config": "workspace:*",
+    "@types/node": "^26.6.5",
+    "eslint": "^9.39.5",
     "typescript": "^7.0.2"
   }
 }

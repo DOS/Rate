@@ -145,15 +145,18 @@ export const MasterProductSchema = z.object({
   max_price: z.number().nonnegative().default(0),
   merchant_count: z.number().int().nonnegative().default(0),
   total_reviews: z.number().int().nonnegative().default(0),
-  average_rating: z.number().min(0).max(5).nullable().default(0),
+  average_rating: z.number().min(0).max(5).nullable().default(null),
   entity_type: z.enum(['product', 'service']).default('product').optional(),
   expert_rating: z.number().min(0).max(5).nullable().optional(),
   expert_review_summary: z.string().nullable().optional(),
-  expert_criteria_scores: z.record(z.any()).default({}).optional(),
+  expert_criteria_scores: z
+    .record(z.string(), z.unknown())
+    .default({})
+    .optional(),
   user_rating_weighted: z.number().min(0).max(5).nullable().optional(),
   authentic_review_count: z.number().int().nonnegative().default(0).optional(),
   status: StatusSchema.default('draft'),
-  metadata: z.record(z.any()).default({}),
+  metadata: z.record(z.string(), z.unknown()).default({}),
   created_at: z.string().optional(),
   updated_at: z.string().optional(),
 });

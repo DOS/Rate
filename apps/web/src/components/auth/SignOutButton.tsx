@@ -1,24 +1,18 @@
 'use client';
 
-import { useParams, useRouter } from 'next/navigation';
-import { getPublicClient } from '@repo/shared-data';
-import { normalizeRateLocale } from '@/lib/rate-i18n';
+import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
+import { getBrowserSupabase } from '@/lib/supabase/browser';
 
 export function SignOutButton({ className }: { className?: string }) {
-  const params = useParams<{ locale: string }>();
+  const t = useTranslations('authPortal');
   const router = useRouter();
-  const locale = normalizeRateLocale(params?.locale);
   const callbackUrl = '/';
-  const label =
-    locale === 'en'
-      ? 'Sign Out'
-      : locale === 'cs'
-        ? 'Odhlásit se'
-        : 'Đăng xuất';
+  const label = t('signOutBtnLabel');
 
   const handleSignOut = async () => {
     try {
-      const supabase = getPublicClient();
+      const supabase = getBrowserSupabase();
       await supabase.auth.signOut();
     } catch {
       // Ignore client sign-out error

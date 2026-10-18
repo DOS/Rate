@@ -20,6 +20,8 @@
   ],
   "scripts": {
     "build": "turbo build --cache-dir=.turbo",
+    "check:migrations": "node scripts/check-migration-drift.mjs",
+    "test:migrations": "node scripts/test-migration-replay.mjs",
     "build:web": "turbo run build --filter=@repo/web",
     "build:crawler": "turbo run build --filter=@repo/crawlers",
     "commit": "git-cz",
@@ -39,17 +41,17 @@
   },
   "prettier": "@repo/prettier-config",
   "devDependencies": {
-    "@commitlint/cli": "19.8.1",
-    "@commitlint/config-conventional": "19.8.1",
-    "@playwright/test": "^1.52.0",
+    "@commitlint/cli": "21.2.3",
+    "@commitlint/config-conventional": "21.2.3",
+    "@playwright/test": "^1.64.1",
     "@repo/eslint-config": "workspace:*",
     "@repo/prettier-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",
     "@swc/core": "1.13.3",
     "@swc/core-win32-x64-msvc": "1.13.3",
-    "commitizen": "4.3.1",
+    "commitizen": "4.3.2",
     "cz-conventional-changelog": "^3.3.0",
-    "eslint": "^8.57.0",
+    "eslint": "^9.39.5",
     "husky": "^9.1.1",
     "lint-staged": "16.1.0",
     "next": "^16.3.8",
@@ -69,7 +71,7 @@
       "sharp"
     ],
     "overrides": {
-      "eslint": "^8.57.0",
+      "eslint": "^9.39.5",
       "@typescript-eslint/eslint-plugin": "^8.71.2",
       "@typescript-eslint/parser": "^8.71.2",
       "@typescript-eslint/typescript-estree": "^8.71.2",
@@ -89,9 +91,9 @@
   "dependencies": {
     "@typescript-eslint/eslint-plugin": "^8.71.2",
     "@typescript-eslint/parser": "^8.71.2",
-    "eslint-config-prettier": "10.1.5",
+    "eslint-config-prettier": "10.1.8",
     "lucide-react": "0.513.0",
     "playwright": "^1.52.0",
-    "zod": "^3.25.76"
+    "zod": "^4.6.5"
   }
 }

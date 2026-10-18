@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
+import { BsCheckLg, BsPlusLg } from 'react-icons/bs';
 import {
   type CompareTrayItem,
   getCompareTray,
@@ -14,6 +16,8 @@ interface CompareQuickToggleProps {
   size?: 'sm' | 'md';
   className?: string;
   includeWatchlist?: boolean;
+  /** Icon plus short label on a neutral chip, for card overlays. */
+  compact?: boolean;
 }
 
 export default function CompareQuickToggle({
@@ -21,7 +25,9 @@ export default function CompareQuickToggle({
   size = 'sm',
   className = '',
   includeWatchlist = true,
+  compact = false,
 }: CompareQuickToggleProps) {
+  const t = useTranslations('compare');
   const [selected, setSelected] = useState(false);
   const [limitAlert, setLimitAlert] = useState(false);
 
@@ -44,6 +50,54 @@ export default function CompareQuickToggle({
     }
   };
 
+  if (compact) {
+    const title = limitAlert
+      ? t('quickToggleLimitTitle')
+      : selected
+        ? t('quickToggleRemoveTitle')
+        : t('quickToggleAddTitle');
+    return (
+      <div
+        className={`d-inline-flex align-items-center gap-1 ${className}`.trim()}
+      >
+        {includeWatchlist && (
+          <WatchlistQuickToggle
+            compact
+            item={{
+              slug: item.slug,
+              name: item.name,
+              brand: item.brand,
+              thumbnail: item.thumbnail,
+              min_price: item.min_price,
+              categoryPath: item.categoryPath,
+            }}
+          />
+        )}
+        <button
+          type="button"
+          onClick={handleToggle}
+          title={title}
+          aria-label={`${t('quickToggleShortAdd')}: ${item.name}`}
+          aria-pressed={selected}
+          className={`rate-chip-btn${selected ? ' is-active' : ''}${limitAlert ? ' is-warning' : ''}`}
+        >
+          {selected ? (
+            <BsCheckLg aria-hidden="true" />
+          ) : (
+            <BsPlusLg aria-hidden="true" />
+          )}
+          <span>
+            {limitAlert
+              ? t('quickToggleShortLimit')
+              : selected
+                ? t('quickToggleShortSelected')
+                : t('quickToggleShortAdd')}
+          </span>
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="d-inline-flex align-items-center flex-wrap gap-1">
       {includeWatchlist && (
@@ -64,10 +118,10 @@ export default function CompareQuickToggle({
         onClick={handleToggle}
         title={
           limitAlert
-            ? 'Tối đa 4 thiết bị trong bảng so sánh'
+            ? t('quickToggleLimitTitle')
             : selected
-              ? 'Bỏ khỏi danh sách so sánh'
-              : 'Thêm vào danh sách so sánh 10 nhóm thông số'
+              ? t('quickToggleRemoveTitle')
+              : t('quickToggleAddTitle')
         }
         className={`btn ${
           limitAlert
@@ -76,14 +130,14 @@ export default function CompareQuickToggle({
               ? 'btn-danger text-white'
               : 'btn-outline-secondary text-dark bg-white'
         } ${size === 'sm' ? 'btn-sm small px-2 py-1' : 'px-3 py-2'} rounded-pill fw-medium d-inline-flex align-items-center gap-1 shadow-sm ${className}`}
-        style={{ fontSize: size === 'sm' ? '12px' : '13.5px' }}
+        style={{ fontSize: size === 'sm' ? '0.8125rem' : '13.5px' }}
       >
         <span>
           {limitAlert
-            ? '⚠️ Tối đa 4 máy'
+            ? t('quickToggleLimitBtn')
             : selected
-              ? '✓ Đã chọn so sánh'
-              : '+ So sánh'}
+              ? t('quickToggleSelectedBtn')
+              : t('quickToggleAddBtn')}
         </span>
       </button>
     </div>

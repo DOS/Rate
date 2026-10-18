@@ -1,7 +1,9 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Link } from '@/lib/navigation';
+import { escapeCsvCell } from '@/lib/csv-safe';
 import type { MasterProduct } from '@repo/shared-data';
 import { getMasterProductHref } from '@/lib/rate-domain';
 import {
@@ -21,6 +23,7 @@ import {
   type RadarSignal,
 } from '@/lib/deal-radar';
 import { useDealRadarIndex } from '@/components/radar/use-deal-radar';
+import { authorizedJsonHeaders } from '@/lib/auth/access-token';
 
 interface WatchlistWorkspaceProps {
   catalogProducts: MasterProduct[];
@@ -64,6 +67,7 @@ export default function WatchlistWorkspace({
   catalogProducts,
   locale,
 }: WatchlistWorkspaceProps) {
+  const t = useTranslations('watchlist');
   const [items, setItems] = useState<WatchlistItem[]>([]);
   const [liveDeals, setLiveDeals] = useState<Record<string, LiveWatchlistDeal>>(
     {}
@@ -71,8 +75,10 @@ export default function WatchlistWorkspace({
   const radarIndex = useDealRadarIndex();
   const [editingSlug, setEditingSlug] = useState<string | null>(null);
   const [editTarget, setEditTarget] = useState<number>(0);
-  const [subscriberEmail, setSubscriberEmail] = useState<string>('');
-  const [cloudSyncStatus, setCloudSyncStatus] = useState<string | null>(null);
+  const [cloudSyncStatus, setCloudSyncStatus] = useState<{
+    ok: boolean;
+    message: string;
+  } | null>(null);
   const [isSyncingCloud, setIsSyncingCloud] = useState<boolean>(false);
   const [copiedPortfolioMd, setCopiedPortfolioMd] = useState<boolean>(false);
 
@@ -133,14 +139,16 @@ export default function WatchlistWorkspace({
       targetPrice: cleanTarget,
     });
     setEditingSlug(null);
+    // Cloud alerts need a signed-in account; signed-out users keep the local watchlist.
+    const headers = await authorizedJsonHeaders();
+    if (!headers) return;
     try {
       await fetch('/api/v1/rate/watchlist', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           slug: item.slug,
           targetPrice: cleanTarget,
-          subscriberEmail: subscriberEmail.trim() || undefined,
           locale: locale || 'vi',
         }),
       });
@@ -152,28 +160,64 @@ export default function WatchlistWorkspace({
   const handleSyncAllCloudAlerts = async (e: React.FormEvent) => {
     e.preventDefault();
     if (items.length === 0) return;
-    setIsSyncingCloud(true);
     setCloudSyncStatus(null);
+    const headers = await authorizedJsonHeaders();
+    if (!headers) {
+      setCloudSyncStatus({
+        ok: false,
+        message: t('cloudLoginRequired'),
+      });
+      return;
+    }
+    setIsSyncingCloud(true);
     try {
-      await Promise.all(
-        items.map((item) =>
-          fetch('/api/v1/rate/watchlist', {
+      const results = await Promise.all(
+        items.map(async (item) => {
+          const res = await fetch('/api/v1/rate/watchlist', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers,
             body: JSON.stringify({
               slug: item.slug,
               targetPrice: item.targetPrice,
-              subscriberEmail: subscriberEmail.trim() || undefined,
               locale: locale || 'vi',
             }),
-          })
-        )
+          });
+          const payload = (await res.json().catch(() => null)) as {
+            ok?: boolean;
+            persistedInCloud?: boolean;
+            error?: string;
+          } | null;
+          return {
+            saved:
+              res.ok &&
+              payload?.ok === true &&
+              payload.persistedInCloud === true,
+            error: typeof payload?.error === 'string' ? payload.error : null,
+          };
+        })
       );
+      const saved = results.filter((r) => r.saved).length;
+      const firstError = results.find((r) => !r.saved && r.error)?.error;
       setCloudSyncStatus(
-        `Đã đồng bộ ${items.length} cảnh báo giá mục tiêu lên hệ thống Rate Cloud!`
+        saved === items.length
+          ? {
+              ok: true,
+              message: t('cloudSavedAll', { saved }),
+            }
+          : {
+              ok: false,
+              message: t('cloudSavedPartial', {
+                saved,
+                total: items.length,
+                errorSuffix: firstError ? ` (${firstError})` : '',
+              }),
+            }
       );
     } catch {
-      setCloudSyncStatus('Đã lưu cấu hình cảnh báo giá trên trình duyệt.');
+      setCloudSyncStatus({
+        ok: false,
+        message: t('cloudSaveError'),
+      });
     } finally {
       setIsSyncingCloud(false);
     }
@@ -226,13 +270,24 @@ export default function WatchlistWorkspace({
     if (typeof window === 'undefined' || items.length === 0) return;
     try {
       const lines = [
-        `### 🔔 Danh Mục Theo Dõi Giá & Kiểm Toán Thiết Bị (Rate.vn Watchlist - ${items.length} mẫu)`,
-        `- **Tổng giá trị danh mục (Giá thấp nhất 10 sàn):** ${portfolioStats.totalMinVnd.toLocaleString('vi-VN')} ₫`,
-        `- **Tổng ngân sách mục tiêu đặt canh:** ${portfolioStats.totalTargetVnd.toLocaleString('vi-VN')} ₫`,
-        `- **Tổng mức tiết kiệm chéo giữa các sàn:** ${portfolioStats.totalSpreadSavingsVnd.toLocaleString('vi-VN')} ₫`,
-        `- **Điểm JReviews trung bình danh mục:** ★ ${avgPortfolioRating > 0 ? `${avgPortfolioRating.toFixed(2)}/5.0` : 'chưa có'}`,
+        t('mdHeader', { count: items.length }),
+        t('mdTotalMin', {
+          price: portfolioStats.totalMinVnd.toLocaleString('vi-VN'),
+        }),
+        t('mdTotalTarget', {
+          price: portfolioStats.totalTargetVnd.toLocaleString('vi-VN'),
+        }),
+        t('mdTotalSpread', {
+          price: portfolioStats.totalSpreadSavingsVnd.toLocaleString('vi-VN'),
+        }),
+        t('mdAvgRating', {
+          rating:
+            avgPortfolioRating > 0
+              ? `${avgPortfolioRating.toFixed(2)}/5.0`
+              : t('mdNoRating'),
+        }),
         ``,
-        `| Thiết bị | Hãng | Giá thấp nhất hiện tại | Giá mục tiêu | Độ lệch 10 sàn | Radar 60N | Trạng thái | Deal tốt nhất |`,
+        t('mdTableHead'),
         `| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :--- |`,
         ...items.map((item) => {
           const liveProd = productBySlug.get(item.slug);
@@ -254,8 +309,8 @@ export default function WatchlistWorkspace({
           const hit = curMin > 0 && curMin <= item.targetPrice;
           const bestOfferStr = liveDeal?.best_offer
             ? `${liveDeal.best_offer.merchant_name} (${liveDeal.best_offer.platform.toUpperCase()})`
-            : `${liveProd?.merchant_count || 0} nguồn`;
-          return `| ${item.name} | ${item.brand} | ${curMin.toLocaleString('vi-VN')} ₫ | ${item.targetPrice.toLocaleString('vi-VN')} ₫ | ${spreadStr} | ${radarMarkdownCell(rSig)} | ${hit ? '✅ Đạt mục tiêu' : '⏳ Đang canh'} | ${bestOfferStr} |`;
+            : t('mdSourcesCount', { count: liveProd?.merchant_count || 0 });
+          return `| ${item.name} | ${item.brand} | ${curMin.toLocaleString('vi-VN')} ₫ | ${item.targetPrice.toLocaleString('vi-VN')} ₫ | ${spreadStr} | ${radarMarkdownCell(rSig)} | ${hit ? t('mdStatusReached') : t('mdStatusWatching')} | ${bestOfferStr} |`;
         }),
       ];
       await navigator.clipboard.writeText(lines.join('\n'));
@@ -299,24 +354,23 @@ export default function WatchlistWorkspace({
         rSig?.priceSpread?.spreadPct ??
         (curMin > 0 ? Math.round(((curMax - curMin) / curMin) * 1000) / 10 : 0);
       const hit = curMin > 0 && curMin <= item.targetPrice;
-      const esc = (v: string | number) =>
-        `"${String(v ?? '').replace(/"/g, '""')}"`;
       return [
-        esc(item.slug),
-        esc(item.name),
-        esc(item.brand),
-        esc(item.categoryPath || '/smartphones'),
-        esc(curMin),
-        esc(item.targetPrice),
-        esc(spreadVnd),
-        esc(spreadPct),
-        esc(hit ? 'TARGET_REACHED' : 'WATCHING'),
-        esc(liveDeal?.best_offer?.merchant_name || ''),
-        esc(liveDeal?.best_offer?.platform || ''),
-        ...radarCsvCells(rSig).map(esc),
+        escapeCsvCell(item.slug),
+        escapeCsvCell(item.name),
+        escapeCsvCell(item.brand),
+        escapeCsvCell(item.categoryPath || '/smartphones'),
+        escapeCsvCell(curMin),
+        escapeCsvCell(item.targetPrice),
+        escapeCsvCell(spreadVnd),
+        escapeCsvCell(spreadPct),
+        escapeCsvCell(hit ? 'TARGET_REACHED' : 'WATCHING'),
+        escapeCsvCell(liveDeal?.best_offer?.merchant_name || ''),
+        escapeCsvCell(liveDeal?.best_offer?.platform || ''),
+        ...radarCsvCells(rSig).map(escapeCsvCell),
       ].join(',');
     });
-    const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\n');
+    const csvContent =
+      '\uFEFF' + [headers.map(escapeCsvCell).join(','), ...rows].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -380,16 +434,12 @@ export default function WatchlistWorkspace({
         <div className="d-flex flex-column flex-lg-row justify-content-between align-items-start align-items-lg-center gap-3">
           <div>
             <span className="badge bg-danger rounded-pill mb-2 px-3 py-2 text-white">
-              🔔 Hệ Thống Canh Giá Thật &amp; Cảnh Báo Chạm Đáy Lịch Sử
+              {t('heroBadge')}
             </span>
             <h1 className="h2 fw-bold mb-2 text-white">
-              Danh Sách Theo Dõi Biến Động Giá ({items.length})
+              {t('heroTitle', { count: items.length })}
             </h1>
-            <p className="text-white-50 mb-0">
-              Đối chiếu giá thấp nhất trực tiếp từ `rate.master_products` và
-              chuỗi thời gian `rate.price_history` để báo hiệu ngay khi chạm mức
-              giá mục tiêu của bạn.
-            </p>
+            <p className="text-white-50 mb-0">{t('heroSubtitle')}</p>
           </div>
           <div className="d-flex flex-wrap gap-2">
             {items.length > 0 && (
@@ -400,15 +450,15 @@ export default function WatchlistWorkspace({
                   className="btn btn-outline-light rounded-pill btn-sm fw-semibold px-3"
                 >
                   {copiedPortfolioMd
-                    ? '✓ Đã sao chép Markdown!'
-                    : '📋 Sao chép danh mục Markdown'}
+                    ? t('copiedPortfolioMdBtn')
+                    : t('copyPortfolioMdBtn')}
                 </button>
                 <button
                   type="button"
                   onClick={handleDownloadPortfolioCsv}
                   className="btn btn-outline-light rounded-pill btn-sm fw-semibold px-3"
                 >
-                  📥 Xuất bảng CSV
+                  {t('exportCsvBtn')}
                 </button>
                 <button
                   type="button"
@@ -416,7 +466,7 @@ export default function WatchlistWorkspace({
                   data-testid="download-watchlist-json-btn"
                   className="btn btn-outline-light rounded-pill btn-sm fw-semibold px-3"
                 >
-                  📦 Xuất JSON
+                  {t('exportJsonBtn')}
                 </button>
               </>
             )}
@@ -424,13 +474,13 @@ export default function WatchlistWorkspace({
               href="/inspect"
               className="btn btn-outline-light rounded-pill px-4"
             >
-              🔬 Kiểm toán Link TMĐT
+              {t('inspectLinkBtn')}
             </Link>
             <Link
               href="/smartphones"
               className="btn btn-outline-light rounded-pill px-4"
             >
-              + Thêm sản phẩm từ danh mục
+              {t('addFromCatalogBtn')}
             </Link>
             {(() => {
               const firstCat = items[0]?.categoryPath || '/smartphones';
@@ -447,8 +497,9 @@ export default function WatchlistWorkspace({
                     .join(',')}`}
                   className="btn btn-danger rounded-pill fw-medium px-4"
                 >
-                  ⚖️ So sánh {Math.min(4, sameCatItems.length)} máy cùng danh
-                  mục
+                  {t('compareSameCatBtn', {
+                    count: Math.min(4, sameCatItems.length),
+                  })}
                 </Link>
               );
             })()}
@@ -467,7 +518,7 @@ export default function WatchlistWorkspace({
                 }}
               >
                 <div className="small text-white-50 mb-1">
-                  Tổng giá trị danh mục (Giá đáy)
+                  {t('kpiTotalMinLabel')}
                 </div>
                 <div className="h5 fw-bold font-monospace rate-tabular mb-0 text-white">
                   {portfolioStats.totalMinVnd.toLocaleString('vi-VN')} ₫
@@ -483,7 +534,7 @@ export default function WatchlistWorkspace({
                 }}
               >
                 <div className="small text-white-50 mb-1">
-                  Tổng ngân sách mục tiêu
+                  {t('kpiTotalTargetLabel')}
                 </div>
                 <div className="h5 fw-bold font-monospace text-info rate-tabular mb-0">
                   {portfolioStats.totalTargetVnd.toLocaleString('vi-VN')} ₫
@@ -494,12 +545,12 @@ export default function WatchlistWorkspace({
               <div
                 className="rounded-3 h-100 p-3"
                 style={{
-                  background: 'rgba(16,185,129,0.1)',
-                  border: '1px solid rgba(16,185,129,0.28)',
+                  background: 'rgba(45, 186, 105, 0.1)',
+                  border: '1px solid rgba(45, 186, 105, 0.28)',
                 }}
               >
                 <div className="small text-white-50 mb-1">
-                  Tiết kiệm chéo giữa 10 sàn
+                  {t('kpiSpreadSavingsLabel')}
                 </div>
                 <div className="h5 fw-bold font-monospace text-success rate-tabular mb-0">
                   +
@@ -517,13 +568,13 @@ export default function WatchlistWorkspace({
                 }}
               >
                 <div className="small text-white-50 mb-1">
-                  Điểm JReviews trung bình danh mục
+                  {t('kpiAvgRatingLabel')}
                 </div>
                 <div className="h5 fw-bold font-monospace text-warning rate-tabular mb-0">
                   ★{' '}
                   {avgPortfolioRating > 0
                     ? `${avgPortfolioRating.toFixed(2)} / 5.0`
-                    : 'Chưa có'}
+                    : t('kpiNoRating')}
                 </div>
               </div>
             </div>
@@ -535,14 +586,8 @@ export default function WatchlistWorkspace({
             onSubmit={handleSyncAllCloudAlerts}
             className="row g-2 align-items-center border-top border-secondary border-opacity-25 mt-3 pt-3"
           >
-            <div className="col-md-8">
-              <input
-                type="email"
-                className="form-control form-control-sm rounded-pill px-3"
-                placeholder="Nhập email nhận thông báo khi giá chạm ngưỡng mục tiêu (Tùy chọn - Cloud Alert API)..."
-                value={subscriberEmail}
-                onChange={(e) => setSubscriberEmail(e.target.value)}
-              />
+            <div className="col-md-8 small text-secondary">
+              {t('cloudExplain')}
             </div>
             <div className="col-md-4 d-grid">
               <button
@@ -550,14 +595,17 @@ export default function WatchlistWorkspace({
                 disabled={isSyncingCloud}
                 className="btn btn-sm btn-danger rounded-pill fw-semibold"
               >
-                {isSyncingCloud
-                  ? 'Đang đồng bộ Cloud...'
-                  : '☁️ Đồng Bộ Cảnh Báo Lên Rate Cloud'}
+                {isSyncingCloud ? t('cloudSyncingBtn') : t('cloudSyncBtn')}
               </button>
             </div>
             {cloudSyncStatus && (
-              <div className="small text-success fw-medium col-12 mt-1">
-                ✓ {cloudSyncStatus}
+              <div
+                role="status"
+                className={`small fw-medium col-12 mt-1 ${
+                  cloudSyncStatus.ok ? 'text-success' : 'text-warning'
+                }`}
+              >
+                {cloudSyncStatus.ok ? '✓' : '⚠'} {cloudSyncStatus.message}
               </div>
             )}
           </form>
@@ -567,25 +615,29 @@ export default function WatchlistWorkspace({
         <div className="row g-3 border-top border-secondary border-opacity-25 mt-3 pt-3">
           <div className="col-sm-4 col-12">
             <div className="rounded-3 bg-opacity-10 bg-white p-3">
-              <div className="small text-white-50">Sản phẩm đang theo dõi</div>
+              <div className="small text-white-50">
+                {t('statWatchingLabel')}
+              </div>
               <div className="h4 fw-bold mb-0 text-white">
-                {items.length} mẫu
+                {t('statWatchingValue', { count: items.length })}
               </div>
             </div>
           </div>
           <div className="col-sm-4 col-12">
             <div className="rounded-3 bg-opacity-10 bg-white p-3">
-              <div className="small text-white-50">Đã chạm mục tiêu mua</div>
+              <div className="small text-white-50">{t('statReachedLabel')}</div>
               <div className="h4 fw-bold text-success mb-0">
-                {reachedCount} mẫu đạt giá mục tiêu
+                {t('statReachedValue', { count: reachedCount })}
               </div>
             </div>
           </div>
           <div className="col-sm-4 col-12">
             <div className="rounded-3 bg-opacity-10 bg-white p-3">
-              <div className="small text-white-50">Chống giảm giá ảo</div>
+              <div className="small text-white-50">
+                {t('statAntiFakeLabel')}
+              </div>
               <div className="h4 fw-bold text-info mb-0">
-                100% đối chiếu trung vị 90 ngày
+                {t('statAntiFakeValue')}
               </div>
             </div>
           </div>
@@ -596,16 +648,13 @@ export default function WatchlistWorkspace({
       {items.length === 0 ? (
         <div className="card rounded-4 p-md-5 mb-4 border bg-white p-4 text-center shadow-sm">
           <div className="display-5 mb-3">🔔</div>
-          <h3 className="h5 fw-bold mb-2">
-            Bạn chưa thêm sản phẩm nào vào danh sách canh giá
-          </h3>
+          <h3 className="h5 fw-bold mb-2">{t('emptyTitle')}</h3>
           <p
             className="text-muted small mx-auto mb-4"
             style={{ maxWidth: '560px' }}
           >
-            Hãy chọn nhanh một mẫu máy bên dưới hoặc bấm nút{' '}
-            <strong>&ldquo;🔔 Theo dõi giảm giá&rdquo;</strong> trên bất kỳ
-            trang chi tiết sản phẩm nào để thiết lập ngưỡng giá mục tiêu.
+            {t('emptyDescPrefix')} <strong>“{t('emptyDescBtnName')}”</strong>{' '}
+            {t('emptyDescSuffix')}
           </p>
 
           {catalogProducts.length > 0 && (
@@ -646,11 +695,11 @@ export default function WatchlistWorkspace({
                         onClick={() => handleQuickAddCatalog(p)}
                         className="btn btn-sm btn-primary rounded-pill fw-medium w-100"
                       >
-                        🔔 Canh giảm 5% (≤{' '}
-                        {(
-                          Math.round((minP * 0.95) / 100000) * 100000
-                        ).toLocaleString('vi-VN')}{' '}
-                        ₫)
+                        {t('quickWatch5PctBtn', {
+                          price: (
+                            Math.round((minP * 0.95) / 100000) * 100000
+                          ).toLocaleString('vi-VN'),
+                        })}
                       </button>
                     </div>
                   </div>
@@ -712,7 +761,7 @@ export default function WatchlistWorkspace({
                           className="rounded-3 bg-light d-flex align-items-center justify-content-center text-muted small border"
                           style={{ width: '76px', height: '76px' }}
                         >
-                          No Img
+                          {t('noImg')}
                         </div>
                       )}
                       <div>
@@ -722,15 +771,16 @@ export default function WatchlistWorkspace({
                           </span>
                           {targetReached ? (
                             <span className="badge bg-success rounded-pill text-white">
-                              🎉 Đã chạm giá mục tiêu!
+                              {t('badgeTargetReached')}
                             </span>
                           ) : (
                             <span className="badge bg-warning-subtle text-warning-emphasis border-warning-subtle rounded-pill border">
-                              ⏳ Đang chờ giảm thêm{' '}
-                              {Math.max(0, diffFromTarget).toLocaleString(
-                                'vi-VN'
-                              )}{' '}
-                              ₫
+                              {t('badgeWaitingDrop', {
+                                diff: Math.max(
+                                  0,
+                                  diffFromTarget
+                                ).toLocaleString('vi-VN'),
+                              })}
                             </span>
                           )}
                         </div>
@@ -743,19 +793,21 @@ export default function WatchlistWorkspace({
                           >
                             {radarSignal.genuineDeal && (
                               <span className="badge bg-success-subtle text-success rounded-pill small">
-                                🟢 Kèo đáy lịch sử (-
-                                {radarSignal.genuineDeal.savingsVsMedianPct}% so
-                                trung vị tại{' '}
-                                {radarSignal.genuineDeal.platform.toUpperCase()}
-                                )
+                                {t('radarGenuineBadge', {
+                                  pct: radarSignal.genuineDeal
+                                    .savingsVsMedianPct,
+                                  platform:
+                                    radarSignal.genuineDeal.platform.toUpperCase(),
+                                })}
                               </span>
                             )}
                             {radarSignal.fakeSaleTrap && (
                               <span className="badge bg-danger-subtle text-danger rounded-pill small">
-                                🚨 Cảnh báo sàn{' '}
-                                {radarSignal.fakeSaleTrap.platform.toUpperCase()}{' '}
-                                kê khống +
-                                {radarSignal.fakeSaleTrap.fakeMarkupPct}%
+                                {t('radarFakeBadge', {
+                                  platform:
+                                    radarSignal.fakeSaleTrap.platform.toUpperCase(),
+                                  pct: radarSignal.fakeSaleTrap.fakeMarkupPct,
+                                })}
                               </span>
                             )}
                             {radarSignal.priceSpread &&
@@ -764,16 +816,16 @@ export default function WatchlistWorkspace({
                                   className="badge bg-warning-subtle text-dark border-warning-subtle rounded-pill small border"
                                   data-testid="watchlist-price-spread-badge"
                                 >
-                                  📊 Độ lệch 10 sàn +
-                                  {radarSignal.priceSpread.spreadPct}% (Chênh{' '}
-                                  {radarSignal.priceSpread.spreadVnd.toLocaleString(
-                                    'vi-VN'
-                                  )}{' '}
-                                  ₫ giữa{' '}
-                                  {radarSignal.priceSpread.cheapestPlatform.toUpperCase()}{' '}
-                                  &amp;{' '}
-                                  {radarSignal.priceSpread.priciestPlatform.toUpperCase()}
-                                  )
+                                  {t('radarSpreadBadge', {
+                                    pct: radarSignal.priceSpread.spreadPct,
+                                    vnd: radarSignal.priceSpread.spreadVnd.toLocaleString(
+                                      'vi-VN'
+                                    ),
+                                    cheapest:
+                                      radarSignal.priceSpread.cheapestPlatform.toUpperCase(),
+                                    priciest:
+                                      radarSignal.priceSpread.priciestPlatform.toUpperCase(),
+                                  })}
                                 </span>
                               )}
                           </div>
@@ -787,8 +839,11 @@ export default function WatchlistWorkspace({
                           </Link>
                         </h5>
                         <div className="text-muted small">
-                          Lưu ngày:{' '}
-                          {new Date(item.addedAt).toLocaleDateString('vi-VN')}
+                          {t('savedDateLabel', {
+                            date: new Date(item.addedAt).toLocaleDateString(
+                              'vi-VN'
+                            ),
+                          })}
                         </div>
                       </div>
                     </div>
@@ -810,25 +865,29 @@ export default function WatchlistWorkspace({
                     <div className="col-sm-4 col-12">
                       <div className="rounded-3 bg-light border p-2 text-center">
                         <div className="small text-muted">
-                          Giá hiện tại thấp nhất
+                          {t('colCurrentLowest')}
                         </div>
                         <div className="fw-bold text-danger">
                           {currentMin.toLocaleString('vi-VN')} ₫
                         </div>
                         <div
                           className="text-muted"
-                          style={{ fontSize: '11px' }}
+                          style={{ fontSize: '0.8125rem' }}
                         >
                           {currentMin !== currentMax
-                            ? `Cao nhất: ${currentMax.toLocaleString('vi-VN')} ₫`
-                            : `${live?.merchant_count || 1} nơi bán`}
+                            ? t('highestPriceSub', {
+                                price: currentMax.toLocaleString('vi-VN'),
+                              })
+                            : t('sellersCountSub', {
+                                count: live?.merchant_count || 1,
+                              })}
                         </div>
                       </div>
                     </div>
                     <div className="col-sm-4 col-12">
                       <div className="rounded-3 bg-light border p-2 text-center">
                         <div className="small text-muted">
-                          Giá lúc bắt đầu lưu
+                          {t('colPriceWhenAdded')}
                         </div>
                         <div className="fw-semibold text-dark">
                           {item.priceWhenAdded.toLocaleString('vi-VN')} ₫
@@ -841,20 +900,26 @@ export default function WatchlistWorkspace({
                                 ? 'text-danger'
                                 : 'text-muted'
                           }
-                          style={{ fontSize: '11px' }}
+                          style={{ fontSize: '0.8125rem' }}
                         >
                           {diffFromAdded === 0
-                            ? 'Chưa biến động'
+                            ? t('diffUnchanged')
                             : diffFromAdded < 0
-                              ? `Đã giảm ${Math.abs(diffFromAdded).toLocaleString('vi-VN')} ₫`
-                              : `Tăng ${diffFromAdded.toLocaleString('vi-VN')} ₫`}
+                              ? t('diffDropped', {
+                                  diff: Math.abs(diffFromAdded).toLocaleString(
+                                    'vi-VN'
+                                  ),
+                                })
+                              : t('diffIncreased', {
+                                  diff: diffFromAdded.toLocaleString('vi-VN'),
+                                })}
                         </div>
                       </div>
                     </div>
                     <div className="col-sm-4 col-12">
                       <div className="rounded-3 bg-primary-subtle border-primary-subtle border p-2 text-center">
                         <div className="small text-primary-emphasis">
-                          Mức giá mục tiêu
+                          {t('colTargetPrice')}
                         </div>
                         <div className="fw-bold text-primary">
                           ≤ {item.targetPrice.toLocaleString('vi-VN')} ₫
@@ -868,9 +933,9 @@ export default function WatchlistWorkspace({
                             setEditTarget(item.targetPrice);
                           }}
                           className="btn btn-link btn-sm text-decoration-none p-0"
-                          style={{ fontSize: '11px' }}
+                          style={{ fontSize: '0.8125rem' }}
                         >
-                          Đổi mức giá ✎
+                          {t('editTargetBtn')}
                         </button>
                       </div>
                     </div>
@@ -886,7 +951,7 @@ export default function WatchlistWorkspace({
                     >
                       <div className="small">
                         <span className="fw-semibold">
-                          🔥 Giá thấp nhất trên {platformCount} sàn/đại lý:
+                          {t('bestOfferPrefix', { count: platformCount })}
                         </span>{' '}
                         <span className="badge bg-dark rounded-pill me-1 text-white">
                           {PLATFORM_DISPLAY_LABELS[bestOffer.platform] ||
@@ -897,7 +962,7 @@ export default function WatchlistWorkspace({
                         </span>{' '}
                         {bestOffer.is_official_mall && (
                           <span className="badge bg-success-subtle text-success border-success-subtle border">
-                            Official Mall
+                            {t('officialMallBadge')}
                           </span>
                         )}
                       </div>
@@ -907,7 +972,9 @@ export default function WatchlistWorkspace({
                         rel="noopener noreferrer"
                         className="small fw-semibold text-primary text-decoration-none"
                       >
-                        Mở deal {bestOffer.price.toLocaleString('vi-VN')} ₫ ↗
+                        {t('openDealLink', {
+                          price: bestOffer.price.toLocaleString('vi-VN'),
+                        })}
                       </a>
                     </div>
                   )}
@@ -929,14 +996,14 @@ export default function WatchlistWorkspace({
                         onClick={() => handleUpdateTarget(item)}
                         className="btn btn-sm btn-primary rounded-pill px-3"
                       >
-                        Lưu
+                        {t('saveBtn')}
                       </button>
                       <button
                         type="button"
                         onClick={() => setEditingSlug(null)}
                         className="btn btn-sm btn-outline-secondary rounded-pill px-2"
                       >
-                        Hủy
+                        {t('cancelBtn')}
                       </button>
                     </div>
                   )}
@@ -947,20 +1014,20 @@ export default function WatchlistWorkspace({
                       onClick={() => removeWatchlistItem(item.slug)}
                       className="btn btn-sm btn-outline-danger rounded-pill px-3"
                     >
-                      Xóa khỏi danh sách
+                      {t('removeFromWatchlistBtn')}
                     </button>
                     <div className="d-flex gap-2">
                       <Link
                         href={`${detailHref}#price-history-section`}
                         className="btn btn-sm btn-outline-primary rounded-pill px-3"
                       >
-                        📈 Biểu đồ giá
+                        {t('priceChartLink')}
                       </Link>
                       <Link
                         href={detailHref}
                         className="btn btn-sm btn-primary rounded-pill fw-medium px-3"
                       >
-                        Xem nơi bán tốt nhất →
+                        {t('viewBestSellersLink')}
                       </Link>
                     </div>
                   </div>

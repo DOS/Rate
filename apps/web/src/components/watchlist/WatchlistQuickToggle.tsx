@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
+import { BsBell, BsBellFill } from 'react-icons/bs';
 import {
   getWatchlist,
   removeWatchlistItem,
@@ -21,13 +23,17 @@ interface WatchlistQuickToggleProps {
   item: WatchlistQuickItem;
   size?: 'sm' | 'md';
   className?: string;
+  /** Icon plus short label on a neutral chip, for card overlays. */
+  compact?: boolean;
 }
 
 export default function WatchlistQuickToggle({
   item,
   size = 'sm',
   className = '',
+  compact = false,
 }: WatchlistQuickToggleProps) {
+  const t = useTranslations('watchlist');
   const [watched, setWatched] = useState(false);
 
   useEffect(() => {
@@ -66,23 +72,51 @@ export default function WatchlistQuickToggle({
     });
   };
 
+  if (compact) {
+    return (
+      <button
+        type="button"
+        onClick={handleToggle}
+        title={
+          watched
+            ? t('quickToggleTitleWatched')
+            : t('quickToggleTitleUnwatched')
+        }
+        aria-label={`${t('quickToggleShortUnwatched')}: ${item.name}`}
+        aria-pressed={watched}
+        className={`rate-chip-btn${watched ? ' is-active' : ''} ${className}`.trim()}
+      >
+        {watched ? (
+          <BsBellFill aria-hidden="true" />
+        ) : (
+          <BsBell aria-hidden="true" />
+        )}
+        <span>
+          {watched
+            ? t('quickToggleShortWatched')
+            : t('quickToggleShortUnwatched')}
+        </span>
+      </button>
+    );
+  }
+
   return (
     <button
       type="button"
       onClick={handleToggle}
       title={
-        watched
-          ? 'Đang theo dõi biến động giá (Bấm để bỏ theo dõi)'
-          : 'Theo dõi biến động giá & nhận cảnh báo giảm giá thật (-5%)'
+        watched ? t('quickToggleTitleWatched') : t('quickToggleTitleUnwatched')
       }
       className={`btn ${
         watched
           ? 'btn-success text-white'
           : 'btn-outline-secondary text-dark bg-white'
       } ${size === 'sm' ? 'btn-sm small px-2 py-1' : 'px-3 py-2'} rounded-pill fw-medium d-inline-flex align-items-center gap-1 shadow-sm ${className}`}
-      style={{ fontSize: size === 'sm' ? '12px' : '13.5px' }}
+      style={{ fontSize: size === 'sm' ? '0.8125rem' : '13.5px' }}
     >
-      <span>{watched ? '🔔 Đang canh giá' : '🔔 Canh giá'}</span>
+      <span>
+        {watched ? t('quickToggleBtnWatched') : t('quickToggleBtnUnwatched')}
+      </span>
     </button>
   );
 }

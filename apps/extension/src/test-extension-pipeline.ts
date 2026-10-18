@@ -15,10 +15,12 @@ import {
   normalizeAllowedApiBaseUrl,
 } from './security-guards.js';
 import * as extModule from '../../web/src/server/rate/extension.js';
+import * as rateApiRootMod from '../../web/src/lib/rate-api.js';
 const {
   EXTENSION_CAPABILITY_MATRIX,
   canonicalizeProductUrl,
   detectAccessoryOrJunk,
+  detectPlatformFromInput,
   evaluateExtensionPriceVerdict,
   extractStorageAndAmbiguity,
   ingestExtensionCrowdSignal,
@@ -28,6 +30,11 @@ const {
     ? extModule
     : (extModule as unknown as { default: typeof extModule }).default
 ) as typeof extModule;
+const { parseEcommerceUrlOrQuery } = (
+  'parseEcommerceUrlOrQuery' in rateApiRootMod
+    ? rateApiRootMod
+    : (rateApiRootMod as unknown as { default: typeof rateApiRootMod }).default
+) as typeof rateApiRootMod;
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 for (const envCandidate of [
@@ -96,6 +103,125 @@ async function runTests() {
     detectEcommercePlatform('https://phongvu.vn/macbook-air-m3'),
     'phongvu'
   );
+  assert.equal(
+    detectEcommercePlatform('https://mall.shopee.vn/item-i.1.2'),
+    'shopee'
+  );
+  assert.equal(
+    detectEcommercePlatform('https://www.topzone.vn/iphone/iphone-16-pro-max'),
+    'tgdd'
+  );
+  assert.equal(
+    detectEcommercePlatform('https://www.google.com/search?q=shopee.vn'),
+    null,
+    'Must not misclassify query-string mentions of shopee.vn as Shopee platform'
+  );
+  assert.equal(
+    detectEcommercePlatform('https://shopee.vn.evil.com/item-i.1.2'),
+    null,
+    'Must reject spoofed domains where shopee.vn is only a subdomain prefix'
+  );
+  assert.equal(
+    detectEcommercePlatform('not-a-valid-url-shopee.vn'),
+    null,
+    'Must reject non-URL strings'
+  );
+  assert.equal(
+    detectPlatformFromInput(null, 'https://shopee.vn.evil.com/item-i.1.2'),
+    null,
+    'Server detectPlatformFromInput must reject spoofed subdomain prefixes'
+  );
+  assert.equal(
+    detectPlatformFromInput(null, 'https://www.dienmayxanh.com/dtdd/iphone-16'),
+    'tgdd'
+  );
+  assert.deepEqual(
+    parseEcommerceUrlOrQuery(
+      'https://www.tiktok.com/@appleflagship/product/1729384756'
+    ),
+    {
+      isUrl: true,
+      platform: 'tiktok',
+      platformShopId: 'appleflagship',
+      platformItemId: '1729384756',
+      internalSlug: null,
+    }
+  );
+  assert.deepEqual(
+    parseEcommerceUrlOrQuery(
+      'https://cellphones.com.vn/iphone-16-pro-max.html'
+    ),
+    {
+      isUrl: true,
+      platform: 'cellphones',
+      platformShopId: null,
+      platformItemId: 'iphone-16-pro-max',
+      internalSlug: null,
+    }
+  );
+  assert.deepEqual(
+    parseEcommerceUrlOrQuery(
+      'https://www.topzone.vn/iphone/iphone-16-pro-max-256gb'
+    ),
+    {
+      isUrl: true,
+      platform: 'tgdd',
+      platformShopId: null,
+      platformItemId: 'iphone-16-pro-max-256gb',
+      internalSlug: null,
+    }
+  );
+  assert.deepEqual(
+    parseEcommerceUrlOrQuery(
+      'https://fptshop.com.vn/dien-thoai/iphone-16-pro-max'
+    ),
+    {
+      isUrl: true,
+      platform: 'fptshop',
+      platformShopId: null,
+      platformItemId: 'iphone-16-pro-max',
+      internalSlug: null,
+    }
+  );
+  assert.deepEqual(
+    parseEcommerceUrlOrQuery(
+      'https://hoanghamobile.com/dien-thoai/iphone-16-pro-max'
+    ),
+    {
+      isUrl: true,
+      platform: 'hoangha',
+      platformShopId: null,
+      platformItemId: 'iphone-16-pro-max',
+      internalSlug: null,
+    }
+  );
+  assert.deepEqual(
+    parseEcommerceUrlOrQuery(
+      'https://didongviet.vn/dien-thoai/iphone-16-pro-max.html'
+    ),
+    {
+      isUrl: true,
+      platform: 'didongviet',
+      platformShopId: null,
+      platformItemId: 'iphone-16-pro-max',
+      internalSlug: null,
+    }
+  );
+  assert.deepEqual(
+    parseEcommerceUrlOrQuery('https://phongvu.vn/macbook-air-m3'),
+    {
+      isUrl: true,
+      platform: 'phongvu',
+      platformShopId: null,
+      platformItemId: 'macbook-air-m3',
+      internalSlug: null,
+    }
+  );
+  assert.equal(
+    parseEcommerceUrlOrQuery('https://shopee.vn.evil.com/item-i.1.2').platform,
+    null,
+    'parseEcommerceUrlOrQuery must reject spoofed domains'
+  );
   assert.equal(Object.keys(EXTENSION_CAPABILITY_MATRIX).length, 10);
   assert.equal(parseVndPriceText('28.990.000₫ - 34.990.000₫'), 28990000);
   console.log(
@@ -114,6 +240,22 @@ async function runTests() {
     price: 350000,
   });
   assert.equal(lowPriceCheck.isAccessory, true);
+
+  const realEarbudsCheck = detectAccessoryOrJunk({
+    title: 'Tai nghe Bluetooth Sony WF-C700N Chính hãng',
+    price: 890000,
+  });
+  assert.equal(
+    realEarbudsCheck.isAccessory,
+    false,
+    'Genuine wireless earbuds >= 400k VND must not be rejected by phone 1.2M VND floor'
+  );
+
+  const fakeEarbudsAccessoryCheck = detectAccessoryOrJunk({
+    title: 'Tai nghe Bluetooth AirPods Pro 2',
+    price: 150000,
+  });
+  assert.equal(fakeEarbudsAccessoryCheck.isAccessory, true);
 
   const realPhoneCheck = detectAccessoryOrJunk({
     title: 'Điện thoại Apple iPhone 16 Pro Max 256GB Chính hãng VN/A',
@@ -248,6 +390,21 @@ async function runTests() {
   });
   assert.equal(accessoryRejectRes.accepted, false);
   assert.equal(accessoryRejectRes.jobState, 'skipped_accessory');
+
+  const mismatchedDomainRes = await ingestExtensionCrowdSignal({
+    platform: 'shopee',
+    externalItemId: '29512841920',
+    url: 'https://www.lazada.vn/products/iphone-16-i29512841920.html',
+    title: 'Điện thoại iPhone 16 Pro Max 256GB',
+    price: 28990000,
+    userConsentOptIn: true,
+  });
+  assert.equal(mismatchedDomainRes.accepted, false);
+  assert.equal(
+    mismatchedDomainRes.jobState,
+    'rejected_invalid_url',
+    'Must reject crowd ingest when URL domain does not match declared platform'
+  );
   assert.equal(EXTENSION_CAPABILITY_MATRIX.shopee.crowdVerifyQueue, true);
   assert.equal(EXTENSION_CAPABILITY_MATRIX.lazada.crowdVerifyQueue, true);
   assert.equal(EXTENSION_CAPABILITY_MATRIX.tiki.crowdVerifyQueue, true);
@@ -307,16 +464,202 @@ async function runTests() {
     ['storage', 'sidePanel'],
     'manifest.json must request only least-privilege storage and sidePanel permissions without tabs (Audit C7, #174)'
   );
-  const distGuardsPath = path.resolve(__dirname, '../dist/security-guards.js');
   if (fs.existsSync(path.resolve(__dirname, '../dist/manifest.json'))) {
-    assert.equal(
-      fs.existsSync(distGuardsPath),
-      true,
-      'dist/security-guards.js must be bundled alongside dist/background/service-worker.js and dist/sidepanel/sidepanel.js (#174)'
-    );
+    // esbuild bundles each entry (#238): no output may import another file,
+    // and the content script (no module support in MV3) must not use import/export.
+    for (const rel of [
+      'background/service-worker.js',
+      'sidepanel/sidepanel.js',
+      'content/content-script.js',
+    ]) {
+      const out = fs.readFileSync(
+        path.resolve(__dirname, '../dist', rel),
+        'utf8'
+      );
+      assert.ok(
+        !/^\s*import\s|^\s*export\s|from\s+['"]\.{1,2}\//m.test(out),
+        `dist/${rel} must be a self-contained bundle (#238, replaces #174's security-guards copy)`
+      );
+      // The worker and panel inline the security guards (rate.vn allowlist);
+      // the content script inlines the marketplace detector.
+      const marker = rel.startsWith('content/') ? 'shopee' : 'rate.vn';
+      assert.ok(
+        out.includes(marker),
+        `dist/${rel} must contain its bundled dependencies ("${marker}")`
+      );
+    }
   }
+  const apiHandlerMod =
+    await import('../../web/src/server/rate/api-handler.js');
+  const {
+    BoundedSlidingWindowRateLimiter,
+    extractClientRateLimitKey,
+    parseBoundedStringParam,
+    parseCompareSlugsParam,
+    resolveReviewVoteInput,
+  } = (
+    'BoundedSlidingWindowRateLimiter' in apiHandlerMod
+      ? apiHandlerMod
+      : (apiHandlerMod as unknown as { default: typeof apiHandlerMod }).default
+  ) as typeof apiHandlerMod;
+
+  const limiter = new BoundedSlidingWindowRateLimiter({
+    windowMs: 60_000,
+    maxRequests: 2,
+    maxBuckets: 3,
+  });
+  assert.equal(limiter.allow('1.2.3.4', 1_000), true);
+  assert.equal(limiter.allow('1.2.3.4', 2_000), true);
+  assert.equal(
+    limiter.allow('1.2.3.4', 3_000),
+    false,
+    'Must reject once maxRequests is reached within windowMs'
+  );
+  assert.equal(
+    limiter.allow('1.2.3.4', 61_001),
+    true,
+    'Must reset window after windowMs elapses'
+  );
+  assert.equal(limiter.allow('2.2.2.2', 62_000), true);
+  assert.equal(limiter.allow('3.3.3.3', 62_000), true);
+  assert.equal(limiter.allow('4.4.4.4', 62_000), true);
+  assert.equal(
+    limiter.size,
+    3,
+    'BoundedSlidingWindowRateLimiter must never exceed maxBuckets'
+  );
+  assert.equal(
+    extractClientRateLimitKey(
+      new Headers({ 'x-forwarded-for': ' 203.0.113.7 , 10.0.0.1 ' })
+    ),
+    '203.0.113.7'
+  );
+  assert.equal(
+    extractClientRateLimitKey(new Headers({ 'x-real-ip': '198.51.100.9' })),
+    '198.51.100.9'
+  );
+  assert.equal(extractClientRateLimitKey(new Headers()), 'anon');
+  assert.equal(parseBoundedStringParam('  hello world  ', 5), 'hello');
+  assert.equal(parseBoundedStringParam('   ', 10), null);
+  assert.deepEqual(
+    parseCompareSlugsParam(
+      ' iphone-16-pro-max , IPHONE-16-PRO-MAX , bad<script>slug , galaxy-s24-ultra , xiaomi-15-ultra , find-x8-pro , extra-fifth-slug '
+    ),
+    ['iphone-16-pro-max', 'galaxy-s24-ultra', 'xiaomi-15-ultra', 'find-x8-pro'],
+    'parseCompareSlugsParam must deduplicate case-insensitively, reject invalid characters, and cap at 4 slugs'
+  );
+  assert.deepEqual(parseCompareSlugsParam('   , ??? , /etc/passwd '), []);
+  assert.equal(
+    resolveReviewVoteInput({}),
+    null,
+    'Empty vote body must not silently default to an upvote'
+  );
+  assert.equal(
+    resolveReviewVoteInput({ voteType: 'invalid_action', helpful: true }),
+    null,
+    'Invalid voteType must be rejected even if helpful is present'
+  );
+  assert.deepEqual(resolveReviewVoteInput({ vote: 'down' }), {
+    voteType: 'down',
+    reportReason: 'spam',
+  });
+  assert.deepEqual(
+    resolveReviewVoteInput({ voteType: 'REPORT', reason: 'FAKE' }),
+    {
+      voteType: 'report',
+      reportReason: 'fake',
+    }
+  );
+  assert.deepEqual(resolveReviewVoteInput({ helpful: false }), {
+    voteType: 'down',
+    reportReason: 'spam',
+  });
+
+  const cacheTagsMod = await import('../../web/src/server/rate/cache-tags.js');
+  const { resolveRevalidationTargets, RATE_CACHE_TAGS } = (
+    'resolveRevalidationTargets' in cacheTagsMod
+      ? cacheTagsMod
+      : (cacheTagsMod as unknown as { default: typeof cacheTagsMod }).default
+  ) as typeof cacheTagsMod;
+  const revalTargets = resolveRevalidationTargets({
+    slugs: ['iphone-16-pro-max'],
+    merchants: ['shopee:88201679'],
+    paths: ['/vi/smartphones/iphone-16-pro-max'],
+  });
+  assert.ok(revalTargets.tags.includes('rate:product:iphone-16-pro-max'));
+  assert.ok(revalTargets.tags.includes(RATE_CACHE_TAGS.PRODUCTS));
+  assert.ok(
+    revalTargets.tags.includes(RATE_CACHE_TAGS.OFFERS),
+    'Slug/merchant revalidation must invalidate rate:offers'
+  );
+  assert.ok(
+    revalTargets.tags.includes(RATE_CACHE_TAGS.PRICE_HISTORY),
+    'Slug revalidation must invalidate rate:price-history'
+  );
+  assert.ok(
+    revalTargets.tags.includes(RATE_CACHE_TAGS.REVIEWS),
+    'Slug revalidation must invalidate rate:reviews'
+  );
+  assert.ok(revalTargets.tags.includes(RATE_CACHE_TAGS.DEALS));
+  assert.ok(revalTargets.tags.includes('rate:merchant:shopee:88201679'));
+  assert.deepEqual(revalTargets.paths, ['/vi/smartphones/iphone-16-pro-max']);
+
+  const openApiCheckMod = await import('../../web/src/server/rate/openapi.js');
+  const { buildRateOpenApiSpec: buildSpecForCheck } = (
+    'buildRateOpenApiSpec' in openApiCheckMod
+      ? openApiCheckMod
+      : (openApiCheckMod as unknown as { default: typeof openApiCheckMod })
+          .default
+  ) as typeof openApiCheckMod;
+  const specDoc = buildSpecForCheck('https://rate.vn');
+  assert.equal(specDoc.openapi, '3.1.0');
+  const ingestPayloadSchema = specDoc.components.schemas
+    .ExtensionQuarantineIngestPayload as {
+    required?: string[];
+  };
+  assert.deepEqual(ingestPayloadSchema.required, [
+    'platform',
+    'externalItemId',
+    'url',
+    'title',
+    'price',
+    'userConsentOptIn',
+  ]);
+  const verdictLevelSchema = specDoc.components.schemas.PriceVerdictLevel as {
+    enum?: string[];
+  };
+  assert.deepEqual(verdictLevelSchema.enum, [
+    'genuine_deal',
+    'fair_market',
+    'above_market',
+    'inflated_fake_sale',
+    'insufficient_data',
+    'ambiguous_variant',
+    'skipped_accessory',
+  ]);
+  const lookupParamNames = (
+    specDoc.paths['/api/v1/rate/extension/lookup']?.get?.parameters ?? []
+  ).map((p) => p.name);
+  assert.ok(lookupParamNames.includes('selectedVariant'));
+  assert.ok(lookupParamNames.includes('skuText'));
+  assert.ok(lookupParamNames.includes('externalId'));
+
+  const rateApiBatchMod = await import('../../web/src/lib/rate-api.js');
+  const { getMasterProductOffersBatch } = (
+    'getMasterProductOffersBatch' in rateApiBatchMod
+      ? rateApiBatchMod
+      : (rateApiBatchMod as unknown as { default: typeof rateApiBatchMod })
+          .default
+  ) as typeof rateApiBatchMod;
+  const emptyBatchMap = await getMasterProductOffersBatch(['', '   ']);
+  assert.equal(
+    emptyBatchMap.size,
+    0,
+    'getMasterProductOffersBatch must return an empty Map for empty/whitespace IDs without querying PostgREST'
+  );
+
   console.log(
-    '  ✅ [5/6] Zero-Trust Quarantine, Opt-In Consent, MV3 Security Guards (C7) & Full 10/10 Platform Capability Matrix passed'
+    '  ✅ [5/6] Zero-Trust Quarantine, Opt-In Consent, Bounded Rate Limiter, OpenAPI 3.1 Contract, Batched Offers & Full 10/10 Platform Capability Matrix passed'
   );
 
   // 6. Live Read-Only Lookup against Supabase `rate` schema (when real credentials are present)

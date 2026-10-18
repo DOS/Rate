@@ -25,7 +25,7 @@ function escapeHtml(raw: string): string {
 
 function buildSvgSparkline(points: ExtensionPriceHistoryPoint[]): string {
   if (!points || points.length < 2) {
-    return `<div style="font-size: 12px; color: #9ca3af; padding: 8px 0;">Đang tích lũy thêm các mốc thời gian lịch sử giá.</div>`;
+    return `<div style="font-size: 13px; color: #9ca3af; padding: 8px 0;">Đang tích lũy thêm các mốc thời gian lịch sử giá.</div>`;
   }
   const prices = points.map((p) => p.price).filter((p) => p > 0);
   if (prices.length < 2) return '';
@@ -46,7 +46,7 @@ function buildSvgSparkline(points: ExtensionPriceHistoryPoint[]): string {
     <svg viewBox="0 0 ${width} ${height}" width="100%" height="${height}" style="background: #101318; border-radius: 8px; border: 1px solid #2a2f3a; margin-top: 8px;">
       <polyline
         fill="none"
-        stroke="#FF2E29"
+        stroke="#d83030"
         stroke-width="2.2"
         points="${coords.join(' ')}"
       />
@@ -263,7 +263,7 @@ async function fetchAndRenderMerchantTrustDirectory(
                     <a href="${escapeSafeExternalHref(detailHref)}" target="_blank" rel="noopener noreferrer" style="color:#f3f4f6;text-decoration:none;">
                       ${escapeHtml(m.name)}
                     </a>
-                    ${m.is_official ? '<span style="color:#34d399;font-size:11px;">[Mall]</span>' : ''}
+                    ${m.is_official ? '<span style="color:#34d399;font-size: 13px;">[Mall]</span>' : ''}
                   </div>
                   <div class="offer-meta">
                     ${escapeHtml(m.platform.toUpperCase())} (${m.product_count} SP) - DOSafe: ${m.dosafe_risk_score} | Seeding: ${m.review_risk_score}
@@ -362,22 +362,22 @@ function renderPanelContent(
         <div class="stats-grid">
           ${
             keySpecs.screen
-              ? `<div class="stat-box"><div class="stat-label">Màn hình</div><div class="stat-val" style="font-size:12px;">${escapeHtml(keySpecs.screen)}</div></div>`
+              ? `<div class="stat-box"><div class="stat-label">Màn hình</div><div class="stat-val" style="font-size: 13px;">${escapeHtml(keySpecs.screen)}</div></div>`
               : ''
           }
           ${
             keySpecs.chip
-              ? `<div class="stat-box"><div class="stat-label">Vi xử lý</div><div class="stat-val" style="font-size:12px;">${escapeHtml(keySpecs.chip)}</div></div>`
+              ? `<div class="stat-box"><div class="stat-label">Vi xử lý</div><div class="stat-val" style="font-size: 13px;">${escapeHtml(keySpecs.chip)}</div></div>`
               : ''
           }
           ${
             keySpecs.camera
-              ? `<div class="stat-box"><div class="stat-label">Camera</div><div class="stat-val" style="font-size:12px;">${escapeHtml(keySpecs.camera)}</div></div>`
+              ? `<div class="stat-box"><div class="stat-label">Camera</div><div class="stat-val" style="font-size: 13px;">${escapeHtml(keySpecs.camera)}</div></div>`
               : ''
           }
           ${
             keySpecs.battery
-              ? `<div class="stat-box"><div class="stat-label">Pin &amp; Sạc</div><div class="stat-val" style="font-size:12px;">${escapeHtml(keySpecs.battery)}</div></div>`
+              ? `<div class="stat-box"><div class="stat-label">Pin &amp; Sạc</div><div class="stat-val" style="font-size: 13px;">${escapeHtml(keySpecs.battery)}</div></div>`
               : ''
           }
         </div>
@@ -401,7 +401,7 @@ function renderPanelContent(
               <div>
                 <div class="offer-shop">
                   ${escapeHtml(off.merchant.name)}
-                  ${off.merchant.is_official ? '<span style="color:#34d399;font-size:11px;">[Mall]</span>' : ''}
+                  ${off.merchant.is_official ? '<span style="color:#34d399;font-size: 13px;">[Mall]</span>' : ''}
                 </div>
                 <div class="offer-meta">
                   ${escapeHtml(off.platform.toUpperCase())} - ★ ${Number(off.rating_star || 0).toFixed(1)} - Rủi ro shop: ${off.merchant.risk_score}/100
@@ -434,7 +434,7 @@ function renderPanelContent(
         </div>
         ${
           reviews.ai_summary
-            ? `<p style="margin-top: 8px; color: #d1d5db; font-size: 12.5px;">${escapeHtml(reviews.ai_summary)}</p>`
+            ? `<p style="margin-top: 8px; color: #d1d5db; font-size: 13px;">${escapeHtml(reviews.ai_summary)}</p>`
             : ''
         }
       </div>
@@ -508,7 +508,7 @@ function renderPanelContent(
         <div class="stats-grid">
           <div class="stat-box">
             <div class="stat-label">Hạng Danh Mục</div>
-            <div class="stat-val" style="color: #FF2E29;">#${overallBadge.rank} / ${overallBadge.totalInCategory}</div>
+            <div class="stat-val" style="color: #ff6b6b;">#${overallBadge.rank} / ${overallBadge.totalInCategory}</div>
           </div>
           <div class="stat-box">
             <div class="stat-label">Điểm Tổng Hợp</div>
@@ -521,7 +521,7 @@ function renderPanelContent(
                 ${subBadges
                   .map(
                     (sr) =>
-                      `<span style="font-size:11px;background:#181c24;border:1px solid #2a2f3a;color:#e5e7eb;padding:3px 7px;border-radius:6px;">🏆 #${sr.rank} ${escapeHtml(focusLabelMap[sr.criterion] || sr.criterion)} (${sr.score10.toFixed(1)})</span>`
+                      `<span style="font-size: 13px;background:#181c24;border:1px solid #2a2f3a;color:#e5e7eb;padding:3px 7px;border-radius:6px;">🏆 #${sr.rank} ${escapeHtml(focusLabelMap[sr.criterion] || sr.criterion)} (${sr.score10.toFixed(1)})</span>`
                   )
                   .join('')}
               </div>`
@@ -568,7 +568,7 @@ function renderPanelContent(
         ${radarPillHtml}
       </div>
       <div class="product-name">${escapeHtml(master?.name || signal.title)}</div>
-      <p style="color: #d1d5db; font-size: 12.5px;">${escapeHtml(assessment.explanation)}</p>
+      <p style="color: #d1d5db; font-size: 13px;">${escapeHtml(assessment.explanation)}</p>
       <div class="stats-grid">
         <div class="stat-box">
           <div class="stat-label">Giá Đang Xem</div>

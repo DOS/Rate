@@ -1,10 +1,15 @@
 'use client';
 
 import React, { useEffect, useId, useMemo, useState } from 'react';
+import { useTranslations } from 'next-intl';
+import { escapeCsvCell } from '@/lib/csv-safe';
 import {
+  computeCombinedDualScore,
   computeJReviewsWeight,
+  computeWilsonLowerBound,
+  detectStarDistributionAnomaly,
+  evaluateReviewTrustAssessment,
   type ReviewAnalysisSummary,
-  type ReviewFlagCategory,
   type ReviewItem,
 } from '@/lib/rate-domain';
 import {
@@ -14,6 +19,13 @@ import {
   radarMarkdownCell,
   type RadarSignal,
 } from '@/lib/deal-radar';
+import { getBrowserAccessToken } from '@/lib/auth/access-token';
+import {
+  isFilteredOutReview,
+  reviewBadgeKind,
+  submitErrorKey,
+  type ReviewBadgeKind,
+} from '@/lib/review-display';
 
 type VoteChoice = 'up' | 'down' | 'report';
 type FilterTab = 'all' | 'authentic' | 'expert' | 'ignored';
@@ -34,54 +46,23 @@ export interface JReviewsSectionProps {
   radarSignal?: RadarSignal | null;
 }
 
-const CRITERIA_META = [
-  { key: 'screen', label: 'Màn hình & Hiển thị' },
-  { key: 'performance', label: 'Hiệu năng & Nhiệt độ' },
-  { key: 'camera', label: 'Camera & Quay chụp' },
-  { key: 'battery', label: 'Pin & Sạc nhanh' },
-  { key: 'value', label: 'Đáng đồng tiền' },
+const CRITERIA_KEYS = [
+  { key: 'screen', labelKey: 'criteriaScreen' },
+  { key: 'performance', labelKey: 'criteriaPerformance' },
+  { key: 'camera', labelKey: 'criteriaCamera' },
+  { key: 'battery', labelKey: 'criteriaBattery' },
+  { key: 'value', labelKey: 'criteriaValue' },
 ] as const;
 
-const FLAG_META: Record<
-  ReviewFlagCategory,
-  {
-    label: string;
-    badgeClass: string;
-    description: string;
-  }
-> = {
-  authentic: {
-    label: '✓ Đánh giá thực chất',
-    badgeClass: 'bg-success-subtle text-success border border-success-subtle',
-    description:
-      'Đánh giá hợp lệ, được tính vào điểm sản phẩm theo trọng số JReviews.',
-  },
-  low_value_coin_spam: {
-    label: '🪙 Spam cày xu (Bỏ qua khỏi điểm SP)',
-    badgeClass:
-      'bg-secondary-subtle text-secondary border border-secondary-subtle',
-    description:
-      'Bình luận chung chung để nhận xu thưởng, không mô tả trải nghiệm thực tế - trọng số = 0.',
-  },
-  seeding_fake: {
-    label: '🤖 Nghi vấn Seeding / Ảo (Bỏ qua khỏi điểm SP)',
-    badgeClass: 'bg-danger-subtle text-danger border border-danger-subtle',
-    description:
-      'Văn phong quảng cáo mẫu hoặc trùng lặp bất thường - trọng số = 0.',
-  },
-  competitor_sabotage: {
-    label: '⚔️ Nghi vấn đối thủ chơi xấu (Bỏ qua khỏi điểm SP)',
-    badgeClass:
-      'bg-warning-subtle text-warning-emphasis border border-warning-subtle',
-    description:
-      'Đánh giá 1-2 sao thiếu bằng chứng hoặc công kích cá nhân/dẫn khách sang shop khác - trọng số = 0.',
-  },
-  review_bombing: {
-    label: '💣 Bom đơn / Đánh giá bất thường (Bỏ qua khỏi điểm SP)',
-    badgeClass: 'bg-danger-subtle text-danger border border-danger-subtle',
-    description:
-      'Đánh giá tiêu cực hàng loạt từ người chưa sử dụng dịch vụ hoặc hủy đơn - trọng số = 0.',
-  },
+const FLAG_STYLES: Record<ReviewBadgeKind, string> = {
+  pending: 'bg-info-subtle text-info-emphasis border border-info-subtle',
+  authentic: 'bg-success-subtle text-success border border-success-subtle',
+  low_value_coin_spam:
+    'bg-secondary-subtle text-secondary border border-secondary-subtle',
+  seeding_fake: 'bg-danger-subtle text-danger border border-danger-subtle',
+  competitor_sabotage:
+    'bg-warning-subtle text-warning-emphasis border border-warning-subtle',
+  review_bombing: 'bg-danger-subtle text-danger border border-danger-subtle',
 };
 
 const STORAGE_KEY = 'rate_review_votes_v1';
@@ -101,6 +82,58 @@ export default function JReviewsSection({
   summary,
   radarSignal,
 }: JReviewsSectionProps) {
+  const t = useTranslations('reviews');
+
+  const criteriaMeta = useMemo(
+    () =>
+      CRITERIA_KEYS.map((c) => ({
+        key: c.key,
+        label: t(c.labelKey),
+      })),
+    [t]
+  );
+
+  const flagMetaMap = useMemo<
+    Record<
+      ReviewBadgeKind,
+      { label: string; badgeClass: string; description: string }
+    >
+  >(
+    () => ({
+      pending: {
+        label: t('flagPendingLabel'),
+        badgeClass: FLAG_STYLES.pending,
+        description: t('flagPendingDesc'),
+      },
+      authentic: {
+        label: t('flagAuthenticLabel'),
+        badgeClass: FLAG_STYLES.authentic,
+        description: t('flagAuthenticDesc'),
+      },
+      low_value_coin_spam: {
+        label: t('flagCoinSpamLabel'),
+        badgeClass: FLAG_STYLES.low_value_coin_spam,
+        description: t('flagCoinSpamDesc'),
+      },
+      seeding_fake: {
+        label: t('flagSeedingFakeLabel'),
+        badgeClass: FLAG_STYLES.seeding_fake,
+        description: t('flagSeedingFakeDesc'),
+      },
+      competitor_sabotage: {
+        label: t('flagSabotageLabel'),
+        badgeClass: FLAG_STYLES.competitor_sabotage,
+        description: t('flagSabotageDesc'),
+      },
+      review_bombing: {
+        label: t('flagBombingLabel'),
+        badgeClass: FLAG_STYLES.review_bombing,
+        description: t('flagBombingDesc'),
+      },
+    }),
+    [t]
+  );
+
   const [reviews, setReviews] = useState<ReviewItem[]>(initialReviews);
   const [userVotes, setUserVotes] = useState<Record<string, VoteChoice>>({});
   const [pendingIds, setPendingIds] = useState<Record<string, boolean>>({});
@@ -115,7 +148,6 @@ export default function JReviewsSection({
   const fieldId = useId();
   const [authorName, setAuthorName] = useState('');
   const [variation, setVariation] = useState('');
-  const [reviewerType, setReviewerType] = useState<'user' | 'expert'>('user');
   const [comment, setComment] = useState('');
   const [criteriaScores, setCriteriaScores] = useState<Record<string, number>>({
     screen: 5,
@@ -160,9 +192,7 @@ export default function JReviewsSection({
     const authentic = reviews.filter(
       (r) => r.include_in_rating && r.helpfulness_weight > 0
     ).length;
-    const ignored = reviews.filter(
-      (r) => !r.include_in_rating || r.helpfulness_weight === 0
-    ).length;
+    const ignored = reviews.filter(isFilteredOutReview).length;
     const expert = reviews.filter((r) => r.reviewer_type === 'expert').length;
     return {
       all: reviews.length,
@@ -226,14 +256,14 @@ export default function JReviewsSection({
           : bayesianConfidence < 0.85
             ? 'medium'
             : 'high';
-    const confidenceLabelVi =
+    const confidenceLabel =
       confidenceTier === 'insufficient_data'
-        ? 'Chưa đủ dữ liệu'
+        ? t('confidenceInsufficient')
         : confidenceTier === 'low'
-          ? 'Độ tin cậy thấp'
+          ? t('confidenceLow')
           : confidenceTier === 'medium'
-            ? 'Độ tin cậy: Trung bình'
-            : 'Độ tin cậy: Cao';
+            ? t('confidenceMedium')
+            : t('confidenceHigh');
 
     let computedExpert: number | null = expertRating;
     if (validExpertReviews.length > 0) {
@@ -250,16 +280,15 @@ export default function JReviewsSection({
       }
     }
 
-    let overall = Number(averageRating || 0);
-    if (computedUser != null && computedExpert != null) {
-      overall = Number((computedUser * 0.6 + computedExpert * 0.4).toFixed(2));
-    } else if (computedUser != null) {
-      overall = computedUser;
-    } else if (computedExpert != null) {
-      overall = computedExpert;
-    }
+    const dualScore = computeCombinedDualScore({
+      userScore: computedUser,
+      expertScore: computedExpert,
+      userConfidence: bayesianConfidence,
+      fallbackAverage: averageRating,
+    });
+    const starAnomaly = detectStarDistributionAnomaly(reviews);
 
-    const criteriaAverages = CRITERIA_META.map((crit) => {
+    const criteriaAverages = criteriaMeta.map((crit) => {
       let wSum = 0;
       let valSum = 0;
       for (const r of validUserReviews) {
@@ -282,17 +311,27 @@ export default function JReviewsSection({
     });
 
     return {
-      overall,
+      overall: dualScore.overall,
+      isBlended: dualScore.isBlended,
+      blendFormulaNoteVi: dualScore.blendFormulaNoteVi,
+      starAnomaly,
       user: computedUser,
       bayesianUser: bayesianUserScore,
       bayesianConfidence,
       confidenceTier,
-      confidenceLabelVi,
+      confidenceLabel,
       userWeightSum: Number(userWeightSum.toFixed(2)),
       expert: computedExpert,
       criteriaAverages,
     };
-  }, [reviews, averageRating, userRatingWeighted, expertRating]);
+  }, [
+    reviews,
+    averageRating,
+    userRatingWeighted,
+    expertRating,
+    criteriaMeta,
+    t,
+  ]);
 
   const filteredAndSortedReviews = useMemo(() => {
     const kw = searchKeyword.trim().toLowerCase();
@@ -302,7 +341,7 @@ export default function JReviewsSection({
       } else if (activeTab === 'expert') {
         if (r.reviewer_type !== 'expert') return false;
       } else if (activeTab === 'ignored') {
-        if (r.include_in_rating && r.helpfulness_weight > 0) return false;
+        if (!isFilteredOutReview(r)) return false;
       }
 
       if (starFilter === 5 && Math.round(r.rating_star) !== 5) return false;
@@ -326,6 +365,15 @@ export default function JReviewsSection({
 
     return [...filtered].sort((a, b) => {
       if (sortMode === 'weight_desc') {
+        const wilsonA = computeWilsonLowerBound(a.upvotes, a.downvotes);
+        const wilsonB = computeWilsonLowerBound(b.upvotes, b.downvotes);
+        if (
+          a.include_in_rating &&
+          b.include_in_rating &&
+          Math.abs(wilsonB - wilsonA) >= 0.005
+        ) {
+          return wilsonB - wilsonA;
+        }
         if (b.helpfulness_weight !== a.helpfulness_weight) {
           return b.helpfulness_weight - a.helpfulness_weight;
         }
@@ -403,24 +451,7 @@ export default function JReviewsSection({
     }
 
     try {
-      let bearerToken = '';
-      try {
-        for (let i = 0; i < window.localStorage.length; i++) {
-          const k = window.localStorage.key(i);
-          if (k && k.startsWith('sb-') && k.endsWith('-auth-token')) {
-            const rawSession = window.localStorage.getItem(k);
-            if (rawSession) {
-              const parsedSession = JSON.parse(rawSession);
-              if (typeof parsedSession?.access_token === 'string') {
-                bearerToken = parsedSession.access_token;
-                break;
-              }
-            }
-          }
-        }
-      } catch {
-        // Ignore storage errors
-      }
+      const bearerToken = await getBrowserAccessToken();
 
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
@@ -456,9 +487,7 @@ export default function JReviewsSection({
           );
         }
       } else if (res.status === 401) {
-        setAuthNotice(
-          'Đã áp dụng mô phỏng trọng số JReviews trên trình duyệt của bạn. Đăng nhập tài khoản DOS ID để lưu bình chọn vĩnh viễn lên hệ thống.'
-        );
+        setAuthNotice(t('authVoteNotice'));
       }
     } catch (err) {
       console.error('Failed to sync review vote:', err);
@@ -474,16 +503,18 @@ export default function JReviewsSection({
 
     const cleanComment = comment.trim();
     if (cleanComment.length < 15) {
-      setSubmitError(
-        'Vui lòng nhập ít nhất 15 ký tự mô tả trải nghiệm thực tế của bạn.'
-      );
+      setSubmitError(t('errCommentTooShort'));
       return;
     }
 
     if (!masterProductId) {
-      setSubmitError(
-        'Không xác định được mã sản phẩm chuẩn hóa để gửi đánh giá.'
-      );
+      setSubmitError(t('errMissingMasterId'));
+      return;
+    }
+
+    const accessToken = await getBrowserAccessToken();
+    if (!accessToken) {
+      setSubmitError(t('errLoginRequired'));
       return;
     }
 
@@ -495,12 +526,14 @@ export default function JReviewsSection({
       );
       const res = await fetch('/api/v1/rate/reviews', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
         body: JSON.stringify({
           masterProductId,
-          authorName: authorName.trim() || 'Người dùng Rate.vn',
+          authorName: authorName.trim() || t('defaultAuthorName'),
           variation: variation.trim() || undefined,
-          reviewerType,
           ratingStar: avgStar,
           comment: cleanComment,
           criteriaRatings: criteriaScores,
@@ -509,7 +542,7 @@ export default function JReviewsSection({
 
       const payload = await res.json();
       if (!res.ok || !payload?.ok || !payload?.review) {
-        setSubmitError(payload?.error || 'Không thể gửi đánh giá lúc này.');
+        setSubmitError(t(submitErrorKey(payload?.code)));
         return;
       }
 
@@ -533,12 +566,20 @@ export default function JReviewsSection({
       setComment('');
       setShowWriteForm(false);
       setSubmitSuccess(
-        newRev.include_in_rating
-          ? `Đã đăng đánh giá thực chất thành công! Hệ thống AI chấm trọng số khởi tạo ${newRev.helpfulness_weight.toFixed(2)}x.`
-          : `Đánh giá của bạn đã được ghi nhận nhưng bị bộ lọc AI gắn cờ (${newRev.flag_category}) nên không tính vào điểm trung bình.`
+        newRev.verdict === 'unanalyzed'
+          ? t('successPendingModeration')
+          : newRev.include_in_rating
+            ? t('successPublishedAuthentic', {
+                weight: newRev.helpfulness_weight.toFixed(2),
+              })
+            : t('successFlaggedFiltered', {
+                flag:
+                  flagMetaMap[newRev.flag_category]?.label ??
+                  newRev.flag_category,
+              })
       );
     } catch {
-      setSubmitError('Lỗi kết nối khi gửi đánh giá. Vui lòng thử lại.');
+      setSubmitError(t('errNetworkFailed'));
     } finally {
       setSubmittingReview(false);
     }
@@ -567,7 +608,7 @@ export default function JReviewsSection({
       r.reviewer_type === 'expert' ? 'Expert' : 'Verified Buyer',
       `${r.rating_star}/5★`,
       `${r.helpfulness_weight.toFixed(2)}x`,
-      r.flag_category,
+      reviewBadgeKind(r),
       String(r.upvotes),
       r.comment.replace(/\|/g, '-').replace(/\r?\n/g, ' ').slice(0, 120),
     ]);
@@ -595,7 +636,6 @@ export default function JReviewsSection({
       filteredAndSortedReviews.length === 0
     )
       return;
-    const escapeCsv = (val: string) => `"${val.replace(/"/g, '""')}"`;
     const headers = [
       'ReviewID',
       'Author',
@@ -618,7 +658,7 @@ export default function JReviewsSection({
       String(r.rating_star),
       r.helpfulness_weight.toFixed(2),
       r.include_in_rating ? 'true' : 'false',
-      r.flag_category,
+      reviewBadgeKind(r),
       r.verdict || 'authentic',
       String(r.upvotes),
       String(r.downvotes),
@@ -629,8 +669,8 @@ export default function JReviewsSection({
     const csvContent =
       '\uFEFF' +
       [
-        headers.map(escapeCsv).join(','),
-        ...rows.map((row) => row.map(escapeCsv).join(',')),
+        headers.map(escapeCsvCell).join(','),
+        ...rows.map((row) => row.map(escapeCsvCell).join(',')),
       ].join('\r\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -679,13 +719,10 @@ export default function JReviewsSection({
       <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 gap-3">
         <div>
           <h2 className="h4 fw-bold d-flex align-items-center mb-1 gap-2">
-            <span>⭐</span> Hệ Thống Đánh Giá Đa Chiều JReviews &amp; Chống
-            Seeding AI
+            <span>⭐</span> {t('sectionHeading')}
           </h2>
           <p className="text-muted small mb-0">
-            Điểm sản phẩm {productName} chỉ tính các đánh giá thực chất và tự
-            động điều chỉnh trọng số theo bình chọn Hữu ích của cộng đồng (tối
-            đa 3.00x).
+            {t('sectionSubtitle', { productName })}
           </p>
         </div>
         <div className="d-flex align-items-center flex-wrap gap-2">
@@ -695,9 +732,7 @@ export default function JReviewsSection({
             className="btn btn-outline-dark btn-sm rounded-pill fw-semibold px-3 py-1"
             data-testid="copy-reviews-md-btn"
           >
-            {copiedReviewsMd
-              ? '✅ Đã chép đánh giá MD!'
-              : '📋 Sao chép đánh giá Markdown'}
+            {copiedReviewsMd ? t('copiedReviewsMd') : t('copyReviewsMdBtn')}
           </button>
           <button
             type="button"
@@ -705,7 +740,7 @@ export default function JReviewsSection({
             className="btn btn-outline-secondary btn-sm rounded-pill fw-semibold px-3 py-1"
             data-testid="download-reviews-csv-btn"
           >
-            📥 Xuất CSV đánh giá
+            {t('exportReviewsCsvBtn')}
           </button>
           <button
             type="button"
@@ -713,7 +748,7 @@ export default function JReviewsSection({
             className="btn btn-outline-secondary btn-sm rounded-pill fw-semibold px-3 py-1"
             data-testid="download-reviews-json-btn"
           >
-            📦 Xuất JSON
+            {t('exportJsonBtn')}
           </button>
           {masterProductId && (
             <button
@@ -724,13 +759,11 @@ export default function JReviewsSection({
               }}
               className="btn btn-primary btn-sm rounded-pill fw-medium px-3 py-2"
             >
-              {showWriteForm
-                ? '✕ Đóng biểu mẫu'
-                : '✍️ Viết đánh giá 5 tiêu chí'}
+              {showWriteForm ? t('closeFormBtn') : t('openWriteFormBtn')}
             </button>
           )}
           <span className="badge bg-dark rounded-pill small px-3 py-2 text-white">
-            Chuẩn JReviews Dual-Rating
+            {t('dualRatingStandardBadge')}
           </span>
         </div>
       </div>
@@ -741,7 +774,7 @@ export default function JReviewsSection({
           <button
             type="button"
             className="btn-close btn-sm"
-            aria-label="Đóng"
+            aria-label={t('closeAlertAria')}
             onClick={() => setSubmitSuccess(null)}
           />
         </div>
@@ -755,10 +788,10 @@ export default function JReviewsSection({
         >
           <div className="d-flex justify-content-between align-items-center mb-3">
             <h3 className="h6 fw-bold text-dark mb-0">
-              ✍️ Gửi Đánh Giá 5 Tiêu Chí Kỹ Thuật Cho {productName}
+              {t('writeFormHeading', { productName })}
             </h3>
             <span className="badge bg-primary-subtle text-primary rounded-pill small">
-              Tự động kiểm duyệt Seeding bằng AI
+              {t('aiModerationBadge')}
             </span>
           </div>
 
@@ -769,72 +802,49 @@ export default function JReviewsSection({
           )}
 
           <div className="row g-3 mb-3">
-            <div className="col-md-4 col-12">
+            <div className="col-md-6 col-12">
               <label
                 className="form-label small fw-semibold mb-1"
                 htmlFor={`${fieldId}-author`}
               >
-                Tên hiển thị của bạn
+                {t('authorNameLabel')}
               </label>
               <input
                 id={`${fieldId}-author`}
                 type="text"
                 value={authorName}
                 onChange={(e) => setAuthorName(e.target.value)}
-                placeholder="VD: Minh Quân (Hà Nội)"
+                placeholder={t('authorNamePlaceholder')}
                 className="form-control form-control-sm rounded-3"
                 maxLength={80}
               />
             </div>
-            <div className="col-md-4 col-12">
+            <div className="col-md-6 col-12">
               <label
                 className="form-label small fw-semibold mb-1"
                 htmlFor={`${fieldId}-variation`}
               >
-                Phiên bản / Dung lượng đang dùng
+                {t('variationLabel')}
               </label>
               <input
                 id={`${fieldId}-variation`}
                 type="text"
                 value={variation}
                 onChange={(e) => setVariation(e.target.value)}
-                placeholder="VD: Titan Tự Nhiên - 256GB"
+                placeholder={t('variationPlaceholder')}
                 className="form-control form-control-sm rounded-3"
                 maxLength={100}
               />
-            </div>
-            <div className="col-md-4 col-12">
-              <label
-                className="form-label small fw-semibold mb-1"
-                htmlFor={`${fieldId}-reviewer-type`}
-              >
-                Phân loại người đánh giá
-              </label>
-              <select
-                id={`${fieldId}-reviewer-type`}
-                value={reviewerType}
-                onChange={(e) =>
-                  setReviewerType(
-                    e.target.value === 'expert' ? 'expert' : 'user'
-                  )
-                }
-                className="form-select form-select-sm rounded-3"
-              >
-                <option value="user">
-                  Người mua &amp; trải nghiệm thực tế
-                </option>
-                <option value="expert">Reviewer / Chuyên gia kỹ thuật</option>
-              </select>
             </div>
           </div>
 
           {/* 5 Criteria Sliders / Star Selectors */}
           <div className="rounded-3 mb-3 border bg-white p-3">
             <div className="small fw-semibold text-dark mb-2">
-              Chấm điểm chi tiết 5 nhóm trải nghiệm (1 - 5 sao):
+              {t('rate5CriteriaPrompt')}
             </div>
             <div className="row g-2">
-              {CRITERIA_META.map((crit) => {
+              {criteriaMeta.map((crit) => {
                 const score = criteriaScores[crit.key] ?? 5;
                 return (
                   <div
@@ -879,15 +889,14 @@ export default function JReviewsSection({
               className="form-label small fw-semibold mb-1"
               htmlFor={`${fieldId}-comment`}
             >
-              Chia sẻ chi tiết trải nghiệm thực tế (tối thiểu 30 ký tự để được
-              tính trọng số JReviews cao)
+              {t('commentLabel')}
             </label>
             <textarea
               id={`${fieldId}-comment`}
               rows={3}
               value={comment}
               onChange={(e) => setComment(e.target.value)}
-              placeholder="Nhận xét thực tế về màn hình, nhiệt độ khi chơi game/tác vụ nặng, thời lượng pin thực tế và chất lượng camera..."
+              placeholder={t('commentPlaceholder')}
               className="form-control form-control-sm rounded-3"
               required
             />
@@ -895,7 +904,7 @@ export default function JReviewsSection({
 
           <div className="d-flex justify-content-between align-items-center">
             <span className="text-muted small">
-              Điểm trung bình 5 tiêu chí:{' '}
+              {t('avg5CriteriaLabel')}{' '}
               <strong className="text-danger">
                 {(
                   Object.values(criteriaScores).reduce((a, b) => a + b, 0) /
@@ -909,9 +918,7 @@ export default function JReviewsSection({
               disabled={submittingReview}
               className="btn btn-primary btn-sm rounded-pill fw-medium px-4 py-2"
             >
-              {submittingReview
-                ? 'Đang kiểm duyệt AI & gửi...'
-                : 'Gửi đánh giá chuẩn JReviews'}
+              {submittingReview ? t('submittingAiBtn') : t('submitJReviewsBtn')}
             </button>
           </div>
         </form>
@@ -923,7 +930,7 @@ export default function JReviewsSection({
           <button
             type="button"
             className="btn-close btn-sm"
-            aria-label="Đóng"
+            aria-label={t('closeAlertAria')}
             onClick={() => setAuthNotice(null)}
           />
         </div>
@@ -936,7 +943,7 @@ export default function JReviewsSection({
           <div className="rate-scoreboard-dark d-flex flex-column justify-content-between h-100 p-4">
             <div>
               <div className="text-uppercase small fw-bold text-white-50 mb-1">
-                Điểm Tổng Hợp Rate.vn
+                {t('overallScoreTitle')}
               </div>
               <div className="d-flex align-items-baseline my-2 gap-2">
                 <span className="display-5 fw-bold font-monospace text-white">
@@ -956,9 +963,7 @@ export default function JReviewsSection({
               </div>
             </div>
             <div className="small text-white-50 border-top border-secondary border-opacity-25 mt-2 pt-2">
-              {liveScores.expert != null
-                ? 'Tỷ trọng: 60% Người mua thực chất + 40% Chuyên gia Rate Lab'
-                : 'Tỷ trọng: 100% Người mua thực chất (đã lọc Seeding & Spam xu)'}
+              {liveScores.blendFormulaNoteVi}
             </div>
           </div>
         </div>
@@ -969,7 +974,7 @@ export default function JReviewsSection({
             <div>
               <div className="d-flex justify-content-between align-items-center mb-1">
                 <span className="text-uppercase small fw-bold text-primary">
-                  Điểm Người Mua Thực Chất
+                  {t('authenticUserScoreTitle')}
                 </span>
                 <span className="rate-score-badge-user">
                   ★{' '}
@@ -991,12 +996,14 @@ export default function JReviewsSection({
                 <span className="text-muted small">/ 5.0 (Bayes)</span>
               </div>
               <div className="small text-secondary mb-2">
-                Tính trên <strong>{counts.authentic}</strong> đánh giá thực chất
-                (Σw = <strong>{liveScores.userWeightSum}</strong> · TB trọng số:{' '}
-                <strong>
-                  {liveScores.user != null ? liveScores.user.toFixed(2) : 'N/A'}
-                </strong>
-                ).
+                {t('basedOnAuthenticReviews', {
+                  count: counts.authentic,
+                  weightSum: liveScores.userWeightSum,
+                  avgScore:
+                    liveScores.user != null
+                      ? liveScores.user.toFixed(2)
+                      : 'N/A',
+                })}
               </div>
             </div>
             <div className="d-flex border-top mt-2 flex-wrap gap-2 pt-2">
@@ -1009,19 +1016,19 @@ export default function JReviewsSection({
                       ? 'bg-warning-subtle text-warning-emphasis'
                       : 'bg-secondary-subtle text-secondary'
                 }`}
-                title={`Độ tin cậy Bayes c = Σw / (Σw + 3) = ${Math.round(
-                  liveScores.bayesianConfidence * 100
-                )}%`}
+                title={t('bayesianConfidenceTooltip', {
+                  pct: Math.round(liveScores.bayesianConfidence * 100),
+                })}
               >
-                📊 {liveScores.confidenceLabelVi} (
+                📊 {liveScores.confidenceLabel} (
                 {Math.round(liveScores.bayesianConfidence * 100)}%)
               </span>
               <span className="badge bg-success-subtle text-success small">
-                ✓ {counts.authentic} Hợp lệ
+                {t('validCountBadge', { count: counts.authentic })}
               </span>
               {counts.ignored > 0 && (
                 <span className="badge bg-danger-subtle text-danger small">
-                  🛡️ Đã chặn {counts.ignored} Seeding / Spam xu
+                  {t('blockedSeedingBadge', { count: counts.ignored })}
                 </span>
               )}
             </div>
@@ -1034,13 +1041,13 @@ export default function JReviewsSection({
             <div>
               <div className="d-flex justify-content-between align-items-center mb-1">
                 <span className="text-uppercase small fw-bold text-dark">
-                  Điểm Chuyên Gia Rate Lab
+                  {t('expertLabScoreTitle')}
                 </span>
                 <span className="rate-score-badge-expert">
                   Expert{' '}
                   {liveScores.expert != null
                     ? `${liveScores.expert.toFixed(1)}/5.0`
-                    : 'chưa có'}
+                    : t('expertPendingShort')}
                 </span>
               </div>
               {liveScores.expert != null ? (
@@ -1052,26 +1059,24 @@ export default function JReviewsSection({
                     <span className="text-muted small">/ 5.0</span>
                   </div>
                   <div className="small text-secondary">
-                    {expertReviewSummary ||
-                      'Đánh giá độc lập dựa trên bài kiểm tra hiệu năng, pin và nhiệt độ thực tế.'}
+                    {expertReviewSummary || t('defaultExpertSummary')}
                   </div>
                 </>
               ) : (
                 <div className="my-3">
                   <div className="fw-semibold text-secondary small mb-1">
-                    Đang cập nhật bài test phòng Lab
+                    {t('updatingLabTestsTitle')}
                   </div>
                   <p className="text-muted small mb-0">
-                    Khi chưa có điểm Expert, điểm tổng hợp sử dụng 100% điểm
-                    Người mua thực chất đã lọc Seeding.
+                    {t('updatingLabTestsDesc')}
                   </p>
                 </div>
               )}
             </div>
             <div className="small text-muted border-top mt-2 pt-2">
               {counts.expert > 0
-                ? `${counts.expert} bài đánh giá từ Chuyên gia`
-                : 'Chưa bị pha loãng bởi đánh giá quảng cáo'}
+                ? t('expertReviewsCountNote', { count: counts.expert })
+                : t('zeroAdDilutionNote')}
             </div>
           </div>
         </div>
@@ -1081,11 +1086,10 @@ export default function JReviewsSection({
       <div className="rounded-4 p-md-4 mb-4 border bg-white p-3">
         <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
           <span className="small fw-bold text-uppercase text-secondary">
-            📊 Điểm Chi Tiết 5 Nhóm Trải Nghiệm Thực Tế (JReviews 5-Criteria
-            Matrix)
+            {t('criteriaMatrixHeading')}
           </span>
           <span className="badge bg-light text-secondary rounded-pill small border">
-            Đã chuẩn hóa theo trọng số hữu ích
+            {t('normalizedByHelpfulnessBadge')}
           </span>
         </div>
         <div className="row g-3">
@@ -1105,7 +1109,7 @@ export default function JReviewsSection({
                     <strong className="text-dark font-monospace">
                       {crit.score != null
                         ? `${crit.score.toFixed(1)}/5.0`
-                        : 'Chưa có'}
+                        : t('notAvailableShort')}
                     </strong>
                   </div>
                   <div
@@ -1124,22 +1128,32 @@ export default function JReviewsSection({
         </div>
       </div>
 
+      {liveScores.starAnomaly.isAnomalous &&
+        liveScores.starAnomaly.warningLabelVi && (
+          <div
+            className="alert alert-warning rounded-4 small d-flex align-items-center mb-4 gap-2 px-3 py-2"
+            data-testid="star-distribution-anomaly-alert"
+          >
+            <span>⚠️</span>
+            <span>{liveScores.starAnomaly.warningLabelVi}</span>
+          </div>
+        )}
+
       {/* 2. AI Review Synthesis (Pros / Cons / Authenticity Bar) */}
       <div className="rounded-4 bg-light mb-4 border p-4">
         <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-3 gap-2">
           <div className="fw-bold text-dark d-flex align-items-center gap-2">
-            <span>🤖</span> Phân Tích Độ Trung Thực &amp; Tổng Hợp Trải Nghiệm
-            Bằng AI
+            <span>🤖</span> {t('aiAuthenticityHeading')}
           </div>
           <div className="d-flex small flex-wrap gap-2">
             <span className="badge bg-success text-white">
-              Thực chất: {summary.authentic_pct}%
+              {t('authenticPctBadge', { pct: summary.authentic_pct })}
             </span>
             <span className="badge bg-warning text-dark">
-              Cày xu / Nghi vấn: {summary.suspicious_pct}%
+              {t('suspiciousPctBadge', { pct: summary.suspicious_pct })}
             </span>
             <span className="badge bg-danger text-white">
-              Seeding / Ảo: {summary.fake_pct}%
+              {t('fakePctBadge', { pct: summary.fake_pct })}
             </span>
           </div>
         </div>
@@ -1148,28 +1162,28 @@ export default function JReviewsSection({
         <div
           className="progress rounded-pill mb-3"
           style={{ height: '10px' }}
-          aria-label="Tỷ lệ độ trung thực của đánh giá"
+          aria-label={t('authenticityProgressAria')}
         >
           <div
             className="progress-bar bg-success"
             style={{ width: `${summary.authentic_pct}%` }}
-            title={`Thực chất: ${summary.authentic_pct}%`}
+            title={t('authenticPctBadge', { pct: summary.authentic_pct })}
           />
           <div
             className="progress-bar bg-warning"
             style={{ width: `${summary.suspicious_pct}%` }}
-            title={`Nghi vấn / Cày xu: ${summary.suspicious_pct}%`}
+            title={t('suspiciousPctBadge', { pct: summary.suspicious_pct })}
           />
           <div
             className="progress-bar bg-danger"
             style={{ width: `${summary.fake_pct}%` }}
-            title={`Seeding / Ảo: ${summary.fake_pct}%`}
+            title={t('fakePctBadge', { pct: summary.fake_pct })}
           />
         </div>
 
         {summary.ai_summary && (
           <div className="rounded-3 small text-dark mb-3 border bg-white p-3">
-            <strong>Tóm tắt AI:</strong> {summary.ai_summary}
+            <strong>{t('aiSummaryPrefix')}</strong> {summary.ai_summary}
           </div>
         )}
 
@@ -1178,12 +1192,10 @@ export default function JReviewsSection({
             <div className="col-md-6 col-12">
               <div className="rounded-3 h-100 border bg-white p-3">
                 <div className="fw-semibold text-success small mb-2">
-                  👍 Ưu điểm thực tế người mua ghi nhận
+                  {t('prosHeading')}
                 </div>
                 {summary.pros.length === 0 ? (
-                  <div className="text-muted small">
-                    Đang tổng hợp thêm từ người mua thực tế.
-                  </div>
+                  <div className="text-muted small">{t('prosEmpty')}</div>
                 ) : (
                   <ul className="small text-secondary mb-0 ps-3">
                     {summary.pros.map((pro, idx) => (
@@ -1198,13 +1210,10 @@ export default function JReviewsSection({
             <div className="col-md-6 col-12">
               <div className="rounded-3 h-100 border bg-white p-3">
                 <div className="fw-semibold text-danger small mb-2">
-                  ⚠️ Nhược điểm &amp; Vấn đề cần lưu ý
+                  {t('consHeading')}
                 </div>
                 {summary.cons.length === 0 ? (
-                  <div className="text-muted small">
-                    Chưa ghi nhận nhược điểm nghiêm trọng từ các đánh giá thực
-                    chất.
-                  </div>
+                  <div className="text-muted small">{t('consEmpty')}</div>
                 ) : (
                   <ul className="small text-secondary mb-0 ps-3">
                     {summary.cons.map((con, idx) => (
@@ -1231,7 +1240,7 @@ export default function JReviewsSection({
                 activeTab === 'all' ? 'btn-dark' : 'btn-outline-secondary'
               }`}
             >
-              Tất cả ({counts.all})
+              {t('tabAll', { count: counts.all })}
             </button>
             <button
               type="button"
@@ -1242,7 +1251,7 @@ export default function JReviewsSection({
                   : 'btn-outline-success'
               }`}
             >
-              ✓ Đánh giá thực chất ({counts.authentic})
+              {t('tabAuthentic', { count: counts.authentic })}
             </button>
             {counts.expert > 0 && (
               <button
@@ -1254,7 +1263,7 @@ export default function JReviewsSection({
                     : 'btn-outline-warning text-dark'
                 }`}
               >
-                🔬 Chuyên gia ({counts.expert})
+                {t('tabExpert', { count: counts.expert })}
               </button>
             )}
             <button
@@ -1264,7 +1273,7 @@ export default function JReviewsSection({
                 activeTab === 'ignored' ? 'btn-danger' : 'btn-outline-danger'
               }`}
             >
-              🛡️ Đã lọc Seeding / Spam ({counts.ignored})
+              {t('tabIgnored', { count: counts.ignored })}
             </button>
           </div>
 
@@ -1273,7 +1282,7 @@ export default function JReviewsSection({
               htmlFor="review-sort-select"
               className="text-muted mb-0 text-nowrap"
             >
-              Sắp xếp:
+              {t('sortByLabel')}
             </label>
             <select
               id="review-sort-select"
@@ -1282,12 +1291,10 @@ export default function JReviewsSection({
               className="form-select form-select-sm rounded-pill"
               style={{ minWidth: '240px' }}
             >
-              <option value="weight_desc">
-                Hữu ích nhất (Trọng số JReviews cao nhất)
-              </option>
-              <option value="newest">Mới nhất</option>
-              <option value="rating_desc">Số sao: Cao đến Thấp</option>
-              <option value="rating_asc">Số sao: Thấp đến Cao</option>
+              <option value="weight_desc">{t('sortMostHelpful')}</option>
+              <option value="newest">{t('sortNewest')}</option>
+              <option value="rating_desc">{t('sortRatingDesc')}</option>
+              <option value="rating_asc">{t('sortRatingAsc')}</option>
             </select>
           </div>
         </div>
@@ -1299,15 +1306,15 @@ export default function JReviewsSection({
               type="search"
               value={searchKeyword}
               onChange={(e) => setSearchKeyword(e.target.value)}
-              placeholder="🔍 Tìm trong bình luận (VD: nhiệt độ, pin, camera, màn hình, đóng gói)..."
+              placeholder={t('searchReviewsPlaceholder')}
               className="form-control form-control-sm rounded-pill border-0 bg-white px-3"
-              aria-label="Tìm kiếm nội dung đánh giá"
+              aria-label={t('searchReviewsAria')}
             />
           </div>
           <div className="d-flex align-items-center flex-wrap gap-1">
             {(
               [
-                { id: 'all', label: 'Mọi mức sao' },
+                { id: 'all', label: t('starFilterAll') },
                 { id: 5, label: '5 ★' },
                 { id: 4, label: '4 ★' },
                 { id: 3, label: '≤ 3 ★' },
@@ -1322,7 +1329,7 @@ export default function JReviewsSection({
                     ? 'btn-warning text-dark fw-semibold'
                     : 'btn-outline-secondary bg-white'
                 }`}
-                style={{ fontSize: '0.78rem' }}
+                style={{ fontSize: '0.8125rem' }}
               >
                 {tier.label}
               </button>
@@ -1336,7 +1343,7 @@ export default function JReviewsSection({
                 }}
                 className="btn btn-sm btn-link text-danger text-decoration-none small px-2"
               >
-                Xóa lọc
+                {t('clearFilterBtn')}
               </button>
             )}
           </div>
@@ -1346,15 +1353,15 @@ export default function JReviewsSection({
       {/* 4. Review Cards List */}
       {filteredAndSortedReviews.length === 0 ? (
         <div className="bg-light rounded-4 py-5 text-center">
-          <p className="text-muted mb-0">
-            Không có đánh giá nào khớp với bộ lọc hiện tại.
-          </p>
+          <p className="text-muted mb-0">{t('noMatchingReviews')}</p>
         </div>
       ) : (
         <div className="row g-3">
           {filteredAndSortedReviews.map((rev) => {
             const flagMeta =
-              FLAG_META[rev.flag_category] || FLAG_META.authentic;
+              flagMetaMap[reviewBadgeKind(rev)] || flagMetaMap.authentic;
+            const assessment =
+              rev.trust_assessment ?? evaluateReviewTrustAssessment(rev);
             const myVote = userVotes[rev.id] || null;
             const isPending = Boolean(pendingIds[rev.id]);
             const isZeroWeight =
@@ -1364,7 +1371,7 @@ export default function JReviewsSection({
               <div key={rev.id} className="col-md-6 col-12">
                 <div
                   className={`rounded-4 d-flex flex-column justify-content-between h-100 p-3 ${
-                    isZeroWeight
+                    isFilteredOutReview(rev)
                       ? 'card bg-light border-danger-subtle border opacity-75'
                       : 'rate-card border bg-white shadow-sm'
                   }`}
@@ -1378,11 +1385,21 @@ export default function JReviewsSection({
                         </span>
                         {rev.reviewer_type === 'expert' ? (
                           <span className="badge bg-warning text-dark rounded-pill small">
-                            🔬 Chuyên gia Rate
+                            {t('roleExpertBadge')}
                           </span>
                         ) : (
                           <span className="badge bg-light text-secondary rounded-pill small border">
-                            Người mua
+                            {t('roleBuyerBadge')}
+                          </span>
+                        )}
+                        {assessment.sponsorshipBadgeVi && (
+                          <span className="badge bg-warning-subtle text-warning-emphasis border-warning-subtle rounded-pill small border">
+                            📢 {assessment.sponsorshipBadgeVi}
+                          </span>
+                        )}
+                        {assessment.routesTo === 'merchant' && (
+                          <span className="badge bg-info-subtle text-info-emphasis border-info-subtle rounded-pill small border">
+                            {t('routedToMerchantBadge')}
                           </span>
                         )}
                       </div>
@@ -1407,29 +1424,33 @@ export default function JReviewsSection({
                               ? 'bg-primary-subtle text-primary'
                               : 'bg-light text-muted border'
                         }`}
-                        title="Trọng số đóng góp của đánh giá này vào điểm sản phẩm cuối cùng"
+                        title={assessment.breakdown.explanationVi}
+                        data-testid="review-6axis-breakdown"
                       >
-                        Trọng số: {rev.helpfulness_weight.toFixed(2)}x
+                        {t('weightBadgeLabel', {
+                          weight: rev.helpfulness_weight.toFixed(2),
+                          explanation: assessment.breakdown.explanationVi,
+                        })}
                       </span>
                     </div>
 
                     {rev.variation && (
                       <div className="text-muted small mb-2">
-                        Phân loại: {rev.variation}
+                        {t('variationPrefix', { variation: rev.variation })}
                       </div>
                     )}
 
                     {rev.criteria_ratings &&
                       Object.keys(rev.criteria_ratings).length > 0 && (
                         <div className="d-flex mb-2 flex-wrap gap-1">
-                          {CRITERIA_META.map((crit) => {
+                          {criteriaMeta.map((crit) => {
                             const val = rev.criteria_ratings?.[crit.key];
                             if (val == null) return null;
                             return (
                               <span
                                 key={crit.key}
                                 className="badge bg-light text-dark rounded-pill border"
-                                style={{ fontSize: '0.7rem' }}
+                                style={{ fontSize: '0.8125rem' }}
                               >
                                 {crit.label.split(' ')[0]}: {val}/5 ★
                               </span>
@@ -1443,13 +1464,13 @@ export default function JReviewsSection({
                       className="small text-dark lh-base mb-2"
                       style={{ whiteSpace: 'pre-line' }}
                     >
-                      {rev.comment || '(Không có nội dung bình luận)'}
+                      {rev.comment || t('emptyCommentPlaceholder')}
                     </p>
 
                     {/* AI Flag Reason Transparency Note */}
                     {rev.reason && (
                       <div className="rounded-3 bg-light small text-secondary mb-2 border p-2">
-                        <strong>Giải thích AI:</strong> {rev.reason}
+                        <strong>{t('aiReasonPrefix')}</strong> {rev.reason}
                       </div>
                     )}
                   </div>
@@ -1458,9 +1479,9 @@ export default function JReviewsSection({
                   <div className="d-flex justify-content-between align-items-center border-top mt-2 flex-wrap gap-2 pt-2">
                     <span
                       className="text-muted"
-                      style={{ fontSize: '0.75rem' }}
+                      style={{ fontSize: '0.8125rem' }}
                     >
-                      Đánh giá này có hữu ích?
+                      {t('isHelpfulPrompt')}
                     </span>
                     <div className="d-flex align-items-center gap-1">
                       <button
@@ -1472,10 +1493,10 @@ export default function JReviewsSection({
                             ? 'btn-success text-white'
                             : 'btn-outline-secondary'
                         }`}
-                        style={{ fontSize: '0.75rem' }}
-                        title="Vote Hữu ích - tăng trọng số của đánh giá này trong điểm sản phẩm (tối đa 3.00x)"
+                        style={{ fontSize: '0.8125rem' }}
+                        title={t('upvoteTitle')}
                       >
-                        👍 Hữu ích ({rev.upvotes})
+                        {t('upvoteBtnLabel', { count: rev.upvotes })}
                       </button>
                       <button
                         type="button"
@@ -1486,8 +1507,8 @@ export default function JReviewsSection({
                             ? 'btn-warning text-dark'
                             : 'btn-outline-secondary'
                         }`}
-                        style={{ fontSize: '0.75rem' }}
-                        title="Vote Không hữu ích - giảm trọng số của đánh giá này"
+                        style={{ fontSize: '0.8125rem' }}
+                        title={t('downvoteTitle')}
                       >
                         👎 ({rev.downvotes})
                       </button>
@@ -1500,10 +1521,10 @@ export default function JReviewsSection({
                             ? 'btn-danger text-white'
                             : 'btn-outline-danger'
                         }`}
-                        style={{ fontSize: '0.75rem' }}
-                        title="Báo cáo đánh giá Seeding / Spam / Chơi xấu (-0.35 trọng số mỗi báo cáo)"
+                        style={{ fontSize: '0.8125rem' }}
+                        title={t('reportTitle')}
                       >
-                        🚩 Báo cáo ({rev.report_count})
+                        {t('reportBtnLabel', { count: rev.report_count })}
                       </button>
                     </div>
                   </div>

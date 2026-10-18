@@ -478,10 +478,12 @@ async function run() {
       req.on('data', c => (body += c));
       req.on('end', () => {
         llmCalls++;
-        const payload = JSON.parse(body);
-        const user = JSON.parse(payload.messages[1].content);
+        const payload = JSON.parse(body) as { messages: Array<{ content: string }> };
+        const user = JSON.parse(payload.messages[1]!.content) as {
+          reviews: Array<{ review_id: string }>;
+        };
         const out = {
-          reviews: user.reviews.map((r: any) => ({
+          reviews: user.reviews.map(r => ({
             review_id: r.review_id,
             flag_category: r.review_id === 'llm-seed' ? 'seeding_fake' : 'authentic',
             verdict: r.review_id === 'llm-seed' ? 'fake' : 'authentic',
@@ -559,22 +561,27 @@ async function run() {
     console.log('6. persistAnalysisToSupabase payload shape (stubbed client)');
     console.log('================================================================');
 
-    const calls: Array<{ table: string; op: string; payload: any; col?: string; val?: string }> =
-      [];
+    const calls: Array<{
+      table: string;
+      op: string;
+      payload: unknown;
+      col?: string;
+      val?: string;
+    }> = [];
     const stub = {
       from: (table: string) => ({
-        upsert: async (payload: any) => {
+        upsert: async (payload: unknown) => {
           calls.push({ table, op: 'upsert', payload });
           return { error: null };
         },
-        update: (payload: any) => ({
+        update: (payload: unknown) => ({
           eq: async (col: string, val: string) => {
             calls.push({ table, op: 'update', payload, col, val });
             return { error: null };
           },
         }),
       }),
-    } as any;
+    } as unknown as Parameters<typeof llm.persistAnalysisToSupabase>[0];
 
     const out = await llm.persistAnalysisToSupabase(stub, {
       productId: 'prod-1',
@@ -588,8 +595,14 @@ async function run() {
     });
 
     const flagUpsert = calls.find(c => c.table === 'review_flags' && c.op === 'upsert')!;
-    assert.equal(flagUpsert.payload.length, input.length);
-    for (const row of flagUpsert.payload) {
+    const flagRowsPayload = flagUpsert.payload as Array<{
+      flag_category: ReviewFlagCategory;
+      verdict: string;
+      signals: Record<string, unknown>;
+      input_hash: string;
+    }>;
+    assert.equal(flagRowsPayload.length, input.length);
+    for (const row of flagRowsPayload) {
       assert.ok(
         [
           'authentic',
@@ -605,7 +618,10 @@ async function run() {
     }
     assert.ok(
       calls.some(
-        c => c.table === 'review_analysis' && c.op === 'upsert' && c.payload.product_id === 'prod-1'
+        c =>
+          c.table === 'review_analysis' &&
+          c.op === 'upsert' &&
+          (c.payload as Record<string, unknown>).product_id === 'prod-1'
       )
     );
     assert.ok(
@@ -614,21 +630,18 @@ async function run() {
           c.table === 'master_products' &&
           c.op === 'update' &&
           c.val === 'master-1' &&
-          'user_rating_weighted' in c.payload
+          'user_rating_weighted' in (c.payload as Record<string, unknown>)
       )
     );
     const merchUpdate = calls.find(
       c => c.table === 'merchants' && c.op === 'update' && c.val === 'merch-1'
     );
     assert.ok(merchUpdate, 'merchants update called');
-    assert.equal(typeof merchUpdate.payload.review_risk_score, 'number');
-    assert.equal(typeof merchUpdate.payload.review_risk_breakdown, 'object');
-    assert.equal(typeof merchUpdate.payload.review_risk_updated_at, 'string');
-    assert.equal(
-      'risk_score' in merchUpdate.payload,
-      false,
-      'must NOT overwrite DOSafe risk_score'
-    );
+    const merchPayload = merchUpdate.payload as Record<string, unknown>;
+    assert.equal(typeof merchPayload.review_risk_score, 'number');
+    assert.equal(typeof merchPayload.review_risk_breakdown, 'object');
+    assert.equal(typeof merchPayload.review_risk_updated_at, 'string');
+    assert.equal('risk_score' in merchPayload, false, 'must NOT overwrite DOSafe risk_score');
     assert.equal(
       calls.filter(c => c.table === 'reviews' && c.op === 'update').length,
       input.length,
@@ -638,14 +651,14 @@ async function run() {
 
     // 6b. When .rpc() is available on the Supabase client, persistAnalysisToSupabase delegates
     // master rating refresh to canonical SQL RPC `refresh_master_product_rating` (Audit C5)
-    const rpcCalls: Array<{ fn: string; args: any }> = [];
+    const rpcCalls: Array<{ fn: string; args: Record<string, unknown> }> = [];
     const rpcStub = {
       ...stub,
-      rpc: async (fn: string, args: any) => {
+      rpc: async (fn: string, args: Record<string, unknown>) => {
         rpcCalls.push({ fn, args });
         return { error: null };
       },
-    } as any;
+    } as unknown as Parameters<typeof llm.persistAnalysisToSupabase>[0];
     await llm.persistAnalysisToSupabase(rpcStub, {
       productId: 'prod-rpc-1',
       masterId: 'master-rpc-1',
@@ -671,13 +684,16 @@ async function run() {
     console.log('7. castReviewVote (rate.review_votes per-user vote & report)');
     console.log('================================================================');
 
-    let lastVoteUpsert: any = null;
+    let lastVoteUpsert: {
+      payload: Record<string, unknown>;
+      opts: { onConflict?: string };
+    } | null = null;
     const deletedPair: { reviewId?: string; voterId?: string } = {};
     const voteStub = {
       from: (table: string) => {
         assert.equal(table, 'review_votes');
         return {
-          upsert: async (payload: any, opts: any) => {
+          upsert: async (payload: Record<string, unknown>, opts: { onConflict?: string }) => {
             lastVoteUpsert = { payload, opts };
             return { error: null };
           },
@@ -694,7 +710,7 @@ async function run() {
           }),
         };
       },
-    } as any;
+    } as unknown as Parameters<typeof llm.castReviewVote>[0];
 
     const r1 = await llm.castReviewVote(voteStub, {
       reviewId: 'rev-1',
@@ -703,14 +719,14 @@ async function run() {
       reported: false,
     });
     assert.equal(r1.action, 'upserted');
-    assert.deepEqual(lastVoteUpsert.payload, {
+    assert.deepEqual(lastVoteUpsert!.payload, {
       review_id: 'rev-1',
       voter_id: 'user-1',
       vote: 'up',
       reported: false,
       report_reason: null,
     });
-    assert.equal(lastVoteUpsert.opts.onConflict, 'review_id,voter_id');
+    assert.equal(lastVoteUpsert!.opts.onConflict, 'review_id,voter_id');
 
     const r2 = await llm.castReviewVote(voteStub, {
       reviewId: 'rev-1',
@@ -989,8 +1005,63 @@ async function run() {
   assert.equal(affAssess.independence, 'affiliate');
   assert.equal(affAssess.breakdown.independence, 0.7);
 
+  // 9.5 Self-Excluded Peer Floor Price in ShopeeIngestionPipeline (#292)
+  const { resolveClusterPeerFloorPrice } = await import('./shopee-to-supabase.js');
+  const peerFloor = resolveClusterPeerFloorPrice(
+    [
+      { id: 'listing-bait', price_current: 5_000_000, merchants: { is_official: false } },
+      { id: 'listing-peer-1', price_current: 26_500_000, merchants: { is_official: false } },
+      { id: 'listing-mall-1', price_current: 28_490_000, merchants: [{ is_official: true }] },
+    ],
+    'listing-bait',
+    5_000_000
+  );
+  assert.equal(
+    peerFloor,
+    28_490_000,
+    'resolveClusterPeerFloorPrice must exclude currentProductId and prefer Official Mall sibling floor'
+  );
+  assert.equal(
+    resolveClusterPeerFloorPrice(
+      [{ id: 'listing-only', price_current: 27_990_000, merchants: { is_official: true } }],
+      'listing-only',
+      27_990_000
+    ),
+    27_990_000,
+    'resolveClusterPeerFloorPrice must fall back to fallbackMasterMinPrice when no peer siblings exist'
+  );
+
+  // 9.6 ArenaSpecSyncer Non-5G & Hybrid PhoneArena Table Merging (#292)
+  const { parseGsmArenaHtmlToSpecs } = await import('./arena-spec-syncer.js');
+  const wifiTabletHtml = `
+    <h1 data-spec="modelname">Xiaomi Pad 7 Pro</h1>
+    <td data-spec="displaysize">11.2 inches</td>
+    <td data-spec="displaytype">IPS LCD, 144Hz</td>
+    <td data-spec="internalmemory">256GB 12GB RAM</td>
+    <td data-spec="nettech">No cellular connectivity</td>
+    <td data-spec="jack">Yes, 3.5mm jack</td>
+  `;
+  const paTableHtml = `
+    <table>
+      <tr><th>Main camera</th><td>50 MP, f/1.8, PDAF</td></tr>
+      <tr><th>Second camera</th><td>2 MP, f/2.4, depth</td></tr>
+      <tr><th>Front camera</th><td>32 MP, f/2.2</td></tr>
+    </table>
+  `;
+  const parsedTablet = parseGsmArenaHtmlToSpecs(wifiTabletHtml, {
+    phonearenaHtml: paTableHtml,
+  });
+  assert.equal(parsedTablet.source, 'hybrid');
+  assert.equal(parsedTablet.has5g, false);
+  assert.equal(parsedTablet.specifications.cellular?.has_5g, false);
+  assert.equal(parsedTablet.specifications.cellular?.bands_5g, undefined);
+  assert.equal(parsedTablet.specifications.multimedia?.headphone_jack_35mm, true);
+  assert.equal(parsedTablet.specifications.camera?.main_camera, '50 MP, f/1.8, PDAF');
+  assert.equal(parsedTablet.specifications.camera?.second_camera, '2 MP, f/2.4, depth');
+  assert.equal(parsedTablet.specifications.camera?.front_camera, '32 MP, f/2.2');
+
   console.log(
-    `✅ [P2/P3 Trust Model] Voter weight, Wilson lower bound (50/52=${wilson50of52} > 1/1=${wilson1of1}), shingle copy seeding (sim=${shingleSim}) & affiliate shortlinks verified`
+    `✅ [P2/P3 Trust Model & #292] Voter weight, Wilson lower bound (50/52=${wilson50of52} > 1/1=${wilson1of1}), shingle copy seeding (sim=${shingleSim}), affiliate shortlinks, peer floor & ArenaSpecSyncer verified`
   );
 
   console.log('\n🎉 ALL AI REVIEW ANALYZER TESTS PASSED!');

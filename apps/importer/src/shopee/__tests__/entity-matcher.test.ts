@@ -6,7 +6,7 @@
  * - Race condition recovery: ignoreDuplicates winner refetch without overwriting status
  */
 import assert from 'node:assert/strict';
-import type { SupabaseClient } from '@supabase/supabase-js';
+import { MasterProductSchema } from '@repo/shared-data';
 import {
   EntityMatcher,
   ENTITY_MATCH_ACCEPT_THRESHOLD,
@@ -17,8 +17,10 @@ import {
   detectProductCondition,
   detectProductOrigin,
 } from '../product-normalizer.js';
-import { AiSpecEnricher } from '../ai-spec-enricher.js';
-import type { ShopeeProduct } from '../types.js';
+import { AiSpecEnricher, getAiSpecEnrichmentJsonSchema } from '../ai-spec-enricher.js';
+import { getAiReviewBatchJsonSchema } from '../ai-review-analyzer.js';
+import { computeRetryDelayMs, createImporterLogger, sanitizeAiGeneratedText } from '../logger.js';
+import type { RateSupabaseClient, ShopeeProduct } from '../types.js';
 
 function createShopeeListing(
   title: string,
@@ -113,13 +115,97 @@ function createMockSupabase(opts: MockDbOptions = {}) {
         error: opts.fuzzyErr ?? null,
       };
     },
-  } as unknown as SupabaseClient<any, 'rate'>;
+  } as unknown as RateSupabaseClient;
 
   return { client, capturedUpserts, capturedRpcCalls };
 }
 
+interface LabeledProductPair {
+  id: string;
+  titleA: string;
+  titleB: string;
+  shouldMatchCanonicalCluster: boolean;
+}
+
+const LABELED_ENTITY_RESOLUTION_BENCHMARK: ReadonlyArray<LabeledProductPair> = [
+  {
+    id: 'pair-1-iphone16pm-256-shopee-vs-tiki',
+    titleA: '[Mã ELBAU5 giảm 5%] Điện thoại Apple iPhone 16 Pro Max 256GB Chính hãng VN/A',
+    titleB: 'Apple iPhone 16 Pro Max 256GB Titan Tự Nhiên - Hàng Chính Hãng VN/A',
+    shouldMatchCanonicalCluster: true,
+  },
+  {
+    id: 'pair-2-s24ultra-256-cellphones-vs-tgdd',
+    titleA: 'Điện thoại Samsung Galaxy S24 Ultra 5G 12GB/256GB Chính hãng',
+    titleB: 'Samsung Galaxy S24 Ultra 12GB RAM 256GB ROM Bảo hành 12 tháng',
+    shouldMatchCanonicalCluster: true,
+  },
+  {
+    id: 'pair-3-xiaomi15ultra-512-lazada-vs-hoangha',
+    titleA: 'Điện thoại Xiaomi 15 Ultra 5G (16GB/512GB) Chính hãng DGW',
+    titleB: 'Xiaomi 15 Ultra 16GB 512GB Hàng chính hãng nguyên seal',
+    shouldMatchCanonicalCluster: true,
+  },
+  {
+    id: 'pair-4-macbook-air-m4-256-fpt-vs-phongvu',
+    titleA: 'Laptop Apple MacBook Air M4 13 inch 16GB/256GB Chính hãng SA/A',
+    titleB: 'Apple MacBook Air 13 inch M4 2025 16GB RAM 256GB SSD',
+    shouldMatchCanonicalCluster: true,
+  },
+  {
+    id: 'pair-5-ipad-pro-m4-256-shopee-vs-didongviet',
+    titleA: 'Máy tính bảng Apple iPad Pro M4 11 inch WiFi 256GB Chính hãng',
+    titleB: 'Apple iPad Pro 11 inch M4 2024 WiFi 256GB Nguyên Seal',
+    shouldMatchCanonicalCluster: true,
+  },
+  {
+    id: 'pair-6-airpods-pro-2-usbc-shopee-vs-tiki',
+    titleA: 'Tai nghe Bluetooth Apple AirPods Pro 2 (USB-C) Chính hãng VN/A',
+    titleB: 'Tai nghe không dây Apple AirPods Pro Gen 2 MagSafe Type-C',
+    shouldMatchCanonicalCluster: true,
+  },
+  {
+    id: 'pair-7-storage-mismatch-256-vs-512',
+    titleA: 'Điện thoại Apple iPhone 16 Pro Max 256GB Chính hãng VN/A',
+    titleB: 'Điện thoại Apple iPhone 16 Pro Max 512GB Chính hãng VN/A',
+    shouldMatchCanonicalCluster: false,
+  },
+  {
+    id: 'pair-8-tier-mismatch-pro-vs-promax',
+    titleA: 'Điện thoại Apple iPhone 16 Pro 256GB Chính hãng VN/A',
+    titleB: 'Điện thoại Apple iPhone 16 Pro Max 256GB Chính hãng VN/A',
+    shouldMatchCanonicalCluster: false,
+  },
+  {
+    id: 'pair-9-tier-mismatch-s24plus-vs-s24ultra',
+    titleA: 'Điện thoại Samsung Galaxy S24 Plus 256GB Chính hãng',
+    titleB: 'Điện thoại Samsung Galaxy S24 Ultra 256GB Chính hãng',
+    shouldMatchCanonicalCluster: false,
+  },
+  {
+    id: 'pair-10-condition-mismatch-new-vs-likenew99',
+    titleA: 'Điện thoại Apple iPhone 16 Pro Max 256GB Chính hãng VN/A Mới 100%',
+    titleB: 'Điện thoại Apple iPhone 16 Pro Max 256GB Likenew 99% Zin Nguyên Bản',
+    shouldMatchCanonicalCluster: false,
+  },
+  {
+    id: 'pair-11-condition-mismatch-new-vs-used',
+    titleA: 'Điện thoại Samsung Galaxy S24 Ultra 256GB Chính hãng',
+    titleB: 'Điện thoại Samsung Galaxy S24 Ultra 256GB Máy cũ đã qua sử dụng',
+    shouldMatchCanonicalCluster: false,
+  },
+  {
+    id: 'pair-12-origin-mismatch-vna-vs-lla-imported',
+    titleA: 'Điện thoại Apple iPhone 16 Pro Max 256GB Chính hãng VN/A',
+    titleB: 'Điện thoại Apple iPhone 16 Pro Max 256GB Bản Mỹ LL/A Xách tay',
+    shouldMatchCanonicalCluster: false,
+  },
+];
+
 async function runEntityMatcherSuite() {
-  console.log('🧪 Running EntityMatcher 3-Tier & Condition/Origin Verification Suite (Audit C6)...');
+  console.log(
+    '🧪 Running EntityMatcher 3-Tier & Condition/Origin Verification Suite (Audit C6)...'
+  );
   const normalizer = new ProductNormalizer();
   const offlineEnricher = new AiSpecEnricher({ apiKey: '' });
 
@@ -176,7 +262,7 @@ async function runEntityMatcherSuite() {
     true,
     'Non-new listings must set needs_review = true so they never auto-publish'
   );
-  console.log('  ✅ [1/5] ProductCondition & ProductOrigin detection (Audit C6) passed');
+  console.log('  ✅ [1/7] ProductCondition & ProductOrigin detection (Audit C6) passed');
 
   // 2. Tier 1 Deterministic Exact Match
   const s24New = normalizer.normalize(
@@ -197,7 +283,7 @@ async function runEntityMatcherSuite() {
   const tier1Res = await tier1Matcher.resolveOrCreateMasterProduct(s24New);
   assert.deepEqual(tier1Res, { masterId: 'master-exact-1', isNew: false });
   assert.equal(tier1Db.capturedRpcCalls.length, 0, 'Tier 1 hit must not call Tier 2 RPC');
-  console.log('  ✅ [2/5] Tier 1 deterministic model_key match passed');
+  console.log('  ✅ [2/7] Tier 1 deterministic model_key match passed');
 
   // 3. Tier 2 Fuzzy Match (>= 0.70 accepted; 0.65..0.69 ambiguous -> draft)
   const tier2AcceptDb = createMockSupabase({
@@ -235,7 +321,7 @@ async function runEntityMatcherSuite() {
     'draft',
     'Ambiguous Tier 2 similarity (0.65..0.69) must seed new Master Product as draft'
   );
-  console.log('  ✅ [3/5] Tier 2 fuzzy match threshold & ambiguous draft fallback passed');
+  console.log('  ✅ [3/7] Tier 2 fuzzy match threshold & ambiguous draft fallback passed');
 
   // 4. Tier 3 Creation Status: benchmark_registry (new) -> published; non-new or crawled_title -> draft
   const tier3PublishedDb = createMockSupabase();
@@ -269,7 +355,7 @@ async function runEntityMatcherSuite() {
     'draft',
     'Unverified crawled_title specs must seed as draft'
   );
-  console.log('  ✅ [4/5] Tier 3 creation status rules (published vs draft) passed');
+  console.log('  ✅ [4/7] Tier 3 creation status rules (published vs draft) passed');
 
   // 5. Race Condition Winner Refetch
   const raceDb = createMockSupabase({
@@ -282,9 +368,100 @@ async function runEntityMatcherSuite() {
     masterId: 'winner-from-concurrent-worker',
     isNew: false,
   });
-  console.log('  ✅ [5/5] Concurrent worker race-condition winner refetch passed');
+  console.log('  ✅ [5/7] Concurrent worker race-condition winner refetch passed');
 
-  console.log('🎉 All EntityMatcher & Condition/Origin tests passed!');
+  // 6. Labeled Cross-Platform SKU Pair Precision / Recall Benchmark (Audit C6)
+  let tp = 0;
+  let fp = 0;
+  let tn = 0;
+  let fn = 0;
+  for (const pair of LABELED_ENTITY_RESOLUTION_BENCHMARK) {
+    const candA = normalizer.normalize(createShopeeListing(pair.titleA));
+    const candB = normalizer.normalize(createShopeeListing(pair.titleB));
+    const sameModelKey = candA.model_key === candB.model_key;
+    const sameCondition = candA.condition === candB.condition;
+    const incompatibleOrigin =
+      (candA.origin === 'official_vna' && candB.origin === 'imported') ||
+      (candA.origin === 'imported' && candB.origin === 'official_vna');
+    const predictedMatch =
+      sameModelKey &&
+      sameCondition &&
+      !incompatibleOrigin &&
+      !candA.needs_review &&
+      !candB.needs_review;
+
+    if (pair.shouldMatchCanonicalCluster && predictedMatch) tp += 1;
+    else if (!pair.shouldMatchCanonicalCluster && predictedMatch) fp += 1;
+    else if (!pair.shouldMatchCanonicalCluster && !predictedMatch) tn += 1;
+    else fn += 1;
+  }
+  const precision = tp / Math.max(1, tp + fp);
+  const recall = tp / Math.max(1, tp + fn);
+  const f1 = (2 * precision * recall) / Math.max(1e-9, precision + recall);
+  assert.equal(precision, 1, `Expected 100% precision on SKU benchmark, got ${precision}`);
+  assert.equal(recall, 1, `Expected 100% recall on SKU benchmark, got ${recall}`);
+  assert.equal(f1, 1);
+  assert.equal(tp + tn, LABELED_ENTITY_RESOLUTION_BENCHMARK.length);
+  console.log(
+    `  ✅ [6/7] Labeled SKU pair benchmark (${LABELED_ENTITY_RESOLUTION_BENCHMARK.length} pairs): Precision=${(precision * 100).toFixed(0)}%, Recall=${(recall * 100).toFixed(0)}%, F1=${(f1 * 100).toFixed(0)}%`
+  );
+
+  // 7. Audit C8, T15 & Low Verification (Zod 4 JSON Schema, URL/Phone Redaction, MasterProductSchema defaults, Structured Logger)
+  const parsedMaster = MasterProductSchema.parse({
+    id: '018f1a50-0000-7000-8000-000000000001',
+    brand: 'Apple',
+    model: 'iPhone 16 Pro Max',
+    model_key: 'apple:iphone-16-pro-max:256gb',
+    name: 'Apple iPhone 16 Pro Max 256GB',
+    slug: 'apple-iphone-16-pro-max-256gb',
+  });
+  assert.equal(parsedMaster.status, 'draft');
+  assert.equal(parsedMaster.average_rating, null);
+
+  const reviewJsonSchema = getAiReviewBatchJsonSchema();
+  assert.equal(reviewJsonSchema.type, 'object');
+  assert.ok(reviewJsonSchema.properties && 'reviews' in (reviewJsonSchema.properties as object));
+
+  const specJsonSchema = getAiSpecEnrichmentJsonSchema();
+  assert.equal(specJsonSchema.type, 'object');
+  assert.ok(specJsonSchema.properties && 'specifications' in (specJsonSchema.properties as object));
+
+  const sanitizedSummary = sanitizeAiGeneratedText(
+    '<b>Máy tốt</b> nhưng liên hệ Zalo 0912.345.678 hoặc +84 987 654 321 tại https://phishing.example.com/deal và shopee.vn/fake-shop để nhận quà!'
+  );
+  assert.ok(!sanitizedSummary.includes('0912.345.678'));
+  assert.ok(!sanitizedSummary.includes('987 654 321'));
+  assert.doesNotMatch(sanitizedSummary, /phishing\.example\.com/);
+  assert.ok(!sanitizedSummary.includes('shopee.vn/fake-shop'));
+  assert.ok(sanitizedSummary.includes('[phone-removed]'));
+  assert.ok(sanitizedSummary.includes('[link-removed]'));
+
+  const delay0 = computeRetryDelayMs(0, 250, 2000, () => 0.5);
+  const delay1 = computeRetryDelayMs(1, 250, 2000, () => 0.5);
+  assert.ok(delay0 >= 125 && delay0 <= 250);
+  assert.ok(delay1 >= 250 && delay1 <= 500);
+
+  const testLogger = createImporterLogger('TestComponent', {
+    runId: 'run-test-1',
+    platform: 'shopee',
+  });
+  const entry = testLogger.formatEntry(
+    'info',
+    'test.redaction',
+    'Connecting via http://user1:pass1@proxy.vn:8080 with Bearer secret_token_123 for buyer@example.com',
+    { apiKey: 'sk-1234567890abcdef' } // gitleaks:allow -- fake key for the redaction test
+  );
+  assert.equal(entry.service, '@repo/crawlers');
+  assert.equal(entry.run_id, 'run-test-1');
+  assert.ok(entry.message.includes('http://u***:p***@proxy.vn:8080'));
+  assert.ok(entry.message.includes('Bearer [REDACTED]'));
+  assert.ok(entry.message.includes('b***@example.com'));
+  assert.equal(entry.meta?.apiKey, '[REDACTED]');
+  console.log(
+    '  ✅ [7/7] Zod 4 JSON Schema, URL/phone prompt-injection filter, MasterProductSchema defaults & structured logger passed'
+  );
+
+  console.log('🎉 All EntityMatcher & Open-Core Audit C6/C8/T15/Low tests passed!');
 }
 
 runEntityMatcherSuite().catch(err => {

@@ -1,7 +1,13 @@
 import crypto from 'node:crypto';
-import type { SupabaseClient } from '@supabase/supabase-js';
-import type { SupportedAiProvider, AiSpecEnricherConfig } from './ai-spec-enricher.js';
-import type { ScrapedReviewer } from './types.js';
+import { z } from '@repo/shared-data';
+import {
+  trimTrailingSlashes,
+  type SupportedAiProvider,
+  type AiSpecEnricherConfig,
+} from './ai-spec-enricher.js';
+import type { RateSupabaseClient, ScrapedReviewer } from './types.js';
+import { computeRetryDelayMs, sanitizeAiGeneratedText } from './logger.js';
+export { computeRetryDelayMs, sanitizeAiGeneratedText } from './logger.js';
 
 /**
  * 5-Category Classification for Reviews across Products & Services
@@ -831,6 +837,61 @@ export function assessReview6Axes(
   };
 }
 
+export const AiReviewBatchItemSchema = z.object({
+  review_id: z.string().min(1),
+  flag_category: z.enum([
+    'authentic',
+    'low_value_coin_spam',
+    'seeding_fake',
+    'competitor_sabotage',
+    'review_bombing',
+  ]),
+  verdict: z.enum(['authentic', 'suspicious', 'fake']),
+  fake_probability: z.number().min(0).max(1),
+  authenticity: z
+    .enum(['genuine', 'doubtful', 'fabricated', 'sabotage', 'bombing', 'copied'])
+    .optional(),
+  independence: z
+    .enum([
+      'organic',
+      'affiliate',
+      'incentivized',
+      'sponsored_balanced',
+      'sponsored_promo',
+      'undisclosed_paid',
+      'conflict_of_interest',
+    ])
+    .optional(),
+  depth: z
+    .enum([
+      'stars_only',
+      'platform_label',
+      'filler',
+      'low_effort',
+      'specific_short',
+      'detailed',
+      'expert_depth',
+    ])
+    .optional(),
+  relevance: z.number().min(0).max(1).optional(),
+  ai_generated_prob: z.number().min(0).max(1).optional(),
+  reason: z.string(),
+});
+
+export const AiReviewBatchResponseSchema = z.object({
+  reviews: z.array(AiReviewBatchItemSchema),
+  pros: z.array(z.string()).default([]),
+  cons: z.array(z.string()).default([]),
+  ai_summary: z.string().default(''),
+});
+
+/**
+ * Generates strict JSON Schema from `AiReviewBatchResponseSchema` via Zod 4 `z.toJSONSchema()` (Audit C8).
+ */
+export function getAiReviewBatchJsonSchema(): Record<string, unknown> {
+  return z.toJSONSchema(AiReviewBatchResponseSchema) as Record<string, unknown>;
+}
+
 /**
  * Provider-Agnostic AI Review Analyzer & JReviews Scoring Engine
  * Supports Products & Services across Shopee, Lazada, Tiki, TikTok Shop, Facebook, Website
@@ -847,13 +908,13 @@ export class AiReviewAnalyzer {
     const defaults = PROVIDER_DEFAULTS[this.provider];
 
     this.apiKey = config.apiKey ?? this.resolveApiKey(this.provider);
-    this.baseUrl = (
+    this.baseUrl = trimTrailingSlashes(
       config.baseUrl ||
-      process.env.AI_BASE_URL ||
-      process.env.DOS_AI_BASE_URL ||
-      process.env.OPENAI_BASE_URL ||
-      defaults.baseUrl
-    ).replace(/\/+$/, '');
+        process.env.AI_BASE_URL ||
+        process.env.DOS_AI_BASE_URL ||
+        process.env.OPENAI_BASE_URL ||
+        defaults.baseUrl
+    );
 
     this.model =
       config.model || process.env.AI_MODEL || process.env.OPENAI_MODEL || defaults.defaultModel;
@@ -1156,20 +1217,17 @@ export class AiReviewAnalyzer {
   } | null> {
     const sanitizePromptText = (raw: string | null | undefined, maxLen = 1500): string => {
       if (!raw) return '';
-      return raw
-        .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, ' ')
-        .trim()
-        .slice(0, maxLen);
+      return (
+        raw
+          // eslint-disable-next-line no-control-regex -- stripping control characters is the point
+          .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, ' ')
+          .trim()
+          .slice(0, maxLen)
+      );
     };
 
-    const sanitizeOutputText = (raw: unknown, maxLen = 400): string => {
-      if (typeof raw !== 'string') return '';
-      return raw
-        .replace(/<[^>]*>/g, '')
-        .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, ' ')
-        .trim()
-        .slice(0, maxLen);
-    };
+    const sanitizeOutputText = (raw: unknown, maxLen = 400): string =>
+      sanitizeAiGeneratedText(raw, maxLen);
 
     try {
       const systemPrompt = `You are an expert e-commerce & service review fraud auditor for Rate.vn (inspired by JReviews).
@@ -1204,11 +1262,45 @@ Return ONLY valid JSON matching:
   "ai_summary": "string (2-3 sentences in Vietnamese summarizing authentic buyer feedback)"
 }`;
 
-      const aiMap = new Map<string, any>();
+      interface RawAiReviewItem {
+        review_id?: string;
+        flag_category?: string;
+        verdict?: string;
+        fake_probability?: number;
+        authenticity?: string;
+        independence?: string;
+        depth?: string;
+        relevance?: number;
+        ai_generated_prob?: number;
+        reason?: string;
+      }
+      interface RawAiReviewBatch {
+        reviews?: RawAiReviewItem[];
+        pros?: unknown[];
+        cons?: unknown[];
+        ai_summary?: unknown;
+      }
+
+      const aiMap = new Map<string, RawAiReviewItem>();
       const collectedPros: string[] = [];
       const collectedCons: string[] = [];
       let firstSummary = '';
       let anyBatchSucceeded = false;
+
+      const supportsStrictJsonSchema =
+        this.provider === 'openai' ||
+        this.provider === 'dos-ai' ||
+        this.provider === 'gemini' ||
+        this.provider === 'openrouter';
+      let useStrictSchema = supportsStrictJsonSchema;
+      const strictResponseFormat = {
+        type: 'json_schema',
+        json_schema: {
+          name: 'review_batch_analysis',
+          strict: true,
+          schema: getAiReviewBatchJsonSchema(),
+        },
+      };
 
       for (let offset = 0; offset < reviews.length; offset += 25) {
         const batch = reviews.slice(offset, offset + 25);
@@ -1235,7 +1327,7 @@ Return ONLY valid JSON matching:
         });
 
         let response: Response | null = null;
-        for (let attempt = 0; attempt < 2; attempt++) {
+        for (let attempt = 0; attempt < 3; attempt++) {
           const batchController = new AbortController();
           const batchTimer = setTimeout(() => batchController.abort(), this.timeoutMs);
           try {
@@ -1252,28 +1344,37 @@ Return ONLY valid JSON matching:
                   { role: 'user', content: userPrompt },
                 ],
                 temperature: 0.1,
-                response_format: { type: 'json_object' },
+                response_format: useStrictSchema ? strictResponseFormat : { type: 'json_object' },
               }),
               signal: batchController.signal,
             });
             if (response.ok) break;
+            if (response.status === 400 && useStrictSchema) {
+              // Provider endpoint does not support json_schema strict mode -> fall back to json_object immediately
+              useStrictSchema = false;
+              continue;
+            }
             if (response.status !== 429 && response.status < 500) break;
           } catch {
             response = null;
           } finally {
             clearTimeout(batchTimer);
           }
-          if (attempt === 0) {
-            await new Promise(resolve => setTimeout(resolve, 350));
+          if (attempt < 2) {
+            await new Promise(resolve =>
+              setTimeout(resolve, computeRetryDelayMs(attempt, 250, 2000))
+            );
           }
         }
 
         if (!response || !response.ok) continue;
-        const data = (await response.json()) as any;
+        const data = (await response.json()) as {
+          choices?: Array<{ message?: { content?: string } }>;
+        };
         const rawContent: string | undefined = data?.choices?.[0]?.message?.content;
         if (!rawContent) continue;
 
-        let parsed: any;
+        let parsed: RawAiReviewBatch;
         try {
           parsed = JSON.parse(
             rawContent
@@ -1281,34 +1382,39 @@ Return ONLY valid JSON matching:
               .replace(/^```(?:json)?\s*/i, '')
               .replace(/\s*```$/i, '')
               .trim()
-          );
+          ) as RawAiReviewBatch;
         } catch {
           continue;
         }
 
+        const validatedBatch = AiReviewBatchResponseSchema.safeParse(parsed);
+        const batchData: RawAiReviewBatch = validatedBatch.success ? validatedBatch.data : parsed;
+
         anyBatchSucceeded = true;
-        if (Array.isArray(parsed.reviews)) {
-          for (const item of parsed.reviews) {
+        if (Array.isArray(batchData?.reviews)) {
+          for (const rawItem of batchData.reviews) {
+            const parsedItem = AiReviewBatchItemSchema.safeParse(rawItem);
+            const item: RawAiReviewItem = parsedItem.success ? parsedItem.data : rawItem;
             if (item?.review_id) aiMap.set(String(item.review_id), item);
           }
         }
-        if (Array.isArray(parsed.pros)) {
-          for (const p of parsed.pros) {
+        if (Array.isArray(batchData?.pros)) {
+          for (const p of batchData.pros) {
             const cleanP = sanitizeOutputText(p, 160);
             if (cleanP && !collectedPros.includes(cleanP)) {
               collectedPros.push(cleanP);
             }
           }
         }
-        if (Array.isArray(parsed.cons)) {
-          for (const c of parsed.cons) {
+        if (Array.isArray(batchData?.cons)) {
+          for (const c of batchData.cons) {
             const cleanC = sanitizeOutputText(c, 160);
             if (cleanC && !collectedCons.includes(cleanC)) {
               collectedCons.push(cleanC);
             }
           }
         }
-        const cleanSummary = sanitizeOutputText(parsed.ai_summary, 600);
+        const cleanSummary = sanitizeOutputText(batchData?.ai_summary, 600);
         if (!firstSummary && cleanSummary) {
           firstSummary = cleanSummary;
         }
@@ -1367,14 +1473,14 @@ Return ONLY valid JSON matching:
         const heuristicLocked = base.flag_category !== 'authentic';
         let updatedAssessment = base.assessment;
         if (updatedAssessment && !heuristicLocked) {
-          const nextAuth: Authenticity = validAuthenticity.has(aiItem.authenticity)
-            ? aiItem.authenticity
+          const nextAuth: Authenticity = validAuthenticity.has(aiItem.authenticity as Authenticity)
+            ? (aiItem.authenticity as Authenticity)
             : updatedAssessment.authenticity;
-          const nextInd: Independence = validIndependence.has(aiItem.independence)
-            ? aiItem.independence
+          const nextInd: Independence = validIndependence.has(aiItem.independence as Independence)
+            ? (aiItem.independence as Independence)
             : updatedAssessment.independence;
-          const nextDepth: Depth = validDepth.has(aiItem.depth)
-            ? aiItem.depth
+          const nextDepth: Depth = validDepth.has(aiItem.depth as Depth)
+            ? (aiItem.depth as Depth)
             : updatedAssessment.depth;
           const nextRel =
             typeof aiItem.relevance === 'number' && Number.isFinite(aiItem.relevance)
@@ -1423,14 +1529,15 @@ Return ONLY valid JSON matching:
                 updatedAssessment.depth
               )
             : 'authentic';
+        const aiCat = aiItem.flag_category as ReviewFlagCategory;
         const cat: ReviewFlagCategory = heuristicLocked
           ? base.flag_category
-          : validCategories.has(aiItem.flag_category) && aiItem.flag_category !== 'authentic'
-            ? aiItem.flag_category
+          : validCategories.has(aiCat) && aiCat !== 'authentic'
+            ? aiCat
             : derivedFromAxes !== 'authentic'
               ? derivedFromAxes
-              : validCategories.has(aiItem.flag_category)
-                ? aiItem.flag_category
+              : validCategories.has(aiCat)
+                ? aiCat
                 : base.flag_category;
 
         const verdict: ReviewVerdict =
@@ -1717,7 +1824,7 @@ Return ONLY valid JSON matching:
    * master_products weighted rating, and merchant risk_score in Supabase `rate` schema
    */
   public async persistAnalysisToSupabase(
-    supabase: SupabaseClient<any, 'rate'>,
+    supabase: RateSupabaseClient,
     params: {
       productId: string;
       masterId?: string | null;
@@ -1808,8 +1915,8 @@ Return ONLY valid JSON matching:
 
     // 3. Update master_products weighted rating & authentic count via canonical SQL RPC (Audit C5)
     if (params.masterId) {
-      if (typeof (supabase as any).rpc === 'function') {
-        const { error: rpcErr } = await (supabase as any).rpc('refresh_master_product_rating', {
+      if (typeof supabase.rpc === 'function') {
+        const { error: rpcErr } = await supabase.rpc('refresh_master_product_rating', {
           p_master_id: params.masterId,
         });
         if (rpcErr) {
@@ -1904,7 +2011,7 @@ Return ONLY valid JSON matching:
    * counters + `helpfulness_weight` + `rate.master_products.user_rating_weighted`.
    */
   public async castReviewVote(
-    supabase: SupabaseClient<any, 'rate'>,
+    supabase: RateSupabaseClient,
     params: {
       reviewId: string;
       voterId: string;

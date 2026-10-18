@@ -18,8 +18,9 @@ Tài liệu này tổng hợp đầy đủ **User-Level Hard Rules (`C:\Users\JO
    - Chỉ hỏi ý kiến JOY cho: quyết định sản phẩm/kiến trúc, thao tác rủi ro cao (xóa dữ liệu, thay đổi prod, tiêu tiền, sửa khác repo `cross-repo writes`), hoặc bước bắt buộc cần người thật (2FA, CAPTCHA, OAuth device code).
 
 3. **Ngôn ngữ & Định dạng Giao tiếp:**
-   - **Trả lời JOY:** Luôn dùng **Tiếng Việt có dấu đầy đủ 100%** trên mọi bề mặt giao tiếp (chat, câu hỏi `ask_question`, nhãn lựa chọn). Giữ nguyên thuật ngữ kỹ thuật thông dụng bằng tiếng Anh (`API`, `commit`, `branch`, `PR`, `CI`, `build`, `deploy`, `repo`, `merge`, `push`, `workflow`, `token`, `key`, `env`, `prod`, `staging`).
-   - **Code, comments, commit messages, README, ROADMAP và tài liệu chuẩn trong repo:** Viết bằng **Tiếng Anh** (trừ các file quy tắc phối hợp nội bộ hoặc tài liệu thiết kế theo yêu cầu).
+   - **Trả lời trực tiếp JOY (Private / Direct Chat):** Luôn dùng **Tiếng Việt có dấu đầy đủ 100%** trên bề mặt giao tiếp trực tiếp với JOY (chat, câu hỏi `ask_question`, nhãn lựa chọn). Giữ nguyên thuật ngữ kỹ thuật thông dụng bằng tiếng Anh (`API`, `commit`, `branch`, `PR`, `CI`, `build`, `deploy`, `repo`, `merge`, `push`, `workflow`, `token`, `key`, `env`, `prod`, `staging`).
+   - **Toàn bộ bề mặt Public trên GitHub & trong Repo (Issues, PRs, Comments, Code, Commits, Docs) = 100% Tiếng Anh:**
+     - Vì `DOS/Rate` là kho mã nguồn mở công khai (`Open-Core`) hướng tới cộng đồng quốc tế (`vi`, `en`, `cs`), **BẮT BUỘC viết 100% bằng Tiếng Anh** cho: **GitHub Issues (Title, Body, Comments)**, **GitHub Pull Requests (Title, Body, Review comments)**, **Commit messages**, **Code & Code comments**, **Tests**, và các tài liệu chuẩn (`README.md`, `ROADMAP.md`, `CHANGELOG.md`, `CONTRIBUTING.md`, `SECURITY.md`, `DESIGN.md`). Không bao giờ tạo Issue, PR hoặc comment bằng tiếng Việt trên GitHub.
    - **Tài liệu đưa cho JOY đọc/review (Proposal, Plan, Report, Audit) = HTML + Dark Theme + Tiếng Việt có dấu:**
      - Mọi tài liệu cần JOY đọc để ra quyết định **BẮT BUỘC** phải xuất thành file **HTML tự chứa (self-contained)** lưu ngay trong repo (ví dụ `Docs/Proposals/<YYYY-MM-DD>-<slug>.html`), có **Dark Theme gốc** (`<meta name="color-scheme" content="dark">`, nền tối `~#0f1113`, chữ sáng, điểm nhấn đỏ `#FF2E29`), viết bằng **Tiếng Việt có dấu đầy đủ**. Không đưa file `.md` thô hoặc trang nền sáng cho JOY đọc.
    - **Cấm dùng dấu gạch ngang dài (No em-dashes):** Không bao giờ dùng `—` (`U+2014`), `–` (`U+2013`), hoặc `&mdash;`. Luôn dùng dấu gạch nối đơn `-`.
@@ -32,8 +33,15 @@ Tài liệu này tổng hợp đầy đủ **User-Level Hard Rules (`C:\Users\JO
    - Khi làm việc đa nhánh/đa repo, tạo worktree riêng theo runtime (`<repo>\.claude\worktrees\<task>`, `<repo>\.codex\worktrees\<task>`, `<repo>\.gemini\worktrees\<task>`). Không bao giờ chạy `git checkout` / `git reset --hard` trên nhánh chính đang dùng chung.
    - Mọi deliverable (báo cáo HTML, proposal, script) phải lưu trong repo và commit, không vứt ở thư mục tạm (`C:\Temp`, scratchpad).
 
-6. **Chủ động đề xuất việc tiếp theo (Proactive Next-Task):**
-   - Cuối mỗi lượt hoàn thành task, luôn khảo sát trạng thái (open PRs, Issues trên GitHub Project #9, `ROADMAP.md`) và đề xuất cụ thể 1 task tiếp theo kèm lý do ngắn gọn: `Next: <việc tiếp theo> - <lý do>. Bắt đầu chứ?`
+6. **CẤM deploy thẳng lên Production (`rate.vn`). Production chỉ build từ nhánh `main` qua Vercel Git integration:**
+   - Luồng chuẩn (giống `DOS.AI` và `DOS.Me`): PR tính năng -> `dev` (**squash**); PR promote `dev` -> `main` mở từ chính nhánh `dev` và merge bằng **merge commit** (`gh pr merge --merge`), không bao giờ squash hay rebase. Hotfix: nhánh `hotfix/*` -> `main` có label `emergency-hotfix`, rồi back-merge ngay `main` -> `dev` bằng merge commit. Chi tiết: [`Docs/Resources/RELEASE.md`](./Docs/Resources/RELEASE.md).
+   - **TUYỆT ĐỐI KHÔNG** chạy `vercel deploy --prod`, `vercel --prod`, `--prebuilt --prod`, `--skip-domain` rồi `promote`, hay promote một bản Preview của `dev` lên production, kể cả khi JOY đã cho phép "deploy". Lời cho phép deploy nghĩa là merge PR promote `dev` -> `main`, không phải deploy từ máy local.
+   - Chốt kỹ thuật: `scripts/vercel-production-guard.mjs` (chạy trong `buildCommand` của `vercel.json`) làm build production thất bại nếu không phải GitHub build từ `DOS/Rate@main`; workflow `Validate PR Base` chặn PR vào `main` không từ `dev`; workflow `Branch Divergence` báo lỗi khi `main` có commit mà `dev` không có. Không được sửa hay vô hiệu hóa các chốt này để deploy cho nhanh.
+   - Ngoại lệ duy nhất: **rollback** về một bản production cũ đã build từ Git (`vercel rollback`), vì không build lại. Sau đó sửa tiếp qua PR hotfix.
+
+7. **Chủ động thực thi liên tục & đề xuất việc tiếp theo (Proactive Next-Task):**
+   - **Khi đang ở chế độ `/goal` hoặc được giao làm hết backlog:** Tự động tạo/nhận và làm liên tục từng task đến khi sạch toàn bộ backlog mà **KHÔNG dừng lại hỏi `Bắt đầu chứ?`**.
+   - Chỉ khi đã hoàn thành toàn bộ mục tiêu và không còn task khả dụng mới báo cáo tổng kết.
 
 ---
 
@@ -56,23 +64,23 @@ gh issue list -R DOS/Rate-Services --state open
   - Vì mọi Agent đều chạy dưới tài khoản GitHub của JOY (`@me`), **MỖI AGENT PHẢI TỰ ĐẶT MỘT NICKNAME NGẮN GỌN** theo chuyên môn hoặc phiên làm việc (ví dụ: `Crawl`, `Web`, `Core`, `DB`, `QA`) và gắn cả **Nhãn `agent:<nickname>`** lẫn **Cột `Agent` trên GitHub Project #9**.
   - **TUYỆT ĐỐI KHÔNG** tự ý làm các Issue đang có nhãn `status:in-progress`, `status:in-review` hoặc đã có nhãn `agent:<khác>` đang chạy (trừ khi JOY chỉ định rõ).
   - Ưu tiên chọn các Issue đang có nhãn `status:ready`.
-  - Nếu yêu cầu của người dùng chưa có Issue tương ứng, **TẠO NGAY ISSUE MỚI** và gắn vào GitHub Project #9:
+  - Nếu yêu cầu của người dùng chưa có Issue tương ứng, **TẠO NGAY ISSUE MỚI BẰNG TIẾNG ANH** và gắn vào GitHub Project #9:
     ```powershell
     $agentNick = "Crawl" # Đặt nickname riêng của Agent (vd: Crawl, Web, Core...)
     $agentLabel = "agent:$($agentNick.ToLower())"
     gh label create $agentLabel -R DOS/Rate --color "D93F0B" --description "Claimed by Agent: $agentNick" --force
-    gh issue create -R DOS/Rate --title "<Tiêu đề task>" --body "<Mô tả chi tiết>" --label "status:in-progress,$agentLabel" --assignee "@me"
+    gh issue create -R DOS/Rate --title "<English task title>" --body "<Detailed English description>" --label "status:in-progress,$agentLabel" --assignee "@me"
     gh project item-add 9 --owner DOS --url <ISSUE_URL>
     ```
-- **Chuyển trạng thái sang `In Progress` & Ghi danh Agent ngay khi bắt đầu (BẮT BUỘC đồng bộ cả Issue lẫn Board Project #9):**
+- **Chuyển trạng thái sang `In Progress` & Ghi danh Agent ngay khi bắt đầu (BẮT BUỘC đồng bộ cả Issue lẫn Board Project #9, comment bằng Tiếng Anh):**
   ```powershell
   $agentNick = "Crawl" # Nickname của Agent hiện tại
   $agentLabel = "agent:$($agentNick.ToLower())"
   gh label create $agentLabel -R DOS/Rate --color "D93F0B" --description "Claimed by Agent: $agentNick" --force
 
-  # 1. Cập nhật nhãn Issue (status:in-progress + agent:<nick>) & comment ghi danh
+  # 1. Cập nhật nhãn Issue (status:in-progress + agent:<nick>) & comment ghi danh bằng Tiếng Anh
   gh issue edit <ISSUE_NUMBER> -R DOS/Rate --remove-label "status:ready" --add-label "status:in-progress,$agentLabel" --add-assignee "@me"
-  gh issue comment <ISSUE_NUMBER> -R DOS/Rate --body "🤖 **[Agent: $agentNick]** Bắt đầu thực hiện task này (Status: Ready -> In Progress)."
+  gh issue comment <ISSUE_NUMBER> -R DOS/Rate --body "🤖 **[Agent: $agentNick]** Claimed this issue (Status: Ready -> In Progress)."
 
   # 2. BẮT BUỘC cập nhật cột Status VÀ trường Agent trên bảng GitHub Project #9
   # Project ID: PVT_kwDOA388Vc4Bm5Ml | Field Status: PVTSSF_lADOA388Vc4Bm5MlzhlgSt8 | Field Agent: PVTF_lADOA388Vc4Bm5MlzhlqBH8
@@ -89,14 +97,14 @@ Sau khi code xong, chạy pass toàn bộ bài test/build và qua bước review
 - **Trường hợp đang mở PR chờ CI / Reviewer tự động (`In Review`):**
   ```powershell
   gh issue edit <ISSUE_NUMBER> -R DOS/Rate --remove-label "status:in-progress" --add-label "status:in-review"
-  gh issue comment <ISSUE_NUMBER> -R DOS/Rate --body "🔍 **[Agent: $agentNick]** Đã triển khai xong và pass test. Chuyển trạng thái sang In Review (Commit/PR: <SHA/URL>)."
+  gh issue comment <ISSUE_NUMBER> -R DOS/Rate --body "🔍 **[Agent: $agentNick]** Implementation complete and tests passing. Moving status to In Review (Commit/PR: <SHA/URL>)."
   $itemId = ((gh project item-list 9 --owner DOS --format json | ConvertFrom-Json).items | Where-Object { $_.content.number -eq <ISSUE_NUMBER> -and $_.content.repository -eq "DOS/Rate" }).id
   gh project item-edit --project-id PVT_kwDOA388Vc4Bm5Ml --id $itemId --field-id PVTSSF_lADOA388Vc4Bm5MlzhlgSt8 --single-select-option-id aba860b9
   ```
 - **Trường hợp đã hoàn tất & merge xong (`Done`):**
   ```powershell
   gh issue edit <ISSUE_NUMBER> -R DOS/Rate --remove-label "status:in-progress,status:in-review" --add-label "status:done"
-  gh issue close <ISSUE_NUMBER> -R DOS/Rate --comment "✅ **[Agent: $agentNick]** Hoàn tất task tại commit <SHA> (Status -> Done)."
+  gh issue close <ISSUE_NUMBER> -R DOS/Rate --comment "✅ **[Agent: $agentNick]** Completed in commit <SHA> (Status -> Done)."
   $itemId = ((gh project item-list 9 --owner DOS --format json | ConvertFrom-Json).items | Where-Object { $_.content.number -eq <ISSUE_NUMBER> -and $_.content.repository -eq "DOS/Rate" }).id
   gh project item-edit --project-id PVT_kwDOA388Vc4Bm5Ml --id $itemId --field-id PVTSSF_lADOA388Vc4Bm5MlzhlgSt8 --single-select-option-id 98236657
   ```
@@ -161,3 +169,23 @@ pnpm install
 pnpm build
 pnpm test:enricher
 ```
+
+---
+
+## 5. Review PR: Mức Độ Finding (P0-P3) & Quy Tắc Hội Tụ
+
+Mỗi finding khi review (subagent fresh-context, bot, hoặc người) phải được gắn một mức độ:
+
+| Mức    | Định nghĩa                                                                                                                |
+| :----- | :------------------------------------------------------------------------------------------------------------------------ |
+| **P0** | Gây sập dịch vụ, mất dữ liệu, xâm phạm bảo mật, hoặc dịch chuyển tiền sai trong luồng sử dụng bình thường.                |
+| **P1** | Lỗi đúng/sai trên luồng bình thường, hoặc lỗi về bảo mật / phân quyền / tiền / credential / dữ liệu chưa tới mức P0.      |
+| **P2** | Lỗi ở edge case, hoặc lỗi có cách né (workaround), nằm ngoài các vùng bảo mật / phân quyền / tiền / credential / dữ liệu. |
+| **P3** | Câu chữ, style, đặt tên.                                                                                                  |
+
+**Quy tắc hội tụ (nhẹ):**
+
+- **Vòng 1:** Sửa các finding hợp lý ở mọi mức.
+- **Từ vòng 2 trở đi:** Trong PR hiện tại chỉ sửa P0/P1, mọi finding về bảo mật hoặc dữ liệu, lỗi trong hành vi mà chính PR này thêm vào, và required check đang đỏ. Các P2/P3 còn lại gom vào **một** issue follow-up duy nhất; trả lời từng thread kèm link issue đó rồi resolve thread.
+- Một lượt review của bot bị rate-limit, bị bỏ qua (skipped) hoặc không có nội dung **không phải là review**. Không chờ và không tính là đã review.
+- Cổng review thật sự là **review bằng subagent fresh-context** (Mục 0.2). Required check `Typecheck & Build Monorepo` phải xanh trước khi merge (ruleset `dev-main-light` trên `dev` và `main`: chặn xóa nhánh và force-push, không yêu cầu approval). Riêng `main` có thêm ruleset `main-release`: bắt buộc qua PR, chỉ cho merge commit, và phải xanh thêm `PR into main comes from dev` và `main must not lead dev` (Mục 0.6).

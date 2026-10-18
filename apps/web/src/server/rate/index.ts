@@ -1,3 +1,4 @@
+import 'server-only';
 import { cache } from 'react';
 import {
   compareMasterProducts as _compareMasterProducts,
@@ -7,6 +8,7 @@ import {
   getMasterProductCategorySlug,
   getMasterProductHref,
   getMasterProductOffers as _getMasterProductOffers,
+  getMasterProductOffersBatch as _getMasterProductOffersBatch,
   getMasterProductPriceHistory as _getMasterProductPriceHistory,
   getMasterProductReviews as _getMasterProductReviews,
   getMasterProductReviewSummary as _getMasterProductReviewSummary,
@@ -54,36 +56,153 @@ export {
   resolveProductImageUrl,
 };
 
+import {
+  RATE_CACHE_TAGS,
+  categoryCacheTag,
+  merchantCacheTag,
+  productCacheTag,
+  resolveRevalidationTargets,
+  withRateDataCache,
+  type RateCanonicalCacheTag,
+  type RateDataCacheOptions,
+  type RevalidationTargetsInput,
+} from './cache-tags';
+import { computeProductRadarSignal } from './deals';
+
+export {
+  RATE_CACHE_TAGS,
+  categoryCacheTag,
+  merchantCacheTag,
+  productCacheTag,
+  resolveRevalidationTargets,
+  withRateDataCache,
+  type RateCanonicalCacheTag,
+  type RateDataCacheOptions,
+  type RevalidationTargetsInput,
+};
+
 /**
- * Per-request memoized Server Data Layer (React.cache) for Next.js 16 App Router.
- * Prevents duplicate Supabase round-trips when both generateMetadata() and Page()
- * query the same product, merchant, or category facets during a single SSR render pass.
+ * Dual-Layer Server Data Cache (Audit C3 & Phase 7.3):
+ * 1. `React.cache()` deduplicates identical queries within a single SSR render pass
+ *    (e.g., `generateMetadata()` + `Page()`).
+ * 2. `withRateDataCache()` (`unstable_cache`) persists results across requests with
+ *    deterministic cache tags (`rate:products`, `rate:product:<slug>`, `rate:merchants`, etc.)
+ *    so `POST /api/v1/rate/revalidate` can surgically invalidate updated entities.
  */
-const _getCachedMasterProductsByKey = cache((serializedParams: string) => {
-  const parsed = JSON.parse(serializedParams) as MasterProductFilterParams;
-  return _getMasterProducts(parsed);
-});
+const _fetchMasterProductsDataCache = withRateDataCache(
+  async (serializedParams: string) => {
+    const parsed = JSON.parse(serializedParams) as MasterProductFilterParams;
+    return _getMasterProducts(parsed);
+  },
+  ['rate-master-products'],
+  {
+    revalidate: 300,
+    tags: [RATE_CACHE_TAGS.PRODUCTS],
+  }
+);
+
+const _getCachedMasterProductsByKey = cache((serializedParams: string) =>
+  _fetchMasterProductsDataCache(serializedParams)
+);
 
 export function getCachedMasterProducts(params?: MasterProductFilterParams) {
   return _getCachedMasterProductsByKey(JSON.stringify(params ?? {}));
 }
 
-export const getCachedMasterProductBySlug = cache(_getMasterProductBySlug);
-export const getCachedCategoryDirectoryFacets = cache(
-  _getCategoryDirectoryFacets
+export const getCachedMasterProductBySlug = cache((slug: string) =>
+  withRateDataCache(
+    _getMasterProductBySlug,
+    ['rate-master-product-by-slug', slug],
+    {
+      revalidate: 300,
+      tags: [RATE_CACHE_TAGS.PRODUCTS, productCacheTag(slug)],
+    }
+  )(slug)
 );
-export const getCachedMasterProductOffers = cache(_getMasterProductOffers);
-export const getCachedMasterProductReviews = cache(_getMasterProductReviews);
+
+export const getCachedCategoryDirectoryFacets = cache((categorySlug?: string) =>
+  withRateDataCache(
+    _getCategoryDirectoryFacets,
+    ['rate-category-facets', categorySlug ?? 'all'],
+    {
+      revalidate: 600,
+      tags: [
+        RATE_CACHE_TAGS.CATEGORIES,
+        RATE_CACHE_TAGS.PRODUCTS,
+        ...(categorySlug ? [categoryCacheTag(categorySlug)] : []),
+      ],
+    }
+  )(categorySlug)
+);
+
+export const getCachedMasterProductOffers = cache((masterProductId: string) =>
+  withRateDataCache(
+    _getMasterProductOffers,
+    ['rate-master-product-offers', masterProductId],
+    {
+      revalidate: 180,
+      tags: [RATE_CACHE_TAGS.OFFERS, RATE_CACHE_TAGS.DEALS],
+    }
+  )(masterProductId)
+);
+
+export const getCachedMasterProductReviews = cache((masterProductId: string) =>
+  withRateDataCache(
+    _getMasterProductReviews,
+    ['rate-master-product-reviews', masterProductId],
+    {
+      revalidate: 300,
+      tags: [RATE_CACHE_TAGS.REVIEWS],
+    }
+  )(masterProductId)
+);
+
 export const getCachedMasterProductReviewSummary = cache(
-  _getMasterProductReviewSummary
+  (
+    masterProductId: string,
+    existingReviews?: import('../../lib/rate-api').ReviewItem[]
+  ) =>
+    withRateDataCache(
+      (id: string) => _getMasterProductReviewSummary(id, existingReviews),
+      ['rate-master-product-review-summary', masterProductId],
+      {
+        revalidate: 300,
+        tags: [RATE_CACHE_TAGS.REVIEWS],
+      }
+    )(masterProductId)
 );
+
 export const getCachedMasterProductPriceHistory = cache(
-  _getMasterProductPriceHistory
+  (
+    masterProductId: string,
+    existingOffers?: import('../../lib/rate-api').MerchantOffer[]
+  ) =>
+    withRateDataCache(
+      (id: string) => _getMasterProductPriceHistory(id, existingOffers),
+      ['rate-master-product-price-history', masterProductId],
+      {
+        revalidate: 600,
+        tags: [RATE_CACHE_TAGS.PRICE_HISTORY],
+      }
+    )(masterProductId)
 );
+
 export const getCachedCompareMasterProducts = cache((slugsCsv: string) =>
-  _compareMasterProducts(slugsCsv.split(','))
+  withRateDataCache(
+    (csv: string) => _compareMasterProducts(csv.split(',')),
+    ['rate-compare-master-products', slugsCsv],
+    {
+      revalidate: 300,
+      tags: [
+        RATE_CACHE_TAGS.PRODUCTS,
+        ...slugsCsv
+          .split(',')
+          .filter(Boolean)
+          .map((s) => productCacheTag(s)),
+      ],
+    }
+  )(slugsCsv)
 );
-import { computeProductRadarSignal } from './deals';
 
 async function inspectProductOrShopUrlWithRadar(rawQuery: string) {
   const res = await _inspectProductOrShopUrl(rawQuery);
@@ -95,15 +214,38 @@ async function inspectProductOrShopUrlWithRadar(rawQuery: string) {
   };
 }
 
-export const getCachedMerchantsList = cache(() => _getMerchantsList());
-export const getCachedMerchantProfileById = cache(_getMerchantProfileById);
-export const getCachedRatePlatformStats = cache(_getRatePlatformStats);
+export const getCachedMerchantsList = cache(() =>
+  withRateDataCache(_getMerchantsList, ['rate-merchants-list'], {
+    revalidate: 600,
+    tags: [RATE_CACHE_TAGS.MERCHANTS],
+  })()
+);
+
+export const getCachedMerchantProfileById = cache((merchantId: string) =>
+  withRateDataCache(
+    _getMerchantProfileById,
+    ['rate-merchant-profile', merchantId],
+    {
+      revalidate: 600,
+      tags: [RATE_CACHE_TAGS.MERCHANTS, merchantCacheTag(merchantId)],
+    }
+  )(merchantId)
+);
+
+export const getCachedRatePlatformStats = cache(() =>
+  withRateDataCache(_getRatePlatformStats, ['rate-platform-stats'], {
+    revalidate: 600,
+    tags: [RATE_CACHE_TAGS.STATS],
+  })()
+);
+
 export const getCachedInspectProductOrShopUrl = cache(
   inspectProductOrShopUrlWithRadar
 );
 
 export {
   _getMasterProducts as getMasterProducts,
+  _getMasterProductOffersBatch as getMasterProductOffersBatch,
   _compareMasterProducts as compareMasterProducts,
   _getMerchantsList as getMerchantsList,
   _getMerchantProfileById as getMerchantProfileById,

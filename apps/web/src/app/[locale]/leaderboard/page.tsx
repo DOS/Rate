@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { getTranslations } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
 import {
   getCachedMasterProducts,
@@ -9,6 +10,7 @@ import {
   type CanonicalCategorySlug,
 } from '@/lib/rate-api';
 import { normalizeRateLocale, type SupportedRateLocale } from '@/lib/rate-i18n';
+import { defaultOpenGraph } from '@/lib/seo';
 import NavbarDarkDynamic from '../components/navbar/NavbarDarkDynamic';
 import FooterTop from '../components/footer-top';
 import FooterDynamic from '../components/footer/FooterDynamic';
@@ -59,32 +61,25 @@ export async function generateMetadata({
 }: PageProps): Promise<Metadata> {
   const { locale } = await params;
   const resolvedLocale: SupportedRateLocale = normalizeRateLocale(locale);
+  const t = await getTranslations({
+    locale: resolvedLocale,
+    namespace: 'leaderboard',
+  });
   const siteUrl = SITE_URL;
-
-  const titleByLocale: Record<SupportedRateLocale, string> = {
-    vi: 'Bảng Xếp Hạng Thiết Bị Công Nghệ (JReviews 10.0) | Rate.vn',
-    en: 'Tech Device Leaderboard (JReviews 10.0 Dual-Rating) | Rate.vn',
-    cs: 'Žebříček Technologií (JReviews 10.0 Dual-Rating) | Rate.vn',
-  };
-
-  const descByLocale: Record<SupportedRateLocale, string> = {
-    vi: 'Bảng xếp hạng độc lập theo cấu trúc 4 tầng (Directory -> Category -> Master Product -> Listing). Chấm điểm kép Chuyên gia & Người dùng thật kèm 5 tiêu chí kỹ thuật độc lập, không bị thao túng bởi quảng cáo hay Affiliate.',
-    en: 'Independent 4-tier tech leaderboard (Directory -> Category -> Master Product -> Listing). Dual Expert & Verified User scores across 5 sub-criteria with zero affiliate bias.',
-    cs: 'Nezávislý 4-úrovňový žebříček technologií (Directory -> Category -> Master Product -> Listing). Duální hodnocení expertů a uživatelů v 5 kritériích bez reklamního zkreslení.',
-  };
+  const title = t('metaTitle');
+  const description = t('metaDescription');
 
   return {
-    title: titleByLocale[resolvedLocale],
-    description: descByLocale[resolvedLocale],
+    title,
+    description,
     alternates: {
       canonical: `${siteUrl}/leaderboard`,
     },
     openGraph: {
-      title: titleByLocale[resolvedLocale],
-      description: descByLocale[resolvedLocale],
+      ...defaultOpenGraph(resolvedLocale),
+      title,
+      description,
       url: `${siteUrl}/leaderboard`,
-      siteName: 'Rate.vn',
-      type: 'website',
     },
   };
 }
@@ -96,6 +91,10 @@ export default async function LeaderboardPage({
   const { locale } = await params;
   const query = await searchParams;
   const resolvedLocale: SupportedRateLocale = normalizeRateLocale(locale);
+  const t = await getTranslations({
+    locale: resolvedLocale,
+    namespace: 'leaderboard',
+  });
   const siteUrl = SITE_URL;
 
   const [products, dealRadar] = await Promise.all([
@@ -129,49 +128,18 @@ export default async function LeaderboardPage({
     : 'combined';
 
   const copy = {
-    vi: {
-      kicker: 'JREVIEWS DUAL-RATING LEADERBOARD • DESIGN.MD V3.0',
-      title: 'Bảng Xếp Hạng Thiết Bị Độc Lập 10.0',
-      subtitle:
-        'Xếp hạng khách quan theo cấu trúc 4 tầng: Directory (Tech & Electronics) -> 5 Categories -> Master Products -> Verified Listings. Tách biệt hoàn toàn điểm Người dùng thật, Chuyên gia Lab và 5 tiêu chí kỹ thuật khỏi bảng giá thương mại.',
-      home: 'Trang chủ',
-      breadcrumb: 'Bảng xếp hạng',
-      compareCta: 'Mở Bàn So Sánh',
-      inspectCta: 'Kiểm Tra Seeding AI',
-      statProducts: 'Thiết bị chuẩn hóa',
-      statCategories: 'Danh mục độc lập',
-      statCriteria: 'Tiêu chí chấm điểm',
-      statZeroBias: '0% Trọng số Affiliate',
-    },
-    en: {
-      kicker: 'JREVIEWS DUAL-RATING LEADERBOARD • DESIGN.MD V3.0',
-      title: 'Independent 10.0 Device Leaderboard',
-      subtitle:
-        'Objective ranking across our 4-tier taxonomy: Directory (Tech & Electronics) -> 5 Categories -> Master Products -> Verified Listings. Strictly separates Verified User, Lab Expert, and 5 sub-criteria scores from merchant pricing.',
-      home: 'Home',
-      breadcrumb: 'Leaderboard',
-      compareCta: 'Open Compare Matrix',
-      inspectCta: 'AI Seeding Inspector',
-      statProducts: 'Normalized Devices',
-      statCategories: 'Categories',
-      statCriteria: 'Scoring Criteria',
-      statZeroBias: '0% Affiliate Weight',
-    },
-    cs: {
-      kicker: 'JREVIEWS DUAL-RATING LEADERBOARD • DESIGN.MD V3.0',
-      title: 'Nezávislý Žebříček Zařízení 10.0',
-      subtitle:
-        'Objektivní žebříček dle 4-úrovňové taxonomie: Directory (Tech & Electronics) -> 5 Kategorií -> Master Products -> Ověřené nabídky. Striktně odděluje skóre uživatelů, expertů a 5 kritérií od cen obchodníků.',
-      home: 'Domů',
-      breadcrumb: 'Žebříček',
-      compareCta: 'Porovnat Zařízení',
-      inspectCta: 'AI Kontrola Recenzí',
-      statProducts: 'Zařízení v databázi',
-      statCategories: 'Kategorie',
-      statCriteria: 'Kritéria hodnocení',
-      statZeroBias: '0% Vliv Affiliate',
-    },
-  }[resolvedLocale];
+    kicker: t('kicker'),
+    title: t('title'),
+    subtitle: t('subtitle'),
+    home: t('home'),
+    breadcrumb: t('breadcrumb'),
+    compareCta: t('compareCta'),
+    inspectCta: t('inspectCta'),
+    statProducts: t('statProducts'),
+    statCategories: t('statCategories'),
+    statCriteria: t('statCriteria'),
+    statZeroBias: t('statZeroBias'),
+  };
 
   // Build Schema.org ItemList JSON-LD for Top 15 Ranked Master Products
   const itemListSchema = {
@@ -267,10 +235,10 @@ export default async function LeaderboardPage({
                 <div
                   className="d-inline-flex align-items-center rounded-pill mb-3 gap-2 px-3 py-1"
                   style={{
-                    background: 'rgba(255,46,41,0.14)',
-                    border: '1px solid rgba(255,46,41,0.35)',
+                    background: 'rgba(216, 48, 48, 0.14)',
+                    border: '1px solid rgba(216, 48, 48, 0.35)',
                     color: '#ff6b66',
-                    fontSize: '11px',
+                    fontSize: '0.8125rem',
                     fontWeight: 700,
                     letterSpacing: '0.06em',
                   }}
@@ -322,7 +290,7 @@ export default async function LeaderboardPage({
                       >
                         {products.length}
                       </div>
-                      <div style={{ fontSize: '11px', color: '#94a3b8' }}>
+                      <div style={{ fontSize: '0.8125rem', color: '#94a3b8' }}>
                         {copy.statProducts}
                       </div>
                     </div>
@@ -337,7 +305,7 @@ export default async function LeaderboardPage({
                       >
                         5
                       </div>
-                      <div style={{ fontSize: '11px', color: '#94a3b8' }}>
+                      <div style={{ fontSize: '0.8125rem', color: '#94a3b8' }}>
                         {copy.statCategories}
                       </div>
                     </div>
@@ -352,7 +320,7 @@ export default async function LeaderboardPage({
                       >
                         8
                       </div>
-                      <div style={{ fontSize: '11px', color: '#94a3b8' }}>
+                      <div style={{ fontSize: '0.8125rem', color: '#94a3b8' }}>
                         {copy.statCriteria}
                       </div>
                     </div>
@@ -362,9 +330,9 @@ export default async function LeaderboardPage({
                     <span
                       className="badge rounded-pill"
                       style={{
-                        background: 'rgba(16,185,129,0.15)',
+                        background: 'rgba(45, 186, 105, 0.15)',
                         color: '#34d399',
-                        fontSize: '11px',
+                        fontSize: '0.8125rem',
                       }}
                     >
                       🛡️ {copy.statZeroBias}
@@ -373,7 +341,7 @@ export default async function LeaderboardPage({
                       <Link
                         href="/compare"
                         className="btn btn-sm btn-outline-light rounded-pill px-3"
-                        style={{ fontSize: '12px', fontWeight: 600 }}
+                        style={{ fontSize: '0.8125rem', fontWeight: 600 }}
                       >
                         ⚖️ {copy.compareCta}
                       </Link>
@@ -381,9 +349,9 @@ export default async function LeaderboardPage({
                         href="/inspect"
                         className="btn btn-sm rounded-pill px-3"
                         style={{
-                          background: '#ff2e29',
+                          background: '#d83030',
                           color: '#ffffff',
-                          fontSize: '12px',
+                          fontSize: '0.8125rem',
                           fontWeight: 600,
                         }}
                       >

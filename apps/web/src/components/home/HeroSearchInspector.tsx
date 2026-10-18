@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Link, useRouter } from '@/lib/navigation';
 import type { KeySpecs, MasterProduct } from '@repo/shared-data';
 import {
@@ -64,6 +65,7 @@ export default function HeroSearchInspector({
   initialMerchants,
 }: HeroSearchInspectorProps) {
   const router = useRouter();
+  const t = useTranslations('heroSearch');
   const radarIndex = useDealRadarIndex();
   const [mode, setMode] = useState<'search' | 'inspect'>('search');
   const [query, setQuery] = useState('');
@@ -138,14 +140,12 @@ export default function HeroSearchInspector({
       );
       const json = await resp.json();
       if (!resp.ok || !json.ok) {
-        throw new Error(
-          json.error || 'Không thể tra cứu dữ liệu sản phẩm/shop'
-        );
+        throw new Error(json.error || t('errLookupFailed'));
       }
       setInspectResult(json.data as UrlInspectionResult);
     } catch (err) {
       setInspectError(
-        err instanceof Error ? err.message : 'Lỗi kết nối máy chủ kiểm định'
+        err instanceof Error ? err.message : t('errServerConnection')
       );
     } finally {
       setIsInspecting(false);
@@ -217,7 +217,7 @@ export default function HeroSearchInspector({
           }`}
         >
           <BsSearch />
-          Tìm Sản Phẩm &amp; Thông Số (10 Nhóm)
+          {t('modeSearchBtn')}
         </button>
         <button
           type="button"
@@ -229,7 +229,7 @@ export default function HeroSearchInspector({
           }`}
         >
           <BsShieldCheck />
-          Dán Link Kiểm Tra Giá Ảo &amp; Độ Uy Tín Shop
+          {t('modeInspectBtn')}
         </button>
       </div>
 
@@ -256,8 +256,8 @@ export default function HeroSearchInspector({
                   }}
                   onKeyDown={handleSearchKeyDown}
                   className="form-control fw-medium rounded-pill border-0 ps-2 shadow-none"
-                  placeholder="Tìm tên máy, chip (VD: iPhone 16, Apple A18) hoặc dán link Shopee..."
-                  aria-label="Tìm kiếm sản phẩm công nghệ hoặc dán link kiểm định"
+                  placeholder={t('searchPlaceholder')}
+                  aria-label={t('searchAriaLabel')}
                   autoComplete="off"
                 />
               </div>
@@ -270,7 +270,7 @@ export default function HeroSearchInspector({
                       setActiveIndex(-1);
                     }}
                     className="btn btn-sm btn-light rounded-circle text-muted"
-                    aria-label="Xóa từ khóa"
+                    aria-label={t('clearKeywordAria')}
                   >
                     <BsXLg />
                   </button>
@@ -281,7 +281,7 @@ export default function HeroSearchInspector({
                   type="submit"
                   className="btn btn-primary rounded-pill fw-semibold px-4 py-2"
                 >
-                  Tìm kiếm
+                  {t('searchSubmitBtn')}
                 </button>
               </div>
             </div>
@@ -297,8 +297,8 @@ export default function HeroSearchInspector({
                 {isLikelyEcommerceUrl(query) && (
                   <div className="alert alert-danger d-flex align-items-center justify-content-between rounded-3 mb-3 px-3 py-2">
                     <div className="small">
-                      <strong>Phát hiện đường dẫn TMĐT!</strong> Bấm để kiểm tra
-                      lịch sử giá, giảm giá ảo và điểm rủi ro shop ngay.
+                      <strong>{t('urlDetectedStrong')}</strong>{' '}
+                      {t('urlDetectedSub')}
                     </div>
                     <button
                       type="button"
@@ -308,7 +308,7 @@ export default function HeroSearchInspector({
                       }}
                       className="btn btn-sm btn-danger rounded-pill fw-semibold ms-2 flex-shrink-0"
                     >
-                      Kiểm định Link →
+                      {t('inspectLinkBtn')}
                     </button>
                   </div>
                 )}
@@ -316,23 +316,24 @@ export default function HeroSearchInspector({
                 <div className="d-flex justify-content-between align-items-center mb-2 px-2">
                   <span
                     className="text-muted text-uppercase fw-bold"
-                    style={{ fontSize: '0.72rem' }}
+                    style={{ fontSize: '0.8125rem' }}
                   >
-                    📱 Sản phẩm chuẩn hóa ({filteredProducts.length})
+                    {t('normalizedProductsHeader', {
+                      count: filteredProducts.length,
+                    })}
                   </span>
                   <Link
                     href="/smartphones"
                     onClick={() => setIsDropdownOpen(false)}
                     className="text-primary text-decoration-none small fw-semibold"
                   >
-                    Bộ lọc 10 nhóm thông số →
+                    {t('specFilterLink')}
                   </Link>
                 </div>
 
                 {filteredProducts.length === 0 ? (
                   <div className="text-muted small px-2 py-3">
-                    Không tìm thấy mẫu máy khớp với &ldquo;{query}&rdquo;. Bạn
-                    có thể chuyển sang tab{' '}
+                    {t('noMatchPrefix', { query })}{' '}
                     <button
                       type="button"
                       onClick={() => {
@@ -341,7 +342,7 @@ export default function HeroSearchInspector({
                       }}
                       className="btn btn-link btn-sm p-0 align-baseline"
                     >
-                      Kiểm định Link / Từ khóa
+                      {t('inspectTabLinkBtn')}
                     </button>
                     .
                   </div>
@@ -399,7 +400,7 @@ export default function HeroSearchInspector({
                               </div>
                               <div
                                 className="text-muted d-flex align-items-center flex-wrap gap-2"
-                                style={{ fontSize: '0.75rem' }}
+                                style={{ fontSize: '0.8125rem' }}
                               >
                                 <span className="badge bg-light text-secondary border">
                                   {item.brand}
@@ -429,9 +430,11 @@ export default function HeroSearchInspector({
                               </div>
                               <div
                                 className="text-muted"
-                                style={{ fontSize: '0.7rem' }}
+                                style={{ fontSize: '0.8125rem' }}
                               >
-                                {item.merchant_count || 0} nơi bán
+                                {t('merchantsCount', {
+                                  count: item.merchant_count || 0,
+                                })}
                               </div>
                             </div>
                             <CompareQuickToggle
@@ -455,17 +458,18 @@ export default function HeroSearchInspector({
                     <div className="d-flex justify-content-between align-items-center mb-1 px-2">
                       <span
                         className="text-muted text-uppercase fw-bold"
-                        style={{ fontSize: '0.72rem' }}
+                        style={{ fontSize: '0.8125rem' }}
                       >
-                        🏪 Gian hàng &amp; Hồ sơ Tín nhiệm (
-                        {filteredMerchants.length})
+                        {t('merchantsHeader', {
+                          count: filteredMerchants.length,
+                        })}
                       </span>
                       <Link
                         href="/merchants"
                         onClick={() => setIsDropdownOpen(false)}
                         className="text-primary text-decoration-none small"
                       >
-                        Xem tất cả shop →
+                        {t('viewAllMerchantsLink')}
                       </Link>
                     </div>
                     {filteredMerchants.map((m) => (
@@ -492,7 +496,7 @@ export default function HeroSearchInspector({
                           </span>
                           <span
                             className="text-muted"
-                            style={{ fontSize: '0.75rem' }}
+                            style={{ fontSize: '0.8125rem' }}
                           >
                             DOSafe: {m.dosafe_risk_score}/100
                           </span>
@@ -522,8 +526,8 @@ export default function HeroSearchInspector({
                   value={inspectQuery}
                   onChange={(e) => setInspectQuery(e.target.value)}
                   className="form-control fw-medium rounded-pill border-0 ps-2 shadow-none"
-                  placeholder="Dán link sản phẩm/shop Shopee, Lazada, Tiki hoặc nhập tên sản phẩm..."
-                  aria-label="Dán link sản phẩm hoặc gian hàng để kiểm định"
+                  placeholder={t('inspectPlaceholder')}
+                  aria-label={t('inspectAriaLabel')}
                 />
               </div>
               {inspectQuery && (
@@ -536,7 +540,7 @@ export default function HeroSearchInspector({
                       setInspectError(null);
                     }}
                     className="btn btn-sm btn-light rounded-circle text-muted"
-                    aria-label="Xóa đường dẫn"
+                    aria-label={t('clearUrlAria')}
                   >
                     <BsXLg />
                   </button>
@@ -548,7 +552,7 @@ export default function HeroSearchInspector({
                   disabled={isInspecting}
                   className="btn btn-danger rounded-pill fw-semibold px-4 py-2"
                 >
-                  {isInspecting ? 'Đang kiểm định...' : 'Kiểm định ngay'}
+                  {isInspecting ? t('inspectingBtn') : t('inspectNowBtn')}
                 </button>
               </div>
             </div>
@@ -557,7 +561,7 @@ export default function HeroSearchInspector({
           {/* Sample One-Click Inspection Pills */}
           <div className="d-flex align-items-center justify-content-center mt-2 flex-wrap gap-2">
             <span className="text-light small opacity-75">
-              Thử nhanh với dữ liệu thật:
+              {t('sampleLinksLabel')}
             </span>
             {SAMPLE_INSPECT_LINKS.map((sample) => (
               <button
@@ -585,17 +589,14 @@ export default function HeroSearchInspector({
               <div className="card-header bg-dark d-flex justify-content-between align-items-center flex-wrap gap-2 px-4 py-3 text-white">
                 <div className="d-flex align-items-center gap-2">
                   <BsShieldCheck className="text-success fs-5" />
-                  <span className="fw-bold">
-                    Kết Quả Kiểm Định Giá Bán, Review AI &amp; Tín Nhiệm Gian
-                    Hàng
-                  </span>
+                  <span className="fw-bold">{t('resultCardHeader')}</span>
                 </div>
                 <button
                   type="button"
                   onClick={() => setInspectResult(null)}
                   className="btn btn-sm btn-outline-light rounded-pill px-3"
                 >
-                  Đóng
+                  {t('closeBtn')}
                 </button>
               </div>
 
@@ -664,18 +665,19 @@ export default function HeroSearchInspector({
                           </h4>
 
                           <div className="text-danger fw-bold fs-5 mb-1">
-                            Giá tốt nhất:{' '}
+                            {t('bestPriceLabel')}{' '}
                             {Number(
                               inspectResult.masterProduct.min_price
                             ).toLocaleString('vi-VN')}{' '}
                             ₫
                             {inspectResult.priceHistory?.lowestEverPrice && (
                               <span className="text-success small fw-semibold ms-2">
-                                (Đáy lịch sử:{' '}
-                                {inspectResult.priceHistory.lowestEverPrice.toLocaleString(
-                                  'vi-VN'
-                                )}{' '}
-                                ₫)
+                                {t('lowestEverPriceLabel', {
+                                  price:
+                                    inspectResult.priceHistory.lowestEverPrice.toLocaleString(
+                                      'vi-VN'
+                                    ),
+                                })}
                               </span>
                             )}
                           </div>
@@ -694,7 +696,9 @@ export default function HeroSearchInspector({
                         {inspectResult.merchantProfile && (
                           <div className="d-flex justify-content-between align-items-center border-bottom mb-2 pb-2">
                             <div className="small">
-                              <span className="text-muted">Gian hàng: </span>
+                              <span className="text-muted">
+                                {t('merchantLabel')}{' '}
+                              </span>
                               <Link
                                 href={`/merchants/${inspectResult.merchantProfile.id}`}
                                 className="fw-bold text-dark text-decoration-none"
@@ -715,13 +719,14 @@ export default function HeroSearchInspector({
                         {inspectResult.reviewSummary && (
                           <div className="d-flex justify-content-between align-items-center small mb-3">
                             <span className="text-muted">
-                              Độ trung thực Review AI:
+                              {t('aiReviewAuthLabel')}
                             </span>
                             <span className="fw-bold text-success">
-                              ✓ {inspectResult.reviewSummary.authentic_pct}%
-                              thực chất (trong{' '}
-                              {inspectResult.reviewSummary.total_analyzed} đánh
-                              giá)
+                              {t('aiReviewAuthValue', {
+                                pct: inspectResult.reviewSummary.authentic_pct,
+                                total:
+                                  inspectResult.reviewSummary.total_analyzed,
+                              })}
                             </span>
                           </div>
                         )}
@@ -733,21 +738,21 @@ export default function HeroSearchInspector({
                             )}
                             className="btn btn-primary btn-sm rounded-pill fw-semibold flex-grow-1 px-3"
                           >
-                            Xem 10 Nhóm Thông Số &amp; Lịch Sử Giá{' '}
+                            {t('viewSpecsAndHistoryBtn')}{' '}
                             <BsArrowRight className="ms-1" />
                           </Link>
                           <Link
                             href={`/inspect?q=${encodeURIComponent(inspectQuery)}`}
                             className="btn btn-outline-danger btn-sm rounded-pill fw-medium px-3"
                           >
-                            🔬 Báo cáo Kiểm toán
+                            {t('auditReportBtn')}
                           </Link>
                           {inspectResult.merchantProfile && (
                             <Link
                               href={`/merchants/${inspectResult.merchantProfile.id}`}
                               className="btn btn-outline-dark btn-sm rounded-pill px-3"
                             >
-                              Hồ sơ Shop
+                              {t('shopProfileBtn')}
                             </Link>
                           )}
                         </div>
@@ -784,9 +789,11 @@ export default function HeroSearchInspector({
                         <strong>
                           {inspectResult.merchantProfile.review_risk_score}/100
                         </strong>{' '}
-                        • Đang theo dõi{' '}
+                        •{' '}
                         <strong>
-                          {inspectResult.merchantProfile.product_count} sản phẩm
+                          {t('trackingProductsCount', {
+                            count: inspectResult.merchantProfile.product_count,
+                          })}
                         </strong>
                       </div>
                     </div>
@@ -794,7 +801,7 @@ export default function HeroSearchInspector({
                       href={`/merchants/${inspectResult.merchantProfile.id}`}
                       className="btn btn-primary rounded-pill fw-semibold px-4"
                     >
-                      Mở Hồ Sơ Tín Nhiệm Gian Hàng →
+                      {t('openMerchantProfileBtn')}
                     </Link>
                   </div>
                 ) : (
@@ -802,19 +809,17 @@ export default function HeroSearchInspector({
                     <div>
                       <h5 className="fw-bold d-flex align-items-center mb-1 gap-2">
                         <BsExclamationTriangleFill className="text-warning" />
-                        Sản phẩm/Link này chưa có trong bộ đệm kiểm định trực
-                        tiếp
+                        {t('unmatchedHeading')}
                       </h5>
                       <p className="text-muted small mb-0">
-                        Bạn có thể tra cứu các dòng máy chuẩn hóa tương đương
-                        hoặc xem hồ sơ các gian hàng chính hãng bên dưới.
+                        {t('unmatchedDesc')}
                       </p>
                     </div>
                     <Link
                       href={`/smartphones?q=${encodeURIComponent(inspectResult.query)}`}
                       className="btn btn-outline-primary rounded-pill fw-semibold px-4"
                     >
-                      Tìm trong Danh mục Điện thoại →
+                      {t('searchInSmartphonesBtn')}
                     </Link>
                   </div>
                 )}

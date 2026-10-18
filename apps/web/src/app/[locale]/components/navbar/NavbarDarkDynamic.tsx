@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from '@/lib/navigation';
 import Image from 'next/image';
-import { useLocale } from 'next-intl';
+import { useTranslations } from 'next-intl';
 import {
   BsArrowLeftRight,
   BsBellFill,
@@ -10,7 +10,7 @@ import {
   BsShieldCheck,
 } from 'react-icons/bs';
 import LocaleSwitcher from '@/components/elementary/LocaleSwitcher';
-import { getRateCopy } from '@/lib/rate-i18n';
+import RateWordmark from '@/components/brand/RateWordmark';
 
 export interface NavbarLinkItem {
   readonly id?: string | number;
@@ -26,8 +26,7 @@ export function NavbarDarkDynamic({
   readonly links: readonly NavbarLinkItem[];
   readonly logoUrl?: string | null;
 }) {
-  const locale = useLocale();
-  const copy = getRateCopy(locale);
+  const tNav = useTranslations('rate.nav');
   const [scroll, setScroll] = useState(false);
   const [toggle, setToggle] = useState(false);
   const [windowWidth, setWindowWidth] = useState(0);
@@ -46,16 +45,20 @@ export function NavbarDarkDynamic({
   }, []);
 
   const logo = (
-    <Link className="nav-brand" href="/">
-      <Image
-        src={logoUrl || '/img/logo.svg'}
-        width={0}
-        height={0}
-        sizes="100vw"
-        style={{ width: '166px', height: 'auto' }}
-        className="logo"
-        alt="Rate.vn Logo"
-      />
+    <Link className="nav-brand" href="/" aria-label="Rate.vn">
+      {logoUrl ? (
+        <Image
+          src={logoUrl}
+          width={0}
+          height={0}
+          sizes="100vw"
+          style={{ width: '166px', height: 'auto' }}
+          className="logo"
+          alt="Rate.vn Logo"
+        />
+      ) : (
+        <RateWordmark tone="ink" size={30} />
+      )}
     </Link>
   );
 
@@ -94,7 +97,7 @@ export function NavbarDarkDynamic({
                     <Link
                       href="/inspect"
                       className="d-flex align-items-center text-danger"
-                      aria-label={copy.nav.inspect}
+                      aria-label={tNav('inspect')}
                     >
                       <BsShieldCheck className="me-1" />
                     </Link>
@@ -103,7 +106,7 @@ export function NavbarDarkDynamic({
                     <Link
                       href="/compare"
                       className="d-flex align-items-center text-dark"
-                      aria-label={copy.nav.compare}
+                      aria-label={tNav('compare')}
                     >
                       <BsArrowLeftRight className="me-1" />
                     </Link>
@@ -112,7 +115,7 @@ export function NavbarDarkDynamic({
                     <Link
                       href="/watchlist"
                       className="d-flex align-items-center text-primary"
-                      aria-label={copy.nav.watchlist}
+                      aria-label={tNav('watchlist')}
                     >
                       <BsBellFill className="me-1" />
                     </Link>
@@ -121,7 +124,7 @@ export function NavbarDarkDynamic({
                     <Link
                       href="/developers"
                       className="d-flex align-items-center text-dark"
-                      aria-label={copy.nav.developers}
+                      aria-label={tNav('developers')}
                     >
                       <BsCodeSlash className="me-1" />
                     </Link>
@@ -135,15 +138,19 @@ export function NavbarDarkDynamic({
               style={{ transitionProperty: toggle ? 'none' : 'left' }}
             >
               <div className="mobLogos">
-                <Image
-                  src={logoUrl || '/img/logo.svg'}
-                  width={0}
-                  height={0}
-                  sizes="100vw"
-                  style={{ width: '140px', height: 'auto' }}
-                  className="img-fluid lightLogo"
-                  alt="Rate.vn Logo"
-                />
+                {logoUrl ? (
+                  <Image
+                    src={logoUrl}
+                    width={0}
+                    height={0}
+                    sizes="100vw"
+                    style={{ width: '140px', height: 'auto' }}
+                    className="img-fluid lightLogo"
+                    alt="Rate.vn Logo"
+                  />
+                ) : (
+                  <RateWordmark tone="ink" size={26} />
+                )}
               </div>
               <span
                 className="nav-menus-wrapper-close-button"
@@ -161,62 +168,62 @@ export function NavbarDarkDynamic({
                 const defaultLinks: NavbarLinkItem[] = [
                   {
                     id: 'home',
-                    label: copy.nav.home,
+                    label: tNav('home'),
                     href: '/',
                   },
                   {
                     id: 'smartphones',
-                    label: copy.nav.smartphones,
+                    label: tNav('smartphones'),
                     href: '/smartphones',
                   },
                   {
                     id: 'laptops',
-                    label: copy.nav.laptops,
+                    label: tNav('laptops'),
                     href: '/laptops',
                   },
                   {
                     id: 'tablets',
-                    label: copy.nav.tablets,
+                    label: tNav('tablets'),
                     href: '/tablets',
                   },
                   {
                     id: 'smartwatches',
-                    label: copy.nav.smartwatches,
+                    label: tNav('smartwatches'),
                     href: '/smartwatches',
                   },
                   {
                     id: 'earbuds',
-                    label: copy.nav.earbuds,
+                    label: tNav('earbuds'),
                     href: '/earbuds',
                   },
                   {
                     id: 'leaderboard',
-                    label: copy.nav.leaderboard,
+                    label: tNav('leaderboard'),
                     href: '/leaderboard',
                   },
                   {
                     id: 'merchants',
-                    label: copy.nav.merchants,
+                    label: tNav('merchants'),
                     href: '/merchants',
                   },
                   {
                     id: 'inspect',
-                    label: copy.nav.inspect,
+                    label: tNav('inspect'),
                     href: '/inspect',
                   },
                   {
                     id: 'compare',
-                    label: copy.nav.compare,
+                    label: tNav('compare'),
                     href: '/compare',
                   },
                   {
                     id: 'watchlist',
-                    label: copy.nav.watchlist,
+                    label: tNav('watchlist'),
                     href: '/watchlist',
                   },
                   {
                     id: 'developers',
-                    label: copy.nav.developers,
+                    label: tNav('developers'),
                     href: '/developers',
                   },
                 ];
@@ -251,7 +258,7 @@ export function NavbarDarkDynamic({
                     className="d-inline-flex align-items-center"
                   >
                     <BsBellFill className="fs-6 me-1" />
-                    {copy.nav.priceWatchCta}
+                    {tNav('priceWatchCta')}
                   </Link>
                 </li>
               </ul>

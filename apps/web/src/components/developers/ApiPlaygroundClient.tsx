@@ -1,6 +1,8 @@
 'use client';
 
-import React, { useId, useState } from 'react';
+import React, { useId, useMemo, useState } from 'react';
+import { useTranslations } from 'next-intl';
+import { escapeCsvCell } from '@/lib/csv-safe';
 import {
   BsCheck2,
   BsClipboard,
@@ -20,136 +22,126 @@ export interface ApiPresetEndpoint {
   defaultBody?: string;
 }
 
-const PRESET_ENDPOINTS: ApiPresetEndpoint[] = [
-  {
-    id: 'list-products',
-    method: 'GET',
-    title: 'Danh sách Master Products (10 Nhóm Thông Số)',
-    path: '/api/v1/rate/products?limit=3&sort=rating_desc',
-    description:
-      'Truy vấn danh sách sản phẩm gốc chuẩn hóa từ rate.master_products kèm lọc theo ngành hàng, thương hiệu, RAM/ROM và điểm JReviews.',
-  },
-  {
-    id: 'product-detail',
-    method: 'GET',
-    title: 'Chi tiết Sản phẩm + Lịch sử Giá + Review AI',
-    path: '/api/v1/rate/products/apple-iphone-16-128gb',
-    description:
-      'Trả về toàn bộ 10 nhóm thông số kỹ thuật, danh sách gian hàng (rate.products), chuỗi thời gian giá 90 ngày (rate.price_history), phân tích giảm giá ảo và đánh giá đã kiểm duyệt AI.',
-  },
-  {
-    id: 'leaderboard-ranking',
-    method: 'GET',
-    title: 'Bảng Xếp Hạng 4 Tầng JReviews (/leaderboard)',
-    path: '/api/v1/rate/leaderboard?category=smartphones&criterion=camera&limit=5',
-    description:
-      'Xếp hạng thiết bị theo cấu trúc 4 tầng (Directory -> Category -> Master Product -> Listing) theo 8 tiêu chí JReviews (Combined, User, Expert, Màn hình, Hiệu năng, Camera, Pin, Đáng tiền).',
-  },
-  {
-    id: 'compare-products',
-    method: 'GET',
-    title: 'So sánh Chéo 10 Nhóm Thông Số (/compare)',
-    path: '/api/v1/rate/compare?slugs=apple-iphone-16-128gb,apple-iphone-16-plus-256gb',
-    description:
-      'Đặt tối đa 4 sản phẩm gốc lên bàn cân 10 nhóm thông số kỹ thuật chuẩn GSMArena & PhoneArena chỉ với 1 truy vấn REST.',
-  },
-  {
-    id: 'versus-head-to-head',
-    method: 'GET',
-    title: 'Đối đầu 1v1 JReviews & Trọng số Persona (/versus)',
-    path: '/api/v1/rate/versus?pair=apple-iphone-16-128gb-vs-apple-iphone-16-plus-256gb&persona=balanced',
-    description:
-      'Chấm điểm đối đầu 1v1 trực tiếp giữa 2 mẫu cùng ngành hàng theo 5 tiêu chí JReviews (Màn hình, Hiệu năng, Camera, Pin, Đáng tiền), hỗ trợ tùy biến trọng số Persona và tính độ lệch giá.',
-  },
-  {
-    id: 'inspect-url',
-    method: 'GET',
-    title: 'Trình Kiểm Định Giá & Link Sàn (/inspect)',
-    path: '/api/v1/rate/inspect?q=https://shopee.vn/product/88201679/27110898667&price=21990000',
-    description:
-      'Kiểm định trực tiếp URL hoặc tên máy trên 10 sàn/đại lý (Shopee, Lazada, Tiki, TikTok Shop, CellphoneS, TGDĐ, FPT Shop, Hoàng Hà, Di Động Việt, Phong Vũ) kèm kết luận giá 5 mức.',
-  },
-  {
-    id: 'extension-lookup',
-    method: 'GET',
-    title: 'Browser Extension MV3 Hybrid Lookup',
-    path: '/api/v1/rate/extension/lookup?url=https://shopee.vn/product/88201679/27110898667',
-    description:
-      'Endpoint tốc độ cao phục vụ Rate Browser Extension MV3: chuẩn hóa URL, chặn phụ kiện/linh kiện và trả về kết luận giá 5 mức.',
-  },
-  {
-    id: 'extension-ingest',
-    method: 'POST',
-    title: 'Zero-Trust Quarantine Ingest (POST)',
-    path: '/api/v1/rate/extension/ingest',
-    description:
-      'Gửi tín hiệu sản phẩm ẩn danh từ Browser Extension MV3 (bắt buộc consentGranted=true) qua bộ lọc Zero-Trust Quarantine trước khi đẩy vào hàng đợi rate.crawl_jobs.',
-    defaultBody: JSON.stringify(
-      {
-        url: 'https://cellphones.com.vn/iphone-16-pro-max.html?utm_source=extension_test',
-        platform: 'cellphones',
-        title: 'iPhone 16 Pro Max 256GB Chính hãng VN/A',
-        currentPrice: 30990000,
-        originalPrice: 34990000,
-        skuText: '256GB Titan Tự Nhiên',
-        sellerName: 'CellphoneS Official',
-        isOfficialMall: true,
-        consentGranted: true,
-        extensionVersion: '2.1.0',
-      },
-      null,
-      2
-    ),
-  },
-  {
-    id: 'list-merchants',
-    method: 'GET',
-    title: 'Danh bạ Tín nhiệm Gian hàng (Dual Risk Score)',
-    path: '/api/v1/rate/merchants?officialOnly=true',
-    description:
-      'Liệt kê toàn bộ gian hàng TMĐT kèm điểm Trust Score, DOSafe Threat Intel Risk và AI Review Seeding Risk.',
-  },
-  {
-    id: 'watchlist-check',
-    method: 'GET',
-    title: 'Theo dõi Biến động Giá (/watchlist)',
-    path: '/api/v1/rate/watchlist?slugs=apple-iphone-16-128gb,apple-iphone-16-plus-256gb',
-    description:
-      'Truy vấn hàng loạt giá thấp nhất hiện tại, trung vị 90 ngày và trạng thái giảm giá thật/ảo cho danh sách sản phẩm đang theo dõi.',
-  },
-  {
-    id: 'platform-stats',
-    method: 'GET',
-    title: 'Số liệu Thống kê Toàn Nền tảng (/stats)',
-    path: '/api/v1/rate/stats',
-    description:
-      'Trả về số lượng sản phẩm chuẩn hóa, bản ghi lịch sử giá, tỷ lệ đánh giá thực chất và số lượng mẫu theo từng ngành hàng.',
-  },
-  {
-    id: 'deals-radar',
-    method: 'GET',
-    title: 'Radar Kèo Thơm & Bẫy Sale Ảo 10 Sàn (/deals)',
-    path: '/api/v1/rate/deals?category=all&limit=6',
-    description:
-      'Quét thời gian thực toàn bộ báo giá 10 sàn để phát hiện Kèo thơm đáy lịch sử thật (genuineDeals) và Bẫy nâng khống giá gốc (fakeSaleTraps).',
-  },
-  {
-    id: 'openapi-spec',
-    method: 'GET',
-    title: 'Đặc tả OpenAPI 3.1.0 (/openapi.json)',
-    path: '/api/v1/rate/openapi.json',
-    description:
-      'Trả về tài liệu OpenAPI 3.1.0 chuẩn máy đọc (machine-readable JSON) cho toàn bộ 15 REST API v1 endpoints của Rate.vn.',
-  },
-];
-
 export default function ApiPlaygroundClient() {
-  const [selectedId, setSelectedId] = useState<string>(PRESET_ENDPOINTS[0]!.id);
-  const [customMethod, setCustomMethod] = useState<'GET' | 'POST'>(
-    PRESET_ENDPOINTS[0]!.method
+  const t = useTranslations('developers');
+
+  const presetEndpoints = useMemo<ApiPresetEndpoint[]>(
+    () => [
+      {
+        id: 'list-products',
+        method: 'GET',
+        title: t('pgPreset1Title'),
+        path: '/api/v1/rate/products?limit=3&sort=rating_desc',
+        description: t('pgPreset1Desc'),
+      },
+      {
+        id: 'product-detail',
+        method: 'GET',
+        title: t('pgPreset2Title'),
+        path: '/api/v1/rate/products/apple-iphone-16-128gb',
+        description: t('pgPreset2Desc'),
+      },
+      {
+        id: 'leaderboard-ranking',
+        method: 'GET',
+        title: t('pgPreset3Title'),
+        path: '/api/v1/rate/leaderboard?category=smartphones&criterion=camera&limit=5',
+        description: t('pgPreset3Desc'),
+      },
+      {
+        id: 'compare-products',
+        method: 'GET',
+        title: t('pgPreset4Title'),
+        path: '/api/v1/rate/compare?slugs=apple-iphone-16-128gb,apple-iphone-16-plus-256gb',
+        description: t('pgPreset4Desc'),
+      },
+      {
+        id: 'versus-head-to-head',
+        method: 'GET',
+        title: t('pgPreset5Title'),
+        path: '/api/v1/rate/versus?pair=apple-iphone-16-128gb-vs-apple-iphone-16-plus-256gb&persona=balanced',
+        description: t('pgPreset5Desc'),
+      },
+      {
+        id: 'inspect-url',
+        method: 'GET',
+        title: t('pgPreset6Title'),
+        path: '/api/v1/rate/inspect?q=https://shopee.vn/product/88201679/27110898667&price=21990000',
+        description: t('pgPreset6Desc'),
+      },
+      {
+        id: 'extension-lookup',
+        method: 'GET',
+        title: t('pgPreset7Title'),
+        path: '/api/v1/rate/extension/lookup?url=https://shopee.vn/product/88201679/27110898667',
+        description: t('pgPreset7Desc'),
+      },
+      {
+        id: 'extension-ingest',
+        method: 'POST',
+        title: t('pgPreset8Title'),
+        path: '/api/v1/rate/extension/ingest',
+        description: t('pgPreset8Desc'),
+        defaultBody: JSON.stringify(
+          {
+            url: 'https://cellphones.com.vn/iphone-16-pro-max.html?utm_source=extension_test',
+            platform: 'cellphones',
+            title: 'iPhone 16 Pro Max 256GB Chính hãng VN/A',
+            currentPrice: 30990000,
+            originalPrice: 34990000,
+            skuText: '256GB Titan Tự Nhiên',
+            sellerName: 'CellphoneS Official',
+            isOfficialMall: true,
+            consentGranted: true,
+            extensionVersion: '2.1.0',
+          },
+          null,
+          2
+        ),
+      },
+      {
+        id: 'list-merchants',
+        method: 'GET',
+        title: t('pgPreset9Title'),
+        path: '/api/v1/rate/merchants?officialOnly=true',
+        description: t('pgPreset9Desc'),
+      },
+      {
+        id: 'watchlist-check',
+        method: 'GET',
+        title: t('pgPreset10Title'),
+        path: '/api/v1/rate/watchlist?slugs=apple-iphone-16-128gb,apple-iphone-16-plus-256gb',
+        description: t('pgPreset10Desc'),
+      },
+      {
+        id: 'platform-stats',
+        method: 'GET',
+        title: t('pgPreset11Title'),
+        path: '/api/v1/rate/stats',
+        description: t('pgPreset11Desc'),
+      },
+      {
+        id: 'deals-radar',
+        method: 'GET',
+        title: t('pgPreset12Title'),
+        path: '/api/v1/rate/deals?category=all&limit=6',
+        description: t('pgPreset12Desc'),
+      },
+      {
+        id: 'openapi-spec',
+        method: 'GET',
+        title: t('pgPreset13Title'),
+        path: '/api/v1/rate/openapi.json',
+        description: t('pgPreset13Desc'),
+      },
+    ],
+    [t]
   );
+
+  const [selectedId, setSelectedId] = useState<string>('list-products');
+  const [customMethod, setCustomMethod] = useState<'GET' | 'POST'>('GET');
   const [customPath, setCustomPath] = useState<string>(
-    PRESET_ENDPOINTS[0]!.path
+    '/api/v1/rate/products?limit=3&sort=rating_desc'
   );
   const fieldId = useId();
   const [requestBody, setRequestBody] = useState<string>('');
@@ -159,15 +151,14 @@ export default function ApiPlaygroundClient() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [statusCode, setStatusCode] = useState<number | null>(null);
   const [latencyMs, setLatencyMs] = useState<number | null>(null);
-  const [responseJson, setResponseJson] = useState<string>(
-    '// Bấm "Chạy thử Request trực tiếp" để xem dữ liệu JSON thực tế từ Supabase rate schema...'
-  );
+  const [responseJson, setResponseJson] = useState<string | null>(null);
   const [copiedSnippet, setCopiedSnippet] = useState<boolean>(false);
   const [copiedResponse, setCopiedResponse] = useState<boolean>(false);
   const [copiedCatalogMd, setCopiedCatalogMd] = useState<boolean>(false);
 
   const activePreset =
-    PRESET_ENDPOINTS.find((p) => p.id === selectedId) ?? PRESET_ENDPOINTS[0]!;
+    presetEndpoints.find((p) => p.id === selectedId) ?? presetEndpoints[0]!;
+  const displayedResponse = responseJson ?? t('pgInitialResponseComment');
 
   const handleSelectPreset = (preset: ApiPresetEndpoint) => {
     setSelectedId(preset.id);
@@ -184,7 +175,7 @@ export default function ApiPlaygroundClient() {
       setResponseJson(
         JSON.stringify(
           {
-            error: 'Đường dẫn thử nghiệm phải bắt đầu bằng /api/...',
+            error: t('pgErrPathPrefix'),
           },
           null,
           2
@@ -220,7 +211,7 @@ export default function ApiPlaygroundClient() {
       setResponseJson(
         JSON.stringify(
           {
-            error: 'Không thể kết nối tới API endpoint',
+            error: t('pgErrConnect'),
             details: err instanceof Error ? err.message : String(err),
           },
           null,
@@ -266,7 +257,7 @@ export default function ApiPlaygroundClient() {
 
   const handleCopyResponseJson = async () => {
     try {
-      await navigator.clipboard.writeText(responseJson);
+      await navigator.clipboard.writeText(displayedResponse);
       setCopiedResponse(true);
       setTimeout(() => setCopiedResponse(false), 2000);
     } catch {
@@ -276,7 +267,7 @@ export default function ApiPlaygroundClient() {
 
   const handleDownloadResponseJson = () => {
     if (typeof document === 'undefined') return;
-    const blob = new Blob([responseJson], {
+    const blob = new Blob([displayedResponse], {
       type: 'application/json;charset=utf-8;',
     });
     const url = URL.createObjectURL(blob);
@@ -293,11 +284,11 @@ export default function ApiPlaygroundClient() {
     if (typeof navigator === 'undefined') return;
     try {
       const lines = [
-        `### 🔌 Danh Mục Rate.vn Open-Core REST API v1 (${PRESET_ENDPOINTS.length} kịch bản mẫu)`,
+        t('pgMdTitle', { count: presetEndpoints.length }),
         '',
-        '| Phương thức | Đường dẫn mẫu | Chức năng | Mô tả kỹ thuật |',
+        t('pgMdHeaderRow'),
         '| --- | --- | --- | --- |',
-        ...PRESET_ENDPOINTS.map(
+        ...presetEndpoints.map(
           (ep) =>
             `| \`${ep.method}\` | \`${ep.path}\` | **${ep.title}** | ${ep.description} |`
         ),
@@ -312,14 +303,8 @@ export default function ApiPlaygroundClient() {
 
   const handleDownloadApiCatalogCsv = () => {
     if (typeof document === 'undefined') return;
-    const escapeCsv = (val: string) => {
-      if (val.includes(',') || val.includes('"') || val.includes('\n')) {
-        return `"${val.replace(/"/g, '""')}"`;
-      }
-      return val;
-    };
     const headers = ['ID', 'Method', 'Path', 'Title', 'Description'];
-    const rows = PRESET_ENDPOINTS.map((ep) => [
+    const rows = presetEndpoints.map((ep) => [
       ep.id,
       ep.method,
       ep.path,
@@ -327,8 +312,8 @@ export default function ApiPlaygroundClient() {
       ep.description,
     ]);
     const csvContent = `\uFEFF${[
-      headers.map(escapeCsv).join(','),
-      ...rows.map((r) => r.map(escapeCsv).join(',')),
+      headers.map(escapeCsvCell).join(','),
+      ...rows.map((r) => r.map(escapeCsvCell).join(',')),
     ].join('\n')}`;
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -346,11 +331,9 @@ export default function ApiPlaygroundClient() {
       <div className="card-header bg-dark d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-2 px-4 py-3 text-white">
         <div className="d-flex align-items-center flex-wrap gap-2">
           <BsTerminal className="text-danger fs-5" />
-          <span className="fw-bold">
-            Interactive Open-Core REST API v1 Playground
-          </span>
+          <span className="fw-bold">{t('pgHeaderTitle')}</span>
           <span className="badge bg-success rounded-pill small">
-            Live Supabase Rate Schema
+            {t('pgHeaderBadge')}
           </span>
           <a
             href="/api/v1/rate/openapi.json"
@@ -368,7 +351,7 @@ export default function ApiPlaygroundClient() {
             data-testid="copy-api-catalog-md-btn"
             className="btn btn-sm btn-outline-light rounded-pill py-0"
           >
-            {copiedCatalogMd ? '✓ Đã chép API MD!' : '📋 Sao chép API MD'}
+            {copiedCatalogMd ? t('pgCopyMdDone') : t('pgCopyMdBtn')}
           </button>
           <button
             type="button"
@@ -376,7 +359,7 @@ export default function ApiPlaygroundClient() {
             data-testid="download-api-catalog-csv-btn"
             className="btn btn-sm btn-outline-info rounded-pill py-0"
           >
-            📥 Xuất CSV Endpoints
+            {t('pgExportCsvBtn')}
           </button>
         </div>
       </div>
@@ -385,11 +368,10 @@ export default function ApiPlaygroundClient() {
         {/* Preset Selector Pills */}
         <div className="mb-3">
           <div className="small fw-bold text-uppercase text-muted mb-2">
-            Chọn nhanh Endpoint mẫu ({PRESET_ENDPOINTS.length} kịch bản thực
-            tế):
+            {t('pgSelectPresetLabel', { count: presetEndpoints.length })}
           </div>
           <div className="d-flex flex-wrap gap-2">
-            {PRESET_ENDPOINTS.map((preset) => {
+            {presetEndpoints.map((preset) => {
               const isSelected = preset.id === selectedId;
               return (
                 <button
@@ -430,7 +412,7 @@ export default function ApiPlaygroundClient() {
               }
               className="form-select bg-dark fw-bold border-0 text-white"
               style={{ maxWidth: '105px' }}
-              aria-label="HTTP Method"
+              aria-label={t('pgHttpMethodAria')}
             >
               <option value="GET">GET</option>
               <option value="POST">POST</option>
@@ -441,7 +423,7 @@ export default function ApiPlaygroundClient() {
               onChange={(e) => setCustomPath(e.target.value)}
               className="form-control font-monospace bg-light"
               placeholder="/api/v1/rate/products?limit=5"
-              aria-label="API Endpoint Path"
+              aria-label={t('pgEndpointPathAria')}
             />
             <button
               type="submit"
@@ -449,7 +431,7 @@ export default function ApiPlaygroundClient() {
               className="btn btn-primary fw-semibold d-inline-flex align-items-center gap-2 px-4"
             >
               <BsPlayFill className="fs-5" />
-              {isLoading ? 'Đang truy vấn...' : 'Chạy thử Request trực tiếp'}
+              {isLoading ? t('pgRunLoading') : t('pgRunBtn')}
             </button>
           </div>
 
@@ -459,7 +441,7 @@ export default function ApiPlaygroundClient() {
                 className="form-label small fw-bold text-uppercase text-muted mb-1"
                 htmlFor={`${fieldId}-request-body`}
               >
-                JSON Request Body (`application/json`):
+                {t('pgRequestBodyLabel')}
               </label>
               <textarea
                 id={`${fieldId}-request-body`}
@@ -480,7 +462,7 @@ export default function ApiPlaygroundClient() {
               <div className="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-1">
                 <div className="d-flex align-items-center gap-2">
                   <span className="small fw-semibold text-white-50">
-                    <BsCodeSlash className="me-1" /> Code:
+                    <BsCodeSlash className="me-1" /> {t('pgCodeLabel')}
                   </span>
                   <div className="btn-group btn-group-sm">
                     <button
@@ -526,11 +508,11 @@ export default function ApiPlaygroundClient() {
                 >
                   {copiedSnippet ? (
                     <>
-                      <BsCheck2 className="me-1" /> Đã sao chép
+                      <BsCheck2 className="me-1" /> {t('pgCopiedBtn')}
                     </>
                   ) : (
                     <>
-                      <BsClipboard className="me-1" /> Copy
+                      <BsClipboard className="me-1" /> {t('pgCopyBtn')}
                     </>
                   )}
                 </button>
@@ -548,7 +530,7 @@ export default function ApiPlaygroundClient() {
             <div className="rounded-3 bg-dark h-100 p-3 text-white">
               <div className="d-flex justify-content-between align-items-center border-bottom border-secondary border-opacity-25 mb-2 flex-wrap gap-2 pb-2">
                 <span className="small fw-semibold text-white-50">
-                  JSON Response Payload
+                  {t('pgResponsePayloadTitle')}
                 </span>
                 <div className="d-flex align-items-center flex-wrap gap-2">
                   {statusCode !== null && (
@@ -573,7 +555,7 @@ export default function ApiPlaygroundClient() {
                     className="btn btn-sm btn-outline-light rounded-pill py-0"
                     data-testid="copy-api-response-btn"
                   >
-                    {copiedResponse ? '✅ Đã chép JSON' : '📋 Copy JSON'}
+                    {copiedResponse ? t('pgCopyJsonDone') : t('pgCopyJsonBtn')}
                   </button>
                   <button
                     type="button"
@@ -581,7 +563,7 @@ export default function ApiPlaygroundClient() {
                     className="btn btn-sm btn-outline-info rounded-pill py-0"
                     data-testid="download-api-response-btn"
                   >
-                    📥 Tải JSON
+                    {t('pgDownloadJsonBtn')}
                   </button>
                 </div>
               </div>
@@ -593,7 +575,7 @@ export default function ApiPlaygroundClient() {
                   whiteSpace: 'pre-wrap',
                 }}
               >
-                {responseJson}
+                {displayedResponse}
               </pre>
             </div>
           </div>

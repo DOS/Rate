@@ -12,7 +12,10 @@ import {
   formatStorageLabel,
   getCategoryFilterSchema,
 } from '../../../lib/category-filters';
-import { getRateCopy, normalizeRateLocale } from '../../../lib/rate-i18n';
+import csMessages from '../../../../locales/cs.json';
+import enMessages from '../../../../locales/en.json';
+import viMessages from '../../../../locales/vi.json';
+import { normalizeRateLocale } from '../../../lib/rate-i18n';
 import {
   getSpecUiDictionary,
   localizeSpecValue,
@@ -176,9 +179,13 @@ async function runCoreArchitectureSuite() {
   assert.equal(normalizeRateLocale('cs'), 'cs');
   assert.equal(normalizeRateLocale('unknown'), 'vi');
 
+  const localeCatalogs = {
+    vi: viMessages,
+    en: enMessages,
+    cs: csMessages,
+  } as const;
   for (const loc of ['vi', 'en', 'cs'] as const) {
-    const copy = getRateCopy(loc);
-    assert.equal(copy.locale, loc);
+    const copy = localeCatalogs[loc].rate;
     assert.ok(copy.seo.siteTitle.includes('Rate.vn'));
     assert.ok(copy.nav.developers.length > 0);
     assert.ok(copy.footer.links.smartwatches.length > 0);
@@ -265,7 +272,9 @@ async function runCoreArchitectureSuite() {
   const path = require('node:path') as typeof import('node:path');
   const { NextRequest } =
     require('next/server') as typeof import('next/server');
-  const middleware = require('../../../middleware').default as (
+  // Next.js 16 renamed middleware.ts to proxy.ts; the locale routing it runs
+  // first is exported synchronously as localeProxy.
+  const middleware = require('../../../proxy').localeProxy as (
     req: import('next/server').NextRequest
   ) => import('next/server').NextResponse;
 
@@ -293,7 +302,12 @@ async function runCoreArchitectureSuite() {
   assert.equal(
     fs.existsSync(duplicateRootMiddleware),
     false,
-    'apps/web/middleware.ts must not exist and shadow apps/web/src/middleware.ts'
+    'apps/web/middleware.ts must not exist and shadow apps/web/src/proxy.ts'
+  );
+  assert.equal(
+    fs.existsSync(path.join(repoRoot, 'apps', 'web', 'src', 'middleware.ts')),
+    false,
+    'src/middleware.ts must not exist next to src/proxy.ts (Next.js 16)'
   );
 
   // Guard RootLayout dynamic <html lang={locale}>
@@ -557,7 +571,7 @@ async function runCoreArchitectureSuite() {
     'LeaderboardExplorer must follow DESIGN.md v3.0 Dual-Rating tokens and lock 1-click Top 3 compare to activeCategory'
   );
   for (const locale of ['vi', 'en', 'cs'] as const) {
-    const dict = getRateCopy(locale);
+    const dict = localeCatalogs[locale].rate;
     assert.ok(
       dict.nav.leaderboard && dict.nav.leaderboard.length > 0,
       `Dictionary for ${locale} must define nav.leaderboard`
@@ -1364,9 +1378,15 @@ async function runCoreArchitectureSuite() {
     ),
     'utf8'
   );
+  const productCardSrc = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/components/product/ProductCard.tsx'),
+    'utf8'
+  );
   assert.ok(
     categoryCatalogSpreadSrc.includes('category-price-spread-leaders') &&
-      categoryCatalogSpreadSrc.includes('RadarBadge'),
+      categoryCatalogSpreadSrc.includes('<ProductCard') &&
+      categoryCatalogSpreadSrc.includes('radarSignal={getRadarSignal(') &&
+      productCardSrc.includes('<RadarBadge'),
     'CategoryCatalogContent must render category-price-spread-leaders and catalog-card-radar-badge (#97)'
   );
   assert.ok(
@@ -1688,7 +1708,9 @@ async function runCoreArchitectureSuite() {
     'utf8'
   );
   assert.ok(
-    homePageRadarCardSrc.includes('RadarBadge') &&
+    homePageRadarCardSrc.includes('<ProductCard') &&
+      homePageRadarCardSrc.includes('radarSignal={getRadarSignal(') &&
+      productCardSrc.includes('<RadarBadge') &&
       homePageRadarCardSrc.includes('buildRadarIndex') &&
       /categorySlug: 'all', limit: 50/.test(homePageRadarCardSrc),
     'Homepage featured product cards must render RadarBadge from full catalog index (#117)'
@@ -2077,7 +2099,7 @@ async function runCoreArchitectureSuite() {
     'utf8'
   );
   assert.ok(
-    !rootLayoutSrc145.includes('cdn.jsdelivr.net') &&
+    !/cdn\.jsdelivr\.net/.test(rootLayoutSrc145) &&
       rootLayoutSrc145.includes('<BootstrapClient />') &&
       fs
         .readFileSync(
@@ -2096,7 +2118,7 @@ async function runCoreArchitectureSuite() {
     'utf8'
   );
   assert.ok(
-    !customScssSrc147.includes('fonts.googleapis.com') &&
+    !/fonts\.googleapis\.com/.test(customScssSrc147) &&
       customScssSrc147.includes('var(--font-inter') &&
       customScssSrc147.includes('var(--font-jetbrains-mono') &&
       rootLayoutSrc145.includes('fontInter.variable') &&
@@ -2394,12 +2416,12 @@ async function runCoreArchitectureSuite() {
     'apps/web/src/server/rate/extension.ts must never reference SUPABASE_SERVICE_ROLE_KEY (#159)'
   );
   const eslintSrc = fs.readFileSync(
-    path.join(repoRoot, 'apps/web/.eslintrc.js'),
+    path.join(repoRoot, 'apps/web/eslint.config.mjs'),
     'utf8'
   );
   assert.ok(
     eslintSrc.includes('SUPABASE_SERVICE_ROLE_KEY'),
-    'apps/web/.eslintrc.js must ban SUPABASE_SERVICE_ROLE_KEY in src/app/** and src/server/** (#159)'
+    'apps/web/eslint.config.mjs must ban SUPABASE_SERVICE_ROLE_KEY in src/app/** and src/server/** (#159)'
   );
 
   const { ingestExtensionCrowdSignal } =
@@ -2506,7 +2528,7 @@ async function runCoreArchitectureSuite() {
   assert.ok(
     eslintSrc.includes('no-restricted-imports') &&
       eslintSrc.includes('@/lib/rate-api'),
-    'apps/web/.eslintrc.js must forbid @/lib/rate-api in src/components/** (#173)'
+    'apps/web/eslint.config.mjs must forbid @/lib/rate-api in src/components/** (#173)'
   );
   for (const compRel of [
     'apps/web/src/components/compare/CompareWorkspace.tsx',
@@ -2564,7 +2586,7 @@ async function runCoreArchitectureSuite() {
   const mig176Src = fs.readFileSync(
     path.join(
       repoRoot,
-      'supabase/migrations/20261018003000_rate_audit_t4_t6_t7_t8_hardening.sql'
+      'supabase/migrations/20261018120102_rate_audit_t4_t6_t7_t8_hardening.sql'
     ),
     'utf8'
   );
@@ -2574,7 +2596,7 @@ async function runCoreArchitectureSuite() {
       mig176Src.includes('SECURITY INVOKER') &&
       mig176Src.includes("SET search_path = ''") &&
       mig176Src.includes("ESCAPE ''\\''"),
-    "20261018003000_rate_audit_t4_t6_t7_t8_hardening.sql must enforce BRIN index, ON DELETE RESTRICT, SECURITY INVOKER, search_path='' & escaped ILIKE wildcards (#176)"
+    "20261018120102_rate_audit_t4_t6_t7_t8_hardening.sql must enforce BRIN index, ON DELETE RESTRICT, SECURITY INVOKER, search_path='' & escaped ILIKE wildcards (#176)"
   );
   const rateApiSrc176 = fs.readFileSync(
     path.join(repoRoot, 'apps/web/src/lib/rate-api.ts'),
@@ -2593,7 +2615,7 @@ async function runCoreArchitectureSuite() {
   const mig177Src = fs.readFileSync(
     path.join(
       repoRoot,
-      'supabase/migrations/20261018010000_rate_audit_c5_t3_market_stats_and_vote_guard.sql'
+      'supabase/migrations/20261018120103_rate_audit_c5_t3_market_stats_and_vote_guard.sql'
     ),
     'utf8'
   );
@@ -2606,7 +2628,7 @@ async function runCoreArchitectureSuite() {
       mig177Src.includes(
         'REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON rate.review_flags FROM PUBLIC, anon, authenticated;'
       ),
-    '20261018010000_rate_audit_c5_t3_market_stats_and_vote_guard.sql must define refresh_master_market_stats, UPDATE flood guard on review_votes, and revoke public DML on review_flags (#177)'
+    '20261018120103_rate_audit_c5_t3_market_stats_and_vote_guard.sql must define refresh_master_market_stats, UPDATE flood guard on review_votes, and revoke public DML on review_flags (#177)'
   );
   const ingestSrc177 = fs.readFileSync(
     path.join(repoRoot, 'apps/importer/src/shopee/shopee-to-supabase.ts'),
@@ -2624,7 +2646,7 @@ async function runCoreArchitectureSuite() {
   const mig178Src = fs.readFileSync(
     path.join(
       repoRoot,
-      'supabase/migrations/20261018013000_rate_audit_c1_catalog_search_and_facets_rpc.sql'
+      'supabase/migrations/20261018120104_rate_audit_c1_catalog_search_and_facets_rpc.sql'
     ),
     'utf8'
   );
@@ -2637,7 +2659,7 @@ async function runCoreArchitectureSuite() {
       ) &&
       mig178Src.includes('idx_master_products_specs_gin') &&
       mig178Src.includes('SECURITY INVOKER'),
-    '20261018013000_rate_audit_c1_catalog_search_and_facets_rpc.sql must define get_category_brand_facets and search_master_products with SECURITY INVOKER (#178)'
+    '20261018120104_rate_audit_c1_catalog_search_and_facets_rpc.sql must define get_category_brand_facets and search_master_products with SECURITY INVOKER (#178)'
   );
   assert.ok(
     rateApiSrc176.includes("'get_category_brand_facets'") &&
@@ -2867,7 +2889,7 @@ async function runCoreArchitectureSuite() {
   const mig189Src = fs.readFileSync(
     path.join(
       repoRoot,
-      'supabase/migrations/20261018020000_rate_audit_low_queue_purge_and_updated_at_triggers.sql'
+      'supabase/migrations/20261018120105_rate_audit_low_queue_purge_and_updated_at_triggers.sql'
     ),
     'utf8'
   );
@@ -2879,7 +2901,7 @@ async function runCoreArchitectureSuite() {
         'CREATE OR REPLACE FUNCTION rate.set_updated_at_timestamp()'
       ) &&
       mig189Src.includes("SET search_path = ''"),
-    '20261018020000_rate_audit_low_queue_purge_and_updated_at_triggers.sql must define purge_completed_crawl_jobs and set_updated_at_timestamp (#189)'
+    '20261018120105_rate_audit_low_queue_purge_and_updated_at_triggers.sql must define purge_completed_crawl_jobs and set_updated_at_timestamp (#189)'
   );
   const sidebarSrc189 = fs.readFileSync(
     path.join(
@@ -2900,7 +2922,8 @@ async function runCoreArchitectureSuite() {
       !sidebarSrc189.includes("from '@/lib/rate-api'") &&
       merchDirSrc189.includes("from '@/lib/rate-domain'") &&
       !merchDirSrc189.includes("from '@/server/rate'") &&
-      eslintSrc.includes('src/app/[locale]/components/**') &&
+      // minimatch treats [locale] as a character class; the flat config escapes it.
+      eslintSrc.includes('src/app/[[]locale]/components/**') &&
       eslintSrc.includes('@/server/rate'),
     'list-sidebar-one.tsx and MerchantDirectoryExplorer.tsx must import from @/lib/rate-domain and ESLint must ban @/lib/rate-api & @/server/rate in Client Component folders (#189)'
   );
@@ -2932,7 +2955,7 @@ async function runCoreArchitectureSuite() {
   const mig215Src = fs.readFileSync(
     path.join(
       repoRoot,
-      'supabase/migrations/20261018023000_rate_audit_m3_m4_m5_m7_queue_and_observation_rpc.sql'
+      'supabase/migrations/20261018120106_rate_audit_m3_m4_m5_m7_queue_and_observation_rpc.sql'
     ),
     'utf8'
   );
@@ -2950,7 +2973,7 @@ async function runCoreArchitectureSuite() {
       mig215Src.includes('idx_crawl_jobs_run_id') &&
       mig215Src.includes('idx_promotions_product_id') &&
       mig215Src.includes("SET search_path = ''"),
-    '20261018023000_rate_audit_m3_m4_m5_m7_queue_and_observation_rpc.sql must define cancel_crawl_jobs, release_crawl_job, record_price_observation, queue/FK indexes, and Linter 0011 search_path hardening (#215)'
+    '20261018120106_rate_audit_m3_m4_m5_m7_queue_and_observation_rpc.sql must define cancel_crawl_jobs, release_crawl_job, record_price_observation, queue/FK indexes, and Linter 0011 search_path hardening (#215)'
   );
   const ingest215Src = fs.readFileSync(
     path.join(repoRoot, 'apps/importer/src/shopee/shopee-to-supabase.ts'),
@@ -2962,6 +2985,703 @@ async function runCoreArchitectureSuite() {
   );
   console.log(
     '  ✅ [58/58] Baseline Queue/Master Migrations Sync & M3/M4/M5/M7 Queue/Observation RPCs (#215) passed'
+  );
+
+  // ---------------------------------------------------------------------------
+  // 57. Review Trust Model v2 Web Domain & 6-Axis Breakdown (#184)
+  // ---------------------------------------------------------------------------
+  const {
+    computeCombinedDualScore,
+    computeWilsonLowerBound,
+    detectStarDistributionAnomaly,
+    evaluateReviewTrustAssessment,
+  } = await import('../../../lib/rate-domain');
+
+  assert.equal(computeWilsonLowerBound(0, 0), 0);
+  const wilsonSingleVote = computeWilsonLowerBound(1, 0);
+  const wilsonManyVotes = computeWilsonLowerBound(50, 2);
+  assert.ok(
+    wilsonManyVotes > wilsonSingleVote,
+    `Wilson lower bound for 50/52 (${wilsonManyVotes}) must exceed 1/1 (${wilsonSingleVote})`
+  );
+
+  const shippingOnlyEval = evaluateReviewTrustAssessment({
+    rating_star: 1,
+    comment: 'Giao hàng quá chậm, đóng gói hộp móp méo, shipper thái độ kém',
+    reviewer_type: 'user',
+    upvotes: 5,
+    downvotes: 0,
+    report_count: 0,
+    flag_category: 'authentic',
+    verdict: 'authentic',
+    include_in_rating: true,
+    signals: null,
+  });
+  assert.equal(shippingOnlyEval.routesTo, 'merchant');
+  assert.equal(shippingOnlyEval.breakdown.context, 0);
+  assert.equal(shippingOnlyEval.breakdown.gate, 0);
+  assert.equal(shippingOnlyEval.breakdown.weight, 0);
+
+  const sponsoredPromoEval = evaluateReviewTrustAssessment({
+    rating_star: 5,
+    comment:
+      'Bài viết được tài trợ bởi hãng: Màn hình 120Hz siêu đẹp, camera chụp nét, pin 5000mAh cực trâu!',
+    reviewer_type: 'user',
+    upvotes: 0,
+    downvotes: 0,
+    report_count: 0,
+    flag_category: 'authentic',
+    verdict: 'authentic',
+    include_in_rating: true,
+    signals: null,
+  });
+  assert.equal(sponsoredPromoEval.independence, 'sponsored_promo');
+  assert.equal(sponsoredPromoEval.sponsorshipBadgeVi, 'Quảng cáo');
+  assert.equal(sponsoredPromoEval.breakdown.independence, 0.1);
+
+  const sponsoredBalancedEval = evaluateReviewTrustAssessment({
+    rating_star: 4,
+    comment:
+      'Nhận sản phẩm từ hãng để trải nghiệm: Màn hình OLED 120Hz rất đẹp nhưng nhược điểm là máy hơi nóng khi quay video 4K.',
+    reviewer_type: 'user',
+    upvotes: 3,
+    downvotes: 0,
+    report_count: 0,
+    flag_category: 'authentic',
+    verdict: 'authentic',
+    include_in_rating: true,
+    signals: null,
+  });
+  assert.equal(sponsoredBalancedEval.independence, 'sponsored_balanced');
+  assert.equal(sponsoredBalancedEval.sponsorshipBadgeVi, 'Có tài trợ');
+  assert.equal(sponsoredBalancedEval.breakdown.independence, 0.5);
+
+  const gatedLowConfidenceDual = computeCombinedDualScore({
+    userScore: 5.0,
+    expertScore: 4.2,
+    userConfidence: 0.29,
+    fallbackAverage: 4.5,
+  });
+  assert.equal(gatedLowConfidenceDual.isBlended, false);
+  assert.equal(gatedLowConfidenceDual.overall, 4.2);
+
+  const blendedHighConfidenceDual = computeCombinedDualScore({
+    userScore: 4.5,
+    expertScore: 4.0,
+    userConfidence: 0.75,
+    fallbackAverage: 4.2,
+  });
+  assert.equal(blendedHighConfidenceDual.isBlended, true);
+  assert.equal(blendedHighConfidenceDual.overall, 4.3);
+
+  const anomalousCluster = detectStarDistributionAnomaly([
+    { rating_star: 5, comment: '', flag_category: 'authentic' },
+    { rating_star: 5, comment: 'Cực kì hài lòng', flag_category: 'authentic' },
+    { rating_star: 5, comment: 'Tốt', flag_category: 'authentic' },
+    { rating_star: 5, comment: 'Ok lắm', flag_category: 'authentic' },
+    {
+      rating_star: 5,
+      comment: 'Pin 5000mAh dùng ổn định cả ngày, màn hình sáng đẹp',
+      flag_category: 'authentic',
+    },
+  ]);
+  assert.equal(anomalousCluster.isAnomalous, true);
+  assert.equal(anomalousCluster.fiveStarRatioPct, 100);
+  assert.ok(
+    anomalousCluster.warningLabelVi?.includes('Cảnh báo phân bố sao bất thường')
+  );
+
+  console.log(
+    '  ✅ [57/57] Review Trust Model v2 6-axis breakdown, Wilson sort & confidence gate (#184) passed'
+  );
+
+  // 58. Server-only boundary enforcement & 16/16 CSV formula-injection guard (#185 - Audit T11, T12)
+  const { buildSafeCsvContent } = await import('../../../lib/csv-safe');
+  const { assertServerOnlyBoundary } = await import('../server-only');
+
+  assert.equal(escapeCsvCell("=CMD|'/C calc'!A0"), "'=CMD|'/C calc'!A0");
+  assert.equal(escapeCsvCell('+SUM(A1:A2)'), "'+SUM(A1:A2)");
+  assert.equal(
+    escapeCsvCell('@HYPERLINK("http://evil")'),
+    `"'@HYPERLINK(""http://evil"")"`
+  );
+  assert.equal(escapeCsvCell('-15.4%'), '-15.4%');
+  assert.equal(escapeCsvCell(-250000), '-250000');
+  const safeCsvDoc = buildSafeCsvContent(
+    ['Model', 'FormulaPayload', 'Savings'],
+    [['iPhone 16 Pro Max', '=1+1', '-12.5%']],
+    '\n'
+  );
+  assert.ok(safeCsvDoc.startsWith('\uFEFFModel,FormulaPayload,Savings\n'));
+  assert.ok(safeCsvDoc.includes("iPhone 16 Pro Max,'=1+1,-12.5%"));
+
+  assert.doesNotThrow(() => assertServerOnlyBoundary());
+
+  const fs58 = await import('node:fs');
+  const path58 = await import('node:path');
+  const webSrcRoot58 = path58.resolve(__dirname, '../../..');
+
+  const serverRateModules58 = [
+    'index.ts',
+    'extension.ts',
+    'deals.ts',
+    'openapi.ts',
+    'api-handler.ts',
+    'cache-tags.ts',
+  ];
+  for (const modName of serverRateModules58) {
+    const modSource = fs58.readFileSync(
+      path58.join(webSrcRoot58, 'server', 'rate', modName),
+      'utf8'
+    );
+    assert.ok(
+      modSource.includes("import 'server-only';"),
+      `Expected src/server/rate/${modName} to import 'server-only'`
+    );
+  }
+
+  const csvComponents58: string[] = [];
+  const clientServerRateLeaks58: string[] = [];
+  function walkSrc58(dir: string) {
+    for (const entry of fs58.readdirSync(dir, { withFileTypes: true })) {
+      const fullPath = path58.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name !== '__tests__') walkSrc58(fullPath);
+      } else if (entry.name.endsWith('.tsx') || entry.name.endsWith('.ts')) {
+        const content = fs58.readFileSync(fullPath, 'utf8');
+        const rel = path58.relative(webSrcRoot58, fullPath).replace(/\\/g, '/');
+        if (content.includes('text/csv')) {
+          csvComponents58.push(rel);
+          assert.ok(
+            content.includes('@/lib/csv-safe'),
+            `Expected CSV export component ${rel} to import @/lib/csv-safe`
+          );
+        }
+        if (
+          (content.includes("'use client'") ||
+            content.includes('"use client"')) &&
+          content.includes('@/server/rate')
+        ) {
+          clientServerRateLeaks58.push(rel);
+        }
+      }
+    }
+  }
+  walkSrc58(webSrcRoot58);
+  assert.ok(
+    csvComponents58.length >= 16,
+    `Expected at least 16 CSV export components using @/lib/csv-safe, found ${csvComponents58.length}`
+  );
+  assert.deepEqual(
+    clientServerRateLeaks58,
+    [],
+    `Client components must not import @/server/rate directly: ${clientServerRateLeaks58.join(', ')}`
+  );
+
+  console.log(
+    `  ✅ [58/58] Server-only boundary across 5 server/rate modules & ${csvComponents58.length}/16 CSV formula guards (#185) passed`
+  );
+
+  // 59. Cross-request Data Cache tags & POST /api/v1/rate/revalidate webhook (#186 - Audit C3)
+  const {
+    RATE_CACHE_TAGS,
+    productCacheTag,
+    categoryCacheTag,
+    merchantCacheTag,
+    withRateDataCache,
+  } = await import('../cache-tags');
+  const revalidateRoute =
+    await import('../../../app/api/v1/rate/revalidate/route');
+
+  assert.equal(
+    productCacheTag('  Apple-iPhone-16-Pro-Max '),
+    'rate:product:apple-iphone-16-pro-max'
+  );
+  assert.equal(categoryCacheTag('Smartphones'), 'rate:category:smartphones');
+  assert.equal(
+    merchantCacheTag('Shopee-88201679'),
+    'rate:merchant:shopee-88201679'
+  );
+
+  let fallbackInvocations = 0;
+  const wrappedProbe = withRateDataCache(
+    async (slug: string) => {
+      fallbackInvocations += 1;
+      return { slug, ok: true };
+    },
+    ['rate-test-probe'],
+    { revalidate: 120, tags: [RATE_CACHE_TAGS.PRODUCTS] }
+  );
+  const probeResult = await wrappedProbe('samsung-galaxy-s24-ultra');
+  assert.equal(probeResult.slug, 'samsung-galaxy-s24-ultra');
+  assert.equal(fallbackInvocations, 1);
+
+  const revalOptionsRes = await revalidateRoute.OPTIONS();
+  assert.equal(revalOptionsRes.status, 204);
+
+  const prevRevalSecret = process.env.RATE_REVALIDATE_SECRET;
+  process.env.RATE_REVALIDATE_SECRET = 'test-revalidate-secret-2026';
+  try {
+    const unauthReq = new NextRequest(
+      'https://rate.vn/api/v1/rate/revalidate',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer wrong-secret',
+        },
+        body: JSON.stringify({ tags: ['rate:products'] }),
+      }
+    );
+    const unauthRes = await revalidateRoute.POST(unauthReq);
+    assert.equal(unauthRes.status, 401);
+
+    const emptyPayloadReq = new NextRequest(
+      'https://rate.vn/api/v1/rate/revalidate',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer test-revalidate-secret-2026',
+        },
+        body: JSON.stringify({}),
+      }
+    );
+    const emptyPayloadRes = await revalidateRoute.POST(emptyPayloadReq);
+    assert.equal(emptyPayloadRes.status, 400);
+
+    const validRevalReq = new NextRequest(
+      'https://rate.vn/api/v1/rate/revalidate',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Rate-Revalidate-Token': 'test-revalidate-secret-2026',
+        },
+        body: JSON.stringify({
+          slugs: ['apple-iphone-16-pro-max'],
+          categories: ['smartphones'],
+          merchants: ['shopee-88201679'],
+          paths: ['/smartphones/apple-iphone-16-pro-max'],
+        }),
+      }
+    );
+    const validRevalRes = await revalidateRoute.POST(validRevalReq);
+    assert.equal(validRevalRes.status, 200);
+    const validRevalBody = (await validRevalRes.json()) as {
+      ok: boolean;
+      data: {
+        revalidated: boolean;
+        tags: string[];
+        paths: string[];
+      };
+    };
+    assert.equal(validRevalBody.ok, true);
+    assert.equal(validRevalBody.data.revalidated, true);
+    assert.ok(
+      validRevalBody.data.tags.includes('rate:product:apple-iphone-16-pro-max')
+    );
+    assert.ok(validRevalBody.data.tags.includes('rate:products'));
+    assert.ok(validRevalBody.data.tags.includes('rate:deals'));
+    assert.ok(validRevalBody.data.tags.includes('rate:category:smartphones'));
+    assert.ok(
+      validRevalBody.data.tags.includes('rate:merchant:shopee-88201679')
+    );
+    assert.deepEqual(validRevalBody.data.paths, [
+      '/smartphones/apple-iphone-16-pro-max',
+    ]);
+  } finally {
+    if (prevRevalSecret === undefined) {
+      delete process.env.RATE_REVALIDATE_SECRET;
+    } else {
+      process.env.RATE_REVALIDATE_SECRET = prevRevalSecret;
+    }
+  }
+
+  assert.ok(
+    openApi.paths['/api/v1/rate/revalidate']?.post,
+    'OpenAPI 3.1.0 must document POST /api/v1/rate/revalidate'
+  );
+
+  console.log(
+    '  ✅ [59/59] Cross-request Data Cache tags & POST /api/v1/rate/revalidate webhook (#186) passed'
+  );
+
+  // 60. Complete behavioral NextRequest -> NextResponse coverage for all remaining REST API v1 routes (#187 - Audit T1)
+  const healthRoute60 = await import('../../../app/api/health/route');
+  const openApiRoute = await import('../../../app/api/v1/rate/openapi/route');
+  const openApiJsonRoute =
+    await import('../../../app/api/v1/rate/openapi.json/route');
+  const productsRoute = await import('../../../app/api/v1/rate/products/route');
+  const productDetailRoute =
+    await import('../../../app/api/v1/rate/products/[slug]/route');
+  const dealsRoute = await import('../../../app/api/v1/rate/deals/route');
+  const leaderboardRoute =
+    await import('../../../app/api/v1/rate/leaderboard/route');
+  const merchantsRoute =
+    await import('../../../app/api/v1/rate/merchants/route');
+  const merchantDetailRoute =
+    await import('../../../app/api/v1/rate/merchants/[id]/route');
+  const statsRoute = await import('../../../app/api/v1/rate/stats/route');
+
+  // 60.1 /api/health
+  const healthRes60 = await healthRoute60.GET();
+  assert.equal(healthRes60.status, 200);
+  assert.equal(healthRes60.headers.get('Cache-Control'), 'no-store, max-age=0');
+  const healthBody60 = (await healthRes60.json()) as {
+    status: string;
+    service: string;
+  };
+  assert.equal(healthBody60.status, 'ok');
+  assert.equal(healthBody60.service, 'rate-web');
+
+  // 60.2 /api/v1/rate/openapi & /api/v1/rate/openapi.json
+  const openApiOpt = await openApiRoute.OPTIONS();
+  assert.equal(openApiOpt.status, 204);
+  const openApiGet = await openApiRoute.GET(
+    new Request('https://rate.vn/api/v1/rate/openapi')
+  );
+  assert.equal(openApiGet.status, 200);
+  const openApiDoc = (await openApiGet.json()) as {
+    openapi: string;
+    servers: Array<{ url: string }>;
+  };
+  assert.equal(openApiDoc.openapi, '3.1.0');
+  assert.equal(openApiDoc.servers[0]?.url, 'https://rate.vn');
+
+  const openApiJsonOpt = await openApiJsonRoute.OPTIONS();
+  assert.equal(openApiJsonOpt.status, 204);
+  const openApiJsonGet = await openApiJsonRoute.GET(
+    new NextRequest('https://rate.vn/api/v1/rate/openapi.json')
+  );
+  assert.equal(openApiJsonGet.status, 200);
+
+  // 60.3 /api/v1/rate/products & /api/v1/rate/products/[slug]
+  const productsOpt = await productsRoute.OPTIONS();
+  assert.equal(productsOpt.status, 204);
+  const productsGet = await productsRoute.GET(
+    new NextRequest(
+      'https://rate.vn/api/v1/rate/products?category=smartphones&limit=5&ram=8,12&has5g=true'
+    )
+  );
+  assert.ok([200, 500].includes(productsGet.status));
+  const productsBody = (await productsGet.json()) as {
+    ok: boolean;
+    error?: string;
+    count?: number;
+  };
+  if (productsGet.status === 200) {
+    assert.equal(productsBody.ok, true);
+    assert.equal(typeof productsBody.count, 'number');
+  } else {
+    assert.equal(productsBody.ok, false);
+    assert.ok(!/PGRST|relation|schema/i.test(productsBody.error ?? ''));
+  }
+
+  const prodDetailOpt = await productDetailRoute.OPTIONS();
+  assert.equal(prodDetailOpt.status, 204);
+  const prodDetailBadSlug = await productDetailRoute.GET(
+    new NextRequest('https://rate.vn/api/v1/rate/products/bad'),
+    { params: Promise.resolve({ slug: '../etc/passwd' }) }
+  );
+  assert.equal(prodDetailBadSlug.status, 400);
+
+  const prodDetailMissing = await productDetailRoute.GET(
+    new NextRequest(
+      'https://rate.vn/api/v1/rate/products/non-existent-device-slug-2099'
+    ),
+    { params: Promise.resolve({ slug: 'non-existent-device-slug-2099' }) }
+  );
+  assert.ok([404, 500].includes(prodDetailMissing.status));
+
+  // 60.4 /api/v1/rate/deals, /api/v1/rate/leaderboard, /api/v1/rate/stats
+  const dealsOpt = await dealsRoute.OPTIONS();
+  assert.equal(dealsOpt.status, 204);
+  const dealsGet = await dealsRoute.GET(
+    new Request(
+      'https://rate.vn/api/v1/rate/deals?category=smartphones&limit=4'
+    )
+  );
+  assert.ok([200, 500].includes(dealsGet.status));
+
+  const leaderboardGet = await leaderboardRoute.GET(
+    new NextRequest(
+      'https://rate.vn/api/v1/rate/leaderboard?category=smartphones&criterion=overall&limit=5'
+    )
+  );
+  assert.ok([200, 500].includes(leaderboardGet.status));
+
+  const statsGet = await statsRoute.GET();
+  assert.ok([200, 500].includes(statsGet.status));
+
+  // 60.5 /api/v1/rate/merchants & /api/v1/rate/merchants/[id]
+  const merchantsOpt = await merchantsRoute.OPTIONS();
+  assert.equal(merchantsOpt.status, 204);
+  const merchantsGet = await merchantsRoute.GET(
+    new NextRequest(
+      'https://rate.vn/api/v1/rate/merchants?platform=shopee&official=1&min_trust=70&limit=10'
+    )
+  );
+  assert.ok([200, 500].includes(merchantsGet.status));
+
+  const merchDetailOpt = await merchantDetailRoute.OPTIONS();
+  assert.equal(merchDetailOpt.status, 204);
+  const merchDetailBadId = await merchantDetailRoute.GET(
+    new NextRequest('https://rate.vn/api/v1/rate/merchants/bad'),
+    { params: Promise.resolve({ id: 'invalid/id with spaces' }) }
+  );
+  assert.equal(merchDetailBadId.status, 400);
+
+  const merchDetailMissing = await merchantDetailRoute.GET(
+    new NextRequest(
+      'https://rate.vn/api/v1/rate/merchants/non-existent-merchant-999999'
+    ),
+    { params: Promise.resolve({ id: 'non-existent-merchant-999999' }) }
+  );
+  assert.ok([404, 500].includes(merchDetailMissing.status));
+
+  console.log(
+    '  ✅ [60/60] Complete behavioral NextRequest->NextResponse test coverage across all REST API v1 routes (#187) passed'
+  );
+
+  // 61. Dedicated backfill-specs CLI with --apply guard & migration security audit (#188 - Audit T2, C9)
+  const importerBackfillPath = path.join(
+    repoRoot,
+    'apps',
+    'importer',
+    'src',
+    'shopee',
+    'jobs',
+    'backfill-specs.ts'
+  );
+  const importerTestEnricherPath = path.join(
+    repoRoot,
+    'apps',
+    'importer',
+    'src',
+    'shopee',
+    'test-ai-enricher.ts'
+  );
+  assert.equal(
+    fs.existsSync(importerBackfillPath),
+    true,
+    'apps/importer/src/shopee/jobs/backfill-specs.ts must exist (Audit T2)'
+  );
+  const backfillSource = fs.readFileSync(importerBackfillPath, 'utf8');
+  assert.ok(
+    backfillSource.includes('const apply = options.apply === true;'),
+    'backfill-specs.ts must default to dry-run (apply = false) unless --apply is passed'
+  );
+  assert.ok(
+    backfillSource.includes('export async function runMasterSpecsBackfill') &&
+      backfillSource.includes('export async function auditMasterSpecs'),
+    'backfill-specs.ts must export runMasterSpecsBackfill and auditMasterSpecs'
+  );
+
+  const testEnricherSource = fs.readFileSync(importerTestEnricherPath, 'utf8');
+  assert.ok(
+    !testEnricherSource.includes(".from('master_products')") &&
+      !testEnricherSource.includes('.insert(') &&
+      !testEnricherSource.includes('.update('),
+    'test-ai-enricher.ts must not contain direct master_products DB mutations (Audit T2)'
+  );
+  assert.ok(
+    testEnricherSource.includes('./jobs/backfill-specs.js'),
+    'test-ai-enricher.ts must delegate --backfill and --audit-only to ./jobs/backfill-specs.js'
+  );
+
+  // Verify reference migrations in supabase/migrations/ enforce Audit C9, T3, T4, T6, T7, T8
+  const migrationsDir = path.join(repoRoot, 'supabase', 'migrations');
+  const migrationFiles = fs
+    .readdirSync(migrationsDir)
+    .filter((f) => f.endsWith('.sql'))
+    .sort();
+  assert.ok(
+    migrationFiles.length >= 11,
+    `Expected at least 11 reference migrations in supabase/migrations/, found ${migrationFiles.length}`
+  );
+  const combinedMigrationsSql = migrationFiles
+    .map((f) => fs.readFileSync(path.join(migrationsDir, f), 'utf8'))
+    .join('\n');
+
+  assert.ok(
+    combinedMigrationsSql.includes(
+      'REVOKE SELECT ON rate.merchants FROM anon, authenticated'
+    ),
+    'Migrations must revoke table-wide SELECT on rate.merchants from anon and authenticated (Audit C9)'
+  );
+  assert.ok(
+    combinedMigrationsSql.includes('SET search_path = rate, public, pg_temp') ||
+      combinedMigrationsSql.includes('SET search_path = rate, pg_temp'),
+    'SECURITY DEFINER functions must pin search_path'
+  );
+  assert.ok(
+    combinedMigrationsSql.includes('refresh_master_market_stats'),
+    'Migrations must define canonical refresh_master_market_stats RPC (Audit C5)'
+  );
+  assert.ok(
+    combinedMigrationsSql.includes('search_master_products') &&
+      combinedMigrationsSql.includes('get_category_brand_facets'),
+    'Migrations must define search_master_products and get_category_brand_facets RPCs (Audit C1)'
+  );
+
+  console.log(
+    '  ✅ [61/62] Dedicated backfill-specs CLI (--apply guard) & reference migration security audit (#188) passed'
+  );
+
+  // 62. Full next-intl Multilingual Parity (vi/en/cs) across all 15 namespaces (#241, #266, #272)
+  const viJson = JSON.parse(
+    fs.readFileSync(path.join(repoRoot, 'apps/web/locales/vi.json'), 'utf8')
+  ) as Record<string, unknown>;
+  const enJson = JSON.parse(
+    fs.readFileSync(path.join(repoRoot, 'apps/web/locales/en.json'), 'utf8')
+  ) as Record<string, unknown>;
+  const csJson = JSON.parse(
+    fs.readFileSync(path.join(repoRoot, 'apps/web/locales/cs.json'), 'utf8')
+  ) as Record<string, unknown>;
+
+  function collectLeafPaths(obj: unknown, prefix = ''): string[] {
+    if (!obj || typeof obj !== 'object' || Array.isArray(obj)) {
+      return [prefix];
+    }
+    const paths: string[] = [];
+    for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
+      const next = prefix ? `${prefix}.${k}` : k;
+      paths.push(...collectLeafPaths(v, next));
+    }
+    return paths.sort();
+  }
+
+  const viPaths = collectLeafPaths(viJson);
+  const enPaths = collectLeafPaths(enJson);
+  const csPaths = collectLeafPaths(csJson);
+
+  assert.deepEqual(
+    enPaths,
+    viPaths,
+    'en.json leaf keys must match vi.json 100% across all namespaces (#241, #266, #272)'
+  );
+  assert.deepEqual(
+    csPaths,
+    viPaths,
+    'cs.json leaf keys must match vi.json 100% across all namespaces (#241, #266, #272)'
+  );
+  assert.ok(
+    viPaths.length >= 1550,
+    `Expected at least 1,550 localized leaf keys per locale, found ${viPaths.length}`
+  );
+
+  for (const requiredNamespace of [
+    'rate',
+    'errors',
+    'compare',
+    'leaderboard',
+    'reviews',
+    'watchlist',
+    'deals',
+    'inspect',
+    'merchants',
+    'productDetail',
+    'homePage',
+    'developers',
+    'staticPages',
+    'catalog',
+    'heroSearch',
+    'authPortal',
+  ]) {
+    assert.ok(
+      requiredNamespace in viJson &&
+        requiredNamespace in enJson &&
+        requiredNamespace in csJson,
+      `Locale catalogs must include namespace "${requiredNamespace}" in vi, en, and cs`
+    );
+  }
+
+  for (const localeFile of [
+    'apps/web/locales/vi.json',
+    'apps/web/locales/en.json',
+    'apps/web/locales/cs.json',
+  ]) {
+    const rawLocaleText = fs.readFileSync(
+      path.join(repoRoot, localeFile),
+      'utf8'
+    );
+    assert.ok(
+      !rawLocaleText.includes('??'),
+      `${localeFile} must not contain '??' UTF-8 encoding corruption`
+    );
+  }
+
+  console.log(
+    `  ✅ [62/63] Full next-intl Multilingual Parity (${viPaths.length} keys x 3 locales vi/en/cs across 16 namespaces) (#241, #266, #272, #279) passed`
+  );
+
+  // 63. Retirement of getRateCopy & Localization of Navbar, Footer, RadarBadge, and GlobalError (#279)
+  const rateI18nSource = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/lib/rate-i18n.ts'),
+    'utf8'
+  );
+  assert.ok(
+    !rateI18nSource.includes('getRateCopy') &&
+      !rateI18nSource.includes('RateLocaleCopy'),
+    'rate-i18n.ts must retire legacy getRateCopy and RateLocaleCopy (#279)'
+  );
+
+  const navbarSource = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/app/[locale]/components/navbar/NavbarDarkDynamic.tsx'
+    ),
+    'utf8'
+  );
+  const footerDynamicSource = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/app/[locale]/components/footer/FooterDynamic.tsx'
+    ),
+    'utf8'
+  );
+  const footerTopSource = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/app/[locale]/components/footer-top.tsx'),
+    'utf8'
+  );
+  const radarBadgeSource = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/components/radar/RadarBadge.tsx'),
+    'utf8'
+  );
+  const globalErrorSource = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/app/global-error.tsx'),
+    'utf8'
+  );
+
+  assert.ok(
+    navbarSource.includes("useTranslations('rate.nav')") &&
+      !navbarSource.includes('getRateCopy'),
+    'NavbarDarkDynamic.tsx must use useTranslations("rate.nav") (#279)'
+  );
+  assert.ok(
+    footerDynamicSource.includes("namespace: 'rate.footer'") &&
+      !footerDynamicSource.includes('getRateCopy'),
+    'FooterDynamic.tsx must use getTranslations("rate.footer") (#279)'
+  );
+  assert.ok(
+    footerTopSource.includes("namespace: 'rate.footer'") &&
+      footerTopSource.includes("tFooter('bannerInspectCta')") &&
+      !footerTopSource.includes('getRateCopy'),
+    'footer-top.tsx must use getTranslations("rate.footer") and bannerInspectCta (#279)'
+  );
+  assert.ok(
+    radarBadgeSource.includes("useTranslations('deals')"),
+    'RadarBadge.tsx must localize badges via useTranslations("deals") (#279)'
+  );
+  assert.ok(
+    globalErrorSource.includes('GLOBAL_ERROR_CATALOG') &&
+      globalErrorSource.includes('detectBrowserLocale'),
+    'global-error.tsx must localize recovery UI across vi/en/cs (#279)'
+  );
+
+  console.log(
+    '  ✅ [63/63] Retirement of getRateCopy & Localization of Navbar, Footer, RadarBadge, and GlobalError (#279) passed'
   );
 
   console.log('🎉 All Rate.vn Core Architecture tests passed!');

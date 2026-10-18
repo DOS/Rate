@@ -4,7 +4,11 @@ import {
   ingestExtensionCrowdSignal,
   type SupportedEcommercePlatform,
 } from '@/server/rate';
-import { jsonApiError } from '@/server/rate/api-handler';
+import {
+  BoundedSlidingWindowRateLimiter,
+  extractClientRateLimitKey,
+  jsonApiError,
+} from '@/server/rate/api-handler';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -38,30 +42,12 @@ const CrowdIngestSchema = z.object({
   userConsentOptIn: z.boolean(),
 });
 
-// Lightweight per-IP sliding window rate limiter for crowd ingest quarantine
-const ingestRateBuckets = new Map<
-  string,
-  { count: number; windowResetAt: number }
->();
-const RATE_WINDOW_MS = 60_000;
-const MAX_REQUESTS_PER_MINUTE = 15;
-
-function checkRateLimit(clientKey: string): boolean {
-  const now = Date.now();
-  const bucket = ingestRateBuckets.get(clientKey);
-  if (!bucket || now >= bucket.windowResetAt) {
-    ingestRateBuckets.set(clientKey, {
-      count: 1,
-      windowResetAt: now + RATE_WINDOW_MS,
-    });
-    return true;
-  }
-  if (bucket.count >= MAX_REQUESTS_PER_MINUTE) {
-    return false;
-  }
-  bucket.count += 1;
-  return true;
-}
+// Bounded per-IP sliding window rate limiter for crowd ingest quarantine
+const ingestRateLimiter = new BoundedSlidingWindowRateLimiter({
+  windowMs: 60_000,
+  maxRequests: 15,
+  maxBuckets: 2_000,
+});
 
 export async function OPTIONS() {
   return new NextResponse(null, {
@@ -82,12 +68,9 @@ export async function OPTIONS() {
  */
 export async function POST(request: NextRequest) {
   try {
-    const forwardedFor = request.headers.get('x-forwarded-for');
-    const clientIp = forwardedFor
-      ? forwardedFor.split(',')[0]?.trim() || 'anon'
-      : 'anon';
+    const clientIp = extractClientRateLimitKey(request.headers);
 
-    if (!checkRateLimit(clientIp)) {
+    if (!ingestRateLimiter.allow(clientIp)) {
       return NextResponse.json(
         {
           ok: false,

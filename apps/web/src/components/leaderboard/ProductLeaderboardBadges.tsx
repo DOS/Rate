@@ -1,3 +1,4 @@
+import { getTranslations } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
 import type { CanonicalCategorySlug } from '@/lib/rate-domain';
@@ -12,70 +13,7 @@ interface ProductLeaderboardBadgesProps {
   locale?: string;
 }
 
-const CATEGORY_NAMES: Record<
-  'vi' | 'en' | 'cs',
-  Record<CanonicalCategorySlug, string>
-> = {
-  vi: {
-    smartphones: 'Điện thoại',
-    tablets: 'Máy tính bảng',
-    laptops: 'Laptop',
-    smartwatches: 'Đồng hồ thông minh',
-    earbuds: 'Tai nghe',
-  },
-  en: {
-    smartphones: 'Smartphones',
-    tablets: 'Tablets',
-    laptops: 'Laptops',
-    smartwatches: 'Smartwatches',
-    earbuds: 'Earbuds',
-  },
-  cs: {
-    smartphones: 'Smartphony',
-    tablets: 'Tablety',
-    laptops: 'Notebooky',
-    smartwatches: 'Chytré hodinky',
-    earbuds: 'Sluchátka',
-  },
-};
-
-const CRITERION_LABELS: Record<
-  'vi' | 'en' | 'cs',
-  Record<LeaderboardCriterionKey, string>
-> = {
-  vi: {
-    combined: 'Tổng hợp JReviews',
-    user: 'Người dùng thật',
-    expert: 'Chuyên gia Lab',
-    screen: 'Màn hình',
-    performance: 'Hiệu năng',
-    camera: 'Camera / Âm thanh',
-    battery: 'Pin & Sạc',
-    value: 'Đáng tiền (P/P)',
-  },
-  en: {
-    combined: 'Overall JReviews',
-    user: 'Verified Users',
-    expert: 'Lab Experts',
-    screen: 'Display',
-    performance: 'Performance',
-    camera: 'Camera / Audio',
-    battery: 'Battery & Charge',
-    value: 'Value (P/P)',
-  },
-  cs: {
-    combined: 'Celkově JReviews',
-    user: 'Ověření uživatelé',
-    expert: 'Experti Lab',
-    screen: 'Displej',
-    performance: 'Výkon',
-    camera: 'Fotoaparát / Zvuk',
-    battery: 'Baterie a nabíjení',
-    value: 'Poměr cena/výkon',
-  },
-};
-
-export default function ProductLeaderboardBadges({
+export default async function ProductLeaderboardBadges({
   badges,
   locale,
 }: ProductLeaderboardBadgesProps) {
@@ -84,15 +22,28 @@ export default function ProductLeaderboardBadges({
   }
 
   const lang = normalizeRateLocale(locale);
-  const catNames = CATEGORY_NAMES[lang];
-  const critLabels = CRITERION_LABELS[lang];
+  const t = await getTranslations({ locale: lang, namespace: 'leaderboard' });
 
-  const sectionLabel =
-    lang === 'en'
-      ? 'Category Leaderboard Standing:'
-      : lang === 'cs'
-        ? 'Umístění v žebříčku kategorie:'
-        : 'Thứ hạng trong Bảng xếp hạng danh mục:';
+  const catNames: Record<CanonicalCategorySlug, string> = {
+    smartphones: t('catSmartphones'),
+    tablets: t('catTablets'),
+    laptops: t('catLaptops'),
+    smartwatches: t('catSmartwatches'),
+    earbuds: t('catEarbuds'),
+  };
+
+  const critLabels: Record<LeaderboardCriterionKey, string> = {
+    combined: t('badgeCombined'),
+    user: t('badgeUser'),
+    expert: t('badgeExpert'),
+    screen: t('badgeScreen'),
+    performance: t('badgePerformance'),
+    camera: t('badgeCamera'),
+    battery: t('badgeBattery'),
+    value: t('badgeValue'),
+  };
+
+  const sectionLabel = t('standingLabel');
 
   return (
     <div
@@ -104,7 +55,7 @@ export default function ProductLeaderboardBadges({
       <span
         className="d-inline-flex align-items-center fw-semibold gap-1"
         style={{
-          fontSize: '12px',
+          fontSize: '0.8125rem',
           color: '#cbd5e1',
           letterSpacing: '0.02em',
         }}
@@ -126,18 +77,18 @@ export default function ProductLeaderboardBadges({
             href={`/leaderboard?cat=${b.categorySlug}&criterion=${b.criterion}`}
             className="text-decoration-none d-inline-flex align-items-center rounded-pill gap-1 px-3 py-1"
             style={{
-              fontSize: '12px',
+              fontSize: '0.8125rem',
               fontWeight: 700,
               background: isFirst
-                ? 'linear-gradient(135deg, rgba(245,158,11,0.22) 0%, rgba(255,46,41,0.22) 100%)'
+                ? 'linear-gradient(135deg, rgba(245,158,11,0.22) 0%, rgba(216, 48, 48, 0.22) 100%)'
                 : isCombined
                   ? 'rgba(56,189,248,0.16)'
-                  : 'rgba(16,185,129,0.15)',
+                  : 'rgba(45, 186, 105, 0.15)',
               border: isFirst
                 ? '1px solid rgba(251,191,36,0.55)'
                 : isCombined
                   ? '1px solid rgba(56,189,248,0.38)'
-                  : '1px solid rgba(16,185,129,0.35)',
+                  : '1px solid rgba(45, 186, 105, 0.35)',
               color: isFirst ? '#fde68a' : isCombined ? '#7dd3fc' : '#6ee7b7',
             }}
           >
@@ -155,7 +106,7 @@ export default function ProductLeaderboardBadges({
               style={{
                 opacity: 0.85,
                 fontFamily: 'var(--font-mono, monospace)',
-                fontSize: '11px',
+                fontSize: '0.8125rem',
               }}
             >
               ({b.score5.toFixed(2)}/5.0) ↗

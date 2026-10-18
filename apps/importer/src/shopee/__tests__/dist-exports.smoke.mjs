@@ -14,10 +14,15 @@ for (const name of [
   'detectCategorySlug',
   'EntityMatcher',
   'AiSpecEnricher',
+  'getAiSpecEnrichmentJsonSchema',
   'sanitizeSpecifications',
   'AiReviewAnalyzer',
+  'getAiReviewBatchJsonSchema',
   'computeReviewWeight',
   'ShopeeIngestionPipeline',
+  'createImporterLogger',
+  'sanitizeAiGeneratedText',
+  'computeRetryDelayMs',
 ]) {
   assert.equal(
     typeof crawlers[name],
@@ -25,6 +30,14 @@ for (const name of [
     `@repo/crawlers is missing export ${name}`
   );
 }
+
+const { createImporterLogger } =
+  await import('@repo/crawlers/shopee/logger');
+assert.equal(
+  typeof createImporterLogger,
+  'function',
+  'logger subpath export is broken'
+);
 
 const { ArenaSpecSyncer } =
   await import('@repo/crawlers/shopee/arena-spec-syncer');
@@ -39,6 +52,19 @@ const { FLAGSHIP_DEVICES_TO_SEED } =
 assert.ok(
   FLAGSHIP_DEVICES_TO_SEED.length > 0,
   'flagship-seed-data subpath export is empty'
+);
+
+const { runMasterSpecsBackfill, auditMasterSpecs } =
+  await import('@repo/crawlers/shopee/jobs/backfill-specs');
+assert.equal(
+  typeof runMasterSpecsBackfill,
+  'function',
+  'runMasterSpecsBackfill subpath export is broken'
+);
+assert.equal(
+  typeof auditMasterSpecs,
+  'function',
+  'auditMasterSpecs subpath export is broken'
 );
 
 const { ProductSpecificationsSchema } = await import('@repo/shared-data');
@@ -70,8 +96,10 @@ const pkgDir = require
 for (const dts of [
   'dist/index.d.ts',
   'dist/shopee/types.d.ts',
+  'dist/shopee/logger.d.ts',
   'dist/shopee/arena-spec-syncer.d.ts',
   'dist/shopee/flagship-seed-data.d.ts',
+  'dist/shopee/jobs/backfill-specs.d.ts',
 ]) {
   assert.ok(fs.existsSync(pkgDir + dts), `Missing type declarations: ${dts}`);
 }
@@ -79,3 +107,4 @@ for (const dts of [
 console.log(
   '✅ @repo/crawlers & @repo/shared-data dist entry points resolve by package name.'
 );
+

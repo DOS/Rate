@@ -6,14 +6,18 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "build": "tsc --project tsconfig.json && node scripts/build.mjs",
-    "test": "tsx src/test-extension-pipeline.ts"
+    "lint": "eslint . --max-warnings 0",
+    "build": "tsc --project tsconfig.json --noEmit && node scripts/build.mjs",
+    "test": "tsx --tsconfig ../web/tsconfig.test.json src/test-extension-pipeline.ts"
   },
   "dependencies": {
     "@repo/shared-data": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "^22.10.2",
+    "@repo/eslint-config": "workspace:*",
+    "@types/node": "^26.6.5",
+    "esbuild": "^0.28.2",
+    "eslint": "^9.39.5",
     "tsx": "^4.19.2",
     "typescript": "^7.0.2"
   }

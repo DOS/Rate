@@ -2,7 +2,7 @@ name: Sync Labels
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ dev, main ]
     paths:
       - .github/labels.yml
   workflow_dispatch: {}
@@ -15,12 +15,14 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Sync labels
-        uses: crazy-max/ghaction-github-labeler@v5
+        uses: crazy-max/ghaction-github-labeler@548a7c3603594ec17c819e1239f281a3b801ab4d # v6.0.0
         with:
           yaml_file: .github/labels.yml
-          skip_delete: false
+          # Keep labels that are not in labels.yml (status:*, agent:*, phase:*,
+          # Dependabot labels): they are created by agents and other tools.
+          skip_delete: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

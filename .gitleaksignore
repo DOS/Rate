@@ -1,0 +1,6 @@
+# Fingerprints of gitleaks findings that are known false positives.
+# Each entry needs a reason. Real secrets are rotated and purged, never listed here.
+
+# Fake 'sk-123...' key in the logger redaction test. The line carries gitleaks:allow
+# today; this commit (#260) added it before the inline allow comment existed.
+02a0187ca6b96e11476e6bf90921aabf53b1f7a5:apps/importer/src/shopee/__tests__/entity-matcher.test.ts:generic-api-key:453

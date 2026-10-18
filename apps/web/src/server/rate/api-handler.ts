@@ -1,3 +1,4 @@
+import 'server-only';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
@@ -83,4 +84,190 @@ export function parseBoundedNumberParam(
     return Math.min(Math.max(parsed.data, min), max);
   }
   return parsed.data;
+}
+
+export function parseBoundedStringParam(
+  raw: string | null | undefined,
+  maxLength: number
+): string | null {
+  if (raw == null) return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  return trimmed.length > maxLength ? trimmed.slice(0, maxLength) : trimmed;
+}
+
+const CANONICAL_PRODUCT_SLUG_REGEX = /^[a-zA-Z0-9._-]+$/;
+
+/**
+ * Parses and validates comma-separated master product slugs for `GET /api/v1/rate/compare`.
+ * Bounds raw input length, trims/deduplicates up to `maxSlugs` (default 4), and rejects invalid characters.
+ */
+export function parseCompareSlugsParam(
+  raw: string | null | undefined,
+  maxSlugs = 4
+): string[] {
+  const boundedRaw = parseBoundedStringParam(raw, 600);
+  if (!boundedRaw) return [];
+  const uniqueSlugs: string[] = [];
+  const seen = new Set<string>();
+  for (const part of boundedRaw.split(',')) {
+    const slug = part.trim();
+    if (!slug) continue;
+    if (slug.length > 120 || !CANONICAL_PRODUCT_SLUG_REGEX.test(slug)) {
+      continue;
+    }
+    const lower = slug.toLowerCase();
+    if (seen.has(lower)) continue;
+    seen.add(lower);
+    uniqueSlugs.push(slug);
+    if (uniqueSlugs.length >= maxSlugs) break;
+  }
+  return uniqueSlugs;
+}
+
+export interface SlidingWindowRateLimiterOptions {
+  windowMs: number;
+  maxRequests: number;
+  maxBuckets?: number;
+}
+
+export class BoundedSlidingWindowRateLimiter {
+  private readonly buckets = new Map<
+    string,
+    { count: number; windowResetAt: number }
+  >();
+  private readonly windowMs: number;
+  private readonly maxRequests: number;
+  private readonly maxBuckets: number;
+
+  constructor(options: SlidingWindowRateLimiterOptions) {
+    this.windowMs = Math.max(1_000, options.windowMs);
+    this.maxRequests = Math.max(1, options.maxRequests);
+    this.maxBuckets = Math.max(1, options.maxBuckets ?? 2_000);
+  }
+
+  public get size(): number {
+    return this.buckets.size;
+  }
+
+  public pruneExpired(now = Date.now()): void {
+    for (const [key, bucket] of this.buckets.entries()) {
+      if (now >= bucket.windowResetAt) {
+        this.buckets.delete(key);
+      }
+    }
+  }
+
+  public allow(clientKey: string, now = Date.now()): boolean {
+    const normalizedKey = clientKey.trim().slice(0, 128) || 'anon';
+    const existing = this.buckets.get(normalizedKey);
+    if (existing && now < existing.windowResetAt) {
+      if (existing.count >= this.maxRequests) {
+        return false;
+      }
+      existing.count += 1;
+      this.buckets.delete(normalizedKey);
+      this.buckets.set(normalizedKey, existing);
+      return true;
+    }
+
+    if (existing) {
+      this.buckets.delete(normalizedKey);
+    }
+
+    if (this.buckets.size >= this.maxBuckets) {
+      this.pruneExpired(now);
+      while (this.buckets.size >= this.maxBuckets) {
+        const oldestKey = this.buckets.keys().next().value;
+        if (oldestKey === undefined) break;
+        this.buckets.delete(oldestKey);
+      }
+    }
+
+    this.buckets.set(normalizedKey, {
+      count: 1,
+      windowResetAt: now + this.windowMs,
+    });
+    return true;
+  }
+}
+
+export function extractClientRateLimitKey(
+  headers: Pick<Headers, 'get'>
+): string {
+  const forwardedFor = headers.get('x-forwarded-for');
+  if (forwardedFor) {
+    const firstIp = forwardedFor.split(',')[0]?.trim();
+    if (firstIp) return firstIp.slice(0, 128);
+  }
+  const realIp = headers.get('x-real-ip')?.trim();
+  if (realIp) return realIp.slice(0, 128);
+  return 'anon';
+}
+
+export type ReviewVoteAction = 'up' | 'down' | 'report' | 'clear';
+export type ReviewReportReason =
+  'spam' | 'fake' | 'offensive' | 'off_topic' | 'other';
+
+const VALID_REVIEW_VOTE_ACTIONS = new Set<ReviewVoteAction>([
+  'up',
+  'down',
+  'report',
+  'clear',
+]);
+
+const VALID_REVIEW_REPORT_REASONS = new Set<ReviewReportReason>([
+  'spam',
+  'fake',
+  'offensive',
+  'off_topic',
+  'other',
+]);
+
+/**
+ * Validates and normalizes the request body for `POST /api/reviews/[id]/vote`.
+ * Rejects empty or unrecognized vote actions (`null`) instead of silently defaulting to `'up'`.
+ */
+export function resolveReviewVoteInput(rawBody: unknown): {
+  voteType: ReviewVoteAction;
+  reportReason: ReviewReportReason;
+} | null {
+  if (!rawBody || typeof rawBody !== 'object') {
+    return null;
+  }
+  const body = rawBody as Record<string, unknown>;
+  let voteType: ReviewVoteAction | null = null;
+  const rawAction =
+    typeof body.voteType === 'string'
+      ? body.voteType.trim().toLowerCase()
+      : typeof body.vote === 'string'
+        ? body.vote.trim().toLowerCase()
+        : null;
+
+  if (
+    rawAction &&
+    VALID_REVIEW_VOTE_ACTIONS.has(rawAction as ReviewVoteAction)
+  ) {
+    voteType = rawAction as ReviewVoteAction;
+  } else if (rawAction === null && typeof body.helpful === 'boolean') {
+    voteType = body.helpful ? 'up' : 'down';
+  }
+
+  if (!voteType) {
+    return null;
+  }
+
+  const rawReason =
+    typeof body.reportReason === 'string'
+      ? body.reportReason.trim().toLowerCase()
+      : typeof body.reason === 'string'
+        ? body.reason.trim().toLowerCase()
+        : null;
+  const reportReason: ReviewReportReason =
+    rawReason &&
+    VALID_REVIEW_REPORT_REASONS.has(rawReason as ReviewReportReason)
+      ? (rawReason as ReviewReportReason)
+      : 'spam';
+
+  return { voteType, reportReason };
 }

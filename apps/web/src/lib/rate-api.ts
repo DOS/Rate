@@ -1,5 +1,9 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import type { MasterProduct } from '@repo/shared-data';
+import { createLogger } from '@/lib/logger';
+import { isPendingReview } from '@/lib/review-display';
+
+const log = createLogger('rate-api');
 export type { MasterProduct };
 
 type RateSchemaClient = ReturnType<SupabaseClient['schema']>;
@@ -46,10 +50,11 @@ async function fetchAllRows<T>(
   for (let from = 0; ;) {
     const { data, error } = await buildPage(from, from + pageSize - 1);
     if (error) {
-      console.error(
-        `rate-api: paged read of ${label} failed at row ${from}:`,
-        error.message
-      );
+      log.error('paged read failed', {
+        table: label,
+        row: from,
+        message: error.message,
+      });
       return rows;
     }
     const page = data ?? [];
@@ -91,6 +96,51 @@ export interface MerchantOffer {
   };
 }
 
+export type ReviewAuthenticityAxis =
+  'genuine' | 'doubtful' | 'fabricated' | 'sabotage' | 'bombing' | 'copied';
+
+export type ReviewIndependenceAxis =
+  | 'organic'
+  | 'affiliate'
+  | 'incentivized'
+  | 'sponsored_balanced'
+  | 'sponsored_promo'
+  | 'undisclosed_paid'
+  | 'conflict_of_interest';
+
+export type ReviewDepthAxis =
+  | 'stars_only'
+  | 'platform_label'
+  | 'filler'
+  | 'low_effort'
+  | 'specific_short'
+  | 'detailed'
+  | 'expert_depth';
+
+export interface ReviewWeightBreakdown {
+  gate: 0 | 1;
+  gateReason?: string;
+  authenticity: number;
+  independence: number;
+  depth: number;
+  reviewer: number;
+  context: number;
+  community: number;
+  base_weight: number;
+  weight: number;
+  explanationVi: string;
+}
+
+export interface ReviewTrustAssessment {
+  authenticity: ReviewAuthenticityAxis;
+  independence: ReviewIndependenceAxis;
+  depth: ReviewDepthAxis;
+  routesTo: 'product' | 'merchant';
+  sponsorshipBadgeVi: string | null;
+  breakdown: ReviewWeightBreakdown;
+  wilsonScore: number;
+}
+
 export interface ReviewItem {
   id: string;
   author_name: string;
@@ -110,6 +160,7 @@ export interface ReviewItem {
   flag_category: ReviewFlagCategory;
   reason: string | null;
   signals: Record<string, unknown> | null;
+  trust_assessment?: ReviewTrustAssessment;
 }
 
 export interface ReviewAnalysisSummary {
@@ -120,6 +171,394 @@ export interface ReviewAnalysisSummary {
   pros: string[];
   cons: string[];
   ai_summary: string | null;
+}
+
+/**
+ * Computes the 95% Wilson score confidence interval lower bound for ranking "Most Helpful" reviews
+ * over weighted upvotes and downvotes (Section 9 of `Docs/Platform/review-trust-model.html`).
+ * Prevents a review with 1 upvote / 0 downvotes from outranking a review with 50 upvotes / 2 downvotes.
+ */
+export function computeWilsonLowerBound(
+  helpfulWeight: number,
+  unhelpfulWeight: number,
+  z = 1.96
+): number {
+  const pos =
+    Number.isFinite(helpfulWeight) && helpfulWeight > 0 ? helpfulWeight : 0;
+  const neg =
+    Number.isFinite(unhelpfulWeight) && unhelpfulWeight > 0
+      ? unhelpfulWeight
+      : 0;
+  const n = pos + neg;
+  if (n <= 0) return 0;
+  const pHat = pos / n;
+  const z2 = z * z;
+  const numerator =
+    pHat + z2 / (2 * n) - z * Math.sqrt((pHat * (1 - pHat) + z2 / (4 * n)) / n);
+  const denominator = 1 + z2 / n;
+  return Number(Math.max(0, Math.min(1, numerator / denominator)).toFixed(4));
+}
+
+const WEB_SHIPPING_ASPECT_RE =
+  /(?:giao\s*hàng|ship(?:per)?|vận\s*chuyển|đóng\s*gói|bọc\s*hàng|hộp\s*móp|giao\s*nhanh|giao\s*chậm|tư\s*vấn|chăm\s*sóc\s*khách)/i;
+const WEB_PRODUCT_ASPECT_RE =
+  /(?:\bpin\b|sạc|mah|màn(?:\s*hình)?|tần\s*số\s*quét|nit|hiển\s*thị|cam(?:era)?|chụp|quay\s*video|zoom|loa|mic|chất\s*âm|chống\s*ồn|bass|treble|hiệu\s*năng|chip|mượt|lag|giật|nóng|nhiệt\s*độ|fps|game|thiết\s*kế|cầm\s*nắm|vân\s*tay|face\s*id|wifi|5g|bluetooth|phím|bàn\s*phím|touchpad)/i;
+const WEB_PLATFORM_LABEL_RE =
+  /^(?:cực\s*k[ìỳ]\s*hài\s*lòng|rất\s*hài\s*lòng|hài\s*lòng|bình\s*thường|không\s*hài\s*lòng|rất\s*không\s*hài\s*lòng|tuyệt\s*vời|tốt|khá|tệ|rất\s*tệ)$/iu;
+const WEB_SPONSORED_RE =
+  /(?:được\s*tài\s*trợ|nhận\s*sản\s*phẩm\s*từ\s*hãng|bài\s*viết\s*tài\s*trợ|quảng\s*cáo|sponsored|gifted\s*by|partner(?:ed)?\s*with)/i;
+const WEB_AFFILIATE_RE =
+  /(?:link\s*mua|link\s*bio|tiếp\s*thị\s*liên\s*kết|affiliate|hoa\s*hồng|s\.shopee\.vn|shope\.ee|vt\.tiktok\.com)/i;
+const WEB_INCENTIVIZED_RE =
+  /(?:đánh\s*giá\s*5\s*sao\s*nhận\s*quà|nhận\s*voucher|hoàn\s*tiền\s*khi\s*đánh\s*giá|thẻ\s*cào\s*trong\s*hộp)/i;
+const WEB_TECH_MEASURE_RE =
+  /(?:\b\d+\s*(?:mah|wh|w|hz|nit|nits|fps|gb|tb|mp|mm|gram|g|db|ms|°c|độ\s*c)\b|geekbench|antutu|3dmark|cinebench|pcmag|gsmarena|phonearena)/i;
+const WEB_LONG_TERM_RE =
+  /(?:sau\s*\d+\s*(?:tháng|năm|tuần)|dùng\s*(?:được\s*)?\d+\s*(?:tháng|năm)|cập\s*nhật\s*sau)/i;
+
+/**
+ * Evaluates a `ReviewItem` on the 6 independent axes of Review Trust Model v2
+ * (`Docs/Platform/review-trust-model.html` Sections 3, 5, 9, 15).
+ */
+export function evaluateReviewTrustAssessment(
+  review: Pick<
+    ReviewItem,
+    | 'rating_star'
+    | 'comment'
+    | 'reviewer_type'
+    | 'upvotes'
+    | 'downvotes'
+    | 'report_count'
+    | 'flag_category'
+    | 'verdict'
+    | 'include_in_rating'
+    | 'signals'
+  >
+): ReviewTrustAssessment {
+  const comment = (review.comment || '').normalize('NFC').trim();
+  const cleanText = comment.replace(/[\s.!,]+$/u, '').trim();
+  const hasShipping = WEB_SHIPPING_ASPECT_RE.test(comment);
+  const hasProduct = WEB_PRODUCT_ASPECT_RE.test(comment);
+  const shippingOnly = hasShipping && !hasProduct && cleanText.length > 0;
+
+  // 1. Axis A: Authenticity
+  let authenticity: ReviewAuthenticityAxis = 'genuine';
+  if (review.flag_category === 'seeding_fake' || review.verdict === 'fake') {
+    authenticity = 'fabricated';
+  } else if (review.flag_category === 'competitor_sabotage') {
+    authenticity = 'sabotage';
+  } else if (review.flag_category === 'review_bombing') {
+    authenticity = 'bombing';
+  } else if (
+    review.rating_star >= 5 &&
+    /(?:tệ\s*quá|hàng\s*giả|lừa\s*đảo|đừng\s*mua|phí\s*tiền|dở\s*tệ|hỏng\s*ngay)/i.test(
+      comment
+    )
+  ) {
+    authenticity = 'doubtful';
+  }
+
+  // 2. Axis B: Independence & Sponsorship disclosure
+  let independence: ReviewIndependenceAxis = 'organic';
+  let sponsorshipBadgeVi: string | null = null;
+  if (WEB_SPONSORED_RE.test(comment)) {
+    const hasCriticism =
+      /(?:nhưng|tuy\s*nhiên|nhược\s*điểm|điểm\s*trừ|hơi\s*tiếc)/i.test(comment);
+    if (hasCriticism) {
+      independence = 'sponsored_balanced';
+      sponsorshipBadgeVi = 'Có tài trợ';
+    } else {
+      independence = 'sponsored_promo';
+      sponsorshipBadgeVi = 'Quảng cáo';
+    }
+  } else if (WEB_INCENTIVIZED_RE.test(comment)) {
+    independence = 'incentivized';
+    sponsorshipBadgeVi = 'Đổi quà / Nhận ưu đãi';
+  } else if (WEB_AFFILIATE_RE.test(comment)) {
+    independence = 'affiliate';
+    sponsorshipBadgeVi = 'Tiếp thị liên kết';
+  }
+
+  // 3. Axis C: Depth
+  let depth: ReviewDepthAxis;
+  if (cleanText.length === 0) {
+    depth = 'stars_only';
+  } else if (WEB_PLATFORM_LABEL_RE.test(cleanText)) {
+    depth = 'platform_label';
+  } else if (review.flag_category === 'low_value_coin_spam') {
+    depth = 'filler';
+  } else if (
+    review.reviewer_type === 'expert' ||
+    WEB_TECH_MEASURE_RE.test(comment) ||
+    (cleanText.length >= 240 && hasProduct)
+  ) {
+    depth = 'expert_depth';
+  } else if (cleanText.length >= 90 && hasProduct) {
+    depth = 'detailed';
+  } else if (hasProduct && cleanText.length >= 30) {
+    depth = 'specific_short';
+  } else {
+    depth = 'low_effort';
+  }
+
+  const A =
+    authenticity === 'genuine' ? 1.0 : authenticity === 'doubtful' ? 0.5 : 0;
+  const B =
+    independence === 'organic'
+      ? 1.0
+      : independence === 'affiliate'
+        ? 0.7
+        : independence === 'incentivized' ||
+            independence === 'sponsored_balanced'
+          ? 0.5
+          : independence === 'sponsored_promo'
+            ? 0.1
+            : 0;
+  let C =
+    depth === 'stars_only' || depth === 'platform_label'
+      ? 0.25
+      : depth === 'filler'
+        ? 0
+        : depth === 'low_effort'
+          ? 0.5
+          : depth === 'specific_short'
+            ? 0.8
+            : depth === 'detailed'
+              ? 1.0
+              : 1.2;
+  if (
+    (depth === 'specific_short' ||
+      depth === 'detailed' ||
+      depth === 'expert_depth') &&
+    WEB_LONG_TERM_RE.test(comment)
+  ) {
+    C = Math.min(1.5, Number((C + 0.2).toFixed(2)));
+  }
+
+  // 4. Axis D: Reviewer credibility
+  const D = review.reviewer_type === 'expert' ? 1.3 : 1.0;
+
+  // 5. Axis E: Context & routing
+  const routesTo: 'product' | 'merchant' = shippingOnly
+    ? 'merchant'
+    : 'product';
+  const E = shippingOnly ? 0 : 1.0;
+
+  // 6. Axis F: Community signal
+  const upvotes = Math.max(0, Number(review.upvotes || 0));
+  const downvotes = Math.max(0, Number(review.downvotes || 0));
+  const reports = Math.max(0, Number(review.report_count || 0));
+  const netPos = Math.max(0, upvotes - downvotes);
+  const netNeg = Math.max(0, downvotes - upvotes);
+  const rawF = 1 + 0.45 * Math.log(1 + netPos) - 0.3 * netNeg - 0.35 * reports;
+  const F = Number(Math.max(0.1, Math.min(2.0, rawF)).toFixed(2));
+
+  let gate: 0 | 1 = 1;
+  let gateReason: string | undefined;
+  if (!review.include_in_rating || A === 0 || B === 0 || C === 0 || E === 0) {
+    gate = 0;
+    if (E === 0) {
+      gateReason = 'shipping_only_routed_to_merchant';
+    } else if (A === 0) {
+      gateReason = `authenticity:${authenticity}`;
+    } else if (C === 0) {
+      gateReason = 'depth:filler';
+    } else if (B === 0) {
+      gateReason = `independence:${independence}`;
+    } else {
+      gateReason = 'excluded_from_rating';
+    }
+  }
+
+  const baseWeight = gate === 0 ? 0 : Number((A * B * C * D * E).toFixed(4));
+  const weight =
+    gate === 0
+      ? 0
+      : Number(Math.max(0, Math.min(3.0, baseWeight * F)).toFixed(2));
+
+  let explanationVi: string;
+  if (shippingOnly) {
+    explanationVi =
+      'Trọng số 0.00x cho sản phẩm: chỉ nhận xét giao hàng/đóng gói (chuyển sang điểm người bán)';
+  } else if (gate === 0) {
+    if (depth === 'filler') {
+      explanationVi =
+        'Trọng số 0.00x: bình luận cày xu / không mô tả trải nghiệm sản phẩm';
+    } else if (authenticity === 'sabotage') {
+      explanationVi = 'Trọng số 0.00x: nghi vấn đối thủ dìm hàng thiếu căn cứ';
+    } else if (authenticity === 'bombing') {
+      explanationVi = 'Trọng số 0.00x: đánh giá bất thường / bom đơn';
+    } else {
+      explanationVi = 'Trọng số 0.00x: nghi vấn seeding / văn mẫu trùng lặp';
+    }
+  } else if (depth === 'stars_only') {
+    explanationVi = `Trọng số ${weight.toFixed(2)}x: chỉ chấm sao, không có nội dung (C=0.25)`;
+  } else if (depth === 'platform_label') {
+    explanationVi = `Trọng số ${weight.toFixed(2)}x: nhãn mặc định theo số sao của sàn (C=0.25)`;
+  } else if (depth === 'low_effort') {
+    explanationVi = `Trọng số ${weight.toFixed(2)}x: nhận xét ngắn, ít chi tiết kỹ thuật (C=0.50)`;
+  } else {
+    explanationVi = `A=${A} · B=${B} · C=${C} · D=${D} · E=${E} · F=${F} -> ${weight.toFixed(2)}x`;
+  }
+
+  return {
+    authenticity,
+    independence,
+    depth,
+    routesTo,
+    sponsorshipBadgeVi,
+    breakdown: {
+      gate,
+      ...(gateReason ? { gateReason } : {}),
+      authenticity: A,
+      independence: B,
+      depth: C,
+      reviewer: D,
+      context: E,
+      community: F,
+      base_weight: baseWeight,
+      weight,
+      explanationVi,
+    },
+    wilsonScore: computeWilsonLowerBound(upvotes, downvotes),
+  };
+}
+
+export interface CombinedDualScoreResult {
+  overall: number;
+  isBlended: boolean;
+  blendFormulaNoteVi: string;
+}
+
+/**
+ * Section 7 of `Docs/Platform/review-trust-model.html`:
+ * "Điểm người dùng và điểm chuyên gia tách riêng, như JReviews.
+ * Điểm tổng (40% chuyên gia, 60% người dùng) chỉ hiện khi có cả hai
+ * và độ tin cậy của điểm người dùng từ mức trung bình trở lên (c >= 0.6)."
+ */
+export function computeCombinedDualScore(params: {
+  userScore: number | null;
+  expertScore: number | null;
+  userConfidence: number;
+  fallbackAverage?: number;
+}): CombinedDualScoreResult {
+  const {
+    userScore,
+    expertScore,
+    userConfidence,
+    fallbackAverage = 0,
+  } = params;
+  const hasUser = typeof userScore === 'number' && userScore > 0;
+  const hasExpert = typeof expertScore === 'number' && expertScore > 0;
+
+  if (hasUser && hasExpert && userConfidence >= 0.6) {
+    return {
+      overall: Number((userScore * 0.6 + expertScore * 0.4).toFixed(2)),
+      isBlended: true,
+      blendFormulaNoteVi:
+        'Tỷ trọng: 60% Người mua thực chất + 40% Chuyên gia Rate Lab (c ≥ 60%)',
+    };
+  }
+
+  if (hasUser && hasExpert && userConfidence < 0.6) {
+    return {
+      overall: Number(expertScore.toFixed(2)),
+      isBlended: false,
+      blendFormulaNoteVi:
+        'Hiển thị riêng Điểm Chuyên gia & Người mua (chờ độ tin cậy người dùng đạt mức Trung bình c ≥ 60% để gộp 60/40)',
+    };
+  }
+
+  if (hasUser) {
+    return {
+      overall: Number(userScore.toFixed(2)),
+      isBlended: false,
+      blendFormulaNoteVi:
+        'Tỷ trọng: 100% Người mua thực chất (đã lọc Seeding & Spam xu)',
+    };
+  }
+
+  if (hasExpert) {
+    return {
+      overall: Number(expertScore.toFixed(2)),
+      isBlended: false,
+      blendFormulaNoteVi: 'Tỷ trọng: 100% Đánh giá Chuyên gia Rate Lab',
+    };
+  }
+
+  return {
+    overall: Number(Number(fallbackAverage || 0).toFixed(2)),
+    isBlended: false,
+    blendFormulaNoteVi: 'Chưa đủ dữ liệu đánh giá thực chất',
+  };
+}
+
+export interface StarDistributionAnomalySummary {
+  isAnomalous: boolean;
+  fiveStarRatioPct: number;
+  lowEffortOrSeedingRatioPct: number;
+  warningLabelVi: string | null;
+}
+
+/**
+ * Section 4 (#24) & Section 7 of `Docs/Platform/review-trust-model.html`:
+ * Detects abnormal 5-star clustering at listing/product level (e.g. >= 90% 5-star reviews
+ * with zero <=3 star reviews and >= 60% stars-only/low-effort/seeding reviews across >= 5 reviews).
+ */
+export function detectStarDistributionAnomaly(
+  reviews: ReadonlyArray<
+    Pick<ReviewItem, 'rating_star' | 'comment' | 'flag_category'>
+  >
+): StarDistributionAnomalySummary {
+  if (reviews.length < 5) {
+    return {
+      isAnomalous: false,
+      fiveStarRatioPct: 0,
+      lowEffortOrSeedingRatioPct: 0,
+      warningLabelVi: null,
+    };
+  }
+
+  let fiveStarCount = 0;
+  let criticalStarCount = 0;
+  let shallowOrFlaggedFiveStar = 0;
+
+  for (const r of reviews) {
+    const star = Math.round(Number(r.rating_star || 0));
+    const text = (r.comment || '').trim();
+    if (star === 5) {
+      fiveStarCount += 1;
+      if (
+        text.length < 25 ||
+        WEB_PLATFORM_LABEL_RE.test(text) ||
+        r.flag_category !== 'authentic'
+      ) {
+        shallowOrFlaggedFiveStar += 1;
+      }
+    } else if (star <= 3) {
+      criticalStarCount += 1;
+    }
+  }
+
+  const fiveStarRatioPct = Math.round((fiveStarCount / reviews.length) * 100);
+  const lowEffortOrSeedingRatioPct =
+    fiveStarCount > 0
+      ? Math.round((shallowOrFlaggedFiveStar / fiveStarCount) * 100)
+      : 0;
+
+  const isAnomalous =
+    fiveStarRatioPct >= 90 &&
+    criticalStarCount === 0 &&
+    lowEffortOrSeedingRatioPct >= 60;
+
+  return {
+    isAnomalous,
+    fiveStarRatioPct,
+    lowEffortOrSeedingRatioPct,
+    warningLabelVi: isAnomalous
+      ? `Cảnh báo phân bố sao bất thường: ${fiveStarRatioPct}% đánh giá là 5 sao tuyệt đối (${lowEffortOrSeedingRatioPct}% chỉ chấm sao hoặc thiếu chi tiết trải nghiệm)`
+      : null,
+  };
 }
 
 /**
@@ -336,8 +775,8 @@ export async function getCategoryDirectoryFacets(
   }
 
   // Audit C1: Prefer server-side GROUP BY brand RPC `get_category_brand_facets`
-  if (typeof (supabase as any).rpc === 'function') {
-    const { data: facetRows, error: facetErr } = await (supabase as any).rpc(
+  {
+    const { data: facetRows, error: facetErr } = await supabase.rpc(
       'get_category_brand_facets',
       { p_category_id: currentCategory.id }
     );
@@ -418,8 +857,8 @@ export async function getMasterProducts(
     params?.limit && params.limit > 0 ? Math.min(params.limit, 500) : 200;
 
   // Audit C1: Prefer server-side SQL RPC `search_master_products` when deployed
-  if (typeof (supabase as any).rpc === 'function') {
-    const { data: rpcRows, error: rpcErr } = await (supabase as any).rpc(
+  {
+    const { data: rpcRows, error: rpcErr } = await supabase.rpc(
       'search_master_products',
       {
         p_category_id: resolvedCategoryId,
@@ -655,7 +1094,7 @@ export async function getMasterProductBySlug(
     .maybeSingle();
 
   if (error || !data) {
-    console.error(`Master product not found for slug: ${slug}`, error?.message);
+    log.warn('master product not found', { slug, message: error?.message });
     return null;
   }
   return normalizeMasterProductRow(data as MasterProduct);
@@ -663,6 +1102,7 @@ export async function getMasterProductBySlug(
 
 interface RawTrustViewRow {
   id: string;
+  cluster_id?: string | null;
   merchant_id: string;
   platform: string;
   title: string;
@@ -694,6 +1134,7 @@ interface RawMerchantRow {
 
 interface RawOfferRow {
   id: string;
+  cluster_id?: string | null;
   platform: string;
   title: string;
   price_current: number | string;
@@ -703,6 +1144,69 @@ interface RawOfferRow {
   rating_count: number;
   url: string;
   merchants?: RawMerchantRow | RawMerchantRow[] | null;
+}
+
+function mapTrustViewRowToMerchantOffer(row: RawTrustViewRow): MerchantOffer {
+  const combinedRisk = Number(row.threat_risk_score || 0);
+  const dosafeRisk = Number(row.dosafe_risk_score ?? combinedRisk);
+  const reviewRisk = Number(row.review_risk_score || 0);
+  return {
+    id: row.id,
+    platform: row.platform,
+    title: row.title,
+    price_current: Number(row.price_current),
+    price_original: row.price_original ? Number(row.price_original) : null,
+    stock: row.stock,
+    rating_star: Number(row.rating_star),
+    rating_count: row.rating_count,
+    url: row.url,
+    merchant: {
+      id: row.merchant_id || '',
+      name: row.merchant_name || 'Gian hàng',
+      platform: row.platform,
+      is_official: Boolean(row.merchant_is_official),
+      rating_star: null,
+      follower_count: 0,
+      location: row.merchant_location || null,
+      risk_score: Math.max(combinedRisk, dosafeRisk, reviewRisk),
+      dosafe_risk_score: dosafeRisk,
+      review_risk_score: reviewRisk,
+      review_risk_breakdown: row.review_risk_breakdown || null,
+    },
+  };
+}
+
+function mapOfferRowToMerchantOffer(item: RawOfferRow): MerchantOffer {
+  const merchantObj = Array.isArray(item.merchants)
+    ? item.merchants[0]
+    : item.merchants;
+  const dosafeRisk = Number(merchantObj?.risk_score || 0);
+  return {
+    id: item.id,
+    platform: item.platform,
+    title: item.title,
+    price_current: Number(item.price_current),
+    price_original: item.price_original ? Number(item.price_original) : null,
+    stock: item.stock,
+    rating_star: Number(item.rating_star),
+    rating_count: item.rating_count,
+    url: item.url,
+    merchant: {
+      id: merchantObj?.id || '',
+      name: merchantObj?.name || 'Gian hàng',
+      platform: merchantObj?.platform || item.platform,
+      is_official: Boolean(merchantObj?.is_official),
+      rating_star: merchantObj?.rating_star
+        ? Number(merchantObj.rating_star)
+        : null,
+      follower_count: merchantObj?.follower_count || 0,
+      location: merchantObj?.location || null,
+      risk_score: dosafeRisk,
+      dosafe_risk_score: dosafeRisk,
+      review_risk_score: 0,
+      review_risk_breakdown: null,
+    },
+  };
 }
 
 /**
@@ -722,35 +1226,9 @@ export async function getMasterProductOffers(
     .order('price_current', { ascending: true });
 
   if (!viewErr && viewData) {
-    return (viewData as unknown as RawTrustViewRow[]).map((row) => {
-      const combinedRisk = Number(row.threat_risk_score || 0);
-      const dosafeRisk = Number(row.dosafe_risk_score ?? combinedRisk);
-      const reviewRisk = Number(row.review_risk_score || 0);
-      return {
-        id: row.id,
-        platform: row.platform,
-        title: row.title,
-        price_current: Number(row.price_current),
-        price_original: row.price_original ? Number(row.price_original) : null,
-        stock: row.stock,
-        rating_star: Number(row.rating_star),
-        rating_count: row.rating_count,
-        url: row.url,
-        merchant: {
-          id: row.merchant_id || '',
-          name: row.merchant_name || 'Gian hàng',
-          platform: row.platform,
-          is_official: Boolean(row.merchant_is_official),
-          rating_star: null,
-          follower_count: 0,
-          location: row.merchant_location || null,
-          risk_score: Math.max(combinedRisk, dosafeRisk, reviewRisk),
-          dosafe_risk_score: dosafeRisk,
-          review_risk_score: reviewRisk,
-          review_risk_breakdown: row.review_risk_breakdown || null,
-        },
-      };
-    });
+    return (viewData as unknown as RawTrustViewRow[]).map(
+      mapTrustViewRowToMerchantOffer
+    );
   }
 
   // Fallback with explicit column list matching column-level SELECT grants on rate.merchants
@@ -759,6 +1237,7 @@ export async function getMasterProductOffers(
     .select(
       `
       id,
+      cluster_id,
       platform,
       title,
       price_current,
@@ -783,46 +1262,100 @@ export async function getMasterProductOffers(
     .order('price_current', { ascending: true });
 
   if (error || !data) {
-    console.error(
-      'Error fetching offers for masterId:',
-      masterId,
-      error?.message
-    );
+    log.error('offers fetch failed', { masterId, message: error?.message });
     return [];
   }
 
-  return (data as unknown as RawOfferRow[]).map((item) => {
-    const merchantObj = Array.isArray(item.merchants)
-      ? item.merchants[0]
-      : item.merchants;
-    const dosafeRisk = Number(merchantObj?.risk_score || 0);
-    return {
-      id: item.id,
-      platform: item.platform,
-      title: item.title,
-      price_current: Number(item.price_current),
-      price_original: item.price_original ? Number(item.price_original) : null,
-      stock: item.stock,
-      rating_star: Number(item.rating_star),
-      rating_count: item.rating_count,
-      url: item.url,
-      merchant: {
-        id: merchantObj?.id || '',
-        name: merchantObj?.name || 'Gian hàng',
-        platform: merchantObj?.platform || item.platform,
-        is_official: Boolean(merchantObj?.is_official),
-        rating_star: merchantObj?.rating_star
-          ? Number(merchantObj.rating_star)
-          : null,
-        follower_count: merchantObj?.follower_count || 0,
-        location: merchantObj?.location || null,
-        risk_score: dosafeRisk,
-        dosafe_risk_score: dosafeRisk,
-        review_risk_score: 0,
-        review_risk_breakdown: null,
-      },
-    };
-  });
+  return (data as unknown as RawOfferRow[]).map(mapOfferRowToMerchantOffer);
+}
+
+/**
+ * Batch-fetch merchant listing offers for multiple master products in chunked `.in('cluster_id', ...)` queries.
+ * Eliminates N+1 query storms in Cross-Platform Deal Radar and multi-product aggregations.
+ */
+export async function getMasterProductOffersBatch(
+  masterIds: readonly string[]
+): Promise<Map<string, MerchantOffer[]>> {
+  const uniqueIds = Array.from(
+    new Set(masterIds.map((id) => id.trim()).filter(Boolean))
+  );
+  const offersByMaster = new Map<string, MerchantOffer[]>(
+    uniqueIds.map((id) => [id, []])
+  );
+  if (uniqueIds.length === 0) {
+    return offersByMaster;
+  }
+
+  const supabase = getRateClient();
+  const chunkSize = 150;
+
+  for (let i = 0; i < uniqueIds.length; i += chunkSize) {
+    const batchIds = uniqueIds.slice(i, i + chunkSize);
+
+    const { data: viewData, error: viewErr } = await supabase
+      .from('v_products_with_merchant_trust')
+      .select('*')
+      .in('cluster_id', batchIds)
+      .order('price_current', { ascending: true });
+
+    if (!viewErr && viewData) {
+      for (const row of viewData as unknown as RawTrustViewRow[]) {
+        const cid = row.cluster_id ? String(row.cluster_id) : '';
+        if (!cid) continue;
+        const list = offersByMaster.get(cid) ?? [];
+        list.push(mapTrustViewRowToMerchantOffer(row));
+        offersByMaster.set(cid, list);
+      }
+      continue;
+    }
+
+    const { data, error } = await supabase
+      .from('products')
+      .select(
+        `
+        id,
+        cluster_id,
+        platform,
+        title,
+        price_current,
+        price_original,
+        stock,
+        rating_star,
+        rating_count,
+        url,
+        merchants (
+          id,
+          name,
+          platform,
+          is_official,
+          rating_star,
+          follower_count,
+          location,
+          risk_score
+        )
+      `
+      )
+      .in('cluster_id', batchIds)
+      .order('price_current', { ascending: true });
+
+    if (error || !data) {
+      log.error('batch offers fetch failed', {
+        batchSize: batchIds.length,
+        message: error?.message,
+      });
+      continue;
+    }
+
+    for (const item of data as unknown as RawOfferRow[]) {
+      const cid = item.cluster_id ? String(item.cluster_id) : '';
+      if (!cid) continue;
+      const list = offersByMaster.get(cid) ?? [];
+      list.push(mapOfferRowToMerchantOffer(item));
+      offersByMaster.set(cid, list);
+    }
+  }
+
+  return offersByMaster;
 }
 
 interface RawReviewFlagRow {
@@ -917,7 +1450,7 @@ export async function getMasterProductReviews(
             includeInRating,
           });
 
-    return {
+    const item: ReviewItem = {
       id: r.id,
       author_name: r.author_name || 'Khách hàng',
       rating_star: Number(r.rating_star || 5),
@@ -938,6 +1471,8 @@ export async function getMasterProductReviews(
       reason: vf?.reason || null,
       signals: vf?.signals || null,
     };
+    item.trust_assessment = evaluateReviewTrustAssessment(item);
+    return item;
   });
 }
 
@@ -958,11 +1493,14 @@ export async function getMasterProductReviewSummary(
   masterId: string,
   reviewsFallback: ReviewItem[] = []
 ): Promise<ReviewAnalysisSummary> {
-  const totalFromReviews = reviewsFallback.length;
-  const authenticFromReviews = reviewsFallback.filter(
+  // Unanalyzed community reviews are neither authentic nor suspicious yet, so
+  // they stay out of every percentage.
+  const analyzedReviews = reviewsFallback.filter((r) => !isPendingReview(r));
+  const totalFromReviews = analyzedReviews.length;
+  const authenticFromReviews = analyzedReviews.filter(
     (r) => r.include_in_rating
   ).length;
-  const fakeFromReviews = reviewsFallback.filter(
+  const fakeFromReviews = analyzedReviews.filter(
     (r) =>
       r.flag_category === 'seeding_fake' ||
       r.flag_category === 'competitor_sabotage' ||
@@ -1204,10 +1742,10 @@ export async function getMasterProductPriceHistory(
     .limit(1000);
 
   if (error) {
-    console.error(
-      `rate-api: failed to fetch price_history for master ${masterId}:`,
-      error.message
-    );
+    log.error('price_history fetch failed', {
+      masterId,
+      message: error.message,
+    });
   }
 
   const chronologicalRows = [
@@ -1710,10 +2248,12 @@ export function getMasterProductHref(
   return `/${catSlug}/${product.slug}`;
 }
 
-function computeDynamicReviewRisk(reviews: ReviewItem[]): {
+function computeDynamicReviewRisk(allReviews: ReviewItem[]): {
   reviewRiskScore: number;
   breakdown: MerchantRiskBreakdown;
 } {
+  // Unanalyzed community reviews carry no risk signal yet.
+  const reviews = allReviews.filter((r) => !isPendingReview(r));
   const total = reviews.length;
   if (total === 0) {
     return {
@@ -2467,7 +3007,9 @@ export async function getRatePlatformStats(): Promise<RatePlatformStats> {
         vf?.include_in_rating ??
         (flagCategory === 'authentic' && verdict !== 'fake')
       );
-      if (includeInRating) {
+      if (verdict === 'unanalyzed') {
+        // Pending community reviews are neither authentic nor filtered yet.
+      } else if (includeInRating) {
         authenticCount += 1;
       } else {
         filteredCount += 1;
@@ -2502,8 +3044,11 @@ export async function getRatePlatformStats(): Promise<RatePlatformStats> {
     });
 
   const totalRev = mappedReviews.length;
+  const analyzedRev = authenticCount + filteredCount;
   const authenticRatioPct =
-    totalRev > 0 ? Math.round((authenticCount / totalRev) * 1000) / 10 : 100;
+    analyzedRev > 0
+      ? Math.round((authenticCount / analyzedRev) * 1000) / 10
+      : 100;
 
   return {
     masterProductsCount: masterRows.length,
@@ -2525,7 +3070,19 @@ export async function getRatePlatformStats(): Promise<RatePlatformStats> {
 
 export interface ParsedEcommerceUrl {
   isUrl: boolean;
-  platform: 'shopee' | 'lazada' | 'tiki' | 'tiktok' | 'rate' | null;
+  platform:
+    | 'shopee'
+    | 'lazada'
+    | 'tiki'
+    | 'tiktok'
+    | 'cellphones'
+    | 'tgdd'
+    | 'fptshop'
+    | 'hoangha'
+    | 'didongviet'
+    | 'phongvu'
+    | 'rate'
+    | null;
   platformShopId: string | null;
   platformItemId: string | null;
   internalSlug: string | null;
@@ -2551,16 +3108,181 @@ export interface UrlInspectionResult {
   radarSignal?: import('./deal-radar').RadarSignal | null;
 }
 
+function isDomainOrSubdomain(host: string, domain: string): boolean {
+  return host === domain || host.endsWith(`.${domain}`);
+}
+
 export function parseEcommerceUrlOrQuery(raw: string): ParsedEcommerceUrl {
   const trimmed = raw.trim();
-  const isUrl =
-    /^https?:\/\//i.test(trimmed) ||
-    /shopee\.vn|lazada\.vn|tiki\.vn|tiktok\.com|rate\.vn/i.test(trimmed);
+  const hasHttpProtocol = /^https?:\/\//i.test(trimmed);
+  const hasKnownDomainToken =
+    /(?:^|\/\/|\.)(?:shopee\.vn|lazada\.vn|tiki\.vn|tiktok\.com|cellphones\.com\.vn|thegioididong\.com|topzone\.vn|dienmayxanh\.com|fptshop\.com\.vn|hoanghamobile\.com|didongviet\.vn|phongvu\.vn|rate\.vn)(?:\/|$)/i.test(
+      trimmed
+    );
+  const isUrl = hasHttpProtocol || hasKnownDomainToken;
 
-  // Shopee item pattern: ...-i.<shopId>.<itemId> or /product/<shopId>/<itemId>
-  const shopeeItemMatch =
-    trimmed.match(/(?:a-)?i\.(\d+)\.(\d+)/i) ||
-    trimmed.match(/shopee\.vn\/product\/(\d+)\/(\d+)/i);
+  let parsedHost: string | null = null;
+  let parsedPathname = trimmed;
+  if (hasHttpProtocol || hasKnownDomainToken) {
+    try {
+      const parsed = new URL(
+        hasHttpProtocol ? trimmed : `https://${trimmed.replace(/^\/+/, '')}`
+      );
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        return {
+          isUrl: false,
+          platform: null,
+          platformShopId: null,
+          platformItemId: null,
+          internalSlug: null,
+        };
+      }
+      parsedHost = parsed.hostname.toLowerCase();
+      parsedPathname = parsed.pathname;
+    } catch {
+      parsedHost = null;
+    }
+  }
+
+  // If a full HTTP/HTTPS URL was supplied, verify host against known domains first
+  if (parsedHost) {
+    if (isDomainOrSubdomain(parsedHost, 'shopee.vn')) {
+      const itemMatch =
+        parsedPathname.match(/(?:a-)?i\.(\d+)\.(\d+)/i) ||
+        parsedPathname.match(/\/product\/(\d+)\/(\d+)/i);
+      if (itemMatch) {
+        return {
+          isUrl: true,
+          platform: 'shopee',
+          platformShopId: itemMatch[1] || null,
+          platformItemId: itemMatch[2] || null,
+          internalSlug: null,
+        };
+      }
+      const shopMatch = parsedPathname.match(/\/shop\/(\d+)/i);
+      if (shopMatch) {
+        return {
+          isUrl: true,
+          platform: 'shopee',
+          platformShopId: shopMatch[1] || null,
+          platformItemId: null,
+          internalSlug: null,
+        };
+      }
+      return {
+        isUrl: true,
+        platform: 'shopee',
+        platformShopId: null,
+        platformItemId: null,
+        internalSlug: null,
+      };
+    }
+
+    if (isDomainOrSubdomain(parsedHost, 'lazada.vn')) {
+      const lazadaMatch = parsedPathname.match(/-i(\d+)(?:-s(\d+))?\.html/i);
+      return {
+        isUrl: true,
+        platform: 'lazada',
+        platformShopId: lazadaMatch?.[2] || null,
+        platformItemId: lazadaMatch?.[1] || null,
+        internalSlug: null,
+      };
+    }
+
+    if (isDomainOrSubdomain(parsedHost, 'tiki.vn')) {
+      const tikiMatch = parsedPathname.match(/-p(\d+)\.html/i);
+      return {
+        isUrl: true,
+        platform: 'tiki',
+        platformShopId: null,
+        platformItemId: tikiMatch?.[1] || null,
+        internalSlug: null,
+      };
+    }
+
+    if (isDomainOrSubdomain(parsedHost, 'tiktok.com')) {
+      const prodMatch =
+        parsedPathname.match(/\/product\/(\d+)/i) ||
+        parsedPathname.match(/\/view\/product\/(\d+)/i) ||
+        parsedPathname.match(/\/video\/(\d+)/i);
+      const shopMatch = parsedPathname.match(/\/@([a-zA-Z0-9_.-]+)/);
+      return {
+        isUrl: true,
+        platform: 'tiktok',
+        platformShopId: shopMatch?.[1] || null,
+        platformItemId: prodMatch?.[1] || null,
+        internalSlug: null,
+      };
+    }
+
+    const retailPlatform: ParsedEcommerceUrl['platform'] = isDomainOrSubdomain(
+      parsedHost,
+      'cellphones.com.vn'
+    )
+      ? 'cellphones'
+      : isDomainOrSubdomain(parsedHost, 'thegioididong.com') ||
+          isDomainOrSubdomain(parsedHost, 'topzone.vn') ||
+          isDomainOrSubdomain(parsedHost, 'dienmayxanh.com')
+        ? 'tgdd'
+        : isDomainOrSubdomain(parsedHost, 'fptshop.com.vn')
+          ? 'fptshop'
+          : isDomainOrSubdomain(parsedHost, 'hoanghamobile.com')
+            ? 'hoangha'
+            : isDomainOrSubdomain(parsedHost, 'didongviet.vn')
+              ? 'didongviet'
+              : isDomainOrSubdomain(parsedHost, 'phongvu.vn')
+                ? 'phongvu'
+                : null;
+
+    if (retailPlatform) {
+      const segments = parsedPathname.split('/').filter(Boolean);
+      const lastSeg =
+        segments[segments.length - 1]?.replace(/\.html?$/i, '') || null;
+      const isValidItemSlug =
+        lastSeg &&
+        lastSeg !== 'search' &&
+        lastSeg !== 'tim-kiem' &&
+        lastSeg.length >= 2;
+      return {
+        isUrl: true,
+        platform: retailPlatform,
+        platformShopId: null,
+        platformItemId: isValidItemSlug ? lastSeg : null,
+        internalSlug: null,
+      };
+    }
+
+    if (
+      isDomainOrSubdomain(parsedHost, 'rate.vn') ||
+      parsedHost === 'localhost' ||
+      parsedHost === '127.0.0.1'
+    ) {
+      const rateSlugMatch = parsedPathname.match(
+        /\/(?:smartphones|tablets|laptops|smartwatches|earbuds)\/([a-z0-9-]+)/i
+      );
+      if (rateSlugMatch) {
+        return {
+          isUrl: true,
+          platform: 'rate',
+          platformShopId: null,
+          platformItemId: null,
+          internalSlug: rateSlugMatch[1] || null,
+        };
+      }
+    }
+
+    // Full URL to an unknown/unrelated domain (e.g., https://google.com/search?q=shopee.vn or https://shopee.vn.evil.com/...)
+    return {
+      isUrl: true,
+      platform: null,
+      platformShopId: null,
+      platformItemId: null,
+      internalSlug: null,
+    };
+  }
+
+  // Fallback for relative paths / raw product tokens without hostname
+  const shopeeItemMatch = trimmed.match(/(?:a-)?i\.(\d+)\.(\d+)/i);
   if (shopeeItemMatch) {
     return {
       isUrl: true,
@@ -2571,19 +3293,6 @@ export function parseEcommerceUrlOrQuery(raw: string): ParsedEcommerceUrl {
     };
   }
 
-  // Shopee shop URL: shopee.vn/shop/<shopId>
-  const shopeeShopMatch = trimmed.match(/shopee\.vn\/shop\/(\d+)/i);
-  if (shopeeShopMatch) {
-    return {
-      isUrl: true,
-      platform: 'shopee',
-      platformShopId: shopeeShopMatch[1] || null,
-      platformItemId: null,
-      internalSlug: null,
-    };
-  }
-
-  // Lazada item pattern: -i<itemId>-s<shopId>.html or -i<itemId>.html
   const lazadaMatch = trimmed.match(/-i(\d+)(?:-s(\d+))?\.html/i);
   if (lazadaMatch) {
     return {
@@ -2595,7 +3304,6 @@ export function parseEcommerceUrlOrQuery(raw: string): ParsedEcommerceUrl {
     };
   }
 
-  // Tiki item pattern: -p<itemId>.html
   const tikiMatch = trimmed.match(/-p(\d+)\.html/i);
   if (tikiMatch) {
     return {
@@ -2607,7 +3315,7 @@ export function parseEcommerceUrlOrQuery(raw: string): ParsedEcommerceUrl {
     };
   }
 
-  // Rate.vn internal URL: /smartphones/<slug>, /tablets/<slug>, /laptops/<slug>, /smartwatches/<slug>, /earbuds/<slug>
+  // Rate.vn internal relative URL: /smartphones/<slug>, /tablets/<slug>, /laptops/<slug>, /smartwatches/<slug>, /earbuds/<slug>
   const rateSlugMatch = trimmed.match(
     /\/(?:smartphones|tablets|laptops|smartwatches|earbuds)\/([a-z0-9-]+)/i
   );
@@ -2630,8 +3338,20 @@ export function parseEcommerceUrlOrQuery(raw: string): ParsedEcommerceUrl {
   };
 }
 
+const PLATFORM_ITEM_ID_PREFIX: Partial<
+  Record<NonNullable<ParsedEcommerceUrl['platform']>, string>
+> = {
+  tiktok: 'tts-',
+  cellphones: 'cps-',
+  tgdd: 'tgdd-',
+  fptshop: 'fpt-',
+  hoangha: 'hhm-',
+  didongviet: 'ddv-',
+  phongvu: 'pv-',
+};
+
 /**
- * Inspect an e-commerce product/shop URL (Shopee, Lazada, Tiki) or keyword:
+ * Inspect an e-commerce product/shop URL (all 10 platforms) or keyword:
  * - Resolves exact `platform_item_id` or `url` against `rate.products`
  * - Or resolves `platform_shop_id` / merchant name against `rate.merchants`
  * - Or resolves product slug / keyword against `rate.master_products`
@@ -2663,10 +3383,24 @@ export async function inspectProductOrShopUrl(
 
   // 1. Direct lookup by platform_item_id if parsed from URL
   if (parsedUrl.platformItemId) {
+    const candidateIds = new Set<string>([parsedUrl.platformItemId]);
+    if (parsedUrl.platformShopId) {
+      candidateIds.add(
+        `${parsedUrl.platformShopId}_${parsedUrl.platformItemId}`
+      );
+    }
+    const prefix = parsedUrl.platform
+      ? PLATFORM_ITEM_ID_PREFIX[parsedUrl.platform]
+      : undefined;
+    if (prefix && !parsedUrl.platformItemId.startsWith(prefix)) {
+      candidateIds.add(`${prefix}${parsedUrl.platformItemId}`);
+    }
+
     const { data: prodRow } = await supabase
       .from('products')
       .select('id, cluster_id, merchant_id, platform_item_id')
-      .eq('platform_item_id', parsedUrl.platformItemId)
+      .in('platform_item_id', Array.from(candidateIds))
+      .limit(1)
       .maybeSingle();
 
     const matchedProd = prodRow as {

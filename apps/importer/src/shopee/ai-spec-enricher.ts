@@ -1,10 +1,12 @@
 import {
+  z,
   ProductSpecificationsSchema,
   KeySpecsSchema,
   type ProductSpecifications,
   type KeySpecs,
 } from '@repo/shared-data';
 import type { NormalizedProductCandidate } from './product-normalizer.js';
+import { computeRetryDelayMs, createImporterLogger } from './logger.js';
 
 export type SupportedAiProvider =
   'openai' | 'dos-ai' | 'gemini' | 'deepseek' | 'groq' | 'openrouter' | 'ollama';
@@ -27,6 +29,22 @@ export interface AiEnrichmentResponse {
   specifications: ProductSpecifications;
   key_specs: KeySpecs;
 }
+
+export const AiSpecEnrichmentPayloadSchema = z.object({
+  ram_gb: z.number().positive().nullable().optional(),
+  storage_gb: z.number().positive().nullable().optional(),
+  screen_size_inch: z.number().positive().nullable().optional(),
+  battery_mah: z.number().positive().nullable().optional(),
+  has_5g: z.boolean().optional(),
+  specifications: ProductSpecificationsSchema,
+  key_specs: KeySpecsSchema.optional(),
+});
+
+export function getAiSpecEnrichmentJsonSchema(): Record<string, unknown> {
+  return z.toJSONSchema(AiSpecEnrichmentPayloadSchema) as Record<string, unknown>;
+}
+
+const logger = createImporterLogger('AiSpecEnricher');
 
 const PROVIDER_DEFAULTS: Record<
   SupportedAiProvider,
@@ -97,128 +115,145 @@ function toStringOrUndefined(val: unknown): string | undefined {
   return undefined;
 }
 
+function asRecord(val: unknown): Record<string, unknown> | undefined {
+  return val && typeof val === 'object' && !Array.isArray(val)
+    ? (val as Record<string, unknown>)
+    : undefined;
+}
+
 /**
  * Coerces raw LLM JSON output into strict types matching ProductSpecificationsSchema
  */
-export function sanitizeSpecifications(raw: any): ProductSpecifications {
-  if (!raw || typeof raw !== 'object') return {};
+export function sanitizeSpecifications(raw: unknown): ProductSpecifications {
+  const root = asRecord(raw);
+  if (!root) return {};
 
-  const availability = raw.availability
+  const rawAvailability = asRecord(root.availability);
+  const availability = rawAvailability
     ? {
-        announced: toStringOrUndefined(raw.availability.announced),
-        status: toStringOrUndefined(raw.availability.status),
-        prices_msrp: toStringOrUndefined(raw.availability.prices_msrp),
+        announced: toStringOrUndefined(rawAvailability.announced),
+        status: toStringOrUndefined(rawAvailability.status),
+        prices_msrp: toStringOrUndefined(rawAvailability.prices_msrp),
       }
     : undefined;
 
-  const design = raw.design
+  const rawDesign = asRecord(root.design);
+  const design = rawDesign
     ? {
-        dimensions: toStringOrUndefined(raw.design.dimensions),
-        weight_g: toNumberOrUndefined(raw.design.weight_g),
-        materials: toStringOrUndefined(raw.design.materials),
-        build: toStringOrUndefined(raw.design.build),
-        resistance: toStringOrUndefined(raw.design.resistance),
-        biometrics: toStringOrUndefined(raw.design.biometrics),
-        keys: toStringOrUndefined(raw.design.keys),
-        colors: Array.isArray(raw.design.colors)
-          ? raw.design.colors.map((c: unknown) => String(c).trim()).filter(Boolean)
+        dimensions: toStringOrUndefined(rawDesign.dimensions),
+        weight_g: toNumberOrUndefined(rawDesign.weight_g),
+        materials: toStringOrUndefined(rawDesign.materials),
+        build: toStringOrUndefined(rawDesign.build),
+        resistance: toStringOrUndefined(rawDesign.resistance),
+        biometrics: toStringOrUndefined(rawDesign.biometrics),
+        keys: toStringOrUndefined(rawDesign.keys),
+        colors: Array.isArray(rawDesign.colors)
+          ? rawDesign.colors.map((c: unknown) => String(c).trim()).filter(Boolean)
           : undefined,
       }
     : undefined;
 
-  const display = raw.display
+  const rawDisplay = asRecord(root.display);
+  const display = rawDisplay
     ? {
-        size_inch: toNumberOrUndefined(raw.display.size_inch),
-        type: toStringOrUndefined(raw.display.type),
-        resolution: toStringOrUndefined(raw.display.resolution),
-        refresh_rate_hz: toNumberOrUndefined(raw.display.refresh_rate_hz),
-        ppi: toNumberOrUndefined(raw.display.ppi),
-        protection: toStringOrUndefined(raw.display.protection),
-        features: toStringOrUndefined(raw.display.features),
+        size_inch: toNumberOrUndefined(rawDisplay.size_inch),
+        type: toStringOrUndefined(rawDisplay.type),
+        resolution: toStringOrUndefined(rawDisplay.resolution),
+        refresh_rate_hz: toNumberOrUndefined(rawDisplay.refresh_rate_hz),
+        ppi: toNumberOrUndefined(rawDisplay.ppi),
+        protection: toStringOrUndefined(rawDisplay.protection),
+        features: toStringOrUndefined(rawDisplay.features),
       }
     : undefined;
 
-  const hardware = raw.hardware
+  const rawHardware = asRecord(root.hardware);
+  const hardware = rawHardware
     ? {
-        chipset: toStringOrUndefined(raw.hardware.chipset),
-        cpu: toStringOrUndefined(raw.hardware.cpu),
-        gpu: toStringOrUndefined(raw.hardware.gpu),
-        ram_gb: toNumberOrUndefined(raw.hardware.ram_gb),
-        storage_gb: toNumberOrUndefined(raw.hardware.storage_gb),
-        storage_expansion: toStringOrUndefined(raw.hardware.storage_expansion),
-        os: toStringOrUndefined(raw.hardware.os),
+        chipset: toStringOrUndefined(rawHardware.chipset),
+        cpu: toStringOrUndefined(rawHardware.cpu),
+        gpu: toStringOrUndefined(rawHardware.gpu),
+        ram_gb: toNumberOrUndefined(rawHardware.ram_gb),
+        storage_gb: toNumberOrUndefined(rawHardware.storage_gb),
+        storage_expansion: toStringOrUndefined(rawHardware.storage_expansion),
+        os: toStringOrUndefined(rawHardware.os),
       }
     : undefined;
 
-  const battery = raw.battery
+  const rawBattery = asRecord(root.battery);
+  const battery = rawBattery
     ? {
-        capacity_mah: toNumberOrUndefined(raw.battery.capacity_mah),
-        type: toStringOrUndefined(raw.battery.type),
-        charging: toStringOrUndefined(raw.battery.charging),
-        fast_charging_w: toNumberOrUndefined(raw.battery.fast_charging_w),
+        capacity_mah: toNumberOrUndefined(rawBattery.capacity_mah),
+        type: toStringOrUndefined(rawBattery.type),
+        charging: toStringOrUndefined(rawBattery.charging),
+        fast_charging_w: toNumberOrUndefined(rawBattery.fast_charging_w),
         reverse_charging:
-          typeof raw.battery.reverse_charging === 'boolean' ||
-          typeof raw.battery.reverse_charging === 'string'
-            ? raw.battery.reverse_charging
+          typeof rawBattery.reverse_charging === 'boolean' ||
+          typeof rawBattery.reverse_charging === 'string'
+            ? rawBattery.reverse_charging
             : undefined,
       }
     : undefined;
 
-  const camera = raw.camera
+  const rawCamera = asRecord(root.camera);
+  const camera = rawCamera
     ? {
-        rear_setup: toStringOrUndefined(raw.camera.rear_setup),
-        main_camera: toStringOrUndefined(raw.camera.main_camera),
-        second_camera: toStringOrUndefined(raw.camera.second_camera),
-        third_camera: toStringOrUndefined(raw.camera.third_camera),
-        fourth_camera: toStringOrUndefined(raw.camera.fourth_camera),
-        flash: toStringOrUndefined(raw.camera.flash),
-        video_recording: toStringOrUndefined(raw.camera.video_recording),
-        front_camera: toStringOrUndefined(raw.camera.front_camera),
+        rear_setup: toStringOrUndefined(rawCamera.rear_setup),
+        main_camera: toStringOrUndefined(rawCamera.main_camera),
+        second_camera: toStringOrUndefined(rawCamera.second_camera),
+        third_camera: toStringOrUndefined(rawCamera.third_camera),
+        fourth_camera: toStringOrUndefined(rawCamera.fourth_camera),
+        flash: toStringOrUndefined(rawCamera.flash),
+        video_recording: toStringOrUndefined(rawCamera.video_recording),
+        front_camera: toStringOrUndefined(rawCamera.front_camera),
       }
     : undefined;
 
-  const connectivity = raw.connectivity
+  const rawConnectivity = asRecord(root.connectivity);
+  const connectivity = rawConnectivity
     ? {
-        bluetooth: toStringOrUndefined(raw.connectivity.bluetooth),
-        wlan: toStringOrUndefined(raw.connectivity.wlan),
-        usb: toStringOrUndefined(raw.connectivity.usb),
-        sensors: toStringOrUndefined(raw.connectivity.sensors),
-        location: toStringOrUndefined(raw.connectivity.location),
-        nfc: toBooleanOrUndefined(raw.connectivity.nfc),
-        other: toStringOrUndefined(raw.connectivity.other),
+        bluetooth: toStringOrUndefined(rawConnectivity.bluetooth),
+        wlan: toStringOrUndefined(rawConnectivity.wlan),
+        usb: toStringOrUndefined(rawConnectivity.usb),
+        sensors: toStringOrUndefined(rawConnectivity.sensors),
+        location: toStringOrUndefined(rawConnectivity.location),
+        nfc: toBooleanOrUndefined(rawConnectivity.nfc),
+        other: toStringOrUndefined(rawConnectivity.other),
       }
     : undefined;
 
-  const cellular = raw.cellular
+  const rawCellular = asRecord(root.cellular);
+  const cellular = rawCellular
     ? {
-        has_5g: toBooleanOrUndefined(raw.cellular.has_5g),
-        bands_5g: toStringOrUndefined(raw.cellular.bands_5g),
-        bands_4g: toStringOrUndefined(raw.cellular.bands_4g),
-        bands_3g: toStringOrUndefined(raw.cellular.bands_3g),
-        bands_2g: toStringOrUndefined(raw.cellular.bands_2g),
-        technology: toStringOrUndefined(raw.cellular.technology),
-        data_speed: toStringOrUndefined(raw.cellular.data_speed),
-        sim_type: toStringOrUndefined(raw.cellular.sim_type),
-        volte: toBooleanOrUndefined(raw.cellular.volte),
-        vowifi: toBooleanOrUndefined(raw.cellular.vowifi),
+        has_5g: toBooleanOrUndefined(rawCellular.has_5g),
+        bands_5g: toStringOrUndefined(rawCellular.bands_5g),
+        bands_4g: toStringOrUndefined(rawCellular.bands_4g),
+        bands_3g: toStringOrUndefined(rawCellular.bands_3g),
+        bands_2g: toStringOrUndefined(rawCellular.bands_2g),
+        technology: toStringOrUndefined(rawCellular.technology),
+        data_speed: toStringOrUndefined(rawCellular.data_speed),
+        sim_type: toStringOrUndefined(rawCellular.sim_type),
+        volte: toBooleanOrUndefined(rawCellular.volte),
+        vowifi: toBooleanOrUndefined(rawCellular.vowifi),
       }
     : undefined;
 
-  const multimedia = raw.multimedia
+  const rawMultimedia = asRecord(root.multimedia);
+  const multimedia = rawMultimedia
     ? {
-        loudspeaker: toStringOrUndefined(raw.multimedia.loudspeaker),
-        headphone_jack_35mm: toBooleanOrUndefined(raw.multimedia.headphone_jack_35mm),
-        audio_features: toStringOrUndefined(raw.multimedia.audio_features),
+        loudspeaker: toStringOrUndefined(rawMultimedia.loudspeaker),
+        headphone_jack_35mm: toBooleanOrUndefined(rawMultimedia.headphone_jack_35mm),
+        audio_features: toStringOrUndefined(rawMultimedia.audio_features),
       }
     : undefined;
 
-  const regulatory = raw.regulatory
+  const rawRegulatory = asRecord(root.regulatory);
+  const regulatory = rawRegulatory
     ? {
-        fcc_approval: toStringOrUndefined(raw.regulatory.fcc_approval),
-        sar_head: toStringOrUndefined(raw.regulatory.sar_head),
-        sar_body: toStringOrUndefined(raw.regulatory.sar_body),
-        sar_simultaneous: toStringOrUndefined(raw.regulatory.sar_simultaneous),
-        certifications: toStringOrUndefined(raw.regulatory.certifications),
+        fcc_approval: toStringOrUndefined(rawRegulatory.fcc_approval),
+        sar_head: toStringOrUndefined(rawRegulatory.sar_head),
+        sar_body: toStringOrUndefined(rawRegulatory.sar_body),
+        sar_simultaneous: toStringOrUndefined(rawRegulatory.sar_simultaneous),
+        certifications: toStringOrUndefined(rawRegulatory.certifications),
       }
     : undefined;
 
@@ -244,6 +279,14 @@ export function sanitizeSpecifications(raw: any): ProductSpecifications {
  * Populates the 10 Field Groups (PhoneArena structure + GSMArena depth) for any mobile device.
  * Supports: OpenAI, DOS-AI Gateway, Gemini, DeepSeek, Groq, OpenRouter, Ollama (or any OpenAI-compatible API).
  */
+export function trimTrailingSlashes(rawUrl: string): string {
+  let end = rawUrl.length;
+  while (end > 0 && rawUrl.charCodeAt(end - 1) === 47) {
+    end -= 1;
+  }
+  return end === rawUrl.length ? rawUrl : rawUrl.slice(0, end);
+}
+
 export class AiSpecEnricher {
   private provider: SupportedAiProvider;
   private apiKey: string;
@@ -258,13 +301,13 @@ export class AiSpecEnricher {
     const defaults = PROVIDER_DEFAULTS[this.provider];
 
     this.apiKey = config.apiKey ?? this.resolveApiKey(this.provider);
-    this.baseUrl = (
+    this.baseUrl = trimTrailingSlashes(
       config.baseUrl ||
-      process.env.AI_BASE_URL ||
-      process.env.DOS_AI_BASE_URL ||
-      process.env.OPENAI_BASE_URL ||
-      defaults.baseUrl
-    ).replace(/\/+$/, '');
+        process.env.AI_BASE_URL ||
+        process.env.DOS_AI_BASE_URL ||
+        process.env.OPENAI_BASE_URL ||
+        defaults.baseUrl
+    );
 
     this.model =
       config.model || process.env.AI_MODEL || process.env.OPENAI_MODEL || defaults.defaultModel;
@@ -467,8 +510,14 @@ REQUIRED JSON SCHEMA:
     rawDescription?: string;
   }): Promise<AiEnrichmentResponse | null> {
     if (!this.isConfigured()) {
-      console.log(
-        `[AiSpecEnricher] Skipped AI call for "${params.brand} ${params.model}" (no API key configured for provider "${this.provider}").`
+      logger.info(
+        'spec_enrich.skipped_unconfigured',
+        `Skipped AI call for "${params.brand} ${params.model}" (no API key configured for provider "${this.provider}").`,
+        {
+          provider: this.provider,
+          brand: params.brand,
+          deviceModel: params.model,
+        }
       );
       return null;
     }
@@ -476,7 +525,9 @@ REQUIRED JSON SCHEMA:
     const cacheKey = `${params.brand.toLowerCase()}:${params.model.toLowerCase()}:${params.storageGb || 'default'}`;
     const cached = this.memoryCache.get(cacheKey);
     if (cached) {
-      console.log(`[AiSpecEnricher] Cache hit for "${cacheKey}"`);
+      logger.info('spec_enrich.cache_hit', `Cache hit for "${cacheKey}"`, {
+        cacheKey,
+      });
       return cached;
     }
 
@@ -493,8 +544,15 @@ REQUIRED JSON SCHEMA:
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
 
     try {
-      console.log(
-        `[AiSpecEnricher] Querying ${this.provider} (${this.model}) for "${params.brand} ${params.model}"...`
+      logger.info(
+        'spec_enrich.query_start',
+        `Querying ${this.provider} (${this.model}) for "${params.brand} ${params.model}"`,
+        {
+          provider: this.provider,
+          model: this.model,
+          brand: params.brand,
+          deviceModel: params.model,
+        }
       );
 
       const endpoint = `${this.baseUrl}/chat/completions`;
@@ -515,25 +573,48 @@ REQUIRED JSON SCHEMA:
         response_format: { type: 'json_object' },
       };
 
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      });
+      let response: Response | null = null;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const reqController = new AbortController();
+        const reqTimer = setTimeout(() => reqController.abort(), this.timeoutMs);
+        try {
+          response = await fetch(endpoint, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(body),
+            signal: reqController.signal,
+          });
+          if (response.ok) break;
+          if (response.status !== 429 && response.status < 500) break;
+        } finally {
+          clearTimeout(reqTimer);
+        }
+        if (attempt === 0) {
+          await new Promise(resolve =>
+            setTimeout(resolve, computeRetryDelayMs(attempt, 250, 1500))
+          );
+        }
+      }
 
-      if (!response.ok) {
-        const errText = await response.text().catch(() => '');
-        console.warn(
-          `[AiSpecEnricher] HTTP ${response.status} from ${this.provider}: ${errText.slice(0, 300)}`
+      if (!response || !response.ok) {
+        const status = response?.status ?? 0;
+        const errText = response ? await response.text().catch(() => '') : '';
+        logger.warn(
+          'spec_enrich.http_error',
+          `HTTP ${status} from ${this.provider}: ${errText.slice(0, 300)}`,
+          { provider: this.provider, status }
         );
         return null;
       }
 
-      const data = (await response.json()) as any;
+      const data = (await response.json()) as {
+        choices?: Array<{ message?: { content?: string } }>;
+      };
       const rawContent: string | undefined = data?.choices?.[0]?.message?.content;
       if (!rawContent) {
-        console.warn(`[AiSpecEnricher] Empty message content from ${this.provider}`);
+        logger.warn('spec_enrich.empty_response', `Empty message content from ${this.provider}`, {
+          provider: this.provider,
+        });
         return null;
       }
 
@@ -614,13 +695,24 @@ REQUIRED JSON SCHEMA:
       };
 
       this.memoryCache.set(cacheKey, result);
-      console.log(
-        `[AiSpecEnricher] Enriched "${params.brand} ${params.model}": Chip="${keySpecs.chip}", Screen="${keySpecs.screen}", Battery="${keySpecs.battery}"`
+      logger.info(
+        'spec_enrich.completed',
+        `Enriched "${params.brand} ${params.model}": Chip="${keySpecs.chip}", Screen="${keySpecs.screen}", Battery="${keySpecs.battery}"`,
+        {
+          brand: params.brand,
+          deviceModel: params.model,
+          chip: keySpecs.chip ?? null,
+          screen: keySpecs.screen ?? null,
+          battery: keySpecs.battery ?? null,
+        }
       );
       return result;
-    } catch (err: any) {
-      console.warn(
-        `[AiSpecEnricher] Failed to enrich "${params.brand} ${params.model}": ${err?.message || err}`
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      logger.warn(
+        'spec_enrich.failed',
+        `Failed to enrich "${params.brand} ${params.model}": ${errMsg}`,
+        { brand: params.brand, deviceModel: params.model }
       );
       return null;
     } finally {

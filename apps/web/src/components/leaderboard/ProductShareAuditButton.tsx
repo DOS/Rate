@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
+import { escapeCsvCell } from '@/lib/csv-safe';
 import {
   RADAR_CSV_HEADERS,
   radarCsvCells,
@@ -34,6 +36,7 @@ export default function ProductShareAuditButton({
   keySpecLine,
   radarSignal,
 }: ProductShareAuditButtonProps) {
+  const t = useTranslations('productDetail');
   const [copiedMd, setCopiedMd] = useState(false);
   const [copiedUrl, setCopiedUrl] = useState(false);
 
@@ -42,19 +45,35 @@ export default function ProductShareAuditButton({
     try {
       const priceStr =
         minPriceVnd > 0
-          ? `${minPriceVnd.toLocaleString('vi-VN')} ₫ (${offerCount} nguồn kiểm định)`
-          : 'Đang cập nhật';
+          ? t('shareAuditPriceSources', {
+              price: minPriceVnd.toLocaleString('vi-VN'),
+              count: offerCount,
+            })
+          : t('shareAuditUpdating');
+      const userScoreStr =
+        userScore5 > 0
+          ? t('shareAuditMdUserScoreVal', {
+              score: userScore5.toFixed(2),
+              count: authenticReviews,
+            })
+          : t('shareAuditMdNoReviews');
+      const expertScoreStr =
+        expertScore10 != null
+          ? `${expertScore10.toFixed(1)}/10`
+          : t('shareAuditMdNoExpert');
       const lines = [
-        `### 🛡️ Hồ Sơ Kiểm Định Thiết Bị: ${name} (${brand})`,
-        `- **Điểm Người Mua Thực Chất (JReviews):** ${userScore5 > 0 ? `★ ${userScore5.toFixed(2)}/5.0 (${authenticReviews} đánh giá thật đã lọc Seeding AI)` : 'Chưa có đánh giá'}`,
-        `- **Điểm Chuyên Gia Rate Lab:** ${expertScore10 != null ? `${expertScore10.toFixed(1)}/10` : 'Chưa có'}`,
-        ...(keySpecLine ? [`- **Cấu Hình Chuẩn Hóa:** ${keySpecLine}`] : []),
-        `- **Giá Tham Khảo Thấp Nhất:** ${priceStr}`,
-        ...(radarSignal
-          ? [`- **Tín Hiệu Deal Radar 60N:** ${radarLabel(radarSignal)}`]
+        t('shareAuditMdTitle', { name, brand }),
+        t('shareAuditMdUserScore', { score: userScoreStr }),
+        t('shareAuditMdExpertScore', { score: expertScoreStr }),
+        ...(keySpecLine
+          ? [t('shareAuditMdKeySpecs', { specs: keySpecLine })]
           : []),
-        `- **Mã Định Danh Chuẩn:** \`${modelKey}\``,
-        `- **Xem chi tiết 10 nhóm thông số & lịch sử giá:** ${window.location.href}`,
+        t('shareAuditMdMinPrice', { price: priceStr }),
+        ...(radarSignal
+          ? [t('shareAuditMdRadar', { signal: radarLabel(radarSignal) })]
+          : []),
+        t('shareAuditMdModelKey', { modelKey }),
+        t('shareAuditMdUrl', { url: window.location.href }),
       ];
       await navigator.clipboard.writeText(lines.join('\n'));
       setCopiedMd(true);
@@ -77,23 +96,16 @@ export default function ProductShareAuditButton({
 
   const handleDownloadProductCsv = () => {
     if (typeof window === 'undefined') return;
-    const escapeCsv = (val: string | number) => {
-      const str = String(val ?? '');
-      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-        return `"${str.replace(/"/g, '""')}"`;
-      }
-      return str;
-    };
     const headers = [
-      'Thiết Bị',
-      'Thương Hiệu',
-      'Model Key',
-      'Điểm Người Mua (/5.0)',
-      'Điểm Chuyên Gia (/10)',
-      'Review Thật',
-      'Giá Thấp Nhất (VND)',
-      'Số Nguồn Kiểm Định',
-      'Cấu Hình Chuẩn Hóa',
+      t('shareAuditCsvColDevice'),
+      t('shareAuditCsvColBrand'),
+      t('shareAuditCsvColModelKey'),
+      t('shareAuditCsvColUserScore'),
+      t('shareAuditCsvColExpertScore'),
+      t('shareAuditCsvColAuthenticReviews'),
+      t('shareAuditCsvColMinPrice'),
+      t('shareAuditCsvColOfferCount'),
+      t('shareAuditCsvColKeySpecs'),
       ...(radarSignal ? RADAR_CSV_HEADERS : []),
     ];
     const row = [
@@ -108,7 +120,7 @@ export default function ProductShareAuditButton({
       keySpecLine || '',
       ...(radarSignal ? radarCsvCells(radarSignal) : []),
     ];
-    const csvContent = `\uFEFF${headers.map(escapeCsv).join(',')}\n${row.map(escapeCsv).join(',')}`;
+    const csvContent = `\uFEFF${headers.map(escapeCsvCell).join(',')}\n${row.map(escapeCsvCell).join(',')}`;
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -153,11 +165,9 @@ export default function ProductShareAuditButton({
         type="button"
         onClick={handleCopyMarkdown}
         className="btn btn-sm btn-outline-danger rounded-pill fw-medium px-3"
-        title="Sao chép thẻ tóm tắt kiểm định định dạng Markdown để dán lên diễn đàn/nhóm chat"
+        title={t('shareAuditCopyMdTitle')}
       >
-        {copiedMd
-          ? '✓ Đã sao chép hồ sơ Markdown!'
-          : '📋 Sao chép hồ sơ kiểm định'}
+        {copiedMd ? t('shareAuditCopiedMdBtn') : t('shareAuditCopyMdBtn')}
       </button>
       <button
         type="button"
@@ -179,9 +189,9 @@ export default function ProductShareAuditButton({
         type="button"
         onClick={handleCopyLink}
         className="btn btn-sm btn-outline-secondary rounded-pill px-3"
-        title="Sao chép đường dẫn sản phẩm"
+        title={t('shareAuditCopyLinkTitle')}
       >
-        {copiedUrl ? '✓ Đã chép link!' : '🔗 Chép link'}
+        {copiedUrl ? t('shareAuditCopiedLinkBtn') : t('shareAuditCopyLinkBtn')}
       </button>
     </div>
   );

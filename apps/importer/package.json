@@ -10,6 +10,10 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./shopee/logger": {
+      "types": "./dist/shopee/logger.d.ts",
+      "import": "./dist/shopee/logger.js"
+    },
     "./shopee/arena-spec-syncer": {
       "types": "./dist/shopee/arena-spec-syncer.d.ts",
       "import": "./dist/shopee/arena-spec-syncer.js"
@@ -17,6 +21,10 @@
     "./shopee/flagship-seed-data": {
       "types": "./dist/shopee/flagship-seed-data.d.ts",
       "import": "./dist/shopee/flagship-seed-data.js"
+    },
+    "./shopee/jobs/backfill-specs": {
+      "types": "./dist/shopee/jobs/backfill-specs.d.ts",
+      "import": "./dist/shopee/jobs/backfill-specs.js"
     },
     "./package.json": "./package.json"
   },
@@ -26,9 +34,10 @@
     "typecheck": "tsc -p tsconfig.typecheck.json --noEmit",
     "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",
-    "lint": "eslint . --ext .ts",
+    "lint": "eslint . --max-warnings 0",
     "format": "prettier --write \"src/**/*.ts\"",
-    "test": "tsx src/shopee/__tests__/open-core-intelligence.test.ts && tsx src/shopee/__tests__/entity-matcher.test.ts && tsx src/shopee/test-review-analyzer.ts",
+    "backfill:specs": "tsx src/shopee/jobs/backfill-specs.ts",
+    "test": "tsx src/shopee/__tests__/open-core-intelligence.test.ts && tsx src/shopee/__tests__/entity-matcher.test.ts && tsx src/shopee/__tests__/shopee-to-supabase.test.ts && tsx src/shopee/test-ai-enricher.ts && tsx src/shopee/test-review-analyzer.ts",
     "test:dist": "node src/shopee/__tests__/dist-exports.smoke.mjs"
   },
   "keywords": [
@@ -47,17 +56,14 @@
   "dependencies": {
     "@repo/shared-data": "workspace:*",
     "@supabase/supabase-js": "^2.117.2",
-    "dotenv": "^16.4.7"
+    "dotenv": "^18.0.8"
   },
   "devDependencies": {
-    "@types/node": "^26.6.3",
-    "@typescript-eslint/eslint-plugin": "8.33.1",
-    "@typescript-eslint/parser": "8.33.1",
-    "eslint": "^8.57.0",
-    "eslint-config-prettier": "10.1.5",
-    "eslint-plugin-prettier": "^5.2.1",
+    "@types/node": "^26.6.5",
+    "@repo/eslint-config": "workspace:*",
+    "eslint": "^9.39.5",
     "prettier": "^3.9.6",
-    "tsx": "^4.20.5",
+    "tsx": "^4.23.15",
     "typescript": "^7.0.2"
   }
 }

@@ -2,10 +2,10 @@
 
 import React, { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { Link } from '@/lib/navigation';
-import { getPublicClient } from '@repo/shared-data';
+import { getBrowserSupabase } from '@/lib/supabase/browser';
 import { PASSWORD_MIN_LENGTH } from '@/lib/constants';
-import { normalizeRateLocale, type SupportedRateLocale } from '@/lib/rate-i18n';
 import {
   BsArrowRight,
   BsBellFill,
@@ -28,238 +28,56 @@ interface RateAuthPortalProps {
   locale?: string;
 }
 
-interface AuthLocaleText {
-  badge: string;
-  trustTitle: string;
-  trustSubtitle: string;
-  feature1Title: string;
-  feature1Desc: string;
-  feature2Title: string;
-  feature2Desc: string;
-  feature3Title: string;
-  feature3Desc: string;
-  loginTitle: string;
-  loginSub: string;
-  registerTitle: string;
-  registerSub: string;
-  forgotTitle: string;
-  forgotSub: string;
-  otpTitle: string;
-  otpSub: string;
-  fullNameLabel: string;
-  fullNamePlaceholder: string;
-  emailLabel: string;
-  emailPlaceholder: string;
-  passwordLabel: string;
-  passwordPlaceholder: string;
-  confirmPasswordLabel: string;
-  confirmPasswordPlaceholder: string;
-  otpLabel: string;
-  otpPlaceholder: string;
-  loginBtn: string;
-  registerBtn: string;
-  forgotBtn: string;
-  otpVerifyBtn: string;
-  sendMagicOtpBtn: string;
-  submitting: string;
-  switchToRegister: string;
-  switchToLogin: string;
-  forgotLink: string;
-  otpLink: string;
-  errPasswordMismatch: string;
-  errPasswordShort: string;
-  errInvalidCredentials: string;
-  errGeneric: string;
-  okLogin: string;
-  okRegister: string;
-  okResetSent: string;
-  okOtpSent: string;
-  okOtpVerified: string;
-}
-
-const AUTH_COPY: Record<SupportedRateLocale, AuthLocaleText> = {
-  vi: {
-    badge: 'Hệ Thống Định Danh Bảo Mật Supabase Auth (DOS Ecosystem)',
-    trustTitle: 'Tài Khoản Người Mua Độc Lập Trên Rate.vn',
-    trustSubtitle:
-      'Đồng bộ danh sách canh giá thật, gửi đánh giá 5 tiêu chí JReviews và biểu quyết bình luận hữu ích mà không tiết lộ thông tin cá nhân cho các gian hàng TMĐT.',
-    feature1Title: 'Bảo vệ Biểu quyết JReviews (rate.review_votes)',
-    feature1Desc:
-      'Mỗi tài khoản xác thực giúp chống thao túng trọng số Helpful/Report trên hệ thống đánh giá kỹ thuật 5 tiêu chí.',
-    feature2Title: 'Đồng bộ Danh sách Canh giá thật (/watchlist)',
-    feature2Desc:
-      'Lưu trữ ngưỡng giá mục tiêu cho điện thoại, laptop, máy tính bảng, đồng hồ và tai nghe trên đám mây.',
-    feature3Title: 'Kiến trúc Zero-Trust & Không chia sẻ cho Sàn',
-    feature3Desc:
-      'Dữ liệu định danh được bảo vệ bởi Row Level Security (RLS) trên PostgreSQL 17 của hệ sinh thái DOS.',
-    loginTitle: 'Đăng Nhập Tài Khoản Rate.vn',
-    loginSub:
-      'Sử dụng email và mật khẩu hoặc nhận mã xác thực OTP một lần qua email.',
-    registerTitle: 'Tạo Tài Khoản Kiểm Toán Người Mua',
-    registerSub:
-      'Tham gia cộng đồng đánh giá thông số 10 nhóm và canh giá thật đa sàn.',
-    forgotTitle: 'Khôi Phục Mật Khẩu Tài Khoản',
-    forgotSub:
-      'Nhập địa chỉ email đã đăng ký để nhận liên kết đặt lại mật khẩu an toàn từ Supabase Auth.',
-    otpTitle: 'Xác Thực Hai Lớp & Mã OTP Email',
-    otpSub:
-      'Nhập mã xác thực 6 chữ số được gửi tới hộp thư của bạn để hoàn tất đăng nhập bảo mật.',
-    fullNameLabel: 'Họ và tên hiển thị',
-    fullNamePlaceholder: 'Nguyễn Văn A',
-    emailLabel: 'Địa chỉ Email',
-    emailPlaceholder: 'ban@rate.vn',
-    passwordLabel: 'Mật khẩu bảo mật',
-    passwordPlaceholder: 'Tối thiểu 6 ký tự',
-    confirmPasswordLabel: 'Xác nhận lại mật khẩu',
-    confirmPasswordPlaceholder: 'Nhập lại mật khẩu',
-    otpLabel: 'Mã xác thực OTP (6 chữ số)',
-    otpPlaceholder: '123456',
-    loginBtn: 'Đăng nhập vào Rate.vn',
-    registerBtn: 'Đăng ký tài khoản mới',
-    forgotBtn: 'Gửi liên kết đặt lại mật khẩu',
-    otpVerifyBtn: 'Xác nhận mã OTP & Đăng nhập',
-    sendMagicOtpBtn: 'Gửi mã OTP tới Email này',
-    submitting: 'Đang xử lý yêu cầu...',
-    switchToRegister: 'Chưa có tài khoản? Đăng ký ngay',
-    switchToLogin: 'Đã có tài khoản? Quay lại Đăng nhập',
-    forgotLink: 'Quên mật khẩu?',
-    otpLink: 'Đăng nhập bằng mã OTP / 2FA',
-    errPasswordMismatch: 'Mật khẩu xác nhận không khớp. Vui lòng kiểm tra lại.',
-    errPasswordShort: `Mật khẩu phải có ít nhất ${PASSWORD_MIN_LENGTH} ký tự.`,
-    errInvalidCredentials:
-      'Email hoặc mật khẩu không chính xác, hoặc tài khoản chưa được kích hoạt.',
-    errGeneric:
-      'Không thể hoàn tất yêu cầu xác thực. Vui lòng kiểm tra lại thông tin.',
-    okLogin: 'Đăng nhập thành công! Đang chuyển hướng...',
-    okRegister:
-      'Đăng ký tài khoản thành công! Vui lòng kiểm tra hộp thư email để xác nhận hoặc đăng nhập ngay.',
-    okResetSent:
-      'Đã gửi hướng dẫn đặt lại mật khẩu tới email của bạn. Vui lòng kiểm tra hộp thư đến (và thư mục Spam).',
-    okOtpSent:
-      'Đã gửi mã OTP 6 chữ số tới email của bạn. Vui lòng nhập mã bên dưới để hoàn tất xác thực.',
-    okOtpVerified: 'Xác thực OTP thành công! Đang chuyển hướng về trang chủ...',
-  },
-  en: {
-    badge: 'Supabase Auth Identity Layer (DOS Ecosystem)',
-    trustTitle: 'Independent Buyer Audit Account on Rate.vn',
-    trustSubtitle:
-      'Sync your true-price watchlist, submit 5-criteria JReviews technical ratings, and vote on authentic buyer reviews without exposing your identity to marketplace sellers.',
-    feature1Title: 'Authenticated JReviews Voting (rate.review_votes)',
-    feature1Desc:
-      'Verified accounts prevent manipulation of Helpful/Report weights across our 5-criteria technical review engine.',
-    feature2Title: 'Cross-Device Price Watchlist (/watchlist)',
-    feature2Desc:
-      'Track target price thresholds across smartphones, laptops, tablets, smartwatches, and earbuds.',
-    feature3Title: 'Zero-Trust PostgreSQL 17 RLS Isolation',
-    feature3Desc:
-      'Your identity is protected by strict Row Level Security on the DOS Ecosystem Supabase infrastructure.',
-    loginTitle: 'Sign In to Rate.vn',
-    loginSub:
-      'Sign in with your email and password or request a one-time email OTP code.',
-    registerTitle: 'Create a Buyer Audit Account',
-    registerSub:
-      'Join the open community auditing 10-group specs and real historical prices.',
-    forgotTitle: 'Reset Your Account Password',
-    forgotSub:
-      'Enter your registered email address to receive a password reset link via Supabase Auth.',
-    otpTitle: 'Two-Factor & Email OTP Verification',
-    otpSub:
-      'Enter the 6-digit verification code sent to your email inbox to complete sign-in.',
-    fullNameLabel: 'Display Name',
-    fullNamePlaceholder: 'Alex Nguyen',
-    emailLabel: 'Email Address',
-    emailPlaceholder: 'you@rate.vn',
-    passwordLabel: 'Password',
-    passwordPlaceholder: 'Minimum 6 characters',
-    confirmPasswordLabel: 'Confirm Password',
-    confirmPasswordPlaceholder: 'Re-enter your password',
-    otpLabel: '6-Digit OTP Verification Code',
-    otpPlaceholder: '123456',
-    loginBtn: 'Sign In to Rate.vn',
-    registerBtn: 'Create Account',
-    forgotBtn: 'Send Password Reset Link',
-    otpVerifyBtn: 'Verify OTP & Sign In',
-    sendMagicOtpBtn: 'Send OTP Code to Email',
-    submitting: 'Processing request...',
-    switchToRegister: 'New to Rate.vn? Create an account',
-    switchToLogin: 'Already have an account? Back to Sign In',
-    forgotLink: 'Forgot password?',
-    otpLink: 'Sign in with Email OTP / 2FA',
-    errPasswordMismatch: 'Passwords do not match. Please double-check.',
-    errPasswordShort: `Password must be at least ${PASSWORD_MIN_LENGTH} characters long.`,
-    errInvalidCredentials:
-      'Invalid email or password, or the account has not been confirmed yet.',
-    errGeneric:
-      'Could not complete authentication request. Please verify your details.',
-    okLogin: 'Signed in successfully! Redirecting...',
-    okRegister:
-      'Account created! Please check your email inbox for confirmation or sign in directly.',
-    okResetSent:
-      'Password reset instructions have been sent to your email address.',
-    okOtpSent:
-      'A 6-digit OTP code has been sent to your email. Enter it below to verify.',
-    okOtpVerified: 'OTP verified successfully! Redirecting...',
-  },
-  cs: {
-    badge: 'Autentizační vrstva Supabase Auth (DOS Ecosystem)',
-    trustTitle: 'Nezávislý účet kupujícího na Rate.vn',
-    trustSubtitle:
-      'Synchronizujte své hlídání skutečných cen, přidávejte 5kritériové recenze JReviews a hlasujte o užitečnosti bez sdílení osobních údajů s e-shopy.',
-    feature1Title: 'Ověřené hlasování JReviews (rate.review_votes)',
-    feature1Desc:
-      'Ověřené účty chrání vážené skóre užitečnosti recenzí před manipulací a seedingem.',
-    feature2Title: 'Synchronizace hlídaných cen (/watchlist)',
-    feature2Desc:
-      'Sledujte cílové ceny pro telefony, notebooky, tablety, chytré hodinky a sluchátka.',
-    feature3Title: 'Zero-Trust PostgreSQL 17 RLS ochrana',
-    feature3Desc:
-      'Vaše identita je chráněna politikami Row Level Security v infrastruktuře DOS.',
-    loginTitle: 'Přihlášení k účtu Rate.vn',
-    loginSub:
-      'Přihlaste se pomocí e-mailu a hesla nebo jednorázového OTP kódu.',
-    registerTitle: 'Vytvořit účet na Rate.vn',
-    registerSub:
-      'Připojte se ke komunitě kontrolující 10 skupin parametrů a skutečné ceny.',
-    forgotTitle: 'Obnovení zapomenutého hesla',
-    forgotSub:
-      'Zadejte svůj registrovaný e-mail pro zaslání odkazu k obnovení hesla přes Supabase Auth.',
-    otpTitle: 'Dvoufázové ověření a e-mailový OTP kód',
-    otpSub: 'Zadejte 6místný ověřovací kód zaslaný na váš e-mail.',
-    fullNameLabel: 'Zobrazované jméno',
-    fullNamePlaceholder: 'Jan Novák',
-    emailLabel: 'E-mailová adresa',
-    emailPlaceholder: 'vas@rate.vn',
-    passwordLabel: 'Heslo',
-    passwordPlaceholder: 'Minimálně 6 znaků',
-    confirmPasswordLabel: 'Potvrzení hesla',
-    confirmPasswordPlaceholder: 'Zadejte heslo znovu',
-    otpLabel: '6místný ověřovací OTP kód',
-    otpPlaceholder: '123456',
-    loginBtn: 'Přihlásit se na Rate.vn',
-    registerBtn: 'Vytvořit účet',
-    forgotBtn: 'Odeslat odkaz pro obnovu hesla',
-    otpVerifyBtn: 'Ověřit OTP a přihlásit se',
-    sendMagicOtpBtn: 'Odeslat OTP kód na e-mail',
-    submitting: 'Zpracovávání požadavku...',
-    switchToRegister: 'Nemáte účet? Zaregistrujte se',
-    switchToLogin: 'Již máte účet? Zpět na přihlášení',
-    forgotLink: 'Zapomněli jste heslo?',
-    otpLink: 'Přihlášení přes OTP / 2FA',
-    errPasswordMismatch: 'Zadaná hesla se neshodují.',
-    errPasswordShort: `Heslo musí mít alespoň ${PASSWORD_MIN_LENGTH} znaků.`,
-    errInvalidCredentials: 'Neplatný e-mail nebo heslo.',
-    errGeneric: 'Požadavek se nepodařilo dokončit. Zkontrolujte zadané údaje.',
-    okLogin: 'Přihlášení proběhlo úspěšně! Přesměrování...',
-    okRegister: 'Účet byl vytvořen! Zkontrolujte svůj e-mail pro potvrzení.',
-    okResetSent: 'Pokyny pro obnovení hesla byly odeslány na váš e-mail.',
-    okOtpSent: '6místný OTP kód byl odeslán na váš e-mail.',
-    okOtpVerified: 'OTP kód byl úspěšně ověřen! Přesměrování...',
-  },
-};
-
-export default function RateAuthPortal({ mode, locale }: RateAuthPortalProps) {
-  const normalizedLocale = normalizeRateLocale(locale);
-  const copy = AUTH_COPY[normalizedLocale];
+export default function RateAuthPortal({ mode }: RateAuthPortalProps) {
+  const t = useTranslations('authPortal');
+  const copy = {
+    badge: t('badge'),
+    trustTitle: t('trustTitle'),
+    trustSubtitle: t('trustSubtitle'),
+    feature1Title: t('feature1Title'),
+    feature1Desc: t('feature1Desc'),
+    feature2Title: t('feature2Title'),
+    feature2Desc: t('feature2Desc'),
+    feature3Title: t('feature3Title'),
+    feature3Desc: t('feature3Desc'),
+    loginTitle: t('loginTitle'),
+    loginSub: t('loginSub'),
+    registerTitle: t('registerTitle'),
+    registerSub: t('registerSub'),
+    forgotTitle: t('forgotTitle'),
+    forgotSub: t('forgotSub'),
+    otpTitle: t('otpTitle'),
+    otpSub: t('otpSub'),
+    fullNameLabel: t('fullNameLabel'),
+    fullNamePlaceholder: t('fullNamePlaceholder'),
+    emailLabel: t('emailLabel'),
+    emailPlaceholder: t('emailPlaceholder'),
+    passwordLabel: t('passwordLabel'),
+    passwordPlaceholder: t('passwordPlaceholder'),
+    confirmPasswordLabel: t('confirmPasswordLabel'),
+    confirmPasswordPlaceholder: t('confirmPasswordPlaceholder'),
+    otpLabel: t('otpLabel'),
+    otpPlaceholder: t('otpPlaceholder'),
+    loginBtn: t('loginBtn'),
+    registerBtn: t('registerBtn'),
+    forgotBtn: t('forgotBtn'),
+    otpVerifyBtn: t('otpVerifyBtn'),
+    sendMagicOtpBtn: t('sendMagicOtpBtn'),
+    submitting: t('submitting'),
+    switchToRegister: t('switchToRegister'),
+    switchToLogin: t('switchToLogin'),
+    forgotLink: t('forgotLink'),
+    otpLink: t('otpLink'),
+    errPasswordMismatch: t('errPasswordMismatch'),
+    errPasswordShort: t('errPasswordShort', { min: PASSWORD_MIN_LENGTH }),
+    errInvalidCredentials: t('errInvalidCredentials'),
+    errGeneric: t('errGeneric'),
+    okLogin: t('okLogin'),
+    okRegister: t('okRegister'),
+    okResetSent: t('okResetSent'),
+    okOtpSent: t('okOtpSent'),
+    okOtpVerified: t('okOtpVerified'),
+  };
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -283,7 +101,7 @@ export default function RateAuthPortal({ mode, locale }: RateAuthPortalProps) {
     setLoading(true);
 
     try {
-      const supabase = getPublicClient();
+      const supabase = getBrowserSupabase();
       const trimmedEmail = email.trim();
 
       if (mode === 'login') {
@@ -415,7 +233,7 @@ export default function RateAuthPortal({ mode, locale }: RateAuthPortalProps) {
     setSuccessMessage(null);
     setLoading(true);
     try {
-      const supabase = getPublicClient();
+      const supabase = getBrowserSupabase();
       const { error } = await supabase.auth.signInWithOtp({
         email: trimmedEmail,
       });
@@ -516,25 +334,25 @@ export default function RateAuthPortal({ mode, locale }: RateAuthPortalProps) {
                   href="/smartphones"
                   className="btn btn-sm btn-outline-light rounded-pill px-3"
                 >
-                  📱 Smartphones
+                  {t('pillSmartphones')}
                 </Link>
                 <Link
                   href="/laptops"
                   className="btn btn-sm btn-outline-light rounded-pill px-3"
                 >
-                  💻 Laptops
+                  {t('pillLaptops')}
                 </Link>
                 <Link
                   href="/merchants"
                   className="btn btn-sm btn-outline-light rounded-pill px-3"
                 >
-                  🛡️ Merchants
+                  {t('pillMerchants')}
                 </Link>
                 <Link
                   href="/watchlist"
                   className="btn btn-sm btn-outline-light rounded-pill px-3"
                 >
-                  🔔 Watchlist
+                  {t('pillWatchlist')}
                 </Link>
               </div>
             </div>
@@ -553,7 +371,7 @@ export default function RateAuthPortal({ mode, locale }: RateAuthPortalProps) {
                       : 'btn-light text-muted'
                   }`}
                 >
-                  🔑 Login
+                  {t('tabLogin')}
                 </Link>
                 <Link
                   href="/register"
@@ -563,7 +381,7 @@ export default function RateAuthPortal({ mode, locale }: RateAuthPortalProps) {
                       : 'btn-light text-muted'
                   }`}
                 >
-                  ✨ Register
+                  {t('tabRegister')}
                 </Link>
                 <Link
                   href="/two-factor-auth"
@@ -573,7 +391,7 @@ export default function RateAuthPortal({ mode, locale }: RateAuthPortalProps) {
                       : 'btn-light text-muted'
                   }`}
                 >
-                  🛡️ Email OTP / 2FA
+                  {t('tabOtp')}
                 </Link>
                 <Link
                   href="/forgot-password"
@@ -583,7 +401,7 @@ export default function RateAuthPortal({ mode, locale }: RateAuthPortalProps) {
                       : 'btn-light text-muted'
                   }`}
                 >
-                  🔄 Reset
+                  {t('tabReset')}
                 </Link>
               </div>
 

@@ -4,32 +4,54 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, edited]
 
+permissions:
+  contents: read
+
 jobs:
   commitlint:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 2
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.34.5
-
       - name: Use Node 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
-          cache: pnpm
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      # Install only commitlint, at the versions pinned in the root package.json,
+      # into a scratch directory instead of installing the whole monorepo.
+      # The repo config is copied next to it so `extends` resolves there.
+      - name: Install commitlint
+        run: |
+          CL_DIR="$RUNNER_TEMP/commitlint"
+          mkdir -p "$CL_DIR"
+          CLI_VERSION=$(node -p "require('./package.json').devDependencies['@commitlint/cli']")
+          CONFIG_VERSION=$(node -p "require('./package.json').devDependencies['@commitlint/config-conventional']")
+          for v in "$CLI_VERSION" "$CONFIG_VERSION"; do
+            if ! printf '%s' "$v" | grep -Eq '^[~^]?[0-9]+\.[0-9]+\.[0-9]+'; then
+              echo "::error::Root package.json must pin @commitlint/cli and @commitlint/config-conventional to a semver version (got '$v')"
+              exit 1
+            fi
+          done
+          cp commitlint.config.ts "$CL_DIR/"
+          cd "$CL_DIR"
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund --ignore-scripts \
+            "@commitlint/cli@$CLI_VERSION" "@commitlint/config-conventional@$CONFIG_VERSION"
+          echo "CL_DIR=$CL_DIR" >> "$GITHUB_ENV"
 
-      - name: Lint PR title and HEAD commit message
+      # Lint the PR head commit, not the synthetic merge commit that
+      # actions/checkout uses for pull_request (commitlint ignores "Merge ...").
+      # fetch-depth: 2 includes the head commit as the merge commit's parent.
+      - name: Lint PR title and head commit message
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          echo "$PR_TITLE" | pnpm exec commitlint
-          git log -1 --pretty=%B | pnpm exec commitlint
+          HEAD_MESSAGE=$(git log -1 --pretty=%B "$HEAD_SHA")
+          cd "$CL_DIR"
+          printf '%s\n' "$PR_TITLE" | npx --no-install commitlint
+          printf '%s\n' "$HEAD_MESSAGE" | npx --no-install commitlint

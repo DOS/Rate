@@ -3,12 +3,22 @@
  * Decouples the public Normalization, Entity Matching & AI Spec Enricher engine
  * from private scraper implementations (see DOS/Rate-Services).
  */
+import type { SupabaseClient } from '@supabase/supabase-js';
 export {
   SupportedEcommercePlatformSchema,
   ScrapedReviewerSchema,
   ScrapedReviewSchema,
   ScrapedProductSchema,
 } from '@repo/shared-data';
+
+export type RateSupabaseClient = SupabaseClient;
+
+/**
+ * Scopes a SupabaseClient instance to the `rate` schema without using `any`.
+ */
+export function scopeSupabaseToRate(client: SupabaseClient): RateSupabaseClient {
+  return (client as unknown as { schema: (name: 'rate') => RateSupabaseClient }).schema('rate');
+}
 
 export type SupportedEcommercePlatform =
   | 'shopee'

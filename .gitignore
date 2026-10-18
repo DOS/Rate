@@ -41,10 +41,6 @@ yarn-error.log*
 apps/*/.env
 apps/*/.env.local
 packages/*/.env
-
-# Keep example files
-!.env.example
-!**/.env.example
 .pnpm-debug.log*
 
 # local env files
@@ -123,3 +119,32 @@ Rate.code-workspace
 
 # Playwright HTML report
 playwright-report/
+
+# Secrets and local data that must never be committed (DOS/Rate#153):
+# Windows Explorer copies (English "x - Copy.env", Vietnamese "x - Bản sao"),
+# any *.env file, SQL files outside the migrations folder (dumps, ad-hoc
+# scripts with passwords), captured request headers and browser sessions.
+*.env
+*.env.*
+*.sql
+!supabase/migrations/*.sql
+* - Copy*
+* - Bản sao*
+*.dump
+*.sql.gz
+*.har
+header*.txt
+cookies*.json
+storage-state*.json
+storageState*.json
+**/playwright/.auth/
+
+# Example env files and env-named source modules stay tracked. These negations
+# must stay at the end of the file: ".env*" and "*.env.*" above would win.
+!.env.example
+!*.env.example
+!*.env.ts
+!*.env.mts
+!*.env.js
+!*.env.mjs
+!*.env.d.ts

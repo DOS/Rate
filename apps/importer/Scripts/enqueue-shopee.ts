@@ -9,44 +9,57 @@
 import fs from 'node:fs';
 import dotenv from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
+import { createImporterLogger } from '../src/shopee/logger.js';
+import { scopeSupabaseToRate } from '../src/shopee/types.js';
 
-dotenv.config();
+dotenv.config({ quiet: true });
 
+const logger = createImporterLogger('EnqueueShopee');
 const admin = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
-const db = (admin as any).schema('rate');
+const db = scopeSupabaseToRate(admin);
 
 function parseItem(url: string): { itemId: string; shopId: string } | null {
   const m = url.match(/(?:a-)?i\.(\d+)\.(\d+)/);
-  return m ? { shopId: m[1], itemId: m[2] } : null;
+  return m ? { shopId: m[1]!, itemId: m[2]! } : null;
 }
 
 async function main() {
   const args = process.argv.slice(2);
   let urls: string[] = [];
   if (args[0] === '--file') {
-    urls = fs.readFileSync(args[1], 'utf-8').split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !l.startsWith('#'));
+    urls = fs
+      .readFileSync(args[1]!, 'utf-8')
+      .split(/\r?\n/)
+      .map(l => l.trim())
+      .filter(l => l && !l.startsWith('#'));
   } else {
-    urls = args.filter((a) => a.startsWith('http'));
+    urls = args.filter(a => a.startsWith('http'));
   }
   if (urls.length === 0) {
-    console.error('Usage: tsx Scripts/enqueue-shopee.ts <url1> [url2...] | --file targets.txt');
+    logger.error(
+      'enqueue.usage',
+      'Usage: tsx Scripts/enqueue-shopee.ts <url1> [url2...] | --file targets.txt'
+    );
     process.exit(1);
   }
 
-  const { data: runId, error: runErr } = await db.rpc('start_crawl_run', { p_source: 'enqueue-cli', p_params: { count: urls.length } });
+  const { data: runId, error: runErr } = await db.rpc('start_crawl_run', {
+    p_source: 'enqueue-cli',
+    p_params: { count: urls.length },
+  });
   if (runErr || !runId) {
-    console.error(`[Enqueue] start_crawl_run failed: ${runErr?.message}`);
+    logger.error('enqueue.start_run_failed', `start_crawl_run failed: ${runErr?.message}`);
     process.exit(1);
   }
-  console.log(`[Enqueue] run=${runId}`);
+  logger.info('enqueue.run_started', `run=${runId}`, { runId: String(runId) });
 
   let failures = 0;
   for (const url of urls) {
     const ids = parseItem(url);
     if (!ids) {
-      console.error(`[Enqueue] SKIP unparseable: ${url}`);
+      logger.error('enqueue.unparseable_url', `SKIP unparseable: ${url}`, { url });
       failures += 1;
       continue;
     }
@@ -61,22 +74,38 @@ async function main() {
       p_run_id: runId,
     });
     if (error) {
-      console.error(`[Enqueue] FAIL ${ids.itemId}: ${error.message}`);
+      logger.error('enqueue.job_failed', `FAIL ${ids.itemId}: ${error.message}`, {
+        itemId: ids.itemId,
+      });
       failures += 1;
     } else {
-      console.log(`[Enqueue] job=${data[0]?.job_id ?? data?.job_id} state=${data[0]?.state ?? data?.state} item=${ids.itemId}`);
+      const row = Array.isArray(data)
+        ? (data[0] as { job_id?: string; state?: string } | undefined)
+        : (data as { job_id?: string; state?: string } | null);
+      logger.info(
+        'enqueue.job_created',
+        `job=${row?.job_id} state=${row?.state} item=${ids.itemId}`,
+        {
+          jobId: row?.job_id ?? null,
+          state: row?.state ?? null,
+          itemId: ids.itemId,
+        }
+      );
     }
   }
   // Close the run: an enqueue-only run has no worker, so leaving it
   // 'running' would linger until the 6h timeout aborts it.
-  await db.rpc('finish_crawl_run', { p_run_id: runId, p_stats: { enqueued: urls.length - failures, failed: failures } });
+  await db.rpc('finish_crawl_run', {
+    p_run_id: runId,
+    p_stats: { enqueued: urls.length - failures, failed: failures },
+  });
 
   // Non-zero exit when anything failed so automation cannot mistake a
   // partially-failed or fully-skipped enqueue for success (Codex SHOULD).
   process.exit(failures > 0 ? 1 : 0);
 }
 
-main().catch((e) => {
-  console.error(e.message);
+main().catch((e: unknown) => {
+  logger.error('enqueue.fatal', e instanceof Error ? e.message : String(e));
   process.exit(1);
 });

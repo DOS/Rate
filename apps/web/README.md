@@ -40,7 +40,7 @@ Khai báo trong `src/env.mjs`. Sao chép `apps/web/.env.example` thành `apps/we
 - **Tùy chọn:**
   - `APP_PUBLIC_URL` (mặc định `https://rate.vn`), `NEXT_PUBLIC_SITE_URL` (URL gốc cho metadata của trang `/leaderboard`, mặc định `https://rate.vn`), `NEXT_OUTPUT`, `APP_ENV`;
   - Sentry: `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT`.
-- `SUPABASE_SERVICE_ROLE_KEY`: chỉ phía server, không bao giờ đưa ra client. Dùng cho phần ghi dữ liệu của Extension (`src/server/rate/extension.ts`, chỉ đọc `NEXT_PUBLIC_SUPABASE_URL`, không có fallback; thiếu key thì ingest trả về `quarantined_dry_run`) và `POST /api/v1/rate/watchlist` (`getRateClient` của `@repo/shared-data`).
+- `SUPABASE_SERVICE_ROLE_KEY`: chỉ phía server, không bao giờ đưa ra client. Dùng cho phần ghi dữ liệu của Extension (`src/server/rate/extension.ts`, chỉ đọc `NEXT_PUBLIC_SUPABASE_URL`, không có fallback; thiếu key thì ingest trả về `quarantined_dry_run`). Các route ghi công khai (`POST /api/v1/rate/watchlist`, `POST /api/v1/rate/reviews`, vote) không dùng key này: chúng yêu cầu access token của người dùng và gọi RPC dưới quyền người dùng đó (`src/server/rate/request-auth.ts`). ESLint cấm `apps/web` import `@repo/shared-data/server`.
 
 ## Database
 

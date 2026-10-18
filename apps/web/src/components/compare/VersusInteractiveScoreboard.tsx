@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Link } from '@/lib/navigation';
 import type { ScoredLeaderboardItem } from '@/lib/leaderboard-engine';
 import {
@@ -14,7 +15,6 @@ import {
 import { escapeCsvCell } from '@/lib/csv-safe';
 import RadarBadge from '@/components/radar/RadarBadge';
 import { useDealRadarIndex } from '@/components/radar/use-deal-radar';
-import { normalizeRateLocale } from '@/lib/rate-i18n';
 
 type ScoredVersusItem = Omit<ScoredLeaderboardItem, 'rank'>;
 
@@ -74,9 +74,8 @@ const PERSONA_WEIGHTS: Record<
 export default function VersusInteractiveScoreboard({
   scoreA,
   scoreB,
-  locale,
 }: VersusInteractiveScoreboardProps) {
-  const lang = normalizeRateLocale(locale);
+  const t = useTranslations('compare');
   const [persona, setPersona] = useState<PersonaPresetKey>('default');
   const [weights, setWeights] = useState<CriteriaWeights>(
     PERSONA_WEIGHTS.default
@@ -143,56 +142,31 @@ export default function VersusInteractiveScoreboard({
   const criteriaRows = [
     {
       key: 'screen' as const,
-      label:
-        lang === 'en'
-          ? 'Display & Visuals'
-          : lang === 'cs'
-            ? 'Displej a obraz'
-            : 'Màn hình & Hiển thị',
+      label: t('criteriaScreen'),
       aVal: scoreA.criteria.screen,
       bVal: scoreB.criteria.screen,
     },
     {
       key: 'performance' as const,
-      label:
-        lang === 'en'
-          ? 'Performance & SoC'
-          : lang === 'cs'
-            ? 'Výkon a čipset'
-            : 'Hiệu năng & Nhiệt độ',
+      label: t('criteriaPerformance'),
       aVal: scoreA.criteria.performance,
       bVal: scoreB.criteria.performance,
     },
     {
       key: 'camera' as const,
-      label:
-        lang === 'en'
-          ? 'Camera / Audio'
-          : lang === 'cs'
-            ? 'Fotoaparát / Zvuk'
-            : 'Camera / Âm thanh',
+      label: t('criteriaCamera'),
       aVal: scoreA.criteria.camera,
       bVal: scoreB.criteria.camera,
     },
     {
       key: 'battery' as const,
-      label:
-        lang === 'en'
-          ? 'Battery & Fast Charge'
-          : lang === 'cs'
-            ? 'Baterie a nabíjení'
-            : 'Pin & Sạc nhanh',
+      label: t('criteriaBattery'),
       aVal: scoreA.criteria.battery,
       bVal: scoreB.criteria.battery,
     },
     {
       key: 'value' as const,
-      label:
-        lang === 'en'
-          ? 'Value for Money (P/P)'
-          : lang === 'cs'
-            ? 'Poměr cena / výkon'
-            : 'Đáng đồng tiền (P/P)',
+      label: t('criteriaValue'),
       aVal: scoreA.criteria.value,
       bVal: scoreB.criteria.value,
     },
@@ -203,25 +177,29 @@ export default function VersusInteractiveScoreboard({
     try {
       const sigA = getRadarSignal(radarIndex, scoreA.slug);
       const sigB = getRadarSignal(radarIndex, scoreB.slug);
+      const leadScore =
+        weightedResult.finalA >= weightedResult.finalB
+          ? weightedResult.finalA.toFixed(2)
+          : weightedResult.finalB.toFixed(2);
       const lines = [
-        `### ⚔️ Kết Luận Đối Đầu 1v1: ${scoreA.name} vs ${scoreB.name}`,
-        `- **Thiết bị dẫn trước:** **${weightedResult.winner.name}** (${weightedResult.finalA >= weightedResult.finalB ? weightedResult.finalA.toFixed(2) : weightedResult.finalB.toFixed(2)}/5.0 - Chênh lệch ${weightedResult.delta} điểm)`,
-        `- **Đường dẫn kiểm định:** ${window.location.href}`,
+        `### ${t('md1v1Heading', { nameA: scoreA.name, nameB: scoreB.name })}`,
+        `- **${t('mdLeadingDevice')}:** **${weightedResult.winner.name}** (${leadScore}/5.0 - ${t('mdScoreDelta', { delta: weightedResult.delta })})`,
+        `- **${t('mdAuditUrl')}:** ${window.location.href}`,
         '',
-        `| Tiêu chí JReviews | ${scoreA.name} | ${scoreB.name} | Ưu thế |`,
+        `| ${t('mdColCriterion')} | ${scoreA.name} | ${scoreB.name} | ${t('mdColAdvantage')} |`,
         `| --- | --- | --- | --- |`,
-        `| **Điểm Tổng Hợp Trọng Số** | **${weightedResult.finalA.toFixed(2)}/5.0** | **${weightedResult.finalB.toFixed(2)}/5.0** | **${weightedResult.winner.name}** |`,
+        `| **${t('mdRowWeightedScore')}** | **${weightedResult.finalA.toFixed(2)}/5.0** | **${weightedResult.finalB.toFixed(2)}/5.0** | **${weightedResult.winner.name}** |`,
         ...criteriaRows.map((r) => {
           const winName =
             r.aVal > r.bVal
               ? scoreA.name
               : r.bVal > r.aVal
                 ? scoreB.name
-                : 'Cân bằng';
+                : t('mdRowTie');
           return `| ${r.label} | ${r.aVal.toFixed(2)}/5.0 | ${r.bVal.toFixed(2)}/5.0 | ${winName} |`;
         }),
-        `| **Giá Tham Khảo Thấp Nhất** | ${scoreA.minPrice.toLocaleString('vi-VN')} ₫ | ${scoreB.minPrice.toLocaleString('vi-VN')} ₫ | ${scoreA.minPrice <= scoreB.minPrice ? scoreA.name : scoreB.name} |`,
-        `| **Tín Hiệu Deal Radar 60N** | ${radarMarkdownCell(sigA)} | ${radarMarkdownCell(sigB)} | ${sigA.verdict === 'genuine_deal' ? scoreA.name : sigB.verdict === 'genuine_deal' ? scoreB.name : '-'} |`,
+        `| **${t('mdRowMinPrice')}** | ${scoreA.minPrice.toLocaleString('vi-VN')} ₫ | ${scoreB.minPrice.toLocaleString('vi-VN')} ₫ | ${scoreA.minPrice <= scoreB.minPrice ? scoreA.name : scoreB.name} |`,
+        `| **${t('mdRowDealRadar')}** | ${radarMarkdownCell(sigA)} | ${radarMarkdownCell(sigB)} | ${sigA.verdict === 'genuine_deal' ? scoreA.name : sigB.verdict === 'genuine_deal' ? scoreB.name : '-'} |`,
       ];
       await navigator.clipboard.writeText(lines.join('\n'));
       setCopiedVerdict(true);
@@ -238,15 +216,15 @@ export default function VersusInteractiveScoreboard({
     const cellsA = radarCsvCells(sigA);
     const cellsB = radarCsvCells(sigB);
     const headers = [
-      'Tiêu Chí JReviews',
-      'Trọng Số (%)',
+      t('csvColCriterion'),
+      t('csvColWeight'),
       scoreA.name,
       scoreB.name,
-      'Ưu Thế',
+      t('csvColAdvantage'),
     ];
     const rows: Array<Array<string | number>> = [
       [
-        'Điểm Tổng Hợp Trọng Số (Thang 5.0)',
+        t('csvRowWeightedScore5'),
         100,
         weightedResult.finalA.toFixed(2),
         weightedResult.finalB.toFixed(2),
@@ -261,10 +239,10 @@ export default function VersusInteractiveScoreboard({
           ? scoreA.name
           : r.bVal > r.aVal
             ? scoreB.name
-            : 'Cân bằng',
+            : t('mdRowTie'),
       ]),
       [
-        'Điểm Chuyên Gia Rate Lab (Thang 10)',
+        t('csvRowExpertScore10'),
         '-',
         scoreA.expertScore10 != null ? scoreA.expertScore10.toFixed(1) : '',
         scoreB.expertScore10 != null ? scoreB.expertScore10.toFixed(1) : '',
@@ -279,14 +257,14 @@ export default function VersusInteractiveScoreboard({
               : '-',
       ],
       [
-        'Giá Tham Khảo Thấp Nhất (VND)',
+        t('csvRowMinPriceVnd'),
         '-',
         scoreA.minPrice,
         scoreB.minPrice,
         scoreA.minPrice <= scoreB.minPrice ? scoreA.name : scoreB.name,
       ],
       [
-        'Tín Hiệu Deal Radar 60N',
+        t('mdRowDealRadar'),
         '-',
         radarLabel(sigA),
         radarLabel(sigB),
@@ -375,59 +353,15 @@ export default function VersusInteractiveScoreboard({
       <div className="d-flex justify-content-between align-items-center border-bottom border-secondary border-opacity-25 mb-3 flex-wrap gap-2 pb-3">
         <div className="d-flex align-items-center flex-wrap gap-1">
           <span className="small text-white-50 fw-semibold me-1">
-            {lang === 'vi'
-              ? 'Chấm theo nhu cầu:'
-              : lang === 'cs'
-                ? 'Profil:'
-                : 'Use-Case:'}
+            {t('useCaseLabel')}
           </span>
           {(
             [
-              {
-                key: 'default',
-                label:
-                  lang === 'vi'
-                    ? '⚖️ Cân bằng'
-                    : lang === 'cs'
-                      ? '⚖️ Vyvážený'
-                      : '⚖️ Balanced',
-              },
-              {
-                key: 'photography',
-                label:
-                  lang === 'vi'
-                    ? '📸 Chụp ảnh / Âm thanh'
-                    : lang === 'cs'
-                      ? '📸 Foto / Zvuk'
-                      : '📸 Camera / Audio',
-              },
-              {
-                key: 'gaming',
-                label:
-                  lang === 'vi'
-                    ? '🎮 Chiến Game nặng'
-                    : lang === 'cs'
-                      ? '🎮 Hraní her'
-                      : '🎮 Heavy Gaming',
-              },
-              {
-                key: 'endurance',
-                label:
-                  lang === 'vi'
-                    ? '🔋 Pin trâu 2 ngày'
-                    : lang === 'cs'
-                      ? '🔋 Výdrž baterie'
-                      : '🔋 Battery King',
-              },
-              {
-                key: 'value_hunter',
-                label:
-                  lang === 'vi'
-                    ? '💎 Ngon-Bổ-Rẻ P/P'
-                    : lang === 'cs'
-                      ? '💎 Cena / Výkon'
-                      : '💎 Best Value',
-              },
+              { key: 'default', label: t('personaDefault') },
+              { key: 'photography', label: t('personaPhotography') },
+              { key: 'gaming', label: t('personaGaming') },
+              { key: 'endurance', label: t('personaEndurance') },
+              { key: 'value_hunter', label: t('personaValueHunter') },
             ] as const
           ).map((item) => (
             <button
@@ -439,7 +373,7 @@ export default function VersusInteractiveScoreboard({
                   ? 'btn-danger fw-bold text-white'
                   : 'btn-outline-light text-white-50'
               }`}
-              style={{ fontSize: '0.76rem' }}
+              style={{ fontSize: '0.8125rem' }}
             >
               {item.label}
             </button>
@@ -452,14 +386,9 @@ export default function VersusInteractiveScoreboard({
                 ? 'btn-warning text-dark fw-bold'
                 : 'btn-outline-secondary text-light'
             }`}
-            style={{ fontSize: '0.76rem' }}
+            style={{ fontSize: '0.8125rem' }}
           >
-            🎛️{' '}
-            {lang === 'vi'
-              ? 'Tùy chỉnh trọng số'
-              : lang === 'cs'
-                ? 'Vlastní váhy'
-                : 'Custom Weights'}
+            🎛️ {t('customWeightsBtn')}
           </button>
         </div>
 
@@ -469,9 +398,7 @@ export default function VersusInteractiveScoreboard({
             onClick={handleCopy1v1Markdown}
             className="btn btn-sm btn-outline-warning rounded-pill fw-semibold px-3"
           >
-            {copiedVerdict
-              ? '✓ Đã sao chép Markdown 1v1!'
-              : '📋 Sao chép kết luận 1v1'}
+            {copiedVerdict ? t('copied1v1Markdown') : t('copy1v1VerdictBtn')}
           </button>
           <button
             type="button"
@@ -492,14 +419,9 @@ export default function VersusInteractiveScoreboard({
           <Link
             href={`/compare/${scoreB.slug}-vs-${scoreA.slug}`}
             className="btn btn-sm btn-outline-light rounded-pill px-3"
-            title="Đảo chiều vị trí 2 thiết bị"
+            title={t('swapDevicesTitle')}
           >
-            ⇄{' '}
-            {lang === 'vi'
-              ? 'Đảo chiều A/B'
-              : lang === 'cs'
-                ? 'Prohodit A/B'
-                : 'Swap A/B'}
+            ⇄ {t('swapAbBtn')}
           </Link>
         </div>
       </div>
@@ -540,17 +462,17 @@ export default function VersusInteractiveScoreboard({
         className="rounded-3 d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2 p-3"
         style={{
           background:
-            'linear-gradient(90deg, rgba(16,185,129,0.16) 0%, rgba(255,46,41,0.12) 100%)',
+            'linear-gradient(90deg, rgba(45, 186, 105, 0.16) 0%, rgba(216, 48, 48, 0.12) 100%)',
           border: '1px solid rgba(52,211,153,0.35)',
         }}
       >
         <div>
           <span className="badge bg-success rounded-pill me-2 text-white">
-            🏆 Dẫn đầu 1v1
+            {t('leading1v1Badge')}
           </span>
           <strong className="text-white">{weightedResult.winner.name}</strong>
           <span className="text-white-50 small ms-2">
-            (Chênh lệch +{weightedResult.delta} điểm theo trọng số hiện tại)
+            {t('leadingDeltaNote', { delta: weightedResult.delta })}
           </span>
         </div>
         <div className="font-monospace small text-warning fw-bold">
@@ -575,7 +497,7 @@ export default function VersusInteractiveScoreboard({
             <span className="rate-score-badge-expert">
               {scoreA.expertScore10 != null
                 ? `Lab ${scoreA.expertScore10.toFixed(1)}/10`
-                : 'Lab: chưa có'}
+                : t('labScorePending')}
             </span>
           </div>
         </div>
@@ -598,7 +520,7 @@ export default function VersusInteractiveScoreboard({
             <span className="rate-score-badge-expert">
               {scoreB.expertScore10 != null
                 ? `Lab ${scoreB.expertScore10.toFixed(1)}/10`
-                : 'Lab: chưa có'}
+                : t('labScorePending')}
             </span>
           </div>
         </div>
@@ -681,13 +603,13 @@ export default function VersusInteractiveScoreboard({
             minSpreadPct={Infinity}
             emptyFallback={
               <span className="badge bg-dark border-secondary text-white-50 rounded-pill font-monospace border">
-                ⚖️ Giá 60N ổn định
+                {t('price60dStable')}
               </span>
             }
           />
         </div>
         <div className="small text-warning fw-semibold col-4 text-center">
-          🔥 Tín hiệu Radar Kèo Đáy &amp; Bẫy Sale 10 Sàn
+          {t('radarRowTitle')}
         </div>
         <div className="col-4 text-end">
           <RadarBadge
@@ -695,7 +617,7 @@ export default function VersusInteractiveScoreboard({
             minSpreadPct={Infinity}
             emptyFallback={
               <span className="badge bg-dark border-secondary text-white-50 rounded-pill font-monospace border">
-                ⚖️ Giá 60N ổn định
+                {t('price60dStable')}
               </span>
             }
           />

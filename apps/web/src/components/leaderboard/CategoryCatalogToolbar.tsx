@@ -1,7 +1,9 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Link } from '@/lib/navigation';
+import { escapeCsvCell } from '@/lib/csv-safe';
 import type { MasterProduct } from '@/lib/rate-domain';
 import {
   getRadarSignal,
@@ -26,6 +28,7 @@ export default function CategoryCatalogToolbar({
   products,
   dealRadar,
 }: CategoryCatalogToolbarProps) {
+  const t = useTranslations('catalog');
   const [slugA, setSlugA] = useState<string>('');
   const [slugB, setSlugB] = useState<string>('');
   const [copiedCatalogMd, setCopiedCatalogMd] = useState(false);
@@ -78,8 +81,12 @@ export default function CategoryCatalogToolbar({
         String(idx + 1),
         p.name.replace(/\|/g, '-'),
         p.brand || '-',
-        userRating != null ? `${userRating.toFixed(1)}/5.0` : 'chưa có',
-        expertScore10 != null ? `${expertScore10.toFixed(1)}/10` : 'chưa có',
+        userRating != null
+          ? `${userRating.toFixed(1)}/5.0`
+          : t('toolbar.unratedText'),
+        expertScore10 != null
+          ? `${expertScore10.toFixed(1)}/10`
+          : t('toolbar.unratedText'),
         String(p.authentic_review_count || p.total_reviews || 0),
         p.min_price ? `${Number(p.min_price).toLocaleString('vi-VN')} ₫` : '-',
         radarMarkdownCell(radar),
@@ -105,7 +112,6 @@ export default function CategoryCatalogToolbar({
 
   const handleDownloadCatalogCsv = () => {
     if (typeof document === 'undefined' || products.length === 0) return;
-    const escapeCsv = (val: string) => `"${val.replace(/"/g, '""')}"`;
     const headers = [
       'Rank',
       'Slug',
@@ -151,8 +157,8 @@ export default function CategoryCatalogToolbar({
     const csvContent =
       '\uFEFF' +
       [
-        headers.map(escapeCsv).join(','),
-        ...rows.map((r) => r.map(escapeCsv).join(',')),
+        headers.map(escapeCsvCell).join(','),
+        ...rows.map((r) => r.map(escapeCsvCell).join(',')),
       ].join('\r\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -208,14 +214,14 @@ export default function CategoryCatalogToolbar({
         {products.length >= 2 ? (
           <div className="d-flex align-items-center flex-grow-1 flex-wrap gap-2">
             <span className="small fw-semibold text-dark">
-              ⚔️ Chọn nhanh kèo 1v1 ({categoryTitle}):
+              {t('toolbar.quick1v1Label', { title: categoryTitle })}
             </span>
             <select
               className="form-select form-select-sm w-auto"
               style={{ maxWidth: '210px' }}
               value={effectiveSlugA}
               onChange={(e) => setSlugA(e.target.value)}
-              aria-label="Chọn máy A để đối đầu 1v1"
+              aria-label={t('toolbar.selectDeviceAAria')}
             >
               {products.map((p) => (
                 <option key={p.slug} value={p.slug}>
@@ -229,7 +235,7 @@ export default function CategoryCatalogToolbar({
               style={{ maxWidth: '210px' }}
               value={effectiveSlugB}
               onChange={(e) => setSlugB(e.target.value)}
-              aria-label="Chọn máy B để đối đầu 1v1"
+              aria-label={t('toolbar.selectDeviceBAria')}
             >
               {products
                 .filter((p) => p.slug !== effectiveSlugA)
@@ -245,7 +251,7 @@ export default function CategoryCatalogToolbar({
                 className="btn btn-sm btn-danger rounded-pill fw-semibold px-3 py-1"
                 data-testid="catalog-1v1-go-btn"
               >
-                Đấu 1v1 ngay →
+                {t('toolbar.versusGoBtn')}
               </Link>
             )}
           </div>
@@ -258,30 +264,30 @@ export default function CategoryCatalogToolbar({
             type="button"
             onClick={handleCopyCatalogMarkdown}
             className="btn btn-sm btn-outline-dark rounded-pill fw-semibold px-3 py-1"
-            style={{ fontSize: '0.76rem' }}
+            style={{ fontSize: '0.8125rem' }}
             data-testid="copy-catalog-md-btn"
           >
             {copiedCatalogMd
-              ? '✅ Đã chép danh mục MD!'
-              : '📋 Sao chép danh mục Markdown'}
+              ? t('toolbar.copiedMdBtn')
+              : t('toolbar.copyMdBtn')}
           </button>
           <button
             type="button"
             onClick={handleDownloadCatalogCsv}
             className="btn btn-sm btn-outline-secondary rounded-pill fw-semibold px-3 py-1"
-            style={{ fontSize: '0.76rem' }}
+            style={{ fontSize: '0.8125rem' }}
             data-testid="download-catalog-csv-btn"
           >
-            📥 Xuất CSV ngành hàng
+            {t('toolbar.exportCsvBtn')}
           </button>
           <button
             type="button"
             onClick={handleDownloadCategoryJson}
             className="btn btn-sm btn-outline-secondary rounded-pill fw-semibold px-3 py-1"
-            style={{ fontSize: '0.76rem' }}
+            style={{ fontSize: '0.8125rem' }}
             data-testid="download-catalog-json-btn"
           >
-            📦 Xuất JSON
+            {t('toolbar.exportJsonBtn')}
           </button>
         </div>
       </div>

@@ -1,3 +1,4 @@
+import { getTranslations } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
 import {
   BsArrowLeftRight,
@@ -5,10 +6,13 @@ import {
   BsCodeSlash,
   BsShieldCheck,
 } from 'react-icons/bs';
-import { getRateCopy } from '@/lib/rate-i18n';
 
-export default function FooterTop({ locale = 'vi' }: { locale?: string }) {
-  const copy = getRateCopy(locale);
+export default async function FooterTop({
+  locale = 'vi',
+}: {
+  locale?: string;
+}) {
+  const tFooter = await getTranslations({ locale, namespace: 'rate.footer' });
   return (
     <section
       className="position-relative py-5"
@@ -27,10 +31,10 @@ export default function FooterTop({ locale = 'vi' }: { locale?: string }) {
                 <span
                   className="badge rounded-pill d-inline-flex align-items-center gap-1 px-3 py-1"
                   style={{
-                    backgroundColor: 'rgba(16, 185, 129, 0.14)',
+                    backgroundColor: 'rgba(45, 186, 105, 0.14)',
                     color: '#34d399',
-                    border: '1px solid rgba(16, 185, 129, 0.3)',
-                    fontSize: '0.75rem',
+                    border: '1px solid rgba(45, 186, 105, 0.3)',
+                    fontSize: '0.8125rem',
                     fontWeight: 600,
                   }}
                 >
@@ -42,13 +46,13 @@ export default function FooterTop({ locale = 'vi' }: { locale?: string }) {
                 className="lh-base fw-bold mb-1 text-white"
                 style={{ letterSpacing: '-0.02em' }}
               >
-                {copy.footer.bannerTitle}
+                {tFooter('bannerTitle')}
               </h4>
               <p
                 className="m-0"
                 style={{ color: '#94a3b8', fontSize: '0.95rem' }}
               >
-                {copy.footer.bannerDesc}
+                {tFooter('bannerDesc')}
               </p>
             </div>
           </div>
@@ -59,12 +63,12 @@ export default function FooterTop({ locale = 'vi' }: { locale?: string }) {
                 href="/inspect"
                 className="btn rounded-pill fw-semibold d-inline-flex align-items-center gap-2 px-4 py-2 text-white"
                 style={{
-                  backgroundColor: '#e11d48',
+                  backgroundColor: 'var(--bs-primary)',
                   border: '1px solid rgba(255, 255, 255, 0.12)',
                 }}
               >
                 <BsShieldCheck />
-                Kiểm định Review &amp; Giá
+                {tFooter('bannerInspectCta')}
               </Link>
               <Link
                 href="/compare"
@@ -72,7 +76,7 @@ export default function FooterTop({ locale = 'vi' }: { locale?: string }) {
                 style={{ borderColor: 'rgba(255, 255, 255, 0.2)' }}
               >
                 <BsArrowLeftRight />
-                {copy.footer.bannerCompareCta}
+                {tFooter('bannerCompareCta')}
               </Link>
               <Link
                 href="/watchlist"
@@ -80,7 +84,7 @@ export default function FooterTop({ locale = 'vi' }: { locale?: string }) {
                 style={{ borderColor: 'rgba(255, 255, 255, 0.2)' }}
               >
                 <BsBellFill />
-                {copy.footer.bannerCta}
+                {tFooter('bannerCta')}
               </Link>
               <Link
                 href="/developers"
