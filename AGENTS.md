@@ -86,7 +86,8 @@ gh issue list -R DOS/Rate-Services --state open
   # 2. BẮT BUỘC cập nhật cột Status VÀ trường Agent trên bảng GitHub Project #9
   # Project ID: PVT_kwDOA388Vc4Bm5Ml | Field Status: PVTSSF_lADOA388Vc4Bm5MlzhlgSt8 | Field Agent: PVTF_lADOA388Vc4Bm5MlzhlqBH8
   # Status Option IDs: Backlog=f75ad846 | Ready=e18bf179 | In progress=47fc9ee4 | In review=aba860b9 | Done=98236657
-  $itemId = ((gh project item-list 9 --owner DOS --format json | ConvertFrom-Json).items | Where-Object { $_.content.number -eq <ISSUE_NUMBER> -and $_.content.repository -eq "DOS/Rate" }).id
+  # Tra item từ phía issue: `gh project item-list` mặc định chỉ trả 30 trong hơn 300 item của Project #9 nên không thấy issue mới (`$itemId` rỗng, cập nhật board thất bại âm thầm).
+  $itemId = gh api graphql -F n=<ISSUE_NUMBER> -f query='query($n: Int!) { repository(owner: "DOS", name: "Rate") { issue(number: $n) { projectItems(first: 10) { nodes { id project { number } } } } } }' --jq '.data.repository.issue.projectItems.nodes[] | select(.project.number == 9) | .id'
   gh project item-edit --project-id PVT_kwDOA388Vc4Bm5Ml --id $itemId --field-id PVTSSF_lADOA388Vc4Bm5MlzhlgSt8 --single-select-option-id 47fc9ee4
   gh project item-edit --project-id PVT_kwDOA388Vc4Bm5Ml --id $itemId --field-id PVTF_lADOA388Vc4Bm5MlzhlqBH8 --text $agentNick
   ```
@@ -101,14 +102,14 @@ Sau khi code xong, chạy pass toàn bộ bài test/build và qua bước review
   ```powershell
   gh issue edit <ISSUE_NUMBER> -R DOS/Rate --remove-label "status:in-progress" --add-label "status:in-review"
   gh issue comment <ISSUE_NUMBER> -R DOS/Rate --body "🔍 **[Agent: $agentNick]** Implementation complete and tests passing. Moving status to In Review (Commit/PR: <SHA/URL>)."
-  $itemId = ((gh project item-list 9 --owner DOS --format json | ConvertFrom-Json).items | Where-Object { $_.content.number -eq <ISSUE_NUMBER> -and $_.content.repository -eq "DOS/Rate" }).id
+  $itemId = gh api graphql -F n=<ISSUE_NUMBER> -f query='query($n: Int!) { repository(owner: "DOS", name: "Rate") { issue(number: $n) { projectItems(first: 10) { nodes { id project { number } } } } } }' --jq '.data.repository.issue.projectItems.nodes[] | select(.project.number == 9) | .id'
   gh project item-edit --project-id PVT_kwDOA388Vc4Bm5Ml --id $itemId --field-id PVTSSF_lADOA388Vc4Bm5MlzhlgSt8 --single-select-option-id aba860b9
   ```
 - **Trường hợp đã hoàn tất & merge xong (`Done`):**
   ```powershell
   gh issue edit <ISSUE_NUMBER> -R DOS/Rate --remove-label "status:in-progress,status:in-review" --add-label "status:done"
   gh issue close <ISSUE_NUMBER> -R DOS/Rate --comment "✅ **[Agent: $agentNick]** Completed in commit <SHA> (Status -> Done)."
-  $itemId = ((gh project item-list 9 --owner DOS --format json | ConvertFrom-Json).items | Where-Object { $_.content.number -eq <ISSUE_NUMBER> -and $_.content.repository -eq "DOS/Rate" }).id
+  $itemId = gh api graphql -F n=<ISSUE_NUMBER> -f query='query($n: Int!) { repository(owner: "DOS", name: "Rate") { issue(number: $n) { projectItems(first: 10) { nodes { id project { number } } } } } }' --jq '.data.repository.issue.projectItems.nodes[] | select(.project.number == 9) | .id'
   gh project item-edit --project-id PVT_kwDOA388Vc4Bm5Ml --id $itemId --field-id PVTSSF_lADOA388Vc4Bm5MlzhlgSt8 --single-select-option-id 98236657
   ```
 
