@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useId, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Link } from '@/lib/navigation';
 import {
   BsCheckCircleFill,
@@ -18,6 +19,7 @@ interface QuarantineApiResult {
 }
 
 export default function CommunityQuarantineSubmitForm() {
+  const t = useTranslations('staticPages');
   const fieldId = useId();
   const [url, setUrl] = useState(
     'https://cellphones.com.vn/iphone-16-pro-max.html'
@@ -65,10 +67,7 @@ export default function CommunityQuarantineSubmitForm() {
         status: 'rejected_invalid_payload',
         jobId: null,
         canonicalUrl: null,
-        reason:
-          err instanceof Error
-            ? err.message
-            : 'Không thể kết nối tới cổng Zero-Trust Quarantine.',
+        reason: err instanceof Error ? err.message : t('quarantineErrConnect'),
       });
     } finally {
       setIsSubmitting(false);
@@ -80,22 +79,16 @@ export default function CommunityQuarantineSubmitForm() {
       <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
         <div>
           <span className="badge bg-danger bg-opacity-10 text-danger rounded-pill fw-semibold mb-2 px-3 py-1">
-            🛡️ Zero-Trust Quarantine Ingestion (`rate.crawl_jobs`)
+            {t('quarantineBadge')}
           </span>
-          <h3 className="h4 fw-bold mb-1">
-            Đóng Góp Link Sản Phẩm Mới Hoặc Báo Cáo Khuyến Mãi Ảo
-          </h3>
-          <p className="text-muted small mb-0">
-            Hỗ trợ toàn bộ 10 sàn/đại lý: Shopee, Lazada, Tiki, TikTok Shop,
-            CellphoneS, Thế Giới Di Động, FPT Shop, Hoàng Hà Mobile, Di Động
-            Việt và Phong Vũ.
-          </p>
+          <h3 className="h4 fw-bold mb-1">{t('quarantineTitle')}</h3>
+          <p className="text-muted small mb-0">{t('quarantineSubtitle')}</p>
         </div>
         <Link
           href={`/inspect?q=${encodeURIComponent(url)}`}
           className="btn btn-sm btn-outline-primary rounded-pill fw-semibold px-3"
         >
-          🔍 Mở trong Trình Kiểm Định (/inspect)
+          {t('quarantineOpenInspectBtn')}
         </Link>
       </div>
 
@@ -105,7 +98,7 @@ export default function CommunityQuarantineSubmitForm() {
             className="form-label small fw-bold text-secondary"
             htmlFor={`${fieldId}-url`}
           >
-            Đường dẫn sản phẩm TMĐT (URL) *
+            {t('quarantineUrlLabel')}
           </label>
           <input
             id={`${fieldId}-url`}
@@ -114,7 +107,7 @@ export default function CommunityQuarantineSubmitForm() {
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             className="form-control"
-            placeholder="https://shopee.vn/product/... hoặc https://cellphones.com.vn/..."
+            placeholder={t('quarantineUrlPlaceholder')}
           />
         </div>
 
@@ -123,7 +116,7 @@ export default function CommunityQuarantineSubmitForm() {
             className="form-label small fw-bold text-secondary"
             htmlFor={`${fieldId}-title`}
           >
-            Tên sản phẩm hiển thị trên sàn *
+            {t('quarantineTitleLabel')}
           </label>
           <input
             id={`${fieldId}-title`}
@@ -132,7 +125,7 @@ export default function CommunityQuarantineSubmitForm() {
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             className="form-control"
-            placeholder="Ví dụ: Apple iPhone 16 Pro Max 256GB..."
+            placeholder={t('quarantineTitlePlaceholder')}
           />
         </div>
 
@@ -141,7 +134,7 @@ export default function CommunityQuarantineSubmitForm() {
             className="form-label small fw-bold text-secondary"
             htmlFor={`${fieldId}-current-price`}
           >
-            Giá đang bán (VNĐ) *
+            {t('quarantineCurrentPriceLabel')}
           </label>
           <input
             id={`${fieldId}-current-price`}
@@ -159,7 +152,7 @@ export default function CommunityQuarantineSubmitForm() {
             className="form-label small fw-bold text-secondary"
             htmlFor={`${fieldId}-original-price`}
           >
-            Giá gốc gạch ngang (VNĐ)
+            {t('quarantineOriginalPriceLabel')}
           </label>
           <input
             id={`${fieldId}-original-price`}
@@ -168,7 +161,7 @@ export default function CommunityQuarantineSubmitForm() {
             value={originalPrice}
             onChange={(e) => setOriginalPrice(e.target.value)}
             className="form-control"
-            placeholder="Tùy chọn"
+            placeholder={t('quarantineOptionalPlaceholder')}
           />
         </div>
 
@@ -177,7 +170,7 @@ export default function CommunityQuarantineSubmitForm() {
             className="form-label small fw-bold text-secondary"
             htmlFor={`${fieldId}-sku`}
           >
-            Phiên bản RAM / ROM (SKU)
+            {t('quarantineSkuLabel')}
           </label>
           <input
             id={`${fieldId}-sku`}
@@ -185,7 +178,7 @@ export default function CommunityQuarantineSubmitForm() {
             value={skuText}
             onChange={(e) => setSkuText(e.target.value)}
             className="form-control"
-            placeholder="Ví dụ: 256GB Titan"
+            placeholder={t('quarantineSkuPlaceholder')}
           />
         </div>
 
@@ -194,7 +187,7 @@ export default function CommunityQuarantineSubmitForm() {
             className="form-label small fw-bold text-secondary"
             htmlFor={`${fieldId}-seller`}
           >
-            Tên Gian hàng / Đại lý
+            {t('quarantineSellerLabel')}
           </label>
           <input
             id={`${fieldId}-seller`}
@@ -202,7 +195,7 @@ export default function CommunityQuarantineSubmitForm() {
             value={sellerName}
             onChange={(e) => setSellerName(e.target.value)}
             className="form-control"
-            placeholder="Tùy chọn"
+            placeholder={t('quarantineOptionalPlaceholder')}
           />
         </div>
 
@@ -219,11 +212,9 @@ export default function CommunityQuarantineSubmitForm() {
               htmlFor="community-quarantine-consent"
               className="form-check-label small text-secondary"
             >
-              <strong>Đồng thuận đóng góp dữ liệu ẩn danh (Opt-In):</strong> Tôi
-              đồng ý gửi thông tin giá công khai của sản phẩm này qua bộ lọc{' '}
-              <code>Zero-Trust Quarantine</code> (tự động xóa toàn bộ tham số
-              tracking/PII trước khi lưu vào hàng đợi kiểm chứng{' '}
-              <code>rate.crawl_jobs</code>).
+              <strong>{t('quarantineConsentStrong')}</strong>{' '}
+              {t('quarantineConsentText1')} <code>Zero-Trust Quarantine</code>{' '}
+              {t('quarantineConsentText2')} <code>rate.crawl_jobs</code>).
             </label>
           </div>
         </div>
@@ -232,8 +223,7 @@ export default function CommunityQuarantineSubmitForm() {
           <div className="small text-muted d-flex align-items-center gap-1">
             <BsShieldCheck className="text-success fs-5" />
             <span>
-              Tự động từ chối phụ kiện/linh kiện giá rẻ để bảo vệ độ sạch của{' '}
-              <code>rate.master_products</code>.
+              {t('quarantineAccessoryNote')} <code>rate.master_products</code>.
             </span>
           </div>
           <button
@@ -243,8 +233,8 @@ export default function CommunityQuarantineSubmitForm() {
           >
             <BsSendFill />
             {isSubmitting
-              ? 'Đang kiểm duyệt Zero-Trust...'
-              : 'Gửi Link Vào Hàng Đợi Kiểm Toán'}
+              ? t('quarantineSubmittingBtn')
+              : t('quarantineSubmitBtn')}
           </button>
         </div>
       </form>
@@ -266,14 +256,14 @@ export default function CommunityQuarantineSubmitForm() {
             <div>
               <div className="fw-bold mb-1">
                 {result.accepted
-                  ? 'Đã tiếp nhận vào cổng Zero-Trust Quarantine'
-                  : 'Tín hiệu bị từ chối bởi bộ lọc Zero-Trust Gatekeeper'}{' '}
+                  ? t('quarantineAcceptedTitle')
+                  : t('quarantineRejectedTitle')}{' '}
                 <span className="badge bg-dark ms-1">{result.status}</span>
               </div>
               <div className="small mb-1">{result.reason}</div>
               {result.canonicalUrl && (
                 <div className="small font-monospace text-muted">
-                  URL chuẩn hóa (đã lọc PII): {result.canonicalUrl}
+                  {t('quarantineCanonicalUrlLabel')} {result.canonicalUrl}
                   {result.jobId ? ` • Job ID: ${result.jobId}` : ''}
                 </div>
               )}

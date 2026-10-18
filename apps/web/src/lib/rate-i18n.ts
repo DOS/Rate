@@ -171,6 +171,18 @@ const _csHomePageCheck: HomePageCopyStrings = csMessages.homePage;
 void _enHomePageCheck;
 void _csHomePageCheck;
 
+type DevelopersCopyStrings = typeof viMessages.developers;
+const _enDevelopersCheck: DevelopersCopyStrings = enMessages.developers;
+const _csDevelopersCheck: DevelopersCopyStrings = csMessages.developers;
+void _enDevelopersCheck;
+void _csDevelopersCheck;
+
+type StaticPagesCopyStrings = typeof viMessages.staticPages;
+const _enStaticPagesCheck: StaticPagesCopyStrings = enMessages.staticPages;
+const _csStaticPagesCheck: StaticPagesCopyStrings = csMessages.staticPages;
+void _enStaticPagesCheck;
+void _csStaticPagesCheck;
+
 const RATE_COPY_DICTIONARY: Record<SupportedRateLocale, RateLocaleCopy> = {
   vi: { locale: 'vi', ...viCopy },
   en: { locale: 'en', ...enCopy },

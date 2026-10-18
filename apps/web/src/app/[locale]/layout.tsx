@@ -51,6 +51,8 @@ export default async function LocaleLayout({
     merchants: messages.merchants,
     productDetail: messages.productDetail,
     homePage: messages.homePage,
+    developers: messages.developers,
+    staticPages: messages.staticPages,
   };
 
   return (
