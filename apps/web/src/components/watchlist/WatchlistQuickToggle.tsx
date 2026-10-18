@@ -82,6 +82,7 @@ export default function WatchlistQuickToggle({
             ? t('quickToggleTitleWatched')
             : t('quickToggleTitleUnwatched')
         }
+        aria-label={`${t('quickToggleShortUnwatched')}: ${item.name}`}
         aria-pressed={watched}
         className={`rate-chip-btn${watched ? ' is-active' : ''} ${className}`.trim()}
       >

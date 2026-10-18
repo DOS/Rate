@@ -77,6 +77,7 @@ export default function CompareQuickToggle({
           type="button"
           onClick={handleToggle}
           title={title}
+          aria-label={`${t('quickToggleShortAdd')}: ${item.name}`}
           aria-pressed={selected}
           className={`rate-chip-btn${selected ? ' is-active' : ''}${limitAlert ? ' is-warning' : ''}`}
         >

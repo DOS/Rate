@@ -1708,12 +1708,12 @@
     "okOtpVerified": "Xác thực OTP thành công! Đang chuyển hướng về trang chủ..."
   },
   "productCard": {
-    "reviewCount": "{count} đánh giá",
+    "reviewCount": "{count, number} đánh giá",
     "noReviews": "Chưa có đánh giá",
     "expertScore": "Lab {score}",
     "refPrice": "Giá tham khảo",
     "priceUpTo": "đến {price}",
-    "sources": "{count} nơi bán",
+    "sources": "{count, number} nơi bán",
     "viewDetails": "Xem chi tiết",
     "priceHistory": "Lịch sử giá",
     "priceHistoryTitle": "Kiểm định lịch sử giá 90 ngày & phát hiện giảm giá ảo",

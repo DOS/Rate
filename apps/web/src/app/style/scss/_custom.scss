@@ -178,6 +178,11 @@
   }
 }
 
+// multiply would turn product shots near-black on the dark canvas.
+.rate-surface-dark .rate-product-card-media-link img {
+  mix-blend-mode: normal;
+}
+
 .rate-product-card-noimage {
   font-size: var(--rate-text-min);
   color: var(--rate-fg-muted);
@@ -265,6 +270,11 @@
 
     &:hover {
       color: var(--rate-brand);
+    }
+
+    // The line clamp needs overflow: hidden, so draw the ring inside.
+    &:focus-visible {
+      outline-offset: -2px !important;
     }
   }
 }

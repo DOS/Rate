@@ -71,9 +71,10 @@ export default function ProductCard({
           href={href}
           className="rate-product-card-media-link"
           tabIndex={-1}
+          aria-hidden="true"
         >
           {thumbnail ? (
-            <img src={thumbnail} alt={name} loading="lazy" />
+            <img src={thumbnail} alt="" loading="lazy" />
           ) : (
             <span className="rate-product-card-noimage">{t('noImage')}</span>
           )}
@@ -96,17 +97,18 @@ export default function ProductCard({
       <div className="rate-product-card-body">
         <p className="rate-product-card-meta">{meta.join(' · ')}</p>
 
-        <h3 className="rate-product-card-title">
+        <h4 className="rate-product-card-title">
           <Link href={href}>
             {name}
             {verified && (
               <BsPatchCheckFill
                 className="rate-product-card-verified"
+                role="img"
                 aria-label={t('verified')}
               />
             )}
           </Link>
-        </h3>
+        </h4>
 
         <div className="rate-product-card-scores">
           {userScore != null ? (
