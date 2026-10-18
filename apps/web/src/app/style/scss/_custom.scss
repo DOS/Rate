@@ -493,3 +493,18 @@
   color: var(--rate-brand);
   transition: gap 0.15s ease;
 }
+
+// Long badge labels (eyebrows, radar headings) must wrap on phones instead
+// of widening the page.
+@media (max-width: 575.98px) {
+  body .badge {
+    max-width: 100%;
+    white-space: normal;
+    text-align: start;
+  }
+}
+
+// A truncating flex child only ellipsizes once it is allowed to shrink.
+.d-flex > .text-truncate {
+  min-width: 0;
+}

@@ -642,8 +642,11 @@ export default function MerchantDirectoryExplorer({
             return (
               <div className="col-lg-6 col-12" key={merchant.id}>
                 <div className="rate-card rounded-4 d-flex flex-column h-100 border bg-white p-4 shadow-sm">
-                  <div className="d-flex justify-content-between align-items-start mb-3 gap-3">
-                    <div className="d-flex align-items-center gap-3">
+                  <div className="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-3">
+                    <div
+                      className="d-flex align-items-center gap-3"
+                      style={{ minWidth: 0 }}
+                    >
                       <div
                         className="rounded-circle bg-primary-subtle text-primary d-flex align-items-center justify-content-center fw-bold fs-4 flex-shrink-0"
                         style={{ width: '56px', height: '56px' }}
