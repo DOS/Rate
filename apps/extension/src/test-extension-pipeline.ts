@@ -495,6 +495,7 @@ async function runTests() {
     BoundedSlidingWindowRateLimiter,
     extractClientRateLimitKey,
     parseBoundedStringParam,
+    parseCompareSlugsParam,
   } = (
     'BoundedSlidingWindowRateLimiter' in apiHandlerMod
       ? apiHandlerMod
@@ -539,6 +540,43 @@ async function runTests() {
   assert.equal(extractClientRateLimitKey(new Headers()), 'anon');
   assert.equal(parseBoundedStringParam('  hello world  ', 5), 'hello');
   assert.equal(parseBoundedStringParam('   ', 10), null);
+  assert.deepEqual(
+    parseCompareSlugsParam(
+      ' iphone-16-pro-max , IPHONE-16-PRO-MAX , bad<script>slug , galaxy-s24-ultra , xiaomi-15-ultra , find-x8-pro , extra-fifth-slug '
+    ),
+    ['iphone-16-pro-max', 'galaxy-s24-ultra', 'xiaomi-15-ultra', 'find-x8-pro'],
+    'parseCompareSlugsParam must deduplicate case-insensitively, reject invalid characters, and cap at 4 slugs'
+  );
+  assert.deepEqual(parseCompareSlugsParam('   , ??? , /etc/passwd '), []);
+
+  const cacheTagsMod = await import('../../web/src/server/rate/cache-tags.js');
+  const { resolveRevalidationTargets, RATE_CACHE_TAGS } = (
+    'resolveRevalidationTargets' in cacheTagsMod
+      ? cacheTagsMod
+      : (cacheTagsMod as unknown as { default: typeof cacheTagsMod }).default
+  ) as typeof cacheTagsMod;
+  const revalTargets = resolveRevalidationTargets({
+    slugs: ['iphone-16-pro-max'],
+    merchants: ['shopee:88201679'],
+    paths: ['/vi/smartphones/iphone-16-pro-max'],
+  });
+  assert.ok(revalTargets.tags.includes('rate:product:iphone-16-pro-max'));
+  assert.ok(revalTargets.tags.includes(RATE_CACHE_TAGS.PRODUCTS));
+  assert.ok(
+    revalTargets.tags.includes(RATE_CACHE_TAGS.OFFERS),
+    'Slug/merchant revalidation must invalidate rate:offers'
+  );
+  assert.ok(
+    revalTargets.tags.includes(RATE_CACHE_TAGS.PRICE_HISTORY),
+    'Slug revalidation must invalidate rate:price-history'
+  );
+  assert.ok(
+    revalTargets.tags.includes(RATE_CACHE_TAGS.REVIEWS),
+    'Slug revalidation must invalidate rate:reviews'
+  );
+  assert.ok(revalTargets.tags.includes(RATE_CACHE_TAGS.DEALS));
+  assert.ok(revalTargets.tags.includes('rate:merchant:shopee:88201679'));
+  assert.deepEqual(revalTargets.paths, ['/vi/smartphones/iphone-16-pro-max']);
 
   const openApiCheckMod = await import('../../web/src/server/rate/openapi.js');
   const { buildRateOpenApiSpec: buildSpecForCheck } = (

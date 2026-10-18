@@ -2,12 +2,7 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { type NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import {
-  RATE_CACHE_TAGS,
-  categoryCacheTag,
-  merchantCacheTag,
-  productCacheTag,
-} from '@/server/rate';
+import { resolveRevalidationTargets } from '@/server/rate';
 import { jsonApiError } from '@/server/rate/api-handler';
 
 const REVALIDATE_CORS_HEADERS: Record<string, string> = {
@@ -111,30 +106,10 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const tagSet = new Set<string>();
-  const pathSet = new Set<string>();
+  const { tags: revalidatedTags, paths: revalidatedPaths } =
+    resolveRevalidationTargets(parsed.data);
 
-  for (const tag of parsed.data.tags ?? []) {
-    tagSet.add(tag);
-  }
-  for (const slug of parsed.data.slugs ?? []) {
-    tagSet.add(productCacheTag(slug));
-    tagSet.add(RATE_CACHE_TAGS.PRODUCTS);
-    tagSet.add(RATE_CACHE_TAGS.DEALS);
-  }
-  for (const cat of parsed.data.categories ?? []) {
-    tagSet.add(categoryCacheTag(cat));
-    tagSet.add(RATE_CACHE_TAGS.CATEGORIES);
-  }
-  for (const merchantId of parsed.data.merchants ?? []) {
-    tagSet.add(merchantCacheTag(merchantId));
-    tagSet.add(RATE_CACHE_TAGS.MERCHANTS);
-  }
-  for (const p of parsed.data.paths ?? []) {
-    pathSet.add(p);
-  }
-
-  if (tagSet.size === 0 && pathSet.size === 0) {
+  if (revalidatedTags.length === 0 && revalidatedPaths.length === 0) {
     return jsonApiError(
       400,
       'At least one tag, slug, category, merchant, or path is required',
@@ -142,9 +117,6 @@ export async function POST(request: NextRequest) {
       REVALIDATE_CORS_HEADERS
     );
   }
-
-  const revalidatedTags = [...tagSet];
-  const revalidatedPaths = [...pathSet];
 
   for (const tag of revalidatedTags) {
     try {
