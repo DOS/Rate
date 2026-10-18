@@ -1196,8 +1196,108 @@ async function run() {
   assert.equal(parsedTablet.specifications.camera?.second_camera, '2 MP, f/2.4, depth');
   assert.equal(parsedTablet.specifications.camera?.front_camera, '32 MP, f/2.2');
 
+  // 9.7 ProductNormalizer iPhone 16e/SE & Promo-Prefix Model Extraction + EntityMatcher Spec Preservation (#352)
+  const { ProductNormalizer } = await import('./product-normalizer.js');
+  const { EntityMatcher } = await import('./entity-matcher.js');
+  const normalizer = new ProductNormalizer();
+  const baseRaw = {
+    platform: 'shopee' as const,
+    itemId: 'sp-test',
+    shopId: 'shop-1',
+    url: 'https://shopee.vn/product/1/2',
+    priceMin: 16_990_000,
+    priceMax: 16_990_000,
+    priceBeforeDiscount: 17_990_000,
+    currency: 'VND',
+    historicalSold: 50,
+    ratingStar: 4.9,
+    ratingCount: 10,
+    images: [],
+    models: [],
+    attributes: [],
+    shop: {
+      shopId: 'shop-1',
+      name: 'Shopee Mall',
+      isMall: true,
+    },
+    reviews: [],
+  };
+
+  const iphone16e = normalizer.normalize({
+    ...baseRaw,
+    title: 'Điện thoại Apple iPhone 16e 128GB Chính hãng VN/A',
+  });
+  assert.equal(iphone16e.model, 'iPhone 16e');
+  assert.equal(iphone16e.model_key, 'apple:iphone-16e:128gb');
+  assert.equal(iphone16e.battery_mah, 4005);
+
+  const iphoneSe2022 = normalizer.normalize({
+    ...baseRaw,
+    title: 'Apple iPhone SE (2022) 64GB Chính hãng VN/A',
+  });
+  assert.equal(iphoneSe2022.model, 'iPhone SE 2022');
+  assert.equal(iphoneSe2022.model_key, 'apple:iphone-se-2022:64gb');
+
+  const promoSamsung = normalizer.normalize({
+    ...baseRaw,
+    title: '[Mã BMLT300 giảm 5%] Điện thoại thông minh Samsung Galaxy S24 Ultra 5G 256GB',
+  });
+  assert.equal(promoSamsung.brand, 'Samsung');
+  assert.equal(promoSamsung.model, 'Galaxy S24 Ultra');
+  assert.equal(promoSamsung.model_key, 'samsung:galaxy-s24-ultra:256gb');
+
+  let updatedMasterPayload: Record<string, unknown> | null = null;
+  const matcherStub = {
+    from: () => ({
+      select: () => ({
+        eq: () => ({
+          maybeSingle: async () => ({
+            data: {
+              id: 'master-352',
+              brand: 'Samsung',
+              model: 'Galaxy S24 Ultra',
+              storage_gb: 256,
+              ram_gb: 12,
+              screen_size_inch: 6.8,
+              battery_mah: 5000,
+              has_5g: true,
+              name: 'Samsung Galaxy S24 Ultra 256GB',
+              description: '',
+              colors: ['Titanium Gray'],
+            },
+            error: null,
+          }),
+        }),
+      }),
+      update: (payload: Record<string, unknown>) => ({
+        eq: async () => {
+          updatedMasterPayload = payload;
+          return { error: null };
+        },
+      }),
+    }),
+  } as unknown as ConstructorParameters<typeof EntityMatcher>[0];
+
+  const matcher = new EntityMatcher(matcherStub);
+  (matcher as unknown as { enricher: { fetchSpecsFromAi: () => Promise<unknown> } }).enricher = {
+    fetchSpecsFromAi: async () => ({
+      ram_gb: null,
+      screen_size_inch: null,
+      battery_mah: null,
+      has_5g: undefined,
+      specifications: { design: { colors: [] } },
+      key_specs: ['6.8" AMOLED'],
+    }),
+  };
+  const enrichOk = await matcher.enrichMasterProductById('master-352');
+  assert.equal(enrichOk, true);
+  assert.equal(updatedMasterPayload?.['ram_gb'], 12);
+  assert.equal(updatedMasterPayload?.['screen_size_inch'], 6.8);
+  assert.equal(updatedMasterPayload?.['battery_mah'], 5000);
+  assert.equal(updatedMasterPayload?.['has_5g'], true);
+
   console.log(
-    `✅ [P2/P3 Trust Model & #292] Voter weight, Wilson lower bound (50/52=${wilson50of52} > 1/1=${wilson1of1}), shingle copy seeding (sim=${shingleSim}), affiliate shortlinks, peer floor & ArenaSpecSyncer verified`
+    `✅ [P2/P3 Trust Model & #292/#352] Voter weight, Wilson lower bound (50/52=${wilson50of52} > 1/1=${wilson1of1}), shingle copy seeding (sim=${shingleSim}), affiliate shortlinks, peer floor, ArenaSpecSyncer & Normalizer/EntityMatcher (#352) verified`
   );
 
   console.log('\n🎉 ALL AI REVIEW ANALYZER TESTS PASSED!');

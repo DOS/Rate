@@ -242,6 +242,26 @@ const CANONICAL_PHONE_REGISTRY: Record<
     release_date: 'September 2024',
     ip_rating: 'IP68 (6m up to 30 mins)',
   },
+  'apple:iphone-16e': {
+    screen_size_inch: 6.1,
+    battery_mah: 4005,
+    ram_gb: 8,
+    chipset: 'Apple A18 (3 nm)',
+    cpu: 'Hexa-core (2x4.04 GHz + 4x2.20 GHz)',
+    gpu: 'Apple GPU (4-core graphics)',
+    os: 'iOS 18.3 (upgradable)',
+    weight_g: 167,
+    dimensions: '146.7 x 71.5 x 7.8 mm',
+    resolution: '1170 x 2532 pixels (~460 ppi)',
+    screen_type: 'Super Retina XDR OLED, HDR10, Dolby Vision, 1200 nits (peak)',
+    refresh_rate_hz: 60,
+    rear_camera: '48 MP, f/1.6, 26mm (wide), PDAF, OIS',
+    front_camera: '12 MP, f/1.9, 23mm (wide), PDAF + SL 3D',
+    charging_w: 20,
+    has_5g: true,
+    release_date: 'February 2025',
+    ip_rating: 'IP68 (6m up to 30 mins)',
+  },
   'apple:iphone-16-plus': {
     screen_size_inch: 6.7,
     battery_mah: 4674,
@@ -1053,7 +1073,9 @@ export class ProductNormalizer {
     // 2. Extract Model
     let model = '';
     if (brand === 'Apple') {
-      const iphoneMatch = title.match(/iphone\s*(\d+(?:\s*(?:pro\s*max|pro|plus|mini))?)/i);
+      const iphoneMatch = title.match(
+        /iphone\s*(\d+e\b|\d+(?:\s*(?:pro\s*max|pro|plus|mini|air))?|se(?:\s*(?:\(?\s*(?:2020|2022|2025)\s*\)?|(?:gen\s*)?[234]\b))?)/i
+      );
       const ipadMatch = title.match(/ipad\s*(pro\s*m\d+|air\s*m\d+|pro|air|mini|\d+)/i);
       const macbookMatch = title.match(
         /macbook\s*(pro\s*m\d+(?:\s*(?:pro|max))?|air\s*m\d+|air|pro)/i
@@ -1073,7 +1095,13 @@ export class ProductNormalizer {
       const chip = chipMatch ? chipMatch[1].toUpperCase() : '';
 
       if (iphoneMatch && iphoneMatch[1]) {
-        model = `iPhone ${iphoneMatch[1].trim()}`;
+        const normalizedIphoneSuffix = iphoneMatch[1]
+          .replace(/[()]/g, ' ')
+          .replace(/\bgen\s*/i, '')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .replace(/^se\b/i, 'SE');
+        model = `iPhone ${normalizedIphoneSuffix}`;
       } else if (ipadMatch && ipadMatch[1]) {
         const line = ipadMatch[1].trim();
         model = /^(pro|air)$/i.test(line) && chip ? `iPad ${line} ${chip}` : `iPad ${line}`;
@@ -1121,16 +1149,20 @@ export class ProductNormalizer {
     } else if (brand === 'Xiaomi' && /pad\s*7\s*pro/i.test(title)) {
       model = 'Pad 7 Pro';
     } else {
-      const cleaned = title
+      const withoutLeadingPromo = title
+        .replace(/^(?:\s*(?:\[[^\]]*\]|\([^)]*\)|【[^】]*】)\s*)+/, '')
+        .trim();
+      const cleaned = withoutLeadingPromo
         .replace(
           new RegExp(
-            `^(?:Điện thoại|Smartphone|Máy tính bảng|Tablet|Laptop|Máy tính xách tay|Đồng hồ thông minh|Smartwatch|Tai nghe(?:\\s*Bluetooth|\\s*chống\\s*ồn)?|Earbuds)?\\s*${brand}`,
+            `^(?:(?:Hàng\\s*)?Chính\\s*hãng\\s+)?(?:Điện thoại(?:\\s*thông\\s*minh|\\s*di\\s*động)?|Smartphone|Máy tính bảng|Tablet|Laptop|Máy tính xách tay|Đồng hồ thông minh|Smartwatch|Tai nghe(?:\\s*Bluetooth|\\s*chống\\s*ồn|\\s*không\\s*dây)?|Earbuds)?\\s*(?:(?:Hàng\\s*)?Chính\\s*hãng\\s+)?(?:${brand}\\b\\s*)?`,
             'i'
           ),
           ''
         )
+        .replace(/^(?:\s*(?:\[[^\]]*\]|\([^)]*\)|【[^】]*】)\s*)+/, '')
         .trim();
-      const rawTokens = cleaned.split(/\s+/);
+      const rawTokens = cleaned.split(/\s+/).filter(Boolean);
       const modelTokens: string[] = [];
       for (const tok of rawTokens) {
         if (modelTokens.length >= 4) break;
