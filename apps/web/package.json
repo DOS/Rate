@@ -17,6 +17,8 @@
     "not op_mini all"
   ],
   "dependencies": {
+    "@fontsource-variable/inter": "5.3.0",
+    "@fontsource-variable/jetbrains-mono": "5.3.0",
     "@plaiceholder/next": "^3.0.0",
     "@repo/design-system": "workspace:*",
     "@repo/shared-data": "workspace:*",

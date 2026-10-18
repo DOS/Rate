@@ -201,41 +201,6 @@ function start(command, commandArgs, env) {
   return child;
 }
 
-// next/font downloads Google Fonts during the build; a failed fetch surfaces
-// as one of these. Only such failures are worth retrying.
-// (Turbopack names next/font/google; webpack says "... from Google Fonts".)
-const FONT_FETCH_ERROR =
-  /font\/google|from Google Fonts|fonts\.(googleapis|gstatic)\.com/i;
-
-/** Like run(), but also returns the tail of the output to classify failures. */
-function runCapturingTail(command, commandArgs, env) {
-  return new Promise((resolve, reject) => {
-    const isWindows = process.platform === 'win32';
-    const child = spawn(
-      command,
-      isWindows ? commandArgs.map(quoteForCmd) : commandArgs,
-      {
-        cwd: repoRoot,
-        env: { ...process.env, ...env },
-        stdio: ['ignore', 'pipe', 'pipe'],
-        shell: isWindows,
-        detached: !isWindows,
-      }
-    );
-    children.push(child);
-    let tail = '';
-    const keep = (chunk, out) => {
-      out.write(chunk);
-      tail = (tail + chunk.toString()).slice(-20_000);
-    };
-    child.stdout.on('data', (c) => keep(c, process.stdout));
-    child.stderr.on('data', (c) => keep(c, process.stderr));
-    child.on('error', reject);
-    // 'close', not 'exit': it fires after stdout/stderr drain, so the tail is complete.
-    child.on('close', (code) => resolve({ code, tail }));
-  });
-}
-
 // Asynchronous on purpose: the proxy runs in this process and must keep
 // answering while `next build` and Playwright query it.
 function run(command, commandArgs, env) {
@@ -407,22 +372,13 @@ try {
   };
   if (!skipBuild) {
     // --ui=stream: turbo's TUI would take over the terminal from a detached child.
-    for (let attempt = 1; ; attempt++) {
-      const { code, tail } = await runCapturingTail(
-        'pnpm',
-        ['exec', 'turbo', 'run', 'build', '--filter=@repo/web', '--ui=stream'],
-        env
-      );
-      if (code === 0) break;
-      // A real compile error fails at once; a Google Fonts outage gets backoff.
-      if (attempt >= 3 || !FONT_FETCH_ERROR.test(tail)) {
-        throw new Error(`next build failed (exit ${code})`);
-      }
-      console.warn(
-        `Google Fonts fetch failed during the build; retry ${attempt + 1}/3 in ${attempt * 15}s`
-      );
-      await sleep(attempt * 15_000);
-    }
+    await run(
+      'pnpm',
+      ['exec', 'turbo', 'run', 'build', '--filter=@repo/web', '--ui=stream'],
+      env
+    ).catch((err) => {
+      throw new Error(`next build failed: ${err.message}`);
+    });
     writeFileSync(SUPABASE_PORT_FILE, String(supabasePort));
   }
 

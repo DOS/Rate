@@ -2119,13 +2119,34 @@ async function runCoreArchitectureSuite() {
     path.join(repoRoot, 'apps/web/src/app/style/scss/_custom.scss'),
     'utf8'
   );
+  const fontsSrc447 = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/lib/fonts.ts'),
+    'utf8'
+  );
+  // Each subset is a separate face; the fallback-carrying Latin face must come
+  // last in each stack or it would shadow the faces after it (#447).
+  const inStackOrder = (src: string, vars: string[]) =>
+    vars.every((v, i) => {
+      const at = src.indexOf(`var(${v},`);
+      return at >= 0 && (i === 0 || at > src.indexOf(`var(${vars[i - 1]},`));
+    });
   assert.ok(
     !/fonts\.googleapis\.com/.test(customScssSrc147) &&
-      customScssSrc147.includes('var(--font-inter') &&
-      customScssSrc147.includes('var(--font-jetbrains-mono') &&
-      rootLayoutSrc145.includes('fontInter.variable') &&
-      rootLayoutSrc145.includes('fontJetBrainsMono.variable'),
-    'Inter and JetBrains Mono must come from next/font (src/lib/fonts.ts) via --font-inter / --font-jetbrains-mono, never a Google Fonts @import (#147)'
+      !fontsSrc447.includes('next/font/google') &&
+      fontsSrc447.includes("from 'next/font/local'") &&
+      inStackOrder(customScssSrc147, [
+        '--font-inter-vi',
+        '--font-inter-ext',
+        '--font-inter-greek',
+        '--font-inter',
+      ]) &&
+      inStackOrder(customScssSrc147, [
+        '--font-jetbrains-mono-vi',
+        '--font-jetbrains-mono-ext',
+        '--font-jetbrains-mono',
+      ]) &&
+      rootLayoutSrc145.includes('fontFaces.map((font) => font.variable)'),
+    'Inter and JetBrains Mono must come from local files via next/font/local (src/lib/fonts.ts), one face per subset in stack order, never from Google Fonts (#147, #447)'
   );
   console.log(
     '  ✅ [44/45] Inter & JetBrains Mono self-hosted via next/font, no Google Fonts @import (#147) passed'
