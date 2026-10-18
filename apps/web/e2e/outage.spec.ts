@@ -1,8 +1,10 @@
 import { expect, test } from '@playwright/test';
 
-// scripts/e2e/run.mjs answers 500 to every PostgREST query containing
-// "e2e-fault", simulating a database outage for these URLs only. An outage must
-// surface as 5xx, never as a 404 that crawlers would act on (DOS/Rate#323).
+// scripts/e2e/run.mjs answers 500 to PostgREST queries matching FAULT_MARKERS
+// (any query containing "e2e-fault", and the listing query of the seeded
+// faulty-listings-store merchant), simulating a database outage for these URLs
+// only. An outage must surface as 5xx, never as a 404 or as an empty profile
+// that would be cached (DOS/Rate#323, #329).
 const BINGBOT =
   'Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)';
 

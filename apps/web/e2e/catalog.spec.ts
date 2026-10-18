@@ -97,6 +97,19 @@ test('unknown product slug shows the not-found page, never indexed', async ({
   );
 });
 
+// A merchant with 250 listings: its reads are chunked under the request-line
+// limit, and the review on its last listing still shows (DOS/Rate#329).
+test('merchant with hundreds of listings loads every chunk', async ({
+  request,
+}) => {
+  expect((await request.get('/merchants/bulk-listings-store')).status()).toBe(
+    200
+  );
+  const res = await request.get('/api/v1/rate/merchants/bulk-listings-store');
+  expect(res.status()).toBe(200);
+  expect(await res.text()).toContain('Đóng gói cẩn thận, giao nhanh.');
+});
+
 // Positive controls for the 404 specs: the same routes resolve seeded rows.
 test('merchant and versus pages resolve seeded rows', async ({ request }) => {
   for (const path of [
