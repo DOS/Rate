@@ -412,8 +412,8 @@ export class ArenaSpecSyncer {
           id: string;
           name: string;
           slug?: string | null;
-          model_key?: string | null;
-          specifications?: unknown;
+          model_key: string;
+          specifications?: Record<string, unknown> | null;
         }> | null;
         error: { message: string } | null;
       }>;

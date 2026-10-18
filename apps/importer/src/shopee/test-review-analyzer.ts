@@ -598,7 +598,7 @@ async function run() {
     const flagRowsPayload = flagUpsert.payload as Array<{
       flag_category: ReviewFlagCategory;
       verdict: string;
-      signals: ReviewSignals;
+      signals: Record<string, unknown>;
       input_hash: string;
     }>;
     assert.equal(flagRowsPayload.length, input.length);
