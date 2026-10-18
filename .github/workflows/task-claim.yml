@@ -29,9 +29,9 @@ jobs:
     name: task-claim
     runs-on: ubuntu-latest
     timeout-minutes: 2
-    concurrency:
-      group: task-claim-pr-${{ github.event.pull_request.number }}
-      cancel-in-progress: true
+    # No concurrency group: a cancelled run becomes the PR's task-claim result
+    # (GitHub reports the newest run) and blocks the merge (#444). Runs are
+    # read-only, take seconds and read the labels live, so overlap is harmless.
     permissions:
       contents: read
       issues: read
