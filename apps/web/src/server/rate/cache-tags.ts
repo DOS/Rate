@@ -40,6 +40,26 @@ export interface RevalidationTargetsInput {
   paths?: readonly string[];
 }
 
+export function canonicalizeCacheParams(value: unknown): string {
+  if (value === null || value === undefined) {
+    return '{}';
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => canonicalizeCacheParams(item)).join(',')}]`;
+  }
+  if (typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([, val]) => val !== undefined)
+      .sort(([keyA], [keyB]) => keyA.localeCompare(keyB));
+    return `{${entries
+      .map(
+        ([key, val]) => `${JSON.stringify(key)}:${canonicalizeCacheParams(val)}`
+      )
+      .join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
 export function resolveRevalidationTargets(input: RevalidationTargetsInput): {
   tags: string[];
   paths: string[];
@@ -60,12 +80,16 @@ export function resolveRevalidationTargets(input: RevalidationTargetsInput): {
     tagSet.add(RATE_CACHE_TAGS.PRICE_HISTORY);
     tagSet.add(RATE_CACHE_TAGS.REVIEWS);
     tagSet.add(RATE_CACHE_TAGS.DEALS);
+    tagSet.add(RATE_CACHE_TAGS.STATS);
   }
   for (const cat of input.categories ?? []) {
     const clean = cat.trim();
     if (!clean) continue;
     tagSet.add(categoryCacheTag(clean));
     tagSet.add(RATE_CACHE_TAGS.CATEGORIES);
+    tagSet.add(RATE_CACHE_TAGS.PRODUCTS);
+    tagSet.add(RATE_CACHE_TAGS.DEALS);
+    tagSet.add(RATE_CACHE_TAGS.STATS);
   }
   for (const merchantId of input.merchants ?? []) {
     const clean = merchantId.trim();
@@ -74,6 +98,7 @@ export function resolveRevalidationTargets(input: RevalidationTargetsInput): {
     tagSet.add(RATE_CACHE_TAGS.MERCHANTS);
     tagSet.add(RATE_CACHE_TAGS.OFFERS);
     tagSet.add(RATE_CACHE_TAGS.DEALS);
+    tagSet.add(RATE_CACHE_TAGS.STATS);
   }
   for (const p of input.paths ?? []) {
     const clean = p.trim();
