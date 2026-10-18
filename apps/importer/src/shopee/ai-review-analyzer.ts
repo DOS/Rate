@@ -29,8 +29,24 @@ export type ReviewVerdict = 'authentic' | 'suspicious' | 'fake' | 'unanalyzed';
  */
 export const BURST_AUDITOR_DETECTOR = 'review_burst_auditor';
 
+/**
+ * `review_flags.detector` of community reviews written by
+ * `rate.submit_community_review` (DOS-Me 20261018100000, and its predecessor
+ * 20261014234500). Those verdicts are owned by the community moderation path:
+ * the crawl analyzer reads every review of a listing, including community ones
+ * attached to it, and must not overwrite them (it could otherwise include an
+ * unmoderated community review in the rating).
+ */
+export const COMMUNITY_REVIEW_DETECTORS: readonly string[] = [
+  'rate-community-guard',
+  'rate-jreviews-guard',
+];
+
 /** Detectors whose `review_flags` rows `persistAnalysisToSupabase` leaves untouched. */
-export const ANALYZER_PRESERVED_DETECTORS: readonly string[] = [BURST_AUDITOR_DETECTOR];
+export const ANALYZER_PRESERVED_DETECTORS: readonly string[] = [
+  BURST_AUDITOR_DETECTOR,
+  ...COMMUNITY_REVIEW_DETECTORS,
+];
 
 /** The stored verdict fields of a preserved flag, applied over the analyzer result. */
 type PreservedReviewFlag = Pick<
