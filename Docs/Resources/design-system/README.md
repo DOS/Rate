@@ -35,7 +35,7 @@ Rate.vn is an independent product rating, anti-seeding review and technical audi
 - Obsidian sections (homepage hero, scoreboard, extension side panel) use `rate-bg-dark` in both themes, with `rate-fg-on-dark` and `rate-fg-on-dark-muted` text and `rate-border-dark` hairlines.
 - The dark theme here is the app's `.rate-surface-dark` scope (`_custom.scss`): wrap an obsidian section in it and the `rate-bg-*`, `rate-border-*`, `rate-fg-*` and `-bg` tint tokens switch to their dark values, so cards, eyebrows, spec pills and score badges keep working inside it.
 - Crimson text that must read on a surface uses `rate-crimson-text` (`bs-primary` in light, #ff6b6b in dark).
-- `rate-brand` (#d83030) and `rate-score-user` (#2dba69) are the two colors of the official logo. The red reads as text and carries white text (4.8:1); the green is a fill and icon color only (2.5:1 on white). Crimson text uses `bs-primary` (4.7:1) or `bs-primary-text-emphasis` (6.3:1) on light grounds, and `rate-crimson-text` where it must also read inside `.rate-surface-dark`.
+- `rate-brand` (#d83030) and `rate-score-user` (#2dba69) are the two colors of the official logo. The red reads as text and carries white text (4.8:1); the green is a fill and icon color only (2.5:1 on white). Crimson text uses `bs-primary` (4.8:1) or `bs-primary-text-emphasis` (6.4:1) on light grounds, and `rate-crimson-text` where it must also read inside `.rate-surface-dark`.
 - Emerald, indigo and amber fills never carry small text directly; badges pair a soft tint (`rate-score-*-bg`) with a dark ink (`rate-score-*-ink`).
 - Status always carries a word or icon as well as a color: red and green look alike to color-blind users ("Review thật" vs "Seeding bị loại").
 

@@ -235,8 +235,8 @@ export default async function LeaderboardPage({
                 <div
                   className="d-inline-flex align-items-center rounded-pill mb-3 gap-2 px-3 py-1"
                   style={{
-                    background: 'rgba(216, 48, 48,0.14)',
-                    border: '1px solid rgba(216, 48, 48,0.35)',
+                    background: 'rgba(216, 48, 48, 0.14)',
+                    border: '1px solid rgba(216, 48, 48, 0.35)',
                     color: '#ff6b66',
                     fontSize: '0.8125rem',
                     fontWeight: 700,
@@ -330,7 +330,7 @@ export default async function LeaderboardPage({
                     <span
                       className="badge rounded-pill"
                       style={{
-                        background: 'rgba(45, 186, 105,0.15)',
+                        background: 'rgba(45, 186, 105, 0.15)',
                         color: '#34d399',
                         fontSize: '0.8125rem',
                       }}

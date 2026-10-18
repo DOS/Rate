@@ -462,7 +462,7 @@ export default function VersusInteractiveScoreboard({
         className="rounded-3 d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2 p-3"
         style={{
           background:
-            'linear-gradient(90deg, rgba(16,185,129,0.16) 0%, rgba(255,46,41,0.12) 100%)',
+            'linear-gradient(90deg, rgba(45, 186, 105, 0.16) 0%, rgba(216, 48, 48, 0.12) 100%)',
           border: '1px solid rgba(52,211,153,0.35)',
         }}
       >

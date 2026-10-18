@@ -244,7 +244,7 @@ a:focus-visible {
 .btn-light-primary {
   background: var(--bs-primary-bg-subtle);
   border-color: var(--bs-primary-border-subtle);
-  color: var(--bs-primary);
+  color: var(--bs-primary-text-emphasis);
 }
 .btn-light-primary:hover {
   background: var(--bs-primary);

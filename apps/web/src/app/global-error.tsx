@@ -42,7 +42,7 @@ export default function GlobalError({
             style={{
               display: 'inline-block',
               backgroundColor: 'rgba(216, 48, 48, 0.15)',
-              color: '#d83030',
+              color: '#ff6b6b',
               fontWeight: 700,
               fontSize: '0.8125rem',
               padding: '6px 12px',

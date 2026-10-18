@@ -17,4 +17,4 @@ A `<button>` or `<a>` with `.btn` + one variant + optional size (`.btn-sm`, `.bt
 
 - Hover darkens to `bs-primary-bg-dark`; outline and light variants fill with `bs-primary`. Keyboard focus draws a 2px `rate-focus-ring` outline offset 2px.
 - Outline and light variants use `bs-primary` text. Inside `.rate-surface-dark` it stays #e11d48 (about 3.9:1 on the dark surface): use `rate-crimson-text` for crimson text there.
-- Source pair kept: `bs-primary` text on `bs-primary-bg-subtle` (light primary) is about 4.3:1, under 4.5:1 for small text.
+- Light primary uses `bs-primary-text-emphasis` text on `bs-primary-bg-subtle` (about 5.8:1).

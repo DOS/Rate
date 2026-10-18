@@ -142,7 +142,7 @@ function renderShadowTrustPill(lookup: ExtensionLookupData): void {
           display: flex;
           align-items: center;
           gap: 8px;
-          font-size: 12.5px;
+          font-size: 13px;
           font-weight: 700;
           white-space: nowrap;
         }
@@ -151,12 +151,12 @@ function renderShadowTrustPill(lookup: ExtensionLookupData): void {
           color: #ffffff;
           padding: 2px 8px;
           border-radius: 999px;
-          font-size: 11.5px;
+          font-size: 13px;
         }
         .radar-chip {
           padding: 2px 7px;
           border-radius: 999px;
-          font-size: 11px;
+          font-size: 13px;
           font-weight: 700;
         }
         .radar-deal {
@@ -173,11 +173,11 @@ function renderShadowTrustPill(lookup: ExtensionLookupData): void {
         }
         .rating-tag {
           color: #fbbf24;
-          font-size: 11.5px;
+          font-size: 13px;
           font-weight: 700;
         }
         .sub-row {
-          font-size: 11.5px;
+          font-size: 13px;
           color: #9ca3af;
           white-space: nowrap;
           overflow: hidden;
@@ -189,7 +189,7 @@ function renderShadowTrustPill(lookup: ExtensionLookupData): void {
           border: none;
           border-radius: 999px;
           padding: 6px 11px;
-          font-size: 11px;
+          font-size: 13px;
           font-weight: 700;
           cursor: pointer;
           flex-shrink: 0;

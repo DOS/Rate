@@ -545,8 +545,8 @@ export default function WatchlistWorkspace({
               <div
                 className="rounded-3 h-100 p-3"
                 style={{
-                  background: 'rgba(16,185,129,0.1)',
-                  border: '1px solid rgba(16,185,129,0.28)',
+                  background: 'rgba(45, 186, 105, 0.1)',
+                  border: '1px solid rgba(45, 186, 105, 0.28)',
                 }}
               >
                 <div className="small text-white-50 mb-1">

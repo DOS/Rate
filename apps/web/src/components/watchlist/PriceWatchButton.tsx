@@ -106,7 +106,7 @@ export default function PriceWatchButton({
             <button
               type="button"
               className="btn-close small"
-              style={{ fontSize: '0.8125rem' }}
+              style={{ fontSize: '0.65rem' }}
               onClick={() => setShowEditor(false)}
               aria-label={t('closeAria')}
             />

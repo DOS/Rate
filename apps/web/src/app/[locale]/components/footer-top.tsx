@@ -59,7 +59,7 @@ export default function FooterTop({ locale = 'vi' }: { locale?: string }) {
                 href="/inspect"
                 className="btn rounded-pill fw-semibold d-inline-flex align-items-center gap-2 px-4 py-2 text-white"
                 style={{
-                  backgroundColor: '#e11d48',
+                  backgroundColor: 'var(--bs-primary)',
                   border: '1px solid rgba(255, 255, 255, 0.12)',
                 }}
               >

@@ -28,12 +28,12 @@ export default function RateWordmark({
   );
 }
 
-/** The official star mark alone (public/img/rate-logo-512.png, 512x512 with transparent padding). */
+/** The official star mark alone (public/img/rate-logo-64.png, resized from the 512px master; enough for 2x at 30px). */
 export function RateMark({ size = 28 }: { readonly size?: number }) {
   return (
     <Image
       className="rate-mark"
-      src="/img/rate-logo-512.png"
+      src="/img/rate-logo-64.png"
       width={size}
       height={size}
       // Inline size beats the template's `.nav-brand img` / `.footerLogo img` widths
