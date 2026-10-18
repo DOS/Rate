@@ -204,3 +204,70 @@ export function extractClientRateLimitKey(
   if (realIp) return realIp.slice(0, 128);
   return 'anon';
 }
+
+export type ReviewVoteAction = 'up' | 'down' | 'report' | 'clear';
+export type ReviewReportReason =
+  'spam' | 'fake' | 'offensive' | 'off_topic' | 'other';
+
+const VALID_REVIEW_VOTE_ACTIONS = new Set<ReviewVoteAction>([
+  'up',
+  'down',
+  'report',
+  'clear',
+]);
+
+const VALID_REVIEW_REPORT_REASONS = new Set<ReviewReportReason>([
+  'spam',
+  'fake',
+  'offensive',
+  'off_topic',
+  'other',
+]);
+
+/**
+ * Validates and normalizes the request body for `POST /api/reviews/[id]/vote`.
+ * Rejects empty or unrecognized vote actions (`null`) instead of silently defaulting to `'up'`.
+ */
+export function resolveReviewVoteInput(rawBody: unknown): {
+  voteType: ReviewVoteAction;
+  reportReason: ReviewReportReason;
+} | null {
+  if (!rawBody || typeof rawBody !== 'object') {
+    return null;
+  }
+  const body = rawBody as Record<string, unknown>;
+  let voteType: ReviewVoteAction | null = null;
+  const rawAction =
+    typeof body.voteType === 'string'
+      ? body.voteType.trim().toLowerCase()
+      : typeof body.vote === 'string'
+        ? body.vote.trim().toLowerCase()
+        : null;
+
+  if (
+    rawAction &&
+    VALID_REVIEW_VOTE_ACTIONS.has(rawAction as ReviewVoteAction)
+  ) {
+    voteType = rawAction as ReviewVoteAction;
+  } else if (rawAction === null && typeof body.helpful === 'boolean') {
+    voteType = body.helpful ? 'up' : 'down';
+  }
+
+  if (!voteType) {
+    return null;
+  }
+
+  const rawReason =
+    typeof body.reportReason === 'string'
+      ? body.reportReason.trim().toLowerCase()
+      : typeof body.reason === 'string'
+        ? body.reason.trim().toLowerCase()
+        : null;
+  const reportReason: ReviewReportReason =
+    rawReason &&
+    VALID_REVIEW_REPORT_REASONS.has(rawReason as ReviewReportReason)
+      ? (rawReason as ReviewReportReason)
+      : 'spam';
+
+  return { voteType, reportReason };
+}
