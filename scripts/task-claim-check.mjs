@@ -1,10 +1,10 @@
 #!/usr/bin/env node
-// Advisory task-claim check for PRs into `dev` (.github/workflows/task-claim.yml).
+// Required task-claim check for PRs into `dev` (.github/workflows/task-claim.yml).
 // AGENTS.md section 1: an agent claims an issue before working on it by giving
 // it an `agent:<nick>` label and `status:in-progress`, then `status:in-review`
 // once the PR is open. A PR that closes issues passes only when every issue it
 // closes carries such a claim. Dependabot PRs and the dev to main promotion are
-// exempt. The check is not in the dev ruleset yet, so a failure only warns.
+// exempt. The `dev-task-claim` ruleset requires it, so a failure blocks the merge.
 
 import { appendFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
@@ -94,7 +94,7 @@ export function renderSummary(number, result) {
       '',
       'Claim the issue before merging: add `agent:<nick>` and `status:in-progress` ' +
         '(or `status:in-review` once the PR is open), and set Status and Agent on ' +
-        'GitHub Project #9. Then re-run this check.'
+        'GitHub Project #9. The check re-runs when the issue labels change.'
     );
   }
   return lines.join('\n') + '\n';
