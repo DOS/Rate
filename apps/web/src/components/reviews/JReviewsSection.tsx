@@ -10,7 +10,6 @@ import {
   detectStarDistributionAnomaly,
   evaluateReviewTrustAssessment,
   type ReviewAnalysisSummary,
-  type ReviewFlagCategory,
   type ReviewItem,
 } from '@/lib/rate-domain';
 import {
@@ -21,6 +20,12 @@ import {
   type RadarSignal,
 } from '@/lib/deal-radar';
 import { getBrowserAccessToken } from '@/lib/auth/access-token';
+import {
+  isFilteredOutReview,
+  reviewBadgeKind,
+  submitErrorKey,
+  type ReviewBadgeKind,
+} from '@/lib/review-display';
 
 type VoteChoice = 'up' | 'down' | 'report';
 type FilterTab = 'all' | 'authentic' | 'expert' | 'ignored';
@@ -49,7 +54,8 @@ const CRITERIA_KEYS = [
   { key: 'value', labelKey: 'criteriaValue' },
 ] as const;
 
-const FLAG_STYLES: Record<ReviewFlagCategory, string> = {
+const FLAG_STYLES: Record<ReviewBadgeKind, string> = {
+  pending: 'bg-info-subtle text-info-emphasis border border-info-subtle',
   authentic: 'bg-success-subtle text-success border border-success-subtle',
   low_value_coin_spam:
     'bg-secondary-subtle text-secondary border border-secondary-subtle',
@@ -89,11 +95,16 @@ export default function JReviewsSection({
 
   const flagMetaMap = useMemo<
     Record<
-      ReviewFlagCategory,
+      ReviewBadgeKind,
       { label: string; badgeClass: string; description: string }
     >
   >(
     () => ({
+      pending: {
+        label: t('flagPendingLabel'),
+        badgeClass: FLAG_STYLES.pending,
+        description: t('flagPendingDesc'),
+      },
       authentic: {
         label: t('flagAuthenticLabel'),
         badgeClass: FLAG_STYLES.authentic,
@@ -181,9 +192,7 @@ export default function JReviewsSection({
     const authentic = reviews.filter(
       (r) => r.include_in_rating && r.helpfulness_weight > 0
     ).length;
-    const ignored = reviews.filter(
-      (r) => !r.include_in_rating || r.helpfulness_weight === 0
-    ).length;
+    const ignored = reviews.filter(isFilteredOutReview).length;
     const expert = reviews.filter((r) => r.reviewer_type === 'expert').length;
     return {
       all: reviews.length,
@@ -332,7 +341,7 @@ export default function JReviewsSection({
       } else if (activeTab === 'expert') {
         if (r.reviewer_type !== 'expert') return false;
       } else if (activeTab === 'ignored') {
-        if (r.include_in_rating && r.helpfulness_weight > 0) return false;
+        if (!isFilteredOutReview(r)) return false;
       }
 
       if (starFilter === 5 && Math.round(r.rating_star) !== 5) return false;
@@ -533,7 +542,7 @@ export default function JReviewsSection({
 
       const payload = await res.json();
       if (!res.ok || !payload?.ok || !payload?.review) {
-        setSubmitError(payload?.error || t('errSubmitFailed'));
+        setSubmitError(t(submitErrorKey(payload?.code)));
         return;
       }
 
@@ -564,7 +573,9 @@ export default function JReviewsSection({
                 weight: newRev.helpfulness_weight.toFixed(2),
               })
             : t('successFlaggedFiltered', {
-                flag: newRev.flag_category,
+                flag:
+                  flagMetaMap[newRev.flag_category]?.label ??
+                  newRev.flag_category,
               })
       );
     } catch {
@@ -597,7 +608,7 @@ export default function JReviewsSection({
       r.reviewer_type === 'expert' ? 'Expert' : 'Verified Buyer',
       `${r.rating_star}/5★`,
       `${r.helpfulness_weight.toFixed(2)}x`,
-      r.flag_category,
+      reviewBadgeKind(r),
       String(r.upvotes),
       r.comment.replace(/\|/g, '-').replace(/\r?\n/g, ' ').slice(0, 120),
     ]);
@@ -647,7 +658,7 @@ export default function JReviewsSection({
       String(r.rating_star),
       r.helpfulness_weight.toFixed(2),
       r.include_in_rating ? 'true' : 'false',
-      r.flag_category,
+      reviewBadgeKind(r),
       r.verdict || 'authentic',
       String(r.upvotes),
       String(r.downvotes),
@@ -1348,7 +1359,7 @@ export default function JReviewsSection({
         <div className="row g-3">
           {filteredAndSortedReviews.map((rev) => {
             const flagMeta =
-              flagMetaMap[rev.flag_category] || flagMetaMap.authentic;
+              flagMetaMap[reviewBadgeKind(rev)] || flagMetaMap.authentic;
             const assessment =
               rev.trust_assessment ?? evaluateReviewTrustAssessment(rev);
             const myVote = userVotes[rev.id] || null;
@@ -1360,7 +1371,7 @@ export default function JReviewsSection({
               <div key={rev.id} className="col-md-6 col-12">
                 <div
                   className={`rounded-4 d-flex flex-column justify-content-between h-100 p-3 ${
-                    isZeroWeight
+                    isFilteredOutReview(rev)
                       ? 'card bg-light border-danger-subtle border opacity-75'
                       : 'rate-card border bg-white shadow-sm'
                   }`}

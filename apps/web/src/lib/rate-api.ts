@@ -1,6 +1,7 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import type { MasterProduct } from '@repo/shared-data';
 import { createLogger } from '@/lib/logger';
+import { isPendingReview } from '@/lib/review-display';
 
 const log = createLogger('rate-api');
 export type { MasterProduct };
@@ -1492,11 +1493,14 @@ export async function getMasterProductReviewSummary(
   masterId: string,
   reviewsFallback: ReviewItem[] = []
 ): Promise<ReviewAnalysisSummary> {
-  const totalFromReviews = reviewsFallback.length;
-  const authenticFromReviews = reviewsFallback.filter(
+  // Unanalyzed community reviews are neither authentic nor suspicious yet, so
+  // they stay out of every percentage.
+  const analyzedReviews = reviewsFallback.filter((r) => !isPendingReview(r));
+  const totalFromReviews = analyzedReviews.length;
+  const authenticFromReviews = analyzedReviews.filter(
     (r) => r.include_in_rating
   ).length;
-  const fakeFromReviews = reviewsFallback.filter(
+  const fakeFromReviews = analyzedReviews.filter(
     (r) =>
       r.flag_category === 'seeding_fake' ||
       r.flag_category === 'competitor_sabotage' ||
@@ -2244,10 +2248,12 @@ export function getMasterProductHref(
   return `/${catSlug}/${product.slug}`;
 }
 
-function computeDynamicReviewRisk(reviews: ReviewItem[]): {
+function computeDynamicReviewRisk(allReviews: ReviewItem[]): {
   reviewRiskScore: number;
   breakdown: MerchantRiskBreakdown;
 } {
+  // Unanalyzed community reviews carry no risk signal yet.
+  const reviews = allReviews.filter((r) => !isPendingReview(r));
   const total = reviews.length;
   if (total === 0) {
     return {
@@ -3001,7 +3007,9 @@ export async function getRatePlatformStats(): Promise<RatePlatformStats> {
         vf?.include_in_rating ??
         (flagCategory === 'authentic' && verdict !== 'fake')
       );
-      if (includeInRating) {
+      if (verdict === 'unanalyzed') {
+        // Pending community reviews are neither authentic nor filtered yet.
+      } else if (includeInRating) {
         authenticCount += 1;
       } else {
         filteredCount += 1;
@@ -3036,8 +3044,11 @@ export async function getRatePlatformStats(): Promise<RatePlatformStats> {
     });
 
   const totalRev = mappedReviews.length;
+  const analyzedRev = authenticCount + filteredCount;
   const authenticRatioPct =
-    totalRev > 0 ? Math.round((authenticCount / totalRev) * 1000) / 10 : 100;
+    analyzedRev > 0
+      ? Math.round((authenticCount / analyzedRev) * 1000) / 10
+      : 100;
 
   return {
     masterProductsCount: masterRows.length,
