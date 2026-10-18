@@ -3225,8 +3225,37 @@ async function runCoreArchitectureSuite() {
   assert.equal(revalOptionsRes.status, 204);
 
   const prevRevalSecret = process.env.RATE_REVALIDATE_SECRET;
-  process.env.RATE_REVALIDATE_SECRET = 'test-revalidate-secret-2026';
+  const prevCronSecret = process.env.CRON_SECRET;
   try {
+    // No RATE_REVALIDATE_SECRET: 503 (not configured), even with a token that
+    // matches CRON_SECRET; the cron secret is not accepted as a fallback.
+    delete process.env.RATE_REVALIDATE_SECRET;
+    process.env.CRON_SECRET = 'test-cron-secret-2026';
+    const unconfiguredRes = await revalidateRoute.POST(
+      new NextRequest('https://rate.vn/api/v1/rate/revalidate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer test-cron-secret-2026',
+        },
+        body: JSON.stringify({ tags: ['rate:products'] }),
+      })
+    );
+    assert.equal(unconfiguredRes.status, 503);
+
+    process.env.RATE_REVALIDATE_SECRET = 'test-revalidate-secret-2026';
+    const cronTokenRes = await revalidateRoute.POST(
+      new NextRequest('https://rate.vn/api/v1/rate/revalidate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer test-cron-secret-2026',
+        },
+        body: JSON.stringify({ tags: ['rate:products'] }),
+      })
+    );
+    assert.equal(cronTokenRes.status, 401);
+
     const unauthReq = new NextRequest(
       'https://rate.vn/api/v1/rate/revalidate',
       {
@@ -3300,6 +3329,11 @@ async function runCoreArchitectureSuite() {
       delete process.env.RATE_REVALIDATE_SECRET;
     } else {
       process.env.RATE_REVALIDATE_SECRET = prevRevalSecret;
+    }
+    if (prevCronSecret === undefined) {
+      delete process.env.CRON_SECRET;
+    } else {
+      process.env.CRON_SECRET = prevCronSecret;
     }
   }
 
