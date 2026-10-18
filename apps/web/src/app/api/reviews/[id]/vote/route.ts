@@ -1,23 +1,32 @@
+import { revalidateTag } from 'next/cache';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { sanitizePublicApiError } from '@/server/rate/api-handler';
+import { RATE_CACHE_TAGS } from '@/server/rate';
+import {
+  resolveReviewVoteInput,
+  sanitizePublicApiError,
+  type ReviewReportReason,
+} from '@/server/rate/api-handler';
 import { createLogger, serializeError } from '@/lib/logger';
 
 const log = createLogger('api.reviews.vote');
 
-type VoteAction = 'up' | 'down' | 'report' | 'clear';
-type ReportReason = 'spam' | 'fake' | 'offensive' | 'off_topic' | 'other';
+const REVIEW_VOTE_CORS_HEADERS: Record<string, string> = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers':
+    'Content-Type, Authorization, X-Rate-Extension-Version',
+};
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const VALID_REPORT_REASONS = new Set<ReportReason>([
-  'spam',
-  'fake',
-  'offensive',
-  'off_topic',
-  'other',
-]);
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: REVIEW_VOTE_CORS_HEADERS,
+  });
+}
 
 /**
  * Review Trust Model Section 9: Voter Eligibility Gate
@@ -64,8 +73,8 @@ export async function POST(
 
   if (!reviewId || !UUID_REGEX.test(reviewId)) {
     return NextResponse.json(
-      { error: 'Invalid review ID format (expected UUID)' },
-      { status: 400 }
+      { ok: false, error: 'Invalid review ID format (expected UUID)' },
+      { status: 400, headers: REVIEW_VOTE_CORS_HEADERS }
     );
   }
 
@@ -78,8 +87,8 @@ export async function POST(
 
   if (!supabaseUrl || !anonKey) {
     return NextResponse.json(
-      { error: 'Missing Supabase configuration' },
-      { status: 500 }
+      { ok: false, error: 'Missing Supabase configuration' },
+      { status: 500, headers: REVIEW_VOTE_CORS_HEADERS }
     );
   }
 
@@ -91,37 +100,29 @@ export async function POST(
   if (!bearerToken) {
     return NextResponse.json(
       {
+        ok: false,
         error: 'Authentication required to persist review vote',
         code: 'AUTH_REQUIRED',
       },
-      { status: 401 }
+      { status: 401, headers: REVIEW_VOTE_CORS_HEADERS }
     );
   }
 
   try {
-    const body = await request.json().catch(() => ({}));
-    let voteType: VoteAction = 'up';
-    if (
-      body.voteType === 'up' ||
-      body.voteType === 'down' ||
-      body.voteType === 'report' ||
-      body.voteType === 'clear'
-    ) {
-      voteType = body.voteType;
-    } else if (typeof body.helpful === 'boolean') {
-      voteType = body.helpful ? 'up' : 'down';
+    const rawBody = await request.json().catch(() => null);
+    const parsedInput = resolveReviewVoteInput(rawBody);
+    if (!parsedInput) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            'Invalid vote action; provide voteType in ["up", "down", "report", "clear"] or boolean helpful',
+          code: 'INVALID_VOTE_ACTION',
+        },
+        { status: 400, headers: REVIEW_VOTE_CORS_HEADERS }
+      );
     }
-
-    const rawReason =
-      typeof body.reportReason === 'string'
-        ? body.reportReason
-        : typeof body.reason === 'string'
-          ? body.reason
-          : null;
-    const reportReason: ReportReason =
-      rawReason && VALID_REPORT_REASONS.has(rawReason as ReportReason)
-        ? (rawReason as ReportReason)
-        : 'spam';
+    const { voteType, reportReason } = parsedInput;
 
     const baseClient = createClient(supabaseUrl, anonKey, {
       auth: { persistSession: false },
@@ -135,10 +136,11 @@ export async function POST(
     if (authErr || !voterId || !userRes?.user) {
       return NextResponse.json(
         {
+          ok: false,
           error: 'Invalid or expired authentication token',
           code: 'AUTH_INVALID',
         },
-        { status: 401 }
+        { status: 401, headers: REVIEW_VOTE_CORS_HEADERS }
       );
     }
 
@@ -146,10 +148,11 @@ export async function POST(
     if (!eligibility.eligible) {
       return NextResponse.json(
         {
+          ok: false,
           error: eligibility.reason || 'Voter account is not eligible to vote',
           code: 'VOTER_NOT_ELIGIBLE',
         },
-        { status: 403 }
+        { status: 403, headers: REVIEW_VOTE_CORS_HEADERS }
       );
     }
 
@@ -163,12 +166,13 @@ export async function POST(
       if (delErr) {
         return NextResponse.json(
           {
+            ok: false,
             error: sanitizePublicApiError(
               delErr,
               'Failed to clear review vote'
             ),
           },
-          { status: 400 }
+          { status: 400, headers: REVIEW_VOTE_CORS_HEADERS }
         );
       }
     } else {
@@ -177,7 +181,7 @@ export async function POST(
         voter_id: string;
         vote: 'up' | 'down' | null;
         reported: boolean;
-        report_reason: ReportReason | null;
+        report_reason: ReviewReportReason | null;
       } =
         voteType === 'report'
           ? {
@@ -203,6 +207,7 @@ export async function POST(
         const isRateLimit = upsertErr.code === '54000';
         return NextResponse.json(
           {
+            ok: false,
             error: isRateLimit
               ? 'Rate limit exceeded (maximum 60 vote actions per hour)'
               : sanitizePublicApiError(
@@ -211,7 +216,10 @@ export async function POST(
                 ),
             code: isRateLimit ? 'RATE_LIMIT_EXCEEDED' : 'VOTE_REJECTED',
           },
-          { status: isRateLimit ? 429 : 400 }
+          {
+            status: isRateLimit ? 429 : 400,
+            headers: REVIEW_VOTE_CORS_HEADERS,
+          }
         );
       }
     }
@@ -224,26 +232,43 @@ export async function POST(
 
     if (selectErr || !updatedReview) {
       return NextResponse.json(
-        { error: 'Review not found after vote update' },
-        { status: 404 }
+        { ok: false, error: 'Review not found after vote update' },
+        { status: 404, headers: REVIEW_VOTE_CORS_HEADERS }
       );
     }
 
-    return NextResponse.json({
-      ok: true,
-      mode: 'authenticated',
-      reviewId,
-      voteType,
-      upvotes: Number(updatedReview.upvotes ?? 0),
-      downvotes: Number(updatedReview.downvotes ?? 0),
-      reports: Number(updatedReview.report_count ?? 0),
-      helpfulnessWeight: Number(updatedReview.helpfulness_weight ?? 1),
-    });
+    for (const tag of [RATE_CACHE_TAGS.REVIEWS, RATE_CACHE_TAGS.PRODUCTS]) {
+      try {
+        revalidateTag(tag, 'max');
+      } catch {
+        // Ignore outside Next.js static generation runtime
+      }
+    }
+
+    return NextResponse.json(
+      {
+        ok: true,
+        mode: 'authenticated',
+        reviewId,
+        voteType,
+        upvotes: Number(updatedReview.upvotes ?? 0),
+        downvotes: Number(updatedReview.downvotes ?? 0),
+        reports: Number(updatedReview.report_count ?? 0),
+        helpfulnessWeight: Number(updatedReview.helpfulness_weight ?? 1),
+      },
+      {
+        status: 200,
+        headers: REVIEW_VOTE_CORS_HEADERS,
+      }
+    );
   } catch (error) {
     log.error('vote failed', { error: serializeError(error) });
     return NextResponse.json(
-      { error: sanitizePublicApiError(error, 'Failed to vote on review') },
-      { status: 500 }
+      {
+        ok: false,
+        error: sanitizePublicApiError(error, 'Failed to vote on review'),
+      },
+      { status: 500, headers: REVIEW_VOTE_CORS_HEADERS }
     );
   }
 }
