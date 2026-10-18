@@ -16,6 +16,7 @@ import {
   BsShieldExclamation,
   BsShop,
 } from 'react-icons/bs';
+import { toHeroMerchantSuggestions } from '@/lib/hero-merchants';
 
 export async function generateMetadata({
   params,
@@ -73,7 +74,7 @@ export default async function ContactUsPage({
             <div className="col-xl-9 col-lg-10">
               <HeroSearchInspector
                 initialProducts={products}
-                initialMerchants={merchants}
+                initialMerchants={toHeroMerchantSuggestions(merchants)}
               />
             </div>
           </div>
