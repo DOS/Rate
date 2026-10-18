@@ -6,7 +6,17 @@ import {
   detectAccessoryOrJunk,
   evaluateExtensionPriceVerdict,
 } from '@/server/rate/extension';
-import { jsonApiError } from '@/server/rate/api-handler';
+import {
+  jsonApiError,
+  parseBoundedStringParam,
+} from '@/server/rate/api-handler';
+
+function parseOptionalVndPriceParam(raw: string | null): number | null {
+  if (!raw || !raw.trim()) return null;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return Math.min(Math.round(n), 500_000_000);
+}
 
 /**
  * GET /api/v1/rate/inspect?q=<url_or_keyword>
@@ -17,7 +27,10 @@ import { jsonApiError } from '@/server/rate/api-handler';
 export async function GET(request: NextRequest) {
   try {
     const sp = request.nextUrl.searchParams;
-    const rawQuery = (sp.get('q') || sp.get('url') || '').trim();
+    const rawQuery = parseBoundedStringParam(
+      sp.get('q') || sp.get('url'),
+      1024
+    );
 
     if (!rawQuery) {
       return NextResponse.json(
@@ -29,16 +42,23 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const queryPrice = parseOptionalVndPriceParam(sp.get('price'));
+    const queryOriginalPrice = parseOptionalVndPriceParam(
+      sp.get('originalPrice')
+    );
+
     const inspection = await getCachedInspectProductOrShopUrl(rawQuery);
     const canonicalUrl = canonicalizeProductUrl(rawQuery);
     const observedPrice = Number(
-      inspection.matchedOffer?.price_current ||
-        inspection.masterProduct?.min_price ||
+      queryPrice ??
+        inspection.matchedOffer?.price_current ??
+        inspection.masterProduct?.min_price ??
         0
     );
     const observedOriginalPrice = Number(
-      inspection.matchedOffer?.price_original ||
-        inspection.masterProduct?.max_price ||
+      queryOriginalPrice ??
+        inspection.matchedOffer?.price_original ??
+        inspection.masterProduct?.max_price ??
         0
     );
 

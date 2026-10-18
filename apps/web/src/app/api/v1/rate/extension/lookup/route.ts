@@ -70,7 +70,7 @@ export async function GET(request: NextRequest) {
     const url = parseBoundedStringParam(sp.get('url'), 1024);
     const title = parseBoundedStringParam(sp.get('title'), 320);
     const selectedVariant = parseBoundedStringParam(
-      sp.get('selectedVariant'),
+      sp.get('selectedVariant') ?? sp.get('skuText'),
       160
     );
     const mode = sp.get('mode') === 'pill' ? 'pill' : 'full';

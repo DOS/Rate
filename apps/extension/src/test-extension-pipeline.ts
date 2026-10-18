@@ -540,8 +540,48 @@ async function runTests() {
   assert.equal(parseBoundedStringParam('  hello world  ', 5), 'hello');
   assert.equal(parseBoundedStringParam('   ', 10), null);
 
+  const openApiCheckMod = await import('../../web/src/server/rate/openapi.js');
+  const { buildRateOpenApiSpec: buildSpecForCheck } = (
+    'buildRateOpenApiSpec' in openApiCheckMod
+      ? openApiCheckMod
+      : (openApiCheckMod as unknown as { default: typeof openApiCheckMod })
+          .default
+  ) as typeof openApiCheckMod;
+  const specDoc = buildSpecForCheck('https://rate.vn');
+  assert.equal(specDoc.openapi, '3.1.0');
+  const ingestPayloadSchema = specDoc.components.schemas
+    .ExtensionQuarantineIngestPayload as {
+    required?: string[];
+  };
+  assert.deepEqual(ingestPayloadSchema.required, [
+    'platform',
+    'externalItemId',
+    'url',
+    'title',
+    'price',
+    'userConsentOptIn',
+  ]);
+  const verdictLevelSchema = specDoc.components.schemas.PriceVerdictLevel as {
+    enum?: string[];
+  };
+  assert.deepEqual(verdictLevelSchema.enum, [
+    'genuine_deal',
+    'fair_market',
+    'above_market',
+    'inflated_fake_sale',
+    'insufficient_data',
+    'ambiguous_variant',
+    'skipped_accessory',
+  ]);
+  const lookupParamNames = (
+    specDoc.paths['/api/v1/rate/extension/lookup']?.get?.parameters ?? []
+  ).map((p) => p.name);
+  assert.ok(lookupParamNames.includes('selectedVariant'));
+  assert.ok(lookupParamNames.includes('skuText'));
+  assert.ok(lookupParamNames.includes('externalId'));
+
   console.log(
-    '  ✅ [5/6] Zero-Trust Quarantine, Opt-In Consent, Bounded Rate Limiter, MV3 Security Guards (C7) & Full 10/10 Platform Capability Matrix passed'
+    '  ✅ [5/6] Zero-Trust Quarantine, Opt-In Consent, Bounded Rate Limiter, OpenAPI 3.1 Contract & Full 10/10 Platform Capability Matrix passed'
   );
 
   // 6. Live Read-Only Lookup against Supabase `rate` schema (when real credentials are present)

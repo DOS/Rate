@@ -15,6 +15,7 @@ import {
   PUBLIC_API_CORS_HEADERS,
   jsonApiError,
   parseBoundedIntParam,
+  parseBoundedStringParam,
 } from '@/server/rate/api-handler';
 
 export async function OPTIONS() {
@@ -77,12 +78,14 @@ export async function GET(request: NextRequest) {
     const filterParams: MasterProductFilterParams = {
       categorySlug,
       brands,
-      search: sp.get('q') || undefined,
+      search: parseBoundedStringParam(sp.get('q'), 160) || undefined,
       minPrice: parsePositiveNum(sp.get('minPrice')),
       maxPrice: parsePositiveNum(sp.get('maxPrice')),
-      minRating: parsePositiveNum(sp.get('rating')),
-      ramGb: parseNumArray(sp.get('ram')),
-      storageGb: parseNumArray(sp.get('storage') || sp.get('rom')),
+      minRating: parsePositiveNum(sp.get('minRating') || sp.get('rating')),
+      ramGb: parseNumArray(sp.get('ramGb') || sp.get('ram')),
+      storageGb: parseNumArray(
+        sp.get('storageGb') || sp.get('storage') || sp.get('rom')
+      ),
       minBatteryMah: parseBooleanFlag(sp.get('bigBattery'))
         ? 5000
         : parsePositiveNum(sp.get('battery')),

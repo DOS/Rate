@@ -6,6 +6,7 @@ import {
   getCachedMasterProductOffers,
 } from '@/server/rate';
 import { radarExportFields } from '@/lib/deal-radar';
+import { jsonApiError } from '@/server/rate/api-handler';
 import {
   authenticateRateRequest,
   isMissingRpcError,
@@ -170,9 +171,7 @@ export async function GET(request: NextRequest) {
       items,
     });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : 'Internal server error';
-    return NextResponse.json({ ok: false, error: message }, { status: 500 });
+    return jsonApiError(500, 'Failed to fetch watchlist products', error);
   }
 }
 
