@@ -143,6 +143,13 @@ export default async function Home({
     catSlugById.set(c.id, c.slug);
   }
 
+  const quickCompareSlugs = masterProducts
+    .filter((p) =>
+      getMasterProductHref(p, catSlugById).startsWith('/smartphones/')
+    )
+    .map((p) => p.slug)
+    .slice(0, 3);
+
   return (
     <>
       <NavbarDarkDynamic links={[]} />
@@ -413,20 +420,14 @@ export default async function Home({
                 </p>
               </div>
               <div className="rate-section-links">
-                {masterProducts.length >= 2 && (
+                {quickCompareSlugs.length >= 2 && (
                   <Link
-                    href={`/compare?cat=smartphones&slugs=${masterProducts
-                      .filter((p) =>
-                        getMasterProductHref(p, catSlugById).startsWith(
-                          '/smartphones/'
-                        )
-                      )
-                      .map((p) => p.slug)
-                      .slice(0, 3)
-                      .join(',')}`}
+                    href={`/compare?cat=smartphones&slugs=${quickCompareSlugs.join(',')}`}
                   >
                     <BsArrowLeftRight aria-hidden="true" />
-                    {tRate('home.compareSpecsBtn')}
+                    {tRate('home.compareSpecsBtn', {
+                      count: quickCompareSlugs.length,
+                    })}
                   </Link>
                 )}
                 <Link href="/smartphones">
@@ -618,48 +619,52 @@ export default async function Home({
                   </div>
 
                   <div className="row g-4">
-                    <div className="col-lg-6">
-                      <h5 className="rate-radar-list-title is-good">
-                        <BsGraphDownArrow aria-hidden="true" />
-                        {tHome('radarGenuineTitle', {
-                          count: dealRadar.genuineDeals.length,
-                        })}
-                      </h5>
-                      <ul className="rate-radar-list">
-                        {dealRadar.genuineDeals.slice(0, 3).map((g) => (
-                          <li key={g.id}>
-                            <div className="rate-radar-item-main">
-                              <Link
-                                href={g.productHref}
-                                className="text-truncate"
-                              >
-                                {g.productName}
-                              </Link>
-                              <span className="rate-radar-item-meta text-truncate">
-                                <span className="rate-radar-platform">
-                                  {g.platform}
+                    {dealRadar.genuineDeals.length > 0 && (
+                      <div className="col-lg-6">
+                        <h5 className="rate-radar-list-title is-good">
+                          <BsGraphDownArrow aria-hidden="true" />
+                          {tHome('radarGenuineTitle', {
+                            count: dealRadar.genuineDeals.length,
+                          })}
+                        </h5>
+                        <ul className="rate-radar-list">
+                          {dealRadar.genuineDeals.slice(0, 3).map((g) => (
+                            <li key={g.id}>
+                              <div className="rate-radar-item-main">
+                                <Link
+                                  href={g.productHref}
+                                  className="text-truncate"
+                                >
+                                  {g.productName}
+                                </Link>
+                                <span className="rate-radar-item-meta text-truncate">
+                                  <span className="rate-radar-platform">
+                                    {g.platform}
+                                  </span>
+                                  {g.merchantName} ·{' '}
+                                  {tHome('medianPriceInline', {
+                                    price:
+                                      g.marketMedianPrice.toLocaleString(
+                                        'vi-VN'
+                                      ),
+                                  })}
                                 </span>
-                                {g.merchantName} ·{' '}
-                                {tHome('medianPriceInline', {
-                                  price:
-                                    g.marketMedianPrice.toLocaleString('vi-VN'),
-                                })}
-                              </span>
-                            </div>
-                            <div className="rate-radar-item-side">
-                              <span className="rate-radar-price">
-                                {g.priceCurrent.toLocaleString('vi-VN')} ₫
-                              </span>
-                              <span className="rate-radar-tag is-good">
-                                {tHome('vsMedianPctBadge', {
-                                  pct: g.savingsVsMedianPct,
-                                })}
-                              </span>
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
+                              </div>
+                              <div className="rate-radar-item-side">
+                                <span className="rate-radar-price">
+                                  {g.priceCurrent.toLocaleString('vi-VN')} ₫
+                                </span>
+                                <span className="rate-radar-tag is-good">
+                                  {tHome('vsMedianPctBadge', {
+                                    pct: g.savingsVsMedianPct,
+                                  })}
+                                </span>
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
 
                     {dealRadar.fakeSaleTraps.length > 0 && (
                       <div className="col-lg-6">
@@ -877,7 +882,9 @@ export default async function Home({
                       <div>
                         <dt>{tHome('ratingsAndProductsLabel')}</dt>
                         <dd>
-                          ★ {(merchant.rating_star ?? 5).toFixed(1)} ·{' '}
+                          {merchant.rating_star != null
+                            ? `★ ${merchant.rating_star.toFixed(1)} · `
+                            : ''}
                           {merchant.product_count} {tHome('productsShortUnit')}
                         </dd>
                         <dd className="rate-merchant-note">

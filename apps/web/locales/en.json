@@ -75,7 +75,7 @@
       "featuredTitleHighlight": "Verified Specs & True Price History",
       "featuredSubtitle": "Specs standardized to GSMArena & PhoneArena, with real price history and seeding-filtered reviews",
       "viewAllCatalog": "View full catalog",
-      "compareSpecsBtn": "Quick compare 3 models",
+      "compareSpecsBtn": "Quick compare {count} models",
       "viewSpecAndPriceBtn": "View 10 spec groups & price history →",
       "merchantBadge": "Dual trust score",
       "merchantTitlePrefix": "E-Commerce Merchant",

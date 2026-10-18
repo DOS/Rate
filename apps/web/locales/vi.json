@@ -75,7 +75,7 @@
       "featuredTitleHighlight": "Đã Kiểm Chứng Thông Số & Lịch Sử Giá",
       "featuredSubtitle": "Thông số chuẩn hóa theo GSMArena & PhoneArena, kèm lịch sử giá thật và đánh giá đã lọc seeding",
       "viewAllCatalog": "Xem toàn bộ danh mục",
-      "compareSpecsBtn": "So sánh nhanh 3 máy",
+      "compareSpecsBtn": "So sánh nhanh {count} máy",
       "viewSpecAndPriceBtn": "Xem 10 nhóm thông số & lịch sử giá →",
       "merchantBadge": "Chấm điểm tín nhiệm kép",
       "merchantTitlePrefix": "Hồ Sơ Tín Nhiệm",
