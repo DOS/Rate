@@ -3354,6 +3354,57 @@ function isDomainOrSubdomain(host: string, domain: string): boolean {
   return host === domain || host.endsWith(`.${domain}`);
 }
 
+const RETAIL_NON_PRODUCT_FIRST_SEGMENTS = new Set([
+  'tin-tuc',
+  'sforum',
+  'dchannel',
+  'hoi-dap',
+  'khuyen-mai',
+  'tra-gop',
+  'bao-hanh',
+  'he-thong-cua-hang',
+  'he-thong-sieu-thi',
+  'catalogsearch',
+  'tim-kiem',
+  'search',
+  'cart',
+  'gio-hang',
+  'account',
+  'login',
+  'blog',
+  'news',
+  'event',
+  'landing',
+  'collection',
+  'c',
+]);
+
+const RETAIL_CATEGORY_ROOT_SLUGS = new Set([
+  'dtdd',
+  'dien-thoai',
+  'dien-thoai-di-dong',
+  'mobile',
+  'smartphones',
+  'laptop',
+  'laptops',
+  'may-tinh-xach-tay',
+  'may-tinh-bang',
+  'tablet',
+  'tablets',
+  'dong-ho-thong-minh',
+  'smartwatch',
+  'smartwatches',
+  'tai-nghe',
+  'earbuds',
+  'phu-kien',
+  'apple',
+  'iphone',
+  'ipad',
+  'macbook',
+  'watch',
+  'airpods',
+]);
+
 export function parseEcommerceUrlOrQuery(raw: string): ParsedEcommerceUrl {
   const trimmed = raw.trim();
   const hasHttpProtocol = /^https?:\/\//i.test(trimmed);
@@ -3391,7 +3442,7 @@ export function parseEcommerceUrlOrQuery(raw: string): ParsedEcommerceUrl {
     if (isDomainOrSubdomain(parsedHost, 'shopee.vn')) {
       const itemMatch =
         parsedPathname.match(/(?:a-)?i\.(\d+)\.(\d+)/i) ||
-        parsedPathname.match(/\/product\/(\d+)\/(\d+)/i);
+        parsedPathname.match(/\/(?:product|opaanlp)\/(\d+)\/(\d+)/i);
       if (itemMatch) {
         return {
           isUrl: true,
@@ -3443,10 +3494,18 @@ export function parseEcommerceUrlOrQuery(raw: string): ParsedEcommerceUrl {
     }
 
     if (isDomainOrSubdomain(parsedHost, 'tiktok.com')) {
+      if (/\/video\/\d+/i.test(parsedPathname)) {
+        return {
+          isUrl: true,
+          platform: 'tiktok',
+          platformShopId: null,
+          platformItemId: null,
+          internalSlug: null,
+        };
+      }
       const prodMatch =
         parsedPathname.match(/\/product\/(\d+)/i) ||
-        parsedPathname.match(/\/view\/product\/(\d+)/i) ||
-        parsedPathname.match(/\/video\/(\d+)/i);
+        parsedPathname.match(/\/view\/product\/(\d+)/i);
       const shopMatch = parsedPathname.match(/\/@([a-zA-Z0-9_.-]+)/);
       return {
         isUrl: true,
@@ -3477,14 +3536,25 @@ export function parseEcommerceUrlOrQuery(raw: string): ParsedEcommerceUrl {
                 : null;
 
     if (retailPlatform) {
-      const segments = parsedPathname.split('/').filter(Boolean);
+      const segments = parsedPathname
+        .split('/')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const firstSegLower = (segments[0] || '')
+        .replace(/\.html?$/i, '')
+        .toLowerCase();
       const lastSeg =
         segments[segments.length - 1]?.replace(/\.html?$/i, '') || null;
+      const lastSegLower = (lastSeg || '').toLowerCase();
       const isValidItemSlug =
-        lastSeg &&
-        lastSeg !== 'search' &&
-        lastSeg !== 'tim-kiem' &&
-        lastSeg.length >= 2;
+        Boolean(lastSeg) &&
+        lastSeg!.length >= 2 &&
+        !RETAIL_NON_PRODUCT_FIRST_SEGMENTS.has(firstSegLower) &&
+        !RETAIL_NON_PRODUCT_FIRST_SEGMENTS.has(lastSegLower) &&
+        !(
+          segments.length === 1 && RETAIL_CATEGORY_ROOT_SLUGS.has(firstSegLower)
+        ) &&
+        !(retailPlatform === 'tgdd' && segments.length < 2);
       return {
         isUrl: true,
         platform: retailPlatform,
@@ -3524,7 +3594,9 @@ export function parseEcommerceUrlOrQuery(raw: string): ParsedEcommerceUrl {
   }
 
   // Fallback for relative paths / raw product tokens without hostname
-  const shopeeItemMatch = trimmed.match(/(?:a-)?i\.(\d+)\.(\d+)/i);
+  const shopeeItemMatch =
+    trimmed.match(/(?:a-)?i\.(\d+)\.(\d+)/i) ||
+    trimmed.match(/\/(?:product|opaanlp)\/(\d+)\/(\d+)/i);
   if (shopeeItemMatch) {
     return {
       isUrl: true,
