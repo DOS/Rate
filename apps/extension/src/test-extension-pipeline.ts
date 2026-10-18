@@ -1837,8 +1837,53 @@ async function runTests() {
     true,
     'isPrivilegedExtensionSender must accept messages matching the own extension runtime ID'
   );
+
+  const {
+    formatSafeExtensionVnd,
+    sanitizeVerdictClassSuffix,
+    filterValidSparklinePrices,
+  } = await import('./security-guards.js');
+
+  assert.equal(
+    formatSafeExtensionVnd(28_990_000),
+    `${(28_990_000).toLocaleString('vi-VN')} ₫`
+  );
+  assert.equal(
+    formatSafeExtensionVnd(Number.POSITIVE_INFINITY),
+    'Chưa có',
+    'formatSafeExtensionVnd must reject Infinity'
+  );
+  assert.equal(
+    formatSafeExtensionVnd(2_000_000_000),
+    'Chưa có',
+    'formatSafeExtensionVnd must reject prices > MAX_VALID_EXTENSION_VND_PRICE'
+  );
+  assert.equal(formatSafeExtensionVnd(0), 'Chưa có');
+
+  assert.equal(sanitizeVerdictClassSuffix('genuine_deal'), 'genuine_deal');
+  assert.equal(
+    sanitizeVerdictClassSuffix('inflated_fake_sale'),
+    'inflated_fake_sale'
+  );
+  assert.equal(
+    sanitizeVerdictClassSuffix('evil" onclick="alert(1)'),
+    'untracked',
+    'sanitizeVerdictClassSuffix must reject non-allowlisted class suffixes'
+  );
+
+  assert.deepEqual(
+    filterValidSparklinePrices([
+      { price: 25_000_000 },
+      { price: 0 },
+      { price: Number.POSITIVE_INFINITY },
+      { price: 1_500_000_000 },
+      { price: 24_500_000 },
+    ]),
+    [25_000_000, 24_500_000]
+  );
+
   console.log(
-    '  ✅ [Extension Signal & Sender Guards] sanitizeExtensionProductSignal bounds & runtimeId verification passed (#382)'
+    '  ✅ [Extension Signal & Sender Guards] sanitizeExtensionProductSignal, formatSafeExtensionVnd & sanitizeVerdictClassSuffix passed (#382, #393)'
   );
 
   console.log('🎉 All Rate Browser Extension MV3 v2 tests passed!');

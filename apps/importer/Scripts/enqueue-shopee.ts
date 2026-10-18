@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import dotenv from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
 import { createImporterLogger } from '../src/shopee/logger.js';
+import { parseShopeeEnqueueUrl } from '../src/shopee/paging.js';
 import { scopeSupabaseToRate } from '../src/shopee/types.js';
 
 dotenv.config({ quiet: true });
@@ -19,11 +20,6 @@ const admin = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVI
   auth: { autoRefreshToken: false, persistSession: false },
 });
 const db = scopeSupabaseToRate(admin);
-
-function parseItem(url: string): { itemId: string; shopId: string } | null {
-  const m = url.match(/(?:a-)?i\.(\d+)\.(\d+)/);
-  return m ? { shopId: m[1]!, itemId: m[2]! } : null;
-}
 
 async function main() {
   const args = process.argv.slice(2);
@@ -57,7 +53,7 @@ async function main() {
 
   let failures = 0;
   for (const url of urls) {
-    const ids = parseItem(url);
+    const ids = parseShopeeEnqueueUrl(url);
     if (!ids) {
       logger.error('enqueue.unparseable_url', `SKIP unparseable: ${url}`, { url });
       failures += 1;
@@ -66,8 +62,8 @@ async function main() {
     const { data, error } = await db.rpc('enqueue_crawl_job', {
       p_type: 'crawl_listing',
       p_platform: 'shopee',
-      p_payload: { schema_version: 1, url },
-      p_target_url: url,
+      p_payload: { schema_version: 1, url: ids.normalizedUrl },
+      p_target_url: ids.normalizedUrl,
       p_platform_item_id: ids.itemId,
       p_platform_shop_id: ids.shopId,
       p_priority: 0,
