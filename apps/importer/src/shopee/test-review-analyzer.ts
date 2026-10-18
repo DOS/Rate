@@ -478,10 +478,12 @@ async function run() {
       req.on('data', c => (body += c));
       req.on('end', () => {
         llmCalls++;
-        const payload = JSON.parse(body);
-        const user = JSON.parse(payload.messages[1].content);
+        const payload = JSON.parse(body) as { messages: Array<{ content: string }> };
+        const user = JSON.parse(payload.messages[1]!.content) as {
+          reviews: Array<{ review_id: string }>;
+        };
         const out = {
-          reviews: user.reviews.map((r: any) => ({
+          reviews: user.reviews.map(r => ({
             review_id: r.review_id,
             flag_category: r.review_id === 'llm-seed' ? 'seeding_fake' : 'authentic',
             verdict: r.review_id === 'llm-seed' ? 'fake' : 'authentic',
@@ -559,22 +561,27 @@ async function run() {
     console.log('6. persistAnalysisToSupabase payload shape (stubbed client)');
     console.log('================================================================');
 
-    const calls: Array<{ table: string; op: string; payload: any; col?: string; val?: string }> =
-      [];
+    const calls: Array<{
+      table: string;
+      op: string;
+      payload: unknown;
+      col?: string;
+      val?: string;
+    }> = [];
     const stub = {
       from: (table: string) => ({
-        upsert: async (payload: any) => {
+        upsert: async (payload: unknown) => {
           calls.push({ table, op: 'upsert', payload });
           return { error: null };
         },
-        update: (payload: any) => ({
+        update: (payload: unknown) => ({
           eq: async (col: string, val: string) => {
             calls.push({ table, op: 'update', payload, col, val });
             return { error: null };
           },
         }),
       }),
-    } as any;
+    } as unknown as Parameters<typeof llm.persistAnalysisToSupabase>[0];
 
     const out = await llm.persistAnalysisToSupabase(stub, {
       productId: 'prod-1',
@@ -588,8 +595,14 @@ async function run() {
     });
 
     const flagUpsert = calls.find(c => c.table === 'review_flags' && c.op === 'upsert')!;
-    assert.equal(flagUpsert.payload.length, input.length);
-    for (const row of flagUpsert.payload) {
+    const flagRowsPayload = flagUpsert.payload as Array<{
+      flag_category: ReviewFlagCategory;
+      verdict: string;
+      signals: ReviewSignals;
+      input_hash: string;
+    }>;
+    assert.equal(flagRowsPayload.length, input.length);
+    for (const row of flagRowsPayload) {
       assert.ok(
         [
           'authentic',
@@ -605,7 +618,10 @@ async function run() {
     }
     assert.ok(
       calls.some(
-        c => c.table === 'review_analysis' && c.op === 'upsert' && c.payload.product_id === 'prod-1'
+        c =>
+          c.table === 'review_analysis' &&
+          c.op === 'upsert' &&
+          (c.payload as Record<string, unknown>).product_id === 'prod-1'
       )
     );
     assert.ok(
@@ -614,21 +630,18 @@ async function run() {
           c.table === 'master_products' &&
           c.op === 'update' &&
           c.val === 'master-1' &&
-          'user_rating_weighted' in c.payload
+          'user_rating_weighted' in (c.payload as Record<string, unknown>)
       )
     );
     const merchUpdate = calls.find(
       c => c.table === 'merchants' && c.op === 'update' && c.val === 'merch-1'
     );
     assert.ok(merchUpdate, 'merchants update called');
-    assert.equal(typeof merchUpdate.payload.review_risk_score, 'number');
-    assert.equal(typeof merchUpdate.payload.review_risk_breakdown, 'object');
-    assert.equal(typeof merchUpdate.payload.review_risk_updated_at, 'string');
-    assert.equal(
-      'risk_score' in merchUpdate.payload,
-      false,
-      'must NOT overwrite DOSafe risk_score'
-    );
+    const merchPayload = merchUpdate.payload as Record<string, unknown>;
+    assert.equal(typeof merchPayload.review_risk_score, 'number');
+    assert.equal(typeof merchPayload.review_risk_breakdown, 'object');
+    assert.equal(typeof merchPayload.review_risk_updated_at, 'string');
+    assert.equal('risk_score' in merchPayload, false, 'must NOT overwrite DOSafe risk_score');
     assert.equal(
       calls.filter(c => c.table === 'reviews' && c.op === 'update').length,
       input.length,
@@ -638,14 +651,14 @@ async function run() {
 
     // 6b. When .rpc() is available on the Supabase client, persistAnalysisToSupabase delegates
     // master rating refresh to canonical SQL RPC `refresh_master_product_rating` (Audit C5)
-    const rpcCalls: Array<{ fn: string; args: any }> = [];
+    const rpcCalls: Array<{ fn: string; args: Record<string, unknown> }> = [];
     const rpcStub = {
       ...stub,
-      rpc: async (fn: string, args: any) => {
+      rpc: async (fn: string, args: Record<string, unknown>) => {
         rpcCalls.push({ fn, args });
         return { error: null };
       },
-    } as any;
+    } as unknown as Parameters<typeof llm.persistAnalysisToSupabase>[0];
     await llm.persistAnalysisToSupabase(rpcStub, {
       productId: 'prod-rpc-1',
       masterId: 'master-rpc-1',
@@ -671,13 +684,16 @@ async function run() {
     console.log('7. castReviewVote (rate.review_votes per-user vote & report)');
     console.log('================================================================');
 
-    let lastVoteUpsert: any = null;
+    let lastVoteUpsert: {
+      payload: Record<string, unknown>;
+      opts: { onConflict?: string };
+    } | null = null;
     const deletedPair: { reviewId?: string; voterId?: string } = {};
     const voteStub = {
       from: (table: string) => {
         assert.equal(table, 'review_votes');
         return {
-          upsert: async (payload: any, opts: any) => {
+          upsert: async (payload: Record<string, unknown>, opts: { onConflict?: string }) => {
             lastVoteUpsert = { payload, opts };
             return { error: null };
           },
@@ -694,7 +710,7 @@ async function run() {
           }),
         };
       },
-    } as any;
+    } as unknown as Parameters<typeof llm.castReviewVote>[0];
 
     const r1 = await llm.castReviewVote(voteStub, {
       reviewId: 'rev-1',
@@ -703,14 +719,14 @@ async function run() {
       reported: false,
     });
     assert.equal(r1.action, 'upserted');
-    assert.deepEqual(lastVoteUpsert.payload, {
+    assert.deepEqual(lastVoteUpsert!.payload, {
       review_id: 'rev-1',
       voter_id: 'user-1',
       vote: 'up',
       reported: false,
       report_reason: null,
     });
-    assert.equal(lastVoteUpsert.opts.onConflict, 'review_id,voter_id');
+    assert.equal(lastVoteUpsert!.opts.onConflict, 'review_id,voter_id');
 
     const r2 = await llm.castReviewVote(voteStub, {
       reviewId: 'rev-1',

@@ -1,7 +1,7 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
 import type { NormalizedProductCandidate } from './product-normalizer.js';
 import { AiSpecEnricher } from './ai-spec-enricher.js';
 import { createImporterLogger } from './logger.js';
+import type { RateSupabaseClient } from './types.js';
 
 const logger = createImporterLogger('EntityMatcher');
 
@@ -14,7 +14,7 @@ export class EntityMatcher {
   private enricher: AiSpecEnricher;
 
   constructor(
-    private supabase: SupabaseClient<any, 'rate'>,
+    private supabase: RateSupabaseClient,
     enricher?: AiSpecEnricher
   ) {
     this.enricher = enricher ?? new AiSpecEnricher();
