@@ -96,6 +96,29 @@ async function runTests() {
     detectEcommercePlatform('https://phongvu.vn/macbook-air-m3'),
     'phongvu'
   );
+  assert.equal(
+    detectEcommercePlatform('https://mall.shopee.vn/item-i.1.2'),
+    'shopee'
+  );
+  assert.equal(
+    detectEcommercePlatform('https://www.topzone.vn/iphone/iphone-16-pro-max'),
+    'tgdd'
+  );
+  assert.equal(
+    detectEcommercePlatform('https://www.google.com/search?q=shopee.vn'),
+    null,
+    'Must not misclassify query-string mentions of shopee.vn as Shopee platform'
+  );
+  assert.equal(
+    detectEcommercePlatform('https://shopee.vn.evil.com/item-i.1.2'),
+    null,
+    'Must reject spoofed domains where shopee.vn is only a subdomain prefix'
+  );
+  assert.equal(
+    detectEcommercePlatform('not-a-valid-url-shopee.vn'),
+    null,
+    'Must reject non-URL strings'
+  );
   assert.equal(Object.keys(EXTENSION_CAPABILITY_MATRIX).length, 10);
   assert.equal(parseVndPriceText('28.990.000₫ - 34.990.000₫'), 28990000);
   console.log(
