@@ -118,17 +118,36 @@ const SUPABASE_PORT_FILE = path.join(
   '.next',
   'e2e-supabase-port'
 );
+const isValidPort = (p) => Number.isInteger(p) && p > 0 && p < 65536;
+
+function recordedSupabasePort() {
+  try {
+    const port = Number(readFileSync(SUPABASE_PORT_FILE, 'utf8').trim());
+    return isValidPort(port) ? port : null;
+  } catch {
+    return null;
+  }
+}
+
 async function resolveSupabasePort() {
-  if (process.env.E2E_SUPABASE_PORT)
-    return Number(process.env.E2E_SUPABASE_PORT);
-  if (skipBuild) {
-    try {
-      return Number(readFileSync(SUPABASE_PORT_FILE, 'utf8'));
-    } catch {
+  const recorded = skipBuild ? recordedSupabasePort() : null;
+  if (process.env.E2E_SUPABASE_PORT) {
+    const port = Number(process.env.E2E_SUPABASE_PORT);
+    if (!isValidPort(port))
+      throw new Error('E2E_SUPABASE_PORT is not a valid port');
+    if (recorded && recorded !== port) {
+      // The build inlines the old URL; the app would call a port with no proxy.
       throw new Error(
-        '--skip-build needs a previous full run in this checkout (no recorded proxy port); or set E2E_SUPABASE_PORT'
+        `--skip-build reuses a build made for proxy port ${recorded}, not E2E_SUPABASE_PORT=${port}; rebuild or unset it`
       );
     }
+    return port;
+  }
+  if (skipBuild) {
+    if (recorded) return recorded;
+    throw new Error(
+      '--skip-build needs a previous full run in this checkout (no recorded proxy port); or set E2E_SUPABASE_PORT'
+    );
   }
   const preferred =
     54000 +
