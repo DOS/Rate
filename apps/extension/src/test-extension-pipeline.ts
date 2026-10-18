@@ -31,7 +31,14 @@ const {
     ? extModule
     : (extModule as unknown as { default: typeof extModule }).default
 ) as typeof extModule;
-const { parseEcommerceUrlOrQuery } = (
+const {
+  MAX_VALID_VND_PRICE,
+  getMasterProductPriceHistory,
+  mapOfferRowToMerchantOffer,
+  mapTrustViewRowToMerchantOffer,
+  normalizeOfferOriginalPrice,
+  parseEcommerceUrlOrQuery,
+} = (
   'parseEcommerceUrlOrQuery' in rateApiRootMod
     ? rateApiRootMod
     : (rateApiRootMod as unknown as { default: typeof rateApiRootMod }).default
@@ -1407,6 +1414,351 @@ async function runTests() {
   );
   console.log(
     '  ✅ [URL & Extension Hardening] Shopee /opaanlp/, TikTok video exclusion, retail path filtering, Phong Vu SKU stripping & crowd ingest URL guard verified (#365)'
+  );
+
+  // Verify merchant review_risk extraction, price history Infinity guard, and Deal Radar bounds (#371)
+  assert.equal(MAX_VALID_VND_PRICE, 1_000_000_000);
+  assert.equal(normalizeOfferOriginalPrice(28_990_000, 32_990_000), 32_990_000);
+  assert.equal(
+    normalizeOfferOriginalPrice(28_990_000, 19_990_000),
+    null,
+    'normalizeOfferOriginalPrice must reject inverted original price < priceCurrent'
+  );
+  assert.equal(
+    normalizeOfferOriginalPrice(28_990_000, 9_000_000_000),
+    null,
+    'normalizeOfferOriginalPrice must reject astronomical original price > 1B VND'
+  );
+
+  const mappedFallbackOffer = mapOfferRowToMerchantOffer({
+    id: 'off-371',
+    platform: 'shopee',
+    title: 'iPhone 16 Pro Max 256GB',
+    price_current: 28_990_000,
+    price_original: 9_000_000_000,
+    stock: 5,
+    rating_star: 4.9,
+    rating_count: 42,
+    url: 'https://shopee.vn/product/88201679/29512841920',
+    merchants: {
+      id: 'm-371',
+      name: 'Seeding Trap Shop',
+      platform: 'shopee',
+      is_official: false,
+      rating_star: 4.2,
+      follower_count: 120,
+      location: 'HN',
+      risk_score: 12,
+      metadata: {
+        dosafe_risk_score: 15,
+        review_risk_score: 68,
+        combined_risk_score: 48,
+        seeding_spam_ratio_pct: 55,
+      },
+    },
+  });
+  assert.equal(mappedFallbackOffer.price_original, null);
+  assert.equal(mappedFallbackOffer.merchant.dosafe_risk_score, 15);
+  assert.equal(mappedFallbackOffer.merchant.review_risk_score, 68);
+  assert.equal(mappedFallbackOffer.merchant.risk_score, 68);
+  assert.ok(mappedFallbackOffer.merchant.review_risk_breakdown !== null);
+
+  const mappedTrustViewOffer = mapTrustViewRowToMerchantOffer({
+    id: 'off-tv-371',
+    merchant_id: 'm-tv-371',
+    platform: 'lazada',
+    title: 'Galaxy S25 Ultra',
+    price_current: 26_990_000,
+    price_original: 15_000_000,
+    stock: 3,
+    rating_star: 4.8,
+    rating_count: 19,
+    url: 'https://www.lazada.vn/products/p-i123.html',
+    merchant_name: 'Lazada Store',
+    merchant_is_official: true,
+    threat_risk_score: 8,
+    dosafe_risk_score: 8,
+    review_risk_score: 10,
+  });
+  assert.equal(
+    mappedTrustViewOffer.price_original,
+    null,
+    'mapTrustViewRowToMerchantOffer must normalize inverted price_original to null'
+  );
+
+  const origFetch371 = globalThis.fetch;
+  const origSupabaseUrl371 = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const origSupabaseAnon371 = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  try {
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+      process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://placeholder.supabase.co';
+    }
+    if (!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'placeholder-anon-key';
+    }
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify([
+          {
+            id: 1,
+            product_id: 'off-valid-371',
+            price: 9_000_000_000,
+            price_original: 10_000_000_000,
+            recorded_at: '2026-10-18T10:00:00Z',
+            source: 'crawler',
+          },
+          {
+            id: 2,
+            product_id: 'off-valid-371',
+            price: 27_990_000,
+            price_original: 9_000_000_000,
+            recorded_at: '2026-10-18T11:00:00Z',
+            source: 'crawler',
+          },
+        ]),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }
+      )) as typeof fetch;
+
+    const zeroPriceSummary = await getMasterProductPriceHistory('master-371', [
+      {
+        ...mappedFallbackOffer,
+        id: 'off-zero-371',
+        price_current: 0,
+        price_original: null,
+      },
+      {
+        ...mappedFallbackOffer,
+        id: 'off-runaway-371',
+        price_current: 5_000_000_000,
+        price_original: null,
+      },
+    ]);
+    assert.equal(zeroPriceSummary.points.length, 0);
+    assert.deepEqual(zeroPriceSummary.byOffer, {});
+    assert.equal(zeroPriceSummary.currentMinPrice, null);
+    assert.equal(zeroPriceSummary.lowestEverPrice, null);
+
+    const boundedPriceSummary = await getMasterProductPriceHistory(
+      'master-371',
+      [
+        {
+          ...mappedFallbackOffer,
+          id: 'off-valid-371',
+          price_current: 28_990_000,
+          price_original: null,
+        },
+      ]
+    );
+    assert.equal(
+      boundedPriceSummary.points.length,
+      1,
+      'getMasterProductPriceHistory must drop >1B VND price_history points'
+    );
+    assert.equal(boundedPriceSummary.points[0]?.price, 27_990_000);
+    assert.equal(
+      boundedPriceSummary.points[0]?.price_original,
+      null,
+      'getMasterProductPriceHistory must normalize >1B VND price_original on history rows to null'
+    );
+    assert.equal(
+      boundedPriceSummary.byOffer['off-valid-371']?.historical_max_price,
+      28_990_000
+    );
+  } finally {
+    globalThis.fetch = origFetch371;
+    if (origSupabaseUrl371 === undefined) {
+      delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+    } else {
+      process.env.NEXT_PUBLIC_SUPABASE_URL = origSupabaseUrl371;
+    }
+    if (origSupabaseAnon371 === undefined) {
+      delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    } else {
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = origSupabaseAnon371;
+    }
+  }
+
+  const dealsMod371 = await import('../../web/src/server/rate/deals.js');
+  const { computeCrossPlatformDealRadarFromData: runDealRadar371 } = (
+    'computeCrossPlatformDealRadarFromData' in dealsMod371
+      ? dealsMod371
+      : (dealsMod371 as unknown as { default: typeof dealsMod371 }).default
+  ) as typeof dealsMod371;
+
+  const radar371 = runDealRadar371([
+    {
+      master: {
+        id: 'mp-371',
+        slug: 'apple-iphone-16-pro-max-256gb',
+        name: 'iPhone 16 Pro Max 256GB',
+        brand: 'Apple',
+        model: 'iPhone 16 Pro Max',
+        model_key: 'apple_iphone_16_pro_max_256gb',
+        category_id: null,
+        ram_gb: 8,
+        storage_gb: 256,
+        screen_size_inch: 6.9,
+        battery_mah: 4685,
+        has_5g: true,
+        min_price: 26_990_000,
+        max_price: 29_990_000,
+        average_rating: 4.9,
+        user_rating_weighted: 4.9,
+        expert_rating: 9.4,
+        total_reviews: 50,
+        merchant_count: 3,
+        thumbnail: null,
+        images: [],
+        key_specs: null,
+        specifications: null,
+        metadata: { category_slug: 'smartphones' },
+      },
+      offers: [
+        {
+          id: 'o-seeding-cheap',
+          platform: 'shopee',
+          title: 'iPhone 16 Pro Max',
+          price_current: 25_990_000,
+          price_original: 29_990_000,
+          stock: 5,
+          rating_star: 4.9,
+          rating_count: 100,
+          url: 'https://shopee.vn/product/1/1',
+          merchant: {
+            id: 'm-seeding',
+            name: 'High Review Risk Shop',
+            platform: 'shopee',
+            is_official: false,
+            rating_star: 4.5,
+            follower_count: 500,
+            location: 'HN',
+            risk_score: 10,
+            dosafe_risk_score: 10,
+            review_risk_score: 65,
+            review_risk_breakdown: null,
+          },
+        },
+        {
+          id: 'o-clean-deal',
+          platform: 'lazada',
+          title: 'iPhone 16 Pro Max',
+          price_current: 26_990_000,
+          price_original: 9_000_000_000,
+          stock: 5,
+          rating_star: 4.9,
+          rating_count: 80,
+          url: 'https://www.lazada.vn/products/p-i2.html',
+          merchant: {
+            id: 'm-clean',
+            name: 'Clean Official Mall',
+            platform: 'lazada',
+            is_official: true,
+            rating_star: 4.9,
+            follower_count: 10000,
+            location: 'HCM',
+            risk_score: 8,
+            dosafe_risk_score: 8,
+            review_risk_score: 12,
+            review_risk_breakdown: null,
+          },
+        },
+        {
+          id: 'o-mid',
+          platform: 'tiki',
+          title: 'iPhone 16 Pro Max',
+          price_current: 28_990_000,
+          price_original: 29_990_000,
+          stock: 5,
+          rating_star: 4.9,
+          rating_count: 60,
+          url: 'https://tiki.vn/p3.html',
+          merchant: {
+            id: 'm-mid',
+            name: 'Tiki Trading',
+            platform: 'tiki',
+            is_official: true,
+            rating_star: 4.9,
+            follower_count: 50000,
+            location: 'HCM',
+            risk_score: 5,
+            dosafe_risk_score: 5,
+            review_risk_score: 5,
+            review_risk_breakdown: null,
+          },
+        },
+        {
+          id: 'o-high',
+          platform: 'fptshop',
+          title: 'iPhone 16 Pro Max',
+          price_current: 29_990_000,
+          price_original: 31_990_000,
+          stock: 5,
+          rating_star: 4.9,
+          rating_count: 40,
+          url: 'https://fptshop.com.vn/dien-thoai/iphone-16-pro-max',
+          merchant: {
+            id: 'm-fpt',
+            name: 'FPT Shop',
+            platform: 'fptshop',
+            is_official: true,
+            rating_star: 4.9,
+            follower_count: 40000,
+            location: 'HCM',
+            risk_score: 5,
+            dosafe_risk_score: 5,
+            review_risk_score: 5,
+            review_risk_breakdown: null,
+          },
+        },
+        {
+          id: 'o-runaway',
+          platform: 'cellphones',
+          title: 'Corrupted 5B Offer',
+          price_current: 5_000_000_000,
+          price_original: 6_000_000_000,
+          stock: 1,
+          rating_star: 5,
+          rating_count: 1,
+          url: 'https://cellphones.com.vn/iphone-16-pro-max.html',
+          merchant: {
+            id: 'm-cps',
+            name: 'CellphoneS',
+            platform: 'cellphones',
+            is_official: true,
+            rating_star: 4.9,
+            follower_count: 10000,
+            location: 'HCM',
+            risk_score: 5,
+            dosafe_risk_score: 5,
+            review_risk_score: 5,
+            review_risk_breakdown: null,
+          },
+        },
+      ],
+    },
+  ]);
+  assert.equal(
+    radar371.totalOffersAnalyzed,
+    4,
+    'computeCrossPlatformDealRadarFromData must exclude >1B VND corrupted offers'
+  );
+  assert.equal(
+    radar371.genuineDeals[0]?.merchantId,
+    'm-clean',
+    'computeCrossPlatformDealRadarFromData must skip merchants with review_risk_score > 30 even if base risk_score <= 30'
+  );
+  assert.equal(
+    radar371.genuineDeals[0]?.priceOriginal,
+    null,
+    'computeCrossPlatformDealRadarFromData must normalize >1B VND price_original to null'
+  );
+  assert.equal(radar371.genuineDeals[0]?.claimedDiscountPct, 0);
+  assert.equal(radar371.genuineDeals[0]?.merchantRiskScore, 12);
+  console.log(
+    '  ✅ [Merchant Dual-Risk & Deal Radar Bounds] Metadata review_risk extraction, price_history Infinity guard, and 1B VND Deal Radar bounds verified (#371)'
   );
 
   console.log('🎉 All Rate Browser Extension MV3 v2 tests passed!');

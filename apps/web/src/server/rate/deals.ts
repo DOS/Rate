@@ -1,9 +1,11 @@
 import 'server-only';
 import { cache } from 'react';
 import {
+  MAX_VALID_VND_PRICE,
   getMasterProductCategorySlug,
   getMasterProductOffersBatch,
   getMasterProducts,
+  normalizeOfferOriginalPrice,
   resolveProductImageUrl,
   type CanonicalCategorySlug,
   type MasterProduct,
@@ -88,7 +90,7 @@ export interface CrossPlatformDealRadarResponse {
 
 function computeMedian(values: number[]): number {
   const valid = values
-    .filter((v) => Number.isFinite(v) && v > 0)
+    .filter((v) => Number.isFinite(v) && v > 0 && v <= MAX_VALID_VND_PRICE)
     .sort((a, b) => a - b);
   if (valid.length === 0) return 0;
   const mid = Math.floor(valid.length / 2);
@@ -96,6 +98,21 @@ function computeMedian(values: number[]): number {
     return valid[mid]!;
   }
   return Math.round((valid[mid - 1]! + valid[mid]!) / 2);
+}
+
+function resolveEffectiveMerchantRisk(
+  merchant: MerchantOffer['merchant'] | undefined,
+  fallback: number
+): number {
+  if (!merchant) return fallback;
+  const risk = Number(merchant.risk_score ?? fallback);
+  const dosafe = Number(merchant.dosafe_risk_score ?? 0);
+  const review = Number(merchant.review_risk_score ?? 0);
+  return Math.max(
+    Number.isFinite(risk) ? risk : fallback,
+    Number.isFinite(dosafe) ? dosafe : 0,
+    Number.isFinite(review) ? review : 0
+  );
 }
 
 /**
@@ -137,7 +154,10 @@ export function computeCrossPlatformDealRadarFromData(
     }
 
     const validOffers = offers.filter(
-      (o) => Number.isFinite(o.price_current) && o.price_current > 0
+      (o) =>
+        Number.isFinite(o.price_current) &&
+        o.price_current > 0 &&
+        o.price_current <= MAX_VALID_VND_PRICE
     );
     if (validOffers.length < 2) continue;
 
@@ -211,7 +231,7 @@ export function computeCrossPlatformDealRadarFromData(
 
     const bestOffer = sortedByPrice.find(
       (o) =>
-        Number(o.merchant?.risk_score ?? 10) <= 30 &&
+        resolveEffectiveMerchantRisk(o.merchant, 10) <= 30 &&
         (platformFilter === 'all' ||
           o.platform.toLowerCase() === platformFilter)
     );
@@ -221,13 +241,14 @@ export function computeCrossPlatformDealRadarFromData(
       const savingsVsMedianPct = Number(
         ((savingsVsMedianVnd / marketMedianPrice) * 100).toFixed(1)
       );
+      const validBestOrig = normalizeOfferOriginalPrice(
+        bestOffer.price_current,
+        bestOffer.price_original
+      );
       const claimedDiscountPct =
-        bestOffer.price_original &&
-        bestOffer.price_original > bestOffer.price_current
+        validBestOrig && validBestOrig > bestOffer.price_current
           ? Math.round(
-              ((bestOffer.price_original - bestOffer.price_current) /
-                bestOffer.price_original) *
-                100
+              ((validBestOrig - bestOffer.price_current) / validBestOrig) * 100
             )
           : 0;
 
@@ -253,10 +274,10 @@ export function computeCrossPlatformDealRadarFromData(
         merchantId: bestOffer.merchant.id,
         merchantName: bestOffer.merchant.name,
         isOfficialMall: Boolean(bestOffer.merchant.is_official),
-        merchantRiskScore: Number(bestOffer.merchant.risk_score ?? 5),
+        merchantRiskScore: resolveEffectiveMerchantRisk(bestOffer.merchant, 5),
         offerUrl: bestOffer.url,
         priceCurrent: bestOffer.price_current,
-        priceOriginal: bestOffer.price_original,
+        priceOriginal: validBestOrig,
         marketMedianPrice,
         marketMinPrice,
         marketMaxPrice,
@@ -277,17 +298,18 @@ export function computeCrossPlatformDealRadarFromData(
       ) {
         continue;
       }
-      if (!off.price_original || off.price_original <= off.price_current) {
+      const validOrig = normalizeOfferOriginalPrice(
+        off.price_current,
+        off.price_original
+      );
+      if (!validOrig || validOrig <= off.price_current) {
         continue;
       }
       const fakeMarkupPct = Number(
-        (
-          ((off.price_original - marketMedianPrice) / marketMedianPrice) *
-          100
-        ).toFixed(1)
+        (((validOrig - marketMedianPrice) / marketMedianPrice) * 100).toFixed(1)
       );
       const claimedDiscountPct = Math.round(
-        ((off.price_original - off.price_current) / off.price_original) * 100
+        ((validOrig - off.price_current) / validOrig) * 100
       );
 
       // Flag when original price is >= 11% above market median and current price is >= market median
@@ -306,10 +328,10 @@ export function computeCrossPlatformDealRadarFromData(
           merchantId: off.merchant.id,
           merchantName: off.merchant.name,
           isOfficialMall: Boolean(off.merchant.is_official),
-          merchantRiskScore: Number(off.merchant.risk_score ?? 15),
+          merchantRiskScore: resolveEffectiveMerchantRisk(off.merchant, 15),
           offerUrl: off.url,
           priceCurrent: off.price_current,
-          priceOriginal: off.price_original,
+          priceOriginal: validOrig,
           marketMedianPrice,
           marketMinPrice,
           marketMaxPrice,
@@ -323,7 +345,7 @@ export function computeCrossPlatformDealRadarFromData(
           claimedDiscountPct,
           fakeMarkupPct,
           jreviewsScore10,
-          explanationVi: `Gian hàng treo giá gốc gạch ngang ${off.price_original.toLocaleString('vi-VN')}₫ (cao hơn trung vị thị trường +${fakeMarkupPct}%) để tạo cảm giác giảm ${claimedDiscountPct}%, nhưng giá thực bán cao hơn đáy thị trường ${(off.price_current - marketMinPrice).toLocaleString('vi-VN')}₫.`,
+          explanationVi: `Gian hàng treo giá gốc gạch ngang ${validOrig.toLocaleString('vi-VN')}₫ (cao hơn trung vị thị trường +${fakeMarkupPct}%) để tạo cảm giác giảm ${claimedDiscountPct}%, nhưng giá thực bán cao hơn đáy thị trường ${(off.price_current - marketMinPrice).toLocaleString('vi-VN')}₫.`,
         });
         break;
       }

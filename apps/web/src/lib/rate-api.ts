@@ -1175,7 +1175,33 @@ interface RawTrustViewRow {
   review_risk_breakdown?: Record<string, unknown> | null;
 }
 
-interface RawMerchantRow {
+export const MAX_VALID_VND_PRICE = 1_000_000_000;
+
+/**
+ * Normalize an offer's strikethrough `price_original` against `priceCurrent` and
+ * the 1B VND sanity ceiling. Inverted (`< priceCurrent`), non-positive, or
+ * astronomical (`> 1,000,000,000`) original prices are treated as `null`.
+ */
+export function normalizeOfferOriginalPrice(
+  priceCurrent: number,
+  rawOriginal: unknown
+): number | null {
+  if (rawOriginal === null || rawOriginal === undefined || rawOriginal === '') {
+    return null;
+  }
+  const orig = Number(rawOriginal);
+  if (
+    !Number.isFinite(orig) ||
+    orig <= 0 ||
+    orig > MAX_VALID_VND_PRICE ||
+    (Number.isFinite(priceCurrent) && priceCurrent > 0 && orig < priceCurrent)
+  ) {
+    return null;
+  }
+  return orig;
+}
+
+export interface RawMerchantRow {
   id?: string;
   name?: string;
   platform?: string;
@@ -1184,9 +1210,13 @@ interface RawMerchantRow {
   follower_count?: number | null;
   location?: string | null;
   risk_score?: number | string | null;
+  dosafe_risk_score?: number | string | null;
+  review_risk_score?: number | string | null;
+  review_risk_breakdown?: Record<string, unknown> | null;
+  metadata?: Record<string, unknown> | null;
 }
 
-interface RawOfferRow {
+export interface RawOfferRow {
   id: string;
   cluster_id?: string | null;
   platform: string;
@@ -1200,16 +1230,22 @@ interface RawOfferRow {
   merchants?: RawMerchantRow | RawMerchantRow[] | null;
 }
 
-function mapTrustViewRowToMerchantOffer(row: RawTrustViewRow): MerchantOffer {
+export function mapTrustViewRowToMerchantOffer(
+  row: RawTrustViewRow
+): MerchantOffer {
   const combinedRisk = Number(row.threat_risk_score || 0);
   const dosafeRisk = Number(row.dosafe_risk_score ?? combinedRisk);
   const reviewRisk = Number(row.review_risk_score || 0);
+  const priceCurrent = Number(row.price_current);
   return {
     id: row.id,
     platform: row.platform,
     title: row.title,
-    price_current: Number(row.price_current),
-    price_original: row.price_original ? Number(row.price_original) : null,
+    price_current: priceCurrent,
+    price_original: normalizeOfferOriginalPrice(
+      priceCurrent,
+      row.price_original
+    ),
     stock: row.stock,
     rating_star: Number(row.rating_star),
     rating_count: row.rating_count,
@@ -1230,17 +1266,51 @@ function mapTrustViewRowToMerchantOffer(row: RawTrustViewRow): MerchantOffer {
   };
 }
 
-function mapOfferRowToMerchantOffer(item: RawOfferRow): MerchantOffer {
+export function mapOfferRowToMerchantOffer(item: RawOfferRow): MerchantOffer {
   const merchantObj = Array.isArray(item.merchants)
     ? item.merchants[0]
     : item.merchants;
-  const dosafeRisk = Number(merchantObj?.risk_score || 0);
+  const meta =
+    merchantObj?.metadata && typeof merchantObj.metadata === 'object'
+      ? merchantObj.metadata
+      : null;
+  const baseRisk = Number(merchantObj?.risk_score || 0);
+  const dosafeRisk =
+    merchantObj?.dosafe_risk_score != null
+      ? Number(merchantObj.dosafe_risk_score)
+      : typeof meta?.dosafe_risk_score === 'number'
+        ? meta.dosafe_risk_score
+        : baseRisk;
+  const reviewRisk =
+    merchantObj?.review_risk_score != null
+      ? Number(merchantObj.review_risk_score)
+      : typeof meta?.review_risk_score === 'number'
+        ? meta.review_risk_score
+        : 0;
+  const metaCombined =
+    typeof meta?.combined_risk_score === 'number'
+      ? meta.combined_risk_score
+      : 0;
+  const combinedRisk = Math.max(baseRisk, dosafeRisk, reviewRisk, metaCombined);
+  const breakdown =
+    merchantObj?.review_risk_breakdown ??
+    (meta?.review_risk_breakdown &&
+    typeof meta.review_risk_breakdown === 'object'
+      ? (meta.review_risk_breakdown as Record<string, unknown>)
+      : meta &&
+          ('review_risk_score' in meta || 'seeding_spam_ratio_pct' in meta)
+        ? meta
+        : null);
+  const priceCurrent = Number(item.price_current);
   return {
     id: item.id,
     platform: item.platform,
     title: item.title,
-    price_current: Number(item.price_current),
-    price_original: item.price_original ? Number(item.price_original) : null,
+    price_current: priceCurrent,
+    price_original: normalizeOfferOriginalPrice(
+      priceCurrent,
+      item.price_original
+    ),
     stock: item.stock,
     rating_star: Number(item.rating_star),
     rating_count: item.rating_count,
@@ -1255,10 +1325,10 @@ function mapOfferRowToMerchantOffer(item: RawOfferRow): MerchantOffer {
         : null,
       follower_count: merchantObj?.follower_count || 0,
       location: merchantObj?.location || null,
-      risk_score: dosafeRisk,
+      risk_score: combinedRisk,
       dosafe_risk_score: dosafeRisk,
-      review_risk_score: 0,
-      review_risk_breakdown: null,
+      review_risk_score: reviewRisk,
+      review_risk_breakdown: breakdown,
     },
   };
 }
@@ -1277,7 +1347,7 @@ const OFFER_FALLBACK_SELECT = `
   rating_star, rating_count, url,
   merchants (
     id, name, platform, is_official, rating_star, follower_count, location,
-    risk_score
+    risk_score, metadata
   )
 `;
 
@@ -1854,11 +1924,13 @@ export async function getMasterProductPriceHistory(
     const off = offerMap.get(row.product_id);
     if (!off) continue;
     const price = Number(row.price || 0);
-    if (price <= 0) continue;
-    const priceOriginal =
-      row.price_original != null && Number(row.price_original) > 0
-        ? Number(row.price_original)
-        : null;
+    if (!Number.isFinite(price) || price <= 0 || price > MAX_VALID_VND_PRICE) {
+      continue;
+    }
+    const priceOriginal = normalizeOfferOriginalPrice(
+      price,
+      row.price_original
+    );
 
     points.push({
       id: Number(row.id),
@@ -1883,11 +1955,22 @@ export async function getMasterProductPriceHistory(
     }
   }
 
-  // Ensure every active offer has at least its current price represented
+  // Ensure every active offer with a valid VND price has at least its current price represented
   const nowIso = new Date().toISOString();
   for (const off of offers) {
+    if (
+      !Number.isFinite(off.price_current) ||
+      off.price_current <= 0 ||
+      off.price_current > MAX_VALID_VND_PRICE
+    ) {
+      continue;
+    }
     const existingList = pricesByOffer.get(off.id);
     if (!existingList || existingList.length === 0) {
+      const normalizedOrig = normalizeOfferOriginalPrice(
+        off.price_current,
+        off.price_original
+      );
       pricesByOffer.set(off.id, [off.price_current]);
       points.push({
         id: -1 * (points.length + 1),
@@ -1896,7 +1979,7 @@ export async function getMasterProductPriceHistory(
         platform: off.platform,
         is_official: off.merchant.is_official,
         price: off.price_current,
-        price_original: off.price_original,
+        price_original: normalizedOrig,
         recorded_at: nowIso,
         source: 'live_listing',
       });
@@ -1909,21 +1992,34 @@ export async function getMasterProductPriceHistory(
       new Date(a.recorded_at).getTime() - new Date(b.recorded_at).getTime()
   );
 
-  // Market median across all current offers
-  const marketMedianPrice = computeMedian(offers.map((o) => o.price_current));
+  // Market median across all current offers with valid VND prices
+  const validOfferPrices = offers
+    .map((o) => o.price_current)
+    .filter((p) => Number.isFinite(p) && p > 0 && p <= MAX_VALID_VND_PRICE);
+  const marketMedianPrice = computeMedian(validOfferPrices);
 
   const byOffer: Record<string, OfferDiscountAnalysis> = {};
   let fakeDiscountCount = 0;
   let genuineDealCount = 0;
 
   for (const off of offers) {
+    const validCurrentPrice =
+      Number.isFinite(off.price_current) &&
+      off.price_current > 0 &&
+      off.price_current <= MAX_VALID_VND_PRICE;
+    if (!validCurrentPrice) continue;
+
     const histPrices = pricesByOffer.get(off.id) ?? [off.price_current];
     const lastHistPrice = histPrices[histPrices.length - 1];
     const rawSamples =
       lastHistPrice === off.price_current
         ? histPrices
         : [...histPrices, off.price_current];
-    const allSamples = rawSamples.filter((p) => p > 0);
+    const allSamples = rawSamples.filter(
+      (p) => Number.isFinite(p) && p > 0 && p <= MAX_VALID_VND_PRICE
+    );
+    if (allSamples.length === 0) continue;
+
     const histMin = Math.min(...allSamples);
     const histMax = Math.max(...allSamples);
     const histMedian = computeMedian(allSamples);
@@ -1933,10 +2029,12 @@ export async function getMasterProductPriceHistory(
         : Math.max(histMedian, marketMedianPrice);
 
     const priceCurrent = off.price_current;
+    const normalizedOrig = normalizeOfferOriginalPrice(
+      priceCurrent,
+      off.price_original
+    );
     const priceOriginal =
-      off.price_original && off.price_original > priceCurrent
-        ? off.price_original
-        : null;
+      normalizedOrig && normalizedOrig > priceCurrent ? normalizedOrig : null;
 
     const claimedDiscountPct = priceOriginal
       ? Math.round(((priceOriginal - priceCurrent) / priceOriginal) * 1000) / 10
@@ -2017,7 +2115,7 @@ export async function getMasterProductPriceHistory(
   }
 
   const currentMinPrice =
-    offers.length > 0 ? Math.min(...offers.map((o) => o.price_current)) : null;
+    validOfferPrices.length > 0 ? Math.min(...validOfferPrices) : null;
 
   return {
     points,
@@ -2579,7 +2677,9 @@ export async function getMerchantsList(
     prodToMerchant.set(p.id, p.merchant_id);
     const list = prodsByMerchant.get(p.merchant_id) ?? [];
     const price = Number(p.price_current || 0);
-    if (price > 0) list.push(price);
+    if (Number.isFinite(price) && price > 0 && price <= MAX_VALID_VND_PRICE) {
+      list.push(price);
+    }
     prodsByMerchant.set(p.merchant_id, list);
 
     const idList = productIdsByMerchant.get(p.merchant_id) ?? [];
@@ -2700,9 +2800,18 @@ export async function getMerchantsList(
         sabotage_or_bombing_count: 0,
         suspicious_ratio_pct: 0,
       };
+    const metaCombined =
+      typeof meta.combined_risk_score === 'number'
+        ? meta.combined_risk_score
+        : 0;
     const combinedRisk = Math.min(
       100,
-      Math.max(Number(m.risk_score || 0), dosafeRisk, effectiveReviewRisk)
+      Math.max(
+        Number(m.risk_score || 0),
+        dosafeRisk,
+        effectiveReviewRisk,
+        metaCombined
+      )
     );
     const trustScore = Math.max(0, 100 - combinedRisk);
 
@@ -2930,16 +3039,17 @@ export async function getMerchantProfileById(
     const masterInfo = p.cluster_id
       ? masterById.get(p.cluster_id) || null
       : null;
+    const priceCurrent = Number(p.price_current || 0);
     return {
       id: p.id,
       platform: p.platform,
       platform_item_id: p.platform_item_id,
       title: p.title,
-      price_current: Number(p.price_current || 0),
-      price_original:
-        p.price_original != null && Number(p.price_original) > 0
-          ? Number(p.price_original)
-          : null,
+      price_current: priceCurrent,
+      price_original: normalizeOfferOriginalPrice(
+        priceCurrent,
+        p.price_original
+      ),
       stock: Number(p.stock || 0),
       historical_sold: Number(p.historical_sold || 0),
       rating_star: Number(p.rating_star || 0),
@@ -3036,16 +3146,21 @@ export async function getMerchantProfileById(
     persistedReviewRisk
   );
   const breakdown = persistedBreakdown ?? dynamicRisk.breakdown;
+  const metaCombined =
+    typeof meta.combined_risk_score === 'number' ? meta.combined_risk_score : 0;
   const combinedRisk = Math.min(
     100,
     Math.max(
       Number(merchantRow.risk_score || 0),
       dosafeRisk,
-      effectiveReviewRisk
+      effectiveReviewRisk,
+      metaCombined
     )
   );
   const trustScore = Math.max(0, 100 - combinedRisk);
-  const prices = listings.map((l) => l.price_current).filter((p) => p > 0);
+  const prices = listings
+    .map((l) => l.price_current)
+    .filter((p) => Number.isFinite(p) && p > 0 && p <= MAX_VALID_VND_PRICE);
 
   return {
     id: merchantRow.id,
