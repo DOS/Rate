@@ -155,16 +155,21 @@ function run(command, commandArgs, env) {
 
 /**
  * Serves PostgREST at /rest/v1 like Supabase; every other path is a 404. Any
- * query containing one of FAULT_MARKERS answers 500 (a 503 would also trip
+ * query matching one of FAULT_RULES answers 500 (a 503 would also trip
  * postgrest-js retries and only slow the spec down), so a spec can simulate a database
  * outage for one URL without disturbing specs running in parallel.
  */
-// Second marker: the listing query of the seeded "faulty-listings-store"
-// merchant only (eq., so batch reads of all merchants with in.() still work).
 const MAX_REQUEST_URL_LENGTH = 8_000;
-const FAULT_MARKERS = [
-  'e2e-fault',
-  'merchant_id=eq.eeeeeeee-eeee-4eee-8eee-eeeeeeeefa17',
+// Each rule matches the decoded request path; all are scoped so that batch
+// reads covering many rows (in.() lists) keep working for parallel specs.
+const FAULT_RULES = [
+  (url) => url.includes('e2e-fault'),
+  // Listing query of the seeded "faulty-listings-store" merchant.
+  (url) => url.includes('merchant_id=eq.eeeeeeee-eeee-4eee-8eee-eeeeeeeefa17'),
+  // Price history of the seeded "e2e-price-fault-phone" (its single offer).
+  (url) =>
+    url.startsWith('/rest/v1/price_history?') &&
+    url.includes('product_id=in.(cccccccc-cccc-4ccc-8ccc-ccccccccfa17)'),
 ];
 function startProxy(upstreamPort) {
   proxyServer = http.createServer((req, res) => {
@@ -180,7 +185,8 @@ function startProxy(upstreamPort) {
       res.end('{"message":"request URI too long"}');
       return;
     }
-    if (FAULT_MARKERS.some((marker) => req.url.includes(marker))) {
+    const decodedUrl = decodeURIComponent(req.url);
+    if (FAULT_RULES.some((matches) => matches(decodedUrl))) {
       res.writeHead(500, { 'content-type': 'application/json' });
       res.end('{"message":"simulated outage","code":"XX000"}');
       return;

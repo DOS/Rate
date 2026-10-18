@@ -2271,9 +2271,12 @@ async function runCoreArchitectureSuite() {
     'utf8'
   );
   assert.ok(
-    rateApiSrc168.includes(".in('merchant_id', merchantIds)") &&
+    // Chunked since #333: the ids are still only merchantIds / unscoredProductIds.
+    /fetchAllRowsInChunks\(\s*'products',\s*merchantIds,/.test(rateApiSrc168) &&
       rateApiSrc168.includes('extractPersistedBreakdown') &&
-      rateApiSrc168.includes(".in('product_id', unscoredProductIds)"),
+      /fetchAllRowsInChunks\(\s*'reviews',\s*unscoredProductIds,/.test(
+        rateApiSrc168
+      ),
     'getMerchantsList must scope products by merchantIds and only query reviews for unscoredProductIds (C2)'
   );
 
