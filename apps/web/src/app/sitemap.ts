@@ -1,15 +1,19 @@
 import type { MetadataRoute } from 'next';
 import { env } from '@/env.mjs';
+import { createLogger, serializeError } from '@/lib/logger';
 import {
+  getMasterProductCategorySlug,
   getMasterProductHref,
   getMasterProducts,
   getMerchantsList,
+  getRateClient,
 } from '@/lib/rate-api';
 import {
   buildPopular1v1BattlesForCategory,
   VALID_LEADERBOARD_CATEGORIES,
 } from '@/lib/leaderboard-engine';
 
+const log = createLogger('sitemap');
 const baseUrl = (env.APP_PUBLIC_URL || 'https://rate.vn').replace(/\/$/, '');
 
 export const revalidate = 3600;
@@ -122,21 +126,46 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ];
 
   try {
-    const [products, merchants] = await Promise.all([
+    const supabase = getRateClient();
+    const [products, merchants, catsRes] = await Promise.all([
       getMasterProducts({ categorySlug: 'all', limit: 500 }),
       getMerchantsList({ limit: 200 }),
+      supabase.from('categories').select('id, slug'),
     ]);
 
-    const productEntries: MetadataRoute.Sitemap = products.map((product) => ({
-      url: `${baseUrl}${getMasterProductHref(product)}`,
-      lastModified: now,
-      changeFrequency: 'daily',
-      priority: 0.85,
-    }));
+    const catSlugById = new Map<string, string>();
+    for (const c of (catsRes.data || []) as Array<{
+      id: string;
+      slug: string;
+    }>) {
+      catSlugById.set(c.id, c.slug);
+    }
+
+    const stampedProducts = products.map((product) => {
+      const catSlug = getMasterProductCategorySlug(product, catSlugById);
+      return {
+        ...product,
+        metadata: {
+          ...(product.metadata && typeof product.metadata === 'object'
+            ? product.metadata
+            : {}),
+          category_slug: catSlug,
+        },
+      };
+    });
+
+    const productEntries: MetadataRoute.Sitemap = stampedProducts.map(
+      (product) => ({
+        url: `${baseUrl}${getMasterProductHref(product, catSlugById)}`,
+        lastModified: now,
+        changeFrequency: 'daily',
+        priority: 0.85,
+      })
+    );
 
     const versusEntries: MetadataRoute.Sitemap =
       VALID_LEADERBOARD_CATEGORIES.flatMap((category) =>
-        buildPopular1v1BattlesForCategory(products, category, 3).map(
+        buildPopular1v1BattlesForCategory(stampedProducts, category, 3).map(
           (pair) => ({
             url: `${baseUrl}${pair.versusHref}`,
             lastModified: now,
@@ -162,7 +191,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       ...merchantEntries,
     ];
   } catch (err) {
-    console.error('sitemap: failed to fetch dynamic entries:', err);
+    log.error('sitemap dynamic entries failed', { error: serializeError(err) });
     return staticEntries;
   }
 }

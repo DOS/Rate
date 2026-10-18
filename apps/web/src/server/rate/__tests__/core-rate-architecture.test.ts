@@ -4290,6 +4290,353 @@ async function runCoreArchitectureSuite() {
     '  ✅ [65/65] REST API v1 CORS headers, exact batch deal_radar & Extension Lookup URL/externalId resolution (#345) passed'
   );
 
+  // =========================================================================
+  // 66. Platform Stats Head Counts, Category Slug Stamping, Leaderboard Radar Batching & Watchlist Outlier Guard (#386)
+  // =========================================================================
+  const origFetch386 = globalThis.fetch;
+  try {
+    const { normalizeMasterProductRow, getRatePlatformStats } =
+      await import('@/lib/rate-api');
+    const { NextRequest } = await import('next/server');
+
+    // 66.1 normalizeMasterProductRow stamps metadata.category_slug & expanded getMasterProductCategorySlug regexes
+    const stampedLaptop = normalizeMasterProductRow(
+      {
+        id: 'mp-dell-7450',
+        slug: 'dell-latitude-7450',
+        name: 'Dell Latitude 7450',
+        brand: 'Dell',
+        model: 'Latitude 7450',
+        model_key: 'dell_latitude_7450',
+        min_price: 25000000,
+        max_price: 28000000,
+      } as unknown as Parameters<typeof normalizeMasterProductRow>[0],
+      'laptops'
+    );
+    assert.equal(
+      (stampedLaptop.metadata as Record<string, unknown>)?.category_slug,
+      'laptops',
+      'normalizeMasterProductRow must stamp metadata.category_slug when categorySlugHint is passed (#386)'
+    );
+    assert.equal(
+      getMasterProductCategorySlug({
+        slug: 'dell-latitude-7450',
+        name: 'Dell Latitude 7450',
+        model: 'Latitude 7450',
+      }),
+      'laptops',
+      'getMasterProductCategorySlug must classify Dell Latitude as laptops (#386)'
+    );
+    assert.equal(
+      getMasterProductCategorySlug({
+        slug: 'lenovo-tab-p12',
+        name: 'Lenovo Tab P12',
+        model: 'Tab P12',
+      }),
+      'tablets',
+      'getMasterProductCategorySlug must classify Lenovo Tab as tablets (#386)'
+    );
+    assert.equal(
+      getMasterProductCategorySlug({
+        slug: 'coros-pace-3',
+        name: 'Coros Pace 3',
+        model: 'Pace 3',
+      }),
+      'smartwatches',
+      'getMasterProductCategorySlug must classify Coros Pace as smartwatches (#386)'
+    );
+    assert.equal(
+      getMasterProductCategorySlug({
+        slug: 'bose-quietcomfort-ultra-earbuds',
+        name: 'Bose QuietComfort Ultra Earbuds',
+        model: 'QuietComfort Ultra Earbuds',
+      }),
+      'earbuds',
+      'getMasterProductCategorySlug must classify Bose QuietComfort as earbuds (#386)'
+    );
+
+    // 66.2 getRatePlatformStats uses exact HEAD counts and scoped .in('id', sampleProductIds)
+    const statsFetchedUrls: Array<{ url: string; method: string }> = [];
+    let returnedStatsMasterPage = false;
+    globalThis.fetch = (async (
+      input: RequestInfo | URL,
+      init?: RequestInit
+    ) => {
+      const url =
+        typeof input === 'string'
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
+      const method = (init?.method ?? 'GET').toUpperCase();
+      statsFetchedUrls.push({ url, method });
+
+      if (url.includes('/rest/v1/master_products')) {
+        if (returnedStatsMasterPage) {
+          return new Response(JSON.stringify([]), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          });
+        }
+        returnedStatsMasterPage = true;
+        return new Response(
+          JSON.stringify([
+            {
+              id: 'mp-stats-1',
+              name: 'Samsung Galaxy S24 Ultra',
+              slug: 'samsung-galaxy-s24-ultra',
+              category_id: null,
+            },
+          ]),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        );
+      }
+      if (url.includes('/rest/v1/merchants') && method === 'HEAD') {
+        return new Response(null, {
+          status: 200,
+          headers: {
+            'content-type': 'application/json',
+            'content-range': '0-0/320',
+          },
+        });
+      }
+      if (url.includes('/rest/v1/products') && method === 'HEAD') {
+        return new Response(null, {
+          status: 200,
+          headers: {
+            'content-type': 'application/json',
+            'content-range': '0-0/18450',
+          },
+        });
+      }
+      if (url.includes('/rest/v1/price_history') && method === 'HEAD') {
+        return new Response(null, {
+          status: 200,
+          headers: {
+            'content-type': 'application/json',
+            'content-range': '0-0/145000',
+          },
+        });
+      }
+      if (url.includes('/rest/v1/reviews') && method === 'HEAD') {
+        return new Response(null, {
+          status: 200,
+          headers: {
+            'content-type': 'application/json',
+            'content-range': '0-0/92300',
+          },
+        });
+      }
+      if (url.includes('/rest/v1/reviews') && method === 'GET') {
+        return new Response(
+          JSON.stringify([
+            {
+              id: 'rev-stats-1',
+              product_id: 'prod-sample-1',
+              author_name: 'Minh',
+              rating_star: 5,
+              comment: 'Pin trâu, màn hình nét, giao hàng cực nhanh.',
+              created_at: '2026-10-18T10:00:00.000Z',
+              review_flags: [],
+            },
+          ]),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        );
+      }
+      if (
+        url.includes('/rest/v1/products') &&
+        method === 'GET' &&
+        url.includes('id=in.')
+      ) {
+        return new Response(
+          JSON.stringify([
+            {
+              id: 'prod-sample-1',
+              title: 'Samsung Galaxy S24 Ultra 256GB Chính Hãng',
+              cluster_id: 'mp-stats-1',
+            },
+          ]),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        );
+      }
+      return new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const platformStats = await getRatePlatformStats();
+    assert.equal(
+      platformStats.listingsCount,
+      18450,
+      'getRatePlatformStats must read listingsCount from exact HEAD count (#386)'
+    );
+    assert.equal(
+      platformStats.totalReviewsCount,
+      92300,
+      'getRatePlatformStats must read totalReviewsCount from exact HEAD count (#386)'
+    );
+    assert.equal(
+      platformStats.recentReviewsSample[0]?.masterSlug,
+      'samsung-galaxy-s24-ultra',
+      'getRatePlatformStats must resolve recent review masterSlug via scoped .in(id, sampleProductIds) (#386)'
+    );
+    assert.ok(
+      !statsFetchedUrls.some(
+        (req) =>
+          req.url.includes('/rest/v1/products') &&
+          req.method === 'GET' &&
+          !req.url.includes('id=in.')
+      ),
+      'getRatePlatformStats must never scan the entire products table via unfiltered GET (#386)'
+    );
+
+    // 66.3 GET /api/v1/rate/leaderboard computes deal_radar via getMasterProductOffersBatch and returns CORS on 500
+    const { GET: getLeaderboardRoute } =
+      await import('@/app/api/v1/rate/leaderboard/route');
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify({ message: 'DB failure' }), {
+        status: 500,
+        headers: { 'content-type': 'application/json' },
+      })) as typeof fetch;
+    const lbErrRes = await getLeaderboardRoute(
+      new NextRequest(
+        'https://rate.vn/api/v1/rate/leaderboard?category=earbuds&brand=bose-err-386'
+      )
+    );
+    assert.equal(lbErrRes.status, 500);
+    assert.equal(
+      lbErrRes.headers.get('access-control-allow-origin'),
+      '*',
+      'GET /api/v1/rate/leaderboard 500 response must include Access-Control-Allow-Origin: * (#386)'
+    );
+
+    // 66.4 GET /api/v1/rate/watchlist filters out > MAX_VALID_VND_PRICE and normalizes inverted price_original
+    const { GET: getWatchlistRoute } =
+      await import('@/app/api/v1/rate/watchlist/route');
+    let returnedWatchOffersPage = false;
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url =
+        typeof input === 'string'
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
+      if (url.includes('/rest/v1/master_products')) {
+        return new Response(
+          JSON.stringify({
+            id: 'mp-watch-386',
+            slug: 'apple-iphone-16-watch-386',
+            name: 'Apple iPhone 16 Pro Max 256GB',
+            brand: 'Apple',
+            model: 'iPhone 16 Pro Max',
+            min_price: 28990000,
+            max_price: 31990000,
+            avg_rating: 9.4,
+            user_rating_avg: 9.3,
+            editor_rating: 9.5,
+            offer_count: 2,
+            merchant_count: 2,
+            thumbnail: null,
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        );
+      }
+      if (url.includes('/rest/v1/v_products_with_merchant_trust')) {
+        if (returnedWatchOffersPage) {
+          return new Response(JSON.stringify([]), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          });
+        }
+        returnedWatchOffersPage = true;
+        return new Response(
+          JSON.stringify([
+            {
+              id: 'prod-outlier-999m',
+              cluster_id: 'mp-watch-386',
+              platform: 'shopee',
+              title: 'Outlier Placeholder Listing',
+              price_current: 999999999,
+              price_original: 999999999,
+              stock: 5,
+              rating_star: 4.9,
+              rating_count: 10,
+              url: 'https://shopee.vn/outlier',
+              merchant_id: 'merch-watch-1',
+              merchant_name: 'Apple Flagship Store',
+              merchant_is_official: true,
+              merchant_location: 'TP.HCM',
+              threat_risk_score: 4,
+              dosafe_risk_score: 4,
+              review_risk_score: 4,
+              review_risk_breakdown: null,
+            },
+            {
+              id: 'prod-valid-inverted',
+              cluster_id: 'mp-watch-386',
+              platform: 'shopee',
+              title: 'Apple iPhone 16 Pro Max 256GB VN/A',
+              price_current: 28990000,
+              price_original: 25000000, // inverted original < current
+              stock: 5,
+              rating_star: 4.9,
+              rating_count: 50,
+              url: 'https://shopee.vn/valid',
+              merchant_id: 'merch-watch-1',
+              merchant_name: 'Apple Flagship Store',
+              merchant_is_official: true,
+              merchant_location: 'TP.HCM',
+              threat_risk_score: 4,
+              dosafe_risk_score: 4,
+              review_risk_score: 4,
+              review_risk_breakdown: null,
+            },
+          ]),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        );
+      }
+      return new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const watchRes = await getWatchlistRoute(
+      new NextRequest(
+        'https://rate.vn/api/v1/rate/watchlist?slugs=apple-iphone-16-watch-386'
+      )
+    );
+    assert.equal(watchRes.status, 200);
+    const watchBody = (await watchRes.json()) as {
+      ok: boolean;
+      items: Record<
+        string,
+        {
+          slug: string;
+          best_offer: { price: number; original_price: number | null } | null;
+        }
+      >;
+    };
+    assert.equal(watchBody.ok, true);
+    assert.equal(
+      watchBody.items['apple-iphone-16-watch-386']?.best_offer?.price,
+      28990000,
+      'Watchlist best_offer must ignore placeholder prices > MAX_VALID_VND_PRICE (#386)'
+    );
+    assert.equal(
+      watchBody.items['apple-iphone-16-watch-386']?.best_offer?.original_price,
+      28990000,
+      'Watchlist best_offer must normalize inverted price_original < price_current (#386)'
+    );
+  } finally {
+    globalThis.fetch = origFetch386;
+  }
+
+  console.log(
+    '  ✅ [66/66] Platform Stats head counts, Category Slug stamping, Leaderboard batch radar & Watchlist outlier guard (#386) passed'
+  );
+
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
 
