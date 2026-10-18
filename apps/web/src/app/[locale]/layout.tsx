@@ -45,6 +45,9 @@ export default async function LocaleLayout({
     compare: messages.compare,
     leaderboard: messages.leaderboard,
     reviews: messages.reviews,
+    watchlist: messages.watchlist,
+    deals: messages.deals,
+    inspect: messages.inspect,
   };
 
   return (

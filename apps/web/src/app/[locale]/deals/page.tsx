@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { getTranslations } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
 import {
   getCachedMasterProducts,
@@ -23,15 +24,10 @@ export async function generateMetadata({
 }: PageProps): Promise<Metadata> {
   const { locale } = await params;
   const lang = normalizeRateLocale(locale);
+  const t = await getTranslations({ locale: lang, namespace: 'deals' });
   return {
-    title:
-      lang === 'en'
-        ? 'Verified Tech Deals & Price-to-Performance Finder | Rate.vn'
-        : lang === 'cs'
-          ? 'Ověřené technologické nabídky a nejlepší poměr cena/výkon | Rate.vn'
-          : 'Săn Deal Công Nghệ Đã Kiểm Định Giá Thật 10 Sàn | Rate.vn',
-    description:
-      'Tìm kiếm thiết bị công nghệ đáng tiền nhất theo ngân sách và nhu cầu sử dụng, đã đối chiếu lịch sử giá 60 ngày và lọc khuyến mãi ảo trên 10 sàn TMĐT.',
+    title: t('metaTitle'),
+    description: t('metaDescription'),
     alternates: {
       canonical: 'https://rate.vn/deals',
     },
@@ -40,7 +36,8 @@ export async function generateMetadata({
 
 export default async function DealsPage({ params }: PageProps) {
   const { locale } = await params;
-  normalizeRateLocale(locale);
+  const lang = normalizeRateLocale(locale);
+  const t = await getTranslations({ locale: lang, namespace: 'deals' });
   const [products, dealRadar] = await Promise.all([
     getCachedMasterProducts({
       categorySlug: 'all',
@@ -63,29 +60,23 @@ export default async function DealsPage({ params }: PageProps) {
             <div className="d-flex justify-content-between align-items-center flex-wrap gap-3">
               <div>
                 <div className="rate-eyebrow text-warning mb-1">
-                  VERIFIED DEAL & VALUE DISCOVERY ENGINE
+                  {t('pageEyebrow')}
                 </div>
-                <h1 className="h3 fw-bold mb-1 text-white">
-                  Săn Deal Đáng Tiền Nhất Đã Kiểm Chứng Khuyến Mãi Ảo (10 Sàn)
-                </h1>
-                <p className="text-white-50 small mb-0">
-                  Xếp hạng thiết bị theo chỉ số Hiệu suất Giá / Điểm JReviews và
-                  biên độ tiết kiệm giữa các sàn chính hãng. Hỗ trợ xuất
-                  Markdown, CSV và JSON.
-                </p>
+                <h1 className="h3 fw-bold mb-1 text-white">{t('pageTitle')}</h1>
+                <p className="text-white-50 small mb-0">{t('pageSubtitle')}</p>
               </div>
               <div className="d-flex flex-wrap gap-2">
                 <Link
                   href="/leaderboard"
                   className="btn btn-sm btn-outline-light rounded-pill px-3"
                 >
-                  🏆 Bảng xếp hạng JReviews
+                  {t('leaderboardBtn')}
                 </Link>
                 <Link
                   href="/inspect"
                   className="btn btn-sm btn-danger rounded-pill fw-semibold px-3"
                 >
-                  🔬 Kiểm toán link giảm giá ảo
+                  {t('inspectBtn')}
                 </Link>
               </div>
             </div>

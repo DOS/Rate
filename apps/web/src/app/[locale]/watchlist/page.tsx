@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { getTranslations } from 'next-intl/server';
 import { getMasterProducts } from '@/lib/rate-api';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
 import NavbarDarkDynamic from '../components/navbar/NavbarDarkDynamic';
@@ -15,19 +16,10 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { locale } = await params;
   const lang = normalizeRateLocale(locale);
+  const t = await getTranslations({ locale: lang, namespace: 'watchlist' });
   return {
-    title:
-      lang === 'en'
-        ? 'True Price Watchlist & Target Drop Alerts | Rate.vn'
-        : lang === 'cs'
-          ? 'Seznam hlídaných cen a upozornění na slevy | Rate.vn'
-          : 'Danh Sách Canh Giá Thật & Cảnh Báo Giảm Giá Đa Ngành | Rate.vn',
-    description:
-      lang === 'en'
-        ? 'Track real-time historical price drops across all 5 tech categories, set target price alerts, and avoid inflated fake discounts on Shopee, Lazada, and Tiki.'
-        : lang === 'cs'
-          ? 'Sledujte vývoj skutečných cen v reálném čase, nastavte si cílovou cenu a vyhněte se falešným slevám.'
-          : 'Theo dõi biến động giá theo thời gian thực trên cả 5 ngành hàng, đặt mức giá mục tiêu và chống chiêu trò nâng giá gốc giảm ảo trên Shopee, Lazada, Tiki.',
+    title: t('metaTitle'),
+    description: t('metaDescription'),
     alternates: {
       canonical: 'https://rate.vn/watchlist',
     },

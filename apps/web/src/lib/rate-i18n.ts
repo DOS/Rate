@@ -133,6 +133,24 @@ const _csReviewsCheck: ReviewsCopyStrings = csMessages.reviews;
 void _enReviewsCheck;
 void _csReviewsCheck;
 
+type WatchlistCopyStrings = typeof viMessages.watchlist;
+const _enWatchlistCheck: WatchlistCopyStrings = enMessages.watchlist;
+const _csWatchlistCheck: WatchlistCopyStrings = csMessages.watchlist;
+void _enWatchlistCheck;
+void _csWatchlistCheck;
+
+type DealsCopyStrings = typeof viMessages.deals;
+const _enDealsCheck: DealsCopyStrings = enMessages.deals;
+const _csDealsCheck: DealsCopyStrings = csMessages.deals;
+void _enDealsCheck;
+void _csDealsCheck;
+
+type InspectCopyStrings = typeof viMessages.inspect;
+const _enInspectCheck: InspectCopyStrings = enMessages.inspect;
+const _csInspectCheck: InspectCopyStrings = csMessages.inspect;
+void _enInspectCheck;
+void _csInspectCheck;
+
 const RATE_COPY_DICTIONARY: Record<SupportedRateLocale, RateLocaleCopy> = {
   vi: { locale: 'vi', ...viCopy },
   en: { locale: 'en', ...enCopy },

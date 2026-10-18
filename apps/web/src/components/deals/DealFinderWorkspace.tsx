@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Link } from '@/lib/navigation';
 import type { MasterProduct } from '@repo/shared-data';
 import {
@@ -35,34 +36,12 @@ interface DealFinderWorkspaceProps {
 type PersonaKey =
   'default' | 'value_hunter' | 'photography' | 'gaming' | 'endurance';
 
-const CATEGORY_OPTIONS: Array<{
-  slug: CanonicalCategorySlug | 'all';
-  label: string;
-}> = [
-  { slug: 'all', label: 'Tất cả 5 ngành hàng' },
-  { slug: 'smartphones', label: 'Điện thoại' },
-  { slug: 'tablets', label: 'Máy tính bảng' },
-  { slug: 'laptops', label: 'Laptop' },
-  { slug: 'smartwatches', label: 'Đồng hồ thông minh' },
-  { slug: 'earbuds', label: 'Tai nghe' },
-];
-
-const PERSONA_OPTIONS: Array<{
-  key: PersonaKey;
-  label: string;
-}> = [
-  { key: 'value_hunter', label: '💎 Đáng tiền nhất (P/P)' },
-  { key: 'default', label: '⚖️ Cân bằng toàn diện' },
-  { key: 'photography', label: '📸 Camera / Âm thanh' },
-  { key: 'gaming', label: '🎮 Hiệu năng & Chiến game' },
-  { key: 'endurance', label: '🔋 Pin trâu & Sạc nhanh' },
-];
-
 export default function DealFinderWorkspace({
   products,
   initialCategory = 'all',
   dealRadar = null,
 }: DealFinderWorkspaceProps) {
+  const t = useTranslations('deals');
   const [categoryFilter, setCategoryFilter] = useState<
     CanonicalCategorySlug | 'all'
   >(initialCategory);
@@ -72,6 +51,29 @@ export default function DealFinderWorkspace({
   const [copiedMarkdown, setCopiedMarkdown] = useState<boolean>(false);
   const [copiedRadarMd, setCopiedRadarMd] = useState<boolean>(false);
   const radarIndex = useDealRadarIndex(dealRadar);
+
+  const categoryOptions: Array<{
+    slug: CanonicalCategorySlug | 'all';
+    label: string;
+  }> = [
+    { slug: 'all', label: t('catAll') },
+    { slug: 'smartphones', label: t('catSmartphones') },
+    { slug: 'tablets', label: t('catTablets') },
+    { slug: 'laptops', label: t('catLaptops') },
+    { slug: 'smartwatches', label: t('catSmartwatches') },
+    { slug: 'earbuds', label: t('catEarbuds') },
+  ];
+
+  const personaOptions: Array<{
+    key: PersonaKey;
+    label: string;
+  }> = [
+    { key: 'value_hunter', label: t('personaValueHunter') },
+    { key: 'default', label: t('personaDefault') },
+    { key: 'photography', label: t('personaPhotography') },
+    { key: 'gaming', label: t('personaGaming') },
+    { key: 'endurance', label: t('personaEndurance') },
+  ];
 
   const filteredGenuineDeals = useMemo<CrossPlatformDealRadarItem[]>(() => {
     if (!dealRadar) return [];
@@ -100,27 +102,31 @@ export default function DealFinderWorkspace({
     if (typeof window === 'undefined' || !dealRadar) return;
     try {
       const lines = [
-        `### 🔥 Radar Kèo Thơm Đáy Lịch Sử & Cảnh Báo Bẫy Nâng Giá Gốc 10 Sàn - Rate.vn`,
-        `- **Ngành hàng:** ${categoryFilter} | **Cụm sản phẩm phân tích:** ${dealRadar.totalClustersAnalyzed} (${dealRadar.totalOffersAnalyzed} gian hàng)`,
+        t('radarMdHeader'),
+        t('radarMdMeta', {
+          category: categoryFilter,
+          clusters: dealRadar.totalClustersAnalyzed,
+          offers: dealRadar.totalOffersAnalyzed,
+        }),
         '',
-        '#### 🟢 Kèo Thơm Đáy Lịch Sử Thật (Genuine Deals)',
-        '| Thiết bị | Sàn / Gian hàng | Giá Bán Hiện Tại | Trung Vị 10 Sàn | Tiết Kiệm Thật | Điểm JReviews |',
+        t('radarMdGenuineTitle'),
+        t('radarMdGenuineTableHead'),
         '| --- | --- | --- | --- | --- | --- |',
         ...filteredGenuineDeals.map(
           (g) =>
-            `| ${g.productName} | ${g.platform.toUpperCase()} (${g.merchantName}) | **${g.priceCurrent.toLocaleString('vi-VN')} ₫** | ${g.marketMedianPrice.toLocaleString('vi-VN')} ₫ | -${g.savingsVsMedianVnd.toLocaleString('vi-VN')} ₫ (-${g.savingsVsMedianPct}%) | ${g.jreviewsScore10 != null ? `${g.jreviewsScore10.toFixed(1)}/10` : 'Chưa có'} |`
+            `| ${g.productName} | ${g.platform.toUpperCase()} (${g.merchantName}) | **${g.priceCurrent.toLocaleString('vi-VN')} ₫** | ${g.marketMedianPrice.toLocaleString('vi-VN')} ₫ | -${g.savingsVsMedianVnd.toLocaleString('vi-VN')} ₫ (-${g.savingsVsMedianPct}%) | ${g.jreviewsScore10 != null ? `${g.jreviewsScore10.toFixed(1)}/10` : t('noScore')} |`
         ),
         '',
-        '#### 🚨 Bẫy Nâng Khống Giá Gốc (Fake Sale Traps)',
-        '| Thiết bị | Sàn / Gian hàng | Giá Bán Thực Tế | Giá Gốc Kê Khống | Trung Vị 10 Sàn | Mức Thổi Phồng |',
+        t('radarMdFakeTitle'),
+        t('radarMdFakeTableHead'),
         '| --- | --- | --- | --- | --- | --- |',
         ...filteredFakeSaleTraps.map(
-          (t) =>
-            `| ${t.productName} | ${t.platform.toUpperCase()} (${t.merchantName}) | ${t.priceCurrent.toLocaleString('vi-VN')} ₫ | ${(t.priceOriginal || t.priceCurrent).toLocaleString('vi-VN')} ₫ | ${t.marketMedianPrice.toLocaleString('vi-VN')} ₫ | **+${t.fakeMarkupPct}%** |`
+          (trap) =>
+            `| ${trap.productName} | ${trap.platform.toUpperCase()} (${trap.merchantName}) | ${trap.priceCurrent.toLocaleString('vi-VN')} ₫ | ${(trap.priceOriginal || trap.priceCurrent).toLocaleString('vi-VN')} ₫ | ${trap.marketMedianPrice.toLocaleString('vi-VN')} ₫ | **+${trap.fakeMarkupPct}%** |`
         ),
         '',
-        '#### 📊 Chênh Lệch Giá Đa Sàn Lớn Nhất (Price Spread Leaders)',
-        '| Thiết bị | Sàn Rẻ Nhất | Sàn Đắt Nhất | Giá Thấp Nhất | Giá Cao Nhất | Chênh Lệch Tuyệt Đối |',
+        t('radarMdSpreadTitle'),
+        t('radarMdSpreadTableHead'),
         '| --- | --- | --- | --- | --- | --- |',
         ...filteredPriceSpreadLeaders.map(
           (s) =>
@@ -139,19 +145,19 @@ export default function DealFinderWorkspace({
     if (typeof window === 'undefined' || !dealRadar) return;
     const escapeCsv = escapeCsvCell;
     const headers = [
-      'Phân Loại',
-      'Thiết Bị',
-      'Thương Hiệu',
-      'Danh Mục',
-      'Sàn',
-      'Gian Hàng',
+      'Verdict',
+      'Device',
+      'Brand',
+      'Category',
+      'Platform',
+      'Merchant',
       'Official Mall',
-      'Giá Hiện Tại (VND)',
-      'Giá Gốc Niêm Yết (VND)',
-      'Trung Vị 10 Sàn (VND)',
-      'Tiết Kiệm So Trung Vị (%)',
-      'Thổi Phồng Giá Gốc (%)',
-      'Điểm JReviews (/10)',
+      'Current Price (VND)',
+      'Claimed Original Price (VND)',
+      '10-Platform Median (VND)',
+      'Savings vs Median (%)',
+      'Fake Markup (%)',
+      'JReviews Score (/10)',
     ];
     const allItems = [...filteredGenuineDeals, ...filteredFakeSaleTraps];
     const rows = [
@@ -297,17 +303,20 @@ export default function DealFinderWorkspace({
     if (typeof window === 'undefined' || rankedDeals.length === 0) return;
     try {
       const lines = [
-        `### 💎 Bảng Xếp Hạng Top Deal Đã Kiểm Định (${rankedDeals.length} thiết bị) - Rate.vn`,
-        `- **Ngân sách tối đa:** ${maxBudgetVnd.toLocaleString('vi-VN')} ₫ | **Hồ sơ nhu cầu:** ${persona}`,
-        `- **Đường dẫn kiểm định:** ${window.location.href}`,
+        t('dealsMdHeader', { count: rankedDeals.length }),
+        t('dealsMdBudgetLine', {
+          budget: maxBudgetVnd.toLocaleString('vi-VN'),
+          persona,
+        }),
+        t('dealsMdUrlLine', { url: window.location.href }),
         '',
-        '| Hạng | Thiết bị | Hãng | Điểm Nhu Cầu | Điểm JReviews | Giá Thấp Nhất | Tiết Kiệm Chênh Sàn | Radar |',
+        t('dealsMdTableHead'),
         '| --- | --- | --- | --- | --- | --- | --- | --- |',
         ...rankedDeals
           .slice(0, 20)
           .map(
             (d) =>
-              `| #${d.rank} | ${d.name} | ${d.brand} | **${d.personaScore5 > 0 ? `${d.personaScore5.toFixed(2)}/5.0` : 'chưa có'}** | ★ ${d.userScore5 > 0 ? d.userScore5.toFixed(1) : 'chưa có'} (${d.expertScore10 != null ? `Lab ${d.expertScore10.toFixed(1)}/10` : 'Lab: chưa có'}) | **${d.minPrice.toLocaleString('vi-VN')} ₫** | ${d.spreadSavingsVnd > 0 ? `-${d.spreadSavingsVnd.toLocaleString('vi-VN')} ₫` : 'Đồng giá'} | ${radarMarkdownCell(getRadarSignal(radarIndex, d.slug))} |`
+              `| #${d.rank} | ${d.name} | ${d.brand} | **${d.personaScore5 > 0 ? `${d.personaScore5.toFixed(2)}/5.0` : t('noScore')}** | ★ ${d.userScore5 > 0 ? d.userScore5.toFixed(1) : t('noScore')} (${d.expertScore10 != null ? `Lab ${d.expertScore10.toFixed(1)}/10` : t('labNoScore')}) | **${d.minPrice.toLocaleString('vi-VN')} ₫** | ${d.spreadSavingsVnd > 0 ? `-${d.spreadSavingsVnd.toLocaleString('vi-VN')} ₫` : t('samePrice')} | ${radarMarkdownCell(getRadarSignal(radarIndex, d.slug))} |`
           ),
       ];
       await navigator.clipboard.writeText(lines.join('\n'));
@@ -322,17 +331,17 @@ export default function DealFinderWorkspace({
     if (typeof window === 'undefined' || rankedDeals.length === 0) return;
     const escapeCsv = escapeCsvCell;
     const headers = [
-      'Hạng',
-      'Thiết Bị',
-      'Thương Hiệu',
-      'Danh Mục',
-      'Điểm Nhu Cầu (/5.0)',
-      'Điểm Người Mua (/5.0)',
-      'Điểm Chuyên Gia (/10)',
-      'Giá Thấp Nhất (VND)',
-      'Tiết Kiệm Chênh Sàn (VND)',
-      'Chi Phí / Điểm JReviews (VND)',
-      'Đường Dẫn',
+      'Rank',
+      'Device',
+      'Brand',
+      'Category',
+      'Persona Score (/5.0)',
+      'User Score (/5.0)',
+      'Expert Score (/10)',
+      'Lowest Price (VND)',
+      'Spread Savings (VND)',
+      'Cost / JReviews Point (VND)',
+      'URL',
       ...RADAR_CSV_HEADERS,
     ];
     const rows = rankedDeals.map((d) => [
@@ -405,10 +414,10 @@ export default function DealFinderWorkspace({
         <div className="d-flex justify-content-between align-items-center border-bottom mb-3 flex-wrap gap-2 pb-3">
           <div>
             <span className="badge bg-danger rounded-pill me-2 text-white">
-              💎 Săn Deal Đã Kiểm Định 10 Sàn
+              {t('filterBadge')}
             </span>
             <strong className="text-dark">
-              Đang hiển thị {rankedDeals.length} thiết bị thỏa mãn ngân sách
+              {t('showingCount', { count: rankedDeals.length })}
             </strong>
           </div>
           <div className="d-flex align-items-center flex-wrap gap-2">
@@ -418,9 +427,7 @@ export default function DealFinderWorkspace({
               data-testid="deals-copy-md-btn"
               className="btn btn-sm btn-outline-danger rounded-pill fw-semibold px-3"
             >
-              {copiedMarkdown
-                ? '✓ Đã sao chép Markdown!'
-                : '📋 Sao chép Markdown'}
+              {copiedMarkdown ? t('copiedMdBtn') : t('copyMdBtn')}
             </button>
             <button
               type="button"
@@ -428,7 +435,7 @@ export default function DealFinderWorkspace({
               data-testid="deals-export-csv-btn"
               className="btn btn-sm btn-outline-dark rounded-pill fw-semibold px-3"
             >
-              📥 Xuất CSV ({rankedDeals.length})
+              {t('exportCsvBtn', { count: rankedDeals.length })}
             </button>
             <button
               type="button"
@@ -436,7 +443,7 @@ export default function DealFinderWorkspace({
               data-testid="deals-export-json-btn"
               className="btn btn-sm btn-outline-dark rounded-pill fw-semibold px-3"
             >
-              📦 Xuất JSON ({rankedDeals.length})
+              {t('exportJsonBtn', { count: rankedDeals.length })}
             </button>
           </div>
         </div>
@@ -444,9 +451,9 @@ export default function DealFinderWorkspace({
         {/* Category Pills */}
         <div className="d-flex align-items-center mb-3 flex-wrap gap-2">
           <span className="small text-secondary fw-semibold me-1">
-            Ngành hàng:
+            {t('categoryLabel')}
           </span>
-          {CATEGORY_OPTIONS.map((opt) => (
+          {categoryOptions.map((opt) => (
             <button
               key={opt.slug}
               type="button"
@@ -465,9 +472,9 @@ export default function DealFinderWorkspace({
         {/* Persona Pills */}
         <div className="d-flex align-items-center mb-3 flex-wrap gap-2">
           <span className="small text-secondary fw-semibold me-1">
-            Ưu tiên chấm điểm:
+            {t('personaLabel')}
           </span>
-          {PERSONA_OPTIONS.map((p) => (
+          {personaOptions.map((p) => (
             <button
               key={p.key}
               type="button"
@@ -488,7 +495,7 @@ export default function DealFinderWorkspace({
           <div className="col-md-6">
             <div className="d-flex justify-content-between small mb-1">
               <span className="fw-semibold text-secondary">
-                Trần ngân sách tối đa:
+                {t('maxBudgetLabel')}
               </span>
               <strong className="text-danger font-monospace">
                 ≤ {maxBudgetVnd.toLocaleString('vi-VN')} ₫
@@ -502,7 +509,7 @@ export default function DealFinderWorkspace({
               value={maxBudgetVnd}
               onChange={(e) => setMaxBudgetVnd(Number(e.target.value))}
               className="form-range"
-              aria-label="Trần ngân sách tối đa"
+              aria-label={t('maxBudgetAria')}
             />
           </div>
           <div className="col-md-6">
@@ -510,7 +517,7 @@ export default function DealFinderWorkspace({
               type="search"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Tìm nhanh theo tên máy hoặc thương hiệu (Apple, Samsung, Xiaomi, Sony...)"
+              placeholder={t('searchPlaceholder')}
               className="form-control form-control-sm rounded-pill px-3 py-2"
             />
           </div>
@@ -528,11 +535,13 @@ export default function DealFinderWorkspace({
             <div className="d-flex justify-content-between align-items-center border-bottom mb-3 flex-wrap gap-2 pb-3">
               <div>
                 <span className="badge bg-dark rounded-pill text-warning me-2">
-                  🔥 RADAR KÈO THƠM & BẪY SALE ẢO 10 SÀN
+                  {t('radarBannerBadge')}
                 </span>
                 <strong className="text-dark">
-                  Đã quét {dealRadar.totalOffersAnalyzed} gian hàng trên{' '}
-                  {dealRadar.totalClustersAnalyzed} cụm sản phẩm
+                  {t('radarScannedSummary', {
+                    offers: dealRadar.totalOffersAnalyzed,
+                    clusters: dealRadar.totalClustersAnalyzed,
+                  })}
                 </strong>
               </div>
               <div className="d-flex align-items-center flex-wrap gap-2">
@@ -542,9 +551,7 @@ export default function DealFinderWorkspace({
                   data-testid="radar-copy-md-btn"
                   className="btn btn-sm btn-outline-danger rounded-pill fw-semibold px-3"
                 >
-                  {copiedRadarMd
-                    ? '✓ Đã chép Radar MD!'
-                    : '📋 Sao chép Radar MD'}
+                  {copiedRadarMd ? t('copiedRadarMdBtn') : t('copyRadarMdBtn')}
                 </button>
                 <button
                   type="button"
@@ -552,7 +559,7 @@ export default function DealFinderWorkspace({
                   data-testid="radar-export-csv-btn"
                   className="btn btn-sm btn-outline-dark rounded-pill fw-semibold px-3"
                 >
-                  📥 Xuất Radar CSV
+                  {t('exportRadarCsvBtn')}
                 </button>
                 <button
                   type="button"
@@ -560,7 +567,7 @@ export default function DealFinderWorkspace({
                   data-testid="radar-export-json-btn"
                   className="btn btn-sm btn-outline-dark rounded-pill fw-semibold px-3"
                 >
-                  📦 Xuất Radar JSON
+                  {t('exportRadarJsonBtn')}
                 </button>
               </div>
             </div>
@@ -569,7 +576,9 @@ export default function DealFinderWorkspace({
               <div className="col-lg-6">
                 <div className="rounded-3 border-success-subtle bg-success-subtle bg-opacity-10 h-100 border p-3">
                   <div className="fw-bold text-success mb-2">
-                    🟢 Kèo Thơm Đáy Lịch Sử Thật ({filteredGenuineDeals.length})
+                    {t('genuineDealsHeader', {
+                      count: filteredGenuineDeals.length,
+                    })}
                   </div>
                   <div className="d-flex flex-column gap-2">
                     {filteredGenuineDeals.slice(0, 6).map((g) => (
@@ -588,8 +597,11 @@ export default function DealFinderWorkspace({
                             <span className="badge bg-dark text-uppercase me-1">
                               {g.platform}
                             </span>
-                            {g.merchantName} • Trung vị:{' '}
-                            {g.marketMedianPrice.toLocaleString('vi-VN')} ₫
+                            {g.merchantName} •{' '}
+                            {t('medianPriceLabel', {
+                              price:
+                                g.marketMedianPrice.toLocaleString('vi-VN'),
+                            })}
                           </div>
                         </div>
                         <div className="flex-shrink-0 text-end">
@@ -597,7 +609,9 @@ export default function DealFinderWorkspace({
                             {g.priceCurrent.toLocaleString('vi-VN')} ₫
                           </div>
                           <span className="badge bg-success rounded-pill">
-                            -{g.savingsVsMedianPct}% so trung vị
+                            {t('savingsVsMedianBadge', {
+                              pct: g.savingsVsMedianPct,
+                            })}
                           </span>
                         </div>
                       </div>
@@ -609,30 +623,31 @@ export default function DealFinderWorkspace({
               <div className="col-lg-6">
                 <div className="rounded-3 border-danger-subtle bg-danger-subtle bg-opacity-10 h-100 border p-3">
                   <div className="fw-bold text-danger mb-2">
-                    🚨 Cảnh Báo Nâng Khống Giá Gốc (
-                    {filteredFakeSaleTraps.length})
+                    {t('fakeTrapsHeader', {
+                      count: filteredFakeSaleTraps.length,
+                    })}
                   </div>
                   <div className="d-flex flex-column gap-2">
-                    {filteredFakeSaleTraps.slice(0, 6).map((t) => (
+                    {filteredFakeSaleTraps.slice(0, 6).map((trap) => (
                       <div
-                        key={t.id}
+                        key={trap.id}
                         className="rounded-3 d-flex justify-content-between align-items-center border bg-white p-2"
                       >
                         <div className="overflow-hidden pe-2">
                           <Link
-                            href={t.productHref}
+                            href={trap.productHref}
                             className="fw-bold text-dark text-decoration-none d-block text-truncate small"
                           >
-                            {t.productName}
+                            {trap.productName}
                           </Link>
                           <div className="text-secondary small">
                             <span className="badge bg-secondary text-uppercase me-1">
-                              {t.platform}
+                              {trap.platform}
                             </span>
-                            {t.merchantName} • Giá gốc kê:{' '}
+                            {trap.merchantName} • {t('claimedOrigLabel')}{' '}
                             <span className="text-decoration-line-through">
                               {(
-                                t.priceOriginal || t.priceCurrent
+                                trap.priceOriginal || trap.priceCurrent
                               ).toLocaleString('vi-VN')}{' '}
                               ₫
                             </span>
@@ -640,10 +655,10 @@ export default function DealFinderWorkspace({
                         </div>
                         <div className="flex-shrink-0 text-end">
                           <div className="fw-bold text-danger font-monospace small">
-                            {t.priceCurrent.toLocaleString('vi-VN')} ₫
+                            {trap.priceCurrent.toLocaleString('vi-VN')} ₫
                           </div>
                           <span className="badge bg-danger rounded-pill">
-                            Kê khống +{t.fakeMarkupPct}%
+                            {t('fakeMarkupBadge', { pct: trap.fakeMarkupPct })}
                           </span>
                         </div>
                       </div>
@@ -659,8 +674,9 @@ export default function DealFinderWorkspace({
                 className="rounded-3 bg-light mt-3 border p-3"
               >
                 <div className="fw-bold text-dark small mb-2">
-                  📊 Bảng Xếp Hạng Chênh Lệch Giá Đa Sàn Lớn Nhất (
-                  {filteredPriceSpreadLeaders.length} thiết bị)
+                  {t('spreadLeadersHeader', {
+                    count: filteredPriceSpreadLeaders.length,
+                  })}
                 </div>
                 <div className="row g-2">
                   {filteredPriceSpreadLeaders.slice(0, 6).map((s) => (
@@ -688,7 +704,7 @@ export default function DealFinderWorkspace({
                             -{s.spreadVnd.toLocaleString('vi-VN')} ₫
                           </div>
                           <span className="badge bg-warning text-dark rounded-pill">
-                            Chênh {s.spreadPct}%
+                            {t('spreadPctBadge', { pct: s.spreadPct })}
                           </span>
                         </div>
                       </div>
@@ -704,8 +720,9 @@ export default function DealFinderWorkspace({
       {rankedDeals.length === 0 ? (
         <div className="rate-card p-5 text-center">
           <p className="text-secondary mb-3">
-            Không tìm thấy thiết bị nào trong mức ngân sách ≤{' '}
-            {maxBudgetVnd.toLocaleString('vi-VN')} ₫.
+            {t('emptyBudgetText', {
+              budget: maxBudgetVnd.toLocaleString('vi-VN'),
+            })}
           </p>
           <button
             type="button"
@@ -716,7 +733,7 @@ export default function DealFinderWorkspace({
             }}
             className="btn btn-sm btn-dark rounded-pill px-4"
           >
-            Đặt lại bộ lọc ngân sách
+            {t('resetBudgetBtn')}
           </button>
         </div>
       ) : (
@@ -728,19 +745,19 @@ export default function DealFinderWorkspace({
                   <div className="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
                     <div className="d-flex align-items-center gap-2">
                       <span className="badge bg-dark rounded-pill text-white">
-                        #{deal.rank} Deal
+                        {t('rankDealBadge', { rank: deal.rank })}
                       </span>
                       <span className="rate-spec-pill">{deal.brand}</span>
                       <span className="rate-score-badge-user">
                         ★{' '}
                         {deal.personaScore5 > 0
                           ? `${deal.personaScore5.toFixed(2)}/5.0`
-                          : 'chưa có'}
+                          : t('noScore')}
                       </span>
                       <span className="rate-score-badge-expert">
                         {deal.expertScore10 != null
                           ? `Lab ${deal.expertScore10.toFixed(1)}/10`
-                          : 'Lab: chưa có'}
+                          : t('labNoScore')}
                       </span>
                       <RadarBadge
                         signal={getRadarSignal(radarIndex, deal.slug)}
@@ -749,8 +766,9 @@ export default function DealFinderWorkspace({
                     </div>
                     {deal.spreadSavingsVnd > 0 && (
                       <span className="badge bg-success-subtle text-success rounded-pill font-monospace">
-                        Chênh sàn tiết kiệm{' '}
-                        {deal.spreadSavingsVnd.toLocaleString('vi-VN')} ₫
+                        {t('spreadSavingsBadge', {
+                          amount: deal.spreadSavingsVnd.toLocaleString('vi-VN'),
+                        })}
                       </span>
                     )}
                   </div>
@@ -773,8 +791,9 @@ export default function DealFinderWorkspace({
                       <div className="text-danger fw-bold font-monospace mt-1">
                         {deal.minPrice.toLocaleString('vi-VN')} ₫{' '}
                         <span className="text-secondary small fw-normal">
-                          ({deal.costPerPointVnd.toLocaleString('vi-VN')} ₫ /
-                          điểm JReviews)
+                          {t('costPerPointSub', {
+                            cost: deal.costPerPointVnd.toLocaleString('vi-VN'),
+                          })}
                         </span>
                       </div>
                     </div>
@@ -796,7 +815,7 @@ export default function DealFinderWorkspace({
                     href={deal.productHref}
                     className="btn btn-sm btn-dark rounded-pill fw-semibold px-3"
                   >
-                    Kiểm định giá 10 sàn →
+                    {t('audit10PlatformsLink')}
                   </Link>
                 </div>
               </div>

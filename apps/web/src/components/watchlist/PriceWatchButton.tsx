@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Link } from '@/lib/navigation';
 import {
   getWatchlist,
@@ -29,6 +30,7 @@ export default function PriceWatchButton({
   currentMinPrice,
   size = 'md',
 }: PriceWatchButtonProps) {
+  const t = useTranslations('watchlist');
   const [watchedItem, setWatchedItem] = useState<WatchlistItem | null>(null);
   const [showEditor, setShowEditor] = useState(false);
   const [targetInput, setTargetInput] = useState<number>(
@@ -80,11 +82,13 @@ export default function PriceWatchButton({
         className={`btn ${
           watchedItem ? 'btn-success text-white' : 'btn-outline-primary'
         } ${size === 'sm' ? 'btn-sm px-2 py-1' : 'px-3'} rounded-pill fw-medium`}
-        title="Đặt ngưỡng giá mong muốn để theo dõi khi sản phẩm giảm giá thật"
+        title={t('btnTitle')}
       >
         {watchedItem
-          ? `🔔 Đang canh giá: ≤ ${watchedItem.targetPrice.toLocaleString('vi-VN')} ₫`
-          : '🔔 Theo dõi giảm giá'}
+          ? t('btnWatching', {
+              price: watchedItem.targetPrice.toLocaleString('vi-VN'),
+            })
+          : t('btnWatch')}
       </button>
 
       {showEditor && (
@@ -98,17 +102,17 @@ export default function PriceWatchButton({
           }}
         >
           <div className="d-flex justify-content-between align-items-center mb-2">
-            <strong className="small">🔔 Đặt mục tiêu canh giá thật</strong>
+            <strong className="small">{t('editorTitle')}</strong>
             <button
               type="button"
               className="btn-close small"
               style={{ fontSize: '0.65rem' }}
               onClick={() => setShowEditor(false)}
-              aria-label="Đóng"
+              aria-label={t('closeAria')}
             />
           </div>
           <p className="text-muted mb-2" style={{ fontSize: '0.78rem' }}>
-            Giá tốt nhất hiện tại:{' '}
+            {t('currentBestPrice')}{' '}
             <strong className="text-danger">
               {currentMinPrice.toLocaleString('vi-VN')} ₫
             </strong>
@@ -121,7 +125,7 @@ export default function PriceWatchButton({
               className="btn btn-sm btn-light rounded-pill flex-fill border"
               style={{ fontSize: '0.75rem' }}
             >
-              Giảm 5% ({preset5Pct.toLocaleString('vi-VN')} ₫)
+              {t('preset5Pct', { price: preset5Pct.toLocaleString('vi-VN') })}
             </button>
             <button
               type="button"
@@ -129,12 +133,12 @@ export default function PriceWatchButton({
               className="btn btn-sm btn-light rounded-pill flex-fill border"
               style={{ fontSize: '0.75rem' }}
             >
-              Giảm 10% ({preset10Pct.toLocaleString('vi-VN')} ₫)
+              {t('preset10Pct', { price: preset10Pct.toLocaleString('vi-VN') })}
             </button>
           </div>
 
           <div className="input-group input-group-sm mb-2">
-            <span className="input-group-text">Mức giá mục tiêu (₫)</span>
+            <span className="input-group-text">{t('targetInputLabel')}</span>
             <input
               type="number"
               step={100000}
@@ -152,14 +156,14 @@ export default function PriceWatchButton({
                 onClick={handleRemove}
                 className="btn btn-sm btn-outline-danger rounded-pill px-2"
               >
-                Bỏ theo dõi
+                {t('unwatchBtn')}
               </button>
             ) : (
               <Link
                 href="/watchlist"
                 className="small text-primary text-decoration-none"
               >
-                Xem danh sách canh giá ↗
+                {t('viewWatchlistLink')}
               </Link>
             )}
             <button
@@ -167,7 +171,7 @@ export default function PriceWatchButton({
               onClick={() => handleSave(targetInput)}
               className="btn btn-sm btn-primary rounded-pill fw-medium ms-auto px-3"
             >
-              Lưu mức giá
+              {t('saveTargetBtn')}
             </button>
           </div>
         </div>
