@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Báo cáo backlog đợt 2</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0f1113;
+    --surface: #16191d;
+    --surface-2: #1d2127;
+    --border: #2a2f37;
+    --text: #f3f4f6;
+    --muted: #a1a8b3;
+    --accent: #FF2E29;
+    --accent-soft: rgba(255, 46, 41, 0.14);
+    --high: #f97316;
+    --high-soft: rgba(249, 115, 22, 0.14);
+    --mid: #f59e0b;
+    --mid-soft: rgba(245, 158, 11, 0.13);
+    --low: #60a5fa;
+    --low-soft: rgba(96, 165, 250, 0.13);
+    --ok: #10b981;
+    --ok-soft: rgba(16, 185, 129, 0.13);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 32px 16px 72px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+    font-size: 15px;
+    line-height: 1.62;
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; }
+  header.hero {
+    background: linear-gradient(145deg, #16191d 0%, #1b1315 100%);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--accent);
+    border-radius: 16px;
+    padding: 26px 28px;
+    margin-bottom: 24px;
+  }
+  .eyebrow { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .pill {
+    display: inline-block; padding: 3px 11px; border-radius: 999px;
+    font-size: 12px; font-weight: 700; letter-spacing: .02em;
+    border: 1px solid transparent; white-space: nowrap;
+  }
+  .p-crit { background: var(--accent-soft); color: #ff6b67; border-color: rgba(255,46,41,.4); }
+  .p-high { background: var(--high-soft); color: #fb923c; border-color: rgba(249,115,22,.4); }
+  .p-mid { background: var(--mid-soft); color: #fbbf24; border-color: rgba(245,158,11,.4); }
+  .p-low { background: var(--low-soft); color: #93c5fd; border-color: rgba(96,165,250,.4); }
+  .p-ok { background: var(--ok-soft); color: #34d399; border-color: rgba(16,185,129,.4); }
+  h1 { font-size: 27px; line-height: 1.25; margin: 0 0 8px; color: #fff; letter-spacing: -.01em; }
+  h2 {
+    font-size: 20px; color: #fff; margin: 0 0 14px; padding-bottom: 9px;
+    border-bottom: 1px solid var(--border);
+  }
+  h3 { font-size: 16px; color: #fff; margin: 18px 0 8px; }
+  p { margin: 0 0 11px; color: var(--muted); }
+  p strong, li strong, td strong { color: var(--text); }
+  .meta { font-size: 13px; color: var(--muted); }
+  section.card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; padding: 22px 24px; margin-bottom: 20px;
+  }
+  .verdict {
+    border-left: 4px solid var(--accent); background: var(--surface-2);
+    border-radius: 10px; padding: 14px 18px; margin: 4px 0 14px;
+  }
+  .verdict p { color: var(--text); margin-bottom: 6px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin: 6px 0 4px; }
+  .stat { background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+  .stat .v { font-size: 24px; font-weight: 800; color: #fff; font-variant-numeric: tabular-nums; }
+  .stat .v.red { color: #ff6b67; }
+  .stat .l { font-size: 12.5px; color: var(--muted); }
+  ul, ol { margin: 6px 0 12px; padding-left: 20px; color: var(--muted); }
+  li { margin-bottom: 6px; }
+  .tbl { width: 100%; overflow-x: auto; margin: 8px 0 6px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.8px; min-width: 640px; }
+  th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+  th { background: var(--surface-2); color: #e5e7eb; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  td { color: var(--muted); }
+  tr:last-child td { border-bottom: none; }
+  td.id { color: #fff; font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  code {
+    font-family: "JetBrains Mono", Consolas, monospace; font-size: 12.3px;
+    background: #0b0c0e; color: #ff8582; padding: 1px 5px; border-radius: 5px;
+    border: 1px solid #262930; word-break: break-word;
+  }
+  .ev { display: block; margin-top: 4px; font-size: 12.5px; color: #8b93a0; }
+  .tag-i { color: var(--mid); font-weight: 700; font-size: 12px; }
+  .phase { border: 1px solid var(--border); border-radius: 12px; padding: 14px 18px; margin-bottom: 12px; background: var(--surface-2); }
+  .phase h3 { margin-top: 0; }
+  .phase.p0 { border-left: 4px solid var(--accent); }
+  .phase.p1 { border-left: 4px solid var(--high); }
+  .phase.p2 { border-left: 4px solid var(--mid); }
+  .phase.p3 { border-left: 4px solid var(--low); }
+  .toc a { color: #ff8582; text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  a { color: #ff8582; }
+  footer { font-size: 12.5px; color: #7c8490; margin-top: 26px; }
+  @media (max-width: 640px) {
+    body { padding: 20px 16px 56px; font-size: 14.5px; }
+    header.hero, section.card { padding: 18px 16px; }
+    h1 { font-size: 22px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <div class="eyebrow">
+    <span class="pill p-ok">9 PR đã merge</span>
+    <span class="pill p-crit">1 lỗi production đã sửa</span>
+    <span class="pill p-high">3 việc chờ quyền</span>
+  </div>
+  <h1>Đợt backlog 2: kiểm thử E2E, HTTP status đúng và không cache dữ liệu lỗi</h1>
+  <p class="meta">DOS/Rate, nhánh <code>dev</code>. Ngày 18/10/2026. Agent: Guard. Mọi PR đều qua review độc lập bằng subagent, CI xanh trên head cuối trước khi merge.</p>
+</header>
+
+<section class="card">
+  <h2>Tóm tắt</h2>
+  <div class="verdict">
+    <p><strong>Rate giờ có bộ kiểm thử trình duyệt thật chạy trong CI mà không cần secret Supabase nào.</strong> Bộ này đã bắt được một lỗi đang chạy trên rate.vn: trang sản phẩm không tồn tại trả về HTTP 200 (soft 404). Lỗi này đã được sửa.</p>
+    <p>Hệ thống cũng không còn cache dữ liệu rỗng hoặc thiếu khi DB lỗi tạm thời. Trước đây một lần DB chập chờn có thể làm trang sản phẩm hiện "không tìm thấy" hoặc "không có lịch sử giá" trong 5 đến 10 phút.</p>
+  </div>
+  <div class="grid">
+    <div class="stat"><div class="v">34</div><div class="l">spec E2E chạy trên PostgreSQL 17 + PostgREST thật</div></div>
+    <div class="stat"><div class="v">1.377</div><div class="l">dòng type sinh tự động từ migration</div></div>
+    <div class="stat"><div class="v red">200 → 404</div><div class="l">status của URL sản phẩm không tồn tại (đã sửa)</div></div>
+    <div class="stat"><div class="v">0</div><div class="l">secret cần cho CI E2E</div></div>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Đã làm và đã merge</h2>
+  <div class="tbl"><table>
+    <thead><tr><th>PR</th><th>Việc</th><th>Kết quả kiểm chứng</th></tr></thead>
+    <tbody>
+      <tr><td class="id">#317</td><td><strong>Kiểm thử E2E hermetic</strong> (#312): dựng DB từ migration trong Docker, PostgREST, build production, Playwright. Job CI mới <code>E2E (Playwright)</code>.</td><td>Xanh trên Ubuntu khoảng 1 phút 30 giây</td></tr>
+      <tr><td class="id">#319</td><td><strong>Sửa soft 404</strong> (#316): bỏ <code>[locale]/loading.tsx</code> vì nó làm trang bắt đầu stream trước khi kịp trả 404.</td><td>URL sản phẩm, merchant, so sánh không tồn tại trả 404 cho trình duyệt và Bingbot</td></tr>
+      <tr><td class="id">#320</td><td><strong>Type DB tự sinh</strong> (#313): <code>pnpm gen:db-types</code>, CI báo lỗi khi type lệch migration; client Supabase có type đầy đủ.</td><td>Output giống hệt nhau trên Windows và Ubuntu</td></tr>
+      <tr><td class="id">#326</td><td><strong>Thanh tiến trình chuyển trang</strong> (#318): thay spinner toàn trang đã bỏ, áp dụng cho link và <code>router.push</code>.</td><td>E2E giữ chậm phản hồi để thấy thanh hiện rồi tắt</td></tr>
+      <tr><td class="id">#328</td><td><strong>Lỗi DB thành 5xx, không cache</strong> (#323): phân biệt "không có dữ liệu" với "DB lỗi".</td><td>E2E giả lập DB lỗi cho từng URL; body API không lộ chi tiết nội bộ</td></tr>
+      <tr><td class="id">#331</td><td><strong>Type nốt client còn lại</strong> (#330): bỏ ép kiểu <code>as unknown as</code>.</td><td>tsc kiểm tra tên RPC và tham số</td></tr>
+      <tr><td class="id">#332</td><td><strong>Hồ sơ merchant không cache dữ liệu thiếu</strong> (#329) và <strong>chia lô truy vấn</strong> cho merchant nhiều sản phẩm.</td><td>Spec fail khi không chia lô (đã kiểm), pass khi chia lô</td></tr>
+      <tr><td class="id">#336</td><td><strong>Danh sách merchant và lịch sử giá</strong> (#333): không cache danh sách thiếu hay lịch sử giá rỗng; chia lô truy vấn danh sách.</td><td>34 spec E2E pass; kiểm tra ngược đã fail đúng</td></tr>
+      <tr><td class="id">#305</td><td><strong>Quét secret bằng gitleaks</strong> trên mỗi PR (#191).</td><td>Chạy trên mọi PR vào <code>dev</code>/<code>main</code></td></tr>
+    </tbody>
+  </table></div>
+  <p>Ngoài ra: runner E2E giờ xóa data cache của Next.js trước mỗi lần chạy. Lỗ hổng này phát hiện khi kiểm tra ngược: cache cũ của lần chạy trước đã trả lời thay cho DB mới. CI không bị ảnh hưởng vì luôn chạy trên môi trường sạch.</p>
+</section>
+
+<section class="card">
+  <h2>Lỗi tìm thấy trên production</h2>
+  <p><strong>Soft 404:</strong> <code>https://rate.vn/smartphones/&lt;slug-không-tồn-tại&gt;</code> trả HTTP 200 kèm trang "không tìm thấy" cho cả trình duyệt lẫn Googlebot. Search Console sẽ báo soft 404, còn link checker và crawler coi đó là trang hợp lệ. Đã sửa ở #319. Bản sửa sẽ lên rate.vn khi <code>dev</code> được promote sang <code>main</code> theo quy trình release.</p>
+  <p><strong>Đánh đổi:</strong> bỏ spinner toàn trang thì khi chuyển sang trang động người dùng không còn thấy spinner chờ. #326 bù lại bằng thanh tiến trình mảnh ở đầu trang.</p>
+</section>
+
+<section class="card">
+  <h2>Việc còn chờ quyền hoặc người khác</h2>
+  <div class="tbl"><table>
+    <thead><tr><th>Việc</th><th>Trạng thái đã kiểm</th><th>Ai gỡ được</th></tr></thead>
+    <tbody>
+      <tr><td class="id">Áp migration lên beta</td><td>Workflow ghi beta của DOS-Me tên <code>Beta Schema Writer (Disabled)</code>, lần chạy gần nhất bị bỏ qua. Migration mới nằm trong ledger, chưa chạy lên DB dùng chung.</td><td>Chủ DOS-Me mở lại quy trình beta</td></tr>
+      <tr><td class="id">GitHub Secret Scanning</td><td>Repo Rate là public nên tính năng này miễn phí, nhưng API trả 422: "blocked by an enterprise policy".</td><td>Chủ enterprise DOS mở policy, hoặc gắn cấu hình "Secret Protection enabled" có sẵn của org cho repo Rate</td></tr>
+      <tr><td class="id">Bắt buộc check gitleaks</td><td>Ruleset <code>dev-main-light</code> và <code>main-release</code> đã bật lại, nhưng chưa có <code>Secret scan (gitleaks)</code> trong danh sách check bắt buộc.</td><td>Cần chủ repo cho phép sửa ruleset</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section class="card">
+  <h2>Bước tiếp theo đề xuất</h2>
+  <ul>
+    <li><strong>Promote <code>dev</code> sang <code>main</code></strong> để bản sửa soft 404 và các bản sửa cache lên rate.vn. Cần làm theo quy trình release trong <code>Docs/Resources/RELEASE.md</code>.</li>
+    <li><strong>ROADMAP 7.1, dữ liệu thật đa sàn:</strong> hiện rate.vn mới có 15 sản phẩm công khai. Mở rộng catalog là việc có giá trị lớn nhất tiếp theo.</li>
+  </ul>
+</section>
+
+<footer>Báo cáo do agent Guard soạn từ kết quả CI, review độc lập và readback trực tiếp. Chi tiết từng thay đổi nằm trong mô tả của từng PR trên GitHub.</footer>
+</div>
+</body>
+</html>
