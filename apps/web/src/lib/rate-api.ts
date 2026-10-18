@@ -1264,6 +1264,24 @@ function mapOfferRowToMerchantOffer(item: RawOfferRow): MerchantOffer {
 }
 
 /**
+ * Columns mapTrustViewRowToMerchantOffer reads (RawTrustViewRow). Not '*': the
+ * view also carries descriptions, images and metadata, and offer reads are
+ * uncapped now that they page.
+ */
+const TRUST_VIEW_SELECT =
+  'id, cluster_id, merchant_id, platform, title, price_current, price_original, stock, rating_star, rating_count, url, merchant_name, merchant_is_official, merchant_location, threat_risk_score, dosafe_risk_score, review_risk_score, review_risk_breakdown';
+
+/** Offer columns readable through rate.merchants' column-level grants. */
+const OFFER_FALLBACK_SELECT = `
+  id, cluster_id, platform, title, price_current, price_original, stock,
+  rating_star, rating_count, url,
+  merchants (
+    id, name, platform, is_official, rating_star, follower_count, location,
+    risk_score
+  )
+`;
+
+/**
  * Fetch all merchant listing offers for a master product.
  * Queries `rate.v_products_with_merchant_trust` (granted to anon/authenticated)
  * and falls back to explicit non-PII column selection on `rate.merchants`.
@@ -1272,58 +1290,36 @@ export async function getMasterProductOffers(
   masterId: string
 ): Promise<MerchantOffer[]> {
   const supabase = getRateClient();
-
-  const { data: viewData, error: viewErr } = await supabase
-    .from('v_products_with_merchant_trust')
-    .select('*')
-    .eq('cluster_id', masterId)
-    .order('price_current', { ascending: true });
-
-  if (!viewErr && viewData) {
-    return (viewData as unknown as RawTrustViewRow[]).map(
+  // Paged: one request stops at PostgREST max-rows (1000), so a product with
+  // more listings would silently lose offers. id breaks price ties.
+  const viewRows = await fetchAllRows(
+    'v_products_with_merchant_trust',
+    (from, to) =>
+      supabase
+        .from('v_products_with_merchant_trust')
+        .select(TRUST_VIEW_SELECT)
+        .eq('cluster_id', masterId)
+        .order('price_current', { ascending: true })
+        .order('id')
+        .range(from, to)
+  ).catch(() => null);
+  if (viewRows) {
+    return (viewRows as unknown as RawTrustViewRow[]).map(
       mapTrustViewRowToMerchantOffer
     );
   }
 
   // Fallback with explicit column list matching column-level SELECT grants on rate.merchants
-  const { data, error } = await supabase
-    .from('products')
-    .select(
-      `
-      id,
-      cluster_id,
-      platform,
-      title,
-      price_current,
-      price_original,
-      stock,
-      rating_star,
-      rating_count,
-      url,
-      merchants (
-        id,
-        name,
-        platform,
-        is_official,
-        rating_star,
-        follower_count,
-        location,
-        risk_score
-      )
-    `
-    )
-    .eq('cluster_id', masterId)
-    .order('price_current', { ascending: true });
-
-  if (error) {
-    log.error('offers fetch failed', { masterId, message: error.message });
-    throw new RateDataUnavailableError('product offers', error);
-  }
-  if (!data) {
-    return [];
-  }
-
-  return (data as unknown as RawOfferRow[]).map(mapOfferRowToMerchantOffer);
+  const rows = await fetchAllRows('product offers', (from, to) =>
+    supabase
+      .from('products')
+      .select(OFFER_FALLBACK_SELECT)
+      .eq('cluster_id', masterId)
+      .order('price_current', { ascending: true })
+      .order('id')
+      .range(from, to)
+  );
+  return (rows as unknown as RawOfferRow[]).map(mapOfferRowToMerchantOffer);
 }
 
 /**
@@ -1349,13 +1345,20 @@ export async function getMasterProductOffersBatch(
   for (let i = 0; i < uniqueIds.length; i += chunkSize) {
     const batchIds = uniqueIds.slice(i, i + chunkSize);
 
-    const { data: viewData, error: viewErr } = await supabase
-      .from('v_products_with_merchant_trust')
-      .select('*')
-      .in('cluster_id', batchIds)
-      .order('price_current', { ascending: true });
+    // Paged per chunk: 150 masters can easily hold more than 1000 offers.
+    const viewData = await fetchAllRows(
+      'v_products_with_merchant_trust',
+      (from, to) =>
+        supabase
+          .from('v_products_with_merchant_trust')
+          .select(TRUST_VIEW_SELECT)
+          .in('cluster_id', batchIds)
+          .order('price_current', { ascending: true })
+          .order('id')
+          .range(from, to)
+    ).catch(() => null);
 
-    if (!viewErr && viewData) {
+    if (viewData) {
       for (const row of viewData as unknown as RawTrustViewRow[]) {
         const cid = row.cluster_id ? String(row.cluster_id) : '';
         if (!cid) continue;
@@ -1366,45 +1369,15 @@ export async function getMasterProductOffersBatch(
       continue;
     }
 
-    const { data, error } = await supabase
-      .from('products')
-      .select(
-        `
-        id,
-        cluster_id,
-        platform,
-        title,
-        price_current,
-        price_original,
-        stock,
-        rating_star,
-        rating_count,
-        url,
-        merchants (
-          id,
-          name,
-          platform,
-          is_official,
-          rating_star,
-          follower_count,
-          location,
-          risk_score
-        )
-      `
-      )
-      .in('cluster_id', batchIds)
-      .order('price_current', { ascending: true });
-
-    if (error) {
-      log.error('batch offers fetch failed', {
-        batchSize: batchIds.length,
-        message: error.message,
-      });
-      throw new RateDataUnavailableError('batch product offers', error);
-    }
-    if (!data) {
-      continue;
-    }
+    const data = await fetchAllRows('batch product offers', (from, to) =>
+      supabase
+        .from('products')
+        .select(OFFER_FALLBACK_SELECT)
+        .in('cluster_id', batchIds)
+        .order('price_current', { ascending: true })
+        .order('id')
+        .range(from, to)
+    );
 
     for (const item of data as unknown as RawOfferRow[]) {
       const cid = item.cluster_id ? String(item.cluster_id) : '';
@@ -2845,18 +2818,21 @@ export async function getMerchantProfileById(
 
   // Secondary reads throw too: a profile with silently empty listings or
   // reviews would otherwise be cached as if it were true (DOS/Rate#329).
-  const { data: prodRows, error: prodError } = await supabase
-    .from('products')
-    .select(
-      'id, merchant_id, platform, platform_item_id, title, price_current, price_original, stock, historical_sold, rating_star, rating_count, images, url, cluster_id'
-    )
-    .eq('merchant_id', merchantRow.id)
-    .order('price_current', { ascending: true });
-  if (prodError) {
-    throw new RateDataUnavailableError('merchant listings', prodError);
-  }
+  // Paged: retailers can list more than PostgREST's 1000-row cap.
+  const merchantId = merchantRow.id;
+  const prodRows = await fetchAllRows('merchant listings', (from, to) =>
+    supabase
+      .from('products')
+      .select(
+        'id, merchant_id, platform, platform_item_id, title, price_current, price_original, stock, historical_sold, rating_star, rating_count, images, url, cluster_id'
+      )
+      .eq('merchant_id', merchantId)
+      .order('price_current', { ascending: true })
+      .order('id')
+      .range(from, to)
+  );
 
-  const rawProducts = (prodRows as unknown as RawProductRow[]) || [];
+  const rawProducts = prodRows as unknown as RawProductRow[];
   const clusterIds = Array.from(
     new Set(rawProducts.map((p) => p.cluster_id).filter(Boolean))
   ) as string[];

@@ -131,6 +131,33 @@ test('merchant search reaches merchants past the 1000-row cap', async ({
   expect(await res.text()).toContain('last-ranked-shop');
 });
 
+// 1050 offers / listings exceed PostgREST's 1000-row cap: single, batched and
+// merchant reads page past it (DOS/Rate#366).
+test('offer and listing reads page past the 1000-row cap', async ({
+  request,
+}) => {
+  const product = await (
+    await request.get('/api/v1/rate/products/e2e-many-offers-phone')
+  ).json();
+  expect(product.data.offers).toHaveLength(1050);
+
+  const merchant = await (
+    await request.get('/api/v1/rate/merchants/many-offers-store')
+  ).json();
+  expect(merchant.data.listings).toHaveLength(1050);
+
+  // Batched path: the dearest 50 offers carry the whole price spread.
+  const compare = await (
+    await request.get(
+      '/api/v1/rate/compare?slugs=e2e-many-offers-phone,iphone-16-pro-max-256gb'
+    )
+  ).json();
+  const many = compare.data.find(
+    (p: { slug: string }) => p.slug === 'e2e-many-offers-phone'
+  );
+  expect(many.deal_radar.spreadPct).toBeGreaterThan(0);
+});
+
 // Positive controls for the 404 specs: the same routes resolve seeded rows.
 test('merchant and versus pages resolve seeded rows', async ({ request }) => {
   for (const path of [

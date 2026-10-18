@@ -79,6 +79,22 @@ FROM generate_series(1, 1100) AS g;
 INSERT INTO rate.merchants (platform, platform_shop_id, name, slug, follower_count)
 VALUES ('shopee', 'last_ranked_shop', 'Last Ranked Shop', 'last-ranked-shop', 0);
 
+-- A phone with 1050 offers from one store: past PostgREST's 1000-row cap. The
+-- 50 dearest offers cost double, so a truncated (price-ordered) read loses the
+-- whole price spread as well as 50 offers and 50 store listings.
+INSERT INTO rate.merchants (id, platform, platform_shop_id, name, slug, is_official)
+VALUES ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa1050', 'shopee', 'shop_many_offers', 'Many Offers Store', 'many-offers-store', false);
+INSERT INTO rate.master_products
+  (id, category_id, brand, model, model_key, name, slug, min_price, max_price, merchant_count, status, metadata)
+VALUES ('22222222-2222-4222-8222-222222221050', 'c0000000-0000-4000-8000-000000000001', 'E2E', 'Many Offers Phone',
+  'e2e_many_offers_phone', 'E2E Many Offers Phone', 'e2e-many-offers-phone', 1000000, 2000000, 1, 'published',
+  '{"category_slug": "smartphones"}');
+INSERT INTO rate.products (merchant_id, platform, platform_item_id, title, category_id, price_current, url, cluster_id)
+SELECT 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa1050', 'shopee', 'many_' || g, 'E2E Many Offers Phone #' || g,
+  'c0000000-0000-4000-8000-000000000001', CASE WHEN g <= 1000 THEN 1000000 ELSE 2000000 END,
+  'https://shopee.vn/many-' || g, '22222222-2222-4222-8222-222222221050'
+FROM generate_series(1, 1050) AS g;
+
 -- A merchant with 250 listings: reads that pass every listing id to one in.()
 -- would exceed the request-line limit the E2E proxy enforces. The only review
 -- sits on the last listing, so it shows only if every chunk is read.
