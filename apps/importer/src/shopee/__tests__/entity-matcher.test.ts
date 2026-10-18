@@ -6,7 +6,6 @@
  * - Race condition recovery: ignoreDuplicates winner refetch without overwriting status
  */
 import assert from 'node:assert/strict';
-import type { SupabaseClient } from '@supabase/supabase-js';
 import { MasterProductSchema } from '@repo/shared-data';
 import {
   EntityMatcher,
@@ -21,7 +20,7 @@ import {
 import { AiSpecEnricher, getAiSpecEnrichmentJsonSchema } from '../ai-spec-enricher.js';
 import { getAiReviewBatchJsonSchema } from '../ai-review-analyzer.js';
 import { computeRetryDelayMs, createImporterLogger, sanitizeAiGeneratedText } from '../logger.js';
-import type { ShopeeProduct } from '../types.js';
+import type { RateSupabaseClient, ShopeeProduct } from '../types.js';
 
 function createShopeeListing(
   title: string,
@@ -116,7 +115,7 @@ function createMockSupabase(opts: MockDbOptions = {}) {
         error: opts.fuzzyErr ?? null,
       };
     },
-  } as unknown as SupabaseClient<any, 'rate'>;
+  } as unknown as RateSupabaseClient;
 
   return { client, capturedUpserts, capturedRpcCalls };
 }

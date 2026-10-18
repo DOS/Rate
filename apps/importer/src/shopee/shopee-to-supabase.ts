@@ -5,9 +5,11 @@
  */
 import crypto from 'node:crypto';
 import dotenv from 'dotenv';
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js';
 import {
   ScrapedProductSchema,
+  scopeSupabaseToRate,
+  type RateSupabaseClient,
   type ShopeeProduct,
   type ShopeeReview,
   type SupportedEcommercePlatform,
@@ -46,7 +48,7 @@ export interface IngestOptions {
 }
 
 export class ShopeeIngestionPipeline {
-  private supabase: SupabaseClient<any, 'rate'>;
+  private supabase: RateSupabaseClient;
   private normalizer: ProductNormalizer;
   private matcher: EntityMatcher;
   private enricher: AiSpecEnricher;
@@ -67,7 +69,7 @@ export class ShopeeIngestionPipeline {
     });
 
     // Scope to rate schema
-    this.supabase = (admin as any).schema('rate');
+    this.supabase = scopeSupabaseToRate(admin);
     this.normalizer = new ProductNormalizer();
     this.enricher = new AiSpecEnricher(aiConfig);
     this.reviewAnalyzer = new AiReviewAnalyzer(aiConfig);
@@ -247,11 +249,10 @@ export class ShopeeIngestionPipeline {
     });
 
     // 3b. Refresh canonical master_products market stats (min_price, max_price, merchant_count) via SQL RPC (Audit C5)
-    if (typeof (this.supabase as any).rpc === 'function') {
-      const { error: marketStatsErr } = await (this.supabase as any).rpc(
-        'refresh_master_market_stats',
-        { p_master_id: masterId }
-      );
+    if (typeof this.supabase.rpc === 'function') {
+      const { error: marketStatsErr } = await this.supabase.rpc('refresh_master_market_stats', {
+        p_master_id: masterId,
+      });
       if (marketStatsErr) {
         platLogger.warn(
           'ingest.market_stats_rpc_warn',
@@ -277,8 +278,8 @@ export class ShopeeIngestionPipeline {
         .digest('hex');
 
     let handledByObservationRpc = false;
-    if (typeof (this.supabase as any).rpc === 'function') {
-      const { data: obsStatus, error: obsRpcErr } = await (this.supabase as any).rpc(
+    if (typeof this.supabase.rpc === 'function') {
+      const { data: obsStatus, error: obsRpcErr } = await this.supabase.rpc(
         'record_price_observation',
         {
           p_product_id: productId,
@@ -566,10 +567,11 @@ export class ShopeeIngestionPipeline {
           }
         );
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
       platLogger.warn(
         'ingest.review_analysis_failed',
-        `Review analysis failed (non-fatal): ${err?.message || err}`,
+        `Review analysis failed (non-fatal): ${errMsg}`,
         { productId }
       );
     }

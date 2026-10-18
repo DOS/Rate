@@ -70,7 +70,7 @@ export default [
   {
     // The architecture suite lazily require()s each section's modules (CommonJS under tsx).
     files: ['src/**/__tests__/**'],
-    rules: { '@typescript-eslint/no-require-imports': 'off' },
+    rules: { '@typescript-eslint/no-require-imports': 'off', 'no-console': 'off' },
   },
   {
     // JS config files are not in the TypeScript project; no enabled rule needs type
