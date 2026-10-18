@@ -285,7 +285,7 @@ export async function CategoryCatalogContent({
 
       {/* Hero Banner (DESIGN.md v2.0 Dark Obsidian + DOS Crimson Glow) */}
       <div
-        className="hero-banner position-relative overflow-hidden"
+        className="hero-banner rate-hero-dark position-relative overflow-hidden"
         style={{
           background:
             'radial-gradient(circle at 18% 22%, rgba(216, 48, 48, 0.16), transparent 45%), radial-gradient(circle at 82% 18%, rgba(99, 102, 241, 0.14), transparent 42%), linear-gradient(180deg, #0f1113 0%, #141821 100%)',

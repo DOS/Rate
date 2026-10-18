@@ -165,6 +165,7 @@ export default async function VersusComparePage({ params }: VersusPageProps) {
 
       {/* DESIGN.md v3.0 1v1 Head-to-Head Hero Scoreboard */}
       <section
+        className="rate-hero-dark"
         style={{
           background:
             'linear-gradient(135deg, #0b0d10 0%, #12161f 55%, #181c26 100%)',

@@ -6,11 +6,17 @@
 // Same hues, darker shades; each is at least 4.9:1 on every one of those
 // surfaces. Dark panels keep their own colours.
 
-$rate-dark-surfaces: '.bg-dark, .bg-black, .text-bg-dark, .rate-scoreboard-dark, [data-bs-theme="dark"]';
+// .rate-hero-dark marks sections whose dark background is an inline gradient:
+// no colour class says they are dark, and axe reports text on gradients as
+// "incomplete", so the E2E gate cannot catch a darkened colour there.
+$rate-dark-surfaces: '.bg-dark, .bg-black, .text-bg-dark, .rate-scoreboard-dark, .rate-hero-dark, [data-bs-theme="dark"]';
 
 // Neither a dark surface itself nor inside one.
 @mixin on-light-surface($selector) {
-  #{$selector}:not(:is(#{$rate-dark-surfaces})):not(:is(#{$rate-dark-surfaces}) *) {
+  // :is() so a selector list is gated as a whole, not only its last part.
+  :is(#{$selector}):not(:is(#{$rate-dark-surfaces})):not(
+      :is(#{$rate-dark-surfaces}) *
+    ) {
     @content;
   }
 }
@@ -35,9 +41,22 @@ $rate-dark-surfaces: '.bg-dark, .bg-black, .text-bg-dark, .rate-scoreboard-dark,
   color: #7a5a00 !important;
 }
 
-// .bg-primary badges are DOS/Rate#334's (solid tint bug); leave them alone.
-@include on-light-surface('.text-primary:not(.bg-primary)') {
+@include on-light-surface('.text-primary') {
   color: #b42318 !important;
+}
+
+// On the dark panels (#0b0d10 to #181c26) the defaults that fall short are
+// #198754 (3.7:1) and #6c757d (3.6:1); use Bootstrap's dark-mode emphasis
+// shades (at least 7:1 there). Light cards inside a dark panel are left
+// out of both sets of overrides.
+:is(#{$rate-dark-surfaces})
+  :is(.text-success):not(:is(.bg-white, .bg-light, .card) *) {
+  color: #75b798 !important;
+}
+
+:is(#{$rate-dark-surfaces})
+  :is(.text-muted, .text-secondary):not(:is(.bg-white, .bg-light, .card) *) {
+  color: #a7acb1 !important;
 }
 
 // Outline buttons paint their own light background (var(--bs-body-bg)) even in

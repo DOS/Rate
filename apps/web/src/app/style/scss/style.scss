@@ -10874,7 +10874,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .rate-scoreboard-dark {
-  // Solid fallback first: contrast checkers (and old browsers) read it.
+  // Solid fallback under the gradient (shows if the gradient cannot render).
   background-color: #0b0d11;
   background-image: linear-gradient(145deg, #0b0d11 0%, #121722 65%, #171e2e 100%);
   border: 1px solid rgba(255, 255, 255, 0.1);

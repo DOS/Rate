@@ -15,7 +15,7 @@ export default async function FooterTop({
   const tFooter = await getTranslations({ locale, namespace: 'rate.footer' });
   return (
     <section
-      className="position-relative py-5"
+      className="rate-hero-dark position-relative py-5"
       style={{
         background:
           'linear-gradient(135deg, #0b0d11 0%, #131824 60%, #1a1f2e 100%)',
