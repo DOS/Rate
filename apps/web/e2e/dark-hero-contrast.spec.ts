@@ -23,6 +23,7 @@ const PAGES = [
 const MUST_MEASURE = new Set([
   '/compare/iphone-16-pro-max-256gb-vs-samsung-galaxy-s25-ultra-256gb',
   '/leaderboard',
+  '/deals',
 ]);
 
 for (const path of PAGES) {
@@ -58,7 +59,8 @@ for (const path of PAGES) {
       let count = 0;
       for (const surface of document.querySelectorAll<HTMLElement>(selector)) {
         const style = getComputedStyle(surface);
-        // Opaque stops only; translucent overlays sit on top of them.
+        // Opaque stops only. Translucent glows on top can lighten the ground
+        // a little, so this is close to, not strictly, the worst case.
         const stops = parse(`${style.backgroundImage} ${style.backgroundColor}`)
           .filter((c) => c.length === 3 || c[3] === 1)
           .map(lum);
@@ -75,11 +77,35 @@ for (const path of PAGES) {
         for (const el of texts) {
           // Measured against its own nearest dark surface, once.
           if (el.closest(selector) !== surface) continue;
-          if (el.closest('.bg-white, .bg-light, .card')) continue;
+          // Solid light islands inside the surface switch back to the dark
+          // inks (_custom.scss); they are light backgrounds, not this one.
+          const island = el.closest(
+            '.bg-white, .bg-light, .card, .dropdown-menu'
+          );
+          if (
+            island &&
+            island !== surface &&
+            surface.contains(island) &&
+            (island.matches(
+              ':is(.bg-white, .bg-light):not([class*="bg-opacity"])'
+            ) ||
+              (surface.matches('.rate-ink-on-dark') &&
+                island.matches(
+                  ':is(.card, .dropdown-menu):not(.bg-dark, .text-bg-dark)'
+                )))
+          ) {
+            continue;
+          }
           const text = el.textContent?.trim();
           if (!text || el.getClientRects().length === 0) continue;
           const s = getComputedStyle(el);
-          const fg = parse(s.color)[0] ?? [0, 0, 0];
+          const fg = parse(s.color)[0];
+          if (!fg) {
+            out.push(
+              `${el.className} "${text.slice(0, 30)}": cannot parse colour ${s.color}`
+            );
+            continue;
+          }
           const ratio =
             (Math.max(lum(fg), bg) + 0.05) / (Math.min(lum(fg), bg) + 0.05);
           const size = parseFloat(s.fontSize);
