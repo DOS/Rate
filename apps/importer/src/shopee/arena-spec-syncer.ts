@@ -53,36 +53,37 @@ export function extractGsmArenaDataSpecs(html: string): Record<string, string> {
   // regex with `[^>]*\bdata-spec=` and a lazy body backtracks polynomially on
   // hostile pages (CodeQL js/polynomial-redos).
   const openTag = /<([a-z0-9]+)\b([^<>]*)>/gi;
-  // Close tags are searched on the original string with a case-insensitive
-  // regex; lowercasing the page instead would shift offsets (e.g. U+0130).
-  const closeTags = new Map<string, RegExp>();
-  // A close tag missing after one position is missing after every later one,
-  // so unclosed tags are searched for once rather than once per opening.
-  const unclosed = new Set<string>();
+  // Index every close tag once (offsets into the original string, so case
+  // folding cannot shift them). Openings are visited left to right, so a
+  // per-tag cursor finds the first close after each opening in amortized
+  // constant time and the whole scan stays linear.
+  const closesByTag = new Map<string, { at: number; end: number }[]>();
+  for (const close of html.matchAll(/<\/([a-z0-9]+)>/gi)) {
+    const tag = close[1].toLowerCase();
+    const list = closesByTag.get(tag) ?? [];
+    const at = close.index ?? 0;
+    list.push({ at, end: at + close[0].length });
+    closesByTag.set(tag, list);
+  }
+  const cursors = new Map<string, number>();
   let match: RegExpExecArray | null;
   while ((match = openTag.exec(html)) !== null) {
     const keyMatch = /\bdata-spec=["']([^"']+)["']/i.exec(match[2] || '');
     if (!keyMatch) continue;
     const tag = match[1].toLowerCase();
-    if (unclosed.has(tag)) continue;
-    let closeTag = closeTags.get(tag);
-    if (!closeTag) {
-      // `tag` is [a-z0-9]+, so it needs no escaping.
-      closeTag = new RegExp(`</${tag}>`, 'gi');
-      closeTags.set(tag, closeTag);
-    }
-    closeTag.lastIndex = openTag.lastIndex;
-    const close = closeTag.exec(html);
-    if (!close) {
-      unclosed.add(tag);
-      continue;
-    }
+    const list = closesByTag.get(tag);
+    if (!list) continue;
+    let cursor = cursors.get(tag) ?? 0;
+    while (cursor < list.length && list[cursor].at < openTag.lastIndex) cursor++;
+    cursors.set(tag, cursor);
+    const close = list[cursor];
+    if (!close) continue;
     const key = keyMatch[1]?.trim();
-    const val = stripHtmlTags(html.slice(openTag.lastIndex, close.index));
+    const val = stripHtmlTags(html.slice(openTag.lastIndex, close.at));
     if (key && val && !specs[key]) {
       specs[key] = val;
     }
-    openTag.lastIndex = closeTag.lastIndex;
+    openTag.lastIndex = close.end;
   }
   return specs;
 }
