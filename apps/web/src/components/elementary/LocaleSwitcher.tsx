@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect, useTransition } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { useLocale } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { FaChevronDown } from 'react-icons/fa6';
 
 import { AppLocale } from '@/types/general';
@@ -105,6 +105,7 @@ export function LocaleSwitcher({
   compact = false,
 }: LocaleSwitcherProps) {
   const contextLocale = useLocale();
+  const tNav = useTranslations('rate.nav');
   const currentLocale = (propLocale || contextLocale) as AppLocale;
   const [isOpen, setIsOpen] = useState(false);
   const [, startTransition] = useTransition();
@@ -176,7 +177,7 @@ export function LocaleSwitcher({
           cursor: 'pointer',
         }}
         aria-expanded={isOpen}
-        aria-label="Chọn ngôn ngữ"
+        aria-label={tNav('selectLanguageAria')}
       >
         <span className="d-flex align-items-center">{active.flag}</span>
         <span style={{ letterSpacing: '0.5px' }}>{active.short}</span>

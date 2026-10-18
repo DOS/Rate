@@ -17,7 +17,8 @@
       "compare": "Compare",
       "watchlist": "Watchlist",
       "developers": "API",
-      "priceWatchCta": "Price Watch"
+      "priceWatchCta": "Price Watch",
+      "selectLanguageAria": "Select language"
     },
     "footer": {
       "copyRight": "© {YEAR} Rate.vn (DOS Ecosystem). Open-Core Product Spec Intelligence, True Price History & AI Review Auditing.",
@@ -49,7 +50,8 @@
       "bannerTitle": "Verify True Historical Price & AI Review Trust Before Buying",
       "bannerDesc": "Paste any Shopee, Lazada, or Tiki listing link or set a target price alert to avoid inflated fake sales.",
       "bannerCta": "Open Price Watchlist",
-      "bannerCompareCta": "Compare 10 Spec Groups"
+      "bannerCompareCta": "Compare 10 Spec Groups",
+      "bannerInspectCta": "Inspect Review & Price"
     },
     "home": {
       "heroBadge": "Cross-Platform Spec Intelligence, True Price History & AI Review Auditing",
@@ -665,7 +667,10 @@
     "labNoScore": "Lab: N/A",
     "spreadSavingsBadge": "Cross-platform savings {amount} ₫",
     "costPerPointSub": "({cost} ₫ / JReviews pt)",
-    "audit10PlatformsLink": "Audit 10-platform prices →"
+    "audit10PlatformsLink": "Audit 10-platform prices →",
+    "radarBadgeGenuine": "🔥 60D Low (-{pct}%)",
+    "radarBadgeFakeTrap": "🚨 Fake Sale Alert (+{pct}%)",
+    "radarBadgeSpread": "📊 +{pct}% cross-platform spread"
   },
   "inspect": {
     "metaTitle": "Deep URL & Fake Discount Inspector | Rate.vn",
@@ -1596,7 +1601,9 @@
       "featuresHeader": "Key Features (10 Field Groups)",
       "filteringBtn": "Filtering data...",
       "applyFiltersBtn": "Apply Filters",
-      "clearAllFiltersBtn": "Clear All Filters"
+      "clearAllFiltersBtn": "Clear All Filters",
+      "rangeFrom": "From:",
+      "rangeTo": "To:"
     }
   },
   "heroSearch": {

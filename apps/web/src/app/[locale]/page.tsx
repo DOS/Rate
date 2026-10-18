@@ -3,7 +3,6 @@ import { getTranslations } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
 import NavbarDarkDynamic from './components/navbar/NavbarDarkDynamic';
 import { getMasterProductHref, getMasterProducts } from '@/lib/rate-api';
-import { getRateCopy } from '@/lib/rate-i18n';
 import { buildPopular1v1BattlesForCategory } from '@/lib/leaderboard-engine';
 import {
   getCachedMerchantsList,
@@ -43,10 +42,10 @@ export async function generateMetadata({
   params: Promise<{ locale: string }>;
 }): Promise<Metadata> {
   const { locale } = await params;
-  const copy = getRateCopy(locale);
+  const tSeo = await getTranslations({ locale, namespace: 'rate.seo' });
   return {
-    title: copy.seo.siteTitle,
-    description: copy.seo.siteDescription,
+    title: tSeo('siteTitle'),
+    description: tSeo('siteDescription'),
     alternates: {
       canonical: 'https://rate.vn',
     },
@@ -76,7 +75,7 @@ export default async function Home({
   params: Promise<{ locale: string }>;
 }) {
   const { locale } = await params;
-  const copy = getRateCopy(locale);
+  const tRate = await getTranslations({ locale, namespace: 'rate' });
   const tHome = await getTranslations({ locale, namespace: 'homePage' });
 
   let masterProducts: MasterProduct[] = [];
@@ -154,7 +153,7 @@ export default async function Home({
                   }}
                 >
                   <BsShieldCheck className="text-success" />
-                  <span>{copy.home.heroBadge}</span>
+                  <span>{tRate('home.heroBadge')}</span>
                 </div>
                 <h1
                   className="fw-bold mb-3 text-white"
@@ -164,7 +163,7 @@ export default async function Home({
                     lineHeight: 1.15,
                   }}
                 >
-                  {copy.home.heroTitlePrefix}{' '}
+                  {tRate('home.heroTitlePrefix')}{' '}
                   <span
                     className="rounded-3 d-inline-block px-3 py-1"
                     style={{
@@ -174,9 +173,9 @@ export default async function Home({
                       color: '#ff6b6b',
                     }}
                   >
-                    {copy.home.heroTitleHighlight}
+                    {tRate('home.heroTitleHighlight')}
                   </span>{' '}
-                  {copy.home.heroTitleSuffix}
+                  {tRate('home.heroTitleSuffix')}
                 </h1>
                 <p
                   className="fs-5 mb-0"
@@ -186,7 +185,7 @@ export default async function Home({
                     margin: '0 auto',
                   }}
                 >
-                  {copy.home.heroSubtitle}
+                  {tRate('home.heroSubtitle')}
                 </p>
               </div>
             </div>
@@ -222,7 +221,7 @@ export default async function Home({
                       {platformStats.masterProductsCount}
                     </div>
                     <div className="small" style={{ color: '#94a3b8' }}>
-                      {copy.home.statProducts}
+                      {tRate('home.statProducts')}
                     </div>
                   </div>
                 </div>
@@ -243,7 +242,7 @@ export default async function Home({
                       {platformStats.priceObservationsCount}
                     </div>
                     <div className="small" style={{ color: '#94a3b8' }}>
-                      {copy.home.statPricePoints}
+                      {tRate('home.statPricePoints')}
                     </div>
                   </div>
                 </div>
@@ -264,7 +263,7 @@ export default async function Home({
                       {platformStats.totalReviewsCount}
                     </div>
                     <div className="small" style={{ color: '#94a3b8' }}>
-                      {copy.home.statReviews}
+                      {tRate('home.statReviews')}
                     </div>
                   </div>
                 </div>
@@ -285,7 +284,7 @@ export default async function Home({
                       {platformStats.merchantsCount}
                     </div>
                     <div className="small" style={{ color: '#94a3b8' }}>
-                      {copy.home.statMerchants}
+                      {tRate('home.statMerchants')}
                     </div>
                   </div>
                 </div>
@@ -301,58 +300,58 @@ export default async function Home({
           <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-end mb-4 gap-3">
             <div>
               <span className="badge bg-primary bg-opacity-10 text-primary rounded-pill fw-semibold mb-2 px-3 py-2">
-                {copy.home.catBadge}
+                {tRate('home.catBadge')}
               </span>
               <h3 className="sectionHeading mb-1">
-                {copy.home.catTitlePrefix}{' '}
+                {tRate('home.catTitlePrefix')}{' '}
                 <span className="text-primary">
-                  {copy.home.catTitleHighlight}
+                  {tRate('home.catTitleHighlight')}
                 </span>
               </h3>
-              <p className="text-muted mb-0">{copy.home.catSubtitle}</p>
+              <p className="text-muted mb-0">{tRate('home.catSubtitle')}</p>
             </div>
             <div className="d-flex flex-wrap gap-2">
               <Link
                 href="/smartphones"
                 className="btn btn-sm btn-outline-primary rounded-pill px-3"
               >
-                📱 {copy.nav.smartphones}
+                📱 {tRate('nav.smartphones')}
               </Link>
               <Link
                 href="/laptops"
                 className="btn btn-sm btn-outline-primary rounded-pill px-3"
               >
-                💻 {copy.nav.laptops}
+                💻 {tRate('nav.laptops')}
               </Link>
               <Link
                 href="/tablets"
                 className="btn btn-sm btn-outline-primary rounded-pill px-3"
               >
-                📟 {copy.nav.tablets}
+                📟 {tRate('nav.tablets')}
               </Link>
               <Link
                 href="/smartwatches"
                 className="btn btn-sm btn-outline-primary rounded-pill px-3"
               >
-                ⌚ {copy.nav.smartwatches}
+                ⌚ {tRate('nav.smartwatches')}
               </Link>
               <Link
                 href="/earbuds"
                 className="btn btn-sm btn-outline-primary rounded-pill px-3"
               >
-                🎧 {copy.nav.earbuds}
+                🎧 {tRate('nav.earbuds')}
               </Link>
               <Link
                 href="/inspect"
                 className="btn btn-sm btn-outline-danger rounded-pill px-3"
               >
-                🔍 {copy.nav.inspect}
+                🔍 {tRate('nav.inspect')}
               </Link>
               <Link
                 href="/merchants"
                 className="btn btn-sm btn-outline-dark rounded-pill px-3"
               >
-                🏪 {copy.nav.merchants}
+                🏪 {tRate('nav.merchants')}
               </Link>
             </div>
           </div>
@@ -374,8 +373,8 @@ export default async function Home({
                         }`}
                       >
                         {cat.productCount > 0
-                          ? `${cat.productCount} ${copy.home.catReadySuffix}`
-                          : copy.home.catExpanding}
+                          ? `${cat.productCount} ${tRate('home.catReadySuffix')}`
+                          : tRate('home.catExpanding')}
                       </span>
                     </div>
                     <h5 className="fw-bold text-dark mb-1">
@@ -384,7 +383,7 @@ export default async function Home({
                       cat.slug === 'tablets' ||
                       cat.slug === 'smartwatches' ||
                       cat.slug === 'earbuds'
-                        ? copy.nav[cat.slug]
+                        ? tRate(`nav.${cat.slug}`)
                         : cat.name}
                     </h5>
                     <p className="text-muted small mb-0">
@@ -411,22 +410,24 @@ export default async function Home({
             <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 gap-3">
               <div>
                 <span className="badge bg-primary bg-opacity-10 text-primary rounded-pill fw-semibold mb-2 px-3 py-2">
-                  {copy.home.featuredBadge}
+                  {tRate('home.featuredBadge')}
                 </span>
                 <h3 className="sectionHeading mb-1">
-                  {copy.home.featuredTitlePrefix}{' '}
+                  {tRate('home.featuredTitlePrefix')}{' '}
                   <span className="text-primary">
-                    {copy.home.featuredTitleHighlight}
+                    {tRate('home.featuredTitleHighlight')}
                   </span>
                 </h3>
-                <p className="text-muted mb-0">{copy.home.featuredSubtitle}</p>
+                <p className="text-muted mb-0">
+                  {tRate('home.featuredSubtitle')}
+                </p>
               </div>
               <div className="d-flex flex-wrap gap-2">
                 <Link
                   href="/smartphones"
                   className="btn btn-outline-primary rounded-pill fw-medium px-3 py-2"
                 >
-                  {copy.home.viewAllCatalog} (
+                  {tRate('home.viewAllCatalog')} (
                   {platformStats.masterProductsCount}) →
                 </Link>
                 {masterProducts.length >= 2 && (
@@ -442,7 +443,7 @@ export default async function Home({
                       .join(',')}`}
                     className="btn btn-primary rounded-pill fw-medium px-3 py-2"
                   >
-                    {copy.home.compareSpecsBtn} (3)
+                    {tRate('home.compareSpecsBtn')} (3)
                   </Link>
                 )}
               </div>
@@ -892,22 +893,25 @@ export default async function Home({
           <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 gap-3">
             <div>
               <span className="badge bg-success bg-opacity-10 text-success rounded-pill fw-semibold mb-2 px-3 py-2">
-                {copy.home.merchantBadge}
+                {tRate('home.merchantBadge')}
               </span>
               <h3 className="sectionHeading mb-1">
-                {copy.home.merchantTitlePrefix}{' '}
+                {tRate('home.merchantTitlePrefix')}{' '}
                 <span className="text-primary">
-                  {copy.home.merchantTitleHighlight}
+                  {tRate('home.merchantTitleHighlight')}
                 </span>
               </h3>
-              <p className="text-muted mb-0">{copy.home.merchantSubtitle}</p>
+              <p className="text-muted mb-0">
+                {tRate('home.merchantSubtitle')}
+              </p>
             </div>
             <div>
               <Link
                 href="/merchants"
                 className="btn btn-outline-primary rounded-pill fw-medium px-4 py-2"
               >
-                {copy.home.viewAllMerchants} ({platformStats.merchantsCount}) →
+                {tRate('home.viewAllMerchants')} ({platformStats.merchantsCount}
+                ) →
               </Link>
             </div>
           </div>
@@ -1055,7 +1059,7 @@ export default async function Home({
                         href={`/merchants/${merchant.id}`}
                         className="btn btn-sm btn-primary rounded-pill fw-medium px-3"
                       >
-                        {copy.home.viewMerchantAuditBtn}
+                        {tRate('home.viewMerchantAuditBtn')}
                       </Link>
                     </div>
                   </div>
@@ -1073,15 +1077,17 @@ export default async function Home({
             <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 gap-3">
               <div>
                 <span className="badge bg-info bg-opacity-10 text-info rounded-pill fw-semibold mb-2 px-3 py-2">
-                  {copy.home.reviewsBadge}
+                  {tRate('home.reviewsBadge')}
                 </span>
                 <h3 className="sectionHeading mb-1">
-                  {copy.home.reviewsTitlePrefix}{' '}
+                  {tRate('home.reviewsTitlePrefix')}{' '}
                   <span className="text-primary">
-                    {copy.home.reviewsTitleHighlight}
+                    {tRate('home.reviewsTitleHighlight')}
                   </span>
                 </h3>
-                <p className="text-muted mb-0">{copy.home.reviewsSubtitle}</p>
+                <p className="text-muted mb-0">
+                  {tRate('home.reviewsSubtitle')}
+                </p>
               </div>
               <div className="d-flex align-items-center flex-wrap gap-2">
                 <span className="badge bg-success bg-opacity-10 text-success rounded-pill px-3 py-2">
@@ -1188,16 +1194,16 @@ export default async function Home({
           <div className="row justify-content-center mb-4">
             <div className="col-xl-8 col-lg-9 text-center">
               <span className="badge bg-primary bg-opacity-10 text-primary rounded-pill fw-semibold mb-2 px-3 py-2">
-                {copy.home.whyBadge}
+                {tRate('home.whyBadge')}
               </span>
               <h3 className="sectionHeading mb-2">
-                {copy.home.whyTitlePrefix}{' '}
+                {tRate('home.whyTitlePrefix')}{' '}
                 <span className="text-primary">
-                  {copy.home.whyTitleHighlight}
+                  {tRate('home.whyTitleHighlight')}
                 </span>
                 ?
               </h3>
-              <p className="text-muted mb-0">{copy.home.whySubtitle}</p>
+              <p className="text-muted mb-0">{tRate('home.whySubtitle')}</p>
             </div>
           </div>
 

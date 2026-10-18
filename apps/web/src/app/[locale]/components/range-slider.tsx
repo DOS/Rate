@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import Slider from 'rc-slider';
 import 'rc-slider/assets/index.css';
 
@@ -24,6 +25,7 @@ export default function RangeSlider({
   onChange,
   onChangeComplete,
 }: RangeSliderProps) {
+  const tSidebar = useTranslations('catalog.sidebar');
   const [internalRange, setInternalRange] = useState<[number, number]>(
     value ?? defaultValue
   );
@@ -79,11 +81,13 @@ export default function RangeSlider({
         style={{ marginTop: 10 }}
       >
         <span>
-          Từ: <strong className="text-dark">{activeRange[0]}</strong>
+          {tSidebar('rangeFrom')}{' '}
+          <strong className="text-dark">{activeRange[0]}</strong>
           {unitSuffix ? ` ${unitSuffix}` : ''}
         </span>
         <span>
-          Đến: <strong className="text-dark">{activeRange[1]}</strong>
+          {tSidebar('rangeTo')}{' '}
+          <strong className="text-dark">{activeRange[1]}</strong>
           {unitSuffix ? ` ${unitSuffix}` : ''}
         </span>
       </div>

@@ -1,3 +1,4 @@
+import { getTranslations } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
 import {
   BsArrowLeftRight,
@@ -5,10 +6,13 @@ import {
   BsCodeSlash,
   BsShieldCheck,
 } from 'react-icons/bs';
-import { getRateCopy } from '@/lib/rate-i18n';
 
-export default function FooterTop({ locale = 'vi' }: { locale?: string }) {
-  const copy = getRateCopy(locale);
+export default async function FooterTop({
+  locale = 'vi',
+}: {
+  locale?: string;
+}) {
+  const tFooter = await getTranslations({ locale, namespace: 'rate.footer' });
   return (
     <section
       className="position-relative py-5"
@@ -42,13 +46,13 @@ export default function FooterTop({ locale = 'vi' }: { locale?: string }) {
                 className="lh-base fw-bold mb-1 text-white"
                 style={{ letterSpacing: '-0.02em' }}
               >
-                {copy.footer.bannerTitle}
+                {tFooter('bannerTitle')}
               </h4>
               <p
                 className="m-0"
                 style={{ color: '#94a3b8', fontSize: '0.95rem' }}
               >
-                {copy.footer.bannerDesc}
+                {tFooter('bannerDesc')}
               </p>
             </div>
           </div>
@@ -64,7 +68,7 @@ export default function FooterTop({ locale = 'vi' }: { locale?: string }) {
                 }}
               >
                 <BsShieldCheck />
-                Kiểm định Review &amp; Giá
+                {tFooter('bannerInspectCta')}
               </Link>
               <Link
                 href="/compare"
@@ -72,7 +76,7 @@ export default function FooterTop({ locale = 'vi' }: { locale?: string }) {
                 style={{ borderColor: 'rgba(255, 255, 255, 0.2)' }}
               >
                 <BsArrowLeftRight />
-                {copy.footer.bannerCompareCta}
+                {tFooter('bannerCompareCta')}
               </Link>
               <Link
                 href="/watchlist"
@@ -80,7 +84,7 @@ export default function FooterTop({ locale = 'vi' }: { locale?: string }) {
                 style={{ borderColor: 'rgba(255, 255, 255, 0.2)' }}
               >
                 <BsBellFill />
-                {copy.footer.bannerCta}
+                {tFooter('bannerCta')}
               </Link>
               <Link
                 href="/developers"

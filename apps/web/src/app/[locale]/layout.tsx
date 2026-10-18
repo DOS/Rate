@@ -1,8 +1,11 @@
 import { Metadata } from 'next';
 import { NextIntlClientProvider } from 'next-intl';
-import { getMessages, setRequestLocale } from 'next-intl/server';
+import {
+  getMessages,
+  getTranslations,
+  setRequestLocale,
+} from 'next-intl/server';
 import { AppProviders } from '@/app/providers';
-import { getRateCopy } from '@/lib/rate-i18n';
 import { defaultOpenGraph } from '@/lib/seo';
 
 export async function generateMetadata({
@@ -11,11 +14,11 @@ export async function generateMetadata({
   params: Promise<{ locale: string }>;
 }): Promise<Metadata> {
   const { locale } = await params;
-  const copy = getRateCopy(locale);
+  const tSeo = await getTranslations({ locale, namespace: 'rate.seo' });
   return {
     metadataBase: new URL('https://rate.vn'),
-    title: copy.seo.siteTitle,
-    description: copy.seo.siteDescription,
+    title: tSeo('siteTitle'),
+    description: tSeo('siteDescription'),
     // Default share card. og:title/description come from each page's own
     // title/description, and Next fills the Twitter title, description and
     // image from the page's resolved openGraph, so neither is set here.
@@ -37,10 +40,10 @@ export default async function LocaleLayout({
   const { locale } = await params;
   setRequestLocale(locale);
   const messages = await getMessages();
-  // Only Client Components need messages in the browser, and the only client
-  // consumer is the error boundary (errors.global). Server Components read the
-  // full catalog through getTranslations, so nothing else is shipped.
+  // Client Components read scoped namespaces via NextIntlClientProvider.
+  // Server Components read the full catalog through getTranslations.
   const clientMessages = {
+    rate: { nav: (messages.rate as Record<string, unknown>)?.nav },
     errors: { global: (messages.errors as Record<string, unknown>)?.global },
     compare: messages.compare,
     leaderboard: messages.leaderboard,
