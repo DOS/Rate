@@ -216,8 +216,15 @@ function renderShadowTrustPill(lookup: ExtensionLookupData): void {
 
     const trigger = shadow.getElementById('rate-pill-trigger');
     if (trigger) {
-      trigger.addEventListener('click', () => {
+      const openSidePanel = () => {
         void chrome.runtime.sendMessage({ type: 'RATE_OPEN_SIDE_PANEL' });
+      };
+      trigger.addEventListener('click', openSidePanel);
+      trigger.addEventListener('keydown', (event: KeyboardEvent) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          openSidePanel();
+        }
       });
     }
   });
