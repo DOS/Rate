@@ -2099,7 +2099,7 @@ async function runCoreArchitectureSuite() {
     'utf8'
   );
   assert.ok(
-    !rootLayoutSrc145.includes('cdn.jsdelivr.net') &&
+    !/cdn\.jsdelivr\.net/.test(rootLayoutSrc145) &&
       rootLayoutSrc145.includes('<BootstrapClient />') &&
       fs
         .readFileSync(
@@ -2118,7 +2118,7 @@ async function runCoreArchitectureSuite() {
     'utf8'
   );
   assert.ok(
-    !customScssSrc147.includes('fonts.googleapis.com') &&
+    !/fonts\.googleapis\.com/.test(customScssSrc147) &&
       customScssSrc147.includes('var(--font-inter') &&
       customScssSrc147.includes('var(--font-jetbrains-mono') &&
       rootLayoutSrc145.includes('fontInter.variable') &&
