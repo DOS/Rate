@@ -1,5 +1,5 @@
 -- ============================================================================
--- Migration: 20261018023000_rate_audit_m3_m4_m5_m7_queue_and_observation_rpc.sql
+-- Migration: 20261018120106_rate_audit_m3_m4_m5_m7_queue_and_observation_rpc.sql
 -- Purpose:
 --   1. Audit M3: Add `rate.cancel_crawl_jobs(p_job_ids UUID[], p_reason TEXT)`
 --      (`SECURITY DEFINER`, `SET search_path = ''`) so operator scripts can cancel
@@ -25,6 +25,9 @@
 -- ----------------------------------------------------------------------------
 -- 1. Audit M4 & M5: Platform-First Queue Index, URL Dedupe Index & FK Indexes
 -- ----------------------------------------------------------------------------
+-- Fail fast instead of queueing behind long transactions on the shared database.
+SET lock_timeout = '5s';
+
 CREATE INDEX IF NOT EXISTS idx_crawl_jobs_claimable_platform
   ON rate.crawl_jobs (platform, priority DESC, created_at)
   WHERE status IN ('pending', 'running');
@@ -277,8 +280,8 @@ BEGIN
     ALTER TABLE rate.price_history
       ADD CONSTRAINT price_history_price_non_negative_check
       CHECK (price >= 0) NOT VALID;
-    ALTER TABLE rate.price_history
-      VALIDATE CONSTRAINT price_history_price_non_negative_check;
+    -- Not validated here: VALIDATE would scan price_history under lock and abort
+    -- the migration on any legacy negative row. New and updated rows are checked.
   END IF;
 END $$;
 
@@ -413,3 +416,5 @@ BEGIN
     ALTER FUNCTION rate.commit_review_verdict(uuid, bigint, text, text, numeric, jsonb, text, text) SET search_path = '';
   END IF;
 END $$;
+
+RESET lock_timeout;

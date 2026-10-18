@@ -7,10 +7,16 @@
 -- (Open-Core reference migration; official ledger deployed via DOS-Me)
 -- ==============================================================================
 
--- 1. Audit T4: Ensure v_products_with_merchant_trust runs as SECURITY INVOKER
-ALTER VIEW IF EXISTS rate.v_products_with_merchant_trust SET (security_invoker = true);
+-- 1. Audit T4: rate.v_products_with_merchant_trust deliberately stays an
+--    owner-rights view (not SECURITY INVOKER). It joins dosafe.threat_intel and
+--    merchants.entity_hash, which anon/authenticated cannot read
+--    (20260912120000, 20261014231500); as an invoker view every public read of
+--    offers would fail. It only exposes non-PII columns.
 
 -- 2. Audit T6: Ensure recorded_at on rate.price_history has a default, backfill NULLs, and add BRIN index
+-- Fail fast instead of queueing behind long transactions on the shared database.
+SET lock_timeout = '5s';
+
 UPDATE rate.price_history
    SET recorded_at = now()
  WHERE recorded_at IS NULL;
@@ -179,3 +185,5 @@ $$;
 
 REVOKE ALL ON FUNCTION rate.search_catalog_autocomplete(TEXT, INTEGER) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION rate.search_catalog_autocomplete(TEXT, INTEGER) TO anon, authenticated, service_role;
+
+RESET lock_timeout;
