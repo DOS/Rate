@@ -700,7 +700,7 @@
     "inspectingBtn": "Đang phân tích...",
     "copyLinkBtn": "Sao chép Link Báo cáo",
     "copiedLinkBtn": "Đã sao chép Link!",
-    "copiedAuditMdBtn": "✓ Đã chép biên bản Markdown!",
+    "copiedAuditMdBtn": "Đã chép biên bản Markdown!",
     "copyAuditMdBtn": "Sao chép biên bản Markdown",
     "exportCsvBtn": "Xuất CSV",
     "exportJsonBtn": "Xuất JSON",

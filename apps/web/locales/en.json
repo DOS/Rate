@@ -700,7 +700,7 @@
     "inspectingBtn": "Auditing...",
     "copyLinkBtn": "Copy Shareable Audit Link",
     "copiedLinkBtn": "Audit Link Copied!",
-    "copiedAuditMdBtn": "✓ Audit Markdown Copied!",
+    "copiedAuditMdBtn": "Audit Markdown Copied!",
     "copyAuditMdBtn": "Copy Audit Markdown",
     "exportCsvBtn": "Export CSV",
     "exportJsonBtn": "Export JSON",

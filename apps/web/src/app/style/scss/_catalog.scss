@@ -115,3 +115,7 @@
 .rate-radar-list:empty {
   display: none;
 }
+// On dark heroes the light-theme shadow disappears; give the menu real depth.
+.rate-surface-dark .rate-export-menu-list {
+  box-shadow: 0 16px 36px -10px rgba(0, 0, 0, 0.6);
+}

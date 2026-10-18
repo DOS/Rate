@@ -700,7 +700,7 @@
     "inspectingBtn": "Probíhá analýza...",
     "copyLinkBtn": "Kopírovat odkaz na report",
     "copiedLinkBtn": "Odkaz zkopírován!",
-    "copiedAuditMdBtn": "✓ Markdown auditu zkopírován!",
+    "copiedAuditMdBtn": "Markdown auditu zkopírován!",
     "copyAuditMdBtn": "Kopírovat Markdown auditu",
     "exportCsvBtn": "Exportovat CSV",
     "exportJsonBtn": "Exportovat JSON",
