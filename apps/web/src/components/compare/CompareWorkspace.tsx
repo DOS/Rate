@@ -1583,7 +1583,7 @@ export default function CompareWorkspace({
                     data-testid="compare-export-csv-btn"
                     className="btn btn-sm btn-outline-dark rounded-pill fw-medium px-3 py-2"
                   >
-                    📥 CSV ({products.length})
+                    CSV ({products.length})
                   </button>
                   <button
                     type="button"
@@ -1591,7 +1591,7 @@ export default function CompareWorkspace({
                     data-testid="compare-export-json-btn"
                     className="btn btn-sm btn-outline-dark rounded-pill fw-medium px-3 py-2"
                   >
-                    📦 JSON ({products.length})
+                    JSON ({products.length})
                   </button>
                 </>
               )}

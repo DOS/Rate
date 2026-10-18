@@ -242,7 +242,7 @@ export default function ProductValueCalculator({
             data-testid="download-value-csv-btn"
             className="btn btn-sm btn-outline-secondary rounded-pill fw-semibold px-3"
           >
-            📥 CSV
+            CSV
           </button>
           <button
             type="button"
@@ -250,7 +250,7 @@ export default function ProductValueCalculator({
             data-testid="download-value-json-btn"
             className="btn btn-sm btn-outline-secondary rounded-pill fw-semibold px-3"
           >
-            📦 JSON
+            JSON
           </button>
         </div>
       </div>

@@ -175,7 +175,7 @@ export default function ProductShareAuditButton({
         data-testid="product-export-csv-btn"
         className="btn btn-sm btn-outline-secondary rounded-pill fw-medium px-3"
       >
-        📥 CSV
+        CSV
       </button>
       <button
         type="button"
@@ -183,7 +183,7 @@ export default function ProductShareAuditButton({
         data-testid="product-export-json-btn"
         className="btn btn-sm btn-outline-secondary rounded-pill fw-medium px-3"
       >
-        📦 JSON
+        JSON
       </button>
       <button
         type="button"

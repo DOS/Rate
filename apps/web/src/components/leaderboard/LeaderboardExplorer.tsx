@@ -704,7 +704,7 @@ export default function LeaderboardExplorer({
               className="btn btn-sm btn-outline-secondary rounded-pill fw-semibold px-3 py-1"
               data-testid="download-leaderboard-json-btn"
             >
-              📦 JSON
+              JSON
             </button>
             {top3Slugs.length >= 2 && (
               <Link
