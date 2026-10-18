@@ -156,7 +156,7 @@ export default async function Home({
 
       {/* Hero Section with Interactive Autocomplete & E-commerce Link Inspector (DESIGN.md v2.0 Dark Obsidian + DOS Crimson Glow) */}
       <div
-        className="hero-header position-relative overflow-hidden"
+        className="hero-header rate-ink-on-dark position-relative overflow-hidden"
         style={{
           background:
             'radial-gradient(circle at 20% 20%, rgba(216, 48, 48, 0.16), transparent 45%), radial-gradient(circle at 80% 15%, rgba(99, 102, 241, 0.14), transparent 42%), linear-gradient(180deg, #0f1113 0%, #141821 100%)',

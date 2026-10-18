@@ -2,8 +2,8 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 
 // WCAG 2.1 A/AA checks with axe on the main public pages (seeded in
-// apps/web/e2e/seed.sql). color-contrast is left out until the design tokens
-// are fixed (DOS/Rate#362); every other rule must pass.
+// apps/web/e2e/seed.sql), color-contrast included (DOS/Rate#362): every rule
+// must pass.
 const PAGES = [
   '/',
   '/smartphones',
@@ -18,13 +18,15 @@ const PAGES = [
 
 for (const path of PAGES) {
   test(`no accessibility violations on ${path}`, async ({ page }) => {
+    // color-contrast checks every text node; the home page and the merchant
+    // directory render thousands, which takes longer than the 30s default.
+    test.setTimeout(120_000);
     const res = await page.goto(path);
     expect(res?.status()).toBe(200);
     // Scan the hydrated page: effects add DOM after load.
     await page.waitForLoadState('networkidle');
     const { violations } = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-      .disableRules(['color-contrast'])
       .analyze();
     const summary = violations.map(
       (v) =>

@@ -221,7 +221,7 @@ section.min {
   color: var(--bs-purple) !important;
 }
 .text-primary{
- color: var(--bs-primary) !important;
+ color: var(--rate-ink-primary) !important;
 } 
 
 .text-sm-muted {
@@ -799,7 +799,7 @@ blockquote:not(:last-child) {
 .btn-outline-success {
   background: var(--bs-body-bg);
   border-color: var(--bs-success);
-  color: var(--bs-success);
+  color: var(--rate-ink-success);
 
   &:hover {
     background: var(--bs-success) !important;
@@ -871,7 +871,7 @@ blockquote:not(:last-child) {
 .btn-outline-danger {
   background: var(--bs-body-bg);
   border-color: var(--bs-danger);
-  color: var(--bs-danger);
+  color: var(--rate-ink-danger);
 
   &:hover {
     background: var(--bs-danger) !important;
@@ -943,24 +943,24 @@ blockquote:not(:last-child) {
 .btn-outline-warning {
   background: var(--bs-body-bg);
   border-color: var(--bs-warning);
-  color: var(--bs-warning);
+  color: var(--rate-ink-warning);
 
   &:hover {
     background: var(--bs-warning) !important;
     border-color: var(--bs-warning) !important;
-    color: var(--bs-white) !important;
+    color: var(--bs-dark) !important;
   }
 
   &:focus {
     background: var(--bs-warning) !important;
     border-color: var(--bs-warning) !important;
-    color: var(--bs-white) !important;
+    color: var(--bs-dark) !important;
   }
 
   &:active {
     background: var(--bs-warning) !important;
     border-color: var(--bs-warning) !important;
-    color: var(--bs-white) !important;
+    color: var(--bs-dark) !important;
   }
 }
 
@@ -1015,7 +1015,7 @@ blockquote:not(:last-child) {
 .btn-outline-info {
   background: var(--bs-body-bg);
   border-color: var(--bs-info);
-  color: var(--bs-info);
+  color: var(--rate-ink-info);
 
   &:hover {
     background: var(--bs-info) !important;

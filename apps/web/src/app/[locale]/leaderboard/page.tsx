@@ -197,6 +197,7 @@ export default async function LeaderboardPage({
 
         {/* DESIGN.md v3.0 Dark Obsidian Hero */}
         <section
+          className="rate-ink-on-dark"
           style={{
             background:
               'linear-gradient(135deg, #0b0d10 0%, #12151a 60%, #191d24 100%)',
