@@ -736,6 +736,40 @@ async function run() {
       withBurst.summary.breakdown_by_category.seeding_fake,
       baseline.summary.breakdown_by_category.seeding_fake + 1
     );
+    // The heuristic fallback summary text must reflect the overlaid counts, not the analyzer's own.
+    const heuristicPersist = heuristicOnly();
+    existingFlagRows = [];
+    const heuristicBaseline = await heuristicPersist.persistAnalysisToSupabase(stub, {
+      productId: 'prod-h-baseline',
+      reviews: input,
+    });
+    existingFlagRows = [
+      {
+        review_id: burstTarget.id,
+        verdict: 'fake',
+        flag_category: 'seeding_fake',
+        include_in_rating: false,
+        fake_probability: 0.85,
+      },
+    ];
+    const heuristicBurst = await heuristicPersist.persistAnalysisToSupabase(stub, {
+      productId: 'prod-h-burst',
+      reviews: input,
+    });
+    assert.ok(
+      heuristicBurst.summary.ai_summary.includes(
+        `giữ lại ${heuristicBurst.summary.authentic_review_count} đánh giá`
+      ),
+      'fallback summary text must be built from the overlaid counts'
+    );
+    assert.notEqual(heuristicBurst.summary.ai_summary, heuristicBaseline.summary.ai_summary);
+    calls.length = 0;
+    await llm.persistAnalysisToSupabase(stub, {
+      productId: 'prod-burst',
+      reviews: input,
+      platform: 'shopee',
+      merchantId: 'merch-1',
+    });
     const analysisUpsert = calls.find(c => c.table === 'review_analysis' && c.op === 'upsert')!;
     assert.equal(
       (analysisUpsert.payload as { authenticity_score: number }).authenticity_score,

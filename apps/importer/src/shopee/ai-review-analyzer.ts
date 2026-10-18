@@ -1189,6 +1189,37 @@ export class AiReviewAnalyzer {
     results: AnalyzedReviewResult[];
     summary: JReviewsProductSummary;
   }> {
+    const raw = await this.analyzeReviewsRaw(reviews, context);
+    const summary = this.computeJReviewsSummary(
+      reviews,
+      raw.results,
+      context?.expertRating ?? null,
+      raw.aiPros,
+      raw.aiCons,
+      raw.aiSummaryText
+    );
+    return { results: raw.results, summary };
+  }
+
+  /**
+   * Per-review verdicts plus the raw LLM pros/cons/summary text, before any
+   * product summary is derived. Kept separate so a caller that adjusts the
+   * verdicts can compute the summary once from the adjusted results instead of
+   * reusing fallback text that embeds the unadjusted counts.
+   */
+  private async analyzeReviewsRaw(
+    reviews: ReviewInputItem[],
+    context?: {
+      entityName?: string;
+      entityType?: 'product' | 'service';
+      platform?: string;
+    }
+  ): Promise<{
+    results: AnalyzedReviewResult[];
+    aiPros: string[];
+    aiCons: string[];
+    aiSummaryText: string;
+  }> {
     const heuristicResults = this.analyzeWithHeuristics(reviews);
     let finalResults = heuristicResults;
     let aiPros: string[] = [];
@@ -1205,16 +1236,7 @@ export class AiReviewAnalyzer {
       }
     }
 
-    const summary = this.computeJReviewsSummary(
-      reviews,
-      finalResults,
-      context?.expertRating ?? null,
-      aiPros,
-      aiCons,
-      aiSummaryText
-    );
-
-    return { results: finalResults, summary };
+    return { results: finalResults, aiPros, aiCons, aiSummaryText };
   }
 
   private async refineBatchWithAi(
@@ -1893,7 +1915,7 @@ Return ONLY valid JSON matching:
     summary: JReviewsProductSummary;
     merchantRisk?: MerchantRiskEvaluation;
   }> {
-    const analysis = await this.analyzeReviews(params.reviews, {
+    const analysis = await this.analyzeReviewsRaw(params.reviews, {
       entityName: params.entityName,
       entityType: params.entityType,
       platform: params.platform,
@@ -1916,17 +1938,14 @@ Return ONLY valid JSON matching:
             const stored = preservedFlags.get(r.review_id);
             return stored ? { ...r, ...stored } : r;
           });
-    const summary =
-      preservedFlags.size === 0
-        ? analysis.summary
-        : this.computeJReviewsSummary(
-            params.reviews,
-            results,
-            null,
-            analysis.summary.pros,
-            analysis.summary.cons,
-            analysis.summary.ai_summary
-          );
+    const summary = this.computeJReviewsSummary(
+      params.reviews,
+      results,
+      null,
+      analysis.aiPros,
+      analysis.aiCons,
+      analysis.aiSummaryText
+    );
 
     // 1. Upsert into rate.review_flags & update helpfulness_weight on rate.reviews
     if (results.length > 0) {
