@@ -1495,8 +1495,272 @@ async function run() {
     'Long non-sabotage comment must not match competitor_sabotage or backtrack quadratically'
   );
 
+  // 16d. DOS/Rate#379: ScrapedProductSchema MAX_VALID_VND_PRICE, normalizeScrapedProductPrices, resolveClusterPeerFloorPrice bounds, and EntityMatcher key_specs preservation
+  const { MAX_VALID_VND_PRICE, ScrapedProductSchema } = await import('./types.js');
+  const { normalizeScrapedProductPrices } = await import('./shopee-to-supabase.js');
+  assert.equal(MAX_VALID_VND_PRICE, 1_000_000_000);
+  const unscaledSchemaCheck = ScrapedProductSchema.safeParse({
+    itemId: 'i-379',
+    shopId: 's-379',
+    url: 'https://shopee.vn/product/379/379',
+    title: 'iPhone 16 Pro Max 256GB',
+    priceMin: 2_899_000_000_000,
+    priceMax: 2_899_000_000_000,
+    shop: { shopId: 's-379', name: 'Shop 379', isMall: true },
+  });
+  assert.equal(
+    unscaledSchemaCheck.success,
+    false,
+    'ScrapedProductSchema must reject unscaled priceMin/priceMax > MAX_VALID_VND_PRICE'
+  );
+
+  const normalized379 = normalizeScrapedProductPrices(
+    ScrapedProductSchema.parse({
+      itemId: 'i-379',
+      shopId: 's-379',
+      url: 'https://shopee.vn/product/379/379',
+      title: 'iPhone 16 Pro Max 256GB',
+      priceMin: 28_990_000,
+      priceMax: 30_990_000,
+      priceBeforeDiscount: 2_899_000_000_000,
+      models: [
+        { modelId: 'm1', name: '256GB', price: 28_990_000 },
+        { modelId: 'm2', name: 'Out of stock', price: 0 },
+        { modelId: 'm3', name: 'Unscaled', price: 2_899_000_000_000 },
+      ],
+      shop: { shopId: 's-379', name: 'Shop 379', isMall: true },
+    })
+  );
+  assert.equal(
+    normalized379.priceBeforeDiscount,
+    undefined,
+    'normalizeScrapedProductPrices must strip priceBeforeDiscount > MAX_VALID_VND_PRICE'
+  );
+  assert.equal(
+    normalized379.models.length,
+    1,
+    'normalizeScrapedProductPrices must filter out models with price <= 0 or > MAX_VALID_VND_PRICE'
+  );
+
+  assert.equal(
+    resolveClusterPeerFloorPrice(
+      [
+        { id: 'peer-unscaled', price_current: 2_899_000_000_000, merchants: { is_official: true } },
+        { id: 'peer-valid', price_current: 28_990_000, merchants: { is_official: false } },
+      ],
+      'self-prod',
+      2_899_000_000_000
+    ),
+    28_990_000,
+    'resolveClusterPeerFloorPrice must ignore peer prices > MAX_VALID_VND_PRICE'
+  );
+  assert.equal(
+    resolveClusterPeerFloorPrice(
+      [{ id: 'peer-unscaled', price_current: 2_899_000_000_000, merchants: { is_official: true } }],
+      'self-prod',
+      2_899_000_000_000
+    ),
+    undefined,
+    'resolveClusterPeerFloorPrice must ignore fallbackMasterMinPrice > MAX_VALID_VND_PRICE'
+  );
+
+  // EntityMatcher.enrichMasterProductById must preserve existing key_specs (e.g. price_spread_audit)
+  let updatedKeySpecs379: Record<string, unknown> | null = null;
+  const matcher379 = new EntityMatcher(
+    {
+      from: (table: string) => {
+        assert.equal(table, 'master_products');
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: {
+                  id: 'master-379',
+                  brand: 'Apple',
+                  model: 'iPhone 16 Pro Max',
+                  storage_gb: 256,
+                  ram_gb: 8,
+                  screen_size_inch: 6.9,
+                  battery_mah: 4685,
+                  has_5g: true,
+                  name: 'Apple iPhone 16 Pro Max 256GB',
+                  description: '',
+                  colors: ['Natural Titanium'],
+                  key_specs: {
+                    price_spread_audit: { verdict: 'normal_spread', maxSpreadRatio: 1.05 },
+                    custom_tag: 'flagship',
+                  },
+                },
+                error: null,
+              }),
+            }),
+          }),
+          update: (patch: Record<string, unknown>) => {
+            updatedKeySpecs379 = (patch.key_specs as Record<string, unknown>) ?? null;
+            return {
+              eq: async () => ({ error: null }),
+            };
+          },
+        };
+      },
+    } as unknown as import('./types.js').RateSupabaseClient,
+    {
+      fetchSpecsFromAi: async () => ({
+        ram_gb: 8,
+        storage_gb: 256,
+        screen_size_inch: 6.9,
+        battery_mah: 4685,
+        has_5g: true,
+        specifications: {
+          hardware: { chipset: 'Apple A18 Pro', ram_gb: 8, storage_gb: 256 },
+        },
+        key_specs: {
+          chip: 'Apple A18 Pro',
+          screen: '6.9" LTPO Super Retina XDR OLED',
+        },
+      }),
+    } as unknown as import('./ai-spec-enricher.js').AiSpecEnricher
+  );
+  const enriched379 = await matcher379.enrichMasterProductById('master-379');
+  assert.equal(enriched379, true);
+  assert.deepEqual(
+    updatedKeySpecs379,
+    {
+      price_spread_audit: { verdict: 'normal_spread', maxSpreadRatio: 1.05 },
+      custom_tag: 'flagship',
+      chip: 'Apple A18 Pro',
+      screen: '6.9" LTPO Super Retina XDR OLED',
+    },
+    'EntityMatcher.enrichMasterProductById must preserve existing key_specs (such as price_spread_audit) when merging AI key_specs'
+  );
+
+  // 16e. DOS/Rate#382: ArenaSpecSyncer numeric bounds, entity decoding, regex escaping, gsmarena host check, countPopulatedFieldGroups, and backfill-specs mergeKeySpecs
+  const { parseGsmArenaBrandCatalogHtml, countPopulatedFieldGroups } =
+    await import('./arena-spec-syncer.js');
+  const { mergeKeySpecs } = await import('./jobs/backfill-specs.js');
+
+  const edgeArenaSpecs = parseGsmArenaHtmlToSpecs(`
+    <h1 data-spec="modelname">Nothing+(Phone) 3a &ndash; Edition</h1>
+    <td data-spec="displaysize">0 inches</td>
+    <td data-spec="displaytype">OLED, 0Hz</td>
+    <td data-spec="displayresolution">1080 &#215; 2400 pixels (~5 ppi)</td>
+    <td data-spec="internalmemory">0GB 0GB RAM, 256GB 12GB RAM</td>
+    <td data-spec="batdescription1">Li-Ion 05 mAh</td>
+    <td data-spec="batcharging">0W wired</td>
+    <td data-spec="weight">0 g</td>
+  `);
+  assert.equal(edgeArenaSpecs.brand, 'Nothing+(Phone)');
+  assert.equal(edgeArenaSpecs.model, '3a - Edition');
+  assert.equal(
+    edgeArenaSpecs.specifications.display?.resolution,
+    '1080 × 2400 pixels (~5 ppi)',
+    'Numeric HTML entity &#215; must decode to ×'
+  );
+  assert.equal(edgeArenaSpecs.screenSizeInch, null, '0 inches must be dropped');
+  assert.equal(
+    edgeArenaSpecs.specifications.display?.refresh_rate_hz,
+    undefined,
+    '0Hz must be dropped'
+  );
+  assert.equal(
+    edgeArenaSpecs.specifications.display?.ppi,
+    undefined,
+    '5 ppi (<10) must be dropped'
+  );
+  assert.equal(edgeArenaSpecs.ramGb, 12);
+  assert.equal(edgeArenaSpecs.storageGb, 256);
+  assert.equal(edgeArenaSpecs.batteryMah, null, '5 mAh (<10) must be dropped');
+  assert.equal(
+    edgeArenaSpecs.specifications.battery?.fast_charging_w,
+    undefined,
+    '0W wired must be dropped'
+  );
+  assert.equal(edgeArenaSpecs.specifications.design?.weight_g, undefined, '0g must be dropped');
+
+  const catalog382 = parseGsmArenaBrandCatalogHtml(
+    `<ul>
+      <li><a href="nothing_phone_3a-123.php"><span>Phone 3a &#215; Pro</span></a></li>
+      <li><a href="https://evil.com/phish.php"><span>Phish Device</span></a></li>
+    </ul>`,
+    'Nothing+(Phone)'
+  );
+  assert.equal(catalog382.length, 1, 'Untrusted non-gsmarena host must be rejected');
+  assert.equal(catalog382[0]?.name, 'Nothing+(Phone) Phone 3a × Pro');
+
+  assert.equal(
+    countPopulatedFieldGroups({
+      display: { colors: [] },
+      hardware: { extra: {} },
+      camera: { main_camera: '50 MP' },
+    }),
+    1,
+    'Empty arrays and empty objects must not count as populated specification groups'
+  );
+
+  assert.deepEqual(
+    mergeKeySpecs(
+      {
+        price_spread_audit: { verdict: 'high_arbitrage_opportunity', spreadPct: 14 },
+        screen: 'Old Screen',
+      },
+      {
+        screen: '6.9" LTPO AMOLED 120Hz',
+        chip: 'Snapdragon 8 Elite',
+      }
+    ),
+    {
+      price_spread_audit: { verdict: 'high_arbitrage_opportunity', spreadPct: 14 },
+      screen: '6.9" LTPO AMOLED 120Hz',
+      chip: 'Snapdragon 8 Elite',
+    },
+    'mergeKeySpecs in backfill-specs.ts must preserve price_spread_audit while updating canonical key_specs'
+  );
+
+  // 16f. DOS/Rate#401: Recursive computeImporterAlgorithmMetadata paramsHash and sanitizeLogMeta Error & header redaction
+  const { computeImporterAlgorithmMetadata, sanitizeLogMeta } = await import('./logger.js');
+  const algoMetaOrderA = computeImporterAlgorithmMetadata('review-trust-6axis', '2.1.0', {
+    thresholds: { fake: 0.75, suspicious: 0.45 },
+    weights: [{ axis: 'A', cap: 1.0, bonus: 0.2 }],
+  });
+  const algoMetaOrderB = computeImporterAlgorithmMetadata('review-trust-6axis', '2.1.0', {
+    weights: [{ bonus: 0.2, cap: 1.0, axis: 'A' }],
+    thresholds: { suspicious: 0.45, fake: 0.75 },
+  });
+  assert.equal(
+    algoMetaOrderA.paramsHash,
+    algoMetaOrderB.paramsHash,
+    'computeImporterAlgorithmMetadata must produce identical paramsHash regardless of nested object key order'
+  );
+
+  const sanitizedMeta401 = sanitizeLogMeta({
+    err: new Error('Request failed with Bearer secret-jwt-token-1234567890'),
+    authorization: 'Bearer raw-auth-header',
+    sessionCookie: 'SPC_EC=super-secret-cookie',
+    clientCredential: 'cred-xyz',
+    userJwt: 'eyJhbGciOiJIUzI1NiJ9',
+    nested: {
+      cause: new TypeError('Invalid token sk-abcdef1234567890abcdef'),
+    },
+  });
+  assert.deepEqual(sanitizedMeta401, {
+    err: {
+      name: 'Error',
+      message: 'Request failed with Bearer [REDACTED]',
+    },
+    authorization: '[REDACTED]',
+    sessionCookie: '[REDACTED]',
+    clientCredential: '[REDACTED]',
+    userJwt: '[REDACTED]',
+    nested: {
+      cause: {
+        name: 'TypeError',
+        message: 'Invalid token [REDACTED_KEY]',
+      },
+    },
+  });
+
   console.log(
-    `✅ [P2/P3 Trust Model & #292/#352/#356/#359] Voter weight, Wilson lower bound (50/52=${wilson50of52} > 1/1=${wilson1of1}), shingle copy seeding (sim=${shingleSim}), affiliate shortlinks, peer floor, ArenaSpecSyncer & Importer hardening (#352, #356, #359) verified`
+    `✅ [P2/P3 Trust Model & #292/#352/#356/#359/#379/#382/#401] Voter weight, Wilson lower bound (50/52=${wilson50of52} > 1/1=${wilson1of1}), shingle copy seeding (sim=${shingleSim}), affiliate shortlinks, peer floor, ArenaSpecSyncer, Importer & Logger hardening (#352, #356, #359, #379, #382, #401) verified`
   );
 
   console.log('\n🎉 ALL AI REVIEW ANALYZER TESTS PASSED!');

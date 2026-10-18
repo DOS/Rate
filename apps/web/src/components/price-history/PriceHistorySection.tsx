@@ -693,7 +693,15 @@ export default function PriceHistorySection({
             )}
           </div>
 
-          <div className="table-responsive">
+          {/* Scrolls sideways on phones; focusable so keyboard users can scroll it
+              (WCAG 2.1.1, axe scrollable-region-focusable). */}
+          <div
+            className="table-responsive"
+            // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- a scrollable region must be focusable
+            tabIndex={0}
+            role="region"
+            aria-label={t('priceHistoryChartAria', { name: productName })}
+          >
             <svg
               ref={chartRef}
               viewBox={`0 0 ${chartGeometry.width} ${chartGeometry.height}`}

@@ -241,10 +241,12 @@ export function buildRateOpenApiSpec(
               schema: {
                 type: 'string',
                 enum: [
+                  'default',
                   'rating_desc',
                   'price_asc',
                   'price_desc',
-                  'reviews_desc',
+                  'merchants_desc',
+                  'newest',
                 ],
                 default: 'rating_desc',
               },
@@ -1320,8 +1322,25 @@ export function buildRateOpenApiSpec(
               description: 'Malformed JSON or empty revalidation target lists.',
             },
             '401': {
+              description: 'Missing or invalid `RATE_REVALIDATE_SECRET` token.',
+            },
+            '503': {
               description:
-                'Missing or invalid `RATE_REVALIDATE_SECRET` / `CRON_SECRET` token.',
+                'Revalidation is not configured on this deployment (`RATE_REVALIDATE_SECRET` unset).',
+            },
+          },
+        },
+      },
+      '/api/health': {
+        get: {
+          operationId: 'getHealthStatus',
+          summary: 'Liveness & readiness health check probe',
+          description:
+            'Returns service liveness metadata (`status: "ok"`, `service: "rate-web"`, `version`, and ISO-8601 `timestamp`) with `Cache-Control: no-store, max-age=0` for load balancers and uptime monitors.',
+          tags: ['Platform Telemetry'],
+          responses: {
+            '200': {
+              description: 'Service is healthy and responding.',
             },
           },
         },

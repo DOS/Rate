@@ -3,7 +3,10 @@ import { revalidatePath, revalidateTag } from 'next/cache';
 import { type NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { resolveRevalidationTargets } from '@/server/rate';
+import { createLogger } from '@/lib/logger';
 import { jsonApiError } from '@/server/rate/api-handler';
+
+const log = createLogger('api.revalidate');
 
 const REVALIDATE_CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -71,8 +74,20 @@ export async function OPTIONS() {
 }
 
 export async function POST(request: NextRequest) {
-  const expectedSecret =
-    process.env.RATE_REVALIDATE_SECRET || process.env.CRON_SECRET;
+  // Its own secret only: falling back to another job's secret (e.g.
+  // CRON_SECRET) would let whoever holds that one purge the cache.
+  const expectedSecret = process.env.RATE_REVALIDATE_SECRET;
+  if (!expectedSecret?.trim()) {
+    // Fail closed, but say so: a 401 here reads as "caller has the wrong
+    // token" and hides that the deployment has no secret at all.
+    log.error('RATE_REVALIDATE_SECRET is not set; revalidation is disabled');
+    return jsonApiError(
+      503,
+      'Revalidation is not configured',
+      undefined,
+      REVALIDATE_CORS_HEADERS
+    );
+  }
   const providedToken = extractProvidedToken(request);
 
   if (!verifyRevalidateSecret(providedToken, expectedSecret)) {

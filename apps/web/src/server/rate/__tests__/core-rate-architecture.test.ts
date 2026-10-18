@@ -3225,8 +3225,37 @@ async function runCoreArchitectureSuite() {
   assert.equal(revalOptionsRes.status, 204);
 
   const prevRevalSecret = process.env.RATE_REVALIDATE_SECRET;
-  process.env.RATE_REVALIDATE_SECRET = 'test-revalidate-secret-2026';
+  const prevCronSecret = process.env.CRON_SECRET;
   try {
+    // No RATE_REVALIDATE_SECRET: 503 (not configured), even with a token that
+    // matches CRON_SECRET; the cron secret is not accepted as a fallback.
+    delete process.env.RATE_REVALIDATE_SECRET;
+    process.env.CRON_SECRET = 'test-cron-secret-2026';
+    const unconfiguredRes = await revalidateRoute.POST(
+      new NextRequest('https://rate.vn/api/v1/rate/revalidate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer test-cron-secret-2026',
+        },
+        body: JSON.stringify({ tags: ['rate:products'] }),
+      })
+    );
+    assert.equal(unconfiguredRes.status, 503);
+
+    process.env.RATE_REVALIDATE_SECRET = 'test-revalidate-secret-2026';
+    const cronTokenRes = await revalidateRoute.POST(
+      new NextRequest('https://rate.vn/api/v1/rate/revalidate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer test-cron-secret-2026',
+        },
+        body: JSON.stringify({ tags: ['rate:products'] }),
+      })
+    );
+    assert.equal(cronTokenRes.status, 401);
+
     const unauthReq = new NextRequest(
       'https://rate.vn/api/v1/rate/revalidate',
       {
@@ -3300,6 +3329,11 @@ async function runCoreArchitectureSuite() {
       delete process.env.RATE_REVALIDATE_SECRET;
     } else {
       process.env.RATE_REVALIDATE_SECRET = prevRevalSecret;
+    }
+    if (prevCronSecret === undefined) {
+      delete process.env.CRON_SECRET;
+    } else {
+      process.env.CRON_SECRET = prevCronSecret;
     }
   }
 
@@ -4288,6 +4322,731 @@ async function runCoreArchitectureSuite() {
 
   console.log(
     '  ✅ [65/65] REST API v1 CORS headers, exact batch deal_radar & Extension Lookup URL/externalId resolution (#345) passed'
+  );
+
+  // =========================================================================
+  // 66. Platform Stats Head Counts, Category Slug Stamping, Leaderboard Radar Batching & Watchlist Outlier Guard (#386)
+  // =========================================================================
+  const origFetch386 = globalThis.fetch;
+  try {
+    const { normalizeMasterProductRow, getRatePlatformStats } =
+      await import('@/lib/rate-api');
+    const { NextRequest } = await import('next/server');
+
+    // 66.1 normalizeMasterProductRow stamps metadata.category_slug & expanded getMasterProductCategorySlug regexes
+    const stampedLaptop = normalizeMasterProductRow(
+      {
+        id: 'mp-dell-7450',
+        slug: 'dell-latitude-7450',
+        name: 'Dell Latitude 7450',
+        brand: 'Dell',
+        model: 'Latitude 7450',
+        model_key: 'dell_latitude_7450',
+        min_price: 25000000,
+        max_price: 28000000,
+      } as unknown as Parameters<typeof normalizeMasterProductRow>[0],
+      'laptops'
+    );
+    assert.equal(
+      (stampedLaptop.metadata as Record<string, unknown>)?.category_slug,
+      'laptops',
+      'normalizeMasterProductRow must stamp metadata.category_slug when categorySlugHint is passed (#386)'
+    );
+    assert.equal(
+      getMasterProductCategorySlug({
+        slug: 'dell-latitude-7450',
+        name: 'Dell Latitude 7450',
+        model: 'Latitude 7450',
+      }),
+      'laptops',
+      'getMasterProductCategorySlug must classify Dell Latitude as laptops (#386)'
+    );
+    assert.equal(
+      getMasterProductCategorySlug({
+        slug: 'lenovo-tab-p12',
+        name: 'Lenovo Tab P12',
+        model: 'Tab P12',
+      }),
+      'tablets',
+      'getMasterProductCategorySlug must classify Lenovo Tab as tablets (#386)'
+    );
+    assert.equal(
+      getMasterProductCategorySlug({
+        slug: 'coros-pace-3',
+        name: 'Coros Pace 3',
+        model: 'Pace 3',
+      }),
+      'smartwatches',
+      'getMasterProductCategorySlug must classify Coros Pace as smartwatches (#386)'
+    );
+    assert.equal(
+      getMasterProductCategorySlug({
+        slug: 'bose-quietcomfort-ultra-earbuds',
+        name: 'Bose QuietComfort Ultra Earbuds',
+        model: 'QuietComfort Ultra Earbuds',
+      }),
+      'earbuds',
+      'getMasterProductCategorySlug must classify Bose QuietComfort as earbuds (#386)'
+    );
+
+    // 66.2 getRatePlatformStats uses exact HEAD counts and scoped .in('id', sampleProductIds)
+    const statsFetchedUrls: Array<{ url: string; method: string }> = [];
+    let returnedStatsMasterPage = false;
+    globalThis.fetch = (async (
+      input: RequestInfo | URL,
+      init?: RequestInit
+    ) => {
+      const url =
+        typeof input === 'string'
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
+      const method = (init?.method ?? 'GET').toUpperCase();
+      statsFetchedUrls.push({ url, method });
+
+      if (url.includes('/rest/v1/master_products')) {
+        if (returnedStatsMasterPage) {
+          return new Response(JSON.stringify([]), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          });
+        }
+        returnedStatsMasterPage = true;
+        return new Response(
+          JSON.stringify([
+            {
+              id: 'mp-stats-1',
+              name: 'Samsung Galaxy S24 Ultra',
+              slug: 'samsung-galaxy-s24-ultra',
+              category_id: null,
+            },
+          ]),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        );
+      }
+      if (url.includes('/rest/v1/merchants') && method === 'HEAD') {
+        return new Response(null, {
+          status: 200,
+          headers: {
+            'content-type': 'application/json',
+            'content-range': '0-0/320',
+          },
+        });
+      }
+      if (url.includes('/rest/v1/products') && method === 'HEAD') {
+        return new Response(null, {
+          status: 200,
+          headers: {
+            'content-type': 'application/json',
+            'content-range': '0-0/18450',
+          },
+        });
+      }
+      if (url.includes('/rest/v1/price_history') && method === 'HEAD') {
+        return new Response(null, {
+          status: 200,
+          headers: {
+            'content-type': 'application/json',
+            'content-range': '0-0/145000',
+          },
+        });
+      }
+      if (url.includes('/rest/v1/reviews') && method === 'HEAD') {
+        return new Response(null, {
+          status: 200,
+          headers: {
+            'content-type': 'application/json',
+            'content-range': '0-0/92300',
+          },
+        });
+      }
+      if (url.includes('/rest/v1/reviews') && method === 'GET') {
+        return new Response(
+          JSON.stringify([
+            {
+              id: 'rev-stats-1',
+              product_id: 'prod-sample-1',
+              author_name: 'Minh',
+              rating_star: 5,
+              comment: 'Pin trâu, màn hình nét, giao hàng cực nhanh.',
+              created_at: '2026-10-18T10:00:00.000Z',
+              review_flags: [],
+            },
+          ]),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        );
+      }
+      if (
+        url.includes('/rest/v1/products') &&
+        method === 'GET' &&
+        url.includes('id=in.')
+      ) {
+        return new Response(
+          JSON.stringify([
+            {
+              id: 'prod-sample-1',
+              title: 'Samsung Galaxy S24 Ultra 256GB Chính Hãng',
+              cluster_id: 'mp-stats-1',
+            },
+          ]),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        );
+      }
+      return new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const platformStats = await getRatePlatformStats();
+    assert.equal(
+      platformStats.listingsCount,
+      18450,
+      'getRatePlatformStats must read listingsCount from exact HEAD count (#386)'
+    );
+    assert.equal(
+      platformStats.totalReviewsCount,
+      92300,
+      'getRatePlatformStats must read totalReviewsCount from exact HEAD count (#386)'
+    );
+    assert.equal(
+      platformStats.recentReviewsSample[0]?.masterSlug,
+      'samsung-galaxy-s24-ultra',
+      'getRatePlatformStats must resolve recent review masterSlug via scoped .in(id, sampleProductIds) (#386)'
+    );
+    assert.ok(
+      !statsFetchedUrls.some(
+        (req) =>
+          req.url.includes('/rest/v1/products') &&
+          req.method === 'GET' &&
+          !req.url.includes('id=in.')
+      ),
+      'getRatePlatformStats must never scan the entire products table via unfiltered GET (#386)'
+    );
+
+    // 66.3 GET /api/v1/rate/leaderboard computes deal_radar via getMasterProductOffersBatch and returns CORS on 500
+    const { GET: getLeaderboardRoute } =
+      await import('@/app/api/v1/rate/leaderboard/route');
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify({ message: 'DB failure' }), {
+        status: 500,
+        headers: { 'content-type': 'application/json' },
+      })) as typeof fetch;
+    const lbErrRes = await getLeaderboardRoute(
+      new NextRequest(
+        'https://rate.vn/api/v1/rate/leaderboard?category=earbuds&brand=bose-err-386'
+      )
+    );
+    assert.equal(lbErrRes.status, 500);
+    assert.equal(
+      lbErrRes.headers.get('access-control-allow-origin'),
+      '*',
+      'GET /api/v1/rate/leaderboard 500 response must include Access-Control-Allow-Origin: * (#386)'
+    );
+
+    // 66.4 GET /api/v1/rate/watchlist filters out > MAX_VALID_VND_PRICE and normalizes inverted price_original
+    const { GET: getWatchlistRoute } =
+      await import('@/app/api/v1/rate/watchlist/route');
+    let returnedWatchOffersPage = false;
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url =
+        typeof input === 'string'
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
+      if (url.includes('/rest/v1/master_products')) {
+        return new Response(
+          JSON.stringify({
+            id: 'mp-watch-386',
+            slug: 'apple-iphone-16-watch-386',
+            name: 'Apple iPhone 16 Pro Max 256GB',
+            brand: 'Apple',
+            model: 'iPhone 16 Pro Max',
+            min_price: 28990000,
+            max_price: 31990000,
+            avg_rating: 9.4,
+            user_rating_avg: 9.3,
+            editor_rating: 9.5,
+            offer_count: 2,
+            merchant_count: 2,
+            thumbnail: null,
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        );
+      }
+      if (url.includes('/rest/v1/v_products_with_merchant_trust')) {
+        if (returnedWatchOffersPage) {
+          return new Response(JSON.stringify([]), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          });
+        }
+        returnedWatchOffersPage = true;
+        return new Response(
+          JSON.stringify([
+            {
+              id: 'prod-outlier-999m',
+              cluster_id: 'mp-watch-386',
+              platform: 'shopee',
+              title: 'Outlier Placeholder Listing',
+              price_current: 999999999,
+              price_original: 999999999,
+              stock: 5,
+              rating_star: 4.9,
+              rating_count: 10,
+              url: 'https://shopee.vn/outlier',
+              merchant_id: 'merch-watch-1',
+              merchant_name: 'Apple Flagship Store',
+              merchant_is_official: true,
+              merchant_location: 'TP.HCM',
+              threat_risk_score: 4,
+              dosafe_risk_score: 4,
+              review_risk_score: 4,
+              review_risk_breakdown: null,
+            },
+            {
+              id: 'prod-valid-inverted',
+              cluster_id: 'mp-watch-386',
+              platform: 'shopee',
+              title: 'Apple iPhone 16 Pro Max 256GB VN/A',
+              price_current: 28990000,
+              price_original: 25000000, // inverted original < current
+              stock: 5,
+              rating_star: 4.9,
+              rating_count: 50,
+              url: 'https://shopee.vn/valid',
+              merchant_id: 'merch-watch-1',
+              merchant_name: 'Apple Flagship Store',
+              merchant_is_official: true,
+              merchant_location: 'TP.HCM',
+              threat_risk_score: 4,
+              dosafe_risk_score: 4,
+              review_risk_score: 4,
+              review_risk_breakdown: null,
+            },
+          ]),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        );
+      }
+      return new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const watchRes = await getWatchlistRoute(
+      new NextRequest(
+        'https://rate.vn/api/v1/rate/watchlist?slugs=apple-iphone-16-watch-386'
+      )
+    );
+    assert.equal(watchRes.status, 200);
+    const watchBody = (await watchRes.json()) as {
+      ok: boolean;
+      items: Record<
+        string,
+        {
+          slug: string;
+          best_offer: { price: number; original_price: number | null } | null;
+        }
+      >;
+    };
+    assert.equal(watchBody.ok, true);
+    assert.equal(
+      watchBody.items['apple-iphone-16-watch-386']?.best_offer?.price,
+      28990000,
+      'Watchlist best_offer must ignore placeholder prices > MAX_VALID_VND_PRICE (#386)'
+    );
+    assert.equal(
+      watchBody.items['apple-iphone-16-watch-386']?.best_offer?.original_price,
+      28990000,
+      'Watchlist best_offer must normalize inverted price_original < price_current (#386)'
+    );
+  } finally {
+    globalThis.fetch = origFetch386;
+  }
+
+  console.log(
+    '  ✅ [66/67] Platform Stats head counts, Category Slug stamping, Leaderboard batch radar & Watchlist outlier guard (#386) passed'
+  );
+
+  // =========================================================================
+  // 67. Worst Fake-Sale Trap Selection, Canonical Cache Keys/Tag Cascade & OpenAPI Parity (#396)
+  // =========================================================================
+  {
+    const {
+      RATE_CACHE_TAGS,
+      buildRateOpenApiSpec,
+      canonicalizeCacheParams,
+      computeCrossPlatformDealRadarFromData,
+      resolveRevalidationTargets,
+    } = await import('@/server/rate');
+
+    // 67.1 computeCrossPlatformDealRadarFromData selects the worst fake-sale trap regardless of offer order
+    const radarMaster = {
+      id: 'mp-trap-396',
+      slug: 'apple-iphone-16-pro-max-256gb',
+      name: 'Apple iPhone 16 Pro Max 256GB',
+      brand: 'Apple',
+      model: 'iPhone 16 Pro Max',
+      model_key: 'apple_iphone_16_pro_max_256gb',
+      min_price: 28000000,
+      max_price: 31000000,
+      expert_rating: 9.4,
+    } as unknown as Parameters<
+      typeof computeCrossPlatformDealRadarFromData
+    >[0][number]['master'];
+
+    const makeOffer = (
+      id: string,
+      platform: string,
+      priceCurrent: number,
+      priceOriginal: number | null
+    ) => ({
+      id,
+      platform,
+      title: `Offer ${id}`,
+      price_current: priceCurrent,
+      price_original: priceOriginal,
+      stock: 5,
+      rating_star: 4.9,
+      rating_count: 40,
+      url: `https://example.com/${id}`,
+      merchant: {
+        id: `m-${id}`,
+        name: `Merchant ${id}`,
+        platform,
+        is_official: true,
+        rating_star: 4.9,
+        follower_count: 10000,
+        location: 'HN',
+        risk_score: 5,
+        dosafe_risk_score: 5,
+        review_risk_score: 5,
+        review_risk_breakdown: null,
+      },
+    });
+
+    // Median across [28M, 30M, 30.5M] is 30M.
+    // Offer 'trap-small' has original 33.6M (+12% markup over 30M median) and appears FIRST.
+    // Offer 'trap-worst' has original 45M (+50% markup over 30M median) and appears SECOND.
+    const radarResult = computeCrossPlatformDealRadarFromData([
+      {
+        master: radarMaster,
+        offers: [
+          makeOffer('fair-floor', 'tiki', 28000000, 29000000),
+          makeOffer('trap-small', 'shopee', 30000000, 33600000),
+          makeOffer('trap-worst', 'lazada', 30500000, 45000000),
+        ],
+      },
+    ]);
+
+    assert.equal(radarResult.fakeSaleTraps.length, 1);
+    assert.equal(
+      radarResult.fakeSaleTraps[0]?.fakeMarkupPct,
+      50,
+      'computeCrossPlatformDealRadarFromData must select the worst fake-sale trap (+50% markup) even when a smaller trap (+12%) appears first (#396)'
+    );
+    assert.equal(radarResult.fakeSaleTraps[0]?.platform, 'lazada');
+
+    // 67.2 canonicalizeCacheParams produces identical keys regardless of key order or undefined properties
+    const keyA = canonicalizeCacheParams({
+      categorySlug: 'smartphones',
+      limit: 24,
+      brand: undefined,
+      ramGb: [8, 12],
+    });
+    const keyB = canonicalizeCacheParams({
+      ramGb: [8, 12],
+      limit: 24,
+      categorySlug: 'smartphones',
+    });
+    assert.equal(
+      keyA,
+      keyB,
+      'canonicalizeCacheParams must produce key-order-independent JSON strings and strip undefined properties (#396)'
+    );
+
+    // 67.3 resolveRevalidationTargets cascades stats, products, and deals tags
+    const catTargets = resolveRevalidationTargets({
+      categories: ['Smartphones'],
+    });
+    assert.ok(
+      catTargets.tags.includes('rate:category:smartphones') &&
+        catTargets.tags.includes(RATE_CACHE_TAGS.CATEGORIES) &&
+        catTargets.tags.includes(RATE_CACHE_TAGS.PRODUCTS) &&
+        catTargets.tags.includes(RATE_CACHE_TAGS.DEALS) &&
+        catTargets.tags.includes(RATE_CACHE_TAGS.STATS),
+      'Category revalidation must cascade to rate:category:<slug>, categories, products, deals, and stats (#396)'
+    );
+
+    const slugTargets = resolveRevalidationTargets({
+      slugs: ['apple-iphone-16-pro-max-256gb'],
+    });
+    assert.ok(
+      slugTargets.tags.includes(RATE_CACHE_TAGS.STATS),
+      'Product slug revalidation must also invalidate rate:stats (#396)'
+    );
+
+    const merchantTargets = resolveRevalidationTargets({
+      merchants: ['shopee-88201679'],
+    });
+    assert.ok(
+      merchantTargets.tags.includes(RATE_CACHE_TAGS.STATS),
+      'Merchant revalidation must also invalidate rate:stats (#396)'
+    );
+
+    // 67.4 OpenAPI 3.1.0 spec aligns GET /api/v1/rate/products sort enum and documents /api/health
+    const openApiDoc = buildRateOpenApiSpec('https://rate.vn');
+    const productsSortParam = openApiDoc.paths[
+      '/api/v1/rate/products'
+    ]?.get?.parameters?.find((p) => p.name === 'sort');
+    assert.deepEqual(
+      productsSortParam?.schema.enum,
+      [
+        'default',
+        'rating_desc',
+        'price_asc',
+        'price_desc',
+        'merchants_desc',
+        'newest',
+      ],
+      'OpenAPI GET /api/v1/rate/products sort enum must match actual supported sort values (#396)'
+    );
+    assert.equal(
+      openApiDoc.paths['/api/health']?.get?.operationId,
+      'getHealthStatus',
+      'OpenAPI spec must document /api/health endpoint (#396)'
+    );
+  }
+
+  console.log(
+    '  ✅ [67/68] Worst Fake-Sale Trap selection, Canonical Cache Keys/Tag Cascade & OpenAPI parity (#396) passed'
+  );
+
+  // =========================================================================
+  // 68. Leaderboard Engine Price Segment Guards, 10-Point User Normalization & Category-Aware Criteria (#399)
+  // =========================================================================
+  {
+    const {
+      scoreMasterProductForLeaderboard: scoreFromDomain,
+      rankMasterProductsForLeaderboard: rankFromDomain,
+      computeJReviewsCriteriaScores: criteriaFromDomain,
+    } = await import('@/lib/rate-domain');
+
+    assert.equal(
+      typeof scoreFromDomain,
+      'function',
+      'rate-domain.ts must re-export scoreMasterProductForLeaderboard (#399)'
+    );
+    assert.equal(
+      typeof rankFromDomain,
+      'function',
+      'rate-domain.ts must re-export rankMasterProductsForLeaderboard (#399)'
+    );
+    assert.equal(
+      typeof criteriaFromDomain,
+      'function',
+      'rate-domain.ts must re-export computeJReviewsCriteriaScores (#399)'
+    );
+
+    // 68.1 10-point scale user rating normalization (9.2 -> 4.60 instead of clamped 5.00)
+    const tenPointUserProduct = {
+      id: '00000000-0000-0000-0000-000000000399',
+      brand: 'Sony',
+      model: 'WF-1000XM5',
+      model_key: 'sony-wf-1000xm5',
+      name: 'Sony WF-1000XM5 Wireless Earbuds',
+      slug: 'sony-wf-1000xm5',
+      has_5g: false,
+      specifications: {
+        design: { resistance: 'IPX4', weight_g: 11.8 },
+        connectivity: { bluetooth: '5.3' },
+        multimedia: { audio_features: 'ANC, LDAC, Hi-Res Audio' },
+        battery: { capacity_mah: 500, charging: 'USB-C & Qi Wireless' },
+      },
+      key_specs: { chip: 'Integrated Processor V2' },
+      images: [],
+      colors: [],
+      min_price: 5_490_000,
+      max_price: 5_990_000,
+      merchant_count: 6,
+      total_reviews: 28,
+      average_rating: 4.6,
+      user_rating_weighted: 9.2,
+      expert_rating: 9.0,
+      authentic_review_count: 25,
+      status: 'published' as const,
+      metadata: { category_slug: 'earbuds' },
+    };
+
+    const scoredEarbud = scoreFromDomain(tenPointUserProduct, 'combined');
+    assert.equal(
+      scoredEarbud.userScore5,
+      4.6,
+      'scoreMasterProductForLeaderboard must normalize 10-point user_rating_weighted (9.2 -> 4.6) instead of clamping to 5.0 (#399)'
+    );
+    assert.equal(scoredEarbud.categorySlug, 'earbuds');
+
+    // 68.2 Category-aware criteria fallback deltas for earbuds (no -0.04 penalty for missing refresh_rate_hz)
+    // base5 = 4.6 * 0.55 + 4.5 * 0.45 = 2.53 + 2.025 = 4.56
+    assert.ok(
+      scoredEarbud.criteria.screen > 4.56,
+      `Earbuds with IPX4 design must receive positive screen/design delta (${scoredEarbud.criteria.screen} > 4.56) instead of -0.04 smartphone refresh rate penalty (#399)`
+    );
+    assert.ok(
+      scoredEarbud.criteria.camera >= 4.7,
+      `Earbuds with ANC + LDAC must receive positive audio criterion delta (${scoredEarbud.criteria.camera}) (#399)`
+    );
+    assert.ok(
+      scoredEarbud.criteria.battery >= 4.7,
+      `Earbuds with 500mAh case must receive positive battery delta (${scoredEarbud.criteria.battery}) (#399)`
+    );
+
+    // 68.3 Unpriced (min_price = 0) products excluded from non-'all' priceSegments & sorted after priced ties
+    const unpricedClone = {
+      ...tenPointUserProduct,
+      id: '00000000-0000-0000-0000-000000000400',
+      slug: 'aaa-unpriced-earbud',
+      name: 'AAA Unpriced Earbud',
+      min_price: 0,
+      max_price: 0,
+      // Give unpriced clone identical criteria via explicit expert_criteria_scores so scores tie
+      expert_criteria_scores: { ...scoredEarbud.criteria },
+    };
+    const pricedClone = {
+      ...tenPointUserProduct,
+      id: '00000000-0000-0000-0000-000000000401',
+      slug: 'zzz-priced-earbud',
+      name: 'ZZZ Priced Earbud',
+      min_price: 5_490_000,
+      max_price: 5_990_000,
+      expert_criteria_scores: { ...scoredEarbud.criteria },
+    };
+
+    const under15mRanked = rankFromDomain([unpricedClone, pricedClone], {
+      category: 'earbuds',
+      criterion: 'combined',
+      priceSegment: 'under15m',
+    });
+    assert.equal(
+      under15mRanked.length,
+      1,
+      'under15m priceSegment must exclude unpriced (min_price = 0) products (#399)'
+    );
+    assert.equal(under15mRanked[0]?.slug, 'zzz-priced-earbud');
+
+    const allSegmentTiedRanked = rankFromDomain([unpricedClone, pricedClone], {
+      category: 'earbuds',
+      criterion: 'combined',
+      priceSegment: 'all',
+    });
+    assert.equal(allSegmentTiedRanked.length, 2);
+    assert.equal(
+      allSegmentTiedRanked[0]?.slug,
+      'zzz-priced-earbud',
+      'Priced product must win tie-breaker over unpriced (min_price = 0) product (#399)'
+    );
+    assert.equal(allSegmentTiedRanked[1]?.slug, 'aaa-unpriced-earbud');
+
+    // 68.4 Search query matches key_specs.chip in rankMasterProductsForLeaderboard & LeaderboardExplorer uses scoreMasterProductForLeaderboard
+    const chipSearched = rankFromDomain([pricedClone], {
+      category: 'earbuds',
+      query: 'processor v2',
+    });
+    assert.equal(
+      chipSearched.length,
+      1,
+      'rankMasterProductsForLeaderboard query must match key_specs.chip (#399)'
+    );
+
+    const lbExplorerSrc399 = fs.readFileSync(
+      path.join(
+        repoRoot,
+        'apps/web/src/components/leaderboard/LeaderboardExplorer.tsx'
+      ),
+      'utf8'
+    );
+    assert.ok(
+      lbExplorerSrc399.includes('scoreMasterProductForLeaderboard(') &&
+        lbExplorerSrc399.includes('if (minPrice <= 0) return false;'),
+      'LeaderboardExplorer.tsx must delegate scoring to scoreMasterProductForLeaderboard and guard minPrice <= 0 in price segments (#399)'
+    );
+  }
+
+  console.log(
+    '  ✅ [68/69] Leaderboard Engine price segment guards, 10-point user normalization & category-aware criteria (#399) passed'
+  );
+
+  // =========================================================================
+  // 69. Public Write Routes Hardening: Voter Eligibility, Malformed Ingest JSON, CORS & Stats Cache Revalidation (#402)
+  // =========================================================================
+  {
+    const voteRoute402 = await import('@/app/api/reviews/[id]/vote/route');
+    const ingestRoute402 =
+      await import('@/app/api/v1/rate/extension/ingest/route');
+
+    // 69.1 evaluateVoterEligibility rejects is_anonymous: true and single-field email_confirmed_at: null (when phone_confirmed_at is omitted)
+    assert.equal(
+      voteRoute402.evaluateVoterEligibility({
+        created_at: new Date(Date.now() - 30 * 86_400_000).toISOString(),
+        email_confirmed_at: new Date().toISOString(),
+        is_anonymous: true,
+      }).eligible,
+      false,
+      'Anonymous accounts must be rejected by evaluateVoterEligibility (#402)'
+    );
+    assert.equal(
+      voteRoute402.evaluateVoterEligibility({
+        created_at: new Date(Date.now() - 30 * 86_400_000).toISOString(),
+        email_confirmed_at: null,
+      }).eligible,
+      false,
+      'Account with email_confirmed_at: null and omitted phone_confirmed_at must be rejected (#402)'
+    );
+
+    // 69.2 POST /api/v1/rate/extension/ingest with malformed JSON returns 400 Bad Request + CORS instead of 500
+    const badJsonIngestRes = await ingestRoute402.POST(
+      new NextRequest('https://rate.vn/api/v1/rate/extension/ingest', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-forwarded-for': '203.0.113.42',
+        },
+        body: '{invalid-json-payload',
+      })
+    );
+    assert.equal(
+      badJsonIngestRes.status,
+      400,
+      'POST /api/v1/rate/extension/ingest with malformed JSON must return 400 instead of 500 (#402)'
+    );
+    assert.equal(
+      badJsonIngestRes.headers.get('access-control-allow-origin'),
+      '*',
+      'POST /api/v1/rate/extension/ingest 400 response must include Access-Control-Allow-Origin: * (#402)'
+    );
+
+    // 69.3 POST /api/v1/rate/reviews & POST /api/reviews/[id]/vote revalidate RATE_CACHE_TAGS.STATS
+    const reviewsRouteSrc402 = fs.readFileSync(
+      path.join(repoRoot, 'apps/web/src/app/api/v1/rate/reviews/route.ts'),
+      'utf8'
+    );
+    const voteRouteSrc402 = fs.readFileSync(
+      path.join(repoRoot, 'apps/web/src/app/api/reviews/[id]/vote/route.ts'),
+      'utf8'
+    );
+    assert.ok(
+      reviewsRouteSrc402.includes('RATE_CACHE_TAGS.STATS') &&
+        voteRouteSrc402.includes('RATE_CACHE_TAGS.STATS') &&
+        voteRouteSrc402.includes('authenticateRateRequest('),
+      'POST /api/v1/rate/reviews and POST /api/reviews/[id]/vote must revalidate RATE_CACHE_TAGS.STATS and use authenticateRateRequest (#402)'
+    );
+  }
+
+  console.log(
+    '  ✅ [69/69] Public write routes hardening: cookie-session voting, voter eligibility, malformed ingest JSON & stats cache revalidation (#402) passed'
   );
 
   console.log('🎉 All Rate.vn Core Architecture tests passed!');

@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server';
 import { getCrossPlatformDealRadar } from '../../../../../server/rate/deals';
 import type { CanonicalCategorySlug } from '../../../../../lib/rate-api';
-import { jsonApiError, parseBoundedIntParam } from '@/server/rate/api-handler';
+import {
+  PUBLIC_API_CORS_HEADERS,
+  jsonApiError,
+  parseBoundedIntParam,
+} from '@/server/rate/api-handler';
 
 const VALID_CATEGORIES = new Set<CanonicalCategorySlug>([
   'smartphones',
@@ -24,14 +28,11 @@ const VALID_PLATFORMS = new Set<string>([
   'phongvu',
 ]);
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-};
-
 export async function OPTIONS() {
-  return new NextResponse(null, { status: 204, headers: CORS_HEADERS });
+  return new NextResponse(null, {
+    status: 204,
+    headers: PUBLIC_API_CORS_HEADERS,
+  });
 }
 
 export async function GET(request: Request) {
@@ -71,7 +72,7 @@ export async function GET(request: Request) {
       {
         status: 200,
         headers: {
-          ...CORS_HEADERS,
+          ...PUBLIC_API_CORS_HEADERS,
           'Cache-Control': 'public, s-maxage=120, stale-while-revalidate=300',
         },
       }
@@ -81,7 +82,7 @@ export async function GET(request: Request) {
       500,
       'Failed to load Cross-Platform Deal Radar',
       err,
-      CORS_HEADERS
+      PUBLIC_API_CORS_HEADERS
     );
   }
 }

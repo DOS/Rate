@@ -121,6 +121,9 @@ export const KeySpecsSchema = z.object({
   ram: z.string().optional(),
 });
 
+/** Maximum realistic VND listing price (1 billion VND) to block unscaled fixed-point / concatenated price bugs. */
+export const MAX_VALID_VND_PRICE = 1_000_000_000;
+
 export const MasterProductSchema = z.object({
   id: z.string().uuid(),
   category_id: z.string().uuid().nullable().optional(),
@@ -141,8 +144,8 @@ export const MasterProductSchema = z.object({
   images: z.array(z.string()).default([]),
   thumbnail: z.string().nullable().optional(),
   colors: z.array(z.string()).default([]),
-  min_price: z.number().nonnegative().default(0),
-  max_price: z.number().nonnegative().default(0),
+  min_price: z.number().nonnegative().max(MAX_VALID_VND_PRICE).default(0),
+  max_price: z.number().nonnegative().max(MAX_VALID_VND_PRICE).default(0),
   merchant_count: z.number().int().nonnegative().default(0),
   total_reviews: z.number().int().nonnegative().default(0),
   average_rating: z.number().min(0).max(5).nullable().default(null),
@@ -211,8 +214,8 @@ export const ScrapedProductSchema = z.object({
   url: z.string().min(1),
   title: z.string().min(1),
   description: z.string().optional(),
-  priceMin: z.number().nonnegative(),
-  priceMax: z.number().nonnegative(),
+  priceMin: z.number().nonnegative().max(MAX_VALID_VND_PRICE),
+  priceMax: z.number().nonnegative().max(MAX_VALID_VND_PRICE),
   priceBeforeDiscount: z.number().nonnegative().optional(),
   currency: z.string().min(1).default('VND'),
   historicalSold: z.number().int().nonnegative().default(0),

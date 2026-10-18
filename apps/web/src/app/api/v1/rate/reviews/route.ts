@@ -256,7 +256,11 @@ export async function POST(request: NextRequest) {
   try {
     const rawBody: unknown = await request.json().catch(() => null);
 
-    const auth = await authenticateRateRequest(request, 'submit a review');
+    const auth = await authenticateRateRequest(
+      request,
+      'submit a review',
+      REVIEWS_CORS_HEADERS
+    );
     if (!auth.ok) return auth.response;
 
     const parsed = SubmitReviewSchema.safeParse(rawBody ?? {});
@@ -351,6 +355,7 @@ export async function POST(request: NextRequest) {
     try {
       revalidateTag(RATE_CACHE_TAGS.REVIEWS, 'max');
       revalidateTag(RATE_CACHE_TAGS.PRODUCTS, 'max');
+      revalidateTag(RATE_CACHE_TAGS.STATS, 'max');
     } catch {
       // Ignore revalidateTag errors outside Next.js request context
     }

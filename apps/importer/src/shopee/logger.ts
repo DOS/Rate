@@ -6,6 +6,18 @@ export interface ImporterAlgorithmMetadata {
   paramsHash: string;
 }
 
+function canonicalizeParamValue(value: unknown, depth = 0): unknown {
+  if (depth > 8 || value === null || value === undefined) return value;
+  if (typeof value !== 'object') return value;
+  if (Array.isArray(value)) {
+    return value.map(item => canonicalizeParamValue(item, depth + 1));
+  }
+  const obj = value as Record<string, unknown>;
+  return Object.keys(obj)
+    .sort()
+    .map(k => [k, canonicalizeParamValue(obj[k], depth + 1)]);
+}
+
 /**
  * Computes a deterministic algorithm provenance descriptor `{ algo, version, paramsHash }`
  * for Open-Core scoring and normalization engines.
@@ -15,9 +27,7 @@ export function computeImporterAlgorithmMetadata(
   version: string,
   params: Record<string, unknown>
 ): ImporterAlgorithmMetadata {
-  const sortedEntries = Object.keys(params)
-    .sort()
-    .map(k => [k, params[k]]);
+  const sortedEntries = canonicalizeParamValue(params, 0);
   const canonicalJson = JSON.stringify(sortedEntries);
   const paramsHash = crypto
     .createHash('sha256')
@@ -105,17 +115,26 @@ export function redactSensitiveString(raw: string): string {
   );
 }
 
+const SENSITIVE_META_KEY_RE =
+  /(password|secret|token|api_?key|service_role|authorization|cookie|credential|jwt)/i;
+
 export function sanitizeLogMeta(value: unknown, depth = 0): unknown {
   if (depth > 4 || value === null || value === undefined) return value;
   if (typeof value === 'string') return redactSensitiveString(value);
   if (typeof value === 'number' || typeof value === 'boolean') return value;
+  if (value instanceof Error) {
+    return {
+      name: value.name || 'Error',
+      message: redactSensitiveString(value.message || ''),
+    };
+  }
   if (Array.isArray(value)) {
     return value.slice(0, 50).map(item => sanitizeLogMeta(item, depth + 1));
   }
   if (typeof value === 'object') {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-      if (/(password|secret|token|api_?key|service_role)/i.test(k)) {
+      if (SENSITIVE_META_KEY_RE.test(k)) {
         out[k] = '[REDACTED]';
       } else {
         out[k] = sanitizeLogMeta(v, depth + 1);

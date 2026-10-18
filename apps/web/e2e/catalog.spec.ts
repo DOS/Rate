@@ -186,3 +186,20 @@ test('locale prefix redirects and switches the language', async ({ page }) => {
   const cookies = await page.context().cookies();
   expect(cookies.find((c) => c.name === 'NEXT_LOCALE')?.value).toBe('en');
 });
+
+// The directory renders stores in pages of 48 instead of one card per store
+// up front (1100+ seeded), and "show more" appends the next page.
+test('merchant directory renders stores progressively', async ({ page }) => {
+  await page.goto('/merchants');
+  const cardLinks = () =>
+    page
+      .locator('a[href^="/merchants/"]')
+      .evaluateAll(
+        (els) => new Set(els.map((e) => e.getAttribute('href'))).size
+      );
+  const first = await cardLinks();
+  expect(first).toBeGreaterThan(0);
+  expect(first).toBeLessThanOrEqual(48);
+  await page.getByRole('button', { name: /Xem thêm/ }).click();
+  await expect.poll(cardLinks).toBeGreaterThan(first);
+});

@@ -1,6 +1,6 @@
 # 🗺️ Rate Platform Roadmap - Kiến Trúc Zero-Strapi & Open-Core 2026
 
-> **Cập nhật lần cuối:** 18/10/2026  
+> **Cập nhật lần cuối:** 19/10/2026  
 > **Tech Stack chuẩn hóa:** TypeScript 7.0.2 + Next.js 16.3.8 + React 19.3 + Pure PostgreSQL 17 (Supabase Cloud `rate` schema) + Open-Core 2 Repositories (`DOS/Rate` & `DOS/Rate-Services`)  
 > **GitHub Project Board (Multi-Agent Queue):** [https://github.com/orgs/DOS/projects/9](https://github.com/orgs/DOS/projects/9)  
 > **Nhật ký hoàn thành chi tiết (Phases 1 -> 5):** Xem [`Docs/Resources/CHANGELOG.md`](./CHANGELOG.md)  
@@ -66,6 +66,10 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc 4 tầ
   - [x] Đưa toàn bộ chuỗi tiếng Việt viết cứng trong hơn 60 component và route (bao gồm `NavbarDarkDynamic`, `FooterDynamic`, `footer-top`, `RadarBadge`, `LocaleSwitcher`, `range-slider`, `global-error`) vào catalog `vi.json`, `en.json`, `cs.json` (1.583 khóa mỗi ngôn ngữ trên 16 namespaces, gỡ bỏ hoàn toàn `getRateCopy`, kiểm tra đồng bộ kiểu tại thời điểm biên dịch và kiểm thử tự động Suite `[63/63]`).
 - [x] **6.9. Củng Cố Toàn Diện Open-Core Engine & Rate-Services (`DOS/Rate#215`, `#259`, `#261` & `DOS/Rate-Services#45`-`#55`):**
   - Hoàn tất 100% mục kiểm toán `DOS/Rate-Services` (`K1-K3`, `C1-C12`, `M1-M14`, `Low`) và Open-Core Engine (`C6`, `C8`, `T14`, `T15`, `Low`): `strict: true` + `no-explicit-any: error` toàn bộ TypeScript, `ScrapedProductSchema` (Zod 4) ở ranh giới cào dữ liệu, `z.toJSONSchema()` cho `response_format: { type: 'json_schema', strict: true }` kèm backoff có jitter và bộ lọc URL/số điện thoại chống prompt-injection (`sanitizeAiGeneratedText`), bộ dữ liệu cặp sản phẩm gán nhãn đo Precision/Recall = 100%, `DomainTokenBucketLimiter` + `PlatformCircuitBreaker`, Chromium sandbox cấu hình theo môi trường, `StructuredLogger` che secret/PII, và gắn `algorithmMeta` (`{ algo, version, paramsHash }`) cho toàn bộ 4 Auditor.
+- [x] **6.10. Quy Trình Nhận Task Đa Agent Được Cưỡng Chế (`DOS/Rate#325`, `#327`, `#337`, `#338`, `#383`, `#385`, `#426`, `#429`):**
+  - Sửa `labels-sync.yml` dùng đúng input `yaml-file`/`skip-delete` của labeler v6 (bản cũ bị bỏ qua nên xóa sạch nhãn `status:*`/`agent:*` ngày 18/10), tạo lại 28 nhãn và gắn lại nhãn claim cho issue/PR đang mở; nhãn `status:*` do `labels.yml` quản lý.
+  - Check bắt buộc `task-claim` (ruleset `dev-task-claim`, chỉ áp cho `dev`): PR đóng issue nào thì issue đó phải có `agent:<nick>` và `status:in-progress`/`status:in-review`; chạy bằng `pull_request_target` từ `dev` nên PR không tự sửa được check, tự chạy lại khi nhãn claim thay đổi (`task-claim-revalidate.yml`).
+  - AGENTS.md tra item Project #9 từ phía issue (`gh project item-list` mặc định chỉ trả 30/321 item nên cập nhật Status/Agent của issue mới thất bại âm thầm).
 
 ### 🚀 Phase 7: Mở Rộng Độ Phủ Dữ Liệu Thật Đa Sàn & Kiểm Thử E2E (2027 Q1)
 
@@ -81,3 +85,8 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc 4 tầ
   - `pnpm gen:db-types` sinh `packages/shared-data/src/database.types.ts` bằng `supabase/postgres-meta` (pin digest) trên DB replay; `pnpm check:db-types` chặn drift trong CI; mọi client Supabase của web có type `Database`.
 - [x] **7.6. HTTP Status Đúng & Không Cache Dữ Liệu Lỗi (`DOS/Rate#316`, `#318`, `#319`, `#323`, `#326`, `#328`, `#329`, `#332`, `#333`, `#336`):**
   - Bỏ `[locale]/loading.tsx` để URL sản phẩm, merchant, so sánh không tồn tại trả 404 thật (trước đó là soft 404 trên rate.vn); thay bằng thanh tiến trình chuyển trang. Lỗi DB ở trang chi tiết, hồ sơ merchant, danh sách merchant và lịch sử giá ném `RateDataUnavailableError` (trang 5xx, body API đã che chi tiết) thay vì trả rỗng rồi bị `unstable_cache` giữ 5-10 phút; truy vấn `in()` chia lô 150 id.
+- [x] **7.7. Dọn Stack E2E Mồ Côi (`DOS/Rate#417`, `#419`):**
+  - `scripts/e2e/run.mjs` tự xóa container/network `rate-e2e-<pid>` của các lần chạy đã chết (bị kill không kịp dọn) trước khi dựng stack mới; logic tên/PID có unit test trong CI.
+- [x] **7.8. Khả Năng Tiếp Cận WCAG 2.1 AA Có Cổng Kiểm Thử (`DOS/Rate#362`, `#413`, `#421`, `#425`):**
+  - Token `--rate-ink-*` cho chữ `text-*` và nút outline đạt tối thiểu 4,5:1 trên mọi nền sáng; nền tối (`rate-surface-dark`, scoreboard, `bg-dark`, hero gradient `rate-ink-on-dark`) dùng mực sáng, đảo sáng bên trong quay về mực tối; `bg-white` tôn trọng `bg-opacity-*`, `--bs-form-color` được định nghĩa.
+  - `e2e/a11y.spec.ts` chạy axe (WCAG 2.1 A/AA, gồm `color-contrast`) trên toàn bộ 25 trang công khai ở hai viewport desktop 1280 và phone 390; từ 6.823 node vi phạm tương phản về 0.

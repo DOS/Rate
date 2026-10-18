@@ -18,6 +18,8 @@ import {
 } from '@/server/rate';
 import type { MasterProduct } from '@repo/shared-data';
 import {
+  BsArrowLeftRight,
+  BsArrowRight,
   BsBatteryHalf,
   BsCheckCircleFill,
   BsCpu,
@@ -31,6 +33,9 @@ import {
   BsSmartwatch,
   BsStarFill,
   BsTabletLandscape,
+  BsTrophy,
+  BsGraphDownArrow,
+  BsExclamationTriangle,
 } from 'react-icons/bs';
 import FooterTop from './components/footer-top';
 import FooterDynamic from './components/footer/FooterDynamic';
@@ -42,6 +47,7 @@ import ProductCard, {
 } from '@/components/product/ProductCard';
 import { buildRadarIndex, getRadarSignal } from '@/lib/deal-radar';
 import { isPendingReview } from '@/lib/review-display';
+import { toHeroMerchantSuggestions } from '@/lib/hero-merchants';
 
 export async function generateMetadata({
   params,
@@ -59,20 +65,33 @@ export async function generateMetadata({
   };
 }
 
+const CATEGORY_DESC_KEYS = {
+  smartphones: 'catDescSmartphones',
+  laptops: 'catDescLaptops',
+  tablets: 'catDescTablets',
+  smartwatches: 'catDescSmartwatches',
+  earbuds: 'catDescEarbuds',
+} as const;
+
+type KnownCategorySlug = keyof typeof CATEGORY_DESC_KEYS;
+
+const isKnownCategory = (slug: string): slug is KnownCategorySlug =>
+  Object.hasOwn(CATEGORY_DESC_KEYS, slug);
+
 function getCategoryIcon(slug: string) {
   switch (slug) {
     case 'smartphones':
-      return <BsPhone className="fs-2 text-primary" />;
+      return <BsPhone />;
     case 'laptops':
-      return <BsLaptop className="fs-2 text-primary" />;
+      return <BsLaptop />;
     case 'tablets':
-      return <BsTabletLandscape className="fs-2 text-primary" />;
+      return <BsTabletLandscape />;
     case 'smartwatches':
-      return <BsSmartwatch className="fs-2 text-primary" />;
+      return <BsSmartwatch />;
     case 'earbuds':
-      return <BsHeadphones className="fs-2 text-primary" />;
+      return <BsHeadphones />;
     default:
-      return <BsCpu className="fs-2 text-primary" />;
+      return <BsCpu />;
   }
 }
 
@@ -124,13 +143,20 @@ export default async function Home({
     catSlugById.set(c.id, c.slug);
   }
 
+  const quickCompareSlugs = masterProducts
+    .filter((p) =>
+      getMasterProductHref(p, catSlugById).startsWith('/smartphones/')
+    )
+    .map((p) => p.slug)
+    .slice(0, 3);
+
   return (
     <>
       <NavbarDarkDynamic links={[]} />
 
       {/* Hero Section with Interactive Autocomplete & E-commerce Link Inspector (DESIGN.md v2.0 Dark Obsidian + DOS Crimson Glow) */}
       <div
-        className="hero-header position-relative overflow-hidden"
+        className="hero-header rate-ink-on-dark position-relative overflow-hidden"
         style={{
           background:
             'radial-gradient(circle at 20% 20%, rgba(216, 48, 48, 0.16), transparent 45%), radial-gradient(circle at 80% 15%, rgba(99, 102, 241, 0.14), transparent 42%), linear-gradient(180deg, #0f1113 0%, #141821 100%)',
@@ -195,7 +221,7 @@ export default async function Home({
             <div className="col-xl-9 col-lg-10 col-md-12 col-sm-12">
               <HeroSearchInspector
                 initialProducts={masterProducts}
-                initialMerchants={merchants}
+                initialMerchants={toHeroMerchantSuggestions(merchants)}
               />
             </div>
           </div>
@@ -295,11 +321,11 @@ export default async function Home({
       </div>
 
       {/* Section 1: Live Categories from rate.categories */}
-      <section className="py-5 pb-4" id="mains">
+      <section className="rate-home-categories py-5" id="mains">
         <div className="container">
-          <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-end mb-4 gap-3">
+          <div className="rate-section-head">
             <div>
-              <span className="badge bg-primary bg-opacity-10 text-primary rounded-pill fw-semibold mb-2 px-3 py-2">
+              <span className="rate-eyebrow mb-2">
                 {tRate('home.catBadge')}
               </span>
               <h3 className="sectionHeading mb-1">
@@ -310,95 +336,66 @@ export default async function Home({
               </h3>
               <p className="text-muted mb-0">{tRate('home.catSubtitle')}</p>
             </div>
-            <div className="d-flex flex-wrap gap-2">
-              <Link
-                href="/smartphones"
-                className="btn btn-sm btn-outline-primary rounded-pill px-3"
-              >
-                📱 {tRate('nav.smartphones')}
+            <div className="rate-section-links">
+              <Link href="/inspect">
+                <BsShieldCheck aria-hidden="true" />
+                {tRate('nav.inspect')}
               </Link>
-              <Link
-                href="/laptops"
-                className="btn btn-sm btn-outline-primary rounded-pill px-3"
-              >
-                💻 {tRate('nav.laptops')}
-              </Link>
-              <Link
-                href="/tablets"
-                className="btn btn-sm btn-outline-primary rounded-pill px-3"
-              >
-                📟 {tRate('nav.tablets')}
-              </Link>
-              <Link
-                href="/smartwatches"
-                className="btn btn-sm btn-outline-primary rounded-pill px-3"
-              >
-                ⌚ {tRate('nav.smartwatches')}
-              </Link>
-              <Link
-                href="/earbuds"
-                className="btn btn-sm btn-outline-primary rounded-pill px-3"
-              >
-                🎧 {tRate('nav.earbuds')}
-              </Link>
-              <Link
-                href="/inspect"
-                className="btn btn-sm btn-outline-danger rounded-pill px-3"
-              >
-                🔍 {tRate('nav.inspect')}
-              </Link>
-              <Link
-                href="/merchants"
-                className="btn btn-sm btn-outline-dark rounded-pill px-3"
-              >
-                🏪 {tRate('nav.merchants')}
+              <Link href="/merchants">
+                <BsShop aria-hidden="true" />
+                {tRate('nav.merchants')}
               </Link>
             </div>
           </div>
 
           <div className="row g-3">
-            {platformStats.categoriesWithCounts.map((cat) => (
-              <div key={cat.id} className="col-xl col-lg-4 col-md-6 col-12">
-                <Link href={cat.routeHref} className="text-decoration-none">
-                  <div className="card rounded-4 hover-shadow h-100 border bg-white p-3 shadow-sm transition">
-                    <div className="d-flex align-items-center justify-content-between mb-3">
-                      <div className="rounded-3 bg-primary bg-opacity-10 d-inline-flex align-items-center justify-content-center p-3">
-                        {getCategoryIcon(cat.slug)}
-                      </div>
+            {platformStats.categoriesWithCounts.map((cat) => {
+              const known = isKnownCategory(cat.slug);
+              const titleId = `home-cat-${cat.slug}-title`;
+              const descId = `home-cat-${cat.slug}-desc`;
+              return (
+                <div key={cat.id} className="col-xl col-lg-4 col-sm-6 col-12">
+                  <Link
+                    href={cat.routeHref}
+                    className="rate-card rate-card-interactive rate-category-card"
+                    aria-labelledby={titleId}
+                    aria-describedby={known ? descId : undefined}
+                  >
+                    <div className="rate-category-card-top">
                       <span
-                        className={`badge rounded-pill px-3 py-2 ${
-                          cat.productCount > 0
-                            ? 'bg-success bg-opacity-10 text-success border-success border-opacity-25 border'
-                            : 'bg-secondary bg-opacity-10 text-secondary'
+                        className="rate-category-card-icon"
+                        aria-hidden="true"
+                      >
+                        {getCategoryIcon(cat.slug)}
+                      </span>
+                      <span
+                        className={`rate-category-card-count${
+                          cat.productCount > 0 ? '' : ' is-empty'
                         }`}
                       >
                         {cat.productCount > 0
-                          ? `${cat.productCount} ${tRate('home.catReadySuffix')}`
+                          ? tRate('home.catModelCount', {
+                              count: cat.productCount,
+                            })
                           : tRate('home.catExpanding')}
                       </span>
                     </div>
-                    <h5 className="fw-bold text-dark mb-1">
-                      {cat.slug === 'smartphones' ||
-                      cat.slug === 'laptops' ||
-                      cat.slug === 'tablets' ||
-                      cat.slug === 'smartwatches' ||
-                      cat.slug === 'earbuds'
-                        ? tRate(`nav.${cat.slug}`)
-                        : cat.name}
-                    </h5>
-                    <p className="text-muted small mb-0">
-                      {cat.slug === 'smartphones' &&
-                        tHome('catDescSmartphones')}
-                      {cat.slug === 'laptops' && tHome('catDescLaptops')}
-                      {cat.slug === 'tablets' && tHome('catDescTablets')}
-                      {cat.slug === 'smartwatches' &&
-                        tHome('catDescSmartwatches')}
-                      {cat.slug === 'earbuds' && tHome('catDescEarbuds')}
-                    </p>
-                  </div>
-                </Link>
-              </div>
-            ))}
+                    <h4 id={titleId} className="rate-category-card-title">
+                      {known ? tRate(`nav.${cat.slug}`) : cat.name}
+                    </h4>
+                    {isKnownCategory(cat.slug) && (
+                      <p id={descId} className="rate-category-card-desc">
+                        {tHome(CATEGORY_DESC_KEYS[cat.slug])}
+                      </p>
+                    )}
+                    <span className="rate-category-card-cta">
+                      {tRate('home.catViewLink')}
+                      <BsArrowRight aria-hidden="true" />
+                    </span>
+                  </Link>
+                </div>
+              );
+            })}
           </div>
         </div>
       </section>
@@ -407,9 +404,9 @@ export default async function Home({
       {masterProducts.length > 0 && (
         <section className="border-top border-bottom bg-white py-5">
           <div className="container">
-            <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 gap-3">
+            <div className="rate-section-head">
               <div>
-                <span className="badge bg-primary bg-opacity-10 text-primary rounded-pill fw-semibold mb-2 px-3 py-2">
+                <span className="rate-eyebrow mb-2">
                   {tRate('home.featuredBadge')}
                 </span>
                 <h3 className="sectionHeading mb-1">
@@ -422,30 +419,22 @@ export default async function Home({
                   {tRate('home.featuredSubtitle')}
                 </p>
               </div>
-              <div className="d-flex flex-wrap gap-2">
-                <Link
-                  href="/smartphones"
-                  className="btn btn-outline-primary rounded-pill fw-medium px-3 py-2"
-                >
-                  {tRate('home.viewAllCatalog')} (
-                  {platformStats.masterProductsCount}) →
-                </Link>
-                {masterProducts.length >= 2 && (
+              <div className="rate-section-links">
+                {quickCompareSlugs.length >= 2 && (
                   <Link
-                    href={`/compare?cat=smartphones&slugs=${masterProducts
-                      .filter((p) =>
-                        getMasterProductHref(p, catSlugById).startsWith(
-                          '/smartphones/'
-                        )
-                      )
-                      .map((p) => p.slug)
-                      .slice(0, 3)
-                      .join(',')}`}
-                    className="btn btn-primary rounded-pill fw-medium px-3 py-2"
+                    href={`/compare?cat=smartphones&slugs=${quickCompareSlugs.join(',')}`}
                   >
-                    {tRate('home.compareSpecsBtn')} (3)
+                    <BsArrowLeftRight aria-hidden="true" />
+                    {tRate('home.compareSpecsBtn', {
+                      count: quickCompareSlugs.length,
+                    })}
                   </Link>
                 )}
+                <Link href="/smartphones">
+                  {tRate('home.viewAllCatalog')} (
+                  {platformStats.masterProductsCount})
+                  <BsArrowRight aria-hidden="true" />
+                </Link>
               </div>
             </div>
 
@@ -522,27 +511,23 @@ export default async function Home({
 
             {/* Section 2.5: Popular 1v1 Head-to-Head Flagship Showdowns (#58) */}
             {popularHomeBattles.length > 0 && (
-              <div className="rate-scoreboard-dark rounded-4 p-md-4 mt-5 p-3">
-                <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+              <div className="rate-scoreboard-dark rate-surface-dark rate-battles mt-5">
+                <div className="rate-section-head">
                   <div>
-                    <span className="badge bg-danger rounded-pill fw-semibold mb-1 px-3 py-1">
+                    <span className="rate-eyebrow mb-2">
                       {tHome('popularBattlesBadge')}
                     </span>
-                    <h4 className="h5 fw-bold mb-0 text-white">
+                    <h4 className="rate-battles-title">
                       {tHome('popularBattlesTitle')}
                     </h4>
                   </div>
-                  <div className="d-flex flex-wrap gap-2">
-                    <Link
-                      href="/leaderboard"
-                      className="btn btn-sm btn-outline-warning rounded-pill px-3"
-                    >
+                  <div className="rate-section-links">
+                    <Link href="/leaderboard">
+                      <BsTrophy aria-hidden="true" />
                       {tHome('leaderboard5CatsBtn')}
                     </Link>
-                    <Link
-                      href="/compare"
-                      className="btn btn-sm btn-outline-light rounded-pill px-3"
-                    >
+                    <Link href="/compare">
+                      <BsArrowLeftRight aria-hidden="true" />
                       {tHome('compare10GroupsBtn')}
                     </Link>
                   </div>
@@ -551,55 +536,50 @@ export default async function Home({
                 <div className="row g-3">
                   {popularHomeBattles.map((battle) => (
                     <div key={battle.versusSlug} className="col-lg-4 col-md-6">
-                      <div
-                        className="rounded-4 d-flex flex-column justify-content-between h-100 p-3"
-                        style={{
-                          background: 'rgba(255,255,255,0.05)',
-                          border: '1px solid rgba(255,255,255,0.12)',
-                        }}
+                      <Link
+                        href={battle.versusHref}
+                        className="rate-battle-card"
                       >
-                        <div className="d-flex justify-content-between align-items-center mb-2">
-                          <span className="badge bg-warning text-dark rounded-pill small fw-bold">
+                        <div className="rate-battle-meta">
+                          <span>
                             #{battle.productA.rank} vs #{battle.productB.rank}
                           </span>
-                          <span className="small text-white-50 font-monospace">
-                            {tHome('scoreDeltaLabel', {
-                              delta: battle.scoreDelta5.toFixed(2),
-                            })}
+                          <span>
+                            {battle.scoreDelta5 > 0.005
+                              ? tHome('scoreDeltaLabel', {
+                                  delta: battle.scoreDelta5.toFixed(2),
+                                })
+                              : tHome('scoreTieLabel')}
                           </span>
                         </div>
 
-                        <div className="d-flex align-items-center justify-content-between my-2 gap-2">
-                          <div className="overflow-hidden">
-                            <div className="small fw-bold text-truncate text-white">
+                        <div className="rate-battle-sides">
+                          <div className="rate-battle-side">
+                            <div className="rate-battle-name">
                               {battle.productA.name}
                             </div>
-                            <div className="small text-warning font-monospace">
-                              ★ {battle.productA.combinedScore5.toFixed(2)}/5.0
+                            <div className="rate-battle-score">
+                              ★ {battle.productA.combinedScore5.toFixed(2)}
                             </div>
                           </div>
-                          <span className="badge bg-danger rounded-pill flex-shrink-0">
+                          <span className="rate-battle-vs" aria-hidden="true">
                             VS
                           </span>
-                          <div className="overflow-hidden text-end">
-                            <div className="small fw-bold text-truncate text-white">
+                          <div className="rate-battle-side text-end">
+                            <div className="rate-battle-name">
                               {battle.productB.name}
                             </div>
-                            <div className="small text-warning font-monospace">
-                              ★ {battle.productB.combinedScore5.toFixed(2)}/5.0
+                            <div className="rate-battle-score">
+                              ★ {battle.productB.combinedScore5.toFixed(2)}
                             </div>
                           </div>
                         </div>
 
-                        <div className="border-top border-secondary border-opacity-25 mt-2 pt-2 text-end">
-                          <Link
-                            href={battle.versusHref}
-                            className="btn btn-sm btn-danger rounded-pill fw-semibold w-100"
-                          >
-                            {tHome('view1v1ScoreBtn')}
-                          </Link>
-                        </div>
-                      </div>
+                        <span className="rate-battle-cta">
+                          {tHome('view1v1ScoreBtn')}
+                          <BsArrowRight aria-hidden="true" />
+                        </span>
+                      </Link>
                     </div>
                   ))}
                 </div>
@@ -611,183 +591,174 @@ export default async function Home({
               (dealRadar.genuineDeals.length > 0 ||
                 dealRadar.fakeSaleTraps.length > 0) && (
                 <div
-                  className="rate-card p-md-4 mt-4 p-3"
+                  className="rate-card rate-home-radar mt-4"
                   data-testid="homepage-deal-radar"
                 >
-                  <div className="d-flex justify-content-between align-items-center border-bottom mb-3 flex-wrap gap-2 pb-3">
+                  <div className="rate-section-head">
                     <div>
-                      <span className="badge bg-dark rounded-pill text-warning me-2">
+                      <span className="rate-eyebrow mb-2">
                         {tHome('radarHomeBadge')}
                       </span>
-                      <strong className="text-dark">
+                      <h4 className="rate-home-radar-title">
                         {tHome('radarHomeAnalyzed', {
                           offers: dealRadar.totalOffersAnalyzed,
                           clusters: dealRadar.totalClustersAnalyzed,
                         })}
-                      </strong>
+                      </h4>
                     </div>
-                    <div className="d-flex flex-wrap gap-2">
-                      <Link
-                        href="/deals"
-                        className="btn btn-sm btn-danger rounded-pill fw-semibold px-3"
-                      >
-                        {tHome('radarHomeDealHubBtn')}
-                      </Link>
-                      <Link
-                        href="/inspect"
-                        className="btn btn-sm btn-outline-dark rounded-pill px-3"
-                      >
+                    <div className="rate-section-links">
+                      <Link href="/inspect">
+                        <BsShieldCheck aria-hidden="true" />
                         {tHome('radarHomeInspectBtn')}
+                      </Link>
+                      <Link href="/deals">
+                        {tHome('radarHomeDealHubBtn')}
+                        <BsArrowRight aria-hidden="true" />
                       </Link>
                     </div>
                   </div>
 
-                  <div className="row g-3">
-                    <div className="col-lg-6">
-                      <div className="rounded-3 border-success-subtle bg-success-subtle bg-opacity-10 h-100 border p-3">
-                        <div className="fw-bold text-success mb-2">
+                  <div className="row g-4">
+                    {dealRadar.genuineDeals.length > 0 && (
+                      <div className="col-lg-6">
+                        <h5 className="rate-radar-list-title is-good">
+                          <BsGraphDownArrow aria-hidden="true" />
                           {tHome('radarGenuineTitle', {
                             count: dealRadar.genuineDeals.length,
                           })}
-                        </div>
-                        <div className="d-flex flex-column gap-2">
+                        </h5>
+                        <ul className="rate-radar-list">
                           {dealRadar.genuineDeals.slice(0, 3).map((g) => (
-                            <div
-                              key={g.id}
-                              className="rounded-3 d-flex justify-content-between align-items-center border bg-white p-2"
-                            >
-                              <div className="overflow-hidden pe-2">
+                            <li key={g.id}>
+                              <div className="rate-radar-item-main">
                                 <Link
                                   href={g.productHref}
-                                  className="fw-bold text-dark text-decoration-none d-block text-truncate small"
+                                  className="text-truncate"
                                 >
                                   {g.productName}
                                 </Link>
-                                <div className="text-secondary small">
-                                  <span className="badge bg-dark text-uppercase me-1">
+                                <span className="rate-radar-item-meta text-truncate">
+                                  <span className="rate-radar-platform">
                                     {g.platform}
                                   </span>
-                                  {g.merchantName} •{' '}
+                                  {g.merchantName} ·{' '}
                                   {tHome('medianPriceInline', {
                                     price:
                                       g.marketMedianPrice.toLocaleString(
                                         'vi-VN'
                                       ),
                                   })}
-                                </div>
+                                </span>
                               </div>
-                              <div className="flex-shrink-0 text-end">
-                                <div className="fw-bold text-success font-monospace small">
+                              <div className="rate-radar-item-side">
+                                <span className="rate-radar-price">
                                   {g.priceCurrent.toLocaleString('vi-VN')} ₫
-                                </div>
-                                <span className="badge bg-success rounded-pill">
+                                </span>
+                                <span className="rate-radar-tag is-good">
                                   {tHome('vsMedianPctBadge', {
                                     pct: g.savingsVsMedianPct,
                                   })}
                                 </span>
                               </div>
-                            </div>
+                            </li>
                           ))}
-                        </div>
+                        </ul>
                       </div>
-                    </div>
+                    )}
 
-                    <div className="col-lg-6">
-                      <div className="rounded-3 border-danger-subtle bg-danger-subtle bg-opacity-10 h-100 border p-3">
-                        <div className="fw-bold text-danger mb-2">
+                    {dealRadar.fakeSaleTraps.length > 0 && (
+                      <div className="col-lg-6">
+                        <h5 className="rate-radar-list-title is-bad">
+                          <BsExclamationTriangle aria-hidden="true" />
                           {tHome('radarFakeTitle', {
                             count: dealRadar.fakeSaleTraps.length,
                           })}
-                        </div>
-                        <div className="d-flex flex-column gap-2">
+                        </h5>
+                        <ul className="rate-radar-list">
                           {dealRadar.fakeSaleTraps.slice(0, 3).map((t) => (
-                            <div
-                              key={t.id}
-                              className="rounded-3 d-flex justify-content-between align-items-center border bg-white p-2"
-                            >
-                              <div className="overflow-hidden pe-2">
+                            <li key={t.id}>
+                              <div className="rate-radar-item-main">
                                 <Link
                                   href={t.productHref}
-                                  className="fw-bold text-dark text-decoration-none d-block text-truncate small"
+                                  className="text-truncate"
                                 >
                                   {t.productName}
                                 </Link>
-                                <div className="text-secondary small">
-                                  <span className="badge bg-secondary text-uppercase me-1">
+                                <span className="rate-radar-item-meta text-truncate">
+                                  <span className="rate-radar-platform">
                                     {t.platform}
                                   </span>
-                                  {t.merchantName} •{' '}
+                                  {t.merchantName} ·{' '}
                                   {tHome('inflatedOrigInline')}{' '}
-                                  <span className="text-decoration-line-through">
+                                  <s>
                                     {(
                                       t.priceOriginal || t.priceCurrent
                                     ).toLocaleString('vi-VN')}{' '}
                                     ₫
-                                  </span>
-                                </div>
+                                  </s>
+                                </span>
                               </div>
-                              <div className="flex-shrink-0 text-end">
-                                <div className="fw-bold text-danger font-monospace small">
+                              <div className="rate-radar-item-side">
+                                <span className="rate-radar-price">
                                   {t.priceCurrent.toLocaleString('vi-VN')} ₫
-                                </div>
-                                <span className="badge bg-danger rounded-pill">
+                                </span>
+                                <span className="rate-radar-tag is-bad">
                                   {tHome('fakeMarkupPctBadge', {
                                     pct: t.fakeMarkupPct,
                                   })}
                                 </span>
                               </div>
-                            </div>
+                            </li>
                           ))}
-                        </div>
+                        </ul>
                       </div>
-                    </div>
+                    )}
                   </div>
 
                   {Array.isArray(dealRadar.priceSpreadLeaders) &&
                     dealRadar.priceSpreadLeaders.length > 0 && (
                       <div
                         data-testid="homepage-price-spread-leaders"
-                        className="rounded-3 bg-light mt-3 border p-3"
+                        className="rate-radar-spread"
                       >
-                        <div className="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
-                          <div className="fw-bold text-dark small">
+                        <div className="rate-radar-spread-head">
+                          <h5 className="rate-radar-list-title">
+                            <BsArrowLeftRight aria-hidden="true" />
                             {tHome('spreadLeadersTitle')}
-                          </div>
-                          <Link
-                            href="/deals"
-                            className="small fw-semibold text-danger text-decoration-none"
-                          >
+                          </h5>
+                          <Link href="/deals">
                             {tHome('viewAllSpreadBtn', {
                               count: dealRadar.priceSpreadLeaders.length,
                             })}
+                            <BsArrowRight aria-hidden="true" />
                           </Link>
                         </div>
                         <div className="row g-2">
                           {dealRadar.priceSpreadLeaders.slice(0, 3).map((s) => (
                             <div key={s.id} className="col-lg-4 col-md-6">
-                              <div className="rounded-3 d-flex justify-content-between align-items-center h-100 border bg-white p-2">
-                                <div className="overflow-hidden pe-2">
+                              <div className="rate-radar-spread-item">
+                                <div className="rate-radar-item-main">
                                   <Link
                                     href={s.productHref}
-                                    className="fw-bold text-dark text-decoration-none d-block text-truncate small"
+                                    className="text-truncate"
                                   >
                                     {s.productName}
                                   </Link>
-                                  <div className="text-secondary small">
-                                    <span className="badge bg-success text-uppercase me-1">
+                                  <span className="rate-radar-item-meta">
+                                    <span className="rate-radar-platform">
                                       {s.cheapestPlatform}
                                     </span>
                                     vs{' '}
-                                    <span className="badge bg-secondary text-uppercase">
+                                    <span className="rate-radar-platform">
                                       {s.priciestPlatform}
                                     </span>
-                                  </div>
+                                  </span>
                                 </div>
-                                <div className="flex-shrink-0 text-end">
-                                  <div className="fw-bold text-success font-monospace small">
+                                <div className="rate-radar-item-side">
+                                  <span className="rate-radar-price">
                                     -{s.spreadVnd.toLocaleString('vi-VN')} ₫
-                                  </div>
-                                  <span className="badge bg-warning text-dark rounded-pill">
+                                  </span>
+                                  <span className="rate-radar-tag is-warn">
                                     {tHome('spreadPctBadge', {
                                       pct: s.spreadPct,
                                     })}
@@ -808,9 +779,9 @@ export default async function Home({
       {/* Section 3: Merchant Trust Directory Preview (Dual Risk Score) */}
       <section className="bg-light py-5">
         <div className="container">
-          <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 gap-3">
+          <div className="rate-section-head">
             <div>
-              <span className="badge bg-success bg-opacity-10 text-success rounded-pill fw-semibold mb-2 px-3 py-2">
+              <span className="rate-eyebrow mb-2">
                 {tRate('home.merchantBadge')}
               </span>
               <h3 className="sectionHeading mb-1">
@@ -823,32 +794,26 @@ export default async function Home({
                 {tRate('home.merchantSubtitle')}
               </p>
             </div>
-            <div>
-              <Link
-                href="/merchants"
-                className="btn btn-outline-primary rounded-pill fw-medium px-4 py-2"
-              >
+            <div className="rate-section-links">
+              <Link href="/merchants">
                 {tRate('home.viewAllMerchants')} ({platformStats.merchantsCount}
-                ) →
+                )
+                <BsArrowRight aria-hidden="true" />
               </Link>
             </div>
           </div>
 
           <div className="row g-4">
             {merchants.map((merchant) => {
-              const isTrusted = merchant.risk_score < 20;
-              const isCaution =
-                merchant.risk_score >= 20 && merchant.risk_score < 50;
-              const badgeClass = isTrusted
-                ? 'bg-success bg-opacity-10 text-success border-success'
-                : isCaution
-                  ? 'bg-warning bg-opacity-10 text-warning border-warning'
-                  : 'bg-danger bg-opacity-10 text-danger border-danger';
-              const trustLabel = isTrusted
-                ? tHome('merchantTrustedLabel')
-                : isCaution
-                  ? tHome('merchantCautionLabel')
-                  : tHome('merchantHighRiskLabel');
+              const tone = (risk: number) =>
+                risk < 20 ? 'is-good' : risk < 50 ? 'is-warn' : 'is-bad';
+              const overallTone = tone(merchant.risk_score);
+              const trustLabel =
+                overallTone === 'is-good'
+                  ? tHome('merchantTrustedLabel')
+                  : overallTone === 'is-warn'
+                    ? tHome('merchantCautionLabel')
+                    : tHome('merchantHighRiskLabel');
               const breakdown = merchant.review_risk_breakdown;
               const totalRevAnalyzed = breakdown?.total_reviews ?? 0;
               const flaggedRevCount =
@@ -858,129 +823,100 @@ export default async function Home({
 
               return (
                 <div key={merchant.id} className="col-lg-6 col-12">
-                  <div className="card rounded-4 h-100 border bg-white p-4 shadow-sm">
-                    <div className="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
-                      <div className="d-flex align-items-center gap-3">
-                        <div
-                          className="rounded-circle bg-primary bg-opacity-10 text-primary d-flex align-items-center justify-content-center fw-bold fs-4"
-                          style={{ width: '54px', height: '54px' }}
-                        >
-                          <BsShop />
-                        </div>
-                        <div>
-                          <div className="d-flex align-items-center flex-wrap gap-2">
-                            <h5 className="fw-bold mb-0">
-                              <Link
-                                href={`/merchants/${merchant.id}`}
-                                className="text-dark text-decoration-none"
-                              >
-                                {merchant.name}
-                              </Link>
-                            </h5>
-                            {merchant.is_official && (
-                              <span className="badge bg-danger rounded-pill small px-2 py-1 text-white">
-                                <BsCheckCircleFill className="me-1" />
-                                Official Mall
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-muted small mt-1">
-                            {tHome('platformLabel')}{' '}
-                            <span className="text-uppercase fw-semibold text-dark">
-                              {merchant.platform}
-                            </span>{' '}
-                            • {tHome('shopIdLabel')}{' '}
-                            <code>{merchant.platform_shop_id}</code>
-                          </div>
-                        </div>
-                      </div>
+                  <article className="rate-card rate-merchant-card">
+                    <div className="rate-merchant-head">
                       <span
-                        className={`badge rounded-pill fw-semibold border px-3 py-2 ${badgeClass}`}
+                        className="rate-category-card-icon"
+                        aria-hidden="true"
                       >
-                        🛡️ {trustLabel} (Trust: {merchant.trust_score}/100)
+                        <BsShop />
+                      </span>
+                      <div className="rate-merchant-id">
+                        <h4 className="rate-merchant-name">
+                          <Link href={`/merchants/${merchant.id}`}>
+                            {merchant.name}
+                          </Link>
+                        </h4>
+                        <div className="rate-merchant-meta">
+                          <span className="rate-radar-platform">
+                            {merchant.platform}
+                          </span>
+                          {tHome('shopIdLabel')} {merchant.platform_shop_id}
+                          {merchant.is_official && (
+                            <span className="rate-merchant-official">
+                              <BsCheckCircleFill aria-hidden="true" />
+                              {tHome('officialMallBadge')}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <span className={`rate-radar-tag ${overallTone}`}>
+                        {trustLabel} · {merchant.trust_score}/100
                       </span>
                     </div>
 
-                    <div className="row g-2 mb-3">
-                      <div className="col-sm-4 col-12">
-                        <div className="rounded-3 bg-light border p-2 text-center">
-                          <div className="small text-muted">
-                            DOSafe Threat Risk
-                          </div>
-                          <div className="fw-bold text-success">
-                            {merchant.dosafe_risk_score}/100
-                          </div>
-                          <div
-                            className="text-muted"
-                            style={{ fontSize: '0.8125rem' }}
-                          >
+                    <dl className="rate-merchant-metrics">
+                      <div>
+                        <dt>{tHome('dosafeRiskLabel')}</dt>
+                        <dd className={tone(merchant.dosafe_risk_score)}>
+                          {merchant.dosafe_risk_score}/100
+                        </dd>
+                        {merchant.dosafe_risk_score < 20 && (
+                          <dd className="rate-merchant-note">
                             {tHome('noScamDetected')}
-                          </div>
-                        </div>
+                          </dd>
+                        )}
                       </div>
-                      <div className="col-sm-4 col-12">
-                        <div className="rounded-3 bg-light border p-2 text-center">
-                          <div className="small text-muted">
-                            AI Review Seeding Risk
-                          </div>
-                          <div className="fw-bold text-primary">
-                            {merchant.review_risk_score}/100
-                          </div>
-                          <div
-                            className="text-muted"
-                            style={{ fontSize: '0.8125rem' }}
-                          >
-                            {tHome('flaggedReviewsRatio', {
-                              flagged: flaggedRevCount,
-                              total: totalRevAnalyzed,
-                            })}
-                          </div>
-                        </div>
+                      <div>
+                        <dt>{tHome('reviewRiskLabel')}</dt>
+                        <dd className={tone(merchant.review_risk_score)}>
+                          {merchant.review_risk_score}/100
+                        </dd>
+                        <dd className="rate-merchant-note">
+                          {tHome('flaggedReviewsRatio', {
+                            flagged: flaggedRevCount,
+                            total: totalRevAnalyzed,
+                          })}
+                        </dd>
                       </div>
-                      <div className="col-sm-4 col-12">
-                        <div className="rounded-3 bg-light border p-2 text-center">
-                          <div className="small text-muted">
-                            {tHome('ratingsAndProductsLabel')}
-                          </div>
-                          <div className="fw-bold text-dark">
-                            ⭐ {(merchant.rating_star ?? 5).toFixed(1)} •{' '}
-                            {merchant.product_count}{' '}
-                            {tHome('productsShortUnit')}
-                          </div>
-                          <div
-                            className="text-muted"
-                            style={{ fontSize: '0.8125rem' }}
-                          >
-                            {merchant.follower_count > 0
-                              ? tHome('followersCountText', {
-                                  count:
-                                    merchant.follower_count.toLocaleString(
-                                      'vi-VN'
-                                    ),
-                                })
-                              : tHome('periodicMonitoring')}
-                          </div>
-                        </div>
+                      <div>
+                        <dt>{tHome('ratingsAndProductsLabel')}</dt>
+                        <dd>
+                          {merchant.rating_star != null
+                            ? `★ ${merchant.rating_star.toFixed(1)} · `
+                            : ''}
+                          {merchant.product_count} {tHome('productsShortUnit')}
+                        </dd>
+                        <dd className="rate-merchant-note">
+                          {merchant.follower_count > 0
+                            ? tHome('followersCountText', {
+                                count:
+                                  merchant.follower_count.toLocaleString(
+                                    'vi-VN'
+                                  ),
+                              })
+                            : tHome('periodicMonitoring')}
+                        </dd>
                       </div>
-                    </div>
+                    </dl>
 
-                    <div className="d-flex justify-content-between align-items-center border-top pt-2">
-                      <span className="small text-muted">
-                        {tHome('lastUpdatedLabel')}{' '}
-                        {merchant.updated_at
-                          ? new Date(merchant.updated_at).toLocaleDateString(
-                              'vi-VN'
-                            )
-                          : '14/10/2026'}
-                      </span>
-                      <Link
-                        href={`/merchants/${merchant.id}`}
-                        className="btn btn-sm btn-primary rounded-pill fw-medium px-3"
-                      >
+                    <div className="rate-merchant-foot">
+                      {merchant.updated_at ? (
+                        <span>
+                          {tHome('lastUpdatedLabel')}{' '}
+                          {new Date(merchant.updated_at).toLocaleDateString(
+                            'vi-VN'
+                          )}
+                        </span>
+                      ) : (
+                        <span />
+                      )}
+                      <Link href={`/merchants/${merchant.id}`}>
                         {tRate('home.viewMerchantAuditBtn')}
+                        <BsArrowRight aria-hidden="true" />
                       </Link>
                     </div>
-                  </div>
+                  </article>
                 </div>
               );
             })}
@@ -992,9 +928,9 @@ export default async function Home({
       {platformStats.recentReviewsSample.length > 0 && (
         <section className="bg-white py-5">
           <div className="container">
-            <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 gap-3">
+            <div className="rate-section-head">
               <div>
-                <span className="badge bg-info bg-opacity-10 text-info rounded-pill fw-semibold mb-2 px-3 py-2">
+                <span className="rate-eyebrow mb-2">
                   {tRate('home.reviewsBadge')}
                 </span>
                 <h3 className="sectionHeading mb-1">
@@ -1007,15 +943,17 @@ export default async function Home({
                   {tRate('home.reviewsSubtitle')}
                 </p>
               </div>
-              <div className="d-flex align-items-center flex-wrap gap-2">
-                <span className="badge bg-success bg-opacity-10 text-success rounded-pill px-3 py-2">
+              <div className="rate-review-stats">
+                <span className="rate-radar-tag is-good">
+                  <BsCheckCircleFill aria-hidden="true" />
                   {tHome('authenticReviewsStatBadge', {
                     count: platformStats.authenticReviewsCount,
                     pct: platformStats.authenticRatioPct,
                   })}
                 </span>
                 {platformStats.filteredSeedingCount > 0 && (
-                  <span className="badge bg-warning bg-opacity-10 text-warning rounded-pill px-3 py-2">
+                  <span className="rate-radar-tag is-warn">
+                    <BsShieldExclamation aria-hidden="true" />
                     {tHome('filteredSeedingStatBadge', {
                       count: platformStats.filteredSeedingCount,
                     })}
@@ -1033,77 +971,72 @@ export default async function Home({
                 const confidencePct =
                   rev.fake_probability != null
                     ? Math.round((1 - Number(rev.fake_probability)) * 100)
-                    : 95;
+                    : null;
+                const stars = Math.max(1, Math.min(5, rev.rating_star));
 
                 return (
                   <div key={rev.id} className="col-lg-4 col-md-6 col-12">
-                    <div className="card rounded-4 d-flex flex-column h-100 border bg-white p-3 shadow-sm">
-                      <div className="d-flex justify-content-between align-items-start mb-2 gap-2">
+                    <article className="rate-card rate-review-card">
+                      <div className="rate-review-head">
                         <div>
-                          <div className="fw-bold text-dark">
+                          <div className="rate-review-author">
                             {rev.author_name}
                           </div>
-                          <div className="d-flex align-items-center text-warning small gap-1">
-                            {Array.from({
-                              length: Math.max(1, Math.min(5, rev.rating_star)),
-                            }).map((_, idx) => (
-                              <BsStarFill key={idx} />
+                          <div
+                            className="rate-review-stars"
+                            role="img"
+                            aria-label={tHome('starsAria', { count: stars })}
+                          >
+                            {Array.from({ length: stars }).map((_, idx) => (
+                              <BsStarFill key={idx} aria-hidden="true" />
                             ))}
                           </div>
                         </div>
                         {isPending ? (
-                          <span className="badge bg-info bg-opacity-10 text-info-emphasis border-info rounded-pill small border px-2 py-1">
+                          <span className="rate-radar-tag">
                             {tHome('pendingAnalysisBadge')}
                           </span>
                         ) : isFlagged ? (
-                          <span className="badge bg-warning bg-opacity-10 text-warning border-warning rounded-pill small border px-2 py-1">
-                            <BsShieldExclamation className="me-1" />
+                          <span className="rate-radar-tag is-warn">
+                            <BsShieldExclamation aria-hidden="true" />
                             {rev.flag_category === 'low_value_coin_spam'
                               ? tHome('coinSpamBadge')
                               : tHome('suspectedSeedingBadge')}
                           </span>
                         ) : (
-                          <span className="badge bg-success bg-opacity-10 text-success border-success rounded-pill small border px-2 py-1">
-                            <BsCheckCircleFill className="me-1" />
-                            {tHome('authenticConfidenceBadge', {
-                              pct: confidencePct,
-                            })}
+                          <span className="rate-radar-tag is-good">
+                            <BsCheckCircleFill aria-hidden="true" />
+                            {confidencePct != null
+                              ? tHome('authenticConfidenceBadge', {
+                                  pct: confidencePct,
+                                })
+                              : tHome('authenticBadge')}
                           </span>
                         )}
                       </div>
 
-                      <p
-                        className="text-secondary small mb-3 flex-grow-1"
-                        style={{
-                          display: '-webkit-box',
-                          WebkitLineClamp: 4,
-                          WebkitBoxOrient: 'vertical',
-                          overflow: 'hidden',
-                        }}
-                      >
-                        &ldquo;{rev.comment}&rdquo;
-                      </p>
+                      {rev.comment?.trim() && (
+                        <p className="rate-review-body">
+                          &ldquo;{rev.comment.trim()}&rdquo;
+                        </p>
+                      )}
 
-                      <div className="border-top d-flex justify-content-between align-items-center small mt-auto pt-2">
+                      <div className="rate-review-foot">
+                        <BsPhone aria-hidden="true" />
                         {rev.masterRouteHref ? (
                           <Link
                             href={rev.masterRouteHref}
-                            className="text-primary fw-semibold text-decoration-none text-truncate"
-                            style={{ maxWidth: '70%' }}
+                            className="text-truncate"
                           >
-                            📱 {rev.productTitle}
+                            {rev.productTitle}
                           </Link>
                         ) : (
-                          <span
-                            className="text-muted text-truncate"
-                            style={{ maxWidth: '70%' }}
-                          >
-                            📱 {rev.productTitle}
+                          <span className="text-truncate">
+                            {rev.productTitle}
                           </span>
                         )}
-                        <span className="text-muted">Shopee Mall</span>
                       </div>
-                    </div>
+                    </article>
                   </div>
                 );
               })}
@@ -1117,7 +1050,7 @@ export default async function Home({
         <div className="container">
           <div className="row justify-content-center mb-4">
             <div className="col-xl-8 col-lg-9 text-center">
-              <span className="badge bg-primary bg-opacity-10 text-primary rounded-pill fw-semibold mb-2 px-3 py-2">
+              <span className="rate-eyebrow mb-2">
                 {tRate('home.whyBadge')}
               </span>
               <h3 className="sectionHeading mb-2">
@@ -1132,62 +1065,37 @@ export default async function Home({
           </div>
 
           <div className="row g-4">
-            <div className="col-lg-4 col-md-6 col-12">
-              <div className="card rounded-4 h-100 border-0 bg-white p-4 shadow-sm">
-                <div
-                  className="rounded-3 bg-primary bg-opacity-10 text-primary d-inline-flex align-items-center justify-content-center mb-3"
-                  style={{ width: '48px', height: '48px' }}
-                >
-                  <BsCpu className="fs-4" />
-                </div>
-                <h5 className="fw-bold mb-2">{tHome('whyCard1Title')}</h5>
-                <p className="text-muted small mb-3">{tHome('whyCard1Desc')}</p>
+            {(
+              [
+                { n: 1, href: '/compare', icon: <BsCpu /> },
+                { n: 2, href: '/smartphones', icon: <BsGraphUpArrow /> },
+                { n: 3, href: '/merchants', icon: <BsShieldCheck /> },
+              ] as const
+            ).map(({ n, href, icon }) => (
+              <div key={n} className="col-lg-4 col-md-6 col-12">
                 <Link
-                  href="/compare"
-                  className="text-primary small fw-semibold text-decoration-none mt-auto"
+                  href={href}
+                  className="rate-card rate-card-interactive rate-category-card"
                 >
-                  {tHome('whyCard1Link')}
+                  <span
+                    className="rate-category-card-icon mb-3"
+                    aria-hidden="true"
+                  >
+                    {icon}
+                  </span>
+                  <h4 className="rate-category-card-title">
+                    {tHome(`whyCard${n}Title`)}
+                  </h4>
+                  <p className="rate-category-card-desc">
+                    {tHome(`whyCard${n}Desc`)}
+                  </p>
+                  <span className="rate-category-card-cta">
+                    {tHome(`whyCard${n}Link`)}
+                    <BsArrowRight aria-hidden="true" />
+                  </span>
                 </Link>
               </div>
-            </div>
-
-            <div className="col-lg-4 col-md-6 col-12">
-              <div className="card rounded-4 h-100 border-0 bg-white p-4 shadow-sm">
-                <div
-                  className="rounded-3 bg-success bg-opacity-10 text-success d-inline-flex align-items-center justify-content-center mb-3"
-                  style={{ width: '48px', height: '48px' }}
-                >
-                  <BsGraphUpArrow className="fs-4" />
-                </div>
-                <h5 className="fw-bold mb-2">{tHome('whyCard2Title')}</h5>
-                <p className="text-muted small mb-3">{tHome('whyCard2Desc')}</p>
-                <Link
-                  href="/smartphones"
-                  className="text-success small fw-semibold text-decoration-none mt-auto"
-                >
-                  {tHome('whyCard2Link')}
-                </Link>
-              </div>
-            </div>
-
-            <div className="col-lg-4 col-md-12 col-12">
-              <div className="card rounded-4 h-100 border-0 bg-white p-4 shadow-sm">
-                <div
-                  className="rounded-3 bg-warning bg-opacity-10 text-warning d-inline-flex align-items-center justify-content-center mb-3"
-                  style={{ width: '48px', height: '48px' }}
-                >
-                  <BsShieldCheck className="fs-4" />
-                </div>
-                <h5 className="fw-bold mb-2">{tHome('whyCard3Title')}</h5>
-                <p className="text-muted small mb-3">{tHome('whyCard3Desc')}</p>
-                <Link
-                  href="/merchants"
-                  className="text-warning small fw-semibold text-decoration-none mt-auto"
-                >
-                  {tHome('whyCard3Link')}
-                </Link>
-              </div>
-            </div>
+            ))}
           </div>
         </div>
       </section>

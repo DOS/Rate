@@ -7,11 +7,15 @@ import type {
 import {
   DEFAULT_API_BASE_URL,
   escapeSafeExternalHref,
+  filterValidSparklinePrices,
+  formatSafeExtensionVnd,
+  formatSafeNumber,
+  resolveSafeApiRelativeUrl,
+  sanitizeVerdictClassSuffix,
 } from '../security-guards.js';
 
 function formatVnd(val: number | null | undefined): string {
-  if (!val || val <= 0) return 'Chưa có';
-  return `${val.toLocaleString('vi-VN')} ₫`;
+  return formatSafeExtensionVnd(val);
 }
 
 function escapeHtml(raw: string): string {
@@ -27,7 +31,7 @@ function buildSvgSparkline(points: ExtensionPriceHistoryPoint[]): string {
   if (!points || points.length < 2) {
     return `<div style="font-size: 13px; color: #9ca3af; padding: 8px 0;">Đang tích lũy thêm các mốc thời gian lịch sử giá.</div>`;
   }
-  const prices = points.map((p) => p.price).filter((p) => p > 0);
+  const prices = filterValidSparklinePrices(points);
   if (prices.length < 2) return '';
 
   const minP = Math.min(...prices);
@@ -126,12 +130,12 @@ async function fetchAndRenderDealRadar(
             <div class="offer-item">
               <div>
                 <div class="offer-shop">
-                  <a href="${escapeSafeExternalHref(settings.apiBaseUrl + d.productHref)}" target="_blank" rel="noopener noreferrer" style="color:#f3f4f6;text-decoration:none;">
+                  <a href="${resolveSafeApiRelativeUrl(settings.apiBaseUrl, d.productHref)}" target="_blank" rel="noopener noreferrer" style="color:#f3f4f6;text-decoration:none;">
                     ${escapeHtml(d.productName)}
                   </a>
                 </div>
                 <div class="offer-meta">
-                  ${escapeHtml(d.platform.toUpperCase())} (${escapeHtml(d.merchantName)}) - Tiết kiệm ${formatVnd(d.savingsVsMedianVnd)} (-${d.savingsVsMedianPct}%)
+                  ${escapeHtml(d.platform.toUpperCase())} (${escapeHtml(d.merchantName)}) - Tiết kiệm ${formatVnd(d.savingsVsMedianVnd)} (-${formatSafeNumber(d.savingsVsMedianPct, { min: 0, max: 100 })}%)
                 </div>
               </div>
               <a href="${escapeSafeExternalHref(d.offerUrl)}" target="_blank" rel="noopener noreferrer" class="offer-price" style="text-decoration:none;color:#34d399;">
@@ -181,7 +185,7 @@ async function fetchAndRenderDealRadar(
                     <div>
                       <div class="offer-shop">${escapeHtml(t.productName)}</div>
                       <div class="offer-meta" style="color:#fca5a5;">
-                        ${escapeHtml(t.platform.toUpperCase())} - Giá gốc kê khống +${t.fakeMarkupPct}% (${formatVnd(t.priceOriginal)})
+                        ${escapeHtml(t.platform.toUpperCase())} - Giá gốc kê khống +${formatSafeNumber(t.fakeMarkupPct, { min: 0, max: 10000 })}% (${formatVnd(t.priceOriginal)})
                       </div>
                     </div>
                     <span class="offer-price" style="color:#f87171;">${formatVnd(t.priceCurrent)}</span>
@@ -249,28 +253,33 @@ async function fetchAndRenderMerchantTrustDirectory(
         ${sorted
           .slice(0, 5)
           .map((m) => {
-            const detailHref = `${settings.apiBaseUrl}/merchants/${encodeURIComponent(m.slug || m.id)}`;
+            const detailHref = resolveSafeApiRelativeUrl(
+              settings.apiBaseUrl,
+              `/merchants/${encodeURIComponent(m.slug || m.id)}`,
+              '/merchants'
+            );
+            const trustScoreNum = Number(m.trust_score);
             const trustColor =
-              m.trust_score >= 85
+              trustScoreNum >= 85
                 ? '#34d399'
-                : m.trust_score >= 65
+                : trustScoreNum >= 65
                   ? '#fbbf24'
                   : '#f87171';
             return `
               <div class="offer-item">
                 <div>
                   <div class="offer-shop">
-                    <a href="${escapeSafeExternalHref(detailHref)}" target="_blank" rel="noopener noreferrer" style="color:#f3f4f6;text-decoration:none;">
+                    <a href="${detailHref}" target="_blank" rel="noopener noreferrer" style="color:#f3f4f6;text-decoration:none;">
                       ${escapeHtml(m.name)}
                     </a>
                     ${m.is_official ? '<span style="color:#34d399;font-size: 13px;">[Mall]</span>' : ''}
                   </div>
                   <div class="offer-meta">
-                    ${escapeHtml(m.platform.toUpperCase())} (${m.product_count} SP) - DOSafe: ${m.dosafe_risk_score} | Seeding: ${m.review_risk_score}
+                    ${escapeHtml(m.platform.toUpperCase())} (${formatSafeNumber(m.product_count, { min: 0 })} SP) - DOSafe: ${formatSafeNumber(m.dosafe_risk_score, { min: 0, max: 100 })} | Seeding: ${formatSafeNumber(m.review_risk_score, { min: 0, max: 100 })}
                   </div>
                 </div>
-                <a href="${escapeSafeExternalHref(detailHref)}" target="_blank" rel="noopener noreferrer" class="offer-price" style="text-decoration:none;color:${trustColor};">
-                  Trust ${m.trust_score}/100
+                <a href="${detailHref}" target="_blank" rel="noopener noreferrer" class="offer-price" style="text-decoration:none;color:${trustColor};">
+                  Trust ${formatSafeNumber(m.trust_score, { min: 0, max: 100 })}/100
                 </a>
               </div>
             `;
@@ -404,7 +413,7 @@ function renderPanelContent(
                   ${off.merchant.is_official ? '<span style="color:#34d399;font-size: 13px;">[Mall]</span>' : ''}
                 </div>
                 <div class="offer-meta">
-                  ${escapeHtml(off.platform.toUpperCase())} - ★ ${Number(off.rating_star || 0).toFixed(1)} - Rủi ro shop: ${off.merchant.risk_score}/100
+                  ${escapeHtml(off.platform.toUpperCase())} - ★ ${formatSafeNumber(off.rating_star, { min: 0, max: 5, decimals: 1 })} - Rủi ro shop: ${formatSafeNumber(off.merchant.risk_score, { min: 0, max: 100 })}/100
                 </div>
               </div>
               <a href="${escapeSafeExternalHref(off.url)}" target="_blank" rel="noopener noreferrer" class="offer-price" style="text-decoration:none;">
@@ -425,11 +434,11 @@ function renderPanelContent(
         <div class="stats-grid">
           <div class="stat-box">
             <div class="stat-label">Điểm User Đã Lọc</div>
-            <div class="stat-val" style="color: #fbbf24;">★ ${Number(master?.user_rating_weighted || master?.average_rating || 0).toFixed(1)} / 5</div>
+            <div class="stat-val" style="color: #fbbf24;">★ ${formatSafeNumber(master?.user_rating_weighted || master?.average_rating || 0, { min: 0, max: 5, decimals: 1 })} / 5</div>
           </div>
           <div class="stat-box">
             <div class="stat-label">Tỷ Lệ Đánh Giá Thật</div>
-            <div class="stat-val" style="color: #34d399;">${reviews.authentic_pct}% (${reviews.total_analyzed} đánh giá)</div>
+            <div class="stat-val" style="color: #34d399;">${formatSafeNumber(reviews.authentic_pct, { min: 0, max: 100 })}% (${formatSafeNumber(reviews.total_analyzed, { min: 0 })} đánh giá)</div>
           </div>
         </div>
         ${
@@ -448,11 +457,11 @@ function renderPanelContent(
         <div class="stats-grid">
           <div class="stat-box">
             <div class="stat-label">Trust Score</div>
-            <div class="stat-val" style="color: #34d399;">${merchant.trust_score}/100</div>
+            <div class="stat-val" style="color: #34d399;">${formatSafeNumber(merchant.trust_score, { min: 0, max: 100 })}/100</div>
           </div>
           <div class="stat-box">
             <div class="stat-label">DOSafe / Seeding Risk</div>
-            <div class="stat-val">${merchant.dosafe_risk_score} / ${merchant.review_risk_score}</div>
+            <div class="stat-val">${formatSafeNumber(merchant.dosafe_risk_score, { min: 0, max: 100 })} / ${formatSafeNumber(merchant.review_risk_score, { min: 0, max: 100 })}</div>
           </div>
         </div>
       </div>
@@ -478,7 +487,6 @@ function renderPanelContent(
     `
     : '';
 
-  const categorySlug = lookup.categorySlug || 'smartphones';
   const categoryNameMap: Record<string, string> = {
     smartphones: 'Điện thoại',
     tablets: 'Máy tính bảng',
@@ -486,6 +494,13 @@ function renderPanelContent(
     smartwatches: 'Đồng hồ thông minh',
     earbuds: 'Tai nghe không dây',
   };
+  const rawCategorySlug = lookup.categorySlug || 'smartphones';
+  const categorySlug = Object.prototype.hasOwnProperty.call(
+    categoryNameMap,
+    rawCategorySlug
+  )
+    ? rawCategorySlug
+    : 'smartphones';
   const focusLabelMap: Record<string, string> = {
     combined: 'Tổng hợp',
     screen: 'Màn hình',
@@ -508,11 +523,11 @@ function renderPanelContent(
         <div class="stats-grid">
           <div class="stat-box">
             <div class="stat-label">Hạng Danh Mục</div>
-            <div class="stat-val" style="color: #ff6b6b;">#${overallBadge.rank} / ${overallBadge.totalInCategory}</div>
+            <div class="stat-val" style="color: #ff6b6b;">#${formatSafeNumber(overallBadge.rank, { min: 1 })} / ${formatSafeNumber(overallBadge.totalInCategory, { min: 1 })}</div>
           </div>
           <div class="stat-box">
             <div class="stat-label">Điểm Tổng Hợp</div>
-            <div class="stat-val" style="color: #34d399;">${overallBadge.score10.toFixed(1)} / 10</div>
+            <div class="stat-val" style="color: #34d399;">${formatSafeNumber(overallBadge.score10, { min: 0, max: 10, decimals: 1 })} / 10</div>
           </div>
         </div>
         ${
@@ -521,7 +536,7 @@ function renderPanelContent(
                 ${subBadges
                   .map(
                     (sr) =>
-                      `<span style="font-size: 13px;background:#181c24;border:1px solid #2a2f3a;color:#e5e7eb;padding:3px 7px;border-radius:6px;">🏆 #${sr.rank} ${escapeHtml(focusLabelMap[sr.criterion] || sr.criterion)} (${sr.score10.toFixed(1)})</span>`
+                      `<span style="font-size: 13px;background:#181c24;border:1px solid #2a2f3a;color:#e5e7eb;padding:3px 7px;border-radius:6px;">🏆 #${formatSafeNumber(sr.rank, { min: 1 })} ${escapeHtml(focusLabelMap[sr.criterion] || sr.criterion)} (${formatSafeNumber(sr.score10, { min: 0, max: 10, decimals: 1 })})</span>`
                   )
                   .join('')}
               </div>`
@@ -531,40 +546,59 @@ function renderPanelContent(
     `
     : '';
 
-  const detailUrl = lookup.productDetailUrl
-    ? `${settings.apiBaseUrl}${lookup.productDetailUrl}`
-    : `${settings.apiBaseUrl}/${categorySlug}`;
-  const compareUrl = lookup.compareUrl
-    ? `${settings.apiBaseUrl}${lookup.compareUrl}`
-    : `${settings.apiBaseUrl}/compare?cat=${categorySlug}`;
-  const leaderboardUrl = lookup.leaderboardUrl
-    ? `${settings.apiBaseUrl}${lookup.leaderboardUrl}`
-    : `${settings.apiBaseUrl}/leaderboard?cat=${categorySlug}`;
+  const detailUrl = resolveSafeApiRelativeUrl(
+    settings.apiBaseUrl,
+    lookup.productDetailUrl,
+    `/${categorySlug}`
+  );
+  const compareUrl = resolveSafeApiRelativeUrl(
+    settings.apiBaseUrl,
+    lookup.compareUrl,
+    `/compare?cat=${categorySlug}`
+  );
+  const leaderboardUrl = resolveSafeApiRelativeUrl(
+    settings.apiBaseUrl,
+    lookup.leaderboardUrl,
+    `/leaderboard?cat=${categorySlug}`
+  );
   const versusUrl = lookup.versusUrl
-    ? `${settings.apiBaseUrl}${lookup.versusUrl}`
+    ? resolveSafeApiRelativeUrl(
+        settings.apiBaseUrl,
+        lookup.versusUrl,
+        `/compare?cat=${categorySlug}`
+      )
     : null;
-  const inspectUrl = `${settings.apiBaseUrl}/inspect?q=${encodeURIComponent(
-    signal.canonicalUrl || master?.slug || signal.title
-  )}`;
-  const watchlistUrl = master?.slug
-    ? `${settings.apiBaseUrl}/watchlist?add=${encodeURIComponent(master.slug)}`
-    : `${settings.apiBaseUrl}/watchlist`;
+  const inspectUrl = resolveSafeApiRelativeUrl(
+    settings.apiBaseUrl,
+    `/inspect?q=${encodeURIComponent(
+      signal.canonicalUrl || master?.slug || signal.title
+    )}`,
+    '/inspect'
+  );
+  const watchlistUrl = resolveSafeApiRelativeUrl(
+    settings.apiBaseUrl,
+    master?.slug
+      ? `/watchlist?add=${encodeURIComponent(master.slug)}`
+      : '/watchlist',
+    '/watchlist'
+  );
 
   const radarSig = lookup.radarSignal;
+  const radarSpreadPct = Number(radarSig?.spreadPct ?? 0);
   const radarPillHtml = radarSig
     ? radarSig.verdict === 'genuine_deal'
-      ? `<span class="verdict-pill verdict-genuine_deal" style="margin-left:6px;">🔥 Đáy giá 60N (-${radarSig.savingsPct}%)</span>`
+      ? `<span class="verdict-pill verdict-genuine_deal" style="margin-left:6px;">🔥 Đáy giá 60N (-${formatSafeNumber(radarSig.savingsPct, { min: 0, max: 100 })}%)</span>`
       : radarSig.verdict === 'fake_sale_trap'
-        ? `<span class="verdict-pill verdict-inflated_fake_sale" style="margin-left:6px;">🚨 Cảnh báo Sale Ảo (+${radarSig.fakeMarkupPct}%)</span>`
-        : radarSig.spreadPct >= 5
-          ? `<span class="verdict-pill" style="margin-left:6px;background:#1e293b;color:#38bdf8;border:1px solid #0284c7;">📊 Lệch 10 sàn ${radarSig.spreadPct}%</span>`
+        ? `<span class="verdict-pill verdict-inflated_fake_sale" style="margin-left:6px;">🚨 Cảnh báo Sale Ảo (+${formatSafeNumber(radarSig.fakeMarkupPct, { min: 0, max: 10000 })}%)</span>`
+        : Number.isFinite(radarSpreadPct) && radarSpreadPct >= 5
+          ? `<span class="verdict-pill" style="margin-left:6px;background:#1e293b;color:#38bdf8;border:1px solid #0284c7;">📊 Lệch 10 sàn ${formatSafeNumber(radarSig.spreadPct, { min: 0, max: 10000 })}%</span>`
           : ''
     : '';
 
   root.innerHTML = `
     <div class="card">
       <div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;">
-        <span class="verdict-pill verdict-${assessment.verdict}">${escapeHtml(assessment.badgeLabel)}</span>
+        <span class="verdict-pill verdict-${sanitizeVerdictClassSuffix(assessment.verdict)}">${escapeHtml(assessment.badgeLabel)}</span>
         ${radarPillHtml}
       </div>
       <div class="product-name">${escapeHtml(master?.name || signal.title)}</div>
@@ -580,20 +614,20 @@ function renderPanelContent(
         </div>
       </div>
       <div class="btn-row">
-        <a class="btn-primary" href="${escapeSafeExternalHref(detailUrl)}" target="_blank" rel="noopener noreferrer">Xem Trên Rate.vn</a>
-        <a class="btn-secondary" href="${escapeSafeExternalHref(compareUrl)}" target="_blank" rel="noopener noreferrer">So Sánh Cấu Hình</a>
+        <a class="btn-primary" href="${detailUrl}" target="_blank" rel="noopener noreferrer">Xem Trên Rate.vn</a>
+        <a class="btn-secondary" href="${compareUrl}" target="_blank" rel="noopener noreferrer">So Sánh Cấu Hình</a>
       </div>
       <div class="btn-row" style="margin-top: 6px;">
-        <a class="btn-secondary" href="${escapeSafeExternalHref(leaderboardUrl)}" target="_blank" rel="noopener noreferrer">🏆 Bảng Xếp Hạng</a>
+        <a class="btn-secondary" href="${leaderboardUrl}" target="_blank" rel="noopener noreferrer">🏆 Bảng Xếp Hạng</a>
         ${
           versusUrl
-            ? `<a class="btn-secondary" href="${escapeSafeExternalHref(versusUrl)}" target="_blank" rel="noopener noreferrer">⚔️ Đối Đầu 1v1</a>`
-            : `<a class="btn-secondary" href="${escapeSafeExternalHref(inspectUrl)}" target="_blank" rel="noopener noreferrer">🔬 Kiểm Toán Sâu</a>`
+            ? `<a class="btn-secondary" href="${versusUrl}" target="_blank" rel="noopener noreferrer">⚔️ Đối Đầu 1v1</a>`
+            : `<a class="btn-secondary" href="${inspectUrl}" target="_blank" rel="noopener noreferrer">🔬 Kiểm Toán Sâu</a>`
         }
       </div>
       <div class="btn-row" style="margin-top: 6px;">
-        <a class="btn-secondary" href="${escapeSafeExternalHref(inspectUrl)}" target="_blank" rel="noopener noreferrer">🔬 Kiểm Toán Sâu</a>
-        <a class="btn-secondary" href="${escapeSafeExternalHref(watchlistUrl)}" target="_blank" rel="noopener noreferrer">🔔 Canh Giá Thật</a>
+        <a class="btn-secondary" href="${inspectUrl}" target="_blank" rel="noopener noreferrer">🔬 Kiểm Toán Sâu</a>
+        <a class="btn-secondary" href="${watchlistUrl}" target="_blank" rel="noopener noreferrer">🔔 Canh Giá Thật</a>
       </div>
     </div>
     ${leaderboardCardHtml}
@@ -753,10 +787,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   inpApiBase?.addEventListener('change', async () => {
     if (inpApiBase.value.trim()) {
-      await chrome.runtime.sendMessage({
+      const updated = (await chrome.runtime.sendMessage({
         type: 'RATE_UPDATE_SETTINGS',
         apiBaseUrl: inpApiBase.value.trim(),
-      });
+      })) as { settings?: ExtensionSettings } | undefined;
+      if (updated?.settings?.apiBaseUrl) {
+        inpApiBase.value = updated.settings.apiBaseUrl;
+      }
       void loadSidePanel();
     }
   });

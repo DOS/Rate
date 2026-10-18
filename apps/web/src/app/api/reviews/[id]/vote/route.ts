@@ -1,12 +1,12 @@
 import { revalidateTag } from 'next/cache';
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { RATE_CACHE_TAGS } from '@/server/rate';
 import {
   resolveReviewVoteInput,
   sanitizePublicApiError,
   type ReviewReportReason,
 } from '@/server/rate/api-handler';
+import { authenticateRateRequest } from '@/server/rate/request-auth';
 import { createLogger, serializeError } from '@/lib/logger';
 
 const log = createLogger('api.reviews.vote');
@@ -30,17 +30,27 @@ export async function OPTIONS() {
 
 /**
  * Review Trust Model Section 9: Voter Eligibility Gate
- * - Account must be at least 7 days old when `created_at` is present
+ * - Rejects anonymous Supabase sessions (`is_anonymous === true`)
  * - Account must have a confirmed email or phone when confirmation fields are present
+ * - Account must be at least 7 days old when `created_at` is present
  */
 export function evaluateVoterEligibility(user: {
   created_at?: string | null;
   email_confirmed_at?: string | null;
   phone_confirmed_at?: string | null;
+  is_anonymous?: boolean | null;
 }): { eligible: boolean; reason?: string } {
+  if (user.is_anonymous === true) {
+    return {
+      eligible: false,
+      reason: 'Anonymous accounts cannot vote on reviews.',
+    };
+  }
+  const hasConfirmationField =
+    ('email_confirmed_at' in user && user.email_confirmed_at !== undefined) ||
+    ('phone_confirmed_at' in user && user.phone_confirmed_at !== undefined);
   if (
-    'email_confirmed_at' in user &&
-    'phone_confirmed_at' in user &&
+    hasConfirmationField &&
     !user.email_confirmed_at &&
     !user.phone_confirmed_at
   ) {
@@ -78,38 +88,18 @@ export async function POST(
     );
   }
 
-  const supabaseUrl =
-    process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '';
-  const anonKey =
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    process.env.SUPABASE_ANON_KEY ||
-    '';
-
-  if (!supabaseUrl || !anonKey) {
-    return NextResponse.json(
-      { ok: false, error: 'Missing Supabase configuration' },
-      { status: 500, headers: REVIEW_VOTE_CORS_HEADERS }
-    );
-  }
-
-  const authHeader = request.headers.get('authorization') || '';
-  const bearerToken = authHeader.startsWith('Bearer ')
-    ? authHeader.slice(7).trim()
-    : '';
-
-  if (!bearerToken) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: 'Authentication required to persist review vote',
-        code: 'AUTH_REQUIRED',
-      },
-      { status: 401, headers: REVIEW_VOTE_CORS_HEADERS }
-    );
-  }
-
   try {
     const rawBody = await request.json().catch(() => null);
+
+    const auth = await authenticateRateRequest(
+      request,
+      'vote on a review',
+      REVIEW_VOTE_CORS_HEADERS
+    );
+    if (!auth.ok) {
+      return auth.response;
+    }
+
     const parsedInput = resolveReviewVoteInput(rawBody);
     if (!parsedInput) {
       return NextResponse.json(
@@ -123,28 +113,9 @@ export async function POST(
       );
     }
     const { voteType, reportReason } = parsedInput;
+    const { userId: voterId, user, rateClient } = auth;
 
-    const baseClient = createClient(supabaseUrl, anonKey, {
-      auth: { persistSession: false },
-      global: { headers: { Authorization: `Bearer ${bearerToken}` } },
-    });
-    const rateClient = baseClient.schema('rate');
-
-    const { data: userRes, error: authErr } =
-      await baseClient.auth.getUser(bearerToken);
-    const voterId = userRes?.user?.id;
-    if (authErr || !voterId || !userRes?.user) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: 'Invalid or expired authentication token',
-          code: 'AUTH_INVALID',
-        },
-        { status: 401, headers: REVIEW_VOTE_CORS_HEADERS }
-      );
-    }
-
-    const eligibility = evaluateVoterEligibility(userRes.user);
+    const eligibility = evaluateVoterEligibility(user);
     if (!eligibility.eligible) {
       return NextResponse.json(
         {
@@ -237,7 +208,11 @@ export async function POST(
       );
     }
 
-    for (const tag of [RATE_CACHE_TAGS.REVIEWS, RATE_CACHE_TAGS.PRODUCTS]) {
+    for (const tag of [
+      RATE_CACHE_TAGS.REVIEWS,
+      RATE_CACHE_TAGS.PRODUCTS,
+      RATE_CACHE_TAGS.STATS,
+    ]) {
       try {
         revalidateTag(tag, 'max');
       } catch {

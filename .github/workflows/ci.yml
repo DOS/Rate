@@ -46,14 +46,6 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - name: Cache Turborepo
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: .turbo
-          key: '${{ runner.os }}-turbo-${{ github.sha }}'
-          restore-keys: |
-            ${{ runner.os }}-turbo-
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -62,6 +54,9 @@ jobs:
 
       - name: Test the task-claim check
         run: node --test scripts/task-claim-check.test.mjs
+
+      - name: Test the E2E stale-stack pruning
+        run: node --test scripts/e2e/stale-stacks.test.mjs
 
       - name: Replay rate migrations on PostgreSQL 17 (Docker)
         run: node scripts/test-migration-replay.mjs

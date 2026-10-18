@@ -34,6 +34,11 @@ export async function GET() {
       }
     );
   } catch (error) {
-    return jsonApiError(500, 'Failed to fetch platform stats', error);
+    return jsonApiError(
+      500,
+      'Failed to fetch platform stats',
+      error,
+      PUBLIC_API_CORS_HEADERS
+    );
   }
 }

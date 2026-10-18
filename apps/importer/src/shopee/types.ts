@@ -5,10 +5,12 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 export {
+  MAX_VALID_VND_PRICE,
   SupportedEcommercePlatformSchema,
   ScrapedReviewerSchema,
   ScrapedReviewSchema,
   ScrapedProductSchema,
+  type ValidatedScrapedProduct,
 } from '@repo/shared-data';
 
 export type RateSupabaseClient = SupabaseClient;

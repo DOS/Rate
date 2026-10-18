@@ -512,6 +512,11 @@ async function testCookieSessions() {
     ) as Req
   );
   assert.equal(res.status, 200, 'a same-origin cookie session is accepted');
+  assert.equal(
+    res.headers.get('access-control-allow-origin'),
+    '*',
+    'POST /api/v1/rate/watchlist 200 response must include Access-Control-Allow-Origin: * (#402)'
+  );
   const [rpc] = rpcCalls('upsert_price_alert');
   assert.ok(rpc, 'the RPC runs for the cookie session');
   assert.equal(
@@ -535,9 +540,66 @@ async function testCookieSessions() {
       403,
       `cookie session from origin ${origin ?? '(none)'} is rejected`
     );
+    assert.equal(
+      res.headers.get('access-control-allow-origin'),
+      '*',
+      'authenticateRateRequest 403 rejection must include CORS headers (#402)'
+    );
     assert.equal((await res.json()).code, 'CROSS_SITE');
     assert.equal(rpcCalls('upsert_price_alert').length, 0);
   }
+
+  // Over MAX_VALID_VND_PRICE (1_000_000_000) must be rejected with 400 + CORS headers (#402)
+  const overMaxPriceRes = await POST(
+    postWithCookies(
+      '/api/v1/rate/watchlist',
+      { slug: 'apple-iphone-16-128gb', targetPrice: 1_500_000_000 },
+      cookie,
+      'http://localhost'
+    ) as Req
+  );
+  assert.equal(
+    overMaxPriceRes.status,
+    400,
+    'targetPrice > MAX_VALID_VND_PRICE must return 400 (#402)'
+  );
+  assert.equal(overMaxPriceRes.headers.get('access-control-allow-origin'), '*');
+
+  // Canonical slugs with dots or underscores must pass PriceAlertBodySchema (#402)
+  const dotSlugRes = await POST(
+    postWithCookies(
+      '/api/v1/rate/watchlist',
+      { slug: 'ipad-pro-12.9-m2_wifi', targetPrice: 22_000_000 },
+      cookie,
+      'http://localhost'
+    ) as Req
+  );
+  assert.equal(
+    dotSlugRes.status,
+    200,
+    'PriceAlertBodySchema must accept slugs with dots and underscores (#402)'
+  );
+
+  // POST /api/reviews/[id]/vote also accepts same-origin @supabase/ssr cookies and rejects cross-site cookies (#402)
+  const { POST: postVote } = await import('@/app/api/reviews/[id]/vote/route');
+  type VoteReq = Parameters<typeof postVote>[0];
+  const reviewId = '11111111-2222-4333-8444-666666666666';
+
+  const crossSiteVoteRes = await postVote(
+    postWithCookies(
+      `/api/reviews/${reviewId}/vote`,
+      { voteType: 'up' },
+      cookie,
+      'https://evil.example'
+    ) as VoteReq,
+    { params: Promise.resolve({ id: reviewId }) }
+  );
+  assert.equal(
+    crossSiteVoteRes.status,
+    403,
+    'POST /api/reviews/[id]/vote must reject cross-site cookie sessions with 403 (#402)'
+  );
+  assert.equal((await crossSiteVoteRes.json()).code, 'CROSS_SITE');
 
   console.log(
     '  ✅ Cookie sessions (@supabase/ssr) work same-origin and are rejected cross-site'

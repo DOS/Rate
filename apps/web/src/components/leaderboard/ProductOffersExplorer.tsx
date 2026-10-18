@@ -284,7 +284,7 @@ export default function ProductOffersExplorer({
             </span>
             <strong className="text-dark small">
               {t('offersSpreadSavePrefix')}{' '}
-              <span className="text-success font-monospace">
+              <span className="text-success rate-tabular">
                 {priceSpreadAudit.spreadVnd.toLocaleString('vi-VN')} ₫ (
                 {priceSpreadAudit.spreadPct}%)
               </span>{' '}
@@ -299,7 +299,7 @@ export default function ProductOffersExplorer({
               </span>
             </strong>
           </div>
-          <div className="small font-monospace text-secondary">
+          <div className="small rate-tabular text-secondary">
             {t('offersSpreadLowLabel')}{' '}
             <strong className="text-success">
               {priceSpreadAudit.cheapest.price_current.toLocaleString('vi-VN')}{' '}
@@ -552,11 +552,11 @@ export default function ProductOffersExplorer({
                       </div>
                     </td>
                     <td>
-                      <div className="fw-bold text-dark font-monospace">
+                      <div className="fw-bold text-dark rate-tabular">
                         {price} ₫
                       </div>
                       {origPrice && (
-                        <div className="text-muted small text-decoration-line-through font-monospace">
+                        <div className="text-muted small text-decoration-line-through rate-tabular">
                           {origPrice} ₫
                         </div>
                       )}

@@ -386,7 +386,8 @@ export async function GET(req: NextRequest) {
     return jsonApiError(
       500,
       'Failed to compute 1v1 Head-to-Head JReviews versus verdict',
-      err
+      err,
+      PUBLIC_API_CORS_HEADERS
     );
   }
 }
