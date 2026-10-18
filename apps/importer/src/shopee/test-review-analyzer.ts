@@ -697,8 +697,13 @@ async function run() {
       false,
       'When .rpc() is provided, master_products rating is updated exclusively by SQL RPC'
     );
-    // 6c. Flags written by the burst auditor survive re-analysis (DOS/Rate#322)
-    assert.deepEqual(flagReads[0]!.detectors, [BURST_AUDITOR_DETECTOR]);
+    // 6c. Flags written by the burst auditor (DOS/Rate#322) and by the community
+    // review RPC survive re-analysis.
+    assert.deepEqual(flagReads[0]!.detectors, [
+      BURST_AUDITOR_DETECTOR,
+      'rate-community-guard',
+      'rate-jreviews-guard',
+    ]);
     assert.deepEqual(
       flagReads[0]!.ids,
       input.map(r => r.id)
