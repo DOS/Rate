@@ -56,10 +56,10 @@
   "dependencies": {
     "@repo/shared-data": "workspace:*",
     "@supabase/supabase-js": "^2.117.2",
-    "dotenv": "^16.4.7"
+    "dotenv": "^18.0.8"
   },
   "devDependencies": {
-    "@types/node": "^26.6.3",
+    "@types/node": "^26.6.5",
     "@repo/eslint-config": "workspace:*",
     "eslint": "^9.39.5",
     "prettier": "^3.9.6",

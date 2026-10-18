@@ -12,7 +12,7 @@ import { createClient } from '@supabase/supabase-js';
 import { createImporterLogger } from '../src/shopee/logger.js';
 import { scopeSupabaseToRate } from '../src/shopee/types.js';
 
-dotenv.config();
+dotenv.config({ quiet: true });
 
 const logger = createImporterLogger('EnqueueShopee');
 const admin = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {

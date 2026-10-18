@@ -337,8 +337,8 @@ const isDirectExecution =
   import.meta.url === pathToFileURL(process.argv[1]!).href;
 
 if (isDirectExecution) {
-  dotenv.config();
-  dotenv.config({ path: '../../.env' });
+  dotenv.config({ quiet: true });
+  dotenv.config({ path: '../../.env', quiet: true });
   const applyFlag = process.argv.includes('--apply');
   const auditOnlyFlag = process.argv.includes('--audit-only');
   (auditOnlyFlag
