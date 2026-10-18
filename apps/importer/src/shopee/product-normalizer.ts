@@ -1061,7 +1061,9 @@ export class ProductNormalizer {
       const watchMatch = title.match(
         /(?:apple\s*)?watch\s*(ultra\s*\d+|series\s*\d+|se(?:\s*\d+)?)/i
       );
-      const airpodsMatch = title.match(/airpods\s*(pro\s*\d+|max|\d+)/i);
+      const airpodsMatch = title.match(
+        /airpods\s*(?:(pro)(?:\s*(?:gen|thế\s*hệ)?\s*(\d+))?|(max)|(?:gen|thế\s*hệ)?\s*(\d+))/i
+      );
 
       // Retail titles often put the chip after the screen size ("iPad Pro 11 inch M4",
       // "MacBook Air 13 inch M3"); pick it up wherever it sits.
@@ -1081,8 +1083,16 @@ export class ProductNormalizer {
             : `MacBook ${line}`;
       } else if (watchMatch && watchMatch[1]) {
         model = `Watch ${watchMatch[1].trim()}`;
-      } else if (airpodsMatch && airpodsMatch[1]) {
-        model = `AirPods ${airpodsMatch[1].trim()}`;
+      } else if (airpodsMatch) {
+        if (airpodsMatch[1]) {
+          model = `AirPods Pro${airpodsMatch[2] ? ` ${airpodsMatch[2]}` : ''}`;
+        } else if (airpodsMatch[3]) {
+          model = 'AirPods Max';
+        } else if (airpodsMatch[4]) {
+          model = `AirPods ${airpodsMatch[4]}`;
+        } else {
+          model = 'AirPods';
+        }
       } else {
         model = 'iPhone';
       }

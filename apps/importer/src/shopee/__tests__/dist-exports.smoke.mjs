@@ -14,10 +14,15 @@ for (const name of [
   'detectCategorySlug',
   'EntityMatcher',
   'AiSpecEnricher',
+  'getAiSpecEnrichmentJsonSchema',
   'sanitizeSpecifications',
   'AiReviewAnalyzer',
+  'getAiReviewBatchJsonSchema',
   'computeReviewWeight',
   'ShopeeIngestionPipeline',
+  'createImporterLogger',
+  'sanitizeAiGeneratedText',
+  'computeRetryDelayMs',
 ]) {
   assert.equal(
     typeof crawlers[name],
@@ -25,6 +30,14 @@ for (const name of [
     `@repo/crawlers is missing export ${name}`
   );
 }
+
+const { createImporterLogger } =
+  await import('@repo/crawlers/shopee/logger');
+assert.equal(
+  typeof createImporterLogger,
+  'function',
+  'logger subpath export is broken'
+);
 
 const { ArenaSpecSyncer } =
   await import('@repo/crawlers/shopee/arena-spec-syncer');
@@ -83,6 +96,7 @@ const pkgDir = require
 for (const dts of [
   'dist/index.d.ts',
   'dist/shopee/types.d.ts',
+  'dist/shopee/logger.d.ts',
   'dist/shopee/arena-spec-syncer.d.ts',
   'dist/shopee/flagship-seed-data.d.ts',
   'dist/shopee/jobs/backfill-specs.d.ts',

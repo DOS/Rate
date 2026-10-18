@@ -1,0 +1,214 @@
+import crypto from 'node:crypto';
+
+export interface ImporterAlgorithmMetadata {
+  algo: string;
+  version: string;
+  paramsHash: string;
+}
+
+/**
+ * Computes a deterministic algorithm provenance descriptor `{ algo, version, paramsHash }`
+ * for Open-Core scoring and normalization engines.
+ */
+export function computeImporterAlgorithmMetadata(
+  algo: string,
+  version: string,
+  params: Record<string, unknown>
+): ImporterAlgorithmMetadata {
+  const sortedEntries = Object.keys(params)
+    .sort()
+    .map(k => [k, params[k]]);
+  const canonicalJson = JSON.stringify(sortedEntries);
+  const paramsHash = crypto
+    .createHash('sha256')
+    .update(`${algo}@${version}:${canonicalJson}`)
+    .digest('hex')
+    .slice(0, 12);
+  return {
+    algo,
+    version,
+    paramsHash,
+  };
+}
+
+/**
+ * Computes exponential backoff with full jitter for LLM / network retries on 429 or 5xx (Audit C8).
+ */
+export function computeRetryDelayMs(
+  attempt: number,
+  baseDelayMs = 400,
+  maxDelayMs = 5000,
+  randomFn: () => number = Math.random
+): number {
+  const safeAttempt = Math.max(0, Math.min(10, Math.floor(attempt)));
+  const exp = Math.min(maxDelayMs, baseDelayMs * Math.pow(2, safeAttempt));
+  const half = Math.floor(exp / 2);
+  const jitter = Math.floor(Math.max(0, Math.min(1, randomFn())) * (exp - half + 1));
+  return half + jitter;
+}
+
+/**
+ * Sanitizes untrusted AI-generated output text (`ai_summary`, `pros`, `cons`, `reason`)
+ * by stripping HTML tags, control characters, URLs, and phone/Zalo numbers to prevent
+ * prompt-injection phishing or rival spam from surfacing on public pages (Audit C8).
+ */
+export function sanitizeAiGeneratedText(raw: unknown, maxLen = 400): string {
+  if (typeof raw !== 'string') return '';
+  return (
+    raw
+      .replace(/<[^>]*>/g, ' ')
+      // Strip explicit http(s):// and www. URLs
+      .replace(/\b(?:https?:\/\/|www\.)\S+/gi, '[link-removed]')
+      // Strip bare domain links with common TLDs/paths (e.g. bit.ly/xyz, shopee.vn/abc, t.me/xyz)
+      .replace(
+        /\b[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.(?:vn|com|net|org|io|me|ly|gg|co|shop|store|xyz|info)(?:\/\S*)?\b/gi,
+        '[link-removed]'
+      )
+      // Strip Vietnamese phone / Zalo numbers (e.g. 0912345678, +84 912 345 678, 098.123.4567)
+      .replace(/(?:\+?84|0)\s*[1-9](?:[\s.-]*\d){7,9}\b/g, '[phone-removed]')
+      // eslint-disable-next-line no-control-regex -- stripping control characters is intentional
+      .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, maxLen)
+  );
+}
+
+/**
+ * Redacts PII (emails), proxy credentials (`user:pass@`), Bearer/JWT tokens, and API keys
+ * from log strings and metadata values (Audit Low).
+ */
+export function redactSensitiveString(raw: string): string {
+  if (!raw) return raw;
+  return (
+    raw
+      // Proxy credentials in URLs: http://user:pass@host -> http://u***:p***@host
+      .replace(/(\bhttps?:\/\/)([^/\s:@]+):([^/\s@]+)@/gi, '$1u***:p***@')
+      // Bearer / eyJ JWT tokens
+      .replace(/\bBearer\s+[A-Za-z0-9._~+/-]+=*/gi, 'Bearer [REDACTED]')
+      .replace(
+        /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g,
+        '[REDACTED_JWT]'
+      )
+      // API keys (sk-..., sbp_..., sb_secret_...)
+      .replace(
+        /\b(?:sk-[A-Za-z0-9_-]{12,}|sbp_[A-Za-z0-9_-]{12,}|sb_secret_[A-Za-z0-9_-]{12,})\b/g,
+        '[REDACTED_KEY]'
+      )
+      // Email addresses: alice@example.com -> a***@example.com
+      .replace(
+        /\b([A-Za-z0-9._%+-])[A-Za-z0-9._%+-]*@([A-Za-z0-9.-]+\.[A-Za-z]{2,})\b/g,
+        '$1***@$2'
+      )
+  );
+}
+
+export function sanitizeLogMeta(value: unknown, depth = 0): unknown {
+  if (depth > 4 || value === null || value === undefined) return value;
+  if (typeof value === 'string') return redactSensitiveString(value);
+  if (typeof value === 'number' || typeof value === 'boolean') return value;
+  if (Array.isArray(value)) {
+    return value.slice(0, 50).map(item => sanitizeLogMeta(item, depth + 1));
+  }
+  if (typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      if (/(password|secret|token|api_?key|service_role)/i.test(k)) {
+        out[k] = '[REDACTED]';
+      } else {
+        out[k] = sanitizeLogMeta(v, depth + 1);
+      }
+    }
+    return out;
+  }
+  return String(value);
+}
+
+export type ImporterLogLevel = 'info' | 'warn' | 'error';
+
+export interface ImporterLogContext {
+  component: string;
+  runId?: string | null;
+  jobId?: string | null;
+  platform?: string | null;
+}
+
+export interface ImporterLogEntry {
+  timestamp: string;
+  level: ImporterLogLevel;
+  service: '@repo/crawlers';
+  component: string;
+  run_id: string | null;
+  job_id: string | null;
+  platform: string | null;
+  event: string;
+  message: string;
+  meta?: Record<string, unknown>;
+}
+
+/**
+ * Structured JSON logger for `@repo/crawlers` (`apps/importer`) with secret/PII redaction (Audit Low).
+ */
+export class ImporterStructuredLogger {
+  private context: ImporterLogContext;
+
+  constructor(context: ImporterLogContext) {
+    this.context = { ...context };
+  }
+
+  public child(overrides: Partial<ImporterLogContext>): ImporterStructuredLogger {
+    return new ImporterStructuredLogger({
+      ...this.context,
+      ...overrides,
+    });
+  }
+
+  public formatEntry(
+    level: ImporterLogLevel,
+    event: string,
+    message: string,
+    meta?: Record<string, unknown>
+  ): ImporterLogEntry {
+    const sanitizedMeta = meta ? (sanitizeLogMeta(meta) as Record<string, unknown>) : undefined;
+    return {
+      timestamp: new Date().toISOString(),
+      level,
+      service: '@repo/crawlers',
+      component: this.context.component,
+      run_id: this.context.runId ?? process.env.RATE_RUN_ID ?? null,
+      job_id: this.context.jobId ?? null,
+      platform: this.context.platform ?? null,
+      event,
+      message: redactSensitiveString(message),
+      ...(sanitizedMeta && Object.keys(sanitizedMeta).length > 0 ? { meta: sanitizedMeta } : {}),
+    };
+  }
+
+  public info(event: string, message: string, meta?: Record<string, unknown>): ImporterLogEntry {
+    const entry = this.formatEntry('info', event, message, meta);
+    console.log(JSON.stringify(entry));
+    return entry;
+  }
+
+  public warn(event: string, message: string, meta?: Record<string, unknown>): ImporterLogEntry {
+    const entry = this.formatEntry('warn', event, message, meta);
+    console.warn(JSON.stringify(entry));
+    return entry;
+  }
+
+  public error(event: string, message: string, meta?: Record<string, unknown>): ImporterLogEntry {
+    const entry = this.formatEntry('error', event, message, meta);
+    console.error(JSON.stringify(entry));
+    return entry;
+  }
+}
+
+export function createImporterLogger(
+  component: string,
+  overrides: Omit<ImporterLogContext, 'component'> = {}
+): ImporterStructuredLogger {
+  return new ImporterStructuredLogger({
+    component,
+    ...overrides,
+  });
+}

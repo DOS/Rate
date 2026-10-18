@@ -63,6 +63,8 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc 4 tầ
 - [ ] **6.8. Đa Ngôn Ngữ Đầy Đủ (`DOS/Rate#241`, `#251`-`#255`):**
   - [x] Một catalog next-intl (namespace `rate` có kiểm tra kiểu), client chỉ nhận namespace cần dùng (`DOS/Rate#250`).
   - [ ] Đưa khoảng 1.469 dòng chuỗi tiếng Việt viết cứng trong khoảng 40 component vào catalog vi/en/cs, theo 5 nhóm.
+- [x] **6.9. Củng Cố Toàn Diện Open-Core Engine & Rate-Services (`DOS/Rate#215`, `#259` & `DOS/Rate-Services#45`-`#52`):**
+  - Hoàn tất 100% mục kiểm toán `DOS/Rate-Services` (`K1-K3`, `C1-C12`, `M1-M14`, `Low`) và Open-Core Engine (`C6`, `C8`, `T15`, `Low`): `strict: true` toàn bộ TypeScript, `ScrapedProductSchema` (Zod 4) ở ranh giới cào dữ liệu, `z.toJSONSchema()` cho `response_format: { type: 'json_schema', strict: true }` kèm backoff có jitter và bộ lọc URL/số điện thoại chống prompt-injection (`sanitizeAiGeneratedText`), bộ dữ liệu cặp sản phẩm gán nhãn đo Precision/Recall = 100%, `DomainTokenBucketLimiter` + `PlatformCircuitBreaker`, Chromium sandbox cấu hình theo môi trường, `StructuredLogger` che secret/PII, và gắn `algorithmMeta` (`{ algo, version, paramsHash }`) cho toàn bộ 4 Auditor.
 
 ### 🚀 Phase 7: Mở Rộng Độ Phủ Dữ Liệu Thật Đa Sàn & Kiểm Thử E2E (2027 Q1)
 
@@ -70,5 +72,5 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc 4 tầ
   - Vận hành định kỳ `scheduled-crawler.yml` trên `DOS/Rate-Services` để thu thập giá niêm yết thật, lịch sử giá thật và đánh giá thật có gắn nguồn kiểm chứng (`spec_source`, `observation_id`) cho toàn bộ 5 ngành hàng.
 - [x] **7.2. Bộ Kiểm Thử Hành Vi Route Handlers Toàn Diện (`DOS/Rate#179`, `#187` - Audit T1):**
   - Kiểm thử trực tiếp `NextRequest -> NextResponse` trên toàn bộ 15 REST API v1 endpoints (`/api/v1/rate/products`, `/products/[slug]`, `/compare`, `/versus`, `/lookup`, `/inspect`, `/deals`, `/leaderboard`, `/merchants`, `/merchants/[id]`, `/stats`, `/openapi`, `/openapi.json`, `/revalidate`, `/extension/lookup`, `/extension/ingest`, `/api/reviews/[id]/vote`, `/api/health`) kiểm tra đầy đủ mã `200`, `204`, `400`, `401`, `404`, `429`, `500` (Suite `[56/61]` & `[60/61]`).
-- [x] **7.3. Tối Ưu Hóa Cache Đa Tầng Next.js 16 (`withRateDataCache` & `/api/v1/rate/revalidate` - `DOS/Rate#186` - Audit C3):**
-  - Kết hợp `React.cache()` (chống trùng lặp trong cùng 1 SSR request) với `unstable_cache` (`withRateDataCache` trong `src/server/rate/cache-tags.ts`) gắn thẻ xác định (`rate:products`, `rate:product:<slug>`, `rate:category:<slug>`, `rate:merchant:<id>`, `rate:deals`, `rate:reviews`, `rate:price-history`) và endpoint `POST /api/v1/rate/revalidate` xác thực `timingSafeEqual`.
+- [x] **7.3. Tối Ưu Hóa Cache Đa Tầng Next.js 16 (`withRateDataCache` & `/api/v1/rate/revalidate` - `DOS/Rate#186`, `DOS/Rate-Services#52` - Audit C3):**
+  - Kết hợp `React.cache()` (chống trùng lặp trong cùng 1 SSR request) với `unstable_cache` (`withRateDataCache` trong `src/server/rate/cache-tags.ts`) gắn thẻ xác định (`rate:products`, `rate:product:<slug>`, `rate:category:<slug>`, `rate:merchant:<id>`, `rate:deals`, `rate:reviews`, `rate:price-history`), endpoint `POST /api/v1/rate/revalidate` xác thực `timingSafeEqual`, và tích hợp tự động gọi revalidate tại Step 8 (`triggerWebCacheRevalidation`) của `DOS/Rate-Services`.
