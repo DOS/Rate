@@ -602,7 +602,28 @@ async function runTests() {
       masterProductId: null,
       slug: 'iphone-16-pro-max-256gb',
       hideFake: true,
+      limit: 50,
     }
+  );
+  assert.deepEqual(
+    parseReviewsQueryParams(
+      new URLSearchParams(
+        'productId=123e4567-e89b-12d3-a456-426614174000&limit=25'
+      )
+    ),
+    {
+      masterProductId: '123e4567-e89b-12d3-a456-426614174000',
+      slug: null,
+      hideFake: false,
+      limit: 25,
+    }
+  );
+  assert.equal(
+    parseReviewsQueryParams(
+      new URLSearchParams('slug=iphone-16-pro-max-256gb&limit=999')
+    ),
+    null,
+    'parseReviewsQueryParams must reject out-of-range limit'
   );
   assert.equal(
     parseReviewsQueryParams(
@@ -1187,7 +1208,7 @@ async function runTests() {
     'has5g',
     'minBatteryMah',
     'minFastChargeW',
-    'ipRating',
+    'hasNfc',
   ]) {
     assert.ok(
       productParamNames.includes(expectedParam),
@@ -1219,8 +1240,8 @@ async function runTests() {
       properties: Record<string, { maximum?: number }>;
     }
   ).properties;
-  assert.equal(ingestProps.price?.maximum, 1_000_000_000);
-  assert.equal(ingestProps.originalPrice?.maximum, 1_000_000_000);
+  assert.equal(ingestProps.price?.maximum, 500_000_000);
+  assert.equal(ingestProps.originalPrice?.maximum, 500_000_000);
   console.log(
     '  ✅ [OpenAPI 3.1] Spec parameter and schema bounds verified (#359)'
   );

@@ -217,14 +217,16 @@ export function buildRateOpenApiSpec(
             {
               name: 'minFastChargeW',
               in: 'query',
-              description: 'Minimum wired fast-charging power in Watts (1-500)',
+              description:
+                'Minimum wired fast-charging power in Watts (1-500); alias `charge` is also accepted',
               schema: { type: 'number' },
             },
             {
-              name: 'ipRating',
+              name: 'hasNfc',
               in: 'query',
-              description: 'Ingress protection rating filter (e.g. IP68, IP69)',
-              schema: { type: 'string' },
+              description:
+                'Filter by NFC support; alias `nfc` is also accepted',
+              schema: { type: 'boolean' },
             },
             {
               name: 'minRating',
@@ -1407,13 +1409,13 @@ export function buildRateOpenApiSpec(
             price: {
               type: 'integer',
               minimum: 1,
-              maximum: 1000000000,
+              maximum: 500000000,
               example: 28990000,
             },
             originalPrice: {
               type: 'integer',
               minimum: 1,
-              maximum: 1000000000,
+              maximum: 500000000,
               nullable: true,
               example: 34990000,
             },
