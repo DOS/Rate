@@ -35,7 +35,7 @@ export interface ArenaSyncedDeviceSpec {
 function stripHtmlTags(raw: string): string {
   return raw
     .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<[^>]+>/g, ' ')
+    .replace(/<[^<>]+>/g, ' ')
     .replace(/&nbsp;/gi, ' ')
     .replace(/&amp;/gi, '&')
     .replace(/&quot;/gi, '"')
@@ -49,14 +49,31 @@ function stripHtmlTags(raw: string): string {
  */
 export function extractGsmArenaDataSpecs(html: string): Record<string, string> {
   const specs: Record<string, string> = {};
-  const regex = /<([a-z0-9]+)\b[^>]*\bdata-spec=["']([^"']+)["'][^>]*>([\s\S]*?)<\/\1>/gi;
+  // Scan opening tags, then find the matching close with indexOf. A single
+  // regex with `[^>]*\bdata-spec=` and a lazy body backtracks polynomially on
+  // hostile pages (CodeQL js/polynomial-redos).
+  const openTag = /<([a-z0-9]+)\b([^<>]*)>/gi;
+  const lowerHtml = html.toLowerCase();
+  // A close tag missing after one position is missing after every later one,
+  // so unclosed tags are searched for once rather than once per opening.
+  const unclosed = new Set<string>();
   let match: RegExpExecArray | null;
-  while ((match = regex.exec(html)) !== null) {
-    const key = match[2]?.trim();
-    const val = stripHtmlTags(match[3] || '');
+  while ((match = openTag.exec(html)) !== null) {
+    const keyMatch = /\bdata-spec=["']([^"']+)["']/i.exec(match[2] || '');
+    if (!keyMatch) continue;
+    const close = `</${match[1].toLowerCase()}>`;
+    if (unclosed.has(close)) continue;
+    const closeAt = lowerHtml.indexOf(close, openTag.lastIndex);
+    if (closeAt === -1) {
+      unclosed.add(close);
+      continue;
+    }
+    const key = keyMatch[1]?.trim();
+    const val = stripHtmlTags(html.slice(openTag.lastIndex, closeAt));
     if (key && val && !specs[key]) {
       specs[key] = val;
     }
+    openTag.lastIndex = closeAt + close.length;
   }
   return specs;
 }
@@ -282,8 +299,10 @@ export function parseGsmArenaHtmlToSpecs(
  */
 export function extractPhoneArenaTableSpecs(html: string): Record<string, string> {
   const out: Record<string, string> = {};
+  // Cell bodies cannot contain another tr/th/td tag, so each attempt stops at
+  // the next cell instead of rescanning the rest of the page (polynomial-redos).
   const rowRegex =
-    /<tr[^>]*>\s*<(?:th|td)[^>]*>([\s\S]*?)<\/(?:th|td)>\s*<td[^>]*>([\s\S]*?)<\/td>\s*<\/tr>/gi;
+    /<tr[^<>]*>\s*<(?:th|td)[^<>]*>((?:(?!<\/?t[rhd]\b)[\s\S])*)<\/(?:th|td)>\s*<td[^<>]*>((?:(?!<\/?t[rhd]\b)[\s\S])*)<\/td>\s*<\/tr>/gi;
   let match: RegExpExecArray | null;
   while ((match = rowRegex.exec(html)) !== null) {
     const label = stripHtmlTags(match[1] || '')
@@ -313,19 +332,24 @@ export function parseGsmArenaBrandCatalogHtml(
   brandHint?: string
 ): DiscoveredArenaCatalogItem[] {
   const results: DiscoveredArenaCatalogItem[] = [];
-  const itemRegex = /<li[^>]*>\s*<a\s+href=["']([^"']+\.php)["'][^>]*>([\s\S]*?)<\/a>\s*<\/li>/gi;
+  // The link body cannot contain another <a> or <li>, so a page of unclosed
+  // items cannot make each attempt rescan to the end (polynomial-redos).
+  const itemRegex =
+    /<li[^<>]*>\s*<a\s+href=["']([^"'<>]+\.php)["'][^<>]*>((?:(?!<\/?(?:a|li)\b)[\s\S])*)<\/a>\s*<\/li>/gi;
   let match: RegExpExecArray | null;
   while ((match = itemRegex.exec(html)) !== null) {
     const href = match[1]?.trim() || '';
     const inner = match[2] || '';
-    const nameMatch = inner.match(/<span[^>]*>([\s\S]*?)<\/span>/i);
+    const nameMatch = inner.match(/<span[^<>]*>((?:(?!<\/?span\b)[\s\S])*)<\/span>/i);
     const rawName = stripHtmlTags(nameMatch ? nameMatch[1] || '' : inner);
     if (!rawName || !href) continue;
     const fullName =
       brandHint && !new RegExp(`^${brandHint}\\b`, 'i').test(rawName)
         ? `${brandHint} ${rawName}`
         : rawName;
-    const imgMatch = inner.match(/<img[^>]+src=["']([^"']+)["']/i);
+    const imgSrc = [...inner.matchAll(/<img\b([^<>]*)>/gi)]
+      .map(img => /\bsrc=["']([^"']+)["']/i.exec(img[1] || '')?.[1])
+      .find(Boolean);
     const url = href.startsWith('http')
       ? href
       : `https://www.gsmarena.com/${href.replace(/^\/+/, '')}`;
@@ -333,7 +357,7 @@ export function parseGsmArenaBrandCatalogHtml(
       source: 'gsmarena',
       name: fullName,
       url,
-      imageUrl: imgMatch?.[1],
+      imageUrl: imgSrc,
     });
   }
   return results;
@@ -344,12 +368,16 @@ export function parseGsmArenaBrandCatalogHtml(
  */
 export function parsePhoneArenaCatalogHtml(html: string): DiscoveredArenaCatalogItem[] {
   const results: DiscoveredArenaCatalogItem[] = [];
-  const linkRegex =
-    /<a[^>]+href=["'](https?:\/\/www\.phonearena\.com\/phones\/[^"'#?]+|\/phones\/[^"'#?]+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+  // Match the whole <a> first (attributes cannot span tags, the body cannot
+  // contain another <a>), then read href from the attributes. One regex with
+  // `[^>]+href=` backtracks polynomially on repeated attributes.
+  const linkRegex = /<a\s([^<>]*)>((?:(?!<\/?a\b)[\s\S])*)<\/a>/gi;
+  const hrefRegex =
+    /(?:^|\s)href=["'](https?:\/\/www\.phonearena\.com\/phones\/[^"'#?]+|\/phones\/[^"'#?]+)["']/i;
   const seen = new Set<string>();
   let match: RegExpExecArray | null;
   while ((match = linkRegex.exec(html)) !== null) {
-    const rawHref = match[1]?.trim() || '';
+    const rawHref = hrefRegex.exec(match[1] || '')?.[1]?.trim() || '';
     const text = stripHtmlTags(match[2] || '');
     if (!rawHref || !text || text.length < 4) continue;
     if (/compare|benchmarks|size-compare|reviews/i.test(rawHref)) continue;
