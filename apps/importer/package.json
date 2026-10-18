@@ -37,7 +37,7 @@
     "lint": "eslint . --max-warnings 0",
     "format": "prettier --write \"src/**/*.ts\"",
     "backfill:specs": "tsx src/shopee/jobs/backfill-specs.ts",
-    "test": "tsx src/shopee/__tests__/open-core-intelligence.test.ts && tsx src/shopee/__tests__/entity-matcher.test.ts && tsx src/shopee/__tests__/shopee-to-supabase.test.ts && tsx src/shopee/test-ai-enricher.ts && tsx src/shopee/test-review-analyzer.ts",
+    "test": "tsx src/shopee/__tests__/open-core-intelligence.test.ts && tsx src/shopee/__tests__/entity-matcher.test.ts && tsx src/shopee/__tests__/shopee-to-supabase.test.ts && tsx src/shopee/__tests__/paging.test.ts && tsx src/shopee/test-ai-enricher.ts && tsx src/shopee/test-review-analyzer.ts",
     "test:dist": "node src/shopee/__tests__/dist-exports.smoke.mjs"
   },
   "keywords": [

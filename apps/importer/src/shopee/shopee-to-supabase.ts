@@ -133,10 +133,7 @@ export class ShopeeIngestionPipeline {
   }
 
   /**
-   * Initializes category lookup across all 5 tech categories
-   */
-  /**
-   * Which of `ids` this product already stores. Filters on the ids (100 per
+   * Which of `ids` this product already stores. Filters on the ids (50 per
    * request, a short URL) instead of reading every stored review, which
    * PostgREST caps at max-rows.
    */
@@ -147,12 +144,12 @@ export class ShopeeIngestionPipeline {
   ): Promise<Set<string>> {
     const found = new Set<string>();
     const unique = [...new Set(ids)];
-    for (let i = 0; i < unique.length; i += 100) {
+    for (let i = 0; i < unique.length; i += 50) {
       const { data, error } = await this.supabase
         .from('reviews')
         .select('platform_review_id')
         .eq('product_id', productId)
-        .in('platform_review_id', unique.slice(i, i + 100));
+        .in('platform_review_id', unique.slice(i, i + 50));
       if (error) throw new Error(`${errorPrefix}: ${error.message}`);
       for (const r of (data || []) as Array<{ platform_review_id: string }>) {
         found.add(r.platform_review_id);
@@ -161,6 +158,9 @@ export class ShopeeIngestionPipeline {
     return found;
   }
 
+  /**
+   * Initializes category lookup across all 5 tech categories
+   */
   public async init(): Promise<void> {
     const { data: cats, error: catsErr } = await this.supabase
       .from('categories')
