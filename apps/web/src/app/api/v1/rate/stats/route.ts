@@ -1,6 +1,16 @@
 import { NextResponse } from 'next/server';
 import { getCachedRatePlatformStats } from '@/server/rate';
-import { jsonApiError } from '@/server/rate/api-handler';
+import {
+  PUBLIC_API_CORS_HEADERS,
+  jsonApiError,
+} from '@/server/rate/api-handler';
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: PUBLIC_API_CORS_HEADERS,
+  });
+}
 
 /**
  * GET /api/v1/rate/stats
@@ -18,7 +28,7 @@ export async function GET() {
       {
         status: 200,
         headers: {
-          'Access-Control-Allow-Origin': '*',
+          ...PUBLIC_API_CORS_HEADERS,
           'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300',
         },
       }

@@ -78,6 +78,7 @@ export interface CrossPlatformPriceSpreadItem {
 export interface CrossPlatformDealRadarResponse {
   generatedAt: string;
   categoryFilter: CanonicalCategorySlug | 'all';
+  platformFilter?: string;
   totalClustersAnalyzed: number;
   totalOffersAnalyzed: number;
   genuineDeals: CrossPlatformDealRadarItem[];
@@ -114,10 +115,13 @@ export function computeCrossPlatformDealRadarFromData(
   }>,
   options?: {
     categorySlug?: CanonicalCategorySlug | 'all';
+    platform?: string;
     limit?: number;
   }
 ): CrossPlatformDealRadarResponse {
   const categoryFilter = options?.categorySlug || 'all';
+  const platformFilter =
+    (options?.platform || 'all').trim().toLowerCase() || 'all';
   const limit = Math.max(1, Math.min(options?.limit || 12, 50));
 
   const genuineDeals: CrossPlatformDealRadarItem[] = [];
@@ -175,7 +179,12 @@ export function computeCrossPlatformDealRadarFromData(
       validOffers.map((o) => o.platform.toLowerCase())
     ).size;
 
-    if (spreadVnd > 0) {
+    if (
+      spreadVnd > 0 &&
+      (platformFilter === 'all' ||
+        cheapestOffer.platform.toLowerCase() === platformFilter ||
+        priciestOffer.platform.toLowerCase() === platformFilter)
+    ) {
       priceSpreadLeaders.push({
         id: `spread-${master.slug}`,
         productSlug: master.slug,
@@ -201,7 +210,10 @@ export function computeCrossPlatformDealRadarFromData(
     }
 
     const bestOffer = sortedByPrice.find(
-      (o) => Number(o.merchant?.risk_score ?? 10) <= 30
+      (o) =>
+        Number(o.merchant?.risk_score ?? 10) <= 30 &&
+        (platformFilter === 'all' ||
+          o.platform.toLowerCase() === platformFilter)
     );
 
     if (bestOffer && bestOffer.price_current < marketMedianPrice) {
@@ -259,6 +271,12 @@ export function computeCrossPlatformDealRadarFromData(
 
     // 2. Identify fake-sale traps (inflated strikethrough original price)
     for (const off of validOffers) {
+      if (
+        platformFilter !== 'all' &&
+        off.platform.toLowerCase() !== platformFilter
+      ) {
+        continue;
+      }
       if (!off.price_original || off.price_original <= off.price_current) {
         continue;
       }
@@ -328,6 +346,7 @@ export function computeCrossPlatformDealRadarFromData(
   return {
     generatedAt: new Date().toISOString(),
     categoryFilter,
+    platformFilter,
     totalClustersAnalyzed,
     totalOffersAnalyzed,
     genuineDeals: genuineDeals.slice(0, limit),
@@ -355,13 +374,16 @@ export function computeProductRadarSignal(
 export const getCrossPlatformDealRadar = cache(
   async (options?: {
     categorySlug?: CanonicalCategorySlug | 'all';
+    platform?: string;
     limit?: number;
   }): Promise<CrossPlatformDealRadarResponse> => {
     const categorySlug = options?.categorySlug || 'all';
+    const platformFilter =
+      (options?.platform || 'all').trim().toLowerCase() || 'all';
     const limit = Math.max(1, Math.min(options?.limit || 12, 50));
 
     return withRateDataCache(
-      async (cat: CanonicalCategorySlug | 'all', lim: number) => {
+      async (cat: CanonicalCategorySlug | 'all', plat: string, lim: number) => {
         const masters = await getMasterProducts({
           categorySlug: cat === 'all' ? undefined : cat,
           limit: 36,
@@ -378,10 +400,16 @@ export const getCrossPlatformDealRadar = cache(
 
         return computeCrossPlatformDealRadarFromData(clusters, {
           categorySlug: cat,
+          platform: plat,
           limit: lim,
         });
       },
-      ['rate-cross-platform-deal-radar', categorySlug, String(limit)],
+      [
+        'rate-cross-platform-deal-radar',
+        categorySlug,
+        platformFilter,
+        String(limit),
+      ],
       {
         revalidate: 180,
         tags: [
@@ -391,6 +419,6 @@ export const getCrossPlatformDealRadar = cache(
           ...(categorySlug !== 'all' ? [categoryCacheTag(categorySlug)] : []),
         ],
       }
-    )(categorySlug, limit);
+    )(categorySlug, platformFilter, limit);
   }
 );
