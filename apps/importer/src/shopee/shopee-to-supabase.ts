@@ -28,15 +28,24 @@ function hashEntity(val: string): string {
   return '0x' + crypto.createHash('sha256').update(val.toLowerCase()).digest('hex');
 }
 
-function platformReviewIdFor(r: ShopeeReview): string {
+export function platformReviewIdFor(r: ShopeeReview): string {
   return (
     r.reviewId ||
     'rv-' +
       crypto
         .createHash('sha256')
-        .update(`${r.author || ''}|${r.comment || ''}`)
+        .update(
+          `${r.author || ''}|${r.ratingStar ?? ''}|${r.variation || ''}|${r.createdAt || ''}|${r.comment || ''}`
+        )
         .digest('hex')
   );
+}
+
+export interface ShopeeIngestionPipelineConfig extends AiSpecEnricherConfig {
+  /**
+   * Optional pre-scoped `rate` schema Supabase client for dependency injection / deterministic testing.
+   */
+  supabaseClient?: RateSupabaseClient;
 }
 
 export interface IngestOptions {
@@ -56,20 +65,24 @@ export class ShopeeIngestionPipeline {
   private smartphoneCategoryId: string | null = null;
   private categoryIdBySlug = new Map<string, string>();
 
-  constructor(aiConfig?: AiSpecEnricherConfig) {
-    const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY || '';
+  constructor(aiConfig?: ShopeeIngestionPipelineConfig) {
+    if (aiConfig?.supabaseClient) {
+      this.supabase = aiConfig.supabaseClient;
+    } else {
+      const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+      const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY || '';
 
-    if (!url || !key) {
-      throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in environment.');
+      if (!url || !key) {
+        throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in environment.');
+      }
+
+      const admin = createClient(url, key, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      });
+
+      // Scope to rate schema
+      this.supabase = scopeSupabaseToRate(admin);
     }
-
-    const admin = createClient(url, key, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    });
-
-    // Scope to rate schema
-    this.supabase = scopeSupabaseToRate(admin);
     this.normalizer = new ProductNormalizer();
     this.enricher = new AiSpecEnricher(aiConfig);
     this.reviewAnalyzer = new AiReviewAnalyzer(aiConfig);
@@ -80,7 +93,12 @@ export class ShopeeIngestionPipeline {
    * Initializes category lookup across all 5 tech categories
    */
   public async init(): Promise<void> {
-    const { data: cats } = await this.supabase.from('categories').select('id, slug');
+    const { data: cats, error: catsErr } = await this.supabase
+      .from('categories')
+      .select('id, slug');
+    if (catsErr) {
+      throw new Error(`Failed to initialize categories: ${catsErr.message}`);
+    }
 
     for (const c of cats || []) {
       this.categoryIdBySlug.set(c.slug, c.id);
@@ -184,11 +202,16 @@ export class ShopeeIngestionPipeline {
     // re-matching every crawl, which can split it onto a new draft master.
     let hinted: { masterId: string; isNew: boolean } | null = null;
     if (options.masterIdHint) {
-      const { data: hintRow } = await this.supabase
+      const { data: hintRow, error: hintErr } = await this.supabase
         .from('master_products')
         .select('id')
         .eq('id', options.masterIdHint)
         .maybeSingle();
+      if (hintErr) {
+        throw new Error(
+          `Failed to verify masterIdHint (${options.masterIdHint}): ${hintErr.message}`
+        );
+      }
       if (hintRow?.id) hinted = { masterId: hintRow.id, isNew: false };
     }
     const { masterId, isNew } =
