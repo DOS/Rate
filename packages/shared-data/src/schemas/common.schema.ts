@@ -28,7 +28,7 @@ export const ApiResponseSchema = <T extends z.ZodType>(dataSchema: T) =>
         status: z.number(),
         name: z.string(),
         message: z.string(),
-        details: z.record(z.string(), z.any()).optional(),
+        details: z.record(z.string(), z.unknown()).optional(),
       })
       .optional(),
   });

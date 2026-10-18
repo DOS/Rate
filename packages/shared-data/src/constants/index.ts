@@ -5,30 +5,6 @@
 // Export route constants
 export * from './routes.js';
 
-// API endpoints
-export const API_ENDPOINTS = {
-  AUTH: {
-    LOGIN: '/auth/local',
-    REGISTER: '/auth/local/register',
-    FORGOT_PASSWORD: '/auth/forgot-password',
-    RESET_PASSWORD: '/auth/reset-password',
-    ME: '/users/me',
-  },
-  LISTINGS: {
-    BASE: '/listings',
-    BY_ID: (id: string) => `/listings/${id}`,
-    SEARCH: '/listings/search',
-    FEATURED: '/listings/featured',
-  },
-  REVIEWS: {
-    BASE: '/reviews',
-    BY_ID: (id: string) => `/reviews/${id}`,
-    BY_LISTING: (listingId: string) =>
-      `/reviews?filters[listingId][$eq]=${listingId}`,
-  },
-  UPLOAD: '/upload',
-} as const;
-
 // Status codes
 export const STATUS_CODES = {
   OK: 200,
