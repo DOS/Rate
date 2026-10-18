@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCachedInspectProductOrShopUrl } from '@/server/rate';
-import { jsonApiError } from '@/server/rate/api-handler';
+import {
+  jsonApiError,
+  parseBoundedStringParam,
+} from '@/server/rate/api-handler';
 
 /**
  * GET /api/v1/rate/lookup?q=<url_or_keyword>
@@ -11,7 +14,10 @@ import { jsonApiError } from '@/server/rate/api-handler';
 export async function GET(request: NextRequest) {
   try {
     const sp = request.nextUrl.searchParams;
-    const rawQuery = (sp.get('q') || sp.get('url') || '').trim();
+    const rawQuery = parseBoundedStringParam(
+      sp.get('q') || sp.get('url'),
+      1024
+    );
 
     if (!rawQuery) {
       return NextResponse.json(

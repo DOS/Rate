@@ -4,6 +4,7 @@ import {
   jsonApiError,
   parseBoundedIntParam,
   parseBoundedNumberParam,
+  parseBoundedStringParam,
 } from '@/server/rate/api-handler';
 
 const CORS_HEADERS = {
@@ -23,11 +24,17 @@ export async function OPTIONS() {
 export async function GET(request: NextRequest) {
   try {
     const sp = request.nextUrl.searchParams;
-    const q = sp.get('q') || undefined;
-    const platform = sp.get('platform') || undefined;
+    const q = parseBoundedStringParam(sp.get('q'), 160) || undefined;
+    const platform =
+      parseBoundedStringParam(sp.get('platform'), 32) || undefined;
+    const rawOfficial = sp.get('officialOnly') ?? sp.get('official');
     const officialOnly =
-      sp.get('official') === '1' || sp.get('official') === 'true';
-    const minTrust = parseBoundedNumberParam(sp.get('min_trust'), 0, 100);
+      rawOfficial === '1' || rawOfficial?.toLowerCase() === 'true';
+    const minTrust = parseBoundedNumberParam(
+      sp.get('min_trust') ?? sp.get('minTrust'),
+      0,
+      100
+    );
     const rawSort = sp.get('sort');
     const sort =
       rawSort === 'trust_desc' ||
