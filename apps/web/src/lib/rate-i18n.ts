@@ -195,6 +195,12 @@ const _csHeroSearchCheck: HeroSearchCopyStrings = csMessages.heroSearch;
 void _enHeroSearchCheck;
 void _csHeroSearchCheck;
 
+type AuthPortalCopyStrings = typeof viMessages.authPortal;
+const _enAuthPortalCheck: AuthPortalCopyStrings = enMessages.authPortal;
+const _csAuthPortalCheck: AuthPortalCopyStrings = csMessages.authPortal;
+void _enAuthPortalCheck;
+void _csAuthPortalCheck;
+
 const RATE_COPY_DICTIONARY: Record<SupportedRateLocale, RateLocaleCopy> = {
   vi: { locale: 'vi', ...viCopy },
   en: { locale: 'en', ...enCopy },

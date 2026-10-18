@@ -1,20 +1,14 @@
 'use client';
 
-import { useParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { getBrowserSupabase } from '@/lib/supabase/browser';
-import { normalizeRateLocale } from '@/lib/rate-i18n';
 
 export function SignOutButton({ className }: { className?: string }) {
-  const params = useParams<{ locale: string }>();
+  const t = useTranslations('authPortal');
   const router = useRouter();
-  const locale = normalizeRateLocale(params?.locale);
   const callbackUrl = '/';
-  const label =
-    locale === 'en'
-      ? 'Sign Out'
-      : locale === 'cs'
-        ? 'Odhlásit se'
-        : 'Đăng xuất';
+  const label = t('signOutBtnLabel');
 
   const handleSignOut = async () => {
     try {

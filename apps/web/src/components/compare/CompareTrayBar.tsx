@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Link } from '@/lib/navigation';
 import {
   clearCompareTray,
@@ -12,6 +13,7 @@ import {
 } from './compare-tray';
 
 export default function CompareTrayBar() {
+  const t = useTranslations('compare');
   const [items, setItems] = useState<CompareTrayItem[]>([]);
   const [collapsed, setCollapsed] = useState(false);
 
@@ -51,13 +53,13 @@ export default function CompareTrayBar() {
               <span className="badge bg-danger rounded-pill px-2 py-1">
                 {items.length} / {MAX_COMPARE_ITEMS}
               </span>
-              <span className="fw-bold small">Khay So Sánh Điện Thoại</span>
+              <span className="fw-bold small">{t('trayTitle')}</span>
               <button
                 type="button"
                 onClick={() => setCollapsed((c) => !c)}
                 className="btn btn-link btn-sm text-light text-decoration-none small ms-1 p-0 opacity-75"
               >
-                {collapsed ? 'Mở rộng ▲' : 'Thu gọn ▼'}
+                {collapsed ? t('trayExpand') : t('trayCollapse')}
               </button>
             </div>
 
@@ -67,13 +69,13 @@ export default function CompareTrayBar() {
                 onClick={clearCompareTray}
                 className="btn btn-sm btn-outline-light rounded-pill small px-3 py-1"
               >
-                Xóa tất cả
+                {t('trayClearAll')}
               </button>
               <Link
                 href={compareHref}
                 className="btn btn-sm btn-danger rounded-pill fw-bold px-3 py-1 shadow-sm"
               >
-                So sánh ngay ({items.length} máy) →
+                {t('trayCompareNow', { count: items.length })}
               </Link>
             </div>
           </div>
@@ -128,8 +130,8 @@ export default function CompareTrayBar() {
                       type="button"
                       onClick={() => handleRemove(item.slug)}
                       className="btn btn-sm text-light p-0 px-1 opacity-75"
-                      title="Xóa khỏi khay so sánh"
-                      aria-label={`Xóa ${item.name}`}
+                      title={t('trayRemoveTitle')}
+                      aria-label={t('trayRemoveAria', { name: item.name })}
                     >
                       ×
                     </button>
