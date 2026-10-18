@@ -21,6 +21,7 @@ import net from 'node:net';
 import path from 'node:path';
 
 import { docker, repoRoot, startRateDb } from '../lib/rate-db.mjs';
+import { pruneStaleStacks } from './stale-stacks.mjs';
 
 const args = process.argv.slice(2);
 const skipBuild = args.includes('--skip-build');
@@ -330,6 +331,10 @@ function startProxy(upstreamPort, SUPABASE_PORT) {
 }
 
 let exitCode = 1;
+// A run killed without cleanup (no signal handler on Windows TerminateProcess
+// or a command timeout) leaves its stack running; remove stacks of dead runs.
+pruneStaleStacks();
+
 try {
   docker(['network', 'create', network]);
   const db = startRateDb({

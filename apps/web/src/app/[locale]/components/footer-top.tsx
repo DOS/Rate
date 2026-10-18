@@ -2,7 +2,7 @@ import { getTranslations } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
 import {
   BsArrowLeftRight,
-  BsBellFill,
+  BsBell,
   BsCodeSlash,
   BsShieldCheck,
 } from 'react-icons/bs';
@@ -14,85 +14,37 @@ export default async function FooterTop({
 }) {
   const tFooter = await getTranslations({ locale, namespace: 'rate.footer' });
   return (
-    <section
-      className="rate-ink-on-dark position-relative py-5"
-      style={{
-        background:
-          'linear-gradient(135deg, #0b0d11 0%, #131824 60%, #1a1f2e 100%)',
-        borderTop: '1px solid rgba(255, 255, 255, 0.08)',
-        borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
-      }}
-    >
+    <section className="rate-footer-cta rate-surface-dark py-5">
       <div className="container">
         <div className="row align-items-center justify-content-between g-4">
-          <div className="col-xl-7 col-lg-7 col-md-12">
-            <div className="d-flex flex-column gap-2">
-              <div className="d-inline-flex align-items-center gap-2">
-                <span
-                  className="badge rounded-pill d-inline-flex align-items-center gap-1 px-3 py-1"
-                  style={{
-                    backgroundColor: 'rgba(45, 186, 105, 0.14)',
-                    color: '#34d399',
-                    border: '1px solid rgba(45, 186, 105, 0.3)',
-                    fontSize: '0.8125rem',
-                    fontWeight: 600,
-                  }}
-                >
-                  <BsShieldCheck />
-                  Open-Core Rating &amp; Anti-Seeding Engine
-                </span>
-              </div>
-              <h4
-                className="lh-base fw-bold mb-1 text-white"
-                style={{ letterSpacing: '-0.02em' }}
-              >
-                {tFooter('bannerTitle')}
-              </h4>
-              <p
-                className="m-0"
-                style={{ color: '#94a3b8', fontSize: '0.95rem' }}
-              >
-                {tFooter('bannerDesc')}
-              </p>
-            </div>
+          <div className="col-lg-7 col-md-12">
+            <span className="rate-eyebrow mb-2">{tFooter('bannerBadge')}</span>
+            <h4 className="rate-footer-cta-title">{tFooter('bannerTitle')}</h4>
+            <p className="rate-footer-cta-desc">{tFooter('bannerDesc')}</p>
           </div>
 
-          <div className="col-xl-5 col-lg-5 col-md-12">
-            <div className="d-flex justify-content-lg-end flex-wrap gap-2">
-              <Link
-                href="/inspect"
-                className="btn rounded-pill fw-semibold d-inline-flex align-items-center gap-2 px-4 py-2 text-white"
-                style={{
-                  backgroundColor: 'var(--bs-primary)',
-                  border: '1px solid rgba(255, 255, 255, 0.12)',
-                }}
-              >
-                <BsShieldCheck />
+          <div className="col-lg-5 col-md-12">
+            <div className="rate-footer-cta-actions">
+              <Link href="/inspect" className="btn btn-primary fw-semibold">
+                <BsShieldCheck aria-hidden="true" />
                 {tFooter('bannerInspectCta')}
               </Link>
               <Link
                 href="/compare"
-                className="btn btn-outline-light rounded-pill fw-semibold d-inline-flex align-items-center gap-2 px-4 py-2"
-                style={{ borderColor: 'rgba(255, 255, 255, 0.2)' }}
+                className="btn btn-outline-light fw-semibold"
               >
-                <BsArrowLeftRight />
+                <BsArrowLeftRight aria-hidden="true" />
                 {tFooter('bannerCompareCta')}
               </Link>
-              <Link
-                href="/watchlist"
-                className="btn btn-outline-light rounded-pill fw-semibold d-inline-flex align-items-center gap-2 px-3 py-2"
-                style={{ borderColor: 'rgba(255, 255, 255, 0.2)' }}
-              >
-                <BsBellFill />
+            </div>
+            <div className="rate-section-links rate-footer-cta-links">
+              <Link href="/watchlist">
+                <BsBell aria-hidden="true" />
                 {tFooter('bannerCta')}
               </Link>
-              <Link
-                href="/developers"
-                className="btn btn-outline-light rounded-pill fw-semibold d-inline-flex align-items-center gap-2 px-3 py-2"
-                style={{ borderColor: 'rgba(255, 255, 255, 0.2)' }}
-              >
-                <BsCodeSlash />
-                REST API v1
+              <Link href="/developers">
+                <BsCodeSlash aria-hidden="true" />
+                {tFooter('bannerApiLink')}
               </Link>
             </div>
           </div>
