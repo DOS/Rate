@@ -60,8 +60,10 @@ jobs:
       - name: Replay rate migrations on PostgreSQL 17 (Docker)
         run: node scripts/test-migration-replay.mjs
 
-      - name: Build @repo/shared-data
-        run: pnpm --filter @repo/shared-data build
+      - name: Build & Lint @repo/shared-data (strict --max-warnings 0)
+        run: |
+          pnpm --filter @repo/shared-data lint
+          pnpm --filter @repo/shared-data build
 
       - name: Build & Typecheck @repo/crawlers
         run: |
@@ -77,8 +79,10 @@ jobs:
       - name: Verify @repo/crawlers dist entry points (consumed by DOS/Rate-Services)
         run: pnpm --filter @repo/crawlers test:dist
 
-      - name: Build & Typecheck @repo/extension (MV3)
-        run: pnpm --filter @repo/extension build
+      - name: Build, Typecheck & Lint @repo/extension (MV3, strict --max-warnings 0)
+        run: |
+          pnpm --filter @repo/extension lint
+          pnpm --filter @repo/extension build
 
       - name: Run @repo/extension E2E Pipeline Tests
         run: pnpm --filter @repo/extension test
@@ -86,11 +90,16 @@ jobs:
       - name: Typecheck @repo/web
         run: pnpm --filter @repo/web typecheck
 
-      - name: Lint @repo/web (errors fail, warnings do not)
+      - name: Lint @repo/web (strict --max-warnings 0)
         run: pnpm --filter @repo/web lint
 
       - name: Run @repo/web Core Architecture Tests
         run: pnpm --filter @repo/web test
 
       - name: Build @repo/web (Next.js 16)
-        run: pnpm --filter @repo/web build
+        run: |
+          pnpm --filter @repo/web build || (
+            echo "Transient Next.js build failure (e.g. Google Fonts fetch timeout); retrying in 3s..."
+            sleep 3
+            pnpm --filter @repo/web build
+          )

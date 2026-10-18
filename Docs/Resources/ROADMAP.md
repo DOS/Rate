@@ -58,13 +58,13 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc 4 tầ
 - [x] **6.6. Khóa Đường Ghi Công Khai Theo Người Dùng & Phiên Cookie (`DOS/Rate#155`, `#194` - Audit K1, K2, C4, T13):**
   - `POST /api/v1/rate/reviews` và `/watchlist` bắt buộc đăng nhập, gọi RPC dưới quyền người dùng (không còn service role), không báo thành công giả, mã lỗi RPC → 403/409/422/429. Client service role tách sang `@repo/shared-data/server` (ESLint cấm trong `apps/web`).
   - Phiên đăng nhập lưu trong cookie qua `@supabase/ssr`; `middleware.ts` → `proxy.ts` (Next.js 16) refresh phiên; request dùng cookie phải cùng origin.
-- [x] **6.7. Nền Tảng Tooling 2026 (`DOS/Rate#192`, `#195`, `#196`, `#234`, `#238`, `#239`, `#240`):**
-  - Pin GitHub Actions theo SHA, secret ra khỏi hash của Turbo; Zod 4 toàn monorepo; ESLint 9 flat config (sửa glob `[locale]` chưa từng được áp); Dependabot một mục npm ở gốc; extension bundle bằng esbuild; bật React Compiler; logger JSON có che secret/email cho code server.
+- [x] **6.7. Nền Tảng Tooling 2026 (`DOS/Rate#192`, `#195`, `#196`, `#234`, `#238`, `#239`, `#240`, `#261`, `#263`):**
+  - Pin GitHub Actions theo SHA, secret ra khỏi hash của Turbo; Zod 4 toàn monorepo; ESLint 9 flat config cưỡng chế `eslint . --max-warnings 0` trên cả 4 gói (`@repo/shared-data`, `@repo/crawlers`, `@repo/extension`, `@repo/web`); Dependabot một mục npm ở gốc; extension bundle bằng esbuild; bật React Compiler; logger JSON có che secret/email cho toàn bộ code server và CLI importer.
 - [ ] **6.8. Đa Ngôn Ngữ Đầy Đủ (`DOS/Rate#241`, `#251`-`#255`):**
   - [x] Một catalog next-intl (namespace `rate` có kiểm tra kiểu), client chỉ nhận namespace cần dùng (`DOS/Rate#250`).
   - [ ] Đưa khoảng 1.469 dòng chuỗi tiếng Việt viết cứng trong khoảng 40 component vào catalog vi/en/cs, theo 5 nhóm.
-- [x] **6.9. Củng Cố Toàn Diện Open-Core Engine & Rate-Services (`DOS/Rate#215`, `#259` & `DOS/Rate-Services#45`-`#52`):**
-  - Hoàn tất 100% mục kiểm toán `DOS/Rate-Services` (`K1-K3`, `C1-C12`, `M1-M14`, `Low`) và Open-Core Engine (`C6`, `C8`, `T15`, `Low`): `strict: true` toàn bộ TypeScript, `ScrapedProductSchema` (Zod 4) ở ranh giới cào dữ liệu, `z.toJSONSchema()` cho `response_format: { type: 'json_schema', strict: true }` kèm backoff có jitter và bộ lọc URL/số điện thoại chống prompt-injection (`sanitizeAiGeneratedText`), bộ dữ liệu cặp sản phẩm gán nhãn đo Precision/Recall = 100%, `DomainTokenBucketLimiter` + `PlatformCircuitBreaker`, Chromium sandbox cấu hình theo môi trường, `StructuredLogger` che secret/PII, và gắn `algorithmMeta` (`{ algo, version, paramsHash }`) cho toàn bộ 4 Auditor.
+- [x] **6.9. Củng Cố Toàn Diện Open-Core Engine & Rate-Services (`DOS/Rate#215`, `#259`, `#261` & `DOS/Rate-Services#45`-`#55`):**
+  - Hoàn tất 100% mục kiểm toán `DOS/Rate-Services` (`K1-K3`, `C1-C12`, `M1-M14`, `Low`) và Open-Core Engine (`C6`, `C8`, `T14`, `T15`, `Low`): `strict: true` + `no-explicit-any: error` toàn bộ TypeScript, `ScrapedProductSchema` (Zod 4) ở ranh giới cào dữ liệu, `z.toJSONSchema()` cho `response_format: { type: 'json_schema', strict: true }` kèm backoff có jitter và bộ lọc URL/số điện thoại chống prompt-injection (`sanitizeAiGeneratedText`), bộ dữ liệu cặp sản phẩm gán nhãn đo Precision/Recall = 100%, `DomainTokenBucketLimiter` + `PlatformCircuitBreaker`, Chromium sandbox cấu hình theo môi trường, `StructuredLogger` che secret/PII, và gắn `algorithmMeta` (`{ algo, version, paramsHash }`) cho toàn bộ 4 Auditor.
 
 ### 🚀 Phase 7: Mở Rộng Độ Phủ Dữ Liệu Thật Đa Sàn & Kiểm Thử E2E (2027 Q1)
 
