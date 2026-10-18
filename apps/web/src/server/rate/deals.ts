@@ -2,7 +2,7 @@ import 'server-only';
 import { cache } from 'react';
 import {
   getMasterProductCategorySlug,
-  getMasterProductOffers,
+  getMasterProductOffersBatch,
   getMasterProducts,
   resolveProductImageUrl,
   type CanonicalCategorySlug,
@@ -14,6 +14,11 @@ import {
   getRadarSignal,
   type RadarSignal,
 } from '../../lib/deal-radar';
+import {
+  RATE_CACHE_TAGS,
+  categoryCacheTag,
+  withRateDataCache,
+} from './cache-tags';
 
 export type DealRadarVerdict =
   'genuine_all_time_low' | 'best_market_deal' | 'inflated_fake_sale';
@@ -353,18 +358,39 @@ export const getCrossPlatformDealRadar = cache(
     limit?: number;
   }): Promise<CrossPlatformDealRadarResponse> => {
     const categorySlug = options?.categorySlug || 'all';
-    const masters = await getMasterProducts({
-      categorySlug: categorySlug === 'all' ? undefined : categorySlug,
-      limit: 36,
-    });
+    const limit = Math.max(1, Math.min(options?.limit || 12, 50));
 
-    const clusters = await Promise.all(
-      masters.map(async (master) => ({
-        master,
-        offers: await getMasterProductOffers(master.id),
-      }))
-    );
+    return withRateDataCache(
+      async (cat: CanonicalCategorySlug | 'all', lim: number) => {
+        const masters = await getMasterProducts({
+          categorySlug: cat === 'all' ? undefined : cat,
+          limit: 36,
+        });
 
-    return computeCrossPlatformDealRadarFromData(clusters, options);
+        const offersByMaster = await getMasterProductOffersBatch(
+          masters.map((m) => m.id)
+        );
+
+        const clusters = masters.map((master) => ({
+          master,
+          offers: offersByMaster.get(master.id) ?? [],
+        }));
+
+        return computeCrossPlatformDealRadarFromData(clusters, {
+          categorySlug: cat,
+          limit: lim,
+        });
+      },
+      ['rate-cross-platform-deal-radar', categorySlug, String(limit)],
+      {
+        revalidate: 180,
+        tags: [
+          RATE_CACHE_TAGS.DEALS,
+          RATE_CACHE_TAGS.PRODUCTS,
+          RATE_CACHE_TAGS.OFFERS,
+          ...(categorySlug !== 'all' ? [categoryCacheTag(categorySlug)] : []),
+        ],
+      }
+    )(categorySlug, limit);
   }
 );
