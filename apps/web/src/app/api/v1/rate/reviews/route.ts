@@ -140,7 +140,7 @@ const FLAG_CATEGORIES = new Set<ReviewFlagCategory>([
 ]);
 
 // SQLSTATEs raised deliberately by rate.submit_community_review
-// (DOS-Me 20261014234500 and the auth gate in 20261017120000).
+// (DOS-Me 20261014234500 and the auth gate in 20261018100000).
 const RPC_REJECTIONS: Record<string, RpcRejection> = {
   // invalid length / stars / product id
   '22023': {
