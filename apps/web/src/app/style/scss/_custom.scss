@@ -65,6 +65,13 @@
   --rate-radius-btn: 8px;
   // Smallest UI text size (labels, chips, captions)
   --rate-text-min: 0.8125rem;
+  // Status pairs for verdict tags (radar, merchant risk, review status).
+  --rate-status-good-fg: #166534;
+  --rate-status-good-bg: #dcfce7;
+  --rate-status-warn-fg: #854d0e;
+  --rate-status-warn-bg: #fef3c7;
+  --rate-status-bad-fg: #991b1b;
+  --rate-status-bad-bg: #fee2e2;
   --rate-brand-bg: #fff1f2;
   --rate-score-star-bg: #fffbeb;
   // Crimson text for links and labels on white surfaces (#d83030 is 4.8:1 on white)
@@ -640,7 +647,7 @@
   }
 
   &.is-good svg {
-    color: #15803d;
+    color: var(--rate-status-good-fg);
   }
 
   &.is-bad svg {
@@ -732,18 +739,18 @@
   font-variant-numeric: tabular-nums;
 
   &.is-good {
-    color: #166534;
-    background-color: #dcfce7;
+    color: var(--rate-status-good-fg);
+    background-color: var(--rate-status-good-bg);
   }
 
   &.is-bad {
-    color: #991b1b;
-    background-color: #fee2e2;
+    color: var(--rate-status-bad-fg);
+    background-color: var(--rate-status-bad-bg);
   }
 
   &.is-warn {
-    color: #854d0e;
-    background-color: #fef3c7;
+    color: var(--rate-status-warn-fg);
+    background-color: var(--rate-status-warn-bg);
   }
 }
 
@@ -874,15 +881,15 @@
     font-variant-numeric: tabular-nums;
 
     &.is-good {
-      color: #15803d;
+      color: var(--rate-status-good-fg);
     }
 
     &.is-warn {
-      color: #a16207;
+      color: var(--rate-status-warn-fg);
     }
 
     &.is-bad {
-      color: #b91c1c;
+      color: var(--rate-status-bad-fg);
     }
   }
 
@@ -950,9 +957,15 @@
 
 .rate-review-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
   gap: 0.75rem;
+
+  > div {
+    flex: 1 1 8rem;
+    min-width: 0;
+  }
 
   .rate-radar-tag {
     display: inline-flex;
@@ -963,23 +976,25 @@
     background-color: var(--rate-bg-canvas);
 
     &.is-good {
-      color: #166534;
-      background-color: #dcfce7;
+      color: var(--rate-status-good-fg);
+      background-color: var(--rate-status-good-bg);
     }
 
     &.is-warn {
-      color: #854d0e;
-      background-color: #fef3c7;
+      color: var(--rate-status-warn-fg);
+      background-color: var(--rate-status-warn-bg);
     }
 
     &.is-bad {
-      color: #991b1b;
-      background-color: #fee2e2;
+      color: var(--rate-status-bad-fg);
+      background-color: var(--rate-status-bad-bg);
     }
   }
 }
 
 .rate-review-author {
+  min-width: 0;
+  overflow-wrap: anywhere;
   font-size: 0.9375rem;
   font-weight: 700;
   color: var(--rate-fg-primary);
