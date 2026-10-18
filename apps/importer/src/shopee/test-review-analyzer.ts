@@ -1005,8 +1005,63 @@ async function run() {
   assert.equal(affAssess.independence, 'affiliate');
   assert.equal(affAssess.breakdown.independence, 0.7);
 
+  // 9.5 Self-Excluded Peer Floor Price in ShopeeIngestionPipeline (#292)
+  const { resolveClusterPeerFloorPrice } = await import('./shopee-to-supabase.js');
+  const peerFloor = resolveClusterPeerFloorPrice(
+    [
+      { id: 'listing-bait', price_current: 5_000_000, merchants: { is_official: false } },
+      { id: 'listing-peer-1', price_current: 26_500_000, merchants: { is_official: false } },
+      { id: 'listing-mall-1', price_current: 28_490_000, merchants: [{ is_official: true }] },
+    ],
+    'listing-bait',
+    5_000_000
+  );
+  assert.equal(
+    peerFloor,
+    28_490_000,
+    'resolveClusterPeerFloorPrice must exclude currentProductId and prefer Official Mall sibling floor'
+  );
+  assert.equal(
+    resolveClusterPeerFloorPrice(
+      [{ id: 'listing-only', price_current: 27_990_000, merchants: { is_official: true } }],
+      'listing-only',
+      27_990_000
+    ),
+    27_990_000,
+    'resolveClusterPeerFloorPrice must fall back to fallbackMasterMinPrice when no peer siblings exist'
+  );
+
+  // 9.6 ArenaSpecSyncer Non-5G & Hybrid PhoneArena Table Merging (#292)
+  const { parseGsmArenaHtmlToSpecs } = await import('./arena-spec-syncer.js');
+  const wifiTabletHtml = `
+    <h1 data-spec="modelname">Xiaomi Pad 7 Pro</h1>
+    <td data-spec="displaysize">11.2 inches</td>
+    <td data-spec="displaytype">IPS LCD, 144Hz</td>
+    <td data-spec="internalmemory">256GB 12GB RAM</td>
+    <td data-spec="nettech">No cellular connectivity</td>
+    <td data-spec="jack">Yes, 3.5mm jack</td>
+  `;
+  const paTableHtml = `
+    <table>
+      <tr><th>Main camera</th><td>50 MP, f/1.8, PDAF</td></tr>
+      <tr><th>Second camera</th><td>2 MP, f/2.4, depth</td></tr>
+      <tr><th>Front camera</th><td>32 MP, f/2.2</td></tr>
+    </table>
+  `;
+  const parsedTablet = parseGsmArenaHtmlToSpecs(wifiTabletHtml, {
+    phonearenaHtml: paTableHtml,
+  });
+  assert.equal(parsedTablet.source, 'hybrid');
+  assert.equal(parsedTablet.has5g, false);
+  assert.equal(parsedTablet.specifications.cellular?.has_5g, false);
+  assert.equal(parsedTablet.specifications.cellular?.bands_5g, undefined);
+  assert.equal(parsedTablet.specifications.multimedia?.headphone_jack_35mm, true);
+  assert.equal(parsedTablet.specifications.camera?.main_camera, '50 MP, f/1.8, PDAF');
+  assert.equal(parsedTablet.specifications.camera?.second_camera, '2 MP, f/2.4, depth');
+  assert.equal(parsedTablet.specifications.camera?.front_camera, '32 MP, f/2.2');
+
   console.log(
-    `✅ [P2/P3 Trust Model] Voter weight, Wilson lower bound (50/52=${wilson50of52} > 1/1=${wilson1of1}), shingle copy seeding (sim=${shingleSim}) & affiliate shortlinks verified`
+    `✅ [P2/P3 Trust Model & #292] Voter weight, Wilson lower bound (50/52=${wilson50of52} > 1/1=${wilson1of1}), shingle copy seeding (sim=${shingleSim}), affiliate shortlinks, peer floor & ArenaSpecSyncer verified`
   );
 
   console.log('\n🎉 ALL AI REVIEW ANALYZER TESTS PASSED!');
