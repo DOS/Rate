@@ -21,6 +21,8 @@ import {
   BsStarFill,
 } from 'react-icons/bs';
 
+const MERCHANT_PAGE_SIZE = 48;
+
 export type MerchantSortOption =
   'trust_desc' | 'products_desc' | 'seeding_asc' | 'followers_desc';
 
@@ -51,6 +53,23 @@ export default function MerchantDirectoryExplorer({
   const [seedingTier, setSeedingTier] = useState<MerchantSeedingTier>('all');
   const [sortBy, setSortBy] = useState<MerchantSortOption>(initialSort);
   const [copiedMerchantsMd, setCopiedMerchantsMd] = useState(false);
+  // Render the directory in pages: with a thousand stores, one list of cards
+  // makes a huge DOM. Exports still use every filtered store.
+  const [visibleCount, setVisibleCount] = useState(MERCHANT_PAGE_SIZE);
+  // JSON, not a joined string: a query containing the separator cannot collide.
+  const filterKey = JSON.stringify([
+    query,
+    platform,
+    officialOnly,
+    riskTier,
+    seedingTier,
+    sortBy,
+  ]);
+  const [shownForFilter, setShownForFilter] = useState(filterKey);
+  if (shownForFilter !== filterKey) {
+    setShownForFilter(filterKey);
+    setVisibleCount(MERCHANT_PAGE_SIZE);
+  }
   const radarPayload = useDealRadarPayload();
 
   const labels = useMemo(
@@ -622,253 +641,274 @@ export default function MerchantDirectoryExplorer({
           </div>
         </div>
       ) : (
-        <div className="row g-4">
-          {filteredMerchants.map((merchant) => {
-            const trustBadgeClass =
-              merchant.trust_score >= 80
-                ? 'bg-success text-white'
-                : merchant.trust_score >= 50
-                  ? 'bg-warning text-dark'
-                  : 'bg-danger text-white';
+        <>
+          <div className="row g-4">
+            {filteredMerchants.slice(0, visibleCount).map((merchant) => {
+              const trustBadgeClass =
+                merchant.trust_score >= 80
+                  ? 'bg-success text-white'
+                  : merchant.trust_score >= 50
+                    ? 'bg-warning text-dark'
+                    : 'bg-danger text-white';
 
-            const minPriceText = merchant.min_price
-              ? `${merchant.min_price.toLocaleString('vi-VN')} ₫`
-              : null;
-            const maxPriceText =
-              merchant.max_price && merchant.max_price !== merchant.min_price
-                ? `${merchant.max_price.toLocaleString('vi-VN')} ₫`
+              const minPriceText = merchant.min_price
+                ? `${merchant.min_price.toLocaleString('vi-VN')} ₫`
                 : null;
+              const maxPriceText =
+                merchant.max_price && merchant.max_price !== merchant.min_price
+                  ? `${merchant.max_price.toLocaleString('vi-VN')} ₫`
+                  : null;
 
-            return (
-              <div className="col-lg-6 col-12" key={merchant.id}>
-                <div className="rate-card rounded-4 d-flex flex-column h-100 border bg-white p-4 shadow-sm">
-                  <div className="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-3">
-                    <div
-                      className="d-flex align-items-center gap-3"
-                      style={{ minWidth: 0 }}
-                    >
+              return (
+                <div className="col-lg-6 col-12" key={merchant.id}>
+                  <div className="rate-card rounded-4 d-flex flex-column h-100 border bg-white p-4 shadow-sm">
+                    <div className="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-3">
                       <div
-                        className="rounded-circle bg-primary-subtle text-primary d-flex align-items-center justify-content-center fw-bold fs-4 flex-shrink-0"
-                        style={{ width: '56px', height: '56px' }}
+                        className="d-flex align-items-center gap-3"
+                        style={{ minWidth: 0 }}
                       >
-                        <BsShop />
+                        <div
+                          className="rounded-circle bg-primary-subtle text-primary d-flex align-items-center justify-content-center fw-bold fs-4 flex-shrink-0"
+                          style={{ width: '56px', height: '56px' }}
+                        >
+                          <BsShop />
+                        </div>
+                        <div>
+                          <div className="d-flex align-items-center mb-1 flex-wrap gap-2">
+                            <span className="badge bg-danger text-uppercase small">
+                              {merchant.platform}
+                            </span>
+                            {merchant.is_official && (
+                              <span className="badge bg-success-subtle text-success small d-inline-flex align-items-center gap-1">
+                                <BsCheckCircleFill /> {labels.officialBadge}
+                              </span>
+                            )}
+                            <span className="text-muted small">
+                              ID: <code>{merchant.platform_shop_id}</code>
+                            </span>
+                          </div>
+                          <h3 className="h5 fw-bold mb-0">
+                            <Link
+                              href={`/merchants/${merchant.id}`}
+                              className="text-dark text-decoration-none"
+                            >
+                              {merchant.name}
+                            </Link>
+                          </h3>
+                        </div>
                       </div>
-                      <div>
-                        <div className="d-flex align-items-center mb-1 flex-wrap gap-2">
-                          <span className="badge bg-danger text-uppercase small">
-                            {merchant.platform}
-                          </span>
-                          {merchant.is_official && (
-                            <span className="badge bg-success-subtle text-success small d-inline-flex align-items-center gap-1">
-                              <BsCheckCircleFill /> {labels.officialBadge}
+
+                      <div className="flex-shrink-0 text-end">
+                        <span
+                          className={`badge ${trustBadgeClass} rounded-pill fs-6 font-monospace px-3 py-2`}
+                        >
+                          Trust: {merchant.trust_score}/100
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Shop Quick Metrics */}
+                    <div className="row g-2 mb-3">
+                      <div className="col-sm-4 col-6">
+                        <div className="bg-light rounded-3 p-2 px-3">
+                          <div
+                            className="text-muted"
+                            style={{ fontSize: '0.8125rem' }}
+                          >
+                            {labels.platformRating}
+                          </div>
+                          <div className="fw-bold small d-flex align-items-center font-monospace gap-1">
+                            <BsStarFill className="text-warning" />
+                            {merchant.rating_star
+                              ? `${merchant.rating_star.toFixed(2)} / 5.0`
+                              : labels.noRating}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="col-sm-4 col-6">
+                        <div className="bg-light rounded-3 p-2 px-3">
+                          <div
+                            className="text-muted"
+                            style={{ fontSize: '0.8125rem' }}
+                          >
+                            {labels.followers}
+                          </div>
+                          <div className="fw-bold small d-flex align-items-center font-monospace gap-1">
+                            <BsPeopleFill className="text-primary" />
+                            {merchant.follower_count > 0
+                              ? merchant.follower_count.toLocaleString('vi-VN')
+                              : '-'}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="col-sm-4 col-12">
+                        <div className="bg-light rounded-3 p-2 px-3">
+                          <div
+                            className="text-muted"
+                            style={{ fontSize: '0.8125rem' }}
+                          >
+                            {labels.trackedProducts}
+                          </div>
+                          <div className="fw-bold small d-flex align-items-center font-monospace gap-1">
+                            <BsBoxSeam className="text-success" />
+                            {merchant.product_count} {labels.productsUnit}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Dual Risk Score Breakdown */}
+                    <div className="rounded-3 mb-3 border bg-white p-3">
+                      <div className="row g-3">
+                        <div className="border-end col-6">
+                          <div className="d-flex justify-content-between align-items-center mb-1">
+                            <span className="small text-muted fw-medium">
+                              🛡️ DOSafe Threat Risk
+                            </span>
+                            <span
+                              className={`badge rounded-pill font-monospace ${
+                                merchant.dosafe_risk_score === 0
+                                  ? 'bg-success-subtle text-success'
+                                  : 'bg-danger-subtle text-danger'
+                              }`}
+                            >
+                              {merchant.dosafe_risk_score}/100
+                            </span>
+                          </div>
+                          <div
+                            className="small text-muted"
+                            style={{ fontSize: '0.8125rem' }}
+                          >
+                            {merchant.dosafe_risk_score === 0
+                              ? labels.dosafeZero
+                              : labels.dosafeAlert}
+                          </div>
+                        </div>
+
+                        <div className="col-6">
+                          <div className="d-flex justify-content-between align-items-center mb-1">
+                            <span className="small text-muted fw-medium">
+                              🤖 AI Review Risk
+                            </span>
+                            <span
+                              className={`badge rounded-pill font-monospace ${
+                                merchant.review_risk_score <= 15
+                                  ? 'bg-success-subtle text-success'
+                                  : merchant.review_risk_score <= 40
+                                    ? 'bg-warning-subtle text-warning-emphasis'
+                                    : 'bg-danger-subtle text-danger'
+                              }`}
+                            >
+                              {merchant.review_risk_score}/100
+                            </span>
+                          </div>
+                          <div
+                            className="small text-muted"
+                            style={{ fontSize: '0.8125rem' }}
+                          >
+                            {merchant.review_risk_breakdown.total_reviews >
+                            0 ? (
+                              <>
+                                {labels.authenticLabel}{' '}
+                                <strong>
+                                  {
+                                    merchant.review_risk_breakdown
+                                      .authentic_count
+                                  }
+                                </strong>
+                                /{merchant.review_risk_breakdown.total_reviews}{' '}
+                                (
+                                {merchant.review_risk_breakdown
+                                  .coin_spam_count +
+                                  merchant.review_risk_breakdown
+                                    .seeding_fake_count}{' '}
+                                {labels.filteredSpamSuffix})
+                              </>
+                            ) : (
+                              labels.noAbnormalReviews
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {minPriceText && (
+                      <div className="small text-muted mb-2">
+                        {labels.priceRangeLabel}{' '}
+                        <strong className="text-dark font-monospace">
+                          {minPriceText}
+                          {maxPriceText ? ` - ${maxPriceText}` : ''}
+                        </strong>
+                      </div>
+                    )}
+
+                    {(() => {
+                      const rStats = getMerchantRadarStats(merchant);
+                      return (
+                        <div
+                          className="d-flex align-items-center mb-3 flex-wrap gap-1"
+                          data-testid="merchant-deal-radar-badge"
+                        >
+                          {rStats.genuineDealCount > 0 && (
+                            <span className="badge bg-success-subtle text-success border-success-subtle rounded-pill border px-2 py-1">
+                              {t('radarGenuineBadge', {
+                                count: rStats.genuineDealCount,
+                                pct: rStats.bestSavingsPct,
+                              })}
                             </span>
                           )}
-                          <span className="text-muted small">
-                            ID: <code>{merchant.platform_shop_id}</code>
-                          </span>
-                        </div>
-                        <h3 className="h5 fw-bold mb-0">
-                          <Link
-                            href={`/merchants/${merchant.id}`}
-                            className="text-dark text-decoration-none"
-                          >
-                            {merchant.name}
-                          </Link>
-                        </h3>
-                      </div>
-                    </div>
-
-                    <div className="flex-shrink-0 text-end">
-                      <span
-                        className={`badge ${trustBadgeClass} rounded-pill fs-6 font-monospace px-3 py-2`}
-                      >
-                        Trust: {merchant.trust_score}/100
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Shop Quick Metrics */}
-                  <div className="row g-2 mb-3">
-                    <div className="col-sm-4 col-6">
-                      <div className="bg-light rounded-3 p-2 px-3">
-                        <div
-                          className="text-muted"
-                          style={{ fontSize: '0.8125rem' }}
-                        >
-                          {labels.platformRating}
-                        </div>
-                        <div className="fw-bold small d-flex align-items-center font-monospace gap-1">
-                          <BsStarFill className="text-warning" />
-                          {merchant.rating_star
-                            ? `${merchant.rating_star.toFixed(2)} / 5.0`
-                            : labels.noRating}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="col-sm-4 col-6">
-                      <div className="bg-light rounded-3 p-2 px-3">
-                        <div
-                          className="text-muted"
-                          style={{ fontSize: '0.8125rem' }}
-                        >
-                          {labels.followers}
-                        </div>
-                        <div className="fw-bold small d-flex align-items-center font-monospace gap-1">
-                          <BsPeopleFill className="text-primary" />
-                          {merchant.follower_count > 0
-                            ? merchant.follower_count.toLocaleString('vi-VN')
-                            : '-'}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="col-sm-4 col-12">
-                      <div className="bg-light rounded-3 p-2 px-3">
-                        <div
-                          className="text-muted"
-                          style={{ fontSize: '0.8125rem' }}
-                        >
-                          {labels.trackedProducts}
-                        </div>
-                        <div className="fw-bold small d-flex align-items-center font-monospace gap-1">
-                          <BsBoxSeam className="text-success" />
-                          {merchant.product_count} {labels.productsUnit}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Dual Risk Score Breakdown */}
-                  <div className="rounded-3 mb-3 border bg-white p-3">
-                    <div className="row g-3">
-                      <div className="border-end col-6">
-                        <div className="d-flex justify-content-between align-items-center mb-1">
-                          <span className="small text-muted fw-medium">
-                            🛡️ DOSafe Threat Risk
-                          </span>
-                          <span
-                            className={`badge rounded-pill font-monospace ${
-                              merchant.dosafe_risk_score === 0
-                                ? 'bg-success-subtle text-success'
-                                : 'bg-danger-subtle text-danger'
-                            }`}
-                          >
-                            {merchant.dosafe_risk_score}/100
-                          </span>
-                        </div>
-                        <div
-                          className="small text-muted"
-                          style={{ fontSize: '0.8125rem' }}
-                        >
-                          {merchant.dosafe_risk_score === 0
-                            ? labels.dosafeZero
-                            : labels.dosafeAlert}
-                        </div>
-                      </div>
-
-                      <div className="col-6">
-                        <div className="d-flex justify-content-between align-items-center mb-1">
-                          <span className="small text-muted fw-medium">
-                            🤖 AI Review Risk
-                          </span>
-                          <span
-                            className={`badge rounded-pill font-monospace ${
-                              merchant.review_risk_score <= 15
-                                ? 'bg-success-subtle text-success'
-                                : merchant.review_risk_score <= 40
-                                  ? 'bg-warning-subtle text-warning-emphasis'
-                                  : 'bg-danger-subtle text-danger'
-                            }`}
-                          >
-                            {merchant.review_risk_score}/100
-                          </span>
-                        </div>
-                        <div
-                          className="small text-muted"
-                          style={{ fontSize: '0.8125rem' }}
-                        >
-                          {merchant.review_risk_breakdown.total_reviews > 0 ? (
-                            <>
-                              {labels.authenticLabel}{' '}
-                              <strong>
-                                {merchant.review_risk_breakdown.authentic_count}
-                              </strong>
-                              /{merchant.review_risk_breakdown.total_reviews} (
-                              {merchant.review_risk_breakdown.coin_spam_count +
-                                merchant.review_risk_breakdown
-                                  .seeding_fake_count}{' '}
-                              {labels.filteredSpamSuffix})
-                            </>
+                          {rStats.fakeTrapCount > 0 ? (
+                            <span className="badge bg-danger-subtle text-danger border-danger-subtle rounded-pill border px-2 py-1">
+                              {t('radarFakeBadge', {
+                                count: rStats.fakeTrapCount,
+                              })}
+                            </span>
                           ) : (
-                            labels.noAbnormalReviews
+                            <span className="badge bg-light text-secondary rounded-pill border px-2 py-1">
+                              {t('radarZeroFakeBadge')}
+                            </span>
                           )}
                         </div>
-                      </div>
-                    </div>
-                  </div>
+                      );
+                    })()}
 
-                  {minPriceText && (
-                    <div className="small text-muted mb-2">
-                      {labels.priceRangeLabel}{' '}
-                      <strong className="text-dark font-monospace">
-                        {minPriceText}
-                        {maxPriceText ? ` - ${maxPriceText}` : ''}
-                      </strong>
-                    </div>
-                  )}
-
-                  {(() => {
-                    const rStats = getMerchantRadarStats(merchant);
-                    return (
-                      <div
-                        className="d-flex align-items-center mb-3 flex-wrap gap-1"
-                        data-testid="merchant-deal-radar-badge"
+                    <div className="d-flex justify-content-between align-items-center border-top mt-auto flex-wrap gap-2 pt-2">
+                      <Link
+                        href={`/merchants/${merchant.id}`}
+                        className="btn btn-primary rounded-pill fw-medium px-4"
                       >
-                        {rStats.genuineDealCount > 0 && (
-                          <span className="badge bg-success-subtle text-success border-success-subtle rounded-pill border px-2 py-1">
-                            {t('radarGenuineBadge', {
-                              count: rStats.genuineDealCount,
-                              pct: rStats.bestSavingsPct,
-                            })}
-                          </span>
-                        )}
-                        {rStats.fakeTrapCount > 0 ? (
-                          <span className="badge bg-danger-subtle text-danger border-danger-subtle rounded-pill border px-2 py-1">
-                            {t('radarFakeBadge', {
-                              count: rStats.fakeTrapCount,
-                            })}
-                          </span>
-                        ) : (
-                          <span className="badge bg-light text-secondary rounded-pill border px-2 py-1">
-                            {t('radarZeroFakeBadge')}
-                          </span>
-                        )}
-                      </div>
-                    );
-                  })()}
-
-                  <div className="d-flex justify-content-between align-items-center border-top mt-auto flex-wrap gap-2 pt-2">
-                    <Link
-                      href={`/merchants/${merchant.id}`}
-                      className="btn btn-primary rounded-pill fw-medium px-4"
-                    >
-                      {labels.viewTrustProfileCta}
-                    </Link>
-                    {merchant.url && (
-                      <a
-                        href={merchant.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="btn btn-outline-secondary btn-sm rounded-pill px-3"
-                      >
-                        {labels.openStorefrontCta}
-                      </a>
-                    )}
+                        {labels.viewTrustProfileCta}
+                      </Link>
+                      {merchant.url && (
+                        <a
+                          href={merchant.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="btn btn-outline-secondary btn-sm rounded-pill px-3"
+                        >
+                          {labels.openStorefrontCta}
+                        </a>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+          {filteredMerchants.length > visibleCount && (
+            <div className="mt-4 text-center">
+              <button
+                type="button"
+                className="btn btn-outline-dark rounded-pill fw-semibold px-4"
+                onClick={() => setVisibleCount((n) => n + MERCHANT_PAGE_SIZE)}
+              >
+                {t('showMoreMerchants', {
+                  count: filteredMerchants.length - visibleCount,
+                })}
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

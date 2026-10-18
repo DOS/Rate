@@ -889,7 +889,8 @@
     "mdRadarLine": "- **60-Day Price Radar Audit:** 🟢 {genuine} genuine lows | 🚨 {traps} fake-sale traps",
     "mdAuthenticLine": "- **Authentic Buyer Review Ratio:** {pct}% ({auth}/{total} authentic reviews, {flagged} Seeding/Spam filtered)",
     "mdProductsLine": "- **Tracked Canonical Products:** {count} models",
-    "mdUrlLine": "- **Live Audit Profile on Rate.vn:** {url}"
+    "mdUrlLine": "- **Live Audit Profile on Rate.vn:** {url}",
+    "showMoreMerchants": "Show more ({count} stores)"
   },
   "productDetail": {
     "notFoundTitle": "Product Not Found | Rate.vn",

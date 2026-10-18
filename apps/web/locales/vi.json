@@ -889,7 +889,8 @@
     "mdRadarLine": "- **Kiểm toán Radar Giá 60 Ngày:** 🟢 {genuine} kèo đáy lịch sử | 🚨 {traps} cảnh báo kê khống giá gốc",
     "mdAuthenticLine": "- **Tỷ lệ đánh giá người mua thật:** {pct}% ({auth}/{total} đánh giá thật, đã lọc {flagged} bài Seeding/Spam)",
     "mdProductsLine": "- **Số thiết bị đang theo dõi giá:** {count} mẫu chuẩn hóa",
-    "mdUrlLine": "- **Hồ sơ kiểm toán trực tiếp trên Rate.vn:** {url}"
+    "mdUrlLine": "- **Hồ sơ kiểm toán trực tiếp trên Rate.vn:** {url}",
+    "showMoreMerchants": "Xem thêm ({count} gian hàng)"
   },
   "productDetail": {
     "notFoundTitle": "Không tìm thấy sản phẩm | Rate.vn",
