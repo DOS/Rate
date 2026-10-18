@@ -83,6 +83,8 @@ export function NavbarDarkDynamic({
                 className="nav-toggle"
                 role="button"
                 tabIndex={0}
+                aria-label="Toggle navigation"
+                aria-expanded={toggle}
                 onClick={() => setToggle(!toggle)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') setToggle(!toggle);
@@ -160,6 +162,7 @@ export function NavbarDarkDynamic({
                 className="nav-menus-wrapper-close-button"
                 role="button"
                 tabIndex={0}
+                aria-label="Close navigation"
                 onClick={() => setToggle(false)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') setToggle(false);
