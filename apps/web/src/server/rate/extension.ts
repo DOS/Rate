@@ -258,6 +258,12 @@ const ACCESSORY_KEYWORDS_VI_EN = [
 ];
 
 const MINIMUM_DEVICE_PRICE_FLOOR_VND = 1_200_000;
+const MINIMUM_EARBUDS_PRICE_FLOOR_VND = 400_000;
+const EARBUDS_TITLE_REGEX = /\b(?:airpods|buds|wf-|tai\s*nghe|earbuds)\b/i;
+
+function isDomainOrSubdomain(host: string, domain: string): boolean {
+  return host === domain || host.endsWith(`.${domain}`);
+}
 
 /**
  * Strip all tracking & session parameters (sp_atk, xptdk, utm_*, fbclid, etc.)
@@ -297,23 +303,39 @@ export function detectPlatformFromInput(
   ) {
     return norm;
   }
-  const u = (rawUrl || '').toLowerCase();
-  if (u.includes('shopee.vn')) return 'shopee';
-  if (u.includes('lazada.vn')) return 'lazada';
-  if (u.includes('tiki.vn')) return 'tiki';
-  if (u.includes('tiktok.com')) return 'tiktok';
-  if (u.includes('cellphones.com.vn')) return 'cellphones';
-  if (u.includes('thegioididong.com') || u.includes('topzone.vn'))
+  if (!rawUrl || typeof rawUrl !== 'string') return null;
+  let host: string;
+  try {
+    const parsed = new URL(rawUrl.trim());
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return null;
+    }
+    host = parsed.hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+
+  if (isDomainOrSubdomain(host, 'shopee.vn')) return 'shopee';
+  if (isDomainOrSubdomain(host, 'lazada.vn')) return 'lazada';
+  if (isDomainOrSubdomain(host, 'tiki.vn')) return 'tiki';
+  if (isDomainOrSubdomain(host, 'tiktok.com')) return 'tiktok';
+  if (isDomainOrSubdomain(host, 'cellphones.com.vn')) return 'cellphones';
+  if (
+    isDomainOrSubdomain(host, 'thegioididong.com') ||
+    isDomainOrSubdomain(host, 'topzone.vn') ||
+    isDomainOrSubdomain(host, 'dienmayxanh.com')
+  ) {
     return 'tgdd';
-  if (u.includes('fptshop.com.vn')) return 'fptshop';
-  if (u.includes('hoanghamobile.com')) return 'hoangha';
-  if (u.includes('didongviet.vn')) return 'didongviet';
-  if (u.includes('phongvu.vn')) return 'phongvu';
+  }
+  if (isDomainOrSubdomain(host, 'fptshop.com.vn')) return 'fptshop';
+  if (isDomainOrSubdomain(host, 'hoanghamobile.com')) return 'hoangha';
+  if (isDomainOrSubdomain(host, 'didongviet.vn')) return 'didongviet';
+  if (isDomainOrSubdomain(host, 'phongvu.vn')) return 'phongvu';
   return null;
 }
 
 /**
- * Gatekeeper Layer 0: Distinguish accessories/spare parts from actual phones/tablets/laptops.
+ * Gatekeeper Layer 0: Distinguish accessories/spare parts from actual phones/tablets/laptops/earbuds.
  */
 export function detectAccessoryOrJunk(params: {
   title?: string | null;
@@ -331,14 +353,18 @@ export function detectAccessoryOrJunk(params: {
     }
   }
 
+  const minFloor = EARBUDS_TITLE_REGEX.test(titleLower)
+    ? MINIMUM_EARBUDS_PRICE_FLOOR_VND
+    : MINIMUM_DEVICE_PRICE_FLOOR_VND;
+
   if (
     typeof params.price === 'number' &&
     params.price > 0 &&
-    params.price < MINIMUM_DEVICE_PRICE_FLOOR_VND
+    params.price < minFloor
   ) {
     return {
       isAccessory: true,
-      reason: `Mức giá (${params.price.toLocaleString('vi-VN')} ₫) thấp hơn ngưỡng tối thiểu của thiết bị chính hãng (${MINIMUM_DEVICE_PRICE_FLOOR_VND.toLocaleString('vi-VN')} ₫) - khả năng cao là phụ kiện hoặc linh kiện.`,
+      reason: `Mức giá (${params.price.toLocaleString('vi-VN')} ₫) thấp hơn ngưỡng tối thiểu của thiết bị chính hãng (${minFloor.toLocaleString('vi-VN')} ₫) - khả năng cao là phụ kiện hoặc linh kiện.`,
     };
   }
 
@@ -1028,6 +1054,17 @@ export async function ingestExtensionCrowdSignal(
       jobState: 'rejected_invalid_url',
       jobId: null,
       reason: 'URL sản phẩm không hợp lệ.',
+    };
+  }
+
+  const urlPlatform = detectPlatformFromInput(null, canonicalUrl);
+  if (urlPlatform !== input.platform) {
+    return {
+      accepted: false,
+      quarantinedForWorker: false,
+      jobState: 'rejected_invalid_url',
+      jobId: null,
+      reason: 'URL sản phẩm không khớp với tên miền của sàn TMĐT đã khai báo.',
     };
   }
 
