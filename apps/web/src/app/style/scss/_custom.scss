@@ -500,11 +500,7 @@
   body .badge {
     max-width: 100%;
     white-space: normal;
-    text-align: start;
+    line-height: 1.25;
+    text-align: inherit;
   }
-}
-
-// A truncating flex child only ellipsizes once it is allowed to shrink.
-.d-flex > .text-truncate {
-  min-width: 0;
 }
