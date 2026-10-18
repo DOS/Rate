@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { Link } from '@/lib/navigation';
 import Image from 'next/image';
 import { useTranslations } from 'next-intl';
@@ -91,7 +91,11 @@ export function NavbarDarkDynamic({
               <div className="mobile_nav">
                 <ul className="d-flex align-items-center gap-2">
                   <li className="me-1">
-                    <LocaleSwitcher isDarkHeader={false} compact={true} />
+                    {/* LocaleSwitcher reads useSearchParams; its own boundary keeps a statically
+                    rendered page from bailing out to client rendering. */}
+                    <Suspense fallback={null}>
+                      <LocaleSwitcher isDarkHeader={false} compact={true} />
+                    </Suspense>
                   </li>
                   <li>
                     <Link
@@ -250,7 +254,9 @@ export function NavbarDarkDynamic({
 
               <ul className="nav-menu nav-menu-social align-to-right d-flex align-items-center mb-0">
                 <li className="d-flex align-items-center me-3">
-                  <LocaleSwitcher isDarkHeader={false} />
+                  <Suspense fallback={null}>
+                    <LocaleSwitcher isDarkHeader={false} />
+                  </Suspense>
                 </li>
                 <li className="list-buttons d-flex align-items-center">
                   <Link

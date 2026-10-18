@@ -10,6 +10,8 @@ const GALAXY = {
   name: 'Galaxy S25 Ultra 256GB',
 };
 
+// Next.js awaits metadata before answering HTML-limited crawlers such as Bingbot,
+// so they exercise the non-streaming path; the default UA covers streaming.
 const BINGBOT =
   'Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)';
 
@@ -66,6 +68,9 @@ test('product page shows offers and reviews', async ({ page }) => {
 for (const path of [
   '/smartphones/does-not-exist-e2e',
   '/laptops/does-not-exist-e2e',
+  '/tablets/does-not-exist-e2e',
+  '/earbuds/does-not-exist-e2e',
+  '/smartwatches/does-not-exist-e2e',
   '/merchants/00000000-0000-4000-8000-000000000000',
   '/compare/no-such-a-vs-no-such-b',
 ]) {
@@ -90,6 +95,16 @@ test('unknown product slug shows the not-found page, never indexed', async ({
   await expect(page.getByRole('heading', { level: 1 })).not.toContainText(
     IPHONE.name
   );
+});
+
+// Positive controls for the 404 specs: the same routes resolve seeded rows.
+test('merchant and versus pages resolve seeded rows', async ({ request }) => {
+  for (const path of [
+    '/merchants/11111111-1111-4111-8111-111111111111',
+    `/compare/${IPHONE.slug}-vs-${GALAXY.slug}`,
+  ]) {
+    expect((await request.get(path)).status(), path).toBe(200);
+  }
 });
 
 test('compare page shows both products', async ({ page }) => {
