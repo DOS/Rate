@@ -534,7 +534,7 @@ export default function WatchlistWorkspace({
                 <div className="small text-white-50 mb-1">
                   {t('kpiTotalTargetLabel')}
                 </div>
-                <div className="h5 fw-bold rate-tabular text-info rate-tabular mb-0">
+                <div className="h5 fw-bold rate-tabular text-info mb-0">
                   {portfolioStats.totalTargetVnd.toLocaleString('vi-VN')} ₫
                 </div>
               </div>
@@ -550,7 +550,7 @@ export default function WatchlistWorkspace({
                 <div className="small text-white-50 mb-1">
                   {t('kpiSpreadSavingsLabel')}
                 </div>
-                <div className="h5 fw-bold rate-tabular text-success rate-tabular mb-0">
+                <div className="h5 fw-bold rate-tabular text-success mb-0">
                   +
                   {portfolioStats.totalSpreadSavingsVnd.toLocaleString('vi-VN')}{' '}
                   ₫
@@ -568,7 +568,7 @@ export default function WatchlistWorkspace({
                 <div className="small text-white-50 mb-1">
                   {t('kpiAvgRatingLabel')}
                 </div>
-                <div className="h5 fw-bold rate-tabular text-warning rate-tabular mb-0">
+                <div className="h5 fw-bold rate-tabular text-warning mb-0">
                   ★{' '}
                   {avgPortfolioRating > 0
                     ? `${avgPortfolioRating.toFixed(2)} / 5.0`

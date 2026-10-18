@@ -364,7 +364,7 @@ export default function DeepInspectWorkspace({
                 </span>
                 <input
                   type="text"
-                  className="form-control border-0"
+                  className="form-control text-dark border-0"
                   placeholder={t('inputPlaceholder')}
                   value={queryInput}
                   onChange={(e) => setQueryInput(e.target.value)}
@@ -375,7 +375,7 @@ export default function DeepInspectWorkspace({
               <button
                 type="submit"
                 disabled={loading}
-                className="btn btn-primary btn-lg fw-semibold d-flex align-items-center justify-content-center text-nowrap gap-2"
+                className="btn btn-primary fw-semibold d-flex align-items-center justify-content-center gap-2 px-3 lh-sm"
               >
                 <BsSearch />
                 <span>{loading ? t('inspectingBtn') : t('inspectBtn')}</span>

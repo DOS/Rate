@@ -261,7 +261,7 @@ export default function ProductValueCalculator({
             <div className="text-muted small mb-1">
               {t('valueCalcCardCostPerPointTitle')}
             </div>
-            <div className="h5 fw-bold rate-tabular text-dark rate-tabular mb-1">
+            <div className="h5 fw-bold rate-tabular text-dark mb-1">
               {metrics.costPerPoint10 > 0
                 ? `${metrics.costPerPoint10.toLocaleString('vi-VN')} ₫`
                 : t('valueCalcNotAvailable')}
@@ -281,7 +281,7 @@ export default function ProductValueCalculator({
             <div className="text-muted small mb-1">
               {t('valueCalcCardDailyCostTitle', { months })}
             </div>
-            <div className="h5 fw-bold rate-tabular text-danger rate-tabular mb-1">
+            <div className="h5 fw-bold rate-tabular text-danger mb-1">
               {metrics.dailyCostVnd.toLocaleString('vi-VN')}{' '}
               {t('valueCalcPerDayUnit')}
             </div>
@@ -297,7 +297,7 @@ export default function ProductValueCalculator({
             <div className="text-muted small mb-1">
               {t('valueCalcCardResaleTitle', { months })}
             </div>
-            <div className="h5 fw-bold rate-tabular text-success rate-tabular mb-1">
+            <div className="h5 fw-bold rate-tabular text-success mb-1">
               {includeResale
                 ? `${metrics.estimatedResaleVnd.toLocaleString('vi-VN')} ₫`
                 : '0 ₫'}
@@ -318,7 +318,7 @@ export default function ProductValueCalculator({
             <div className="text-muted small mb-1">
               {t('valueCalcCardValueScoreTitle')}
             </div>
-            <div className="h5 fw-bold rate-tabular text-primary rate-tabular mb-1">
+            <div className="h5 fw-bold rate-tabular text-primary mb-1">
               {valueCriterionScore5 > 0
                 ? `★ ${valueCriterionScore5.toFixed(1)}/5.0`
                 : t('valueCalcNotAvailable')}
