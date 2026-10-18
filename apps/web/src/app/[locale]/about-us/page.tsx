@@ -5,6 +5,7 @@ import NavbarDarkDynamic from '../components/navbar/NavbarDarkDynamic';
 import FooterTop from '../components/footer-top';
 import FooterDynamic from '../components/footer/FooterDynamic';
 import BackToTop from '../components/back-to-top';
+import { EMPTY_RATE_PLATFORM_STATS } from '@/lib/rate-api';
 import { getCachedRatePlatformStats } from '@/server/rate';
 import {
   BsCheckCircleFill,
@@ -45,7 +46,8 @@ export default async function AboutUsPage({
 }) {
   const { locale } = await params;
   const [stats, t] = await Promise.all([
-    getCachedRatePlatformStats(),
+    // Counters are decorative here: show zeros rather than an error page.
+    getCachedRatePlatformStats().catch(() => EMPTY_RATE_PLATFORM_STATS),
     getTranslations({ locale, namespace: 'staticPages' }),
   ]);
 

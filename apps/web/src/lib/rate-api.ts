@@ -2993,6 +2993,20 @@ export async function getMerchantProfileById(
  * Fetch live platform statistics, category product counts, and recent verified/flagged
  * reviews from the `rate` schema to power the Homepage with 100% real database data.
  */
+/** Counters shown when platform stats cannot be read; never cached. */
+export const EMPTY_RATE_PLATFORM_STATS: RatePlatformStats = {
+  masterProductsCount: 0,
+  listingsCount: 0,
+  merchantsCount: 0,
+  priceObservationsCount: 0,
+  totalReviewsCount: 0,
+  authenticReviewsCount: 0,
+  filteredSeedingCount: 0,
+  authenticRatioPct: 100,
+  categoriesWithCounts: [],
+  recentReviewsSample: [],
+};
+
 export async function getRatePlatformStats(): Promise<RatePlatformStats> {
   const supabase = getRateClient();
 
@@ -3033,6 +3047,15 @@ export async function getRatePlatformStats(): Promise<RatePlatformStats> {
       .order('created_at', { ascending: false })
       .limit(60),
   ]);
+  // Zero counters would otherwise be cached as the platform's real totals.
+  const statsError =
+    catsRes.error ??
+    merchantsRes.error ??
+    priceHistCountRes.error ??
+    reviewsRes.error;
+  if (statsError) {
+    throw new RateDataUnavailableError('platform stats', statsError);
+  }
 
   const categories = (catsRes.data as RateCategoryItem[]) || [];
   const masterRows =

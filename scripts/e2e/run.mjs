@@ -185,7 +185,12 @@ function startProxy(upstreamPort) {
       res.end('{"message":"request URI too long"}');
       return;
     }
-    const decodedUrl = decodeURIComponent(req.url);
+    let decodedUrl = req.url;
+    try {
+      decodedUrl = decodeURIComponent(req.url);
+    } catch {
+      // malformed escape: match rules against the raw URL
+    }
     if (FAULT_RULES.some((matches) => matches(decodedUrl))) {
       res.writeHead(500, { 'content-type': 'application/json' });
       res.end('{"message":"simulated outage","code":"XX000"}');
