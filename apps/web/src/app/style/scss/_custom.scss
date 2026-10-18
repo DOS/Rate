@@ -380,3 +380,116 @@
     flex-grow: 1;
   }
 }
+
+// Section header with a title block and a short row of secondary links.
+.rate-section-head {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+
+  @media (min-width: 768px) {
+    flex-direction: row;
+    align-items: flex-end;
+    justify-content: space-between;
+  }
+}
+
+.rate-section-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.25rem;
+
+  a {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--rate-fg-paragraph);
+    text-decoration: none;
+    white-space: nowrap;
+
+    svg {
+      color: var(--rate-fg-muted);
+    }
+
+    &:hover {
+      color: var(--rate-brand);
+
+      svg {
+        color: currentColor;
+      }
+    }
+  }
+}
+
+// Home category tiles: the whole tile is one link.
+.rate-category-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 1.25rem;
+  color: inherit;
+  text-decoration: none;
+
+  &:hover .rate-category-card-cta {
+    gap: 0.6rem;
+  }
+}
+
+.rate-category-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.rate-category-card-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  font-size: 1.375rem;
+  color: var(--rate-brand);
+  background-color: var(--rate-brand-bg);
+  border-radius: 10px;
+}
+
+.rate-category-card-count {
+  font-size: var(--rate-text-min);
+  font-weight: 600;
+  color: var(--rate-fg-paragraph);
+  font-variant-numeric: tabular-nums;
+
+  &.is-empty {
+    color: var(--rate-fg-muted);
+  }
+}
+
+.rate-category-card-title {
+  margin: 0 0 0.375rem;
+  font-size: 1.0625rem;
+  font-weight: 700;
+  color: var(--rate-fg-primary);
+}
+
+.rate-category-card-desc {
+  margin: 0 0 1rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--rate-fg-paragraph);
+}
+
+.rate-category-card-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: auto;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--rate-brand);
+  transition: gap 0.15s ease;
+}

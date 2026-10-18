@@ -63,11 +63,10 @@
       "statPricePoints": "Bodů historie cen",
       "statReviews": "AI ověřených recenzí",
       "statMerchants": "Obchodů s duálním skóre rizika",
-      "catBadge": "🗂️ Katalog technologických zařízení",
+      "catBadge": "Kategorie zařízení",
       "catTitlePrefix": "Prozkoumat podle",
       "catTitleHighlight": "Standardizované Kategorie",
       "catSubtitle": "Každá kategorie podporuje hloubkové filtrování podle 10 skupin parametrů a ověření cen v reálném čase",
-      "catReadySuffix": "modelů",
       "catExpanding": "Rozšiřujeme",
       "featuredBadge": "⚡ 10 skupin parametrů (GSMArena & PhoneArena)",
       "featuredTitlePrefix": "Produkty s",
@@ -89,7 +88,9 @@
       "whyBadge": "🔬 Transparentní Open-Core Architektura 2026",
       "whyTitlePrefix": "Proč kupující věří",
       "whyTitleHighlight": "Rate.vn",
-      "whySubtitle": "Tři nezávislé vrstvy ochrany vás chrání před falešnými slevami a zmanipulovaným hodnocením"
+      "whySubtitle": "Tři nezávislé vrstvy ochrany vás chrání před falešnými slevami a zmanipulovaným hodnocením",
+      "catModelCount": "{count, plural, one {# model} few {# modely} other {# modelů}}",
+      "catViewLink": "Zobrazit kategorii"
     }
   },
   "errors": {
