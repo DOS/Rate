@@ -55,6 +55,7 @@ export default async function LocaleLayout({
     staticPages: messages.staticPages,
     catalog: messages.catalog,
     heroSearch: messages.heroSearch,
+    authPortal: messages.authPortal,
   };
 
   return (

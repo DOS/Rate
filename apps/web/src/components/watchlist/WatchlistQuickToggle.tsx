@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import {
   getWatchlist,
   removeWatchlistItem,
@@ -28,6 +29,7 @@ export default function WatchlistQuickToggle({
   size = 'sm',
   className = '',
 }: WatchlistQuickToggleProps) {
+  const t = useTranslations('watchlist');
   const [watched, setWatched] = useState(false);
 
   useEffect(() => {
@@ -71,9 +73,7 @@ export default function WatchlistQuickToggle({
       type="button"
       onClick={handleToggle}
       title={
-        watched
-          ? 'Đang theo dõi biến động giá (Bấm để bỏ theo dõi)'
-          : 'Theo dõi biến động giá & nhận cảnh báo giảm giá thật (-5%)'
+        watched ? t('quickToggleTitleWatched') : t('quickToggleTitleUnwatched')
       }
       className={`btn ${
         watched
@@ -82,7 +82,9 @@ export default function WatchlistQuickToggle({
       } ${size === 'sm' ? 'btn-sm small px-2 py-1' : 'px-3 py-2'} rounded-pill fw-medium d-inline-flex align-items-center gap-1 shadow-sm ${className}`}
       style={{ fontSize: size === 'sm' ? '12px' : '13.5px' }}
     >
-      <span>{watched ? '🔔 Đang canh giá' : '🔔 Canh giá'}</span>
+      <span>
+        {watched ? t('quickToggleBtnWatched') : t('quickToggleBtnUnwatched')}
+      </span>
     </button>
   );
 }
