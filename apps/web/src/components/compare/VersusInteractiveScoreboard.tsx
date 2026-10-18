@@ -406,7 +406,7 @@ export default function VersusInteractiveScoreboard({
             data-testid="versus-export-csv-btn"
             className="btn btn-sm btn-outline-light rounded-pill fw-semibold px-3"
           >
-            📥 CSV
+            CSV
           </button>
           <button
             type="button"
@@ -414,7 +414,7 @@ export default function VersusInteractiveScoreboard({
             data-testid="versus-export-json-btn"
             className="btn btn-sm btn-outline-light rounded-pill fw-semibold px-3"
           >
-            📦 JSON
+            JSON
           </button>
           <Link
             href={`/compare/${scoreB.slug}-vs-${scoreA.slug}`}

@@ -188,7 +188,7 @@ export default function MerchantShareAuditButton({
         data-testid="merchant-export-csv-btn"
         className="btn btn-outline-light btn-sm rounded-pill fw-semibold px-3"
       >
-        📥 CSV
+        CSV
       </button>
       <button
         type="button"
@@ -196,7 +196,7 @@ export default function MerchantShareAuditButton({
         data-testid="merchant-export-json-btn"
         className="btn btn-outline-light btn-sm rounded-pill fw-semibold px-3"
       >
-        📦 JSON
+        JSON
       </button>
       <button
         type="button"
