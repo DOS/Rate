@@ -2530,34 +2530,47 @@ export async function getMerchantsList(
 ): Promise<MerchantSummary[]> {
   const supabase = getRateClient();
 
-  let mQuery = supabase
-    .from('merchants')
-    .select(
-      'id, platform, platform_shop_id, name, slug, url, is_official, rating_star, follower_count, location, risk_score, metadata, updated_at'
-    )
-    .order('is_official', { ascending: false })
-    .order('follower_count', { ascending: false });
-
-  if (params?.platform && params.platform !== 'all') {
-    mQuery = mQuery.eq('platform', params.platform.toLowerCase());
-  }
-  if (params?.officialOnly) {
-    mQuery = mQuery.eq('is_official', true);
-  }
+  const merchantsQuery = () => {
+    let q = supabase
+      .from('merchants')
+      .select(
+        'id, platform, platform_shop_id, name, slug, url, is_official, rating_star, follower_count, location, risk_score, metadata, updated_at'
+      )
+      .order('is_official', { ascending: false })
+      .order('follower_count', { ascending: false })
+      // Tiebreak so pages never overlap or skip rows.
+      .order('id');
+    if (params?.platform && params.platform !== 'all') {
+      q = q.eq('platform', params.platform.toLowerCase());
+    }
+    if (params?.officialOnly) {
+      q = q.eq('is_official', true);
+    }
+    return q;
+  };
   const hasPostQueryFilterOrSort = Boolean(
     (params?.q && params.q.trim()) ||
     (typeof params?.minTrust === 'number' && !Number.isNaN(params.minTrust)) ||
     params?.sort
   );
-  if (!hasPostQueryFilterOrSort && params?.limit && params.limit > 0) {
-    mQuery = mQuery.limit(params.limit);
-  }
+  const directLimit =
+    !hasPostQueryFilterOrSort && params?.limit && params.limit > 0
+      ? params.limit
+      : null;
 
-  const { data: merchantRows, error: merchantsError } = await mQuery;
-  if (merchantsError) {
-    throw new RateDataUnavailableError('merchants', merchantsError);
+  // Every merchant unless only the top `limit` is needed: one request is
+  // silently capped at PostgREST max-rows (1000 on Supabase), so page it.
+  let merchantRows: unknown[];
+  if (directLimit) {
+    const { data, error } = await merchantsQuery().range(0, directLimit - 1);
+    if (error) throw new RateDataUnavailableError('merchants', error);
+    merchantRows = data ?? [];
+  } else {
+    merchantRows = await fetchAllRows('merchants', (from, to) =>
+      merchantsQuery().range(from, to)
+    );
   }
-  const merchants = (merchantRows as unknown as RawMerchantSafeRow[]) || [];
+  const merchants = merchantRows as unknown as RawMerchantSafeRow[];
   if (merchants.length === 0) return [];
 
   const merchantIds = merchants.map((m) => m.id);

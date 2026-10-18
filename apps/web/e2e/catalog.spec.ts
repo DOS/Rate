@@ -116,9 +116,19 @@ test('merchant directory loads with a merchant of hundreds of listings', async (
   request,
 }) => {
   expect((await request.get('/merchants')).status()).toBe(200);
-  const res = await request.get('/api/v1/rate/merchants');
+  const res = await request.get('/api/v1/rate/merchants?q=bulk-listings-store');
   expect(res.status()).toBe(200);
   expect(await res.text()).toContain('bulk-listings-store');
+});
+
+// 1100 extra merchants exceed PostgREST's 1000-row cap; the directory pages its
+// read, so the last-ranked one is still searchable (DOS/Rate#358).
+test('merchant search reaches merchants past the 1000-row cap', async ({
+  request,
+}) => {
+  const res = await request.get('/api/v1/rate/merchants?q=last-ranked-shop');
+  expect(res.status()).toBe(200);
+  expect(await res.text()).toContain('last-ranked-shop');
 });
 
 // Positive controls for the 404 specs: the same routes resolve seeded rows.
