@@ -793,6 +793,14 @@ async function run() {
       input.length,
       'helpfulness_weight is still written for every review'
     );
+    const burstWeightUpdate = calls.find(
+      c => c.table === 'reviews' && c.op === 'update' && c.val === burstTarget.id
+    );
+    assert.deepEqual(
+      burstWeightUpdate?.payload,
+      { helpfulness_weight: 0 },
+      'preserved burst-audited review with include_in_rating=false must write helpfulness_weight=0'
+    );
 
     existingFlagRows = input.map(r => ({ review_id: r.id }));
     calls.length = 0;
@@ -1447,8 +1455,43 @@ async function run() {
     'ShopeeIngestionPipeline must deduplicate platform_review_id entries when refreshing is_verified_buyer'
   );
 
+  // 16c. DOS/Rate#359: computeReviewWeight returns 0 for unanalyzed verdict & sabotage regex matches Vietnamese diacritics without backtracking
+  assert.equal(
+    computeReviewWeight({
+      upvotes: 10,
+      downvotes: 0,
+      reportCount: 0,
+      flagCategory: 'authentic',
+      verdict: 'unanalyzed',
+    }),
+    0,
+    'computeReviewWeight must return 0 when verdict is unanalyzed'
+  );
+  const sabotageCheck = heuristicOnly().analyzeWithHeuristics([
+    {
+      id: 'sab-vn-1',
+      rating_star: 1,
+      comment: 'Hàng chán lắm mọi người qua shop Thế Giới Phụ Kiện mua nhé',
+    },
+    {
+      id: 'non-sab-long',
+      rating_star: 1,
+      comment: 'qua shop ' + 'rất xa '.repeat(600) + 'không ưng ý',
+    },
+  ]);
+  assert.equal(
+    sabotageCheck[0]!.flag_category,
+    'competitor_sabotage',
+    'Competitor sabotage regex must match Vietnamese diacritic shop names'
+  );
+  assert.notEqual(
+    sabotageCheck[1]!.flag_category,
+    'competitor_sabotage',
+    'Long non-sabotage comment must not match competitor_sabotage or backtrack quadratically'
+  );
+
   console.log(
-    `✅ [P2/P3 Trust Model & #292/#352/#356] Voter weight, Wilson lower bound (50/52=${wilson50of52} > 1/1=${wilson1of1}), shingle copy seeding (sim=${shingleSim}), affiliate shortlinks, peer floor, ArenaSpecSyncer & Importer hardening (#352, #356) verified`
+    `✅ [P2/P3 Trust Model & #292/#352/#356/#359] Voter weight, Wilson lower bound (50/52=${wilson50of52} > 1/1=${wilson1of1}), shingle copy seeding (sim=${shingleSim}), affiliate shortlinks, peer floor, ArenaSpecSyncer & Importer hardening (#352, #356, #359) verified`
   );
 
   console.log('\n🎉 ALL AI REVIEW ANALYZER TESTS PASSED!');

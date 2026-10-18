@@ -103,13 +103,13 @@ export async function GET(request: NextRequest) {
       ),
       minBatteryMah: parseBooleanFlag(sp.get('bigBattery'))
         ? 5000
-        : parsePositiveNum(sp.get('battery')),
+        : parsePositiveNum(sp.get('minBatteryMah') || sp.get('battery')),
       minRefreshRateHz: parseBooleanFlag(sp.get('highRefresh'))
         ? 120
-        : parsePositiveNum(sp.get('hz')),
+        : parsePositiveNum(sp.get('minRefreshHz') || sp.get('hz')),
       minFastChargingW: parseBooleanFlag(sp.get('fastCharge'))
         ? 45
-        : parsePositiveNum(sp.get('charge')),
+        : parsePositiveNum(sp.get('minFastChargeW') || sp.get('charge')),
       has5g: parseBooleanFlag(sp.get('has5g') || sp.get('5g')),
       hasNfc: parseBooleanFlag(sp.get('hasNfc') || sp.get('nfc')),
       maxScreenSizeInch,

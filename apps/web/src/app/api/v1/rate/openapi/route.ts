@@ -1,17 +1,15 @@
 import { NextResponse } from 'next/server';
 import { buildRateOpenApiSpec } from '@/server/rate/openapi';
+import { PUBLIC_API_CORS_HEADERS } from '@/server/rate/api-handler';
 import { createLogger, serializeError } from '@/lib/logger';
 
 const log = createLogger('api.openapi');
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-};
-
 export async function OPTIONS() {
-  return new NextResponse(null, { status: 204, headers: CORS_HEADERS });
+  return new NextResponse(null, {
+    status: 204,
+    headers: PUBLIC_API_CORS_HEADERS,
+  });
 }
 
 export async function GET(request: Request) {
@@ -23,7 +21,7 @@ export async function GET(request: Request) {
     return NextResponse.json(spec, {
       status: 200,
       headers: {
-        ...CORS_HEADERS,
+        ...PUBLIC_API_CORS_HEADERS,
         'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400',
       },
     });
@@ -31,7 +29,7 @@ export async function GET(request: Request) {
     log.error('openapi build failed', { error: serializeError(err) });
     return NextResponse.json(
       { error: 'Internal server error' },
-      { status: 500, headers: CORS_HEADERS }
+      { status: 500, headers: PUBLIC_API_CORS_HEADERS }
     );
   }
 }

@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
       resolvedMasterId,
       allReviews
     );
-    const reviews = parsedQuery.hideFake
+    const filteredReviews = parsedQuery.hideFake
       ? allReviews.filter(
           (r) =>
             r.verdict !== 'fake' &&
@@ -80,6 +80,7 @@ export async function GET(request: NextRequest) {
             r.flag_category !== 'low_value_coin_spam'
         )
       : allReviews;
+    const reviews = filteredReviews.slice(0, parsedQuery.limit);
 
     return NextResponse.json(
       {

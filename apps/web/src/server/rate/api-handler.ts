@@ -372,18 +372,34 @@ export function parseReviewsQueryParams(
   masterProductId: string | null;
   slug: string | null;
   hideFake: boolean;
+  limit: number;
 } | null {
   const hideFakeRaw = searchParams.get('hideFake');
   const hideFake =
     hideFakeRaw === '1' || hideFakeRaw?.trim().toLowerCase() === 'true';
 
-  const rawMasterId = searchParams.get('masterProductId');
+  const rawLimit = searchParams.get('limit');
+  let limit = 50;
+  if (rawLimit != null && rawLimit.trim() !== '') {
+    const parsedLimit = Number(rawLimit.trim());
+    if (
+      !Number.isInteger(parsedLimit) ||
+      parsedLimit < 1 ||
+      parsedLimit > 200
+    ) {
+      return null;
+    }
+    limit = parsedLimit;
+  }
+
+  const rawMasterId =
+    searchParams.get('masterProductId') ?? searchParams.get('productId');
   if (rawMasterId != null && rawMasterId.trim() !== '') {
     const trimmedId = rawMasterId.trim();
     if (!UUID_PARAM_REGEX.test(trimmedId)) {
       return null;
     }
-    return { masterProductId: trimmedId, slug: null, hideFake };
+    return { masterProductId: trimmedId, slug: null, hideFake, limit };
   }
 
   const rawSlug = searchParams.get('slug');
@@ -395,7 +411,7 @@ export function parseReviewsQueryParams(
     ) {
       return null;
     }
-    return { masterProductId: null, slug: trimmedSlug, hideFake };
+    return { masterProductId: null, slug: trimmedSlug, hideFake, limit };
   }
 
   return null;
