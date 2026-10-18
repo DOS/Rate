@@ -493,3 +493,14 @@
   color: var(--rate-brand);
   transition: gap 0.15s ease;
 }
+
+// Long badge labels (eyebrows, radar headings) must wrap on phones instead
+// of widening the page.
+@media (max-width: 575.98px) {
+  body .badge {
+    max-width: 100%;
+    white-space: normal;
+    line-height: 1.25;
+    text-align: inherit;
+  }
+}

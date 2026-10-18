@@ -1368,7 +1368,7 @@ export default function LeaderboardExplorer({
                       />
                     </Link>
 
-                    <div>
+                    <div className="flex-grow-1" style={{ minWidth: 0 }}>
                       <div className="d-flex align-items-center mb-1 flex-wrap gap-1">
                         <span className="badge bg-dark rounded-pill small text-white">
                           {entry.product.brand}
