@@ -2,6 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import type { ReviewFlagCategory, ReviewItem } from '@/lib/rate-api';
 import {
+  getCachedMasterProductBySlug,
+  getCachedMasterProductReviews,
+  getCachedMasterProductReviewSummary,
+} from '@/server/rate';
+import {
+  PUBLIC_API_CORS_HEADERS,
+  jsonApiError,
+  parseBoundedStringParam,
+} from '@/server/rate/api-handler';
+import {
   authenticateRateRequest,
   isMissingRpcError,
   mapRpcRejection,
@@ -10,6 +20,90 @@ import {
 import { createLogger, serializeError } from '@/lib/logger';
 
 const log = createLogger('api.reviews');
+
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      ...PUBLIC_API_CORS_HEADERS,
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    },
+  });
+}
+
+/**
+ * GET /api/v1/rate/reviews?slug=<slug>&hideFake=<boolean>
+ * Returns AI-audited user and expert reviews + JReviews summary for a master product.
+ */
+export async function GET(request: NextRequest) {
+  try {
+    const sp = request.nextUrl.searchParams;
+    const slug = parseBoundedStringParam(sp.get('slug'), 120);
+    const masterProductIdParam = parseBoundedStringParam(
+      sp.get('masterProductId'),
+      64
+    );
+    const hideFakeRaw = sp.get('hideFake');
+    const hideFake =
+      hideFakeRaw === '1' || hideFakeRaw?.toLowerCase() === 'true';
+
+    let resolvedMasterId: string | null = null;
+    if (masterProductIdParam && UUID_REGEX.test(masterProductIdParam)) {
+      resolvedMasterId = masterProductIdParam;
+    } else if (slug) {
+      const product = await getCachedMasterProductBySlug(slug);
+      if (!product) {
+        return NextResponse.json(
+          { ok: false, error: 'Product not found', code: 'NOT_FOUND' },
+          { status: 404, headers: PUBLIC_API_CORS_HEADERS }
+        );
+      }
+      resolvedMasterId = product.id;
+    } else {
+      return jsonApiError(
+        400,
+        'Provide ?slug=<product-slug> or a valid ?masterProductId=<uuid>'
+      );
+    }
+
+    const allReviews = await getCachedMasterProductReviews(resolvedMasterId);
+    const summary = await getCachedMasterProductReviewSummary(
+      resolvedMasterId,
+      allReviews
+    );
+    const reviews = hideFake
+      ? allReviews.filter(
+          (r) =>
+            r.verdict !== 'fake' &&
+            r.flag_category !== 'seeding_fake' &&
+            r.flag_category !== 'low_value_coin_spam'
+        )
+      : allReviews;
+
+    return NextResponse.json(
+      {
+        ok: true,
+        masterProductId: resolvedMasterId,
+        count: reviews.length,
+        totalCount: allReviews.length,
+        summary,
+        data: reviews,
+      },
+      {
+        status: 200,
+        headers: {
+          ...PUBLIC_API_CORS_HEADERS,
+          'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300',
+        },
+      }
+    );
+  } catch (err) {
+    return jsonApiError(500, 'Failed to fetch product reviews', err);
+  }
+}
 
 const CRITERIA_KEYS = [
   'screen',

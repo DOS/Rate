@@ -8,6 +8,7 @@ export interface OpenApiParameter {
   description: string;
   schema: {
     type: string;
+    format?: string;
     enum?: string[];
     default?: string | number | boolean;
   };
@@ -585,6 +586,13 @@ export function buildRateOpenApiSpec(
                 'Optional observed live listing price in VND to test against the 90-day median',
               schema: { type: 'number' },
             },
+            {
+              name: 'originalPrice',
+              in: 'query',
+              description:
+                'Optional observed strikethrough original price in VND to test for fake-sale markup',
+              schema: { type: 'number' },
+            },
           ],
           responses: {
             '200': {
@@ -617,16 +625,52 @@ export function buildRateOpenApiSpec(
           tags: ['URL Inspector & Extension MV3'],
           parameters: [
             {
+              name: 'platform',
+              in: 'query',
+              description: 'Marketplace or authorized retailer platform slug',
+              schema: {
+                type: 'string',
+                enum: supportedPlatforms,
+              },
+            },
+            {
+              name: 'externalId',
+              in: 'query',
+              description: 'Platform item ID or shopId_itemId',
+              schema: { type: 'string' },
+            },
+            {
+              name: 'shopId',
+              in: 'query',
+              description: 'Platform shop ID',
+              schema: { type: 'string' },
+            },
+            {
               name: 'url',
               in: 'query',
-              required: true,
-              description: 'Active tab URL or quick-search query',
+              required: false,
+              description:
+                'Active tab URL (at least one of `url`, `title`, or `externalId` is required)',
               schema: { type: 'string' },
             },
             {
               name: 'title',
               in: 'query',
               description: 'DOM-extracted product title from active tab',
+              schema: { type: 'string' },
+            },
+            {
+              name: 'selectedVariant',
+              in: 'query',
+              description:
+                'Selected SKU variant text on DOM (e.g. 256GB Titan Tu Nhien); alias `skuText` is also accepted',
+              schema: { type: 'string' },
+            },
+            {
+              name: 'skuText',
+              in: 'query',
+              description:
+                'Alias for `selectedVariant` (selected SKU variant text)',
               schema: { type: 'string' },
             },
             {
@@ -642,11 +686,15 @@ export function buildRateOpenApiSpec(
               schema: { type: 'number' },
             },
             {
-              name: 'skuText',
+              name: 'mode',
               in: 'query',
               description:
-                'Selected SKU variant text (e.g. 256GB Titan Tu Nhien)',
-              schema: { type: 'string' },
+                'Response payload mode (`pill` for lightweight Shadow DOM badge or `full` for Side Panel)',
+              schema: {
+                type: 'string',
+                enum: ['pill', 'full'],
+                default: 'full',
+              },
             },
           ],
           responses: {
@@ -667,6 +715,10 @@ export function buildRateOpenApiSpec(
                 },
               },
             },
+            '429': {
+              description:
+                'Per-IP sliding-window rate limit exceeded (max 60 requests/min).',
+            },
           },
         },
       },
@@ -676,7 +728,7 @@ export function buildRateOpenApiSpec(
           summary:
             'Zero-Trust Quarantine Ingestion for crowd-contributed extension snapshots',
           description:
-            'Validates opt-in Browser Extension MV3 product snapshots (`consentGranted === true`), strips PII/tracking query params, blocks accessories, checks price sanity bounds, and enqueues unindexed listings into `rate.crawl_jobs` (`source: extension_quarantine`) without directly mutating `rate.master_products`.',
+            'Validates opt-in Browser Extension MV3 product snapshots (`userConsentOptIn === true`), strips PII/tracking query params, verifies URL hostname matches declared `platform`, blocks accessories, checks price sanity bounds, and enqueues unindexed listings into `rate.crawl_jobs` via `enqueue_crowd_verify_signal` without directly mutating `rate.master_products`.',
           tags: ['URL Inspector & Extension MV3'],
           requestBody: {
             required: true,
@@ -695,6 +747,10 @@ export function buildRateOpenApiSpec(
             '400': {
               description: 'Rejected by Zero-Trust Quarantine Validator.',
             },
+            '429': {
+              description:
+                'Per-IP sliding-window rate limit exceeded (max 15 signals/min).',
+            },
           },
         },
       },
@@ -704,7 +760,7 @@ export function buildRateOpenApiSpec(
           summary:
             'List e-commerce merchants with Dual Risk Score (DOSafe + AI Seeding Risk)',
           description:
-            'Returns verified merchants (`rate.merchants`) with filter support for platform, Official Mall status, risk tier, search query, and sorting.',
+            'Returns verified merchants (`rate.merchants`) with filter support for platform, Official Mall status, minimum trust score, search query, and sorting.',
           tags: ['Merchants & Dual Risk Score'],
           parameters: [
             {
@@ -719,14 +775,43 @@ export function buildRateOpenApiSpec(
             {
               name: 'officialOnly',
               in: 'query',
-              description: 'Set to true to return only Official Mall stores',
+              description:
+                'Set to true (or `official=1`) to return only Official Mall stores',
               schema: { type: 'boolean' },
+            },
+            {
+              name: 'min_trust',
+              in: 'query',
+              description:
+                'Minimum merchant trust score (0-100); alias `minTrust` is also accepted',
+              schema: { type: 'number' },
             },
             {
               name: 'q',
               in: 'query',
               description: 'Search merchant name or shop slug',
               schema: { type: 'string' },
+            },
+            {
+              name: 'sort',
+              in: 'query',
+              description: 'Sort order for returned merchants',
+              schema: {
+                type: 'string',
+                enum: [
+                  'trust_desc',
+                  'products_desc',
+                  'seeding_asc',
+                  'followers_desc',
+                ],
+                default: 'trust_desc',
+              },
+            },
+            {
+              name: 'limit',
+              in: 'query',
+              description: 'Maximum number of merchants to return (1-100)',
+              schema: { type: 'number', default: 50 },
             },
           ],
           responses: {
@@ -837,17 +922,18 @@ export function buildRateOpenApiSpec(
         post: {
           operationId: 'voteOnReview',
           summary:
-            'Cast a Helpful or Report Seeding vote on a review (`rate.review_votes`)',
+            'Cast an authenticated Helpful/Downvote/Report vote on a review (`rate.review_votes`)',
           description:
-            'Records a SHA-256 voter-hashed vote (`helpful` or `report`) and triggers the PostgreSQL `SECURITY DEFINER` function to update review counters.',
+            'Records an authenticated voter action (`up`, `down`, `report`, or `clear`) for a review after verifying voter account eligibility (>= 7 days old and confirmed email/phone) and triggers the PostgreSQL `SECURITY DEFINER` function to update review counters.',
           tags: ['Community Reviews & Voting'],
+          security: [{ bearerAuth: [] }],
           parameters: [
             {
               name: 'id',
               in: 'path',
               required: true,
               description: 'Review UUID (`rate.reviews.id`)',
-              schema: { type: 'string' },
+              schema: { type: 'string', format: 'uuid' },
             },
           ],
           requestBody: {
@@ -856,11 +942,20 @@ export function buildRateOpenApiSpec(
               'application/json': {
                 schema: {
                   type: 'object',
-                  required: ['action'],
                   properties: {
-                    action: {
+                    voteType: {
                       type: 'string',
-                      enum: ['helpful', 'report'],
+                      enum: ['up', 'down', 'report', 'clear'],
+                      default: 'up',
+                    },
+                    helpful: {
+                      type: 'boolean',
+                      description:
+                        'Optional shorthand (`true` -> `up`, `false` -> `down`) when `voteType` is omitted.',
+                    },
+                    reportReason: {
+                      type: 'string',
+                      enum: ['spam', 'fake', 'offensive', 'off_topic', 'other'],
                     },
                   },
                 },
@@ -870,6 +965,17 @@ export function buildRateOpenApiSpec(
           responses: {
             '200': {
               description: 'Updated helpful/report counters for the review.',
+            },
+            '401': {
+              description: 'Missing or invalid bearer token.',
+            },
+            '403': {
+              description:
+                'Voter account is ineligible (< 7 days old or unverified contact).',
+            },
+            '429': {
+              description:
+                'Rate limit exceeded (maximum 60 vote actions per hour).',
             },
           },
         },
@@ -1121,8 +1227,7 @@ export function buildRateOpenApiSpec(
                 'Successfully invalidated requested cache tags and paths.',
             },
             '400': {
-              description:
-                'Malformed JSON or empty revalidation target lists.',
+              description: 'Malformed JSON or empty revalidation target lists.',
             },
             '401': {
               description:
@@ -1156,69 +1261,93 @@ export function buildRateOpenApiSpec(
         PriceVerdictLevel: {
           type: 'string',
           enum: [
-            'historical_low',
-            'good_deal',
-            'fair_price',
-            'above_average',
+            'genuine_deal',
+            'fair_market',
+            'above_market',
             'inflated_fake_sale',
             'insufficient_data',
+            'ambiguous_variant',
+            'skipped_accessory',
           ],
           description:
-            'Evidence-based 5-level price verdict comparing current price and claimed original price against the 90-day historical median.',
+            'Evidence-based price verdict comparing observed listing price and claimed original price against the 90-day historical median and cross-retailer floor.',
         },
         ExtensionQuarantineIngestPayload: {
           type: 'object',
           required: [
+            'platform',
+            'externalItemId',
             'url',
             'title',
-            'currentPrice',
-            'consentGranted',
-            'extensionVersion',
+            'price',
+            'userConsentOptIn',
           ],
           properties: {
-            url: {
-              type: 'string',
-              example: 'https://shopee.vn/product/88201679/27110898667',
-            },
             platform: {
               $ref: '#/components/schemas/SupportedEcommercePlatform',
             },
+            externalItemId: {
+              type: 'string',
+              minLength: 1,
+              maxLength: 120,
+              example: '29512841920',
+            },
+            externalShopId: {
+              type: 'string',
+              maxLength: 120,
+              nullable: true,
+              example: '88201679',
+            },
+            url: {
+              type: 'string',
+              format: 'uri',
+              maxLength: 1024,
+              example: 'https://shopee.vn/product/88201679/29512841920',
+            },
             title: {
               type: 'string',
+              minLength: 3,
+              maxLength: 320,
               example: 'Apple iPhone 16 Pro Max 256GB Chính Hãng VN/A',
             },
-            currentPrice: {
-              type: 'number',
-              example: 29990000,
-            },
-            originalPrice: {
-              type: 'number',
-              nullable: true,
-              example: 34990000,
-            },
-            skuText: {
+            selectedVariant: {
               type: 'string',
+              maxLength: 160,
               nullable: true,
               example: '256GB Titan Tự Nhiên',
             },
-            sellerName: {
-              type: 'string',
+            price: {
+              type: 'integer',
+              minimum: 1,
+              maximum: 500000000,
+              example: 28990000,
+            },
+            originalPrice: {
+              type: 'integer',
+              minimum: 1,
+              maximum: 500000000,
               nullable: true,
-              example: 'Apple Flagship Store',
+              example: 34990000,
             },
-            isOfficialMall: {
-              type: 'boolean',
-              example: true,
+            ratingStar: {
+              type: 'number',
+              minimum: 0,
+              maximum: 5,
+              nullable: true,
+              example: 4.9,
             },
-            consentGranted: {
+            ratingCount: {
+              type: 'integer',
+              minimum: 0,
+              maximum: 10000000,
+              nullable: true,
+              example: 120,
+            },
+            userConsentOptIn: {
               type: 'boolean',
               description:
-                'Must be explicitly true (user opt-in required before any telemetry leaves the browser).',
+                'Must be explicitly true (user opt-in required before any crowd signal is queued for verification).',
               example: true,
-            },
-            extensionVersion: {
-              type: 'string',
-              example: '2.1.0',
             },
           },
         },
