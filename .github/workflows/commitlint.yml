@@ -30,6 +30,12 @@ jobs:
           mkdir -p "$CL_DIR"
           CLI_VERSION=$(node -p "require('./package.json').devDependencies['@commitlint/cli']")
           CONFIG_VERSION=$(node -p "require('./package.json').devDependencies['@commitlint/config-conventional']")
+          for v in "$CLI_VERSION" "$CONFIG_VERSION"; do
+            if ! printf '%s' "$v" | grep -Eq '^[~^]?[0-9]+\.[0-9]+\.[0-9]+'; then
+              echo "::error::Root package.json must pin @commitlint/cli and @commitlint/config-conventional to a semver version (got '$v')"
+              exit 1
+            fi
+          done
           cp commitlint.config.ts "$CL_DIR/"
           cd "$CL_DIR"
           npm init -y >/dev/null
@@ -37,11 +43,15 @@ jobs:
             "@commitlint/cli@$CLI_VERSION" "@commitlint/config-conventional@$CONFIG_VERSION"
           echo "CL_DIR=$CL_DIR" >> "$GITHUB_ENV"
 
-      - name: Lint PR title and HEAD commit message
+      # Lint the PR head commit, not the synthetic merge commit that
+      # actions/checkout uses for pull_request (commitlint ignores "Merge ...").
+      # fetch-depth: 2 includes the head commit as the merge commit's parent.
+      - name: Lint PR title and head commit message
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          HEAD_MESSAGE=$(git log -1 --pretty=%B)
+          HEAD_MESSAGE=$(git log -1 --pretty=%B "$HEAD_SHA")
           cd "$CL_DIR"
           printf '%s\n' "$PR_TITLE" | npx --no-install commitlint
           printf '%s\n' "$HEAD_MESSAGE" | npx --no-install commitlint
