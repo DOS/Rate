@@ -17,7 +17,8 @@
       "compare": "Porovnat",
       "watchlist": "Hlídání cen",
       "developers": "API",
-      "priceWatchCta": "Hlídání cen"
+      "priceWatchCta": "Hlídání cen",
+      "selectLanguageAria": "Vybrat jazyk"
     },
     "footer": {
       "copyRight": "© {YEAR} Rate.vn (DOS Ecosystem). Open-Core platforma pro analýzu specifikací, historii skutečných cen a AI audit recenzí.",
@@ -49,7 +50,8 @@
       "bannerTitle": "Ověřte skutečnou historii cen a důvěryhodnost před nákupem",
       "bannerDesc": "Vložte odkaz na produkt nebo si nastavte cílovou cenu a vyhněte se uměle navýšeným slevám.",
       "bannerCta": "Otevřít hlídání cen",
-      "bannerCompareCta": "Porovnat 10 skupin parametrů"
+      "bannerCompareCta": "Porovnat 10 skupin parametrů",
+      "bannerInspectCta": "Ověřit recenze a cenu"
     },
     "home": {
       "heroBadge": "Analýza parametrů napříč tržišti, historie skutečných cen a AI audit recenzí",
@@ -665,7 +667,10 @@
     "labNoScore": "Lab: N/A",
     "spreadSavingsBadge": "Úspora mezi platformami {amount} ₫",
     "costPerPointSub": "({cost} ₫ / bod JReviews)",
-    "audit10PlatformsLink": "Audit cen na 10 platformách →"
+    "audit10PlatformsLink": "Audit cen na 10 platformách →",
+    "radarBadgeGenuine": "🔥 60D minimum (-{pct}%)",
+    "radarBadgeFakeTrap": "🚨 Falešná sleva (+{pct}%)",
+    "radarBadgeSpread": "📊 +{pct}% rozdíl mezi e-shopy"
   },
   "inspect": {
     "metaTitle": "Hloubkový audit URL a falešných slev | Rate.vn",
@@ -1596,7 +1601,9 @@
       "featuresHeader": "Klíčové funkce (10 skupin parametrů)",
       "filteringBtn": "Filtrování dat...",
       "applyFiltersBtn": "Použít filtry",
-      "clearAllFiltersBtn": "Vymazat všechny filtry"
+      "clearAllFiltersBtn": "Vymazat všechny filtry",
+      "rangeFrom": "Od:",
+      "rangeTo": "Do:"
     }
   },
   "heroSearch": {

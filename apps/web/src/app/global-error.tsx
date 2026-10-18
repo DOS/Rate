@@ -1,5 +1,34 @@
 'use client';
 
+import csMessages from '../../locales/cs.json';
+import enMessages from '../../locales/en.json';
+import viMessages from '../../locales/vi.json';
+import { normalizeRateLocale, type SupportedRateLocale } from '@/lib/rate-i18n';
+
+const GLOBAL_ERROR_CATALOG: Record<
+  SupportedRateLocale,
+  typeof viMessages.errors.global
+> = {
+  vi: viMessages.errors.global,
+  en: enMessages.errors.global,
+  cs: csMessages.errors.global,
+};
+
+function detectBrowserLocale(): SupportedRateLocale {
+  if (typeof document !== 'undefined') {
+    const match = document.cookie.match(/(?:^|;\s*)NEXT_LOCALE=(vi|en|cs)\b/);
+    if (match?.[1]) {
+      return normalizeRateLocale(match[1]);
+    }
+  }
+  if (typeof navigator !== 'undefined' && navigator.language) {
+    const lang = navigator.language.toLowerCase();
+    if (lang.startsWith('cs')) return 'cs';
+    if (lang.startsWith('en')) return 'en';
+  }
+  return 'vi';
+}
+
 export default function GlobalError({
   error,
   reset,
@@ -7,12 +36,15 @@ export default function GlobalError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const locale = detectBrowserLocale();
+  const copy = GLOBAL_ERROR_CATALOG[locale];
+
   return (
-    <html lang="vi">
+    <html lang={locale}>
       <head>
         <meta charSet="utf-8" />
         <meta name="color-scheme" content="dark" />
-        <title>Sự cố hệ thống - Rate.vn</title>
+        <title>{`${copy.title} - Rate.vn`}</title>
       </head>
       <body
         style={{
@@ -50,12 +82,12 @@ export default function GlobalError({
               marginBottom: '16px',
             }}
           >
-            CẢNH BÁO HỆ THỐNG RATE.VN
+            RATE.VN
           </div>
           <h1
             style={{ fontSize: '22px', margin: '0 0 12px', color: '#ffffff' }}
           >
-            Đã xảy ra gián đoạn tạm thời khi tải dữ liệu
+            {copy.somethingWentWrong}
           </h1>
           <p
             style={{
@@ -65,8 +97,8 @@ export default function GlobalError({
               margin: '0 0 20px',
             }}
           >
-            Hệ thống kiểm toán thông số và giá đang tự động khôi phục kết nối.
-            {error?.digest ? ` (Mã tham chiếu: ${error.digest})` : ''}
+            {copy.invalidContent}
+            {error?.digest ? ` (${error.digest})` : ''}
           </p>
           <button
             type="button"
@@ -82,7 +114,7 @@ export default function GlobalError({
               cursor: 'pointer',
             }}
           >
-            Thử tải lại trang
+            {copy.tryAgain}
           </button>
         </div>
       </body>

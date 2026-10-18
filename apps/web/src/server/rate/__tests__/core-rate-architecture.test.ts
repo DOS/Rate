@@ -12,7 +12,10 @@ import {
   formatStorageLabel,
   getCategoryFilterSchema,
 } from '../../../lib/category-filters';
-import { getRateCopy, normalizeRateLocale } from '../../../lib/rate-i18n';
+import csMessages from '../../../../locales/cs.json';
+import enMessages from '../../../../locales/en.json';
+import viMessages from '../../../../locales/vi.json';
+import { normalizeRateLocale } from '../../../lib/rate-i18n';
 import {
   getSpecUiDictionary,
   localizeSpecValue,
@@ -176,9 +179,13 @@ async function runCoreArchitectureSuite() {
   assert.equal(normalizeRateLocale('cs'), 'cs');
   assert.equal(normalizeRateLocale('unknown'), 'vi');
 
+  const localeCatalogs = {
+    vi: viMessages,
+    en: enMessages,
+    cs: csMessages,
+  } as const;
   for (const loc of ['vi', 'en', 'cs'] as const) {
-    const copy = getRateCopy(loc);
-    assert.equal(copy.locale, loc);
+    const copy = localeCatalogs[loc].rate;
     assert.ok(copy.seo.siteTitle.includes('Rate.vn'));
     assert.ok(copy.nav.developers.length > 0);
     assert.ok(copy.footer.links.smartwatches.length > 0);
@@ -564,7 +571,7 @@ async function runCoreArchitectureSuite() {
     'LeaderboardExplorer must follow DESIGN.md v3.0 Dual-Rating tokens and lock 1-click Top 3 compare to activeCategory'
   );
   for (const locale of ['vi', 'en', 'cs'] as const) {
-    const dict = getRateCopy(locale);
+    const dict = localeCatalogs[locale].rate;
     assert.ok(
       dict.nav.leaderboard && dict.nav.leaderboard.length > 0,
       `Dictionary for ${locale} must define nav.leaderboard`
@@ -3558,6 +3565,7 @@ async function runCoreArchitectureSuite() {
 
   for (const requiredNamespace of [
     'rate',
+    'errors',
     'compare',
     'leaderboard',
     'reviews',
@@ -3581,8 +3589,91 @@ async function runCoreArchitectureSuite() {
     );
   }
 
+  for (const localeFile of [
+    'apps/web/locales/vi.json',
+    'apps/web/locales/en.json',
+    'apps/web/locales/cs.json',
+  ]) {
+    const rawLocaleText = fs.readFileSync(
+      path.join(repoRoot, localeFile),
+      'utf8'
+    );
+    assert.ok(
+      !rawLocaleText.includes('??'),
+      `${localeFile} must not contain '??' UTF-8 encoding corruption`
+    );
+  }
+
   console.log(
-    `  ✅ [62/62] Full next-intl Multilingual Parity (${viPaths.length} keys x 3 locales vi/en/cs across 15 namespaces) (#241, #266, #272) passed`
+    `  ✅ [62/63] Full next-intl Multilingual Parity (${viPaths.length} keys x 3 locales vi/en/cs across 16 namespaces) (#241, #266, #272, #279) passed`
+  );
+
+  // 63. Retirement of getRateCopy & Localization of Navbar, Footer, RadarBadge, and GlobalError (#279)
+  const rateI18nSource = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/lib/rate-i18n.ts'),
+    'utf8'
+  );
+  assert.ok(
+    !rateI18nSource.includes('getRateCopy') &&
+      !rateI18nSource.includes('RateLocaleCopy'),
+    'rate-i18n.ts must retire legacy getRateCopy and RateLocaleCopy (#279)'
+  );
+
+  const navbarSource = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/app/[locale]/components/navbar/NavbarDarkDynamic.tsx'
+    ),
+    'utf8'
+  );
+  const footerDynamicSource = fs.readFileSync(
+    path.join(
+      repoRoot,
+      'apps/web/src/app/[locale]/components/footer/FooterDynamic.tsx'
+    ),
+    'utf8'
+  );
+  const footerTopSource = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/app/[locale]/components/footer-top.tsx'),
+    'utf8'
+  );
+  const radarBadgeSource = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/components/radar/RadarBadge.tsx'),
+    'utf8'
+  );
+  const globalErrorSource = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/app/global-error.tsx'),
+    'utf8'
+  );
+
+  assert.ok(
+    navbarSource.includes("useTranslations('rate.nav')") &&
+      !navbarSource.includes('getRateCopy'),
+    'NavbarDarkDynamic.tsx must use useTranslations("rate.nav") (#279)'
+  );
+  assert.ok(
+    footerDynamicSource.includes("namespace: 'rate.footer'") &&
+      !footerDynamicSource.includes('getRateCopy'),
+    'FooterDynamic.tsx must use getTranslations("rate.footer") (#279)'
+  );
+  assert.ok(
+    footerTopSource.includes("namespace: 'rate.footer'") &&
+      footerTopSource.includes("tFooter('bannerInspectCta')") &&
+      !footerTopSource.includes('getRateCopy'),
+    'footer-top.tsx must use getTranslations("rate.footer") and bannerInspectCta (#279)'
+  );
+  assert.ok(
+    radarBadgeSource.includes("useTranslations('deals')"),
+    'RadarBadge.tsx must localize badges via useTranslations("deals") (#279)'
+  );
+  assert.ok(
+    globalErrorSource.includes('GLOBAL_ERROR_CATALOG') &&
+      globalErrorSource.includes('detectBrowserLocale'),
+    'global-error.tsx must localize recovery UI across vi/en/cs (#279)'
+  );
+
+  console.log(
+    '  ✅ [63/63] Retirement of getRateCopy & Localization of Navbar, Footer, RadarBadge, and GlobalError (#279) passed'
   );
 
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
