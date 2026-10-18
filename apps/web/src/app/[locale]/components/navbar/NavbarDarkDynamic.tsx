@@ -83,6 +83,8 @@ export function NavbarDarkDynamic({
                 className="nav-toggle"
                 role="button"
                 tabIndex={0}
+                aria-label={tNav('menuToggleAria')}
+                aria-expanded={toggle}
                 onClick={() => setToggle(!toggle)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') setToggle(!toggle);
