@@ -1225,7 +1225,7 @@ async function run() {
 
   const iphone16e = normalizer.normalize({
     ...baseRaw,
-    title: 'Điện thoại Apple iPhone 16e 128GB Chính hãng VN/A',
+    title: 'Điện thoại Apple iPhone 16E 128GB Chính hãng VN/A',
   });
   assert.equal(iphone16e.model, 'iPhone 16e');
   assert.equal(iphone16e.model_key, 'apple:iphone-16e:128gb');

@@ -1074,7 +1074,7 @@ export class ProductNormalizer {
     let model = '';
     if (brand === 'Apple') {
       const iphoneMatch = title.match(
-        /iphone\s*(\d+e\b|\d+(?:\s*(?:pro\s*max|pro|plus|mini|air))?|se(?:\s*(?:\(?\s*(?:2020|2022|2025)\s*\)?|(?:gen\s*)?[234]\b))?)/i
+        /iphone\s*(\d+e\b|\d+(?:\s*(?:pro\s*max|pro|plus|mini|air))?|se(?:\s*(?:\(\s*(?:2020|2022|2025)\s*\)|(?:2020|2022|2025)\b|(?:gen\s*)?[234]\b))?)/i
       );
       const ipadMatch = title.match(/ipad\s*(pro\s*m\d+|air\s*m\d+|pro|air|mini|\d+)/i);
       const macbookMatch = title.match(
@@ -1100,6 +1100,7 @@ export class ProductNormalizer {
           .replace(/\bgen\s*/i, '')
           .replace(/\s+/g, ' ')
           .trim()
+          .replace(/^(\d+)E\b/, '$1e')
           .replace(/^se\b/i, 'SE');
         model = `iPhone ${normalizedIphoneSuffix}`;
       } else if (ipadMatch && ipadMatch[1]) {
@@ -1150,17 +1151,17 @@ export class ProductNormalizer {
       model = 'Pad 7 Pro';
     } else {
       const withoutLeadingPromo = title
-        .replace(/^(?:\s*(?:\[[^\]]*\]|\([^)]*\)|【[^】]*】)\s*)+/, '')
+        .replace(/^(?:\s*(?:\[[^\]]*\]|\([^)]*\)|【[^】]*】))+\s*/, '')
         .trim();
       const cleaned = withoutLeadingPromo
         .replace(
           new RegExp(
-            `^(?:(?:Hàng\\s*)?Chính\\s*hãng\\s+)?(?:Điện thoại(?:\\s*thông\\s*minh|\\s*di\\s*động)?|Smartphone|Máy tính bảng|Tablet|Laptop|Máy tính xách tay|Đồng hồ thông minh|Smartwatch|Tai nghe(?:\\s*Bluetooth|\\s*chống\\s*ồn|\\s*không\\s*dây)?|Earbuds)?\\s*(?:(?:Hàng\\s*)?Chính\\s*hãng\\s+)?(?:${brand}\\b\\s*)?`,
+            `^(?:(?:Hàng\\s+)?Chính\\s+hãng\\s+)?(?:(?:Điện\\s+thoại(?:\\s+thông\\s+minh|\\s+di\\s+động)?|Smartphone|Máy\\s+tính\\s+bảng|Tablet|Laptop|Máy\\s+tính\\s+xách\\s+tay|Đồng\\s+hồ\\s+thông\\s+minh|Smartwatch|Tai\\s+nghe(?:\\s+Bluetooth|\\s+chống\\s+ồn|\\s+không\\s+dây)?|Earbuds)\\s+(?:(?:Hàng\\s+)?Chính\\s+hãng\\s+)?)?(?:${brand}\\b\\s*)?`,
             'i'
           ),
           ''
         )
-        .replace(/^(?:\s*(?:\[[^\]]*\]|\([^)]*\)|【[^】]*】)\s*)+/, '')
+        .replace(/^(?:\s*(?:\[[^\]]*\]|\([^)]*\)|【[^】]*】))+\s*/, '')
         .trim();
       const rawTokens = cleaned.split(/\s+/).filter(Boolean);
       const modelTokens: string[] = [];
