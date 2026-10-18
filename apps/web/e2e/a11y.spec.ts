@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 
-// WCAG 2.1 A/AA checks with axe on every public page (seeded in
+// WCAG 2.2 A/AA checks with axe on every public page (seeded in
 // apps/web/e2e/seed.sql), color-contrast included (DOS/Rate#362), at desktop
 // and phone widths (DOS/Rate#421): every rule must pass.
 const PAGES: { path: string; status?: number }[] = [
@@ -60,7 +60,7 @@ for (const viewport of VIEWPORTS) {
       // Scan the hydrated page: effects add DOM after load.
       await page.waitForLoadState('networkidle');
       const { violations } = await new AxeBuilder({ page })
-        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
         .analyze();
       const summary = violations.map(
         (v) =>
