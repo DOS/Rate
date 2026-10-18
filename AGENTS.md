@@ -161,3 +161,23 @@ pnpm install
 pnpm build
 pnpm test:enricher
 ```
+
+---
+
+## 5. Review PR: Mức Độ Finding (P0-P3) & Quy Tắc Hội Tụ
+
+Mỗi finding khi review (subagent fresh-context, bot, hoặc người) phải được gắn một mức độ:
+
+| Mức    | Định nghĩa                                                                                                                 |
+| :----- | :------------------------------------------------------------------------------------------------------------------------- |
+| **P0** | Gây sập dịch vụ, mất dữ liệu, xâm phạm bảo mật, hoặc dịch chuyển tiền sai trong luồng sử dụng bình thường.               |
+| **P1** | Lỗi đúng/sai trên luồng bình thường, hoặc lỗi về bảo mật / phân quyền / tiền / credential / dữ liệu chưa tới mức P0.      |
+| **P2** | Lỗi ở edge case, hoặc lỗi có cách né (workaround), nằm ngoài các vùng bảo mật / phân quyền / tiền / credential / dữ liệu. |
+| **P3** | Câu chữ, style, đặt tên.                                                                                                   |
+
+**Quy tắc hội tụ (nhẹ):**
+
+- **Vòng 1:** Sửa các finding hợp lý ở mọi mức.
+- **Từ vòng 2 trở đi:** Trong PR hiện tại chỉ sửa P0/P1, mọi finding về bảo mật hoặc dữ liệu, lỗi trong hành vi mà chính PR này thêm vào, và required check đang đỏ. Các P2/P3 còn lại gom vào **một** issue follow-up duy nhất; trả lời từng thread kèm link issue đó rồi resolve thread.
+- Một lượt review của bot bị rate-limit, bị bỏ qua (skipped) hoặc không có nội dung **không phải là review**. Không chờ và không tính là đã review.
+- Cổng review thật sự là **review bằng subagent fresh-context** (Mục 0.2). Required check `Typecheck & Build Monorepo` phải xanh trước khi merge (ruleset `dev-main-light` trên `dev` và `main`: chặn xóa nhánh và force-push, không yêu cầu approval).
