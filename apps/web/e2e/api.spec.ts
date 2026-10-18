@@ -36,3 +36,31 @@ test('anonymous watchlist write is rejected', async ({ request, baseURL }) => {
   });
   expect(res.status()).toBe(401);
 });
+
+// Inspect looks merchants up in the database by id, shop id or name instead of
+// reading the whole directory per request (DOS/Rate#372).
+test('inspect resolves the matched offer merchant by id', async ({
+  request,
+}) => {
+  const res = await request.get(
+    '/api/v1/rate/inspect?q=iphone-16-pro-max-256gb'
+  );
+  expect(res.status()).toBe(200);
+  const body = await res.json();
+  expect(body.data.merchantProfile.name).toBe('Apple Flagship Store');
+});
+
+test('inspect keyword search finds a merchant by name', async ({ request }) => {
+  const res = await request.get('/api/v1/rate/inspect?q=Last%20Ranked');
+  expect(res.status()).toBe(200);
+  expect(await res.text()).toContain('last-ranked-shop');
+});
+
+test('inspect treats LIKE wildcards in a keyword literally', async ({
+  request,
+}) => {
+  const res = await request.get('/api/v1/rate/inspect?q=%25');
+  expect(res.status()).toBe(200);
+  const body = await res.json();
+  expect(body.data.matchedType).not.toBe('merchant');
+});
