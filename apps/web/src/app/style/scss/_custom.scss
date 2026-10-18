@@ -166,10 +166,14 @@
 }
 
 // Dark chips and buttons outside an obsidian surface (badge bg-dark
-// text-warning) take the light inks.
+// text-warning) take the light inks, and so do the heroes painted with an
+// inline dark gradient (.rate-ink-on-dark). axe cannot measure text on a
+// gradient (it reports "incomplete", which the E2E gate does not fail on), so
+// these sections have to opt in explicitly.
 .bg-dark,
 .text-bg-dark,
-.btn-dark {
+.btn-dark,
+.rate-ink-on-dark {
   --rate-ink-primary: #ff6b6b;
   --rate-ink-success: #34d399;
   --rate-ink-danger: #ff6b6b;
@@ -178,10 +182,13 @@
   --rate-ink-info: #0dcaf0;
 }
 
-// style.scss paints outline buttons with the light body color; on an obsidian
-// card that put light inks on a light pill. Let the dark surface show through.
+// style.scss paints outline buttons with the light body color; on a dark
+// ground that put light inks on a light pill. Let the dark ground show through.
 .rate-surface-dark,
-.rate-scoreboard-dark {
+.rate-scoreboard-dark,
+.rate-ink-on-dark,
+.bg-dark,
+.text-bg-dark {
   .btn-outline-primary,
   .btn-outline-success,
   .btn-outline-danger,
@@ -190,6 +197,21 @@
   .btn-outline-secondary {
     background: transparent;
   }
+}
+
+// A solid white or light island inside a dark ground (an input group on the
+// inspect scoreboard, the hero search box, its result and suggestion cards)
+// goes back to the dark inks. Translucent bg-white bg-opacity-* panels stay
+// dark, so they keep the light inks.
+:is(.rate-surface-dark, .rate-scoreboard-dark, .rate-ink-on-dark, .bg-dark)
+  :is(.bg-white, .bg-light):not([class*='bg-opacity']),
+.rate-ink-on-dark :is(.card, .dropdown-menu):not(.bg-dark, .text-bg-dark) {
+  --rate-ink-primary: #b42828;
+  --rate-ink-success: #146c43;
+  --rate-ink-danger: #b02a37;
+  --rate-ink-secondary: #545b62;
+  --rate-ink-warning: #7a5000;
+  --rate-ink-info: #0a6c7d;
 }
 
 // The score badges carry light-only literal tints; on the dark surface they
