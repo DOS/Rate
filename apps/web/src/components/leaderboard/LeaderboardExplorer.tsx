@@ -892,7 +892,7 @@ export default function LeaderboardExplorer({
                   ? 'btn-primary fw-semibold text-white'
                   : 'btn-outline-primary'
               }`}
-              style={{ fontSize: '0.76rem' }}
+              style={{ fontSize: '0.8125rem' }}
             >
               🎛️ {copy.customizeWeightsBtn}
             </button>
@@ -920,7 +920,7 @@ export default function LeaderboardExplorer({
                       ? 'btn-danger fw-semibold text-white shadow-sm'
                       : 'btn-outline-dark bg-light'
                   }`}
-                  style={{ fontSize: '0.8rem' }}
+                  style={{ fontSize: '0.8125rem' }}
                 >
                   {copy.personaLabels[presetKey]}
                 </button>
@@ -1003,7 +1003,7 @@ export default function LeaderboardExplorer({
                       ? 'btn-danger fw-semibold text-white'
                       : 'btn-outline-secondary'
                   }`}
-                  style={{ fontSize: '0.76rem' }}
+                  style={{ fontSize: '0.8125rem' }}
                 >
                   {seg.label}
                 </button>
@@ -1220,7 +1220,7 @@ export default function LeaderboardExplorer({
                             <RadarBadge
                               signal={radarSignal}
                               minSpreadPct={Infinity}
-                              style={{ fontSize: '0.68rem' }}
+                              style={{ fontSize: '0.8125rem' }}
                             />
                           </div>
                         </div>
@@ -1249,7 +1249,7 @@ export default function LeaderboardExplorer({
                             <div key={c.key} className="mb-1 last:mb-0">
                               <div
                                 className="d-flex justify-content-between text-white-50"
-                                style={{ fontSize: '0.72rem' }}
+                                style={{ fontSize: '0.8125rem' }}
                               >
                                 <span>{c.label}</span>
                                 <strong className="font-monospace text-white">
@@ -1547,7 +1547,7 @@ export default function LeaderboardExplorer({
                         >
                           <span
                             className="text-muted"
-                            style={{ fontSize: '0.73rem' }}
+                            style={{ fontSize: '0.8125rem' }}
                           >
                             {c.short}:
                           </span>
@@ -1557,7 +1557,7 @@ export default function LeaderboardExplorer({
                                 ? 'text-danger'
                                 : 'text-dark'
                             }`}
-                            style={{ fontSize: '0.73rem' }}
+                            style={{ fontSize: '0.8125rem' }}
                           >
                             {entry.criteria[c.key] > 0
                               ? entry.criteria[c.key].toFixed(2)

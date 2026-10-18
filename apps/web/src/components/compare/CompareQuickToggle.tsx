@@ -78,7 +78,7 @@ export default function CompareQuickToggle({
               ? 'btn-danger text-white'
               : 'btn-outline-secondary text-dark bg-white'
         } ${size === 'sm' ? 'btn-sm small px-2 py-1' : 'px-3 py-2'} rounded-pill fw-medium d-inline-flex align-items-center gap-1 shadow-sm ${className}`}
-        style={{ fontSize: size === 'sm' ? '12px' : '13.5px' }}
+        style={{ fontSize: size === 'sm' ? '0.8125rem' : '13.5px' }}
       >
         <span>
           {limitAlert

@@ -8,10 +8,10 @@ Rate.vn is an independent product rating, anti-seeding review and technical audi
 
 - **Rating and review first, never affiliate first.** Lead product pages with the dual score (authentic user score + expert lab score) and the AI-audited reviews. Never put a loud price box or a "Buy now" button above the fold; prices and merchants are evidence, placed at the bottom.
 - **Monochrome plus semantic color.** Surfaces and text come from `rate-bg-*` and `rate-fg-*`. Color is telemetry, not decoration:
-  - `rate-score-user` (emerald): authentic user score, pros, verified buyer, trust >= 85, verified price floor.
+  - `rate-score-user` (brand green #2dba69): authentic user score, pros, verified buyer, trust >= 85, verified price floor.
   - `rate-score-expert` (indigo): expert lab score, 5-criteria bars, AI-enriched specs.
   - `rate-score-star` (amber): star ratings, moderate seeding watch, minor price volatility.
-  - `rate-risk-danger` (rose) and `rate-brand` (crimson): seeding spam excluded, cons, fake discount alert, and the brand focal mark.
+  - `rate-risk-danger` (rose) and `rate-brand` (brand red #d83030): seeding spam excluded, cons, fake discount alert, and the brand focal mark.
 - **No "Bootstrap rainbow soup".** Do not mix `bg-info`, `bg-warning`, `bg-primary`, `bg-success` utility fills or decorative emoji inside analytical headers. The sanctioned uses of Bootstrap status fills are the Deal Radar verdict (`bs-success`, `bs-danger`, `bs-warning-bg-subtle`) and, inside the dark scoreboard, the VS and battle badges (`bs-danger`) and rank chips (`bs-warning`).
 - **Tabular density.** Every rating (`4.9 / 5.0`), criteria score, percentage (`92% Review thật`), hardware metric (`120 Hz`, `5000 mAh`) and price uses `font-variant-numeric: tabular-nums` (`.rate-tabular`, or `.rate-mono` for identifiers).
 - **No legacy template artifacts.** The ListingHub template logos, brand carousels, red `bg-primary-2` banners and the Jost font are banned.
@@ -35,12 +35,13 @@ Rate.vn is an independent product rating, anti-seeding review and technical audi
 - Obsidian sections (homepage hero, scoreboard, extension side panel) use `rate-bg-dark` in both themes, with `rate-fg-on-dark` and `rate-fg-on-dark-muted` text and `rate-border-dark` hairlines.
 - The dark theme here is the app's `.rate-surface-dark` scope (`_custom.scss`): wrap an obsidian section in it and the `rate-bg-*`, `rate-border-*`, `rate-fg-*` and `-bg` tint tokens switch to their dark values, so cards, eyebrows, spec pills and score badges keep working inside it.
 - Crimson text that must read on a surface uses `rate-crimson-text` (`bs-primary` in light, #ff6b6b in dark).
-- `rate-brand` is a mark, not a text color on light grounds (3.7:1 on white). Crimson text uses `bs-primary` (4.7:1) or `bs-primary-text-emphasis` (6.3:1) on light grounds, and `rate-crimson-text` where it must also read inside `.rate-surface-dark`.
+- `rate-brand` (#d83030) and `rate-score-user` (#2dba69) are the two colors of the official logo. The red reads as text and carries white text (4.8:1); the green is a fill and icon color only (2.5:1 on white). Crimson text uses `bs-primary` (4.8:1) or `bs-primary-text-emphasis` (6.4:1) on light grounds, and `rate-crimson-text` where it must also read inside `.rate-surface-dark`.
 - Emerald, indigo and amber fills never carry small text directly; badges pair a soft tint (`rate-score-*-bg`) with a dark ink (`rate-score-*-ink`).
-- Status always carries a word or icon as well as a color: emerald vs rose are told apart by the label ("Review thật" vs "Seeding bị loại").
+- Status always carries a word or icon as well as a color: red and green look alike to color-blind users ("Review thật" vs "Seeding bị loại").
 
 ### Type
 
+- Body copy is 16px and nothing renders below 13px (`--rate-text-min`): labels, chips, `.small`, `code` and chart labels included.
 - One sans family, `sans` (Inter 400-800, self-hosted by next/font in `src/lib/fonts.ts` with the Latin and Vietnamese subsets). Headings 600 by default with `-0.02em` tracking.
 - `mono` (JetBrains Mono 500-700, next/font, not preloaded) applies only through `.rate-mono`; no component uses it yet. Deal Radar labels, scoreboard scores and deltas use Bootstrap `.font-monospace`, which is `system-mono` (SFMono-Regular, Menlo, Consolas).
 - Scale: `display-hero` on the obsidian hero, `product-title` for the product H1, `score-numeral` for scoreboard numbers, `section-heading` under an `eyebrow-label` pill, `body` (15px) for copy, `spec-label` / `spec-value` in spec tables, `score-badge-label`, `spec-pill-label`, `micro-badge` for chips.
@@ -55,7 +56,7 @@ Rate.vn is an independent product rating, anti-seeding review and technical audi
 ### Shape, borders and elevation
 
 - Borders, not shadows. `shadow-card` is nearly invisible; only interactive cards lift (`shadow-card-hover`, 2px up) on hover.
-- Radii: `radius-pill` for chips, eyebrows, criteria bars and most buttons (`rounded-pill` is the most used class in the app); `radius-card` for cards and the scoreboard; `radius-spec-group` for spec cards; `radius-badge` for score badges; `radius-spec-pill` for spec pills.
+- Buttons use `radius-btn` (8px), never a pill; `.btn.rounded-pill` is overridden to 8px. `radius-pill` is for chips, eyebrows, status badges and criteria bars; `radius-card` for cards and the scoreboard; `radius-spec-group` for spec cards; `radius-badge` for score badges; `radius-spec-pill` for spec pills.
 - Two gradients are part of the brand and live in `bundle.css`, not tokens: the dark scoreboard (`#0b0d11 → #121722 → #171e2e`, 145deg) and the criteria fill (`rate-criteria-from` → `rate-criteria-to`). The homepage hero adds two soft radial glows (crimson at 16%, indigo at 14%) over a `rate-bg-dark` to #141821 vertical gradient.
 
 ### Motion and states
@@ -73,9 +74,10 @@ Rate.vn is an independent product rating, anti-seeding review and technical audi
 
 ## Logo
 
-- The brand mark is a `rate-brand` (#ff2e29) dot on a #12151a disc, radii 0.24 and 0.46 of the size: the same geometry as the extension icon, the favicon and `icon.svg`. The Logos group holds `rate-mark.svg` and the 128px and 48px PNGs.
-- The wordmark is the mark followed by "Rate.vn" in `sans` 800 at 0.82 of the mark height, with a 0.4em gap (`<RateWordmark />`, see the Wordmark component). Use `tone="ink"` on light grounds and `tone="light"` on obsidian grounds, where the disc gets a white 16% hairline.
-- Never use the ListingHub template logos, favicon or brand images.
+- The official Rate logo is the split star: red #d83030 (top right) and green #2dba69 (bottom left) with a white cut between them, from the brand files in Drive `Biz/Rate/Marketing/Logo/Final`. The PDF there only wraps a raster, so the PNGs are the masters; never redraw the star.
+- The wordmark is the star followed by "Rate.vn" in `sans` 800 at 0.82 of the mark height, 0.4em gap (`<RateWordmark />`). It reads on light and dark grounds alike.
+- Favicon, app icons, the share card and the extension icons are resized from the same files.
+- The older "AhReview" options and the ListingHub template logos are not used.
 
 ## Not synced
 

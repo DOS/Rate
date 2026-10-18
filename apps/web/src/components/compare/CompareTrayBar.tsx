@@ -105,7 +105,7 @@ export default function CompareTrayBar() {
                       ) : (
                         <span
                           className="text-muted"
-                          style={{ fontSize: '10px' }}
+                          style={{ fontSize: '0.8125rem' }}
                         >
                           📱
                         </span>
@@ -114,14 +114,14 @@ export default function CompareTrayBar() {
                     <div className="flex-grow-1 overflow-hidden">
                       <div
                         className="fw-semibold text-truncate text-white"
-                        style={{ fontSize: '12px' }}
+                        style={{ fontSize: '0.8125rem' }}
                         title={item.name}
                       >
                         {item.name}
                       </div>
                       <div
                         className="text-warning fw-bold"
-                        style={{ fontSize: '11px' }}
+                        style={{ fontSize: '0.8125rem' }}
                       >
                         {Number(item.min_price || 0).toLocaleString('vi-VN')} ₫
                       </div>

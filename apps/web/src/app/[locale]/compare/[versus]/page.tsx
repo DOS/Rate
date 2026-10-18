@@ -178,10 +178,10 @@ export default async function VersusComparePage({ params }: VersusPageProps) {
             <span
               className="badge rounded-pill px-3 py-2"
               style={{
-                background: 'rgba(255,46,41,0.16)',
-                border: '1px solid rgba(255,46,41,0.4)',
+                background: 'rgba(216, 48, 48, 0.16)',
+                border: '1px solid rgba(216, 48, 48, 0.4)',
                 color: '#ff6b66',
-                fontSize: '11px',
+                fontSize: '0.8125rem',
                 fontWeight: 700,
               }}
             >

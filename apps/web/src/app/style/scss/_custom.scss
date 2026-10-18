@@ -11,24 +11,24 @@
   --bs-muted-2: #64748b;
   --bs-body-color-rgb: 15, 23, 42;
   --bs-dark-text: #0f172a;
-  --bs-primary: #e11d48;
+  --bs-primary: #d83030;
   --bs-light: #f1f5f9;
   --bs-light-gray: rgba(255, 255, 255, 0.78);
   --bs-dark: #0f1113;
-  --bs-primary-rgb: 225, 29, 72;
+  --bs-primary-rgb: 216, 48, 48;
   --bs-light-rgb: 241, 245, 249;
   --bs-dark-rgb: 15, 17, 19;
   --bs-primary-2: #0f1113;
-  --bs-primary-text-emphasis: #be123c;
+  --bs-primary-text-emphasis: #b42828;
   --bs-primary-bg-subtle: #fff1f2;
-  --bs-primary-bg-dark: #be123c;
+  --bs-primary-bg-dark: #b42828;
   --bs-primary-border-subtle: #ffe4e6;
   --bs-danger-bg-subtle: #fff1f2;
   --headingColor: #0f172a;
   --bs-link-color: #0f172a;
   --bs-link-color-rgb: 15, 23, 42;
-  --bs-link-hover-color: #e11d48;
-  --bs-link-hover-color-rgb: 225, 29, 72;
+  --bs-link-hover-color: #d83030;
+  --bs-link-hover-color-rgb: 216, 48, 48;
   --bs-link-decoration: none;
   --bs-code-color: #4f46e5;
   --bs-highlight-color: #0f172a;
@@ -50,9 +50,10 @@
   --rate-fg-primary: #0f172a;
   --rate-fg-secondary: #475569;
   --rate-fg-muted: #64748b;
-  --rate-brand: #ff2e29;
-  --rate-brand-hover: #e11d48;
-  --rate-score-user: #10b981;
+  // Brand colors from the official star logo (red #d83030, green #2dba69)
+  --rate-brand: #d83030;
+  --rate-brand-hover: #b42828;
+  --rate-score-user: #2dba69;
   --rate-score-user-bg: #ecfdf5;
   --rate-score-expert: #6366f1;
   --rate-score-expert-bg: #eef2ff;
@@ -60,12 +61,16 @@
   --rate-risk-danger: #f43f5e;
   --rate-risk-danger-bg: #fff1f2;
   --rate-fg-paragraph: #334155;
+  // Buttons use a small corner radius (no pill buttons)
+  --rate-radius-btn: 8px;
+  // Smallest UI text size (labels, chips, captions)
+  --rate-text-min: 0.8125rem;
   --rate-brand-bg: #fff1f2;
   --rate-score-star-bg: #fffbeb;
-  // Crimson text for links and labels on white surfaces (#e11d48 is 4.7:1 on white)
-  --rate-crimson-text: #e11d48;
-  // Keyboard focus ring: 4.7:1 on white, 4.0:1 on #0f1113 (WCAG 2.4.7 / 1.4.11)
-  --rate-focus-ring: #e11d48;
+  // Crimson text for links and labels on white surfaces (#d83030 is 4.8:1 on white)
+  --rate-crimson-text: #d83030;
+  // Keyboard focus ring: 4.8:1 on white, 4.0:1 on #0f1113 (WCAG 2.4.7 / 1.4.11)
+  --rate-focus-ring: #d83030;
 
   --body-font-family: var(--font-inter, 'Inter'), 'Plus Jakarta Sans', 'Noto Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --heading-font-family: var(--font-inter, 'Inter'), 'Plus Jakarta Sans', 'Noto Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -88,12 +93,12 @@
   --rate-fg-secondary: #94a3b8;
   --rate-fg-muted: #64748b;
   --rate-fg-paragraph: #cbd5e1;
-  --rate-brand-bg: rgba(255, 46, 41, 0.14);
-  --rate-score-user-bg: rgba(16, 185, 129, 0.14);
+  --rate-brand-bg: rgba(216, 48, 48, 0.14);
+  --rate-score-user-bg: rgba(45, 186, 105, 0.14);
   --rate-score-expert-bg: rgba(99, 102, 241, 0.14);
   --rate-score-star-bg: rgba(245, 158, 11, 0.14);
   --rate-risk-danger-bg: rgba(244, 63, 94, 0.14);
-  // #e11d48 is only ~3.9:1 on #12161f; the hero highlight color reads ~6:1
+  // #d83030 is only ~3.8:1 on #12161f; the hero highlight color reads ~6.5:1
   --rate-crimson-text: #ff6b6b;
   --rate-focus-ring: #ff6b6b;
   --headingColor: #f8fafc;
@@ -114,7 +119,7 @@
 .rate-surface-dark .rate-score-badge-user {
   color: #34d399;
   background-color: var(--rate-score-user-bg);
-  border-color: #10b981;
+  border-color: #2dba69;
 }
 
 .rate-surface-dark .rate-score-badge-expert {

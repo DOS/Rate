@@ -1318,7 +1318,7 @@ export default function JReviewsSection({
                     ? 'btn-warning text-dark fw-semibold'
                     : 'btn-outline-secondary bg-white'
                 }`}
-                style={{ fontSize: '0.78rem' }}
+                style={{ fontSize: '0.8125rem' }}
               >
                 {tier.label}
               </button>
@@ -1439,7 +1439,7 @@ export default function JReviewsSection({
                               <span
                                 key={crit.key}
                                 className="badge bg-light text-dark rounded-pill border"
-                                style={{ fontSize: '0.7rem' }}
+                                style={{ fontSize: '0.8125rem' }}
                               >
                                 {crit.label.split(' ')[0]}: {val}/5 ★
                               </span>
@@ -1468,7 +1468,7 @@ export default function JReviewsSection({
                   <div className="d-flex justify-content-between align-items-center border-top mt-2 flex-wrap gap-2 pt-2">
                     <span
                       className="text-muted"
-                      style={{ fontSize: '0.75rem' }}
+                      style={{ fontSize: '0.8125rem' }}
                     >
                       {t('isHelpfulPrompt')}
                     </span>
@@ -1482,7 +1482,7 @@ export default function JReviewsSection({
                             ? 'btn-success text-white'
                             : 'btn-outline-secondary'
                         }`}
-                        style={{ fontSize: '0.75rem' }}
+                        style={{ fontSize: '0.8125rem' }}
                         title={t('upvoteTitle')}
                       >
                         {t('upvoteBtnLabel', { count: rev.upvotes })}
@@ -1496,7 +1496,7 @@ export default function JReviewsSection({
                             ? 'btn-warning text-dark'
                             : 'btn-outline-secondary'
                         }`}
-                        style={{ fontSize: '0.75rem' }}
+                        style={{ fontSize: '0.8125rem' }}
                         title={t('downvoteTitle')}
                       >
                         👎 ({rev.downvotes})
@@ -1510,7 +1510,7 @@ export default function JReviewsSection({
                             ? 'btn-danger text-white'
                             : 'btn-outline-danger'
                         }`}
-                        style={{ fontSize: '0.75rem' }}
+                        style={{ fontSize: '0.8125rem' }}
                         title={t('reportTitle')}
                       >
                         {t('reportBtnLabel', { count: rev.report_count })}

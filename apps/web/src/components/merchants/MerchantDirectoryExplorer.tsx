@@ -534,7 +534,7 @@ export default function MerchantDirectoryExplorer({
                       ? 'btn-primary fw-semibold text-white'
                       : 'btn-outline-primary'
                   }`}
-                  style={{ fontSize: '0.75rem' }}
+                  style={{ fontSize: '0.8125rem' }}
                 >
                   {tier.label}
                 </button>
@@ -690,7 +690,7 @@ export default function MerchantDirectoryExplorer({
                       <div className="bg-light rounded-3 p-2 px-3">
                         <div
                           className="text-muted"
-                          style={{ fontSize: '0.75rem' }}
+                          style={{ fontSize: '0.8125rem' }}
                         >
                           {labels.platformRating}
                         </div>
@@ -706,7 +706,7 @@ export default function MerchantDirectoryExplorer({
                       <div className="bg-light rounded-3 p-2 px-3">
                         <div
                           className="text-muted"
-                          style={{ fontSize: '0.75rem' }}
+                          style={{ fontSize: '0.8125rem' }}
                         >
                           {labels.followers}
                         </div>
@@ -722,7 +722,7 @@ export default function MerchantDirectoryExplorer({
                       <div className="bg-light rounded-3 p-2 px-3">
                         <div
                           className="text-muted"
-                          style={{ fontSize: '0.75rem' }}
+                          style={{ fontSize: '0.8125rem' }}
                         >
                           {labels.trackedProducts}
                         </div>
@@ -754,7 +754,7 @@ export default function MerchantDirectoryExplorer({
                         </div>
                         <div
                           className="small text-muted"
-                          style={{ fontSize: '0.75rem' }}
+                          style={{ fontSize: '0.8125rem' }}
                         >
                           {merchant.dosafe_risk_score === 0
                             ? labels.dosafeZero
@@ -781,7 +781,7 @@ export default function MerchantDirectoryExplorer({
                         </div>
                         <div
                           className="small text-muted"
-                          style={{ fontSize: '0.75rem' }}
+                          style={{ fontSize: '0.8125rem' }}
                         >
                           {merchant.review_risk_breakdown.total_reviews > 0 ? (
                             <>
