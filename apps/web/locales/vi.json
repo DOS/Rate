@@ -301,7 +301,20 @@
     "csvColSpecGroup": "Nhóm Thông Số",
     "csvColTechCriterion": "Tiêu Chí Kỹ Thuật",
     "csvRadarGroupTitle": "0. Tín hiệu Deal Radar 10 Sàn (60N)",
-    "csvRadarVerdictRow": "Phán quyết & Độ lệch giá"
+    "csvRadarVerdictRow": "Phán quyết & Độ lệch giá",
+    "quickToggleLimitTitle": "Tối đa 4 thiết bị trong bảng so sánh",
+    "quickToggleRemoveTitle": "Bỏ khỏi danh sách so sánh",
+    "quickToggleAddTitle": "Thêm vào danh sách so sánh 10 nhóm thông số",
+    "quickToggleLimitBtn": "⚠️ Tối đa 4 máy",
+    "quickToggleSelectedBtn": "✓ Đã chọn so sánh",
+    "quickToggleAddBtn": "+ So sánh",
+    "trayTitle": "Khay So Sánh Thiết Bị",
+    "trayExpand": "Mở rộng ▲",
+    "trayCollapse": "Thu gọn ▼",
+    "trayClearAll": "Xóa tất cả",
+    "trayCompareNow": "So sánh ngay ({count} máy) →",
+    "trayRemoveTitle": "Xóa khỏi khay so sánh",
+    "trayRemoveAria": "Xóa {name}"
   },
   "leaderboard": {
     "metaTitle": "Bảng Xếp Hạng Thiết Bị Công Nghệ (JReviews 10.0) | Rate.vn",
@@ -582,7 +595,11 @@
     "cancelBtn": "Hủy",
     "removeFromWatchlistBtn": "Xóa khỏi danh sách",
     "priceChartLink": "📈 Biểu đồ giá",
-    "viewBestSellersLink": "Xem nơi bán tốt nhất →"
+    "viewBestSellersLink": "Xem nơi bán tốt nhất →",
+    "quickToggleTitleWatched": "Đang theo dõi biến động giá (Bấm để bỏ theo dõi)",
+    "quickToggleTitleUnwatched": "Theo dõi biến động giá & nhận cảnh báo giảm giá thật (-5%)",
+    "quickToggleBtnWatched": "🔔 Đang canh giá",
+    "quickToggleBtnUnwatched": "🔔 Canh giá"
   },
   "deals": {
     "metaTitle": "Săn Deal Công Nghệ Đã Kiểm Định Giá Thật 10 Sàn | Rate.vn",
@@ -909,7 +926,137 @@
     "costPerPointUnit": "💎 {cost} ₫ / 1.0 điểm",
     "betterValueTag": "(Tối ưu P/P hơn)",
     "compare1v1Btn": "⚔️ So sánh đối đầu 1-1",
-    "detailsBtn": "Chi tiết"
+    "detailsBtn": "Chi tiết",
+    "offersSpreadBadge": "📊 KIỂM TOÁN ĐỘ LỆCH GIÁ {count} SÀN",
+    "offersSpreadSavePrefix": "Tiết kiệm ngay",
+    "offersSpreadBuyAt": "khi mua tại",
+    "offersSpreadInsteadOf": "thay vì",
+    "offersSpreadLowLabel": "Đáy:",
+    "offersSpreadHighLabel": "Đỉnh:",
+    "offersFilterAll": "Tất cả ({count})",
+    "offersCopiedMd": "✅ Đã chép bảng giá MD!",
+    "offersCopyMd": "📋 Sao chép bảng giá Markdown",
+    "offersExportCsv": "📥 Xuất bảng giá CSV",
+    "offersExportJson": "📦 Xuất JSON",
+    "offersOfficialOnlyBtn": "✓ Chỉ Official Mall",
+    "offersHighTrustOnlyBtn": "🛡️ Chỉ gian hàng Trust >= 80%",
+    "offersSortLabel": "Sắp xếp:",
+    "offersSortAria": "Sắp xếp bảng báo giá",
+    "offersSortPriceAsc": "Giá thấp nhất trước",
+    "offersSortTrustDesc": "Độ tin cậy cao nhất",
+    "offersSortDiscountDesc": "Mức giảm giá sâu nhất",
+    "offersEmptyFilterText": "Không có gian hàng nào khớp với bộ lọc hiện tại.",
+    "offersResetFiltersBtn": "Xóa bộ lọc bảng giá",
+    "offersColPlatformMerchant": "Sàn & Gian Hàng",
+    "offersColListingTitle": "Tiêu đề niêm yết",
+    "offersColTrustScore": "Độ tin cậy (DOSafe + AI Review)",
+    "offersColRecordedPrice": "Giá ghi nhận",
+    "offersColAuditSource": "Kiểm định & Nguồn",
+    "offersOfficialMallBadge": "Chính hãng (Mall)",
+    "offersMerchantTrustTitle": "Xem hồ sơ tín nhiệm gian hàng",
+    "offersInspectBtnTitle": "Kiểm định trực tiếp listing này trong Trình Kiểm Định (/inspect)",
+    "offersInspectBtn": "🔍 Kiểm định",
+    "offersSourceLinkBtn": "Đối chiếu nguồn ↗",
+    "offersMdRadarPrefix": "- **Tín hiệu Deal Radar 60N:** {signal}\n",
+    "offersMdSpreadLine": "- **Độ lệch giá đa sàn ({count} sàn):** Tiết kiệm **{spreadVnd} ₫ ({spreadPct}%)** khi mua tại **{cheapestPlatform} ({cheapestMerchant})** thay vì **{priciestPlatform}**\n",
+    "shareAuditPriceSources": "{price} ₫ ({count} nguồn kiểm định)",
+    "shareAuditUpdating": "Đang cập nhật",
+    "shareAuditMdTitle": "### 🛡️ Hồ Sơ Kiểm Định Thiết Bị: {name} ({brand})",
+    "shareAuditMdUserScore": "- **Điểm Người Mua Thực Chất (JReviews):** {score}",
+    "shareAuditMdUserScoreVal": "★ {score}/5.0 ({count} đánh giá thật đã lọc Seeding AI)",
+    "shareAuditMdNoReviews": "Chưa có đánh giá",
+    "shareAuditMdExpertScore": "- **Điểm Chuyên Gia Rate Lab:** {score}",
+    "shareAuditMdNoExpert": "Chưa có",
+    "shareAuditMdKeySpecs": "- **Cấu Hình Chuẩn Hóa:** {specs}",
+    "shareAuditMdMinPrice": "- **Giá Tham Khảo Thấp Nhất:** {price}",
+    "shareAuditMdRadar": "- **Tín Hiệu Deal Radar 60N:** {signal}",
+    "shareAuditMdModelKey": "- **Mã Định Danh Chuẩn:** `{modelKey}`",
+    "shareAuditMdUrl": "- **Xem chi tiết 10 nhóm thông số & lịch sử giá:** {url}",
+    "shareAuditCsvColDevice": "Thiết Bị",
+    "shareAuditCsvColBrand": "Thương Hiệu",
+    "shareAuditCsvColModelKey": "Model Key",
+    "shareAuditCsvColUserScore": "Điểm Người Mua (/5.0)",
+    "shareAuditCsvColExpertScore": "Điểm Chuyên Gia (/10)",
+    "shareAuditCsvColAuthenticReviews": "Review Thật",
+    "shareAuditCsvColMinPrice": "Giá Thấp Nhất (VND)",
+    "shareAuditCsvColOfferCount": "Số Nguồn Kiểm Định",
+    "shareAuditCsvColKeySpecs": "Cấu Hình Chuẩn Hóa",
+    "shareAuditCopyMdTitle": "Sao chép thẻ tóm tắt kiểm định định dạng Markdown để dán lên diễn đàn/nhóm chat",
+    "shareAuditCopiedMdBtn": "✓ Đã sao chép hồ sơ Markdown!",
+    "shareAuditCopyMdBtn": "📋 Sao chép hồ sơ kiểm định",
+    "shareAuditCopyLinkTitle": "Sao chép đường dẫn sản phẩm",
+    "shareAuditCopiedLinkBtn": "✓ Đã chép link!",
+    "shareAuditCopyLinkBtn": "🔗 Chép link",
+    "specsToolbarCopiedMd": "✅ Đã chép 10 nhóm thông số!",
+    "specsToolbarCopyMd": "📋 Sao chép 10 nhóm thông số MD",
+    "specsToolbarExportCsv": "📥 Xuất CSV thông số",
+    "specsToolbarExportJson": "📦 Xuất JSON thông số",
+    "valueCalcCsvColHorizon": "Chu Kỳ (Tháng)",
+    "valueCalcCsvColMinPrice": "Giá Mua Thấp Nhất (VND)",
+    "valueCalcCsvColRetentionPct": "Tỷ Lệ Giữ Giá Dự Kiến (%)",
+    "valueCalcCsvColResaleVnd": "Giá Trị Thu Hồi Dự Kiến (VND)",
+    "valueCalcCsvColNetCostVnd": "Chi Phí Sở Hữu Thực (VND)",
+    "valueCalcCsvColMonthlyCostVnd": "Chi Phí Mỗi Tháng (VND)",
+    "valueCalcCsvColDailyCostVnd": "Chi Phí Mỗi Ngày (VND)",
+    "valueCalcEyebrow": "💡 BỘ TÍNH HIỆU SUẤT ĐẦU TƯ & CHI PHÍ SỞ HỮU (VALUE & TCO AUDIT)",
+    "valueCalcHeading": "Định Lượng Giá Trị Thực Tế: {name}",
+    "valueCalcSubtitle": "Quy đổi giá thấp nhất đã kiểm định ({price} ₫) trên mỗi điểm chất lượng JReviews ({score}) và chi phí sử dụng thực tế theo ngày.",
+    "valueCalcNoScoreYet": "chưa có điểm",
+    "valueCalcHorizonAria": "Chu kỳ sử dụng",
+    "valueCalcMonthsBtn": "{months} tháng",
+    "valueCalcIncludeResaleOn": "♻️ Có tính thu cũ đổi mới (~{pct}%)",
+    "valueCalcIncludeResaleOff": "🔒 Không tính bán lại (Khấu hao 100%)",
+    "valueCalcCardCostPerPointTitle": "Chi phí / 1.0 điểm JReviews",
+    "valueCalcNotAvailable": "Chưa có",
+    "valueCalcCardCostPerPointSub": "Cho mỗi 1.0 điểm trên thang {score}/10",
+    "valueCalcCardCostPerPointEmpty": "Chưa đủ dữ liệu điểm JReviews",
+    "valueCalcCardDailyCostTitle": "Chi phí thực tế mỗi ngày ({months}T)",
+    "valueCalcPerDayUnit": "₫/ngày",
+    "valueCalcPerMonthUnit": "₫/tháng",
+    "valueCalcCardResaleTitle": "Giá trị thu hồi dự kiến sau {months} tháng",
+    "valueCalcCardResaleSubOn": "Giữ giá dự kiến ~{pct}% ({brand})",
+    "valueCalcCardResaleSubOff": "Đang tắt tính năng thu hồi vốn",
+    "valueCalcCardValueScoreTitle": "Điểm Đáng tiền P/P & Tiết kiệm chéo",
+    "valueCalcSpreadSavingsSub": "Lệch giữa các sàn: {amount} ₫",
+    "valueCalcUniformPriceSub": "Giá đồng nhất giữa các đại lý",
+    "priceHistoryHeading": "Biểu Đồ Lịch Sử Giá & Kiểm Chứng Giảm Giá Ảo",
+    "priceHistorySubtitlePrefix": "Theo dõi biến động giá thực tế theo thời gian của",
+    "priceHistorySubtitleSuffix": "và phát hiện hành vi nâng khống giá gạch ngang trước các đợt Sale.",
+    "priceHistoryCopiedMdBtn": "✅ Đã chép lịch sử giá MD!",
+    "priceHistoryCopyMdBtn": "📋 Sao chép lịch sử giá Markdown",
+    "priceHistoryExportCsvBtn": "📥 Xuất CSV lịch sử giá 60 ngày",
+    "priceHistoryExportJsonBtn": "📦 Xuất JSON",
+    "priceHistoryFakeAlertBadge": "🚨 Phát hiện {count} nơi bán nâng giá gốc / giảm ảo",
+    "priceHistoryCleanBadge": "✓ Không phát hiện chiêu trò nâng khống giá gốc",
+    "priceHistoryGenuineDealBadge": "🔥 {count} nơi bán đang ở vùng giá tốt thật",
+    "priceHistoryKpiCurrentMinTitle": "Giá tốt nhất hiện tại",
+    "priceHistoryKpiCurrentMinSub": "Tổng hợp từ {count} gian hàng",
+    "priceHistoryKpiLowestEverTitle": "Đáy giá lịch sử từng ghi nhận",
+    "priceHistoryKpiLowestEverDefaultSub": "Dữ liệu chuẩn hóa Rate.vn",
+    "priceHistoryKpiHighestEverTitle": "Đỉnh giá thực tế",
+    "priceHistoryKpiHighestEverSub": "Dựa trên {count} mốc quan sát giá",
+    "priceHistoryKpiAiAuditTitle": "Kiểm định khuyến mãi AI",
+    "priceHistoryKpiAiAuditFakeCount": "{count} Cảnh báo ảo",
+    "priceHistoryKpiAiAuditTransparent": "100% Minh bạch",
+    "priceHistoryKpiAiAuditSub": "So sánh giá gạch ngang vs lịch sử thực",
+    "priceHistoryMerchantFilterLabel": "Gian hàng:",
+    "priceHistoryMerchantFilterAll": "Tất cả ({count})",
+    "priceHistoryRangeAria": "Khoảng thời gian",
+    "priceHistoryRange30d": "30 ngày",
+    "priceHistoryRange90d": "90 ngày",
+    "priceHistoryRangeAll": "Toàn bộ",
+    "priceHistoryLegendActual": "Giá bán thực tế (Actual Price)",
+    "priceHistoryLegendOriginal": "Giá gốc gạch ngang (Claimed Original)",
+    "priceHistoryLegendLowest": "Đáy giá lịch sử ({price})",
+    "priceHistoryChartAria": "Biểu đồ lịch sử giá của {name}",
+    "priceHistoryEmptyRange": "Chưa có dữ liệu chuỗi thời gian cho bộ lọc này.",
+    "priceHistoryMerchantAuditHeading": "Phân Tích Độ Trung Thực Giá Khuyến Mãi Từng Gian Hàng",
+    "priceHistoryCurrentPriceLabel": "Giá hiện tại:",
+    "priceHistoryStrikethroughLabel": "Giá gạch ngang:",
+    "priceHistoryClaimedPctBadge": "-{pct}% công bố",
+    "priceHistoryMedianLabel": "Trung vị lịch sử:",
+    "priceHistoryMinLabel": "Thấp nhất:",
+    "priceHistoryMaxLabel": "Cao nhất:"
   },
   "homePage": {
     "catDescSmartphones": "Lọc theo Chipset, RAM/ROM, tần số quét Hz, pin mAh & sạc nhanh W",
@@ -1221,5 +1368,339 @@
     "quarantineRejectedTitle": "Tín hiệu bị từ chối bởi bộ lọc Zero-Trust Gatekeeper",
     "quarantineCanonicalUrlLabel": "URL chuẩn hóa (đã lọc PII):",
     "quarantineErrConnect": "Không thể kết nối tới cổng Zero-Trust Quarantine."
+  },
+  "catalog": {
+    "meta": {
+      "smartphones": {
+        "titleCount": "So sánh giá Điện thoại di động ({count} mẫu máy chuẩn hóa) | Rate.vn",
+        "titleDefault": "So sánh giá Điện thoại di động & Kiểm định khuyến mãi AI | Rate.vn",
+        "description": "Tìm kiếm và lọc điện thoại theo 10 nhóm thông số kỹ thuật chuẩn PhoneArena/GSMArena, kiểm tra lịch sử giá thật và lọc đánh giá Seeding bằng AI trên Rate.vn."
+      },
+      "tablets": {
+        "titleCount": "So sánh giá Máy tính bảng ({count} mẫu máy chuẩn hóa) | Rate.vn",
+        "titleDefault": "So sánh giá Máy tính bảng (Tablets) & Kiểm định khuyến mãi AI | Rate.vn",
+        "description": "Tra cứu và lọc máy tính bảng (iPad, Galaxy Tab, Xiaomi Pad) theo 10 nhóm thông số kỹ thuật chuẩn hóa, kiểm tra lịch sử giá thật và lọc đánh giá Seeding trên Rate.vn."
+      },
+      "laptops": {
+        "titleCount": "So sánh giá Laptop ({count} mẫu máy chuẩn hóa) | Rate.vn",
+        "titleDefault": "So sánh giá Máy tính xách tay (Laptops) & Kiểm định khuyến mãi AI | Rate.vn",
+        "description": "Tra cứu và lọc laptop (MacBook, ThinkPad, ASUS ROG, Dell XPS) theo 10 nhóm thông số kỹ thuật chuẩn hóa, kiểm tra lịch sử giá thật và lọc đánh giá Seeding trên Rate.vn."
+      },
+      "smartwatches": {
+        "titleCount": "So sánh giá Đồng hồ thông minh ({count} mẫu chuẩn hóa) | Rate.vn",
+        "titleDefault": "So sánh giá Đồng hồ thông minh (Smartwatches) & Kiểm định khuyến mãi AI | Rate.vn",
+        "description": "Tra cứu và lọc đồng hồ thông minh (Apple Watch, Galaxy Watch, Garmin, Xiaomi Watch, Huawei Watch) theo 10 nhóm thông số kỹ thuật chuẩn hóa, kiểm tra lịch sử giá thật và lọc đánh giá Seeding trên Rate.vn."
+      },
+      "earbuds": {
+        "titleCount": "So sánh giá Tai nghe không dây ANC ({count} mẫu chuẩn hóa) | Rate.vn",
+        "titleDefault": "So sánh giá Tai nghe chống ồn ANC (Earbuds) & Kiểm định khuyến mãi AI | Rate.vn",
+        "description": "Tra cứu và lọc tai nghe không dây chống ồn chủ động ANC (AirPods Pro, Sony WF-1000XM5, Galaxy Buds, Bose, Sennheiser) theo 10 nhóm thông số chuẩn hóa, lịch sử giá thật và đánh giá AI trên Rate.vn."
+      }
+    },
+    "sortOptions": {
+      "default": "Mặc định (Mới cập nhật)",
+      "price_asc": "Giá thấp đến cao",
+      "price_desc": "Giá cao đến thấp",
+      "rating_desc": "Điểm đánh giá cao nhất",
+      "merchants_desc": "Nhiều nơi bán nhất",
+      "newest": "Mới ra mắt nhất"
+    },
+    "schemas": {
+      "directoryTech": "Công nghệ & Thiết bị số",
+      "smartphones": {
+        "title": "Điện Thoại Thông Minh",
+        "subtitle": "Tra cứu dữ liệu kỹ thuật 10 nhóm thông số chuẩn GSMArena & PhoneArena, đối chiếu giá đa sàn và lọc đánh giá thật bằng AI",
+        "searchPlaceholder": "Tìm tên máy, chip (VD: iPhone 16, Snapdragon 8 Gen 3)...",
+        "presets": {
+          "under-7m": "Dưới 7 triệu",
+          "7m-15m": "7 - 15 triệu",
+          "15m-25m": "15 - 25 triệu",
+          "over-25m": "Trên 25 triệu"
+        },
+        "features": {
+          "has5g": {
+            "label": "Hỗ trợ 5G",
+            "desc": "Cellular: Kết nối mạng di động 5G tốc độ cao"
+          },
+          "highRefresh": {
+            "label": "Màn hình 120Hz+",
+            "desc": "Display: Tần số quét từ 120Hz trở lên"
+          },
+          "bigBattery": {
+            "label": "Pin >= 5000mAh",
+            "desc": "Battery: Dung lượng pin từ 5000 mAh trở lên"
+          },
+          "fastCharge": {
+            "label": "Sạc nhanh >= 45W",
+            "desc": "Battery: Công suất sạc nhanh từ 45W trở lên"
+          },
+          "hasNfc": {
+            "label": "Có NFC",
+            "desc": "Connectivity: Thanh toán chạm & đọc CCCD gắn chip"
+          },
+          "compactScreen": {
+            "label": "Nhỏ gọn (<= 6.2\")",
+            "desc": "Display: Màn hình gọn dễ cầm một tay (<= 6.2 inch)"
+          }
+        }
+      },
+      "tablets": {
+        "title": "Máy Tính Bảng (Tablets)",
+        "subtitle": "So sánh thông số kỹ thuật 10 nhóm và giá bán máy tính bảng từ các sàn TMĐT",
+        "searchPlaceholder": "Tìm iPad, Galaxy Tab, Xiaomi Pad...",
+        "presets": {
+          "under-10m": "Dưới 10 triệu",
+          "10m-20m": "10 - 20 triệu",
+          "over-20m": "Trên 20 triệu"
+        },
+        "features": {
+          "has5g": {
+            "label": "Bản 5G / Cellular",
+            "desc": "Hỗ trợ lắp SIM / eSIM kết nối 5G"
+          },
+          "highRefresh": {
+            "label": "Màn hình 120Hz+",
+            "desc": "Tần số quét màn hình >= 120Hz"
+          },
+          "bigBattery": {
+            "label": "Pin >= 8000mAh",
+            "desc": "Dung lượng pin lớn"
+          }
+        }
+      },
+      "laptops": {
+        "title": "Máy Tính Xách Tay (Laptops)",
+        "subtitle": "Đối chiếu cấu hình phần cứng 10 nhóm và lịch sử giá laptop chính hãng",
+        "searchPlaceholder": "Tìm MacBook, ThinkPad, ASUS ROG, Dell XPS...",
+        "presets": {
+          "under-15m": "Dưới 15 triệu",
+          "15m-30m": "15 - 30 triệu",
+          "over-30m": "Trên 30 triệu"
+        },
+        "features": {
+          "highRefresh": {
+            "label": "Màn hình 120Hz+",
+            "desc": "Tần số quét cao >= 120Hz"
+          },
+          "fastCharge": {
+            "label": "Sạc nhanh USB-C PD",
+            "desc": "Hỗ trợ sạc nhanh công suất cao"
+          }
+        }
+      },
+      "smartwatches": {
+        "title": "Đồng Hồ Thông Minh (Smartwatches)",
+        "subtitle": "Đối chiếu cảm biến sức khỏe, chuẩn kháng nước, GPS đa băng tần và lịch sử giá đồng hồ thông minh chính hãng",
+        "searchPlaceholder": "Tìm Apple Watch, Galaxy Watch, Garmin, Xiaomi Watch, Huawei Watch...",
+        "presets": {
+          "under-3m": "Dưới 3 triệu",
+          "3m-8m": "3 - 8 triệu",
+          "8m-15m": "8 - 15 triệu",
+          "over-15m": "Trên 15 triệu"
+        },
+        "features": {
+          "has5g": {
+            "label": "Hỗ trợ eSIM / LTE",
+            "desc": "Nghe gọi độc lập qua eSIM không cần mang theo điện thoại"
+          },
+          "hasNfc": {
+            "label": "Có NFC / Thanh toán chạm",
+            "desc": "Hỗ trợ kết nối NFC và thanh toán không chạm"
+          },
+          "fastCharge": {
+            "label": "Sạc nhanh từ tính",
+            "desc": "Hỗ trợ sạc nhanh không dây nam châm"
+          }
+        }
+      },
+      "earbuds": {
+        "title": "Tai Nghe Không Dây & Chống Ồn ANC (Earbuds)",
+        "subtitle": "So sánh khả năng chống ồn chủ động ANC, codec âm thanh Hi-Res (LDAC/aptX), thời lượng pin và giá bán thực tế đa sàn",
+        "searchPlaceholder": "Tìm AirPods Pro, Sony WF-1000XM5, Galaxy Buds, Bose, Sennheiser...",
+        "presets": {
+          "under-1m": "Dưới 1 triệu",
+          "1m-3m": "1 - 3 triệu",
+          "3m-6m": "3 - 6 triệu",
+          "over-6m": "Trên 6 triệu"
+        },
+        "features": {
+          "fastCharge": {
+            "label": "Hộp sạc nhanh / MagSafe",
+            "desc": "Hỗ trợ sạc nhanh qua USB-C hoặc sạc không dây Qi/MagSafe"
+          }
+        }
+      }
+    },
+    "page": {
+      "chipKeyword": "Từ khóa: \"{query}\"",
+      "chipBrand": "Hãng: {brand}",
+      "chipPrice": "Giá: {min} - {max}",
+      "searchLabel": "Tìm máy",
+      "brandLabel": "Hãng",
+      "searchBtn": "Tìm kiếm",
+      "loadingFilters": "Đang tải bộ lọc thông số...",
+      "clearAllBtn": "Xóa tất cả",
+      "foundPrefix": "Tìm thấy",
+      "foundSuffix": "/ {total} sản phẩm chuẩn hóa",
+      "quickCompare3": "So sánh nhanh 3 máy",
+      "quickCompare2": "So sánh nhanh 2 máy",
+      "versus1v1Badge": "⚔️ Kèo 1v1: {brandA} vs {brandB}",
+      "leaderboardBadge": "🏆 Bảng Xếp Hạng",
+      "sortByPrefix": "Sắp xếp: {label}",
+      "radarBannerBadge": "🔥 RADAR KÈO THƠM & BẪY SALE ẢO ({title})",
+      "radarAnalyzedSub": "Đã kiểm toán {count} gian hàng trên 10 sàn",
+      "viewAllRadarBtn": "💎 Xem toàn bộ Radar 10 sàn →",
+      "vsMedianBadge": "-{pct}% so trung vị",
+      "fakeMarkupBadge": "Kê khống +{pct}%",
+      "spreadHeader": "📊 Độ lệch giá 10 sàn cao nhất ({title}):",
+      "spreadSub": "Mua đúng sàn tiết kiệm hàng triệu đồng",
+      "spreadDiffBadge": "Lệch +{pct}% ({amount} ₫)",
+      "emptySyncingTitle": "Danh mục \"{title}\" đang chờ đồng bộ dữ liệu sản phẩm mới",
+      "emptyMatchingTitle": "Không tìm thấy sản phẩm khớp với bộ lọc hiện tại",
+      "emptySyncingDesc": "Bộ khung chuẩn hóa 10 nhóm thông số cho {title} ({brands}) đã sẵn sàng. Trong lúc chờ đội ngũ Crawler nạp thêm dữ liệu danh mục này, bạn có thể khám phá danh mục Điện thoại hoặc Bảng so sánh.",
+      "emptyMatchingDesc": "Hãy thử nới lỏng khoảng giá hoặc bỏ bớt một vài tiêu chí phần cứng để xem thêm các dòng máy khác.",
+      "resetFiltersBtn": "Đặt lại bộ lọc",
+      "browseSmartphonesBtn": "Xem danh mục Điện thoại đang có sẵn →",
+      "merchantProfilesBtn": "Hồ sơ Tín nhiệm Gian hàng",
+      "noImage": "Chưa có ảnh",
+      "userScoreText": "{score} User ({count} đánh giá thật)",
+      "userScoreUnrated": "User: chưa có",
+      "expertScoreText": "{score} Expert Lab",
+      "expertScoreUnrated": "Expert Lab: chưa có",
+      "refPriceLabel": "Giá tham khảo:",
+      "sourcesCount": "{count} nguồn",
+      "viewReviewsSpecsBtn": "★ Xem Review & 10 Nhóm Thông Số",
+      "inspectPriceHistoryTitle": "Kiểm định lịch sử giá 90 ngày & phát hiện giảm giá ảo",
+      "inspectBtn": "🔍 Kiểm định"
+    },
+    "toolbar": {
+      "unratedText": "chưa có",
+      "quick1v1Label": "⚔️ Chọn nhanh kèo 1v1 ({title}):",
+      "selectDeviceAAria": "Chọn máy A để đối đầu 1v1",
+      "selectDeviceBAria": "Chọn máy B để đối đầu 1v1",
+      "versusGoBtn": "Đấu 1v1 ngay →",
+      "copiedMdBtn": "✅ Đã chép danh mục MD!",
+      "copyMdBtn": "📋 Sao chép danh mục Markdown",
+      "exportCsvBtn": "📥 Xuất CSV ngành hàng",
+      "exportJsonBtn": "📦 Xuất JSON"
+    },
+    "sidebar": {
+      "filterTitle": "Bộ lọc thông số",
+      "keywordChipsetHeader": "Từ khóa & Chipset",
+      "jreviewsRatingHeader": "Điểm đánh giá (JReviews)",
+      "categoryHeader": "Danh mục thiết bị (Category)",
+      "brandHeader": "Hãng sản xuất (Brand)",
+      "priceRangeHeader": "Khoảng giá (Triệu VNĐ)",
+      "ramHeader": "Dung lượng RAM (Hardware)",
+      "storageHeader": "Bộ nhớ trong (ROM)",
+      "featuresHeader": "Tính năng nổi bật (10 Field Groups)",
+      "filteringBtn": "Đang lọc dữ liệu...",
+      "applyFiltersBtn": "Áp dụng bộ lọc",
+      "clearAllFiltersBtn": "Xóa tất cả bộ lọc"
+    }
+  },
+  "heroSearch": {
+    "modeSearchBtn": "Tìm Sản Phẩm & Thông Số (10 Nhóm)",
+    "modeInspectBtn": "Dán Link Kiểm Tra Giá Ảo & Độ Uy Tín Shop",
+    "searchPlaceholder": "Tìm tên máy, chip (VD: iPhone 16, Apple A18) hoặc dán link Shopee...",
+    "searchAriaLabel": "Tìm kiếm sản phẩm công nghệ hoặc dán link kiểm định",
+    "clearKeywordAria": "Xóa từ khóa",
+    "searchSubmitBtn": "Tìm kiếm",
+    "urlDetectedStrong": "Phát hiện đường dẫn TMĐT!",
+    "urlDetectedSub": "Bấm để kiểm tra lịch sử giá, giảm giá ảo và điểm rủi ro shop ngay.",
+    "inspectLinkBtn": "Kiểm định Link →",
+    "normalizedProductsHeader": "📱 Sản phẩm chuẩn hóa ({count})",
+    "specFilterLink": "Bộ lọc 10 nhóm thông số →",
+    "noMatchPrefix": "Không tìm thấy mẫu máy khớp với \"{query}\". Bạn có thể chuyển sang tab",
+    "inspectTabLinkBtn": "Kiểm định Link / Từ khóa",
+    "merchantsCount": "{count} nơi bán",
+    "merchantsHeader": "🏪 Gian hàng & Hồ sơ Tín nhiệm ({count})",
+    "viewAllMerchantsLink": "Xem tất cả shop →",
+    "inspectPlaceholder": "Dán link sản phẩm/shop Shopee, Lazada, Tiki hoặc nhập tên sản phẩm...",
+    "inspectAriaLabel": "Dán link sản phẩm hoặc gian hàng để kiểm định",
+    "clearUrlAria": "Xóa đường dẫn",
+    "inspectingBtn": "Đang kiểm định...",
+    "inspectNowBtn": "Kiểm định ngay",
+    "sampleLinksLabel": "Thử nhanh với dữ liệu thật:",
+    "errLookupFailed": "Không thể tra cứu dữ liệu sản phẩm/shop",
+    "errServerConnection": "Lỗi kết nối máy chủ kiểm định",
+    "resultCardHeader": "Kết Quả Kiểm Định Giá Bán, Review AI & Tín Nhiệm Gian Hàng",
+    "closeBtn": "Đóng",
+    "bestPriceLabel": "Giá tốt nhất:",
+    "lowestEverPriceLabel": "(Đáy lịch sử: {price} ₫)",
+    "merchantLabel": "Gian hàng:",
+    "aiReviewAuthLabel": "Độ trung thực Review AI:",
+    "aiReviewAuthValue": "✓ {pct}% thực chất (trong {total} đánh giá)",
+    "viewSpecsAndHistoryBtn": "Xem 10 Nhóm Thông Số & Lịch Sử Giá",
+    "auditReportBtn": "🔬 Báo cáo Kiểm toán",
+    "shopProfileBtn": "Hồ sơ Shop",
+    "trackingProductsCount": "Đang theo dõi {count} sản phẩm",
+    "openMerchantProfileBtn": "Mở Hồ Sơ Tín Nhiệm Gian Hàng →",
+    "unmatchedHeading": "Sản phẩm/Link này chưa có trong bộ đệm kiểm định trực tiếp",
+    "unmatchedDesc": "Bạn có thể tra cứu các dòng máy chuẩn hóa tương đương hoặc xem hồ sơ các gian hàng chính hãng bên dưới.",
+    "searchInSmartphonesBtn": "Tìm trong Danh mục Điện thoại →"
+  },
+  "authPortal": {
+    "metaLoginTitle": "Đăng Nhập Tài Khoản Rate.vn | Hệ Thống Định Danh Supabase Auth",
+    "metaRegisterTitle": "Đăng Ký Tài Khoản Rate.vn | Cộng Đồng Kiểm Toán Giá Thật & Thông Số",
+    "metaForgotTitle": "Khôi Phục Mật Khẩu Tài Khoản | Rate.vn",
+    "metaOtpTitle": "Xác Thực Hai Lớp & Mã OTP Email | Rate.vn",
+    "loadingFallback": "Đang tải...",
+    "signInBtnLabel": "Đăng nhập",
+    "signOutBtnLabel": "Đăng xuất",
+    "badge": "Hệ Thống Định Danh Bảo Mật Supabase Auth (DOS Ecosystem)",
+    "trustTitle": "Tài Khoản Người Mua Độc Lập Trên Rate.vn",
+    "trustSubtitle": "Đồng bộ danh sách canh giá thật, gửi đánh giá 5 tiêu chí JReviews và biểu quyết bình luận hữu ích mà không tiết lộ thông tin cá nhân cho các gian hàng TMĐT.",
+    "feature1Title": "Bảo vệ Biểu quyết JReviews (rate.review_votes)",
+    "feature1Desc": "Mỗi tài khoản xác thực giúp chống thao túng trọng số Helpful/Report trên hệ thống đánh giá kỹ thuật 5 tiêu chí.",
+    "feature2Title": "Đồng bộ Danh sách Canh giá thật (/watchlist)",
+    "feature2Desc": "Lưu trữ ngưỡng giá mục tiêu cho điện thoại, laptop, máy tính bảng, đồng hồ và tai nghe trên đám mây.",
+    "feature3Title": "Kiến trúc Zero-Trust & Không chia sẻ cho Sàn",
+    "feature3Desc": "Dữ liệu định danh được bảo vệ bởi Row Level Security (RLS) trên PostgreSQL 17 của hệ sinh thái DOS.",
+    "pillSmartphones": "📱 Điện thoại",
+    "pillLaptops": "💻 Laptop",
+    "pillMerchants": "🛡️ Gian hàng",
+    "pillWatchlist": "🔔 Canh giá",
+    "tabLogin": "🔑 Đăng nhập",
+    "tabRegister": "✨ Đăng ký",
+    "tabOtp": "🛡️ Email OTP / 2FA",
+    "tabReset": "🔄 Đặt lại MK",
+    "loginTitle": "Đăng Nhập Tài Khoản Rate.vn",
+    "loginSub": "Sử dụng email và mật khẩu hoặc nhận mã xác thực OTP một lần qua email.",
+    "registerTitle": "Tạo Tài Khoản Kiểm Toán Người Mua",
+    "registerSub": "Tham gia cộng đồng đánh giá thông số 10 nhóm và canh giá thật đa sàn.",
+    "forgotTitle": "Khôi Phục Mật Khẩu Tài Khoản",
+    "forgotSub": "Nhập địa chỉ email đã đăng ký để nhận liên kết đặt lại mật khẩu an toàn từ Supabase Auth.",
+    "otpTitle": "Xác Thực Hai Lớp & Mã OTP Email",
+    "otpSub": "Nhập mã xác thực 6 chữ số được gửi tới hộp thư của bạn để hoàn tất đăng nhập bảo mật.",
+    "fullNameLabel": "Họ và tên hiển thị",
+    "fullNamePlaceholder": "Nguyễn Văn A",
+    "emailLabel": "Địa chỉ Email",
+    "emailPlaceholder": "ban@rate.vn",
+    "passwordLabel": "Mật khẩu bảo mật",
+    "passwordPlaceholder": "Tối thiểu 6 ký tự",
+    "confirmPasswordLabel": "Xác nhận lại mật khẩu",
+    "confirmPasswordPlaceholder": "Nhập lại mật khẩu",
+    "otpLabel": "Mã xác thực OTP (6 chữ số)",
+    "otpPlaceholder": "123456",
+    "loginBtn": "Đăng nhập vào Rate.vn",
+    "registerBtn": "Đăng ký tài khoản mới",
+    "forgotBtn": "Gửi liên kết đặt lại mật khẩu",
+    "otpVerifyBtn": "Xác nhận mã OTP & Đăng nhập",
+    "sendMagicOtpBtn": "Gửi mã OTP tới Email này",
+    "submitting": "Đang xử lý yêu cầu...",
+    "switchToRegister": "Chưa có tài khoản? Đăng ký ngay",
+    "switchToLogin": "Đã có tài khoản? Quay lại Đăng nhập",
+    "forgotLink": "Quên mật khẩu?",
+    "otpLink": "Đăng nhập bằng mã OTP / 2FA",
+    "errPasswordMismatch": "Mật khẩu xác nhận không khớp. Vui lòng kiểm tra lại.",
+    "errPasswordShort": "Mật khẩu phải có ít nhất {min} ký tự.",
+    "errInvalidCredentials": "Email hoặc mật khẩu không chính xác, hoặc tài khoản chưa được kích hoạt.",
+    "errGeneric": "Không thể hoàn tất yêu cầu xác thực. Vui lòng kiểm tra lại thông tin.",
+    "okLogin": "Đăng nhập thành công! Đang chuyển hướng...",
+    "okRegister": "Đăng ký tài khoản thành công! Vui lòng kiểm tra hộp thư email để xác nhận hoặc đăng nhập ngay.",
+    "okResetSent": "Đã gửi hướng dẫn đặt lại mật khẩu tới email của bạn. Vui lòng kiểm tra hộp thư đến (và thư mục Spam).",
+    "okOtpSent": "Đã gửi mã OTP 6 chữ số tới email của bạn. Vui lòng nhập mã bên dưới để hoàn tất xác thực.",
+    "okOtpVerified": "Xác thực OTP thành công! Đang chuyển hướng về trang chủ..."
   }
 }

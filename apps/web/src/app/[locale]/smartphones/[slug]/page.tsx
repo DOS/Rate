@@ -92,7 +92,7 @@ export async function generateMetadata({
 export async function ProductDetailView({
   params,
   categoryBasePath = '/smartphones',
-  categoryLabel = 'Điện thoại',
+  categoryLabel = 'Smartphones',
 }: {
   params: PageParams;
   categoryBasePath?: string;
@@ -1622,11 +1622,5 @@ export default async function SmartphoneDetailPage({
 }: {
   params: PageParams;
 }) {
-  return (
-    <ProductDetailView
-      params={params}
-      categoryBasePath="/smartphones"
-      categoryLabel="Điện thoại"
-    />
-  );
+  return <ProductDetailView params={params} categoryBasePath="/smartphones" />;
 }

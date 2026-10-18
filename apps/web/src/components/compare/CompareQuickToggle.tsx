@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import {
   type CompareTrayItem,
   getCompareTray,
@@ -22,6 +23,7 @@ export default function CompareQuickToggle({
   className = '',
   includeWatchlist = true,
 }: CompareQuickToggleProps) {
+  const t = useTranslations('compare');
   const [selected, setSelected] = useState(false);
   const [limitAlert, setLimitAlert] = useState(false);
 
@@ -64,10 +66,10 @@ export default function CompareQuickToggle({
         onClick={handleToggle}
         title={
           limitAlert
-            ? 'Tối đa 4 thiết bị trong bảng so sánh'
+            ? t('quickToggleLimitTitle')
             : selected
-              ? 'Bỏ khỏi danh sách so sánh'
-              : 'Thêm vào danh sách so sánh 10 nhóm thông số'
+              ? t('quickToggleRemoveTitle')
+              : t('quickToggleAddTitle')
         }
         className={`btn ${
           limitAlert
@@ -80,10 +82,10 @@ export default function CompareQuickToggle({
       >
         <span>
           {limitAlert
-            ? '⚠️ Tối đa 4 máy'
+            ? t('quickToggleLimitBtn')
             : selected
-              ? '✓ Đã chọn so sánh'
-              : '+ So sánh'}
+              ? t('quickToggleSelectedBtn')
+              : t('quickToggleAddBtn')}
         </span>
       </button>
     </div>

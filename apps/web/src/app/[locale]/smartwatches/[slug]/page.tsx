@@ -18,11 +18,5 @@ export default async function SmartwatchDetailPage({
 }: {
   params: PageParams;
 }) {
-  return (
-    <ProductDetailView
-      params={params}
-      categoryBasePath="/smartwatches"
-      categoryLabel="Đồng hồ thông minh"
-    />
-  );
+  return <ProductDetailView params={params} categoryBasePath="/smartwatches" />;
 }

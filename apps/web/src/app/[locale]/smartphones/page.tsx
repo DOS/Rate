@@ -1,5 +1,6 @@
 import { Suspense } from 'react';
 import type { Metadata } from 'next';
+import { getTranslations } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
 import {
   getCachedCategoryDirectoryFacets,
@@ -13,6 +14,7 @@ import RadarBadge from '@/components/radar/RadarBadge';
 import {
   formatStorageLabel,
   getCategoryFilterSchema,
+  localizeCategoryFilterSchema,
   SORT_OPTIONS,
   type ProductSortOption,
 } from '@/lib/category-filters';
@@ -34,8 +36,6 @@ import {
 } from 'react-icons/bs';
 import type { KeySpecs, ProductSpecifications } from '@repo/shared-data';
 
-import { normalizeRateLocale } from '@/lib/rate-i18n';
-
 type SearchParamsInput = Record<string, string | string[] | undefined>;
 
 export async function generateMetadata({
@@ -44,26 +44,17 @@ export async function generateMetadata({
   params: Promise<{ locale: string }>;
 }): Promise<Metadata> {
   const { locale } = await params;
-  const lang = normalizeRateLocale(locale);
+  const t = await getTranslations({ locale, namespace: 'catalog' });
   const facets = await getCachedCategoryDirectoryFacets('smartphones');
   const totalModels = facets.totalUnfiltered;
   const canonicalUrl = 'https://rate.vn/smartphones';
 
   return {
     title:
-      lang === 'en'
-        ? `Smartphone Price Comparison & 10-Group Spec Filter (${totalModels} Models) | Rate.vn`
-        : lang === 'cs'
-          ? `Srovnání cen chytrých telefonů a filtr 10 skupin parametrů (${totalModels} modelů) | Rate.vn`
-          : totalModels > 0
-            ? `So sánh giá Điện thoại di động (${totalModels} mẫu máy chuẩn hóa) | Rate.vn`
-            : 'So sánh giá Điện thoại di động & Kiểm định khuyến mãi AI | Rate.vn',
-    description:
-      lang === 'en'
-        ? 'Filter smartphones by 10 standardized technical spec groups (PhoneArena/GSMArena), inspect true historical prices, and filter AI seeding reviews on Rate.vn.'
-        : lang === 'cs'
-          ? 'Filtrujte chytré telefony podle 10 skupin parametrů, zkontrolujte historii skutečných cen a filtrujte AI seeding recenze na Rate.vn.'
-          : 'Tìm kiếm và lọc điện thoại theo 10 nhóm thông số kỹ thuật chuẩn PhoneArena/GSMArena, kiểm tra lịch sử giá thật và lọc đánh giá Seeding bằng AI trên Rate.vn.',
+      totalModels > 0
+        ? t('meta.smartphones.titleCount', { count: totalModels })
+        : t('meta.smartphones.titleDefault'),
+    description: t('meta.smartphones.description'),
     alternates: {
       canonical: canonicalUrl,
     },
@@ -129,6 +120,7 @@ export async function CategoryCatalogContent({
   defaultCategorySlug?: string;
   basePath?: string;
 }) {
+  const t = await getTranslations({ locale, namespace: 'catalog' });
   const categorySlug =
     getSingleParam(rawSearch.category) || defaultCategorySlug;
   const q = getSingleParam(rawSearch.q).trim();
@@ -150,11 +142,11 @@ export async function CategoryCatalogContent({
 
   const sortParam = (getSingleParam(rawSearch.sort) ||
     'default') as ProductSortOption;
-  const currentSortOption: { value: ProductSortOption; label: string } =
-    SORT_OPTIONS.find((s) => s.value === sortParam) ?? {
-      value: 'default',
-      label: 'Mặc định (Mới cập nhật)',
-    };
+  const matchedSort = SORT_OPTIONS.find((s) => s.value === sortParam);
+  const currentSortOption: { value: ProductSortOption; label: string } = {
+    value: matchedSort ? matchedSort.value : 'default',
+    label: t(`sortOptions.${matchedSort ? matchedSort.value : 'default'}`),
+  };
 
   const filterParams: MasterProductFilterParams = {
     categorySlug,
@@ -191,10 +183,11 @@ export async function CategoryCatalogContent({
 
   const radarIndex = buildRadarIndex(categoryDealRadar);
 
-  const schema = getCategoryFilterSchema(
+  const baseSchema = getCategoryFilterSchema(
     categorySlug,
     facets.brands.map((b) => b.name)
   );
+  const schema = localizeCategoryFilterSchema(baseSchema, t);
 
   // Build dismissible active filter tags matching grid-layout-01 `.alert.tag-alert`
   const activeChips: ActiveFilterChip[] = [];
@@ -202,7 +195,7 @@ export async function CategoryCatalogContent({
   if (q) {
     activeChips.push({
       id: 'q',
-      label: `Từ khóa: "${q}"`,
+      label: t('page.chipKeyword', { query: q }),
       removeHref: buildFilterHref(basePath, rawSearch, { q: null }),
     });
   }
@@ -213,7 +206,7 @@ export async function CategoryCatalogContent({
     );
     activeChips.push({
       id: `brand-${b}`,
-      label: `Hãng: ${b}`,
+      label: t('page.chipBrand', { brand: b }),
       removeHref: buildFilterHref(basePath, rawSearch, {
         brands: nextBrands.length > 0 ? nextBrands.join(',') : null,
         brand: null,
@@ -237,7 +230,7 @@ export async function CategoryCatalogContent({
         : `${schema.priceRangeMillion.max}tr+`;
     activeChips.push({
       id: 'price',
-      label: `Giá: ${minM} - ${maxM}`,
+      label: t('page.chipPrice', { min: minM, max: maxM }),
       removeHref: buildFilterHref(basePath, rawSearch, {
         minPrice: null,
         maxPrice: null,
@@ -418,7 +411,7 @@ export async function CategoryCatalogContent({
                           <div className="mobSearch d-flex align-items-center justify-content-start">
                             <div className="flexStart ps-2">
                               <span className="fw-semibold text-dark">
-                                Tìm máy
+                                {t('page.searchLabel')}
                               </span>
                             </div>
                             <input
@@ -436,7 +429,7 @@ export async function CategoryCatalogContent({
                           <div className="mobSearch d-flex align-items-center justify-content-start">
                             <div className="flexStart ps-2">
                               <span className="fw-semibold text-dark">
-                                Hãng
+                                {t('page.brandLabel')}
                               </span>
                             </div>
                             <input
@@ -458,7 +451,7 @@ export async function CategoryCatalogContent({
                         className="btn btn-primary full-width fw-medium"
                       >
                         <BsSearch className="me-2" />
-                        Tìm kiếm
+                        {t('page.searchBtn')}
                       </button>
                     </div>
                   </div>
@@ -478,7 +471,7 @@ export async function CategoryCatalogContent({
               <Suspense
                 fallback={
                   <div className="bg-light rounded-4 text-muted small p-4">
-                    Đang tải bộ lọc thông số...
+                    {t('page.loadingFilters')}
                   </div>
                 }
               >
@@ -521,7 +514,7 @@ export async function CategoryCatalogContent({
                           }
                           className="fw-medium text-primary text-md"
                         >
-                          Xóa tất cả
+                          {t('page.clearAllBtn')}
                         </Link>
                       </div>
                     </div>
@@ -534,11 +527,11 @@ export async function CategoryCatalogContent({
                 <div className="col-xl-7 col-lg-7 col-md-7 col-sm-12">
                   <div className="d-flex align-items-center flex-wrap gap-2">
                     <h6 className="m-0">
-                      Tìm thấy{' '}
+                      {t('page.foundPrefix')}{' '}
                       <span className="text-primary fw-bold">
                         {products.length}
                       </span>{' '}
-                      / {facets.totalUnfiltered} sản phẩm chuẩn hóa
+                      {t('page.foundSuffix', { total: facets.totalUnfiltered })}
                     </h6>
                     {products.length >= 2 && (
                       <Link
@@ -549,7 +542,9 @@ export async function CategoryCatalogContent({
                         className="badge bg-primary-subtle text-primary text-decoration-none rounded-pill fw-semibold px-3 py-2"
                       >
                         <BsLightningCharge className="me-1" />
-                        So sánh nhanh {products.length >= 3 ? '3 máy' : '2 máy'}
+                        {products.length >= 3
+                          ? t('page.quickCompare3')
+                          : t('page.quickCompare2')}
                       </Link>
                     )}
                     {products.length >= 2 && products[0] && products[1] && (
@@ -557,14 +552,17 @@ export async function CategoryCatalogContent({
                         href={`/compare/${products[0].slug}-vs-${products[1].slug}`}
                         className="badge bg-danger-subtle text-danger text-decoration-none rounded-pill fw-semibold px-3 py-2"
                       >
-                        ⚔️ Kèo 1v1: {products[0].brand} vs {products[1].brand}
+                        {t('page.versus1v1Badge', {
+                          brandA: products[0].brand,
+                          brandB: products[1].brand,
+                        })}
                       </Link>
                     )}
                     <Link
                       href={`/leaderboard?cat=${categorySlug}`}
                       className="badge bg-dark text-decoration-none rounded-pill fw-semibold px-3 py-2 text-white"
                     >
-                      🏆 Bảng Xếp Hạng
+                      {t('page.leaderboardBadge')}
                     </Link>
                   </div>
                 </div>
@@ -579,7 +577,9 @@ export async function CategoryCatalogContent({
                         data-bs-toggle="dropdown"
                         aria-expanded="false"
                       >
-                        Sắp xếp: {currentSortOption.label}
+                        {t('page.sortByPrefix', {
+                          label: currentSortOption.label,
+                        })}
                       </a>
                       <div className="dropdown-menu dropdown-menu-end border shadow-sm">
                         <ul className="card rounded-0 list-unstyled mb-0 p-0">
@@ -596,7 +596,7 @@ export async function CategoryCatalogContent({
                                     : ''
                                 }`}
                               >
-                                {opt.label}
+                                {t(`sortOptions.${opt.value}`)}
                               </Link>
                             </li>
                           ))}
@@ -626,19 +626,21 @@ export async function CategoryCatalogContent({
                     <div className="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
                       <div>
                         <span className="badge bg-dark rounded-pill text-warning me-2">
-                          🔥 RADAR KÈO THƠM &amp; BẪY SALE ẢO (
-                          {schema.categoryTitle})
+                          {t('page.radarBannerBadge', {
+                            title: schema.categoryTitle,
+                          })}
                         </span>
                         <span className="small text-secondary">
-                          Đã kiểm toán {categoryDealRadar.totalOffersAnalyzed}{' '}
-                          gian hàng trên 10 sàn
+                          {t('page.radarAnalyzedSub', {
+                            count: categoryDealRadar.totalOffersAnalyzed,
+                          })}
                         </span>
                       </div>
                       <Link
                         href="/deals"
                         className="btn btn-sm btn-outline-danger rounded-pill fw-semibold px-3"
                       >
-                        💎 Xem toàn bộ Radar 10 sàn →
+                        {t('page.viewAllRadarBtn')}
                       </Link>
                     </div>
                     <div className="row g-2">
@@ -661,37 +663,44 @@ export async function CategoryCatalogContent({
                                 {g.priceCurrent.toLocaleString('vi-VN')} ₫
                               </div>
                               <span className="badge bg-success rounded-pill">
-                                -{g.savingsVsMedianPct}% so trung vị
+                                {t('page.vsMedianBadge', {
+                                  pct: g.savingsVsMedianPct,
+                                })}
                               </span>
                             </div>
                           </div>
                         </div>
                       ))}
-                      {categoryDealRadar.fakeSaleTraps.slice(0, 2).map((t) => (
-                        <div key={t.id} className="col-md-6">
-                          <div className="rounded-3 border-danger-subtle bg-danger-subtle bg-opacity-10 d-flex justify-content-between align-items-center border p-2">
-                            <div className="overflow-hidden pe-2">
-                              <Link
-                                href={t.productHref}
-                                className="fw-bold text-dark text-decoration-none d-block text-truncate small"
-                              >
-                                🚨 {t.productName}
-                              </Link>
-                              <div className="text-secondary small">
-                                {t.platform.toUpperCase()} • {t.merchantName}
+                      {categoryDealRadar.fakeSaleTraps
+                        .slice(0, 2)
+                        .map((trap) => (
+                          <div key={trap.id} className="col-md-6">
+                            <div className="rounded-3 border-danger-subtle bg-danger-subtle bg-opacity-10 d-flex justify-content-between align-items-center border p-2">
+                              <div className="overflow-hidden pe-2">
+                                <Link
+                                  href={trap.productHref}
+                                  className="fw-bold text-dark text-decoration-none d-block text-truncate small"
+                                >
+                                  🚨 {trap.productName}
+                                </Link>
+                                <div className="text-secondary small">
+                                  {trap.platform.toUpperCase()} •{' '}
+                                  {trap.merchantName}
+                                </div>
                               </div>
-                            </div>
-                            <div className="flex-shrink-0 text-end">
-                              <div className="fw-bold text-danger font-monospace small">
-                                {t.priceCurrent.toLocaleString('vi-VN')} ₫
+                              <div className="flex-shrink-0 text-end">
+                                <div className="fw-bold text-danger font-monospace small">
+                                  {trap.priceCurrent.toLocaleString('vi-VN')} ₫
+                                </div>
+                                <span className="badge bg-danger rounded-pill">
+                                  {t('page.fakeMarkupBadge', {
+                                    pct: trap.fakeMarkupPct,
+                                  })}
+                                </span>
                               </div>
-                              <span className="badge bg-danger rounded-pill">
-                                Kê khống +{t.fakeMarkupPct}%
-                              </span>
                             </div>
                           </div>
-                        </div>
-                      ))}
+                        ))}
                     </div>
                     {Array.isArray(categoryDealRadar.priceSpreadLeaders) &&
                       categoryDealRadar.priceSpreadLeaders.length > 0 && (
@@ -701,11 +710,12 @@ export async function CategoryCatalogContent({
                         >
                           <div className="d-flex justify-content-between align-items-center mb-1 flex-wrap gap-1">
                             <span className="small fw-semibold text-dark">
-                              📊 Độ lệch giá 10 sàn cao nhất (
-                              {schema.categoryTitle}):
+                              {t('page.spreadHeader', {
+                                title: schema.categoryTitle,
+                              })}
                             </span>
                             <span className="small text-muted">
-                              Mua đúng sàn tiết kiệm hàng triệu đồng
+                              {t('page.spreadSub')}
                             </span>
                           </div>
                           <div className="row g-2">
@@ -725,8 +735,11 @@ export async function CategoryCatalogContent({
                                       </span>
                                     </Link>
                                     <span className="badge bg-warning-subtle text-dark border-warning-subtle flex-shrink-0 border">
-                                      Lệch +{sp.spreadPct}% (
-                                      {sp.spreadVnd.toLocaleString('vi-VN')} ₫)
+                                      {t('page.spreadDiffBadge', {
+                                        pct: sp.spreadPct,
+                                        amount:
+                                          sp.spreadVnd.toLocaleString('vi-VN'),
+                                      })}
                                     </span>
                                   </div>
                                 </div>
@@ -742,13 +755,18 @@ export async function CategoryCatalogContent({
                 <div className="card rounded-4 bg-light border-0 p-5 text-center shadow-sm">
                   <h5 className="fw-bold mb-2">
                     {facets.totalUnfiltered === 0
-                      ? `Danh mục "${schema.categoryTitle}" đang chờ đồng bộ dữ liệu sản phẩm mới`
-                      : 'Không tìm thấy sản phẩm khớp với bộ lọc hiện tại'}
+                      ? t('page.emptySyncingTitle', {
+                          title: schema.categoryTitle,
+                        })
+                      : t('page.emptyMatchingTitle')}
                   </h5>
                   <p className="text-muted mb-3">
                     {facets.totalUnfiltered === 0
-                      ? `Bộ khung chuẩn hóa 10 nhóm thông số cho ${schema.categoryTitle} (${schema.defaultBrands.join(', ')}) đã sẵn sàng. Trong lúc chờ đội ngũ Crawler nạp thêm dữ liệu danh mục này, bạn có thể khám phá danh mục Điện thoại hoặc Bảng so sánh.`
-                      : 'Hãy thử nới lỏng khoảng giá hoặc bỏ bớt một vài tiêu chí phần cứng để xem thêm các dòng máy khác.'}
+                      ? t('page.emptySyncingDesc', {
+                          title: schema.categoryTitle,
+                          brands: schema.defaultBrands.join(', '),
+                        })
+                      : t('page.emptyMatchingDesc')}
                   </p>
                   <div className="d-flex justify-content-center flex-wrap gap-2">
                     {activeChips.length > 0 && (
@@ -756,7 +774,7 @@ export async function CategoryCatalogContent({
                         href={basePath}
                         className="btn btn-primary rounded-pill fw-medium px-4"
                       >
-                        Đặt lại bộ lọc
+                        {t('page.resetFiltersBtn')}
                       </Link>
                     )}
                     {categorySlug !== 'smartphones' && (
@@ -764,14 +782,14 @@ export async function CategoryCatalogContent({
                         href="/smartphones"
                         className="btn btn-primary rounded-pill fw-medium px-4"
                       >
-                        Xem danh mục Điện thoại đang có sẵn →
+                        {t('page.browseSmartphonesBtn')}
                       </Link>
                     )}
                     <Link
                       href="/merchants"
                       className="btn btn-outline-dark rounded-pill fw-medium px-4"
                     >
-                      Hồ sơ Tín nhiệm Gian hàng
+                      {t('page.merchantProfilesBtn')}
                     </Link>
                   </div>
                 </div>
@@ -869,7 +887,7 @@ export async function CategoryCatalogContent({
                               />
                             ) : (
                               <div className="text-muted small">
-                                Chưa có ảnh
+                                {t('page.noImage')}
                               </div>
                             )}
                           </Link>
@@ -893,14 +911,19 @@ export async function CategoryCatalogContent({
                             <span className="rate-score-badge-user">
                               ★{' '}
                               {effectiveRating != null
-                                ? `${effectiveRating.toFixed(1)} User (${authCount} đánh giá thật)`
-                                : 'User: chưa có'}
+                                ? t('page.userScoreText', {
+                                    score: effectiveRating.toFixed(1),
+                                    count: authCount,
+                                  })
+                                : t('page.userScoreUnrated')}
                             </span>
                             <span className="rate-score-badge-expert">
                               🔬{' '}
                               {expertScore != null
-                                ? `${expertScore.toFixed(1)} Expert Lab`
-                                : 'Expert Lab: chưa có'}
+                                ? t('page.expertScoreText', {
+                                    score: expertScore.toFixed(1),
+                                  })
+                                : t('page.expertScoreUnrated')}
                             </span>
                             <RadarBadge signal={radarSignal} />
                           </div>
@@ -938,7 +961,7 @@ export async function CategoryCatalogContent({
                           {/* Neutral Market Reference Strip */}
                           <div className="d-flex justify-content-between align-items-center small text-muted border-top mt-auto pt-2">
                             <span>
-                              Giá tham khảo:{' '}
+                              {t('page.refPriceLabel')}{' '}
                               <strong className="text-dark font-monospace">
                                 {minPriceFormatted} ₫
                               </strong>
@@ -950,7 +973,9 @@ export async function CategoryCatalogContent({
                             </span>
                             <span>
                               <BsShop className="me-1" />
-                              {item.merchant_count || 0} nguồn
+                              {t('page.sourcesCount', {
+                                count: item.merchant_count || 0,
+                              })}
                             </span>
                           </div>
 
@@ -960,14 +985,14 @@ export async function CategoryCatalogContent({
                               href={`${basePath}/${item.slug}`}
                               className="btn btn-sm btn-primary rounded-pill fw-semibold flex-grow-1 py-2"
                             >
-                              ★ Xem Review &amp; 10 Nhóm Thông Số
+                              {t('page.viewReviewsSpecsBtn')}
                             </Link>
                             <Link
                               href={`/inspect?q=${encodeURIComponent(item.slug)}`}
                               className="btn btn-sm btn-outline-secondary rounded-pill fw-medium px-3 py-2"
-                              title="Kiểm định lịch sử giá 90 ngày & phát hiện giảm giá ảo"
+                              title={t('page.inspectPriceHistoryTitle')}
                             >
-                              🔍 Kiểm định
+                              {t('page.inspectBtn')}
                             </Link>
                           </div>
                         </div>

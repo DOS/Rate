@@ -20,6 +20,7 @@
     "build": "tsc",
     "dev": "tsc",
     "lint": "eslint . --max-warnings 0",
+    "test": "tsc && node dist/__tests__/shared-data.test.js",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
