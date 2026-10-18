@@ -405,7 +405,20 @@ export class ArenaSpecSyncer {
    * Audits `rate.master_products` against the canonical 2026 Multi-Category Arena
    * Registry and flags any master products with < 10 populated specification field groups.
    */
-  public async auditCatalogAgainstArenaRegistry(supabase: any): Promise<ArenaCatalogAuditReport> {
+  public async auditCatalogAgainstArenaRegistry(supabase: {
+    from: (table: string) => {
+      select: (columns: string) => PromiseLike<{
+        data: Array<{
+          id: string;
+          name: string;
+          slug?: string | null;
+          model_key: string;
+          specifications?: Record<string, unknown> | null;
+        }> | null;
+        error: { message: string } | null;
+      }>;
+    };
+  }): Promise<ArenaCatalogAuditReport> {
     const { data: rows, error } = await supabase
       .from('master_products')
       .select('id, name, slug, model_key, specifications');

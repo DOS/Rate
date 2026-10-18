@@ -64,12 +64,14 @@ jobs:
         run: pnpm --filter @repo/shared-data build
 
       - name: Build & Typecheck @repo/crawlers
-        run: pnpm --filter @repo/crawlers build
+        run: |
+          pnpm --filter @repo/crawlers typecheck
+          pnpm --filter @repo/crawlers build
 
       - name: Run @repo/crawlers Open-Core Intelligence Tests
         run: pnpm --filter @repo/crawlers test
 
-      - name: Lint @repo/crawlers (errors fail, warnings do not)
+      - name: Lint @repo/crawlers (strict --max-warnings 0)
         run: pnpm --filter @repo/crawlers lint
 
       - name: Verify @repo/crawlers dist entry points (consumed by DOS/Rate-Services)

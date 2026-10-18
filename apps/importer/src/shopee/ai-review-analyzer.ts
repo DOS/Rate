@@ -1,8 +1,7 @@
 import crypto from 'node:crypto';
 import { z } from '@repo/shared-data';
-import type { SupabaseClient } from '@supabase/supabase-js';
 import type { SupportedAiProvider, AiSpecEnricherConfig } from './ai-spec-enricher.js';
-import type { ScrapedReviewer } from './types.js';
+import type { RateSupabaseClient, ScrapedReviewer } from './types.js';
 import { computeRetryDelayMs, sanitizeAiGeneratedText } from './logger.js';
 export { computeRetryDelayMs, sanitizeAiGeneratedText } from './logger.js';
 
@@ -1259,7 +1258,26 @@ Return ONLY valid JSON matching:
   "ai_summary": "string (2-3 sentences in Vietnamese summarizing authentic buyer feedback)"
 }`;
 
-      const aiMap = new Map<string, any>();
+      interface RawAiReviewItem {
+        review_id?: string;
+        flag_category?: string;
+        verdict?: string;
+        fake_probability?: number;
+        authenticity?: string;
+        independence?: string;
+        depth?: string;
+        relevance?: number;
+        ai_generated_prob?: number;
+        reason?: string;
+      }
+      interface RawAiReviewBatch {
+        reviews?: RawAiReviewItem[];
+        pros?: unknown[];
+        cons?: unknown[];
+        ai_summary?: unknown;
+      }
+
+      const aiMap = new Map<string, RawAiReviewItem>();
       const collectedPros: string[] = [];
       const collectedCons: string[] = [];
       let firstSummary = '';
@@ -1346,11 +1364,13 @@ Return ONLY valid JSON matching:
         }
 
         if (!response || !response.ok) continue;
-        const data = (await response.json()) as any;
+        const data = (await response.json()) as {
+          choices?: Array<{ message?: { content?: string } }>;
+        };
         const rawContent: string | undefined = data?.choices?.[0]?.message?.content;
         if (!rawContent) continue;
 
-        let parsed: any;
+        let parsed: RawAiReviewBatch;
         try {
           parsed = JSON.parse(
             rawContent
@@ -1358,19 +1378,19 @@ Return ONLY valid JSON matching:
               .replace(/^```(?:json)?\s*/i, '')
               .replace(/\s*```$/i, '')
               .trim()
-          );
+          ) as RawAiReviewBatch;
         } catch {
           continue;
         }
 
         const validatedBatch = AiReviewBatchResponseSchema.safeParse(parsed);
-        const batchData = validatedBatch.success ? validatedBatch.data : parsed;
+        const batchData: RawAiReviewBatch = validatedBatch.success ? validatedBatch.data : parsed;
 
         anyBatchSucceeded = true;
         if (Array.isArray(batchData?.reviews)) {
           for (const rawItem of batchData.reviews) {
             const parsedItem = AiReviewBatchItemSchema.safeParse(rawItem);
-            const item = parsedItem.success ? parsedItem.data : rawItem;
+            const item: RawAiReviewItem = parsedItem.success ? parsedItem.data : rawItem;
             if (item?.review_id) aiMap.set(String(item.review_id), item);
           }
         }
@@ -1449,14 +1469,14 @@ Return ONLY valid JSON matching:
         const heuristicLocked = base.flag_category !== 'authentic';
         let updatedAssessment = base.assessment;
         if (updatedAssessment && !heuristicLocked) {
-          const nextAuth: Authenticity = validAuthenticity.has(aiItem.authenticity)
-            ? aiItem.authenticity
+          const nextAuth: Authenticity = validAuthenticity.has(aiItem.authenticity as Authenticity)
+            ? (aiItem.authenticity as Authenticity)
             : updatedAssessment.authenticity;
-          const nextInd: Independence = validIndependence.has(aiItem.independence)
-            ? aiItem.independence
+          const nextInd: Independence = validIndependence.has(aiItem.independence as Independence)
+            ? (aiItem.independence as Independence)
             : updatedAssessment.independence;
-          const nextDepth: Depth = validDepth.has(aiItem.depth)
-            ? aiItem.depth
+          const nextDepth: Depth = validDepth.has(aiItem.depth as Depth)
+            ? (aiItem.depth as Depth)
             : updatedAssessment.depth;
           const nextRel =
             typeof aiItem.relevance === 'number' && Number.isFinite(aiItem.relevance)
@@ -1505,14 +1525,15 @@ Return ONLY valid JSON matching:
                 updatedAssessment.depth
               )
             : 'authentic';
+        const aiCat = aiItem.flag_category as ReviewFlagCategory;
         const cat: ReviewFlagCategory = heuristicLocked
           ? base.flag_category
-          : validCategories.has(aiItem.flag_category) && aiItem.flag_category !== 'authentic'
-            ? aiItem.flag_category
+          : validCategories.has(aiCat) && aiCat !== 'authentic'
+            ? aiCat
             : derivedFromAxes !== 'authentic'
               ? derivedFromAxes
-              : validCategories.has(aiItem.flag_category)
-                ? aiItem.flag_category
+              : validCategories.has(aiCat)
+                ? aiCat
                 : base.flag_category;
 
         const verdict: ReviewVerdict =
@@ -1799,7 +1820,7 @@ Return ONLY valid JSON matching:
    * master_products weighted rating, and merchant risk_score in Supabase `rate` schema
    */
   public async persistAnalysisToSupabase(
-    supabase: SupabaseClient<any, 'rate'>,
+    supabase: RateSupabaseClient,
     params: {
       productId: string;
       masterId?: string | null;
@@ -1890,8 +1911,8 @@ Return ONLY valid JSON matching:
 
     // 3. Update master_products weighted rating & authentic count via canonical SQL RPC (Audit C5)
     if (params.masterId) {
-      if (typeof (supabase as any).rpc === 'function') {
-        const { error: rpcErr } = await (supabase as any).rpc('refresh_master_product_rating', {
+      if (typeof supabase.rpc === 'function') {
+        const { error: rpcErr } = await supabase.rpc('refresh_master_product_rating', {
           p_master_id: params.masterId,
         });
         if (rpcErr) {
@@ -1986,7 +2007,7 @@ Return ONLY valid JSON matching:
    * counters + `helpfulness_weight` + `rate.master_products.user_rating_weighted`.
    */
   public async castReviewVote(
-    supabase: SupabaseClient<any, 'rate'>,
+    supabase: RateSupabaseClient,
     params: {
       reviewId: string;
       voterId: string;
