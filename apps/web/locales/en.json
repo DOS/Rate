@@ -63,11 +63,10 @@
       "statPricePoints": "Historical Price Observations",
       "statReviews": "AI-Audited Buyer Reviews",
       "statMerchants": "Dual-Risk Audited Merchants",
-      "catBadge": "🗂️ Multi-Platform Tech Device Directory",
+      "catBadge": "Device categories",
       "catTitlePrefix": "Explore By",
       "catTitleHighlight": "Standardized Category",
       "catSubtitle": "Every category supports deep 10-group technical specification filtering and real-time cross-merchant price verification",
-      "catReadySuffix": "models tracked",
       "catExpanding": "Expanding",
       "featuredBadge": "⚡ 10-Group Standardized Specs (GSMArena & PhoneArena)",
       "featuredTitlePrefix": "Products With",
@@ -89,7 +88,9 @@
       "whyBadge": "🔬 Open-Core Transparency Architecture 2026",
       "whyTitlePrefix": "Why Shoppers Trust",
       "whyTitleHighlight": "Rate.vn",
-      "whySubtitle": "Three independent verification layers protect you from inflated strikethrough prices and manipulated marketplace ratings"
+      "whySubtitle": "Three independent verification layers protect you from inflated strikethrough prices and manipulated marketplace ratings",
+      "catModelCount": "{count, plural, one {# model} other {# models}}",
+      "catViewLink": "Browse category"
     }
   },
   "errors": {

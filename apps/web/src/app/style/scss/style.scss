@@ -3382,8 +3382,9 @@ div[data-overlay] p {
 .bg-primary-2 {
   background-color: var(--bs-primary-2) !important;
 }
+// Keep Bootstrap's --bs-bg-opacity so .bg-opacity-* tints still work.
 .bg-primary {
-  background-color: var(--bs-primary) !important;
+  background-color: rgba(var(--bs-primary-rgb), var(--bs-bg-opacity, 1)) !important;
 }
 
 .bg-gray {

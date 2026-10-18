@@ -63,11 +63,10 @@
       "statPricePoints": "Điểm đối chiếu lịch sử giá",
       "statReviews": "Đánh giá đã kiểm duyệt AI",
       "statMerchants": "Gian hàng chấm điểm rủi ro kép",
-      "catBadge": "🗂️ Danh Mục Thiết Bị Công Nghệ Đa Sàn",
+      "catBadge": "Danh mục thiết bị",
       "catTitlePrefix": "Khám Phá Theo",
       "catTitleHighlight": "Ngành Hàng Chuẩn Hóa",
       "catSubtitle": "Mọi danh mục đều hỗ trợ bộ lọc chuyên sâu theo 10 nhóm thông số kỹ thuật và đối chiếu giá theo thời gian thực",
-      "catReadySuffix": "mẫu sẵn sàng",
       "catExpanding": "Đang mở rộng",
       "featuredBadge": "⚡ Chuẩn Hóa 10 Nhóm Thông Số GSMArena & PhoneArena",
       "featuredTitlePrefix": "Sản Phẩm",
@@ -89,7 +88,9 @@
       "whyBadge": "🔬 Kiến Trúc Minh Bạch Open-Core 2026",
       "whyTitlePrefix": "Vì Sao Người Mua Tin Dùng",
       "whyTitleHighlight": "Rate.vn",
-      "whySubtitle": "Ba lớp bảo vệ độc lập giúp bạn không bao giờ mua nhầm hàng nâng giá ảo hoặc tin nhầm bình luận Seeding"
+      "whySubtitle": "Ba lớp bảo vệ độc lập giúp bạn không bao giờ mua nhầm hàng nâng giá ảo hoặc tin nhầm bình luận Seeding",
+      "catModelCount": "{count, number} mẫu",
+      "catViewLink": "Xem danh mục"
     }
   },
   "errors": {

@@ -18,6 +18,7 @@ import {
 } from '@/server/rate';
 import type { MasterProduct } from '@repo/shared-data';
 import {
+  BsArrowRight,
   BsBatteryHalf,
   BsCheckCircleFill,
   BsCpu,
@@ -59,20 +60,33 @@ export async function generateMetadata({
   };
 }
 
+const CATEGORY_DESC_KEYS = {
+  smartphones: 'catDescSmartphones',
+  laptops: 'catDescLaptops',
+  tablets: 'catDescTablets',
+  smartwatches: 'catDescSmartwatches',
+  earbuds: 'catDescEarbuds',
+} as const;
+
+type KnownCategorySlug = keyof typeof CATEGORY_DESC_KEYS;
+
+const isKnownCategory = (slug: string): slug is KnownCategorySlug =>
+  Object.hasOwn(CATEGORY_DESC_KEYS, slug);
+
 function getCategoryIcon(slug: string) {
   switch (slug) {
     case 'smartphones':
-      return <BsPhone className="fs-2 text-primary" />;
+      return <BsPhone />;
     case 'laptops':
-      return <BsLaptop className="fs-2 text-primary" />;
+      return <BsLaptop />;
     case 'tablets':
-      return <BsTabletLandscape className="fs-2 text-primary" />;
+      return <BsTabletLandscape />;
     case 'smartwatches':
-      return <BsSmartwatch className="fs-2 text-primary" />;
+      return <BsSmartwatch />;
     case 'earbuds':
-      return <BsHeadphones className="fs-2 text-primary" />;
+      return <BsHeadphones />;
     default:
-      return <BsCpu className="fs-2 text-primary" />;
+      return <BsCpu />;
   }
 }
 
@@ -295,11 +309,11 @@ export default async function Home({
       </div>
 
       {/* Section 1: Live Categories from rate.categories */}
-      <section className="py-5 pb-4" id="mains">
+      <section className="rate-home-categories py-5" id="mains">
         <div className="container">
-          <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-end mb-4 gap-3">
+          <div className="rate-section-head">
             <div>
-              <span className="badge bg-primary bg-opacity-10 text-primary rounded-pill fw-semibold mb-2 px-3 py-2">
+              <span className="rate-eyebrow mb-2">
                 {tRate('home.catBadge')}
               </span>
               <h3 className="sectionHeading mb-1">
@@ -310,95 +324,66 @@ export default async function Home({
               </h3>
               <p className="text-muted mb-0">{tRate('home.catSubtitle')}</p>
             </div>
-            <div className="d-flex flex-wrap gap-2">
-              <Link
-                href="/smartphones"
-                className="btn btn-sm btn-outline-primary rounded-pill px-3"
-              >
-                📱 {tRate('nav.smartphones')}
+            <div className="rate-section-links">
+              <Link href="/inspect">
+                <BsShieldCheck aria-hidden="true" />
+                {tRate('nav.inspect')}
               </Link>
-              <Link
-                href="/laptops"
-                className="btn btn-sm btn-outline-primary rounded-pill px-3"
-              >
-                💻 {tRate('nav.laptops')}
-              </Link>
-              <Link
-                href="/tablets"
-                className="btn btn-sm btn-outline-primary rounded-pill px-3"
-              >
-                📟 {tRate('nav.tablets')}
-              </Link>
-              <Link
-                href="/smartwatches"
-                className="btn btn-sm btn-outline-primary rounded-pill px-3"
-              >
-                ⌚ {tRate('nav.smartwatches')}
-              </Link>
-              <Link
-                href="/earbuds"
-                className="btn btn-sm btn-outline-primary rounded-pill px-3"
-              >
-                🎧 {tRate('nav.earbuds')}
-              </Link>
-              <Link
-                href="/inspect"
-                className="btn btn-sm btn-outline-danger rounded-pill px-3"
-              >
-                🔍 {tRate('nav.inspect')}
-              </Link>
-              <Link
-                href="/merchants"
-                className="btn btn-sm btn-outline-dark rounded-pill px-3"
-              >
-                🏪 {tRate('nav.merchants')}
+              <Link href="/merchants">
+                <BsShop aria-hidden="true" />
+                {tRate('nav.merchants')}
               </Link>
             </div>
           </div>
 
           <div className="row g-3">
-            {platformStats.categoriesWithCounts.map((cat) => (
-              <div key={cat.id} className="col-xl col-lg-4 col-md-6 col-12">
-                <Link href={cat.routeHref} className="text-decoration-none">
-                  <div className="card rounded-4 hover-shadow h-100 border bg-white p-3 shadow-sm transition">
-                    <div className="d-flex align-items-center justify-content-between mb-3">
-                      <div className="rounded-3 bg-primary bg-opacity-10 d-inline-flex align-items-center justify-content-center p-3">
-                        {getCategoryIcon(cat.slug)}
-                      </div>
+            {platformStats.categoriesWithCounts.map((cat) => {
+              const known = isKnownCategory(cat.slug);
+              const titleId = `home-cat-${cat.slug}-title`;
+              const descId = `home-cat-${cat.slug}-desc`;
+              return (
+                <div key={cat.id} className="col-xl col-lg-4 col-sm-6 col-12">
+                  <Link
+                    href={cat.routeHref}
+                    className="rate-card rate-card-interactive rate-category-card"
+                    aria-labelledby={titleId}
+                    aria-describedby={known ? descId : undefined}
+                  >
+                    <div className="rate-category-card-top">
                       <span
-                        className={`badge rounded-pill px-3 py-2 ${
-                          cat.productCount > 0
-                            ? 'bg-success bg-opacity-10 text-success border-success border-opacity-25 border'
-                            : 'bg-secondary bg-opacity-10 text-secondary'
+                        className="rate-category-card-icon"
+                        aria-hidden="true"
+                      >
+                        {getCategoryIcon(cat.slug)}
+                      </span>
+                      <span
+                        className={`rate-category-card-count${
+                          cat.productCount > 0 ? '' : ' is-empty'
                         }`}
                       >
                         {cat.productCount > 0
-                          ? `${cat.productCount} ${tRate('home.catReadySuffix')}`
+                          ? tRate('home.catModelCount', {
+                              count: cat.productCount,
+                            })
                           : tRate('home.catExpanding')}
                       </span>
                     </div>
-                    <h5 className="fw-bold text-dark mb-1">
-                      {cat.slug === 'smartphones' ||
-                      cat.slug === 'laptops' ||
-                      cat.slug === 'tablets' ||
-                      cat.slug === 'smartwatches' ||
-                      cat.slug === 'earbuds'
-                        ? tRate(`nav.${cat.slug}`)
-                        : cat.name}
-                    </h5>
-                    <p className="text-muted small mb-0">
-                      {cat.slug === 'smartphones' &&
-                        tHome('catDescSmartphones')}
-                      {cat.slug === 'laptops' && tHome('catDescLaptops')}
-                      {cat.slug === 'tablets' && tHome('catDescTablets')}
-                      {cat.slug === 'smartwatches' &&
-                        tHome('catDescSmartwatches')}
-                      {cat.slug === 'earbuds' && tHome('catDescEarbuds')}
-                    </p>
-                  </div>
-                </Link>
-              </div>
-            ))}
+                    <h4 id={titleId} className="rate-category-card-title">
+                      {known ? tRate(`nav.${cat.slug}`) : cat.name}
+                    </h4>
+                    {isKnownCategory(cat.slug) && (
+                      <p id={descId} className="rate-category-card-desc">
+                        {tHome(CATEGORY_DESC_KEYS[cat.slug])}
+                      </p>
+                    )}
+                    <span className="rate-category-card-cta">
+                      {tRate('home.catViewLink')}
+                      <BsArrowRight aria-hidden="true" />
+                    </span>
+                  </Link>
+                </div>
+              );
+            })}
           </div>
         </div>
       </section>
