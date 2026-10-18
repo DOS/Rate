@@ -1,4 +1,5 @@
 import 'server-only';
+import type { Database } from '@repo/shared-data';
 import {
   getMasterProductBySlug,
   getMasterProductCategorySlug,
@@ -989,10 +990,14 @@ export async function lookupExtensionProduct(
   };
 }
 
+type CrowdVerifySignalArgs =
+  Database['rate']['Functions']['enqueue_crowd_verify_signal']['Args'];
+
+/** The one RPC the ingest path calls; tests inject a fake with this shape. */
 export interface CrowdIngestRpcClient {
   rpc: (
-    fn: string,
-    args: Record<string, unknown>
+    fn: 'enqueue_crowd_verify_signal',
+    args: CrowdVerifySignalArgs
   ) => PromiseLike<{
     data: unknown;
     error: { message?: string; code?: string } | null;
@@ -1113,7 +1118,7 @@ export async function ingestExtensionCrowdSignal(
           'Đã ghi nhận tín hiệu ở chế độ cách ly (Quarantine Dry-Run) - chờ Worker xác minh độc lập.',
       };
     }
-    rpcClient = getRateClient() as unknown as CrowdIngestRpcClient;
+    rpcClient = getRateClient();
   }
 
   const normalizedItemId = input.externalShopId
@@ -1124,7 +1129,7 @@ export async function ingestExtensionCrowdSignal(
     p_platform: input.platform,
     p_target_url: canonicalUrl,
     p_platform_item_id: normalizedItemId,
-    p_platform_shop_id: input.externalShopId || null,
+    p_platform_shop_id: input.externalShopId || undefined,
     p_payload: {
       source: 'extension_mv3_quarantine',
       canonical_url: canonicalUrl,
