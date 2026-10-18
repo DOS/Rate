@@ -32,6 +32,60 @@ export function merchantCacheTag(merchantId: string): string {
   return `rate:merchant:${merchantId.trim().toLowerCase()}`;
 }
 
+export interface RevalidationTargetsInput {
+  tags?: readonly string[];
+  slugs?: readonly string[];
+  categories?: readonly string[];
+  merchants?: readonly string[];
+  paths?: readonly string[];
+}
+
+export function resolveRevalidationTargets(input: RevalidationTargetsInput): {
+  tags: string[];
+  paths: string[];
+} {
+  const tagSet = new Set<string>();
+  const pathSet = new Set<string>();
+
+  for (const tag of input.tags ?? []) {
+    const clean = tag.trim();
+    if (clean) tagSet.add(clean);
+  }
+  for (const slug of input.slugs ?? []) {
+    const clean = slug.trim();
+    if (!clean) continue;
+    tagSet.add(productCacheTag(clean));
+    tagSet.add(RATE_CACHE_TAGS.PRODUCTS);
+    tagSet.add(RATE_CACHE_TAGS.OFFERS);
+    tagSet.add(RATE_CACHE_TAGS.PRICE_HISTORY);
+    tagSet.add(RATE_CACHE_TAGS.REVIEWS);
+    tagSet.add(RATE_CACHE_TAGS.DEALS);
+  }
+  for (const cat of input.categories ?? []) {
+    const clean = cat.trim();
+    if (!clean) continue;
+    tagSet.add(categoryCacheTag(clean));
+    tagSet.add(RATE_CACHE_TAGS.CATEGORIES);
+  }
+  for (const merchantId of input.merchants ?? []) {
+    const clean = merchantId.trim();
+    if (!clean) continue;
+    tagSet.add(merchantCacheTag(clean));
+    tagSet.add(RATE_CACHE_TAGS.MERCHANTS);
+    tagSet.add(RATE_CACHE_TAGS.OFFERS);
+    tagSet.add(RATE_CACHE_TAGS.DEALS);
+  }
+  for (const p of input.paths ?? []) {
+    const clean = p.trim();
+    if (clean) pathSet.add(clean);
+  }
+
+  return {
+    tags: [...tagSet],
+    paths: [...pathSet],
+  };
+}
+
 export interface RateDataCacheOptions {
   readonly revalidate: number;
   readonly tags: readonly string[];
