@@ -15,5 +15,8 @@ export * from './clients/index.js';
 // Export constants
 export * from './constants/index.js';
 
+// `rate` schema types generated from supabase/migrations (pnpm gen:db-types)
+export type { Database, Json } from './database.types.js';
+
 // Version for API compatibility checking
 export const SHARED_DATA_VERSION = '2.0.0';

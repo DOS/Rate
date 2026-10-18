@@ -21,6 +21,7 @@
   "scripts": {
     "build": "turbo build --cache-dir=.turbo",
     "check:migrations": "node scripts/check-migration-drift.mjs",
+    "check:db-types": "node scripts/gen-db-types.mjs --check",
     "test:e2e": "node scripts/e2e/run.mjs",
     "test:migrations": "node scripts/test-migration-replay.mjs",
     "build:web": "turbo run build --filter=@repo/web",
@@ -30,6 +31,7 @@
     "dev:web": "turbo run dev --filter=@repo/web",
     "dev:crawler": "turbo run dev --filter=@repo/crawlers",
     "format": "prettier --write --cache --ignore-unknown \"**/*.{js,jsx,ts,tsx,md,css,scss}\"",
+    "gen:db-types": "node scripts/gen-db-types.mjs",
     "format:check": "prettier --check --cache --ignore-unknown \"**/*.{js,jsx,ts,tsx,md,css,scss}\"",
     "preinstall": "npx only-allow pnpm",
     "lint": "turbo lint",
