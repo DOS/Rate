@@ -294,19 +294,44 @@ export function extractKeywordFromProductUrl(rawUrl?: string | null): string {
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
       return '';
     }
+    const rawSegments = decodeURIComponent(parsed.pathname)
+      .split('/')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const firstSegLower = (rawSegments[0] || '')
+      .replace(/\.html?$/i, '')
+      .toLowerCase();
+    if (
+      /^(?:tin-tuc|sforum|dchannel|hoi-dap|khuyen-mai|tra-gop|bao-hanh|he-thong-cua-hang|he-thong-sieu-thi|catalogsearch|tim-kiem|search|cart|gio-hang|account|login|blog|news|event|landing|collection|c|shop|opaanlp|video)$/.test(
+        firstSegLower
+      )
+    ) {
+      return '';
+    }
     const decodedPath = decodeURIComponent(parsed.pathname)
       .replace(/(?:\/|-)i\.\d+\.\d+$/i, '')
-      .replace(/\/product\/\d+\/\d+\/?$/i, '')
-      .replace(/(?:\/|-)i\d+-s\d+\.html$/i, '')
+      .replace(/\/(?:product|opaanlp)\/\d+\/\d+\/?$/i, '')
+      .replace(/\/(?:view\/)?product\/\d+\/?$/i, '')
+      .replace(/(?:\/|-)i\d+(?:-s\d+)?\.html$/i, '')
       .replace(/(?:\/|-)p\d+\.html$/i, '')
+      .replace(/--s\d+(?:\.html?)?$/i, '')
       .replace(/\.html?$/i, '')
       .replace(
-        /^\/(?:products?|san-pham|dien-thoai|dtdd|may-tinh-bang|laptop|dong-ho-thong-minh|tai-nghe|smartphones|tablets|laptops|smartwatches|earbuds)\//i,
+        /^\/(?:products?|san-pham|dien-thoai|dien-thoai-di-dong|dtdd|may-tinh-bang|may-tinh-xach-tay|laptop|dong-ho-thong-minh|tai-nghe|smartphones|tablets|laptops|smartwatches|earbuds|apple|iphone|ipad|macbook|watch|airpods)\//i,
         '/'
       );
     const segments = decodedPath.split('/').filter(Boolean);
     const lastSeg = segments[segments.length - 1] || '';
-    if (!lastSeg || /^\d+$/.test(lastSeg) || /^i\.\d+\.\d+$/i.test(lastSeg)) {
+    const lastSegLower = lastSeg.toLowerCase();
+    if (
+      !lastSeg ||
+      /^\d+$/.test(lastSeg) ||
+      /^i\.\d+\.\d+$/i.test(lastSeg) ||
+      lastSeg.startsWith('@') ||
+      /^(?:dtdd|dien-thoai|dien-thoai-di-dong|mobile|smartphones|laptop|laptops|may-tinh-xach-tay|may-tinh-bang|tablet|tablets|dong-ho-thong-minh|smartwatch|smartwatches|tai-nghe|earbuds|phu-kien|apple|iphone|ipad|macbook|watch|airpods|search|tim-kiem|result|product|products|view)$/.test(
+        lastSegLower
+      )
+    ) {
       return '';
     }
     return lastSeg.replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim();
@@ -1156,13 +1181,15 @@ export async function ingestExtensionCrowdSignal(
   }
 
   const urlPlatform = detectPlatformFromInput(null, canonicalUrl);
-  if (urlPlatform !== input.platform) {
+  const parsedProductUrl = parseEcommerceUrlOrQuery(canonicalUrl);
+  if (urlPlatform !== input.platform || !parsedProductUrl.platformItemId) {
     return {
       accepted: false,
       quarantinedForWorker: false,
       jobState: 'rejected_invalid_url',
       jobId: null,
-      reason: 'URL sản phẩm không khớp với tên miền của sàn TMĐT đã khai báo.',
+      reason:
+        'URL sản phẩm không khớp với định dạng trang chi tiết sản phẩm của sàn TMĐT đã khai báo.',
     };
   }
 
@@ -1217,6 +1244,12 @@ export async function ingestExtensionCrowdSignal(
   const normalizedItemId = input.externalShopId
     ? `${input.externalShopId}_${input.externalItemId}`
     : input.externalItemId;
+  const validOriginalPrice =
+    typeof input.originalPrice === 'number' &&
+    Number.isFinite(input.originalPrice) &&
+    input.originalPrice >= input.price
+      ? input.originalPrice
+      : null;
 
   const { data, error } = await rpcClient.rpc('enqueue_crowd_verify_signal', {
     p_platform: input.platform,
@@ -1229,7 +1262,7 @@ export async function ingestExtensionCrowdSignal(
       observed_title: input.title.slice(0, 280),
       selected_variant: input.selectedVariant?.slice(0, 120) || null,
       observed_price: input.price,
-      observed_original_price: input.originalPrice || null,
+      observed_original_price: validOriginalPrice,
       observed_rating_star: input.ratingStar || null,
       observed_rating_count: input.ratingCount || null,
       submitted_at: new Date().toISOString(),

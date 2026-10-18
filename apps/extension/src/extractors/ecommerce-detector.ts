@@ -43,7 +43,8 @@ export function detectEcommercePlatform(
   if (isDomainOrSubdomain(host, 'cellphones.com.vn')) return 'cellphones';
   if (
     isDomainOrSubdomain(host, 'thegioididong.com') ||
-    isDomainOrSubdomain(host, 'topzone.vn')
+    isDomainOrSubdomain(host, 'topzone.vn') ||
+    isDomainOrSubdomain(host, 'dienmayxanh.com')
   ) {
     return 'tgdd';
   }
@@ -54,6 +55,57 @@ export function detectEcommercePlatform(
   return null;
 }
 
+const RETAIL_NON_PRODUCT_FIRST_SEGMENTS = new Set([
+  'tin-tuc',
+  'sforum',
+  'dchannel',
+  'hoi-dap',
+  'khuyen-mai',
+  'tra-gop',
+  'bao-hanh',
+  'he-thong-cua-hang',
+  'he-thong-sieu-thi',
+  'catalogsearch',
+  'tim-kiem',
+  'search',
+  'cart',
+  'gio-hang',
+  'account',
+  'login',
+  'blog',
+  'news',
+  'event',
+  'landing',
+  'collection',
+  'c',
+]);
+
+const RETAIL_CATEGORY_ROOT_SLUGS = new Set([
+  'dtdd',
+  'dien-thoai',
+  'dien-thoai-di-dong',
+  'mobile',
+  'smartphones',
+  'laptop',
+  'laptops',
+  'may-tinh-xach-tay',
+  'may-tinh-bang',
+  'tablet',
+  'tablets',
+  'dong-ho-thong-minh',
+  'smartwatch',
+  'smartwatches',
+  'tai-nghe',
+  'earbuds',
+  'phu-kien',
+  'apple',
+  'iphone',
+  'ipad',
+  'macbook',
+  'watch',
+  'airpods',
+]);
+
 export function extractIdsFromUrl(
   platform: SupportedEcommercePlatform,
   canonicalUrl: string
@@ -61,13 +113,14 @@ export function extractIdsFromUrl(
   if (platform === 'shopee') {
     const m =
       canonicalUrl.match(/(?:a-)?i\.(\d+)\.(\d+)/i) ||
-      canonicalUrl.match(/\/product\/(\d+)\/(\d+)/i);
+      canonicalUrl.match(/\/(?:product|opaanlp)\/(\d+)\/(\d+)/i);
     if (m) {
       return {
         externalShopId: m[1] || null,
         externalItemId: m[2] || null,
       };
     }
+    return { externalItemId: null, externalShopId: null };
   }
 
   if (platform === 'lazada') {
@@ -78,6 +131,7 @@ export function extractIdsFromUrl(
         externalShopId: m[2] || null,
       };
     }
+    return { externalItemId: null, externalShopId: null };
   }
 
   if (platform === 'tiki') {
@@ -88,13 +142,16 @@ export function extractIdsFromUrl(
         externalShopId: null,
       };
     }
+    return { externalItemId: null, externalShopId: null };
   }
 
   if (platform === 'tiktok') {
+    if (/\/video\/\d+/i.test(canonicalUrl)) {
+      return { externalItemId: null, externalShopId: null };
+    }
     const prodMatch =
       canonicalUrl.match(/\/product\/(\d+)/i) ||
-      canonicalUrl.match(/\/view\/product\/(\d+)/i) ||
-      canonicalUrl.match(/\/video\/(\d+)/i);
+      canonicalUrl.match(/\/view\/product\/(\d+)/i);
     const shopMatch = canonicalUrl.match(/\/@([a-zA-Z0-9_.-]+)/);
     return {
       externalItemId: prodMatch?.[1] || null,
@@ -102,11 +159,32 @@ export function extractIdsFromUrl(
     };
   }
 
-  // For CellphoneS / TGDD / FPT Shop / Hoàng Hà / Di Động Việt / Phong Vũ, use the last pathname slug as item identifier
-  const parts = canonicalUrl.split('/').filter(Boolean);
-  const lastSegment = parts[parts.length - 1]?.replace(/\.html?$/i, '') || null;
+  // For CellphoneS / TGDD / FPT Shop / Hoàng Hà / Di Động Việt / Phong Vũ, validate pathname segments
+  let pathname = canonicalUrl;
+  try {
+    pathname = new URL(canonicalUrl).pathname;
+  } catch {
+    // Keep raw pathname if already relative
+  }
+  const segments = pathname
+    .split('/')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const firstSegLower = (segments[0] || '')
+    .replace(/\.html?$/i, '')
+    .toLowerCase();
+  const lastSegment =
+    segments[segments.length - 1]?.replace(/\.html?$/i, '') || null;
+  const lastSegLower = (lastSegment || '').toLowerCase();
+  const isValidItemSlug =
+    Boolean(lastSegment) &&
+    lastSegment!.length >= 2 &&
+    !RETAIL_NON_PRODUCT_FIRST_SEGMENTS.has(firstSegLower) &&
+    !RETAIL_NON_PRODUCT_FIRST_SEGMENTS.has(lastSegLower) &&
+    !(segments.length === 1 && RETAIL_CATEGORY_ROOT_SLUGS.has(firstSegLower)) &&
+    !(platform === 'tgdd' && segments.length < 2);
   return {
-    externalItemId: lastSegment,
+    externalItemId: isValidItemSlug ? lastSegment : null,
     externalShopId: null,
   };
 }
@@ -114,8 +192,12 @@ export function extractIdsFromUrl(
 export function parseVndPriceText(rawText?: string | null): number | null {
   if (!rawText) return null;
   // Extract first price when a range like "28.990.000₫ - 34.990.000₫" is displayed
-  const firstSegment = rawText.split('-')[0] || rawText;
-  const digits = firstSegment.replace(/[^\d]/g, '');
+  const firstSegment = (rawText.split('-')[0] || rawText).trim();
+  const withoutCurrency = firstSegment.replace(/[^\d.,]/g, '');
+  if (!withoutCurrency) return null;
+  // Handle plain decimal string like "28990000.00" or thousand-separated decimal "28,990,000.00"
+  const strippedFraction = withoutCurrency.replace(/[.,]\d{1,2}$/, '');
+  const digits = strippedFraction.replace(/[^\d]/g, '');
   if (!digits) return null;
   const num = Number(digits);
   if (!Number.isFinite(num) || num < 10_000 || num > 500_000_000) {
@@ -177,9 +259,9 @@ export function extractProductSignalFromDom(
     canonicalUrl
   );
 
-  // Skip homepage or search pages that do not look like a product page
+  // Skip homepage, category index, blog, or search pages that do not resolve to a product item ID
   const path = new URL(canonicalUrl).pathname;
-  if (!path || path === '/' || path.startsWith('/search')) {
+  if (!path || path === '/' || path.startsWith('/search') || !externalItemId) {
     return null;
   }
 

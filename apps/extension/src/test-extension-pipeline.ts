@@ -22,6 +22,7 @@ const {
   detectAccessoryOrJunk,
   detectPlatformFromInput,
   evaluateExtensionPriceVerdict,
+  extractKeywordFromProductUrl,
   extractStorageAndAmbiguity,
   ingestExtensionCrowdSignal,
   lookupExtensionProduct,
@@ -1244,6 +1245,168 @@ async function runTests() {
   assert.equal(ingestProps.originalPrice?.maximum, 500_000_000);
   console.log(
     '  ✅ [OpenAPI 3.1] Spec parameter and schema bounds verified (#359)'
+  );
+
+  // Verify 10-platform URL parsing, Phong Vu SKU stripping, decimal VND parsing, and crowd ingest URL guard (#365)
+  assert.deepEqual(
+    parseEcommerceUrlOrQuery('https://shopee.vn/opaanlp/88201679/25678901234'),
+    {
+      isUrl: true,
+      platform: 'shopee',
+      platformShopId: '88201679',
+      platformItemId: '25678901234',
+      internalSlug: null,
+    },
+    'parseEcommerceUrlOrQuery must support Shopee /opaanlp/<shopId>/<itemId> share URLs'
+  );
+  assert.deepEqual(
+    parseEcommerceUrlOrQuery(
+      'https://www.tiktok.com/@appleflagship/video/7421234567890123456'
+    ),
+    {
+      isUrl: true,
+      platform: 'tiktok',
+      platformShopId: null,
+      platformItemId: null,
+      internalSlug: null,
+    },
+    'parseEcommerceUrlOrQuery must not treat non-commerce TikTok /video/<id> URLs as product listings'
+  );
+  assert.equal(
+    parseEcommerceUrlOrQuery('https://www.thegioididong.com/dtdd')
+      .platformItemId,
+    null,
+    'parseEcommerceUrlOrQuery must reject 1-segment TGDD category index URLs'
+  );
+  assert.equal(
+    parseEcommerceUrlOrQuery('https://fptshop.com.vn/dien-thoai')
+      .platformItemId,
+    null,
+    'parseEcommerceUrlOrQuery must reject 1-segment FPT Shop category index URLs'
+  );
+  assert.equal(
+    parseEcommerceUrlOrQuery(
+      'https://cellphones.com.vn/sforum/danh-gia-iphone-16e'
+    ).platformItemId,
+    null,
+    'parseEcommerceUrlOrQuery must reject CellphoneS sforum blog URLs'
+  );
+  assert.equal(
+    parseEcommerceUrlOrQuery(
+      'https://didongviet.vn/dchannel/tren-tay-iphone-16e.html'
+    ).platformItemId,
+    null,
+    'parseEcommerceUrlOrQuery must reject Di Dong Viet dchannel blog URLs'
+  );
+
+  assert.equal(
+    extractKeywordFromProductUrl(
+      'https://phongvu.vn/apple-iphone-16e-128gb--s2502001'
+    ),
+    'apple iphone 16e 128gb',
+    'extractKeywordFromProductUrl must strip Phong Vu --s<sku> suffix'
+  );
+  assert.equal(
+    extractKeywordFromProductUrl(
+      'https://shopee.vn/opaanlp/88201679/25678901234'
+    ),
+    '',
+    'extractKeywordFromProductUrl must return empty string for numeric Shopee /opaanlp/ share URLs'
+  );
+  assert.equal(
+    extractKeywordFromProductUrl(
+      'https://cellphones.com.vn/catalogsearch/result?q=iphone'
+    ),
+    '',
+    'extractKeywordFromProductUrl must return empty string for non-product search paths'
+  );
+
+  assert.equal(
+    detectEcommercePlatform('https://www.dienmayxanh.com/dtdd/iphone-16e'),
+    'tgdd',
+    'detectEcommercePlatform must map dienmayxanh.com to tgdd'
+  );
+  assert.deepEqual(
+    extractIdsFromUrl(
+      'shopee',
+      'https://shopee.vn/opaanlp/88201679/25678901234'
+    ),
+    {
+      externalShopId: '88201679',
+      externalItemId: '25678901234',
+    }
+  );
+  assert.deepEqual(
+    extractIdsFromUrl(
+      'tiktok',
+      'https://www.tiktok.com/@appleflagship/video/7421234567890123456'
+    ),
+    {
+      externalItemId: null,
+      externalShopId: null,
+    }
+  );
+  assert.deepEqual(
+    extractIdsFromUrl(
+      'cellphones',
+      'https://cellphones.com.vn/sforum/danh-gia-iphone-16e'
+    ),
+    {
+      externalItemId: null,
+      externalShopId: null,
+    }
+  );
+  assert.equal(
+    parseVndPriceText('28990000.00'),
+    28990000,
+    'parseVndPriceText must strip decimal .00 instead of concatenating fractional digits'
+  );
+  assert.equal(
+    parseVndPriceText('28,990,000.00 ₫'),
+    28990000,
+    'parseVndPriceText must parse thousand-separated decimal VND strings'
+  );
+
+  const nonProductUrlIngest = await ingestExtensionCrowdSignal({
+    platform: 'shopee',
+    externalItemId: '29512841920',
+    url: 'https://shopee.vn/search?keyword=iphone',
+    title: 'Điện thoại iPhone 16 Pro Max 256GB',
+    price: 28990000,
+    userConsentOptIn: true,
+  });
+  assert.equal(nonProductUrlIngest.accepted, false);
+  assert.equal(
+    nonProductUrlIngest.jobState,
+    'rejected_invalid_url',
+    'ingestExtensionCrowdSignal must reject search/category URLs that lack a product item ID'
+  );
+
+  let capturedIngestPayload: Record<string, unknown> | null = null;
+  const invertedOriginalIngest = await ingestExtensionCrowdSignal({
+    platform: 'shopee',
+    externalItemId: '29512841920',
+    externalShopId: '88201679',
+    url: 'https://shopee.vn/product/88201679/29512841920',
+    title: 'Điện thoại iPhone 16 Pro Max 256GB',
+    price: 28990000,
+    originalPrice: 19990000,
+    userConsentOptIn: true,
+    rateClient: {
+      rpc: async (_fn, args) => {
+        capturedIngestPayload = args.p_payload as Record<string, unknown>;
+        return { data: { state: 'enqueued', job_id: 'job-365' }, error: null };
+      },
+    },
+  });
+  assert.equal(invertedOriginalIngest.accepted, true);
+  assert.equal(
+    capturedIngestPayload?.['observed_original_price'],
+    null,
+    'ingestExtensionCrowdSignal must normalize inverted originalPrice (< price) to null'
+  );
+  console.log(
+    '  ✅ [URL & Extension Hardening] Shopee /opaanlp/, TikTok video exclusion, retail path filtering, Phong Vu SKU stripping & crowd ingest URL guard verified (#365)'
   );
 
   console.log('🎉 All Rate Browser Extension MV3 v2 tests passed!');
