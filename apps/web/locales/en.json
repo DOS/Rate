@@ -316,7 +316,10 @@
     "trayClearAll": "Clear all",
     "trayCompareNow": "Compare now ({count} devices) →",
     "trayRemoveTitle": "Remove from comparison tray",
-    "trayRemoveAria": "Remove {name}"
+    "trayRemoveAria": "Remove {name}",
+    "quickToggleShortAdd": "Compare",
+    "quickToggleShortSelected": "Added",
+    "quickToggleShortLimit": "Max 4"
   },
   "leaderboard": {
     "metaTitle": "Tech Device Leaderboard (JReviews 10.0 Dual-Rating) | Rate.vn",
@@ -607,7 +610,9 @@
     "quickToggleTitleWatched": "Watching price changes (Click to unwatch)",
     "quickToggleTitleUnwatched": "Watch price changes & get real price-drop alerts (-5%)",
     "quickToggleBtnWatched": "🔔 Watching price",
-    "quickToggleBtnUnwatched": "🔔 Watch price"
+    "quickToggleBtnUnwatched": "🔔 Watch price",
+    "quickToggleShortUnwatched": "Watch price",
+    "quickToggleShortWatched": "Watching"
   },
   "deals": {
     "metaTitle": "Verified Tech Deals & Price-to-Performance Finder | Rate.vn",
@@ -1076,12 +1081,6 @@
     "catDescTablets": "Filter by screen size, storage capacity, 5G/Wi-Fi connectivity",
     "catDescSmartwatches": "Smartwatches with health tracking, GPS & battery endurance",
     "catDescEarbuds": "True wireless earbuds with active noise cancellation (ANC), Hi-Res codecs & battery",
-    "userNoScore": "User: N/A",
-    "expertNoScore": "Expert: N/A",
-    "refPriceLabel": "Reference price:",
-    "sourcesCount": "🏪 {count} sources",
-    "viewReviewsAndSpecsBtn": "★ Reviews & 10 Spec Groups",
-    "inspectPriceHistoryTitle": "Inspect 90-day price history & detect fake discounts",
     "popularBattlesBadge": "⚔️ Featured 1v1 Showdowns",
     "popularBattlesTitle": "Head-to-Head Flagship Battles Most Compared Right Now",
     "leaderboard5CatsBtn": "🏆 5-Category Leaderboard →",
@@ -1574,17 +1573,7 @@
       "emptyMatchingDesc": "Try widening the price range or relaxing hardware filter criteria to see more models.",
       "resetFiltersBtn": "Reset filters",
       "browseSmartphonesBtn": "Browse available Smartphones →",
-      "merchantProfilesBtn": "Merchant Trust Profiles",
-      "noImage": "No image",
-      "userScoreText": "{score} User ({count} verified reviews)",
-      "userScoreUnrated": "User: unrated",
-      "expertScoreText": "{score} Expert Lab",
-      "expertScoreUnrated": "Expert Lab: unrated",
-      "refPriceLabel": "Reference price:",
-      "sourcesCount": "{count} sources",
-      "viewReviewsSpecsBtn": "★ View Reviews & 10 Spec Groups",
-      "inspectPriceHistoryTitle": "Audit 90-day price history & detect fake discounts",
-      "inspectBtn": "🔍 Inspect"
+      "merchantProfilesBtn": "Merchant Trust Profiles"
     },
     "toolbar": {
       "unratedText": "N/A",
@@ -1717,5 +1706,18 @@
     "okResetSent": "Password reset instructions have been sent to your email address.",
     "okOtpSent": "A 6-digit OTP code has been sent to your email. Enter it below to verify.",
     "okOtpVerified": "OTP verified successfully! Redirecting..."
+  },
+  "productCard": {
+    "reviewCount": "{count, plural, one {# review} other {# reviews}}",
+    "noReviews": "No reviews yet",
+    "expertScore": "Lab {score}",
+    "refPrice": "Reference price",
+    "priceUpTo": "up to {price}",
+    "sources": "{count, plural, one {# seller} other {# sellers}}",
+    "viewDetails": "View details",
+    "priceHistory": "Price history",
+    "priceHistoryTitle": "Check the 90-day price history and spot fake discounts",
+    "noImage": "No image",
+    "verified": "Specs normalized"
   }
 }
