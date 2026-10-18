@@ -23,6 +23,16 @@ export type ReviewFlagCategory =
 export type ReviewVerdict = 'authentic' | 'suspicious' | 'fake' | 'unanalyzed';
 
 /**
+ * `review_flags.detector` written by the private ReviewBurstAuditor. Its
+ * `seeding_fake` verdicts come from cross-review timing and text similarity,
+ * which a per-review analysis cannot see, so the analyzer must not overwrite them.
+ */
+export const BURST_AUDITOR_DETECTOR = 'review_burst_auditor';
+
+/** Detectors whose `review_flags` rows `persistAnalysisToSupabase` leaves untouched. */
+export const ANALYZER_PRESERVED_DETECTORS: readonly string[] = [BURST_AUDITOR_DETECTOR];
+
+/**
  * Strictly conforms to PostgreSQL CHECK constraint `rate.signals_valid(signals)`
  */
 export interface ReviewSignals {
@@ -1820,6 +1830,36 @@ Return ONLY valid JSON matching:
   }
 
   /**
+   * Returns the review ids whose existing flag was written by a detector in
+   * `ANALYZER_PRESERVED_DETECTORS`. A failed read throws rather than risk
+   * overwriting those rows.
+   */
+  private async loadPreservedFlagReviewIds(
+    supabase: RateSupabaseClient,
+    reviewIds: readonly string[]
+  ): Promise<Set<string>> {
+    const preserved = new Set<string>();
+    const uniqueIds = Array.from(new Set(reviewIds.filter(Boolean)));
+    // Chunked so a large batch never exceeds the PostgREST URL length.
+    for (let i = 0; i < uniqueIds.length; i += 150) {
+      const { data, error } = await supabase
+        .from('review_flags')
+        .select('review_id')
+        .in('review_id', uniqueIds.slice(i, i + 150))
+        .in('detector', [...ANALYZER_PRESERVED_DETECTORS]);
+      if (error) {
+        throw new Error(
+          `[AiReviewAnalyzer] Failed to read existing review_flags: ${error.message}`
+        );
+      }
+      for (const row of (data || []) as Array<{ review_id?: unknown }>) {
+        if (row.review_id) preserved.add(String(row.review_id));
+      }
+    }
+    return preserved;
+  }
+
+  /**
    * Persists review flags, updates review helpfulness weights, review_analysis,
    * master_products weighted rating, and merchant risk_score in Supabase `rate` schema
    */
@@ -1850,6 +1890,10 @@ Return ONLY valid JSON matching:
 
     // 1. Upsert into rate.review_flags & update helpfulness_weight on rate.reviews
     if (results.length > 0) {
+      const preservedReviewIds = await this.loadPreservedFlagReviewIds(
+        supabase,
+        results.map(r => r.review_id)
+      );
       const flagRows = results.map((r, i) => ({
         review_id: r.review_id,
         fake_probability: r.fake_probability,
@@ -1870,13 +1914,16 @@ Return ONLY valid JSON matching:
             .digest('hex'),
         analyzed_at: new Date().toISOString(),
       }));
+      const writableFlagRows = flagRows.filter(row => !preservedReviewIds.has(row.review_id));
 
-      const { error: flagErr } = await supabase
-        .from('review_flags')
-        .upsert(flagRows, { onConflict: 'review_id' });
+      if (writableFlagRows.length > 0) {
+        const { error: flagErr } = await supabase
+          .from('review_flags')
+          .upsert(writableFlagRows, { onConflict: 'review_id' });
 
-      if (flagErr) {
-        throw new Error(`[AiReviewAnalyzer] Failed to upsert review_flags: ${flagErr.message}`);
+        if (flagErr) {
+          throw new Error(`[AiReviewAnalyzer] Failed to upsert review_flags: ${flagErr.message}`);
+        }
       }
 
       for (const r of results) {

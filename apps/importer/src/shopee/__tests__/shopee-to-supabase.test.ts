@@ -328,6 +328,18 @@ function createPipelineStubSupabase(opts: StubPipelineOptions = {}) {
 
       if (table === 'review_flags' || table === 'review_analysis') {
         return {
+          // persistAnalysisToSupabase reads flags written by other detectors first.
+          select(_columns: string) {
+            return {
+              in(_column: string, _ids: unknown[]) {
+                return {
+                  in(_detectorColumn: string, _detectors: unknown[]) {
+                    return Promise.resolve({ data: [], error: null });
+                  },
+                };
+              },
+            };
+          },
           upsert(_payload: unknown, _options?: unknown) {
             return Promise.resolve({ data: null, error: null });
           },

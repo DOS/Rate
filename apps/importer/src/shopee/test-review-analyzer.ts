@@ -6,6 +6,7 @@ import http from 'node:http';
 import assert from 'node:assert/strict';
 import {
   AiReviewAnalyzer,
+  BURST_AUDITOR_DETECTOR,
   accountAgeBucket,
   assessReview6Axes,
   compute6AxisWeightBreakdown,
@@ -568,8 +569,22 @@ async function run() {
       col?: string;
       val?: string;
     }> = [];
+    // review_flags rows the stub reports as already written by another detector.
+    let existingFlagRows: Array<{ review_id: string }> = [];
+    let existingFlagsError: { message: string } | null = null;
+    const flagReads: Array<{ ids: string[]; detectors: string[] }> = [];
     const stub = {
       from: (table: string) => ({
+        select: () => ({
+          in: (_idCol: string, ids: string[]) => ({
+            in: async (_detCol: string, detectors: string[]) => {
+              flagReads.push({ ids, detectors });
+              return existingFlagsError
+                ? { data: null, error: existingFlagsError }
+                : { data: existingFlagRows.filter(r => ids.includes(r.review_id)), error: null };
+            },
+          }),
+        }),
         upsert: async (payload: unknown) => {
           calls.push({ table, op: 'upsert', payload });
           return { error: null };
@@ -676,8 +691,53 @@ async function run() {
       false,
       'When .rpc() is provided, master_products rating is updated exclusively by SQL RPC'
     );
+    // 6c. Flags written by the burst auditor survive re-analysis (DOS/Rate#322)
+    assert.deepEqual(flagReads[0]!.detectors, [BURST_AUDITOR_DETECTOR]);
+    assert.deepEqual(
+      flagReads[0]!.ids,
+      input.map(r => r.id)
+    );
+    existingFlagRows = [{ review_id: input[0]!.id }];
+    calls.length = 0;
+    await llm.persistAnalysisToSupabase(stub, {
+      productId: 'prod-burst',
+      reviews: input,
+      platform: 'shopee',
+    });
+    const burstUpsert = calls.find(c => c.table === 'review_flags' && c.op === 'upsert')!;
+    const burstRowIds = (burstUpsert.payload as Array<{ review_id: string }>).map(r => r.review_id);
+    assert.equal(
+      burstRowIds.includes(input[0]!.id),
+      false,
+      'burst auditor flag must not be overwritten'
+    );
+    assert.equal(burstRowIds.length, input.length - 1);
+    assert.equal(
+      calls.filter(c => c.table === 'reviews' && c.op === 'update').length,
+      input.length,
+      'helpfulness_weight is still written for every review'
+    );
+
+    existingFlagRows = input.map(r => ({ review_id: r.id }));
+    calls.length = 0;
+    await llm.persistAnalysisToSupabase(stub, { productId: 'prod-all-burst', reviews: input });
+    assert.equal(
+      calls.some(c => c.table === 'review_flags' && c.op === 'upsert'),
+      false,
+      'no upsert when every row is preserved'
+    );
+
+    existingFlagRows = [];
+    existingFlagsError = { message: 'read timeout' };
+    await assert.rejects(
+      llm.persistAnalysisToSupabase(stub, { productId: 'prod-read-fail', reviews: input }),
+      /Failed to read existing review_flags: read timeout/,
+      'a failed read must not fall through to an overwrite'
+    );
+    existingFlagsError = null;
+
     console.log(
-      '✅ [Persist] review_flags / review_analysis / master_products (RPC & stub) / merchants (review_risk_score isolated) / reviews payloads valid'
+      '✅ [Persist] review_flags / review_analysis / master_products (RPC & stub) / merchants (review_risk_score isolated) / reviews payloads valid; burst auditor flags preserved'
     );
 
     console.log('\n================================================================');
