@@ -700,7 +700,7 @@ export default function MerchantDirectoryExplorer({
 
                       <div className="flex-shrink-0 text-end">
                         <span
-                          className={`badge ${trustBadgeClass} rounded-pill fs-6 font-monospace px-3 py-2`}
+                          className={`badge ${trustBadgeClass} rounded-pill fs-6 rate-tabular px-3 py-2`}
                         >
                           Trust: {merchant.trust_score}/100
                         </span>
@@ -717,7 +717,7 @@ export default function MerchantDirectoryExplorer({
                           >
                             {labels.platformRating}
                           </div>
-                          <div className="fw-bold small d-flex align-items-center font-monospace gap-1">
+                          <div className="fw-bold small d-flex align-items-center rate-tabular gap-1">
                             <BsStarFill className="text-warning" />
                             {merchant.rating_star
                               ? `${merchant.rating_star.toFixed(2)} / 5.0`
@@ -733,7 +733,7 @@ export default function MerchantDirectoryExplorer({
                           >
                             {labels.followers}
                           </div>
-                          <div className="fw-bold small d-flex align-items-center font-monospace gap-1">
+                          <div className="fw-bold small d-flex align-items-center rate-tabular gap-1">
                             <BsPeopleFill className="text-primary" />
                             {merchant.follower_count > 0
                               ? merchant.follower_count.toLocaleString('vi-VN')
@@ -749,7 +749,7 @@ export default function MerchantDirectoryExplorer({
                           >
                             {labels.trackedProducts}
                           </div>
-                          <div className="fw-bold small d-flex align-items-center font-monospace gap-1">
+                          <div className="fw-bold small d-flex align-items-center rate-tabular gap-1">
                             <BsBoxSeam className="text-success" />
                             {merchant.product_count} {labels.productsUnit}
                           </div>
@@ -766,7 +766,7 @@ export default function MerchantDirectoryExplorer({
                               🛡️ DOSafe Threat Risk
                             </span>
                             <span
-                              className={`badge rounded-pill font-monospace ${
+                              className={`badge rounded-pill rate-tabular ${
                                 merchant.dosafe_risk_score === 0
                                   ? 'bg-success-subtle text-success'
                                   : 'bg-danger-subtle text-danger'
@@ -791,7 +791,7 @@ export default function MerchantDirectoryExplorer({
                               🤖 AI Review Risk
                             </span>
                             <span
-                              className={`badge rounded-pill font-monospace ${
+                              className={`badge rounded-pill rate-tabular ${
                                 merchant.review_risk_score <= 15
                                   ? 'bg-success-subtle text-success'
                                   : merchant.review_risk_score <= 40
@@ -835,7 +835,7 @@ export default function MerchantDirectoryExplorer({
                     {minPriceText && (
                       <div className="small text-muted mb-2">
                         {labels.priceRangeLabel}{' '}
-                        <strong className="text-dark font-monospace">
+                        <strong className="text-dark rate-tabular">
                           {minPriceText}
                           {maxPriceText ? ` - ${maxPriceText}` : ''}
                         </strong>

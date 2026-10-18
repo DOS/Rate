@@ -1683,7 +1683,7 @@ export default function CompareWorkspace({
                         #{battle.productA.rank} vs #{battle.productB.rank}{' '}
                         {activeCategoryMeta.label}
                       </span>
-                      <span className="badge bg-danger-subtle text-danger rounded-pill small font-monospace">
+                      <span className="badge bg-danger-subtle text-danger rounded-pill small rate-tabular">
                         {t('scoreDeltaBadge', {
                           delta: battle.scoreDelta5.toFixed(2),
                         })}
@@ -1706,7 +1706,7 @@ export default function CompareWorkspace({
                           <div className="small fw-bold text-dark text-truncate">
                             {battle.productA.name}
                           </div>
-                          <div className="small text-secondary font-monospace">
+                          <div className="small text-secondary rate-tabular">
                             ★ {battle.productA.combinedScore5.toFixed(2)}
                           </div>
                         </div>
@@ -1721,7 +1721,7 @@ export default function CompareWorkspace({
                           <div className="small fw-bold text-dark text-truncate">
                             {battle.productB.name}
                           </div>
-                          <div className="small text-secondary font-monospace">
+                          <div className="small text-secondary rate-tabular">
                             ★ {battle.productB.combinedScore5.toFixed(2)}
                           </div>
                         </div>

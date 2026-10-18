@@ -430,12 +430,10 @@ export default function WatchlistWorkspace({
   return (
     <div className="container py-5">
       {/* Header Banner (DESIGN.md v3.0 Dark Obsidian Command Header) */}
-      <div className="rate-scoreboard-dark p-md-5 mb-4 p-4">
+      <div className="rate-scoreboard-dark rate-surface-dark p-md-5 mb-4 p-4">
         <div className="d-flex flex-column flex-lg-row justify-content-between align-items-start align-items-lg-center gap-3">
           <div>
-            <span className="badge bg-danger rounded-pill mb-2 px-3 py-2 text-white">
-              {t('heroBadge')}
-            </span>
+            <span className="rate-eyebrow mb-2">{t('heroBadge')}</span>
             <h1 className="h2 fw-bold mb-2 text-white">
               {t('heroTitle', { count: items.length })}
             </h1>
@@ -520,7 +518,7 @@ export default function WatchlistWorkspace({
                 <div className="small text-white-50 mb-1">
                   {t('kpiTotalMinLabel')}
                 </div>
-                <div className="h5 fw-bold font-monospace rate-tabular mb-0 text-white">
+                <div className="h5 fw-bold rate-tabular mb-0 text-white">
                   {portfolioStats.totalMinVnd.toLocaleString('vi-VN')} ₫
                 </div>
               </div>
@@ -536,7 +534,7 @@ export default function WatchlistWorkspace({
                 <div className="small text-white-50 mb-1">
                   {t('kpiTotalTargetLabel')}
                 </div>
-                <div className="h5 fw-bold font-monospace text-info rate-tabular mb-0">
+                <div className="h5 fw-bold rate-tabular text-info rate-tabular mb-0">
                   {portfolioStats.totalTargetVnd.toLocaleString('vi-VN')} ₫
                 </div>
               </div>
@@ -552,7 +550,7 @@ export default function WatchlistWorkspace({
                 <div className="small text-white-50 mb-1">
                   {t('kpiSpreadSavingsLabel')}
                 </div>
-                <div className="h5 fw-bold font-monospace text-success rate-tabular mb-0">
+                <div className="h5 fw-bold rate-tabular text-success rate-tabular mb-0">
                   +
                   {portfolioStats.totalSpreadSavingsVnd.toLocaleString('vi-VN')}{' '}
                   ₫
@@ -570,7 +568,7 @@ export default function WatchlistWorkspace({
                 <div className="small text-white-50 mb-1">
                   {t('kpiAvgRatingLabel')}
                 </div>
-                <div className="h5 fw-bold font-monospace text-warning rate-tabular mb-0">
+                <div className="h5 fw-bold rate-tabular text-warning rate-tabular mb-0">
                   ★{' '}
                   {avgPortfolioRating > 0
                     ? `${avgPortfolioRating.toFixed(2)} / 5.0`

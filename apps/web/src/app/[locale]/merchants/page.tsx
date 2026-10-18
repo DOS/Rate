@@ -64,7 +64,7 @@ export default async function MerchantsDirectoryPage({
       <NavbarDarkDynamic links={[]} />
 
       <div
-        className="hero-banner position-relative overflow-hidden"
+        className="hero-banner rate-surface-dark position-relative overflow-hidden"
         style={{
           background:
             'radial-gradient(circle at 18% 22%, rgba(216, 48, 48, 0.16), transparent 45%), radial-gradient(circle at 82% 18%, rgba(45, 186, 105, 0.14), transparent 42%), linear-gradient(180deg, #0f1113 0%, #141821 100%)',
@@ -77,28 +77,9 @@ export default async function MerchantsDirectoryPage({
           <div className="row justify-content-center align-items-center">
             <div className="col-xl-12 col-lg-12 col-md-12 col-sm-12">
               <div className="position-relative mt-2 text-start">
-                <div className="d-flex align-items-center mb-3 flex-wrap gap-2">
-                  <span
-                    className="badge rounded-pill px-3 py-2"
-                    style={{
-                      backgroundColor: 'rgba(255, 255, 255, 0.07)',
-                      border: '1px solid rgba(255, 255, 255, 0.14)',
-                      color: '#f8fafc',
-                    }}
-                  >
-                    {t('dirHeroBadge1')}
-                  </span>
-                  <span
-                    className="badge rounded-pill px-3 py-2"
-                    style={{
-                      backgroundColor: 'rgba(45, 186, 105, 0.16)',
-                      border: '1px solid rgba(45, 186, 105, 0.38)',
-                      color: '#6ee7b7',
-                    }}
-                  >
-                    {t('dirHeroBadge2')}
-                  </span>
-                </div>
+                <span className="rate-eyebrow mb-3">
+                  {t('dirHeroBadge1')} · {t('dirHeroBadge2')}
+                </span>
                 <h1
                   className="fw-bold mb-2 text-white"
                   style={{

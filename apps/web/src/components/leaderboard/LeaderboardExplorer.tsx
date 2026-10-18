@@ -743,7 +743,7 @@ export default function LeaderboardExplorer({
                 <span>{tab.icon}</span>
                 <span>{tab.label}</span>
                 <span
-                  className={`badge rounded-pill font-monospace ${
+                  className={`badge rounded-pill rate-tabular ${
                     isSelected
                       ? 'text-danger bg-white'
                       : 'bg-secondary bg-opacity-25 text-dark'
@@ -851,7 +851,7 @@ export default function LeaderboardExplorer({
                   <div key={slider.key} className="col-md-4 col-sm-6">
                     <div className="d-flex justify-content-between small fw-semibold mb-1">
                       <span>{slider.label}</span>
-                      <span className="font-monospace text-danger">
+                      <span className="rate-tabular text-danger">
                         {customWeights[slider.key]}%
                       </span>
                     </div>
@@ -1072,13 +1072,13 @@ export default function LeaderboardExplorer({
                     <div>
                       <div className="d-flex justify-content-between align-items-center mb-3 gap-2">
                         <span
-                          className="badge rounded-pill fw-bold font-monospace px-3 py-2"
+                          className="badge rounded-pill fw-bold rate-tabular px-3 py-2"
                           style={rankBadgeStyle}
                         >
                           🏆 {rankLabel}
                         </span>
                         <div className="text-end">
-                          <div className="fs-4 fw-bold text-warning font-monospace lh-1">
+                          <div className="fs-4 fw-bold text-warning rate-tabular lh-1">
                             {entry.activeScore5.toFixed(2)}
                             <span className="fs-6 text-white-50">/5.0</span>
                           </div>
@@ -1160,7 +1160,7 @@ export default function LeaderboardExplorer({
                                 style={{ fontSize: '0.8125rem' }}
                               >
                                 <span>{c.label}</span>
-                                <strong className="font-monospace text-white">
+                                <strong className="rate-tabular text-white">
                                   {val.toFixed(2)}
                                 </strong>
                               </div>
@@ -1188,7 +1188,7 @@ export default function LeaderboardExplorer({
                           </span>
                         )}
                         {keySpecs.ram && (
-                          <span className="badge bg-dark border-secondary text-white-50 small font-monospace border">
+                          <span className="badge bg-dark border-secondary text-white-50 small rate-tabular border">
                             {keySpecs.ram}
                             {keySpecs.storage ? ` / ${keySpecs.storage}` : ''}
                           </span>
@@ -1197,7 +1197,7 @@ export default function LeaderboardExplorer({
                     </div>
 
                     <div className="border-top border-secondary border-opacity-25 d-flex justify-content-between align-items-center flex-wrap gap-2 pt-2">
-                      <span className="small text-white-50 font-monospace">
+                      <span className="small text-white-50 rate-tabular">
                         {Number(entry.product.min_price).toLocaleString(
                           'vi-VN'
                         )}{' '}
@@ -1267,7 +1267,7 @@ export default function LeaderboardExplorer({
                         <span className="badge bg-dark rounded-pill small text-white">
                           #{iA + 1} vs #{iB + 1}
                         </span>
-                        <span className="badge bg-danger-subtle text-danger rounded-pill small font-monospace">
+                        <span className="badge bg-danger-subtle text-danger rounded-pill small rate-tabular">
                           Δ {delta} / 5.0
                         </span>
                       </div>
@@ -1277,7 +1277,7 @@ export default function LeaderboardExplorer({
                           <div className="small fw-bold text-dark text-truncate">
                             {a.product.name}
                           </div>
-                          <div className="small text-secondary font-monospace">
+                          <div className="small text-secondary rate-tabular">
                             ★ {a.activeScore5.toFixed(2)}
                           </div>
                         </div>
@@ -1288,7 +1288,7 @@ export default function LeaderboardExplorer({
                           <div className="small fw-bold text-dark text-truncate">
                             {b.product.name}
                           </div>
-                          <div className="small text-secondary font-monospace">
+                          <div className="small text-secondary rate-tabular">
                             ★ {b.activeScore5.toFixed(2)}
                           </div>
                         </div>
@@ -1340,7 +1340,7 @@ export default function LeaderboardExplorer({
                 <div className="col-lg-5 col-md-12">
                   <div className="d-flex align-items-center gap-3">
                     <div
-                      className={`rounded-circle d-flex align-items-center justify-content-center fw-bold font-monospace flex-shrink-0 ${
+                      className={`rounded-circle d-flex align-items-center justify-content-center fw-bold rate-tabular flex-shrink-0 ${
                         rank === 1
                           ? 'bg-warning text-dark fs-5'
                           : rank <= 3
@@ -1404,13 +1404,13 @@ export default function LeaderboardExplorer({
                           </span>
                         )}
                         {keySpecs.ram && (
-                          <span className="rate-spec-pill font-monospace">
+                          <span className="rate-spec-pill rate-tabular">
                             {keySpecs.ram}
                             {keySpecs.storage ? `/${keySpecs.storage}` : ''}
                           </span>
                         )}
                         {keySpecs.battery && (
-                          <span className="rate-spec-pill font-monospace">
+                          <span className="rate-spec-pill rate-tabular">
                             {keySpecs.battery}
                           </span>
                         )}
@@ -1460,7 +1460,7 @@ export default function LeaderboardExplorer({
                             {c.short}:
                           </span>
                           <strong
-                            className={`font-monospace ${
+                            className={`rate-tabular ${
                               activeCriterion === c.key
                                 ? 'text-danger'
                                 : 'text-dark'
@@ -1484,11 +1484,11 @@ export default function LeaderboardExplorer({
                       <div className="small text-muted">
                         {copy.critLabels[activeCriterion]}
                       </div>
-                      <div className="h4 fw-bold text-danger font-monospace mb-0">
+                      <div className="h4 fw-bold text-danger rate-tabular mb-0">
                         {entry.activeScore5.toFixed(2)}
                         <span className="fs-6 text-muted fw-normal">/5.0</span>
                       </div>
-                      <div className="small text-secondary font-monospace">
+                      <div className="small text-secondary rate-tabular">
                         {minPriceText} ₫ ({entry.product.merchant_count || 0}{' '}
                         {copy.storesTrackedSuffix})
                       </div>

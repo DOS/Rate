@@ -437,7 +437,7 @@ export default function VersusInteractiveScoreboard({
               <div key={c.key} className="col-md col-6">
                 <div className="d-flex justify-content-between small mb-1 text-white">
                   <span>{c.label}</span>
-                  <strong className="text-warning font-monospace">
+                  <strong className="text-warning rate-tabular">
                     {weights[c.key]}%
                   </strong>
                 </div>
@@ -475,7 +475,7 @@ export default function VersusInteractiveScoreboard({
             {t('leadingDeltaNote', { delta: weightedResult.delta })}
           </span>
         </div>
-        <div className="font-monospace small text-warning fw-bold">
+        <div className="rate-tabular small text-warning fw-bold">
           {scoreA.brand}: {weightedResult.finalA.toFixed(2)}/5.0 •{' '}
           {scoreB.brand}: {weightedResult.finalB.toFixed(2)}/5.0
         </div>
@@ -540,7 +540,7 @@ export default function VersusInteractiveScoreboard({
             <div className="col-4">
               <div className="d-flex align-items-center gap-2">
                 <span
-                  className={`font-monospace fw-bold ${
+                  className={`rate-tabular fw-bold ${
                     aWins ? 'text-success' : 'text-white-50'
                   }`}
                 >
@@ -561,7 +561,7 @@ export default function VersusInteractiveScoreboard({
             </div>
             <div className="small text-light fw-semibold col-4 text-center">
               {row.label}{' '}
-              <span className="text-white-50 font-monospace">
+              <span className="text-white-50 rate-tabular">
                 ({weights[row.key]}%)
               </span>
             </div>
@@ -579,7 +579,7 @@ export default function VersusInteractiveScoreboard({
                   />
                 </div>
                 <span
-                  className={`font-monospace fw-bold ${
+                  className={`rate-tabular fw-bold ${
                     bWins ? 'text-success' : 'text-white-50'
                   }`}
                 >
@@ -602,7 +602,7 @@ export default function VersusInteractiveScoreboard({
             signal={getRadarSignal(radarIndex, scoreA.slug)}
             minSpreadPct={Infinity}
             emptyFallback={
-              <span className="badge bg-dark border-secondary text-white-50 rounded-pill font-monospace border">
+              <span className="badge bg-dark border-secondary text-white-50 rounded-pill rate-tabular border">
                 {t('price60dStable')}
               </span>
             }
@@ -616,7 +616,7 @@ export default function VersusInteractiveScoreboard({
             signal={getRadarSignal(radarIndex, scoreB.slug)}
             minSpreadPct={Infinity}
             emptyFallback={
-              <span className="badge bg-dark border-secondary text-white-50 rounded-pill font-monospace border">
+              <span className="badge bg-dark border-secondary text-white-50 rounded-pill rate-tabular border">
                 {t('price60dStable')}
               </span>
             }
