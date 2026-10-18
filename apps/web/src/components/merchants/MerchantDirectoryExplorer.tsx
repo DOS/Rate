@@ -15,6 +15,7 @@ import {
   BsPeopleFill,
   BsRobot,
   BsSearch,
+  BsShield,
   BsShieldCheck,
   BsShieldExclamation,
   BsShop,
@@ -765,10 +766,7 @@ export default function MerchantDirectoryExplorer({
                         <div className="border-end col-6">
                           <div className="d-flex justify-content-between align-items-center mb-1">
                             <span className="small text-muted fw-medium">
-                              <BsShieldCheck
-                                aria-hidden="true"
-                                className="me-1"
-                              />
+                              <BsShield aria-hidden="true" className="me-1" />
                               DOSafe Threat Risk
                             </span>
                             <span

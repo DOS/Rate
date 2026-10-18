@@ -1,9 +1,8 @@
 'use client';
 
-import { BsLightningCharge } from 'react-icons/bs';
-
 import React, { useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { BsLightningCharge } from 'react-icons/bs';
 import { useRouter } from '@/lib/navigation';
 import { startNavigationProgress } from '@/components/elementary/NavigationProgress';
 import {

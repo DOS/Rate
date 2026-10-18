@@ -1,9 +1,8 @@
 'use client';
 
-import { BsSliders } from 'react-icons/bs';
-
 import { useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { BsSliders } from 'react-icons/bs';
 import { Link } from '@/lib/navigation';
 import type { ScoredLeaderboardItem } from '@/lib/leaderboard-engine';
 import {
