@@ -41,6 +41,49 @@ export function platformReviewIdFor(r: ShopeeReview): string {
   );
 }
 
+export interface ClusterPeerPriceCandidate {
+  id?: unknown;
+  price_current?: unknown;
+  merchants?: { is_official?: boolean | null } | Array<{ is_official?: boolean | null }> | null;
+}
+
+/**
+ * Computes the self-excluded peer floor price for a cluster (`id !== currentProductId`),
+ * preferring Official Mall sibling prices when available, and falling back to
+ * `fallbackMasterMinPrice` only when no positive-priced peer listings exist.
+ */
+export function resolveClusterPeerFloorPrice(
+  peerRows: readonly ClusterPeerPriceCandidate[],
+  currentProductId: string,
+  fallbackMasterMinPrice?: number | null
+): number | undefined {
+  let officialMin = Number.POSITIVE_INFINITY;
+  let peerMin = Number.POSITIVE_INFINITY;
+
+  for (const row of peerRows) {
+    if (row.id && String(row.id) === currentProductId) continue;
+    const price = Number(row.price_current || 0);
+    if (!Number.isFinite(price) || price <= 0) continue;
+    if (price < peerMin) {
+      peerMin = price;
+    }
+    const mObj = Array.isArray(row.merchants) ? row.merchants[0] : row.merchants;
+    if (mObj?.is_official && price < officialMin) {
+      officialMin = price;
+    }
+  }
+
+  if (Number.isFinite(officialMin)) {
+    return officialMin;
+  }
+  if (Number.isFinite(peerMin)) {
+    return peerMin;
+  }
+  return fallbackMasterMinPrice && Number(fallbackMasterMinPrice) > 0
+    ? Number(fallbackMasterMinPrice)
+    : undefined;
+}
+
 export interface ShopeeIngestionPipelineConfig extends AiSpecEnricherConfig {
   /**
    * Optional pre-scoped `rate` schema Supabase client for dependency injection / deterministic testing.
@@ -555,11 +598,25 @@ export class ShopeeIngestionPipeline {
           { productId }
         );
       } else if (storedReviews && storedReviews.length > 0) {
-        const { data: masterRow } = await this.supabase
-          .from('master_products')
-          .select('min_price')
-          .eq('id', masterId)
-          .maybeSingle();
+        const [{ data: masterRow }, { data: peerRows }] = await Promise.all([
+          this.supabase
+            .from('master_products')
+            .select('min_price')
+            .eq('id', masterId)
+            .maybeSingle(),
+          this.supabase
+            .from('products')
+            .select('id, price_current, merchants(is_official)')
+            .eq('cluster_id', masterId)
+            .gt('price_current', 0)
+            .limit(100),
+        ]);
+
+        const canonicalMinPrice = resolveClusterPeerFloorPrice(
+          Array.isArray(peerRows) ? (peerRows as ClusterPeerPriceCandidate[]) : [],
+          productId,
+          masterRow?.min_price ? Number(masterRow.min_price) : undefined
+        );
 
         const { summary, merchantRisk } = await this.reviewAnalyzer.persistAnalysisToSupabase(
           this.supabase,
@@ -572,7 +629,7 @@ export class ShopeeIngestionPipeline {
             entityType: 'product',
             platform,
             listingPrice: product.priceMin,
-            canonicalMinPrice: masterRow?.min_price ? Number(masterRow.min_price) : undefined,
+            canonicalMinPrice,
             isOfficial: product.shop.isMall,
             followerCount: product.shop.followerCount,
           }

@@ -85,28 +85,31 @@ export function splitCameraModulesToPhoneArenaFormat(rawModules: string): {
 }
 
 /**
- * Parses a GSMArena specification HTML document into validated 10-Field-Group
- * `ProductSpecifications` and `KeySpecs`.
+ * Parses a GSMArena specification HTML document (and optional PhoneArena table HTML)
+ * into validated 10-Field-Group `ProductSpecifications` and `KeySpecs`.
  */
 export function parseGsmArenaHtmlToSpecs(
   html: string,
-  meta?: { gsmarenaUrl?: string; phonearenaUrl?: string }
+  meta?: { gsmarenaUrl?: string; phonearenaUrl?: string; phonearenaHtml?: string }
 ): ArenaSyncedDeviceSpec {
   const d = extractGsmArenaDataSpecs(html);
-  const modelName = d['modelname'] || 'Unknown Device';
+  const pa = meta?.phonearenaHtml ? extractPhoneArenaTableSpecs(meta.phonearenaHtml) : {};
+  const modelName = d['modelname'] || pa['device name'] || 'Unknown Device';
   const brand = modelName.split(/\s+/)[0] || 'Generic';
   const model = modelName.replace(new RegExp(`^${brand}\\s+`, 'i'), '').trim() || modelName;
 
   // Display parsing
-  const sizeMatch = (d['displaysize'] || '').match(/(\d+(?:\.\d+)?)\s*inches/i);
+  const sizeMatch = (d['displaysize'] || pa['screen size'] || '').match(
+    /(\d+(?:\.\d+)?)\s*inches/i
+  );
   const screenSizeInch = sizeMatch ? Number(sizeMatch[1]) : null;
-  const refreshMatch = (d['displaytype'] || '').match(/(\d+)\s*Hz/i);
+  const refreshMatch = (d['displaytype'] || pa['refresh rate'] || '').match(/(\d+)\s*Hz/i);
   const refreshRateHz = refreshMatch ? Number(refreshMatch[1]) : undefined;
-  const ppiMatch = (d['displayresolution'] || '').match(/~?(\d+)\s*ppi/i);
+  const ppiMatch = (d['displayresolution'] || pa['pixel density'] || '').match(/~?(\d+)\s*ppi/i);
   const ppi = ppiMatch ? Number(ppiMatch[1]) : undefined;
 
   // Hardware & memory parsing (`256GB 12GB RAM, 512GB 16GB RAM`)
-  const memRaw = d['internalmemory'] || '';
+  const memRaw = d['internalmemory'] || `${pa['internal storage'] || ''} ${pa['ram'] || ''}`.trim();
   const ramMatches = Array.from(memRaw.matchAll(/(\d+)\s*GB\s*RAM/gi)).map(m => Number(m[1]));
   const storageMatches = Array.from(memRaw.matchAll(/(\d+)\s*(GB|TB)(?!\s*RAM)/gi)).map(m =>
     m[2]?.toUpperCase() === 'TB' ? Number(m[1]) * 1024 : Number(m[1])
@@ -115,56 +118,70 @@ export function parseGsmArenaHtmlToSpecs(
   const ramGb = ramMatches.length > 0 ? Math.max(...ramMatches) : null;
   const storageGb = storageMatches.length > 0 ? Math.max(...storageMatches) : null;
 
-  // Camera parsing (PhoneArena split format)
-  const camSplit = splitCameraModulesToPhoneArenaFormat(d['cam1modules'] || '');
+  // Camera parsing (PhoneArena split format + PhoneArena table overrides)
+  const camSplitRaw = splitCameraModulesToPhoneArenaFormat(d['cam1modules'] || '');
+  const camSplit = {
+    main_camera: pa['main camera'] || camSplitRaw.main_camera,
+    second_camera: pa['second camera'] || pa['ultra-wide camera'] || camSplitRaw.second_camera,
+    third_camera: pa['third camera'] || pa['telephoto camera'] || camSplitRaw.third_camera,
+    fourth_camera: pa['fourth camera'] || pa['periscope camera'] || camSplitRaw.fourth_camera,
+  };
 
   // Battery parsing
-  const batRaw = d['batdescription1'] || '';
+  const batRaw = d['batdescription1'] || pa['capacity'] || '';
   const batMatch = batRaw.match(/(\d{3,5})\s*mAh/i);
   const batteryMah = batMatch ? Number(batMatch[1]) : null;
-  const chargingRaw = d['batcharging'] || batRaw;
+  const chargingRaw = d['batcharging'] || pa['charging'] || batRaw;
   const fastChargeMatch = chargingRaw.match(/(\d+)\s*W\s*wired/i);
   const fastChargingW = fastChargeMatch ? Number(fastChargeMatch[1]) : undefined;
 
   // Weight parsing
-  const weightMatch = (d['weight'] || '').match(/(\d+(?:\.\d+)?)\s*g\b/i);
+  const weightMatch = (d['weight'] || pa['weight'] || '').match(/(\d+(?:\.\d+)?)\s*g\b/i);
   const weightG = weightMatch ? Number(weightMatch[1]) : undefined;
 
   // Resistance parsing
-  const resistanceMatch = (d['bodyother'] || '').match(/IP\d{2}[A-Z]?[^.;\n]*/i);
+  const resistanceMatch = (d['bodyother'] || pa['water resistance'] || '').match(
+    /IP\d{2}[A-Z]?[^.;\n]*/i
+  );
 
   // 5G check
-  const netTech = `${d['nettech'] || ''} ${d['speed'] || ''} ${d['5g'] || ''}`;
+  const netTech = `${d['nettech'] || ''} ${d['speed'] || ''} ${d['5g'] || ''} ${d['net5g'] || ''}`;
   const has5g = /5G|NR|SA\/NSA/i.test(netTech);
+
+  // 3.5mm headphone jack check
+  const jackRaw = d['jack'] || d['3.5mm jack'] || pa['headphones'] || '';
+  const has35mmJack = jackRaw ? /^yes\b|3\.5\s*mm\s*jack/i.test(jackRaw.trim()) : false;
 
   const rawSpecs: ProductSpecifications = {
     display: {
       size_inch: screenSizeInch ?? undefined,
-      type: d['displaytype'] || undefined,
-      resolution: d['displayresolution'] || undefined,
+      type: d['displaytype'] || pa['display type'] || undefined,
+      resolution: d['displayresolution'] || pa['resolution'] || undefined,
       refresh_rate_hz: refreshRateHz,
       ppi,
       protection: d['displayprotection'] || undefined,
       features: d['displayother'] || d['displaytype'] || undefined,
     },
     hardware: {
-      chipset: d['chipset'] || undefined,
-      cpu: d['cpu'] || undefined,
-      gpu: d['gpu'] || undefined,
+      chipset: d['chipset'] || pa['system chip'] || undefined,
+      cpu: d['cpu'] || pa['processor'] || undefined,
+      gpu: d['gpu'] || pa['gpu'] || undefined,
       ram_gb: ramGb ?? undefined,
       storage_gb: storageGb ?? undefined,
       storage_expansion: d['memoryother']
         ? `${d['memoryslot'] || 'No'} (${d['memoryother']})`
         : d['memoryslot'] || 'No',
-      os: d['os'] || undefined,
+      os: d['os'] || pa['os'] || undefined,
     },
     camera: {
       main_camera: camSplit.main_camera,
       second_camera: camSplit.second_camera,
       third_camera: camSplit.third_camera,
       fourth_camera: camSplit.fourth_camera,
-      video_recording: d['cam1video'] || undefined,
-      front_camera: d['cam2modules'] ? d['cam2modules'].replace(/\r?\n/g, ' | ') : undefined,
+      video_recording: d['cam1video'] || pa['video recording'] || undefined,
+      front_camera: d['cam2modules']
+        ? d['cam2modules'].replace(/\r?\n/g, ' | ')
+        : pa['front camera'] || undefined,
       flash: d['cam1features'] || 'LED Flash, HDR, Panorama',
     },
     battery: {
@@ -175,11 +192,11 @@ export function parseGsmArenaHtmlToSpecs(
       reverse_charging: /reverse\s+wireless/i.test(chargingRaw) ? true : undefined,
     },
     design: {
-      dimensions: d['dimensions'] || undefined,
+      dimensions: d['dimensions'] || pa['dimensions'] || undefined,
       weight_g: weightG,
       materials: d['build'] || d['bodyother'] || undefined,
       resistance: resistanceMatch ? resistanceMatch[0].trim() : undefined,
-      biometrics: /fingerprint/i.test(d['sensors'] || '')
+      biometrics: /fingerprint/i.test(d['sensors'] || pa['biometrics'] || '')
         ? 'Under-display ultrasonic fingerprint, Face Unlock'
         : 'Face ID / Biometric sensor',
       colors: d['colors']
@@ -191,22 +208,22 @@ export function parseGsmArenaHtmlToSpecs(
     },
     cellular: {
       has_5g: has5g,
-      bands_5g: d['net5g'] || '5G SA/NSA/Sub6',
-      sim_type: d['sim'] || 'Dual SIM (Nano-SIM + eSIM)',
-      data_speed: d['speed'] || '5G, LTE-A',
-      technology: d['nettech'] || 'GSM / HSPA / LTE / 5G',
+      bands_5g: has5g ? d['net5g'] || '5G SA/NSA/Sub6' : d['net5g'] || undefined,
+      sim_type: d['sim'] || (has5g ? 'Dual SIM (Nano-SIM + eSIM)' : 'No cellular connectivity'),
+      data_speed: d['speed'] || (has5g ? '5G, LTE-A' : 'Wi-Fi Only'),
+      technology: d['nettech'] || (has5g ? 'GSM / HSPA / LTE / 5G' : 'No cellular connectivity'),
     },
     connectivity: {
-      bluetooth: d['bluetooth'] || undefined,
-      wlan: d['wlan'] || undefined,
-      usb: d['usb'] || undefined,
+      bluetooth: d['bluetooth'] || pa['bluetooth'] || undefined,
+      wlan: d['wlan'] || pa['wi-fi'] || undefined,
+      usb: d['usb'] || pa['usb'] || undefined,
       nfc: d['nfc'] ? /yes|true/i.test(d['nfc']) : true,
       location: d['gps'] || undefined,
       sensors: d['sensors'] || undefined,
     },
     multimedia: {
       loudspeaker: d['loudspeaker'] || 'Stereo speakers, Dolby Atmos',
-      headphone_jack_35mm: false,
+      headphone_jack_35mm: has35mmJack,
       audio_features: d['soundother'] || '24-bit/192kHz Hi-Res & Hi-Res Wireless audio',
     },
     availability: {
@@ -226,7 +243,7 @@ export function parseGsmArenaHtmlToSpecs(
     screen: screenSizeInch
       ? `${screenSizeInch}" ${d['displaytype']?.split(',')[0] || 'LTPO OLED'} ${refreshRateHz ? `${refreshRateHz}Hz` : ''}`.trim()
       : d['displaytype'],
-    chip: d['chipset'] || undefined,
+    chip: d['chipset'] || pa['system chip'] || undefined,
     ram: ramGb ? `${ramGb}GB` : undefined,
     storage: storageGb ? `${storageGb}GB` : undefined,
     camera: camSplit.main_camera
@@ -241,7 +258,7 @@ export function parseGsmArenaHtmlToSpecs(
   });
 
   return {
-    source: meta?.phonearenaUrl ? 'hybrid' : 'gsmarena',
+    source: meta?.phonearenaUrl || meta?.phonearenaHtml ? 'hybrid' : 'gsmarena',
     gsmarenaUrl: meta?.gsmarenaUrl,
     phonearenaUrl: meta?.phonearenaUrl,
     brand,
