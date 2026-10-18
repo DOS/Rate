@@ -1263,6 +1263,14 @@ function mapOfferRowToMerchantOffer(item: RawOfferRow): MerchantOffer {
   };
 }
 
+/**
+ * Columns mapTrustViewRowToMerchantOffer reads (RawTrustViewRow). Not '*': the
+ * view also carries descriptions, images and metadata, and offer reads are
+ * uncapped now that they page.
+ */
+const TRUST_VIEW_SELECT =
+  'id, cluster_id, merchant_id, platform, title, price_current, price_original, stock, rating_star, rating_count, url, merchant_name, merchant_is_official, merchant_location, threat_risk_score, dosafe_risk_score, review_risk_score, review_risk_breakdown';
+
 /** Offer columns readable through rate.merchants' column-level grants. */
 const OFFER_FALLBACK_SELECT = `
   id, cluster_id, platform, title, price_current, price_original, stock,
@@ -1289,7 +1297,7 @@ export async function getMasterProductOffers(
     (from, to) =>
       supabase
         .from('v_products_with_merchant_trust')
-        .select('*')
+        .select(TRUST_VIEW_SELECT)
         .eq('cluster_id', masterId)
         .order('price_current', { ascending: true })
         .order('id')
@@ -1343,7 +1351,7 @@ export async function getMasterProductOffersBatch(
       (from, to) =>
         supabase
           .from('v_products_with_merchant_trust')
-          .select('*')
+          .select(TRUST_VIEW_SELECT)
           .in('cluster_id', batchIds)
           .order('price_current', { ascending: true })
           .order('id')
