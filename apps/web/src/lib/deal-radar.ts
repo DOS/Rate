@@ -100,17 +100,28 @@ export function getRadarSignal(
 /** Short human label shared by every badge and Markdown cell. */
 export function radarLabel(
   signal?: RadarSignal | null,
-  minSpreadPct = 0
+  minSpreadPct = 0,
+  locale?: string
 ): string {
   const sig = signal ?? EMPTY_RADAR_SIGNAL;
+  const loc = locale === 'en' || locale === 'cs' ? locale : 'vi';
   if (sig.verdict === 'genuine_deal') {
-    return `🔥 Đáy giá 60N (-${sig.savingsPct.toFixed(1)}%)`;
+    const pct = sig.savingsPct.toFixed(1);
+    if (loc === 'en') return `🔥 60D Low (-${pct}%)`;
+    if (loc === 'cs') return `🔥 60D minimum (-${pct}%)`;
+    return `🔥 Đáy giá 60N (-${pct}%)`;
   }
   if (sig.verdict === 'fake_sale_trap') {
-    return `🚨 Cảnh báo Sale Ảo (+${sig.fakeMarkupPct.toFixed(1)}%)`;
+    const pct = sig.fakeMarkupPct.toFixed(1);
+    if (loc === 'en') return `🚨 Fake Sale Alert (+${pct}%)`;
+    if (loc === 'cs') return `🚨 Falešná sleva (+${pct}%)`;
+    return `🚨 Cảnh báo Sale Ảo (+${pct}%)`;
   }
   if (sig.spreadPct > 0 && sig.spreadPct >= minSpreadPct) {
-    return `📊 Lệch giá +${sig.spreadPct.toFixed(1)}% đa sàn`;
+    const pct = sig.spreadPct.toFixed(1);
+    if (loc === 'en') return `📊 +${pct}% cross-platform spread`;
+    if (loc === 'cs') return `📊 +${pct}% rozdíl mezi e-shopy`;
+    return `📊 Lệch giá +${pct}% đa sàn`;
   }
   return '';
 }
@@ -144,8 +155,11 @@ export function radarCsvCells(signal?: RadarSignal | null): string[] {
 }
 
 /** Markdown cell content ('-' when there is no signal). */
-export function radarMarkdownCell(signal?: RadarSignal | null): string {
-  return radarLabel(signal) || '-';
+export function radarMarkdownCell(
+  signal?: RadarSignal | null,
+  locale?: string
+): string {
+  return radarLabel(signal, 0, locale) || '-';
 }
 
 /** Radar entries that belong to one merchant (matched by id or name). */

@@ -1,5 +1,6 @@
 import { Link } from '@/lib/navigation';
 import Image from 'next/image';
+import { getTranslations } from 'next-intl/server';
 import { FaFacebookF, FaInstagram } from 'react-icons/fa';
 import {
   FaLinkedin,
@@ -11,7 +12,6 @@ import {
   FaTelegram,
 } from 'react-icons/fa6';
 import { BsShieldCheck, BsCodeSlash } from 'react-icons/bs';
-import { getRateCopy } from '@/lib/rate-i18n';
 import RateWordmark from '@/components/brand/RateWordmark';
 
 export interface FooterSectionLink {
@@ -26,7 +26,7 @@ export interface FooterSection {
   links?: readonly FooterSectionLink[];
 }
 
-export default function FooterDynamic({
+export default async function FooterDynamic({
   sections,
   links: _links,
   logoUrl,
@@ -41,41 +41,41 @@ export default function FooterDynamic({
   readonly socialLinks?: readonly FooterSectionLink[] | null;
   readonly locale?: string;
 }) {
-  const copyDict = getRateCopy(locale);
+  const tFooter = await getTranslations({ locale, namespace: 'rate.footer' });
   const yearText = new Date().getFullYear().toString();
-  const copy = (copyRight || copyDict.footer.copyRight).replace(
+  const copy = (copyRight || tFooter('copyRight', { YEAR: yearText })).replace(
     '{YEAR}',
     yearText
   );
 
   const fallback1: FooterSection = {
-    title: copyDict.footer.col1Title,
+    title: tFooter('col1Title'),
     links: [
-      { label: copyDict.footer.links.smartphones, href: '/smartphones' },
-      { label: copyDict.footer.links.laptops, href: '/laptops' },
-      { label: copyDict.footer.links.tablets, href: '/tablets' },
+      { label: tFooter('links.smartphones'), href: '/smartphones' },
+      { label: tFooter('links.laptops'), href: '/laptops' },
+      { label: tFooter('links.tablets'), href: '/tablets' },
       {
-        label: copyDict.footer.links.smartwatches,
+        label: tFooter('links.smartwatches'),
         href: '/smartwatches',
       },
       {
-        label: copyDict.footer.links.earbuds,
+        label: tFooter('links.earbuds'),
         href: '/earbuds',
       },
     ],
   };
 
   const fallback2: FooterSection = {
-    title: copyDict.footer.col2Title,
+    title: tFooter('col2Title'),
     links: [
-      { label: copyDict.footer.links.leaderboard, href: '/leaderboard' },
-      { label: copyDict.footer.links.inspect, href: '/inspect' },
-      { label: copyDict.footer.links.compare, href: '/compare' },
-      { label: copyDict.footer.links.merchants, href: '/merchants' },
-      { label: copyDict.footer.links.watchlist, href: '/watchlist' },
-      { label: copyDict.footer.links.developers, href: '/developers' },
+      { label: tFooter('links.leaderboard'), href: '/leaderboard' },
+      { label: tFooter('links.inspect'), href: '/inspect' },
+      { label: tFooter('links.compare'), href: '/compare' },
+      { label: tFooter('links.merchants'), href: '/merchants' },
+      { label: tFooter('links.watchlist'), href: '/watchlist' },
+      { label: tFooter('links.developers'), href: '/developers' },
       {
-        label: copyDict.footer.links.apiProducts,
+        label: tFooter('links.apiProducts'),
         href: '/api/v1/rate/products',
         newTab: true,
       },
@@ -83,14 +83,14 @@ export default function FooterDynamic({
   };
 
   const fallback3: FooterSection = {
-    title: copyDict.footer.col3Title,
+    title: tFooter('col3Title'),
     links: [
-      { label: copyDict.footer.links.about, href: '/about-us' },
-      { label: copyDict.footer.links.faq, href: '/faq' },
-      { label: copyDict.footer.links.privacy, href: '/privacy-policy' },
-      { label: copyDict.footer.links.contact, href: '/contact-us' },
+      { label: tFooter('links.about'), href: '/about-us' },
+      { label: tFooter('links.faq'), href: '/faq' },
+      { label: tFooter('links.privacy'), href: '/privacy-policy' },
+      { label: tFooter('links.contact'), href: '/contact-us' },
       {
-        label: copyDict.footer.links.github,
+        label: tFooter('links.github'),
         href: 'https://github.com/DOS/Rate',
         newTab: true,
       },
@@ -289,7 +289,7 @@ export default function FooterDynamic({
           {/* Open-Core Architecture & Security Status */}
           <div className="col-md-4 col-lg-3 col-xl-2 col-6">
             <div className="footer-widget">
-              <h4 className="widget-title">{copyDict.footer.trustTitle}</h4>
+              <h4 className="widget-title">{tFooter('trustTitle')}</h4>
               <div className="contactInfowrap">
                 <div className="singleinfo">
                   <div className="icons">
@@ -301,7 +301,7 @@ export default function FooterDynamic({
                       <br />
                       Dual Risk Score
                     </h5>
-                    <p className="subs">{copyDict.footer.antiSeedingSub}</p>
+                    <p className="subs">{tFooter('antiSeedingSub')}</p>
                   </div>
                 </div>
                 <div className="singleinfo">
@@ -310,7 +310,7 @@ export default function FooterDynamic({
                   </div>
                   <div className="caps">
                     <h5 className="title">Open-Core REST v1</h5>
-                    <p className="subs">{copyDict.footer.specGroupsSub}</p>
+                    <p className="subs">{tFooter('specGroupsSub')}</p>
                   </div>
                 </div>
               </div>

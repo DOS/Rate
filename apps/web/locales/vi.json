@@ -17,7 +17,8 @@
       "compare": "So sánh",
       "watchlist": "Canh giá",
       "developers": "API",
-      "priceWatchCta": "Canh giá thật"
+      "priceWatchCta": "Canh giá thật",
+      "selectLanguageAria": "Chọn ngôn ngữ"
     },
     "footer": {
       "copyRight": "© {YEAR} Rate.vn (DOS Ecosystem). Nền tảng Đối chiếu Thông số 10 Nhóm, Lịch sử Giá thật & Kiểm toán Đánh giá Đa sàn.",
@@ -49,7 +50,8 @@
       "bannerTitle": "Tra cứu Giá Thật & Kiểm Toán Seeding Trước Khi Đặt Mua",
       "bannerDesc": "Dán link sản phẩm Shopee, Lazada, Tiki hoặc đặt mức giá mục tiêu để không bao giờ mua nhầm khuyến mãi ảo.",
       "bannerCta": "Mở Danh Sách Canh Giá",
-      "bannerCompareCta": "Bàn Cân 10 Nhóm Thông Số"
+      "bannerCompareCta": "Bàn Cân 10 Nhóm Thông Số",
+      "bannerInspectCta": "Kiểm định Review & Giá"
     },
     "home": {
       "heroBadge": "Nền Tảng Đối Chiếu Thông Số, Lịch Sử Giá Thật & Kiểm Toán Đánh Giá Đa Sàn",
@@ -665,7 +667,10 @@
     "labNoScore": "Lab: chưa có",
     "spreadSavingsBadge": "Chênh sàn tiết kiệm {amount} ₫",
     "costPerPointSub": "({cost} ₫ / điểm JReviews)",
-    "audit10PlatformsLink": "Kiểm định giá 10 sàn →"
+    "audit10PlatformsLink": "Kiểm định giá 10 sàn →",
+    "radarBadgeGenuine": "🔥 Đáy giá 60N (-{pct}%)",
+    "radarBadgeFakeTrap": "🚨 Cảnh báo Sale Ảo (+{pct}%)",
+    "radarBadgeSpread": "📊 Lệch giá +{pct}% đa sàn"
   },
   "inspect": {
     "metaTitle": "Trung Tâm Kiểm Toán Link Đa Sàn & Phát Hiện Giảm Giá Ảo | Rate.vn",
@@ -1596,7 +1601,9 @@
       "featuresHeader": "Tính năng nổi bật (10 Field Groups)",
       "filteringBtn": "Đang lọc dữ liệu...",
       "applyFiltersBtn": "Áp dụng bộ lọc",
-      "clearAllFiltersBtn": "Xóa tất cả bộ lọc"
+      "clearAllFiltersBtn": "Xóa tất cả bộ lọc",
+      "rangeFrom": "Từ:",
+      "rangeTo": "Đến:"
     }
   },
   "heroSearch": {
