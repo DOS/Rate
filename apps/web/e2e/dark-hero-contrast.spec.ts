@@ -23,7 +23,6 @@ const PAGES = [
 const MUST_MEASURE = new Set([
   '/compare/iphone-16-pro-max-256gb-vs-samsung-galaxy-s25-ultra-256gb',
   '/leaderboard',
-  '/deals',
 ]);
 
 for (const path of PAGES) {
