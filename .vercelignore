@@ -3,19 +3,21 @@ node_modules
 **/node_modules
 
 # Local docker and DB volumes
-volumes
-volumes/**
-supabase
-supabase/**
-.supabase/**
+# Leading slashes: these are root folders only. Unanchored, `supabase` also
+# matched apps/web/src/lib/supabase and broke Vercel builds (#297).
+/volumes
+/volumes/**
+/supabase
+/supabase/**
+/.supabase/**
 
 # Unused root templates & demo kits
 ListingHub_NextJs_*/**
-vendor/**
-Backup/**
-crawler_test/**
-test-results/**
-scratch/**
+/vendor/**
+/Backup/**
+/crawler_test/**
+/test-results/**
+/scratch/**
 
 # Other apps and packages not needed for web
 apps/importer/**
