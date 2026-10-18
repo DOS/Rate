@@ -700,10 +700,10 @@
     "inspectingBtn": "Probíhá analýza...",
     "copyLinkBtn": "Kopírovat odkaz na report",
     "copiedLinkBtn": "Odkaz zkopírován!",
-    "copiedAuditMdBtn": "✓ Markdown auditu zkopírován!",
-    "copyAuditMdBtn": "📋 Kopírovat Markdown auditu",
-    "exportCsvBtn": "📥 Exportovat CSV",
-    "exportJsonBtn": "📦 Exportovat JSON",
+    "copiedAuditMdBtn": "Markdown auditu zkopírován!",
+    "copyAuditMdBtn": "Kopírovat Markdown auditu",
+    "exportCsvBtn": "Exportovat CSV",
+    "exportJsonBtn": "Exportovat JSON",
     "sampleLabel": "Vyzkoušejte živé ukázky:",
     "verdictTitle": "Výsledek auditu ceny a slevy na základě důkazů",
     "claimedOriginalLabel": "Deklarovaná přeškrtnutá cena prodejce",
@@ -741,7 +741,8 @@
     "colAction": "Odkaz",
     "auditShopBtn": "Audit obchodu",
     "notFoundTitle": "Žádná přímá shoda nebyla nalezena",
-    "notFoundDesc": "Vyzkoušejte některý z ukázkových odkazů výše nebo zadejte název zařízení (např. iPhone 16)."
+    "notFoundDesc": "Vyzkoušejte některý z ukázkových odkazů výše nebo zadejte název zařízení (např. iPhone 16).",
+    "exportMenu": "Exportovat data"
   },
   "merchants": {
     "dirMetaTitle": "Adresář důvěryhodnosti e-shopů (DOSafe + AI Review Risk) | Rate.vn",

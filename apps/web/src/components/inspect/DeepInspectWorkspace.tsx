@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useDetailsDismiss } from '@/components/elementary/use-details-dismiss';
 import { Link, useRouter } from '@/lib/navigation';
 import {
   getMasterProductHref,
@@ -25,7 +26,6 @@ import type { KeySpecs } from '@repo/shared-data';
 import {
   BsArrowRight,
   BsCheckCircleFill,
-  BsClipboardCheck,
   BsCpu,
   BsExclamationTriangleFill,
   BsGraphDownArrow,
@@ -35,6 +35,7 @@ import {
   BsShieldExclamation,
   BsShop,
   BsStarFill,
+  BsDownload,
 } from 'react-icons/bs';
 
 interface DeepInspectWorkspaceProps {
@@ -308,6 +309,8 @@ export default function DeepInspectWorkspace({
   const productCategoryPath =
     productHref.replace(`/${master?.slug || ''}`, '') || '/smartphones';
 
+  const { ref: exportMenuRef, close: closeExportMenu } = useDetailsDismiss();
+
   return (
     <div className="bg-light py-5">
       <div className="container">
@@ -315,42 +318,40 @@ export default function DeepInspectWorkspace({
         <div className="rate-scoreboard-dark rate-surface-dark p-lg-5 mb-4 p-4">
           <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
             <span className="rate-eyebrow">{t('badge')}</span>
-            <div className="d-flex align-items-center flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={handleCopyAuditMarkdown}
-                className="btn btn-sm btn-danger rounded-pill d-inline-flex align-items-center fw-semibold gap-2 px-3"
-              >
-                <BsClipboardCheck />
-                <span>
+            <details ref={exportMenuRef} className="rate-export-menu ms-auto">
+              <summary>
+                <BsDownload aria-hidden="true" />
+                {t('exportMenu')}
+              </summary>
+              <div className="rate-export-menu-list">
+                <button type="button" onClick={handleCopyAuditMarkdown}>
                   {copiedMd ? t('copiedAuditMdBtn') : t('copyAuditMdBtn')}
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={handleDownloadInspectCsv}
-                data-testid="inspect-export-csv-btn"
-                className="btn btn-sm btn-outline-light rounded-pill fw-semibold px-3"
-              >
-                {t('exportCsvBtn')}
-              </button>
-              <button
-                type="button"
-                onClick={handleDownloadInspectJson}
-                data-testid="inspect-export-json-btn"
-                className="btn btn-sm btn-outline-light rounded-pill fw-semibold px-3"
-              >
-                {t('exportJsonBtn')}
-              </button>
-              <button
-                type="button"
-                onClick={handleCopyReportLink}
-                className="btn btn-sm btn-outline-light rounded-pill d-inline-flex align-items-center gap-2 px-3"
-              >
-                <BsClipboardCheck />
-                <span>{copied ? t('copiedLinkBtn') : t('copyLinkBtn')}</span>
-              </button>
-            </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleDownloadInspectCsv();
+                    closeExportMenu();
+                  }}
+                  data-testid="inspect-export-csv-btn"
+                >
+                  {t('exportCsvBtn')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleDownloadInspectJson();
+                    closeExportMenu();
+                  }}
+                  data-testid="inspect-export-json-btn"
+                >
+                  {t('exportJsonBtn')}
+                </button>
+                <button type="button" onClick={handleCopyReportLink}>
+                  {copied ? t('copiedLinkBtn') : t('copyLinkBtn')}
+                </button>
+              </div>
+            </details>
           </div>
 
           <h1 className="h2 fw-bold mb-2 text-white">{t('title')}</h1>
