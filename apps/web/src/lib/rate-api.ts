@@ -2752,7 +2752,11 @@ export async function getMerchantProfileById(
   // Each chunk returns its newest 60; keep the newest 60 overall.
   const reviewsRes = {
     data: (reviewRows as Array<{ created_at?: string | null }>)
-      .sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''))
+      .sort(
+        (a, b) =>
+          (Date.parse(b.created_at ?? '') || 0) -
+          (Date.parse(a.created_at ?? '') || 0)
+      )
       .slice(0, 60),
   };
 
