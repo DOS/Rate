@@ -495,7 +495,9 @@ async function runTests() {
     BoundedSlidingWindowRateLimiter,
     extractClientRateLimitKey,
     parseBoundedStringParam,
+    parseOptionalVndPriceParam,
     parseCompareSlugsParam,
+    parseWatchlistSlugsParam,
     parseVersusQueryParams,
     resolveReviewVoteInput,
   } = (
@@ -542,6 +544,11 @@ async function runTests() {
   assert.equal(extractClientRateLimitKey(new Headers()), 'anon');
   assert.equal(parseBoundedStringParam('  hello world  ', 5), 'hello');
   assert.equal(parseBoundedStringParam('   ', 10), null);
+  assert.equal(parseOptionalVndPriceParam(' 25990000.4 '), 25990000);
+  assert.equal(parseOptionalVndPriceParam('999000000'), 500_000_000);
+  assert.equal(parseOptionalVndPriceParam('-100'), null);
+  assert.equal(parseOptionalVndPriceParam('abc'), null);
+  assert.equal(parseOptionalVndPriceParam(''), null);
   assert.deepEqual(
     parseCompareSlugsParam(
       ' iphone-16-pro-max , IPHONE-16-PRO-MAX , bad<script>slug , galaxy-s24-ultra , xiaomi-15-ultra , find-x8-pro , extra-fifth-slug '
@@ -550,6 +557,15 @@ async function runTests() {
     'parseCompareSlugsParam must deduplicate case-insensitively, reject invalid characters, and cap at 4 slugs'
   );
   assert.deepEqual(parseCompareSlugsParam('   , ??? , /etc/passwd '), []);
+  assert.deepEqual(
+    parseWatchlistSlugsParam(
+      ' Apple-iPhone-16-128GB , apple-iphone-16-128gb , bad<script>slug , Samsung-Galaxy-S24-Ultra , extra-ignored ',
+      2
+    ),
+    ['apple-iphone-16-128gb', 'samsung-galaxy-s24-ultra'],
+    'parseWatchlistSlugsParam must lowercase, deduplicate, reject invalid characters, and cap at maxSlugs'
+  );
+  assert.deepEqual(parseWatchlistSlugsParam('   , ??? , /etc/passwd '), []);
   assert.deepEqual(
     parseVersusQueryParams(
       new URLSearchParams('pair=Apple-iPhone-16-vs-Samsung-Galaxy-S25')

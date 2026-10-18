@@ -96,6 +96,22 @@ export function parseBoundedStringParam(
   return trimmed.length > maxLength ? trimmed.slice(0, maxLength) : trimmed;
 }
 
+/**
+ * Parses an optional VND price query parameter (`?price=` or `?originalPrice=`),
+ * returning a positive integer capped at `maxVnd` (default 500,000,000 VND) or `null` if invalid/missing.
+ */
+export function parseOptionalVndPriceParam(
+  raw: string | null | undefined,
+  maxVnd = 500_000_000
+): number | null {
+  if (raw == null) return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const n = Number(trimmed);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return Math.min(Math.round(n), maxVnd);
+}
+
 const CANONICAL_PRODUCT_SLUG_REGEX = /^[a-zA-Z0-9._-]+$/;
 
 /**
@@ -119,6 +135,33 @@ export function parseCompareSlugsParam(
     const lower = slug.toLowerCase();
     if (seen.has(lower)) continue;
     seen.add(lower);
+    uniqueSlugs.push(slug);
+    if (uniqueSlugs.length >= maxSlugs) break;
+  }
+  return uniqueSlugs;
+}
+
+/**
+ * Parses and validates comma-separated master product slugs for `GET /api/v1/rate/watchlist`.
+ * Bounds raw input length, normalizes to lowercase, deduplicates up to `maxSlugs` (default 20),
+ * and rejects overlong (`> 120` chars) or malformed slugs.
+ */
+export function parseWatchlistSlugsParam(
+  raw: string | null | undefined,
+  maxSlugs = 20
+): string[] {
+  const boundedRaw = parseBoundedStringParam(raw, 2600);
+  if (!boundedRaw) return [];
+  const uniqueSlugs: string[] = [];
+  const seen = new Set<string>();
+  for (const part of boundedRaw.split(',')) {
+    const slug = part.trim().toLowerCase();
+    if (!slug) continue;
+    if (slug.length > 120 || !CANONICAL_PRODUCT_SLUG_REGEX.test(slug)) {
+      continue;
+    }
+    if (seen.has(slug)) continue;
+    seen.add(slug);
     uniqueSlugs.push(slug);
     if (uniqueSlugs.length >= maxSlugs) break;
   }

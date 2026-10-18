@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getCachedInspectProductOrShopUrl } from '@/server/rate';
+import {
+  computeProductRadarSignal,
+  getCachedInspectProductOrShopUrl,
+} from '@/server/rate';
 import {
   PUBLIC_API_CORS_HEADERS,
   jsonApiError,
@@ -28,20 +31,21 @@ export async function GET(request: NextRequest) {
     );
 
     if (!rawQuery) {
-      return jsonApiError(
-        400,
-        'Missing query parameter ?q= or ?url=',
-        undefined,
-        PUBLIC_API_CORS_HEADERS
-      );
+      return jsonApiError(400, 'Missing query parameter ?q= or ?url=');
     }
 
     const result = await getCachedInspectProductOrShopUrl(rawQuery);
+    const radarSignal = result.masterProduct
+      ? computeProductRadarSignal(result.masterProduct, result.allOffers)
+      : null;
 
     return NextResponse.json(
       {
         ok: true,
-        data: result,
+        data: {
+          ...result,
+          radarSignal,
+        },
       },
       {
         status: 200,
