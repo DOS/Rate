@@ -306,7 +306,7 @@ export async function ProductDetailView({
 
           {/* Right: Overview & Offers Highlights */}
           <div className="col-lg-7 d-flex flex-column col-12">
-            <p className="rate-product-card-meta mb-1">
+            <p className="rate-product-card-meta rate-pdv-meta mb-1">
               {[product.brand, product.has_5g ? '5G' : '', product.variant_name]
                 .filter(Boolean)
                 .join(' · ')}
@@ -381,6 +381,15 @@ export async function ProductDetailView({
                         }
                       >
                         {bayesianSummary.tierLabelVi}
+                        {bayesianSummary.effectiveWeightSum > 0 && (
+                          <span className="visually-hidden">
+                            {' '}
+                            (Σw={bayesianSummary.effectiveWeightSum.toFixed(2)},
+                            c=
+                            {Math.round(bayesianSummary.confidenceRatio * 100)}
+                            %)
+                          </span>
+                        )}
                       </span>
                     </div>
                   </div>
