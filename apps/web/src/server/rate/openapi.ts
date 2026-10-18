@@ -1322,8 +1322,11 @@ export function buildRateOpenApiSpec(
               description: 'Malformed JSON or empty revalidation target lists.',
             },
             '401': {
+              description: 'Missing or invalid `RATE_REVALIDATE_SECRET` token.',
+            },
+            '503': {
               description:
-                'Missing or invalid `RATE_REVALIDATE_SECRET` / `CRON_SECRET` token.',
+                'Revalidation is not configured on this deployment (`RATE_REVALIDATE_SECRET` unset).',
             },
           },
         },
