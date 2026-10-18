@@ -496,6 +496,7 @@ async function runTests() {
     extractClientRateLimitKey,
     parseBoundedStringParam,
     parseCompareSlugsParam,
+    resolveReviewVoteInput,
   } = (
     'BoundedSlidingWindowRateLimiter' in apiHandlerMod
       ? apiHandlerMod
@@ -548,6 +549,31 @@ async function runTests() {
     'parseCompareSlugsParam must deduplicate case-insensitively, reject invalid characters, and cap at 4 slugs'
   );
   assert.deepEqual(parseCompareSlugsParam('   , ??? , /etc/passwd '), []);
+  assert.equal(
+    resolveReviewVoteInput({}),
+    null,
+    'Empty vote body must not silently default to an upvote'
+  );
+  assert.equal(
+    resolveReviewVoteInput({ voteType: 'invalid_action', helpful: true }),
+    null,
+    'Invalid voteType must be rejected even if helpful is present'
+  );
+  assert.deepEqual(resolveReviewVoteInput({ vote: 'down' }), {
+    voteType: 'down',
+    reportReason: 'spam',
+  });
+  assert.deepEqual(
+    resolveReviewVoteInput({ voteType: 'REPORT', reason: 'FAKE' }),
+    {
+      voteType: 'report',
+      reportReason: 'fake',
+    }
+  );
+  assert.deepEqual(resolveReviewVoteInput({ helpful: false }), {
+    voteType: 'down',
+    reportReason: 'spam',
+  });
 
   const cacheTagsMod = await import('../../web/src/server/rate/cache-tags.js');
   const { resolveRevalidationTargets, RATE_CACHE_TAGS } = (
