@@ -53,8 +53,9 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc 4 tầ
   - [ ] Áp lên beta/prod: workflow beta của `DOS-Me` đang bị khóa (`beta-migrations.yml`), nhánh beta chưa cập nhật từ 18/04/2026; chờ quy trình beta có review của chủ `DOS-Me`.
 - [ ] **6.5. Bảo Vệ Nhánh & Quét Bí Mật Trên GitHub (`DOS/Rate` - Audit K3 - `DOS/Rate#191`):**
   - [x] Dependabot security updates và CodeQL default setup đã bật.
-  - [ ] Secret Scanning + Push Protection: bị chính sách enterprise của org chặn (`422`), cần chủ enterprise bật.
-  - [ ] Branch Rulesets cho `main` và `dev`: bật sau khi làm sạch lịch sử git (`#153`).
+  - [x] Quét secret bù trừ: gitleaks quét commit của mỗi PR vào `dev`/`main` (`DOS/Rate#305`).
+  - [ ] Secret Scanning + Push Protection: repo public nên miễn phí, nhưng API trả `422` "blocked by an enterprise policy"; cần chủ enterprise mở policy hoặc gắn cấu hình "Secret Protection enabled" của org cho repo.
+  - [ ] Branch Rulesets: `dev-main-light` và `main-release` đã bật lại sau khi làm sạch lịch sử (`#153`); còn thiếu `Secret scan (gitleaks)` trong danh sách check bắt buộc (cần chủ repo cho phép).
 - [x] **6.6. Khóa Đường Ghi Công Khai Theo Người Dùng & Phiên Cookie (`DOS/Rate#155`, `#194` - Audit K1, K2, C4, T13):**
   - `POST /api/v1/rate/reviews` và `/watchlist` bắt buộc đăng nhập, gọi RPC dưới quyền người dùng (không còn service role), không báo thành công giả, mã lỗi RPC → 403/409/422/429. Client service role tách sang `@repo/shared-data/server` (ESLint cấm trong `apps/web`).
   - Phiên đăng nhập lưu trong cookie qua `@supabase/ssr`; `middleware.ts` → `proxy.ts` (Next.js 16) refresh phiên; request dùng cookie phải cùng origin.
@@ -74,3 +75,9 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc 4 tầ
   - Kiểm thử trực tiếp `NextRequest -> NextResponse` trên toàn bộ 15 REST API v1 endpoints (`/api/v1/rate/products`, `/products/[slug]`, `/compare`, `/versus`, `/lookup`, `/inspect`, `/deals`, `/leaderboard`, `/merchants`, `/merchants/[id]`, `/stats`, `/openapi`, `/openapi.json`, `/revalidate`, `/extension/lookup`, `/extension/ingest`, `/api/reviews/[id]/vote`, `/api/health`) kiểm tra đầy đủ mã `200`, `204`, `400`, `401`, `404`, `429`, `500` (Suite `[56/61]` & `[60/61]`).
 - [x] **7.3. Tối Ưu Hóa Cache Đa Tầng Next.js 16 (`withRateDataCache` & `/api/v1/rate/revalidate` - `DOS/Rate#186`, `DOS/Rate-Services#52` - Audit C3):**
   - Kết hợp `React.cache()` (chống trùng lặp trong cùng 1 SSR request) với `unstable_cache` (`withRateDataCache` trong `src/server/rate/cache-tags.ts`) gắn thẻ xác định (`rate:products`, `rate:product:<slug>`, `rate:category:<slug>`, `rate:merchant:<id>`, `rate:deals`, `rate:reviews`, `rate:price-history`), endpoint `POST /api/v1/rate/revalidate` xác thực `timingSafeEqual`, và tích hợp tự động gọi revalidate tại Step 8 (`triggerWebCacheRevalidation`) của `DOS/Rate-Services`.
+- [x] **7.4. Kiểm Thử E2E Hermetic Trên Trình Duyệt (`DOS/Rate#312`, `#317`):**
+  - `pnpm test:e2e` dựng PostgreSQL 17 từ `supabase/migrations`, seed catalog mẫu, chạy PostgREST sau proxy `/rest/v1` (anon JWT ký tại chỗ), build production rồi chạy Playwright; job CI `E2E (Playwright)` không cần secret Supabase. Proxy giả lập DB lỗi theo từng URL và giới hạn request line 8000 ký tự như gateway.
+- [x] **7.5. Type Schema `rate` Sinh Từ Migration (`DOS/Rate#313`, `#320`, `#330`, `#331`):**
+  - `pnpm gen:db-types` sinh `packages/shared-data/src/database.types.ts` bằng `supabase/postgres-meta` (pin digest) trên DB replay; `pnpm check:db-types` chặn drift trong CI; mọi client Supabase của web có type `Database`.
+- [x] **7.6. HTTP Status Đúng & Không Cache Dữ Liệu Lỗi (`DOS/Rate#316`, `#318`, `#319`, `#323`, `#326`, `#328`, `#329`, `#332`, `#333`, `#336`):**
+  - Bỏ `[locale]/loading.tsx` để URL sản phẩm, merchant, so sánh không tồn tại trả 404 thật (trước đó là soft 404 trên rate.vn); thay bằng thanh tiến trình chuyển trang. Lỗi DB ở trang chi tiết, hồ sơ merchant, danh sách merchant và lịch sử giá ném `RateDataUnavailableError` (trang 5xx, body API đã che chi tiết) thay vì trả rỗng rồi bị `unstable_cache` giữ 5-10 phút; truy vấn `in()` chia lô 150 id.
