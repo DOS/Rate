@@ -7,6 +7,7 @@
  * 5. Review batch deduplication, 23505 unique-index race retry pass, is_verified_buyer refresh & AiReviewAnalyzer integration
  */
 import assert from 'node:assert/strict';
+import { trimTrailingSlashes } from '../ai-spec-enricher.js';
 import { ShopeeIngestionPipeline, platformReviewIdFor } from '../shopee-to-supabase.js';
 import type { RateSupabaseClient, ShopeeProduct, ShopeeReview } from '../types.js';
 
@@ -398,7 +399,15 @@ async function runTests() {
     'sp-rev-999',
     'Explicit platform reviewId must take precedence over fallback hash'
   );
-  console.log('  ✅ [1/5] platformReviewIdFor masked-author collision resistance passed');
+  assert.equal(trimTrailingSlashes('https://api.dos.ai/v1///'), 'https://api.dos.ai/v1');
+  assert.equal(
+    trimTrailingSlashes(`https://api.dos.ai/${'/'.repeat(5000)}v1///`),
+    `https://api.dos.ai/${'/'.repeat(5000)}v1`,
+    'trimTrailingSlashes must run in linear time without polynomial regex backtracking'
+  );
+  console.log(
+    '  ✅ [1/5] platformReviewIdFor masked-author collision resistance & linear-time URL normalization passed'
+  );
 
   // 2. init() category lookup error propagation
   const { stub: errCatStub } = createPipelineStubSupabase({
