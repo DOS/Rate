@@ -1,0 +1,216 @@
+// Product detail scoreboard (smartphones/[slug] and the other categories).
+// Lives in its own partial so product work does not collide with home or
+// catalog additions.
+
+.rate-pdv-board {
+  padding: 1.25rem;
+
+  @media (min-width: 768px) {
+    padding: 1.5rem;
+  }
+}
+
+.rate-pdv-board-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.rate-pdv-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.rate-pdv-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.6rem;
+  font-size: var(--rate-text-min);
+  font-weight: 600;
+  color: var(--rate-fg-paragraph);
+  background-color: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--rate-border-strong);
+  border-radius: 6px;
+
+  &.is-good,
+  &.is-high {
+    color: #6ee7b7;
+    background-color: rgba(45, 186, 105, 0.14);
+    border-color: rgba(45, 186, 105, 0.35);
+  }
+
+  &.is-medium {
+    color: #7dd3fc;
+    background-color: rgba(56, 189, 248, 0.14);
+    border-color: rgba(56, 189, 248, 0.32);
+  }
+
+  &.is-low {
+    color: #fde68a;
+    background-color: rgba(251, 191, 36, 0.12);
+    border-color: rgba(251, 191, 36, 0.3);
+  }
+
+  &.is-bad {
+    color: #fda4af;
+    background-color: rgba(244, 63, 94, 0.14);
+    border-color: rgba(244, 63, 94, 0.32);
+  }
+}
+
+.rate-pdv-radar-note {
+  margin: 0 0 1rem;
+  font-size: 0.9375rem;
+  color: var(--rate-fg-paragraph);
+}
+
+.rate-pdv-score {
+  padding: 1rem;
+  background-color: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--rate-border-subtle);
+  border-radius: 10px;
+
+  &.is-expert {
+    background-color: rgba(99, 102, 241, 0.1);
+    border-color: rgba(99, 102, 241, 0.28);
+  }
+}
+
+.rate-pdv-score-label {
+  margin-bottom: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+
+  &.is-user {
+    color: #fcd34d;
+  }
+
+  &.is-expert {
+    color: #a5b4fc;
+  }
+}
+
+.rate-pdv-score-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.rate-pdv-score-value {
+  font-size: 2.25rem;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--rate-fg-primary);
+  font-variant-numeric: tabular-nums;
+
+  &.is-small {
+    font-size: 1.75rem;
+  }
+}
+
+.rate-pdv-score-sub {
+  font-size: 0.875rem;
+  color: var(--rate-fg-secondary);
+}
+
+.rate-pdv-score-empty {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--rate-fg-secondary);
+}
+
+.rate-pdv-confidence {
+  margin-top: 0.75rem;
+}
+
+.rate-pdv-crit {
+  padding: 1rem;
+  background-color: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--rate-border-subtle);
+  border-radius: 10px;
+}
+
+.rate-pdv-crit-row + .rate-pdv-crit-row {
+  margin-top: 0.75rem;
+}
+
+.rate-pdv-crit-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.375rem;
+  font-size: 0.875rem;
+  color: var(--rate-fg-paragraph);
+}
+
+.rate-pdv-crit-value {
+  font-weight: 700;
+  color: var(--rate-fg-primary);
+  font-variant-numeric: tabular-nums;
+
+  &.is-empty {
+    font-weight: 500;
+    color: var(--rate-fg-secondary);
+  }
+}
+
+.rate-pdv-crit .rate-pdv-crit-track {
+  height: 6px;
+  margin-bottom: 0;
+  background-color: rgba(255, 255, 255, 0.12);
+}
+
+.rate-pdv-verdict {
+  margin-top: 1rem;
+  padding: 0.875rem 1rem;
+  font-size: 0.9375rem;
+  color: var(--rate-fg-paragraph);
+  background-color: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--rate-border-subtle);
+  border-radius: 10px;
+
+  strong {
+    color: #a5b4fc;
+  }
+}
+
+.rate-pdv-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1.25rem;
+
+  > .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 0.95rem;
+    font-size: 0.9375rem;
+  }
+
+  > .btn-outline-light {
+    border-color: var(--rate-border-strong);
+  }
+}
+
+.rate-pdv-devinfo {
+  font-size: var(--rate-text-min);
+  color: var(--rate-fg-muted);
+
+  summary {
+    cursor: pointer;
+    font-weight: 600;
+  }
+
+  p {
+    margin: 0.5rem 0 0;
+  }
+}

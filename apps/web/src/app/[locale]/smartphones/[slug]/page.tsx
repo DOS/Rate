@@ -15,6 +15,7 @@ import {
 } from '@/server/rate';
 import { computeBayesianRatingSummary } from '@/lib/rate-api';
 import { isFilteredOutReview } from '@/lib/review-display';
+import { BsCheckCircleFill, BsShieldExclamation } from 'react-icons/bs';
 import RadarBadge from '@/components/radar/RadarBadge';
 import { buildRadarIndex, getRadarSignal } from '@/lib/deal-radar';
 import { defaultOpenGraph, SHARE_IMAGE } from '@/lib/seo';
@@ -305,51 +306,26 @@ export async function ProductDetailView({
 
           {/* Right: Overview & Offers Highlights */}
           <div className="col-lg-7 d-flex flex-column col-12">
-            <div className="d-flex align-items-center mb-2 gap-2">
-              <span className="badge bg-primary-subtle text-primary fw-semibold rounded-pill px-3 py-1">
-                {product.brand}
-              </span>
-              {product.has_5g && (
-                <span className="badge bg-dark rounded-pill px-2 py-1">5G</span>
-              )}
-              {product.variant_name && (
-                <span className="badge bg-light text-muted rounded-pill border px-2 py-1">
-                  {product.variant_name}
-                </span>
-              )}
-            </div>
+            <p className="rate-product-card-meta mb-1">
+              {[product.brand, product.has_5g ? '5G' : '', product.variant_name]
+                .filter(Boolean)
+                .join(' · ')}
+            </p>
 
             <h1 className="h2 fw-bold text-dark mb-3">{product.name}</h1>
 
             {/* #1 Core Focus Above the Fold: JReviews Dual-Rating & 5-Criteria Scoreboard (DESIGN.md v3.0) */}
-            <div className="rate-scoreboard-dark mb-4 p-4">
-              <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-                <span
-                  className="rate-eyebrow"
-                  style={{ color: '#fda4af', letterSpacing: '0.06em' }}
-                >
-                  {t('scoreboardEyebrow')}
-                </span>
-                <div className="d-flex flex-wrap gap-2">
-                  <span
-                    className="badge rounded-pill px-3 py-1"
-                    style={{
-                      backgroundColor: 'rgba(45, 186, 105, 0.16)',
-                      color: '#34d399',
-                      border: '1px solid rgba(45, 186, 105, 0.35)',
-                    }}
-                  >
+            <div className="rate-scoreboard-dark rate-surface-dark rate-pdv-board mb-4">
+              <div className="rate-pdv-board-head">
+                <span className="rate-eyebrow">{t('scoreboardEyebrow')}</span>
+                <div className="rate-pdv-tags">
+                  <span className="rate-pdv-tag is-good">
+                    <BsCheckCircleFill aria-hidden="true" />
                     {t('authenticReviewsBadge', { count: authenticCount })}
                   </span>
                   {ignoredCount > 0 && (
-                    <span
-                      className="badge rounded-pill px-3 py-1"
-                      style={{
-                        backgroundColor: 'rgba(244, 63, 94, 0.16)',
-                        color: '#fda4af',
-                        border: '1px solid rgba(244, 63, 94, 0.35)',
-                      }}
-                    >
+                    <span className="rate-pdv-tag is-bad">
+                      <BsShieldExclamation aria-hidden="true" />
                       {t('filteredSeedingBadge', { count: ignoredCount })}
                     </span>
                   )}
@@ -358,130 +334,82 @@ export async function ProductDetailView({
               </div>
 
               {radarSignal.verdict !== 'none' && (
-                <div
-                  className="small mb-3"
+                <p
+                  className="rate-pdv-radar-note"
                   data-testid="pdv-radar-signal"
-                  style={{ color: '#cbd5e1' }}
                 >
                   {radarSignal.verdict === 'genuine_deal'
                     ? radarSignal.genuineDeal?.explanationVi
                     : radarSignal.fakeSaleTrap?.explanationVi}
-                </div>
+                </p>
               )}
 
               <div className="row g-3 align-items-stretch">
                 {/* Dual Score Boxes */}
-                <div className="col-md-5 d-flex flex-column col-12 gap-2">
-                  <div
-                    className="rounded-3 p-3"
-                    style={{
-                      backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
-                    }}
-                  >
-                    <div
-                      className="small fw-semibold mb-1"
-                      style={{ color: '#fcd34d' }}
-                    >
+                <div className="col-md-5 d-flex flex-column col-12 gap-3">
+                  <div className="rate-pdv-score">
+                    <div className="rate-pdv-score-label is-user">
                       {t('userWeightedScoreLabel')}
                     </div>
-                    <div className="d-flex align-items-baseline gap-2">
-                      <span
-                        className="h2 fw-bold font-monospace mb-0 text-white"
-                        style={{ letterSpacing: '-0.03em' }}
-                      >
-                        {displayUserRating > 0
-                          ? displayUserRating.toFixed(1)
-                          : t('notAvailableYet')}
-                      </span>
-                      <span className="small" style={{ color: '#94a3b8' }}>
-                        {displayUserRating > 0
-                          ? t('verifiedReviewsCount', { count: authenticCount })
-                          : t('verifiedReviewsCountNoScore', {
-                              count: authenticCount,
-                            })}
-                      </span>
-                    </div>
+                    {displayUserRating > 0 ? (
+                      <div className="rate-pdv-score-row">
+                        <span className="rate-pdv-score-value">
+                          {displayUserRating.toFixed(1)}
+                        </span>
+                        <span className="rate-pdv-score-sub">
+                          {t('verifiedReviewsCount', { count: authenticCount })}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="rate-pdv-score-empty">
+                        {t('notAvailableYet')} ·{' '}
+                        {t('verifiedReviewsCountNoScore', {
+                          count: authenticCount,
+                        })}
+                      </div>
+                    )}
                     <div
-                      className="d-flex align-items-center mt-2 flex-wrap gap-2"
+                      className="rate-pdv-confidence"
                       data-testid="pdv-bayesian-confidence"
                     >
                       <span
-                        className="badge rounded-pill px-2 py-1"
-                        style={{
-                          fontSize: '0.8125rem',
-                          backgroundColor:
-                            bayesianSummary.confidenceTier === 'high'
-                              ? 'rgba(45, 186, 105, 0.2)'
-                              : bayesianSummary.confidenceTier === 'medium'
-                                ? 'rgba(56, 189, 248, 0.2)'
-                                : 'rgba(251, 191, 36, 0.18)',
-                          color:
-                            bayesianSummary.confidenceTier === 'high'
-                              ? '#6ee7b7'
-                              : bayesianSummary.confidenceTier === 'medium'
-                                ? '#7dd3fc'
-                                : '#fde68a',
-                          border: '1px solid rgba(255, 255, 255, 0.14)',
-                        }}
+                        className={`rate-pdv-tag is-${bayesianSummary.confidenceTier}`}
+                        title={
+                          bayesianSummary.effectiveWeightSum > 0
+                            ? `Σw=${bayesianSummary.effectiveWeightSum.toFixed(2)} · c=${Math.round(bayesianSummary.confidenceRatio * 100)}%`
+                            : undefined
+                        }
                       >
-                        ⚖️ {bayesianSummary.tierLabelVi}
+                        {bayesianSummary.tierLabelVi}
                       </span>
-                      {bayesianSummary.effectiveWeightSum > 0 && (
-                        <span
-                          className="small font-monospace"
-                          style={{ fontSize: '0.8125rem', color: '#94a3b8' }}
-                        >
-                          Σw={bayesianSummary.effectiveWeightSum.toFixed(2)} |
-                          c=
-                          {Math.round(bayesianSummary.confidenceRatio * 100)}%
-                        </span>
-                      )}
                     </div>
                   </div>
 
-                  <div
-                    className="rounded-3 p-3"
-                    style={{
-                      backgroundColor: 'rgba(99, 102, 241, 0.12)',
-                      border: '1px solid rgba(99, 102, 241, 0.3)',
-                    }}
-                  >
-                    <div
-                      className="small fw-semibold mb-1"
-                      style={{ color: '#a5b4fc' }}
-                    >
+                  <div className="rate-pdv-score is-expert">
+                    <div className="rate-pdv-score-label is-expert">
                       {t('expertScoreLabel')}
                     </div>
-                    <div className="d-flex align-items-baseline gap-2">
-                      <span
-                        className="h3 fw-bold font-monospace mb-0 text-white"
-                        style={{ letterSpacing: '-0.03em' }}
-                      >
-                        {product.expert_rating != null &&
-                        Number(product.expert_rating) > 0
-                          ? Number(product.expert_rating).toFixed(1)
-                          : t('notAvailableYet')}
-                      </span>
-                      <span className="small" style={{ color: '#cbd5e1' }}>
-                        {product.expert_rating != null &&
-                        Number(product.expert_rating) > 0
-                          ? t('tenGroupStandardWithSlash')
-                          : t('tenGroupStandard')}
-                      </span>
-                    </div>
+                    {product.expert_rating != null &&
+                    Number(product.expert_rating) > 0 ? (
+                      <div className="rate-pdv-score-row">
+                        <span className="rate-pdv-score-value is-small">
+                          {Number(product.expert_rating).toFixed(1)}
+                        </span>
+                        <span className="rate-pdv-score-sub">
+                          {t('tenGroupStandardWithSlash')}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="rate-pdv-score-empty">
+                        {t('notAvailableYet')} · {t('tenGroupStandard')}
+                      </div>
+                    )}
                   </div>
                 </div>
 
                 {/* 5-Criteria Breakdown Bars */}
                 <div className="col-md-7 d-flex flex-column justify-content-center col-12">
-                  <div
-                    className="rounded-3 h-100 p-3"
-                    style={{
-                      backgroundColor: 'rgba(255, 255, 255, 0.04)',
-                      border: '1px solid rgba(255, 255, 255, 0.08)',
-                    }}
-                  >
+                  <div className="rate-pdv-crit h-100">
                     {(() => {
                       const validCriteriaReviews = reviews.filter(
                         (r) =>
@@ -541,24 +469,18 @@ export async function ProductDetailView({
                           : null;
                       const pct = val != null ? Math.round((val / 5) * 100) : 0;
                       return (
-                        <div key={crit.label} className="mb-2 last:mb-0">
-                          <div className="d-flex justify-content-between small mb-1">
-                            <span style={{ color: '#cbd5e1' }}>
-                              {crit.label}
-                            </span>
-                            <span className="fw-bold font-monospace text-white">
+                        <div key={crit.label} className="rate-pdv-crit-row">
+                          <div className="rate-pdv-crit-head">
+                            <span>{crit.label}</span>
+                            <span
+                              className={`rate-pdv-crit-value${val == null ? ' is-empty' : ''}`}
+                            >
                               {val != null
                                 ? `${val.toFixed(1)}/5`
                                 : t('notAvailableYet')}
                             </span>
                           </div>
-                          <div
-                            className="progress"
-                            style={{
-                              height: '6px',
-                              backgroundColor: 'rgba(255, 255, 255, 0.12)',
-                            }}
-                          >
+                          <div className="progress rate-pdv-crit-track">
                             <div
                               className="progress-bar"
                               role="progressbar"
@@ -587,43 +509,32 @@ export async function ProductDetailView({
               </div>
 
               {product.expert_review_summary && (
-                <div
-                  className="rounded-3 small mt-3 p-3"
-                  style={{
-                    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                    borderLeft: '3px solid #6366f1',
-                    color: '#e2e8f0',
-                  }}
-                >
-                  <strong style={{ color: '#a5b4fc' }}>
-                    {t('expertVerdictPrefix')}
-                  </strong>{' '}
+                <div className="rate-pdv-verdict">
+                  <strong>{t('expertVerdictPrefix')}</strong>{' '}
                   {product.expert_review_summary}
                 </div>
               )}
 
               {/* Primary Review & Evaluation Actions */}
-              <div className="d-flex align-items-center mt-3 flex-wrap gap-2">
+              <div className="rate-pdv-actions">
                 <a
                   href="#jreviews-section"
-                  className="btn btn-primary rounded-pill fw-semibold px-4"
+                  className="btn btn-primary fw-semibold"
                 >
                   {t('readAndSubmitReviewsBtn', { count: authenticCount })}
                 </a>
-                <a
-                  href="#specs-section"
-                  className="btn btn-outline-light rounded-pill small px-3"
-                >
+                <a href="#specs-section" className="btn btn-outline-light">
                   {t('tenSpecGroupsBtn')}
                 </a>
                 <Link
                   href={`/compare?slugs=${product.slug}`}
-                  className="btn btn-outline-light rounded-pill small px-3"
+                  className="btn btn-outline-light"
                 >
                   {t('headToHeadCompareBtn')}
                 </Link>
                 <CompareQuickToggle
-                  size="md"
+                  compact
+                  className="ms-lg-auto"
                   item={{
                     slug: product.slug,
                     name: product.name,
@@ -744,7 +655,7 @@ export async function ProductDetailView({
                   <div className="text-muted small">
                     {t('priceReferenceLabel', { count: offers.length })}
                   </div>
-                  <div className="fw-bold text-dark font-monospace fs-5">
+                  <div className="fw-bold text-dark rate-tabular fs-5">
                     {minPriceFormatted} ₫
                     {product.min_price !== product.max_price && (
                       <span className="small fw-normal text-muted ms-2">
@@ -818,9 +729,12 @@ export async function ProductDetailView({
               </div>
             </div>
 
-            <p className="text-muted small lh-base mb-0">
-              {t('canonicalModelKeyLabel')} <code>{product.model_key}</code>
-            </p>
+            <details className="rate-pdv-devinfo">
+              <summary>{t('devInfoToggle')}</summary>
+              <p>
+                {t('canonicalModelKeyLabel')} <code>{product.model_key}</code>
+              </p>
+            </details>
           </div>
         </div>
 
@@ -1549,7 +1463,7 @@ export async function ProductDetailView({
                             </Link>
                           </h6>
                           <div className="d-flex align-items-center flex-wrap gap-2">
-                            <span className="text-danger fw-bold small font-monospace">
+                            <span className="text-danger fw-bold small rate-tabular">
                               {peerPrice.toLocaleString('vi-VN')} ₫
                             </span>
                             {priceDelta !== 0 && currentMinPrice > 0 && (
@@ -1573,7 +1487,7 @@ export async function ProductDetailView({
                             )}
                           </div>
                           {peerCostPerPoint > 0 && (
-                            <div className="text-muted small font-monospace mt-1">
+                            <div className="text-muted small rate-tabular mt-1">
                               {t('costPerPointUnit', {
                                 cost: peerCostPerPoint.toLocaleString('vi-VN'),
                               })}
