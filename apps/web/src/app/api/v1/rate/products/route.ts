@@ -1,16 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
   getCachedCategoryDirectoryFacets,
-  getCrossPlatformDealRadar,
+  getMasterProductOffersBatch,
   getMasterProducts,
-  type CanonicalCategorySlug,
   type MasterProductFilterParams,
 } from '@/server/rate';
-import {
-  buildRadarIndex,
-  getRadarSignal,
-  radarExportFields,
-} from '@/lib/deal-radar';
+import { computeProductRadarSignal } from '@/server/rate/deals';
+import { radarExportFields } from '@/lib/deal-radar';
 import {
   PUBLIC_API_CORS_HEADERS,
   jsonApiError,
@@ -45,6 +41,17 @@ function parseBooleanFlag(raw: string | null): boolean | undefined {
   return raw === '1' || raw.toLowerCase() === 'true' ? true : undefined;
 }
 
+const VALID_PRODUCT_SORTS = new Set<
+  NonNullable<MasterProductFilterParams['sort']>
+>([
+  'default',
+  'price_asc',
+  'price_desc',
+  'rating_desc',
+  'merchants_desc',
+  'newest',
+]);
+
 /**
  * GET /api/v1/rate/products
  * Structured JSON Backend API for Web Client, Browser Extension MV3, and Partners.
@@ -65,8 +72,9 @@ export async function GET(request: NextRequest) {
           .filter(Boolean)
       : undefined;
 
-    const sortParam = sp.get('sort') as
-      MasterProductFilterParams['sort'] | null;
+    const rawSort = sp.get('sort') as MasterProductFilterParams['sort'] | null;
+    const sort: NonNullable<MasterProductFilterParams['sort']> =
+      rawSort && VALID_PRODUCT_SORTS.has(rawSort) ? rawSort : 'default';
     const limit = parseBoundedIntParam(sp.get('limit'), 24, 1, 100);
 
     const compactRaw = sp.get('compactScreen') || sp.get('compact');
@@ -98,41 +106,48 @@ export async function GET(request: NextRequest) {
       has5g: parseBooleanFlag(sp.get('has5g') || sp.get('5g')),
       hasNfc: parseBooleanFlag(sp.get('hasNfc') || sp.get('nfc')),
       maxScreenSizeInch,
-      sort: sortParam || 'default',
+      sort,
       limit,
     };
 
-    const [products, facets, dealRadar] = await Promise.all([
+    const [products, facets] = await Promise.all([
       getMasterProducts(filterParams),
       includeFacets
         ? getCachedCategoryDirectoryFacets(categorySlug)
         : Promise.resolve(null),
-      getCrossPlatformDealRadar({
-        categorySlug: (categorySlug as CanonicalCategorySlug) || 'all',
-        limit: 50,
-      }),
     ]);
-    const radarIndex = buildRadarIndex(dealRadar);
+    const offersByMasterId = await getMasterProductOffersBatch(
+      products.map((p) => p.id)
+    );
 
     return NextResponse.json(
       {
         ok: true,
         category: categorySlug,
         count: products.length,
-        data: products.map((p) => ({
-          ...p,
-          deal_radar: radarExportFields(getRadarSignal(radarIndex, p.slug)),
-        })),
+        data: products.map((p) => {
+          const offers = offersByMasterId.get(p.id) ?? [];
+          return {
+            ...p,
+            deal_radar: radarExportFields(computeProductRadarSignal(p, offers)),
+          };
+        }),
         ...(facets ? { facets } : {}),
       },
       {
         status: 200,
         headers: {
+          ...PUBLIC_API_CORS_HEADERS,
           'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300',
         },
       }
     );
   } catch (error) {
-    return jsonApiError(500, 'Failed to fetch products catalog', error);
+    return jsonApiError(
+      500,
+      'Failed to fetch products catalog',
+      error,
+      PUBLIC_API_CORS_HEADERS
+    );
   }
 }
