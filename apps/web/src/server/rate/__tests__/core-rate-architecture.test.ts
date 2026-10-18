@@ -4634,7 +4634,161 @@ async function runCoreArchitectureSuite() {
   }
 
   console.log(
-    '  ✅ [66/66] Platform Stats head counts, Category Slug stamping, Leaderboard batch radar & Watchlist outlier guard (#386) passed'
+    '  ✅ [66/67] Platform Stats head counts, Category Slug stamping, Leaderboard batch radar & Watchlist outlier guard (#386) passed'
+  );
+
+  // =========================================================================
+  // 67. Worst Fake-Sale Trap Selection, Canonical Cache Keys/Tag Cascade & OpenAPI Parity (#396)
+  // =========================================================================
+  {
+    const {
+      RATE_CACHE_TAGS,
+      buildRateOpenApiSpec,
+      canonicalizeCacheParams,
+      computeCrossPlatformDealRadarFromData,
+      resolveRevalidationTargets,
+    } = await import('@/server/rate');
+
+    // 67.1 computeCrossPlatformDealRadarFromData selects the worst fake-sale trap regardless of offer order
+    const radarMaster = {
+      id: 'mp-trap-396',
+      slug: 'apple-iphone-16-pro-max-256gb',
+      name: 'Apple iPhone 16 Pro Max 256GB',
+      brand: 'Apple',
+      model: 'iPhone 16 Pro Max',
+      model_key: 'apple_iphone_16_pro_max_256gb',
+      min_price: 28000000,
+      max_price: 31000000,
+      expert_rating: 9.4,
+    } as unknown as Parameters<
+      typeof computeCrossPlatformDealRadarFromData
+    >[0][number]['master'];
+
+    const makeOffer = (
+      id: string,
+      platform: string,
+      priceCurrent: number,
+      priceOriginal: number | null
+    ) => ({
+      id,
+      platform,
+      title: `Offer ${id}`,
+      price_current: priceCurrent,
+      price_original: priceOriginal,
+      stock: 5,
+      rating_star: 4.9,
+      rating_count: 40,
+      url: `https://example.com/${id}`,
+      merchant: {
+        id: `m-${id}`,
+        name: `Merchant ${id}`,
+        platform,
+        is_official: true,
+        rating_star: 4.9,
+        follower_count: 10000,
+        location: 'HN',
+        risk_score: 5,
+        dosafe_risk_score: 5,
+        review_risk_score: 5,
+        review_risk_breakdown: null,
+      },
+    });
+
+    // Median across [28M, 30M, 30.5M] is 30M.
+    // Offer 'trap-small' has original 33.6M (+12% markup over 30M median) and appears FIRST.
+    // Offer 'trap-worst' has original 45M (+50% markup over 30M median) and appears SECOND.
+    const radarResult = computeCrossPlatformDealRadarFromData([
+      {
+        master: radarMaster,
+        offers: [
+          makeOffer('fair-floor', 'tiki', 28000000, 29000000),
+          makeOffer('trap-small', 'shopee', 30000000, 33600000),
+          makeOffer('trap-worst', 'lazada', 30500000, 45000000),
+        ],
+      },
+    ]);
+
+    assert.equal(radarResult.fakeSaleTraps.length, 1);
+    assert.equal(
+      radarResult.fakeSaleTraps[0]?.fakeMarkupPct,
+      50,
+      'computeCrossPlatformDealRadarFromData must select the worst fake-sale trap (+50% markup) even when a smaller trap (+12%) appears first (#396)'
+    );
+    assert.equal(radarResult.fakeSaleTraps[0]?.platform, 'lazada');
+
+    // 67.2 canonicalizeCacheParams produces identical keys regardless of key order or undefined properties
+    const keyA = canonicalizeCacheParams({
+      categorySlug: 'smartphones',
+      limit: 24,
+      brand: undefined,
+      ramGb: [8, 12],
+    });
+    const keyB = canonicalizeCacheParams({
+      ramGb: [8, 12],
+      limit: 24,
+      categorySlug: 'smartphones',
+    });
+    assert.equal(
+      keyA,
+      keyB,
+      'canonicalizeCacheParams must produce key-order-independent JSON strings and strip undefined properties (#396)'
+    );
+
+    // 67.3 resolveRevalidationTargets cascades stats, products, and deals tags
+    const catTargets = resolveRevalidationTargets({
+      categories: ['Smartphones'],
+    });
+    assert.ok(
+      catTargets.tags.includes('rate:category:smartphones') &&
+        catTargets.tags.includes(RATE_CACHE_TAGS.CATEGORIES) &&
+        catTargets.tags.includes(RATE_CACHE_TAGS.PRODUCTS) &&
+        catTargets.tags.includes(RATE_CACHE_TAGS.DEALS) &&
+        catTargets.tags.includes(RATE_CACHE_TAGS.STATS),
+      'Category revalidation must cascade to rate:category:<slug>, categories, products, deals, and stats (#396)'
+    );
+
+    const slugTargets = resolveRevalidationTargets({
+      slugs: ['apple-iphone-16-pro-max-256gb'],
+    });
+    assert.ok(
+      slugTargets.tags.includes(RATE_CACHE_TAGS.STATS),
+      'Product slug revalidation must also invalidate rate:stats (#396)'
+    );
+
+    const merchantTargets = resolveRevalidationTargets({
+      merchants: ['shopee-88201679'],
+    });
+    assert.ok(
+      merchantTargets.tags.includes(RATE_CACHE_TAGS.STATS),
+      'Merchant revalidation must also invalidate rate:stats (#396)'
+    );
+
+    // 67.4 OpenAPI 3.1.0 spec aligns GET /api/v1/rate/products sort enum and documents /api/health
+    const openApiDoc = buildRateOpenApiSpec('https://rate.vn');
+    const productsSortParam = openApiDoc.paths[
+      '/api/v1/rate/products'
+    ]?.get?.parameters?.find((p) => p.name === 'sort');
+    assert.deepEqual(
+      productsSortParam?.schema.enum,
+      [
+        'default',
+        'rating_desc',
+        'price_asc',
+        'price_desc',
+        'merchants_desc',
+        'newest',
+      ],
+      'OpenAPI GET /api/v1/rate/products sort enum must match actual supported sort values (#396)'
+    );
+    assert.equal(
+      openApiDoc.paths['/api/health']?.get?.operationId,
+      'getHealthStatus',
+      'OpenAPI spec must document /api/health endpoint (#396)'
+    );
+  }
+
+  console.log(
+    '  ✅ [67/67] Worst Fake-Sale Trap selection, Canonical Cache Keys/Tag Cascade & OpenAPI parity (#396) passed'
   );
 
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
