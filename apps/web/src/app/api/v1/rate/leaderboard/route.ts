@@ -73,7 +73,7 @@ export async function GET(req: NextRequest) {
     });
 
     const items = ranked.slice(0, limit).map((r) => {
-      const radar = radarExportFields(getRadarSignal(radarIndex, r.slug));
+      const rawSignal = getRadarSignal(radarIndex, r.slug);
       return {
         rank: r.rank,
         slug: r.slug,
@@ -96,8 +96,8 @@ export async function GET(req: NextRequest) {
         max_price: r.maxPrice,
         merchant_count: r.merchantCount,
         key_specs: r.product.key_specs || {},
-        deal_radar: radar,
-        radar_signal: radar,
+        deal_radar: radarExportFields(rawSignal),
+        radar_signal: radarExportFields(rawSignal),
       };
     });
 

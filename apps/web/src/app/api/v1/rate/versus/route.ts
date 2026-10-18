@@ -274,12 +274,16 @@ export async function GET(req: NextRequest) {
       prodA.id,
       prodB.id,
     ]);
-    const radarSignalA = radarExportFields(
-      computeProductRadarSignal(prodA, offersByMaster.get(prodA.id) ?? [])
+    const rawSignalA = computeProductRadarSignal(
+      prodA,
+      offersByMaster.get(prodA.id) ?? []
     );
-    const radarSignalB = radarExportFields(
-      computeProductRadarSignal(prodB, offersByMaster.get(prodB.id) ?? [])
+    const rawSignalB = computeProductRadarSignal(
+      prodB,
+      offersByMaster.get(prodB.id) ?? []
     );
+    const radarSignalA = radarExportFields(rawSignalA);
+    const radarSignalB = radarExportFields(rawSignalB);
 
     return NextResponse.json(
       {
@@ -341,7 +345,7 @@ export async function GET(req: NextRequest) {
           merchant_count: scoreA.merchantCount,
           key_specs: prodA.key_specs || {},
           specifications: prodA.specifications || {},
-          deal_radar: radarSignalA,
+          deal_radar: radarExportFields(rawSignalA),
           radar_signal: radarSignalA,
         },
         product_b: {
@@ -366,7 +370,7 @@ export async function GET(req: NextRequest) {
           merchant_count: scoreB.merchantCount,
           key_specs: prodB.key_specs || {},
           specifications: prodB.specifications || {},
-          deal_radar: radarSignalB,
+          deal_radar: radarExportFields(rawSignalB),
           radar_signal: radarSignalB,
         },
       },
