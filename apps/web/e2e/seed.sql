@@ -70,6 +70,15 @@ VALUES ('cccccccc-cccc-4ccc-8ccc-ccccccccfa17', 'dddddddd-dddd-4ddd-8ddd-ddddddd
   'E2E Price Fault Phone', 'c0000000-0000-4000-8000-000000000001', 1000000, 'https://shopee.vn/item-fault',
   '22222222-2222-4222-8222-22222222fa17');
 
+-- 1100 small merchants push the directory past PostgREST's 1000-row cap, and
+-- "Last Ranked Shop" sorts after all of them (fewest followers), so an unpaged
+-- merchants read always drops it.
+INSERT INTO rate.merchants (platform, platform_shop_id, name, slug, follower_count)
+SELECT 'shopee', 'bulk_shop_' || g, 'Bulk Shop ' || g, 'bulk-shop-' || g, 1
+FROM generate_series(1, 1100) AS g;
+INSERT INTO rate.merchants (platform, platform_shop_id, name, slug, follower_count)
+VALUES ('shopee', 'last_ranked_shop', 'Last Ranked Shop', 'last-ranked-shop', 0);
+
 -- A merchant with 250 listings: reads that pass every listing id to one in.()
 -- would exceed the request-line limit the E2E proxy enforces. The only review
 -- sits on the last listing, so it shows only if every chunk is read.

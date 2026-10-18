@@ -261,6 +261,9 @@ try {
       'PGRST_DB_SCHEMAS=rate',
       '-e',
       'PGRST_DB_ANON_ROLE=anon',
+      // Supabase's default response cap: unpaged reads lose rows past it.
+      '-e',
+      'PGRST_DB_MAX_ROWS=1000',
       '-e',
       `PGRST_JWT_SECRET=${JWT_SECRET}`,
       POSTGREST_IMAGE,
