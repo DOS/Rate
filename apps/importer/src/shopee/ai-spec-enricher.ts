@@ -502,8 +502,14 @@ REQUIRED JSON SCHEMA:
     rawDescription?: string;
   }): Promise<AiEnrichmentResponse | null> {
     if (!this.isConfigured()) {
-      console.log(
-        `[AiSpecEnricher] Skipped AI call for "${params.brand} ${params.model}" (no API key configured for provider "${this.provider}").`
+      logger.info(
+        'spec_enrich.skipped_unconfigured',
+        `Skipped AI call for "${params.brand} ${params.model}" (no API key configured for provider "${this.provider}").`,
+        {
+          provider: this.provider,
+          brand: params.brand,
+          deviceModel: params.model,
+        }
       );
       return null;
     }
@@ -511,7 +517,9 @@ REQUIRED JSON SCHEMA:
     const cacheKey = `${params.brand.toLowerCase()}:${params.model.toLowerCase()}:${params.storageGb || 'default'}`;
     const cached = this.memoryCache.get(cacheKey);
     if (cached) {
-      console.log(`[AiSpecEnricher] Cache hit for "${cacheKey}"`);
+      logger.info('spec_enrich.cache_hit', `Cache hit for "${cacheKey}"`, {
+        cacheKey,
+      });
       return cached;
     }
 
