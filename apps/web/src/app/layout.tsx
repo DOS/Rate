@@ -1,7 +1,12 @@
 import 'bootstrap/dist/css/bootstrap.css';
 import './style/scss/style.scss';
 import BootstrapClient from './BootstrapClient';
-import { fontInter, fontJetBrainsMono } from '@/lib/fonts';
+import {
+  fontInter,
+  fontInterVietnamese,
+  fontJetBrainsMono,
+  fontJetBrainsMonoVietnamese,
+} from '@/lib/fonts';
 import { getLocale } from 'next-intl/server';
 
 export default async function RootLayout({
@@ -19,7 +24,7 @@ export default async function RootLayout({
   return (
     <html
       lang={locale}
-      className={`${fontInter.variable} ${fontJetBrainsMono.variable}`}
+      className={`${fontInterVietnamese.variable} ${fontInter.variable} ${fontJetBrainsMonoVietnamese.variable} ${fontJetBrainsMono.variable}`}
     >
       <head>
         <meta charSet="utf-8" />
