@@ -14,6 +14,7 @@ import {
 } from '@/server/rate';
 import type { MasterProduct } from '@repo/shared-data';
 import {
+  BsBatteryHalf,
   BsCheckCircleFill,
   BsCpu,
   BsGraphUpArrow,
@@ -31,9 +32,10 @@ import FooterTop from './components/footer-top';
 import FooterDynamic from './components/footer/FooterDynamic';
 import BackToTop from './components/back-to-top';
 import HeroSearchInspector from '@/components/home/HeroSearchInspector';
-import CompareQuickToggle from '@/components/compare/CompareQuickToggle';
 import CompareTrayBar from '@/components/compare/CompareTrayBar';
-import RadarBadge from '@/components/radar/RadarBadge';
+import ProductCard, {
+  type ProductCardSpec,
+} from '@/components/product/ProductCard';
 import { buildRadarIndex, getRadarSignal } from '@/lib/deal-radar';
 import { isPendingReview } from '@/lib/review-display';
 
@@ -452,152 +454,70 @@ export default async function Home({
 
             <div className="row g-4">
               {masterProducts.slice(0, 6).map((item) => {
-                const minPrice = Number(item.min_price).toLocaleString('vi-VN');
-                const maxPrice = Number(item.max_price).toLocaleString('vi-VN');
-                const priceText =
-                  item.min_price === item.max_price
-                    ? `${minPrice} ₫`
-                    : `${minPrice} ₫ - ${maxPrice} ₫`;
                 const thumb =
                   item.thumbnail ||
                   (item.images && item.images.length > 0
                     ? item.images[0]
-                    : '/img/placeholder.png');
+                    : null);
                 const keySpecs = item.key_specs || {};
                 const productHref = getMasterProductHref(item, catSlugById);
                 const rawUser = Number(
                   item.user_rating_weighted || item.average_rating || 0
                 );
-                const userScore = rawUser > 0 ? rawUser : null;
                 const expertScore =
                   item.expert_rating != null && Number(item.expert_rating) > 0
                     ? Number(item.expert_rating)
                     : null;
-                const authCount = Number(
-                  item.authentic_review_count || item.total_reviews || 0
-                );
+                const specs: ProductCardSpec[] = [];
+                if (keySpecs.screen) {
+                  specs.push({
+                    key: 'screen',
+                    icon: <BsPhone />,
+                    label: String(keySpecs.screen),
+                  });
+                }
+                if (keySpecs.chip) {
+                  specs.push({
+                    key: 'chip',
+                    icon: <BsCpu />,
+                    label: String(keySpecs.chip),
+                  });
+                }
+                if (keySpecs.battery) {
+                  specs.push({
+                    key: 'battery',
+                    icon: <BsBatteryHalf />,
+                    label: String(keySpecs.battery),
+                  });
+                }
 
                 return (
                   <div key={item.id} className="col-lg-4 col-md-6 col-12">
-                    <div className="rate-card rounded-4 d-flex flex-column h-100 border bg-white p-3 shadow-sm transition">
-                      <div className="d-flex justify-content-between align-items-center mb-2">
-                        <div className="d-flex flex-wrap gap-1">
-                          <span className="badge bg-secondary bg-opacity-10 text-secondary">
-                            {item.brand}
-                          </span>
-                          {item.ram_gb ? (
-                            <span className="rate-spec-pill">
-                              {item.ram_gb}GB RAM
-                            </span>
-                          ) : null}
-                          {item.storage_gb ? (
-                            <span className="rate-spec-pill">
-                              {item.storage_gb}GB
-                            </span>
-                          ) : null}
-                        </div>
-                        <CompareQuickToggle
-                          item={{
-                            slug: item.slug,
-                            name: item.name,
-                            brand: item.brand,
-                            thumbnail: thumb ?? null,
-                            min_price: Number(item.min_price),
-                            categoryPath:
-                              productHref.replace(`/${item.slug}`, '') ||
-                              '/smartphones',
-                          }}
-                        />
-                      </div>
-
-                      <div
-                        className="d-flex justify-content-center align-items-center bg-light rounded-3 mb-3 p-3"
-                        style={{ minHeight: '195px' }}
-                      >
-                        <img
-                          src={thumb}
-                          alt={item.name}
-                          className="img-fluid object-fit-contain rounded"
-                          style={{ maxHeight: '165px' }}
-                        />
-                      </div>
-
-                      <h5 className="fw-bold mb-2">
-                        <Link
-                          href={productHref}
-                          className="text-dark text-decoration-none"
-                        >
-                          {item.name}
-                        </Link>
-                      </h5>
-
-                      {/* #1 Core Focus: JReviews Dual Rating Badges + Product Deal Radar */}
-                      <div className="d-flex align-items-center mb-2 flex-wrap gap-1">
-                        <span className="rate-score-badge-user">
-                          ★{' '}
-                          {userScore != null
-                            ? `${userScore.toFixed(1)} User (${authCount})`
-                            : tHome('userNoScore')}
-                        </span>
-                        <span className="rate-score-badge-expert">
-                          🔬{' '}
-                          {expertScore != null
-                            ? `${expertScore.toFixed(1)} Expert`
-                            : tHome('expertNoScore')}
-                        </span>
-                        <RadarBadge
-                          signal={getRadarSignal(radarIndex, item.slug)}
-                        />
-                      </div>
-
-                      {/* Quick Key Specs pills */}
-                      <div className="d-flex mb-3 flex-wrap gap-1">
-                        {keySpecs.screen && (
-                          <span className="rate-spec-pill">
-                            📱 {String(keySpecs.screen)}
-                          </span>
-                        )}
-                        {keySpecs.chip && (
-                          <span className="rate-spec-pill">
-                            ⚙️ {String(keySpecs.chip)}
-                          </span>
-                        )}
-                        {keySpecs.battery && (
-                          <span className="rate-spec-pill">
-                            🔋 {String(keySpecs.battery)}
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="d-flex justify-content-between align-items-center text-muted small border-top mt-auto pt-3">
-                        <span>
-                          {tHome('refPriceLabel')}{' '}
-                          <strong className="text-dark font-monospace">
-                            {priceText}
-                          </strong>
-                        </span>
-                        <span>
-                          {tHome('sourcesCount', {
-                            count: item.merchant_count || 0,
-                          })}
-                        </span>
-                      </div>
-                      <div className="d-flex mt-3 gap-2">
-                        <Link
-                          href={productHref}
-                          className="btn btn-primary rounded-pill fw-medium flex-grow-1"
-                        >
-                          {tHome('viewReviewsAndSpecsBtn')}
-                        </Link>
-                        <Link
-                          href={`/inspect?q=${encodeURIComponent(item.slug)}`}
-                          className="btn btn-outline-secondary rounded-pill fw-medium px-3"
-                          title={tHome('inspectPriceHistoryTitle')}
-                        >
-                          🔍
-                        </Link>
-                      </div>
-                    </div>
+                    <ProductCard
+                      slug={item.slug}
+                      href={productHref}
+                      categoryPath={
+                        productHref.replace(`/${item.slug}`, '') ||
+                        '/smartphones'
+                      }
+                      name={item.name}
+                      brand={item.brand}
+                      thumbnail={thumb ?? null}
+                      tags={[
+                        item.ram_gb ? `${item.ram_gb}GB RAM` : '',
+                        item.storage_gb ? `${item.storage_gb}GB` : '',
+                      ].filter(Boolean)}
+                      specs={specs}
+                      userScore={rawUser > 0 ? rawUser : null}
+                      reviewCount={Number(
+                        item.authentic_review_count || item.total_reviews || 0
+                      )}
+                      expertScore={expertScore}
+                      radarSignal={getRadarSignal(radarIndex, item.slug)}
+                      minPrice={Number(item.min_price || 0)}
+                      maxPrice={Number(item.max_price || 0)}
+                      merchantCount={item.merchant_count || 0}
+                    />
                   </div>
                 );
               })}

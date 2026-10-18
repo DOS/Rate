@@ -10,7 +10,9 @@ import {
 } from '@/server/rate';
 import type { CanonicalCategorySlug } from '@/lib/rate-api';
 import { buildRadarIndex, getRadarSignal } from '@/lib/deal-radar';
-import RadarBadge from '@/components/radar/RadarBadge';
+import ProductCard, {
+  type ProductCardSpec,
+} from '@/components/product/ProductCard';
 import {
   formatStorageLabel,
   getCategoryFilterSchema,
@@ -23,16 +25,14 @@ import ListSidebarOne from '../components/list-sidebar-one';
 import FooterTop from '../components/footer-top';
 import FooterDynamic from '../components/footer/FooterDynamic';
 import BackToTop from '../components/back-to-top';
-import CompareQuickToggle from '@/components/compare/CompareQuickToggle';
 import CompareTrayBar from '@/components/compare/CompareTrayBar';
 import CategoryCatalogToolbar from '@/components/leaderboard/CategoryCatalogToolbar';
 import {
+  BsBatteryHalf,
   BsCpu,
   BsLightningCharge,
-  BsPatchCheckFill,
   BsPhone,
   BsSearch,
-  BsShop,
 } from 'react-icons/bs';
 import type { KeySpecs, ProductSpecifications } from '@repo/shared-data';
 
@@ -796,12 +796,6 @@ export async function CategoryCatalogContent({
               ) : (
                 <div className="row align-items-stretch justify-content-start g-xl-4 g-3">
                   {products.map((item) => {
-                    const minPriceFormatted = Number(
-                      item.min_price
-                    ).toLocaleString('vi-VN');
-                    const maxPriceFormatted = Number(
-                      item.max_price
-                    ).toLocaleString('vi-VN');
                     const keySpecs = (item.key_specs || {}) as KeySpecs;
                     const specs = (item.specifications ||
                       {}) as ProductSpecifications;
@@ -823,179 +817,82 @@ export async function CategoryCatalogContent({
                       Number(item.expert_rating) > 0
                         ? Number(item.expert_rating)
                         : null;
-                    const authCount = Number(
-                      item.authentic_review_count || item.total_reviews || 0
-                    );
 
                     const refreshHz = specs.display?.refresh_rate_hz;
-                    const nfcSupported = specs.connectivity?.nfc;
                     const fastChargeW = specs.battery?.fast_charging_w;
-                    const radarSignal = getRadarSignal(radarIndex, item.slug);
+                    const memoryLabel = [
+                      item.ram_gb ? `${item.ram_gb}GB` : '',
+                      item.storage_gb
+                        ? formatStorageLabel(Number(item.storage_gb))
+                        : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' / ');
+                    const tags = [
+                      memoryLabel,
+                      item.has_5g ? '5G' : '',
+                      refreshHz && refreshHz >= 120 ? `${refreshHz}Hz` : '',
+                      specs.connectivity?.nfc ? 'NFC' : '',
+                    ].filter(Boolean);
+
+                    const cardSpecs: ProductCardSpec[] = [];
+                    const chip = keySpecs.chip || specs.hardware?.chipset;
+                    if (chip) {
+                      cardSpecs.push({
+                        key: 'chip',
+                        icon: <BsCpu />,
+                        label: String(chip),
+                      });
+                    }
+                    const screen =
+                      keySpecs.screen ||
+                      (item.screen_size_inch
+                        ? `${item.screen_size_inch}"`
+                        : '');
+                    if (screen) {
+                      cardSpecs.push({
+                        key: 'screen',
+                        icon: <BsPhone />,
+                        label: String(screen),
+                      });
+                    }
+                    if (item.battery_mah) {
+                      cardSpecs.push({
+                        key: 'battery',
+                        icon: <BsBatteryHalf />,
+                        label: `${item.battery_mah} mAh${
+                          fastChargeW ? ` · ${fastChargeW}W` : ''
+                        }`,
+                      });
+                    }
 
                     return (
                       <div
                         className="col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12"
                         key={item.id}
                       >
-                        <div className="rate-card rounded-4 d-flex flex-column h-100 border bg-white p-3 shadow-sm">
-                          {/* Top Identity & Compare Toggle */}
-                          <div className="d-flex justify-content-between align-items-center mb-2 gap-2">
-                            <div className="d-flex align-items-center flex-wrap gap-1">
-                              <span className="badge bg-dark text-uppercase rounded-pill small px-2 py-1 text-white">
-                                {item.brand}
-                              </span>
-                              {item.has_5g && (
-                                <span className="rate-spec-pill">5G</span>
-                              )}
-                              {refreshHz && refreshHz >= 120 && (
-                                <span className="rate-spec-pill">
-                                  {refreshHz}Hz
-                                </span>
-                              )}
-                              {nfcSupported && (
-                                <span className="rate-spec-pill">NFC</span>
-                              )}
-                            </div>
-                            <CompareQuickToggle
-                              item={{
-                                slug: item.slug,
-                                name: item.name,
-                                brand: item.brand,
-                                thumbnail: thumb ?? null,
-                                min_price: Number(item.min_price || 0),
-                                categoryPath: basePath,
-                              }}
-                            />
-                          </div>
-
-                          {/* Studio Image Frame */}
-                          <Link
-                            href={`${basePath}/${item.slug}`}
-                            className="d-flex align-items-center justify-content-center bg-light rounded-3 text-decoration-none mb-3 p-3"
-                            style={{ height: '215px' }}
-                          >
-                            {thumb ? (
-                              <img
-                                src={thumb}
-                                alt={item.name}
-                                className="img-fluid"
-                                style={{
-                                  maxHeight: '180px',
-                                  width: 'auto',
-                                  objectFit: 'contain',
-                                }}
-                              />
-                            ) : (
-                              <div className="text-muted small">
-                                {t('page.noImage')}
-                              </div>
-                            )}
-                          </Link>
-
-                          {/* Title */}
-                          <h4 className="h5 fw-bold mb-2">
-                            <Link
-                              href={`${basePath}/${item.slug}`}
-                              className="text-dark text-decoration-none"
-                            >
-                              {item.name}
-                              <BsPatchCheckFill
-                                className="text-primary ms-1"
-                                style={{ fontSize: '0.9rem' }}
-                              />
-                            </Link>
-                          </h4>
-
-                          {/* #1 Core Focus: JReviews Dual-Rating Score Strip */}
-                          <div className="d-flex align-items-center mb-2 flex-wrap gap-1">
-                            <span className="rate-score-badge-user">
-                              ★{' '}
-                              {effectiveRating != null
-                                ? t('page.userScoreText', {
-                                    score: effectiveRating.toFixed(1),
-                                    count: authCount,
-                                  })
-                                : t('page.userScoreUnrated')}
-                            </span>
-                            <span className="rate-score-badge-expert">
-                              🔬{' '}
-                              {expertScore != null
-                                ? t('page.expertScoreText', {
-                                    score: expertScore.toFixed(1),
-                                  })
-                                : t('page.expertScoreUnrated')}
-                            </span>
-                            <RadarBadge signal={radarSignal} />
-                          </div>
-
-                          {/* 10 Field Groups Spec Badges */}
-                          <div className="d-flex mb-3 flex-wrap gap-1">
-                            {(item.ram_gb || item.storage_gb) && (
-                              <span className="rate-spec-pill">
-                                💾 {item.ram_gb ? `${item.ram_gb}GB / ` : ''}
-                                {item.storage_gb
-                                  ? formatStorageLabel(Number(item.storage_gb))
-                                  : ''}
-                              </span>
-                            )}
-                            {(keySpecs.chip || specs.hardware?.chipset) && (
-                              <span className="rate-spec-pill">
-                                <BsCpu className="me-1" />
-                                {keySpecs.chip || specs.hardware?.chipset}
-                              </span>
-                            )}
-                            {item.battery_mah && (
-                              <span className="rate-spec-pill">
-                                🔋 {item.battery_mah} mAh
-                                {fastChargeW ? ` (${fastChargeW}W)` : ''}
-                              </span>
-                            )}
-                            {(keySpecs.screen || item.screen_size_inch) && (
-                              <span className="rate-spec-pill">
-                                <BsPhone className="me-1" />
-                                {keySpecs.screen || `${item.screen_size_inch}"`}
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Neutral Market Reference Strip */}
-                          <div className="d-flex justify-content-between align-items-center small text-muted border-top mt-auto pt-2">
-                            <span>
-                              {t('page.refPriceLabel')}{' '}
-                              <strong className="text-dark font-monospace">
-                                {minPriceFormatted} ₫
-                              </strong>
-                              {item.max_price > item.min_price && (
-                                <span className="text-muted font-monospace ms-1">
-                                  ~ {maxPriceFormatted} ₫
-                                </span>
-                              )}
-                            </span>
-                            <span>
-                              <BsShop className="me-1" />
-                              {t('page.sourcesCount', {
-                                count: item.merchant_count || 0,
-                              })}
-                            </span>
-                          </div>
-
-                          {/* Primary Review-Centric CTA Bar */}
-                          <div className="d-flex mt-3 gap-2">
-                            <Link
-                              href={`${basePath}/${item.slug}`}
-                              className="btn btn-sm btn-primary rounded-pill fw-semibold flex-grow-1 py-2"
-                            >
-                              {t('page.viewReviewsSpecsBtn')}
-                            </Link>
-                            <Link
-                              href={`/inspect?q=${encodeURIComponent(item.slug)}`}
-                              className="btn btn-sm btn-outline-secondary rounded-pill fw-medium px-3 py-2"
-                              title={t('page.inspectPriceHistoryTitle')}
-                            >
-                              {t('page.inspectBtn')}
-                            </Link>
-                          </div>
-                        </div>
+                        <ProductCard
+                          slug={item.slug}
+                          href={`${basePath}/${item.slug}`}
+                          categoryPath={basePath}
+                          name={item.name}
+                          brand={item.brand}
+                          thumbnail={thumb ?? null}
+                          tags={tags}
+                          specs={cardSpecs}
+                          userScore={effectiveRating}
+                          reviewCount={Number(
+                            item.authentic_review_count ||
+                              item.total_reviews ||
+                              0
+                          )}
+                          expertScore={expertScore}
+                          radarSignal={getRadarSignal(radarIndex, item.slug)}
+                          minPrice={Number(item.min_price || 0)}
+                          maxPrice={Number(item.max_price || 0)}
+                          merchantCount={item.merchant_count || 0}
+                          verified
+                        />
                       </div>
                     );
                   })}

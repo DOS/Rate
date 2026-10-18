@@ -316,7 +316,10 @@
     "trayClearAll": "Vymazat vše",
     "trayCompareNow": "Porovnat nyní ({count} zařízení) →",
     "trayRemoveTitle": "Odebrat z panelu porovnání",
-    "trayRemoveAria": "Odebrat {name}"
+    "trayRemoveAria": "Odebrat {name}",
+    "quickToggleShortAdd": "Porovnat",
+    "quickToggleShortSelected": "Přidáno",
+    "quickToggleShortLimit": "Max. 4"
   },
   "leaderboard": {
     "metaTitle": "Žebříček Technologií (JReviews 10.0 Dual-Rating) | Rate.vn",
@@ -607,7 +610,9 @@
     "quickToggleTitleWatched": "Sledování vývoje ceny (Kliknutím zrušíte)",
     "quickToggleTitleUnwatched": "Sledovat vývoj ceny a dostávat upozornění na slevu (-5 %)",
     "quickToggleBtnWatched": "🔔 Hlídáno",
-    "quickToggleBtnUnwatched": "🔔 Hlídat cenu"
+    "quickToggleBtnUnwatched": "🔔 Hlídat cenu",
+    "quickToggleShortUnwatched": "Hlídat cenu",
+    "quickToggleShortWatched": "Hlídáno"
   },
   "deals": {
     "metaTitle": "Ověřené technologické nabídky a nejlepší poměr cena/výkon | Rate.vn",
@@ -1076,12 +1081,6 @@
     "catDescTablets": "Filtrovat podle úhlopříčky, kapacity úložiště a konektivity 5G/Wi-Fi",
     "catDescSmartwatches": "Chytré hodinky se sledováním zdraví, GPS a výdrží baterie",
     "catDescEarbuds": "Bezdrátová sluchátka s aktivním potlačením hluku (ANC), Hi-Res kodeky a baterií",
-    "userNoScore": "User: není",
-    "expertNoScore": "Expert: není",
-    "refPriceLabel": "Referenční cena:",
-    "sourcesCount": "🏪 {count} zdrojů",
-    "viewReviewsAndSpecsBtn": "★ Recenze a 10 Skupin Parametrů",
-    "inspectPriceHistoryTitle": "Ověřit 90denní historii cen a odhalit falešné slevy",
     "popularBattlesBadge": "⚔️ Hlavní Souboje 1v1",
     "popularBattlesTitle": "Nejčastěji Porovnávané Vlajkové Modely На Ваze",
     "leaderboard5CatsBtn": "🏆 Žebříček 5 Kategorií →",
@@ -1574,17 +1573,7 @@
       "emptyMatchingDesc": "Zkuste rozšířit cenové rozpětí nebo uvolnit hardwarová kritéria pro zobrazení dalších modelů.",
       "resetFiltersBtn": "Obnovit filtry",
       "browseSmartphonesBtn": "Prohlédnout dostupné telefony →",
-      "merchantProfilesBtn": "Profily důvěryhodnosti prodejců",
-      "noImage": "Bez obrázku",
-      "userScoreText": "{score} Uživatelé ({count} ověřených recenzí)",
-      "userScoreUnrated": "Uživatelé: nehodnoceno",
-      "expertScoreText": "{score} Expert Lab",
-      "expertScoreUnrated": "Expert Lab: nehodnoceno",
-      "refPriceLabel": "Referenční cena:",
-      "sourcesCount": "{count} zdrojů",
-      "viewReviewsSpecsBtn": "★ Zobrazit recenze a 10 skupin parametrů",
-      "inspectPriceHistoryTitle": "Zkontrolovat 90denní historii cen a odhalit falešné slevy",
-      "inspectBtn": "🔍 Zkontrolovat"
+      "merchantProfilesBtn": "Profily důvěryhodnosti prodejců"
     },
     "toolbar": {
       "unratedText": "N/A",
@@ -1717,5 +1706,18 @@
     "okResetSent": "Pokyny pro obnovení hesla byly odeslány na váš e-mail.",
     "okOtpSent": "6místný OTP kód byl odeslán na váš e-mail.",
     "okOtpVerified": "OTP kód byl úspěšně ověřen! Přesměrování..."
+  },
+  "productCard": {
+    "reviewCount": "{count, plural, one {# recenze} few {# recenze} other {# recenzí}}",
+    "noReviews": "Zatím bez recenzí",
+    "expertScore": "Lab {score}",
+    "refPrice": "Orientační cena",
+    "priceUpTo": "až {price}",
+    "sources": "{count, plural, one {# prodejce} few {# prodejci} other {# prodejců}}",
+    "viewDetails": "Zobrazit detail",
+    "priceHistory": "Historie cen",
+    "priceHistoryTitle": "Ověřit 90denní historii cen a odhalit falešné slevy",
+    "noImage": "Bez obrázku",
+    "verified": "Normalizované parametry"
   }
 }

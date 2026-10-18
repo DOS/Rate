@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { BsCheckLg, BsPlusLg } from 'react-icons/bs';
 import {
   type CompareTrayItem,
   getCompareTray,
@@ -15,6 +16,8 @@ interface CompareQuickToggleProps {
   size?: 'sm' | 'md';
   className?: string;
   includeWatchlist?: boolean;
+  /** Icon plus short label on a neutral chip, for card overlays. */
+  compact?: boolean;
 }
 
 export default function CompareQuickToggle({
@@ -22,6 +25,7 @@ export default function CompareQuickToggle({
   size = 'sm',
   className = '',
   includeWatchlist = true,
+  compact = false,
 }: CompareQuickToggleProps) {
   const t = useTranslations('compare');
   const [selected, setSelected] = useState(false);
@@ -45,6 +49,54 @@ export default function CompareQuickToggle({
       setTimeout(() => setLimitAlert(false), 2200);
     }
   };
+
+  if (compact) {
+    const title = limitAlert
+      ? t('quickToggleLimitTitle')
+      : selected
+        ? t('quickToggleRemoveTitle')
+        : t('quickToggleAddTitle');
+    return (
+      <div
+        className={`d-inline-flex align-items-center gap-1 ${className}`.trim()}
+      >
+        {includeWatchlist && (
+          <WatchlistQuickToggle
+            compact
+            item={{
+              slug: item.slug,
+              name: item.name,
+              brand: item.brand,
+              thumbnail: item.thumbnail,
+              min_price: item.min_price,
+              categoryPath: item.categoryPath,
+            }}
+          />
+        )}
+        <button
+          type="button"
+          onClick={handleToggle}
+          title={title}
+          aria-label={`${t('quickToggleShortAdd')}: ${item.name}`}
+          aria-pressed={selected}
+          className={`rate-chip-btn${selected ? ' is-active' : ''}${limitAlert ? ' is-warning' : ''}`}
+        >
+          {selected ? (
+            <BsCheckLg aria-hidden="true" />
+          ) : (
+            <BsPlusLg aria-hidden="true" />
+          )}
+          <span>
+            {limitAlert
+              ? t('quickToggleShortLimit')
+              : selected
+                ? t('quickToggleShortSelected')
+                : t('quickToggleShortAdd')}
+          </span>
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="d-inline-flex align-items-center flex-wrap gap-1">

@@ -1378,9 +1378,15 @@ async function runCoreArchitectureSuite() {
     ),
     'utf8'
   );
+  const productCardSrc = fs.readFileSync(
+    path.join(repoRoot, 'apps/web/src/components/product/ProductCard.tsx'),
+    'utf8'
+  );
   assert.ok(
     categoryCatalogSpreadSrc.includes('category-price-spread-leaders') &&
-      categoryCatalogSpreadSrc.includes('RadarBadge'),
+      categoryCatalogSpreadSrc.includes('<ProductCard') &&
+      categoryCatalogSpreadSrc.includes('radarSignal={getRadarSignal(') &&
+      productCardSrc.includes('<RadarBadge'),
     'CategoryCatalogContent must render category-price-spread-leaders and catalog-card-radar-badge (#97)'
   );
   assert.ok(
@@ -1702,7 +1708,9 @@ async function runCoreArchitectureSuite() {
     'utf8'
   );
   assert.ok(
-    homePageRadarCardSrc.includes('RadarBadge') &&
+    homePageRadarCardSrc.includes('<ProductCard') &&
+      homePageRadarCardSrc.includes('radarSignal={getRadarSignal(') &&
+      productCardSrc.includes('<RadarBadge') &&
       homePageRadarCardSrc.includes('buildRadarIndex') &&
       /categorySlug: 'all', limit: 50/.test(homePageRadarCardSrc),
     'Homepage featured product cards must render RadarBadge from full catalog index (#117)'

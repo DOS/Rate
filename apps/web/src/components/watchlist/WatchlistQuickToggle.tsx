@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { BsBell, BsBellFill } from 'react-icons/bs';
 import {
   getWatchlist,
   removeWatchlistItem,
@@ -22,12 +23,15 @@ interface WatchlistQuickToggleProps {
   item: WatchlistQuickItem;
   size?: 'sm' | 'md';
   className?: string;
+  /** Icon plus short label on a neutral chip, for card overlays. */
+  compact?: boolean;
 }
 
 export default function WatchlistQuickToggle({
   item,
   size = 'sm',
   className = '',
+  compact = false,
 }: WatchlistQuickToggleProps) {
   const t = useTranslations('watchlist');
   const [watched, setWatched] = useState(false);
@@ -67,6 +71,34 @@ export default function WatchlistQuickToggle({
       addedAt: new Date().toISOString(),
     });
   };
+
+  if (compact) {
+    return (
+      <button
+        type="button"
+        onClick={handleToggle}
+        title={
+          watched
+            ? t('quickToggleTitleWatched')
+            : t('quickToggleTitleUnwatched')
+        }
+        aria-label={`${t('quickToggleShortUnwatched')}: ${item.name}`}
+        aria-pressed={watched}
+        className={`rate-chip-btn${watched ? ' is-active' : ''} ${className}`.trim()}
+      >
+        {watched ? (
+          <BsBellFill aria-hidden="true" />
+        ) : (
+          <BsBell aria-hidden="true" />
+        )}
+        <span>
+          {watched
+            ? t('quickToggleShortWatched')
+            : t('quickToggleShortUnwatched')}
+        </span>
+      </button>
+    );
+  }
 
   return (
     <button

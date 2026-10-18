@@ -316,7 +316,10 @@
     "trayClearAll": "Xóa tất cả",
     "trayCompareNow": "So sánh ngay ({count} máy) →",
     "trayRemoveTitle": "Xóa khỏi khay so sánh",
-    "trayRemoveAria": "Xóa {name}"
+    "trayRemoveAria": "Xóa {name}",
+    "quickToggleShortAdd": "So sánh",
+    "quickToggleShortSelected": "Đã chọn",
+    "quickToggleShortLimit": "Tối đa 4"
   },
   "leaderboard": {
     "metaTitle": "Bảng Xếp Hạng Thiết Bị Công Nghệ (JReviews 10.0) | Rate.vn",
@@ -607,7 +610,9 @@
     "quickToggleTitleWatched": "Đang theo dõi biến động giá (Bấm để bỏ theo dõi)",
     "quickToggleTitleUnwatched": "Theo dõi biến động giá & nhận cảnh báo giảm giá thật (-5%)",
     "quickToggleBtnWatched": "🔔 Đang canh giá",
-    "quickToggleBtnUnwatched": "🔔 Canh giá"
+    "quickToggleBtnUnwatched": "🔔 Canh giá",
+    "quickToggleShortUnwatched": "Canh giá",
+    "quickToggleShortWatched": "Đang canh"
   },
   "deals": {
     "metaTitle": "Săn Deal Công Nghệ Đã Kiểm Định Giá Thật 10 Sàn | Rate.vn",
@@ -1076,12 +1081,6 @@
     "catDescTablets": "Lọc theo kích thước màn hình, dung lượng lưu trữ, kết nối 5G/Wi-Fi",
     "catDescSmartwatches": "Đồng hồ thông minh theo dõi sức khỏe, GPS & thời lượng pin",
     "catDescEarbuds": "Tai nghe chống ồn chủ động ANC, chuẩn codec Hi-Res & pin",
-    "userNoScore": "User: chưa có",
-    "expertNoScore": "Expert: chưa có",
-    "refPriceLabel": "Giá tham khảo:",
-    "sourcesCount": "🏪 {count} nguồn",
-    "viewReviewsAndSpecsBtn": "★ Xem Review & 10 Nhóm Thông Số",
-    "inspectPriceHistoryTitle": "Kiểm định lịch sử giá 90 ngày & phát hiện giảm giá ảo",
     "popularBattlesBadge": "⚔️ Kèo Đối Đầu 1v1 Tâm Điểm",
     "popularBattlesTitle": "Đặt Lên Bàn Cân Các Flagship Đang Được So Kè Nhiều Nhất",
     "leaderboard5CatsBtn": "🏆 Bảng Xếp Hạng 5 Ngành →",
@@ -1574,17 +1573,7 @@
       "emptyMatchingDesc": "Hãy thử nới lỏng khoảng giá hoặc bỏ bớt một vài tiêu chí phần cứng để xem thêm các dòng máy khác.",
       "resetFiltersBtn": "Đặt lại bộ lọc",
       "browseSmartphonesBtn": "Xem danh mục Điện thoại đang có sẵn →",
-      "merchantProfilesBtn": "Hồ sơ Tín nhiệm Gian hàng",
-      "noImage": "Chưa có ảnh",
-      "userScoreText": "{score} User ({count} đánh giá thật)",
-      "userScoreUnrated": "User: chưa có",
-      "expertScoreText": "{score} Expert Lab",
-      "expertScoreUnrated": "Expert Lab: chưa có",
-      "refPriceLabel": "Giá tham khảo:",
-      "sourcesCount": "{count} nguồn",
-      "viewReviewsSpecsBtn": "★ Xem Review & 10 Nhóm Thông Số",
-      "inspectPriceHistoryTitle": "Kiểm định lịch sử giá 90 ngày & phát hiện giảm giá ảo",
-      "inspectBtn": "🔍 Kiểm định"
+      "merchantProfilesBtn": "Hồ sơ Tín nhiệm Gian hàng"
     },
     "toolbar": {
       "unratedText": "chưa có",
@@ -1717,5 +1706,18 @@
     "okResetSent": "Đã gửi hướng dẫn đặt lại mật khẩu tới email của bạn. Vui lòng kiểm tra hộp thư đến (và thư mục Spam).",
     "okOtpSent": "Đã gửi mã OTP 6 chữ số tới email của bạn. Vui lòng nhập mã bên dưới để hoàn tất xác thực.",
     "okOtpVerified": "Xác thực OTP thành công! Đang chuyển hướng về trang chủ..."
+  },
+  "productCard": {
+    "reviewCount": "{count, number} đánh giá",
+    "noReviews": "Chưa có đánh giá",
+    "expertScore": "Lab {score}",
+    "refPrice": "Giá tham khảo",
+    "priceUpTo": "đến {price}",
+    "sources": "{count, number} nơi bán",
+    "viewDetails": "Xem chi tiết",
+    "priceHistory": "Lịch sử giá",
+    "priceHistoryTitle": "Kiểm định lịch sử giá 90 ngày & phát hiện giảm giá ảo",
+    "noImage": "Chưa có ảnh",
+    "verified": "Đã chuẩn hóa thông số"
   }
 }
