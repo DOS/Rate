@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  MAX_VALID_VND_PRICE,
   getCategoryRouteHref,
   getMasterProductCategorySlug,
   resolveProductImageUrl,
@@ -19,19 +20,39 @@ export interface WatchlistItem {
 
 const STORAGE_KEY = 'rate_price_watchlist_v1';
 const EVENT_NAME = 'rate:watchlist:change';
+export const MAX_WATCHLIST_ITEMS = 50;
 
-function normalizeWatchlistItem(item: WatchlistItem): WatchlistItem {
+function sanitizeWatchlistPrice(value: unknown): number {
+  const num = Number(value);
+  if (!Number.isFinite(num) || num < 0 || num > MAX_VALID_VND_PRICE) {
+    return 0;
+  }
+  return Math.round(num);
+}
+
+export function normalizeWatchlistItem(item: WatchlistItem): WatchlistItem {
+  const pathMatch =
+    typeof item.categoryPath === 'string'
+      ? /^\/(smartphones|tablets|laptops|smartwatches|earbuds)(?:\/|$)/.exec(
+          item.categoryPath.trim()
+        )
+      : null;
   const catSlug = getMasterProductCategorySlug({
     slug: item.slug,
     name: item.name,
+    metadata: pathMatch ? { category_slug: pathMatch[1] } : undefined,
   });
+  const priceWhenAdded = sanitizeWatchlistPrice(item.priceWhenAdded);
+  const targetPrice = sanitizeWatchlistPrice(item.targetPrice);
   return {
     ...item,
-    categoryPath:
-      item.categoryPath && item.categoryPath.startsWith('/')
-        ? item.categoryPath
-        : getCategoryRouteHref(catSlug),
-    thumbnail: resolveProductImageUrl(item.slug, item.thumbnail),
+    slug: item.slug.trim(),
+    name: item.name.trim(),
+    brand: typeof item.brand === 'string' ? item.brand.trim() : '',
+    categoryPath: getCategoryRouteHref(catSlug),
+    thumbnail: resolveProductImageUrl(item.slug.trim(), item.thumbnail),
+    priceWhenAdded,
+    targetPrice,
   };
 }
 
@@ -42,13 +63,25 @@ export function getWatchlist(): WatchlistItem[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return parsed
-      .filter((item): item is WatchlistItem =>
-        Boolean(
-          item && typeof item.slug === 'string' && typeof item.name === 'string'
-        )
-      )
-      .map(normalizeWatchlistItem);
+    const deduped: WatchlistItem[] = [];
+    const seen = new Set<string>();
+    for (const item of parsed) {
+      if (
+        !item ||
+        typeof item.slug !== 'string' ||
+        !item.slug.trim() ||
+        typeof item.name !== 'string' ||
+        !item.name.trim()
+      ) {
+        continue;
+      }
+      const normalized = normalizeWatchlistItem(item as WatchlistItem);
+      if (seen.has(normalized.slug)) continue;
+      seen.add(normalized.slug);
+      deduped.push(normalized);
+      if (deduped.length >= MAX_WATCHLIST_ITEMS) break;
+    }
+    return deduped;
   } catch {
     return [];
   }
@@ -57,7 +90,10 @@ export function getWatchlist(): WatchlistItem[] {
 function saveWatchlist(items: WatchlistItem[]) {
   if (typeof window === 'undefined') return;
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+    window.localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify(items.slice(0, MAX_WATCHLIST_ITEMS))
+    );
     window.dispatchEvent(new CustomEvent(EVENT_NAME));
   } catch {
     // Ignore private mode storage quota errors
@@ -68,10 +104,11 @@ export function upsertWatchlistItem(item: WatchlistItem): WatchlistItem[] {
   const normalized = normalizeWatchlistItem(item);
   const current = getWatchlist();
   const idx = current.findIndex((x) => x.slug === normalized.slug);
-  const next =
+  const next = (
     idx >= 0
       ? current.map((x, i) => (i === idx ? normalized : x))
-      : [normalized, ...current];
+      : [normalized, ...current]
+  ).slice(0, MAX_WATCHLIST_ITEMS);
   saveWatchlist(next);
   return next;
 }

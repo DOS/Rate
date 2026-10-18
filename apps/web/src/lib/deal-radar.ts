@@ -57,21 +57,42 @@ export function buildRadarIndex(
   };
   for (const g of payload.genuineDeals ?? []) {
     if (!g?.productSlug) continue;
-    upsert(g.productSlug, {
-      genuineDeal: map.get(g.productSlug)?.genuineDeal ?? g,
-    });
+    const prev = map.get(g.productSlug)?.genuineDeal;
+    const prevSavings = Math.abs(Number(prev?.savingsVsMedianPct ?? 0));
+    const nextSavings = Math.abs(Number(g.savingsVsMedianPct ?? 0));
+    const isStronger =
+      !prev ||
+      nextSavings > prevSavings ||
+      (nextSavings === prevSavings &&
+        Number(g.priceCurrent ?? Infinity) <
+          Number(prev.priceCurrent ?? Infinity));
+    if (isStronger) {
+      upsert(g.productSlug, { genuineDeal: g });
+    }
   }
   for (const t of payload.fakeSaleTraps ?? []) {
     if (!t?.productSlug) continue;
-    upsert(t.productSlug, {
-      fakeSaleTrap: map.get(t.productSlug)?.fakeSaleTrap ?? t,
-    });
+    const prev = map.get(t.productSlug)?.fakeSaleTrap;
+    const prevMarkup = Math.abs(Number(prev?.fakeMarkupPct ?? 0));
+    const nextMarkup = Math.abs(Number(t.fakeMarkupPct ?? 0));
+    const isWorse =
+      !prev ||
+      nextMarkup > prevMarkup ||
+      (nextMarkup === prevMarkup &&
+        Number(t.claimedDiscountPct ?? 0) >
+          Number(prev.claimedDiscountPct ?? 0));
+    if (isWorse) {
+      upsert(t.productSlug, { fakeSaleTrap: t });
+    }
   }
   for (const sp of payload.priceSpreadLeaders ?? []) {
     if (!sp?.productSlug) continue;
-    upsert(sp.productSlug, {
-      priceSpread: map.get(sp.productSlug)?.priceSpread ?? sp,
-    });
+    const prev = map.get(sp.productSlug)?.priceSpread;
+    const prevSpread = Number(prev?.spreadPct ?? 0);
+    const nextSpread = Number(sp.spreadPct ?? 0);
+    if (!prev || nextSpread > prevSpread) {
+      upsert(sp.productSlug, { priceSpread: sp });
+    }
   }
   for (const [slug, sig] of map) {
     const verdict: RadarVerdict = sig.genuineDeal
@@ -82,9 +103,9 @@ export function buildRadarIndex(
     map.set(slug, {
       ...sig,
       verdict,
-      savingsPct: Math.abs(sig.genuineDeal?.savingsVsMedianPct ?? 0),
-      fakeMarkupPct: Math.abs(sig.fakeSaleTrap?.fakeMarkupPct ?? 0),
-      spreadPct: sig.priceSpread?.spreadPct ?? 0,
+      savingsPct: Math.abs(Number(sig.genuineDeal?.savingsVsMedianPct ?? 0)),
+      fakeMarkupPct: Math.abs(Number(sig.fakeSaleTrap?.fakeMarkupPct ?? 0)),
+      spreadPct: Math.max(0, Number(sig.priceSpread?.spreadPct ?? 0)),
     });
   }
   return map;
@@ -162,14 +183,21 @@ export function radarMarkdownCell(
   return radarLabel(signal, 0, locale) || '-';
 }
 
-/** Radar entries that belong to one merchant (matched by id or name). */
+/** Radar entries that belong to one merchant (matched by id or non-empty name). */
 export function selectMerchantRadar(
   payload: CrossPlatformDealRadarResponse | null | undefined,
   merchant: { id: string; name: string }
 ) {
-  const nameLower = merchant.name.toLowerCase();
+  const targetId = String(merchant?.id || '').trim();
+  const nameLower = String(merchant?.name || '')
+    .trim()
+    .toLowerCase();
   const belongs = (i: CrossPlatformDealRadarItem) =>
-    i.merchantId === merchant.id || i.merchantName.toLowerCase() === nameLower;
+    (Boolean(targetId) && i.merchantId === targetId) ||
+    (Boolean(nameLower) &&
+      String(i.merchantName || '')
+        .trim()
+        .toLowerCase() === nameLower);
   const genuineDeals = (payload?.genuineDeals ?? []).filter(belongs);
   const fakeSaleTraps = (payload?.fakeSaleTraps ?? []).filter(belongs);
   return {
@@ -178,7 +206,7 @@ export function selectMerchantRadar(
     genuineDealCount: genuineDeals.length,
     fakeTrapCount: fakeSaleTraps.length,
     bestSavingsPct: genuineDeals.reduce(
-      (max, g) => Math.max(max, Number(g.savingsVsMedianPct || 0)),
+      (max, g) => Math.max(max, Math.abs(Number(g.savingsVsMedianPct || 0))),
       0
     ),
   };
