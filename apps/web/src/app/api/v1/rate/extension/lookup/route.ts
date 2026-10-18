@@ -3,13 +3,31 @@ import {
   EXTENSION_CAPABILITY_MATRIX,
   lookupExtensionProduct,
 } from '@/server/rate';
-import { jsonApiError } from '@/server/rate/api-handler';
+import {
+  BoundedSlidingWindowRateLimiter,
+  extractClientRateLimitKey,
+  jsonApiError,
+  parseBoundedStringParam,
+} from '@/server/rate/api-handler';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, X-Rate-Extension-Version',
 };
+
+const lookupRateLimiter = new BoundedSlidingWindowRateLimiter({
+  windowMs: 60_000,
+  maxRequests: 60,
+  maxBuckets: 2_000,
+});
+
+function parseOptionalVndPriceParam(raw: string | null): number | null {
+  if (!raw || !raw.trim()) return null;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return Math.min(Math.round(n), 500_000_000);
+}
 
 export async function OPTIONS() {
   return new NextResponse(null, {
@@ -22,7 +40,7 @@ export async function OPTIONS() {
  * GET /api/v1/rate/extension/lookup
  * Fast-Path Read-Only Lookup for Rate Browser Extension MV3 (Two-Speed Hybrid Architecture v2).
  * Query parameters:
- * - platform: shopee | lazada | tiki | cellphones | tgdd | fptshop
+ * - platform: shopee | lazada | tiki | tiktok | cellphones | tgdd | fptshop | hoangha | didongviet | phongvu
  * - externalId: platform item ID or shopId_itemId
  * - shopId: platform shop ID
  * - url: product URL (automatically canonicalized, stripping tracking params)
@@ -34,15 +52,27 @@ export async function OPTIONS() {
  */
 export async function GET(request: NextRequest) {
   try {
+    const clientIp = extractClientRateLimitKey(request.headers);
+    if (!lookupRateLimiter.allow(clientIp)) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: 'Rate limit exceeded. Maximum 60 lookup requests per minute.',
+        },
+        { status: 429, headers: CORS_HEADERS }
+      );
+    }
+
     const sp = request.nextUrl.searchParams;
-    const platform = sp.get('platform');
-    const externalId = sp.get('externalId');
-    const shopId = sp.get('shopId');
-    const url = sp.get('url');
-    const title = sp.get('title');
-    const selectedVariant = sp.get('selectedVariant');
-    const rawPrice = sp.get('price');
-    const rawOriginalPrice = sp.get('originalPrice');
+    const platform = parseBoundedStringParam(sp.get('platform'), 32);
+    const externalId = parseBoundedStringParam(sp.get('externalId'), 120);
+    const shopId = parseBoundedStringParam(sp.get('shopId'), 120);
+    const url = parseBoundedStringParam(sp.get('url'), 1024);
+    const title = parseBoundedStringParam(sp.get('title'), 320);
+    const selectedVariant = parseBoundedStringParam(
+      sp.get('selectedVariant'),
+      160
+    );
     const mode = sp.get('mode') === 'pill' ? 'pill' : 'full';
 
     if (!url && !title && !externalId) {
@@ -57,8 +87,8 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const price = rawPrice ? Number(rawPrice) : null;
-    const originalPrice = rawOriginalPrice ? Number(rawOriginalPrice) : null;
+    const price = parseOptionalVndPriceParam(sp.get('price'));
+    const originalPrice = parseOptionalVndPriceParam(sp.get('originalPrice'));
 
     const result = await lookupExtensionProduct({
       platform,
@@ -67,9 +97,8 @@ export async function GET(request: NextRequest) {
       url,
       title,
       selectedVariant,
-      price: price && Number.isFinite(price) ? price : null,
-      originalPrice:
-        originalPrice && Number.isFinite(originalPrice) ? originalPrice : null,
+      price,
+      originalPrice,
       mode,
     });
 
