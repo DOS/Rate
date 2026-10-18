@@ -758,10 +758,18 @@ export async function getCategoryDirectoryFacets(
 ): Promise<CategoryDirectoryFacets> {
   const supabase = getRateClient();
 
-  const { data: catRows } = await supabase
+  const { data: catRows, error: catErr } = await supabase
     .from('categories')
     .select('id, parent_id, name, slug, icon, display_order')
     .order('display_order', { ascending: true });
+
+  if (catErr) {
+    log.error('category directory lookup failed', {
+      categorySlug,
+      message: catErr.message,
+    });
+    throw new RateDataUnavailableError('categories', catErr);
+  }
 
   const categories = (catRows as RateCategoryItem[]) || [];
   const currentCategory =
@@ -799,12 +807,20 @@ export async function getCategoryDirectoryFacets(
     }
   }
 
-  const { data: prodRows } = await supabase
+  const { data: prodRows, error: prodErr } = await supabase
     .from('master_products')
     .select('brand, category_id')
     .eq('status', 'published')
     .eq('category_id', currentCategory.id)
     .limit(500);
+
+  if (prodErr) {
+    log.error('category brand facets fallback failed', {
+      categorySlug,
+      message: prodErr.message,
+    });
+    throw new RateDataUnavailableError('category brand facets', prodErr);
+  }
 
   const rows =
     (prodRows as { brand: string; category_id: string | null }[]) || [];
@@ -837,11 +853,19 @@ export async function getMasterProducts(
   let resolvedCategoryId: string | null = null;
 
   if (params?.categorySlug && params.categorySlug !== 'all') {
-    const { data: catRow } = await supabase
+    const { data: catRow, error: catErr } = await supabase
       .from('categories')
       .select('id')
       .eq('slug', params.categorySlug)
       .maybeSingle();
+
+    if (catErr) {
+      log.error('category slug lookup failed', {
+        categorySlug: params.categorySlug,
+        message: catErr.message,
+      });
+      throw new RateDataUnavailableError('category lookup', catErr);
+    }
 
     if (!catRow?.id) {
       return [];
@@ -889,7 +913,7 @@ export async function getMasterProducts(
       }
     );
     if (!rpcErr && Array.isArray(rpcRows)) {
-      return rpcRows as MasterProduct[];
+      return (rpcRows as MasterProduct[]).map(normalizeMasterProductRow);
     }
   }
 
@@ -1291,8 +1315,11 @@ export async function getMasterProductOffers(
     .eq('cluster_id', masterId)
     .order('price_current', { ascending: true });
 
-  if (error || !data) {
-    log.error('offers fetch failed', { masterId, message: error?.message });
+  if (error) {
+    log.error('offers fetch failed', { masterId, message: error.message });
+    throw new RateDataUnavailableError('product offers', error);
+  }
+  if (!data) {
     return [];
   }
 
@@ -1317,7 +1344,7 @@ export async function getMasterProductOffersBatch(
   }
 
   const supabase = getRateClient();
-  const chunkSize = 150;
+  const chunkSize = IN_FILTER_CHUNK_SIZE;
 
   for (let i = 0; i < uniqueIds.length; i += chunkSize) {
     const batchIds = uniqueIds.slice(i, i + chunkSize);
@@ -1368,11 +1395,14 @@ export async function getMasterProductOffersBatch(
       .in('cluster_id', batchIds)
       .order('price_current', { ascending: true });
 
-    if (error || !data) {
+    if (error) {
       log.error('batch offers fetch failed', {
         batchSize: batchIds.length,
-        message: error?.message,
+        message: error.message,
       });
+      throw new RateDataUnavailableError('batch product offers', error);
+    }
+    if (!data) {
       continue;
     }
 
@@ -1426,30 +1456,35 @@ export async function getMasterProductReviews(
     .select('id')
     .eq('cluster_id', masterId);
   if (prodsErr) {
-    throw new Error(
-      `rate-api: failed to resolve listings for master ${masterId}: ${prodsErr.message}`
+    throw new RateDataUnavailableError(
+      `listings for master ${masterId}`,
+      prodsErr
     );
   }
   if (!prods || prods.length === 0) return [];
 
   const productIds = (prods as Array<{ id: string }>).map((p) => p.id);
-  const { data: reviews, error } = await supabase
-    .from('reviews')
-    .select('*, review_flags(*)')
-    .in('product_id', productIds)
-    .order('created_at', { ascending: false })
-    .limit(50);
+  const reviewRows = await readInChunks(
+    productIds,
+    `reviews for master ${masterId}`,
+    (chunk) =>
+      supabase
+        .from('reviews')
+        .select('*, review_flags(*)')
+        .in('product_id', chunk)
+        .order('created_at', { ascending: false })
+        .limit(50)
+  );
 
-  if (error) {
-    throw new Error(
-      `rate-api: failed to fetch reviews for master ${masterId}: ${error.message}`
-    );
-  }
-  if (!reviews) {
-    return [];
-  }
+  const reviews = (reviewRows as unknown as RawReviewRow[])
+    .sort(
+      (a, b) =>
+        (Date.parse(b.created_at ?? '') || 0) -
+        (Date.parse(a.created_at ?? '') || 0)
+    )
+    .slice(0, 50);
 
-  return (reviews as unknown as RawReviewRow[]).map((r) => {
+  return reviews.map((r) => {
     const vf = Array.isArray(r.review_flags)
       ? r.review_flags[0]
       : r.review_flags;
@@ -1556,20 +1591,42 @@ export async function getMasterProductReviewSummary(
       : 0;
 
   const supabase = getRateClient();
-  const { data: prods } = await supabase
+  const { data: prods, error: prodsErr } = await supabase
     .from('products')
     .select('id')
     .eq('cluster_id', masterId);
 
+  if (prodsErr) {
+    throw new RateDataUnavailableError(
+      `review summary listings for master ${masterId}`,
+      prodsErr
+    );
+  }
+
   const productIds = ((prods || []) as Array<{ id: string }>).map((p) => p.id);
   if (productIds.length > 0) {
-    const { data: analyses } = await supabase
-      .from('review_analysis')
-      .select('*')
-      .in('product_id', productIds)
-      .order('analyzed_at', { ascending: false });
+    const analysisRows = await readInChunks(
+      productIds,
+      `review analysis for master ${masterId}`,
+      (chunk) =>
+        supabase
+          .from('review_analysis')
+          .select('*')
+          .in('product_id', chunk)
+          .order('analyzed_at', { ascending: false })
+    );
 
-    if (analyses && analyses.length > 0) {
+    const analyses = (
+      analysisRows as unknown as Array<
+        RawReviewAnalysisRow & { analyzed_at?: string | null }
+      >
+    ).sort(
+      (a, b) =>
+        (Date.parse(b.analyzed_at ?? '') || 0) -
+        (Date.parse(a.analyzed_at ?? '') || 0)
+    );
+
+    if (analyses.length > 0) {
       const typedAnalyses = analyses as unknown as RawReviewAnalysisRow[];
       const prosSet = new Set<string>();
       const consSet = new Set<string>();
@@ -1790,28 +1847,31 @@ export async function getMasterProductPriceHistory(
 
   const productIds = offers.map((o) => o.id);
   const supabase = getRateClient();
-  const { data: rawRows, error } = await supabase
-    .from('price_history')
-    .select('id, product_id, price, price_original, recorded_at, source')
-    .in('product_id', productIds)
-    .order('recorded_at', { ascending: false })
-    .limit(1000);
-
-  if (error) {
+  let rawRows: unknown[];
+  try {
+    rawRows = await readInChunks(productIds, 'price history', (chunk) =>
+      supabase
+        .from('price_history')
+        .select('id, product_id, price, price_original, recorded_at, source')
+        .in('product_id', chunk)
+        .order('recorded_at', { ascending: false })
+        .limit(1000)
+    );
+  } catch (err) {
     log.error('price_history fetch failed', {
       masterId,
-      message: error.message,
+      message: err instanceof Error ? err.message : String(err),
     });
-    // An empty history would be cached and shown as "no price data".
-    throw new RateDataUnavailableError('price history', error);
+    throw err;
   }
 
-  const chronologicalRows = [
-    ...((rawRows || []) as unknown as RawPriceHistoryRow[]),
-  ].sort(
-    (a, b) =>
-      new Date(a.recorded_at).getTime() - new Date(b.recorded_at).getTime()
-  );
+  const cappedNewestRows = (rawRows as unknown as RawPriceHistoryRow[])
+    .sort(
+      (a, b) =>
+        new Date(b.recorded_at).getTime() - new Date(a.recorded_at).getTime()
+    )
+    .slice(0, 1000);
+  const chronologicalRows = [...cappedNewestRows].reverse();
 
   const points: PriceHistoryPoint[] = [];
   const pricesByOffer = new Map<string, number[]>();
@@ -3526,12 +3586,16 @@ export async function inspectProductOrShopUrl(
       candidateIds.add(`${prefix}${parsedUrl.platformItemId}`);
     }
 
-    const { data: prodRow } = await supabase
+    const { data: prodRow, error: prodErr } = await supabase
       .from('products')
       .select('id, cluster_id, merchant_id, platform_item_id')
       .in('platform_item_id', Array.from(candidateIds))
       .limit(1)
       .maybeSingle();
+
+    if (prodErr) {
+      throw new RateDataUnavailableError('URL product listing lookup', prodErr);
+    }
 
     const matchedProd = prodRow as {
       id: string;
@@ -3541,13 +3605,22 @@ export async function inspectProductOrShopUrl(
     } | null;
 
     if (matchedProd?.cluster_id) {
-      const { data: masterData } = await supabase
+      const { data: masterData, error: masterErr } = await supabase
         .from('master_products')
         .select('*')
         .eq('id', matchedProd.cluster_id)
         .maybeSingle();
 
-      const masterProduct = (masterData as MasterProduct) || null;
+      if (masterErr) {
+        throw new RateDataUnavailableError(
+          'URL master product lookup',
+          masterErr
+        );
+      }
+
+      const masterProduct = masterData
+        ? normalizeMasterProductRow(masterData as MasterProduct)
+        : null;
       if (masterProduct) {
         const [offers, reviews, merchantsList] = await Promise.all([
           getMasterProductOffers(masterProduct.id),

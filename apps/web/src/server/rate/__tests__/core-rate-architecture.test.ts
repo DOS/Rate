@@ -3684,7 +3684,270 @@ async function runCoreArchitectureSuite() {
   );
 
   console.log(
-    '  ✅ [63/63] Retirement of getRateCopy & Localization of Navbar, Footer, RadarBadge, and GlobalError (#279) passed'
+    '  ✅ [63/64] Retirement of getRateCopy & Localization of Navbar, Footer, RadarBadge, and GlobalError (#279) passed'
+  );
+
+  // 64. Issue #344: RateDataUnavailableError propagation on DB failures, RPC image normalization & >150 IN-filter chunking
+  const {
+    RateDataUnavailableError,
+    getCategoryDirectoryFacets,
+    getMasterProducts: getMasterProductsRaw,
+    getMasterProductOffers,
+    getMasterProductOffersBatch,
+    getMasterProductReviews,
+    getMasterProductReviewSummary,
+    getMasterProductPriceHistory,
+    inspectProductOrShopUrl,
+  } = await import('../../../lib/rate-api');
+
+  const origFetch344 = globalThis.fetch;
+
+  try {
+    const jsonResp344 = (status: number, body: unknown) =>
+      new Response(JSON.stringify(body), {
+        status,
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+    // 64.1 getCategoryDirectoryFacets throws RateDataUnavailableError when categories or fallback master_products fails
+    globalThis.fetch = (async () =>
+      jsonResp344(500, {
+        message: 'simulated categories failure',
+      })) as typeof fetch;
+    await assert.rejects(
+      () => getCategoryDirectoryFacets('smartphones'),
+      (err: unknown) => err instanceof RateDataUnavailableError
+    );
+
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.includes('/rest/v1/categories')) {
+        return jsonResp344(200, [
+          {
+            id: 'cat-smartphones',
+            parent_id: null,
+            name: 'Smartphones',
+            slug: 'smartphones',
+            icon: null,
+            display_order: 1,
+          },
+        ]);
+      }
+      return jsonResp344(500, { message: 'simulated facets fallback failure' });
+    }) as typeof fetch;
+    await assert.rejects(
+      () => getCategoryDirectoryFacets('smartphones'),
+      (err: unknown) => err instanceof RateDataUnavailableError
+    );
+
+    // 64.2 getMasterProducts throws RateDataUnavailableError on category lookup failure & normalizes search_master_products RPC rows
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.includes('/rest/v1/categories')) {
+        return jsonResp344(500, { message: 'simulated category slug failure' });
+      }
+      return jsonResp344(200, []);
+    }) as typeof fetch;
+    await assert.rejects(
+      () => getMasterProductsRaw({ categorySlug: 'smartphones' }),
+      (err: unknown) => err instanceof RateDataUnavailableError
+    );
+
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.includes('/rest/v1/rpc/search_master_products')) {
+        return jsonResp344(200, [
+          {
+            id: 'master-16pm',
+            slug: 'apple-iphone-16-pro-max-256gb',
+            name: 'Apple iPhone 16 Pro Max 256GB',
+            brand: 'Apple',
+            model: 'iPhone 16 Pro Max',
+            model_key: 'apple-iphone-16-pro-max-256gb',
+            images: ['https://broken.example.com/404.jpg'],
+            specifications: {},
+            key_specs: {},
+            min_price: 28990000,
+            max_price: 30990000,
+            merchant_count: 3,
+            total_reviews: 10,
+            average_rating: 4.8,
+            status: 'published',
+          },
+        ]);
+      }
+      return jsonResp344(200, []);
+    }) as typeof fetch;
+    const rpcProducts344 = await getMasterProductsRaw({ categorySlug: 'all' });
+    assert.equal(rpcProducts344.length, 1);
+    assert.equal(
+      rpcProducts344[0]?.images?.[0],
+      '/img/devices/apple-iphone-16-pro-max-256gb.jpg',
+      'search_master_products RPC rows must be normalized via normalizeMasterProductRow (#344)'
+    );
+
+    // 64.3 getMasterProductOffers & getMasterProductOffersBatch throw RateDataUnavailableError when both view and products fallback fail
+    globalThis.fetch = (async () =>
+      jsonResp344(500, {
+        message: 'simulated offers failure',
+      })) as typeof fetch;
+    await assert.rejects(
+      () => getMasterProductOffers('master-16pm'),
+      (err: unknown) => err instanceof RateDataUnavailableError
+    );
+    await assert.rejects(
+      () => getMasterProductOffersBatch(['master-16pm']),
+      (err: unknown) => err instanceof RateDataUnavailableError
+    );
+
+    // 64.4 Chunking (>150 productIds) and RateDataUnavailableError in getMasterProductReviews, getMasterProductReviewSummary, and getMasterProductPriceHistory
+    const manyListingRows344 = Array.from({ length: 160 }, (_, idx) => ({
+      id: `prod-${idx + 1}`,
+    }));
+    let reviewChunksCalled = 0;
+    let analysisChunksCalled = 0;
+    let priceHistoryChunksCalled = 0;
+
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.includes('/rest/v1/products')) {
+        return jsonResp344(200, manyListingRows344);
+      }
+      if (url.includes('/rest/v1/reviews')) {
+        reviewChunksCalled += 1;
+        return jsonResp344(200, [
+          {
+            id: `rev-chunk-${reviewChunksCalled}`,
+            author_name: 'Buyer',
+            rating_star: 5,
+            comment: 'Great display and battery life',
+            created_at:
+              reviewChunksCalled === 1
+                ? '2026-10-17T10:00:00Z'
+                : '2026-10-18T10:00:00Z',
+            reviewer_type: 'user',
+            upvotes: 2,
+            downvotes: 0,
+            report_count: 0,
+            review_flags: {
+              verdict: 'authentic',
+              flag_category: 'authentic',
+              include_in_rating: true,
+            },
+          },
+        ]);
+      }
+      if (url.includes('/rest/v1/review_analysis')) {
+        analysisChunksCalled += 1;
+        return jsonResp344(200, [
+          {
+            total_reviews_analyzed: 10,
+            authenticity_score: 92,
+            ai_summary: `Summary from chunk ${analysisChunksCalled}`,
+            pros: [`Pro ${analysisChunksCalled}`],
+            cons: [`Con ${analysisChunksCalled}`],
+            analyzed_at:
+              analysisChunksCalled === 1
+                ? '2026-10-17T10:00:00Z'
+                : '2026-10-18T10:00:00Z',
+          },
+        ]);
+      }
+      if (url.includes('/rest/v1/price_history')) {
+        priceHistoryChunksCalled += 1;
+        return jsonResp344(200, [
+          {
+            id: priceHistoryChunksCalled,
+            product_id: `prod-${priceHistoryChunksCalled === 1 ? 1 : 155}`,
+            price: 27990000,
+            price_original: 29990000,
+            recorded_at:
+              priceHistoryChunksCalled === 1
+                ? '2026-10-17T10:00:00Z'
+                : '2026-10-18T10:00:00Z',
+            source: 'crawler',
+          },
+        ]);
+      }
+      return jsonResp344(200, []);
+    }) as typeof fetch;
+
+    const chunkedReviews344 = await getMasterProductReviews('master-16pm');
+    assert.equal(
+      reviewChunksCalled,
+      2,
+      'getMasterProductReviews must chunk 160 productIds into 2 requests of <=150 IDs (#344)'
+    );
+    assert.equal(chunkedReviews344.length, 2);
+    assert.equal(chunkedReviews344[0]?.id, 'rev-chunk-2');
+
+    const chunkedSummary344 = await getMasterProductReviewSummary(
+      'master-16pm',
+      chunkedReviews344
+    );
+    assert.equal(
+      analysisChunksCalled,
+      2,
+      'getMasterProductReviewSummary must chunk 160 productIds into 2 requests of <=150 IDs (#344)'
+    );
+    assert.equal(chunkedSummary344.ai_summary, 'Summary from chunk 2');
+    assert.deepEqual(chunkedSummary344.pros, ['Pro 2', 'Pro 1']);
+
+    const mockOffers344 = manyListingRows344.map((r, idx) => ({
+      id: r.id,
+      platform: 'shopee',
+      title: `Listing ${idx + 1}`,
+      price_current: 27990000,
+      price_original: 29990000,
+      stock: 10,
+      rating_star: 4.9,
+      rating_count: 20,
+      url: `https://shopee.vn/i.1.${idx + 1}`,
+      merchant: {
+        id: 'merch-1',
+        name: 'Official Store',
+        platform: 'shopee',
+        is_official: true,
+        rating_star: 4.9,
+        follower_count: 1000,
+        location: 'VN',
+        risk_score: 5,
+        dosafe_risk_score: 5,
+        review_risk_score: 5,
+        review_risk_breakdown: null,
+      },
+    }));
+    const chunkedPriceHistory344 = await getMasterProductPriceHistory(
+      'master-16pm',
+      mockOffers344
+    );
+    assert.equal(
+      priceHistoryChunksCalled,
+      2,
+      'getMasterProductPriceHistory must chunk 160 productIds into 2 requests of <=150 IDs (#344)'
+    );
+    const crawlerPoints344 = chunkedPriceHistory344.points.filter(
+      (p) => p.source === 'crawler'
+    );
+    assert.equal(crawlerPoints344.length, 2);
+    assert.equal(crawlerPoints344[0]?.product_id, 'prod-1');
+    assert.equal(crawlerPoints344[1]?.product_id, 'prod-155');
+
+    // 64.5 inspectProductOrShopUrl throws RateDataUnavailableError on DB failure
+    globalThis.fetch = (async () =>
+      jsonResp344(500, {
+        message: 'simulated inspect DB failure',
+      })) as typeof fetch;
+    await assert.rejects(
+      () => inspectProductOrShopUrl('https://shopee.vn/i.88201679.24871920101'),
+      (err: unknown) => err instanceof RateDataUnavailableError
+    );
+  } finally {
+    globalThis.fetch = origFetch344;
+  }
+
+  console.log(
+    '  ✅ [64/64] RateDataUnavailableError propagation, RPC row image normalization & >150 IN-filter chunking (#344) passed'
   );
 
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
