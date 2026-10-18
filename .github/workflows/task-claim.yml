@@ -24,9 +24,9 @@ on:
 
 permissions: {}
 
-concurrency:
-  group: task-claim-${{ github.event_name }}-${{ github.event.pull_request.number || github.event.issue.number }}
-  cancel-in-progress: true
+# Concurrency is per job, not per workflow: every issue label event starts a
+# run, and a workflow-level group would let an unrelated label cancel a
+# pending revalidation before its job `if:` is even evaluated.
 
 jobs:
   claim:
@@ -35,6 +35,9 @@ jobs:
     if: github.event_name == 'pull_request_target'
     runs-on: ubuntu-latest
     timeout-minutes: 2
+    concurrency:
+      group: task-claim-pr-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
     permissions:
       contents: read
       issues: read
@@ -62,13 +65,18 @@ jobs:
       (startsWith(github.event.label.name, 'agent:') ||
       startsWith(github.event.label.name, 'status:'))
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 10
+    concurrency:
+      group: task-claim-issue-${{ github.event.issue.number }}
+      cancel-in-progress: false
     permissions:
       actions: write
       issues: read
       pull-requests: read
     steps:
-      - name: Re-run the latest task-claim run of each affected PR
+      # A re-run keeps the run's PR head, so it only counts for the required
+      # check when it is the run for the PR's current head; match on head_sha.
+      - name: Re-run the task-claim run of each affected PR's current head
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -81,24 +89,30 @@ jobs:
               repository(owner: $owner, name: $name) {
                 issue(number: $number) {
                   closedByPullRequestsReferences(first: 25, includeClosedPrs: false) {
-                    nodes { number baseRefName headRefOid }
+                    nodes { number baseRefName headRefOid repository { nameWithOwner } }
                   }
                 }
               }
             }' --jq '.data.repository.issue.closedByPullRequestsReferences.nodes[]
-                    | select(.baseRefName == "dev") | "\(.number) \(.headRefOid)"')
+                    | select(.baseRefName == "dev" and .repository.nameWithOwner == env.REPO)
+                    | "\(.number) \(.headRefOid)"')
           if [[ -z "$prs" ]]; then
             echo "No open PR into dev closes #$ISSUE."
             exit 0
           fi
-          runs=$(gh api "repos/$REPO/actions/workflows/task-claim.yml/runs?event=pull_request_target&per_page=100" \
-            --jq '.workflow_runs[] | "\(.id) \(.status) \(.head_sha) \([.pull_requests[]?.number] | join(","))"')
           while read -r pr sha; do
-            id=$(awk -v pr="$pr" -v sha="$sha" '$3 == sha || ("," $4 ",") ~ ("," pr ",") { print $1; exit }' <<< "$runs")
-            if [[ -z "$id" ]]; then
-              echo "::warning::PR #$pr has no task-claim run to re-run; push or edit the PR to start one."
+            runs="repos/$REPO/actions/workflows/task-claim.yml/runs?event=pull_request_target&head_sha=$sha&per_page=1"
+            read -r id status < <(gh api "$runs" --jq '.workflow_runs[0] // empty | "\(.id) \(.status)"') || true
+            if [[ -z "${id:-}" ]]; then
+              echo "::warning::PR #$pr has no task-claim run for its head $sha; push or edit the PR to start one."
               continue
             fi
-            echo "Re-running task-claim run $id for PR #$pr"
-            gh run rerun "$id" -R "$REPO" || echo "::warning::Could not re-run $id for PR #$pr (still running?)"
+            # A run that is still going cannot be re-run, and it may have read
+            # the labels before this change. Let it finish first.
+            if [[ "$status" != "completed" ]]; then
+              timeout 300 gh run watch "$id" -R "$REPO" < /dev/null > /dev/null || true
+            fi
+            echo "Re-running task-claim run $id for PR #$pr ($sha)"
+            gh run rerun "$id" -R "$REPO" < /dev/null || echo "::warning::Could not re-run $id for PR #$pr"
+            unset id status
           done <<< "$prs"

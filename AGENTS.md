@@ -91,7 +91,7 @@ gh issue list -R DOS/Rate-Services --state open
   gh project item-edit --project-id PVT_kwDOA388Vc4Bm5Ml --id $itemId --field-id PVTF_lADOA388Vc4Bm5MlzhlqBH8 --text $agentNick
   ```
 
-- **Check bắt buộc `task-claim`:** ruleset `dev-task-claim` chặn merge mọi PR vào `dev` có `Closes #N` cho tới khi **mỗi** issue được đóng có nhãn `agent:<nick>` và `status:in-progress` hoặc `status:in-review`. PR của Dependabot được miễn; PR không đóng issue nào thì pass. Khi nhãn của issue thay đổi, check tự chạy lại; chạy tay bằng `gh run rerun <run-id> -R DOS/Rate`. Nguồn: `.github/workflows/task-claim.yml`, `scripts/task-claim-check.mjs`.
+- **Check bắt buộc `task-claim`:** ruleset `dev-task-claim` chặn merge PR vào `dev` cho tới khi **mỗi** issue mà PR sẽ đóng (từ khóa `Closes`/`Fixes`/`Resolves #N` hoặc liên kết thủ công) có nhãn `agent:<nick>` và `status:in-progress` hoặc `status:in-review`. PR của Dependabot được miễn; PR không đóng issue nào thì pass. Khi issue được thêm hoặc gỡ nhãn `agent:*`/`status:*`, check của các PR liên quan tự chạy lại; nếu không thấy chạy lại thì push/sửa mô tả PR hoặc chạy `gh run rerun <run-id> -R DOS/Rate`. Nguồn: `.github/workflows/task-claim.yml`, `scripts/task-claim-check.mjs`.
 
 ### Bước 2: Cập nhật trạng thái khi hoàn thành (`In Review` / `Done`)
 
