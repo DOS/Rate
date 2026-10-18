@@ -1,5 +1,7 @@
 'use client';
 
+import { BsSliders } from 'react-icons/bs';
+
 import { useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Link } from '@/lib/navigation';
@@ -388,7 +390,8 @@ export default function VersusInteractiveScoreboard({
             }`}
             style={{ fontSize: '0.8125rem' }}
           >
-            🎛️ {t('customWeightsBtn')}
+            <BsSliders aria-hidden="true" className="me-1" />
+            {t('customWeightsBtn')}
           </button>
         </div>
 
