@@ -74,6 +74,11 @@ function cleanup() {
   spawnSync('docker', ['rm', '--force', restName, dbName], { timeout: 30_000 });
   spawnSync('docker', ['network', 'rm', network], { timeout: 30_000 });
 }
+process.on('uncaughtException', (err) => {
+  console.error(err);
+  cleanup();
+  process.exit(1);
+});
 for (const signal of ['SIGINT', 'SIGTERM']) {
   process.on(signal, () => {
     cleanup();
@@ -102,7 +107,7 @@ async function waitForHttp(url, label, timeoutMs, child) {
         `${label} exited with ${child.exitCode} before it was ready`
       );
     try {
-      const res = await fetch(url);
+      const res = await fetch(url, { signal: AbortSignal.timeout(5_000) });
       if (res.status < 500) return;
     } catch {
       // not up yet
@@ -117,10 +122,12 @@ function start(command, commandArgs, env) {
   const child = spawn(command, commandArgs, {
     cwd: repoRoot,
     env: { ...process.env, ...env },
-    stdio: 'inherit',
+    // No stdin: a detached process group that reads the terminal is stopped.
+    stdio: ['ignore', 'inherit', 'inherit'],
     shell: process.platform === 'win32',
     detached: process.platform !== 'win32',
   });
+  child.on('error', (err) => console.error(`${command}: ${err.message}`));
   children.push(child);
   return child;
 }
@@ -129,7 +136,9 @@ function start(command, commandArgs, env) {
 // answering while `next build` and Playwright query it.
 function run(command, commandArgs, env) {
   return new Promise((resolve, reject) => {
-    start(command, commandArgs, env).on('exit', (code) =>
+    const child = start(command, commandArgs, env);
+    child.on('error', reject);
+    child.on('exit', (code) =>
       code === 0
         ? resolve()
         : reject(
@@ -161,6 +170,10 @@ function startProxy(upstreamPort) {
       }
     );
     upstream.on('error', (err) => {
+      if (res.headersSent) {
+        res.destroy(err);
+        return;
+      }
       res.writeHead(502, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ message: err.message }));
     });
@@ -193,9 +206,9 @@ try {
 
   docker(
     [
+      // No --rm: keep a crashed PostgREST around for its logs; cleanup() removes it.
       'run',
       '--detach',
-      '--rm',
       '--name',
       restName,
       '--network',
@@ -219,11 +232,17 @@ try {
   );
   await startProxy(restPort);
   const supabaseUrl = `http://127.0.0.1:${SUPABASE_PORT}`;
-  await waitForHttp(
-    `${supabaseUrl}/rest/v1/categories?select=slug`,
-    'PostgREST',
-    60_000
-  );
+  try {
+    await waitForHttp(
+      `${supabaseUrl}/rest/v1/categories?select=slug`,
+      'PostgREST',
+      60_000
+    );
+  } catch (err) {
+    const logs = spawnSync('docker', ['logs', restName], { encoding: 'utf8' });
+    console.error(`${logs.stdout}${logs.stderr}`);
+    throw err;
+  }
 
   const env = {
     NEXT_PUBLIC_SUPABASE_URL: supabaseUrl,
@@ -231,13 +250,28 @@ try {
     SUPABASE_URL: supabaseUrl,
     SUPABASE_ANON_KEY: anonKey,
     NEXT_TELEMETRY_DISABLED: '1',
+    // Set so a developer's apps/web/.env.local cannot change the build (Next
+    // only fills keys that are absent): default output, local public URL.
+    NEXT_OUTPUT: '',
+    APP_PUBLIC_URL: 'http://localhost',
   };
-  if (!skipBuild)
-    await run(
-      'pnpm',
-      ['exec', 'turbo', 'run', 'build', '--filter=@repo/web'],
-      env
-    );
+  if (!skipBuild) {
+    // --ui=stream: turbo's TUI would take over the terminal from a detached child.
+    const build = () =>
+      run(
+        'pnpm',
+        ['exec', 'turbo', 'run', 'build', '--filter=@repo/web', '--ui=stream'],
+        env
+      );
+    try {
+      await build();
+    } catch {
+      // Same transient next/font (Google Fonts) fetch failures the verify job retries.
+      console.warn('Build failed; retrying once in 3s...');
+      await sleep(3_000);
+      await build();
+    }
+  }
 
   const webPort = Number(process.env.E2E_WEB_PORT) || (await freePort());
   // `localhost`, not 127.0.0.1: next-intl rewrites to a `localhost` URL, and when

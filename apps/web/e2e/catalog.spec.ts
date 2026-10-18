@@ -19,6 +19,9 @@ const BINGBOT =
 const productLink = (page: Page, slug: string) =>
   page.locator(`a[href$="/${slug}"]`).first();
 
+const visibleText = (page: Page, text: string) =>
+  page.getByText(text).filter({ visible: true }).first();
+
 /** Fails the test on uncaught page errors (hydration failures included). */
 function trackPageErrors(page: Page) {
   const errors: string[] = [];
@@ -30,7 +33,8 @@ test('home page renders seeded products', async ({ page }) => {
   const errors = trackPageErrors(page);
   const res = await page.goto('/');
   expect(res?.status()).toBe(200);
-  await expect(page.getByText(IPHONE.name).first()).toBeVisible();
+  await expect(visibleText(page, IPHONE.name)).toBeVisible();
+  await page.waitForLoadState('networkidle'); // let late hydration errors surface
   expect(errors).toEqual([]);
 });
 
@@ -40,6 +44,7 @@ test('category page lists both smartphones', async ({ page }) => {
   expect(res?.status()).toBe(200);
   await expect(productLink(page, IPHONE.slug)).toBeVisible();
   await expect(productLink(page, GALAXY.slug)).toBeVisible();
+  await page.waitForLoadState('networkidle'); // let late hydration errors surface
   expect(errors).toEqual([]);
 });
 
@@ -54,6 +59,7 @@ test('product page shows offers and reviews', async ({ page }) => {
   await expect(
     page.getByText('pin trâu suốt cả ngày', { exact: false }).first()
   ).toBeVisible();
+  await page.waitForLoadState('networkidle'); // let late hydration errors surface
   expect(errors).toEqual([]);
 });
 
@@ -85,8 +91,9 @@ test('compare page shows both products', async ({ page }) => {
   const errors = trackPageErrors(page);
   const res = await page.goto(`/compare?slugs=${IPHONE.slug},${GALAXY.slug}`);
   expect(res?.status()).toBe(200);
-  await expect(page.getByText(IPHONE.name).first()).toBeVisible();
-  await expect(page.getByText(GALAXY.name).first()).toBeVisible();
+  await expect(visibleText(page, IPHONE.name)).toBeVisible();
+  await expect(visibleText(page, GALAXY.name)).toBeVisible();
+  await page.waitForLoadState('networkidle'); // let late hydration errors surface
   expect(errors).toEqual([]);
 });
 
