@@ -1761,6 +1761,86 @@ async function runTests() {
     '  ✅ [Merchant Dual-Risk & Deal Radar Bounds] Metadata review_risk extraction, price_history Infinity guard, and 1B VND Deal Radar bounds verified (#371)'
   );
 
+  // 26. Extension Signal Sanitization & Runtime ID Sender Guard (#382)
+  const { sanitizeExtensionProductSignal, MAX_VALID_EXTENSION_VND_PRICE } =
+    await import('./security-guards.js');
+  assert.equal(MAX_VALID_EXTENSION_VND_PRICE, 1_000_000_000);
+
+  const glitchedSignal = sanitizeExtensionProductSignal({
+    platform: 'shopee',
+    canonicalUrl: 'https://shopee.vn/product/123/456',
+    externalItemId: '456',
+    externalShopId: '123',
+    title: '  Apple iPhone 16 Pro Max 256GB  ',
+    selectedVariant: '   ',
+    price: 2_899_000_000_000, // > 1B VND unscaled glitch
+    originalPrice: 30_000_000,
+    ratingStar: 6.2, // > 5 out of bounds
+    ratingCount: -5, // negative out of bounds
+  });
+  assert.equal(glitchedSignal.title, 'Apple iPhone 16 Pro Max 256GB');
+  assert.equal(glitchedSignal.selectedVariant, null);
+  assert.equal(
+    glitchedSignal.price,
+    null,
+    'sanitizeExtensionProductSignal must drop price > MAX_VALID_EXTENSION_VND_PRICE so lookup does not 400'
+  );
+  assert.equal(glitchedSignal.originalPrice, 30_000_000);
+  assert.equal(
+    glitchedSignal.ratingStar,
+    null,
+    'ratingStar > 5 must be dropped'
+  );
+  assert.equal(
+    glitchedSignal.ratingCount,
+    null,
+    'negative ratingCount must be dropped'
+  );
+
+  const invertedSignal = sanitizeExtensionProductSignal({
+    platform: 'tiki',
+    canonicalUrl: 'https://tiki.vn/iphone-p123.html',
+    externalItemId: '123',
+    externalShopId: null,
+    title: 'iPhone 16 Pro Max',
+    selectedVariant: 'Titan Tự Nhiên',
+    price: 28_990_000,
+    originalPrice: 20_000_000, // < price
+    ratingStar: 4.888,
+    ratingCount: 42,
+  });
+  assert.equal(invertedSignal.price, 28_990_000);
+  assert.equal(
+    invertedSignal.originalPrice,
+    null,
+    'sanitizeExtensionProductSignal must drop inverted originalPrice < price'
+  );
+  assert.equal(invertedSignal.ratingStar, 4.89);
+  assert.equal(invertedSignal.ratingCount, 42);
+
+  assert.equal(
+    isPrivilegedExtensionSender(
+      { id: 'ext-other', url: 'chrome-extension://ext-other/sidepanel.html' },
+      'ext-rate-own'
+    ),
+    false,
+    'isPrivilegedExtensionSender must reject messages from a foreign extension runtime ID'
+  );
+  assert.equal(
+    isPrivilegedExtensionSender(
+      {
+        id: 'ext-rate-own',
+        url: 'chrome-extension://ext-rate-own/sidepanel.html',
+      },
+      'ext-rate-own'
+    ),
+    true,
+    'isPrivilegedExtensionSender must accept messages matching the own extension runtime ID'
+  );
+  console.log(
+    '  ✅ [Extension Signal & Sender Guards] sanitizeExtensionProductSignal bounds & runtimeId verification passed (#382)'
+  );
+
   console.log('🎉 All Rate Browser Extension MV3 v2 tests passed!');
 }
 

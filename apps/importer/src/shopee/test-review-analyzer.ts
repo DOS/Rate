@@ -1634,8 +1634,90 @@ async function run() {
     'EntityMatcher.enrichMasterProductById must preserve existing key_specs (such as price_spread_audit) when merging AI key_specs'
   );
 
+  // 16e. DOS/Rate#382: ArenaSpecSyncer numeric bounds, entity decoding, regex escaping, gsmarena host check, countPopulatedFieldGroups, and backfill-specs mergeKeySpecs
+  const { parseGsmArenaBrandCatalogHtml, countPopulatedFieldGroups } =
+    await import('./arena-spec-syncer.js');
+  const { mergeKeySpecs } = await import('./jobs/backfill-specs.js');
+
+  const edgeArenaSpecs = parseGsmArenaHtmlToSpecs(`
+    <h1 data-spec="modelname">Nothing+(Phone) 3a &ndash; Edition</h1>
+    <td data-spec="displaysize">0 inches</td>
+    <td data-spec="displaytype">OLED, 0Hz</td>
+    <td data-spec="displayresolution">1080 &#215; 2400 pixels (~5 ppi)</td>
+    <td data-spec="internalmemory">0GB 0GB RAM, 256GB 12GB RAM</td>
+    <td data-spec="batdescription1">Li-Ion 05 mAh</td>
+    <td data-spec="batcharging">0W wired</td>
+    <td data-spec="weight">0 g</td>
+  `);
+  assert.equal(edgeArenaSpecs.brand, 'Nothing+(Phone)');
+  assert.equal(edgeArenaSpecs.model, '3a - Edition');
+  assert.equal(
+    edgeArenaSpecs.specifications.display?.resolution,
+    '1080 × 2400 pixels (~5 ppi)',
+    'Numeric HTML entity &#215; must decode to ×'
+  );
+  assert.equal(edgeArenaSpecs.screenSizeInch, null, '0 inches must be dropped');
+  assert.equal(
+    edgeArenaSpecs.specifications.display?.refresh_rate_hz,
+    undefined,
+    '0Hz must be dropped'
+  );
+  assert.equal(
+    edgeArenaSpecs.specifications.display?.ppi,
+    undefined,
+    '5 ppi (<10) must be dropped'
+  );
+  assert.equal(edgeArenaSpecs.ramGb, 12);
+  assert.equal(edgeArenaSpecs.storageGb, 256);
+  assert.equal(edgeArenaSpecs.batteryMah, null, '5 mAh (<10) must be dropped');
+  assert.equal(
+    edgeArenaSpecs.specifications.battery?.fast_charging_w,
+    undefined,
+    '0W wired must be dropped'
+  );
+  assert.equal(edgeArenaSpecs.specifications.design?.weight_g, undefined, '0g must be dropped');
+
+  const catalog382 = parseGsmArenaBrandCatalogHtml(
+    `<ul>
+      <li><a href="nothing_phone_3a-123.php"><span>Phone 3a &#215; Pro</span></a></li>
+      <li><a href="https://evil.com/phish.php"><span>Phish Device</span></a></li>
+    </ul>`,
+    'Nothing+(Phone)'
+  );
+  assert.equal(catalog382.length, 1, 'Untrusted non-gsmarena host must be rejected');
+  assert.equal(catalog382[0]?.name, 'Nothing+(Phone) Phone 3a × Pro');
+
+  assert.equal(
+    countPopulatedFieldGroups({
+      display: { colors: [] },
+      hardware: { extra: {} },
+      camera: { main_camera: '50 MP' },
+    }),
+    1,
+    'Empty arrays and empty objects must not count as populated specification groups'
+  );
+
+  assert.deepEqual(
+    mergeKeySpecs(
+      {
+        price_spread_audit: { verdict: 'high_arbitrage_opportunity', spreadPct: 14 },
+        screen: 'Old Screen',
+      },
+      {
+        screen: '6.9" LTPO AMOLED 120Hz',
+        chip: 'Snapdragon 8 Elite',
+      }
+    ),
+    {
+      price_spread_audit: { verdict: 'high_arbitrage_opportunity', spreadPct: 14 },
+      screen: '6.9" LTPO AMOLED 120Hz',
+      chip: 'Snapdragon 8 Elite',
+    },
+    'mergeKeySpecs in backfill-specs.ts must preserve price_spread_audit while updating canonical key_specs'
+  );
+
   console.log(
-    `✅ [P2/P3 Trust Model & #292/#352/#356/#359/#379] Voter weight, Wilson lower bound (50/52=${wilson50of52} > 1/1=${wilson1of1}), shingle copy seeding (sim=${shingleSim}), affiliate shortlinks, peer floor, ArenaSpecSyncer & Importer hardening (#352, #356, #359, #379) verified`
+    `✅ [P2/P3 Trust Model & #292/#352/#356/#359/#379/#382] Voter weight, Wilson lower bound (50/52=${wilson50of52} > 1/1=${wilson1of1}), shingle copy seeding (sim=${shingleSim}), affiliate shortlinks, peer floor, ArenaSpecSyncer & Importer hardening (#352, #356, #359, #379, #382) verified`
   );
 
   console.log('\n🎉 ALL AI REVIEW ANALYZER TESTS PASSED!');

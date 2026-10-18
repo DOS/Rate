@@ -13,6 +13,7 @@ import {
   DEFAULT_API_BASE_URL,
   isPrivilegedExtensionSender,
   normalizeAllowedApiBaseUrl,
+  sanitizeExtensionProductSignal,
 } from '../security-guards.js';
 
 const DEFAULT_SETTINGS: ExtensionSettings = {
@@ -38,9 +39,10 @@ async function getSettings(): Promise<ExtensionSettings> {
 }
 
 async function fetchExtensionLookup(
-  signal: ExtractedPageProductSignal,
+  rawSignal: ExtractedPageProductSignal,
   mode: 'pill' | 'full'
 ): Promise<ExtensionLookupData | null> {
+  const signal = sanitizeExtensionProductSignal(rawSignal);
   const settings = await getSettings();
   const params = new URLSearchParams();
   params.set('platform', signal.platform);
@@ -91,8 +93,9 @@ const SUPPORTED_CROWD_PLATFORMS = new Set([
 ]);
 
 async function maybeSendOptInCrowdSignal(
-  signal: ExtractedPageProductSignal
+  rawSignal: ExtractedPageProductSignal
 ): Promise<void> {
+  const signal = sanitizeExtensionProductSignal(rawSignal);
   const settings = await getSettings();
   // Strict Privacy Gate: Only send crowd verification signal if user explicitly opted in
   // and platform is in the 10-platform capability matrix
@@ -197,7 +200,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (msgType === 'RATE_PRODUCT_DETECTED') {
     (async () => {
       try {
-        const signal = message.signal as ExtractedPageProductSignal;
+        const signal = sanitizeExtensionProductSignal(
+          message.signal as ExtractedPageProductSignal
+        );
         const tabId = sender.tab?.id;
         const cacheKey = tabId ? `tab_${tabId}` : 'tab_latest';
 
