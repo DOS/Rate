@@ -7,9 +7,17 @@ import {
   evaluateExtensionPriceVerdict,
 } from '@/server/rate/extension';
 import {
+  PUBLIC_API_CORS_HEADERS,
   jsonApiError,
   parseBoundedStringParam,
 } from '@/server/rate/api-handler';
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: PUBLIC_API_CORS_HEADERS,
+  });
+}
 
 function parseOptionalVndPriceParam(raw: string | null): number | null {
   if (!raw || !raw.trim()) return null;
@@ -33,12 +41,11 @@ export async function GET(request: NextRequest) {
     );
 
     if (!rawQuery) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: 'Missing query parameter ?q= or ?url=',
-        },
-        { status: 400 }
+      return jsonApiError(
+        400,
+        'Missing query parameter ?q= or ?url=',
+        undefined,
+        PUBLIC_API_CORS_HEADERS
       );
     }
 
@@ -101,11 +108,17 @@ export async function GET(request: NextRequest) {
       {
         status: 200,
         headers: {
+          ...PUBLIC_API_CORS_HEADERS,
           'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=120',
         },
       }
     );
   } catch (error) {
-    return jsonApiError(500, 'Failed to inspect URL or query', error);
+    return jsonApiError(
+      500,
+      'Failed to inspect URL or query',
+      error,
+      PUBLIC_API_CORS_HEADERS
+    );
   }
 }

@@ -38,7 +38,12 @@ export async function GET(_request: NextRequest, context: RouteContext) {
       cleanSlug.length > 120 ||
       !/^[a-zA-Z0-9._-]+$/.test(cleanSlug)
     ) {
-      return jsonApiError(400, 'Invalid product slug');
+      return jsonApiError(
+        400,
+        'Invalid product slug',
+        undefined,
+        PUBLIC_API_CORS_HEADERS
+      );
     }
 
     const product = await getCachedMasterProductBySlug(cleanSlug);
@@ -82,7 +87,11 @@ export async function GET(_request: NextRequest, context: RouteContext) {
       }
     );
   } catch (error) {
-    return jsonApiError(500, 'Failed to fetch product detail', error);
+    return jsonApiError(
+      500,
+      'Failed to fetch product detail',
+      error,
+      PUBLIC_API_CORS_HEADERS
+    );
   }
 }
-

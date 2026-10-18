@@ -33,7 +33,9 @@ export async function GET(request: NextRequest) {
     if (slugs.length === 0) {
       return jsonApiError(
         400,
-        'Missing or invalid ?slugs= parameter (provide 1 to 4 comma-separated master product slugs)'
+        'Missing or invalid ?slugs= parameter (provide 1 to 4 comma-separated master product slugs)',
+        undefined,
+        PUBLIC_API_CORS_HEADERS
       );
     }
 
@@ -74,6 +76,11 @@ export async function GET(request: NextRequest) {
       }
     );
   } catch (error) {
-    return jsonApiError(500, 'Failed to compare products', error);
+    return jsonApiError(
+      500,
+      'Failed to compare products',
+      error,
+      PUBLIC_API_CORS_HEADERS
+    );
   }
 }

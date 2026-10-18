@@ -10,7 +10,9 @@ import {
   getMasterProducts,
   getMerchantsList,
   getRateClient,
+  normalizeMasterProductRow,
   parseEcommerceUrlOrQuery,
+  RateDataUnavailableError,
   type CanonicalCategorySlug,
   type MasterProduct,
   type MasterProductPriceHistorySummary,
@@ -282,6 +284,34 @@ export function canonicalizeProductUrl(rawUrl?: string | null): string | null {
     return `${parsed.origin}${parsed.pathname}`;
   } catch {
     return null;
+  }
+}
+
+export function extractKeywordFromProductUrl(rawUrl?: string | null): string {
+  if (!rawUrl || typeof rawUrl !== 'string') return '';
+  try {
+    const parsed = new URL(rawUrl.trim());
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return '';
+    }
+    const decodedPath = decodeURIComponent(parsed.pathname)
+      .replace(/(?:\/|-)i\.\d+\.\d+$/i, '')
+      .replace(/\/product\/\d+\/\d+\/?$/i, '')
+      .replace(/(?:\/|-)i\d+-s\d+\.html$/i, '')
+      .replace(/(?:\/|-)p\d+\.html$/i, '')
+      .replace(/\.html?$/i, '')
+      .replace(
+        /^\/(?:products?|san-pham|dien-thoai|dtdd|may-tinh-bang|laptop|dong-ho-thong-minh|tai-nghe|smartphones|tablets|laptops|smartwatches|earbuds)\//i,
+        '/'
+      );
+    const segments = decodedPath.split('/').filter(Boolean);
+    const lastSeg = segments[segments.length - 1] || '';
+    if (!lastSeg || /^\d+$/.test(lastSeg) || /^i\.\d+\.\d+$/i.test(lastSeg)) {
+      return '';
+    }
+    return lastSeg.replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim();
+  } catch {
+    return '';
   }
 }
 
@@ -704,15 +734,18 @@ export async function lookupExtensionProduct(
       ? Math.round(params.originalPrice)
       : null;
 
+  const urlKeyword = extractKeywordFromProductUrl(canonicalUrl || params.url);
+  const effectiveTitle = (params.title || '').trim() || urlKeyword;
+
   // Step 1: Accessory / Junk Gatekeeper
   const gatekeeper = detectAccessoryOrJunk({
-    title: params.title,
+    title: effectiveTitle,
     price: observedPrice,
   });
 
   const { storageGb, hasMultipleStorageInTitle, cleanModelSearchQuery } =
     extractStorageAndAmbiguity({
-      title: params.title,
+      title: effectiveTitle,
       selectedVariant: params.selectedVariant,
     });
 
@@ -759,8 +792,10 @@ export async function lookupExtensionProduct(
     : null;
   const rawExternalId =
     (params.externalId || '').trim() || parsedFromUrl?.platformItemId || null;
+  const effectiveShopId =
+    (params.shopId || '').trim() || parsedFromUrl?.platformShopId || null;
 
-  // Normalize externalId (handle both `shopId_itemId` and raw `itemId`)
+  // Normalize externalId (handle both `shopId_itemId`, platform prefixes, and raw `itemId`)
   const candidateItemIds = new Set<string>();
   if (rawExternalId) {
     candidateItemIds.add(rawExternalId);
@@ -768,18 +803,30 @@ export async function lookupExtensionProduct(
       const parts = rawExternalId.split('_');
       if (parts[1]) candidateItemIds.add(parts[1]);
     }
-    if (params.shopId && !rawExternalId.includes('_')) {
-      candidateItemIds.add(`${params.shopId}_${rawExternalId}`);
+    if (effectiveShopId && !rawExternalId.includes('_')) {
+      candidateItemIds.add(`${effectiveShopId}_${rawExternalId}`);
+    }
+    const prefixMap: Partial<Record<SupportedEcommercePlatform, string>> = {
+      tiktok: 'tts-',
+      cellphones: 'cps-',
+      tgdd: 'tgdd-',
+      fptshop: 'fpt-',
+      hoangha: 'hhm-',
+      didongviet: 'ddv-',
+      phongvu: 'pv-',
+    };
+    const prefix = platform ? prefixMap[platform] : undefined;
+    if (prefix && !rawExternalId.startsWith(prefix)) {
+      candidateItemIds.add(`${prefix}${rawExternalId}`);
     }
   }
 
   // Step 3: Search candidate Master Products in DB (Read-Only)
-  const searchKeyword =
-    cleanModelSearchQuery || params.title || canonicalUrl || '';
+  const searchKeyword = cleanModelSearchQuery || effectiveTitle || '';
   const [catalogCandidates, merchantsList] = await Promise.all([
     searchKeyword
       ? getMasterProducts({ search: searchKeyword, limit: 8 })
-      : getMasterProducts({ limit: 6 }),
+      : Promise.resolve([]),
     getMerchantsList(),
   ]);
 
@@ -787,14 +834,60 @@ export async function lookupExtensionProduct(
   let matchStatus: ExtensionMatchStatus = 'not_found';
 
   // Try matching via URL / externalId inspection if available
-  if (canonicalUrl || rawExternalId) {
-    const queryStr = canonicalUrl || rawExternalId || '';
-    const parsed = parseEcommerceUrlOrQuery(queryStr);
-    if (parsed.internalSlug) {
-      const bySlug = await getMasterProductBySlug(parsed.internalSlug);
-      if (bySlug) {
-        matchedMaster = bySlug;
-        matchStatus = 'canonical_model';
+  const internalSlugCandidate =
+    parsedFromUrl?.internalSlug ||
+    (rawExternalId
+      ? parseEcommerceUrlOrQuery(rawExternalId).internalSlug
+      : null);
+  if (internalSlugCandidate) {
+    const bySlug = await getMasterProductBySlug(internalSlugCandidate);
+    if (bySlug) {
+      matchedMaster = bySlug;
+      matchStatus = 'canonical_model';
+    }
+  }
+
+  if (!matchedMaster && candidateItemIds.size > 0) {
+    const client = getRateClient();
+    if (client) {
+      const { data: prodRows, error: prodErr } = await client
+        .from('products')
+        .select('cluster_id, platform_item_id')
+        .in('platform_item_id', Array.from(candidateItemIds))
+        .not('cluster_id', 'is', null)
+        .limit(5);
+      if (prodErr) {
+        log.error('extension_lookup_products_failed', {
+          candidateItemIds: Array.from(candidateItemIds),
+          message: prodErr.message,
+          code: prodErr.code,
+        });
+        throw new RateDataUnavailableError('products', prodErr);
+      }
+      const matchedProd = (
+        (prodRows || []) as Array<{
+          cluster_id: string | null;
+          platform_item_id: string;
+        }>
+      ).find((r) => Boolean(r.cluster_id));
+      if (matchedProd?.cluster_id) {
+        const { data: masterRow, error: masterErr } = await client
+          .from('master_products')
+          .select('*')
+          .eq('id', matchedProd.cluster_id)
+          .maybeSingle();
+        if (masterErr) {
+          log.error('extension_lookup_master_failed', {
+            clusterId: matchedProd.cluster_id,
+            message: masterErr.message,
+            code: masterErr.code,
+          });
+          throw new RateDataUnavailableError('master_products', masterErr);
+        }
+        if (masterRow) {
+          matchedMaster = normalizeMasterProductRow(masterRow as MasterProduct);
+          matchStatus = 'exact_listing';
+        }
       }
     }
   }
