@@ -411,7 +411,8 @@
     "showdownsEyebrow": "Přímé duely 1v1 z žebříčku",
     "showdownsHeading": "Přímé porovnání nejlepších zařízení ve stejné kategorii",
     "openCompareMatrixBtn": "Otevřít porovnání →",
-    "view1v1DeepBtn": "Zobrazit 1v1 duel"
+    "view1v1DeepBtn": "Zobrazit 1v1 duel",
+    "categoryTabsAria": "Vyberte kategorii"
   },
   "reviews": {
     "criteriaScreen": "Displej a zobrazení",
@@ -1601,7 +1602,9 @@
       "applyFiltersBtn": "Použít filtry",
       "clearAllFiltersBtn": "Vymazat všechny filtry",
       "rangeFrom": "Od:",
-      "rangeTo": "Do:"
+      "rangeTo": "Do:",
+      "minPriceAria": "Minimální cena",
+      "maxPriceAria": "Maximální cena"
     }
   },
   "heroSearch": {

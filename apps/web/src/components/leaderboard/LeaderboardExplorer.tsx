@@ -815,7 +815,11 @@ export default function LeaderboardExplorer({
         </div>
 
         {/* 5-Category Switcher Pills */}
-        <div className="d-flex mb-4 flex-wrap gap-2" role="tablist">
+        <div
+          className="d-flex mb-4 flex-wrap gap-2"
+          role="tablist"
+          aria-label={t('categoryTabsAria')}
+        >
           {categoryTabs.map((tab) => {
             const isSelected = tab.slug === activeCategory;
             const count = categoryCounts.get(tab.slug) ?? 0;

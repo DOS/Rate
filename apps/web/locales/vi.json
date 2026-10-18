@@ -411,7 +411,8 @@
     "showdownsEyebrow": "Kèo Đối Đầu 1v1 Từ Bảng Xếp Hạng",
     "showdownsHeading": "So Kè Trực Tiếp Các Thiết Bị Dẫn Đầu Cùng Danh Mục",
     "openCompareMatrixBtn": "Mở Bàn Cân Đa Chiều →",
-    "view1v1DeepBtn": "Xem Đối Đầu 1v1 Chuyên Sâu"
+    "view1v1DeepBtn": "Xem Đối Đầu 1v1 Chuyên Sâu",
+    "categoryTabsAria": "Chọn ngành hàng"
   },
   "reviews": {
     "criteriaScreen": "Màn hình & Hiển thị",
@@ -1601,7 +1602,9 @@
       "applyFiltersBtn": "Áp dụng bộ lọc",
       "clearAllFiltersBtn": "Xóa tất cả bộ lọc",
       "rangeFrom": "Từ:",
-      "rangeTo": "Đến:"
+      "rangeTo": "Đến:",
+      "minPriceAria": "Giá tối thiểu",
+      "maxPriceAria": "Giá tối đa"
     }
   },
   "heroSearch": {
