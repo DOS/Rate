@@ -16,4 +16,4 @@ export * from './clients/index.js';
 export * from './constants/index.js';
 
 // Version for API compatibility checking
-export const SHARED_DATA_VERSION = '1.0.0';
+export const SHARED_DATA_VERSION = '2.0.0';
