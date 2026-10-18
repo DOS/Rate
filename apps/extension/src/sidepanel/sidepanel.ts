@@ -7,11 +7,13 @@ import type {
 import {
   DEFAULT_API_BASE_URL,
   escapeSafeExternalHref,
+  filterValidSparklinePrices,
+  formatSafeExtensionVnd,
+  sanitizeVerdictClassSuffix,
 } from '../security-guards.js';
 
 function formatVnd(val: number | null | undefined): string {
-  if (!val || val <= 0) return 'Chưa có';
-  return `${val.toLocaleString('vi-VN')} ₫`;
+  return formatSafeExtensionVnd(val);
 }
 
 function escapeHtml(raw: string): string {
@@ -27,7 +29,7 @@ function buildSvgSparkline(points: ExtensionPriceHistoryPoint[]): string {
   if (!points || points.length < 2) {
     return `<div style="font-size: 13px; color: #9ca3af; padding: 8px 0;">Đang tích lũy thêm các mốc thời gian lịch sử giá.</div>`;
   }
-  const prices = points.map((p) => p.price).filter((p) => p > 0);
+  const prices = filterValidSparklinePrices(points);
   if (prices.length < 2) return '';
 
   const minP = Math.min(...prices);
@@ -564,7 +566,7 @@ function renderPanelContent(
   root.innerHTML = `
     <div class="card">
       <div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;">
-        <span class="verdict-pill verdict-${assessment.verdict}">${escapeHtml(assessment.badgeLabel)}</span>
+        <span class="verdict-pill verdict-${sanitizeVerdictClassSuffix(assessment.verdict)}">${escapeHtml(assessment.badgeLabel)}</span>
         ${radarPillHtml}
       </div>
       <div class="product-name">${escapeHtml(master?.name || signal.title)}</div>
@@ -753,10 +755,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   inpApiBase?.addEventListener('change', async () => {
     if (inpApiBase.value.trim()) {
-      await chrome.runtime.sendMessage({
+      const updated = (await chrome.runtime.sendMessage({
         type: 'RATE_UPDATE_SETTINGS',
         apiBaseUrl: inpApiBase.value.trim(),
-      });
+      })) as { settings?: ExtensionSettings } | undefined;
+      if (updated?.settings?.apiBaseUrl) {
+        inpApiBase.value = updated.settings.apiBaseUrl;
+      }
       void loadSidePanel();
     }
   });

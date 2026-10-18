@@ -158,3 +158,53 @@ export function escapeSafeExternalHref(
     return fallbackUrl;
   }
 }
+
+export function formatSafeExtensionVnd(val: number | null | undefined): string {
+  if (
+    typeof val !== 'number' ||
+    !Number.isFinite(val) ||
+    val <= 0 ||
+    val > MAX_VALID_EXTENSION_VND_PRICE
+  ) {
+    return 'Chưa có';
+  }
+  return `${Math.round(val).toLocaleString('vi-VN')} ₫`;
+}
+
+const ALLOWED_VERDICT_CLASS_SUFFIXES = new Set([
+  'genuine_deal',
+  'fair_market_price',
+  'above_market',
+  'inflated_fake_sale',
+  'insufficient_data',
+  'accessory_skip',
+  'normal_price',
+  'suspicious_discount',
+  'fake_discount',
+  'fake_sale_trap',
+  'fair_market',
+  'ambiguous_variant',
+  'skipped_accessory',
+  'untracked',
+]);
+
+export function sanitizeVerdictClassSuffix(
+  verdict: string | null | undefined
+): string {
+  if (typeof verdict !== 'string') return 'insufficient_data';
+  const cleaned = verdict.trim().toLowerCase();
+  return ALLOWED_VERDICT_CLASS_SUFFIXES.has(cleaned)
+    ? cleaned
+    : 'insufficient_data';
+}
+
+export function filterValidSparklinePrices(
+  points: ReadonlyArray<{ price: number }> | null | undefined
+): number[] {
+  if (!Array.isArray(points)) return [];
+  return points
+    .map((p) => Number(p?.price))
+    .filter(
+      (p) => Number.isFinite(p) && p > 0 && p <= MAX_VALID_EXTENSION_VND_PRICE
+    );
+}
