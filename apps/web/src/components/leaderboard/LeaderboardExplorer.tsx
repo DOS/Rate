@@ -4,11 +4,11 @@ import React, { useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Link, useRouter } from '@/lib/navigation';
 import {
-  getCategoryRouteHref,
   getMasterProductCategorySlug,
-  getMasterProductHref,
-  resolveProductImageUrl,
+  scoreMasterProductForLeaderboard,
   type CanonicalCategorySlug,
+  type LeaderboardCriterionKey,
+  type LeaderboardPriceSegment,
   type MasterProduct,
 } from '@/lib/rate-domain';
 import {
@@ -23,7 +23,7 @@ import RadarBadge from '@/components/radar/RadarBadge';
 import { useDealRadarIndex } from '@/components/radar/use-deal-radar';
 import CompareQuickToggle from '@/components/compare/CompareQuickToggle';
 import { escapeCsvCell } from '@/lib/csv-safe';
-import type { KeySpecs, ProductSpecifications } from '@repo/shared-data';
+import type { KeySpecs } from '@repo/shared-data';
 import {
   BsArrowLeftRight,
   BsAwardFill,
@@ -40,18 +40,7 @@ import {
   BsTrophyFill,
 } from 'react-icons/bs';
 
-export type LeaderboardCriterionKey =
-  | 'combined'
-  | 'user'
-  | 'expert'
-  | 'screen'
-  | 'performance'
-  | 'camera'
-  | 'battery'
-  | 'value';
-
-export type LeaderboardPriceSegment =
-  'all' | 'under15m' | '15to25m' | 'over25m';
+export type { LeaderboardCriterionKey, LeaderboardPriceSegment };
 
 interface LeaderboardExplorerProps {
   readonly products: readonly MasterProduct[];
@@ -118,123 +107,24 @@ function buildCategoryTabs(t: TranslateFn): ReadonlyArray<{
   ];
 }
 
-function clamp5(val: number): number {
-  if (!Number.isFinite(val) || val <= 0) return 0;
-  return Number(Math.min(5.0, val).toFixed(2));
-}
-
 function computeProductScores(
   item: MasterProduct,
   criterion: LeaderboardCriterionKey
 ): RankedProductEntry {
-  const categorySlug = getMasterProductCategorySlug(item);
-  const categoryPath = getCategoryRouteHref(categorySlug);
-  const productHref = getMasterProductHref(item);
-  const rawThumb =
-    item.thumbnail ||
-    (item.images && item.images.length > 0 ? item.images[0] : null);
-  const thumbnail =
-    resolveProductImageUrl(item.slug, rawThumb) ||
-    '/img/devices/apple-iphone-16-pro-max-256gb.jpg';
-
-  const rawUser = Number(item.user_rating_weighted || item.average_rating || 0);
-  const userScore5 = rawUser > 0 ? clamp5(rawUser) : 0;
-
-  const rawExpert =
-    item.expert_rating != null && Number(item.expert_rating) > 0
-      ? Number(item.expert_rating)
-      : null;
-
-  const expertScore5: number | null =
-    rawExpert != null
-      ? rawExpert > 5
-        ? Number((rawExpert / 2).toFixed(2))
-        : Number(rawExpert.toFixed(2))
-      : null;
-
-  const expertScore10: number | null =
-    expertScore5 != null
-      ? Number(Math.min(10, expertScore5 * 2).toFixed(1))
-      : null;
-
-  const combinedScore5 =
-    userScore5 > 0 && expertScore5 != null
-      ? Number((userScore5 * 0.6 + expertScore5 * 0.4).toFixed(2))
-      : userScore5 > 0
-        ? userScore5
-        : (expertScore5 ?? 0);
-
-  const specs = (item.specifications || {}) as ProductSpecifications;
-  const minPriceM = Number(item.min_price || 0) / 1_000_000;
-
-  const refreshHz = Number(specs.display?.refresh_rate_hz || 0);
-  const screenBonus = refreshHz >= 120 ? 0.09 : refreshHz >= 90 ? 0.04 : -0.02;
-
-  const ramGb = Number(specs.hardware?.ram_gb || 0);
-  const perfBonus = ramGb >= 16 ? 0.1 : ramGb >= 12 ? 0.06 : 0.02;
-
-  const hasPeriscopeOrMultiCam = Boolean(
-    specs.camera?.third_camera || specs.camera?.second_camera
-  );
-  const cameraBonus = hasPeriscopeOrMultiCam ? 0.08 : 0.01;
-
-  const battMah = Number(specs.battery?.capacity_mah || 0);
-  const fastW = Number(specs.battery?.fast_charging_w || 0);
-  const batteryBonus =
-    (battMah >= 5000 ? 0.06 : 0.01) + (fastW >= 65 ? 0.05 : 0.01);
-
-  const valueBonus =
-    minPriceM > 0 && minPriceM <= 15
-      ? 0.12
-      : minPriceM > 0 && minPriceM <= 24
-        ? 0.06
-        : minPriceM > 0
-          ? -0.03
-          : 0;
-
-  const criteria =
-    combinedScore5 > 0
-      ? {
-          screen: clamp5(combinedScore5 + screenBonus),
-          performance: clamp5(combinedScore5 + perfBonus),
-          camera: clamp5(combinedScore5 + cameraBonus),
-          battery: clamp5(combinedScore5 + batteryBonus),
-          value: clamp5(combinedScore5 + valueBonus),
-        }
-      : {
-          screen: 0,
-          performance: 0,
-          camera: 0,
-          battery: 0,
-          value: 0,
-        };
-
-  let activeScore5 = combinedScore5;
-  if (criterion === 'user') activeScore5 = userScore5;
-  else if (criterion === 'expert') activeScore5 = expertScore5 ?? 0;
-  else if (criterion !== 'combined') activeScore5 = criteria[criterion];
-
-  const authenticCount = Number(
-    item.authentic_review_count || item.total_reviews || 0
-  );
-  const ignoredCount = Math.max(
-    0,
-    Number(item.total_reviews || 0) - Number(item.authentic_review_count || 0)
-  );
-
+  const scored = scoreMasterProductForLeaderboard(item, criterion);
   return {
-    product: item,
-    categorySlug,
-    categoryPath,
-    productHref,
-    thumbnail,
-    userScore5,
-    expertScore10,
-    combinedScore5,
-    authenticCount,
-    ignoredCount,
-    criteria,
-    activeScore5,
+    product: scored.product,
+    categorySlug: scored.categorySlug,
+    categoryPath: scored.categoryPath,
+    productHref: scored.productHref,
+    thumbnail: scored.thumbnail,
+    userScore5: scored.userScore5,
+    expertScore10: scored.expertScore10,
+    combinedScore5: scored.combinedScore5,
+    authenticCount: scored.authenticReviewCount,
+    ignoredCount: scored.filteredNoiseReviewCount,
+    criteria: scored.criteria,
+    activeScore5: scored.activeScore5,
   };
 }
 
@@ -437,20 +327,25 @@ export default function LeaderboardExplorer({
         return false;
       }
       const minPrice = Number(item.min_price || 0);
-      if (priceSegment === 'under15m' && minPrice >= 15_000_000) return false;
-      if (
-        priceSegment === '15to25m' &&
-        (minPrice < 15_000_000 || minPrice > 25_000_000)
-      ) {
-        return false;
+      if (priceSegment !== 'all') {
+        if (minPrice <= 0) return false;
+        if (priceSegment === 'under15m' && minPrice >= 15_000_000) return false;
+        if (
+          priceSegment === '15to25m' &&
+          (minPrice < 15_000_000 || minPrice > 25_000_000)
+        ) {
+          return false;
+        }
+        if (priceSegment === 'over25m' && minPrice <= 25_000_000) return false;
       }
-      if (priceSegment === 'over25m' && minPrice <= 25_000_000) return false;
 
       if (kw) {
         const keySpecs = (item.key_specs || {}) as KeySpecs;
         const hay = [
           item.name,
           item.brand,
+          item.model,
+          item.slug,
           item.model_key,
           keySpecs.chip || '',
           keySpecs.screen || '',
@@ -510,9 +405,18 @@ export default function LeaderboardExplorer({
       if (b.authenticCount !== a.authenticCount) {
         return b.authenticCount - a.authenticCount;
       }
-      return (
-        Number(a.product.min_price || 0) - Number(b.product.min_price || 0)
-      );
+      const priceA = Number(a.product.min_price || 0);
+      const priceB = Number(b.product.min_price || 0);
+      if (priceA > 0 && priceB > 0 && priceA !== priceB) {
+        return priceA - priceB;
+      }
+      if (priceA > 0 && priceB <= 0) {
+        return -1;
+      }
+      if (priceA <= 0 && priceB > 0) {
+        return 1;
+      }
+      return a.product.slug.localeCompare(b.product.slug);
     });
   }, [
     categoryProducts,
