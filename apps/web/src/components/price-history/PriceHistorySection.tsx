@@ -693,9 +693,11 @@ export default function PriceHistorySection({
             )}
           </div>
 
-          {/* Scrolls sideways on phones; focusable so keyboard users can scroll it. */}
+          {/* Scrolls sideways on phones; focusable so keyboard users can scroll it
+              (WCAG 2.1.1, axe scrollable-region-focusable). */}
           <div
             className="table-responsive"
+            // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- a scrollable region must be focusable
             tabIndex={0}
             role="region"
             aria-label={t('priceHistoryChartAria', { name: productName })}
