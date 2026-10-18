@@ -882,6 +882,16 @@ export async function getMasterProducts(
   const boundedLimit =
     params?.limit && params.limit > 0 ? Math.min(params.limit, 500) : 200;
 
+  const categoryHint: CanonicalCategorySlug | null =
+    params?.categorySlug &&
+    (params.categorySlug === 'smartphones' ||
+      params.categorySlug === 'tablets' ||
+      params.categorySlug === 'laptops' ||
+      params.categorySlug === 'smartwatches' ||
+      params.categorySlug === 'earbuds')
+      ? params.categorySlug
+      : null;
+
   // Audit C1: Prefer server-side SQL RPC `search_master_products` when deployed.
   // Every filter defaults to NULL in SQL, so an omitted (undefined) filter is
   // the same as passing null.
@@ -913,7 +923,9 @@ export async function getMasterProducts(
       }
     );
     if (!rpcErr && Array.isArray(rpcRows)) {
-      return (rpcRows as MasterProduct[]).map(normalizeMasterProductRow);
+      return (rpcRows as MasterProduct[]).map((r) =>
+        normalizeMasterProductRow(r, categoryHint)
+      );
     }
   }
 
@@ -984,9 +996,11 @@ export async function getMasterProducts(
 
   const { data, error } = await query;
   if (error) {
-    throw new Error(
-      `rate-api: failed to fetch master products: ${error.message}`
-    );
+    log.error('master products fallback query failed', {
+      categorySlug: params?.categorySlug || 'all',
+      message: error.message,
+    });
+    throw new RateDataUnavailableError('master_products', error);
   }
 
   let items = ((data as MasterProduct[]) || []).slice();
@@ -1104,7 +1118,7 @@ export async function getMasterProducts(
     items = items.slice(0, params.limit);
   }
 
-  return items.map(normalizeMasterProductRow);
+  return items.map((r) => normalizeMasterProductRow(r, categoryHint));
 }
 
 /**
@@ -1762,7 +1776,9 @@ export async function compareMasterProducts(
   if (!data) {
     return [];
   }
-  const rows = (data as MasterProduct[]).map(normalizeMasterProductRow);
+  const rows = (data as MasterProduct[]).map((row) =>
+    normalizeMasterProductRow(row)
+  );
   const bySlug = new Map(rows.map((r) => [r.slug, r]));
   const ordered = uniqueSlugs
     .map((slug) => bySlug.get(slug))
@@ -2342,17 +2358,35 @@ export function resolveProductImageUrl(
   return fallbackUrl || null;
 }
 
-export function normalizeMasterProductRow(row: MasterProduct): MasterProduct {
+export function normalizeMasterProductRow(
+  row: MasterProduct,
+  categorySlugHint?: CanonicalCategorySlug | null
+): MasterProduct {
   if (!row?.slug) return row;
+  let normalized = row;
   if (KNOWN_LOCAL_DEVICE_IMAGES.has(row.slug)) {
     const localImg = `/img/devices/${row.slug}.jpg`;
-    return {
-      ...row,
+    normalized = {
+      ...normalized,
       thumbnail: localImg,
       images: [localImg],
     };
   }
-  return row;
+  if (
+    categorySlugHint &&
+    typeof normalized.metadata?.category_slug !== 'string'
+  ) {
+    normalized = {
+      ...normalized,
+      metadata: {
+        ...(normalized.metadata && typeof normalized.metadata === 'object'
+          ? normalized.metadata
+          : {}),
+        category_slug: categorySlugHint,
+      },
+    };
+  }
+  return normalized;
 }
 
 export type CanonicalCategorySlug =
@@ -2390,28 +2424,28 @@ export function getMasterProductCategorySlug(
   const haystack =
     `${product.name || ''} ${product.model || ''} ${product.slug}`.toLowerCase();
   if (
-    /ipad|galaxy tab|xiaomi pad|matepad|redmi pad|tab s\d|tablet|máy tính bảng/i.test(
+    /ipad|galaxy tab|xiaomi pad|matepad|redmi pad|tab s\d|tab a\d|tab p\d|tab m\d|oneplus pad|oppo pad|vivo pad|honor pad|surface pro|tablet|máy tính bảng/i.test(
       haystack
     )
   ) {
     return 'tablets';
   }
   if (
-    /macbook|thinkpad|zenbook|vivobook|inspiron|xps|legion|rog|tuf|omen|pavilion|spectre|envy|gram|surface laptop|ultrabook|laptop/i.test(
+    /macbook|thinkpad|zenbook|vivobook|inspiron|xps|latitude|legion|ideapad|yoga|loq|rog|tuf|omen|victus|pavilion|spectre|envy|elitebook|probook|zbook|swift|aspire|predator|nitro|prestige|stealth|raider|katana|cyborg|modern \d|matebook|gram|surface laptop|ultrabook|laptop|máy tính xách tay/i.test(
       haystack
     )
   ) {
     return 'laptops';
   }
   if (
-    /apple watch|galaxy watch|garmin|xiaomi watch|huawei watch|amazfit|smartwatch|đồng hồ thông minh/i.test(
+    /apple watch|galaxy watch|garmin|coros|suunto|fitbit|xiaomi watch|redmi watch|huawei watch|watch gt|watch fit|watch d|amazfit|miband|smart band|smartwatch|đồng hồ thông minh/i.test(
       haystack
     )
   ) {
     return 'smartwatches';
   }
   if (
-    /airpods|galaxy buds|wf-1000xm|wh-1000xm|earbuds|tai nghe|freebuds|soundcore/i.test(
+    /airpods|galaxy buds|wf-1000xm|wh-1000xm|linkbuds|quietcomfort|momentum true wireless|tour pro|tune beam|tune buds|wave beam|liberty \d|space a40|soundcore|freebuds|nothing ear|pixel buds|beats fit|beats studio buds|enco|earbuds|tai nghe/i.test(
       haystack
     )
   ) {
@@ -3236,9 +3270,10 @@ export async function getRatePlatformStats(): Promise<RatePlatformStats> {
   const [
     catsRes,
     masterRes,
-    prodsRes,
+    prodsCountRes,
     merchantsRes,
     priceHistCountRes,
+    reviewsCountRes,
     reviewsRes,
   ] = await Promise.all([
     supabase
@@ -3253,17 +3288,12 @@ export async function getRatePlatformStats(): Promise<RatePlatformStats> {
         .order('id')
         .range(from, to)
     ).then((data) => ({ data })),
-    fetchAllRows('products', (from, to) =>
-      supabase
-        .from('products')
-        .select('id, title, cluster_id')
-        .order('id')
-        .range(from, to)
-    ).then((data) => ({ data })),
+    supabase.from('products').select('id', { count: 'exact', head: true }),
     supabase.from('merchants').select('id', { count: 'exact', head: true }),
     supabase
       .from('price_history')
       .select('id', { count: 'estimated', head: true }),
+    supabase.from('reviews').select('id', { count: 'exact', head: true }),
     supabase
       .from('reviews')
       .select('*, review_flags(*)')
@@ -3273,8 +3303,10 @@ export async function getRatePlatformStats(): Promise<RatePlatformStats> {
   // Zero counters would otherwise be cached as the platform's real totals.
   const statsError =
     catsRes.error ??
+    prodsCountRes.error ??
     merchantsRes.error ??
     priceHistCountRes.error ??
+    reviewsCountRes.error ??
     reviewsRes.error;
   if (statsError) {
     throw new RateDataUnavailableError('platform stats', statsError);
@@ -3288,12 +3320,34 @@ export async function getRatePlatformStats(): Promise<RatePlatformStats> {
       name: string;
       category_id: string | null;
     }>) || [];
-  const prodRows =
-    (prodsRes.data as Array<{
-      id: string;
-      title: string;
-      cluster_id: string | null;
-    }>) || [];
+
+  const rawReviews =
+    (reviewsRes.data as unknown as Array<
+      RawReviewRow & { product_id: string }
+    >) || [];
+  const sampleProductIds = Array.from(
+    new Set(rawReviews.map((r) => r.product_id).filter(Boolean))
+  );
+  let prodRows: Array<{
+    id: string;
+    title: string;
+    cluster_id: string | null;
+  }> = [];
+  if (sampleProductIds.length > 0) {
+    const { data: sampleProds, error: sampleProdsErr } = await supabase
+      .from('products')
+      .select('id, title, cluster_id')
+      .in('id', sampleProductIds);
+    if (sampleProdsErr) {
+      throw new RateDataUnavailableError('platform stats', sampleProdsErr);
+    }
+    prodRows =
+      (sampleProds as Array<{
+        id: string;
+        title: string;
+        cluster_id: string | null;
+      }>) || [];
+  }
 
   const catSlugById = new Map<string, string>();
   for (const c of categories) {
@@ -3336,10 +3390,6 @@ export async function getRatePlatformStats(): Promise<RatePlatformStats> {
     });
   }
 
-  const rawReviews =
-    (reviewsRes.data as unknown as Array<
-      RawReviewRow & { product_id: string }
-    >) || [];
   let authenticCount = 0;
   let filteredCount = 0;
 
@@ -3396,7 +3446,7 @@ export async function getRatePlatformStats(): Promise<RatePlatformStats> {
       };
     });
 
-  const totalRev = mappedReviews.length;
+  const totalRev = reviewsCountRes.count ?? mappedReviews.length;
   const analyzedRev = authenticCount + filteredCount;
   const authenticRatioPct =
     analyzedRev > 0
@@ -3405,7 +3455,7 @@ export async function getRatePlatformStats(): Promise<RatePlatformStats> {
 
   return {
     masterProductsCount: masterRows.length,
-    listingsCount: prodRows.length,
+    listingsCount: prodsCountRes.count ?? prodRows.length,
     merchantsCount: merchantsRes.count ?? 0,
     priceObservationsCount: priceHistCountRes.count ?? 0,
     totalReviewsCount: totalRev,

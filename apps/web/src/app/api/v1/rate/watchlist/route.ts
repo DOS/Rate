@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import {
+  MAX_VALID_VND_PRICE,
+  normalizeOfferOriginalPrice,
+} from '@/lib/rate-api';
+import {
   computeProductRadarSignal,
   getCachedMasterProductBySlug,
   getCachedMasterProductOffers,
@@ -72,9 +76,15 @@ export interface WatchlistBestOffer {
 function selectBestOfferFromListings(
   offers: Awaited<ReturnType<typeof getCachedMasterProductOffers>>
 ): { bestOffer: WatchlistBestOffer | null; offerPlatforms: string[] } {
-  const valid = offers.filter(
-    (o) => Number(o.stock ?? 1) > 0 && Number(o.price_current) > 0
-  );
+  const valid = offers.filter((o) => {
+    const price = Number(o.price_current);
+    return (
+      Number(o.stock ?? 1) > 0 &&
+      Number.isFinite(price) &&
+      price > 0 &&
+      price <= MAX_VALID_VND_PRICE
+    );
+  });
   const platforms = Array.from(
     new Set(
       valid
@@ -97,12 +107,14 @@ function selectBestOfferFromListings(
   });
 
   const best = sorted[0]!;
+  const bestPrice = Number(best.price_current);
+  const validOrig = normalizeOfferOriginalPrice(bestPrice, best.price_original);
   return {
     bestOffer: {
       id: best.id,
       title: best.title,
-      price: Number(best.price_current),
-      original_price: Number(best.price_original || best.price_current),
+      price: bestPrice,
+      original_price: validOrig ?? bestPrice,
       url: best.url,
       platform: String(
         best.merchant?.platform || best.platform || 'shopee'
@@ -201,7 +213,12 @@ export async function GET(request: NextRequest) {
       }
     );
   } catch (error) {
-    return jsonApiError(500, 'Failed to fetch watchlist products', error);
+    return jsonApiError(
+      500,
+      'Failed to fetch watchlist products',
+      error,
+      WATCHLIST_CORS_HEADERS
+    );
   }
 }
 
