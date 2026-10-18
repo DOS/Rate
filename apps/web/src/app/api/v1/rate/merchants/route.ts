@@ -1,20 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getMerchantsList } from '@/server/rate';
+import { getCachedMerchantsList } from '@/server/rate';
 import {
+  PUBLIC_API_CORS_HEADERS,
   jsonApiError,
   parseBoundedIntParam,
   parseBoundedNumberParam,
   parseBoundedStringParam,
 } from '@/server/rate/api-handler';
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-};
-
 export async function OPTIONS() {
-  return new NextResponse(null, { status: 204, headers: CORS_HEADERS });
+  return new NextResponse(null, {
+    status: 204,
+    headers: PUBLIC_API_CORS_HEADERS,
+  });
 }
 
 /**
@@ -45,7 +43,7 @@ export async function GET(request: NextRequest) {
         : undefined;
     const limit = parseBoundedIntParam(sp.get('limit'), 50, 1, 100);
 
-    const merchants = await getMerchantsList({
+    const merchants = await getCachedMerchantsList({
       q,
       platform,
       officialOnly,
@@ -63,7 +61,7 @@ export async function GET(request: NextRequest) {
       {
         status: 200,
         headers: {
-          ...CORS_HEADERS,
+          ...PUBLIC_API_CORS_HEADERS,
           'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300',
         },
       }
@@ -73,7 +71,7 @@ export async function GET(request: NextRequest) {
       500,
       'Failed to fetch merchants list',
       error,
-      CORS_HEADERS
+      PUBLIC_API_CORS_HEADERS
     );
   }
 }

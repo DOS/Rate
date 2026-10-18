@@ -2375,18 +2375,99 @@ function computeDynamicReviewRisk(allReviews: ReviewItem[]): {
   };
 }
 
-/**
- * Fetch all tracked merchants with computed Dual Risk Scores (DOSafe + AI Review Risk)
- * and active listing statistics. Uses explicit non-PII column selection.
- */
-export async function getMerchantsList(params?: {
+export interface MerchantListFilterParams {
   q?: string;
   platform?: string;
   officialOnly?: boolean;
   minTrust?: number;
   sort?: 'trust_desc' | 'products_desc' | 'seeding_asc' | 'followers_desc';
   limit?: number;
-}): Promise<MerchantSummary[]> {
+}
+
+function extractPersistedBreakdown(
+  m: RawMerchantSafeRow
+): MerchantRiskBreakdown | null {
+  const candidate =
+    m.review_risk_breakdown ??
+    (m.metadata && typeof m.metadata === 'object'
+      ? (m.metadata.review_risk_breakdown as MerchantRiskBreakdown | undefined)
+      : undefined);
+  if (
+    candidate &&
+    typeof candidate === 'object' &&
+    typeof candidate.total_reviews === 'number'
+  ) {
+    return candidate;
+  }
+  return null;
+}
+
+/**
+ * Pure post-query filter, sort, and limit helper for tracked merchants (#347).
+ * Ensures `?q=`, `?min_trust=`, and `?sort=` evaluate across the full candidate set
+ * before slicing to `limit`, rather than truncating in SQL before filtering/sorting.
+ */
+export function filterAndSortMerchants(
+  merchants: MerchantSummary[],
+  params?: MerchantListFilterParams
+): MerchantSummary[] {
+  let results = [...merchants];
+
+  if (params?.q && params.q.trim()) {
+    const kw = params.q.trim().toLowerCase();
+    results = results.filter(
+      (m) =>
+        m.name.toLowerCase().includes(kw) ||
+        m.platform_shop_id.toLowerCase().includes(kw) ||
+        m.platform.toLowerCase().includes(kw) ||
+        (m.slug && m.slug.toLowerCase().includes(kw))
+    );
+  }
+
+  if (typeof params?.minTrust === 'number' && !Number.isNaN(params.minTrust)) {
+    results = results.filter((m) => m.trust_score >= params.minTrust!);
+  }
+
+  if (params?.sort) {
+    results.sort((a, b) => {
+      switch (params.sort) {
+        case 'trust_desc':
+          return (
+            b.trust_score - a.trust_score || b.product_count - a.product_count
+          );
+        case 'products_desc':
+          return (
+            b.product_count - a.product_count || b.trust_score - a.trust_score
+          );
+        case 'seeding_asc':
+          return (
+            a.review_risk_score - b.review_risk_score ||
+            b.trust_score - a.trust_score
+          );
+        case 'followers_desc':
+          return (
+            b.follower_count - a.follower_count || b.trust_score - a.trust_score
+          );
+        default:
+          return 0;
+      }
+    });
+  }
+
+  if (params?.limit && params.limit > 0) {
+    results = results.slice(0, params.limit);
+  }
+
+  return results;
+}
+
+/**
+ * Fetch all tracked merchants with computed Dual Risk Scores (DOSafe + AI Review Risk)
+ * and active listing statistics. Uses explicit non-PII column selection.
+ */
+export async function getMerchantsList(
+  params?: MerchantListFilterParams
+): Promise<MerchantSummary[]> {
   const supabase = getRateClient();
 
   let mQuery = supabase
@@ -2403,7 +2484,12 @@ export async function getMerchantsList(params?: {
   if (params?.officialOnly) {
     mQuery = mQuery.eq('is_official', true);
   }
-  if (params?.limit && params.limit > 0) {
+  const hasPostQueryFilterOrSort = Boolean(
+    (params?.q && params.q.trim()) ||
+    (typeof params?.minTrust === 'number' && !Number.isNaN(params.minTrust)) ||
+    params?.sort
+  );
+  if (!hasPostQueryFilterOrSort && params?.limit && params.limit > 0) {
     mQuery = mQuery.limit(params.limit);
   }
 
@@ -2449,25 +2535,6 @@ export async function getMerchantsList(params?: {
     idList.push(p.id);
     productIdsByMerchant.set(p.merchant_id, idList);
   }
-
-  const extractPersistedBreakdown = (
-    m: RawMerchantSafeRow
-  ): MerchantRiskBreakdown | null => {
-    const candidate =
-      m.review_risk_breakdown ??
-      (m.metadata && typeof m.metadata === 'object'
-        ? (m.metadata.review_risk_breakdown as
-            MerchantRiskBreakdown | undefined)
-        : undefined);
-    if (
-      candidate &&
-      typeof candidate === 'object' &&
-      typeof candidate.total_reviews === 'number'
-    ) {
-      return candidate;
-    }
-    return null;
-  };
 
   const unscoredProductIds: string[] = [];
   for (const m of merchants) {
@@ -2549,7 +2616,7 @@ export async function getMerchantsList(params?: {
     }
   }
 
-  let results: MerchantSummary[] = merchants.map((m) => {
+  const results: MerchantSummary[] = merchants.map((m) => {
     const prices = prodsByMerchant.get(m.id) ?? [];
     const persistedBreakdown = extractPersistedBreakdown(m);
     const mReviews = mappedReviewsByMerchant.get(m.id) ?? [];
@@ -2615,48 +2682,7 @@ export async function getMerchantsList(params?: {
     };
   });
 
-  if (params?.q && params.q.trim()) {
-    const kw = params.q.trim().toLowerCase();
-    results = results.filter(
-      (m) =>
-        m.name.toLowerCase().includes(kw) ||
-        m.platform_shop_id.toLowerCase().includes(kw) ||
-        m.platform.toLowerCase().includes(kw) ||
-        (m.slug && m.slug.toLowerCase().includes(kw))
-    );
-  }
-
-  if (typeof params?.minTrust === 'number' && !Number.isNaN(params.minTrust)) {
-    results = results.filter((m) => m.trust_score >= params.minTrust!);
-  }
-
-  if (params?.sort) {
-    results = [...results].sort((a, b) => {
-      switch (params.sort) {
-        case 'trust_desc':
-          return (
-            b.trust_score - a.trust_score || b.product_count - a.product_count
-          );
-        case 'products_desc':
-          return (
-            b.product_count - a.product_count || b.trust_score - a.trust_score
-          );
-        case 'seeding_asc':
-          return (
-            a.review_risk_score - b.review_risk_score ||
-            b.trust_score - a.trust_score
-          );
-        case 'followers_desc':
-          return (
-            b.follower_count - a.follower_count || b.trust_score - a.trust_score
-          );
-        default:
-          return 0;
-      }
-    });
-  }
-
-  return results;
+  return filterAndSortMerchants(results, params);
 }
 
 /**
@@ -2934,8 +2960,8 @@ export async function getMerchantProfileById(
     };
   });
 
-  const { reviewRiskScore, breakdown } =
-    computeDynamicReviewRisk(recentReviews);
+  const persistedBreakdown = extractPersistedBreakdown(merchantRow);
+  const dynamicRisk = computeDynamicReviewRisk(recentReviews);
   const meta = (
     merchantRow.metadata && typeof merchantRow.metadata === 'object'
       ? merchantRow.metadata
@@ -2946,8 +2972,16 @@ export async function getMerchantProfileById(
       ? meta.dosafe_risk_score
       : Number(merchantRow.risk_score || 0);
   const persistedReviewRisk =
-    typeof meta.review_risk_score === 'number' ? meta.review_risk_score : 0;
-  const effectiveReviewRisk = Math.max(reviewRiskScore, persistedReviewRisk);
+    merchantRow.review_risk_score != null
+      ? Number(merchantRow.review_risk_score)
+      : typeof meta.review_risk_score === 'number'
+        ? meta.review_risk_score
+        : 0;
+  const effectiveReviewRisk = Math.max(
+    dynamicRisk.reviewRiskScore,
+    persistedReviewRisk
+  );
+  const breakdown = persistedBreakdown ?? dynamicRisk.breakdown;
   const combinedRisk = Math.min(
     100,
     Math.max(

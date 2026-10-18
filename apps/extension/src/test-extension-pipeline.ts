@@ -754,7 +754,7 @@ async function runTests() {
   assert.ok(lookupParamNames.includes('externalId'));
 
   const rateApiBatchMod = await import('../../web/src/lib/rate-api.js');
-  const { getMasterProductOffersBatch } = (
+  const { getMasterProductOffersBatch, filterAndSortMerchants } = (
     'getMasterProductOffersBatch' in rateApiBatchMod
       ? rateApiBatchMod
       : (rateApiBatchMod as unknown as { default: typeof rateApiBatchMod })
@@ -765,6 +765,87 @@ async function runTests() {
     emptyBatchMap.size,
     0,
     'getMasterProductOffersBatch must return an empty Map for empty/whitespace IDs without querying PostgREST'
+  );
+
+  // Verify filterAndSortMerchants filters and sorts across all candidates before applying limit (#347)
+  const sampleMerchants = [
+    {
+      id: 'm-1',
+      platform: 'shopee',
+      platform_shop_id: 'shop-1',
+      name: 'Mega Follower Shop',
+      slug: 'mega-follower-shop',
+      url: 'https://shopee.vn/shop/shop-1',
+      is_official: true,
+      rating_star: 4.8,
+      follower_count: 900_000,
+      location: 'HCM',
+      dosafe_risk_score: 25,
+      review_risk_score: 30,
+      risk_score: 30,
+      trust_score: 70,
+      product_count: 5,
+      min_price: 10_000_000,
+      max_price: 20_000_000,
+      review_risk_breakdown: {
+        total_reviews: 10,
+        authentic_count: 7,
+        coin_spam_count: 2,
+        seeding_fake_count: 1,
+        sabotage_or_bombing_count: 0,
+        suspicious_ratio_pct: 30,
+      },
+      updated_at: null,
+    },
+    {
+      id: 'm-2',
+      platform: 'cellphones',
+      platform_shop_id: 'cps-official',
+      name: 'CellphoneS Official',
+      slug: 'cellphones-official',
+      url: 'https://cellphones.com.vn',
+      is_official: true,
+      rating_star: 4.9,
+      follower_count: 50_000,
+      location: 'HCM',
+      dosafe_risk_score: 4,
+      review_risk_score: 2,
+      risk_score: 4,
+      trust_score: 96,
+      product_count: 42,
+      min_price: 5_000_000,
+      max_price: 45_000_000,
+      review_risk_breakdown: {
+        total_reviews: 100,
+        authentic_count: 98,
+        coin_spam_count: 2,
+        seeding_fake_count: 0,
+        sabotage_or_bombing_count: 0,
+        suspicious_ratio_pct: 2,
+      },
+      updated_at: null,
+    },
+  ];
+  const searchedWithLimit1 = filterAndSortMerchants(sampleMerchants, {
+    q: 'cellphones',
+    limit: 1,
+  });
+  assert.equal(searchedWithLimit1.length, 1);
+  assert.equal(
+    searchedWithLimit1[0]?.id,
+    'm-2',
+    'filterAndSortMerchants must match q across all candidates before slicing to limit=1'
+  );
+  const sortedBySeedingLimit1 = filterAndSortMerchants(sampleMerchants, {
+    sort: 'seeding_asc',
+    minTrust: 90,
+    limit: 1,
+  });
+  assert.equal(sortedBySeedingLimit1.length, 1);
+  assert.equal(
+    sortedBySeedingLimit1[0]?.id,
+    'm-2',
+    'filterAndSortMerchants must sort by seeding_asc and filter by minTrust before slicing to limit=1'
   );
 
   console.log(
