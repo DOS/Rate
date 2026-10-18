@@ -145,6 +145,14 @@
   color: var(--rate-fg-primary);
 }
 
+// The template's .bg-white { background-color: var(--bs-body-bg) !important }
+// ignores .bg-opacity-*, so translucent white panels on dark surfaces
+// (watchlist KPIs, auth portal) turned solid white. The attribute selector
+// outranks the template rule even though this partial is loaded first.
+.bg-white[class*="bg-opacity-"] {
+  background-color: rgba(255, 255, 255, var(--bs-bg-opacity, 1)) !important;
+}
+
 // WCAG AA text inks (1.4.3, DOS/Rate#362). Bootstrap's semantic text colors
 // (#198754, #dc3545, #6c757d, #ffc107, #0dcaf0) and the brand red read only
 // 1.5-4.4:1 on the light tints these pages use, so text utilities take the

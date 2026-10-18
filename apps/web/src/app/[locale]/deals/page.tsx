@@ -56,12 +56,10 @@ export default async function DealsPage({ params }: PageProps) {
       <NavbarDarkDynamic links={[]} />
       <section className="py-4">
         <div className="container">
-          <div className="rate-scoreboard-dark rounded-4 mb-4 p-4">
+          <div className="rate-scoreboard-dark rate-surface-dark rounded-4 mb-4 p-4">
             <div className="d-flex justify-content-between align-items-center flex-wrap gap-3">
               <div>
-                <div className="rate-eyebrow text-warning mb-1">
-                  {t('pageEyebrow')}
-                </div>
+                <div className="rate-eyebrow mb-2">{t('pageEyebrow')}</div>
                 <h1 className="h3 fw-bold mb-1 text-white">{t('pageTitle')}</h1>
                 <p className="text-white-50 small mb-0">{t('pageSubtitle')}</p>
               </div>
