@@ -151,6 +151,26 @@ const _csInspectCheck: InspectCopyStrings = csMessages.inspect;
 void _enInspectCheck;
 void _csInspectCheck;
 
+type MerchantsCopyStrings = typeof viMessages.merchants;
+const _enMerchantsCheck: MerchantsCopyStrings = enMessages.merchants;
+const _csMerchantsCheck: MerchantsCopyStrings = csMessages.merchants;
+void _enMerchantsCheck;
+void _csMerchantsCheck;
+
+type ProductDetailCopyStrings = typeof viMessages.productDetail;
+const _enProductDetailCheck: ProductDetailCopyStrings =
+  enMessages.productDetail;
+const _csProductDetailCheck: ProductDetailCopyStrings =
+  csMessages.productDetail;
+void _enProductDetailCheck;
+void _csProductDetailCheck;
+
+type HomePageCopyStrings = typeof viMessages.homePage;
+const _enHomePageCheck: HomePageCopyStrings = enMessages.homePage;
+const _csHomePageCheck: HomePageCopyStrings = csMessages.homePage;
+void _enHomePageCheck;
+void _csHomePageCheck;
+
 const RATE_COPY_DICTIONARY: Record<SupportedRateLocale, RateLocaleCopy> = {
   vi: { locale: 'vi', ...viCopy },
   en: { locale: 'en', ...enCopy },

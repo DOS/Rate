@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { escapeCsvCell } from '@/lib/csv-safe';
 
 interface MerchantShareAuditButtonProps {
@@ -36,6 +37,7 @@ export default function MerchantShareAuditButton({
   genuineDealCount = 0,
   fakeSaleTrapCount = 0,
 }: MerchantShareAuditButtonProps) {
+  const t = useTranslations('merchants');
   const [copiedMd, setCopiedMd] = useState(false);
   const [copiedUrl, setCopiedUrl] = useState(false);
 
@@ -47,15 +49,32 @@ export default function MerchantShareAuditButton({
           ? Math.round((authenticReviews / totalReviews) * 100)
           : 100;
       const lines = [
-        `### 🛡️ Biên Bản Kiểm Toán Tín Nhiệm Gian Hàng: ${merchantName} (${platform.toUpperCase()})`,
-        `- **Phân loại:** ${isOfficial ? 'Gian hàng Chính hãng (Official Mall)' : 'Gian hàng tiêu chuẩn'} | Shop ID: \`${platformShopId}\``,
-        `- **Chỉ số Tín nhiệm Tổng hợp (Rate Trust Score):** **${trustScore}/100** (${trustLevelLabel})`,
-        `- **Rủi ro an ninh DOSafe Threat Intel:** ${dosafeRiskScore}/100`,
-        `- **Rủi ro gian lận đánh giá (AI Review Seeding Risk):** ${reviewSeedingRiskScore}/100`,
-        `- **Kiểm toán Radar Giá 60 Ngày:** 🟢 ${genuineDealCount} kèo đáy lịch sử | 🚨 ${fakeSaleTrapCount} cảnh báo kê khống giá gốc`,
-        `- **Tỷ lệ đánh giá người mua thật:** ${authenticPct}% (${authenticReviews}/${totalReviews} đánh giá thật, đã lọc ${flaggedReviews} bài Seeding/Spam)`,
-        `- **Số thiết bị đang theo dõi giá:** ${productCount} mẫu chuẩn hóa`,
-        `- **Hồ sơ kiểm toán trực tiếp trên Rate.vn:** ${window.location.href}`,
+        t('mdHeading', {
+          name: merchantName,
+          platform: platform.toUpperCase(),
+        }),
+        t('mdCategoryLine', {
+          type: isOfficial ? t('officialMallLabel') : t('standardShopLabel'),
+          shopId: platformShopId,
+        }),
+        t('mdTrustLine', {
+          score: trustScore,
+          label: trustLevelLabel,
+        }),
+        t('mdDosafeLine', { score: dosafeRiskScore }),
+        t('mdSeedingLine', { score: reviewSeedingRiskScore }),
+        t('mdRadarLine', {
+          genuine: genuineDealCount,
+          traps: fakeSaleTrapCount,
+        }),
+        t('mdAuthenticLine', {
+          pct: authenticPct,
+          auth: authenticReviews,
+          total: totalReviews,
+          flagged: flaggedReviews,
+        }),
+        t('mdProductsLine', { count: productCount }),
+        t('mdUrlLine', { url: window.location.href }),
       ];
       await navigator.clipboard.writeText(lines.join('\n'));
       setCopiedMd(true);
@@ -79,20 +98,20 @@ export default function MerchantShareAuditButton({
   const handleDownloadMerchantCsv = () => {
     if (typeof window === 'undefined') return;
     const headers = [
-      'Tên Gian Hàng',
-      'Sàn',
-      'Shop ID',
-      'Phân Loại',
-      'Trust Score (/100)',
-      'Mức Tín Nhiệm',
-      'DOSafe Risk (/100)',
-      'Seeding Risk (/100)',
-      'Kèo Đáy 60N',
-      'Cảnh Báo Kê Khống 60N',
-      'Review Thật',
-      'Tổng Review',
-      'Review Bị Gắn Cờ',
-      'Số Thiết Bị Theo Dõi',
+      'MerchantName',
+      'Platform',
+      'ShopID',
+      'Tier',
+      'TrustScore(/100)',
+      'TrustLevel',
+      'DOSafeRisk(/100)',
+      'SeedingRisk(/100)',
+      'GenuineDeals60D',
+      'FakeSaleTraps60D',
+      'AuthenticReviews',
+      'TotalReviews',
+      'FlaggedReviews',
+      'TrackedProducts',
     ];
     const row = [
       merchantName,
@@ -159,11 +178,9 @@ export default function MerchantShareAuditButton({
         type="button"
         onClick={handleCopyMerchantMarkdown}
         className="btn btn-danger btn-sm rounded-pill fw-semibold px-3"
-        title="Sao chép biên bản kiểm toán tín nhiệm gian hàng định dạng Markdown"
+        title={t('shareBtnTitle')}
       >
-        {copiedMd
-          ? '✓ Đã chép biên bản Markdown!'
-          : '📋 Sao chép biên bản tín nhiệm'}
+        {copiedMd ? t('shareCopiedMd') : t('shareCopyMd')}
       </button>
       <button
         type="button"
@@ -185,9 +202,9 @@ export default function MerchantShareAuditButton({
         type="button"
         onClick={handleCopyMerchantUrl}
         className="btn btn-outline-light btn-sm rounded-pill px-3"
-        title="Sao chép đường dẫn hồ sơ gian hàng"
+        title={t('shareCopyUrlTitle')}
       >
-        {copiedUrl ? '✓ Đã chép link!' : '🔗 Chép link'}
+        {copiedUrl ? t('shareCopiedUrl') : t('shareCopyUrl')}
       </button>
     </div>
   );

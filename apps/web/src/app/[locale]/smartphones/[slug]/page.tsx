@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { getTranslations } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
 import { notFound } from 'next/navigation';
 import {
@@ -47,50 +48,30 @@ export async function generateCategoryProductMetadata(
 ): Promise<Metadata> {
   const { locale, slug } = await params;
   const lang = normalizeRateLocale(locale);
+  const t = await getTranslations({ locale, namespace: 'productDetail' });
   const product = await getCachedMasterProductBySlug(slug);
   if (!product) {
     return {
-      title:
-        lang === 'en'
-          ? 'Product Not Found | Rate.vn'
-          : lang === 'cs'
-            ? 'Produkt nenalezen | Rate.vn'
-            : 'Không tìm thấy sản phẩm | Rate.vn',
+      title: t('notFoundTitle'),
     };
   }
   const minPrice = Number(product.min_price || 0).toLocaleString('vi-VN');
   const canonicalUrl = `https://rate.vn${categoryBasePath}/${product.slug}`;
 
   return {
-    title:
-      lang === 'en'
-        ? `${product.name} - From ${minPrice} ₫, 10-Group Specs & AI Review Audit | Rate.vn`
-        : lang === 'cs'
-          ? `${product.name} - Od ${minPrice} ₫, 10 skupin parametrů a AI audit recenzí | Rate.vn`
-          : `${product.name} - Giá từ ${minPrice} ₫, Thông số 10 nhóm & Đánh giá thực chất | Rate.vn`,
-    description:
-      lang === 'en'
-        ? `Compare ${product.name} (${product.brand}) prices across ${product.merchant_count || 0} merchants, inspect historical price charts for fake discounts, and read AI-verified buyer reviews on Rate.vn.`
-        : lang === 'cs'
-          ? `Porovnejte ceny ${product.name} (${product.brand}) z ${product.merchant_count || 0} obchodů, zkontrolujte historii cen a přečtěte si AI ověřené recenze na Rate.vn.`
-          : `So sánh giá ${product.name} (${product.brand}) từ ${product.merchant_count || 0} gian hàng, biểu đồ lịch sử giá phát hiện giảm giá ảo và đánh giá thực chất đã lọc Seeding bằng AI trên Rate.vn.`,
+    title: t('metaTitle', { name: product.name, minPrice }),
+    description: t('metaDesc', {
+      name: product.name,
+      brand: product.brand,
+      merchantCount: product.merchant_count || 0,
+    }),
     alternates: {
       canonical: canonicalUrl,
     },
     openGraph: {
       ...defaultOpenGraph(lang),
-      title:
-        lang === 'en'
-          ? `${product.name} - 10-Group Specs & True Price History | Rate.vn`
-          : lang === 'cs'
-            ? `${product.name} - 10 skupin parametrů a historie cen | Rate.vn`
-            : `${product.name} - So sánh giá & Kiểm định khuyến mãi AI | Rate.vn`,
-      description:
-        lang === 'en'
-          ? `Best price from ${minPrice} ₫. See the 10 standardized GSMArena/PhoneArena spec groups and the price history chart.`
-          : lang === 'cs'
-            ? `Nejlepší cena od ${minPrice} ₫. Prohlédněte si 10 standardizovaných skupin parametrů GSMArena/PhoneArena a graf historie cen.`
-            : `Giá tốt nhất từ ${minPrice} ₫. Xem 10 nhóm thông số kỹ thuật chuẩn GSMArena/PhoneArena và biểu đồ lịch sử giá.`,
+      title: t('ogTitle', { name: product.name }),
+      description: t('ogDesc', { minPrice }),
       url: canonicalUrl,
       images:
         product.images && product.images.length > 0
@@ -118,13 +99,25 @@ export async function ProductDetailView({
   categoryLabel?: string;
 }) {
   const { locale, slug } = await params;
-  const product = await getCachedMasterProductBySlug(slug);
+  const [t, tNav, product] = await Promise.all([
+    getTranslations({ locale, namespace: 'productDetail' }),
+    getTranslations({ locale, namespace: 'rate.nav' }),
+    getCachedMasterProductBySlug(slug),
+  ]);
 
   if (!product) {
     notFound();
   }
 
   const categorySlug = categoryBasePath.replace(/^\//, '') || 'smartphones';
+  const localizedCategoryLabel =
+    categorySlug === 'smartphones' ||
+    categorySlug === 'laptops' ||
+    categorySlug === 'tablets' ||
+    categorySlug === 'smartwatches' ||
+    categorySlug === 'earbuds'
+      ? tNav(categorySlug)
+      : categoryLabel;
   const [offers, reviews, categoryPeers, categoryDealRadar] = await Promise.all(
     [
       getCachedMasterProductOffers(product.id),
@@ -192,13 +185,13 @@ export async function ProductDetailView({
           {
             '@type': 'ListItem',
             position: 1,
-            name: 'Trang chủ',
+            name: t('breadcrumbHome'),
             item: 'https://rate.vn',
           },
           {
             '@type': 'ListItem',
             position: 2,
-            name: categoryLabel,
+            name: localizedCategoryLabel,
             item: `https://rate.vn${categoryBasePath}`,
           },
           {
@@ -255,12 +248,12 @@ export async function ProductDetailView({
           <ol className="breadcrumb small">
             <li className="breadcrumb-item">
               <Link href="/" className="text-decoration-none">
-                Trang chủ
+                {t('breadcrumbHome')}
               </Link>
             </li>
             <li className="breadcrumb-item">
               <Link href={categoryBasePath} className="text-decoration-none">
-                {categoryLabel}
+                {localizedCategoryLabel}
               </Link>
             </li>
             <li className="breadcrumb-item active" aria-current="page">
@@ -286,14 +279,16 @@ export async function ProductDetailView({
                     style={{ maxHeight: '350px', objectFit: 'contain' }}
                   />
                 ) : (
-                  <div className="text-muted">Chưa có ảnh sản phẩm</div>
+                  <div className="text-muted">{t('noProductImage')}</div>
                 )}
               </div>
 
               {/* Colors */}
               {product.colors && product.colors.length > 0 && (
                 <div className="border-top mt-3 pt-3 text-start">
-                  <div className="small text-muted mb-2">Màu sắc có sẵn:</div>
+                  <div className="small text-muted mb-2">
+                    {t('availableColors')}
+                  </div>
                   <div className="d-flex flex-wrap gap-2">
                     {product.colors.map((c, i) => (
                       <span
@@ -334,7 +329,7 @@ export async function ProductDetailView({
                   className="rate-eyebrow"
                   style={{ color: '#fda4af', letterSpacing: '0.06em' }}
                 >
-                  🛡️ HỘI ĐỒNG THẨM ĐỊNH ĐỘC LẬP JREVIEWS (ĐÃ LỌC SEEDING AI)
+                  {t('scoreboardEyebrow')}
                 </span>
                 <div className="d-flex flex-wrap gap-2">
                   <span
@@ -345,7 +340,7 @@ export async function ProductDetailView({
                       border: '1px solid rgba(16, 185, 129, 0.35)',
                     }}
                   >
-                    ✓ {authenticCount} đánh giá thực chất
+                    {t('authenticReviewsBadge', { count: authenticCount })}
                   </span>
                   {ignoredCount > 0 && (
                     <span
@@ -356,7 +351,7 @@ export async function ProductDetailView({
                         border: '1px solid rgba(244, 63, 94, 0.35)',
                       }}
                     >
-                      🛡️ Đã loại bỏ {ignoredCount} Seeding / Spam xu
+                      {t('filteredSeedingBadge', { count: ignoredCount })}
                     </span>
                   )}
                   <RadarBadge signal={radarSignal} minSpreadPct={0} />
@@ -389,7 +384,7 @@ export async function ProductDetailView({
                       className="small fw-semibold mb-1"
                       style={{ color: '#fcd34d' }}
                     >
-                      ★ Điểm Người Mua Thực Tế (Weighted)
+                      {t('userWeightedScoreLabel')}
                     </div>
                     <div className="d-flex align-items-baseline gap-2">
                       <span
@@ -398,12 +393,14 @@ export async function ProductDetailView({
                       >
                         {displayUserRating > 0
                           ? displayUserRating.toFixed(1)
-                          : 'Chưa có'}
+                          : t('notAvailableYet')}
                       </span>
                       <span className="small" style={{ color: '#94a3b8' }}>
                         {displayUserRating > 0
-                          ? `/ 5.0 (${authenticCount} bài kiểm chứng)`
-                          : `(${authenticCount} bài kiểm chứng)`}
+                          ? t('verifiedReviewsCount', { count: authenticCount })
+                          : t('verifiedReviewsCountNoScore', {
+                              count: authenticCount,
+                            })}
                       </span>
                     </div>
                     <div
@@ -455,7 +452,7 @@ export async function ProductDetailView({
                       className="small fw-semibold mb-1"
                       style={{ color: '#a5b4fc' }}
                     >
-                      🔬 Điểm Chuyên Gia Lab (Expert Score)
+                      {t('expertScoreLabel')}
                     </div>
                     <div className="d-flex align-items-baseline gap-2">
                       <span
@@ -465,13 +462,13 @@ export async function ProductDetailView({
                         {product.expert_rating != null &&
                         Number(product.expert_rating) > 0
                           ? Number(product.expert_rating).toFixed(1)
-                          : 'Chưa có'}
+                          : t('notAvailableYet')}
                       </span>
                       <span className="small" style={{ color: '#cbd5e1' }}>
                         {product.expert_rating != null &&
                         Number(product.expert_rating) > 0
-                          ? '/ 5.0 chuẩn 10 nhóm'
-                          : 'chuẩn 10 nhóm'}
+                          ? t('tenGroupStandardWithSlash')
+                          : t('tenGroupStandard')}
                       </span>
                     </div>
                   </div>
@@ -514,27 +511,27 @@ export async function ProductDetailView({
                         {
                           label:
                             categorySlug === 'earbuds'
-                              ? 'Âm trường & Chất âm'
-                              : 'Màn hình & Hiển thị',
+                              ? t('critSoundstage')
+                              : t('critDisplay'),
                           score: avgCrit('screen'),
                         },
                         {
-                          label: 'Hiệu năng & Nhiệt độ',
+                          label: t('critPerformance'),
                           score: avgCrit('performance'),
                         },
                         {
                           label:
                             categorySlug === 'earbuds'
-                              ? 'Chống ồn ANC & Mic'
-                              : 'Camera & Quay chụp',
+                              ? t('critAncMic')
+                              : t('critCamera'),
                           score: avgCrit('camera'),
                         },
                         {
-                          label: 'Pin & Sạc nhanh',
+                          label: t('critBattery'),
                           score: avgCrit('battery'),
                         },
                         {
-                          label: 'Đáng đồng tiền (Value)',
+                          label: t('critValue'),
                           score: avgCrit('value'),
                         },
                       ];
@@ -551,7 +548,9 @@ export async function ProductDetailView({
                               {crit.label}
                             </span>
                             <span className="fw-bold font-monospace text-white">
-                              {val != null ? `${val.toFixed(1)}/5` : 'Chưa có'}
+                              {val != null
+                                ? `${val.toFixed(1)}/5`
+                                : t('notAvailableYet')}
                             </span>
                           </div>
                           <div
@@ -597,7 +596,7 @@ export async function ProductDetailView({
                   }}
                 >
                   <strong style={{ color: '#a5b4fc' }}>
-                    Nhận định Chuyên gia Rate.vn:
+                    {t('expertVerdictPrefix')}
                   </strong>{' '}
                   {product.expert_review_summary}
                 </div>
@@ -609,19 +608,19 @@ export async function ProductDetailView({
                   href="#jreviews-section"
                   className="btn btn-primary rounded-pill fw-semibold px-4"
                 >
-                  ★ Đọc &amp; Gửi Đánh Giá 5 Tiêu Chí ({authenticCount})
+                  {t('readAndSubmitReviewsBtn', { count: authenticCount })}
                 </a>
                 <a
                   href="#specs-section"
                   className="btn btn-outline-light rounded-pill small px-3"
                 >
-                  📋 10 Nhóm Thông Số
+                  {t('tenSpecGroupsBtn')}
                 </a>
                 <Link
                   href={`/compare?slugs=${product.slug}`}
                   className="btn btn-outline-light rounded-pill small px-3"
                 >
-                  ⚖️ Bàn Cân Đối Đầu
+                  {t('headToHeadCompareBtn')}
                 </Link>
                 <CompareQuickToggle
                   size="md"
@@ -652,8 +651,8 @@ export async function ProductDetailView({
                 <div className="bg-light rounded-3 h-100 border p-3">
                   <div className="text-muted small">
                     {categorySlug === 'earbuds'
-                      ? 'Màng loa / Hiển thị'
-                      : 'Màn hình'}
+                      ? t('quickSpecDriver')
+                      : t('quickSpecScreen')}
                   </div>
                   <div className="fw-semibold small">
                     {keySpecs?.screen ||
@@ -667,7 +666,9 @@ export async function ProductDetailView({
               </div>
               <div className="col-sm-4 col-6">
                 <div className="bg-light rounded-3 h-100 border p-3">
-                  <div className="text-muted small">Vi xử lý (Chipset)</div>
+                  <div className="text-muted small">
+                    {t('quickSpecChipset')}
+                  </div>
                   <div className="fw-semibold small">
                     {keySpecs?.chip ||
                       specs?.hardware?.chipset ||
@@ -682,8 +683,8 @@ export async function ProductDetailView({
                     {categorySlug === 'earbuds' &&
                     !keySpecs?.camera &&
                     !specs?.camera?.main_camera
-                      ? 'Âm thanh / ANC'
-                      : 'Camera chính'}
+                      ? t('quickSpecAudioAnc')
+                      : t('quickSpecMainCamera')}
                   </div>
                   <div className="fw-semibold small">
                     {keySpecs?.camera ||
@@ -695,7 +696,7 @@ export async function ProductDetailView({
               </div>
               <div className="col-sm-4 col-6">
                 <div className="bg-light rounded-3 h-100 border p-3">
-                  <div className="text-muted small">Bộ nhớ (RAM/ROM)</div>
+                  <div className="text-muted small">{t('quickSpecMemory')}</div>
                   <div className="fw-semibold small">
                     {(() => {
                       const ram = product.ram_gb ?? specs?.hardware?.ram_gb;
@@ -711,7 +712,9 @@ export async function ProductDetailView({
               </div>
               <div className="col-sm-4 col-6">
                 <div className="bg-light rounded-3 h-100 border p-3">
-                  <div className="text-muted small">Pin &amp; Sạc</div>
+                  <div className="text-muted small">
+                    {t('quickSpecBattery')}
+                  </div>
                   <div className="fw-semibold small">
                     {keySpecs?.battery ||
                       (specs?.battery?.capacity_mah
@@ -722,7 +725,9 @@ export async function ProductDetailView({
               </div>
               <div className="col-sm-4 col-6">
                 <div className="bg-light rounded-3 h-100 border p-3">
-                  <div className="text-muted small">Độ bền / Kháng nước</div>
+                  <div className="text-muted small">
+                    {t('quickSpecDurability')}
+                  </div>
                   <div className="fw-semibold small">
                     {specs?.design?.resistance ||
                       specs?.design?.materials ||
@@ -737,8 +742,7 @@ export async function ProductDetailView({
               <div className="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-2">
                 <div>
                   <div className="text-muted small">
-                    Biên độ giá tham khảo thị trường ({offers.length} nguồn ghi
-                    nhận):
+                    {t('priceReferenceLabel', { count: offers.length })}
                   </div>
                   <div className="fw-bold text-dark font-monospace fs-5">
                     {minPriceFormatted} ₫
@@ -749,8 +753,12 @@ export async function ProductDetailView({
                     )}
                     {priceHistory.lowestEverPrice != null && (
                       <span className="badge bg-success-subtle text-success fw-normal ms-2">
-                        Đáy 90 ngày:{' '}
-                        {priceHistory.lowestEverPrice.toLocaleString('vi-VN')} ₫
+                        {t('low90dBadge', {
+                          price:
+                            priceHistory.lowestEverPrice.toLocaleString(
+                              'vi-VN'
+                            ),
+                        })}
                       </span>
                     )}
                   </div>
@@ -774,7 +782,7 @@ export async function ProductDetailView({
                     href="#price-history-section"
                     className="btn btn-sm btn-outline-secondary rounded-pill px-3"
                   >
-                    📈 Kiểm định giá ({offers.length} nguồn)
+                    {t('auditPriceBtn', { count: offers.length })}
                   </a>
                   <ProductShareAuditButton
                     name={product.name}
@@ -811,8 +819,7 @@ export async function ProductDetailView({
             </div>
 
             <p className="text-muted small lh-base mb-0">
-              Mã định danh chuẩn (Canonical Model Key):{' '}
-              <code>{product.model_key}</code>
+              {t('canonicalModelKeyLabel')} <code>{product.model_key}</code>
             </p>
           </div>
         </div>
@@ -1391,22 +1398,19 @@ export async function ProductDetailView({
           <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
             <div>
               <span className="rate-eyebrow text-muted d-block mb-1">
-                THAM CHIẾU NGUỒN DỮ LIỆU ĐỘC LẬP (KHÔNG QUẢNG CÁO AFFILIATE)
+                {t('offersEyebrow')}
               </span>
               <h2 className="h4 fw-bold d-flex align-items-center mb-0 gap-2">
-                <span>🛡️</span> Kiểm Định Gian Hàng &amp; Đối Chiếu Giá Niêm Yết
-                ({offers.length} nguồn)
+                <span>🛡️</span> {t('offersTitle', { count: offers.length })}
               </h2>
             </div>
             <span className="badge bg-light text-secondary rounded-pill border px-3 py-2">
-              Tự động đối chiếu với trung vị lịch sử 90 ngày
+              {t('offersMedianBadge')}
             </span>
           </div>
 
           {offers.length === 0 ? (
-            <p className="text-muted mb-0">
-              Hiện chưa có sàn bán nào liên kết với mẫu máy này.
-            </p>
+            <p className="text-muted mb-0">{t('noOffersYet')}</p>
           ) : (
             <ProductOffersExplorer
               productName={product.name}
@@ -1445,12 +1449,10 @@ export async function ProductDetailView({
             <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
               <div>
                 <span className="badge bg-primary bg-opacity-10 text-primary rounded-pill fw-semibold mb-1 px-3 py-1">
-                  ⚖️ Đối Thủ Trực Tiếp Cùng Phân Khúc &amp; Hiệu Suất Giá / Điểm
-                  ({categoryLabel})
+                  {t('competitorsBadge', { category: localizedCategoryLabel })}
                 </span>
                 <h3 className="h5 fw-bold mb-0">
-                  So Sánh 1 Chạm &amp; Đối Chiếu Giá / Điểm JReviews Với{' '}
-                  {product.name}
+                  {t('competitorsTitle', { name: product.name })}
                 </h3>
               </div>
               <div className="d-flex flex-wrap gap-2">
@@ -1458,14 +1460,15 @@ export async function ProductDetailView({
                   href="/deals"
                   className="btn btn-sm btn-outline-dark rounded-pill fw-semibold px-3"
                 >
-                  💎 Trung Tâm Săn Deal 10 Sàn
+                  {t('dealHub10PlatformsBtn')}
                 </Link>
                 <Link
                   href={`/compare?slugs=${[product.slug, ...relatedCompetitors.map((c) => c.slug)].slice(0, 4).join(',')}`}
                   className="btn btn-sm btn-danger rounded-pill fw-semibold px-3"
                 >
-                  ⚖️ Đặt Cả {Math.min(4, relatedCompetitors.length + 1)} Máy Lên
-                  Bàn Cân 10 Nhóm →
+                  {t('compareAllPeersBtn', {
+                    count: Math.min(4, relatedCompetitors.length + 1),
+                  })}
                 </Link>
               </div>
             </div>
@@ -1531,7 +1534,7 @@ export async function ProductDetailView({
                               ⭐{' '}
                               {peerRating > 0
                                 ? peerRating.toFixed(1)
-                                : 'chưa có'}
+                                : t('peerNoRating')}
                             </span>
                             <RadarBadge
                               signal={getRadarSignal(peerRadarIndex, peer.slug)}
@@ -1559,18 +1562,24 @@ export async function ProductDetailView({
                                 style={{ fontSize: '11px' }}
                               >
                                 {priceDelta < 0
-                                  ? `Rẻ hơn ${Math.abs(priceDelta).toLocaleString('vi-VN')} ₫`
+                                  ? t('cheaperByBadge', {
+                                      amount:
+                                        Math.abs(priceDelta).toLocaleString(
+                                          'vi-VN'
+                                        ),
+                                    })
                                   : `+${priceDelta.toLocaleString('vi-VN')} ₫`}
                               </span>
                             )}
                           </div>
                           {peerCostPerPoint > 0 && (
                             <div className="text-muted small font-monospace mt-1">
-                              💎 {peerCostPerPoint.toLocaleString('vi-VN')} ₫ /
-                              1.0 điểm
+                              {t('costPerPointUnit', {
+                                cost: peerCostPerPoint.toLocaleString('vi-VN'),
+                              })}
                               {costPerPointDelta < 0 && (
                                 <span className="text-success fw-semibold ms-1">
-                                  (Tối ưu P/P hơn)
+                                  {t('betterValueTag')}
                                 </span>
                               )}
                             </div>
@@ -1583,13 +1592,13 @@ export async function ProductDetailView({
                           href={`/compare/${product.slug}-vs-${peer.slug}`}
                           className="btn btn-sm btn-outline-primary rounded-pill fw-semibold flex-grow-1"
                         >
-                          ⚔️ So sánh đối đầu 1-1
+                          {t('compare1v1Btn')}
                         </Link>
                         <Link
                           href={`${categoryBasePath}/${peer.slug}`}
                           className="btn btn-sm btn-light rounded-pill border px-3"
                         >
-                          Chi tiết
+                          {t('detailsBtn')}
                         </Link>
                       </div>
                     </div>
