@@ -1,12 +1,16 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import type { MasterProduct } from '@repo/shared-data';
+import { createClient } from '@supabase/supabase-js';
+import type { Database, MasterProduct } from '@repo/shared-data';
 import { createLogger } from '@/lib/logger';
 import { isPendingReview } from '@/lib/review-display';
 
 const log = createLogger('rate-api');
 export type { MasterProduct };
 
-type RateSchemaClient = ReturnType<SupabaseClient['schema']>;
+const createRateSchemaClient = (url: string, anonKey: string) =>
+  createClient<Database>(url, anonKey, {
+    auth: { persistSession: false },
+  }).schema('rate');
+type RateSchemaClient = ReturnType<typeof createRateSchemaClient>;
 let _client: RateSchemaClient | null = null;
 
 export function getRateClient(): RateSchemaClient {
@@ -25,10 +29,7 @@ export function getRateClient(): RateSchemaClient {
       'rate-api: NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY are not configured; refusing to fall back to a hardcoded project'
     );
   }
-  const raw = createClient(supabaseUrl, supabaseAnonKey, {
-    auth: { persistSession: false },
-  });
-  _client = raw.schema('rate');
+  _client = createRateSchemaClient(supabaseUrl, supabaseAnonKey);
   return _client;
 }
 
@@ -856,29 +857,31 @@ export async function getMasterProducts(
   const boundedLimit =
     params?.limit && params.limit > 0 ? Math.min(params.limit, 500) : 200;
 
-  // Audit C1: Prefer server-side SQL RPC `search_master_products` when deployed
+  // Audit C1: Prefer server-side SQL RPC `search_master_products` when deployed.
+  // Every filter defaults to NULL in SQL, so an omitted (undefined) filter is
+  // the same as passing null.
   {
     const { data: rpcRows, error: rpcErr } = await supabase.rpc(
       'search_master_products',
       {
-        p_category_id: resolvedCategoryId,
-        p_brands: brandList,
-        p_search: params?.search?.trim() || null,
-        p_min_price: params?.minPrice ?? null,
-        p_max_price: params?.maxPrice ?? null,
-        p_min_rating: params?.minRating ?? null,
+        p_category_id: resolvedCategoryId ?? undefined,
+        p_brands: brandList ?? undefined,
+        p_search: params?.search?.trim() || undefined,
+        p_min_price: params?.minPrice,
+        p_max_price: params?.maxPrice,
+        p_min_rating: params?.minRating,
         p_ram_gb:
-          params?.ramGb && params.ramGb.length > 0 ? params.ramGb : null,
+          params?.ramGb && params.ramGb.length > 0 ? params.ramGb : undefined,
         p_storage_gb:
           params?.storageGb && params.storageGb.length > 0
             ? params.storageGb
-            : null,
-        p_min_battery_mah: params?.minBatteryMah ?? null,
-        p_min_refresh_rate_hz: params?.minRefreshRateHz ?? null,
-        p_min_fast_charging_w: params?.minFastChargingW ?? null,
-        p_has_5g: params?.has5g ?? null,
-        p_has_nfc: params?.hasNfc ?? null,
-        p_max_screen_size_inch: params?.maxScreenSizeInch ?? null,
+            : undefined,
+        p_min_battery_mah: params?.minBatteryMah,
+        p_min_refresh_rate_hz: params?.minRefreshRateHz,
+        p_min_fast_charging_w: params?.minFastChargingW,
+        p_has_5g: params?.has5g,
+        p_has_nfc: params?.hasNfc,
+        p_max_screen_size_inch: params?.maxScreenSizeInch,
         p_sort: params?.sort || 'default',
         p_limit: boundedLimit,
         p_offset: 0,
