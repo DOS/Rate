@@ -1279,25 +1279,176 @@ async function run() {
   } as unknown as ConstructorParameters<typeof EntityMatcher>[0];
 
   const matcher = new EntityMatcher(matcherStub);
+  const sharedAiSpec = {
+    ram_gb: null,
+    storage_gb: 512,
+    screen_size_inch: null,
+    battery_mah: null,
+    has_5g: undefined,
+    specifications: { design: { colors: ['Original AI Color'] } },
+    key_specs: ['6.8" AMOLED'],
+  };
   (matcher as unknown as { enricher: { fetchSpecsFromAi: () => Promise<unknown> } }).enricher = {
-    fetchSpecsFromAi: async () => ({
-      ram_gb: null,
-      screen_size_inch: null,
-      battery_mah: null,
-      has_5g: undefined,
-      specifications: { design: { colors: [] } },
-      key_specs: ['6.8" AMOLED'],
-    }),
+    fetchSpecsFromAi: async () => sharedAiSpec,
   };
   const enrichOk = await matcher.enrichMasterProductById('master-352');
   assert.equal(enrichOk, true);
   assert.equal(updatedMasterPayload?.['ram_gb'], 12);
+  assert.equal(updatedMasterPayload?.['storage_gb'], 256);
   assert.equal(updatedMasterPayload?.['screen_size_inch'], 6.8);
   assert.equal(updatedMasterPayload?.['battery_mah'], 5000);
   assert.equal(updatedMasterPayload?.['has_5g'], true);
+  assert.deepEqual(
+    (updatedMasterPayload?.['specifications'] as { design?: { colors?: string[] } })?.design
+      ?.colors,
+    ['Titanium Gray']
+  );
+  assert.deepEqual(
+    sharedAiSpec.specifications.design.colors,
+    ['Original AI Color'],
+    'enrichMasterProductById must clone specifications instead of mutating cached AI object'
+  );
+
+  // 9.8 ShopeeIngestionPipeline masterIdHint enrichment & deduplicated review verification chunks (#356)
+  const { ShopeeIngestionPipeline } = await import('./shopee-to-supabase.js');
+  const verifiedInBatches: string[][] = [];
+  let hintedMasterEnriched = false;
+  const ingestStub = {
+    from: (table: string) => {
+      if (table === 'categories') {
+        return {
+          select: async () => ({
+            data: [{ id: 'cat-smartphones', slug: 'smartphones' }],
+            error: null,
+          }),
+        };
+      }
+      if (table === 'merchants') {
+        return {
+          upsert: () => ({
+            select: () => ({
+              single: async () => ({ data: { id: 'merch-356' }, error: null }),
+            }),
+          }),
+        };
+      }
+      if (table === 'master_products') {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: { id: 'master-hint-356', specifications: {} },
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
+      if (table === 'products') {
+        return {
+          upsert: () => ({
+            select: () => ({
+              single: async () => ({ data: { id: 'prod-356' }, error: null }),
+            }),
+          }),
+        };
+      }
+      if (table === 'reviews') {
+        return {
+          select: () => ({
+            eq: () => ({
+              not: async () => ({ data: [{ platform_review_id: 'rev-dup-1' }], error: null }),
+              order: () => ({
+                limit: async () => ({ data: [], error: null }),
+              }),
+            }),
+          }),
+          update: () => ({
+            eq: () => ({
+              in: async (_col: string, ids: string[]) => {
+                verifiedInBatches.push(ids);
+                return { error: null };
+              },
+            }),
+          }),
+        };
+      }
+      throw new Error(`Unexpected table ${table}`);
+    },
+    rpc: async (fn: string) => {
+      if (fn === 'record_price_observation') {
+        return { data: 'unchanged_delta', error: null };
+      }
+      return { data: null, error: null };
+    },
+  } as unknown as NonNullable<
+    ConstructorParameters<typeof ShopeeIngestionPipeline>[0]
+  >['supabaseClient'];
+
+  const pipeline356 = new ShopeeIngestionPipeline({ supabaseClient: ingestStub });
+  (
+    pipeline356 as unknown as {
+      matcher: { enrichMasterProductById: (id: string) => Promise<boolean> };
+    }
+  ).matcher = {
+    enrichMasterProductById: async (id: string) => {
+      if (id === 'master-hint-356') hintedMasterEnriched = true;
+      return true;
+    },
+  };
+
+  await pipeline356.ingestProduct(
+    {
+      platform: 'shopee',
+      itemId: 'item-356',
+      shopId: 'shop-356',
+      url: 'https://shopee.vn/product/356/356',
+      title: 'Điện thoại Apple iPhone 16e 128GB Chính hãng VN/A',
+      priceMin: 16_990_000,
+      priceMax: 16_990_000,
+      currency: 'VND',
+      historicalSold: 10,
+      ratingStar: 5,
+      ratingCount: 2,
+      images: ['https://cf.shopee.vn/file/ip16e.jpg'],
+      models: [],
+      attributes: [],
+      shop: { shopId: 'shop-356', name: 'Apple Flagship Store', isMall: true },
+      reviews: [
+        {
+          reviewId: 'rev-dup-1',
+          author: 'User A',
+          ratingStar: 5,
+          comment: 'Máy dùng rất mượt',
+          images: [],
+          reviewer: { verifiedPurchase: true },
+        },
+        {
+          reviewId: 'rev-dup-1',
+          author: 'User A',
+          ratingStar: 5,
+          comment: 'Máy dùng rất mượt',
+          images: [],
+          reviewer: { verifiedPurchase: true },
+        },
+      ],
+    },
+    undefined,
+    { masterIdHint: 'master-hint-356' }
+  );
+  assert.equal(
+    hintedMasterEnriched,
+    true,
+    'ShopeeIngestionPipeline must enrich hinted master when its specifications object is empty'
+  );
+  assert.deepEqual(
+    verifiedInBatches,
+    [['rev-dup-1']],
+    'ShopeeIngestionPipeline must deduplicate platform_review_id entries when refreshing is_verified_buyer'
+  );
 
   console.log(
-    `✅ [P2/P3 Trust Model & #292/#352] Voter weight, Wilson lower bound (50/52=${wilson50of52} > 1/1=${wilson1of1}), shingle copy seeding (sim=${shingleSim}), affiliate shortlinks, peer floor, ArenaSpecSyncer & Normalizer/EntityMatcher (#352) verified`
+    `✅ [P2/P3 Trust Model & #292/#352/#356] Voter weight, Wilson lower bound (50/52=${wilson50of52} > 1/1=${wilson1of1}), shingle copy seeding (sim=${shingleSim}), affiliate shortlinks, peer floor, ArenaSpecSyncer & Importer hardening (#352, #356) verified`
   );
 
   console.log('\n🎉 ALL AI REVIEW ANALYZER TESTS PASSED!');

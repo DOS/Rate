@@ -136,7 +136,7 @@ function createPipelineStubSupabase(opts: StubPipelineOptions = {}) {
               eq(col: string, val: string) {
                 return {
                   maybeSingle() {
-                    if (col === 'id' && cols === 'id') {
+                    if (col === 'id' && (cols === 'id' || cols === 'id, specifications')) {
                       return Promise.resolve({
                         data: opts.hintRow ?? null,
                         error: opts.hintErr ?? null,

@@ -247,7 +247,7 @@ export class ShopeeIngestionPipeline {
     if (options.masterIdHint) {
       const { data: hintRow, error: hintErr } = await this.supabase
         .from('master_products')
-        .select('id')
+        .select('id, specifications')
         .eq('id', options.masterIdHint)
         .maybeSingle();
       if (hintErr) {
@@ -255,7 +255,26 @@ export class ShopeeIngestionPipeline {
           `Failed to verify masterIdHint (${options.masterIdHint}): ${hintErr.message}`
         );
       }
-      if (hintRow?.id) hinted = { masterId: hintRow.id, isNew: false };
+      if (hintRow?.id) {
+        hinted = { masterId: hintRow.id, isNew: false };
+        const existingSpecs = (hintRow as { specifications?: Record<string, unknown> | null })
+          .specifications;
+        if (
+          existingSpecs !== undefined &&
+          (!existingSpecs || Object.keys(existingSpecs).length === 0)
+        ) {
+          try {
+            await this.matcher.enrichMasterProductById(hintRow.id);
+          } catch (enrichErr: unknown) {
+            const msg = enrichErr instanceof Error ? enrichErr.message : String(enrichErr);
+            platLogger.warn(
+              'ingest.master_hint_enrich_warn',
+              `Could not enrich hinted master ${hintRow.id}: ${msg}`,
+              { masterId: hintRow.id }
+            );
+          }
+        }
+      }
     }
     const { masterId, isNew } =
       hinted ??
@@ -545,21 +564,28 @@ export class ShopeeIngestionPipeline {
       // Rows stored before the platform's purchase flag was captured still carry the
       // column default; refresh it for reviews already in the DB.
       for (const verified of [true, false]) {
-        const ids = product.reviews
-          .filter(r => r.reviewer?.verifiedPurchase === verified)
-          .map(platformReviewIdFor);
+        const ids = Array.from(
+          new Set(
+            product.reviews
+              .filter(r => r.reviewer?.verifiedPurchase === verified)
+              .map(platformReviewIdFor)
+          )
+        );
         if (ids.length === 0) continue;
-        const { error: verifiedErr } = await this.supabase
-          .from('reviews')
-          .update({ is_verified_buyer: verified })
-          .eq('product_id', productId)
-          .in('platform_review_id', ids);
-        if (verifiedErr) {
-          platLogger.warn(
-            'ingest.reviews_verified_refresh_warn',
-            `Could not refresh is_verified_buyer: ${verifiedErr.message}`,
-            { productId }
-          );
+        for (let i = 0; i < ids.length; i += 100) {
+          const chunk = ids.slice(i, i + 100);
+          const { error: verifiedErr } = await this.supabase
+            .from('reviews')
+            .update({ is_verified_buyer: verified })
+            .eq('product_id', productId)
+            .in('platform_review_id', chunk);
+          if (verifiedErr) {
+            platLogger.warn(
+              'ingest.reviews_verified_refresh_warn',
+              `Could not refresh is_verified_buyer: ${verifiedErr.message}`,
+              { productId }
+            );
+          }
         }
       }
       await report?.('reviews');
