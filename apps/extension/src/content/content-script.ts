@@ -140,11 +140,11 @@ function renderShadowTrustPill(lookup: ExtensionLookupData): void {
         }
         .top-row {
           display: flex;
+          flex-wrap: wrap;
           align-items: center;
-          gap: 8px;
+          gap: 4px 8px;
           font-size: 13px;
           font-weight: 700;
-          white-space: nowrap;
         }
         .verdict-badge {
           background: ${theme.bg};

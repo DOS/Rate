@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import type {
   DiscountVerdictType,
@@ -135,10 +135,13 @@ export default function PriceHistorySection({
 
   // Axis labels are sized in viewBox units; scale them so they render at 13px
   // (the text floor) whatever width the chart is drawn at.
-  const chartRef = useRef<SVGSVGElement | null>(null);
+  // A callback ref re-attaches the observer whenever the SVG remounts (it is
+  // unmounted while the selected offer has no points).
   const [labelUnits, setLabelUnits] = useState(13);
-  useEffect(() => {
-    const el = chartRef.current;
+  const chartObserver = useRef<ResizeObserver | null>(null);
+  const chartRef = useCallback((el: SVGSVGElement | null) => {
+    chartObserver.current?.disconnect();
+    chartObserver.current = null;
     if (!el || typeof ResizeObserver === 'undefined') return;
     const update = () => {
       const rect = el.getBoundingClientRect();
@@ -147,9 +150,8 @@ export default function PriceHistorySection({
       setLabelUnits(Math.round((13 / scale) * 10) / 10);
     };
     update();
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-    return () => ro.disconnect();
+    chartObserver.current = new ResizeObserver(update);
+    chartObserver.current.observe(el);
   }, []);
 
   // SVG Chart dimensions & coordinate mapping
