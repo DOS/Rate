@@ -499,6 +499,8 @@ async function runTests() {
     parseCompareSlugsParam,
     parseWatchlistSlugsParam,
     parseVersusQueryParams,
+    parseReviewsQueryParams,
+    parseProductsFilterBounds,
     resolveReviewVoteInput,
   } = (
     'BoundedSlidingWindowRateLimiter' in apiHandlerMod
@@ -591,6 +593,53 @@ async function runTests() {
     ),
     null,
     'Malformed slug characters must be rejected by parseVersusQueryParams'
+  );
+  assert.deepEqual(
+    parseReviewsQueryParams(
+      new URLSearchParams('slug=iphone-16-pro-max-256gb&hideFake=true')
+    ),
+    {
+      masterProductId: null,
+      slug: 'iphone-16-pro-max-256gb',
+      hideFake: true,
+    }
+  );
+  assert.equal(
+    parseReviewsQueryParams(
+      new URLSearchParams('masterProductId=not-a-uuid&slug=iphone-16-pro-max')
+    ),
+    null,
+    'parseReviewsQueryParams must reject malformed masterProductId even when slug is present'
+  );
+  assert.equal(
+    parseReviewsQueryParams(new URLSearchParams('slug=bad<script>slug')),
+    null,
+    'parseReviewsQueryParams must reject malformed slug characters'
+  );
+  assert.deepEqual(
+    parseProductsFilterBounds(
+      new URLSearchParams(
+        'category=LAPTOPS&brands=Apple,apple,bad<script>,Samsung&minPrice=15000000&maxPrice=35000000'
+      )
+    ),
+    {
+      categorySlug: 'laptops',
+      brands: ['Apple', 'Samsung'],
+      minPrice: 15_000_000,
+      maxPrice: 35_000_000,
+    }
+  );
+  assert.equal(
+    parseProductsFilterBounds(new URLSearchParams('category=unknown-cat')),
+    null,
+    'parseProductsFilterBounds must reject unknown category slugs'
+  );
+  assert.equal(
+    parseProductsFilterBounds(
+      new URLSearchParams('minPrice=30000000&maxPrice=20000000')
+    ),
+    null,
+    'parseProductsFilterBounds must reject inverted price ranges (minPrice > maxPrice)'
   );
   assert.equal(
     resolveReviewVoteInput({}),

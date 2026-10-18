@@ -11,7 +11,9 @@ import {
   PUBLIC_API_CORS_HEADERS,
   jsonApiError,
   parseBoundedIntParam,
+  parseBoundedNumberParam,
   parseBoundedStringParam,
+  parseProductsFilterBounds,
 } from '@/server/rate/api-handler';
 
 export async function OPTIONS() {
@@ -60,17 +62,18 @@ const VALID_PRODUCT_SORTS = new Set<
 export async function GET(request: NextRequest) {
   try {
     const sp = request.nextUrl.searchParams;
-    const categorySlug = sp.get('category') || 'smartphones';
+    const filterBounds = parseProductsFilterBounds(sp);
+    if (!filterBounds) {
+      return jsonApiError(
+        400,
+        'Invalid category slug or price filter range (minPrice must not exceed maxPrice)',
+        undefined,
+        PUBLIC_API_CORS_HEADERS
+      );
+    }
+    const { categorySlug, brands, minPrice, maxPrice } = filterBounds;
     const includeFacets =
       sp.get('facets') === '1' || sp.get('facets') === 'true';
-
-    const brandsParam = sp.get('brands') || sp.get('brand');
-    const brands = brandsParam
-      ? brandsParam
-          .split(',')
-          .map((b) => b.trim())
-          .filter(Boolean)
-      : undefined;
 
     const rawSort = sp.get('sort') as MasterProductFilterParams['sort'] | null;
     const sort: NonNullable<MasterProductFilterParams['sort']> =
@@ -87,9 +90,13 @@ export async function GET(request: NextRequest) {
       categorySlug,
       brands,
       search: parseBoundedStringParam(sp.get('q'), 160) || undefined,
-      minPrice: parsePositiveNum(sp.get('minPrice')),
-      maxPrice: parsePositiveNum(sp.get('maxPrice')),
-      minRating: parsePositiveNum(sp.get('minRating') || sp.get('rating')),
+      minPrice,
+      maxPrice,
+      minRating: parseBoundedNumberParam(
+        sp.get('minRating') || sp.get('rating'),
+        0,
+        5
+      ),
       ramGb: parseNumArray(sp.get('ramGb') || sp.get('ram')),
       storageGb: parseNumArray(
         sp.get('storageGb') || sp.get('storage') || sp.get('rom')
