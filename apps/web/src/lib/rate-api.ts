@@ -1101,6 +1101,7 @@ export async function getMasterProductBySlug(
 
 interface RawTrustViewRow {
   id: string;
+  cluster_id?: string | null;
   merchant_id: string;
   platform: string;
   title: string;
@@ -1132,6 +1133,7 @@ interface RawMerchantRow {
 
 interface RawOfferRow {
   id: string;
+  cluster_id?: string | null;
   platform: string;
   title: string;
   price_current: number | string;
@@ -1141,6 +1143,69 @@ interface RawOfferRow {
   rating_count: number;
   url: string;
   merchants?: RawMerchantRow | RawMerchantRow[] | null;
+}
+
+function mapTrustViewRowToMerchantOffer(row: RawTrustViewRow): MerchantOffer {
+  const combinedRisk = Number(row.threat_risk_score || 0);
+  const dosafeRisk = Number(row.dosafe_risk_score ?? combinedRisk);
+  const reviewRisk = Number(row.review_risk_score || 0);
+  return {
+    id: row.id,
+    platform: row.platform,
+    title: row.title,
+    price_current: Number(row.price_current),
+    price_original: row.price_original ? Number(row.price_original) : null,
+    stock: row.stock,
+    rating_star: Number(row.rating_star),
+    rating_count: row.rating_count,
+    url: row.url,
+    merchant: {
+      id: row.merchant_id || '',
+      name: row.merchant_name || 'Gian hàng',
+      platform: row.platform,
+      is_official: Boolean(row.merchant_is_official),
+      rating_star: null,
+      follower_count: 0,
+      location: row.merchant_location || null,
+      risk_score: Math.max(combinedRisk, dosafeRisk, reviewRisk),
+      dosafe_risk_score: dosafeRisk,
+      review_risk_score: reviewRisk,
+      review_risk_breakdown: row.review_risk_breakdown || null,
+    },
+  };
+}
+
+function mapOfferRowToMerchantOffer(item: RawOfferRow): MerchantOffer {
+  const merchantObj = Array.isArray(item.merchants)
+    ? item.merchants[0]
+    : item.merchants;
+  const dosafeRisk = Number(merchantObj?.risk_score || 0);
+  return {
+    id: item.id,
+    platform: item.platform,
+    title: item.title,
+    price_current: Number(item.price_current),
+    price_original: item.price_original ? Number(item.price_original) : null,
+    stock: item.stock,
+    rating_star: Number(item.rating_star),
+    rating_count: item.rating_count,
+    url: item.url,
+    merchant: {
+      id: merchantObj?.id || '',
+      name: merchantObj?.name || 'Gian hàng',
+      platform: merchantObj?.platform || item.platform,
+      is_official: Boolean(merchantObj?.is_official),
+      rating_star: merchantObj?.rating_star
+        ? Number(merchantObj.rating_star)
+        : null,
+      follower_count: merchantObj?.follower_count || 0,
+      location: merchantObj?.location || null,
+      risk_score: dosafeRisk,
+      dosafe_risk_score: dosafeRisk,
+      review_risk_score: 0,
+      review_risk_breakdown: null,
+    },
+  };
 }
 
 /**
@@ -1160,35 +1225,9 @@ export async function getMasterProductOffers(
     .order('price_current', { ascending: true });
 
   if (!viewErr && viewData) {
-    return (viewData as unknown as RawTrustViewRow[]).map((row) => {
-      const combinedRisk = Number(row.threat_risk_score || 0);
-      const dosafeRisk = Number(row.dosafe_risk_score ?? combinedRisk);
-      const reviewRisk = Number(row.review_risk_score || 0);
-      return {
-        id: row.id,
-        platform: row.platform,
-        title: row.title,
-        price_current: Number(row.price_current),
-        price_original: row.price_original ? Number(row.price_original) : null,
-        stock: row.stock,
-        rating_star: Number(row.rating_star),
-        rating_count: row.rating_count,
-        url: row.url,
-        merchant: {
-          id: row.merchant_id || '',
-          name: row.merchant_name || 'Gian hàng',
-          platform: row.platform,
-          is_official: Boolean(row.merchant_is_official),
-          rating_star: null,
-          follower_count: 0,
-          location: row.merchant_location || null,
-          risk_score: Math.max(combinedRisk, dosafeRisk, reviewRisk),
-          dosafe_risk_score: dosafeRisk,
-          review_risk_score: reviewRisk,
-          review_risk_breakdown: row.review_risk_breakdown || null,
-        },
-      };
-    });
+    return (viewData as unknown as RawTrustViewRow[]).map(
+      mapTrustViewRowToMerchantOffer
+    );
   }
 
   // Fallback with explicit column list matching column-level SELECT grants on rate.merchants
@@ -1197,6 +1236,7 @@ export async function getMasterProductOffers(
     .select(
       `
       id,
+      cluster_id,
       platform,
       title,
       price_current,
@@ -1225,38 +1265,96 @@ export async function getMasterProductOffers(
     return [];
   }
 
-  return (data as unknown as RawOfferRow[]).map((item) => {
-    const merchantObj = Array.isArray(item.merchants)
-      ? item.merchants[0]
-      : item.merchants;
-    const dosafeRisk = Number(merchantObj?.risk_score || 0);
-    return {
-      id: item.id,
-      platform: item.platform,
-      title: item.title,
-      price_current: Number(item.price_current),
-      price_original: item.price_original ? Number(item.price_original) : null,
-      stock: item.stock,
-      rating_star: Number(item.rating_star),
-      rating_count: item.rating_count,
-      url: item.url,
-      merchant: {
-        id: merchantObj?.id || '',
-        name: merchantObj?.name || 'Gian hàng',
-        platform: merchantObj?.platform || item.platform,
-        is_official: Boolean(merchantObj?.is_official),
-        rating_star: merchantObj?.rating_star
-          ? Number(merchantObj.rating_star)
-          : null,
-        follower_count: merchantObj?.follower_count || 0,
-        location: merchantObj?.location || null,
-        risk_score: dosafeRisk,
-        dosafe_risk_score: dosafeRisk,
-        review_risk_score: 0,
-        review_risk_breakdown: null,
-      },
-    };
-  });
+  return (data as unknown as RawOfferRow[]).map(mapOfferRowToMerchantOffer);
+}
+
+/**
+ * Batch-fetch merchant listing offers for multiple master products in chunked `.in('cluster_id', ...)` queries.
+ * Eliminates N+1 query storms in Cross-Platform Deal Radar and multi-product aggregations.
+ */
+export async function getMasterProductOffersBatch(
+  masterIds: readonly string[]
+): Promise<Map<string, MerchantOffer[]>> {
+  const uniqueIds = Array.from(
+    new Set(masterIds.map((id) => id.trim()).filter(Boolean))
+  );
+  const offersByMaster = new Map<string, MerchantOffer[]>(
+    uniqueIds.map((id) => [id, []])
+  );
+  if (uniqueIds.length === 0) {
+    return offersByMaster;
+  }
+
+  const supabase = getRateClient();
+  const chunkSize = 150;
+
+  for (let i = 0; i < uniqueIds.length; i += chunkSize) {
+    const batchIds = uniqueIds.slice(i, i + chunkSize);
+
+    const { data: viewData, error: viewErr } = await supabase
+      .from('v_products_with_merchant_trust')
+      .select('*')
+      .in('cluster_id', batchIds)
+      .order('price_current', { ascending: true });
+
+    if (!viewErr && viewData) {
+      for (const row of viewData as unknown as RawTrustViewRow[]) {
+        const cid = row.cluster_id ? String(row.cluster_id) : '';
+        if (!cid) continue;
+        const list = offersByMaster.get(cid) ?? [];
+        list.push(mapTrustViewRowToMerchantOffer(row));
+        offersByMaster.set(cid, list);
+      }
+      continue;
+    }
+
+    const { data, error } = await supabase
+      .from('products')
+      .select(
+        `
+        id,
+        cluster_id,
+        platform,
+        title,
+        price_current,
+        price_original,
+        stock,
+        rating_star,
+        rating_count,
+        url,
+        merchants (
+          id,
+          name,
+          platform,
+          is_official,
+          rating_star,
+          follower_count,
+          location,
+          risk_score
+        )
+      `
+      )
+      .in('cluster_id', batchIds)
+      .order('price_current', { ascending: true });
+
+    if (error || !data) {
+      log.error('batch offers fetch failed', {
+        batchSize: batchIds.length,
+        message: error?.message,
+      });
+      continue;
+    }
+
+    for (const item of data as unknown as RawOfferRow[]) {
+      const cid = item.cluster_id ? String(item.cluster_id) : '';
+      if (!cid) continue;
+      const list = offersByMaster.get(cid) ?? [];
+      list.push(mapOfferRowToMerchantOffer(item));
+      offersByMaster.set(cid, list);
+    }
+  }
+
+  return offersByMaster;
 }
 
 interface RawReviewFlagRow {

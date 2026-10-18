@@ -580,8 +580,22 @@ async function runTests() {
   assert.ok(lookupParamNames.includes('skuText'));
   assert.ok(lookupParamNames.includes('externalId'));
 
+  const rateApiBatchMod = await import('../../web/src/lib/rate-api.js');
+  const { getMasterProductOffersBatch } = (
+    'getMasterProductOffersBatch' in rateApiBatchMod
+      ? rateApiBatchMod
+      : (rateApiBatchMod as unknown as { default: typeof rateApiBatchMod })
+          .default
+  ) as typeof rateApiBatchMod;
+  const emptyBatchMap = await getMasterProductOffersBatch(['', '   ']);
+  assert.equal(
+    emptyBatchMap.size,
+    0,
+    'getMasterProductOffersBatch must return an empty Map for empty/whitespace IDs without querying PostgREST'
+  );
+
   console.log(
-    '  ✅ [5/6] Zero-Trust Quarantine, Opt-In Consent, Bounded Rate Limiter, OpenAPI 3.1 Contract & Full 10/10 Platform Capability Matrix passed'
+    '  ✅ [5/6] Zero-Trust Quarantine, Opt-In Consent, Bounded Rate Limiter, OpenAPI 3.1 Contract, Batched Offers & Full 10/10 Platform Capability Matrix passed'
   );
 
   // 6. Live Read-Only Lookup against Supabase `rate` schema (when real credentials are present)

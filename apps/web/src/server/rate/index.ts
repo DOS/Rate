@@ -8,6 +8,7 @@ import {
   getMasterProductCategorySlug,
   getMasterProductHref,
   getMasterProductOffers as _getMasterProductOffers,
+  getMasterProductOffersBatch as _getMasterProductOffersBatch,
   getMasterProductPriceHistory as _getMasterProductPriceHistory,
   getMasterProductReviews as _getMasterProductReviews,
   getMasterProductReviewSummary as _getMasterProductReviewSummary,
@@ -153,27 +154,33 @@ export const getCachedMasterProductReviews = cache((masterProductId: string) =>
 );
 
 export const getCachedMasterProductReviewSummary = cache(
-  (masterProductId: string, existingReviews?: import('../../lib/rate-api').ReviewItem[]) =>
+  (
+    masterProductId: string,
+    existingReviews?: import('../../lib/rate-api').ReviewItem[]
+  ) =>
     withRateDataCache(
-      _getMasterProductReviewSummary,
+      (id: string) => _getMasterProductReviewSummary(id, existingReviews),
       ['rate-master-product-review-summary', masterProductId],
       {
         revalidate: 300,
         tags: [RATE_CACHE_TAGS.REVIEWS],
       }
-    )(masterProductId, existingReviews)
+    )(masterProductId)
 );
 
 export const getCachedMasterProductPriceHistory = cache(
-  (masterProductId: string, existingOffers?: import('../../lib/rate-api').MerchantOffer[]) =>
+  (
+    masterProductId: string,
+    existingOffers?: import('../../lib/rate-api').MerchantOffer[]
+  ) =>
     withRateDataCache(
-      _getMasterProductPriceHistory,
+      (id: string) => _getMasterProductPriceHistory(id, existingOffers),
       ['rate-master-product-price-history', masterProductId],
       {
         revalidate: 600,
         tags: [RATE_CACHE_TAGS.PRICE_HISTORY],
       }
-    )(masterProductId, existingOffers)
+    )(masterProductId)
 );
 
 export const getCachedCompareMasterProducts = cache((slugsCsv: string) =>
@@ -234,6 +241,7 @@ export const getCachedInspectProductOrShopUrl = cache(
 
 export {
   _getMasterProducts as getMasterProducts,
+  _getMasterProductOffersBatch as getMasterProductOffersBatch,
   _compareMasterProducts as compareMasterProducts,
   _getMerchantsList as getMerchantsList,
   _getMerchantProfileById as getMerchantProfileById,
