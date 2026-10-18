@@ -312,9 +312,9 @@ export default function DeepInspectWorkspace({
     <div className="bg-light py-5">
       <div className="container">
         {/* Top Hero Inspector Card */}
-        <div className="rate-scoreboard-dark p-lg-5 mb-4 p-4">
+        <div className="rate-scoreboard-dark rate-surface-dark p-lg-5 mb-4 p-4">
           <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-            <span className="rate-eyebrow text-white">{t('badge')}</span>
+            <span className="rate-eyebrow">{t('badge')}</span>
             <div className="d-flex align-items-center flex-wrap gap-2">
               <button
                 type="button"
@@ -364,7 +364,7 @@ export default function DeepInspectWorkspace({
                 </span>
                 <input
                   type="text"
-                  className="form-control border-0"
+                  className="form-control text-dark border-0"
                   placeholder={t('inputPlaceholder')}
                   value={queryInput}
                   onChange={(e) => setQueryInput(e.target.value)}
@@ -375,7 +375,7 @@ export default function DeepInspectWorkspace({
               <button
                 type="submit"
                 disabled={loading}
-                className="btn btn-danger btn-lg fw-semibold d-flex align-items-center justify-content-center gap-2"
+                className="btn btn-primary fw-semibold d-flex align-items-center justify-content-center gap-2 px-3 lh-sm"
               >
                 <BsSearch />
                 <span>{loading ? t('inspectingBtn') : t('inspectBtn')}</span>
@@ -437,7 +437,7 @@ export default function DeepInspectWorkspace({
                         <div className="small text-muted mb-1">
                           {t('currentPriceLabel')}
                         </div>
-                        <div className="h5 fw-bold text-danger font-monospace mb-0">
+                        <div className="h5 fw-bold text-danger rate-tabular mb-0">
                           {Number(
                             matchedOffer?.price_current ||
                               master?.min_price ||
@@ -453,7 +453,7 @@ export default function DeepInspectWorkspace({
                         <div className="small text-muted mb-1">
                           {t('claimedOriginalLabel')}
                         </div>
-                        <div className="h6 fw-semibold text-secondary text-decoration-line-through font-monospace mb-0">
+                        <div className="h6 fw-semibold text-secondary text-decoration-line-through rate-tabular mb-0">
                           {matchedOffer?.price_original
                             ? `${Number(
                                 matchedOffer.price_original
@@ -468,7 +468,7 @@ export default function DeepInspectWorkspace({
                         <div className="small text-muted mb-1">
                           {t('historicalLowLabel')}
                         </div>
-                        <div className="h6 fw-bold text-success font-monospace mb-0">
+                        <div className="h6 fw-bold text-success rate-tabular mb-0">
                           {priceHistory?.lowestEverPrice
                             ? `${Number(
                                 priceHistory.lowestEverPrice
@@ -485,7 +485,7 @@ export default function DeepInspectWorkspace({
                         <div className="small text-muted mb-1">
                           {t('historicalHighLabel')}
                         </div>
-                        <div className="h6 fw-bold text-dark font-monospace mb-0">
+                        <div className="h6 fw-bold text-dark rate-tabular mb-0">
                           {priceHistory?.highestEverPrice
                             ? `${Number(
                                 priceHistory.highestEverPrice

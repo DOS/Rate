@@ -497,7 +497,7 @@ export default function DealFinderWorkspace({
               <span className="fw-semibold text-secondary">
                 {t('maxBudgetLabel')}
               </span>
-              <strong className="text-danger font-monospace">
+              <strong className="text-danger rate-tabular">
                 ≤ {maxBudgetVnd.toLocaleString('vi-VN')} ₫
               </strong>
             </div>
@@ -605,7 +605,7 @@ export default function DealFinderWorkspace({
                           </div>
                         </div>
                         <div className="flex-shrink-0 text-end">
-                          <div className="fw-bold text-success font-monospace small">
+                          <div className="fw-bold text-success rate-tabular small">
                             {g.priceCurrent.toLocaleString('vi-VN')} ₫
                           </div>
                           <span className="badge bg-success rounded-pill">
@@ -654,7 +654,7 @@ export default function DealFinderWorkspace({
                           </div>
                         </div>
                         <div className="flex-shrink-0 text-end">
-                          <div className="fw-bold text-danger font-monospace small">
+                          <div className="fw-bold text-danger rate-tabular small">
                             {trap.priceCurrent.toLocaleString('vi-VN')} ₫
                           </div>
                           <span className="badge bg-danger rounded-pill">
@@ -700,7 +700,7 @@ export default function DealFinderWorkspace({
                           </div>
                         </div>
                         <div className="flex-shrink-0 text-end">
-                          <div className="fw-bold text-success font-monospace small">
+                          <div className="fw-bold text-success rate-tabular small">
                             -{s.spreadVnd.toLocaleString('vi-VN')} ₫
                           </div>
                           <span className="badge bg-warning text-dark rounded-pill">
@@ -765,7 +765,7 @@ export default function DealFinderWorkspace({
                       />
                     </div>
                     {deal.spreadSavingsVnd > 0 && (
-                      <span className="badge bg-success-subtle text-success rounded-pill font-monospace">
+                      <span className="badge bg-success-subtle text-success rounded-pill rate-tabular">
                         {t('spreadSavingsBadge', {
                           amount: deal.spreadSavingsVnd.toLocaleString('vi-VN'),
                         })}
@@ -787,7 +787,7 @@ export default function DealFinderWorkspace({
                       >
                         {deal.name}
                       </Link>
-                      <div className="text-danger fw-bold font-monospace mt-1">
+                      <div className="text-danger fw-bold rate-tabular mt-1">
                         {deal.minPrice.toLocaleString('vi-VN')} ₫{' '}
                         <span className="text-secondary small fw-normal">
                           {t('costPerPointSub', {

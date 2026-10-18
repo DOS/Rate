@@ -28,11 +28,16 @@ import BackToTop from '../components/back-to-top';
 import CompareTrayBar from '@/components/compare/CompareTrayBar';
 import CategoryCatalogToolbar from '@/components/leaderboard/CategoryCatalogToolbar';
 import {
+  BsArrowLeftRight,
+  BsArrowRight,
   BsBatteryHalf,
   BsCpu,
   BsLightningCharge,
   BsPhone,
   BsSearch,
+  BsTrophy,
+  BsGraphDownArrow,
+  BsExclamationTriangle,
 } from 'react-icons/bs';
 import type { KeySpecs, ProductSpecifications } from '@repo/shared-data';
 
@@ -285,7 +290,7 @@ export async function CategoryCatalogContent({
 
       {/* Hero Banner (DESIGN.md v2.0 Dark Obsidian + DOS Crimson Glow) */}
       <div
-        className="hero-banner rate-ink-on-dark position-relative overflow-hidden"
+        className="hero-banner rate-surface-dark rate-ink-on-dark position-relative overflow-hidden"
         style={{
           background:
             'radial-gradient(circle at 18% 22%, rgba(216, 48, 48, 0.16), transparent 45%), radial-gradient(circle at 82% 18%, rgba(99, 102, 241, 0.14), transparent 42%), linear-gradient(180deg, #0f1113 0%, #141821 100%)',
@@ -298,29 +303,9 @@ export async function CategoryCatalogContent({
           <div className="row justify-content-center align-items-center">
             <div className="col-xl-12 col-lg-12 col-md-12 col-sm-12">
               <div className="position-relative mt-2 text-start">
-                <div className="d-flex align-items-center mb-3 flex-wrap gap-2">
-                  <span
-                    className="badge rounded-pill px-3 py-2"
-                    style={{
-                      backgroundColor: 'rgba(255, 255, 255, 0.07)',
-                      border: '1px solid rgba(255, 255, 255, 0.14)',
-                      color: '#f8fafc',
-                    }}
-                  >
-                    📂 Directory: {schema.directoryName}
-                  </span>
-                  <span
-                    className="badge rounded-pill px-3 py-2"
-                    style={{
-                      backgroundColor: 'rgba(216, 48, 48, 0.16)',
-                      border: '1px solid rgba(216, 48, 48, 0.38)',
-                      color: '#ff8585',
-                    }}
-                  >
-                    Category:{' '}
-                    {facets.currentCategory?.name || schema.categoryTitle}
-                  </span>
-                </div>
+                <span className="rate-eyebrow mb-3">
+                  {schema.directoryName} · {schema.categoryTitle}
+                </span>
                 <h1
                   className="fw-bold mb-2 text-white"
                   style={{
@@ -410,7 +395,7 @@ export async function CategoryCatalogContent({
                         <div className="form-group mb-0">
                           <div className="mobSearch d-flex align-items-center justify-content-start">
                             <div className="flexStart ps-2">
-                              <span className="fw-semibold text-dark">
+                              <span className="fw-semibold text-dark text-nowrap">
                                 {t('page.searchLabel')}
                               </span>
                             </div>
@@ -525,7 +510,7 @@ export async function CategoryCatalogContent({
               {/* Results Header + Compare Button + Sort Dropdown */}
               <div className="row align-items-center justify-content-between g-2 mb-4">
                 <div className="col-xl-7 col-lg-7 col-md-7 col-sm-12">
-                  <div className="d-flex align-items-center flex-wrap gap-2">
+                  <div className="d-flex align-items-center flex-wrap gap-2 gap-md-3">
                     <h6 className="m-0">
                       {t('page.foundPrefix')}{' '}
                       <span className="text-primary fw-bold">
@@ -539,9 +524,9 @@ export async function CategoryCatalogContent({
                           .map((p) => p.slug)
                           .slice(0, 3)
                           .join(',')}`}
-                        className="badge bg-primary-subtle text-primary text-decoration-none rounded-pill fw-semibold px-3 py-2"
+                        className="rate-results-link"
                       >
-                        <BsLightningCharge className="me-1" />
+                        <BsLightningCharge aria-hidden="true" />
                         {products.length >= 3
                           ? t('page.quickCompare3')
                           : t('page.quickCompare2')}
@@ -550,8 +535,9 @@ export async function CategoryCatalogContent({
                     {products.length >= 2 && products[0] && products[1] && (
                       <Link
                         href={`/compare/${products[0].slug}-vs-${products[1].slug}`}
-                        className="badge bg-danger-subtle text-danger text-decoration-none rounded-pill fw-semibold px-3 py-2"
+                        className="rate-results-link"
                       >
+                        <BsArrowLeftRight aria-hidden="true" />
                         {t('page.versus1v1Badge', {
                           brandA: products[0].brand,
                           brandB: products[1].brand,
@@ -560,8 +546,9 @@ export async function CategoryCatalogContent({
                     )}
                     <Link
                       href={`/leaderboard?cat=${categorySlug}`}
-                      className="badge bg-dark text-decoration-none rounded-pill fw-semibold px-3 py-2 text-white"
+                      className="rate-results-link"
                     >
+                      <BsTrophy aria-hidden="true" />
                       {t('page.leaderboardBadge')}
                     </Link>
                   </div>
@@ -620,101 +607,117 @@ export async function CategoryCatalogContent({
                 (categoryDealRadar.genuineDeals.length > 0 ||
                   categoryDealRadar.fakeSaleTraps.length > 0) && (
                   <div
-                    className="rate-card mb-4 p-3"
+                    className="rate-card rate-home-radar mb-4"
                     data-testid="category-deal-radar"
                   >
-                    <div className="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                    <div className="rate-radar-spread-head">
                       <div>
-                        <span className="badge bg-dark rounded-pill text-warning me-2">
+                        <span className="rate-eyebrow mb-2">
                           {t('page.radarBannerBadge', {
                             title: schema.categoryTitle,
                           })}
                         </span>
-                        <span className="small text-secondary">
+                        <div className="rate-radar-item-meta">
                           {t('page.radarAnalyzedSub', {
                             count: categoryDealRadar.totalOffersAnalyzed,
                           })}
-                        </span>
+                        </div>
                       </div>
-                      <Link
-                        href="/deals"
-                        className="btn btn-sm btn-outline-danger rounded-pill fw-semibold px-3"
-                      >
+                      <Link href="/deals">
                         {t('page.viewAllRadarBtn')}
+                        <BsArrowRight aria-hidden="true" />
                       </Link>
                     </div>
-                    <div className="row g-2">
+
+                    {categoryDealRadar.genuineDeals.length > 0 && (
+                      <h3 className="rate-radar-list-title is-good mt-3">
+                        <BsGraphDownArrow aria-hidden="true" />
+                        {t('page.radarDealsTitle')}
+                      </h3>
+                    )}
+                    <ul className="rate-radar-list">
                       {categoryDealRadar.genuineDeals.slice(0, 2).map((g) => (
-                        <div key={g.id} className="col-md-6">
-                          <div className="rounded-3 border-success-subtle bg-success-subtle bg-opacity-10 d-flex justify-content-between align-items-center border p-2">
-                            <div className="overflow-hidden pe-2">
-                              <Link
-                                href={g.productHref}
-                                className="fw-bold text-dark text-decoration-none d-block text-truncate small"
-                              >
-                                🟢 {g.productName}
-                              </Link>
-                              <div className="text-secondary small">
-                                {g.platform.toUpperCase()} • {g.merchantName}
-                              </div>
-                            </div>
-                            <div className="flex-shrink-0 text-end">
-                              <div className="fw-bold text-success font-monospace small">
-                                {g.priceCurrent.toLocaleString('vi-VN')} ₫
-                              </div>
-                              <span className="badge bg-success rounded-pill">
-                                {t('page.vsMedianBadge', {
-                                  pct: g.savingsVsMedianPct,
-                                })}
+                        <li key={g.id}>
+                          <div className="rate-radar-item-main">
+                            <Link
+                              href={g.productHref}
+                              className="text-truncate"
+                            >
+                              {g.productName}
+                            </Link>
+                            <span className="rate-radar-item-meta text-truncate">
+                              <span className="rate-radar-platform">
+                                {g.platform}
                               </span>
-                            </div>
+                              {g.merchantName}
+                            </span>
                           </div>
-                        </div>
+                          <div className="rate-radar-item-side">
+                            <span className="rate-radar-price">
+                              {g.priceCurrent.toLocaleString('vi-VN')} ₫
+                            </span>
+                            <span className="rate-radar-tag is-good">
+                              {t('page.vsMedianBadge', {
+                                pct: g.savingsVsMedianPct,
+                              })}
+                            </span>
+                          </div>
+                        </li>
                       ))}
+                    </ul>
+                    {categoryDealRadar.fakeSaleTraps.length > 0 && (
+                      <h3 className="rate-radar-list-title is-bad mt-3">
+                        <BsExclamationTriangle aria-hidden="true" />
+                        {t('page.radarTrapsTitle')}
+                      </h3>
+                    )}
+                    <ul className="rate-radar-list">
                       {categoryDealRadar.fakeSaleTraps
                         .slice(0, 2)
                         .map((trap) => (
-                          <div key={trap.id} className="col-md-6">
-                            <div className="rounded-3 border-danger-subtle bg-danger-subtle bg-opacity-10 d-flex justify-content-between align-items-center border p-2">
-                              <div className="overflow-hidden pe-2">
-                                <Link
-                                  href={trap.productHref}
-                                  className="fw-bold text-dark text-decoration-none d-block text-truncate small"
-                                >
-                                  🚨 {trap.productName}
-                                </Link>
-                                <div className="text-secondary small">
-                                  {trap.platform.toUpperCase()} •{' '}
-                                  {trap.merchantName}
-                                </div>
-                              </div>
-                              <div className="flex-shrink-0 text-end">
-                                <div className="fw-bold text-danger font-monospace small">
-                                  {trap.priceCurrent.toLocaleString('vi-VN')} ₫
-                                </div>
-                                <span className="badge bg-danger rounded-pill">
-                                  {t('page.fakeMarkupBadge', {
-                                    pct: trap.fakeMarkupPct,
-                                  })}
+                          <li key={trap.id}>
+                            <div className="rate-radar-item-main">
+                              <Link
+                                href={trap.productHref}
+                                className="text-truncate"
+                              >
+                                {trap.productName}
+                              </Link>
+                              <span className="rate-radar-item-meta text-truncate">
+                                <span className="rate-radar-platform">
+                                  {trap.platform}
                                 </span>
-                              </div>
+                                {trap.merchantName}
+                              </span>
                             </div>
-                          </div>
+                            <div className="rate-radar-item-side">
+                              <span className="rate-radar-price">
+                                {trap.priceCurrent.toLocaleString('vi-VN')} ₫
+                              </span>
+                              <span className="rate-radar-tag is-bad">
+                                {t('page.fakeMarkupBadge', {
+                                  pct: trap.fakeMarkupPct,
+                                })}
+                              </span>
+                            </div>
+                          </li>
                         ))}
-                    </div>
+                    </ul>
+
                     {Array.isArray(categoryDealRadar.priceSpreadLeaders) &&
                       categoryDealRadar.priceSpreadLeaders.length > 0 && (
                         <div
-                          className="border-top mt-2 pt-2"
+                          className="rate-radar-spread"
                           data-testid="category-price-spread-leaders"
                         >
-                          <div className="d-flex justify-content-between align-items-center mb-1 flex-wrap gap-1">
-                            <span className="small fw-semibold text-dark">
+                          <div className="rate-radar-spread-head">
+                            <h3 className="rate-radar-list-title">
+                              <BsArrowLeftRight aria-hidden="true" />
                               {t('page.spreadHeader', {
                                 title: schema.categoryTitle,
                               })}
-                            </span>
-                            <span className="small text-muted">
+                            </h3>
+                            <span className="rate-radar-item-meta mb-3">
                               {t('page.spreadSub')}
                             </span>
                           </div>
@@ -722,25 +725,36 @@ export async function CategoryCatalogContent({
                             {categoryDealRadar.priceSpreadLeaders
                               .slice(0, 2)
                               .map((sp) => (
-                                <div key={sp.productSlug} className="col-md-6">
-                                  <div className="rounded-3 bg-light d-flex justify-content-between align-items-center border px-2 py-1">
-                                    <Link
-                                      href={sp.productHref}
-                                      className="fw-semibold text-dark text-decoration-none text-truncate small me-2"
-                                    >
-                                      {sp.productName}{' '}
-                                      <span className="text-muted fw-normal">
-                                        ({sp.cheapestPlatform.toUpperCase()} vs{' '}
-                                        {sp.priciestPlatform.toUpperCase()})
+                                <div key={sp.productSlug} className="col-12">
+                                  <div className="rate-radar-spread-item">
+                                    <div className="rate-radar-item-main">
+                                      <Link
+                                        href={sp.productHref}
+                                        className="text-truncate"
+                                      >
+                                        {sp.productName}
+                                      </Link>
+                                      <span className="rate-radar-item-meta">
+                                        <span className="rate-radar-platform">
+                                          {sp.cheapestPlatform}
+                                        </span>
+                                        vs{' '}
+                                        <span className="rate-radar-platform">
+                                          {sp.priciestPlatform}
+                                        </span>
                                       </span>
-                                    </Link>
-                                    <span className="badge bg-warning-subtle text-dark border-warning-subtle flex-shrink-0 border">
-                                      {t('page.spreadDiffBadge', {
-                                        pct: sp.spreadPct,
-                                        amount:
-                                          sp.spreadVnd.toLocaleString('vi-VN'),
-                                      })}
-                                    </span>
+                                    </div>
+                                    <div className="rate-radar-item-side">
+                                      <span className="rate-radar-tag is-warn">
+                                        {t('page.spreadDiffBadge', {
+                                          pct: sp.spreadPct,
+                                          amount:
+                                            sp.spreadVnd.toLocaleString(
+                                              'vi-VN'
+                                            ),
+                                        })}
+                                      </span>
+                                    </div>
                                   </div>
                                 </div>
                               ))}

@@ -17,6 +17,8 @@ const __dirname = path.dirname(__filename)
 const nextConfig = {
   output: env.NEXT_OUTPUT || undefined,
   reactStrictMode: true,
+  // No X-Powered-By: it only advertises the framework.
+  poweredByHeader: false,
   // React Compiler (stable in Next.js 16) memoizes components and hooks at build time.
   reactCompiler: true,
   experimental: { externalDir: true },
@@ -112,7 +114,8 @@ const nextConfig = {
           },
           {
             key: "Content-Security-Policy",
-            value: "frame-ancestors 'self'; base-uri 'self'; form-action 'self';",
+            value:
+              "frame-ancestors 'self'; base-uri 'self'; form-action 'self'; object-src 'none';",
           },
         ],
       },
