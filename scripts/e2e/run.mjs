@@ -119,14 +119,21 @@ async function waitForHttp(url, label, timeoutMs, child) {
   }
 }
 
+// On Windows the command runs through cmd.exe (pnpm is a .cmd shim), which
+// splits unquoted arguments on spaces: `-- --grep "home page"` must stay one.
+const quoteForCmd = (arg) =>
+  /[\s"&|<>^()]/.test(arg) ? `"${arg.replace(/"/g, '""')}"` : arg;
+
 function start(command, commandArgs, env) {
-  const child = spawn(command, commandArgs, {
+  const isWindows = process.platform === 'win32';
+  const args = isWindows ? commandArgs.map(quoteForCmd) : commandArgs;
+  const child = spawn(command, args, {
     cwd: repoRoot,
     env: { ...process.env, ...env },
     // No stdin: a detached process group that reads the terminal is stopped.
     stdio: ['ignore', 'inherit', 'inherit'],
-    shell: process.platform === 'win32',
-    detached: process.platform !== 'win32',
+    shell: isWindows,
+    detached: !isWindows,
   });
   child.on('error', (err) => {
     // A failed spawn never sets exitCode; waitForHttp checks this instead.

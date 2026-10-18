@@ -523,7 +523,8 @@
     "upvoteBtnLabel": "👍 Helpful ({count})",
     "downvoteTitle": "Downvote Not Helpful - reduces this review weight",
     "reportTitle": "Report Seeding / Spam / Sabotage (-0.35 weight penalty per report)",
-    "reportBtnLabel": "🚩 Report ({count})"
+    "reportBtnLabel": "🚩 Report ({count})",
+    "filterGroupAria": "Filter reviews"
   },
   "watchlist": {
     "metaTitle": "True Price Watchlist & Target Drop Alerts | Rate.vn",

@@ -1232,7 +1232,12 @@ export default function JReviewsSection({
       {/* 3. Filter Tabs, Keyword Search, Star Filter & Sort Controls */}
       <div className="d-flex flex-column mb-4 gap-3">
         <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
-          <div className="d-flex flex-wrap gap-2" role="tablist">
+          {/* Filter toggles, not tabs with panels: a labelled group. */}
+          <div
+            className="d-flex flex-wrap gap-2"
+            role="group"
+            aria-label={t('filterGroupAria')}
+          >
             <button
               type="button"
               onClick={() => setActiveTab('all')}

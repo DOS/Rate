@@ -562,6 +562,7 @@ export async function ProductDetailView({
                             <div
                               className="progress-bar"
                               role="progressbar"
+                              aria-label={crit.label}
                               style={{
                                 width: `${pct}%`,
                                 backgroundColor:

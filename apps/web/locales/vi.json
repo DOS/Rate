@@ -523,7 +523,8 @@
     "upvoteBtnLabel": "👍 Hữu ích ({count})",
     "downvoteTitle": "Vote Không hữu ích - giảm trọng số của đánh giá này",
     "reportTitle": "Báo cáo đánh giá Seeding / Spam / Chơi xấu (-0.35 trọng số mỗi báo cáo)",
-    "reportBtnLabel": "🚩 Báo cáo ({count})"
+    "reportBtnLabel": "🚩 Báo cáo ({count})",
+    "filterGroupAria": "Lọc đánh giá"
   },
   "watchlist": {
     "metaTitle": "Danh Sách Canh Giá Thật & Cảnh Báo Giảm Giá Đa Ngành | Rate.vn",
