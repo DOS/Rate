@@ -49,3 +49,20 @@
   color: b60205
   description: Production hotfix PR into main from a branch other than dev; back-merge into dev afterwards
 
+
+# Task claim states, AGENTS.md section 1. The task-claim check reads them.
+- name: status:ready
+  color: 0e8a16
+  description: Task ready to be picked up by an Agent
+
+- name: status:in-progress
+  color: fbca04
+  description: Task currently claimed and being worked on by an Agent
+
+- name: status:in-review
+  color: 1d76db
+  description: Task completed and waiting for review / PR merge
+
+- name: status:done
+  color: 5319e7
+  description: Task completed and verified

@@ -1,0 +1,47 @@
+name: Task Claim
+
+# Advisory check for the AGENTS.md section 1 claim workflow: a PR into `dev`
+# that closes an issue needs that issue to carry an `agent:*` label and
+# `status:in-progress` or `status:in-review`. Dependabot PRs and the dev to
+# main promotion are exempt. Logic and tests: scripts/task-claim-check.mjs.
+#
+# Advisory: the job is not a required check in the dev ruleset, so a red run
+# warns but does not block the merge. Making it required needs JOY's approval.
+#
+# It reads issue labels when it runs. A claim added after the last run is not
+# seen until the PR is pushed or edited, or the job is re-run.
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, edited, ready_for_review]
+    branches: [dev]
+
+# Reads PR and issue metadata only; never checks out or runs PR code beyond
+# the check script itself, and never writes back.
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+
+concurrency:
+  group: task-claim-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  claim:
+    name: task-claim (advisory)
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: scripts/task-claim-check.mjs
+          sparse-checkout-cone-mode: false
+
+      - name: Check that closing issues are claimed
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: node scripts/task-claim-check.mjs

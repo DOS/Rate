@@ -19,10 +19,13 @@ jobs:
 
       - name: Sync labels
         uses: crazy-max/ghaction-github-labeler@548a7c3603594ec17c819e1239f281a3b801ab4d # v6.0.0
+        # v6 only reads kebab-case inputs. The snake_case names used before
+        # were ignored with an "Unexpected input(s)" warning, so skip-delete
+        # fell back to false and the 2026-10-18 runs deleted every label not
+        # listed in labels.yml (#325).
         with:
-          yaml_file: .github/labels.yml
-          # Keep labels that are not in labels.yml (status:*, agent:*, phase:*,
+          yaml-file: .github/labels.yml
+          # Keep labels that are not in labels.yml (agent:*, phase:*,
           # Dependabot labels): they are created by agents and other tools.
-          skip_delete: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          skip-delete: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
