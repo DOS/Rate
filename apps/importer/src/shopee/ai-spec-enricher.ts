@@ -1,10 +1,12 @@
 import {
+  z,
   ProductSpecificationsSchema,
   KeySpecsSchema,
   type ProductSpecifications,
   type KeySpecs,
 } from '@repo/shared-data';
 import type { NormalizedProductCandidate } from './product-normalizer.js';
+import { computeRetryDelayMs, createImporterLogger } from './logger.js';
 
 export type SupportedAiProvider =
   'openai' | 'dos-ai' | 'gemini' | 'deepseek' | 'groq' | 'openrouter' | 'ollama';
@@ -27,6 +29,22 @@ export interface AiEnrichmentResponse {
   specifications: ProductSpecifications;
   key_specs: KeySpecs;
 }
+
+export const AiSpecEnrichmentPayloadSchema = z.object({
+  ram_gb: z.number().positive().nullable().optional(),
+  storage_gb: z.number().positive().nullable().optional(),
+  screen_size_inch: z.number().positive().nullable().optional(),
+  battery_mah: z.number().positive().nullable().optional(),
+  has_5g: z.boolean().optional(),
+  specifications: ProductSpecificationsSchema,
+  key_specs: KeySpecsSchema.optional(),
+});
+
+export function getAiSpecEnrichmentJsonSchema(): Record<string, unknown> {
+  return z.toJSONSchema(AiSpecEnrichmentPayloadSchema) as Record<string, unknown>;
+}
+
+const logger = createImporterLogger('AiSpecEnricher');
 
 const PROVIDER_DEFAULTS: Record<
   SupportedAiProvider,
@@ -493,8 +511,15 @@ REQUIRED JSON SCHEMA:
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
 
     try {
-      console.log(
-        `[AiSpecEnricher] Querying ${this.provider} (${this.model}) for "${params.brand} ${params.model}"...`
+      logger.info(
+        'spec_enrich.query_start',
+        `Querying ${this.provider} (${this.model}) for "${params.brand} ${params.model}"`,
+        {
+          provider: this.provider,
+          model: this.model,
+          brand: params.brand,
+          deviceModel: params.model,
+        }
       );
 
       const endpoint = `${this.baseUrl}/chat/completions`;
@@ -515,17 +540,36 @@ REQUIRED JSON SCHEMA:
         response_format: { type: 'json_object' },
       };
 
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      });
+      let response: Response | null = null;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const reqController = new AbortController();
+        const reqTimer = setTimeout(() => reqController.abort(), this.timeoutMs);
+        try {
+          response = await fetch(endpoint, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(body),
+            signal: reqController.signal,
+          });
+          if (response.ok) break;
+          if (response.status !== 429 && response.status < 500) break;
+        } finally {
+          clearTimeout(reqTimer);
+        }
+        if (attempt === 0) {
+          await new Promise(resolve =>
+            setTimeout(resolve, computeRetryDelayMs(attempt, 250, 1500))
+          );
+        }
+      }
 
-      if (!response.ok) {
-        const errText = await response.text().catch(() => '');
-        console.warn(
-          `[AiSpecEnricher] HTTP ${response.status} from ${this.provider}: ${errText.slice(0, 300)}`
+      if (!response || !response.ok) {
+        const status = response?.status ?? 0;
+        const errText = response ? await response.text().catch(() => '') : '';
+        logger.warn(
+          'spec_enrich.http_error',
+          `HTTP ${status} from ${this.provider}: ${errText.slice(0, 300)}`,
+          { provider: this.provider, status }
         );
         return null;
       }
@@ -533,7 +577,9 @@ REQUIRED JSON SCHEMA:
       const data = (await response.json()) as any;
       const rawContent: string | undefined = data?.choices?.[0]?.message?.content;
       if (!rawContent) {
-        console.warn(`[AiSpecEnricher] Empty message content from ${this.provider}`);
+        logger.warn('spec_enrich.empty_response', `Empty message content from ${this.provider}`, {
+          provider: this.provider,
+        });
         return null;
       }
 
@@ -614,13 +660,23 @@ REQUIRED JSON SCHEMA:
       };
 
       this.memoryCache.set(cacheKey, result);
-      console.log(
-        `[AiSpecEnricher] Enriched "${params.brand} ${params.model}": Chip="${keySpecs.chip}", Screen="${keySpecs.screen}", Battery="${keySpecs.battery}"`
+      logger.info(
+        'spec_enrich.completed',
+        `Enriched "${params.brand} ${params.model}": Chip="${keySpecs.chip}", Screen="${keySpecs.screen}", Battery="${keySpecs.battery}"`,
+        {
+          brand: params.brand,
+          deviceModel: params.model,
+          chip: keySpecs.chip ?? null,
+          screen: keySpecs.screen ?? null,
+          battery: keySpecs.battery ?? null,
+        }
       );
       return result;
     } catch (err: any) {
-      console.warn(
-        `[AiSpecEnricher] Failed to enrich "${params.brand} ${params.model}": ${err?.message || err}`
+      logger.warn(
+        'spec_enrich.failed',
+        `Failed to enrich "${params.brand} ${params.model}": ${err?.message || err}`,
+        { brand: params.brand, deviceModel: params.model }
       );
       return null;
     } finally {

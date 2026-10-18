@@ -1,6 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { NormalizedProductCandidate } from './product-normalizer.js';
 import { AiSpecEnricher } from './ai-spec-enricher.js';
+import { createImporterLogger } from './logger.js';
+
+const logger = createImporterLogger('EntityMatcher');
 
 /** Minimum pg_trgm similarity returned from RPC so ambiguous near-misses (0.65..0.69) can be flagged as draft */
 export const ENTITY_MATCH_CANDIDATE_FLOOR = 0.65;
@@ -39,8 +42,10 @@ export class EntityMatcher {
     }
 
     if (exactMatch) {
-      console.log(
-        `[EntityMatcher] Tier 1 Exact Match found: ${exactMatch.name} (${exactMatch.model_key}) -> ID: ${exactMatch.id}`
+      logger.info(
+        'entity_match.tier1_exact',
+        `Tier 1 Exact Match found: ${exactMatch.name} (${exactMatch.model_key}) -> ID: ${exactMatch.id}`,
+        { masterId: exactMatch.id, modelKey: exactMatch.model_key }
       );
       return { masterId: exactMatch.id, isNew: false };
     }
@@ -66,16 +71,24 @@ export class EntityMatcher {
     if (Array.isArray(fuzzyMatches) && fuzzyMatches.length > 0) {
       const topMatch = fuzzyMatches[0];
       if (topMatch.similarity >= ENTITY_MATCH_ACCEPT_THRESHOLD) {
-        console.log(
-          `[EntityMatcher] Tier 2 Fuzzy Match found: "${candidate.name}" ~= "${topMatch.name}" (similarity: ${(topMatch.similarity * 100).toFixed(1)}%) -> ID: ${topMatch.master_id}`
+        logger.info(
+          'entity_match.tier2_fuzzy',
+          `Tier 2 Fuzzy Match found: "${candidate.name}" ~= "${topMatch.name}" (similarity: ${(topMatch.similarity * 100).toFixed(1)}%) -> ID: ${topMatch.master_id}`,
+          {
+            masterId: topMatch.master_id,
+            similarity: topMatch.similarity,
+            candidateName: candidate.name,
+          }
         );
         return { masterId: topMatch.master_id, isNew: false };
       }
       // Candidates exist but all below the accept threshold: identity is
       // uncertain -> seed as draft (plan v7 §5.1), never auto-publish.
       ambiguousFuzzy = true;
-      console.log(
-        `[EntityMatcher] Tier 2 best similarity ${(topMatch.similarity * 100).toFixed(1)}% < ${(ENTITY_MATCH_ACCEPT_THRESHOLD * 100).toFixed(0)}%: seeding as draft if new.`
+      logger.warn(
+        'entity_match.tier2_ambiguous',
+        `Tier 2 best similarity ${(topMatch.similarity * 100).toFixed(1)}% < ${(ENTITY_MATCH_ACCEPT_THRESHOLD * 100).toFixed(0)}%: seeding as draft if new.`,
+        { similarity: topMatch.similarity, modelKey: candidate.model_key }
       );
     }
 
@@ -95,8 +108,14 @@ export class EntityMatcher {
       !candidate.is_benchmark_enriched;
     const seedStatus =
       candidate.needs_review || ambiguousFuzzy || isUnverifiedSpec ? 'draft' : 'published';
-    console.log(
-      `[EntityMatcher] Tier 3: Creating new canonical Master Product: ${candidate.name} (status: ${seedStatus}, spec_source: ${candidate.spec_source ?? 'unknown'})...`
+    logger.info(
+      'entity_match.tier3_create_start',
+      `Tier 3: Creating new canonical Master Product: ${candidate.name} (status: ${seedStatus}, spec_source: ${candidate.spec_source ?? 'unknown'})...`,
+      {
+        modelKey: candidate.model_key,
+        seedStatus,
+        specSource: candidate.spec_source ?? 'unknown',
+      }
     );
 
     // Insert-only with ignoreDuplicates: the LOSING worker must refetch the
@@ -135,7 +154,11 @@ export class EntityMatcher {
     }
     if (Array.isArray(createdRows) && createdRows.length > 0) {
       const createdMaster = createdRows[0];
-      console.log(`[EntityMatcher] Successfully created Master Product ID: ${createdMaster.id}`);
+      logger.info(
+        'entity_match.tier3_created',
+        `Successfully created Master Product ID: ${createdMaster.id}`,
+        { masterId: createdMaster.id, modelKey: candidate.model_key, seedStatus }
+      );
       return { masterId: createdMaster.id, isNew: true };
     }
 
@@ -149,7 +172,11 @@ export class EntityMatcher {
     if (winnerErr || !winner) {
       throw new Error(`Master product race lost and winner fetch failed: ${winnerErr?.message}`);
     }
-    console.log(`[EntityMatcher] Master product already existed (race): ${winner.id}`);
+    logger.info(
+      'entity_match.tier3_race_winner',
+      `Master product already existed (race): ${winner.id}`,
+      { masterId: winner.id, modelKey: candidate.model_key }
+    );
     return { masterId: winner.id, isNew: false };
   }
 

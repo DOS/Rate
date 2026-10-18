@@ -1,7 +1,10 @@
 import crypto from 'node:crypto';
+import { z } from '@repo/shared-data';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { SupportedAiProvider, AiSpecEnricherConfig } from './ai-spec-enricher.js';
 import type { ScrapedReviewer } from './types.js';
+import { computeRetryDelayMs, sanitizeAiGeneratedText } from './logger.js';
+export { computeRetryDelayMs, sanitizeAiGeneratedText } from './logger.js';
 
 /**
  * 5-Category Classification for Reviews across Products & Services
@@ -831,6 +834,61 @@ export function assessReview6Axes(
   };
 }
 
+export const AiReviewBatchItemSchema = z.object({
+  review_id: z.string().min(1),
+  flag_category: z.enum([
+    'authentic',
+    'low_value_coin_spam',
+    'seeding_fake',
+    'competitor_sabotage',
+    'review_bombing',
+  ]),
+  verdict: z.enum(['authentic', 'suspicious', 'fake']),
+  fake_probability: z.number().min(0).max(1),
+  authenticity: z
+    .enum(['genuine', 'doubtful', 'fabricated', 'sabotage', 'bombing', 'copied'])
+    .optional(),
+  independence: z
+    .enum([
+      'organic',
+      'affiliate',
+      'incentivized',
+      'sponsored_balanced',
+      'sponsored_promo',
+      'undisclosed_paid',
+      'conflict_of_interest',
+    ])
+    .optional(),
+  depth: z
+    .enum([
+      'stars_only',
+      'platform_label',
+      'filler',
+      'low_effort',
+      'specific_short',
+      'detailed',
+      'expert_depth',
+    ])
+    .optional(),
+  relevance: z.number().min(0).max(1).optional(),
+  ai_generated_prob: z.number().min(0).max(1).optional(),
+  reason: z.string(),
+});
+
+export const AiReviewBatchResponseSchema = z.object({
+  reviews: z.array(AiReviewBatchItemSchema),
+  pros: z.array(z.string()).default([]),
+  cons: z.array(z.string()).default([]),
+  ai_summary: z.string().default(''),
+});
+
+/**
+ * Generates strict JSON Schema from `AiReviewBatchResponseSchema` via Zod 4 `z.toJSONSchema()` (Audit C8).
+ */
+export function getAiReviewBatchJsonSchema(): Record<string, unknown> {
+  return z.toJSONSchema(AiReviewBatchResponseSchema) as Record<string, unknown>;
+}
+
 /**
  * Provider-Agnostic AI Review Analyzer & JReviews Scoring Engine
  * Supports Products & Services across Shopee, Lazada, Tiki, TikTok Shop, Facebook, Website
@@ -1165,17 +1223,8 @@ export class AiReviewAnalyzer {
       );
     };
 
-    const sanitizeOutputText = (raw: unknown, maxLen = 400): string => {
-      if (typeof raw !== 'string') return '';
-      return (
-        raw
-          .replace(/<[^>]*>/g, '')
-          // eslint-disable-next-line no-control-regex -- stripping control characters is the point
-          .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, ' ')
-          .trim()
-          .slice(0, maxLen)
-      );
-    };
+    const sanitizeOutputText = (raw: unknown, maxLen = 400): string =>
+      sanitizeAiGeneratedText(raw, maxLen);
 
     try {
       const systemPrompt = `You are an expert e-commerce & service review fraud auditor for Rate.vn (inspired by JReviews).
@@ -1216,6 +1265,21 @@ Return ONLY valid JSON matching:
       let firstSummary = '';
       let anyBatchSucceeded = false;
 
+      const supportsStrictJsonSchema =
+        this.provider === 'openai' ||
+        this.provider === 'dos-ai' ||
+        this.provider === 'gemini' ||
+        this.provider === 'openrouter';
+      let useStrictSchema = supportsStrictJsonSchema;
+      const strictResponseFormat = {
+        type: 'json_schema',
+        json_schema: {
+          name: 'review_batch_analysis',
+          strict: true,
+          schema: getAiReviewBatchJsonSchema(),
+        },
+      };
+
       for (let offset = 0; offset < reviews.length; offset += 25) {
         const batch = reviews.slice(offset, offset + 25);
         const batchBaseline = baseline.slice(offset, offset + 25);
@@ -1241,7 +1305,7 @@ Return ONLY valid JSON matching:
         });
 
         let response: Response | null = null;
-        for (let attempt = 0; attempt < 2; attempt++) {
+        for (let attempt = 0; attempt < 3; attempt++) {
           const batchController = new AbortController();
           const batchTimer = setTimeout(() => batchController.abort(), this.timeoutMs);
           try {
@@ -1258,19 +1322,26 @@ Return ONLY valid JSON matching:
                   { role: 'user', content: userPrompt },
                 ],
                 temperature: 0.1,
-                response_format: { type: 'json_object' },
+                response_format: useStrictSchema ? strictResponseFormat : { type: 'json_object' },
               }),
               signal: batchController.signal,
             });
             if (response.ok) break;
+            if (response.status === 400 && useStrictSchema) {
+              // Provider endpoint does not support json_schema strict mode -> fall back to json_object immediately
+              useStrictSchema = false;
+              continue;
+            }
             if (response.status !== 429 && response.status < 500) break;
           } catch {
             response = null;
           } finally {
             clearTimeout(batchTimer);
           }
-          if (attempt === 0) {
-            await new Promise(resolve => setTimeout(resolve, 350));
+          if (attempt < 2) {
+            await new Promise(resolve =>
+              setTimeout(resolve, computeRetryDelayMs(attempt, 250, 2000))
+            );
           }
         }
 
@@ -1292,29 +1363,34 @@ Return ONLY valid JSON matching:
           continue;
         }
 
+        const validatedBatch = AiReviewBatchResponseSchema.safeParse(parsed);
+        const batchData = validatedBatch.success ? validatedBatch.data : parsed;
+
         anyBatchSucceeded = true;
-        if (Array.isArray(parsed.reviews)) {
-          for (const item of parsed.reviews) {
+        if (Array.isArray(batchData?.reviews)) {
+          for (const rawItem of batchData.reviews) {
+            const parsedItem = AiReviewBatchItemSchema.safeParse(rawItem);
+            const item = parsedItem.success ? parsedItem.data : rawItem;
             if (item?.review_id) aiMap.set(String(item.review_id), item);
           }
         }
-        if (Array.isArray(parsed.pros)) {
-          for (const p of parsed.pros) {
+        if (Array.isArray(batchData?.pros)) {
+          for (const p of batchData.pros) {
             const cleanP = sanitizeOutputText(p, 160);
             if (cleanP && !collectedPros.includes(cleanP)) {
               collectedPros.push(cleanP);
             }
           }
         }
-        if (Array.isArray(parsed.cons)) {
-          for (const c of parsed.cons) {
+        if (Array.isArray(batchData?.cons)) {
+          for (const c of batchData.cons) {
             const cleanC = sanitizeOutputText(c, 160);
             if (cleanC && !collectedCons.includes(cleanC)) {
               collectedCons.push(cleanC);
             }
           }
         }
-        const cleanSummary = sanitizeOutputText(parsed.ai_summary, 600);
+        const cleanSummary = sanitizeOutputText(batchData?.ai_summary, 600);
         if (!firstSummary && cleanSummary) {
           firstSummary = cleanSummary;
         }

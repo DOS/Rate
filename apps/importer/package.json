@@ -10,6 +10,10 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./shopee/logger": {
+      "types": "./dist/shopee/logger.d.ts",
+      "import": "./dist/shopee/logger.js"
+    },
     "./shopee/arena-spec-syncer": {
       "types": "./dist/shopee/arena-spec-syncer.d.ts",
       "import": "./dist/shopee/arena-spec-syncer.js"
