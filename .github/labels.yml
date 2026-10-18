@@ -45,3 +45,7 @@
   color: 1abc9c
   description: Performance improvements
 
+- name: emergency-hotfix
+  color: b60205
+  description: Production hotfix PR into main from a branch other than dev; back-merge into dev afterwards
+

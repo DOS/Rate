@@ -1,0 +1,114 @@
+name: Branch Divergence
+
+# Fails when main holds a non-merge commit that dev does not.
+#
+# Promotions from dev to main must use a merge commit. Squashing dev into main
+# creates a commit that can never exist on dev, so main leads dev forever and
+# the next promotion diffs from a stale merge base (it can propose reverting
+# live code). A hotfix landed on main and never back-merged has the same shape.
+# Merge commits are excluded on purpose: a correct promotion leaves a merge
+# commit on main that dev legitimately lacks.
+#
+# The main ruleset allowing only "merge" is what prevents the mistake; this
+# check notices when something got past it. Ported from DOS/DOS.AI.
+
+on:
+  pull_request:
+    branches: [main, dev]
+  push:
+    branches: [main, dev]
+  schedule:
+    # Daily, because the condition appears between pushes.
+    - cron: '17 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: main must not lead dev
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Check out full history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Compare main against dev
+        env:
+          BASELINE: .github/branch-divergence-baseline.txt
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          set -euo pipefail
+
+          git fetch --quiet origin main dev
+
+          # PRs into dev are checked out at the merge candidate. Compare main
+          # against that candidate so a back-merge PR can prove it restores the
+          # ancestry before it lands.
+          compare_ref=origin/dev
+          compared_label=dev
+          if [ "$EVENT_NAME" = "pull_request" ] && [ "$PR_BASE_REF" = "dev" ]; then
+            compare_ref=HEAD
+            compared_label="the PR merge candidate"
+          fi
+
+          mapfile -t found < <(git log --no-merges --format='%H' "$compare_ref..origin/main")
+
+          if [ ! -f "$BASELINE" ]; then
+            echo "::error::$BASELINE is missing."
+            exit 1
+          fi
+          # Accepted entries: 40-hex at line start, the rest of the line is a comment.
+          mapfile -t accepted < <(grep -oE '^[0-9a-f]{40}' "$BASELINE" || true)
+
+          echo "main leads $compared_label by ${#found[@]} non-merge commit(s); ${#accepted[@]} accepted in the baseline."
+
+          # Here-strings instead of `printf | grep -q`: under pipefail, grep -q
+          # exiting early can SIGPIPE printf on a long list and flip the result.
+          accepted_list=$(printf '%s\n' "${accepted[@]:-}")
+          found_list=$(printf '%s\n' "${found[@]:-}")
+
+          new=()
+          for sha in "${found[@]:-}"; do
+            [ -n "$sha" ] || continue
+            if ! grep -qxF -- "$sha" <<<"$accepted_list"; then
+              new+=("$sha")
+            fi
+          done
+
+          stale=()
+          for sha in "${accepted[@]:-}"; do
+            [ -n "$sha" ] || continue
+            if ! grep -qxF -- "$sha" <<<"$found_list"; then
+              stale+=("$sha")
+            fi
+          done
+          if [ "${#stale[@]}" -gt 0 ]; then
+            echo "::notice::${#stale[@]} baseline entr(y/ies) are no longer diverged and can be deleted from $BASELINE."
+          fi
+
+          if [ "${#new[@]}" -eq 0 ]; then
+            echo "No new divergence."
+            exit 0
+          fi
+
+          echo "::error::main has ${#new[@]} commit(s) that dev does not."
+          for sha in "${new[@]}"; do
+            echo "  $(git log -1 --format='%h %ad %an %s' --date=short "$sha")"
+          done
+          cat <<'EOF'
+
+          A commit is on main and not on dev. Usual causes: a dev to main
+          promotion merged with "Squash and merge", or a hotfix that landed on
+          main and was never back-merged.
+
+          Fix: open a PR from a branch named chore/sync-main-into-dev-<date>
+          that merges main into dev, and merge it with "Create a merge commit".
+          See Docs/Resources/RELEASE.md. Do not add the commit to the baseline
+          to make this pass.
+          EOF
+          exit 1
