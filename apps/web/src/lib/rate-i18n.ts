@@ -115,6 +115,12 @@ const viCopy: RateCopyStrings = viMessages.rate;
 const enCopy: RateCopyStrings = enMessages.rate;
 const csCopy: RateCopyStrings = csMessages.rate;
 
+type CompareCopyStrings = typeof viMessages.compare;
+const _enCompareCheck: CompareCopyStrings = enMessages.compare;
+const _csCompareCheck: CompareCopyStrings = csMessages.compare;
+void _enCompareCheck;
+void _csCompareCheck;
+
 const RATE_COPY_DICTIONARY: Record<SupportedRateLocale, RateLocaleCopy> = {
   vi: { locale: 'vi', ...viCopy },
   en: { locale: 'en', ...enCopy },

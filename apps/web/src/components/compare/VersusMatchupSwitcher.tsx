@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { useRouter } from '@/lib/navigation';
 import {
   getMasterProductCategorySlug,
@@ -21,8 +22,8 @@ export default function VersusMatchupSwitcher({
   currentSlugB,
   categorySlug,
   catalogCandidates,
-  locale = 'vi',
 }: VersusMatchupSwitcherProps) {
+  const t = useTranslations('compare');
   const router = useRouter();
   const [slugA, setSlugA] = useState<string>(currentSlugA);
   const [slugB, setSlugB] = useState<string>(currentSlugB);
@@ -58,15 +59,10 @@ export default function VersusMatchupSwitcher({
     >
       <div className="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
         <div className="small fw-semibold text-white">
-          ⚡{' '}
-          {locale === 'en'
-            ? 'Quick Same-Category 1v1 Matchup Switcher'
-            : locale === 'cs'
-              ? 'Rychlý přepínač souboje 1v1 ve stejné kategorii'
-              : 'Đổi Nhanh Cặp Đấu 1v1 Cùng Ngành Hàng (Same-Category Lock)'}
+          ⚡ {t('switcherTitle')}
         </div>
         <span className="small text-white-50">
-          {sameCategoryPeers.length} mẫu chuẩn hóa trong nhóm{' '}
+          {t('switcherPeerCount', { count: sameCategoryPeers.length })}{' '}
           <code className="text-info">{categorySlug}</code>
         </span>
       </div>
@@ -74,7 +70,7 @@ export default function VersusMatchupSwitcher({
       <div className="row g-2 align-items-center">
         <div className="col-lg-5 col-md-6">
           <select
-            aria-label="Chọn Thiết bị A"
+            aria-label={t('selectDeviceAAria')}
             value={slugA}
             onChange={(e) => setSlugA(e.target.value)}
             className="form-select form-select-sm bg-dark border-secondary text-white"
@@ -87,7 +83,7 @@ export default function VersusMatchupSwitcher({
               >
                 [A] {peer.name} (
                 {Number(peer.min_price || 0) > 0
-                  ? `${Math.round(Number(peer.min_price) / 1000000)}tr`
+                  ? `${Math.round(Number(peer.min_price) / 1000000)}M`
                   : 'N/A'}
                 )
               </option>
@@ -97,7 +93,7 @@ export default function VersusMatchupSwitcher({
 
         <div className="col-lg-5 col-md-6">
           <select
-            aria-label="Chọn Thiết bị B"
+            aria-label={t('selectDeviceBAria')}
             value={slugB}
             onChange={(e) => setSlugB(e.target.value)}
             className="form-select form-select-sm bg-dark border-secondary text-white"
@@ -110,7 +106,7 @@ export default function VersusMatchupSwitcher({
               >
                 [B] {peer.name} (
                 {Number(peer.min_price || 0) > 0
-                  ? `${Math.round(Number(peer.min_price) / 1000000)}tr`
+                  ? `${Math.round(Number(peer.min_price) / 1000000)}M`
                   : 'N/A'}
                 )
               </option>
@@ -124,7 +120,7 @@ export default function VersusMatchupSwitcher({
             disabled={!canLaunchMatchup || !isDifferentFromCurrent}
             className="btn btn-sm btn-danger rounded-pill fw-semibold"
           >
-            ⚔️ So sánh 1v1
+            {t('launch1v1Btn')}
           </button>
         </div>
       </div>

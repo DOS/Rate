@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
 import {
   getCachedCompareMasterProducts,
@@ -42,31 +43,25 @@ export async function generateMetadata({
 }: VersusPageProps): Promise<Metadata> {
   const { locale, versus } = await params;
   const lang = normalizeRateLocale(locale);
+  const t = await getTranslations({ locale: lang, namespace: 'compare' });
   const parsed = parseVersusSlugs(versus);
   if (!parsed) {
-    return { title: '1v1 Compare | Rate.vn' };
+    return { title: t('versusMetaFallbackTitle') };
   }
 
   const compared = await getCachedCompareMasterProducts(parsed.join(','));
   const a = compared[0];
   const b = compared[1];
   if (!a || !b) {
-    return { title: '1v1 Compare | Rate.vn' };
+    return { title: t('versusMetaFallbackTitle') };
   }
 
   const canonicalUrl = `https://rate.vn/compare/${a.slug}-vs-${b.slug}`;
-  const title =
-    lang === 'en'
-      ? `${a.name} vs ${b.name}: 10-Group Specs & JReviews 1v1 Verdict | Rate.vn`
-      : lang === 'cs'
-        ? `${a.name} vs ${b.name}: Porovnání 10 skupin parametrů a JReviews | Rate.vn`
-        : `So sánh ${a.name} vs ${b.name}: Đối đầu 10 nhóm thông số & Điểm JReviews | Rate.vn`;
-  const description =
-    lang === 'en'
-      ? `Head-to-head comparison between ${a.name} and ${b.name} across 5 JReviews criteria, 10 standardized spec groups, and 90-day verified market prices.`
-      : lang === 'cs'
-        ? `Přímý souboj ${a.name} vs ${b.name} v 5 kritériích JReviews, 10 skupinách specifikací a ověřených cenách.`
-        : `Đặt lên bàn cân đối đầu 1v1 giữa ${a.name} và ${b.name}: Chấm điểm kép JReviews 5 tiêu chí, 10 nhóm thông số kỹ thuật chuẩn GSMArena & PhoneArena và kiểm toán giá thật.`;
+  const title = t('versusMetaTitle', { nameA: a.name, nameB: b.name });
+  const description = t('versusMetaDescription', {
+    nameA: a.name,
+    nameB: b.name,
+  });
 
   return {
     title,
@@ -86,6 +81,7 @@ export async function generateMetadata({
 export default async function VersusComparePage({ params }: VersusPageProps) {
   const { locale, versus } = await params;
   const lang = normalizeRateLocale(locale);
+  const t = await getTranslations({ locale: lang, namespace: 'compare' });
   const parsed = parseVersusSlugs(versus);
   if (!parsed) {
     notFound();
@@ -189,19 +185,14 @@ export default async function VersusComparePage({ params }: VersusPageProps) {
                 fontWeight: 700,
               }}
             >
-              ⚔️ 1V1 HEAD-TO-HEAD AUDIT • SAME-CATEGORY LOCK (
-              {catSlug.toUpperCase()})
+              {/* 1V1 HEAD-TO-HEAD AUDIT */}
+              {t('versusHeroBadge', { category: catSlug.toUpperCase() })}
             </span>
             <Link
               href={`/leaderboard?cat=${catSlug}`}
               className="btn btn-sm btn-outline-light rounded-pill px-3"
             >
-              🏆{' '}
-              {lang === 'en'
-                ? 'View Category Leaderboard'
-                : lang === 'cs'
-                  ? 'Zobrazit žebříček kategorie'
-                  : 'Xem Bảng xếp hạng cùng ngành'}
+              🏆 {t('viewCategoryLeaderboard')}
             </Link>
           </div>
 
@@ -214,11 +205,14 @@ export default async function VersusComparePage({ params }: VersusPageProps) {
           </h1>
 
           <p className="text-white-50 small mb-4">
-            {lang === 'en'
-              ? `Automated 1v1 JReviews verdict: ${overallWinner.name} leads overall with ${overallWinner.combinedScore5.toFixed(2)}/5.0 Combined Score.`
-              : lang === 'cs'
-                ? `Automatický verdikt 1v1 JReviews: ${overallWinner.name} vede s celkovým skóre ${overallWinner.combinedScore5.toFixed(2)}/5.0.`
-                : `Kết luận đối đầu 1v1 tự động: ${overallWinner.name} dẫn trước với điểm tổng hợp JReviews ${overallWinner.combinedScore5.toFixed(2)}/5.0${overallWinner.expertScore10 != null ? ` (${overallWinner.expertScore10.toFixed(1)}/10 Lab)` : ''}.`}
+            {t('versusAutoVerdict', {
+              winner: overallWinner.name,
+              score: overallWinner.combinedScore5.toFixed(2),
+              expertSuffix:
+                overallWinner.expertScore10 != null
+                  ? ` (${overallWinner.expertScore10.toFixed(1)}/10 Lab)`
+                  : '',
+            })}
           </p>
 
           <VersusInteractiveScoreboard
