@@ -279,6 +279,14 @@ export function sanitizeSpecifications(raw: unknown): ProductSpecifications {
  * Populates the 10 Field Groups (PhoneArena structure + GSMArena depth) for any mobile device.
  * Supports: OpenAI, DOS-AI Gateway, Gemini, DeepSeek, Groq, OpenRouter, Ollama (or any OpenAI-compatible API).
  */
+export function trimTrailingSlashes(rawUrl: string): string {
+  let end = rawUrl.length;
+  while (end > 0 && rawUrl.charCodeAt(end - 1) === 47) {
+    end -= 1;
+  }
+  return end === rawUrl.length ? rawUrl : rawUrl.slice(0, end);
+}
+
 export class AiSpecEnricher {
   private provider: SupportedAiProvider;
   private apiKey: string;
@@ -293,13 +301,13 @@ export class AiSpecEnricher {
     const defaults = PROVIDER_DEFAULTS[this.provider];
 
     this.apiKey = config.apiKey ?? this.resolveApiKey(this.provider);
-    this.baseUrl = (
+    this.baseUrl = trimTrailingSlashes(
       config.baseUrl ||
-      process.env.AI_BASE_URL ||
-      process.env.DOS_AI_BASE_URL ||
-      process.env.OPENAI_BASE_URL ||
-      defaults.baseUrl
-    ).replace(/\/+$/, '');
+        process.env.AI_BASE_URL ||
+        process.env.DOS_AI_BASE_URL ||
+        process.env.OPENAI_BASE_URL ||
+        defaults.baseUrl
+    );
 
     this.model =
       config.model || process.env.AI_MODEL || process.env.OPENAI_MODEL || defaults.defaultModel;
