@@ -326,7 +326,13 @@ export async function ProductDetailView({
               <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
                 <span
                   className="rate-eyebrow"
-                  style={{ color: '#fda4af', letterSpacing: '0.06em' }}
+                  // A translucent pink pill on the dark panel instead of the
+                  // default light pill, which left pink text at 1.7:1.
+                  style={{
+                    color: '#fda4af',
+                    backgroundColor: 'rgba(253, 164, 175, 0.12)',
+                    letterSpacing: '0.06em',
+                  }}
                 >
                   {t('scoreboardEyebrow')}
                 </span>

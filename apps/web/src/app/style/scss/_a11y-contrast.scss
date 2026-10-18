@@ -1,0 +1,68 @@
+// WCAG 2.1 AA text contrast (4.5:1) on the light surfaces the site uses
+// (#ffffff, #f8fafc, #f1f5f9 and the *-subtle badge tints). Bootstrap's
+// default text colours fall short there (DOS/Rate#362): #6c757d is 4.3:1 on
+// #f1f5f9, #198754 is 3.5:1 on bg-success-subtle, #ffc107 is 1.5:1 and
+// #0dcaf0 (text-info) is below 2:1.
+// Same hues, darker shades; each is at least 4.9:1 on every one of those
+// surfaces. Dark panels keep their own colours.
+
+$rate-dark-surfaces: '.bg-dark, .bg-black, .text-bg-dark, .rate-scoreboard-dark, [data-bs-theme="dark"]';
+
+// Neither a dark surface itself nor inside one.
+@mixin on-light-surface($selector) {
+  #{$selector}:not(:is(#{$rate-dark-surfaces})):not(:is(#{$rate-dark-surfaces}) *) {
+    @content;
+  }
+}
+
+@include on-light-surface('.text-muted, .text-secondary') {
+  color: #565e64 !important;
+}
+
+@include on-light-surface('.text-success') {
+  color: #146c43 !important;
+}
+
+@include on-light-surface('.text-danger') {
+  color: #b02a37 !important;
+}
+
+@include on-light-surface('.text-info') {
+  color: #055160 !important;
+}
+
+@include on-light-surface('.text-warning') {
+  color: #7a5a00 !important;
+}
+
+// .bg-primary badges are DOS/Rate#334's (solid tint bug); leave them alone.
+@include on-light-surface('.text-primary:not(.bg-primary)') {
+  color: #b42318 !important;
+}
+
+// Outline buttons paint their own light background (var(--bs-body-bg)) even in
+// dark sections, so they need the dark text shade everywhere. The theme sets
+// color directly (same specificity, loaded later), hence .btn.btn-outline-*;
+// hover/focus/active keep white text (!important there).
+.btn.btn-outline-warning {
+  color: #7a5a00;
+}
+
+.btn.btn-outline-danger {
+  color: #b02a37;
+}
+
+.btn.btn-outline-success {
+  color: #146c43;
+}
+
+// The eyebrow pill always has a light background (--rate-bg-elevated), even in
+// dark sections, so its warning text needs the dark shade everywhere.
+.rate-eyebrow.text-warning {
+  color: #7a5a00 !important;
+}
+
+// Counts inside light tab buttons were faded to 2.8:1 with opacity.
+@include on-light-surface('.btn-light .opacity-75') {
+  opacity: 1 !important;
+}

@@ -28,6 +28,8 @@ Default Style
 ---------------------------------------------------*/
 
 @use'custom';
+// Higher specificity than Bootstrap's utilities, so load order does not matter.
+@use 'a11y-contrast';
 
 
 
@@ -10872,7 +10874,9 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .rate-scoreboard-dark {
-  background: linear-gradient(145deg, #0b0d11 0%, #121722 65%, #171e2e 100%);
+  // Solid fallback first: contrast checkers (and old browsers) read it.
+  background-color: #0b0d11;
+  background-image: linear-gradient(145deg, #0b0d11 0%, #121722 65%, #171e2e 100%);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 14px;
   color: #f8fafc;
