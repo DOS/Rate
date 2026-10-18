@@ -1862,13 +1862,23 @@ async function runTests() {
 
   assert.equal(sanitizeVerdictClassSuffix('genuine_deal'), 'genuine_deal');
   assert.equal(
+    sanitizeVerdictClassSuffix('fair_market_price'),
+    'fair_market_price'
+  );
+  assert.equal(sanitizeVerdictClassSuffix('above_market'), 'above_market');
+  assert.equal(
     sanitizeVerdictClassSuffix('inflated_fake_sale'),
     'inflated_fake_sale'
   );
   assert.equal(
+    sanitizeVerdictClassSuffix('insufficient_data'),
+    'insufficient_data'
+  );
+  assert.equal(sanitizeVerdictClassSuffix('accessory_skip'), 'accessory_skip');
+  assert.equal(
     sanitizeVerdictClassSuffix('evil" onclick="alert(1)'),
-    'untracked',
-    'sanitizeVerdictClassSuffix must reject non-allowlisted class suffixes'
+    'insufficient_data',
+    'sanitizeVerdictClassSuffix must reject non-allowlisted class suffixes and fall back to insufficient_data'
   );
 
   assert.deepEqual(

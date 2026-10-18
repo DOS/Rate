@@ -173,20 +173,29 @@ export function formatSafeExtensionVnd(val: number | null | undefined): string {
 
 const ALLOWED_VERDICT_CLASS_SUFFIXES = new Set([
   'genuine_deal',
+  'fair_market_price',
+  'above_market',
+  'inflated_fake_sale',
+  'insufficient_data',
+  'accessory_skip',
   'normal_price',
   'suspicious_discount',
-  'inflated_fake_sale',
   'fake_discount',
   'fake_sale_trap',
+  'fair_market',
+  'ambiguous_variant',
+  'skipped_accessory',
   'untracked',
 ]);
 
 export function sanitizeVerdictClassSuffix(
   verdict: string | null | undefined
 ): string {
-  if (typeof verdict !== 'string') return 'untracked';
+  if (typeof verdict !== 'string') return 'insufficient_data';
   const cleaned = verdict.trim().toLowerCase();
-  return ALLOWED_VERDICT_CLASS_SUFFIXES.has(cleaned) ? cleaned : 'untracked';
+  return ALLOWED_VERDICT_CLASS_SUFFIXES.has(cleaned)
+    ? cleaned
+    : 'insufficient_data';
 }
 
 export function filterValidSparklinePrices(
