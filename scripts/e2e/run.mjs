@@ -153,12 +153,23 @@ function run(command, commandArgs, env) {
   });
 }
 
-/** Serves PostgREST at /rest/v1 like Supabase; every other path is a 404. */
+/**
+ * Serves PostgREST at /rest/v1 like Supabase; every other path is a 404. Any
+ * query containing FAULT_MARKER answers 500 (a 503 would also trip
+ * postgrest-js retries and only slow the spec down), so a spec can simulate a database
+ * outage for one URL without disturbing specs running in parallel.
+ */
+const FAULT_MARKER = 'e2e-fault';
 function startProxy(upstreamPort) {
   proxyServer = http.createServer((req, res) => {
     if (!req.url?.startsWith('/rest/v1/')) {
       res.writeHead(404, { 'content-type': 'application/json' });
       res.end('{"message":"not served by the e2e stack"}');
+      return;
+    }
+    if (req.url.includes(FAULT_MARKER)) {
+      res.writeHead(500, { 'content-type': 'application/json' });
+      res.end('{"message":"simulated outage","code":"XX000"}');
       return;
     }
     const upstream = http.request(

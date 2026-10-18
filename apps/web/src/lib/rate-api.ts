@@ -1083,7 +1083,20 @@ export async function getMasterProducts(
 }
 
 /**
- * Fetch a single master product by its slug
+ * The database could not answer, as opposed to answering "no such row".
+ * Detail lookups throw it so pages render the error boundary (5xx) instead of
+ * notFound(), and unstable_cache never stores the failure.
+ */
+export class RateDataUnavailableError extends Error {
+  constructor(what: string, cause: { message?: string } | null) {
+    super(`${what} lookup failed: ${cause?.message ?? 'unknown error'}`);
+    this.name = 'RateDataUnavailableError';
+  }
+}
+
+/**
+ * Fetch a single master product by its slug. Null means no published product
+ * has that slug; a database failure throws RateDataUnavailableError.
  */
 export async function getMasterProductBySlug(
   slug: string
@@ -1096,8 +1109,11 @@ export async function getMasterProductBySlug(
     .eq('status', 'published')
     .maybeSingle();
 
-  if (error || !data) {
-    log.warn('master product not found', { slug, message: error?.message });
+  if (error) {
+    log.error('master product lookup failed', { slug, message: error.message });
+    throw new RateDataUnavailableError('master product', error);
+  }
+  if (!data) {
     return null;
   }
   return normalizeMasterProductRow(data as MasterProduct);
@@ -1626,7 +1642,11 @@ export async function compareMasterProducts(
     .in('slug', uniqueSlugs)
     .eq('status', 'published');
 
-  if (error || !data) {
+  if (error) {
+    log.error('compare lookup failed', { message: error.message });
+    throw new RateDataUnavailableError('compare', error);
+  }
+  if (!data) {
     return [];
   }
   const rows = (data as MasterProduct[]).map(normalizeMasterProductRow);
@@ -2625,11 +2645,12 @@ export async function getMerchantProfileById(
   let merchantRow: RawMerchantSafeRow | null = null;
 
   if (isUuid) {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('merchants')
       .select(selectCols)
       .eq('id', cleaned)
       .maybeSingle();
+    if (error) throw new RateDataUnavailableError('merchant', error);
     merchantRow = (data as unknown as RawMerchantSafeRow) || null;
   }
 
@@ -2638,12 +2659,13 @@ export async function getMerchantProfileById(
     if (!safeToken) {
       return null;
     }
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('merchants')
       .select(selectCols)
       .or(`slug.eq.${safeToken},platform_shop_id.eq.${safeToken}`)
       .limit(1)
       .maybeSingle();
+    if (error) throw new RateDataUnavailableError('merchant', error);
     merchantRow = (data as unknown as RawMerchantSafeRow) || null;
   }
 
