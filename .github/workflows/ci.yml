@@ -63,6 +63,9 @@ jobs:
       - name: Test the task-claim check
         run: node --test scripts/task-claim-check.test.mjs
 
+      - name: Test the E2E stale-stack pruning
+        run: node --test scripts/e2e/stale-stacks.test.mjs
+
       - name: Replay rate migrations on PostgreSQL 17 (Docker)
         run: node scripts/test-migration-replay.mjs
 
