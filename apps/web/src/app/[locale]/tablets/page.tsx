@@ -1,10 +1,17 @@
 import type { Metadata } from 'next';
+import { getTranslations } from 'next-intl/server';
 import { getCachedCategoryDirectoryFacets } from '@/server/rate';
 import { CategoryCatalogContent } from '../smartphones/page';
 
 type SearchParamsInput = Record<string, string | string[] | undefined>;
 
-export async function generateMetadata(): Promise<Metadata> {
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  const t = await getTranslations({ locale, namespace: 'catalog' });
   const facets = await getCachedCategoryDirectoryFacets('tablets');
   const totalModels = facets.totalUnfiltered;
   const canonicalUrl = 'https://rate.vn/tablets';
@@ -12,10 +19,9 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title:
       totalModels > 0
-        ? `So sánh giá Máy tính bảng (${totalModels} mẫu máy chuẩn hóa) | Rate.vn`
-        : 'So sánh giá Máy tính bảng (Tablets) & Kiểm định khuyến mãi AI | Rate.vn',
-    description:
-      'Tra cứu và lọc máy tính bảng (iPad, Galaxy Tab, Xiaomi Pad) theo 10 nhóm thông số kỹ thuật chuẩn hóa, kiểm tra lịch sử giá thật và lọc đánh giá Seeding trên Rate.vn.',
+        ? t('meta.tablets.titleCount', { count: totalModels })
+        : t('meta.tablets.titleDefault'),
+    description: t('meta.tablets.description'),
     alternates: {
       canonical: canonicalUrl,
     },

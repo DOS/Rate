@@ -1221,5 +1221,276 @@
     "quarantineRejectedTitle": "Signal Rejected by Zero-Trust Gatekeeper",
     "quarantineCanonicalUrlLabel": "Canonical URL (PII stripped):",
     "quarantineErrConnect": "Unable to connect to the Zero-Trust Quarantine gateway."
+  },
+  "catalog": {
+    "meta": {
+      "smartphones": {
+        "titleCount": "Smartphone Price Comparison & 10-Group Spec Filter ({count} Models) | Rate.vn",
+        "titleDefault": "Smartphone Price Comparison & AI Promo Audit | Rate.vn",
+        "description": "Filter smartphones by 10 standardized technical spec groups (PhoneArena/GSMArena), inspect true historical prices, and filter AI seeding reviews on Rate.vn."
+      },
+      "tablets": {
+        "titleCount": "Tablet Price Comparison ({count} normalized models) | Rate.vn",
+        "titleDefault": "Tablet Price Comparison & AI Promo Audit | Rate.vn",
+        "description": "Search and filter tablets (iPad, Galaxy Tab, Xiaomi Pad) across 10 standardized spec groups, verify true historical prices, and filter out seeding reviews on Rate.vn."
+      },
+      "laptops": {
+        "titleCount": "Laptop Price Comparison ({count} normalized models) | Rate.vn",
+        "titleDefault": "Laptop Price Comparison & AI Promo Audit | Rate.vn",
+        "description": "Search and filter laptops (MacBook, ThinkPad, ASUS ROG, Dell XPS) across 10 standardized spec groups, verify true historical prices, and filter out seeding reviews on Rate.vn."
+      },
+      "smartwatches": {
+        "titleCount": "Smartwatch Price Comparison ({count} normalized models) | Rate.vn",
+        "titleDefault": "Smartwatch Price Comparison & AI Promo Audit | Rate.vn",
+        "description": "Search and filter smartwatches (Apple Watch, Galaxy Watch, Garmin, Xiaomi Watch, Huawei Watch) across 10 standardized spec groups, verify true historical prices, and filter out seeding reviews on Rate.vn."
+      },
+      "earbuds": {
+        "titleCount": "ANC Wireless Earbuds Price Comparison ({count} normalized models) | Rate.vn",
+        "titleDefault": "ANC Wireless Earbuds Price Comparison & AI Promo Audit | Rate.vn",
+        "description": "Search and filter ANC wireless earbuds (AirPods Pro, Sony WF-1000XM5, Galaxy Buds, Bose, Sennheiser) across 10 standardized spec groups, true price history, and AI review audits on Rate.vn."
+      }
+    },
+    "sortOptions": {
+      "default": "Default (Recently updated)",
+      "price_asc": "Price: Low to High",
+      "price_desc": "Price: High to Low",
+      "rating_desc": "Highest Rated",
+      "merchants_desc": "Most Merchants",
+      "newest": "Newest Releases"
+    },
+    "schemas": {
+      "directoryTech": "Tech & Digital Devices",
+      "smartphones": {
+        "title": "Smartphones",
+        "subtitle": "Explore 10-group technical specs aligned with GSMArena & PhoneArena, compare cross-platform prices, and filter authentic buyer reviews with AI",
+        "searchPlaceholder": "Search model, chipset (e.g. iPhone 16, Snapdragon 8 Gen 3)...",
+        "presets": {
+          "under-7m": "Under 7M VND",
+          "7m-15m": "7M - 15M VND",
+          "15m-25m": "15M - 25M VND",
+          "over-25m": "Over 25M VND"
+        },
+        "features": {
+          "has5g": {
+            "label": "5G Support",
+            "desc": "Cellular: High-speed 5G mobile network connectivity"
+          },
+          "highRefresh": {
+            "label": "120Hz+ Display",
+            "desc": "Display: Refresh rate 120Hz or higher"
+          },
+          "bigBattery": {
+            "label": "Battery >= 5000mAh",
+            "desc": "Battery: Capacity 5000 mAh or higher"
+          },
+          "fastCharge": {
+            "label": "Fast Charge >= 45W",
+            "desc": "Battery: Fast charging power 45W or higher"
+          },
+          "hasNfc": {
+            "label": "NFC Support",
+            "desc": "Connectivity: Contactless payment & chip ID reading"
+          },
+          "compactScreen": {
+            "label": "Compact (<= 6.2\")",
+            "desc": "Display: One-hand friendly compact screen (<= 6.2 inch)"
+          }
+        }
+      },
+      "tablets": {
+        "title": "Tablets",
+        "subtitle": "Compare 10-group technical specifications and cross-marketplace tablet prices",
+        "searchPlaceholder": "Search iPad, Galaxy Tab, Xiaomi Pad...",
+        "presets": {
+          "under-10m": "Under 10M VND",
+          "10m-20m": "10M - 20M VND",
+          "over-20m": "Over 20M VND"
+        },
+        "features": {
+          "has5g": {
+            "label": "5G / Cellular",
+            "desc": "Supports SIM / eSIM 5G cellular connectivity"
+          },
+          "highRefresh": {
+            "label": "120Hz+ Display",
+            "desc": "Screen refresh rate >= 120Hz"
+          },
+          "bigBattery": {
+            "label": "Battery >= 8000mAh",
+            "desc": "High-capacity tablet battery"
+          }
+        }
+      },
+      "laptops": {
+        "title": "Laptops",
+        "subtitle": "Compare 10-group hardware configurations and verified laptop price history",
+        "searchPlaceholder": "Search MacBook, ThinkPad, ASUS ROG, Dell XPS...",
+        "presets": {
+          "under-15m": "Under 15M VND",
+          "15m-30m": "15M - 30M VND",
+          "over-30m": "Over 30M VND"
+        },
+        "features": {
+          "highRefresh": {
+            "label": "120Hz+ Display",
+            "desc": "High refresh rate >= 120Hz"
+          },
+          "fastCharge": {
+            "label": "USB-C PD Fast Charge",
+            "desc": "Supports high-wattage USB-C Power Delivery"
+          }
+        }
+      },
+      "smartwatches": {
+        "title": "Smartwatches",
+        "subtitle": "Compare health sensors, water resistance ratings, dual-band GPS, and official smartwatch price history",
+        "searchPlaceholder": "Search Apple Watch, Galaxy Watch, Garmin, Xiaomi Watch, Huawei Watch...",
+        "presets": {
+          "under-3m": "Under 3M VND",
+          "3m-8m": "3M - 8M VND",
+          "8m-15m": "8M - 15M VND",
+          "over-15m": "Over 15M VND"
+        },
+        "features": {
+          "has5g": {
+            "label": "eSIM / LTE Support",
+            "desc": "Standalone calls via eSIM without carrying a phone"
+          },
+          "hasNfc": {
+            "label": "NFC / Contactless Pay",
+            "desc": "Supports NFC connectivity and contactless payments"
+          },
+          "fastCharge": {
+            "label": "Magnetic Fast Charge",
+            "desc": "Supports magnetic wireless fast charging"
+          }
+        }
+      },
+      "earbuds": {
+        "title": "Wireless & ANC Earbuds",
+        "subtitle": "Compare Active Noise Cancellation (ANC), Hi-Res audio codecs (LDAC/aptX), battery life, and real cross-platform prices",
+        "searchPlaceholder": "Search AirPods Pro, Sony WF-1000XM5, Galaxy Buds, Bose, Sennheiser...",
+        "presets": {
+          "under-1m": "Under 1M VND",
+          "1m-3m": "1M - 3M VND",
+          "3m-6m": "3M - 6M VND",
+          "over-6m": "Over 6M VND"
+        },
+        "features": {
+          "fastCharge": {
+            "label": "Fast / MagSafe Case",
+            "desc": "Supports fast charging via USB-C or Qi/MagSafe wireless"
+          }
+        }
+      }
+    },
+    "page": {
+      "chipKeyword": "Keyword: \"{query}\"",
+      "chipBrand": "Brand: {brand}",
+      "chipPrice": "Price: {min} - {max}",
+      "searchLabel": "Device",
+      "brandLabel": "Brand",
+      "searchBtn": "Search",
+      "loadingFilters": "Loading specification filters...",
+      "clearAllBtn": "Clear all",
+      "foundPrefix": "Found",
+      "foundSuffix": "/ {total} normalized products",
+      "quickCompare3": "Quick compare 3",
+      "quickCompare2": "Quick compare 2",
+      "versus1v1Badge": "⚔️ 1v1: {brandA} vs {brandB}",
+      "leaderboardBadge": "🏆 Leaderboard",
+      "sortByPrefix": "Sort: {label}",
+      "radarBannerBadge": "🔥 DEAL RADAR & FAKE SALE TRAPS ({title})",
+      "radarAnalyzedSub": "Audited {count} store listings across 10 marketplaces",
+      "viewAllRadarBtn": "💎 Explore Full 10-Platform Radar →",
+      "vsMedianBadge": "-{pct}% vs median",
+      "fakeMarkupBadge": "Inflated +{pct}%",
+      "spreadHeader": "📊 Largest 10-Marketplace Price Spread ({title}):",
+      "spreadSub": "Save millions of VND by choosing the right marketplace",
+      "spreadDiffBadge": "Spread +{pct}% ({amount} ₫)",
+      "emptySyncingTitle": "Category \"{title}\" is awaiting normalized product data sync",
+      "emptyMatchingTitle": "No products match the current filters",
+      "emptySyncingDesc": "The 10-group standardized specification schema for {title} ({brands}) is ready. While our crawlers index more models for this category, explore Smartphones or the Comparison Matrix.",
+      "emptyMatchingDesc": "Try widening the price range or relaxing hardware filter criteria to see more models.",
+      "resetFiltersBtn": "Reset filters",
+      "browseSmartphonesBtn": "Browse available Smartphones →",
+      "merchantProfilesBtn": "Merchant Trust Profiles",
+      "noImage": "No image",
+      "userScoreText": "{score} User ({count} verified reviews)",
+      "userScoreUnrated": "User: unrated",
+      "expertScoreText": "{score} Expert Lab",
+      "expertScoreUnrated": "Expert Lab: unrated",
+      "refPriceLabel": "Reference price:",
+      "sourcesCount": "{count} sources",
+      "viewReviewsSpecsBtn": "★ View Reviews & 10 Spec Groups",
+      "inspectPriceHistoryTitle": "Audit 90-day price history & detect fake discounts",
+      "inspectBtn": "🔍 Inspect"
+    },
+    "toolbar": {
+      "unratedText": "N/A",
+      "quick1v1Label": "⚔️ Quick 1v1 Matchup ({title}):",
+      "selectDeviceAAria": "Select device A for 1v1 comparison",
+      "selectDeviceBAria": "Select device B for 1v1 comparison",
+      "versusGoBtn": "Go 1v1 →",
+      "copiedMdBtn": "✅ Copied Catalog MD!",
+      "copyMdBtn": "📋 Copy Catalog Markdown",
+      "exportCsvBtn": "📥 Export Category CSV",
+      "exportJsonBtn": "📦 Export JSON"
+    },
+    "sidebar": {
+      "filterTitle": "Spec Filters",
+      "keywordChipsetHeader": "Keyword & Chipset",
+      "jreviewsRatingHeader": "Rating Score (JReviews)",
+      "categoryHeader": "Device Category",
+      "brandHeader": "Manufacturer (Brand)",
+      "priceRangeHeader": "Price Range (Million VND)",
+      "ramHeader": "RAM Capacity (Hardware)",
+      "storageHeader": "Internal Storage (ROM)",
+      "featuresHeader": "Key Features (10 Field Groups)",
+      "filteringBtn": "Filtering data...",
+      "applyFiltersBtn": "Apply Filters",
+      "clearAllFiltersBtn": "Clear All Filters"
+    }
+  },
+  "heroSearch": {
+    "modeSearchBtn": "Search Products & 10-Group Specs",
+    "modeInspectBtn": "Paste URL to Audit Fake Sales & Shop Trust",
+    "searchPlaceholder": "Search model, chipset (e.g. iPhone 16, Apple A18) or paste Shopee link...",
+    "searchAriaLabel": "Search tech products or paste marketplace URL to inspect",
+    "clearKeywordAria": "Clear keyword",
+    "searchSubmitBtn": "Search",
+    "urlDetectedStrong": "Marketplace URL detected!",
+    "urlDetectedSub": "Click to inspect historical prices, fake discounts, and merchant risk scores.",
+    "inspectLinkBtn": "Inspect Link →",
+    "normalizedProductsHeader": "📱 Normalized Products ({count})",
+    "specFilterLink": "10-group spec filters →",
+    "noMatchPrefix": "No model matches \"{query}\". You can switch to",
+    "inspectTabLinkBtn": "Inspect Link / Keyword",
+    "merchantsCount": "{count} stores",
+    "merchantsHeader": "🏪 Merchants & Trust Profiles ({count})",
+    "viewAllMerchantsLink": "View all shops →",
+    "inspectPlaceholder": "Paste Shopee, Lazada, Tiki product/shop link or enter model name...",
+    "inspectAriaLabel": "Paste product or merchant link to inspect",
+    "clearUrlAria": "Clear URL",
+    "inspectingBtn": "Inspecting...",
+    "inspectNowBtn": "Inspect Now",
+    "sampleLinksLabel": "Try live sample links:",
+    "errLookupFailed": "Unable to look up product/merchant data",
+    "errServerConnection": "Connection error with inspection server",
+    "resultCardHeader": "Price History, AI Review & Merchant Trust Audit Result",
+    "closeBtn": "Close",
+    "bestPriceLabel": "Best price:",
+    "lowestEverPriceLabel": "(All-time low: {price} ₫)",
+    "merchantLabel": "Merchant:",
+    "aiReviewAuthLabel": "AI Review Authenticity:",
+    "aiReviewAuthValue": "✓ {pct}% authentic (across {total} reviews)",
+    "viewSpecsAndHistoryBtn": "View 10 Spec Groups & Price History",
+    "auditReportBtn": "🔬 Audit Report",
+    "shopProfileBtn": "Shop Profile",
+    "trackingProductsCount": "Tracking {count} products",
+    "openMerchantProfileBtn": "Open Merchant Trust Profile →",
+    "unmatchedHeading": "This product/link is not yet in the live inspection cache",
+    "unmatchedDesc": "You can search equivalent normalized models or browse verified merchant profiles below.",
+    "searchInSmartphonesBtn": "Search in Smartphone Catalog →"
   }
 }

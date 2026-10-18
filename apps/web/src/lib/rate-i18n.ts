@@ -183,6 +183,18 @@ const _csStaticPagesCheck: StaticPagesCopyStrings = csMessages.staticPages;
 void _enStaticPagesCheck;
 void _csStaticPagesCheck;
 
+type CatalogCopyStrings = typeof viMessages.catalog;
+const _enCatalogCheck: CatalogCopyStrings = enMessages.catalog;
+const _csCatalogCheck: CatalogCopyStrings = csMessages.catalog;
+void _enCatalogCheck;
+void _csCatalogCheck;
+
+type HeroSearchCopyStrings = typeof viMessages.heroSearch;
+const _enHeroSearchCheck: HeroSearchCopyStrings = enMessages.heroSearch;
+const _csHeroSearchCheck: HeroSearchCopyStrings = csMessages.heroSearch;
+void _enHeroSearchCheck;
+void _csHeroSearchCheck;
+
 const RATE_COPY_DICTIONARY: Record<SupportedRateLocale, RateLocaleCopy> = {
   vi: { locale: 'vi', ...viCopy },
   en: { locale: 'en', ...enCopy },
