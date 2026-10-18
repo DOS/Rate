@@ -56,7 +56,9 @@ export function sanitizeAiGeneratedText(raw: unknown, maxLen = 400): string {
   if (typeof raw !== 'string') return '';
   return (
     raw
-      .replace(/<[^>]*>/g, ' ')
+      // `[^<>]` rather than `[^>]`: a run of unclosed '<' would otherwise be
+      // rescanned to the end of the string from each '<' (quadratic).
+      .replace(/<[^<>]*>/g, ' ')
       // Strip explicit http(s):// and www. URLs
       .replace(/\b(?:https?:\/\/|www\.)\S+/gi, '[link-removed]')
       // Strip bare domain links with common TLDs/paths (e.g. bit.ly/xyz, shopee.vn/abc, t.me/xyz)

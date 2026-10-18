@@ -431,7 +431,7 @@ async function runEntityMatcherSuite() {
   );
   assert.ok(!sanitizedSummary.includes('0912.345.678'));
   assert.ok(!sanitizedSummary.includes('987 654 321'));
-  assert.ok(!sanitizedSummary.includes('https://phishing.example.com'));
+  assert.doesNotMatch(sanitizedSummary, /phishing\.example\.com/);
   assert.ok(!sanitizedSummary.includes('shopee.vn/fake-shop'));
   assert.ok(sanitizedSummary.includes('[phone-removed]'));
   assert.ok(sanitizedSummary.includes('[link-removed]'));
