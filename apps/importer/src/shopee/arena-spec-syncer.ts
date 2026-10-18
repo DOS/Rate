@@ -13,6 +13,7 @@ import {
   type ProductSpecifications,
   type KeySpecs,
 } from '@repo/shared-data';
+import { fetchAllPages } from './paging.js';
 
 export interface ArenaSyncedDeviceSpec {
   source: 'gsmarena' | 'phonearena' | 'hybrid';
@@ -533,37 +534,52 @@ export interface ArenaCatalogAuditReport {
   }>;
 }
 
+export interface ArenaAuditMasterRow {
+  id: string;
+  name: string;
+  slug?: string | null;
+  model_key: string;
+  specifications?: Record<string, unknown> | null;
+}
+
 export class ArenaSpecSyncer {
   /**
    * Audits `rate.master_products` against the canonical 2026 Multi-Category Arena
    * Registry and flags any master products with < 10 populated specification field groups.
+   * Reads the whole table in pages (one response stops at max-rows) and throws on a
+   * read error rather than reporting every flagship as missing.
    */
-  public async auditCatalogAgainstArenaRegistry(supabase: {
-    from: (table: string) => {
-      select: (columns: string) => PromiseLike<{
-        data: Array<{
-          id: string;
-          name: string;
-          slug?: string | null;
-          model_key: string;
-          specifications?: Record<string, unknown> | null;
-        }> | null;
-        error: { message: string } | null;
-      }>;
-    };
-  }): Promise<ArenaCatalogAuditReport> {
-    const { data: rows, error } = await supabase
-      .from('master_products')
-      .select('id, name, slug, model_key, specifications');
-
-    if (error || !Array.isArray(rows)) {
-      return {
-        totalArena2026Flagships: UPSTREAM_2026_ARENA_REFERENCE_URLS.length,
-        presentInDatabase: 0,
-        missingFromDatabase: [...UPSTREAM_2026_ARENA_REFERENCE_URLS],
-        incompleteSpecMasters: [],
+  public async auditCatalogAgainstArenaRegistry(
+    supabase: {
+      from: (table: string) => {
+        select: (columns: string) => {
+          order: (
+            column: string,
+            options: { ascending: boolean }
+          ) => {
+            range: (
+              from: number,
+              to: number
+            ) => PromiseLike<{
+              data: ArenaAuditMasterRow[] | null;
+              error: { message: string } | null;
+            }>;
+          };
+        };
       };
-    }
+    },
+    pageSize?: number
+  ): Promise<ArenaCatalogAuditReport> {
+    const rows = await fetchAllPages(
+      'Arena catalog audit: failed to read master_products',
+      (from, to) =>
+        supabase
+          .from('master_products')
+          .select('id, name, slug, model_key, specifications')
+          .order('id', { ascending: true })
+          .range(from, to),
+      pageSize
+    );
 
     const existingKeys = new Set<string>();
     const existingSlugs = new Set<string>();

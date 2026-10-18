@@ -78,6 +78,15 @@
   --rate-crimson-text: #d83030;
   // Keyboard focus ring: 4.8:1 on white, 4.0:1 on #0f1113 (WCAG 2.4.7 / 1.4.11)
   --rate-focus-ring: #d83030;
+  // Text inks for Bootstrap's semantic text utilities (see "WCAG AA text inks"
+  // below). Each is at least 4.5:1 on white, #f1f5f9 and every *-subtle or
+  // bg-opacity-10 tint used on light pages.
+  --rate-ink-primary: #b42828;
+  --rate-ink-success: #146c43;
+  --rate-ink-danger: #b02a37;
+  --rate-ink-secondary: #545b62;
+  --rate-ink-warning: #7a5000;
+  --rate-ink-info: #0a6c7d;
 
   --body-font-family:
     var(--font-inter, 'Inter'), 'Plus Jakarta Sans', 'Noto Sans', -apple-system,
@@ -96,7 +105,9 @@
 // Rate.vn v3.0 Dark Command Surface (DESIGN.md section 2): wrap an obsidian
 // section in .rate-surface-dark and every --rate-* token below resolves to
 // its dark value, so .rate-card, .rate-eyebrow, .rate-spec-* read correctly.
-.rate-surface-dark {
+// The scoreboard card on product pages is an obsidian surface too.
+.rate-surface-dark,
+.rate-scoreboard-dark {
   --rate-bg-canvas: #0b0d11;
   --rate-bg-surface: #12161f;
   --rate-bg-elevated: #181d29;
@@ -114,6 +125,13 @@
   // #d83030 is only ~3.8:1 on #12161f; the hero highlight color reads ~6.5:1
   --rate-crimson-text: #ff6b6b;
   --rate-focus-ring: #ff6b6b;
+  // Light inks on obsidian (all at least 6:1 on #181d29)
+  --rate-ink-primary: #ff6b6b;
+  --rate-ink-success: #34d399;
+  --rate-ink-danger: #ff6b6b;
+  --rate-ink-secondary: #94a3b8;
+  --rate-ink-warning: #ffc107;
+  --rate-ink-info: #0dcaf0;
   --headingColor: #f8fafc;
   // Element rules in style.scss read these Bootstrap/template variables directly
   --paragraphColor: #cbd5e1;
@@ -133,6 +151,82 @@
 // outranks the template rule even though this partial is loaded first.
 .bg-white[class*="bg-opacity-"] {
   background-color: rgba(255, 255, 255, var(--bs-bg-opacity, 1)) !important;
+}
+
+// WCAG AA text inks (1.4.3, DOS/Rate#362). Bootstrap's semantic text colors
+// (#198754, #dc3545, #6c757d, #ffc107, #0dcaf0) and the brand red read only
+// 1.5-4.4:1 on the light tints these pages use, so text utilities take the
+// --rate-ink-* tokens instead (style.scss does the same for .text-primary and
+// the .btn-outline-* buttons). Backgrounds (bg-*, *-subtle, bg-opacity-*) keep
+// the brand and Bootstrap colors. Bootstrap's rules are !important too; this
+// file loads after bootstrap.css, so these win.
+.text-success {
+  color: var(--rate-ink-success) !important;
+}
+
+.text-danger {
+  color: var(--rate-ink-danger) !important;
+}
+
+.text-secondary {
+  color: var(--rate-ink-secondary) !important;
+}
+
+.text-warning {
+  color: var(--rate-ink-warning) !important;
+}
+
+.text-info {
+  color: var(--rate-ink-info) !important;
+}
+
+// Dark chips and buttons outside an obsidian surface (badge bg-dark
+// text-warning) take the light inks, and so do the heroes painted with an
+// inline dark gradient (.rate-ink-on-dark). axe cannot measure text on a
+// gradient (it reports "incomplete", which the E2E gate does not fail on), so
+// these sections have to opt in explicitly.
+.bg-dark,
+.text-bg-dark,
+.btn-dark,
+.rate-ink-on-dark {
+  --rate-ink-primary: #ff6b6b;
+  --rate-ink-success: #34d399;
+  --rate-ink-danger: #ff6b6b;
+  --rate-ink-secondary: #94a3b8;
+  --rate-ink-warning: #ffc107;
+  --rate-ink-info: #0dcaf0;
+}
+
+// style.scss paints outline buttons with the light body color; on a dark
+// ground that put light inks on a light pill. Let the dark ground show through.
+.rate-surface-dark,
+.rate-scoreboard-dark,
+.rate-ink-on-dark,
+.bg-dark,
+.text-bg-dark {
+  .btn-outline-primary,
+  .btn-outline-success,
+  .btn-outline-danger,
+  .btn-outline-warning,
+  .btn-outline-info,
+  .btn-outline-secondary {
+    background: transparent;
+  }
+}
+
+// A solid white or light island inside a dark ground (an input group on the
+// inspect scoreboard, the hero search box, its result and suggestion cards)
+// goes back to the dark inks. Translucent bg-white bg-opacity-* panels stay
+// dark, so they keep the light inks.
+:is(.rate-surface-dark, .rate-scoreboard-dark, .rate-ink-on-dark, .bg-dark)
+  :is(.bg-white, .bg-light):not([class*='bg-opacity']),
+.rate-ink-on-dark :is(.card, .dropdown-menu):not(.bg-dark, .text-bg-dark) {
+  --rate-ink-primary: #b42828;
+  --rate-ink-success: #146c43;
+  --rate-ink-danger: #b02a37;
+  --rate-ink-secondary: #545b62;
+  --rate-ink-warning: #7a5000;
+  --rate-ink-info: #0a6c7d;
 }
 
 // The score badges carry light-only literal tints; on the dark surface they

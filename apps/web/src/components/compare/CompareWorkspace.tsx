@@ -1317,8 +1317,7 @@ export default function CompareWorkspace({
                       : 'btn-light text-secondary border'
                   }`}
                 >
-                  {tab.label}{' '}
-                  <span className="rate-tabular opacity-75">({count})</span>
+                  {tab.label} <span className="rate-tabular">({count})</span>
                 </button>
               );
             })}

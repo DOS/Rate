@@ -18,7 +18,8 @@
       "watchlist": "Canh giá",
       "developers": "API",
       "priceWatchCta": "Canh giá thật",
-      "selectLanguageAria": "Chọn ngôn ngữ"
+      "selectLanguageAria": "Chọn ngôn ngữ",
+      "menuToggleAria": "Mở hoặc đóng menu"
     },
     "footer": {
       "copyRight": "© {YEAR} Rate.vn (DOS Ecosystem). Nền tảng Đối chiếu Thông số 10 Nhóm, Lịch sử Giá thật & Kiểm toán Đánh giá Đa sàn.",
