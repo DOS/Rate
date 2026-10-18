@@ -18,11 +18,5 @@ export default async function EarbudsDetailPage({
 }: {
   params: PageParams;
 }) {
-  return (
-    <ProductDetailView
-      params={params}
-      categoryBasePath="/earbuds"
-      categoryLabel="Tai nghe không dây"
-    />
-  );
+  return <ProductDetailView params={params} categoryBasePath="/earbuds" />;
 }

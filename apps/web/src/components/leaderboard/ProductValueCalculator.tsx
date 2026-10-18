@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import {
   RADAR_CSV_HEADERS,
   radarCsvCells,
@@ -56,6 +57,7 @@ export default function ProductValueCalculator({
   valueCriterionScore5,
   radarSignal,
 }: ProductValueCalculatorProps) {
+  const t = useTranslations('productDetail');
   const [months, setMonths] = useState<HorizonMonths>(24);
   const [includeResale, setIncludeResale] = useState<boolean>(true);
 
@@ -115,13 +117,13 @@ export default function ProductValueCalculator({
     if (typeof window === 'undefined') return;
     const escapeCsv = escapeCsvCell;
     const headers = [
-      'Chu Kỳ (Tháng)',
-      'Giá Mua Thấp Nhất (VND)',
-      'Tỷ Lệ Giữ Giá Dự Kiến (%)',
-      'Giá Trị Thu Hồi Dự Kiến (VND)',
-      'Chi Phí Sở Hữu Thực (VND)',
-      'Chi Phí Mỗi Tháng (VND)',
-      'Chi Phí Mỗi Ngày (VND)',
+      t('valueCalcCsvColHorizon'),
+      t('valueCalcCsvColMinPrice'),
+      t('valueCalcCsvColRetentionPct'),
+      t('valueCalcCsvColResaleVnd'),
+      t('valueCalcCsvColNetCostVnd'),
+      t('valueCalcCsvColMonthlyCostVnd'),
+      t('valueCalcCsvColDailyCostVnd'),
       ...(radarSignal ? RADAR_CSV_HEADERS : []),
     ];
     const horizons: HorizonMonths[] = [12, 24, 36];
@@ -186,20 +188,19 @@ export default function ProductValueCalculator({
       <div className="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-3">
         <div>
           <span className="rate-eyebrow text-danger d-block mb-1">
-            💡 BỘ TÍNH HIỆU SUẤT ĐẦU TƯ &amp; CHI PHÍ SỞ HỮU (VALUE &amp; TCO
-            AUDIT)
+            {t('valueCalcEyebrow')}
           </span>
           <h3 className="h5 fw-bold mb-1">
-            Định Lượng Giá Trị Thực Tế: {productName}
+            {t('valueCalcHeading', { name: productName })}
           </h3>
           <p className="text-muted small mb-0">
-            Quy đổi giá thấp nhất đã kiểm định (
-            {minPriceVnd.toLocaleString('vi-VN')} ₫) trên mỗi điểm chất lượng
-            JReviews (
-            {metrics.combined10 > 0
-              ? `${metrics.combined10}/10`
-              : 'chưa có điểm'}
-            ) và chi phí sử dụng thực tế theo ngày.
+            {t('valueCalcSubtitle', {
+              price: minPriceVnd.toLocaleString('vi-VN'),
+              score:
+                metrics.combined10 > 0
+                  ? `${metrics.combined10}/10`
+                  : t('valueCalcNoScoreYet'),
+            })}
           </p>
         </div>
 
@@ -207,7 +208,7 @@ export default function ProductValueCalculator({
           <div
             className="btn-group btn-group-sm"
             role="group"
-            aria-label="Chu kỳ sử dụng"
+            aria-label={t('valueCalcHorizonAria')}
           >
             {([12, 24, 36] as HorizonMonths[]).map((m) => (
               <button
@@ -218,7 +219,7 @@ export default function ProductValueCalculator({
                   months === m ? 'btn-danger' : 'btn-outline-secondary'
                 }`}
               >
-                {m} tháng
+                {t('valueCalcMonthsBtn', { months: m })}
               </button>
             ))}
           </div>
@@ -231,8 +232,8 @@ export default function ProductValueCalculator({
             }`}
           >
             {includeResale
-              ? `♻️ Có tính thu cũ đổi mới (~${metrics.retentionPct}%)`
-              : '🔒 Không tính bán lại (Khấu hao 100%)'}
+              ? t('valueCalcIncludeResaleOn', { pct: metrics.retentionPct })
+              : t('valueCalcIncludeResaleOff')}
           </button>
 
           <button
@@ -258,17 +259,19 @@ export default function ProductValueCalculator({
         <div className="col-md-3 col-6">
           <div className="rounded-3 bg-light h-100 border p-3">
             <div className="text-muted small mb-1">
-              Chi phí / 1.0 điểm JReviews
+              {t('valueCalcCardCostPerPointTitle')}
             </div>
             <div className="h5 fw-bold font-monospace text-dark rate-tabular mb-1">
               {metrics.costPerPoint10 > 0
                 ? `${metrics.costPerPoint10.toLocaleString('vi-VN')} ₫`
-                : 'Chưa có'}
+                : t('valueCalcNotAvailable')}
             </div>
             <div className="small text-secondary">
               {metrics.combined10 > 0
-                ? `Cho mỗi 1.0 điểm trên thang ${metrics.combined10}/10`
-                : 'Chưa đủ dữ liệu điểm JReviews'}
+                ? t('valueCalcCardCostPerPointSub', {
+                    score: metrics.combined10,
+                  })
+                : t('valueCalcCardCostPerPointEmpty')}
             </div>
           </div>
         </div>
@@ -276,13 +279,15 @@ export default function ProductValueCalculator({
         <div className="col-md-3 col-6">
           <div className="rounded-3 bg-light h-100 border p-3">
             <div className="text-muted small mb-1">
-              Chi phí thực tế mỗi ngày ({months}T)
+              {t('valueCalcCardDailyCostTitle', { months })}
             </div>
             <div className="h5 fw-bold font-monospace text-danger rate-tabular mb-1">
-              {metrics.dailyCostVnd.toLocaleString('vi-VN')} ₫/ngày
+              {metrics.dailyCostVnd.toLocaleString('vi-VN')}{' '}
+              {t('valueCalcPerDayUnit')}
             </div>
             <div className="small text-secondary rate-tabular">
-              ~{metrics.monthlyCostVnd.toLocaleString('vi-VN')} ₫/tháng
+              ~{metrics.monthlyCostVnd.toLocaleString('vi-VN')}{' '}
+              {t('valueCalcPerMonthUnit')}
             </div>
           </div>
         </div>
@@ -290,7 +295,7 @@ export default function ProductValueCalculator({
         <div className="col-md-3 col-6">
           <div className="rounded-3 bg-light h-100 border p-3">
             <div className="text-muted small mb-1">
-              Giá trị thu hồi dự kiến sau {months} tháng
+              {t('valueCalcCardResaleTitle', { months })}
             </div>
             <div className="h5 fw-bold font-monospace text-success rate-tabular mb-1">
               {includeResale
@@ -299,8 +304,11 @@ export default function ProductValueCalculator({
             </div>
             <div className="small text-secondary">
               {includeResale
-                ? `Giữ giá dự kiến ~${metrics.retentionPct}% (${brand})`
-                : 'Đang tắt tính năng thu hồi vốn'}
+                ? t('valueCalcCardResaleSubOn', {
+                    pct: metrics.retentionPct,
+                    brand,
+                  })
+                : t('valueCalcCardResaleSubOff')}
             </div>
           </div>
         </div>
@@ -308,17 +316,19 @@ export default function ProductValueCalculator({
         <div className="col-md-3 col-6">
           <div className="rounded-3 bg-light h-100 border p-3">
             <div className="text-muted small mb-1">
-              Điểm Đáng tiền P/P &amp; Tiết kiệm chéo
+              {t('valueCalcCardValueScoreTitle')}
             </div>
             <div className="h5 fw-bold font-monospace text-primary rate-tabular mb-1">
               {valueCriterionScore5 > 0
                 ? `★ ${valueCriterionScore5.toFixed(1)}/5.0`
-                : 'Chưa có'}
+                : t('valueCalcNotAvailable')}
             </div>
             <div className="small text-secondary rate-tabular">
               {metrics.maxSpreadSavingsVnd > 0
-                ? `Lệch giữa các sàn: ${metrics.maxSpreadSavingsVnd.toLocaleString('vi-VN')} ₫`
-                : 'Giá đồng nhất giữa các đại lý'}
+                ? t('valueCalcSpreadSavingsSub', {
+                    amount: metrics.maxSpreadSavingsVnd.toLocaleString('vi-VN'),
+                  })
+                : t('valueCalcUniformPriceSub')}
             </div>
           </div>
         </div>

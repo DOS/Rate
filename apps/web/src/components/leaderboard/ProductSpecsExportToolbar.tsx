@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import type { KeySpecs, ProductSpecifications } from '@repo/shared-data';
 import {
   RADAR_CSV_HEADERS,
@@ -28,6 +29,7 @@ export default function ProductSpecsExportToolbar({
   keySpecs,
   radarSignal,
 }: ProductSpecsExportToolbarProps) {
+  const t = useTranslations('productDetail');
   const [copiedSpecsMd, setCopiedSpecsMd] = useState(false);
 
   const buildSpecRows = (): Array<[string, string, string]> => [
@@ -287,9 +289,7 @@ export default function ProductSpecsExportToolbar({
         className="btn btn-sm btn-outline-dark rounded-pill fw-semibold px-3 py-1"
         data-testid="copy-specs-md-btn"
       >
-        {copiedSpecsMd
-          ? '✅ Đã chép 10 nhóm thông số!'
-          : '📋 Sao chép 10 nhóm thông số MD'}
+        {copiedSpecsMd ? t('specsToolbarCopiedMd') : t('specsToolbarCopyMd')}
       </button>
       <button
         type="button"
@@ -297,7 +297,7 @@ export default function ProductSpecsExportToolbar({
         className="btn btn-sm btn-outline-secondary rounded-pill fw-semibold px-3 py-1"
         data-testid="download-specs-csv-btn"
       >
-        📥 Xuất CSV thông số
+        {t('specsToolbarExportCsv')}
       </button>
       <button
         type="button"
@@ -305,7 +305,7 @@ export default function ProductSpecsExportToolbar({
         className="btn btn-sm btn-outline-secondary rounded-pill fw-semibold px-3 py-1"
         data-testid="download-specs-json-btn"
       >
-        📦 Xuất JSON thông số
+        {t('specsToolbarExportJson')}
       </button>
     </div>
   );

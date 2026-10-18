@@ -1,11 +1,11 @@
 import { Suspense } from 'react';
 import type { Metadata } from 'next';
+import { getTranslations } from 'next-intl/server';
 import NavbarDarkDynamic from '../components/navbar/NavbarDarkDynamic';
 import FooterTop from '../components/footer-top';
 import FooterDynamic from '../components/footer/FooterDynamic';
 import BackToTop from '../components/back-to-top';
 import RateAuthPortal from '@/components/auth/RateAuthPortal';
-import { normalizeRateLocale } from '@/lib/rate-i18n';
 
 export async function generateMetadata({
   params,
@@ -13,14 +13,9 @@ export async function generateMetadata({
   params: Promise<{ locale: string }>;
 }): Promise<Metadata> {
   const { locale } = await params;
-  const lang = normalizeRateLocale(locale);
+  const t = await getTranslations({ locale, namespace: 'authPortal' });
   return {
-    title:
-      lang === 'en'
-        ? 'Create a Buyer Audit Account | Rate.vn'
-        : lang === 'cs'
-          ? 'Vytvořit účet | Rate.vn'
-          : 'Đăng Ký Tài Khoản Rate.vn | Cộng Đồng Kiểm Toán Giá Thật & Thông Số',
+    title: t('metaRegisterTitle'),
   };
 }
 
@@ -30,11 +25,16 @@ export default async function RegisterPage({
   params: Promise<{ locale: string }>;
 }) {
   const { locale } = await params;
+  const t = await getTranslations({ locale, namespace: 'authPortal' });
   return (
     <>
       <NavbarDarkDynamic links={[]} />
       <Suspense
-        fallback={<div className="container py-5 text-center">Loading...</div>}
+        fallback={
+          <div className="container py-5 text-center">
+            {t('loadingFallback')}
+          </div>
+        }
       >
         <RateAuthPortal mode="register" locale={locale} />
       </Suspense>
