@@ -1495,8 +1495,147 @@ async function run() {
     'Long non-sabotage comment must not match competitor_sabotage or backtrack quadratically'
   );
 
+  // 16d. DOS/Rate#379: ScrapedProductSchema MAX_VALID_VND_PRICE, normalizeScrapedProductPrices, resolveClusterPeerFloorPrice bounds, and EntityMatcher key_specs preservation
+  const { MAX_VALID_VND_PRICE, ScrapedProductSchema } = await import('./types.js');
+  const { normalizeScrapedProductPrices } = await import('./shopee-to-supabase.js');
+  assert.equal(MAX_VALID_VND_PRICE, 1_000_000_000);
+  const unscaledSchemaCheck = ScrapedProductSchema.safeParse({
+    itemId: 'i-379',
+    shopId: 's-379',
+    url: 'https://shopee.vn/product/379/379',
+    title: 'iPhone 16 Pro Max 256GB',
+    priceMin: 2_899_000_000_000,
+    priceMax: 2_899_000_000_000,
+    shop: { shopId: 's-379', name: 'Shop 379', isMall: true },
+  });
+  assert.equal(
+    unscaledSchemaCheck.success,
+    false,
+    'ScrapedProductSchema must reject unscaled priceMin/priceMax > MAX_VALID_VND_PRICE'
+  );
+
+  const normalized379 = normalizeScrapedProductPrices(
+    ScrapedProductSchema.parse({
+      itemId: 'i-379',
+      shopId: 's-379',
+      url: 'https://shopee.vn/product/379/379',
+      title: 'iPhone 16 Pro Max 256GB',
+      priceMin: 28_990_000,
+      priceMax: 30_990_000,
+      priceBeforeDiscount: 2_899_000_000_000,
+      models: [
+        { modelId: 'm1', name: '256GB', price: 28_990_000 },
+        { modelId: 'm2', name: 'Out of stock', price: 0 },
+        { modelId: 'm3', name: 'Unscaled', price: 2_899_000_000_000 },
+      ],
+      shop: { shopId: 's-379', name: 'Shop 379', isMall: true },
+    })
+  );
+  assert.equal(
+    normalized379.priceBeforeDiscount,
+    undefined,
+    'normalizeScrapedProductPrices must strip priceBeforeDiscount > MAX_VALID_VND_PRICE'
+  );
+  assert.equal(
+    normalized379.models.length,
+    1,
+    'normalizeScrapedProductPrices must filter out models with price <= 0 or > MAX_VALID_VND_PRICE'
+  );
+
+  assert.equal(
+    resolveClusterPeerFloorPrice(
+      [
+        { id: 'peer-unscaled', price_current: 2_899_000_000_000, merchants: { is_official: true } },
+        { id: 'peer-valid', price_current: 28_990_000, merchants: { is_official: false } },
+      ],
+      'self-prod',
+      2_899_000_000_000
+    ),
+    28_990_000,
+    'resolveClusterPeerFloorPrice must ignore peer prices > MAX_VALID_VND_PRICE'
+  );
+  assert.equal(
+    resolveClusterPeerFloorPrice(
+      [{ id: 'peer-unscaled', price_current: 2_899_000_000_000, merchants: { is_official: true } }],
+      'self-prod',
+      2_899_000_000_000
+    ),
+    undefined,
+    'resolveClusterPeerFloorPrice must ignore fallbackMasterMinPrice > MAX_VALID_VND_PRICE'
+  );
+
+  // EntityMatcher.enrichMasterProductById must preserve existing key_specs (e.g. price_spread_audit)
+  let updatedKeySpecs379: Record<string, unknown> | null = null;
+  const matcher379 = new EntityMatcher(
+    {
+      from: (table: string) => {
+        assert.equal(table, 'master_products');
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: {
+                  id: 'master-379',
+                  brand: 'Apple',
+                  model: 'iPhone 16 Pro Max',
+                  storage_gb: 256,
+                  ram_gb: 8,
+                  screen_size_inch: 6.9,
+                  battery_mah: 4685,
+                  has_5g: true,
+                  name: 'Apple iPhone 16 Pro Max 256GB',
+                  description: '',
+                  colors: ['Natural Titanium'],
+                  key_specs: {
+                    price_spread_audit: { verdict: 'normal_spread', maxSpreadRatio: 1.05 },
+                    custom_tag: 'flagship',
+                  },
+                },
+                error: null,
+              }),
+            }),
+          }),
+          update: (patch: Record<string, unknown>) => {
+            updatedKeySpecs379 = (patch.key_specs as Record<string, unknown>) ?? null;
+            return {
+              eq: async () => ({ error: null }),
+            };
+          },
+        };
+      },
+    } as unknown as import('./types.js').RateSupabaseClient,
+    {
+      fetchSpecsFromAi: async () => ({
+        ram_gb: 8,
+        storage_gb: 256,
+        screen_size_inch: 6.9,
+        battery_mah: 4685,
+        has_5g: true,
+        specifications: {
+          hardware: { chipset: 'Apple A18 Pro', ram_gb: 8, storage_gb: 256 },
+        },
+        key_specs: {
+          chip: 'Apple A18 Pro',
+          screen: '6.9" LTPO Super Retina XDR OLED',
+        },
+      }),
+    } as unknown as import('./ai-spec-enricher.js').AiSpecEnricher
+  );
+  const enriched379 = await matcher379.enrichMasterProductById('master-379');
+  assert.equal(enriched379, true);
+  assert.deepEqual(
+    updatedKeySpecs379,
+    {
+      price_spread_audit: { verdict: 'normal_spread', maxSpreadRatio: 1.05 },
+      custom_tag: 'flagship',
+      chip: 'Apple A18 Pro',
+      screen: '6.9" LTPO Super Retina XDR OLED',
+    },
+    'EntityMatcher.enrichMasterProductById must preserve existing key_specs (such as price_spread_audit) when merging AI key_specs'
+  );
+
   console.log(
-    `✅ [P2/P3 Trust Model & #292/#352/#356/#359] Voter weight, Wilson lower bound (50/52=${wilson50of52} > 1/1=${wilson1of1}), shingle copy seeding (sim=${shingleSim}), affiliate shortlinks, peer floor, ArenaSpecSyncer & Importer hardening (#352, #356, #359) verified`
+    `✅ [P2/P3 Trust Model & #292/#352/#356/#359/#379] Voter weight, Wilson lower bound (50/52=${wilson50of52} > 1/1=${wilson1of1}), shingle copy seeding (sim=${shingleSim}), affiliate shortlinks, peer floor, ArenaSpecSyncer & Importer hardening (#352, #356, #359, #379) verified`
   );
 
   console.log('\n🎉 ALL AI REVIEW ANALYZER TESTS PASSED!');

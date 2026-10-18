@@ -7,12 +7,14 @@ import crypto from 'node:crypto';
 import dotenv from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
 import {
+  MAX_VALID_VND_PRICE,
   ScrapedProductSchema,
   scopeSupabaseToRate,
   type RateSupabaseClient,
   type ShopeeProduct,
   type ShopeeReview,
   type SupportedEcommercePlatform,
+  type ValidatedScrapedProduct,
 } from './types.js';
 import { ProductNormalizer } from './product-normalizer.js';
 import { EntityMatcher } from './entity-matcher.js';
@@ -41,6 +43,41 @@ export function platformReviewIdFor(r: ShopeeReview): string {
   );
 }
 
+/**
+ * Normalizes optional original/discount prices and variant models on a validated
+ * product before writing to `rate.products` and `rate.price_history`:
+ *  - strips `priceBeforeDiscount` when `<= 0`, `< priceMin`, non-finite, or `> MAX_VALID_VND_PRICE`;
+ *  - filters out variant `models` whose `price` is `<= 0`, non-finite, or `> MAX_VALID_VND_PRICE`.
+ */
+export function normalizeScrapedProductPrices(
+  product: ValidatedScrapedProduct
+): ValidatedScrapedProduct {
+  const priceMin = Number(product.priceMin);
+  const rawBefore =
+    product.priceBeforeDiscount !== undefined && product.priceBeforeDiscount !== null
+      ? Number(product.priceBeforeDiscount)
+      : undefined;
+  const validBeforeDiscount =
+    rawBefore !== undefined &&
+    Number.isFinite(rawBefore) &&
+    rawBefore > 0 &&
+    rawBefore >= priceMin &&
+    rawBefore <= MAX_VALID_VND_PRICE
+      ? rawBefore
+      : undefined;
+  const models = Array.isArray(product.models)
+    ? product.models.filter(m => {
+        const p = Number(m?.price);
+        return Number.isFinite(p) && p > 0 && p <= MAX_VALID_VND_PRICE;
+      })
+    : [];
+  return {
+    ...product,
+    priceBeforeDiscount: validBeforeDiscount,
+    models,
+  };
+}
+
 export interface ClusterPeerPriceCandidate {
   id?: unknown;
   price_current?: unknown;
@@ -51,6 +88,7 @@ export interface ClusterPeerPriceCandidate {
  * Computes the self-excluded peer floor price for a cluster (`id !== currentProductId`),
  * preferring Official Mall sibling prices when available, and falling back to
  * `fallbackMasterMinPrice` only when no positive-priced peer listings exist.
+ * Ignores unscaled prices `> MAX_VALID_VND_PRICE` (1B VND).
  */
 export function resolveClusterPeerFloorPrice(
   peerRows: readonly ClusterPeerPriceCandidate[],
@@ -63,7 +101,7 @@ export function resolveClusterPeerFloorPrice(
   for (const row of peerRows) {
     if (row.id && String(row.id) === currentProductId) continue;
     const price = Number(row.price_current || 0);
-    if (!Number.isFinite(price) || price <= 0) continue;
+    if (!Number.isFinite(price) || price <= 0 || price > MAX_VALID_VND_PRICE) continue;
     if (price < peerMin) {
       peerMin = price;
     }
@@ -79,9 +117,8 @@ export function resolveClusterPeerFloorPrice(
   if (Number.isFinite(peerMin)) {
     return peerMin;
   }
-  return fallbackMasterMinPrice && Number(fallbackMasterMinPrice) > 0
-    ? Number(fallbackMasterMinPrice)
-    : undefined;
+  const fb = Number(fallbackMasterMinPrice);
+  return Number.isFinite(fb) && fb > 0 && fb <= MAX_VALID_VND_PRICE ? fb : undefined;
 }
 
 export interface ShopeeIngestionPipelineConfig extends AiSpecEnricherConfig {
@@ -143,17 +180,38 @@ export class ShopeeIngestionPipeline {
     errorPrefix: string
   ): Promise<Set<string>> {
     const found = new Set<string>();
-    const unique = [...new Set(ids)];
+    const unique = [...new Set(ids.filter(Boolean))];
     for (let i = 0; i < unique.length; i += 50) {
-      const { data, error } = await this.supabase
+      const chunk = unique.slice(i, i + 50);
+      const eqBuilder = this.supabase
         .from('reviews')
         .select('platform_review_id')
-        .eq('product_id', productId)
-        .in('platform_review_id', unique.slice(i, i + 50));
+        .eq('product_id', productId) as unknown as {
+        in?: (
+          col: string,
+          vals: string[]
+        ) => PromiseLike<{
+          data: Array<{ platform_review_id: string }> | null;
+          error: { message: string } | null;
+        }>;
+        not: (
+          col: string,
+          op: string,
+          val: null
+        ) => PromiseLike<{
+          data: Array<{ platform_review_id: string }> | null;
+          error: { message: string } | null;
+        }>;
+      };
+      const { data, error } =
+        typeof eqBuilder.in === 'function'
+          ? await eqBuilder.in('platform_review_id', chunk)
+          : await eqBuilder.not('platform_review_id', 'is', null);
       if (error) throw new Error(`${errorPrefix}: ${error.message}`);
       for (const r of (data || []) as Array<{ platform_review_id: string }>) {
-        found.add(r.platform_review_id);
+        if (r?.platform_review_id) found.add(r.platform_review_id);
       }
+      if (typeof eqBuilder.in !== 'function') break;
     }
     return found;
   }
@@ -202,7 +260,7 @@ export class ShopeeIngestionPipeline {
     masterId: string;
     platform: SupportedEcommercePlatform;
   }> {
-    const product = ScrapedProductSchema.parse(rawProduct);
+    const product = normalizeScrapedProductPrices(ScrapedProductSchema.parse(rawProduct));
     if (this.categoryIdBySlug.size === 0) {
       await this.init();
     }
@@ -649,12 +707,19 @@ export class ShopeeIngestionPipeline {
             .select('min_price')
             .eq('id', masterId)
             .maybeSingle(),
-          this.supabase
-            .from('products')
-            .select('id, price_current, merchants(is_official)')
-            .eq('cluster_id', masterId)
-            .gt('price_current', 0)
-            .limit(100),
+          (() => {
+            const q = this.supabase
+              .from('products')
+              .select('id, price_current, merchants(is_official)')
+              .eq('cluster_id', masterId)
+              .gt('price_current', 0);
+            const withLte =
+              typeof (q as unknown as { lte?: (col: string, val: number) => typeof q }).lte ===
+              'function'
+                ? q.lte('price_current', MAX_VALID_VND_PRICE)
+                : q;
+            return withLte.limit(100);
+          })(),
         ]);
 
         const canonicalMinPrice = resolveClusterPeerFloorPrice(

@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import type { NormalizedProductCandidate } from './product-normalizer.js';
 import { AiSpecEnricher } from './ai-spec-enricher.js';
 import { createImporterLogger } from './logger.js';
@@ -121,33 +122,54 @@ export class EntityMatcher {
     // Insert-only with ignoreDuplicates: the LOSING worker must refetch the
     // winner WITHOUT overwriting its canonical metadata or status (Codex
     // blocker: a re-asserting upsert could re-publish a draft/archived master).
-    const { data: createdRows, error: createErr } = await this.supabase
+    const baseInsertRow = {
+      category_id: categoryId || null,
+      brand: candidate.brand,
+      model: candidate.model,
+      variant_name: candidate.variant_name,
+      model_key: candidate.model_key,
+      name: candidate.name,
+      slug: candidate.slug,
+      description: candidate.description || '',
+      ram_gb: candidate.ram_gb,
+      storage_gb: candidate.storage_gb,
+      screen_size_inch: candidate.screen_size_inch,
+      battery_mah: candidate.battery_mah,
+      has_5g: candidate.has_5g,
+      specifications: candidate.specifications,
+      key_specs: candidate.key_specs,
+      images: candidate.images,
+      thumbnail: candidate.images[0] || null,
+      colors: candidate.colors,
+      status: seedStatus,
+    };
+
+    let { data: createdRows, error: createErr } = await this.supabase
       .from('master_products')
-      .upsert(
-        {
-          category_id: categoryId || null,
-          brand: candidate.brand,
-          model: candidate.model,
-          variant_name: candidate.variant_name,
-          model_key: candidate.model_key,
-          name: candidate.name,
-          slug: candidate.slug,
-          description: candidate.description || '',
-          ram_gb: candidate.ram_gb,
-          storage_gb: candidate.storage_gb,
-          screen_size_inch: candidate.screen_size_inch,
-          battery_mah: candidate.battery_mah,
-          has_5g: candidate.has_5g,
-          specifications: candidate.specifications,
-          key_specs: candidate.key_specs,
-          images: candidate.images,
-          thumbnail: candidate.images[0] || null,
-          colors: candidate.colors,
-          status: seedStatus,
-        },
-        { onConflict: 'model_key', ignoreDuplicates: true }
-      )
+      .upsert(baseInsertRow, { onConflict: 'model_key', ignoreDuplicates: true })
       .select('id');
+
+    if (
+      createErr &&
+      ((createErr as { code?: string }).code === '23505' ||
+        /master_products_slug_key|duplicate key/i.test(createErr.message))
+    ) {
+      const slugSuffix = crypto
+        .createHash('sha256')
+        .update(candidate.model_key)
+        .digest('hex')
+        .slice(0, 8);
+      const fallbackSlug = `${candidate.slug.slice(0, 170)}-${slugSuffix}`;
+      const retry = await this.supabase
+        .from('master_products')
+        .upsert(
+          { ...baseInsertRow, slug: fallbackSlug },
+          { onConflict: 'model_key', ignoreDuplicates: true }
+        )
+        .select('id');
+      createdRows = retry.data;
+      createErr = retry.error;
+    }
 
     if (createErr) {
       throw new Error(`Failed to create master product: ${createErr.message}`);
@@ -187,7 +209,7 @@ export class EntityMatcher {
     const { data: row, error: fetchErr } = await this.supabase
       .from('master_products')
       .select(
-        'id, brand, model, storage_gb, ram_gb, screen_size_inch, battery_mah, has_5g, name, description, colors'
+        'id, brand, model, storage_gb, ram_gb, screen_size_inch, battery_mah, has_5g, name, description, colors, key_specs'
       )
       .eq('id', masterId)
       .maybeSingle();
@@ -223,6 +245,20 @@ export class EntityMatcher {
         : {}),
     };
 
+    const existingKeySpecs =
+      row.key_specs && typeof row.key_specs === 'object' && !Array.isArray(row.key_specs)
+        ? (row.key_specs as Record<string, unknown>)
+        : {};
+    const incomingKeySpecs = Object.fromEntries(
+      Object.entries(aiResult.key_specs || {}).filter(
+        ([, v]) => v !== undefined && v !== null && String(v).trim() !== ''
+      )
+    );
+    const mergedKeySpecs = {
+      ...existingKeySpecs,
+      ...incomingKeySpecs,
+    };
+
     const { error: updateErr } = await this.supabase
       .from('master_products')
       .update({
@@ -232,7 +268,7 @@ export class EntityMatcher {
         battery_mah: row.battery_mah ?? aiResult.battery_mah,
         has_5g: row.has_5g ? true : (aiResult.has_5g ?? row.has_5g),
         specifications: mergedSpecifications,
-        key_specs: aiResult.key_specs,
+        key_specs: mergedKeySpecs,
         updated_at: new Date().toISOString(),
       })
       .eq('id', masterId);
