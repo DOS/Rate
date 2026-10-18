@@ -56,6 +56,19 @@ export async function generateMetadata({
   };
 }
 
+const CATEGORY_DESC_KEYS = {
+  smartphones: 'catDescSmartphones',
+  laptops: 'catDescLaptops',
+  tablets: 'catDescTablets',
+  smartwatches: 'catDescSmartwatches',
+  earbuds: 'catDescEarbuds',
+} as const;
+
+type KnownCategorySlug = keyof typeof CATEGORY_DESC_KEYS;
+
+const isKnownCategory = (slug: string): slug is KnownCategorySlug =>
+  Object.hasOwn(CATEGORY_DESC_KEYS, slug);
+
 function getCategoryIcon(slug: string) {
   switch (slug) {
     case 'smartphones':
@@ -328,17 +341,16 @@ export default async function Home({
 
           <div className="row g-3">
             {platformStats.categoriesWithCounts.map((cat) => {
-              const known =
-                cat.slug === 'smartphones' ||
-                cat.slug === 'laptops' ||
-                cat.slug === 'tablets' ||
-                cat.slug === 'smartwatches' ||
-                cat.slug === 'earbuds';
+              const known = isKnownCategory(cat.slug);
+              const titleId = `home-cat-${cat.slug}-title`;
+              const descId = `home-cat-${cat.slug}-desc`;
               return (
                 <div key={cat.id} className="col-xl col-lg-4 col-sm-6 col-12">
                   <Link
                     href={cat.routeHref}
                     className="rate-card rate-card-interactive rate-category-card"
+                    aria-labelledby={titleId}
+                    aria-describedby={known ? descId : undefined}
                   >
                     <div className="rate-category-card-top">
                       <span
@@ -359,18 +371,14 @@ export default async function Home({
                           : tRate('home.catExpanding')}
                       </span>
                     </div>
-                    <h4 className="rate-category-card-title">
+                    <h4 id={titleId} className="rate-category-card-title">
                       {known ? tRate(`nav.${cat.slug}`) : cat.name}
                     </h4>
-                    <p className="rate-category-card-desc">
-                      {cat.slug === 'smartphones' &&
-                        tHome('catDescSmartphones')}
-                      {cat.slug === 'laptops' && tHome('catDescLaptops')}
-                      {cat.slug === 'tablets' && tHome('catDescTablets')}
-                      {cat.slug === 'smartwatches' &&
-                        tHome('catDescSmartwatches')}
-                      {cat.slug === 'earbuds' && tHome('catDescEarbuds')}
-                    </p>
+                    {isKnownCategory(cat.slug) && (
+                      <p id={descId} className="rate-category-card-desc">
+                        {tHome(CATEGORY_DESC_KEYS[cat.slug])}
+                      </p>
+                    )}
                     <span className="rate-category-card-cta">
                       {tRate('home.catViewLink')}
                       <BsArrowRight aria-hidden="true" />
