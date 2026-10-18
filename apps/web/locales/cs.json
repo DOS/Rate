@@ -1221,5 +1221,276 @@
     "quarantineRejectedTitle": "Signál zamítnut filtrem Zero-Trust Gatekeeper",
     "quarantineCanonicalUrlLabel": "Kanonizovaná URL (bez PII):",
     "quarantineErrConnect": "Nelze se připojit k bráně Zero-Trust Quarantine."
+  },
+  "catalog": {
+    "meta": {
+      "smartphones": {
+        "titleCount": "Srovnání cen chytrých telefonů a filtr 10 skupin parametrů ({count} modelů) | Rate.vn",
+        "titleDefault": "Srovnání cen chytrých telefonů (Smartphones) a AI kontrola slev | Rate.vn",
+        "description": "Filtrujte chytré telefony podle 10 skupin parametrů, zkontrolujte historii skutečných cen a filtrujte AI seeding recenze na Rate.vn."
+      },
+      "tablets": {
+        "titleCount": "Srovnání cen tabletů ({count} normalizovaných modelů) | Rate.vn",
+        "titleDefault": "Srovnání cen tabletů (Tablets) a AI kontrola slev | Rate.vn",
+        "description": "Vyhledávejte a filtrujte tablety (iPad, Galaxy Tab, Xiaomi Pad) podle 10 standardizovaných skupin parametrů, ověřte historii cen a odfiltrujte falešné recenze na Rate.vn."
+      },
+      "laptops": {
+        "titleCount": "Srovnání cen notebooků ({count} normalizovaných modelů) | Rate.vn",
+        "titleDefault": "Srovnání cen notebooků (Laptops) a AI kontrola slev | Rate.vn",
+        "description": "Vyhledávejte a filtrujte notebooky (MacBook, ThinkPad, ASUS ROG, Dell XPS) podle 10 standardizovaných skupin parametrů, ověřte historii cen a odfiltrujte falešné recenze na Rate.vn."
+      },
+      "smartwatches": {
+        "titleCount": "Srovnání cen chytrých hodinek ({count} normalizovaných modelů) | Rate.vn",
+        "titleDefault": "Srovnání cen chytrých hodinek (Smartwatches) a AI kontrola slev | Rate.vn",
+        "description": "Vyhledávejte a filtrujte chytré hodinky (Apple Watch, Galaxy Watch, Garmin, Xiaomi Watch, Huawei Watch) podle 10 skupin parametrů, ověřte historii cen a recenze na Rate.vn."
+      },
+      "earbuds": {
+        "titleCount": "Srovnání cen bezdrátových ANC sluchátek ({count} normalizovaných modelů) | Rate.vn",
+        "titleDefault": "Srovnání cen bezdrátových ANC sluchátek (Earbuds) a AI kontrola slev | Rate.vn",
+        "description": "Vyhledávejte a filtrujte bezdrátová sluchátka s ANC (AirPods Pro, Sony WF-1000XM5, Galaxy Buds, Bose, Sennheiser) podle 10 skupin parametrů, historie cen a AI auditu recenzí na Rate.vn."
+      }
+    },
+    "sortOptions": {
+      "default": "Výchozí (Nedávno aktualizované)",
+      "price_asc": "Cena: od nejnižší",
+      "price_desc": "Cena: od nejvyšší",
+      "rating_desc": "Nejlépe hodnocené",
+      "merchants_desc": "Nejvíce prodejců",
+      "newest": "Nejnovější modely"
+    },
+    "schemas": {
+      "directoryTech": "Technologie a digitální zařízení",
+      "smartphones": {
+        "title": "Chytré telefony",
+        "subtitle": "Prozkoumejte technické parametry v 10 skupinách podle GSMArena a PhoneArena, porovnejte ceny napříč tržišti a filtrujte ověřené recenze pomocí AI",
+        "searchPlaceholder": "Hledat model, čipset (např. iPhone 16, Snapdragon 8 Gen 3)...",
+        "presets": {
+          "under-7m": "Pod 7M VND",
+          "7m-15m": "7M - 15M VND",
+          "15m-25m": "15M - 25M VND",
+          "over-25m": "Nad 25M VND"
+        },
+        "features": {
+          "has5g": {
+            "label": "Podpora 5G",
+            "desc": "Cellular: Vysokorychlostní mobilní připojení 5G"
+          },
+          "highRefresh": {
+            "label": "Displej 120Hz+",
+            "desc": "Display: Obnovovací frekvence 120 Hz nebo vyšší"
+          },
+          "bigBattery": {
+            "label": "Baterie >= 5000mAh",
+            "desc": "Battery: Kapacita baterie 5000 mAh nebo vyšší"
+          },
+          "fastCharge": {
+            "label": "Rychlonabíjení >= 45W",
+            "desc": "Battery: Výkon rychlého nabíjení 45 W nebo vyšší"
+          },
+          "hasNfc": {
+            "label": "Podpora NFC",
+            "desc": "Connectivity: Bezkontaktní platby a čtení čipových dokladů"
+          },
+          "compactScreen": {
+            "label": "Kompaktní (<= 6.2\")",
+            "desc": "Display: Kompaktní obrazovka vhodná do jedné ruky (<= 6.2 palce)"
+          }
+        }
+      },
+      "tablets": {
+        "title": "Tablety (Tablets)",
+        "subtitle": "Porovnejte technické parametry v 10 skupinách a ceny tabletů napříč e-commerce tržišti",
+        "searchPlaceholder": "Hledat iPad, Galaxy Tab, Xiaomi Pad...",
+        "presets": {
+          "under-10m": "Pod 10M VND",
+          "10m-20m": "10M - 20M VND",
+          "over-20m": "Nad 20M VND"
+        },
+        "features": {
+          "has5g": {
+            "label": "5G / Cellular",
+            "desc": "Podpora SIM / eSIM mobilního připojení 5G"
+          },
+          "highRefresh": {
+            "label": "Displej 120Hz+",
+            "desc": "Obnovovací frekvence obrazovky >= 120 Hz"
+          },
+          "bigBattery": {
+            "label": "Baterie >= 8000mAh",
+            "desc": "Vysokokapacitní baterie tabletu"
+          }
+        }
+      },
+      "laptops": {
+        "title": "Notebooky (Laptops)",
+        "subtitle": "Porovnejte hardwarové konfigurace v 10 skupinách a ověřenou historii cen notebooků",
+        "searchPlaceholder": "Hledat MacBook, ThinkPad, ASUS ROG, Dell XPS...",
+        "presets": {
+          "under-15m": "Pod 15M VND",
+          "15m-30m": "15M - 30M VND",
+          "over-30m": "Nad 30M VND"
+        },
+        "features": {
+          "highRefresh": {
+            "label": "Displej 120Hz+",
+            "desc": "Vysoká obnovovací frekvence >= 120 Hz"
+          },
+          "fastCharge": {
+            "label": "Rychlonabíjení USB-C PD",
+            "desc": "Podpora výkonného nabíjení USB-C Power Delivery"
+          }
+        }
+      },
+      "smartwatches": {
+        "title": "Chytré hodinky (Smartwatches)",
+        "subtitle": "Porovnejte zdravotní senzory, voděodolnost, dvoupásmovou GPS a oficiální historii cen chytrých hodinek",
+        "searchPlaceholder": "Hledat Apple Watch, Galaxy Watch, Garmin, Xiaomi Watch, Huawei Watch...",
+        "presets": {
+          "under-3m": "Pod 3M VND",
+          "3m-8m": "3M - 8M VND",
+          "8m-15m": "8M - 15M VND",
+          "over-15m": "Nad 15M VND"
+        },
+        "features": {
+          "has5g": {
+            "label": "Podpora eSIM / LTE",
+            "desc": "Samostatné hovory přes eSIM bez nutnosti nosit telefon"
+          },
+          "hasNfc": {
+            "label": "NFC / Bezkontaktní platby",
+            "desc": "Podpora NFC a bezkontaktních plateb"
+          },
+          "fastCharge": {
+            "label": "Magnetické rychlonabíjení",
+            "desc": "Podpora magnetického bezdrátového rychlonabíjení"
+          }
+        }
+      },
+      "earbuds": {
+        "title": "Bezdrátová a ANC sluchátka (Earbuds)",
+        "subtitle": "Porovnejte aktivní potlačení hluku (ANC), Hi-Res kodeky (LDAC/aptX), výdrž baterie a skutečné ceny napříč tržišti",
+        "searchPlaceholder": "Hledat AirPods Pro, Sony WF-1000XM5, Galaxy Buds, Bose, Sennheiser...",
+        "presets": {
+          "under-1m": "Pod 1M VND",
+          "1m-3m": "1M - 3M VND",
+          "3m-6m": "3M - 6M VND",
+          "over-6m": "Nad 6M VND"
+        },
+        "features": {
+          "fastCharge": {
+            "label": "Rychlonabíjecí / MagSafe pouzdro",
+            "desc": "Podpora rychlého nabíjení přes USB-C nebo bezdrátově Qi/MagSafe"
+          }
+        }
+      }
+    },
+    "page": {
+      "chipKeyword": "Klíčové slovo: \"{query}\"",
+      "chipBrand": "Značka: {brand}",
+      "chipPrice": "Cena: {min} - {max}",
+      "searchLabel": "Zařízení",
+      "brandLabel": "Značka",
+      "searchBtn": "Hledat",
+      "loadingFilters": "Načítání filtrů parametrů...",
+      "clearAllBtn": "Vymazat vše",
+      "foundPrefix": "Nalezeno",
+      "foundSuffix": "/ {total} normalizovaných produktů",
+      "quickCompare3": "Rychle porovnat 3",
+      "quickCompare2": "Rychle porovnat 2",
+      "versus1v1Badge": "⚔️ 1v1: {brandA} vs {brandB}",
+      "leaderboardBadge": "🏆 Žebříček",
+      "sortByPrefix": "Řazení: {label}",
+      "radarBannerBadge": "🔥 RADAR SLEV A FALEŠNÝCH AKCÍ ({title})",
+      "radarAnalyzedSub": "Zkontrolováno {count} nabídek napříč 10 tržišti",
+      "viewAllRadarBtn": "💎 Zobrazit celý Radar 10 tržišť →",
+      "vsMedianBadge": "-{pct}% oproti mediánu",
+      "fakeMarkupBadge": "Nadsazeno +{pct}%",
+      "spreadHeader": "📊 Největší cenový rozptyl na 10 tržištích ({title}):",
+      "spreadSub": "Ušetřete miliony VND výběrem správného tržiště",
+      "spreadDiffBadge": "Rozdíl +{pct}% ({amount} ₫)",
+      "emptySyncingTitle": "Kategorie \"{title}\" čeká na synchronizaci normalizovaných dat",
+      "emptyMatchingTitle": "Žádné produkty neodpovídají aktuálním filtrům",
+      "emptySyncingDesc": "Standardizované schéma 10 skupin parametrů pro {title} ({brands}) je připraveno. Zatímco systém sbírá další modely, prozkoumejte Chytré telefony nebo Srovnávací matici.",
+      "emptyMatchingDesc": "Zkuste rozšířit cenové rozpětí nebo uvolnit hardwarová kritéria pro zobrazení dalších modelů.",
+      "resetFiltersBtn": "Obnovit filtry",
+      "browseSmartphonesBtn": "Prohlédnout dostupné telefony →",
+      "merchantProfilesBtn": "Profily důvěryhodnosti prodejců",
+      "noImage": "Bez obrázku",
+      "userScoreText": "{score} Uživatelé ({count} ověřených recenzí)",
+      "userScoreUnrated": "Uživatelé: nehodnoceno",
+      "expertScoreText": "{score} Expert Lab",
+      "expertScoreUnrated": "Expert Lab: nehodnoceno",
+      "refPriceLabel": "Referenční cena:",
+      "sourcesCount": "{count} zdrojů",
+      "viewReviewsSpecsBtn": "★ Zobrazit recenze a 10 skupin parametrů",
+      "inspectPriceHistoryTitle": "Zkontrolovat 90denní historii cen a odhalit falešné slevy",
+      "inspectBtn": "🔍 Zkontrolovat"
+    },
+    "toolbar": {
+      "unratedText": "N/A",
+      "quick1v1Label": "⚔️ Rychlé srovnání 1v1 ({title}):",
+      "selectDeviceAAria": "Vyberte zařízení A pro srovnání 1v1",
+      "selectDeviceBAria": "Vyberte zařízení B pro srovnání 1v1",
+      "versusGoBtn": "Porovnat 1v1 →",
+      "copiedMdBtn": "✅ Katalog MD zkopírován!",
+      "copyMdBtn": "📋 Kopírovat katalog Markdown",
+      "exportCsvBtn": "📥 Exportovat CSV kategorie",
+      "exportJsonBtn": "📦 Exportovat JSON"
+    },
+    "sidebar": {
+      "filterTitle": "Filtry parametrů",
+      "keywordChipsetHeader": "Klíčové slovo a čipset",
+      "jreviewsRatingHeader": "Hodnocení (JReviews)",
+      "categoryHeader": "Kategorie zařízení",
+      "brandHeader": "Výrobce (Brand)",
+      "priceRangeHeader": "Cenové rozpětí (Miliony VND)",
+      "ramHeader": "Kapacita RAM (Hardware)",
+      "storageHeader": "Interní úložiště (ROM)",
+      "featuresHeader": "Klíčové funkce (10 skupin parametrů)",
+      "filteringBtn": "Filtrování dat...",
+      "applyFiltersBtn": "Použít filtry",
+      "clearAllFiltersBtn": "Vymazat všechny filtry"
+    }
+  },
+  "heroSearch": {
+    "modeSearchBtn": "Hledat produkty a 10 skupin parametrů",
+    "modeInspectBtn": "Vložit odkaz pro kontrolu falešných slev a důvěryhodnosti",
+    "searchPlaceholder": "Hledat model, čipset (např. iPhone 16, Apple A18) nebo vložit odkaz Shopee...",
+    "searchAriaLabel": "Hledat technologické produkty nebo vložit odkaz ke kontrole",
+    "clearKeywordAria": "Vymazat klíčové slovo",
+    "searchSubmitBtn": "Hledat",
+    "urlDetectedStrong": "Detekován odkaz e-shopu!",
+    "urlDetectedSub": "Klikněte pro okamžitou kontrolu historie cen, falešných slev a rizika prodejce.",
+    "inspectLinkBtn": "Zkontrolovat odkaz →",
+    "normalizedProductsHeader": "📱 Normalizované produkty ({count})",
+    "specFilterLink": "Filtry 10 skupin parametrů →",
+    "noMatchPrefix": "Žádný model neodpovídá \"{query}\". Můžete přejít na",
+    "inspectTabLinkBtn": "Kontrola odkazu / klíčového slova",
+    "merchantsCount": "{count} obchodů",
+    "merchantsHeader": "🏪 Prodejci a profily důvěryhodnosti ({count})",
+    "viewAllMerchantsLink": "Zobrazit všechny obchody →",
+    "inspectPlaceholder": "Vložte odkaz produktu/obchodu Shopee, Lazada, Tiki nebo zadejte název...",
+    "inspectAriaLabel": "Vložte odkaz produktu nebo prodejce ke kontrole",
+    "clearUrlAria": "Vymazat odkaz",
+    "inspectingBtn": "Kontroluji...",
+    "inspectNowBtn": "Zkontrolovat nyní",
+    "sampleLinksLabel": "Vyzkoušejte živé ukázky:",
+    "errLookupFailed": "Nelze vyhledat data produktu/prodejce",
+    "errServerConnection": "Chyba připojení k inspekčnímu serveru",
+    "resultCardHeader": "Výsledek auditu ceny, AI recenzí a důvěryhodnosti prodejce",
+    "closeBtn": "Zavřít",
+    "bestPriceLabel": "Nejlepší cena:",
+    "lowestEverPriceLabel": "(Historické minimum: {price} ₫)",
+    "merchantLabel": "Prodejce:",
+    "aiReviewAuthLabel": "Pravost AI recenzí:",
+    "aiReviewAuthValue": "✓ {pct}% autentických (z {total} recenzí)",
+    "viewSpecsAndHistoryBtn": "Zobrazit 10 skupin parametrů a historii cen",
+    "auditReportBtn": "🔬 Zpráva auditu",
+    "shopProfileBtn": "Profil obchodu",
+    "trackingProductsCount": "Sledováno {count} produktů",
+    "openMerchantProfileBtn": "Otevřít profil důvěryhodnosti prodejce →",
+    "unmatchedHeading": "Tento produkt/odkaz zatím není v mezipaměti přímé kontroly",
+    "unmatchedDesc": "Můžete vyhledat odpovídající normalizované modely nebo prohlédnout profily ověřených prodejců níže.",
+    "searchInSmartphonesBtn": "Hledat v katalogu telefonů →"
   }
 }
