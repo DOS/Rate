@@ -33,7 +33,13 @@ Tài liệu này tổng hợp đầy đủ **User-Level Hard Rules (`C:\Users\JO
    - Khi làm việc đa nhánh/đa repo, tạo worktree riêng theo runtime (`<repo>\.claude\worktrees\<task>`, `<repo>\.codex\worktrees\<task>`, `<repo>\.gemini\worktrees\<task>`). Không bao giờ chạy `git checkout` / `git reset --hard` trên nhánh chính đang dùng chung.
    - Mọi deliverable (báo cáo HTML, proposal, script) phải lưu trong repo và commit, không vứt ở thư mục tạm (`C:\Temp`, scratchpad).
 
-6. **Chủ động thực thi liên tục & đề xuất việc tiếp theo (Proactive Next-Task):**
+6. **CẤM deploy thẳng lên Production (`rate.vn`). Production chỉ build từ nhánh `main` qua Vercel Git integration:**
+   - Luồng chuẩn (giống `DOS.AI` và `DOS.Me`): PR tính năng -> `dev` (**squash**); PR promote `dev` -> `main` mở từ chính nhánh `dev` và merge bằng **merge commit** (`gh pr merge --merge`), không bao giờ squash hay rebase. Hotfix: nhánh `hotfix/*` -> `main` có label `emergency-hotfix`, rồi back-merge ngay `main` -> `dev` bằng merge commit. Chi tiết: [`Docs/Resources/RELEASE.md`](./Docs/Resources/RELEASE.md).
+   - **TUYỆT ĐỐI KHÔNG** chạy `vercel deploy --prod`, `vercel --prod`, `--prebuilt --prod`, `--skip-domain` rồi `promote`, hay promote một bản Preview của `dev` lên production, kể cả khi JOY đã cho phép "deploy". Lời cho phép deploy nghĩa là merge PR promote `dev` -> `main`, không phải deploy từ máy local.
+   - Chốt kỹ thuật: `scripts/vercel-production-guard.mjs` (chạy trong `buildCommand` của `vercel.json`) làm build production thất bại nếu không phải GitHub build từ `DOS/Rate@main`; workflow `Validate PR Base` chặn PR vào `main` không từ `dev`; workflow `Branch Divergence` báo lỗi khi `main` có commit mà `dev` không có. Không được sửa hay vô hiệu hóa các chốt này để deploy cho nhanh.
+   - Ngoại lệ duy nhất: **rollback** về một bản production cũ đã build từ Git (`vercel rollback`), vì không build lại. Sau đó sửa tiếp qua PR hotfix.
+
+7. **Chủ động thực thi liên tục & đề xuất việc tiếp theo (Proactive Next-Task):**
    - **Khi đang ở chế độ `/goal` hoặc được giao làm hết backlog:** Tự động tạo/nhận và làm liên tục từng task đến khi sạch toàn bộ backlog mà **KHÔNG dừng lại hỏi `Bắt đầu chứ?`**.
    - Chỉ khi đã hoàn thành toàn bộ mục tiêu và không còn task khả dụng mới báo cáo tổng kết.
 
@@ -182,4 +188,4 @@ Mỗi finding khi review (subagent fresh-context, bot, hoặc người) phải �
 - **Vòng 1:** Sửa các finding hợp lý ở mọi mức.
 - **Từ vòng 2 trở đi:** Trong PR hiện tại chỉ sửa P0/P1, mọi finding về bảo mật hoặc dữ liệu, lỗi trong hành vi mà chính PR này thêm vào, và required check đang đỏ. Các P2/P3 còn lại gom vào **một** issue follow-up duy nhất; trả lời từng thread kèm link issue đó rồi resolve thread.
 - Một lượt review của bot bị rate-limit, bị bỏ qua (skipped) hoặc không có nội dung **không phải là review**. Không chờ và không tính là đã review.
-- Cổng review thật sự là **review bằng subagent fresh-context** (Mục 0.2). Required check `Typecheck & Build Monorepo` phải xanh trước khi merge (ruleset `dev-main-light` trên `dev` và `main`: chặn xóa nhánh và force-push, không yêu cầu approval).
+- Cổng review thật sự là **review bằng subagent fresh-context** (Mục 0.2). Required check `Typecheck & Build Monorepo` phải xanh trước khi merge (ruleset `dev-main-light` trên `dev` và `main`: chặn xóa nhánh và force-push, không yêu cầu approval). Riêng `main` có thêm ruleset `main-release`: bắt buộc qua PR, chỉ cho merge commit, và phải xanh thêm `PR into main comes from dev` và `main must not lead dev` (Mục 0.6).

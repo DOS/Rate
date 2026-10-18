@@ -4,6 +4,8 @@
 - Use: `feat|fix|chore|docs|refactor/<area>-<short>`
   - Examples: `feat/frontend-profile-card`, `fix/backend-auth-timeout`
 
+- Feature PRs target `dev` and are squash-merged. `main` is production: it only receives the `dev` -> `main` promotion PR (merge commit). See [Docs/Resources/RELEASE.md](../Docs/Resources/RELEASE.md).
+
 ## Commits (Conventional Commits)
 - `feat(scope): short summary`
 - `fix(scope): short summary`

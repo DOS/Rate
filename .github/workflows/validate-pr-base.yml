@@ -1,0 +1,60 @@
+name: Validate PR Base
+
+# Enforces the release workflow in Docs/Resources/RELEASE.md: PRs into `main`
+# must come from `dev`. A hotfix may bypass with the `emergency-hotfix` label,
+# and must then be back-merged into `dev`.
+#
+# Why: the `main` ruleset requires a PR but cannot restrict the source branch.
+# Without this check any branch can open a PR straight into `main` (production)
+# and skip `dev`. Same workflow as DOS/DOS.Me and DOS/DOS.AI.
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, edited, labeled, unlabeled]
+    branches: [main]
+
+# The script reads PR metadata from the event payload and never writes back.
+permissions:
+  pull-requests: read
+  contents: read
+
+jobs:
+  validate:
+    name: PR into main comes from dev
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - name: Check source branch for PRs into main
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const base = pr.base.ref;
+            const head = pr.head.ref;
+            const sameRepo = pr.head.repo && pr.head.repo.full_name === pr.base.repo.full_name;
+            const labels = (pr.labels || []).map(l => l.name);
+
+            core.info(`PR #${pr.number}: ${pr.head.label} -> ${base}`);
+            core.info(`labels: ${labels.join(', ') || '(none)'}`);
+
+            if (base !== 'main') {
+              core.info('Base is not main, skipping source-branch check.');
+              return;
+            }
+            if (head === 'dev' && sameRepo) {
+              core.info('Base main, head dev - allowed.');
+              return;
+            }
+            if (labels.includes('emergency-hotfix') && sameRepo) {
+              core.warning(
+                `PR targets main from '${head}' (not dev) but has the ` +
+                `'emergency-hotfix' label - allowing bypass. Back-merge main ` +
+                `into dev right after this lands.`
+              );
+              return;
+            }
+            core.setFailed(
+              `PRs into 'main' must come from 'dev' in this repository ` +
+              `(got '${pr.head.label}'). Open this PR against 'dev', or add ` +
+              `the 'emergency-hotfix' label for a production hotfix.`
+            );

@@ -1,0 +1,5 @@
+# Commits that exist on main and not on dev, known and accepted.
+#
+# EMPTY, and that is the healthy state. One entry, 6853aa2b (a direct copy of
+# dev's #215 commit), was cleared by back-merging main into dev before this guard
+# shipped. Do not add entries to silence the check: back-merge instead.
