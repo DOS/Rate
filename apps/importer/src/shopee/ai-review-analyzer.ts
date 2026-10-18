@@ -1,6 +1,10 @@
 import crypto from 'node:crypto';
 import { z } from '@repo/shared-data';
-import type { SupportedAiProvider, AiSpecEnricherConfig } from './ai-spec-enricher.js';
+import {
+  trimTrailingSlashes,
+  type SupportedAiProvider,
+  type AiSpecEnricherConfig,
+} from './ai-spec-enricher.js';
 import type { RateSupabaseClient, ScrapedReviewer } from './types.js';
 import { computeRetryDelayMs, sanitizeAiGeneratedText } from './logger.js';
 export { computeRetryDelayMs, sanitizeAiGeneratedText } from './logger.js';
@@ -904,13 +908,13 @@ export class AiReviewAnalyzer {
     const defaults = PROVIDER_DEFAULTS[this.provider];
 
     this.apiKey = config.apiKey ?? this.resolveApiKey(this.provider);
-    this.baseUrl = (
+    this.baseUrl = trimTrailingSlashes(
       config.baseUrl ||
-      process.env.AI_BASE_URL ||
-      process.env.DOS_AI_BASE_URL ||
-      process.env.OPENAI_BASE_URL ||
-      defaults.baseUrl
-    ).replace(/\/+$/, '');
+        process.env.AI_BASE_URL ||
+        process.env.DOS_AI_BASE_URL ||
+        process.env.OPENAI_BASE_URL ||
+        defaults.baseUrl
+    );
 
     this.model =
       config.model || process.env.AI_MODEL || process.env.OPENAI_MODEL || defaults.defaultModel;

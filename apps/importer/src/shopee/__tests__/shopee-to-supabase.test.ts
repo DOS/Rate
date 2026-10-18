@@ -1,0 +1,583 @@
+/**
+ * Verification Suite for ShopeeIngestionPipeline (Audit C5, M7, #280):
+ * 1. platformReviewIdFor collision resistance on masked authors across variations/ratings/timestamps
+ * 2. init() category lookup error propagation (prevents silent null category_id writes)
+ * 3. masterIdHint preservation vs DB error abort vs fallback to EntityMatcher
+ * 4. Smart Delta Price Compression via record_price_observation RPC + client-side 7-day fallback & 23505 race recovery
+ * 5. Review batch deduplication, 23505 unique-index race retry pass, is_verified_buyer refresh & AiReviewAnalyzer integration
+ */
+import assert from 'node:assert/strict';
+import { trimTrailingSlashes } from '../ai-spec-enricher.js';
+import { ShopeeIngestionPipeline, platformReviewIdFor } from '../shopee-to-supabase.js';
+import type { RateSupabaseClient, ShopeeProduct, ShopeeReview } from '../types.js';
+
+function createBaseProduct(overrides: Partial<ShopeeProduct> = {}): ShopeeProduct {
+  return {
+    platform: 'shopee',
+    itemId: 'item-280',
+    shopId: 'shop-280',
+    title: 'Điện thoại Apple iPhone 16 Pro Max 256GB Chính hãng VN/A',
+    description: 'Chip A18 Pro, Màn hình 6.9 inch, Pin 4685 mAh',
+    priceMin: 28990000,
+    priceMax: 28990000,
+    priceBeforeDiscount: 31990000,
+    currency: 'VND',
+    stock: 15,
+    historicalSold: 120,
+    ratingStar: 4.9,
+    ratingCount: 40,
+    images: ['https://rate.vn/img/ip16pm.png'],
+    models: [{ modelId: 'm-1', name: 'Titan Tự Nhiên - 256GB', price: 28990000, stock: 15 }],
+    attributes: [],
+    shop: {
+      shopId: 'shop-280',
+      name: 'Apple Flagship Store',
+      isMall: true,
+      ratingStar: 4.9,
+      followerCount: 250000,
+      location: 'TP. Hồ Chí Minh',
+    },
+    reviews: [],
+    url: 'https://shopee.vn/product/shop-280/item-280',
+    ...overrides,
+  };
+}
+
+interface StubPipelineOptions {
+  categoriesErr?: { message: string } | null;
+  hintRow?: { id: string } | null;
+  hintErr?: { message: string } | null;
+  exactMasterRow?: { id: string; name: string; model_key: string } | null;
+  recordPriceRpcResult?: { data: string | null; error: { code?: string; message: string } | null };
+  latestPriceObs?: Array<{
+    observation_id: string;
+    price: number;
+    price_original: number | null;
+    recorded_at: string;
+  }>;
+  existingPriceObs?: Array<{ observation_id: string }>;
+  priceInsertErr?: { code?: string; message: string } | null;
+  initialExistingReviewIds?: string[];
+  afterRaceExistingReviewIds?: string[];
+  firstReviewInsertRace?: boolean;
+}
+
+function createPipelineStubSupabase(opts: StubPipelineOptions = {}) {
+  const events: {
+    merchantUpserts: number;
+    productUpserts: Array<Record<string, unknown>>;
+    priceRpcCalls: Array<Record<string, unknown>>;
+    priceInserts: Array<Record<string, unknown>>;
+    reviewInserts: Array<Array<Record<string, unknown>>>;
+    verifiedUpdates: Array<{ verified: boolean; ids: string[] }>;
+    marketStatsRefreshed: string[];
+  } = {
+    merchantUpserts: 0,
+    productUpserts: [],
+    priceRpcCalls: [],
+    priceInserts: [],
+    reviewInserts: [],
+    verifiedUpdates: [],
+    marketStatsRefreshed: [],
+  };
+
+  let reviewSelectPass = 0;
+  let reviewInsertPass = 0;
+
+  const stub = {
+    from(table: string) {
+      if (table === 'categories') {
+        return {
+          select(_cols: string) {
+            return Promise.resolve({
+              data: opts.categoriesErr
+                ? null
+                : [
+                    { id: 'cat-smartphones', slug: 'smartphones' },
+                    { id: 'cat-laptops', slug: 'laptops' },
+                  ],
+              error: opts.categoriesErr ?? null,
+            });
+          },
+        };
+      }
+
+      if (table === 'merchants') {
+        return {
+          upsert(_payload: Record<string, unknown>, _options?: unknown) {
+            events.merchantUpserts += 1;
+            return {
+              select(_cols: string) {
+                return {
+                  single() {
+                    return Promise.resolve({
+                      data: { id: 'merchant-uuid-1' },
+                      error: null,
+                    });
+                  },
+                };
+              },
+            };
+          },
+          update(_payload: Record<string, unknown>) {
+            return {
+              eq(_col: string, _val: string) {
+                return Promise.resolve({ data: null, error: null });
+              },
+            };
+          },
+        };
+      }
+
+      if (table === 'master_products') {
+        return {
+          select(cols: string) {
+            return {
+              eq(col: string, val: string) {
+                return {
+                  maybeSingle() {
+                    if (col === 'id' && cols === 'id') {
+                      return Promise.resolve({
+                        data: opts.hintRow ?? null,
+                        error: opts.hintErr ?? null,
+                      });
+                    }
+                    if (col === 'id' && cols === 'min_price') {
+                      return Promise.resolve({
+                        data: { min_price: 28990000 },
+                        error: null,
+                      });
+                    }
+                    if (col === 'model_key') {
+                      return Promise.resolve({
+                        data: opts.exactMasterRow ?? {
+                          id: 'master-exact-1',
+                          name: 'Apple iPhone 16 Pro Max 256GB',
+                          model_key: val,
+                        },
+                        error: null,
+                      });
+                    }
+                    return Promise.resolve({ data: null, error: null });
+                  },
+                };
+              },
+            };
+          },
+          update(_payload: Record<string, unknown>) {
+            return {
+              eq(_col: string, _val: string) {
+                return Promise.resolve({ data: null, error: null });
+              },
+            };
+          },
+        };
+      }
+
+      if (table === 'products') {
+        return {
+          upsert(payload: Record<string, unknown>, _options?: unknown) {
+            events.productUpserts.push(payload);
+            return {
+              select(_cols: string) {
+                return {
+                  single() {
+                    return Promise.resolve({
+                      data: { id: 'product-uuid-1' },
+                      error: null,
+                    });
+                  },
+                };
+              },
+            };
+          },
+        };
+      }
+
+      if (table === 'price_history') {
+        return {
+          select(cols: string) {
+            return {
+              eq(col: string, _val: string) {
+                if (col === 'product_id' && cols.includes('recorded_at')) {
+                  return {
+                    order(_orderCol: string, _orderOpts: unknown) {
+                      return {
+                        limit(_n: number) {
+                          return Promise.resolve({
+                            data: opts.latestPriceObs ?? [],
+                            error: null,
+                          });
+                        },
+                      };
+                    },
+                  };
+                }
+                return {
+                  limit(_n: number) {
+                    return Promise.resolve({
+                      data: opts.existingPriceObs ?? [],
+                      error: null,
+                    });
+                  },
+                };
+              },
+            };
+          },
+          insert(payload: Record<string, unknown>) {
+            events.priceInserts.push(payload);
+            return Promise.resolve({
+              data: null,
+              error: opts.priceInsertErr ?? null,
+            });
+          },
+        };
+      }
+
+      if (table === 'reviews') {
+        return {
+          select(cols: string) {
+            if (cols === 'platform_review_id') {
+              return {
+                eq(_col: string, _val: string) {
+                  return {
+                    not(_notCol: string, _op: string, _notVal: unknown) {
+                      reviewSelectPass += 1;
+                      const ids =
+                        reviewSelectPass === 1
+                          ? (opts.initialExistingReviewIds ?? [])
+                          : (opts.afterRaceExistingReviewIds ?? []);
+                      return Promise.resolve({
+                        data: ids.map(id => ({ platform_review_id: id })),
+                        error: null,
+                      });
+                    },
+                  };
+                },
+              };
+            }
+            return {
+              eq(_col: string, _val: string) {
+                return {
+                  order(_orderCol: string, _orderOpts: unknown) {
+                    return {
+                      limit(_n: number) {
+                        return Promise.resolve({
+                          data: [
+                            {
+                              id: 'db-rev-1',
+                              platform_review_id: 'rev-explicit-1',
+                              author_name: 'Minh Anh',
+                              rating_star: 5,
+                              comment:
+                                'Máy chính hãng VN/A nguyên seal, màn hình 120Hz mượt, pin dùng hơn 1 ngày rất trâu.',
+                              variation: 'Titan Tự Nhiên - 256GB',
+                              images: [],
+                              is_verified_buyer: true,
+                              reviewer_type: 'user',
+                              upvotes: 3,
+                              downvotes: 0,
+                              report_count: 0,
+                              platform_created_at: '2026-10-01T10:00:00.000Z',
+                            },
+                          ],
+                          error: null,
+                        });
+                      },
+                    };
+                  },
+                };
+              },
+            };
+          },
+          insert(rows: Array<Record<string, unknown>>) {
+            reviewInsertPass += 1;
+            events.reviewInserts.push(rows);
+            if (opts.firstReviewInsertRace && reviewInsertPass === 1) {
+              return Promise.resolve({
+                data: null,
+                error: {
+                  code: '23505',
+                  message:
+                    'duplicate key value violates unique constraint "reviews_product_platform_review_idx"',
+                },
+              });
+            }
+            return Promise.resolve({ data: null, error: null });
+          },
+          update(payload: Record<string, unknown>) {
+            return {
+              eq(_col: string, _val: string) {
+                if ('is_verified_buyer' in payload) {
+                  return {
+                    in(_inCol: string, ids: string[]) {
+                      events.verifiedUpdates.push({
+                        verified: Boolean(payload.is_verified_buyer),
+                        ids,
+                      });
+                      return Promise.resolve({ data: null, error: null });
+                    },
+                  };
+                }
+                return Promise.resolve({ data: null, error: null });
+              },
+            };
+          },
+        };
+      }
+
+      if (table === 'review_flags' || table === 'review_analysis') {
+        return {
+          upsert(_payload: unknown, _options?: unknown) {
+            return Promise.resolve({ data: null, error: null });
+          },
+        };
+      }
+
+      throw new Error(`Unexpected table in stub: ${table}`);
+    },
+    async rpc(fn: string, args: Record<string, unknown>) {
+      if (fn === 'refresh_master_market_stats') {
+        events.marketStatsRefreshed.push(String(args.p_master_id));
+        return { data: null, error: null };
+      }
+      if (fn === 'record_price_observation') {
+        events.priceRpcCalls.push(args);
+        if (opts.recordPriceRpcResult) {
+          return opts.recordPriceRpcResult;
+        }
+        return { data: 'inserted', error: null };
+      }
+      if (fn === 'refresh_master_review_stats' || fn === 'refresh_merchant_risk_score') {
+        return { data: null, error: null };
+      }
+      throw new Error(`Unexpected RPC in stub: ${fn}`);
+    },
+  } as unknown as RateSupabaseClient;
+
+  return { stub, events };
+}
+
+async function runTests() {
+  console.log('================================================================');
+  console.log('🧪 Running ShopeeIngestionPipeline Deterministic Verification Suite');
+  console.log('================================================================');
+
+  // 1. platformReviewIdFor collision resistance for masked authors
+  const maskedReviewA: ShopeeReview = {
+    reviewId: '',
+    author: 'n*****3',
+    ratingStar: 5,
+    comment: '',
+    variation: 'Titan Tự Nhiên - 256GB',
+    images: [],
+    createdAt: '2026-10-01T08:00:00Z',
+  };
+  const maskedReviewB: ShopeeReview = {
+    reviewId: '',
+    author: 'n*****3',
+    ratingStar: 4,
+    comment: '',
+    variation: 'Titan Đen - 512GB',
+    images: [],
+    createdAt: '2026-10-02T09:30:00Z',
+  };
+  const idA = platformReviewIdFor(maskedReviewA);
+  const idB = platformReviewIdFor(maskedReviewB);
+  assert.notEqual(
+    idA,
+    idB,
+    'Masked authors with empty/identical comments but different ratings/variations/timestamps must not collide'
+  );
+  assert.equal(
+    platformReviewIdFor({ ...maskedReviewA }),
+    idA,
+    'Identical fallback review must produce a deterministic hash'
+  );
+  assert.equal(
+    platformReviewIdFor({ ...maskedReviewA, reviewId: 'sp-rev-999' }),
+    'sp-rev-999',
+    'Explicit platform reviewId must take precedence over fallback hash'
+  );
+  assert.equal(trimTrailingSlashes('https://api.dos.ai/v1///'), 'https://api.dos.ai/v1');
+  assert.equal(
+    trimTrailingSlashes(`https://api.dos.ai/${'/'.repeat(5000)}v1///`),
+    `https://api.dos.ai/${'/'.repeat(5000)}v1`,
+    'trimTrailingSlashes must run in linear time without polynomial regex backtracking'
+  );
+  console.log(
+    '  ✅ [1/5] platformReviewIdFor masked-author collision resistance & linear-time URL normalization passed'
+  );
+
+  // 2. init() category lookup error propagation
+  const { stub: errCatStub } = createPipelineStubSupabase({
+    categoriesErr: { message: 'connection reset by peer' },
+  });
+  const errCatPipeline = new ShopeeIngestionPipeline({
+    supabaseClient: errCatStub,
+    apiKey: '',
+  });
+  await assert.rejects(
+    () => errCatPipeline.ingestProduct(createBaseProduct()),
+    /Failed to initialize categories: connection reset by peer/,
+    'init() must propagate categories query failure instead of writing null category_id'
+  );
+  console.log('  ✅ [2/5] init() category error propagation passed');
+
+  // 3. masterIdHint preservation vs DB error abort
+  const { stub: hintErrStub } = createPipelineStubSupabase({
+    hintErr: { message: 'statement timeout on master_products' },
+  });
+  const hintErrPipeline = new ShopeeIngestionPipeline({
+    supabaseClient: hintErrStub,
+    apiKey: '',
+  });
+  await assert.rejects(
+    () =>
+      hintErrPipeline.ingestProduct(createBaseProduct(), undefined, {
+        masterIdHint: 'master-hint-123',
+      }),
+    /Failed to verify masterIdHint \(master-hint-123\): statement timeout on master_products/,
+    'masterIdHint DB error must abort instead of falling through and splitting cluster'
+  );
+
+  const { stub: hintOkStub, events: hintOkEvents } = createPipelineStubSupabase({
+    hintRow: { id: 'master-hint-verified' },
+  });
+  const hintOkPipeline = new ShopeeIngestionPipeline({
+    supabaseClient: hintOkStub,
+    apiKey: '',
+  });
+  const hintedRes = await hintOkPipeline.ingestProduct(createBaseProduct(), undefined, {
+    masterIdHint: 'master-hint-verified',
+  });
+  assert.equal(hintedRes.masterId, 'master-hint-verified');
+  assert.equal(hintOkEvents.productUpserts[0]?.cluster_id, 'master-hint-verified');
+  assert.equal(hintOkEvents.productUpserts[0]?.category_id, 'cat-smartphones');
+  console.log('  ✅ [3/5] masterIdHint preservation & DB error abort passed');
+
+  // 4. Smart Delta Price Compression: client-side 7-day fallback & 23505 race recovery
+  const recentAnchor = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
+  const { stub: deltaSkipStub, events: deltaSkipEvents } = createPipelineStubSupabase({
+    recordPriceRpcResult: {
+      data: null,
+      error: { code: 'PGRST202', message: 'function record_price_observation does not exist' },
+    },
+    latestPriceObs: [
+      {
+        observation_id: 'px-prev',
+        price: 28990000,
+        price_original: 31990000,
+        recorded_at: recentAnchor,
+      },
+    ],
+  });
+  const deltaSkipPipeline = new ShopeeIngestionPipeline({
+    supabaseClient: deltaSkipStub,
+    apiKey: '',
+  });
+  await deltaSkipPipeline.ingestProduct(createBaseProduct());
+  assert.equal(
+    deltaSkipEvents.priceInserts.length,
+    0,
+    'Client-side 7-day delta compression must skip redundant price_history insert when price is unchanged'
+  );
+
+  const { stub: priceRaceStub, events: priceRaceEvents } = createPipelineStubSupabase({
+    recordPriceRpcResult: {
+      data: null,
+      error: { code: 'PGRST202', message: 'function record_price_observation does not exist' },
+    },
+    latestPriceObs: [],
+    existingPriceObs: [],
+    priceInsertErr: { code: '23505', message: 'duplicate key value violates unique constraint' },
+  });
+  const priceRacePipeline = new ShopeeIngestionPipeline({
+    supabaseClient: priceRaceStub,
+    apiKey: '',
+  });
+  await priceRacePipeline.ingestProduct(createBaseProduct());
+  assert.equal(
+    priceRaceEvents.priceInserts.length,
+    1,
+    'Concurrent 23505 price observation insert race must be treated as dedupe without throwing'
+  );
+  console.log('  ✅ [4/5] Smart Delta Price Compression & 23505 race recovery passed');
+
+  // 5. Review deduplication, 23505 race retry pass, is_verified_buyer refresh & section reporting
+  const reportedSections: string[] = [];
+  const { stub: revRaceStub, events: revRaceEvents } = createPipelineStubSupabase({
+    initialExistingReviewIds: ['rev-already-stored'],
+    afterRaceExistingReviewIds: ['rev-already-stored', 'rev-raced-by-other-worker'],
+    firstReviewInsertRace: true,
+  });
+  const revRacePipeline = new ShopeeIngestionPipeline({
+    supabaseClient: revRaceStub,
+    apiKey: '',
+  });
+  await revRacePipeline.ingestProduct(
+    createBaseProduct({
+      reviews: [
+        {
+          reviewId: 'rev-already-stored',
+          author: 'User 1',
+          ratingStar: 5,
+          comment: 'Đã có trong DB',
+          images: [],
+          reviewer: { verifiedPurchase: true },
+        },
+        {
+          reviewId: 'rev-raced-by-other-worker',
+          author: 'User 2',
+          ratingStar: 5,
+          comment: 'Worker khác vừa chèn xong',
+          images: [],
+          reviewer: { verifiedPurchase: true },
+        },
+        {
+          reviewId: 'rev-explicit-1',
+          author: 'Minh Anh',
+          ratingStar: 5,
+          comment: 'Review mới còn lại sau khi lọc race',
+          images: [],
+          reviewer: { verifiedPurchase: false },
+        },
+      ],
+    }),
+    async section => {
+      reportedSections.push(section);
+    }
+  );
+  assert.equal(
+    revRaceEvents.reviewInserts.length,
+    2,
+    'Must retry review insert once after 23505 race'
+  );
+  assert.equal(
+    revRaceEvents.reviewInserts[0]?.length,
+    2,
+    'Pass 1 should attempt the 2 reviews not in initialExistingReviewIds'
+  );
+  assert.equal(
+    revRaceEvents.reviewInserts[1]?.length,
+    1,
+    'Pass 2 should insert only the remaining non-raced review'
+  );
+  assert.equal(revRaceEvents.reviewInserts[1]?.[0]?.platform_review_id, 'rev-explicit-1');
+  assert.equal(
+    revRaceEvents.verifiedUpdates.length,
+    2,
+    'Must refresh both verified=true and verified=false cohorts'
+  );
+  assert.deepEqual(reportedSections, ['merchant', 'master', 'listing', 'price', 'reviews']);
+  console.log(
+    '  ✅ [5/5] Review deduplication, 23505 retry pass & verifiedPurchase refresh passed'
+  );
+
+  console.log('\n🎉 ALL SHOPEE INGESTION PIPELINE TESTS PASSED!');
+}
+
+runTests().catch(err => {
+  console.error('❌ ShopeeIngestionPipeline test suite failed:', err);
+  process.exit(1);
+});
