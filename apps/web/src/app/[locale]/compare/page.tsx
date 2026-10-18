@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { getTranslations } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
 import {
   type CanonicalCategorySlug,
@@ -6,6 +7,7 @@ import {
   getMasterProductCategorySlug,
   getMasterProducts,
 } from '@/server/rate';
+import { normalizeRateLocale } from '@/lib/rate-i18n';
 import CompareWorkspace from '@/components/compare/CompareWorkspace';
 import NavbarDarkDynamic from '../components/navbar/NavbarDarkDynamic';
 import FooterTop from '../components/footer-top';
@@ -49,6 +51,8 @@ export async function generateMetadata({
   searchParams,
 }: PageProps): Promise<Metadata> {
   const { locale } = await params;
+  const lang = normalizeRateLocale(locale);
+  const t = await getTranslations({ locale: lang, namespace: 'compare' });
   const { slugs: slugsParam } = await searchParams;
   const requestedSlugs = parseSlugsCsv(slugsParam);
 
@@ -61,16 +65,8 @@ export async function generateMetadata({
     if (compared.length >= 2) {
       const names = compared.map((p) => p.name).join(' vs ');
       return {
-        title:
-          locale === 'vi'
-            ? `So sánh ${names} - Điểm Đánh Giá & 10 Nhóm Thông Số | Rate.vn`
-            : locale === 'cs'
-              ? `Porovnání ${names} - Hodnocení a 10 skupin parametrů | Rate.vn`
-              : `Compare ${names} - Ratings & 10 Spec Groups | Rate.vn`,
-        description:
-          locale === 'vi'
-            ? `Đối chiếu điểm đánh giá thực chất (JReviews), 10 nhóm thông số kỹ thuật chuẩn PhoneArena/GSMArena và giá tham khảo giữa ${names} trên Rate.vn.`
-            : `Side-by-side comparison across JReviews ratings, 10 standardized technical spec groups, and verified prices for ${names} on Rate.vn.`,
+        title: t('compareMetaTitleWithNames', { names }),
+        description: t('compareMetaDescWithNames', { names }),
         alternates: {
           canonical: canonicalUrl,
         },
@@ -79,16 +75,8 @@ export async function generateMetadata({
   }
 
   return {
-    title:
-      locale === 'vi'
-        ? 'So sánh Thiết bị Cùng Danh Mục - Điểm Đánh Giá & 10 Nhóm Thông Số | Rate.vn'
-        : locale === 'cs'
-          ? 'Porovnání zařízení ve stejné kategorii - 10 skupin parametrů | Rate.vn'
-          : 'Same-Category Device Comparison - Ratings & 10 Spec Groups | Rate.vn',
-    description:
-      locale === 'vi'
-        ? 'Đặt lên bàn cân tối đa 4 thiết bị cùng danh mục (Điện thoại, Máy tính bảng, Laptop, Đồng hồ thông minh hoặc Tai nghe) theo điểm JReviews và 10 nhóm thông số kỹ thuật.'
-        : 'Compare up to 4 devices within the same category (Smartphones, Tablets, Laptops, Smartwatches, or Earbuds) across JReviews ratings and 10 technical specification groups.',
+    title: t('compareMetaDefaultTitle'),
+    description: t('compareMetaDefaultDesc'),
     alternates: {
       canonical: canonicalUrl,
     },
@@ -100,6 +88,8 @@ export default async function ComparePhonesPage({
   searchParams,
 }: PageProps) {
   const { locale } = await params;
+  const lang = normalizeRateLocale(locale);
+  const t = await getTranslations({ locale: lang, namespace: 'compare' });
   const { slugs: slugsParam, category: categoryParam } = await searchParams;
   const requestedSlugs = parseSlugsCsv(slugsParam);
 
@@ -143,11 +133,7 @@ export default async function ComparePhonesPage({
                 <ol className="breadcrumb small mb-2">
                   <li className="breadcrumb-item">
                     <Link href="/" className="text-decoration-none">
-                      {locale === 'vi'
-                        ? 'Trang chủ'
-                        : locale === 'cs'
-                          ? 'Domů'
-                          : 'Home'}
+                      {t('breadcrumbHome')}
                     </Link>
                   </li>
                   <li className="breadcrumb-item">
@@ -155,37 +141,17 @@ export default async function ComparePhonesPage({
                       href={`/${activeCategory}`}
                       className="text-decoration-none"
                     >
-                      {locale === 'vi'
-                        ? 'Danh mục thiết bị'
-                        : locale === 'cs'
-                          ? 'Katalog zařízení'
-                          : 'Device Catalog'}
+                      {t('breadcrumbCatalog')}
                     </Link>
                   </li>
                   <li className="breadcrumb-item active" aria-current="page">
-                    {locale === 'vi'
-                      ? 'Đối chiếu Điểm Đánh Giá & 10 Nhóm Thông Số'
-                      : locale === 'cs'
-                        ? 'Porovnání hodnocení a 10 skupin parametrů'
-                        : 'Rating & 10-Group Spec Comparison'}
+                    {t('breadcrumbCompare')}
                   </li>
                 </ol>
               </nav>
-              <div className="rate-eyebrow mb-2">
-                Chuẩn Đối Chiếu Cùng Danh Mục (Same-Category Lock)
-              </div>
-              <h1 className="h2 fw-bold mb-1">
-                {locale === 'vi'
-                  ? 'Bàn Cân Điểm Đánh Giá Đa Chiều & 10 Nhóm Thông Số Kỹ Thuật'
-                  : locale === 'cs'
-                    ? 'Porovnání hodnocení a 10 skupin technických parametrů'
-                    : 'Side-by-Side Rating & 10-Group Technical Specification Matrix'}
-              </h1>
-              <p className="text-muted mb-0">
-                {locale === 'vi'
-                  ? 'Hệ thống tự động khóa cùng danh mục thiết bị (chỉ so sánh Điện thoại với Điện thoại, Tai nghe với Tai nghe, Laptop với Laptop) để đảm bảo kết quả chấm điểm và thông số chính xác tuyệt đối.'
-                  : 'Strictly locks comparison slots to the same device category so ratings, technical specs, and price floors are compared fairly.'}
-              </p>
+              <div className="rate-eyebrow mb-2">{t('pageEyebrow')}</div>
+              <h1 className="h2 fw-bold mb-1">{t('pageTitle')}</h1>
+              <p className="text-muted mb-0">{t('pageSubtitle')}</p>
             </div>
           </div>
 

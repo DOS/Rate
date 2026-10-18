@@ -6,7 +6,7 @@ import { escapeCsvCell } from '@/lib/csv-safe';
 import type { MerchantSummary } from '@/lib/rate-domain';
 import { selectMerchantRadar } from '@/lib/deal-radar';
 import { useDealRadarPayload } from '@/components/radar/use-deal-radar';
-import { normalizeRateLocale } from '@/lib/rate-i18n';
+import { useTranslations } from 'next-intl';
 import {
   BsArrowCounterclockwise,
   BsBoxSeam,
@@ -29,7 +29,7 @@ export type MerchantSeedingTier = 'all' | 'low' | 'elevated';
 
 interface MerchantDirectoryExplorerProps {
   readonly initialMerchants: readonly MerchantSummary[];
-  readonly locale: string;
+  readonly locale?: string;
   readonly initialQuery?: string;
   readonly initialPlatform?: string;
   readonly initialOfficialOnly?: boolean;
@@ -38,13 +38,12 @@ interface MerchantDirectoryExplorerProps {
 
 export default function MerchantDirectoryExplorer({
   initialMerchants,
-  locale,
   initialQuery = '',
   initialPlatform = 'all',
   initialOfficialOnly = false,
   initialSort = 'trust_desc',
 }: MerchantDirectoryExplorerProps) {
-  const lang = normalizeRateLocale(locale);
+  const t = useTranslations('merchants');
   const [query, setQuery] = useState(initialQuery);
   const [platform, setPlatform] = useState(initialPlatform.toLowerCase());
   const [officialOnly, setOfficialOnly] = useState(initialOfficialOnly);
@@ -54,154 +53,55 @@ export default function MerchantDirectoryExplorer({
   const [copiedMerchantsMd, setCopiedMerchantsMd] = useState(false);
   const radarPayload = useDealRadarPayload();
 
-  const labels = useMemo(() => {
-    if (lang === 'en') {
-      return {
-        totalMerchants: 'Tracked Merchants',
-        officialMalls: 'Official Malls',
-        highTrustShops: 'High-Trust Sellers (>=80)',
-        avgTrustScore: 'Average Trust Score',
-        searchPlaceholder: 'Search by merchant name, shop ID, or platform...',
-        allPlatforms: 'All Platforms',
-        officialMallOnly: 'Official Mall Only',
-        riskFilterLabel: 'Trust Level:',
-        riskAll: 'All Tiers',
-        riskSafe: 'Safe (>= 80)',
-        riskModerate: 'Moderate (60-79)',
-        riskWarning: 'Warning (< 60)',
-        seedingAll: 'All Review Risk',
-        seedingLow: 'Clean Reviews (<=15% Seeding)',
-        seedingElevated: 'Elevated Seeding (>15%)',
-        copyMdBtn: '📋 Copy Directory Markdown',
-        copiedMdBtn: '✅ Copied Markdown!',
-        exportCsvBtn: '📥 Export CSV',
-        sortLabel: 'Sort by:',
-        sortTrust: 'Highest Trust Score',
-        sortProducts: 'Most Tracked Products',
-        sortSeeding: 'Lowest AI Review Risk',
-        sortFollowers: 'Most Followers',
-        resetFilters: 'Reset filters',
-        showingCount: 'Showing',
-        ofCount: 'of',
-        merchantsUnit: 'merchants',
-        officialBadge: 'Official Mall',
-        platformRating: 'Platform Rating',
-        noRating: 'N/A',
-        followers: 'Followers',
-        trackedProducts: 'Tracked Listings',
-        productsUnit: 'products',
-        dosafeZero: '0 scam alerts in DOSafe Threat Intel',
-        dosafeAlert: 'Active risk flags in DOSafe Threat Intel',
-        authenticLabel: 'Authentic:',
-        filteredSpamSuffix: 'spam/seeding filtered',
-        noAbnormalReviews: 'No abnormal review patterns detected',
-        priceRangeLabel: 'Reference price range:',
-        viewTrustProfileCta: 'View Audit Profile & Reviews →',
-        openStorefrontCta: 'Verify Source ↗',
-        emptyTitle: 'No matching merchants found',
-        emptySubtitle:
-          'Try clearing filters or paste a Shopee/Lazada/Tiki/CellphoneS URL into our Deep Inspector.',
-        inspectUrlCta: 'Inspect Any Store or Product Link →',
-      };
-    }
-    if (lang === 'cs') {
-      return {
-        totalMerchants: 'Sledované obchody',
-        officialMalls: 'Oficiální obchody (Mall)',
-        highTrustShops: 'Vysoká důvěra (>=80)',
-        avgTrustScore: 'Průměrné Trust skóre',
-        searchPlaceholder: 'Hledat podle názvu obchodu, ID nebo tržiště...',
-        allPlatforms: 'Všechny platformy',
-        officialMallOnly: 'Pouze Official Mall',
-        riskFilterLabel: 'Úroveň důvěry:',
-        riskAll: 'Všechny úrovně',
-        riskSafe: 'Bezpečné (>= 80)',
-        riskModerate: 'Střední (60-79)',
-        riskWarning: 'Varování (< 60)',
-        seedingAll: 'Všechna rizika recenzí',
-        seedingLow: 'Čisté recenze (<=15 % Seeding)',
-        seedingElevated: 'Vyšší Seeding (>15 %)',
-        copyMdBtn: '📋 Kopírovat seznam (MD)',
-        copiedMdBtn: '✅ Zkopírováno!',
-        exportCsvBtn: '📥 Exportovat CSV',
-        sortLabel: 'Řadit dle:',
-        sortTrust: 'Nejvyšší Trust Score',
-        sortProducts: 'Nejvíce produktů',
-        sortSeeding: 'Nejnižší AI Review Risk',
-        sortFollowers: 'Nejvíce sledujících',
-        resetFilters: 'Vymazat filtry',
-        showingCount: 'Zobrazeno',
-        ofCount: 'z',
-        merchantsUnit: 'obchodů',
-        officialBadge: 'Oficiální obchod (Mall)',
-        platformRating: 'Hodnocení na tržišti',
-        noRating: 'Není',
-        followers: 'Sledující',
-        trackedProducts: 'Sledované nabídky',
-        productsUnit: 'produktů',
-        dosafeZero: 'Žádná varování v databázi DOSafe',
-        dosafeAlert: 'Detekováno riziko v systému DOSafe',
-        authenticLabel: 'Autentické:',
-        filteredSpamSuffix: 'spam/seeding odfiltrováno',
-        noAbnormalReviews: 'Žádné podezřelé vzorce recenzí',
-        priceRangeLabel: 'Referenční cenové rozpětí:',
-        viewTrustProfileCta: 'Zobrazit audit a recenze →',
-        openStorefrontCta: 'Ověřit zdroj ↗',
-        emptyTitle: 'Žádný odpovídající obchod nebyl nalezen',
-        emptySubtitle:
-          'Zkuste upravit filtry nebo vložte odkaz na obchod do hloubkového auditu.',
-        inspectUrlCta: 'Prověřit odkaz na obchod nebo produkt →',
-      };
-    }
-    return {
-      totalMerchants: 'Gian hàng đang theo dõi',
-      officialMalls: 'Gian hàng Chính hãng (Mall)',
-      highTrustShops: 'Độ tin cậy cao (>=80)',
-      avgTrustScore: 'Điểm Trust trung bình',
-      searchPlaceholder:
-        'Tìm tên gian hàng, mã shop_id hoặc sàn (Shopee, Lazada, Tiki, CellphoneS, TGDĐ)...',
-      allPlatforms: 'Tất cả sàn',
-      officialMallOnly: 'Chỉ hiện Official Mall',
-      riskFilterLabel: 'Mức tín nhiệm:',
-      riskAll: 'Tất cả mức',
-      riskSafe: 'An toàn (>= 80)',
-      riskModerate: 'Trung bình (60-79)',
-      riskWarning: 'Cảnh báo (< 60)',
-      seedingAll: 'Mọi mức Seeding AI',
-      seedingLow: 'Đánh giá sạch (Seeding <= 15%)',
-      seedingElevated: 'Seeding cao (> 15%)',
-      copyMdBtn: '📋 Sao chép danh bạ Markdown',
-      copiedMdBtn: '✅ Đã chép Markdown!',
-      exportCsvBtn: '📥 Xuất danh bạ CSV',
-      sortLabel: 'Sắp xếp:',
-      sortTrust: 'Điểm Tin cậy cao nhất',
-      sortProducts: 'Nhiều sản phẩm nhất',
-      sortSeeding: 'Rủi ro Seeding thấp nhất',
-      sortFollowers: 'Nhiều người theo dõi nhất',
-      resetFilters: 'Xóa bộ lọc',
-      showingCount: 'Hiển thị',
-      ofCount: 'trên',
-      merchantsUnit: 'gian hàng',
-      officialBadge: 'Chính hãng (Official Mall)',
-      platformRating: 'Đánh giá sàn',
-      noRating: 'Chưa có',
-      followers: 'Người theo dõi',
-      trackedProducts: 'Sản phẩm đang theo dõi',
-      productsUnit: 'sản phẩm',
-      dosafeZero: 'Không có cảnh báo lừa đảo trong DOSafe',
-      dosafeAlert: 'Có cảnh báo rủi ro trên hệ thống DOSafe',
-      authenticLabel: 'Thực chất:',
-      filteredSpamSuffix: 'spam/seeding đã lọc',
-      noAbnormalReviews: 'Chưa phát hiện đánh giá bất thường',
-      priceRangeLabel: 'Biên độ giá tham chiếu:',
-      viewTrustProfileCta: 'Xem Hồ sơ Kiểm toán & Đánh giá →',
-      openStorefrontCta: 'Đối chiếu nguồn ↗',
-      emptyTitle: 'Không tìm thấy gian hàng phù hợp',
-      emptySubtitle:
-        'Hãy thử xóa bộ lọc hoặc dán trực tiếp link gian hàng/sản phẩm vào công cụ Kiểm toán sâu.',
-      inspectUrlCta: 'Kiểm toán Link Gian hàng hoặc Sản phẩm bất kỳ →',
-    };
-  }, [lang]);
+  const labels = useMemo(
+    () => ({
+      totalMerchants: t('totalMerchants'),
+      officialMalls: t('officialMalls'),
+      highTrustShops: t('highTrustShops'),
+      avgTrustScore: t('avgTrustScore'),
+      searchPlaceholder: t('searchPlaceholder'),
+      allPlatforms: t('allPlatforms'),
+      officialMallOnly: t('officialMallOnly'),
+      riskFilterLabel: t('riskFilterLabel'),
+      riskAll: t('riskAll'),
+      riskSafe: t('riskSafe'),
+      riskModerate: t('riskModerate'),
+      riskWarning: t('riskWarning'),
+      seedingAll: t('seedingAll'),
+      seedingLow: t('seedingLow'),
+      seedingElevated: t('seedingElevated'),
+      copyMdBtn: t('copyMdBtn'),
+      copiedMdBtn: t('copiedMdBtn'),
+      exportCsvBtn: t('exportCsvBtn'),
+      sortLabel: t('sortLabel'),
+      sortTrust: t('sortTrust'),
+      sortProducts: t('sortProducts'),
+      sortSeeding: t('sortSeeding'),
+      sortFollowers: t('sortFollowers'),
+      resetFilters: t('resetFilters'),
+      showingCount: t('showingCount'),
+      ofCount: t('ofCount'),
+      merchantsUnit: t('merchantsUnit'),
+      officialBadge: t('officialBadge'),
+      platformRating: t('platformRating'),
+      noRating: t('noRating'),
+      followers: t('followers'),
+      trackedProducts: t('trackedProducts'),
+      productsUnit: t('productsUnit'),
+      dosafeZero: t('dosafeZero'),
+      dosafeAlert: t('dosafeAlert'),
+      authenticLabel: t('authenticLabel'),
+      filteredSpamSuffix: t('filteredSpamSuffix'),
+      noAbnormalReviews: t('noAbnormalReviews'),
+      priceRangeLabel: t('priceRangeLabel'),
+      viewTrustProfileCta: t('viewTrustProfileCta'),
+      openStorefrontCta: t('openStorefrontCta'),
+      emptyTitle: t('emptyTitle'),
+      emptySubtitle: t('emptySubtitle'),
+      inspectUrlCta: t('inspectUrlCta'),
+    }),
+    [t]
+  );
 
   const platformCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -922,17 +822,21 @@ export default function MerchantDirectoryExplorer({
                       >
                         {rStats.genuineDealCount > 0 && (
                           <span className="badge bg-success-subtle text-success border-success-subtle rounded-pill border px-2 py-1">
-                            🟢 {rStats.genuineDealCount} Kèo đáy lịch sử 60N (-
-                            {rStats.bestSavingsPct}%)
+                            {t('radarGenuineBadge', {
+                              count: rStats.genuineDealCount,
+                              pct: rStats.bestSavingsPct,
+                            })}
                           </span>
                         )}
                         {rStats.fakeTrapCount > 0 ? (
                           <span className="badge bg-danger-subtle text-danger border-danger-subtle rounded-pill border px-2 py-1">
-                            🚨 {rStats.fakeTrapCount} Cảnh báo kê khống giá gốc
+                            {t('radarFakeBadge', {
+                              count: rStats.fakeTrapCount,
+                            })}
                           </span>
                         ) : (
                           <span className="badge bg-light text-secondary rounded-pill border px-2 py-1">
-                            🛡️ 0 cảnh báo nâng khống giá gốc (Radar 60N)
+                            {t('radarZeroFakeBadge')}
                           </span>
                         )}
                       </div>

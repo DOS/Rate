@@ -42,6 +42,17 @@ export default async function LocaleLayout({
   // full catalog through getTranslations, so nothing else is shipped.
   const clientMessages = {
     errors: { global: (messages.errors as Record<string, unknown>)?.global },
+    compare: messages.compare,
+    leaderboard: messages.leaderboard,
+    reviews: messages.reviews,
+    watchlist: messages.watchlist,
+    deals: messages.deals,
+    inspect: messages.inspect,
+    merchants: messages.merchants,
+    productDetail: messages.productDetail,
+    homePage: messages.homePage,
+    developers: messages.developers,
+    staticPages: messages.staticPages,
   };
 
   return (

@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { getTranslations } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 import { Link } from '@/lib/navigation';
 import {
@@ -32,8 +33,6 @@ import {
   BsStarFill,
 } from 'react-icons/bs';
 
-import { normalizeRateLocale } from '@/lib/rate-i18n';
-
 type PageParams = Promise<{ locale: string; id: string }>;
 
 export async function generateMetadata({
@@ -42,33 +41,27 @@ export async function generateMetadata({
   params: PageParams;
 }): Promise<Metadata> {
   const { locale, id } = await params;
-  const lang = normalizeRateLocale(locale);
+  const t = await getTranslations({ locale, namespace: 'merchants' });
   const merchant = await getCachedMerchantProfileById(id);
   if (!merchant) {
     return {
-      title:
-        lang === 'en'
-          ? 'Merchant Not Found | Rate.vn'
-          : lang === 'cs'
-            ? 'Obchod nenalezen | Rate.vn'
-            : 'Không tìm thấy gian hàng | Rate.vn',
+      title: t('notFoundTitle'),
     };
   }
   const canonicalUrl = `https://rate.vn/merchants/${merchant.id}`;
 
   return {
-    title:
-      lang === 'en'
-        ? `${merchant.name} (${merchant.platform.toUpperCase()}) - Trust ${merchant.trust_score}/100 & Price Audit | Rate.vn`
-        : lang === 'cs'
-          ? `${merchant.name} (${merchant.platform.toUpperCase()}) - Důvěra ${merchant.trust_score}/100 a Audit Cen | Rate.vn`
-          : `${merchant.name} (${merchant.platform.toUpperCase()}) - Trust ${merchant.trust_score}/100 & Kiểm định Giá | Rate.vn`,
-    description:
-      lang === 'en'
-        ? `Merchant trust profile for ${merchant.name}: DOSafe Threat Score (${merchant.dosafe_risk_score}/100), AI Review Seeding Risk (${merchant.review_risk_score}/100), and historical price audit across ${merchant.product_count} products.`
-        : lang === 'cs'
-          ? `Profil důvěryhodnosti obchodu ${merchant.name}: DOSafe riziko (${merchant.dosafe_risk_score}/100), AI riziko recenzí (${merchant.review_risk_score}/100) a audit cen ${merchant.product_count} produktů.`
-          : `Hồ sơ tín nhiệm gian hàng ${merchant.name}: Điểm an toàn DOSafe (${merchant.dosafe_risk_score}/100), Điểm rủi ro đánh giá AI (${merchant.review_risk_score}/100) và kiểm định lịch sử giá ${merchant.product_count} sản phẩm trên Rate.vn.`,
+    title: t('profileMetaTitle', {
+      name: merchant.name,
+      platform: merchant.platform.toUpperCase(),
+      score: merchant.trust_score,
+    }),
+    description: t('profileMetaDesc', {
+      name: merchant.name,
+      dosafe: merchant.dosafe_risk_score,
+      seeding: merchant.review_risk_score,
+      count: merchant.product_count,
+    }),
     alternates: {
       canonical: canonicalUrl,
     },
@@ -81,7 +74,7 @@ export default async function MerchantProfilePage({
   params: PageParams;
 }) {
   const { locale, id } = await params;
-  const lang = normalizeRateLocale(locale);
+  const t = await getTranslations({ locale, namespace: 'merchants' });
   const [merchant, dealRadar] = await Promise.all([
     getCachedMerchantProfileById(id),
     getCrossPlatformDealRadar({ categorySlug: 'all', limit: 50 }),
@@ -98,22 +91,10 @@ export default async function MerchantProfilePage({
 
   const trustLevelLabel =
     merchant.trust_score >= 80
-      ? lang === 'en'
-        ? 'High Trust (Verified Safe)'
-        : lang === 'cs'
-          ? 'Vysoká důvěryhodnost (Bezpečný)'
-          : 'Độ tin cậy cao (An toàn)'
+      ? t('trustHigh')
       : merchant.trust_score >= 50
-        ? lang === 'en'
-          ? 'Moderate Trust (Monitor)'
-          : lang === 'cs'
-            ? 'Střední důvěryhodnost'
-            : 'Độ tin cậy trung bình (Cần lưu ý)'
-        : lang === 'en'
-          ? 'High Risk Alert'
-          : lang === 'cs'
-            ? 'Varování: Vysoké riziko'
-            : 'Cảnh báo rủi ro cao';
+        ? t('trustModerate')
+        : t('trustRisk');
 
   const trustBadgeClass =
     merchant.trust_score >= 80
@@ -139,13 +120,13 @@ export default async function MerchantProfilePage({
           {
             '@type': 'ListItem',
             position: 1,
-            name: 'Trang chủ',
+            name: t('breadcrumbHome'),
             item: 'https://rate.vn',
           },
           {
             '@type': 'ListItem',
             position: 2,
-            name: 'Gian hàng',
+            name: t('breadcrumbMerchantsShort'),
             item: 'https://rate.vn/merchants',
           },
           {
@@ -194,12 +175,12 @@ export default async function MerchantProfilePage({
           <ol className="breadcrumb small mb-0">
             <li className="breadcrumb-item">
               <Link href="/" className="text-decoration-none">
-                Trang chủ
+                {t('breadcrumbHome')}
               </Link>
             </li>
             <li className="breadcrumb-item">
               <Link href="/merchants" className="text-decoration-none">
-                Gian hàng
+                {t('breadcrumbMerchantsShort')}
               </Link>
             </li>
             <li className="breadcrumb-item active" aria-current="page">
@@ -239,8 +220,7 @@ export default async function MerchantProfilePage({
                           border: '1px solid rgba(16, 185, 129, 0.35)',
                         }}
                       >
-                        <BsCheckCircleFill /> Gian hàng Chính hãng (Official
-                        Mall)
+                        <BsCheckCircleFill /> {t('officialMallLabel')}
                       </span>
                     )}
                     <span
@@ -263,16 +243,16 @@ export default async function MerchantProfilePage({
                   >
                     <span className="d-inline-flex align-items-center gap-1">
                       <BsStarFill className="text-warning" />
-                      Điểm sàn:{' '}
+                      {t('platformRatingLabel')}{' '}
                       <strong className="font-monospace text-white">
                         {merchant.rating_star
                           ? `${merchant.rating_star.toFixed(2)} / 5.0`
-                          : 'Chưa cập nhật'}
+                          : t('notUpdatedYet')}
                       </strong>
                     </span>
                     <span className="d-inline-flex align-items-center gap-1">
                       <BsPeopleFill className="text-info" />
-                      Người theo dõi:{' '}
+                      {t('followersLabel')}{' '}
                       <strong className="font-monospace text-white">
                         {merchant.follower_count > 0
                           ? merchant.follower_count.toLocaleString('vi-VN')
@@ -281,9 +261,11 @@ export default async function MerchantProfilePage({
                     </span>
                     <span className="d-inline-flex align-items-center gap-1">
                       <BsBoxSeam className="text-success" />
-                      Sản phẩm đang theo dõi:{' '}
+                      {t('trackedModelsLabel')}{' '}
                       <strong className="font-monospace text-white">
-                        {merchant.product_count} mẫu
+                        {t('modelsCountUnit', {
+                          count: merchant.product_count,
+                        })}
                       </strong>
                     </span>
                   </div>
@@ -300,7 +282,7 @@ export default async function MerchantProfilePage({
                 }}
               >
                 <div className="small mb-1" style={{ color: '#94a3b8' }}>
-                  Chỉ số Tín nhiệm Tổng hợp (Rate Trust Score)
+                  {t('compositeTrustScoreLabel')}
                 </div>
                 <div className="display-6 fw-bold font-monospace mb-1 text-white">
                   {merchant.trust_score}
@@ -322,7 +304,9 @@ export default async function MerchantProfilePage({
                     rel="noopener noreferrer"
                     className="btn btn-outline-light btn-sm rounded-pill fw-medium"
                   >
-                    Đối chiếu nguồn trên {merchant.platform.toUpperCase()} ↗
+                    {t('verifySourceOnPlatform', {
+                      platform: merchant.platform.toUpperCase(),
+                    })}
                   </a>
                 )}
                 <MerchantShareAuditButton
@@ -357,11 +341,11 @@ export default async function MerchantProfilePage({
               <div className="d-flex justify-content-between align-items-start mb-3">
                 <div>
                   <span className="badge bg-primary-subtle text-primary rounded-pill small mb-2 px-3 py-1">
-                    Tầng bảo vệ 1: DOSafe Threat Intelligence
+                    {t('layer1Badge')}
                   </span>
                   <h2 className="h5 fw-bold d-flex align-items-center mb-0 gap-2">
                     <BsShieldCheck className="text-success" />
-                    Hồ sơ Chống Lừa Đảo DOSafe
+                    {t('layer1Title')}
                   </h2>
                 </div>
                 <span
@@ -376,34 +360,34 @@ export default async function MerchantProfilePage({
               </div>
 
               <p className="text-muted small mb-3">
-                Đối chiếu tự động qua mã băm định danh (<code>entity_hash</code>
-                ) với cơ sở dữ liệu cảnh báo lừa đảo liên thông{' '}
-                <code>dosafe.threat_intel</code>.
+                {t('layer1DescPrefix')}
+                <code>entity_hash</code>
+                {t('layer1DescMid')} <code>dosafe.threat_intel</code>.
               </p>
 
               <div className="rounded-3 bg-light mt-auto p-3">
                 <div className="d-flex align-items-center justify-content-between small mb-2">
-                  <span className="text-muted">
-                    Trạng thái cảnh báo lừa đảo:
-                  </span>
+                  <span className="text-muted">{t('scamStatusLabel')}</span>
                   <span className="fw-semibold text-success">
                     {merchant.dosafe_risk_score === 0
-                      ? '✓ Không ghi nhận phốt / cảnh báo'
-                      : '⚠️ Có cảnh báo rủi ro'}
+                      ? t('scamStatusClean')
+                      : t('scamStatusAlert')}
                   </span>
                 </div>
                 <div className="d-flex align-items-center justify-content-between small mb-2">
-                  <span className="text-muted">Xác thực pháp nhân sàn:</span>
+                  <span className="text-muted">
+                    {t('entityVerificationLabel')}
+                  </span>
                   <span className="fw-semibold">
                     {merchant.is_official
-                      ? '✓ Gian hàng Chính hãng (Official Mall)'
-                      : 'Gian hàng tiêu chuẩn'}
+                      ? t('entityOfficial')
+                      : t('standardShopLabel')}
                   </span>
                 </div>
                 <div className="d-flex align-items-center justify-content-between small">
-                  <span className="text-muted">Bảo mật dữ liệu PII:</span>
+                  <span className="text-muted">{t('piiProtectionLabel')}</span>
                   <span className="fw-semibold text-secondary">
-                    Đã ẩn thông tin nhạy cảm (SĐT/Ngân hàng)
+                    {t('piiProtectionValue')}
                   </span>
                 </div>
               </div>
@@ -416,11 +400,11 @@ export default async function MerchantProfilePage({
               <div className="d-flex justify-content-between align-items-start mb-3">
                 <div>
                   <span className="badge bg-warning-subtle text-warning-emphasis rounded-pill small mb-2 px-3 py-1">
-                    Tầng bảo vệ 2: JReviews AI Seeding Detector
+                    {t('layer2Badge')}
                   </span>
                   <h2 className="h5 fw-bold d-flex align-items-center mb-0 gap-2">
                     <BsGraphUpArrow className="text-primary" />
-                    Phân Tích Độ Trung Thực Đánh Giá
+                    {t('layer2Title')}
                   </h2>
                 </div>
                 <span
@@ -437,9 +421,8 @@ export default async function MerchantProfilePage({
               </div>
 
               <p className="text-muted small mb-3">
-                Tổng hợp từ <strong>{brk.total_reviews}</strong> đánh giá đã
-                được AI phân loại trên các sản phẩm thuộc gian hàng này (tỷ lệ
-                đánh giá thực chất đạt <strong>{authenticPct}%</strong>).
+                {t('layer2DescPrefix')} <strong>{brk.total_reviews}</strong>{' '}
+                {t('layer2DescMid')} <strong>{authenticPct}%</strong>).
               </p>
 
               <div className="row g-2 mt-auto">
@@ -449,7 +432,7 @@ export default async function MerchantProfilePage({
                       {brk.authentic_count}
                     </div>
                     <div className="text-muted" style={{ fontSize: '0.72rem' }}>
-                      Thực chất
+                      {t('statAuthentic')}
                     </div>
                   </div>
                 </div>
@@ -459,7 +442,7 @@ export default async function MerchantProfilePage({
                       {brk.coin_spam_count}
                     </div>
                     <div className="text-muted" style={{ fontSize: '0.72rem' }}>
-                      Spam nhận xu
+                      {t('statCoinSpam')}
                     </div>
                   </div>
                 </div>
@@ -469,7 +452,7 @@ export default async function MerchantProfilePage({
                       {brk.seeding_fake_count}
                     </div>
                     <div className="text-muted" style={{ fontSize: '0.72rem' }}>
-                      Seeding ảo
+                      {t('statSeedingFake')}
                     </div>
                   </div>
                 </div>
@@ -479,7 +462,7 @@ export default async function MerchantProfilePage({
                       {brk.sabotage_or_bombing_count}
                     </div>
                     <div className="text-muted" style={{ fontSize: '0.72rem' }}>
-                      Phá hoại/Bomb
+                      {t('statSabotage')}
                     </div>
                   </div>
                 </div>
@@ -496,16 +479,19 @@ export default async function MerchantProfilePage({
           <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
             <div>
               <span className="badge bg-dark rounded-pill text-warning me-2">
-                🔥 TÍN HIỆU RADAR KÈO ĐÁY &amp; KIỂM TOÁN GIÁ ẢO 60 NGÀY
+                {t('profileRadarBadge')}
               </span>
               <span className="small text-muted">
-                Đối chiếu tự động trên {dealRadar.totalOffersAnalyzed} gian hàng
-                đa sàn
+                {t('profileRadarAnalyzed', {
+                  count: dealRadar.totalOffersAnalyzed,
+                })}
               </span>
             </div>
             <div className="d-flex align-items-center flex-wrap gap-2">
               <span className="badge bg-success-subtle text-success border-success-subtle rounded-pill border px-3 py-1">
-                🟢 {merchantGenuineDeals.length} kèo đáy lịch sử 60N
+                {t('profileRadarGenuineCount', {
+                  count: merchantGenuineDeals.length,
+                })}
               </span>
               <span
                 className={`badge rounded-pill border px-3 py-1 ${
@@ -515,14 +501,16 @@ export default async function MerchantProfilePage({
                 }`}
               >
                 {merchantFakeTraps.length > 0
-                  ? `🚨 ${merchantFakeTraps.length} cảnh báo kê khống giá gốc`
-                  : '🛡️ 0 cảnh báo nâng khống giá gốc'}
+                  ? t('profileRadarFakeCount', {
+                      count: merchantFakeTraps.length,
+                    })
+                  : t('profileRadarZeroFake')}
               </span>
               <Link
                 href="/deals"
                 className="btn btn-sm btn-outline-danger rounded-pill fw-semibold px-3"
               >
-                Mở Radar 10 sàn →
+                {t('openRadar10PlatformsBtn')}
               </Link>
             </div>
           </div>
@@ -539,9 +527,10 @@ export default async function MerchantProfilePage({
                         🟢 {g.productName}
                       </Link>
                       <div className="text-secondary small">
-                        Đáy 60N: {g.marketMinPrice.toLocaleString('vi-VN')} ₫ •
-                        Trung vị: {g.marketMedianPrice.toLocaleString('vi-VN')}{' '}
-                        ₫
+                        {t('low60dAndMedian', {
+                          min: g.marketMinPrice.toLocaleString('vi-VN'),
+                          median: g.marketMedianPrice.toLocaleString('vi-VN'),
+                        })}
                       </div>
                     </div>
                     <div className="flex-shrink-0 text-end">
@@ -549,33 +538,36 @@ export default async function MerchantProfilePage({
                         {g.priceCurrent.toLocaleString('vi-VN')} ₫
                       </div>
                       <span className="badge bg-success rounded-pill">
-                        -{g.savingsVsMedianPct}% so trung vị
+                        {t('vsMedianBadge', { pct: g.savingsVsMedianPct })}
                       </span>
                     </div>
                   </div>
                 </div>
               ))}
-              {merchantFakeTraps.slice(0, 4).map((t) => (
-                <div key={t.id} className="col-md-6">
+              {merchantFakeTraps.slice(0, 4).map((tItem) => (
+                <div key={tItem.id} className="col-md-6">
                   <div className="rounded-3 border-danger-subtle bg-danger-subtle bg-opacity-10 d-flex justify-content-between align-items-center border p-2">
                     <div className="overflow-hidden pe-2">
                       <Link
-                        href={t.productHref}
+                        href={tItem.productHref}
                         className="fw-bold text-dark text-decoration-none d-block text-truncate small"
                       >
-                        🚨 {t.productName}
+                        🚨 {tItem.productName}
                       </Link>
                       <div className="text-secondary small">
-                        Giá gạch ngang kê khống:{' '}
-                        {(t.priceOriginal || 0).toLocaleString('vi-VN')} ₫
+                        {t('inflatedOriginalPrice', {
+                          price: (tItem.priceOriginal || 0).toLocaleString(
+                            'vi-VN'
+                          ),
+                        })}
                       </div>
                     </div>
                     <div className="flex-shrink-0 text-end">
                       <div className="fw-bold text-danger font-monospace small">
-                        {t.priceCurrent.toLocaleString('vi-VN')} ₫
+                        {tItem.priceCurrent.toLocaleString('vi-VN')} ₫
                       </div>
                       <span className="badge bg-danger rounded-pill">
-                        Kê khống +{t.fakeMarkupPct}%
+                        {t('fakeMarkupBadge', { pct: tItem.fakeMarkupPct })}
                       </span>
                     </div>
                   </div>
@@ -583,31 +575,25 @@ export default async function MerchantProfilePage({
               ))}
             </div>
           ) : (
-            <div className="small text-muted">
-              Gian hàng này hiện duy trì mức giá niêm yết ổn định quanh trung vị
-              thị trường 60 ngày, không có bản ghi nâng khống giá gốc bất
-              thường.
-            </div>
+            <div className="small text-muted">{t('profileRadarCleanNote')}</div>
           )}
         </div>
 
         {/* SECTION #1: Recent Buyer Reviews & AI Flags Section (Rating-First Priority) */}
         <div className="card rounded-4 p-md-5 mb-5 border-0 p-4 shadow-sm">
           <span className="rate-eyebrow text-primary d-block mb-1">
-            KIỂM TOÁN BÌNH LUẬN &amp; CHỐNG SEEDING BẰNG AI (JREVIEWS WEIGHTED)
+            {t('reviewsSectionEyebrow')}
           </span>
           <h2 className="h4 fw-bold mb-1">
-            💬 Nhật Ký Kiểm Định Đánh Giá Người Mua Tại Gian Hàng (
-            {merchant.recent_reviews.length})
+            {t('reviewsSectionTitle', {
+              count: merchant.recent_reviews.length,
+            })}
           </h2>
-          <p className="text-muted small mb-4">
-            Toàn bộ đánh giá được chấm trọng số JReviews và gắn nhãn tự động bởi
-            AI Review Analyzer trước khi tính vào điểm tín nhiệm
-          </p>
+          <p className="text-muted small mb-4">{t('reviewsSectionSubtitle')}</p>
 
           {merchant.recent_reviews.length === 0 ? (
             <div className="text-muted py-4 text-center">
-              Chưa có đánh giá nào được ghi nhận cho gian hàng này.
+              {t('noReviewsYet')}
             </div>
           ) : (
             <div className="row g-3">
@@ -623,16 +609,18 @@ export default async function MerchantProfilePage({
                 const flagBadge =
                   rev.flag_category === 'low_value_coin_spam'
                     ? {
-                        label: '🪙 Bình luận rác nhận xu (Trọng số 0.0)',
+                        label: t('flagCoinSpam'),
                         cls: 'bg-warning-subtle text-warning-emphasis',
                       }
                     : rev.flag_category === 'seeding_fake'
                       ? {
-                          label: '🚨 Nghi vấn Seeding ảo (Trọng số 0.0)',
+                          label: t('flagSeedingFake'),
                           cls: 'bg-danger-subtle text-danger',
                         }
                       : {
-                          label: `✓ Đánh giá thực chất (Trọng số ${rev.helpfulness_weight.toFixed(2)})`,
+                          label: t('flagAuthenticWeight', {
+                            weight: rev.helpfulness_weight.toFixed(2),
+                          }),
                           cls: 'bg-success-subtle text-success',
                         };
 
@@ -669,7 +657,7 @@ export default async function MerchantProfilePage({
                       </div>
 
                       <p className="small text-dark mb-2">
-                        {rev.comment || '(Không có nội dung bình luận)'}
+                        {rev.comment || t('noCommentBody')}
                       </p>
 
                       <div className="d-flex justify-content-between align-items-center border-top mt-auto flex-wrap gap-2 pt-2">
@@ -701,34 +689,34 @@ export default async function MerchantProfilePage({
           <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 gap-2">
             <div>
               <span className="rate-eyebrow text-muted d-block mb-1">
-                KIỂM ĐỊNH BIÊN ĐỘ GIÁ &amp; PHÁT HIỆN NÂNG KHỐNG GIÁ GỐC
+                {t('listingsSectionEyebrow')}
               </span>
               <h2 className="h4 fw-bold mb-1">
-                🛡️ Danh Sách Niêm Yết &amp; Đối Chiếu Lịch Sử Giá (
-                {merchant.listings.length})
+                {t('listingsSectionTitle', {
+                  count: merchant.listings.length,
+                })}
               </h2>
               <p className="text-muted small mb-0">
-                Đối chiếu giá ghi nhận tại {merchant.name} với mức giá thấp nhất
-                thị trường và trung vị lịch sử 90 ngày
+                {t('listingsSectionSubtitle', { name: merchant.name })}
               </p>
             </div>
           </div>
 
           {merchant.listings.length === 0 ? (
             <div className="text-muted py-4 text-center">
-              Chưa có sản phẩm nào được liên kết với gian hàng này.
+              {t('noListingsYet')}
             </div>
           ) : (
             <div className="table-responsive">
               <table className="table-hover mb-0 table align-middle">
                 <thead className="table-light small">
                   <tr>
-                    <th scope="col">Sản phẩm niêm yết</th>
-                    <th scope="col">Dòng máy chuẩn hóa (Master Product)</th>
-                    <th scope="col">Giá ghi nhận</th>
-                    <th scope="col">Kiểm định Khuyến mãi (Price History)</th>
+                    <th scope="col">{t('colListedProduct')}</th>
+                    <th scope="col">{t('colMasterProduct')}</th>
+                    <th scope="col">{t('colRecordedPrice')}</th>
+                    <th scope="col">{t('colPromoAudit')}</th>
                     <th scope="col" className="text-end">
-                      Kiểm định &amp; Nguồn
+                      {t('colAuditAndSource')}
                     </th>
                   </tr>
                 </thead>
@@ -784,8 +772,9 @@ export default async function MerchantProfilePage({
                                 className="text-muted"
                                 style={{ fontSize: '0.75rem' }}
                               >
-                                Mã sàn: <code>{item.platform_item_id}</code> •
-                                Đã bán:{' '}
+                                {t('itemMetaLine')}{' '}
+                                <code>{item.platform_item_id}</code> •{' '}
+                                {t('soldLabel')}{' '}
                                 {item.historical_sold.toLocaleString('vi-VN')} •
                                 ★ {item.rating_star.toFixed(1)} (
                                 {item.rating_count})
@@ -814,7 +803,7 @@ export default async function MerchantProfilePage({
                                 className="text-muted"
                                 style={{ fontSize: '0.75rem' }}
                               >
-                                Giá thấp nhất thị trường:{' '}
+                                {t('lowestMarketPriceLabel')}{' '}
                                 <strong className="font-monospace">
                                   {item.master_product.market_min_price.toLocaleString(
                                     'vi-VN'
@@ -825,7 +814,7 @@ export default async function MerchantProfilePage({
                             </div>
                           ) : (
                             <span className="text-muted small">
-                              Chưa gom cụm
+                              {t('unclusteredLabel')}
                             </span>
                           )}
                         </td>
@@ -855,16 +844,18 @@ export default async function MerchantProfilePage({
                                   maxWidth: '280px',
                                 }}
                               >
-                                Đáy lịch sử:{' '}
-                                {da.historical_min_price.toLocaleString(
-                                  'vi-VN'
-                                )}{' '}
-                                ₫ ({da.observation_count} mốc đo)
+                                {t('historicalLowObs', {
+                                  price:
+                                    da.historical_min_price.toLocaleString(
+                                      'vi-VN'
+                                    ),
+                                  count: da.observation_count,
+                                })}
                               </div>
                             </div>
                           ) : (
                             <span className="badge bg-light text-muted small border">
-                              Đang thu thập lịch sử giá
+                              {t('collectingHistoryBadge')}
                             </span>
                           )}
                         </td>
@@ -875,7 +866,7 @@ export default async function MerchantProfilePage({
                                 href={`${masterBaseHref}/${item.master_product.slug}#jreviews-section`}
                                 className="btn btn-sm btn-outline-primary rounded-pill px-3"
                               >
-                                ★ Xem Review &amp; Giá
+                                {t('viewReviewsAndPricesBtn')}
                               </Link>
                             )}
                             <a
@@ -884,7 +875,7 @@ export default async function MerchantProfilePage({
                               rel="noopener noreferrer"
                               className="btn btn-sm btn-outline-secondary rounded-pill px-3"
                             >
-                              Đối chiếu nguồn ↗
+                              {t('verifySourceBtn')}
                             </a>
                           </div>
                         </td>

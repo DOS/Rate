@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { getTranslations } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
 import NavbarDarkDynamic from '../components/navbar/NavbarDarkDynamic';
 import FooterTop from '../components/footer-top';
@@ -22,6 +23,7 @@ export async function generateMetadata({
   params: Promise<{ locale: string }>;
 }): Promise<Metadata> {
   const { locale } = await params;
+  const t = await getTranslations({ locale, namespace: 'staticPages' });
   const alternates = {
     canonical: 'https://rate.vn/contact-us',
     languages: {
@@ -30,26 +32,9 @@ export async function generateMetadata({
       cs: 'https://rate.vn/contact-us',
     },
   };
-  if (locale === 'en') {
-    return {
-      title: 'Contact & Report Suspicious Marketplace Merchant | Rate.vn',
-      description:
-        'Report fake discounts, review seeding campaigns, or request a merchant trust re-audit on Rate.vn.',
-      alternates,
-    };
-  }
-  if (locale === 'cs') {
-    return {
-      title: 'Kontakt a nahlášení podezřelého obchodu | Rate.vn',
-      description:
-        'Nahlaste falešné slevy, AI seeding kampaně nebo požádejte o opětovný audit důvěryhodnosti obchodu na Rate.vn.',
-      alternates,
-    };
-  }
   return {
-    title: 'Liên Hệ & Báo Cáo Gian Hàng Nghi Vấn Seeding / Giá Ảo | Rate.vn',
-    description:
-      'Gửi đường dẫn sản phẩm hoặc gian hàng Shopee, Lazada, Tiki có dấu hiệu nâng khống giá gốc hoặc chạy Seeding đánh giá ảo để hệ thống Rate.vn kiểm định.',
+    title: t('contactSeoTitle'),
+    description: t('contactSeoDesc'),
     alternates,
   };
 }
@@ -60,9 +45,10 @@ export default async function ContactUsPage({
   params: Promise<{ locale: string }>;
 }) {
   const { locale } = await params;
-  const [products, merchants] = await Promise.all([
+  const [products, merchants, t] = await Promise.all([
     getMasterProducts({ limit: 6 }),
     getCachedMerchantsList(),
+    getTranslations({ locale, namespace: 'staticPages' }),
   ]);
 
   return (
@@ -74,18 +60,12 @@ export default async function ContactUsPage({
           <div className="row justify-content-center mb-4 text-center">
             <div className="col-lg-9">
               <span className="badge bg-danger rounded-pill fw-semibold mb-3 px-3 py-2">
-                <BsShieldExclamation className="me-1" /> Trung Tâm Tiếp Nhận
-                Kiểm Toán &amp; Phản Hồi Cộng Đồng
+                <BsShieldExclamation className="me-1" /> {t('contactHeroBadge')}
               </span>
               <h1 className="display-6 fw-bold mb-3 text-white">
-                Kiểm Định Nhanh &amp; Báo Cáo Gian Hàng Bất Thường
+                {t('contactHeroTitle')}
               </h1>
-              <p className="lead text-white-50 mb-0">
-                Dán trực tiếp đường dẫn sản phẩm hoặc gian hàng Shopee, Lazada,
-                Tiki, TikTok Shop, CellphoneS, TGDĐ, FPT Shop, Hoàng Hà, Di Động
-                Việt, Phong Vũ vào bộ kiểm định bên dưới để kiểm tra ngay lịch
-                sử giá hoặc gửi vào hàng đợi Zero-Trust Quarantine.
-              </p>
+              <p className="lead text-white-50 mb-0">{t('contactHeroDesc')}</p>
             </div>
           </div>
 
@@ -110,20 +90,13 @@ export default async function ContactUsPage({
             <div className="col-lg-4">
               <div className="card rounded-4 h-100 border bg-white p-4 shadow-sm">
                 <BsShieldExclamation className="text-danger fs-1 mb-3" />
-                <h4 className="h5 fw-bold mb-2">
-                  1. Báo Cáo Khuyến Mãi Ảo &amp; Seeding
-                </h4>
-                <p className="text-muted small mb-3">
-                  Khi phát hiện gian hàng nâng giá gốc đột biến trước ngày sale
-                  hoặc dùng tài khoản ảo lặp lại bình luận mẫu để đẩy sao, bạn
-                  có thể bấm nút <strong>&ldquo;Báo cáo Seeding&rdquo;</strong>{' '}
-                  ngay tại từng đánh giá trên trang chi tiết sản phẩm.
-                </p>
+                <h4 className="h5 fw-bold mb-2">{t('contactCard1Title')}</h4>
+                <p className="text-muted small mb-3">{t('contactCard1Desc')}</p>
                 <Link
                   href="/smartphones"
                   className="btn btn-outline-danger rounded-pill fw-medium mt-auto"
                 >
-                  Tới danh mục sản phẩm →
+                  {t('contactCard1Btn')}
                 </Link>
               </div>
             </div>
@@ -131,20 +104,13 @@ export default async function ContactUsPage({
             <div className="col-lg-4">
               <div className="card rounded-4 h-100 border bg-white p-4 shadow-sm">
                 <BsShop className="text-primary fs-1 mb-3" />
-                <h4 className="h5 fw-bold mb-2">
-                  2. Xác Minh Gian Hàng Chính Hãng (Official Mall)
-                </h4>
-                <p className="text-muted small mb-3">
-                  Dành cho các đối tác thương hiệu và nhà phân phối ủy quyền
-                  muốn đồng bộ danh mục sản phẩm chuẩn hóa 10 nhóm hoặc yêu cầu
-                  rà soát lại hồ sơ tín nhiệm trong bảng{' '}
-                  <code>rate.merchants</code>.
-                </p>
+                <h4 className="h5 fw-bold mb-2">{t('contactCard2Title')}</h4>
+                <p className="text-muted small mb-3">{t('contactCard2Desc')}</p>
                 <Link
                   href="/merchants"
                   className="btn btn-outline-primary rounded-pill fw-medium mt-auto"
                 >
-                  Tra cứu danh bạ gian hàng →
+                  {t('contactCard2Btn')}
                 </Link>
               </div>
             </div>
@@ -152,15 +118,8 @@ export default async function ContactUsPage({
             <div className="col-lg-4">
               <div className="card rounded-4 h-100 border bg-white p-4 shadow-sm">
                 <BsCodeSquare className="text-success fs-1 mb-3" />
-                <h4 className="h5 fw-bold mb-2">
-                  3. Đóng Góp Mã Nguồn Mở &amp; Tích Hợp API
-                </h4>
-                <p className="text-muted small mb-3">
-                  Rate.vn phát triển theo mô hình Open-Core thuộc hệ sinh thái
-                  DOS. Mọi đề xuất cải tiến schema 10 nhóm thông số, bộ chuẩn
-                  hóa <code>ProductNormalizer</code> hoặc báo lỗi kỹ thuật đều
-                  được tiếp nhận công khai trên GitHub.
-                </p>
+                <h4 className="h5 fw-bold mb-2">{t('contactCard3Title')}</h4>
+                <p className="text-muted small mb-3">{t('contactCard3Desc')}</p>
                 <div className="d-flex mt-auto flex-wrap gap-2">
                   <a
                     href="https://github.com/DOS/Rate/issues"
@@ -168,13 +127,13 @@ export default async function ContactUsPage({
                     rel="noopener noreferrer"
                     className="btn btn-dark rounded-pill fw-medium d-inline-flex align-items-center gap-2 px-3"
                   >
-                    <BsGithub /> GitHub Issues
+                    <BsGithub /> {t('contactCard3GithubBtn')}
                   </a>
                   <Link
                     href="/developers"
                     className="btn btn-outline-success rounded-pill fw-medium px-3"
                   >
-                    REST API v1
+                    {t('contactCard3ApiBtn')}
                   </Link>
                 </div>
               </div>
@@ -192,13 +151,11 @@ export default async function ContactUsPage({
                     <BsEnvelopeAt className="fs-4" />
                   </div>
                   <div>
-                    <h5 className="fw-bold mb-1">
-                      Kênh Liên Hệ Chính Thức Hệ Sinh Thái DOS / Rate.vn
-                    </h5>
+                    <h5 className="fw-bold mb-1">{t('contactFooterTitle')}</h5>
                     <p className="text-muted small mb-0">
-                      Email tiếp nhận báo cáo bảo mật, khiếu nại dữ liệu gian
-                      hàng và hợp tác kỹ thuật: <code>security@rate.vn</code>{' '}
-                      hoặc qua hệ thống Issue Tracker chính thức tại{' '}
+                      {t('contactFooterDescPrefix')}{' '}
+                      <code>security@rate.vn</code>{' '}
+                      {t('contactFooterDescMiddle')}{' '}
                       <code>github.com/DOS/Rate</code>.
                     </p>
                   </div>
@@ -209,7 +166,7 @@ export default async function ContactUsPage({
                   href="/faq"
                   className="btn btn-primary rounded-pill fw-medium px-4"
                 >
-                  Xem Câu Hỏi Thường Gặp (FAQ)
+                  {t('contactFooterFaqBtn')}
                 </Link>
               </div>
             </div>
