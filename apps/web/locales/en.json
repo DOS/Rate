@@ -411,7 +411,8 @@
     "showdownsEyebrow": "Direct 1v1 Showdowns From Leaderboard",
     "showdownsHeading": "Head-to-Head Matchups Between Top-Ranked Devices",
     "openCompareMatrixBtn": "Open Comparison Matrix →",
-    "view1v1DeepBtn": "View 1v1 Head-to-Head"
+    "view1v1DeepBtn": "View 1v1 Head-to-Head",
+    "categoryTabsAria": "Choose a category"
   },
   "reviews": {
     "criteriaScreen": "Display & Visuals",
@@ -1601,7 +1602,9 @@
       "applyFiltersBtn": "Apply Filters",
       "clearAllFiltersBtn": "Clear All Filters",
       "rangeFrom": "From:",
-      "rangeTo": "To:"
+      "rangeTo": "To:",
+      "minPriceAria": "Minimum price",
+      "maxPriceAria": "Maximum price"
     }
   },
   "heroSearch": {

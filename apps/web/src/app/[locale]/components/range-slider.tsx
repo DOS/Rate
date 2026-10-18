@@ -76,7 +76,10 @@ export default function RangeSlider({
         onChangeComplete={handleAfterChange}
         allowCross={false}
         // Each handle is a role="slider" and needs an accessible name.
-        ariaLabelForHandle={[tSidebar('rangeFrom'), tSidebar('rangeTo')]}
+        ariaLabelForHandle={[
+          tSidebar('minPriceAria'),
+          tSidebar('maxPriceAria'),
+        ]}
       />
       <div
         className="d-flex justify-content-between align-items-center small fw-medium text-muted"
