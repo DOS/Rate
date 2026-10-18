@@ -2570,7 +2570,12 @@ export async function getMerchantsList(
       merchantsQuery().range(from, to)
     );
   }
-  const merchants = merchantRows as unknown as RawMerchantSafeRow[];
+  // Pages are not one snapshot: a row that moves between reads can repeat.
+  const merchants = [
+    ...new Map(
+      (merchantRows as unknown as RawMerchantSafeRow[]).map((m) => [m.id, m])
+    ).values(),
+  ];
   if (merchants.length === 0) return [];
 
   const merchantIds = merchants.map((m) => m.id);
