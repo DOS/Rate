@@ -102,6 +102,7 @@ function freePort() {
 async function waitForHttp(url, label, timeoutMs, child) {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
+    if (child?.spawnError) throw child.spawnError;
     if (child && child.exitCode !== null)
       throw new Error(
         `${label} exited with ${child.exitCode} before it was ready`
@@ -127,7 +128,11 @@ function start(command, commandArgs, env) {
     shell: process.platform === 'win32',
     detached: process.platform !== 'win32',
   });
-  child.on('error', (err) => console.error(`${command}: ${err.message}`));
+  child.on('error', (err) => {
+    // A failed spawn never sets exitCode; waitForHttp checks this instead.
+    child.spawnError = err;
+    console.error(`${command}: ${err.message}`);
+  });
   children.push(child);
   return child;
 }
@@ -227,19 +232,22 @@ try {
     ],
     { timeout: 120_000 }
   );
-  const restPort = Number(
-    docker(['port', restName, '3000/tcp']).split('\n')[0].split(':').pop()
-  );
-  await startProxy(restPort);
   const supabaseUrl = `http://127.0.0.1:${SUPABASE_PORT}`;
   try {
+    const restPort = Number(
+      docker(['port', restName, '3000/tcp']).split('\n')[0].split(':').pop()
+    );
+    await startProxy(restPort);
     await waitForHttp(
       `${supabaseUrl}/rest/v1/categories?select=slug`,
       'PostgREST',
       60_000
     );
   } catch (err) {
-    const logs = spawnSync('docker', ['logs', restName], { encoding: 'utf8' });
+    const logs = spawnSync('docker', ['logs', restName], {
+      encoding: 'utf8',
+      timeout: 10_000,
+    });
     console.error(`${logs.stdout}${logs.stderr}`);
     throw err;
   }
