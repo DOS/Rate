@@ -29,6 +29,7 @@ import CompareTrayBar from '@/components/compare/CompareTrayBar';
 import CategoryCatalogToolbar from '@/components/leaderboard/CategoryCatalogToolbar';
 import {
   BsArrowLeftRight,
+  BsArrowRight,
   BsBatteryHalf,
   BsCpu,
   BsLightningCharge,
@@ -605,101 +606,103 @@ export async function CategoryCatalogContent({
                 (categoryDealRadar.genuineDeals.length > 0 ||
                   categoryDealRadar.fakeSaleTraps.length > 0) && (
                   <div
-                    className="rate-card mb-4 p-3"
+                    className="rate-card rate-home-radar mb-4"
                     data-testid="category-deal-radar"
                   >
-                    <div className="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                    <div className="rate-radar-spread-head">
                       <div>
-                        <span className="badge bg-dark rounded-pill text-warning me-2">
+                        <span className="rate-eyebrow mb-2">
                           {t('page.radarBannerBadge', {
                             title: schema.categoryTitle,
                           })}
                         </span>
-                        <span className="small text-secondary">
+                        <div className="rate-radar-item-meta">
                           {t('page.radarAnalyzedSub', {
                             count: categoryDealRadar.totalOffersAnalyzed,
                           })}
-                        </span>
+                        </div>
                       </div>
-                      <Link
-                        href="/deals"
-                        className="btn btn-sm btn-outline-danger rounded-pill fw-semibold px-3"
-                      >
+                      <Link href="/deals">
                         {t('page.viewAllRadarBtn')}
+                        <BsArrowRight aria-hidden="true" />
                       </Link>
                     </div>
-                    <div className="row g-2">
+
+                    <ul className="rate-radar-list mt-3">
                       {categoryDealRadar.genuineDeals.slice(0, 2).map((g) => (
-                        <div key={g.id} className="col-md-6">
-                          <div className="rounded-3 border-success-subtle bg-success-subtle bg-opacity-10 d-flex justify-content-between align-items-center border p-2">
-                            <div className="overflow-hidden pe-2">
-                              <Link
-                                href={g.productHref}
-                                className="fw-bold text-dark text-decoration-none d-block text-truncate small"
-                              >
-                                🟢 {g.productName}
-                              </Link>
-                              <div className="text-secondary small">
-                                {g.platform.toUpperCase()} • {g.merchantName}
-                              </div>
-                            </div>
-                            <div className="flex-shrink-0 text-end">
-                              <div className="fw-bold text-success font-monospace small">
-                                {g.priceCurrent.toLocaleString('vi-VN')} ₫
-                              </div>
-                              <span className="badge bg-success rounded-pill">
-                                {t('page.vsMedianBadge', {
-                                  pct: g.savingsVsMedianPct,
-                                })}
+                        <li key={g.id}>
+                          <div className="rate-radar-item-main">
+                            <Link
+                              href={g.productHref}
+                              className="text-truncate"
+                            >
+                              {g.productName}
+                            </Link>
+                            <span className="rate-radar-item-meta text-truncate">
+                              <span className="rate-radar-platform">
+                                {g.platform}
                               </span>
-                            </div>
+                              {g.merchantName}
+                            </span>
                           </div>
-                        </div>
+                          <div className="rate-radar-item-side">
+                            <span className="rate-radar-price">
+                              {g.priceCurrent.toLocaleString('vi-VN')} ₫
+                            </span>
+                            <span className="rate-radar-tag is-good">
+                              {t('page.vsMedianBadge', {
+                                pct: g.savingsVsMedianPct,
+                              })}
+                            </span>
+                          </div>
+                        </li>
                       ))}
                       {categoryDealRadar.fakeSaleTraps
                         .slice(0, 2)
                         .map((trap) => (
-                          <div key={trap.id} className="col-md-6">
-                            <div className="rounded-3 border-danger-subtle bg-danger-subtle bg-opacity-10 d-flex justify-content-between align-items-center border p-2">
-                              <div className="overflow-hidden pe-2">
-                                <Link
-                                  href={trap.productHref}
-                                  className="fw-bold text-dark text-decoration-none d-block text-truncate small"
-                                >
-                                  🚨 {trap.productName}
-                                </Link>
-                                <div className="text-secondary small">
-                                  {trap.platform.toUpperCase()} •{' '}
-                                  {trap.merchantName}
-                                </div>
-                              </div>
-                              <div className="flex-shrink-0 text-end">
-                                <div className="fw-bold text-danger font-monospace small">
-                                  {trap.priceCurrent.toLocaleString('vi-VN')} ₫
-                                </div>
-                                <span className="badge bg-danger rounded-pill">
-                                  {t('page.fakeMarkupBadge', {
-                                    pct: trap.fakeMarkupPct,
-                                  })}
+                          <li key={trap.id}>
+                            <div className="rate-radar-item-main">
+                              <Link
+                                href={trap.productHref}
+                                className="text-truncate"
+                              >
+                                {trap.productName}
+                              </Link>
+                              <span className="rate-radar-item-meta text-truncate">
+                                <span className="rate-radar-platform">
+                                  {trap.platform}
                                 </span>
-                              </div>
+                                {trap.merchantName}
+                              </span>
                             </div>
-                          </div>
+                            <div className="rate-radar-item-side">
+                              <span className="rate-radar-price">
+                                {trap.priceCurrent.toLocaleString('vi-VN')} ₫
+                              </span>
+                              <span className="rate-radar-tag is-bad">
+                                {t('page.fakeMarkupBadge', {
+                                  pct: trap.fakeMarkupPct,
+                                })}
+                              </span>
+                            </div>
+                          </li>
                         ))}
-                    </div>
+                    </ul>
+
                     {Array.isArray(categoryDealRadar.priceSpreadLeaders) &&
                       categoryDealRadar.priceSpreadLeaders.length > 0 && (
                         <div
-                          className="border-top mt-2 pt-2"
+                          className="rate-radar-spread"
                           data-testid="category-price-spread-leaders"
                         >
-                          <div className="d-flex justify-content-between align-items-center mb-1 flex-wrap gap-1">
-                            <span className="small fw-semibold text-dark">
+                          <div className="rate-radar-spread-head">
+                            <h5 className="rate-radar-list-title">
+                              <BsArrowLeftRight aria-hidden="true" />
                               {t('page.spreadHeader', {
                                 title: schema.categoryTitle,
                               })}
-                            </span>
-                            <span className="small text-muted">
+                            </h5>
+                            <span className="rate-radar-item-meta mb-3">
                               {t('page.spreadSub')}
                             </span>
                           </div>
@@ -707,25 +710,36 @@ export async function CategoryCatalogContent({
                             {categoryDealRadar.priceSpreadLeaders
                               .slice(0, 2)
                               .map((sp) => (
-                                <div key={sp.productSlug} className="col-md-6">
-                                  <div className="rounded-3 bg-light d-flex justify-content-between align-items-center border px-2 py-1">
-                                    <Link
-                                      href={sp.productHref}
-                                      className="fw-semibold text-dark text-decoration-none text-truncate small me-2"
-                                    >
-                                      {sp.productName}{' '}
-                                      <span className="text-muted fw-normal">
-                                        ({sp.cheapestPlatform.toUpperCase()} vs{' '}
-                                        {sp.priciestPlatform.toUpperCase()})
+                                <div key={sp.productSlug} className="col-12">
+                                  <div className="rate-radar-spread-item">
+                                    <div className="rate-radar-item-main">
+                                      <Link
+                                        href={sp.productHref}
+                                        className="text-truncate"
+                                      >
+                                        {sp.productName}
+                                      </Link>
+                                      <span className="rate-radar-item-meta">
+                                        <span className="rate-radar-platform">
+                                          {sp.cheapestPlatform}
+                                        </span>
+                                        vs{' '}
+                                        <span className="rate-radar-platform">
+                                          {sp.priciestPlatform}
+                                        </span>
                                       </span>
-                                    </Link>
-                                    <span className="badge bg-warning-subtle text-dark border-warning-subtle flex-shrink-0 border">
-                                      {t('page.spreadDiffBadge', {
-                                        pct: sp.spreadPct,
-                                        amount:
-                                          sp.spreadVnd.toLocaleString('vi-VN'),
-                                      })}
-                                    </span>
+                                    </div>
+                                    <div className="rate-radar-item-side">
+                                      <span className="rate-radar-tag is-warn">
+                                        {t('page.spreadDiffBadge', {
+                                          pct: sp.spreadPct,
+                                          amount:
+                                            sp.spreadVnd.toLocaleString(
+                                              'vi-VN'
+                                            ),
+                                        })}
+                                      </span>
+                                    </div>
                                   </div>
                                 </div>
                               ))}
