@@ -18,7 +18,10 @@ const PAGES = [
 
 for (const path of PAGES) {
   test(`no accessibility violations on ${path}`, async ({ page }) => {
-    await page.goto(path);
+    const res = await page.goto(path);
+    expect(res?.status()).toBe(200);
+    // Scan the hydrated page: effects add DOM after load.
+    await page.waitForLoadState('networkidle');
     const { violations } = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
       .disableRules(['color-contrast'])

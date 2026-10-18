@@ -1241,6 +1241,7 @@ export default function JReviewsSection({
             <button
               type="button"
               onClick={() => setActiveTab('all')}
+              aria-pressed={activeTab === 'all'}
               className={`btn btn-sm rounded-pill px-3 ${
                 activeTab === 'all' ? 'btn-dark' : 'btn-outline-secondary'
               }`}
@@ -1250,6 +1251,7 @@ export default function JReviewsSection({
             <button
               type="button"
               onClick={() => setActiveTab('authentic')}
+              aria-pressed={activeTab === 'authentic'}
               className={`btn btn-sm rounded-pill px-3 ${
                 activeTab === 'authentic'
                   ? 'btn-success'
@@ -1262,6 +1264,7 @@ export default function JReviewsSection({
               <button
                 type="button"
                 onClick={() => setActiveTab('expert')}
+                aria-pressed={activeTab === 'expert'}
                 className={`btn btn-sm rounded-pill px-3 ${
                   activeTab === 'expert'
                     ? 'btn-warning text-dark'
@@ -1274,6 +1277,7 @@ export default function JReviewsSection({
             <button
               type="button"
               onClick={() => setActiveTab('ignored')}
+              aria-pressed={activeTab === 'ignored'}
               className={`btn btn-sm rounded-pill px-3 ${
                 activeTab === 'ignored' ? 'btn-danger' : 'btn-outline-danger'
               }`}
