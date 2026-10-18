@@ -47,10 +47,10 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc 4 tầ
   - Loại bỏ `SUPABASE_SERVICE_ROLE_KEY` khỏi đường đọc/ghi Web public (`extension/ingest` gọi RPC `rate.enqueue_crowd_verify_signal`), cưỡng chế `import 'server-only'` trên toàn bộ 6 module `src/server/rate/*`, tách `@/lib/rate-domain` cho 100% Client Components, chuẩn hóa `escapeCsvCell` / `buildSafeCsvContent` trên toàn bộ **16/16** thành phần xuất CSV, tách riêng `apps/importer/src/shopee/jobs/backfill-specs.ts` (mặc định `dry-run`, yêu cầu `--apply` để ghi DB), và xử lý triệt để toàn bộ cảnh báo Dependabot (`0` open alerts).
 - [x] **6.3. Chuẩn Hóa Thủ Tục SQL, Chỉ Mục BRIN/GIN & Đẩy Lọc Xuống PostgreSQL (`DOS/Rate#176`, `#177`, `#178`, `#188`):**
   - Cố định `SET search_path = ''`, `SECURITY INVOKER` cho các hàm/view đọc công khai, chỉ mục BRIN trên `price_history(recorded_at)`, `ON DELETE RESTRICT` bảo vệ lịch sử khi lưu trữ gian hàng, hàm chuẩn `refresh_master_market_stats`, chống flood cả `INSERT` lẫn `UPDATE` trên `review_votes`, và đẩy lọc/phân trang danh mục xuống `get_category_directory_facets_v1` + `search_catalog_products_v1`.
-- [ ] **6.4. Đồng Bộ Migration Ledger Sang `DOS-Me` & Kiểm Thử Replay Tự Động (Audit C9 / K1 - `DOS/Rate#193`):**
-  - [x] Replay PostgreSQL 17 cho bản copy tham chiếu chạy trong CI (`pnpm test:migrations`, `DOS/Rate#226`). Replay đã bắt và sửa 4 lỗi: autocomplete mất quyền dùng `pg_trgm` trong schema `sign` khi chuyển sang `SECURITY INVOKER`; vote nâng review bị loại lên trọng số 1,31; `purge_completed_crawl_jobs` sai tên cột; payload crowd verify không giới hạn.
-  - [x] Script so sánh với ledger `pnpm check:migrations`.
-  - [ ] Đồng bộ 6 migration `20261017235900` → `20261018023000` (bản đã sửa) cùng migration khóa `upsert_price_alert` (`20261017130000`) sang `DOS-Me/supabase/migrations/`, sau khi `DOS/DOS.Me#1213` merge. Hiện các RPC này chưa tồn tại ở môi trường nào.
+- [x] **6.4. Đồng Bộ Migration Ledger Sang `DOS-Me` & Kiểm Thử Replay Tự Động (Audit C9 / K1 - `DOS/Rate#193`, `#226`, `#302`, `DOS/DOS.Me#1239`):**
+  - [x] Replay PostgreSQL 17 cho bản copy tham chiếu chạy trong CI (`pnpm test:migrations`); đã bắt và sửa 4 lỗi chạy thật trong các migration audit.
+  - [x] 6 migration audit và migration khóa `upsert_price_alert` đã vào ledger `DOS-Me` (`20261018120000`, `20261018120101`-`120106`), Supabase Preview áp thành công; bản copy Rate khớp ledger (`pnpm check:migrations`: không drift).
+  - [ ] Áp lên beta/prod: workflow beta của `DOS-Me` đang bị khóa (`beta-migrations.yml`), nhánh beta chưa cập nhật từ 18/04/2026; chờ quy trình beta có review của chủ `DOS-Me`.
 - [ ] **6.5. Bảo Vệ Nhánh & Quét Bí Mật Trên GitHub (`DOS/Rate` - Audit K3 - `DOS/Rate#191`):**
   - [x] Dependabot security updates và CodeQL default setup đã bật.
   - [ ] Secret Scanning + Push Protection: bị chính sách enterprise của org chặn (`422`), cần chủ enterprise bật.
