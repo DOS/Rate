@@ -158,6 +158,21 @@ try {
     'pending and recently finished jobs survive the purge'
   );
 
+  // The merchant-trust view stays owner-rights: anon reads offers through it.
+  asRole('anon', `SELECT count(*) FROM rate.v_products_with_merchant_trust`);
+  // Crowd signals must target the marketplace's own host.
+  assert.throws(
+    () => asRole('anon', `SELECT * FROM rate.enqueue_crowd_verify_signal('shopee', 'https://evil.example/shopee.vn/item-12', 'item_12', NULL, '{}'::jsonb)`),
+    /Target URL host does not match the platform/,
+  );
+  // An anonymous crowd signal never supersedes a live crawl of another type.
+  sql(`SELECT * FROM rate.enqueue_crawl_job('crawl_listing', 'shopee', '{}'::jsonb, 'https://shopee.vn/item-77', 'item_77', NULL, 0, NULL)`);
+  assert.equal(
+    asRole('anon', `SELECT state FROM rate.enqueue_crowd_verify_signal('shopee', 'https://shopee.vn/item-77', 'item_77', NULL, '{}'::jsonb)`),
+    'already_queued',
+  );
+  assert.equal(sql(`SELECT type || ':' || status FROM rate.crawl_jobs WHERE platform_item_id = 'item_77' ORDER BY created_at`), 'crawl_listing:pending');
+
   console.log(`Rate migration replay passed: ${migrations.length} migrations applied twice on PostgreSQL 17, catalog/queue/vote RPCs exercised`);
 } finally {
   if (started) docker(['rm', '--force', container]);
