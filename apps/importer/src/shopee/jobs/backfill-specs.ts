@@ -15,6 +15,7 @@ import { pathToFileURL } from 'node:url';
 import dotenv from 'dotenv';
 import { ProductSpecificationsSchema, type ProductSpecifications } from '@repo/shared-data';
 import { AiSpecEnricher, sanitizeSpecifications } from '../ai-spec-enricher.js';
+import { fetchAllPages } from '../paging.js';
 import {
   CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY,
   FLAGSHIP_DEVICES_TO_SEED,
@@ -54,13 +55,15 @@ export interface BackfillSpecsResult {
  * camera. Deliberately asserts nothing about offers, reviews or ratings.
  */
 export async function auditMasterSpecs(supabase: RateSupabaseClient): Promise<number> {
-  const { data: rows, error } = await supabase
-    .from('master_products')
-    .select('id, name, model_key, specifications');
-
-  if (error || !rows) {
-    throw new Error(`Final audit query failed: ${error?.message}`);
-  }
+  // Paged: an unpaged read stops at PostgREST's 1000-row cap and would skip
+  // the rest of the catalog silently.
+  const rows = await fetchAllPages('Final audit query failed', (from, to) =>
+    supabase
+      .from('master_products')
+      .select('id, name, model_key, specifications')
+      .order('id')
+      .range(from, to)
+  );
 
   const failures: string[] = [];
   for (const row of rows as Array<{
@@ -216,14 +219,14 @@ export async function runMasterSpecsBackfill(
     }
   }
 
-  const { data: masters, error } = await supabase
-    .from('master_products')
-    .select('id, name, model_key')
-    .order('created_at', { ascending: false });
-
-  if (error) {
-    throw new Error(`Failed to fetch master_products: ${error.message}`);
-  }
+  const masters = await fetchAllPages('Failed to fetch master_products', (from, to) =>
+    supabase
+      .from('master_products')
+      .select('id, name, model_key')
+      .order('created_at', { ascending: false })
+      .order('id')
+      .range(from, to)
+  );
 
   let skipped = 0;
   for (const m of masters || []) {
