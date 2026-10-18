@@ -40,8 +40,8 @@ importers:
         specifier: 0.513.0
         version: 0.513.0(react@19.3.0)
       playwright:
-        specifier: ^1.52.0
-        version: 1.63.0
+        specifier: ^1.64.1
+        version: 1.64.1
       zod:
         specifier: ^4.6.5
         version: 4.6.7
@@ -3620,18 +3620,8 @@ packages:
     peerDependencies:
       sharp: '>= 0.30.6'
 
-  playwright-core@1.63.0:
-    resolution: {integrity: sha512-rYCsBF/M5HjUch52bbtVONEFjv6Xu8sm8h72dNlR5bzIE1fvC/bxgspzkjSfU+MweEMmPM8KJebG6nnyxo5mCg==}
-    engines: {node: '>=20'}
-    hasBin: true
-
   playwright-core@1.64.1:
     resolution: {integrity: sha512-BC4s8y6SEVA6Q1rSxZTto8hI1KUI3xXlHGZgvGqP4IqPdI/a6FX9H29IDNz7vKo9l21b6LfYosScPL6M3xxyDQ==}
-    engines: {node: '>=20'}
-    hasBin: true
-
-  playwright@1.63.0:
-    resolution: {integrity: sha512-+7ziBLidS4NaNCdt57SUDT+wYmmd5fmiQejUic/kb+YsYSCPyOOE9sebzMjNmQrsnNpDJqd4WHvV/8lfKfUDUg==}
     engines: {node: '>=20'}
     hasBin: true
 
@@ -7367,13 +7357,7 @@ snapshots:
     dependencies:
       sharp: 0.35.5(@types/node@26.6.5)
 
-  playwright-core@1.63.0: {}
-
   playwright-core@1.64.1: {}
-
-  playwright@1.63.0:
-    dependencies:
-      playwright-core: 1.63.0
 
   playwright@1.64.1:
     dependencies:
