@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { BsDownload } from 'react-icons/bs';
 import { Link } from '@/lib/navigation';
 import { escapeCsvCell } from '@/lib/csv-safe';
 import type { MasterProduct } from '@/lib/rate-domain';
@@ -209,16 +210,16 @@ export default function CategoryCatalogToolbar({
   if (products.length === 0) return null;
 
   return (
-    <div className="card rounded-4 mb-3 border bg-white p-3 shadow-sm">
+    <div className="rate-card rate-catalog-toolbar mb-3">
       <div className="d-flex justify-content-between align-items-center flex-wrap gap-2">
         {products.length >= 2 ? (
           <div className="d-flex align-items-center flex-grow-1 flex-wrap gap-2">
-            <span className="small fw-semibold text-dark">
+            <span className="rate-catalog-toolbar-label">
               {t('toolbar.quick1v1Label', { title: categoryTitle })}
             </span>
             <select
               className="form-select form-select-sm w-auto"
-              style={{ maxWidth: '210px' }}
+              style={{ maxWidth: '190px' }}
               value={effectiveSlugA}
               onChange={(e) => setSlugA(e.target.value)}
               aria-label={t('toolbar.selectDeviceAAria')}
@@ -229,10 +230,12 @@ export default function CategoryCatalogToolbar({
                 </option>
               ))}
             </select>
-            <span className="badge bg-danger rounded-pill">VS</span>
+            <span className="rate-catalog-toolbar-vs" aria-hidden="true">
+              vs
+            </span>
             <select
               className="form-select form-select-sm w-auto"
-              style={{ maxWidth: '210px' }}
+              style={{ maxWidth: '190px' }}
               value={effectiveSlugB}
               onChange={(e) => setSlugB(e.target.value)}
               aria-label={t('toolbar.selectDeviceBAria')}
@@ -248,7 +251,7 @@ export default function CategoryCatalogToolbar({
             {effectiveSlugA && effectiveSlugB && (
               <Link
                 href={`/compare/${effectiveSlugA}-vs-${effectiveSlugB}`}
-                className="btn btn-sm btn-danger rounded-pill fw-semibold px-3 py-1"
+                className="btn btn-sm btn-primary fw-semibold px-3"
                 data-testid="catalog-1v1-go-btn"
               >
                 {t('toolbar.versusGoBtn')}
@@ -259,37 +262,37 @@ export default function CategoryCatalogToolbar({
           <div />
         )}
 
-        <div className="d-flex align-items-center flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={handleCopyCatalogMarkdown}
-            className="btn btn-sm btn-outline-dark rounded-pill fw-semibold px-3 py-1"
-            style={{ fontSize: '0.8125rem' }}
-            data-testid="copy-catalog-md-btn"
-          >
-            {copiedCatalogMd
-              ? t('toolbar.copiedMdBtn')
-              : t('toolbar.copyMdBtn')}
-          </button>
-          <button
-            type="button"
-            onClick={handleDownloadCatalogCsv}
-            className="btn btn-sm btn-outline-secondary rounded-pill fw-semibold px-3 py-1"
-            style={{ fontSize: '0.8125rem' }}
-            data-testid="download-catalog-csv-btn"
-          >
-            {t('toolbar.exportCsvBtn')}
-          </button>
-          <button
-            type="button"
-            onClick={handleDownloadCategoryJson}
-            className="btn btn-sm btn-outline-secondary rounded-pill fw-semibold px-3 py-1"
-            style={{ fontSize: '0.8125rem' }}
-            data-testid="download-catalog-json-btn"
-          >
-            {t('toolbar.exportJsonBtn')}
-          </button>
-        </div>
+        <details className="rate-export-menu ms-auto">
+          <summary>
+            <BsDownload aria-hidden="true" />
+            {t('toolbar.exportMenu')}
+          </summary>
+          <div className="rate-export-menu-list">
+            <button
+              type="button"
+              onClick={handleCopyCatalogMarkdown}
+              data-testid="copy-catalog-md-btn"
+            >
+              {copiedCatalogMd
+                ? t('toolbar.copiedMdBtn')
+                : t('toolbar.copyMdBtn')}
+            </button>
+            <button
+              type="button"
+              onClick={handleDownloadCatalogCsv}
+              data-testid="download-catalog-csv-btn"
+            >
+              {t('toolbar.exportCsvBtn')}
+            </button>
+            <button
+              type="button"
+              onClick={handleDownloadCategoryJson}
+              data-testid="download-catalog-json-btn"
+            >
+              {t('toolbar.exportJsonBtn')}
+            </button>
+          </div>
+        </details>
       </div>
     </div>
   );

@@ -1568,8 +1568,8 @@
       "foundSuffix": "/ {total} normalizovaných produktů",
       "quickCompare3": "Rychle porovnat 3",
       "quickCompare2": "Rychle porovnat 2",
-      "versus1v1Badge": "⚔️ 1v1: {brandA} vs {brandB}",
-      "leaderboardBadge": "🏆 Žebříček",
+      "versus1v1Badge": "1v1: {brandA} vs {brandB}",
+      "leaderboardBadge": "Žebříček",
       "sortByPrefix": "Řazení: {label}",
       "radarBannerBadge": "🔥 RADAR SLEV A FALEŠNÝCH AKCÍ ({title})",
       "radarAnalyzedSub": "Zkontrolováno {count} nabídek napříč 10 tržišti",
@@ -1589,14 +1589,15 @@
     },
     "toolbar": {
       "unratedText": "N/A",
-      "quick1v1Label": "⚔️ Rychlé srovnání 1v1 ({title}):",
+      "quick1v1Label": "Rychlé 1v1:",
       "selectDeviceAAria": "Vyberte zařízení A pro srovnání 1v1",
       "selectDeviceBAria": "Vyberte zařízení B pro srovnání 1v1",
       "versusGoBtn": "Porovnat 1v1 →",
-      "copiedMdBtn": "✅ Katalog MD zkopírován!",
-      "copyMdBtn": "📋 Kopírovat katalog Markdown",
-      "exportCsvBtn": "📥 Exportovat CSV kategorie",
-      "exportJsonBtn": "📦 Exportovat JSON"
+      "copiedMdBtn": "Katalog MD zkopírován!",
+      "copyMdBtn": "Kopírovat katalog Markdown",
+      "exportCsvBtn": "Exportovat CSV kategorie",
+      "exportJsonBtn": "Exportovat JSON",
+      "exportMenu": "Exportovat data"
     },
     "sidebar": {
       "filterTitle": "Filtry parametrů",

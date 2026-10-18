@@ -1568,8 +1568,8 @@
       "foundSuffix": "/ {total} normalized products",
       "quickCompare3": "Quick compare 3",
       "quickCompare2": "Quick compare 2",
-      "versus1v1Badge": "⚔️ 1v1: {brandA} vs {brandB}",
-      "leaderboardBadge": "🏆 Leaderboard",
+      "versus1v1Badge": "1v1: {brandA} vs {brandB}",
+      "leaderboardBadge": "Leaderboard",
       "sortByPrefix": "Sort: {label}",
       "radarBannerBadge": "🔥 DEAL RADAR & FAKE SALE TRAPS ({title})",
       "radarAnalyzedSub": "Audited {count} store listings across 10 marketplaces",
@@ -1589,14 +1589,15 @@
     },
     "toolbar": {
       "unratedText": "N/A",
-      "quick1v1Label": "⚔️ Quick 1v1 Matchup ({title}):",
+      "quick1v1Label": "Quick 1v1:",
       "selectDeviceAAria": "Select device A for 1v1 comparison",
       "selectDeviceBAria": "Select device B for 1v1 comparison",
       "versusGoBtn": "Go 1v1 →",
-      "copiedMdBtn": "✅ Copied Catalog MD!",
-      "copyMdBtn": "📋 Copy Catalog Markdown",
-      "exportCsvBtn": "📥 Export Category CSV",
-      "exportJsonBtn": "📦 Export JSON"
+      "copiedMdBtn": "Copied Catalog MD!",
+      "copyMdBtn": "Copy Catalog Markdown",
+      "exportCsvBtn": "Export Category CSV",
+      "exportJsonBtn": "Export JSON",
+      "exportMenu": "Export data"
     },
     "sidebar": {
       "filterTitle": "Spec Filters",

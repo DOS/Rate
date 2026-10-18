@@ -1568,8 +1568,8 @@
       "foundSuffix": "/ {total} sản phẩm chuẩn hóa",
       "quickCompare3": "So sánh nhanh 3 máy",
       "quickCompare2": "So sánh nhanh 2 máy",
-      "versus1v1Badge": "⚔️ Kèo 1v1: {brandA} vs {brandB}",
-      "leaderboardBadge": "🏆 Bảng Xếp Hạng",
+      "versus1v1Badge": "Kèo 1v1: {brandA} vs {brandB}",
+      "leaderboardBadge": "Bảng Xếp Hạng",
       "sortByPrefix": "Sắp xếp: {label}",
       "radarBannerBadge": "🔥 RADAR KÈO THƠM & BẪY SALE ẢO ({title})",
       "radarAnalyzedSub": "Đã kiểm toán {count} gian hàng trên 10 sàn",
@@ -1589,14 +1589,15 @@
     },
     "toolbar": {
       "unratedText": "chưa có",
-      "quick1v1Label": "⚔️ Chọn nhanh kèo 1v1 ({title}):",
+      "quick1v1Label": "So kè nhanh 1v1:",
       "selectDeviceAAria": "Chọn máy A để đối đầu 1v1",
       "selectDeviceBAria": "Chọn máy B để đối đầu 1v1",
       "versusGoBtn": "Đấu 1v1 ngay →",
-      "copiedMdBtn": "✅ Đã chép danh mục MD!",
-      "copyMdBtn": "📋 Sao chép danh mục Markdown",
-      "exportCsvBtn": "📥 Xuất CSV ngành hàng",
-      "exportJsonBtn": "📦 Xuất JSON"
+      "copiedMdBtn": "Đã chép danh mục MD!",
+      "copyMdBtn": "Sao chép danh mục Markdown",
+      "exportCsvBtn": "Xuất CSV ngành hàng",
+      "exportJsonBtn": "Xuất JSON",
+      "exportMenu": "Xuất dữ liệu"
     },
     "sidebar": {
       "filterTitle": "Bộ lọc thông số",

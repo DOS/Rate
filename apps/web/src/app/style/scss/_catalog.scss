@@ -1,0 +1,112 @@
+// Category catalog (CategoryCatalogContent): results header links and the
+// 1v1 / export toolbar. Kept in its own partial so catalog work does not
+// collide with home-page additions at the end of _custom.scss.
+
+.rate-results-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--rate-fg-paragraph);
+  text-decoration: none;
+  white-space: nowrap;
+
+  svg {
+    color: var(--rate-fg-muted);
+  }
+
+  &:hover {
+    color: var(--rate-crimson-text);
+
+    svg {
+      color: currentColor;
+    }
+  }
+}
+
+.rate-catalog-toolbar {
+  padding: 0.875rem 1rem;
+
+  > div {
+    row-gap: 0.75rem;
+  }
+
+  .form-select {
+    font-size: 0.875rem;
+  }
+}
+
+.rate-catalog-toolbar-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--rate-fg-primary);
+}
+
+.rate-catalog-toolbar-vs {
+  font-size: var(--rate-text-min);
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--rate-fg-muted);
+}
+
+// Native disclosure menu for developer exports (Markdown, CSV, JSON).
+.rate-export-menu {
+  position: relative;
+
+  summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.375rem 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--rate-fg-paragraph);
+    list-style: none;
+    cursor: pointer;
+    border: 1px solid var(--rate-border-strong);
+    border-radius: var(--rate-radius-btn);
+
+    &::-webkit-details-marker {
+      display: none;
+    }
+
+    &:hover {
+      color: var(--rate-fg-primary);
+    }
+  }
+
+  &[open] summary {
+    color: var(--rate-fg-primary);
+    background-color: var(--rate-bg-canvas);
+  }
+}
+
+.rate-export-menu-list {
+  position: absolute;
+  right: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  min-width: 15rem;
+  margin-top: 0.375rem;
+  padding: 0.375rem;
+  background-color: var(--rate-bg-surface);
+  border: 1px solid var(--rate-border-subtle);
+  border-radius: 10px;
+  box-shadow: 0 12px 28px -8px rgba(15, 23, 42, 0.18);
+
+  button {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    color: var(--rate-fg-primary);
+    text-align: left;
+    background: none;
+    border: 0;
+    border-radius: 6px;
+
+    &:hover {
+      background-color: var(--rate-bg-canvas);
+    }
+  }
+}

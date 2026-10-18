@@ -28,11 +28,13 @@ import BackToTop from '../components/back-to-top';
 import CompareTrayBar from '@/components/compare/CompareTrayBar';
 import CategoryCatalogToolbar from '@/components/leaderboard/CategoryCatalogToolbar';
 import {
+  BsArrowLeftRight,
   BsBatteryHalf,
   BsCpu,
   BsLightningCharge,
   BsPhone,
   BsSearch,
+  BsTrophy,
 } from 'react-icons/bs';
 import type { KeySpecs, ProductSpecifications } from '@repo/shared-data';
 
@@ -285,7 +287,7 @@ export async function CategoryCatalogContent({
 
       {/* Hero Banner (DESIGN.md v2.0 Dark Obsidian + DOS Crimson Glow) */}
       <div
-        className="hero-banner position-relative overflow-hidden"
+        className="hero-banner rate-surface-dark position-relative overflow-hidden"
         style={{
           background:
             'radial-gradient(circle at 18% 22%, rgba(216, 48, 48, 0.16), transparent 45%), radial-gradient(circle at 82% 18%, rgba(99, 102, 241, 0.14), transparent 42%), linear-gradient(180deg, #0f1113 0%, #141821 100%)',
@@ -298,29 +300,10 @@ export async function CategoryCatalogContent({
           <div className="row justify-content-center align-items-center">
             <div className="col-xl-12 col-lg-12 col-md-12 col-sm-12">
               <div className="position-relative mt-2 text-start">
-                <div className="d-flex align-items-center mb-3 flex-wrap gap-2">
-                  <span
-                    className="badge rounded-pill px-3 py-2"
-                    style={{
-                      backgroundColor: 'rgba(255, 255, 255, 0.07)',
-                      border: '1px solid rgba(255, 255, 255, 0.14)',
-                      color: '#f8fafc',
-                    }}
-                  >
-                    📂 Directory: {schema.directoryName}
-                  </span>
-                  <span
-                    className="badge rounded-pill px-3 py-2"
-                    style={{
-                      backgroundColor: 'rgba(216, 48, 48, 0.16)',
-                      border: '1px solid rgba(216, 48, 48, 0.38)',
-                      color: '#ff8585',
-                    }}
-                  >
-                    Category:{' '}
-                    {facets.currentCategory?.name || schema.categoryTitle}
-                  </span>
-                </div>
+                <span className="rate-eyebrow mb-3">
+                  {schema.directoryName} ·{' '}
+                  {facets.currentCategory?.name || schema.categoryTitle}
+                </span>
                 <h1
                   className="fw-bold mb-2 text-white"
                   style={{
@@ -410,7 +393,7 @@ export async function CategoryCatalogContent({
                         <div className="form-group mb-0">
                           <div className="mobSearch d-flex align-items-center justify-content-start">
                             <div className="flexStart ps-2">
-                              <span className="fw-semibold text-dark">
+                              <span className="fw-semibold text-dark text-nowrap">
                                 {t('page.searchLabel')}
                               </span>
                             </div>
@@ -525,7 +508,7 @@ export async function CategoryCatalogContent({
               {/* Results Header + Compare Button + Sort Dropdown */}
               <div className="row align-items-center justify-content-between g-2 mb-4">
                 <div className="col-xl-7 col-lg-7 col-md-7 col-sm-12">
-                  <div className="d-flex align-items-center flex-wrap gap-2">
+                  <div className="d-flex align-items-center flex-wrap gap-2 gap-md-3">
                     <h6 className="m-0">
                       {t('page.foundPrefix')}{' '}
                       <span className="text-primary fw-bold">
@@ -539,9 +522,9 @@ export async function CategoryCatalogContent({
                           .map((p) => p.slug)
                           .slice(0, 3)
                           .join(',')}`}
-                        className="badge bg-primary-subtle text-primary text-decoration-none rounded-pill fw-semibold px-3 py-2"
+                        className="rate-results-link"
                       >
-                        <BsLightningCharge className="me-1" />
+                        <BsLightningCharge aria-hidden="true" />
                         {products.length >= 3
                           ? t('page.quickCompare3')
                           : t('page.quickCompare2')}
@@ -550,8 +533,9 @@ export async function CategoryCatalogContent({
                     {products.length >= 2 && products[0] && products[1] && (
                       <Link
                         href={`/compare/${products[0].slug}-vs-${products[1].slug}`}
-                        className="badge bg-danger-subtle text-danger text-decoration-none rounded-pill fw-semibold px-3 py-2"
+                        className="rate-results-link"
                       >
+                        <BsArrowLeftRight aria-hidden="true" />
                         {t('page.versus1v1Badge', {
                           brandA: products[0].brand,
                           brandB: products[1].brand,
@@ -560,8 +544,9 @@ export async function CategoryCatalogContent({
                     )}
                     <Link
                       href={`/leaderboard?cat=${categorySlug}`}
-                      className="badge bg-dark text-decoration-none rounded-pill fw-semibold px-3 py-2 text-white"
+                      className="rate-results-link"
                     >
+                      <BsTrophy aria-hidden="true" />
                       {t('page.leaderboardBadge')}
                     </Link>
                   </div>
