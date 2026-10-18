@@ -61,9 +61,11 @@ import {
   categoryCacheTag,
   merchantCacheTag,
   productCacheTag,
+  resolveRevalidationTargets,
   withRateDataCache,
   type RateCanonicalCacheTag,
   type RateDataCacheOptions,
+  type RevalidationTargetsInput,
 } from './cache-tags';
 import { computeProductRadarSignal } from './deals';
 
@@ -72,9 +74,11 @@ export {
   categoryCacheTag,
   merchantCacheTag,
   productCacheTag,
+  resolveRevalidationTargets,
   withRateDataCache,
   type RateCanonicalCacheTag,
   type RateDataCacheOptions,
+  type RevalidationTargetsInput,
 };
 
 /**

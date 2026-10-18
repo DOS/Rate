@@ -1,16 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
   getCachedCompareMasterProducts,
-  getCrossPlatformDealRadar,
   getMasterProductCategorySlug,
   getMasterProductHref,
+  getMasterProductOffersBatch,
 } from '@/server/rate';
+import { computeProductRadarSignal } from '@/server/rate/deals';
+import { radarExportFields } from '@/lib/deal-radar';
 import {
-  buildRadarIndex,
-  getRadarSignal,
-  radarExportFields,
-} from '@/lib/deal-radar';
-import { jsonApiError } from '@/server/rate/api-handler';
+  PUBLIC_API_CORS_HEADERS,
+  jsonApiError,
+  parseCompareSlugsParam,
+} from '@/server/rate/api-handler';
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: PUBLIC_API_CORS_HEADERS,
+  });
+}
 
 /**
  * GET /api/v1/rate/compare?slugs=slug1,slug2
@@ -20,24 +28,12 @@ import { jsonApiError } from '@/server/rate/api-handler';
 export async function GET(request: NextRequest) {
   try {
     const sp = request.nextUrl.searchParams;
-    const rawSlugs = (sp.get('slugs') || '').trim();
-    const slugs = Array.from(
-      new Set(
-        rawSlugs
-          .split(',')
-          .map((s) => s.trim())
-          .filter(Boolean)
-      )
-    ).slice(0, 4);
+    const slugs = parseCompareSlugsParam(sp.get('slugs'), 4);
 
     if (slugs.length === 0) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error:
-            'Missing ?slugs= parameter (provide 1 to 4 comma-separated master product slugs)',
-        },
-        { status: 400 }
+      return jsonApiError(
+        400,
+        'Missing or invalid ?slugs= parameter (provide 1 to 4 comma-separated master product slugs)'
       );
     }
 
@@ -49,11 +45,9 @@ export async function GET(request: NextRequest) {
     const excludedCrossCategorySlugs = slugs.filter(
       (s) => !returnedSlugSet.has(s)
     );
-    const dealRadar = await getCrossPlatformDealRadar({
-      categorySlug: lockedCategory || 'all',
-      limit: 50,
-    });
-    const radarIndex = buildRadarIndex(dealRadar);
+    const offersByMasterId = await getMasterProductOffersBatch(
+      products.map((p) => p.id)
+    );
 
     return NextResponse.json(
       {
@@ -62,16 +56,19 @@ export async function GET(request: NextRequest) {
         locked_category: lockedCategory,
         requested_slugs: slugs,
         excluded_cross_category_slugs: excludedCrossCategorySlugs,
-        data: products.map((p) => ({
-          ...p,
-          canonical_href: getMasterProductHref(p),
-          deal_radar: radarExportFields(getRadarSignal(radarIndex, p.slug)),
-        })),
+        data: products.map((p) => {
+          const offers = offersByMasterId.get(p.id) ?? [];
+          return {
+            ...p,
+            canonical_href: getMasterProductHref(p),
+            deal_radar: radarExportFields(computeProductRadarSignal(p, offers)),
+          };
+        }),
       },
       {
         status: 200,
         headers: {
-          'Access-Control-Allow-Origin': '*',
+          ...PUBLIC_API_CORS_HEADERS,
           'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300',
         },
       }

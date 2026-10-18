@@ -96,6 +96,35 @@ export function parseBoundedStringParam(
   return trimmed.length > maxLength ? trimmed.slice(0, maxLength) : trimmed;
 }
 
+const CANONICAL_PRODUCT_SLUG_REGEX = /^[a-zA-Z0-9._-]+$/;
+
+/**
+ * Parses and validates comma-separated master product slugs for `GET /api/v1/rate/compare`.
+ * Bounds raw input length, trims/deduplicates up to `maxSlugs` (default 4), and rejects invalid characters.
+ */
+export function parseCompareSlugsParam(
+  raw: string | null | undefined,
+  maxSlugs = 4
+): string[] {
+  const boundedRaw = parseBoundedStringParam(raw, 600);
+  if (!boundedRaw) return [];
+  const uniqueSlugs: string[] = [];
+  const seen = new Set<string>();
+  for (const part of boundedRaw.split(',')) {
+    const slug = part.trim();
+    if (!slug) continue;
+    if (slug.length > 120 || !CANONICAL_PRODUCT_SLUG_REGEX.test(slug)) {
+      continue;
+    }
+    const lower = slug.toLowerCase();
+    if (seen.has(lower)) continue;
+    seen.add(lower);
+    uniqueSlugs.push(slug);
+    if (uniqueSlugs.length >= maxSlugs) break;
+  }
+  return uniqueSlugs;
+}
+
 export interface SlidingWindowRateLimiterOptions {
   windowMs: number;
   maxRequests: number;
