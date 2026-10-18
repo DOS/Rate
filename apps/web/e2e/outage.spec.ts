@@ -23,6 +23,20 @@ for (const path of [
         res.status(),
         userAgent ?? 'default user agent'
       ).toBeGreaterThanOrEqual(500);
+      // Audit T9: the PostgREST detail stays in the logs.
+      expect(await res.text()).not.toContain('simulated outage');
     }
+  });
+}
+
+// Junk slugs are not products: they must stay 404s (or the page's empty
+// state), never reach PostgREST as a malformed query and turn into a 5xx.
+for (const [path, status] of [
+  ['/smartphones/bad%22slug', 404],
+  ['/compare/a%22)b-vs-c', 404],
+  ['/compare?slugs=a%22)b,c', 200],
+] as const) {
+  test(`malformed slug ${path} answers ${status}`, async ({ request }) => {
+    expect((await request.get(path)).status()).toBe(status);
   });
 }

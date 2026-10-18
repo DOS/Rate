@@ -1089,10 +1089,19 @@ export async function getMasterProducts(
  */
 export class RateDataUnavailableError extends Error {
   constructor(what: string, cause: { message?: string } | null) {
-    super(`${what} lookup failed: ${cause?.message ?? 'unknown error'}`);
+    // "rate-api: failed to" is masked by sanitizePublicApiError (audit T9), so
+    // the PostgREST detail reaches the logs but never an API response.
+    super(
+      `rate-api: failed to look up ${what}: ${cause?.message ?? 'unknown error'}`
+    );
     this.name = 'RateDataUnavailableError';
   }
 }
+
+// Same shape the public API accepts (CANONICAL_PRODUCT_SLUG_REGEX). Anything
+// else cannot be a product, and sending it would let PostgREST reject the
+// query (NUL bytes, quotes in in.()), which would now surface as a 5xx.
+const PRODUCT_SLUG_REGEX = /^[a-zA-Z0-9._-]{1,120}$/;
 
 /**
  * Fetch a single master product by its slug. Null means no published product
@@ -1101,6 +1110,7 @@ export class RateDataUnavailableError extends Error {
 export async function getMasterProductBySlug(
   slug: string
 ): Promise<MasterProduct | null> {
+  if (!PRODUCT_SLUG_REGEX.test(slug)) return null;
   const supabase = getRateClient();
   const { data, error } = await supabase
     .from('master_products')
@@ -1631,7 +1641,9 @@ export async function compareMasterProducts(
 ): Promise<MasterProduct[]> {
   if (!slugs || slugs.length === 0) return [];
   const uniqueSlugs = Array.from(
-    new Set(slugs.map((s) => s.trim()).filter(Boolean))
+    new Set(
+      slugs.map((s) => s.trim()).filter((s) => PRODUCT_SLUG_REGEX.test(s))
+    )
   ).slice(0, 4);
   if (uniqueSlugs.length === 0) return [];
 
