@@ -5,7 +5,8 @@
  * This package serves as the contract between frontend and backend
  */
 
-// Export all schemas and types
+// Export Zod 4 runtime and all schemas/types
+export { z } from 'zod';
 export * from './schemas/index.js';
 
 // Export API clients

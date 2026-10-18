@@ -16,8 +16,11 @@ import { ProductNormalizer } from './product-normalizer.js';
 import { EntityMatcher } from './entity-matcher.js';
 import { AiSpecEnricher, type AiSpecEnricherConfig } from './ai-spec-enricher.js';
 import { AiReviewAnalyzer, type ReviewInputItem } from './ai-review-analyzer.js';
+import { createImporterLogger } from './logger.js';
 
 dotenv.config();
+
+const logger = createImporterLogger('ShopeeIngestionPipeline');
 
 function hashEntity(val: string): string {
   return '0x' + crypto.createHash('sha256').update(val.toLowerCase()).digest('hex');
@@ -85,8 +88,14 @@ export class ShopeeIngestionPipeline {
     }
 
     const aiInfo = this.enricher.getProviderInfo();
-    console.log(
-      `[MultiPlatformIngest] AI Spec Enricher status: provider=${aiInfo.provider}, model=${aiInfo.model}, configured=${aiInfo.configured}`
+    logger.info(
+      'ingest.init',
+      `AI Spec Enricher status: provider=${aiInfo.provider}, model=${aiInfo.model}, configured=${aiInfo.configured}`,
+      {
+        provider: aiInfo.provider,
+        model: aiInfo.model,
+        configured: aiInfo.configured,
+      }
     );
   }
 
@@ -110,10 +119,12 @@ export class ShopeeIngestionPipeline {
     }
 
     const platform: SupportedEcommercePlatform = product.platform || 'shopee';
+    const platLogger = logger.child({ platform });
 
-    console.log(`\n================================================================`);
-    console.log(`[MultiPlatformIngest:${platform}] Processing: "${product.title}"`);
-    console.log(`================================================================`);
+    platLogger.info('ingest.start', `Processing: "${product.title}"`, {
+      itemId: product.itemId,
+      shopId: product.shop.shopId,
+    });
 
     // 1. Upsert merchant
     const entityHash = hashEntity(`${platform}:${product.shop.shopId}`);
@@ -142,8 +153,10 @@ export class ShopeeIngestionPipeline {
     }
 
     const merchantId = merchant.id;
-    console.log(
-      `[MultiPlatformIngest:${platform}] Merchant resolved: ${product.shop.name} -> ID: ${merchantId}`
+    platLogger.info(
+      'ingest.merchant_resolved',
+      `Merchant resolved: ${product.shop.name} -> ID: ${merchantId}`,
+      { merchantId, shopName: product.shop.name }
     );
     await report?.('merchant');
 
@@ -153,8 +166,15 @@ export class ShopeeIngestionPipeline {
       this.categoryIdBySlug.get(candidate.category_slug || 'smartphones') ||
       this.smartphoneCategoryId;
 
-    console.log(
-      `[MultiPlatformIngest:${platform}] Specs normalized -> Key: "${candidate.model_key}", Category: ${candidate.category_slug || 'smartphones'}, RAM: ${candidate.ram_gb}GB, Storage: ${candidate.storage_gb}GB`
+    platLogger.info(
+      'ingest.specs_normalized',
+      `Specs normalized -> Key: "${candidate.model_key}", Category: ${candidate.category_slug || 'smartphones'}, RAM: ${candidate.ram_gb}GB, Storage: ${candidate.storage_gb}GB`,
+      {
+        modelKey: candidate.model_key,
+        categorySlug: candidate.category_slug || 'smartphones',
+        ramGb: candidate.ram_gb,
+        storageGb: candidate.storage_gb,
+      }
     );
 
     // A caller that already verified the master (coverage discovery, or a refresh of
@@ -176,8 +196,10 @@ export class ShopeeIngestionPipeline {
         resolvedCategoryId || undefined,
         product.title
       ));
-    console.log(
-      `[MultiPlatformIngest:${platform}] Master Product ${hinted ? 'LINKED (caller hint)' : isNew ? 'CREATED' : 'LINKED'}: ID = ${masterId}`
+    platLogger.info(
+      'ingest.master_resolved',
+      `Master Product ${hinted ? 'LINKED (caller hint)' : isNew ? 'CREATED' : 'LINKED'}: ID = ${masterId}`,
+      { masterId, isNew, hinted: Boolean(hinted) }
     );
     await report?.('master');
 
@@ -219,7 +241,10 @@ export class ShopeeIngestionPipeline {
     }
 
     const productId = savedProduct.id;
-    console.log(`[MultiPlatformIngest:${platform}] Listing upserted -> ID: ${productId}`);
+    platLogger.info('ingest.listing_upserted', `Listing upserted -> ID: ${productId}`, {
+      productId,
+      masterId,
+    });
 
     // 3b. Refresh canonical master_products market stats (min_price, max_price, merchant_count) via SQL RPC (Audit C5)
     if (typeof (this.supabase as any).rpc === 'function') {
@@ -228,8 +253,10 @@ export class ShopeeIngestionPipeline {
         { p_master_id: masterId }
       );
       if (marketStatsErr) {
-        console.warn(
-          `[MultiPlatformIngest:${platform}] Could not refresh master market stats via RPC: ${marketStatsErr.message}`
+        platLogger.warn(
+          'ingest.market_stats_rpc_warn',
+          `Could not refresh master market stats via RPC: ${marketStatsErr.message}`,
+          { masterId }
         );
       }
     }
@@ -266,12 +293,16 @@ export class ShopeeIngestionPipeline {
       if (!obsRpcErr && typeof obsStatus === 'string') {
         handledByObservationRpc = true;
         if (obsStatus === 'unchanged_delta') {
-          console.log(
-            `[MultiPlatformIngest:${platform}] Delta Price Compression (RPC): price unchanged (${Number(product.priceMin).toLocaleString('vi-VN')}₫), skipping redundant history row.`
+          platLogger.info(
+            'ingest.price_delta_unchanged',
+            `Delta Price Compression (RPC): price unchanged (${Number(product.priceMin).toLocaleString('vi-VN')}₫), skipping redundant history row.`,
+            { productId, observationId, priceMin: product.priceMin }
           );
         } else if (obsStatus === 'deduped_conflict') {
-          console.log(
-            `[MultiPlatformIngest:${platform}] Price observation already recorded via RPC (${observationId}), skipping.`
+          platLogger.info(
+            'ingest.price_deduped_rpc',
+            `Price observation already recorded via RPC (${observationId}), skipping.`,
+            { productId, observationId }
           );
         }
       } else if (
@@ -280,8 +311,10 @@ export class ShopeeIngestionPipeline {
           `${obsRpcErr.code || ''} ${obsRpcErr.message || ''}`
         )
       ) {
-        console.warn(
-          `[MultiPlatformIngest:${platform}] record_price_observation RPC warning (${obsRpcErr.message}); falling back to client-side delta check.`
+        platLogger.warn(
+          'ingest.price_rpc_fallback',
+          `record_price_observation RPC warning (${obsRpcErr.message}); falling back to client-side delta check.`,
+          { productId }
         );
       }
     }
@@ -312,8 +345,10 @@ export class ShopeeIngestionPipeline {
         prevOriginal === currentOriginal &&
         ageMs < sevenDaysMs
       ) {
-        console.log(
-          `[MultiPlatformIngest:${platform}] Delta Price Compression: price unchanged (${currentPrice.toLocaleString('vi-VN')}₫, last anchor ${String(latestObs.recorded_at).slice(0, 10)}), skipping redundant history row.`
+        platLogger.info(
+          'ingest.price_delta_unchanged_client',
+          `Delta Price Compression: price unchanged (${currentPrice.toLocaleString('vi-VN')}₫, last anchor ${String(latestObs.recorded_at).slice(0, 10)}), skipping redundant history row.`,
+          { productId, observationId }
         );
       } else {
         const { data: existingPrice, error: priceLookupErr } = await this.supabase
@@ -325,8 +360,10 @@ export class ShopeeIngestionPipeline {
           throw new Error(`Failed to check existing price observation: ${priceLookupErr.message}`);
         }
         if (Array.isArray(existingPrice) && existingPrice.length > 0) {
-          console.log(
-            `[MultiPlatformIngest:${platform}] Price observation already recorded (${observationId}), skipping.`
+          platLogger.info(
+            'ingest.price_deduped_client',
+            `Price observation already recorded (${observationId}), skipping.`,
+            { productId, observationId }
           );
         } else {
           const { error: priceErr } = await this.supabase.from('price_history').insert({
@@ -340,8 +377,10 @@ export class ShopeeIngestionPipeline {
           if (priceErr) {
             const pCode = (priceErr as { code?: string }).code || '';
             if (pCode === '23505' || /duplicate key/i.test(priceErr.message)) {
-              console.warn(
-                '[MultiPlatformIngest] Concurrent price observation insert lost the race; treated as dedupe.'
+              platLogger.warn(
+                'ingest.price_race_deduped',
+                'Concurrent price observation insert lost the race; treated as dedupe.',
+                { productId, observationId }
               );
             } else {
               throw new Error(
@@ -389,16 +428,20 @@ export class ShopeeIngestionPipeline {
       });
 
       if (newRows.length === 0) {
-        console.log(
-          `[MultiPlatformIngest:${platform}] No new reviews to ingest (${seen.size} duplicates skipped).`
+        platLogger.info(
+          'ingest.reviews_none_new',
+          `No new reviews to ingest (${seen.size} duplicates skipped).`,
+          { productId, skippedDuplicates: seen.size }
         );
       } else {
         let pending = newRows;
         for (let pass = 0; pass < 2; pass++) {
           const { error: reviewErr } = await this.supabase.from('reviews').insert(pending);
           if (!reviewErr) {
-            console.log(
-              `[MultiPlatformIngest:${platform}] Successfully ingested ${pending.length} reviews (batch pass ${pass + 1}).`
+            platLogger.info(
+              'ingest.reviews_inserted',
+              `Successfully ingested ${pending.length} reviews (batch pass ${pass + 1}).`,
+              { productId, insertedCount: pending.length, pass: pass + 1 }
             );
             pending = [];
             break;
@@ -408,8 +451,10 @@ export class ShopeeIngestionPipeline {
           if (!isRace || pass > 0) {
             throw new Error(`Failed to insert reviews: ${reviewErr.message}`);
           }
-          console.warn(
-            '[MultiPlatformIngest] Review batch hit a unique-index race; retrying the remainder.'
+          platLogger.warn(
+            'ingest.reviews_race_retry',
+            'Review batch hit a unique-index race; retrying the remainder.',
+            { productId }
           );
           const { data: existingNow, error: refetchErr } = await this.supabase
             .from('reviews')
@@ -443,8 +488,10 @@ export class ShopeeIngestionPipeline {
           .eq('product_id', productId)
           .in('platform_review_id', ids);
         if (verifiedErr) {
-          console.warn(
-            `[MultiPlatformIngest:${platform}] Could not refresh is_verified_buyer: ${verifiedErr.message}`
+          platLogger.warn(
+            'ingest.reviews_verified_refresh_warn',
+            `Could not refresh is_verified_buyer: ${verifiedErr.message}`,
+            { productId }
           );
         }
       }
@@ -478,8 +525,10 @@ export class ShopeeIngestionPipeline {
       );
 
       if (storedErr) {
-        console.warn(
-          `[MultiPlatformIngest:${platform}] Review analysis skipped (fetch failed): ${storedErr.message}`
+        platLogger.warn(
+          'ingest.review_analysis_skipped',
+          `Review analysis skipped (fetch failed): ${storedErr.message}`,
+          { productId }
         );
       } else if (storedReviews && storedReviews.length > 0) {
         const { data: masterRow } = await this.supabase
@@ -504,18 +553,31 @@ export class ShopeeIngestionPipeline {
             followerCount: product.shop.followerCount,
           }
         );
-        console.log(
-          `[MultiPlatformIngest:${platform}] Review analysis: ${summary.authentic_review_count}/${summary.total_reviews_analyzed} authentic, weighted rating ${summary.user_rating_weighted}/5, merchant risk ${merchantRisk?.risk_score ?? 'n/a'} (${merchantRisk?.risk_level ?? 'n/a'}).`
+        platLogger.info(
+          'ingest.review_analysis_completed',
+          `Review analysis: ${summary.authentic_review_count}/${summary.total_reviews_analyzed} authentic, weighted rating ${summary.user_rating_weighted}/5, merchant risk ${merchantRisk?.risk_score ?? 'n/a'} (${merchantRisk?.risk_level ?? 'n/a'}).`,
+          {
+            productId,
+            masterId,
+            authenticCount: summary.authentic_review_count,
+            totalAnalyzed: summary.total_reviews_analyzed,
+            weightedRating: summary.user_rating_weighted,
+            merchantRiskScore: merchantRisk?.risk_score ?? null,
+          }
         );
       }
     } catch (err: any) {
-      console.warn(
-        `[MultiPlatformIngest:${platform}] Review analysis failed (non-fatal): ${err?.message || err}`
+      platLogger.warn(
+        'ingest.review_analysis_failed',
+        `Review analysis failed (non-fatal): ${err?.message || err}`,
+        { productId }
       );
     }
 
-    console.log(
-      `[MultiPlatformIngest:${platform}] Product ingestion complete! (Master: ${masterId}, Product: ${productId})`
+    platLogger.info(
+      'ingest.completed',
+      `Product ingestion complete! (Master: ${masterId}, Product: ${productId})`,
+      { masterId, productId, merchantId }
     );
     return { productId, merchantId, masterId, platform };
   }
