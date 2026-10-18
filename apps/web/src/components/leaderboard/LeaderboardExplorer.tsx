@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Link, useRouter } from '@/lib/navigation';
 import {
   getCategoryRouteHref,
@@ -20,7 +21,6 @@ import {
 } from '@/lib/deal-radar';
 import RadarBadge from '@/components/radar/RadarBadge';
 import { useDealRadarIndex } from '@/components/radar/use-deal-radar';
-import { normalizeRateLocale } from '@/lib/rate-i18n';
 import CompareQuickToggle from '@/components/compare/CompareQuickToggle';
 import { escapeCsvCell } from '@/lib/csv-safe';
 import type { KeySpecs, ProductSpecifications } from '@repo/shared-data';
@@ -82,49 +82,41 @@ interface RankedProductEntry {
   activeScore5: number;
 }
 
-const CATEGORY_TABS: ReadonlyArray<{
+type TranslateFn = ReturnType<typeof useTranslations<'leaderboard'>>;
+
+function buildCategoryTabs(t: TranslateFn): ReadonlyArray<{
   slug: CanonicalCategorySlug;
   icon: string;
-  labelVi: string;
-  labelEn: string;
-  labelCs: string;
-}> = [
-  {
-    slug: 'smartphones',
-    icon: '📱',
-    labelVi: 'Điện thoại',
-    labelEn: 'Smartphones',
-    labelCs: 'Telefony',
-  },
-  {
-    slug: 'tablets',
-    icon: '📟',
-    labelVi: 'Máy tính bảng',
-    labelEn: 'Tablets',
-    labelCs: 'Tablety',
-  },
-  {
-    slug: 'laptops',
-    icon: '💻',
-    labelVi: 'Laptop & MacBook',
-    labelEn: 'Laptops',
-    labelCs: 'Notebooky',
-  },
-  {
-    slug: 'smartwatches',
-    icon: '⌚',
-    labelVi: 'Đồng hồ thông minh',
-    labelEn: 'Smartwatches',
-    labelCs: 'Hodinky',
-  },
-  {
-    slug: 'earbuds',
-    icon: '🎧',
-    labelVi: 'Tai nghe ANC',
-    labelEn: 'Earbuds',
-    labelCs: 'Sluchátka',
-  },
-];
+  label: string;
+}> {
+  return [
+    {
+      slug: 'smartphones',
+      icon: '📱',
+      label: t('tabSmartphones'),
+    },
+    {
+      slug: 'tablets',
+      icon: '📟',
+      label: t('tabTablets'),
+    },
+    {
+      slug: 'laptops',
+      icon: '💻',
+      label: t('tabLaptops'),
+    },
+    {
+      slug: 'smartwatches',
+      icon: '⌚',
+      label: t('tabSmartwatches'),
+    },
+    {
+      slug: 'earbuds',
+      icon: '🎧',
+      label: t('tabEarbuds'),
+    },
+  ];
+}
 
 function clamp5(val: number): number {
   if (!Number.isFinite(val) || val <= 0) return 0;
@@ -251,12 +243,12 @@ export default function LeaderboardExplorer({
   dealRadar,
   initialCategory = 'smartphones',
   initialCriterion = 'combined',
-  locale,
 }: LeaderboardExplorerProps) {
-  const lang = normalizeRateLocale(locale);
+  const t = useTranslations('leaderboard');
   const router = useRouter();
 
   const radarIndex = useDealRadarIndex(dealRadar);
+  const categoryTabs = useMemo(() => buildCategoryTabs(t), [t]);
 
   const [activeCategory, setActiveCategory] =
     useState<CanonicalCategorySlug>(initialCategory);
@@ -364,141 +356,52 @@ export default function LeaderboardExplorer({
     }));
   };
 
-  const copy = useMemo(() => {
-    if (lang === 'en') {
-      return {
-        dirLabel: 'Directory: Tech & Electronics (tech_electronics)',
-        chooseCategory: '1. Select Category (Same-Category Ranking Lock):',
-        chooseCriterion: '2. Rank By JReviews Criterion:',
-        personaTitle: '3. Smart Use-Case Persona Recommender & Custom Weights:',
-        customizeWeightsBtn: 'Custom 5-Criteria Sliders',
-        personaLabels: {
-          none: 'Standard Mode',
-          photography: '📸 Photography & Vlog',
-          gaming: '🎮 Hardcore Gaming',
-          endurance: '🔋 2-Day Battery Endurance',
-          business: '💼 Business & Display',
-          value_hunter: '💎 Best Value (P/P)',
-          custom: '🎛️ Custom Weighted Score',
-        },
-        compareTop3Btn: 'Compare Top 3 in Category',
-        searchPlaceholder: 'Filter by model name, SoC chip, or brand...',
-        allBrands: 'All Brands',
-        priceAll: 'All Price Tiers',
-        priceUnder15: 'Under 15M VND',
-        price15to25: '15M - 25M VND',
-        priceOver25: 'Over 25M VND',
-        podiumTitle: 'Top 3 Category Champions (Verified Dual-Rating)',
-        rank1Label: 'Champion #1',
-        rank2Label: 'Runner-Up #2',
-        rank3Label: 'Top #3',
-        fullTableTitle: 'Complete Category Leaderboard',
-        verifiedReviewsSuffix: 'authentic reviews',
-        blockedSpamSuffix: 'seeding/spam blocked',
-        storesTrackedSuffix: 'stores audited',
-        viewAuditDetailBtn: 'Reviews & 10 Spec Groups →',
-        inspectBtn: 'Audit Price',
-        critLabels: {
-          combined: 'Combined Rate Score',
-          user: 'Authentic Buyer Rating',
-          expert: 'Rate Lab Expert Score',
-          screen: 'Display & Visuals',
-          performance: 'Performance & Thermals',
-          camera: 'Camera & Optics',
-          battery: 'Battery & Fast Charge',
-          value: 'Value for Money',
-        },
-      };
-    }
-    if (lang === 'cs') {
-      return {
-        dirLabel: 'Adresář: Technologie a Elektronika (tech_electronics)',
-        chooseCategory: '1. Vyberte kategorii (Uzamčeno v rámci kategorie):',
-        chooseCriterion: '2. Řadit podle kritéria JReviews:',
-        personaTitle: '3. Doporučení podle scénáře použití a vlastní váhy:',
-        customizeWeightsBtn: 'Vlastní váhy 5 kritérií',
-        personaLabels: {
-          none: 'Standardní režim',
-          photography: '📸 Fotografie a video',
-          gaming: '🎮 Náročné hraní her',
-          endurance: '🔋 Maximální výdrž baterie',
-          business: '💼 Práce a displej',
-          value_hunter: '💎 Nejlepší poměr cena/výkon',
-          custom: '🎛️ Vlastní vážené skóre',
-        },
-        compareTop3Btn: 'Porovnat Top 3 v kategorii',
-        searchPlaceholder: 'Hledat podle modelu, čipu nebo značky...',
-        allBrands: 'Všechny značky',
-        priceAll: 'Všechny cenové hladiny',
-        priceUnder15: 'Do 15M VND',
-        price15to25: '15M - 25M VND',
-        priceOver25: 'Nad 25M VND',
-        podiumTitle: 'Top 3 šampioni kategorie (Duální hodnocení)',
-        rank1Label: 'Šampion #1',
-        rank2Label: '2. místo',
-        rank3Label: '3. místo',
-        fullTableTitle: 'Kompletní žebříček kategorie',
-        verifiedReviewsSuffix: 'ověřených recenzí',
-        blockedSpamSuffix: 'seeding/spam blokováno',
-        storesTrackedSuffix: 'obchodů',
-        viewAuditDetailBtn: 'Recenze a 10 skupin parametrů →',
-        inspectBtn: 'Audit ceny',
-        critLabels: {
-          combined: 'Celkové skóre Rate.vn',
-          user: 'Skutečné hodnocení kupujících',
-          expert: 'Expertní skóre Rate Lab',
-          screen: 'Displej a obraz',
-          performance: 'Výkon a teploty',
-          camera: 'Fotoaparát a optika',
-          battery: 'Baterie a nabíjení',
-          value: 'Poměr cena / výkon',
-        },
-      };
-    }
-    return {
-      dirLabel: 'Directory: Công nghệ & Điện tử (tech_electronics)',
-      chooseCategory: '1. Chọn Danh Mục Ngành Hàng (Khóa Xếp Hạng Cùng Ngành):',
-      chooseCriterion: '2. Xếp Hạng Theo Tiêu Chí JReviews:',
-      personaTitle: '3. Gợi Ý Theo Nhu Cầu Thực Tế & Trọng Số Tùy Chỉnh:',
-      customizeWeightsBtn: 'Tùy chỉnh thanh trượt 5 tiêu chí',
+  const copy = useMemo(
+    () => ({
+      dirLabel: t('dirLabel'),
+      chooseCategory: t('chooseCategory'),
+      chooseCriterion: t('chooseCriterion'),
+      personaTitle: t('personaTitle'),
+      customizeWeightsBtn: t('customizeWeightsBtn'),
       personaLabels: {
-        none: 'Mặc định theo tiêu chí',
-        photography: '📸 Chụp ảnh & Quay Vlog',
-        gaming: '🎮 Gaming & Đồ họa nặng',
-        endurance: '🔋 Pin trâu 2 ngày',
-        business: '💼 Doanh nhân & Màn hình đẹp',
-        value_hunter: '💎 Săn cấu hình / Giá tốt (P/P)',
-        custom: '🎛️ Trọng số cá nhân hóa',
+        none: t('personaNone'),
+        photography: t('personaPhotography'),
+        gaming: t('personaGaming'),
+        endurance: t('personaEndurance'),
+        business: t('personaBusiness'),
+        value_hunter: t('personaValueHunter'),
+        custom: t('personaCustom'),
       },
-      compareTop3Btn: 'So sánh Top 3 ngành này',
-      searchPlaceholder: 'Tìm tên máy, chip xử lý hoặc thương hiệu...',
-      allBrands: 'Tất cả hãng',
-      priceAll: 'Mọi tầm giá',
-      priceUnder15: 'Dưới 15 triệu',
-      price15to25: '15 - 25 triệu',
-      priceOver25: 'Trên 25 triệu',
-      podiumTitle: 'Top 3 Dẫn Đầu Phân Khúc (Đã Kiểm Toán Seeding AI)',
-      rank1Label: 'Quán Quân #1',
-      rank2Label: 'Á Quân #2',
-      rank3Label: 'Hạng #3',
-      fullTableTitle: 'Bảng Xếp Hạng Toàn Diện Theo Ngành Hàng',
-      verifiedReviewsSuffix: 'đánh giá thực chất',
-      blockedSpamSuffix: 'seeding/spam đã chặn',
-      storesTrackedSuffix: 'nơi bán đối chiếu',
-      viewAuditDetailBtn: 'Xem Đánh giá & 10 nhóm thông số →',
-      inspectBtn: 'Kiểm định',
+      compareTop3Btn: t('compareTop3Btn'),
+      searchPlaceholder: t('searchPlaceholder'),
+      allBrands: t('allBrands'),
+      priceAll: t('priceAll'),
+      priceUnder15: t('priceUnder15'),
+      price15to25: t('price15to25'),
+      priceOver25: t('priceOver25'),
+      podiumTitle: t('podiumTitle'),
+      rank1Label: t('rank1Label'),
+      rank2Label: t('rank2Label'),
+      rank3Label: t('rank3Label'),
+      fullTableTitle: t('fullTableTitle'),
+      verifiedReviewsSuffix: t('verifiedReviewsSuffix'),
+      blockedSpamSuffix: t('blockedSpamSuffix'),
+      storesTrackedSuffix: t('storesTrackedSuffix'),
+      viewAuditDetailBtn: t('viewAuditDetailBtn'),
+      inspectBtn: t('inspectBtn'),
       critLabels: {
-        combined: 'Điểm Tổng Hợp Rate.vn',
-        user: 'Điểm Người Mua Thực Chất',
-        expert: 'Điểm Chuyên Gia Rate Lab',
-        screen: 'Màn Hình & Hiển Thị',
-        performance: 'Hiệu Năng & Nhiệt Độ',
-        camera: 'Camera & Quay Chụp',
-        battery: 'Pin & Sạc Nhanh',
-        value: 'Đáng Đồng Tiền',
+        combined: t('critCombined'),
+        user: t('critUser'),
+        expert: t('critExpert'),
+        screen: t('critScreen'),
+        performance: t('critPerformance'),
+        camera: t('critCamera'),
+        battery: t('critBattery'),
+        value: t('critValue'),
       },
-    };
-  }, [lang]);
+    }),
+    [t]
+  );
 
   const categoryCounts = useMemo(() => {
     const map = new Map<CanonicalCategorySlug, number>();
@@ -674,10 +577,10 @@ export default function LeaderboardExplorer({
         entry.product.name.replace(/\|/g, '-'),
         entry.product.brand || '-',
         entry.activeScore5.toFixed(2),
-        entry.userScore5 > 0 ? entry.userScore5.toFixed(1) : 'chưa có',
+        entry.userScore5 > 0 ? entry.userScore5.toFixed(1) : t('unratedShort'),
         entry.expertScore10 != null
           ? entry.expertScore10.toFixed(1)
-          : 'chưa có',
+          : t('unratedShort'),
         entry.product.min_price
           ? `${Number(entry.product.min_price).toLocaleString('vi-VN')} ₫`
           : '-',
@@ -880,16 +783,8 @@ export default function LeaderboardExplorer({
               data-testid="copy-leaderboard-md-btn"
             >
               {copiedLeaderboardMd
-                ? lang === 'en'
-                  ? '✅ Copied Markdown!'
-                  : lang === 'cs'
-                    ? '✅ Zkopírováno!'
-                    : '✅ Đã chép BXH Markdown!'
-                : lang === 'en'
-                  ? '📋 Copy Leaderboard Markdown'
-                  : lang === 'cs'
-                    ? '📋 Kopírovat žebříček (MD)'
-                    : '📋 Sao chép BXH Markdown'}
+                ? t('copiedLeaderboardMd')
+                : t('copyLeaderboardMdBtn')}
             </button>
             <button
               type="button"
@@ -897,11 +792,7 @@ export default function LeaderboardExplorer({
               className="btn btn-sm btn-outline-secondary rounded-pill fw-semibold px-3 py-1"
               data-testid="download-leaderboard-csv-btn"
             >
-              {lang === 'en'
-                ? '📥 Export CSV'
-                : lang === 'cs'
-                  ? '📥 Exportovat CSV'
-                  : '📥 Xuất bảng CSV'}
+              {t('exportCsvBtn')}
             </button>
             <button
               type="button"
@@ -925,15 +816,9 @@ export default function LeaderboardExplorer({
 
         {/* 5-Category Switcher Pills */}
         <div className="d-flex mb-4 flex-wrap gap-2" role="tablist">
-          {CATEGORY_TABS.map((tab) => {
+          {categoryTabs.map((tab) => {
             const isSelected = tab.slug === activeCategory;
             const count = categoryCounts.get(tab.slug) ?? 0;
-            const label =
-              lang === 'en'
-                ? tab.labelEn
-                : lang === 'cs'
-                  ? tab.labelCs
-                  : tab.labelVi;
             return (
               <button
                 key={tab.slug}
@@ -948,7 +833,7 @@ export default function LeaderboardExplorer({
                 }`}
               >
                 <span>{tab.icon}</span>
-                <span>{label}</span>
+                <span>{tab.label}</span>
                 <span
                   className={`badge rounded-pill font-monospace ${
                     isSelected
@@ -1129,13 +1014,13 @@ export default function LeaderboardExplorer({
           <div className="col-lg-3 col-md-6">
             <div className="input-group input-group-sm">
               <span className="input-group-text bg-light text-muted">
-                <BsFunnel className="me-1" /> Brand
+                <BsFunnel className="me-1" /> {t('brandFilterLabel')}
               </span>
               <select
                 value={selectedBrand}
                 onChange={(e) => setSelectedBrand(e.target.value)}
                 className="form-select"
-                aria-label="Filter by brand"
+                aria-label={t('brandFilterAria')}
               >
                 <option value="all">{copy.allBrands}</option>
                 {availableBrands.map((b) => (
@@ -1154,12 +1039,7 @@ export default function LeaderboardExplorer({
             <div className="row g-2 align-items-center">
               <div className="col-lg-4 col-md-12">
                 <div className="small fw-semibold text-dark">
-                  ⚡{' '}
-                  {lang === 'en'
-                    ? 'Quick 1v1 Matchup Picker (Same Category):'
-                    : lang === 'cs'
-                      ? 'Rychlý 1v1 duel ze žebříčku:'
-                      : 'Chọn nhanh 2 máy bất kỳ trong BXH để đấu 1v1:'}
+                  ⚡ {t('quick1v1PickerLabel')}
                 </div>
               </div>
               <div className="col-lg-3 col-md-5">
@@ -1167,7 +1047,7 @@ export default function LeaderboardExplorer({
                   className="form-select form-select-sm"
                   value={effectiveVersusA}
                   onChange={(e) => setVersusSlugA(e.target.value)}
-                  aria-label="Select Device A for 1v1 Matchup"
+                  aria-label={t('selectDeviceAAria')}
                 >
                   {rankedEntries.map((entry, idx) => (
                     <option key={entry.product.slug} value={entry.product.slug}>
@@ -1182,7 +1062,7 @@ export default function LeaderboardExplorer({
                   className="form-select form-select-sm"
                   value={effectiveVersusB}
                   onChange={(e) => setVersusSlugB(e.target.value)}
-                  aria-label="Select Device B for 1v1 Matchup"
+                  aria-label={t('selectDeviceBAria')}
                 >
                   {rankedEntries
                     .filter((e) => e.product.slug !== effectiveVersusA)
@@ -1209,12 +1089,7 @@ export default function LeaderboardExplorer({
                     className="btn btn-sm btn-danger rounded-pill fw-bold w-100"
                     data-testid="leaderboard-1v1-go-btn"
                   >
-                    ⚔️{' '}
-                    {lang === 'en'
-                      ? '1v1 Battle'
-                      : lang === 'cs'
-                        ? 'Spustit 1v1'
-                        : 'Đấu 1v1'}
+                    ⚔️ {t('go1v1BattleBtn')}
                   </Link>
                 )}
               </div>
@@ -1336,12 +1211,12 @@ export default function LeaderboardExplorer({
                               ★{' '}
                               {entry.userScore5 > 0
                                 ? `${entry.userScore5.toFixed(2)}/5.0`
-                                : 'chưa có'}
+                                : t('unratedShort')}
                             </span>
                             <span className="rate-score-badge-expert">
                               {entry.expertScore10 != null
                                 ? `Expert ${entry.expertScore10.toFixed(1)}/10`
-                                : 'Expert: chưa có'}
+                                : t('expertUnrated')}
                             </span>
                             <RadarBadge
                               signal={radarSignal}
@@ -1441,19 +1316,9 @@ export default function LeaderboardExplorer({
         <div className="rate-card rounded-4 p-md-4 mb-4 border bg-white p-3 shadow-sm">
           <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
             <div>
-              <div className="rate-eyebrow mb-1">
-                {lang === 'vi'
-                  ? 'Kèo Đối Đầu 1v1 Từ Bảng Xếp Hạng'
-                  : lang === 'cs'
-                    ? 'Přímé duely 1v1 z žebříčku'
-                    : 'Direct 1v1 Showdowns From Leaderboard'}
-              </div>
+              <div className="rate-eyebrow mb-1">{t('showdownsEyebrow')}</div>
               <h3 className="h6 fw-bold text-dark mb-0">
-                {lang === 'vi'
-                  ? 'So Kè Trực Tiếp Các Thiết Bị Dẫn Đầu Cùng Danh Mục'
-                  : lang === 'cs'
-                    ? 'Přímé porovnání nejlepších zařízení ve stejné kategorii'
-                    : 'Head-to-Head Matchups Between Top-Ranked Devices'}
+                {t('showdownsHeading')}
               </h3>
             </div>
             <Link
@@ -1465,11 +1330,7 @@ export default function LeaderboardExplorer({
               )}`}
               className="btn btn-sm btn-outline-dark rounded-pill px-3"
             >
-              {lang === 'vi'
-                ? 'Mở Bàn Cân Đa Chiều →'
-                : lang === 'cs'
-                  ? 'Otevřít porovnání →'
-                  : 'Open Comparison Matrix →'}
+              {t('openCompareMatrixBtn')}
             </Link>
           </div>
 
@@ -1532,11 +1393,7 @@ export default function LeaderboardExplorer({
                           className="btn btn-sm btn-dark rounded-pill small fw-semibold w-100"
                         >
                           <BsArrowLeftRight className="me-1" />
-                          {lang === 'vi'
-                            ? 'Xem Đối Đầu 1v1 Chuyên Sâu'
-                            : lang === 'cs'
-                              ? 'Zobrazit 1v1 duel'
-                              : 'View 1v1 Head-to-Head'}
+                          {t('view1v1DeepBtn')}
                         </Link>
                       </div>
                     </div>
@@ -1665,25 +1522,25 @@ export default function LeaderboardExplorer({
                         <span>
                           {entry.userScore5 > 0
                             ? `User ${entry.userScore5.toFixed(2)}/5.0`
-                            : 'User: chưa có'}
+                            : t('userUnrated')}
                         </span>
                       </span>
                       <span className="rate-score-badge-expert">
                         <span>
                           {entry.expertScore10 != null
                             ? `Expert ${entry.expertScore10.toFixed(1)}/10`
-                            : 'Expert: chưa có'}
+                            : t('expertUnrated')}
                         </span>
                       </span>
                     </div>
                     <div className="row g-1 small">
                       {(
                         [
-                          { key: 'screen', short: 'Display' },
-                          { key: 'performance', short: 'Perf' },
-                          { key: 'camera', short: 'Cam/ANC' },
-                          { key: 'battery', short: 'Battery' },
-                          { key: 'value', short: 'Value' },
+                          { key: 'screen', short: t('shortDisplay') },
+                          { key: 'performance', short: t('shortPerf') },
+                          { key: 'camera', short: t('shortCamAnc') },
+                          { key: 'battery', short: t('shortBattery') },
+                          { key: 'value', short: t('shortValue') },
                         ] as const
                       ).map((c) => (
                         <div
@@ -1706,7 +1563,7 @@ export default function LeaderboardExplorer({
                           >
                             {entry.criteria[c.key] > 0
                               ? entry.criteria[c.key].toFixed(2)
-                              : 'chưa có'}
+                              : t('unratedShort')}
                           </strong>
                         </div>
                       ))}

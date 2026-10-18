@@ -43,6 +43,8 @@ export default async function LocaleLayout({
   const clientMessages = {
     errors: { global: (messages.errors as Record<string, unknown>)?.global },
     compare: messages.compare,
+    leaderboard: messages.leaderboard,
+    reviews: messages.reviews,
   };
 
   return (

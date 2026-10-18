@@ -121,6 +121,18 @@ const _csCompareCheck: CompareCopyStrings = csMessages.compare;
 void _enCompareCheck;
 void _csCompareCheck;
 
+type LeaderboardCopyStrings = typeof viMessages.leaderboard;
+const _enLeaderboardCheck: LeaderboardCopyStrings = enMessages.leaderboard;
+const _csLeaderboardCheck: LeaderboardCopyStrings = csMessages.leaderboard;
+void _enLeaderboardCheck;
+void _csLeaderboardCheck;
+
+type ReviewsCopyStrings = typeof viMessages.reviews;
+const _enReviewsCheck: ReviewsCopyStrings = enMessages.reviews;
+const _csReviewsCheck: ReviewsCopyStrings = csMessages.reviews;
+void _enReviewsCheck;
+void _csReviewsCheck;
+
 const RATE_COPY_DICTIONARY: Record<SupportedRateLocale, RateLocaleCopy> = {
   vi: { locale: 'vi', ...viCopy },
   en: { locale: 'en', ...enCopy },
