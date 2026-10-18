@@ -1171,6 +1171,60 @@ async function runTests() {
     );
   }
 
+  // OpenAPI 3.1 contract verification (#359)
+  const openApiMod = await import('../../web/src/server/rate/openapi.js');
+  const { buildRateOpenApiSpec } = (
+    'buildRateOpenApiSpec' in openApiMod
+      ? openApiMod
+      : (openApiMod as unknown as { default: typeof openApiMod }).default
+  ) as typeof openApiMod;
+  const openApiSpec = buildRateOpenApiSpec('https://rate.vn');
+  const productParamNames = (
+    openApiSpec.paths['/api/v1/rate/products']?.get?.parameters ?? []
+  ).map((p) => p.name);
+  for (const expectedParam of [
+    'minRefreshHz',
+    'has5g',
+    'minBatteryMah',
+    'minFastChargeW',
+    'ipRating',
+  ]) {
+    assert.ok(
+      productParamNames.includes(expectedParam),
+      `OpenAPI /api/v1/rate/products must document ${expectedParam}`
+    );
+  }
+  const versusParamNames = (
+    openApiSpec.paths['/api/v1/rate/versus']?.get?.parameters ?? []
+  ).map((p) => p.name);
+  for (const expectedParam of [
+    'w_screen',
+    'w_performance',
+    'w_camera',
+    'w_battery',
+    'w_value',
+  ]) {
+    assert.ok(
+      versusParamNames.includes(expectedParam),
+      `OpenAPI /api/v1/rate/versus must document ${expectedParam}`
+    );
+  }
+  const reviewParamNames = (
+    openApiSpec.paths['/api/v1/rate/reviews']?.get?.parameters ?? []
+  ).map((p) => p.name);
+  assert.ok(reviewParamNames.includes('masterProductId'));
+  assert.ok(reviewParamNames.includes('limit'));
+  const ingestProps = (
+    openApiSpec.components.schemas.ExtensionQuarantineIngestPayload as {
+      properties: Record<string, { maximum?: number }>;
+    }
+  ).properties;
+  assert.equal(ingestProps.price?.maximum, 1_000_000_000);
+  assert.equal(ingestProps.originalPrice?.maximum, 1_000_000_000);
+  console.log(
+    '  ✅ [OpenAPI 3.1] Spec parameter and schema bounds verified (#359)'
+  );
+
   console.log('🎉 All Rate Browser Extension MV3 v2 tests passed!');
 }
 

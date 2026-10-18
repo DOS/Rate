@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { z } from '@repo/shared-data';
 import {
   trimTrailingSlashes,
+  extractJsonObjectString,
   type SupportedAiProvider,
   type AiSpecEnricherConfig,
 } from './ai-spec-enricher.js';
@@ -471,7 +472,8 @@ export function computeReviewWeight(params: {
     flagCategory === 'seeding_fake' ||
     flagCategory === 'competitor_sabotage' ||
     flagCategory === 'review_bombing' ||
-    verdict === 'fake'
+    verdict === 'fake' ||
+    verdict === 'unanalyzed'
   ) {
     return 0;
   }
@@ -1056,7 +1058,7 @@ export class AiReviewAnalyzer {
       // Rule B: Competitor Sabotage (Đối thủ chơi xấu / chèo kéo sang shop khác / dìm 1 sao vô căn cứ)
       const isCompetitorSabotage =
         r.rating_star <= 2 &&
-        (/qua\s*shop\s*[\w\s]+\s*mua|mua\s*bên\s*[\w\s]+\s*rẻ\s*hơn|đừng\s*mua\s*shop\s*này\s*qua\s*bên|ib\s*mình\s*bán\s*rẻ\s*hơn|liên\s*hệ\s*zalo\s*\d{8,}/i.test(
+        (/(?:qua\s*shop\s+\S+(?:\s+\S+){0,5}\s+mua|mua\s*bên\s+\S+(?:\s+\S+){0,5}\s+rẻ\s*hơn|đừng\s*mua\s*shop\s*này\s*qua\s*bên|ib\s*mình\s*bán\s*rẻ\s*hơn|liên\s*hệ\s*zalo\s*\d{8,})/i.test(
           comment
         ) ||
           (r.is_verified_buyer === false &&
@@ -1430,13 +1432,7 @@ Return ONLY valid JSON matching:
 
         let parsed: RawAiReviewBatch;
         try {
-          parsed = JSON.parse(
-            rawContent
-              .trim()
-              .replace(/^```(?:json)?\s*/i, '')
-              .replace(/\s*```$/i, '')
-              .trim()
-          ) as RawAiReviewBatch;
+          parsed = JSON.parse(extractJsonObjectString(rawContent)) as RawAiReviewBatch;
         } catch {
           continue;
         }
@@ -1950,9 +1946,20 @@ Return ONLY valid JSON matching:
     const results =
       preservedFlags.size === 0
         ? analysis.results
-        : analysis.results.map(r => {
+        : analysis.results.map((r, idx) => {
             const stored = preservedFlags.get(r.review_id);
-            return stored ? { ...r, ...stored } : r;
+            if (!stored) return r;
+            const srcReview = params.reviews[idx];
+            const helpfulness_weight = !stored.include_in_rating
+              ? 0
+              : computeReviewWeight({
+                  upvotes: srcReview?.upvotes ?? 0,
+                  downvotes: srcReview?.downvotes ?? 0,
+                  reportCount: srcReview?.report_count ?? 0,
+                  flagCategory: stored.flag_category,
+                  verdict: stored.verdict,
+                });
+            return { ...r, ...stored, helpfulness_weight };
           });
     const summary = this.computeJReviewsSummary(
       params.reviews,
