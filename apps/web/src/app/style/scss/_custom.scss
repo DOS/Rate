@@ -65,6 +65,13 @@
   --rate-radius-btn: 8px;
   // Smallest UI text size (labels, chips, captions)
   --rate-text-min: 0.8125rem;
+  // Status pairs for verdict tags (radar, merchant risk, review status).
+  --rate-status-good-fg: #166534;
+  --rate-status-good-bg: #dcfce7;
+  --rate-status-warn-fg: #854d0e;
+  --rate-status-warn-bg: #fef3c7;
+  --rate-status-bad-fg: #991b1b;
+  --rate-status-bad-bg: #fee2e2;
   --rate-brand-bg: #fff1f2;
   --rate-score-star-bg: #fffbeb;
   // Crimson text for links and labels on white surfaces (#d83030 is 4.8:1 on white)
@@ -415,7 +422,7 @@
     }
 
     &:hover {
-      color: var(--rate-brand);
+      color: var(--rate-crimson-text);
 
       svg {
         color: currentColor;
@@ -502,5 +509,605 @@
     white-space: normal;
     line-height: 1.25;
     text-align: inherit;
+  }
+}
+
+// Home 1v1 showdowns: dark scoreboard with whole-card battle links.
+.rate-battles {
+  padding: 1.25rem;
+
+  @media (min-width: 768px) {
+    padding: 1.75rem;
+  }
+}
+
+.rate-battles-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--rate-fg-primary);
+}
+
+.rate-battle-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+  height: 100%;
+  padding: 1rem 1.125rem;
+  color: var(--rate-fg-primary);
+  text-decoration: none;
+  background-color: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--rate-border-subtle);
+  border-radius: 12px;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease;
+
+  &:hover {
+    color: var(--rate-fg-primary);
+    background-color: rgba(255, 255, 255, 0.07);
+    border-color: var(--rate-border-strong);
+
+    .rate-battle-cta {
+      gap: 0.6rem;
+    }
+  }
+}
+
+.rate-battle-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: var(--rate-text-min);
+  font-weight: 600;
+  color: var(--rate-fg-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.rate-battle-sides {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.rate-battle-name {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.rate-battle-score {
+  margin-top: 0.25rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #fbbf24;
+  font-variant-numeric: tabular-nums;
+}
+
+.rate-battle-vs {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  font-size: var(--rate-text-min);
+  font-weight: 800;
+  color: var(--rate-fg-primary);
+  background-color: var(--rate-brand-bg);
+  border: 1px solid rgba(255, 107, 107, 0.35);
+  border-radius: 50%;
+}
+
+.rate-battle-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: auto;
+  padding-top: 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--rate-crimson-text);
+  border-top: 1px solid var(--rate-border-subtle);
+  transition: gap 0.15s ease;
+}
+
+// Home deal radar: neutral card, two lists, tinted tags carry the verdict.
+.rate-home-radar {
+  padding: 1.25rem;
+
+  @media (min-width: 768px) {
+    padding: 1.75rem;
+  }
+}
+
+.rate-home-radar-title {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--rate-fg-primary);
+}
+
+.rate-radar-list-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.75rem;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--rate-fg-primary);
+
+  svg {
+    flex-shrink: 0;
+    color: var(--rate-fg-muted);
+  }
+
+  &.is-good svg {
+    color: var(--rate-status-good-fg);
+  }
+
+  &.is-bad svg {
+    color: var(--rate-brand);
+  }
+}
+
+.rate-radar-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--rate-border-subtle);
+  border-radius: 10px;
+
+  li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.75rem 0.875rem;
+
+    & + li {
+      border-top: 1px solid var(--rate-border-subtle);
+    }
+  }
+}
+
+.rate-radar-item-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+
+  a {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--rate-fg-primary);
+    text-decoration: none;
+
+    &:hover {
+      color: var(--rate-crimson-text);
+    }
+  }
+}
+
+.rate-radar-item-meta {
+  font-size: var(--rate-text-min);
+  color: var(--rate-fg-muted);
+
+  s {
+    text-decoration-thickness: 1px;
+  }
+}
+
+.rate-radar-platform {
+  margin-right: 0.35rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--rate-fg-paragraph);
+
+  & + & {
+    margin-left: 0.35rem;
+  }
+}
+
+.rate-radar-item-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
+  flex-shrink: 0;
+}
+
+.rate-radar-price {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--rate-fg-primary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.rate-radar-tag {
+  padding: 0.125rem 0.45rem;
+  font-size: var(--rate-text-min);
+  font-weight: 600;
+  white-space: nowrap;
+  border-radius: 6px;
+  font-variant-numeric: tabular-nums;
+
+  &.is-good {
+    color: var(--rate-status-good-fg);
+    background-color: var(--rate-status-good-bg);
+  }
+
+  &.is-bad {
+    color: var(--rate-status-bad-fg);
+    background-color: var(--rate-status-bad-bg);
+  }
+
+  &.is-warn {
+    color: var(--rate-status-warn-fg);
+    background-color: var(--rate-status-warn-bg);
+  }
+}
+
+.rate-radar-spread {
+  margin-top: 1.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--rate-border-subtle);
+}
+
+.rate-radar-spread-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+
+  > a {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-bottom: 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--rate-crimson-text);
+    text-decoration: none;
+  }
+}
+
+.rate-radar-spread-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  height: 100%;
+  padding: 0.75rem 0.875rem;
+  border: 1px solid var(--rate-border-subtle);
+  border-radius: 10px;
+}
+
+// Home merchant trust cards.
+.rate-merchant-card {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  height: 100%;
+  padding: 1.25rem;
+
+  @media (min-width: 768px) {
+    padding: 1.5rem;
+  }
+}
+
+.rate-merchant-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.75rem 1rem;
+
+  .rate-radar-tag {
+    margin-left: auto;
+  }
+}
+
+.rate-merchant-id {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.rate-merchant-name {
+  margin: 0 0 0.25rem;
+  font-size: 1.0625rem;
+  font-weight: 700;
+
+  a {
+    color: var(--rate-fg-primary);
+    text-decoration: none;
+
+    &:hover {
+      color: var(--rate-crimson-text);
+    }
+  }
+}
+
+.rate-merchant-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.5rem;
+  font-size: var(--rate-text-min);
+  color: var(--rate-fg-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.rate-merchant-official {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-weight: 600;
+  color: var(--rate-crimson-text);
+}
+
+.rate-merchant-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+  border: 1px solid var(--rate-border-subtle);
+  border-radius: 10px;
+
+  > div {
+    padding: 0.75rem 0.875rem;
+
+    & + div {
+      border-left: 1px solid var(--rate-border-subtle);
+    }
+  }
+
+  dt {
+    font-size: var(--rate-text-min);
+    font-weight: 600;
+    color: var(--rate-fg-muted);
+  }
+
+  dd {
+    margin: 0.25rem 0 0;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--rate-fg-primary);
+    font-variant-numeric: tabular-nums;
+
+    &.is-good {
+      color: var(--rate-status-good-fg);
+    }
+
+    &.is-warn {
+      color: var(--rate-status-warn-fg);
+    }
+
+    &.is-bad {
+      color: var(--rate-status-bad-fg);
+    }
+  }
+
+  dd.rate-merchant-note {
+    font-size: var(--rate-text-min);
+    font-weight: 400;
+    color: var(--rate-fg-muted);
+  }
+
+  @media (max-width: 575.98px) {
+    grid-template-columns: minmax(0, 1fr);
+
+    > div + div {
+      border-left: 0;
+      border-top: 1px solid var(--rate-border-subtle);
+    }
+  }
+}
+
+.rate-merchant-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin-top: auto;
+  padding-top: 1rem;
+  font-size: var(--rate-text-min);
+  color: var(--rate-fg-muted);
+  border-top: 1px solid var(--rate-border-subtle);
+
+  a {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--rate-crimson-text);
+    text-decoration: none;
+  }
+}
+
+// Home AI-audited review cards.
+.rate-review-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+
+  .rate-radar-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.3rem 0.6rem;
+    white-space: normal;
+  }
+}
+
+.rate-review-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  height: 100%;
+  padding: 1.25rem;
+}
+
+.rate-review-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+
+  > div {
+    flex: 1 1 8rem;
+    min-width: 0;
+  }
+
+  .rate-radar-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    flex-shrink: 0;
+    color: var(--rate-fg-paragraph);
+    background-color: var(--rate-bg-canvas);
+
+    &.is-good {
+      color: var(--rate-status-good-fg);
+      background-color: var(--rate-status-good-bg);
+    }
+
+    &.is-warn {
+      color: var(--rate-status-warn-fg);
+      background-color: var(--rate-status-warn-bg);
+    }
+
+    &.is-bad {
+      color: var(--rate-status-bad-fg);
+      background-color: var(--rate-status-bad-bg);
+    }
+  }
+}
+
+.rate-review-author {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--rate-fg-primary);
+}
+
+.rate-review-stars {
+  display: flex;
+  gap: 0.15rem;
+  margin-top: 0.25rem;
+  font-size: 0.8125rem;
+  color: #f59e0b;
+}
+
+.rate-review-body {
+  flex-grow: 1;
+  margin: 0;
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  color: var(--rate-fg-paragraph);
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.rate-review-foot {
+  display: flex;
+  margin-top: auto;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+  padding-top: 0.75rem;
+  font-size: var(--rate-text-min);
+  color: var(--rate-fg-muted);
+  border-top: 1px solid var(--rate-border-subtle);
+
+  svg {
+    flex-shrink: 0;
+  }
+
+  a {
+    font-weight: 600;
+    color: var(--rate-crimson-text);
+    text-decoration: none;
+  }
+}
+
+// Site-wide pre-footer call to action (FooterTop).
+.rate-footer-cta {
+  background: linear-gradient(135deg, #0b0d11 0%, #131824 60%, #1a1f2e 100%);
+  border-top: 1px solid var(--rate-border-subtle);
+  border-bottom: 1px solid var(--rate-border-subtle);
+}
+
+.rate-footer-cta-title {
+  margin: 0 0 0.5rem;
+  font-size: 1.375rem;
+  font-weight: 700;
+  line-height: 1.35;
+  letter-spacing: -0.02em;
+  color: var(--rate-fg-primary);
+}
+
+.rate-footer-cta-desc {
+  margin: 0;
+  font-size: 0.9375rem;
+  color: var(--rate-fg-secondary);
+}
+
+.rate-footer-cta-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1.125rem;
+  }
+
+  .btn-outline-light {
+    border-color: var(--rate-border-strong);
+  }
+
+  @media (min-width: 992px) {
+    justify-content: flex-end;
+  }
+}
+
+.rate-footer-cta-links {
+  margin-top: 0.875rem;
+
+  @media (min-width: 992px) {
+    justify-content: flex-end;
+  }
+}
+
+// Phones: give radar product names the full row, price and tag go below.
+@media (max-width: 575.98px) {
+  .rate-radar-list li,
+  .rate-radar-spread-item {
+    flex-wrap: wrap;
+  }
+
+  .rate-radar-item-main {
+    flex: 1 1 100%;
+  }
+
+  .rate-radar-item-side {
+    flex: 1 1 100%;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
   }
 }
