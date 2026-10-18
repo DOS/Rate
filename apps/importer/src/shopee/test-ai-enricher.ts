@@ -13,7 +13,11 @@ import assert from 'node:assert/strict';
 import dotenv from 'dotenv';
 import { ProductSpecificationsSchema, KeySpecsSchema } from '@repo/shared-data';
 import { ProductNormalizer } from './product-normalizer.js';
-import { AiSpecEnricher, sanitizeSpecifications } from './ai-spec-enricher.js';
+import {
+  AiSpecEnricher,
+  extractJsonObjectString,
+  sanitizeSpecifications,
+} from './ai-spec-enricher.js';
 import {
   CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY,
   FLAGSHIP_DEVICES_TO_SEED,
@@ -325,8 +329,55 @@ async function runTests() {
     assert.equal(
       requestCount,
       1,
-      'In-memory cache should prevent duplicate API calls for the same model'
+      'In-memory cache should prevent duplicate API calls for the same model and RAM/storage'
     );
+
+    // Verify cached specifications.design.colors was not mutated in-place by first candidate's colors (#356)
+    const cachedColorsCandidate = await enricher.enrichCandidate({
+      ...xiaomi,
+      colors: [],
+      is_benchmark_enriched: false,
+    });
+    assert.deepEqual(
+      cachedColorsCandidate.specifications.design?.colors,
+      ['Black', 'White', 'Titanium Special Edition'],
+      'Candidate with empty colors must receive original AI design.colors without mutation from previous candidate'
+    );
+
+    // Verify different RAM variant (12GB/512GB vs 16GB/512GB) does not collide in memoryCache (#356)
+    await enricher.enrichCandidate({
+      ...xiaomi,
+      ram_gb: 12,
+      is_benchmark_enriched: false,
+    });
+    assert.equal(requestCount, 2, 'Different RAM variant must use a distinct cacheKey');
+
+    // Verify sanitizeSpecifications strips out-of-range numeric fields without wiping valid groups (#356)
+    const partialOutOfBounds = sanitizeSpecifications({
+      ...messyLlmOutput,
+      design: { ...messyLlmOutput.design, weight_g: 0 },
+      display: { ...messyLlmOutput.display, ppi: -10, refresh_rate_hz: 99999 },
+      battery: { ...messyLlmOutput.battery, capacity_mah: 0, fast_charging_w: 0 },
+    });
+    assert.equal(partialOutOfBounds.design?.weight_g, undefined);
+    assert.equal(partialOutOfBounds.design?.dimensions, '161.4 x 75.3 x 9.2 mm');
+    assert.equal(partialOutOfBounds.display?.ppi, undefined);
+    assert.equal(partialOutOfBounds.display?.refresh_rate_hz, undefined);
+    assert.equal(partialOutOfBounds.display?.size_inch, 6.73);
+    assert.equal(partialOutOfBounds.battery?.capacity_mah, undefined);
+    assert.equal(partialOutOfBounds.battery?.fast_charging_w, 0);
+    assert.equal(
+      partialOutOfBounds.hardware?.chipset,
+      'Qualcomm SM8650-AB Snapdragon 8 Gen 3 (4 nm)'
+    );
+
+    // Verify extractJsonObjectString handles preamble/postamble text and markdown fences (#356)
+    const wrappedJson =
+      'Here are the specifications:\n```json\n{"ram_gb":12,"storage_gb":256}\n```\nHope this helps!';
+    assert.deepEqual(JSON.parse(extractJsonObjectString(wrappedJson)), {
+      ram_gb: 12,
+      storage_gb: 256,
+    });
 
     console.log('✅ [AiSpecEnricher] Mock OpenAI-compatible enrichment & caching passed 100%!');
   } finally {
@@ -342,9 +393,7 @@ const isApply = process.argv.includes('--apply');
 
 (async () => {
   if (isAuditOnly) {
-    const { runQuickSpecSyncAndAudit } = await import(
-      './jobs/backfill-specs.js'
-    );
+    const { runQuickSpecSyncAndAudit } = await import('./jobs/backfill-specs.js');
     await runQuickSpecSyncAndAudit({ apply: isApply });
     return;
   }
@@ -354,8 +403,7 @@ const isApply = process.argv.includes('--apply');
     return;
   }
   await runTests();
-})().catch((err) => {
+})().catch(err => {
   console.error('❌ Execution failed:', err);
   process.exit(1);
 });
-

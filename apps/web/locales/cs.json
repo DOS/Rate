@@ -411,7 +411,8 @@
     "showdownsEyebrow": "Přímé duely 1v1 z žebříčku",
     "showdownsHeading": "Přímé porovnání nejlepších zařízení ve stejné kategorii",
     "openCompareMatrixBtn": "Otevřít porovnání →",
-    "view1v1DeepBtn": "Zobrazit 1v1 duel"
+    "view1v1DeepBtn": "Zobrazit 1v1 duel",
+    "categoryTabsAria": "Vyberte kategorii"
   },
   "reviews": {
     "criteriaScreen": "Displej a zobrazení",
@@ -523,7 +524,8 @@
     "upvoteBtnLabel": "👍 Užitečné ({count})",
     "downvoteTitle": "Neužitečné - snižuje váhu této recenze",
     "reportTitle": "Nahlásit Seeding / Spam / Sabotáž (-0.35 váhy za každé nahlášení)",
-    "reportBtnLabel": "🚩 Nahlásit ({count})"
+    "reportBtnLabel": "🚩 Nahlásit ({count})",
+    "filterGroupAria": "Filtrovat recenze"
   },
   "watchlist": {
     "metaTitle": "Seznam hlídaných cen a upozornění na slevy | Rate.vn",
@@ -1600,7 +1602,9 @@
       "applyFiltersBtn": "Použít filtry",
       "clearAllFiltersBtn": "Vymazat všechny filtry",
       "rangeFrom": "Od:",
-      "rangeTo": "Do:"
+      "rangeTo": "Do:",
+      "minPriceAria": "Minimální cena",
+      "maxPriceAria": "Maximální cena"
     }
   },
   "heroSearch": {

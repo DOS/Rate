@@ -1,9 +1,11 @@
 import 'server-only';
 import { cache } from 'react';
 import {
+  MAX_VALID_VND_PRICE,
   getMasterProductCategorySlug,
   getMasterProductOffersBatch,
   getMasterProducts,
+  normalizeOfferOriginalPrice,
   resolveProductImageUrl,
   type CanonicalCategorySlug,
   type MasterProduct,
@@ -78,6 +80,7 @@ export interface CrossPlatformPriceSpreadItem {
 export interface CrossPlatformDealRadarResponse {
   generatedAt: string;
   categoryFilter: CanonicalCategorySlug | 'all';
+  platformFilter?: string;
   totalClustersAnalyzed: number;
   totalOffersAnalyzed: number;
   genuineDeals: CrossPlatformDealRadarItem[];
@@ -87,7 +90,7 @@ export interface CrossPlatformDealRadarResponse {
 
 function computeMedian(values: number[]): number {
   const valid = values
-    .filter((v) => Number.isFinite(v) && v > 0)
+    .filter((v) => Number.isFinite(v) && v > 0 && v <= MAX_VALID_VND_PRICE)
     .sort((a, b) => a - b);
   if (valid.length === 0) return 0;
   const mid = Math.floor(valid.length / 2);
@@ -95,6 +98,21 @@ function computeMedian(values: number[]): number {
     return valid[mid]!;
   }
   return Math.round((valid[mid - 1]! + valid[mid]!) / 2);
+}
+
+function resolveEffectiveMerchantRisk(
+  merchant: MerchantOffer['merchant'] | undefined,
+  fallback: number
+): number {
+  if (!merchant) return fallback;
+  const risk = Number(merchant.risk_score ?? fallback);
+  const dosafe = Number(merchant.dosafe_risk_score ?? 0);
+  const review = Number(merchant.review_risk_score ?? 0);
+  return Math.max(
+    Number.isFinite(risk) ? risk : fallback,
+    Number.isFinite(dosafe) ? dosafe : 0,
+    Number.isFinite(review) ? review : 0
+  );
 }
 
 /**
@@ -114,10 +132,13 @@ export function computeCrossPlatformDealRadarFromData(
   }>,
   options?: {
     categorySlug?: CanonicalCategorySlug | 'all';
+    platform?: string;
     limit?: number;
   }
 ): CrossPlatformDealRadarResponse {
   const categoryFilter = options?.categorySlug || 'all';
+  const platformFilter =
+    (options?.platform || 'all').trim().toLowerCase() || 'all';
   const limit = Math.max(1, Math.min(options?.limit || 12, 50));
 
   const genuineDeals: CrossPlatformDealRadarItem[] = [];
@@ -133,7 +154,10 @@ export function computeCrossPlatformDealRadarFromData(
     }
 
     const validOffers = offers.filter(
-      (o) => Number.isFinite(o.price_current) && o.price_current > 0
+      (o) =>
+        Number.isFinite(o.price_current) &&
+        o.price_current > 0 &&
+        o.price_current <= MAX_VALID_VND_PRICE
     );
     if (validOffers.length < 2) continue;
 
@@ -175,7 +199,12 @@ export function computeCrossPlatformDealRadarFromData(
       validOffers.map((o) => o.platform.toLowerCase())
     ).size;
 
-    if (spreadVnd > 0) {
+    if (
+      spreadVnd > 0 &&
+      (platformFilter === 'all' ||
+        cheapestOffer.platform.toLowerCase() === platformFilter ||
+        priciestOffer.platform.toLowerCase() === platformFilter)
+    ) {
       priceSpreadLeaders.push({
         id: `spread-${master.slug}`,
         productSlug: master.slug,
@@ -201,7 +230,10 @@ export function computeCrossPlatformDealRadarFromData(
     }
 
     const bestOffer = sortedByPrice.find(
-      (o) => Number(o.merchant?.risk_score ?? 10) <= 30
+      (o) =>
+        resolveEffectiveMerchantRisk(o.merchant, 10) <= 30 &&
+        (platformFilter === 'all' ||
+          o.platform.toLowerCase() === platformFilter)
     );
 
     if (bestOffer && bestOffer.price_current < marketMedianPrice) {
@@ -209,13 +241,14 @@ export function computeCrossPlatformDealRadarFromData(
       const savingsVsMedianPct = Number(
         ((savingsVsMedianVnd / marketMedianPrice) * 100).toFixed(1)
       );
+      const validBestOrig = normalizeOfferOriginalPrice(
+        bestOffer.price_current,
+        bestOffer.price_original
+      );
       const claimedDiscountPct =
-        bestOffer.price_original &&
-        bestOffer.price_original > bestOffer.price_current
+        validBestOrig && validBestOrig > bestOffer.price_current
           ? Math.round(
-              ((bestOffer.price_original - bestOffer.price_current) /
-                bestOffer.price_original) *
-                100
+              ((validBestOrig - bestOffer.price_current) / validBestOrig) * 100
             )
           : 0;
 
@@ -241,10 +274,10 @@ export function computeCrossPlatformDealRadarFromData(
         merchantId: bestOffer.merchant.id,
         merchantName: bestOffer.merchant.name,
         isOfficialMall: Boolean(bestOffer.merchant.is_official),
-        merchantRiskScore: Number(bestOffer.merchant.risk_score ?? 5),
+        merchantRiskScore: resolveEffectiveMerchantRisk(bestOffer.merchant, 5),
         offerUrl: bestOffer.url,
         priceCurrent: bestOffer.price_current,
-        priceOriginal: bestOffer.price_original,
+        priceOriginal: validBestOrig,
         marketMedianPrice,
         marketMinPrice,
         marketMaxPrice,
@@ -259,17 +292,24 @@ export function computeCrossPlatformDealRadarFromData(
 
     // 2. Identify fake-sale traps (inflated strikethrough original price)
     for (const off of validOffers) {
-      if (!off.price_original || off.price_original <= off.price_current) {
+      if (
+        platformFilter !== 'all' &&
+        off.platform.toLowerCase() !== platformFilter
+      ) {
+        continue;
+      }
+      const validOrig = normalizeOfferOriginalPrice(
+        off.price_current,
+        off.price_original
+      );
+      if (!validOrig || validOrig <= off.price_current) {
         continue;
       }
       const fakeMarkupPct = Number(
-        (
-          ((off.price_original - marketMedianPrice) / marketMedianPrice) *
-          100
-        ).toFixed(1)
+        (((validOrig - marketMedianPrice) / marketMedianPrice) * 100).toFixed(1)
       );
       const claimedDiscountPct = Math.round(
-        ((off.price_original - off.price_current) / off.price_original) * 100
+        ((validOrig - off.price_current) / validOrig) * 100
       );
 
       // Flag when original price is >= 11% above market median and current price is >= market median
@@ -288,10 +328,10 @@ export function computeCrossPlatformDealRadarFromData(
           merchantId: off.merchant.id,
           merchantName: off.merchant.name,
           isOfficialMall: Boolean(off.merchant.is_official),
-          merchantRiskScore: Number(off.merchant.risk_score ?? 15),
+          merchantRiskScore: resolveEffectiveMerchantRisk(off.merchant, 15),
           offerUrl: off.url,
           priceCurrent: off.price_current,
-          priceOriginal: off.price_original,
+          priceOriginal: validOrig,
           marketMedianPrice,
           marketMinPrice,
           marketMaxPrice,
@@ -305,7 +345,7 @@ export function computeCrossPlatformDealRadarFromData(
           claimedDiscountPct,
           fakeMarkupPct,
           jreviewsScore10,
-          explanationVi: `Gian hàng treo giá gốc gạch ngang ${off.price_original.toLocaleString('vi-VN')}₫ (cao hơn trung vị thị trường +${fakeMarkupPct}%) để tạo cảm giác giảm ${claimedDiscountPct}%, nhưng giá thực bán cao hơn đáy thị trường ${(off.price_current - marketMinPrice).toLocaleString('vi-VN')}₫.`,
+          explanationVi: `Gian hàng treo giá gốc gạch ngang ${validOrig.toLocaleString('vi-VN')}₫ (cao hơn trung vị thị trường +${fakeMarkupPct}%) để tạo cảm giác giảm ${claimedDiscountPct}%, nhưng giá thực bán cao hơn đáy thị trường ${(off.price_current - marketMinPrice).toLocaleString('vi-VN')}₫.`,
         });
         break;
       }
@@ -328,6 +368,7 @@ export function computeCrossPlatformDealRadarFromData(
   return {
     generatedAt: new Date().toISOString(),
     categoryFilter,
+    platformFilter,
     totalClustersAnalyzed,
     totalOffersAnalyzed,
     genuineDeals: genuineDeals.slice(0, limit),
@@ -355,13 +396,16 @@ export function computeProductRadarSignal(
 export const getCrossPlatformDealRadar = cache(
   async (options?: {
     categorySlug?: CanonicalCategorySlug | 'all';
+    platform?: string;
     limit?: number;
   }): Promise<CrossPlatformDealRadarResponse> => {
     const categorySlug = options?.categorySlug || 'all';
+    const platformFilter =
+      (options?.platform || 'all').trim().toLowerCase() || 'all';
     const limit = Math.max(1, Math.min(options?.limit || 12, 50));
 
     return withRateDataCache(
-      async (cat: CanonicalCategorySlug | 'all', lim: number) => {
+      async (cat: CanonicalCategorySlug | 'all', plat: string, lim: number) => {
         const masters = await getMasterProducts({
           categorySlug: cat === 'all' ? undefined : cat,
           limit: 36,
@@ -378,10 +422,16 @@ export const getCrossPlatformDealRadar = cache(
 
         return computeCrossPlatformDealRadarFromData(clusters, {
           categorySlug: cat,
+          platform: plat,
           limit: lim,
         });
       },
-      ['rate-cross-platform-deal-radar', categorySlug, String(limit)],
+      [
+        'rate-cross-platform-deal-radar',
+        categorySlug,
+        platformFilter,
+        String(limit),
+      ],
       {
         revalidate: 180,
         tags: [
@@ -391,6 +441,6 @@ export const getCrossPlatformDealRadar = cache(
           ...(categorySlug !== 'all' ? [categoryCacheTag(categorySlug)] : []),
         ],
       }
-    )(categorySlug, limit);
+    )(categorySlug, platformFilter, limit);
   }
 );

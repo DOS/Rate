@@ -4,6 +4,7 @@ import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { BsFunnel, BsStarFill } from 'react-icons/bs';
 import { Link, usePathname, useRouter } from '@/lib/navigation';
+import { startNavigationProgress } from '@/components/elementary/NavigationProgress';
 import RangeSlider from './range-slider';
 import {
   formatStorageLabel,
@@ -332,20 +333,19 @@ export default function ListSidebarOne({
                                   id={`cat-${cat.slug}`}
                                   checked={active}
                                   onChange={() => {
+                                    const href =
+                                      cat.slug === 'smartphones' ||
+                                      cat.slug === 'tablets' ||
+                                      cat.slug === 'laptops' ||
+                                      cat.slug === 'smartwatches' ||
+                                      cat.slug === 'earbuds'
+                                        ? `/${cat.slug}`
+                                        : `/smartphones?category=${encodeURIComponent(cat.slug)}`;
+                                    // Outside the transition: inside it the bar's
+                                    // update would wait for the navigation and never show.
+                                    startNavigationProgress(href);
                                     startTransition(() => {
-                                      if (
-                                        cat.slug === 'smartphones' ||
-                                        cat.slug === 'tablets' ||
-                                        cat.slug === 'laptops' ||
-                                        cat.slug === 'smartwatches' ||
-                                        cat.slug === 'earbuds'
-                                      ) {
-                                        router.push(`/${cat.slug}`);
-                                      } else {
-                                        router.push(
-                                          `/smartphones?category=${encodeURIComponent(cat.slug)}`
-                                        );
-                                      }
+                                      router.push(href);
                                     });
                                   }}
                                 />

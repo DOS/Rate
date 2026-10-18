@@ -1,4 +1,5 @@
 import 'server-only';
+import type { Database } from '@repo/shared-data';
 import {
   getMasterProductBySlug,
   getMasterProductCategorySlug,
@@ -9,7 +10,9 @@ import {
   getMasterProducts,
   getMerchantsList,
   getRateClient,
+  normalizeMasterProductRow,
   parseEcommerceUrlOrQuery,
+  RateDataUnavailableError,
   type CanonicalCategorySlug,
   type MasterProduct,
   type MasterProductPriceHistorySummary,
@@ -281,6 +284,59 @@ export function canonicalizeProductUrl(rawUrl?: string | null): string | null {
     return `${parsed.origin}${parsed.pathname}`;
   } catch {
     return null;
+  }
+}
+
+export function extractKeywordFromProductUrl(rawUrl?: string | null): string {
+  if (!rawUrl || typeof rawUrl !== 'string') return '';
+  try {
+    const parsed = new URL(rawUrl.trim());
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return '';
+    }
+    const rawSegments = decodeURIComponent(parsed.pathname)
+      .split('/')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const firstSegLower = (rawSegments[0] || '')
+      .replace(/\.html?$/i, '')
+      .toLowerCase();
+    if (
+      /^(?:tin-tuc|sforum|dchannel|hoi-dap|khuyen-mai|tra-gop|bao-hanh|he-thong-cua-hang|he-thong-sieu-thi|catalogsearch|tim-kiem|search|cart|gio-hang|account|login|blog|news|event|landing|collection|c|shop|opaanlp|video)$/.test(
+        firstSegLower
+      )
+    ) {
+      return '';
+    }
+    const decodedPath = decodeURIComponent(parsed.pathname)
+      .replace(/(?:\/|-)i\.\d+\.\d+$/i, '')
+      .replace(/\/(?:product|opaanlp)\/\d+\/\d+\/?$/i, '')
+      .replace(/\/(?:view\/)?product\/\d+\/?$/i, '')
+      .replace(/(?:\/|-)i\d+(?:-s\d+)?\.html$/i, '')
+      .replace(/(?:\/|-)p\d+\.html$/i, '')
+      .replace(/--s\d+(?:\.html?)?$/i, '')
+      .replace(/\.html?$/i, '')
+      .replace(
+        /^\/(?:products?|san-pham|dien-thoai|dien-thoai-di-dong|dtdd|may-tinh-bang|may-tinh-xach-tay|laptop|dong-ho-thong-minh|tai-nghe|smartphones|tablets|laptops|smartwatches|earbuds|apple|iphone|ipad|macbook|watch|airpods)\//i,
+        '/'
+      );
+    const segments = decodedPath.split('/').filter(Boolean);
+    const lastSeg = segments[segments.length - 1] || '';
+    const lastSegLower = lastSeg.toLowerCase();
+    if (
+      !lastSeg ||
+      /^\d+$/.test(lastSeg) ||
+      /^i\.\d+\.\d+$/i.test(lastSeg) ||
+      lastSeg.startsWith('@') ||
+      /^(?:dtdd|dien-thoai|dien-thoai-di-dong|mobile|smartphones|laptop|laptops|may-tinh-xach-tay|may-tinh-bang|tablet|tablets|dong-ho-thong-minh|smartwatch|smartwatches|tai-nghe|earbuds|phu-kien|apple|iphone|ipad|macbook|watch|airpods|search|tim-kiem|result|product|products|view)$/.test(
+        lastSegLower
+      )
+    ) {
+      return '';
+    }
+    return lastSeg.replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim();
+  } catch {
+    return '';
   }
 }
 
@@ -703,15 +759,18 @@ export async function lookupExtensionProduct(
       ? Math.round(params.originalPrice)
       : null;
 
+  const urlKeyword = extractKeywordFromProductUrl(canonicalUrl || params.url);
+  const effectiveTitle = (params.title || '').trim() || urlKeyword;
+
   // Step 1: Accessory / Junk Gatekeeper
   const gatekeeper = detectAccessoryOrJunk({
-    title: params.title,
+    title: effectiveTitle,
     price: observedPrice,
   });
 
   const { storageGb, hasMultipleStorageInTitle, cleanModelSearchQuery } =
     extractStorageAndAmbiguity({
-      title: params.title,
+      title: effectiveTitle,
       selectedVariant: params.selectedVariant,
     });
 
@@ -758,8 +817,10 @@ export async function lookupExtensionProduct(
     : null;
   const rawExternalId =
     (params.externalId || '').trim() || parsedFromUrl?.platformItemId || null;
+  const effectiveShopId =
+    (params.shopId || '').trim() || parsedFromUrl?.platformShopId || null;
 
-  // Normalize externalId (handle both `shopId_itemId` and raw `itemId`)
+  // Normalize externalId (handle both `shopId_itemId`, platform prefixes, and raw `itemId`)
   const candidateItemIds = new Set<string>();
   if (rawExternalId) {
     candidateItemIds.add(rawExternalId);
@@ -767,33 +828,88 @@ export async function lookupExtensionProduct(
       const parts = rawExternalId.split('_');
       if (parts[1]) candidateItemIds.add(parts[1]);
     }
-    if (params.shopId && !rawExternalId.includes('_')) {
-      candidateItemIds.add(`${params.shopId}_${rawExternalId}`);
+    if (effectiveShopId && !rawExternalId.includes('_')) {
+      candidateItemIds.add(`${effectiveShopId}_${rawExternalId}`);
+    }
+    const prefixMap: Partial<Record<SupportedEcommercePlatform, string>> = {
+      tiktok: 'tts-',
+      cellphones: 'cps-',
+      tgdd: 'tgdd-',
+      fptshop: 'fpt-',
+      hoangha: 'hhm-',
+      didongviet: 'ddv-',
+      phongvu: 'pv-',
+    };
+    const prefix = platform ? prefixMap[platform] : undefined;
+    if (prefix && !rawExternalId.startsWith(prefix)) {
+      candidateItemIds.add(`${prefix}${rawExternalId}`);
     }
   }
 
   // Step 3: Search candidate Master Products in DB (Read-Only)
-  const searchKeyword =
-    cleanModelSearchQuery || params.title || canonicalUrl || '';
-  const [catalogCandidates, merchantsList] = await Promise.all([
-    searchKeyword
-      ? getMasterProducts({ search: searchKeyword, limit: 8 })
-      : getMasterProducts({ limit: 6 }),
-    getMerchantsList(),
-  ]);
+  const searchKeyword = cleanModelSearchQuery || effectiveTitle || '';
+  const catalogCandidates = searchKeyword
+    ? await getMasterProducts({ search: searchKeyword, limit: 8 })
+    : [];
 
   let matchedMaster: MasterProduct | null = null;
   let matchStatus: ExtensionMatchStatus = 'not_found';
 
   // Try matching via URL / externalId inspection if available
-  if (canonicalUrl || rawExternalId) {
-    const queryStr = canonicalUrl || rawExternalId || '';
-    const parsed = parseEcommerceUrlOrQuery(queryStr);
-    if (parsed.internalSlug) {
-      const bySlug = await getMasterProductBySlug(parsed.internalSlug);
-      if (bySlug) {
-        matchedMaster = bySlug;
-        matchStatus = 'canonical_model';
+  const internalSlugCandidate =
+    parsedFromUrl?.internalSlug ||
+    (rawExternalId
+      ? parseEcommerceUrlOrQuery(rawExternalId).internalSlug
+      : null);
+  if (internalSlugCandidate) {
+    const bySlug = await getMasterProductBySlug(internalSlugCandidate);
+    if (bySlug) {
+      matchedMaster = bySlug;
+      matchStatus = 'canonical_model';
+    }
+  }
+
+  if (!matchedMaster && candidateItemIds.size > 0) {
+    const client = getRateClient();
+    if (client) {
+      const { data: prodRows, error: prodErr } = await client
+        .from('products')
+        .select('cluster_id, platform_item_id')
+        .in('platform_item_id', Array.from(candidateItemIds))
+        .not('cluster_id', 'is', null)
+        .limit(5);
+      if (prodErr) {
+        log.error('extension_lookup_products_failed', {
+          candidateItemIds: Array.from(candidateItemIds),
+          message: prodErr.message,
+          code: prodErr.code,
+        });
+        throw new RateDataUnavailableError('products', prodErr);
+      }
+      const matchedProd = (
+        (prodRows || []) as Array<{
+          cluster_id: string | null;
+          platform_item_id: string;
+        }>
+      ).find((r) => Boolean(r.cluster_id));
+      if (matchedProd?.cluster_id) {
+        const { data: masterRow, error: masterErr } = await client
+          .from('master_products')
+          .select('*')
+          .eq('id', matchedProd.cluster_id)
+          .maybeSingle();
+        if (masterErr) {
+          log.error('extension_lookup_master_failed', {
+            clusterId: matchedProd.cluster_id,
+            message: masterErr.message,
+            code: masterErr.code,
+          });
+          throw new RateDataUnavailableError('master_products', masterErr);
+        }
+        if (masterRow) {
+          matchedMaster = normalizeMasterProductRow(masterRow as MasterProduct);
+          matchStatus = 'exact_listing';
+        }
       }
     }
   }
@@ -954,8 +1070,10 @@ export async function lookupExtensionProduct(
         .slice(0, 4)
     : offers.slice(0, 4);
 
+  // Only the matched offer's merchant: this public endpoint used to read the
+  // whole merchant directory on every lookup.
   const merchantProfile = matchedOffer
-    ? merchantsList.find((m) => m.id === matchedOffer.merchant.id) || null
+    ? ((await getMerchantsList({ ids: [matchedOffer.merchant.id] }))[0] ?? null)
     : null;
   const radarSignal = computeProductRadarSignal(matchedMaster, offers);
 
@@ -989,10 +1107,14 @@ export async function lookupExtensionProduct(
   };
 }
 
+type CrowdVerifySignalArgs =
+  Database['rate']['Functions']['enqueue_crowd_verify_signal']['Args'];
+
+/** The one RPC the ingest path calls; tests inject a fake with this shape. */
 export interface CrowdIngestRpcClient {
   rpc: (
-    fn: string,
-    args: Record<string, unknown>
+    fn: 'enqueue_crowd_verify_signal',
+    args: CrowdVerifySignalArgs
   ) => PromiseLike<{
     data: unknown;
     error: { message?: string; code?: string } | null;
@@ -1058,13 +1180,15 @@ export async function ingestExtensionCrowdSignal(
   }
 
   const urlPlatform = detectPlatformFromInput(null, canonicalUrl);
-  if (urlPlatform !== input.platform) {
+  const parsedProductUrl = parseEcommerceUrlOrQuery(canonicalUrl);
+  if (urlPlatform !== input.platform || !parsedProductUrl.platformItemId) {
     return {
       accepted: false,
       quarantinedForWorker: false,
       jobState: 'rejected_invalid_url',
       jobId: null,
-      reason: 'URL sản phẩm không khớp với tên miền của sàn TMĐT đã khai báo.',
+      reason:
+        'URL sản phẩm không khớp với định dạng trang chi tiết sản phẩm của sàn TMĐT đã khai báo.',
     };
   }
 
@@ -1113,25 +1237,31 @@ export async function ingestExtensionCrowdSignal(
           'Đã ghi nhận tín hiệu ở chế độ cách ly (Quarantine Dry-Run) - chờ Worker xác minh độc lập.',
       };
     }
-    rpcClient = getRateClient() as unknown as CrowdIngestRpcClient;
+    rpcClient = getRateClient();
   }
 
   const normalizedItemId = input.externalShopId
     ? `${input.externalShopId}_${input.externalItemId}`
     : input.externalItemId;
+  const validOriginalPrice =
+    typeof input.originalPrice === 'number' &&
+    Number.isFinite(input.originalPrice) &&
+    input.originalPrice >= input.price
+      ? input.originalPrice
+      : null;
 
   const { data, error } = await rpcClient.rpc('enqueue_crowd_verify_signal', {
     p_platform: input.platform,
     p_target_url: canonicalUrl,
     p_platform_item_id: normalizedItemId,
-    p_platform_shop_id: input.externalShopId || null,
+    p_platform_shop_id: input.externalShopId || undefined,
     p_payload: {
       source: 'extension_mv3_quarantine',
       canonical_url: canonicalUrl,
       observed_title: input.title.slice(0, 280),
       selected_variant: input.selectedVariant?.slice(0, 120) || null,
       observed_price: input.price,
-      observed_original_price: input.originalPrice || null,
+      observed_original_price: validOriginalPrice,
       observed_rating_star: input.ratingStar || null,
       observed_rating_count: input.ratingCount || null,
       submitted_at: new Date().toISOString(),

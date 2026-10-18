@@ -128,6 +128,8 @@ playwright-report/
 *.env.*
 *.sql
 !supabase/migrations/*.sql
+# Reviewed E2E fixture: synthetic catalog rows only, no credentials.
+!apps/web/e2e/seed.sql
 * - Copy*
 * - Bản sao*
 *.dump

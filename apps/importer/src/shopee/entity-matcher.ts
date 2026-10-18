@@ -186,7 +186,9 @@ export class EntityMatcher {
   public async enrichMasterProductById(masterId: string): Promise<boolean> {
     const { data: row, error: fetchErr } = await this.supabase
       .from('master_products')
-      .select('id, brand, model, storage_gb, ram_gb, name, description, colors')
+      .select(
+        'id, brand, model, storage_gb, ram_gb, screen_size_inch, battery_mah, has_5g, name, description, colors'
+      )
       .eq('id', masterId)
       .maybeSingle();
 
@@ -207,18 +209,29 @@ export class EntityMatcher {
       return false;
     }
 
-    if (Array.isArray(row.colors) && row.colors.length > 0 && aiResult.specifications.design) {
-      aiResult.specifications.design.colors = row.colors;
-    }
+    const mergedSpecifications = {
+      ...aiResult.specifications,
+      ...(aiResult.specifications.design
+        ? {
+            design: {
+              ...aiResult.specifications.design,
+              ...(Array.isArray(row.colors) && row.colors.length > 0
+                ? { colors: [...row.colors] }
+                : {}),
+            },
+          }
+        : {}),
+    };
 
     const { error: updateErr } = await this.supabase
       .from('master_products')
       .update({
         ram_gb: row.ram_gb ?? aiResult.ram_gb,
-        screen_size_inch: aiResult.screen_size_inch,
-        battery_mah: aiResult.battery_mah,
-        has_5g: aiResult.has_5g,
-        specifications: aiResult.specifications,
+        storage_gb: row.storage_gb ?? aiResult.storage_gb,
+        screen_size_inch: row.screen_size_inch ?? aiResult.screen_size_inch,
+        battery_mah: row.battery_mah ?? aiResult.battery_mah,
+        has_5g: row.has_5g ? true : (aiResult.has_5g ?? row.has_5g),
+        specifications: mergedSpecifications,
         key_specs: aiResult.key_specs,
         updated_at: new Date().toISOString(),
       })

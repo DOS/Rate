@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCachedMerchantProfileById } from '@/server/rate';
-import { jsonApiError } from '@/server/rate/api-handler';
-
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-};
+import {
+  PUBLIC_API_CORS_HEADERS,
+  jsonApiError,
+} from '@/server/rate/api-handler';
 
 export async function OPTIONS() {
-  return new NextResponse(null, { status: 204, headers: CORS_HEADERS });
+  return new NextResponse(null, {
+    status: 204,
+    headers: PUBLIC_API_CORS_HEADERS,
+  });
 }
 
 type RouteContext = {
@@ -30,7 +30,12 @@ export async function GET(_request: NextRequest, context: RouteContext) {
       cleanId.length > 120 ||
       !/^[a-zA-Z0-9._-]+$/.test(cleanId)
     ) {
-      return jsonApiError(400, 'Invalid merchant identifier', undefined, CORS_HEADERS);
+      return jsonApiError(
+        400,
+        'Invalid merchant identifier',
+        undefined,
+        PUBLIC_API_CORS_HEADERS
+      );
     }
 
     const profile = await getCachedMerchantProfileById(cleanId);
@@ -42,7 +47,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
           error: 'Merchant not found',
           code: 'NOT_FOUND',
         },
-        { status: 404, headers: CORS_HEADERS }
+        { status: 404, headers: PUBLIC_API_CORS_HEADERS }
       );
     }
 
@@ -54,7 +59,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
       {
         status: 200,
         headers: {
-          ...CORS_HEADERS,
+          ...PUBLIC_API_CORS_HEADERS,
           'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300',
         },
       }
@@ -64,7 +69,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
       500,
       'Failed to fetch merchant profile',
       error,
-      CORS_HEADERS
+      PUBLIC_API_CORS_HEADERS
     );
   }
 }

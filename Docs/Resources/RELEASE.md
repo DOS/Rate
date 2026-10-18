@@ -18,7 +18,7 @@ This is the release workflow for `rate.vn`. It follows the same model as DOS/DOS
    List the PRs being released in the body.
 4. Wait for the required checks on the promotion PR: `Typecheck & Build Monorepo`, `PR into main comes from dev`, `main must not lead dev`.
 5. Merge with a merge commit: `gh pr merge <number> --repo DOS/Rate --merge`. **Never squash or rebase a promotion.** Squashing creates a commit on `main` that can never exist on `dev`, and the next promotion then diffs from a stale merge base.
-6. Vercel builds `main` and assigns `rate.vn`. Verify the live revision (the deployment's Git SHA equals `main`), `/api/health`, the main routes and a browser check before calling the release done.
+6. Vercel builds `main` and assigns `rate.vn`. Verify the live revision (the deployment's Git SHA equals `main`), `/api/health`, the main routes and a browser check before calling the release done. To check a build before it takes traffic, create it from Git with `autoAssignCustomDomains: false` (Vercel API `POST /v13/deployments` with `gitSource` ref `main` and `target: "production"`), verify it with `vercel curl --deployment <id>`, then `vercel promote <id>`. Promoting an existing production deployment does not rebuild.
 
 ## Hotfix
 
@@ -47,7 +47,7 @@ This is the release workflow for `rate.vn`. It follows the same model as DOS/DOS
 
 The build guard is a guardrail against mistakes, not a security boundary. Anyone with production deploy rights on the Vercel project can get past it, for example with `--build-env` values that imitate a Git build or by uploading an edited `vercel.json`. Doing that breaks the rule above. The only hard limit is Vercel RBAC: a Developer role without the "Full Production Deployment" permission can reach production only by merging to `main`. Whether the `metados` team's plan offers that control has not been verified yet.
 
-The first Git-integration build after the project is connected to GitHub must be checked: its log must show `[production-guard] ... git=github:DOS/Rate@<branch>`. If Vercel does not expose those variables, production builds of `main` fail. The live site keeps serving the previous deployment, and the guard needs fixing before the next promotion.
+The Vercel project `metados/rate` is connected to GitHub `DOS/Rate` with production branch `main`; every other branch builds as a Preview. The guard was verified on real Git builds: a `dev` Preview logged `git=github:DOS/Rate@dev -> preview build` and the `main` production build logged `git=github:DOS/Rate@main -> production build from DOS/Rate main`. If a future build logs empty Git variables, production builds of `main` fail and the live site keeps serving the previous deployment; fix the guard before the next promotion.
 
 ## Rollback
 

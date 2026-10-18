@@ -1,5 +1,15 @@
 import {
   z,
+  AvailabilitySchema,
+  DesignSchema,
+  DisplaySchema,
+  HardwareSchema,
+  BatterySchema,
+  CameraSchema,
+  ConnectivitySchema,
+  CellularSchema,
+  MultimediaSchema,
+  RegulatorySchema,
   ProductSpecificationsSchema,
   KeySpecsSchema,
   type ProductSpecifications,
@@ -88,15 +98,27 @@ const PROVIDER_DEFAULTS: Record<
 };
 
 function toNumberOrUndefined(val: unknown): number | undefined {
-  if (typeof val === 'number' && !Number.isNaN(val)) return val;
+  if (typeof val === 'number' && Number.isFinite(val)) return val;
   if (typeof val === 'string') {
     const match = val.replace(',', '.').match(/(\d+(?:\.\d+)?)/);
     if (match) {
       const parsed = parseFloat(match[1]);
-      if (!Number.isNaN(parsed)) return parsed;
+      if (Number.isFinite(parsed)) return parsed;
     }
   }
   return undefined;
+}
+
+function toBoundedNumberOrUndefined(
+  val: unknown,
+  max: number,
+  allowZero = false
+): number | undefined {
+  const num = toNumberOrUndefined(val);
+  if (num === undefined) return undefined;
+  const minOk = allowZero ? num >= 0 : num > 0;
+  if (!minOk || num > max) return undefined;
+  return num;
 }
 
 function toBooleanOrUndefined(val: unknown): boolean | undefined {
@@ -122,26 +144,41 @@ function asRecord(val: unknown): Record<string, unknown> | undefined {
 }
 
 /**
- * Coerces raw LLM JSON output into strict types matching ProductSpecificationsSchema
+ * Extracts the outermost JSON object substring (`{...}`) in O(n) without regex backtracking.
+ */
+export function extractJsonObjectString(rawContent: string): string {
+  const trimmed = rawContent.trim();
+  const firstBrace = trimmed.indexOf('{');
+  const lastBrace = trimmed.lastIndexOf('}');
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    return trimmed.slice(firstBrace, lastBrace + 1);
+  }
+  return trimmed;
+}
+
+/**
+ * Coerces raw LLM JSON output into strict types matching ProductSpecificationsSchema.
+ * Validates each of the 10 Field Groups independently so an invalid field in one group
+ * never discards the remaining valid specification groups.
  */
 export function sanitizeSpecifications(raw: unknown): ProductSpecifications {
   const root = asRecord(raw);
   if (!root) return {};
 
   const rawAvailability = asRecord(root.availability);
-  const availability = rawAvailability
-    ? {
+  const availabilityParsed = rawAvailability
+    ? AvailabilitySchema.safeParse({
         announced: toStringOrUndefined(rawAvailability.announced),
         status: toStringOrUndefined(rawAvailability.status),
         prices_msrp: toStringOrUndefined(rawAvailability.prices_msrp),
-      }
+      })
     : undefined;
 
   const rawDesign = asRecord(root.design);
-  const design = rawDesign
-    ? {
+  const designParsed = rawDesign
+    ? DesignSchema.safeParse({
         dimensions: toStringOrUndefined(rawDesign.dimensions),
-        weight_g: toNumberOrUndefined(rawDesign.weight_g),
+        weight_g: toBoundedNumberOrUndefined(rawDesign.weight_g, 25000),
         materials: toStringOrUndefined(rawDesign.materials),
         build: toStringOrUndefined(rawDesign.build),
         resistance: toStringOrUndefined(rawDesign.resistance),
@@ -150,53 +187,53 @@ export function sanitizeSpecifications(raw: unknown): ProductSpecifications {
         colors: Array.isArray(rawDesign.colors)
           ? rawDesign.colors.map((c: unknown) => String(c).trim()).filter(Boolean)
           : undefined,
-      }
+      })
     : undefined;
 
   const rawDisplay = asRecord(root.display);
-  const display = rawDisplay
-    ? {
-        size_inch: toNumberOrUndefined(rawDisplay.size_inch),
+  const displayParsed = rawDisplay
+    ? DisplaySchema.safeParse({
+        size_inch: toBoundedNumberOrUndefined(rawDisplay.size_inch, 120),
         type: toStringOrUndefined(rawDisplay.type),
         resolution: toStringOrUndefined(rawDisplay.resolution),
-        refresh_rate_hz: toNumberOrUndefined(rawDisplay.refresh_rate_hz),
-        ppi: toNumberOrUndefined(rawDisplay.ppi),
+        refresh_rate_hz: toBoundedNumberOrUndefined(rawDisplay.refresh_rate_hz, 1000),
+        ppi: toBoundedNumberOrUndefined(rawDisplay.ppi, 5000),
         protection: toStringOrUndefined(rawDisplay.protection),
         features: toStringOrUndefined(rawDisplay.features),
-      }
+      })
     : undefined;
 
   const rawHardware = asRecord(root.hardware);
-  const hardware = rawHardware
-    ? {
+  const hardwareParsed = rawHardware
+    ? HardwareSchema.safeParse({
         chipset: toStringOrUndefined(rawHardware.chipset),
         cpu: toStringOrUndefined(rawHardware.cpu),
         gpu: toStringOrUndefined(rawHardware.gpu),
-        ram_gb: toNumberOrUndefined(rawHardware.ram_gb),
-        storage_gb: toNumberOrUndefined(rawHardware.storage_gb),
+        ram_gb: toBoundedNumberOrUndefined(rawHardware.ram_gb, 2048),
+        storage_gb: toBoundedNumberOrUndefined(rawHardware.storage_gb, 65536),
         storage_expansion: toStringOrUndefined(rawHardware.storage_expansion),
         os: toStringOrUndefined(rawHardware.os),
-      }
+      })
     : undefined;
 
   const rawBattery = asRecord(root.battery);
-  const battery = rawBattery
-    ? {
-        capacity_mah: toNumberOrUndefined(rawBattery.capacity_mah),
+  const batteryParsed = rawBattery
+    ? BatterySchema.safeParse({
+        capacity_mah: toBoundedNumberOrUndefined(rawBattery.capacity_mah, 500000),
         type: toStringOrUndefined(rawBattery.type),
         charging: toStringOrUndefined(rawBattery.charging),
-        fast_charging_w: toNumberOrUndefined(rawBattery.fast_charging_w),
+        fast_charging_w: toBoundedNumberOrUndefined(rawBattery.fast_charging_w, 1000, true),
         reverse_charging:
           typeof rawBattery.reverse_charging === 'boolean' ||
           typeof rawBattery.reverse_charging === 'string'
             ? rawBattery.reverse_charging
             : undefined,
-      }
+      })
     : undefined;
 
   const rawCamera = asRecord(root.camera);
-  const camera = rawCamera
-    ? {
+  const cameraParsed = rawCamera
+    ? CameraSchema.safeParse({
         rear_setup: toStringOrUndefined(rawCamera.rear_setup),
         main_camera: toStringOrUndefined(rawCamera.main_camera),
         second_camera: toStringOrUndefined(rawCamera.second_camera),
@@ -205,12 +242,12 @@ export function sanitizeSpecifications(raw: unknown): ProductSpecifications {
         flash: toStringOrUndefined(rawCamera.flash),
         video_recording: toStringOrUndefined(rawCamera.video_recording),
         front_camera: toStringOrUndefined(rawCamera.front_camera),
-      }
+      })
     : undefined;
 
   const rawConnectivity = asRecord(root.connectivity);
-  const connectivity = rawConnectivity
-    ? {
+  const connectivityParsed = rawConnectivity
+    ? ConnectivitySchema.safeParse({
         bluetooth: toStringOrUndefined(rawConnectivity.bluetooth),
         wlan: toStringOrUndefined(rawConnectivity.wlan),
         usb: toStringOrUndefined(rawConnectivity.usb),
@@ -218,12 +255,12 @@ export function sanitizeSpecifications(raw: unknown): ProductSpecifications {
         location: toStringOrUndefined(rawConnectivity.location),
         nfc: toBooleanOrUndefined(rawConnectivity.nfc),
         other: toStringOrUndefined(rawConnectivity.other),
-      }
+      })
     : undefined;
 
   const rawCellular = asRecord(root.cellular);
-  const cellular = rawCellular
-    ? {
+  const cellularParsed = rawCellular
+    ? CellularSchema.safeParse({
         has_5g: toBooleanOrUndefined(rawCellular.has_5g),
         bands_5g: toStringOrUndefined(rawCellular.bands_5g),
         bands_4g: toStringOrUndefined(rawCellular.bands_4g),
@@ -234,40 +271,40 @@ export function sanitizeSpecifications(raw: unknown): ProductSpecifications {
         sim_type: toStringOrUndefined(rawCellular.sim_type),
         volte: toBooleanOrUndefined(rawCellular.volte),
         vowifi: toBooleanOrUndefined(rawCellular.vowifi),
-      }
+      })
     : undefined;
 
   const rawMultimedia = asRecord(root.multimedia);
-  const multimedia = rawMultimedia
-    ? {
+  const multimediaParsed = rawMultimedia
+    ? MultimediaSchema.safeParse({
         loudspeaker: toStringOrUndefined(rawMultimedia.loudspeaker),
         headphone_jack_35mm: toBooleanOrUndefined(rawMultimedia.headphone_jack_35mm),
         audio_features: toStringOrUndefined(rawMultimedia.audio_features),
-      }
+      })
     : undefined;
 
   const rawRegulatory = asRecord(root.regulatory);
-  const regulatory = rawRegulatory
-    ? {
+  const regulatoryParsed = rawRegulatory
+    ? RegulatorySchema.safeParse({
         fcc_approval: toStringOrUndefined(rawRegulatory.fcc_approval),
         sar_head: toStringOrUndefined(rawRegulatory.sar_head),
         sar_body: toStringOrUndefined(rawRegulatory.sar_body),
         sar_simultaneous: toStringOrUndefined(rawRegulatory.sar_simultaneous),
         certifications: toStringOrUndefined(rawRegulatory.certifications),
-      }
+      })
     : undefined;
 
   const candidateSpecs: ProductSpecifications = {
-    availability,
-    design,
-    display,
-    hardware,
-    battery,
-    camera,
-    connectivity,
-    cellular,
-    multimedia,
-    regulatory,
+    availability: availabilityParsed?.success ? availabilityParsed.data : undefined,
+    design: designParsed?.success ? designParsed.data : undefined,
+    display: displayParsed?.success ? displayParsed.data : undefined,
+    hardware: hardwareParsed?.success ? hardwareParsed.data : undefined,
+    battery: batteryParsed?.success ? batteryParsed.data : undefined,
+    camera: cameraParsed?.success ? cameraParsed.data : undefined,
+    connectivity: connectivityParsed?.success ? connectivityParsed.data : undefined,
+    cellular: cellularParsed?.success ? cellularParsed.data : undefined,
+    multimedia: multimediaParsed?.success ? multimediaParsed.data : undefined,
+    regulatory: regulatoryParsed?.success ? regulatoryParsed.data : undefined,
   };
 
   const parsed = ProductSpecificationsSchema.safeParse(candidateSpecs);
@@ -522,7 +559,7 @@ REQUIRED JSON SCHEMA:
       return null;
     }
 
-    const cacheKey = `${params.brand.toLowerCase()}:${params.model.toLowerCase()}:${params.storageGb || 'default'}`;
+    const cacheKey = `${params.brand.toLowerCase()}:${params.model.toLowerCase()}:${params.storageGb || 'default'}:${params.ramGb || 'default'}`;
     const cached = this.memoryCache.get(cacheKey);
     if (cached) {
       logger.info('spec_enrich.cache_hit', `Cache hit for "${cacheKey}"`, {
@@ -539,9 +576,6 @@ REQUIRED JSON SCHEMA:
       params.rawTitle,
       params.rawDescription
     );
-
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
 
     try {
       logger.info(
@@ -618,34 +652,31 @@ REQUIRED JSON SCHEMA:
         return null;
       }
 
-      const cleanedJson = rawContent
-        .trim()
-        .replace(/^```(?:json)?\s*/i, '')
-        .replace(/\s*```$/i, '')
-        .trim();
-
+      const cleanedJson = extractJsonObjectString(rawContent);
       const parsedJson = JSON.parse(cleanedJson);
       const specifications = sanitizeSpecifications(parsedJson.specifications || parsedJson);
 
       const ramGb =
         params.ramGb ??
-        toNumberOrUndefined(parsedJson.ram_gb) ??
+        toBoundedNumberOrUndefined(parsedJson.ram_gb, 2048) ??
         specifications.hardware?.ram_gb ??
         null;
 
       const storageGb =
         params.storageGb ??
-        toNumberOrUndefined(parsedJson.storage_gb) ??
+        toBoundedNumberOrUndefined(parsedJson.storage_gb, 65536) ??
         specifications.hardware?.storage_gb ??
         null;
 
       const screenSizeInch =
-        toNumberOrUndefined(parsedJson.screen_size_inch) ??
+        toBoundedNumberOrUndefined(parsedJson.screen_size_inch, 120) ??
         specifications.display?.size_inch ??
         null;
 
       const batteryMah =
-        toNumberOrUndefined(parsedJson.battery_mah) ?? specifications.battery?.capacity_mah ?? null;
+        toBoundedNumberOrUndefined(parsedJson.battery_mah, 500000) ??
+        specifications.battery?.capacity_mah ??
+        null;
 
       const has5g = toBooleanOrUndefined(parsedJson.has_5g) ?? specifications.cellular?.has_5g;
 
@@ -715,13 +746,11 @@ REQUIRED JSON SCHEMA:
         { brand: params.brand, deviceModel: params.model }
       );
       return null;
-    } finally {
-      clearTimeout(timer);
     }
   }
 
   /**
-   * Enriches a NormalizedProductCandidate in-place (and returns it) if it wasn't already
+   * Enriches a NormalizedProductCandidate (and returns a new object) if it wasn't already
    * enriched by the canonical benchmark registry.
    */
   public async enrichCandidate(
@@ -748,10 +777,18 @@ REQUIRED JSON SCHEMA:
       return candidate;
     }
 
-    // Merge colors from crawled variations if available
-    if (candidate.colors.length > 0 && aiResult.specifications.design) {
-      aiResult.specifications.design.colors = candidate.colors;
-    }
+    // Clone specifications so merging crawled candidate colors never mutates the cached aiResult
+    const mergedSpecifications: ProductSpecifications = {
+      ...aiResult.specifications,
+      ...(aiResult.specifications.design
+        ? {
+            design: {
+              ...aiResult.specifications.design,
+              ...(candidate.colors.length > 0 ? { colors: [...candidate.colors] } : {}),
+            },
+          }
+        : {}),
+    };
 
     return {
       ...candidate,
@@ -759,7 +796,7 @@ REQUIRED JSON SCHEMA:
       screen_size_inch: aiResult.screen_size_inch ?? candidate.screen_size_inch,
       battery_mah: aiResult.battery_mah ?? candidate.battery_mah,
       has_5g: aiResult.has_5g ?? candidate.has_5g,
-      specifications: aiResult.specifications,
+      specifications: mergedSpecifications,
       key_specs: {
         ...candidate.key_specs,
         ...aiResult.key_specs,

@@ -1,0 +1,29 @@
+.bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 2000;
+  height: 3px;
+  width: 0;
+  background: var(--bs-danger, #dc3545);
+  box-shadow: 0 0 6px var(--bs-danger, #dc3545);
+  pointer-events: none;
+  animation: grow 8s cubic-bezier(0.1, 0.8, 0.2, 1) forwards;
+}
+
+@keyframes grow {
+  from {
+    width: 0;
+  }
+  to {
+    width: 90%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bar {
+    animation: none;
+    width: 100%;
+    opacity: 0.6;
+  }
+}

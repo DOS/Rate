@@ -21,7 +21,9 @@ import {
   resolveProductImageUrl,
   getRateClient,
   computeJReviewsWeight,
+  filterAndSortMerchants,
   type MasterProductFilterParams,
+  type MerchantListFilterParams,
 } from '../../lib/rate-api';
 
 export type {
@@ -30,6 +32,7 @@ export type {
   DiscountVerdictType,
   MasterProductFilterParams,
   MasterProductPriceHistorySummary,
+  MerchantListFilterParams,
   MerchantOffer,
   MerchantProductListing,
   MerchantProfileDetail,
@@ -49,6 +52,7 @@ export type {
 export {
   getRateClient,
   computeJReviewsWeight,
+  filterAndSortMerchants,
   parseEcommerceUrlOrQuery,
   getCategoryRouteHref,
   getMasterProductCategorySlug,
@@ -214,12 +218,25 @@ async function inspectProductOrShopUrlWithRadar(rawQuery: string) {
   };
 }
 
-export const getCachedMerchantsList = cache(() =>
-  withRateDataCache(_getMerchantsList, ['rate-merchants-list'], {
+const _fetchMerchantsListDataCache = withRateDataCache(
+  async (serializedParams: string) => {
+    const parsed = JSON.parse(serializedParams) as MerchantListFilterParams;
+    return _getMerchantsList(parsed);
+  },
+  ['rate-merchants-list'],
+  {
     revalidate: 600,
     tags: [RATE_CACHE_TAGS.MERCHANTS],
-  })()
+  }
 );
+
+const _getCachedMerchantsListByKey = cache((serializedParams: string) =>
+  _fetchMerchantsListDataCache(serializedParams)
+);
+
+export function getCachedMerchantsList(params?: MerchantListFilterParams) {
+  return _getCachedMerchantsListByKey(JSON.stringify(params ?? {}));
+}
 
 export const getCachedMerchantProfileById = cache((merchantId: string) =>
   withRateDataCache(

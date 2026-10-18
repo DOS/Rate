@@ -5,6 +5,7 @@ import {
   stringFromBase64URL,
 } from '@supabase/ssr';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import type { Database } from '@repo/shared-data';
 import {
   hasSupabaseAuthCookie,
   type CookieRecord,
@@ -13,7 +14,9 @@ import { createLogger } from '@/lib/logger';
 
 const log = createLogger('server.rpc');
 
-type RateSchemaClient = ReturnType<SupabaseClient['schema']>;
+const rateSchemaOf = (client: SupabaseClient<Database>) =>
+  client.schema('rate');
+type RateSchemaClient = ReturnType<typeof rateSchemaOf>;
 
 export interface AuthenticatedRateRequest {
   ok: true;
@@ -135,7 +138,7 @@ async function authenticateAccessToken(
   supabaseUrl: string,
   anonKey: string
 ): Promise<AuthenticatedRateRequest | RejectedRateRequest> {
-  const baseClient = createClient(supabaseUrl, anonKey, {
+  const baseClient = createClient<Database>(supabaseUrl, anonKey, {
     auth: { persistSession: false, autoRefreshToken: false },
     global: { headers: { Authorization: `Bearer ${token}` } },
   });
@@ -159,7 +162,7 @@ async function authenticateAccessToken(
     ok: true,
     userId: user.id,
     email: user.email ?? null,
-    rateClient: baseClient.schema('rate'),
+    rateClient: rateSchemaOf(baseClient),
   };
 }
 

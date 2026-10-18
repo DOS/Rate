@@ -411,7 +411,8 @@
     "showdownsEyebrow": "Kèo Đối Đầu 1v1 Từ Bảng Xếp Hạng",
     "showdownsHeading": "So Kè Trực Tiếp Các Thiết Bị Dẫn Đầu Cùng Danh Mục",
     "openCompareMatrixBtn": "Mở Bàn Cân Đa Chiều →",
-    "view1v1DeepBtn": "Xem Đối Đầu 1v1 Chuyên Sâu"
+    "view1v1DeepBtn": "Xem Đối Đầu 1v1 Chuyên Sâu",
+    "categoryTabsAria": "Chọn ngành hàng"
   },
   "reviews": {
     "criteriaScreen": "Màn hình & Hiển thị",
@@ -523,7 +524,8 @@
     "upvoteBtnLabel": "👍 Hữu ích ({count})",
     "downvoteTitle": "Vote Không hữu ích - giảm trọng số của đánh giá này",
     "reportTitle": "Báo cáo đánh giá Seeding / Spam / Chơi xấu (-0.35 trọng số mỗi báo cáo)",
-    "reportBtnLabel": "🚩 Báo cáo ({count})"
+    "reportBtnLabel": "🚩 Báo cáo ({count})",
+    "filterGroupAria": "Lọc đánh giá"
   },
   "watchlist": {
     "metaTitle": "Danh Sách Canh Giá Thật & Cảnh Báo Giảm Giá Đa Ngành | Rate.vn",
@@ -1600,7 +1602,9 @@
       "applyFiltersBtn": "Áp dụng bộ lọc",
       "clearAllFiltersBtn": "Xóa tất cả bộ lọc",
       "rangeFrom": "Từ:",
-      "rangeTo": "Đến:"
+      "rangeTo": "Đến:",
+      "minPriceAria": "Giá tối thiểu",
+      "maxPriceAria": "Giá tối đa"
     }
   },
   "heroSearch": {

@@ -1,20 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
+  computeProductRadarSignal,
   getCachedCompareMasterProducts,
-  getCrossPlatformDealRadar,
   getMasterProductCategorySlug,
+  getMasterProductOffersBatch,
 } from '@/server/rate';
-import {
-  buildRadarIndex,
-  getRadarSignal,
-  radarExportFields,
-} from '@/lib/deal-radar';
+import { radarExportFields } from '@/lib/deal-radar';
 import {
   scoreMasterProductForLeaderboard,
   type LeaderboardCriteriaBreakdown,
 } from '@/lib/leaderboard-engine';
+import {
+  PUBLIC_API_CORS_HEADERS,
+  jsonApiError,
+  parseVersusQueryParams,
+} from '@/server/rate/api-handler';
+
+export { parseVersusQueryParams };
 
 export const revalidate = 60;
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: PUBLIC_API_CORS_HEADERS,
+  });
+}
 
 interface VersusPersonaConfig {
   id: string;
@@ -74,35 +85,6 @@ const VERSUS_PERSONAS: VersusPersonaConfig[] = [
   },
 ];
 
-export function parseVersusQueryParams(
-  searchParams: URLSearchParams
-): [string, string] | null {
-  const rawPair = (searchParams.get('pair') || '').toLowerCase().trim();
-  if (rawPair.includes('-vs-')) {
-    const parts = rawPair.split('-vs-');
-    if (parts.length === 2) {
-      const a = parts[0]?.trim() || '';
-      const b = parts[1]?.trim() || '';
-      if (a && b && a !== b) {
-        return [a, b];
-      }
-    }
-  }
-
-  const slugA = (searchParams.get('slugA') || searchParams.get('a') || '')
-    .toLowerCase()
-    .trim();
-  const slugB = (searchParams.get('slugB') || searchParams.get('b') || '')
-    .toLowerCase()
-    .trim();
-
-  if (slugA && slugB && slugA !== slugB) {
-    return [slugA, slugB];
-  }
-
-  return null;
-}
-
 const CRITERIA_KEYS: Array<keyof LeaderboardCriteriaBreakdown> = [
   'screen',
   'performance',
@@ -119,10 +101,11 @@ export async function GET(req: NextRequest) {
     if (!parsedSlugs) {
       return NextResponse.json(
         {
+          ok: false,
           error:
             'Missing or invalid 1v1 pair. Provide ?pair=<slugA>-vs-<slugB> or ?slugA=<slugA>&slugB=<slugB> with two distinct same-category product slugs.',
         },
-        { status: 400 }
+        { status: 400, headers: PUBLIC_API_CORS_HEADERS }
       );
     }
 
@@ -133,11 +116,12 @@ export async function GET(req: NextRequest) {
     if (compared.length < 2 || !compared[0] || !compared[1]) {
       return NextResponse.json(
         {
+          ok: false,
           error:
             'Could not resolve two same-category master products for 1v1 comparison. Verify both slugs exist and belong to the same hardware category.',
           requested_pair: parsedSlugs,
         },
-        { status: 404 }
+        { status: 404, headers: PUBLIC_API_CORS_HEADERS }
       );
     }
 
@@ -286,14 +270,24 @@ export async function GET(req: NextRequest) {
           ? scoreB.slug
           : 'equal';
 
-    const dealRadar = await getCrossPlatformDealRadar({
-      categorySlug: category,
-      limit: 50,
-    });
-    const radarIndex = buildRadarIndex(dealRadar);
+    const offersByMaster = await getMasterProductOffersBatch([
+      prodA.id,
+      prodB.id,
+    ]);
+    const rawSignalA = computeProductRadarSignal(
+      prodA,
+      offersByMaster.get(prodA.id) ?? []
+    );
+    const rawSignalB = computeProductRadarSignal(
+      prodB,
+      offersByMaster.get(prodB.id) ?? []
+    );
+    const radarSignalA = radarExportFields(rawSignalA);
+    const radarSignalB = radarExportFields(rawSignalB);
 
     return NextResponse.json(
       {
+        ok: true,
         directory: 'tech_electronics',
         category,
         versus_pair: `${scoreA.slug}-vs-${scoreB.slug}`,
@@ -302,6 +296,10 @@ export async function GET(req: NextRequest) {
         compare_matrix_url: `/compare?cat=${category}&slugs=${scoreA.slug},${scoreB.slug}`,
         persona: matchedPersona.id,
         weights: normalizedWeights,
+        deal_radar: {
+          productA: radarSignalA,
+          productB: radarSignalB,
+        },
         overall_winner: {
           side: winnerSide,
           slug: winnerScore.slug,
@@ -347,7 +345,8 @@ export async function GET(req: NextRequest) {
           merchant_count: scoreA.merchantCount,
           key_specs: prodA.key_specs || {},
           specifications: prodA.specifications || {},
-          deal_radar: radarExportFields(getRadarSignal(radarIndex, prodA.slug)),
+          deal_radar: radarExportFields(rawSignalA),
+          radar_signal: radarSignalA,
         },
         product_b: {
           slug: scoreB.slug,
@@ -371,28 +370,23 @@ export async function GET(req: NextRequest) {
           merchant_count: scoreB.merchantCount,
           key_specs: prodB.key_specs || {},
           specifications: prodB.specifications || {},
-          deal_radar: radarExportFields(getRadarSignal(radarIndex, prodB.slug)),
+          deal_radar: radarExportFields(rawSignalB),
+          radar_signal: radarSignalB,
         },
       },
       {
         status: 200,
         headers: {
+          ...PUBLIC_API_CORS_HEADERS,
           'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300',
         },
       }
     );
   } catch (err) {
-    const { sanitizePublicApiError } =
-      await import('@/server/rate/api-handler');
-    return NextResponse.json(
-      {
-        ok: false,
-        error: sanitizePublicApiError(
-          err,
-          'Failed to compute 1v1 Head-to-Head JReviews versus verdict'
-        ),
-      },
-      { status: 500 }
+    return jsonApiError(
+      500,
+      'Failed to compute 1v1 Head-to-Head JReviews versus verdict',
+      err
     );
   }
 }

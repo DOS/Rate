@@ -197,6 +197,38 @@ export function buildRateOpenApiSpec(
               schema: { type: 'number' },
             },
             {
+              name: 'minRefreshHz',
+              in: 'query',
+              description: 'Minimum display refresh rate in Hz (1-500)',
+              schema: { type: 'number' },
+            },
+            {
+              name: 'has5g',
+              in: 'query',
+              description: 'Filter by 5G connectivity support',
+              schema: { type: 'boolean' },
+            },
+            {
+              name: 'minBatteryMah',
+              in: 'query',
+              description: 'Minimum battery capacity in mAh (1-100000)',
+              schema: { type: 'number' },
+            },
+            {
+              name: 'minFastChargeW',
+              in: 'query',
+              description:
+                'Minimum wired fast-charging power in Watts (1-500); alias `charge` is also accepted',
+              schema: { type: 'number' },
+            },
+            {
+              name: 'hasNfc',
+              in: 'query',
+              description:
+                'Filter by NFC support; alias `nfc` is also accepted',
+              schema: { type: 'boolean' },
+            },
+            {
               name: 'minRating',
               in: 'query',
               description: 'Minimum JReviews score (0-10 scale)',
@@ -386,6 +418,42 @@ export function buildRateOpenApiSpec(
                 enum: ['balanced', 'gamer', 'creator', 'traveler', 'budget'],
                 default: 'balanced',
               },
+            },
+            {
+              name: 'w_screen',
+              in: 'query',
+              required: false,
+              description: 'Optional custom screen criterion weight (0..100).',
+              schema: { type: 'number' },
+            },
+            {
+              name: 'w_performance',
+              in: 'query',
+              required: false,
+              description:
+                'Optional custom performance criterion weight (0..100).',
+              schema: { type: 'number' },
+            },
+            {
+              name: 'w_camera',
+              in: 'query',
+              required: false,
+              description: 'Optional custom camera criterion weight (0..100).',
+              schema: { type: 'number' },
+            },
+            {
+              name: 'w_battery',
+              in: 'query',
+              required: false,
+              description: 'Optional custom battery criterion weight (0..100).',
+              schema: { type: 'number' },
+            },
+            {
+              name: 'w_value',
+              in: 'query',
+              required: false,
+              description: 'Optional custom value criterion weight (0..100).',
+              schema: { type: 'number' },
             },
           ],
           responses: {
@@ -857,6 +925,13 @@ export function buildRateOpenApiSpec(
           tags: ['Community Reviews & Voting'],
           parameters: [
             {
+              name: 'masterProductId',
+              in: 'query',
+              description:
+                'Canonical master product UUID (`rate.master_products.id`); alias `productId` is also accepted',
+              schema: { type: 'string', format: 'uuid' },
+            },
+            {
               name: 'slug',
               in: 'query',
               description: 'Master product slug',
@@ -867,6 +942,12 @@ export function buildRateOpenApiSpec(
               in: 'query',
               description: 'Filter out reviews flagged as AI seeding/fake',
               schema: { type: 'boolean' },
+            },
+            {
+              name: 'limit',
+              in: 'query',
+              description: 'Maximum number of reviews to return (1-200)',
+              schema: { type: 'number', default: 50 },
             },
           ],
           responses: {

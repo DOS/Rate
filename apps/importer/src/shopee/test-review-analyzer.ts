@@ -6,6 +6,7 @@ import http from 'node:http';
 import assert from 'node:assert/strict';
 import {
   AiReviewAnalyzer,
+  BURST_AUDITOR_DETECTOR,
   accountAgeBucket,
   assessReview6Axes,
   compute6AxisWeightBreakdown,
@@ -568,8 +569,28 @@ async function run() {
       col?: string;
       val?: string;
     }> = [];
+    // review_flags rows the stub reports as already written by another detector.
+    let existingFlagRows: Array<{
+      review_id: string;
+      verdict?: string;
+      flag_category?: string;
+      include_in_rating?: boolean;
+      fake_probability?: number;
+    }> = [];
+    let existingFlagsError: { message: string } | null = null;
+    const flagReads: Array<{ ids: string[]; detectors: string[] }> = [];
     const stub = {
       from: (table: string) => ({
+        select: () => ({
+          in: (_idCol: string, ids: string[]) => ({
+            in: async (_detCol: string, detectors: string[]) => {
+              flagReads.push({ ids, detectors });
+              return existingFlagsError
+                ? { data: null, error: existingFlagsError }
+                : { data: existingFlagRows.filter(r => ids.includes(r.review_id)), error: null };
+            },
+          }),
+        }),
         upsert: async (payload: unknown) => {
           calls.push({ table, op: 'upsert', payload });
           return { error: null };
@@ -676,8 +697,131 @@ async function run() {
       false,
       'When .rpc() is provided, master_products rating is updated exclusively by SQL RPC'
     );
+    // 6c. Flags written by the burst auditor (DOS/Rate#322) and by the community
+    // review RPC survive re-analysis.
+    assert.deepEqual(flagReads[0]!.detectors, [
+      BURST_AUDITOR_DETECTOR,
+      'rate-community-guard',
+      'rate-jreviews-guard',
+    ]);
+    assert.deepEqual(
+      flagReads[0]!.ids,
+      input.map(r => r.id)
+    );
+    const baseline = await llm.persistAnalysisToSupabase(stub, {
+      productId: 'prod-baseline',
+      reviews: input,
+      platform: 'shopee',
+      merchantId: 'merch-1',
+    });
+    // The real review is the one a burst auditor relabels as seeding.
+    const burstTarget = input.find(r => r.id === 'llm-real')!;
+    existingFlagRows = [
+      {
+        review_id: burstTarget.id,
+        verdict: 'fake',
+        flag_category: 'seeding_fake',
+        include_in_rating: false,
+        fake_probability: 0.85,
+      },
+    ];
+    calls.length = 0;
+    const withBurst = await llm.persistAnalysisToSupabase(stub, {
+      productId: 'prod-burst',
+      reviews: input,
+      platform: 'shopee',
+      merchantId: 'merch-1',
+    });
+    assert.equal(
+      withBurst.summary.authentic_review_count,
+      baseline.summary.authentic_review_count - 1,
+      'summary must count the burst-flagged review as the stored flag says, not as authentic'
+    );
+    assert.equal(
+      withBurst.summary.breakdown_by_category.seeding_fake,
+      baseline.summary.breakdown_by_category.seeding_fake + 1
+    );
+    // The heuristic fallback summary text must reflect the overlaid counts, not the analyzer's own.
+    const heuristicPersist = heuristicOnly();
+    existingFlagRows = [];
+    const heuristicBaseline = await heuristicPersist.persistAnalysisToSupabase(stub, {
+      productId: 'prod-h-baseline',
+      reviews: input,
+    });
+    existingFlagRows = [
+      {
+        review_id: burstTarget.id,
+        verdict: 'fake',
+        flag_category: 'seeding_fake',
+        include_in_rating: false,
+        fake_probability: 0.85,
+      },
+    ];
+    const heuristicBurst = await heuristicPersist.persistAnalysisToSupabase(stub, {
+      productId: 'prod-h-burst',
+      reviews: input,
+    });
+    assert.ok(
+      heuristicBurst.summary.ai_summary.includes(
+        `giữ lại ${heuristicBurst.summary.authentic_review_count} đánh giá`
+      ),
+      'fallback summary text must be built from the overlaid counts'
+    );
+    assert.notEqual(heuristicBurst.summary.ai_summary, heuristicBaseline.summary.ai_summary);
+    calls.length = 0;
+    await llm.persistAnalysisToSupabase(stub, {
+      productId: 'prod-burst',
+      reviews: input,
+      platform: 'shopee',
+      merchantId: 'merch-1',
+    });
+    const analysisUpsert = calls.find(c => c.table === 'review_analysis' && c.op === 'upsert')!;
+    assert.equal(
+      (analysisUpsert.payload as { authenticity_score: number }).authenticity_score,
+      withBurst.summary.authenticity_score
+    );
+    const burstUpsert = calls.find(c => c.table === 'review_flags' && c.op === 'upsert')!;
+    const burstRowIds = (burstUpsert.payload as Array<{ review_id: string }>).map(r => r.review_id);
+    assert.equal(
+      burstRowIds.includes(burstTarget.id),
+      false,
+      'burst auditor flag must not be overwritten'
+    );
+    assert.equal(burstRowIds.length, input.length - 1);
+    assert.equal(
+      calls.filter(c => c.table === 'reviews' && c.op === 'update').length,
+      input.length,
+      'helpfulness_weight is still written for every review'
+    );
+    const burstWeightUpdate = calls.find(
+      c => c.table === 'reviews' && c.op === 'update' && c.val === burstTarget.id
+    );
+    assert.deepEqual(
+      burstWeightUpdate?.payload,
+      { helpfulness_weight: 0 },
+      'preserved burst-audited review with include_in_rating=false must write helpfulness_weight=0'
+    );
+
+    existingFlagRows = input.map(r => ({ review_id: r.id }));
+    calls.length = 0;
+    await llm.persistAnalysisToSupabase(stub, { productId: 'prod-all-burst', reviews: input });
+    assert.equal(
+      calls.some(c => c.table === 'review_flags' && c.op === 'upsert'),
+      false,
+      'no upsert when every row is preserved'
+    );
+
+    existingFlagRows = [];
+    existingFlagsError = { message: 'read timeout' };
+    await assert.rejects(
+      llm.persistAnalysisToSupabase(stub, { productId: 'prod-read-fail', reviews: input }),
+      /Failed to read existing review_flags: read timeout/,
+      'a failed read must not fall through to an overwrite'
+    );
+    existingFlagsError = null;
+
     console.log(
-      '✅ [Persist] review_flags / review_analysis / master_products (RPC & stub) / merchants (review_risk_score isolated) / reviews payloads valid'
+      '✅ [Persist] review_flags / review_analysis / master_products (RPC & stub) / merchants (review_risk_score isolated) / reviews payloads valid; burst auditor flags preserved'
     );
 
     console.log('\n================================================================');
@@ -1060,8 +1204,299 @@ async function run() {
   assert.equal(parsedTablet.specifications.camera?.second_camera, '2 MP, f/2.4, depth');
   assert.equal(parsedTablet.specifications.camera?.front_camera, '32 MP, f/2.2');
 
+  // 9.7 ProductNormalizer iPhone 16e/SE & Promo-Prefix Model Extraction + EntityMatcher Spec Preservation (#352)
+  const { ProductNormalizer } = await import('./product-normalizer.js');
+  const { EntityMatcher } = await import('./entity-matcher.js');
+  const normalizer = new ProductNormalizer();
+  const baseRaw = {
+    platform: 'shopee' as const,
+    itemId: 'sp-test',
+    shopId: 'shop-1',
+    url: 'https://shopee.vn/product/1/2',
+    priceMin: 16_990_000,
+    priceMax: 16_990_000,
+    priceBeforeDiscount: 17_990_000,
+    currency: 'VND',
+    historicalSold: 50,
+    ratingStar: 4.9,
+    ratingCount: 10,
+    images: [],
+    models: [],
+    attributes: [],
+    shop: {
+      shopId: 'shop-1',
+      name: 'Shopee Mall',
+      isMall: true,
+    },
+    reviews: [],
+  };
+
+  const iphone16e = normalizer.normalize({
+    ...baseRaw,
+    title: 'Điện thoại Apple iPhone 16E 128GB Chính hãng VN/A',
+  });
+  assert.equal(iphone16e.model, 'iPhone 16e');
+  assert.equal(iphone16e.model_key, 'apple:iphone-16e:128gb');
+  assert.equal(iphone16e.battery_mah, 4005);
+
+  const iphoneSe2022 = normalizer.normalize({
+    ...baseRaw,
+    title: 'Apple iPhone SE (2022) 64GB Chính hãng VN/A',
+  });
+  assert.equal(iphoneSe2022.model, 'iPhone SE 2022');
+  assert.equal(iphoneSe2022.model_key, 'apple:iphone-se-2022:64gb');
+
+  const promoSamsung = normalizer.normalize({
+    ...baseRaw,
+    title: '[Mã BMLT300 giảm 5%] Điện thoại thông minh Samsung Galaxy S24 Ultra 5G 256GB',
+  });
+  assert.equal(promoSamsung.brand, 'Samsung');
+  assert.equal(promoSamsung.model, 'Galaxy S24 Ultra');
+  assert.equal(promoSamsung.model_key, 'samsung:galaxy-s24-ultra:256gb');
+
+  let updatedMasterPayload: Record<string, unknown> | null = null;
+  const matcherStub = {
+    from: () => ({
+      select: () => ({
+        eq: () => ({
+          maybeSingle: async () => ({
+            data: {
+              id: 'master-352',
+              brand: 'Samsung',
+              model: 'Galaxy S24 Ultra',
+              storage_gb: 256,
+              ram_gb: 12,
+              screen_size_inch: 6.8,
+              battery_mah: 5000,
+              has_5g: true,
+              name: 'Samsung Galaxy S24 Ultra 256GB',
+              description: '',
+              colors: ['Titanium Gray'],
+            },
+            error: null,
+          }),
+        }),
+      }),
+      update: (payload: Record<string, unknown>) => ({
+        eq: async () => {
+          updatedMasterPayload = payload;
+          return { error: null };
+        },
+      }),
+    }),
+  } as unknown as ConstructorParameters<typeof EntityMatcher>[0];
+
+  const matcher = new EntityMatcher(matcherStub);
+  const sharedAiSpec = {
+    ram_gb: null,
+    storage_gb: 512,
+    screen_size_inch: null,
+    battery_mah: null,
+    has_5g: undefined,
+    specifications: { design: { colors: ['Original AI Color'] } },
+    key_specs: ['6.8" AMOLED'],
+  };
+  (matcher as unknown as { enricher: { fetchSpecsFromAi: () => Promise<unknown> } }).enricher = {
+    fetchSpecsFromAi: async () => sharedAiSpec,
+  };
+  const enrichOk = await matcher.enrichMasterProductById('master-352');
+  assert.equal(enrichOk, true);
+  assert.equal(updatedMasterPayload?.['ram_gb'], 12);
+  assert.equal(updatedMasterPayload?.['storage_gb'], 256);
+  assert.equal(updatedMasterPayload?.['screen_size_inch'], 6.8);
+  assert.equal(updatedMasterPayload?.['battery_mah'], 5000);
+  assert.equal(updatedMasterPayload?.['has_5g'], true);
+  assert.deepEqual(
+    (updatedMasterPayload?.['specifications'] as { design?: { colors?: string[] } })?.design
+      ?.colors,
+    ['Titanium Gray']
+  );
+  assert.deepEqual(
+    sharedAiSpec.specifications.design.colors,
+    ['Original AI Color'],
+    'enrichMasterProductById must clone specifications instead of mutating cached AI object'
+  );
+
+  // 9.8 ShopeeIngestionPipeline masterIdHint enrichment & deduplicated review verification chunks (#356)
+  const { ShopeeIngestionPipeline } = await import('./shopee-to-supabase.js');
+  const verifiedInBatches: string[][] = [];
+  let hintedMasterEnriched = false;
+  const ingestStub = {
+    from: (table: string) => {
+      if (table === 'categories') {
+        return {
+          select: async () => ({
+            data: [{ id: 'cat-smartphones', slug: 'smartphones' }],
+            error: null,
+          }),
+        };
+      }
+      if (table === 'merchants') {
+        return {
+          upsert: () => ({
+            select: () => ({
+              single: async () => ({ data: { id: 'merch-356' }, error: null }),
+            }),
+          }),
+        };
+      }
+      if (table === 'master_products') {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: { id: 'master-hint-356', specifications: {} },
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
+      if (table === 'products') {
+        return {
+          upsert: () => ({
+            select: () => ({
+              single: async () => ({ data: { id: 'prod-356' }, error: null }),
+            }),
+          }),
+        };
+      }
+      if (table === 'reviews') {
+        return {
+          select: () => ({
+            eq: () => ({
+              not: async () => ({ data: [{ platform_review_id: 'rev-dup-1' }], error: null }),
+              // The pipeline asks only about the ids it is about to insert.
+              in: async (_col: string, ids: string[]) => ({
+                data: ids.filter(id => id === 'rev-dup-1').map(id => ({ platform_review_id: id })),
+                error: null,
+              }),
+              order: () => ({
+                limit: async () => ({ data: [], error: null }),
+              }),
+            }),
+          }),
+          update: () => ({
+            eq: () => ({
+              in: async (_col: string, ids: string[]) => {
+                verifiedInBatches.push(ids);
+                return { error: null };
+              },
+            }),
+          }),
+        };
+      }
+      throw new Error(`Unexpected table ${table}`);
+    },
+    rpc: async (fn: string) => {
+      if (fn === 'record_price_observation') {
+        return { data: 'unchanged_delta', error: null };
+      }
+      return { data: null, error: null };
+    },
+  } as unknown as NonNullable<
+    ConstructorParameters<typeof ShopeeIngestionPipeline>[0]
+  >['supabaseClient'];
+
+  const pipeline356 = new ShopeeIngestionPipeline({ supabaseClient: ingestStub });
+  (
+    pipeline356 as unknown as {
+      matcher: { enrichMasterProductById: (id: string) => Promise<boolean> };
+    }
+  ).matcher = {
+    enrichMasterProductById: async (id: string) => {
+      if (id === 'master-hint-356') hintedMasterEnriched = true;
+      return true;
+    },
+  };
+
+  await pipeline356.ingestProduct(
+    {
+      platform: 'shopee',
+      itemId: 'item-356',
+      shopId: 'shop-356',
+      url: 'https://shopee.vn/product/356/356',
+      title: 'Điện thoại Apple iPhone 16e 128GB Chính hãng VN/A',
+      priceMin: 16_990_000,
+      priceMax: 16_990_000,
+      currency: 'VND',
+      historicalSold: 10,
+      ratingStar: 5,
+      ratingCount: 2,
+      images: ['https://cf.shopee.vn/file/ip16e.jpg'],
+      models: [],
+      attributes: [],
+      shop: { shopId: 'shop-356', name: 'Apple Flagship Store', isMall: true },
+      reviews: [
+        {
+          reviewId: 'rev-dup-1',
+          author: 'User A',
+          ratingStar: 5,
+          comment: 'Máy dùng rất mượt',
+          images: [],
+          reviewer: { verifiedPurchase: true },
+        },
+        {
+          reviewId: 'rev-dup-1',
+          author: 'User A',
+          ratingStar: 5,
+          comment: 'Máy dùng rất mượt',
+          images: [],
+          reviewer: { verifiedPurchase: true },
+        },
+      ],
+    },
+    undefined,
+    { masterIdHint: 'master-hint-356' }
+  );
+  assert.equal(
+    hintedMasterEnriched,
+    true,
+    'ShopeeIngestionPipeline must enrich hinted master when its specifications object is empty'
+  );
+  assert.deepEqual(
+    verifiedInBatches,
+    [['rev-dup-1']],
+    'ShopeeIngestionPipeline must deduplicate platform_review_id entries when refreshing is_verified_buyer'
+  );
+
+  // 16c. DOS/Rate#359: computeReviewWeight returns 0 for unanalyzed verdict & sabotage regex matches Vietnamese diacritics without backtracking
+  assert.equal(
+    computeReviewWeight({
+      upvotes: 10,
+      downvotes: 0,
+      reportCount: 0,
+      flagCategory: 'authentic',
+      verdict: 'unanalyzed',
+    }),
+    0,
+    'computeReviewWeight must return 0 when verdict is unanalyzed'
+  );
+  const sabotageCheck = heuristicOnly().analyzeWithHeuristics([
+    {
+      id: 'sab-vn-1',
+      rating_star: 1,
+      comment: 'Hàng chán lắm mọi người qua shop Thế Giới Phụ Kiện mua nhé',
+    },
+    {
+      id: 'non-sab-long',
+      rating_star: 1,
+      comment: 'qua shop ' + 'rất xa '.repeat(600) + 'không ưng ý',
+    },
+  ]);
+  assert.equal(
+    sabotageCheck[0]!.flag_category,
+    'competitor_sabotage',
+    'Competitor sabotage regex must match Vietnamese diacritic shop names'
+  );
+  assert.notEqual(
+    sabotageCheck[1]!.flag_category,
+    'competitor_sabotage',
+    'Long non-sabotage comment must not match competitor_sabotage or backtrack quadratically'
+  );
+
   console.log(
-    `✅ [P2/P3 Trust Model & #292] Voter weight, Wilson lower bound (50/52=${wilson50of52} > 1/1=${wilson1of1}), shingle copy seeding (sim=${shingleSim}), affiliate shortlinks, peer floor & ArenaSpecSyncer verified`
+    `✅ [P2/P3 Trust Model & #292/#352/#356/#359] Voter weight, Wilson lower bound (50/52=${wilson50of52} > 1/1=${wilson1of1}), shingle copy seeding (sim=${shingleSim}), affiliate shortlinks, peer floor, ArenaSpecSyncer & Importer hardening (#352, #356, #359) verified`
   );
 
   console.log('\n🎉 ALL AI REVIEW ANALYZER TESTS PASSED!');

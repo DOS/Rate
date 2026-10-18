@@ -31,6 +31,8 @@ import {
   canonicalizeProductUrl,
   detectAccessoryOrJunk,
   evaluateExtensionPriceVerdict,
+  extractKeywordFromProductUrl,
+  lookupExtensionProduct,
 } from '../extension';
 import { buildRateOpenApiSpec } from '../openapi';
 import {
@@ -2271,9 +2273,12 @@ async function runCoreArchitectureSuite() {
     'utf8'
   );
   assert.ok(
-    rateApiSrc168.includes(".in('merchant_id', merchantIds)") &&
+    // Chunked since #333: the ids are still only merchantIds / unscoredProductIds.
+    /fetchAllRowsInChunks\(\s*'products',\s*merchantIds,/.test(rateApiSrc168) &&
       rateApiSrc168.includes('extractPersistedBreakdown') &&
-      rateApiSrc168.includes(".in('product_id', unscoredProductIds)"),
+      /fetchAllRowsInChunks\(\s*'reviews',\s*unscoredProductIds,/.test(
+        rateApiSrc168
+      ),
     'getMerchantsList must scope products by merchantIds and only query reviews for unscoredProductIds (C2)'
   );
 
@@ -3681,7 +3686,608 @@ async function runCoreArchitectureSuite() {
   );
 
   console.log(
-    '  ✅ [63/63] Retirement of getRateCopy & Localization of Navbar, Footer, RadarBadge, and GlobalError (#279) passed'
+    '  ✅ [63/64] Retirement of getRateCopy & Localization of Navbar, Footer, RadarBadge, and GlobalError (#279) passed'
+  );
+
+  // 64. Issue #344: RateDataUnavailableError propagation on DB failures, RPC image normalization & >150 IN-filter chunking
+  const {
+    RateDataUnavailableError,
+    getCategoryDirectoryFacets,
+    getMasterProducts: getMasterProductsRaw,
+    getMasterProductOffers,
+    getMasterProductOffersBatch,
+    getMasterProductReviews,
+    getMasterProductReviewSummary,
+    getMasterProductPriceHistory,
+    inspectProductOrShopUrl,
+  } = await import('../../../lib/rate-api');
+
+  const origFetch344 = globalThis.fetch;
+  const supaUrlEnvKey = ['NEXT_PUBLIC_SUPABASE', 'URL'].join('_');
+  const supaAnonEnvKey = ['NEXT_PUBLIC_SUPABASE', 'ANON', 'KEY'].join('_');
+  process.env[supaUrlEnvKey] =
+    process.env[supaUrlEnvKey] || 'https://stub.supabase.test';
+  process.env[supaAnonEnvKey] =
+    process.env[supaAnonEnvKey] || 'stub-public-token';
+
+  try {
+    const jsonResp344 = (status: number, body: unknown) =>
+      new Response(JSON.stringify(body), {
+        status,
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+    // 64.1 getCategoryDirectoryFacets throws RateDataUnavailableError when categories or fallback master_products fails
+    globalThis.fetch = (async () =>
+      jsonResp344(500, {
+        message: 'simulated categories failure',
+      })) as typeof fetch;
+    await assert.rejects(
+      () => getCategoryDirectoryFacets('smartphones'),
+      (err: unknown) => err instanceof RateDataUnavailableError
+    );
+
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.includes('/rest/v1/categories')) {
+        return jsonResp344(200, [
+          {
+            id: 'cat-smartphones',
+            parent_id: null,
+            name: 'Smartphones',
+            slug: 'smartphones',
+            icon: null,
+            display_order: 1,
+          },
+        ]);
+      }
+      return jsonResp344(500, { message: 'simulated facets fallback failure' });
+    }) as typeof fetch;
+    await assert.rejects(
+      () => getCategoryDirectoryFacets('smartphones'),
+      (err: unknown) => err instanceof RateDataUnavailableError
+    );
+
+    // 64.2 getMasterProducts throws RateDataUnavailableError on category lookup failure & normalizes search_master_products RPC rows
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.includes('/rest/v1/categories')) {
+        return jsonResp344(500, { message: 'simulated category slug failure' });
+      }
+      return jsonResp344(200, []);
+    }) as typeof fetch;
+    await assert.rejects(
+      () => getMasterProductsRaw({ categorySlug: 'smartphones' }),
+      (err: unknown) => err instanceof RateDataUnavailableError
+    );
+
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.includes('/rest/v1/rpc/search_master_products')) {
+        return jsonResp344(200, [
+          {
+            id: 'master-16pm',
+            slug: 'apple-iphone-16-pro-max-256gb',
+            name: 'Apple iPhone 16 Pro Max 256GB',
+            brand: 'Apple',
+            model: 'iPhone 16 Pro Max',
+            model_key: 'apple-iphone-16-pro-max-256gb',
+            images: ['https://broken.example.com/404.jpg'],
+            specifications: {},
+            key_specs: {},
+            min_price: 28990000,
+            max_price: 30990000,
+            merchant_count: 3,
+            total_reviews: 10,
+            average_rating: 4.8,
+            status: 'published',
+          },
+        ]);
+      }
+      return jsonResp344(200, []);
+    }) as typeof fetch;
+    const rpcProducts344 = await getMasterProductsRaw({ categorySlug: 'all' });
+    assert.equal(rpcProducts344.length, 1);
+    assert.equal(
+      rpcProducts344[0]?.images?.[0],
+      '/img/devices/apple-iphone-16-pro-max-256gb.jpg',
+      'search_master_products RPC rows must be normalized via normalizeMasterProductRow (#344)'
+    );
+
+    // 64.3 getMasterProductOffers & getMasterProductOffersBatch throw RateDataUnavailableError when both view and products fallback fail
+    globalThis.fetch = (async () =>
+      jsonResp344(500, {
+        message: 'simulated offers failure',
+      })) as typeof fetch;
+    await assert.rejects(
+      () => getMasterProductOffers('master-16pm'),
+      (err: unknown) => err instanceof RateDataUnavailableError
+    );
+    await assert.rejects(
+      () => getMasterProductOffersBatch(['master-16pm']),
+      (err: unknown) => err instanceof RateDataUnavailableError
+    );
+
+    // 64.4 Chunking (>150 productIds) and RateDataUnavailableError in getMasterProductReviews, getMasterProductReviewSummary, and getMasterProductPriceHistory
+    const manyListingRows344 = Array.from({ length: 160 }, (_, idx) => ({
+      id: `prod-${idx + 1}`,
+    }));
+    let reviewChunksCalled = 0;
+    let analysisChunksCalled = 0;
+    let priceHistoryChunksCalled = 0;
+
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.includes('/rest/v1/products')) {
+        return jsonResp344(200, manyListingRows344);
+      }
+      if (url.includes('/rest/v1/reviews')) {
+        reviewChunksCalled += 1;
+        return jsonResp344(200, [
+          {
+            id: `rev-chunk-${reviewChunksCalled}`,
+            author_name: 'Buyer',
+            rating_star: 5,
+            comment: 'Great display and battery life',
+            created_at:
+              reviewChunksCalled === 1
+                ? '2026-10-17T10:00:00Z'
+                : '2026-10-18T10:00:00Z',
+            reviewer_type: 'user',
+            upvotes: 2,
+            downvotes: 0,
+            report_count: 0,
+            review_flags: {
+              verdict: 'authentic',
+              flag_category: 'authentic',
+              include_in_rating: true,
+            },
+          },
+        ]);
+      }
+      if (url.includes('/rest/v1/review_analysis')) {
+        analysisChunksCalled += 1;
+        return jsonResp344(200, [
+          {
+            total_reviews_analyzed: 10,
+            authenticity_score: 92,
+            ai_summary: `Summary from chunk ${analysisChunksCalled}`,
+            pros: [`Pro ${analysisChunksCalled}`],
+            cons: [`Con ${analysisChunksCalled}`],
+            analyzed_at:
+              analysisChunksCalled === 1
+                ? '2026-10-17T10:00:00Z'
+                : '2026-10-18T10:00:00Z',
+          },
+        ]);
+      }
+      if (url.includes('/rest/v1/price_history')) {
+        priceHistoryChunksCalled += 1;
+        return jsonResp344(200, [
+          {
+            id: priceHistoryChunksCalled,
+            product_id: `prod-${priceHistoryChunksCalled === 1 ? 1 : 155}`,
+            price: 27990000,
+            price_original: 29990000,
+            recorded_at:
+              priceHistoryChunksCalled === 1
+                ? '2026-10-17T10:00:00Z'
+                : '2026-10-18T10:00:00Z',
+            source: 'crawler',
+          },
+        ]);
+      }
+      return jsonResp344(200, []);
+    }) as typeof fetch;
+
+    const chunkedReviews344 = await getMasterProductReviews('master-16pm');
+    assert.equal(
+      reviewChunksCalled,
+      2,
+      'getMasterProductReviews must chunk 160 productIds into 2 requests of <=150 IDs (#344)'
+    );
+    assert.equal(chunkedReviews344.length, 2);
+    assert.equal(chunkedReviews344[0]?.id, 'rev-chunk-2');
+
+    const chunkedSummary344 = await getMasterProductReviewSummary(
+      'master-16pm',
+      chunkedReviews344
+    );
+    assert.equal(
+      analysisChunksCalled,
+      2,
+      'getMasterProductReviewSummary must chunk 160 productIds into 2 requests of <=150 IDs (#344)'
+    );
+    assert.equal(chunkedSummary344.ai_summary, 'Summary from chunk 2');
+    assert.deepEqual(chunkedSummary344.pros, ['Pro 2', 'Pro 1']);
+
+    const mockOffers344 = manyListingRows344.map((r, idx) => ({
+      id: r.id,
+      platform: 'shopee',
+      title: `Listing ${idx + 1}`,
+      price_current: 27990000,
+      price_original: 29990000,
+      stock: 10,
+      rating_star: 4.9,
+      rating_count: 20,
+      url: `https://shopee.vn/i.1.${idx + 1}`,
+      merchant: {
+        id: 'merch-1',
+        name: 'Official Store',
+        platform: 'shopee',
+        is_official: true,
+        rating_star: 4.9,
+        follower_count: 1000,
+        location: 'VN',
+        risk_score: 5,
+        dosafe_risk_score: 5,
+        review_risk_score: 5,
+        review_risk_breakdown: null,
+      },
+    }));
+    const chunkedPriceHistory344 = await getMasterProductPriceHistory(
+      'master-16pm',
+      mockOffers344
+    );
+    assert.equal(
+      priceHistoryChunksCalled,
+      2,
+      'getMasterProductPriceHistory must chunk 160 productIds into 2 requests of <=150 IDs (#344)'
+    );
+    const crawlerPoints344 = chunkedPriceHistory344.points.filter(
+      (p) => p.source === 'crawler'
+    );
+    assert.equal(crawlerPoints344.length, 2);
+    assert.equal(crawlerPoints344[0]?.product_id, 'prod-1');
+    assert.equal(crawlerPoints344[1]?.product_id, 'prod-155');
+
+    // 64.5 inspectProductOrShopUrl throws RateDataUnavailableError on DB failure
+    globalThis.fetch = (async () =>
+      jsonResp344(500, {
+        message: 'simulated inspect DB failure',
+      })) as typeof fetch;
+    await assert.rejects(
+      () => inspectProductOrShopUrl('https://shopee.vn/i.88201679.24871920101'),
+      (err: unknown) => err instanceof RateDataUnavailableError
+    );
+  } finally {
+    globalThis.fetch = origFetch344;
+  }
+
+  console.log(
+    '  ✅ [64/65] RateDataUnavailableError propagation, RPC row image normalization & >150 IN-filter chunking (#344) passed'
+  );
+
+  // 65. Issue #345: REST API v1 CORS headers, exact batch deal_radar on GET /api/v1/rate/products, and extension lookup URL/externalId resolution
+  assert.equal(
+    extractKeywordFromProductUrl(
+      'https://shopee.vn/Apple-iPhone-16-Pro-Max-256GB-i.88201679.24871920101?sp_atk=abc'
+    ),
+    'Apple iPhone 16 Pro Max 256GB'
+  );
+  assert.equal(
+    extractKeywordFromProductUrl(
+      'https://www.lazada.vn/products/samsung-galaxy-s25-ultra-256gb-i2123456-s9876543.html'
+    ),
+    'samsung galaxy s25 ultra 256gb'
+  );
+  assert.equal(
+    extractKeywordFromProductUrl(
+      'https://cellphones.com.vn/iphone-16-pro-max.html'
+    ),
+    'iphone 16 pro max'
+  );
+  assert.equal(
+    extractKeywordFromProductUrl('https://shopee.vn/i.88201679.24871920101'),
+    ''
+  );
+
+  const inspectOptRes345 = await inspectRoute.OPTIONS();
+  assert.equal(inspectOptRes345.status, 204);
+  assert.equal(
+    inspectOptRes345.headers.get('access-control-allow-origin'),
+    '*',
+    'OPTIONS /api/v1/rate/inspect must include Access-Control-Allow-Origin: * (#345)'
+  );
+
+  const lookupRoute345 = await import('../../../app/api/v1/rate/lookup/route');
+  const lookupOptRes345 = await lookupRoute345.OPTIONS();
+  assert.equal(lookupOptRes345.status, 204);
+  assert.equal(
+    lookupOptRes345.headers.get('access-control-allow-origin'),
+    '*',
+    'OPTIONS /api/v1/rate/lookup must include Access-Control-Allow-Origin: * (#345)'
+  );
+
+  const lookup400Res345 = await lookupRoute345.GET(
+    new NextRequest('https://rate.vn/api/v1/rate/lookup?url=')
+  );
+  assert.equal(lookup400Res345.status, 400);
+  assert.equal(
+    lookup400Res345.headers.get('access-control-allow-origin'),
+    '*',
+    'GET /api/v1/rate/lookup 400 response must include Access-Control-Allow-Origin: * (#345)'
+  );
+
+  const inspect400Res345 = await inspectRoute.GET(
+    new NextRequest('https://rate.vn/api/v1/rate/inspect?q=')
+  );
+  assert.equal(inspect400Res345.status, 400);
+  assert.equal(
+    inspect400Res345.headers.get('access-control-allow-origin'),
+    '*',
+    'GET /api/v1/rate/inspect 400 response must include Access-Control-Allow-Origin: * (#345)'
+  );
+
+  const compare400Res345 = await compareRoute.GET(
+    new NextRequest('https://rate.vn/api/v1/rate/compare?slugs=')
+  );
+  assert.equal(compare400Res345.status, 400);
+  assert.equal(
+    compare400Res345.headers.get('access-control-allow-origin'),
+    '*',
+    'GET /api/v1/rate/compare 400 response must include Access-Control-Allow-Origin: * (#345)'
+  );
+
+  const productSlugRoute345 =
+    await import('../../../app/api/v1/rate/products/[slug]/route');
+  const slug400Res345 = await productSlugRoute345.GET(
+    new NextRequest('https://rate.vn/api/v1/rate/products/INVALID SLUG!'),
+    { params: Promise.resolve({ slug: 'INVALID SLUG!' }) }
+  );
+  assert.equal(slug400Res345.status, 400);
+  assert.equal(
+    slug400Res345.headers.get('access-control-allow-origin'),
+    '*',
+    'GET /api/v1/rate/products/[slug] 400 response must include Access-Control-Allow-Origin: * (#345)'
+  );
+
+  const origFetch345 = globalThis.fetch;
+  try {
+    // 65.1 GET /api/v1/rate/products computes deal_radar via exact batch offers & includes CORS headers
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url =
+        typeof input === 'string'
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
+      if (url.includes('/rest/v1/master_products')) {
+        return new Response(
+          JSON.stringify([
+            {
+              id: 'master-radar-345',
+              slug: 'apple-iphone-16-pro-max-256gb',
+              name: 'Apple iPhone 16 Pro Max 256GB',
+              brand: 'Apple',
+              model: 'iPhone 16 Pro Max',
+              storage_gb: 256,
+              ram_gb: 8,
+              thumbnail: '/img/devices/apple-iphone-16-pro-max-256gb.jpg',
+              images: ['/img/devices/apple-iphone-16-pro-max-256gb.jpg'],
+              key_specs: {},
+              specifications: {},
+              min_price: 27990000,
+              max_price: 34990000,
+              avg_rating: 9.4,
+              user_rating_avg: 9.3,
+              user_rating_count: 120,
+              editor_rating: 9.5,
+              total_reviews: 120,
+              total_sold: 500,
+              offer_count: 2,
+              category_id: 'cat-smartphones',
+            },
+          ]),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        );
+      }
+      if (url.includes('/rest/v1/products')) {
+        return new Response(
+          JSON.stringify([
+            {
+              id: 'offer-fake-345',
+              cluster_id: 'master-radar-345',
+              platform: 'shopee',
+              title: 'Apple iPhone 16 Pro Max 256GB',
+              price_current: 31500000,
+              price_original: 45990000,
+              stock: 5,
+              rating_star: 4.8,
+              rating_count: 50,
+              url: 'https://shopee.vn/i.88201679.24871920101',
+              merchant_id: 'merch-345',
+            },
+            {
+              id: 'offer-fair-345',
+              cluster_id: 'master-radar-345',
+              platform: 'lazada',
+              title: 'Apple iPhone 16 Pro Max 256GB',
+              price_current: 28990000,
+              price_original: 29990000,
+              stock: 10,
+              rating_star: 4.9,
+              rating_count: 80,
+              url: 'https://www.lazada.vn/products/i2123456-s9876543.html',
+              merchant_id: 'merch-345',
+            },
+          ]),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        );
+      }
+      if (url.includes('/rest/v1/merchants')) {
+        return new Response(
+          JSON.stringify([
+            {
+              id: 'merch-345',
+              name: 'Apple Flagship Store',
+              platform: 'shopee',
+              is_official: true,
+              rating_star: 4.9,
+              follower_count: 500000,
+              location: 'TP. Hồ Chí Minh',
+              risk_score: 5,
+              dosafe_risk_score: 5,
+              review_risk_score: 5,
+              review_risk_breakdown: null,
+            },
+          ]),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        );
+      }
+      return new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const prodRes345 = await productsRoute.GET(
+      new NextRequest(
+        'https://rate.vn/api/v1/rate/products?limit=5&sort=invalid_sort_param'
+      )
+    );
+    assert.equal(prodRes345.status, 200);
+    assert.equal(
+      prodRes345.headers.get('access-control-allow-origin'),
+      '*',
+      'GET /api/v1/rate/products 200 response must include Access-Control-Allow-Origin: * (#345)'
+    );
+    const prodBody345 = (await prodRes345.json()) as {
+      ok: boolean;
+      data: Array<{ slug: string; deal_radar: { status: string } | null }>;
+    };
+    assert.equal(prodBody345.ok, true);
+    assert.ok(
+      prodBody345.data[0]?.deal_radar !== null,
+      'GET /api/v1/rate/products must compute deal_radar directly for returned page items (#345)'
+    );
+
+    // 65.2 lookupExtensionProduct resolves externalId-only via products.platform_item_id -> master_products
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url =
+        typeof input === 'string'
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
+      if (
+        url.includes('/rest/v1/products') &&
+        url.includes('platform_item_id=in.')
+      ) {
+        return new Response(
+          JSON.stringify([
+            {
+              cluster_id: 'master-ext-345',
+              platform_item_id: '88201679_24871920101',
+            },
+          ]),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        );
+      }
+      if (
+        url.includes('/rest/v1/master_products') &&
+        url.includes('id=eq.master-ext-345')
+      ) {
+        return new Response(
+          JSON.stringify({
+            id: 'master-ext-345',
+            slug: 'apple-iphone-16-pro-max-256gb',
+            name: 'Apple iPhone 16 Pro Max 256GB',
+            brand: 'Apple',
+            model: 'iPhone 16 Pro Max',
+            storage_gb: 256,
+            ram_gb: 8,
+            thumbnail: 'https://broken.example/img.jpg',
+            images: [],
+            key_specs: {},
+            specifications: {},
+            min_price: 28990000,
+            max_price: 32990000,
+            avg_rating: 9.4,
+            user_rating_avg: 9.3,
+            user_rating_count: 100,
+            editor_rating: 9.5,
+            total_reviews: 100,
+            total_sold: 400,
+            offer_count: 1,
+            category_id: 'cat-smartphones',
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        );
+      }
+      if (
+        url.includes('/rest/v1/products') &&
+        url.includes('cluster_id=eq.master-ext-345')
+      ) {
+        return new Response(
+          JSON.stringify([
+            {
+              id: 'offer-ext-345',
+              cluster_id: 'master-ext-345',
+              platform: 'shopee',
+              title: 'Apple iPhone 16 Pro Max 256GB',
+              price_current: 28990000,
+              price_original: 30990000,
+              stock: 8,
+              rating_star: 4.9,
+              rating_count: 100,
+              url: 'https://shopee.vn/i.88201679.24871920101',
+              merchant_id: null,
+            },
+          ]),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        );
+      }
+      return new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const extByIdResult = await lookupExtensionProduct({
+      platform: 'shopee',
+      externalId: '88201679_24871920101',
+      mode: 'pill',
+    });
+    assert.equal(
+      extByIdResult.matchStatus,
+      'exact_listing',
+      'lookupExtensionProduct with externalId-only must resolve exact_listing via products.platform_item_id (#345)'
+    );
+    assert.equal(
+      extByIdResult.masterProduct?.slug,
+      'apple-iphone-16-pro-max-256gb'
+    );
+    assert.equal(
+      extByIdResult.masterProduct?.thumbnail,
+      '/img/devices/apple-iphone-16-pro-max-256gb.jpg',
+      'lookupExtensionProduct must normalize master_products row thumbnail (#345)'
+    );
+
+    // 65.3 Unknown externalId-only lookup must return not_found instead of random catalog product
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })) as typeof fetch;
+
+    const unknownExtResult = await lookupExtensionProduct({
+      platform: 'shopee',
+      externalId: '99999999_88888888',
+      mode: 'pill',
+    });
+    assert.equal(
+      unknownExtResult.matchStatus,
+      'not_found',
+      'Unknown externalId-only lookup must return not_found rather than falling back to unfiltered getMasterProducts (#345)'
+    );
+    assert.equal(unknownExtResult.masterProduct, null);
+  } finally {
+    globalThis.fetch = origFetch345;
+  }
+
+  console.log(
+    '  ✅ [65/65] REST API v1 CORS headers, exact batch deal_radar & Extension Lookup URL/externalId resolution (#345) passed'
   );
 
   console.log('🎉 All Rate.vn Core Architecture tests passed!');

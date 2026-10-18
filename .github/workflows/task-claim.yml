@@ -1,0 +1,118 @@
+name: Task Claim
+
+# Required check for the AGENTS.md section 1 claim workflow: a PR into `dev`
+# that closes an issue needs that issue to carry an `agent:*` label and
+# `status:in-progress` or `status:in-review`. Dependabot PRs are exempt, and
+# the dev to main promotion is out of scope (the `dev-task-claim` ruleset
+# covers dev only). Logic and tests: scripts/task-claim-check.mjs.
+#
+# pull_request_target runs this file and the script from `dev`, never from the
+# PR, so a PR cannot weaken the check it is held to. No PR code is checked out
+# or run, and the token is read-only.
+#
+# The check reads issue labels when it runs. When an issue gains or loses an
+# agent:* or status:* label, the revalidate job re-runs the check on every
+# open PR into dev that closes it, so a claim added later unblocks the PR and
+# a released claim blocks it again. `gh run rerun <id>` does the same by hand.
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, edited, ready_for_review]
+    branches: [dev]
+  issues:
+    types: [labeled, unlabeled]
+
+permissions: {}
+
+# Concurrency is per job, not per workflow: every issue label event starts a
+# run, and a workflow-level group would let an unrelated label cancel a
+# pending revalidation before its job `if:` is even evaluated.
+
+jobs:
+  claim:
+    # This job name is the required status check context in the ruleset.
+    name: task-claim
+    if: github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    concurrency:
+      group: task-claim-pr-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+    steps:
+      # pull_request_target checks out the base branch by default; only the
+      # script is fetched.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: scripts/task-claim-check.mjs
+          sparse-checkout-cone-mode: false
+
+      - name: Check that closing issues are claimed
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: node scripts/task-claim-check.mjs
+
+  revalidate:
+    name: Re-run task-claim for PRs closing this issue
+    if: >-
+      github.event_name == 'issues' &&
+      (startsWith(github.event.label.name, 'agent:') ||
+      startsWith(github.event.label.name, 'status:'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: task-claim-issue-${{ github.event.issue.number }}
+      cancel-in-progress: false
+    permissions:
+      actions: write
+      issues: read
+      pull-requests: read
+    steps:
+      # A re-run keeps the run's PR head, so it only counts for the required
+      # check when it is the run for the PR's current head; match on head_sha.
+      - name: Re-run the task-claim run of each affected PR's current head
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          ISSUE: ${{ github.event.issue.number }}
+        run: |
+          set -euo pipefail
+          owner=${REPO%/*}; name=${REPO#*/}
+          prs=$(gh api graphql -F owner="$owner" -F name="$name" -F number="$ISSUE" -f query='
+            query($owner: String!, $name: String!, $number: Int!) {
+              repository(owner: $owner, name: $name) {
+                issue(number: $number) {
+                  closedByPullRequestsReferences(first: 25, includeClosedPrs: false) {
+                    nodes { number baseRefName headRefOid repository { nameWithOwner } }
+                  }
+                }
+              }
+            }' --jq '.data.repository.issue.closedByPullRequestsReferences.nodes[]
+                    | select(.baseRefName == "dev" and .repository.nameWithOwner == env.REPO)
+                    | "\(.number) \(.headRefOid)"')
+          if [[ -z "$prs" ]]; then
+            echo "No open PR into dev closes #$ISSUE."
+            exit 0
+          fi
+          while read -r pr sha; do
+            runs="repos/$REPO/actions/workflows/task-claim.yml/runs?event=pull_request_target&head_sha=$sha&per_page=1"
+            read -r id status < <(gh api "$runs" --jq '.workflow_runs[0] // empty | "\(.id) \(.status)"') || true
+            if [[ -z "${id:-}" ]]; then
+              echo "::warning::PR #$pr has no task-claim run for its head $sha; push or edit the PR to start one."
+              continue
+            fi
+            # A run that is still going cannot be re-run, and it may have read
+            # the labels before this change. Let it finish first.
+            if [[ "$status" != "completed" ]]; then
+              timeout 300 gh run watch "$id" -R "$REPO" < /dev/null > /dev/null || true
+            fi
+            echo "Re-running task-claim run $id for PR #$pr ($sha)"
+            gh run rerun "$id" -R "$REPO" < /dev/null || echo "::warning::Could not re-run $id for PR #$pr"
+            unset id status
+          done <<< "$prs"

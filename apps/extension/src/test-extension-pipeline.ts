@@ -22,6 +22,7 @@ const {
   detectAccessoryOrJunk,
   detectPlatformFromInput,
   evaluateExtensionPriceVerdict,
+  extractKeywordFromProductUrl,
   extractStorageAndAmbiguity,
   ingestExtensionCrowdSignal,
   lookupExtensionProduct,
@@ -30,7 +31,14 @@ const {
     ? extModule
     : (extModule as unknown as { default: typeof extModule }).default
 ) as typeof extModule;
-const { parseEcommerceUrlOrQuery } = (
+const {
+  MAX_VALID_VND_PRICE,
+  getMasterProductPriceHistory,
+  mapOfferRowToMerchantOffer,
+  mapTrustViewRowToMerchantOffer,
+  normalizeOfferOriginalPrice,
+  parseEcommerceUrlOrQuery,
+} = (
   'parseEcommerceUrlOrQuery' in rateApiRootMod
     ? rateApiRootMod
     : (rateApiRootMod as unknown as { default: typeof rateApiRootMod }).default
@@ -495,7 +503,12 @@ async function runTests() {
     BoundedSlidingWindowRateLimiter,
     extractClientRateLimitKey,
     parseBoundedStringParam,
+    parseOptionalVndPriceParam,
     parseCompareSlugsParam,
+    parseWatchlistSlugsParam,
+    parseVersusQueryParams,
+    parseReviewsQueryParams,
+    parseProductsFilterBounds,
     resolveReviewVoteInput,
   } = (
     'BoundedSlidingWindowRateLimiter' in apiHandlerMod
@@ -541,6 +554,11 @@ async function runTests() {
   assert.equal(extractClientRateLimitKey(new Headers()), 'anon');
   assert.equal(parseBoundedStringParam('  hello world  ', 5), 'hello');
   assert.equal(parseBoundedStringParam('   ', 10), null);
+  assert.equal(parseOptionalVndPriceParam(' 25990000.4 '), 25990000);
+  assert.equal(parseOptionalVndPriceParam('999000000'), 500_000_000);
+  assert.equal(parseOptionalVndPriceParam('-100'), null);
+  assert.equal(parseOptionalVndPriceParam('abc'), null);
+  assert.equal(parseOptionalVndPriceParam(''), null);
   assert.deepEqual(
     parseCompareSlugsParam(
       ' iphone-16-pro-max , IPHONE-16-PRO-MAX , bad<script>slug , galaxy-s24-ultra , xiaomi-15-ultra , find-x8-pro , extra-fifth-slug '
@@ -549,6 +567,109 @@ async function runTests() {
     'parseCompareSlugsParam must deduplicate case-insensitively, reject invalid characters, and cap at 4 slugs'
   );
   assert.deepEqual(parseCompareSlugsParam('   , ??? , /etc/passwd '), []);
+  assert.deepEqual(
+    parseWatchlistSlugsParam(
+      ' Apple-iPhone-16-128GB , apple-iphone-16-128gb , bad<script>slug , Samsung-Galaxy-S24-Ultra , extra-ignored ',
+      2
+    ),
+    ['apple-iphone-16-128gb', 'samsung-galaxy-s24-ultra'],
+    'parseWatchlistSlugsParam must lowercase, deduplicate, reject invalid characters, and cap at maxSlugs'
+  );
+  assert.deepEqual(parseWatchlistSlugsParam('   , ??? , /etc/passwd '), []);
+  assert.deepEqual(
+    parseVersusQueryParams(
+      new URLSearchParams('pair=Apple-iPhone-16-vs-Samsung-Galaxy-S25')
+    ),
+    ['apple-iphone-16', 'samsung-galaxy-s25']
+  );
+  assert.deepEqual(
+    parseVersusQueryParams(
+      new URLSearchParams('slugA=xiaomi-15-ultra&slugB=oppo-find-x8-pro')
+    ),
+    ['xiaomi-15-ultra', 'oppo-find-x8-pro']
+  );
+  assert.equal(
+    parseVersusQueryParams(
+      new URLSearchParams('pair=same-model-vs-same-model')
+    ),
+    null,
+    'Identical slugs must be rejected by parseVersusQueryParams'
+  );
+  assert.equal(
+    parseVersusQueryParams(
+      new URLSearchParams('pair=bad<script>-vs-samsung-galaxy-s25')
+    ),
+    null,
+    'Malformed slug characters must be rejected by parseVersusQueryParams'
+  );
+  assert.deepEqual(
+    parseReviewsQueryParams(
+      new URLSearchParams('slug=iphone-16-pro-max-256gb&hideFake=true')
+    ),
+    {
+      masterProductId: null,
+      slug: 'iphone-16-pro-max-256gb',
+      hideFake: true,
+      limit: 50,
+    }
+  );
+  assert.deepEqual(
+    parseReviewsQueryParams(
+      new URLSearchParams(
+        'productId=123e4567-e89b-12d3-a456-426614174000&limit=25'
+      )
+    ),
+    {
+      masterProductId: '123e4567-e89b-12d3-a456-426614174000',
+      slug: null,
+      hideFake: false,
+      limit: 25,
+    }
+  );
+  assert.equal(
+    parseReviewsQueryParams(
+      new URLSearchParams('slug=iphone-16-pro-max-256gb&limit=999')
+    ),
+    null,
+    'parseReviewsQueryParams must reject out-of-range limit'
+  );
+  assert.equal(
+    parseReviewsQueryParams(
+      new URLSearchParams('masterProductId=not-a-uuid&slug=iphone-16-pro-max')
+    ),
+    null,
+    'parseReviewsQueryParams must reject malformed masterProductId even when slug is present'
+  );
+  assert.equal(
+    parseReviewsQueryParams(new URLSearchParams('slug=bad<script>slug')),
+    null,
+    'parseReviewsQueryParams must reject malformed slug characters'
+  );
+  assert.deepEqual(
+    parseProductsFilterBounds(
+      new URLSearchParams(
+        'category=LAPTOPS&brands=Apple,apple,bad<script>,Samsung&minPrice=15000000&maxPrice=35000000'
+      )
+    ),
+    {
+      categorySlug: 'laptops',
+      brands: ['Apple', 'Samsung'],
+      minPrice: 15_000_000,
+      maxPrice: 35_000_000,
+    }
+  );
+  assert.equal(
+    parseProductsFilterBounds(new URLSearchParams('category=unknown-cat')),
+    null,
+    'parseProductsFilterBounds must reject unknown category slugs'
+  );
+  assert.equal(
+    parseProductsFilterBounds(
+      new URLSearchParams('minPrice=30000000&maxPrice=20000000')
+    ),
+    null,
+    'parseProductsFilterBounds must reject inverted price ranges (minPrice > maxPrice)'
+  );
   assert.equal(
     resolveReviewVoteInput({}),
     null,
@@ -574,6 +695,88 @@ async function runTests() {
     voteType: 'down',
     reportReason: 'spam',
   });
+
+  const dealsUnitMod = await import('../../web/src/server/rate/deals.js');
+  const { computeCrossPlatformDealRadarFromData: computeRadarUnit } = (
+    'computeCrossPlatformDealRadarFromData' in dealsUnitMod
+      ? dealsUnitMod
+      : (dealsUnitMod as unknown as { default: typeof dealsUnitMod }).default
+  ) as typeof dealsUnitMod;
+  const mockRadarCluster = [
+    {
+      master: {
+        id: 'm-radar-1',
+        slug: 'samsung-galaxy-s24-ultra-256gb',
+        name: 'Samsung Galaxy S24 Ultra 256GB',
+        brand: 'Samsung',
+        model: 'Galaxy S24 Ultra',
+        min_price: 23990000,
+        max_price: 27990000,
+        average_rating: 4.9,
+        total_reviews: 50,
+        merchant_count: 3,
+      } as never,
+      offers: [
+        {
+          id: 'o-tiki',
+          platform: 'tiki',
+          price_current: 23990000,
+          price_original: 25990000,
+          url: 'https://tiki.vn/p1.html',
+          merchant: {
+            id: 'm1',
+            name: 'Tiki Trading',
+            is_official: true,
+            risk_score: 5,
+          },
+        },
+        {
+          id: 'o-cps',
+          platform: 'cellphones',
+          price_current: 25990000,
+          price_original: 26990000,
+          url: 'https://cellphones.com.vn/p1.html',
+          merchant: {
+            id: 'm2',
+            name: 'CellphoneS',
+            is_official: true,
+            risk_score: 5,
+          },
+        },
+        {
+          id: 'o-shopee',
+          platform: 'shopee',
+          price_current: 26990000,
+          price_original: 31990000,
+          url: 'https://shopee.vn/product/1/2',
+          merchant: {
+            id: 'm3',
+            name: 'Shopee Seller',
+            is_official: false,
+            risk_score: 20,
+          },
+        },
+      ] as never[],
+    },
+  ];
+  const tikiOnlyRadar = computeRadarUnit(mockRadarCluster, {
+    platform: 'tiki',
+    limit: 10,
+  });
+  assert.equal(tikiOnlyRadar.platformFilter, 'tiki');
+  assert.equal(tikiOnlyRadar.genuineDeals.length, 1);
+  assert.equal(tikiOnlyRadar.genuineDeals[0]!.platform, 'tiki');
+  assert.equal(
+    tikiOnlyRadar.fakeSaleTraps.length,
+    0,
+    'Shopee fake-sale trap must be excluded when filtering Deal Radar by platform=tiki'
+  );
+  const shopeeOnlyRadar = computeRadarUnit(mockRadarCluster, {
+    platform: 'shopee',
+    limit: 10,
+  });
+  assert.equal(shopeeOnlyRadar.fakeSaleTraps.length, 1);
+  assert.equal(shopeeOnlyRadar.fakeSaleTraps[0]!.platform, 'shopee');
 
   const cacheTagsMod = await import('../../web/src/server/rate/cache-tags.js');
   const { resolveRevalidationTargets, RATE_CACHE_TAGS } = (
@@ -645,7 +848,7 @@ async function runTests() {
   assert.ok(lookupParamNames.includes('externalId'));
 
   const rateApiBatchMod = await import('../../web/src/lib/rate-api.js');
-  const { getMasterProductOffersBatch } = (
+  const { getMasterProductOffersBatch, filterAndSortMerchants } = (
     'getMasterProductOffersBatch' in rateApiBatchMod
       ? rateApiBatchMod
       : (rateApiBatchMod as unknown as { default: typeof rateApiBatchMod })
@@ -656,6 +859,87 @@ async function runTests() {
     emptyBatchMap.size,
     0,
     'getMasterProductOffersBatch must return an empty Map for empty/whitespace IDs without querying PostgREST'
+  );
+
+  // Verify filterAndSortMerchants filters and sorts across all candidates before applying limit (#347)
+  const sampleMerchants = [
+    {
+      id: 'm-1',
+      platform: 'shopee',
+      platform_shop_id: 'shop-1',
+      name: 'Mega Follower Shop',
+      slug: 'mega-follower-shop',
+      url: 'https://shopee.vn/shop/shop-1',
+      is_official: true,
+      rating_star: 4.8,
+      follower_count: 900_000,
+      location: 'HCM',
+      dosafe_risk_score: 25,
+      review_risk_score: 30,
+      risk_score: 30,
+      trust_score: 70,
+      product_count: 5,
+      min_price: 10_000_000,
+      max_price: 20_000_000,
+      review_risk_breakdown: {
+        total_reviews: 10,
+        authentic_count: 7,
+        coin_spam_count: 2,
+        seeding_fake_count: 1,
+        sabotage_or_bombing_count: 0,
+        suspicious_ratio_pct: 30,
+      },
+      updated_at: null,
+    },
+    {
+      id: 'm-2',
+      platform: 'cellphones',
+      platform_shop_id: 'cps-official',
+      name: 'CellphoneS Official',
+      slug: 'cellphones-official',
+      url: 'https://cellphones.com.vn',
+      is_official: true,
+      rating_star: 4.9,
+      follower_count: 50_000,
+      location: 'HCM',
+      dosafe_risk_score: 4,
+      review_risk_score: 2,
+      risk_score: 4,
+      trust_score: 96,
+      product_count: 42,
+      min_price: 5_000_000,
+      max_price: 45_000_000,
+      review_risk_breakdown: {
+        total_reviews: 100,
+        authentic_count: 98,
+        coin_spam_count: 2,
+        seeding_fake_count: 0,
+        sabotage_or_bombing_count: 0,
+        suspicious_ratio_pct: 2,
+      },
+      updated_at: null,
+    },
+  ];
+  const searchedWithLimit1 = filterAndSortMerchants(sampleMerchants, {
+    q: 'cellphones',
+    limit: 1,
+  });
+  assert.equal(searchedWithLimit1.length, 1);
+  assert.equal(
+    searchedWithLimit1[0]?.id,
+    'm-2',
+    'filterAndSortMerchants must match q across all candidates before slicing to limit=1'
+  );
+  const sortedBySeedingLimit1 = filterAndSortMerchants(sampleMerchants, {
+    sort: 'seeding_asc',
+    minTrust: 90,
+    limit: 1,
+  });
+  assert.equal(sortedBySeedingLimit1.length, 1);
+  assert.equal(
+    sortedBySeedingLimit1[0]?.id,
+    'm-2',
+    'filterAndSortMerchants must sort by seeding_asc and filter by minTrust before slicing to limit=1'
   );
 
   console.log(
@@ -915,6 +1199,567 @@ async function runTests() {
       `  ✅ [9/9] Live Merchant Risk & Trust Directory verified (${merchantsList.length} merchants audited)`
     );
   }
+
+  // OpenAPI 3.1 contract verification (#359)
+  const openApiMod = await import('../../web/src/server/rate/openapi.js');
+  const { buildRateOpenApiSpec } = (
+    'buildRateOpenApiSpec' in openApiMod
+      ? openApiMod
+      : (openApiMod as unknown as { default: typeof openApiMod }).default
+  ) as typeof openApiMod;
+  const openApiSpec = buildRateOpenApiSpec('https://rate.vn');
+  const productParamNames = (
+    openApiSpec.paths['/api/v1/rate/products']?.get?.parameters ?? []
+  ).map((p) => p.name);
+  for (const expectedParam of [
+    'minRefreshHz',
+    'has5g',
+    'minBatteryMah',
+    'minFastChargeW',
+    'hasNfc',
+  ]) {
+    assert.ok(
+      productParamNames.includes(expectedParam),
+      `OpenAPI /api/v1/rate/products must document ${expectedParam}`
+    );
+  }
+  const versusParamNames = (
+    openApiSpec.paths['/api/v1/rate/versus']?.get?.parameters ?? []
+  ).map((p) => p.name);
+  for (const expectedParam of [
+    'w_screen',
+    'w_performance',
+    'w_camera',
+    'w_battery',
+    'w_value',
+  ]) {
+    assert.ok(
+      versusParamNames.includes(expectedParam),
+      `OpenAPI /api/v1/rate/versus must document ${expectedParam}`
+    );
+  }
+  const reviewParamNames = (
+    openApiSpec.paths['/api/v1/rate/reviews']?.get?.parameters ?? []
+  ).map((p) => p.name);
+  assert.ok(reviewParamNames.includes('masterProductId'));
+  assert.ok(reviewParamNames.includes('limit'));
+  const ingestProps = (
+    openApiSpec.components.schemas.ExtensionQuarantineIngestPayload as {
+      properties: Record<string, { maximum?: number }>;
+    }
+  ).properties;
+  assert.equal(ingestProps.price?.maximum, 500_000_000);
+  assert.equal(ingestProps.originalPrice?.maximum, 500_000_000);
+  console.log(
+    '  ✅ [OpenAPI 3.1] Spec parameter and schema bounds verified (#359)'
+  );
+
+  // Verify 10-platform URL parsing, Phong Vu SKU stripping, decimal VND parsing, and crowd ingest URL guard (#365)
+  assert.deepEqual(
+    parseEcommerceUrlOrQuery('https://shopee.vn/opaanlp/88201679/25678901234'),
+    {
+      isUrl: true,
+      platform: 'shopee',
+      platformShopId: '88201679',
+      platformItemId: '25678901234',
+      internalSlug: null,
+    },
+    'parseEcommerceUrlOrQuery must support Shopee /opaanlp/<shopId>/<itemId> share URLs'
+  );
+  assert.deepEqual(
+    parseEcommerceUrlOrQuery(
+      'https://www.tiktok.com/@appleflagship/video/7421234567890123456'
+    ),
+    {
+      isUrl: true,
+      platform: 'tiktok',
+      platformShopId: null,
+      platformItemId: null,
+      internalSlug: null,
+    },
+    'parseEcommerceUrlOrQuery must not treat non-commerce TikTok /video/<id> URLs as product listings'
+  );
+  assert.equal(
+    parseEcommerceUrlOrQuery('https://www.thegioididong.com/dtdd')
+      .platformItemId,
+    null,
+    'parseEcommerceUrlOrQuery must reject 1-segment TGDD category index URLs'
+  );
+  assert.equal(
+    parseEcommerceUrlOrQuery('https://fptshop.com.vn/dien-thoai')
+      .platformItemId,
+    null,
+    'parseEcommerceUrlOrQuery must reject 1-segment FPT Shop category index URLs'
+  );
+  assert.equal(
+    parseEcommerceUrlOrQuery(
+      'https://cellphones.com.vn/sforum/danh-gia-iphone-16e'
+    ).platformItemId,
+    null,
+    'parseEcommerceUrlOrQuery must reject CellphoneS sforum blog URLs'
+  );
+  assert.equal(
+    parseEcommerceUrlOrQuery(
+      'https://didongviet.vn/dchannel/tren-tay-iphone-16e.html'
+    ).platformItemId,
+    null,
+    'parseEcommerceUrlOrQuery must reject Di Dong Viet dchannel blog URLs'
+  );
+
+  assert.equal(
+    extractKeywordFromProductUrl(
+      'https://phongvu.vn/apple-iphone-16e-128gb--s2502001'
+    ),
+    'apple iphone 16e 128gb',
+    'extractKeywordFromProductUrl must strip Phong Vu --s<sku> suffix'
+  );
+  assert.equal(
+    extractKeywordFromProductUrl(
+      'https://shopee.vn/opaanlp/88201679/25678901234'
+    ),
+    '',
+    'extractKeywordFromProductUrl must return empty string for numeric Shopee /opaanlp/ share URLs'
+  );
+  assert.equal(
+    extractKeywordFromProductUrl(
+      'https://cellphones.com.vn/catalogsearch/result?q=iphone'
+    ),
+    '',
+    'extractKeywordFromProductUrl must return empty string for non-product search paths'
+  );
+
+  assert.equal(
+    detectEcommercePlatform('https://www.dienmayxanh.com/dtdd/iphone-16e'),
+    'tgdd',
+    'detectEcommercePlatform must map dienmayxanh.com to tgdd'
+  );
+  assert.deepEqual(
+    extractIdsFromUrl(
+      'shopee',
+      'https://shopee.vn/opaanlp/88201679/25678901234'
+    ),
+    {
+      externalShopId: '88201679',
+      externalItemId: '25678901234',
+    }
+  );
+  assert.deepEqual(
+    extractIdsFromUrl(
+      'tiktok',
+      'https://www.tiktok.com/@appleflagship/video/7421234567890123456'
+    ),
+    {
+      externalItemId: null,
+      externalShopId: null,
+    }
+  );
+  assert.deepEqual(
+    extractIdsFromUrl(
+      'cellphones',
+      'https://cellphones.com.vn/sforum/danh-gia-iphone-16e'
+    ),
+    {
+      externalItemId: null,
+      externalShopId: null,
+    }
+  );
+  assert.equal(
+    parseVndPriceText('28990000.00'),
+    28990000,
+    'parseVndPriceText must strip decimal .00 instead of concatenating fractional digits'
+  );
+  assert.equal(
+    parseVndPriceText('28,990,000.00 ₫'),
+    28990000,
+    'parseVndPriceText must parse thousand-separated decimal VND strings'
+  );
+
+  const nonProductUrlIngest = await ingestExtensionCrowdSignal({
+    platform: 'shopee',
+    externalItemId: '29512841920',
+    url: 'https://shopee.vn/search?keyword=iphone',
+    title: 'Điện thoại iPhone 16 Pro Max 256GB',
+    price: 28990000,
+    userConsentOptIn: true,
+  });
+  assert.equal(nonProductUrlIngest.accepted, false);
+  assert.equal(
+    nonProductUrlIngest.jobState,
+    'rejected_invalid_url',
+    'ingestExtensionCrowdSignal must reject search/category URLs that lack a product item ID'
+  );
+
+  let capturedIngestPayload: Record<string, unknown> | null = null;
+  const invertedOriginalIngest = await ingestExtensionCrowdSignal({
+    platform: 'shopee',
+    externalItemId: '29512841920',
+    externalShopId: '88201679',
+    url: 'https://shopee.vn/product/88201679/29512841920',
+    title: 'Điện thoại iPhone 16 Pro Max 256GB',
+    price: 28990000,
+    originalPrice: 19990000,
+    userConsentOptIn: true,
+    rateClient: {
+      rpc: async (_fn, args) => {
+        capturedIngestPayload = args.p_payload as Record<string, unknown>;
+        return { data: { state: 'enqueued', job_id: 'job-365' }, error: null };
+      },
+    },
+  });
+  assert.equal(invertedOriginalIngest.accepted, true);
+  assert.equal(
+    capturedIngestPayload?.['observed_original_price'],
+    null,
+    'ingestExtensionCrowdSignal must normalize inverted originalPrice (< price) to null'
+  );
+  console.log(
+    '  ✅ [URL & Extension Hardening] Shopee /opaanlp/, TikTok video exclusion, retail path filtering, Phong Vu SKU stripping & crowd ingest URL guard verified (#365)'
+  );
+
+  // Verify merchant review_risk extraction, price history Infinity guard, and Deal Radar bounds (#371)
+  assert.equal(MAX_VALID_VND_PRICE, 1_000_000_000);
+  assert.equal(normalizeOfferOriginalPrice(28_990_000, 32_990_000), 32_990_000);
+  assert.equal(
+    normalizeOfferOriginalPrice(28_990_000, 19_990_000),
+    null,
+    'normalizeOfferOriginalPrice must reject inverted original price < priceCurrent'
+  );
+  assert.equal(
+    normalizeOfferOriginalPrice(28_990_000, 9_000_000_000),
+    null,
+    'normalizeOfferOriginalPrice must reject astronomical original price > 1B VND'
+  );
+
+  const mappedFallbackOffer = mapOfferRowToMerchantOffer({
+    id: 'off-371',
+    platform: 'shopee',
+    title: 'iPhone 16 Pro Max 256GB',
+    price_current: 28_990_000,
+    price_original: 9_000_000_000,
+    stock: 5,
+    rating_star: 4.9,
+    rating_count: 42,
+    url: 'https://shopee.vn/product/88201679/29512841920',
+    merchants: {
+      id: 'm-371',
+      name: 'Seeding Trap Shop',
+      platform: 'shopee',
+      is_official: false,
+      rating_star: 4.2,
+      follower_count: 120,
+      location: 'HN',
+      risk_score: 12,
+      metadata: {
+        dosafe_risk_score: 15,
+        review_risk_score: 68,
+        combined_risk_score: 48,
+        seeding_spam_ratio_pct: 55,
+      },
+    },
+  });
+  assert.equal(mappedFallbackOffer.price_original, null);
+  assert.equal(mappedFallbackOffer.merchant.dosafe_risk_score, 15);
+  assert.equal(mappedFallbackOffer.merchant.review_risk_score, 68);
+  assert.equal(mappedFallbackOffer.merchant.risk_score, 68);
+  assert.ok(mappedFallbackOffer.merchant.review_risk_breakdown !== null);
+
+  const mappedTrustViewOffer = mapTrustViewRowToMerchantOffer({
+    id: 'off-tv-371',
+    merchant_id: 'm-tv-371',
+    platform: 'lazada',
+    title: 'Galaxy S25 Ultra',
+    price_current: 26_990_000,
+    price_original: 15_000_000,
+    stock: 3,
+    rating_star: 4.8,
+    rating_count: 19,
+    url: 'https://www.lazada.vn/products/p-i123.html',
+    merchant_name: 'Lazada Store',
+    merchant_is_official: true,
+    threat_risk_score: 8,
+    dosafe_risk_score: 8,
+    review_risk_score: 10,
+  });
+  assert.equal(
+    mappedTrustViewOffer.price_original,
+    null,
+    'mapTrustViewRowToMerchantOffer must normalize inverted price_original to null'
+  );
+
+  const origFetch371 = globalThis.fetch;
+  const origSupabaseUrl371 = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const origSupabaseAnon371 = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  try {
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+      process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://placeholder.supabase.co';
+    }
+    if (!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'placeholder-anon-key';
+    }
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify([
+          {
+            id: 1,
+            product_id: 'off-valid-371',
+            price: 9_000_000_000,
+            price_original: 10_000_000_000,
+            recorded_at: '2026-10-18T10:00:00Z',
+            source: 'crawler',
+          },
+          {
+            id: 2,
+            product_id: 'off-valid-371',
+            price: 27_990_000,
+            price_original: 9_000_000_000,
+            recorded_at: '2026-10-18T11:00:00Z',
+            source: 'crawler',
+          },
+        ]),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }
+      )) as typeof fetch;
+
+    const zeroPriceSummary = await getMasterProductPriceHistory('master-371', [
+      {
+        ...mappedFallbackOffer,
+        id: 'off-zero-371',
+        price_current: 0,
+        price_original: null,
+      },
+      {
+        ...mappedFallbackOffer,
+        id: 'off-runaway-371',
+        price_current: 5_000_000_000,
+        price_original: null,
+      },
+    ]);
+    assert.equal(zeroPriceSummary.points.length, 0);
+    assert.deepEqual(zeroPriceSummary.byOffer, {});
+    assert.equal(zeroPriceSummary.currentMinPrice, null);
+    assert.equal(zeroPriceSummary.lowestEverPrice, null);
+
+    const boundedPriceSummary = await getMasterProductPriceHistory(
+      'master-371',
+      [
+        {
+          ...mappedFallbackOffer,
+          id: 'off-valid-371',
+          price_current: 28_990_000,
+          price_original: null,
+        },
+      ]
+    );
+    assert.equal(
+      boundedPriceSummary.points.length,
+      1,
+      'getMasterProductPriceHistory must drop >1B VND price_history points'
+    );
+    assert.equal(boundedPriceSummary.points[0]?.price, 27_990_000);
+    assert.equal(
+      boundedPriceSummary.points[0]?.price_original,
+      null,
+      'getMasterProductPriceHistory must normalize >1B VND price_original on history rows to null'
+    );
+    assert.equal(
+      boundedPriceSummary.byOffer['off-valid-371']?.historical_max_price,
+      28_990_000
+    );
+  } finally {
+    globalThis.fetch = origFetch371;
+    if (origSupabaseUrl371 === undefined) {
+      delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+    } else {
+      process.env.NEXT_PUBLIC_SUPABASE_URL = origSupabaseUrl371;
+    }
+    if (origSupabaseAnon371 === undefined) {
+      delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    } else {
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = origSupabaseAnon371;
+    }
+  }
+
+  const dealsMod371 = await import('../../web/src/server/rate/deals.js');
+  const { computeCrossPlatformDealRadarFromData: runDealRadar371 } = (
+    'computeCrossPlatformDealRadarFromData' in dealsMod371
+      ? dealsMod371
+      : (dealsMod371 as unknown as { default: typeof dealsMod371 }).default
+  ) as typeof dealsMod371;
+
+  const radar371 = runDealRadar371([
+    {
+      master: {
+        id: 'mp-371',
+        slug: 'apple-iphone-16-pro-max-256gb',
+        name: 'iPhone 16 Pro Max 256GB',
+        brand: 'Apple',
+        model: 'iPhone 16 Pro Max',
+        model_key: 'apple_iphone_16_pro_max_256gb',
+        category_id: null,
+        ram_gb: 8,
+        storage_gb: 256,
+        screen_size_inch: 6.9,
+        battery_mah: 4685,
+        has_5g: true,
+        min_price: 26_990_000,
+        max_price: 29_990_000,
+        average_rating: 4.9,
+        user_rating_weighted: 4.9,
+        expert_rating: 9.4,
+        total_reviews: 50,
+        merchant_count: 3,
+        thumbnail: null,
+        images: [],
+        key_specs: null,
+        specifications: null,
+        metadata: { category_slug: 'smartphones' },
+      },
+      offers: [
+        {
+          id: 'o-seeding-cheap',
+          platform: 'shopee',
+          title: 'iPhone 16 Pro Max',
+          price_current: 25_990_000,
+          price_original: 29_990_000,
+          stock: 5,
+          rating_star: 4.9,
+          rating_count: 100,
+          url: 'https://shopee.vn/product/1/1',
+          merchant: {
+            id: 'm-seeding',
+            name: 'High Review Risk Shop',
+            platform: 'shopee',
+            is_official: false,
+            rating_star: 4.5,
+            follower_count: 500,
+            location: 'HN',
+            risk_score: 10,
+            dosafe_risk_score: 10,
+            review_risk_score: 65,
+            review_risk_breakdown: null,
+          },
+        },
+        {
+          id: 'o-clean-deal',
+          platform: 'lazada',
+          title: 'iPhone 16 Pro Max',
+          price_current: 26_990_000,
+          price_original: 9_000_000_000,
+          stock: 5,
+          rating_star: 4.9,
+          rating_count: 80,
+          url: 'https://www.lazada.vn/products/p-i2.html',
+          merchant: {
+            id: 'm-clean',
+            name: 'Clean Official Mall',
+            platform: 'lazada',
+            is_official: true,
+            rating_star: 4.9,
+            follower_count: 10000,
+            location: 'HCM',
+            risk_score: 8,
+            dosafe_risk_score: 8,
+            review_risk_score: 12,
+            review_risk_breakdown: null,
+          },
+        },
+        {
+          id: 'o-mid',
+          platform: 'tiki',
+          title: 'iPhone 16 Pro Max',
+          price_current: 28_990_000,
+          price_original: 29_990_000,
+          stock: 5,
+          rating_star: 4.9,
+          rating_count: 60,
+          url: 'https://tiki.vn/p3.html',
+          merchant: {
+            id: 'm-mid',
+            name: 'Tiki Trading',
+            platform: 'tiki',
+            is_official: true,
+            rating_star: 4.9,
+            follower_count: 50000,
+            location: 'HCM',
+            risk_score: 5,
+            dosafe_risk_score: 5,
+            review_risk_score: 5,
+            review_risk_breakdown: null,
+          },
+        },
+        {
+          id: 'o-high',
+          platform: 'fptshop',
+          title: 'iPhone 16 Pro Max',
+          price_current: 29_990_000,
+          price_original: 31_990_000,
+          stock: 5,
+          rating_star: 4.9,
+          rating_count: 40,
+          url: 'https://fptshop.com.vn/dien-thoai/iphone-16-pro-max',
+          merchant: {
+            id: 'm-fpt',
+            name: 'FPT Shop',
+            platform: 'fptshop',
+            is_official: true,
+            rating_star: 4.9,
+            follower_count: 40000,
+            location: 'HCM',
+            risk_score: 5,
+            dosafe_risk_score: 5,
+            review_risk_score: 5,
+            review_risk_breakdown: null,
+          },
+        },
+        {
+          id: 'o-runaway',
+          platform: 'cellphones',
+          title: 'Corrupted 5B Offer',
+          price_current: 5_000_000_000,
+          price_original: 6_000_000_000,
+          stock: 1,
+          rating_star: 5,
+          rating_count: 1,
+          url: 'https://cellphones.com.vn/iphone-16-pro-max.html',
+          merchant: {
+            id: 'm-cps',
+            name: 'CellphoneS',
+            platform: 'cellphones',
+            is_official: true,
+            rating_star: 4.9,
+            follower_count: 10000,
+            location: 'HCM',
+            risk_score: 5,
+            dosafe_risk_score: 5,
+            review_risk_score: 5,
+            review_risk_breakdown: null,
+          },
+        },
+      ],
+    },
+  ]);
+  assert.equal(
+    radar371.totalOffersAnalyzed,
+    4,
+    'computeCrossPlatformDealRadarFromData must exclude >1B VND corrupted offers'
+  );
+  assert.equal(
+    radar371.genuineDeals[0]?.merchantId,
+    'm-clean',
+    'computeCrossPlatformDealRadarFromData must skip merchants with review_risk_score > 30 even if base risk_score <= 30'
+  );
+  assert.equal(
+    radar371.genuineDeals[0]?.priceOriginal,
+    null,
+    'computeCrossPlatformDealRadarFromData must normalize >1B VND price_original to null'
+  );
+  assert.equal(radar371.genuineDeals[0]?.claimedDiscountPct, 0);
+  assert.equal(radar371.genuineDeals[0]?.merchantRiskScore, 12);
+  console.log(
+    '  ✅ [Merchant Dual-Risk & Deal Radar Bounds] Metadata review_risk extraction, price_history Infinity guard, and 1B VND Deal Radar bounds verified (#371)'
+  );
 
   console.log('🎉 All Rate Browser Extension MV3 v2 tests passed!');
 }

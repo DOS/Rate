@@ -3,6 +3,7 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { useRouter } from '@/lib/navigation';
+import { startNavigationProgress } from '@/components/elementary/NavigationProgress';
 import {
   getMasterProductCategorySlug,
   type CanonicalCategorySlug,
@@ -41,6 +42,7 @@ export default function VersusMatchupSwitcher({
   const handleLaunchMatchup = (e: React.FormEvent) => {
     e.preventDefault();
     if (!canLaunchMatchup) return;
+    startNavigationProgress(`/compare/${slugA}-vs-${slugB}`);
     router.push(`/compare/${slugA}-vs-${slugB}`);
   };
 

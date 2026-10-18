@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { revalidateTag } from 'next/cache';
 import { z } from 'zod';
 import type { ReviewFlagCategory, ReviewItem } from '@/lib/rate-api';
 import {
+  RATE_CACHE_TAGS,
   getCachedMasterProductBySlug,
   getCachedMasterProductReviews,
   getCachedMasterProductReviewSummary,
@@ -9,7 +11,7 @@ import {
 import {
   PUBLIC_API_CORS_HEADERS,
   jsonApiError,
-  parseBoundedStringParam,
+  parseReviewsQueryParams,
 } from '@/server/rate/api-handler';
 import {
   authenticateRateRequest,
@@ -21,16 +23,17 @@ import { createLogger, serializeError } from '@/lib/logger';
 
 const log = createLogger('api.reviews');
 
-const UUID_REGEX =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const REVIEWS_CORS_HEADERS: Record<string, string> = {
+  ...PUBLIC_API_CORS_HEADERS,
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers':
+    'Content-Type, Authorization, X-Rate-Extension-Version',
+};
 
 export async function OPTIONS() {
   return new NextResponse(null, {
     status: 204,
-    headers: {
-      ...PUBLIC_API_CORS_HEADERS,
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    },
+    headers: REVIEWS_CORS_HEADERS,
   });
 }
 
@@ -40,33 +43,28 @@ export async function OPTIONS() {
  */
 export async function GET(request: NextRequest) {
   try {
-    const sp = request.nextUrl.searchParams;
-    const slug = parseBoundedStringParam(sp.get('slug'), 120);
-    const masterProductIdParam = parseBoundedStringParam(
-      sp.get('masterProductId'),
-      64
-    );
-    const hideFakeRaw = sp.get('hideFake');
-    const hideFake =
-      hideFakeRaw === '1' || hideFakeRaw?.toLowerCase() === 'true';
+    const parsedQuery = parseReviewsQueryParams(request.nextUrl.searchParams);
+    if (!parsedQuery) {
+      return jsonApiError(
+        400,
+        'Provide ?slug=<product-slug> or a valid ?masterProductId=<uuid>',
+        undefined,
+        REVIEWS_CORS_HEADERS
+      );
+    }
 
-    let resolvedMasterId: string | null = null;
-    if (masterProductIdParam && UUID_REGEX.test(masterProductIdParam)) {
-      resolvedMasterId = masterProductIdParam;
-    } else if (slug) {
-      const product = await getCachedMasterProductBySlug(slug);
+    let resolvedMasterId: string;
+    if (parsedQuery.masterProductId) {
+      resolvedMasterId = parsedQuery.masterProductId;
+    } else {
+      const product = await getCachedMasterProductBySlug(parsedQuery.slug!);
       if (!product) {
         return NextResponse.json(
           { ok: false, error: 'Product not found', code: 'NOT_FOUND' },
-          { status: 404, headers: PUBLIC_API_CORS_HEADERS }
+          { status: 404, headers: REVIEWS_CORS_HEADERS }
         );
       }
       resolvedMasterId = product.id;
-    } else {
-      return jsonApiError(
-        400,
-        'Provide ?slug=<product-slug> or a valid ?masterProductId=<uuid>'
-      );
     }
 
     const allReviews = await getCachedMasterProductReviews(resolvedMasterId);
@@ -74,7 +72,7 @@ export async function GET(request: NextRequest) {
       resolvedMasterId,
       allReviews
     );
-    const reviews = hideFake
+    const filteredReviews = parsedQuery.hideFake
       ? allReviews.filter(
           (r) =>
             r.verdict !== 'fake' &&
@@ -82,6 +80,7 @@ export async function GET(request: NextRequest) {
             r.flag_category !== 'low_value_coin_spam'
         )
       : allReviews;
+    const reviews = filteredReviews.slice(0, parsedQuery.limit);
 
     return NextResponse.json(
       {
@@ -95,13 +94,18 @@ export async function GET(request: NextRequest) {
       {
         status: 200,
         headers: {
-          ...PUBLIC_API_CORS_HEADERS,
+          ...REVIEWS_CORS_HEADERS,
           'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300',
         },
       }
     );
   } catch (err) {
-    return jsonApiError(500, 'Failed to fetch product reviews', err);
+    return jsonApiError(
+      500,
+      'Failed to fetch product reviews',
+      err,
+      REVIEWS_CORS_HEADERS
+    );
   }
 }
 
@@ -264,7 +268,7 @@ export async function POST(request: NextRequest) {
             parsed.error.issues[0]?.message || 'Dữ liệu đánh giá không hợp lệ.',
           code: 'INVALID_BODY',
         },
-        { status: 400 }
+        { status: 400, headers: REVIEWS_CORS_HEADERS }
       );
     }
     const body = parsed.data;
@@ -293,7 +297,7 @@ export async function POST(request: NextRequest) {
         p_author_name: authorName,
         p_rating_star: ratingStar,
         p_comment: body.comment,
-        p_variation: variation,
+        p_variation: variation ?? undefined,
         p_reviewer_type: 'user',
         p_criteria_ratings: criteria,
       }
@@ -307,7 +311,7 @@ export async function POST(request: NextRequest) {
             error: 'Chức năng gửi đánh giá chưa sẵn sàng trên môi trường này.',
             code: 'REVIEWS_UNAVAILABLE',
           },
-          { status: 503 }
+          { status: 503, headers: REVIEWS_CORS_HEADERS }
         );
       }
       // Errors the RPC raises on purpose carry a user-facing Vietnamese message.
@@ -315,7 +319,7 @@ export async function POST(request: NextRequest) {
       if (rejection) {
         return NextResponse.json(
           { ok: false, error: rejection.error, code: rejection.code },
-          { status: rejection.status }
+          { status: rejection.status, headers: REVIEWS_CORS_HEADERS }
         );
       }
       log.error('submit_community_review failed', {
@@ -328,7 +332,7 @@ export async function POST(request: NextRequest) {
           error: 'Không thể lưu đánh giá lúc này.',
           code: 'PERSIST_FAILED',
         },
-        { status: 502 }
+        { status: 502, headers: REVIEWS_CORS_HEADERS }
       );
     }
 
@@ -340,20 +344,32 @@ export async function POST(request: NextRequest) {
           error: 'Không thể lưu đánh giá lúc này.',
           code: 'PERSIST_FAILED',
         },
-        { status: 502 }
+        { status: 502, headers: REVIEWS_CORS_HEADERS }
       );
     }
 
-    return NextResponse.json({
-      ok: true,
-      mode: 'supabase_rpc',
-      review: toReviewItem(rpcData as Record<string, unknown>, criteria),
-    });
+    try {
+      revalidateTag(RATE_CACHE_TAGS.REVIEWS, 'max');
+      revalidateTag(RATE_CACHE_TAGS.PRODUCTS, 'max');
+    } catch {
+      // Ignore revalidateTag errors outside Next.js request context
+    }
+
+    return NextResponse.json(
+      {
+        ok: true,
+        mode: 'supabase_rpc',
+        review: toReviewItem(rpcData as Record<string, unknown>, criteria),
+      },
+      { headers: REVIEWS_CORS_HEADERS }
+    );
   } catch (err) {
     log.error('POST failed', { error: serializeError(err) });
-    return NextResponse.json(
-      { ok: false, error: 'Failed to submit review' },
-      { status: 500 }
+    return jsonApiError(
+      500,
+      'Failed to submit review',
+      err,
+      REVIEWS_CORS_HEADERS
     );
   }
 }

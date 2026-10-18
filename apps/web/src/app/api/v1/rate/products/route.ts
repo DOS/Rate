@@ -1,21 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
   getCachedCategoryDirectoryFacets,
-  getCrossPlatformDealRadar,
+  getMasterProductOffersBatch,
   getMasterProducts,
-  type CanonicalCategorySlug,
   type MasterProductFilterParams,
 } from '@/server/rate';
-import {
-  buildRadarIndex,
-  getRadarSignal,
-  radarExportFields,
-} from '@/lib/deal-radar';
+import { computeProductRadarSignal } from '@/server/rate/deals';
+import { radarExportFields } from '@/lib/deal-radar';
 import {
   PUBLIC_API_CORS_HEADERS,
   jsonApiError,
   parseBoundedIntParam,
+  parseBoundedNumberParam,
   parseBoundedStringParam,
+  parseProductsFilterBounds,
 } from '@/server/rate/api-handler';
 
 export async function OPTIONS() {
@@ -45,6 +43,17 @@ function parseBooleanFlag(raw: string | null): boolean | undefined {
   return raw === '1' || raw.toLowerCase() === 'true' ? true : undefined;
 }
 
+const VALID_PRODUCT_SORTS = new Set<
+  NonNullable<MasterProductFilterParams['sort']>
+>([
+  'default',
+  'price_asc',
+  'price_desc',
+  'rating_desc',
+  'merchants_desc',
+  'newest',
+]);
+
 /**
  * GET /api/v1/rate/products
  * Structured JSON Backend API for Web Client, Browser Extension MV3, and Partners.
@@ -53,20 +62,22 @@ function parseBooleanFlag(raw: string | null): boolean | undefined {
 export async function GET(request: NextRequest) {
   try {
     const sp = request.nextUrl.searchParams;
-    const categorySlug = sp.get('category') || 'smartphones';
+    const filterBounds = parseProductsFilterBounds(sp);
+    if (!filterBounds) {
+      return jsonApiError(
+        400,
+        'Invalid category slug or price filter range (minPrice must not exceed maxPrice)',
+        undefined,
+        PUBLIC_API_CORS_HEADERS
+      );
+    }
+    const { categorySlug, brands, minPrice, maxPrice } = filterBounds;
     const includeFacets =
       sp.get('facets') === '1' || sp.get('facets') === 'true';
 
-    const brandsParam = sp.get('brands') || sp.get('brand');
-    const brands = brandsParam
-      ? brandsParam
-          .split(',')
-          .map((b) => b.trim())
-          .filter(Boolean)
-      : undefined;
-
-    const sortParam = sp.get('sort') as
-      MasterProductFilterParams['sort'] | null;
+    const rawSort = sp.get('sort') as MasterProductFilterParams['sort'] | null;
+    const sort: NonNullable<MasterProductFilterParams['sort']> =
+      rawSort && VALID_PRODUCT_SORTS.has(rawSort) ? rawSort : 'default';
     const limit = parseBoundedIntParam(sp.get('limit'), 24, 1, 100);
 
     const compactRaw = sp.get('compactScreen') || sp.get('compact');
@@ -79,60 +90,71 @@ export async function GET(request: NextRequest) {
       categorySlug,
       brands,
       search: parseBoundedStringParam(sp.get('q'), 160) || undefined,
-      minPrice: parsePositiveNum(sp.get('minPrice')),
-      maxPrice: parsePositiveNum(sp.get('maxPrice')),
-      minRating: parsePositiveNum(sp.get('minRating') || sp.get('rating')),
+      minPrice,
+      maxPrice,
+      minRating: parseBoundedNumberParam(
+        sp.get('minRating') || sp.get('rating'),
+        0,
+        5
+      ),
       ramGb: parseNumArray(sp.get('ramGb') || sp.get('ram')),
       storageGb: parseNumArray(
         sp.get('storageGb') || sp.get('storage') || sp.get('rom')
       ),
       minBatteryMah: parseBooleanFlag(sp.get('bigBattery'))
         ? 5000
-        : parsePositiveNum(sp.get('battery')),
+        : parsePositiveNum(sp.get('minBatteryMah') || sp.get('battery')),
       minRefreshRateHz: parseBooleanFlag(sp.get('highRefresh'))
         ? 120
-        : parsePositiveNum(sp.get('hz')),
+        : parsePositiveNum(sp.get('minRefreshHz') || sp.get('hz')),
       minFastChargingW: parseBooleanFlag(sp.get('fastCharge'))
         ? 45
-        : parsePositiveNum(sp.get('charge')),
+        : parsePositiveNum(sp.get('minFastChargeW') || sp.get('charge')),
       has5g: parseBooleanFlag(sp.get('has5g') || sp.get('5g')),
       hasNfc: parseBooleanFlag(sp.get('hasNfc') || sp.get('nfc')),
       maxScreenSizeInch,
-      sort: sortParam || 'default',
+      sort,
       limit,
     };
 
-    const [products, facets, dealRadar] = await Promise.all([
+    const [products, facets] = await Promise.all([
       getMasterProducts(filterParams),
       includeFacets
         ? getCachedCategoryDirectoryFacets(categorySlug)
         : Promise.resolve(null),
-      getCrossPlatformDealRadar({
-        categorySlug: (categorySlug as CanonicalCategorySlug) || 'all',
-        limit: 50,
-      }),
     ]);
-    const radarIndex = buildRadarIndex(dealRadar);
+    const offersByMasterId = await getMasterProductOffersBatch(
+      products.map((p) => p.id)
+    );
 
     return NextResponse.json(
       {
         ok: true,
         category: categorySlug,
         count: products.length,
-        data: products.map((p) => ({
-          ...p,
-          deal_radar: radarExportFields(getRadarSignal(radarIndex, p.slug)),
-        })),
+        data: products.map((p) => {
+          const offers = offersByMasterId.get(p.id) ?? [];
+          return {
+            ...p,
+            deal_radar: radarExportFields(computeProductRadarSignal(p, offers)),
+          };
+        }),
         ...(facets ? { facets } : {}),
       },
       {
         status: 200,
         headers: {
+          ...PUBLIC_API_CORS_HEADERS,
           'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300',
         },
       }
     );
   } catch (error) {
-    return jsonApiError(500, 'Failed to fetch products catalog', error);
+    return jsonApiError(
+      500,
+      'Failed to fetch products catalog',
+      error,
+      PUBLIC_API_CORS_HEADERS
+    );
   }
 }

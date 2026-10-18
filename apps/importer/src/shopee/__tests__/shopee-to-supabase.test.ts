@@ -136,7 +136,7 @@ function createPipelineStubSupabase(opts: StubPipelineOptions = {}) {
               eq(col: string, val: string) {
                 return {
                   maybeSingle() {
-                    if (col === 'id' && cols === 'id') {
+                    if (col === 'id' && (cols === 'id' || cols === 'id, specifications')) {
                       return Promise.resolve({
                         data: opts.hintRow ?? null,
                         error: opts.hintErr ?? null,
@@ -240,17 +240,32 @@ function createPipelineStubSupabase(opts: StubPipelineOptions = {}) {
             if (cols === 'platform_review_id') {
               return {
                 eq(_col: string, _val: string) {
+                  // Like PostgREST: filter by the requested ids, and never
+                  // return more than max-rows (1000) in one response.
+                  const respond = (ids: string[], requested?: string[]) => {
+                    const stored = requested ? ids.filter(id => requested.includes(id)) : ids;
+                    return Promise.resolve({
+                      data: stored.slice(0, 1000).map(id => ({ platform_review_id: id })),
+                      error: null,
+                    });
+                  };
+                  const storedNow = () =>
+                    reviewSelectPass === 1
+                      ? (opts.initialExistingReviewIds ?? [])
+                      : (opts.afterRaceExistingReviewIds ?? []);
                   return {
                     not(_notCol: string, _op: string, _notVal: unknown) {
                       reviewSelectPass += 1;
-                      const ids =
-                        reviewSelectPass === 1
-                          ? (opts.initialExistingReviewIds ?? [])
-                          : (opts.afterRaceExistingReviewIds ?? []);
-                      return Promise.resolve({
-                        data: ids.map(id => ({ platform_review_id: id })),
-                        error: null,
-                      });
+                      return respond(storedNow());
+                    },
+                    in(_inCol: string, requested: string[]) {
+                      // The race refetch is the first lookup after an insert.
+                      if (reviewInsertPass > 0 && reviewSelectPass === 1) {
+                        reviewSelectPass = 2;
+                      } else if (reviewSelectPass === 0) {
+                        reviewSelectPass = 1;
+                      }
+                      return respond(storedNow(), requested);
                     },
                   };
                 },
@@ -328,6 +343,18 @@ function createPipelineStubSupabase(opts: StubPipelineOptions = {}) {
 
       if (table === 'review_flags' || table === 'review_analysis') {
         return {
+          // persistAnalysisToSupabase reads flags written by other detectors first.
+          select(_columns: string) {
+            return {
+              in(_column: string, _ids: unknown[]) {
+                return {
+                  in(_detectorColumn: string, _detectors: unknown[]) {
+                    return Promise.resolve({ data: [], error: null });
+                  },
+                };
+              },
+            };
+          },
           upsert(_payload: unknown, _options?: unknown) {
             return Promise.resolve({ data: null, error: null });
           },
@@ -406,7 +433,7 @@ async function runTests() {
     'trimTrailingSlashes must run in linear time without polynomial regex backtracking'
   );
   console.log(
-    '  ✅ [1/5] platformReviewIdFor masked-author collision resistance & linear-time URL normalization passed'
+    '  ✅ [1/6] platformReviewIdFor masked-author collision resistance & linear-time URL normalization passed'
   );
 
   // 2. init() category lookup error propagation
@@ -422,7 +449,7 @@ async function runTests() {
     /Failed to initialize categories: connection reset by peer/,
     'init() must propagate categories query failure instead of writing null category_id'
   );
-  console.log('  ✅ [2/5] init() category error propagation passed');
+  console.log('  ✅ [2/6] init() category error propagation passed');
 
   // 3. masterIdHint preservation vs DB error abort
   const { stub: hintErrStub } = createPipelineStubSupabase({
@@ -454,7 +481,7 @@ async function runTests() {
   assert.equal(hintedRes.masterId, 'master-hint-verified');
   assert.equal(hintOkEvents.productUpserts[0]?.cluster_id, 'master-hint-verified');
   assert.equal(hintOkEvents.productUpserts[0]?.category_id, 'cat-smartphones');
-  console.log('  ✅ [3/5] masterIdHint preservation & DB error abort passed');
+  console.log('  ✅ [3/6] masterIdHint preservation & DB error abort passed');
 
   // 4. Smart Delta Price Compression: client-side 7-day fallback & 23505 race recovery
   const recentAnchor = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
@@ -502,7 +529,7 @@ async function runTests() {
     1,
     'Concurrent 23505 price observation insert race must be treated as dedupe without throwing'
   );
-  console.log('  ✅ [4/5] Smart Delta Price Compression & 23505 race recovery passed');
+  console.log('  ✅ [4/6] Smart Delta Price Compression & 23505 race recovery passed');
 
   // 5. Review deduplication, 23505 race retry pass, is_verified_buyer refresh & section reporting
   const reportedSections: string[] = [];
@@ -571,8 +598,45 @@ async function runTests() {
   );
   assert.deepEqual(reportedSections, ['merchant', 'master', 'listing', 'price', 'reviews']);
   console.log(
-    '  ✅ [5/5] Review deduplication, 23505 retry pass & verifiedPurchase refresh passed'
+    '  ✅ [5/6] Review deduplication, 23505 retry pass & verifiedPurchase refresh passed'
   );
+
+  // A popular product already stores 1200 reviews: more than PostgREST returns
+  // in one response. A re-crawled review stored past that cap must still be
+  // recognized as a duplicate instead of failing the insert with 23505.
+  const { stub: manyStub, events: manyEvents } = createPipelineStubSupabase({
+    initialExistingReviewIds: Array.from({ length: 1200 }, (_, i) => `old-${i + 1}`),
+  });
+  const manyPipeline = new ShopeeIngestionPipeline({ supabaseClient: manyStub, apiKey: '' });
+  await manyPipeline.ingestProduct(
+    createBaseProduct({
+      reviews: [
+        {
+          reviewId: 'old-1150',
+          author: 'User cũ',
+          ratingStar: 4,
+          comment: 'Review đã lưu từ trước, nằm sau giới hạn 1000 dòng',
+          images: [],
+          reviewer: { verifiedPurchase: true },
+        },
+        {
+          reviewId: 'brand-new',
+          author: 'User mới',
+          ratingStar: 5,
+          comment: 'Review mới của lần crawl này',
+          images: [],
+          reviewer: { verifiedPurchase: true },
+        },
+      ],
+    })
+  );
+  assert.equal(manyEvents.reviewInserts.length, 1, 'One insert, no duplicate-key retry');
+  assert.deepEqual(
+    manyEvents.reviewInserts[0]?.map(r => r.platform_review_id),
+    ['brand-new'],
+    'A stored review past the 1000-row cap is still skipped'
+  );
+  console.log('  ✅ [6/6] Duplicate detection past the 1000-row cap passed');
 
   console.log('\n🎉 ALL SHOPEE INGESTION PIPELINE TESTS PASSED!');
 }

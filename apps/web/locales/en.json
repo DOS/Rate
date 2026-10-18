@@ -411,7 +411,8 @@
     "showdownsEyebrow": "Direct 1v1 Showdowns From Leaderboard",
     "showdownsHeading": "Head-to-Head Matchups Between Top-Ranked Devices",
     "openCompareMatrixBtn": "Open Comparison Matrix →",
-    "view1v1DeepBtn": "View 1v1 Head-to-Head"
+    "view1v1DeepBtn": "View 1v1 Head-to-Head",
+    "categoryTabsAria": "Choose a category"
   },
   "reviews": {
     "criteriaScreen": "Display & Visuals",
@@ -523,7 +524,8 @@
     "upvoteBtnLabel": "👍 Helpful ({count})",
     "downvoteTitle": "Downvote Not Helpful - reduces this review weight",
     "reportTitle": "Report Seeding / Spam / Sabotage (-0.35 weight penalty per report)",
-    "reportBtnLabel": "🚩 Report ({count})"
+    "reportBtnLabel": "🚩 Report ({count})",
+    "filterGroupAria": "Filter reviews"
   },
   "watchlist": {
     "metaTitle": "True Price Watchlist & Target Drop Alerts | Rate.vn",
@@ -1600,7 +1602,9 @@
       "applyFiltersBtn": "Apply Filters",
       "clearAllFiltersBtn": "Clear All Filters",
       "rangeFrom": "From:",
-      "rangeTo": "To:"
+      "rangeTo": "To:",
+      "minPriceAria": "Minimum price",
+      "maxPriceAria": "Maximum price"
     }
   },
   "heroSearch": {

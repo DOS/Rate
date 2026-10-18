@@ -7,15 +7,17 @@ import {
   evaluateExtensionPriceVerdict,
 } from '@/server/rate/extension';
 import {
+  PUBLIC_API_CORS_HEADERS,
   jsonApiError,
   parseBoundedStringParam,
+  parseOptionalVndPriceParam,
 } from '@/server/rate/api-handler';
 
-function parseOptionalVndPriceParam(raw: string | null): number | null {
-  if (!raw || !raw.trim()) return null;
-  const n = Number(raw);
-  if (!Number.isFinite(n) || n <= 0) return null;
-  return Math.min(Math.round(n), 500_000_000);
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: PUBLIC_API_CORS_HEADERS,
+  });
 }
 
 /**
@@ -33,13 +35,7 @@ export async function GET(request: NextRequest) {
     );
 
     if (!rawQuery) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: 'Missing query parameter ?q= or ?url=',
-        },
-        { status: 400 }
-      );
+      return jsonApiError(400, 'Missing query parameter ?q= or ?url=');
     }
 
     const queryPrice = parseOptionalVndPriceParam(sp.get('price'));
@@ -101,11 +97,17 @@ export async function GET(request: NextRequest) {
       {
         status: 200,
         headers: {
+          ...PUBLIC_API_CORS_HEADERS,
           'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=120',
         },
       }
     );
   } catch (error) {
-    return jsonApiError(500, 'Failed to inspect URL or query', error);
+    return jsonApiError(
+      500,
+      'Failed to inspect URL or query',
+      error,
+      PUBLIC_API_CORS_HEADERS
+    );
   }
 }
