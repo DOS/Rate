@@ -135,6 +135,32 @@ export class ShopeeIngestionPipeline {
   /**
    * Initializes category lookup across all 5 tech categories
    */
+  /**
+   * Which of `ids` this product already stores. Filters on the ids (100 per
+   * request, a short URL) instead of reading every stored review, which
+   * PostgREST caps at max-rows.
+   */
+  private async findExistingReviewIds(
+    productId: string,
+    ids: readonly string[],
+    errorPrefix: string
+  ): Promise<Set<string>> {
+    const found = new Set<string>();
+    const unique = [...new Set(ids)];
+    for (let i = 0; i < unique.length; i += 100) {
+      const { data, error } = await this.supabase
+        .from('reviews')
+        .select('platform_review_id')
+        .eq('product_id', productId)
+        .in('platform_review_id', unique.slice(i, i + 100));
+      if (error) throw new Error(`${errorPrefix}: ${error.message}`);
+      for (const r of (data || []) as Array<{ platform_review_id: string }>) {
+        found.add(r.platform_review_id);
+      }
+    }
+    return found;
+  }
+
   public async init(): Promise<void> {
     const { data: cats, error: catsErr } = await this.supabase
       .from('categories')
@@ -495,16 +521,15 @@ export class ShopeeIngestionPipeline {
         platform_created_at: r.createdAt || null,
       }));
 
-      const { data: existingReviews, error: existingErr } = await this.supabase
-        .from('reviews')
-        .select('platform_review_id')
-        .eq('product_id', productId)
-        .not('platform_review_id', 'is', null);
-      if (existingErr) {
-        throw new Error(`Failed to fetch existing reviews: ${existingErr.message}`);
-      }
-      const seen = new Set<string>(
-        (existingReviews || []).map((r: { platform_review_id: string }) => r.platform_review_id)
+      // Ask only about the ids in this batch: reading every stored id stops at
+      // PostgREST's max-rows (1000), so popular products missed duplicates.
+      const candidateIds = reviewRows
+        .map(r => r.platform_review_id)
+        .filter((id): id is string => Boolean(id));
+      const seen = await this.findExistingReviewIds(
+        productId,
+        candidateIds,
+        'Failed to fetch existing reviews'
       );
       const newRows = reviewRows.filter(r => {
         if (!r.platform_review_id) return true;
@@ -542,16 +567,10 @@ export class ShopeeIngestionPipeline {
             'Review batch hit a unique-index race; retrying the remainder.',
             { productId }
           );
-          const { data: existingNow, error: refetchErr } = await this.supabase
-            .from('reviews')
-            .select('platform_review_id')
-            .eq('product_id', productId)
-            .not('platform_review_id', 'is', null);
-          if (refetchErr) {
-            throw new Error(`Failed to refetch reviews after race: ${refetchErr.message}`);
-          }
-          const nowSeen = new Set<string>(
-            (existingNow || []).map((r: { platform_review_id: string }) => r.platform_review_id)
+          const nowSeen = await this.findExistingReviewIds(
+            productId,
+            pending.map(r => r.platform_review_id).filter((id): id is string => Boolean(id)),
+            'Failed to refetch reviews after race'
           );
           pending = pending.filter(r => !nowSeen.has(r.platform_review_id as string));
         }

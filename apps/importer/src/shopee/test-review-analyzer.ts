@@ -1366,6 +1366,11 @@ async function run() {
           select: () => ({
             eq: () => ({
               not: async () => ({ data: [{ platform_review_id: 'rev-dup-1' }], error: null }),
+              // The pipeline asks only about the ids it is about to insert.
+              in: async (_col: string, ids: string[]) => ({
+                data: ids.filter(id => id === 'rev-dup-1').map(id => ({ platform_review_id: id })),
+                error: null,
+              }),
               order: () => ({
                 limit: async () => ({ data: [], error: null }),
               }),
