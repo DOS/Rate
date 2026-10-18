@@ -562,6 +562,7 @@ export async function ProductDetailView({
                             <div
                               className="progress-bar"
                               role="progressbar"
+                              aria-label={crit.label}
                               style={{
                                 width: `${pct}%`,
                                 backgroundColor:
@@ -573,7 +574,7 @@ export async function ProductDetailView({
                                         ? '#f59e0b'
                                         : '#f43f5e',
                               }}
-                              aria-valuenow={val ?? 0}
+                              aria-valuenow={val ?? undefined}
                               aria-valuemin={0}
                               aria-valuemax={5}
                             />

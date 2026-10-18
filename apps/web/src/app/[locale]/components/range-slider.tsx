@@ -75,6 +75,8 @@ export default function RangeSlider({
         onChange={handleRangeChange}
         onChangeComplete={handleAfterChange}
         allowCross={false}
+        // Each handle is a role="slider" and needs an accessible name.
+        ariaLabelForHandle={[tSidebar('rangeFrom'), tSidebar('rangeTo')]}
       />
       <div
         className="d-flex justify-content-between align-items-center small fw-medium text-muted"
