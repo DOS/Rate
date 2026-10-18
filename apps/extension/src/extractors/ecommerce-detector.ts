@@ -18,21 +18,39 @@ export function sanitizeProductUrl(rawUrl: string): string | null {
   }
 }
 
+function isDomainOrSubdomain(host: string, domain: string): boolean {
+  return host === domain || host.endsWith(`.${domain}`);
+}
+
 export function detectEcommercePlatform(
   url: string
 ): SupportedEcommercePlatform | null {
-  const host = url.toLowerCase();
-  if (host.includes('shopee.vn')) return 'shopee';
-  if (host.includes('lazada.vn')) return 'lazada';
-  if (host.includes('tiki.vn')) return 'tiki';
-  if (host.includes('tiktok.com')) return 'tiktok';
-  if (host.includes('cellphones.com.vn')) return 'cellphones';
-  if (host.includes('thegioididong.com') || host.includes('topzone.vn'))
+  let host: string;
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return null;
+    }
+    host = parsed.hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+
+  if (isDomainOrSubdomain(host, 'shopee.vn')) return 'shopee';
+  if (isDomainOrSubdomain(host, 'lazada.vn')) return 'lazada';
+  if (isDomainOrSubdomain(host, 'tiki.vn')) return 'tiki';
+  if (isDomainOrSubdomain(host, 'tiktok.com')) return 'tiktok';
+  if (isDomainOrSubdomain(host, 'cellphones.com.vn')) return 'cellphones';
+  if (
+    isDomainOrSubdomain(host, 'thegioididong.com') ||
+    isDomainOrSubdomain(host, 'topzone.vn')
+  ) {
     return 'tgdd';
-  if (host.includes('fptshop.com.vn')) return 'fptshop';
-  if (host.includes('hoanghamobile.com')) return 'hoangha';
-  if (host.includes('didongviet.vn')) return 'didongviet';
-  if (host.includes('phongvu.vn')) return 'phongvu';
+  }
+  if (isDomainOrSubdomain(host, 'fptshop.com.vn')) return 'fptshop';
+  if (isDomainOrSubdomain(host, 'hoanghamobile.com')) return 'hoangha';
+  if (isDomainOrSubdomain(host, 'didongviet.vn')) return 'didongviet';
+  if (isDomainOrSubdomain(host, 'phongvu.vn')) return 'phongvu';
   return null;
 }
 

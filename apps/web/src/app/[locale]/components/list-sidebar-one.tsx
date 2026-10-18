@@ -1,12 +1,14 @@
 'use client';
 import React, { useEffect, useState, useTransition } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { BsFunnel, BsStarFill } from 'react-icons/bs';
 import { Link, usePathname, useRouter } from '@/lib/navigation';
 import RangeSlider from './range-slider';
 import {
   formatStorageLabel,
   getCategoryFilterSchema,
+  localizeCategoryFilterSchema,
   RATING_FILTER_OPTIONS,
 } from '@/lib/category-filters';
 import type { RateCategoryItem } from '@/lib/rate-domain';
@@ -26,11 +28,13 @@ export default function ListSidebarOne({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
+  const t = useTranslations('catalog');
 
-  const schema = getCategoryFilterSchema(
+  const baseSchema = getCategoryFilterSchema(
     categorySlug,
     brandFacets.map((b) => b.name)
   );
+  const schema = localizeCategoryFilterSchema(baseSchema, t);
   const brandCountMap = new Map(
     brandFacets.map((b) => [b.name.toLowerCase(), b.count])
   );
@@ -237,7 +241,7 @@ export default function ListSidebarOne({
           aria-labelledby="filterSliderLabel"
         >
           <div className="offcanvas-header border-bottom py-3">
-            <h3 className="h5 mb-0">Bộ lọc thông số</h3>
+            <h3 className="h5 mb-0">{t('sidebar.filterTitle')}</h3>
             <button
               type="button"
               className="btn-close d-lg-none text-sm"
@@ -256,7 +260,7 @@ export default function ListSidebarOne({
                 <div className="filter-search-box mb-4">
                   <div className="filtersearch-title d-flex justify-content-between align-items-center">
                     <h6 className="lh-base text-uppercase fw-medium mb-2 text-sm">
-                      Từ khóa &amp; Chipset
+                      {t('sidebar.keywordChipsetHeader')}
                     </h6>
                     <span className="badge bg-light text-muted small border">
                       {schema.directoryName}
@@ -277,7 +281,7 @@ export default function ListSidebarOne({
                 <div className="prtsTypes mb-4">
                   <div className="filtersearch-title">
                     <h6 className="lh-base text-uppercase fw-medium mb-2 text-sm">
-                      Điểm đánh giá (JReviews)
+                      {t('sidebar.jreviewsRatingHeader')}
                     </h6>
                   </div>
                   <div className="filterButton">
@@ -308,7 +312,7 @@ export default function ListSidebarOne({
                   <div className="filter-search-box mb-4">
                     <div className="filtersearch-title">
                       <h6 className="lh-base text-uppercase fw-medium mb-2 text-sm">
-                        Danh mục thiết bị (Category)
+                        {t('sidebar.categoryHeader')}
                       </h6>
                     </div>
                     <div className="row align-items-center justify-content-between gy-2">
@@ -364,7 +368,7 @@ export default function ListSidebarOne({
                 <div className="filter-search-box mb-4">
                   <div className="filtersearch-title">
                     <h6 className="lh-base text-uppercase fw-medium mb-2 text-sm">
-                      Hãng sản xuất (Brand)
+                      {t('sidebar.brandHeader')}
                     </h6>
                   </div>
                   <div className="row align-items-center justify-content-between gy-2">
@@ -408,7 +412,7 @@ export default function ListSidebarOne({
                 <div className="filter-search-box mb-4">
                   <div className="filtersearch-title">
                     <h6 className="lh-base text-uppercase fw-medium mb-2 text-sm">
-                      Khoảng giá (Triệu VNĐ)
+                      {t('sidebar.priceRangeHeader')}
                     </h6>
                   </div>
                   <div className="d-flex align-items-center justify-content-center mb-3 flex-wrap gap-2">
@@ -466,7 +470,7 @@ export default function ListSidebarOne({
                 <div className="filter-search-box mb-4">
                   <div className="filtersearch-title">
                     <h6 className="lh-base text-uppercase fw-medium mb-2 text-sm">
-                      Dung lượng RAM (Hardware)
+                      {t('sidebar.ramHeader')}
                     </h6>
                   </div>
                   <div className="d-flex align-items-center justify-content-center flex-wrap gap-2">
@@ -498,7 +502,7 @@ export default function ListSidebarOne({
                 <div className="filter-search-box mb-4">
                   <div className="filtersearch-title">
                     <h6 className="lh-base text-uppercase fw-medium mb-2 text-sm">
-                      Bộ nhớ trong (ROM)
+                      {t('sidebar.storageHeader')}
                     </h6>
                   </div>
                   <div className="d-flex align-items-center justify-content-center flex-wrap gap-2">
@@ -530,7 +534,7 @@ export default function ListSidebarOne({
                 <div className="filter-search-box mb-4">
                   <div className="filtersearch-title">
                     <h6 className="lh-base text-uppercase fw-medium mb-2 text-sm">
-                      Tính năng nổi bật (10 Field Groups)
+                      {t('sidebar.featuresHeader')}
                     </h6>
                   </div>
                   <div className="row align-items-center justify-content-between gy-2">
@@ -564,7 +568,9 @@ export default function ListSidebarOne({
                     className="btn btn-primary fw-medium full-width"
                     disabled={isPending}
                   >
-                    {isPending ? 'Đang lọc dữ liệu...' : 'Áp dụng bộ lọc'}
+                    {isPending
+                      ? t('sidebar.filteringBtn')
+                      : t('sidebar.applyFiltersBtn')}
                   </button>
                   {searchParams && searchParams.toString().length > 0 && (
                     <button
@@ -572,7 +578,7 @@ export default function ListSidebarOne({
                       onClick={handleResetAll}
                       className="btn btn-light fw-medium full-width text-muted border"
                     >
-                      Xóa tất cả bộ lọc
+                      {t('sidebar.clearAllFiltersBtn')}
                     </button>
                   )}
                 </div>
@@ -589,7 +595,7 @@ export default function ListSidebarOne({
         className="fixed-bottom z-sticky d-lg-none filterButtons"
       >
         <BsFunnel className="me-1" />
-        Bộ lọc thông số
+        {t('sidebar.filterTitle')}
       </Link>
     </>
   );

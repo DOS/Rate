@@ -11,6 +11,8 @@ export const RATE_ROUTES = {
   TABLETS: '/tablets',
   SMARTWATCHES: '/smartwatches',
   EARBUDS: '/earbuds',
+  DEALS: '/deals',
+  LEADERBOARD: '/leaderboard',
   MERCHANTS: '/merchants',
   COMPARE: '/compare',
   WATCHLIST: '/watchlist',
@@ -25,18 +27,28 @@ export const RATE_ROUTES = {
 export const RATE_API_V1_ENDPOINTS = {
   BASE: '/api/v1/rate',
   PRODUCTS: '/api/v1/rate/products',
-  PRODUCT_DETAIL: (slug: string) => `/api/v1/rate/products/${encodeURIComponent(slug)}`,
+  PRODUCT_DETAIL: (slug: string) =>
+    `/api/v1/rate/products/${encodeURIComponent(slug)}`,
   COMPARE: '/api/v1/rate/compare',
+  VERSUS: '/api/v1/rate/versus',
+  DEALS: '/api/v1/rate/deals',
+  LEADERBOARD: '/api/v1/rate/leaderboard',
   MERCHANTS: '/api/v1/rate/merchants',
-  MERCHANT_DETAIL: (id: string) => `/api/v1/rate/merchants/${encodeURIComponent(id)}`,
+  MERCHANT_DETAIL: (id: string) =>
+    `/api/v1/rate/merchants/${encodeURIComponent(id)}`,
   LOOKUP: '/api/v1/rate/lookup',
   INSPECT: '/api/v1/rate/inspect',
   WATCHLIST: '/api/v1/rate/watchlist',
   STATS: '/api/v1/rate/stats',
   REVIEWS: '/api/v1/rate/reviews',
+  OPENAPI: '/api/v1/rate/openapi',
+  OPENAPI_JSON: '/api/v1/rate/openapi.json',
+  REVALIDATE: '/api/v1/rate/revalidate',
   EXTENSION_LOOKUP: '/api/v1/rate/extension/lookup',
   EXTENSION_INGEST: '/api/v1/rate/extension/ingest',
-  REVIEW_VOTE: (reviewId: string) => `/api/reviews/${encodeURIComponent(reviewId)}/vote`,
+  REVIEW_VOTE: (reviewId: string) =>
+    `/api/reviews/${encodeURIComponent(reviewId)}/vote`,
+  HEALTH: '/api/health',
 } as const;
 
 export const ROUTES = {
@@ -56,12 +68,4 @@ export const ROUTES = {
     REVIEWS: '/api/reviews',
     RATE_V1: RATE_API_V1_ENDPOINTS,
   },
-} as const;
-
-export const ADMIN_ROUTES = {
-  DASHBOARD: '/admin',
-  USERS: '/admin/users',
-  CONTENT: '/admin/content-manager',
-  SETTINGS: '/admin/settings',
-  PLUGINS: '/admin/plugins',
 } as const;

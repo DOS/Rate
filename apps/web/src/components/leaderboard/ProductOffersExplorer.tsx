@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Link } from '@/lib/navigation';
 import type {
   MasterProductPriceHistorySummary,
@@ -32,6 +33,7 @@ export default function ProductOffersExplorer({
   byOffer,
   radarSignal,
 }: ProductOffersExplorerProps) {
+  const t = useTranslations('productDetail');
   const [selectedPlatform, setSelectedPlatform] = useState<string>('all');
   const [officialOnly, setOfficialOnly] = useState(false);
   const [highTrustOnly, setHighTrustOnly] = useState(false);
@@ -139,10 +141,17 @@ export default function ProductOffersExplorer({
     });
 
     const radarLine = radarSignal
-      ? `- **Tín hiệu Deal Radar 60N:** ${radarMarkdownCell(radarSignal)}\n`
+      ? t('offersMdRadarPrefix', { signal: radarMarkdownCell(radarSignal) })
       : '';
     const spreadLine = priceSpreadAudit
-      ? `- **Độ lệch giá đa sàn (${priceSpreadAudit.platformCount} sàn):** Tiết kiệm **${priceSpreadAudit.spreadVnd.toLocaleString('vi-VN')} ₫ (${priceSpreadAudit.spreadPct}%)** khi mua tại **${priceSpreadAudit.cheapest.platform.toUpperCase()} (${priceSpreadAudit.cheapest.merchant.name})** thay vì **${priceSpreadAudit.priciest.platform.toUpperCase()}**\n`
+      ? t('offersMdSpreadLine', {
+          count: priceSpreadAudit.platformCount,
+          spreadVnd: priceSpreadAudit.spreadVnd.toLocaleString('vi-VN'),
+          spreadPct: priceSpreadAudit.spreadPct,
+          cheapestPlatform: priceSpreadAudit.cheapest.platform.toUpperCase(),
+          cheapestMerchant: priceSpreadAudit.cheapest.merchant.name,
+          priciestPlatform: priceSpreadAudit.priciest.platform.toUpperCase(),
+        })
       : '';
 
     const md = [
@@ -269,31 +278,34 @@ export default function ProductOffersExplorer({
         >
           <div>
             <span className="badge bg-success rounded-pill me-2 text-white">
-              📊 KIỂM TOÁN ĐỘ LỆCH GIÁ {priceSpreadAudit.platformCount} SÀN
+              {t('offersSpreadBadge', {
+                count: priceSpreadAudit.platformCount,
+              })}
             </span>
             <strong className="text-dark small">
-              Tiết kiệm ngay{' '}
+              {t('offersSpreadSavePrefix')}{' '}
               <span className="text-success font-monospace">
                 {priceSpreadAudit.spreadVnd.toLocaleString('vi-VN')} ₫ (
                 {priceSpreadAudit.spreadPct}%)
               </span>{' '}
-              khi mua tại{' '}
+              {t('offersSpreadBuyAt')}{' '}
               <span className="text-uppercase">
                 {priceSpreadAudit.cheapest.platform}
               </span>{' '}
-              ({priceSpreadAudit.cheapest.merchant.name}) thay vì{' '}
+              ({priceSpreadAudit.cheapest.merchant.name}){' '}
+              {t('offersSpreadInsteadOf')}{' '}
               <span className="text-uppercase">
                 {priceSpreadAudit.priciest.platform}
               </span>
             </strong>
           </div>
           <div className="small font-monospace text-secondary">
-            Đáy:{' '}
+            {t('offersSpreadLowLabel')}{' '}
             <strong className="text-success">
               {priceSpreadAudit.cheapest.price_current.toLocaleString('vi-VN')}{' '}
               ₫
             </strong>{' '}
-            • Đỉnh:{' '}
+            • {t('offersSpreadHighLabel')}{' '}
             <strong className="text-danger">
               {priceSpreadAudit.priciest.price_current.toLocaleString('vi-VN')}{' '}
               ₫
@@ -316,7 +328,7 @@ export default function ProductOffersExplorer({
               }`}
               style={{ fontSize: '0.75rem' }}
             >
-              Tất cả ({offers.length})
+              {t('offersFilterAll', { count: offers.length })}
             </button>
             {platforms.map(([plat, count]) => (
               <button
@@ -343,9 +355,7 @@ export default function ProductOffersExplorer({
               style={{ fontSize: '0.76rem' }}
               data-testid="copy-offers-md-btn"
             >
-              {copiedOffersMd
-                ? '✅ Đã chép bảng giá MD!'
-                : '📋 Sao chép bảng giá Markdown'}
+              {copiedOffersMd ? t('offersCopiedMd') : t('offersCopyMd')}
             </button>
             <button
               type="button"
@@ -354,7 +364,7 @@ export default function ProductOffersExplorer({
               style={{ fontSize: '0.76rem' }}
               data-testid="download-offers-csv-btn"
             >
-              📥 Xuất bảng giá CSV
+              {t('offersExportCsv')}
             </button>
             <button
               type="button"
@@ -363,7 +373,7 @@ export default function ProductOffersExplorer({
               style={{ fontSize: '0.76rem' }}
               data-testid="download-offers-json-btn"
             >
-              📦 Xuất JSON
+              {t('offersExportJson')}
             </button>
           </div>
         </div>
@@ -380,7 +390,7 @@ export default function ProductOffersExplorer({
               }`}
               style={{ fontSize: '0.75rem' }}
             >
-              ✓ Chỉ Official Mall
+              {t('offersOfficialOnlyBtn')}
             </button>
             <button
               type="button"
@@ -392,21 +402,23 @@ export default function ProductOffersExplorer({
               }`}
               style={{ fontSize: '0.75rem' }}
             >
-              🛡️ Chỉ gian hàng Trust &gt;= 80%
+              {t('offersHighTrustOnlyBtn')}
             </button>
           </div>
 
           <div className="d-flex align-items-center gap-2">
-            <span className="small text-muted">Sắp xếp:</span>
+            <span className="small text-muted">{t('offersSortLabel')}</span>
             <select
               className="form-select form-select-sm w-auto"
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as OfferSortKey)}
-              aria-label="Sắp xếp bảng báo giá"
+              aria-label={t('offersSortAria')}
             >
-              <option value="price_asc">Giá thấp nhất trước</option>
-              <option value="trust_desc">Độ tin cậy cao nhất</option>
-              <option value="discount_desc">Mức giảm giá sâu nhất</option>
+              <option value="price_asc">{t('offersSortPriceAsc')}</option>
+              <option value="trust_desc">{t('offersSortTrustDesc')}</option>
+              <option value="discount_desc">
+                {t('offersSortDiscountDesc')}
+              </option>
             </select>
           </div>
         </div>
@@ -414,9 +426,7 @@ export default function ProductOffersExplorer({
 
       {filteredOffers.length === 0 ? (
         <div className="rounded-3 border bg-white p-4 text-center">
-          <p className="text-muted small mb-2">
-            Không có gian hàng nào khớp với bộ lọc hiện tại.
-          </p>
+          <p className="text-muted small mb-2">{t('offersEmptyFilterText')}</p>
           <button
             type="button"
             onClick={() => {
@@ -426,7 +436,7 @@ export default function ProductOffersExplorer({
             }}
             className="btn btn-sm btn-outline-danger rounded-pill px-3"
           >
-            Xóa bộ lọc bảng giá
+            {t('offersResetFiltersBtn')}
           </button>
         </div>
       ) : (
@@ -435,13 +445,13 @@ export default function ProductOffersExplorer({
             <thead className="table-light small">
               <tr>
                 <th scope="col" style={{ width: '25%' }}>
-                  Sàn &amp; Gian Hàng
+                  {t('offersColPlatformMerchant')}
                 </th>
-                <th scope="col">Tiêu đề niêm yết</th>
-                <th scope="col">Độ tin cậy (DOSafe + AI Review)</th>
-                <th scope="col">Giá ghi nhận</th>
+                <th scope="col">{t('offersColListingTitle')}</th>
+                <th scope="col">{t('offersColTrustScore')}</th>
+                <th scope="col">{t('offersColRecordedPrice')}</th>
                 <th scope="col" className="text-end">
-                  Kiểm định &amp; Nguồn
+                  {t('offersColAuditSource')}
                 </th>
               </tr>
             </thead>
@@ -502,7 +512,7 @@ export default function ProductOffersExplorer({
                           </div>
                           {offer.merchant.is_official && (
                             <span className="badge bg-success-subtle text-success small">
-                              Chính hãng (Mall)
+                              {t('offersOfficialMallBadge')}
                             </span>
                           )}
                         </div>
@@ -521,7 +531,7 @@ export default function ProductOffersExplorer({
                             <Link
                               href={`/merchants/${offer.merchant.id}`}
                               className={`badge ${trustBadgeClass} text-decoration-none small`}
-                              title="Xem hồ sơ tín nhiệm gian hàng"
+                              title={t('offersMerchantTrustTitle')}
                             >
                               Trust: {trustScore}% ↗
                             </Link>
@@ -568,9 +578,9 @@ export default function ProductOffersExplorer({
                         <Link
                           href={`/inspect?q=${encodeURIComponent(offer.url)}&price=${offer.price_current}`}
                           className="btn btn-sm btn-outline-primary rounded-pill px-2"
-                          title="Kiểm định trực tiếp listing này trong Trình Kiểm Định (/inspect)"
+                          title={t('offersInspectBtnTitle')}
                         >
-                          🔍 Kiểm định
+                          {t('offersInspectBtn')}
                         </Link>
                         <a
                           href={offer.url}
@@ -578,7 +588,7 @@ export default function ProductOffersExplorer({
                           rel="noopener noreferrer"
                           className="btn btn-sm btn-outline-secondary rounded-pill px-3"
                         >
-                          Đối chiếu nguồn ↗
+                          {t('offersSourceLinkBtn')}
                         </a>
                       </div>
                     </td>

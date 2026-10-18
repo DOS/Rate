@@ -301,7 +301,20 @@
     "csvColSpecGroup": "Spec Group",
     "csvColTechCriterion": "Technical Criterion",
     "csvRadarGroupTitle": "0. 10-Marketplace Deal Radar Signal (60d)",
-    "csvRadarVerdictRow": "Verdict & Price Spread"
+    "csvRadarVerdictRow": "Verdict & Price Spread",
+    "quickToggleLimitTitle": "Maximum 4 devices in comparison table",
+    "quickToggleRemoveTitle": "Remove from comparison list",
+    "quickToggleAddTitle": "Add to 10-group spec comparison list",
+    "quickToggleLimitBtn": "⚠️ Max 4 devices",
+    "quickToggleSelectedBtn": "✓ Selected to compare",
+    "quickToggleAddBtn": "+ Compare",
+    "trayTitle": "Device Comparison Tray",
+    "trayExpand": "Expand ▲",
+    "trayCollapse": "Collapse ▼",
+    "trayClearAll": "Clear all",
+    "trayCompareNow": "Compare now ({count} devices) →",
+    "trayRemoveTitle": "Remove from comparison tray",
+    "trayRemoveAria": "Remove {name}"
   },
   "leaderboard": {
     "metaTitle": "Tech Device Leaderboard (JReviews 10.0 Dual-Rating) | Rate.vn",
@@ -588,7 +601,11 @@
     "cancelBtn": "Cancel",
     "removeFromWatchlistBtn": "Remove from watchlist",
     "priceChartLink": "📈 Price History",
-    "viewBestSellersLink": "View Best Sellers →"
+    "viewBestSellersLink": "View Best Sellers →",
+    "quickToggleTitleWatched": "Watching price changes (Click to unwatch)",
+    "quickToggleTitleUnwatched": "Watch price changes & get real price-drop alerts (-5%)",
+    "quickToggleBtnWatched": "🔔 Watching price",
+    "quickToggleBtnUnwatched": "🔔 Watch price"
   },
   "deals": {
     "metaTitle": "Verified Tech Deals & Price-to-Performance Finder | Rate.vn",
@@ -916,7 +933,137 @@
     "costPerPointUnit": "💎 {cost} ₫ / 1.0 pt",
     "betterValueTag": "(Better P/P value)",
     "compare1v1Btn": "⚔️ 1v1 Head-to-Head",
-    "detailsBtn": "Details"
+    "detailsBtn": "Details",
+    "offersSpreadBadge": "📊 {count}-PLATFORM PRICE SPREAD AUDIT",
+    "offersSpreadSavePrefix": "Save",
+    "offersSpreadBuyAt": "when buying at",
+    "offersSpreadInsteadOf": "instead of",
+    "offersSpreadLowLabel": "Low:",
+    "offersSpreadHighLabel": "High:",
+    "offersFilterAll": "All ({count})",
+    "offersCopiedMd": "✅ Copied offers MD!",
+    "offersCopyMd": "📋 Copy offers Markdown",
+    "offersExportCsv": "📥 Export offers CSV",
+    "offersExportJson": "📦 Export JSON",
+    "offersOfficialOnlyBtn": "✓ Official Mall only",
+    "offersHighTrustOnlyBtn": "🛡️ Trust >= 80% only",
+    "offersSortLabel": "Sort by:",
+    "offersSortAria": "Sort merchant offers table",
+    "offersSortPriceAsc": "Lowest price first",
+    "offersSortTrustDesc": "Highest trust score",
+    "offersSortDiscountDesc": "Deepest discount",
+    "offersEmptyFilterText": "No merchant offers match the current filter criteria.",
+    "offersResetFiltersBtn": "Reset offer filters",
+    "offersColPlatformMerchant": "Platform & Merchant",
+    "offersColListingTitle": "Listing Title",
+    "offersColTrustScore": "Trust Score (DOSafe + AI Review)",
+    "offersColRecordedPrice": "Recorded Price",
+    "offersColAuditSource": "Audit & Source",
+    "offersOfficialMallBadge": "Official Mall",
+    "offersMerchantTrustTitle": "View merchant trust profile",
+    "offersInspectBtnTitle": "Inspect this listing directly in Deep URL Inspector (/inspect)",
+    "offersInspectBtn": "🔍 Inspect",
+    "offersSourceLinkBtn": "Verify source ↗",
+    "offersMdRadarPrefix": "- **60D Deal Radar Signal:** {signal}\n",
+    "offersMdSpreadLine": "- **Cross-Platform Price Spread ({count} platforms):** Save **{spreadVnd} ₫ ({spreadPct}%)** at **{cheapestPlatform} ({cheapestMerchant})** instead of **{priciestPlatform}**\n",
+    "shareAuditPriceSources": "{price} ₫ ({count} verified sources)",
+    "shareAuditUpdating": "Updating",
+    "shareAuditMdTitle": "### 🛡️ Device Audit Profile: {name} ({brand})",
+    "shareAuditMdUserScore": "- **Authentic Buyer Score (JReviews):** {score}",
+    "shareAuditMdUserScoreVal": "★ {score}/5.0 ({count} AI-verified buyer reviews)",
+    "shareAuditMdNoReviews": "No reviews yet",
+    "shareAuditMdExpertScore": "- **Rate Lab Expert Score:** {score}",
+    "shareAuditMdNoExpert": "N/A",
+    "shareAuditMdKeySpecs": "- **Normalized Key Specs:** {specs}",
+    "shareAuditMdMinPrice": "- **Lowest Verified Price:** {price}",
+    "shareAuditMdRadar": "- **60D Deal Radar Signal:** {signal}",
+    "shareAuditMdModelKey": "- **Canonical Model Key:** `{modelKey}`",
+    "shareAuditMdUrl": "- **Full 10-group specs & price history:** {url}",
+    "shareAuditCsvColDevice": "Device",
+    "shareAuditCsvColBrand": "Brand",
+    "shareAuditCsvColModelKey": "Model Key",
+    "shareAuditCsvColUserScore": "Buyer Score (/5.0)",
+    "shareAuditCsvColExpertScore": "Expert Score (/10)",
+    "shareAuditCsvColAuthenticReviews": "Authentic Reviews",
+    "shareAuditCsvColMinPrice": "Lowest Price (VND)",
+    "shareAuditCsvColOfferCount": "Verified Offer Count",
+    "shareAuditCsvColKeySpecs": "Normalized Specs",
+    "shareAuditCopyMdTitle": "Copy Markdown audit summary card to share on forums or chat",
+    "shareAuditCopiedMdBtn": "✓ Copied Markdown audit!",
+    "shareAuditCopyMdBtn": "📋 Copy audit profile",
+    "shareAuditCopyLinkTitle": "Copy product URL",
+    "shareAuditCopiedLinkBtn": "✓ Copied link!",
+    "shareAuditCopyLinkBtn": "🔗 Copy link",
+    "specsToolbarCopiedMd": "✅ Copied 10-group specs!",
+    "specsToolbarCopyMd": "📋 Copy 10-group specs MD",
+    "specsToolbarExportCsv": "📥 Export specs CSV",
+    "specsToolbarExportJson": "📦 Export specs JSON",
+    "valueCalcCsvColHorizon": "Horizon (Months)",
+    "valueCalcCsvColMinPrice": "Lowest Purchase Price (VND)",
+    "valueCalcCsvColRetentionPct": "Est. Resale Retention (%)",
+    "valueCalcCsvColResaleVnd": "Est. Resale Value (VND)",
+    "valueCalcCsvColNetCostVnd": "Net Ownership Cost (VND)",
+    "valueCalcCsvColMonthlyCostVnd": "Monthly Cost (VND)",
+    "valueCalcCsvColDailyCostVnd": "Daily Cost (VND)",
+    "valueCalcEyebrow": "💡 VALUE EFFICIENCY & OWNERSHIP COST CALCULATOR (VALUE & TCO AUDIT)",
+    "valueCalcHeading": "True Value Quantification: {name}",
+    "valueCalcSubtitle": "Converts the lowest verified price ({price} ₫) per JReviews quality point ({score}) and net daily ownership cost.",
+    "valueCalcNoScoreYet": "unrated",
+    "valueCalcHorizonAria": "Ownership horizon",
+    "valueCalcMonthsBtn": "{months} mos",
+    "valueCalcIncludeResaleOn": "♻️ Include trade-in resale (~{pct}%)",
+    "valueCalcIncludeResaleOff": "🔒 Exclude resale (100% depreciation)",
+    "valueCalcCardCostPerPointTitle": "Cost / 1.0 JReviews Point",
+    "valueCalcNotAvailable": "N/A",
+    "valueCalcCardCostPerPointSub": "Per 1.0 point on {score}/10 scale",
+    "valueCalcCardCostPerPointEmpty": "Insufficient JReviews score data",
+    "valueCalcCardDailyCostTitle": "Net Daily Cost ({months}M)",
+    "valueCalcPerDayUnit": "₫/day",
+    "valueCalcPerMonthUnit": "₫/mo",
+    "valueCalcCardResaleTitle": "Est. Resale Value after {months} months",
+    "valueCalcCardResaleSubOn": "Estimated retention ~{pct}% ({brand})",
+    "valueCalcCardResaleSubOff": "Resale value calculation disabled",
+    "valueCalcCardValueScoreTitle": "P/P Value Score & Cross-Platform Savings",
+    "valueCalcSpreadSavingsSub": "Cross-platform spread: {amount} ₫",
+    "valueCalcUniformPriceSub": "Uniform pricing across merchants",
+    "priceHistoryHeading": "Price History Chart & Fake Discount Audit",
+    "priceHistorySubtitlePrefix": "Track real historical price movements for",
+    "priceHistorySubtitleSuffix": "and detect inflated strikethrough prices before sale events.",
+    "priceHistoryCopiedMdBtn": "✅ Copied price history MD!",
+    "priceHistoryCopyMdBtn": "📋 Copy price history Markdown",
+    "priceHistoryExportCsvBtn": "📥 Export 60-day price history CSV",
+    "priceHistoryExportJsonBtn": "📦 Export JSON",
+    "priceHistoryFakeAlertBadge": "🚨 Detected {count} listings with inflated original price / fake sale",
+    "priceHistoryCleanBadge": "✓ No inflated strikethrough price tricks detected",
+    "priceHistoryGenuineDealBadge": "🔥 {count} listings currently in genuine deal zone",
+    "priceHistoryKpiCurrentMinTitle": "Current Best Price",
+    "priceHistoryKpiCurrentMinSub": "Aggregated across {count} merchants",
+    "priceHistoryKpiLowestEverTitle": "All-Time Historical Low",
+    "priceHistoryKpiLowestEverDefaultSub": "Rate.vn normalized dataset",
+    "priceHistoryKpiHighestEverTitle": "Historical Peak Price",
+    "priceHistoryKpiHighestEverSub": "Based on {count} price observations",
+    "priceHistoryKpiAiAuditTitle": "AI Promotion Audit",
+    "priceHistoryKpiAiAuditFakeCount": "{count} Fake Sale Alerts",
+    "priceHistoryKpiAiAuditTransparent": "100% Transparent",
+    "priceHistoryKpiAiAuditSub": "Strikethrough price vs real history",
+    "priceHistoryMerchantFilterLabel": "Merchant:",
+    "priceHistoryMerchantFilterAll": "All ({count})",
+    "priceHistoryRangeAria": "Time range",
+    "priceHistoryRange30d": "30 days",
+    "priceHistoryRange90d": "90 days",
+    "priceHistoryRangeAll": "All time",
+    "priceHistoryLegendActual": "Actual Selling Price",
+    "priceHistoryLegendOriginal": "Claimed Original Price",
+    "priceHistoryLegendLowest": "Historical Low ({price})",
+    "priceHistoryChartAria": "Price history chart for {name}",
+    "priceHistoryEmptyRange": "No time-series observations available for this filter.",
+    "priceHistoryMerchantAuditHeading": "Per-Merchant Promotional Price Honesty Breakdown",
+    "priceHistoryCurrentPriceLabel": "Current price:",
+    "priceHistoryStrikethroughLabel": "Strikethrough:",
+    "priceHistoryClaimedPctBadge": "-{pct}% claimed",
+    "priceHistoryMedianLabel": "Historical median:",
+    "priceHistoryMinLabel": "Lowest:",
+    "priceHistoryMaxLabel": "Highest:"
   },
   "homePage": {
     "catDescSmartphones": "Filter by Chipset, RAM/ROM, refresh rate Hz, battery mAh & fast charge W",
@@ -1229,5 +1376,339 @@
     "quarantineRejectedTitle": "Signal Rejected by Zero-Trust Gatekeeper",
     "quarantineCanonicalUrlLabel": "Canonical URL (PII stripped):",
     "quarantineErrConnect": "Unable to connect to the Zero-Trust Quarantine gateway."
+  },
+  "catalog": {
+    "meta": {
+      "smartphones": {
+        "titleCount": "Smartphone Price Comparison & 10-Group Spec Filter ({count} Models) | Rate.vn",
+        "titleDefault": "Smartphone Price Comparison & AI Promo Audit | Rate.vn",
+        "description": "Filter smartphones by 10 standardized technical spec groups (PhoneArena/GSMArena), inspect true historical prices, and filter AI seeding reviews on Rate.vn."
+      },
+      "tablets": {
+        "titleCount": "Tablet Price Comparison ({count} normalized models) | Rate.vn",
+        "titleDefault": "Tablet Price Comparison & AI Promo Audit | Rate.vn",
+        "description": "Search and filter tablets (iPad, Galaxy Tab, Xiaomi Pad) across 10 standardized spec groups, verify true historical prices, and filter out seeding reviews on Rate.vn."
+      },
+      "laptops": {
+        "titleCount": "Laptop Price Comparison ({count} normalized models) | Rate.vn",
+        "titleDefault": "Laptop Price Comparison & AI Promo Audit | Rate.vn",
+        "description": "Search and filter laptops (MacBook, ThinkPad, ASUS ROG, Dell XPS) across 10 standardized spec groups, verify true historical prices, and filter out seeding reviews on Rate.vn."
+      },
+      "smartwatches": {
+        "titleCount": "Smartwatch Price Comparison ({count} normalized models) | Rate.vn",
+        "titleDefault": "Smartwatch Price Comparison & AI Promo Audit | Rate.vn",
+        "description": "Search and filter smartwatches (Apple Watch, Galaxy Watch, Garmin, Xiaomi Watch, Huawei Watch) across 10 standardized spec groups, verify true historical prices, and filter out seeding reviews on Rate.vn."
+      },
+      "earbuds": {
+        "titleCount": "ANC Wireless Earbuds Price Comparison ({count} normalized models) | Rate.vn",
+        "titleDefault": "ANC Wireless Earbuds Price Comparison & AI Promo Audit | Rate.vn",
+        "description": "Search and filter ANC wireless earbuds (AirPods Pro, Sony WF-1000XM5, Galaxy Buds, Bose, Sennheiser) across 10 standardized spec groups, true price history, and AI review audits on Rate.vn."
+      }
+    },
+    "sortOptions": {
+      "default": "Default (Recently updated)",
+      "price_asc": "Price: Low to High",
+      "price_desc": "Price: High to Low",
+      "rating_desc": "Highest Rated",
+      "merchants_desc": "Most Merchants",
+      "newest": "Newest Releases"
+    },
+    "schemas": {
+      "directoryTech": "Tech & Digital Devices",
+      "smartphones": {
+        "title": "Smartphones",
+        "subtitle": "Explore 10-group technical specs aligned with GSMArena & PhoneArena, compare cross-platform prices, and filter authentic buyer reviews with AI",
+        "searchPlaceholder": "Search model, chipset (e.g. iPhone 16, Snapdragon 8 Gen 3)...",
+        "presets": {
+          "under-7m": "Under 7M VND",
+          "7m-15m": "7M - 15M VND",
+          "15m-25m": "15M - 25M VND",
+          "over-25m": "Over 25M VND"
+        },
+        "features": {
+          "has5g": {
+            "label": "5G Support",
+            "desc": "Cellular: High-speed 5G mobile network connectivity"
+          },
+          "highRefresh": {
+            "label": "120Hz+ Display",
+            "desc": "Display: Refresh rate 120Hz or higher"
+          },
+          "bigBattery": {
+            "label": "Battery >= 5000mAh",
+            "desc": "Battery: Capacity 5000 mAh or higher"
+          },
+          "fastCharge": {
+            "label": "Fast Charge >= 45W",
+            "desc": "Battery: Fast charging power 45W or higher"
+          },
+          "hasNfc": {
+            "label": "NFC Support",
+            "desc": "Connectivity: Contactless payment & chip ID reading"
+          },
+          "compactScreen": {
+            "label": "Compact (<= 6.2\")",
+            "desc": "Display: One-hand friendly compact screen (<= 6.2 inch)"
+          }
+        }
+      },
+      "tablets": {
+        "title": "Tablets",
+        "subtitle": "Compare 10-group technical specifications and cross-marketplace tablet prices",
+        "searchPlaceholder": "Search iPad, Galaxy Tab, Xiaomi Pad...",
+        "presets": {
+          "under-10m": "Under 10M VND",
+          "10m-20m": "10M - 20M VND",
+          "over-20m": "Over 20M VND"
+        },
+        "features": {
+          "has5g": {
+            "label": "5G / Cellular",
+            "desc": "Supports SIM / eSIM 5G cellular connectivity"
+          },
+          "highRefresh": {
+            "label": "120Hz+ Display",
+            "desc": "Screen refresh rate >= 120Hz"
+          },
+          "bigBattery": {
+            "label": "Battery >= 8000mAh",
+            "desc": "High-capacity tablet battery"
+          }
+        }
+      },
+      "laptops": {
+        "title": "Laptops",
+        "subtitle": "Compare 10-group hardware configurations and verified laptop price history",
+        "searchPlaceholder": "Search MacBook, ThinkPad, ASUS ROG, Dell XPS...",
+        "presets": {
+          "under-15m": "Under 15M VND",
+          "15m-30m": "15M - 30M VND",
+          "over-30m": "Over 30M VND"
+        },
+        "features": {
+          "highRefresh": {
+            "label": "120Hz+ Display",
+            "desc": "High refresh rate >= 120Hz"
+          },
+          "fastCharge": {
+            "label": "USB-C PD Fast Charge",
+            "desc": "Supports high-wattage USB-C Power Delivery"
+          }
+        }
+      },
+      "smartwatches": {
+        "title": "Smartwatches",
+        "subtitle": "Compare health sensors, water resistance ratings, dual-band GPS, and official smartwatch price history",
+        "searchPlaceholder": "Search Apple Watch, Galaxy Watch, Garmin, Xiaomi Watch, Huawei Watch...",
+        "presets": {
+          "under-3m": "Under 3M VND",
+          "3m-8m": "3M - 8M VND",
+          "8m-15m": "8M - 15M VND",
+          "over-15m": "Over 15M VND"
+        },
+        "features": {
+          "has5g": {
+            "label": "eSIM / LTE Support",
+            "desc": "Standalone calls via eSIM without carrying a phone"
+          },
+          "hasNfc": {
+            "label": "NFC / Contactless Pay",
+            "desc": "Supports NFC connectivity and contactless payments"
+          },
+          "fastCharge": {
+            "label": "Magnetic Fast Charge",
+            "desc": "Supports magnetic wireless fast charging"
+          }
+        }
+      },
+      "earbuds": {
+        "title": "Wireless & ANC Earbuds",
+        "subtitle": "Compare Active Noise Cancellation (ANC), Hi-Res audio codecs (LDAC/aptX), battery life, and real cross-platform prices",
+        "searchPlaceholder": "Search AirPods Pro, Sony WF-1000XM5, Galaxy Buds, Bose, Sennheiser...",
+        "presets": {
+          "under-1m": "Under 1M VND",
+          "1m-3m": "1M - 3M VND",
+          "3m-6m": "3M - 6M VND",
+          "over-6m": "Over 6M VND"
+        },
+        "features": {
+          "fastCharge": {
+            "label": "Fast / MagSafe Case",
+            "desc": "Supports fast charging via USB-C or Qi/MagSafe wireless"
+          }
+        }
+      }
+    },
+    "page": {
+      "chipKeyword": "Keyword: \"{query}\"",
+      "chipBrand": "Brand: {brand}",
+      "chipPrice": "Price: {min} - {max}",
+      "searchLabel": "Device",
+      "brandLabel": "Brand",
+      "searchBtn": "Search",
+      "loadingFilters": "Loading specification filters...",
+      "clearAllBtn": "Clear all",
+      "foundPrefix": "Found",
+      "foundSuffix": "/ {total} normalized products",
+      "quickCompare3": "Quick compare 3",
+      "quickCompare2": "Quick compare 2",
+      "versus1v1Badge": "⚔️ 1v1: {brandA} vs {brandB}",
+      "leaderboardBadge": "🏆 Leaderboard",
+      "sortByPrefix": "Sort: {label}",
+      "radarBannerBadge": "🔥 DEAL RADAR & FAKE SALE TRAPS ({title})",
+      "radarAnalyzedSub": "Audited {count} store listings across 10 marketplaces",
+      "viewAllRadarBtn": "💎 Explore Full 10-Platform Radar →",
+      "vsMedianBadge": "-{pct}% vs median",
+      "fakeMarkupBadge": "Inflated +{pct}%",
+      "spreadHeader": "📊 Largest 10-Marketplace Price Spread ({title}):",
+      "spreadSub": "Save millions of VND by choosing the right marketplace",
+      "spreadDiffBadge": "Spread +{pct}% ({amount} ₫)",
+      "emptySyncingTitle": "Category \"{title}\" is awaiting normalized product data sync",
+      "emptyMatchingTitle": "No products match the current filters",
+      "emptySyncingDesc": "The 10-group standardized specification schema for {title} ({brands}) is ready. While our crawlers index more models for this category, explore Smartphones or the Comparison Matrix.",
+      "emptyMatchingDesc": "Try widening the price range or relaxing hardware filter criteria to see more models.",
+      "resetFiltersBtn": "Reset filters",
+      "browseSmartphonesBtn": "Browse available Smartphones →",
+      "merchantProfilesBtn": "Merchant Trust Profiles",
+      "noImage": "No image",
+      "userScoreText": "{score} User ({count} verified reviews)",
+      "userScoreUnrated": "User: unrated",
+      "expertScoreText": "{score} Expert Lab",
+      "expertScoreUnrated": "Expert Lab: unrated",
+      "refPriceLabel": "Reference price:",
+      "sourcesCount": "{count} sources",
+      "viewReviewsSpecsBtn": "★ View Reviews & 10 Spec Groups",
+      "inspectPriceHistoryTitle": "Audit 90-day price history & detect fake discounts",
+      "inspectBtn": "🔍 Inspect"
+    },
+    "toolbar": {
+      "unratedText": "N/A",
+      "quick1v1Label": "⚔️ Quick 1v1 Matchup ({title}):",
+      "selectDeviceAAria": "Select device A for 1v1 comparison",
+      "selectDeviceBAria": "Select device B for 1v1 comparison",
+      "versusGoBtn": "Go 1v1 →",
+      "copiedMdBtn": "✅ Copied Catalog MD!",
+      "copyMdBtn": "📋 Copy Catalog Markdown",
+      "exportCsvBtn": "📥 Export Category CSV",
+      "exportJsonBtn": "📦 Export JSON"
+    },
+    "sidebar": {
+      "filterTitle": "Spec Filters",
+      "keywordChipsetHeader": "Keyword & Chipset",
+      "jreviewsRatingHeader": "Rating Score (JReviews)",
+      "categoryHeader": "Device Category",
+      "brandHeader": "Manufacturer (Brand)",
+      "priceRangeHeader": "Price Range (Million VND)",
+      "ramHeader": "RAM Capacity (Hardware)",
+      "storageHeader": "Internal Storage (ROM)",
+      "featuresHeader": "Key Features (10 Field Groups)",
+      "filteringBtn": "Filtering data...",
+      "applyFiltersBtn": "Apply Filters",
+      "clearAllFiltersBtn": "Clear All Filters"
+    }
+  },
+  "heroSearch": {
+    "modeSearchBtn": "Search Products & 10-Group Specs",
+    "modeInspectBtn": "Paste URL to Audit Fake Sales & Shop Trust",
+    "searchPlaceholder": "Search model, chipset (e.g. iPhone 16, Apple A18) or paste Shopee link...",
+    "searchAriaLabel": "Search tech products or paste marketplace URL to inspect",
+    "clearKeywordAria": "Clear keyword",
+    "searchSubmitBtn": "Search",
+    "urlDetectedStrong": "Marketplace URL detected!",
+    "urlDetectedSub": "Click to inspect historical prices, fake discounts, and merchant risk scores.",
+    "inspectLinkBtn": "Inspect Link →",
+    "normalizedProductsHeader": "📱 Normalized Products ({count})",
+    "specFilterLink": "10-group spec filters →",
+    "noMatchPrefix": "No model matches \"{query}\". You can switch to",
+    "inspectTabLinkBtn": "Inspect Link / Keyword",
+    "merchantsCount": "{count} stores",
+    "merchantsHeader": "🏪 Merchants & Trust Profiles ({count})",
+    "viewAllMerchantsLink": "View all shops →",
+    "inspectPlaceholder": "Paste Shopee, Lazada, Tiki product/shop link or enter model name...",
+    "inspectAriaLabel": "Paste product or merchant link to inspect",
+    "clearUrlAria": "Clear URL",
+    "inspectingBtn": "Inspecting...",
+    "inspectNowBtn": "Inspect Now",
+    "sampleLinksLabel": "Try live sample links:",
+    "errLookupFailed": "Unable to look up product/merchant data",
+    "errServerConnection": "Connection error with inspection server",
+    "resultCardHeader": "Price History, AI Review & Merchant Trust Audit Result",
+    "closeBtn": "Close",
+    "bestPriceLabel": "Best price:",
+    "lowestEverPriceLabel": "(All-time low: {price} ₫)",
+    "merchantLabel": "Merchant:",
+    "aiReviewAuthLabel": "AI Review Authenticity:",
+    "aiReviewAuthValue": "✓ {pct}% authentic (across {total} reviews)",
+    "viewSpecsAndHistoryBtn": "View 10 Spec Groups & Price History",
+    "auditReportBtn": "🔬 Audit Report",
+    "shopProfileBtn": "Shop Profile",
+    "trackingProductsCount": "Tracking {count} products",
+    "openMerchantProfileBtn": "Open Merchant Trust Profile →",
+    "unmatchedHeading": "This product/link is not yet in the live inspection cache",
+    "unmatchedDesc": "You can search equivalent normalized models or browse verified merchant profiles below.",
+    "searchInSmartphonesBtn": "Search in Smartphone Catalog →"
+  },
+  "authPortal": {
+    "metaLoginTitle": "Sign In to Rate.vn | Buyer Audit Account",
+    "metaRegisterTitle": "Create a Buyer Audit Account | Rate.vn",
+    "metaForgotTitle": "Reset Your Password | Rate.vn",
+    "metaOtpTitle": "Email OTP & Two-Factor Verification | Rate.vn",
+    "loadingFallback": "Loading...",
+    "signInBtnLabel": "Sign In",
+    "signOutBtnLabel": "Sign Out",
+    "badge": "Supabase Auth Identity Layer (DOS Ecosystem)",
+    "trustTitle": "Independent Buyer Audit Account on Rate.vn",
+    "trustSubtitle": "Sync your true-price watchlist, submit 5-criteria JReviews technical ratings, and vote on authentic buyer reviews without exposing your identity to marketplace sellers.",
+    "feature1Title": "Authenticated JReviews Voting (rate.review_votes)",
+    "feature1Desc": "Verified accounts prevent manipulation of Helpful/Report weights across our 5-criteria technical review engine.",
+    "feature2Title": "Cross-Device Price Watchlist (/watchlist)",
+    "feature2Desc": "Track target price thresholds across smartphones, laptops, tablets, smartwatches, and earbuds.",
+    "feature3Title": "Zero-Trust PostgreSQL 17 RLS Isolation",
+    "feature3Desc": "Your identity is protected by strict Row Level Security on the DOS Ecosystem Supabase infrastructure.",
+    "pillSmartphones": "📱 Smartphones",
+    "pillLaptops": "💻 Laptops",
+    "pillMerchants": "🛡️ Merchants",
+    "pillWatchlist": "🔔 Watchlist",
+    "tabLogin": "🔑 Login",
+    "tabRegister": "✨ Register",
+    "tabOtp": "🛡️ Email OTP / 2FA",
+    "tabReset": "🔄 Reset",
+    "loginTitle": "Sign In to Rate.vn",
+    "loginSub": "Sign in with your email and password or request a one-time email OTP code.",
+    "registerTitle": "Create a Buyer Audit Account",
+    "registerSub": "Join the open community auditing 10-group specs and real historical prices.",
+    "forgotTitle": "Reset Your Account Password",
+    "forgotSub": "Enter your registered email address to receive a password reset link via Supabase Auth.",
+    "otpTitle": "Two-Factor & Email OTP Verification",
+    "otpSub": "Enter the 6-digit verification code sent to your email inbox to complete sign-in.",
+    "fullNameLabel": "Display Name",
+    "fullNamePlaceholder": "Alex Nguyen",
+    "emailLabel": "Email Address",
+    "emailPlaceholder": "you@rate.vn",
+    "passwordLabel": "Password",
+    "passwordPlaceholder": "Minimum 6 characters",
+    "confirmPasswordLabel": "Confirm Password",
+    "confirmPasswordPlaceholder": "Re-enter your password",
+    "otpLabel": "6-Digit OTP Verification Code",
+    "otpPlaceholder": "123456",
+    "loginBtn": "Sign In to Rate.vn",
+    "registerBtn": "Create Account",
+    "forgotBtn": "Send Password Reset Link",
+    "otpVerifyBtn": "Verify OTP & Sign In",
+    "sendMagicOtpBtn": "Send OTP Code to Email",
+    "submitting": "Processing request...",
+    "switchToRegister": "New to Rate.vn? Create an account",
+    "switchToLogin": "Already have an account? Back to Sign In",
+    "forgotLink": "Forgot password?",
+    "otpLink": "Sign in with Email OTP / 2FA",
+    "errPasswordMismatch": "Passwords do not match. Please double-check.",
+    "errPasswordShort": "Password must be at least {min} characters long.",
+    "errInvalidCredentials": "Invalid email or password, or the account has not been confirmed yet.",
+    "errGeneric": "Could not complete authentication request. Please verify your details.",
+    "okLogin": "Signed in successfully! Redirecting...",
+    "okRegister": "Account created! Please check your email inbox for confirmation or sign in directly.",
+    "okResetSent": "Password reset instructions have been sent to your email address.",
+    "okOtpSent": "A 6-digit OTP code has been sent to your email. Enter it below to verify.",
+    "okOtpVerified": "OTP verified successfully! Redirecting..."
   }
 }

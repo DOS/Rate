@@ -1,10 +1,17 @@
 import type { Metadata } from 'next';
+import { getTranslations } from 'next-intl/server';
 import { getCachedCategoryDirectoryFacets } from '@/server/rate';
 import { CategoryCatalogContent } from '../smartphones/page';
 
 type SearchParamsInput = Record<string, string | string[] | undefined>;
 
-export async function generateMetadata(): Promise<Metadata> {
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  const t = await getTranslations({ locale, namespace: 'catalog' });
   const facets = await getCachedCategoryDirectoryFacets('smartwatches');
   const totalModels = facets.totalUnfiltered;
   const canonicalUrl = 'https://rate.vn/smartwatches';
@@ -12,10 +19,9 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title:
       totalModels > 0
-        ? `So sánh giá Đồng hồ thông minh (${totalModels} mẫu chuẩn hóa) | Rate.vn`
-        : 'So sánh giá Đồng hồ thông minh (Smartwatches) & Kiểm định khuyến mãi AI | Rate.vn',
-    description:
-      'Tra cứu và lọc đồng hồ thông minh (Apple Watch, Galaxy Watch, Garmin, Xiaomi Watch, Huawei Watch) theo 10 nhóm thông số kỹ thuật chuẩn hóa, kiểm tra lịch sử giá thật và lọc đánh giá Seeding trên Rate.vn.',
+        ? t('meta.smartwatches.titleCount', { count: totalModels })
+        : t('meta.smartwatches.titleDefault'),
+    description: t('meta.smartwatches.description'),
     alternates: {
       canonical: canonicalUrl,
     },

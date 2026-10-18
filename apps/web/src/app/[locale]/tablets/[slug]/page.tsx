@@ -18,11 +18,5 @@ export default async function TabletDetailPage({
 }: {
   params: PageParams;
 }) {
-  return (
-    <ProductDetailView
-      params={params}
-      categoryBasePath="/tablets"
-      categoryLabel="Máy tính bảng"
-    />
-  );
+  return <ProductDetailView params={params} categoryBasePath="/tablets" />;
 }

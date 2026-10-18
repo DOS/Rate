@@ -3511,7 +3511,78 @@ async function runCoreArchitectureSuite() {
   );
 
   console.log(
-    '  ✅ [61/61] Dedicated backfill-specs CLI (--apply guard) & reference migration security audit (#188) passed'
+    '  ✅ [61/62] Dedicated backfill-specs CLI (--apply guard) & reference migration security audit (#188) passed'
+  );
+
+  // 62. Full next-intl Multilingual Parity (vi/en/cs) across all 15 namespaces (#241, #266, #272)
+  const viJson = JSON.parse(
+    fs.readFileSync(path.join(repoRoot, 'apps/web/locales/vi.json'), 'utf8')
+  ) as Record<string, unknown>;
+  const enJson = JSON.parse(
+    fs.readFileSync(path.join(repoRoot, 'apps/web/locales/en.json'), 'utf8')
+  ) as Record<string, unknown>;
+  const csJson = JSON.parse(
+    fs.readFileSync(path.join(repoRoot, 'apps/web/locales/cs.json'), 'utf8')
+  ) as Record<string, unknown>;
+
+  function collectLeafPaths(obj: unknown, prefix = ''): string[] {
+    if (!obj || typeof obj !== 'object' || Array.isArray(obj)) {
+      return [prefix];
+    }
+    const paths: string[] = [];
+    for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
+      const next = prefix ? `${prefix}.${k}` : k;
+      paths.push(...collectLeafPaths(v, next));
+    }
+    return paths.sort();
+  }
+
+  const viPaths = collectLeafPaths(viJson);
+  const enPaths = collectLeafPaths(enJson);
+  const csPaths = collectLeafPaths(csJson);
+
+  assert.deepEqual(
+    enPaths,
+    viPaths,
+    'en.json leaf keys must match vi.json 100% across all namespaces (#241, #266, #272)'
+  );
+  assert.deepEqual(
+    csPaths,
+    viPaths,
+    'cs.json leaf keys must match vi.json 100% across all namespaces (#241, #266, #272)'
+  );
+  assert.ok(
+    viPaths.length >= 1550,
+    `Expected at least 1,550 localized leaf keys per locale, found ${viPaths.length}`
+  );
+
+  for (const requiredNamespace of [
+    'rate',
+    'compare',
+    'leaderboard',
+    'reviews',
+    'watchlist',
+    'deals',
+    'inspect',
+    'merchants',
+    'productDetail',
+    'homePage',
+    'developers',
+    'staticPages',
+    'catalog',
+    'heroSearch',
+    'authPortal',
+  ]) {
+    assert.ok(
+      requiredNamespace in viJson &&
+        requiredNamespace in enJson &&
+        requiredNamespace in csJson,
+      `Locale catalogs must include namespace "${requiredNamespace}" in vi, en, and cs`
+    );
+  }
+
+  console.log(
+    `  ✅ [62/62] Full next-intl Multilingual Parity (${viPaths.length} keys x 3 locales vi/en/cs across 15 namespaces) (#241, #266, #272) passed`
   );
 
   console.log('🎉 All Rate.vn Core Architecture tests passed!');

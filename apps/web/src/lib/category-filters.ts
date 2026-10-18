@@ -24,7 +24,13 @@ export interface PricePresetOption {
 }
 
 export interface SpecFeatureOption {
-  key: 'has5g' | 'highRefresh' | 'bigBattery' | 'fastCharge' | 'hasNfc' | 'compactScreen';
+  key:
+    | 'has5g'
+    | 'highRefresh'
+    | 'bigBattery'
+    | 'fastCharge'
+    | 'hasNfc'
+    | 'compactScreen';
   label: string;
   fieldGroup:
     | 'display'
@@ -66,7 +72,11 @@ export const SORT_OPTIONS: { value: ProductSortOption; label: string }[] = [
   { value: 'newest', label: 'Mới ra mắt nhất' },
 ];
 
-export const RATING_FILTER_OPTIONS: { value: number; id: string; label: string }[] = [
+export const RATING_FILTER_OPTIONS: {
+  value: number;
+  id: string;
+  label: string;
+}[] = [
   { value: 0, id: 'rating-all', label: 'All' },
   { value: 3, id: 'rating-3plus', label: '3.0+' },
   { value: 4, id: 'rating-4plus', label: '4.0+' },
@@ -81,8 +91,17 @@ export const CATEGORY_FILTER_SCHEMAS: Record<string, CategoryFilterSchema> = {
     categoryTitle: 'Điện Thoại Thông Minh',
     categorySubtitle:
       'Tra cứu dữ liệu kỹ thuật 10 nhóm thông số chuẩn GSMArena & PhoneArena, đối chiếu giá đa sàn và lọc đánh giá thật bằng AI',
-    searchPlaceholder: 'Tìm tên máy, chip (VD: iPhone 16, Snapdragon 8 Gen 3)...',
-    defaultBrands: ['Apple', 'Samsung', 'Xiaomi', 'OPPO', 'Vivo', 'Realme', 'Honor'],
+    searchPlaceholder:
+      'Tìm tên máy, chip (VD: iPhone 16, Snapdragon 8 Gen 3)...',
+    defaultBrands: [
+      'Apple',
+      'Samsung',
+      'Xiaomi',
+      'OPPO',
+      'Vivo',
+      'Realme',
+      'Honor',
+    ],
     ramOptionsGb: [4, 6, 8, 12, 16],
     storageOptionsGb: [64, 128, 256, 512, 1024],
     priceRangeMillion: {
@@ -92,9 +111,24 @@ export const CATEGORY_FILTER_SCHEMAS: Record<string, CategoryFilterSchema> = {
     },
     pricePresets: [
       { id: 'under-7m', label: 'Dưới 7 triệu', minVnd: 0, maxVnd: 7_000_000 },
-      { id: '7m-15m', label: '7 - 15 triệu', minVnd: 7_000_000, maxVnd: 15_000_000 },
-      { id: '15m-25m', label: '15 - 25 triệu', minVnd: 15_000_000, maxVnd: 25_000_000 },
-      { id: 'over-25m', label: 'Trên 25 triệu', minVnd: 25_000_000, maxVnd: 50_000_000 },
+      {
+        id: '7m-15m',
+        label: '7 - 15 triệu',
+        minVnd: 7_000_000,
+        maxVnd: 15_000_000,
+      },
+      {
+        id: '15m-25m',
+        label: '15 - 25 triệu',
+        minVnd: 15_000_000,
+        maxVnd: 25_000_000,
+      },
+      {
+        id: 'over-25m',
+        label: 'Trên 25 triệu',
+        minVnd: 25_000_000,
+        maxVnd: 50_000_000,
+      },
     ],
     featureCheckboxes: [
       {
@@ -140,7 +174,8 @@ export const CATEGORY_FILTER_SCHEMAS: Record<string, CategoryFilterSchema> = {
     directorySlug: 'tech_electronics',
     directoryName: 'Công nghệ & Thiết bị số',
     categoryTitle: 'Máy Tính Bảng (Tablets)',
-    categorySubtitle: 'So sánh thông số kỹ thuật 10 nhóm và giá bán máy tính bảng từ các sàn TMĐT',
+    categorySubtitle:
+      'So sánh thông số kỹ thuật 10 nhóm và giá bán máy tính bảng từ các sàn TMĐT',
     searchPlaceholder: 'Tìm iPad, Galaxy Tab, Xiaomi Pad...',
     defaultBrands: ['Apple', 'Samsung', 'Xiaomi', 'Lenovo', 'Huawei'],
     ramOptionsGb: [4, 8, 12, 16],
@@ -151,9 +186,24 @@ export const CATEGORY_FILTER_SCHEMAS: Record<string, CategoryFilterSchema> = {
       step: 1,
     },
     pricePresets: [
-      { id: 'under-10m', label: 'Dưới 10 triệu', minVnd: 0, maxVnd: 10_000_000 },
-      { id: '10m-20m', label: '10 - 20 triệu', minVnd: 10_000_000, maxVnd: 20_000_000 },
-      { id: 'over-20m', label: 'Trên 20 triệu', minVnd: 20_000_000, maxVnd: 50_000_000 },
+      {
+        id: 'under-10m',
+        label: 'Dưới 10 triệu',
+        minVnd: 0,
+        maxVnd: 10_000_000,
+      },
+      {
+        id: '10m-20m',
+        label: '10 - 20 triệu',
+        minVnd: 10_000_000,
+        maxVnd: 20_000_000,
+      },
+      {
+        id: 'over-20m',
+        label: 'Trên 20 triệu',
+        minVnd: 20_000_000,
+        maxVnd: 50_000_000,
+      },
     ],
     featureCheckboxes: [
       {
@@ -181,7 +231,8 @@ export const CATEGORY_FILTER_SCHEMAS: Record<string, CategoryFilterSchema> = {
     directorySlug: 'tech_electronics',
     directoryName: 'Công nghệ & Thiết bị số',
     categoryTitle: 'Máy Tính Xách Tay (Laptops)',
-    categorySubtitle: 'Đối chiếu cấu hình phần cứng 10 nhóm và lịch sử giá laptop chính hãng',
+    categorySubtitle:
+      'Đối chiếu cấu hình phần cứng 10 nhóm và lịch sử giá laptop chính hãng',
     searchPlaceholder: 'Tìm MacBook, ThinkPad, ASUS ROG, Dell XPS...',
     defaultBrands: ['Apple', 'ASUS', 'Lenovo', 'Dell', 'HP', 'Acer', 'MSI'],
     ramOptionsGb: [8, 16, 32, 64],
@@ -192,9 +243,24 @@ export const CATEGORY_FILTER_SCHEMAS: Record<string, CategoryFilterSchema> = {
       step: 2,
     },
     pricePresets: [
-      { id: 'under-15m', label: 'Dưới 15 triệu', minVnd: 0, maxVnd: 15_000_000 },
-      { id: '15m-30m', label: '15 - 30 triệu', minVnd: 15_000_000, maxVnd: 30_000_000 },
-      { id: 'over-30m', label: 'Trên 30 triệu', minVnd: 30_000_000, maxVnd: 80_000_000 },
+      {
+        id: 'under-15m',
+        label: 'Dưới 15 triệu',
+        minVnd: 0,
+        maxVnd: 15_000_000,
+      },
+      {
+        id: '15m-30m',
+        label: '15 - 30 triệu',
+        minVnd: 15_000_000,
+        maxVnd: 30_000_000,
+      },
+      {
+        id: 'over-30m',
+        label: 'Trên 30 triệu',
+        minVnd: 30_000_000,
+        maxVnd: 80_000_000,
+      },
     ],
     featureCheckboxes: [
       {
@@ -220,7 +286,14 @@ export const CATEGORY_FILTER_SCHEMAS: Record<string, CategoryFilterSchema> = {
       'Đối chiếu cảm biến sức khỏe, chuẩn kháng nước, GPS đa băng tần và lịch sử giá đồng hồ thông minh chính hãng',
     searchPlaceholder:
       'Tìm Apple Watch, Galaxy Watch, Garmin, Xiaomi Watch, Huawei Watch...',
-    defaultBrands: ['Apple', 'Samsung', 'Garmin', 'Xiaomi', 'Huawei', 'Amazfit'],
+    defaultBrands: [
+      'Apple',
+      'Samsung',
+      'Garmin',
+      'Xiaomi',
+      'Huawei',
+      'Amazfit',
+    ],
     ramOptionsGb: [1, 2, 4],
     storageOptionsGb: [4, 16, 32, 64],
     priceRangeMillion: {
@@ -279,7 +352,15 @@ export const CATEGORY_FILTER_SCHEMAS: Record<string, CategoryFilterSchema> = {
       'So sánh khả năng chống ồn chủ động ANC, codec âm thanh Hi-Res (LDAC/aptX), thời lượng pin và giá bán thực tế đa sàn',
     searchPlaceholder:
       'Tìm AirPods Pro, Sony WF-1000XM5, Galaxy Buds, Bose, Sennheiser...',
-    defaultBrands: ['Apple', 'Sony', 'Samsung', 'Bose', 'Sennheiser', 'Xiaomi', 'JBL'],
+    defaultBrands: [
+      'Apple',
+      'Sony',
+      'Samsung',
+      'Bose',
+      'Sennheiser',
+      'Xiaomi',
+      'JBL',
+    ],
     ramOptionsGb: [],
     storageOptionsGb: [],
     priceRangeMillion: {
@@ -327,7 +408,15 @@ const DEFAULT_SMARTPHONE_SCHEMA: CategoryFilterSchema = {
   categorySubtitle:
     'Tra cứu dữ liệu kỹ thuật 10 nhóm thông số chuẩn GSMArena & PhoneArena, đối chiếu giá đa sàn và lọc đánh giá thật bằng AI',
   searchPlaceholder: 'Tìm tên máy, chip (VD: iPhone 16, Snapdragon 8 Gen 3)...',
-  defaultBrands: ['Apple', 'Samsung', 'Xiaomi', 'OPPO', 'Vivo', 'Realme', 'Honor'],
+  defaultBrands: [
+    'Apple',
+    'Samsung',
+    'Xiaomi',
+    'OPPO',
+    'Vivo',
+    'Realme',
+    'Honor',
+  ],
   ramOptionsGb: [4, 6, 8, 12, 16],
   storageOptionsGb: [64, 128, 256, 512, 1024],
   priceRangeMillion: {
@@ -337,9 +426,24 @@ const DEFAULT_SMARTPHONE_SCHEMA: CategoryFilterSchema = {
   },
   pricePresets: [
     { id: 'under-7m', label: 'Dưới 7 triệu', minVnd: 0, maxVnd: 7_000_000 },
-    { id: '7m-15m', label: '7 - 15 triệu', minVnd: 7_000_000, maxVnd: 15_000_000 },
-    { id: '15m-25m', label: '15 - 25 triệu', minVnd: 15_000_000, maxVnd: 25_000_000 },
-    { id: 'over-25m', label: 'Trên 25 triệu', minVnd: 25_000_000, maxVnd: 50_000_000 },
+    {
+      id: '7m-15m',
+      label: '7 - 15 triệu',
+      minVnd: 7_000_000,
+      maxVnd: 15_000_000,
+    },
+    {
+      id: '15m-25m',
+      label: '15 - 25 triệu',
+      minVnd: 15_000_000,
+      maxVnd: 25_000_000,
+    },
+    {
+      id: 'over-25m',
+      label: 'Trên 25 triệu',
+      minVnd: 25_000_000,
+      maxVnd: 50_000_000,
+    },
   ],
   featureCheckboxes: [
     {
@@ -389,15 +493,39 @@ export function getCategoryFilterSchema(
     CATEGORY_FILTER_SCHEMAS[categorySlug] ?? DEFAULT_SMARTPHONE_SCHEMA;
 
   const mergedBrands = Array.from(
-    new Set([
-      ...dynamicBrands.filter(Boolean),
-      ...base.defaultBrands,
-    ])
+    new Set([...dynamicBrands.filter(Boolean), ...base.defaultBrands])
   );
 
   return {
     ...base,
     defaultBrands: mergedBrands,
+  };
+}
+
+export function localizeCategoryFilterSchema(
+  schema: CategoryFilterSchema,
+  t: (key: string) => string
+): CategoryFilterSchema {
+  const slug =
+    schema.categorySlug in CATEGORY_FILTER_SCHEMAS
+      ? schema.categorySlug
+      : 'smartphones';
+
+  return {
+    ...schema,
+    directoryName: t('schemas.directoryTech'),
+    categoryTitle: t(`schemas.${slug}.title`),
+    categorySubtitle: t(`schemas.${slug}.subtitle`),
+    searchPlaceholder: t(`schemas.${slug}.searchPlaceholder`),
+    pricePresets: schema.pricePresets.map((preset) => ({
+      ...preset,
+      label: t(`schemas.${slug}.presets.${preset.id}`),
+    })),
+    featureCheckboxes: schema.featureCheckboxes.map((feat) => ({
+      ...feat,
+      label: t(`schemas.${slug}.features.${feat.key}.label`),
+      description: t(`schemas.${slug}.features.${feat.key}.desc`),
+    })),
   };
 }
 
