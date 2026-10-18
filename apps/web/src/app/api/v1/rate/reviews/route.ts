@@ -293,7 +293,7 @@ export async function POST(request: NextRequest) {
         p_author_name: authorName,
         p_rating_star: ratingStar,
         p_comment: body.comment,
-        p_variation: variation,
+        p_variation: variation ?? undefined,
         p_reviewer_type: 'user',
         p_criteria_ratings: criteria,
       }

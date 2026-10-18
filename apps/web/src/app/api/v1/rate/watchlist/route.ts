@@ -242,7 +242,7 @@ export async function POST(request: NextRequest) {
         p_target_price: targetPrice,
         // The RPC keys signed-in callers by auth.uid(); the fingerprint is not used for them.
         p_client_fingerprint: `user:${auth.userId}`,
-        p_subscriber_email: auth.email,
+        p_subscriber_email: auth.email ?? undefined,
         p_locale: locale,
       }
     );
