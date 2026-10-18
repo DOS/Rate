@@ -32,6 +32,7 @@ const PAGES: { path: string; status?: number }[] = [
   { path: '/login' },
   { path: '/register' },
   { path: '/forgot-password' },
+  { path: '/two-factor-auth' },
   { path: '/a11y-unknown-page', status: 404 },
 ];
 
