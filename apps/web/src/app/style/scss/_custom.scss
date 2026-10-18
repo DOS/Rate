@@ -31,6 +31,10 @@
   --bs-link-hover-color-rgb: 216, 48, 48;
   --bs-link-decoration: none;
   --bs-code-color: #4f46e5;
+  // style.scss's .form-control reads this; it was never defined, so input text
+  // inherited the surrounding color (white text in white inputs on dark heroes).
+  // Inputs keep the light body background everywhere, so the ink stays dark.
+  --bs-form-color: #0f172a;
   --bs-highlight-color: #0f172a;
   --bs-highlight-bg: #fef3c7;
   --bs-border-color: #e2e8f0;
@@ -126,6 +130,7 @@
   --rate-crimson-text: #ff6b6b;
   --rate-focus-ring: #ff6b6b;
   // Light inks on obsidian (all at least 6:1 on #181d29)
+  --bs-code-color: #a5b4fc;
   --rate-ink-primary: #ff6b6b;
   --rate-ink-success: #34d399;
   --rate-ink-danger: #ff6b6b;
@@ -195,6 +200,7 @@
   --rate-ink-secondary: #94a3b8;
   --rate-ink-warning: #ffc107;
   --rate-ink-info: #0dcaf0;
+  --bs-code-color: #a5b4fc;
 }
 
 // style.scss paints outline buttons with the light body color; on a dark
@@ -227,6 +233,7 @@
   --rate-ink-secondary: #545b62;
   --rate-ink-warning: #7a5000;
   --rate-ink-info: #0a6c7d;
+  --bs-code-color: #4f46e5;
 }
 
 // The score badges carry light-only literal tints; on the dark surface they

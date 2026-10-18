@@ -3399,8 +3399,10 @@ div[data-overlay] p {
   background-color: var(--bs-purple) !important;
 }
 
+// Keeps Bootstrap's bg-opacity-* working: a solid var(--bs-body-bg) here made
+// every bg-white bg-opacity-10 panel on a dark card an opaque light block.
 .bg-white {
-  background-color: var(--bs-body-bg) !important;
+  background-color: rgba(var(--bs-body-bg-rgb), var(--bs-bg-opacity, 1)) !important;
 }
 
 .bg-dark-banner {
@@ -10384,7 +10386,7 @@ Responsiveness Start
     width: 100%;
     background: var(--bs-primary-bg-subtle);
     border-top: 1px solid var(--bs-primary-border-subtle);
-    color: var(--bs-primary);
+    color: var(--rate-ink-primary);
     border-radius: 0;
     display: flex;
     align-items: center;
