@@ -2635,6 +2635,28 @@ export function sanitizePostgrestFilterToken(raw: string): string {
   return raw.replace(/[^a-zA-Z0-9_-]/g, '');
 }
 
+// Ids per in.() filter: a merchant can list hundreds of products, and one
+// in.() with all of them overflows the gateway's request-line limit (#290).
+const IN_FILTER_CHUNK_SIZE = 150;
+
+/** Runs `read` per chunk of `ids` and concatenates the rows; any error throws. */
+async function readInChunks(
+  ids: readonly string[],
+  what: string,
+  read: (chunk: string[]) => PromiseLike<{
+    data: unknown[] | null;
+    error: { message?: string } | null;
+  }>
+): Promise<unknown[]> {
+  const rows: unknown[] = [];
+  for (let i = 0; i < ids.length; i += IN_FILTER_CHUNK_SIZE) {
+    const { data, error } = await read(ids.slice(i, i + IN_FILTER_CHUNK_SIZE));
+    if (error) throw new RateDataUnavailableError(what, error);
+    rows.push(...(data ?? []));
+  }
+  return rows;
+}
+
 /**
  * Fetch detailed profile for a single Merchant by UUID id, slug, or platform_shop_id,
  * including all listings with Fake Discount verdicts and buyer reviews with AI flags.
@@ -2685,13 +2707,18 @@ export async function getMerchantProfileById(
     return null;
   }
 
-  const { data: prodRows } = await supabase
+  // Secondary reads throw too: a profile with silently empty listings or
+  // reviews would otherwise be cached as if it were true (DOS/Rate#329).
+  const { data: prodRows, error: prodError } = await supabase
     .from('products')
     .select(
       'id, merchant_id, platform, platform_item_id, title, price_current, price_original, stock, historical_sold, rating_star, rating_count, images, url, cluster_id'
     )
     .eq('merchant_id', merchantRow.id)
     .order('price_current', { ascending: true });
+  if (prodError) {
+    throw new RateDataUnavailableError('merchant listings', prodError);
+  }
 
   const rawProducts = (prodRows as unknown as RawProductRow[]) || [];
   const clusterIds = Array.from(
@@ -2699,25 +2726,39 @@ export async function getMerchantProfileById(
   ) as string[];
   const productIds = rawProducts.map((p) => p.id);
 
-  const [masterRes, catsRes, reviewsRes] = await Promise.all([
-    clusterIds.length > 0
-      ? supabase
-          .from('master_products')
-          .select(
-            'id, slug, name, brand, category_id, min_price, max_price, merchant_count'
-          )
-          .in('id', clusterIds)
-      : Promise.resolve({ data: [] }),
+  const [masterRows, catsRes, reviewRows] = await Promise.all([
+    readInChunks(clusterIds, 'merchant profile', (chunk) =>
+      supabase
+        .from('master_products')
+        .select(
+          'id, slug, name, brand, category_id, min_price, max_price, merchant_count'
+        )
+        .in('id', chunk)
+    ),
     supabase.from('categories').select('id, slug'),
-    productIds.length > 0
-      ? supabase
-          .from('reviews')
-          .select('*, review_flags(*)')
-          .in('product_id', productIds)
-          .order('created_at', { ascending: false })
-          .limit(60)
-      : Promise.resolve({ data: [] }),
+    readInChunks(productIds, 'merchant profile', (chunk) =>
+      supabase
+        .from('reviews')
+        .select('*, review_flags(*)')
+        .in('product_id', chunk)
+        .order('created_at', { ascending: false })
+        .limit(60)
+    ),
   ]);
+  if (catsRes.error) {
+    throw new RateDataUnavailableError('merchant profile', catsRes.error);
+  }
+  const masterRes = { data: masterRows };
+  // Each chunk returns its newest 60; keep the newest 60 overall.
+  const reviewsRes = {
+    data: (reviewRows as Array<{ created_at?: string | null }>)
+      .sort(
+        (a, b) =>
+          (Date.parse(b.created_at ?? '') || 0) -
+          (Date.parse(a.created_at ?? '') || 0)
+      )
+      .slice(0, 60),
+  };
 
   const catSlugById = new Map<string, string>();
   for (const c of (catsRes.data || []) as Array<{ id: string; slug: string }>) {

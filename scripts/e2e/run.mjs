@@ -15,7 +15,7 @@
 
 import { spawn, spawnSync } from 'node:child_process';
 import { createHmac } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readFileSync, rmSync } from 'node:fs';
 import http from 'node:http';
 import net from 'node:net';
 import path from 'node:path';
@@ -155,11 +155,17 @@ function run(command, commandArgs, env) {
 
 /**
  * Serves PostgREST at /rest/v1 like Supabase; every other path is a 404. Any
- * query containing FAULT_MARKER answers 500 (a 503 would also trip
+ * query containing one of FAULT_MARKERS answers 500 (a 503 would also trip
  * postgrest-js retries and only slow the spec down), so a spec can simulate a database
  * outage for one URL without disturbing specs running in parallel.
  */
-const FAULT_MARKER = 'e2e-fault';
+// Second marker: the listing query of the seeded "faulty-listings-store"
+// merchant only (eq., so batch reads of all merchants with in.() still work).
+const MAX_REQUEST_URL_LENGTH = 8_000;
+const FAULT_MARKERS = [
+  'e2e-fault',
+  'merchant_id=eq.eeeeeeee-eeee-4eee-8eee-eeeeeeeefa17',
+];
 function startProxy(upstreamPort) {
   proxyServer = http.createServer((req, res) => {
     if (!req.url?.startsWith('/rest/v1/')) {
@@ -167,7 +173,14 @@ function startProxy(upstreamPort) {
       res.end('{"message":"not served by the e2e stack"}');
       return;
     }
-    if (req.url.includes(FAULT_MARKER)) {
+    // Like the hosted gateway, refuse oversized request lines instead of
+    // forwarding them, so unchunked in.() filters fail here too.
+    if (req.url.length > MAX_REQUEST_URL_LENGTH) {
+      res.writeHead(414, { 'content-type': 'application/json' });
+      res.end('{"message":"request URI too long"}');
+      return;
+    }
+    if (FAULT_MARKERS.some((marker) => req.url.includes(marker))) {
       res.writeHead(500, { 'content-type': 'application/json' });
       res.end('{"message":"simulated outage","code":"XX000"}');
       return;
@@ -292,6 +305,12 @@ try {
     }
   }
 
+  // unstable_cache persists in .next/cache/fetch-cache, outside the build
+  // output; a previous run's entries would answer instead of this database.
+  rmSync(path.join(repoRoot, 'apps', 'web', '.next', 'cache', 'fetch-cache'), {
+    recursive: true,
+    force: true,
+  });
   const webPort = Number(process.env.E2E_WEB_PORT) || (await freePort());
   // `localhost`, not 127.0.0.1: next-intl rewrites to a `localhost` URL, and when
   // the server is bound to another hostname Next proxies that rewrite as an

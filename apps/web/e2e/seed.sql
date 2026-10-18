@@ -9,7 +9,9 @@ VALUES ('c0000000-0000-4000-8000-000000000001', 'Điện thoại', 'smartphones'
 INSERT INTO rate.merchants (id, platform, platform_shop_id, name, slug, is_official)
 VALUES
   ('11111111-1111-4111-8111-111111111111', 'shopee', 'shop_1', 'Apple Flagship Store', 'apple-flagship-store', true),
-  ('11111111-1111-4111-8111-111111111112', 'tiki', 'shop_2', 'Samsung Official Store', 'samsung-official-store', true);
+  ('11111111-1111-4111-8111-111111111112', 'tiki', 'shop_2', 'Samsung Official Store', 'samsung-official-store', true),
+  -- Its listing query fails on purpose (FAULT_MARKERS in scripts/e2e/run.mjs).
+  ('eeeeeeee-eeee-4eee-8eee-eeeeeeeefa17', 'shopee', 'shop_fault', 'Faulty Listings Store', 'faulty-listings-store', false);
 
 INSERT INTO rate.master_products
   (id, category_id, brand, model, model_key, name, slug, ram_gb, storage_gb, screen_size_inch, battery_mah, has_5g,
@@ -52,3 +54,15 @@ INSERT INTO rate.review_flags (review_id, verdict, include_in_rating, detector, 
 SELECT id, 'authentic', true, 'e2e-seed', 'v1', 'seed-' || id FROM rate.reviews;
 
 SELECT rate.refresh_master_product_rating(id) FROM rate.master_products;
+
+-- A merchant with 250 listings: reads that pass every listing id to one in.()
+-- would exceed the request-line limit the E2E proxy enforces. The only review
+-- sits on the last listing, so it shows only if every chunk is read.
+INSERT INTO rate.merchants (id, platform, platform_shop_id, name, slug, is_official)
+VALUES ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb250', 'shopee', 'shop_bulk', 'Bulk Listings Store', 'bulk-listings-store', false);
+INSERT INTO rate.products (merchant_id, platform, platform_item_id, title, price_current, url)
+SELECT 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb250', 'shopee', 'bulk_' || g, 'Phụ kiện số ' || g, 100000 + g, 'https://shopee.vn/bulk-' || g
+FROM generate_series(1, 250) AS g;
+INSERT INTO rate.reviews (product_id, author_name, rating_star, comment, reviewer_type)
+SELECT id, 'Thảo', 4, 'Đóng gói cẩn thận, giao nhanh.', 'user'
+FROM rate.products WHERE platform_item_id = 'bulk_250';
