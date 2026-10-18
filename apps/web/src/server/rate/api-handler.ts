@@ -271,3 +271,46 @@ export function resolveReviewVoteInput(rawBody: unknown): {
 
   return { voteType, reportReason };
 }
+
+const VALID_VERSUS_SLUG_REGEX = /^[a-z0-9._-]+$/i;
+
+/**
+ * Parses and validates a 1v1 versus pair (`?pair=<slugA>-vs-<slugB>` or `?slugA=...&slugB=...`).
+ * Rejects missing, identical, overlong (`> 120` chars), or malformed product slugs (`null`).
+ */
+export function parseVersusQueryParams(
+  searchParams: Pick<URLSearchParams, 'get'>,
+  maxSlugLength = 120
+): [string, string] | null {
+  const isValidSlug = (s: string): boolean =>
+    Boolean(s && s.length <= maxSlugLength && VALID_VERSUS_SLUG_REGEX.test(s));
+
+  const rawPair = (searchParams.get('pair') || '').toLowerCase().trim();
+  if (
+    rawPair &&
+    rawPair.length <= maxSlugLength * 2 + 4 &&
+    rawPair.includes('-vs-')
+  ) {
+    const parts = rawPair.split('-vs-');
+    if (parts.length === 2) {
+      const a = parts[0]?.trim() || '';
+      const b = parts[1]?.trim() || '';
+      if (isValidSlug(a) && isValidSlug(b) && a !== b) {
+        return [a, b];
+      }
+    }
+  }
+
+  const slugA = (searchParams.get('slugA') || searchParams.get('a') || '')
+    .toLowerCase()
+    .trim();
+  const slugB = (searchParams.get('slugB') || searchParams.get('b') || '')
+    .toLowerCase()
+    .trim();
+
+  if (isValidSlug(slugA) && isValidSlug(slugB) && slugA !== slugB) {
+    return [slugA, slugB];
+  }
+
+  return null;
+}

@@ -15,11 +15,19 @@ import {
   rankMasterProductsForLeaderboard,
 } from '@/lib/leaderboard-engine';
 import {
+  PUBLIC_API_CORS_HEADERS,
+  jsonApiError,
   parseBoundedIntParam,
-  sanitizePublicApiError,
 } from '@/server/rate/api-handler';
 
 export const revalidate = 60;
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: PUBLIC_API_CORS_HEADERS,
+  });
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -45,7 +53,7 @@ export async function GET(req: NextRequest) {
 
     const [allProducts, dealRadar] = await Promise.all([
       getCachedMasterProducts({
-        categorySlug: 'all',
+        categorySlug: category,
         limit: 100,
         sort: 'rating_desc',
       }),
@@ -64,30 +72,34 @@ export async function GET(req: NextRequest) {
       query,
     });
 
-    const items = ranked.slice(0, limit).map((r) => ({
-      rank: r.rank,
-      slug: r.slug,
-      name: r.name,
-      brand: r.brand,
-      model: r.model,
-      category: r.categorySlug,
-      product_url: r.productHref,
-      thumbnail: r.thumbnail,
-      active_criterion: criterion,
-      active_score_5: r.activeScore5,
-      active_score_10: r.activeScore10,
-      combined_score_5: r.combinedScore5,
-      user_score_5: r.userScore5,
-      expert_score_10: r.expertScore10,
-      authentic_review_count: r.authenticReviewCount,
-      filtered_noise_review_count: r.filteredNoiseReviewCount,
-      criteria_scores: r.criteria,
-      min_price: r.minPrice,
-      max_price: r.maxPrice,
-      merchant_count: r.merchantCount,
-      key_specs: r.product.key_specs || {},
-      deal_radar: radarExportFields(getRadarSignal(radarIndex, r.slug)),
-    }));
+    const items = ranked.slice(0, limit).map((r) => {
+      const radar = radarExportFields(getRadarSignal(radarIndex, r.slug));
+      return {
+        rank: r.rank,
+        slug: r.slug,
+        name: r.name,
+        brand: r.brand,
+        model: r.model,
+        category: r.categorySlug,
+        product_url: r.productHref,
+        thumbnail: r.thumbnail,
+        active_criterion: criterion,
+        active_score_5: r.activeScore5,
+        active_score_10: r.activeScore10,
+        combined_score_5: r.combinedScore5,
+        user_score_5: r.userScore5,
+        expert_score_10: r.expertScore10,
+        authentic_review_count: r.authenticReviewCount,
+        filtered_noise_review_count: r.filteredNoiseReviewCount,
+        criteria_scores: r.criteria,
+        min_price: r.minPrice,
+        max_price: r.maxPrice,
+        merchant_count: r.merchantCount,
+        key_specs: r.product.key_specs || {},
+        deal_radar: radar,
+        radar_signal: radar,
+      };
+    });
 
     const top3Slugs = items.slice(0, 3).map((x) => x.slug);
     const compareCategory =
@@ -97,36 +109,38 @@ export async function GET(req: NextRequest) {
         ? `/compare?cat=${compareCategory}&slugs=${top3Slugs.join(',')}`
         : null;
 
+    const payload = {
+      directory: 'tech_electronics',
+      category,
+      criterion,
+      price_segment: priceSegment,
+      brand,
+      total_matched: ranked.length,
+      returned_count: items.length,
+      compare_top_3_url: compareTop3Url,
+      podium_top_3: items.slice(0, 3),
+      items,
+    };
+
     return NextResponse.json(
       {
-        directory: 'tech_electronics',
-        category,
-        criterion,
-        price_segment: priceSegment,
-        brand,
-        total_matched: ranked.length,
-        returned_count: items.length,
-        compare_top_3_url: compareTop3Url,
-        podium_top_3: items.slice(0, 3),
-        items,
+        ok: true,
+        ...payload,
+        data: payload,
       },
       {
         status: 200,
         headers: {
+          ...PUBLIC_API_CORS_HEADERS,
           'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300',
         },
       }
     );
   } catch (err) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: sanitizePublicApiError(
-          err,
-          'Failed to compute JReviews leaderboard ranking'
-        ),
-      },
-      { status: 500 }
+    return jsonApiError(
+      500,
+      'Failed to compute JReviews leaderboard ranking',
+      err
     );
   }
 }

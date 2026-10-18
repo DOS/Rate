@@ -11,6 +11,19 @@ const VALID_CATEGORIES = new Set<CanonicalCategorySlug>([
   'earbuds',
 ]);
 
+const VALID_PLATFORMS = new Set<string>([
+  'shopee',
+  'lazada',
+  'tiki',
+  'tiktok',
+  'cellphones',
+  'tgdd',
+  'fptshop',
+  'hoangha',
+  'didongviet',
+  'phongvu',
+]);
+
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
@@ -37,10 +50,16 @@ export async function GET(request: Request) {
       ? (rawCat as CanonicalCategorySlug)
       : 'all';
 
-    const limit = parseBoundedIntParam(searchParams.get('limit'), 10, 1, 50);
+    const rawPlatform = (searchParams.get('platform') || 'all')
+      .trim()
+      .toLowerCase();
+    const platform = VALID_PLATFORMS.has(rawPlatform) ? rawPlatform : 'all';
+
+    const limit = parseBoundedIntParam(searchParams.get('limit'), 12, 1, 50);
 
     const radar = await getCrossPlatformDealRadar({
       categorySlug,
+      platform,
       limit,
     });
 

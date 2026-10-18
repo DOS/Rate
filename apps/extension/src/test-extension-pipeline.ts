@@ -496,6 +496,7 @@ async function runTests() {
     extractClientRateLimitKey,
     parseBoundedStringParam,
     parseCompareSlugsParam,
+    parseVersusQueryParams,
     resolveReviewVoteInput,
   } = (
     'BoundedSlidingWindowRateLimiter' in apiHandlerMod
@@ -549,6 +550,32 @@ async function runTests() {
     'parseCompareSlugsParam must deduplicate case-insensitively, reject invalid characters, and cap at 4 slugs'
   );
   assert.deepEqual(parseCompareSlugsParam('   , ??? , /etc/passwd '), []);
+  assert.deepEqual(
+    parseVersusQueryParams(
+      new URLSearchParams('pair=Apple-iPhone-16-vs-Samsung-Galaxy-S25')
+    ),
+    ['apple-iphone-16', 'samsung-galaxy-s25']
+  );
+  assert.deepEqual(
+    parseVersusQueryParams(
+      new URLSearchParams('slugA=xiaomi-15-ultra&slugB=oppo-find-x8-pro')
+    ),
+    ['xiaomi-15-ultra', 'oppo-find-x8-pro']
+  );
+  assert.equal(
+    parseVersusQueryParams(
+      new URLSearchParams('pair=same-model-vs-same-model')
+    ),
+    null,
+    'Identical slugs must be rejected by parseVersusQueryParams'
+  );
+  assert.equal(
+    parseVersusQueryParams(
+      new URLSearchParams('pair=bad<script>-vs-samsung-galaxy-s25')
+    ),
+    null,
+    'Malformed slug characters must be rejected by parseVersusQueryParams'
+  );
   assert.equal(
     resolveReviewVoteInput({}),
     null,
@@ -574,6 +601,88 @@ async function runTests() {
     voteType: 'down',
     reportReason: 'spam',
   });
+
+  const dealsUnitMod = await import('../../web/src/server/rate/deals.js');
+  const { computeCrossPlatformDealRadarFromData: computeRadarUnit } = (
+    'computeCrossPlatformDealRadarFromData' in dealsUnitMod
+      ? dealsUnitMod
+      : (dealsUnitMod as unknown as { default: typeof dealsUnitMod }).default
+  ) as typeof dealsUnitMod;
+  const mockRadarCluster = [
+    {
+      master: {
+        id: 'm-radar-1',
+        slug: 'samsung-galaxy-s24-ultra-256gb',
+        name: 'Samsung Galaxy S24 Ultra 256GB',
+        brand: 'Samsung',
+        model: 'Galaxy S24 Ultra',
+        min_price: 23990000,
+        max_price: 27990000,
+        average_rating: 4.9,
+        total_reviews: 50,
+        merchant_count: 3,
+      } as never,
+      offers: [
+        {
+          id: 'o-tiki',
+          platform: 'tiki',
+          price_current: 23990000,
+          price_original: 25990000,
+          url: 'https://tiki.vn/p1.html',
+          merchant: {
+            id: 'm1',
+            name: 'Tiki Trading',
+            is_official: true,
+            risk_score: 5,
+          },
+        },
+        {
+          id: 'o-cps',
+          platform: 'cellphones',
+          price_current: 25990000,
+          price_original: 26990000,
+          url: 'https://cellphones.com.vn/p1.html',
+          merchant: {
+            id: 'm2',
+            name: 'CellphoneS',
+            is_official: true,
+            risk_score: 5,
+          },
+        },
+        {
+          id: 'o-shopee',
+          platform: 'shopee',
+          price_current: 26990000,
+          price_original: 31990000,
+          url: 'https://shopee.vn/product/1/2',
+          merchant: {
+            id: 'm3',
+            name: 'Shopee Seller',
+            is_official: false,
+            risk_score: 20,
+          },
+        },
+      ] as never[],
+    },
+  ];
+  const tikiOnlyRadar = computeRadarUnit(mockRadarCluster, {
+    platform: 'tiki',
+    limit: 10,
+  });
+  assert.equal(tikiOnlyRadar.platformFilter, 'tiki');
+  assert.equal(tikiOnlyRadar.genuineDeals.length, 1);
+  assert.equal(tikiOnlyRadar.genuineDeals[0]!.platform, 'tiki');
+  assert.equal(
+    tikiOnlyRadar.fakeSaleTraps.length,
+    0,
+    'Shopee fake-sale trap must be excluded when filtering Deal Radar by platform=tiki'
+  );
+  const shopeeOnlyRadar = computeRadarUnit(mockRadarCluster, {
+    platform: 'shopee',
+    limit: 10,
+  });
+  assert.equal(shopeeOnlyRadar.fakeSaleTraps.length, 1);
+  assert.equal(shopeeOnlyRadar.fakeSaleTraps[0]!.platform, 'shopee');
 
   const cacheTagsMod = await import('../../web/src/server/rate/cache-tags.js');
   const { resolveRevalidationTargets, RATE_CACHE_TAGS } = (
