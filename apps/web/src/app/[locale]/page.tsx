@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { getTranslations } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
 import NavbarDarkDynamic from './components/navbar/NavbarDarkDynamic';
 import { getMasterProductHref, getMasterProducts } from '@/lib/rate-api';
@@ -76,6 +77,7 @@ export default async function Home({
 }) {
   const { locale } = await params;
   const copy = getRateCopy(locale);
+  const tHome = await getTranslations({ locale, namespace: 'homePage' });
 
   let masterProducts: MasterProduct[] = [];
   let merchants: MerchantSummary[] = [];
@@ -376,18 +378,23 @@ export default async function Home({
                           : copy.home.catExpanding}
                       </span>
                     </div>
-                    <h5 className="fw-bold text-dark mb-1">{cat.name}</h5>
+                    <h5 className="fw-bold text-dark mb-1">
+                      {cat.slug === 'smartphones' ||
+                      cat.slug === 'laptops' ||
+                      cat.slug === 'tablets' ||
+                      cat.slug === 'smartwatches' ||
+                      cat.slug === 'earbuds'
+                        ? copy.nav[cat.slug]
+                        : cat.name}
+                    </h5>
                     <p className="text-muted small mb-0">
                       {cat.slug === 'smartphones' &&
-                        'Lọc theo Chipset, RAM/ROM, tần số quét Hz, pin mAh & sạc nhanh W'}
-                      {cat.slug === 'laptops' &&
-                        'Lọc theo CPU, RAM, SSD, tấm nền màn hình & trọng lượng chuẩn hóa'}
-                      {cat.slug === 'tablets' &&
-                        'Lọc theo kích thước màn hình, dung lượng lưu trữ, kết nối 5G/Wi-Fi'}
+                        tHome('catDescSmartphones')}
+                      {cat.slug === 'laptops' && tHome('catDescLaptops')}
+                      {cat.slug === 'tablets' && tHome('catDescTablets')}
                       {cat.slug === 'smartwatches' &&
-                        'Đồng hồ thông minh theo dõi sức khỏe, GPS & thời lượng pin'}
-                      {cat.slug === 'earbuds' &&
-                        'Tai nghe chống ồn chủ động ANC, chuẩn codec Hi-Res & pin'}
+                        tHome('catDescSmartwatches')}
+                      {cat.slug === 'earbuds' && tHome('catDescEarbuds')}
                     </p>
                   </div>
                 </Link>
@@ -528,13 +535,13 @@ export default async function Home({
                           ★{' '}
                           {userScore != null
                             ? `${userScore.toFixed(1)} User (${authCount})`
-                            : 'User: chưa có'}
+                            : tHome('userNoScore')}
                         </span>
                         <span className="rate-score-badge-expert">
                           🔬{' '}
                           {expertScore != null
                             ? `${expertScore.toFixed(1)} Expert`
-                            : 'Expert: chưa có'}
+                            : tHome('expertNoScore')}
                         </span>
                         <RadarBadge
                           signal={getRadarSignal(radarIndex, item.slug)}
@@ -562,24 +569,28 @@ export default async function Home({
 
                       <div className="d-flex justify-content-between align-items-center text-muted small border-top mt-auto pt-3">
                         <span>
-                          Giá tham khảo:{' '}
+                          {tHome('refPriceLabel')}{' '}
                           <strong className="text-dark font-monospace">
                             {priceText}
                           </strong>
                         </span>
-                        <span>🏪 {item.merchant_count || 0} nguồn</span>
+                        <span>
+                          {tHome('sourcesCount', {
+                            count: item.merchant_count || 0,
+                          })}
+                        </span>
                       </div>
                       <div className="d-flex mt-3 gap-2">
                         <Link
                           href={productHref}
                           className="btn btn-primary rounded-pill fw-medium flex-grow-1"
                         >
-                          ★ Xem Review &amp; 10 Nhóm Thông Số
+                          {tHome('viewReviewsAndSpecsBtn')}
                         </Link>
                         <Link
                           href={`/inspect?q=${encodeURIComponent(item.slug)}`}
                           className="btn btn-outline-secondary rounded-pill fw-medium px-3"
-                          title="Kiểm định lịch sử giá 90 ngày & phát hiện giảm giá ảo"
+                          title={tHome('inspectPriceHistoryTitle')}
                         >
                           🔍
                         </Link>
@@ -596,10 +607,10 @@ export default async function Home({
                 <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
                   <div>
                     <span className="badge bg-danger rounded-pill fw-semibold mb-1 px-3 py-1">
-                      ⚔️ Kèo Đối Đầu 1v1 Tâm Điểm
+                      {tHome('popularBattlesBadge')}
                     </span>
                     <h4 className="h5 fw-bold mb-0 text-white">
-                      Đặt Lên Bàn Cân Các Flagship Đang Được So Kè Nhiều Nhất
+                      {tHome('popularBattlesTitle')}
                     </h4>
                   </div>
                   <div className="d-flex flex-wrap gap-2">
@@ -607,13 +618,13 @@ export default async function Home({
                       href="/leaderboard"
                       className="btn btn-sm btn-outline-warning rounded-pill px-3"
                     >
-                      🏆 Bảng Xếp Hạng 5 Ngành →
+                      {tHome('leaderboard5CatsBtn')}
                     </Link>
                     <Link
                       href="/compare"
                       className="btn btn-sm btn-outline-light rounded-pill px-3"
                     >
-                      Bàn Cân 10 Nhóm Thông Số →
+                      {tHome('compare10GroupsBtn')}
                     </Link>
                   </div>
                 </div>
@@ -633,7 +644,9 @@ export default async function Home({
                             #{battle.productA.rank} vs #{battle.productB.rank}
                           </span>
                           <span className="small text-white-50 font-monospace">
-                            Chênh {battle.scoreDelta5.toFixed(2)}/5.0
+                            {tHome('scoreDeltaLabel', {
+                              delta: battle.scoreDelta5.toFixed(2),
+                            })}
                           </span>
                         </div>
 
@@ -664,7 +677,7 @@ export default async function Home({
                             href={battle.versusHref}
                             className="btn btn-sm btn-danger rounded-pill fw-semibold w-100"
                           >
-                            ⚡ Xem Chấm Điểm Đối Đầu 1v1 →
+                            {tHome('view1v1ScoreBtn')}
                           </Link>
                         </div>
                       </div>
@@ -685,11 +698,13 @@ export default async function Home({
                   <div className="d-flex justify-content-between align-items-center border-bottom mb-3 flex-wrap gap-2 pb-3">
                     <div>
                       <span className="badge bg-dark rounded-pill text-warning me-2">
-                        🔥 RADAR KÈO THƠM &amp; BẪY SALE ẢO 10 SÀN
+                        {tHome('radarHomeBadge')}
                       </span>
                       <strong className="text-dark">
-                        Đối chiếu tự động {dealRadar.totalOffersAnalyzed} gian
-                        hàng trên {dealRadar.totalClustersAnalyzed} cụm sản phẩm
+                        {tHome('radarHomeAnalyzed', {
+                          offers: dealRadar.totalOffersAnalyzed,
+                          clusters: dealRadar.totalClustersAnalyzed,
+                        })}
                       </strong>
                     </div>
                     <div className="d-flex flex-wrap gap-2">
@@ -697,13 +712,13 @@ export default async function Home({
                         href="/deals"
                         className="btn btn-sm btn-danger rounded-pill fw-semibold px-3"
                       >
-                        💎 Trung Tâm Săn Deal 10 Sàn →
+                        {tHome('radarHomeDealHubBtn')}
                       </Link>
                       <Link
                         href="/inspect"
                         className="btn btn-sm btn-outline-dark rounded-pill px-3"
                       >
-                        🔬 Kiểm định link sale
+                        {tHome('radarHomeInspectBtn')}
                       </Link>
                     </div>
                   </div>
@@ -712,8 +727,9 @@ export default async function Home({
                     <div className="col-lg-6">
                       <div className="rounded-3 border-success-subtle bg-success-subtle bg-opacity-10 h-100 border p-3">
                         <div className="fw-bold text-success mb-2">
-                          🟢 Kèo Thơm Đáy Lịch Sử Thật (
-                          {dealRadar.genuineDeals.length})
+                          {tHome('radarGenuineTitle', {
+                            count: dealRadar.genuineDeals.length,
+                          })}
                         </div>
                         <div className="d-flex flex-column gap-2">
                           {dealRadar.genuineDeals.slice(0, 3).map((g) => (
@@ -732,9 +748,13 @@ export default async function Home({
                                   <span className="badge bg-dark text-uppercase me-1">
                                     {g.platform}
                                   </span>
-                                  {g.merchantName} • Trung vị:{' '}
-                                  {g.marketMedianPrice.toLocaleString('vi-VN')}{' '}
-                                  ₫
+                                  {g.merchantName} •{' '}
+                                  {tHome('medianPriceInline', {
+                                    price:
+                                      g.marketMedianPrice.toLocaleString(
+                                        'vi-VN'
+                                      ),
+                                  })}
                                 </div>
                               </div>
                               <div className="flex-shrink-0 text-end">
@@ -742,7 +762,9 @@ export default async function Home({
                                   {g.priceCurrent.toLocaleString('vi-VN')} ₫
                                 </div>
                                 <span className="badge bg-success rounded-pill">
-                                  -{g.savingsVsMedianPct}% so trung vị
+                                  {tHome('vsMedianPctBadge', {
+                                    pct: g.savingsVsMedianPct,
+                                  })}
                                 </span>
                               </div>
                             </div>
@@ -754,8 +776,9 @@ export default async function Home({
                     <div className="col-lg-6">
                       <div className="rounded-3 border-danger-subtle bg-danger-subtle bg-opacity-10 h-100 border p-3">
                         <div className="fw-bold text-danger mb-2">
-                          🚨 Cảnh Báo Nâng Khống Giá Gốc (
-                          {dealRadar.fakeSaleTraps.length})
+                          {tHome('radarFakeTitle', {
+                            count: dealRadar.fakeSaleTraps.length,
+                          })}
                         </div>
                         <div className="d-flex flex-column gap-2">
                           {dealRadar.fakeSaleTraps.slice(0, 3).map((t) => (
@@ -774,7 +797,8 @@ export default async function Home({
                                   <span className="badge bg-secondary text-uppercase me-1">
                                     {t.platform}
                                   </span>
-                                  {t.merchantName} • Giá gốc kê:{' '}
+                                  {t.merchantName} •{' '}
+                                  {tHome('inflatedOrigInline')}{' '}
                                   <span className="text-decoration-line-through">
                                     {(
                                       t.priceOriginal || t.priceCurrent
@@ -788,7 +812,9 @@ export default async function Home({
                                   {t.priceCurrent.toLocaleString('vi-VN')} ₫
                                 </div>
                                 <span className="badge bg-danger rounded-pill">
-                                  Kê khống +{t.fakeMarkupPct}%
+                                  {tHome('fakeMarkupPctBadge', {
+                                    pct: t.fakeMarkupPct,
+                                  })}
                                 </span>
                               </div>
                             </div>
@@ -806,15 +832,15 @@ export default async function Home({
                       >
                         <div className="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
                           <div className="fw-bold text-dark small">
-                            📊 Chênh Lệch Giá Đa Sàn Lớn Nhất (Tiết kiệm ngay
-                            khi chọn đúng đại lý kiểm định)
+                            {tHome('spreadLeadersTitle')}
                           </div>
                           <Link
                             href="/deals"
                             className="small fw-semibold text-danger text-decoration-none"
                           >
-                            Xem toàn bộ {dealRadar.priceSpreadLeaders.length}{' '}
-                            máy chênh giá →
+                            {tHome('viewAllSpreadBtn', {
+                              count: dealRadar.priceSpreadLeaders.length,
+                            })}
                           </Link>
                         </div>
                         <div className="row g-2">
@@ -843,7 +869,9 @@ export default async function Home({
                                     -{s.spreadVnd.toLocaleString('vi-VN')} ₫
                                   </div>
                                   <span className="badge bg-warning text-dark rounded-pill">
-                                    Chênh {s.spreadPct}%
+                                    {tHome('spreadPctBadge', {
+                                      pct: s.spreadPct,
+                                    })}
                                   </span>
                                 </div>
                               </div>
@@ -895,10 +923,10 @@ export default async function Home({
                   ? 'bg-warning bg-opacity-10 text-warning border-warning'
                   : 'bg-danger bg-opacity-10 text-danger border-danger';
               const trustLabel = isTrusted
-                ? 'Gian Hàng Uy Tín Cao'
+                ? tHome('merchantTrustedLabel')
                 : isCaution
-                  ? 'Cần Lưu Ý Kiểm Tra'
-                  : 'Rủi Ro Cao';
+                  ? tHome('merchantCautionLabel')
+                  : tHome('merchantHighRiskLabel');
               const breakdown = merchant.review_risk_breakdown;
               const totalRevAnalyzed = breakdown?.total_reviews ?? 0;
               const flaggedRevCount =
@@ -935,11 +963,12 @@ export default async function Home({
                             )}
                           </div>
                           <div className="text-muted small mt-1">
-                            Sàn:{' '}
+                            {tHome('platformLabel')}{' '}
                             <span className="text-uppercase fw-semibold text-dark">
                               {merchant.platform}
                             </span>{' '}
-                            • Mã Shop: <code>{merchant.platform_shop_id}</code>
+                            • {tHome('shopIdLabel')}{' '}
+                            <code>{merchant.platform_shop_id}</code>
                           </div>
                         </div>
                       </div>
@@ -963,7 +992,7 @@ export default async function Home({
                             className="text-muted"
                             style={{ fontSize: '11px' }}
                           >
-                            Không phát hiện lừa đảo
+                            {tHome('noScamDetected')}
                           </div>
                         </div>
                       </div>
@@ -979,27 +1008,35 @@ export default async function Home({
                             className="text-muted"
                             style={{ fontSize: '11px' }}
                           >
-                            {flaggedRevCount}/{totalRevAnalyzed} review bị gắn
-                            cờ
+                            {tHome('flaggedReviewsRatio', {
+                              flagged: flaggedRevCount,
+                              total: totalRevAnalyzed,
+                            })}
                           </div>
                         </div>
                       </div>
                       <div className="col-sm-4 col-12">
                         <div className="rounded-3 bg-light border p-2 text-center">
                           <div className="small text-muted">
-                            Đánh giá &amp; Sản phẩm
+                            {tHome('ratingsAndProductsLabel')}
                           </div>
                           <div className="fw-bold text-dark">
                             ⭐ {(merchant.rating_star ?? 5).toFixed(1)} •{' '}
-                            {merchant.product_count} SP
+                            {merchant.product_count}{' '}
+                            {tHome('productsShortUnit')}
                           </div>
                           <div
                             className="text-muted"
                             style={{ fontSize: '11px' }}
                           >
                             {merchant.follower_count > 0
-                              ? `${merchant.follower_count.toLocaleString('vi-VN')} người theo dõi`
-                              : 'Đang theo dõi định kỳ'}
+                              ? tHome('followersCountText', {
+                                  count:
+                                    merchant.follower_count.toLocaleString(
+                                      'vi-VN'
+                                    ),
+                                })
+                              : tHome('periodicMonitoring')}
                           </div>
                         </div>
                       </div>
@@ -1007,7 +1044,7 @@ export default async function Home({
 
                     <div className="d-flex justify-content-between align-items-center border-top pt-2">
                       <span className="small text-muted">
-                        Cập nhật lần cuối:{' '}
+                        {tHome('lastUpdatedLabel')}{' '}
                         {merchant.updated_at
                           ? new Date(merchant.updated_at).toLocaleDateString(
                               'vi-VN'
@@ -1048,13 +1085,16 @@ export default async function Home({
               </div>
               <div className="d-flex align-items-center flex-wrap gap-2">
                 <span className="badge bg-success bg-opacity-10 text-success rounded-pill px-3 py-2">
-                  ✅ {platformStats.authenticReviewsCount} Đánh giá thực chất (
-                  {platformStats.authenticRatioPct}%)
+                  {tHome('authenticReviewsStatBadge', {
+                    count: platformStats.authenticReviewsCount,
+                    pct: platformStats.authenticRatioPct,
+                  })}
                 </span>
                 {platformStats.filteredSeedingCount > 0 && (
                   <span className="badge bg-warning bg-opacity-10 text-warning rounded-pill px-3 py-2">
-                    ⚠️ {platformStats.filteredSeedingCount} Bình luận cày xu /
-                    seeding đã lọc
+                    {tHome('filteredSeedingStatBadge', {
+                      count: platformStats.filteredSeedingCount,
+                    })}
                   </span>
                 )}
               </div>
@@ -1089,13 +1129,15 @@ export default async function Home({
                           <span className="badge bg-warning bg-opacity-10 text-warning border-warning rounded-pill small border px-2 py-1">
                             <BsShieldExclamation className="me-1" />
                             {rev.flag_category === 'low_value_coin_spam'
-                              ? 'Spam cày xu'
-                              : 'Nghi vấn Seeding'}
+                              ? tHome('coinSpamBadge')
+                              : tHome('suspectedSeedingBadge')}
                           </span>
                         ) : (
                           <span className="badge bg-success bg-opacity-10 text-success border-success rounded-pill small border px-2 py-1">
                             <BsCheckCircleFill className="me-1" />
-                            Đánh giá thực chất ({confidencePct}%)
+                            {tHome('authenticConfidenceBadge', {
+                              pct: confidencePct,
+                            })}
                           </span>
                         )}
                       </div>
@@ -1168,19 +1210,13 @@ export default async function Home({
                 >
                   <BsCpu className="fs-4" />
                 </div>
-                <h5 className="fw-bold mb-2">
-                  1. Chuẩn Hóa 10 Nhóm Thông Số Kỹ Thuật
-                </h5>
-                <p className="text-muted small mb-3">
-                  Mọi biến thể RAM/ROM rắc rối trên các sàn TMĐT đều được chuẩn
-                  hóa theo cấu trúc 10 Field Groups kết hợp độ sâu của GSMArena
-                  và bố cục trực quan của PhoneArena.
-                </p>
+                <h5 className="fw-bold mb-2">{tHome('whyCard1Title')}</h5>
+                <p className="text-muted small mb-3">{tHome('whyCard1Desc')}</p>
                 <Link
                   href="/compare"
                   className="text-primary small fw-semibold text-decoration-none mt-auto"
                 >
-                  Mở bàn cân so sánh tối đa 4 máy →
+                  {tHome('whyCard1Link')}
                 </Link>
               </div>
             </div>
@@ -1193,19 +1229,13 @@ export default async function Home({
                 >
                   <BsGraphUpArrow className="fs-4" />
                 </div>
-                <h5 className="fw-bold mb-2">
-                  2. Phát Hiện Chiêu Trò Nâng Giá Gốc Để Giảm Ảo
-                </h5>
-                <p className="text-muted small mb-3">
-                  Hệ thống lưu vết chuỗi thời gian trên `rate.price_history`
-                  chống trùng theo `observation_id`, tự động bóc trần mức giảm
-                  giá thực tế so với trung vị lịch sử 30-90 ngày.
-                </p>
+                <h5 className="fw-bold mb-2">{tHome('whyCard2Title')}</h5>
+                <p className="text-muted small mb-3">{tHome('whyCard2Desc')}</p>
                 <Link
                   href="/smartphones"
                   className="text-success small fw-semibold text-decoration-none mt-auto"
                 >
-                  Xem biểu đồ lịch sử giá sản phẩm →
+                  {tHome('whyCard2Link')}
                 </Link>
               </div>
             </div>
@@ -1218,19 +1248,13 @@ export default async function Home({
                 >
                   <BsShieldCheck className="fs-4" />
                 </div>
-                <h5 className="fw-bold mb-2">
-                  3. Điểm Tín Nhiệm Kép &amp; Lọc Seeding AI
-                </h5>
-                <p className="text-muted small mb-3">
-                  Kết hợp dữ liệu an ninh mạng `DOSafe` và bộ phân tích ngữ
-                  nghĩa AI 5 hạng mục để loại bỏ bình luận rác nhận xu khỏi điểm
-                  trung bình JReviews.
-                </p>
+                <h5 className="fw-bold mb-2">{tHome('whyCard3Title')}</h5>
+                <p className="text-muted small mb-3">{tHome('whyCard3Desc')}</p>
                 <Link
                   href="/merchants"
                   className="text-warning small fw-semibold text-decoration-none mt-auto"
                 >
-                  Tra cứu hồ sơ tín nhiệm gian hàng →
+                  {tHome('whyCard3Link')}
                 </Link>
               </div>
             </div>

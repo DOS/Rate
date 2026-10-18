@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Link, useRouter } from '@/lib/navigation';
 import type {
   KeySpecs,
@@ -41,21 +42,7 @@ interface CompareWorkspaceProps {
   locale?: string;
 }
 
-const CATEGORY_TABS: Array<{
-  slug: CanonicalCategorySlug;
-  label: string;
-  unitLabel: string;
-}> = [
-  { slug: 'smartphones', label: 'Điện thoại', unitLabel: 'mẫu điện thoại' },
-  { slug: 'tablets', label: 'Máy tính bảng', unitLabel: 'mẫu tablet' },
-  { slug: 'laptops', label: 'Laptop', unitLabel: 'mẫu laptop' },
-  {
-    slug: 'smartwatches',
-    label: 'Đồng hồ thông minh',
-    unitLabel: 'mẫu smartwatch',
-  },
-  { slug: 'earbuds', label: 'Tai nghe', unitLabel: 'mẫu tai nghe' },
-];
+type CompareTranslator = ReturnType<typeof useTranslations<'compare'>>;
 
 interface SpecRowDef {
   id: string;
@@ -72,10 +59,13 @@ interface SpecGroupDef {
   rows: SpecRowDef[];
 }
 
-function formatBool(val: boolean | string | undefined | null): string {
+function formatBool(
+  val: boolean | string | undefined | null,
+  t: CompareTranslator
+): string {
   if (typeof val === 'string' && val.trim()) return val;
-  if (val === true) return 'Có';
-  if (val === false) return 'Không';
+  if (val === true) return t('boolYes');
+  if (val === false) return t('boolNo');
   return '-';
 }
 
@@ -85,627 +75,674 @@ function getEffectiveRating(p: MasterProduct): number {
   return Number(p.average_rating || 0);
 }
 
-const SPEC_GROUPS: SpecGroupDef[] = [
-  {
-    id: 'market_trust',
-    title: '0. Điểm Đánh Giá Đa Chiều & Tín Nhiệm (JReviews Core)',
-    icon: '⭐',
-    rows: [
-      {
-        id: 'rating_weighted',
-        label: 'Điểm Người mua thực chất (đã lọc Seeding AI)',
-        renderValue: (p) => {
-          const r = getEffectiveRating(p);
-          const count = p.authentic_review_count || p.total_reviews || 0;
-          return r > 0
-            ? `★ ${r.toFixed(1)} / 5.0 (${count} review thật)`
-            : 'Chưa có đánh giá';
+function buildCategoryTabs(t: CompareTranslator): Array<{
+  slug: CanonicalCategorySlug;
+  label: string;
+  unitLabel: string;
+}> {
+  return [
+    {
+      slug: 'smartphones',
+      label: t('catSmartphones'),
+      unitLabel: t('catSmartphonesUnit'),
+    },
+    {
+      slug: 'tablets',
+      label: t('catTablets'),
+      unitLabel: t('catTabletsUnit'),
+    },
+    {
+      slug: 'laptops',
+      label: t('catLaptops'),
+      unitLabel: t('catLaptopsUnit'),
+    },
+    {
+      slug: 'smartwatches',
+      label: t('catSmartwatches'),
+      unitLabel: t('catSmartwatchesUnit'),
+    },
+    {
+      slug: 'earbuds',
+      label: t('catEarbuds'),
+      unitLabel: t('catEarbudsUnit'),
+    },
+  ];
+}
+
+function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
+  return [
+    {
+      id: 'market_trust',
+      title: t('group0Title'),
+      icon: '⭐',
+      rows: [
+        {
+          id: 'rating_weighted',
+          label: t('rowRatingWeighted'),
+          renderValue: (p) => {
+            const r = getEffectiveRating(p);
+            const count = p.authentic_review_count || p.total_reviews || 0;
+            return r > 0
+              ? t('valAuthenticReviews', { rating: r.toFixed(1), count })
+              : t('valNoReviews');
+          },
+          numericValue: (p) => {
+            const r = getEffectiveRating(p);
+            return r > 0 ? r : null;
+          },
+          higherIsBetter: true,
         },
-        numericValue: (p) => {
-          const r = getEffectiveRating(p);
-          return r > 0 ? r : null;
-        },
-        higherIsBetter: true,
-      },
-      {
-        id: 'expert_rating',
-        label: 'Điểm Chuyên gia Rate Lab (Expert Score)',
-        renderValue: (p) =>
-          p.expert_rating && Number(p.expert_rating) > 0
-            ? `Lab ${Number(p.expert_rating).toFixed(1)} / 5.0`
-            : '-',
-        numericValue: (p) =>
-          p.expert_rating && Number(p.expert_rating) > 0
-            ? Number(p.expert_rating)
-            : null,
-        higherIsBetter: true,
-      },
-      {
-        id: 'min_price',
-        label: 'Giá tham khảo thấp nhất (Đã kiểm định)',
-        renderValue: (p) =>
-          Number(p.min_price) > 0
-            ? `${Number(p.min_price).toLocaleString('vi-VN')} ₫`
-            : '-',
-        numericValue: (p) =>
-          Number(p.min_price) > 0 ? Number(p.min_price) : null,
-        higherIsBetter: false,
-      },
-      {
-        id: 'price_range',
-        label: 'Biên độ giá giữa các nguồn',
-        renderValue: (p) => {
-          const min = Number(p.min_price || 0);
-          const max = Number(p.max_price || 0);
-          if (min <= 0) return '-';
-          if (max > min) {
-            return `${min.toLocaleString('vi-VN')} ₫ - ${max.toLocaleString('vi-VN')} ₫`;
-          }
-          return `${min.toLocaleString('vi-VN')} ₫`;
-        },
-      },
-      {
-        id: 'merchant_count',
-        label: 'Số nguồn kiểm định giá & review',
-        renderValue: (p) => `${p.merchant_count || 0} nguồn`,
-        numericValue: (p) => Number(p.merchant_count || 0),
-        higherIsBetter: true,
-      },
-      {
-        id: 'value_per_point',
-        label: 'Hiệu suất Giá / Điểm JReviews (VND / 1.0 điểm thang 10)',
-        renderValue: (p) => {
-          const min = Number(p.min_price || 0);
-          if (min <= 0) return '-';
-          const u = getEffectiveRating(p) > 0 ? getEffectiveRating(p) : null;
-          const e =
-            p.expert_rating != null && Number(p.expert_rating) > 0
-              ? Number(p.expert_rating) > 5
-                ? Number(p.expert_rating)
-                : Number(p.expert_rating) * 2
-              : null;
-          const combined10 =
-            u != null && e != null
-              ? u * 2 * 0.6 + e * 0.4
-              : u != null
-                ? u * 2
-                : (e ?? 0);
-          if (combined10 <= 0) return '-';
-          const costPerPt = Math.round(min / combined10);
-          return `${costPerPt.toLocaleString('vi-VN')} ₫ / điểm`;
-        },
-        numericValue: (p) => {
-          const min = Number(p.min_price || 0);
-          if (min <= 0) return null;
-          const u = getEffectiveRating(p) > 0 ? getEffectiveRating(p) : null;
-          const e =
-            p.expert_rating != null && Number(p.expert_rating) > 0
-              ? Number(p.expert_rating) > 5
-                ? Number(p.expert_rating)
-                : Number(p.expert_rating) * 2
-              : null;
-          const combined10 =
-            u != null && e != null
-              ? u * 2 * 0.6 + e * 0.4
-              : u != null
-                ? u * 2
-                : (e ?? 0);
-          return combined10 > 0 ? Math.round(min / combined10) : null;
-        },
-        higherIsBetter: false,
-      },
-      {
-        id: 'daily_cost_2y',
-        label: 'Chi phí sở hữu quy đổi 24 tháng (VND / ngày)',
-        renderValue: (p) => {
-          const min = Number(p.min_price || 0);
-          if (min <= 0) return '-';
-          const daily = Math.round(min / 730);
-          return `${daily.toLocaleString('vi-VN')} ₫ / ngày`;
-        },
-        numericValue: (p) => {
-          const min = Number(p.min_price || 0);
-          return min > 0 ? Math.round(min / 730) : null;
-        },
-        higherIsBetter: false,
-      },
-    ],
-  },
-  {
-    id: 'display',
-    title: '1. Màn hình (Display)',
-    icon: '📱',
-    rows: [
-      {
-        id: 'display_size',
-        label: 'Kích thước màn hình',
-        renderValue: (p) => {
-          const specs = (p.specifications || {}) as ProductSpecifications;
-          const size = specs.display?.size_inch ?? p.screen_size_inch;
-          return size ? `${size}"` : '-';
-        },
-        numericValue: (p) => {
-          const specs = (p.specifications || {}) as ProductSpecifications;
-          const size = Number(
-            specs.display?.size_inch ?? p.screen_size_inch ?? 0
-          );
-          return size > 0 ? size : null;
-        },
-        higherIsBetter: true,
-      },
-      {
-        id: 'display_type',
-        label: 'Công nghệ tấm nền',
-        renderValue: (p) => {
-          const specs = (p.specifications || {}) as ProductSpecifications;
-          const keySpecs = (p.key_specs || {}) as KeySpecs;
-          return specs.display?.type || keySpecs.screen || '-';
-        },
-      },
-      {
-        id: 'display_resolution',
-        label: 'Độ phân giải & Mật độ điểm ảnh',
-        renderValue: (p) => {
-          const specs = (p.specifications || {}) as ProductSpecifications;
-          const res = specs.display?.resolution || '-';
-          const ppi = specs.display?.ppi ? ` (${specs.display.ppi} ppi)` : '';
-          return res === '-' && !ppi ? '-' : `${res}${ppi}`;
-        },
-        numericValue: (p) => {
-          const specs = (p.specifications || {}) as ProductSpecifications;
-          return specs.display?.ppi ? Number(specs.display.ppi) : null;
-        },
-        higherIsBetter: true,
-      },
-      {
-        id: 'display_refresh',
-        label: 'Tần số quét (Refresh Rate)',
-        renderValue: (p) => {
-          const specs = (p.specifications || {}) as ProductSpecifications;
-          return specs.display?.refresh_rate_hz
-            ? `${specs.display.refresh_rate_hz} Hz`
-            : '-';
-        },
-        numericValue: (p) => {
-          const specs = (p.specifications || {}) as ProductSpecifications;
-          return specs.display?.refresh_rate_hz
-            ? Number(specs.display.refresh_rate_hz)
-            : null;
-        },
-        higherIsBetter: true,
-      },
-      {
-        id: 'display_protection',
-        label: 'Kính bảo vệ & Tính năng hiển thị',
-        renderValue: (p) => {
-          const specs = (p.specifications || {}) as ProductSpecifications;
-          const parts = [
-            specs.display?.protection,
-            specs.display?.features,
-          ].filter(Boolean);
-          return parts.length > 0 ? parts.join(' | ') : '-';
-        },
-      },
-    ],
-  },
-  {
-    id: 'hardware',
-    title: '2. Hiệu năng & Phần cứng (Hardware)',
-    icon: '⚡',
-    rows: [
-      {
-        id: 'hw_chipset',
-        label: 'Vi xử lý (Chipset)',
-        renderValue: (p) => {
-          const specs = (p.specifications || {}) as ProductSpecifications;
-          const keySpecs = (p.key_specs || {}) as KeySpecs;
-          return specs.hardware?.chipset || keySpecs.chip || '-';
-        },
-      },
-      {
-        id: 'hw_cpu_gpu',
-        label: 'Nhân CPU & Đồ họa GPU',
-        renderValue: (p) => {
-          const specs = (p.specifications || {}) as ProductSpecifications;
-          const parts = [specs.hardware?.cpu, specs.hardware?.gpu].filter(
-            Boolean
-          );
-          return parts.length > 0 ? parts.join(' | ') : '-';
-        },
-      },
-      {
-        id: 'hw_ram',
-        label: 'Dung lượng RAM',
-        renderValue: (p) => {
-          const specs = (p.specifications || {}) as ProductSpecifications;
-          const ram = p.ram_gb ?? specs.hardware?.ram_gb;
-          return ram ? `${ram} GB` : '-';
-        },
-        numericValue: (p) => {
-          const specs = (p.specifications || {}) as ProductSpecifications;
-          const ram = Number(p.ram_gb ?? specs.hardware?.ram_gb ?? 0);
-          return ram > 0 ? ram : null;
-        },
-        higherIsBetter: true,
-      },
-      {
-        id: 'hw_storage',
-        label: 'Bộ nhớ trong (ROM)',
-        renderValue: (p) => {
-          const specs = (p.specifications || {}) as ProductSpecifications;
-          const rom = Number(p.storage_gb ?? specs.hardware?.storage_gb ?? 0);
-          if (!rom) return '-';
-          return rom >= 1024 ? `${rom / 1024} TB` : `${rom} GB`;
-        },
-        numericValue: (p) => {
-          const specs = (p.specifications || {}) as ProductSpecifications;
-          const rom = Number(p.storage_gb ?? specs.hardware?.storage_gb ?? 0);
-          return rom > 0 ? rom : null;
-        },
-        higherIsBetter: true,
-      },
-      {
-        id: 'hw_os_exp',
-        label: 'Hệ điều hành & Khe thẻ nhớ',
-        renderValue: (p) => {
-          const specs = (p.specifications || {}) as ProductSpecifications;
-          const parts = [
-            specs.hardware?.os,
-            specs.hardware?.storage_expansion
-              ? `Thẻ nhớ: ${specs.hardware.storage_expansion}`
+        {
+          id: 'expert_rating',
+          label: t('rowExpertRating'),
+          renderValue: (p) =>
+            p.expert_rating && Number(p.expert_rating) > 0
+              ? `Lab ${Number(p.expert_rating).toFixed(1)} / 5.0`
+              : '-',
+          numericValue: (p) =>
+            p.expert_rating && Number(p.expert_rating) > 0
+              ? Number(p.expert_rating)
               : null,
-          ].filter(Boolean);
-          return parts.length > 0 ? parts.join(' | ') : '-';
+          higherIsBetter: true,
         },
-      },
-    ],
-  },
-  {
-    id: 'camera',
-    title: '3. Hệ thống Máy ảnh (Camera - Chuẩn PhoneArena)',
-    icon: '📸',
-    rows: [
-      {
-        id: 'cam_main',
-        label: 'Camera chính (Main Camera)',
-        renderValue: (p) => {
-          const specs = (p.specifications || {}) as ProductSpecifications;
-          const keySpecs = (p.key_specs || {}) as KeySpecs;
-          return specs.camera?.main_camera || keySpecs.camera || '-';
+        {
+          id: 'min_price',
+          label: t('rowMinPrice'),
+          renderValue: (p) =>
+            Number(p.min_price) > 0
+              ? `${Number(p.min_price).toLocaleString('vi-VN')} ₫`
+              : '-',
+          numericValue: (p) =>
+            Number(p.min_price) > 0 ? Number(p.min_price) : null,
+          higherIsBetter: false,
         },
-      },
-      {
-        id: 'cam_second',
-        label: 'Camera thứ 2 (Góc siêu rộng / Phụ)',
-        renderValue: (p) => {
-          const specs = (p.specifications || {}) as ProductSpecifications;
-          return specs.camera?.second_camera || '-';
+        {
+          id: 'price_range',
+          label: t('rowPriceRange'),
+          renderValue: (p) => {
+            const min = Number(p.min_price || 0);
+            const max = Number(p.max_price || 0);
+            if (min <= 0) return '-';
+            if (max > min) {
+              return `${min.toLocaleString('vi-VN')} ₫ - ${max.toLocaleString('vi-VN')} ₫`;
+            }
+            return `${min.toLocaleString('vi-VN')} ₫`;
+          },
         },
-      },
-      {
-        id: 'cam_third_fourth',
-        label: 'Camera thứ 3 & thứ 4 (Tele / Periscope)',
-        renderValue: (p) => {
-          const specs = (p.specifications || {}) as ProductSpecifications;
-          const parts = [
-            specs.camera?.third_camera,
-            specs.camera?.fourth_camera,
-          ].filter(Boolean);
-          return parts.length > 0 ? parts.join(' + ') : '-';
+        {
+          id: 'merchant_count',
+          label: t('rowMerchantCount'),
+          renderValue: (p) =>
+            t('valSourcesCount', { count: p.merchant_count || 0 }),
+          numericValue: (p) => Number(p.merchant_count || 0),
+          higherIsBetter: true,
         },
-      },
-      {
-        id: 'cam_video',
-        label: 'Quay video & Đèn Flash',
-        renderValue: (p) => {
-          const specs = (p.specifications || {}) as ProductSpecifications;
-          const parts = [
-            specs.camera?.video_recording,
-            specs.camera?.flash,
-          ].filter(Boolean);
-          return parts.length > 0 ? parts.join(' | ') : '-';
-        },
-      },
-      {
-        id: 'cam_front',
-        label: 'Camera trước (Selfie)',
-        renderValue: (p) => {
-          const specs = (p.specifications || {}) as ProductSpecifications;
-          return specs.camera?.front_camera || '-';
-        },
-      },
-    ],
-  },
-  {
-    id: 'battery',
-    title: '4. Pin & Công nghệ Sạc (Battery)',
-    icon: '🔋',
-    rows: [
-      {
-        id: 'bat_capacity',
-        label: 'Dung lượng pin',
-        renderValue: (p) => {
-          const specs = (p.specifications || {}) as ProductSpecifications;
-          const mah = specs.battery?.capacity_mah ?? p.battery_mah;
-          return mah ? `${mah} mAh` : '-';
-        },
-        numericValue: (p) => {
-          const specs = (p.specifications || {}) as ProductSpecifications;
-          const mah = Number(specs.battery?.capacity_mah ?? p.battery_mah ?? 0);
-          return mah > 0 ? mah : null;
-        },
-        higherIsBetter: true,
-      },
-      {
-        id: 'bat_fast_charge',
-        label: 'Công suất sạc nhanh',
-        renderValue: (p) => {
-          const specs = (p.specifications || {}) as ProductSpecifications;
-          return specs.battery?.fast_charging_w
-            ? `${specs.battery.fast_charging_w} W`
-            : '-';
-        },
-        numericValue: (p) => {
-          const specs = (p.specifications || {}) as ProductSpecifications;
-          return specs.battery?.fast_charging_w
-            ? Number(specs.battery.fast_charging_w)
-            : null;
-        },
-        higherIsBetter: true,
-      },
-      {
-        id: 'bat_details',
-        label: 'Công nghệ pin, Sạc không dây & Sạc ngược',
-        renderValue: (p) => {
-          const specs = (p.specifications || {}) as ProductSpecifications;
-          const parts = [
-            specs.battery?.type,
-            specs.battery?.charging,
-            specs.battery?.reverse_charging
-              ? `Sạc ngược: ${formatBool(specs.battery.reverse_charging)}`
-              : null,
-          ].filter(Boolean);
-          return parts.length > 0 ? parts.join(' | ') : '-';
-        },
-      },
-    ],
-  },
-  {
-    id: 'design',
-    title: '5. Thiết kế & Độ bền (Design)',
-    icon: '📐',
-    rows: [
-      {
-        id: 'design_dim',
-        label: 'Kích thước tổng thể',
-        renderValue: (p) => {
-          const specs = (p.specifications || {}) as ProductSpecifications;
-          return specs.design?.dimensions || '-';
-        },
-      },
-      {
-        id: 'design_weight',
-        label: 'Trọng lượng',
-        renderValue: (p) => {
-          const specs = (p.specifications || {}) as ProductSpecifications;
-          return specs.design?.weight_g ? `${specs.design.weight_g} g` : '-';
-        },
-        numericValue: (p) => {
-          const specs = (p.specifications || {}) as ProductSpecifications;
-          return specs.design?.weight_g ? Number(specs.design.weight_g) : null;
-        },
-        higherIsBetter: false,
-      },
-      {
-        id: 'design_materials',
-        label: 'Chất liệu khung & Mặt lưng',
-        renderValue: (p) => {
-          const specs = (p.specifications || {}) as ProductSpecifications;
-          return specs.design?.materials || specs.design?.build || '-';
-        },
-      },
-      {
-        id: 'design_resistance',
-        label: 'Chuẩn kháng nước & bụi (IP)',
-        renderValue: (p) => {
-          const specs = (p.specifications || {}) as ProductSpecifications;
-          return specs.design?.resistance || '-';
-        },
-      },
-      {
-        id: 'design_bio_colors',
-        label: 'Bảo mật sinh trắc học & Màu sắc',
-        renderValue: (p) => {
-          const specs = (p.specifications || {}) as ProductSpecifications;
-          const colors =
-            specs.design?.colors && specs.design.colors.length > 0
-              ? specs.design.colors.join(', ')
-              : p.colors && p.colors.length > 0
-                ? p.colors.join(', ')
+        {
+          id: 'value_per_point',
+          label: t('rowValuePerPoint'),
+          renderValue: (p) => {
+            const min = Number(p.min_price || 0);
+            if (min <= 0) return '-';
+            const u = getEffectiveRating(p) > 0 ? getEffectiveRating(p) : null;
+            const e =
+              p.expert_rating != null && Number(p.expert_rating) > 0
+                ? Number(p.expert_rating) > 5
+                  ? Number(p.expert_rating)
+                  : Number(p.expert_rating) * 2
                 : null;
-          const parts = [
-            specs.design?.biometrics,
-            colors ? `Màu: ${colors}` : null,
-          ].filter(Boolean);
-          return parts.length > 0 ? parts.join(' | ') : '-';
+            const combined10 =
+              u != null && e != null
+                ? u * 2 * 0.6 + e * 0.4
+                : u != null
+                  ? u * 2
+                  : (e ?? 0);
+            if (combined10 <= 0) return '-';
+            const costPerPt = Math.round(min / combined10);
+            return t('valPerPoint', {
+              cost: costPerPt.toLocaleString('vi-VN'),
+            });
+          },
+          numericValue: (p) => {
+            const min = Number(p.min_price || 0);
+            if (min <= 0) return null;
+            const u = getEffectiveRating(p) > 0 ? getEffectiveRating(p) : null;
+            const e =
+              p.expert_rating != null && Number(p.expert_rating) > 0
+                ? Number(p.expert_rating) > 5
+                  ? Number(p.expert_rating)
+                  : Number(p.expert_rating) * 2
+                : null;
+            const combined10 =
+              u != null && e != null
+                ? u * 2 * 0.6 + e * 0.4
+                : u != null
+                  ? u * 2
+                  : (e ?? 0);
+            return combined10 > 0 ? Math.round(min / combined10) : null;
+          },
+          higherIsBetter: false,
         },
-      },
-    ],
-  },
-  {
-    id: 'cellular',
-    title: '6. Mạng Di động & SIM (Cellular)',
-    icon: '📶',
-    rows: [
-      {
-        id: 'cell_5g',
-        label: 'Hỗ trợ mạng 5G',
-        renderValue: (p) => {
-          const specs = (p.specifications || {}) as ProductSpecifications;
-          const has5g = specs.cellular?.has_5g ?? p.has_5g;
-          return has5g ? 'Có 5G' : '4G LTE';
+        {
+          id: 'daily_cost_2y',
+          label: t('rowDailyCost2y'),
+          renderValue: (p) => {
+            const min = Number(p.min_price || 0);
+            if (min <= 0) return '-';
+            const daily = Math.round(min / 730);
+            return t('valPerDay', { cost: daily.toLocaleString('vi-VN') });
+          },
+          numericValue: (p) => {
+            const min = Number(p.min_price || 0);
+            return min > 0 ? Math.round(min / 730) : null;
+          },
+          higherIsBetter: false,
         },
-      },
-      {
-        id: 'cell_sim',
-        label: 'Cấu hình SIM & Công nghệ mạng',
-        renderValue: (p) => {
-          const specs = (p.specifications || {}) as ProductSpecifications;
-          const parts = [
-            specs.cellular?.sim_type,
-            specs.cellular?.technology,
-          ].filter(Boolean);
-          return parts.length > 0 ? parts.join(' | ') : '-';
+      ],
+    },
+    {
+      id: 'display',
+      title: '1. Display',
+      icon: '📱',
+      rows: [
+        {
+          id: 'display_size',
+          label: t('rowDisplaySize'),
+          renderValue: (p) => {
+            const specs = (p.specifications || {}) as ProductSpecifications;
+            const size = specs.display?.size_inch ?? p.screen_size_inch;
+            return size ? `${size}"` : '-';
+          },
+          numericValue: (p) => {
+            const specs = (p.specifications || {}) as ProductSpecifications;
+            const size = Number(
+              specs.display?.size_inch ?? p.screen_size_inch ?? 0
+            );
+            return size > 0 ? size : null;
+          },
+          higherIsBetter: true,
         },
-      },
-      {
-        id: 'cell_bands',
-        label: 'Băng tần 5G / Tốc độ dữ liệu',
-        renderValue: (p) => {
-          const specs = (p.specifications || {}) as ProductSpecifications;
-          const parts = [
-            specs.cellular?.bands_5g,
-            specs.cellular?.data_speed,
-          ].filter(Boolean);
-          return parts.length > 0 ? parts.join(' | ') : '-';
+        {
+          id: 'display_type',
+          label: t('rowDisplayType'),
+          renderValue: (p) => {
+            const specs = (p.specifications || {}) as ProductSpecifications;
+            const keySpecs = (p.key_specs || {}) as KeySpecs;
+            return specs.display?.type || keySpecs.screen || '-';
+          },
         },
-      },
-    ],
-  },
-  {
-    id: 'connectivity',
-    title: '7. Kết nối Không dây & Cổng (Connectivity)',
-    icon: '🌐',
-    rows: [
-      {
-        id: 'conn_wlan_bt',
-        label: 'Wi-Fi & Bluetooth',
-        renderValue: (p) => {
-          const specs = (p.specifications || {}) as ProductSpecifications;
-          const parts = [
-            specs.connectivity?.wlan
-              ? `Wi-Fi: ${specs.connectivity.wlan}`
-              : null,
-            specs.connectivity?.bluetooth
-              ? `BT: ${specs.connectivity.bluetooth}`
-              : null,
-          ].filter(Boolean);
-          return parts.length > 0 ? parts.join(' | ') : '-';
+        {
+          id: 'display_resolution',
+          label: t('rowDisplayResolution'),
+          renderValue: (p) => {
+            const specs = (p.specifications || {}) as ProductSpecifications;
+            const res = specs.display?.resolution || '-';
+            const ppi = specs.display?.ppi ? ` (${specs.display.ppi} ppi)` : '';
+            return res === '-' && !ppi ? '-' : `${res}${ppi}`;
+          },
+          numericValue: (p) => {
+            const specs = (p.specifications || {}) as ProductSpecifications;
+            return specs.display?.ppi ? Number(specs.display.ppi) : null;
+          },
+          higherIsBetter: true,
         },
-      },
-      {
-        id: 'conn_nfc',
-        label: 'Thanh toán không chạm NFC',
-        renderValue: (p) => {
-          const specs = (p.specifications || {}) as ProductSpecifications;
-          return formatBool(specs.connectivity?.nfc);
-        },
-      },
-      {
-        id: 'conn_usb_gps',
-        label: 'Cổng USB, Định vị & Cảm biến',
-        renderValue: (p) => {
-          const specs = (p.specifications || {}) as ProductSpecifications;
-          const parts = [
-            specs.connectivity?.usb || 'USB Type-C',
-            specs.connectivity?.location,
-            specs.connectivity?.sensors,
-          ].filter(Boolean);
-          return parts.join(' | ');
-        },
-      },
-    ],
-  },
-  {
-    id: 'multimedia',
-    title: '8. Âm thanh & Đa phương tiện (Multimedia)',
-    icon: '🔊',
-    rows: [
-      {
-        id: 'mm_speaker',
-        label: 'Hệ thống loa ngoài',
-        renderValue: (p) => {
-          const specs = (p.specifications || {}) as ProductSpecifications;
-          return specs.multimedia?.loudspeaker || 'Loa kép Stereo';
-        },
-      },
-      {
-        id: 'mm_jack_audio',
-        label: 'Giắc tai nghe 3.5mm & Chuẩn âm thanh',
-        renderValue: (p) => {
-          const specs = (p.specifications || {}) as ProductSpecifications;
-          const jack =
-            specs.multimedia?.headphone_jack_35mm !== undefined
-              ? `3.5mm: ${formatBool(specs.multimedia.headphone_jack_35mm)}`
+        {
+          id: 'display_refresh',
+          label: t('rowDisplayRefresh'),
+          renderValue: (p) => {
+            const specs = (p.specifications || {}) as ProductSpecifications;
+            return specs.display?.refresh_rate_hz
+              ? `${specs.display.refresh_rate_hz} Hz`
+              : '-';
+          },
+          numericValue: (p) => {
+            const specs = (p.specifications || {}) as ProductSpecifications;
+            return specs.display?.refresh_rate_hz
+              ? Number(specs.display.refresh_rate_hz)
               : null;
-          const parts = [jack, specs.multimedia?.audio_features].filter(
-            Boolean
-          );
-          return parts.length > 0 ? parts.join(' | ') : '-';
+          },
+          higherIsBetter: true,
         },
-      },
-    ],
-  },
-  {
-    id: 'availability',
-    title: '9. Thời điểm Ra mắt & Giá Khởi điểm (Availability)',
-    icon: '📅',
-    rows: [
-      {
-        id: 'avail_announced',
-        label: 'Thời điểm công bố & Trạng thái',
-        renderValue: (p) => {
-          const specs = (p.specifications || {}) as ProductSpecifications;
-          const parts = [
-            specs.availability?.announced,
-            specs.availability?.status,
-          ].filter(Boolean);
-          return parts.length > 0
-            ? parts.join(' | ')
-            : 'Đang mở bán chính hãng';
+        {
+          id: 'display_protection',
+          label: t('rowDisplayProtection'),
+          renderValue: (p) => {
+            const specs = (p.specifications || {}) as ProductSpecifications;
+            const parts = [
+              specs.display?.protection,
+              specs.display?.features,
+            ].filter(Boolean);
+            return parts.length > 0 ? parts.join(' | ') : '-';
+          },
         },
-      },
-      {
-        id: 'avail_msrp',
-        label: 'Giá niêm yết gốc (MSRP) & Mã Model',
-        renderValue: (p) => {
-          const specs = (p.specifications || {}) as ProductSpecifications;
-          const parts = [specs.availability?.prices_msrp, p.model_key].filter(
-            Boolean
-          );
-          return parts.join(' | ') || '-';
+      ],
+    },
+    {
+      id: 'hardware',
+      title: '2. Hardware',
+      icon: '⚡',
+      rows: [
+        {
+          id: 'hw_chipset',
+          label: t('rowHwChipset'),
+          renderValue: (p) => {
+            const specs = (p.specifications || {}) as ProductSpecifications;
+            const keySpecs = (p.key_specs || {}) as KeySpecs;
+            return specs.hardware?.chipset || keySpecs.chip || '-';
+          },
         },
-      },
-    ],
-  },
-  {
-    id: 'regulatory',
-    title: '10. Chứng nhận & An toàn Pháp lý (Regulatory)',
-    icon: '🛡️',
-    rows: [
-      {
-        id: 'reg_cert',
-        label: 'Chứng nhận chất lượng & Mức bức xạ SAR',
-        renderValue: (p) => {
-          const specs = (p.specifications || {}) as ProductSpecifications;
-          const parts = [
-            specs.regulatory?.certifications,
-            specs.regulatory?.fcc_approval,
-            specs.regulatory?.sar_head
-              ? `SAR đầu: ${specs.regulatory.sar_head}`
-              : null,
-            specs.regulatory?.sar_body
-              ? `SAR thân: ${specs.regulatory.sar_body}`
-              : null,
-          ].filter(Boolean);
-          return parts.length > 0
-            ? parts.join(' | ')
-            : 'Đạt chuẩn hợp quy Bộ TT&TT Việt Nam';
+        {
+          id: 'hw_cpu_gpu',
+          label: t('rowHwCpuGpu'),
+          renderValue: (p) => {
+            const specs = (p.specifications || {}) as ProductSpecifications;
+            const parts = [specs.hardware?.cpu, specs.hardware?.gpu].filter(
+              Boolean
+            );
+            return parts.length > 0 ? parts.join(' | ') : '-';
+          },
         },
-      },
-    ],
-  },
-];
+        {
+          id: 'hw_ram',
+          label: t('rowHwRam'),
+          renderValue: (p) => {
+            const specs = (p.specifications || {}) as ProductSpecifications;
+            const ram = p.ram_gb ?? specs.hardware?.ram_gb;
+            return ram ? `${ram} GB` : '-';
+          },
+          numericValue: (p) => {
+            const specs = (p.specifications || {}) as ProductSpecifications;
+            const ram = Number(p.ram_gb ?? specs.hardware?.ram_gb ?? 0);
+            return ram > 0 ? ram : null;
+          },
+          higherIsBetter: true,
+        },
+        {
+          id: 'hw_storage',
+          label: t('rowHwStorage'),
+          renderValue: (p) => {
+            const specs = (p.specifications || {}) as ProductSpecifications;
+            const rom = Number(p.storage_gb ?? specs.hardware?.storage_gb ?? 0);
+            if (!rom) return '-';
+            return rom >= 1024 ? `${rom / 1024} TB` : `${rom} GB`;
+          },
+          numericValue: (p) => {
+            const specs = (p.specifications || {}) as ProductSpecifications;
+            const rom = Number(p.storage_gb ?? specs.hardware?.storage_gb ?? 0);
+            return rom > 0 ? rom : null;
+          },
+          higherIsBetter: true,
+        },
+        {
+          id: 'hw_os_exp',
+          label: t('rowHwOsExp'),
+          renderValue: (p) => {
+            const specs = (p.specifications || {}) as ProductSpecifications;
+            const parts = [
+              specs.hardware?.os,
+              specs.hardware?.storage_expansion
+                ? t('valCardSlotPrefix', {
+                    value: specs.hardware.storage_expansion,
+                  })
+                : null,
+            ].filter(Boolean);
+            return parts.length > 0 ? parts.join(' | ') : '-';
+          },
+        },
+      ],
+    },
+    {
+      id: 'camera',
+      title: '3. Camera',
+      icon: '📸',
+      rows: [
+        {
+          id: 'cam_main',
+          label: t('rowCamMain'),
+          renderValue: (p) => {
+            const specs = (p.specifications || {}) as ProductSpecifications;
+            const keySpecs = (p.key_specs || {}) as KeySpecs;
+            return specs.camera?.main_camera || keySpecs.camera || '-';
+          },
+        },
+        {
+          id: 'cam_second',
+          label: t('rowCamSecond'),
+          renderValue: (p) => {
+            const specs = (p.specifications || {}) as ProductSpecifications;
+            return specs.camera?.second_camera || '-';
+          },
+        },
+        {
+          id: 'cam_third_fourth',
+          label: t('rowCamThirdFourth'),
+          renderValue: (p) => {
+            const specs = (p.specifications || {}) as ProductSpecifications;
+            const parts = [
+              specs.camera?.third_camera,
+              specs.camera?.fourth_camera,
+            ].filter(Boolean);
+            return parts.length > 0 ? parts.join(' + ') : '-';
+          },
+        },
+        {
+          id: 'cam_video',
+          label: t('rowCamVideo'),
+          renderValue: (p) => {
+            const specs = (p.specifications || {}) as ProductSpecifications;
+            const parts = [
+              specs.camera?.video_recording,
+              specs.camera?.flash,
+            ].filter(Boolean);
+            return parts.length > 0 ? parts.join(' | ') : '-';
+          },
+        },
+        {
+          id: 'cam_front',
+          label: t('rowCamFront'),
+          renderValue: (p) => {
+            const specs = (p.specifications || {}) as ProductSpecifications;
+            return specs.camera?.front_camera || '-';
+          },
+        },
+      ],
+    },
+    {
+      id: 'battery',
+      title: '4. Battery',
+      icon: '🔋',
+      rows: [
+        {
+          id: 'bat_capacity',
+          label: t('rowBatCapacity'),
+          renderValue: (p) => {
+            const specs = (p.specifications || {}) as ProductSpecifications;
+            const mah = specs.battery?.capacity_mah ?? p.battery_mah;
+            return mah ? `${mah} mAh` : '-';
+          },
+          numericValue: (p) => {
+            const specs = (p.specifications || {}) as ProductSpecifications;
+            const mah = Number(
+              specs.battery?.capacity_mah ?? p.battery_mah ?? 0
+            );
+            return mah > 0 ? mah : null;
+          },
+          higherIsBetter: true,
+        },
+        {
+          id: 'bat_fast_charge',
+          label: t('rowBatFastCharge'),
+          renderValue: (p) => {
+            const specs = (p.specifications || {}) as ProductSpecifications;
+            return specs.battery?.fast_charging_w
+              ? `${specs.battery.fast_charging_w} W`
+              : '-';
+          },
+          numericValue: (p) => {
+            const specs = (p.specifications || {}) as ProductSpecifications;
+            return specs.battery?.fast_charging_w
+              ? Number(specs.battery.fast_charging_w)
+              : null;
+          },
+          higherIsBetter: true,
+        },
+        {
+          id: 'bat_details',
+          label: t('rowBatDetails'),
+          renderValue: (p) => {
+            const specs = (p.specifications || {}) as ProductSpecifications;
+            const parts = [
+              specs.battery?.type,
+              specs.battery?.charging,
+              specs.battery?.reverse_charging
+                ? t('valReverseChargePrefix', {
+                    value: formatBool(specs.battery.reverse_charging, t),
+                  })
+                : null,
+            ].filter(Boolean);
+            return parts.length > 0 ? parts.join(' | ') : '-';
+          },
+        },
+      ],
+    },
+    {
+      id: 'design',
+      title: '5. Design',
+      icon: '📐',
+      rows: [
+        {
+          id: 'design_dim',
+          label: t('rowDesignDim'),
+          renderValue: (p) => {
+            const specs = (p.specifications || {}) as ProductSpecifications;
+            return specs.design?.dimensions || '-';
+          },
+        },
+        {
+          id: 'design_weight',
+          label: t('rowDesignWeight'),
+          renderValue: (p) => {
+            const specs = (p.specifications || {}) as ProductSpecifications;
+            return specs.design?.weight_g ? `${specs.design.weight_g} g` : '-';
+          },
+          numericValue: (p) => {
+            const specs = (p.specifications || {}) as ProductSpecifications;
+            return specs.design?.weight_g
+              ? Number(specs.design.weight_g)
+              : null;
+          },
+          higherIsBetter: false,
+        },
+        {
+          id: 'design_materials',
+          label: t('rowDesignMaterials'),
+          renderValue: (p) => {
+            const specs = (p.specifications || {}) as ProductSpecifications;
+            return specs.design?.materials || specs.design?.build || '-';
+          },
+        },
+        {
+          id: 'design_resistance',
+          label: t('rowDesignResistance'),
+          renderValue: (p) => {
+            const specs = (p.specifications || {}) as ProductSpecifications;
+            return specs.design?.resistance || '-';
+          },
+        },
+        {
+          id: 'design_bio_colors',
+          label: t('rowDesignBioColors'),
+          renderValue: (p) => {
+            const specs = (p.specifications || {}) as ProductSpecifications;
+            const colors =
+              specs.design?.colors && specs.design.colors.length > 0
+                ? specs.design.colors.join(', ')
+                : p.colors && p.colors.length > 0
+                  ? p.colors.join(', ')
+                  : null;
+            const parts = [
+              specs.design?.biometrics,
+              colors ? t('valColorsPrefix', { value: colors }) : null,
+            ].filter(Boolean);
+            return parts.length > 0 ? parts.join(' | ') : '-';
+          },
+        },
+      ],
+    },
+    {
+      id: 'cellular',
+      title: '6. Cellular',
+      icon: '📶',
+      rows: [
+        {
+          id: 'cell_5g',
+          label: t('rowCell5g'),
+          renderValue: (p) => {
+            const specs = (p.specifications || {}) as ProductSpecifications;
+            const has5g = specs.cellular?.has_5g ?? p.has_5g;
+            return has5g ? t('valHas5g') : t('val4gLte');
+          },
+        },
+        {
+          id: 'cell_sim',
+          label: t('rowCellSim'),
+          renderValue: (p) => {
+            const specs = (p.specifications || {}) as ProductSpecifications;
+            const parts = [
+              specs.cellular?.sim_type,
+              specs.cellular?.technology,
+            ].filter(Boolean);
+            return parts.length > 0 ? parts.join(' | ') : '-';
+          },
+        },
+        {
+          id: 'cell_bands',
+          label: t('rowCellBands'),
+          renderValue: (p) => {
+            const specs = (p.specifications || {}) as ProductSpecifications;
+            const parts = [
+              specs.cellular?.bands_5g,
+              specs.cellular?.data_speed,
+            ].filter(Boolean);
+            return parts.length > 0 ? parts.join(' | ') : '-';
+          },
+        },
+      ],
+    },
+    {
+      id: 'connectivity',
+      title: '7. Connectivity',
+      icon: '🌐',
+      rows: [
+        {
+          id: 'conn_wlan_bt',
+          label: t('rowConnWlanBt'),
+          renderValue: (p) => {
+            const specs = (p.specifications || {}) as ProductSpecifications;
+            const parts = [
+              specs.connectivity?.wlan
+                ? `Wi-Fi: ${specs.connectivity.wlan}`
+                : null,
+              specs.connectivity?.bluetooth
+                ? `BT: ${specs.connectivity.bluetooth}`
+                : null,
+            ].filter(Boolean);
+            return parts.length > 0 ? parts.join(' | ') : '-';
+          },
+        },
+        {
+          id: 'conn_nfc',
+          label: t('rowConnNfc'),
+          renderValue: (p) => {
+            const specs = (p.specifications || {}) as ProductSpecifications;
+            return formatBool(specs.connectivity?.nfc, t);
+          },
+        },
+        {
+          id: 'conn_usb_gps',
+          label: t('rowConnUsbGps'),
+          renderValue: (p) => {
+            const specs = (p.specifications || {}) as ProductSpecifications;
+            const parts = [
+              specs.connectivity?.usb || 'USB Type-C',
+              specs.connectivity?.location,
+              specs.connectivity?.sensors,
+            ].filter(Boolean);
+            return parts.join(' | ');
+          },
+        },
+      ],
+    },
+    {
+      id: 'multimedia',
+      title: '8. Multimedia',
+      icon: '🔊',
+      rows: [
+        {
+          id: 'mm_speaker',
+          label: t('rowMmSpeaker'),
+          renderValue: (p) => {
+            const specs = (p.specifications || {}) as ProductSpecifications;
+            return specs.multimedia?.loudspeaker || t('valDefaultStereo');
+          },
+        },
+        {
+          id: 'mm_jack_audio',
+          label: t('rowMmJackAudio'),
+          renderValue: (p) => {
+            const specs = (p.specifications || {}) as ProductSpecifications;
+            const jack =
+              specs.multimedia?.headphone_jack_35mm !== undefined
+                ? `3.5mm: ${formatBool(specs.multimedia.headphone_jack_35mm, t)}`
+                : null;
+            const parts = [jack, specs.multimedia?.audio_features].filter(
+              Boolean
+            );
+            return parts.length > 0 ? parts.join(' | ') : '-';
+          },
+        },
+      ],
+    },
+    {
+      id: 'availability',
+      title: '9. Availability',
+      icon: '📅',
+      rows: [
+        {
+          id: 'avail_announced',
+          label: t('rowAvailAnnounced'),
+          renderValue: (p) => {
+            const specs = (p.specifications || {}) as ProductSpecifications;
+            const parts = [
+              specs.availability?.announced,
+              specs.availability?.status,
+            ].filter(Boolean);
+            return parts.length > 0
+              ? parts.join(' | ')
+              : t('valDefaultAvailable');
+          },
+        },
+        {
+          id: 'avail_msrp',
+          label: t('rowAvailMsrp'),
+          renderValue: (p) => {
+            const specs = (p.specifications || {}) as ProductSpecifications;
+            const parts = [specs.availability?.prices_msrp, p.model_key].filter(
+              Boolean
+            );
+            return parts.join(' | ') || '-';
+          },
+        },
+      ],
+    },
+    {
+      id: 'regulatory',
+      title: '10. Regulatory',
+      icon: '🛡️',
+      rows: [
+        {
+          id: 'reg_cert',
+          label: t('rowRegCert'),
+          renderValue: (p) => {
+            const specs = (p.specifications || {}) as ProductSpecifications;
+            const parts = [
+              specs.regulatory?.certifications,
+              specs.regulatory?.fcc_approval,
+              specs.regulatory?.sar_head
+                ? t('valSarHeadPrefix', { value: specs.regulatory.sar_head })
+                : null,
+              specs.regulatory?.sar_body
+                ? t('valSarBodyPrefix', { value: specs.regulatory.sar_body })
+                : null,
+            ].filter(Boolean);
+            return parts.length > 0
+              ? parts.join(' | ')
+              : t('valDefaultRegulatory');
+          },
+        },
+      ],
+    },
+  ];
+}
 
 export default function CompareWorkspace({
   initialProducts,
@@ -714,8 +751,11 @@ export default function CompareWorkspace({
   hasExplicitSlugs = false,
   locale = 'vi',
 }: CompareWorkspaceProps) {
+  const t = useTranslations('compare');
   const router = useRouter();
   const specDict = useMemo(() => getSpecUiDictionary(locale), [locale]);
+  const categoryTabs = useMemo(() => buildCategoryTabs(t), [t]);
+  const specGroups = useMemo(() => buildSpecGroups(t), [t]);
   const [activeCategory, setActiveCategory] = useState<CanonicalCategorySlug>(
     () =>
       initialProducts.length > 0
@@ -749,8 +789,9 @@ export default function CompareWorkspace({
 
   const activeCategoryMeta = useMemo(
     () =>
-      CATEGORY_TABS.find((t) => t.slug === activeCategory) || CATEGORY_TABS[0]!,
-    [activeCategory]
+      categoryTabs.find((tab) => tab.slug === activeCategory) ||
+      categoryTabs[0]!,
+    [activeCategory, categoryTabs]
   );
 
   // Candidates strictly locked to the active category
@@ -1033,42 +1074,41 @@ export default function CompareWorkspace({
   const handleCopyMarkdownReport = async () => {
     if (typeof window === 'undefined' || products.length === 0) return;
     try {
-      const headerCols = [
-        'Tiêu chí / Thông số',
-        ...products.map((p) => p.name),
-      ];
+      const headerCols = [t('mdReportColSpec'), ...products.map((p) => p.name)];
       const sepCols = headerCols.map(() => '---');
       const lines: string[] = [
-        `### 📊 Báo Cáo Đối Chiếu ${activeCategoryMeta.label} - Rate.vn`,
-        `- **Đường dẫn kiểm định:** ${window.location.href}`,
+        `### ${t('mdReportTitle', { category: activeCategoryMeta.label })}`,
+        `- **${t('mdAuditUrl')}:** ${window.location.href}`,
         '',
         `| ${headerCols.join(' | ')} |`,
         `| ${sepCols.join(' | ')} |`,
-        `| **Điểm Người Mua Thực Chất** | ${products
+        `| **${t('mdRowUserRating')}** | ${products
           .map((p) => {
             const r = getEffectiveRating(p);
             const cnt = p.authentic_review_count || p.total_reviews || 0;
-            return r > 0 ? `★ ${r.toFixed(1)}/5.0 (${cnt} review)` : 'chưa có';
+            return r > 0
+              ? `★ ${r.toFixed(1)}/5.0 (${cnt} review)`
+              : t('unratedShort');
           })
           .join(' | ')} |`,
-        `| **Điểm Chuyên Gia Rate Lab** | ${products
+        `| **${t('mdRowExpertRating')}** | ${products
           .map((p) =>
             p.expert_rating && Number(p.expert_rating) > 0
               ? `Lab ${Number(p.expert_rating).toFixed(1)}/5.0`
-              : 'chưa có'
+              : t('unratedShort')
           )
           .join(' | ')} |`,
-        `| **Giá Tham Khảo Thấp Nhất** | ${products
+        `| **${t('mdRowMinPrice')}** | ${products
           .map((p) =>
             Number(p.min_price) > 0
               ? `${Number(p.min_price).toLocaleString('vi-VN')} ₫`
               : '-'
           )
           .join(' | ')} |`,
-        `| **Tín Hiệu Deal Radar 60N** | ${products
+        `| **${t('mdRowDealRadar')}** | ${products
           .map((p) => radarMarkdownCell(getRadarSignal(radarIndex, p.slug)))
           .join(' | ')} |`,
-        `| **Cấu Hình / Bộ Nhớ** | ${products
+        `| **${t('mdRowHardwareMemory')}** | ${products
           .map((p) => {
             const ks = (p.key_specs || {}) as KeySpecs;
             const parts = [
@@ -1079,7 +1119,7 @@ export default function CompareWorkspace({
             return parts.length > 0 ? parts.join(' / ') : '-';
           })
           .join(' | ')} |`,
-        `| **Pin & Năng Lượng** | ${products
+        `| **${t('mdRowBatteryEnergy')}** | ${products
           .map((p) => {
             const ks = (p.key_specs || {}) as KeySpecs;
             return p.battery_mah ? `${p.battery_mah} mAh` : ks.battery || '-';
@@ -1097,8 +1137,8 @@ export default function CompareWorkspace({
   const handleDownloadCompareCsv = () => {
     if (typeof window === 'undefined' || products.length === 0) return;
     const headers = [
-      'Nhóm Thông Số',
-      'Tiêu Chí Kỹ Thuật',
+      t('csvColSpecGroup'),
+      t('csvColTechCriterion'),
       ...products.map((p) => p.name),
     ];
     const productRadarCells = products.map((p) =>
@@ -1107,15 +1147,15 @@ export default function CompareWorkspace({
     const rows: string[] = [
       headers.map(escapeCsvCell).join(','),
       [
-        '0. Tín hiệu Deal Radar 10 Sàn (60N)',
-        'Phán quyết & Độ lệch giá',
+        t('csvRadarGroupTitle'),
+        t('csvRadarVerdictRow'),
         ...products.map((p) => radarLabel(getRadarSignal(radarIndex, p.slug))),
       ]
         .map((c) => escapeCsvCell(c))
         .join(','),
       ...RADAR_CSV_HEADERS.map((hdr, idx) =>
         [
-          '0. Tín hiệu Deal Radar 10 Sàn (60N)',
+          t('csvRadarGroupTitle'),
           hdr,
           ...productRadarCells.map((cells) => cells[idx] ?? ''),
         ]
@@ -1123,7 +1163,7 @@ export default function CompareWorkspace({
           .join(',')
       ),
     ];
-    for (const group of SPEC_GROUPS) {
+    for (const group of specGroups) {
       for (const row of group.rows) {
         const vals = products.map((p) => row.renderValue(p));
         if (vals.every((v) => !v || v === '-')) continue;
@@ -1168,7 +1208,7 @@ export default function CompareWorkspace({
           dealRadar: radarExportFields(getRadarSignal(radarIndex, p.slug)),
         };
       }),
-      matrix: SPEC_GROUPS.map((group) => ({
+      matrix: specGroups.map((group) => ({
         groupId: group.id,
         groupTitle: group.title,
         rows: group.rows.map((row) => ({
@@ -1252,14 +1292,14 @@ export default function CompareWorkspace({
       <div className="rate-card mb-3 p-3">
         <div className="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-2">
           <div className="small fw-semibold text-secondary">
-            Danh mục đang khóa đối chiếu (chỉ so sánh các thiết bị cùng loại):
+            {t('categoryLockLabel')}
           </div>
           <div
             className="d-flex flex-wrap gap-2"
             role="tablist"
-            aria-label="Chọn danh mục đối chiếu"
+            aria-label={t('categoryTabsAria')}
           >
-            {CATEGORY_TABS.map((tab) => {
+            {categoryTabs.map((tab) => {
               const isActive = tab.slug === activeCategory;
               const count = catalogCandidates.filter(
                 (c) => getMasterProductCategorySlug(c) === tab.slug
@@ -1296,8 +1336,15 @@ export default function CompareWorkspace({
               className="form-label fw-bold small text-uppercase text-muted mb-1"
             >
               {replaceIndex !== null && products[replaceIndex]
-                ? `Đang chọn ${activeCategoryMeta.unitLabel} thay thế cho "${products[replaceIndex]?.name}"`
-                : `Tìm & Thêm ${activeCategoryMeta.label} Vào Bảng So Sánh (${products.length}/${MAX_COMPARE_ITEMS})`}
+                ? t('replacingDeviceLabel', {
+                    unit: activeCategoryMeta.unitLabel,
+                    name: products[replaceIndex]?.name ?? '',
+                  })
+                : t('searchAddDeviceLabel', {
+                    category: activeCategoryMeta.label,
+                    count: products.length,
+                    max: MAX_COMPARE_ITEMS,
+                  })}
             </label>
             <div className="position-relative">
               <div className="input-group">
@@ -1317,8 +1364,10 @@ export default function CompareWorkspace({
                   placeholder={
                     products.length >= MAX_COMPARE_ITEMS &&
                     replaceIndex === null
-                      ? 'Đã đủ 4 thiết bị tối đa - Hãy xóa bớt hoặc bấm "Đổi máy" ở cột dưới'
-                      : `Gõ tên ${activeCategoryMeta.unitLabel} cùng danh mục để đối chiếu...`
+                      ? t('maxDevicesPlaceholder')
+                      : t('searchDevicePlaceholder', {
+                          unit: activeCategoryMeta.unitLabel,
+                        })
                   }
                   disabled={
                     products.length >= MAX_COMPARE_ITEMS &&
@@ -1335,7 +1384,7 @@ export default function CompareWorkspace({
                     }}
                     className="btn btn-outline-secondary rounded-pill btn-sm ms-2"
                   >
-                    Hủy đổi
+                    {t('cancelReplaceBtn')}
                   </button>
                 )}
               </div>
@@ -1355,21 +1404,27 @@ export default function CompareWorkspace({
                     <div className="bg-light border-bottom d-flex justify-content-between align-items-center px-3 py-2">
                       <span className="small fw-semibold text-muted">
                         {searchQuery.trim()
-                          ? `Kết quả ${activeCategoryMeta.label} cho "${searchQuery.trim()}"`
-                          : `Danh sách ${activeCategoryMeta.unitLabel} cùng danh mục`}
+                          ? t('searchResultsFor', {
+                              category: activeCategoryMeta.label,
+                              query: searchQuery.trim(),
+                            })
+                          : t('sameCategoryList', {
+                              unit: activeCategoryMeta.unitLabel,
+                            })}
                       </span>
                       {isSearching && (
                         <span className="badge bg-secondary rounded-pill small">
-                          Đang tìm...
+                          {t('searchingBadge')}
                         </span>
                       )}
                     </div>
 
                     {suggestions.length === 0 ? (
                       <div className="text-muted small p-4 text-center">
-                        Không tìm thấy {activeCategoryMeta.unitLabel} khớp với
-                        từ khóa &quot;
-                        {searchQuery}&quot;.
+                        {t('noMatchingDevices', {
+                          unit: activeCategoryMeta.unitLabel,
+                          query: searchQuery,
+                        })}
                       </div>
                     ) : (
                       <div className="list-group list-group-flush">
@@ -1432,7 +1487,7 @@ export default function CompareWorkspace({
                                       ★{' '}
                                       {rating > 0
                                         ? rating.toFixed(1)
-                                        : 'chưa có'}
+                                        : t('unratedShort')}
                                     </span>
                                     <span
                                       className="text-secondary fw-semibold rate-tabular"
@@ -1454,10 +1509,10 @@ export default function CompareWorkspace({
                                 }`}
                               >
                                 {alreadySelected
-                                  ? 'Đang so sánh'
+                                  ? t('alreadyComparingBadge')
                                   : replaceIndex !== null
-                                    ? 'Chọn thay thế'
-                                    : '+ Thêm vào bàn cân'}
+                                    ? t('selectReplacementBadge')
+                                    : t('addToCompareBadge')}
                               </span>
                             </button>
                           );
@@ -1484,7 +1539,7 @@ export default function CompareWorkspace({
                   htmlFor="toggle-diff-only"
                   className="form-check-label small fw-semibold"
                 >
-                  Chỉ hiện điểm khác biệt
+                  {t('showDiffOnlyToggle')}
                 </label>
               </div>
 
@@ -1500,7 +1555,7 @@ export default function CompareWorkspace({
                   htmlFor="toggle-highlight-winners"
                   className="form-check-label small fw-semibold"
                 >
-                  Tô sáng thông số vượt trội
+                  {t('highlightWinnersToggle')}
                 </label>
               </div>
 
@@ -1509,7 +1564,7 @@ export default function CompareWorkspace({
                 onClick={handleCopyShareLink}
                 className="btn btn-sm btn-outline-dark rounded-pill fw-medium px-3 py-2"
               >
-                {copiedLink ? '✓ Đã sao chép link!' : 'Sao chép link so sánh'}
+                {copiedLink ? t('copiedLinkToast') : t('copyCompareLinkBtn')}
               </button>
 
               {products.length > 0 && (
@@ -1520,8 +1575,8 @@ export default function CompareWorkspace({
                     className="btn btn-sm btn-outline-danger rounded-pill fw-medium px-3 py-2"
                   >
                     {copiedMarkdown
-                      ? '✓ Đã sao chép Markdown!'
-                      : '📋 Sao chép bảng Markdown'}
+                      ? t('copiedMarkdownToast')
+                      : t('copyMarkdownTableBtn')}
                   </button>
                   <button
                     type="button"
@@ -1547,7 +1602,7 @@ export default function CompareWorkspace({
                   href={`/compare/${products[0].slug}-vs-${products[1].slug}`}
                   className="btn btn-sm btn-dark rounded-pill fw-medium px-3 py-2"
                 >
-                  ⚡ Trang 1v1 chuyên sâu
+                  {t('deep1v1PageBtn')}
                 </Link>
               )}
 
@@ -1558,8 +1613,8 @@ export default function CompareWorkspace({
                   className="btn btn-sm btn-outline-secondary rounded-pill fw-medium px-3 py-2"
                 >
                   {watchedAllToast
-                    ? '✓ Đã lưu Watchlist!'
-                    : `Theo dõi cả nhóm (${products.length})`}
+                    ? t('savedWatchlistToast')
+                    : t('watchAllGroupBtn', { count: products.length })}
                 </button>
               )}
             </div>
@@ -1570,7 +1625,9 @@ export default function CompareWorkspace({
         {categoryLockedCandidates.length >= 2 && (
           <div className="d-flex align-items-center border-top mt-3 flex-wrap gap-2 pt-3">
             <span className="small text-muted fw-medium me-1">
-              Thêm nhanh {activeCategoryMeta.unitLabel} cùng danh mục:
+              {t('quickAddSameCategory', {
+                unit: activeCategoryMeta.unitLabel,
+              })}
             </span>
             {categoryLockedCandidates
               .filter((c) => !selectedSlugs.has(c.slug))
@@ -1596,18 +1653,23 @@ export default function CompareWorkspace({
           <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
             <div>
               <div className="rate-eyebrow mb-1">
-                Kèo Đối Đầu 1v1 Tiêu Điểm ({activeCategoryMeta.label})
+                {t('popular1v1Eyebrow', {
+                  category: activeCategoryMeta.label,
+                })}
               </div>
               <h2 className="h6 fw-bold text-dark mb-0">
-                Các Cặp So Kè Trực Tiếp Được Tìm Kiếm Nhiều Nhất Trong Nhóm{' '}
-                {activeCategoryMeta.label}
+                {t('popular1v1Heading', {
+                  category: activeCategoryMeta.label,
+                })}
               </h2>
             </div>
             <Link
               href={`/leaderboard?cat=${activeCategory}`}
               className="btn btn-sm btn-outline-dark rounded-pill px-3"
             >
-              Xem Bảng Xếp Hạng {activeCategoryMeta.label} →
+              {t('viewLeaderboardCategoryBtn', {
+                category: activeCategoryMeta.label,
+              })}
             </Link>
           </div>
 
@@ -1622,7 +1684,9 @@ export default function CompareWorkspace({
                         {activeCategoryMeta.label}
                       </span>
                       <span className="badge bg-danger-subtle text-danger rounded-pill small font-monospace">
-                        Chênh {battle.scoreDelta5.toFixed(2)} đ
+                        {t('scoreDeltaBadge', {
+                          delta: battle.scoreDelta5.toFixed(2),
+                        })}
                       </span>
                     </div>
 
@@ -1686,13 +1750,13 @@ export default function CompareWorkspace({
                       }
                       className="btn btn-sm btn-outline-secondary rounded-pill small px-3"
                     >
-                      Nạp vào bàn cân
+                      {t('loadIntoMatrixBtn')}
                     </button>
                     <Link
                       href={battle.versusHref}
                       className="btn btn-sm btn-dark rounded-pill small fw-semibold px-3"
                     >
-                      So kè 1v1 →
+                      {t('go1v1Btn')}
                     </Link>
                   </div>
                 </div>
@@ -1715,18 +1779,20 @@ export default function CompareWorkspace({
                   border: '1px solid rgba(16, 185, 129, 0.3)',
                 }}
               >
-                Chấm điểm Đối đầu ({activeCategoryMeta.label})
+                {t('verdictBadge', { category: activeCategoryMeta.label })}
               </span>
               <span className="fw-bold text-white">
-                Tóm Tắt Ưu Thế Giữa {products.length} {activeCategoryMeta.label}{' '}
-                Đang So Sánh
+                {t('verdictSummaryHeading', {
+                  count: products.length,
+                  category: activeCategoryMeta.label,
+                })}
               </span>
             </div>
             <Link
               href={`/${activeCategory}`}
               className="btn btn-sm btn-outline-light rounded-pill px-3"
             >
-              Xem toàn bộ {activeCategoryMeta.label} →
+              {t('viewAllCategoryBtn', { category: activeCategoryMeta.label })}
             </Link>
           </div>
           <div className="row g-3">
@@ -1743,7 +1809,7 @@ export default function CompareWorkspace({
                     className="small fw-bold mb-1"
                     style={{ color: '#34d399' }}
                   >
-                    Điểm Đánh Giá Thực Chất Cao Nhất
+                    {t('verdictHighestRatedTitle')}
                   </div>
                   <div className="fw-bold text-truncate text-white">
                     {headToHeadSummary.bestRated.name}
@@ -1751,7 +1817,7 @@ export default function CompareWorkspace({
                   <div className="small text-white-50 rate-tabular">
                     ★{' '}
                     {getEffectiveRating(headToHeadSummary.bestRated).toFixed(1)}{' '}
-                    / 5.0 (đã lọc Seeding AI)
+                    / 5.0 {t('verdictAiFilteredNote')}
                   </div>
                 </div>
               </div>
@@ -1769,7 +1835,7 @@ export default function CompareWorkspace({
                     className="small fw-bold mb-1"
                     style={{ color: '#818cf8' }}
                   >
-                    Cấu Hình Phần Cứng Nổi Bật
+                    {t('verdictTopHardwareTitle')}
                   </div>
                   <div className="fw-bold text-truncate text-white">
                     {headToHeadSummary.highestMemory.name}
@@ -1780,7 +1846,7 @@ export default function CompareWorkspace({
                       : ''}
                     {headToHeadSummary.highestMemory.storage_gb
                       ? `${headToHeadSummary.highestMemory.storage_gb}GB`
-                      : 'Chuẩn hóa 10 nhóm'}
+                      : t('verdictNormalized10Groups')}
                   </div>
                 </div>
               </div>
@@ -1798,7 +1864,7 @@ export default function CompareWorkspace({
                     className="small fw-bold mb-1"
                     style={{ color: '#fbbf24' }}
                   >
-                    Thời Lượng Pin &amp; Năng Lượng
+                    {t('verdictBestBatteryTitle')}
                   </div>
                   <div className="fw-bold text-truncate text-white">
                     {headToHeadSummary.bestBattery.name}
@@ -1806,7 +1872,7 @@ export default function CompareWorkspace({
                   <div className="small text-white-50 rate-tabular">
                     {headToHeadSummary.bestBattery.battery_mah
                       ? `${headToHeadSummary.bestBattery.battery_mah} mAh`
-                      : 'Chuẩn hóa 10 nhóm'}
+                      : t('verdictNormalized10Groups')}
                   </div>
                 </div>
               </div>
@@ -1824,7 +1890,7 @@ export default function CompareWorkspace({
                     className="small fw-bold mb-1"
                     style={{ color: '#94a3b8' }}
                   >
-                    Giá Tham Khảo Thấp Nhất Cùng Nhóm
+                    {t('verdictLowestPriceTitle')}
                   </div>
                   <div className="fw-bold text-truncate text-white">
                     {headToHeadSummary.lowestPrice.name}
@@ -1846,12 +1912,10 @@ export default function CompareWorkspace({
       {products.length === 0 ? (
         <div className="rate-card p-5 text-center">
           <h4 className="fw-bold mb-2">
-            Chưa có {activeCategoryMeta.unitLabel} nào trong bảng đối chiếu
+            {t('emptyMatrixTitle', { unit: activeCategoryMeta.unitLabel })}
           </h4>
           <p className="text-muted mb-4">
-            Hãy gõ tìm kiếm ở thanh công cụ phía trên hoặc bấm chọn nhanh một
-            trong các {activeCategoryMeta.unitLabel} bên dưới để bắt đầu đối
-            chiếu.
+            {t('emptyMatrixDesc', { unit: activeCategoryMeta.unitLabel })}
           </p>
           <div className="d-flex justify-content-center flex-wrap gap-2">
             {categoryLockedCandidates.slice(0, 3).map((c) => (
@@ -1861,14 +1925,16 @@ export default function CompareWorkspace({
                 onClick={() => handleSelectCandidate(c)}
                 className="btn btn-dark rounded-pill px-4"
               >
-                + Thêm {c.name}
+                {t('addDeviceQuickBtn', { name: c.name })}
               </button>
             ))}
             <Link
               href={`/${activeCategory}`}
               className="btn btn-outline-secondary rounded-pill px-4"
             >
-              Xem danh mục {activeCategoryMeta.label}
+              {t('viewCategoryCatalogBtn', {
+                category: activeCategoryMeta.label,
+              })}
             </Link>
           </div>
         </div>
@@ -1887,14 +1953,16 @@ export default function CompareWorkspace({
                       {activeCategoryMeta.label}
                     </div>
                     <div className="fw-bold text-dark mb-1">
-                      Điểm Đánh Giá &amp; 10 Nhóm Thông Số
+                      {t('matrixHeaderTitle')}
                     </div>
                     <div
                       className="text-muted fw-normal"
                       style={{ fontSize: '12px' }}
                     >
-                      Chuẩn JReviews &amp; PhoneArena ({products.length}{' '}
-                      {activeCategoryMeta.unitLabel})
+                      {t('matrixHeaderSubtitle', {
+                        count: products.length,
+                        unit: activeCategoryMeta.unitLabel,
+                      })}
                     </div>
                   </th>
 
@@ -1926,9 +1994,11 @@ export default function CompareWorkspace({
                             type="button"
                             onClick={() => handleStartReplace(idx)}
                             className="btn btn-sm btn-light rounded-pill small text-muted border px-2 py-0"
-                            title={`Đổi sang ${activeCategoryMeta.unitLabel} khác`}
+                            title={t('replaceDeviceTitle', {
+                              unit: activeCategoryMeta.unitLabel,
+                            })}
                           >
-                            Đổi máy
+                            {t('replaceDeviceBtn')}
                           </button>
                           <button
                             type="button"
@@ -1939,8 +2009,8 @@ export default function CompareWorkspace({
                               height: '24px',
                               lineHeight: 1,
                             }}
-                            title="Xóa khỏi bảng so sánh"
-                            aria-label={`Xóa ${p.name}`}
+                            title={t('removeDeviceTitle')}
+                            aria-label={t('removeDeviceAria', { name: p.name })}
                           >
                             ×
                           </button>
@@ -1981,7 +2051,7 @@ export default function CompareWorkspace({
                               ★{' '}
                               {userRating > 0
                                 ? `${userRating.toFixed(1)} (${reviewCount})`
-                                : 'chưa có'}
+                                : t('unratedShort')}
                             </span>
                             {expertRating != null && (
                               <span className="rate-score-badge-expert">
@@ -1992,7 +2062,7 @@ export default function CompareWorkspace({
 
                           {/* Neutral Reference Price */}
                           <div className="text-secondary small fw-semibold rate-tabular mb-2">
-                            Giá tham khảo:{' '}
+                            {t('referencePriceLabel')}{' '}
                             <strong className="text-dark">
                               {minPriceFormatted} ₫
                             </strong>
@@ -2013,7 +2083,7 @@ export default function CompareWorkspace({
                               href={`${getMasterProductHref(p)}#jreviews-section`}
                               className="btn btn-sm btn-dark rounded-pill fw-medium px-3"
                             >
-                              Đọc Review &amp; Chấm điểm
+                              {t('readReviewsAndScoreBtn')}
                             </Link>
                           </div>
                         </div>
@@ -2041,19 +2111,24 @@ export default function CompareWorkspace({
                             height: '52px',
                             fontSize: '24px',
                           }}
-                          title={`Thêm ${activeCategoryMeta.unitLabel} cùng danh mục`}
+                          title={t('addSameCategoryTitle', {
+                            unit: activeCategoryMeta.unitLabel,
+                          })}
                         >
                           +
                         </button>
                         <div className="fw-bold small text-dark mb-1">
-                          Thêm {activeCategoryMeta.label}
+                          {t('addCategorySlotTitle', {
+                            category: activeCategoryMeta.label,
+                          })}
                         </div>
                         <div
                           className="text-muted fw-normal"
                           style={{ fontSize: '12px' }}
                         >
-                          Còn trống {MAX_COMPARE_ITEMS - products.length} vị trí
-                          cùng nhóm
+                          {t('remainingSlotsSub', {
+                            remaining: MAX_COMPARE_ITEMS - products.length,
+                          })}
                         </div>
                       </div>
                     </th>
@@ -2064,7 +2139,7 @@ export default function CompareWorkspace({
               <tbody>
                 <tr data-testid="compare-radar-row">
                   <td className="text-muted small fw-semibold bg-light text-start">
-                    🔥 Tín hiệu Radar Kèo Đáy &amp; Bẫy Sale 10 Sàn (60N)
+                    {t('radarRowMatrixTitle')}
                   </td>
                   {products.map((p) => {
                     const sig = getRadarSignal(radarIndex, p.slug);
@@ -2074,7 +2149,7 @@ export default function CompareWorkspace({
                           key={`radar-${p.id}`}
                           className="small text-secondary"
                         >
-                          ⚖️ Ổn định quanh trung vị 60N
+                          {t('radarStableMedian')}
                         </td>
                       );
                     }
@@ -2088,8 +2163,15 @@ export default function CompareWorkspace({
                         }`}
                       >
                         {sig.verdict === 'genuine_deal'
-                          ? `🔥 Đáy giá thật 60N (-${sig.savingsPct.toFixed(1)}% so với trung vị • ${(sig.genuineDeal?.platform ?? '').toUpperCase()})`
-                          : `🚨 Cảnh báo Nâng Giá Sale Ảo (+${sig.fakeMarkupPct.toFixed(1)}% so với trung vị)`}
+                          ? t('radarGenuineFloor', {
+                              pct: sig.savingsPct.toFixed(1),
+                              platform: (
+                                sig.genuineDeal?.platform ?? ''
+                              ).toUpperCase(),
+                            })
+                          : t('radarFakeMarkup', {
+                              pct: sig.fakeMarkupPct.toFixed(1),
+                            })}
                       </td>
                     );
                   })}
@@ -2097,7 +2179,7 @@ export default function CompareWorkspace({
                     <td className="bg-light text-muted small">-</td>
                   )}
                 </tr>
-                {SPEC_GROUPS.map((group) => {
+                {specGroups.map((group) => {
                   // Filter rows when `showDiffOnly` is enabled
                   const visibleRows = group.rows.filter((row) => {
                     if (!showDiffOnly || products.length < 2) return true;
@@ -2122,11 +2204,7 @@ export default function CompareWorkspace({
                       ? specDict.groups[
                           group.id as keyof typeof specDict.groups
                         ]
-                      : locale === 'en'
-                        ? '0. Multi-Dimensional Ratings & Market Trust (JReviews Core)'
-                        : locale === 'cs'
-                          ? '0. Víceúrovňové hodnocení a důvěryhodnost (JReviews Core)'
-                          : group.title;
+                      : group.title;
 
                   return (
                     <React.Fragment key={group.id}>
@@ -2192,11 +2270,7 @@ export default function CompareWorkspace({
                                       className="badge bg-success rounded-pill ms-1 text-white"
                                       style={{ fontSize: '10px' }}
                                     >
-                                      {locale === 'en'
-                                        ? 'Best'
-                                        : locale === 'cs'
-                                          ? 'Nejlepší'
-                                          : 'Tốt nhất'}
+                                      {t('bestBadge')}
                                     </span>
                                   )}
                                 </td>

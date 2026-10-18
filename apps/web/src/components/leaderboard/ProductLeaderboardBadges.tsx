@@ -1,3 +1,4 @@
+import { getTranslations } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
 import type { CanonicalCategorySlug } from '@/lib/rate-domain';
@@ -12,70 +13,7 @@ interface ProductLeaderboardBadgesProps {
   locale?: string;
 }
 
-const CATEGORY_NAMES: Record<
-  'vi' | 'en' | 'cs',
-  Record<CanonicalCategorySlug, string>
-> = {
-  vi: {
-    smartphones: 'Điện thoại',
-    tablets: 'Máy tính bảng',
-    laptops: 'Laptop',
-    smartwatches: 'Đồng hồ thông minh',
-    earbuds: 'Tai nghe',
-  },
-  en: {
-    smartphones: 'Smartphones',
-    tablets: 'Tablets',
-    laptops: 'Laptops',
-    smartwatches: 'Smartwatches',
-    earbuds: 'Earbuds',
-  },
-  cs: {
-    smartphones: 'Smartphony',
-    tablets: 'Tablety',
-    laptops: 'Notebooky',
-    smartwatches: 'Chytré hodinky',
-    earbuds: 'Sluchátka',
-  },
-};
-
-const CRITERION_LABELS: Record<
-  'vi' | 'en' | 'cs',
-  Record<LeaderboardCriterionKey, string>
-> = {
-  vi: {
-    combined: 'Tổng hợp JReviews',
-    user: 'Người dùng thật',
-    expert: 'Chuyên gia Lab',
-    screen: 'Màn hình',
-    performance: 'Hiệu năng',
-    camera: 'Camera / Âm thanh',
-    battery: 'Pin & Sạc',
-    value: 'Đáng tiền (P/P)',
-  },
-  en: {
-    combined: 'Overall JReviews',
-    user: 'Verified Users',
-    expert: 'Lab Experts',
-    screen: 'Display',
-    performance: 'Performance',
-    camera: 'Camera / Audio',
-    battery: 'Battery & Charge',
-    value: 'Value (P/P)',
-  },
-  cs: {
-    combined: 'Celkově JReviews',
-    user: 'Ověření uživatelé',
-    expert: 'Experti Lab',
-    screen: 'Displej',
-    performance: 'Výkon',
-    camera: 'Fotoaparát / Zvuk',
-    battery: 'Baterie a nabíjení',
-    value: 'Poměr cena/výkon',
-  },
-};
-
-export default function ProductLeaderboardBadges({
+export default async function ProductLeaderboardBadges({
   badges,
   locale,
 }: ProductLeaderboardBadgesProps) {
@@ -84,15 +22,28 @@ export default function ProductLeaderboardBadges({
   }
 
   const lang = normalizeRateLocale(locale);
-  const catNames = CATEGORY_NAMES[lang];
-  const critLabels = CRITERION_LABELS[lang];
+  const t = await getTranslations({ locale: lang, namespace: 'leaderboard' });
 
-  const sectionLabel =
-    lang === 'en'
-      ? 'Category Leaderboard Standing:'
-      : lang === 'cs'
-        ? 'Umístění v žebříčku kategorie:'
-        : 'Thứ hạng trong Bảng xếp hạng danh mục:';
+  const catNames: Record<CanonicalCategorySlug, string> = {
+    smartphones: t('catSmartphones'),
+    tablets: t('catTablets'),
+    laptops: t('catLaptops'),
+    smartwatches: t('catSmartwatches'),
+    earbuds: t('catEarbuds'),
+  };
+
+  const critLabels: Record<LeaderboardCriterionKey, string> = {
+    combined: t('badgeCombined'),
+    user: t('badgeUser'),
+    expert: t('badgeExpert'),
+    screen: t('badgeScreen'),
+    performance: t('badgePerformance'),
+    camera: t('badgeCamera'),
+    battery: t('badgeBattery'),
+    value: t('badgeValue'),
+  };
+
+  const sectionLabel = t('standingLabel');
 
   return (
     <div
