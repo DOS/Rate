@@ -304,8 +304,7 @@ export async function CategoryCatalogContent({
             <div className="col-xl-12 col-lg-12 col-md-12 col-sm-12">
               <div className="position-relative mt-2 text-start">
                 <span className="rate-eyebrow mb-3">
-                  {schema.directoryName} ·{' '}
-                  {facets.currentCategory?.name || schema.categoryTitle}
+                  {schema.directoryName} · {schema.categoryTitle}
                 </span>
                 <h1
                   className="fw-bold mb-2 text-white"
