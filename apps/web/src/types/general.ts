@@ -5,7 +5,6 @@ import { IntlKeysPath } from './helpers';
 // Use type safe message keys with `next-intl`
 type Messages = typeof import('../../locales/en.json');
 
-// eslint-disable-next-line no-unused-vars
 export interface IntlMessages extends Messages {}
 
 export type AppLocale = (typeof routing.locales)[number];

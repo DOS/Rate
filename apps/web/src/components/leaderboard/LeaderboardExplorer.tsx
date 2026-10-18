@@ -1308,7 +1308,6 @@ export default function LeaderboardExplorer({
                           className="rounded-3 d-flex align-items-center justify-content-center flex-shrink-0 bg-white p-2"
                           style={{ width: 76, height: 76 }}
                         >
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
                             src={entry.thumbnail}
                             alt={entry.product.name}
@@ -1593,7 +1592,6 @@ export default function LeaderboardExplorer({
                       className="bg-light rounded-3 d-flex align-items-center justify-content-center flex-shrink-0 p-2"
                       style={{ width: 72, height: 72 }}
                     >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={entry.thumbnail}
                         alt={entry.product.name}

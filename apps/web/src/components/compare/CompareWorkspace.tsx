@@ -1628,7 +1628,6 @@ export default function CompareWorkspace({
 
                     <div className="d-flex align-items-center justify-content-between my-2 gap-2">
                       <div className="d-flex align-items-center gap-2 overflow-hidden">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={battle.productA.thumbnail}
                           alt={battle.productA.name}
@@ -1662,7 +1661,6 @@ export default function CompareWorkspace({
                             ★ {battle.productB.combinedScore5.toFixed(2)}
                           </div>
                         </div>
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={battle.productB.thumbnail}
                           alt={battle.productB.name}

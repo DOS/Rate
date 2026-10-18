@@ -756,7 +756,6 @@ export default function DealFinderWorkspace({
                   </div>
 
                   <div className="d-flex align-items-center my-2 gap-3">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={deal.thumbnail}
                       alt={deal.name}
