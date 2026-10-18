@@ -23,6 +23,22 @@ export type ReviewFlagCategory =
 export type ReviewVerdict = 'authentic' | 'suspicious' | 'fake' | 'unanalyzed';
 
 /**
+ * `review_flags.detector` written by the private ReviewBurstAuditor. Its
+ * `seeding_fake` verdicts come from cross-review timing and text similarity,
+ * which a per-review analysis cannot see, so the analyzer must not overwrite them.
+ */
+export const BURST_AUDITOR_DETECTOR = 'review_burst_auditor';
+
+/** Detectors whose `review_flags` rows `persistAnalysisToSupabase` leaves untouched. */
+export const ANALYZER_PRESERVED_DETECTORS: readonly string[] = [BURST_AUDITOR_DETECTOR];
+
+/** The stored verdict fields of a preserved flag, applied over the analyzer result. */
+type PreservedReviewFlag = Pick<
+  AnalyzedReviewResult,
+  'verdict' | 'flag_category' | 'include_in_rating' | 'fake_probability'
+>;
+
+/**
  * Strictly conforms to PostgreSQL CHECK constraint `rate.signals_valid(signals)`
  */
 export interface ReviewSignals {
@@ -1173,6 +1189,37 @@ export class AiReviewAnalyzer {
     results: AnalyzedReviewResult[];
     summary: JReviewsProductSummary;
   }> {
+    const raw = await this.analyzeReviewsRaw(reviews, context);
+    const summary = this.computeJReviewsSummary(
+      reviews,
+      raw.results,
+      context?.expertRating ?? null,
+      raw.aiPros,
+      raw.aiCons,
+      raw.aiSummaryText
+    );
+    return { results: raw.results, summary };
+  }
+
+  /**
+   * Per-review verdicts plus the raw LLM pros/cons/summary text, before any
+   * product summary is derived. Kept separate so a caller that adjusts the
+   * verdicts can compute the summary once from the adjusted results instead of
+   * reusing fallback text that embeds the unadjusted counts.
+   */
+  private async analyzeReviewsRaw(
+    reviews: ReviewInputItem[],
+    context?: {
+      entityName?: string;
+      entityType?: 'product' | 'service';
+      platform?: string;
+    }
+  ): Promise<{
+    results: AnalyzedReviewResult[];
+    aiPros: string[];
+    aiCons: string[];
+    aiSummaryText: string;
+  }> {
     const heuristicResults = this.analyzeWithHeuristics(reviews);
     let finalResults = heuristicResults;
     let aiPros: string[] = [];
@@ -1189,16 +1236,7 @@ export class AiReviewAnalyzer {
       }
     }
 
-    const summary = this.computeJReviewsSummary(
-      reviews,
-      finalResults,
-      context?.expertRating ?? null,
-      aiPros,
-      aiCons,
-      aiSummaryText
-    );
-
-    return { results: finalResults, summary };
+    return { results: finalResults, aiPros, aiCons, aiSummaryText };
   }
 
   private async refineBatchWithAi(
@@ -1820,6 +1858,41 @@ Return ONLY valid JSON matching:
   }
 
   /**
+   * Returns the stored flags written by a detector in `ANALYZER_PRESERVED_DETECTORS`,
+   * keyed by review id. A failed read throws rather than risk overwriting them.
+   */
+  private async loadPreservedFlags(
+    supabase: RateSupabaseClient,
+    reviewIds: readonly string[]
+  ): Promise<Map<string, PreservedReviewFlag>> {
+    const preserved = new Map<string, PreservedReviewFlag>();
+    const uniqueIds = Array.from(new Set(reviewIds.filter(Boolean)));
+    // Chunked so a large batch never exceeds the PostgREST URL length.
+    for (let i = 0; i < uniqueIds.length; i += 150) {
+      const { data, error } = await supabase
+        .from('review_flags')
+        .select('review_id, verdict, flag_category, include_in_rating, fake_probability')
+        .in('review_id', uniqueIds.slice(i, i + 150))
+        .in('detector', [...ANALYZER_PRESERVED_DETECTORS]);
+      if (error) {
+        throw new Error(
+          `[AiReviewAnalyzer] Failed to read existing review_flags: ${error.message}`
+        );
+      }
+      for (const row of (data || []) as Array<Record<string, unknown>>) {
+        if (!row.review_id) continue;
+        preserved.set(String(row.review_id), {
+          verdict: row.verdict as ReviewVerdict,
+          flag_category: row.flag_category as ReviewFlagCategory,
+          include_in_rating: Boolean(row.include_in_rating),
+          fake_probability: Number(row.fake_probability ?? 0),
+        });
+      }
+    }
+    return preserved;
+  }
+
+  /**
    * Persists review flags, updates review helpfulness weights, review_analysis,
    * master_products weighted rating, and merchant risk_score in Supabase `rate` schema
    */
@@ -1842,11 +1915,37 @@ Return ONLY valid JSON matching:
     summary: JReviewsProductSummary;
     merchantRisk?: MerchantRiskEvaluation;
   }> {
-    const { results, summary } = await this.analyzeReviews(params.reviews, {
+    const analysis = await this.analyzeReviewsRaw(params.reviews, {
       entityName: params.entityName,
       entityType: params.entityType,
       platform: params.platform,
     });
+
+    // Flags owned by another detector are neither overwritten nor contradicted:
+    // the summary and merchant risk below use the stored flag for those reviews,
+    // matching what refresh_master_product_rating reads from the database.
+    const preservedFlags =
+      analysis.results.length > 0
+        ? await this.loadPreservedFlags(
+            supabase,
+            analysis.results.map(r => r.review_id)
+          )
+        : new Map<string, PreservedReviewFlag>();
+    const results =
+      preservedFlags.size === 0
+        ? analysis.results
+        : analysis.results.map(r => {
+            const stored = preservedFlags.get(r.review_id);
+            return stored ? { ...r, ...stored } : r;
+          });
+    const summary = this.computeJReviewsSummary(
+      params.reviews,
+      results,
+      null,
+      analysis.aiPros,
+      analysis.aiCons,
+      analysis.aiSummaryText
+    );
 
     // 1. Upsert into rate.review_flags & update helpfulness_weight on rate.reviews
     if (results.length > 0) {
@@ -1870,13 +1969,16 @@ Return ONLY valid JSON matching:
             .digest('hex'),
         analyzed_at: new Date().toISOString(),
       }));
+      const writableFlagRows = flagRows.filter(row => !preservedFlags.has(row.review_id));
 
-      const { error: flagErr } = await supabase
-        .from('review_flags')
-        .upsert(flagRows, { onConflict: 'review_id' });
+      if (writableFlagRows.length > 0) {
+        const { error: flagErr } = await supabase
+          .from('review_flags')
+          .upsert(writableFlagRows, { onConflict: 'review_id' });
 
-      if (flagErr) {
-        throw new Error(`[AiReviewAnalyzer] Failed to upsert review_flags: ${flagErr.message}`);
+        if (flagErr) {
+          throw new Error(`[AiReviewAnalyzer] Failed to upsert review_flags: ${flagErr.message}`);
+        }
       }
 
       for (const r of results) {
