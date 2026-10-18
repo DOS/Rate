@@ -449,7 +449,7 @@ async function runEntityMatcherSuite() {
     'info',
     'test.redaction',
     'Connecting via http://user1:pass1@proxy.vn:8080 with Bearer secret_token_123 for buyer@example.com',
-    { apiKey: 'sk-1234567890abcdef' }
+    { apiKey: 'sk-1234567890abcdef' } // gitleaks:allow -- fake key for the redaction test
   );
   assert.equal(entry.service, '@repo/crawlers');
   assert.equal(entry.run_id, 'run-test-1');
