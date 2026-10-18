@@ -660,8 +660,8 @@ blockquote:not(:last-child) {
 }
 
 .btn-rounded {
-  border-radius: 50px !important;
-  -webkit-border-radius: 50px !important;
+  border-radius: var(--rate-radius-btn) !important;
+  -webkit-border-radius: var(--rate-radius-btn) !important;
 }
 
 .btn-arrow {
@@ -9340,7 +9340,7 @@ Footer Style
 
     .btn {
       height: 54px;
-      border-radius: 50px;
+      border-radius: var(--rate-radius-btn);
       padding: 0 2.3rem;
       font-weight: 500;
       font-size: 15px;
