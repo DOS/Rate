@@ -701,9 +701,9 @@
     "copyLinkBtn": "Copy Shareable Audit Link",
     "copiedLinkBtn": "Audit Link Copied!",
     "copiedAuditMdBtn": "✓ Audit Markdown Copied!",
-    "copyAuditMdBtn": "📋 Copy Audit Markdown",
-    "exportCsvBtn": "📥 Export CSV",
-    "exportJsonBtn": "📦 Export JSON",
+    "copyAuditMdBtn": "Copy Audit Markdown",
+    "exportCsvBtn": "Export CSV",
+    "exportJsonBtn": "Export JSON",
     "sampleLabel": "Try live verified URLs:",
     "verdictTitle": "Evidence-Based Price & Discount Audit Verdict",
     "claimedOriginalLabel": "Seller Claimed Strikethrough Price",
@@ -741,7 +741,8 @@
     "colAction": "Link",
     "auditShopBtn": "Audit Shop",
     "notFoundTitle": "No Direct Listing Match Found Yet",
-    "notFoundDesc": "Try clicking one of the live sample URLs above or enter a standardized device name (e.g. iPhone 16)."
+    "notFoundDesc": "Try clicking one of the live sample URLs above or enter a standardized device name (e.g. iPhone 16).",
+    "exportMenu": "Export data"
   },
   "merchants": {
     "dirMetaTitle": "E-Commerce Merchant Trust Directory (DOSafe + AI Review Risk) | Rate.vn",

@@ -701,9 +701,9 @@
     "copyLinkBtn": "Sao chép Link Báo cáo",
     "copiedLinkBtn": "Đã sao chép Link!",
     "copiedAuditMdBtn": "✓ Đã chép biên bản Markdown!",
-    "copyAuditMdBtn": "📋 Sao chép biên bản Markdown",
-    "exportCsvBtn": "📥 Xuất CSV",
-    "exportJsonBtn": "📦 Xuất JSON",
+    "copyAuditMdBtn": "Sao chép biên bản Markdown",
+    "exportCsvBtn": "Xuất CSV",
+    "exportJsonBtn": "Xuất JSON",
     "sampleLabel": "Chạy thử mẫu dữ liệu thật:",
     "verdictTitle": "Kết Luận Kiểm Toán Giá & Khuyến Mãi Dựa Trên Bằng Chứng",
     "claimedOriginalLabel": "Giá gạch ngang gian hàng khai báo",
@@ -741,7 +741,8 @@
     "colAction": "Liên kết",
     "auditShopBtn": "Kiểm toán Shop",
     "notFoundTitle": "Chưa Tìm Thấy Bản Ghi Trùng Khớp Trực Tiếp",
-    "notFoundDesc": "Hãy thử chọn một trong các đường dẫn mẫu bên trên hoặc tìm theo tên dòng máy (ví dụ: iPhone 16, Galaxy S24, MacBook)."
+    "notFoundDesc": "Hãy thử chọn một trong các đường dẫn mẫu bên trên hoặc tìm theo tên dòng máy (ví dụ: iPhone 16, Galaxy S24, MacBook).",
+    "exportMenu": "Xuất dữ liệu"
   },
   "merchants": {
     "dirMetaTitle": "Hồ Sơ Tín Nhiệm Gian Hàng (DOSafe + AI Review Risk) | Rate.vn",

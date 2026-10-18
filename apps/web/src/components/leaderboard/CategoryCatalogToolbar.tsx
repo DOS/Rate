@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { BsDownload } from 'react-icons/bs';
 import { Link } from '@/lib/navigation';
+import { useDetailsDismiss } from '@/components/elementary/use-details-dismiss';
 import { escapeCsvCell } from '@/lib/csv-safe';
 import type { MasterProduct } from '@/lib/rate-domain';
 import {
@@ -33,33 +34,7 @@ export default function CategoryCatalogToolbar({
   const [slugA, setSlugA] = useState<string>('');
   const [slugB, setSlugB] = useState<string>('');
   const [copiedCatalogMd, setCopiedCatalogMd] = useState(false);
-  const exportMenuRef = useRef<HTMLDetailsElement>(null);
-
-  // Native <details> has no light-dismiss: close it on an outside pointer
-  // press or Escape, returning focus to the summary for keyboard users.
-  useEffect(() => {
-    const onPointerDown = (e: PointerEvent) => {
-      const menu = exportMenuRef.current;
-      if (menu?.open && !menu.contains(e.target as Node)) menu.open = false;
-    };
-    const onKeyDown = (e: KeyboardEvent) => {
-      const menu = exportMenuRef.current;
-      if (e.key === 'Escape' && menu?.open) {
-        menu.open = false;
-        menu.querySelector('summary')?.focus();
-      }
-    };
-    document.addEventListener('pointerdown', onPointerDown);
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('pointerdown', onPointerDown);
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, []);
-
-  const closeExportMenu = () => {
-    if (exportMenuRef.current) exportMenuRef.current.open = false;
-  };
+  const { ref: exportMenuRef, close: closeExportMenu } = useDetailsDismiss();
 
   const radarIndex = useDealRadarIndex(dealRadar);
   const radarFor = (slug: string) => getRadarSignal(radarIndex, slug);
