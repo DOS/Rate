@@ -570,7 +570,13 @@ async function run() {
       val?: string;
     }> = [];
     // review_flags rows the stub reports as already written by another detector.
-    let existingFlagRows: Array<{ review_id: string }> = [];
+    let existingFlagRows: Array<{
+      review_id: string;
+      verdict?: string;
+      flag_category?: string;
+      include_in_rating?: boolean;
+      fake_probability?: number;
+    }> = [];
     let existingFlagsError: { message: string } | null = null;
     const flagReads: Array<{ ids: string[]; detectors: string[] }> = [];
     const stub = {
@@ -697,17 +703,48 @@ async function run() {
       flagReads[0]!.ids,
       input.map(r => r.id)
     );
-    existingFlagRows = [{ review_id: input[0]!.id }];
+    const baseline = await llm.persistAnalysisToSupabase(stub, {
+      productId: 'prod-baseline',
+      reviews: input,
+      platform: 'shopee',
+      merchantId: 'merch-1',
+    });
+    // The real review is the one a burst auditor relabels as seeding.
+    const burstTarget = input.find(r => r.id === 'llm-real')!;
+    existingFlagRows = [
+      {
+        review_id: burstTarget.id,
+        verdict: 'fake',
+        flag_category: 'seeding_fake',
+        include_in_rating: false,
+        fake_probability: 0.85,
+      },
+    ];
     calls.length = 0;
-    await llm.persistAnalysisToSupabase(stub, {
+    const withBurst = await llm.persistAnalysisToSupabase(stub, {
       productId: 'prod-burst',
       reviews: input,
       platform: 'shopee',
+      merchantId: 'merch-1',
     });
+    assert.equal(
+      withBurst.summary.authentic_review_count,
+      baseline.summary.authentic_review_count - 1,
+      'summary must count the burst-flagged review as the stored flag says, not as authentic'
+    );
+    assert.equal(
+      withBurst.summary.breakdown_by_category.seeding_fake,
+      baseline.summary.breakdown_by_category.seeding_fake + 1
+    );
+    const analysisUpsert = calls.find(c => c.table === 'review_analysis' && c.op === 'upsert')!;
+    assert.equal(
+      (analysisUpsert.payload as { authenticity_score: number }).authenticity_score,
+      withBurst.summary.authenticity_score
+    );
     const burstUpsert = calls.find(c => c.table === 'review_flags' && c.op === 'upsert')!;
     const burstRowIds = (burstUpsert.payload as Array<{ review_id: string }>).map(r => r.review_id);
     assert.equal(
-      burstRowIds.includes(input[0]!.id),
+      burstRowIds.includes(burstTarget.id),
       false,
       'burst auditor flag must not be overwritten'
     );
