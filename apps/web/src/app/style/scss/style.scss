@@ -4857,6 +4857,19 @@ nav a:hover {
 .nav-menus-wrapper-close-button {
   border: 0;
   background: transparent;
+  // A button's own font size would rescale the em-based hamburger lines.
+  font: inherit;
+}
+
+.nav-menus-wrapper-close-button {
+  padding: 0;
+}
+
+// A button centers its content, so the icon needs explicit coordinates
+// (the div it replaced put it at its top-left padding edge).
+.nav-toggle:before {
+  top: 7px;
+  left: 3px;
 }
 
 @media (max-width: 991.98px) {

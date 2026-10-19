@@ -42,10 +42,14 @@ test('the phone header keeps the menu button on screen', async ({ page }) => {
   const box = await toggle.boundingBox();
   expect(box).not.toBeNull();
   expect(box!.x + box!.width).toBeLessThanOrEqual(375);
-  // Retried until hydration has attached the click handler.
+  // Retried until hydration has attached the click handler; clicks only
+  // while closed, so a slow first open is not undone by the retry.
+  const wrapper = page.locator('.nav-menus-wrapper');
   await expect(async () => {
-    await toggle.click();
-    await expect(page.locator('.nav-menus-wrapper')).toHaveClass(
+    if (!/nav-menus-wrapper-open/.test((await wrapper.getAttribute('class')) ?? '')) {
+      await toggle.click();
+    }
+    await expect(wrapper).toHaveClass(
       /nav-menus-wrapper-open/,
       { timeout: 500 }
     );
@@ -85,8 +89,10 @@ test('the phone menu works from the keyboard', async ({ page }) => {
   // scroll (a div role=button scrolled a whole screen).
   await page.evaluate(() => window.scrollTo(0, 0));
   await expect(async () => {
-    await toggle.focus();
-    await page.keyboard.press('Space');
+    if (!/nav-menus-wrapper-open/.test((await menu.getAttribute('class')) ?? '')) {
+      await toggle.focus();
+      await page.keyboard.press('Space');
+    }
     await expect(menu).toHaveClass(/nav-menus-wrapper-open/, { timeout: 500 });
   }).toPass();
   expect(await page.evaluate(() => window.scrollY)).toBe(0);
@@ -94,4 +100,18 @@ test('the phone menu works from the keyboard', async ({ page }) => {
   await page.keyboard.press('Escape');
   await expect(menu).not.toHaveClass(/nav-menus-wrapper-open/);
   await expect(toggle).toBeFocused();
+
+  // The hamburger lines stay at the top-left of the 30x30 button, as with
+  // the div it replaced (a button centers its content).
+  const icon = await toggle.evaluate((el) => {
+    const before = getComputedStyle(el, '::before');
+    return {
+      top: parseFloat(before.top),
+      left: parseFloat(before.left),
+      width: parseFloat(before.width),
+      box: el.getBoundingClientRect().width,
+    };
+  });
+  expect(icon.top).toBe(7);
+  expect(icon.left + icon.width).toBeLessThanOrEqual(icon.box);
 });
