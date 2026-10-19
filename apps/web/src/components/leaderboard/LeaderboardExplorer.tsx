@@ -1,11 +1,20 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, {
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import type { IconType } from 'react-icons';
-import { Link, useRouter } from '@/lib/navigation';
+import { Link } from '@/lib/navigation';
 import {
   getMasterProductCategorySlug,
+  normalizeLeaderboardCategory,
+  normalizeLeaderboardCriterion,
   scoreMasterProductForLeaderboard,
   type CanonicalCategorySlug,
   type LeaderboardCriterionKey,
@@ -55,8 +64,6 @@ export type { LeaderboardCriterionKey, LeaderboardPriceSegment };
 interface LeaderboardExplorerProps {
   readonly products: readonly MasterProduct[];
   readonly dealRadar?: CrossPlatformDealRadarResponse | null;
-  readonly initialCategory?: CanonicalCategorySlug;
-  readonly initialCriterion?: LeaderboardCriterionKey;
   readonly locale?: string;
 }
 
@@ -138,22 +145,55 @@ function computeProductScores(
   };
 }
 
+/**
+ * Reports the URL's ?cat= and ?criterion=. useSearchParams makes only this
+ * empty component client-rendered (inside its Suspense boundary), so the
+ * leaderboard itself stays in the cached server HTML.
+ */
+function TabFromUrl({
+  onCategory,
+  onCriterion,
+}: {
+  readonly onCategory: (cat: CanonicalCategorySlug) => void;
+  readonly onCriterion: (crit: LeaderboardCriterionKey) => void;
+}) {
+  const searchParams = useSearchParams();
+  // Normalized first, so the effects fire only when the effective tab
+  // changes: a criterion click that writes ?cat=smartphones onto a plain
+  // URL must not count as a category change (and reset the brand).
+  const cat = normalizeLeaderboardCategory(searchParams.get('cat'));
+  const crit = normalizeLeaderboardCriterion(searchParams.get('criterion'));
+  useEffect(() => onCategory(cat), [cat, onCategory]);
+  useEffect(() => onCriterion(crit), [crit, onCriterion]);
+  return null;
+}
+
 export default function LeaderboardExplorer({
   products,
   dealRadar,
-  initialCategory = 'smartphones',
-  initialCriterion = 'combined',
 }: LeaderboardExplorerProps) {
   const t = useTranslations('leaderboard');
-  const router = useRouter();
 
   const radarIndex = useDealRadarIndex(dealRadar);
   const categoryTabs = useMemo(() => buildCategoryTabs(t), [t]);
 
   const [activeCategory, setActiveCategory] =
-    useState<CanonicalCategorySlug>(initialCategory);
+    useState<CanonicalCategorySlug>('smartphones');
   const [activeCriterion, setActiveCriterion] =
-    useState<LeaderboardCriterionKey>(initialCriterion);
+    useState<LeaderboardCriterionKey>('combined');
+
+  // Keeps the tab in the URL without a server round trip; Next syncs its
+  // router with the native history API.
+  const replaceTabUrl = (
+    cat: CanonicalCategorySlug,
+    crit: LeaderboardCriterionKey
+  ) => {
+    window.history.replaceState(
+      null,
+      '',
+      `${window.location.pathname}?cat=${cat}&criterion=${crit}`
+    );
+  };
   const [priceSegment, setPriceSegment] =
     useState<LeaderboardPriceSegment>('all');
   const [selectedBrand, setSelectedBrand] = useState<string>('all');
@@ -616,17 +656,24 @@ export default function LeaderboardExplorer({
   const handleSelectCategory = (cat: CanonicalCategorySlug) => {
     setActiveCategory(cat);
     setSelectedBrand('all');
-    router.replace(`/leaderboard?cat=${cat}&criterion=${activeCriterion}`, {
-      scroll: false,
-    });
+    replaceTabUrl(cat, activeCriterion);
   };
 
   const handleSelectCriterion = (crit: LeaderboardCriterionKey) => {
     setActiveCriterion(crit);
-    router.replace(`/leaderboard?cat=${activeCategory}&criterion=${crit}`, {
-      scroll: false,
-    });
+    replaceTabUrl(activeCategory, crit);
   };
+
+  // The page is cached with the default tab; TabFromUrl applies the URL's
+  // ?cat= and ?criterion= on load and on every later navigation, including
+  // a same-route link to plain /leaderboard (DOS/Rate#508).
+  const applyUrlCategory = useCallback((cat: CanonicalCategorySlug) => {
+    setActiveCategory(cat);
+    setSelectedBrand('all');
+  }, []);
+  const applyUrlCriterion = useCallback((crit: LeaderboardCriterionKey) => {
+    setActiveCriterion(crit);
+  }, []);
 
   const criterionOptions: Array<{
     key: LeaderboardCriterionKey;
@@ -677,6 +724,12 @@ export default function LeaderboardExplorer({
 
   return (
     <div>
+      <Suspense fallback={null}>
+        <TabFromUrl
+          onCategory={applyUrlCategory}
+          onCriterion={applyUrlCriterion}
+        />
+      </Suspense>
       {/* 1. Directory -> 5-Category Hierarchy & Criterion Control Panel */}
       <div className="card rounded-4 mb-4 border bg-white p-4 shadow-sm">
         <div className="d-flex justify-content-between align-items-center border-bottom mb-3 flex-wrap gap-2 pb-3">
