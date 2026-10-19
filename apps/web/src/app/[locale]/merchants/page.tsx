@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
 import { getCachedMerchantsList } from '@/server/rate';
+import { toDirectoryMerchants } from '@/lib/merchant-directory';
 import NavbarDarkDynamic from '../components/navbar/NavbarDarkDynamic';
 import FooterTop from '../components/footer-top';
 import FooterDynamic from '../components/footer/FooterDynamic';
@@ -149,7 +150,7 @@ export default async function MerchantsDirectoryPage({
           </div>
 
           <MerchantDirectoryExplorer
-            initialMerchants={merchants}
+            initialMerchants={toDirectoryMerchants(merchants)}
             locale={locale}
             initialQuery={initialQuery}
             initialPlatform={initialPlatform}

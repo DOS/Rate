@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from '@/lib/navigation';
 import { escapeCsvCell } from '@/lib/csv-safe';
-import type { MerchantSummary } from '@/lib/rate-domain';
+import type { DirectoryMerchant } from '@/lib/merchant-directory';
 import { selectMerchantRadar } from '@/lib/deal-radar';
 import { useDealRadarPayload } from '@/components/radar/use-deal-radar';
 import { useTranslations } from 'next-intl';
@@ -30,7 +30,7 @@ export type MerchantRiskTier = 'all' | 'safe' | 'moderate' | 'warning';
 export type MerchantSeedingTier = 'all' | 'low' | 'elevated';
 
 interface MerchantDirectoryExplorerProps {
-  readonly initialMerchants: readonly MerchantSummary[];
+  readonly initialMerchants: readonly DirectoryMerchant[];
   readonly locale?: string;
   readonly initialQuery?: string;
   readonly initialPlatform?: string;
@@ -253,7 +253,7 @@ export default function MerchantDirectoryExplorer({
     setSortBy('trust_desc');
   };
 
-  const getMerchantRadarStats = (m: MerchantSummary) => {
+  const getMerchantRadarStats = (m: DirectoryMerchant) => {
     const r = selectMerchantRadar(radarPayload, m);
     return {
       genuineDealCount: r.genuineDealCount,
