@@ -82,9 +82,6 @@ export default async function LocaleLayout({
       lang={locale}
       className={fontFaces.map((font) => font.variable).join(' ')}
     >
-      <head>
-        <meta charSet="utf-8" />
-      </head>
       <body>
         <NextIntlClientProvider locale={locale} messages={clientMessages}>
           <AppProviders>{children}</AppProviders>

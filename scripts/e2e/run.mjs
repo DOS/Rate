@@ -235,8 +235,26 @@ const FAULT_RULES = [
     url.startsWith('/rest/v1/price_history?') &&
     url.includes('product_id=in.(cccccccc-cccc-4ccc-8ccc-ccccccccfa17)'),
 ];
+// RPC calls the app made, so a spec can tell a data-cache hit from a query
+// (GET /__e2e/rpc-log). Bounded: only the latest entries are kept.
+const RPC_LOG_LIMIT = 5_000;
+const rpcLog = [];
 function startProxy(upstreamPort, SUPABASE_PORT) {
   proxyServer = http.createServer((req, res) => {
+    if (req.method === 'GET' && req.url === '/__e2e/rpc-log') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify(rpcLog));
+      return;
+    }
+    if (req.url?.startsWith('/rest/v1/rpc/')) {
+      const fn = req.url.slice('/rest/v1/rpc/'.length).split('?')[0];
+      const chunks = [];
+      req.on('data', (chunk) => chunks.push(chunk));
+      req.on('end', () => {
+        rpcLog.push({ fn, body: Buffer.concat(chunks).toString('utf8') });
+        if (rpcLog.length > RPC_LOG_LIMIT) rpcLog.shift();
+      });
+    }
     if (!req.url?.startsWith('/rest/v1/')) {
       res.writeHead(404, { 'content-type': 'application/json' });
       res.end('{"message":"not served by the e2e stack"}');
