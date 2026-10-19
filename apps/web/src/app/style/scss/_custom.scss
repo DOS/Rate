@@ -756,6 +756,9 @@
   margin: 0 0 0.75rem;
   font-size: 0.9375rem;
   font-weight: 700;
+  // Titles are real headings (h3-h5); keep the template's phone heading
+  // line-height from spacing wrapped titles apart.
+  line-height: 1.4;
   color: var(--rate-fg-primary);
 
   svg {
@@ -829,6 +832,16 @@
   & + & {
     margin-left: 0.35rem;
   }
+}
+
+// A radar column with nothing to list keeps its title and says so plainly.
+.rate-radar-empty {
+  margin: 0;
+  padding: 0.875rem;
+  font-size: var(--rate-text-min);
+  color: var(--rate-fg-muted);
+  border: 1px dashed var(--rate-border-subtle);
+  border-radius: 10px;
 }
 
 .rate-radar-item-side {
