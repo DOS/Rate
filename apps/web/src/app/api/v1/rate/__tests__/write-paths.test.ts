@@ -824,6 +824,143 @@ async function testDealRadarAndApiRouteGuards() {
   );
 }
 
+async function testLeaderboardEngineAndMerchantDirectoryGuards() {
+  const {
+    scoreMasterProductForLeaderboard,
+    rankMasterProductsForLeaderboard,
+    comparePositiveMinPrices,
+  } = await import('@/lib/leaderboard-engine');
+  const {
+    DEFAULT_MERCHANT_DIRECTORY_FILTERS,
+    summarizeMerchantDirectory,
+    pageMerchantDirectory,
+  } = await import('@/lib/merchant-directory');
+
+  const scored = scoreMasterProductForLeaderboard({
+    id: MASTER_ID,
+    slug: 'iphone-16-pro-max',
+    name: 'iPhone 16 Pro Max',
+    brand: 'Apple',
+    model: 'iPhone 16 Pro Max',
+    user_rating_weighted: 999,
+    expert_rating: Number.POSITIVE_INFINITY,
+    authentic_review_count: -5,
+    total_reviews: 12,
+    min_price: 30_000_000,
+    max_price: 20_000_000,
+    merchant_count: -3,
+  } as unknown as Parameters<typeof scoreMasterProductForLeaderboard>[0]);
+
+  assert.equal(
+    scored.userScore5,
+    0,
+    'scoreMasterProductForLeaderboard must reject user_rating_weighted > 10 (#552)'
+  );
+  assert.equal(
+    scored.expertScore10,
+    null,
+    'scoreMasterProductForLeaderboard must reject non-finite expert_rating (#552)'
+  );
+  assert.equal(
+    scored.authenticReviewCount,
+    12,
+    'scoreMasterProductForLeaderboard must fall back to safeTotal when authentic_review_count <= 0 (#552)'
+  );
+  assert.equal(
+    scored.maxPrice,
+    30_000_000,
+    'scoreMasterProductForLeaderboard must clamp maxPrice >= minPrice (#552)'
+  );
+  assert.equal(
+    scored.merchantCount,
+    0,
+    'scoreMasterProductForLeaderboard must clamp negative merchant_count to 0 (#552)'
+  );
+
+  const ranked = rankMasterProductsForLeaderboard(
+    [
+      {
+        id: 'm-1',
+        slug: 'p-1',
+        name: 'Phone 1',
+        brand: 'Apple',
+        model: 'P1',
+        user_rating_weighted: 4.8,
+        min_price: 20_000_000,
+        max_price: 22_000_000,
+      },
+      {
+        id: 'm-2',
+        slug: 'p-2',
+        name: 'Phone 2',
+        brand: 'Apple',
+        model: 'P2',
+        user_rating_weighted: 4.6,
+        min_price: 18_000_000,
+        max_price: 19_000_000,
+      },
+    ] as unknown as Parameters<typeof rankMasterProductsForLeaderboard>[0],
+    { limit: 1.9 }
+  );
+  assert.equal(
+    ranked.length,
+    1,
+    'rankMasterProductsForLeaderboard must floor fractional limit (#552)'
+  );
+  assert.equal(
+    comparePositiveMinPrices(5_000_000_000, 20_000_000),
+    'B',
+    'comparePositiveMinPrices must treat prices > 1B VND as invalid (#552)'
+  );
+
+  const merchants = [
+    {
+      id: 's-1',
+      platform: 'shopee',
+      platform_shop_id: 'shop-1',
+      name: 'Store 1',
+      is_official: true,
+      trust_score: Number.NaN,
+      review_risk_score: -10,
+      product_count: 5,
+      follower_count: 1000,
+    },
+    {
+      id: 's-2',
+      platform: 'lazada',
+      platform_shop_id: 'shop-2',
+      name: 'Store 2',
+      is_official: false,
+      trust_score: 90,
+      review_risk_score: 5,
+      product_count: 10,
+      follower_count: 500,
+    },
+  ] as unknown as Parameters<typeof summarizeMerchantDirectory>[0];
+
+  const dirSummary = summarizeMerchantDirectory(merchants);
+  assert.equal(
+    dirSummary.avgTrust,
+    45,
+    'summarizeMerchantDirectory must clamp NaN trust_score to 0 instead of returning NaN avgTrust (#552)'
+  );
+  const pagedNan = pageMerchantDirectory(
+    merchants,
+    DEFAULT_MERCHANT_DIRECTORY_FILTERS,
+    Number.NaN,
+    Number.NaN
+  );
+  assert.equal(
+    pagedNan.items.length,
+    2,
+    'pageMerchantDirectory must fall back to offset=0 and MERCHANT_PAGE_SIZE when offset/limit are NaN (#552)'
+  );
+
+  console.log(
+    '  ✅ Leaderboard engine score/price bounds & merchant directory NaN/pagination guards verified (#552)'
+  );
+}
+
 async function main() {
   console.log('🧪 Public write-path security suite (#155)');
   await testReviews();
@@ -831,6 +968,7 @@ async function main() {
   await testCookieSessions();
   await testFilterBoundsAndWatchlistPrices();
   await testDealRadarAndApiRouteGuards();
+  await testLeaderboardEngineAndMerchantDirectoryGuards();
   testSharedDataClients();
   console.log('✅ Public write-path security suite passed');
 }
