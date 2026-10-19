@@ -3,8 +3,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  cleanExtractedProductTitle,
   detectEcommercePlatform,
   extractIdsFromUrl,
+  extractPriceFromJsonLdOffers,
+  extractProductSignalFromDom,
+  extractRatingFromJsonLd,
+  flattenJsonLdEntities,
+  isJsonLdProductEntity,
   parseVndPriceText,
   sanitizeProductUrl,
 } from './extractors/ecommerce-detector.js';
@@ -13,6 +19,8 @@ import {
   escapeSafeExternalHref,
   isPrivilegedExtensionSender,
   normalizeAllowedApiBaseUrl,
+  normalizeFiveStarRating,
+  selectFreshestSessionSignal,
 } from './security-guards.js';
 import * as extModule from '../../web/src/server/rate/extension.js';
 import * as rateApiRootMod from '../../web/src/lib/rate-api.js';
@@ -1962,8 +1970,113 @@ async function runTests() {
     [25_000_000, 24_500_000]
   );
 
+  // Issue #499: Range price parsing across en-dash, em-dash, tilde, and numeric inputs
+  assert.equal(parseVndPriceText('28.990.000₫ \u2013 34.990.000₫'), 28_990_000);
+  assert.equal(parseVndPriceText('28.990.000₫ \u2014 34.990.000₫'), 28_990_000);
+  assert.equal(parseVndPriceText('28.990.000₫ ~ 34.990.000₫'), 28_990_000);
+  assert.equal(parseVndPriceText(28_990_000.4), 28_990_000);
+  assert.equal(parseVndPriceText(900_000_000), null);
+
+  // Issue #499: JSON-LD @graph flattening, array/URI @type, formatted offer prices, and bestRating scaling
+  const graphJsonLd = {
+    '@context': 'https://schema.org',
+    '@graph': [
+      { '@type': 'WebPage', name: 'CellphoneS' },
+      {
+        '@type': ['https://schema.org/Product', 'IndividualProduct'],
+        name: 'iPhone 16 Pro Max 256GB - CellphoneS.com.vn',
+        offers: {
+          '@type': 'AggregateOffer',
+          lowPrice: '28.990.000 VND',
+          highPrice: '34.990.000 VND',
+        },
+        aggregateRating: {
+          ratingValue: '9,6',
+          bestRating: '10',
+          reviewCount: '1.240',
+        },
+      },
+    ],
+  };
+  const flattenedLd = flattenJsonLdEntities(graphJsonLd);
+  const productLd = flattenedLd.find(isJsonLdProductEntity);
+  assert.ok(productLd, 'Must find Product inside @graph with URI/array @type');
+  assert.equal(
+    cleanExtractedProductTitle(String(productLd.name)),
+    'iPhone 16 Pro Max 256GB'
+  );
+  assert.deepEqual(extractPriceFromJsonLdOffers(productLd.offers), {
+    price: 28_990_000,
+    originalPrice: 34_990_000,
+  });
+  assert.deepEqual(extractRatingFromJsonLd(productLd.aggregateRating), {
+    ratingStar: 4.8,
+    ratingCount: 1240,
+  });
+
+  // Mock Document test for extractProductSignalFromDom with @graph JSON-LD
+  const mockDoc = {
+    title: 'iPhone 16 Pro Max 256GB - Hoàng Hà Mobile',
+    querySelectorAll(sel: string) {
+      if (sel === 'script[type="application/ld+json"]') {
+        return [{ textContent: JSON.stringify(graphJsonLd) }];
+      }
+      if (sel === '.box-linked .item.active') {
+        return [{ textContent: ' 256GB ' }];
+      }
+      return [];
+    },
+    querySelector() {
+      return null;
+    },
+  } as unknown as Document;
+  const extractedDomSignal = extractProductSignalFromDom(
+    mockDoc,
+    'https://cellphones.com.vn/iphone-16-pro-max.html?utm_source=test'
+  );
+  assert.ok(extractedDomSignal);
+  assert.equal(extractedDomSignal.platform, 'cellphones');
+  assert.equal(extractedDomSignal.title, 'iPhone 16 Pro Max 256GB');
+  assert.equal(extractedDomSignal.price, 28_990_000);
+  assert.equal(extractedDomSignal.originalPrice, 34_990_000);
+  assert.equal(extractedDomSignal.ratingStar, 4.8);
+  assert.equal(extractedDomSignal.ratingCount, 1240);
+  assert.equal(extractedDomSignal.selectedVariant, '256GB');
+
+  // Issue #499: 10-point rating scaling & freshest session signal selection
+  assert.equal(normalizeFiveStarRating(4.8), 4.8);
+  assert.equal(normalizeFiveStarRating(9.2), 4.6);
+  assert.equal(normalizeFiveStarRating(92), 4.6);
+  assert.equal(normalizeFiveStarRating('4,8'), 4.8);
+  assert.equal(normalizeFiveStarRating(0), null);
+  assert.equal(normalizeFiveStarRating(150), null);
+
+  const olderTabSignal = {
+    ...extractedDomSignal,
+    title: 'Old Tab Product',
+  };
+  const newerQuickQuerySignal = {
+    ...extractedDomSignal,
+    title: 'Quick Query Product',
+  };
+  assert.equal(
+    selectFreshestSessionSignal(
+      { signal: olderTabSignal, updatedAt: 1000 },
+      { signal: newerQuickQuerySignal, updatedAt: 2000 }
+    )?.title,
+    'Quick Query Product',
+    'selectFreshestSessionSignal must prefer tab_latest when a Quick Query was run more recently than the active tab signal'
+  );
+  assert.equal(
+    selectFreshestSessionSignal(
+      { signal: olderTabSignal, updatedAt: 3000 },
+      { signal: newerQuickQuerySignal, updatedAt: 2000 }
+    )?.title,
+    'Old Tab Product'
+  );
+
   console.log(
-    '  ✅ [Extension Signal & Sender Guards] sanitizeExtensionProductSignal, formatSafeExtensionVnd, resolveSafeApiRelativeUrl, formatSafeNumber & sanitizeVerdictClassSuffix passed (#382, #393, #401)'
+    '  ✅ [Extension Signal & Sender Guards] sanitizeExtensionProductSignal, formatSafeExtensionVnd, resolveSafeApiRelativeUrl, formatSafeNumber, sanitizeVerdictClassSuffix & #499 JSON-LD/Rating/Session guards passed (#382, #393, #401, #499)'
   );
 
   // Verify DOS/Rate#497: isSafeRevalidationPath, resolveRevalidationTargets merchant PRICE_HISTORY cascade, and evaluateExtensionPriceVerdict MAX_VALID_VND_PRICE bounds

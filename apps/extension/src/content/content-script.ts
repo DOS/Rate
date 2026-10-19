@@ -2,6 +2,7 @@ import { extractProductSignalFromDom } from '../extractors/ecommerce-detector.js
 import {
   formatSafeExtensionVnd,
   formatSafeNumber,
+  normalizeFiveStarRating,
 } from '../security-guards.js';
 import type { ExtensionLookupData } from '../types.js';
 
@@ -84,12 +85,7 @@ function renderShadowTrustPill(lookup: ExtensionLookupData): void {
       lookup.masterProduct?.user_rating_weighted ||
       lookup.masterProduct?.average_rating ||
       null;
-    const trustedRating =
-      typeof rawRating === 'number' &&
-      Number.isFinite(rawRating) &&
-      rawRating > 0
-        ? rawRating
-        : null;
+    const trustedRating = normalizeFiveStarRating(rawRating);
     const authenticRatio = lookup.reviewSummary?.authentic_pct ?? null;
 
     const cheaperSummary =
