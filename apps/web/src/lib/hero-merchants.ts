@@ -17,8 +17,11 @@ export type HeroMerchantSuggestion = Pick<
   | 'dosafe_risk_score'
 >;
 
+/** Pages pass only the first few: the dropdown fetches matches as the user types. */
+export const HERO_MERCHANT_PRELOAD = 2;
+
 export function toHeroMerchantSuggestions(
-  merchants: readonly MerchantSummary[]
+  merchants: readonly HeroMerchantSuggestion[]
 ): HeroMerchantSuggestion[] {
   return merchants.map(
     ({

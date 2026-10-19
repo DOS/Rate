@@ -47,7 +47,10 @@ import ProductCard, {
 } from '@/components/product/ProductCard';
 import { buildRadarIndex, getRadarSignal } from '@/lib/deal-radar';
 import { isPendingReview } from '@/lib/review-display';
-import { toHeroMerchantSuggestions } from '@/lib/hero-merchants';
+import {
+  HERO_MERCHANT_PRELOAD,
+  toHeroMerchantSuggestions,
+} from '@/lib/hero-merchants';
 
 export async function generateMetadata({
   params,
@@ -226,7 +229,9 @@ export default async function Home({
             <div className="col-xl-9 col-lg-10 col-md-12 col-sm-12">
               <HeroSearchInspector
                 initialProducts={masterProducts}
-                initialMerchants={toHeroMerchantSuggestions(merchants)}
+                initialMerchants={toHeroMerchantSuggestions(
+                  merchants.slice(0, HERO_MERCHANT_PRELOAD)
+                )}
               />
             </div>
           </div>
