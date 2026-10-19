@@ -2,6 +2,21 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import type { IconType } from 'react-icons';
+import {
+  BsAspectRatio,
+  BsBatteryHalf,
+  BsCalendar3,
+  BsCamera,
+  BsCpu,
+  BsGlobe,
+  BsPhone,
+  BsReception4,
+  BsSearch,
+  BsShieldCheck,
+  BsStar,
+  BsVolumeUp,
+} from 'react-icons/bs';
 import { Link, useRouter } from '@/lib/navigation';
 import type {
   KeySpecs,
@@ -55,7 +70,7 @@ interface SpecRowDef {
 interface SpecGroupDef {
   id: string;
   title: string;
-  icon: string;
+  icon: IconType;
   rows: SpecRowDef[];
 }
 
@@ -114,7 +129,7 @@ function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
     {
       id: 'market_trust',
       title: t('group0Title'),
-      icon: '⭐',
+      icon: BsStar,
       rows: [
         {
           id: 'rating_weighted',
@@ -242,7 +257,7 @@ function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
     {
       id: 'display',
       title: '1. Display',
-      icon: '📱',
+      icon: BsPhone,
       rows: [
         {
           id: 'display_size',
@@ -319,7 +334,7 @@ function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
     {
       id: 'hardware',
       title: '2. Hardware',
-      icon: '⚡',
+      icon: BsCpu,
       rows: [
         {
           id: 'hw_chipset',
@@ -393,7 +408,7 @@ function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
     {
       id: 'camera',
       title: '3. Camera',
-      icon: '📸',
+      icon: BsCamera,
       rows: [
         {
           id: 'cam_main',
@@ -449,7 +464,7 @@ function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
     {
       id: 'battery',
       title: '4. Battery',
-      icon: '🔋',
+      icon: BsBatteryHalf,
       rows: [
         {
           id: 'bat_capacity',
@@ -507,7 +522,7 @@ function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
     {
       id: 'design',
       title: '5. Design',
-      icon: '📐',
+      icon: BsAspectRatio,
       rows: [
         {
           id: 'design_dim',
@@ -571,7 +586,7 @@ function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
     {
       id: 'cellular',
       title: '6. Cellular',
-      icon: '📶',
+      icon: BsReception4,
       rows: [
         {
           id: 'cell_5g',
@@ -611,7 +626,7 @@ function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
     {
       id: 'connectivity',
       title: '7. Connectivity',
-      icon: '🌐',
+      icon: BsGlobe,
       rows: [
         {
           id: 'conn_wlan_bt',
@@ -655,7 +670,7 @@ function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
     {
       id: 'multimedia',
       title: '8. Multimedia',
-      icon: '🔊',
+      icon: BsVolumeUp,
       rows: [
         {
           id: 'mm_speaker',
@@ -685,7 +700,7 @@ function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
     {
       id: 'availability',
       title: '9. Availability',
-      icon: '📅',
+      icon: BsCalendar3,
       rows: [
         {
           id: 'avail_announced',
@@ -717,7 +732,7 @@ function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
     {
       id: 'regulatory',
       title: '10. Regulatory',
-      icon: '🛡️',
+      icon: BsShieldCheck,
       rows: [
         {
           id: 'reg_cert',
@@ -1348,7 +1363,7 @@ export default function CompareWorkspace({
             <div className="position-relative">
               <div className="input-group">
                 <span className="input-group-text bg-light border-end-0 rounded-start-pill ps-3">
-                  🔎
+                  <BsSearch aria-hidden="true" />
                 </span>
                 <input
                   ref={searchInputRef}
@@ -2209,7 +2224,7 @@ export default function CompareWorkspace({
                     <React.Fragment key={group.id}>
                       <tr className="table-secondary fw-bold text-start">
                         <td colSpan={totalCols} className="px-3 py-2">
-                          <span className="me-2">{group.icon}</span>
+                          <group.icon aria-hidden="true" className="me-2" />
                           {groupTitle}
                         </td>
                       </tr>

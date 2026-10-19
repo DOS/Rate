@@ -1,5 +1,11 @@
 import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
+import {
+  BsArrowLeftRight,
+  BsSearch,
+  BsShieldCheck,
+  BsTrophy,
+} from 'react-icons/bs';
 import { Link } from '@/lib/navigation';
 import {
   getCachedMasterProducts,
@@ -257,7 +263,7 @@ export default async function LeaderboardPage({
                     letterSpacing: '0.06em',
                   }}
                 >
-                  <span>🏆</span>
+                  <BsTrophy aria-hidden="true" />
                   <span>{copy.kicker}</span>
                 </div>
 
@@ -349,7 +355,8 @@ export default async function LeaderboardPage({
                         fontSize: '0.8125rem',
                       }}
                     >
-                      🛡️ {copy.statZeroBias}
+                      <BsShieldCheck aria-hidden="true" className="me-1" />
+                      {copy.statZeroBias}
                     </span>
                     <div className="d-flex gap-2">
                       <Link
@@ -357,7 +364,8 @@ export default async function LeaderboardPage({
                         className="btn btn-sm btn-outline-light rounded-pill px-3"
                         style={{ fontSize: '0.8125rem', fontWeight: 600 }}
                       >
-                        ⚖️ {copy.compareCta}
+                        <BsArrowLeftRight aria-hidden="true" className="me-1" />
+                        {copy.compareCta}
                       </Link>
                       <Link
                         href="/inspect"
@@ -369,7 +377,8 @@ export default async function LeaderboardPage({
                           fontWeight: 600,
                         }}
                       >
-                        🔍 {copy.inspectCta}
+                        <BsSearch aria-hidden="true" className="me-1" />
+                        {copy.inspectCta}
                       </Link>
                     </div>
                   </div>
