@@ -1747,5 +1747,17 @@
     "priceHistoryTitle": "Ověřit 90denní historii cen a odhalit falešné slevy",
     "noImage": "Bez obrázku",
     "verified": "Normalizované parametry"
+  },
+  "priceVerdict": {
+    "labelFake": "Varování: falešná sleva",
+    "labelSuspicious": "Podezření na navýšenou původní cenu",
+    "labelGenuine": "Skutečná sleva",
+    "labelHistoricLow": "Historické minimum",
+    "labelNormal": "Stabilní cena",
+    "explainFake": "Obchod uvádí přeškrtnutou cenu {original} (-{claimed} %), ale zaznamenaná prodejní cena nikdy nepřesáhla {max} (medián {median}).",
+    "explainSuspicious": "Inzerovaná sleva (-{claimed} %) je výrazně vyšší než skutečná sleva (-{real} %) podle historie cen ({median}).",
+    "explainGenuine": "Aktuální cena je o {pct} % nižší než historický medián ({median}).",
+    "explainHistoricLow": "Nejnižší zaznamenaná cena ({current}, maximum {max}).",
+    "explainNormal": "Aktuální cena ({current}) odpovídá historickému mediánu ({median})."
   }
 }

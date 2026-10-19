@@ -1747,5 +1747,17 @@
     "priceHistoryTitle": "Check the 90-day price history and spot fake discounts",
     "noImage": "No image",
     "verified": "Specs normalized"
+  },
+  "priceVerdict": {
+    "labelFake": "Fake discount alert",
+    "labelSuspicious": "Suspected inflated list price",
+    "labelGenuine": "Real discount",
+    "labelHistoricLow": "Historic low",
+    "labelNormal": "Stable price",
+    "explainFake": "The store shows a list price of {original} (-{claimed}%), but its recorded selling price has never been above {max} (median {median}).",
+    "explainSuspicious": "The advertised discount (-{claimed}%) is well above the real discount (-{real}%) against the price history ({median}).",
+    "explainGenuine": "The current price is {pct}% below the historical median ({median}).",
+    "explainHistoricLow": "At the lowest price recorded ({current}, against a high of {max}).",
+    "explainNormal": "The current price ({current}) matches the historical median ({median})."
   }
 }

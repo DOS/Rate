@@ -75,6 +75,7 @@ export default async function LocaleLayout({
     catalog: messages.catalog,
     heroSearch: messages.heroSearch,
     authPortal: messages.authPortal,
+    priceVerdict: messages.priceVerdict,
   };
 
   return (
