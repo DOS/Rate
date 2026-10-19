@@ -1,12 +1,27 @@
 import { Metadata } from 'next';
-import { NextIntlClientProvider } from 'next-intl';
+import { notFound } from 'next/navigation';
+import { hasLocale, NextIntlClientProvider } from 'next-intl';
 import {
   getMessages,
   getTranslations,
   setRequestLocale,
 } from 'next-intl/server';
 import { AppProviders } from '@/app/providers';
+import BootstrapClient from '@/app/BootstrapClient';
+import { fontFaces } from '@/lib/fonts';
+import { routing } from '@/lib/navigation';
 import { defaultOpenGraph } from '@/lib/seo';
+
+// No locale is prerendered at build, which needs no database then. Each page
+// renders on its first request and is cached from there, unless it reads
+// searchParams (DOS/Rate#491).
+export function generateStaticParams(): { locale: string }[] {
+  return [];
+}
+
+// Upper bound for every page below, so even pages without data refresh daily
+// (the footer's copyright year, for one). Pages may set a shorter period.
+export const revalidate = 86400;
 
 export async function generateMetadata({
   params,
@@ -38,6 +53,7 @@ export default async function LocaleLayout({
   params: Promise<{ locale: string }>;
 }>) {
   const { locale } = await params;
+  if (!hasLocale(routing.locales, locale)) notFound();
   setRequestLocale(locale);
   const messages = await getMessages();
   // Client Components read scoped namespaces via NextIntlClientProvider.
@@ -62,8 +78,20 @@ export default async function LocaleLayout({
   };
 
   return (
-    <NextIntlClientProvider locale={locale} messages={clientMessages}>
-      <AppProviders>{children}</AppProviders>
-    </NextIntlClientProvider>
+    <html
+      lang={locale}
+      className={fontFaces.map((font) => font.variable).join(' ')}
+    >
+      <head>
+        <meta charSet="utf-8" />
+      </head>
+      <body>
+        <NextIntlClientProvider locale={locale} messages={clientMessages}>
+          <AppProviders>{children}</AppProviders>
+        </NextIntlClientProvider>
+        {/* Bootstrap JS from the installed package (same version as the CSS), not a CDN */}
+        <BootstrapClient />
+      </body>
+    </html>
   );
 }

@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { getTranslations } from 'next-intl/server';
+import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
 import NavbarDarkDynamic from '../components/navbar/NavbarDarkDynamic';
 import FooterTop from '../components/footer-top';
@@ -16,6 +16,10 @@ import {
   BsShieldCheck,
   BsShop,
 } from 'react-icons/bs';
+
+// Cached after the first request, refreshed every 5 minutes or when the
+// worker revalidates its cache tags (DOS/Rate#491).
+export const revalidate = 300;
 
 export async function generateMetadata({
   params,
@@ -45,6 +49,7 @@ export default async function AboutUsPage({
   params: Promise<{ locale: string }>;
 }) {
   const { locale } = await params;
+  setRequestLocale(locale);
   const [stats, t] = await Promise.all([
     // Counters are decorative here: show zeros rather than an error page.
     getCachedRatePlatformStats().catch(() => EMPTY_RATE_PLATFORM_STATS),

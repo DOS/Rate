@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { getTranslations } from 'next-intl/server';
+import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
 import { notFound } from 'next/navigation';
 import {
@@ -47,6 +47,15 @@ import ProductShareAuditButton from '@/components/leaderboard/ProductShareAuditB
 import ProductValueCalculator from '@/components/leaderboard/ProductValueCalculator';
 import ProductOffersExplorer from '@/components/leaderboard/ProductOffersExplorer';
 import ProductSpecsExportToolbar from '@/components/leaderboard/ProductSpecsExportToolbar';
+
+// Cached after the first request, refreshed every 5 minutes or when the
+// worker revalidates its cache tags (DOS/Rate#491).
+export const revalidate = 300;
+
+// Nothing is prerendered at build; each slug renders on its first request.
+export function generateStaticParams(): { slug: string }[] {
+  return [];
+}
 
 export type PageParams = Promise<{ locale: string; slug: string }>;
 
@@ -107,6 +116,7 @@ export async function ProductDetailView({
   categoryLabel?: string;
 }) {
   const { locale, slug } = await params;
+  setRequestLocale(locale);
   const [t, tNav, product] = await Promise.all([
     getTranslations({ locale, namespace: 'productDetail' }),
     getTranslations({ locale, namespace: 'rate.nav' }),
@@ -130,11 +140,14 @@ export async function ProductDetailView({
     [
       getCachedMasterProductOffers(product.id),
       getCachedMasterProductReviews(product.id),
-      getCachedMasterProducts({ categorySlug, limit: 50 }).catch(() => []),
+      // No fallbacks: this page is cached, so an empty fallback would be
+      // served for the whole revalidate window. A failed regeneration keeps
+      // the last good page instead (DOS/Rate#491).
+      getCachedMasterProducts({ categorySlug, limit: 50 }),
       getCrossPlatformDealRadar({
         categorySlug: categorySlug as CanonicalCategorySlug,
         limit: 50,
-      }).catch(() => null),
+      }),
     ]
   );
   const [reviewSummary, priceHistory] = await Promise.all([

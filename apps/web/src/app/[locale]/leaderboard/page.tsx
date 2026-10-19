@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { getTranslations } from 'next-intl/server';
+import { getTranslations, setRequestLocale } from 'next-intl/server';
 import {
   BsArrowLeftRight,
   BsSearch,
@@ -26,7 +26,10 @@ import LeaderboardExplorer, {
   type LeaderboardCriterionKey,
 } from '@/components/leaderboard/LeaderboardExplorer';
 
-export const revalidate = 60;
+// Reads searchParams, so it renders per request. The [locale] layout's
+// generateStaticParams would otherwise make it static, and the searchParams
+// read would then fail with DYNAMIC_SERVER_USAGE (DOS/Rate#491).
+export const dynamic = 'force-dynamic';
 
 const SITE_URL = (
   process.env.NEXT_PUBLIC_SITE_URL || 'https://rate.vn'
@@ -95,6 +98,7 @@ export default async function LeaderboardPage({
   searchParams,
 }: PageProps) {
   const { locale } = await params;
+  setRequestLocale(locale);
   const query = await searchParams;
   const resolvedLocale: SupportedRateLocale = normalizeRateLocale(locale);
   const t = await getTranslations({

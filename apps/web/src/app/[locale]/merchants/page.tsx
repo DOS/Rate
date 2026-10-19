@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { getTranslations } from 'next-intl/server';
+import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
 import { getCachedMerchantsList } from '@/server/rate';
 import NavbarDarkDynamic from '../components/navbar/NavbarDarkDynamic';
@@ -16,6 +16,11 @@ import {
   summarizeMerchantDirectory,
   type MerchantSortOption,
 } from '@/lib/merchant-directory';
+
+// Reads searchParams, so it renders per request. The [locale] layout's
+// generateStaticParams would otherwise make it static, and the searchParams
+// read would then fail with DYNAMIC_SERVER_USAGE (DOS/Rate#491).
+export const dynamic = 'force-dynamic';
 
 export async function generateMetadata({
   params,
@@ -43,6 +48,7 @@ export default async function MerchantsDirectoryPage({
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { locale } = await params;
+  setRequestLocale(locale);
   const resolvedSearch = searchParams ? await searchParams : {};
   const t = await getTranslations({ locale, namespace: 'merchants' });
   const merchants = await getCachedMerchantsList();

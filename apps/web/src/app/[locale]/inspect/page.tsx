@@ -1,6 +1,6 @@
 import { Suspense } from 'react';
 import type { Metadata } from 'next';
-import { getTranslations } from 'next-intl/server';
+import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { getCachedInspectProductOrShopUrl } from '@/server/rate';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
 import NavbarDarkDynamic from '../components/navbar/NavbarDarkDynamic';
@@ -9,6 +9,11 @@ import FooterDynamic from '../components/footer/FooterDynamic';
 import BackToTop from '../components/back-to-top';
 import CompareTrayBar from '@/components/compare/CompareTrayBar';
 import DeepInspectWorkspace from '@/components/inspect/DeepInspectWorkspace';
+
+// Reads searchParams, so it renders per request. The [locale] layout's
+// generateStaticParams would otherwise make it static, and the searchParams
+// read would then fail with DYNAMIC_SERVER_USAGE (DOS/Rate#491).
+export const dynamic = 'force-dynamic';
 
 export async function generateMetadata({
   params,
@@ -35,6 +40,7 @@ export default async function InspectPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { locale } = await params;
+  setRequestLocale(locale);
   const sp = await searchParams;
   const rawQ = sp.q ?? sp.url ?? '';
   const initialQuery = (Array.isArray(rawQ) ? rawQ[0] : rawQ)?.trim() || '';
