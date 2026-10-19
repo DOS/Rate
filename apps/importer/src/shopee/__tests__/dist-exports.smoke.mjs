@@ -16,6 +16,8 @@ for (const name of [
   'AiSpecEnricher',
   'getAiSpecEnrichmentJsonSchema',
   'sanitizeSpecifications',
+  'mergeProductSpecifications',
+  'cloneAiEnrichmentResponse',
   'AiReviewAnalyzer',
   'getAiReviewBatchJsonSchema',
   'computeReviewWeight',
@@ -30,6 +32,11 @@ for (const name of [
     `@repo/crawlers is missing export ${name}`
   );
 }
+assert.equal(
+  typeof crawlers.MAX_SPEC_CACHE_ENTRIES,
+  'number',
+  '@repo/crawlers is missing export MAX_SPEC_CACHE_ENTRIES'
+);
 
 const { createImporterLogger } =
   await import('@repo/crawlers/shopee/logger');

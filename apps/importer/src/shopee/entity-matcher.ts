@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
-import type { NormalizedProductCandidate } from './product-normalizer.js';
-import { AiSpecEnricher } from './ai-spec-enricher.js';
+import { detectCategorySlug, type NormalizedProductCandidate } from './product-normalizer.js';
+import { AiSpecEnricher, mergeProductSpecifications } from './ai-spec-enricher.js';
 import { createImporterLogger } from './logger.js';
 import type { RateSupabaseClient } from './types.js';
 
@@ -209,7 +209,7 @@ export class EntityMatcher {
     const { data: row, error: fetchErr } = await this.supabase
       .from('master_products')
       .select(
-        'id, brand, model, storage_gb, ram_gb, screen_size_inch, battery_mah, has_5g, name, description, colors, key_specs'
+        'id, brand, model, storage_gb, ram_gb, screen_size_inch, battery_mah, has_5g, name, description, colors, specifications, key_specs'
       )
       .eq('id', masterId)
       .maybeSingle();
@@ -218,6 +218,10 @@ export class EntityMatcher {
       throw new Error(`[EntityMatcher] Master product ${masterId} not found: ${fetchErr?.message}`);
     }
 
+    const inferredCategorySlug = detectCategorySlug(
+      `${row.brand || ''} ${row.model || ''} ${row.name || ''}`
+    );
+
     const aiResult = await this.enricher.fetchSpecsFromAi({
       brand: row.brand,
       model: row.model,
@@ -225,25 +229,18 @@ export class EntityMatcher {
       ramGb: row.ram_gb,
       rawTitle: row.name,
       rawDescription: row.description,
+      categorySlug: inferredCategorySlug,
     });
 
     if (!aiResult) {
       return false;
     }
 
-    const mergedSpecifications = {
-      ...aiResult.specifications,
-      ...(aiResult.specifications.design
-        ? {
-            design: {
-              ...aiResult.specifications.design,
-              ...(Array.isArray(row.colors) && row.colors.length > 0
-                ? { colors: [...row.colors] }
-                : {}),
-            },
-          }
-        : {}),
-    };
+    const mergedSpecifications = mergeProductSpecifications(
+      (row as { specifications?: unknown }).specifications,
+      aiResult.specifications,
+      Array.isArray(row.colors) && row.colors.length > 0 ? row.colors : undefined
+    );
 
     const existingKeySpecs =
       row.key_specs && typeof row.key_specs === 'object' && !Array.isArray(row.key_specs)
