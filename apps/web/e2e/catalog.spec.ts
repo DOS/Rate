@@ -242,7 +242,8 @@ test('category catalogue pages past 200 models', async ({ page }) => {
     );
 
   expect((await page.goto('/earbuds'))?.status()).toBe(200);
-  expect((await productSlugs()).size).toBe(200);
+  const first = await productSlugs();
+  expect(first.size).toBe(200);
   const next = page.locator('nav a[rel="next"]');
   await expect(next).toHaveAttribute('href', /[?&]page=2\b/);
   await expect(page.locator('nav a[rel="prev"]')).toHaveCount(0);
@@ -250,9 +251,22 @@ test('category catalogue pages past 200 models', async ({ page }) => {
   expect((await page.goto('/earbuds?page=2'))?.status()).toBe(200);
   const second = await productSlugs();
   expect(second.size).toBe(1);
+  for (const slug of second) expect(first.has(slug)).toBe(false);
   await expect(page.locator('nav a[rel="next"]')).toHaveCount(0);
   await expect(page.locator('nav a[rel="prev"]')).toHaveAttribute(
     'href',
     /\/earbuds$/
   );
+
+  // A sidebar filter change returns to page 1.
+  await page.locator('label[for^="brand-"]').first().click();
+  await expect(page).toHaveURL(/[?&]brands=/);
+  expect(new URL(page.url()).searchParams.has('page')).toBe(false);
+
+  // Past the last page: a link back to the first page.
+  expect((await page.goto('/earbuds?page=5'))?.status()).toBe(200);
+  const firstPage = page.getByRole('link', {
+    name: /Về trang đầu|First page|První stránka/,
+  });
+  await expect(firstPage).toHaveAttribute('href', /\/earbuds$/);
 });

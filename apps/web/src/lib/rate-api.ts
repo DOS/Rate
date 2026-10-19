@@ -997,6 +997,8 @@ export async function getMasterProducts(
       query = query.order('created_at', { ascending: false });
       break;
   }
+  // Tiebreak so offset pages never overlap or skip rows.
+  query = query.order('id', { ascending: true });
 
   query = query.range(boundedOffset, boundedOffset + boundedLimit - 1);
 

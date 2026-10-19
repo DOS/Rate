@@ -1593,7 +1593,8 @@
       "paginationLabel": "Stránky katalogu",
       "prevPage": "Předchozí stránka",
       "nextPage": "Další stránka",
-      "pageNumber": "Stránka {page}"
+      "pageNumber": "Stránka {page}",
+      "firstPage": "První stránka"
     },
     "toolbar": {
       "unratedText": "N/A",

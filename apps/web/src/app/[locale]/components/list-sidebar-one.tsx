@@ -97,6 +97,8 @@ export default function ListSidebarOne({
 
   const updateUrlParams = (updater: (params: URLSearchParams) => void) => {
     const nextParams = new URLSearchParams(searchParams?.toString() || '');
+    // A changed filter starts again from the first catalogue page (#466).
+    nextParams.delete('page');
     updater(nextParams);
     const qs = nextParams.toString();
     startTransition(() => {

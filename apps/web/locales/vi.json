@@ -1593,7 +1593,8 @@
       "paginationLabel": "Phân trang danh mục",
       "prevPage": "Trang trước",
       "nextPage": "Trang sau",
-      "pageNumber": "Trang {page}"
+      "pageNumber": "Trang {page}",
+      "firstPage": "Về trang đầu"
     },
     "toolbar": {
       "unratedText": "chưa có",

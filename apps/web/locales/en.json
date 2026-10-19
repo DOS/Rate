@@ -1593,7 +1593,8 @@
       "paginationLabel": "Catalogue pages",
       "prevPage": "Previous page",
       "nextPage": "Next page",
-      "pageNumber": "Page {page}"
+      "pageNumber": "Page {page}",
+      "firstPage": "First page"
     },
     "toolbar": {
       "unratedText": "N/A",

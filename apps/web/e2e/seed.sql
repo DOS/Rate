@@ -145,9 +145,11 @@ WHERE platform_item_id = 'many_1';
 -- so /earbuds needs a second page (DOS/Rate#466).
 INSERT INTO rate.categories (id, name, slug, display_order)
 VALUES ('c0000000-0000-4000-8000-000000000005', 'Tai nghe', 'earbuds', 5);
+-- Distinct created_at: search_master_products ends its ORDER BY at created_at
+-- with no unique key (DOS/Rate#469), so tied rows could shift between pages.
 INSERT INTO rate.master_products
-  (category_id, brand, model, model_key, name, slug, min_price, max_price, merchant_count, status, metadata)
+  (category_id, brand, model, model_key, name, slug, min_price, max_price, merchant_count, status, metadata, created_at)
 SELECT 'c0000000-0000-4000-8000-000000000005', 'E2E Audio', 'Bud ' || g, 'e2e_bud_' || g,
   'E2E Bud ' || lpad(g::text, 3, '0'), 'e2e-bud-' || lpad(g::text, 3, '0'), 500000, 500000, 0, 'published',
-  '{"category_slug": "earbuds"}'
+  '{"category_slug": "earbuds"}', now() - (g || ' seconds')::interval
 FROM generate_series(1, 201) AS g;

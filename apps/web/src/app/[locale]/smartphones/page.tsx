@@ -937,15 +937,24 @@ export async function CategoryCatalogContent({
                   className="d-flex justify-content-center align-items-center gap-3 mt-4"
                   aria-label={t('page.paginationLabel')}
                 >
-                  {page > 1 && (
-                    <Link
-                      href={pageHref(page - 1)}
-                      className="btn btn-outline-secondary rounded-pill px-4"
-                      rel="prev"
-                    >
-                      {t('page.prevPage')}
-                    </Link>
-                  )}
+                  {page > 1 &&
+                    (products.length === 0 ? (
+                      // Past the last page: go back to the start.
+                      <Link
+                        href={pageHref(1)}
+                        className="btn btn-outline-secondary rounded-pill px-4"
+                      >
+                        {t('page.firstPage')}
+                      </Link>
+                    ) : (
+                      <Link
+                        href={pageHref(page - 1)}
+                        className="btn btn-outline-secondary rounded-pill px-4"
+                        rel="prev"
+                      >
+                        {t('page.prevPage')}
+                      </Link>
+                    ))}
                   <span className="text-muted small">
                     {t('page.pageNumber', { page })}
                   </span>
