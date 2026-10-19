@@ -3933,7 +3933,8 @@ async function runCoreArchitectureSuite() {
         err instanceof RateDataUnavailableError &&
         /exceeded 500 pages/.test(String((err as Error).message))
     );
-    assert.equal(ignoredRangeCalls485, 500);
+    // 500 pages are allowed; the 501st non-empty one ends the read.
+    assert.equal(ignoredRangeCalls485, 501);
 
     // 64.4 Chunking (>150 productIds) and RateDataUnavailableError in getMasterProductReviews, getMasterProductReviewSummary, and getMasterProductPriceHistory
     const manyListingRows344 = Array.from({ length: 160 }, (_, idx) => ({

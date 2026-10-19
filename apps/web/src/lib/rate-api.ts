@@ -54,12 +54,7 @@ async function fetchAllRows<T>(
   pageSize = 1000
 ): Promise<T[]> {
   const rows: T[] = [];
-  for (let from = 0, pages = 0; ; pages++) {
-    if (pages >= FETCH_ALL_MAX_PAGES) {
-      const message = `exceeded ${FETCH_ALL_MAX_PAGES} pages at row ${from}`;
-      log.error('paged read did not end', { table: label, row: from });
-      throw new RateDataUnavailableError(label, { message });
-    }
+  for (let from = 0, pages = 0; ;) {
     const { data, error } = await buildPage(from, from + pageSize - 1);
     if (error) {
       log.error('paged read failed', {
@@ -71,6 +66,12 @@ async function fetchAllRows<T>(
     }
     const page = data ?? [];
     if (page.length === 0) return rows;
+    // Up to FETCH_ALL_MAX_PAGES non-empty pages; one more means no end.
+    if (++pages > FETCH_ALL_MAX_PAGES) {
+      const message = `exceeded ${FETCH_ALL_MAX_PAGES} pages at row ${from}`;
+      log.error('paged read did not end', { table: label, row: from });
+      throw new RateDataUnavailableError(label, { message });
+    }
     rows.push(...page);
     from += page.length;
   }
