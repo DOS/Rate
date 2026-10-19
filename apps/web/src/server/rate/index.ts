@@ -18,6 +18,7 @@ import {
   getRatePlatformStats as _getRatePlatformStats,
   inspectProductOrShopUrl as _inspectProductOrShopUrl,
   isCanonicalCategorySlug,
+  extractPersistedBreakdown,
   extractProductKeywordFromUrl,
   parseEcommerceUrlOrQuery,
   resolveProductImageUrl,
@@ -55,6 +56,7 @@ export type {
 export {
   getRateClient,
   computeJReviewsWeight,
+  extractPersistedBreakdown,
   extractProductKeywordFromUrl,
   filterAndSortMerchants,
   isCanonicalCategorySlug,

@@ -1368,10 +1368,20 @@ export function mapOfferRowToMerchantOffer(item: RawOfferRow): MerchantOffer {
       ? meta.combined_risk_score
       : 0;
   const combinedRisk = Math.max(baseRisk, dosafeRisk, reviewRisk, metaCombined);
+  const topLevelBreakdown =
+    merchantObj?.review_risk_breakdown &&
+    typeof merchantObj.review_risk_breakdown === 'object' &&
+    !Array.isArray(merchantObj.review_risk_breakdown) &&
+    Object.keys(merchantObj.review_risk_breakdown).length > 0
+      ? merchantObj.review_risk_breakdown
+      : null;
   const breakdown =
-    merchantObj?.review_risk_breakdown ??
+    topLevelBreakdown ??
     (meta?.review_risk_breakdown &&
-    typeof meta.review_risk_breakdown === 'object'
+    typeof meta.review_risk_breakdown === 'object' &&
+    !Array.isArray(meta.review_risk_breakdown) &&
+    Object.keys(meta.review_risk_breakdown as Record<string, unknown>).length >
+      0
       ? (meta.review_risk_breakdown as Record<string, unknown>)
       : meta &&
           ('review_risk_score' in meta || 'seeding_spam_ratio_pct' in meta)
@@ -2771,20 +2781,99 @@ export interface MerchantListFilterParams {
   nameContains?: string;
 }
 
-function extractPersistedBreakdown(
-  m: RawMerchantSafeRow
+function parseMerchantRiskBreakdownCandidate(
+  raw: unknown
 ): MerchantRiskBreakdown | null {
-  const candidate =
-    m.review_risk_breakdown ??
-    (m.metadata && typeof m.metadata === 'object'
-      ? (m.metadata.review_risk_breakdown as MerchantRiskBreakdown | undefined)
-      : undefined);
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return null;
+  }
+  const obj = raw as Record<string, unknown>;
   if (
-    candidate &&
-    typeof candidate === 'object' &&
-    typeof candidate.total_reviews === 'number'
+    typeof obj.total_reviews !== 'number' ||
+    !Number.isFinite(obj.total_reviews) ||
+    obj.total_reviews < 0
   ) {
-    return candidate;
+    return null;
+  }
+  const totalReviews = Math.round(obj.total_reviews);
+  const seedingFakeCount =
+    typeof obj.seeding_fake_count === 'number' &&
+    Number.isFinite(obj.seeding_fake_count)
+      ? Math.max(0, Math.round(obj.seeding_fake_count))
+      : typeof obj.seeding_ratio === 'number' &&
+          Number.isFinite(obj.seeding_ratio)
+        ? Math.max(0, Math.round(totalReviews * obj.seeding_ratio))
+        : 0;
+  const coinSpamCount =
+    typeof obj.coin_spam_count === 'number' &&
+    Number.isFinite(obj.coin_spam_count)
+      ? Math.max(0, Math.round(obj.coin_spam_count))
+      : typeof obj.coin_spam_ratio === 'number' &&
+          Number.isFinite(obj.coin_spam_ratio)
+        ? Math.max(0, Math.round(totalReviews * obj.coin_spam_ratio))
+        : 0;
+  const sabotageOrBombingCount =
+    typeof obj.sabotage_or_bombing_count === 'number' &&
+    Number.isFinite(obj.sabotage_or_bombing_count)
+      ? Math.max(0, Math.round(obj.sabotage_or_bombing_count))
+      : typeof obj.sabotage_ratio === 'number' &&
+          Number.isFinite(obj.sabotage_ratio)
+        ? Math.max(0, Math.round(totalReviews * obj.sabotage_ratio))
+        : 0;
+  const authenticCount =
+    typeof obj.authentic_count === 'number' &&
+    Number.isFinite(obj.authentic_count)
+      ? Math.max(0, Math.round(obj.authentic_count))
+      : Math.max(
+          0,
+          totalReviews -
+            seedingFakeCount -
+            coinSpamCount -
+            sabotageOrBombingCount
+        );
+  const flaggedTotal =
+    coinSpamCount + seedingFakeCount + sabotageOrBombingCount;
+  const suspiciousRatioPct =
+    typeof obj.suspicious_ratio_pct === 'number' &&
+    Number.isFinite(obj.suspicious_ratio_pct)
+      ? Math.max(
+          0,
+          Math.min(100, Math.round(obj.suspicious_ratio_pct * 10) / 10)
+        )
+      : totalReviews > 0
+        ? Math.round((flaggedTotal / totalReviews) * 1000) / 10
+        : 0;
+
+  return {
+    total_reviews: totalReviews,
+    authentic_count: authenticCount,
+    coin_spam_count: coinSpamCount,
+    seeding_fake_count: seedingFakeCount,
+    sabotage_or_bombing_count: sabotageOrBombingCount,
+    suspicious_ratio_pct: suspiciousRatioPct,
+  };
+}
+
+export function extractPersistedBreakdown(
+  m: Pick<RawMerchantSafeRow, 'review_risk_breakdown' | 'metadata'>
+): MerchantRiskBreakdown | null {
+  const fromTopLevel = parseMerchantRiskBreakdownCandidate(
+    m.review_risk_breakdown
+  );
+  if (fromTopLevel) {
+    return fromTopLevel;
+  }
+  if (
+    m.metadata &&
+    typeof m.metadata === 'object' &&
+    !Array.isArray(m.metadata)
+  ) {
+    const fromMetaBreakdown = parseMerchantRiskBreakdownCandidate(
+      m.metadata.review_risk_breakdown
+    );
+    if (fromMetaBreakdown) {
+      return fromMetaBreakdown;
+    }
   }
   return null;
 }

@@ -6157,7 +6157,130 @@ async function runCoreArchitectureSuite() {
   }
 
   console.log(
-    '  ✅ [73/73] URL product keyword extraction & shop fallback in inspectProductOrShopUrl and lookupExtensionProduct (#517) passed'
+    '  ✅ [73/74] URL product keyword extraction & shop fallback in inspectProductOrShopUrl and lookupExtensionProduct (#517) passed'
+  );
+
+  // =========================================================================
+  // 74. MerchantRiskBreakdown Schema Alignment, Empty JSONB Fallback & Ratio Derivation (#521)
+  // =========================================================================
+  {
+    const { extractPersistedBreakdown, mapOfferRowToMerchantOffer } =
+      await import('@/lib/rate-api');
+    const domain521 = await import('@/lib/rate-domain');
+    const serverRate521 = await import('@/server/rate');
+
+    assert.equal(
+      domain521.extractPersistedBreakdown,
+      extractPersistedBreakdown,
+      'rate-domain.ts must re-export extractPersistedBreakdown (#521)'
+    );
+    assert.equal(
+      serverRate521.extractPersistedBreakdown,
+      extractPersistedBreakdown,
+      'server/rate/index.ts must re-export extractPersistedBreakdown (#521)'
+    );
+
+    // 74.1 Empty {} top-level review_risk_breakdown (Postgres DEFAULT '{}'::jsonb) falls through to metadata.review_risk_breakdown
+    const fromMetaFallback = extractPersistedBreakdown({
+      review_risk_breakdown: {} as never,
+      metadata: {
+        review_risk_breakdown: {
+          total_reviews: 20,
+          authentic_count: 15,
+          coin_spam_count: 3,
+          seeding_fake_count: 2,
+          sabotage_or_bombing_count: 0,
+          suspicious_ratio_pct: 25,
+        },
+      },
+    });
+    assert.deepEqual(
+      fromMetaFallback,
+      {
+        total_reviews: 20,
+        authentic_count: 15,
+        coin_spam_count: 3,
+        seeding_fake_count: 2,
+        sabotage_or_bombing_count: 0,
+        suspicious_ratio_pct: 25,
+      },
+      'extractPersistedBreakdown must fall back to metadata.review_risk_breakdown when top-level review_risk_breakdown is an empty {} JSONB object (#521)'
+    );
+
+    // 74.2 Ratio-based breakdown payload with total_reviews derives missing counts and suspicious_ratio_pct
+    const fromRatios = extractPersistedBreakdown({
+      review_risk_breakdown: {
+        total_reviews: 40,
+        seeding_ratio: 0.25,
+        coin_spam_ratio: 0.1,
+        sabotage_ratio: 0.05,
+      } as never,
+      metadata: null,
+    });
+    assert.deepEqual(
+      fromRatios,
+      {
+        total_reviews: 40,
+        authentic_count: 24,
+        coin_spam_count: 4,
+        seeding_fake_count: 10,
+        sabotage_or_bombing_count: 2,
+        suspicious_ratio_pct: 40,
+      },
+      'extractPersistedBreakdown must derive authentic_count, coin_spam_count, seeding_fake_count, sabotage_or_bombing_count, and suspicious_ratio_pct from ratio fields when explicit count fields are absent (#521)'
+    );
+
+    // 74.3 mapOfferRowToMerchantOffer ignores empty {} top-level review_risk_breakdown and falls back to metadata.review_risk_breakdown
+    const offer521 = mapOfferRowToMerchantOffer({
+      id: 'offer-521',
+      cluster_id: 'master-521',
+      platform: 'shopee',
+      title: 'iPhone 16 Pro Max 256GB',
+      price_current: 28_990_000,
+      price_original: 34_990_000,
+      stock: 10,
+      rating_star: 4.9,
+      rating_count: 120,
+      url: 'https://shopee.vn/product/1/2',
+      merchants: {
+        id: 'merch-521',
+        name: 'Shop 521',
+        platform: 'shopee',
+        is_official: true,
+        rating_star: 4.9,
+        follower_count: 50000,
+        location: 'TP. Hồ Chí Minh',
+        risk_score: 5,
+        review_risk_score: 15,
+        review_risk_breakdown: {},
+        metadata: {
+          review_risk_breakdown: {
+            total_reviews: 10,
+            authentic_count: 9,
+            coin_spam_count: 1,
+            seeding_fake_count: 0,
+            sabotage_or_bombing_count: 0,
+            suspicious_ratio_pct: 10,
+          },
+        },
+      },
+    });
+    assert.deepEqual(
+      offer521.merchant.review_risk_breakdown,
+      {
+        total_reviews: 10,
+        authentic_count: 9,
+        coin_spam_count: 1,
+        seeding_fake_count: 0,
+        sabotage_or_bombing_count: 0,
+        suspicious_ratio_pct: 10,
+      },
+      'mapOfferRowToMerchantOffer must ignore empty {} top-level review_risk_breakdown and fall back to metadata.review_risk_breakdown (#521)'
+    );
+  }
+
+  console.log(
+    '  ✅ [74/74] MerchantRiskBreakdown Schema Alignment, Empty JSONB Fallback & Ratio Derivation (#521) passed'
   );
 
   console.log('🎉 All Rate.vn Core Architecture tests passed!');

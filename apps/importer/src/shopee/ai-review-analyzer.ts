@@ -201,6 +201,12 @@ export interface MerchantRiskEvaluation {
   seeding_ratio: number; // 0..1
   coin_spam_ratio: number; // 0..1
   sabotage_ratio: number; // 0..1
+  total_reviews: number;
+  authentic_count: number;
+  coin_spam_count: number;
+  seeding_fake_count: number;
+  sabotage_or_bombing_count: number;
+  suspicious_ratio_pct: number;
   price_anomaly_detected: boolean;
   reasons: string[];
 }
@@ -1761,17 +1767,30 @@ Return ONLY valid JSON matching:
    * - Does NOT penalize the merchant for `low_value_coin_spam`, `competitor_sabotage`, or `review_bombing`!
    */
   public evaluateMerchantRisk(input: MerchantRiskInput): MerchantRiskEvaluation {
-    const total = Math.max(1, input.reviewResults.length);
+    const totalReviews = input.reviewResults.length;
+    const total = Math.max(1, totalReviews);
     const seedingCount = input.reviewResults.filter(r => r.flag_category === 'seeding_fake').length;
-    const coinSpamCount = input.reviewResults.filter(
+    const coinSpamCategoryCount = input.reviewResults.filter(
       r => r.flag_category === 'low_value_coin_spam'
     ).length;
     const sabotageCount = input.reviewResults.filter(
       r => r.flag_category === 'competitor_sabotage' || r.flag_category === 'review_bombing'
     ).length;
+    const coinSpamOrExcludedCount = input.reviewResults.filter(
+      r =>
+        r.flag_category === 'low_value_coin_spam' ||
+        (!r.include_in_rating && r.flag_category === 'authentic')
+    ).length;
+    const authenticCount = Math.max(
+      0,
+      totalReviews - seedingCount - coinSpamOrExcludedCount - sabotageCount
+    );
+    const flaggedTotal = seedingCount + coinSpamOrExcludedCount + sabotageCount;
+    const suspiciousRatioPct =
+      totalReviews > 0 ? Math.round((flaggedTotal / totalReviews) * 1000) / 10 : 0;
 
     const seedingRatio = Number((seedingCount / total).toFixed(3));
-    const coinSpamRatio = Number((coinSpamCount / total).toFixed(3));
+    const coinSpamRatio = Number((coinSpamCategoryCount / total).toFixed(3));
     const sabotageRatio = Number((sabotageCount / total).toFixed(3));
 
     let risk = 15; // Baseline neutral risk
@@ -1864,6 +1883,12 @@ Return ONLY valid JSON matching:
       seeding_ratio: seedingRatio,
       coin_spam_ratio: coinSpamRatio,
       sabotage_ratio: sabotageRatio,
+      total_reviews: totalReviews,
+      authentic_count: authenticCount,
+      coin_spam_count: coinSpamOrExcludedCount,
+      seeding_fake_count: seedingCount,
+      sabotage_or_bombing_count: sabotageCount,
+      suspicious_ratio_pct: suspiciousRatioPct,
       price_anomaly_detected: priceAnomaly,
       reasons,
     };
@@ -2088,6 +2113,12 @@ Return ONLY valid JSON matching:
         seeding_ratio: merchantRisk.seeding_ratio,
         coin_spam_ratio: merchantRisk.coin_spam_ratio,
         sabotage_ratio: merchantRisk.sabotage_ratio,
+        total_reviews: merchantRisk.total_reviews,
+        authentic_count: merchantRisk.authentic_count,
+        coin_spam_count: merchantRisk.coin_spam_count,
+        seeding_fake_count: merchantRisk.seeding_fake_count,
+        sabotage_or_bombing_count: merchantRisk.sabotage_or_bombing_count,
+        suspicious_ratio_pct: merchantRisk.suspicious_ratio_pct,
         price_anomaly_detected: merchantRisk.price_anomaly_detected,
         reasons: merchantRisk.reasons,
       };
