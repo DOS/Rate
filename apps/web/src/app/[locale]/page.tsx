@@ -75,6 +75,11 @@ const CATEGORY_DESC_KEYS = {
 
 type KnownCategorySlug = keyof typeof CATEGORY_DESC_KEYS;
 
+// The trust section is a preview with a link to /merchants; rendering every
+// store made the page grow with the directory (DOS/Rate#450). The list comes
+// ordered official first, then by followers.
+const HOME_MERCHANT_PREVIEW_COUNT = 6;
+
 const isKnownCategory = (slug: string): slug is KnownCategorySlug =>
   Object.hasOwn(CATEGORY_DESC_KEYS, slug);
 
@@ -804,7 +809,7 @@ export default async function Home({
           </div>
 
           <div className="row g-4">
-            {merchants.map((merchant) => {
+            {merchants.slice(0, HOME_MERCHANT_PREVIEW_COUNT).map((merchant) => {
               const tone = (risk: number) =>
                 risk < 20 ? 'is-good' : risk < 50 ? 'is-warn' : 'is-bad';
               const overallTone = tone(merchant.risk_score);

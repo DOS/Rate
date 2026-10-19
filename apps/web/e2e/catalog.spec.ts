@@ -131,6 +131,21 @@ test('merchant search reaches merchants past the 1000-row cap', async ({
   expect(await res.text()).toContain('last-ranked-shop');
 });
 
+// Search, trust floor and sort filter the cached directory in memory
+// (DOS/Rate#457); limit applies after them. By default official stores rank
+// first, so the product-count order below is only there if the sort ran.
+test('merchant search combines q, sort and limit', async ({ request }) => {
+  const res = await request.get(
+    '/api/v1/rate/merchants?q=store&sort=products_desc&limit=2'
+  );
+  expect(res.status()).toBe(200);
+  const { data } = await res.json();
+  expect(data.map((m: { slug: string }) => m.slug)).toEqual([
+    'many-offers-store',
+    'bulk-listings-store',
+  ]);
+});
+
 // 1050 offers / listings exceed PostgREST's 1000-row cap: single, batched and
 // merchant reads page past it (DOS/Rate#366).
 test('offer and listing reads page past the 1000-row cap', async ({
@@ -140,6 +155,14 @@ test('offer and listing reads page past the 1000-row cap', async ({
     await request.get('/api/v1/rate/products/e2e-many-offers-phone')
   ).json();
   expect(product.data.offers).toHaveLength(1050);
+  // Reviews and their analysis on the last listing come through (DOS/Rate#453).
+  expect(JSON.stringify(product.data.reviews)).toContain(
+    'Review past the 1000-row listing cap.'
+  );
+  expect(product.data.reviewSummary.total_analyzed).toBe(7);
+  expect(product.data.reviewSummary.ai_summary).toBe(
+    'E2E analysis past the 1000-row listing cap.'
+  );
 
   const merchant = await (
     await request.get('/api/v1/rate/merchants/many-offers-store')

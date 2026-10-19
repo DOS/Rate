@@ -263,7 +263,31 @@ const _getCachedMerchantsListByKey = cache((serializedParams: string) =>
   _fetchMerchantsListDataCache(serializedParams)
 );
 
-export function getCachedMerchantsList(params?: MerchantListFilterParams) {
+export async function getCachedMerchantsList(
+  params?: MerchantListFilterParams
+) {
+  const { q, minTrust, sort, limit, ...databaseParams } = params ?? {};
+  // Search, trust floor and sort run in memory over the whole list anyway
+  // (getMerchantsList reads every merchant for them). Filter the cached list
+  // for the database-side params instead of caching per query: otherwise each
+  // new ?q= on the public API costs a full merchants/products/reviews scan
+  // (DOS/Rate#457).
+  if (
+    (q && q.trim()) ||
+    (typeof minTrust === 'number' && !Number.isNaN(minTrust)) ||
+    sort
+  ) {
+    // No-op filters out of the key, so the API (which always sends
+    // officialOnly) shares the pages' unfiltered directory entry.
+    if (!databaseParams.officialOnly) delete databaseParams.officialOnly;
+    if (!databaseParams.platform || databaseParams.platform === 'all') {
+      delete databaseParams.platform;
+    }
+    const all = await _getCachedMerchantsListByKey(
+      canonicalizeCacheParams(databaseParams)
+    );
+    return filterAndSortMerchants(all, { q, minTrust, sort, limit });
+  }
   return _getCachedMerchantsListByKey(canonicalizeCacheParams(params ?? {}));
 }
 

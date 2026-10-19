@@ -584,7 +584,7 @@ export default function MerchantDirectoryExplorer({
               className="btn btn-sm btn-outline-secondary rounded-pill fw-semibold px-3 py-1"
               data-testid="download-merchants-json-btn"
             >
-              📦 JSON
+              JSON
             </button>
             <span className="small text-muted ms-1">
               {labels.showingCount}{' '}

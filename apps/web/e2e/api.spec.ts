@@ -64,3 +64,17 @@ test('inspect treats LIKE wildcards in a keyword literally', async ({
   const body = await res.json();
   expect(body.data.matchedType).not.toBe('merchant');
 });
+
+// More filtered reviews are seeded than the 60-review sample holds; the
+// platform-wide counts must include every one of them (DOS/Rate#455).
+test('platform review verdict counts cover every review', async ({
+  request,
+}) => {
+  const res = await request.get('/api/v1/rate/stats');
+  expect(res.status()).toBe(200);
+  const { data } = await res.json();
+  expect(data.filteredSeedingCount).toBeGreaterThanOrEqual(120);
+  expect(
+    data.authenticReviewsCount + data.filteredSeedingCount
+  ).toBeLessThanOrEqual(data.totalReviewsCount);
+});

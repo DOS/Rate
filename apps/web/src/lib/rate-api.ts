@@ -1501,6 +1501,27 @@ interface RawReviewRow {
 }
 
 /**
+ * Ids of every listing clustered under a master product. Paged: a popular
+ * model can have more than the 1000 rows one PostgREST response returns, and
+ * a truncated list silently drops those listings' reviews and analyses.
+ */
+async function getListingIdsForMaster(
+  masterId: string,
+  label: string
+): Promise<string[]> {
+  const supabase = getRateClient();
+  const rows = await fetchAllRows<{ id: string }>(label, (from, to) =>
+    supabase
+      .from('products')
+      .select('id')
+      .eq('cluster_id', masterId)
+      .order('id')
+      .range(from, to)
+  );
+  return rows.map((row) => row.id);
+}
+
+/**
  * Fetch reviews across listings grouped under a master product,
  * including JReviews vote metrics and AI transparency flags.
  */
@@ -1508,19 +1529,12 @@ export async function getMasterProductReviews(
   masterId: string
 ): Promise<ReviewItem[]> {
   const supabase = getRateClient();
-  const { data: prods, error: prodsErr } = await supabase
-    .from('products')
-    .select('id')
-    .eq('cluster_id', masterId);
-  if (prodsErr) {
-    throw new RateDataUnavailableError(
-      `listings for master ${masterId}`,
-      prodsErr
-    );
-  }
-  if (!prods || prods.length === 0) return [];
+  const productIds = await getListingIdsForMaster(
+    masterId,
+    `listings for master ${masterId}`
+  );
+  if (productIds.length === 0) return [];
 
-  const productIds = (prods as Array<{ id: string }>).map((p) => p.id);
   const reviewRows = await readInChunks(
     productIds,
     `reviews for master ${masterId}`,
@@ -1648,19 +1662,10 @@ export async function getMasterProductReviewSummary(
       : 0;
 
   const supabase = getRateClient();
-  const { data: prods, error: prodsErr } = await supabase
-    .from('products')
-    .select('id')
-    .eq('cluster_id', masterId);
-
-  if (prodsErr) {
-    throw new RateDataUnavailableError(
-      `review summary listings for master ${masterId}`,
-      prodsErr
-    );
-  }
-
-  const productIds = ((prods || []) as Array<{ id: string }>).map((p) => p.id);
+  const productIds = await getListingIdsForMaster(
+    masterId,
+    `review summary listings for master ${masterId}`
+  );
   if (productIds.length > 0) {
     const analysisRows = await readInChunks(
       productIds,
@@ -3275,6 +3280,9 @@ export async function getRatePlatformStats(): Promise<RatePlatformStats> {
     priceHistCountRes,
     reviewsCountRes,
     reviewsRes,
+    unanalyzedCountRes,
+    filteredExplicitCountRes,
+    filteredDerivedCountRes,
   ] = await Promise.all([
     supabase
       .from('categories')
@@ -3299,6 +3307,28 @@ export async function getRatePlatformStats(): Promise<RatePlatformStats> {
       .select('*, review_flags(*)')
       .order('created_at', { ascending: false })
       .limit(60),
+    // Platform-wide review verdict counts (DOS/Rate#455), with the same rules
+    // as the per-review mapping below: a review without a flag row counts as
+    // authentic, 'unanalyzed' counts as neither, and include_in_rating decides
+    // the rest (a NULL include_in_rating falls back to the flag category,
+    // derived from the verdict when the category is NULL). review_id is the
+    // primary key, so one flag row per review.
+    supabase
+      .from('review_flags')
+      .select('review_id', { count: 'exact', head: true })
+      .eq('verdict', 'unanalyzed'),
+    supabase
+      .from('review_flags')
+      .select('review_id', { count: 'exact', head: true })
+      .eq('include_in_rating', false)
+      .or('verdict.is.null,verdict.neq.unanalyzed'),
+    supabase
+      .from('review_flags')
+      .select('review_id', { count: 'exact', head: true })
+      .is('include_in_rating', null)
+      .or(
+        'and(flag_category.neq.authentic,or(verdict.is.null,verdict.neq.unanalyzed)),verdict.eq.fake,and(flag_category.is.null,verdict.eq.suspicious)'
+      ),
   ]);
   // Zero counters would otherwise be cached as the platform's real totals.
   const statsError =
@@ -3307,7 +3337,10 @@ export async function getRatePlatformStats(): Promise<RatePlatformStats> {
     merchantsRes.error ??
     priceHistCountRes.error ??
     reviewsCountRes.error ??
-    reviewsRes.error;
+    reviewsRes.error ??
+    unanalyzedCountRes.error ??
+    filteredExplicitCountRes.error ??
+    filteredDerivedCountRes.error;
   if (statsError) {
     throw new RateDataUnavailableError('platform stats', statsError);
   }
@@ -3390,9 +3423,6 @@ export async function getRatePlatformStats(): Promise<RatePlatformStats> {
     });
   }
 
-  let authenticCount = 0;
-  let filteredCount = 0;
-
   const mappedReviews: RatePlatformStats['recentReviewsSample'] =
     rawReviews.map((r) => {
       const vf = Array.isArray(r.review_flags)
@@ -3410,13 +3440,6 @@ export async function getRatePlatformStats(): Promise<RatePlatformStats> {
         vf?.include_in_rating ??
         (flagCategory === 'authentic' && verdict !== 'fake')
       );
-      if (verdict === 'unanalyzed') {
-        // Pending community reviews are neither authentic nor filtered yet.
-      } else if (includeInRating) {
-        authenticCount += 1;
-      } else {
-        filteredCount += 1;
-      }
       const pInfo = prodInfoById.get(r.product_id);
       return {
         id: r.id,
@@ -3447,6 +3470,14 @@ export async function getRatePlatformStats(): Promise<RatePlatformStats> {
     });
 
   const totalRev = reviewsCountRes.count ?? mappedReviews.length;
+  const filteredCount =
+    (filteredExplicitCountRes.count ?? 0) +
+    (filteredDerivedCountRes.count ?? 0);
+  // Pending community reviews are neither authentic nor filtered yet.
+  const authenticCount = Math.max(
+    0,
+    totalRev - (unanalyzedCountRes.count ?? 0) - filteredCount
+  );
   const analyzedRev = authenticCount + filteredCount;
   const authenticRatioPct =
     analyzedRev > 0
