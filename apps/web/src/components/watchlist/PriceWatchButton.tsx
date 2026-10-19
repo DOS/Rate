@@ -4,8 +4,11 @@ import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Link } from '@/lib/navigation';
 import {
+  MIN_WATCHLIST_TARGET_PRICE,
+  computeWatchlistTargetPrice,
   getWatchlist,
   removeWatchlistItem,
+  sanitizeWatchlistTargetPrice,
   subscribeWatchlist,
   upsertWatchlistItem,
   type WatchlistItem,
@@ -34,7 +37,7 @@ export default function PriceWatchButton({
   const [watchedItem, setWatchedItem] = useState<WatchlistItem | null>(null);
   const [showEditor, setShowEditor] = useState(false);
   const [targetInput, setTargetInput] = useState<number>(
-    Math.round((currentMinPrice * 0.95) / 100000) * 100000
+    computeWatchlistTargetPrice(currentMinPrice, 5)
   );
 
   useEffect(() => {
@@ -44,7 +47,7 @@ export default function PriceWatchButton({
       if (found) {
         setTargetInput(found.targetPrice);
       } else if (currentMinPrice > 0) {
-        setTargetInput(Math.round((currentMinPrice * 0.95) / 100000) * 100000);
+        setTargetInput(computeWatchlistTargetPrice(currentMinPrice, 5));
       }
     };
     sync();
@@ -52,7 +55,10 @@ export default function PriceWatchButton({
   }, [slug, currentMinPrice]);
 
   const handleSave = (customTarget: number) => {
-    const cleanTarget = Math.max(100000, Math.round(customTarget));
+    const cleanTarget = sanitizeWatchlistTargetPrice(
+      customTarget,
+      currentMinPrice
+    );
     upsertWatchlistItem({
       slug,
       name,
@@ -71,8 +77,8 @@ export default function PriceWatchButton({
     setShowEditor(false);
   };
 
-  const preset5Pct = Math.round((currentMinPrice * 0.95) / 100000) * 100000;
-  const preset10Pct = Math.round((currentMinPrice * 0.9) / 100000) * 100000;
+  const preset5Pct = computeWatchlistTargetPrice(currentMinPrice, 5);
+  const preset10Pct = computeWatchlistTargetPrice(currentMinPrice, 10);
 
   return (
     <div className="position-relative d-inline-block">
@@ -141,8 +147,12 @@ export default function PriceWatchButton({
             <span className="input-group-text">{t('targetInputLabel')}</span>
             <input
               type="number"
-              step={100000}
-              min={100000}
+              step={
+                currentMinPrice > 0 && currentMinPrice < 2_000_000
+                  ? 10000
+                  : 100000
+              }
+              min={MIN_WATCHLIST_TARGET_PRICE}
               value={targetInput}
               onChange={(e) => setTargetInput(Number(e.target.value || 0))}
               className="form-control fw-semibold"

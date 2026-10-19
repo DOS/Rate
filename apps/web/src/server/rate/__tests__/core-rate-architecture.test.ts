@@ -6939,7 +6939,86 @@ async function runCoreArchitectureSuite() {
   }
 
   console.log(
-    '  ✅ [78/78] CompareWorkspace Rating Scale Normalization, Positive Spec Fallbacks & Zero Guards (#542) passed'
+    '  ✅ [78/79] CompareWorkspace Rating Scale Normalization, Positive Spec Fallbacks & Zero Guards (#542) passed'
+  );
+
+  // =========================================================================
+  // 79. Watchlist Target Price Presets, Live KPI Sync & PriceHistorySection Guards (#549)
+  // =========================================================================
+  {
+    const wlStore549 =
+      await import('../../../components/watchlist/watchlist-store');
+
+    assert.equal(
+      wlStore549.computeWatchlistTargetPrice(1_000_000, 5),
+      950_000,
+      'computeWatchlistTargetPrice must not round 1,000,000 VND -5% back up to 1,000,000 VND (#549)'
+    );
+    assert.equal(
+      wlStore549.computeWatchlistTargetPrice(500_000, 5),
+      480_000,
+      'computeWatchlistTargetPrice must use 10k VND steps below 2M VND and stay strictly below basePrice (#549)'
+    );
+    assert.equal(
+      wlStore549.computeWatchlistTargetPrice(100_000, 5),
+      90_000,
+      'computeWatchlistTargetPrice must subtract step when rounding would equal basePrice (#549)'
+    );
+    assert.equal(
+      wlStore549.computeWatchlistTargetPrice(25_000_000, 5),
+      23_800_000,
+      'computeWatchlistTargetPrice must use 100k VND steps at or above 2M VND (#549)'
+    );
+    assert.equal(
+      wlStore549.computeWatchlistTargetPrice(25_000_000, 10),
+      22_500_000
+    );
+    assert.equal(
+      wlStore549.computeWatchlistTargetPrice(0, 5),
+      10_000_000,
+      'computeWatchlistTargetPrice must fall back to 10,000,000 VND when basePrice is 0 (#549)'
+    );
+
+    assert.equal(
+      wlStore549.sanitizeWatchlistTargetPrice(420_000, 500_000),
+      420_000
+    );
+    assert.equal(
+      wlStore549.sanitizeWatchlistTargetPrice(500, 500_000),
+      wlStore549.MIN_WATCHLIST_TARGET_PRICE,
+      'sanitizeWatchlistTargetPrice must clamp positive custom target prices to MIN_WATCHLIST_TARGET_PRICE (#549)'
+    );
+    assert.equal(
+      wlStore549.sanitizeWatchlistTargetPrice(0, 1_000_000),
+      950_000,
+      'sanitizeWatchlistTargetPrice must fall back to computeWatchlistTargetPrice when customTarget <= 0 (#549)'
+    );
+
+    const wlWorkspaceSrc = fs.readFileSync(
+      path.join(webSrcRoot, 'components/watchlist/WatchlistWorkspace.tsx'),
+      'utf8'
+    );
+    assert.ok(
+      wlWorkspaceSrc.includes('resolveCompareEffectiveUserRating(liveProd)') &&
+        wlWorkspaceSrc.includes('computeWatchlistTargetPrice(minP, 5)') &&
+        wlWorkspaceSrc.includes('currentMin > 0 && item.priceWhenAdded > 0'),
+      'WatchlistWorkspace.tsx must use computeWatchlistTargetPrice, resolveCompareEffectiveUserRating, and zero-guarded diffFromAdded (#549)'
+    );
+
+    const priceHistorySrc = fs.readFileSync(
+      path.join(webSrcRoot, 'components/price-history/PriceHistorySection.tsx'),
+      'utf8'
+    );
+    assert.ok(
+      priceHistorySrc.includes('price > MAX_VALID_VND_PRICE') &&
+        priceHistorySrc.includes('pt.price_original <= MAX_VALID_VND_PRICE') &&
+        priceHistorySrc.includes('if (allValues.length === 0)'),
+      'PriceHistorySection.tsx must filter invalid timestamps/prices and bound price_original by MAX_VALID_VND_PRICE (#549)'
+    );
+  }
+
+  console.log(
+    '  ✅ [79/79] Watchlist Target Price Presets, Live KPI Sync & PriceHistorySection Guards (#549) passed'
   );
 
   console.log('🎉 All Rate.vn Core Architecture tests passed!');

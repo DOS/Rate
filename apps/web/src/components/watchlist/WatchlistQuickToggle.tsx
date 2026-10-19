@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { BsBell, BsBellFill } from 'react-icons/bs';
 import {
+  computeWatchlistTargetPrice,
   getWatchlist,
   removeWatchlistItem,
   subscribeWatchlist,
@@ -55,10 +56,7 @@ export default function WatchlistQuickToggle({
     }
 
     const basePrice = Math.max(0, Number(item.min_price || 0));
-    const defaultTarget =
-      basePrice > 0
-        ? Math.max(100_000, Math.round((basePrice * 0.95) / 100_000) * 100_000)
-        : 10_000_000;
+    const defaultTarget = computeWatchlistTargetPrice(basePrice, 5);
 
     upsertWatchlistItem({
       slug: item.slug,
