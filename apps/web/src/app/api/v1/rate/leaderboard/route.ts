@@ -48,9 +48,12 @@ export async function GET(req: NextRequest) {
     const query = (searchParams.get('q') || '').trim();
     const limit = parseBoundedIntParam(searchParams.get('limit'), 20, 1, 50);
 
+    // Brand, price segment, query and the criterion ranking all run on this
+    // list, so it must be the whole category, not its 100 best-rated models
+    // (DOS/Rate#473). 500 is getMasterProducts' cap.
     const allProducts = await getCachedMasterProducts({
       categorySlug: category,
-      limit: 100,
+      limit: 500,
       sort: 'rating_desc',
     });
 

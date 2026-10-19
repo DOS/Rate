@@ -153,3 +153,8 @@ SELECT 'c0000000-0000-4000-8000-000000000005', 'E2E Audio', 'Bud ' || g, 'e2e_bu
   'E2E Bud ' || lpad(g::text, 3, '0'), 'e2e-bud-' || lpad(g::text, 3, '0'), 500000, 500000, 0, 'published',
   '{"category_slug": "earbuds"}', now() - (g || ' seconds')::interval
 FROM generate_series(1, 201) AS g;
+-- One shared rating, so the leaderboard ranks them (unrated models are left
+-- out) and every bud ties: past the 100 best-rated, only a search over the
+-- whole category finds them (DOS/Rate#473).
+UPDATE rate.master_products SET user_rating_weighted = 4
+WHERE slug LIKE 'e2e-bud-%';

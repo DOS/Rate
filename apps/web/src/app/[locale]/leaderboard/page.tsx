@@ -97,17 +97,24 @@ export default async function LeaderboardPage({
   });
   const siteUrl = SITE_URL;
 
-  const [products, dealRadar] = await Promise.all([
-    getCachedMasterProducts({
-      categorySlug: 'all',
-      limit: 100,
-      sort: 'rating_desc',
-    }),
+  // The 100 best-rated models of each category: one global top 100 could
+  // leave a whole category out of its own leaderboard tab (DOS/Rate#473).
+  const [productsByCategory, dealRadar] = await Promise.all([
+    Promise.all(
+      [...VALID_CATEGORIES].map((categorySlug) =>
+        getCachedMasterProducts({
+          categorySlug,
+          limit: 100,
+          sort: 'rating_desc',
+        })
+      )
+    ),
     getCrossPlatformDealRadar({
       categorySlug: 'all',
       limit: 36,
     }).catch(() => null),
   ]);
+  const products = productsByCategory.flat();
 
   const rawCategory = (query.cat || 'smartphones')
     .toLowerCase()
