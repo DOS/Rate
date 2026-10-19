@@ -60,6 +60,7 @@ export {
   VALID_LEADERBOARD_CATEGORIES,
   VALID_LEADERBOARD_CRITERIA,
   buildPopular1v1BattlesForCategory,
+  comparePositiveMinPrices,
   computeJReviewsCriteriaScores,
   computeProductStandingInCategory,
   normalizeLeaderboardCategory,
