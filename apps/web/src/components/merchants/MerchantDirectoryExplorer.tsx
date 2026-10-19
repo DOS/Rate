@@ -1,12 +1,21 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Link } from '@/lib/navigation';
 import { escapeCsvCell } from '@/lib/csv-safe';
 import type { MerchantSummary } from '@/lib/rate-domain';
 import {
   MERCHANT_PAGE_SIZE,
   merchantDirectoryFilterParams,
+  parseMerchantDirectoryFilters,
   type MerchantDirectoryFilters,
   type MerchantDirectoryPage,
   type MerchantDirectorySummary,
@@ -65,6 +74,27 @@ async function fetchDirectoryPage(
   return body.data;
 }
 
+/**
+ * Reports the URL's directory filters. useSearchParams makes only this empty
+ * component client-rendered (inside its Suspense boundary), so the first page
+ * stays in the cached server HTML. Keyed on the parsed filters, so a URL
+ * change that keeps them (or a typed query, which does not touch the URL)
+ * does not overwrite what the user picked.
+ */
+function FiltersFromUrl({
+  onFilters,
+}: {
+  readonly onFilters: (filters: MerchantDirectoryFilters) => void;
+}) {
+  const searchParams = useSearchParams();
+  const parsed = parseMerchantDirectoryFilters((key) => searchParams.get(key));
+  const parsedKey = JSON.stringify(parsed);
+  useEffect(() => {
+    onFilters(JSON.parse(parsedKey) as MerchantDirectoryFilters);
+  }, [parsedKey, onFilters]);
+  return null;
+}
+
 export default function MerchantDirectoryExplorer({
   initialPage,
   summary,
@@ -80,6 +110,16 @@ export default function MerchantDirectoryExplorer({
   const [riskTier, setRiskTier] = useState<MerchantRiskTier>('all');
   const [seedingTier, setSeedingTier] = useState<MerchantSeedingTier>('all');
   const [sortBy, setSortBy] = useState<MerchantSortOption>(initialSort);
+  // The page is cached unfiltered; FiltersFromUrl applies a link's filters
+  // (and later navigations) here, and the effect below fetches that page.
+  const applyUrlFilters = useCallback((next: MerchantDirectoryFilters) => {
+    setQuery(next.query);
+    setPlatform(next.platform);
+    setOfficialOnly(next.officialOnly);
+    setRiskTier(next.riskTier);
+    setSeedingTier(next.seedingTier);
+    setSortBy(next.sortBy);
+  }, []);
   const [copiedMerchantsMd, setCopiedMerchantsMd] = useState(false);
   // The server filters and pages the directory (DOS/Rate#452): only the
   // stores on screen are in the browser. Exports fetch every matching store.
@@ -431,6 +471,9 @@ export default function MerchantDirectoryExplorer({
 
   return (
     <div>
+      <Suspense fallback={null}>
+        <FiltersFromUrl onFilters={applyUrlFilters} />
+      </Suspense>
       {/* KPI Summary Strip */}
       <div className="row g-3 mb-4">
         <div className="col-md-3 col-6">

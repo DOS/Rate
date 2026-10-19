@@ -76,3 +76,20 @@ test('merchant Markdown copy covers every matching store', async ({
   // Title, blank line, header and separator, then one row per store.
   expect(md.trim().split('\n').length - 4).toBe(total);
 });
+
+// /merchants is cached unfiltered; a link's filters are applied in the
+// browser through the directory API (DOS/Rate#560).
+test('the merchant directory is served from the page cache', async ({
+  request,
+}) => {
+  expect((await request.get('/merchants')).status()).toBe(200);
+  const res = await request.get('/merchants?q=last');
+  expect(res.status()).toBe(200);
+  expect(res.headers()['x-nextjs-cache']).toMatch(/^(HIT|STALE)$/);
+});
+
+test('a merchant directory link applies its search', async ({ page }) => {
+  await page.goto('/merchants?q=Last%20Ranked');
+  await expect(page.getByRole('searchbox').first()).toHaveValue('Last Ranked');
+  await expect(page.getByText('Last Ranked Shop').first()).toBeVisible();
+});

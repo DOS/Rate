@@ -14,13 +14,12 @@ import {
   MERCHANT_PAGE_SIZE,
   pageMerchantDirectory,
   summarizeMerchantDirectory,
-  type MerchantSortOption,
 } from '@/lib/merchant-directory';
 
-// Reads searchParams, so it renders per request. The [locale] layout's
-// generateStaticParams would otherwise make it static, and the searchParams
-// read would then fail with DYNAMIC_SERVER_USAGE (DOS/Rate#491).
-export const dynamic = 'force-dynamic';
+// Cached: the page ships the unfiltered first page, and the explorer applies
+// ?q= / ?platform= / ?official= / ?sort= in the browser through the
+// directory API, so no request data is read here (DOS/Rate#560).
+export const revalidate = 300;
 
 export async function generateMetadata({
   params,
@@ -42,44 +41,19 @@ export async function generateMetadata({
 
 export default async function MerchantsDirectoryPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ locale: string }>;
-  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { locale } = await params;
   setRequestLocale(locale);
-  const resolvedSearch = searchParams ? await searchParams : {};
   const t = await getTranslations({ locale, namespace: 'merchants' });
   const merchants = await getCachedMerchantsList();
 
-  const initialQuery =
-    typeof resolvedSearch.q === 'string' ? resolvedSearch.q : '';
-  const initialPlatform =
-    typeof resolvedSearch.platform === 'string'
-      ? resolvedSearch.platform
-      : 'all';
-  const initialOfficialOnly =
-    resolvedSearch.official === '1' || resolvedSearch.official === 'true';
-  const rawSort =
-    typeof resolvedSearch.sort === 'string' ? resolvedSearch.sort : '';
-  const initialSort: MerchantSortOption =
-    rawSort === 'products_desc' ||
-    rawSort === 'seeding_asc' ||
-    rawSort === 'followers_desc'
-      ? rawSort
-      : 'trust_desc';
   // Only the first page and whole-directory stats go to the browser; the
   // explorer fetches further pages and exports from the directory API.
   const initialPage = pageMerchantDirectory(
     merchants,
-    {
-      ...DEFAULT_MERCHANT_DIRECTORY_FILTERS,
-      query: initialQuery,
-      platform: initialPlatform.toLowerCase(),
-      officialOnly: initialOfficialOnly,
-      sortBy: initialSort,
-    },
+    DEFAULT_MERCHANT_DIRECTORY_FILTERS,
     0,
     MERCHANT_PAGE_SIZE
   );
@@ -179,10 +153,6 @@ export default async function MerchantsDirectoryPage({
             initialPage={initialPage}
             summary={summary}
             locale={locale}
-            initialQuery={initialQuery}
-            initialPlatform={initialPlatform}
-            initialOfficialOnly={initialOfficialOnly}
-            initialSort={initialSort}
           />
         </div>
       </section>
