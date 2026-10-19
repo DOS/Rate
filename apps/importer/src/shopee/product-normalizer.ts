@@ -1,5 +1,8 @@
-import type { ProductSpecifications, KeySpecs } from '@repo/shared-data';
+import { MAX_VALID_VND_PRICE, type ProductSpecifications, type KeySpecs } from '@repo/shared-data';
 import type { ShopeeProduct } from './types.js';
+
+export const MAX_VALID_RAM_GB = 2048;
+export const MAX_VALID_STORAGE_GB = 65536;
 
 export type CanonicalCategorySlug =
   'smartphones' | 'tablets' | 'laptops' | 'smartwatches' | 'earbuds';
@@ -1182,11 +1185,13 @@ export class ProductNormalizer {
     // 3. Extract Storage - RAM-aware (plan v7 §5.2, Codex-reproduced bug:
     // "Samsung Galaxy A55 8GB RAM 256GB" must be 256GB, not the first GB token).
     // Decimal separator: dot or comma (Vietnamese titles use "1,5TB").
-    const sizeTokens = [...title.matchAll(/(\d+(?:[.,]\d+)?)\s*(TB|GB)/gi)].map(m => ({
-      value: parseFloat(m[1].replace(',', '.')) * (m[2].toUpperCase() === 'TB' ? 1024 : 1),
-      index: m.index ?? 0,
-      raw: m[0],
-    }));
+    const sizeTokens = [...title.matchAll(/(\d+(?:[.,]\d+)?)\s*(TB|GB)/gi)]
+      .map(m => ({
+        value: parseFloat(m[1].replace(',', '.')) * (m[2].toUpperCase() === 'TB' ? 1024 : 1),
+        index: m.index ?? 0,
+        raw: m[0],
+      }))
+      .filter(t => Number.isFinite(t.value) && t.value > 0);
 
     const ramPhrases = [...title.matchAll(/bộ\s*nhớ\s*RAM|dung\s*lượng\s*RAM|RAM\b/gi)].map(
       m => m.index ?? 0
@@ -1227,7 +1232,9 @@ export class ProductNormalizer {
       }
     }
 
-    const storageCandidates = claimable.filter(t => !t.claimed);
+    const storageCandidates = claimable.filter(
+      t => !t.claimed && t.value > 0 && t.value <= MAX_VALID_STORAGE_GB
+    );
 
     const romExplicit = title.match(/(?:ROM|bộ nhớ trong)\s*[:-]?\s*(\d+(?:[.,]\d+)?)\s*(TB|GB)/i);
     const romLoose = title.match(
@@ -1237,18 +1244,29 @@ export class ProductNormalizer {
     const baseKey = `${slugify(brand)}:${slugify(model)}`;
     const benchmark = CANONICAL_PHONE_REGISTRY[baseKey];
 
+    const toValidStorageGb = (val: number): number | null =>
+      Number.isFinite(val) && val > 0 && val <= MAX_VALID_STORAGE_GB ? val : null;
+
     let storageGb: number | null = null;
     let storageConfident = false;
     const marker = romExplicit ?? romLoose;
     if (marker) {
-      storageGb =
-        parseFloat(marker[1].replace(',', '.')) * (marker[2].toUpperCase() === 'TB' ? 1024 : 1);
-      storageConfident = true;
+      const candidateStorage = toValidStorageGb(
+        parseFloat(marker[1].replace(',', '.')) * (marker[2].toUpperCase() === 'TB' ? 1024 : 1)
+      );
+      if (candidateStorage !== null) {
+        storageGb = candidateStorage;
+        storageConfident = true;
+      }
     } else if (slashRamRom) {
-      storageGb =
+      const candidateStorage = toValidStorageGb(
         parseFloat(slashRamRom[2].replace(',', '.')) *
-        (slashRamRom[3].toUpperCase() === 'TB' ? 1024 : 1);
-      storageConfident = true;
+          (slashRamRom[3].toUpperCase() === 'TB' ? 1024 : 1)
+      );
+      if (candidateStorage !== null) {
+        storageGb = candidateStorage;
+        storageConfident = true;
+      }
     } else if (storageCandidates.length === 1) {
       storageGb = storageCandidates[0].value;
       storageConfident = true;
@@ -1265,8 +1283,19 @@ export class ProductNormalizer {
     const colors: string[] = [];
     if (Array.isArray(raw.models)) {
       for (const m of raw.models) {
-        if (m.name && typeof m.name === 'string' && !colors.includes(m.name.trim())) {
-          colors.push(m.name.trim());
+        const trimmedColor = typeof m?.name === 'string' ? m.name.trim() : '';
+        if (trimmedColor.length > 0 && !colors.includes(trimmedColor)) {
+          colors.push(trimmedColor);
+        }
+      }
+    }
+
+    const images: string[] = [];
+    if (Array.isArray(raw.images)) {
+      for (const img of raw.images) {
+        const trimmedImg = typeof img === 'string' ? img.trim() : '';
+        if (trimmedImg.length > 0 && !images.includes(trimmedImg)) {
+          images.push(trimmedImg);
         }
       }
     }
@@ -1306,7 +1335,15 @@ export class ProductNormalizer {
         ? parsedTitleScreen
         : null;
 
-    const ramGb = benchmark ? benchmark.ram_gb : (claimable.find(t => t.claimed)?.value ?? null);
+    const claimedRamValue = claimable.find(t => t.claimed)?.value ?? null;
+    const ramGb = benchmark
+      ? benchmark.ram_gb
+      : claimedRamValue !== null &&
+          Number.isFinite(claimedRamValue) &&
+          claimedRamValue > 0 &&
+          claimedRamValue <= MAX_VALID_RAM_GB
+        ? claimedRamValue
+        : null;
     const screenSize = benchmark ? benchmark.screen_size_inch : titleScreenSize;
     const batteryMah = benchmark ? benchmark.battery_mah : null;
     const has5g = benchmark
@@ -1471,12 +1508,18 @@ export class ProductNormalizer {
             ? 'Dual Camera'
             : 'Single Camera';
 
+    const rawPriceMin = Number(raw.priceMin);
+    const safePriceMin =
+      Number.isFinite(rawPriceMin) && rawPriceMin > 0 && rawPriceMin <= MAX_VALID_VND_PRICE
+        ? rawPriceMin
+        : 0;
+
     const specifications: ProductSpecifications = {
       category_slug: categorySlug,
       availability: {
         announced: benchmark?.release_date || '2024',
         status: 'Available',
-        prices_msrp: `${storageDisplay}: ${(raw.priceMin || 0).toLocaleString('vi-VN')}₫`,
+        prices_msrp: `${storageDisplay}: ${safePriceMin.toLocaleString('vi-VN')}₫`,
       },
       design: {
         dimensions: benchmark?.dimensions || undefined,
@@ -1505,7 +1548,7 @@ export class ProductNormalizer {
         cpu: benchmark?.cpu || undefined,
         gpu: benchmark?.gpu || undefined,
         ram_gb: ramGb || undefined,
-        storage_gb: storageGb !== null ? storageGb : undefined,
+        storage_gb: storageGb !== null && storageGb > 0 ? storageGb : undefined,
         storage_expansion: 'Không hỗ trợ thẻ nhớ',
         os: benchmark?.os || fallbackOs,
       },
@@ -1602,7 +1645,7 @@ export class ProductNormalizer {
       battery_mah: batteryMah,
       has_5g: has5g,
       colors,
-      images: raw.images || [],
+      images,
       specifications,
       key_specs: keySpecs,
       description: raw.description,

@@ -1,10 +1,22 @@
 import crypto from 'node:crypto';
-import { detectCategorySlug, type NormalizedProductCandidate } from './product-normalizer.js';
+import {
+  detectCategorySlug,
+  type CanonicalCategorySlug,
+  type NormalizedProductCandidate,
+} from './product-normalizer.js';
 import { AiSpecEnricher, mergeProductSpecifications } from './ai-spec-enricher.js';
 import { createImporterLogger } from './logger.js';
 import type { RateSupabaseClient } from './types.js';
 
 const logger = createImporterLogger('EntityMatcher');
+
+const VALID_CATEGORY_SLUGS = new Set<CanonicalCategorySlug>([
+  'smartphones',
+  'tablets',
+  'laptops',
+  'smartwatches',
+  'earbuds',
+]);
 
 /** Minimum pg_trgm similarity returned from RPC so ambiguous near-misses (0.65..0.69) can be flagged as draft */
 export const ENTITY_MATCH_CANDIDATE_FLOOR = 0.65;
@@ -218,9 +230,24 @@ export class EntityMatcher {
       throw new Error(`[EntityMatcher] Master product ${masterId} not found: ${fetchErr?.message}`);
     }
 
-    const inferredCategorySlug = detectCategorySlug(
-      `${row.brand || ''} ${row.model || ''} ${row.name || ''}`
-    );
+    const existingSpecsRecord =
+      row.specifications &&
+      typeof row.specifications === 'object' &&
+      !Array.isArray(row.specifications)
+        ? (row.specifications as Record<string, unknown>)
+        : undefined;
+    const rawExistingCatSlug =
+      typeof existingSpecsRecord?.category_slug === 'string'
+        ? existingSpecsRecord.category_slug.trim().toLowerCase()
+        : '';
+    const existingCategorySlug = VALID_CATEGORY_SLUGS.has(
+      rawExistingCatSlug as CanonicalCategorySlug
+    )
+      ? (rawExistingCatSlug as CanonicalCategorySlug)
+      : undefined;
+    const inferredCategorySlug =
+      existingCategorySlug ??
+      detectCategorySlug(`${row.brand || ''} ${row.model || ''} ${row.name || ''}`);
 
     const aiResult = await this.enricher.fetchSpecsFromAi({
       brand: row.brand,
@@ -237,10 +264,13 @@ export class EntityMatcher {
     }
 
     const mergedSpecifications = mergeProductSpecifications(
-      (row as { specifications?: unknown }).specifications,
+      existingSpecsRecord,
       aiResult.specifications,
       Array.isArray(row.colors) && row.colors.length > 0 ? row.colors : undefined
     );
+    if (!mergedSpecifications.category_slug) {
+      mergedSpecifications.category_slug = inferredCategorySlug;
+    }
 
     const existingKeySpecs =
       row.key_specs && typeof row.key_specs === 'object' && !Array.isArray(row.key_specs)
