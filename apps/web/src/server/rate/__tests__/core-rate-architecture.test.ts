@@ -5461,7 +5461,206 @@ async function runCoreArchitectureSuite() {
   }
 
   console.log(
-    '  ✅ [70/70] CSV formula guard, Deal Radar index selection & client store normalization (#406) passed'
+    '  ✅ [70/71] CSV formula guard, Deal Radar index selection & client store normalization (#406) passed'
+  );
+
+  // =========================================================================
+  // 71. Case-Insensitive Brand Facets, Fractional TB Labels & getMasterProducts Fallback Hardening (#510)
+  // =========================================================================
+  {
+    const { formatStorageLabel, getCategoryFilterSchema } =
+      await import('@/lib/category-filters');
+    const rateApi510 = await import('@/lib/rate-api');
+
+    const laptopSchema = getCategoryFilterSchema('laptops', [
+      'Asus',
+      '  apple ',
+      'Framework',
+      'framework',
+    ]);
+    assert.equal(
+      laptopSchema.defaultBrands.filter((b) => b.toLowerCase() === 'asus')
+        .length,
+      1,
+      'getCategoryFilterSchema must deduplicate Asus and ASUS case-insensitively (#510)'
+    );
+    assert.ok(
+      laptopSchema.defaultBrands.includes('ASUS'),
+      'getCategoryFilterSchema must preserve canonical ASUS casing from defaultBrands (#510)'
+    );
+    assert.equal(
+      laptopSchema.defaultBrands.filter((b) => b.toLowerCase() === 'framework')
+        .length,
+      1,
+      'getCategoryFilterSchema must deduplicate custom dynamicBrands case-insensitively (#510)'
+    );
+
+    assert.equal(formatStorageLabel(512), '512GB');
+    assert.equal(formatStorageLabel(1024), '1TB');
+    assert.equal(
+      formatStorageLabel(1536),
+      '1.5TB',
+      'formatStorageLabel must format 1536GB as 1.5TB (#510)'
+    );
+    assert.equal(formatStorageLabel(2048), '2TB');
+
+    const origFetch510 = globalThis.fetch;
+    try {
+      let masterPageFetched = false;
+      const capturedUrls510: string[] = [];
+      globalThis.fetch = (async (input: RequestInfo | URL) => {
+        const url = String(input);
+        capturedUrls510.push(url);
+
+        if (url.includes('/rest/v1/rpc/get_category_brand_facets')) {
+          return new Response(
+            JSON.stringify({ message: 'function not found' }),
+            { status: 404, headers: { 'content-type': 'application/json' } }
+          );
+        }
+        if (url.includes('/rest/v1/rpc/search_master_products')) {
+          return new Response(
+            JSON.stringify({ message: 'function not found' }),
+            { status: 404, headers: { 'content-type': 'application/json' } }
+          );
+        }
+        if (url.includes('/rest/v1/categories')) {
+          if (url.includes('slug=eq.')) {
+            return new Response(JSON.stringify({ id: 'cat-laptops-510' }), {
+              status: 200,
+              headers: { 'content-type': 'application/json' },
+            });
+          }
+          return new Response(
+            JSON.stringify([
+              {
+                id: 'cat-laptops-510',
+                name: 'Laptops',
+                slug: 'laptops',
+                sort_order: 3,
+              },
+            ]),
+            { status: 200, headers: { 'content-type': 'application/json' } }
+          );
+        }
+        if (url.includes('/rest/v1/master_products')) {
+          if (url.includes('select=brand%2Ccategory_id')) {
+            return new Response(
+              JSON.stringify([
+                { brand: 'asus', category_id: 'cat-laptops-510' },
+                { brand: 'Asus', category_id: 'cat-laptops-510' },
+                { brand: 'ASUS ', category_id: 'cat-laptops-510' },
+                { brand: 'Apple', category_id: 'cat-laptops-510' },
+              ]),
+              { status: 200, headers: { 'content-type': 'application/json' } }
+            );
+          }
+          if (masterPageFetched) {
+            return new Response(JSON.stringify([]), {
+              status: 200,
+              headers: { 'content-type': 'application/json' },
+            });
+          }
+          masterPageFetched = true;
+          return new Response(
+            JSON.stringify([
+              {
+                id: 'mp-510-1',
+                category_id: 'cat-laptops-510',
+                brand: 'Asus',
+                model: 'ROG Zephyrus G16',
+                model_key: 'asus:rog-zephyrus-g16:1024gb',
+                name: 'ASUS ROG Zephyrus G16 1TB',
+                slug: 'asus-rog-zephyrus-g16-1tb',
+                min_price: 45_990_000,
+                max_price: 48_990_000,
+                merchant_count: 4,
+                total_reviews: 12,
+                average_rating: 4.2,
+                user_rating_weighted: null,
+                expert_rating: 4.9,
+                status: 'published',
+                specifications: {},
+                key_specs: { screen: '16" 2.5K OLED 240Hz' },
+              },
+              {
+                id: 'mp-510-2',
+                category_id: 'cat-laptops-510',
+                brand: 'ASUS',
+                model: 'Zenbook S 14',
+                model_key: 'asus:zenbook-s-14:1024gb',
+                name: 'ASUS Zenbook S 14 1TB',
+                slug: 'asus-zenbook-s-14-1tb',
+                min_price: 39_990_000,
+                max_price: 41_990_000,
+                merchant_count: 5,
+                total_reviews: 20,
+                average_rating: 4.5,
+                user_rating_weighted: 4.6,
+                expert_rating: 4.5,
+                status: 'published',
+                specifications: { display: { refresh_rate_hz: 120 } },
+                key_specs: { screen: '14" 3K OLED 120Hz' },
+              },
+            ]),
+            { status: 200, headers: { 'content-type': 'application/json' } }
+          );
+        }
+        return new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }) as typeof fetch;
+
+      const facets510 = await rateApi510.getCategoryDirectoryFacets('laptops');
+      assert.equal(
+        facets510.brands.length,
+        2,
+        'getCategoryDirectoryFacets must merge case-variant Asus/ASUS/asus into a single brand facet (#510)'
+      );
+      assert.equal(facets510.brands[0]?.count, 3);
+      assert.equal(facets510.brands[0]?.name, 'Asus');
+
+      masterPageFetched = false;
+      const filtered510 = await rateApi510.getMasterProducts({
+        categorySlug: 'laptops',
+        brands: ['asus'],
+        minRefreshRateHz: 165,
+        sort: 'rating_desc',
+      });
+      assert.ok(
+        !capturedUrls510.some(
+          (u) =>
+            u.includes('/rest/v1/master_products') && u.includes('brand=in.')
+        ),
+        'getMasterProducts fallback must not apply case-sensitive brand=in. SQL filter (#510)'
+      );
+      assert.equal(
+        filtered510.length,
+        1,
+        'getMasterProducts fallback must match 240Hz in key_specs.screen when minRefreshRateHz=165 and match brand case-insensitively (#510)'
+      );
+      assert.equal(filtered510[0]?.id, 'mp-510-1');
+
+      masterPageFetched = false;
+      const sorted510 = await rateApi510.getMasterProducts({
+        categorySlug: 'laptops',
+        brands: ['asus'],
+        sort: 'rating_desc',
+      });
+      assert.equal(sorted510.length, 2);
+      assert.equal(
+        sorted510[0]?.id,
+        'mp-510-1',
+        'rating_desc sort must use expert_rating (4.9) when user_rating_weighted is null (#510)'
+      );
+    } finally {
+      globalThis.fetch = origFetch510;
+    }
+  }
+
+  console.log(
+    '  ✅ [71/71] Case-insensitive brand facets, fractional TB storage labels & getMasterProducts fallback hardening (#510) passed'
   );
 
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
