@@ -45,6 +45,11 @@ export function unwrapRadarPayload(
   return payload as CrossPlatformDealRadarResponse;
 }
 
+function toSafeRadarPct(value: unknown, max = 10_000): number {
+  const n = Math.abs(Number(value));
+  return Number.isFinite(n) && n > 0 ? Math.min(n, max) : 0;
+}
+
 /** Build a slug -> signal index. A genuine deal wins over a trap. */
 export function buildRadarIndex(
   payload: CrossPlatformDealRadarResponse | null | undefined
@@ -58,8 +63,8 @@ export function buildRadarIndex(
   for (const g of payload.genuineDeals ?? []) {
     if (!g?.productSlug) continue;
     const prev = map.get(g.productSlug)?.genuineDeal;
-    const prevSavings = Math.abs(Number(prev?.savingsVsMedianPct ?? 0));
-    const nextSavings = Math.abs(Number(g.savingsVsMedianPct ?? 0));
+    const prevSavings = toSafeRadarPct(prev?.savingsVsMedianPct);
+    const nextSavings = toSafeRadarPct(g.savingsVsMedianPct);
     const isStronger =
       !prev ||
       nextSavings > prevSavings ||
@@ -73,14 +78,14 @@ export function buildRadarIndex(
   for (const t of payload.fakeSaleTraps ?? []) {
     if (!t?.productSlug) continue;
     const prev = map.get(t.productSlug)?.fakeSaleTrap;
-    const prevMarkup = Math.abs(Number(prev?.fakeMarkupPct ?? 0));
-    const nextMarkup = Math.abs(Number(t.fakeMarkupPct ?? 0));
+    const prevMarkup = toSafeRadarPct(prev?.fakeMarkupPct);
+    const nextMarkup = toSafeRadarPct(t.fakeMarkupPct);
     const isWorse =
       !prev ||
       nextMarkup > prevMarkup ||
       (nextMarkup === prevMarkup &&
-        Number(t.claimedDiscountPct ?? 0) >
-          Number(prev.claimedDiscountPct ?? 0));
+        toSafeRadarPct(t.claimedDiscountPct) >
+          toSafeRadarPct(prev.claimedDiscountPct));
     if (isWorse) {
       upsert(t.productSlug, { fakeSaleTrap: t });
     }
@@ -88,8 +93,8 @@ export function buildRadarIndex(
   for (const sp of payload.priceSpreadLeaders ?? []) {
     if (!sp?.productSlug) continue;
     const prev = map.get(sp.productSlug)?.priceSpread;
-    const prevSpread = Number(prev?.spreadPct ?? 0);
-    const nextSpread = Number(sp.spreadPct ?? 0);
+    const prevSpread = toSafeRadarPct(prev?.spreadPct);
+    const nextSpread = toSafeRadarPct(sp.spreadPct);
     if (!prev || nextSpread > prevSpread) {
       upsert(sp.productSlug, { priceSpread: sp });
     }
@@ -103,9 +108,9 @@ export function buildRadarIndex(
     map.set(slug, {
       ...sig,
       verdict,
-      savingsPct: Math.abs(Number(sig.genuineDeal?.savingsVsMedianPct ?? 0)),
-      fakeMarkupPct: Math.abs(Number(sig.fakeSaleTrap?.fakeMarkupPct ?? 0)),
-      spreadPct: Math.max(0, Number(sig.priceSpread?.spreadPct ?? 0)),
+      savingsPct: toSafeRadarPct(sig.genuineDeal?.savingsVsMedianPct),
+      fakeMarkupPct: toSafeRadarPct(sig.fakeSaleTrap?.fakeMarkupPct),
+      spreadPct: toSafeRadarPct(sig.priceSpread?.spreadPct),
     });
   }
   return map;
@@ -126,20 +131,23 @@ export function radarLabel(
 ): string {
   const sig = signal ?? EMPTY_RADAR_SIGNAL;
   const loc = locale === 'en' || locale === 'cs' ? locale : 'vi';
+  const safeSavingsPct = toSafeRadarPct(sig.savingsPct);
+  const safeFakeMarkupPct = toSafeRadarPct(sig.fakeMarkupPct);
+  const safeSpreadPct = toSafeRadarPct(sig.spreadPct);
   if (sig.verdict === 'genuine_deal') {
-    const pct = sig.savingsPct.toFixed(1);
+    const pct = safeSavingsPct.toFixed(1);
     if (loc === 'en') return `🔥 60D Low (-${pct}%)`;
     if (loc === 'cs') return `🔥 60D minimum (-${pct}%)`;
     return `🔥 Đáy giá 60N (-${pct}%)`;
   }
   if (sig.verdict === 'fake_sale_trap') {
-    const pct = sig.fakeMarkupPct.toFixed(1);
+    const pct = safeFakeMarkupPct.toFixed(1);
     if (loc === 'en') return `🚨 Fake Sale Alert (+${pct}%)`;
     if (loc === 'cs') return `🚨 Falešná sleva (+${pct}%)`;
     return `🚨 Cảnh báo Sale Ảo (+${pct}%)`;
   }
-  if (sig.spreadPct > 0 && sig.spreadPct >= minSpreadPct) {
-    const pct = sig.spreadPct.toFixed(1);
+  if (safeSpreadPct > 0 && safeSpreadPct >= minSpreadPct) {
+    const pct = safeSpreadPct.toFixed(1);
     if (loc === 'en') return `📊 +${pct}% cross-platform spread`;
     if (loc === 'cs') return `📊 +${pct}% rozdíl mezi e-shopy`;
     return `📊 Lệch giá +${pct}% đa sàn`;
@@ -152,9 +160,9 @@ export function radarExportFields(signal?: RadarSignal | null) {
   const sig = signal ?? EMPTY_RADAR_SIGNAL;
   return {
     verdict: sig.verdict,
-    savingsPct: sig.savingsPct,
-    fakeMarkupPct: sig.fakeMarkupPct,
-    spreadPct: sig.spreadPct,
+    savingsPct: toSafeRadarPct(sig.savingsPct),
+    fakeMarkupPct: toSafeRadarPct(sig.fakeMarkupPct),
+    spreadPct: toSafeRadarPct(sig.spreadPct),
   };
 }
 
@@ -169,9 +177,9 @@ export function radarCsvCells(signal?: RadarSignal | null): string[] {
   const sig = signal ?? EMPTY_RADAR_SIGNAL;
   return [
     sig.verdict,
-    sig.savingsPct.toFixed(1),
-    sig.fakeMarkupPct.toFixed(1),
-    sig.spreadPct.toFixed(1),
+    toSafeRadarPct(sig.savingsPct).toFixed(1),
+    toSafeRadarPct(sig.fakeMarkupPct).toFixed(1),
+    toSafeRadarPct(sig.spreadPct).toFixed(1),
   ];
 }
 
@@ -206,7 +214,7 @@ export function selectMerchantRadar(
     genuineDealCount: genuineDeals.length,
     fakeTrapCount: fakeSaleTraps.length,
     bestSavingsPct: genuineDeals.reduce(
-      (max, g) => Math.max(max, Math.abs(Number(g.savingsVsMedianPct || 0))),
+      (max, g) => Math.max(max, toSafeRadarPct(g.savingsVsMedianPct)),
       0
     ),
   };

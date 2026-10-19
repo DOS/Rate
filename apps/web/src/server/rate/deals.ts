@@ -104,15 +104,18 @@ function resolveEffectiveMerchantRisk(
   merchant: MerchantOffer['merchant'] | undefined,
   fallback: number
 ): number {
-  if (!merchant) return fallback;
-  const risk = Number(merchant.risk_score ?? fallback);
+  const safeFallback =
+    Number.isFinite(fallback) && fallback >= 0 ? Math.min(100, fallback) : 0;
+  if (!merchant) return safeFallback;
+  const risk = Number(merchant.risk_score ?? safeFallback);
   const dosafe = Number(merchant.dosafe_risk_score ?? 0);
   const review = Number(merchant.review_risk_score ?? 0);
-  return Math.max(
-    Number.isFinite(risk) ? risk : fallback,
+  const rawMax = Math.max(
+    Number.isFinite(risk) ? risk : safeFallback,
     Number.isFinite(dosafe) ? dosafe : 0,
     Number.isFinite(review) ? review : 0
   );
+  return Math.min(100, Math.max(0, rawMax));
 }
 
 /**
@@ -139,7 +142,11 @@ export function computeCrossPlatformDealRadarFromData(
   const categoryFilter = options?.categorySlug || 'all';
   const platformFilter =
     (options?.platform || 'all').trim().toLowerCase() || 'all';
-  const limit = Math.max(1, Math.min(options?.limit || 12, 50));
+  const rawLimit = Number(options?.limit);
+  const limit =
+    Number.isFinite(rawLimit) && rawLimit >= 1
+      ? Math.min(Math.floor(rawLimit), 50)
+      : 12;
 
   const genuineDeals: CrossPlatformDealRadarItem[] = [];
   const fakeSaleTraps: CrossPlatformDealRadarItem[] = [];
@@ -178,7 +185,7 @@ export function computeCrossPlatformDealRadarFromData(
     );
     // No expert or user rating yet: leave the score empty instead of inventing one.
     const jreviewsScore10 =
-      rawExpert > 0
+      Number.isFinite(rawExpert) && rawExpert > 0 && rawExpert <= 10
         ? Number((rawExpert <= 5 ? rawExpert * 2 : rawExpert).toFixed(1))
         : null;
     const imageUrl = resolveProductImageUrl(master);
@@ -463,6 +470,10 @@ export function getCrossPlatformDealRadar(options?: {
   const categorySlug = options?.categorySlug || 'all';
   const platformFilter =
     (options?.platform || 'all').trim().toLowerCase() || 'all';
-  const limit = Math.max(1, Math.min(options?.limit || 12, 50));
+  const rawLimit = Number(options?.limit);
+  const limit =
+    Number.isFinite(rawLimit) && rawLimit >= 1
+      ? Math.min(Math.floor(rawLimit), 50)
+      : 12;
   return _getCrossPlatformDealRadarByKey(categorySlug, platformFilter, limit);
 }
