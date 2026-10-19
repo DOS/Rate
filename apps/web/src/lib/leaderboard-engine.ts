@@ -608,7 +608,10 @@ export function buildPopular1v1BattlesForCategory(
     const scoreDelta5 = Number(
       Math.abs(itemA.combinedScore5 - itemB.combinedScore5).toFixed(2)
     );
-    const priceDeltaVnd = Math.abs(itemA.minPrice - itemB.minPrice);
+    const priceDeltaVnd =
+      itemA.minPrice > 0 && itemB.minPrice > 0
+        ? Math.abs(itemA.minPrice - itemB.minPrice)
+        : 0;
     const winnerSlug =
       itemA.combinedScore5 > itemB.combinedScore5
         ? itemA.slug
@@ -629,4 +632,27 @@ export function buildPopular1v1BattlesForCategory(
   }
 
   return pairs;
+}
+
+/**
+ * Compare two minimum VND prices (`minPriceA` vs `minPriceB`) while treating
+ * non-positive (`<= 0`) values as unpriced.
+ * Returns `'A'` when A is strictly cheaper (or A is priced and B is unpriced),
+ * `'B'` when B is strictly cheaper (or B is priced and A is unpriced),
+ * `'equal'` when both are priced and equal, and `'unknown'` when neither is priced.
+ */
+export function comparePositiveMinPrices(
+  minPriceA: number,
+  minPriceB: number
+): 'A' | 'B' | 'equal' | 'unknown' {
+  const validA = Number.isFinite(minPriceA) && minPriceA > 0;
+  const validB = Number.isFinite(minPriceB) && minPriceB > 0;
+  if (validA && validB) {
+    if (minPriceA < minPriceB) return 'A';
+    if (minPriceB < minPriceA) return 'B';
+    return 'equal';
+  }
+  if (validA && !validB) return 'A';
+  if (!validA && validB) return 'B';
+  return 'unknown';
 }

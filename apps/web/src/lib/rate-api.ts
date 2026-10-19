@@ -973,6 +973,7 @@ export async function getMasterProducts(
     hasMultiBrands ||
     (params?.search && params.search.trim().length > 0) ||
     (typeof params?.minRating === 'number' && params.minRating > 0) ||
+    (typeof params?.minBatteryMah === 'number' && params.minBatteryMah > 0) ||
     (typeof params?.minRefreshRateHz === 'number' &&
       params.minRefreshRateHz > 0) ||
     (typeof params?.minFastChargingW === 'number' &&
@@ -1011,10 +1012,6 @@ export async function getMasterProducts(
 
     if (params?.storageGb && params.storageGb.length > 0) {
       query = query.in('storage_gb', params.storageGb);
-    }
-
-    if (typeof params?.minBatteryMah === 'number' && params.minBatteryMah > 0) {
-      query = query.gte('battery_mah', params.minBatteryMah);
     }
 
     if (params?.has5g === true) {
@@ -1114,6 +1111,20 @@ export async function getMasterProducts(
     items = items.filter((item) => getEffectiveRating(item) >= minRating);
   }
 
+  // Battery: capacity_mah >= minBatteryMah (top-level -> specifications.battery.capacity_mah -> key_specs.battery "<N> mAh")
+  if (typeof params?.minBatteryMah === 'number' && params.minBatteryMah > 0) {
+    const minMah = params.minBatteryMah;
+    items = items.filter((item) => {
+      const topMah = Number(item.battery_mah || 0);
+      if (topMah >= minMah) return true;
+      const specMah = Number(item.specifications?.battery?.capacity_mah || 0);
+      if (specMah >= minMah) return true;
+      const batteryText = item.key_specs?.battery || '';
+      const mahMatch = batteryText.match(/(\d{3,5})\s*mah\b/i);
+      return mahMatch ? Number(mahMatch[1]) >= minMah : false;
+    });
+  }
+
   // 10 Field Groups JSONB filters:
   // Display: refresh_rate_hz >= minRefreshRateHz
   if (
@@ -1152,17 +1163,26 @@ export async function getMasterProducts(
     );
   }
 
-  // Display: compact screen <= maxScreenSizeInch
+  // Display: compact screen <= maxScreenSizeInch (top-level -> specifications.display.size_inch -> key_specs.screen)
   if (
     typeof params?.maxScreenSizeInch === 'number' &&
     params.maxScreenSizeInch > 0
   ) {
     const maxInch = params.maxScreenSizeInch;
     items = items.filter((item) => {
-      const size = Number(
-        item.screen_size_inch ?? item.specifications?.display?.size_inch ?? 0
-      );
-      return size > 0 && size <= maxInch;
+      const topSize = Number(item.screen_size_inch || 0);
+      const specSize = Number(item.specifications?.display?.size_inch || 0);
+      let size = topSize > 0 ? topSize : specSize > 0 ? specSize : 0;
+      if (size <= 0) {
+        const screenText = item.key_specs?.screen || '';
+        const inchMatch = screenText.match(
+          /\b(\d{1,2}(?:[.,]\d)?)\s*(?:inch|in\b|")/i
+        );
+        if (inchMatch?.[1]) {
+          size = Number(inchMatch[1].replace(',', '.'));
+        }
+      }
+      return Number.isFinite(size) && size > 0 && size <= maxInch;
     });
   }
 

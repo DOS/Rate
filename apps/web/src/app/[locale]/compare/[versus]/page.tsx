@@ -11,7 +11,10 @@ import {
 } from '@/server/rate';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
 import { defaultOpenGraph } from '@/lib/seo';
-import { scoreMasterProductForLeaderboard } from '@/lib/leaderboard-engine';
+import {
+  comparePositiveMinPrices,
+  scoreMasterProductForLeaderboard,
+} from '@/lib/leaderboard-engine';
 import NavbarDarkDynamic from '../../components/navbar/NavbarDarkDynamic';
 import FooterTop from '../../components/footer-top';
 import FooterDynamic from '../../components/footer/FooterDynamic';
@@ -113,14 +116,18 @@ export default async function VersusComparePage({ params }: VersusPageProps) {
   const scoreA = scoreMasterProductForLeaderboard(prodA, 'combined');
   const scoreB = scoreMasterProductForLeaderboard(prodB, 'combined');
 
+  const tiePriceSide = comparePositiveMinPrices(
+    scoreA.minPrice,
+    scoreB.minPrice
+  );
   const overallWinner =
     scoreA.combinedScore5 > scoreB.combinedScore5
       ? scoreA
       : scoreB.combinedScore5 > scoreA.combinedScore5
         ? scoreB
-        : scoreA.minPrice <= scoreB.minPrice
-          ? scoreA
-          : scoreB;
+        : tiePriceSide === 'B'
+          ? scoreB
+          : scoreA;
 
   const itemListSchema = {
     '@context': 'https://schema.org',

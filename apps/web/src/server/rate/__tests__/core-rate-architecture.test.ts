@@ -6435,6 +6435,180 @@ async function runCoreArchitectureSuite() {
     '  ✅ [75/75] GET /api/v1/rate/products Offset Pagination, key_specs.battery Fast-Charge Fallback & OpenAPI Route Coverage (#526) passed'
   );
 
+  // =========================================================================
+  // 76. 1v1 Versus Unpriced Tiebreaks, UI Persona Presets & Catalog Spec Fallbacks (#533)
+  // =========================================================================
+  {
+    const { comparePositiveMinPrices } = await import('@/lib/rate-domain');
+    assert.equal(comparePositiveMinPrices(19_990_000, 25_000_000), 'A');
+    assert.equal(comparePositiveMinPrices(25_000_000, 19_990_000), 'B');
+    assert.equal(comparePositiveMinPrices(20_000_000, 20_000_000), 'equal');
+    assert.equal(
+      comparePositiveMinPrices(0, 25_000_000),
+      'B',
+      'Unpriced product A (0 VND) must not beat priced product B (#533)'
+    );
+    assert.equal(
+      comparePositiveMinPrices(25_000_000, 0),
+      'A',
+      'Priced product A must beat unpriced product B (0 VND) (#533)'
+    );
+    assert.equal(comparePositiveMinPrices(0, 0), 'unknown');
+
+    const { NextRequest } = await import('next/server');
+    const { getMasterProducts } = await import('@/server/rate');
+    const versusRoute533 = await import('@/app/api/v1/rate/versus/route');
+    const origFetch533 = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.includes('/rest/v1/rpc/search_master_products')) {
+        return new Response('{"message":"function not found"}', {
+          status: 404,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      if (url.includes('/rest/v1/master_products')) {
+        const u533 = new URL(url);
+        const offset533 = Number(u533.searchParams.get('offset') ?? 0);
+        const limit533 = Number(u533.searchParams.get('limit') ?? 1000);
+        const rows533 = [
+          {
+            id: '00000000-0000-4000-8000-000000000531',
+            slug: 'unpriced-phone-a-256gb',
+            name: 'Unpriced Phone A 256GB',
+            brand: 'Samsung',
+            model: 'Phone A',
+            model_key: 'samsung-phone-a:256gb',
+            category_id: null,
+            min_price: 0,
+            max_price: 0,
+            merchant_count: 0,
+            battery_mah: null,
+            screen_size_inch: 0,
+            average_rating: 4.5,
+            user_rating_weighted: 4.5,
+            expert_rating: 8.8,
+            total_reviews: 20,
+            status: 'published',
+            specifications: {
+              battery: { capacity_mah: 5000 },
+            },
+            key_specs: {
+              screen: '6.1 inch Dynamic AMOLED 2X | 120Hz',
+              battery: '5000 mAh | 45W',
+            },
+            metadata: { category_slug: 'smartphones' },
+            thumbnail: null,
+            images: [],
+          },
+          {
+            id: '00000000-0000-4000-8000-000000000532',
+            slug: 'priced-phone-b-256gb',
+            name: 'Priced Phone B 256GB',
+            brand: 'Samsung',
+            model: 'Phone B',
+            model_key: 'samsung-phone-b:256gb',
+            category_id: null,
+            min_price: 24_990_000,
+            max_price: 26_990_000,
+            merchant_count: 4,
+            battery_mah: 0,
+            screen_size_inch: null,
+            average_rating: 4.5,
+            user_rating_weighted: 4.5,
+            expert_rating: 8.8,
+            total_reviews: 20,
+            status: 'published',
+            specifications: {
+              display: { size_inch: 6.7 },
+            },
+            key_specs: {
+              screen: '6.7 inch Dynamic AMOLED 2X | 120Hz',
+              battery: '5400 mAh | 65W',
+            },
+            metadata: { category_slug: 'smartphones' },
+            thumbnail: null,
+            images: [],
+          },
+        ];
+        return new Response(
+          JSON.stringify(rows533.slice(offset533, offset533 + limit533)),
+          {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }
+        );
+      }
+      return new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    try {
+      const compact533 = await getMasterProducts({
+        maxScreenSizeInch: 6.3,
+      });
+      assert.equal(
+        compact533.length,
+        1,
+        'getMasterProducts fallback must parse key_specs.screen when screen_size_inch is 0 (#533)'
+      );
+      assert.equal(compact533[0]?.slug, 'unpriced-phone-a-256gb');
+
+      const battery533 = await getMasterProducts({
+        minBatteryMah: 5200,
+      });
+      assert.equal(
+        battery533.length,
+        1,
+        'getMasterProducts fallback must parse key_specs.battery "<N> mAh" when battery_mah is 0 (#533)'
+      );
+      assert.equal(battery533[0]?.slug, 'priced-phone-b-256gb');
+
+      const versusReq533 = new NextRequest(
+        'https://rate.vn/api/v1/rate/versus?pair=unpriced-phone-a-256gb-vs-priced-phone-b-256gb&persona=photography'
+      );
+      const versusRes533 = await versusRoute533.GET(versusReq533);
+      assert.equal(versusRes533.status, 200);
+      const versusBody533 = (await versusRes533.json()) as {
+        ok: boolean;
+        persona: string;
+        weights: { camera: number };
+        overall_winner: { side: 'A' | 'B'; slug: string };
+        price_comparison: {
+          cheaper_slug: string;
+          price_delta_vnd: number;
+          price_delta_percent: number;
+        };
+      };
+      assert.equal(versusBody533.ok, true);
+      assert.equal(
+        versusBody533.persona,
+        'photography',
+        'GET /api/v1/rate/versus must recognize UI persona preset "photography" (#533)'
+      );
+      assert.equal(versusBody533.weights.camera, 45);
+      assert.equal(
+        versusBody533.price_comparison.cheaper_slug,
+        'priced-phone-b-256gb',
+        'cheaper_slug must resolve to the priced product when the other product has min_price=0 (#533)'
+      );
+      assert.equal(
+        versusBody533.price_comparison.price_delta_vnd,
+        0,
+        'price_delta_vnd must be 0 when one product is unpriced (#533)'
+      );
+      assert.equal(versusBody533.price_comparison.price_delta_percent, 0);
+    } finally {
+      globalThis.fetch = origFetch533;
+    }
+  }
+
+  console.log(
+    '  ✅ [76/76] 1v1 Versus Unpriced Tiebreaks, UI Persona Presets & Catalog Spec Fallbacks (#533) passed'
+  );
+
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
 

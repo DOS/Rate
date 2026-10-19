@@ -7,6 +7,7 @@ import {
 } from '@/server/rate';
 import { radarExportFields } from '@/lib/deal-radar';
 import {
+  comparePositiveMinPrices,
   scoreMasterProductForLeaderboard,
   type LeaderboardCriteriaBreakdown,
 } from '@/lib/leaderboard-engine';
@@ -44,11 +45,31 @@ const VERSUS_PERSONAS: VersusPersonaConfig[] = [
     },
   },
   {
+    id: 'default',
+    weights: {
+      screen: 20,
+      performance: 20,
+      camera: 20,
+      battery: 20,
+      value: 20,
+    },
+  },
+  {
     id: 'creator',
     weights: {
       screen: 25,
       performance: 15,
       camera: 40,
+      battery: 10,
+      value: 10,
+    },
+  },
+  {
+    id: 'photography',
+    weights: {
+      screen: 20,
+      performance: 15,
+      camera: 45,
       battery: 10,
       value: 10,
     },
@@ -64,6 +85,16 @@ const VERSUS_PERSONAS: VersusPersonaConfig[] = [
     },
   },
   {
+    id: 'gaming',
+    weights: {
+      screen: 25,
+      performance: 45,
+      camera: 5,
+      battery: 15,
+      value: 10,
+    },
+  },
+  {
     id: 'traveler',
     weights: {
       screen: 15,
@@ -74,7 +105,37 @@ const VERSUS_PERSONAS: VersusPersonaConfig[] = [
     },
   },
   {
+    id: 'endurance',
+    weights: {
+      screen: 15,
+      performance: 15,
+      camera: 10,
+      battery: 45,
+      value: 15,
+    },
+  },
+  {
+    id: 'business',
+    weights: {
+      screen: 35,
+      performance: 25,
+      camera: 10,
+      battery: 20,
+      value: 10,
+    },
+  },
+  {
     id: 'budget',
+    weights: {
+      screen: 15,
+      performance: 20,
+      camera: 10,
+      battery: 15,
+      value: 40,
+    },
+  },
+  {
+    id: 'value_hunter',
     weights: {
       screen: 15,
       performance: 20,
@@ -220,6 +281,10 @@ export async function GET(req: NextRequest) {
     const customScoreB5 = computeWeighted5(scoreB.criteria);
     const customScoreA10 = Number((customScoreA5 * 2).toFixed(1));
     const customScoreB10 = Number((customScoreB5 * 2).toFixed(1));
+    const priceSide = comparePositiveMinPrices(
+      scoreA.minPrice,
+      scoreB.minPrice
+    );
 
     const winnerSide: 'A' | 'B' =
       customScoreA5 > customScoreB5
@@ -230,9 +295,9 @@ export async function GET(req: NextRequest) {
             ? 'A'
             : scoreB.combinedScore5 > scoreA.combinedScore5
               ? 'B'
-              : scoreA.minPrice <= scoreB.minPrice
-                ? 'A'
-                : 'B';
+              : priceSide === 'B'
+                ? 'B'
+                : 'A';
 
     const winnerScore = winnerSide === 'A' ? scoreA : scoreB;
     const winnerCustom10 = winnerSide === 'A' ? customScoreA10 : customScoreB10;
@@ -257,18 +322,27 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    const priceDeltaVnd = Math.abs(scoreA.minPrice - scoreB.minPrice);
-    const minOfTwoPrices = Math.min(scoreA.minPrice, scoreB.minPrice);
+    const bothPriced =
+      Number.isFinite(scoreA.minPrice) &&
+      scoreA.minPrice > 0 &&
+      Number.isFinite(scoreB.minPrice) &&
+      scoreB.minPrice > 0;
+    const priceDeltaVnd = bothPriced
+      ? Math.abs(scoreA.minPrice - scoreB.minPrice)
+      : 0;
+    const minOfTwoPrices = bothPriced
+      ? Math.min(scoreA.minPrice, scoreB.minPrice)
+      : 0;
     const priceDeltaPercent =
       minOfTwoPrices > 0
         ? Number(((priceDeltaVnd / minOfTwoPrices) * 100).toFixed(1))
         : 0;
     const cheaperSlug =
-      scoreA.minPrice < scoreB.minPrice
+      priceSide === 'A'
         ? scoreA.slug
-        : scoreB.minPrice < scoreA.minPrice
+        : priceSide === 'B'
           ? scoreB.slug
-          : 'equal';
+          : priceSide;
 
     const offersByMaster = await getMasterProductOffersBatch([
       prodA.id,
