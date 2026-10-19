@@ -77,7 +77,8 @@ import { createLogger } from '@/lib/logger';
 
 const log = createLogger('server.rate');
 
-// Next skips Data Cache entries over 2 MB (it warns once and stores nothing),
+// Next skips Data Cache entries over 2 MB (it warns on each such write and
+// stores nothing; in dev it throws). JSON length is the unit Next measures,
 // and the unfiltered merchant directory is one entry shared by /, /merchants
 // and the APIs. Warn before it gets there, so the cutover to a split cache is
 // planned, not discovered as a full directory scan on every request
