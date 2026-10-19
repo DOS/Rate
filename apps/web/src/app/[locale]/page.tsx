@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { getTranslations } from 'next-intl/server';
+import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
 import NavbarDarkDynamic from './components/navbar/NavbarDarkDynamic';
 import {
@@ -51,6 +51,10 @@ import {
   HERO_MERCHANT_PRELOAD,
   toHeroMerchantSuggestions,
 } from '@/lib/hero-merchants';
+
+// Cached after the first request, refreshed every 5 minutes or when the
+// worker revalidates its cache tags (DOS/Rate#491).
+export const revalidate = 300;
 
 export async function generateMetadata({
   params,
@@ -109,6 +113,7 @@ export default async function Home({
   params: Promise<{ locale: string }>;
 }) {
   const { locale } = await params;
+  setRequestLocale(locale);
   const tRate = await getTranslations({ locale, namespace: 'rate' });
   const tHome = await getTranslations({ locale, namespace: 'homePage' });
 

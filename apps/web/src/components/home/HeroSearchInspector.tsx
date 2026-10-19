@@ -20,9 +20,12 @@ import { getRadarSignal } from '@/lib/deal-radar';
 import {
   BsArrowRight,
   BsCheckCircleFill,
+  BsCpu,
+  BsDeviceSsd,
   BsExclamationTriangleFill,
   BsLightningChargeFill,
   BsLink45Deg,
+  BsPhone,
   BsSearch,
   BsShieldCheck,
   BsShop,
@@ -425,7 +428,10 @@ export default function HeroSearchInspector({
                                   }}
                                 />
                               ) : (
-                                <span className="small text-muted">📱</span>
+                                <BsPhone
+                                  aria-hidden="true"
+                                  className="text-muted"
+                                />
                               )}
                             </div>
                             <div>
@@ -440,10 +446,22 @@ export default function HeroSearchInspector({
                                   {item.brand}
                                 </span>
                                 {keySpecs.chip && (
-                                  <span>⚡ {keySpecs.chip}</span>
+                                  <span>
+                                    <BsCpu
+                                      aria-hidden="true"
+                                      className="me-1"
+                                    />
+                                    {keySpecs.chip}
+                                  </span>
                                 )}
                                 {item.storage_gb && (
-                                  <span>💾 {item.storage_gb}GB</span>
+                                  <span>
+                                    <BsDeviceSsd
+                                      aria-hidden="true"
+                                      className="me-1"
+                                    />
+                                    {item.storage_gb}GB
+                                  </span>
                                 )}
                                 {rating > 0 && (
                                   <span className="text-warning-emphasis fw-semibold">

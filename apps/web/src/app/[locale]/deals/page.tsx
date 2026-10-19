@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { getTranslations } from 'next-intl/server';
+import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
 import {
   getCachedMasterProducts,
@@ -36,6 +36,7 @@ export async function generateMetadata({
 
 export default async function DealsPage({ params }: PageProps) {
   const { locale } = await params;
+  setRequestLocale(locale);
   const lang = normalizeRateLocale(locale);
   const t = await getTranslations({ locale: lang, namespace: 'deals' });
   const [products, dealRadar] = await Promise.all([

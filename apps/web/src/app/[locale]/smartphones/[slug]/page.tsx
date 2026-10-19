@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { getTranslations } from 'next-intl/server';
+import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
 import { notFound } from 'next/navigation';
 import {
@@ -15,7 +15,13 @@ import {
 } from '@/server/rate';
 import { computeBayesianRatingSummary } from '@/lib/rate-api';
 import { isFilteredOutReview } from '@/lib/review-display';
-import { BsCheckCircleFill, BsShieldExclamation } from 'react-icons/bs';
+import {
+  BsCardChecklist,
+  BsCheckCircleFill,
+  BsPhone,
+  BsShieldCheck,
+  BsShieldExclamation,
+} from 'react-icons/bs';
 import RadarBadge from '@/components/radar/RadarBadge';
 import { buildRadarIndex, getRadarSignal } from '@/lib/deal-radar';
 import { defaultOpenGraph, SHARE_IMAGE } from '@/lib/seo';
@@ -41,6 +47,15 @@ import ProductShareAuditButton from '@/components/leaderboard/ProductShareAuditB
 import ProductValueCalculator from '@/components/leaderboard/ProductValueCalculator';
 import ProductOffersExplorer from '@/components/leaderboard/ProductOffersExplorer';
 import ProductSpecsExportToolbar from '@/components/leaderboard/ProductSpecsExportToolbar';
+
+// Cached after the first request, refreshed every 5 minutes or when the
+// worker revalidates its cache tags (DOS/Rate#491).
+export const revalidate = 300;
+
+// Nothing is prerendered at build; each slug renders on its first request.
+export function generateStaticParams(): { slug: string }[] {
+  return [];
+}
 
 export type PageParams = Promise<{ locale: string; slug: string }>;
 
@@ -101,6 +116,7 @@ export async function ProductDetailView({
   categoryLabel?: string;
 }) {
   const { locale, slug } = await params;
+  setRequestLocale(locale);
   const [t, tNav, product] = await Promise.all([
     getTranslations({ locale, namespace: 'productDetail' }),
     getTranslations({ locale, namespace: 'rate.nav' }),
@@ -124,11 +140,14 @@ export async function ProductDetailView({
     [
       getCachedMasterProductOffers(product.id),
       getCachedMasterProductReviews(product.id),
-      getCachedMasterProducts({ categorySlug, limit: 50 }).catch(() => []),
+      // No fallbacks: this page is cached, so an empty fallback would be
+      // served for the whole revalidate window. A failed regeneration keeps
+      // the last good page instead (DOS/Rate#491).
+      getCachedMasterProducts({ categorySlug, limit: 50 }),
       getCrossPlatformDealRadar({
         categorySlug: categorySlug as CanonicalCategorySlug,
         limit: 50,
-      }).catch(() => null),
+      }),
     ]
   );
   const [reviewSummary, priceHistory] = await Promise.all([
@@ -790,7 +809,7 @@ export async function ProductDetailView({
                     {specUi.sectionEyebrow}
                   </span>
                   <h2 className="h4 fw-bold d-flex align-items-center mb-0 gap-2">
-                    <span>📋</span> {specUi.sectionTitle}
+                    <BsCardChecklist aria-hidden="true" /> {specUi.sectionTitle}
                   </h2>
                 </div>
                 <div className="d-flex align-items-center flex-wrap gap-2">
@@ -1324,7 +1343,8 @@ export async function ProductDetailView({
                 {t('offersEyebrow')}
               </span>
               <h2 className="h4 fw-bold d-flex align-items-center mb-0 gap-2">
-                <span>🛡️</span> {t('offersTitle', { count: offers.length })}
+                <BsShieldCheck aria-hidden="true" />{' '}
+                {t('offersTitle', { count: offers.length })}
               </h2>
             </div>
             <span className="badge bg-light text-secondary rounded-pill border px-3 py-2">
@@ -1445,7 +1465,10 @@ export async function ProductDetailView({
                               }}
                             />
                           ) : (
-                            <span className="text-muted small">📱</span>
+                            <BsPhone
+                              aria-hidden="true"
+                              className="text-muted"
+                            />
                           )}
                         </div>
                         <div className="overflow-hidden">
@@ -1454,7 +1477,7 @@ export async function ProductDetailView({
                               {peer.brand}
                             </span>
                             <span className="badge bg-warning-subtle text-dark small">
-                              ⭐{' '}
+                              ★{' '}
                               {peerRating > 0
                                 ? peerRating.toFixed(1)
                                 : t('peerNoRating')}

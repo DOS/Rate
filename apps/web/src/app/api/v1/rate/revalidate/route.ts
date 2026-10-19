@@ -4,6 +4,7 @@ import { type NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { resolveRevalidationTargets } from '@/server/rate';
 import { createLogger } from '@/lib/logger';
+import { routing } from '@/lib/navigation';
 import { jsonApiError } from '@/server/rate/api-handler';
 
 const log = createLogger('api.revalidate');
@@ -141,11 +142,19 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  // Public URLs carry no locale prefix, but pages are cached under the
+  // rewritten /<locale>/... path, so each locale's entry is revalidated too
+  // (DOS/Rate#491).
   for (const p of revalidatedPaths) {
-    try {
-      revalidatePath(p);
-    } catch {
-      // Outside Next.js static generation runtime (e.g., standalone unit test runner)
+    const localized = routing.locales.map(
+      (locale) => `/${locale}${p === '/' ? '' : p}`
+    );
+    for (const target of [p, ...localized]) {
+      try {
+        revalidatePath(target);
+      } catch {
+        // Outside Next.js static generation runtime (e.g., standalone unit test runner)
+      }
     }
   }
 

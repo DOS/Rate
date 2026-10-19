@@ -1,6 +1,6 @@
 import { Suspense } from 'react';
 import type { Metadata } from 'next';
-import { getTranslations } from 'next-intl/server';
+import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
 import {
   getCachedCategoryDirectoryFacets,
@@ -40,6 +40,11 @@ import {
   BsExclamationTriangle,
 } from 'react-icons/bs';
 import type { KeySpecs, ProductSpecifications } from '@repo/shared-data';
+
+// Reads searchParams, so it renders per request. The [locale] layout's
+// generateStaticParams would otherwise make it static, and the searchParams
+// read would then fail with DYNAMIC_SERVER_USAGE (DOS/Rate#491).
+export const dynamic = 'force-dynamic';
 
 type SearchParamsInput = Record<string, string | string[] | undefined>;
 
@@ -1008,6 +1013,7 @@ export default async function SmartphonesCatalogPage({
   searchParams: Promise<SearchParamsInput>;
 }) {
   const { locale } = await params;
+  setRequestLocale(locale);
   const rawSearch = await searchParams;
   return (
     <CategoryCatalogContent

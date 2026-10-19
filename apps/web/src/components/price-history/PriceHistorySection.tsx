@@ -2,6 +2,16 @@
 
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import type { IconType } from 'react-icons';
+import {
+  BsBarChart,
+  BsCalendar3,
+  BsCheckCircle,
+  BsExclamationOctagon,
+  BsExclamationTriangle,
+  BsGraphUp,
+  BsSearch,
+} from 'react-icons/bs';
 import type {
   DiscountVerdictType,
   MasterProductPriceHistorySummary,
@@ -36,28 +46,28 @@ const SERIES_COLORS = [
 
 function getVerdictBadgeStyle(verdict: DiscountVerdictType): {
   badgeClass: string;
-  icon: string;
+  icon: IconType;
 } {
   switch (verdict) {
     case 'fake_discount':
       return {
         badgeClass: 'bg-danger text-white',
-        icon: '🚨',
+        icon: BsExclamationOctagon,
       };
     case 'suspicious_discount':
       return {
         badgeClass: 'bg-warning text-dark',
-        icon: '⚠️',
+        icon: BsExclamationTriangle,
       };
     case 'genuine_deal':
       return {
         badgeClass: 'bg-success text-white',
-        icon: '✅',
+        icon: BsCheckCircle,
       };
     default:
       return {
         badgeClass: 'bg-secondary-subtle text-secondary-emphasis',
-        icon: '📊',
+        icon: BsBarChart,
       };
   }
 }
@@ -415,7 +425,7 @@ export default function PriceHistorySection({
       <div className="d-flex flex-column flex-lg-row justify-content-between align-items-start align-items-lg-center mb-4 gap-3">
         <div>
           <h2 className="h4 fw-bold d-flex align-items-center mb-1 gap-2">
-            <span>📈</span> {t('priceHistoryHeading')}
+            <BsGraphUp aria-hidden="true" /> {t('priceHistoryHeading')}
           </h2>
           <p className="text-muted small mb-0">
             {t('priceHistorySubtitlePrefix')} <strong>{productName}</strong>{' '}
@@ -678,7 +688,8 @@ export default function PriceHistorySection({
 
             {activeNode && (
               <div className="badge bg-light text-dark rounded-pill small border px-3 py-2">
-                📅 {formatDateShort(activeNode.pt.recorded_at)} -{' '}
+                <BsCalendar3 aria-hidden="true" className="me-1" />
+                {formatDateShort(activeNode.pt.recorded_at)} -{' '}
                 <strong>{activeNode.pt.merchant_name}</strong>:{' '}
                 <span className="text-danger fw-bold">
                   {formatVnd(activeNode.pt.price)}
@@ -904,7 +915,8 @@ export default function PriceHistorySection({
       {/* Per-Merchant Fake Discount Detector Cards */}
       <div>
         <h3 className="h6 fw-bold d-flex align-items-center mb-3 gap-2">
-          <span>🔍</span> {t('priceHistoryMerchantAuditHeading')}
+          <BsSearch aria-hidden="true" />{' '}
+          {t('priceHistoryMerchantAuditHeading')}
         </h3>
         <div className="row g-3">
           {offerAnalyses.map((oa) => {
@@ -924,7 +936,8 @@ export default function PriceHistorySection({
                     <span
                       className={`badge ${style.badgeClass} rounded-pill small px-3 py-1`}
                     >
-                      {style.icon} {oa.badge_label}
+                      <style.icon aria-hidden="true" className="me-1" />
+                      {oa.badge_label}
                     </span>
                   </div>
 
