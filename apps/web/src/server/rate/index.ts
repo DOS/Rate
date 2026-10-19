@@ -73,6 +73,16 @@ import {
   type RevalidationTargetsInput,
 } from './cache-tags';
 import { computeProductRadarSignal } from './deals';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('server.rate');
+
+// Next skips Data Cache entries over 2 MB (it warns once and stores nothing),
+// and the unfiltered merchant directory is one entry shared by /, /merchants
+// and the APIs. Warn before it gets there, so the cutover to a split cache is
+// planned, not discovered as a full directory scan on every request
+// (DOS/Rate#488).
+const MERCHANT_CACHE_WARN_BYTES = 1_500_000;
 
 export {
   RATE_CACHE_TAGS,
@@ -250,7 +260,16 @@ async function inspectProductOrShopUrlWithRadar(rawQuery: string) {
 const _fetchMerchantsListDataCache = withRateDataCache(
   async (serializedParams: string) => {
     const parsed = JSON.parse(serializedParams) as MerchantListFilterParams;
-    return _getMerchantsList(parsed);
+    const merchants = await _getMerchantsList(parsed);
+    const bytes = JSON.stringify(merchants).length;
+    if (bytes > MERCHANT_CACHE_WARN_BYTES) {
+      log.warn('merchant directory cache entry near the 2 MB limit', {
+        bytes,
+        merchants: merchants.length,
+        params: serializedParams,
+      });
+    }
+    return merchants;
   },
   ['rate-merchants-list'],
   {
