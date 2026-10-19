@@ -18,6 +18,7 @@ export {
   getCategoryRouteHref,
   getMasterProductCategorySlug,
   getMasterProductHref,
+  isCanonicalCategorySlug,
   parseEcommerceUrlOrQuery,
   resolveProductImageUrl,
   sanitizePostgrestFilterToken,
