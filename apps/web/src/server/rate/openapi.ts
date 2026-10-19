@@ -312,9 +312,9 @@ export function buildRateOpenApiSpec(
         get: {
           operationId: 'getMasterProductBySlug',
           summary:
-            'Get full master product detail, 10-group specs, offers, 90-day price history & AI reviews',
+            'Get full master product detail, 10-group specs, offers, price history & AI reviews',
           description:
-            'Returns the canonical master product record, full 10-group specification JSONB, cross-marketplace merchant offers (`rate.products`), 90-day price history series (`rate.price_history`), fake-sale discount analysis, canonical `deal_radar` / `radar_signal`, and AI-audited user reviews.',
+            'Returns the canonical master product record, full 10-group specification JSONB, cross-marketplace merchant offers (`rate.products`), price history series (`rate.price_history`), fake-sale discount analysis, canonical `deal_radar` / `radar_signal`, and AI-audited user reviews.',
           tags: ['Products & Specs'],
           parameters: [
             {
@@ -527,7 +527,7 @@ export function buildRateOpenApiSpec(
           summary:
             'Fetch real-time price, Deal Radar signal & fake-sale verdict status for watched products',
           description:
-            'Batch-fetches current lowest prices, 90-day median prices, fake-sale discount analysis, and canonical `deal_radar` / `radar_signal` telemetry for up to 20 watched product slugs.',
+            'Batch-fetches current lowest prices, historical median prices, fake-sale discount analysis, and canonical `deal_radar` / `radar_signal` telemetry for up to 20 watched product slugs.',
           tags: ['Comparison & Watchlist'],
           parameters: [
             {
@@ -664,7 +664,7 @@ export function buildRateOpenApiSpec(
         get: {
           operationId: 'inspectProductUrlAndVerdict',
           summary:
-            'Full Web Product & URL Inspector with 5-level price verdict and 90-day chart',
+            'Full Web Product & URL Inspector with 5-level price verdict and price history chart',
           description:
             'Runs the complete hybrid lookup pipeline for the `/inspect` web portal: canonicalizes 10 supported e-commerce/retailer platforms, blocks non-hardware accessories, resolves SKU variant capacity, computes the 5-level price verdict, and returns full product detail with `deal_radar` and `radar_signal`.',
           tags: ['URL Inspector & Extension MV3'],
@@ -680,7 +680,7 @@ export function buildRateOpenApiSpec(
               name: 'price',
               in: 'query',
               description:
-                'Optional observed live listing price in VND to test against the 90-day median',
+                'Optional observed live listing price in VND to test against the historical median',
               schema: { type: 'number' },
             },
             {
@@ -1195,7 +1195,7 @@ export function buildRateOpenApiSpec(
           summary:
             'Get real-time platform statistics and 5-category model counts',
           description:
-            'Returns live counts of standardized master products, 90-day price observations, audited reviews, genuine review percentage, verified merchants, and per-category product counts.',
+            'Returns live counts of standardized master products, recorded price observations, audited reviews, genuine review percentage, verified merchants, and per-category product counts.',
           tags: ['Platform Telemetry'],
           responses: {
             '200': {
@@ -1496,7 +1496,7 @@ export function buildRateOpenApiSpec(
             'skipped_accessory',
           ],
           description:
-            'Evidence-based price verdict comparing observed listing price and claimed original price against the 90-day historical median and cross-retailer floor.',
+            'Evidence-based price verdict comparing observed listing price and claimed original price against the historical median and cross-retailer floor.',
         },
         ExtensionQuarantineIngestPayload: {
           type: 'object',
