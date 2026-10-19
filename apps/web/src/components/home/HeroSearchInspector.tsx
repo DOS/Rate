@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { discountVerdictCopy } from '@/lib/discount-verdict-copy';
 import { Link, useRouter } from '@/lib/navigation';
 import { startNavigationProgress } from '@/components/elementary/NavigationProgress';
 import type { KeySpecs, MasterProduct } from '@repo/shared-data';
@@ -73,6 +74,7 @@ export default function HeroSearchInspector({
 }: HeroSearchInspectorProps) {
   const router = useRouter();
   const t = useTranslations('heroSearch');
+  const tVerdict = useTranslations('priceVerdict');
   const radarIndex = useDealRadarIndex();
   const [mode, setMode] = useState<'search' | 'inspect'>('search');
   const [query, setQuery] = useState('');
@@ -691,7 +693,12 @@ export default function HeroSearchInspector({
                                       : 'bg-secondary-subtle text-secondary'
                                 }`}
                               >
-                                {inspectResult.discountAnalysis.badge_label}
+                                {
+                                  discountVerdictCopy(
+                                    tVerdict,
+                                    inspectResult.discountAnalysis
+                                  ).label
+                                }
                               </span>
                             )}
                             <RadarBadge
@@ -736,7 +743,12 @@ export default function HeroSearchInspector({
 
                           {inspectResult.discountAnalysis && (
                             <p className="text-muted small mb-0">
-                              {inspectResult.discountAnalysis.explanation}
+                              {
+                                discountVerdictCopy(
+                                  tVerdict,
+                                  inspectResult.discountAnalysis
+                                ).explanation
+                              }
                             </p>
                           )}
                         </div>

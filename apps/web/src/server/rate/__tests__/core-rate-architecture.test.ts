@@ -7067,7 +7067,7 @@ async function runCoreArchitectureSuite() {
     assert.ok(
       deepInspectSrc.includes("discount?.verdict === 'suspicious_discount'") &&
         deepInspectSrc.includes('o.merchant?.platform') &&
-        deepInspectSrc.includes('priceHistory?.byOffer?.[o.id]?.badge_label') &&
+        deepInspectSrc.includes('priceHistory?.byOffer?.[o.id]') &&
         deepInspectSrc.includes('resolveCompareExpertRating10'),
       'DeepInspectWorkspace.tsx must handle suspicious_discount verdict, per-offer CSV verdict/platform fallbacks, and normalized ratings (#554)'
     );

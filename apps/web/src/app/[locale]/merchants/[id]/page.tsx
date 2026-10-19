@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { notFound } from 'next/navigation';
+import { discountVerdictCopy } from '@/lib/discount-verdict-copy';
 import { Link } from '@/lib/navigation';
 import {
   getCategoryRouteHref,
@@ -88,6 +89,10 @@ export default async function MerchantProfilePage({
   const { locale, id } = await params;
   setRequestLocale(locale);
   const t = await getTranslations({ locale, namespace: 'merchants' });
+  const tVerdict = await getTranslations({
+    locale,
+    namespace: 'priceVerdict',
+  });
   const [merchant, dealRadar] = await Promise.all([
     getCachedMerchantProfileById(id),
     getCrossPlatformDealRadar({ categorySlug: 'all', limit: 50 }),
@@ -870,9 +875,11 @@ export default async function MerchantProfilePage({
                             <div>
                               <span
                                 className={`badge ${badgeClass} rounded-pill small px-3 py-1`}
-                                title={da.explanation}
+                                title={
+                                  discountVerdictCopy(tVerdict, da).explanation
+                                }
                               >
-                                {da.badge_label}
+                                {discountVerdictCopy(tVerdict, da).label}
                               </span>
                               <div
                                 className="text-muted mt-1"

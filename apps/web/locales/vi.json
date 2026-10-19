@@ -1747,5 +1747,17 @@
     "priceHistoryTitle": "Kiểm định lịch sử giá 90 ngày & phát hiện giảm giá ảo",
     "noImage": "Chưa có ảnh",
     "verified": "Đã chuẩn hóa thông số"
+  },
+  "priceVerdict": {
+    "labelFake": "Cảnh báo Giảm giá ảo",
+    "labelSuspicious": "Nghi nâng giá gốc",
+    "labelGenuine": "Giảm giá thật",
+    "labelHistoricLow": "Đáy giá lịch sử",
+    "labelNormal": "Giá ổn định",
+    "explainFake": "Gian hàng niêm yết giá gạch ngang {original} (-{claimed}%), nhưng giá bán thực tế lịch sử chưa từng vượt {max} (trung vị: {median}).",
+    "explainSuspicious": "Mức giảm công bố (-{claimed}%) cao hơn đáng kể so với mức giảm thực tế (-{real}%) khi đối chiếu lịch sử giá ({median}).",
+    "explainGenuine": "Giá hiện tại thấp hơn {pct}% so với mức trung vị lịch sử ({median}).",
+    "explainHistoricLow": "Đang ở vùng giá thấp nhất ghi nhận được ({current} so với đỉnh {max}).",
+    "explainNormal": "Giá bán hiện tại ({current}) khớp với mức trung vị lịch sử ({median})."
   }
 }

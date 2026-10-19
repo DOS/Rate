@@ -8,6 +8,7 @@ import {
   BsExclamationOctagon,
   BsExclamationTriangle,
 } from 'react-icons/bs';
+import { discountVerdictCopy } from '@/lib/discount-verdict-copy';
 import { Link } from '@/lib/navigation';
 import type {
   MasterProductPriceHistorySummary,
@@ -40,6 +41,7 @@ export default function ProductOffersExplorer({
   radarSignal,
 }: ProductOffersExplorerProps) {
   const t = useTranslations('productDetail');
+  const tVerdict = useTranslations('priceVerdict');
   const [selectedPlatform, setSelectedPlatform] = useState<string>('all');
   const [officialOnly, setOfficialOnly] = useState(false);
   const [highTrustOnly, setHighTrustOnly] = useState(false);
@@ -142,7 +144,9 @@ export default function ProductOffersExplorer({
         o.price_original
           ? `${o.price_original.toLocaleString('vi-VN')} ₫`
           : '-',
-        analysis?.badge_label || 'Fair Price',
+        analysis
+          ? discountVerdictCopy(tVerdict, analysis).label
+          : tVerdict('labelNormal'),
       ];
     });
 
@@ -570,12 +574,18 @@ export default function ProductOffersExplorer({
                         <div className="mt-1">
                           <a
                             href="#price-history-section"
-                            title={discountAnalysis.explanation}
+                            title={
+                              discountVerdictCopy(tVerdict, discountAnalysis)
+                                .explanation
+                            }
                             className={`badge ${discountBadgeClass} text-decoration-none rounded-pill small`}
                             style={{ fontSize: '0.8125rem' }}
                           >
                             <DiscountIcon aria-hidden="true" className="me-1" />
-                            {discountAnalysis.badge_label}
+                            {
+                              discountVerdictCopy(tVerdict, discountAnalysis)
+                                .label
+                            }
                           </a>
                         </div>
                       )}
