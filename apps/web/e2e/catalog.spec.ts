@@ -229,3 +229,30 @@ test('merchant directory renders stores progressively', async ({ page }) => {
   await page.getByRole('button', { name: /Xem thêm/ }).click();
   await expect.poll(cardLinks).toBeGreaterThan(first);
 });
+
+// 201 seeded earbuds: one more than a catalogue page holds (DOS/Rate#466).
+test('category catalogue pages past 200 models', async ({ page }) => {
+  const productSlugs = async () =>
+    new Set(
+      await page
+        .locator('a[href*="/earbuds/e2e-bud-"]')
+        .evaluateAll((links) =>
+          links.map((a) => (a.getAttribute('href') ?? '').split('?')[0])
+        )
+    );
+
+  expect((await page.goto('/earbuds'))?.status()).toBe(200);
+  expect((await productSlugs()).size).toBe(200);
+  const next = page.locator('nav a[rel="next"]');
+  await expect(next).toHaveAttribute('href', /[?&]page=2\b/);
+  await expect(page.locator('nav a[rel="prev"]')).toHaveCount(0);
+
+  expect((await page.goto('/earbuds?page=2'))?.status()).toBe(200);
+  const second = await productSlugs();
+  expect(second.size).toBe(1);
+  await expect(page.locator('nav a[rel="next"]')).toHaveCount(0);
+  await expect(page.locator('nav a[rel="prev"]')).toHaveAttribute(
+    'href',
+    /\/earbuds$/
+  );
+});

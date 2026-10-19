@@ -1589,7 +1589,11 @@
       "browseSmartphonesBtn": "Prohlédnout dostupné telefony →",
       "merchantProfilesBtn": "Profily důvěryhodnosti prodejců",
       "radarDealsTitle": "Skutečná minima",
-      "radarTrapsTitle": "Varování: navýšené původní ceny"
+      "radarTrapsTitle": "Varování: navýšené původní ceny",
+      "paginationLabel": "Stránky katalogu",
+      "prevPage": "Předchozí stránka",
+      "nextPage": "Další stránka",
+      "pageNumber": "Stránka {page}"
     },
     "toolbar": {
       "unratedText": "N/A",
