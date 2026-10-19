@@ -1887,8 +1887,11 @@ async function fetchAllRowsInChunks<T>(
  */
 export async function getMasterProductPriceHistory(
   masterId: string,
-  existingOffers?: MerchantOffer[]
+  existingOffers?: MerchantOffer[],
+  /** false skips the all-time low/high reads, for callers using only byOffer. */
+  options: { allTime?: boolean } = {}
 ): Promise<MasterProductPriceHistorySummary> {
+  const allTime = options.allTime ?? true;
   const offers = existingOffers ?? (await getMasterProductOffers(masterId));
   if (offers.length === 0) {
     return {
@@ -1939,8 +1942,8 @@ export async function getMasterProductPriceHistory(
           .order('recorded_at', { ascending: false })
           .limit(1000)
       ),
-      extremes(true),
-      extremes(false),
+      allTime ? extremes(true) : Promise.resolve([]),
+      allTime ? extremes(false) : Promise.resolve([]),
     ]);
     rawRows = windowRows;
     extremeRows = [...lowRows, ...highRows];
@@ -2172,7 +2175,13 @@ export async function getMasterProductPriceHistory(
     }),
   ];
   for (const pt of allTimeCandidates) {
-    if (!lowestPoint || pt.price < lowestPoint.price) {
+    // On equal prices keep the first time it was seen.
+    if (
+      !lowestPoint ||
+      pt.price < lowestPoint.price ||
+      (pt.price === lowestPoint.price &&
+        Date.parse(pt.recorded_at) < Date.parse(lowestPoint.recorded_at))
+    ) {
       lowestPoint = pt;
     }
     if (highestEverPrice === null || pt.price > highestEverPrice) {
@@ -3222,7 +3231,10 @@ export async function getMerchantProfileById(
     clusterIds,
     PRICE_HISTORY_CONCURRENCY,
     async (cId) => {
-      const ph = await getMasterProductPriceHistory(cId);
+      // Only byOffer is used here: skip the all-time low/high reads.
+      const ph = await getMasterProductPriceHistory(cId, undefined, {
+        allTime: false,
+      });
       for (const [offerId, analysis] of Object.entries(ph.byOffer)) {
         discountByOfferId.set(offerId, analysis);
       }

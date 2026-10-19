@@ -935,7 +935,7 @@
     "quickSpecBattery": "Pin & Sạc",
     "quickSpecDurability": "Độ bền / Kháng nước",
     "priceReferenceLabel": "Biên độ giá tham khảo thị trường ({count} nguồn ghi nhận):",
-    "low90dBadge": "Đáy 90 ngày: {price} ₫",
+    "allTimeLowBadge": "Đáy lịch sử: {price} ₫",
     "auditPriceBtn": "📈 Kiểm định giá ({count} nguồn)",
     "canonicalModelKeyLabel": "Mã định danh chuẩn (Canonical Model Key):",
     "offersEyebrow": "THAM CHIẾU NGUỒN DỮ LIỆU ĐỘC LẬP (KHÔNG QUẢNG CÁO AFFILIATE)",

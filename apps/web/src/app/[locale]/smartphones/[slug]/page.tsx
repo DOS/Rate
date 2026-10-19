@@ -673,7 +673,7 @@ export async function ProductDetailView({
                     )}
                     {priceHistory.lowestEverPrice != null && (
                       <span className="badge bg-success-subtle text-success fw-normal ms-2">
-                        {t('low90dBadge', {
+                        {t('allTimeLowBadge', {
                           price:
                             priceHistory.lowestEverPrice.toLocaleString(
                               'vi-VN'
