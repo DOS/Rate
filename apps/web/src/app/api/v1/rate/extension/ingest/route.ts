@@ -32,7 +32,15 @@ const CrowdIngestSchema = z.object({
   ]),
   externalItemId: z.string().trim().min(1).max(120),
   externalShopId: z.string().trim().max(120).nullish(),
-  url: z.string().trim().url().max(1024),
+  url: z
+    .string()
+    .trim()
+    .url()
+    .max(1024)
+    .refine(
+      (u) => /^https?:\/\//i.test(u),
+      'Product URL must use http:// or https://'
+    ),
   title: z.string().trim().min(3).max(320),
   selectedVariant: z.string().trim().max(160).nullish(),
   price: z.number().int().positive().max(500_000_000),

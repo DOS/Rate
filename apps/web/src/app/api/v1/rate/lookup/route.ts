@@ -31,7 +31,12 @@ export async function GET(request: NextRequest) {
     );
 
     if (!rawQuery) {
-      return jsonApiError(400, 'Missing query parameter ?q= or ?url=');
+      return jsonApiError(
+        400,
+        'Missing query parameter ?q= or ?url=',
+        undefined,
+        PUBLIC_API_CORS_HEADERS
+      );
     }
 
     const result = await getCachedInspectProductOrShopUrl(rawQuery);

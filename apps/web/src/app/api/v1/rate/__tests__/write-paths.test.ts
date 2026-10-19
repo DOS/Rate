@@ -681,12 +681,156 @@ async function testFilterBoundsAndWatchlistPrices() {
   );
 }
 
+async function testDealRadarAndApiRouteGuards() {
+  const { computeCrossPlatformDealRadarFromData } =
+    await import('@/server/rate/deals');
+  const { buildRadarIndex, radarExportFields, selectMerchantRadar } =
+    await import('@/lib/deal-radar');
+  const { GET: getLookup } = await import('@/app/api/v1/rate/lookup/route');
+
+  const radarResponse = computeCrossPlatformDealRadarFromData(
+    [
+      {
+        master: {
+          id: MASTER_ID,
+          slug: 'galaxy-s24-ultra',
+          name: 'Samsung Galaxy S24 Ultra',
+          brand: 'Samsung',
+          model: 'Galaxy S24 Ultra',
+          expert_rating: 99,
+          user_rating_weighted: Number.NaN,
+          average_rating: 0,
+        } as unknown as Parameters<
+          typeof computeCrossPlatformDealRadarFromData
+        >[0][number]['master'],
+        offers: [
+          {
+            id: 'offer-1',
+            platform: 'shopee',
+            url: 'https://shopee.vn/product/100/200',
+            price_current: 24_000_000,
+            price_original: 28_000_000,
+            merchant: {
+              id: 'shop-1',
+              name: 'Official Store',
+              is_official: true,
+              risk_score: -50,
+            },
+          },
+          {
+            id: 'offer-2',
+            platform: 'lazada',
+            url: 'https://www.lazada.vn/products/s24-i123.html',
+            price_current: 26_000_000,
+            price_original: 32_000_000,
+            merchant: {
+              id: 'shop-2',
+              name: 'Retail Store',
+              is_official: false,
+              risk_score: 500,
+            },
+          },
+        ] as unknown as Parameters<
+          typeof computeCrossPlatformDealRadarFromData
+        >[0][number]['offers'],
+      },
+    ],
+    { limit: 2.9 }
+  );
+  assert.equal(radarResponse.genuineDeals.length, 1);
+  assert.equal(
+    radarResponse.genuineDeals[0]!.jreviewsScore10,
+    null,
+    'computeCrossPlatformDealRadarFromData must sanitize out-of-range (>10) or NaN ratings to null (#544)'
+  );
+  assert.equal(
+    radarResponse.genuineDeals[0]!.merchantRiskScore,
+    0,
+    'resolveEffectiveMerchantRisk must clamp negative merchant risk scores to 0 (#544)'
+  );
+  assert.equal(
+    radarResponse.fakeSaleTraps.length,
+    1,
+    'computeCrossPlatformDealRadarFromData must detect inflated fake sale trap (#544)'
+  );
+  assert.equal(
+    radarResponse.fakeSaleTraps[0]!.merchantRiskScore,
+    100,
+    'resolveEffectiveMerchantRisk must clamp merchant risk scores >100 to 100 (#544)'
+  );
+
+  // Deal radar UI helpers must guard against NaN/Infinity/out-of-bounds percentages (#544)
+  const malformedPayload: typeof radarResponse = {
+    ...radarResponse,
+    genuineDeals: [
+      {
+        ...radarResponse.genuineDeals[0]!,
+        savingsVsMedianPct: Number.POSITIVE_INFINITY,
+      },
+    ],
+    priceSpreadLeaders: [
+      {
+        ...radarResponse.priceSpreadLeaders[0]!,
+        spreadPct: Number.NaN,
+      },
+    ],
+  };
+  const index = buildRadarIndex(malformedPayload);
+  const sig = index.get('galaxy-s24-ultra');
+  assert.ok(sig);
+  assert.equal(
+    sig.savingsPct,
+    0,
+    'buildRadarIndex must clamp non-finite savingsVsMedianPct to 0 (#544)'
+  );
+  assert.equal(
+    sig.spreadPct,
+    0,
+    'buildRadarIndex must clamp NaN spreadPct to 0 (#544)'
+  );
+  const exportFields = radarExportFields({
+    ...sig,
+    savingsPct: Number.NaN,
+    fakeMarkupPct: Number.POSITIVE_INFINITY,
+    spreadPct: 99_999,
+  });
+  assert.equal(exportFields.savingsPct, 0);
+  assert.equal(exportFields.fakeMarkupPct, 0);
+  assert.equal(exportFields.spreadPct, 10_000);
+  assert.equal(
+    selectMerchantRadar(malformedPayload, {
+      id: 'shop-1',
+      name: 'Official Store',
+    }).bestSavingsPct,
+    0,
+    'selectMerchantRadar must clamp non-finite savingsVsMedianPct to 0 (#544)'
+  );
+
+  // GET /api/v1/rate/lookup 400 response must include PUBLIC_API_CORS_HEADERS (#544)
+  type LookupReq = Parameters<typeof getLookup>[0];
+  const badLookupRes = await getLookup({
+    nextUrl: new URL('http://localhost/api/v1/rate/lookup'),
+    headers: new Headers(),
+  } as unknown as LookupReq);
+  assert.equal(badLookupRes.status, 400);
+  assert.equal(
+    badLookupRes.headers.get('Access-Control-Allow-Origin'),
+    '*',
+    'GET /api/v1/rate/lookup 400 response must include CORS headers (#544)'
+  );
+
+  console.log(
+    '  ✅ Deal Radar numeric bounds & lookup 400 CORS headers verified (#544)'
+  );
+}
+
 async function main() {
   console.log('🧪 Public write-path security suite (#155)');
   await testReviews();
   await testWatchlist();
   await testCookieSessions();
   await testFilterBoundsAndWatchlistPrices();
+  await testDealRadarAndApiRouteGuards();
   testSharedDataClients();
   console.log('✅ Public write-path security suite passed');
 }
