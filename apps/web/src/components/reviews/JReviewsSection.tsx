@@ -2,6 +2,14 @@
 
 import React, { useEffect, useId, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import {
+  BsBarChart,
+  BsCheckCircle,
+  BsExclamationTriangle,
+  BsHandThumbsDown,
+  BsMegaphone,
+  BsRobot,
+} from 'react-icons/bs';
 import { escapeCsvCell } from '@/lib/csv-safe';
 import {
   computeCombinedDualScore,
@@ -770,7 +778,10 @@ export default function JReviewsSection({
 
       {submitSuccess && (
         <div className="alert alert-success small rounded-3 d-flex justify-content-between align-items-center mb-4 px-3 py-2">
-          <span>✅ {submitSuccess}</span>
+          <span>
+            <BsCheckCircle aria-hidden="true" className="me-1" />
+            {submitSuccess}
+          </span>
           <button
             type="button"
             className="btn-close btn-sm"
@@ -797,7 +808,8 @@ export default function JReviewsSection({
 
           {submitError && (
             <div className="alert alert-danger small rounded-3 mb-3 px-3 py-2">
-              ⚠️ {submitError}
+              <BsExclamationTriangle aria-hidden="true" className="me-1" />
+              {submitError}
             </div>
           )}
 
@@ -1020,7 +1032,8 @@ export default function JReviewsSection({
                   pct: Math.round(liveScores.bayesianConfidence * 100),
                 })}
               >
-                📊 {liveScores.confidenceLabel} (
+                <BsBarChart aria-hidden="true" className="me-1" />
+                {liveScores.confidenceLabel} (
                 {Math.round(liveScores.bayesianConfidence * 100)}%)
               </span>
               <span className="badge bg-success-subtle text-success small">
@@ -1134,7 +1147,10 @@ export default function JReviewsSection({
             className="alert alert-warning rounded-4 small d-flex align-items-center mb-4 gap-2 px-3 py-2"
             data-testid="star-distribution-anomaly-alert"
           >
-            <span>⚠️</span>
+            <BsExclamationTriangle
+              aria-hidden="true"
+              className="flex-shrink-0"
+            />
             <span>{liveScores.starAnomaly.warningLabelVi}</span>
           </div>
         )}
@@ -1143,7 +1159,7 @@ export default function JReviewsSection({
       <div className="rounded-4 bg-light mb-4 border p-4">
         <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-3 gap-2">
           <div className="fw-bold text-dark d-flex align-items-center gap-2">
-            <span>🤖</span> {t('aiAuthenticityHeading')}
+            <BsRobot aria-hidden="true" /> {t('aiAuthenticityHeading')}
           </div>
           <div className="d-flex small flex-wrap gap-2">
             <span className="badge bg-success text-white">
@@ -1403,7 +1419,8 @@ export default function JReviewsSection({
                         )}
                         {assessment.sponsorshipBadgeVi && (
                           <span className="badge bg-warning-subtle text-warning-emphasis border-warning-subtle rounded-pill small border">
-                            📢 {assessment.sponsorshipBadgeVi}
+                            <BsMegaphone aria-hidden="true" className="me-1" />
+                            {assessment.sponsorshipBadgeVi}
                           </span>
                         )}
                         {assessment.routesTo === 'merchant' && (
@@ -1519,7 +1536,11 @@ export default function JReviewsSection({
                         style={{ fontSize: '0.8125rem' }}
                         title={t('downvoteTitle')}
                       >
-                        👎 ({rev.downvotes})
+                        <BsHandThumbsDown aria-hidden="true" className="me-1" />
+                        <span className="visually-hidden">
+                          {t('downvoteTitle')}
+                        </span>
+                        ({rev.downvotes})
                       </button>
                       <button
                         type="button"

@@ -2,6 +2,12 @@
 
 import { useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import {
+  BsBarChart,
+  BsCheckCircle,
+  BsExclamationOctagon,
+  BsExclamationTriangle,
+} from 'react-icons/bs';
 import { Link } from '@/lib/navigation';
 import type {
   MasterProductPriceHistorySummary,
@@ -481,14 +487,14 @@ export default function ProductOffersExplorer({
                       : discountAnalysis?.verdict === 'genuine_deal'
                         ? 'bg-success text-white'
                         : 'bg-light text-secondary border';
-                const discountIcon =
+                const DiscountIcon =
                   discountAnalysis?.verdict === 'fake_discount'
-                    ? '🚨'
+                    ? BsExclamationOctagon
                     : discountAnalysis?.verdict === 'suspicious_discount'
-                      ? '⚠️'
+                      ? BsExclamationTriangle
                       : discountAnalysis?.verdict === 'genuine_deal'
-                        ? '✅'
-                        : '📊';
+                        ? BsCheckCircle
+                        : BsBarChart;
 
                 return (
                   <tr key={offer.id}>
@@ -568,7 +574,8 @@ export default function ProductOffersExplorer({
                             className={`badge ${discountBadgeClass} text-decoration-none rounded-pill small`}
                             style={{ fontSize: '0.8125rem' }}
                           >
-                            {discountIcon} {discountAnalysis.badge_label}
+                            <DiscountIcon aria-hidden="true" className="me-1" />
+                            {discountAnalysis.badge_label}
                           </a>
                         </div>
                       )}
