@@ -7,6 +7,7 @@ import {
   BsCheckCircle,
   BsExclamationTriangle,
   BsHandThumbsDown,
+  BsInfoCircle,
   BsMegaphone,
   BsRobot,
 } from 'react-icons/bs';
@@ -938,7 +939,10 @@ export default function JReviewsSection({
 
       {authNotice && (
         <div className="alert alert-info small rounded-3 d-flex justify-content-between align-items-center mb-4 px-3 py-2">
-          <span>ℹ️ {authNotice}</span>
+          <span>
+            <BsInfoCircle aria-hidden="true" className="me-1" />
+            {authNotice}
+          </span>
           <button
             type="button"
             className="btn-close btn-sm"
