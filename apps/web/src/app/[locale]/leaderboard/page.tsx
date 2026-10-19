@@ -114,7 +114,13 @@ export default async function LeaderboardPage({
       limit: 36,
     }).catch(() => null),
   ]);
-  const products = productsByCategory.flat();
+  // Back in one best-rated-first list (same key as search_master_products'
+  // rating_desc), so the top 15 in the ItemList below stay platform-wide.
+  const ratingOf = (p: (typeof productsByCategory)[number][number]) =>
+    Number(p.user_rating_weighted || 0) || Number(p.average_rating || 0);
+  const products = productsByCategory
+    .flat()
+    .sort((a, b) => ratingOf(b) - ratingOf(a));
 
   const rawCategory = (query.cat || 'smartphones')
     .toLowerCase()
