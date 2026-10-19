@@ -989,7 +989,11 @@ export async function getMasterProducts(
       query = query.order('merchant_count', { ascending: false });
       break;
     case 'rating_desc':
-      query = query.order('user_rating_weighted', { ascending: false });
+      // Unrated (NULL) models last, like search_master_products.
+      query = query.order('user_rating_weighted', {
+        ascending: false,
+        nullsFirst: false,
+      });
       break;
     case 'newest':
     case 'default':
