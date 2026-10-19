@@ -97,20 +97,27 @@ export function normalizeFiveStarRating(val: unknown): number | null {
   return Number(scaled.toFixed(2));
 }
 
-export function selectFreshestSessionSignal<
-  T extends { signal?: ExtractedPageProductSignal; updatedAt?: number },
->(
+export interface SessionSignalEntry {
+  signal?: ExtractedPageProductSignal;
+  updatedAt?: number;
+  source?: 'page' | 'quick_query';
+}
+
+export function selectFreshestSessionSignal<T extends SessionSignalEntry>(
   tabEntry: T | null | undefined,
   latestEntry: T | null | undefined
 ): ExtractedPageProductSignal | null {
   const tabSignal = tabEntry?.signal ?? null;
   const latestSignal = latestEntry?.signal ?? null;
   if (tabSignal && latestSignal) {
-    const tabTs =
-      typeof tabEntry?.updatedAt === 'number' ? tabEntry.updatedAt : 0;
-    const latestTs =
-      typeof latestEntry?.updatedAt === 'number' ? latestEntry.updatedAt : 0;
-    return latestTs > tabTs ? latestSignal : tabSignal;
+    if (latestEntry?.source === 'quick_query') {
+      const tabTs =
+        typeof tabEntry?.updatedAt === 'number' ? tabEntry.updatedAt : 0;
+      const latestTs =
+        typeof latestEntry?.updatedAt === 'number' ? latestEntry.updatedAt : 0;
+      return latestTs > tabTs ? latestSignal : tabSignal;
+    }
+    return tabSignal;
   }
   return tabSignal ?? latestSignal ?? null;
 }

@@ -205,22 +205,38 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           message.signal as ExtractedPageProductSignal
         );
         const tabId = sender.tab?.id;
+        const isBackgroundTab = Boolean(
+          sender.tab && sender.tab.active === false
+        );
         const cacheKey = tabId ? `tab_${tabId}` : 'tab_latest';
+        const now = Date.now();
 
-        // Store latest extracted signal in session storage (ephemeral SW safe)
-        await chrome.storage.session.set({
-          [cacheKey]: { signal, updatedAt: Date.now() },
-          tab_latest: { signal, updatedAt: Date.now() },
-        });
+        // Store latest extracted signal in session storage (ephemeral SW safe).
+        // Background tabs only write their own `tab_<id>` slot so they never hijack
+        // `tab_latest` or trigger sidepanel reloads on the active tab (#531).
+        const signalPayload: Record<string, unknown> = {
+          [cacheKey]: { signal, updatedAt: now, source: 'page' },
+        };
+        if (!isBackgroundTab) {
+          signalPayload.tab_latest = {
+            signal,
+            updatedAt: now,
+            source: 'page',
+          };
+        }
+        await chrome.storage.session.set(signalPayload);
 
         const lookup = await fetchExtensionLookup(signal, 'pill');
         await updateActionBadge(tabId, lookup);
 
         if (lookup) {
-          await chrome.storage.session.set({
+          const lookupPayload: Record<string, unknown> = {
             [`lookup_${cacheKey}`]: lookup,
-            lookup_tab_latest: lookup,
-          });
+          };
+          if (!isBackgroundTab) {
+            lookupPayload.lookup_tab_latest = lookup;
+          }
+          await chrome.storage.session.set(lookupPayload);
         }
 
         // Fire-and-forget Opt-In Quarantine Crowd Signal if user enabled it
@@ -253,14 +269,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           tabKey,
           'tab_latest',
         ]);
-        const baseSignal = selectFreshestSessionSignal(
-          sessionData[tabKey] as
-            | { signal?: ExtractedPageProductSignal; updatedAt?: number }
-            | undefined,
-          sessionData.tab_latest as
-            | { signal?: ExtractedPageProductSignal; updatedAt?: number }
-            | undefined
-        );
+        const tabEntry = sessionData[tabKey] as
+          | {
+              signal?: ExtractedPageProductSignal;
+              updatedAt?: number;
+              source?: 'page' | 'quick_query';
+            }
+          | undefined;
+        const latestEntry = sessionData.tab_latest as
+          | {
+              signal?: ExtractedPageProductSignal;
+              updatedAt?: number;
+              source?: 'page' | 'quick_query';
+            }
+          | undefined;
+        const baseSignal = selectFreshestSessionSignal(tabEntry, latestEntry);
 
         const settings = await getSettings();
 
@@ -280,10 +303,32 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         if (overrideVariant) {
           const now = Date.now();
-          await chrome.storage.session.set({
-            [tabKey]: { signal: effectiveSignal, updatedAt: now },
-            tab_latest: { signal: effectiveSignal, updatedAt: now },
-          });
+          const isQuickQuerySelected =
+            Boolean(latestEntry?.signal) &&
+            baseSignal === latestEntry?.signal &&
+            latestEntry?.source === 'quick_query';
+          if (isQuickQuerySelected) {
+            await chrome.storage.session.set({
+              tab_latest: {
+                signal: effectiveSignal,
+                updatedAt: now,
+                source: 'quick_query',
+              },
+            });
+          } else {
+            await chrome.storage.session.set({
+              [tabKey]: {
+                signal: effectiveSignal,
+                updatedAt: now,
+                source: 'page',
+              },
+              tab_latest: {
+                signal: effectiveSignal,
+                updatedAt: now,
+                source: 'page',
+              },
+            });
+          }
         }
 
         const fullLookup = await fetchExtensionLookup(effectiveSignal, 'full');
@@ -388,15 +433,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           syntheticSignal.platform = fullLookup.platform;
         }
 
-        const [activeTab] = await chrome.tabs.query({
-          active: true,
-          currentWindow: true,
-        });
-        const tabKey = activeTab?.id ? `tab_${activeTab.id}` : 'tab_latest';
         const now = Date.now();
         await chrome.storage.session.set({
-          [tabKey]: { signal: syntheticSignal, updatedAt: now },
-          tab_latest: { signal: syntheticSignal, updatedAt: now },
+          tab_latest: {
+            signal: syntheticSignal,
+            updatedAt: now,
+            source: 'quick_query',
+          },
         });
 
         sendResponse({

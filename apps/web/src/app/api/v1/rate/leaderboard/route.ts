@@ -15,6 +15,7 @@ import {
   PUBLIC_API_CORS_HEADERS,
   jsonApiError,
   parseBoundedIntParam,
+  parseBoundedStringParam,
 } from '@/server/rate/api-handler';
 
 export const revalidate = 60;
@@ -44,8 +45,9 @@ export async function GET(req: NextRequest) {
     const priceSegment = normalizeLeaderboardPriceSegment(
       searchParams.get('price')
     );
-    const brand = (searchParams.get('brand') || 'all').trim();
-    const query = (searchParams.get('q') || '').trim();
+    const brand =
+      parseBoundedStringParam(searchParams.get('brand'), 64) || 'all';
+    const query = parseBoundedStringParam(searchParams.get('q'), 160) || '';
     const limit = parseBoundedIntParam(searchParams.get('limit'), 20, 1, 50);
 
     // Brand, price segment, query and the criterion ranking all run on this

@@ -21,6 +21,7 @@ export interface WatchlistItem {
 const STORAGE_KEY = 'rate_price_watchlist_v1';
 const EVENT_NAME = 'rate:watchlist:change';
 export const MAX_WATCHLIST_ITEMS = 50;
+export const MIN_WATCHLIST_TARGET_PRICE = 10_000;
 
 function sanitizeWatchlistPrice(value: unknown): number {
   const num = Number(value);
@@ -28,6 +29,51 @@ function sanitizeWatchlistPrice(value: unknown): number {
     return 0;
   }
   return Math.round(num);
+}
+
+/**
+ * Computes a clean rounded target price for a given discount percentage (`discountPct`),
+ * using 10,000 VND steps below 2M VND and 100,000 VND steps at or above 2M VND,
+ * and guaranteeing that the target price is strictly below `basePrice` when `basePrice > step`.
+ */
+export function computeWatchlistTargetPrice(
+  basePrice: unknown,
+  discountPct = 5
+): number {
+  const safeBase = sanitizeWatchlistPrice(basePrice);
+  if (safeBase <= 0) return 10_000_000;
+  const rawPct = Number(discountPct);
+  const safePct = Number.isFinite(rawPct)
+    ? Math.max(1, Math.min(90, rawPct))
+    : 5;
+  const step = safeBase < 2_000_000 ? 10_000 : 100_000;
+  const rawDiscounted = safeBase * (1 - safePct / 100);
+  let rounded = Math.round(rawDiscounted / step) * step;
+  if (safeBase > step && rounded >= safeBase) {
+    rounded = safeBase - step;
+  }
+  return Math.max(
+    MIN_WATCHLIST_TARGET_PRICE,
+    Math.min(MAX_VALID_VND_PRICE, rounded)
+  );
+}
+
+/**
+ * Sanitizes a user-supplied custom target price into `[MIN_WATCHLIST_TARGET_PRICE, MAX_VALID_VND_PRICE]`,
+ * falling back to `computeWatchlistTargetPrice(fallbackBasePrice, 5)` when non-positive or NaN.
+ */
+export function sanitizeWatchlistTargetPrice(
+  customTarget: unknown,
+  fallbackBasePrice?: unknown
+): number {
+  const num = Number(customTarget);
+  if (!Number.isFinite(num) || num <= 0) {
+    return computeWatchlistTargetPrice(fallbackBasePrice, 5);
+  }
+  return Math.max(
+    MIN_WATCHLIST_TARGET_PRICE,
+    Math.min(MAX_VALID_VND_PRICE, Math.round(num))
+  );
 }
 
 export function normalizeWatchlistItem(item: WatchlistItem): WatchlistItem {

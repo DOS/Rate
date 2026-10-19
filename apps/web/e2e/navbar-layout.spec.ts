@@ -115,3 +115,15 @@ test('the phone menu works from the keyboard', async ({ page }) => {
   expect(icon.top).toBe(7);
   expect(icon.left + icon.width).toBeLessThanOrEqual(icon.box);
 });
+
+test('at exactly 992px the header does not cover the hero title', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 992, height: 768 });
+  await page.goto('/');
+  const header = await page.locator('.header').boundingBox();
+  const title = await page.locator('h1').first().boundingBox();
+  expect(header && title).toBeTruthy();
+  // The theme's 993px / 992px blocks now meet at 992px (DOS/Rate#543).
+  expect(title!.y).toBeGreaterThanOrEqual(header!.y + header!.height);
+});

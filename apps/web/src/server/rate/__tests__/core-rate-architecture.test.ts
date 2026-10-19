@@ -6606,7 +6606,436 @@ async function runCoreArchitectureSuite() {
   }
 
   console.log(
-    '  ✅ [76/76] 1v1 Versus Unpriced Tiebreaks, UI Persona Presets & Catalog Spec Fallbacks (#533) passed'
+    '  ✅ [76/77] 1v1 Versus Unpriced Tiebreaks, UI Persona Presets & Catalog Spec Fallbacks (#533) passed'
+  );
+
+  // 77. Issue #532: URL inspect matched merchant offer pairing, platform-scoped shop lookup, Lazada SKU skip, and earbuds URL price floor
+  {
+    const rateApi532 =
+      require('../../../lib/rate-api') as typeof import('../../../lib/rate-api');
+    const extServer532 =
+      require('../extension') as typeof import('../extension');
+
+    // 77a. detectAccessoryOrJunk applies the 400k VND earbuds floor when category words were stripped from title but present in URL
+    const earbudsGate532 = extServer532.detectAccessoryOrJunk({
+      title: 'soundpeats air4',
+      url: 'https://tiki.vn/tai-nghe-bluetooth-soundpeats-air4-p123.html',
+      price: 800_000,
+    });
+    assert.equal(
+      earbudsGate532.isAccessory,
+      false,
+      'detectAccessoryOrJunk must apply the 400k VND earbuds floor for tiki.vn/tai-nghe-bluetooth-soundpeats-air4-p123.html at 800k VND (#532)'
+    );
+
+    const origFetch532 = globalThis.fetch;
+    const merchantLookupUrls532: string[] = [];
+    try {
+      globalThis.fetch = (async (input: RequestInfo | URL) => {
+        const url =
+          typeof input === 'string'
+            ? input
+            : input instanceof URL
+              ? input.toString()
+              : input.url;
+
+        if (
+          url.includes('/rest/v1/products') &&
+          url.includes('platform_item_id=in.')
+        ) {
+          return new Response(JSON.stringify(null), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          });
+        }
+
+        if (url.includes('/rest/v1/merchants')) {
+          merchantLookupUrls532.push(url);
+          if (
+            url.includes('platform_shop_id=in.') &&
+            url.includes('platform=eq.shopee')
+          ) {
+            return new Response(
+              JSON.stringify([
+                {
+                  id: 'merch-532-shop-a',
+                  platform: 'shopee',
+                  platform_shop_id: '88201679',
+                  name: 'Shop A Flagship',
+                  slug: 'shop-a-flagship',
+                  is_official: true,
+                  rating_star: 4.9,
+                  follower_count: 500000,
+                  location: 'Hà Nội',
+                  risk_score: 4,
+                  metadata: {},
+                  updated_at: '2026-10-19T00:00:00Z',
+                },
+              ]),
+              { status: 200, headers: { 'content-type': 'application/json' } }
+            );
+          }
+          return new Response(JSON.stringify([]), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          });
+        }
+
+        if (
+          url.includes('/rest/v1/master_products') &&
+          url.includes('slug=eq.apple-iphone-16-pro-max-256gb')
+        ) {
+          return new Response(
+            JSON.stringify({
+              id: 'mp-532-ip16pm',
+              slug: 'apple-iphone-16-pro-max-256gb',
+              name: 'Apple iPhone 16 Pro Max 256GB',
+              brand: 'Apple',
+              model: 'iPhone 16 Pro Max',
+              model_key: 'apple-iphone-16-pro-max-256gb',
+              category_id: 'cat-smartphones',
+              min_price: 28990000,
+              max_price: 31990000,
+              merchant_count: 2,
+              average_rating: 4.9,
+              user_rating_weighted: 4.9,
+              expert_rating: 4.9,
+              total_reviews: 40,
+              has_5g: true,
+              colors: ['Black Titanium'],
+              status: 'published',
+              specifications: { category_slug: 'smartphones' },
+              key_specs: {},
+              metadata: {},
+              thumbnail: null,
+              images: [],
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } }
+          );
+        }
+
+        if (
+          url.includes('/rest/v1/v_products_with_merchant_trust') &&
+          url.includes('cluster_id=eq.mp-532-ip16pm')
+        ) {
+          const parsedUrl = new URL(url);
+          const offset = Number(parsedUrl.searchParams.get('offset') ?? 0);
+          if (offset > 0) {
+            return new Response(JSON.stringify([]), {
+              status: 200,
+              headers: { 'content-type': 'application/json' },
+            });
+          }
+          // Cheapest offer is Shop B (28.99M), second offer is Shop A (29.99M)
+          return new Response(
+            JSON.stringify([
+              {
+                id: 'offer-532-shop-b',
+                cluster_id: 'mp-532-ip16pm',
+                merchant_id: 'merch-532-shop-b',
+                platform: 'shopee',
+                title: 'iPhone 16 Pro Max 256GB Shop B',
+                price_current: 28990000,
+                price_original: 29990000,
+                stock: 5,
+                rating_star: 4.7,
+                rating_count: 10,
+                url: 'https://shopee.vn/i.999999.111',
+                merchant_name: 'Shop B Cheaper',
+                merchant_is_official: false,
+                merchant_location: 'TP.HCM',
+                threat_risk_score: 25,
+                dosafe_risk_score: 25,
+                review_risk_score: 20,
+                review_risk_breakdown: {},
+              },
+              {
+                id: 'offer-532-shop-a',
+                cluster_id: 'mp-532-ip16pm',
+                merchant_id: 'merch-532-shop-a',
+                platform: 'shopee',
+                title: 'iPhone 16 Pro Max 256GB Shop A',
+                price_current: 29990000,
+                price_original: 34990000,
+                stock: 10,
+                rating_star: 4.9,
+                rating_count: 80,
+                url: 'https://shopee.vn/i.88201679.222',
+                merchant_name: 'Shop A Flagship',
+                merchant_is_official: true,
+                merchant_location: 'Hà Nội',
+                threat_risk_score: 4,
+                dosafe_risk_score: 4,
+                review_risk_score: 2,
+                review_risk_breakdown: {},
+              },
+            ]),
+            { status: 200, headers: { 'content-type': 'application/json' } }
+          );
+        }
+
+        return new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }) as typeof fetch;
+
+      // 77b. Shopee URL with Vietnamese diacritics and Shop A's ID picks Shop A's offer (not Shop B's cheaper offer)
+      const inspectedShopee532 = await rateApi532.inspectProductOrShopUrl(
+        'https://shopee.vn/%C4%90i%E1%BB%87n-tho%E1%BA%A1i-Apple-iPhone-16-Pro-Max-256GB-i.88201679.777777777'
+      );
+      assert.equal(inspectedShopee532.matchedType, 'master_product');
+      assert.equal(
+        inspectedShopee532.merchantProfile?.id,
+        'merch-532-shop-a',
+        'merchantProfile must be Shop A (#532)'
+      );
+      assert.equal(
+        inspectedShopee532.matchedOffer?.id,
+        'offer-532-shop-a',
+        'matchedOffer must be Shop A offer (offer-532-shop-a), not Shop B cheapest offer (#532)'
+      );
+      assert.equal(
+        inspectedShopee532.matchedOffer?.price_current,
+        29990000,
+        'matchedOffer price must match Shop A offer (#532)'
+      );
+      assert.ok(
+        merchantLookupUrls532.some(
+          (u) =>
+            u.includes('platform_shop_id=in.') &&
+            u.includes('platform=eq.shopee')
+        ),
+        'Shop lookup must filter by platform=eq.shopee (#532)'
+      );
+
+      // 77c. Lazada product URL with -s<sku> skips shop lookup so SKU number never collides with another platform shop ID
+      merchantLookupUrls532.length = 0;
+      const inspectedLazada532 = await rateApi532.inspectProductOrShopUrl(
+        'https://www.lazada.vn/products/apple-iphone-16-pro-max-256gb-i123456789-s88201679.html'
+      );
+      assert.equal(inspectedLazada532.matchedType, 'master_product');
+      assert.ok(
+        !merchantLookupUrls532.some((u) => u.includes('platform_shop_id=in.')),
+        'Lazada product URL must skip platform_shop_id lookup because -s<sku> is a SKU ID (#532)'
+      );
+      assert.equal(
+        inspectedLazada532.matchedOffer?.id,
+        'offer-532-shop-b',
+        'Lazada product URL without shop match must pick cheapest offer (#532)'
+      );
+    } finally {
+      globalThis.fetch = origFetch532;
+    }
+  }
+
+  console.log(
+    '  ✅ [77/78] URL Inspect Merchant-Offer Pairing, Platform Shop Filter, Lazada SKU Skip & Earbuds URL Floor (#532) passed'
+  );
+
+  // 78. Issue #542: Normalize CompareWorkspace rating scales, positive spec fallbacks, and head-to-head zero guards
+  {
+    const domain542 =
+      require('../../../lib/rate-domain') as typeof import('../../../lib/rate-domain');
+
+    assert.equal(domain542.normalizeCompareFiveStarRating(4.8), 4.8);
+    assert.equal(
+      domain542.normalizeCompareFiveStarRating(9.2),
+      4.6,
+      '10-point Lab/User ratings must scale to 5-point scale (#542)'
+    );
+    assert.equal(domain542.normalizeCompareFiveStarRating(92), 4.6);
+    assert.equal(domain542.normalizeCompareFiveStarRating(0), 0);
+    assert.equal(domain542.normalizeCompareFiveStarRating(-5), 0);
+
+    assert.equal(
+      domain542.resolveCompareEffectiveUserRating({
+        user_rating_weighted: 9.4,
+        average_rating: 4.5,
+      }),
+      4.7,
+      'resolveCompareEffectiveUserRating must normalize 10-point user_rating_weighted to 5-point scale (#542)'
+    );
+    assert.equal(
+      domain542.resolveCompareEffectiveUserRating({
+        user_rating_weighted: 0,
+        average_rating: 9.0,
+      }),
+      4.5,
+      'resolveCompareEffectiveUserRating must fall back to normalized average_rating when user_rating_weighted is 0 (#542)'
+    );
+    assert.equal(
+      domain542.resolveCompareExpertRating5({ expert_rating: 9.2 }),
+      4.6,
+      'resolveCompareExpertRating5 must normalize 10-point Lab scores to 5.0 scale (#542)'
+    );
+    assert.equal(
+      domain542.resolveCompareExpertRating5({ expert_rating: 0 }),
+      null
+    );
+
+    // Positive spec fallbacks when top-level or nested field is 0
+    assert.equal(
+      domain542.resolveCompareDisplaySizeInch({
+        screen_size_inch: 0,
+        specifications: { display: { size_inch: 0 } },
+        key_specs: { screen: '6.3" LTPO OLED 120Hz' },
+      }),
+      6.3,
+      'resolveCompareDisplaySizeInch must fall through 0 values to key_specs.screen (#542)'
+    );
+    // Two decimals parse whole, never as the digits after the point.
+    for (const [screen, inch] of [
+      ['6.78 inch AMOLED', 6.78],
+      ['6.67" OLED', 6.67],
+      ['6,9 inch', 6.9],
+      ['Màn 13 inch', 13],
+    ] as const) {
+      assert.equal(
+        domain542.resolveCompareDisplaySizeInch({
+          screen_size_inch: 0,
+          specifications: {},
+          key_specs: { screen },
+        }),
+        inch,
+        `key_specs.screen "${screen}" must parse as ${inch}"`
+      );
+    }
+    assert.equal(
+      domain542.resolveCompareRamGb({
+        ram_gb: 0,
+        specifications: { hardware: { ram_gb: 16 } },
+        key_specs: { ram: '16GB LPDDR5X' },
+      }),
+      16,
+      'resolveCompareRamGb must fall through ram_gb=0 to specifications.hardware.ram_gb (#542)'
+    );
+    assert.equal(
+      domain542.resolveCompareStorageGb({
+        storage_gb: 0,
+        specifications: { hardware: { storage_gb: 0 } },
+        key_specs: { storage: '1.5TB NVMe' },
+      }),
+      1536,
+      'resolveCompareStorageGb must fall through 0 values and parse TB in key_specs.storage (#542)'
+    );
+    assert.equal(
+      domain542.resolveCompareMemoryScore({
+        ram_gb: 0,
+        storage_gb: 0,
+        specifications: {},
+        key_specs: {},
+      }),
+      0,
+      'resolveCompareMemoryScore must return 0 when no RAM or storage is present so headToHeadSummary excludes unspecd earbuds (#542)'
+    );
+    assert.equal(
+      domain542.resolveCompareBatteryMah({
+        battery_mah: 0,
+        specifications: { battery: { capacity_mah: 0 } },
+        key_specs: { battery: '5500 mAh, 80W' },
+      }),
+      5500,
+      'resolveCompareBatteryMah must fall through 0 values to key_specs.battery (#542)'
+    );
+
+    const compareWsSrc = fs.readFileSync(
+      path.join(webSrcRoot, 'components/compare/CompareWorkspace.tsx'),
+      'utf8'
+    );
+    assert.ok(
+      !compareWsSrc.includes("from '@/lib/leaderboard-engine'"),
+      'CompareWorkspace.tsx must import buildPopular1v1BattlesForCategory from @/lib/rate-domain (#542)'
+    );
+    assert.ok(
+      compareWsSrc.includes('resolveCompareExpertRating5') &&
+        compareWsSrc.includes('resolveCompareMemoryScore') &&
+        compareWsSrc.includes('resolveCompareBatteryMah'),
+      'CompareWorkspace.tsx must use normalized rating and positive spec fallback helpers (#542)'
+    );
+  }
+
+  console.log(
+    '  ✅ [78/79] CompareWorkspace Rating Scale Normalization, Positive Spec Fallbacks & Zero Guards (#542) passed'
+  );
+
+  // =========================================================================
+  // 79. Watchlist Target Price Presets, Live KPI Sync & PriceHistorySection Guards (#549)
+  // =========================================================================
+  {
+    const wlStore549 =
+      await import('../../../components/watchlist/watchlist-store');
+
+    assert.equal(
+      wlStore549.computeWatchlistTargetPrice(1_000_000, 5),
+      950_000,
+      'computeWatchlistTargetPrice must not round 1,000,000 VND -5% back up to 1,000,000 VND (#549)'
+    );
+    assert.equal(
+      wlStore549.computeWatchlistTargetPrice(500_000, 5),
+      480_000,
+      'computeWatchlistTargetPrice must use 10k VND steps below 2M VND and stay strictly below basePrice (#549)'
+    );
+    assert.equal(
+      wlStore549.computeWatchlistTargetPrice(100_000, 5),
+      90_000,
+      'computeWatchlistTargetPrice must subtract step when rounding would equal basePrice (#549)'
+    );
+    assert.equal(
+      wlStore549.computeWatchlistTargetPrice(25_000_000, 5),
+      23_800_000,
+      'computeWatchlistTargetPrice must use 100k VND steps at or above 2M VND (#549)'
+    );
+    assert.equal(
+      wlStore549.computeWatchlistTargetPrice(25_000_000, 10),
+      22_500_000
+    );
+    assert.equal(
+      wlStore549.computeWatchlistTargetPrice(0, 5),
+      10_000_000,
+      'computeWatchlistTargetPrice must fall back to 10,000,000 VND when basePrice is 0 (#549)'
+    );
+
+    assert.equal(
+      wlStore549.sanitizeWatchlistTargetPrice(420_000, 500_000),
+      420_000
+    );
+    assert.equal(
+      wlStore549.sanitizeWatchlistTargetPrice(500, 500_000),
+      wlStore549.MIN_WATCHLIST_TARGET_PRICE,
+      'sanitizeWatchlistTargetPrice must clamp positive custom target prices to MIN_WATCHLIST_TARGET_PRICE (#549)'
+    );
+    assert.equal(
+      wlStore549.sanitizeWatchlistTargetPrice(0, 1_000_000),
+      950_000,
+      'sanitizeWatchlistTargetPrice must fall back to computeWatchlistTargetPrice when customTarget <= 0 (#549)'
+    );
+
+    const wlWorkspaceSrc = fs.readFileSync(
+      path.join(webSrcRoot, 'components/watchlist/WatchlistWorkspace.tsx'),
+      'utf8'
+    );
+    assert.ok(
+      wlWorkspaceSrc.includes('resolveCompareEffectiveUserRating(liveProd)') &&
+        wlWorkspaceSrc.includes('computeWatchlistTargetPrice(minP, 5)') &&
+        wlWorkspaceSrc.includes('currentMin > 0 && item.priceWhenAdded > 0'),
+      'WatchlistWorkspace.tsx must use computeWatchlistTargetPrice, resolveCompareEffectiveUserRating, and zero-guarded diffFromAdded (#549)'
+    );
+
+    const priceHistorySrc = fs.readFileSync(
+      path.join(webSrcRoot, 'components/price-history/PriceHistorySection.tsx'),
+      'utf8'
+    );
+    assert.ok(
+      priceHistorySrc.includes('price > MAX_VALID_VND_PRICE') &&
+        priceHistorySrc.includes('pt.price_original <= MAX_VALID_VND_PRICE') &&
+        priceHistorySrc.includes('if (allValues.length === 0)'),
+      'PriceHistorySection.tsx must filter invalid timestamps/prices and bound price_original by MAX_VALID_VND_PRICE (#549)'
+    );
+  }
+
+  console.log(
+    '  ✅ [79/79] Watchlist Target Price Presets, Live KPI Sync & PriceHistorySection Guards (#549) passed'
   );
 
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
