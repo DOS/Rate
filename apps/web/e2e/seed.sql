@@ -104,7 +104,7 @@ SELECT id, 7, 90, 'E2E analysis past the 1000-row listing cap.'
 FROM rate.products WHERE platform_item_id = 'many_1050';
 
 -- A merchant with 250 listings: reads that pass every listing id to one in.()
--- would exceed the request-line limit the E2E proxy enforces. The only review
+-- would exceed the request-line limit the E2E proxy enforces. Its newest review
 -- sits on the last listing, so it shows only if every chunk is read.
 INSERT INTO rate.merchants (id, platform, platform_shop_id, name, slug, is_official)
 VALUES ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb250', 'shopee', 'shop_bulk', 'Bulk Listings Store', 'bulk-listings-store', false);
@@ -114,3 +114,15 @@ FROM generate_series(1, 250) AS g;
 INSERT INTO rate.reviews (product_id, author_name, rating_star, comment, reviewer_type)
 SELECT id, 'Thảo', 4, 'Đóng gói cẩn thận, giao nhanh.', 'user'
 FROM rate.products WHERE platform_item_id = 'bulk_250';
+
+-- 120 old reviews flagged as seeding, more than the newest-60 sample the home
+-- page shows: platform-wide verdict counts must include all of them
+-- (DOS/Rate#455). They are older than every other review, so they only fill
+-- recent-review slots the other seeded reviews leave free.
+INSERT INTO rate.reviews (product_id, author_name, rating_star, comment, reviewer_type, created_at)
+SELECT id, 'Seeder', 5, 'Sản phẩm tốt tuyệt vời ' || platform_item_id, 'user', now() - interval '60 days'
+FROM rate.products
+WHERE platform_item_id IN (SELECT 'bulk_' || g FROM generate_series(1, 120) AS g);
+INSERT INTO rate.review_flags (review_id, verdict, fake_probability, detector, detector_version, input_hash, include_in_rating, flag_category)
+SELECT r.id, 'fake', 0.95, 'e2e', '1', 'e2e-' || r.id, false, 'seeding_fake'
+FROM rate.reviews r WHERE r.author_name = 'Seeder';
