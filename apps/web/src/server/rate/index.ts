@@ -277,6 +277,12 @@ export async function getCachedMerchantsList(
     (typeof minTrust === 'number' && !Number.isNaN(minTrust)) ||
     sort
   ) {
+    // No-op filters out of the key, so the API (which always sends
+    // officialOnly) shares the pages' unfiltered directory entry.
+    if (!databaseParams.officialOnly) delete databaseParams.officialOnly;
+    if (!databaseParams.platform || databaseParams.platform === 'all') {
+      delete databaseParams.platform;
+    }
     const all = await _getCachedMerchantsListByKey(
       canonicalizeCacheParams(databaseParams)
     );

@@ -132,15 +132,18 @@ test('merchant search reaches merchants past the 1000-row cap', async ({
 });
 
 // Search, trust floor and sort filter the cached directory in memory
-// (DOS/Rate#457); limit applies after them.
+// (DOS/Rate#457); limit applies after them. By default official stores rank
+// first, so the product-count order below is only there if the sort ran.
 test('merchant search combines q, sort and limit', async ({ request }) => {
   const res = await request.get(
-    '/api/v1/rate/merchants?q=bulk-shop-11&sort=followers_desc&limit=3'
+    '/api/v1/rate/merchants?q=store&sort=products_desc&limit=2'
   );
   expect(res.status()).toBe(200);
   const { data } = await res.json();
-  expect(data).toHaveLength(3);
-  for (const m of data) expect(m.slug).toContain('bulk-shop-11');
+  expect(data.map((m: { slug: string }) => m.slug)).toEqual([
+    'many-offers-store',
+    'bulk-listings-store',
+  ]);
 });
 
 // 1050 offers / listings exceed PostgREST's 1000-row cap: single, batched and
