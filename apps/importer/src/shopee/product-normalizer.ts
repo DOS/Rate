@@ -1185,7 +1185,11 @@ export class ProductNormalizer {
     // 3. Extract Storage - RAM-aware (plan v7 §5.2, Codex-reproduced bug:
     // "Samsung Galaxy A55 8GB RAM 256GB" must be 256GB, not the first GB token).
     // Decimal separator: dot or comma (Vietnamese titles use "1,5TB").
-    const sizeTokens = [...title.matchAll(/(\d+(?:[.,]\d+)?)\s*(TB|GB)/gi)]
+    // (?<!\d): a match never starts inside a digit run, so a long run with no
+    // unit costs one pass instead of one per digit (CodeQL polynomial regex).
+    // The matches are unchanged: the leftmost one always starts at the run's
+    // first digit.
+    const sizeTokens = [...title.matchAll(/(?<!\d)(\d+(?:[.,]\d+)?)\s*(TB|GB)/gi)]
       .map(m => ({
         value: parseFloat(m[1].replace(',', '.')) * (m[2].toUpperCase() === 'TB' ? 1024 : 1),
         index: m.index ?? 0,

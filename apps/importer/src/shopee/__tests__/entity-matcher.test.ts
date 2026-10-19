@@ -262,6 +262,22 @@ async function runEntityMatcherSuite() {
     true,
     'Non-new listings must set needs_review = true so they never auto-publish'
   );
+  // Storage parsing is unchanged by the size regex's digit lookbehind, and a
+  // title with a huge digit run (CodeQL polynomial-regex input) stays fast.
+  assert.equal(
+    normalizer.normalize(createShopeeListing('Samsung Galaxy A55 8GB RAM 256GB')).storage_gb,
+    256
+  );
+  assert.equal(
+    normalizer.normalize(createShopeeListing('Apple MacBook Pro M4 1,5TB SSD')).storage_gb,
+    1536
+  );
+  const longRunStart = Date.now();
+  normalizer.normalize(createShopeeListing(`Samsung Galaxy ${'9'.repeat(50_000)}`));
+  assert.ok(
+    Date.now() - longRunStart < 1_000,
+    'a 50k-digit title must not hang the storage parser'
+  );
   console.log('  ✅ [1/7] ProductCondition & ProductOrigin detection (Audit C6) passed');
 
   // 2. Tier 1 Deterministic Exact Match
