@@ -6884,6 +6884,23 @@ async function runCoreArchitectureSuite() {
       6.3,
       'resolveCompareDisplaySizeInch must fall through 0 values to key_specs.screen (#542)'
     );
+    // Two decimals parse whole, never as the digits after the point.
+    for (const [screen, inch] of [
+      ['6.78 inch AMOLED', 6.78],
+      ['6.67" OLED', 6.67],
+      ['6,9 inch', 6.9],
+      ['Màn 13 inch', 13],
+    ] as const) {
+      assert.equal(
+        domain542.resolveCompareDisplaySizeInch({
+          screen_size_inch: 0,
+          specifications: {},
+          key_specs: { screen },
+        }),
+        inch,
+        `key_specs.screen "${screen}" must parse as ${inch}"`
+      );
+    }
     assert.equal(
       domain542.resolveCompareRamGb({
         ram_gb: 0,

@@ -127,8 +127,10 @@ export function resolveCompareDisplaySizeInch(
   const fromTop = Number(p.screen_size_inch || 0);
   if (Number.isFinite(fromTop) && fromTop > 0) return fromTop;
   const ks = (p.key_specs || {}) as KeySpecs;
+  // Up to two decimals ("6.78 inch"), never starting mid-number: with one
+  // decimal only, "6.78" matched as 78 (DOS/Rate#546 release-gate review).
   const m = String(ks.screen || '').match(
-    /(\d{1,2}(?:[.,]\d)?)\s*(?:inch|in\b|")/i
+    /(?<![\d.,])(\d{1,2}(?:[.,]\d{1,2})?)\s*(?:inch|in\b|")/i
   );
   if (m?.[1]) {
     const parsed = Number(m[1].replace(',', '.'));
