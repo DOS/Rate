@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from '@/lib/navigation';
 import Image from 'next/image';
 import { useTranslations } from 'next-intl';
@@ -29,6 +29,24 @@ export function NavbarDarkDynamic({
   const tNav = useTranslations('rate.nav');
   const [scroll, setScroll] = useState(false);
   const [toggle, setToggle] = useState(false);
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Phone menu: focus moves into it on open, Escape closes it and focus
+  // returns to the toggle (DOS/Rate#523).
+  useEffect(() => {
+    if (!toggle) return;
+    menuRef.current
+      ?.querySelector<HTMLElement>('a[href]')
+      ?.focus({ preventScroll: true });
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      setToggle(false);
+      toggleRef.current?.focus({ preventScroll: true });
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [toggle]);
 
   useEffect(() => {
     const handlerScroll = () => setScroll(window.scrollY > 50);
@@ -67,17 +85,15 @@ export function NavbarDarkDynamic({
           <nav id="navigation" className="navigation">
             <div className="nav-header">
               {logo}
-              <div
+              <button
+                ref={toggleRef}
+                type="button"
                 className="nav-toggle"
-                role="button"
-                tabIndex={0}
                 aria-label={tNav('menuToggleAria')}
+                aria-controls="rate-nav-menu"
                 aria-expanded={toggle}
                 onClick={() => setToggle(!toggle)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') setToggle(!toggle);
-                }}
-              ></div>
+              ></button>
               {/* Below 576px only the locale switcher and Inspect fit next to the
               logo; more icons pushed the menu button off the screen. The
               hidden ones are all in the menu (DOS/Rate#515). */}
@@ -127,8 +143,14 @@ export function NavbarDarkDynamic({
             </div>
 
             <div
+              ref={menuRef}
+              id="rate-nav-menu"
               className={`nav-menus-wrapper ${toggle ? 'nav-menus-wrapper-open' : ''}`}
-              style={{ transitionProperty: toggle ? 'none' : 'left' }}
+              // Closing slides out, and visibility turns hidden only at the
+              // end of the slide (see style.scss).
+              style={{
+                transitionProperty: toggle ? 'none' : 'left, visibility',
+              }}
             >
               <div className="mobLogos">
                 {logoUrl ? (
@@ -145,18 +167,17 @@ export function NavbarDarkDynamic({
                   <RateWordmark tone="ink" size={26} />
                 )}
               </div>
-              <span
+              <button
+                type="button"
                 className="nav-menus-wrapper-close-button"
-                role="button"
-                tabIndex={0}
-                aria-label="Close navigation"
-                onClick={() => setToggle(false)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') setToggle(false);
+                aria-label={tNav('menuCloseAria')}
+                onClick={() => {
+                  setToggle(false);
+                  toggleRef.current?.focus({ preventScroll: true });
                 }}
               >
-                ✕
-              </span>
+                <span aria-hidden="true">✕</span>
+              </button>
 
               {(() => {
                 const defaultLinks: NavbarLinkItem[] = [
