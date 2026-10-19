@@ -8,9 +8,14 @@ import FooterDynamic from '../components/footer/FooterDynamic';
 import BackToTop from '../components/back-to-top';
 import CompareTrayBar from '@/components/compare/CompareTrayBar';
 import { BsSearch, BsShieldCheck } from 'react-icons/bs';
-import MerchantDirectoryExplorer, {
+import MerchantDirectoryExplorer from '@/components/merchants/MerchantDirectoryExplorer';
+import {
+  DEFAULT_MERCHANT_DIRECTORY_FILTERS,
+  MERCHANT_PAGE_SIZE,
+  pageMerchantDirectory,
+  summarizeMerchantDirectory,
   type MerchantSortOption,
-} from '@/components/merchants/MerchantDirectoryExplorer';
+} from '@/lib/merchant-directory';
 
 export async function generateMetadata({
   params,
@@ -58,6 +63,21 @@ export default async function MerchantsDirectoryPage({
     rawSort === 'followers_desc'
       ? rawSort
       : 'trust_desc';
+  // Only the first page and whole-directory stats go to the browser; the
+  // explorer fetches further pages and exports from the directory API.
+  const initialPage = pageMerchantDirectory(
+    merchants,
+    {
+      ...DEFAULT_MERCHANT_DIRECTORY_FILTERS,
+      query: initialQuery,
+      platform: initialPlatform.toLowerCase(),
+      officialOnly: initialOfficialOnly,
+      sortBy: initialSort,
+    },
+    0,
+    MERCHANT_PAGE_SIZE
+  );
+  const summary = summarizeMerchantDirectory(merchants);
 
   return (
     <>
@@ -150,7 +170,8 @@ export default async function MerchantsDirectoryPage({
           </div>
 
           <MerchantDirectoryExplorer
-            initialMerchants={merchants}
+            initialPage={initialPage}
+            summary={summary}
             locale={locale}
             initialQuery={initialQuery}
             initialPlatform={initialPlatform}

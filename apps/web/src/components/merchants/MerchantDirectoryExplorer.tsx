@@ -1,9 +1,19 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from '@/lib/navigation';
 import { escapeCsvCell } from '@/lib/csv-safe';
 import type { MerchantSummary } from '@/lib/rate-domain';
+import {
+  MERCHANT_PAGE_SIZE,
+  merchantDirectoryFilterParams,
+  type MerchantDirectoryFilters,
+  type MerchantDirectoryPage,
+  type MerchantDirectorySummary,
+  type MerchantRiskTier,
+  type MerchantSeedingTier,
+  type MerchantSortOption,
+} from '@/lib/merchant-directory';
 import { selectMerchantRadar } from '@/lib/deal-radar';
 import { useDealRadarPayload } from '@/components/radar/use-deal-radar';
 import { useTranslations } from 'next-intl';
@@ -23,16 +33,14 @@ import {
   BsStarFill,
 } from 'react-icons/bs';
 
-const MERCHANT_PAGE_SIZE = 48;
-
-export type MerchantSortOption =
-  'trust_desc' | 'products_desc' | 'seeding_asc' | 'followers_desc';
-
-export type MerchantRiskTier = 'all' | 'safe' | 'moderate' | 'warning';
-export type MerchantSeedingTier = 'all' | 'low' | 'elevated';
+// Rows per request when an export collects every matching store.
+const EXPORT_PAGE_SIZE = 500;
 
 interface MerchantDirectoryExplorerProps {
-  readonly initialMerchants: readonly MerchantSummary[];
+  /** First page for the initial filters, rendered on the server. */
+  readonly initialPage: MerchantDirectoryPage;
+  /** Whole-directory stats; they do not depend on the filters. */
+  readonly summary: MerchantDirectorySummary;
   readonly locale?: string;
   readonly initialQuery?: string;
   readonly initialPlatform?: string;
@@ -40,8 +48,26 @@ interface MerchantDirectoryExplorerProps {
   readonly initialSort?: MerchantSortOption;
 }
 
+async function fetchDirectoryPage(
+  filters: MerchantDirectoryFilters,
+  offset: number,
+  limit: number,
+  signal?: AbortSignal
+): Promise<MerchantDirectoryPage> {
+  const params = merchantDirectoryFilterParams(filters);
+  params.set('offset', String(offset));
+  params.set('limit', String(limit));
+  const resp = await fetch(`/api/v1/rate/merchants/directory?${params}`, {
+    signal,
+  });
+  if (!resp.ok) throw new Error(`merchant directory HTTP ${resp.status}`);
+  const body = (await resp.json()) as { data: MerchantDirectoryPage };
+  return body.data;
+}
+
 export default function MerchantDirectoryExplorer({
-  initialMerchants,
+  initialPage,
+  summary,
   initialQuery = '',
   initialPlatform = 'all',
   initialOfficialOnly = false,
@@ -55,23 +81,94 @@ export default function MerchantDirectoryExplorer({
   const [seedingTier, setSeedingTier] = useState<MerchantSeedingTier>('all');
   const [sortBy, setSortBy] = useState<MerchantSortOption>(initialSort);
   const [copiedMerchantsMd, setCopiedMerchantsMd] = useState(false);
-  // Render the directory in pages: with a thousand stores, one list of cards
-  // makes a huge DOM. Exports still use every filtered store.
-  const [visibleCount, setVisibleCount] = useState(MERCHANT_PAGE_SIZE);
+  // The server filters and pages the directory (DOS/Rate#452): only the
+  // stores on screen are in the browser. Exports fetch every matching store.
+  const filters = useMemo<MerchantDirectoryFilters>(
+    () => ({ query, platform, officialOnly, riskTier, seedingTier, sortBy }),
+    [query, platform, officialOnly, riskTier, seedingTier, sortBy]
+  );
   // JSON, not a joined string: a query containing the separator cannot collide.
-  const filterKey = JSON.stringify([
-    query,
-    platform,
-    officialOnly,
-    riskTier,
-    seedingTier,
-    sortBy,
-  ]);
-  const [shownForFilter, setShownForFilter] = useState(filterKey);
-  if (shownForFilter !== filterKey) {
-    setShownForFilter(filterKey);
-    setVisibleCount(MERCHANT_PAGE_SIZE);
-  }
+  const filterKey = JSON.stringify(filters);
+  const [pageState, setPageState] = useState({
+    key: filterKey,
+    items: initialPage.items,
+    matched: initialPage.matched,
+  });
+  const [loadingMore, setLoadingMore] = useState(false);
+  const firstRender = useRef(true);
+  const lastQuery = useRef(query);
+  useEffect(() => {
+    if (firstRender.current) {
+      firstRender.current = false;
+      return;
+    }
+    // Typing waits for a pause; other filter changes apply at once.
+    const delay = filters.query !== lastQuery.current ? 250 : 0;
+    lastQuery.current = filters.query;
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        const page = await fetchDirectoryPage(
+          filters,
+          0,
+          MERCHANT_PAGE_SIZE,
+          controller.signal
+        );
+        setPageState({
+          key: filterKey,
+          items: page.items,
+          matched: page.matched,
+        });
+      } catch {
+        // Aborted or offline: keep the current results.
+      }
+    }, delay);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [filterKey, filters]);
+  const visibleMerchants = pageState.items;
+  const matchedCount = pageState.matched;
+  const handleShowMore = async () => {
+    if (loadingMore) return;
+    setLoadingMore(true);
+    const offset = visibleMerchants.length;
+    try {
+      const page = await fetchDirectoryPage(
+        filters,
+        offset,
+        MERCHANT_PAGE_SIZE
+      );
+      setPageState((prev) => {
+        // Only append to the list this page continues (same filters, same
+        // length); skip ids already shown if the order shifted meanwhile.
+        if (prev.key !== filterKey || prev.items.length !== offset) return prev;
+        const shown = new Set(prev.items.map((m) => m.id));
+        return {
+          key: prev.key,
+          items: [...prev.items, ...page.items.filter((m) => !shown.has(m.id))],
+          matched: page.matched,
+        };
+      });
+    } catch {
+      // Keep what is shown; the button stays available to retry.
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+  /** Every store matching the current filters, for the exports. */
+  const fetchAllMatching = async (): Promise<MerchantSummary[]> => {
+    const all: MerchantSummary[] = [];
+    for (let offset = 0; ; offset += EXPORT_PAGE_SIZE) {
+      const page = await fetchDirectoryPage(filters, offset, EXPORT_PAGE_SIZE);
+      all.push(...page.items);
+      if (page.items.length < EXPORT_PAGE_SIZE || all.length >= page.matched) {
+        // Pages can come from different cache snapshots: drop repeats.
+        return [...new Map(all.map((m) => [m.id, m])).values()];
+      }
+    }
+  };
   const radarPayload = useDealRadarPayload();
 
   const labels = useMemo(
@@ -124,14 +221,10 @@ export default function MerchantDirectoryExplorer({
     [t]
   );
 
-  const platformCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const m of initialMerchants) {
-      const p = m.platform.toLowerCase();
-      counts.set(p, (counts.get(p) ?? 0) + 1);
-    }
-    return counts;
-  }, [initialMerchants]);
+  const platformCounts = useMemo(
+    () => new Map(Object.entries(summary.platformCounts)),
+    [summary.platformCounts]
+  );
 
   const availablePlatforms = useMemo(() => {
     const base = [
@@ -152,91 +245,7 @@ export default function MerchantDirectoryExplorer({
     return base;
   }, [platformCounts]);
 
-  const summaryStats = useMemo(() => {
-    const total = initialMerchants.length;
-    const official = initialMerchants.filter((m) => m.is_official).length;
-    const safe = initialMerchants.filter((m) => m.trust_score >= 80).length;
-    const avgTrust =
-      total > 0
-        ? Math.round(
-            initialMerchants.reduce((acc, m) => acc + m.trust_score, 0) / total
-          )
-        : 100;
-    return { total, official, safe, avgTrust };
-  }, [initialMerchants]);
-
-  const filteredMerchants = useMemo(() => {
-    const kw = query.trim().toLowerCase();
-
-    const filtered = initialMerchants.filter((m) => {
-      if (platform !== 'all' && m.platform.toLowerCase() !== platform) {
-        return false;
-      }
-      if (officialOnly && !m.is_official) {
-        return false;
-      }
-      if (riskTier === 'safe' && m.trust_score < 80) {
-        return false;
-      }
-      if (
-        riskTier === 'moderate' &&
-        (m.trust_score < 60 || m.trust_score >= 80)
-      ) {
-        return false;
-      }
-      if (riskTier === 'warning' && m.trust_score >= 60) {
-        return false;
-      }
-      if (seedingTier === 'low' && m.review_risk_score > 15) {
-        return false;
-      }
-      if (seedingTier === 'elevated' && m.review_risk_score <= 15) {
-        return false;
-      }
-      if (kw) {
-        const matchName = m.name.toLowerCase().includes(kw);
-        const matchShopId = m.platform_shop_id.toLowerCase().includes(kw);
-        const matchPlatform = m.platform.toLowerCase().includes(kw);
-        const matchSlug = m.slug ? m.slug.toLowerCase().includes(kw) : false;
-        if (!matchName && !matchShopId && !matchPlatform && !matchSlug) {
-          return false;
-        }
-      }
-      return true;
-    });
-
-    return [...filtered].sort((a, b) => {
-      switch (sortBy) {
-        case 'trust_desc':
-          return (
-            b.trust_score - a.trust_score || b.product_count - a.product_count
-          );
-        case 'products_desc':
-          return (
-            b.product_count - a.product_count || b.trust_score - a.trust_score
-          );
-        case 'seeding_asc':
-          return (
-            a.review_risk_score - b.review_risk_score ||
-            b.trust_score - a.trust_score
-          );
-        case 'followers_desc':
-          return (
-            b.follower_count - a.follower_count || b.trust_score - a.trust_score
-          );
-        default:
-          return 0;
-      }
-    });
-  }, [
-    initialMerchants,
-    query,
-    platform,
-    officialOnly,
-    riskTier,
-    seedingTier,
-    sortBy,
-  ]);
+  const summaryStats = summary;
 
   const hasActiveFilters =
     query.trim() !== '' ||
@@ -264,9 +273,7 @@ export default function MerchantDirectoryExplorer({
     };
   };
 
-  const handleCopyMerchantsMarkdown = async () => {
-    if (typeof navigator === 'undefined' || filteredMerchants.length === 0)
-      return;
+  const buildMerchantsMarkdown = (filteredMerchants: MerchantSummary[]) => {
     const headers = [
       'Merchant',
       'Platform',
@@ -300,19 +307,43 @@ export default function MerchantDirectoryExplorer({
       `| ${sep.join(' | ')} |`,
       ...rows.map((r) => `| ${r.join(' | ')} |`),
     ].join('\n');
+    return md;
+  };
 
+  const handleCopyMerchantsMarkdown = async () => {
+    if (typeof navigator === 'undefined' || matchedCount === 0) return;
+    // The rows are fetched first, but Safari only lets the clipboard be written
+    // during the click: hand it a promise via ClipboardItem so the write starts
+    // inside the gesture. Browsers without ClipboardItem fall back to
+    // writeText after the fetch.
+    const markdown = fetchAllMatching().then(buildMerchantsMarkdown);
     try {
-      await navigator.clipboard.writeText(md);
+      if (typeof ClipboardItem !== 'undefined' && navigator.clipboard.write) {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            'text/plain': markdown.then(
+              (md) => new Blob([md], { type: 'text/plain' })
+            ),
+          }),
+        ]);
+      } else {
+        await navigator.clipboard.writeText(await markdown);
+      }
       setCopiedMerchantsMd(true);
       setTimeout(() => setCopiedMerchantsMd(false), 2500);
     } catch {
-      // Ignore clipboard error
+      // Clipboard refused or fetch failed: nothing was copied.
     }
   };
 
-  const handleDownloadMerchantsCsv = () => {
-    if (typeof document === 'undefined' || filteredMerchants.length === 0)
+  const handleDownloadMerchantsCsv = async () => {
+    if (typeof document === 'undefined' || matchedCount === 0) return;
+    let filteredMerchants: MerchantSummary[];
+    try {
+      filteredMerchants = await fetchAllMatching();
+    } catch {
       return;
+    }
     const headers = [
       'MerchantID',
       'Name',
@@ -367,9 +398,14 @@ export default function MerchantDirectoryExplorer({
     URL.revokeObjectURL(url);
   };
 
-  const handleDownloadMerchantsJson = () => {
-    if (typeof document === 'undefined' || filteredMerchants.length === 0)
+  const handleDownloadMerchantsJson = async () => {
+    if (typeof document === 'undefined' || matchedCount === 0) return;
+    let filteredMerchants: MerchantSummary[];
+    try {
+      filteredMerchants = await fetchAllMatching();
+    } catch {
       return;
+    }
     const payload = {
       source: 'Rate.vn Merchant Trust Directory',
       exportedAt: new Date().toISOString(),
@@ -507,7 +543,7 @@ export default function MerchantDirectoryExplorer({
                 platform === 'all' ? 'btn-dark fw-semibold' : 'btn-outline-dark'
               }`}
             >
-              {labels.allPlatforms} ({initialMerchants.length})
+              {labels.allPlatforms} ({summary.total})
             </button>
             {availablePlatforms.map((p) => {
               const count = platformCounts.get(p) ?? 0;
@@ -590,8 +626,8 @@ export default function MerchantDirectoryExplorer({
             </button>
             <span className="small text-muted ms-1">
               {labels.showingCount}{' '}
-              <strong className="text-dark">{filteredMerchants.length}</strong>{' '}
-              {labels.ofCount} {initialMerchants.length} {labels.merchantsUnit}
+              <strong className="text-dark">{matchedCount}</strong>{' '}
+              {labels.ofCount} {summary.total} {labels.merchantsUnit}
             </span>
             {hasActiveFilters && (
               <button
@@ -608,7 +644,7 @@ export default function MerchantDirectoryExplorer({
       </div>
 
       {/* Results Grid */}
-      {filteredMerchants.length === 0 ? (
+      {matchedCount === 0 ? (
         <div className="card rounded-4 border bg-white p-5 text-center shadow-sm">
           <div className="mb-3">
             <BsShieldExclamation className="fs-1 text-warning" />
@@ -646,7 +682,7 @@ export default function MerchantDirectoryExplorer({
       ) : (
         <>
           <div className="row g-4">
-            {filteredMerchants.slice(0, visibleCount).map((merchant) => {
+            {visibleMerchants.map((merchant) => {
               const trustBadgeClass =
                 merchant.trust_score >= 80
                   ? 'bg-success text-white'
@@ -900,15 +936,16 @@ export default function MerchantDirectoryExplorer({
               );
             })}
           </div>
-          {filteredMerchants.length > visibleCount && (
+          {matchedCount > visibleMerchants.length && (
             <div className="mt-4 text-center">
               <button
                 type="button"
                 className="btn btn-outline-dark rounded-pill fw-semibold px-4"
-                onClick={() => setVisibleCount((n) => n + MERCHANT_PAGE_SIZE)}
+                onClick={handleShowMore}
+                disabled={loadingMore}
               >
                 {t('showMoreMerchants', {
-                  count: filteredMerchants.length - visibleCount,
+                  count: matchedCount - visibleMerchants.length,
                 })}
               </button>
             </div>
