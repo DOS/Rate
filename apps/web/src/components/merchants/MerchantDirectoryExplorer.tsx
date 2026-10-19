@@ -280,8 +280,8 @@ export default function MerchantDirectoryExplorer({
       'Official Mall',
       'Trust Score (/100)',
       'AI Seeding Risk (%)',
-      'Genuine Deals (60D)',
-      'Fake Sale Traps (60D)',
+      'Genuine Deals',
+      'Fake Sale Traps',
       'Authentic Reviews',
       'Tracked Products',
     ];

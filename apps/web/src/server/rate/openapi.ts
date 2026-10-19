@@ -91,7 +91,7 @@ export function buildRateOpenApiSpec(
       title: 'Rate.vn Open-Core Intelligence REST API v1',
       version: '1.7.0',
       summary:
-        'Standardized 10-Group Tech Specs, 90-Day Price History, Product Deal Radar & AI Review Auditing API',
+        'Standardized 10-Group Tech Specs, Price History, Product Deal Radar & AI Review Auditing API',
       description:
         'Official OpenAPI 3.1 specification for the Rate.vn 4-Layer Composable Backend Architecture (Zero-Strapi 2026). Powers Web Client Islands, the Rate Browser Extension Manifest V3 across 10 Vietnamese e-commerce/retail platforms, and open e-commerce transparency research.',
       license: {
@@ -1314,7 +1314,7 @@ export function buildRateOpenApiSpec(
           summary:
             'Cross-Platform Deal Radar & Fake-Sale Trap Feed across 10 platforms',
           description:
-            'Returns real-time genuine all-time-low deals (`genuineDeals`) and inflated fake-sale traps (`fakeSaleTraps`) audited against 60-day price history and cross-retailer medians.',
+            'Returns real-time genuine all-time-low deals (`genuineDeals`) and inflated fake-sale traps (`fakeSaleTraps`) audited against cross-retailer median prices.',
           tags: ['Products & Specs'],
           parameters: [
             {
