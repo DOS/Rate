@@ -2916,7 +2916,6 @@ export function sanitizePostgrestFilterToken(raw: string): string {
 // in.() with all of them overflows the gateway's request-line limit (#290).
 const IN_FILTER_CHUNK_SIZE = 150;
 
-/** Runs `read` per chunk of `ids` and concatenates the rows; any error throws. */
 // Parallel price-history reads per merchant profile. Each one is a paged
 // offers read plus chunked price_history reads, so a large store listing
 // hundreds of models must not open them all at once (DOS/Rate#462).
@@ -2946,6 +2945,7 @@ export async function forEachWithConcurrency<T>(
   );
 }
 
+/** Runs `read` per chunk of `ids` and concatenates the rows; any error throws. */
 async function readInChunks(
   ids: readonly string[],
   what: string,
