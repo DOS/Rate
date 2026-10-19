@@ -692,8 +692,8 @@
     "radarBadgeGenuine": "🔥 Cross-platform low (-{pct}%)",
     "radarBadgeFakeTrap": "🚨 Fake Sale Alert (+{pct}%)",
     "radarBadgeSpread": "📊 +{pct}% cross-platform spread",
-    "radarNoGenuine": "No offers below the market median for the current filters.",
-    "radarNoTraps": "No inflated list prices detected for the current filters."
+    "radarNoGenuine": "No offers below the market median in this category.",
+    "radarNoTraps": "No inflated list prices detected in this category."
   },
   "inspect": {
     "metaTitle": "Deep URL & Fake Discount Inspector | Rate.vn",

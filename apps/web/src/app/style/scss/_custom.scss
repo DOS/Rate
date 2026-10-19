@@ -756,6 +756,9 @@
   margin: 0 0 0.75rem;
   font-size: 0.9375rem;
   font-weight: 700;
+  // Titles are real headings (h3-h5); keep the template's phone heading
+  // line-height from spacing wrapped titles apart.
+  line-height: 1.4;
   color: var(--rate-fg-primary);
 
   svg {

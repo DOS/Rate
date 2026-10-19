@@ -532,23 +532,22 @@ export default function DealFinderWorkspace({
       {/* Live Cross-Platform Deal & Fake-Sale Trap Radar */}
       {dealRadar &&
         (filteredGenuineDeals.length > 0 ||
-          filteredFakeSaleTraps.length > 0) && (
+          filteredFakeSaleTraps.length > 0 ||
+          filteredPriceSpreadLeaders.length > 0) && (
           <div
             className="rate-card p-md-4 mb-4 p-3"
             data-testid="cross-platform-deal-radar"
           >
             <div className="d-flex justify-content-between align-items-center border-bottom mb-3 flex-wrap gap-2 pb-3">
-              <div>
+              <h2 className="fs-6 lh-base fw-bold text-dark mb-0">
                 <span className="badge bg-dark rounded-pill text-warning me-2">
                   {t('radarBannerBadge')}
                 </span>
-                <strong className="text-dark">
-                  {t('radarScannedSummary', {
-                    offers: dealRadar.totalOffersAnalyzed,
-                    clusters: dealRadar.totalClustersAnalyzed,
-                  })}
-                </strong>
-              </div>
+                {t('radarScannedSummary', {
+                  offers: dealRadar.totalOffersAnalyzed,
+                  clusters: dealRadar.totalClustersAnalyzed,
+                })}
+              </h2>
               <div className="d-flex align-items-center flex-wrap gap-2">
                 <button
                   type="button"
@@ -579,12 +578,12 @@ export default function DealFinderWorkspace({
 
             <div className="row g-4">
               <div className="col-lg-6">
-                <h2 className="rate-radar-list-title is-good">
+                <h3 className="rate-radar-list-title is-good">
                   <BsGraphDownArrow aria-hidden="true" />
                   {t('genuineDealsHeader', {
                     count: filteredGenuineDeals.length,
                   })}
-                </h2>
+                </h3>
                 {filteredGenuineDeals.length > 0 ? (
                   <ul className="rate-radar-list">
                     {filteredGenuineDeals.slice(0, 6).map((g) => (
@@ -623,12 +622,12 @@ export default function DealFinderWorkspace({
               </div>
 
               <div className="col-lg-6">
-                <h2 className="rate-radar-list-title is-bad">
+                <h3 className="rate-radar-list-title is-bad">
                   <BsExclamationTriangle aria-hidden="true" />
                   {t('fakeTrapsHeader', {
                     count: filteredFakeSaleTraps.length,
                   })}
-                </h2>
+                </h3>
                 {filteredFakeSaleTraps.length > 0 ? (
                   <ul className="rate-radar-list">
                     {filteredFakeSaleTraps.slice(0, 6).map((trap) => (
@@ -675,12 +674,12 @@ export default function DealFinderWorkspace({
                 data-testid="deals-price-spread-leaders"
                 className="rate-radar-spread"
               >
-                <h2 className="rate-radar-list-title">
+                <h3 className="rate-radar-list-title">
                   <BsArrowLeftRight aria-hidden="true" />
                   {t('spreadLeadersHeader', {
                     count: filteredPriceSpreadLeaders.length,
                   })}
-                </h2>
+                </h3>
                 <div className="row g-2">
                   {filteredPriceSpreadLeaders.slice(0, 6).map((s) => (
                     <div key={s.id} className="col-lg-4 col-md-6">
