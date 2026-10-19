@@ -1138,7 +1138,10 @@ export async function getMasterProducts(
     const minW = params.minFastChargingW;
     items = items.filter((item) => {
       const w = Number(item.specifications?.battery?.fast_charging_w || 0);
-      return w >= minW;
+      if (w >= minW) return true;
+      const batteryText = item.key_specs?.battery || '';
+      const wMatch = batteryText.match(/(\d{1,3})\s*w\b/i);
+      return wMatch ? Number(wMatch[1]) >= minW : false;
     });
   }
 

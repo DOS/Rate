@@ -6280,7 +6280,159 @@ async function runCoreArchitectureSuite() {
   }
 
   console.log(
-    '  ✅ [74/74] MerchantRiskBreakdown Schema Alignment, Empty JSONB Fallback & Ratio Derivation (#521) passed'
+    '  ✅ [74/75] MerchantRiskBreakdown Schema Alignment, Empty JSONB Fallback & Ratio Derivation (#521) passed'
+  );
+
+  // =========================================================================
+  // 75. GET /api/v1/rate/products Offset Pagination, key_specs.battery Fast-Charge Fallback & OpenAPI Route Coverage (#526)
+  // =========================================================================
+  {
+    const { NextRequest } = await import('next/server');
+    const { buildRateOpenApiSpec } = await import('@/server/rate/openapi');
+    const { getMasterProducts } = await import('@/lib/rate-api');
+    const productsRoute526 = await import('@/app/api/v1/rate/products/route');
+
+    // 75.1 OpenAPI 3.1.0 specification covers all route handlers including /api/v1/rate/merchants/directory
+    const spec526 = buildRateOpenApiSpec('https://rate.vn');
+    assert.ok(
+      spec526.paths['/api/v1/rate/merchants/directory']?.get,
+      'buildRateOpenApiSpec must document GET /api/v1/rate/merchants/directory (#526)'
+    );
+    const productParams526 =
+      spec526.paths['/api/v1/rate/products']?.get?.parameters ?? [];
+    assert.ok(
+      productParams526.some((p) => p.name === 'facets') &&
+        productParams526.some((p) => p.name === 'compactScreen') &&
+        productParams526.some(
+          (p) => p.name === 'minRating' && p.description.includes('0-5')
+        ),
+      'buildRateOpenApiSpec GET /api/v1/rate/products must document facets, compactScreen, and 0-5 minRating scale (#526)'
+    );
+
+    // 75.2 GET /api/v1/rate/products wires ?offset= into getMasterProducts and returns offset in response payload, and key_specs.battery parses <N>W
+    let capturedRpcOffset526: number | null = null;
+    const origFetch526 = globalThis.fetch;
+    globalThis.fetch = (async (
+      input: RequestInfo | URL,
+      init?: RequestInit
+    ) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.includes('/rest/v1/categories')) {
+        return new Response(
+          JSON.stringify({
+            id: '00000000-0000-4000-8000-000000000520',
+            slug: 'smartphones',
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        );
+      }
+      if (url.includes('/rest/v1/rpc/search_master_products')) {
+        if (init?.body && typeof init.body === 'string') {
+          const parsedBody = JSON.parse(init.body) as { p_offset?: number };
+          if (typeof parsedBody.p_offset === 'number') {
+            capturedRpcOffset526 = parsedBody.p_offset;
+          }
+        }
+        return new Response('{"message":"function not found"}', {
+          status: 404,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      if (url.includes('/rest/v1/master_products')) {
+        const u526 = new URL(url);
+        const offset526 = Number(u526.searchParams.get('offset') ?? 0);
+        const limit526 = Number(u526.searchParams.get('limit') ?? 1000);
+        const rows526 = [
+          {
+            id: '00000000-0000-4000-8000-000000000521',
+            slug: 'samsung-galaxy-s25-256gb',
+            name: 'Samsung Galaxy S25 256GB',
+            brand: 'Samsung',
+            model: 'Galaxy S25',
+            model_key: 'samsung-galaxy-s25:256gb',
+            category_id: null,
+            min_price: 19_990_000,
+            max_price: 21_990_000,
+            merchant_count: 3,
+            status: 'published',
+            specifications: { battery: { capacity_mah: 4000 } },
+            key_specs: { battery: '4000 mAh | 25W' },
+            metadata: { category_slug: 'smartphones' },
+            thumbnail: null,
+            images: [],
+          },
+          {
+            id: '00000000-0000-4000-8000-000000000522',
+            slug: 'samsung-galaxy-s25-ultra-256gb',
+            name: 'Samsung Galaxy S25 Ultra 256GB',
+            brand: 'Samsung',
+            model: 'Galaxy S25 Ultra',
+            model_key: 'samsung-galaxy-s25-ultra:256gb',
+            category_id: null,
+            min_price: 28_990_000,
+            max_price: 31_990_000,
+            merchant_count: 5,
+            status: 'published',
+            specifications: { battery: { capacity_mah: 5000 } },
+            key_specs: { battery: '5000 mAh | 45W' },
+            metadata: { category_slug: 'smartphones' },
+            thumbnail: null,
+            images: [],
+          },
+        ];
+        return new Response(
+          JSON.stringify(rows526.slice(offset526, offset526 + limit526)),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        );
+      }
+      return new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    try {
+      const fastCharged526 = await getMasterProducts({
+        minFastChargingW: 45,
+      });
+      assert.equal(
+        fastCharged526.length,
+        1,
+        'getMasterProducts fallback must match key_specs.battery "<N>W" when specifications.battery.fast_charging_w is absent (#526)'
+      );
+      assert.equal(fastCharged526[0]?.slug, 'samsung-galaxy-s25-ultra-256gb');
+
+      const req526 = new NextRequest(
+        'https://rate.vn/api/v1/rate/products?q=Samsung&limit=1&offset=1'
+      );
+      const res526 = await productsRoute526.GET(req526);
+      assert.equal(res526.status, 200);
+      const body526 = (await res526.json()) as {
+        ok: boolean;
+        count: number;
+        offset: number;
+        data: Array<{ slug: string }>;
+      };
+      assert.equal(body526.ok, true);
+      assert.equal(body526.offset, 1);
+      assert.equal(
+        capturedRpcOffset526,
+        1,
+        'GET /api/v1/rate/products must pass offset to getMasterProducts (#526)'
+      );
+      assert.equal(body526.data.length, 1);
+      assert.equal(
+        body526.data[0]?.slug,
+        'samsung-galaxy-s25-ultra-256gb',
+        'GET /api/v1/rate/products?offset=1&limit=1 must return the second matched product (#526)'
+      );
+    } finally {
+      globalThis.fetch = origFetch526;
+    }
+  }
+
+  console.log(
+    '  ✅ [75/75] GET /api/v1/rate/products Offset Pagination, key_specs.battery Fast-Charge Fallback & OpenAPI Route Coverage (#526) passed'
   );
 
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
