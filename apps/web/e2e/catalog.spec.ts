@@ -155,6 +155,9 @@ test('offer and listing reads page past the 1000-row cap', async ({
     await request.get('/api/v1/rate/products/e2e-many-offers-phone')
   ).json();
   expect(product.data.offers).toHaveLength(1050);
+  // All-time low/high recorded before the newest 1000 observations (#464).
+  expect(product.data.priceHistory.lowestEverPrice).toBe(500000);
+  expect(product.data.priceHistory.highestEverPrice).toBe(3000000);
   // Reviews and their analysis on the last listing come through (DOS/Rate#453).
   expect(JSON.stringify(product.data.reviews)).toContain(
     'Review past the 1000-row listing cap.'

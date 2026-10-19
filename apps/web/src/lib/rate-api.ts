@@ -1887,8 +1887,11 @@ async function fetchAllRowsInChunks<T>(
  */
 export async function getMasterProductPriceHistory(
   masterId: string,
-  existingOffers?: MerchantOffer[]
+  existingOffers?: MerchantOffer[],
+  /** false skips the all-time low/high reads, for callers using only byOffer. */
+  options: { allTime?: boolean } = {}
 ): Promise<MasterProductPriceHistorySummary> {
+  const allTime = options.allTime ?? true;
   const offers = existingOffers ?? (await getMasterProductOffers(masterId));
   if (offers.length === 0) {
     return {
@@ -1912,15 +1915,38 @@ export async function getMasterProductPriceHistory(
   const productIds = offers.map((o) => o.id);
   const supabase = getRateClient();
   let rawRows: unknown[];
-  try {
-    rawRows = await readInChunks(productIds, 'price history', (chunk) =>
+  let extremeRows: unknown[];
+  // The chart and per-offer analysis use the newest 1000 observations; the
+  // all-time low and high must look at the whole history, or a low recorded
+  // before that window is lost (DOS/Rate#464). One cheapest and one dearest
+  // valid row per chunk.
+  const extremes = (ascending: boolean) =>
+    readInChunks(productIds, 'price history extremes', (chunk) =>
       supabase
         .from('price_history')
         .select('id, product_id, price, price_original, recorded_at, source')
         .in('product_id', chunk)
-        .order('recorded_at', { ascending: false })
-        .limit(1000)
+        .gt('price', 0)
+        .lte('price', MAX_VALID_VND_PRICE)
+        .order('price', { ascending })
+        .order('recorded_at', { ascending: true })
+        .limit(1)
     );
+  try {
+    const [windowRows, lowRows, highRows] = await Promise.all([
+      readInChunks(productIds, 'price history', (chunk) =>
+        supabase
+          .from('price_history')
+          .select('id, product_id, price, price_original, recorded_at, source')
+          .in('product_id', chunk)
+          .order('recorded_at', { ascending: false })
+          .limit(1000)
+      ),
+      allTime ? extremes(true) : Promise.resolve([]),
+      allTime ? extremes(false) : Promise.resolve([]),
+    ]);
+    rawRows = windowRows;
+    extremeRows = [...lowRows, ...highRows];
   } catch (err) {
     log.error('price_history fetch failed', {
       masterId,
@@ -2123,11 +2149,39 @@ export async function getMasterProductPriceHistory(
     };
   }
 
-  let lowestPoint: PriceHistoryPoint | null = null;
+  let lowestPoint: Pick<
+    PriceHistoryPoint,
+    'price' | 'recorded_at' | 'merchant_name'
+  > | null = null;
   let highestEverPrice: number | null = null;
 
-  for (const pt of points) {
-    if (!lowestPoint || pt.price < lowestPoint.price) {
+  const allTimeCandidates = [
+    ...points,
+    ...(extremeRows as unknown as RawPriceHistoryRow[]).flatMap((row) => {
+      const off = offerMap.get(row.product_id);
+      const price = Number(row.price || 0);
+      return off &&
+        Number.isFinite(price) &&
+        price > 0 &&
+        price <= MAX_VALID_VND_PRICE
+        ? [
+            {
+              price,
+              recorded_at: row.recorded_at,
+              merchant_name: off.merchant.name,
+            },
+          ]
+        : [];
+    }),
+  ];
+  for (const pt of allTimeCandidates) {
+    // On equal prices keep the first time it was seen.
+    if (
+      !lowestPoint ||
+      pt.price < lowestPoint.price ||
+      (pt.price === lowestPoint.price &&
+        Date.parse(pt.recorded_at) < Date.parse(lowestPoint.recorded_at))
+    ) {
       lowestPoint = pt;
     }
     if (highestEverPrice === null || pt.price > highestEverPrice) {
@@ -3177,7 +3231,10 @@ export async function getMerchantProfileById(
     clusterIds,
     PRICE_HISTORY_CONCURRENCY,
     async (cId) => {
-      const ph = await getMasterProductPriceHistory(cId);
+      // Only byOffer is used here: skip the all-time low/high reads.
+      const ph = await getMasterProductPriceHistory(cId, undefined, {
+        allTime: false,
+      });
       for (const [offerId, analysis] of Object.entries(ph.byOffer)) {
         discountByOfferId.set(offerId, analysis);
       }

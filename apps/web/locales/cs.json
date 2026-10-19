@@ -935,7 +935,7 @@
     "quickSpecBattery": "Baterie a nabíjení",
     "quickSpecDurability": "Odolnost / Krytí",
     "priceReferenceLabel": "Referenční tržní rozpětí ({count} sledovaných zdrojů):",
-    "low90dBadge": "90D minimum: {price} ₫",
+    "allTimeLowBadge": "Historické minimum: {price} ₫",
     "auditPriceBtn": "📈 Audit cen ({count} zdrojů)",
     "canonicalModelKeyLabel": "Standardizovaný klíč modelu (Canonical Model Key):",
     "offersEyebrow": "NEZÁVISLÝ PŘEHLED ZDROJŮ (BEZ AFFILIATE REKLAMY)",

@@ -3870,6 +3870,7 @@ async function runCoreArchitectureSuite() {
     let reviewChunksCalled = 0;
     let analysisChunksCalled = 0;
     let priceHistoryChunksCalled = 0;
+    let priceExtremeChunksCalled = 0;
 
     globalThis.fetch = (async (input: RequestInfo | URL) => {
       const url = typeof input === 'string' ? input : input.toString();
@@ -3923,6 +3924,15 @@ async function runCoreArchitectureSuite() {
                 : '2026-10-18T10:00:00Z',
           },
         ]);
+      }
+      if (
+        url.includes('/rest/v1/price_history') &&
+        /[?&]order=price./.test(url)
+      ) {
+        // All-time low/high reads (#464): one cheapest and one dearest row
+        // per chunk.
+        priceExtremeChunksCalled += 1;
+        return jsonResp344(200, []);
       }
       if (url.includes('/rest/v1/price_history')) {
         priceHistoryChunksCalled += 1;
@@ -3996,6 +4006,11 @@ async function runCoreArchitectureSuite() {
       priceHistoryChunksCalled,
       2,
       'getMasterProductPriceHistory must chunk 160 productIds into 2 requests of <=150 IDs (#344)'
+    );
+    assert.equal(
+      priceExtremeChunksCalled,
+      4,
+      'getMasterProductPriceHistory must read the all-time low and high per chunk (#464)'
     );
     const crawlerPoints344 = chunkedPriceHistory344.points.filter(
       (p) => p.source === 'crawler'

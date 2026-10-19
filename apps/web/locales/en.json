@@ -935,7 +935,7 @@
     "quickSpecBattery": "Battery & Charging",
     "quickSpecDurability": "Durability / Resistance",
     "priceReferenceLabel": "Market reference price range ({count} tracked sources):",
-    "low90dBadge": "90D Low: {price} ₫",
+    "allTimeLowBadge": "All-time low: {price} ₫",
     "auditPriceBtn": "📈 Price Audit ({count} sources)",
     "canonicalModelKeyLabel": "Canonical Model Key:",
     "offersEyebrow": "INDEPENDENT SOURCE REFERENCE (ZERO AFFILIATE BIAS)",
