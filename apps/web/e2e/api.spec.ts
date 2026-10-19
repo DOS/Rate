@@ -90,3 +90,18 @@ test('sitemap lists every merchant and product page', async ({ request }) => {
   ).toBeGreaterThan(1100);
   expect(xml).toContain('/smartphones/e2e-many-offers-phone<');
 });
+
+// 201 seeded earbuds share one rating: a query for one outside the 100
+// best-rated must still find it (DOS/Rate#473).
+test('leaderboard filters the whole category, not its top 100', async ({
+  request,
+}) => {
+  const res = await request.get(
+    '/api/v1/rate/leaderboard?category=earbuds&q=E2E%20Bud%20150&limit=5'
+  );
+  expect(res.status()).toBe(200);
+  const body = await res.json();
+  expect(body.items.map((i: { slug: string }) => i.slug)).toEqual([
+    'e2e-bud-150',
+  ]);
+});
