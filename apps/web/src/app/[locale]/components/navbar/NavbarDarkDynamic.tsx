@@ -29,19 +29,11 @@ export function NavbarDarkDynamic({
   const tNav = useTranslations('rate.nav');
   const [scroll, setScroll] = useState(false);
   const [toggle, setToggle] = useState(false);
-  const [windowWidth, setWindowWidth] = useState(0);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
     const handlerScroll = () => setScroll(window.scrollY > 50);
-    const handleResize = () => setWindowWidth(window.innerWidth);
-    setWindowWidth(window.innerWidth);
     window.addEventListener('scroll', handlerScroll);
-    window.addEventListener('resize', handleResize);
-    return () => {
-      window.removeEventListener('scroll', handlerScroll);
-      window.removeEventListener('resize', handleResize);
-    };
+    return () => window.removeEventListener('scroll', handlerScroll);
   }, []);
 
   const logo = (
@@ -69,14 +61,10 @@ export function NavbarDarkDynamic({
         data-sticky-element=""
       >
         <div className="container-fluid">
-          <nav
-            id="navigation"
-            className={
-              windowWidth > 991
-                ? 'navigation navigation-landscape'
-                : 'navigation navigation-portrait'
-            }
-          >
+          {/* Phone vs desktop layout comes from media queries in style.scss
+          (992px), not from a JS width class: the server HTML must already
+          be right, or the navbar jumps after hydration (DOS/Rate#515). */}
+          <nav id="navigation" className="navigation">
             <div className="nav-header">
               {logo}
               <div

@@ -1,8 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 
-// The server HTML lays the navbar out for the viewport by media query, so it
-// does not jump after hydration, and the phone header fits the screen
-// (DOS/Rate#515).
+// The server HTML lays the navbar out for the viewport by media query, so
+// the page does not jump after hydration, and the phone header fits the
+// screen (DOS/Rate#515).
 async function cumulativeLayoutShift(page: Page): Promise<number> {
   return page.evaluate(
     () =>
@@ -25,7 +25,7 @@ for (const viewport of [
   { name: 'desktop', width: 1024, height: 768 },
   { name: 'phone', width: 375, height: 812 },
 ]) {
-  test(`no navbar layout shift on load (${viewport.name})`, async ({
+  test(`the home page does not shift on load (${viewport.name})`, async ({
     page,
   }) => {
     await page.setViewportSize(viewport);
@@ -42,8 +42,23 @@ test('the phone header keeps the menu button on screen', async ({ page }) => {
   const box = await toggle.boundingBox();
   expect(box).not.toBeNull();
   expect(box!.x + box!.width).toBeLessThanOrEqual(375);
-  await toggle.click();
-  await expect(page.locator('.nav-menus-wrapper')).toHaveClass(
-    /nav-menus-wrapper-open/
-  );
+  // Retried until hydration has attached the click handler.
+  await expect(async () => {
+    await toggle.click();
+    await expect(page.locator('.nav-menus-wrapper')).toHaveClass(
+      /nav-menus-wrapper-open/,
+      { timeout: 500 }
+    );
+  }).toPass();
+});
+
+test('at exactly 992px only the desktop menu shows', async ({ page }) => {
+  await page.setViewportSize({ width: 992, height: 768 });
+  await page.goto('/');
+  await expect(page.locator('#navigation .mobile_nav')).toBeHidden();
+  await expect(page.locator('#navigation .nav-toggle')).toBeHidden();
+  // The menu items float, so check a link rather than the zero-height list.
+  await expect(
+    page.locator('#navigation .nav-menu a[href="/leaderboard"]')
+  ).toBeVisible();
 });

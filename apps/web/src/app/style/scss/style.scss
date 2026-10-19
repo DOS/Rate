@@ -4849,6 +4849,14 @@ nav a:hover {
   }
 }
 
+/* The desktop menu starts at 992px; the theme hid the phone icons only from
+   993px, so at exactly 992px both showed (DOS/Rate#515). */
+@media (min-width: 992px) {
+  .navigation .mobile_nav {
+    display: none;
+  }
+}
+
 .nav-menus-wrapper.nav-menus-wrapper-open {
   left: 0;
 }
