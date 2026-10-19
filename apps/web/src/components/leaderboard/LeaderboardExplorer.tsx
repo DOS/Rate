@@ -1,11 +1,13 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import type { IconType } from 'react-icons';
-import { Link, useRouter } from '@/lib/navigation';
+import { Link } from '@/lib/navigation';
 import {
   getMasterProductCategorySlug,
+  normalizeLeaderboardCategory,
+  normalizeLeaderboardCriterion,
   scoreMasterProductForLeaderboard,
   type CanonicalCategorySlug,
   type LeaderboardCriterionKey,
@@ -55,8 +57,6 @@ export type { LeaderboardCriterionKey, LeaderboardPriceSegment };
 interface LeaderboardExplorerProps {
   readonly products: readonly MasterProduct[];
   readonly dealRadar?: CrossPlatformDealRadarResponse | null;
-  readonly initialCategory?: CanonicalCategorySlug;
-  readonly initialCriterion?: LeaderboardCriterionKey;
   readonly locale?: string;
 }
 
@@ -141,19 +141,41 @@ function computeProductScores(
 export default function LeaderboardExplorer({
   products,
   dealRadar,
-  initialCategory = 'smartphones',
-  initialCriterion = 'combined',
 }: LeaderboardExplorerProps) {
   const t = useTranslations('leaderboard');
-  const router = useRouter();
 
   const radarIndex = useDealRadarIndex(dealRadar);
   const categoryTabs = useMemo(() => buildCategoryTabs(t), [t]);
 
   const [activeCategory, setActiveCategory] =
-    useState<CanonicalCategorySlug>(initialCategory);
+    useState<CanonicalCategorySlug>('smartphones');
   const [activeCriterion, setActiveCriterion] =
-    useState<LeaderboardCriterionKey>(initialCriterion);
+    useState<LeaderboardCriterionKey>('combined');
+
+  // The page is cached with the default tab, so a deep link's ?cat= and
+  // ?criterion= are applied once the browser has the URL (DOS/Rate#508).
+  useEffect(() => {
+    const query = new URLSearchParams(window.location.search);
+    if (query.has('cat')) {
+      setActiveCategory(normalizeLeaderboardCategory(query.get('cat')));
+    }
+    if (query.has('criterion')) {
+      setActiveCriterion(normalizeLeaderboardCriterion(query.get('criterion')));
+    }
+  }, []);
+
+  // Keeps the tab in the URL without a server round trip; Next syncs its
+  // router with the native history API.
+  const replaceTabUrl = (
+    cat: CanonicalCategorySlug,
+    crit: LeaderboardCriterionKey
+  ) => {
+    window.history.replaceState(
+      null,
+      '',
+      `${window.location.pathname}?cat=${cat}&criterion=${crit}`
+    );
+  };
   const [priceSegment, setPriceSegment] =
     useState<LeaderboardPriceSegment>('all');
   const [selectedBrand, setSelectedBrand] = useState<string>('all');
@@ -616,16 +638,12 @@ export default function LeaderboardExplorer({
   const handleSelectCategory = (cat: CanonicalCategorySlug) => {
     setActiveCategory(cat);
     setSelectedBrand('all');
-    router.replace(`/leaderboard?cat=${cat}&criterion=${activeCriterion}`, {
-      scroll: false,
-    });
+    replaceTabUrl(cat, activeCriterion);
   };
 
   const handleSelectCriterion = (crit: LeaderboardCriterionKey) => {
     setActiveCriterion(crit);
-    router.replace(`/leaderboard?cat=${activeCategory}&criterion=${crit}`, {
-      scroll: false,
-    });
+    replaceTabUrl(activeCategory, crit);
   };
 
   const criterionOptions: Array<{

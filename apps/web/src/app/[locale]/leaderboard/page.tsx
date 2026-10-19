@@ -22,14 +22,12 @@ import FooterTop from '../components/footer-top';
 import FooterDynamic from '../components/footer/FooterDynamic';
 import BackToTop from '../components/back-to-top';
 import CompareTrayBar from '@/components/compare/CompareTrayBar';
-import LeaderboardExplorer, {
-  type LeaderboardCriterionKey,
-} from '@/components/leaderboard/LeaderboardExplorer';
+import LeaderboardExplorer from '@/components/leaderboard/LeaderboardExplorer';
 
-// Reads searchParams, so it renders per request. The [locale] layout's
-// generateStaticParams would otherwise make it static, and the searchParams
-// read would then fail with DYNAMIC_SERVER_USAGE (DOS/Rate#491).
-export const dynamic = 'force-dynamic';
+// Cached: the page renders the default tab, and LeaderboardExplorer applies
+// ?cat= / ?criterion= in the browser, so no request data is read here
+// (DOS/Rate#508).
+export const revalidate = 60;
 
 const SITE_URL = (
   process.env.NEXT_PUBLIC_SITE_URL || 'https://rate.vn'
@@ -37,25 +35,7 @@ const SITE_URL = (
 
 interface PageProps {
   params: Promise<{ locale: string }>;
-  searchParams: Promise<{
-    cat?: string;
-    criterion?: string;
-    brand?: string;
-    price?: string;
-    q?: string;
-  }>;
 }
-
-const VALID_CRITERIA = new Set<LeaderboardCriterionKey>([
-  'combined',
-  'user',
-  'expert',
-  'screen',
-  'performance',
-  'camera',
-  'battery',
-  'value',
-]);
 
 const VALID_CATEGORIES = new Set<CanonicalCategorySlug>([
   'smartphones',
@@ -93,13 +73,9 @@ export async function generateMetadata({
   };
 }
 
-export default async function LeaderboardPage({
-  params,
-  searchParams,
-}: PageProps) {
+export default async function LeaderboardPage({ params }: PageProps) {
   const { locale } = await params;
   setRequestLocale(locale);
-  const query = await searchParams;
   const resolvedLocale: SupportedRateLocale = normalizeRateLocale(locale);
   const t = await getTranslations({
     locale: resolvedLocale,
@@ -119,10 +95,12 @@ export default async function LeaderboardPage({
         })
       )
     ),
+    // No fallback: the page is cached, so a null radar would be served for
+    // the whole revalidate window (DOS/Rate#491).
     getCrossPlatformDealRadar({
       categorySlug: 'all',
       limit: 36,
-    }).catch(() => null),
+    }),
   ]);
   // Back in one best-rated-first list (same key as search_master_products'
   // rating_desc), so the top 15 in the ItemList below stay platform-wide.
@@ -131,24 +109,6 @@ export default async function LeaderboardPage({
   const products = productsByCategory
     .flat()
     .sort((a, b) => ratingOf(b) - ratingOf(a));
-
-  const rawCategory = (query.cat || 'smartphones')
-    .toLowerCase()
-    .trim() as CanonicalCategorySlug;
-  const initialCategory: CanonicalCategorySlug = VALID_CATEGORIES.has(
-    rawCategory
-  )
-    ? rawCategory
-    : 'smartphones';
-
-  const rawCriterion = (query.criterion || 'combined')
-    .toLowerCase()
-    .trim() as LeaderboardCriterionKey;
-  const initialCriterion: LeaderboardCriterionKey = VALID_CRITERIA.has(
-    rawCriterion
-  )
-    ? rawCriterion
-    : 'combined';
 
   const copy = {
     kicker: t('kicker'),
@@ -398,8 +358,6 @@ export default async function LeaderboardPage({
             products={products}
             dealRadar={dealRadar}
             locale={resolvedLocale}
-            initialCategory={initialCategory}
-            initialCriterion={initialCriterion}
           />
         </section>
       </main>
