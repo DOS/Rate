@@ -6830,7 +6830,116 @@ async function runCoreArchitectureSuite() {
   }
 
   console.log(
-    '  ✅ [77/77] URL Inspect Merchant-Offer Pairing, Platform Shop Filter, Lazada SKU Skip & Earbuds URL Floor (#532) passed'
+    '  ✅ [77/78] URL Inspect Merchant-Offer Pairing, Platform Shop Filter, Lazada SKU Skip & Earbuds URL Floor (#532) passed'
+  );
+
+  // 78. Issue #542: Normalize CompareWorkspace rating scales, positive spec fallbacks, and head-to-head zero guards
+  {
+    const domain542 =
+      require('../../../lib/rate-domain') as typeof import('../../../lib/rate-domain');
+
+    assert.equal(domain542.normalizeCompareFiveStarRating(4.8), 4.8);
+    assert.equal(
+      domain542.normalizeCompareFiveStarRating(9.2),
+      4.6,
+      '10-point Lab/User ratings must scale to 5-point scale (#542)'
+    );
+    assert.equal(domain542.normalizeCompareFiveStarRating(92), 4.6);
+    assert.equal(domain542.normalizeCompareFiveStarRating(0), 0);
+    assert.equal(domain542.normalizeCompareFiveStarRating(-5), 0);
+
+    assert.equal(
+      domain542.resolveCompareEffectiveUserRating({
+        user_rating_weighted: 9.4,
+        average_rating: 4.5,
+      }),
+      4.7,
+      'resolveCompareEffectiveUserRating must normalize 10-point user_rating_weighted to 5-point scale (#542)'
+    );
+    assert.equal(
+      domain542.resolveCompareEffectiveUserRating({
+        user_rating_weighted: 0,
+        average_rating: 9.0,
+      }),
+      4.5,
+      'resolveCompareEffectiveUserRating must fall back to normalized average_rating when user_rating_weighted is 0 (#542)'
+    );
+    assert.equal(
+      domain542.resolveCompareExpertRating5({ expert_rating: 9.2 }),
+      4.6,
+      'resolveCompareExpertRating5 must normalize 10-point Lab scores to 5.0 scale (#542)'
+    );
+    assert.equal(
+      domain542.resolveCompareExpertRating5({ expert_rating: 0 }),
+      null
+    );
+
+    // Positive spec fallbacks when top-level or nested field is 0
+    assert.equal(
+      domain542.resolveCompareDisplaySizeInch({
+        screen_size_inch: 0,
+        specifications: { display: { size_inch: 0 } },
+        key_specs: { screen: '6.3" LTPO OLED 120Hz' },
+      }),
+      6.3,
+      'resolveCompareDisplaySizeInch must fall through 0 values to key_specs.screen (#542)'
+    );
+    assert.equal(
+      domain542.resolveCompareRamGb({
+        ram_gb: 0,
+        specifications: { hardware: { ram_gb: 16 } },
+        key_specs: { ram: '16GB LPDDR5X' },
+      }),
+      16,
+      'resolveCompareRamGb must fall through ram_gb=0 to specifications.hardware.ram_gb (#542)'
+    );
+    assert.equal(
+      domain542.resolveCompareStorageGb({
+        storage_gb: 0,
+        specifications: { hardware: { storage_gb: 0 } },
+        key_specs: { storage: '1.5TB NVMe' },
+      }),
+      1536,
+      'resolveCompareStorageGb must fall through 0 values and parse TB in key_specs.storage (#542)'
+    );
+    assert.equal(
+      domain542.resolveCompareMemoryScore({
+        ram_gb: 0,
+        storage_gb: 0,
+        specifications: {},
+        key_specs: {},
+      }),
+      0,
+      'resolveCompareMemoryScore must return 0 when no RAM or storage is present so headToHeadSummary excludes unspecd earbuds (#542)'
+    );
+    assert.equal(
+      domain542.resolveCompareBatteryMah({
+        battery_mah: 0,
+        specifications: { battery: { capacity_mah: 0 } },
+        key_specs: { battery: '5500 mAh, 80W' },
+      }),
+      5500,
+      'resolveCompareBatteryMah must fall through 0 values to key_specs.battery (#542)'
+    );
+
+    const compareWsSrc = fs.readFileSync(
+      path.join(webSrcRoot, 'components/compare/CompareWorkspace.tsx'),
+      'utf8'
+    );
+    assert.ok(
+      !compareWsSrc.includes("from '@/lib/leaderboard-engine'"),
+      'CompareWorkspace.tsx must import buildPopular1v1BattlesForCategory from @/lib/rate-domain (#542)'
+    );
+    assert.ok(
+      compareWsSrc.includes('resolveCompareExpertRating5') &&
+        compareWsSrc.includes('resolveCompareMemoryScore') &&
+        compareWsSrc.includes('resolveCompareBatteryMah'),
+      'CompareWorkspace.tsx must use normalized rating and positive spec fallback helpers (#542)'
+    );
+  }
+
+  console.log(
+    '  ✅ [78/78] CompareWorkspace Rating Scale Normalization, Positive Spec Fallbacks & Zero Guards (#542) passed'
   );
 
   console.log('🎉 All Rate.vn Core Architecture tests passed!');

@@ -25,8 +25,16 @@ import type {
 } from '@repo/shared-data';
 import {
   type CanonicalCategorySlug,
+  buildPopular1v1BattlesForCategory,
   getMasterProductCategorySlug,
   getMasterProductHref,
+  resolveCompareBatteryMah,
+  resolveCompareDisplaySizeInch,
+  resolveCompareEffectiveUserRating,
+  resolveCompareExpertRating5,
+  resolveCompareMemoryScore,
+  resolveCompareRamGb,
+  resolveCompareStorageGb,
   resolveProductImageUrl,
 } from '@/lib/rate-domain';
 import {
@@ -47,7 +55,6 @@ import {
 } from './compare-tray';
 import { upsertWatchlistItem } from '@/components/watchlist/watchlist-store';
 import { getSpecUiDictionary, localizeSpecValue } from '@/lib/spec-localizer';
-import { buildPopular1v1BattlesForCategory } from '@/lib/leaderboard-engine';
 
 interface CompareWorkspaceProps {
   initialProducts: MasterProduct[];
@@ -85,9 +92,7 @@ function formatBool(
 }
 
 function getEffectiveRating(p: MasterProduct): number {
-  const weighted = Number(p.user_rating_weighted || 0);
-  if (weighted > 0) return weighted;
-  return Number(p.average_rating || 0);
+  return resolveCompareEffectiveUserRating(p);
 }
 
 function buildCategoryTabs(t: CompareTranslator): Array<{
@@ -150,14 +155,11 @@ function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
         {
           id: 'expert_rating',
           label: t('rowExpertRating'),
-          renderValue: (p) =>
-            p.expert_rating && Number(p.expert_rating) > 0
-              ? `Lab ${Number(p.expert_rating).toFixed(1)} / 5.0`
-              : '-',
-          numericValue: (p) =>
-            p.expert_rating && Number(p.expert_rating) > 0
-              ? Number(p.expert_rating)
-              : null,
+          renderValue: (p) => {
+            const exp5 = resolveCompareExpertRating5(p);
+            return exp5 != null ? `Lab ${exp5.toFixed(1)} / 5.0` : '-';
+          },
+          numericValue: (p) => resolveCompareExpertRating5(p),
           higherIsBetter: true,
         },
         {
@@ -199,12 +201,8 @@ function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
             const min = Number(p.min_price || 0);
             if (min <= 0) return '-';
             const u = getEffectiveRating(p) > 0 ? getEffectiveRating(p) : null;
-            const e =
-              p.expert_rating != null && Number(p.expert_rating) > 0
-                ? Number(p.expert_rating) > 5
-                  ? Number(p.expert_rating)
-                  : Number(p.expert_rating) * 2
-                : null;
+            const exp5 = resolveCompareExpertRating5(p);
+            const e = exp5 != null ? exp5 * 2 : null;
             const combined10 =
               u != null && e != null
                 ? u * 2 * 0.6 + e * 0.4
@@ -221,12 +219,8 @@ function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
             const min = Number(p.min_price || 0);
             if (min <= 0) return null;
             const u = getEffectiveRating(p) > 0 ? getEffectiveRating(p) : null;
-            const e =
-              p.expert_rating != null && Number(p.expert_rating) > 0
-                ? Number(p.expert_rating) > 5
-                  ? Number(p.expert_rating)
-                  : Number(p.expert_rating) * 2
-                : null;
+            const exp5 = resolveCompareExpertRating5(p);
+            const e = exp5 != null ? exp5 * 2 : null;
             const combined10 =
               u != null && e != null
                 ? u * 2 * 0.6 + e * 0.4
@@ -263,17 +257,10 @@ function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
           id: 'display_size',
           label: t('rowDisplaySize'),
           renderValue: (p) => {
-            const specs = (p.specifications || {}) as ProductSpecifications;
-            const size = specs.display?.size_inch ?? p.screen_size_inch;
-            return size ? `${size}"` : '-';
+            const size = resolveCompareDisplaySizeInch(p);
+            return size != null ? `${size}"` : '-';
           },
-          numericValue: (p) => {
-            const specs = (p.specifications || {}) as ProductSpecifications;
-            const size = Number(
-              specs.display?.size_inch ?? p.screen_size_inch ?? 0
-            );
-            return size > 0 ? size : null;
-          },
+          numericValue: (p) => resolveCompareDisplaySizeInch(p),
           higherIsBetter: true,
         },
         {
@@ -360,31 +347,21 @@ function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
           id: 'hw_ram',
           label: t('rowHwRam'),
           renderValue: (p) => {
-            const specs = (p.specifications || {}) as ProductSpecifications;
-            const ram = p.ram_gb ?? specs.hardware?.ram_gb;
-            return ram ? `${ram} GB` : '-';
+            const ram = resolveCompareRamGb(p);
+            return ram != null ? `${ram} GB` : '-';
           },
-          numericValue: (p) => {
-            const specs = (p.specifications || {}) as ProductSpecifications;
-            const ram = Number(p.ram_gb ?? specs.hardware?.ram_gb ?? 0);
-            return ram > 0 ? ram : null;
-          },
+          numericValue: (p) => resolveCompareRamGb(p),
           higherIsBetter: true,
         },
         {
           id: 'hw_storage',
           label: t('rowHwStorage'),
           renderValue: (p) => {
-            const specs = (p.specifications || {}) as ProductSpecifications;
-            const rom = Number(p.storage_gb ?? specs.hardware?.storage_gb ?? 0);
+            const rom = resolveCompareStorageGb(p);
             if (!rom) return '-';
             return rom >= 1024 ? `${rom / 1024} TB` : `${rom} GB`;
           },
-          numericValue: (p) => {
-            const specs = (p.specifications || {}) as ProductSpecifications;
-            const rom = Number(p.storage_gb ?? specs.hardware?.storage_gb ?? 0);
-            return rom > 0 ? rom : null;
-          },
+          numericValue: (p) => resolveCompareStorageGb(p),
           higherIsBetter: true,
         },
         {
@@ -470,17 +447,10 @@ function buildSpecGroups(t: CompareTranslator): SpecGroupDef[] {
           id: 'bat_capacity',
           label: t('rowBatCapacity'),
           renderValue: (p) => {
-            const specs = (p.specifications || {}) as ProductSpecifications;
-            const mah = specs.battery?.capacity_mah ?? p.battery_mah;
-            return mah ? `${mah} mAh` : '-';
+            const mah = resolveCompareBatteryMah(p);
+            return mah != null ? `${mah} mAh` : '-';
           },
-          numericValue: (p) => {
-            const specs = (p.specifications || {}) as ProductSpecifications;
-            const mah = Number(
-              specs.battery?.capacity_mah ?? p.battery_mah ?? 0
-            );
-            return mah > 0 ? mah : null;
-          },
+          numericValue: (p) => resolveCompareBatteryMah(p),
           higherIsBetter: true,
         },
         {
@@ -1107,11 +1077,12 @@ export default function CompareWorkspace({
           })
           .join(' | ')} |`,
         `| **${t('mdRowExpertRating')}** | ${products
-          .map((p) =>
-            p.expert_rating && Number(p.expert_rating) > 0
-              ? `Lab ${Number(p.expert_rating).toFixed(1)}/5.0`
-              : t('unratedShort')
-          )
+          .map((p) => {
+            const exp5 = resolveCompareExpertRating5(p);
+            return exp5 != null
+              ? `Lab ${exp5.toFixed(1)}/5.0`
+              : t('unratedShort');
+          })
           .join(' | ')} |`,
         `| **${t('mdRowMinPrice')}** | ${products
           .map((p) =>
@@ -1126,10 +1097,14 @@ export default function CompareWorkspace({
         `| **${t('mdRowHardwareMemory')}** | ${products
           .map((p) => {
             const ks = (p.key_specs || {}) as KeySpecs;
+            const ram = resolveCompareRamGb(p);
+            const rom = resolveCompareStorageGb(p);
             const parts = [
               ks.chip,
-              p.ram_gb ? `${p.ram_gb}GB RAM` : ks.ram,
-              p.storage_gb ? `${p.storage_gb}GB` : ks.storage,
+              ram ? `${ram}GB RAM` : ks.ram,
+              rom
+                ? `${rom >= 1024 ? `${rom / 1024}TB` : `${rom}GB`}`
+                : ks.storage,
             ].filter(Boolean);
             return parts.length > 0 ? parts.join(' / ') : '-';
           })
@@ -1137,7 +1112,8 @@ export default function CompareWorkspace({
         `| **${t('mdRowBatteryEnergy')}** | ${products
           .map((p) => {
             const ks = (p.key_specs || {}) as KeySpecs;
-            return p.battery_mah ? `${p.battery_mah} mAh` : ks.battery || '-';
+            const mah = resolveCompareBatteryMah(p);
+            return mah ? `${mah} mAh` : ks.battery || '-';
           })
           .join(' | ')} |`,
       ];
@@ -1209,10 +1185,7 @@ export default function CompareWorkspace({
       productCount: products.length,
       products: products.map((p) => {
         const u = getEffectiveRating(p);
-        const e =
-          p.expert_rating != null && Number(p.expert_rating) > 0
-            ? Number(p.expert_rating)
-            : null;
+        const e = resolveCompareExpertRating5(p);
         return {
           slug: p.slug,
           name: p.name,
@@ -1278,21 +1251,24 @@ export default function CompareWorkspace({
 
   const headToHeadSummary = useMemo(() => {
     if (products.length < 2) return null;
-    const byRating = [...products].sort(
-      (a, b) => getEffectiveRating(b) - getEffectiveRating(a)
-    );
+    const byRating = [...products]
+      .filter((p) => getEffectiveRating(p) > 0)
+      .sort((a, b) => getEffectiveRating(b) - getEffectiveRating(a));
     const byPrice = [...products]
       .filter((p) => Number(p.min_price || 0) > 0)
       .sort((a, b) => Number(a.min_price || 0) - Number(b.min_price || 0));
-    const byMemory = [...products].sort(
-      (a, b) =>
-        Number(b.ram_gb || 0) * 1000 +
-        Number(b.storage_gb || 0) -
-        (Number(a.ram_gb || 0) * 1000 + Number(a.storage_gb || 0))
-    );
-    const byBattery = [...products].sort(
-      (a, b) => Number(b.battery_mah || 0) - Number(a.battery_mah || 0)
-    );
+    const byMemory = [...products]
+      .filter((p) => resolveCompareMemoryScore(p) > 0)
+      .sort(
+        (a, b) => resolveCompareMemoryScore(b) - resolveCompareMemoryScore(a)
+      );
+    const byBattery = [...products]
+      .filter((p) => (resolveCompareBatteryMah(p) ?? 0) > 0)
+      .sort(
+        (a, b) =>
+          (resolveCompareBatteryMah(b) ?? 0) -
+          (resolveCompareBatteryMah(a) ?? 0)
+      );
     return {
       bestRated: byRating[0] ?? null,
       lowestPrice: byPrice[0] ?? null,
@@ -1855,12 +1831,21 @@ export default function CompareWorkspace({
                     {headToHeadSummary.highestMemory.name}
                   </div>
                   <div className="small text-white-50 rate-tabular">
-                    {headToHeadSummary.highestMemory.ram_gb
-                      ? `${headToHeadSummary.highestMemory.ram_gb}GB RAM - `
-                      : ''}
-                    {headToHeadSummary.highestMemory.storage_gb
-                      ? `${headToHeadSummary.highestMemory.storage_gb}GB`
-                      : t('verdictNormalized10Groups')}
+                    {(() => {
+                      const ram = resolveCompareRamGb(
+                        headToHeadSummary.highestMemory
+                      );
+                      const rom = resolveCompareStorageGb(
+                        headToHeadSummary.highestMemory
+                      );
+                      return `${ram ? `${ram}GB RAM - ` : ''}${
+                        rom
+                          ? rom >= 1024
+                            ? `${rom / 1024}TB`
+                            : `${rom}GB`
+                          : t('verdictNormalized10Groups')
+                      }`;
+                    })()}
                   </div>
                 </div>
               </div>
@@ -1884,9 +1869,14 @@ export default function CompareWorkspace({
                     {headToHeadSummary.bestBattery.name}
                   </div>
                   <div className="small text-white-50 rate-tabular">
-                    {headToHeadSummary.bestBattery.battery_mah
-                      ? `${headToHeadSummary.bestBattery.battery_mah} mAh`
-                      : t('verdictNormalized10Groups')}
+                    {(() => {
+                      const mah = resolveCompareBatteryMah(
+                        headToHeadSummary.bestBattery
+                      );
+                      return mah
+                        ? `${mah} mAh`
+                        : t('verdictNormalized10Groups');
+                    })()}
                   </div>
                 </div>
               </div>
@@ -1989,10 +1979,7 @@ export default function CompareWorkspace({
                     const minPrice = Number(p.min_price || 0);
                     const minPriceFormatted = minPrice.toLocaleString('vi-VN');
                     const userRating = getEffectiveRating(p);
-                    const expertRating =
-                      p.expert_rating && Number(p.expert_rating) > 0
-                        ? Number(p.expert_rating)
-                        : null;
+                    const expertRating = resolveCompareExpertRating5(p);
                     const reviewCount =
                       p.authentic_review_count || p.total_reviews || 0;
 
