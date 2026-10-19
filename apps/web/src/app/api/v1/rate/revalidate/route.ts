@@ -2,7 +2,10 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { type NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { resolveRevalidationTargets } from '@/server/rate';
+import {
+  isSafeRevalidationPath,
+  resolveRevalidationTargets,
+} from '@/server/rate';
 import { createLogger } from '@/lib/logger';
 import { routing } from '@/lib/navigation';
 import { jsonApiError } from '@/server/rate/api-handler';
@@ -29,8 +32,9 @@ const RevalidateRequestSchema = z
           .trim()
           .min(1)
           .max(200)
-          .refine((p) => p.startsWith('/'), {
-            message: 'Path must start with /',
+          .refine((p) => isSafeRevalidationPath(p), {
+            message:
+              'Path must start with a single / and contain no backslashes or control characters',
           })
       )
       .max(20)

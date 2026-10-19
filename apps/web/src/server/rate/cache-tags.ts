@@ -60,6 +60,14 @@ export function canonicalizeCacheParams(value: unknown): string {
   return JSON.stringify(value);
 }
 
+export function isSafeRevalidationPath(rawPath: string): boolean {
+  const clean = rawPath.trim();
+  if (!clean || clean.length > 200) return false;
+  if (!clean.startsWith('/') || clean.startsWith('//')) return false;
+  if (clean.includes('\\') || /[\r\n\0]/.test(clean)) return false;
+  return true;
+}
+
 export function resolveRevalidationTargets(input: RevalidationTargetsInput): {
   tags: string[];
   paths: string[];
@@ -97,12 +105,15 @@ export function resolveRevalidationTargets(input: RevalidationTargetsInput): {
     tagSet.add(merchantCacheTag(clean));
     tagSet.add(RATE_CACHE_TAGS.MERCHANTS);
     tagSet.add(RATE_CACHE_TAGS.OFFERS);
+    tagSet.add(RATE_CACHE_TAGS.PRICE_HISTORY);
     tagSet.add(RATE_CACHE_TAGS.DEALS);
     tagSet.add(RATE_CACHE_TAGS.STATS);
   }
   for (const p of input.paths ?? []) {
     const clean = p.trim();
-    if (clean) pathSet.add(clean);
+    if (isSafeRevalidationPath(clean)) {
+      pathSet.add(clean);
+    }
   }
 
   return {

@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
+import type { ScrapedProduct } from './types.js';
 import { ShopeeIngestionPipeline } from './shopee-to-supabase.js';
 import { createImporterLogger } from './logger.js';
 
@@ -11,7 +12,36 @@ const logger = createImporterLogger('RunIngestionTest');
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-async function main() {
+export function extractCrawlProductsArray(rawData: unknown): ScrapedProduct[] {
+  const candidates = Array.isArray(rawData)
+    ? rawData
+    : rawData &&
+        typeof rawData === 'object' &&
+        Array.isArray((rawData as { results?: unknown }).results)
+      ? (rawData as { results: unknown[] }).results
+      : rawData &&
+          typeof rawData === 'object' &&
+          Array.isArray((rawData as { products?: unknown }).products)
+        ? (rawData as { products: unknown[] }).products
+        : null;
+
+  if (!candidates) {
+    throw new Error(
+      'Invalid crawl dataset: expected a top-level array or an object with a "results" or "products" array'
+    );
+  }
+
+  return candidates.filter((item): item is ScrapedProduct =>
+    Boolean(
+      item &&
+      typeof item === 'object' &&
+      typeof (item as { title?: unknown }).title === 'string' &&
+      (item as { title: string }).title.trim().length > 0
+    )
+  );
+}
+
+export async function main() {
   const crawlFile = path.resolve(
     __dirname,
     '../../Results/shopee_smartphones_crawl_2026-09-17T09-12-40-878Z.json'
@@ -23,8 +53,8 @@ async function main() {
   }
 
   logger.info('test.load', `Loading crawled dataset from: ${crawlFile}`);
-  const rawData = JSON.parse(fs.readFileSync(crawlFile, 'utf-8'));
-  const products = rawData.results;
+  const rawData: unknown = JSON.parse(fs.readFileSync(crawlFile, 'utf-8'));
+  const products = extractCrawlProductsArray(rawData);
 
   logger.info('test.count', `Found ${products.length} products to ingest.`);
 
@@ -44,7 +74,14 @@ async function main() {
   logger.info('test.complete', 'Ingestion finished! Verifying data in Supabase...');
 }
 
-main().catch((err: unknown) => {
-  logger.error('test.fatal', err instanceof Error ? err.message : String(err));
-  process.exit(1);
-});
+const isMainModule =
+  typeof process !== 'undefined' &&
+  Boolean(process.argv[1]) &&
+  path.resolve(process.argv[1]) === __filename;
+
+if (isMainModule) {
+  main().catch((err: unknown) => {
+    logger.error('test.fatal', err instanceof Error ? err.message : String(err));
+    process.exit(1);
+  });
+}
