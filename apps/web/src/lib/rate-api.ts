@@ -40,6 +40,11 @@ export function getRateClient(): RateSchemaClient {
  * A failed page throws RateDataUnavailableError: a partial list would otherwise
  * be cached as if it were complete (DOS/Rate#333).
  */
+// Non-empty pages one paged read may take: a server (or test mock) that
+// ignores .range() would otherwise loop until memory runs out (DOS/Rate#485).
+// 500 x 1000 rows is far above any table this app reads in full.
+const FETCH_ALL_MAX_PAGES = 500;
+
 async function fetchAllRows<T>(
   label: string,
   buildPage: (
@@ -49,7 +54,7 @@ async function fetchAllRows<T>(
   pageSize = 1000
 ): Promise<T[]> {
   const rows: T[] = [];
-  for (let from = 0; ;) {
+  for (let from = 0, pages = 0; ;) {
     const { data, error } = await buildPage(from, from + pageSize - 1);
     if (error) {
       log.error('paged read failed', {
@@ -61,6 +66,12 @@ async function fetchAllRows<T>(
     }
     const page = data ?? [];
     if (page.length === 0) return rows;
+    // Up to FETCH_ALL_MAX_PAGES non-empty pages; one more means no end.
+    if (++pages > FETCH_ALL_MAX_PAGES) {
+      const message = `exceeded ${FETCH_ALL_MAX_PAGES} pages at row ${from}`;
+      log.error('paged read did not end', { table: label, row: from });
+      throw new RateDataUnavailableError(label, { message });
+    }
     rows.push(...page);
     from += page.length;
   }

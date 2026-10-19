@@ -317,6 +317,9 @@ export default function MerchantDirectoryExplorer({
     // inside the gesture. Browsers without ClipboardItem fall back to
     // writeText after the fetch.
     const markdown = fetchAllMatching().then(buildMerchantsMarkdown);
+    // Handled below through the clipboard call; this only keeps an early
+    // clipboard refusal from leaving the promise unobserved.
+    markdown.catch(() => {});
     try {
       if (typeof ClipboardItem !== 'undefined' && navigator.clipboard.write) {
         await navigator.clipboard.write([
