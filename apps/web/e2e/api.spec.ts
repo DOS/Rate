@@ -78,3 +78,15 @@ test('platform review verdict counts cover every review', async ({
     data.authenticReviewsCount + data.filteredSeedingCount
   ).toBeLessThanOrEqual(data.totalReviewsCount);
 });
+
+// The sitemap lists the whole catalogue: 1,100+ seeded merchants, past the
+// old 200-merchant cap (DOS/Rate#460).
+test('sitemap lists every merchant and product page', async ({ request }) => {
+  const res = await request.get('/sitemap.xml');
+  expect(res.status()).toBe(200);
+  const xml = await res.text();
+  expect(
+    (xml.match(/\/merchants\/[0-9a-f-]{36}</g) ?? []).length
+  ).toBeGreaterThan(1100);
+  expect(xml).toContain('/smartphones/e2e-many-offers-phone<');
+});
