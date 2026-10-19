@@ -1785,8 +1785,135 @@ async function run() {
     'extractCrawlProductsArray must throw a descriptive error when given an invalid structure'
   );
 
+  // 16h. DOS/Rate#514: hasPopulatedSpecificationGroups, priceMax >= priceMin clamping, and enrichMasterProductById category_slug
+  const { hasPopulatedSpecificationGroups } = await import('./shopee-to-supabase.js');
+  assert.equal(hasPopulatedSpecificationGroups(null), false);
+  assert.equal(hasPopulatedSpecificationGroups({}), false);
+  assert.equal(
+    hasPopulatedSpecificationGroups({ category_slug: 'smartphones' }),
+    false,
+    'Stub specifications with only category_slug and 0 populated field groups must return false'
+  );
+  assert.equal(
+    hasPopulatedSpecificationGroups({ category_slug: 'tablets', display: {} }),
+    false,
+    'Empty field group objects must return false'
+  );
+  assert.equal(
+    hasPopulatedSpecificationGroups({
+      category_slug: 'tablets',
+      display: { size_inch: 11.0 },
+    }),
+    true,
+    'Populated 10-field-group value must return true'
+  );
+
+  const clampedMaxProduct = normalizeScrapedProductPrices({
+    itemId: 'item-514',
+    shopId: 'shop-514',
+    url: 'https://shopee.vn/product/514/514',
+    title: 'Apple iPhone 16 Pro Max 256GB',
+    priceMin: 28_990_000,
+    priceMax: 0,
+    currency: 'VND',
+    historicalSold: 10,
+    ratingStar: 4.9,
+    ratingCount: 5,
+    images: [],
+    models: [],
+    attributes: [],
+    shop: {
+      shopId: 'shop-514',
+      name: 'Official Store',
+      isMall: true,
+    },
+    reviews: [],
+  });
+  assert.equal(
+    clampedMaxProduct.priceMax,
+    28_990_000,
+    'normalizeScrapedProductPrices must clamp priceMax < priceMin up to priceMin'
+  );
+
+  let capturedCategorySlug: string | undefined;
+  let updatedSpecs514: Record<string, unknown> | undefined;
+  const stubSupabase514 = {
+    from(table: string) {
+      assert.equal(table, 'master_products');
+      return {
+        select() {
+          return {
+            eq() {
+              return {
+                async maybeSingle() {
+                  return {
+                    data: {
+                      id: 'master-514',
+                      brand: 'Lenovo',
+                      model: 'Tab P12',
+                      storage_gb: 256,
+                      ram_gb: 8,
+                      screen_size_inch: null,
+                      battery_mah: null,
+                      has_5g: false,
+                      name: 'Lenovo Tab P12 256GB',
+                      description: '',
+                      colors: ['Storm Grey'],
+                      specifications: { category_slug: 'tablets' },
+                      key_specs: { storage: '256GB' },
+                    },
+                    error: null,
+                  };
+                },
+              };
+            },
+          };
+        },
+        update(payload: Record<string, unknown>) {
+          updatedSpecs514 = payload.specifications as Record<string, unknown>;
+          return {
+            async eq() {
+              return { error: null };
+            },
+          };
+        },
+      };
+    },
+  } as unknown as ConstructorParameters<typeof EntityMatcher>[0];
+
+  const stubEnricher514 = {
+    async fetchSpecsFromAi(params: { categorySlug?: string }) {
+      capturedCategorySlug = params.categorySlug;
+      return {
+        ram_gb: 8,
+        storage_gb: 256,
+        screen_size_inch: 12.7,
+        battery_mah: 10200,
+        has_5g: false,
+        specifications: {
+          display: { size_inch: 12.7, type: 'LTPS LCD, 60Hz' },
+        },
+        key_specs: { screen: '12.7" LTPS LCD' },
+      };
+    },
+  } as unknown as ConstructorParameters<typeof EntityMatcher>[1];
+
+  const matcher514 = new EntityMatcher(stubSupabase514, stubEnricher514);
+  const enriched514 = await matcher514.enrichMasterProductById('master-514');
+  assert.equal(enriched514, true);
+  assert.equal(
+    capturedCategorySlug,
+    'tablets',
+    'enrichMasterProductById must forward existing specifications.category_slug to fetchSpecsFromAi'
+  );
+  assert.equal(
+    updatedSpecs514?.category_slug,
+    'tablets',
+    'enrichMasterProductById must preserve category_slug on mergedSpecifications'
+  );
+
   console.log(
-    `✅ [P2/P3 Trust Model & #292/#352/#356/#359/#379/#382/#401/#497] Voter weight, Wilson lower bound (50/52=${wilson50of52} > 1/1=${wilson1of1}), shingle copy seeding (sim=${shingleSim}), affiliate shortlinks, peer floor, ArenaSpecSyncer, Importer & Logger hardening (#352, #356, #359, #379, #382, #401, #497) verified`
+    `✅ [P2/P3 Trust Model & #292/#352/#356/#359/#379/#382/#401/#497/#514] Voter weight, Wilson lower bound (50/52=${wilson50of52} > 1/1=${wilson1of1}), shingle copy seeding (sim=${shingleSim}), affiliate shortlinks, peer floor, ArenaSpecSyncer, Importer & Logger hardening (#352, #356, #359, #379, #382, #401, #497, #514) verified`
   );
 
   console.log('\n🎉 ALL AI REVIEW ANALYZER TESTS PASSED!');

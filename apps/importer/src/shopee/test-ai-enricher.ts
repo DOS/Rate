@@ -105,6 +105,67 @@ async function runTests() {
     `✅ [Normalizer] ${xiaomi.name} -> key=${xiaomi.model_key}, is_benchmark_enriched=${xiaomi.is_benchmark_enriched}, default OS=${xiaomi.specifications.hardware?.os}`
   );
 
+  // Case C: DOS/Rate#514 - Reject 0GB / 100TB storage, >2048GB RAM, out-of-bounds priceMin, and whitespace colors/images
+  const zeroStorageProduct = makeDummyShopeeProduct(
+    'Điện thoại Realme GT6 4000GB RAM 0GB Quốc Tế',
+    2_500_000_000
+  );
+  zeroStorageProduct.models = [
+    { modelId: '1', name: '   ', price: 10000000 },
+    { modelId: '2', name: ' Bạc Ánh Kim ', price: 10000000 },
+    { modelId: '3', name: 'Bạc Ánh Kim', price: 10000000 },
+  ];
+  zeroStorageProduct.images = [
+    '  ',
+    ' https://example.com/gt6.jpg ',
+    'https://example.com/gt6.jpg',
+  ];
+  const normalizedZero = normalizer.normalize(zeroStorageProduct);
+  assert.equal(normalizedZero.storage_gb, null, '0GB storage token must be rejected as null');
+  assert.equal(normalizedZero.ram_gb, null, '4000GB RAM (> 2048) must be rejected as null');
+  assert.equal(normalizedZero.model_key, 'realme:gt6:unknown');
+  assert.equal(normalizedZero.needs_review, true);
+  assert.deepEqual(normalizedZero.colors, ['Bạc Ánh Kim']);
+  assert.deepEqual(normalizedZero.images, ['https://example.com/gt6.jpg']);
+  assert.equal(
+    normalizedZero.specifications.availability?.prices_msrp,
+    'Không rõ dung lượng: 0₫',
+    'priceMin > MAX_VALID_VND_PRICE must clamp to 0₫ in prices_msrp'
+  );
+  assert.equal(
+    ProductSpecificationsSchema.safeParse(normalizedZero.specifications).success,
+    true,
+    'Normalized specs with rejected 0GB/4000GB tokens must pass ProductSpecificationsSchema'
+  );
+
+  const hugeStorageProduct = normalizer.normalize(
+    makeDummyShopeeProduct('Điện thoại Vivo X200 Pro 100000GB RAM 512GB Chính Hãng', 21990000)
+  );
+  assert.equal(
+    hugeStorageProduct.storage_gb,
+    512,
+    '100000GB token before RAM keyword must be claimed by RAM so 512GB ROM is preserved'
+  );
+  assert.equal(
+    hugeStorageProduct.ram_gb,
+    null,
+    'Claimed 100000GB RAM token (> 2048) must be rejected from ram_gb'
+  );
+  assert.equal(
+    ProductSpecificationsSchema.safeParse(hugeStorageProduct.specifications).success,
+    true
+  );
+
+  const romOverflowProduct = normalizer.normalize(
+    makeDummyShopeeProduct('Điện thoại Vivo X200 Pro ROM 100TB Chính Hãng', 21990000)
+  );
+  assert.equal(
+    romOverflowProduct.storage_gb,
+    null,
+    'ROM 100TB (102400GB > 65536GB) must be rejected as null'
+  );
+  assert.equal(romOverflowProduct.needs_review, true);
+
   console.log('\n================================================================');
   console.log('2. Testing sanitizeSpecifications & Zod 10-Field-Group Schema');
   console.log('================================================================');
