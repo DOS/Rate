@@ -1314,7 +1314,7 @@ export function buildRateOpenApiSpec(
           summary:
             'Cross-Platform Deal Radar & Fake-Sale Trap Feed across 10 platforms',
           description:
-            'Returns real-time genuine all-time-low deals (`genuineDeals`) and inflated fake-sale traps (`fakeSaleTraps`) audited against cross-retailer median prices.',
+            'Returns real-time genuine cross-platform deals (`genuineDeals`, current offers below the cross-retailer median) and inflated fake-sale traps (`fakeSaleTraps`) audited against cross-retailer median prices.',
           tags: ['Products & Specs'],
           parameters: [
             {
