@@ -13,6 +13,7 @@ import { Link } from '@/lib/navigation';
 import { escapeCsvCell } from '@/lib/csv-safe';
 import type { MerchantSummary } from '@/lib/rate-domain';
 import {
+  DEFAULT_MERCHANT_DIRECTORY_FILTERS,
   MERCHANT_PAGE_SIZE,
   merchantDirectoryFilterParams,
   parseMerchantDirectoryFilters,
@@ -51,10 +52,6 @@ interface MerchantDirectoryExplorerProps {
   /** Whole-directory stats; they do not depend on the filters. */
   readonly summary: MerchantDirectorySummary;
   readonly locale?: string;
-  readonly initialQuery?: string;
-  readonly initialPlatform?: string;
-  readonly initialOfficialOnly?: boolean;
-  readonly initialSort?: MerchantSortOption;
 }
 
 async function fetchDirectoryPage(
@@ -89,7 +86,12 @@ function FiltersFromUrl({
   const searchParams = useSearchParams();
   const parsed = parseMerchantDirectoryFilters((key) => searchParams.get(key));
   const parsedKey = JSON.stringify(parsed);
+  // The explorer starts on the defaults, so a plain /merchants applies
+  // nothing: a query typed right after load is not reset to ''.
+  const appliedKey = useRef(JSON.stringify(DEFAULT_MERCHANT_DIRECTORY_FILTERS));
   useEffect(() => {
+    if (parsedKey === appliedKey.current) return;
+    appliedKey.current = parsedKey;
     onFilters(JSON.parse(parsedKey) as MerchantDirectoryFilters);
   }, [parsedKey, onFilters]);
   return null;
@@ -98,18 +100,20 @@ function FiltersFromUrl({
 export default function MerchantDirectoryExplorer({
   initialPage,
   summary,
-  initialQuery = '',
-  initialPlatform = 'all',
-  initialOfficialOnly = false,
-  initialSort = 'trust_desc',
 }: MerchantDirectoryExplorerProps) {
   const t = useTranslations('merchants');
-  const [query, setQuery] = useState(initialQuery);
-  const [platform, setPlatform] = useState(initialPlatform.toLowerCase());
-  const [officialOnly, setOfficialOnly] = useState(initialOfficialOnly);
+  const [query, setQuery] = useState(DEFAULT_MERCHANT_DIRECTORY_FILTERS.query);
+  const [platform, setPlatform] = useState(
+    DEFAULT_MERCHANT_DIRECTORY_FILTERS.platform
+  );
+  const [officialOnly, setOfficialOnly] = useState(
+    DEFAULT_MERCHANT_DIRECTORY_FILTERS.officialOnly
+  );
   const [riskTier, setRiskTier] = useState<MerchantRiskTier>('all');
   const [seedingTier, setSeedingTier] = useState<MerchantSeedingTier>('all');
-  const [sortBy, setSortBy] = useState<MerchantSortOption>(initialSort);
+  const [sortBy, setSortBy] = useState<MerchantSortOption>(
+    DEFAULT_MERCHANT_DIRECTORY_FILTERS.sortBy
+  );
   // The page is cached unfiltered; FiltersFromUrl applies a link's filters
   // (and later navigations) here, and the effect below fetches that page.
   const applyUrlFilters = useCallback((next: MerchantDirectoryFilters) => {
