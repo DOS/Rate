@@ -1966,6 +1966,169 @@ async function runTests() {
     '  ✅ [Extension Signal & Sender Guards] sanitizeExtensionProductSignal, formatSafeExtensionVnd, resolveSafeApiRelativeUrl, formatSafeNumber & sanitizeVerdictClassSuffix passed (#382, #393, #401)'
   );
 
+  // Verify DOS/Rate#497: isSafeRevalidationPath, resolveRevalidationTargets merchant PRICE_HISTORY cascade, and evaluateExtensionPriceVerdict MAX_VALID_VND_PRICE bounds
+  const {
+    RATE_CACHE_TAGS: CACHE_TAGS_497,
+    isSafeRevalidationPath,
+    resolveRevalidationTargets: resolveTargets497,
+  } = await import('../../web/src/server/rate/cache-tags');
+
+  assert.equal(isSafeRevalidationPath('/smartphones'), true);
+  assert.equal(
+    isSafeRevalidationPath('//evil.com/phish'),
+    false,
+    'isSafeRevalidationPath must reject protocol-relative // paths'
+  );
+  assert.equal(
+    isSafeRevalidationPath('/smartphones\\evil'),
+    false,
+    'isSafeRevalidationPath must reject backslash paths'
+  );
+  assert.equal(
+    isSafeRevalidationPath('/smartphones\r\nSet-Cookie: evil=1'),
+    false,
+    'isSafeRevalidationPath must reject control characters'
+  );
+
+  const merchTargets497 = resolveTargets497({
+    merchants: ['shopee-88201679'],
+    paths: ['//evil.com', '/merchants', '/smartphones\\bad'],
+  });
+  assert.ok(
+    merchTargets497.tags.includes(CACHE_TAGS_497.PRICE_HISTORY),
+    'Merchant revalidation must cascade to rate:price-history (#497)'
+  );
+  assert.deepEqual(
+    merchTargets497.paths,
+    ['/merchants'],
+    'resolveRevalidationTargets must filter out unsafe revalidation paths (#497)'
+  );
+
+  const verdict497 = evaluateExtensionPriceVerdict({
+    isAccessory: false,
+    accessoryReason: null,
+    isAmbiguousVariant: false,
+    observedPrice: 28_000_000,
+    observedOriginalPrice: 9_000_000_000, // corrupted > 1B VND original price
+    offers: [
+      {
+        id: 'off-valid-floor',
+        platform: 'tiki',
+        title: 'iPhone 16 Pro Max 256GB',
+        price_current: 27_000_000,
+        price_original: null,
+        stock: 5,
+        rating_star: 4.9,
+        rating_count: 100,
+        url: 'https://tiki.vn/p1.html',
+        merchant: {
+          id: 'm0',
+          name: 'Shop 0',
+          platform: 'tiki',
+          is_official: true,
+          rating_star: 4.9,
+          follower_count: 1000,
+          location: 'VN',
+          risk_score: 5,
+          dosafe_risk_score: 5,
+          review_risk_score: 5,
+          review_risk_breakdown: null,
+        },
+      },
+      {
+        id: 'off-valid-1',
+        platform: 'shopee',
+        title: 'iPhone 16 Pro Max 256GB',
+        price_current: 28_000_000,
+        price_original: null,
+        stock: 5,
+        rating_star: 4.9,
+        rating_count: 100,
+        url: 'https://shopee.vn/i.1.1',
+        merchant: {
+          id: 'm1',
+          name: 'Shop 1',
+          platform: 'shopee',
+          is_official: true,
+          rating_star: 4.9,
+          follower_count: 1000,
+          location: 'VN',
+          risk_score: 5,
+          dosafe_risk_score: 5,
+          review_risk_score: 5,
+          review_risk_breakdown: null,
+        },
+      },
+      {
+        id: 'off-valid-high',
+        platform: 'cellphones',
+        title: 'iPhone 16 Pro Max 256GB',
+        price_current: 29_000_000,
+        price_original: null,
+        stock: 5,
+        rating_star: 4.9,
+        rating_count: 100,
+        url: 'https://cellphones.com.vn/p1.html',
+        merchant: {
+          id: 'm3',
+          name: 'Shop 3',
+          platform: 'cellphones',
+          is_official: true,
+          rating_star: 4.9,
+          follower_count: 1000,
+          location: 'VN',
+          risk_score: 5,
+          dosafe_risk_score: 5,
+          review_risk_score: 5,
+          review_risk_breakdown: null,
+        },
+      },
+      {
+        id: 'off-corrupt-2',
+        platform: 'lazada',
+        title: 'Corrupted Offer',
+        price_current: 5_000_000_000, // > 1B VND must be ignored
+        price_original: null,
+        stock: 1,
+        rating_star: 4.5,
+        rating_count: 10,
+        url: 'https://lazada.vn/i2.html',
+        merchant: {
+          id: 'm2',
+          name: 'Shop 2',
+          platform: 'lazada',
+          is_official: false,
+          rating_star: 4.5,
+          follower_count: 100,
+          location: 'VN',
+          risk_score: 20,
+          dosafe_risk_score: 20,
+          review_risk_score: 20,
+          review_risk_breakdown: null,
+        },
+      },
+    ],
+    priceHistory: null,
+  });
+  assert.equal(
+    verdict497.marketMaxPrice,
+    29_000_000,
+    'evaluateExtensionPriceVerdict must exclude corrupted > 1B VND offer prices from marketMaxPrice (#497)'
+  );
+  assert.equal(
+    verdict497.observedOriginalPrice,
+    null,
+    'evaluateExtensionPriceVerdict must ignore observedOriginalPrice > 1B VND (#497)'
+  );
+  assert.equal(
+    verdict497.verdict,
+    'fair_market_price',
+    'evaluateExtensionPriceVerdict must not trigger inflated_fake_sale from corrupted > 1B VND original price (#497)'
+  );
+  console.log(
+    '  ✅ [Cache Tags & Verdict Bounds] isSafeRevalidationPath, merchant PRICE_HISTORY cascade & evaluateExtensionPriceVerdict bounds verified (#497)'
+  );
+
   console.log('🎉 All Rate Browser Extension MV3 v2 tests passed!');
 }
 

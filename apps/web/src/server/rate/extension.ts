@@ -1,6 +1,7 @@
 import 'server-only';
 import type { Database } from '@repo/shared-data';
 import {
+  MAX_VALID_VND_PRICE,
   getMasterProductBySlug,
   getMasterProductCategorySlug,
   getMasterProductOffers,
@@ -557,7 +558,7 @@ export function evaluateExtensionPriceVerdict(params: {
 
   const offerPrices = offers
     .map((o) => o.price_current)
-    .filter((p) => Number.isFinite(p) && p > 0);
+    .filter((p) => Number.isFinite(p) && p > 0 && p <= MAX_VALID_VND_PRICE);
 
   const marketMinPrice =
     offerPrices.length > 0 ? Math.min(...offerPrices) : null;
@@ -590,14 +591,19 @@ export function evaluateExtensionPriceVerdict(params: {
   }
 
   const effectivePrice =
-    observedPrice && observedPrice > 0
+    observedPrice &&
+    Number.isFinite(observedPrice) &&
+    observedPrice > 0 &&
+    observedPrice <= MAX_VALID_VND_PRICE
       ? observedPrice
-      : (offers[0]?.price_current ?? null);
+      : (offerPrices[0] ?? null);
 
   const effectiveOriginalPrice =
     observedOriginalPrice &&
+    Number.isFinite(observedOriginalPrice) &&
     effectivePrice &&
-    observedOriginalPrice > effectivePrice
+    observedOriginalPrice > effectivePrice &&
+    observedOriginalPrice <= MAX_VALID_VND_PRICE
       ? observedOriginalPrice
       : null;
 
@@ -635,7 +641,11 @@ export function evaluateExtensionPriceVerdict(params: {
     ) / 10;
 
   const cheaperOffers = offers.filter(
-    (o) => o.price_current > 0 && o.price_current < effectivePrice - 50_000
+    (o) =>
+      Number.isFinite(o.price_current) &&
+      o.price_current > 0 &&
+      o.price_current <= MAX_VALID_VND_PRICE &&
+      o.price_current < effectivePrice - 50_000
   );
   const cheaperOfferCount = cheaperOffers.length;
   const maxSavingsAmount =
@@ -1045,8 +1055,16 @@ export async function lookupExtensionProduct(
 
   const effectiveObservedPrice =
     observedPrice ?? matchedOffer?.price_current ?? null;
+  const rawEffectiveOriginal =
+    observedOriginalPrice ??
+    (observedPrice === null ? matchedOffer?.price_original : null) ??
+    null;
   const effectiveObservedOriginal =
-    observedOriginalPrice ?? matchedOffer?.price_original ?? null;
+    rawEffectiveOriginal !== null &&
+    effectiveObservedPrice !== null &&
+    rawEffectiveOriginal >= effectiveObservedPrice
+      ? rawEffectiveOriginal
+      : null;
 
   const isAmbiguous = matchStatus === 'ambiguous_variant';
   const priceAssessment = evaluateExtensionPriceVerdict({
@@ -1063,7 +1081,9 @@ export async function lookupExtensionProduct(
     ? offers
         .filter(
           (o) =>
+            Number.isFinite(o.price_current) &&
             o.price_current > 0 &&
+            o.price_current <= MAX_VALID_VND_PRICE &&
             o.price_current < effectiveObservedPrice - 50_000
         )
         .sort((a, b) => a.price_current - b.price_current)

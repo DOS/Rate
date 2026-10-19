@@ -1759,8 +1759,34 @@ async function run() {
     },
   });
 
+  // 16g. DOS/Rate#497: extractCrawlProductsArray validation and non-executing import of run-ingestion-test.ts
+  const { extractCrawlProductsArray } = await import('./run-ingestion-test.js');
+  const validCrawlItems = extractCrawlProductsArray({
+    results: [
+      { title: 'Apple iPhone 16 Pro Max 256GB', priceMin: 28_990_000 },
+      { title: '   ' },
+      null,
+    ],
+  });
+  assert.equal(
+    validCrawlItems.length,
+    1,
+    'extractCrawlProductsArray must extract valid product entries from { results } and filter out blank/null items'
+  );
+  assert.equal(
+    extractCrawlProductsArray([{ title: 'Samsung Galaxy S25 Ultra 256GB', priceMin: 27_990_000 }])
+      .length,
+    1,
+    'extractCrawlProductsArray must accept a top-level array of products'
+  );
+  assert.throws(
+    () => extractCrawlProductsArray({ invalidKey: 123 }),
+    /Invalid crawl dataset/,
+    'extractCrawlProductsArray must throw a descriptive error when given an invalid structure'
+  );
+
   console.log(
-    `✅ [P2/P3 Trust Model & #292/#352/#356/#359/#379/#382/#401] Voter weight, Wilson lower bound (50/52=${wilson50of52} > 1/1=${wilson1of1}), shingle copy seeding (sim=${shingleSim}), affiliate shortlinks, peer floor, ArenaSpecSyncer, Importer & Logger hardening (#352, #356, #359, #379, #382, #401) verified`
+    `✅ [P2/P3 Trust Model & #292/#352/#356/#359/#379/#382/#401/#497] Voter weight, Wilson lower bound (50/52=${wilson50of52} > 1/1=${wilson1of1}), shingle copy seeding (sim=${shingleSim}), affiliate shortlinks, peer floor, ArenaSpecSyncer, Importer & Logger hardening (#352, #356, #359, #379, #382, #401, #497) verified`
   );
 
   console.log('\n🎉 ALL AI REVIEW ANALYZER TESTS PASSED!');
