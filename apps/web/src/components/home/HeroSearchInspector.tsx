@@ -152,7 +152,9 @@ export default function HeroSearchInspector({
   }, [trimmedQuery]);
   const filteredMerchants = useMemo(() => {
     if (!trimmedQuery) return initialMerchants.slice(0, 2);
-    return merchantMatches?.q === trimmedQuery ? merchantMatches.items : [];
+    // Until the current query's answer arrives, keep the last list so the
+    // dropdown does not flash empty on every keystroke.
+    return merchantMatches?.items ?? [];
   }, [trimmedQuery, initialMerchants, merchantMatches]);
 
   const runUrlInspection = async (targetInput: string) => {
