@@ -45,14 +45,16 @@ type SearchParamsInput = Record<string, string | string[] | undefined>;
 
 export async function generateMetadata({
   params,
+  searchParams,
 }: {
   params: Promise<{ locale: string }>;
+  searchParams: Promise<SearchParamsInput>;
 }): Promise<Metadata> {
   const { locale } = await params;
   const t = await getTranslations({ locale, namespace: 'catalog' });
   const facets = await getCachedCategoryDirectoryFacets('smartphones');
   const totalModels = facets.totalUnfiltered;
-  const canonicalUrl = 'https://rate.vn/smartphones';
+  const canonicalUrl = catalogCanonicalUrl('/smartphones', await searchParams);
 
   return {
     title:
@@ -64,6 +66,22 @@ export async function generateMetadata({
       canonical: canonicalUrl,
     },
   };
+}
+
+/**
+ * Canonical URL of a catalogue page: page 2+ of a category is its own page
+ * (self-canonical), not a duplicate of page 1 (DOS/Rate#482). Filters still
+ * canonicalise to the category.
+ */
+export function catalogCanonicalUrl(
+  basePath: string,
+  rawSearch: SearchParamsInput
+): string {
+  const page = Math.floor(Number(getSingleParam(rawSearch.page)));
+  const base = `https://rate.vn${basePath}`;
+  return Number.isFinite(page) && page > 1 && page <= 500
+    ? `${base}?page=${page}`
+    : base;
 }
 
 function getSingleParam(val: string | string[] | undefined): string {
