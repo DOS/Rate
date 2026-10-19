@@ -2479,6 +2479,21 @@ export function resolveProductImageUrl(
   return fallbackUrl || null;
 }
 
+export type CanonicalCategorySlug =
+  'smartphones' | 'tablets' | 'laptops' | 'smartwatches' | 'earbuds';
+
+export function isCanonicalCategorySlug(
+  value: unknown
+): value is CanonicalCategorySlug {
+  return (
+    value === 'smartphones' ||
+    value === 'tablets' ||
+    value === 'laptops' ||
+    value === 'smartwatches' ||
+    value === 'earbuds'
+  );
+}
+
 export function normalizeMasterProductRow(
   row: MasterProduct,
   categorySlugHint?: CanonicalCategorySlug | null
@@ -2493,8 +2508,18 @@ export function normalizeMasterProductRow(
       images: [localImg],
     };
   }
+  const specCatSlug =
+    normalized.specifications &&
+    typeof normalized.specifications === 'object' &&
+    !Array.isArray(normalized.specifications)
+      ? (normalized.specifications as { category_slug?: unknown }).category_slug
+      : undefined;
+  const effectiveCatHint: CanonicalCategorySlug | null =
+    categorySlugHint ??
+    (isCanonicalCategorySlug(specCatSlug) ? specCatSlug : null);
+
   if (
-    categorySlugHint &&
+    effectiveCatHint &&
     typeof normalized.metadata?.category_slug !== 'string'
   ) {
     normalized = {
@@ -2503,15 +2528,12 @@ export function normalizeMasterProductRow(
         ...(normalized.metadata && typeof normalized.metadata === 'object'
           ? normalized.metadata
           : {}),
-        category_slug: categorySlugHint,
+        category_slug: effectiveCatHint,
       },
     };
   }
   return normalized;
 }
-
-export type CanonicalCategorySlug =
-  'smartphones' | 'tablets' | 'laptops' | 'smartwatches' | 'earbuds';
 
 export function getMasterProductCategorySlug(
   product: Pick<MasterProduct, 'slug'> & {
@@ -2519,6 +2541,8 @@ export function getMasterProductCategorySlug(
     model?: string | null;
     category_id?: string | null;
     metadata?: Record<string, unknown> | null;
+    specifications?:
+      { category_slug?: string | null } | Record<string, unknown> | null;
   },
   categorySlugById?: ReadonlyMap<string, string>
 ): CanonicalCategorySlug {
@@ -2530,15 +2554,17 @@ export function getMasterProductCategorySlug(
     typeof product.metadata?.category_slug === 'string'
       ? product.metadata.category_slug
       : undefined;
-  const resolvedCat = catSlugFromMap || catSlugFromMeta;
+  const catSlugFromSpecs =
+    product.specifications &&
+    typeof product.specifications === 'object' &&
+    !Array.isArray(product.specifications) &&
+    typeof (product.specifications as { category_slug?: unknown })
+      .category_slug === 'string'
+      ? (product.specifications as { category_slug: string }).category_slug
+      : undefined;
+  const resolvedCat = catSlugFromMap || catSlugFromMeta || catSlugFromSpecs;
 
-  if (
-    resolvedCat === 'tablets' ||
-    resolvedCat === 'laptops' ||
-    resolvedCat === 'smartwatches' ||
-    resolvedCat === 'earbuds' ||
-    resolvedCat === 'smartphones'
-  ) {
+  if (isCanonicalCategorySlug(resolvedCat)) {
     return resolvedCat;
   }
 
@@ -2585,6 +2611,8 @@ export function getMasterProductHref(
     model?: string | null;
     category_id?: string | null;
     metadata?: Record<string, unknown> | null;
+    specifications?:
+      { category_slug?: string | null } | Record<string, unknown> | null;
   },
   categorySlugById?: ReadonlyMap<string, string>
 ): string {
@@ -2599,6 +2627,7 @@ export interface SitemapRows {
     model: string | null;
     category_id: string | null;
     metadata: Record<string, unknown> | null;
+    specifications?: Record<string, unknown> | null;
     updated_at: string | null;
   }>;
   merchants: Array<{ id: string; updated_at: string | null }>;
@@ -2616,7 +2645,9 @@ export async function getSitemapRows(): Promise<SitemapRows> {
     fetchAllRows('sitemap products', (from, to) =>
       supabase
         .from('master_products')
-        .select('slug, name, model, category_id, metadata, updated_at')
+        .select(
+          'slug, name, model, category_id, metadata, specifications, updated_at'
+        )
         .eq('status', 'published')
         .order('id')
         .range(from, to)
@@ -2646,6 +2677,12 @@ export async function getSitemapRows(): Promise<SitemapRows> {
       typeof row.metadata === 'object' &&
       !Array.isArray(row.metadata)
         ? (row.metadata as Record<string, unknown>)
+        : null,
+    specifications:
+      row.specifications &&
+      typeof row.specifications === 'object' &&
+      !Array.isArray(row.specifications)
+        ? (row.specifications as Record<string, unknown>)
         : null,
   }));
   return { products, merchants, categorySlugById };
@@ -3215,7 +3252,7 @@ export async function getMerchantProfileById(
       supabase
         .from('master_products')
         .select(
-          'id, slug, name, brand, category_id, min_price, max_price, merchant_count'
+          'id, slug, name, model, brand, category_id, metadata, specifications, min_price, max_price, merchant_count'
         )
         .in('id', chunk)
     ),
@@ -3267,8 +3304,11 @@ export async function getMerchantProfileById(
     id: string;
     slug: string;
     name: string;
+    model?: string | null;
     brand: string;
     category_id: string | null;
+    metadata?: Record<string, unknown> | null;
+    specifications?: Record<string, unknown> | null;
     min_price: number | string;
     max_price: number | string;
     merchant_count: number | null;
@@ -3278,8 +3318,7 @@ export async function getMerchantProfileById(
       slug: m.slug,
       name: m.name,
       brand: m.brand,
-      category_slug:
-        (m.category_id && catSlugById.get(m.category_id)) || 'smartphones',
+      category_slug: getMasterProductCategorySlug(m, catSlugById),
       market_min_price: Number(m.min_price || 0),
       market_max_price: Number(m.max_price || 0),
       merchant_count: Number(m.merchant_count || 0),
@@ -3366,7 +3405,7 @@ export async function getMerchantProfileById(
           });
     const prod = prodById.get(r.product_id);
 
-    return {
+    const item: MerchantProfileDetail['recent_reviews'][number] = {
       id: r.id,
       product_id: r.product_id,
       product_title: prod?.title || 'Sản phẩm niêm yết',
@@ -3390,6 +3429,8 @@ export async function getMerchantProfileById(
       reason: vf?.reason || null,
       signals: vf?.signals || null,
     };
+    item.trust_assessment = evaluateReviewTrustAssessment(item);
+    return item;
   });
 
   const persistedBreakdown = extractPersistedBreakdown(merchantRow);
@@ -3500,7 +3541,7 @@ export async function getRatePlatformStats(): Promise<RatePlatformStats> {
     fetchAllRows('master_products', (from, to) =>
       supabase
         .from('master_products')
-        .select('id, slug, name, category_id')
+        .select('id, slug, name, model, category_id, metadata, specifications')
         .eq('status', 'published')
         .order('id')
         .range(from, to)
@@ -3560,7 +3601,10 @@ export async function getRatePlatformStats(): Promise<RatePlatformStats> {
       id: string;
       slug: string;
       name: string;
+      model?: string | null;
       category_id: string | null;
+      metadata?: Record<string, unknown> | null;
+      specifications?: Record<string, unknown> | null;
     }>) || [];
 
   const rawReviews =
@@ -3592,26 +3636,27 @@ export async function getRatePlatformStats(): Promise<RatePlatformStats> {
   }
 
   const catSlugById = new Map<string, string>();
+  const catIdBySlug = new Map<string, string>();
   for (const c of categories) {
     catSlugById.set(c.id, c.slug);
+    catIdBySlug.set(c.slug, c.id);
   }
 
   const countByCatId = new Map<string, number>();
   const masterSlugById = new Map<string, string>();
   const masterRouteById = new Map<string, string>();
   for (const m of masterRows) {
+    const resolvedCatSlug = getMasterProductCategorySlug(m, catSlugById);
     masterSlugById.set(m.id, m.slug);
-    masterRouteById.set(
-      m.id,
-      getMasterProductHref(
-        { slug: m.slug, name: m.name, category_id: m.category_id },
-        catSlugById
-      )
-    );
-    if (m.category_id) {
+    masterRouteById.set(m.id, `/${resolvedCatSlug}/${m.slug}`);
+    const resolvedCatId =
+      (m.category_id && catSlugById.has(m.category_id)
+        ? m.category_id
+        : null) || catIdBySlug.get(resolvedCatSlug);
+    if (resolvedCatId) {
       countByCatId.set(
-        m.category_id,
-        (countByCatId.get(m.category_id) || 0) + 1
+        resolvedCatId,
+        (countByCatId.get(resolvedCatId) || 0) + 1
       );
     }
   }
@@ -3649,8 +3694,22 @@ export async function getRatePlatformStats(): Promise<RatePlatformStats> {
         vf?.include_in_rating ??
         (flagCategory === 'authentic' && verdict !== 'fake')
       );
+      const upvotes = Number(r.upvotes ?? 0);
+      const downvotes = Number(r.downvotes ?? 0);
+      const reports = Number(r.report_count ?? 0);
+      const computedWeight =
+        r.helpfulness_weight != null
+          ? Number(r.helpfulness_weight)
+          : computeJReviewsWeight({
+              upvotes,
+              downvotes,
+              reports,
+              flagCategory,
+              verdict,
+              includeInRating,
+            });
       const pInfo = prodInfoById.get(r.product_id);
-      return {
+      const item: RatePlatformStats['recentReviewsSample'][number] = {
         id: r.id,
         author_name: r.author_name || 'Khách hàng',
         rating_star: Number(r.rating_star || 5),
@@ -3658,12 +3717,10 @@ export async function getRatePlatformStats(): Promise<RatePlatformStats> {
         variation: r.variation || null,
         created_at: r.created_at,
         reviewer_type: r.reviewer_type === 'expert' ? 'expert' : 'user',
-        upvotes: Number(r.upvotes ?? 0),
-        downvotes: Number(r.downvotes ?? 0),
-        report_count: Number(r.report_count ?? 0),
-        helpfulness_weight: includeInRating
-          ? Number(r.helpfulness_weight ?? 1)
-          : 0,
+        upvotes,
+        downvotes,
+        report_count: reports,
+        helpfulness_weight: includeInRating ? computedWeight : 0,
         include_in_rating: includeInRating,
         criteria_ratings: r.criteria_ratings || {},
         verdict,
@@ -3676,6 +3733,8 @@ export async function getRatePlatformStats(): Promise<RatePlatformStats> {
         masterSlug: pInfo?.masterSlug || null,
         masterRouteHref: pInfo?.masterRouteHref || null,
       };
+      item.trust_assessment = evaluateReviewTrustAssessment(item);
+      return item;
     });
 
   const totalRev = reviewsCountRes.count ?? mappedReviews.length;
@@ -4065,6 +4124,101 @@ const PLATFORM_ITEM_ID_PREFIX: Partial<
   phongvu: 'pv-',
 };
 
+const ECOMMERCE_SLUG_NOISE_PHRASES_REGEX =
+  /(?:^|[\s,.|-]+)(?:điện thoại di động|dien thoai di dong|điện thoại|dien thoai|di động|di dong|smartphone|máy tính bảng|may tinh bang|tablet|máy tính xách tay|may tinh xach tay|laptop|đồng hồ thông minh|dong ho thong minh|smartwatch|tai nghe bluetooth true wireless|tai nghe bluetooth không dây|tai nghe bluetooth khong day|tai nghe chụp tai chống ồn|tai nghe chup tai chong on|tai nghe bluetooth|tai nghe không dây|tai nghe khong day|tai nghe true wireless|tai nghe nhét tai|tai nghe nhet tai|tai nghe(?!\s+(?:có dây|co day))|earbuds|chính hãng vn\/a|chinh hang vn a|chinh hang vna|chính hãng|chinh hang|vn\/a|vn a|vna|fullbox|mới 100%|moi 100%|moi 100|nguyên seal|nguyen seal|trả góp 0%|tra gop 0%|trả góp|tra gop|bảo hành \d+ tháng|bao hanh \d+ thang|bảo hành chính hãng|bao hanh chinh hang|freeship|hoả tốc|hỏa tốc|hoa toc|giá rẻ|gia re|nhập khẩu|nhap khau|quốc tế|quoc te)(?=$|[\s,.|-])/giu;
+
+export function stripEcommerceNoiseTokens(rawText: string): string {
+  return rawText
+    .replace(/\[[^\]]*\]/g, ' ')
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(ECOMMERCE_SLUG_NOISE_PHRASES_REGEX, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Extract a clean, human-readable product search keyword from an e-commerce product URL
+ * across all 10 supported platforms (Shopee, Lazada, Tiki, TikTok Shop, CellphoneS,
+ * TGDD/TopZone/DMX, FPT Shop, Hoàng Hà, Di Động Việt, Phong Vũ).
+ */
+export function extractProductKeywordFromUrl(rawUrl?: string | null): string {
+  if (!rawUrl || typeof rawUrl !== 'string') return '';
+  const trimmed = rawUrl.trim();
+  if (!trimmed) return '';
+  const hasHttpProtocol = /^https?:\/\//i.test(trimmed);
+  const hasKnownDomainToken =
+    /(?:^|\/\/|\.)(?:shopee\.vn|lazada\.vn|tiki\.vn|tiktok\.com|cellphones\.com\.vn|thegioididong\.com|topzone\.vn|dienmayxanh\.com|fptshop\.com\.vn|hoanghamobile\.com|didongviet\.vn|phongvu\.vn|rate\.vn)(?:\/|$)/i.test(
+      trimmed
+    );
+  if (!hasHttpProtocol && !hasKnownDomainToken) return '';
+
+  try {
+    const parsed = new URL(
+      hasHttpProtocol ? trimmed : `https://${trimmed.replace(/^\/+/, '')}`
+    );
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return '';
+    }
+    let decodedPathname = parsed.pathname;
+    try {
+      decodedPathname = decodeURIComponent(parsed.pathname);
+    } catch {
+      decodedPathname = parsed.pathname;
+    }
+
+    const rawSegments = decodedPathname
+      .split('/')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const firstSegLower = (rawSegments[0] || '')
+      .replace(/\.html?$/i, '')
+      .toLowerCase();
+    if (
+      RETAIL_NON_PRODUCT_FIRST_SEGMENTS.has(firstSegLower) ||
+      firstSegLower === 'shop' ||
+      firstSegLower === 'opaanlp' ||
+      firstSegLower === 'video'
+    ) {
+      return '';
+    }
+
+    const cleanedPath = decodedPathname
+      .replace(/(?:\/a-i|-i|\/i)\.\d+\.\d+\/?$/i, '')
+      .replace(/\/(?:product|opaanlp)\/\d+\/\d+\/?$/i, '')
+      .replace(/\/(?:view\/)?product\/\d+\/?$/i, '')
+      .replace(/(?:\/|-)i\d+(?:-s\d+)?\.html?$/i, '')
+      .replace(/(?:\/|-)p\d+\.html?$/i, '')
+      .replace(/--s\d+(?:\.html?)?$/i, '')
+      .replace(/\.html?$/i, '')
+      .replace(
+        /^\/(?:products?|san-pham|dien-thoai|dien-thoai-di-dong|dtdd|may-tinh-bang|may-tinh-xach-tay|laptop|dong-ho-thong-minh|tai-nghe|smartphones|tablets|laptops|smartwatches|earbuds|apple|iphone|ipad|macbook|watch|airpods)\//i,
+        '/'
+      );
+    const segments = cleanedPath.split('/').filter(Boolean);
+    const lastSeg = segments[segments.length - 1] || '';
+    const lastSegLower = lastSeg.toLowerCase();
+    if (
+      !lastSeg ||
+      /^\d+$/.test(lastSeg) ||
+      /^(?:a-)?i\.\d+\.\d+$/i.test(lastSeg) ||
+      lastSeg.startsWith('@') ||
+      RETAIL_CATEGORY_ROOT_SLUGS.has(lastSegLower) ||
+      /^(?:search|tim-kiem|result|product|products|view)$/.test(lastSegLower)
+    ) {
+      return '';
+    }
+
+    const spaceSeparated = lastSeg
+      .replace(/[-_]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    const stripped = stripEcommerceNoiseTokens(spaceSeparated);
+    return stripped || spaceSeparated;
+  } catch {
+    return '';
+  }
+}
+
 /**
  * Inspect an e-commerce product/shop URL (all 10 platforms) or keyword:
  * - Resolves exact `platform_item_id` or `url` against `rate.products`
@@ -4150,7 +4304,7 @@ export async function inspectProductOrShopUrl(
         const [offers, reviews, merchantsList] = await Promise.all([
           getMasterProductOffers(masterProduct.id),
           getMasterProductReviews(masterProduct.id),
-          getMerchantsList({ ids: [matchedProd.merchant_id] }),
+          getMerchantsList({ ids: [matchedProd.merchant_id], limit: 1 }),
         ]);
         const [priceHistory, reviewSummary] = await Promise.all([
           getMasterProductPriceHistory(masterProduct.id, offers),
@@ -4181,15 +4335,17 @@ export async function inspectProductOrShopUrl(
     }
   }
 
-  // 2. Direct lookup by Shopee/platform shop ID if URL is a shop link
-  if (parsedUrl.platformShopId && !parsedUrl.platformItemId) {
+  // 2. Direct lookup by Shopee/platform shop ID if present on the URL
+  let matchedMerchantByShopId: MerchantSummary | null = null;
+  if (parsedUrl.platformShopId) {
     const merchants = await getMerchantsList({
       platformShopIds: [parsedUrl.platformShopId],
+      limit: 1,
     });
-    const matchedMerchant =
+    matchedMerchantByShopId =
       merchants.find((m) => m.platform_shop_id === parsedUrl.platformShopId) ||
       null;
-    if (matchedMerchant) {
+    if (matchedMerchantByShopId && !parsedUrl.platformItemId) {
       const suggestions = await getMasterProducts({ limit: 3 });
       return {
         query,
@@ -4201,15 +4357,28 @@ export async function inspectProductOrShopUrl(
         discountAnalysis: null,
         priceHistory: null,
         reviewSummary: null,
-        merchantProfile: matchedMerchant,
+        merchantProfile: matchedMerchantByShopId,
         suggestions,
       };
     }
   }
 
-  // 3. Internal slug or exact master product slug match
-  const candidateSlug = parsedUrl.internalSlug || query.toLowerCase();
-  const exactMaster = await getMasterProductBySlug(candidateSlug);
+  // 3. Internal slug or exact master product slug match (including slugified URL keyword)
+  const urlProductKeyword = parsedUrl.isUrl
+    ? extractProductKeywordFromUrl(query)
+    : '';
+  const slugifiedUrlKeyword = urlProductKeyword
+    ? urlProductKeyword
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+    : '';
+  const candidateSlug =
+    parsedUrl.internalSlug ||
+    (parsedUrl.isUrl ? slugifiedUrlKeyword : query.toLowerCase());
+  const exactMaster = candidateSlug
+    ? await getMasterProductBySlug(candidateSlug)
+    : null;
   if (exactMaster) {
     const [offers, reviews] = await Promise.all([
       getMasterProductOffers(exactMaster.id),
@@ -4219,16 +4388,21 @@ export async function inspectProductOrShopUrl(
     const [priceHistory, reviewSummary, merchantsList] = await Promise.all([
       getMasterProductPriceHistory(exactMaster.id, offers),
       getMasterProductReviewSummary(exactMaster.id, reviews),
-      getMerchantsList({
-        ids: matchedOffer ? [matchedOffer.merchant.id] : [],
-      }),
+      matchedMerchantByShopId
+        ? Promise.resolve([matchedMerchantByShopId])
+        : getMerchantsList({
+            ids: matchedOffer ? [matchedOffer.merchant.id] : [],
+            limit: 1,
+          }),
     ]);
     const discountAnalysis = matchedOffer
       ? priceHistory.byOffer[matchedOffer.id] || null
       : null;
-    const merchantProfile = matchedOffer
-      ? merchantsList.find((m) => m.id === matchedOffer.merchant.id) || null
-      : null;
+    const merchantProfile =
+      matchedMerchantByShopId ||
+      (matchedOffer
+        ? merchantsList.find((m) => m.id === matchedOffer.merchant.id) || null
+        : null);
 
     return {
       query,
@@ -4248,21 +4422,28 @@ export async function inspectProductOrShopUrl(
   // 4. Search across merchants and master products by keyword. Merchant
   // lookups are filtered in the database: this public endpoint must not read
   // the whole directory on every request.
-  const [nameMatches, shopMatches, matchedProducts] = await Promise.all([
-    // No merchant name is this long; skipping also keeps a 1024-char query out
-    // of the request URL.
-    query.length <= 200
-      ? getMerchantsList({ nameContains: query, limit: 1 })
-      : Promise.resolve([]),
-    // Only shop-id-shaped input reaches the in() filter syntax.
-    /^[A-Za-z0-9_.-]{1,64}$/.test(query)
-      ? getMerchantsList({ platformShopIds: [query], limit: 1 })
-      : Promise.resolve([]),
-    getMasterProducts({ search: query, limit: 6 }),
-  ]);
-  const matchedMerchantByName = nameMatches[0] ?? shopMatches[0] ?? null;
+  const effectiveSearchQuery = parsedUrl.isUrl ? urlProductKeyword : query;
+  const [nameMatches, shopMatches, matchedProducts] = effectiveSearchQuery
+    ? await Promise.all([
+        // No merchant name is this long; skipping also keeps a 1024-char query out
+        // of the request URL.
+        !parsedUrl.isUrl && effectiveSearchQuery.length <= 200
+          ? getMerchantsList({ nameContains: effectiveSearchQuery, limit: 1 })
+          : Promise.resolve([]),
+        // Only shop-id-shaped input reaches the in() filter syntax.
+        !parsedUrl.isUrl && /^[A-Za-z0-9_.-]{1,64}$/.test(effectiveSearchQuery)
+          ? getMerchantsList({
+              platformShopIds: [effectiveSearchQuery],
+              limit: 1,
+            })
+          : Promise.resolve([]),
+        getMasterProducts({ search: effectiveSearchQuery, limit: 6 }),
+      ])
+    : [[], [], []];
+  const matchedMerchantByName =
+    matchedMerchantByShopId ?? nameMatches[0] ?? shopMatches[0] ?? null;
   const merchantById = async (id: string) =>
-    (await getMerchantsList({ ids: [id] }))[0] ?? null;
+    (await getMerchantsList({ ids: [id], limit: 1 }))[0] ?? null;
 
   if (matchedProducts.length === 1) {
     const single = matchedProducts[0]!;
@@ -4278,9 +4459,12 @@ export async function inspectProductOrShopUrl(
     const discountAnalysis = matchedOffer
       ? priceHistory.byOffer[matchedOffer.id] || null
       : null;
-    const merchantProfile = matchedOffer
-      ? (await merchantById(matchedOffer.merchant.id)) || matchedMerchantByName
-      : matchedMerchantByName;
+    const merchantProfile =
+      matchedMerchantByShopId ||
+      (matchedOffer
+        ? (await merchantById(matchedOffer.merchant.id)) ||
+          matchedMerchantByName
+        : matchedMerchantByName);
 
     return {
       query,

@@ -2,6 +2,7 @@ import 'server-only';
 import type { Database } from '@repo/shared-data';
 import {
   MAX_VALID_VND_PRICE,
+  extractProductKeywordFromUrl,
   getMasterProductBySlug,
   getMasterProductCategorySlug,
   getMasterProductOffers,
@@ -14,6 +15,7 @@ import {
   normalizeMasterProductRow,
   parseEcommerceUrlOrQuery,
   RateDataUnavailableError,
+  stripEcommerceNoiseTokens,
   type CanonicalCategorySlug,
   type MasterProduct,
   type MasterProductPriceHistorySummary,
@@ -289,56 +291,7 @@ export function canonicalizeProductUrl(rawUrl?: string | null): string | null {
 }
 
 export function extractKeywordFromProductUrl(rawUrl?: string | null): string {
-  if (!rawUrl || typeof rawUrl !== 'string') return '';
-  try {
-    const parsed = new URL(rawUrl.trim());
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-      return '';
-    }
-    const rawSegments = decodeURIComponent(parsed.pathname)
-      .split('/')
-      .map((s) => s.trim())
-      .filter(Boolean);
-    const firstSegLower = (rawSegments[0] || '')
-      .replace(/\.html?$/i, '')
-      .toLowerCase();
-    if (
-      /^(?:tin-tuc|sforum|dchannel|hoi-dap|khuyen-mai|tra-gop|bao-hanh|he-thong-cua-hang|he-thong-sieu-thi|catalogsearch|tim-kiem|search|cart|gio-hang|account|login|blog|news|event|landing|collection|c|shop|opaanlp|video)$/.test(
-        firstSegLower
-      )
-    ) {
-      return '';
-    }
-    const decodedPath = decodeURIComponent(parsed.pathname)
-      .replace(/(?:\/|-)i\.\d+\.\d+$/i, '')
-      .replace(/\/(?:product|opaanlp)\/\d+\/\d+\/?$/i, '')
-      .replace(/\/(?:view\/)?product\/\d+\/?$/i, '')
-      .replace(/(?:\/|-)i\d+(?:-s\d+)?\.html$/i, '')
-      .replace(/(?:\/|-)p\d+\.html$/i, '')
-      .replace(/--s\d+(?:\.html?)?$/i, '')
-      .replace(/\.html?$/i, '')
-      .replace(
-        /^\/(?:products?|san-pham|dien-thoai|dien-thoai-di-dong|dtdd|may-tinh-bang|may-tinh-xach-tay|laptop|dong-ho-thong-minh|tai-nghe|smartphones|tablets|laptops|smartwatches|earbuds|apple|iphone|ipad|macbook|watch|airpods)\//i,
-        '/'
-      );
-    const segments = decodedPath.split('/').filter(Boolean);
-    const lastSeg = segments[segments.length - 1] || '';
-    const lastSegLower = lastSeg.toLowerCase();
-    if (
-      !lastSeg ||
-      /^\d+$/.test(lastSeg) ||
-      /^i\.\d+\.\d+$/i.test(lastSeg) ||
-      lastSeg.startsWith('@') ||
-      /^(?:dtdd|dien-thoai|dien-thoai-di-dong|mobile|smartphones|laptop|laptops|may-tinh-xach-tay|may-tinh-bang|tablet|tablets|dong-ho-thong-minh|smartwatch|smartwatches|tai-nghe|earbuds|phu-kien|apple|iphone|ipad|macbook|watch|airpods|search|tim-kiem|result|product|products|view)$/.test(
-        lastSegLower
-      )
-    ) {
-      return '';
-    }
-    return lastSeg.replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim();
-  } catch {
-    return '';
-  }
+  return extractProductKeywordFromUrl(rawUrl);
 }
 
 export function detectPlatformFromInput(
@@ -480,14 +433,8 @@ export function extractStorageAndAmbiguity(params: {
   const hasMultipleStorageInTitle =
     variantCaps.length !== 1 && titleCaps.length > 1;
 
-  // Build clean core device query (strip promotional brackets, Shopee noise, and capacity suffixes)
-  const cleanModelSearchQuery = titleText
-    .replace(/\[[^\]]*\]/g, ' ')
-    .replace(/\([^)]*\)/g, ' ')
-    .replace(
-      /(?:^|\s)(chính hãng|vn\/a|vna|fullbox|mới 100%|nguyên seal|trả góp 0%|bảo hành \d+ tháng|freeship|hoả tốc|hỏa tốc|điện thoại|di động|smartphone|máy tính bảng|tablet|laptop)(?=\s|$|[,.|-])/giu,
-      ' '
-    )
+  // Build clean core device query (strip promotional brackets, Shopee/URL slug noise, and capacity suffixes)
+  const cleanModelSearchQuery = stripEcommerceNoiseTokens(titleText)
     .replace(/\b\d+\s*(?:gb|tb)\b/gi, ' ')
     .replace(/\s+/g, ' ')
     .trim();

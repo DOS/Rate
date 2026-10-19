@@ -5660,7 +5660,504 @@ async function runCoreArchitectureSuite() {
   }
 
   console.log(
-    '  ✅ [71/71] Case-insensitive brand facets, fractional TB storage labels & getMasterProducts fallback hardening (#510) passed'
+    '  ✅ [71/72] Case-insensitive brand facets, fractional TB storage labels & getMasterProducts fallback hardening (#510) passed'
+  );
+
+  // 72. Issue #513: Resolve specifications.category_slug and harden merchant/stats category & review trust mapping
+  {
+    const rateApi513 =
+      require('../../../lib/rate-api') as typeof import('../../../lib/rate-api');
+
+    assert.equal(rateApi513.isCanonicalCategorySlug('earbuds'), true);
+    assert.equal(rateApi513.isCanonicalCategorySlug('tablets'), true);
+    assert.equal(rateApi513.isCanonicalCategorySlug('unknown'), false);
+
+    // 72a. getMasterProductCategorySlug resolves specifications.category_slug even when name/slug has no keyword match
+    assert.equal(
+      rateApi513.getMasterProductCategorySlug({
+        slug: 'marshall-motif-ii-anc',
+        name: 'Marshall Motif II A.N.C.',
+        category_id: null,
+        metadata: null,
+        specifications: { category_slug: 'earbuds' },
+      }),
+      'earbuds',
+      'getMasterProductCategorySlug must resolve specifications.category_slug when category_id and metadata.category_slug are null (#513)'
+    );
+    assert.equal(
+      rateApi513.getMasterProductHref({
+        slug: 'marshall-motif-ii-anc',
+        name: 'Marshall Motif II A.N.C.',
+        specifications: { category_slug: 'earbuds' },
+      }),
+      '/earbuds/marshall-motif-ii-anc',
+      'getMasterProductHref must route to /earbuds/[slug] when specifications.category_slug is earbuds (#513)'
+    );
+
+    // 72b. normalizeMasterProductRow stamps metadata.category_slug from specifications.category_slug
+    const normalized513 = rateApi513.normalizeMasterProductRow({
+      id: 'mp-513-earbud',
+      slug: 'marshall-motif-ii-anc',
+      name: 'Marshall Motif II A.N.C.',
+      brand: 'Marshall',
+      model: 'Motif II A.N.C.',
+      model_key: 'marshall-motif-ii-anc-1',
+      category_id: null,
+      specifications: { category_slug: 'earbuds' },
+      key_specs: {},
+      metadata: {},
+      min_price: 4990000,
+      max_price: 5490000,
+      merchant_count: 2,
+      average_rating: 4.8,
+      user_rating_weighted: 4.8,
+      expert_rating: 4.7,
+      total_reviews: 12,
+      has_5g: false,
+      colors: [],
+      status: 'published',
+      thumbnail: null,
+      images: [],
+    });
+    assert.equal(
+      normalized513.metadata?.category_slug,
+      'earbuds',
+      'normalizeMasterProductRow must populate metadata.category_slug from specifications.category_slug (#513)'
+    );
+
+    // 72c. getMerchantProfileById & getRatePlatformStats resolve specifications.category_slug and attach trust_assessment
+    const origFetch513 = globalThis.fetch;
+    let merchantProdsFetched = false;
+    let statsMastersFetched = false;
+    try {
+      globalThis.fetch = (async (input: RequestInfo | URL) => {
+        const url =
+          typeof input === 'string'
+            ? input
+            : input instanceof URL
+              ? input.toString()
+              : input.url;
+
+        if (url.includes('/rest/v1/merchants') && url.includes('id=eq.')) {
+          return new Response(
+            JSON.stringify({
+              id: '00000000-0000-4000-8000-000000000513',
+              platform: 'shopee',
+              platform_shop_id: 'shop-513',
+              name: 'Marshall Official Store',
+              slug: 'marshall-official-store',
+              is_official: true,
+              rating_star: 4.9,
+              follower_count: 55000,
+              location: 'TP. Hồ Chí Minh',
+              risk_score: 5,
+              metadata: {},
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } }
+          );
+        }
+        if (url.includes('/rest/v1/merchants')) {
+          return new Response('[]', {
+            status: 200,
+            headers: {
+              'content-type': 'application/json',
+              'content-range': '0-0/8',
+            },
+          });
+        }
+        if (url.includes('/rest/v1/categories')) {
+          return new Response(
+            JSON.stringify([
+              {
+                id: 'cat-smartphones',
+                parent_id: null,
+                name: 'Điện thoại',
+                slug: 'smartphones',
+                icon: 'smartphone',
+                display_order: 1,
+              },
+              {
+                id: 'cat-earbuds',
+                parent_id: null,
+                name: 'Tai nghe',
+                slug: 'earbuds',
+                icon: 'headphones',
+                display_order: 5,
+              },
+            ]),
+            { status: 200, headers: { 'content-type': 'application/json' } }
+          );
+        }
+        if (
+          url.includes('/rest/v1/products') &&
+          url.includes('merchant_id=eq.')
+        ) {
+          if (merchantProdsFetched) {
+            return new Response(JSON.stringify([]), {
+              status: 200,
+              headers: { 'content-type': 'application/json' },
+            });
+          }
+          merchantProdsFetched = true;
+          return new Response(
+            JSON.stringify([
+              {
+                id: 'prod-513-1',
+                merchant_id: '00000000-0000-4000-8000-000000000513',
+                platform: 'shopee',
+                platform_item_id: 'item-513-1',
+                title: 'Marshall Motif II A.N.C. Chính Hãng',
+                price_current: 4990000,
+                price_original: 5490000,
+                stock: 15,
+                historical_sold: 40,
+                rating_star: 4.9,
+                rating_count: 18,
+                images: [],
+                url: 'https://shopee.vn/product/513/1',
+                cluster_id: 'mp-513-earbud',
+              },
+            ]),
+            { status: 200, headers: { 'content-type': 'application/json' } }
+          );
+        }
+        if (url.includes('/rest/v1/products') && url.includes('id=in.')) {
+          return new Response(
+            JSON.stringify([
+              {
+                id: 'prod-513-1',
+                title: 'Marshall Motif II A.N.C. Chính Hãng',
+                cluster_id: 'mp-513-earbud',
+              },
+            ]),
+            { status: 200, headers: { 'content-type': 'application/json' } }
+          );
+        }
+        if (
+          url.includes('/rest/v1/products') &&
+          url.includes('cluster_id=eq.')
+        ) {
+          return new Response(JSON.stringify([]), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          });
+        }
+        if (url.includes('/rest/v1/products')) {
+          return new Response('[]', {
+            status: 200,
+            headers: {
+              'content-type': 'application/json',
+              'content-range': '0-0/25',
+            },
+          });
+        }
+        if (
+          url.includes('/rest/v1/master_products') &&
+          url.includes('id=in.')
+        ) {
+          return new Response(
+            JSON.stringify([
+              {
+                id: 'mp-513-earbud',
+                slug: 'marshall-motif-ii-anc',
+                name: 'Marshall Motif II A.N.C.',
+                model: 'Motif II A.N.C.',
+                brand: 'Marshall',
+                category_id: null,
+                metadata: null,
+                specifications: { category_slug: 'earbuds' },
+                min_price: 4990000,
+                max_price: 5490000,
+                merchant_count: 2,
+              },
+            ]),
+            { status: 200, headers: { 'content-type': 'application/json' } }
+          );
+        }
+        if (url.includes('/rest/v1/master_products')) {
+          if (statsMastersFetched) {
+            return new Response(JSON.stringify([]), {
+              status: 200,
+              headers: { 'content-type': 'application/json' },
+            });
+          }
+          statsMastersFetched = true;
+          return new Response(
+            JSON.stringify([
+              {
+                id: 'mp-513-earbud',
+                slug: 'marshall-motif-ii-anc',
+                name: 'Marshall Motif II A.N.C.',
+                model: 'Motif II A.N.C.',
+                category_id: null,
+                metadata: null,
+                specifications: { category_slug: 'earbuds' },
+              },
+            ]),
+            { status: 200, headers: { 'content-type': 'application/json' } }
+          );
+        }
+        if (url.includes('/rest/v1/reviews')) {
+          return new Response(
+            JSON.stringify([
+              {
+                id: 'rev-513-1',
+                product_id: 'prod-513-1',
+                author_name: 'Minh Quân',
+                rating_star: 5,
+                comment:
+                  'Chất âm Marshall đặc trưng, chống ồn chủ động rất tốt khi đi tàu điện, pin dùng thực tế khoảng 6 tiếng liên tục.',
+                variation: 'Black',
+                created_at: '2026-10-18T10:00:00Z',
+                reviewer_type: 'user',
+                upvotes: 6,
+                downvotes: 0,
+                report_count: 0,
+                helpfulness_weight: null,
+                criteria_ratings: { audio: 4.9, battery: 4.7 },
+                review_flags: {
+                  verdict: 'authentic',
+                  fake_probability: 0.04,
+                  flag_category: 'authentic',
+                  include_in_rating: true,
+                  reason: 'Đánh giá chi tiết trải nghiệm thực tế',
+                  signals: {},
+                },
+              },
+            ]),
+            {
+              status: 200,
+              headers: {
+                'content-type': 'application/json',
+                'content-range': '0-0/1',
+              },
+            }
+          );
+        }
+        return new Response('[]', {
+          status: 200,
+          headers: {
+            'content-type': 'application/json',
+            'content-range': '0-0/0',
+          },
+        });
+      }) as typeof fetch;
+
+      const merchantProfile513 = await rateApi513.getMerchantProfileById(
+        '00000000-0000-4000-8000-000000000513'
+      );
+      assert.ok(merchantProfile513, 'merchantProfile513 must resolve (#513)');
+      assert.equal(
+        merchantProfile513.listings[0]?.master_product?.category_slug,
+        'earbuds',
+        'getMerchantProfileById must resolve category_slug via getMasterProductCategorySlug from specifications.category_slug (#513)'
+      );
+      assert.ok(
+        merchantProfile513.recent_reviews[0]?.trust_assessment,
+        'getMerchantProfileById recent_reviews must include trust_assessment (#513)'
+      );
+
+      const stats513 = await rateApi513.getRatePlatformStats();
+      const earbudsCat513 = stats513.categoriesWithCounts.find(
+        (c) => c.slug === 'earbuds'
+      );
+      assert.equal(
+        earbudsCat513?.productCount,
+        1,
+        'getRatePlatformStats must count published products with category_id=null into their resolved canonical category (#513)'
+      );
+      assert.equal(
+        stats513.recentReviewsSample[0]?.masterRouteHref,
+        '/earbuds/marshall-motif-ii-anc',
+        'getRatePlatformStats recentReviewsSample must resolve /earbuds/[slug] via specifications.category_slug (#513)'
+      );
+      assert.ok(
+        (stats513.recentReviewsSample[0]?.helpfulness_weight ?? 0) > 1,
+        'getRatePlatformStats recentReviewsSample must compute JReviews weight when helpfulness_weight is null (#513)'
+      );
+      assert.ok(
+        stats513.recentReviewsSample[0]?.trust_assessment,
+        'getRatePlatformStats recentReviewsSample must include trust_assessment (#513)'
+      );
+    } finally {
+      globalThis.fetch = origFetch513;
+    }
+  }
+
+  console.log(
+    '  ✅ [72/73] specifications.category_slug resolution & merchant/stats review trust_assessment mapping (#513) passed'
+  );
+
+  // 73. Issue #517: Harden URL product keyword extraction and shop fallback in inspectProductOrShopUrl and lookupExtensionProduct
+  {
+    const rateApi517 =
+      require('../../../lib/rate-api') as typeof import('../../../lib/rate-api');
+    const extServer517 =
+      require('../extension') as typeof import('../extension');
+
+    assert.equal(
+      rateApi517.extractProductKeywordFromUrl(
+        'https://shopee.vn/Dien-thoai-Apple-iPhone-16-Pro-Max-256GB-Chinh-hang-VN-A-i.88201679.29512841920'
+      ),
+      'Apple iPhone 16 Pro Max 256GB',
+      'extractProductKeywordFromUrl must strip Dien thoai and Chinh hang VN A from Shopee URLs (#517)'
+    );
+    assert.equal(
+      rateApi517.extractProductKeywordFromUrl(
+        'https://tiki.vn/tai-nghe-bluetooth-apple-airpods-pro-2-usb-c-chinh-hang-p274019283.html'
+      ),
+      'apple airpods pro 2 usb c',
+      'extractProductKeywordFromUrl must strip tai nghe bluetooth and chinh hang from Tiki URLs (#517)'
+    );
+    assert.equal(
+      rateApi517.extractProductKeywordFromUrl(
+        'https://www.lazada.vn/products/laptop-apple-macbook-air-m3-13-inch-256gb-chinh-hang-i123456789-s987654321.html'
+      ),
+      'apple macbook air m3 13 inch 256gb',
+      'extractProductKeywordFromUrl must strip laptop and chinh hang from Lazada URLs (#517)'
+    );
+    assert.equal(
+      rateApi517.extractProductKeywordFromUrl(
+        'https://shopee.vn/Op-lung-iPhone-16-Pro-Max-Chinh-hang-i.111.222'
+      ),
+      'Op lung iPhone 16 Pro Max',
+      'extractProductKeywordFromUrl must preserve accessory tokens like Op lung so detectAccessoryOrJunk catches them (#517)'
+    );
+
+    const parsedAmbiguity517 = extServer517.extractStorageAndAmbiguity({
+      title: 'Dien thoai Apple iPhone 16 Pro Max 256GB Chinh hang VN A',
+    });
+    assert.equal(
+      parsedAmbiguity517.cleanModelSearchQuery,
+      'Apple iPhone 16 Pro Max',
+      'extractStorageAndAmbiguity must strip non-accented URL slug noise tokens (#517)'
+    );
+    assert.equal(parsedAmbiguity517.storageGb, 256);
+
+    const origFetch517 = globalThis.fetch;
+    try {
+      globalThis.fetch = (async (input: RequestInfo | URL) => {
+        const url =
+          typeof input === 'string'
+            ? input
+            : input instanceof URL
+              ? input.toString()
+              : input.url;
+
+        if (
+          url.includes('/rest/v1/products') &&
+          url.includes('platform_item_id=in.')
+        ) {
+          return new Response(JSON.stringify(null), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          });
+        }
+        if (
+          url.includes('/rest/v1/merchants') &&
+          url.includes('platform_shop_id=in.')
+        ) {
+          return new Response(
+            JSON.stringify([
+              {
+                id: 'merch-517-apple',
+                platform: 'shopee',
+                platform_shop_id: '88201679',
+                name: 'Apple Flagship Store',
+                slug: 'apple-flagship-store',
+                is_official: true,
+                rating_star: 4.9,
+                follower_count: 1500000,
+                location: 'TP. Hồ Chí Minh',
+                risk_score: 2,
+                metadata: {},
+                updated_at: '2026-10-19T00:00:00Z',
+              },
+            ]),
+            { status: 200, headers: { 'content-type': 'application/json' } }
+          );
+        }
+        if (
+          url.includes('/rest/v1/master_products') &&
+          url.includes('slug=eq.apple-iphone-16-pro-max-256gb')
+        ) {
+          return new Response(
+            JSON.stringify({
+              id: 'mp-517-ip16pm',
+              slug: 'apple-iphone-16-pro-max-256gb',
+              name: 'Apple iPhone 16 Pro Max 256GB',
+              brand: 'Apple',
+              model: 'iPhone 16 Pro Max',
+              model_key: 'apple-iphone-16-pro-max-256gb',
+              category_id: 'cat-smartphones',
+              min_price: 29990000,
+              max_price: 33990000,
+              merchant_count: 4,
+              average_rating: 4.9,
+              user_rating_weighted: 4.9,
+              expert_rating: 4.9,
+              total_reviews: 120,
+              has_5g: true,
+              colors: ['Natural Titanium'],
+              status: 'published',
+              specifications: { category_slug: 'smartphones' },
+              key_specs: {},
+              metadata: {},
+              thumbnail: null,
+              images: [],
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } }
+          );
+        }
+        if (url.includes('/rest/v1/rpc/search_master_products')) {
+          return new Response(JSON.stringify([]), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          });
+        }
+        return new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }) as typeof fetch;
+
+      const inspected517 = await rateApi517.inspectProductOrShopUrl(
+        'https://shopee.vn/Dien-thoai-Apple-iPhone-16-Pro-Max-256GB-Chinh-hang-VN-A-i.88201679.99999999999'
+      );
+      assert.equal(
+        inspected517.matchedType,
+        'master_product',
+        'inspectProductOrShopUrl must resolve unindexed e-commerce product URLs to their canonical MasterProduct (#517)'
+      );
+      assert.equal(
+        inspected517.masterProduct?.slug,
+        'apple-iphone-16-pro-max-256gb'
+      );
+      assert.equal(
+        inspected517.merchantProfile?.platform_shop_id,
+        '88201679',
+        'inspectProductOrShopUrl must attach the tracked merchantProfile from parsedUrl.platformShopId even when platformItemId is not yet in rate.products (#517)'
+      );
+
+      const inspectedShopFallback517 = await rateApi517.inspectProductOrShopUrl(
+        'https://shopee.vn/San-pham-chua-co-trong-danh-muc-i.88201679.88888888888'
+      );
+      assert.equal(
+        inspectedShopFallback517.matchedType,
+        'merchant',
+        'inspectProductOrShopUrl must fall back to matchedType=merchant when the product is unknown but platformShopId is a tracked merchant (#517)'
+      );
+      assert.equal(
+        inspectedShopFallback517.merchantProfile?.name,
+        'Apple Flagship Store'
+      );
+    } finally {
+      globalThis.fetch = origFetch517;
+    }
+  }
+
+  console.log(
+    '  ✅ [73/73] URL product keyword extraction & shop fallback in inspectProductOrShopUrl and lookupExtensionProduct (#517) passed'
   );
 
   console.log('🎉 All Rate.vn Core Architecture tests passed!');

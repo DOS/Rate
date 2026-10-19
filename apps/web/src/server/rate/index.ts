@@ -17,8 +17,11 @@ import {
   getMerchantsList as _getMerchantsList,
   getRatePlatformStats as _getRatePlatformStats,
   inspectProductOrShopUrl as _inspectProductOrShopUrl,
+  isCanonicalCategorySlug,
+  extractProductKeywordFromUrl,
   parseEcommerceUrlOrQuery,
   resolveProductImageUrl,
+  stripEcommerceNoiseTokens,
   getRateClient,
   computeJReviewsWeight,
   filterAndSortMerchants,
@@ -52,12 +55,15 @@ export type {
 export {
   getRateClient,
   computeJReviewsWeight,
+  extractProductKeywordFromUrl,
   filterAndSortMerchants,
+  isCanonicalCategorySlug,
   parseEcommerceUrlOrQuery,
   getCategoryRouteHref,
   getMasterProductCategorySlug,
   getMasterProductHref,
   resolveProductImageUrl,
+  stripEcommerceNoiseTokens,
 };
 
 import {
