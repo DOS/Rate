@@ -7,6 +7,7 @@ export {
   BAYESIAN_PRIOR_K,
   BAYESIAN_PRIOR_MEAN,
   KNOWN_LOCAL_DEVICE_IMAGES,
+  MAX_VALID_VND_PRICE,
   computeBayesianRatingSummary,
   computeCombinedDualScore,
   computeJReviewsWeight,

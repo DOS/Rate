@@ -5173,7 +5173,295 @@ async function runCoreArchitectureSuite() {
   }
 
   console.log(
-    '  ✅ [69/69] Public write routes hardening: cookie-session voting, voter eligibility, malformed ingest JSON & stats cache revalidation (#402) passed'
+    '  ✅ [69/70] Public write routes hardening: cookie-session voting, voter eligibility, malformed ingest JSON & stats cache revalidation (#402) passed'
+  );
+
+  // =========================================================================
+  // 70. CSV Formula Injection Guard, Deal Radar Index Selection & Client Store Normalization (#406)
+  // =========================================================================
+  {
+    const { escapeCsvCell } = await import('@/lib/csv-safe');
+    const { buildRadarIndex, selectMerchantRadar } =
+      await import('@/lib/deal-radar');
+    const { MAX_WATCHLIST_ITEMS, normalizeWatchlistItem } =
+      await import('@/components/watchlist/watchlist-store');
+    const { normalizeTrayItem } =
+      await import('@/components/compare/compare-tray');
+
+    // 70.1 escapeCsvCell blocks leading-whitespace and pipe (|) formula injection while preserving plain numbers
+    assert.equal(
+      escapeCsvCell(" =cmd|' /C calc'!A0"),
+      "' =cmd|' /C calc'!A0",
+      'escapeCsvCell must neutralize leading-whitespace formula payloads (#406)'
+    );
+    assert.equal(
+      escapeCsvCell('\n=SUM(A1:A2)'),
+      '"\'\n=SUM(A1:A2)"',
+      'escapeCsvCell must neutralize newline-prefixed formula payloads (#406)'
+    );
+    assert.equal(
+      escapeCsvCell('|calc!A0'),
+      "'|calc!A0",
+      'escapeCsvCell must neutralize pipe-prefixed DDE formula payloads (#406)'
+    );
+    assert.equal(
+      escapeCsvCell('-15.4%'),
+      '-15.4%',
+      'escapeCsvCell must preserve plain negative numeric literals (#406)'
+    );
+
+    // 70.2 buildRadarIndex selects strongest genuine deal, worst fake-sale trap, and widest price spread per slug
+    const radarIdx406 = buildRadarIndex({
+      genuineDeals: [
+        {
+          id: 'gd-1',
+          verdict: 'best_market_deal',
+          verdictBadgeVi: 'Giá tốt',
+          productSlug: 'apple-iphone-16-pro-256gb',
+          productName: 'iPhone 16 Pro 256GB',
+          brand: 'Apple',
+          categorySlug: 'smartphones',
+          productHref: '/smartphones/apple-iphone-16-pro-256gb',
+          imageUrl: null,
+          platform: 'shopee',
+          merchantId: 'm-1',
+          merchantName: 'Shop A',
+          isOfficialMall: true,
+          merchantRiskScore: 5,
+          offerUrl: 'https://shopee.vn/a',
+          priceCurrent: 25_500_000,
+          priceOriginal: 28_990_000,
+          marketMedianPrice: 27_000_000,
+          marketMinPrice: 23_900_000,
+          marketMaxPrice: 28_990_000,
+          savingsVsMedianVnd: 1_500_000,
+          savingsVsMedianPct: 5.6,
+          claimedDiscountPct: 12,
+          fakeMarkupPct: 0,
+          jreviewsScore10: 9.2,
+          explanationVi: 'Rẻ hơn trung vị',
+        },
+        {
+          id: 'gd-2',
+          verdict: 'genuine_all_time_low',
+          verdictBadgeVi: 'Đáy giá',
+          productSlug: 'apple-iphone-16-pro-256gb',
+          productName: 'iPhone 16 Pro 256GB',
+          brand: 'Apple',
+          categorySlug: 'smartphones',
+          productHref: '/smartphones/apple-iphone-16-pro-256gb',
+          imageUrl: null,
+          platform: 'lazada',
+          merchantId: 'm-2',
+          merchantName: 'Shop B',
+          isOfficialMall: true,
+          merchantRiskScore: 5,
+          offerUrl: 'https://lazada.vn/b',
+          priceCurrent: 23_900_000,
+          priceOriginal: 28_990_000,
+          marketMedianPrice: 27_000_000,
+          marketMinPrice: 23_900_000,
+          marketMaxPrice: 28_990_000,
+          savingsVsMedianVnd: 3_100_000,
+          savingsVsMedianPct: 11.5,
+          claimedDiscountPct: 17.6,
+          fakeMarkupPct: 0,
+          jreviewsScore10: 9.2,
+          explanationVi: 'Đáy giá lịch sử',
+        },
+      ],
+      fakeSaleTraps: [
+        {
+          id: 'fst-1',
+          verdict: 'inflated_fake_sale',
+          verdictBadgeVi: 'Sale ảo',
+          productSlug: 'samsung-galaxy-s24-ultra-256gb',
+          productName: 'Galaxy S24 Ultra',
+          brand: 'Samsung',
+          categorySlug: 'smartphones',
+          productHref: '/smartphones/samsung-galaxy-s24-ultra-256gb',
+          imageUrl: null,
+          platform: 'shopee',
+          merchantId: 'm-3',
+          merchantName: '',
+          isOfficialMall: false,
+          merchantRiskScore: 45,
+          offerUrl: 'https://shopee.vn/c',
+          priceCurrent: 26_000_000,
+          priceOriginal: 32_000_000,
+          marketMedianPrice: 25_500_000,
+          marketMinPrice: 24_900_000,
+          marketMaxPrice: 27_000_000,
+          savingsVsMedianVnd: -500_000,
+          savingsVsMedianPct: -2,
+          claimedDiscountPct: 18.8,
+          fakeMarkupPct: 25.5,
+          jreviewsScore10: 9.1,
+          explanationVi: 'Kê giá gốc',
+        },
+        {
+          id: 'fst-2',
+          verdict: 'inflated_fake_sale',
+          verdictBadgeVi: 'Sale ảo',
+          productSlug: 'samsung-galaxy-s24-ultra-256gb',
+          productName: 'Galaxy S24 Ultra',
+          brand: 'Samsung',
+          categorySlug: 'smartphones',
+          productHref: '/smartphones/samsung-galaxy-s24-ultra-256gb',
+          imageUrl: null,
+          platform: 'tiktok',
+          merchantId: 'm-4',
+          merchantName: 'Trap Shop',
+          isOfficialMall: false,
+          merchantRiskScore: 60,
+          offerUrl: 'https://tiktok.com/d',
+          priceCurrent: 26_500_000,
+          priceOriginal: 39_990_000,
+          marketMedianPrice: 25_500_000,
+          marketMinPrice: 24_900_000,
+          marketMaxPrice: 27_000_000,
+          savingsVsMedianVnd: -1_000_000,
+          savingsVsMedianPct: -3.9,
+          claimedDiscountPct: 33.7,
+          fakeMarkupPct: 56.8,
+          jreviewsScore10: 9.1,
+          explanationVi: 'Kê giá gốc nặng',
+        },
+      ],
+      priceSpreadLeaders: [
+        {
+          id: 'sp-1',
+          productSlug: 'apple-iphone-16-pro-256gb',
+          productName: 'iPhone 16 Pro 256GB',
+          brand: 'Apple',
+          categorySlug: 'smartphones',
+          productHref: '/smartphones/apple-iphone-16-pro-256gb',
+          imageUrl: null,
+          platformCount: 2,
+          offerCount: 3,
+          minPrice: 24_500_000,
+          maxPrice: 27_000_000,
+          medianPrice: 25_500_000,
+          spreadVnd: 2_500_000,
+          spreadPct: 10.2,
+          cheapestPlatform: 'shopee',
+          cheapestMerchantName: 'Shop A',
+          cheapestOfferUrl: 'https://shopee.vn/a',
+          priciestPlatform: 'lazada',
+          priciestMerchantName: 'Shop X',
+          explanationVi: 'Lệch 10.2%',
+        },
+        {
+          id: 'sp-2',
+          productSlug: 'apple-iphone-16-pro-256gb',
+          productName: 'iPhone 16 Pro 256GB',
+          brand: 'Apple',
+          categorySlug: 'smartphones',
+          productHref: '/smartphones/apple-iphone-16-pro-256gb',
+          imageUrl: null,
+          platformCount: 3,
+          offerCount: 5,
+          minPrice: 23_900_000,
+          maxPrice: 28_500_000,
+          medianPrice: 25_500_000,
+          spreadVnd: 4_600_000,
+          spreadPct: 19.2,
+          cheapestPlatform: 'lazada',
+          cheapestMerchantName: 'Shop B',
+          cheapestOfferUrl: 'https://lazada.vn/b',
+          priciestPlatform: 'tiktok',
+          priciestMerchantName: 'Shop Y',
+          explanationVi: 'Lệch 19.2%',
+        },
+      ],
+      categoryFilter: 'all',
+      totalClustersAnalyzed: 2,
+      totalOffersAnalyzed: 4,
+      generatedAt: new Date().toISOString(),
+    });
+
+    const ip16Sig = radarIdx406.get('apple-iphone-16-pro-256gb');
+    assert.equal(
+      ip16Sig?.savingsPct,
+      11.5,
+      'buildRadarIndex must select the strongest genuine deal savingsPct for duplicate slugs (#406)'
+    );
+    assert.equal(
+      ip16Sig?.genuineDeal?.merchantId,
+      'm-2',
+      'buildRadarIndex must keep the best genuineDeal entry (#406)'
+    );
+    assert.equal(
+      ip16Sig?.spreadPct,
+      19.2,
+      'buildRadarIndex must keep the widest priceSpread entry for duplicate slugs (#406)'
+    );
+
+    const s24Sig = radarIdx406.get('samsung-galaxy-s24-ultra-256gb');
+    assert.equal(
+      s24Sig?.fakeMarkupPct,
+      56.8,
+      'buildRadarIndex must select the worst fakeSaleTrap markup for duplicate slugs (#406)'
+    );
+    assert.equal(
+      s24Sig?.fakeSaleTrap?.merchantId,
+      'm-4',
+      'buildRadarIndex must keep the worst fakeSaleTrap entry (#406)'
+    );
+
+    // 70.3 selectMerchantRadar refuses to match empty/whitespace merchant names
+    const emptyMerchantRadar = selectMerchantRadar(
+      {
+        genuineDeals: [],
+        fakeSaleTraps: [s24Sig!.fakeSaleTrap!],
+        priceSpreadLeaders: [],
+        categoryFilter: 'all',
+        totalClustersAnalyzed: 1,
+        totalOffersAnalyzed: 1,
+        generatedAt: new Date().toISOString(),
+      },
+      { id: 'non-existent-id', name: '   ' }
+    );
+    assert.equal(
+      emptyMerchantRadar.fakeTrapCount,
+      0,
+      'selectMerchantRadar must not match empty/whitespace merchant names (#406)'
+    );
+
+    // 70.4 normalizeWatchlistItem & normalizeTrayItem sanitize prices and infer category from categoryPath
+    assert.equal(MAX_WATCHLIST_ITEMS, 50);
+    const normWatch = normalizeWatchlistItem({
+      slug: '  custom-tws-model  ',
+      name: '  Custom Model X  ',
+      brand: '  Sony  ',
+      categoryPath: '/earbuds',
+      thumbnail: null,
+      priceWhenAdded: -50_000,
+      targetPrice: 5_000_000_000,
+      addedAt: '2026-10-19T00:00:00.000Z',
+    });
+    assert.equal(normWatch.slug, 'custom-tws-model');
+    assert.equal(normWatch.categoryPath, '/earbuds');
+    assert.equal(normWatch.priceWhenAdded, 0);
+    assert.equal(normWatch.targetPrice, 0);
+
+    const normTray = normalizeTrayItem({
+      slug: '  apple-iphone-16-pro-256gb  ',
+      name: '  iPhone 16 Pro 256GB  ',
+      brand: 'Apple',
+      thumbnail: 'https://broken.example.com/img.jpg',
+      min_price: 9_999_999_999,
+    });
+    assert.equal(normTray.slug, 'apple-iphone-16-pro-256gb');
+    assert.equal(
+      normTray.thumbnail,
+      '/img/devices/apple-iphone-16-pro-256gb.jpg'
+    );
+    assert.equal(normTray.min_price, 0);
+  }
+
+  console.log(
+    '  ✅ [70/70] CSV formula guard, Deal Radar index selection & client store normalization (#406) passed'
   );
 
   console.log('🎉 All Rate.vn Core Architecture tests passed!');

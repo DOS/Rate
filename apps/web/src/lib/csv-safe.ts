@@ -10,9 +10,15 @@ export function escapeCsvCell(value: unknown): string {
 
   let str = String(value).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 
-  // Neutralize formula-injection payloads starting with =, +, -, @, \t, \r
+  // Neutralize formula-injection payloads starting with =, +, -, @, |, \t, \r
+  // (including payloads with leading whitespace/newlines before =, +, -, @, |)
   // unless the string is a plain numeric literal like "-15.4" or "+12"
-  if (/^[=+\-@\t\r]/.test(str) && !/^[+-]?\d+(?:\.\d+)?%?$/.test(str.trim())) {
+  const trimmed = str.trim();
+  const isPlainNumericLiteral = /^[+-]?\d+(?:\.\d+)?%?$/.test(trimmed);
+  if (
+    !isPlainNumericLiteral &&
+    (/^[=+\-@\t\r|]/.test(str) || /^[=+\-@|]/.test(trimmed))
+  ) {
     str = `'${str}`;
   }
 
