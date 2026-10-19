@@ -98,7 +98,7 @@ function renderShadowTrustPill(lookup: ExtensionLookupData): void {
     const radarSpreadPct = Number(radarSig?.spreadPct ?? 0);
     const radarChipHtml = radarSig
       ? radarSig.verdict === 'genuine_deal'
-        ? `<span class="radar-chip radar-deal">🔥 Đáy 60N (-${formatSafeNumber(radarSig.savingsPct, { min: 0, max: 100 })}%)</span>`
+        ? `<span class="radar-chip radar-deal">🔥 Đáy đa sàn (-${formatSafeNumber(radarSig.savingsPct, { min: 0, max: 100 })}%)</span>`
         : radarSig.verdict === 'fake_sale_trap'
           ? `<span class="radar-chip radar-trap">🚨 Bẫy Sale (+${formatSafeNumber(radarSig.fakeMarkupPct, { min: 0, max: 10000 })}%)</span>`
           : Number.isFinite(radarSpreadPct) && radarSpreadPct >= 5

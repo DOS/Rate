@@ -136,9 +136,9 @@ export function radarLabel(
   const safeSpreadPct = toSafeRadarPct(sig.spreadPct);
   if (sig.verdict === 'genuine_deal') {
     const pct = safeSavingsPct.toFixed(1);
-    if (loc === 'en') return `🔥 60D Low (-${pct}%)`;
-    if (loc === 'cs') return `🔥 60D minimum (-${pct}%)`;
-    return `🔥 Đáy giá 60N (-${pct}%)`;
+    if (loc === 'en') return `🔥 Cross-platform low (-${pct}%)`;
+    if (loc === 'cs') return `🔥 Minimum napříč obchody (-${pct}%)`;
+    return `🔥 Đáy giá đa sàn (-${pct}%)`;
   }
   if (sig.verdict === 'fake_sale_trap') {
     const pct = safeFakeMarkupPct.toFixed(1);

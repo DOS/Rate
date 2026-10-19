@@ -203,7 +203,7 @@ export default function DeepInspectWorkspace({
           ? [
               `- **Master Product:** ${master.name} (\`${master.model_key}\`)`,
               `- **JReviews Buyer Score:** ${masterUserRating > 0 ? `★ ${masterUserRating.toFixed(2)}/5.0` : t('userNoScore')}${masterExpertRating10 != null ? ` | Lab ${masterExpertRating10.toFixed(1)}/10` : ''} ${t('verifiedReviewsCount', { count: master.authentic_review_count || master.total_reviews || 0 })}`,
-              `- **60D Deal Radar:** ${radarMarkdownCell(radarSignal)}`,
+              `- **Deal Radar:** ${radarMarkdownCell(radarSignal)}`,
             ]
           : []),
         ...(discount

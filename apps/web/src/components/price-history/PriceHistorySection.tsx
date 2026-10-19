@@ -356,12 +356,12 @@ export default function PriceHistorySection({
       discountVerdictCopy(tVerdict, oa).label,
     ]);
     const md = [
-      `### 📈 Rate.vn 60-Day Price History & Fake Sale Audit: ${productName}`,
+      `### 📈 Rate.vn Price History & Fake Sale Audit: ${productName}`,
       `- **Current Lowest Price**: ${formatVnd(history.currentMinPrice)}`,
       `- **All-Time Lowest Recorded**: ${formatVnd(history.lowestEverPrice)}`,
       `- **Fake Sale Alerts**: ${history.fakeDiscountCount} | **Genuine Deals**: ${history.genuineDealCount}`,
       ...(radarSignal
-        ? [`- **Deal Radar 60N**: ${radarMarkdownCell(radarSignal)}`]
+        ? [`- **Deal Radar**: ${radarMarkdownCell(radarSignal)}`]
         : []),
       '',
       `| ${headers.join(' | ')} |`,
@@ -419,7 +419,7 @@ export default function PriceHistorySection({
   const handleDownloadPriceHistoryJson = () => {
     if (typeof document === 'undefined' || filteredPoints.length === 0) return;
     const payload = {
-      source: 'Rate.vn 60-Day Price History & Fake Sale Audit',
+      source: 'Rate.vn Price History & Fake Sale Audit',
       productName,
       exportedAt: new Date().toISOString(),
       currentMinPriceVnd: history.currentMinPrice,
