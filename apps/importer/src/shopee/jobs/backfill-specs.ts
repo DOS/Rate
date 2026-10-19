@@ -107,16 +107,19 @@ export function mergeKeySpecs(
       ? (existing as Record<string, unknown>)
       : {};
   const next = incoming && typeof incoming === 'object' && !Array.isArray(incoming) ? incoming : {};
-  const out: Record<string, unknown> = { ...base };
-  for (const [k, v] of Object.entries(next)) {
-    if (v === undefined || v === null) continue;
-    if (typeof v === 'string') {
-      const trimmed = v.trim();
-      if (!trimmed) continue;
-      out[k] = trimmed;
-      continue;
+  const out: Record<string, unknown> = {};
+  for (const source of [base, next]) {
+    for (const [k, v] of Object.entries(source)) {
+      if (v === undefined || v === null) continue;
+      if (typeof v === 'number' && !Number.isFinite(v)) continue;
+      if (typeof v === 'string') {
+        const trimmed = v.trim();
+        if (!trimmed) continue;
+        out[k] = trimmed;
+        continue;
+      }
+      out[k] = v;
     }
-    out[k] = v;
   }
   return out;
 }
@@ -361,11 +364,14 @@ export async function runQuickSpecSyncAndAudit(
 
   if (apply) {
     for (const seed of FLAGSHIP_DEVICES_TO_SEED) {
-      const { data: existingRow } = await supabase
+      const { data: existingRow, error: lookupErr } = await supabase
         .from('master_products')
         .select('id, key_specs, specifications')
         .eq('model_key', seed.model_key)
         .maybeSingle();
+      if (lookupErr) {
+        throw new Error(`Failed to look up master product ${seed.model_key}: ${lookupErr.message}`);
+      }
       const { error: upErr } = await supabase
         .from('master_products')
         .update({

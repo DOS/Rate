@@ -1912,8 +1912,35 @@ async function run() {
     'enrichMasterProductById must preserve category_slug on mergedSpecifications'
   );
 
+  // DOS/Rate#522: ArenaSpecSyncer weightG <= 25000 bound, TB storage formatting, color deduplication, NaN group check, and mergeKeySpecs existing cleanup
+  const gsm522 = parseGsmArenaHtmlToSpecs(`
+    <h1 data-spec="modelname">Apple MacBook Pro 16</h1>
+    <span data-spec="weight">30000 g</span>
+    <span data-spec="internalmemory">1TB 32GB RAM</span>
+    <span data-spec="colors">Space Black, Silver, Space Black,  , </span>
+  `);
+  assert.equal(
+    gsm522.specifications.design?.weight_g,
+    undefined,
+    'parseGsmArenaHtmlToSpecs must drop weight > 25000g so DesignSchema.parse never throws'
+  );
+  assert.equal(gsm522.keySpecs.storage, '1TB', '1024GB storage must format as 1TB in keySpecs');
+  assert.deepEqual(gsm522.specifications.design?.colors, ['Space Black', 'Silver']);
+  assert.equal(
+    countPopulatedFieldGroups({ display: { size_inch: Number.NaN } }),
+    0,
+    'countPopulatedFieldGroups must not count NaN numeric fields as populated'
+  );
+  assert.deepEqual(
+    mergeKeySpecs(
+      { screen: '  6.8" OLED  ', empty: '   ', nil: null, badNum: Number.NaN },
+      { chip: ' A18 Pro ' }
+    ),
+    { screen: '6.8" OLED', chip: 'A18 Pro' }
+  );
+
   console.log(
-    `✅ [P2/P3 Trust Model & #292/#352/#356/#359/#379/#382/#401/#497/#514] Voter weight, Wilson lower bound (50/52=${wilson50of52} > 1/1=${wilson1of1}), shingle copy seeding (sim=${shingleSim}), affiliate shortlinks, peer floor, ArenaSpecSyncer, Importer & Logger hardening (#352, #356, #359, #379, #382, #401, #497, #514) verified`
+    `✅ [P2/P3 Trust Model & #292/#352/#356/#359/#379/#382/#401/#497/#514/#522] Voter weight, Wilson lower bound (50/52=${wilson50of52} > 1/1=${wilson1of1}), shingle copy seeding (sim=${shingleSim}), affiliate shortlinks, peer floor, ArenaSpecSyncer, Importer & Logger hardening (#352, #356, #359, #379, #382, #401, #497, #514, #522) verified`
   );
 
   console.log('\n🎉 ALL AI REVIEW ANALYZER TESTS PASSED!');
