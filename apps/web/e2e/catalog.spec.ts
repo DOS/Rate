@@ -140,6 +140,14 @@ test('offer and listing reads page past the 1000-row cap', async ({
     await request.get('/api/v1/rate/products/e2e-many-offers-phone')
   ).json();
   expect(product.data.offers).toHaveLength(1050);
+  // Reviews and their analysis on the last listing come through (DOS/Rate#453).
+  expect(JSON.stringify(product.data.reviews)).toContain(
+    'Review past the 1000-row listing cap.'
+  );
+  expect(product.data.reviewSummary.total_analyzed).toBe(7);
+  expect(product.data.reviewSummary.ai_summary).toBe(
+    'E2E analysis past the 1000-row listing cap.'
+  );
 
   const merchant = await (
     await request.get('/api/v1/rate/merchants/many-offers-store')

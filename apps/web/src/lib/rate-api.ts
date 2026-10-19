@@ -1501,6 +1501,27 @@ interface RawReviewRow {
 }
 
 /**
+ * Ids of every listing clustered under a master product. Paged: a popular
+ * model can have more than the 1000 rows one PostgREST response returns, and
+ * a truncated list silently drops those listings' reviews and analyses.
+ */
+async function getListingIdsForMaster(
+  masterId: string,
+  label: string
+): Promise<string[]> {
+  const supabase = getRateClient();
+  const rows = await fetchAllRows<{ id: string }>(label, (from, to) =>
+    supabase
+      .from('products')
+      .select('id')
+      .eq('cluster_id', masterId)
+      .order('id')
+      .range(from, to)
+  );
+  return rows.map((row) => row.id);
+}
+
+/**
  * Fetch reviews across listings grouped under a master product,
  * including JReviews vote metrics and AI transparency flags.
  */
@@ -1508,19 +1529,12 @@ export async function getMasterProductReviews(
   masterId: string
 ): Promise<ReviewItem[]> {
   const supabase = getRateClient();
-  const { data: prods, error: prodsErr } = await supabase
-    .from('products')
-    .select('id')
-    .eq('cluster_id', masterId);
-  if (prodsErr) {
-    throw new RateDataUnavailableError(
-      `listings for master ${masterId}`,
-      prodsErr
-    );
-  }
-  if (!prods || prods.length === 0) return [];
+  const productIds = await getListingIdsForMaster(
+    masterId,
+    `listings for master ${masterId}`
+  );
+  if (productIds.length === 0) return [];
 
-  const productIds = (prods as Array<{ id: string }>).map((p) => p.id);
   const reviewRows = await readInChunks(
     productIds,
     `reviews for master ${masterId}`,
@@ -1648,19 +1662,10 @@ export async function getMasterProductReviewSummary(
       : 0;
 
   const supabase = getRateClient();
-  const { data: prods, error: prodsErr } = await supabase
-    .from('products')
-    .select('id')
-    .eq('cluster_id', masterId);
-
-  if (prodsErr) {
-    throw new RateDataUnavailableError(
-      `review summary listings for master ${masterId}`,
-      prodsErr
-    );
-  }
-
-  const productIds = ((prods || []) as Array<{ id: string }>).map((p) => p.id);
+  const productIds = await getListingIdsForMaster(
+    masterId,
+    `review summary listings for master ${masterId}`
+  );
   if (productIds.length > 0) {
     const analysisRows = await readInChunks(
       productIds,

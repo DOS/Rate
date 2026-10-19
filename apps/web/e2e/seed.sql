@@ -94,6 +94,14 @@ SELECT 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa1050', 'shopee', 'many_' || g, 'E2E Many
   'c0000000-0000-4000-8000-000000000001', CASE WHEN g <= 1000 THEN 1000000 ELSE 2000000 END,
   'https://shopee.vn/many-' || g, '22222222-2222-4222-8222-222222221050'
 FROM generate_series(1, 1050) AS g;
+-- Its only review and review analysis sit on the last-inserted listing, which an
+-- unpaged listing-id read (insertion order, capped at 1000) never reaches.
+INSERT INTO rate.reviews (product_id, author_name, rating_star, comment, reviewer_type)
+SELECT id, 'Khoa', 5, 'Review past the 1000-row listing cap.', 'user'
+FROM rate.products WHERE platform_item_id = 'many_1050';
+INSERT INTO rate.review_analysis (product_id, total_reviews_analyzed, authenticity_score, ai_summary)
+SELECT id, 7, 90, 'E2E analysis past the 1000-row listing cap.'
+FROM rate.products WHERE platform_item_id = 'many_1050';
 
 -- A merchant with 250 listings: reads that pass every listing id to one in.()
 -- would exceed the request-line limit the E2E proxy enforces. The only review
