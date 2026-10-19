@@ -79,6 +79,7 @@ export async function GET(request: NextRequest) {
     const sort: NonNullable<MasterProductFilterParams['sort']> =
       rawSort && VALID_PRODUCT_SORTS.has(rawSort) ? rawSort : 'default';
     const limit = parseBoundedIntParam(sp.get('limit'), 24, 1, 100);
+    const offset = parseBoundedIntParam(sp.get('offset'), 0, 0, 100_000);
 
     const compactRaw = sp.get('compactScreen') || sp.get('compact');
     const maxScreenSizeInch =
@@ -115,6 +116,7 @@ export async function GET(request: NextRequest) {
       maxScreenSizeInch,
       sort,
       limit,
+      offset,
     };
 
     const [products, facets] = await Promise.all([
@@ -132,6 +134,7 @@ export async function GET(request: NextRequest) {
         ok: true,
         category: categorySlug,
         count: products.length,
+        offset,
         data: products.map((p) => {
           const offers = offersByMasterId.get(p.id) ?? [];
           return {

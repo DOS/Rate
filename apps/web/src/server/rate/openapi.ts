@@ -231,8 +231,23 @@ export function buildRateOpenApiSpec(
             {
               name: 'minRating',
               in: 'query',
-              description: 'Minimum JReviews score (0-10 scale)',
+              description:
+                'Minimum effective product rating (0-5 star scale); alias `rating` is also accepted',
               schema: { type: 'number' },
+            },
+            {
+              name: 'compactScreen',
+              in: 'query',
+              description:
+                'Maximum screen size in inches (or `true`/`1` for <= 6.2 inch compact devices); alias `compact` is also accepted',
+              schema: { type: 'string' },
+            },
+            {
+              name: 'facets',
+              in: 'query',
+              description:
+                'Set to `true` or `1` to include category directory facets (brand counts, RAM/ROM options, price bounds)',
+              schema: { type: 'boolean' },
             },
             {
               name: 'sort',
@@ -248,19 +263,19 @@ export function buildRateOpenApiSpec(
                   'merchants_desc',
                   'newest',
                 ],
-                default: 'rating_desc',
+                default: 'default',
               },
             },
             {
               name: 'limit',
               in: 'query',
               description: 'Maximum number of products to return (1-100)',
-              schema: { type: 'number', default: 20 },
+              schema: { type: 'number', default: 24 },
             },
             {
               name: 'offset',
               in: 'query',
-              description: 'Pagination offset',
+              description: 'Pagination offset (0-100000)',
               schema: { type: 'number', default: 0 },
             },
           ],
@@ -887,6 +902,96 @@ export function buildRateOpenApiSpec(
           responses: {
             '200': {
               description: 'Array of merchant trust profiles.',
+            },
+          },
+        },
+      },
+      '/api/v1/rate/merchants/directory': {
+        get: {
+          operationId: 'getMerchantDirectoryPage',
+          summary:
+            'Paginated merchant directory with risk tier, seeding tier & platform filters',
+          description:
+            'Returns one page (`items`, `matched`, `offset`) of the `/merchants` directory filtered by search query, platform, Official Mall status, trust risk tier (`safe`, `moderate`, `warning`), AI seeding tier (`low`, `elevated`), and sort order.',
+          tags: ['Merchants & Dual Risk Score'],
+          parameters: [
+            {
+              name: 'q',
+              in: 'query',
+              description: 'Search merchant name, shop ID, or slug',
+              schema: { type: 'string' },
+            },
+            {
+              name: 'platform',
+              in: 'query',
+              description: 'Filter by marketplace platform or `all`',
+              schema: {
+                type: 'string',
+                enum: [...supportedPlatforms, 'all'],
+                default: 'all',
+              },
+            },
+            {
+              name: 'official',
+              in: 'query',
+              description:
+                'Set to `true` or `1` to return only Official Mall stores (`officialOnly` alias is also accepted)',
+              schema: { type: 'boolean' },
+            },
+            {
+              name: 'risk',
+              in: 'query',
+              description:
+                'Trust score tier (`all`, `safe` >= 80, `moderate` 60-79, `warning` < 60)',
+              schema: {
+                type: 'string',
+                enum: ['all', 'safe', 'moderate', 'warning'],
+                default: 'all',
+              },
+            },
+            {
+              name: 'seeding',
+              in: 'query',
+              description:
+                'AI seeding risk tier (`all`, `low` <= 15, `elevated` > 15)',
+              schema: {
+                type: 'string',
+                enum: ['all', 'low', 'elevated'],
+                default: 'all',
+              },
+            },
+            {
+              name: 'sort',
+              in: 'query',
+              description: 'Sort order for directory entries',
+              schema: {
+                type: 'string',
+                enum: [
+                  'trust_desc',
+                  'products_desc',
+                  'seeding_asc',
+                  'followers_desc',
+                ],
+                default: 'trust_desc',
+              },
+            },
+            {
+              name: 'offset',
+              in: 'query',
+              description: 'Pagination offset (0-100000)',
+              schema: { type: 'number', default: 0 },
+            },
+            {
+              name: 'limit',
+              in: 'query',
+              description: 'Page size (1-500)',
+              schema: { type: 'number', default: 48 },
+            },
+          ],
+          responses: {
+            '200': {
+              description:
+                'Paginated merchant directory slice with total matched count.',
             },
           },
         },
