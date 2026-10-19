@@ -4,7 +4,17 @@ import { isPlainListing } from '../catalog-listing';
 console.warn('🧪 Catalogue plain-listing suite');
 
 // Category, sort and page window only: cached (DOS/Rate#495).
-assert.equal(isPlainListing({}), true);
+assert.equal(isPlainListing({ categorySlug: 'earbuds' }), true);
+
+// The category comes from ?category=, so only the five canonical slugs
+// qualify: anything else would add a cache entry per made-up value.
+for (const categorySlug of [undefined, 'all', 'Earbuds', 'random-123', '']) {
+  assert.equal(
+    isPlainListing({ categorySlug, sort: 'newest' }),
+    false,
+    String(categorySlug)
+  );
+}
 assert.equal(
   isPlainListing({
     categorySlug: 'smartphones',
