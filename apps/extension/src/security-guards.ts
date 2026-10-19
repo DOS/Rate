@@ -82,6 +82,39 @@ export function isPrivilegedExtensionSender(
   return true;
 }
 
+export function normalizeFiveStarRating(val: unknown): number | null {
+  const num =
+    typeof val === 'number'
+      ? val
+      : typeof val === 'string' && val.trim() !== ''
+        ? Number(val.trim().replace(',', '.'))
+        : NaN;
+  if (!Number.isFinite(num) || num <= 0 || num > 100) {
+    return null;
+  }
+  const scaled = num > 10 ? num / 20 : num > 5 ? num / 2 : num;
+  if (scaled <= 0 || scaled > 5) return null;
+  return Number(scaled.toFixed(2));
+}
+
+export function selectFreshestSessionSignal<
+  T extends { signal?: ExtractedPageProductSignal; updatedAt?: number },
+>(
+  tabEntry: T | null | undefined,
+  latestEntry: T | null | undefined
+): ExtractedPageProductSignal | null {
+  const tabSignal = tabEntry?.signal ?? null;
+  const latestSignal = latestEntry?.signal ?? null;
+  if (tabSignal && latestSignal) {
+    const tabTs =
+      typeof tabEntry?.updatedAt === 'number' ? tabEntry.updatedAt : 0;
+    const latestTs =
+      typeof latestEntry?.updatedAt === 'number' ? latestEntry.updatedAt : 0;
+    return latestTs > tabTs ? latestSignal : tabSignal;
+  }
+  return tabSignal ?? latestSignal ?? null;
+}
+
 export function sanitizeExtensionProductSignal(
   signal: ExtractedPageProductSignal
 ): ExtractedPageProductSignal {

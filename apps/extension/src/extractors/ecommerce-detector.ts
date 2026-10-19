@@ -189,10 +189,22 @@ export function extractIdsFromUrl(
   };
 }
 
-export function parseVndPriceText(rawText?: string | null): number | null {
-  if (!rawText) return null;
-  // Extract first price when a range like "28.990.000₫ - 34.990.000₫" is displayed
-  const firstSegment = (rawText.split('-')[0] || rawText).trim();
+export function parseVndPriceText(
+  rawText?: string | number | null
+): number | null {
+  if (typeof rawText === 'number') {
+    if (
+      !Number.isFinite(rawText) ||
+      rawText < 10_000 ||
+      rawText > 500_000_000
+    ) {
+      return null;
+    }
+    return Math.round(rawText);
+  }
+  if (typeof rawText !== 'string' || !rawText) return null;
+  // Extract first price when a range like "28.990.000₫ - 34.990.000₫", "28.990.000₫ – 34.990.000₫", or "28.990.000₫ ~ 34.990.000₫" is displayed
+  const firstSegment = (rawText.split(/[-–—~]/)[0] || rawText).trim();
   const withoutCurrency = firstSegment.replace(/[^\d.,]/g, '');
   if (!withoutCurrency) return null;
   // Handle plain decimal string like "28990000.00" or thousand-separated decimal "28,990,000.00"
@@ -204,6 +216,186 @@ export function parseVndPriceText(rawText?: string | null): number | null {
     return null;
   }
   return num;
+}
+
+const JSON_LD_PRODUCT_TYPES = new Set([
+  'product',
+  'productgroup',
+  'individualproduct',
+  'productmodel',
+]);
+
+export function flattenJsonLdEntities(
+  raw: unknown,
+  depth = 0
+): Record<string, unknown>[] {
+  if (!raw || depth > 3) return [];
+  if (Array.isArray(raw)) {
+    const out: Record<string, unknown>[] = [];
+    for (const entry of raw) {
+      out.push(...flattenJsonLdEntities(entry, depth + 1));
+    }
+    return out;
+  }
+  if (typeof raw === 'object') {
+    const obj = raw as Record<string, unknown>;
+    const out: Record<string, unknown>[] = [obj];
+    if (Array.isArray(obj['@graph'])) {
+      out.push(...flattenJsonLdEntities(obj['@graph'], depth + 1));
+    }
+    return out;
+  }
+  return [];
+}
+
+export function isJsonLdProductEntity(item: Record<string, unknown>): boolean {
+  const rawType = item['@type'];
+  const types = Array.isArray(rawType) ? rawType : [rawType];
+  return types.some((t) => {
+    if (typeof t !== 'string') return false;
+    const normalized = t
+      .trim()
+      .replace(/^https?:\/\/schema\.org\//i, '')
+      .toLowerCase();
+    return JSON_LD_PRODUCT_TYPES.has(normalized);
+  });
+}
+
+export function extractPriceFromJsonLdOffers(offersRaw: unknown): {
+  price: number | null;
+  originalPrice: number | null;
+} {
+  if (!offersRaw || typeof offersRaw !== 'object') {
+    return { price: null, originalPrice: null };
+  }
+  const candidates: Record<string, unknown>[] = [];
+  const pushOffer = (entry: unknown) => {
+    if (!entry || typeof entry !== 'object') return;
+    const obj = entry as Record<string, unknown>;
+    candidates.push(obj);
+    if (Array.isArray(obj.offers)) {
+      for (const nested of obj.offers) {
+        if (nested && typeof nested === 'object') {
+          candidates.push(nested as Record<string, unknown>);
+        }
+      }
+    }
+  };
+
+  if (Array.isArray(offersRaw)) {
+    for (const entry of offersRaw) pushOffer(entry);
+  } else {
+    pushOffer(offersRaw);
+  }
+
+  let resolvedPrice: number | null = null;
+  let resolvedHighPrice: number | null = null;
+
+  for (const offer of candidates) {
+    const priceSpec =
+      offer.priceSpecification && typeof offer.priceSpecification === 'object'
+        ? (offer.priceSpecification as Record<string, unknown>)
+        : Array.isArray(offer.priceSpecification) &&
+            offer.priceSpecification[0] &&
+            typeof offer.priceSpecification[0] === 'object'
+          ? (offer.priceSpecification[0] as Record<string, unknown>)
+          : null;
+
+    const rawPriceCandidate =
+      offer.price ?? offer.lowPrice ?? priceSpec?.price ?? null;
+    if (
+      resolvedPrice === null &&
+      (typeof rawPriceCandidate === 'string' ||
+        typeof rawPriceCandidate === 'number')
+    ) {
+      const parsed = parseVndPriceText(rawPriceCandidate);
+      if (parsed) {
+        resolvedPrice = parsed;
+      }
+    }
+
+    const rawHighCandidate = offer.highPrice ?? null;
+    if (
+      resolvedHighPrice === null &&
+      (typeof rawHighCandidate === 'string' ||
+        typeof rawHighCandidate === 'number')
+    ) {
+      const parsedHigh = parseVndPriceText(rawHighCandidate);
+      if (parsedHigh) {
+        resolvedHighPrice = parsedHigh;
+      }
+    }
+  }
+
+  const validOriginal =
+    resolvedHighPrice !== null &&
+    (resolvedPrice === null || resolvedHighPrice > resolvedPrice)
+      ? resolvedHighPrice
+      : null;
+
+  return { price: resolvedPrice, originalPrice: validOriginal };
+}
+
+export function extractRatingFromJsonLd(aggRaw: unknown): {
+  ratingStar: number | null;
+  ratingCount: number | null;
+} {
+  if (!aggRaw || typeof aggRaw !== 'object') {
+    return { ratingStar: null, ratingCount: null };
+  }
+  const agg = aggRaw as Record<string, unknown>;
+  const rawVal = agg.ratingValue;
+  const rawBest = agg.bestRating;
+  const rawCnt = agg.reviewCount ?? agg.ratingCount;
+
+  const parseDecimal = (v: unknown): number => {
+    if (typeof v === 'number') return v;
+    if (typeof v === 'string') {
+      const normalized = v.trim().replace(',', '.');
+      return Number(normalized);
+    }
+    return NaN;
+  };
+
+  let ratingStar: number | null = null;
+  const rVal = parseDecimal(rawVal);
+  const bestRating = parseDecimal(rawBest);
+  if (Number.isFinite(rVal) && rVal > 0) {
+    let scaled = rVal;
+    if (Number.isFinite(bestRating) && bestRating > 5 && rVal <= bestRating) {
+      scaled = (rVal / bestRating) * 5;
+    } else if (rVal > 5 && rVal <= 10) {
+      scaled = rVal / 2;
+    } else if (rVal > 10 && rVal <= 100) {
+      scaled = rVal / 20;
+    }
+    if (scaled > 0 && scaled <= 5) {
+      ratingStar = Number(scaled.toFixed(2));
+    }
+  }
+
+  let ratingCount: number | null = null;
+  if (typeof rawCnt === 'number' && Number.isFinite(rawCnt) && rawCnt > 0) {
+    ratingCount = Math.round(rawCnt);
+  } else if (typeof rawCnt === 'string') {
+    const digits = rawCnt.replace(/[^\d]/g, '');
+    const parsedCnt = digits ? Number(digits) : NaN;
+    if (Number.isFinite(parsedCnt) && parsedCnt > 0) {
+      ratingCount = Math.round(parsedCnt);
+    }
+  }
+
+  return { ratingStar, ratingCount };
+}
+
+export function cleanExtractedProductTitle(rawTitle: string): string {
+  return rawTitle
+    .replace(/\|.*$/, '')
+    .replace(
+      /\s*[-–—]\s*(?:Shopee|Lazada|Tiki|TikTok\s*Shop|CellphoneS|Thế\s*Giới\s*Di\s*Động|Thegioididong|TopZone|Điện\s*Máy\s*Xanh|FPT\s*Shop|Hoàng\s*Hà\s*Mobile|HoangHaMobile|Di\s*Động\s*Việt|Phong\s*Vũ).*$/i,
+      ''
+    )
+    .trim();
 }
 
 /**
@@ -276,33 +468,33 @@ export function extractProductSignalFromDom(
   ldScripts.forEach((script) => {
     try {
       const raw = JSON.parse(script.textContent || '{}');
-      const items = Array.isArray(raw) ? raw : [raw];
+      const items = flattenJsonLdEntities(raw);
       for (const item of items) {
-        if (
-          item &&
-          (item['@type'] === 'Product' || item['@type'] === 'ProductGroup')
-        ) {
+        if (isJsonLdProductEntity(item)) {
           if (!title && typeof item.name === 'string') {
-            title = item.name.trim();
+            title = cleanExtractedProductTitle(item.name);
           }
-          const offers = Array.isArray(item.offers)
-            ? item.offers[0]
-            : item.offers;
-          if (offers) {
-            const p = Number(offers.price || offers.lowPrice || 0);
-            if (!price && p >= 10_000) {
-              price = Math.round(p);
+          if (!price || !originalPrice) {
+            const offerPrices = extractPriceFromJsonLdOffers(item.offers);
+            if (!price && offerPrices.price) {
+              price = offerPrices.price;
+            }
+            if (
+              !originalPrice &&
+              offerPrices.originalPrice &&
+              (!price || offerPrices.originalPrice > price)
+            ) {
+              originalPrice = offerPrices.originalPrice;
             }
           }
-          if (item.aggregateRating) {
-            const rVal = Number(item.aggregateRating.ratingValue || 0);
-            const rCnt = Number(
-              item.aggregateRating.reviewCount ||
-                item.aggregateRating.ratingCount ||
-                0
-            );
-            if (rVal > 0 && rVal <= 5) ratingStar = rVal;
-            if (rCnt > 0) ratingCount = rCnt;
+          if (item.aggregateRating && (!ratingStar || !ratingCount)) {
+            const parsedRating = extractRatingFromJsonLd(item.aggregateRating);
+            if (!ratingStar && parsedRating.ratingStar) {
+              ratingStar = parsedRating.ratingStar;
+            }
+            if (!ratingCount && parsedRating.ratingCount) {
+              ratingCount = parsedRating.ratingCount;
+            }
           }
         }
       }
@@ -314,10 +506,7 @@ export function extractProductSignalFromDom(
   // 2. Fallback to DOM H1 / document title
   if (!title) {
     const h1 = doc.querySelector('h1');
-    title = (h1?.textContent || doc.title || '')
-      .replace(/\|.*$/, '')
-      .replace(/-\s*Shopee.*$/i, '')
-      .trim();
+    title = cleanExtractedProductTitle(h1?.textContent || doc.title || '');
   }
 
   if (!title || title.length < 3) {

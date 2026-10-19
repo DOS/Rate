@@ -10,6 +10,7 @@ import {
   filterValidSparklinePrices,
   formatSafeExtensionVnd,
   formatSafeNumber,
+  normalizeFiveStarRating,
   resolveSafeApiRelativeUrl,
   sanitizeVerdictClassSuffix,
 } from '../security-guards.js';
@@ -434,7 +435,7 @@ function renderPanelContent(
         <div class="stats-grid">
           <div class="stat-box">
             <div class="stat-label">Điểm User Đã Lọc</div>
-            <div class="stat-val" style="color: #fbbf24;">★ ${formatSafeNumber(master?.user_rating_weighted || master?.average_rating || 0, { min: 0, max: 5, decimals: 1 })} / 5</div>
+            <div class="stat-val" style="color: #fbbf24;">★ ${formatSafeNumber(normalizeFiveStarRating(master?.user_rating_weighted || master?.average_rating) ?? 0, { min: 0, max: 5, decimals: 1 })} / 5</div>
           </div>
           <div class="stat-box">
             <div class="stat-label">Tỷ Lệ Đánh Giá Thật</div>
@@ -797,6 +798,14 @@ document.addEventListener('DOMContentLoaded', () => {
       void loadSidePanel();
     }
   });
+
+  if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
+    chrome.storage.onChanged.addListener((changes, areaName) => {
+      if (areaName === 'session' && changes.lookup_tab_latest) {
+        void loadSidePanel();
+      }
+    });
+  }
 
   void loadSidePanel();
 });
