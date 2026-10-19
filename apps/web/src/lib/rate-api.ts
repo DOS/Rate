@@ -741,6 +741,8 @@ export interface MasterProductFilterParams {
     | 'merchants_desc'
     | 'newest';
   limit?: number;
+  /** Rows to skip, for paged catalogue pages. */
+  offset?: number;
 }
 
 export interface CategoryDirectoryFacets {
@@ -881,6 +883,10 @@ export async function getMasterProducts(
         : null;
   const boundedLimit =
     params?.limit && params.limit > 0 ? Math.min(params.limit, 500) : 200;
+  const boundedOffset =
+    params?.offset && params.offset > 0
+      ? Math.min(Math.floor(params.offset), 100_000)
+      : 0;
 
   const categoryHint: CanonicalCategorySlug | null =
     params?.categorySlug &&
@@ -919,7 +925,7 @@ export async function getMasterProducts(
         p_max_screen_size_inch: params?.maxScreenSizeInch,
         p_sort: params?.sort || 'default',
         p_limit: boundedLimit,
-        p_offset: 0,
+        p_offset: boundedOffset,
       }
     );
     if (!rpcErr && Array.isArray(rpcRows)) {
@@ -991,8 +997,10 @@ export async function getMasterProducts(
       query = query.order('created_at', { ascending: false });
       break;
   }
+  // Tiebreak so offset pages never overlap or skip rows.
+  query = query.order('id', { ascending: true });
 
-  query = query.limit(boundedLimit);
+  query = query.range(boundedOffset, boundedOffset + boundedLimit - 1);
 
   const { data, error } = await query;
   if (error) {

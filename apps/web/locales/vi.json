@@ -1589,7 +1589,12 @@
       "browseSmartphonesBtn": "Xem danh mục Điện thoại đang có sẵn →",
       "merchantProfilesBtn": "Hồ sơ Tín nhiệm Gian hàng",
       "radarDealsTitle": "Giá tốt thật",
-      "radarTrapsTitle": "Cảnh báo nâng khống giá gốc"
+      "radarTrapsTitle": "Cảnh báo nâng khống giá gốc",
+      "paginationLabel": "Phân trang danh mục",
+      "prevPage": "Trang trước",
+      "nextPage": "Trang sau",
+      "pageNumber": "Trang {page}",
+      "firstPage": "Về trang đầu"
     },
     "toolbar": {
       "unratedText": "chưa có",

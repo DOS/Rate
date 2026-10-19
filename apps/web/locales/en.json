@@ -1589,7 +1589,12 @@
       "browseSmartphonesBtn": "Browse available Smartphones →",
       "merchantProfilesBtn": "Merchant Trust Profiles",
       "radarDealsTitle": "Real lows",
-      "radarTrapsTitle": "Inflated list-price warnings"
+      "radarTrapsTitle": "Inflated list-price warnings",
+      "paginationLabel": "Catalogue pages",
+      "prevPage": "Previous page",
+      "nextPage": "Next page",
+      "pageNumber": "Page {page}",
+      "firstPage": "First page"
     },
     "toolbar": {
       "unratedText": "N/A",

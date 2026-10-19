@@ -2690,8 +2690,10 @@ async function runCoreArchitectureSuite() {
   assert.ok(
     rateApiSrc176.includes("'get_category_brand_facets'") &&
       rateApiSrc176.includes("'search_master_products'") &&
-      rateApiSrc176.includes('query = query.limit(boundedLimit);'),
-    'rate-api.ts must invoke get_category_brand_facets and search_master_products RPCs and enforce bounded .limit() (#178)'
+      rateApiSrc176.includes(
+        'query = query.range(boundedOffset, boundedOffset + boundedLimit - 1);'
+      ),
+    'rate-api.ts must invoke get_category_brand_facets and search_master_products RPCs and enforce a bounded page (#178, #466)'
   );
   assert.ok(
     fs.existsSync(path.join(repoRoot, 'Docs/Resources/CHANGELOG.md')) &&

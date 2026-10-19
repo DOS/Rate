@@ -85,6 +85,10 @@ function parseCsvNumbers(val: string | string[] | undefined): number[] {
     .filter((n) => !Number.isNaN(n) && n > 0);
 }
 
+// Products per catalogue page (DOS/Rate#466). One extra row is requested to
+// know whether a next page exists.
+const CATALOG_PAGE_SIZE = 200;
+
 function buildFilterHref(
   basePath: string,
   currentSearch: SearchParamsInput,
@@ -97,6 +101,8 @@ function buildFilterHref(
       params.set(key, single);
     }
   }
+  // Any other change (filter, sort) starts again from the first page.
+  if (!('page' in overrides)) params.delete('page');
   for (const [key, val] of Object.entries(overrides)) {
     if (val === null || val === undefined || val === '') {
       params.delete(key);
@@ -129,6 +135,11 @@ export async function CategoryCatalogContent({
   const categorySlug =
     getSingleParam(rawSearch.category) || defaultCategorySlug;
   const q = getSingleParam(rawSearch.q).trim();
+  const requestedPage = Math.floor(Number(getSingleParam(rawSearch.page)));
+  const page =
+    Number.isFinite(requestedPage) && requestedPage > 1
+      ? Math.min(requestedPage, 500)
+      : 1;
   const brands = parseCsvStrings(rawSearch.brands);
   const singleBrand = getSingleParam(rawSearch.brand).trim();
   const activeBrands =
@@ -173,9 +184,11 @@ export async function CategoryCatalogContent({
     hasNfc: hasNfc ? true : undefined,
     maxScreenSizeInch: compactScreen ? 6.2 : undefined,
     sort: currentSortOption.value,
+    limit: CATALOG_PAGE_SIZE + 1,
+    offset: (page - 1) * CATALOG_PAGE_SIZE,
   };
 
-  const [facets, products, categoryDealRadar] = await Promise.all([
+  const [facets, pageRows, categoryDealRadar] = await Promise.all([
     getCachedCategoryDirectoryFacets(categorySlug),
     getMasterProducts(filterParams),
     getCrossPlatformDealRadar({
@@ -185,6 +198,13 @@ export async function CategoryCatalogContent({
       limit: 50,
     }),
   ]);
+
+  const hasNextPage = pageRows.length > CATALOG_PAGE_SIZE;
+  const products = pageRows.slice(0, CATALOG_PAGE_SIZE);
+  const pageHref = (target: number) =>
+    buildFilterHref(basePath, rawSearch, {
+      page: target > 1 ? String(target) : null,
+    });
 
   const radarIndex = buildRadarIndex(categoryDealRadar);
 
@@ -911,6 +931,43 @@ export async function CategoryCatalogContent({
                     );
                   })}
                 </div>
+              )}
+              {(page > 1 || hasNextPage) && (
+                <nav
+                  className="d-flex justify-content-center align-items-center gap-3 mt-4"
+                  aria-label={t('page.paginationLabel')}
+                >
+                  {page > 1 &&
+                    (products.length === 0 ? (
+                      // Past the last page: go back to the start.
+                      <Link
+                        href={pageHref(1)}
+                        className="btn btn-outline-secondary rounded-pill px-4"
+                      >
+                        {t('page.firstPage')}
+                      </Link>
+                    ) : (
+                      <Link
+                        href={pageHref(page - 1)}
+                        className="btn btn-outline-secondary rounded-pill px-4"
+                        rel="prev"
+                      >
+                        {t('page.prevPage')}
+                      </Link>
+                    ))}
+                  <span className="text-muted small">
+                    {t('page.pageNumber', { page })}
+                  </span>
+                  {hasNextPage && (
+                    <Link
+                      href={pageHref(page + 1)}
+                      className="btn btn-outline-secondary rounded-pill px-4"
+                      rel="next"
+                    >
+                      {t('page.nextPage')}
+                    </Link>
+                  )}
+                </nav>
               )}
             </div>
           </div>
