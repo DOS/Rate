@@ -32,11 +32,15 @@ import {
   BsCheckCircleFill,
   BsCpu,
   BsDisplay,
+  BsFolder2Open,
   BsFunnel,
   BsGem,
+  BsLightningCharge,
   BsSearch,
   BsShieldCheck,
+  BsSliders,
   BsStarFill,
+  BsTrophy,
   BsTrophyFill,
 } from 'react-icons/bs';
 
@@ -672,7 +676,8 @@ export default function LeaderboardExplorer({
         <div className="d-flex justify-content-between align-items-center border-bottom mb-3 flex-wrap gap-2 pb-3">
           <div className="d-flex align-items-center flex-wrap gap-2">
             <span className="badge bg-dark rounded-pill px-3 py-2 text-white">
-              🗂️ {copy.dirLabel}
+              <BsFolder2Open aria-hidden="true" className="me-1" />
+              {copy.dirLabel}
             </span>
             <span className="small text-muted fw-semibold">
               {copy.chooseCategory}
@@ -802,7 +807,8 @@ export default function LeaderboardExplorer({
               }`}
               style={{ fontSize: '0.8125rem' }}
             >
-              🎛️ {copy.customizeWeightsBtn}
+              <BsSliders aria-hidden="true" className="me-1" />
+              {copy.customizeWeightsBtn}
             </button>
           </div>
 
@@ -947,7 +953,8 @@ export default function LeaderboardExplorer({
             <div className="row g-2 align-items-center">
               <div className="col-lg-4 col-md-12">
                 <div className="small fw-semibold text-dark">
-                  ⚡ {t('quick1v1PickerLabel')}
+                  <BsLightningCharge aria-hidden="true" className="me-1" />
+                  {t('quick1v1PickerLabel')}
                 </div>
               </div>
               <div className="col-lg-3 col-md-5">
@@ -997,7 +1004,8 @@ export default function LeaderboardExplorer({
                     className="btn btn-sm btn-danger rounded-pill fw-bold w-100"
                     data-testid="leaderboard-1v1-go-btn"
                   >
-                    ⚔️ {t('go1v1BattleBtn')}
+                    <BsArrowLeftRight aria-hidden="true" className="me-1" />
+                    {t('go1v1BattleBtn')}
                   </Link>
                 )}
               </div>
@@ -1075,7 +1083,8 @@ export default function LeaderboardExplorer({
                           className="badge rounded-pill fw-bold rate-tabular px-3 py-2"
                           style={rankBadgeStyle}
                         >
-                          🏆 {rankLabel}
+                          <BsTrophy aria-hidden="true" className="me-1" />
+                          {rankLabel}
                         </span>
                         <div className="text-end">
                           <div className="fs-4 fw-bold text-warning rate-tabular lh-1">
@@ -1379,7 +1388,11 @@ export default function LeaderboardExplorer({
                         </span>
                         {entry.ignoredCount > 0 && (
                           <span className="badge bg-danger-subtle text-danger rounded-pill small">
-                            🛡️ {entry.ignoredCount} {copy.blockedSpamSuffix}
+                            <BsShieldCheck
+                              aria-hidden="true"
+                              className="me-1"
+                            />
+                            {entry.ignoredCount} {copy.blockedSpamSuffix}
                           </span>
                         )}
                         <RadarBadge
