@@ -51,7 +51,7 @@ test('merchant CSV export covers every matching store', async ({
     page.getByTestId('download-merchants-csv-btn').click(),
   ]);
   const csv = await readFile((await download.path())!, 'utf8');
-  const rows = csv.replace(/^﻿/, '').trim().split(/\r\n/);
+  const rows = csv.replace(/^\uFEFF/, '').trim().split(/\r\n/);
   expect(rows.length - 1).toBe(total);
 });
 
