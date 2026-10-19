@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useRef, useEffect, useTransition } from 'react';
-import { useSearchParams } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 import { FaChevronDown } from 'react-icons/fa6';
 
@@ -113,7 +112,6 @@ export function LocaleSwitcher({
 
   const pathname = usePathname();
   const router = useRouter();
-  const searchParams = useSearchParams();
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -136,7 +134,10 @@ export function LocaleSwitcher({
       document.cookie = `NEXT_LOCALE=${nextLocale}; path=/; max-age=${60 * 60 * 24 * 365}; SameSite=Lax`;
     }
 
-    const queryParams = searchParams?.toString() || '';
+    // Read at click time: useSearchParams would make the switcher
+    // client-only on cached pages, so it popped in after hydration and
+    // shifted the navbar (DOS/Rate#515).
+    const queryParams = window.location.search.slice(1);
     startTransition(() => {
       router.replace(
         queryParams.length > 0 ? `${pathname}?${queryParams}` : pathname,

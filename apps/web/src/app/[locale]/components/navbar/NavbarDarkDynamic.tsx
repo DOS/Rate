@@ -1,5 +1,5 @@
 'use client';
-import { Suspense, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from '@/lib/navigation';
 import Image from 'next/image';
 import { useTranslations } from 'next-intl';
@@ -29,19 +29,11 @@ export function NavbarDarkDynamic({
   const tNav = useTranslations('rate.nav');
   const [scroll, setScroll] = useState(false);
   const [toggle, setToggle] = useState(false);
-  const [windowWidth, setWindowWidth] = useState(0);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
     const handlerScroll = () => setScroll(window.scrollY > 50);
-    const handleResize = () => setWindowWidth(window.innerWidth);
-    setWindowWidth(window.innerWidth);
     window.addEventListener('scroll', handlerScroll);
-    window.addEventListener('resize', handleResize);
-    return () => {
-      window.removeEventListener('scroll', handlerScroll);
-      window.removeEventListener('resize', handleResize);
-    };
+    return () => window.removeEventListener('scroll', handlerScroll);
   }, []);
 
   const logo = (
@@ -69,14 +61,10 @@ export function NavbarDarkDynamic({
         data-sticky-element=""
       >
         <div className="container-fluid">
-          <nav
-            id="navigation"
-            className={
-              windowWidth > 991
-                ? 'navigation navigation-landscape'
-                : 'navigation navigation-portrait'
-            }
-          >
+          {/* Phone vs desktop layout comes from media queries in style.scss
+          (992px), not from a JS width class: the server HTML must already
+          be right, or the navbar jumps after hydration (DOS/Rate#515). */}
+          <nav id="navigation" className="navigation">
             <div className="nav-header">
               {logo}
               <div
@@ -90,14 +78,13 @@ export function NavbarDarkDynamic({
                   if (e.key === 'Enter' || e.key === ' ') setToggle(!toggle);
                 }}
               ></div>
+              {/* Below 576px only the locale switcher and Inspect fit next to the
+              logo; more icons pushed the menu button off the screen. The
+              hidden ones are all in the menu (DOS/Rate#515). */}
               <div className="mobile_nav">
                 <ul className="d-flex align-items-center gap-2">
                   <li className="me-1">
-                    {/* LocaleSwitcher reads useSearchParams; its own boundary keeps a statically
-                    rendered page from bailing out to client rendering. */}
-                    <Suspense fallback={null}>
-                      <LocaleSwitcher isDarkHeader={false} compact={true} />
-                    </Suspense>
+                    <LocaleSwitcher isDarkHeader={false} compact={true} />
                   </li>
                   <li>
                     <Link
@@ -108,7 +95,7 @@ export function NavbarDarkDynamic({
                       <BsShieldCheck className="me-1" />
                     </Link>
                   </li>
-                  <li>
+                  <li className="d-none d-sm-block">
                     <Link
                       href="/compare"
                       className="d-flex align-items-center text-dark"
@@ -117,7 +104,7 @@ export function NavbarDarkDynamic({
                       <BsArrowLeftRight className="me-1" />
                     </Link>
                   </li>
-                  <li>
+                  <li className="d-none d-sm-block">
                     <Link
                       href="/watchlist"
                       className="d-flex align-items-center text-primary"
@@ -126,7 +113,7 @@ export function NavbarDarkDynamic({
                       <BsBellFill className="me-1" />
                     </Link>
                   </li>
-                  <li>
+                  <li className="d-none d-sm-block">
                     <Link
                       href="/developers"
                       className="d-flex align-items-center text-dark"
@@ -257,9 +244,7 @@ export function NavbarDarkDynamic({
 
               <ul className="nav-menu nav-menu-social align-to-right d-flex align-items-center mb-0">
                 <li className="d-flex align-items-center me-3">
-                  <Suspense fallback={null}>
-                    <LocaleSwitcher isDarkHeader={false} />
-                  </Suspense>
+                  <LocaleSwitcher isDarkHeader={false} />
                 </li>
                 <li className="list-buttons d-flex align-items-center">
                   <Link
