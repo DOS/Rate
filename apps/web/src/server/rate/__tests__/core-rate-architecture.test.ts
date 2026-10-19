@@ -5173,7 +5173,1440 @@ async function runCoreArchitectureSuite() {
   }
 
   console.log(
-    '  ✅ [69/69] Public write routes hardening: cookie-session voting, voter eligibility, malformed ingest JSON & stats cache revalidation (#402) passed'
+    '  ✅ [69/70] Public write routes hardening: cookie-session voting, voter eligibility, malformed ingest JSON & stats cache revalidation (#402) passed'
+  );
+
+  // =========================================================================
+  // 70. CSV Formula Injection Guard, Deal Radar Index Selection & Client Store Normalization (#406)
+  // =========================================================================
+  {
+    const { escapeCsvCell } = await import('@/lib/csv-safe');
+    const { buildRadarIndex, selectMerchantRadar } =
+      await import('@/lib/deal-radar');
+    const { MAX_WATCHLIST_ITEMS, normalizeWatchlistItem } =
+      await import('@/components/watchlist/watchlist-store');
+    const { normalizeTrayItem } =
+      await import('@/components/compare/compare-tray');
+
+    // 70.1 escapeCsvCell blocks leading-whitespace and pipe (|) formula injection while preserving plain numbers
+    assert.equal(
+      escapeCsvCell(" =cmd|' /C calc'!A0"),
+      "' =cmd|' /C calc'!A0",
+      'escapeCsvCell must neutralize leading-whitespace formula payloads (#406)'
+    );
+    assert.equal(
+      escapeCsvCell('\n=SUM(A1:A2)'),
+      '"\'\n=SUM(A1:A2)"',
+      'escapeCsvCell must neutralize newline-prefixed formula payloads (#406)'
+    );
+    assert.equal(
+      escapeCsvCell('|calc!A0'),
+      "'|calc!A0",
+      'escapeCsvCell must neutralize pipe-prefixed DDE formula payloads (#406)'
+    );
+    assert.equal(
+      escapeCsvCell('-15.4%'),
+      '-15.4%',
+      'escapeCsvCell must preserve plain negative numeric literals (#406)'
+    );
+
+    // 70.2 buildRadarIndex selects strongest genuine deal, worst fake-sale trap, and widest price spread per slug
+    const radarIdx406 = buildRadarIndex({
+      genuineDeals: [
+        {
+          id: 'gd-1',
+          verdict: 'best_market_deal',
+          verdictBadgeVi: 'Giá tốt',
+          productSlug: 'apple-iphone-16-pro-256gb',
+          productName: 'iPhone 16 Pro 256GB',
+          brand: 'Apple',
+          categorySlug: 'smartphones',
+          productHref: '/smartphones/apple-iphone-16-pro-256gb',
+          imageUrl: null,
+          platform: 'shopee',
+          merchantId: 'm-1',
+          merchantName: 'Shop A',
+          isOfficialMall: true,
+          merchantRiskScore: 5,
+          offerUrl: 'https://shopee.vn/a',
+          priceCurrent: 25_500_000,
+          priceOriginal: 28_990_000,
+          marketMedianPrice: 27_000_000,
+          marketMinPrice: 23_900_000,
+          marketMaxPrice: 28_990_000,
+          savingsVsMedianVnd: 1_500_000,
+          savingsVsMedianPct: 5.6,
+          claimedDiscountPct: 12,
+          fakeMarkupPct: 0,
+          jreviewsScore10: 9.2,
+          explanationVi: 'Rẻ hơn trung vị',
+        },
+        {
+          id: 'gd-2',
+          verdict: 'genuine_all_time_low',
+          verdictBadgeVi: 'Đáy giá',
+          productSlug: 'apple-iphone-16-pro-256gb',
+          productName: 'iPhone 16 Pro 256GB',
+          brand: 'Apple',
+          categorySlug: 'smartphones',
+          productHref: '/smartphones/apple-iphone-16-pro-256gb',
+          imageUrl: null,
+          platform: 'lazada',
+          merchantId: 'm-2',
+          merchantName: 'Shop B',
+          isOfficialMall: true,
+          merchantRiskScore: 5,
+          offerUrl: 'https://lazada.vn/b',
+          priceCurrent: 23_900_000,
+          priceOriginal: 28_990_000,
+          marketMedianPrice: 27_000_000,
+          marketMinPrice: 23_900_000,
+          marketMaxPrice: 28_990_000,
+          savingsVsMedianVnd: 3_100_000,
+          savingsVsMedianPct: 11.5,
+          claimedDiscountPct: 17.6,
+          fakeMarkupPct: 0,
+          jreviewsScore10: 9.2,
+          explanationVi: 'Đáy giá lịch sử',
+        },
+      ],
+      fakeSaleTraps: [
+        {
+          id: 'fst-1',
+          verdict: 'inflated_fake_sale',
+          verdictBadgeVi: 'Sale ảo',
+          productSlug: 'samsung-galaxy-s24-ultra-256gb',
+          productName: 'Galaxy S24 Ultra',
+          brand: 'Samsung',
+          categorySlug: 'smartphones',
+          productHref: '/smartphones/samsung-galaxy-s24-ultra-256gb',
+          imageUrl: null,
+          platform: 'shopee',
+          merchantId: 'm-3',
+          merchantName: '',
+          isOfficialMall: false,
+          merchantRiskScore: 45,
+          offerUrl: 'https://shopee.vn/c',
+          priceCurrent: 26_000_000,
+          priceOriginal: 32_000_000,
+          marketMedianPrice: 25_500_000,
+          marketMinPrice: 24_900_000,
+          marketMaxPrice: 27_000_000,
+          savingsVsMedianVnd: -500_000,
+          savingsVsMedianPct: -2,
+          claimedDiscountPct: 18.8,
+          fakeMarkupPct: 25.5,
+          jreviewsScore10: 9.1,
+          explanationVi: 'Kê giá gốc',
+        },
+        {
+          id: 'fst-2',
+          verdict: 'inflated_fake_sale',
+          verdictBadgeVi: 'Sale ảo',
+          productSlug: 'samsung-galaxy-s24-ultra-256gb',
+          productName: 'Galaxy S24 Ultra',
+          brand: 'Samsung',
+          categorySlug: 'smartphones',
+          productHref: '/smartphones/samsung-galaxy-s24-ultra-256gb',
+          imageUrl: null,
+          platform: 'tiktok',
+          merchantId: 'm-4',
+          merchantName: 'Trap Shop',
+          isOfficialMall: false,
+          merchantRiskScore: 60,
+          offerUrl: 'https://tiktok.com/d',
+          priceCurrent: 26_500_000,
+          priceOriginal: 39_990_000,
+          marketMedianPrice: 25_500_000,
+          marketMinPrice: 24_900_000,
+          marketMaxPrice: 27_000_000,
+          savingsVsMedianVnd: -1_000_000,
+          savingsVsMedianPct: -3.9,
+          claimedDiscountPct: 33.7,
+          fakeMarkupPct: 56.8,
+          jreviewsScore10: 9.1,
+          explanationVi: 'Kê giá gốc nặng',
+        },
+      ],
+      priceSpreadLeaders: [
+        {
+          id: 'sp-1',
+          productSlug: 'apple-iphone-16-pro-256gb',
+          productName: 'iPhone 16 Pro 256GB',
+          brand: 'Apple',
+          categorySlug: 'smartphones',
+          productHref: '/smartphones/apple-iphone-16-pro-256gb',
+          imageUrl: null,
+          platformCount: 2,
+          offerCount: 3,
+          minPrice: 24_500_000,
+          maxPrice: 27_000_000,
+          medianPrice: 25_500_000,
+          spreadVnd: 2_500_000,
+          spreadPct: 10.2,
+          cheapestPlatform: 'shopee',
+          cheapestMerchantName: 'Shop A',
+          cheapestOfferUrl: 'https://shopee.vn/a',
+          priciestPlatform: 'lazada',
+          priciestMerchantName: 'Shop X',
+          explanationVi: 'Lệch 10.2%',
+        },
+        {
+          id: 'sp-2',
+          productSlug: 'apple-iphone-16-pro-256gb',
+          productName: 'iPhone 16 Pro 256GB',
+          brand: 'Apple',
+          categorySlug: 'smartphones',
+          productHref: '/smartphones/apple-iphone-16-pro-256gb',
+          imageUrl: null,
+          platformCount: 3,
+          offerCount: 5,
+          minPrice: 23_900_000,
+          maxPrice: 28_500_000,
+          medianPrice: 25_500_000,
+          spreadVnd: 4_600_000,
+          spreadPct: 19.2,
+          cheapestPlatform: 'lazada',
+          cheapestMerchantName: 'Shop B',
+          cheapestOfferUrl: 'https://lazada.vn/b',
+          priciestPlatform: 'tiktok',
+          priciestMerchantName: 'Shop Y',
+          explanationVi: 'Lệch 19.2%',
+        },
+      ],
+      categoryFilter: 'all',
+      totalClustersAnalyzed: 2,
+      totalOffersAnalyzed: 4,
+      generatedAt: new Date().toISOString(),
+    });
+
+    const ip16Sig = radarIdx406.get('apple-iphone-16-pro-256gb');
+    assert.equal(
+      ip16Sig?.savingsPct,
+      11.5,
+      'buildRadarIndex must select the strongest genuine deal savingsPct for duplicate slugs (#406)'
+    );
+    assert.equal(
+      ip16Sig?.genuineDeal?.merchantId,
+      'm-2',
+      'buildRadarIndex must keep the best genuineDeal entry (#406)'
+    );
+    assert.equal(
+      ip16Sig?.spreadPct,
+      19.2,
+      'buildRadarIndex must keep the widest priceSpread entry for duplicate slugs (#406)'
+    );
+
+    const s24Sig = radarIdx406.get('samsung-galaxy-s24-ultra-256gb');
+    assert.equal(
+      s24Sig?.fakeMarkupPct,
+      56.8,
+      'buildRadarIndex must select the worst fakeSaleTrap markup for duplicate slugs (#406)'
+    );
+    assert.equal(
+      s24Sig?.fakeSaleTrap?.merchantId,
+      'm-4',
+      'buildRadarIndex must keep the worst fakeSaleTrap entry (#406)'
+    );
+
+    // 70.3 selectMerchantRadar refuses to match empty/whitespace merchant names
+    const emptyMerchantRadar = selectMerchantRadar(
+      {
+        genuineDeals: [],
+        fakeSaleTraps: [s24Sig!.fakeSaleTrap!],
+        priceSpreadLeaders: [],
+        categoryFilter: 'all',
+        totalClustersAnalyzed: 1,
+        totalOffersAnalyzed: 1,
+        generatedAt: new Date().toISOString(),
+      },
+      { id: 'non-existent-id', name: '   ' }
+    );
+    assert.equal(
+      emptyMerchantRadar.fakeTrapCount,
+      0,
+      'selectMerchantRadar must not match empty/whitespace merchant names (#406)'
+    );
+
+    // 70.4 normalizeWatchlistItem & normalizeTrayItem sanitize prices and infer category from categoryPath
+    assert.equal(MAX_WATCHLIST_ITEMS, 50);
+    const normWatch = normalizeWatchlistItem({
+      slug: '  custom-tws-model  ',
+      name: '  Custom Model X  ',
+      brand: '  Sony  ',
+      categoryPath: '/earbuds',
+      thumbnail: null,
+      priceWhenAdded: -50_000,
+      targetPrice: 5_000_000_000,
+      addedAt: '2026-10-19T00:00:00.000Z',
+    });
+    assert.equal(normWatch.slug, 'custom-tws-model');
+    assert.equal(normWatch.categoryPath, '/earbuds');
+    assert.equal(normWatch.priceWhenAdded, 0);
+    assert.equal(normWatch.targetPrice, 0);
+
+    const normTray = normalizeTrayItem({
+      slug: '  apple-iphone-16-pro-256gb  ',
+      name: '  iPhone 16 Pro 256GB  ',
+      brand: 'Apple',
+      thumbnail: 'https://broken.example.com/img.jpg',
+      min_price: 9_999_999_999,
+    });
+    assert.equal(normTray.slug, 'apple-iphone-16-pro-256gb');
+    assert.equal(
+      normTray.thumbnail,
+      '/img/devices/apple-iphone-16-pro-256gb.jpg'
+    );
+    assert.equal(normTray.min_price, 0);
+  }
+
+  console.log(
+    '  ✅ [70/71] CSV formula guard, Deal Radar index selection & client store normalization (#406) passed'
+  );
+
+  // =========================================================================
+  // 71. Case-Insensitive Brand Facets, Fractional TB Labels & getMasterProducts Fallback Hardening (#510)
+  // =========================================================================
+  {
+    const { formatStorageLabel, getCategoryFilterSchema } =
+      await import('@/lib/category-filters');
+    const rateApi510 = await import('@/lib/rate-api');
+
+    const laptopSchema = getCategoryFilterSchema('laptops', [
+      'Asus',
+      '  apple ',
+      'Framework',
+      'framework',
+    ]);
+    assert.equal(
+      laptopSchema.defaultBrands.filter((b) => b.toLowerCase() === 'asus')
+        .length,
+      1,
+      'getCategoryFilterSchema must deduplicate Asus and ASUS case-insensitively (#510)'
+    );
+    assert.ok(
+      laptopSchema.defaultBrands.includes('ASUS'),
+      'getCategoryFilterSchema must preserve canonical ASUS casing from defaultBrands (#510)'
+    );
+    assert.equal(
+      laptopSchema.defaultBrands.filter((b) => b.toLowerCase() === 'framework')
+        .length,
+      1,
+      'getCategoryFilterSchema must deduplicate custom dynamicBrands case-insensitively (#510)'
+    );
+
+    assert.equal(formatStorageLabel(512), '512GB');
+    assert.equal(formatStorageLabel(1024), '1TB');
+    assert.equal(
+      formatStorageLabel(1536),
+      '1.5TB',
+      'formatStorageLabel must format 1536GB as 1.5TB (#510)'
+    );
+    assert.equal(formatStorageLabel(2048), '2TB');
+
+    const origFetch510 = globalThis.fetch;
+    try {
+      let masterPageFetched = false;
+      const capturedUrls510: string[] = [];
+      globalThis.fetch = (async (input: RequestInfo | URL) => {
+        const url = String(input);
+        capturedUrls510.push(url);
+
+        if (url.includes('/rest/v1/rpc/get_category_brand_facets')) {
+          return new Response(
+            JSON.stringify({ message: 'function not found' }),
+            { status: 404, headers: { 'content-type': 'application/json' } }
+          );
+        }
+        if (url.includes('/rest/v1/rpc/search_master_products')) {
+          return new Response(
+            JSON.stringify({ message: 'function not found' }),
+            { status: 404, headers: { 'content-type': 'application/json' } }
+          );
+        }
+        if (url.includes('/rest/v1/categories')) {
+          if (url.includes('slug=eq.')) {
+            return new Response(JSON.stringify({ id: 'cat-laptops-510' }), {
+              status: 200,
+              headers: { 'content-type': 'application/json' },
+            });
+          }
+          return new Response(
+            JSON.stringify([
+              {
+                id: 'cat-laptops-510',
+                name: 'Laptops',
+                slug: 'laptops',
+                sort_order: 3,
+              },
+            ]),
+            { status: 200, headers: { 'content-type': 'application/json' } }
+          );
+        }
+        if (url.includes('/rest/v1/master_products')) {
+          if (url.includes('select=brand%2Ccategory_id')) {
+            return new Response(
+              JSON.stringify([
+                { brand: 'asus', category_id: 'cat-laptops-510' },
+                { brand: 'Asus', category_id: 'cat-laptops-510' },
+                { brand: 'ASUS ', category_id: 'cat-laptops-510' },
+                { brand: 'Apple', category_id: 'cat-laptops-510' },
+              ]),
+              { status: 200, headers: { 'content-type': 'application/json' } }
+            );
+          }
+          if (masterPageFetched) {
+            return new Response(JSON.stringify([]), {
+              status: 200,
+              headers: { 'content-type': 'application/json' },
+            });
+          }
+          masterPageFetched = true;
+          return new Response(
+            JSON.stringify([
+              {
+                id: 'mp-510-1',
+                category_id: 'cat-laptops-510',
+                brand: 'Asus',
+                model: 'ROG Zephyrus G16',
+                model_key: 'asus:rog-zephyrus-g16:1024gb',
+                name: 'ASUS ROG Zephyrus G16 1TB',
+                slug: 'asus-rog-zephyrus-g16-1tb',
+                min_price: 45_990_000,
+                max_price: 48_990_000,
+                merchant_count: 4,
+                total_reviews: 12,
+                average_rating: 4.2,
+                user_rating_weighted: null,
+                expert_rating: 4.9,
+                status: 'published',
+                specifications: {},
+                key_specs: { screen: '16" 2.5K OLED 240Hz' },
+              },
+              {
+                id: 'mp-510-2',
+                category_id: 'cat-laptops-510',
+                brand: 'ASUS',
+                model: 'Zenbook S 14',
+                model_key: 'asus:zenbook-s-14:1024gb',
+                name: 'ASUS Zenbook S 14 1TB',
+                slug: 'asus-zenbook-s-14-1tb',
+                min_price: 39_990_000,
+                max_price: 41_990_000,
+                merchant_count: 5,
+                total_reviews: 20,
+                average_rating: 4.5,
+                user_rating_weighted: 4.6,
+                expert_rating: 4.5,
+                status: 'published',
+                specifications: { display: { refresh_rate_hz: 120 } },
+                key_specs: { screen: '14" 3K OLED 120Hz' },
+              },
+            ]),
+            { status: 200, headers: { 'content-type': 'application/json' } }
+          );
+        }
+        return new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }) as typeof fetch;
+
+      const facets510 = await rateApi510.getCategoryDirectoryFacets('laptops');
+      assert.equal(
+        facets510.brands.length,
+        2,
+        'getCategoryDirectoryFacets must merge case-variant Asus/ASUS/asus into a single brand facet (#510)'
+      );
+      assert.equal(facets510.brands[0]?.count, 3);
+      assert.equal(facets510.brands[0]?.name, 'Asus');
+
+      masterPageFetched = false;
+      const filtered510 = await rateApi510.getMasterProducts({
+        categorySlug: 'laptops',
+        brands: ['asus'],
+        minRefreshRateHz: 165,
+        sort: 'rating_desc',
+      });
+      assert.ok(
+        !capturedUrls510.some(
+          (u) =>
+            u.includes('/rest/v1/master_products') && u.includes('brand=in.')
+        ),
+        'getMasterProducts fallback must not apply case-sensitive brand=in. SQL filter (#510)'
+      );
+      assert.equal(
+        filtered510.length,
+        1,
+        'getMasterProducts fallback must match 240Hz in key_specs.screen when minRefreshRateHz=165 and match brand case-insensitively (#510)'
+      );
+      assert.equal(filtered510[0]?.id, 'mp-510-1');
+
+      masterPageFetched = false;
+      const sorted510 = await rateApi510.getMasterProducts({
+        categorySlug: 'laptops',
+        brands: ['asus'],
+        sort: 'rating_desc',
+      });
+      assert.equal(sorted510.length, 2);
+      assert.equal(
+        sorted510[0]?.id,
+        'mp-510-1',
+        'rating_desc sort must use expert_rating (4.9) when user_rating_weighted is null (#510)'
+      );
+    } finally {
+      globalThis.fetch = origFetch510;
+    }
+  }
+
+  console.log(
+    '  ✅ [71/72] Case-insensitive brand facets, fractional TB storage labels & getMasterProducts fallback hardening (#510) passed'
+  );
+
+  // 72. Issue #513: Resolve specifications.category_slug and harden merchant/stats category & review trust mapping
+  {
+    const rateApi513 =
+      require('../../../lib/rate-api') as typeof import('../../../lib/rate-api');
+
+    assert.equal(rateApi513.isCanonicalCategorySlug('earbuds'), true);
+    assert.equal(rateApi513.isCanonicalCategorySlug('tablets'), true);
+    assert.equal(rateApi513.isCanonicalCategorySlug('unknown'), false);
+
+    // 72a. getMasterProductCategorySlug resolves specifications.category_slug even when name/slug has no keyword match
+    assert.equal(
+      rateApi513.getMasterProductCategorySlug({
+        slug: 'marshall-motif-ii-anc',
+        name: 'Marshall Motif II A.N.C.',
+        category_id: null,
+        metadata: null,
+        specifications: { category_slug: 'earbuds' },
+      }),
+      'earbuds',
+      'getMasterProductCategorySlug must resolve specifications.category_slug when category_id and metadata.category_slug are null (#513)'
+    );
+    assert.equal(
+      rateApi513.getMasterProductHref({
+        slug: 'marshall-motif-ii-anc',
+        name: 'Marshall Motif II A.N.C.',
+        specifications: { category_slug: 'earbuds' },
+      }),
+      '/earbuds/marshall-motif-ii-anc',
+      'getMasterProductHref must route to /earbuds/[slug] when specifications.category_slug is earbuds (#513)'
+    );
+
+    // 72b. normalizeMasterProductRow stamps metadata.category_slug from specifications.category_slug
+    const normalized513 = rateApi513.normalizeMasterProductRow({
+      id: 'mp-513-earbud',
+      slug: 'marshall-motif-ii-anc',
+      name: 'Marshall Motif II A.N.C.',
+      brand: 'Marshall',
+      model: 'Motif II A.N.C.',
+      model_key: 'marshall-motif-ii-anc-1',
+      category_id: null,
+      specifications: { category_slug: 'earbuds' },
+      key_specs: {},
+      metadata: {},
+      min_price: 4990000,
+      max_price: 5490000,
+      merchant_count: 2,
+      average_rating: 4.8,
+      user_rating_weighted: 4.8,
+      expert_rating: 4.7,
+      total_reviews: 12,
+      has_5g: false,
+      colors: [],
+      status: 'published',
+      thumbnail: null,
+      images: [],
+    });
+    assert.equal(
+      normalized513.metadata?.category_slug,
+      'earbuds',
+      'normalizeMasterProductRow must populate metadata.category_slug from specifications.category_slug (#513)'
+    );
+
+    // 72c. getMerchantProfileById & getRatePlatformStats resolve specifications.category_slug and attach trust_assessment
+    const origFetch513 = globalThis.fetch;
+    let merchantProdsFetched = false;
+    let statsMastersFetched = false;
+    try {
+      globalThis.fetch = (async (input: RequestInfo | URL) => {
+        const url =
+          typeof input === 'string'
+            ? input
+            : input instanceof URL
+              ? input.toString()
+              : input.url;
+
+        if (url.includes('/rest/v1/merchants') && url.includes('id=eq.')) {
+          return new Response(
+            JSON.stringify({
+              id: '00000000-0000-4000-8000-000000000513',
+              platform: 'shopee',
+              platform_shop_id: 'shop-513',
+              name: 'Marshall Official Store',
+              slug: 'marshall-official-store',
+              is_official: true,
+              rating_star: 4.9,
+              follower_count: 55000,
+              location: 'TP. Hồ Chí Minh',
+              risk_score: 5,
+              metadata: {},
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } }
+          );
+        }
+        if (url.includes('/rest/v1/merchants')) {
+          return new Response('[]', {
+            status: 200,
+            headers: {
+              'content-type': 'application/json',
+              'content-range': '0-0/8',
+            },
+          });
+        }
+        if (url.includes('/rest/v1/categories')) {
+          return new Response(
+            JSON.stringify([
+              {
+                id: 'cat-smartphones',
+                parent_id: null,
+                name: 'Điện thoại',
+                slug: 'smartphones',
+                icon: 'smartphone',
+                display_order: 1,
+              },
+              {
+                id: 'cat-earbuds',
+                parent_id: null,
+                name: 'Tai nghe',
+                slug: 'earbuds',
+                icon: 'headphones',
+                display_order: 5,
+              },
+            ]),
+            { status: 200, headers: { 'content-type': 'application/json' } }
+          );
+        }
+        if (
+          url.includes('/rest/v1/products') &&
+          url.includes('merchant_id=eq.')
+        ) {
+          if (merchantProdsFetched) {
+            return new Response(JSON.stringify([]), {
+              status: 200,
+              headers: { 'content-type': 'application/json' },
+            });
+          }
+          merchantProdsFetched = true;
+          return new Response(
+            JSON.stringify([
+              {
+                id: 'prod-513-1',
+                merchant_id: '00000000-0000-4000-8000-000000000513',
+                platform: 'shopee',
+                platform_item_id: 'item-513-1',
+                title: 'Marshall Motif II A.N.C. Chính Hãng',
+                price_current: 4990000,
+                price_original: 5490000,
+                stock: 15,
+                historical_sold: 40,
+                rating_star: 4.9,
+                rating_count: 18,
+                images: [],
+                url: 'https://shopee.vn/product/513/1',
+                cluster_id: 'mp-513-earbud',
+              },
+            ]),
+            { status: 200, headers: { 'content-type': 'application/json' } }
+          );
+        }
+        if (url.includes('/rest/v1/products') && url.includes('id=in.')) {
+          return new Response(
+            JSON.stringify([
+              {
+                id: 'prod-513-1',
+                title: 'Marshall Motif II A.N.C. Chính Hãng',
+                cluster_id: 'mp-513-earbud',
+              },
+            ]),
+            { status: 200, headers: { 'content-type': 'application/json' } }
+          );
+        }
+        if (
+          url.includes('/rest/v1/products') &&
+          url.includes('cluster_id=eq.')
+        ) {
+          return new Response(JSON.stringify([]), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          });
+        }
+        if (url.includes('/rest/v1/products')) {
+          return new Response('[]', {
+            status: 200,
+            headers: {
+              'content-type': 'application/json',
+              'content-range': '0-0/25',
+            },
+          });
+        }
+        if (
+          url.includes('/rest/v1/master_products') &&
+          url.includes('id=in.')
+        ) {
+          return new Response(
+            JSON.stringify([
+              {
+                id: 'mp-513-earbud',
+                slug: 'marshall-motif-ii-anc',
+                name: 'Marshall Motif II A.N.C.',
+                model: 'Motif II A.N.C.',
+                brand: 'Marshall',
+                category_id: null,
+                metadata: null,
+                specifications: { category_slug: 'earbuds' },
+                min_price: 4990000,
+                max_price: 5490000,
+                merchant_count: 2,
+              },
+            ]),
+            { status: 200, headers: { 'content-type': 'application/json' } }
+          );
+        }
+        if (url.includes('/rest/v1/master_products')) {
+          if (statsMastersFetched) {
+            return new Response(JSON.stringify([]), {
+              status: 200,
+              headers: { 'content-type': 'application/json' },
+            });
+          }
+          statsMastersFetched = true;
+          return new Response(
+            JSON.stringify([
+              {
+                id: 'mp-513-earbud',
+                slug: 'marshall-motif-ii-anc',
+                name: 'Marshall Motif II A.N.C.',
+                model: 'Motif II A.N.C.',
+                category_id: null,
+                metadata: null,
+                specifications: { category_slug: 'earbuds' },
+              },
+            ]),
+            { status: 200, headers: { 'content-type': 'application/json' } }
+          );
+        }
+        if (url.includes('/rest/v1/reviews')) {
+          return new Response(
+            JSON.stringify([
+              {
+                id: 'rev-513-1',
+                product_id: 'prod-513-1',
+                author_name: 'Minh Quân',
+                rating_star: 5,
+                comment:
+                  'Chất âm Marshall đặc trưng, chống ồn chủ động rất tốt khi đi tàu điện, pin dùng thực tế khoảng 6 tiếng liên tục.',
+                variation: 'Black',
+                created_at: '2026-10-18T10:00:00Z',
+                reviewer_type: 'user',
+                upvotes: 6,
+                downvotes: 0,
+                report_count: 0,
+                helpfulness_weight: null,
+                criteria_ratings: { audio: 4.9, battery: 4.7 },
+                review_flags: {
+                  verdict: 'authentic',
+                  fake_probability: 0.04,
+                  flag_category: 'authentic',
+                  include_in_rating: true,
+                  reason: 'Đánh giá chi tiết trải nghiệm thực tế',
+                  signals: {},
+                },
+              },
+            ]),
+            {
+              status: 200,
+              headers: {
+                'content-type': 'application/json',
+                'content-range': '0-0/1',
+              },
+            }
+          );
+        }
+        return new Response('[]', {
+          status: 200,
+          headers: {
+            'content-type': 'application/json',
+            'content-range': '0-0/0',
+          },
+        });
+      }) as typeof fetch;
+
+      const merchantProfile513 = await rateApi513.getMerchantProfileById(
+        '00000000-0000-4000-8000-000000000513'
+      );
+      assert.ok(merchantProfile513, 'merchantProfile513 must resolve (#513)');
+      assert.equal(
+        merchantProfile513.listings[0]?.master_product?.category_slug,
+        'earbuds',
+        'getMerchantProfileById must resolve category_slug via getMasterProductCategorySlug from specifications.category_slug (#513)'
+      );
+      assert.ok(
+        merchantProfile513.recent_reviews[0]?.trust_assessment,
+        'getMerchantProfileById recent_reviews must include trust_assessment (#513)'
+      );
+
+      const stats513 = await rateApi513.getRatePlatformStats();
+      const earbudsCat513 = stats513.categoriesWithCounts.find(
+        (c) => c.slug === 'earbuds'
+      );
+      assert.equal(
+        earbudsCat513?.productCount,
+        1,
+        'getRatePlatformStats must count published products with category_id=null into their resolved canonical category (#513)'
+      );
+      assert.equal(
+        stats513.recentReviewsSample[0]?.masterRouteHref,
+        '/earbuds/marshall-motif-ii-anc',
+        'getRatePlatformStats recentReviewsSample must resolve /earbuds/[slug] via specifications.category_slug (#513)'
+      );
+      assert.ok(
+        (stats513.recentReviewsSample[0]?.helpfulness_weight ?? 0) > 1,
+        'getRatePlatformStats recentReviewsSample must compute JReviews weight when helpfulness_weight is null (#513)'
+      );
+      assert.ok(
+        stats513.recentReviewsSample[0]?.trust_assessment,
+        'getRatePlatformStats recentReviewsSample must include trust_assessment (#513)'
+      );
+    } finally {
+      globalThis.fetch = origFetch513;
+    }
+  }
+
+  console.log(
+    '  ✅ [72/73] specifications.category_slug resolution & merchant/stats review trust_assessment mapping (#513) passed'
+  );
+
+  // 73. Issue #517: Harden URL product keyword extraction and shop fallback in inspectProductOrShopUrl and lookupExtensionProduct
+  {
+    const rateApi517 =
+      require('../../../lib/rate-api') as typeof import('../../../lib/rate-api');
+    const extServer517 =
+      require('../extension') as typeof import('../extension');
+
+    assert.equal(
+      rateApi517.extractProductKeywordFromUrl(
+        'https://shopee.vn/Dien-thoai-Apple-iPhone-16-Pro-Max-256GB-Chinh-hang-VN-A-i.88201679.29512841920'
+      ),
+      'Apple iPhone 16 Pro Max 256GB',
+      'extractProductKeywordFromUrl must strip Dien thoai and Chinh hang VN A from Shopee URLs (#517)'
+    );
+    assert.equal(
+      rateApi517.extractProductKeywordFromUrl(
+        'https://tiki.vn/tai-nghe-bluetooth-apple-airpods-pro-2-usb-c-chinh-hang-p274019283.html'
+      ),
+      'apple airpods pro 2 usb c',
+      'extractProductKeywordFromUrl must strip tai nghe bluetooth and chinh hang from Tiki URLs (#517)'
+    );
+    assert.equal(
+      rateApi517.extractProductKeywordFromUrl(
+        'https://www.lazada.vn/products/laptop-apple-macbook-air-m3-13-inch-256gb-chinh-hang-i123456789-s987654321.html'
+      ),
+      'apple macbook air m3 13 inch 256gb',
+      'extractProductKeywordFromUrl must strip laptop and chinh hang from Lazada URLs (#517)'
+    );
+    assert.equal(
+      rateApi517.extractProductKeywordFromUrl(
+        'https://shopee.vn/Op-lung-iPhone-16-Pro-Max-Chinh-hang-i.111.222'
+      ),
+      'Op lung iPhone 16 Pro Max',
+      'extractProductKeywordFromUrl must preserve accessory tokens like Op lung so detectAccessoryOrJunk catches them (#517)'
+    );
+
+    const parsedAmbiguity517 = extServer517.extractStorageAndAmbiguity({
+      title: 'Dien thoai Apple iPhone 16 Pro Max 256GB Chinh hang VN A',
+    });
+    assert.equal(
+      parsedAmbiguity517.cleanModelSearchQuery,
+      'Apple iPhone 16 Pro Max',
+      'extractStorageAndAmbiguity must strip non-accented URL slug noise tokens (#517)'
+    );
+    assert.equal(parsedAmbiguity517.storageGb, 256);
+
+    const origFetch517 = globalThis.fetch;
+    try {
+      globalThis.fetch = (async (input: RequestInfo | URL) => {
+        const url =
+          typeof input === 'string'
+            ? input
+            : input instanceof URL
+              ? input.toString()
+              : input.url;
+
+        if (
+          url.includes('/rest/v1/products') &&
+          url.includes('platform_item_id=in.')
+        ) {
+          return new Response(JSON.stringify(null), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          });
+        }
+        if (
+          url.includes('/rest/v1/merchants') &&
+          url.includes('platform_shop_id=in.')
+        ) {
+          return new Response(
+            JSON.stringify([
+              {
+                id: 'merch-517-apple',
+                platform: 'shopee',
+                platform_shop_id: '88201679',
+                name: 'Apple Flagship Store',
+                slug: 'apple-flagship-store',
+                is_official: true,
+                rating_star: 4.9,
+                follower_count: 1500000,
+                location: 'TP. Hồ Chí Minh',
+                risk_score: 2,
+                metadata: {},
+                updated_at: '2026-10-19T00:00:00Z',
+              },
+            ]),
+            { status: 200, headers: { 'content-type': 'application/json' } }
+          );
+        }
+        if (
+          url.includes('/rest/v1/master_products') &&
+          url.includes('slug=eq.apple-iphone-16-pro-max-256gb')
+        ) {
+          return new Response(
+            JSON.stringify({
+              id: 'mp-517-ip16pm',
+              slug: 'apple-iphone-16-pro-max-256gb',
+              name: 'Apple iPhone 16 Pro Max 256GB',
+              brand: 'Apple',
+              model: 'iPhone 16 Pro Max',
+              model_key: 'apple-iphone-16-pro-max-256gb',
+              category_id: 'cat-smartphones',
+              min_price: 29990000,
+              max_price: 33990000,
+              merchant_count: 4,
+              average_rating: 4.9,
+              user_rating_weighted: 4.9,
+              expert_rating: 4.9,
+              total_reviews: 120,
+              has_5g: true,
+              colors: ['Natural Titanium'],
+              status: 'published',
+              specifications: { category_slug: 'smartphones' },
+              key_specs: {},
+              metadata: {},
+              thumbnail: null,
+              images: [],
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } }
+          );
+        }
+        if (url.includes('/rest/v1/rpc/search_master_products')) {
+          return new Response(JSON.stringify([]), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          });
+        }
+        return new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }) as typeof fetch;
+
+      const inspected517 = await rateApi517.inspectProductOrShopUrl(
+        'https://shopee.vn/Dien-thoai-Apple-iPhone-16-Pro-Max-256GB-Chinh-hang-VN-A-i.88201679.99999999999'
+      );
+      assert.equal(
+        inspected517.matchedType,
+        'master_product',
+        'inspectProductOrShopUrl must resolve unindexed e-commerce product URLs to their canonical MasterProduct (#517)'
+      );
+      assert.equal(
+        inspected517.masterProduct?.slug,
+        'apple-iphone-16-pro-max-256gb'
+      );
+      assert.equal(
+        inspected517.merchantProfile?.platform_shop_id,
+        '88201679',
+        'inspectProductOrShopUrl must attach the tracked merchantProfile from parsedUrl.platformShopId even when platformItemId is not yet in rate.products (#517)'
+      );
+
+      const inspectedShopFallback517 = await rateApi517.inspectProductOrShopUrl(
+        'https://shopee.vn/San-pham-chua-co-trong-danh-muc-i.88201679.88888888888'
+      );
+      assert.equal(
+        inspectedShopFallback517.matchedType,
+        'merchant',
+        'inspectProductOrShopUrl must fall back to matchedType=merchant when the product is unknown but platformShopId is a tracked merchant (#517)'
+      );
+      assert.equal(
+        inspectedShopFallback517.merchantProfile?.name,
+        'Apple Flagship Store'
+      );
+    } finally {
+      globalThis.fetch = origFetch517;
+    }
+  }
+
+  console.log(
+    '  ✅ [73/74] URL product keyword extraction & shop fallback in inspectProductOrShopUrl and lookupExtensionProduct (#517) passed'
+  );
+
+  // =========================================================================
+  // 74. MerchantRiskBreakdown Schema Alignment, Empty JSONB Fallback & Ratio Derivation (#521)
+  // =========================================================================
+  {
+    const { extractPersistedBreakdown, mapOfferRowToMerchantOffer } =
+      await import('@/lib/rate-api');
+    const domain521 = await import('@/lib/rate-domain');
+    const serverRate521 = await import('@/server/rate');
+
+    assert.equal(
+      domain521.extractPersistedBreakdown,
+      extractPersistedBreakdown,
+      'rate-domain.ts must re-export extractPersistedBreakdown (#521)'
+    );
+    assert.equal(
+      serverRate521.extractPersistedBreakdown,
+      extractPersistedBreakdown,
+      'server/rate/index.ts must re-export extractPersistedBreakdown (#521)'
+    );
+
+    // 74.1 Empty {} top-level review_risk_breakdown (Postgres DEFAULT '{}'::jsonb) falls through to metadata.review_risk_breakdown
+    const fromMetaFallback = extractPersistedBreakdown({
+      review_risk_breakdown: {} as never,
+      metadata: {
+        review_risk_breakdown: {
+          total_reviews: 20,
+          authentic_count: 15,
+          coin_spam_count: 3,
+          seeding_fake_count: 2,
+          sabotage_or_bombing_count: 0,
+          suspicious_ratio_pct: 25,
+        },
+      },
+    });
+    assert.deepEqual(
+      fromMetaFallback,
+      {
+        total_reviews: 20,
+        authentic_count: 15,
+        coin_spam_count: 3,
+        seeding_fake_count: 2,
+        sabotage_or_bombing_count: 0,
+        suspicious_ratio_pct: 25,
+      },
+      'extractPersistedBreakdown must fall back to metadata.review_risk_breakdown when top-level review_risk_breakdown is an empty {} JSONB object (#521)'
+    );
+
+    // 74.2 Ratio-based breakdown payload with total_reviews derives missing counts and suspicious_ratio_pct
+    const fromRatios = extractPersistedBreakdown({
+      review_risk_breakdown: {
+        total_reviews: 40,
+        seeding_ratio: 0.25,
+        coin_spam_ratio: 0.1,
+        sabotage_ratio: 0.05,
+      } as never,
+      metadata: null,
+    });
+    assert.deepEqual(
+      fromRatios,
+      {
+        total_reviews: 40,
+        authentic_count: 24,
+        coin_spam_count: 4,
+        seeding_fake_count: 10,
+        sabotage_or_bombing_count: 2,
+        suspicious_ratio_pct: 40,
+      },
+      'extractPersistedBreakdown must derive authentic_count, coin_spam_count, seeding_fake_count, sabotage_or_bombing_count, and suspicious_ratio_pct from ratio fields when explicit count fields are absent (#521)'
+    );
+
+    // 74.3 mapOfferRowToMerchantOffer ignores empty {} top-level review_risk_breakdown and falls back to metadata.review_risk_breakdown
+    const offer521 = mapOfferRowToMerchantOffer({
+      id: 'offer-521',
+      cluster_id: 'master-521',
+      platform: 'shopee',
+      title: 'iPhone 16 Pro Max 256GB',
+      price_current: 28_990_000,
+      price_original: 34_990_000,
+      stock: 10,
+      rating_star: 4.9,
+      rating_count: 120,
+      url: 'https://shopee.vn/product/1/2',
+      merchants: {
+        id: 'merch-521',
+        name: 'Shop 521',
+        platform: 'shopee',
+        is_official: true,
+        rating_star: 4.9,
+        follower_count: 50000,
+        location: 'TP. Hồ Chí Minh',
+        risk_score: 5,
+        review_risk_score: 15,
+        review_risk_breakdown: {},
+        metadata: {
+          review_risk_breakdown: {
+            total_reviews: 10,
+            authentic_count: 9,
+            coin_spam_count: 1,
+            seeding_fake_count: 0,
+            sabotage_or_bombing_count: 0,
+            suspicious_ratio_pct: 10,
+          },
+        },
+      },
+    });
+    assert.deepEqual(
+      offer521.merchant.review_risk_breakdown,
+      {
+        total_reviews: 10,
+        authentic_count: 9,
+        coin_spam_count: 1,
+        seeding_fake_count: 0,
+        sabotage_or_bombing_count: 0,
+        suspicious_ratio_pct: 10,
+      },
+      'mapOfferRowToMerchantOffer must ignore empty {} top-level review_risk_breakdown and fall back to metadata.review_risk_breakdown (#521)'
+    );
+  }
+
+  console.log(
+    '  ✅ [74/75] MerchantRiskBreakdown Schema Alignment, Empty JSONB Fallback & Ratio Derivation (#521) passed'
+  );
+
+  // =========================================================================
+  // 75. GET /api/v1/rate/products Offset Pagination, key_specs.battery Fast-Charge Fallback & OpenAPI Route Coverage (#526)
+  // =========================================================================
+  {
+    const { NextRequest } = await import('next/server');
+    const { buildRateOpenApiSpec } = await import('@/server/rate/openapi');
+    const { getMasterProducts } = await import('@/lib/rate-api');
+    const productsRoute526 = await import('@/app/api/v1/rate/products/route');
+
+    // 75.1 OpenAPI 3.1.0 specification covers all route handlers including /api/v1/rate/merchants/directory
+    const spec526 = buildRateOpenApiSpec('https://rate.vn');
+    assert.ok(
+      spec526.paths['/api/v1/rate/merchants/directory']?.get,
+      'buildRateOpenApiSpec must document GET /api/v1/rate/merchants/directory (#526)'
+    );
+    const productParams526 =
+      spec526.paths['/api/v1/rate/products']?.get?.parameters ?? [];
+    assert.ok(
+      productParams526.some((p) => p.name === 'facets') &&
+        productParams526.some((p) => p.name === 'compactScreen') &&
+        productParams526.some(
+          (p) => p.name === 'minRating' && p.description.includes('0-5')
+        ),
+      'buildRateOpenApiSpec GET /api/v1/rate/products must document facets, compactScreen, and 0-5 minRating scale (#526)'
+    );
+
+    // 75.2 GET /api/v1/rate/products wires ?offset= into getMasterProducts and returns offset in response payload, and key_specs.battery parses <N>W
+    let capturedRpcOffset526: number | null = null;
+    const origFetch526 = globalThis.fetch;
+    globalThis.fetch = (async (
+      input: RequestInfo | URL,
+      init?: RequestInit
+    ) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.includes('/rest/v1/categories')) {
+        return new Response(
+          JSON.stringify({
+            id: '00000000-0000-4000-8000-000000000520',
+            slug: 'smartphones',
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        );
+      }
+      if (url.includes('/rest/v1/rpc/search_master_products')) {
+        if (init?.body && typeof init.body === 'string') {
+          const parsedBody = JSON.parse(init.body) as { p_offset?: number };
+          if (typeof parsedBody.p_offset === 'number') {
+            capturedRpcOffset526 = parsedBody.p_offset;
+          }
+        }
+        return new Response('{"message":"function not found"}', {
+          status: 404,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      if (url.includes('/rest/v1/master_products')) {
+        const u526 = new URL(url);
+        const offset526 = Number(u526.searchParams.get('offset') ?? 0);
+        const limit526 = Number(u526.searchParams.get('limit') ?? 1000);
+        const rows526 = [
+          {
+            id: '00000000-0000-4000-8000-000000000521',
+            slug: 'samsung-galaxy-s25-256gb',
+            name: 'Samsung Galaxy S25 256GB',
+            brand: 'Samsung',
+            model: 'Galaxy S25',
+            model_key: 'samsung-galaxy-s25:256gb',
+            category_id: null,
+            min_price: 19_990_000,
+            max_price: 21_990_000,
+            merchant_count: 3,
+            status: 'published',
+            specifications: { battery: { capacity_mah: 4000 } },
+            key_specs: { battery: '4000 mAh | 25W' },
+            metadata: { category_slug: 'smartphones' },
+            thumbnail: null,
+            images: [],
+          },
+          {
+            id: '00000000-0000-4000-8000-000000000522',
+            slug: 'samsung-galaxy-s25-ultra-256gb',
+            name: 'Samsung Galaxy S25 Ultra 256GB',
+            brand: 'Samsung',
+            model: 'Galaxy S25 Ultra',
+            model_key: 'samsung-galaxy-s25-ultra:256gb',
+            category_id: null,
+            min_price: 28_990_000,
+            max_price: 31_990_000,
+            merchant_count: 5,
+            status: 'published',
+            specifications: { battery: { capacity_mah: 5000 } },
+            key_specs: { battery: '5000 mAh | 45W' },
+            metadata: { category_slug: 'smartphones' },
+            thumbnail: null,
+            images: [],
+          },
+        ];
+        return new Response(
+          JSON.stringify(rows526.slice(offset526, offset526 + limit526)),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        );
+      }
+      return new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    try {
+      const fastCharged526 = await getMasterProducts({
+        minFastChargingW: 45,
+      });
+      assert.equal(
+        fastCharged526.length,
+        1,
+        'getMasterProducts fallback must match key_specs.battery "<N>W" when specifications.battery.fast_charging_w is absent (#526)'
+      );
+      assert.equal(fastCharged526[0]?.slug, 'samsung-galaxy-s25-ultra-256gb');
+
+      const req526 = new NextRequest(
+        'https://rate.vn/api/v1/rate/products?q=Samsung&limit=1&offset=1'
+      );
+      const res526 = await productsRoute526.GET(req526);
+      assert.equal(res526.status, 200);
+      const body526 = (await res526.json()) as {
+        ok: boolean;
+        count: number;
+        offset: number;
+        data: Array<{ slug: string }>;
+      };
+      assert.equal(body526.ok, true);
+      assert.equal(body526.offset, 1);
+      assert.equal(
+        capturedRpcOffset526,
+        1,
+        'GET /api/v1/rate/products must pass offset to getMasterProducts (#526)'
+      );
+      assert.equal(body526.data.length, 1);
+      assert.equal(
+        body526.data[0]?.slug,
+        'samsung-galaxy-s25-ultra-256gb',
+        'GET /api/v1/rate/products?offset=1&limit=1 must return the second matched product (#526)'
+      );
+    } finally {
+      globalThis.fetch = origFetch526;
+    }
+  }
+
+  console.log(
+    '  ✅ [75/75] GET /api/v1/rate/products Offset Pagination, key_specs.battery Fast-Charge Fallback & OpenAPI Route Coverage (#526) passed'
+  );
+
+  // =========================================================================
+  // 76. 1v1 Versus Unpriced Tiebreaks, UI Persona Presets & Catalog Spec Fallbacks (#533)
+  // =========================================================================
+  {
+    const { comparePositiveMinPrices } = await import('@/lib/rate-domain');
+    assert.equal(comparePositiveMinPrices(19_990_000, 25_000_000), 'A');
+    assert.equal(comparePositiveMinPrices(25_000_000, 19_990_000), 'B');
+    assert.equal(comparePositiveMinPrices(20_000_000, 20_000_000), 'equal');
+    assert.equal(
+      comparePositiveMinPrices(0, 25_000_000),
+      'B',
+      'Unpriced product A (0 VND) must not beat priced product B (#533)'
+    );
+    assert.equal(
+      comparePositiveMinPrices(25_000_000, 0),
+      'A',
+      'Priced product A must beat unpriced product B (0 VND) (#533)'
+    );
+    assert.equal(comparePositiveMinPrices(0, 0), 'unknown');
+
+    const { NextRequest } = await import('next/server');
+    const { getMasterProducts } = await import('@/server/rate');
+    const versusRoute533 = await import('@/app/api/v1/rate/versus/route');
+    const origFetch533 = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.includes('/rest/v1/rpc/search_master_products')) {
+        return new Response('{"message":"function not found"}', {
+          status: 404,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      if (url.includes('/rest/v1/master_products')) {
+        const u533 = new URL(url);
+        const offset533 = Number(u533.searchParams.get('offset') ?? 0);
+        const limit533 = Number(u533.searchParams.get('limit') ?? 1000);
+        const rows533 = [
+          {
+            id: '00000000-0000-4000-8000-000000000531',
+            slug: 'unpriced-phone-a-256gb',
+            name: 'Unpriced Phone A 256GB',
+            brand: 'Samsung',
+            model: 'Phone A',
+            model_key: 'samsung-phone-a:256gb',
+            category_id: null,
+            min_price: 0,
+            max_price: 0,
+            merchant_count: 0,
+            battery_mah: null,
+            screen_size_inch: 0,
+            average_rating: 4.5,
+            user_rating_weighted: 4.5,
+            expert_rating: 8.8,
+            total_reviews: 20,
+            status: 'published',
+            specifications: {
+              battery: { capacity_mah: 5000 },
+            },
+            key_specs: {
+              screen: '6.1 inch Dynamic AMOLED 2X | 120Hz',
+              battery: '5000 mAh | 45W',
+            },
+            metadata: { category_slug: 'smartphones' },
+            thumbnail: null,
+            images: [],
+          },
+          {
+            id: '00000000-0000-4000-8000-000000000532',
+            slug: 'priced-phone-b-256gb',
+            name: 'Priced Phone B 256GB',
+            brand: 'Samsung',
+            model: 'Phone B',
+            model_key: 'samsung-phone-b:256gb',
+            category_id: null,
+            min_price: 24_990_000,
+            max_price: 26_990_000,
+            merchant_count: 4,
+            battery_mah: 0,
+            screen_size_inch: null,
+            average_rating: 4.5,
+            user_rating_weighted: 4.5,
+            expert_rating: 8.8,
+            total_reviews: 20,
+            status: 'published',
+            specifications: {
+              display: { size_inch: 6.7 },
+            },
+            key_specs: {
+              screen: '6.7 inch Dynamic AMOLED 2X | 120Hz',
+              battery: '5400 mAh | 65W',
+            },
+            metadata: { category_slug: 'smartphones' },
+            thumbnail: null,
+            images: [],
+          },
+        ];
+        return new Response(
+          JSON.stringify(rows533.slice(offset533, offset533 + limit533)),
+          {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }
+        );
+      }
+      return new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    try {
+      const compact533 = await getMasterProducts({
+        maxScreenSizeInch: 6.3,
+      });
+      assert.equal(
+        compact533.length,
+        1,
+        'getMasterProducts fallback must parse key_specs.screen when screen_size_inch is 0 (#533)'
+      );
+      assert.equal(compact533[0]?.slug, 'unpriced-phone-a-256gb');
+
+      const battery533 = await getMasterProducts({
+        minBatteryMah: 5200,
+      });
+      assert.equal(
+        battery533.length,
+        1,
+        'getMasterProducts fallback must parse key_specs.battery "<N> mAh" when battery_mah is 0 (#533)'
+      );
+      assert.equal(battery533[0]?.slug, 'priced-phone-b-256gb');
+
+      const versusReq533 = new NextRequest(
+        'https://rate.vn/api/v1/rate/versus?pair=unpriced-phone-a-256gb-vs-priced-phone-b-256gb&persona=photography'
+      );
+      const versusRes533 = await versusRoute533.GET(versusReq533);
+      assert.equal(versusRes533.status, 200);
+      const versusBody533 = (await versusRes533.json()) as {
+        ok: boolean;
+        persona: string;
+        weights: { camera: number };
+        overall_winner: { side: 'A' | 'B'; slug: string };
+        price_comparison: {
+          cheaper_slug: string;
+          price_delta_vnd: number;
+          price_delta_percent: number;
+        };
+      };
+      assert.equal(versusBody533.ok, true);
+      assert.equal(
+        versusBody533.persona,
+        'photography',
+        'GET /api/v1/rate/versus must recognize UI persona preset "photography" (#533)'
+      );
+      assert.equal(versusBody533.weights.camera, 45);
+      assert.equal(
+        versusBody533.price_comparison.cheaper_slug,
+        'priced-phone-b-256gb',
+        'cheaper_slug must resolve to the priced product when the other product has min_price=0 (#533)'
+      );
+      assert.equal(
+        versusBody533.price_comparison.price_delta_vnd,
+        0,
+        'price_delta_vnd must be 0 when one product is unpriced (#533)'
+      );
+      assert.equal(versusBody533.price_comparison.price_delta_percent, 0);
+    } finally {
+      globalThis.fetch = origFetch533;
+    }
+  }
+
+  console.log(
+    '  ✅ [76/76] 1v1 Versus Unpriced Tiebreaks, UI Persona Presets & Catalog Spec Fallbacks (#533) passed'
   );
 
   console.log('🎉 All Rate.vn Core Architecture tests passed!');

@@ -1,5 +1,8 @@
-import type { ProductSpecifications, KeySpecs } from '@repo/shared-data';
+import { MAX_VALID_VND_PRICE, type ProductSpecifications, type KeySpecs } from '@repo/shared-data';
 import type { ShopeeProduct } from './types.js';
+
+export const MAX_VALID_RAM_GB = 2048;
+export const MAX_VALID_STORAGE_GB = 65536;
 
 export type CanonicalCategorySlug =
   'smartphones' | 'tablets' | 'laptops' | 'smartwatches' | 'earbuds';
@@ -1182,11 +1185,17 @@ export class ProductNormalizer {
     // 3. Extract Storage - RAM-aware (plan v7 §5.2, Codex-reproduced bug:
     // "Samsung Galaxy A55 8GB RAM 256GB" must be 256GB, not the first GB token).
     // Decimal separator: dot or comma (Vietnamese titles use "1,5TB").
-    const sizeTokens = [...title.matchAll(/(\d+(?:[.,]\d+)?)\s*(TB|GB)/gi)].map(m => ({
-      value: parseFloat(m[1].replace(',', '.')) * (m[2].toUpperCase() === 'TB' ? 1024 : 1),
-      index: m.index ?? 0,
-      raw: m[0],
-    }));
+    // (?<!\d): a match never starts inside a digit run, so a long run with no
+    // unit costs one pass instead of one per digit (CodeQL polynomial regex).
+    // The matches are unchanged: the leftmost one always starts at the run's
+    // first digit.
+    const sizeTokens = [...title.matchAll(/(?<!\d)(\d+(?:[.,]\d+)?)\s*(TB|GB)/gi)]
+      .map(m => ({
+        value: parseFloat(m[1].replace(',', '.')) * (m[2].toUpperCase() === 'TB' ? 1024 : 1),
+        index: m.index ?? 0,
+        raw: m[0],
+      }))
+      .filter(t => Number.isFinite(t.value) && t.value > 0);
 
     const ramPhrases = [...title.matchAll(/bộ\s*nhớ\s*RAM|dung\s*lượng\s*RAM|RAM\b/gi)].map(
       m => m.index ?? 0
@@ -1210,7 +1219,10 @@ export class ProductNormalizer {
 
     // Also support slash shorthand ("12GB/256GB", "8/256GB") and CellphoneS/TGDD
     // adjacent RAM+ROM pairs ("12GB 256GB") when no explicit RAM keyword is present.
-    const slashRamRom = title.match(/\b(\d{1,2})\s*(?:GB)?\s*\/\s*(\d+(?:[.,]\d+)?)\s*(TB|GB)\b/i);
+    // `\s*(?:X\s*)?` rather than `\s*X?\s*` (here and in the ROM patterns
+    // below): the same strings, without the two adjacent \s* that made long
+    // whitespace runs quadratic (CodeQL polynomial regex, DOS/Rate#537).
+    const slashRamRom = title.match(/\b(\d{1,2})\s*(?:GB\s*)?\/\s*(\d+(?:[.,]\d+)?)\s*(TB|GB)\b/i);
     if (slashRamRom && ramPhrases.length === 0) {
       const slashRam = parseInt(slashRamRom[1], 10);
       for (const c of claimable) {
@@ -1227,33 +1239,51 @@ export class ProductNormalizer {
       }
     }
 
-    const storageCandidates = claimable.filter(t => !t.claimed);
+    const storageCandidates = claimable.filter(
+      t => !t.claimed && t.value > 0 && t.value <= MAX_VALID_STORAGE_GB
+    );
 
-    const romExplicit = title.match(/(?:ROM|bộ nhớ trong)\s*[:-]?\s*(\d+(?:[.,]\d+)?)\s*(TB|GB)/i);
+    const romExplicit = title.match(
+      /(?:ROM|bộ nhớ trong)\s*(?:[:-]\s*)?(\d+(?:[.,]\d+)?)\s*(TB|GB)/i
+    );
     const romLoose = title.match(
-      /dung lượng\s*[:-]?\s*(\d+(?:[.,]\d+)?)\s*(TB|GB)(?!\s*(?:RAM|bộ\s*nhớ\s*RAM|dung\s*lượng\s*RAM))/i
+      /dung lượng\s*(?:[:-]\s*)?(\d+(?:[.,]\d+)?)\s*(TB|GB)(?!\s*(?:RAM|bộ\s*nhớ\s*RAM|dung\s*lượng\s*RAM))/i
     );
 
     const baseKey = `${slugify(brand)}:${slugify(model)}`;
     const benchmark = CANONICAL_PHONE_REGISTRY[baseKey];
 
+    const toValidStorageGb = (val: number): number | null =>
+      Number.isFinite(val) && val > 0 && val <= MAX_VALID_STORAGE_GB ? val : null;
+
     let storageGb: number | null = null;
     let storageConfident = false;
     const marker = romExplicit ?? romLoose;
     if (marker) {
-      storageGb =
-        parseFloat(marker[1].replace(',', '.')) * (marker[2].toUpperCase() === 'TB' ? 1024 : 1);
-      storageConfident = true;
+      const candidateStorage = toValidStorageGb(
+        parseFloat(marker[1].replace(',', '.')) * (marker[2].toUpperCase() === 'TB' ? 1024 : 1)
+      );
+      if (candidateStorage !== null) {
+        storageGb = candidateStorage;
+        storageConfident = true;
+      }
     } else if (slashRamRom) {
-      storageGb =
+      const candidateStorage = toValidStorageGb(
         parseFloat(slashRamRom[2].replace(',', '.')) *
-        (slashRamRom[3].toUpperCase() === 'TB' ? 1024 : 1);
-      storageConfident = true;
+          (slashRamRom[3].toUpperCase() === 'TB' ? 1024 : 1)
+      );
+      if (candidateStorage !== null) {
+        storageGb = candidateStorage;
+        storageConfident = true;
+      }
     } else if (storageCandidates.length === 1) {
       storageGb = storageCandidates[0].value;
       storageConfident = true;
     } else if (storageCandidates.length === 0 && benchmark?.default_storage_gb != null) {
       storageGb = benchmark.default_storage_gb;
+      storageConfident = true;
+    } else if (storageCandidates.length === 0 && categorySlug === 'earbuds') {
+      storageGb = 1;
       storageConfident = true;
     }
     const storageKnown = storageGb !== null;
@@ -1262,8 +1292,19 @@ export class ProductNormalizer {
     const colors: string[] = [];
     if (Array.isArray(raw.models)) {
       for (const m of raw.models) {
-        if (m.name && typeof m.name === 'string' && !colors.includes(m.name.trim())) {
-          colors.push(m.name.trim());
+        const trimmedColor = typeof m?.name === 'string' ? m.name.trim() : '';
+        if (trimmedColor.length > 0 && !colors.includes(trimmedColor)) {
+          colors.push(trimmedColor);
+        }
+      }
+    }
+
+    const images: string[] = [];
+    if (Array.isArray(raw.images)) {
+      for (const img of raw.images) {
+        const trimmedImg = typeof img === 'string' ? img.trim() : '';
+        if (trimmedImg.length > 0 && !images.includes(trimmedImg)) {
+          images.push(trimmedImg);
         }
       }
     }
@@ -1290,10 +1331,174 @@ export class ProductNormalizer {
     // 6. Enrich with 10 Field Groups (PhoneArena structure + GSMArena depth)
     const isApple = brand === 'Apple';
 
-    const ramGb = benchmark ? benchmark.ram_gb : (claimable.find(t => t.claimed)?.value ?? null);
-    const screenSize = benchmark ? benchmark.screen_size_inch : null;
+    const titleScreenMatch =
+      categorySlug === 'earbuds' ? null : title.match(/\b(\d{1,2}(?:[.,]\d)?)\s*(?:inch|in\b|")/i);
+    const parsedTitleScreen = titleScreenMatch
+      ? parseFloat(titleScreenMatch[1].replace(',', '.'))
+      : null;
+    const titleScreenSize =
+      parsedTitleScreen !== null &&
+      Number.isFinite(parsedTitleScreen) &&
+      parsedTitleScreen >= 0.8 &&
+      parsedTitleScreen <= 20
+        ? parsedTitleScreen
+        : null;
+
+    const claimedRamValue = claimable.find(t => t.claimed)?.value ?? null;
+    const ramGb = benchmark
+      ? benchmark.ram_gb
+      : claimedRamValue !== null &&
+          Number.isFinite(claimedRamValue) &&
+          claimedRamValue > 0 &&
+          claimedRamValue <= MAX_VALID_RAM_GB
+        ? claimedRamValue
+        : null;
+    const screenSize = benchmark ? benchmark.screen_size_inch : titleScreenSize;
     const batteryMah = benchmark ? benchmark.battery_mah : null;
-    const has5g = benchmark ? benchmark.has_5g : categorySlug === 'smartphones';
+    const has5g = benchmark
+      ? benchmark.has_5g
+      : categorySlug === 'smartphones' || /\b5g\b/i.test(title);
+
+    const fallbackOs =
+      categorySlug === 'laptops'
+        ? isApple
+          ? 'macOS Sequoia'
+          : 'Windows 11 Home'
+        : categorySlug === 'tablets'
+          ? isApple
+            ? 'iPadOS 18'
+            : 'Android 14'
+          : categorySlug === 'smartwatches'
+            ? isApple
+              ? 'watchOS 11'
+              : brand === 'Garmin'
+                ? 'Garmin OS'
+                : 'Wear OS 5'
+            : categorySlug === 'earbuds'
+              ? isApple
+                ? 'Apple AudioOS'
+                : 'Bluetooth 5.3 Audio DSP'
+              : isApple
+                ? 'iOS 18'
+                : 'Android 14';
+
+    const fallbackScreenSize =
+      screenSize ||
+      (categorySlug === 'laptops'
+        ? isApple
+          ? 13.6
+          : 14.0
+        : categorySlug === 'tablets'
+          ? 11.0
+          : categorySlug === 'smartwatches'
+            ? 1.4
+            : categorySlug === 'earbuds'
+              ? 1.0
+              : isApple
+                ? 6.1
+                : 6.6);
+
+    const fallbackScreenType =
+      categorySlug === 'laptops'
+        ? isApple
+          ? 'Liquid Retina IPS'
+          : 'IPS / OLED Anti-Glare'
+        : categorySlug === 'tablets'
+          ? isApple
+            ? 'Liquid Retina IPS, True Tone'
+            : 'IPS LCD / AMOLED, 120Hz'
+          : categorySlug === 'smartwatches'
+            ? 'AMOLED Always-On Touchscreen'
+            : categorySlug === 'earbuds'
+              ? 'Status LED Indicator'
+              : isApple
+                ? 'Super Retina XDR OLED, HDR10'
+                : 'AMOLED, 120Hz, HDR10+';
+
+    const fallbackChip =
+      categorySlug === 'laptops'
+        ? isApple
+          ? 'Apple M-Series'
+          : 'Intel Core / AMD Ryzen'
+        : categorySlug === 'tablets'
+          ? isApple
+            ? 'Apple M / A-Series'
+            : 'Snapdragon / Dimensity'
+          : categorySlug === 'smartwatches'
+            ? isApple
+              ? 'Apple S-Series SiP'
+              : 'Wearable Dual-Core SoC'
+            : categorySlug === 'earbuds'
+              ? isApple
+                ? 'Apple H-Series Audio Chip'
+                : 'Bluetooth 5.3 ANC DSP'
+              : isApple
+                ? 'Apple A-Series'
+                : 'Snapdragon / Dimensity';
+
+    const fallbackMainCamera =
+      categorySlug === 'laptops'
+        ? '1080p FHD Webcam with Dual-Array Mic'
+        : categorySlug === 'earbuds'
+          ? 'Multi-Mic Array + Active Noise Cancellation (ANC)'
+          : categorySlug === 'smartwatches'
+            ? 'Optical Heart Rate + SpO2 Blood Oxygen Sensor'
+            : '50 MP (wide, OIS)';
+
+    const fallbackSecondCamera =
+      categorySlug === 'laptops'
+        ? 'IR Camera / Privacy Shutter'
+        : categorySlug === 'earbuds'
+          ? 'Voice Pickup & Ambient Sound Sensor'
+          : categorySlug === 'smartwatches'
+            ? 'Accelerometer + Gyroscope + Altimeter'
+            : '12 MP (ultrawide)';
+
+    const fallbackFrontCamera =
+      categorySlug === 'laptops'
+        ? '1080p FHD Webcam'
+        : categorySlug === 'earbuds'
+          ? 'Capacitive Touch Controls'
+          : categorySlug === 'smartwatches'
+            ? 'AMOLED Touch + Physical Crown/Button'
+            : '12 MP';
+
+    const fallbackKeyCamera =
+      categorySlug === 'laptops'
+        ? '1080p FHD Webcam'
+        : categorySlug === 'earbuds'
+          ? 'Active Noise Cancellation (ANC)'
+          : categorySlug === 'smartwatches'
+            ? 'Optical HR + SpO2 Sensor'
+            : '50 MP OIS';
+
+    const fallbackBatteryMah =
+      batteryMah ||
+      (categorySlug === 'laptops'
+        ? 4800
+        : categorySlug === 'tablets'
+          ? 8000
+          : categorySlug === 'smartwatches'
+            ? 400
+            : categorySlug === 'earbuds'
+              ? 500
+              : isApple
+                ? 3561
+                : 5000);
+
+    const fallbackChargingW =
+      benchmark?.charging_w ||
+      (categorySlug === 'laptops'
+        ? 65
+        : categorySlug === 'tablets'
+          ? 30
+          : categorySlug === 'smartwatches'
+            ? 10
+            : categorySlug === 'earbuds'
+              ? 5
+              : isApple
+                ? 25
+                : 45);
 
     const cameraCount = benchmark
       ? [
@@ -1312,11 +1517,18 @@ export class ProductNormalizer {
             ? 'Dual Camera'
             : 'Single Camera';
 
+    const rawPriceMin = Number(raw.priceMin);
+    const safePriceMin =
+      Number.isFinite(rawPriceMin) && rawPriceMin > 0 && rawPriceMin <= MAX_VALID_VND_PRICE
+        ? rawPriceMin
+        : 0;
+
     const specifications: ProductSpecifications = {
+      category_slug: categorySlug,
       availability: {
         announced: benchmark?.release_date || '2024',
         status: 'Available',
-        prices_msrp: `${storageDisplay}: ${(raw.priceMin || 0).toLocaleString('vi-VN')}₫`,
+        prices_msrp: `${storageDisplay}: ${safePriceMin.toLocaleString('vi-VN')}₫`,
       },
       design: {
         dimensions: benchmark?.dimensions || undefined,
@@ -1331,9 +1543,7 @@ export class ProductNormalizer {
       },
       display: {
         size_inch: screenSize || undefined,
-        type:
-          benchmark?.screen_type ||
-          (isApple ? 'Super Retina XDR OLED, HDR10' : 'AMOLED, 120Hz, HDR10+'),
+        type: benchmark?.screen_type || fallbackScreenType,
         resolution: benchmark?.resolution || undefined,
         refresh_rate_hz: benchmark?.refresh_rate_hz || (isApple ? 60 : 120),
         ppi: benchmark?.screen_size_inch === 6.8 ? 505 : 460,
@@ -1347,24 +1557,24 @@ export class ProductNormalizer {
         cpu: benchmark?.cpu || undefined,
         gpu: benchmark?.gpu || undefined,
         ram_gb: ramGb || undefined,
-        storage_gb: storageGb !== null ? storageGb : undefined,
+        storage_gb: storageGb !== null && storageGb > 0 ? storageGb : undefined,
         storage_expansion: 'Không hỗ trợ thẻ nhớ',
-        os: benchmark?.os || (isApple ? 'iOS 18' : 'Android 14'),
+        os: benchmark?.os || fallbackOs,
       },
       battery: {
         capacity_mah: batteryMah || undefined,
         type: 'Li-Ion, không thể tháo rời',
         charging: isApple ? 'Sạc nhanh PD, Sạc không dây MagSafe/Qi2' : 'Sạc nhanh USB-C PD/PPS',
-        fast_charging_w: benchmark?.charging_w || (isApple ? 25 : 45),
+        fast_charging_w: fallbackChargingW,
         reverse_charging: false,
       },
       camera: {
         rear_setup: rearSetupLabel,
-        main_camera: benchmark?.rear_camera || '50 MP (wide, OIS)',
-        second_camera: benchmark?.second_camera || '12 MP (ultrawide)',
+        main_camera: benchmark?.rear_camera || fallbackMainCamera,
+        second_camera: benchmark?.second_camera || fallbackSecondCamera,
         third_camera: benchmark?.third_camera || undefined,
         fourth_camera: benchmark?.fourth_camera || undefined,
-        front_camera: benchmark?.front_camera || '12 MP',
+        front_camera: benchmark?.front_camera || fallbackFrontCamera,
         flash: isApple ? 'True Tone Dual-LED' : 'LED flash, auto-HDR, panorama',
         video_recording: '4K@30/60fps, 1080p@30/60/120/240fps, HDR',
       },
@@ -1379,15 +1589,27 @@ export class ProductNormalizer {
         nfc: true,
         other: isApple ? 'Ultra Wideband (UWB), SOS vệ tinh' : 'Hỗ trợ OTG, Chia sẻ nhanh',
       },
-      cellular: {
-        has_5g: has5g,
-        bands_5g: 'SA/NSA/Sub6',
-        bands_4g: 'LTE Cat 20',
-        technology: 'GSM / HSPA / LTE / 5G',
-        sim_type: '2 Nano-SIM + eSIM',
-        volte: true,
-        vowifi: true,
-      },
+      cellular:
+        !has5g && categorySlug !== 'smartphones'
+          ? {
+              has_5g: false,
+              technology:
+                categorySlug === 'earbuds' || categorySlug === 'laptops'
+                  ? 'Wi-Fi / Bluetooth (No Cellular)'
+                  : 'Wi-Fi / Bluetooth',
+              sim_type: 'No SIM',
+              volte: false,
+              vowifi: false,
+            }
+          : {
+              has_5g: has5g,
+              bands_5g: has5g ? 'SA/NSA/Sub6' : undefined,
+              bands_4g: 'LTE Cat 20',
+              technology: has5g ? 'GSM / HSPA / LTE / 5G' : 'GSM / HSPA / LTE',
+              sim_type: '2 Nano-SIM + eSIM',
+              volte: true,
+              vowifi: true,
+            },
       multimedia: {
         loudspeaker: 'Loa kép Stereo đa chiều',
         headphone_jack_35mm: false,
@@ -1401,12 +1623,13 @@ export class ProductNormalizer {
     };
 
     const keySpecs: KeySpecs = {
-      screen: `${screenSize || (isApple ? 6.1 : 6.6)}" ${benchmark?.screen_type?.split(',')[0] || (isApple ? 'OLED' : 'AMOLED 120Hz')}`,
-      chip:
-        benchmark?.chipset?.split('(')[0]?.trim() ||
-        (isApple ? 'Apple A-Series' : 'Snapdragon / Dimensity'),
-      camera: benchmark?.rear_camera ? benchmark.rear_camera.split(',')[0] : '50 MP OIS',
-      battery: `${batteryMah || (isApple ? 3561 : 5000)} mAh (${benchmark?.charging_w || (isApple ? 25 : 45)}W)`,
+      screen:
+        categorySlug === 'earbuds' && !benchmark
+          ? 'TWS In-Ear + Charging Case'
+          : `${fallbackScreenSize}" ${benchmark?.screen_type?.split(',')[0] || fallbackScreenType.split(',')[0]}`,
+      chip: benchmark?.chipset?.split('(')[0]?.trim() || fallbackChip,
+      camera: benchmark?.rear_camera ? benchmark.rear_camera.split(',')[0] : fallbackKeyCamera,
+      battery: `${fallbackBatteryMah} mAh (${fallbackChargingW}W)`,
       storage: storageDisplay,
       ram: ramGb ? `${ramGb}GB` : undefined,
     };
@@ -1431,7 +1654,7 @@ export class ProductNormalizer {
       battery_mah: batteryMah,
       has_5g: has5g,
       colors,
-      images: raw.images || [],
+      images,
       specifications,
       key_specs: keySpecs,
       description: raw.description,

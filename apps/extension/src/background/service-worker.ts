@@ -14,6 +14,7 @@ import {
   isPrivilegedExtensionSender,
   normalizeAllowedApiBaseUrl,
   sanitizeExtensionProductSignal,
+  selectFreshestSessionSignal,
 } from '../security-guards.js';
 
 const DEFAULT_SETTINGS: ExtensionSettings = {
@@ -252,12 +253,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           tabKey,
           'tab_latest',
         ]);
-        const entry = (sessionData[tabKey] || sessionData.tab_latest) as
-          { signal?: ExtractedPageProductSignal } | undefined;
+        const baseSignal = selectFreshestSessionSignal(
+          sessionData[tabKey] as
+            | { signal?: ExtractedPageProductSignal; updatedAt?: number }
+            | undefined,
+          sessionData.tab_latest as
+            | { signal?: ExtractedPageProductSignal; updatedAt?: number }
+            | undefined
+        );
 
         const settings = await getSettings();
 
-        if (!entry?.signal) {
+        if (!baseSignal) {
           sendResponse({
             ok: true,
             settings,
@@ -268,8 +275,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
 
         const effectiveSignal: ExtractedPageProductSignal = overrideVariant
-          ? { ...entry.signal, selectedVariant: overrideVariant }
-          : entry.signal;
+          ? { ...baseSignal, selectedVariant: overrideVariant }
+          : baseSignal;
+
+        if (overrideVariant) {
+          const now = Date.now();
+          await chrome.storage.session.set({
+            [tabKey]: { signal: effectiveSignal, updatedAt: now },
+            tab_latest: { signal: effectiveSignal, updatedAt: now },
+          });
+        }
 
         const fullLookup = await fetchExtensionLookup(effectiveSignal, 'full');
         sendResponse({
@@ -373,8 +388,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           syntheticSignal.platform = fullLookup.platform;
         }
 
+        const [activeTab] = await chrome.tabs.query({
+          active: true,
+          currentWindow: true,
+        });
+        const tabKey = activeTab?.id ? `tab_${activeTab.id}` : 'tab_latest';
+        const now = Date.now();
         await chrome.storage.session.set({
-          tab_latest: { signal: syntheticSignal, updatedAt: Date.now() },
+          [tabKey]: { signal: syntheticSignal, updatedAt: now },
+          tab_latest: { signal: syntheticSignal, updatedAt: now },
         });
 
         sendResponse({

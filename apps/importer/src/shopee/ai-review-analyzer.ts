@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { z } from '@repo/shared-data';
+import { z, MAX_VALID_VND_PRICE } from '@repo/shared-data';
 import {
   trimTrailingSlashes,
   extractJsonObjectString,
@@ -201,6 +201,12 @@ export interface MerchantRiskEvaluation {
   seeding_ratio: number; // 0..1
   coin_spam_ratio: number; // 0..1
   sabotage_ratio: number; // 0..1
+  total_reviews: number;
+  authentic_count: number;
+  coin_spam_count: number;
+  seeding_fake_count: number;
+  sabotage_or_bombing_count: number;
+  suspicious_ratio_pct: number;
   price_anomaly_detected: boolean;
   reasons: string[];
 }
@@ -247,7 +253,7 @@ const PROVIDER_DEFAULTS: Record<
 };
 
 function clamp01(n: number): number {
-  if (Number.isNaN(n)) return 0;
+  if (!Number.isFinite(n)) return 0;
   return Math.max(0, Math.min(1, Number(n.toFixed(3))));
 }
 
@@ -345,12 +351,18 @@ export function compute6AxisWeightBreakdown(params: {
     if (hasLongTermUsage) C += 0.2;
     C = Math.min(1.5, Number(C.toFixed(2)));
   }
-  const D = Number(Math.max(0.1, Math.min(1.5, reviewerMultiplier)).toFixed(2));
-  const E = Number(Math.max(0, Math.min(1.0, contextMultiplier)).toFixed(2));
+  const safeReviewer = Number.isFinite(reviewerMultiplier) ? reviewerMultiplier : 1.0;
+  const safeContext = Number.isFinite(contextMultiplier) ? contextMultiplier : 1.0;
+  const safeUpvotes = Number.isFinite(upvotes) && upvotes > 0 ? upvotes : 0;
+  const safeDownvotes = Number.isFinite(downvotes) && downvotes > 0 ? downvotes : 0;
+  const safeReportCount = Number.isFinite(reportCount) && reportCount > 0 ? reportCount : 0;
 
-  const netPos = Math.max(0, upvotes - downvotes);
-  const netNeg = Math.max(0, downvotes - upvotes);
-  const rawF = 1 + 0.45 * Math.log(1 + netPos) - 0.3 * netNeg - 0.35 * reportCount;
+  const D = Number(Math.max(0.1, Math.min(1.5, safeReviewer)).toFixed(2));
+  const E = Number(Math.max(0, Math.min(1.0, safeContext)).toFixed(2));
+
+  const netPos = Math.max(0, safeUpvotes - safeDownvotes);
+  const netNeg = Math.max(0, safeDownvotes - safeUpvotes);
+  const rawF = 1 + 0.45 * Math.log(1 + netPos) - 0.3 * netNeg - 0.35 * safeReportCount;
   const F = Number(Math.max(0.1, Math.min(2.0, rawF)).toFixed(4));
 
   let gate: 0 | 1 = 1;
@@ -407,14 +419,28 @@ export function computeBayesianProductRating(
   items: Array<{ rating_star: number; weight: number }>,
   options: { priorMean?: number; priorStrength?: number } = {}
 ): BayesianRatingResult {
-  const mu = options.priorMean ?? 4.2;
-  const k = options.priorStrength ?? 3;
+  const mu =
+    typeof options.priorMean === 'number' &&
+    Number.isFinite(options.priorMean) &&
+    options.priorMean >= 1 &&
+    options.priorMean <= 5
+      ? options.priorMean
+      : 4.2;
+  const k =
+    typeof options.priorStrength === 'number' &&
+    Number.isFinite(options.priorStrength) &&
+    options.priorStrength > 0
+      ? options.priorStrength
+      : 3;
 
   let weightSum = 0;
   let weightedRatingSum = 0;
   for (const item of items) {
     const w = Number.isFinite(item.weight) && item.weight > 0 ? item.weight : 0;
     if (w <= 0) continue;
+    if (!Number.isFinite(item.rating_star) || item.rating_star < 1 || item.rating_star > 5) {
+      continue;
+    }
     weightSum += w;
     weightedRatingSum += w * item.rating_star;
   }
@@ -478,8 +504,12 @@ export function computeReviewWeight(params: {
     return 0;
   }
 
+  const safeUpvotes = Number.isFinite(upvotes) && upvotes > 0 ? upvotes : 0;
+  const safeDownvotes = Number.isFinite(downvotes) && downvotes > 0 ? downvotes : 0;
+  const safeReportCount = Number.isFinite(reportCount) && reportCount > 0 ? reportCount : 0;
+
   const base = verdict === 'suspicious' ? 0.25 : 1.0;
-  const netVotes = upvotes - downvotes;
+  const netVotes = safeUpvotes - safeDownvotes;
 
   let weight = base;
   if (netVotes > 0) {
@@ -488,7 +518,7 @@ export function computeReviewWeight(params: {
     weight = base - Math.abs(netVotes) * 0.3;
   }
 
-  weight -= reportCount * 0.35;
+  weight -= safeReportCount * 0.35;
 
   return Number(Math.max(0, Math.min(3.0, weight)).toFixed(2));
 }
@@ -1665,25 +1695,30 @@ Return ONLY valid JSON matching:
       const cat = res?.flag_category ?? 'authentic';
       breakdown[cat] = (breakdown[cat] || 0) + 1;
 
-      rawSum += r.rating_star;
+      const safeStar = Number.isFinite(r.rating_star) ? Math.max(1, Math.min(5, r.rating_star)) : 0;
+      rawSum += safeStar;
 
-      if (!res?.include_in_rating || res.helpfulness_weight <= 0) {
+      const weight =
+        res && Number.isFinite(res.helpfulness_weight) && res.helpfulness_weight > 0
+          ? res.helpfulness_weight
+          : 0;
+      if (!res?.include_in_rating || weight <= 0 || safeStar === 0) {
         ignoredCount++;
         continue;
       }
 
       authenticCount++;
-      if (r.rating_star >= 4) positiveAuthenticCount++;
+      if (safeStar >= 4) positiveAuthenticCount++;
 
       if (r.reviewer_type === 'expert') {
-        expertSum += r.rating_star * res.helpfulness_weight;
-        expertWeight += res.helpfulness_weight;
+        expertSum += safeStar * weight;
+        expertWeight += weight;
       } else {
-        weightedUserSum += r.rating_star * res.helpfulness_weight;
-        totalUserWeight += res.helpfulness_weight;
+        weightedUserSum += safeStar * weight;
+        totalUserWeight += weight;
         bayesianInputs.push({
-          rating_star: r.rating_star,
-          weight: res.helpfulness_weight,
+          rating_star: safeStar,
+          weight,
         });
       }
     }
@@ -1696,12 +1731,16 @@ Return ONLY valid JSON matching:
 
     const bayesianRating = computeBayesianProductRating(bayesianInputs);
 
-    const computedExpertRating =
-      expertRatingInput !== null
-        ? expertRatingInput
-        : expertWeight > 0
-          ? Number((expertSum / expertWeight).toFixed(2))
-          : null;
+    const hasValidExpertOverride =
+      typeof expertRatingInput === 'number' &&
+      Number.isFinite(expertRatingInput) &&
+      expertRatingInput >= 1 &&
+      expertRatingInput <= 5;
+    const computedExpertRating = hasValidExpertOverride
+      ? Number(expertRatingInput.toFixed(2))
+      : expertWeight > 0
+        ? Number((expertSum / expertWeight).toFixed(2))
+        : null;
 
     // JReviews overall blend: 40% Expert + 60% Weighted Authentic User (or 100% Weighted User if no Expert review yet)
     const overallRating =
@@ -1761,17 +1800,30 @@ Return ONLY valid JSON matching:
    * - Does NOT penalize the merchant for `low_value_coin_spam`, `competitor_sabotage`, or `review_bombing`!
    */
   public evaluateMerchantRisk(input: MerchantRiskInput): MerchantRiskEvaluation {
-    const total = Math.max(1, input.reviewResults.length);
+    const totalReviews = input.reviewResults.length;
+    const total = Math.max(1, totalReviews);
     const seedingCount = input.reviewResults.filter(r => r.flag_category === 'seeding_fake').length;
-    const coinSpamCount = input.reviewResults.filter(
+    const coinSpamCategoryCount = input.reviewResults.filter(
       r => r.flag_category === 'low_value_coin_spam'
     ).length;
     const sabotageCount = input.reviewResults.filter(
       r => r.flag_category === 'competitor_sabotage' || r.flag_category === 'review_bombing'
     ).length;
+    const coinSpamOrExcludedCount = input.reviewResults.filter(
+      r =>
+        r.flag_category === 'low_value_coin_spam' ||
+        (!r.include_in_rating && r.flag_category === 'authentic')
+    ).length;
+    const authenticCount = Math.max(
+      0,
+      totalReviews - seedingCount - coinSpamOrExcludedCount - sabotageCount
+    );
+    const flaggedTotal = seedingCount + coinSpamOrExcludedCount + sabotageCount;
+    const suspiciousRatioPct =
+      totalReviews > 0 ? Math.round((flaggedTotal / totalReviews) * 1000) / 10 : 0;
 
     const seedingRatio = Number((seedingCount / total).toFixed(3));
-    const coinSpamRatio = Number((coinSpamCount / total).toFixed(3));
+    const coinSpamRatio = Number((coinSpamCategoryCount / total).toFixed(3));
     const sabotageRatio = Number((sabotageCount / total).toFixed(3));
 
     let risk = 15; // Baseline neutral risk
@@ -1789,9 +1841,14 @@ Return ONLY valid JSON matching:
     // 2. Price Anomaly Detection (Scam / Counterfeit dump pricing)
     let priceAnomaly = false;
     if (
-      input.listingPrice &&
-      input.canonicalMinPrice &&
-      input.canonicalMinPrice > 2000000 &&
+      typeof input.listingPrice === 'number' &&
+      Number.isFinite(input.listingPrice) &&
+      input.listingPrice > 0 &&
+      input.listingPrice <= MAX_VALID_VND_PRICE &&
+      typeof input.canonicalMinPrice === 'number' &&
+      Number.isFinite(input.canonicalMinPrice) &&
+      input.canonicalMinPrice > 2_000_000 &&
+      input.canonicalMinPrice <= MAX_VALID_VND_PRICE &&
       input.listingPrice < input.canonicalMinPrice * 0.58 &&
       !input.isOfficial
     ) {
@@ -1864,6 +1921,12 @@ Return ONLY valid JSON matching:
       seeding_ratio: seedingRatio,
       coin_spam_ratio: coinSpamRatio,
       sabotage_ratio: sabotageRatio,
+      total_reviews: totalReviews,
+      authentic_count: authenticCount,
+      coin_spam_count: coinSpamOrExcludedCount,
+      seeding_fake_count: seedingCount,
+      sabotage_or_bombing_count: sabotageCount,
+      suspicious_ratio_pct: suspiciousRatioPct,
       price_anomaly_detected: priceAnomaly,
       reasons,
     };
@@ -1994,10 +2057,11 @@ Return ONLY valid JSON matching:
       }));
       const writableFlagRows = flagRows.filter(row => !preservedFlags.has(row.review_id));
 
-      if (writableFlagRows.length > 0) {
+      for (let i = 0; i < writableFlagRows.length; i += 200) {
+        const chunk = writableFlagRows.slice(i, i + 200);
         const { error: flagErr } = await supabase
           .from('review_flags')
-          .upsert(writableFlagRows, { onConflict: 'review_id' });
+          .upsert(chunk, { onConflict: 'review_id' });
 
         if (flagErr) {
           throw new Error(`[AiReviewAnalyzer] Failed to upsert review_flags: ${flagErr.message}`);
@@ -2088,6 +2152,12 @@ Return ONLY valid JSON matching:
         seeding_ratio: merchantRisk.seeding_ratio,
         coin_spam_ratio: merchantRisk.coin_spam_ratio,
         sabotage_ratio: merchantRisk.sabotage_ratio,
+        total_reviews: merchantRisk.total_reviews,
+        authentic_count: merchantRisk.authentic_count,
+        coin_spam_count: merchantRisk.coin_spam_count,
+        seeding_fake_count: merchantRisk.seeding_fake_count,
+        sabotage_or_bombing_count: merchantRisk.sabotage_or_bombing_count,
+        suspicious_ratio_pct: merchantRisk.suspicious_ratio_pct,
         price_anomaly_detected: merchantRisk.price_anomaly_detected,
         reasons: merchantRisk.reasons,
       };

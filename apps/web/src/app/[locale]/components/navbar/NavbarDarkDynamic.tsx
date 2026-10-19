@@ -1,5 +1,5 @@
 'use client';
-import { Suspense, useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from '@/lib/navigation';
 import Image from 'next/image';
 import { useTranslations } from 'next-intl';
@@ -29,19 +29,29 @@ export function NavbarDarkDynamic({
   const tNav = useTranslations('rate.nav');
   const [scroll, setScroll] = useState(false);
   const [toggle, setToggle] = useState(false);
-  const [windowWidth, setWindowWidth] = useState(0);
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Phone menu: focus moves into it on open, Escape closes it and focus
+  // returns to the toggle (DOS/Rate#523).
+  useEffect(() => {
+    if (!toggle) return;
+    menuRef.current
+      ?.querySelector<HTMLElement>('a[href]')
+      ?.focus({ preventScroll: true });
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      setToggle(false);
+      toggleRef.current?.focus({ preventScroll: true });
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [toggle]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
     const handlerScroll = () => setScroll(window.scrollY > 50);
-    const handleResize = () => setWindowWidth(window.innerWidth);
-    setWindowWidth(window.innerWidth);
     window.addEventListener('scroll', handlerScroll);
-    window.addEventListener('resize', handleResize);
-    return () => {
-      window.removeEventListener('scroll', handlerScroll);
-      window.removeEventListener('resize', handleResize);
-    };
+    return () => window.removeEventListener('scroll', handlerScroll);
   }, []);
 
   const logo = (
@@ -69,35 +79,28 @@ export function NavbarDarkDynamic({
         data-sticky-element=""
       >
         <div className="container-fluid">
-          <nav
-            id="navigation"
-            className={
-              windowWidth > 991
-                ? 'navigation navigation-landscape'
-                : 'navigation navigation-portrait'
-            }
-          >
+          {/* Phone vs desktop layout comes from media queries in style.scss
+          (992px), not from a JS width class: the server HTML must already
+          be right, or the navbar jumps after hydration (DOS/Rate#515). */}
+          <nav id="navigation" className="navigation">
             <div className="nav-header">
               {logo}
-              <div
+              <button
+                ref={toggleRef}
+                type="button"
                 className="nav-toggle"
-                role="button"
-                tabIndex={0}
                 aria-label={tNav('menuToggleAria')}
+                aria-controls="rate-nav-menu"
                 aria-expanded={toggle}
                 onClick={() => setToggle(!toggle)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') setToggle(!toggle);
-                }}
-              ></div>
+              ></button>
+              {/* Below 576px only the locale switcher and Inspect fit next to the
+              logo; more icons pushed the menu button off the screen. The
+              hidden ones are all in the menu (DOS/Rate#515). */}
               <div className="mobile_nav">
                 <ul className="d-flex align-items-center gap-2">
                   <li className="me-1">
-                    {/* LocaleSwitcher reads useSearchParams; its own boundary keeps a statically
-                    rendered page from bailing out to client rendering. */}
-                    <Suspense fallback={null}>
-                      <LocaleSwitcher isDarkHeader={false} compact={true} />
-                    </Suspense>
+                    <LocaleSwitcher isDarkHeader={false} compact={true} />
                   </li>
                   <li>
                     <Link
@@ -108,7 +111,7 @@ export function NavbarDarkDynamic({
                       <BsShieldCheck className="me-1" />
                     </Link>
                   </li>
-                  <li>
+                  <li className="d-none d-sm-block">
                     <Link
                       href="/compare"
                       className="d-flex align-items-center text-dark"
@@ -117,7 +120,7 @@ export function NavbarDarkDynamic({
                       <BsArrowLeftRight className="me-1" />
                     </Link>
                   </li>
-                  <li>
+                  <li className="d-none d-sm-block">
                     <Link
                       href="/watchlist"
                       className="d-flex align-items-center text-primary"
@@ -126,7 +129,7 @@ export function NavbarDarkDynamic({
                       <BsBellFill className="me-1" />
                     </Link>
                   </li>
-                  <li>
+                  <li className="d-none d-sm-block">
                     <Link
                       href="/developers"
                       className="d-flex align-items-center text-dark"
@@ -140,8 +143,14 @@ export function NavbarDarkDynamic({
             </div>
 
             <div
+              ref={menuRef}
+              id="rate-nav-menu"
               className={`nav-menus-wrapper ${toggle ? 'nav-menus-wrapper-open' : ''}`}
-              style={{ transitionProperty: toggle ? 'none' : 'left' }}
+              // Closing slides out, and visibility turns hidden only at the
+              // end of the slide (see style.scss).
+              style={{
+                transitionProperty: toggle ? 'none' : 'left, visibility',
+              }}
             >
               <div className="mobLogos">
                 {logoUrl ? (
@@ -158,18 +167,17 @@ export function NavbarDarkDynamic({
                   <RateWordmark tone="ink" size={26} />
                 )}
               </div>
-              <span
+              <button
+                type="button"
                 className="nav-menus-wrapper-close-button"
-                role="button"
-                tabIndex={0}
-                aria-label="Close navigation"
-                onClick={() => setToggle(false)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') setToggle(false);
+                aria-label={tNav('menuCloseAria')}
+                onClick={() => {
+                  setToggle(false);
+                  toggleRef.current?.focus({ preventScroll: true });
                 }}
               >
-                ✕
-              </span>
+                <span aria-hidden="true">✕</span>
+              </button>
 
               {(() => {
                 const defaultLinks: NavbarLinkItem[] = [
@@ -257,9 +265,7 @@ export function NavbarDarkDynamic({
 
               <ul className="nav-menu nav-menu-social align-to-right d-flex align-items-center mb-0">
                 <li className="d-flex align-items-center me-3">
-                  <Suspense fallback={null}>
-                    <LocaleSwitcher isDarkHeader={false} />
-                  </Suspense>
+                  <LocaleSwitcher isDarkHeader={false} />
                 </li>
                 <li className="list-buttons d-flex align-items-center">
                   <Link

@@ -3,8 +3,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  cleanExtractedProductTitle,
   detectEcommercePlatform,
   extractIdsFromUrl,
+  extractPriceFromJsonLdOffers,
+  extractProductSignalFromDom,
+  extractRatingFromJsonLd,
+  flattenJsonLdEntities,
+  isJsonLdProductEntity,
   parseVndPriceText,
   sanitizeProductUrl,
 } from './extractors/ecommerce-detector.js';
@@ -13,6 +19,8 @@ import {
   escapeSafeExternalHref,
   isPrivilegedExtensionSender,
   normalizeAllowedApiBaseUrl,
+  normalizeFiveStarRating,
+  selectFreshestSessionSignal,
 } from './security-guards.js';
 import * as extModule from '../../web/src/server/rate/extension.js';
 import * as rateApiRootMod from '../../web/src/lib/rate-api.js';
@@ -1962,8 +1970,276 @@ async function runTests() {
     [25_000_000, 24_500_000]
   );
 
+  // Issue #499: Range price parsing across en-dash, em-dash, tilde, and numeric inputs
+  assert.equal(parseVndPriceText('28.990.000₫ \u2013 34.990.000₫'), 28_990_000);
+  assert.equal(parseVndPriceText('28.990.000₫ \u2014 34.990.000₫'), 28_990_000);
+  assert.equal(parseVndPriceText('28.990.000₫ ~ 34.990.000₫'), 28_990_000);
+  assert.equal(parseVndPriceText(28_990_000.4), 28_990_000);
+  assert.equal(parseVndPriceText(900_000_000), null);
+
+  // Issue #499: JSON-LD @graph flattening, array/URI @type, formatted offer prices, and bestRating scaling
+  const graphJsonLd = {
+    '@context': 'https://schema.org',
+    '@graph': [
+      { '@type': 'WebPage', name: 'CellphoneS' },
+      {
+        '@type': ['https://schema.org/Product', 'IndividualProduct'],
+        name: 'iPhone 16 Pro Max 256GB - CellphoneS.com.vn',
+        offers: {
+          '@type': 'AggregateOffer',
+          lowPrice: '28.990.000 VND',
+          highPrice: '34.990.000 VND',
+        },
+        aggregateRating: {
+          ratingValue: '9,6',
+          bestRating: '10',
+          reviewCount: '1.240',
+        },
+      },
+    ],
+  };
+  const flattenedLd = flattenJsonLdEntities(graphJsonLd);
+  const productLd = flattenedLd.find(isJsonLdProductEntity);
+  assert.ok(productLd, 'Must find Product inside @graph with URI/array @type');
+  assert.equal(
+    cleanExtractedProductTitle(String(productLd.name)),
+    'iPhone 16 Pro Max 256GB'
+  );
+  assert.deepEqual(extractPriceFromJsonLdOffers(productLd.offers), {
+    price: 28_990_000,
+    originalPrice: 34_990_000,
+  });
+  assert.deepEqual(extractRatingFromJsonLd(productLd.aggregateRating), {
+    ratingStar: 4.8,
+    ratingCount: 1240,
+  });
+
+  // Mock Document test for extractProductSignalFromDom with @graph JSON-LD
+  const mockDoc = {
+    title: 'iPhone 16 Pro Max 256GB - Hoàng Hà Mobile',
+    querySelectorAll(sel: string) {
+      if (sel === 'script[type="application/ld+json"]') {
+        return [{ textContent: JSON.stringify(graphJsonLd) }];
+      }
+      if (sel === '.box-linked .item.active') {
+        return [{ textContent: ' 256GB ' }];
+      }
+      return [];
+    },
+    querySelector() {
+      return null;
+    },
+  } as unknown as Document;
+  const extractedDomSignal = extractProductSignalFromDom(
+    mockDoc,
+    'https://cellphones.com.vn/iphone-16-pro-max.html?utm_source=test'
+  );
+  assert.ok(extractedDomSignal);
+  assert.equal(extractedDomSignal.platform, 'cellphones');
+  assert.equal(extractedDomSignal.title, 'iPhone 16 Pro Max 256GB');
+  assert.equal(extractedDomSignal.price, 28_990_000);
+  assert.equal(extractedDomSignal.originalPrice, 34_990_000);
+  assert.equal(extractedDomSignal.ratingStar, 4.8);
+  assert.equal(extractedDomSignal.ratingCount, 1240);
+  assert.equal(extractedDomSignal.selectedVariant, '256GB');
+
+  // Issue #499: 10-point rating scaling & freshest session signal selection
+  assert.equal(normalizeFiveStarRating(4.8), 4.8);
+  assert.equal(normalizeFiveStarRating(9.2), 4.6);
+  assert.equal(normalizeFiveStarRating(92), 4.6);
+  assert.equal(normalizeFiveStarRating('4,8'), 4.8);
+  assert.equal(normalizeFiveStarRating(0), null);
+  assert.equal(normalizeFiveStarRating(150), null);
+
+  const olderTabSignal = {
+    ...extractedDomSignal,
+    title: 'Old Tab Product',
+  };
+  const newerQuickQuerySignal = {
+    ...extractedDomSignal,
+    title: 'Quick Query Product',
+  };
+  assert.equal(
+    selectFreshestSessionSignal(
+      { signal: olderTabSignal, updatedAt: 1000 },
+      { signal: newerQuickQuerySignal, updatedAt: 2000 }
+    )?.title,
+    'Quick Query Product',
+    'selectFreshestSessionSignal must prefer tab_latest when a Quick Query was run more recently than the active tab signal'
+  );
+  assert.equal(
+    selectFreshestSessionSignal(
+      { signal: olderTabSignal, updatedAt: 3000 },
+      { signal: newerQuickQuerySignal, updatedAt: 2000 }
+    )?.title,
+    'Old Tab Product'
+  );
+
   console.log(
-    '  ✅ [Extension Signal & Sender Guards] sanitizeExtensionProductSignal, formatSafeExtensionVnd, resolveSafeApiRelativeUrl, formatSafeNumber & sanitizeVerdictClassSuffix passed (#382, #393, #401)'
+    '  ✅ [Extension Signal & Sender Guards] sanitizeExtensionProductSignal, formatSafeExtensionVnd, resolveSafeApiRelativeUrl, formatSafeNumber, sanitizeVerdictClassSuffix & #499 JSON-LD/Rating/Session guards passed (#382, #393, #401, #499)'
+  );
+
+  // Verify DOS/Rate#497: isSafeRevalidationPath, resolveRevalidationTargets merchant PRICE_HISTORY cascade, and evaluateExtensionPriceVerdict MAX_VALID_VND_PRICE bounds
+  const {
+    RATE_CACHE_TAGS: CACHE_TAGS_497,
+    isSafeRevalidationPath,
+    resolveRevalidationTargets: resolveTargets497,
+  } = await import('../../web/src/server/rate/cache-tags');
+
+  assert.equal(isSafeRevalidationPath('/smartphones'), true);
+  assert.equal(
+    isSafeRevalidationPath('//evil.com/phish'),
+    false,
+    'isSafeRevalidationPath must reject protocol-relative // paths'
+  );
+  assert.equal(
+    isSafeRevalidationPath('/smartphones\\evil'),
+    false,
+    'isSafeRevalidationPath must reject backslash paths'
+  );
+  assert.equal(
+    isSafeRevalidationPath('/smartphones\r\nSet-Cookie: evil=1'),
+    false,
+    'isSafeRevalidationPath must reject control characters'
+  );
+
+  const merchTargets497 = resolveTargets497({
+    merchants: ['shopee-88201679'],
+    paths: ['//evil.com', '/merchants', '/smartphones\\bad'],
+  });
+  assert.ok(
+    merchTargets497.tags.includes(CACHE_TAGS_497.PRICE_HISTORY),
+    'Merchant revalidation must cascade to rate:price-history (#497)'
+  );
+  assert.deepEqual(
+    merchTargets497.paths,
+    ['/merchants'],
+    'resolveRevalidationTargets must filter out unsafe revalidation paths (#497)'
+  );
+
+  const verdict497 = evaluateExtensionPriceVerdict({
+    isAccessory: false,
+    accessoryReason: null,
+    isAmbiguousVariant: false,
+    observedPrice: 28_000_000,
+    observedOriginalPrice: 9_000_000_000, // corrupted > 1B VND original price
+    offers: [
+      {
+        id: 'off-valid-floor',
+        platform: 'tiki',
+        title: 'iPhone 16 Pro Max 256GB',
+        price_current: 27_000_000,
+        price_original: null,
+        stock: 5,
+        rating_star: 4.9,
+        rating_count: 100,
+        url: 'https://tiki.vn/p1.html',
+        merchant: {
+          id: 'm0',
+          name: 'Shop 0',
+          platform: 'tiki',
+          is_official: true,
+          rating_star: 4.9,
+          follower_count: 1000,
+          location: 'VN',
+          risk_score: 5,
+          dosafe_risk_score: 5,
+          review_risk_score: 5,
+          review_risk_breakdown: null,
+        },
+      },
+      {
+        id: 'off-valid-1',
+        platform: 'shopee',
+        title: 'iPhone 16 Pro Max 256GB',
+        price_current: 28_000_000,
+        price_original: null,
+        stock: 5,
+        rating_star: 4.9,
+        rating_count: 100,
+        url: 'https://shopee.vn/i.1.1',
+        merchant: {
+          id: 'm1',
+          name: 'Shop 1',
+          platform: 'shopee',
+          is_official: true,
+          rating_star: 4.9,
+          follower_count: 1000,
+          location: 'VN',
+          risk_score: 5,
+          dosafe_risk_score: 5,
+          review_risk_score: 5,
+          review_risk_breakdown: null,
+        },
+      },
+      {
+        id: 'off-valid-high',
+        platform: 'cellphones',
+        title: 'iPhone 16 Pro Max 256GB',
+        price_current: 29_000_000,
+        price_original: null,
+        stock: 5,
+        rating_star: 4.9,
+        rating_count: 100,
+        url: 'https://cellphones.com.vn/p1.html',
+        merchant: {
+          id: 'm3',
+          name: 'Shop 3',
+          platform: 'cellphones',
+          is_official: true,
+          rating_star: 4.9,
+          follower_count: 1000,
+          location: 'VN',
+          risk_score: 5,
+          dosafe_risk_score: 5,
+          review_risk_score: 5,
+          review_risk_breakdown: null,
+        },
+      },
+      {
+        id: 'off-corrupt-2',
+        platform: 'lazada',
+        title: 'Corrupted Offer',
+        price_current: 5_000_000_000, // > 1B VND must be ignored
+        price_original: null,
+        stock: 1,
+        rating_star: 4.5,
+        rating_count: 10,
+        url: 'https://lazada.vn/i2.html',
+        merchant: {
+          id: 'm2',
+          name: 'Shop 2',
+          platform: 'lazada',
+          is_official: false,
+          rating_star: 4.5,
+          follower_count: 100,
+          location: 'VN',
+          risk_score: 20,
+          dosafe_risk_score: 20,
+          review_risk_score: 20,
+          review_risk_breakdown: null,
+        },
+      },
+    ],
+    priceHistory: null,
+  });
+  assert.equal(
+    verdict497.marketMaxPrice,
+    29_000_000,
+    'evaluateExtensionPriceVerdict must exclude corrupted > 1B VND offer prices from marketMaxPrice (#497)'
+  );
+  assert.equal(
+    verdict497.observedOriginalPrice,
+    null,
+    'evaluateExtensionPriceVerdict must ignore observedOriginalPrice > 1B VND (#497)'
+  );
+  assert.equal(
+    verdict497.verdict,
+    'fair_market_price',
+    'evaluateExtensionPriceVerdict must not trigger inflated_fake_sale from corrupted > 1B VND original price (#497)'
+  );
+  console.log(
+    '  ✅ [Cache Tags & Verdict Bounds] isSafeRevalidationPath, merchant PRICE_HISTORY cascade & evaluateExtensionPriceVerdict bounds verified (#497)'
   );
 
   console.log('🎉 All Rate Browser Extension MV3 v2 tests passed!');

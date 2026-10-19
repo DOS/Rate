@@ -4,7 +4,10 @@ import { useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { BsSliders } from 'react-icons/bs';
 import { Link } from '@/lib/navigation';
-import type { ScoredLeaderboardItem } from '@/lib/leaderboard-engine';
+import {
+  comparePositiveMinPrices,
+  type ScoredLeaderboardItem,
+} from '@/lib/rate-domain';
 import {
   getRadarSignal,
   RADAR_CSV_HEADERS,
@@ -98,6 +101,16 @@ export default function VersusInteractiveScoreboard({
     }));
   };
 
+  const priceSide = comparePositiveMinPrices(scoreA.minPrice, scoreB.minPrice);
+  const priceAdvantageLabel =
+    priceSide === 'A'
+      ? scoreA.name
+      : priceSide === 'B'
+        ? scoreB.name
+        : priceSide === 'equal'
+          ? t('mdRowTie')
+          : '-';
+
   const weightedResult = useMemo(() => {
     const sumW =
       weights.screen +
@@ -123,14 +136,18 @@ export default function VersusInteractiveScoreboard({
 
     const finalA = calcWeighted(scoreA);
     const finalB = calcWeighted(scoreB);
+    const tiePriceSide = comparePositiveMinPrices(
+      scoreA.minPrice,
+      scoreB.minPrice
+    );
     const winner =
       finalA > finalB
         ? scoreA
         : finalB > finalA
           ? scoreB
-          : scoreA.minPrice <= scoreB.minPrice
-            ? scoreA
-            : scoreB;
+          : tiePriceSide === 'B'
+            ? scoreB
+            : scoreA;
 
     return {
       finalA,
@@ -199,7 +216,7 @@ export default function VersusInteractiveScoreboard({
                 : t('mdRowTie');
           return `| ${r.label} | ${r.aVal.toFixed(2)}/5.0 | ${r.bVal.toFixed(2)}/5.0 | ${winName} |`;
         }),
-        `| **${t('mdRowMinPrice')}** | ${scoreA.minPrice.toLocaleString('vi-VN')} ₫ | ${scoreB.minPrice.toLocaleString('vi-VN')} ₫ | ${scoreA.minPrice <= scoreB.minPrice ? scoreA.name : scoreB.name} |`,
+        `| **${t('mdRowMinPrice')}** | ${scoreA.minPrice.toLocaleString('vi-VN')} ₫ | ${scoreB.minPrice.toLocaleString('vi-VN')} ₫ | ${priceAdvantageLabel} |`,
         `| **${t('mdRowDealRadar')}** | ${radarMarkdownCell(sigA)} | ${radarMarkdownCell(sigB)} | ${sigA.verdict === 'genuine_deal' ? scoreA.name : sigB.verdict === 'genuine_deal' ? scoreB.name : '-'} |`,
       ];
       await navigator.clipboard.writeText(lines.join('\n'));
@@ -262,7 +279,7 @@ export default function VersusInteractiveScoreboard({
         '-',
         scoreA.minPrice,
         scoreB.minPrice,
-        scoreA.minPrice <= scoreB.minPrice ? scoreA.name : scoreB.name,
+        priceAdvantageLabel,
       ],
       [
         t('mdRowDealRadar'),

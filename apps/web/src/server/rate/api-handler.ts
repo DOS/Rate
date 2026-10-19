@@ -112,6 +112,67 @@ export function parseOptionalVndPriceParam(
   return Math.min(Math.round(n), maxVnd);
 }
 
+/**
+ * Parses a comma-separated list of positive integers (e.g. `?ramGb=8,12` or `?storageGb=128,256`),
+ * bounding raw length, filtering out non-integers, `<= 0`, or `> maxValue`, deduplicating,
+ * and capping the list at `maxItems` (default 12).
+ */
+export function parseBoundedPositiveIntArrayParam(
+  raw: string | null | undefined,
+  maxValue: number,
+  maxItems = 12
+): number[] | undefined {
+  const boundedRaw = parseBoundedStringParam(raw, 240);
+  if (!boundedRaw) return undefined;
+  const result: number[] = [];
+  const seen = new Set<number>();
+  for (const part of boundedRaw.split(',')) {
+    const trimmed = part.trim();
+    if (!trimmed) continue;
+    const n = Number(trimmed);
+    if (!Number.isInteger(n) || n <= 0 || n > maxValue || seen.has(n)) {
+      continue;
+    }
+    seen.add(n);
+    result.push(n);
+    if (result.length >= maxItems) break;
+  }
+  return result.length > 0 ? result : undefined;
+}
+
+/**
+ * Resolves bounded `currentMinPrice` and `currentMaxPrice` (`(0, maxVnd]`, `currentMaxPrice >= currentMinPrice`)
+ * for Watchlist API responses and Target Price Alert evaluations, falling back to `bestOfferPrice`
+ * when `master.min_price` is missing, non-positive, or exceeds `maxVnd` (1B VND).
+ */
+export function resolveWatchlistMasterPriceBounds(
+  master: { min_price?: unknown; max_price?: unknown },
+  bestOfferPrice?: number | null,
+  maxVnd = 1_000_000_000
+): { currentMinPrice: number; currentMaxPrice: number } {
+  const rawMin = Number(master.min_price);
+  const safeBestOffer =
+    typeof bestOfferPrice === 'number' &&
+    Number.isFinite(bestOfferPrice) &&
+    bestOfferPrice > 0 &&
+    bestOfferPrice <= maxVnd
+      ? bestOfferPrice
+      : 0;
+  const currentMinPrice =
+    Number.isFinite(rawMin) && rawMin > 0 && rawMin <= maxVnd
+      ? rawMin
+      : safeBestOffer;
+  const rawMax = Number(master.max_price);
+  const currentMaxPrice =
+    currentMinPrice > 0 &&
+    Number.isFinite(rawMax) &&
+    rawMax >= currentMinPrice &&
+    rawMax <= maxVnd
+      ? rawMax
+      : currentMinPrice;
+  return { currentMinPrice, currentMaxPrice };
+}
+
 const CANONICAL_PRODUCT_SLUG_REGEX = /^[a-zA-Z0-9._-]+$/;
 
 /**

@@ -1759,8 +1759,358 @@ async function run() {
     },
   });
 
+  // 16g. DOS/Rate#497: extractCrawlProductsArray validation and non-executing import of run-ingestion-test.ts
+  const { extractCrawlProductsArray } = await import('./run-ingestion-test.js');
+  const validCrawlItems = extractCrawlProductsArray({
+    results: [
+      { title: 'Apple iPhone 16 Pro Max 256GB', priceMin: 28_990_000 },
+      { title: '   ' },
+      null,
+    ],
+  });
+  assert.equal(
+    validCrawlItems.length,
+    1,
+    'extractCrawlProductsArray must extract valid product entries from { results } and filter out blank/null items'
+  );
+  assert.equal(
+    extractCrawlProductsArray([{ title: 'Samsung Galaxy S25 Ultra 256GB', priceMin: 27_990_000 }])
+      .length,
+    1,
+    'extractCrawlProductsArray must accept a top-level array of products'
+  );
+  assert.throws(
+    () => extractCrawlProductsArray({ invalidKey: 123 }),
+    /Invalid crawl dataset/,
+    'extractCrawlProductsArray must throw a descriptive error when given an invalid structure'
+  );
+
+  // 16h. DOS/Rate#514: hasPopulatedSpecificationGroups, priceMax >= priceMin clamping, and enrichMasterProductById category_slug
+  const { hasPopulatedSpecificationGroups } = await import('./shopee-to-supabase.js');
+  assert.equal(hasPopulatedSpecificationGroups(null), false);
+  assert.equal(hasPopulatedSpecificationGroups({}), false);
+  assert.equal(
+    hasPopulatedSpecificationGroups({ category_slug: 'smartphones' }),
+    false,
+    'Stub specifications with only category_slug and 0 populated field groups must return false'
+  );
+  assert.equal(
+    hasPopulatedSpecificationGroups({ category_slug: 'tablets', display: {} }),
+    false,
+    'Empty field group objects must return false'
+  );
+  assert.equal(
+    hasPopulatedSpecificationGroups({
+      category_slug: 'tablets',
+      display: { size_inch: 11.0 },
+    }),
+    true,
+    'Populated 10-field-group value must return true'
+  );
+
+  const clampedMaxProduct = normalizeScrapedProductPrices({
+    itemId: 'item-514',
+    shopId: 'shop-514',
+    url: 'https://shopee.vn/product/514/514',
+    title: 'Apple iPhone 16 Pro Max 256GB',
+    priceMin: 28_990_000,
+    priceMax: 0,
+    currency: 'VND',
+    historicalSold: 10,
+    ratingStar: 4.9,
+    ratingCount: 5,
+    images: [],
+    models: [],
+    attributes: [],
+    shop: {
+      shopId: 'shop-514',
+      name: 'Official Store',
+      isMall: true,
+    },
+    reviews: [],
+  });
+  assert.equal(
+    clampedMaxProduct.priceMax,
+    28_990_000,
+    'normalizeScrapedProductPrices must clamp priceMax < priceMin up to priceMin'
+  );
+
+  let capturedCategorySlug: string | undefined;
+  let updatedSpecs514: Record<string, unknown> | undefined;
+  const stubSupabase514 = {
+    from(table: string) {
+      assert.equal(table, 'master_products');
+      return {
+        select() {
+          return {
+            eq() {
+              return {
+                async maybeSingle() {
+                  return {
+                    data: {
+                      id: 'master-514',
+                      brand: 'Lenovo',
+                      model: 'Tab P12',
+                      storage_gb: 256,
+                      ram_gb: 8,
+                      screen_size_inch: null,
+                      battery_mah: null,
+                      has_5g: false,
+                      name: 'Lenovo Tab P12 256GB',
+                      description: '',
+                      colors: ['Storm Grey'],
+                      specifications: { category_slug: 'tablets' },
+                      key_specs: { storage: '256GB' },
+                    },
+                    error: null,
+                  };
+                },
+              };
+            },
+          };
+        },
+        update(payload: Record<string, unknown>) {
+          updatedSpecs514 = payload.specifications as Record<string, unknown>;
+          return {
+            async eq() {
+              return { error: null };
+            },
+          };
+        },
+      };
+    },
+  } as unknown as ConstructorParameters<typeof EntityMatcher>[0];
+
+  const stubEnricher514 = {
+    async fetchSpecsFromAi(params: { categorySlug?: string }) {
+      capturedCategorySlug = params.categorySlug;
+      return {
+        ram_gb: 8,
+        storage_gb: 256,
+        screen_size_inch: 12.7,
+        battery_mah: 10200,
+        has_5g: false,
+        specifications: {
+          display: { size_inch: 12.7, type: 'LTPS LCD, 60Hz' },
+        },
+        key_specs: { screen: '12.7" LTPS LCD' },
+      };
+    },
+  } as unknown as ConstructorParameters<typeof EntityMatcher>[1];
+
+  const matcher514 = new EntityMatcher(stubSupabase514, stubEnricher514);
+  const enriched514 = await matcher514.enrichMasterProductById('master-514');
+  assert.equal(enriched514, true);
+  assert.equal(
+    capturedCategorySlug,
+    'tablets',
+    'enrichMasterProductById must forward existing specifications.category_slug to fetchSpecsFromAi'
+  );
+  assert.equal(
+    updatedSpecs514?.category_slug,
+    'tablets',
+    'enrichMasterProductById must preserve category_slug on mergedSpecifications'
+  );
+
+  // DOS/Rate#522: ArenaSpecSyncer weightG <= 25000 bound, TB storage formatting, color deduplication, NaN group check, and mergeKeySpecs existing cleanup
+  const gsm522 = parseGsmArenaHtmlToSpecs(`
+    <h1 data-spec="modelname">Apple MacBook Pro 16</h1>
+    <span data-spec="weight">30000 g</span>
+    <span data-spec="internalmemory">1TB 32GB RAM</span>
+    <span data-spec="colors">Space Black, Silver, Space Black,  , </span>
+  `);
+  assert.equal(
+    gsm522.specifications.design?.weight_g,
+    undefined,
+    'parseGsmArenaHtmlToSpecs must drop weight > 25000g so DesignSchema.parse never throws'
+  );
+  assert.equal(gsm522.keySpecs.storage, '1TB', '1024GB storage must format as 1TB in keySpecs');
+  assert.deepEqual(gsm522.specifications.design?.colors, ['Space Black', 'Silver']);
+  assert.equal(
+    countPopulatedFieldGroups({ display: { size_inch: Number.NaN } }),
+    0,
+    'countPopulatedFieldGroups must not count NaN numeric fields as populated'
+  );
+  assert.deepEqual(
+    mergeKeySpecs(
+      { screen: '  6.8" OLED  ', empty: '   ', nil: null, badNum: Number.NaN },
+      { chip: ' A18 Pro ' }
+    ),
+    { screen: '6.8" OLED', chip: 'A18 Pro' }
+  );
+
+  // DOS/Rate#528: AiReviewAnalyzer numeric bounds, Bayesian inputs, and review_flags chunking
+  const axes528 = compute6AxisWeightBreakdown({
+    authenticity: 'genuine',
+    independence: 'organic',
+    depth: 'detailed',
+    reviewerMultiplier: Number.NaN,
+    contextMultiplier: Number.NaN,
+    upvotes: Number.NaN,
+    downvotes: -5,
+    reportCount: -10,
+  });
+  assert.equal(axes528.reviewer, 1.0, 'NaN reviewerMultiplier must fall back to 1.0');
+  assert.equal(axes528.context, 1.0, 'NaN contextMultiplier must fall back to 1.0');
+  assert.equal(axes528.community, 1.0, 'Negative/NaN votes and reportCount must be ignored');
+  assert.equal(axes528.weight, 1.0);
+
+  const bayesian528 = computeBayesianProductRating(
+    [
+      { rating_star: Number.NaN, weight: 2 },
+      { rating_star: 0, weight: 3 },
+      { rating_star: 6, weight: 3 },
+      { rating_star: 5, weight: 2 },
+    ],
+    { priorMean: Number.NaN, priorStrength: -5 }
+  );
+  assert.equal(bayesian528.prior_mean, 4.2, 'Invalid priorMean must fall back to 4.2');
+  assert.equal(bayesian528.prior_strength, 3, 'Non-positive priorStrength must fall back to 3');
+  assert.equal(
+    bayesian528.effective_weight_sum,
+    2,
+    'Out-of-range rating_star items must be ignored'
+  );
+  assert.equal(bayesian528.raw_weighted_average, 5);
+
+  const weight528 = computeReviewWeight({
+    upvotes: Number.NaN,
+    downvotes: -3,
+    reportCount: -10,
+    flagCategory: 'authentic',
+    verdict: 'authentic',
+  });
+  assert.equal(weight528, 1.0, 'Negative reportCount must not inflate review weight');
+
+  const summary528 = analyzer.computeJReviewsSummary(
+    [
+      {
+        id: 'rev-528-1',
+        rating_star: 5,
+        comment: 'Máy dùng rất mượt, pin trâu dùng cả ngày.',
+        reviewer_type: 'user',
+      },
+      {
+        id: 'rev-528-nan',
+        rating_star: Number.NaN,
+        comment: 'Lỗi điểm sao',
+        reviewer_type: 'user',
+      },
+    ],
+    [
+      {
+        review_id: 'rev-528-1',
+        fake_probability: 0.05,
+        verdict: 'authentic',
+        flag_category: 'authentic',
+        reason: 'ok',
+        include_in_rating: true,
+        helpfulness_weight: 1.0,
+        signals: {
+          burst_pattern_score: 0,
+          duplicate_text_ratio: 0,
+          account_age_bucket: 'high',
+          reviewer_history_score: 0,
+          language_marker_score: 0,
+        },
+      },
+      {
+        review_id: 'rev-528-nan',
+        fake_probability: 0.05,
+        verdict: 'authentic',
+        flag_category: 'authentic',
+        reason: 'ok',
+        include_in_rating: true,
+        helpfulness_weight: 1.0,
+        signals: {
+          burst_pattern_score: 0,
+          duplicate_text_ratio: 0,
+          account_age_bucket: 'high',
+          reviewer_history_score: 0,
+          language_marker_score: 0,
+        },
+      },
+    ],
+    Number.NaN
+  );
+  assert.equal(summary528.user_rating_weighted, 5);
+  assert.equal(summary528.expert_rating, null, 'NaN expertRatingInput must be ignored');
+  assert.equal(summary528.overall_rating, 5);
+
+  const riskCorrupted528 = analyzer.evaluateMerchantRisk({
+    platform: 'shopee',
+    isOfficial: false,
+    listingPrice: 20_000_000,
+    canonicalMinPrice: 5_000_000_000,
+    reviewResults: [],
+  });
+  assert.equal(
+    riskCorrupted528.price_anomaly_detected,
+    false,
+    'canonicalMinPrice > MAX_VALID_VND_PRICE must not trigger false-positive price_anomaly_detected'
+  );
+
+  const upsertedFlagChunks528: number[] = [];
+  const stubSupabase528 = {
+    from(table: string) {
+      if (table === 'review_flags') {
+        return {
+          select() {
+            return {
+              in() {
+                return {
+                  async in() {
+                    return { data: [], error: null };
+                  },
+                };
+              },
+            };
+          },
+          async upsert(rows: unknown[]) {
+            upsertedFlagChunks528.push(rows.length);
+            return { error: null };
+          },
+        };
+      }
+      if (table === 'reviews') {
+        return {
+          update() {
+            return {
+              async eq() {
+                return { error: null };
+              },
+            };
+          },
+        };
+      }
+      if (table === 'review_analysis') {
+        return {
+          async upsert() {
+            return { error: null };
+          },
+        };
+      }
+      throw new Error(`Unexpected table ${table}`);
+    },
+  } as unknown as Parameters<typeof analyzer.persistAnalysisToSupabase>[0];
+
+  const batchReviews528 = Array.from({ length: 205 }, (_, idx) => ({
+    id: `rev-chunk-528-${idx}`,
+    rating_star: 5,
+    comment: `Đánh giá thực tế chi tiết số ${idx} sau khi sử dụng máy 2 tuần, màn hình sáng đẹp.`,
+  }));
+  await analyzer.persistAnalysisToSupabase(stubSupabase528, {
+    productId: 'prod-528',
+    reviews: batchReviews528,
+  });
+  assert.deepEqual(
+    upsertedFlagChunks528,
+    [200, 5],
+    'persistAnalysisToSupabase must chunk review_flags upserts into batches of 200'
+  );
+
   console.log(
-    `✅ [P2/P3 Trust Model & #292/#352/#356/#359/#379/#382/#401] Voter weight, Wilson lower bound (50/52=${wilson50of52} > 1/1=${wilson1of1}), shingle copy seeding (sim=${shingleSim}), affiliate shortlinks, peer floor, ArenaSpecSyncer, Importer & Logger hardening (#352, #356, #359, #379, #382, #401) verified`
+    `✅ [P2/P3 Trust Model & #292/#352/#356/#359/#379/#382/#401/#497/#514/#522/#528] Voter weight, Wilson lower bound (50/52=${wilson50of52} > 1/1=${wilson1of1}), shingle copy seeding (sim=${shingleSim}), affiliate shortlinks, peer floor, ArenaSpecSyncer, Importer & ReviewAnalyzer hardening (#352, #356, #359, #379, #382, #401, #497, #514, #522, #528) verified`
   );
 
   console.log('\n🎉 ALL AI REVIEW ANALYZER TESTS PASSED!');

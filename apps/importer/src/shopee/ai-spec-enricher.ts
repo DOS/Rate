@@ -133,8 +133,16 @@ function toBooleanOrUndefined(val: unknown): boolean | undefined {
 
 function toStringOrUndefined(val: unknown): string | undefined {
   if (typeof val === 'string' && val.trim().length > 0) return val.trim();
-  if (typeof val === 'number') return String(val);
+  if (typeof val === 'number' && Number.isFinite(val)) return String(val);
   return undefined;
+}
+
+function sanitizeColorList(val: unknown): string[] | undefined {
+  if (!Array.isArray(val)) return undefined;
+  const cleaned = Array.from(
+    new Set(val.map((c: unknown) => toStringOrUndefined(c)).filter((c): c is string => Boolean(c)))
+  );
+  return cleaned.length > 0 ? cleaned : undefined;
 }
 
 function asRecord(val: unknown): Record<string, unknown> | undefined {
@@ -184,9 +192,7 @@ export function sanitizeSpecifications(raw: unknown): ProductSpecifications {
         resistance: toStringOrUndefined(rawDesign.resistance),
         biometrics: toStringOrUndefined(rawDesign.biometrics),
         keys: toStringOrUndefined(rawDesign.keys),
-        colors: Array.isArray(rawDesign.colors)
-          ? rawDesign.colors.map((c: unknown) => String(c).trim()).filter(Boolean)
-          : undefined,
+        colors: sanitizeColorList(rawDesign.colors),
       })
     : undefined;
 
@@ -224,10 +230,8 @@ export function sanitizeSpecifications(raw: unknown): ProductSpecifications {
         charging: toStringOrUndefined(rawBattery.charging),
         fast_charging_w: toBoundedNumberOrUndefined(rawBattery.fast_charging_w, 1000, true),
         reverse_charging:
-          typeof rawBattery.reverse_charging === 'boolean' ||
-          typeof rawBattery.reverse_charging === 'string'
-            ? rawBattery.reverse_charging
-            : undefined,
+          toBooleanOrUndefined(rawBattery.reverse_charging) ??
+          toStringOrUndefined(rawBattery.reverse_charging),
       })
     : undefined;
 
@@ -295,6 +299,7 @@ export function sanitizeSpecifications(raw: unknown): ProductSpecifications {
     : undefined;
 
   const candidateSpecs: ProductSpecifications = {
+    category_slug: toStringOrUndefined(root.category_slug),
     availability: availabilityParsed?.success ? availabilityParsed.data : undefined,
     design: designParsed?.success ? designParsed.data : undefined,
     display: displayParsed?.success ? displayParsed.data : undefined,
@@ -309,6 +314,97 @@ export function sanitizeSpecifications(raw: unknown): ProductSpecifications {
 
   const parsed = ProductSpecificationsSchema.safeParse(candidateSpecs);
   return parsed.success ? parsed.data : {};
+}
+
+const SPEC_FIELD_GROUP_KEYS = [
+  'availability',
+  'design',
+  'display',
+  'hardware',
+  'battery',
+  'camera',
+  'connectivity',
+  'cellular',
+  'multimedia',
+  'regulatory',
+] as const;
+
+function mergeSpecGroupRecord(
+  baseGroup: Record<string, unknown> | undefined,
+  incomingGroup: Record<string, unknown> | undefined
+): Record<string, unknown> | undefined {
+  if (!baseGroup && !incomingGroup) return undefined;
+  const merged: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(baseGroup ?? {})) {
+    if (v === undefined || v === null) continue;
+    if (typeof v === 'string' && v.trim().length === 0) continue;
+    if (Array.isArray(v)) {
+      if (v.length > 0) merged[k] = [...v];
+      continue;
+    }
+    merged[k] = v;
+  }
+  for (const [k, v] of Object.entries(incomingGroup ?? {})) {
+    if (v === undefined || v === null) continue;
+    if (typeof v === 'string' && v.trim().length === 0) continue;
+    if (Array.isArray(v)) {
+      if (v.length > 0) merged[k] = [...v];
+      continue;
+    }
+    merged[k] = v;
+  }
+  return Object.keys(merged).length > 0 ? merged : undefined;
+}
+
+/**
+ * Deep-merges two 10-Field-Group `ProductSpecifications` objects without allowing
+ * `undefined`, `null`, or empty incoming fields to overwrite defined base fields.
+ */
+export function mergeProductSpecifications(
+  base: unknown,
+  incoming: unknown,
+  colorsOverride?: readonly string[] | null
+): ProductSpecifications {
+  const safeBase = sanitizeSpecifications(base) as Record<string, unknown>;
+  const safeIncoming = sanitizeSpecifications(incoming) as Record<string, unknown>;
+  const mergedRaw: Record<string, unknown> = {};
+
+  const mergedCategorySlug =
+    toStringOrUndefined(safeIncoming.category_slug) ?? toStringOrUndefined(safeBase.category_slug);
+  if (mergedCategorySlug) {
+    mergedRaw.category_slug = mergedCategorySlug;
+  }
+
+  for (const key of SPEC_FIELD_GROUP_KEYS) {
+    const mergedGroup = mergeSpecGroupRecord(asRecord(safeBase[key]), asRecord(safeIncoming[key]));
+    if (mergedGroup) {
+      mergedRaw[key] = mergedGroup;
+    }
+  }
+
+  const cleanColors = sanitizeColorList(colorsOverride) ?? [];
+  if (cleanColors.length > 0) {
+    mergedRaw.design = {
+      ...(asRecord(mergedRaw.design) ?? {}),
+      colors: cleanColors,
+    };
+  }
+
+  return sanitizeSpecifications(mergedRaw);
+}
+
+export const MAX_SPEC_CACHE_ENTRIES = 250;
+
+export function cloneAiEnrichmentResponse(res: AiEnrichmentResponse): AiEnrichmentResponse {
+  return {
+    ram_gb: res.ram_gb ?? null,
+    storage_gb: res.storage_gb ?? null,
+    screen_size_inch: res.screen_size_inch ?? null,
+    battery_mah: res.battery_mah ?? null,
+    has_5g: res.has_5g,
+    specifications: sanitizeSpecifications(res.specifications),
+    key_specs: { ...(res.key_specs ?? {}) },
+  };
 }
 
 /**
@@ -398,6 +494,10 @@ export class AiSpecEnricher {
     };
   }
 
+  public getCacheSize(): number {
+    return this.memoryCache.size;
+  }
+
   /**
    * Builds the system & user prompts referencing PhoneArena 10-Field-Group structure and GSMArena technical accuracy
    */
@@ -407,10 +507,11 @@ export class AiSpecEnricher {
     storageGb: number | null,
     ramGb: number | null,
     rawTitle?: string,
-    rawDescription?: string
+    rawDescription?: string,
+    categorySlug: string = 'smartphones'
   ): { systemPrompt: string; userPrompt: string } {
-    const systemPrompt = `You are a mobile hardware specification database expert with authoritative knowledge of PhoneArena and GSMArena device specifications.
-Your job is to return accurate, comprehensive technical specifications for a smartphone model, structured into the 10 standard PhoneArena Field Groups (with GSMArena technical precision).
+    const systemPrompt = `You are a hardware specification database expert with authoritative knowledge of PhoneArena and GSMArena device specifications.
+Your job is to return accurate, comprehensive technical specifications for a consumer tech device, structured into the 10 standard PhoneArena Field Groups (with GSMArena technical precision).
 
 RULES:
 1. Return ONLY a valid JSON object matching the exact schema below. Do not wrap in markdown code fences.
@@ -518,8 +619,10 @@ REQUIRED JSON SCHEMA:
   }
 }`;
 
+    const safeCat = (categorySlug || 'smartphones').trim().toLowerCase() || 'smartphones';
     const userPrompt = [
-      `Target Smartphone:`,
+      `Target Device (${safeCat}):`,
+      `- Category: ${safeCat}`,
       `- Brand: ${brand}`,
       `- Model: ${model}`,
       storageGb !== null ? `- Variant Storage: ${storageGb}GB` : null,
@@ -535,6 +638,18 @@ REQUIRED JSON SCHEMA:
     return { systemPrompt, userPrompt };
   }
 
+  private setCacheEntry(cacheKey: string, value: AiEnrichmentResponse): void {
+    if (this.memoryCache.has(cacheKey)) {
+      this.memoryCache.delete(cacheKey);
+    }
+    while (this.memoryCache.size >= MAX_SPEC_CACHE_ENTRIES) {
+      const oldestKey = this.memoryCache.keys().next().value;
+      if (oldestKey === undefined) break;
+      this.memoryCache.delete(oldestKey);
+    }
+    this.memoryCache.set(cacheKey, cloneAiEnrichmentResponse(value));
+  }
+
   /**
    * Calls the configured LLM endpoint and parses the structured JSON specs
    */
@@ -545,6 +660,7 @@ REQUIRED JSON SCHEMA:
     ramGb: number | null;
     rawTitle?: string;
     rawDescription?: string;
+    categorySlug?: string;
   }): Promise<AiEnrichmentResponse | null> {
     if (!this.isConfigured()) {
       logger.info(
@@ -559,22 +675,28 @@ REQUIRED JSON SCHEMA:
       return null;
     }
 
-    const cacheKey = `${params.brand.toLowerCase()}:${params.model.toLowerCase()}:${params.storageGb || 'default'}:${params.ramGb || 'default'}`;
+    const safeParamStorageGb = toBoundedNumberOrUndefined(params.storageGb, 65536) ?? null;
+    const safeParamRamGb = toBoundedNumberOrUndefined(params.ramGb, 2048) ?? null;
+    const catKey = (params.categorySlug || 'smartphones').trim().toLowerCase() || 'smartphones';
+    const cacheKey = `${catKey}:${params.brand.toLowerCase()}:${params.model.toLowerCase()}:${safeParamStorageGb || 'default'}:${safeParamRamGb || 'default'}`;
     const cached = this.memoryCache.get(cacheKey);
     if (cached) {
+      this.memoryCache.delete(cacheKey);
+      this.memoryCache.set(cacheKey, cached);
       logger.info('spec_enrich.cache_hit', `Cache hit for "${cacheKey}"`, {
         cacheKey,
       });
-      return cached;
+      return cloneAiEnrichmentResponse(cached);
     }
 
     const { systemPrompt, userPrompt } = this.buildPrompts(
       params.brand,
       params.model,
-      params.storageGb,
-      params.ramGb,
+      safeParamStorageGb,
+      safeParamRamGb,
       params.rawTitle,
-      params.rawDescription
+      params.rawDescription,
+      catKey
     );
 
     try {
@@ -657,13 +779,13 @@ REQUIRED JSON SCHEMA:
       const specifications = sanitizeSpecifications(parsedJson.specifications || parsedJson);
 
       const ramGb =
-        params.ramGb ??
+        safeParamRamGb ??
         toBoundedNumberOrUndefined(parsedJson.ram_gb, 2048) ??
         specifications.hardware?.ram_gb ??
         null;
 
       const storageGb =
-        params.storageGb ??
+        safeParamStorageGb ??
         toBoundedNumberOrUndefined(parsedJson.storage_gb, 65536) ??
         specifications.hardware?.storage_gb ??
         null;
@@ -725,7 +847,7 @@ REQUIRED JSON SCHEMA:
         key_specs: keySpecs,
       };
 
-      this.memoryCache.set(cacheKey, result);
+      this.setCacheEntry(cacheKey, result);
       logger.info(
         'spec_enrich.completed',
         `Enriched "${params.brand} ${params.model}": Chip="${keySpecs.chip}", Screen="${keySpecs.screen}", Battery="${keySpecs.battery}"`,
@@ -737,7 +859,7 @@ REQUIRED JSON SCHEMA:
           battery: keySpecs.battery ?? null,
         }
       );
-      return result;
+      return cloneAiEnrichmentResponse(result);
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
       logger.warn(
@@ -771,24 +893,26 @@ REQUIRED JSON SCHEMA:
       ramGb: candidate.ram_gb,
       rawTitle,
       rawDescription: candidate.description,
+      categorySlug: candidate.category_slug,
     });
 
     if (!aiResult) {
       return candidate;
     }
 
-    // Clone specifications so merging crawled candidate colors never mutates the cached aiResult
-    const mergedSpecifications: ProductSpecifications = {
-      ...aiResult.specifications,
-      ...(aiResult.specifications.design
-        ? {
-            design: {
-              ...aiResult.specifications.design,
-              ...(candidate.colors.length > 0 ? { colors: [...candidate.colors] } : {}),
-            },
-          }
-        : {}),
-    };
+    // Deep-merge all 10 Field Groups so candidate.specifications fields are preserved
+    // when AI omits a field or group, and candidate.colors override design.colors.
+    const mergedSpecifications = mergeProductSpecifications(
+      candidate.specifications,
+      aiResult.specifications,
+      candidate.colors
+    );
+
+    const incomingKeySpecs = Object.fromEntries(
+      Object.entries(aiResult.key_specs || {}).filter(
+        ([, v]) => v !== undefined && v !== null && String(v).trim() !== ''
+      )
+    );
 
     return {
       ...candidate,
@@ -799,7 +923,7 @@ REQUIRED JSON SCHEMA:
       specifications: mergedSpecifications,
       key_specs: {
         ...candidate.key_specs,
-        ...aiResult.key_specs,
+        ...incomingKeySpecs,
       },
       spec_source: 'ai_unverified',
       spec_enrichment_meta: {

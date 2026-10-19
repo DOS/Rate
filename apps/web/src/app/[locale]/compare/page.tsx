@@ -4,8 +4,8 @@ import { Link } from '@/lib/navigation';
 import {
   type CanonicalCategorySlug,
   getCachedCompareMasterProducts,
+  getCachedMasterProducts,
   getMasterProductCategorySlug,
-  getMasterProducts,
 } from '@/server/rate';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
 import CompareWorkspace from '@/components/compare/CompareWorkspace';
@@ -100,7 +100,8 @@ export default async function ComparePhonesPage({
   const requestedSlugs = parseSlugsCsv(slugsParam);
 
   const [catalogCandidates, requestedProducts] = await Promise.all([
-    getMasterProducts({ categorySlug: 'all', limit: 50 }),
+    // Fixed key, so it shares the data cache; only the compared slugs vary.
+    getCachedMasterProducts({ categorySlug: 'all', limit: 50 }),
     requestedSlugs.length > 0
       ? getCachedCompareMasterProducts(requestedSlugs.join(','))
       : Promise.resolve([]),

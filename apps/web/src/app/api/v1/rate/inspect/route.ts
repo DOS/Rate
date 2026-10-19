@@ -35,7 +35,12 @@ export async function GET(request: NextRequest) {
     );
 
     if (!rawQuery) {
-      return jsonApiError(400, 'Missing query parameter ?q= or ?url=');
+      return jsonApiError(
+        400,
+        'Missing query parameter ?q= or ?url=',
+        undefined,
+        PUBLIC_API_CORS_HEADERS
+      );
     }
 
     const queryPrice = parseOptionalVndPriceParam(sp.get('price'));
@@ -51,12 +56,17 @@ export async function GET(request: NextRequest) {
         inspection.masterProduct?.min_price ??
         0
     );
-    const observedOriginalPrice = Number(
+    const rawObservedOriginalPrice = Number(
       queryOriginalPrice ??
-        inspection.matchedOffer?.price_original ??
-        inspection.masterProduct?.max_price ??
+        (queryPrice === null
+          ? inspection.matchedOffer?.price_original
+          : null) ??
         0
     );
+    const observedOriginalPrice =
+      rawObservedOriginalPrice > 0 && rawObservedOriginalPrice >= observedPrice
+        ? rawObservedOriginalPrice
+        : 0;
 
     const gatekeeper = detectAccessoryOrJunk({
       title:

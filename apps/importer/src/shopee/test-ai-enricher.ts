@@ -105,6 +105,67 @@ async function runTests() {
     `✅ [Normalizer] ${xiaomi.name} -> key=${xiaomi.model_key}, is_benchmark_enriched=${xiaomi.is_benchmark_enriched}, default OS=${xiaomi.specifications.hardware?.os}`
   );
 
+  // Case C: DOS/Rate#514 - Reject 0GB / 100TB storage, >2048GB RAM, out-of-bounds priceMin, and whitespace colors/images
+  const zeroStorageProduct = makeDummyShopeeProduct(
+    'Điện thoại Realme GT6 4000GB RAM 0GB Quốc Tế',
+    2_500_000_000
+  );
+  zeroStorageProduct.models = [
+    { modelId: '1', name: '   ', price: 10000000 },
+    { modelId: '2', name: ' Bạc Ánh Kim ', price: 10000000 },
+    { modelId: '3', name: 'Bạc Ánh Kim', price: 10000000 },
+  ];
+  zeroStorageProduct.images = [
+    '  ',
+    ' https://example.com/gt6.jpg ',
+    'https://example.com/gt6.jpg',
+  ];
+  const normalizedZero = normalizer.normalize(zeroStorageProduct);
+  assert.equal(normalizedZero.storage_gb, null, '0GB storage token must be rejected as null');
+  assert.equal(normalizedZero.ram_gb, null, '4000GB RAM (> 2048) must be rejected as null');
+  assert.equal(normalizedZero.model_key, 'realme:gt6:unknown');
+  assert.equal(normalizedZero.needs_review, true);
+  assert.deepEqual(normalizedZero.colors, ['Bạc Ánh Kim']);
+  assert.deepEqual(normalizedZero.images, ['https://example.com/gt6.jpg']);
+  assert.equal(
+    normalizedZero.specifications.availability?.prices_msrp,
+    'Không rõ dung lượng: 0₫',
+    'priceMin > MAX_VALID_VND_PRICE must clamp to 0₫ in prices_msrp'
+  );
+  assert.equal(
+    ProductSpecificationsSchema.safeParse(normalizedZero.specifications).success,
+    true,
+    'Normalized specs with rejected 0GB/4000GB tokens must pass ProductSpecificationsSchema'
+  );
+
+  const hugeStorageProduct = normalizer.normalize(
+    makeDummyShopeeProduct('Điện thoại Vivo X200 Pro 100000GB RAM 512GB Chính Hãng', 21990000)
+  );
+  assert.equal(
+    hugeStorageProduct.storage_gb,
+    512,
+    '100000GB token before RAM keyword must be claimed by RAM so 512GB ROM is preserved'
+  );
+  assert.equal(
+    hugeStorageProduct.ram_gb,
+    null,
+    'Claimed 100000GB RAM token (> 2048) must be rejected from ram_gb'
+  );
+  assert.equal(
+    ProductSpecificationsSchema.safeParse(hugeStorageProduct.specifications).success,
+    true
+  );
+
+  const romOverflowProduct = normalizer.normalize(
+    makeDummyShopeeProduct('Điện thoại Vivo X200 Pro ROM 100TB Chính Hãng', 21990000)
+  );
+  assert.equal(
+    romOverflowProduct.storage_gb,
+    null,
+    'ROM 100TB (102400GB > 65536GB) must be rejected as null'
+  );
+  assert.equal(romOverflowProduct.needs_review, true);
+
   console.log('\n================================================================');
   console.log('2. Testing sanitizeSpecifications & Zod 10-Field-Group Schema');
   console.log('================================================================');
@@ -378,6 +439,52 @@ async function runTests() {
       ram_gb: 12,
       storage_gb: 256,
     });
+
+    // DOS/Rate#522: sanitizeSpecifications rejects NaN/Infinity in toStringOrUndefined, deduplicates/filters design.colors, and normalizes reverse_charging
+    const sanitized522 = sanitizeSpecifications({
+      availability: { announced: NaN, status: Infinity, prices_msrp: '24.990.000₫' },
+      design: {
+        dimensions: '160 x 75 x 8 mm',
+        colors: ['  Black  ', 'Black', {}, null, '', '   ', 'Silver'],
+      },
+      battery: {
+        capacity_mah: 5000,
+        reverse_charging: '   ',
+      },
+    });
+    assert.equal(sanitized522.availability?.announced, undefined);
+    assert.equal(sanitized522.availability?.status, undefined);
+    assert.equal(sanitized522.availability?.prices_msrp, '24.990.000₫');
+    assert.deepEqual(sanitized522.design?.colors, ['Black', 'Silver']);
+    assert.equal(sanitized522.battery?.reverse_charging, undefined);
+
+    const sanitizedBoolRevCharge = sanitizeSpecifications({
+      battery: { capacity_mah: 5000, reverse_charging: 'true' },
+      design: { colors: [{}, '   '] },
+    });
+    assert.equal(sanitizedBoolRevCharge.battery?.reverse_charging, true);
+    assert.equal(sanitizedBoolRevCharge.design?.colors, undefined);
+
+    // DOS/Rate#522: fetchSpecsFromAi bounds caller params.ramGb / params.storageGb so 0 or >max falls back to AI specs
+    const boundedAiRes = await enricher.fetchSpecsFromAi({
+      brand: 'Xiaomi',
+      model: '14 Ultra',
+      storageGb: 0,
+      ramGb: 99999,
+      categorySlug: 'smartphones',
+    });
+    assert.ok(boundedAiRes);
+    assert.equal(
+      boundedAiRes?.ram_gb,
+      16,
+      'Out-of-bounds params.ramGb (99999) must fall back to valid AI ram_gb'
+    );
+    assert.equal(
+      boundedAiRes?.storage_gb,
+      512,
+      'Invalid params.storageGb (0) must fall back to valid AI storage_gb'
+    );
+    assert.equal(ProductSpecificationsSchema.safeParse(boundedAiRes?.specifications).success, true);
 
     console.log('✅ [AiSpecEnricher] Mock OpenAI-compatible enrichment & caching passed 100%!');
   } finally {

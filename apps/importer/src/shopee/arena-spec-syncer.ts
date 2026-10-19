@@ -173,7 +173,7 @@ export function parseGsmArenaHtmlToSpecs(
 
   // Display parsing
   const sizeMatch = (d['displaysize'] || pa['screen size'] || '').match(
-    /(\d+(?:\.\d+)?)\s*inches/i
+    /(\d+(?:\.\d+)?)\s*(?:inches|inch|in\b|")/i
   );
   const screenSizeInch = toBoundedNumber(sizeMatch ? Number(sizeMatch[1]) : null, 0.5, 120) ?? null;
   const refreshMatch = (d['displaytype'] || pa['refresh rate'] || '').match(/(\d+)\s*Hz/i);
@@ -215,7 +215,9 @@ export function parseGsmArenaHtmlToSpecs(
   const batteryMah =
     toBoundedNumber(batMatch ? Number(batMatch[1]) : null, 10, 200000, true) ?? null;
   const chargingRaw = d['batcharging'] || pa['charging'] || batRaw;
-  const fastChargeMatch = chargingRaw.match(/(\d+(?:\.\d+)?)\s*W\s*wired/i);
+  const fastChargeMatch =
+    chargingRaw.match(/(\d+(?:\.\d+)?)\s*W\s*wired/i) ||
+    chargingRaw.match(/(\d+(?:\.\d+)?)\s*W\b/i);
   const fastChargingW = toBoundedNumber(
     fastChargeMatch ? Number(fastChargeMatch[1]) : null,
     1,
@@ -224,7 +226,7 @@ export function parseGsmArenaHtmlToSpecs(
 
   // Weight parsing
   const weightMatch = (d['weight'] || pa['weight'] || '').match(/(\d+(?:\.\d+)?)\s*g\b/i);
-  const weightG = toBoundedNumber(weightMatch ? Number(weightMatch[1]) : null, 1, 50000);
+  const weightG = toBoundedNumber(weightMatch ? Number(weightMatch[1]) : null, 1, 25000);
 
   // Resistance parsing
   const resistanceMatch = (d['bodyother'] || pa['water resistance'] || '').match(
@@ -238,6 +240,19 @@ export function parseGsmArenaHtmlToSpecs(
   // 3.5mm headphone jack check
   const jackRaw = d['jack'] || d['3.5mm jack'] || pa['headphones'] || '';
   const has35mmJack = jackRaw ? /^yes\b|3\.5\s*mm\s*jack/i.test(jackRaw.trim()) : false;
+
+  const colorsRaw = d['colors'] || pa['colors'] || '';
+  const parsedColors = colorsRaw
+    ? Array.from(
+        new Set(
+          colorsRaw
+            .split(',')
+            .map(c => c.trim())
+            .filter(Boolean)
+        )
+      )
+    : [];
+  const nfcRaw = d['nfc'] || pa['nfc'] || '';
 
   const rawSpecs: ProductSpecifications = {
     display: {
@@ -286,12 +301,7 @@ export function parseGsmArenaHtmlToSpecs(
       biometrics: /fingerprint/i.test(d['sensors'] || pa['biometrics'] || '')
         ? 'Under-display ultrasonic fingerprint, Face Unlock'
         : 'Face ID / Biometric sensor',
-      colors: d['colors']
-        ? d['colors']
-            .split(',')
-            .map(c => c.trim())
-            .filter(Boolean)
-        : undefined,
+      colors: parsedColors.length > 0 ? parsedColors : undefined,
     },
     cellular: {
       has_5g: has5g,
@@ -304,7 +314,7 @@ export function parseGsmArenaHtmlToSpecs(
       bluetooth: d['bluetooth'] || pa['bluetooth'] || undefined,
       wlan: d['wlan'] || pa['wi-fi'] || undefined,
       usb: d['usb'] || pa['usb'] || undefined,
-      nfc: d['nfc'] ? /yes|true/i.test(d['nfc']) : true,
+      nfc: nfcRaw ? /yes|true|nfc/i.test(nfcRaw) && !/^no\b/i.test(nfcRaw.trim()) : true,
       location: d['gps'] || undefined,
       sensors: d['sensors'] || undefined,
     },
@@ -332,7 +342,11 @@ export function parseGsmArenaHtmlToSpecs(
       : d['displaytype'],
     chip: d['chipset'] || pa['system chip'] || undefined,
     ram: ramGb ? `${ramGb}GB` : undefined,
-    storage: storageGb ? `${storageGb}GB` : undefined,
+    storage: storageGb
+      ? storageGb >= 1024
+        ? `${storageGb / 1024}TB`
+        : `${storageGb}GB`
+      : undefined,
     camera: camSplit.main_camera
       ? [camSplit.main_camera, camSplit.second_camera, camSplit.third_camera]
           .filter(Boolean)
@@ -490,9 +504,13 @@ const CANONICAL_10_SPEC_GROUPS = [
 ] as const;
 
 function isPopulatedSpecFieldValue(v: unknown): boolean {
-  if (v === null || v === undefined || v === '') return false;
-  if (Array.isArray(v)) return v.length > 0;
-  if (typeof v === 'object') return Object.keys(v as object).length > 0;
+  if (v === null || v === undefined) return false;
+  if (typeof v === 'number') return Number.isFinite(v);
+  if (typeof v === 'string') return v.trim().length > 0;
+  if (Array.isArray(v)) return v.some(isPopulatedSpecFieldValue);
+  if (typeof v === 'object') {
+    return Object.values(v as Record<string, unknown>).some(isPopulatedSpecFieldValue);
+  }
   return true;
 }
 

@@ -2,6 +2,7 @@
 
 import {
   type CanonicalCategorySlug,
+  MAX_VALID_VND_PRICE,
   getMasterProductCategorySlug,
   resolveProductImageUrl,
 } from '@/lib/rate-domain';
@@ -19,16 +20,27 @@ const STORAGE_KEY = 'rate_compare_tray_v1';
 const EVENT_NAME = 'rate:compare-tray-change';
 export const MAX_COMPARE_ITEMS = 4;
 
-function normalizeTrayItem(item: CompareTrayItem): CompareTrayItem {
+export function normalizeTrayItem(item: CompareTrayItem): CompareTrayItem {
   const categorySlug =
     item.categorySlug ||
     getMasterProductCategorySlug({
       slug: item.slug,
       name: item.name,
     });
+  const rawPrice = Number(item.min_price);
+  const safePrice =
+    Number.isFinite(rawPrice) &&
+    rawPrice >= 0 &&
+    rawPrice <= MAX_VALID_VND_PRICE
+      ? Math.round(rawPrice)
+      : 0;
   return {
     ...item,
-    thumbnail: resolveProductImageUrl(item.slug, item.thumbnail),
+    slug: item.slug.trim(),
+    name: item.name.trim(),
+    brand: typeof item.brand === 'string' ? item.brand.trim() : '',
+    thumbnail: resolveProductImageUrl(item.slug.trim(), item.thumbnail),
+    min_price: safePrice,
     categorySlug,
   };
 }
@@ -47,14 +59,25 @@ export function getCompareTray(): CompareTrayItem[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    const valid = parsed
-      .filter((item): item is CompareTrayItem =>
-        Boolean(
-          item && typeof item.slug === 'string' && typeof item.name === 'string'
-        )
-      )
-      .slice(0, MAX_COMPARE_ITEMS);
-    return enforceSameCategoryTray(valid);
+    const deduped: CompareTrayItem[] = [];
+    const seen = new Set<string>();
+    for (const item of parsed) {
+      if (
+        !item ||
+        typeof item.slug !== 'string' ||
+        !item.slug.trim() ||
+        typeof item.name !== 'string' ||
+        !item.name.trim()
+      ) {
+        continue;
+      }
+      const slugKey = item.slug.trim();
+      if (seen.has(slugKey)) continue;
+      seen.add(slugKey);
+      deduped.push(item as CompareTrayItem);
+      if (deduped.length >= MAX_COMPARE_ITEMS) break;
+    }
+    return enforceSameCategoryTray(deduped);
   } catch {
     return [];
   }

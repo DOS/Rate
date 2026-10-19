@@ -14,7 +14,7 @@ import assert from 'node:assert/strict';
 import { pathToFileURL } from 'node:url';
 import dotenv from 'dotenv';
 import { ProductSpecificationsSchema, type ProductSpecifications } from '@repo/shared-data';
-import { AiSpecEnricher, sanitizeSpecifications } from '../ai-spec-enricher.js';
+import { AiSpecEnricher, mergeProductSpecifications } from '../ai-spec-enricher.js';
 import { fetchAllPages } from '../paging.js';
 import {
   CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY,
@@ -82,10 +82,10 @@ export async function auditMasterSpecs(supabase: RateSupabaseClient): Promise<nu
         failures.push(`${label} is missing specification group "${grp}"`);
       }
     }
-    if (!row.specifications?.camera?.main_camera) {
+    if (!row.specifications?.camera?.main_camera?.trim()) {
       failures.push(`${label} is missing camera.main_camera`);
     }
-    if (!row.specifications?.camera?.second_camera) {
+    if (!row.specifications?.camera?.second_camera?.trim()) {
       failures.push(`${label} is missing camera.second_camera`);
     }
   }
@@ -107,10 +107,21 @@ export function mergeKeySpecs(
       ? (existing as Record<string, unknown>)
       : {};
   const next = incoming && typeof incoming === 'object' && !Array.isArray(incoming) ? incoming : {};
-  return {
-    ...base,
-    ...next,
-  };
+  const out: Record<string, unknown> = {};
+  for (const source of [base, next]) {
+    for (const [k, v] of Object.entries(source)) {
+      if (v === undefined || v === null) continue;
+      if (typeof v === 'number' && !Number.isFinite(v)) continue;
+      if (typeof v === 'string') {
+        const trimmed = v.trim();
+        if (!trimmed) continue;
+        out[k] = trimmed;
+        continue;
+      }
+      out[k] = v;
+    }
+  }
+  return out;
 }
 
 /**
@@ -180,7 +191,7 @@ export async function runMasterSpecsBackfill(
 
     const { data: existing, error: lookupErr } = await supabase
       .from('master_products')
-      .select('id, key_specs')
+      .select('id, key_specs, specifications')
       .eq('model_key', device.model_key)
       .maybeSingle();
     if (lookupErr) {
@@ -193,6 +204,11 @@ export async function runMasterSpecsBackfill(
           .from('master_products')
           .update({
             ...specFields,
+            specifications: mergeProductSpecifications(
+              (existing as { specifications?: unknown }).specifications,
+              device.specifications,
+              device.colors
+            ),
             key_specs: mergeKeySpecs(
               (existing as { key_specs?: unknown }).key_specs,
               device.key_specs as unknown as Record<string, unknown>
@@ -214,6 +230,11 @@ export async function runMasterSpecsBackfill(
       if (apply) {
         const { error: insErr } = await supabase.from('master_products').insert({
           ...specFields,
+          specifications: mergeProductSpecifications(
+            undefined,
+            device.specifications,
+            device.colors
+          ),
           category_id: categoryId,
           brand: device.brand,
           model: device.model,
@@ -241,7 +262,7 @@ export async function runMasterSpecsBackfill(
   const masters = await fetchAllPages('Failed to fetch master_products', (from, to) =>
     supabase
       .from('master_products')
-      .select('id, name, model_key, key_specs')
+      .select('id, name, model_key, key_specs, specifications')
       .order('created_at', { ascending: false })
       .order('id')
       .range(from, to)
@@ -266,7 +287,11 @@ export async function runMasterSpecsBackfill(
             battery_mah: canonicalEntry.battery_mah,
             has_5g: canonicalEntry.has_5g,
             colors: canonicalEntry.colors,
-            specifications: canonicalEntry.specifications,
+            specifications: mergeProductSpecifications(
+              (m as { specifications?: unknown }).specifications,
+              canonicalEntry.specifications,
+              canonicalEntry.colors
+            ),
             key_specs: mergeKeySpecs(
               (m as { key_specs?: unknown }).key_specs,
               canonicalEntry.key_specs as unknown as Record<string, unknown>
@@ -339,15 +364,22 @@ export async function runQuickSpecSyncAndAudit(
 
   if (apply) {
     for (const seed of FLAGSHIP_DEVICES_TO_SEED) {
-      const { data: existingRow } = await supabase
+      const { data: existingRow, error: lookupErr } = await supabase
         .from('master_products')
-        .select('id, key_specs')
+        .select('id, key_specs, specifications')
         .eq('model_key', seed.model_key)
         .maybeSingle();
+      if (lookupErr) {
+        throw new Error(`Failed to look up master product ${seed.model_key}: ${lookupErr.message}`);
+      }
       const { error: upErr } = await supabase
         .from('master_products')
         .update({
-          specifications: sanitizeSpecifications(seed.specifications),
+          specifications: mergeProductSpecifications(
+            (existingRow as { specifications?: unknown } | null)?.specifications,
+            seed.specifications,
+            seed.colors
+          ),
           key_specs: mergeKeySpecs(
             (existingRow as { key_specs?: unknown } | null)?.key_specs,
             seed.key_specs as unknown as Record<string, unknown>

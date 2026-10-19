@@ -392,15 +392,504 @@ async function runSuite() {
   const validScraped = ScrapedProductSchema.safeParse(
     createDummyShopeeProduct('Điện thoại Apple iPhone 16 Pro Max 256GB')
   );
-  assert.equal(validScraped.success, true, 'Valid ShopeeProduct fixture must pass ScrapedProductSchema');
+  assert.equal(
+    validScraped.success,
+    true,
+    'Valid ShopeeProduct fixture must pass ScrapedProductSchema'
+  );
   const invalidScraped = ScrapedProductSchema.safeParse({
     ...createDummyShopeeProduct('Invalid Product'),
     priceMin: -100,
   });
   assert.equal(invalidScraped.success, false, 'Negative priceMin must fail ScrapedProductSchema');
   console.log(
-    '  ✅ [9/9] Data Contract Hardening: Numeric Bounds, Draft/Null Defaults & ScrapedProductSchema (Audit T15) (#171) passed'
+    '  ✅ [9/10] Data Contract Hardening: Numeric Bounds, Draft/Null Defaults & ScrapedProductSchema (Audit T15) (#171) passed'
   );
+
+  // 10. Deep-Merge 10-Field-Group Specifications, Defensive Cache Cloning & Bounded Memory Cache (#496)
+  const { MAX_SPEC_CACHE_ENTRIES, cloneAiEnrichmentResponse, mergeProductSpecifications } =
+    await import('../ai-spec-enricher.js');
+  const { EntityMatcher } = await import('../entity-matcher.js');
+
+  assert.equal(MAX_SPEC_CACHE_ENTRIES, 250);
+
+  const deepMergedSpecs = mergeProductSpecifications(
+    {
+      hardware: {
+        ram_gb: 16,
+        storage_gb: 512,
+        os: 'Android 15',
+      },
+      display: {
+        size_inch: 6.8,
+        refresh_rate_hz: 120,
+      },
+      regulatory: {
+        certifications: 'CE, RoHS',
+      },
+    },
+    {
+      hardware: {
+        chipset: 'Qualcomm Snapdragon 8 Elite (3 nm)',
+        cpu: 'Octa-core',
+        os: '   ', // Empty string must not clobber existing 'Android 15'
+      },
+      camera: {
+        main_camera: '200 MP, f/1.7, OIS',
+      },
+    },
+    ['Titan Đen', '  Titan Trắng  ']
+  );
+
+  assert.equal(
+    deepMergedSpecs.hardware?.ram_gb,
+    16,
+    'mergeProductSpecifications must preserve base hardware.ram_gb when incoming omits it (#496)'
+  );
+  assert.equal(
+    deepMergedSpecs.hardware?.chipset,
+    'Qualcomm Snapdragon 8 Elite (3 nm)',
+    'mergeProductSpecifications must merge incoming hardware.chipset (#496)'
+  );
+  assert.equal(
+    deepMergedSpecs.hardware?.os,
+    'Android 15',
+    'mergeProductSpecifications must not overwrite base string with whitespace-only incoming string (#496)'
+  );
+  assert.equal(
+    deepMergedSpecs.display?.size_inch,
+    6.8,
+    'mergeProductSpecifications must preserve untouched base field groups (#496)'
+  );
+  assert.equal(
+    deepMergedSpecs.regulatory?.certifications,
+    'CE, RoHS',
+    'mergeProductSpecifications must preserve base regulatory group (#496)'
+  );
+  assert.deepEqual(
+    deepMergedSpecs.design?.colors,
+    ['Titan Đen', 'Titan Trắng'],
+    'mergeProductSpecifications must populate design.colors even when design group was absent (#496)'
+  );
+
+  const originalAiRes = {
+    ram_gb: 12,
+    storage_gb: 256,
+    screen_size_inch: 6.7,
+    battery_mah: 5000,
+    has_5g: true,
+    specifications: {
+      hardware: { chipset: 'Apple A18 Pro', ram_gb: 12 },
+      design: { colors: ['Black'] },
+    },
+    key_specs: { chip: 'Apple A18 Pro', ram: '12GB' },
+  };
+  const clonedAiRes = cloneAiEnrichmentResponse(originalAiRes);
+  clonedAiRes.specifications.hardware!.chipset = 'Mutated Chip';
+  clonedAiRes.specifications.design!.colors!.push('Gold');
+  clonedAiRes.key_specs.chip = 'Mutated';
+  assert.equal(
+    originalAiRes.specifications.hardware?.chipset,
+    'Apple A18 Pro',
+    'cloneAiEnrichmentResponse must isolate nested specification objects (#496)'
+  );
+  assert.deepEqual(
+    originalAiRes.specifications.design?.colors,
+    ['Black'],
+    'cloneAiEnrichmentResponse must isolate nested arrays (#496)'
+  );
+  assert.equal(
+    originalAiRes.key_specs.chip,
+    'Apple A18 Pro',
+    'cloneAiEnrichmentResponse must isolate key_specs (#496)'
+  );
+
+  // Verify enrichMasterProductById selects existing specifications and deep-merges them
+  let capturedSelectCols = '';
+  let capturedUpdatePayload: Record<string, unknown> | null = null;
+  const mockEnrichClient = {
+    from(table: string) {
+      assert.equal(table, 'master_products');
+      return {
+        select(cols: string) {
+          capturedSelectCols = cols;
+          return {
+            eq(_col: string, _val: string) {
+              return {
+                async maybeSingle() {
+                  return {
+                    data: {
+                      id: 'master-496',
+                      brand: 'ASUS',
+                      model: 'Zenbook S 14',
+                      storage_gb: 1024,
+                      ram_gb: 32,
+                      screen_size_inch: 14,
+                      battery_mah: null,
+                      has_5g: false,
+                      name: 'Laptop ASUS Zenbook S 14 OLED',
+                      description: 'Intel Core Ultra 7',
+                      colors: ['Zumaia Gray'],
+                      specifications: {
+                        display: { size_inch: 14, refresh_rate_hz: 120 },
+                      },
+                      key_specs: { screen: '14" 3K OLED 120Hz' },
+                    },
+                    error: null,
+                  };
+                },
+              };
+            },
+          };
+        },
+        update(payload: Record<string, unknown>) {
+          capturedUpdatePayload = payload;
+          return {
+            async eq(_col: string, _val: string) {
+              return { data: null, error: null };
+            },
+          };
+        },
+      };
+    },
+  } as unknown as import('../types.js').RateSupabaseClient;
+
+  const stubEnricher = new AiSpecEnricher({ apiKey: '' });
+  let capturedCategorySlug: string | undefined;
+  stubEnricher.fetchSpecsFromAi = async params => {
+    capturedCategorySlug = params.categorySlug;
+    return {
+      ram_gb: 32,
+      storage_gb: 1024,
+      screen_size_inch: 14,
+      battery_mah: 7200,
+      has_5g: false,
+      specifications: {
+        hardware: { chipset: 'Intel Core Ultra 7 258V' },
+      },
+      key_specs: { chip: 'Core Ultra 7 258V', storage: '1TB' },
+    };
+  };
+
+  const enrichMatcher = new EntityMatcher(mockEnrichClient, stubEnricher);
+  const enrichedOk = await enrichMatcher.enrichMasterProductById('master-496');
+  assert.equal(enrichedOk, true);
+  assert.ok(
+    capturedSelectCols.includes('specifications'),
+    'enrichMasterProductById must select existing specifications from master_products (#496)'
+  );
+  assert.equal(
+    capturedCategorySlug,
+    'laptops',
+    'enrichMasterProductById must pass inferred categorySlug to fetchSpecsFromAi (#496)'
+  );
+  const updatedSpecs = (
+    capturedUpdatePayload as { specifications?: Record<string, unknown> } | null
+  )?.specifications as {
+    display?: { size_inch?: number; refresh_rate_hz?: number };
+    hardware?: { chipset?: string };
+    design?: { colors?: string[] };
+  };
+  assert.equal(updatedSpecs?.display?.refresh_rate_hz, 120);
+  assert.equal(updatedSpecs?.hardware?.chipset, 'Intel Core Ultra 7 258V');
+  assert.deepEqual(updatedSpecs?.design?.colors, ['Zumaia Gray']);
+  console.log(
+    '  ✅ [10/11] Deep-Merge 10-Field-Group Specifications, Defensive Cache Cloning & Bounded Memory Cache (#496) passed'
+  );
+
+  // =========================================================================
+  // 11. Backfill KeySpecs Merge, Whitespace Field Group Audit & Arena PhoneArena Fallbacks (#503)
+  // =========================================================================
+  const { mergeKeySpecs, auditMasterSpecs } = await import('../jobs/backfill-specs.js');
+
+  const mergedKeys = mergeKeySpecs(
+    { screen: '6.9" LTPO OLED 120Hz', chip: 'Apple A18 Pro', camera: '48MP + 48MP + 12MP' },
+    {
+      screen: '6.9" Super Retina XDR 120Hz',
+      chip: undefined,
+      camera: '   ',
+      battery: '4685mAh 45W',
+    }
+  );
+  assert.deepEqual(mergedKeys, {
+    screen: '6.9" Super Retina XDR 120Hz',
+    chip: 'Apple A18 Pro',
+    camera: '48MP + 48MP + 12MP',
+    battery: '4685mAh 45W',
+  });
+
+  assert.equal(
+    countPopulatedFieldGroups({
+      display: { type: '   ' },
+      design: { colors: ['   ', ''] },
+      hardware: { chipset: 'Snapdragon 8 Elite' },
+    }),
+    1,
+    'countPopulatedFieldGroups must ignore whitespace-only strings and empty-element arrays (#503)'
+  );
+
+  const phoneArenaFallbackSpec = parseGsmArenaHtmlToSpecs('<html></html>', {
+    phonearenaHtml: `
+      <table>
+        <tr><th>Device name</th><td>Google Pixel 10 Pro XL</td></tr>
+        <tr><th>Screen size</th><td>6.8"</td></tr>
+        <tr><th>Refresh rate</th><td>120 Hz</td></tr>
+        <tr><th>System chip</th><td>Google Tensor G5</td></tr>
+        <tr><th>RAM</th><td>16 GB RAM</td></tr>
+        <tr><th>Internal storage</th><td>256 GB</td></tr>
+        <tr><th>Main camera</th><td>50 MP, f/1.7, OIS</td></tr>
+        <tr><th>Ultra-wide camera</th><td>48 MP, f/1.9, 123-degree</td></tr>
+        <tr><th>Capacity</th><td>5200 mAh</td></tr>
+        <tr><th>Charging</th><td>45W USB-C PD 3.1, reverse wireless</td></tr>
+        <tr><th>NFC</th><td>No</td></tr>
+        <tr><th>Colors</th><td>Obsidian, Porcelain, Hazel</td></tr>
+      </table>
+    `,
+  });
+  assert.equal(phoneArenaFallbackSpec.screenSizeInch, 6.8);
+  assert.equal(phoneArenaFallbackSpec.specifications.battery?.fast_charging_w, 45);
+  assert.equal(phoneArenaFallbackSpec.specifications.connectivity?.nfc, false);
+  assert.deepEqual(phoneArenaFallbackSpec.specifications.design?.colors, [
+    'Obsidian',
+    'Porcelain',
+    'Hazel',
+  ]);
+
+  await assert.rejects(
+    () =>
+      auditMasterSpecs({
+        from: () => ({
+          select: () => ({
+            order: () => ({
+              range: async (from: number) => ({
+                data:
+                  from === 0
+                    ? [
+                        {
+                          id: 'm-ws',
+                          name: 'Whitespace Cam Device',
+                          model_key: 'test:ws:128gb',
+                          specifications: {
+                            ...phoneArenaFallbackSpec.specifications,
+                            camera: {
+                              main_camera: '50 MP',
+                              second_camera: '   ',
+                            },
+                          },
+                        },
+                      ]
+                    : [],
+                error: null,
+              }),
+            }),
+          }),
+        }),
+      } as never),
+    /missing camera\.second_camera/,
+    'auditMasterSpecs must reject whitespace-only camera.second_camera (#503)'
+  );
+
+  console.log(
+    '  ✅ [11/12] Backfill KeySpecs Merge, Whitespace Field Group Audit & Arena PhoneArena Fallbacks (#503) passed'
+  );
+
+  // =========================================================================
+  // 12. ProductNormalizer Category-Aware Fallbacks, Earbud Storage & Title Screen Size (#505)
+  // =========================================================================
+  const unbenchmarkedEarbuds = normalizer.normalize(
+    createDummyShopeeProduct(
+      'Tai nghe Bluetooth Bose QuietComfort Ultra Earbuds Chính hãng',
+      6990000
+    )
+  );
+  assert.equal(unbenchmarkedEarbuds.category_slug, 'earbuds');
+  assert.equal(unbenchmarkedEarbuds.specifications.category_slug, 'earbuds');
+  assert.equal(unbenchmarkedEarbuds.storage_gb, 1);
+  assert.equal(unbenchmarkedEarbuds.variant_name, 'Standard');
+  assert.equal(unbenchmarkedEarbuds.needs_review, false);
+  assert.ok(unbenchmarkedEarbuds.model_key.endsWith(':1gb'));
+  assert.equal(unbenchmarkedEarbuds.specifications.hardware?.os, 'Bluetooth 5.3 Audio DSP');
+  assert.equal(unbenchmarkedEarbuds.specifications.cellular?.has_5g, false);
+  assert.equal(unbenchmarkedEarbuds.specifications.cellular?.sim_type, 'No SIM');
+  assert.equal(unbenchmarkedEarbuds.key_specs.camera, 'Active Noise Cancellation (ANC)');
+
+  const unbenchmarkedLaptop = normalizer.normalize(
+    createDummyShopeeProduct(
+      'Laptop Dell XPS 14 14.5 inch OLED 16GB RAM 1TB SSD Chính hãng',
+      48990000
+    )
+  );
+  assert.equal(unbenchmarkedLaptop.category_slug, 'laptops');
+  assert.equal(unbenchmarkedLaptop.specifications.category_slug, 'laptops');
+  assert.equal(unbenchmarkedLaptop.screen_size_inch, 14.5);
+  assert.equal(unbenchmarkedLaptop.specifications.display?.size_inch, 14.5);
+  assert.equal(unbenchmarkedLaptop.specifications.hardware?.os, 'Windows 11 Home');
+  assert.equal(unbenchmarkedLaptop.specifications.cellular?.has_5g, false);
+  assert.equal(unbenchmarkedLaptop.specifications.cellular?.sim_type, 'No SIM');
+  assert.equal(unbenchmarkedLaptop.key_specs.chip, 'Intel Core / AMD Ryzen');
+  assert.equal(unbenchmarkedLaptop.key_specs.camera, '1080p FHD Webcam');
+
+  const unbenchmarkedWatch = normalizer.normalize(
+    createDummyShopeeProduct('Đồng hồ thông minh Huawei Watch GT 5 Pro 1,4 inch 32GB', 7490000)
+  );
+  assert.equal(unbenchmarkedWatch.category_slug, 'smartwatches');
+  assert.equal(unbenchmarkedWatch.specifications.category_slug, 'smartwatches');
+  assert.equal(unbenchmarkedWatch.screen_size_inch, 1.4);
+  assert.equal(unbenchmarkedWatch.specifications.hardware?.os, 'Wear OS 5');
+  assert.equal(unbenchmarkedWatch.key_specs.camera, 'Optical HR + SpO2 Sensor');
+
+  const mergedWithCategorySlug = mergeProductSpecifications(unbenchmarkedLaptop.specifications, {
+    hardware: { chipset: 'Intel Core Ultra 7 155H' },
+  });
+  assert.equal(
+    mergedWithCategorySlug.category_slug,
+    'laptops',
+    'mergeProductSpecifications must preserve category_slug after ProductSpecificationsSchema.safeParse (#505)'
+  );
+
+  console.log(
+    '  ✅ [12/13] ProductNormalizer Category-Aware Fallbacks, Earbud Storage & Title Screen Size (#505) passed'
+  );
+
+  // =========================================================================
+  // 13. AiReviewAnalyzer MerchantRiskBreakdown Schema Alignment (#521)
+  // =========================================================================
+  {
+    const { AiReviewAnalyzer } = await import('../ai-review-analyzer.js');
+    const analyzer521 = new AiReviewAnalyzer({ apiKey: '' });
+    const sampleResults521 = [
+      {
+        review_id: 'r-1',
+        verdict: 'authentic' as const,
+        flag_category: 'authentic' as const,
+        fake_probability: 0.05,
+        include_in_rating: true,
+        helpfulness_weight: 1.2,
+        reason: 'Authentic review',
+        signals: {
+          burst_pattern_score: 0,
+          duplicate_text_ratio: 0,
+          account_age_bucket: 'high' as const,
+          reviewer_history_score: 0.9,
+          language_marker_score: 0.1,
+        },
+      },
+      {
+        review_id: 'r-2',
+        verdict: 'suspicious' as const,
+        flag_category: 'low_value_coin_spam' as const,
+        fake_probability: 0.45,
+        include_in_rating: false,
+        helpfulness_weight: 0,
+        reason: 'Coin spam',
+        signals: {
+          burst_pattern_score: 0.2,
+          duplicate_text_ratio: 0.5,
+          account_age_bucket: 'medium' as const,
+          reviewer_history_score: 0.4,
+          language_marker_score: 0.6,
+        },
+      },
+      {
+        review_id: 'r-3',
+        verdict: 'fake' as const,
+        flag_category: 'seeding_fake' as const,
+        fake_probability: 0.9,
+        include_in_rating: false,
+        helpfulness_weight: 0,
+        reason: 'Seeding fake',
+        signals: {
+          burst_pattern_score: 0.85,
+          duplicate_text_ratio: 0.8,
+          account_age_bucket: 'low' as const,
+          reviewer_history_score: 0.1,
+          language_marker_score: 0.85,
+        },
+      },
+      {
+        review_id: 'r-4',
+        verdict: 'suspicious' as const,
+        flag_category: 'competitor_sabotage' as const,
+        fake_probability: 0.8,
+        include_in_rating: false,
+        helpfulness_weight: 0,
+        reason: 'Sabotage',
+        signals: {
+          burst_pattern_score: 0.7,
+          duplicate_text_ratio: 0.6,
+          account_age_bucket: 'low' as const,
+          reviewer_history_score: 0.2,
+          language_marker_score: 0.7,
+        },
+      },
+    ];
+
+    const eval521 = analyzer521.evaluateMerchantRisk({
+      merchantId: 'merch-521',
+      platform: 'shopee',
+      isOfficial: false,
+      reviewResults: sampleResults521,
+    });
+    assert.equal(eval521.total_reviews, 4);
+    assert.equal(eval521.authentic_count, 1);
+    assert.equal(eval521.coin_spam_count, 1);
+    assert.equal(eval521.seeding_fake_count, 1);
+    assert.equal(eval521.sabotage_or_bombing_count, 1);
+    assert.equal(eval521.suspicious_ratio_pct, 75);
+
+    let capturedMerchPayload: Record<string, unknown> | null = null;
+    const stub521 = {
+      from: (table: string) => ({
+        select: () => ({
+          in: () => ({
+            in: async () => ({ data: [], error: null }),
+          }),
+        }),
+        upsert: async () => ({ error: null }),
+        update: (payload: Record<string, unknown>) => ({
+          eq: async () => {
+            if (table === 'merchants') {
+              capturedMerchPayload = payload;
+            }
+            return { error: null };
+          },
+        }),
+      }),
+      rpc: async () => ({ error: null }),
+    };
+
+    await analyzer521.persistAnalysisToSupabase(stub521 as never, {
+      productId: 'prod-521',
+      masterId: 'master-521',
+      merchantId: 'merch-521',
+      platform: 'shopee',
+      isOfficial: false,
+      reviews: [
+        {
+          id: 'r-1',
+          rating_star: 5,
+          comment:
+            'Máy dùng rất mượt, màn hình 120Hz sáng rõ ngoài trời, pin dùng trọn 1 ngày làm việc.',
+        },
+        {
+          id: 'r-2',
+          rating_star: 5,
+          comment: 'Hình ảnh mang tính chất nhận xu',
+        },
+      ],
+    });
+    assert.ok(capturedMerchPayload, 'merchants.update must be invoked (#521)');
+    const brk521 = (capturedMerchPayload as Record<string, unknown>)
+      .review_risk_breakdown as Record<string, unknown>;
+    assert.equal(brk521.total_reviews, 2);
+    assert.equal(brk521.authentic_count, 1);
+    assert.equal(brk521.coin_spam_count, 1);
+    assert.equal(brk521.seeding_fake_count, 0);
+    assert.equal(brk521.sabotage_or_bombing_count, 0);
+    assert.equal(brk521.suspicious_ratio_pct, 50);
+  }
+
+  console.log('  ✅ [13/13] AiReviewAnalyzer MerchantRiskBreakdown Schema Alignment (#521) passed');
 
   console.log('🎉 All @repo/crawlers Open-Core Intelligence tests passed!');
 }

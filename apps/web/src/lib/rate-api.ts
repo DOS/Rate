@@ -797,6 +797,34 @@ export async function getCategoryDirectoryFacets(
     };
   }
 
+  const aggregateBrandFacets = (
+    rawItems: { brand: string; count?: number }[]
+  ): { name: string; count: number }[] => {
+    const byLower = new Map<string, { name: string; count: number }>();
+    for (const r of rawItems) {
+      const trimmed = typeof r.brand === 'string' ? r.brand.trim() : '';
+      if (!trimmed) continue;
+      const delta = typeof r.count === 'number' ? Number(r.count) || 0 : 1;
+      if (delta <= 0) continue;
+      const lower = trimmed.toLowerCase();
+      const existing = byLower.get(lower);
+      if (existing) {
+        existing.count += delta;
+        if (
+          existing.name === existing.name.toLowerCase() &&
+          trimmed !== lower
+        ) {
+          existing.name = trimmed;
+        }
+      } else {
+        byLower.set(lower, { name: trimmed, count: delta });
+      }
+    }
+    return Array.from(byLower.values()).sort(
+      (a, b) => b.count - a.count || a.name.localeCompare(b.name)
+    );
+  };
+
   // Audit C1: Prefer server-side GROUP BY brand RPC `get_category_brand_facets`
   {
     const { data: facetRows, error: facetErr } = await supabase.rpc(
@@ -804,11 +832,8 @@ export async function getCategoryDirectoryFacets(
       { p_category_id: currentCategory.id }
     );
     if (!facetErr && Array.isArray(facetRows)) {
-      const brands = (facetRows as { brand: string; count: number }[]).map(
-        (r) => ({
-          name: r.brand,
-          count: Number(r.count) || 0,
-        })
+      const brands = aggregateBrandFacets(
+        facetRows as { brand: string; count: number }[]
       );
       const totalUnfiltered = brands.reduce((acc, b) => acc + b.count, 0);
       return {
@@ -837,16 +862,7 @@ export async function getCategoryDirectoryFacets(
 
   const rows =
     (prodRows as { brand: string; category_id: string | null }[]) || [];
-
-  const brandCounts = new Map<string, number>();
-  for (const r of rows) {
-    if (!r.brand) continue;
-    brandCounts.set(r.brand, (brandCounts.get(r.brand) || 0) + 1);
-  }
-
-  const brands = Array.from(brandCounts.entries())
-    .map(([name, count]) => ({ name, count }))
-    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+  const brands = aggregateBrandFacets(rows);
 
   return {
     currentCategory,
@@ -890,7 +906,7 @@ export async function getMasterProducts(
     params?.brands && params.brands.length > 0
       ? params.brands.map((b) => b.trim()).filter(Boolean)
       : params?.brand
-        ? [params.brand.trim()]
+        ? [params.brand.trim()].filter(Boolean)
         : null;
   const boundedLimit =
     params?.limit && params.limit > 0 ? Math.min(params.limit, 500) : 200;
@@ -917,7 +933,7 @@ export async function getMasterProducts(
       'search_master_products',
       {
         p_category_id: resolvedCategoryId ?? undefined,
-        p_brands: brandList ?? undefined,
+        p_brands: brandList && brandList.length > 0 ? brandList : undefined,
         p_search: params?.search?.trim() || undefined,
         p_min_price: params?.minPrice,
         p_max_price: params?.maxPrice,
@@ -946,20 +962,26 @@ export async function getMasterProducts(
     }
   }
 
-  // Search, rating and the JSONB spec filters run in JS below. Applied after
-  // .range() they would empty or under-fill a page, so with any of them the
-  // fallback reads every row the SQL filters allow, then pages in JS
-  // (DOS/Rate#482).
+  // Search, multi-brand case-insensitive matching, rating, and the JSONB spec
+  // filters run in JS below. Applied after .range() they would empty or
+  // under-fill a page, so with any of them the fallback reads every row the SQL
+  // filters allow, then pages in JS (DOS/Rate#482, #510).
+  const hasMultiBrands = Boolean(
+    params?.brands && params.brands.some((b) => b.trim().length > 0)
+  );
   const needsJsFilter = Boolean(
+    hasMultiBrands ||
     (params?.search && params.search.trim().length > 0) ||
     (typeof params?.minRating === 'number' && params.minRating > 0) ||
+    (typeof params?.minBatteryMah === 'number' && params.minBatteryMah > 0) ||
     (typeof params?.minRefreshRateHz === 'number' &&
       params.minRefreshRateHz > 0) ||
     (typeof params?.minFastChargingW === 'number' &&
       params.minFastChargingW > 0) ||
     params?.hasNfc === true ||
     (typeof params?.maxScreenSizeInch === 'number' &&
-      params.maxScreenSizeInch > 0)
+      params.maxScreenSizeInch > 0) ||
+    params?.sort === 'rating_desc'
   );
 
   const buildFallbackQuery = () => {
@@ -972,13 +994,8 @@ export async function getMasterProducts(
       query = query.eq('category_id', resolvedCategoryId);
     }
 
-    if (params?.brands && params.brands.length > 0) {
-      query = query.in(
-        'brand',
-        params.brands.map((b) => b.trim()).filter(Boolean)
-      );
-    } else if (params?.brand) {
-      query = query.ilike('brand', `%${params.brand}%`);
+    if (!hasMultiBrands && params?.brand && params.brand.trim()) {
+      query = query.ilike('brand', `%${params.brand.trim()}%`);
     }
 
     if (typeof params?.minPrice === 'number' && params.minPrice > 0) {
@@ -995,10 +1012,6 @@ export async function getMasterProducts(
 
     if (params?.storageGb && params.storageGb.length > 0) {
       query = query.in('storage_gb', params.storageGb);
-    }
-
-    if (typeof params?.minBatteryMah === 'number' && params.minBatteryMah > 0) {
-      query = query.gte('battery_mah', params.minBatteryMah);
     }
 
     if (params?.has5g === true) {
@@ -1054,9 +1067,9 @@ export async function getMasterProducts(
   }
 
   // Multi-brand case-insensitive filter
-  if (params?.brands && params.brands.length > 0) {
+  if (hasMultiBrands && params?.brands) {
     const allowedBrands = new Set(
-      params.brands.map((b) => b.trim().toLowerCase())
+      params.brands.map((b) => b.trim().toLowerCase()).filter(Boolean)
     );
     items = items.filter((item) =>
       allowedBrands.has((item.brand || '').trim().toLowerCase())
@@ -1085,17 +1098,30 @@ export async function getMasterProducts(
     });
   }
 
+  const getEffectiveRating = (item: MasterProduct): number =>
+    item.user_rating_weighted && Number(item.user_rating_weighted) > 0
+      ? Number(item.user_rating_weighted)
+      : item.expert_rating && Number(item.expert_rating) > 0
+        ? Number(item.expert_rating)
+        : Number(item.average_rating || 0);
+
   // Minimum effective rating filter (prefers JReviews weighted user rating -> expert rating -> average_rating)
   if (typeof params?.minRating === 'number' && params.minRating > 0) {
     const minRating = params.minRating;
+    items = items.filter((item) => getEffectiveRating(item) >= minRating);
+  }
+
+  // Battery: capacity_mah >= minBatteryMah (top-level -> specifications.battery.capacity_mah -> key_specs.battery "<N> mAh")
+  if (typeof params?.minBatteryMah === 'number' && params.minBatteryMah > 0) {
+    const minMah = params.minBatteryMah;
     items = items.filter((item) => {
-      const effectiveRating =
-        item.user_rating_weighted && Number(item.user_rating_weighted) > 0
-          ? Number(item.user_rating_weighted)
-          : item.expert_rating && Number(item.expert_rating) > 0
-            ? Number(item.expert_rating)
-            : Number(item.average_rating || 0);
-      return effectiveRating >= minRating;
+      const topMah = Number(item.battery_mah || 0);
+      if (topMah >= minMah) return true;
+      const specMah = Number(item.specifications?.battery?.capacity_mah || 0);
+      if (specMah >= minMah) return true;
+      const batteryText = item.key_specs?.battery || '';
+      const mahMatch = batteryText.match(/(\d{3,5})\s*mah\b/i);
+      return mahMatch ? Number(mahMatch[1]) >= minMah : false;
     });
   }
 
@@ -1109,8 +1135,9 @@ export async function getMasterProducts(
     items = items.filter((item) => {
       const hz = Number(item.specifications?.display?.refresh_rate_hz || 0);
       if (hz >= minHz) return true;
-      const screenText = (item.key_specs?.screen || '').toLowerCase();
-      return screenText.includes('120hz') || screenText.includes('144hz');
+      const screenText = item.key_specs?.screen || '';
+      const hzMatch = screenText.match(/(\d{2,4})\s*hz/i);
+      return hzMatch ? Number(hzMatch[1]) >= minHz : false;
     });
   }
 
@@ -1122,7 +1149,10 @@ export async function getMasterProducts(
     const minW = params.minFastChargingW;
     items = items.filter((item) => {
       const w = Number(item.specifications?.battery?.fast_charging_w || 0);
-      return w >= minW;
+      if (w >= minW) return true;
+      const batteryText = item.key_specs?.battery || '';
+      const wMatch = batteryText.match(/(\d{1,3})\s*w\b/i);
+      return wMatch ? Number(wMatch[1]) >= minW : false;
     });
   }
 
@@ -1133,32 +1163,38 @@ export async function getMasterProducts(
     );
   }
 
-  // Display: compact screen <= maxScreenSizeInch
+  // Display: compact screen <= maxScreenSizeInch (top-level -> specifications.display.size_inch -> key_specs.screen)
   if (
     typeof params?.maxScreenSizeInch === 'number' &&
     params.maxScreenSizeInch > 0
   ) {
     const maxInch = params.maxScreenSizeInch;
     items = items.filter((item) => {
-      const size = Number(
-        item.screen_size_inch ?? item.specifications?.display?.size_inch ?? 0
-      );
-      return size > 0 && size <= maxInch;
+      const topSize = Number(item.screen_size_inch || 0);
+      const specSize = Number(item.specifications?.display?.size_inch || 0);
+      let size = topSize > 0 ? topSize : specSize > 0 ? specSize : 0;
+      if (size <= 0) {
+        const screenText = item.key_specs?.screen || '';
+        const inchMatch = screenText.match(
+          /\b(\d{1,2}(?:[.,]\d)?)\s*(?:inch|in\b|")/i
+        );
+        if (inchMatch?.[1]) {
+          size = Number(inchMatch[1].replace(',', '.'));
+        }
+      }
+      return Number.isFinite(size) && size > 0 && size <= maxInch;
     });
   }
 
   // Sort by effective rating if requested
   if (params?.sort === 'rating_desc') {
     items.sort((a, b) => {
-      const ratingA =
-        a.user_rating_weighted && Number(a.user_rating_weighted) > 0
-          ? Number(a.user_rating_weighted)
-          : Number(a.average_rating || 0);
-      const ratingB =
-        b.user_rating_weighted && Number(b.user_rating_weighted) > 0
-          ? Number(b.user_rating_weighted)
-          : Number(b.average_rating || 0);
-      return ratingB - ratingA;
+      const ratingDiff = getEffectiveRating(b) - getEffectiveRating(a);
+      if (ratingDiff !== 0) return ratingDiff;
+      const reviewsDiff =
+        Number(b.total_reviews || 0) - Number(a.total_reviews || 0);
+      if (reviewsDiff !== 0) return reviewsDiff;
+      return String(a.id || '').localeCompare(String(b.id || ''));
     });
   }
 
@@ -1355,10 +1391,20 @@ export function mapOfferRowToMerchantOffer(item: RawOfferRow): MerchantOffer {
       ? meta.combined_risk_score
       : 0;
   const combinedRisk = Math.max(baseRisk, dosafeRisk, reviewRisk, metaCombined);
+  const topLevelBreakdown =
+    merchantObj?.review_risk_breakdown &&
+    typeof merchantObj.review_risk_breakdown === 'object' &&
+    !Array.isArray(merchantObj.review_risk_breakdown) &&
+    Object.keys(merchantObj.review_risk_breakdown).length > 0
+      ? merchantObj.review_risk_breakdown
+      : null;
   const breakdown =
-    merchantObj?.review_risk_breakdown ??
+    topLevelBreakdown ??
     (meta?.review_risk_breakdown &&
-    typeof meta.review_risk_breakdown === 'object'
+    typeof meta.review_risk_breakdown === 'object' &&
+    !Array.isArray(meta.review_risk_breakdown) &&
+    Object.keys(meta.review_risk_breakdown as Record<string, unknown>).length >
+      0
       ? (meta.review_risk_breakdown as Record<string, unknown>)
       : meta &&
           ('review_risk_score' in meta || 'seeding_spam_ratio_pct' in meta)
@@ -2466,6 +2512,21 @@ export function resolveProductImageUrl(
   return fallbackUrl || null;
 }
 
+export type CanonicalCategorySlug =
+  'smartphones' | 'tablets' | 'laptops' | 'smartwatches' | 'earbuds';
+
+export function isCanonicalCategorySlug(
+  value: unknown
+): value is CanonicalCategorySlug {
+  return (
+    value === 'smartphones' ||
+    value === 'tablets' ||
+    value === 'laptops' ||
+    value === 'smartwatches' ||
+    value === 'earbuds'
+  );
+}
+
 export function normalizeMasterProductRow(
   row: MasterProduct,
   categorySlugHint?: CanonicalCategorySlug | null
@@ -2480,8 +2541,18 @@ export function normalizeMasterProductRow(
       images: [localImg],
     };
   }
+  const specCatSlug =
+    normalized.specifications &&
+    typeof normalized.specifications === 'object' &&
+    !Array.isArray(normalized.specifications)
+      ? (normalized.specifications as { category_slug?: unknown }).category_slug
+      : undefined;
+  const effectiveCatHint: CanonicalCategorySlug | null =
+    categorySlugHint ??
+    (isCanonicalCategorySlug(specCatSlug) ? specCatSlug : null);
+
   if (
-    categorySlugHint &&
+    effectiveCatHint &&
     typeof normalized.metadata?.category_slug !== 'string'
   ) {
     normalized = {
@@ -2490,15 +2561,12 @@ export function normalizeMasterProductRow(
         ...(normalized.metadata && typeof normalized.metadata === 'object'
           ? normalized.metadata
           : {}),
-        category_slug: categorySlugHint,
+        category_slug: effectiveCatHint,
       },
     };
   }
   return normalized;
 }
-
-export type CanonicalCategorySlug =
-  'smartphones' | 'tablets' | 'laptops' | 'smartwatches' | 'earbuds';
 
 export function getMasterProductCategorySlug(
   product: Pick<MasterProduct, 'slug'> & {
@@ -2506,6 +2574,8 @@ export function getMasterProductCategorySlug(
     model?: string | null;
     category_id?: string | null;
     metadata?: Record<string, unknown> | null;
+    specifications?:
+      { category_slug?: string | null } | Record<string, unknown> | null;
   },
   categorySlugById?: ReadonlyMap<string, string>
 ): CanonicalCategorySlug {
@@ -2517,15 +2587,17 @@ export function getMasterProductCategorySlug(
     typeof product.metadata?.category_slug === 'string'
       ? product.metadata.category_slug
       : undefined;
-  const resolvedCat = catSlugFromMap || catSlugFromMeta;
+  const catSlugFromSpecs =
+    product.specifications &&
+    typeof product.specifications === 'object' &&
+    !Array.isArray(product.specifications) &&
+    typeof (product.specifications as { category_slug?: unknown })
+      .category_slug === 'string'
+      ? (product.specifications as { category_slug: string }).category_slug
+      : undefined;
+  const resolvedCat = catSlugFromMap || catSlugFromMeta || catSlugFromSpecs;
 
-  if (
-    resolvedCat === 'tablets' ||
-    resolvedCat === 'laptops' ||
-    resolvedCat === 'smartwatches' ||
-    resolvedCat === 'earbuds' ||
-    resolvedCat === 'smartphones'
-  ) {
+  if (isCanonicalCategorySlug(resolvedCat)) {
     return resolvedCat;
   }
 
@@ -2572,6 +2644,8 @@ export function getMasterProductHref(
     model?: string | null;
     category_id?: string | null;
     metadata?: Record<string, unknown> | null;
+    specifications?:
+      { category_slug?: string | null } | Record<string, unknown> | null;
   },
   categorySlugById?: ReadonlyMap<string, string>
 ): string {
@@ -2586,6 +2660,7 @@ export interface SitemapRows {
     model: string | null;
     category_id: string | null;
     metadata: Record<string, unknown> | null;
+    specifications?: Record<string, unknown> | null;
     updated_at: string | null;
   }>;
   merchants: Array<{ id: string; updated_at: string | null }>;
@@ -2603,7 +2678,9 @@ export async function getSitemapRows(): Promise<SitemapRows> {
     fetchAllRows('sitemap products', (from, to) =>
       supabase
         .from('master_products')
-        .select('slug, name, model, category_id, metadata, updated_at')
+        .select(
+          'slug, name, model, category_id, metadata, specifications, updated_at'
+        )
         .eq('status', 'published')
         .order('id')
         .range(from, to)
@@ -2633,6 +2710,12 @@ export async function getSitemapRows(): Promise<SitemapRows> {
       typeof row.metadata === 'object' &&
       !Array.isArray(row.metadata)
         ? (row.metadata as Record<string, unknown>)
+        : null,
+    specifications:
+      row.specifications &&
+      typeof row.specifications === 'object' &&
+      !Array.isArray(row.specifications)
+        ? (row.specifications as Record<string, unknown>)
         : null,
   }));
   return { products, merchants, categorySlugById };
@@ -2721,20 +2804,99 @@ export interface MerchantListFilterParams {
   nameContains?: string;
 }
 
-function extractPersistedBreakdown(
-  m: RawMerchantSafeRow
+function parseMerchantRiskBreakdownCandidate(
+  raw: unknown
 ): MerchantRiskBreakdown | null {
-  const candidate =
-    m.review_risk_breakdown ??
-    (m.metadata && typeof m.metadata === 'object'
-      ? (m.metadata.review_risk_breakdown as MerchantRiskBreakdown | undefined)
-      : undefined);
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return null;
+  }
+  const obj = raw as Record<string, unknown>;
   if (
-    candidate &&
-    typeof candidate === 'object' &&
-    typeof candidate.total_reviews === 'number'
+    typeof obj.total_reviews !== 'number' ||
+    !Number.isFinite(obj.total_reviews) ||
+    obj.total_reviews < 0
   ) {
-    return candidate;
+    return null;
+  }
+  const totalReviews = Math.round(obj.total_reviews);
+  const seedingFakeCount =
+    typeof obj.seeding_fake_count === 'number' &&
+    Number.isFinite(obj.seeding_fake_count)
+      ? Math.max(0, Math.round(obj.seeding_fake_count))
+      : typeof obj.seeding_ratio === 'number' &&
+          Number.isFinite(obj.seeding_ratio)
+        ? Math.max(0, Math.round(totalReviews * obj.seeding_ratio))
+        : 0;
+  const coinSpamCount =
+    typeof obj.coin_spam_count === 'number' &&
+    Number.isFinite(obj.coin_spam_count)
+      ? Math.max(0, Math.round(obj.coin_spam_count))
+      : typeof obj.coin_spam_ratio === 'number' &&
+          Number.isFinite(obj.coin_spam_ratio)
+        ? Math.max(0, Math.round(totalReviews * obj.coin_spam_ratio))
+        : 0;
+  const sabotageOrBombingCount =
+    typeof obj.sabotage_or_bombing_count === 'number' &&
+    Number.isFinite(obj.sabotage_or_bombing_count)
+      ? Math.max(0, Math.round(obj.sabotage_or_bombing_count))
+      : typeof obj.sabotage_ratio === 'number' &&
+          Number.isFinite(obj.sabotage_ratio)
+        ? Math.max(0, Math.round(totalReviews * obj.sabotage_ratio))
+        : 0;
+  const authenticCount =
+    typeof obj.authentic_count === 'number' &&
+    Number.isFinite(obj.authentic_count)
+      ? Math.max(0, Math.round(obj.authentic_count))
+      : Math.max(
+          0,
+          totalReviews -
+            seedingFakeCount -
+            coinSpamCount -
+            sabotageOrBombingCount
+        );
+  const flaggedTotal =
+    coinSpamCount + seedingFakeCount + sabotageOrBombingCount;
+  const suspiciousRatioPct =
+    typeof obj.suspicious_ratio_pct === 'number' &&
+    Number.isFinite(obj.suspicious_ratio_pct)
+      ? Math.max(
+          0,
+          Math.min(100, Math.round(obj.suspicious_ratio_pct * 10) / 10)
+        )
+      : totalReviews > 0
+        ? Math.round((flaggedTotal / totalReviews) * 1000) / 10
+        : 0;
+
+  return {
+    total_reviews: totalReviews,
+    authentic_count: authenticCount,
+    coin_spam_count: coinSpamCount,
+    seeding_fake_count: seedingFakeCount,
+    sabotage_or_bombing_count: sabotageOrBombingCount,
+    suspicious_ratio_pct: suspiciousRatioPct,
+  };
+}
+
+export function extractPersistedBreakdown(
+  m: Pick<RawMerchantSafeRow, 'review_risk_breakdown' | 'metadata'>
+): MerchantRiskBreakdown | null {
+  const fromTopLevel = parseMerchantRiskBreakdownCandidate(
+    m.review_risk_breakdown
+  );
+  if (fromTopLevel) {
+    return fromTopLevel;
+  }
+  if (
+    m.metadata &&
+    typeof m.metadata === 'object' &&
+    !Array.isArray(m.metadata)
+  ) {
+    const fromMetaBreakdown = parseMerchantRiskBreakdownCandidate(
+      m.metadata.review_risk_breakdown
+    );
+    if (fromMetaBreakdown) {
+      return fromMetaBreakdown;
+    }
   }
   return null;
 }
@@ -3202,7 +3364,7 @@ export async function getMerchantProfileById(
       supabase
         .from('master_products')
         .select(
-          'id, slug, name, brand, category_id, min_price, max_price, merchant_count'
+          'id, slug, name, model, brand, category_id, metadata, specifications, min_price, max_price, merchant_count'
         )
         .in('id', chunk)
     ),
@@ -3254,8 +3416,11 @@ export async function getMerchantProfileById(
     id: string;
     slug: string;
     name: string;
+    model?: string | null;
     brand: string;
     category_id: string | null;
+    metadata?: Record<string, unknown> | null;
+    specifications?: Record<string, unknown> | null;
     min_price: number | string;
     max_price: number | string;
     merchant_count: number | null;
@@ -3265,8 +3430,7 @@ export async function getMerchantProfileById(
       slug: m.slug,
       name: m.name,
       brand: m.brand,
-      category_slug:
-        (m.category_id && catSlugById.get(m.category_id)) || 'smartphones',
+      category_slug: getMasterProductCategorySlug(m, catSlugById),
       market_min_price: Number(m.min_price || 0),
       market_max_price: Number(m.max_price || 0),
       merchant_count: Number(m.merchant_count || 0),
@@ -3353,7 +3517,7 @@ export async function getMerchantProfileById(
           });
     const prod = prodById.get(r.product_id);
 
-    return {
+    const item: MerchantProfileDetail['recent_reviews'][number] = {
       id: r.id,
       product_id: r.product_id,
       product_title: prod?.title || 'Sản phẩm niêm yết',
@@ -3377,6 +3541,8 @@ export async function getMerchantProfileById(
       reason: vf?.reason || null,
       signals: vf?.signals || null,
     };
+    item.trust_assessment = evaluateReviewTrustAssessment(item);
+    return item;
   });
 
   const persistedBreakdown = extractPersistedBreakdown(merchantRow);
@@ -3487,7 +3653,7 @@ export async function getRatePlatformStats(): Promise<RatePlatformStats> {
     fetchAllRows('master_products', (from, to) =>
       supabase
         .from('master_products')
-        .select('id, slug, name, category_id')
+        .select('id, slug, name, model, category_id, metadata, specifications')
         .eq('status', 'published')
         .order('id')
         .range(from, to)
@@ -3547,7 +3713,10 @@ export async function getRatePlatformStats(): Promise<RatePlatformStats> {
       id: string;
       slug: string;
       name: string;
+      model?: string | null;
       category_id: string | null;
+      metadata?: Record<string, unknown> | null;
+      specifications?: Record<string, unknown> | null;
     }>) || [];
 
   const rawReviews =
@@ -3579,26 +3748,27 @@ export async function getRatePlatformStats(): Promise<RatePlatformStats> {
   }
 
   const catSlugById = new Map<string, string>();
+  const catIdBySlug = new Map<string, string>();
   for (const c of categories) {
     catSlugById.set(c.id, c.slug);
+    catIdBySlug.set(c.slug, c.id);
   }
 
   const countByCatId = new Map<string, number>();
   const masterSlugById = new Map<string, string>();
   const masterRouteById = new Map<string, string>();
   for (const m of masterRows) {
+    const resolvedCatSlug = getMasterProductCategorySlug(m, catSlugById);
     masterSlugById.set(m.id, m.slug);
-    masterRouteById.set(
-      m.id,
-      getMasterProductHref(
-        { slug: m.slug, name: m.name, category_id: m.category_id },
-        catSlugById
-      )
-    );
-    if (m.category_id) {
+    masterRouteById.set(m.id, `/${resolvedCatSlug}/${m.slug}`);
+    const resolvedCatId =
+      (m.category_id && catSlugById.has(m.category_id)
+        ? m.category_id
+        : null) || catIdBySlug.get(resolvedCatSlug);
+    if (resolvedCatId) {
       countByCatId.set(
-        m.category_id,
-        (countByCatId.get(m.category_id) || 0) + 1
+        resolvedCatId,
+        (countByCatId.get(resolvedCatId) || 0) + 1
       );
     }
   }
@@ -3636,8 +3806,22 @@ export async function getRatePlatformStats(): Promise<RatePlatformStats> {
         vf?.include_in_rating ??
         (flagCategory === 'authentic' && verdict !== 'fake')
       );
+      const upvotes = Number(r.upvotes ?? 0);
+      const downvotes = Number(r.downvotes ?? 0);
+      const reports = Number(r.report_count ?? 0);
+      const computedWeight =
+        r.helpfulness_weight != null
+          ? Number(r.helpfulness_weight)
+          : computeJReviewsWeight({
+              upvotes,
+              downvotes,
+              reports,
+              flagCategory,
+              verdict,
+              includeInRating,
+            });
       const pInfo = prodInfoById.get(r.product_id);
-      return {
+      const item: RatePlatformStats['recentReviewsSample'][number] = {
         id: r.id,
         author_name: r.author_name || 'Khách hàng',
         rating_star: Number(r.rating_star || 5),
@@ -3645,12 +3829,10 @@ export async function getRatePlatformStats(): Promise<RatePlatformStats> {
         variation: r.variation || null,
         created_at: r.created_at,
         reviewer_type: r.reviewer_type === 'expert' ? 'expert' : 'user',
-        upvotes: Number(r.upvotes ?? 0),
-        downvotes: Number(r.downvotes ?? 0),
-        report_count: Number(r.report_count ?? 0),
-        helpfulness_weight: includeInRating
-          ? Number(r.helpfulness_weight ?? 1)
-          : 0,
+        upvotes,
+        downvotes,
+        report_count: reports,
+        helpfulness_weight: includeInRating ? computedWeight : 0,
         include_in_rating: includeInRating,
         criteria_ratings: r.criteria_ratings || {},
         verdict,
@@ -3663,6 +3845,8 @@ export async function getRatePlatformStats(): Promise<RatePlatformStats> {
         masterSlug: pInfo?.masterSlug || null,
         masterRouteHref: pInfo?.masterRouteHref || null,
       };
+      item.trust_assessment = evaluateReviewTrustAssessment(item);
+      return item;
     });
 
   const totalRev = reviewsCountRes.count ?? mappedReviews.length;
@@ -4052,6 +4236,101 @@ const PLATFORM_ITEM_ID_PREFIX: Partial<
   phongvu: 'pv-',
 };
 
+const ECOMMERCE_SLUG_NOISE_PHRASES_REGEX =
+  /(?:^|[\s,.|-]+)(?:điện thoại di động|dien thoai di dong|điện thoại|dien thoai|di động|di dong|smartphone|máy tính bảng|may tinh bang|tablet|máy tính xách tay|may tinh xach tay|laptop|đồng hồ thông minh|dong ho thong minh|smartwatch|tai nghe bluetooth true wireless|tai nghe bluetooth không dây|tai nghe bluetooth khong day|tai nghe chụp tai chống ồn|tai nghe chup tai chong on|tai nghe bluetooth|tai nghe không dây|tai nghe khong day|tai nghe true wireless|tai nghe nhét tai|tai nghe nhet tai|tai nghe(?!\s+(?:có dây|co day))|earbuds|chính hãng vn\/a|chinh hang vn a|chinh hang vna|chính hãng|chinh hang|vn\/a|vn a|vna|fullbox|mới 100%|moi 100%|moi 100|nguyên seal|nguyen seal|trả góp 0%|tra gop 0%|trả góp|tra gop|bảo hành \d+ tháng|bao hanh \d+ thang|bảo hành chính hãng|bao hanh chinh hang|freeship|hoả tốc|hỏa tốc|hoa toc|giá rẻ|gia re|nhập khẩu|nhap khau|quốc tế|quoc te)(?=$|[\s,.|-])/giu;
+
+export function stripEcommerceNoiseTokens(rawText: string): string {
+  return rawText
+    .replace(/\[[^\]]*\]/g, ' ')
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(ECOMMERCE_SLUG_NOISE_PHRASES_REGEX, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Extract a clean, human-readable product search keyword from an e-commerce product URL
+ * across all 10 supported platforms (Shopee, Lazada, Tiki, TikTok Shop, CellphoneS,
+ * TGDD/TopZone/DMX, FPT Shop, Hoàng Hà, Di Động Việt, Phong Vũ).
+ */
+export function extractProductKeywordFromUrl(rawUrl?: string | null): string {
+  if (!rawUrl || typeof rawUrl !== 'string') return '';
+  const trimmed = rawUrl.trim();
+  if (!trimmed) return '';
+  const hasHttpProtocol = /^https?:\/\//i.test(trimmed);
+  const hasKnownDomainToken =
+    /(?:^|\/\/|\.)(?:shopee\.vn|lazada\.vn|tiki\.vn|tiktok\.com|cellphones\.com\.vn|thegioididong\.com|topzone\.vn|dienmayxanh\.com|fptshop\.com\.vn|hoanghamobile\.com|didongviet\.vn|phongvu\.vn|rate\.vn)(?:\/|$)/i.test(
+      trimmed
+    );
+  if (!hasHttpProtocol && !hasKnownDomainToken) return '';
+
+  try {
+    const parsed = new URL(
+      hasHttpProtocol ? trimmed : `https://${trimmed.replace(/^\/+/, '')}`
+    );
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return '';
+    }
+    let decodedPathname = parsed.pathname;
+    try {
+      decodedPathname = decodeURIComponent(parsed.pathname);
+    } catch {
+      decodedPathname = parsed.pathname;
+    }
+
+    const rawSegments = decodedPathname
+      .split('/')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const firstSegLower = (rawSegments[0] || '')
+      .replace(/\.html?$/i, '')
+      .toLowerCase();
+    if (
+      RETAIL_NON_PRODUCT_FIRST_SEGMENTS.has(firstSegLower) ||
+      firstSegLower === 'shop' ||
+      firstSegLower === 'opaanlp' ||
+      firstSegLower === 'video'
+    ) {
+      return '';
+    }
+
+    const cleanedPath = decodedPathname
+      .replace(/(?:\/a-i|-i|\/i)\.\d+\.\d+\/?$/i, '')
+      .replace(/\/(?:product|opaanlp)\/\d+\/\d+\/?$/i, '')
+      .replace(/\/(?:view\/)?product\/\d+\/?$/i, '')
+      .replace(/(?:\/|-)i\d+(?:-s\d+)?\.html?$/i, '')
+      .replace(/(?:\/|-)p\d+\.html?$/i, '')
+      .replace(/--s\d+(?:\.html?)?$/i, '')
+      .replace(/\.html?$/i, '')
+      .replace(
+        /^\/(?:products?|san-pham|dien-thoai|dien-thoai-di-dong|dtdd|may-tinh-bang|may-tinh-xach-tay|laptop|dong-ho-thong-minh|tai-nghe|smartphones|tablets|laptops|smartwatches|earbuds|apple|iphone|ipad|macbook|watch|airpods)\//i,
+        '/'
+      );
+    const segments = cleanedPath.split('/').filter(Boolean);
+    const lastSeg = segments[segments.length - 1] || '';
+    const lastSegLower = lastSeg.toLowerCase();
+    if (
+      !lastSeg ||
+      /^\d+$/.test(lastSeg) ||
+      /^(?:a-)?i\.\d+\.\d+$/i.test(lastSeg) ||
+      lastSeg.startsWith('@') ||
+      RETAIL_CATEGORY_ROOT_SLUGS.has(lastSegLower) ||
+      /^(?:search|tim-kiem|result|product|products|view)$/.test(lastSegLower)
+    ) {
+      return '';
+    }
+
+    const spaceSeparated = lastSeg
+      .replace(/[-_]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    const stripped = stripEcommerceNoiseTokens(spaceSeparated);
+    return stripped || spaceSeparated;
+  } catch {
+    return '';
+  }
+}
+
 /**
  * Inspect an e-commerce product/shop URL (all 10 platforms) or keyword:
  * - Resolves exact `platform_item_id` or `url` against `rate.products`
@@ -4137,7 +4416,7 @@ export async function inspectProductOrShopUrl(
         const [offers, reviews, merchantsList] = await Promise.all([
           getMasterProductOffers(masterProduct.id),
           getMasterProductReviews(masterProduct.id),
-          getMerchantsList({ ids: [matchedProd.merchant_id] }),
+          getMerchantsList({ ids: [matchedProd.merchant_id], limit: 1 }),
         ]);
         const [priceHistory, reviewSummary] = await Promise.all([
           getMasterProductPriceHistory(masterProduct.id, offers),
@@ -4168,15 +4447,17 @@ export async function inspectProductOrShopUrl(
     }
   }
 
-  // 2. Direct lookup by Shopee/platform shop ID if URL is a shop link
-  if (parsedUrl.platformShopId && !parsedUrl.platformItemId) {
+  // 2. Direct lookup by Shopee/platform shop ID if present on the URL
+  let matchedMerchantByShopId: MerchantSummary | null = null;
+  if (parsedUrl.platformShopId) {
     const merchants = await getMerchantsList({
       platformShopIds: [parsedUrl.platformShopId],
+      limit: 1,
     });
-    const matchedMerchant =
+    matchedMerchantByShopId =
       merchants.find((m) => m.platform_shop_id === parsedUrl.platformShopId) ||
       null;
-    if (matchedMerchant) {
+    if (matchedMerchantByShopId && !parsedUrl.platformItemId) {
       const suggestions = await getMasterProducts({ limit: 3 });
       return {
         query,
@@ -4188,15 +4469,28 @@ export async function inspectProductOrShopUrl(
         discountAnalysis: null,
         priceHistory: null,
         reviewSummary: null,
-        merchantProfile: matchedMerchant,
+        merchantProfile: matchedMerchantByShopId,
         suggestions,
       };
     }
   }
 
-  // 3. Internal slug or exact master product slug match
-  const candidateSlug = parsedUrl.internalSlug || query.toLowerCase();
-  const exactMaster = await getMasterProductBySlug(candidateSlug);
+  // 3. Internal slug or exact master product slug match (including slugified URL keyword)
+  const urlProductKeyword = parsedUrl.isUrl
+    ? extractProductKeywordFromUrl(query)
+    : '';
+  const slugifiedUrlKeyword = urlProductKeyword
+    ? urlProductKeyword
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+    : '';
+  const candidateSlug =
+    parsedUrl.internalSlug ||
+    (parsedUrl.isUrl ? slugifiedUrlKeyword : query.toLowerCase());
+  const exactMaster = candidateSlug
+    ? await getMasterProductBySlug(candidateSlug)
+    : null;
   if (exactMaster) {
     const [offers, reviews] = await Promise.all([
       getMasterProductOffers(exactMaster.id),
@@ -4206,16 +4500,21 @@ export async function inspectProductOrShopUrl(
     const [priceHistory, reviewSummary, merchantsList] = await Promise.all([
       getMasterProductPriceHistory(exactMaster.id, offers),
       getMasterProductReviewSummary(exactMaster.id, reviews),
-      getMerchantsList({
-        ids: matchedOffer ? [matchedOffer.merchant.id] : [],
-      }),
+      matchedMerchantByShopId
+        ? Promise.resolve([matchedMerchantByShopId])
+        : getMerchantsList({
+            ids: matchedOffer ? [matchedOffer.merchant.id] : [],
+            limit: 1,
+          }),
     ]);
     const discountAnalysis = matchedOffer
       ? priceHistory.byOffer[matchedOffer.id] || null
       : null;
-    const merchantProfile = matchedOffer
-      ? merchantsList.find((m) => m.id === matchedOffer.merchant.id) || null
-      : null;
+    const merchantProfile =
+      matchedMerchantByShopId ||
+      (matchedOffer
+        ? merchantsList.find((m) => m.id === matchedOffer.merchant.id) || null
+        : null);
 
     return {
       query,
@@ -4235,21 +4534,28 @@ export async function inspectProductOrShopUrl(
   // 4. Search across merchants and master products by keyword. Merchant
   // lookups are filtered in the database: this public endpoint must not read
   // the whole directory on every request.
-  const [nameMatches, shopMatches, matchedProducts] = await Promise.all([
-    // No merchant name is this long; skipping also keeps a 1024-char query out
-    // of the request URL.
-    query.length <= 200
-      ? getMerchantsList({ nameContains: query, limit: 1 })
-      : Promise.resolve([]),
-    // Only shop-id-shaped input reaches the in() filter syntax.
-    /^[A-Za-z0-9_.-]{1,64}$/.test(query)
-      ? getMerchantsList({ platformShopIds: [query], limit: 1 })
-      : Promise.resolve([]),
-    getMasterProducts({ search: query, limit: 6 }),
-  ]);
-  const matchedMerchantByName = nameMatches[0] ?? shopMatches[0] ?? null;
+  const effectiveSearchQuery = parsedUrl.isUrl ? urlProductKeyword : query;
+  const [nameMatches, shopMatches, matchedProducts] = effectiveSearchQuery
+    ? await Promise.all([
+        // No merchant name is this long; skipping also keeps a 1024-char query out
+        // of the request URL.
+        !parsedUrl.isUrl && effectiveSearchQuery.length <= 200
+          ? getMerchantsList({ nameContains: effectiveSearchQuery, limit: 1 })
+          : Promise.resolve([]),
+        // Only shop-id-shaped input reaches the in() filter syntax.
+        !parsedUrl.isUrl && /^[A-Za-z0-9_.-]{1,64}$/.test(effectiveSearchQuery)
+          ? getMerchantsList({
+              platformShopIds: [effectiveSearchQuery],
+              limit: 1,
+            })
+          : Promise.resolve([]),
+        getMasterProducts({ search: effectiveSearchQuery, limit: 6 }),
+      ])
+    : [[], [], []];
+  const matchedMerchantByName =
+    matchedMerchantByShopId ?? nameMatches[0] ?? shopMatches[0] ?? null;
   const merchantById = async (id: string) =>
-    (await getMerchantsList({ ids: [id] }))[0] ?? null;
+    (await getMerchantsList({ ids: [id], limit: 1 }))[0] ?? null;
 
   if (matchedProducts.length === 1) {
     const single = matchedProducts[0]!;
@@ -4265,9 +4571,12 @@ export async function inspectProductOrShopUrl(
     const discountAnalysis = matchedOffer
       ? priceHistory.byOffer[matchedOffer.id] || null
       : null;
-    const merchantProfile = matchedOffer
-      ? (await merchantById(matchedOffer.merchant.id)) || matchedMerchantByName
-      : matchedMerchantByName;
+    const merchantProfile =
+      matchedMerchantByShopId ||
+      (matchedOffer
+        ? (await merchantById(matchedOffer.merchant.id)) ||
+          matchedMerchantByName
+        : matchedMerchantByName);
 
     return {
       query,

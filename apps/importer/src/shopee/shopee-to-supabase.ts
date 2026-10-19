@@ -43,9 +43,44 @@ export function platformReviewIdFor(r: ShopeeReview): string {
   );
 }
 
+const SPEC_FIELD_GROUP_KEYS = [
+  'availability',
+  'design',
+  'display',
+  'hardware',
+  'battery',
+  'camera',
+  'connectivity',
+  'cellular',
+  'multimedia',
+  'regulatory',
+] as const;
+
+/**
+ * Returns true if at least one of the 10 specification field groups contains a
+ * non-empty value (ignoring top-level metadata keys such as `category_slug`).
+ */
+export function hasPopulatedSpecificationGroups(specs: unknown): boolean {
+  if (!specs || typeof specs !== 'object' || Array.isArray(specs)) return false;
+  const record = specs as Record<string, unknown>;
+  for (const groupKey of SPEC_FIELD_GROUP_KEYS) {
+    const group = record[groupKey];
+    if (group && typeof group === 'object' && !Array.isArray(group)) {
+      const hasValue = Object.values(group as Record<string, unknown>).some(v => {
+        if (v === undefined || v === null) return false;
+        if (Array.isArray(v)) return v.length > 0;
+        return String(v).trim() !== '';
+      });
+      if (hasValue) return true;
+    }
+  }
+  return false;
+}
+
 /**
  * Normalizes optional original/discount prices and variant models on a validated
  * product before writing to `rate.products` and `rate.price_history`:
+ *  - clamps `priceMax` to `>= priceMin` (within `MAX_VALID_VND_PRICE`);
  *  - strips `priceBeforeDiscount` when `<= 0`, `< priceMin`, non-finite, or `> MAX_VALID_VND_PRICE`;
  *  - filters out variant `models` whose `price` is `<= 0`, non-finite, or `> MAX_VALID_VND_PRICE`.
  */
@@ -53,6 +88,11 @@ export function normalizeScrapedProductPrices(
   product: ValidatedScrapedProduct
 ): ValidatedScrapedProduct {
   const priceMin = Number(product.priceMin);
+  const rawPriceMax = Number(product.priceMax);
+  const priceMax =
+    Number.isFinite(rawPriceMax) && rawPriceMax >= priceMin && rawPriceMax <= MAX_VALID_VND_PRICE
+      ? rawPriceMax
+      : priceMin;
   const rawBefore =
     product.priceBeforeDiscount !== undefined && product.priceBeforeDiscount !== null
       ? Number(product.priceBeforeDiscount)
@@ -73,6 +113,7 @@ export function normalizeScrapedProductPrices(
     : [];
   return {
     ...product,
+    priceMax,
     priceBeforeDiscount: validBeforeDiscount,
     models,
   };
@@ -343,10 +384,7 @@ export class ShopeeIngestionPipeline {
         hinted = { masterId: hintRow.id, isNew: false };
         const existingSpecs = (hintRow as { specifications?: Record<string, unknown> | null })
           .specifications;
-        if (
-          existingSpecs !== undefined &&
-          (!existingSpecs || Object.keys(existingSpecs).length === 0)
-        ) {
+        if (existingSpecs !== undefined && !hasPopulatedSpecificationGroups(existingSpecs)) {
           try {
             await this.matcher.enrichMasterProductById(hintRow.id);
           } catch (enrichErr: unknown) {

@@ -17,8 +17,12 @@ import {
   getMerchantsList as _getMerchantsList,
   getRatePlatformStats as _getRatePlatformStats,
   inspectProductOrShopUrl as _inspectProductOrShopUrl,
+  isCanonicalCategorySlug,
+  extractPersistedBreakdown,
+  extractProductKeywordFromUrl,
   parseEcommerceUrlOrQuery,
   resolveProductImageUrl,
+  stripEcommerceNoiseTokens,
   getRateClient,
   computeJReviewsWeight,
   filterAndSortMerchants,
@@ -52,18 +56,23 @@ export type {
 export {
   getRateClient,
   computeJReviewsWeight,
+  extractPersistedBreakdown,
+  extractProductKeywordFromUrl,
   filterAndSortMerchants,
+  isCanonicalCategorySlug,
   parseEcommerceUrlOrQuery,
   getCategoryRouteHref,
   getMasterProductCategorySlug,
   getMasterProductHref,
   resolveProductImageUrl,
+  stripEcommerceNoiseTokens,
 };
 
 import {
   RATE_CACHE_TAGS,
   canonicalizeCacheParams,
   categoryCacheTag,
+  isSafeRevalidationPath,
   merchantCacheTag,
   productCacheTag,
   resolveRevalidationTargets,
@@ -89,6 +98,7 @@ export {
   RATE_CACHE_TAGS,
   canonicalizeCacheParams,
   categoryCacheTag,
+  isSafeRevalidationPath,
   merchantCacheTag,
   productCacheTag,
   resolveRevalidationTargets,
@@ -164,56 +174,86 @@ export const getCachedCategoryDirectoryFacets = cache(
   }
 );
 
-export const getCachedMasterProductOffers = cache((masterProductId: string) =>
-  withRateDataCache(
+export const getCachedMasterProductOffers = cache((masterProductId: string) => {
+  const cleanId = masterProductId.trim();
+  return withRateDataCache(
     _getMasterProductOffers,
-    ['rate-master-product-offers', masterProductId],
+    ['rate-master-product-offers', cleanId],
     {
       revalidate: 180,
       tags: [RATE_CACHE_TAGS.OFFERS, RATE_CACHE_TAGS.DEALS],
     }
-  )(masterProductId)
-);
+  )(cleanId);
+});
 
-export const getCachedMasterProductReviews = cache((masterProductId: string) =>
-  withRateDataCache(
-    _getMasterProductReviews,
-    ['rate-master-product-reviews', masterProductId],
-    {
-      revalidate: 300,
-      tags: [RATE_CACHE_TAGS.REVIEWS],
-    }
-  )(masterProductId)
+export const getCachedMasterProductReviews = cache(
+  (masterProductId: string) => {
+    const cleanId = masterProductId.trim();
+    return withRateDataCache(
+      _getMasterProductReviews,
+      ['rate-master-product-reviews', cleanId],
+      {
+        revalidate: 300,
+        tags: [RATE_CACHE_TAGS.REVIEWS],
+      }
+    )(cleanId);
+  }
 );
 
 export const getCachedMasterProductReviewSummary = cache(
   (
     masterProductId: string,
     existingReviews?: import('../../lib/rate-api').ReviewItem[]
-  ) =>
-    withRateDataCache(
-      (id: string) => _getMasterProductReviewSummary(id, existingReviews),
-      ['rate-master-product-review-summary', masterProductId],
+  ) => {
+    const cleanId = masterProductId.trim();
+    const reviewsKey = existingReviews
+      ? `reviews:${existingReviews.length}:${existingReviews
+          .slice(0, 20)
+          .map(
+            (r) => `${r.id}:${r.verdict ?? ''}:${r.include_in_rating ? 1 : 0}`
+          )
+          .join('|')}`
+      : 'reviews:auto';
+    return withRateDataCache(
+      async (id: string) => {
+        const reviews =
+          existingReviews ?? (await getCachedMasterProductReviews(id));
+        return _getMasterProductReviewSummary(id, reviews);
+      },
+      ['rate-master-product-review-summary', cleanId, reviewsKey],
       {
         revalidate: 300,
         tags: [RATE_CACHE_TAGS.REVIEWS],
       }
-    )(masterProductId)
+    )(cleanId);
+  }
 );
 
 export const getCachedMasterProductPriceHistory = cache(
   (
     masterProductId: string,
     existingOffers?: import('../../lib/rate-api').MerchantOffer[]
-  ) =>
-    withRateDataCache(
-      (id: string) => _getMasterProductPriceHistory(id, existingOffers),
-      ['rate-master-product-price-history', masterProductId],
+  ) => {
+    const cleanId = masterProductId.trim();
+    const offersKey = existingOffers
+      ? `offers:${existingOffers.length}:${existingOffers
+          .slice(0, 20)
+          .map((o) => `${o.id}:${o.price_current}:${o.price_original ?? ''}`)
+          .join('|')}`
+      : 'offers:auto';
+    return withRateDataCache(
+      async (id: string) => {
+        const offers =
+          existingOffers ?? (await getCachedMasterProductOffers(id));
+        return _getMasterProductPriceHistory(id, offers);
+      },
+      ['rate-master-product-price-history', cleanId, offersKey],
       {
         revalidate: 600,
-        tags: [RATE_CACHE_TAGS.PRICE_HISTORY],
+        tags: [RATE_CACHE_TAGS.PRICE_HISTORY, RATE_CACHE_TAGS.OFFERS],
       }
-    )(masterProductId)
+    )(cleanId);
+  }
 );
 
 const _getCachedCompareMasterProductsByKey = cache(
@@ -311,16 +351,17 @@ export async function getCachedMerchantsList(
   return _getCachedMerchantsListByKey(canonicalizeCacheParams(params ?? {}));
 }
 
-export const getCachedMerchantProfileById = cache((merchantId: string) =>
-  withRateDataCache(
+export const getCachedMerchantProfileById = cache((merchantId: string) => {
+  const cleanId = merchantId.trim();
+  return withRateDataCache(
     _getMerchantProfileById,
-    ['rate-merchant-profile', merchantId],
+    ['rate-merchant-profile', cleanId],
     {
       revalidate: 600,
-      tags: [RATE_CACHE_TAGS.MERCHANTS, merchantCacheTag(merchantId)],
+      tags: [RATE_CACHE_TAGS.MERCHANTS, merchantCacheTag(cleanId)],
     }
-  )(merchantId)
-);
+  )(cleanId);
+});
 
 export const getCachedRatePlatformStats = cache(() =>
   withRateDataCache(_getRatePlatformStats, ['rate-platform-stats'], {

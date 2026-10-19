@@ -4,11 +4,13 @@ import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
 import {
   getCachedCategoryDirectoryFacets,
+  getCachedMasterProducts,
   getCrossPlatformDealRadar,
   getMasterProducts,
   type MasterProductFilterParams,
 } from '@/server/rate';
 import type { CanonicalCategorySlug } from '@/lib/rate-api';
+import { isPlainListing } from '@/lib/catalog-listing';
 import { buildRadarIndex, getRadarSignal } from '@/lib/deal-radar';
 import ProductCard, {
   type ProductCardSpec,
@@ -213,7 +215,13 @@ export async function CategoryCatalogContent({
 
   const [facets, pageRows, categoryDealRadar] = await Promise.all([
     getCachedCategoryDirectoryFacets(categorySlug),
-    getMasterProducts(filterParams),
+    // The plain listing (only the bounded page and a known sort) is most of
+    // the traffic and shares the data cache. Filtered reads stay uncached:
+    // free-form values (search, prices, brands) would each create an entry
+    // (DOS/Rate#495).
+    isPlainListing(filterParams)
+      ? getCachedMasterProducts(filterParams)
+      : getMasterProducts(filterParams),
     getCrossPlatformDealRadar({
       categorySlug: categorySlug as CanonicalCategorySlug,
       // Max page size: card badges and exports need a signal for EVERY product,
