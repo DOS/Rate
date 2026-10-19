@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
+import { BsTrophy } from 'react-icons/bs';
 import { Link } from '@/lib/navigation';
 import {
   getCachedCompareMasterProducts,
@@ -193,7 +194,8 @@ export default async function VersusComparePage({ params }: VersusPageProps) {
               href={`/leaderboard?cat=${catSlug}`}
               className="btn btn-sm btn-outline-light rounded-pill px-3"
             >
-              🏆 {t('viewCategoryLeaderboard')}
+              <BsTrophy aria-hidden="true" className="me-1" />
+              {t('viewCategoryLeaderboard')}
             </Link>
           </div>
 

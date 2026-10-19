@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { BsPhone } from 'react-icons/bs';
 import { Link } from '@/lib/navigation';
 import {
   clearCompareTray,
@@ -107,7 +108,7 @@ export default function CompareTrayBar() {
                           className="text-muted"
                           style={{ fontSize: '0.8125rem' }}
                         >
-                          📱
+                          <BsPhone aria-hidden="true" />
                         </span>
                       )}
                     </div>

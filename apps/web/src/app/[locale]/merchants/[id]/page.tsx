@@ -24,8 +24,10 @@ import BackToTop from '../../components/back-to-top';
 import CompareTrayBar from '@/components/compare/CompareTrayBar';
 import MerchantShareAuditButton from '@/components/merchants/MerchantShareAuditButton';
 import {
+  BsArrowDownCircle,
   BsBoxSeam,
   BsCheckCircleFill,
+  BsExclamationTriangle,
   BsGraphUpArrow,
   BsPeopleFill,
   BsShieldCheck,
@@ -537,7 +539,11 @@ export default async function MerchantProfilePage({
                         href={g.productHref}
                         className="fw-bold text-dark text-decoration-none d-block text-truncate small"
                       >
-                        🟢 {g.productName}
+                        <BsArrowDownCircle
+                          aria-hidden="true"
+                          className="text-success me-1"
+                        />
+                        {g.productName}
                       </Link>
                       <div className="text-secondary small">
                         {t('low60dAndMedian', {
@@ -565,7 +571,11 @@ export default async function MerchantProfilePage({
                         href={tItem.productHref}
                         className="fw-bold text-dark text-decoration-none d-block text-truncate small"
                       >
-                        🚨 {tItem.productName}
+                        <BsExclamationTriangle
+                          aria-hidden="true"
+                          className="text-danger me-1"
+                        />
+                        {tItem.productName}
                       </Link>
                       <div className="text-secondary small">
                         {t('inflatedOriginalPrice', {

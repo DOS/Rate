@@ -7,7 +7,7 @@ import FooterTop from '../components/footer-top';
 import FooterDynamic from '../components/footer/FooterDynamic';
 import BackToTop from '../components/back-to-top';
 import CompareTrayBar from '@/components/compare/CompareTrayBar';
-import { BsShieldCheck } from 'react-icons/bs';
+import { BsSearch, BsShieldCheck } from 'react-icons/bs';
 import MerchantDirectoryExplorer, {
   type MerchantSortOption,
 } from '@/components/merchants/MerchantDirectoryExplorer';
@@ -136,7 +136,8 @@ export default async function MerchantsDirectoryPage({
                   href="/inspect"
                   className="btn btn-danger rounded-pill fw-medium btn-sm px-3"
                 >
-                  🔬 {t('inspectUrlBtn')}
+                  <BsSearch aria-hidden="true" className="me-1" />
+                  {t('inspectUrlBtn')}
                 </Link>
                 <Link
                   href="/smartphones"

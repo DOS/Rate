@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import type { IconType } from 'react-icons';
 import { Link, useRouter } from '@/lib/navigation';
 import {
   getMasterProductCategorySlug,
@@ -32,14 +33,19 @@ import {
   BsCheckCircleFill,
   BsCpu,
   BsDisplay,
+  BsEarbuds,
   BsFolder2Open,
   BsFunnel,
   BsGem,
+  BsLaptop,
   BsLightningCharge,
+  BsPhone,
   BsSearch,
   BsShieldCheck,
   BsSliders,
+  BsSmartwatch,
   BsStarFill,
+  BsTablet,
   BsTrophy,
   BsTrophyFill,
 } from 'react-icons/bs';
@@ -79,33 +85,33 @@ type TranslateFn = ReturnType<typeof useTranslations<'leaderboard'>>;
 
 function buildCategoryTabs(t: TranslateFn): ReadonlyArray<{
   slug: CanonicalCategorySlug;
-  icon: string;
+  icon: IconType;
   label: string;
 }> {
   return [
     {
       slug: 'smartphones',
-      icon: '📱',
+      icon: BsPhone,
       label: t('tabSmartphones'),
     },
     {
       slug: 'tablets',
-      icon: '📟',
+      icon: BsTablet,
       label: t('tabTablets'),
     },
     {
       slug: 'laptops',
-      icon: '💻',
+      icon: BsLaptop,
       label: t('tabLaptops'),
     },
     {
       slug: 'smartwatches',
-      icon: '⌚',
+      icon: BsSmartwatch,
       label: t('tabSmartwatches'),
     },
     {
       slug: 'earbuds',
-      icon: '🎧',
+      icon: BsEarbuds,
       label: t('tabEarbuds'),
     },
   ];
@@ -745,7 +751,7 @@ export default function LeaderboardExplorer({
                     : 'btn-outline-dark bg-light'
                 }`}
               >
-                <span>{tab.icon}</span>
+                <tab.icon aria-hidden="true" />
                 <span>{tab.label}</span>
                 <span
                   className={`badge rounded-pill rate-tabular ${
