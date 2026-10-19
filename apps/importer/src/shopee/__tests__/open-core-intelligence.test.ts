@@ -748,8 +748,148 @@ async function runSuite() {
   );
 
   console.log(
-    '  ✅ [12/12] ProductNormalizer Category-Aware Fallbacks, Earbud Storage & Title Screen Size (#505) passed'
+    '  ✅ [12/13] ProductNormalizer Category-Aware Fallbacks, Earbud Storage & Title Screen Size (#505) passed'
   );
+
+  // =========================================================================
+  // 13. AiReviewAnalyzer MerchantRiskBreakdown Schema Alignment (#521)
+  // =========================================================================
+  {
+    const { AiReviewAnalyzer } = await import('../ai-review-analyzer.js');
+    const analyzer521 = new AiReviewAnalyzer({ apiKey: '' });
+    const sampleResults521 = [
+      {
+        review_id: 'r-1',
+        verdict: 'authentic' as const,
+        flag_category: 'authentic' as const,
+        fake_probability: 0.05,
+        include_in_rating: true,
+        helpfulness_weight: 1.2,
+        reason: 'Authentic review',
+        signals: {
+          burst_pattern_score: 0,
+          duplicate_text_ratio: 0,
+          account_age_bucket: 'high' as const,
+          reviewer_history_score: 0.9,
+          language_marker_score: 0.1,
+        },
+      },
+      {
+        review_id: 'r-2',
+        verdict: 'suspicious' as const,
+        flag_category: 'low_value_coin_spam' as const,
+        fake_probability: 0.45,
+        include_in_rating: false,
+        helpfulness_weight: 0,
+        reason: 'Coin spam',
+        signals: {
+          burst_pattern_score: 0.2,
+          duplicate_text_ratio: 0.5,
+          account_age_bucket: 'medium' as const,
+          reviewer_history_score: 0.4,
+          language_marker_score: 0.6,
+        },
+      },
+      {
+        review_id: 'r-3',
+        verdict: 'fake' as const,
+        flag_category: 'seeding_fake' as const,
+        fake_probability: 0.9,
+        include_in_rating: false,
+        helpfulness_weight: 0,
+        reason: 'Seeding fake',
+        signals: {
+          burst_pattern_score: 0.85,
+          duplicate_text_ratio: 0.8,
+          account_age_bucket: 'low' as const,
+          reviewer_history_score: 0.1,
+          language_marker_score: 0.85,
+        },
+      },
+      {
+        review_id: 'r-4',
+        verdict: 'suspicious' as const,
+        flag_category: 'competitor_sabotage' as const,
+        fake_probability: 0.8,
+        include_in_rating: false,
+        helpfulness_weight: 0,
+        reason: 'Sabotage',
+        signals: {
+          burst_pattern_score: 0.7,
+          duplicate_text_ratio: 0.6,
+          account_age_bucket: 'low' as const,
+          reviewer_history_score: 0.2,
+          language_marker_score: 0.7,
+        },
+      },
+    ];
+
+    const eval521 = analyzer521.evaluateMerchantRisk({
+      merchantId: 'merch-521',
+      platform: 'shopee',
+      isOfficial: false,
+      reviewResults: sampleResults521,
+    });
+    assert.equal(eval521.total_reviews, 4);
+    assert.equal(eval521.authentic_count, 1);
+    assert.equal(eval521.coin_spam_count, 1);
+    assert.equal(eval521.seeding_fake_count, 1);
+    assert.equal(eval521.sabotage_or_bombing_count, 1);
+    assert.equal(eval521.suspicious_ratio_pct, 75);
+
+    let capturedMerchPayload: Record<string, unknown> | null = null;
+    const stub521 = {
+      from: (table: string) => ({
+        select: () => ({
+          in: () => ({
+            in: async () => ({ data: [], error: null }),
+          }),
+        }),
+        upsert: async () => ({ error: null }),
+        update: (payload: Record<string, unknown>) => ({
+          eq: async () => {
+            if (table === 'merchants') {
+              capturedMerchPayload = payload;
+            }
+            return { error: null };
+          },
+        }),
+      }),
+      rpc: async () => ({ error: null }),
+    };
+
+    await analyzer521.persistAnalysisToSupabase(stub521 as never, {
+      productId: 'prod-521',
+      masterId: 'master-521',
+      merchantId: 'merch-521',
+      platform: 'shopee',
+      isOfficial: false,
+      reviews: [
+        {
+          id: 'r-1',
+          rating_star: 5,
+          comment:
+            'Máy dùng rất mượt, màn hình 120Hz sáng rõ ngoài trời, pin dùng trọn 1 ngày làm việc.',
+        },
+        {
+          id: 'r-2',
+          rating_star: 5,
+          comment: 'Hình ảnh mang tính chất nhận xu',
+        },
+      ],
+    });
+    assert.ok(capturedMerchPayload, 'merchants.update must be invoked (#521)');
+    const brk521 = (capturedMerchPayload as Record<string, unknown>)
+      .review_risk_breakdown as Record<string, unknown>;
+    assert.equal(brk521.total_reviews, 2);
+    assert.equal(brk521.authentic_count, 1);
+    assert.equal(brk521.coin_spam_count, 1);
+    assert.equal(brk521.seeding_fake_count, 0);
+    assert.equal(brk521.sabotage_or_bombing_count, 0);
+    assert.equal(brk521.suspicious_ratio_pct, 50);
+  }
+
+  console.log('  ✅ [13/13] AiReviewAnalyzer MerchantRiskBreakdown Schema Alignment (#521) passed');
 
   console.log('🎉 All @repo/crawlers Open-Core Intelligence tests passed!');
 }

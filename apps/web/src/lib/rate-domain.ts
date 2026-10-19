@@ -14,6 +14,7 @@ export {
   computeWilsonLowerBound,
   detectStarDistributionAnomaly,
   evaluateReviewTrustAssessment,
+  extractPersistedBreakdown,
   extractProductKeywordFromUrl,
   filterAndSortMerchants,
   getCategoryRouteHref,
