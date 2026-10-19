@@ -12,6 +12,7 @@ import {
   jsonApiError,
   parseBoundedIntParam,
   parseBoundedNumberParam,
+  parseBoundedPositiveIntArrayParam,
   parseBoundedStringParam,
   parseProductsFilterBounds,
 } from '@/server/rate/api-handler';
@@ -21,21 +22,6 @@ export async function OPTIONS() {
     status: 204,
     headers: PUBLIC_API_CORS_HEADERS,
   });
-}
-
-function parseNumArray(raw: string | null): number[] | undefined {
-  if (!raw) return undefined;
-  const nums = raw
-    .split(',')
-    .map((s) => Number(s.trim()))
-    .filter((n) => !Number.isNaN(n) && n > 0);
-  return nums.length > 0 ? nums : undefined;
-}
-
-function parsePositiveNum(raw: string | null): number | undefined {
-  if (!raw) return undefined;
-  const n = Number(raw);
-  return !Number.isNaN(n) && n > 0 ? n : undefined;
 }
 
 function parseBooleanFlag(raw: string | null): boolean | undefined {
@@ -85,7 +71,7 @@ export async function GET(request: NextRequest) {
     const maxScreenSizeInch =
       compactRaw === '1' || compactRaw?.toLowerCase() === 'true'
         ? 6.2
-        : parsePositiveNum(compactRaw);
+        : parseBoundedNumberParam(compactRaw, 1, 30);
 
     const filterParams: MasterProductFilterParams = {
       categorySlug,
@@ -98,19 +84,35 @@ export async function GET(request: NextRequest) {
         0,
         5
       ),
-      ramGb: parseNumArray(sp.get('ramGb') || sp.get('ram')),
-      storageGb: parseNumArray(
-        sp.get('storageGb') || sp.get('storage') || sp.get('rom')
+      ramGb: parseBoundedPositiveIntArrayParam(
+        sp.get('ramGb') || sp.get('ram'),
+        2048
+      ),
+      storageGb: parseBoundedPositiveIntArrayParam(
+        sp.get('storageGb') || sp.get('storage') || sp.get('rom'),
+        65536
       ),
       minBatteryMah: parseBooleanFlag(sp.get('bigBattery'))
         ? 5000
-        : parsePositiveNum(sp.get('minBatteryMah') || sp.get('battery')),
+        : parseBoundedNumberParam(
+            sp.get('minBatteryMah') || sp.get('battery'),
+            100,
+            100000
+          ),
       minRefreshRateHz: parseBooleanFlag(sp.get('highRefresh'))
         ? 120
-        : parsePositiveNum(sp.get('minRefreshHz') || sp.get('hz')),
+        : parseBoundedNumberParam(
+            sp.get('minRefreshHz') || sp.get('hz'),
+            30,
+            1000
+          ),
       minFastChargingW: parseBooleanFlag(sp.get('fastCharge'))
         ? 45
-        : parsePositiveNum(sp.get('minFastChargeW') || sp.get('charge')),
+        : parseBoundedNumberParam(
+            sp.get('minFastChargeW') || sp.get('charge'),
+            1,
+            500
+          ),
       has5g: parseBooleanFlag(sp.get('has5g') || sp.get('5g')),
       hasNfc: parseBooleanFlag(sp.get('hasNfc') || sp.get('nfc')),
       maxScreenSizeInch,

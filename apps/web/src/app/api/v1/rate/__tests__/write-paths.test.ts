@@ -606,11 +606,87 @@ async function testCookieSessions() {
   );
 }
 
+async function testFilterBoundsAndWatchlistPrices() {
+  const {
+    parseBoundedPositiveIntArrayParam,
+    resolveWatchlistMasterPriceBounds,
+  } = await import('@/server/rate/api-handler');
+
+  assert.deepEqual(
+    parseBoundedPositiveIntArrayParam(
+      '8, 12, 16, 16.4, 8, -4, 0, NaN, 99999',
+      2048,
+      10
+    ),
+    [8, 12, 16],
+    'parseBoundedPositiveIntArrayParam must deduplicate positive integers and filter out floats, non-positive, or > maxValue entries (#535)'
+  );
+  assert.deepEqual(
+    parseBoundedPositiveIntArrayParam('1,2,3,4,5', 100, 3),
+    [1, 2, 3],
+    'parseBoundedPositiveIntArrayParam must cap output length at maxItems (#535)'
+  );
+  assert.equal(
+    parseBoundedPositiveIntArrayParam('0,-5,99999,abc', 2048, 10),
+    undefined,
+    'parseBoundedPositiveIntArrayParam must return undefined when no valid numbers remain (#535)'
+  );
+
+  assert.deepEqual(
+    resolveWatchlistMasterPriceBounds({
+      min_price: 20_000_000,
+      max_price: 25_000_000,
+    }),
+    { currentMinPrice: 20_000_000, currentMaxPrice: 25_000_000 },
+    'resolveWatchlistMasterPriceBounds must preserve valid min_price and max_price (#535)'
+  );
+  assert.deepEqual(
+    resolveWatchlistMasterPriceBounds({
+      min_price: 25_000_000,
+      max_price: 5_000_000_000, // corrupted > 1B VND
+    }),
+    { currentMinPrice: 25_000_000, currentMaxPrice: 25_000_000 },
+    'resolveWatchlistMasterPriceBounds must fall back currentMaxPrice to currentMinPrice when max_price > MAX_VALID_VND_PRICE (#535)'
+  );
+  assert.deepEqual(
+    resolveWatchlistMasterPriceBounds({
+      min_price: 25_000_000,
+      max_price: 19_000_000, // inverted < min_price
+    }),
+    { currentMinPrice: 25_000_000, currentMaxPrice: 25_000_000 },
+    'resolveWatchlistMasterPriceBounds must clamp inverted max_price < min_price to currentMinPrice (#535)'
+  );
+  assert.deepEqual(
+    resolveWatchlistMasterPriceBounds(
+      {
+        min_price: 0,
+        max_price: -100,
+      },
+      21_500_000
+    ),
+    { currentMinPrice: 21_500_000, currentMaxPrice: 21_500_000 },
+    'resolveWatchlistMasterPriceBounds must fall back to bestOfferPrice when master prices are non-positive (#535)'
+  );
+  assert.deepEqual(
+    resolveWatchlistMasterPriceBounds({
+      min_price: 0,
+      max_price: -100,
+    }),
+    { currentMinPrice: 0, currentMaxPrice: 0 },
+    'resolveWatchlistMasterPriceBounds must return 0 for non-positive prices without bestOfferPrice (#535)'
+  );
+
+  console.log(
+    '  ✅ Product filter positive-int array bounds & watchlist master price clamping verified (#535)'
+  );
+}
+
 async function main() {
   console.log('🧪 Public write-path security suite (#155)');
   await testReviews();
   await testWatchlist();
   await testCookieSessions();
+  await testFilterBoundsAndWatchlistPrices();
   testSharedDataClients();
   console.log('✅ Public write-path security suite passed');
 }

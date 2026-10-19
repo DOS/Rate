@@ -15,6 +15,7 @@ import {
   PUBLIC_API_CORS_HEADERS,
   jsonApiError,
   parseWatchlistSlugsParam,
+  resolveWatchlistMasterPriceBounds,
 } from '@/server/rate/api-handler';
 import {
   authenticateRateRequest,
@@ -171,8 +172,12 @@ export async function GET(request: NextRequest) {
       const offers = offersByMaster.get(master.id) ?? [];
       const { bestOffer, offerPlatforms } = selectBestOfferFromListings(offers);
       const radarSignal = computeProductRadarSignal(master, offers);
-      const currentMinPrice = Number(master.min_price || bestOffer?.price || 0);
-      const currentMaxPrice = Number(master.max_price || currentMinPrice || 0);
+      const { currentMinPrice, currentMaxPrice } =
+        resolveWatchlistMasterPriceBounds(
+          master,
+          bestOffer?.price,
+          MAX_VALID_VND_PRICE
+        );
 
       return [
         slug,
@@ -281,8 +286,10 @@ export async function POST(request: NextRequest) {
     const offers = await getCachedMasterProductOffers(masterProduct.id);
     const { bestOffer, offerPlatforms } = selectBestOfferFromListings(offers);
     const radarSignal = computeProductRadarSignal(masterProduct, offers);
-    const currentMinPrice = Number(
-      masterProduct.min_price || bestOffer?.price || 0
+    const { currentMinPrice } = resolveWatchlistMasterPriceBounds(
+      masterProduct,
+      bestOffer?.price,
+      MAX_VALID_VND_PRICE
     );
     const isReached = currentMinPrice > 0 && currentMinPrice <= targetPrice;
 
