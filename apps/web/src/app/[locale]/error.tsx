@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import * as Sentry from '@sentry/nextjs';
 import { useTranslations } from 'next-intl';
+import { BsArrowClockwise, BsHouse } from 'react-icons/bs';
 import { Link } from '@/lib/navigation';
 import { isDevelopment } from '@/lib/general-helpers';
 
@@ -53,13 +54,15 @@ export default function Error({ error, reset }: Props) {
                   onClick={() => reset()}
                   className="btn btn-danger rounded-pill fw-semibold px-4"
                 >
-                  🔄 {t('tryAgain')}
+                  <BsArrowClockwise aria-hidden="true" className="me-1" />
+                  {t('tryAgain')}
                 </button>
                 <Link
                   href="/"
                   className="btn btn-outline-dark rounded-pill fw-medium px-4"
                 >
-                  🏠 Rate.vn Home
+                  <BsHouse aria-hidden="true" className="me-1" />
+                  {t('goHome')}
                 </Link>
               </div>
             </div>

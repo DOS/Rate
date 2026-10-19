@@ -6,7 +6,7 @@ import type {
   LeaderboardCriterionKey,
   ProductLeaderboardBadgeInfo,
 } from '@/lib/leaderboard-engine';
-import { BsTrophyFill } from 'react-icons/bs';
+import { BsAwardFill, BsTrophyFill } from 'react-icons/bs';
 
 interface ProductLeaderboardBadgesProps {
   badges: ProductLeaderboardBadgeInfo[];
@@ -92,15 +92,11 @@ export default async function ProductLeaderboardBadges({
               color: isFirst ? '#fde68a' : isCombined ? '#7dd3fc' : '#6ee7b7',
             }}
           >
-            <span>
-              {isFirst
-                ? '🥇'
-                : b.rank === 2
-                  ? '🥈'
-                  : b.rank === 3
-                    ? '🥉'
-                    : '🏅'}
-            </span>
+            {isFirst ? (
+              <BsTrophyFill aria-hidden="true" />
+            ) : (
+              <BsAwardFill aria-hidden="true" />
+            )}
             <span>{titleText}</span>
             <span
               style={{

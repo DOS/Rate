@@ -1,4 +1,13 @@
 import { getTranslations } from 'next-intl/server';
+import {
+  BsArrowLeftRight,
+  BsEarbuds,
+  BsLaptop,
+  BsPhone,
+  BsShieldCheck,
+  BsSmartwatch,
+  BsTablet,
+} from 'react-icons/bs';
 import { Link } from '@/lib/navigation';
 import NavbarDarkDynamic from './components/navbar/NavbarDarkDynamic';
 import FooterDynamic from './components/footer/FooterDynamic';
@@ -6,6 +15,7 @@ import BackToTop from './components/back-to-top';
 
 export default async function NotFound() {
   const t = await getTranslations('errors.notFound');
+  const tCat = await getTranslations('leaderboard');
 
   return (
     <>
@@ -35,13 +45,15 @@ export default async function NotFound() {
                     href="/compare"
                     className="btn btn-outline-dark rounded-pill fw-medium px-4"
                   >
-                    ⚖️ Compare 10 Spec Groups
+                    <BsArrowLeftRight aria-hidden="true" className="me-1" />
+                    {t('compareCta')}
                   </Link>
                   <Link
                     href="/merchants"
                     className="btn btn-outline-secondary rounded-pill fw-medium px-4"
                   >
-                    🛡️ Merchant Trust
+                    <BsShieldCheck aria-hidden="true" className="me-1" />
+                    {t('merchantsCta')}
                   </Link>
                 </div>
 
@@ -50,31 +62,36 @@ export default async function NotFound() {
                     href="/smartphones"
                     className="btn btn-sm btn-light rounded-pill px-3"
                   >
-                    📱 Smartphones
+                    <BsPhone aria-hidden="true" className="me-1" />
+                    {tCat('tabSmartphones')}
                   </Link>
                   <Link
                     href="/laptops"
                     className="btn btn-sm btn-light rounded-pill px-3"
                   >
-                    💻 Laptops
+                    <BsLaptop aria-hidden="true" className="me-1" />
+                    {tCat('tabLaptops')}
                   </Link>
                   <Link
                     href="/tablets"
                     className="btn btn-sm btn-light rounded-pill px-3"
                   >
-                    📟 Tablets
+                    <BsTablet aria-hidden="true" className="me-1" />
+                    {tCat('tabTablets')}
                   </Link>
                   <Link
                     href="/smartwatches"
                     className="btn btn-sm btn-light rounded-pill px-3"
                   >
-                    ⌚ Smartwatches
+                    <BsSmartwatch aria-hidden="true" className="me-1" />
+                    {tCat('tabSmartwatches')}
                   </Link>
                   <Link
                     href="/earbuds"
                     className="btn btn-sm btn-light rounded-pill px-3"
                   >
-                    🎧 Earbuds
+                    <BsEarbuds aria-hidden="true" className="me-1" />
+                    {tCat('tabEarbuds')}
                   </Link>
                 </div>
               </div>
