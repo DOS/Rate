@@ -831,6 +831,16 @@
   }
 }
 
+// A radar column with nothing to list keeps its title and says so plainly.
+.rate-radar-empty {
+  margin: 0;
+  padding: 0.875rem;
+  font-size: var(--rate-text-min);
+  color: var(--rate-fg-muted);
+  border: 1px dashed var(--rate-border-subtle);
+  border-radius: 10px;
+}
+
 .rate-radar-item-side {
   display: flex;
   flex-direction: column;

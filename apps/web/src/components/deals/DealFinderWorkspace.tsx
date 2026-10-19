@@ -2,6 +2,11 @@
 
 import { useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import {
+  BsArrowLeftRight,
+  BsExclamationTriangle,
+  BsGraphDownArrow,
+} from 'react-icons/bs';
 import { Link } from '@/lib/navigation';
 import type { MasterProduct } from '@repo/shared-data';
 import {
@@ -572,138 +577,133 @@ export default function DealFinderWorkspace({
               </div>
             </div>
 
-            <div className="row g-3">
+            <div className="row g-4">
               <div className="col-lg-6">
-                <div className="rounded-3 border-success-subtle bg-success-subtle bg-opacity-10 h-100 border p-3">
-                  <div className="fw-bold text-success mb-2">
-                    {t('genuineDealsHeader', {
-                      count: filteredGenuineDeals.length,
-                    })}
-                  </div>
-                  <div className="d-flex flex-column gap-2">
+                <h2 className="rate-radar-list-title is-good">
+                  <BsGraphDownArrow aria-hidden="true" />
+                  {t('genuineDealsHeader', {
+                    count: filteredGenuineDeals.length,
+                  })}
+                </h2>
+                {filteredGenuineDeals.length > 0 ? (
+                  <ul className="rate-radar-list">
                     {filteredGenuineDeals.slice(0, 6).map((g) => (
-                      <div
-                        key={g.id}
-                        className="rounded-3 d-flex justify-content-between align-items-center border bg-white p-2"
-                      >
-                        <div className="overflow-hidden pe-2">
-                          <Link
-                            href={g.productHref}
-                            className="fw-bold text-dark text-decoration-none d-block text-truncate small"
-                          >
+                      <li key={g.id}>
+                        <div className="rate-radar-item-main">
+                          <Link href={g.productHref} className="text-truncate">
                             {g.productName}
                           </Link>
-                          <div className="text-secondary small">
-                            <span className="badge bg-dark text-uppercase me-1">
+                          <span className="rate-radar-item-meta text-truncate">
+                            <span className="rate-radar-platform">
                               {g.platform}
                             </span>
-                            {g.merchantName} •{' '}
+                            {g.merchantName} ·{' '}
                             {t('medianPriceLabel', {
                               price:
                                 g.marketMedianPrice.toLocaleString('vi-VN'),
                             })}
-                          </div>
+                          </span>
                         </div>
-                        <div className="flex-shrink-0 text-end">
-                          <div className="fw-bold text-success rate-tabular small">
+                        <div className="rate-radar-item-side">
+                          <span className="rate-radar-price">
                             {g.priceCurrent.toLocaleString('vi-VN')} ₫
-                          </div>
-                          <span className="badge bg-success rounded-pill">
+                          </span>
+                          <span className="rate-radar-tag is-good">
                             {t('savingsVsMedianBadge', {
                               pct: g.savingsVsMedianPct,
                             })}
                           </span>
                         </div>
-                      </div>
+                      </li>
                     ))}
-                  </div>
-                </div>
+                  </ul>
+                ) : (
+                  <p className="rate-radar-empty">{t('radarNoGenuine')}</p>
+                )}
               </div>
 
               <div className="col-lg-6">
-                <div className="rounded-3 border-danger-subtle bg-danger-subtle bg-opacity-10 h-100 border p-3">
-                  <div className="fw-bold text-danger mb-2">
-                    {t('fakeTrapsHeader', {
-                      count: filteredFakeSaleTraps.length,
-                    })}
-                  </div>
-                  <div className="d-flex flex-column gap-2">
+                <h2 className="rate-radar-list-title is-bad">
+                  <BsExclamationTriangle aria-hidden="true" />
+                  {t('fakeTrapsHeader', {
+                    count: filteredFakeSaleTraps.length,
+                  })}
+                </h2>
+                {filteredFakeSaleTraps.length > 0 ? (
+                  <ul className="rate-radar-list">
                     {filteredFakeSaleTraps.slice(0, 6).map((trap) => (
-                      <div
-                        key={trap.id}
-                        className="rounded-3 d-flex justify-content-between align-items-center border bg-white p-2"
-                      >
-                        <div className="overflow-hidden pe-2">
+                      <li key={trap.id}>
+                        <div className="rate-radar-item-main">
                           <Link
                             href={trap.productHref}
-                            className="fw-bold text-dark text-decoration-none d-block text-truncate small"
+                            className="text-truncate"
                           >
                             {trap.productName}
                           </Link>
-                          <div className="text-secondary small">
-                            <span className="badge bg-secondary text-uppercase me-1">
+                          <span className="rate-radar-item-meta text-truncate">
+                            <span className="rate-radar-platform">
                               {trap.platform}
                             </span>
-                            {trap.merchantName} • {t('claimedOrigLabel')}{' '}
-                            <span className="text-decoration-line-through">
+                            {trap.merchantName} · {t('claimedOrigLabel')}{' '}
+                            <s>
                               {(
                                 trap.priceOriginal || trap.priceCurrent
                               ).toLocaleString('vi-VN')}{' '}
                               ₫
-                            </span>
-                          </div>
+                            </s>
+                          </span>
                         </div>
-                        <div className="flex-shrink-0 text-end">
-                          <div className="fw-bold text-danger rate-tabular small">
+                        <div className="rate-radar-item-side">
+                          <span className="rate-radar-price">
                             {trap.priceCurrent.toLocaleString('vi-VN')} ₫
-                          </div>
-                          <span className="badge bg-danger rounded-pill">
+                          </span>
+                          <span className="rate-radar-tag is-bad">
                             {t('fakeMarkupBadge', { pct: trap.fakeMarkupPct })}
                           </span>
                         </div>
-                      </div>
+                      </li>
                     ))}
-                  </div>
-                </div>
+                  </ul>
+                ) : (
+                  <p className="rate-radar-empty">{t('radarNoTraps')}</p>
+                )}
               </div>
             </div>
 
             {filteredPriceSpreadLeaders.length > 0 && (
               <div
                 data-testid="deals-price-spread-leaders"
-                className="rounded-3 bg-light mt-3 border p-3"
+                className="rate-radar-spread"
               >
-                <div className="fw-bold text-dark small mb-2">
+                <h2 className="rate-radar-list-title">
+                  <BsArrowLeftRight aria-hidden="true" />
                   {t('spreadLeadersHeader', {
                     count: filteredPriceSpreadLeaders.length,
                   })}
-                </div>
+                </h2>
                 <div className="row g-2">
                   {filteredPriceSpreadLeaders.slice(0, 6).map((s) => (
                     <div key={s.id} className="col-lg-4 col-md-6">
-                      <div className="rounded-3 d-flex justify-content-between align-items-center h-100 border bg-white p-2">
-                        <div className="overflow-hidden pe-2">
-                          <Link
-                            href={s.productHref}
-                            className="fw-bold text-dark text-decoration-none d-block text-truncate small"
-                          >
+                      <div className="rate-radar-spread-item">
+                        <div className="rate-radar-item-main">
+                          <Link href={s.productHref} className="text-truncate">
                             {s.productName}
                           </Link>
-                          <div className="text-secondary small">
-                            <span className="badge bg-success text-uppercase me-1">
+                          <span className="rate-radar-item-meta">
+                            <span className="rate-radar-platform">
                               {s.cheapestPlatform}
                             </span>
                             ({s.minPrice.toLocaleString('vi-VN')} ₫) vs{' '}
-                            <span className="badge bg-secondary text-uppercase">
+                            <span className="rate-radar-platform">
                               {s.priciestPlatform}
                             </span>
-                          </div>
+                          </span>
                         </div>
-                        <div className="flex-shrink-0 text-end">
-                          <div className="fw-bold text-success rate-tabular small">
+                        <div className="rate-radar-item-side">
+                          <span className="rate-radar-price">
                             -{s.spreadVnd.toLocaleString('vi-VN')} ₫
-                          </div>
-                          <span className="badge bg-warning text-dark rounded-pill">
+                          </span>
+                          <span className="rate-radar-tag is-warn">
                             {t('spreadPctBadge', { pct: s.spreadPct })}
                           </span>
                         </div>
