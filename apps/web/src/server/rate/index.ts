@@ -18,8 +18,10 @@ import {
   getRatePlatformStats as _getRatePlatformStats,
   inspectProductOrShopUrl as _inspectProductOrShopUrl,
   isCanonicalCategorySlug,
+  extractProductKeywordFromUrl,
   parseEcommerceUrlOrQuery,
   resolveProductImageUrl,
+  stripEcommerceNoiseTokens,
   getRateClient,
   computeJReviewsWeight,
   filterAndSortMerchants,
@@ -53,6 +55,7 @@ export type {
 export {
   getRateClient,
   computeJReviewsWeight,
+  extractProductKeywordFromUrl,
   filterAndSortMerchants,
   isCanonicalCategorySlug,
   parseEcommerceUrlOrQuery,
@@ -60,6 +63,7 @@ export {
   getMasterProductCategorySlug,
   getMasterProductHref,
   resolveProductImageUrl,
+  stripEcommerceNoiseTokens,
 };
 
 import {
