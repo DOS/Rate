@@ -1879,7 +1879,7 @@ async function run() {
         },
       };
     },
-  } as unknown as Parameters<typeof llm.persistAnalysisToSupabase>[0];
+  } as unknown as ConstructorParameters<typeof EntityMatcher>[0];
 
   const stubEnricher514 = {
     async fetchSpecsFromAi(params: { categorySlug?: string }) {
