@@ -594,7 +594,103 @@ async function runSuite() {
   assert.equal(updatedSpecs?.hardware?.chipset, 'Intel Core Ultra 7 258V');
   assert.deepEqual(updatedSpecs?.design?.colors, ['Zumaia Gray']);
   console.log(
-    '  ✅ [10/10] Deep-Merge 10-Field-Group Specifications, Defensive Cache Cloning & Bounded Memory Cache (#496) passed'
+    '  ✅ [10/11] Deep-Merge 10-Field-Group Specifications, Defensive Cache Cloning & Bounded Memory Cache (#496) passed'
+  );
+
+  // =========================================================================
+  // 11. Backfill KeySpecs Merge, Whitespace Field Group Audit & Arena PhoneArena Fallbacks (#503)
+  // =========================================================================
+  const { mergeKeySpecs, auditMasterSpecs } = await import('../jobs/backfill-specs.js');
+
+  const mergedKeys = mergeKeySpecs(
+    { screen: '6.9" LTPO OLED 120Hz', chip: 'Apple A18 Pro', camera: '48MP + 48MP + 12MP' },
+    {
+      screen: '6.9" Super Retina XDR 120Hz',
+      chip: undefined,
+      camera: '   ',
+      battery: '4685mAh 45W',
+    }
+  );
+  assert.deepEqual(mergedKeys, {
+    screen: '6.9" Super Retina XDR 120Hz',
+    chip: 'Apple A18 Pro',
+    camera: '48MP + 48MP + 12MP',
+    battery: '4685mAh 45W',
+  });
+
+  assert.equal(
+    countPopulatedFieldGroups({
+      display: { type: '   ' },
+      design: { colors: ['   ', ''] },
+      hardware: { chipset: 'Snapdragon 8 Elite' },
+    }),
+    1,
+    'countPopulatedFieldGroups must ignore whitespace-only strings and empty-element arrays (#503)'
+  );
+
+  const phoneArenaFallbackSpec = parseGsmArenaHtmlToSpecs('<html></html>', {
+    phonearenaHtml: `
+      <table>
+        <tr><th>Device name</th><td>Google Pixel 10 Pro XL</td></tr>
+        <tr><th>Screen size</th><td>6.8"</td></tr>
+        <tr><th>Refresh rate</th><td>120 Hz</td></tr>
+        <tr><th>System chip</th><td>Google Tensor G5</td></tr>
+        <tr><th>RAM</th><td>16 GB RAM</td></tr>
+        <tr><th>Internal storage</th><td>256 GB</td></tr>
+        <tr><th>Main camera</th><td>50 MP, f/1.7, OIS</td></tr>
+        <tr><th>Ultra-wide camera</th><td>48 MP, f/1.9, 123-degree</td></tr>
+        <tr><th>Capacity</th><td>5200 mAh</td></tr>
+        <tr><th>Charging</th><td>45W USB-C PD 3.1, reverse wireless</td></tr>
+        <tr><th>NFC</th><td>No</td></tr>
+        <tr><th>Colors</th><td>Obsidian, Porcelain, Hazel</td></tr>
+      </table>
+    `,
+  });
+  assert.equal(phoneArenaFallbackSpec.screenSizeInch, 6.8);
+  assert.equal(phoneArenaFallbackSpec.specifications.battery?.fast_charging_w, 45);
+  assert.equal(phoneArenaFallbackSpec.specifications.connectivity?.nfc, false);
+  assert.deepEqual(phoneArenaFallbackSpec.specifications.design?.colors, [
+    'Obsidian',
+    'Porcelain',
+    'Hazel',
+  ]);
+
+  await assert.rejects(
+    () =>
+      auditMasterSpecs({
+        from: () => ({
+          select: () => ({
+            order: () => ({
+              range: async (from: number) => ({
+                data:
+                  from === 0
+                    ? [
+                        {
+                          id: 'm-ws',
+                          name: 'Whitespace Cam Device',
+                          model_key: 'test:ws:128gb',
+                          specifications: {
+                            ...phoneArenaFallbackSpec.specifications,
+                            camera: {
+                              main_camera: '50 MP',
+                              second_camera: '   ',
+                            },
+                          },
+                        },
+                      ]
+                    : [],
+                error: null,
+              }),
+            }),
+          }),
+        }),
+      } as never),
+    /missing camera\.second_camera/,
+    'auditMasterSpecs must reject whitespace-only camera.second_camera (#503)'
+  );
+
+  console.log(
+    '  ✅ [11/11] Backfill KeySpecs Merge, Whitespace Field Group Audit & Arena PhoneArena Fallbacks (#503) passed'
   );
 
   console.log('🎉 All @repo/crawlers Open-Core Intelligence tests passed!');
