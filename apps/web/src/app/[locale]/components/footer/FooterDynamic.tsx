@@ -103,17 +103,30 @@ export default async function FooterDynamic({
     sections?.[2] ?? fallback3,
   ];
 
+  // A URL is matched on its hostname (so "fox.com/x.com" is not X); a plain
+  // label such as "Facebook" by name.
   const getSocialIcon = (urlOrLabel?: string | null) => {
-    const v = (urlOrLabel || '').toLowerCase();
-    if (v.includes('facebook') || v.includes('fb.com')) return <FaFacebookF />;
-    if (v.includes('x.com') || v.includes('twitter')) return <FaXTwitter />;
-    if (v.includes('instagram')) return <FaInstagram />;
-    if (v.includes('linkedin')) return <FaLinkedin />;
-    if (v.includes('youtube')) return <FaYoutube />;
-    if (v.includes('tiktok')) return <FaTiktok />;
-    if (v.includes('github')) return <FaGithub />;
-    if (v.includes('telegram')) return <FaTelegram />;
-    if (v.includes('discord')) return <FaDiscord />;
+    const v = (urlOrLabel || '').trim().toLowerCase();
+    let host: string | null = null;
+    try {
+      host = new URL(v).hostname.replace(/^www\./, '');
+    } catch {
+      // Not a URL: match the label by name below.
+    }
+    const is = (name: string, ...domains: string[]) =>
+      host
+        ? domains.some((d) => host === d || host!.endsWith(`.${d}`))
+        : v.includes(name);
+    if (is('facebook', 'facebook.com', 'fb.com')) return <FaFacebookF />;
+    if (is('twitter', 'x.com', 'twitter.com')) return <FaXTwitter />;
+    if (is('instagram', 'instagram.com')) return <FaInstagram />;
+    if (is('linkedin', 'linkedin.com')) return <FaLinkedin />;
+    if (is('youtube', 'youtube.com', 'youtu.be')) return <FaYoutube />;
+    if (is('tiktok', 'tiktok.com')) return <FaTiktok />;
+    if (is('github', 'github.com')) return <FaGithub />;
+    if (is('telegram', 't.me', 'telegram.org', 'telegram.me'))
+      return <FaTelegram />;
+    if (is('discord', 'discord.com', 'discord.gg')) return <FaDiscord />;
     return null;
   };
 
