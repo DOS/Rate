@@ -272,7 +272,14 @@ async function runEntityMatcherSuite() {
     normalizer.normalize(createShopeeListing('Apple MacBook Pro M4 1,5TB SSD')).storage_gb,
     1536
   );
+  assert.equal(
+    normalizer.normalize(createShopeeListing('Xiaomi Redmi Note 13 8GB / 512 GB')).storage_gb,
+    512
+  );
   const longRunStart = Date.now();
+  for (const marker of ['1', 'ROM:', 'dung lượng']) {
+    normalizer.normalize(createShopeeListing(`Samsung Galaxy ${marker}${' '.repeat(50_000)}x`));
+  }
   normalizer.normalize(createShopeeListing(`Samsung Galaxy ${'9'.repeat(50_000)}`));
   assert.ok(
     Date.now() - longRunStart < 1_000,

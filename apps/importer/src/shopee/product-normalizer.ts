@@ -1219,7 +1219,10 @@ export class ProductNormalizer {
 
     // Also support slash shorthand ("12GB/256GB", "8/256GB") and CellphoneS/TGDD
     // adjacent RAM+ROM pairs ("12GB 256GB") when no explicit RAM keyword is present.
-    const slashRamRom = title.match(/\b(\d{1,2})\s*(?:GB)?\s*\/\s*(\d+(?:[.,]\d+)?)\s*(TB|GB)\b/i);
+    // `\s*(?:X\s*)?` rather than `\s*X?\s*` (here and in the ROM patterns
+    // below): the same strings, without the two adjacent \s* that made long
+    // whitespace runs quadratic (CodeQL polynomial regex, DOS/Rate#537).
+    const slashRamRom = title.match(/\b(\d{1,2})\s*(?:GB\s*)?\/\s*(\d+(?:[.,]\d+)?)\s*(TB|GB)\b/i);
     if (slashRamRom && ramPhrases.length === 0) {
       const slashRam = parseInt(slashRamRom[1], 10);
       for (const c of claimable) {
@@ -1240,9 +1243,11 @@ export class ProductNormalizer {
       t => !t.claimed && t.value > 0 && t.value <= MAX_VALID_STORAGE_GB
     );
 
-    const romExplicit = title.match(/(?:ROM|bộ nhớ trong)\s*[:-]?\s*(\d+(?:[.,]\d+)?)\s*(TB|GB)/i);
+    const romExplicit = title.match(
+      /(?:ROM|bộ nhớ trong)\s*(?:[:-]\s*)?(\d+(?:[.,]\d+)?)\s*(TB|GB)/i
+    );
     const romLoose = title.match(
-      /dung lượng\s*[:-]?\s*(\d+(?:[.,]\d+)?)\s*(TB|GB)(?!\s*(?:RAM|bộ\s*nhớ\s*RAM|dung\s*lượng\s*RAM))/i
+      /dung lượng\s*(?:[:-]\s*)?(\d+(?:[.,]\d+)?)\s*(TB|GB)(?!\s*(?:RAM|bộ\s*nhớ\s*RAM|dung\s*lượng\s*RAM))/i
     );
 
     const baseKey = `${slugify(brand)}:${slugify(model)}`;
