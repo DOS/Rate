@@ -63,6 +63,8 @@ test('the plain catalogue listing is served from the data cache', async ({
   test.skip(!process.env.NEXT_PUBLIC_SUPABASE_URL, 'needs the e2e stack');
   expect((await request.get('/earbuds?sort=newest')).status()).toBe(200);
   const first = await catalogueReads(request, PLAIN_BODY);
+  // The e2e runner clears the fetch cache, so the first visit must query.
+  expect(first).toBeGreaterThan(0);
   expect((await request.get('/earbuds?sort=newest')).status()).toBe(200);
   expect(await catalogueReads(request, PLAIN_BODY)).toBe(first);
 });
@@ -82,4 +84,17 @@ test('a filtered catalogue listing still queries every time', async ({
 test('the document declares its charset once', async ({ request }) => {
   const html = await (await request.get('/faq')).text();
   expect(html.match(/<meta charSet="utf-8"\/>/gi)).toHaveLength(1);
+});
+
+test('the compare page reads its candidate list from the data cache', async ({
+  request,
+}) => {
+  test.skip(!process.env.NEXT_PUBLIC_SUPABASE_URL, 'needs the e2e stack');
+  const body = '{"p_sort":"default","p_limit":50,"p_offset":0}';
+  expect((await request.get('/compare')).status()).toBe(200);
+  const first = await catalogueReads(request, body);
+  // The e2e runner clears the fetch cache, so the first visit must query.
+  expect(first).toBeGreaterThan(0);
+  expect((await request.get('/compare')).status()).toBe(200);
+  expect(await catalogueReads(request, body)).toBe(first);
 });
