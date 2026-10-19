@@ -2690,10 +2690,11 @@ async function runCoreArchitectureSuite() {
   assert.ok(
     rateApiSrc176.includes("'get_category_brand_facets'") &&
       rateApiSrc176.includes("'search_master_products'") &&
+      rateApiSrc176.includes('boundedOffset + boundedLimit - 1') &&
       rateApiSrc176.includes(
-        'query = query.range(boundedOffset, boundedOffset + boundedLimit - 1);'
+        'items.slice(boundedOffset, boundedOffset + boundedLimit)'
       ),
-    'rate-api.ts must invoke get_category_brand_facets and search_master_products RPCs and enforce a bounded page (#178, #466)'
+    'rate-api.ts must invoke get_category_brand_facets and search_master_products RPCs and enforce a bounded page (#178, #466, #482)'
   );
   assert.ok(
     fs.existsSync(path.join(repoRoot, 'Docs/Resources/CHANGELOG.md')) &&
@@ -3849,6 +3850,56 @@ async function runCoreArchitectureSuite() {
       rpcProducts344[0]?.images?.[0],
       '/img/devices/apple-iphone-16-pro-max-256gb.jpg',
       'search_master_products RPC rows must be normalized via normalizeMasterProductRow (#344)'
+    );
+
+    // 64.2b The master_products fallback (RPC down) applies JS-only filters
+    // before paging: a search match outside the first SQL page is still found
+    // (#482).
+    const fallbackRows482 = Array.from({ length: 150 }, (_, idx) => ({
+      id: `fb-${String(idx).padStart(3, '0')}`,
+      slug: `fallback-${idx}`,
+      name: idx === 120 ? 'Needle Phone X' : `Filler Phone ${idx}`,
+      brand: 'E2E',
+      model: `M${idx}`,
+      model_key: `e2e_m${idx}`,
+      category_id: 'cat-smartphones',
+      status: 'published',
+      metadata: { category_slug: 'smartphones' },
+    }));
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.includes('/rest/v1/categories')) {
+        return jsonResp344(200, [
+          {
+            id: 'cat-smartphones',
+            parent_id: null,
+            name: 'Smartphones',
+            slug: 'smartphones',
+            icon: null,
+            display_order: 1,
+          },
+        ]);
+      }
+      if (url.includes('/rest/v1/rpc/')) {
+        return jsonResp344(500, { message: 'simulated RPC outage' });
+      }
+      if (url.includes('/rest/v1/master_products')) {
+        const params = new URL(url).searchParams;
+        const offset = Number(params.get('offset') ?? 0);
+        const limit = Number(params.get('limit') ?? fallbackRows482.length);
+        return jsonResp344(200, fallbackRows482.slice(offset, offset + limit));
+      }
+      return jsonResp344(200, []);
+    }) as typeof fetch;
+    const needle482 = await getMasterProductsRaw({
+      categorySlug: 'smartphones',
+      search: 'needle',
+      limit: 48,
+    });
+    assert.deepEqual(
+      needle482.map((p) => p.slug),
+      ['fallback-120'],
+      'fallback must search the whole category, not only its first SQL page (#482)'
     );
 
     // 64.3 getMasterProductOffers & getMasterProductOffersBatch throw RateDataUnavailableError when both view and products fallback fail

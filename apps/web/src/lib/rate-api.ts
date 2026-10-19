@@ -935,87 +935,112 @@ export async function getMasterProducts(
     }
   }
 
-  let query = supabase
-    .from('master_products')
-    .select('*')
-    .eq('status', 'published');
+  // Search, rating and the JSONB spec filters run in JS below. Applied after
+  // .range() they would empty or under-fill a page, so with any of them the
+  // fallback reads every row the SQL filters allow, then pages in JS
+  // (DOS/Rate#482).
+  const needsJsFilter = Boolean(
+    (params?.search && params.search.trim().length > 0) ||
+    (typeof params?.minRating === 'number' && params.minRating > 0) ||
+    (typeof params?.minRefreshRateHz === 'number' &&
+      params.minRefreshRateHz > 0) ||
+    (typeof params?.minFastChargingW === 'number' &&
+      params.minFastChargingW > 0) ||
+    params?.hasNfc === true ||
+    (typeof params?.maxScreenSizeInch === 'number' &&
+      params.maxScreenSizeInch > 0)
+  );
 
-  if (resolvedCategoryId) {
-    query = query.eq('category_id', resolvedCategoryId);
-  }
+  const buildFallbackQuery = () => {
+    let query = supabase
+      .from('master_products')
+      .select('*')
+      .eq('status', 'published');
 
-  if (params?.brands && params.brands.length > 0) {
-    query = query.in(
-      'brand',
-      params.brands.map((b) => b.trim()).filter(Boolean)
+    if (resolvedCategoryId) {
+      query = query.eq('category_id', resolvedCategoryId);
+    }
+
+    if (params?.brands && params.brands.length > 0) {
+      query = query.in(
+        'brand',
+        params.brands.map((b) => b.trim()).filter(Boolean)
+      );
+    } else if (params?.brand) {
+      query = query.ilike('brand', `%${params.brand}%`);
+    }
+
+    if (typeof params?.minPrice === 'number' && params.minPrice > 0) {
+      query = query.gte('min_price', params.minPrice);
+    }
+
+    if (typeof params?.maxPrice === 'number' && params.maxPrice > 0) {
+      query = query.lte('min_price', params.maxPrice);
+    }
+
+    if (params?.ramGb && params.ramGb.length > 0) {
+      query = query.in('ram_gb', params.ramGb);
+    }
+
+    if (params?.storageGb && params.storageGb.length > 0) {
+      query = query.in('storage_gb', params.storageGb);
+    }
+
+    if (typeof params?.minBatteryMah === 'number' && params.minBatteryMah > 0) {
+      query = query.gte('battery_mah', params.minBatteryMah);
+    }
+
+    if (params?.has5g === true) {
+      query = query.eq('has_5g', true);
+    }
+
+    // Server-side sort where directly supported by top-level columns
+    switch (params?.sort) {
+      case 'price_asc':
+        query = query.order('min_price', { ascending: true });
+        break;
+      case 'price_desc':
+        query = query.order('min_price', { ascending: false });
+        break;
+      case 'merchants_desc':
+        query = query.order('merchant_count', { ascending: false });
+        break;
+      case 'rating_desc':
+        // Unrated (NULL) models last, like search_master_products.
+        query = query.order('user_rating_weighted', {
+          ascending: false,
+          nullsFirst: false,
+        });
+        break;
+      case 'newest':
+      case 'default':
+      default:
+        query = query.order('created_at', { ascending: false });
+        break;
+    }
+    // Tiebreak so offset pages never overlap or skip rows.
+    return query.order('id', { ascending: true });
+  };
+
+  let items: MasterProduct[];
+  if (needsJsFilter) {
+    items = (await fetchAllRows('master_products', (from, to) =>
+      buildFallbackQuery().range(from, to)
+    )) as unknown as MasterProduct[];
+  } else {
+    const { data, error } = await buildFallbackQuery().range(
+      boundedOffset,
+      boundedOffset + boundedLimit - 1
     );
-  } else if (params?.brand) {
-    query = query.ilike('brand', `%${params.brand}%`);
-  }
-
-  if (typeof params?.minPrice === 'number' && params.minPrice > 0) {
-    query = query.gte('min_price', params.minPrice);
-  }
-
-  if (typeof params?.maxPrice === 'number' && params.maxPrice > 0) {
-    query = query.lte('min_price', params.maxPrice);
-  }
-
-  if (params?.ramGb && params.ramGb.length > 0) {
-    query = query.in('ram_gb', params.ramGb);
-  }
-
-  if (params?.storageGb && params.storageGb.length > 0) {
-    query = query.in('storage_gb', params.storageGb);
-  }
-
-  if (typeof params?.minBatteryMah === 'number' && params.minBatteryMah > 0) {
-    query = query.gte('battery_mah', params.minBatteryMah);
-  }
-
-  if (params?.has5g === true) {
-    query = query.eq('has_5g', true);
-  }
-
-  // Server-side sort where directly supported by top-level columns
-  switch (params?.sort) {
-    case 'price_asc':
-      query = query.order('min_price', { ascending: true });
-      break;
-    case 'price_desc':
-      query = query.order('min_price', { ascending: false });
-      break;
-    case 'merchants_desc':
-      query = query.order('merchant_count', { ascending: false });
-      break;
-    case 'rating_desc':
-      // Unrated (NULL) models last, like search_master_products.
-      query = query.order('user_rating_weighted', {
-        ascending: false,
-        nullsFirst: false,
+    if (error) {
+      log.error('master products fallback query failed', {
+        categorySlug: params?.categorySlug || 'all',
+        message: error.message,
       });
-      break;
-    case 'newest':
-    case 'default':
-    default:
-      query = query.order('created_at', { ascending: false });
-      break;
+      throw new RateDataUnavailableError('master_products', error);
+    }
+    items = ((data as MasterProduct[]) || []).slice();
   }
-  // Tiebreak so offset pages never overlap or skip rows.
-  query = query.order('id', { ascending: true });
-
-  query = query.range(boundedOffset, boundedOffset + boundedLimit - 1);
-
-  const { data, error } = await query;
-  if (error) {
-    log.error('master products fallback query failed', {
-      categorySlug: params?.categorySlug || 'all',
-      message: error.message,
-    });
-    throw new RateDataUnavailableError('master_products', error);
-  }
-
-  let items = ((data as MasterProduct[]) || []).slice();
 
   // Multi-brand case-insensitive filter
   if (params?.brands && params.brands.length > 0) {
@@ -1126,9 +1151,10 @@ export async function getMasterProducts(
     });
   }
 
-  if (params?.limit && params.limit > 0) {
-    items = items.slice(0, params.limit);
-  }
+  // The SQL path already returned one page; the JS-filtered path pages here.
+  items = needsJsFilter
+    ? items.slice(boundedOffset, boundedOffset + boundedLimit)
+    : items.slice(0, boundedLimit);
 
   return items.map((r) => normalizeMasterProductRow(r, categoryHint));
 }

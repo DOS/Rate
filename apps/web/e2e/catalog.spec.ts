@@ -270,3 +270,18 @@ test('category catalogue pages past 200 models', async ({ page }) => {
   });
   await expect(firstPage).toHaveAttribute('href', /\/earbuds$/);
 });
+
+// Page 2+ of a catalogue is canonical to itself, not to page 1 (DOS/Rate#482).
+test('catalogue pages carry their own canonical URL', async ({ request }) => {
+  const canonical = async (path: string) => {
+    const html = await (await request.get(path)).text();
+    return html.match(/<link rel="canonical" href="([^"]+)"/)?.[1];
+  };
+  expect(await canonical('/earbuds')).toBe('https://rate.vn/earbuds');
+  expect(await canonical('/earbuds?page=2')).toBe(
+    'https://rate.vn/earbuds?page=2'
+  );
+  expect(await canonical('/earbuds?page=2&brands=E2E%20Audio')).toBe(
+    'https://rate.vn/earbuds?page=2'
+  );
+});

@@ -1,20 +1,25 @@
 import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
 import { getCachedCategoryDirectoryFacets } from '@/server/rate';
-import { CategoryCatalogContent } from '../smartphones/page';
+import {
+  CategoryCatalogContent,
+  catalogCanonicalUrl,
+} from '../smartphones/page';
 
 type SearchParamsInput = Record<string, string | string[] | undefined>;
 
 export async function generateMetadata({
   params,
+  searchParams,
 }: {
   params: Promise<{ locale: string }>;
+  searchParams: Promise<SearchParamsInput>;
 }): Promise<Metadata> {
   const { locale } = await params;
   const t = await getTranslations({ locale, namespace: 'catalog' });
   const facets = await getCachedCategoryDirectoryFacets('laptops');
   const totalModels = facets.totalUnfiltered;
-  const canonicalUrl = 'https://rate.vn/laptops';
+  const canonicalUrl = catalogCanonicalUrl('/laptops', await searchParams);
 
   return {
     title:
