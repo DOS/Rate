@@ -108,10 +108,17 @@ export default async function FooterDynamic({
   const getSocialIcon = (urlOrLabel?: string | null) => {
     const v = (urlOrLabel || '').trim().toLowerCase();
     let host: string | null = null;
-    try {
-      host = new URL(v).hostname.replace(/^www\./, '');
-    } catch {
-      // Not a URL: match the label by name below.
+    // Scheme-less hrefs ("x.com/rate", "//t.me/rate") are URLs too.
+    const candidates = [v];
+    if (v.startsWith('//')) candidates.push(`https:${v}`);
+    else if (v.includes('.') && !/\s/.test(v)) candidates.push(`https://${v}`);
+    for (const candidate of candidates) {
+      try {
+        host = new URL(candidate).hostname.replace(/^www\./, '') || null;
+        if (host) break;
+      } catch {
+        // Not a URL: try the next form, then match the label by name below.
+      }
     }
     const is = (name: string, ...domains: string[]) =>
       host
