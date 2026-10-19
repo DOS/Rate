@@ -100,6 +100,7 @@ export const RegulatorySchema = z.object({
 });
 
 export const ProductSpecificationsSchema = z.object({
+  category_slug: z.string().optional(),
   availability: AvailabilitySchema.optional(),
   design: DesignSchema.optional(),
   display: DisplaySchema.optional(),

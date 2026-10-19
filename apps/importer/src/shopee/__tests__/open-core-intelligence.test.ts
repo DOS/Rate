@@ -690,7 +690,65 @@ async function runSuite() {
   );
 
   console.log(
-    '  ✅ [11/11] Backfill KeySpecs Merge, Whitespace Field Group Audit & Arena PhoneArena Fallbacks (#503) passed'
+    '  ✅ [11/12] Backfill KeySpecs Merge, Whitespace Field Group Audit & Arena PhoneArena Fallbacks (#503) passed'
+  );
+
+  // =========================================================================
+  // 12. ProductNormalizer Category-Aware Fallbacks, Earbud Storage & Title Screen Size (#505)
+  // =========================================================================
+  const unbenchmarkedEarbuds = normalizer.normalize(
+    createDummyShopeeProduct(
+      'Tai nghe Bluetooth Bose QuietComfort Ultra Earbuds Chính hãng',
+      6990000
+    )
+  );
+  assert.equal(unbenchmarkedEarbuds.category_slug, 'earbuds');
+  assert.equal(unbenchmarkedEarbuds.specifications.category_slug, 'earbuds');
+  assert.equal(unbenchmarkedEarbuds.storage_gb, 1);
+  assert.equal(unbenchmarkedEarbuds.variant_name, 'Standard');
+  assert.equal(unbenchmarkedEarbuds.needs_review, false);
+  assert.ok(unbenchmarkedEarbuds.model_key.endsWith(':1gb'));
+  assert.equal(unbenchmarkedEarbuds.specifications.hardware?.os, 'Bluetooth 5.3 Audio DSP');
+  assert.equal(unbenchmarkedEarbuds.specifications.cellular?.has_5g, false);
+  assert.equal(unbenchmarkedEarbuds.specifications.cellular?.sim_type, 'No SIM');
+  assert.equal(unbenchmarkedEarbuds.key_specs.camera, 'Active Noise Cancellation (ANC)');
+
+  const unbenchmarkedLaptop = normalizer.normalize(
+    createDummyShopeeProduct(
+      'Laptop Dell XPS 14 14.5 inch OLED 16GB RAM 1TB SSD Chính hãng',
+      48990000
+    )
+  );
+  assert.equal(unbenchmarkedLaptop.category_slug, 'laptops');
+  assert.equal(unbenchmarkedLaptop.specifications.category_slug, 'laptops');
+  assert.equal(unbenchmarkedLaptop.screen_size_inch, 14.5);
+  assert.equal(unbenchmarkedLaptop.specifications.display?.size_inch, 14.5);
+  assert.equal(unbenchmarkedLaptop.specifications.hardware?.os, 'Windows 11 Home');
+  assert.equal(unbenchmarkedLaptop.specifications.cellular?.has_5g, false);
+  assert.equal(unbenchmarkedLaptop.specifications.cellular?.sim_type, 'No SIM');
+  assert.equal(unbenchmarkedLaptop.key_specs.chip, 'Intel Core / AMD Ryzen');
+  assert.equal(unbenchmarkedLaptop.key_specs.camera, '1080p FHD Webcam');
+
+  const unbenchmarkedWatch = normalizer.normalize(
+    createDummyShopeeProduct('Đồng hồ thông minh Huawei Watch GT 5 Pro 1,4 inch 32GB', 7490000)
+  );
+  assert.equal(unbenchmarkedWatch.category_slug, 'smartwatches');
+  assert.equal(unbenchmarkedWatch.specifications.category_slug, 'smartwatches');
+  assert.equal(unbenchmarkedWatch.screen_size_inch, 1.4);
+  assert.equal(unbenchmarkedWatch.specifications.hardware?.os, 'Wear OS 5');
+  assert.equal(unbenchmarkedWatch.key_specs.camera, 'Optical HR + SpO2 Sensor');
+
+  const mergedWithCategorySlug = mergeProductSpecifications(unbenchmarkedLaptop.specifications, {
+    hardware: { chipset: 'Intel Core Ultra 7 155H' },
+  });
+  assert.equal(
+    mergedWithCategorySlug.category_slug,
+    'laptops',
+    'mergeProductSpecifications must preserve category_slug after ProductSpecificationsSchema.safeParse (#505)'
+  );
+
+  console.log(
+    '  ✅ [12/12] ProductNormalizer Category-Aware Fallbacks, Earbud Storage & Title Screen Size (#505) passed'
   );
 
   console.log('🎉 All @repo/crawlers Open-Core Intelligence tests passed!');
