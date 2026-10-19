@@ -459,7 +459,7 @@
     "successFlaggedFiltered": "Your review was recorded but flagged by the AI filter ({flag}) and excluded from the average.",
     "sectionHeading": "JReviews Multi-Criteria Rating & Anti-Seeding AI System",
     "sectionSubtitle": "Scores for {productName} count only authentic reviews and dynamically adjust weights by community helpfulness votes (up to 3.00x).",
-    "copiedReviewsMd": "✅ Copied Reviews MD!",
+    "copiedReviewsMd": "Copied Reviews MD!",
     "copyReviewsMdBtn": "Copy Reviews Markdown",
     "exportReviewsCsvBtn": "Export Reviews CSV",
     "exportJsonBtn": "Export JSON",

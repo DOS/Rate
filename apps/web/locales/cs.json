@@ -459,7 +459,7 @@
     "successFlaggedFiltered": "Vaše recenze byla zaznamenána, ale filtr AI ji označil ({flag}), takže se nezapočítává do průměru.",
     "sectionHeading": "Vícekriteriální hodnocení JReviews a AI ochrana proti seedingu",
     "sectionSubtitle": "Skóre produktu {productName} zahrnuje pouze skutečné recenze a automaticky upravuje váhu podle hlasů komunity (max. 3.00x).",
-    "copiedReviewsMd": "✅ Zkopírováno (MD)!",
+    "copiedReviewsMd": "Zkopírováno (MD)!",
     "copyReviewsMdBtn": "Kopírovat recenze (Markdown)",
     "exportReviewsCsvBtn": "Exportovat CSV recenzí",
     "exportJsonBtn": "Exportovat JSON",

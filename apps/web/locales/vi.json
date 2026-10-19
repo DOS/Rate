@@ -459,7 +459,7 @@
     "successFlaggedFiltered": "Đánh giá của bạn đã được ghi nhận nhưng bị bộ lọc AI gắn cờ ({flag}) nên không tính vào điểm trung bình.",
     "sectionHeading": "Hệ Thống Đánh Giá Đa Chiều JReviews & Chống Seeding AI",
     "sectionSubtitle": "Điểm sản phẩm {productName} chỉ tính các đánh giá thực chất và tự động điều chỉnh trọng số theo bình chọn Hữu ích của cộng đồng (tối đa 3.00x).",
-    "copiedReviewsMd": "✅ Đã chép đánh giá MD!",
+    "copiedReviewsMd": "Đã chép đánh giá MD!",
     "copyReviewsMdBtn": "Sao chép đánh giá Markdown",
     "exportReviewsCsvBtn": "Xuất CSV đánh giá",
     "exportJsonBtn": "Xuất JSON",

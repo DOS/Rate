@@ -6,10 +6,13 @@ import {
   BsBarChart,
   BsCheckCircle,
   BsExclamationTriangle,
+  BsFlag,
   BsHandThumbsDown,
+  BsHandThumbsUp,
   BsInfoCircle,
   BsMegaphone,
   BsRobot,
+  BsStarFill,
 } from 'react-icons/bs';
 import { escapeCsvCell } from '@/lib/csv-safe';
 import {
@@ -728,7 +731,8 @@ export default function JReviewsSection({
       <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 gap-3">
         <div>
           <h2 className="h4 fw-bold d-flex align-items-center mb-1 gap-2">
-            <span>⭐</span> {t('sectionHeading')}
+            <BsStarFill aria-hidden="true" className="text-warning" />{' '}
+            {t('sectionHeading')}
           </h2>
           <p className="text-muted small mb-0">
             {t('sectionSubtitle', { productName })}
@@ -1526,6 +1530,7 @@ export default function JReviewsSection({
                         style={{ fontSize: '0.8125rem' }}
                         title={t('upvoteTitle')}
                       >
+                        <BsHandThumbsUp aria-hidden="true" className="me-1" />
                         {t('upvoteBtnLabel', { count: rev.upvotes })}
                       </button>
                       <button
@@ -1558,6 +1563,7 @@ export default function JReviewsSection({
                         style={{ fontSize: '0.8125rem' }}
                         title={t('reportTitle')}
                       >
+                        <BsFlag aria-hidden="true" className="me-1" />
                         {t('reportBtnLabel', { count: rev.report_count })}
                       </button>
                     </div>

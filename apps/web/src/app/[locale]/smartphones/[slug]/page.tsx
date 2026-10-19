@@ -1464,7 +1464,7 @@ export async function ProductDetailView({
                               {peer.brand}
                             </span>
                             <span className="badge bg-warning-subtle text-dark small">
-                              ⭐{' '}
+                              ★{' '}
                               {peerRating > 0
                                 ? peerRating.toFixed(1)
                                 : t('peerNoRating')}
