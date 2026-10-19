@@ -440,6 +440,52 @@ async function runTests() {
       storage_gb: 256,
     });
 
+    // DOS/Rate#522: sanitizeSpecifications rejects NaN/Infinity in toStringOrUndefined, deduplicates/filters design.colors, and normalizes reverse_charging
+    const sanitized522 = sanitizeSpecifications({
+      availability: { announced: NaN, status: Infinity, prices_msrp: '24.990.000₫' },
+      design: {
+        dimensions: '160 x 75 x 8 mm',
+        colors: ['  Black  ', 'Black', {}, null, '', '   ', 'Silver'],
+      },
+      battery: {
+        capacity_mah: 5000,
+        reverse_charging: '   ',
+      },
+    });
+    assert.equal(sanitized522.availability?.announced, undefined);
+    assert.equal(sanitized522.availability?.status, undefined);
+    assert.equal(sanitized522.availability?.prices_msrp, '24.990.000₫');
+    assert.deepEqual(sanitized522.design?.colors, ['Black', 'Silver']);
+    assert.equal(sanitized522.battery?.reverse_charging, undefined);
+
+    const sanitizedBoolRevCharge = sanitizeSpecifications({
+      battery: { capacity_mah: 5000, reverse_charging: 'true' },
+      design: { colors: [{}, '   '] },
+    });
+    assert.equal(sanitizedBoolRevCharge.battery?.reverse_charging, true);
+    assert.equal(sanitizedBoolRevCharge.design?.colors, undefined);
+
+    // DOS/Rate#522: fetchSpecsFromAi bounds caller params.ramGb / params.storageGb so 0 or >max falls back to AI specs
+    const boundedAiRes = await enricher.fetchSpecsFromAi({
+      brand: 'Xiaomi',
+      model: '14 Ultra',
+      storageGb: 0,
+      ramGb: 99999,
+      categorySlug: 'smartphones',
+    });
+    assert.ok(boundedAiRes);
+    assert.equal(
+      boundedAiRes?.ram_gb,
+      16,
+      'Out-of-bounds params.ramGb (99999) must fall back to valid AI ram_gb'
+    );
+    assert.equal(
+      boundedAiRes?.storage_gb,
+      512,
+      'Invalid params.storageGb (0) must fall back to valid AI storage_gb'
+    );
+    assert.equal(ProductSpecificationsSchema.safeParse(boundedAiRes?.specifications).success, true);
+
     console.log('✅ [AiSpecEnricher] Mock OpenAI-compatible enrichment & caching passed 100%!');
   } finally {
     mockServer.close();

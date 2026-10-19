@@ -133,8 +133,16 @@ function toBooleanOrUndefined(val: unknown): boolean | undefined {
 
 function toStringOrUndefined(val: unknown): string | undefined {
   if (typeof val === 'string' && val.trim().length > 0) return val.trim();
-  if (typeof val === 'number') return String(val);
+  if (typeof val === 'number' && Number.isFinite(val)) return String(val);
   return undefined;
+}
+
+function sanitizeColorList(val: unknown): string[] | undefined {
+  if (!Array.isArray(val)) return undefined;
+  const cleaned = Array.from(
+    new Set(val.map((c: unknown) => toStringOrUndefined(c)).filter((c): c is string => Boolean(c)))
+  );
+  return cleaned.length > 0 ? cleaned : undefined;
 }
 
 function asRecord(val: unknown): Record<string, unknown> | undefined {
@@ -184,9 +192,7 @@ export function sanitizeSpecifications(raw: unknown): ProductSpecifications {
         resistance: toStringOrUndefined(rawDesign.resistance),
         biometrics: toStringOrUndefined(rawDesign.biometrics),
         keys: toStringOrUndefined(rawDesign.keys),
-        colors: Array.isArray(rawDesign.colors)
-          ? rawDesign.colors.map((c: unknown) => String(c).trim()).filter(Boolean)
-          : undefined,
+        colors: sanitizeColorList(rawDesign.colors),
       })
     : undefined;
 
@@ -224,10 +230,8 @@ export function sanitizeSpecifications(raw: unknown): ProductSpecifications {
         charging: toStringOrUndefined(rawBattery.charging),
         fast_charging_w: toBoundedNumberOrUndefined(rawBattery.fast_charging_w, 1000, true),
         reverse_charging:
-          typeof rawBattery.reverse_charging === 'boolean' ||
-          typeof rawBattery.reverse_charging === 'string'
-            ? rawBattery.reverse_charging
-            : undefined,
+          toBooleanOrUndefined(rawBattery.reverse_charging) ??
+          toStringOrUndefined(rawBattery.reverse_charging),
       })
     : undefined;
 
@@ -378,9 +382,7 @@ export function mergeProductSpecifications(
     }
   }
 
-  const cleanColors = Array.isArray(colorsOverride)
-    ? colorsOverride.map((c: unknown) => String(c).trim()).filter(Boolean)
-    : [];
+  const cleanColors = sanitizeColorList(colorsOverride) ?? [];
   if (cleanColors.length > 0) {
     mergedRaw.design = {
       ...(asRecord(mergedRaw.design) ?? {}),
@@ -673,8 +675,10 @@ REQUIRED JSON SCHEMA:
       return null;
     }
 
+    const safeParamStorageGb = toBoundedNumberOrUndefined(params.storageGb, 65536) ?? null;
+    const safeParamRamGb = toBoundedNumberOrUndefined(params.ramGb, 2048) ?? null;
     const catKey = (params.categorySlug || 'smartphones').trim().toLowerCase() || 'smartphones';
-    const cacheKey = `${catKey}:${params.brand.toLowerCase()}:${params.model.toLowerCase()}:${params.storageGb || 'default'}:${params.ramGb || 'default'}`;
+    const cacheKey = `${catKey}:${params.brand.toLowerCase()}:${params.model.toLowerCase()}:${safeParamStorageGb || 'default'}:${safeParamRamGb || 'default'}`;
     const cached = this.memoryCache.get(cacheKey);
     if (cached) {
       this.memoryCache.delete(cacheKey);
@@ -688,8 +692,8 @@ REQUIRED JSON SCHEMA:
     const { systemPrompt, userPrompt } = this.buildPrompts(
       params.brand,
       params.model,
-      params.storageGb,
-      params.ramGb,
+      safeParamStorageGb,
+      safeParamRamGb,
       params.rawTitle,
       params.rawDescription,
       catKey
@@ -775,13 +779,13 @@ REQUIRED JSON SCHEMA:
       const specifications = sanitizeSpecifications(parsedJson.specifications || parsedJson);
 
       const ramGb =
-        params.ramGb ??
+        safeParamRamGb ??
         toBoundedNumberOrUndefined(parsedJson.ram_gb, 2048) ??
         specifications.hardware?.ram_gb ??
         null;
 
       const storageGb =
-        params.storageGb ??
+        safeParamStorageGb ??
         toBoundedNumberOrUndefined(parsedJson.storage_gb, 65536) ??
         specifications.hardware?.storage_gb ??
         null;

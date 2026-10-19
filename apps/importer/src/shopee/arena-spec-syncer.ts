@@ -226,7 +226,7 @@ export function parseGsmArenaHtmlToSpecs(
 
   // Weight parsing
   const weightMatch = (d['weight'] || pa['weight'] || '').match(/(\d+(?:\.\d+)?)\s*g\b/i);
-  const weightG = toBoundedNumber(weightMatch ? Number(weightMatch[1]) : null, 1, 50000);
+  const weightG = toBoundedNumber(weightMatch ? Number(weightMatch[1]) : null, 1, 25000);
 
   // Resistance parsing
   const resistanceMatch = (d['bodyother'] || pa['water resistance'] || '').match(
@@ -242,6 +242,16 @@ export function parseGsmArenaHtmlToSpecs(
   const has35mmJack = jackRaw ? /^yes\b|3\.5\s*mm\s*jack/i.test(jackRaw.trim()) : false;
 
   const colorsRaw = d['colors'] || pa['colors'] || '';
+  const parsedColors = colorsRaw
+    ? Array.from(
+        new Set(
+          colorsRaw
+            .split(',')
+            .map(c => c.trim())
+            .filter(Boolean)
+        )
+      )
+    : [];
   const nfcRaw = d['nfc'] || pa['nfc'] || '';
 
   const rawSpecs: ProductSpecifications = {
@@ -291,12 +301,7 @@ export function parseGsmArenaHtmlToSpecs(
       biometrics: /fingerprint/i.test(d['sensors'] || pa['biometrics'] || '')
         ? 'Under-display ultrasonic fingerprint, Face Unlock'
         : 'Face ID / Biometric sensor',
-      colors: colorsRaw
-        ? colorsRaw
-            .split(',')
-            .map(c => c.trim())
-            .filter(Boolean)
-        : undefined,
+      colors: parsedColors.length > 0 ? parsedColors : undefined,
     },
     cellular: {
       has_5g: has5g,
@@ -337,7 +342,11 @@ export function parseGsmArenaHtmlToSpecs(
       : d['displaytype'],
     chip: d['chipset'] || pa['system chip'] || undefined,
     ram: ramGb ? `${ramGb}GB` : undefined,
-    storage: storageGb ? `${storageGb}GB` : undefined,
+    storage: storageGb
+      ? storageGb >= 1024
+        ? `${storageGb / 1024}TB`
+        : `${storageGb}GB`
+      : undefined,
     camera: camSplit.main_camera
       ? [camSplit.main_camera, camSplit.second_camera, camSplit.third_camera]
           .filter(Boolean)
@@ -496,6 +505,7 @@ const CANONICAL_10_SPEC_GROUPS = [
 
 function isPopulatedSpecFieldValue(v: unknown): boolean {
   if (v === null || v === undefined) return false;
+  if (typeof v === 'number') return Number.isFinite(v);
   if (typeof v === 'string') return v.trim().length > 0;
   if (Array.isArray(v)) return v.some(isPopulatedSpecFieldValue);
   if (typeof v === 'object') {
