@@ -133,21 +133,24 @@ export default function MerchantDirectoryExplorer({
   const handleShowMore = async () => {
     if (loadingMore) return;
     setLoadingMore(true);
+    const offset = visibleMerchants.length;
     try {
       const page = await fetchDirectoryPage(
         filters,
-        visibleMerchants.length,
+        offset,
         MERCHANT_PAGE_SIZE
       );
-      setPageState((prev) =>
-        prev.key === filterKey
-          ? {
-              key: prev.key,
-              items: [...prev.items, ...page.items],
-              matched: page.matched,
-            }
-          : prev
-      );
+      setPageState((prev) => {
+        // Only append to the list this page continues (same filters, same
+        // length); skip ids already shown if the order shifted meanwhile.
+        if (prev.key !== filterKey || prev.items.length !== offset) return prev;
+        const shown = new Set(prev.items.map((m) => m.id));
+        return {
+          key: prev.key,
+          items: [...prev.items, ...page.items.filter((m) => !shown.has(m.id))],
+          matched: page.matched,
+        };
+      });
     } catch {
       // Keep what is shown; the button stays available to retry.
     } finally {
@@ -161,7 +164,8 @@ export default function MerchantDirectoryExplorer({
       const page = await fetchDirectoryPage(filters, offset, EXPORT_PAGE_SIZE);
       all.push(...page.items);
       if (page.items.length < EXPORT_PAGE_SIZE || all.length >= page.matched) {
-        return all;
+        // Pages can come from different cache snapshots: drop repeats.
+        return [...new Map(all.map((m) => [m.id, m])).values()];
       }
     }
   };
@@ -269,14 +273,7 @@ export default function MerchantDirectoryExplorer({
     };
   };
 
-  const handleCopyMerchantsMarkdown = async () => {
-    if (typeof navigator === 'undefined' || matchedCount === 0) return;
-    let filteredMerchants: MerchantSummary[];
-    try {
-      filteredMerchants = await fetchAllMatching();
-    } catch {
-      return;
-    }
+  const buildMerchantsMarkdown = (filteredMerchants: MerchantSummary[]) => {
     const headers = [
       'Merchant',
       'Platform',
@@ -310,13 +307,32 @@ export default function MerchantDirectoryExplorer({
       `| ${sep.join(' | ')} |`,
       ...rows.map((r) => `| ${r.join(' | ')} |`),
     ].join('\n');
+    return md;
+  };
 
+  const handleCopyMerchantsMarkdown = async () => {
+    if (typeof navigator === 'undefined' || matchedCount === 0) return;
+    // The rows are fetched first, but Safari only lets the clipboard be written
+    // during the click: hand it a promise via ClipboardItem so the write starts
+    // inside the gesture. Browsers without ClipboardItem fall back to
+    // writeText after the fetch.
+    const markdown = fetchAllMatching().then(buildMerchantsMarkdown);
     try {
-      await navigator.clipboard.writeText(md);
+      if (typeof ClipboardItem !== 'undefined' && navigator.clipboard.write) {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            'text/plain': markdown.then(
+              (md) => new Blob([md], { type: 'text/plain' })
+            ),
+          }),
+        ]);
+      } else {
+        await navigator.clipboard.writeText(await markdown);
+      }
       setCopiedMerchantsMd(true);
       setTimeout(() => setCopiedMerchantsMd(false), 2500);
     } catch {
-      // Ignore clipboard error
+      // Clipboard refused or fetch failed: nothing was copied.
     }
   };
 

@@ -54,3 +54,25 @@ test('merchant CSV export covers every matching store', async ({
   const rows = csv.replace(/^﻿/, '').trim().split(/\r\n/);
   expect(rows.length - 1).toBe(total);
 });
+
+test('merchant Markdown copy covers every matching store', async ({
+  page,
+  context,
+  request,
+}) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  const total = (
+    await (await request.get('/api/v1/rate/merchants/directory?limit=1')).json()
+  ).data.matched as number;
+
+  await page.goto('/merchants');
+  await page.getByTestId('copy-merchants-md-btn').click();
+  await expect
+    .poll(() => page.evaluate(() => navigator.clipboard.readText()), {
+      timeout: 30_000,
+    })
+    .toContain(`(${total} merchants)`);
+  const md = await page.evaluate(() => navigator.clipboard.readText());
+  // Title, blank line, header and separator, then one row per store.
+  expect(md.trim().split('\n').length - 4).toBe(total);
+});
