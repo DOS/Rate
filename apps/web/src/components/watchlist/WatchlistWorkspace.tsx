@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { BsBell, BsCheckCircle, BsExclamationTriangle } from 'react-icons/bs';
 import { Link } from '@/lib/navigation';
 import { escapeCsvCell } from '@/lib/csv-safe';
 import type { MasterProduct } from '@repo/shared-data';
@@ -603,7 +604,12 @@ export default function WatchlistWorkspace({
                   cloudSyncStatus.ok ? 'text-success' : 'text-warning'
                 }`}
               >
-                {cloudSyncStatus.ok ? '✓' : '⚠'} {cloudSyncStatus.message}
+                {cloudSyncStatus.ok ? (
+                  <BsCheckCircle aria-hidden="true" className="me-1" />
+                ) : (
+                  <BsExclamationTriangle aria-hidden="true" className="me-1" />
+                )}
+                {cloudSyncStatus.message}
               </div>
             )}
           </form>
@@ -645,7 +651,9 @@ export default function WatchlistWorkspace({
       {/* Empty State with Quick Add Suggestions */}
       {items.length === 0 ? (
         <div className="card rounded-4 p-md-5 mb-4 border bg-white p-4 text-center shadow-sm">
-          <div className="display-5 mb-3">🔔</div>
+          <div className="display-5 text-secondary mb-3">
+            <BsBell aria-hidden="true" />
+          </div>
           <h3 className="h5 fw-bold mb-2">{t('emptyTitle')}</h3>
           <p
             className="text-muted small mx-auto mb-4"
