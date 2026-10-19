@@ -5,8 +5,7 @@ import {
   getMasterProductCategorySlug,
   getMasterProductHref,
   getMasterProducts,
-  getMerchantsList,
-  getRateClient,
+  getSitemapRows,
 } from '@/lib/rate-api';
 import {
   buildPopular1v1BattlesForCategory,
@@ -126,20 +125,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ];
 
   try {
-    const supabase = getRateClient();
-    const [products, merchants, catsRes] = await Promise.all([
+    // Product and merchant URLs come from the whole catalogue; the curated
+    // 1v1 battles only need the top-ranked products.
+    const [rows, products] = await Promise.all([
+      getSitemapRows(),
       getMasterProducts({ categorySlug: 'all', limit: 500 }),
-      getMerchantsList({ limit: 200 }),
-      supabase.from('categories').select('id, slug'),
     ]);
-
-    const catSlugById = new Map<string, string>();
-    for (const c of (catsRes.data || []) as Array<{
-      id: string;
-      slug: string;
-    }>) {
-      catSlugById.set(c.id, c.slug);
-    }
+    const catSlugById = rows.categorySlugById;
 
     const stampedProducts = products.map((product) => {
       const catSlug = getMasterProductCategorySlug(product, catSlugById);
@@ -154,10 +146,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       };
     });
 
-    const productEntries: MetadataRoute.Sitemap = stampedProducts.map(
+    const productEntries: MetadataRoute.Sitemap = rows.products.map(
       (product) => ({
         url: `${baseUrl}${getMasterProductHref(product, catSlugById)}`,
-        lastModified: now,
+        lastModified: product.updated_at ? new Date(product.updated_at) : now,
         changeFrequency: 'daily',
         priority: 0.85,
       })
@@ -175,7 +167,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         )
       );
 
-    const merchantEntries: MetadataRoute.Sitemap = merchants.map(
+    const merchantEntries: MetadataRoute.Sitemap = rows.merchants.map(
       (merchant) => ({
         url: `${baseUrl}/merchants/${merchant.id}`,
         lastModified: merchant.updated_at ? new Date(merchant.updated_at) : now,

@@ -2476,6 +2476,65 @@ export function getMasterProductHref(
   return `/${catSlug}/${product.slug}`;
 }
 
+export interface SitemapRows {
+  products: Array<{
+    slug: string;
+    name: string | null;
+    model: string | null;
+    category_id: string | null;
+    metadata: Record<string, unknown> | null;
+    updated_at: string | null;
+  }>;
+  merchants: Array<{ id: string; updated_at: string | null }>;
+  categorySlugById: Map<string, string>;
+}
+
+/**
+ * Every published product and every merchant, with only the columns their
+ * sitemap URLs need. Paged: the sitemap must list the whole catalogue, not the
+ * first page of a ranked list (DOS/Rate#460).
+ */
+export async function getSitemapRows(): Promise<SitemapRows> {
+  const supabase = getRateClient();
+  const [productRows, merchants, catsRes] = await Promise.all([
+    fetchAllRows('sitemap products', (from, to) =>
+      supabase
+        .from('master_products')
+        .select('slug, name, model, category_id, metadata, updated_at')
+        .eq('status', 'published')
+        .order('id')
+        .range(from, to)
+    ),
+    fetchAllRows<SitemapRows['merchants'][number]>(
+      'sitemap merchants',
+      (from, to) =>
+        supabase
+          .from('merchants')
+          .select('id, updated_at')
+          .order('id')
+          .range(from, to)
+    ),
+    supabase.from('categories').select('id, slug'),
+  ]);
+  if (catsRes.error) {
+    throw new RateDataUnavailableError('sitemap categories', catsRes.error);
+  }
+  const categorySlugById = new Map<string, string>();
+  for (const c of (catsRes.data || []) as Array<{ id: string; slug: string }>) {
+    categorySlugById.set(c.id, c.slug);
+  }
+  const products = productRows.map((row) => ({
+    ...row,
+    metadata:
+      row.metadata &&
+      typeof row.metadata === 'object' &&
+      !Array.isArray(row.metadata)
+        ? (row.metadata as Record<string, unknown>)
+        : null,
+  }));
+  return { products, merchants, categorySlugById };
+}
+
 function computeDynamicReviewRisk(allReviews: ReviewItem[]): {
   reviewRiskScore: number;
   breakdown: MerchantRiskBreakdown;
