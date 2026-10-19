@@ -4124,6 +4124,101 @@ const PLATFORM_ITEM_ID_PREFIX: Partial<
   phongvu: 'pv-',
 };
 
+const ECOMMERCE_SLUG_NOISE_PHRASES_REGEX =
+  /(?:^|[\s,.|-]+)(?:điện thoại di động|dien thoai di dong|điện thoại|dien thoai|di động|di dong|smartphone|máy tính bảng|may tinh bang|tablet|máy tính xách tay|may tinh xach tay|laptop|đồng hồ thông minh|dong ho thong minh|smartwatch|tai nghe bluetooth true wireless|tai nghe bluetooth không dây|tai nghe bluetooth khong day|tai nghe chụp tai chống ồn|tai nghe chup tai chong on|tai nghe bluetooth|tai nghe không dây|tai nghe khong day|tai nghe true wireless|tai nghe nhét tai|tai nghe nhet tai|tai nghe(?!\s+(?:có dây|co day))|earbuds|chính hãng vn\/a|chinh hang vn a|chinh hang vna|chính hãng|chinh hang|vn\/a|vn a|vna|fullbox|mới 100%|moi 100%|moi 100|nguyên seal|nguyen seal|trả góp 0%|tra gop 0%|trả góp|tra gop|bảo hành \d+ tháng|bao hanh \d+ thang|bảo hành chính hãng|bao hanh chinh hang|freeship|hoả tốc|hỏa tốc|hoa toc|giá rẻ|gia re|nhập khẩu|nhap khau|quốc tế|quoc te)(?=$|[\s,.|-])/giu;
+
+export function stripEcommerceNoiseTokens(rawText: string): string {
+  return rawText
+    .replace(/\[[^\]]*\]/g, ' ')
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(ECOMMERCE_SLUG_NOISE_PHRASES_REGEX, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Extract a clean, human-readable product search keyword from an e-commerce product URL
+ * across all 10 supported platforms (Shopee, Lazada, Tiki, TikTok Shop, CellphoneS,
+ * TGDD/TopZone/DMX, FPT Shop, Hoàng Hà, Di Động Việt, Phong Vũ).
+ */
+export function extractProductKeywordFromUrl(rawUrl?: string | null): string {
+  if (!rawUrl || typeof rawUrl !== 'string') return '';
+  const trimmed = rawUrl.trim();
+  if (!trimmed) return '';
+  const hasHttpProtocol = /^https?:\/\//i.test(trimmed);
+  const hasKnownDomainToken =
+    /(?:^|\/\/|\.)(?:shopee\.vn|lazada\.vn|tiki\.vn|tiktok\.com|cellphones\.com\.vn|thegioididong\.com|topzone\.vn|dienmayxanh\.com|fptshop\.com\.vn|hoanghamobile\.com|didongviet\.vn|phongvu\.vn|rate\.vn)(?:\/|$)/i.test(
+      trimmed
+    );
+  if (!hasHttpProtocol && !hasKnownDomainToken) return '';
+
+  try {
+    const parsed = new URL(
+      hasHttpProtocol ? trimmed : `https://${trimmed.replace(/^\/+/, '')}`
+    );
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return '';
+    }
+    let decodedPathname = parsed.pathname;
+    try {
+      decodedPathname = decodeURIComponent(parsed.pathname);
+    } catch {
+      decodedPathname = parsed.pathname;
+    }
+
+    const rawSegments = decodedPathname
+      .split('/')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const firstSegLower = (rawSegments[0] || '')
+      .replace(/\.html?$/i, '')
+      .toLowerCase();
+    if (
+      RETAIL_NON_PRODUCT_FIRST_SEGMENTS.has(firstSegLower) ||
+      firstSegLower === 'shop' ||
+      firstSegLower === 'opaanlp' ||
+      firstSegLower === 'video'
+    ) {
+      return '';
+    }
+
+    const cleanedPath = decodedPathname
+      .replace(/(?:\/a-i|-i|\/i)\.\d+\.\d+\/?$/i, '')
+      .replace(/\/(?:product|opaanlp)\/\d+\/\d+\/?$/i, '')
+      .replace(/\/(?:view\/)?product\/\d+\/?$/i, '')
+      .replace(/(?:\/|-)i\d+(?:-s\d+)?\.html?$/i, '')
+      .replace(/(?:\/|-)p\d+\.html?$/i, '')
+      .replace(/--s\d+(?:\.html?)?$/i, '')
+      .replace(/\.html?$/i, '')
+      .replace(
+        /^\/(?:products?|san-pham|dien-thoai|dien-thoai-di-dong|dtdd|may-tinh-bang|may-tinh-xach-tay|laptop|dong-ho-thong-minh|tai-nghe|smartphones|tablets|laptops|smartwatches|earbuds|apple|iphone|ipad|macbook|watch|airpods)\//i,
+        '/'
+      );
+    const segments = cleanedPath.split('/').filter(Boolean);
+    const lastSeg = segments[segments.length - 1] || '';
+    const lastSegLower = lastSeg.toLowerCase();
+    if (
+      !lastSeg ||
+      /^\d+$/.test(lastSeg) ||
+      /^(?:a-)?i\.\d+\.\d+$/i.test(lastSeg) ||
+      lastSeg.startsWith('@') ||
+      RETAIL_CATEGORY_ROOT_SLUGS.has(lastSegLower) ||
+      /^(?:search|tim-kiem|result|product|products|view)$/.test(lastSegLower)
+    ) {
+      return '';
+    }
+
+    const spaceSeparated = lastSeg
+      .replace(/[-_]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    const stripped = stripEcommerceNoiseTokens(spaceSeparated);
+    return stripped || spaceSeparated;
+  } catch {
+    return '';
+  }
+}
+
 /**
  * Inspect an e-commerce product/shop URL (all 10 platforms) or keyword:
  * - Resolves exact `platform_item_id` or `url` against `rate.products`
@@ -4209,7 +4304,7 @@ export async function inspectProductOrShopUrl(
         const [offers, reviews, merchantsList] = await Promise.all([
           getMasterProductOffers(masterProduct.id),
           getMasterProductReviews(masterProduct.id),
-          getMerchantsList({ ids: [matchedProd.merchant_id] }),
+          getMerchantsList({ ids: [matchedProd.merchant_id], limit: 1 }),
         ]);
         const [priceHistory, reviewSummary] = await Promise.all([
           getMasterProductPriceHistory(masterProduct.id, offers),
@@ -4240,15 +4335,17 @@ export async function inspectProductOrShopUrl(
     }
   }
 
-  // 2. Direct lookup by Shopee/platform shop ID if URL is a shop link
-  if (parsedUrl.platformShopId && !parsedUrl.platformItemId) {
+  // 2. Direct lookup by Shopee/platform shop ID if present on the URL
+  let matchedMerchantByShopId: MerchantSummary | null = null;
+  if (parsedUrl.platformShopId) {
     const merchants = await getMerchantsList({
       platformShopIds: [parsedUrl.platformShopId],
+      limit: 1,
     });
-    const matchedMerchant =
+    matchedMerchantByShopId =
       merchants.find((m) => m.platform_shop_id === parsedUrl.platformShopId) ||
       null;
-    if (matchedMerchant) {
+    if (matchedMerchantByShopId && !parsedUrl.platformItemId) {
       const suggestions = await getMasterProducts({ limit: 3 });
       return {
         query,
@@ -4260,15 +4357,28 @@ export async function inspectProductOrShopUrl(
         discountAnalysis: null,
         priceHistory: null,
         reviewSummary: null,
-        merchantProfile: matchedMerchant,
+        merchantProfile: matchedMerchantByShopId,
         suggestions,
       };
     }
   }
 
-  // 3. Internal slug or exact master product slug match
-  const candidateSlug = parsedUrl.internalSlug || query.toLowerCase();
-  const exactMaster = await getMasterProductBySlug(candidateSlug);
+  // 3. Internal slug or exact master product slug match (including slugified URL keyword)
+  const urlProductKeyword = parsedUrl.isUrl
+    ? extractProductKeywordFromUrl(query)
+    : '';
+  const slugifiedUrlKeyword = urlProductKeyword
+    ? urlProductKeyword
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+    : '';
+  const candidateSlug =
+    parsedUrl.internalSlug ||
+    (parsedUrl.isUrl ? slugifiedUrlKeyword : query.toLowerCase());
+  const exactMaster = candidateSlug
+    ? await getMasterProductBySlug(candidateSlug)
+    : null;
   if (exactMaster) {
     const [offers, reviews] = await Promise.all([
       getMasterProductOffers(exactMaster.id),
@@ -4278,16 +4388,21 @@ export async function inspectProductOrShopUrl(
     const [priceHistory, reviewSummary, merchantsList] = await Promise.all([
       getMasterProductPriceHistory(exactMaster.id, offers),
       getMasterProductReviewSummary(exactMaster.id, reviews),
-      getMerchantsList({
-        ids: matchedOffer ? [matchedOffer.merchant.id] : [],
-      }),
+      matchedMerchantByShopId
+        ? Promise.resolve([matchedMerchantByShopId])
+        : getMerchantsList({
+            ids: matchedOffer ? [matchedOffer.merchant.id] : [],
+            limit: 1,
+          }),
     ]);
     const discountAnalysis = matchedOffer
       ? priceHistory.byOffer[matchedOffer.id] || null
       : null;
-    const merchantProfile = matchedOffer
-      ? merchantsList.find((m) => m.id === matchedOffer.merchant.id) || null
-      : null;
+    const merchantProfile =
+      matchedMerchantByShopId ||
+      (matchedOffer
+        ? merchantsList.find((m) => m.id === matchedOffer.merchant.id) || null
+        : null);
 
     return {
       query,
@@ -4307,21 +4422,28 @@ export async function inspectProductOrShopUrl(
   // 4. Search across merchants and master products by keyword. Merchant
   // lookups are filtered in the database: this public endpoint must not read
   // the whole directory on every request.
-  const [nameMatches, shopMatches, matchedProducts] = await Promise.all([
-    // No merchant name is this long; skipping also keeps a 1024-char query out
-    // of the request URL.
-    query.length <= 200
-      ? getMerchantsList({ nameContains: query, limit: 1 })
-      : Promise.resolve([]),
-    // Only shop-id-shaped input reaches the in() filter syntax.
-    /^[A-Za-z0-9_.-]{1,64}$/.test(query)
-      ? getMerchantsList({ platformShopIds: [query], limit: 1 })
-      : Promise.resolve([]),
-    getMasterProducts({ search: query, limit: 6 }),
-  ]);
-  const matchedMerchantByName = nameMatches[0] ?? shopMatches[0] ?? null;
+  const effectiveSearchQuery = parsedUrl.isUrl ? urlProductKeyword : query;
+  const [nameMatches, shopMatches, matchedProducts] = effectiveSearchQuery
+    ? await Promise.all([
+        // No merchant name is this long; skipping also keeps a 1024-char query out
+        // of the request URL.
+        !parsedUrl.isUrl && effectiveSearchQuery.length <= 200
+          ? getMerchantsList({ nameContains: effectiveSearchQuery, limit: 1 })
+          : Promise.resolve([]),
+        // Only shop-id-shaped input reaches the in() filter syntax.
+        !parsedUrl.isUrl && /^[A-Za-z0-9_.-]{1,64}$/.test(effectiveSearchQuery)
+          ? getMerchantsList({
+              platformShopIds: [effectiveSearchQuery],
+              limit: 1,
+            })
+          : Promise.resolve([]),
+        getMasterProducts({ search: effectiveSearchQuery, limit: 6 }),
+      ])
+    : [[], [], []];
+  const matchedMerchantByName =
+    matchedMerchantByShopId ?? nameMatches[0] ?? shopMatches[0] ?? null;
   const merchantById = async (id: string) =>
-    (await getMerchantsList({ ids: [id] }))[0] ?? null;
+    (await getMerchantsList({ ids: [id], limit: 1 }))[0] ?? null;
 
   if (matchedProducts.length === 1) {
     const single = matchedProducts[0]!;
@@ -4337,9 +4459,12 @@ export async function inspectProductOrShopUrl(
     const discountAnalysis = matchedOffer
       ? priceHistory.byOffer[matchedOffer.id] || null
       : null;
-    const merchantProfile = matchedOffer
-      ? (await merchantById(matchedOffer.merchant.id)) || matchedMerchantByName
-      : matchedMerchantByName;
+    const merchantProfile =
+      matchedMerchantByShopId ||
+      (matchedOffer
+        ? (await merchantById(matchedOffer.merchant.id)) ||
+          matchedMerchantByName
+        : matchedMerchantByName);
 
     return {
       query,
