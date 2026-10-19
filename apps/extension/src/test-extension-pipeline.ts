@@ -2053,7 +2053,11 @@ async function runTests() {
 
   const olderTabSignal = {
     ...extractedDomSignal,
-    title: 'Old Tab Product',
+    title: 'Active Tab A Product',
+  };
+  const newerBackgroundTabSignal = {
+    ...extractedDomSignal,
+    title: 'Background Tab B Product',
   };
   const newerQuickQuerySignal = {
     ...extractedDomSignal,
@@ -2061,22 +2065,43 @@ async function runTests() {
   };
   assert.equal(
     selectFreshestSessionSignal(
-      { signal: olderTabSignal, updatedAt: 1000 },
-      { signal: newerQuickQuerySignal, updatedAt: 2000 }
+      { signal: olderTabSignal, updatedAt: 1000, source: 'page' },
+      { signal: newerBackgroundTabSignal, updatedAt: 2000, source: 'page' }
     )?.title,
-    'Quick Query Product',
-    'selectFreshestSessionSignal must prefer tab_latest when a Quick Query was run more recently than the active tab signal'
+    'Active Tab A Product',
+    'selectFreshestSessionSignal must NOT let a newer page detection in tab_latest override the active tab signal (#531)'
   );
   assert.equal(
     selectFreshestSessionSignal(
-      { signal: olderTabSignal, updatedAt: 3000 },
-      { signal: newerQuickQuerySignal, updatedAt: 2000 }
+      { signal: olderTabSignal, updatedAt: 1000, source: 'page' },
+      { signal: newerQuickQuerySignal, updatedAt: 2000, source: 'quick_query' }
     )?.title,
-    'Old Tab Product'
+    'Quick Query Product',
+    'selectFreshestSessionSignal must prefer tab_latest when a Quick Query (source=quick_query) was run more recently than the active tab signal (#499, #531)'
+  );
+  assert.equal(
+    selectFreshestSessionSignal(
+      { signal: olderTabSignal, updatedAt: 3000, source: 'page' },
+      { signal: newerQuickQuerySignal, updatedAt: 2000, source: 'quick_query' }
+    )?.title,
+    'Active Tab A Product',
+    'selectFreshestSessionSignal must prefer the active tab signal once a newer page signal arrives after a Quick Query (#531)'
+  );
+  assert.equal(
+    cleanExtractedProductTitle('iPhone 15 Pro Max | 256GB | Chính hãng VN/A'),
+    'iPhone 15 Pro Max 256GB',
+    'cleanExtractedProductTitle must preserve storage capacity segments after | while dropping promo suffixes (#531)'
+  );
+  assert.equal(
+    cleanExtractedProductTitle(
+      'Samsung Galaxy S24 Ultra | 12GB/512GB | Giá tốt | CellphoneS.com.vn'
+    ),
+    'Samsung Galaxy S24 Ultra 12GB/512GB',
+    'cleanExtractedProductTitle must preserve RAM/ROM pipe segments while stripping platform suffixes (#531)'
   );
 
   console.log(
-    '  ✅ [Extension Signal & Sender Guards] sanitizeExtensionProductSignal, formatSafeExtensionVnd, resolveSafeApiRelativeUrl, formatSafeNumber, sanitizeVerdictClassSuffix & #499 JSON-LD/Rating/Session guards passed (#382, #393, #401, #499)'
+    '  ✅ [Extension Signal & Sender Guards] sanitizeExtensionProductSignal, formatSafeExtensionVnd, resolveSafeApiRelativeUrl, formatSafeNumber, sanitizeVerdictClassSuffix & #499/#531 JSON-LD/Rating/Session guards passed (#382, #393, #401, #499, #531)'
   );
 
   // Verify DOS/Rate#497: isSafeRevalidationPath, resolveRevalidationTargets merchant PRICE_HISTORY cascade, and evaluateExtensionPriceVerdict MAX_VALID_VND_PRICE bounds

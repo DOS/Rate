@@ -389,13 +389,32 @@ export function extractRatingFromJsonLd(aggRaw: unknown): {
 }
 
 export function cleanExtractedProductTitle(rawTitle: string): string {
-  return rawTitle
-    .replace(/\|.*$/, '')
+  const withoutPlatformSuffix = rawTitle
     .replace(
-      /\s*[-–—]\s*(?:Shopee|Lazada|Tiki|TikTok\s*Shop|CellphoneS|Thế\s*Giới\s*Di\s*Động|Thegioididong|TopZone|Điện\s*Máy\s*Xanh|FPT\s*Shop|Hoàng\s*Hà\s*Mobile|HoangHaMobile|Di\s*Động\s*Việt|Phong\s*Vũ).*$/i,
+      /\s*(?:\||[-–—])\s*(?:Shopee(?:\s*Việt\s*Nam|\s*VN)?|Lazada(?:\s*Việt\s*Nam|\s*VN)?|Tiki(?:\.vn)?|TikTok\s*Shop|CellphoneS(?:\.com\.vn)?|Thế\s*Giới\s*Di\s*Động|Thegioididong(?:\.com)?|TopZone(?:\.vn)?|Điện\s*Máy\s*Xanh|FPT\s*Shop|Fptshop(?:\.com\.vn)?|Hoàng\s*Hà\s*Mobile|HoangHaMobile(?:\.com)?|Di\s*Động\s*Việt|Didongviet(?:\.vn)?|Phong\s*Vũ|Phongvu(?:\.vn)?).*$/i,
       ''
     )
     .trim();
+
+  if (!withoutPlatformSuffix.includes('|')) {
+    return withoutPlatformSuffix;
+  }
+
+  const pipeSegments = withoutPlatformSuffix
+    .split('|')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (pipeSegments.length === 0) return '';
+
+  const keptSegments: string[] = [pipeSegments[0]!];
+  for (let i = 1; i < pipeSegments.length; i++) {
+    const seg = pipeSegments[i]!;
+    if (/\b\d+\s*(?:GB|TB)\b/i.test(seg)) {
+      keptSegments.push(seg);
+    }
+  }
+
+  return keptSegments.join(' ').replace(/\s+/g, ' ').trim();
 }
 
 /**
