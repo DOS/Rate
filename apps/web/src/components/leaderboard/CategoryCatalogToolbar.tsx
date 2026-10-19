@@ -6,7 +6,11 @@ import { BsDownload } from 'react-icons/bs';
 import { Link } from '@/lib/navigation';
 import { useDetailsDismiss } from '@/components/elementary/use-details-dismiss';
 import { escapeCsvCell } from '@/lib/csv-safe';
-import type { MasterProduct } from '@/lib/rate-domain';
+import {
+  resolveCompareEffectiveUserRating,
+  resolveCompareExpertRating10,
+  type MasterProduct,
+} from '@/lib/rate-domain';
 import {
   getRadarSignal,
   radarCsvCells,
@@ -69,16 +73,9 @@ export default function CategoryCatalogToolbar({
     ];
     const sep = headers.map(() => '---');
     const rows = products.map((p, idx) => {
-      const rawUser = Number(p.user_rating_weighted || p.average_rating || 0);
+      const rawUser = resolveCompareEffectiveUserRating(p);
       const userRating = rawUser > 0 ? rawUser : null;
-      const rawExpert =
-        p.expert_rating != null && Number(p.expert_rating) > 0
-          ? Number(p.expert_rating)
-          : null;
-      const expertScore10 =
-        rawExpert != null
-          ? Number((rawExpert > 5 ? rawExpert : rawExpert * 2).toFixed(1))
-          : null;
+      const expertScore10 = resolveCompareExpertRating10(p);
       const radar = radarFor(p.slug);
       return [
         String(idx + 1),
@@ -130,16 +127,9 @@ export default function CategoryCatalogToolbar({
       ...RADAR_CSV_HEADERS,
     ];
     const rows = products.map((p, idx) => {
-      const rawUser = Number(p.user_rating_weighted || p.average_rating || 0);
+      const rawUser = resolveCompareEffectiveUserRating(p);
       const userRating = rawUser > 0 ? rawUser : null;
-      const rawExpert =
-        p.expert_rating != null && Number(p.expert_rating) > 0
-          ? Number(p.expert_rating)
-          : null;
-      const expertScore10 =
-        rawExpert != null
-          ? Number((rawExpert > 5 ? rawExpert : rawExpert * 2).toFixed(1))
-          : null;
+      const expertScore10 = resolveCompareExpertRating10(p);
       const radar = radarFor(p.slug);
       return [
         String(idx + 1),
@@ -184,15 +174,15 @@ export default function CategoryCatalogToolbar({
       exportedAt: new Date().toISOString(),
       productCount: products.length,
       products: products.map((p, idx) => {
-        const rawUser = Number(p.user_rating_weighted || p.average_rating || 0);
-        const rawExpert = Number(p.expert_rating || 0);
+        const rawUser = resolveCompareEffectiveUserRating(p);
+        const expertScore10 = resolveCompareExpertRating10(p);
         return {
           rank: idx + 1,
           slug: p.slug,
           name: p.name,
           brand: p.brand,
           userRating: rawUser > 0 ? rawUser : null,
-          expertRating: rawExpert > 0 ? rawExpert : null,
+          expertRating: expertScore10,
           minPriceVnd: Number(p.min_price || 0),
           dealRadar: radarExportFields(radarFor(p.slug)),
         };
