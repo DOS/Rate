@@ -1,6 +1,13 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, {
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import type { IconType } from 'react-icons';
 import { Link } from '@/lib/navigation';
@@ -138,6 +145,26 @@ function computeProductScores(
   };
 }
 
+/**
+ * Reports the URL's ?cat= and ?criterion=. useSearchParams makes only this
+ * empty component client-rendered (inside its Suspense boundary), so the
+ * leaderboard itself stays in the cached server HTML.
+ */
+function TabFromUrl({
+  onCategory,
+  onCriterion,
+}: {
+  readonly onCategory: (cat: string | null) => void;
+  readonly onCriterion: (crit: string | null) => void;
+}) {
+  const searchParams = useSearchParams();
+  const cat = searchParams.get('cat');
+  const crit = searchParams.get('criterion');
+  useEffect(() => onCategory(cat), [cat, onCategory]);
+  useEffect(() => onCriterion(crit), [crit, onCriterion]);
+  return null;
+}
+
 export default function LeaderboardExplorer({
   products,
   dealRadar,
@@ -151,18 +178,6 @@ export default function LeaderboardExplorer({
     useState<CanonicalCategorySlug>('smartphones');
   const [activeCriterion, setActiveCriterion] =
     useState<LeaderboardCriterionKey>('combined');
-
-  // The page is cached with the default tab, so a deep link's ?cat= and
-  // ?criterion= are applied once the browser has the URL (DOS/Rate#508).
-  useEffect(() => {
-    const query = new URLSearchParams(window.location.search);
-    if (query.has('cat')) {
-      setActiveCategory(normalizeLeaderboardCategory(query.get('cat')));
-    }
-    if (query.has('criterion')) {
-      setActiveCriterion(normalizeLeaderboardCriterion(query.get('criterion')));
-    }
-  }, []);
 
   // Keeps the tab in the URL without a server round trip; Next syncs its
   // router with the native history API.
@@ -646,6 +661,17 @@ export default function LeaderboardExplorer({
     replaceTabUrl(activeCategory, crit);
   };
 
+  // The page is cached with the default tab; TabFromUrl applies the URL's
+  // ?cat= and ?criterion= on load and on every later navigation, including
+  // a same-route link to plain /leaderboard (DOS/Rate#508).
+  const applyUrlCategory = useCallback((cat: string | null) => {
+    setActiveCategory(normalizeLeaderboardCategory(cat));
+    setSelectedBrand('all');
+  }, []);
+  const applyUrlCriterion = useCallback((crit: string | null) => {
+    setActiveCriterion(normalizeLeaderboardCriterion(crit));
+  }, []);
+
   const criterionOptions: Array<{
     key: LeaderboardCriterionKey;
     label: string;
@@ -695,6 +721,12 @@ export default function LeaderboardExplorer({
 
   return (
     <div>
+      <Suspense fallback={null}>
+        <TabFromUrl
+          onCategory={applyUrlCategory}
+          onCriterion={applyUrlCriterion}
+        />
+      </Suspense>
       {/* 1. Directory -> 5-Category Hierarchy & Criterion Control Panel */}
       <div className="card rounded-4 mb-4 border bg-white p-4 shadow-sm">
         <div className="d-flex justify-content-between align-items-center border-bottom mb-3 flex-wrap gap-2 pb-3">
