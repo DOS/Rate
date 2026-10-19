@@ -9,7 +9,10 @@ import {
   getMasterProductHref,
   type UrlInspectionResult,
 } from '@/lib/rate-domain';
-import type { HeroMerchantSuggestion } from '@/lib/hero-merchants';
+import {
+  toHeroMerchantSuggestions,
+  type HeroMerchantSuggestion,
+} from '@/lib/hero-merchants';
 import CompareQuickToggle from '@/components/compare/CompareQuickToggle';
 import RadarBadge from '@/components/radar/RadarBadge';
 import { useDealRadarIndex } from '@/components/radar/use-deal-radar';
@@ -114,18 +117,43 @@ export default function HeroSearchInspector({
       .slice(0, 6);
   }, [query, initialProducts]);
 
+  // Merchant suggestions come from the merchants API as the user types: the
+  // page ships only the first few stores, not the whole directory (#452).
+  const [merchantMatches, setMerchantMatches] = useState<{
+    q: string;
+    items: HeroMerchantSuggestion[];
+  } | null>(null);
+  const trimmedQuery = query.trim();
+  useEffect(() => {
+    if (!trimmedQuery) return;
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        const resp = await fetch(
+          `/api/v1/rate/merchants?q=${encodeURIComponent(trimmedQuery)}&limit=3`,
+          { signal: controller.signal }
+        );
+        if (!resp.ok) return;
+        const body = (await resp.json()) as {
+          data?: HeroMerchantSuggestion[];
+        };
+        setMerchantMatches({
+          q: trimmedQuery,
+          items: toHeroMerchantSuggestions(body.data ?? []),
+        });
+      } catch {
+        // Aborted or offline: keep the previous suggestions.
+      }
+    }, 200);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [trimmedQuery]);
   const filteredMerchants = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return initialMerchants.slice(0, 2);
-    return initialMerchants
-      .filter(
-        (m) =>
-          m.name.toLowerCase().includes(q) ||
-          m.platform_shop_id.toLowerCase().includes(q) ||
-          m.platform.toLowerCase().includes(q)
-      )
-      .slice(0, 3);
-  }, [query, initialMerchants]);
+    if (!trimmedQuery) return initialMerchants.slice(0, 2);
+    return merchantMatches?.q === trimmedQuery ? merchantMatches.items : [];
+  }, [trimmedQuery, initialMerchants, merchantMatches]);
 
   const runUrlInspection = async (targetInput: string) => {
     const cleaned = targetInput.trim();
