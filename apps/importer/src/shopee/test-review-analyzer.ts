@@ -1939,8 +1939,178 @@ async function run() {
     { screen: '6.8" OLED', chip: 'A18 Pro' }
   );
 
+  // DOS/Rate#528: AiReviewAnalyzer numeric bounds, Bayesian inputs, and review_flags chunking
+  const axes528 = compute6AxisWeightBreakdown({
+    authenticity: 'genuine',
+    independence: 'organic',
+    depth: 'detailed',
+    reviewerMultiplier: Number.NaN,
+    contextMultiplier: Number.NaN,
+    upvotes: Number.NaN,
+    downvotes: -5,
+    reportCount: -10,
+  });
+  assert.equal(axes528.reviewer, 1.0, 'NaN reviewerMultiplier must fall back to 1.0');
+  assert.equal(axes528.context, 1.0, 'NaN contextMultiplier must fall back to 1.0');
+  assert.equal(axes528.community, 1.0, 'Negative/NaN votes and reportCount must be ignored');
+  assert.equal(axes528.weight, 1.0);
+
+  const bayesian528 = computeBayesianProductRating(
+    [
+      { rating_star: Number.NaN, weight: 2 },
+      { rating_star: 0, weight: 3 },
+      { rating_star: 6, weight: 3 },
+      { rating_star: 5, weight: 2 },
+    ],
+    { priorMean: Number.NaN, priorStrength: -5 }
+  );
+  assert.equal(bayesian528.prior_mean, 4.2, 'Invalid priorMean must fall back to 4.2');
+  assert.equal(bayesian528.prior_strength, 3, 'Non-positive priorStrength must fall back to 3');
+  assert.equal(
+    bayesian528.effective_weight_sum,
+    2,
+    'Out-of-range rating_star items must be ignored'
+  );
+  assert.equal(bayesian528.raw_weighted_average, 5);
+
+  const weight528 = computeReviewWeight({
+    upvotes: Number.NaN,
+    downvotes: -3,
+    reportCount: -10,
+    flagCategory: 'authentic',
+    verdict: 'authentic',
+  });
+  assert.equal(weight528, 1.0, 'Negative reportCount must not inflate review weight');
+
+  const summary528 = analyzer.computeJReviewsSummary(
+    [
+      {
+        id: 'rev-528-1',
+        rating_star: 5,
+        comment: 'Máy dùng rất mượt, pin trâu dùng cả ngày.',
+        reviewer_type: 'user',
+      },
+      {
+        id: 'rev-528-nan',
+        rating_star: Number.NaN,
+        comment: 'Lỗi điểm sao',
+        reviewer_type: 'user',
+      },
+    ],
+    [
+      {
+        review_id: 'rev-528-1',
+        fake_probability: 0.05,
+        verdict: 'authentic',
+        flag_category: 'authentic',
+        reason: 'ok',
+        include_in_rating: true,
+        helpfulness_weight: 1.0,
+        signals: {
+          burst_pattern_score: 0,
+          duplicate_text_ratio: 0,
+          account_age_bucket: 'high',
+          reviewer_history_score: 0,
+          language_marker_score: 0,
+        },
+      },
+      {
+        review_id: 'rev-528-nan',
+        fake_probability: 0.05,
+        verdict: 'authentic',
+        flag_category: 'authentic',
+        reason: 'ok',
+        include_in_rating: true,
+        helpfulness_weight: 1.0,
+        signals: {
+          burst_pattern_score: 0,
+          duplicate_text_ratio: 0,
+          account_age_bucket: 'high',
+          reviewer_history_score: 0,
+          language_marker_score: 0,
+        },
+      },
+    ],
+    Number.NaN
+  );
+  assert.equal(summary528.user_rating_weighted, 5);
+  assert.equal(summary528.expert_rating, null, 'NaN expertRatingInput must be ignored');
+  assert.equal(summary528.overall_rating, 5);
+
+  const riskCorrupted528 = analyzer.evaluateMerchantRisk({
+    platform: 'shopee',
+    isOfficial: false,
+    listingPrice: 20_000_000,
+    canonicalMinPrice: 5_000_000_000,
+    reviewResults: [],
+  });
+  assert.equal(
+    riskCorrupted528.price_anomaly_detected,
+    false,
+    'canonicalMinPrice > MAX_VALID_VND_PRICE must not trigger false-positive price_anomaly_detected'
+  );
+
+  const upsertedFlagChunks528: number[] = [];
+  const stubSupabase528 = {
+    from(table: string) {
+      if (table === 'review_flags') {
+        return {
+          select() {
+            return {
+              in() {
+                return {
+                  async in() {
+                    return { data: [], error: null };
+                  },
+                };
+              },
+            };
+          },
+          async upsert(rows: unknown[]) {
+            upsertedFlagChunks528.push(rows.length);
+            return { error: null };
+          },
+        };
+      }
+      if (table === 'reviews') {
+        return {
+          update() {
+            return {
+              async eq() {
+                return { error: null };
+              },
+            };
+          },
+        };
+      }
+      if (table === 'review_analysis') {
+        return {
+          async upsert() {
+            return { error: null };
+          },
+        };
+      }
+      throw new Error(`Unexpected table ${table}`);
+    },
+  } as unknown as Parameters<typeof analyzer.persistAnalysisToSupabase>[0];
+
+  const batchReviews528 = Array.from({ length: 205 }, (_, idx) => ({
+    id: `rev-chunk-528-${idx}`,
+    rating_star: 5,
+    comment: `Đánh giá thực tế chi tiết số ${idx} sau khi sử dụng máy 2 tuần, màn hình sáng đẹp.`,
+  }));
+  await analyzer.persistAnalysisToSupabase(stubSupabase528, {
+    productId: 'prod-528',
+    reviews: batchReviews528,
+  });
+  assert.deepEqual(
+    upsertedFlagChunks528,
+    [200, 5],
+    'persistAnalysisToSupabase must chunk review_flags upserts into batches of 200'
+  );
+
   console.log(
-    `✅ [P2/P3 Trust Model & #292/#352/#356/#359/#379/#382/#401/#497/#514/#522] Voter weight, Wilson lower bound (50/52=${wilson50of52} > 1/1=${wilson1of1}), shingle copy seeding (sim=${shingleSim}), affiliate shortlinks, peer floor, ArenaSpecSyncer, Importer & Logger hardening (#352, #356, #359, #379, #382, #401, #497, #514, #522) verified`
+    `✅ [P2/P3 Trust Model & #292/#352/#356/#359/#379/#382/#401/#497/#514/#522/#528] Voter weight, Wilson lower bound (50/52=${wilson50of52} > 1/1=${wilson1of1}), shingle copy seeding (sim=${shingleSim}), affiliate shortlinks, peer floor, ArenaSpecSyncer, Importer & ReviewAnalyzer hardening (#352, #356, #359, #379, #382, #401, #497, #514, #522, #528) verified`
   );
 
   console.log('\n🎉 ALL AI REVIEW ANALYZER TESTS PASSED!');
