@@ -45,6 +45,18 @@ for (const signal of ['SIGINT', 'SIGTERM']) {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+async function fetchTextWithTimeout(url, timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    if (res.ok) return await res.text();
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function generate() {
   docker(['network', 'create', network]);
   startRateDb({
@@ -74,8 +86,8 @@ async function generate() {
   const deadline = Date.now() + 60_000;
   for (;;) {
     try {
-      const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
-      if (res.ok) return await res.text();
+      const text = await fetchTextWithTimeout(url, 10_000);
+      if (text !== null) return text;
     } catch {
       // not up yet
     }
@@ -92,6 +104,7 @@ async function generate() {
   }
 }
 
+const keepAliveTimer = setInterval(() => {}, 10_000);
 let exitCode = 1;
 try {
   const raw = await generate();
@@ -123,6 +136,7 @@ try {
 } catch (err) {
   console.error(err instanceof Error ? err.message : err);
 } finally {
+  clearInterval(keepAliveTimer);
   cleanup();
 }
 process.exit(exitCode);

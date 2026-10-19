@@ -6,6 +6,11 @@ import { useDetailsDismiss } from '@/components/elementary/use-details-dismiss';
 import { Link, useRouter } from '@/lib/navigation';
 import {
   getMasterProductHref,
+  resolveCompareBatteryMah,
+  resolveCompareEffectiveUserRating,
+  resolveCompareExpertRating10,
+  resolveCompareRamGb,
+  resolveCompareStorageGb,
   resolveProductImageUrl,
   type UrlInspectionResult,
 } from '@/lib/rate-domain';
@@ -164,6 +169,13 @@ export default function DeepInspectWorkspace({
   const matchedFakeTrap = radarSignal.fakeSaleTrap ?? null;
   const matchedPriceSpread = radarSignal.priceSpread ?? null;
 
+  const masterUserRating = master
+    ? resolveCompareEffectiveUserRating(master)
+    : 0;
+  const masterExpertRating10 = master
+    ? resolveCompareExpertRating10(master)
+    : null;
+
   const handleCopyAuditMarkdown = async () => {
     if (typeof window === 'undefined') return;
     try {
@@ -182,16 +194,13 @@ export default function DeepInspectWorkspace({
       const histHigh = Number(
         priceHistory?.highestEverPrice || master?.max_price || 0
       );
-      const masterUserRating = master
-        ? Number(master.user_rating_weighted || master.average_rating || 0)
-        : 0;
       const lines = [
         `### 🔬 ${t('title')} (Rate.vn Inspector)`,
         `- **Query:** \`${queryInput.trim()}\``,
         ...(master
           ? [
               `- **Master Product:** ${master.name} (\`${master.model_key}\`)`,
-              `- **JReviews Buyer Score:** ${masterUserRating > 0 ? `★ ${masterUserRating.toFixed(2)}/5.0` : t('userNoScore')} ${t('verifiedReviewsCount', { count: master.authentic_review_count || master.total_reviews || 0 })}`,
+              `- **JReviews Buyer Score:** ${masterUserRating > 0 ? `★ ${masterUserRating.toFixed(2)}/5.0` : t('userNoScore')}${masterExpertRating10 != null ? ` | Lab ${masterExpertRating10.toFixed(1)}/10` : ''} ${t('verifiedReviewsCount', { count: master.authentic_review_count || master.total_reviews || 0 })}`,
               `- **60D Deal Radar:** ${radarMarkdownCell(radarSignal)}`,
             ]
           : []),
@@ -260,14 +269,21 @@ export default function DeepInspectWorkspace({
     );
     const rows = offers.map((o) => [
       o.merchant?.name || merchant?.name || 'Marketplace Shop',
-      (o.merchant?.platform || merchant?.platform || 'shopee').toUpperCase(),
+      (
+        o.platform ||
+        o.merchant?.platform ||
+        merchant?.platform ||
+        'shopee'
+      ).toUpperCase(),
       o.title || master?.name || queryInput.trim(),
       Number(o.price_current || 0),
       Number(o.price_original || 0),
       histLow,
       histHigh,
       matchedPriceSpread?.spreadPct ?? 0,
-      discount?.badge_label || 'Verified',
+      priceHistory?.byOffer?.[o.id]?.badge_label ||
+        (o.id === matchedOffer?.id ? discount?.badge_label : null) ||
+        'Verified',
       ...radarCsvCells(radarSignal),
     ]);
     const csvContent = `\uFEFF${[
@@ -309,6 +325,22 @@ export default function DeepInspectWorkspace({
   };
 
   const keySpecs = (master?.key_specs || {}) as KeySpecs;
+  const chipSpec =
+    keySpecs.chip || master?.specifications?.hardware?.chipset || null;
+  const resolvedRamGb = master ? resolveCompareRamGb(master) : null;
+  const resolvedStorageGb = master ? resolveCompareStorageGb(master) : null;
+  const ramSpec = keySpecs.ram || (resolvedRamGb ? `${resolvedRamGb}GB` : null);
+  const storageSpec =
+    keySpecs.storage ||
+    (resolvedStorageGb
+      ? resolvedStorageGb >= 1024
+        ? `${Number((resolvedStorageGb / 1024).toFixed(1))}TB`
+        : `${resolvedStorageGb}GB`
+      : null);
+  const resolvedBatteryMah = master ? resolveCompareBatteryMah(master) : null;
+  const batterySpec =
+    keySpecs.battery ||
+    (resolvedBatteryMah ? `${resolvedBatteryMah} mAh` : null);
   const productHref = master ? getMasterProductHref(master) : '/smartphones';
   const productCategoryPath =
     productHref.replace(`/${master?.slug || ''}`, '') || '/smartphones';
@@ -428,6 +460,11 @@ export default function DeepInspectWorkspace({
                         <BsExclamationTriangleFill className="me-1" />
                         {t('fakeSaleWarning')}
                       </span>
+                    ) : discount?.verdict === 'suspicious_discount' ? (
+                      <span className="badge bg-warning text-dark rounded-pill px-3 py-2">
+                        <BsExclamationTriangleFill className="me-1" />
+                        {discount.badge_label || t('fakeSaleWarning')}
+                      </span>
                     ) : (
                       <span className="badge bg-success bg-opacity-10 text-success rounded-pill px-3 py-2">
                         <BsCheckCircleFill className="me-1" />
@@ -508,7 +545,9 @@ export default function DeepInspectWorkspace({
                       className={`rounded-3 small fw-medium mt-3 p-3 ${
                         discount.verdict === 'fake_discount'
                           ? 'bg-danger bg-opacity-10 text-danger'
-                          : 'bg-success bg-opacity-10 text-success'
+                          : discount.verdict === 'suspicious_discount'
+                            ? 'bg-warning bg-opacity-10 text-dark'
+                            : 'bg-success bg-opacity-10 text-success'
                       }`}
                     >
                       <strong>{discount.badge_label}:</strong>{' '}
@@ -623,26 +662,26 @@ export default function DeepInspectWorkspace({
 
                   {/* Quick Key Specs Strip */}
                   <div className="row g-2 mb-3">
-                    {keySpecs.chip && (
+                    {chipSpec && (
                       <div className="col-sm-6 col-md-4">
                         <div className="rounded-3 bg-light small p-2">
                           <BsCpu className="text-danger me-1" />
-                          <strong>SoC:</strong> {keySpecs.chip}
+                          <strong>SoC:</strong> {chipSpec}
                         </div>
                       </div>
                     )}
-                    {keySpecs.ram && (
+                    {(ramSpec || storageSpec) && (
                       <div className="col-sm-6 col-md-4">
                         <div className="rounded-3 bg-light small p-2">
-                          <strong>RAM/ROM:</strong> {keySpecs.ram} /{' '}
-                          {keySpecs.storage || ''}
+                          <strong>RAM/ROM:</strong>{' '}
+                          {[ramSpec, storageSpec].filter(Boolean).join(' / ')}
                         </div>
                       </div>
                     )}
-                    {keySpecs.battery && (
+                    {batterySpec && (
                       <div className="col-sm-6 col-md-4">
                         <div className="rounded-3 bg-light small p-2">
-                          <strong>Battery:</strong> {keySpecs.battery}
+                          <strong>Battery:</strong> {batterySpec}
                         </div>
                       </div>
                     )}
@@ -653,25 +692,17 @@ export default function DeepInspectWorkspace({
                       <span className="rate-score-badge-user">
                         <BsStarFill className="text-warning" />
                         <span>
-                          {Number(
-                            master.user_rating_weighted ||
-                              master.average_rating ||
-                              0
-                          ) > 0
-                            ? `${Number(
-                                master.user_rating_weighted ||
-                                  master.average_rating ||
-                                  0
-                              ).toFixed(1)}/5.0`
+                          {masterUserRating > 0
+                            ? `${masterUserRating.toFixed(1)}/5.0`
                             : t('userNoScore')}
                         </span>
                       </span>
                       <span className="rate-score-badge-expert">
                         <span>
                           Expert{' '}
-                          {master.expert_rating != null &&
-                          Number(master.expert_rating) > 0
-                            ? `${Number(master.expert_rating).toFixed(1)}/10`
+                          {masterExpertRating10 != null &&
+                          masterExpertRating10 > 0
+                            ? `${masterExpertRating10.toFixed(1)}/10`
                             : t('expertNoScore')}
                         </span>
                       </span>

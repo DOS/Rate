@@ -115,6 +115,13 @@ export function resolveCompareExpertRating5(
   return norm > 0 ? norm : null;
 }
 
+export function resolveCompareExpertRating10(
+  p: Pick<SharedMasterProduct, 'expert_rating'>
+): number | null {
+  const norm5 = resolveCompareExpertRating5(p);
+  return norm5 != null ? Number((norm5 * 2).toFixed(1)) : null;
+}
+
 export function resolveCompareDisplaySizeInch(
   p: Pick<
     SharedMasterProduct,
