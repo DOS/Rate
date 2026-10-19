@@ -312,13 +312,21 @@ async function runCoreArchitectureSuite() {
     'src/middleware.ts must not exist next to src/proxy.ts (Next.js 16)'
   );
 
-  // Guard RootLayout dynamic <html lang={locale}>
+  // <html lang={locale}> comes from the [locale] segment. getLocale() in the
+  // root layout reads request headers and made every page dynamic (#491).
   const rootLayoutPath = path.resolve(__dirname, '../../../app/layout.tsx');
   const rootLayoutSrc = fs.readFileSync(rootLayoutPath, 'utf8');
+  const localeLayoutSrc491 = fs.readFileSync(
+    path.resolve(__dirname, '../../../app/[locale]/layout.tsx'),
+    'utf8'
+  );
   assert.ok(
-    rootLayoutSrc.includes('getLocale') &&
-      /<html\b[^>]*\slang=\{locale\}/.test(rootLayoutSrc),
-    'RootLayout must dynamically resolve <html lang={locale}> via getLocale()'
+    !rootLayoutSrc.includes("from 'next-intl/server'") &&
+      !/<html\s/.test(rootLayoutSrc) &&
+      /<html\b[^>]*\slang=\{locale\}/.test(localeLayoutSrc491) &&
+      localeLayoutSrc491.includes('setRequestLocale(locale)') &&
+      localeLayoutSrc491.includes('export function generateStaticParams'),
+    '[locale]/layout.tsx must render <html lang={locale}> from its params; the root layout must not call getLocale() (#491)'
   );
 
   const navTsPath = path.resolve(__dirname, '../../../lib/navigation.ts');
@@ -2096,8 +2104,10 @@ async function runCoreArchitectureSuite() {
     '  ✅ [42/44] Unified Deal Radar exports in PriceHistorySection, JReviewsSection, ProductSpecsExportToolbar, Compare/Versus CSVs & OpenAPI 3.1.0 (#128) passed'
   );
   // 43. Bootstrap JS ships from the installed package, not a CDN script (#145)
+  // The document shell (<html>, fonts, Bootstrap JS) lives in the [locale]
+  // layout since #491.
   const rootLayoutSrc145 = fs.readFileSync(
-    path.join(repoRoot, 'apps/web/src/app/layout.tsx'),
+    path.join(repoRoot, 'apps/web/src/app/[locale]/layout.tsx'),
     'utf8'
   );
   assert.ok(

@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { getTranslations } from 'next-intl/server';
+import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { BsTrophy } from 'react-icons/bs';
 import { Link } from '@/lib/navigation';
 import {
@@ -22,6 +22,11 @@ import VersusInteractiveScoreboard from '@/components/compare/VersusInteractiveS
 import VersusMatchupSwitcher from '@/components/compare/VersusMatchupSwitcher';
 
 export const revalidate = 60;
+
+// Nothing is prerendered at build; each versus renders on its first request.
+export function generateStaticParams(): { versus: string }[] {
+  return [];
+}
 
 interface VersusPageProps {
   params: Promise<{ locale: string; versus: string }>;
@@ -81,6 +86,7 @@ export async function generateMetadata({
 
 export default async function VersusComparePage({ params }: VersusPageProps) {
   const { locale, versus } = await params;
+  setRequestLocale(locale);
   const lang = normalizeRateLocale(locale);
   const t = await getTranslations({ locale: lang, namespace: 'compare' });
   const parsed = parseVersusSlugs(versus);

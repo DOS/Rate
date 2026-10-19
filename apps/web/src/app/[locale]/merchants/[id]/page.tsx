@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { getTranslations } from 'next-intl/server';
+import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 import { Link } from '@/lib/navigation';
 import {
@@ -35,6 +35,15 @@ import {
   BsStarFill,
 } from 'react-icons/bs';
 import { isPendingReview } from '@/lib/review-display';
+
+// Cached after the first request, refreshed every 5 minutes or when the
+// worker revalidates its cache tags (DOS/Rate#491).
+export const revalidate = 300;
+
+// Nothing is prerendered at build; each id renders on its first request.
+export function generateStaticParams(): { id: string }[] {
+  return [];
+}
 
 type PageParams = Promise<{ locale: string; id: string }>;
 
@@ -77,6 +86,7 @@ export default async function MerchantProfilePage({
   params: PageParams;
 }) {
   const { locale, id } = await params;
+  setRequestLocale(locale);
   const t = await getTranslations({ locale, namespace: 'merchants' });
   const [merchant, dealRadar] = await Promise.all([
     getCachedMerchantProfileById(id),

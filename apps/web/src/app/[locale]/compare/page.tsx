@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { getTranslations } from 'next-intl/server';
+import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
 import {
   type CanonicalCategorySlug,
@@ -13,6 +13,11 @@ import NavbarDarkDynamic from '../components/navbar/NavbarDarkDynamic';
 import FooterTop from '../components/footer-top';
 import FooterDynamic from '../components/footer/FooterDynamic';
 import BackToTop from '../components/back-to-top';
+
+// Reads searchParams, so it renders per request. The [locale] layout's
+// generateStaticParams would otherwise make it static, and the searchParams
+// read would then fail with DYNAMIC_SERVER_USAGE (DOS/Rate#491).
+export const dynamic = 'force-dynamic';
 
 type PageProps = {
   params: Promise<{ locale: string }>;
@@ -88,6 +93,7 @@ export default async function ComparePhonesPage({
   searchParams,
 }: PageProps) {
   const { locale } = await params;
+  setRequestLocale(locale);
   const lang = normalizeRateLocale(locale);
   const t = await getTranslations({ locale: lang, namespace: 'compare' });
   const { slugs: slugsParam, category: categoryParam } = await searchParams;
