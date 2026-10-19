@@ -295,6 +295,7 @@ export function sanitizeSpecifications(raw: unknown): ProductSpecifications {
     : undefined;
 
   const candidateSpecs: ProductSpecifications = {
+    category_slug: toStringOrUndefined(root.category_slug),
     availability: availabilityParsed?.success ? availabilityParsed.data : undefined,
     design: designParsed?.success ? designParsed.data : undefined,
     display: displayParsed?.success ? displayParsed.data : undefined,
@@ -363,6 +364,12 @@ export function mergeProductSpecifications(
   const safeBase = sanitizeSpecifications(base) as Record<string, unknown>;
   const safeIncoming = sanitizeSpecifications(incoming) as Record<string, unknown>;
   const mergedRaw: Record<string, unknown> = {};
+
+  const mergedCategorySlug =
+    toStringOrUndefined(safeIncoming.category_slug) ?? toStringOrUndefined(safeBase.category_slug);
+  if (mergedCategorySlug) {
+    mergedRaw.category_slug = mergedCategorySlug;
+  }
 
   for (const key of SPEC_FIELD_GROUP_KEYS) {
     const mergedGroup = mergeSpecGroupRecord(asRecord(safeBase[key]), asRecord(safeIncoming[key]));
