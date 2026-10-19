@@ -74,3 +74,14 @@ test('an unknown leaderboard tab falls back to the defaults', async ({
   // ...and the unknown category falls back to smartphones.
   await expect(selectedTab(page)).toContainText('Điện thoại');
 });
+
+test('a criterion click keeps the chosen brand', async ({ page }) => {
+  await page.goto('/leaderboard');
+  const brand = page.getByLabel('Lọc theo thương hiệu');
+  await brand.selectOption('Apple');
+  await page
+    .locator('button', { hasText: 'Điểm Người Mua Thực Chất' })
+    .click();
+  await expect(page).toHaveURL(/criterion=user/);
+  await expect(brand).toHaveValue('Apple');
+});

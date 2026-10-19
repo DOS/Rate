@@ -154,12 +154,15 @@ function TabFromUrl({
   onCategory,
   onCriterion,
 }: {
-  readonly onCategory: (cat: string | null) => void;
-  readonly onCriterion: (crit: string | null) => void;
+  readonly onCategory: (cat: CanonicalCategorySlug) => void;
+  readonly onCriterion: (crit: LeaderboardCriterionKey) => void;
 }) {
   const searchParams = useSearchParams();
-  const cat = searchParams.get('cat');
-  const crit = searchParams.get('criterion');
+  // Normalized first, so the effects fire only when the effective tab
+  // changes: a criterion click that writes ?cat=smartphones onto a plain
+  // URL must not count as a category change (and reset the brand).
+  const cat = normalizeLeaderboardCategory(searchParams.get('cat'));
+  const crit = normalizeLeaderboardCriterion(searchParams.get('criterion'));
   useEffect(() => onCategory(cat), [cat, onCategory]);
   useEffect(() => onCriterion(crit), [crit, onCriterion]);
   return null;
@@ -664,12 +667,12 @@ export default function LeaderboardExplorer({
   // The page is cached with the default tab; TabFromUrl applies the URL's
   // ?cat= and ?criterion= on load and on every later navigation, including
   // a same-route link to plain /leaderboard (DOS/Rate#508).
-  const applyUrlCategory = useCallback((cat: string | null) => {
-    setActiveCategory(normalizeLeaderboardCategory(cat));
+  const applyUrlCategory = useCallback((cat: CanonicalCategorySlug) => {
+    setActiveCategory(cat);
     setSelectedBrand('all');
   }, []);
-  const applyUrlCriterion = useCallback((crit: string | null) => {
-    setActiveCriterion(normalizeLeaderboardCriterion(crit));
+  const applyUrlCriterion = useCallback((crit: LeaderboardCriterionKey) => {
+    setActiveCriterion(crit);
   }, []);
 
   const criterionOptions: Array<{
