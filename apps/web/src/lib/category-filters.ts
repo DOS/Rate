@@ -492,9 +492,25 @@ export function getCategoryFilterSchema(
   const base: CategoryFilterSchema =
     CATEGORY_FILTER_SCHEMAS[categorySlug] ?? DEFAULT_SMARTPHONE_SCHEMA;
 
-  const mergedBrands = Array.from(
-    new Set([...dynamicBrands.filter(Boolean), ...base.defaultBrands])
-  );
+  const canonicalByLower = new Map<string, string>();
+  for (const defBrand of base.defaultBrands) {
+    const trimmed = defBrand.trim();
+    if (trimmed) {
+      canonicalByLower.set(trimmed.toLowerCase(), trimmed);
+    }
+  }
+
+  const seenLower = new Set<string>();
+  const mergedBrands: string[] = [];
+  for (const candidate of [...dynamicBrands, ...base.defaultBrands]) {
+    if (typeof candidate !== 'string') continue;
+    const trimmed = candidate.trim();
+    if (!trimmed) continue;
+    const lower = trimmed.toLowerCase();
+    if (seenLower.has(lower)) continue;
+    seenLower.add(lower);
+    mergedBrands.push(canonicalByLower.get(lower) ?? trimmed);
+  }
 
   return {
     ...base,
@@ -530,8 +546,11 @@ export function localizeCategoryFilterSchema(
 }
 
 export function formatStorageLabel(gb: number): string {
-  if (gb >= 1024 && gb % 1024 === 0) {
-    return `${gb / 1024}TB`;
+  if (gb >= 1024 && Number.isFinite(gb)) {
+    const tb = Number((gb / 1024).toFixed(2));
+    if (Math.abs(tb * 1024 - gb) < 1e-6) {
+      return `${tb}TB`;
+    }
   }
   return `${gb}GB`;
 }

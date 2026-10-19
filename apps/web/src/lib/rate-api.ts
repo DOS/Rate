@@ -797,6 +797,34 @@ export async function getCategoryDirectoryFacets(
     };
   }
 
+  const aggregateBrandFacets = (
+    rawItems: { brand: string; count?: number }[]
+  ): { name: string; count: number }[] => {
+    const byLower = new Map<string, { name: string; count: number }>();
+    for (const r of rawItems) {
+      const trimmed = typeof r.brand === 'string' ? r.brand.trim() : '';
+      if (!trimmed) continue;
+      const delta = typeof r.count === 'number' ? Number(r.count) || 0 : 1;
+      if (delta <= 0) continue;
+      const lower = trimmed.toLowerCase();
+      const existing = byLower.get(lower);
+      if (existing) {
+        existing.count += delta;
+        if (
+          existing.name === existing.name.toLowerCase() &&
+          trimmed !== lower
+        ) {
+          existing.name = trimmed;
+        }
+      } else {
+        byLower.set(lower, { name: trimmed, count: delta });
+      }
+    }
+    return Array.from(byLower.values()).sort(
+      (a, b) => b.count - a.count || a.name.localeCompare(b.name)
+    );
+  };
+
   // Audit C1: Prefer server-side GROUP BY brand RPC `get_category_brand_facets`
   {
     const { data: facetRows, error: facetErr } = await supabase.rpc(
@@ -804,11 +832,8 @@ export async function getCategoryDirectoryFacets(
       { p_category_id: currentCategory.id }
     );
     if (!facetErr && Array.isArray(facetRows)) {
-      const brands = (facetRows as { brand: string; count: number }[]).map(
-        (r) => ({
-          name: r.brand,
-          count: Number(r.count) || 0,
-        })
+      const brands = aggregateBrandFacets(
+        facetRows as { brand: string; count: number }[]
       );
       const totalUnfiltered = brands.reduce((acc, b) => acc + b.count, 0);
       return {
@@ -837,16 +862,7 @@ export async function getCategoryDirectoryFacets(
 
   const rows =
     (prodRows as { brand: string; category_id: string | null }[]) || [];
-
-  const brandCounts = new Map<string, number>();
-  for (const r of rows) {
-    if (!r.brand) continue;
-    brandCounts.set(r.brand, (brandCounts.get(r.brand) || 0) + 1);
-  }
-
-  const brands = Array.from(brandCounts.entries())
-    .map(([name, count]) => ({ name, count }))
-    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+  const brands = aggregateBrandFacets(rows);
 
   return {
     currentCategory,
@@ -890,7 +906,7 @@ export async function getMasterProducts(
     params?.brands && params.brands.length > 0
       ? params.brands.map((b) => b.trim()).filter(Boolean)
       : params?.brand
-        ? [params.brand.trim()]
+        ? [params.brand.trim()].filter(Boolean)
         : null;
   const boundedLimit =
     params?.limit && params.limit > 0 ? Math.min(params.limit, 500) : 200;
@@ -917,7 +933,7 @@ export async function getMasterProducts(
       'search_master_products',
       {
         p_category_id: resolvedCategoryId ?? undefined,
-        p_brands: brandList ?? undefined,
+        p_brands: brandList && brandList.length > 0 ? brandList : undefined,
         p_search: params?.search?.trim() || undefined,
         p_min_price: params?.minPrice,
         p_max_price: params?.maxPrice,
@@ -946,11 +962,15 @@ export async function getMasterProducts(
     }
   }
 
-  // Search, rating and the JSONB spec filters run in JS below. Applied after
-  // .range() they would empty or under-fill a page, so with any of them the
-  // fallback reads every row the SQL filters allow, then pages in JS
-  // (DOS/Rate#482).
+  // Search, multi-brand case-insensitive matching, rating, and the JSONB spec
+  // filters run in JS below. Applied after .range() they would empty or
+  // under-fill a page, so with any of them the fallback reads every row the SQL
+  // filters allow, then pages in JS (DOS/Rate#482, #510).
+  const hasMultiBrands = Boolean(
+    params?.brands && params.brands.some((b) => b.trim().length > 0)
+  );
   const needsJsFilter = Boolean(
+    hasMultiBrands ||
     (params?.search && params.search.trim().length > 0) ||
     (typeof params?.minRating === 'number' && params.minRating > 0) ||
     (typeof params?.minRefreshRateHz === 'number' &&
@@ -959,7 +979,8 @@ export async function getMasterProducts(
       params.minFastChargingW > 0) ||
     params?.hasNfc === true ||
     (typeof params?.maxScreenSizeInch === 'number' &&
-      params.maxScreenSizeInch > 0)
+      params.maxScreenSizeInch > 0) ||
+    params?.sort === 'rating_desc'
   );
 
   const buildFallbackQuery = () => {
@@ -972,13 +993,8 @@ export async function getMasterProducts(
       query = query.eq('category_id', resolvedCategoryId);
     }
 
-    if (params?.brands && params.brands.length > 0) {
-      query = query.in(
-        'brand',
-        params.brands.map((b) => b.trim()).filter(Boolean)
-      );
-    } else if (params?.brand) {
-      query = query.ilike('brand', `%${params.brand}%`);
+    if (!hasMultiBrands && params?.brand && params.brand.trim()) {
+      query = query.ilike('brand', `%${params.brand.trim()}%`);
     }
 
     if (typeof params?.minPrice === 'number' && params.minPrice > 0) {
@@ -1054,9 +1070,9 @@ export async function getMasterProducts(
   }
 
   // Multi-brand case-insensitive filter
-  if (params?.brands && params.brands.length > 0) {
+  if (hasMultiBrands && params?.brands) {
     const allowedBrands = new Set(
-      params.brands.map((b) => b.trim().toLowerCase())
+      params.brands.map((b) => b.trim().toLowerCase()).filter(Boolean)
     );
     items = items.filter((item) =>
       allowedBrands.has((item.brand || '').trim().toLowerCase())
@@ -1085,18 +1101,17 @@ export async function getMasterProducts(
     });
   }
 
+  const getEffectiveRating = (item: MasterProduct): number =>
+    item.user_rating_weighted && Number(item.user_rating_weighted) > 0
+      ? Number(item.user_rating_weighted)
+      : item.expert_rating && Number(item.expert_rating) > 0
+        ? Number(item.expert_rating)
+        : Number(item.average_rating || 0);
+
   // Minimum effective rating filter (prefers JReviews weighted user rating -> expert rating -> average_rating)
   if (typeof params?.minRating === 'number' && params.minRating > 0) {
     const minRating = params.minRating;
-    items = items.filter((item) => {
-      const effectiveRating =
-        item.user_rating_weighted && Number(item.user_rating_weighted) > 0
-          ? Number(item.user_rating_weighted)
-          : item.expert_rating && Number(item.expert_rating) > 0
-            ? Number(item.expert_rating)
-            : Number(item.average_rating || 0);
-      return effectiveRating >= minRating;
-    });
+    items = items.filter((item) => getEffectiveRating(item) >= minRating);
   }
 
   // 10 Field Groups JSONB filters:
@@ -1109,8 +1124,9 @@ export async function getMasterProducts(
     items = items.filter((item) => {
       const hz = Number(item.specifications?.display?.refresh_rate_hz || 0);
       if (hz >= minHz) return true;
-      const screenText = (item.key_specs?.screen || '').toLowerCase();
-      return screenText.includes('120hz') || screenText.includes('144hz');
+      const screenText = item.key_specs?.screen || '';
+      const hzMatch = screenText.match(/(\d{2,4})\s*hz/i);
+      return hzMatch ? Number(hzMatch[1]) >= minHz : false;
     });
   }
 
@@ -1150,15 +1166,12 @@ export async function getMasterProducts(
   // Sort by effective rating if requested
   if (params?.sort === 'rating_desc') {
     items.sort((a, b) => {
-      const ratingA =
-        a.user_rating_weighted && Number(a.user_rating_weighted) > 0
-          ? Number(a.user_rating_weighted)
-          : Number(a.average_rating || 0);
-      const ratingB =
-        b.user_rating_weighted && Number(b.user_rating_weighted) > 0
-          ? Number(b.user_rating_weighted)
-          : Number(b.average_rating || 0);
-      return ratingB - ratingA;
+      const ratingDiff = getEffectiveRating(b) - getEffectiveRating(a);
+      if (ratingDiff !== 0) return ratingDiff;
+      const reviewsDiff =
+        Number(b.total_reviews || 0) - Number(a.total_reviews || 0);
+      if (reviewsDiff !== 0) return reviewsDiff;
+      return String(a.id || '').localeCompare(String(b.id || ''));
     });
   }
 
