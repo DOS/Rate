@@ -392,14 +392,209 @@ async function runSuite() {
   const validScraped = ScrapedProductSchema.safeParse(
     createDummyShopeeProduct('Điện thoại Apple iPhone 16 Pro Max 256GB')
   );
-  assert.equal(validScraped.success, true, 'Valid ShopeeProduct fixture must pass ScrapedProductSchema');
+  assert.equal(
+    validScraped.success,
+    true,
+    'Valid ShopeeProduct fixture must pass ScrapedProductSchema'
+  );
   const invalidScraped = ScrapedProductSchema.safeParse({
     ...createDummyShopeeProduct('Invalid Product'),
     priceMin: -100,
   });
   assert.equal(invalidScraped.success, false, 'Negative priceMin must fail ScrapedProductSchema');
   console.log(
-    '  ✅ [9/9] Data Contract Hardening: Numeric Bounds, Draft/Null Defaults & ScrapedProductSchema (Audit T15) (#171) passed'
+    '  ✅ [9/10] Data Contract Hardening: Numeric Bounds, Draft/Null Defaults & ScrapedProductSchema (Audit T15) (#171) passed'
+  );
+
+  // 10. Deep-Merge 10-Field-Group Specifications, Defensive Cache Cloning & Bounded Memory Cache (#496)
+  const { MAX_SPEC_CACHE_ENTRIES, cloneAiEnrichmentResponse, mergeProductSpecifications } =
+    await import('../ai-spec-enricher.js');
+  const { EntityMatcher } = await import('../entity-matcher.js');
+
+  assert.equal(MAX_SPEC_CACHE_ENTRIES, 250);
+
+  const deepMergedSpecs = mergeProductSpecifications(
+    {
+      hardware: {
+        ram_gb: 16,
+        storage_gb: 512,
+        os: 'Android 15',
+      },
+      display: {
+        size_inch: 6.8,
+        refresh_rate_hz: 120,
+      },
+      regulatory: {
+        certifications: 'CE, RoHS',
+      },
+    },
+    {
+      hardware: {
+        chipset: 'Qualcomm Snapdragon 8 Elite (3 nm)',
+        cpu: 'Octa-core',
+        os: '   ', // Empty string must not clobber existing 'Android 15'
+      },
+      camera: {
+        main_camera: '200 MP, f/1.7, OIS',
+      },
+    },
+    ['Titan Đen', '  Titan Trắng  ']
+  );
+
+  assert.equal(
+    deepMergedSpecs.hardware?.ram_gb,
+    16,
+    'mergeProductSpecifications must preserve base hardware.ram_gb when incoming omits it (#496)'
+  );
+  assert.equal(
+    deepMergedSpecs.hardware?.chipset,
+    'Qualcomm Snapdragon 8 Elite (3 nm)',
+    'mergeProductSpecifications must merge incoming hardware.chipset (#496)'
+  );
+  assert.equal(
+    deepMergedSpecs.hardware?.os,
+    'Android 15',
+    'mergeProductSpecifications must not overwrite base string with whitespace-only incoming string (#496)'
+  );
+  assert.equal(
+    deepMergedSpecs.display?.size_inch,
+    6.8,
+    'mergeProductSpecifications must preserve untouched base field groups (#496)'
+  );
+  assert.equal(
+    deepMergedSpecs.regulatory?.certifications,
+    'CE, RoHS',
+    'mergeProductSpecifications must preserve base regulatory group (#496)'
+  );
+  assert.deepEqual(
+    deepMergedSpecs.design?.colors,
+    ['Titan Đen', 'Titan Trắng'],
+    'mergeProductSpecifications must populate design.colors even when design group was absent (#496)'
+  );
+
+  const originalAiRes = {
+    ram_gb: 12,
+    storage_gb: 256,
+    screen_size_inch: 6.7,
+    battery_mah: 5000,
+    has_5g: true,
+    specifications: {
+      hardware: { chipset: 'Apple A18 Pro', ram_gb: 12 },
+      design: { colors: ['Black'] },
+    },
+    key_specs: { chip: 'Apple A18 Pro', ram: '12GB' },
+  };
+  const clonedAiRes = cloneAiEnrichmentResponse(originalAiRes);
+  clonedAiRes.specifications.hardware!.chipset = 'Mutated Chip';
+  clonedAiRes.specifications.design!.colors!.push('Gold');
+  clonedAiRes.key_specs.chip = 'Mutated';
+  assert.equal(
+    originalAiRes.specifications.hardware?.chipset,
+    'Apple A18 Pro',
+    'cloneAiEnrichmentResponse must isolate nested specification objects (#496)'
+  );
+  assert.deepEqual(
+    originalAiRes.specifications.design?.colors,
+    ['Black'],
+    'cloneAiEnrichmentResponse must isolate nested arrays (#496)'
+  );
+  assert.equal(
+    originalAiRes.key_specs.chip,
+    'Apple A18 Pro',
+    'cloneAiEnrichmentResponse must isolate key_specs (#496)'
+  );
+
+  // Verify enrichMasterProductById selects existing specifications and deep-merges them
+  let capturedSelectCols = '';
+  let capturedUpdatePayload: Record<string, unknown> | null = null;
+  const mockEnrichClient = {
+    from(table: string) {
+      assert.equal(table, 'master_products');
+      return {
+        select(cols: string) {
+          capturedSelectCols = cols;
+          return {
+            eq(_col: string, _val: string) {
+              return {
+                async maybeSingle() {
+                  return {
+                    data: {
+                      id: 'master-496',
+                      brand: 'ASUS',
+                      model: 'Zenbook S 14',
+                      storage_gb: 1024,
+                      ram_gb: 32,
+                      screen_size_inch: 14,
+                      battery_mah: null,
+                      has_5g: false,
+                      name: 'Laptop ASUS Zenbook S 14 OLED',
+                      description: 'Intel Core Ultra 7',
+                      colors: ['Zumaia Gray'],
+                      specifications: {
+                        display: { size_inch: 14, refresh_rate_hz: 120 },
+                      },
+                      key_specs: { screen: '14" 3K OLED 120Hz' },
+                    },
+                    error: null,
+                  };
+                },
+              };
+            },
+          };
+        },
+        update(payload: Record<string, unknown>) {
+          capturedUpdatePayload = payload;
+          return {
+            async eq(_col: string, _val: string) {
+              return { data: null, error: null };
+            },
+          };
+        },
+      };
+    },
+  } as unknown as import('../types.js').RateSupabaseClient;
+
+  const stubEnricher = new AiSpecEnricher({ apiKey: '' });
+  let capturedCategorySlug: string | undefined;
+  stubEnricher.fetchSpecsFromAi = async params => {
+    capturedCategorySlug = params.categorySlug;
+    return {
+      ram_gb: 32,
+      storage_gb: 1024,
+      screen_size_inch: 14,
+      battery_mah: 7200,
+      has_5g: false,
+      specifications: {
+        hardware: { chipset: 'Intel Core Ultra 7 258V' },
+      },
+      key_specs: { chip: 'Core Ultra 7 258V', storage: '1TB' },
+    };
+  };
+
+  const enrichMatcher = new EntityMatcher(mockEnrichClient, stubEnricher);
+  const enrichedOk = await enrichMatcher.enrichMasterProductById('master-496');
+  assert.equal(enrichedOk, true);
+  assert.ok(
+    capturedSelectCols.includes('specifications'),
+    'enrichMasterProductById must select existing specifications from master_products (#496)'
+  );
+  assert.equal(
+    capturedCategorySlug,
+    'laptops',
+    'enrichMasterProductById must pass inferred categorySlug to fetchSpecsFromAi (#496)'
+  );
+  const updatedSpecs = (
+    capturedUpdatePayload as { specifications?: Record<string, unknown> } | null
+  )?.specifications as {
+    display?: { size_inch?: number; refresh_rate_hz?: number };
+    hardware?: { chipset?: string };
+    design?: { colors?: string[] };
+  };
+  assert.equal(updatedSpecs?.display?.refresh_rate_hz, 120);
+  assert.equal(updatedSpecs?.hardware?.chipset, 'Intel Core Ultra 7 258V');
+  assert.deepEqual(updatedSpecs?.design?.colors, ['Zumaia Gray']);
+  console.log(
+    '  ✅ [10/10] Deep-Merge 10-Field-Group Specifications, Defensive Cache Cloning & Bounded Memory Cache (#496) passed'
   );
 
   console.log('🎉 All @repo/crawlers Open-Core Intelligence tests passed!');

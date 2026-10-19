@@ -311,6 +311,93 @@ export function sanitizeSpecifications(raw: unknown): ProductSpecifications {
   return parsed.success ? parsed.data : {};
 }
 
+const SPEC_FIELD_GROUP_KEYS = [
+  'availability',
+  'design',
+  'display',
+  'hardware',
+  'battery',
+  'camera',
+  'connectivity',
+  'cellular',
+  'multimedia',
+  'regulatory',
+] as const;
+
+function mergeSpecGroupRecord(
+  baseGroup: Record<string, unknown> | undefined,
+  incomingGroup: Record<string, unknown> | undefined
+): Record<string, unknown> | undefined {
+  if (!baseGroup && !incomingGroup) return undefined;
+  const merged: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(baseGroup ?? {})) {
+    if (v === undefined || v === null) continue;
+    if (typeof v === 'string' && v.trim().length === 0) continue;
+    if (Array.isArray(v)) {
+      if (v.length > 0) merged[k] = [...v];
+      continue;
+    }
+    merged[k] = v;
+  }
+  for (const [k, v] of Object.entries(incomingGroup ?? {})) {
+    if (v === undefined || v === null) continue;
+    if (typeof v === 'string' && v.trim().length === 0) continue;
+    if (Array.isArray(v)) {
+      if (v.length > 0) merged[k] = [...v];
+      continue;
+    }
+    merged[k] = v;
+  }
+  return Object.keys(merged).length > 0 ? merged : undefined;
+}
+
+/**
+ * Deep-merges two 10-Field-Group `ProductSpecifications` objects without allowing
+ * `undefined`, `null`, or empty incoming fields to overwrite defined base fields.
+ */
+export function mergeProductSpecifications(
+  base: unknown,
+  incoming: unknown,
+  colorsOverride?: readonly string[] | null
+): ProductSpecifications {
+  const safeBase = sanitizeSpecifications(base) as Record<string, unknown>;
+  const safeIncoming = sanitizeSpecifications(incoming) as Record<string, unknown>;
+  const mergedRaw: Record<string, unknown> = {};
+
+  for (const key of SPEC_FIELD_GROUP_KEYS) {
+    const mergedGroup = mergeSpecGroupRecord(asRecord(safeBase[key]), asRecord(safeIncoming[key]));
+    if (mergedGroup) {
+      mergedRaw[key] = mergedGroup;
+    }
+  }
+
+  const cleanColors = Array.isArray(colorsOverride)
+    ? colorsOverride.map((c: unknown) => String(c).trim()).filter(Boolean)
+    : [];
+  if (cleanColors.length > 0) {
+    mergedRaw.design = {
+      ...(asRecord(mergedRaw.design) ?? {}),
+      colors: cleanColors,
+    };
+  }
+
+  return sanitizeSpecifications(mergedRaw);
+}
+
+export const MAX_SPEC_CACHE_ENTRIES = 250;
+
+export function cloneAiEnrichmentResponse(res: AiEnrichmentResponse): AiEnrichmentResponse {
+  return {
+    ram_gb: res.ram_gb ?? null,
+    storage_gb: res.storage_gb ?? null,
+    screen_size_inch: res.screen_size_inch ?? null,
+    battery_mah: res.battery_mah ?? null,
+    has_5g: res.has_5g,
+    specifications: sanitizeSpecifications(res.specifications),
+    key_specs: { ...(res.key_specs ?? {}) },
+  };
+}
+
 /**
  * Provider-Agnostic AI Spec Enricher
  * Populates the 10 Field Groups (PhoneArena structure + GSMArena depth) for any mobile device.
@@ -398,6 +485,10 @@ export class AiSpecEnricher {
     };
   }
 
+  public getCacheSize(): number {
+    return this.memoryCache.size;
+  }
+
   /**
    * Builds the system & user prompts referencing PhoneArena 10-Field-Group structure and GSMArena technical accuracy
    */
@@ -407,10 +498,11 @@ export class AiSpecEnricher {
     storageGb: number | null,
     ramGb: number | null,
     rawTitle?: string,
-    rawDescription?: string
+    rawDescription?: string,
+    categorySlug: string = 'smartphones'
   ): { systemPrompt: string; userPrompt: string } {
-    const systemPrompt = `You are a mobile hardware specification database expert with authoritative knowledge of PhoneArena and GSMArena device specifications.
-Your job is to return accurate, comprehensive technical specifications for a smartphone model, structured into the 10 standard PhoneArena Field Groups (with GSMArena technical precision).
+    const systemPrompt = `You are a hardware specification database expert with authoritative knowledge of PhoneArena and GSMArena device specifications.
+Your job is to return accurate, comprehensive technical specifications for a consumer tech device, structured into the 10 standard PhoneArena Field Groups (with GSMArena technical precision).
 
 RULES:
 1. Return ONLY a valid JSON object matching the exact schema below. Do not wrap in markdown code fences.
@@ -518,8 +610,10 @@ REQUIRED JSON SCHEMA:
   }
 }`;
 
+    const safeCat = (categorySlug || 'smartphones').trim().toLowerCase() || 'smartphones';
     const userPrompt = [
-      `Target Smartphone:`,
+      `Target Device (${safeCat}):`,
+      `- Category: ${safeCat}`,
       `- Brand: ${brand}`,
       `- Model: ${model}`,
       storageGb !== null ? `- Variant Storage: ${storageGb}GB` : null,
@@ -535,6 +629,18 @@ REQUIRED JSON SCHEMA:
     return { systemPrompt, userPrompt };
   }
 
+  private setCacheEntry(cacheKey: string, value: AiEnrichmentResponse): void {
+    if (this.memoryCache.has(cacheKey)) {
+      this.memoryCache.delete(cacheKey);
+    }
+    while (this.memoryCache.size >= MAX_SPEC_CACHE_ENTRIES) {
+      const oldestKey = this.memoryCache.keys().next().value;
+      if (oldestKey === undefined) break;
+      this.memoryCache.delete(oldestKey);
+    }
+    this.memoryCache.set(cacheKey, cloneAiEnrichmentResponse(value));
+  }
+
   /**
    * Calls the configured LLM endpoint and parses the structured JSON specs
    */
@@ -545,6 +651,7 @@ REQUIRED JSON SCHEMA:
     ramGb: number | null;
     rawTitle?: string;
     rawDescription?: string;
+    categorySlug?: string;
   }): Promise<AiEnrichmentResponse | null> {
     if (!this.isConfigured()) {
       logger.info(
@@ -559,13 +666,16 @@ REQUIRED JSON SCHEMA:
       return null;
     }
 
-    const cacheKey = `${params.brand.toLowerCase()}:${params.model.toLowerCase()}:${params.storageGb || 'default'}:${params.ramGb || 'default'}`;
+    const catKey = (params.categorySlug || 'smartphones').trim().toLowerCase() || 'smartphones';
+    const cacheKey = `${catKey}:${params.brand.toLowerCase()}:${params.model.toLowerCase()}:${params.storageGb || 'default'}:${params.ramGb || 'default'}`;
     const cached = this.memoryCache.get(cacheKey);
     if (cached) {
+      this.memoryCache.delete(cacheKey);
+      this.memoryCache.set(cacheKey, cached);
       logger.info('spec_enrich.cache_hit', `Cache hit for "${cacheKey}"`, {
         cacheKey,
       });
-      return cached;
+      return cloneAiEnrichmentResponse(cached);
     }
 
     const { systemPrompt, userPrompt } = this.buildPrompts(
@@ -574,7 +684,8 @@ REQUIRED JSON SCHEMA:
       params.storageGb,
       params.ramGb,
       params.rawTitle,
-      params.rawDescription
+      params.rawDescription,
+      catKey
     );
 
     try {
@@ -725,7 +836,7 @@ REQUIRED JSON SCHEMA:
         key_specs: keySpecs,
       };
 
-      this.memoryCache.set(cacheKey, result);
+      this.setCacheEntry(cacheKey, result);
       logger.info(
         'spec_enrich.completed',
         `Enriched "${params.brand} ${params.model}": Chip="${keySpecs.chip}", Screen="${keySpecs.screen}", Battery="${keySpecs.battery}"`,
@@ -737,7 +848,7 @@ REQUIRED JSON SCHEMA:
           battery: keySpecs.battery ?? null,
         }
       );
-      return result;
+      return cloneAiEnrichmentResponse(result);
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
       logger.warn(
@@ -771,24 +882,26 @@ REQUIRED JSON SCHEMA:
       ramGb: candidate.ram_gb,
       rawTitle,
       rawDescription: candidate.description,
+      categorySlug: candidate.category_slug,
     });
 
     if (!aiResult) {
       return candidate;
     }
 
-    // Clone specifications so merging crawled candidate colors never mutates the cached aiResult
-    const mergedSpecifications: ProductSpecifications = {
-      ...aiResult.specifications,
-      ...(aiResult.specifications.design
-        ? {
-            design: {
-              ...aiResult.specifications.design,
-              ...(candidate.colors.length > 0 ? { colors: [...candidate.colors] } : {}),
-            },
-          }
-        : {}),
-    };
+    // Deep-merge all 10 Field Groups so candidate.specifications fields are preserved
+    // when AI omits a field or group, and candidate.colors override design.colors.
+    const mergedSpecifications = mergeProductSpecifications(
+      candidate.specifications,
+      aiResult.specifications,
+      candidate.colors
+    );
+
+    const incomingKeySpecs = Object.fromEntries(
+      Object.entries(aiResult.key_specs || {}).filter(
+        ([, v]) => v !== undefined && v !== null && String(v).trim() !== ''
+      )
+    );
 
     return {
       ...candidate,
@@ -799,7 +912,7 @@ REQUIRED JSON SCHEMA:
       specifications: mergedSpecifications,
       key_specs: {
         ...candidate.key_specs,
-        ...aiResult.key_specs,
+        ...incomingKeySpecs,
       },
       spec_source: 'ai_unverified',
       spec_enrichment_meta: {
