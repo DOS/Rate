@@ -2479,6 +2479,21 @@ export function resolveProductImageUrl(
   return fallbackUrl || null;
 }
 
+export type CanonicalCategorySlug =
+  'smartphones' | 'tablets' | 'laptops' | 'smartwatches' | 'earbuds';
+
+export function isCanonicalCategorySlug(
+  value: unknown
+): value is CanonicalCategorySlug {
+  return (
+    value === 'smartphones' ||
+    value === 'tablets' ||
+    value === 'laptops' ||
+    value === 'smartwatches' ||
+    value === 'earbuds'
+  );
+}
+
 export function normalizeMasterProductRow(
   row: MasterProduct,
   categorySlugHint?: CanonicalCategorySlug | null
@@ -2493,8 +2508,18 @@ export function normalizeMasterProductRow(
       images: [localImg],
     };
   }
+  const specCatSlug =
+    normalized.specifications &&
+    typeof normalized.specifications === 'object' &&
+    !Array.isArray(normalized.specifications)
+      ? (normalized.specifications as { category_slug?: unknown }).category_slug
+      : undefined;
+  const effectiveCatHint: CanonicalCategorySlug | null =
+    categorySlugHint ??
+    (isCanonicalCategorySlug(specCatSlug) ? specCatSlug : null);
+
   if (
-    categorySlugHint &&
+    effectiveCatHint &&
     typeof normalized.metadata?.category_slug !== 'string'
   ) {
     normalized = {
@@ -2503,15 +2528,12 @@ export function normalizeMasterProductRow(
         ...(normalized.metadata && typeof normalized.metadata === 'object'
           ? normalized.metadata
           : {}),
-        category_slug: categorySlugHint,
+        category_slug: effectiveCatHint,
       },
     };
   }
   return normalized;
 }
-
-export type CanonicalCategorySlug =
-  'smartphones' | 'tablets' | 'laptops' | 'smartwatches' | 'earbuds';
 
 export function getMasterProductCategorySlug(
   product: Pick<MasterProduct, 'slug'> & {
@@ -2519,6 +2541,8 @@ export function getMasterProductCategorySlug(
     model?: string | null;
     category_id?: string | null;
     metadata?: Record<string, unknown> | null;
+    specifications?:
+      { category_slug?: string | null } | Record<string, unknown> | null;
   },
   categorySlugById?: ReadonlyMap<string, string>
 ): CanonicalCategorySlug {
@@ -2530,15 +2554,17 @@ export function getMasterProductCategorySlug(
     typeof product.metadata?.category_slug === 'string'
       ? product.metadata.category_slug
       : undefined;
-  const resolvedCat = catSlugFromMap || catSlugFromMeta;
+  const catSlugFromSpecs =
+    product.specifications &&
+    typeof product.specifications === 'object' &&
+    !Array.isArray(product.specifications) &&
+    typeof (product.specifications as { category_slug?: unknown })
+      .category_slug === 'string'
+      ? (product.specifications as { category_slug: string }).category_slug
+      : undefined;
+  const resolvedCat = catSlugFromMap || catSlugFromMeta || catSlugFromSpecs;
 
-  if (
-    resolvedCat === 'tablets' ||
-    resolvedCat === 'laptops' ||
-    resolvedCat === 'smartwatches' ||
-    resolvedCat === 'earbuds' ||
-    resolvedCat === 'smartphones'
-  ) {
+  if (isCanonicalCategorySlug(resolvedCat)) {
     return resolvedCat;
   }
 
@@ -2585,6 +2611,8 @@ export function getMasterProductHref(
     model?: string | null;
     category_id?: string | null;
     metadata?: Record<string, unknown> | null;
+    specifications?:
+      { category_slug?: string | null } | Record<string, unknown> | null;
   },
   categorySlugById?: ReadonlyMap<string, string>
 ): string {
@@ -2599,6 +2627,7 @@ export interface SitemapRows {
     model: string | null;
     category_id: string | null;
     metadata: Record<string, unknown> | null;
+    specifications?: Record<string, unknown> | null;
     updated_at: string | null;
   }>;
   merchants: Array<{ id: string; updated_at: string | null }>;
@@ -2616,7 +2645,9 @@ export async function getSitemapRows(): Promise<SitemapRows> {
     fetchAllRows('sitemap products', (from, to) =>
       supabase
         .from('master_products')
-        .select('slug, name, model, category_id, metadata, updated_at')
+        .select(
+          'slug, name, model, category_id, metadata, specifications, updated_at'
+        )
         .eq('status', 'published')
         .order('id')
         .range(from, to)
@@ -2646,6 +2677,12 @@ export async function getSitemapRows(): Promise<SitemapRows> {
       typeof row.metadata === 'object' &&
       !Array.isArray(row.metadata)
         ? (row.metadata as Record<string, unknown>)
+        : null,
+    specifications:
+      row.specifications &&
+      typeof row.specifications === 'object' &&
+      !Array.isArray(row.specifications)
+        ? (row.specifications as Record<string, unknown>)
         : null,
   }));
   return { products, merchants, categorySlugById };
@@ -3215,7 +3252,7 @@ export async function getMerchantProfileById(
       supabase
         .from('master_products')
         .select(
-          'id, slug, name, brand, category_id, min_price, max_price, merchant_count'
+          'id, slug, name, model, brand, category_id, metadata, specifications, min_price, max_price, merchant_count'
         )
         .in('id', chunk)
     ),
@@ -3267,8 +3304,11 @@ export async function getMerchantProfileById(
     id: string;
     slug: string;
     name: string;
+    model?: string | null;
     brand: string;
     category_id: string | null;
+    metadata?: Record<string, unknown> | null;
+    specifications?: Record<string, unknown> | null;
     min_price: number | string;
     max_price: number | string;
     merchant_count: number | null;
@@ -3278,8 +3318,7 @@ export async function getMerchantProfileById(
       slug: m.slug,
       name: m.name,
       brand: m.brand,
-      category_slug:
-        (m.category_id && catSlugById.get(m.category_id)) || 'smartphones',
+      category_slug: getMasterProductCategorySlug(m, catSlugById),
       market_min_price: Number(m.min_price || 0),
       market_max_price: Number(m.max_price || 0),
       merchant_count: Number(m.merchant_count || 0),
@@ -3366,7 +3405,7 @@ export async function getMerchantProfileById(
           });
     const prod = prodById.get(r.product_id);
 
-    return {
+    const item: MerchantProfileDetail['recent_reviews'][number] = {
       id: r.id,
       product_id: r.product_id,
       product_title: prod?.title || 'Sản phẩm niêm yết',
@@ -3390,6 +3429,8 @@ export async function getMerchantProfileById(
       reason: vf?.reason || null,
       signals: vf?.signals || null,
     };
+    item.trust_assessment = evaluateReviewTrustAssessment(item);
+    return item;
   });
 
   const persistedBreakdown = extractPersistedBreakdown(merchantRow);
@@ -3500,7 +3541,7 @@ export async function getRatePlatformStats(): Promise<RatePlatformStats> {
     fetchAllRows('master_products', (from, to) =>
       supabase
         .from('master_products')
-        .select('id, slug, name, category_id')
+        .select('id, slug, name, model, category_id, metadata, specifications')
         .eq('status', 'published')
         .order('id')
         .range(from, to)
@@ -3560,7 +3601,10 @@ export async function getRatePlatformStats(): Promise<RatePlatformStats> {
       id: string;
       slug: string;
       name: string;
+      model?: string | null;
       category_id: string | null;
+      metadata?: Record<string, unknown> | null;
+      specifications?: Record<string, unknown> | null;
     }>) || [];
 
   const rawReviews =
@@ -3592,26 +3636,27 @@ export async function getRatePlatformStats(): Promise<RatePlatformStats> {
   }
 
   const catSlugById = new Map<string, string>();
+  const catIdBySlug = new Map<string, string>();
   for (const c of categories) {
     catSlugById.set(c.id, c.slug);
+    catIdBySlug.set(c.slug, c.id);
   }
 
   const countByCatId = new Map<string, number>();
   const masterSlugById = new Map<string, string>();
   const masterRouteById = new Map<string, string>();
   for (const m of masterRows) {
+    const resolvedCatSlug = getMasterProductCategorySlug(m, catSlugById);
     masterSlugById.set(m.id, m.slug);
-    masterRouteById.set(
-      m.id,
-      getMasterProductHref(
-        { slug: m.slug, name: m.name, category_id: m.category_id },
-        catSlugById
-      )
-    );
-    if (m.category_id) {
+    masterRouteById.set(m.id, `/${resolvedCatSlug}/${m.slug}`);
+    const resolvedCatId =
+      (m.category_id && catSlugById.has(m.category_id)
+        ? m.category_id
+        : null) || catIdBySlug.get(resolvedCatSlug);
+    if (resolvedCatId) {
       countByCatId.set(
-        m.category_id,
-        (countByCatId.get(m.category_id) || 0) + 1
+        resolvedCatId,
+        (countByCatId.get(resolvedCatId) || 0) + 1
       );
     }
   }
@@ -3649,8 +3694,22 @@ export async function getRatePlatformStats(): Promise<RatePlatformStats> {
         vf?.include_in_rating ??
         (flagCategory === 'authentic' && verdict !== 'fake')
       );
+      const upvotes = Number(r.upvotes ?? 0);
+      const downvotes = Number(r.downvotes ?? 0);
+      const reports = Number(r.report_count ?? 0);
+      const computedWeight =
+        r.helpfulness_weight != null
+          ? Number(r.helpfulness_weight)
+          : computeJReviewsWeight({
+              upvotes,
+              downvotes,
+              reports,
+              flagCategory,
+              verdict,
+              includeInRating,
+            });
       const pInfo = prodInfoById.get(r.product_id);
-      return {
+      const item: RatePlatformStats['recentReviewsSample'][number] = {
         id: r.id,
         author_name: r.author_name || 'Khách hàng',
         rating_star: Number(r.rating_star || 5),
@@ -3658,12 +3717,10 @@ export async function getRatePlatformStats(): Promise<RatePlatformStats> {
         variation: r.variation || null,
         created_at: r.created_at,
         reviewer_type: r.reviewer_type === 'expert' ? 'expert' : 'user',
-        upvotes: Number(r.upvotes ?? 0),
-        downvotes: Number(r.downvotes ?? 0),
-        report_count: Number(r.report_count ?? 0),
-        helpfulness_weight: includeInRating
-          ? Number(r.helpfulness_weight ?? 1)
-          : 0,
+        upvotes,
+        downvotes,
+        report_count: reports,
+        helpfulness_weight: includeInRating ? computedWeight : 0,
         include_in_rating: includeInRating,
         criteria_ratings: r.criteria_ratings || {},
         verdict,
@@ -3676,6 +3733,8 @@ export async function getRatePlatformStats(): Promise<RatePlatformStats> {
         masterSlug: pInfo?.masterSlug || null,
         masterRouteHref: pInfo?.masterRouteHref || null,
       };
+      item.trust_assessment = evaluateReviewTrustAssessment(item);
+      return item;
     });
 
   const totalRev = reviewsCountRes.count ?? mappedReviews.length;
