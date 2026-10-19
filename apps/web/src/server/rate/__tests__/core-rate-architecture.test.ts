@@ -3916,6 +3916,26 @@ async function runCoreArchitectureSuite() {
       (err: unknown) => err instanceof RateDataUnavailableError
     );
 
+    // 64.3b A paged read against a server that ignores .range() stops with
+    // RateDataUnavailableError instead of looping until memory runs out (#485).
+    let ignoredRangeCalls485 = 0;
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.includes('/rest/v1/products')) {
+        ignoredRangeCalls485 += 1;
+        return jsonResp344(200, [{ id: 'same-row' }]);
+      }
+      return jsonResp344(200, []);
+    }) as typeof fetch;
+    await assert.rejects(
+      () => getMasterProductReviews('master-ignores-range'),
+      (err: unknown) =>
+        err instanceof RateDataUnavailableError &&
+        /exceeded 500 pages/.test(String((err as Error).message))
+    );
+    // 500 pages are allowed; the 501st non-empty one ends the read.
+    assert.equal(ignoredRangeCalls485, 501);
+
     // 64.4 Chunking (>150 productIds) and RateDataUnavailableError in getMasterProductReviews, getMasterProductReviewSummary, and getMasterProductPriceHistory
     const manyListingRows344 = Array.from({ length: 160 }, (_, idx) => ({
       id: `prod-${idx + 1}`,
