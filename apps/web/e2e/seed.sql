@@ -126,3 +126,30 @@ WHERE platform_item_id IN (SELECT 'bulk_' || g FROM generate_series(1, 120) AS g
 INSERT INTO rate.review_flags (review_id, verdict, fake_probability, detector, detector_version, input_hash, include_in_rating, flag_category)
 SELECT r.id, 'fake', 0.95, 'e2e', '1', 'e2e-' || r.id, false, 'seeding_fake'
 FROM rate.reviews r WHERE r.author_name = 'Seeder';
+
+-- 1100 recent observations at 1,000,000 on one many-offers listing, plus an
+-- all-time low (500,000) and high (3,000,000) recorded before them: the
+-- product's lowest/highest ever must come from the whole history, not the
+-- newest 1000 rows (DOS/Rate#464).
+INSERT INTO rate.price_history (product_id, price, recorded_at)
+SELECT id, 1000000, now() - (g || ' minutes')::interval
+FROM rate.products, generate_series(1, 1100) AS g
+WHERE platform_item_id = 'many_1';
+INSERT INTO rate.price_history (product_id, price, recorded_at)
+SELECT id, v.price, now() - v.age
+FROM rate.products,
+  (VALUES (500000, interval '90 days'), (3000000, interval '80 days')) AS v(price, age)
+WHERE platform_item_id = 'many_1';
+
+-- An earbuds category with 201 models: one more than a catalogue page holds,
+-- so /earbuds needs a second page (DOS/Rate#466).
+INSERT INTO rate.categories (id, name, slug, display_order)
+VALUES ('c0000000-0000-4000-8000-000000000005', 'Tai nghe', 'earbuds', 5);
+-- Distinct created_at: search_master_products ends its ORDER BY at created_at
+-- with no unique key (DOS/Rate#469), so tied rows could shift between pages.
+INSERT INTO rate.master_products
+  (category_id, brand, model, model_key, name, slug, min_price, max_price, merchant_count, status, metadata, created_at)
+SELECT 'c0000000-0000-4000-8000-000000000005', 'E2E Audio', 'Bud ' || g, 'e2e_bud_' || g,
+  'E2E Bud ' || lpad(g::text, 3, '0'), 'e2e-bud-' || lpad(g::text, 3, '0'), 500000, 500000, 0, 'published',
+  '{"category_slug": "earbuds"}', now() - (g || ' seconds')::interval
+FROM generate_series(1, 201) AS g;

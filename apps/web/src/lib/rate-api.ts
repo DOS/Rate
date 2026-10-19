@@ -741,6 +741,8 @@ export interface MasterProductFilterParams {
     | 'merchants_desc'
     | 'newest';
   limit?: number;
+  /** Rows to skip, for paged catalogue pages. */
+  offset?: number;
 }
 
 export interface CategoryDirectoryFacets {
@@ -881,6 +883,10 @@ export async function getMasterProducts(
         : null;
   const boundedLimit =
     params?.limit && params.limit > 0 ? Math.min(params.limit, 500) : 200;
+  const boundedOffset =
+    params?.offset && params.offset > 0
+      ? Math.min(Math.floor(params.offset), 100_000)
+      : 0;
 
   const categoryHint: CanonicalCategorySlug | null =
     params?.categorySlug &&
@@ -919,7 +925,7 @@ export async function getMasterProducts(
         p_max_screen_size_inch: params?.maxScreenSizeInch,
         p_sort: params?.sort || 'default',
         p_limit: boundedLimit,
-        p_offset: 0,
+        p_offset: boundedOffset,
       }
     );
     if (!rpcErr && Array.isArray(rpcRows)) {
@@ -991,8 +997,10 @@ export async function getMasterProducts(
       query = query.order('created_at', { ascending: false });
       break;
   }
+  // Tiebreak so offset pages never overlap or skip rows.
+  query = query.order('id', { ascending: true });
 
-  query = query.limit(boundedLimit);
+  query = query.range(boundedOffset, boundedOffset + boundedLimit - 1);
 
   const { data, error } = await query;
   if (error) {
@@ -1887,8 +1895,11 @@ async function fetchAllRowsInChunks<T>(
  */
 export async function getMasterProductPriceHistory(
   masterId: string,
-  existingOffers?: MerchantOffer[]
+  existingOffers?: MerchantOffer[],
+  /** false skips the all-time low/high reads, for callers using only byOffer. */
+  options: { allTime?: boolean } = {}
 ): Promise<MasterProductPriceHistorySummary> {
+  const allTime = options.allTime ?? true;
   const offers = existingOffers ?? (await getMasterProductOffers(masterId));
   if (offers.length === 0) {
     return {
@@ -1912,15 +1923,38 @@ export async function getMasterProductPriceHistory(
   const productIds = offers.map((o) => o.id);
   const supabase = getRateClient();
   let rawRows: unknown[];
-  try {
-    rawRows = await readInChunks(productIds, 'price history', (chunk) =>
+  let extremeRows: unknown[];
+  // The chart and per-offer analysis use the newest 1000 observations; the
+  // all-time low and high must look at the whole history, or a low recorded
+  // before that window is lost (DOS/Rate#464). One cheapest and one dearest
+  // valid row per chunk.
+  const extremes = (ascending: boolean) =>
+    readInChunks(productIds, 'price history extremes', (chunk) =>
       supabase
         .from('price_history')
         .select('id, product_id, price, price_original, recorded_at, source')
         .in('product_id', chunk)
-        .order('recorded_at', { ascending: false })
-        .limit(1000)
+        .gt('price', 0)
+        .lte('price', MAX_VALID_VND_PRICE)
+        .order('price', { ascending })
+        .order('recorded_at', { ascending: true })
+        .limit(1)
     );
+  try {
+    const [windowRows, lowRows, highRows] = await Promise.all([
+      readInChunks(productIds, 'price history', (chunk) =>
+        supabase
+          .from('price_history')
+          .select('id, product_id, price, price_original, recorded_at, source')
+          .in('product_id', chunk)
+          .order('recorded_at', { ascending: false })
+          .limit(1000)
+      ),
+      allTime ? extremes(true) : Promise.resolve([]),
+      allTime ? extremes(false) : Promise.resolve([]),
+    ]);
+    rawRows = windowRows;
+    extremeRows = [...lowRows, ...highRows];
   } catch (err) {
     log.error('price_history fetch failed', {
       masterId,
@@ -2123,11 +2157,39 @@ export async function getMasterProductPriceHistory(
     };
   }
 
-  let lowestPoint: PriceHistoryPoint | null = null;
+  let lowestPoint: Pick<
+    PriceHistoryPoint,
+    'price' | 'recorded_at' | 'merchant_name'
+  > | null = null;
   let highestEverPrice: number | null = null;
 
-  for (const pt of points) {
-    if (!lowestPoint || pt.price < lowestPoint.price) {
+  const allTimeCandidates = [
+    ...points,
+    ...(extremeRows as unknown as RawPriceHistoryRow[]).flatMap((row) => {
+      const off = offerMap.get(row.product_id);
+      const price = Number(row.price || 0);
+      return off &&
+        Number.isFinite(price) &&
+        price > 0 &&
+        price <= MAX_VALID_VND_PRICE
+        ? [
+            {
+              price,
+              recorded_at: row.recorded_at,
+              merchant_name: off.merchant.name,
+            },
+          ]
+        : [];
+    }),
+  ];
+  for (const pt of allTimeCandidates) {
+    // On equal prices keep the first time it was seen.
+    if (
+      !lowestPoint ||
+      pt.price < lowestPoint.price ||
+      (pt.price === lowestPoint.price &&
+        Date.parse(pt.recorded_at) < Date.parse(lowestPoint.recorded_at))
+    ) {
       lowestPoint = pt;
     }
     if (highestEverPrice === null || pt.price > highestEverPrice) {
@@ -2474,6 +2536,65 @@ export function getMasterProductHref(
 ): string {
   const catSlug = getMasterProductCategorySlug(product, categorySlugById);
   return `/${catSlug}/${product.slug}`;
+}
+
+export interface SitemapRows {
+  products: Array<{
+    slug: string;
+    name: string | null;
+    model: string | null;
+    category_id: string | null;
+    metadata: Record<string, unknown> | null;
+    updated_at: string | null;
+  }>;
+  merchants: Array<{ id: string; updated_at: string | null }>;
+  categorySlugById: Map<string, string>;
+}
+
+/**
+ * Every published product and every merchant, with only the columns their
+ * sitemap URLs need. Paged: the sitemap must list the whole catalogue, not the
+ * first page of a ranked list (DOS/Rate#460).
+ */
+export async function getSitemapRows(): Promise<SitemapRows> {
+  const supabase = getRateClient();
+  const [productRows, merchants, catsRes] = await Promise.all([
+    fetchAllRows('sitemap products', (from, to) =>
+      supabase
+        .from('master_products')
+        .select('slug, name, model, category_id, metadata, updated_at')
+        .eq('status', 'published')
+        .order('id')
+        .range(from, to)
+    ),
+    fetchAllRows<SitemapRows['merchants'][number]>(
+      'sitemap merchants',
+      (from, to) =>
+        supabase
+          .from('merchants')
+          .select('id, updated_at')
+          .order('id')
+          .range(from, to)
+    ),
+    supabase.from('categories').select('id, slug'),
+  ]);
+  if (catsRes.error) {
+    throw new RateDataUnavailableError('sitemap categories', catsRes.error);
+  }
+  const categorySlugById = new Map<string, string>();
+  for (const c of (catsRes.data || []) as Array<{ id: string; slug: string }>) {
+    categorySlugById.set(c.id, c.slug);
+  }
+  const products = productRows.map((row) => ({
+    ...row,
+    metadata:
+      row.metadata &&
+      typeof row.metadata === 'object' &&
+      !Array.isArray(row.metadata)
+        ? (row.metadata as Record<string, unknown>)
+        : null,
+  }));
+  return { products, merchants, categorySlugById };
 }
 
 function computeDynamicReviewRisk(allReviews: ReviewItem[]): {
@@ -2916,6 +3037,35 @@ export function sanitizePostgrestFilterToken(raw: string): string {
 // in.() with all of them overflows the gateway's request-line limit (#290).
 const IN_FILTER_CHUNK_SIZE = 150;
 
+// Parallel price-history reads per merchant profile. Each one is a paged
+// offers read plus chunked price_history reads, so a large store listing
+// hundreds of models must not open them all at once (DOS/Rate#462).
+const PRICE_HISTORY_CONCURRENCY = 6;
+
+/** Runs `task` over `items` with at most `limit` in flight; rejects on the first failure. */
+export async function forEachWithConcurrency<T>(
+  items: readonly T[],
+  limit: number,
+  task: (item: T) => Promise<void>
+): Promise<void> {
+  let next = 0;
+  let failed = false;
+  const worker = async () => {
+    while (!failed && next < items.length) {
+      const item = items[next++] as T;
+      try {
+        await task(item);
+      } catch (err) {
+        failed = true;
+        throw err;
+      }
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(limit, items.length) }, worker)
+  );
+}
+
 /** Runs `read` per chunk of `ids` and concatenates the rows; any error throws. */
 async function readInChunks(
   ids: readonly string[],
@@ -3084,14 +3234,19 @@ export async function getMerchantProfileById(
 
   // Compute price history / Fake Discount analysis per master product
   const discountByOfferId = new Map<string, OfferDiscountAnalysis>();
-  await Promise.all(
-    // A failure throws: the profile must not be cached without its analysis.
-    clusterIds.map(async (cId) => {
-      const ph = await getMasterProductPriceHistory(cId);
+  // A failure throws: the profile must not be cached without its analysis.
+  await forEachWithConcurrency(
+    clusterIds,
+    PRICE_HISTORY_CONCURRENCY,
+    async (cId) => {
+      // Only byOffer is used here: skip the all-time low/high reads.
+      const ph = await getMasterProductPriceHistory(cId, undefined, {
+        allTime: false,
+      });
       for (const [offerId, analysis] of Object.entries(ph.byOffer)) {
         discountByOfferId.set(offerId, analysis);
       }
-    })
+    }
   );
 
   const listings: MerchantProductListing[] = rawProducts.map((p) => {
