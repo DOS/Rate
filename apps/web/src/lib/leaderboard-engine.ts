@@ -149,7 +149,7 @@ export function computeJReviewsCriteriaScores(
   const parseRaw = (keys: string[], fallbackDelta: number): number => {
     for (const k of keys) {
       const v = Number(rawCriteria[k]);
-      if (Number.isFinite(v) && v > 0) {
+      if (Number.isFinite(v) && v > 0 && v <= 10) {
         return clampScore5(v > 5 ? v / 2 : v);
       }
     }
@@ -163,7 +163,13 @@ export function computeJReviewsCriteriaScores(
     item.battery_mah || specs.battery?.capacity_mah || 0
   );
   const fastChargingW = Number(specs.battery?.fast_charging_w || 0);
-  const minPrice = Number(item.min_price || 0);
+  const rawMinPrice = Number(item.min_price || 0);
+  const minPrice =
+    Number.isFinite(rawMinPrice) &&
+    rawMinPrice > 0 &&
+    rawMinPrice <= 1_000_000_000
+      ? rawMinPrice
+      : 0;
   const displayType = String(specs.display?.type || '').toLowerCase();
   const displayProtection = String(
     specs.display?.protection || ''
@@ -317,12 +323,14 @@ export function scoreMasterProductForLeaderboard(
     }) || '/img/devices/apple-iphone-16-pro-max-256gb.jpg';
 
   const rawUser = Number(item.user_rating_weighted || item.average_rating || 0);
-  const normalizedUser5 = rawUser > 5 ? rawUser / 2 : rawUser;
-  const userScore5 = rawUser > 0 ? clampScore5(normalizedUser5) : 0;
+  const userScore5 =
+    Number.isFinite(rawUser) && rawUser > 0 && rawUser <= 10
+      ? clampScore5(rawUser > 5 ? rawUser / 2 : rawUser)
+      : 0;
 
   const rawExpert = Number(item.expert_rating || 0);
   const expertScore10: number | null =
-    rawExpert > 0
+    Number.isFinite(rawExpert) && rawExpert > 0 && rawExpert <= 10
       ? Number(
           Math.min(10, rawExpert > 5 ? rawExpert : rawExpert * 2).toFixed(1)
         )
@@ -374,13 +382,38 @@ export function scoreMasterProductForLeaderboard(
   else if (criterion === 'expert') activeScore5 = expertScore5 ?? 0;
   else if (criterion !== 'combined') activeScore5 = criteria[criterion];
 
-  const authenticReviewCount = Number(
-    item.authentic_review_count || item.total_reviews || 0
-  );
+  const rawAuthentic = Number(item.authentic_review_count);
+  const rawTotal = Number(item.total_reviews);
+  const safeTotal =
+    Number.isFinite(rawTotal) && rawTotal > 0 ? Math.floor(rawTotal) : 0;
+  const authenticReviewCount =
+    Number.isFinite(rawAuthentic) && rawAuthentic > 0
+      ? Math.floor(rawAuthentic)
+      : safeTotal;
   const filteredNoiseReviewCount = Math.max(
     0,
-    Number(item.total_reviews || 0) - Number(item.authentic_review_count || 0)
+    safeTotal - authenticReviewCount
   );
+
+  const rawMinPrice = Number(item.min_price || 0);
+  const minPrice =
+    Number.isFinite(rawMinPrice) &&
+    rawMinPrice > 0 &&
+    rawMinPrice <= 1_000_000_000
+      ? Math.round(rawMinPrice)
+      : 0;
+  const rawMaxPrice = Number(item.max_price || 0);
+  const maxPrice =
+    Number.isFinite(rawMaxPrice) &&
+    rawMaxPrice > 0 &&
+    rawMaxPrice <= 1_000_000_000
+      ? Math.max(minPrice, Math.round(rawMaxPrice))
+      : minPrice;
+  const rawMerchantCount = Number(item.merchant_count || 0);
+  const merchantCount =
+    Number.isFinite(rawMerchantCount) && rawMerchantCount > 0
+      ? Math.floor(rawMerchantCount)
+      : 0;
 
   return {
     slug: item.slug,
@@ -398,9 +431,9 @@ export function scoreMasterProductForLeaderboard(
     activeScore10: Number((activeScore5 * 2).toFixed(1)),
     authenticReviewCount,
     filteredNoiseReviewCount,
-    minPrice: Number(item.min_price || 0),
-    maxPrice: Number(item.max_price || 0),
-    merchantCount: Number(item.merchant_count || 0),
+    minPrice,
+    maxPrice,
+    merchantCount,
     criteria,
     product: item,
   };
@@ -504,8 +537,9 @@ export function rankMasterProductsForLeaderboard(
       rank: idx + 1,
     }));
 
-  if (options?.limit && options.limit > 0) {
-    return filtered.slice(0, options.limit);
+  const rawLimit = Number(options?.limit);
+  if (Number.isFinite(rawLimit) && rawLimit >= 1) {
+    return filtered.slice(0, Math.floor(rawLimit));
   }
   return filtered;
 }
@@ -583,6 +617,11 @@ export function buildPopular1v1BattlesForCategory(
   category: CanonicalCategorySlug,
   maxPairs: number = 3
 ): Flagship1v1BattlePair[] {
+  const safeMaxPairs =
+    Number.isFinite(maxPairs) && maxPairs >= 0
+      ? Math.min(Math.floor(maxPairs), 20)
+      : 3;
+  if (safeMaxPairs === 0) return [];
   const ranked = rankMasterProductsForLeaderboard(products, {
     category,
     criterion: 'combined',
@@ -599,7 +638,7 @@ export function buildPopular1v1BattlesForCategory(
 
   const pairs: Flagship1v1BattlePair[] = [];
   for (const [idxA, idxB] of candidateIndices) {
-    if (pairs.length >= maxPairs) break;
+    if (pairs.length >= safeMaxPairs) break;
     const itemA = ranked[idxA];
     const itemB = ranked[idxB];
     if (!itemA || !itemB || itemA.slug === itemB.slug) continue;
@@ -645,8 +684,10 @@ export function comparePositiveMinPrices(
   minPriceA: number,
   minPriceB: number
 ): 'A' | 'B' | 'equal' | 'unknown' {
-  const validA = Number.isFinite(minPriceA) && minPriceA > 0;
-  const validB = Number.isFinite(minPriceB) && minPriceB > 0;
+  const validA =
+    Number.isFinite(minPriceA) && minPriceA > 0 && minPriceA <= 1_000_000_000;
+  const validB =
+    Number.isFinite(minPriceB) && minPriceB > 0 && minPriceB <= 1_000_000_000;
   if (validA && validB) {
     if (minPriceA < minPriceB) return 'A';
     if (minPriceB < minPriceA) return 'B';

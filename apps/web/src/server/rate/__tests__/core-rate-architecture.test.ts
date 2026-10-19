@@ -7035,7 +7035,70 @@ async function runCoreArchitectureSuite() {
   }
 
   console.log(
-    '  ✅ [79/79] Watchlist Target Price Presets, Live KPI Sync & PriceHistorySection Guards (#549) passed'
+    '  ✅ [79/80] Watchlist Target Price Presets, Live KPI Sync & PriceHistorySection Guards (#549) passed'
+  );
+
+  // =========================================================================
+  // 80. DeepInspectWorkspace, CategoryCatalogToolbar & gen-db-types Hardening (#554)
+  // =========================================================================
+  {
+    const domain554 = await import('../../../lib/rate-domain');
+
+    assert.equal(
+      domain554.resolveCompareExpertRating10({ expert_rating: 4.5 }),
+      9.0,
+      'resolveCompareExpertRating10 must scale 5-star expert_rating (4.5) to 9.0/10 (#554)'
+    );
+    assert.equal(
+      domain554.resolveCompareExpertRating10({ expert_rating: 9.2 }),
+      9.2,
+      'resolveCompareExpertRating10 must preserve 10-point expert_rating (9.2/10) (#554)'
+    );
+    assert.equal(
+      domain554.resolveCompareExpertRating10({ expert_rating: 0 }),
+      null,
+      'resolveCompareExpertRating10 must return null when expert_rating <= 0 (#554)'
+    );
+
+    const deepInspectSrc = fs.readFileSync(
+      path.join(webSrcRoot, 'components/inspect/DeepInspectWorkspace.tsx'),
+      'utf8'
+    );
+    assert.ok(
+      deepInspectSrc.includes("discount?.verdict === 'suspicious_discount'") &&
+        deepInspectSrc.includes('o.merchant?.platform') &&
+        deepInspectSrc.includes('priceHistory?.byOffer?.[o.id]?.badge_label') &&
+        deepInspectSrc.includes('resolveCompareExpertRating10'),
+      'DeepInspectWorkspace.tsx must handle suspicious_discount verdict, per-offer CSV verdict/platform fallbacks, and normalized ratings (#554)'
+    );
+
+    const catalogToolbarSrc = fs.readFileSync(
+      path.join(
+        webSrcRoot,
+        'components/leaderboard/CategoryCatalogToolbar.tsx'
+      ),
+      'utf8'
+    );
+    assert.ok(
+      catalogToolbarSrc.includes('resolveCompareEffectiveUserRating(p)') &&
+        catalogToolbarSrc.includes('resolveCompareExpertRating10(p)'),
+      'CategoryCatalogToolbar.tsx must normalize user and expert ratings across Markdown, CSV, and JSON exports (#554)'
+    );
+
+    const genDbTypesSrc = fs.readFileSync(
+      path.join(repoRoot, 'scripts/gen-db-types.mjs'),
+      'utf8'
+    );
+    assert.ok(
+      genDbTypesSrc.includes('fetchTextWithTimeout') &&
+        genDbTypesSrc.includes('keepAliveTimer') &&
+        !genDbTypesSrc.includes('AbortSignal.timeout'),
+      'scripts/gen-db-types.mjs must use ref-d fetchTextWithTimeout and keepAliveTimer instead of unref-d AbortSignal.timeout (#554)'
+    );
+  }
+
+  console.log(
+    '  ✅ [80/80] DeepInspectWorkspace, CategoryCatalogToolbar & gen-db-types Hardening (#554) passed'
   );
 
   console.log('🎉 All Rate.vn Core Architecture tests passed!');

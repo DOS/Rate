@@ -102,6 +102,16 @@ export function merchantDirectoryFilterParams(
   return params;
 }
 
+function toSafeScore100(value: unknown, fallback = 0): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : fallback;
+}
+
+function toSafeCount(value: unknown): number {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+}
+
 export function summarizeMerchantDirectory(
   merchants: readonly MerchantSummary[]
 ): MerchantDirectorySummary {
@@ -110,11 +120,12 @@ export function summarizeMerchantDirectory(
   let safe = 0;
   let trustSum = 0;
   for (const m of merchants) {
-    const p = m.platform.toLowerCase();
+    const p = (m.platform || '').toLowerCase();
     platformCounts[p] = (platformCounts[p] ?? 0) + 1;
     if (m.is_official) official += 1;
-    if (m.trust_score >= 80) safe += 1;
-    trustSum += m.trust_score;
+    const trustScore = toSafeScore100(m.trust_score);
+    if (trustScore >= 80) safe += 1;
+    trustSum += trustScore;
   }
   const total = merchants.length;
   return {
@@ -134,48 +145,48 @@ export function filterMerchantDirectory(
   const { platform, officialOnly, riskTier, seedingTier, sortBy } = filters;
   const kw = filters.query.trim().toLowerCase();
   const filtered = merchants.filter((m) => {
-    if (platform !== 'all' && m.platform.toLowerCase() !== platform) {
+    if (platform !== 'all' && (m.platform || '').toLowerCase() !== platform) {
       return false;
     }
     if (officialOnly && !m.is_official) return false;
-    if (riskTier === 'safe' && m.trust_score < 80) return false;
-    if (
-      riskTier === 'moderate' &&
-      (m.trust_score < 60 || m.trust_score >= 80)
-    ) {
+    const trustScore = toSafeScore100(m.trust_score);
+    const reviewRiskScore = toSafeScore100(m.review_risk_score);
+    if (riskTier === 'safe' && trustScore < 80) return false;
+    if (riskTier === 'moderate' && (trustScore < 60 || trustScore >= 80)) {
       return false;
     }
-    if (riskTier === 'warning' && m.trust_score >= 60) return false;
-    if (seedingTier === 'low' && m.review_risk_score > 15) return false;
-    if (seedingTier === 'elevated' && m.review_risk_score <= 15) return false;
+    if (riskTier === 'warning' && trustScore >= 60) return false;
+    if (seedingTier === 'low' && reviewRiskScore > 15) return false;
+    if (seedingTier === 'elevated' && reviewRiskScore <= 15) return false;
     if (kw) {
       const hit =
-        m.name.toLowerCase().includes(kw) ||
-        m.platform_shop_id.toLowerCase().includes(kw) ||
-        m.platform.toLowerCase().includes(kw) ||
+        (m.name || '').toLowerCase().includes(kw) ||
+        (m.platform_shop_id || '').toLowerCase().includes(kw) ||
+        (m.platform || '').toLowerCase().includes(kw) ||
         (m.slug ? m.slug.toLowerCase().includes(kw) : false);
       if (!hit) return false;
     }
     return true;
   });
   return filtered.sort((a, b) => {
+    const aTrust = toSafeScore100(a.trust_score);
+    const bTrust = toSafeScore100(b.trust_score);
+    const aProducts = toSafeCount(a.product_count);
+    const bProducts = toSafeCount(b.product_count);
     switch (sortBy) {
       case 'trust_desc':
-        return (
-          b.trust_score - a.trust_score || b.product_count - a.product_count
-        );
+        return bTrust - aTrust || bProducts - aProducts;
       case 'products_desc':
-        return (
-          b.product_count - a.product_count || b.trust_score - a.trust_score
-        );
+        return bProducts - aProducts || bTrust - aTrust;
       case 'seeding_asc':
         return (
-          a.review_risk_score - b.review_risk_score ||
-          b.trust_score - a.trust_score
+          toSafeScore100(a.review_risk_score) -
+            toSafeScore100(b.review_risk_score) || bTrust - aTrust
         );
       case 'followers_desc':
         return (
-          b.follower_count - a.follower_count || b.trust_score - a.trust_score
+          toSafeCount(b.follower_count) - toSafeCount(a.follower_count) ||
+          bTrust - aTrust
         );
       default:
         return 0;
@@ -191,9 +202,13 @@ export function pageMerchantDirectory(
   limit: number
 ): MerchantDirectoryPage {
   const matching = filterMerchantDirectory(merchants, filters);
-  const start = Math.max(0, Math.floor(offset));
+  const start = Number.isFinite(offset) && offset >= 0 ? Math.floor(offset) : 0;
+  const safeLimit =
+    Number.isFinite(limit) && limit >= 0
+      ? Math.floor(limit)
+      : MERCHANT_PAGE_SIZE;
   return {
-    items: matching.slice(start, start + Math.max(0, Math.floor(limit))),
+    items: matching.slice(start, start + safeLimit),
     matched: matching.length,
     offset: start,
   };
