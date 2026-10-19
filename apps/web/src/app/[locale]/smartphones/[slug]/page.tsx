@@ -291,9 +291,12 @@ export async function ProductDetailView({
                 style={{ minHeight: '380px' }}
               >
                 {product.images && product.images.length > 0 ? (
+                  // The main product image is the page's largest paint: fetch it
+                  // ahead of the below-the-fold peer and offer thumbnails.
                   <img
                     src={product.images[0]}
                     alt={product.name}
+                    fetchPriority="high"
                     className="img-fluid rounded-3"
                     style={{ maxHeight: '350px', objectFit: 'contain' }}
                   />
