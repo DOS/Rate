@@ -6,10 +6,16 @@ import { BsBell, BsCheckCircle, BsExclamationTriangle } from 'react-icons/bs';
 import { Link } from '@/lib/navigation';
 import { escapeCsvCell } from '@/lib/csv-safe';
 import type { MasterProduct } from '@repo/shared-data';
-import { getMasterProductHref } from '@/lib/rate-domain';
 import {
+  getMasterProductHref,
+  resolveCompareEffectiveUserRating,
+} from '@/lib/rate-domain';
+import {
+  MIN_WATCHLIST_TARGET_PRICE,
+  computeWatchlistTargetPrice,
   getWatchlist,
   removeWatchlistItem,
+  sanitizeWatchlistTargetPrice,
   subscribeWatchlist,
   upsertWatchlistItem,
   type WatchlistItem,
@@ -114,7 +120,7 @@ export default function WatchlistWorkspace({
 
   const handleQuickAddCatalog = (p: MasterProduct) => {
     const minP = Number(p.min_price || 0);
-    const targetP = Math.round((minP * 0.95) / 100000) * 100000;
+    const targetP = computeWatchlistTargetPrice(minP, 5);
     const thumb =
       p.thumbnail ||
       (p.images && p.images.length > 0 ? p.images[0] || null : null);
@@ -134,7 +140,10 @@ export default function WatchlistWorkspace({
   };
 
   const handleUpdateTarget = async (item: WatchlistItem) => {
-    const cleanTarget = Math.max(100000, Math.round(editTarget));
+    const cleanTarget = sanitizeWatchlistTargetPrice(
+      editTarget,
+      item.priceWhenAdded
+    );
     upsertWatchlistItem({
       ...item,
       targetPrice: cleanTarget,
@@ -225,8 +234,11 @@ export default function WatchlistWorkspace({
   };
 
   const reachedCount = items.filter((item) => {
-    const live = productBySlug.get(item.slug);
-    const currentMin = live ? Number(live.min_price || 0) : item.priceWhenAdded;
+    const liveProd = productBySlug.get(item.slug);
+    const liveDeal = liveDeals[item.slug];
+    const currentMin =
+      liveDeal?.current_min_price ||
+      (liveProd ? Number(liveProd.min_price || 0) : item.priceWhenAdded);
     return currentMin > 0 && currentMin <= item.targetPrice;
   }).length;
 
@@ -240,9 +252,7 @@ export default function WatchlistWorkspace({
       const curMax =
         liveDeal?.current_max_price ||
         (liveProd ? Number(liveProd.max_price || curMin) : curMin);
-      const userR = liveProd
-        ? Number(liveProd.user_rating_weighted || liveProd.average_rating || 0)
-        : 0;
+      const userR = liveProd ? resolveCompareEffectiveUserRating(liveProd) : 0;
       acc.totalMinVnd += curMin;
       acc.totalTargetVnd += item.targetPrice;
       acc.totalSpreadSavingsVnd += Math.max(0, curMax - curMin);
@@ -310,7 +320,10 @@ export default function WatchlistWorkspace({
           const hit = curMin > 0 && curMin <= item.targetPrice;
           const bestOfferStr = liveDeal?.best_offer
             ? `${liveDeal.best_offer.merchant_name} (${liveDeal.best_offer.platform.toUpperCase()})`
-            : t('mdSourcesCount', { count: liveProd?.merchant_count || 0 });
+            : t('mdSourcesCount', {
+                count:
+                  liveDeal?.merchant_count || liveProd?.merchant_count || 0,
+              });
           return `| ${item.name} | ${item.brand} | ${curMin.toLocaleString('vi-VN')} ₫ | ${item.targetPrice.toLocaleString('vi-VN')} ₫ | ${spreadStr} | ${radarMarkdownCell(rSig)} | ${hit ? t('mdStatusReached') : t('mdStatusWatching')} | ${bestOfferStr} |`;
         }),
       ];
@@ -702,8 +715,9 @@ export default function WatchlistWorkspace({
                         className="btn btn-sm btn-primary rounded-pill fw-medium w-100"
                       >
                         {t('quickWatch5PctBtn', {
-                          price: (
-                            Math.round((minP * 0.95) / 100000) * 100000
+                          price: computeWatchlistTargetPrice(
+                            minP,
+                            5
                           ).toLocaleString('vi-VN'),
                         })}
                       </button>
@@ -729,7 +743,10 @@ export default function WatchlistWorkspace({
               : live
                 ? Number(live.max_price || currentMin)
                 : currentMin;
-            const diffFromAdded = currentMin - item.priceWhenAdded;
+            const diffFromAdded =
+              currentMin > 0 && item.priceWhenAdded > 0
+                ? currentMin - item.priceWhenAdded
+                : 0;
             const diffFromTarget = currentMin - item.targetPrice;
             const targetReached =
               currentMin > 0 && currentMin <= item.targetPrice;
@@ -885,7 +902,10 @@ export default function WatchlistWorkspace({
                                 price: currentMax.toLocaleString('vi-VN'),
                               })
                             : t('sellersCountSub', {
-                                count: live?.merchant_count || 1,
+                                count:
+                                  dealInfo?.merchant_count ||
+                                  live?.merchant_count ||
+                                  1,
                               })}
                         </div>
                       </div>
@@ -989,8 +1009,12 @@ export default function WatchlistWorkspace({
                     <div className="rounded-3 bg-light d-flex align-items-center mb-3 gap-2 border p-3">
                       <input
                         type="number"
-                        step={100000}
-                        min={100000}
+                        step={
+                          currentMin > 0 && currentMin < 2_000_000
+                            ? 10000
+                            : 100000
+                        }
+                        min={MIN_WATCHLIST_TARGET_PRICE}
                         value={editTarget}
                         onChange={(e) =>
                           setEditTarget(Number(e.target.value || 0))

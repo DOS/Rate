@@ -12,11 +12,12 @@ import {
   BsGraphUp,
   BsSearch,
 } from 'react-icons/bs';
-import type {
-  DiscountVerdictType,
-  MasterProductPriceHistorySummary,
-  OfferDiscountAnalysis,
-  PriceHistoryPoint,
+import {
+  MAX_VALID_VND_PRICE,
+  type DiscountVerdictType,
+  type MasterProductPriceHistorySummary,
+  type OfferDiscountAnalysis,
+  type PriceHistoryPoint,
 } from '@/lib/rate-domain';
 import {
   RADAR_CSV_HEADERS,
@@ -114,19 +115,35 @@ export default function PriceHistorySection({
     [history.byOffer]
   );
 
+  // Filter history.points once to valid positive prices and parseable timestamps
+  const validPoints = useMemo<PriceHistoryPoint[]>(() => {
+    return history.points.filter((pt) => {
+      const price = Number(pt.price);
+      if (
+        !Number.isFinite(price) ||
+        price <= 0 ||
+        price > MAX_VALID_VND_PRICE
+      ) {
+        return false;
+      }
+      const ms = new Date(pt.recorded_at).getTime();
+      return Number.isFinite(ms) && ms > 0;
+    });
+  }, [history.points]);
+
   // Reference anchor timestamp = latest observation in dataset (deterministic for SSR/Client)
   const latestTimestampMs = useMemo(() => {
-    if (history.points.length === 0) return 0;
+    if (validPoints.length === 0) return 0;
     let maxMs = 0;
-    for (const pt of history.points) {
+    for (const pt of validPoints) {
       const ms = new Date(pt.recorded_at).getTime();
       if (ms > maxMs) maxMs = ms;
     }
     return maxMs;
-  }, [history.points]);
+  }, [validPoints]);
 
   const filteredPoints = useMemo<PriceHistoryPoint[]>(() => {
-    let pts = history.points;
+    let pts = validPoints;
     if (selectedProductId !== 'ALL') {
       pts = pts.filter((p) => p.product_id === selectedProductId);
     }
@@ -141,7 +158,7 @@ export default function PriceHistorySection({
       }
     }
     return pts;
-  }, [history.points, selectedProductId, timeRange, latestTimestampMs]);
+  }, [validPoints, selectedProductId, timeRange, latestTimestampMs]);
 
   // Axis labels are sized in viewBox units; scale them so they render at 13px
   // (the text floor) whatever width the chart is drawn at.
@@ -182,10 +199,20 @@ export default function PriceHistorySection({
 
     const allValues: number[] = [];
     for (const pt of filteredPoints) {
-      if (pt.price > 0) allValues.push(pt.price);
-      if (pt.price_original && pt.price_original > pt.price) {
+      if (pt.price > 0 && pt.price <= MAX_VALID_VND_PRICE) {
+        allValues.push(pt.price);
+      }
+      if (
+        pt.price_original &&
+        pt.price_original > pt.price &&
+        pt.price_original <= MAX_VALID_VND_PRICE
+      ) {
         allValues.push(pt.price_original);
       }
+    }
+
+    if (allValues.length === 0) {
+      return null;
     }
 
     const rawMin = Math.min(...allValues);
@@ -223,7 +250,9 @@ export default function PriceHistorySection({
       const x = getX(idx, filteredPoints.length, tMs);
       const yPrice = getY(pt.price);
       const yOriginal =
-        pt.price_original && pt.price_original > pt.price
+        pt.price_original &&
+        pt.price_original > pt.price &&
+        pt.price_original <= MAX_VALID_VND_PRICE
           ? getY(pt.price_original)
           : null;
       return {
