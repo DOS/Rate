@@ -3874,7 +3874,15 @@ async function runCoreArchitectureSuite() {
     globalThis.fetch = (async (input: RequestInfo | URL) => {
       const url = typeof input === 'string' ? input : input.toString();
       if (url.includes('/rest/v1/products')) {
-        return jsonResp344(200, manyListingRows344);
+        // Honour .range() (offset/limit) like PostgREST: the listing-id read
+        // pages until it gets an empty page (#453).
+        const params = new URL(url).searchParams;
+        const offset = Number(params.get('offset') ?? 0);
+        const limit = Number(params.get('limit') ?? manyListingRows344.length);
+        return jsonResp344(
+          200,
+          manyListingRows344.slice(offset, offset + limit)
+        );
       }
       if (url.includes('/rest/v1/reviews')) {
         reviewChunksCalled += 1;
