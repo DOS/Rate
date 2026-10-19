@@ -2917,6 +2917,35 @@ export function sanitizePostgrestFilterToken(raw: string): string {
 const IN_FILTER_CHUNK_SIZE = 150;
 
 /** Runs `read` per chunk of `ids` and concatenates the rows; any error throws. */
+// Parallel price-history reads per merchant profile. Each one is a paged
+// offers read plus chunked price_history reads, so a large store listing
+// hundreds of models must not open them all at once (DOS/Rate#462).
+const PRICE_HISTORY_CONCURRENCY = 6;
+
+/** Runs `task` over `items` with at most `limit` in flight; rejects on the first failure. */
+export async function forEachWithConcurrency<T>(
+  items: readonly T[],
+  limit: number,
+  task: (item: T) => Promise<void>
+): Promise<void> {
+  let next = 0;
+  let failed = false;
+  const worker = async () => {
+    while (!failed && next < items.length) {
+      const item = items[next++] as T;
+      try {
+        await task(item);
+      } catch (err) {
+        failed = true;
+        throw err;
+      }
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(limit, items.length) }, worker)
+  );
+}
+
 async function readInChunks(
   ids: readonly string[],
   what: string,
@@ -3084,14 +3113,16 @@ export async function getMerchantProfileById(
 
   // Compute price history / Fake Discount analysis per master product
   const discountByOfferId = new Map<string, OfferDiscountAnalysis>();
-  await Promise.all(
-    // A failure throws: the profile must not be cached without its analysis.
-    clusterIds.map(async (cId) => {
+  // A failure throws: the profile must not be cached without its analysis.
+  await forEachWithConcurrency(
+    clusterIds,
+    PRICE_HISTORY_CONCURRENCY,
+    async (cId) => {
       const ph = await getMasterProductPriceHistory(cId);
       for (const [offerId, analysis] of Object.entries(ph.byOffer)) {
         discountByOfferId.set(offerId, analysis);
       }
-    })
+    }
   );
 
   const listings: MerchantProductListing[] = rawProducts.map((p) => {
