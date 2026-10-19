@@ -4849,6 +4849,22 @@ nav a:hover {
   }
 }
 
+/* The phone menu and its toggle are real buttons; drop the button chrome.
+   The closed off-canvas menu is hidden from focus and screen readers;
+   "visibility" switches only at the end of the closing slide, since it
+   is part of the inline transition-property (DOS/Rate#523). */
+.nav-toggle,
+.nav-menus-wrapper-close-button {
+  border: 0;
+  background: transparent;
+}
+
+@media (max-width: 991.98px) {
+  .navigation .nav-menus-wrapper:not(.nav-menus-wrapper-open) {
+    visibility: hidden;
+  }
+}
+
 /* The desktop menu starts at 992px; the theme hid the phone icons only from
    993px, so at exactly 992px both showed (DOS/Rate#515). */
 @media (min-width: 992px) {

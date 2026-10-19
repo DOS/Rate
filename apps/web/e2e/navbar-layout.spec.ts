@@ -62,3 +62,36 @@ test('at exactly 992px only the desktop menu shows', async ({ page }) => {
     page.locator('#navigation .nav-menu a[href="/leaderboard"]')
   ).toBeVisible();
 });
+
+test('the phone menu works from the keyboard', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto('/');
+  const menu = page.locator('#rate-nav-menu');
+  const toggle = page.locator('.nav-toggle');
+  const focusInMenu = () =>
+    page.evaluate(() =>
+      Boolean(document.activeElement?.closest('#rate-nav-menu'))
+    );
+
+  // Closed: Tab never lands on the off-screen links (DOS/Rate#523).
+  for (let i = 0; i < 12; i++) {
+    await page.keyboard.press('Tab');
+    expect(await focusInMenu()).toBe(false);
+  }
+
+  // Space opens it without scrolling and moves focus inside; Escape closes
+  // it and gives focus back to the toggle. Retried until hydration.
+  // Back at the top, where the header is static, so only Space could
+  // scroll (a div role=button scrolled a whole screen).
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await expect(async () => {
+    await toggle.focus();
+    await page.keyboard.press('Space');
+    await expect(menu).toHaveClass(/nav-menus-wrapper-open/, { timeout: 500 });
+  }).toPass();
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  expect(await focusInMenu()).toBe(true);
+  await page.keyboard.press('Escape');
+  await expect(menu).not.toHaveClass(/nav-menus-wrapper-open/);
+  await expect(toggle).toBeFocused();
+});

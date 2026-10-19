@@ -19,7 +19,8 @@
       "developers": "API",
       "priceWatchCta": "Hlídání cen",
       "selectLanguageAria": "Vybrat jazyk",
-      "menuToggleAria": "Otevřít nebo zavřít menu"
+      "menuToggleAria": "Otevřít nebo zavřít menu",
+      "menuCloseAria": "Zavřít menu"
     },
     "footer": {
       "copyRight": "© {YEAR} Rate.vn (DOS Ecosystem). Open-Core platforma pro analýzu specifikací, historii skutečných cen a AI audit recenzí.",
