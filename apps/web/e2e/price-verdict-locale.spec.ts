@@ -12,19 +12,19 @@ const VI_VERDICT_TEXT = [
   'Giá ổn định',
   'trung vị lịch sử',
 ];
+// Historic-low labels are left out: cs "Historické minimum" is also the chart
+// legend, so it would match without any verdict on the page.
 const LABELS = {
   en: [
     'Fake discount alert',
     'Suspected inflated list price',
     'Real discount',
-    'Historic low',
     'Stable price',
   ],
   cs: [
     'Varování: falešná sleva',
     'Podezření na navýšenou původní cenu',
     'Skutečná sleva',
-    'Historické minimum',
     'Stabilní cena',
   ],
 };
