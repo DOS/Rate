@@ -6606,7 +6606,231 @@ async function runCoreArchitectureSuite() {
   }
 
   console.log(
-    '  ✅ [76/76] 1v1 Versus Unpriced Tiebreaks, UI Persona Presets & Catalog Spec Fallbacks (#533) passed'
+    '  ✅ [76/77] 1v1 Versus Unpriced Tiebreaks, UI Persona Presets & Catalog Spec Fallbacks (#533) passed'
+  );
+
+  // 77. Issue #532: URL inspect matched merchant offer pairing, platform-scoped shop lookup, Lazada SKU skip, and earbuds URL price floor
+  {
+    const rateApi532 =
+      require('../../../lib/rate-api') as typeof import('../../../lib/rate-api');
+    const extServer532 =
+      require('../extension') as typeof import('../extension');
+
+    // 77a. detectAccessoryOrJunk applies the 400k VND earbuds floor when category words were stripped from title but present in URL
+    const earbudsGate532 = extServer532.detectAccessoryOrJunk({
+      title: 'soundpeats air4',
+      url: 'https://tiki.vn/tai-nghe-bluetooth-soundpeats-air4-p123.html',
+      price: 800_000,
+    });
+    assert.equal(
+      earbudsGate532.isAccessory,
+      false,
+      'detectAccessoryOrJunk must apply the 400k VND earbuds floor for tiki.vn/tai-nghe-bluetooth-soundpeats-air4-p123.html at 800k VND (#532)'
+    );
+
+    const origFetch532 = globalThis.fetch;
+    const merchantLookupUrls532: string[] = [];
+    try {
+      globalThis.fetch = (async (input: RequestInfo | URL) => {
+        const url =
+          typeof input === 'string'
+            ? input
+            : input instanceof URL
+              ? input.toString()
+              : input.url;
+
+        if (
+          url.includes('/rest/v1/products') &&
+          url.includes('platform_item_id=in.')
+        ) {
+          return new Response(JSON.stringify(null), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          });
+        }
+
+        if (url.includes('/rest/v1/merchants')) {
+          merchantLookupUrls532.push(url);
+          if (
+            url.includes('platform_shop_id=in.') &&
+            url.includes('platform=eq.shopee')
+          ) {
+            return new Response(
+              JSON.stringify([
+                {
+                  id: 'merch-532-shop-a',
+                  platform: 'shopee',
+                  platform_shop_id: '88201679',
+                  name: 'Shop A Flagship',
+                  slug: 'shop-a-flagship',
+                  is_official: true,
+                  rating_star: 4.9,
+                  follower_count: 500000,
+                  location: 'Hà Nội',
+                  risk_score: 4,
+                  metadata: {},
+                  updated_at: '2026-10-19T00:00:00Z',
+                },
+              ]),
+              { status: 200, headers: { 'content-type': 'application/json' } }
+            );
+          }
+          return new Response(JSON.stringify([]), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          });
+        }
+
+        if (
+          url.includes('/rest/v1/master_products') &&
+          url.includes('slug=eq.apple-iphone-16-pro-max-256gb')
+        ) {
+          return new Response(
+            JSON.stringify({
+              id: 'mp-532-ip16pm',
+              slug: 'apple-iphone-16-pro-max-256gb',
+              name: 'Apple iPhone 16 Pro Max 256GB',
+              brand: 'Apple',
+              model: 'iPhone 16 Pro Max',
+              model_key: 'apple-iphone-16-pro-max-256gb',
+              category_id: 'cat-smartphones',
+              min_price: 28990000,
+              max_price: 31990000,
+              merchant_count: 2,
+              average_rating: 4.9,
+              user_rating_weighted: 4.9,
+              expert_rating: 4.9,
+              total_reviews: 40,
+              has_5g: true,
+              colors: ['Black Titanium'],
+              status: 'published',
+              specifications: { category_slug: 'smartphones' },
+              key_specs: {},
+              metadata: {},
+              thumbnail: null,
+              images: [],
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } }
+          );
+        }
+
+        if (
+          url.includes('/rest/v1/v_products_with_merchant_trust') &&
+          url.includes('cluster_id=eq.mp-532-ip16pm')
+        ) {
+          const parsedUrl = new URL(url);
+          const offset = Number(parsedUrl.searchParams.get('offset') ?? 0);
+          if (offset > 0) {
+            return new Response(JSON.stringify([]), {
+              status: 200,
+              headers: { 'content-type': 'application/json' },
+            });
+          }
+          // Cheapest offer is Shop B (28.99M), second offer is Shop A (29.99M)
+          return new Response(
+            JSON.stringify([
+              {
+                id: 'offer-532-shop-b',
+                cluster_id: 'mp-532-ip16pm',
+                merchant_id: 'merch-532-shop-b',
+                platform: 'shopee',
+                title: 'iPhone 16 Pro Max 256GB Shop B',
+                price_current: 28990000,
+                price_original: 29990000,
+                stock: 5,
+                rating_star: 4.7,
+                rating_count: 10,
+                url: 'https://shopee.vn/i.999999.111',
+                merchant_name: 'Shop B Cheaper',
+                merchant_is_official: false,
+                merchant_location: 'TP.HCM',
+                threat_risk_score: 25,
+                dosafe_risk_score: 25,
+                review_risk_score: 20,
+                review_risk_breakdown: {},
+              },
+              {
+                id: 'offer-532-shop-a',
+                cluster_id: 'mp-532-ip16pm',
+                merchant_id: 'merch-532-shop-a',
+                platform: 'shopee',
+                title: 'iPhone 16 Pro Max 256GB Shop A',
+                price_current: 29990000,
+                price_original: 34990000,
+                stock: 10,
+                rating_star: 4.9,
+                rating_count: 80,
+                url: 'https://shopee.vn/i.88201679.222',
+                merchant_name: 'Shop A Flagship',
+                merchant_is_official: true,
+                merchant_location: 'Hà Nội',
+                threat_risk_score: 4,
+                dosafe_risk_score: 4,
+                review_risk_score: 2,
+                review_risk_breakdown: {},
+              },
+            ]),
+            { status: 200, headers: { 'content-type': 'application/json' } }
+          );
+        }
+
+        return new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }) as typeof fetch;
+
+      // 77b. Shopee URL with Vietnamese diacritics and Shop A's ID picks Shop A's offer (not Shop B's cheaper offer)
+      const inspectedShopee532 = await rateApi532.inspectProductOrShopUrl(
+        'https://shopee.vn/%C4%90i%E1%BB%87n-tho%E1%BA%A1i-Apple-iPhone-16-Pro-Max-256GB-i.88201679.777777777'
+      );
+      assert.equal(inspectedShopee532.matchedType, 'master_product');
+      assert.equal(
+        inspectedShopee532.merchantProfile?.id,
+        'merch-532-shop-a',
+        'merchantProfile must be Shop A (#532)'
+      );
+      assert.equal(
+        inspectedShopee532.matchedOffer?.id,
+        'offer-532-shop-a',
+        'matchedOffer must be Shop A offer (offer-532-shop-a), not Shop B cheapest offer (#532)'
+      );
+      assert.equal(
+        inspectedShopee532.matchedOffer?.price_current,
+        29990000,
+        'matchedOffer price must match Shop A offer (#532)'
+      );
+      assert.ok(
+        merchantLookupUrls532.some(
+          (u) =>
+            u.includes('platform_shop_id=in.') &&
+            u.includes('platform=eq.shopee')
+        ),
+        'Shop lookup must filter by platform=eq.shopee (#532)'
+      );
+
+      // 77c. Lazada product URL with -s<sku> skips shop lookup so SKU number never collides with another platform shop ID
+      merchantLookupUrls532.length = 0;
+      const inspectedLazada532 = await rateApi532.inspectProductOrShopUrl(
+        'https://www.lazada.vn/products/apple-iphone-16-pro-max-256gb-i123456789-s88201679.html'
+      );
+      assert.equal(inspectedLazada532.matchedType, 'master_product');
+      assert.ok(
+        !merchantLookupUrls532.some((u) => u.includes('platform_shop_id=in.')),
+        'Lazada product URL must skip platform_shop_id lookup because -s<sku> is a SKU ID (#532)'
+      );
+      assert.equal(
+        inspectedLazada532.matchedOffer?.id,
+        'offer-532-shop-b',
+        'Lazada product URL without shop match must pick cheapest offer (#532)'
+      );
+    } finally {
+      globalThis.fetch = origFetch532;
+    }
+  }
+
+  console.log(
+    '  ✅ [77/77] URL Inspect Merchant-Offer Pairing, Platform Shop Filter, Lazada SKU Skip & Earbuds URL Floor (#532) passed'
   );
 
   console.log('🎉 All Rate.vn Core Architecture tests passed!');

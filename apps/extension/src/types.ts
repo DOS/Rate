@@ -186,6 +186,7 @@ export interface ExtensionSettings {
 export interface ChromeTab {
   id?: number;
   windowId?: number;
+  active?: boolean;
   url?: string;
   title?: string;
 }

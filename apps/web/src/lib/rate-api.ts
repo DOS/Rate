@@ -4447,16 +4447,26 @@ export async function inspectProductOrShopUrl(
     }
   }
 
-  // 2. Direct lookup by Shopee/platform shop ID if present on the URL
+  // 2. Direct lookup by Shopee/platform shop ID if present on the URL.
+  // For Lazada product URLs (`-i<itemId>-s<skuId>.html`), `platformShopId` holds
+  // the `-s<sku>` number rather than a shop ID, so skip shop lookup there and
+  // always filter by platform to prevent cross-platform numeric ID collisions (#532).
   let matchedMerchantByShopId: MerchantSummary | null = null;
-  if (parsedUrl.platformShopId) {
+  const shouldLookupShopByUrlId =
+    Boolean(parsedUrl.platformShopId) &&
+    !(parsedUrl.platform === 'lazada' && parsedUrl.platformItemId);
+  if (shouldLookupShopByUrlId && parsedUrl.platformShopId) {
     const merchants = await getMerchantsList({
+      platform: parsedUrl.platform || undefined,
       platformShopIds: [parsedUrl.platformShopId],
       limit: 1,
     });
     matchedMerchantByShopId =
-      merchants.find((m) => m.platform_shop_id === parsedUrl.platformShopId) ||
-      null;
+      merchants.find(
+        (m) =>
+          m.platform_shop_id === parsedUrl.platformShopId &&
+          (!parsedUrl.platform || m.platform === parsedUrl.platform)
+      ) || null;
     if (matchedMerchantByShopId && !parsedUrl.platformItemId) {
       const suggestions = await getMasterProducts({ limit: 3 });
       return {
@@ -4475,6 +4485,21 @@ export async function inspectProductOrShopUrl(
     }
   }
 
+  const pickOfferForUrlInspection = (
+    offers: MerchantOffer[]
+  ): MerchantOffer | null => {
+    if (matchedMerchantByShopId) {
+      const byShopMerchant = offers.find(
+        (o) =>
+          o.merchant.id === matchedMerchantByShopId.id ||
+          (matchedMerchantByShopId.platform_shop_id &&
+            o.merchant.id === matchedMerchantByShopId.platform_shop_id)
+      );
+      if (byShopMerchant) return byShopMerchant;
+    }
+    return offers[0] || null;
+  };
+
   // 3. Internal slug or exact master product slug match (including slugified URL keyword)
   const urlProductKeyword = parsedUrl.isUrl
     ? extractProductKeywordFromUrl(query)
@@ -4482,6 +4507,9 @@ export async function inspectProductOrShopUrl(
   const slugifiedUrlKeyword = urlProductKeyword
     ? urlProductKeyword
         .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/đ/g, 'd')
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-+|-+$/g, '')
     : '';
@@ -4496,25 +4524,38 @@ export async function inspectProductOrShopUrl(
       getMasterProductOffers(exactMaster.id),
       getMasterProductReviews(exactMaster.id),
     ]);
-    const matchedOffer = offers[0] || null;
+    const matchedOffer = pickOfferForUrlInspection(offers);
+    const hasShopOfferMatch = Boolean(
+      matchedMerchantByShopId &&
+      matchedOffer &&
+      (matchedOffer.merchant.id === matchedMerchantByShopId.id ||
+        (matchedMerchantByShopId.platform_shop_id &&
+          matchedOffer.merchant.id ===
+            matchedMerchantByShopId.platform_shop_id))
+    );
+    const shouldFetchOfferMerchant = Boolean(
+      matchedOffer && (!matchedMerchantByShopId || !hasShopOfferMatch)
+    );
     const [priceHistory, reviewSummary, merchantsList] = await Promise.all([
       getMasterProductPriceHistory(exactMaster.id, offers),
       getMasterProductReviewSummary(exactMaster.id, reviews),
-      matchedMerchantByShopId
-        ? Promise.resolve([matchedMerchantByShopId])
-        : getMerchantsList({
-            ids: matchedOffer ? [matchedOffer.merchant.id] : [],
+      shouldFetchOfferMerchant && matchedOffer
+        ? getMerchantsList({
+            ids: [matchedOffer.merchant.id],
             limit: 1,
-          }),
+          })
+        : Promise.resolve(
+            matchedMerchantByShopId ? [matchedMerchantByShopId] : []
+          ),
     ]);
     const discountAnalysis = matchedOffer
       ? priceHistory.byOffer[matchedOffer.id] || null
       : null;
-    const merchantProfile =
-      matchedMerchantByShopId ||
-      (matchedOffer
+    const merchantProfile = hasShopOfferMatch
+      ? matchedMerchantByShopId
+      : matchedOffer
         ? merchantsList.find((m) => m.id === matchedOffer.merchant.id) || null
-        : null);
+        : matchedMerchantByShopId;
 
     return {
       query,
@@ -4567,16 +4608,23 @@ export async function inspectProductOrShopUrl(
       getMasterProductPriceHistory(single.id, offers),
       getMasterProductReviewSummary(single.id, reviews),
     ]);
-    const matchedOffer = offers[0] || null;
+    const matchedOffer = pickOfferForUrlInspection(offers);
+    const hasShopOfferMatch = Boolean(
+      matchedMerchantByShopId &&
+      matchedOffer &&
+      (matchedOffer.merchant.id === matchedMerchantByShopId.id ||
+        (matchedMerchantByShopId.platform_shop_id &&
+          matchedOffer.merchant.id ===
+            matchedMerchantByShopId.platform_shop_id))
+    );
     const discountAnalysis = matchedOffer
       ? priceHistory.byOffer[matchedOffer.id] || null
       : null;
-    const merchantProfile =
-      matchedMerchantByShopId ||
-      (matchedOffer
-        ? (await merchantById(matchedOffer.merchant.id)) ||
-          matchedMerchantByName
-        : matchedMerchantByName);
+    const merchantProfile = hasShopOfferMatch
+      ? matchedMerchantByShopId
+      : matchedOffer
+        ? await merchantById(matchedOffer.merchant.id)
+        : matchedMerchantByName;
 
     return {
       query,
@@ -4603,10 +4651,23 @@ export async function inspectProductOrShopUrl(
       getMasterProductPriceHistory(top.id, offers),
       getMasterProductReviewSummary(top.id, reviews),
     ]);
-    const matchedOffer = offers[0] || null;
+    const matchedOffer = pickOfferForUrlInspection(offers);
+    const hasShopOfferMatch = Boolean(
+      matchedMerchantByShopId &&
+      matchedOffer &&
+      (matchedOffer.merchant.id === matchedMerchantByShopId.id ||
+        (matchedMerchantByShopId.platform_shop_id &&
+          matchedOffer.merchant.id ===
+            matchedMerchantByShopId.platform_shop_id))
+    );
     const discountAnalysis = matchedOffer
       ? priceHistory.byOffer[matchedOffer.id] || null
       : null;
+    const merchantProfile = hasShopOfferMatch
+      ? matchedMerchantByShopId
+      : matchedOffer
+        ? await merchantById(matchedOffer.merchant.id)
+        : matchedMerchantByName;
 
     return {
       query,
@@ -4618,7 +4679,7 @@ export async function inspectProductOrShopUrl(
       discountAnalysis,
       priceHistory,
       reviewSummary,
-      merchantProfile: matchedMerchantByName,
+      merchantProfile,
       suggestions: matchedProducts,
     };
   }

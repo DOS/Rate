@@ -265,7 +265,8 @@ const ACCESSORY_KEYWORDS_VI_EN = [
 
 const MINIMUM_DEVICE_PRICE_FLOOR_VND = 1_200_000;
 const MINIMUM_EARBUDS_PRICE_FLOOR_VND = 400_000;
-const EARBUDS_TITLE_REGEX = /\b(?:airpods|buds|wf-|tai\s*nghe|earbuds)\b/i;
+const EARBUDS_TITLE_REGEX =
+  /\b(?:airpods|earpods|buds|freebuds|soundpeats|wf-|wh-|tws|tai[\s_-]*nghe|earbuds|in[\s_-]*ear)\b/i;
 
 function isDomainOrSubdomain(host: string, domain: string): boolean {
   return host === domain || host.endsWith(`.${domain}`);
@@ -349,9 +350,11 @@ export function detectPlatformFromInput(
  */
 export function detectAccessoryOrJunk(params: {
   title?: string | null;
+  url?: string | null;
   price?: number | null;
 }): { isAccessory: boolean; reason: string | null } {
   const titleLower = (params.title || '').trim().toLowerCase();
+  const urlLower = (params.url || '').trim().toLowerCase();
   if (titleLower) {
     for (const kw of ACCESSORY_KEYWORDS_VI_EN) {
       if (titleLower.includes(kw)) {
@@ -363,7 +366,9 @@ export function detectAccessoryOrJunk(params: {
     }
   }
 
-  const minFloor = EARBUDS_TITLE_REGEX.test(titleLower)
+  const isEarbuds =
+    EARBUDS_TITLE_REGEX.test(titleLower) || EARBUDS_TITLE_REGEX.test(urlLower);
+  const minFloor = isEarbuds
     ? MINIMUM_EARBUDS_PRICE_FLOOR_VND
     : MINIMUM_DEVICE_PRICE_FLOOR_VND;
 
@@ -722,6 +727,7 @@ export async function lookupExtensionProduct(
   // Step 1: Accessory / Junk Gatekeeper
   const gatekeeper = detectAccessoryOrJunk({
     title: effectiveTitle,
+    url: canonicalUrl || params.url,
     price: observedPrice,
   });
 
