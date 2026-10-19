@@ -19,6 +19,10 @@ export function generateStaticParams(): { locale: string }[] {
   return [];
 }
 
+// Upper bound for every page below, so even pages without data refresh daily
+// (the footer's copyright year, for one). Pages may set a shorter period.
+export const revalidate = 86400;
+
 export async function generateMetadata({
   params,
 }: {

@@ -134,11 +134,14 @@ export async function ProductDetailView({
     [
       getCachedMasterProductOffers(product.id),
       getCachedMasterProductReviews(product.id),
-      getCachedMasterProducts({ categorySlug, limit: 50 }).catch(() => []),
+      // No fallbacks: this page is cached, so an empty fallback would be
+      // served for the whole revalidate window. A failed regeneration keeps
+      // the last good page instead (DOS/Rate#491).
+      getCachedMasterProducts({ categorySlug, limit: 50 }),
       getCrossPlatformDealRadar({
         categorySlug: categorySlug as CanonicalCategorySlug,
         limit: 50,
-      }).catch(() => null),
+      }),
     ]
   );
   const [reviewSummary, priceHistory] = await Promise.all([

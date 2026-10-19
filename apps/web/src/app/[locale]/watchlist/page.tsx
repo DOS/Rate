@@ -37,10 +37,12 @@ export default async function WatchlistPage({
 }) {
   const { locale } = await params;
   setRequestLocale(locale);
+  // No empty fallback: it would be cached for the whole revalidate window. A
+  // failed regeneration keeps the last good page instead (DOS/Rate#491).
   const catalogProducts = await getMasterProducts({
     categorySlug: 'all',
     limit: 100,
-  }).catch(() => []);
+  });
 
   return (
     <>
