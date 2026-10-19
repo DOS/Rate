@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { BsLightningCharge } from 'react-icons/bs';
 import { useRouter } from '@/lib/navigation';
 import { startNavigationProgress } from '@/components/elementary/NavigationProgress';
 import {
@@ -61,7 +62,8 @@ export default function VersusMatchupSwitcher({
     >
       <div className="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
         <div className="small fw-semibold text-white">
-          ⚡ {t('switcherTitle')}
+          <BsLightningCharge aria-hidden="true" className="me-1" />
+          {t('switcherTitle')}
         </div>
         <span className="small text-white-50">
           {t('switcherPeerCount', { count: sameCategoryPeers.length })}{' '}

@@ -25,17 +25,21 @@ import { escapeCsvCell } from '@/lib/csv-safe';
 import type { KeySpecs } from '@repo/shared-data';
 import {
   BsArrowRight,
+  BsBarChart,
+  BsCheckCircle,
   BsCheckCircleFill,
+  BsCoin,
   BsCpu,
+  BsDownload,
   BsExclamationTriangleFill,
   BsGraphDownArrow,
   BsLink45Deg,
+  BsRobot,
   BsSearch,
   BsShieldCheck,
   BsShieldExclamation,
   BsShop,
   BsStarFill,
-  BsDownload,
 } from 'react-icons/bs';
 
 interface DeepInspectWorkspaceProps {
@@ -850,19 +854,31 @@ export default function DeepInspectWorkspace({
 
                   <div className="d-flex flex-column small gap-2">
                     <div className="d-flex justify-content-between rounded-3 bg-success bg-opacity-10 text-success fw-semibold p-2">
-                      <span>✅ {t('authenticLabel')}</span>
+                      <span>
+                        <BsCheckCircle aria-hidden="true" className="me-1" />
+                        {t('authenticLabel')}
+                      </span>
                       <span>{reviewSummary.authentic_pct}%</span>
                     </div>
                     <div className="d-flex justify-content-between rounded-3 bg-warning bg-opacity-10 text-dark p-2">
-                      <span>🪙 {t('coinSpamLabel')}</span>
+                      <span>
+                        <BsCoin aria-hidden="true" className="me-1" />
+                        {t('coinSpamLabel')}
+                      </span>
                       <strong>{reviewSummary.suspicious_pct}%</strong>
                     </div>
                     <div className="d-flex justify-content-between rounded-3 bg-danger bg-opacity-10 text-danger p-2">
-                      <span>🤖 {t('seedingFakeLabel')}</span>
+                      <span>
+                        <BsRobot aria-hidden="true" className="me-1" />
+                        {t('seedingFakeLabel')}
+                      </span>
                       <strong>{reviewSummary.fake_pct}%</strong>
                     </div>
                     <div className="d-flex justify-content-between rounded-3 bg-secondary bg-opacity-10 text-secondary p-2">
-                      <span>📊 {t('totalAuditedLabel')}</span>
+                      <span>
+                        <BsBarChart aria-hidden="true" className="me-1" />
+                        {t('totalAuditedLabel')}
+                      </span>
                       <strong>{reviewSummary.total_analyzed}</strong>
                     </div>
                     {reviewSummary.ai_summary && (

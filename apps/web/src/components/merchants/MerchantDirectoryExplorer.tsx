@@ -13,7 +13,9 @@ import {
   BsCheckCircleFill,
   BsFunnel,
   BsPeopleFill,
+  BsRobot,
   BsSearch,
+  BsShield,
   BsShieldCheck,
   BsShieldExclamation,
   BsShop,
@@ -636,7 +638,8 @@ export default function MerchantDirectoryExplorer({
               }
               className="btn btn-danger rounded-pill fw-medium px-4"
             >
-              🔬 {labels.inspectUrlCta}
+              <BsSearch aria-hidden="true" className="me-1" />
+              {labels.inspectUrlCta}
             </Link>
           </div>
         </div>
@@ -763,7 +766,8 @@ export default function MerchantDirectoryExplorer({
                         <div className="border-end col-6">
                           <div className="d-flex justify-content-between align-items-center mb-1">
                             <span className="small text-muted fw-medium">
-                              🛡️ DOSafe Threat Risk
+                              <BsShield aria-hidden="true" className="me-1" />
+                              DOSafe Threat Risk
                             </span>
                             <span
                               className={`badge rounded-pill rate-tabular ${
@@ -788,7 +792,8 @@ export default function MerchantDirectoryExplorer({
                         <div className="col-6">
                           <div className="d-flex justify-content-between align-items-center mb-1">
                             <span className="small text-muted fw-medium">
-                              🤖 AI Review Risk
+                              <BsRobot aria-hidden="true" className="me-1" />
+                              AI Review Risk
                             </span>
                             <span
                               className={`badge rounded-pill rate-tabular ${

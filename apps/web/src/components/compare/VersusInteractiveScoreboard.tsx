@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { BsSliders } from 'react-icons/bs';
 import { Link } from '@/lib/navigation';
 import type { ScoredLeaderboardItem } from '@/lib/leaderboard-engine';
 import {
@@ -388,7 +389,8 @@ export default function VersusInteractiveScoreboard({
             }`}
             style={{ fontSize: '0.8125rem' }}
           >
-            🎛️ {t('customWeightsBtn')}
+            <BsSliders aria-hidden="true" className="me-1" />
+            {t('customWeightsBtn')}
           </button>
         </div>
 
