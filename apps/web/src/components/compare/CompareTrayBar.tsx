@@ -42,11 +42,8 @@ export default function CompareTrayBar() {
       style={{ zIndex: 1055, width: '100%', maxWidth: '960px' }}
     >
       <div
-        className="card rounded-4 overflow-hidden border-0 text-white shadow-lg"
-        style={{
-          background: 'rgba(22, 25, 30, 0.97)',
-          backdropFilter: 'blur(10px)',
-        }}
+        className="card rate-ink-on-dark rounded-4 overflow-hidden border-0 text-white shadow-lg"
+        style={{ background: '#16191e' }}
       >
         <div className="card-body px-3 py-2">
           <div className="d-flex align-items-center justify-content-between flex-wrap gap-2">
@@ -68,13 +65,13 @@ export default function CompareTrayBar() {
               <button
                 type="button"
                 onClick={clearCompareTray}
-                className="btn btn-sm btn-outline-light rounded-pill small px-3 py-1"
+                className="btn btn-sm btn-outline-light rounded-pill small text-nowrap px-3 py-1"
               >
                 {t('trayClearAll')}
               </button>
               <Link
                 href={compareHref}
-                className="btn btn-sm btn-danger rounded-pill fw-bold px-3 py-1 shadow-sm"
+                className="btn btn-sm btn-danger rounded-pill fw-bold text-nowrap px-3 py-1 shadow-sm"
               >
                 {t('trayCompareNow', { count: items.length })}
               </Link>
@@ -90,7 +87,7 @@ export default function CompareTrayBar() {
                     style={{ background: 'rgba(255,255,255,0.06)' }}
                   >
                     <div
-                      className="rounded-2 d-flex align-items-center justify-content-center flex-shrink-0 bg-white"
+                      className="rounded-2 d-none d-sm-flex align-items-center justify-content-center flex-shrink-0 bg-white"
                       style={{ width: '40px', height: '40px', padding: '3px' }}
                     >
                       {item.thumbnail ? (
@@ -121,7 +118,7 @@ export default function CompareTrayBar() {
                         {item.name}
                       </div>
                       <div
-                        className="text-warning fw-bold"
+                        className="text-warning fw-bold rate-tabular text-nowrap"
                         style={{ fontSize: '0.8125rem' }}
                       >
                         {Number(item.min_price || 0).toLocaleString('vi-VN')} ₫
