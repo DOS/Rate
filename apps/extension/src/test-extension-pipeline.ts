@@ -828,15 +828,18 @@ async function runTests() {
   const ingestPayloadSchema = specDoc.components.schemas
     .ExtensionQuarantineIngestPayload as {
     required?: string[];
+    properties?: Record<string, unknown>;
   };
+  // platform and externalItemId are derived from the URL when omitted
+  // (DOS/Rate#615); the extension still sends both.
   assert.deepEqual(ingestPayloadSchema.required, [
-    'platform',
-    'externalItemId',
     'url',
     'title',
     'price',
     'userConsentOptIn',
   ]);
+  assert.ok(ingestPayloadSchema.properties?.platform);
+  assert.ok(ingestPayloadSchema.properties?.externalItemId);
   const verdictLevelSchema = specDoc.components.schemas.PriceVerdictLevel as {
     enum?: string[];
   };
