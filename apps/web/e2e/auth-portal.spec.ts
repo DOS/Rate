@@ -13,13 +13,18 @@ test('login form is in the first screen on a phone', async ({ page }) => {
 
 test('login copy has no schema, route or database names', async ({ page }) => {
   await page.goto('/login');
-  const text = await page.locator('main, body').first().innerText();
+  // The portal renders after hydration (the cached HTML holds a Suspense
+  // fallback), so wait for the form before reading the text.
+  await expect(page.locator('#rate-auth-email')).toBeVisible();
+  const text = await page.locator('body').innerText();
   for (const term of [
     'rate.review_votes',
     '(/watchlist)',
     'Row Level Security',
     'PostgreSQL',
     'Supabase',
+    '2FA',
+    'Two-Factor',
   ]) {
     expect(text).not.toContain(term);
   }
