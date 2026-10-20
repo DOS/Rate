@@ -14,6 +14,15 @@ import {
   type CanonicalCategorySlug,
 } from '@/server/rate';
 import { computeBayesianRatingSummary } from '@/lib/rate-api';
+import {
+  resolveCompareEffectiveUserRating,
+  resolveCompareExpertRating10,
+} from '@/lib/rate-domain';
+import {
+  buildKeySpecLine,
+  peerPriceDelta,
+  rankRelatedCompetitors,
+} from '@/lib/product-competitors';
 import { isFilteredOutReview } from '@/lib/review-display';
 import {
   BsCardChecklist,
@@ -165,14 +174,11 @@ export async function ProductDetailView({
     categoryPeers
   );
   const currentMinPrice = Number(product.min_price || 0);
-  const relatedCompetitors = categoryPeers
-    .filter((p) => p.slug !== product.slug)
-    .sort(
-      (a, b) =>
-        Math.abs(Number(a.min_price || 0) - currentMinPrice) -
-        Math.abs(Number(b.min_price || 0) - currentMinPrice)
-    )
-    .slice(0, 3);
+  const relatedCompetitors = rankRelatedCompetitors(
+    categoryPeers,
+    product.slug,
+    currentMinPrice
+  );
 
   const specs = product.specifications as ProductSpecifications;
   const keySpecs = product.key_specs as KeySpecs;
@@ -185,15 +191,15 @@ export async function ProductDetailView({
       : reviews.filter((r) => r.include_in_rating && r.helpfulness_weight > 0)
           .length;
   const ignoredCount = reviews.filter(isFilteredOutReview).length;
-  const rawUserRating =
-    product.user_rating_weighted && Number(product.user_rating_weighted) > 0
-      ? Number(product.user_rating_weighted)
-      : Number(product.average_rating || 0);
+  const rawUserRating = resolveCompareEffectiveUserRating(product);
+  const expertRating10 = resolveCompareExpertRating10(product);
   const bayesianSummary = computeBayesianRatingSummary(reviews, rawUserRating);
   const displayUserRating =
     bayesianSummary.effectiveWeightSum > 0
       ? bayesianSummary.bayesianRating
       : rawUserRating;
+
+  const keySpecLine = buildKeySpecLine(product);
 
   const canonicalUrl = `https://rate.vn${categoryBasePath}/${product.slug}`;
 
@@ -420,11 +426,10 @@ export async function ProductDetailView({
                     <div className="rate-pdv-score-label is-expert">
                       {t('expertScoreLabel')}
                     </div>
-                    {product.expert_rating != null &&
-                    Number(product.expert_rating) > 0 ? (
+                    {expertRating10 != null ? (
                       <div className="rate-pdv-score-row">
                         <span className="rate-pdv-score-value is-small">
-                          {Number(product.expert_rating).toFixed(1)}
+                          {expertRating10.toFixed(1)}
                         </span>
                         <span className="rate-pdv-score-sub">
                           {t('tenGroupStandardWithSlash')}
@@ -746,14 +751,7 @@ export async function ProductDetailView({
                     authenticReviews={authenticCount}
                     minPriceVnd={Number(product.min_price || 0)}
                     offerCount={offers.length}
-                    keySpecLine={[
-                      keySpecs?.chip,
-                      keySpecs?.ram,
-                      keySpecs?.storage,
-                      keySpecs?.battery,
-                    ]
-                      .filter(Boolean)
-                      .join(' • ')}
+                    keySpecLine={keySpecLine}
                     radarSignal={radarSignal}
                   />
                 </div>
@@ -1425,21 +1423,19 @@ export async function ProductDetailView({
             >
               {relatedCompetitors.map((peer) => {
                 const peerPrice = Number(peer.min_price || 0);
-                const priceDelta = peerPrice - currentMinPrice;
+                const priceDelta = peerPriceDelta(peerPrice, currentMinPrice);
                 const peerThumb =
                   peer.thumbnail ||
                   (peer.images && peer.images.length > 0
                     ? peer.images[0]
                     : null);
-                const peerRating =
-                  peer.user_rating_weighted &&
-                  Number(peer.user_rating_weighted) > 0
-                    ? Number(peer.user_rating_weighted)
-                    : Number(peer.average_rating || 0);
+                const peerRating = resolveCompareEffectiveUserRating(peer);
                 const peerScore10 = peerRating * 2;
                 const currentScore10 = displayUserRating * 2;
                 const peerCostPerPoint =
-                  peerScore10 > 0 ? Math.round(peerPrice / peerScore10) : 0;
+                  peerScore10 > 0 && peerPrice > 0
+                    ? Math.round(peerPrice / peerScore10)
+                    : 0;
                 const currentCostPerPoint =
                   currentScore10 > 0
                     ? Math.round(currentMinPrice / currentScore10)
@@ -1498,10 +1494,16 @@ export async function ProductDetailView({
                             </Link>
                           </h6>
                           <div className="d-flex align-items-center flex-wrap gap-2">
-                            <span className="text-danger fw-bold small rate-tabular">
-                              {peerPrice.toLocaleString('vi-VN')} ₫
-                            </span>
-                            {priceDelta !== 0 && currentMinPrice > 0 && (
+                            {peerPrice > 0 ? (
+                              <span className="text-danger fw-bold small rate-tabular">
+                                {peerPrice.toLocaleString('vi-VN')} ₫
+                              </span>
+                            ) : (
+                              <span className="text-muted small">
+                                {t('peerNoPrice')}
+                              </span>
+                            )}
+                            {priceDelta !== 0 && (
                               <span
                                 className={`badge rounded-pill ${
                                   priceDelta < 0

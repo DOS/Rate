@@ -30,7 +30,10 @@ import {
   type RadarSignal,
 } from '@/lib/deal-radar';
 import { useDealRadarIndex } from '@/components/radar/use-deal-radar';
-import { authorizedJsonHeaders } from '@/lib/auth/access-token';
+import {
+  authorizedJsonHeaders,
+  jsonWriteHeaders,
+} from '@/lib/auth/access-token';
 
 interface WatchlistWorkspaceProps {
   catalogProducts: MasterProduct[];
@@ -171,14 +174,7 @@ export default function WatchlistWorkspace({
     e.preventDefault();
     if (items.length === 0) return;
     setCloudSyncStatus(null);
-    const headers = await authorizedJsonHeaders();
-    if (!headers) {
-      setCloudSyncStatus({
-        ok: false,
-        message: t('cloudLoginRequired'),
-      });
-      return;
-    }
+    const headers = await jsonWriteHeaders();
     setIsSyncingCloud(true);
     try {
       const results = await Promise.all(
@@ -198,6 +194,7 @@ export default function WatchlistWorkspace({
             error?: string;
           } | null;
           return {
+            unauthorized: res.status === 401,
             saved:
               res.ok &&
               payload?.ok === true &&
@@ -206,6 +203,13 @@ export default function WatchlistWorkspace({
           };
         })
       );
+      if (results.every((r) => r.unauthorized)) {
+        setCloudSyncStatus({
+          ok: false,
+          message: t('cloudLoginRequired'),
+        });
+        return;
+      }
       const saved = results.filter((r) => r.saved).length;
       const firstError = results.find((r) => !r.saved && r.error)?.error;
       setCloudSyncStatus(
