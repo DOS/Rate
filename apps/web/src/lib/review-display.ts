@@ -1,7 +1,10 @@
 import type {
+  CombinedDualScoreBlendMode,
   ReviewFlagCategory,
   ReviewIndependenceAxis,
   ReviewItem,
+  ReviewWeightBreakdown,
+  ReviewWeightExplanationKind,
 } from './rate-api';
 
 /**
@@ -56,6 +59,77 @@ export function sponsorshipBadgeKey(
   independence: ReviewIndependenceAxis
 ): SponsorshipBadgeKey | null {
   return SPONSORSHIP_BADGE_KEYS[independence] ?? null;
+}
+
+export type WeightExplanationKey =
+  | 'weightExplanationShippingOnly'
+  | 'weightExplanationFiller'
+  | 'weightExplanationSabotage'
+  | 'weightExplanationBombing'
+  | 'weightExplanationSeeding'
+  | 'weightExplanationStarsOnly'
+  | 'weightExplanationPlatformLabel'
+  | 'weightExplanationLowEffort';
+
+const WEIGHT_EXPLANATION_KEYS: Record<
+  Exclude<ReviewWeightExplanationKind, 'formula'>,
+  WeightExplanationKey
+> = {
+  shipping_only: 'weightExplanationShippingOnly',
+  filler: 'weightExplanationFiller',
+  sabotage: 'weightExplanationSabotage',
+  bombing: 'weightExplanationBombing',
+  seeding: 'weightExplanationSeeding',
+  stars_only: 'weightExplanationStarsOnly',
+  platform_label: 'weightExplanationPlatformLabel',
+  low_effort: 'weightExplanationLowEffort',
+};
+
+export type WeightExplanationCopy =
+  { key: WeightExplanationKey; values: { weight: string } } | { text: string };
+
+/**
+ * Localized copy for a review's weight explanation. The `formula` case
+ * (`A=1 · B=1 ... -> 1.20x`) has no words, so it keeps the server text, as
+ * does an assessment cached before `explanationKind` existed.
+ */
+export function weightExplanationCopy(
+  breakdown: Pick<ReviewWeightBreakdown, 'weight' | 'explanationVi'> & {
+    explanationKind?: ReviewWeightExplanationKind;
+  }
+): WeightExplanationCopy {
+  const kind = breakdown.explanationKind;
+  if (
+    !kind ||
+    kind === 'formula' ||
+    !Object.hasOwn(WEIGHT_EXPLANATION_KEYS, kind)
+  ) {
+    return { text: breakdown.explanationVi };
+  }
+  return {
+    key: WEIGHT_EXPLANATION_KEYS[kind],
+    values: { weight: Number(breakdown.weight).toFixed(2) },
+  };
+}
+
+export type BlendNoteKey =
+  | 'blendNoteBlended'
+  | 'blendNoteSeparateLowConfidence'
+  | 'blendNoteUserOnly'
+  | 'blendNoteExpertOnly'
+  | 'blendNoteInsufficientData';
+
+const BLEND_NOTE_KEYS: Record<CombinedDualScoreBlendMode, BlendNoteKey> = {
+  blended: 'blendNoteBlended',
+  separate_low_confidence: 'blendNoteSeparateLowConfidence',
+  user_only: 'blendNoteUserOnly',
+  expert_only: 'blendNoteExpertOnly',
+  insufficient_data: 'blendNoteInsufficientData',
+};
+
+/** Localized key for the `blendFormulaNoteVi` case `computeCombinedDualScore` picked. */
+export function blendNoteKey(mode: CombinedDualScoreBlendMode): BlendNoteKey {
+  return BLEND_NOTE_KEYS[mode];
 }
 
 export type SubmitErrorKey =
