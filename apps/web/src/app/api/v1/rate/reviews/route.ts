@@ -198,16 +198,33 @@ function asNumber(value: unknown, fallback: number): number {
  * Builds the response item from what rate.submit_community_review stored, so the
  * verdict and weight shown to the user are the ones the database applied.
  */
-function toReviewItem(
+export function toReviewItem(
   record: Record<string, unknown>,
   criteria: Record<string, number>
 ): ReviewItem {
   const verdict = record.verdict;
   const flag = record.flag_category as ReviewFlagCategory;
+  const rawStar = asNumber(record.rating_star, 5);
+  const clampedStar =
+    rawStar > 0 ? Math.max(1, Math.min(5, Math.round(rawStar))) : 0;
+  const clampedWeight = Math.max(
+    0,
+    Math.min(10, asNumber(record.helpfulness_weight, 0))
+  );
+  const sanitizedRecordCriteria =
+    record.criteria_ratings &&
+    typeof record.criteria_ratings === 'object' &&
+    !Array.isArray(record.criteria_ratings)
+      ? sanitizeCriteria(record.criteria_ratings as Record<string, unknown>)
+      : {};
+  const effectiveCriteria =
+    Object.keys(sanitizedRecordCriteria).length > 0
+      ? sanitizedRecordCriteria
+      : criteria;
   return {
     id: String(record.id),
     author_name: String(record.author_name ?? ''),
-    rating_star: asNumber(record.rating_star, 0),
+    rating_star: clampedStar,
     comment: String(record.comment ?? ''),
     variation: typeof record.variation === 'string' ? record.variation : null,
     created_at:
@@ -218,12 +235,9 @@ function toReviewItem(
     upvotes: 0,
     downvotes: 0,
     report_count: 0,
-    helpfulness_weight: asNumber(record.helpfulness_weight, 0),
+    helpfulness_weight: clampedWeight,
     include_in_rating: record.include_in_rating === true,
-    criteria_ratings:
-      record.criteria_ratings && typeof record.criteria_ratings === 'object'
-        ? (record.criteria_ratings as Record<string, number>)
-        : criteria,
+    criteria_ratings: effectiveCriteria,
     verdict:
       verdict === 'authentic' ||
       verdict === 'suspicious' ||
@@ -234,12 +248,12 @@ function toReviewItem(
     fake_probability:
       record.fake_probability == null
         ? null
-        : asNumber(record.fake_probability, 0),
+        : Math.max(0, Math.min(1, asNumber(record.fake_probability, 0))),
     flag_category: FLAG_CATEGORIES.has(flag) ? flag : 'authentic',
     reason: typeof record.reason === 'string' ? record.reason : null,
     signals: {
       source: 'rate_community_jreviews',
-      criteria_count: Object.keys(criteria).length,
+      criteria_count: Object.keys(effectiveCriteria).length,
       comment_length: String(record.comment ?? '').length,
     },
   };

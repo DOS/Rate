@@ -14,6 +14,7 @@ import {
 import {
   PUBLIC_API_CORS_HEADERS,
   jsonApiError,
+  parseBoundedStringParam,
   parseVersusQueryParams,
 } from '@/server/rate/api-handler';
 
@@ -193,7 +194,9 @@ export async function GET(req: NextRequest) {
     const scoreA = scoreMasterProductForLeaderboard(prodA, 'combined');
     const scoreB = scoreMasterProductForLeaderboard(prodB, 'combined');
 
-    const requestedPersonaId = (searchParams.get('persona') || 'balanced')
+    const requestedPersonaId = (
+      parseBoundedStringParam(searchParams.get('persona'), 32) || 'balanced'
+    )
       .toLowerCase()
       .trim();
     const matchedPersona =
@@ -201,8 +204,8 @@ export async function GET(req: NextRequest) {
       VERSUS_PERSONAS[0]!;
 
     const parseWeight = (paramName: string, fallback: number): number => {
-      const raw = searchParams.get(paramName);
-      if (raw === null || raw.trim() === '') return fallback;
+      const raw = parseBoundedStringParam(searchParams.get(paramName), 32);
+      if (!raw) return fallback;
       const num = Number(raw);
       return Number.isFinite(num) ? Math.max(0, Math.min(100, num)) : fallback;
     };

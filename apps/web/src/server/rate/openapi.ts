@@ -73,9 +73,26 @@ export interface RateOpenApiDocument {
   };
 }
 
+export function normalizeOpenApiServerOrigin(
+  rawBaseUrl?: string | null
+): string {
+  const trimmed = (rawBaseUrl ?? '').trim();
+  if (!trimmed || trimmed.length > 256) return 'https://rate.vn';
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return 'https://rate.vn';
+    }
+    return parsed.origin;
+  } catch {
+    return 'https://rate.vn';
+  }
+}
+
 export function buildRateOpenApiSpec(
   baseUrl = 'https://rate.vn'
 ): RateOpenApiDocument {
+  const safeBaseUrl = normalizeOpenApiServerOrigin(baseUrl);
   const categorySlugs = [
     'smartphones',
     'tablets',
@@ -105,7 +122,7 @@ export function buildRateOpenApiSpec(
     },
     servers: [
       {
-        url: baseUrl,
+        url: safeBaseUrl,
         description: 'Rate.vn Production / Active Origin',
       },
     ],
