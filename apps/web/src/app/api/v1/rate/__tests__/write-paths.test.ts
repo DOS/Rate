@@ -1310,6 +1310,113 @@ async function testExtensionAndInspectBounds() {
   );
 }
 
+async function testMerchantCacheRevalidateAndDomainBounds() {
+  const { isSafeRevalidationPath } = await import('@/server/rate/cache-tags');
+  const { verifyRevalidateSecret } =
+    await import('@/app/api/v1/rate/revalidate/route');
+  const {
+    resolveCompareDisplaySizeInch,
+    resolveCompareRamGb,
+    resolveCompareStorageGb,
+    resolveCompareBatteryMah,
+  } = await import('@/lib/rate-domain');
+  const { discountVerdictCopy } = await import('@/lib/discount-verdict-copy');
+
+  // 1. isSafeRevalidationPath control chars, query/fragment, and dot-dot segment guards
+  assert.equal(
+    isSafeRevalidationPath('/smartphones/apple-iphone-16-256gb'),
+    true
+  );
+  assert.equal(isSafeRevalidationPath('/smartphones/../admin'), false);
+  assert.equal(isSafeRevalidationPath('/smartphones?foo=1'), false);
+  assert.equal(isSafeRevalidationPath('/smartphones#hash'), false);
+  assert.equal(isSafeRevalidationPath('/smartphones\u0007bell'), false);
+  assert.equal(isSafeRevalidationPath(null as unknown as string), false);
+
+  // 2. verifyRevalidateSecret token length and inner whitespace guards
+  assert.equal(
+    verifyRevalidateSecret('valid-secret-token', 'valid-secret-token'),
+    true
+  );
+  assert.equal(
+    verifyRevalidateSecret('token with spaces', 'token with spaces'),
+    false,
+    'Token with inner whitespace must be rejected'
+  );
+  assert.equal(
+    verifyRevalidateSecret('a'.repeat(513), 'a'.repeat(513)),
+    false,
+    'Token exceeding 512 chars must be rejected'
+  );
+
+  // 3. Compare spec resolvers upper domain bounds
+  assert.equal(
+    resolveCompareDisplaySizeInch({
+      screen_size_inch: 999,
+      specifications: {},
+      key_specs: { screen: '6.7 inch' },
+    }),
+    6.7,
+    'Over-ceiling screen_size_inch must fall back to valid key_specs.screen'
+  );
+  assert.equal(
+    resolveCompareRamGb({
+      ram_gb: 99999,
+      specifications: {},
+      key_specs: { ram: '12GB' },
+    }),
+    12,
+    'Over-ceiling ram_gb must fall back to valid key_specs.ram'
+  );
+  assert.equal(
+    resolveCompareStorageGb({
+      storage_gb: 999999,
+      specifications: {},
+      key_specs: { storage: '2TB' },
+    }),
+    2048,
+    'Over-ceiling storage_gb must fall back to valid key_specs.storage'
+  );
+  assert.equal(
+    resolveCompareBatteryMah({
+      battery_mah: 9999999,
+      specifications: {},
+      key_specs: { battery: '5000 mAh' },
+    }),
+    5000,
+    'Over-ceiling battery_mah must fall back to valid key_specs.battery'
+  );
+
+  // 4. discountVerdictCopy Infinity / over-ceiling price & percentage clamping
+  const copy = discountVerdictCopy(
+    (key, vals) => `${key}:${JSON.stringify(vals ?? {})}`,
+    {
+      product_id: 'p1',
+      merchant_name: 'Shop',
+      platform: 'shopee',
+      price_current: Number.POSITIVE_INFINITY,
+      price_original: 9_000_000_000,
+      claimed_discount_pct: Number.POSITIVE_INFINITY,
+      real_discount_vs_median_pct: -20,
+      historical_min_price: 0,
+      historical_max_price: 10_000_000,
+      historical_median_price: 9_000_000,
+      observation_count: 3,
+      verdict: 'suspicious_discount',
+      badge_label: '',
+      explanation: '',
+    }
+  );
+  assert.ok(!copy.explanation.includes('Infinity'), copy.explanation);
+  assert.ok(!copy.explanation.includes('∞'), copy.explanation);
+  assert.ok(copy.explanation.includes('"claimed":0'), copy.explanation);
+  assert.ok(copy.explanation.includes('"real":0'), copy.explanation);
+
+  console.log(
+    '  ✅ Merchant cache key deduplication, revalidate path/token guards, and compare/verdict bounds verified (#584)'
+  );
+}
+
 async function main() {
   console.log('🧪 Public write-path security suite (#155)');
   await testReviews();
@@ -1321,6 +1428,7 @@ async function main() {
   await testRateApiTrustAndOfferBounds();
   await testRequestAuthAndRouteBounds();
   await testExtensionAndInspectBounds();
+  await testMerchantCacheRevalidateAndDomainBounds();
   testSharedDataClients();
   console.log('✅ Public write-path security suite passed');
 }

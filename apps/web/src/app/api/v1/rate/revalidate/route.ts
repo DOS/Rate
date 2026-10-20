@@ -42,16 +42,28 @@ const RevalidateRequestSchema = z
   })
   .strict();
 
-function verifyRevalidateSecret(
+const MAX_REVALIDATE_TOKEN_LENGTH = 512;
+
+export function verifyRevalidateSecret(
   providedToken: string | null,
   expectedSecret: string | undefined
 ): boolean {
-  if (!providedToken || !expectedSecret || !expectedSecret.trim()) {
+  if (
+    typeof providedToken !== 'string' ||
+    typeof expectedSecret !== 'string' ||
+    !expectedSecret.trim()
+  ) {
     return false;
   }
   const cleanProvided = providedToken.trim();
   const cleanExpected = expectedSecret.trim();
-  if (!cleanProvided || !cleanExpected) {
+  if (
+    !cleanProvided ||
+    !cleanExpected ||
+    cleanProvided.length > MAX_REVALIDATE_TOKEN_LENGTH ||
+    cleanExpected.length > MAX_REVALIDATE_TOKEN_LENGTH ||
+    /\s/.test(cleanProvided)
+  ) {
     return false;
   }
   const digestA = createHash('sha256').update(cleanProvided).digest();
@@ -59,14 +71,22 @@ function verifyRevalidateSecret(
   return timingSafeEqual(digestA, digestB);
 }
 
-function extractProvidedToken(request: NextRequest): string | null {
+export function extractProvidedToken(request: NextRequest): string | null {
   const headerToken = request.headers.get('x-rate-revalidate-token');
   if (headerToken && headerToken.trim()) {
-    return headerToken.trim();
+    const trimmed = headerToken.trim();
+    return trimmed.length <= MAX_REVALIDATE_TOKEN_LENGTH && !/\s/.test(trimmed)
+      ? trimmed
+      : null;
   }
   const authHeader = request.headers.get('authorization');
   if (authHeader && /^Bearer\s+/i.test(authHeader)) {
-    return authHeader.replace(/^Bearer\s+/i, '').trim();
+    const trimmed = authHeader.replace(/^Bearer\s+/i, '').trim();
+    return trimmed.length > 0 &&
+      trimmed.length <= MAX_REVALIDATE_TOKEN_LENGTH &&
+      !/\s/.test(trimmed)
+      ? trimmed
+      : null;
   }
   return null;
 }
