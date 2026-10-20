@@ -43,7 +43,7 @@ export default function CompareTrayBar() {
     >
       <div
         className="card rate-ink-on-dark rounded-4 overflow-hidden border-0 text-white shadow-lg"
-        style={{ background: '#16191e' }}
+        style={{ background: 'var(--rate-bg-dark-elevated)' }}
       >
         <div className="card-body px-3 py-2">
           <div className="d-flex align-items-center justify-content-between flex-wrap gap-2">
