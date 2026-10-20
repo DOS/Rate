@@ -141,8 +141,21 @@ export interface ReviewWeightBreakdown {
   community: number;
   base_weight: number;
   weight: number;
+  /** Which `explanationVi` case applies, so the UI can localize it. */
+  explanationKind: ReviewWeightExplanationKind;
   explanationVi: string;
 }
+
+export type ReviewWeightExplanationKind =
+  | 'shipping_only'
+  | 'filler'
+  | 'sabotage'
+  | 'bombing'
+  | 'seeding'
+  | 'stars_only'
+  | 'platform_label'
+  | 'low_effort'
+  | 'formula';
 
 export interface ReviewTrustAssessment {
   authenticity: ReviewAuthenticityAxis;
@@ -399,28 +412,38 @@ export function evaluateReviewTrustAssessment(
       ? 0
       : Number(Math.max(0, Math.min(3.0, baseWeight * F)).toFixed(2));
 
+  let explanationKind: ReviewWeightExplanationKind;
   let explanationVi: string;
   if (shippingOnly) {
+    explanationKind = 'shipping_only';
     explanationVi =
       'Trọng số 0.00x cho sản phẩm: chỉ nhận xét giao hàng/đóng gói (chuyển sang điểm người bán)';
   } else if (gate === 0) {
     if (depth === 'filler') {
+      explanationKind = 'filler';
       explanationVi =
         'Trọng số 0.00x: bình luận cày xu / không mô tả trải nghiệm sản phẩm';
     } else if (authenticity === 'sabotage') {
+      explanationKind = 'sabotage';
       explanationVi = 'Trọng số 0.00x: nghi vấn đối thủ dìm hàng thiếu căn cứ';
     } else if (authenticity === 'bombing') {
+      explanationKind = 'bombing';
       explanationVi = 'Trọng số 0.00x: đánh giá bất thường / bom đơn';
     } else {
+      explanationKind = 'seeding';
       explanationVi = 'Trọng số 0.00x: nghi vấn seeding / văn mẫu trùng lặp';
     }
   } else if (depth === 'stars_only') {
+    explanationKind = 'stars_only';
     explanationVi = `Trọng số ${weight.toFixed(2)}x: chỉ chấm sao, không có nội dung (C=0.25)`;
   } else if (depth === 'platform_label') {
+    explanationKind = 'platform_label';
     explanationVi = `Trọng số ${weight.toFixed(2)}x: nhãn mặc định theo số sao của sàn (C=0.25)`;
   } else if (depth === 'low_effort') {
+    explanationKind = 'low_effort';
     explanationVi = `Trọng số ${weight.toFixed(2)}x: nhận xét ngắn, ít chi tiết kỹ thuật (C=0.50)`;
   } else {
+    explanationKind = 'formula';
     explanationVi = `A=${A} · B=${B} · C=${C} · D=${D} · E=${E} · F=${F} -> ${weight.toFixed(2)}x`;
   }
 
@@ -441,15 +464,25 @@ export function evaluateReviewTrustAssessment(
       community: F,
       base_weight: baseWeight,
       weight,
+      explanationKind,
       explanationVi,
     },
     wilsonScore: computeWilsonLowerBound(upvotes, downvotes),
   };
 }
 
+export type CombinedDualScoreBlendMode =
+  | 'blended'
+  | 'separate_low_confidence'
+  | 'user_only'
+  | 'expert_only'
+  | 'insufficient_data';
+
 export interface CombinedDualScoreResult {
   overall: number;
   isBlended: boolean;
+  /** Which `blendFormulaNoteVi` case applies, so the UI can localize it. */
+  blendMode: CombinedDualScoreBlendMode;
   blendFormulaNoteVi: string;
 }
 
@@ -501,6 +534,7 @@ export function computeCombinedDualScore(params: {
     return {
       overall: Number((safeUser * 0.6 + safeExpert * 0.4).toFixed(2)),
       isBlended: true,
+      blendMode: 'blended',
       blendFormulaNoteVi:
         'Tỷ trọng: 60% Người mua thực chất + 40% Chuyên gia Rate Lab (c ≥ 60%)',
     };
@@ -510,6 +544,7 @@ export function computeCombinedDualScore(params: {
     return {
       overall: Number(safeExpert.toFixed(2)),
       isBlended: false,
+      blendMode: 'separate_low_confidence',
       blendFormulaNoteVi:
         'Hiển thị riêng Điểm Chuyên gia & Người mua (chờ độ tin cậy người dùng đạt mức Trung bình c ≥ 60% để gộp 60/40)',
     };
@@ -519,6 +554,7 @@ export function computeCombinedDualScore(params: {
     return {
       overall: Number(safeUser.toFixed(2)),
       isBlended: false,
+      blendMode: 'user_only',
       blendFormulaNoteVi:
         'Tỷ trọng: 100% Người mua thực chất (đã lọc Seeding & Spam xu)',
     };
@@ -528,6 +564,7 @@ export function computeCombinedDualScore(params: {
     return {
       overall: Number(safeExpert.toFixed(2)),
       isBlended: false,
+      blendMode: 'expert_only',
       blendFormulaNoteVi: 'Tỷ trọng: 100% Đánh giá Chuyên gia Rate Lab',
     };
   }
@@ -535,6 +572,7 @@ export function computeCombinedDualScore(params: {
   return {
     overall: Number(safeFallback.toFixed(2)),
     isBlended: false,
+    blendMode: 'insufficient_data',
     blendFormulaNoteVi: 'Chưa đủ dữ liệu đánh giá thực chất',
   };
 }

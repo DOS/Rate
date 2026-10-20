@@ -86,6 +86,36 @@ async function runSuite() {
   assert.equal(ambiguous.storage_gb, null);
   assert.equal(ambiguous.model_key, 'samsung:galaxy-s24-ultra:unknown');
   assert.equal(ambiguous.needs_review, true);
+
+  // Laptop spec lists separate RAM and storage with commas (DOS/Rate#588).
+  const zenbookSpecList = normalizer.normalize(
+    createDummyShopeeProduct(
+      'Laptop Asus Zenbook S 14 UX5406SA - PV140WS (Ultra 7 258V, 32GB, 1TB, 2.8K OLED Touch, Win11)'
+    )
+  );
+  assert.equal(zenbookSpecList.storage_gb, 1024);
+  assert.equal(zenbookSpecList.model_key, 'asus:zenbook-s-14:1024gb');
+  assert.equal(
+    normalizer.normalize(
+      createDummyShopeeProduct('Asus Zenbook S 14 UX5406SA Ultra 7 258V 32GB 1TB')
+    ).model_key,
+    zenbookSpecList.model_key,
+    'comma and space separated spec lists key the same'
+  );
+  assert.equal(
+    normalizer.normalize(
+      createDummyShopeeProduct('Điện thoại Samsung Galaxy S24 Ultra 256GB, 512GB')
+    ).storage_gb,
+    null,
+    'two storage sizes separated by a comma stay ambiguous'
+  );
+  // Accepted trade-off: a small size before a large one reads as RAM + storage
+  // whatever the separator, exactly as "32GB 64GB" already did.
+  assert.equal(
+    normalizer.normalize(createDummyShopeeProduct('Điện thoại Samsung Galaxy A15 4GB, 128GB'))
+      .storage_gb,
+    128
+  );
   console.log('  ✅ [2/5] RAM/ROM Disambiguation & Identity Safety passed');
 
   // 3. Multi-Category Benchmark Enrichment (Tablets, Laptops, Smartwatches, Earbuds)

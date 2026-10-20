@@ -31,12 +31,17 @@ import {
   radarMarkdownCell,
   type RadarSignal,
 } from '@/lib/deal-radar';
-import { getBrowserAccessToken } from '@/lib/auth/access-token';
 import {
+  getBrowserAccessToken,
+  jsonWriteHeaders,
+} from '@/lib/auth/access-token';
+import {
+  blendNoteKey,
   isFilteredOutReview,
   reviewBadgeKind,
   sponsorshipBadgeKey,
   submitErrorKey,
+  weightExplanationCopy,
   type ReviewBadgeKind,
 } from '@/lib/review-display';
 
@@ -326,7 +331,7 @@ export default function JReviewsSection({
     return {
       overall: dualScore.overall,
       isBlended: dualScore.isBlended,
-      blendFormulaNoteVi: dualScore.blendFormulaNoteVi,
+      blendMode: dualScore.blendMode,
       starAnomaly,
       user: computedUser,
       bayesianUser: bayesianUserScore,
@@ -525,12 +530,6 @@ export default function JReviewsSection({
       return;
     }
 
-    const accessToken = await getBrowserAccessToken();
-    if (!accessToken) {
-      setSubmitError(t('errLoginRequired'));
-      return;
-    }
-
     setSubmittingReview(true);
     try {
       const avgStar = Math.round(
@@ -539,10 +538,7 @@ export default function JReviewsSection({
       );
       const res = await fetch('/api/v1/rate/reviews', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-        },
+        headers: await jsonWriteHeaders(),
         body: JSON.stringify({
           masterProductId,
           authorName: authorName.trim() || t('defaultAuthorName'),
@@ -553,6 +549,10 @@ export default function JReviewsSection({
         }),
       });
 
+      if (res.status === 401) {
+        setSubmitError(t('errLoginRequired'));
+        return;
+      }
       const payload = await res.json();
       if (!res.ok || !payload?.ok || !payload?.review) {
         setSubmitError(t(submitErrorKey(payload?.code)));
@@ -984,7 +984,7 @@ export default function JReviewsSection({
               </div>
             </div>
             <div className="small text-white-50 border-top border-secondary border-opacity-25 mt-2 pt-2">
-              {liveScores.blendFormulaNoteVi}
+              {t(blendNoteKey(liveScores.blendMode))}
             </div>
           </div>
         </div>
@@ -1398,6 +1398,11 @@ export default function JReviewsSection({
             const assessment =
               rev.trust_assessment ?? evaluateReviewTrustAssessment(rev);
             const sponsorshipKey = sponsorshipBadgeKey(assessment.independence);
+            const weightCopy = weightExplanationCopy(assessment.breakdown);
+            const weightExplanation =
+              'key' in weightCopy
+                ? t(weightCopy.key, weightCopy.values)
+                : weightCopy.text;
             const myVote = userVotes[rev.id] || null;
             const isPending = Boolean(pendingIds[rev.id]);
             const isZeroWeight =
@@ -1461,12 +1466,12 @@ export default function JReviewsSection({
                               ? 'bg-primary-subtle text-primary'
                               : 'bg-light text-muted border'
                         }`}
-                        title={assessment.breakdown.explanationVi}
+                        title={weightExplanation}
                         data-testid="review-6axis-breakdown"
                       >
                         {t('weightBadgeLabel', {
                           weight: rev.helpfulness_weight.toFixed(2),
-                          explanation: assessment.breakdown.explanationVi,
+                          explanation: weightExplanation,
                         })}
                       </span>
                     </div>
