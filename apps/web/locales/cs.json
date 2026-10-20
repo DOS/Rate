@@ -1431,6 +1431,7 @@
       "accepted": "Odkaz je ve frontě ke kontrole. Zadaná cena se nezveřejní přímo.",
       "noConsent": "Před odesláním zaškrtněte souhlas se sdílením.",
       "invalidUrl": "Nejde o stránku produktu z jednoho z 10 podporovaných obchodů. Otevřete stránku produktu a zkopírujte odkaz znovu.",
+      "platformPending": "Rate.vn zatím nepřijímá odkazy z tohoto obchodu. Zkuste to prosím později.",
       "invalidPrice": "Aktuální cena není platná. Zadejte částku v dongech.",
       "accessory": "Vypadá to na příslušenství nebo díl. Rate.vn sleduje jen ceny zařízení.",
       "rateLimited": "Příliš mnoho odkazů najednou. Počkejte minutu a zkuste to znovu.",

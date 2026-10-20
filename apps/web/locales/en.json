@@ -1431,6 +1431,7 @@
       "accepted": "The link is in the queue for checking. The price you entered is not published directly.",
       "noConsent": "Please tick the sharing consent box before sending.",
       "invalidUrl": "This is not a product page from one of the 10 supported stores. Open the product page and copy its link again.",
+      "platformPending": "Rate.vn is not taking links from this store yet. Please try again later.",
       "invalidPrice": "The current price is not valid. Enter the amount in dong.",
       "accessory": "This looks like an accessory or a part. Rate.vn only tracks device prices.",
       "rateLimited": "Too many links at once. Please wait a minute and try again.",

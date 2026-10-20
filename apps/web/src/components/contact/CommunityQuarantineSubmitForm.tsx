@@ -21,6 +21,7 @@ type SubmitOutcome =
   | 'accepted'
   | 'noConsent'
   | 'invalidUrl'
+  | 'platformPending'
   | 'invalidPrice'
   | 'accessory'
   | 'rateLimited'
@@ -39,6 +40,9 @@ function outcomeFromJobState(jobState: string | undefined): SubmitOutcome {
       return 'noConsent';
     case 'rejected_invalid_url':
       return 'invalidUrl';
+    // A valid link from a store whose checking worker is not running yet.
+    case 'platform_worker_pending_phase_5_1':
+      return 'platformPending';
     case 'rejected_invalid_price':
       return 'invalidPrice';
     case 'skipped_accessory':

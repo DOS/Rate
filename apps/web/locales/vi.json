@@ -1431,6 +1431,7 @@
       "accepted": "Link đã vào hàng chờ kiểm tra. Giá bạn nhập không được đưa thẳng lên trang.",
       "noConsent": "Hãy đánh dấu ô đồng ý chia sẻ trước khi gửi.",
       "invalidUrl": "Link này không phải trang chi tiết sản phẩm của một trong 10 sàn được hỗ trợ. Hãy mở trang sản phẩm và sao chép lại link.",
+      "platformPending": "Rate.vn tạm thời chưa nhận link từ sàn này. Vui lòng thử lại sau.",
       "invalidPrice": "Giá đang bán không hợp lệ. Hãy nhập số tiền bằng đồng.",
       "accessory": "Có vẻ đây là phụ kiện hoặc linh kiện. Rate.vn chỉ theo dõi giá của thiết bị.",
       "rateLimited": "Bạn gửi hơi nhanh. Vui lòng đợi một phút rồi thử lại.",
