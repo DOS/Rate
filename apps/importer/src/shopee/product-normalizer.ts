@@ -1218,7 +1218,8 @@ export class ProductNormalizer {
     }
 
     // Also support slash shorthand ("12GB/256GB", "8/256GB") and CellphoneS/TGDD
-    // adjacent RAM+ROM pairs ("12GB 256GB") when no explicit RAM keyword is present.
+    // adjacent RAM+ROM pairs ("12GB 256GB", laptop spec lists "32GB, 1TB") when no
+    // explicit RAM keyword is present.
     // `\s*(?:X\s*)?` rather than `\s*X?\s*` (here and in the ROM patterns
     // below): the same strings, without the two adjacent \s* that made long
     // whitespace runs quadratic (CodeQL polynomial regex, DOS/Rate#537).
@@ -1234,7 +1235,7 @@ export class ProductNormalizer {
     } else if (ramPhrases.length === 0 && claimable.filter(t => !t.claimed).length === 2) {
       const [first, second] = claimable.filter(t => !t.claimed);
       const between = title.slice(first.index + first.raw.length, second.index);
-      if (first.value <= 32 && second.value >= 64 && /^[\s/-]+$/.test(between)) {
+      if (first.value <= 32 && second.value >= 64 && /^[\s/,-]+$/.test(between)) {
         first.claimed = true;
       }
     }
