@@ -142,6 +142,18 @@ const LABELED_ENTITY_RESOLUTION_BENCHMARK: ReadonlyArray<LabeledProductPair> = [
     shouldMatchCanonicalCluster: false,
   },
   {
+    id: 'pair-plus-4-redmi-note13-pro-plus-sign-vs-word',
+    titleA: 'Xiaomi Redmi Note 13 Pro+ 5G 8GB 256GB Chính hãng',
+    titleB: 'Xiaomi Redmi Note 13 Pro Plus 5G 8GB 256GB Chính hãng',
+    shouldMatchCanonicalCluster: true,
+  },
+  {
+    id: 'pair-plus-5-redmi-note13-pro-plus-word-vs-pro',
+    titleA: 'Xiaomi Redmi Note 13 Pro Plus 5G 8GB 256GB Chính hãng',
+    titleB: 'Xiaomi Redmi Note 13 Pro 5G 8GB 256GB Chính hãng',
+    shouldMatchCanonicalCluster: false,
+  },
+  {
     id: 'pair-plus-3-s24-plus-sign-vs-word',
     titleA: 'Samsung Galaxy S24+ 12GB 256GB Chính hãng',
     titleB: 'Samsung Galaxy S24 Plus 12GB 256GB Chính hãng',
