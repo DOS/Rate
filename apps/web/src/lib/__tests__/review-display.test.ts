@@ -196,6 +196,38 @@ function main() {
     assert.equal(text, breakdown.explanationVi, kind);
     assert.equal('key' in copy, kind !== 'formula', `${kind} is localized`);
   }
+  // Reviews that cover the product as well as delivery are not shipping-only
+  // (DOS/Rate#596): Shopee's structured product fields and any product word
+  // count, matched as whole words.
+  const assess = (comment: string) =>
+    evaluateReviewTrustAssessment({
+      id: comment,
+      rating_star: 5,
+      comment,
+      verdict: 'authentic',
+      flag_category: 'authentic',
+      include_in_rating: true,
+      helpfulness_weight: 1,
+    } as ReviewItem);
+  for (const comment of [
+    'Chất lượng sản phẩm:tốt\nĐúng với mô tả:đúng mô tả\nTính năng nổi bật:dep\n\nĐóng gói cẩn thận. Giao hàng nhanh chóng.',
+    'Lần đầu tiên mình đặt điện thoại qua Ecommerce. Khá run. Nhưng giao hàng khá nhanh.',
+    'Giao hàng nhanh, máy đẹp, đóng gói kỹ',
+  ]) {
+    const a = assess(comment);
+    assert.notEqual(a.breakdown.explanationKind, 'shipping_only', comment);
+    assert.equal(a.routesTo, 'product', comment);
+  }
+  for (const comment of [
+    'Giao hàng nhanh, đóng gói cẩn thận',
+    'Giao hàng nhanh như chớp, shipper thân thiện',
+    'Shopping vui, giao hàng nhanh',
+  ]) {
+    const a = assess(comment);
+    assert.equal(a.breakdown.explanationKind, 'shipping_only', comment);
+    assert.equal(a.routesTo, 'merchant', comment);
+  }
+
   const cached = { weight: 0.25, explanationVi: 'Trọng số 0.25x: cũ' };
   assert.deepEqual(weightExplanationCopy(cached), {
     text: cached.explanationVi,
@@ -235,6 +267,9 @@ function main() {
 
   // The keys exist in every locale.
   const keys = [
+    'ratingWeightBadge',
+    'ratingWeightTitle',
+    'trustModelBadge',
     'weightExplanationShippingOnly',
     'weightExplanationFiller',
     'weightExplanationSabotage',
