@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { BsPhone } from 'react-icons/bs';
+import { BsChevronDown, BsChevronUp, BsPhone } from 'react-icons/bs';
 import { Link } from '@/lib/navigation';
 import {
   clearCompareTray,
@@ -12,6 +12,10 @@ import {
   setCompareTray,
   subscribeCompareTray,
 } from './compare-tray';
+
+// Per-tab memory of the user's last choice; phones start collapsed (#607).
+const COLLAPSED_KEY = 'rate_compare_tray_collapsed';
+const PHONE_QUERY = '(max-width: 767.98px)';
 
 export default function CompareTrayBar() {
   const t = useTranslations('compare');
@@ -25,6 +29,30 @@ export default function CompareTrayBar() {
     sync();
     return subscribeCompareTray(sync);
   }, []);
+
+  useEffect(() => {
+    let saved: string | null = null;
+    try {
+      saved = window.sessionStorage.getItem(COLLAPSED_KEY);
+    } catch {
+      // Storage blocked: fall back to the viewport default.
+    }
+    setCollapsed(
+      saved != null ? saved === '1' : window.matchMedia(PHONE_QUERY).matches
+    );
+  }, []);
+
+  const toggleCollapsed = () => {
+    setCollapsed((c) => {
+      const next = !c;
+      try {
+        window.sessionStorage.setItem(COLLAPSED_KEY, next ? '1' : '0');
+      } catch {
+        // Not persisted; the toggle still works for this page.
+      }
+      return next;
+    });
+  };
 
   if (items.length === 0) {
     return null;
@@ -51,24 +79,40 @@ export default function CompareTrayBar() {
               <span className="badge bg-danger rounded-pill px-2 py-1">
                 {items.length} / {MAX_COMPARE_ITEMS}
               </span>
-              <span className="fw-bold small">{t('trayTitle')}</span>
+              <span
+                className={`fw-bold small ${collapsed ? 'd-none d-sm-inline' : ''}`}
+              >
+                {t('trayTitle')}
+              </span>
               <button
                 type="button"
-                onClick={() => setCollapsed((c) => !c)}
-                className="btn btn-link btn-sm text-light text-decoration-none small ms-1 p-0 opacity-75"
+                onClick={toggleCollapsed}
+                aria-expanded={!collapsed}
+                aria-controls="rate-compare-tray-items"
+                aria-label={collapsed ? t('trayExpand') : t('trayCollapse')}
+                className="btn btn-link btn-sm text-light text-decoration-none small d-inline-flex align-items-center gap-1 ms-1 p-1 opacity-75"
               >
-                {collapsed ? t('trayExpand') : t('trayCollapse')}
+                {collapsed ? (
+                  <BsChevronUp aria-hidden="true" />
+                ) : (
+                  <BsChevronDown aria-hidden="true" />
+                )}
+                <span className="d-none d-sm-inline">
+                  {collapsed ? t('trayExpand') : t('trayCollapse')}
+                </span>
               </button>
             </div>
 
             <div className="d-flex align-items-center justify-content-end flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={clearCompareTray}
-                className="btn btn-sm btn-outline-light rounded-pill small text-nowrap px-3 py-1"
-              >
-                {t('trayClearAll')}
-              </button>
+              {!collapsed && (
+                <button
+                  type="button"
+                  onClick={clearCompareTray}
+                  className="btn btn-sm btn-outline-light rounded-pill small text-nowrap px-3 py-1"
+                >
+                  {t('trayClearAll')}
+                </button>
+              )}
               <Link
                 href={compareHref}
                 className="btn btn-sm btn-danger rounded-pill fw-bold text-nowrap px-3 py-1 shadow-sm"
@@ -79,7 +123,10 @@ export default function CompareTrayBar() {
           </div>
 
           {!collapsed && (
-            <div className="row g-2 border-top border-secondary border-opacity-25 mt-2 pt-2">
+            <div
+              id="rate-compare-tray-items"
+              className="row g-2 border-top border-secondary border-opacity-25 mt-2 pt-2"
+            >
               {items.map((item) => (
                 <div key={item.slug} className="col-md-3 col-6">
                   <div
