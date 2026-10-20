@@ -35,6 +35,7 @@ import { getBrowserAccessToken } from '@/lib/auth/access-token';
 import {
   isFilteredOutReview,
   reviewBadgeKind,
+  sponsorshipBadgeKey,
   submitErrorKey,
   type ReviewBadgeKind,
 } from '@/lib/review-display';
@@ -1149,19 +1150,20 @@ export default function JReviewsSection({
         </div>
       </div>
 
-      {liveScores.starAnomaly.isAnomalous &&
-        liveScores.starAnomaly.warningLabelVi && (
-          <div
-            className="alert alert-warning rounded-4 small d-flex align-items-center mb-4 gap-2 px-3 py-2"
-            data-testid="star-distribution-anomaly-alert"
-          >
-            <BsExclamationTriangle
-              aria-hidden="true"
-              className="flex-shrink-0"
-            />
-            <span>{liveScores.starAnomaly.warningLabelVi}</span>
-          </div>
-        )}
+      {liveScores.starAnomaly.isAnomalous && (
+        <div
+          className="alert alert-warning rounded-4 small d-flex align-items-center mb-4 gap-2 px-3 py-2"
+          data-testid="star-distribution-anomaly-alert"
+        >
+          <BsExclamationTriangle aria-hidden="true" className="flex-shrink-0" />
+          <span>
+            {t('starAnomalyWarning', {
+              fiveStarPct: liveScores.starAnomaly.fiveStarRatioPct,
+              lowEffortPct: liveScores.starAnomaly.lowEffortOrSeedingRatioPct,
+            })}
+          </span>
+        </div>
+      )}
 
       {/* 2. AI Review Synthesis (Pros / Cons / Authenticity Bar) */}
       <div className="rounded-4 bg-light mb-4 border p-4">
@@ -1395,6 +1397,7 @@ export default function JReviewsSection({
               flagMetaMap[reviewBadgeKind(rev)] || flagMetaMap.authentic;
             const assessment =
               rev.trust_assessment ?? evaluateReviewTrustAssessment(rev);
+            const sponsorshipKey = sponsorshipBadgeKey(assessment.independence);
             const myVote = userVotes[rev.id] || null;
             const isPending = Boolean(pendingIds[rev.id]);
             const isZeroWeight =
@@ -1425,10 +1428,10 @@ export default function JReviewsSection({
                             {t('roleBuyerBadge')}
                           </span>
                         )}
-                        {assessment.sponsorshipBadgeVi && (
+                        {sponsorshipKey && (
                           <span className="badge bg-warning-subtle text-warning-emphasis border-warning-subtle rounded-pill small border">
                             <BsMegaphone aria-hidden="true" className="me-1" />
-                            {assessment.sponsorshipBadgeVi}
+                            {t(sponsorshipKey)}
                           </span>
                         )}
                         {assessment.routesTo === 'merchant' && (

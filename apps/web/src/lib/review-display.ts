@@ -1,4 +1,8 @@
-import type { ReviewFlagCategory, ReviewItem } from './rate-api';
+import type {
+  ReviewFlagCategory,
+  ReviewIndependenceAxis,
+  ReviewItem,
+} from './rate-api';
 
 /**
  * Badge shown on a review card. Community reviews are stored unanalyzed and
@@ -26,6 +30,32 @@ export function isFilteredOutReview(
 ): boolean {
   if (isPendingReview(review)) return false;
   return !review.include_in_rating || review.helpfulness_weight <= 0;
+}
+
+export type SponsorshipBadgeKey =
+  | 'sponsorshipBadgeSponsoredBalanced'
+  | 'sponsorshipBadgeSponsoredPromo'
+  | 'sponsorshipBadgeIncentivized'
+  | 'sponsorshipBadgeAffiliate';
+
+const SPONSORSHIP_BADGE_KEYS: Partial<
+  Record<ReviewIndependenceAxis, SponsorshipBadgeKey>
+> = {
+  sponsored_balanced: 'sponsorshipBadgeSponsoredBalanced',
+  sponsored_promo: 'sponsorshipBadgeSponsoredPromo',
+  incentivized: 'sponsorshipBadgeIncentivized',
+  affiliate: 'sponsorshipBadgeAffiliate',
+};
+
+/**
+ * Localized message key for the disclosure badge of a review. Mirrors the
+ * cases where `evaluateReviewTrustAssessment` sets `sponsorshipBadgeVi`, which
+ * is Vietnamese only, so the UI never shows that string directly.
+ */
+export function sponsorshipBadgeKey(
+  independence: ReviewIndependenceAxis
+): SponsorshipBadgeKey | null {
+  return SPONSORSHIP_BADGE_KEYS[independence] ?? null;
 }
 
 export type SubmitErrorKey =

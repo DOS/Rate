@@ -158,3 +158,30 @@ FROM generate_series(1, 201) AS g;
 -- whole category finds them (DOS/Rate#473).
 UPDATE rate.master_products SET user_rating_weighted = 4
 WHERE slug LIKE 'e2e-bud-%';
+
+-- A phone whose six 5-star reviews are mostly star-only, one of them a
+-- sponsored post: the product page shows the star-distribution warning and a
+-- disclosure badge, which must follow the active locale (DOS/Rate#566). Its
+-- rating is never refreshed, so it stays off the leaderboard, and its reviews
+-- are older than every other review, so they take no recent-review slot.
+INSERT INTO rate.merchants (id, platform, platform_shop_id, name, slug, is_official)
+VALUES ('ffffffff-ffff-4fff-8fff-ffffffff0566', 'shopee', 'shop_review_labels', 'Review Labels Store', 'review-labels-store', false);
+INSERT INTO rate.master_products
+  (id, category_id, brand, model, model_key, name, slug, min_price, max_price, merchant_count, status, metadata)
+VALUES ('22222222-2222-4222-8222-222222220566', 'c0000000-0000-4000-8000-000000000001', 'E2E', 'Review Labels Phone',
+  'e2e_review_labels_phone', 'E2E Review Labels Phone', 'e2e-review-labels-phone', 3000000, 3000000, 1, 'published',
+  '{"category_slug": "smartphones"}');
+INSERT INTO rate.products (id, merchant_id, platform, platform_item_id, title, category_id, price_current, url, cluster_id)
+VALUES ('cccccccc-cccc-4ccc-8ccc-cccccccc0566', 'ffffffff-ffff-4fff-8fff-ffffffff0566', 'shopee', 'item_review_labels',
+  'E2E Review Labels Phone', 'c0000000-0000-4000-8000-000000000001', 3000000, 'https://shopee.vn/item-review-labels',
+  '22222222-2222-4222-8222-222222220566');
+INSERT INTO rate.reviews (product_id, author_name, rating_star, comment, reviewer_type, platform_created_at, created_at)
+SELECT 'cccccccc-cccc-4ccc-8ccc-cccccccc0566', v.author, 5, v.comment, 'user',
+  now() - interval '100 days', now() - interval '100 days'
+FROM (VALUES
+  ('Labels 1', 'Máy được tài trợ, dùng rất mượt và pin trâu cả ngày.'),
+  ('Labels 2', 'Tốt'), ('Labels 3', 'Ok'), ('Labels 4', 'Rất tốt'), ('Labels 5', 'Đẹp'), ('Labels 6', 'Ổn')
+) AS v(author, comment);
+INSERT INTO rate.review_flags (review_id, verdict, include_in_rating, detector, detector_version, input_hash)
+SELECT id, 'authentic', true, 'e2e-seed', 'v1', 'seed-' || id
+FROM rate.reviews WHERE product_id = 'cccccccc-cccc-4ccc-8ccc-cccccccc0566';
