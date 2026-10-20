@@ -359,10 +359,7 @@ export default function ProductOffersExplorer({
           </div>
 
           <div className="d-flex align-items-center flex-wrap gap-2">
-            <ExportMenu
-              label={t('exportMenu')}
-              className="rate-export-menu-start-phone"
-            >
+            <ExportMenu label={t('exportMenu')}>
               {(close) => (
                 <>
                   <button
