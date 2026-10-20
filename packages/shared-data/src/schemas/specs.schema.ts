@@ -135,10 +135,10 @@ export const MasterProductSchema = z.object({
   name: z.string().min(1),
   slug: z.string().min(1),
   description: z.string().nullable().optional(),
-  ram_gb: z.number().positive().nullable().optional(),
-  storage_gb: z.number().positive().nullable().optional(),
-  screen_size_inch: z.number().positive().nullable().optional(),
-  battery_mah: z.number().positive().nullable().optional(),
+  ram_gb: z.number().positive().max(2048).nullable().optional(),
+  storage_gb: z.number().positive().max(65536).nullable().optional(),
+  screen_size_inch: z.number().positive().max(120).nullable().optional(),
+  battery_mah: z.number().positive().max(500000).nullable().optional(),
   has_5g: z.boolean().default(false),
   specifications: ProductSpecificationsSchema.default({}),
   key_specs: KeySpecsSchema.default({}),
@@ -217,7 +217,11 @@ export const ScrapedProductSchema = z.object({
   description: z.string().optional(),
   priceMin: z.number().nonnegative().max(MAX_VALID_VND_PRICE),
   priceMax: z.number().nonnegative().max(MAX_VALID_VND_PRICE),
-  priceBeforeDiscount: z.number().nonnegative().optional(),
+  priceBeforeDiscount: z
+    .number()
+    .nonnegative()
+    .max(MAX_VALID_VND_PRICE)
+    .optional(),
   currency: z.string().min(1).default('VND'),
   historicalSold: z.number().int().nonnegative().default(0),
   stock: z.number().int().nonnegative().optional(),
@@ -230,7 +234,7 @@ export const ScrapedProductSchema = z.object({
       z.object({
         modelId: z.string(),
         name: z.string(),
-        price: z.number().nonnegative(),
+        price: z.number().nonnegative().max(MAX_VALID_VND_PRICE),
         stock: z.number().int().nonnegative().optional(),
         sku: z.string().optional(),
       })

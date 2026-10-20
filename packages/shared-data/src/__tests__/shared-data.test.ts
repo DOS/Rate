@@ -238,6 +238,44 @@ function testMasterProductAndScrapedProductSchemas(): void {
   const paged = PaginationSchema.parse({});
   assert.equal(paged.page, 1);
   assert.equal(paged.pageSize, 25);
+  assert.equal(PaginationSchema.safeParse({ page: 1.5 }).success, false);
+  assert.equal(PaginationSchema.safeParse({ total: -1 }).success, false);
+
+  assert.equal(
+    MasterProductSchema.safeParse({
+      id: '01929000-0000-7000-8000-000000000001',
+      brand: 'Apple',
+      model: 'iPhone 16 Pro Max',
+      model_key: 'apple-iphone-16-pro-max-8gb-256gb',
+      name: 'Apple iPhone 16 Pro Max 256GB',
+      slug: 'apple-iphone-16-pro-max-256gb',
+      ram_gb: 99999,
+    }).success,
+    false
+  );
+  assert.equal(
+    ScrapedProductSchema.safeParse({
+      platform: 'shopee',
+      itemId: '123456',
+      shopId: '654321',
+      url: 'https://shopee.vn/product/654321/123456',
+      title: 'iPhone 16 Pro Max 256GB',
+      priceMin: 31990000,
+      priceMax: 33990000,
+      priceBeforeDiscount: 5_000_000_000,
+      shop: { shopId: '654321', name: 'Apple Flagship Store', isMall: true },
+    }).success,
+    false
+  );
+  assert.equal(
+    sharedDataRoot.HttpUrlSchema.safeParse('javascript:alert(1)').success,
+    false
+  );
+  assert.equal(
+    sharedDataRoot.HttpUrlSchema.safeParse('https://rate.vn/smartphones')
+      .success,
+    true
+  );
 
   const responseSchema = ApiResponseSchema(z.object({ ok: z.boolean() }));
   const parsedResponse = responseSchema.parse({
@@ -270,6 +308,12 @@ function testSupabaseClientGuards(): void {
     assert.throws(() => getAdminClient(), /Missing SUPABASE_URL/);
     assert.throws(() => getRateClient(), /Missing SUPABASE_URL/);
     assert.throws(() => getDosafeClient(), /Missing SUPABASE_URL/);
+
+    process.env.NEXT_PUBLIC_SUPABASE_URL = 'javascript:alert(1)';
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'anon-test-key';
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-test-key';
+    assert.throws(() => getPublicClient(), /Invalid NEXT_PUBLIC_SUPABASE_URL/);
+    assert.throws(() => getAdminClient(), /Invalid SUPABASE_URL/);
 
     process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://example.supabase.co';
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'anon-test-key';

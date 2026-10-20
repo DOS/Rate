@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { UUIDv7Schema, StatusSchema } from './common.schema.js';
+import { HttpUrlSchema, UUIDv7Schema, StatusSchema } from './common.schema.js';
 
 /**
  * Review-related schemas
@@ -17,13 +17,13 @@ export const ReviewSchema = z.object({
   content: z.string().min(10).max(5000),
   pros: z.array(z.string()).optional(),
   cons: z.array(z.string()).optional(),
-  images: z.array(z.string().url()).optional(),
+  images: z.array(HttpUrlSchema).optional(),
   isVerified: z.boolean().default(false),
   isAnonymous: z.boolean().default(false),
   status: StatusSchema,
-  helpfulCount: z.number().min(0).default(0),
-  unhelpfulCount: z.number().min(0).default(0),
-  reportCount: z.number().min(0).default(0),
+  helpfulCount: z.number().int().nonnegative().default(0),
+  unhelpfulCount: z.number().int().nonnegative().default(0),
+  reportCount: z.number().int().nonnegative().default(0),
   reply: z
     .object({
       content: z.string(),
