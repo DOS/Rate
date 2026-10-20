@@ -169,6 +169,7 @@ export default async function FooterDynamic({
                             target={s.newTab ? '_blank' : undefined}
                             rel="noopener noreferrer"
                             className="social-link"
+                            aria-label={s.label!}
                           >
                             {getSocialIcon(s.href) ||
                               getSocialIcon(s.label) ||

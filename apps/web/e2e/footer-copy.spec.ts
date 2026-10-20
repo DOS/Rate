@@ -3,12 +3,35 @@ import { expect, test } from '@playwright/test';
 // The site-wide footer talks to shoppers in their language: no route paths,
 // raw API links or untranslated labels (DOS/Rate#617).
 const LOCALES = [
-  { path: '/', lang: 'vi', label: 'Bảng xếp hạng sản phẩm' },
-  { path: '/en', lang: 'en', label: 'Product rankings' },
-  { path: '/cs', lang: 'cs', label: 'Žebříček produktů' },
+  {
+    path: '/',
+    lang: 'vi',
+    label: 'Bảng xếp hạng sản phẩm',
+    icons: [
+      'Mã nguồn trên GitHub',
+      'API cho nhà phát triển',
+      'Độ tin cậy gian hàng',
+    ],
+  },
+  {
+    path: '/en',
+    lang: 'en',
+    label: 'Product rankings',
+    icons: ['Source code on GitHub', 'Developer API', 'Shop trust scores'],
+  },
+  {
+    path: '/cs',
+    lang: 'cs',
+    label: 'Žebříček produktů',
+    icons: [
+      'Zdrojový kód na GitHubu',
+      'API pro vývojáře',
+      'Důvěryhodnost obchodů',
+    ],
+  },
 ];
 
-for (const { path, lang, label } of LOCALES) {
+for (const { path, lang, label, icons } of LOCALES) {
   test(`footer on ${path} has no route paths or API jargon`, async ({
     page,
   }) => {
@@ -31,17 +54,11 @@ for (const { path, lang, label } of LOCALES) {
       expect(text).not.toContain(term);
     }
     await expect(footer.locator('a[href*="/api/"]')).toHaveCount(0);
-    // Icon-only links are named in the page's language (no English
-    // fallbacks such as 'REST API v1' or 'Merchants').
-    for (const name of await footer
-      .locator('a.social-link')
-      .evaluateAll((els) =>
-        els.map((el) => el.getAttribute('aria-label') ?? '')
-      )) {
-      expect(name).not.toBe('');
-      expect(['REST API v1', 'Merchants', 'GitHub DOS/Rate']).not.toContain(
-        name
-      );
+    // Icon-only links are named in the page's language (DOS/Rate#619).
+    const iconLinks = footer.locator('a.social-link');
+    await expect(iconLinks).toHaveCount(icons.length);
+    for (const [i, name] of icons.entries()) {
+      await expect(iconLinks.nth(i)).toHaveAccessibleName(name);
     }
     for (const href of ['/leaderboard', '/inspect', '/developers']) {
       await expect(footer.locator(`a[href$="${href}"]`).first()).toBeAttached();
