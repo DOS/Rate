@@ -38,6 +38,7 @@ import { buildRadarIndex, getRadarSignal } from '@/lib/deal-radar';
 import { bayesianTierKey, radarExplanation } from '@/lib/product-detail-copy';
 import { defaultOpenGraph, SHARE_IMAGE } from '@/lib/seo';
 import JReviewsSection from '@/components/reviews/JReviewsSection';
+import PhoneCollapsible from '@/components/product/PhoneCollapsible';
 import PriceHistorySection from '@/components/price-history/PriceHistorySection';
 import CompareQuickToggle from '@/components/compare/CompareQuickToggle';
 import CompareTrayBar from '@/components/compare/CompareTrayBar';
@@ -831,7 +832,12 @@ export async function ProductDetailView({
                 </div>
               </div>
 
-              <div className="row g-4">
+              <PhoneCollapsible
+                className="row g-4"
+                showMoreLabel={t('specsShowAll')}
+                showLessLabel={t('specsShowLess')}
+                openOnHash="#specs-section"
+              >
                 {/* 1. Display */}
                 <div className="col-md-6 col-12">
                   <div className="rounded-4 h-100 border bg-white p-4">
@@ -1324,7 +1330,7 @@ export async function ProductDetailView({
                     </dl>
                   </div>
                 </div>
-              </div>
+              </PhoneCollapsible>
             </div>
           );
         })()}
