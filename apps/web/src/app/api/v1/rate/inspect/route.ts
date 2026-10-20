@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { MAX_VALID_VND_PRICE } from '@/lib/rate-api';
 import { getCachedInspectProductOrShopUrl } from '@/server/rate';
 import { computeProductRadarSignal } from '@/server/rate/deals';
 import {
@@ -50,12 +51,18 @@ export async function GET(request: NextRequest) {
 
     const inspection = await getCachedInspectProductOrShopUrl(rawQuery);
     const canonicalUrl = canonicalizeProductUrl(rawQuery);
-    const observedPrice = Number(
+    const rawObservedPrice = Number(
       queryPrice ??
         inspection.matchedOffer?.price_current ??
         inspection.masterProduct?.min_price ??
         0
     );
+    const observedPrice =
+      Number.isFinite(rawObservedPrice) &&
+      rawObservedPrice > 0 &&
+      rawObservedPrice <= MAX_VALID_VND_PRICE
+        ? Math.round(rawObservedPrice)
+        : 0;
     const rawObservedOriginalPrice = Number(
       queryOriginalPrice ??
         (queryPrice === null
@@ -64,8 +71,11 @@ export async function GET(request: NextRequest) {
         0
     );
     const observedOriginalPrice =
-      rawObservedOriginalPrice > 0 && rawObservedOriginalPrice >= observedPrice
-        ? rawObservedOriginalPrice
+      Number.isFinite(rawObservedOriginalPrice) &&
+      rawObservedOriginalPrice > 0 &&
+      rawObservedOriginalPrice >= observedPrice &&
+      rawObservedOriginalPrice <= MAX_VALID_VND_PRICE
+        ? Math.round(rawObservedOriginalPrice)
         : 0;
 
     const gatekeeper = detectAccessoryOrJunk({
@@ -73,6 +83,7 @@ export async function GET(request: NextRequest) {
         inspection.matchedOffer?.title ||
         inspection.masterProduct?.name ||
         rawQuery,
+      url: canonicalUrl || rawQuery,
       price: observedPrice > 0 ? observedPrice : null,
     });
 

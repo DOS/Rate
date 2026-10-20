@@ -1282,6 +1282,34 @@ async function testRequestAuthAndRouteBounds() {
   );
 }
 
+async function testExtensionAndInspectBounds() {
+  const { extractStorageAndAmbiguity, ingestExtensionCrowdSignal } =
+    await import('@/server/rate/extension');
+
+  const tupleParsed = extractStorageAndAmbiguity({
+    title: 'Laptop Asus Zenbook S 14 (Ultra 7, 32GB, 1TB)',
+    selectedVariant: null,
+  });
+  assert.equal(tupleParsed.storageGb, 1024);
+  assert.equal(tupleParsed.hasMultipleStorageInTitle, false);
+
+  const rejectedPrice = await ingestExtensionCrowdSignal({
+    platform: 'shopee',
+    externalItemId: '29512841920',
+    externalShopId: '88201679',
+    url: 'https://shopee.vn/Dien-thoai-iPhone-16-i.88201679.29512841920',
+    title: 'Điện thoại iPhone 16 Pro Max 256GB',
+    price: 5_000_000_000,
+    userConsentOptIn: true,
+  });
+  assert.equal(rejectedPrice.accepted, false);
+  assert.equal(rejectedPrice.jobState, 'rejected_invalid_price');
+
+  console.log(
+    '  ✅ Extension RAM/ROM disambiguation and crowd ingest bounds verified (#580)'
+  );
+}
+
 async function main() {
   console.log('🧪 Public write-path security suite (#155)');
   await testReviews();
@@ -1292,6 +1320,7 @@ async function main() {
   await testLeaderboardEngineAndMerchantDirectoryGuards();
   await testRateApiTrustAndOfferBounds();
   await testRequestAuthAndRouteBounds();
+  await testExtensionAndInspectBounds();
   testSharedDataClients();
   console.log('✅ Public write-path security suite passed');
 }
