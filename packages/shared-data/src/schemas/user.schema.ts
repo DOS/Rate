@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { UUIDv7Schema } from './common.schema.js';
+import { HttpUrlSchema, UUIDv7Schema } from './common.schema.js';
 
 /**
  * User-related schemas
@@ -13,7 +13,7 @@ export const UserSchema = z.object({
   email: z.string().email(),
   firstName: z.string().optional(),
   lastName: z.string().optional(),
-  avatar: z.string().url().optional(),
+  avatar: HttpUrlSchema.optional(),
   role: UserRoleSchema,
   isActive: z.boolean(),
   emailConfirmed: z.boolean(),

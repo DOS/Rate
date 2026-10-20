@@ -375,12 +375,22 @@ export function extractRatingFromJsonLd(aggRaw: unknown): {
   }
 
   let ratingCount: number | null = null;
-  if (typeof rawCnt === 'number' && Number.isFinite(rawCnt) && rawCnt > 0) {
+  if (
+    typeof rawCnt === 'number' &&
+    Number.isFinite(rawCnt) &&
+    rawCnt > 0 &&
+    rawCnt <= 100_000_000
+  ) {
     ratingCount = Math.round(rawCnt);
   } else if (typeof rawCnt === 'string') {
-    const digits = rawCnt.replace(/[^\d]/g, '');
+    const strippedFraction = rawCnt.trim().replace(/[.,]\d{1,2}$/, '');
+    const digits = strippedFraction.replace(/[^\d]/g, '');
     const parsedCnt = digits ? Number(digits) : NaN;
-    if (Number.isFinite(parsedCnt) && parsedCnt > 0) {
+    if (
+      Number.isFinite(parsedCnt) &&
+      parsedCnt > 0 &&
+      parsedCnt <= 100_000_000
+    ) {
       ratingCount = Math.round(parsedCnt);
     }
   }

@@ -15,14 +15,33 @@ let _adminClient: SupabaseClient | null = null;
 /**
  * Get the admin Supabase client (service role, bypassing RLS).
  */
+function isValidSupabaseHttpUrl(rawUrl: string): boolean {
+  try {
+    const parsed = new URL(rawUrl);
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:';
+  } catch {
+    return false;
+  }
+}
+
 export function getAdminClient(): SupabaseClient {
   if (!_adminClient) {
-    const supabaseUrl =
-      process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? '';
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
+    const supabaseUrl = (
+      process.env.NEXT_PUBLIC_SUPABASE_URL ??
+      process.env.SUPABASE_URL ??
+      ''
+    ).trim();
+    const supabaseServiceKey = (
+      process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
+    ).trim();
     if (!supabaseUrl || !supabaseServiceKey) {
       throw new Error(
         'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables.'
+      );
+    }
+    if (!isValidSupabaseHttpUrl(supabaseUrl)) {
+      throw new Error(
+        'Invalid SUPABASE_URL: must use http:// or https:// protocol.'
       );
     }
     _adminClient = createClient(supabaseUrl, supabaseServiceKey, {

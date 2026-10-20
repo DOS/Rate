@@ -61,10 +61,15 @@ export function canonicalizeCacheParams(value: unknown): string {
 }
 
 export function isSafeRevalidationPath(rawPath: string): boolean {
+  if (typeof rawPath !== 'string') return false;
   const clean = rawPath.trim();
   if (!clean || clean.length > 200) return false;
   if (!clean.startsWith('/') || clean.startsWith('//')) return false;
-  if (clean.includes('\\') || /[\r\n\0]/.test(clean)) return false;
+  // eslint-disable-next-line no-control-regex -- rejecting control characters in revalidation paths
+  if (clean.includes('\\') || /[\u0000-\u001F\u007F?#]/.test(clean)) {
+    return false;
+  }
+  if (/(?:^|\/)\.\.(?:\/|$)/.test(clean)) return false;
   return true;
 }
 

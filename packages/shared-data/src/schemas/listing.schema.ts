@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import { UUIDv7Schema, StatusSchema, LanguageSchema } from './common.schema.js';
+import {
+  HttpUrlSchema,
+  UUIDv7Schema,
+  StatusSchema,
+  LanguageSchema,
+} from './common.schema.js';
 
 /**
  * Listing-related schemas
@@ -35,15 +40,15 @@ export const ListingSchema = z.object({
   category: ListingCategorySchema,
   status: StatusSchema,
   locale: LanguageSchema,
-  thumbnail: z.string().url().optional(),
-  images: z.array(z.string().url()).optional(),
-  website: z.string().url().optional(),
+  thumbnail: HttpUrlSchema.optional(),
+  images: z.array(HttpUrlSchema).optional(),
+  website: HttpUrlSchema.optional(),
   phoneNumber: z.string().optional(),
   email: z.string().email().optional(),
   address: z.string().optional(),
   rating: z.number().min(0).max(5).optional(),
-  reviewCount: z.number().min(0).default(0),
-  viewCount: z.number().min(0).default(0),
+  reviewCount: z.number().int().nonnegative().default(0),
+  viewCount: z.number().int().nonnegative().default(0),
   isFeatured: z.boolean().default(false),
   isVerified: z.boolean().default(false),
   metadata: z.record(z.string(), z.unknown()).optional(),

@@ -186,6 +186,12 @@ export interface ReviewAnalysisSummary {
   ai_summary: string | null;
 }
 
+function toSafeNonNegativeVoteCount(raw: unknown, max = 1_000_000): number {
+  const num = Number(raw);
+  if (!Number.isFinite(num) || num <= 0) return 0;
+  return Math.min(max, Math.floor(num));
+}
+
 /**
  * Computes the 95% Wilson score confidence interval lower bound for ranking "Most Helpful" reviews
  * over weighted upvotes and downvotes (Section 9 of `Docs/Platform/review-trust-model.html`).
@@ -197,17 +203,20 @@ export function computeWilsonLowerBound(
   z = 1.96
 ): number {
   const pos =
-    Number.isFinite(helpfulWeight) && helpfulWeight > 0 ? helpfulWeight : 0;
+    Number.isFinite(helpfulWeight) && helpfulWeight > 0
+      ? Math.min(10_000_000, helpfulWeight)
+      : 0;
   const neg =
     Number.isFinite(unhelpfulWeight) && unhelpfulWeight > 0
-      ? unhelpfulWeight
+      ? Math.min(10_000_000, unhelpfulWeight)
       : 0;
   const n = pos + neg;
   if (n <= 0) return 0;
+  const safeZ = Number.isFinite(z) && z > 0 ? Math.min(10, z) : 1.96;
   const pHat = pos / n;
-  const z2 = z * z;
-  const numerator =
-    pHat + z2 / (2 * n) - z * Math.sqrt((pHat * (1 - pHat) + z2 / (4 * n)) / n);
+  const z2 = safeZ * safeZ;
+  const radicand = Math.max(0, (pHat * (1 - pHat) + z2 / (4 * n)) / n);
+  const numerator = pHat + z2 / (2 * n) - safeZ * Math.sqrt(radicand);
   const denominator = 1 + z2 / n;
   return Number(Math.max(0, Math.min(1, numerator / denominator)).toFixed(4));
 }
@@ -263,7 +272,8 @@ export function evaluateReviewTrustAssessment(
   } else if (review.flag_category === 'review_bombing') {
     authenticity = 'bombing';
   } else if (
-    review.rating_star >= 5 &&
+    Number.isFinite(Number(review.rating_star)) &&
+    Number(review.rating_star) >= 5 &&
     /(?:tệ\s*quá|hàng\s*giả|lừa\s*đảo|đừng\s*mua|phí\s*tiền|dở\s*tệ|hỏng\s*ngay)/i.test(
       comment
     )
@@ -358,9 +368,9 @@ export function evaluateReviewTrustAssessment(
   const E = shippingOnly ? 0 : 1.0;
 
   // 6. Axis F: Community signal
-  const upvotes = Math.max(0, Number(review.upvotes || 0));
-  const downvotes = Math.max(0, Number(review.downvotes || 0));
-  const reports = Math.max(0, Number(review.report_count || 0));
+  const upvotes = toSafeNonNegativeVoteCount(review.upvotes);
+  const downvotes = toSafeNonNegativeVoteCount(review.downvotes);
+  const reports = toSafeNonNegativeVoteCount(review.report_count);
   const netPos = Math.max(0, upvotes - downvotes);
   const netNeg = Math.max(0, downvotes - upvotes);
   const rawF = 1 + 0.45 * Math.log(1 + netPos) - 0.3 * netNeg - 0.35 * reports;
@@ -461,46 +471,69 @@ export function computeCombinedDualScore(params: {
     userConfidence,
     fallbackAverage = 0,
   } = params;
-  const hasUser = typeof userScore === 'number' && userScore > 0;
-  const hasExpert = typeof expertScore === 'number' && expertScore > 0;
+  const safeUser =
+    typeof userScore === 'number' &&
+    Number.isFinite(userScore) &&
+    userScore > 0 &&
+    userScore <= 10
+      ? userScore
+      : null;
+  const safeExpert =
+    typeof expertScore === 'number' &&
+    Number.isFinite(expertScore) &&
+    expertScore > 0 &&
+    expertScore <= 10
+      ? expertScore
+      : null;
+  const safeConfidence =
+    typeof userConfidence === 'number' && Number.isFinite(userConfidence)
+      ? Math.max(0, Math.min(1, userConfidence))
+      : 0;
+  const safeFallback =
+    typeof fallbackAverage === 'number' &&
+    Number.isFinite(fallbackAverage) &&
+    fallbackAverage > 0 &&
+    fallbackAverage <= 10
+      ? fallbackAverage
+      : 0;
 
-  if (hasUser && hasExpert && userConfidence >= 0.6) {
+  if (safeUser !== null && safeExpert !== null && safeConfidence >= 0.6) {
     return {
-      overall: Number((userScore * 0.6 + expertScore * 0.4).toFixed(2)),
+      overall: Number((safeUser * 0.6 + safeExpert * 0.4).toFixed(2)),
       isBlended: true,
       blendFormulaNoteVi:
         'Tỷ trọng: 60% Người mua thực chất + 40% Chuyên gia Rate Lab (c ≥ 60%)',
     };
   }
 
-  if (hasUser && hasExpert && userConfidence < 0.6) {
+  if (safeUser !== null && safeExpert !== null && safeConfidence < 0.6) {
     return {
-      overall: Number(expertScore.toFixed(2)),
+      overall: Number(safeExpert.toFixed(2)),
       isBlended: false,
       blendFormulaNoteVi:
         'Hiển thị riêng Điểm Chuyên gia & Người mua (chờ độ tin cậy người dùng đạt mức Trung bình c ≥ 60% để gộp 60/40)',
     };
   }
 
-  if (hasUser) {
+  if (safeUser !== null) {
     return {
-      overall: Number(userScore.toFixed(2)),
+      overall: Number(safeUser.toFixed(2)),
       isBlended: false,
       blendFormulaNoteVi:
         'Tỷ trọng: 100% Người mua thực chất (đã lọc Seeding & Spam xu)',
     };
   }
 
-  if (hasExpert) {
+  if (safeExpert !== null) {
     return {
-      overall: Number(expertScore.toFixed(2)),
+      overall: Number(safeExpert.toFixed(2)),
       isBlended: false,
       blendFormulaNoteVi: 'Tỷ trọng: 100% Đánh giá Chuyên gia Rate Lab',
     };
   }
 
   return {
-    overall: Number(Number(fallbackAverage || 0).toFixed(2)),
+    overall: Number(safeFallback.toFixed(2)),
     isBlended: false,
     blendFormulaNoteVi: 'Chưa đủ dữ liệu đánh giá thực chất',
   };
@@ -523,21 +556,17 @@ export function detectStarDistributionAnomaly(
     Pick<ReviewItem, 'rating_star' | 'comment' | 'flag_category'>
   >
 ): StarDistributionAnomalySummary {
-  if (reviews.length < 5) {
-    return {
-      isAnomalous: false,
-      fiveStarRatioPct: 0,
-      lowEffortOrSeedingRatioPct: 0,
-      warningLabelVi: null,
-    };
-  }
-
+  let ratedCount = 0;
   let fiveStarCount = 0;
   let criticalStarCount = 0;
   let shallowOrFlaggedFiveStar = 0;
 
   for (const r of reviews) {
-    const star = Math.round(Number(r.rating_star || 0));
+    const rawStar = Number(r.rating_star);
+    if (!Number.isFinite(rawStar)) continue;
+    const star = Math.round(rawStar);
+    if (star < 1 || star > 5) continue;
+    ratedCount += 1;
     const text = (r.comment || '').trim();
     if (star === 5) {
       fiveStarCount += 1;
@@ -553,7 +582,16 @@ export function detectStarDistributionAnomaly(
     }
   }
 
-  const fiveStarRatioPct = Math.round((fiveStarCount / reviews.length) * 100);
+  if (ratedCount < 5) {
+    return {
+      isAnomalous: false,
+      fiveStarRatioPct: 0,
+      lowEffortOrSeedingRatioPct: 0,
+      warningLabelVi: null,
+    };
+  }
+
+  const fiveStarRatioPct = Math.round((fiveStarCount / ratedCount) * 100);
   const lowEffortOrSeedingRatioPct =
     fiveStarCount > 0
       ? Math.round((shallowOrFlaggedFiveStar / fiveStarCount) * 100)
@@ -611,8 +649,11 @@ export function computeJReviewsWeight(params: {
     return 0;
   }
 
+  const safeUpvotes = toSafeNonNegativeVoteCount(upvotes);
+  const safeDownvotes = toSafeNonNegativeVoteCount(downvotes);
+  const safeReports = toSafeNonNegativeVoteCount(reports);
   const base = verdict === 'suspicious' ? 0.25 : 1.0;
-  const net = Math.max(0, upvotes) - Math.max(0, downvotes);
+  const net = safeUpvotes - safeDownvotes;
   let weight = base;
 
   if (net > 0) {
@@ -621,7 +662,7 @@ export function computeJReviewsWeight(params: {
     weight = base - Math.abs(net) * 0.3;
   }
 
-  weight -= Math.max(0, reports) * 0.35;
+  weight -= safeReports * 0.35;
   return Math.round(Math.max(0, Math.min(3.0, weight)) * 100) / 100;
 }
 
@@ -658,9 +699,16 @@ export function computeBayesianRatingSummary(
 
   for (const r of reviews) {
     if (!r.include_in_rating) continue;
-    const w = Number(r.helpfulness_weight || 0);
-    const star = Number(r.rating_star || 0);
-    if (w > 0 && star >= 1 && star <= 5) {
+    const rawW = Number(r.helpfulness_weight);
+    const star = Number(r.rating_star);
+    if (
+      Number.isFinite(rawW) &&
+      rawW > 0 &&
+      Number.isFinite(star) &&
+      star >= 1 &&
+      star <= 5
+    ) {
+      const w = Math.min(3.0, rawW);
       effectiveWeightSum += w;
       weightedStarSum += w * star;
     }
@@ -670,7 +718,9 @@ export function computeBayesianRatingSummary(
 
   if (effectiveWeightSum <= 0) {
     const safeFallback =
-      fallbackWeightedRating > 0
+      Number.isFinite(fallbackWeightedRating) &&
+      fallbackWeightedRating > 0 &&
+      fallbackWeightedRating <= 5
         ? Math.round(fallbackWeightedRating * 100) / 100
         : 0;
     return {
@@ -909,9 +959,15 @@ export async function getMasterProducts(
         ? [params.brand.trim()].filter(Boolean)
         : null;
   const boundedLimit =
-    params?.limit && params.limit > 0 ? Math.min(params.limit, 500) : 200;
+    typeof params?.limit === 'number' &&
+    Number.isFinite(params.limit) &&
+    params.limit >= 1
+      ? Math.min(Math.floor(params.limit), 500)
+      : 200;
   const boundedOffset =
-    params?.offset && params.offset > 0
+    typeof params?.offset === 'number' &&
+    Number.isFinite(params.offset) &&
+    params.offset > 0
       ? Math.min(Math.floor(params.offset), 100_000)
       : 0;
 
@@ -1329,13 +1385,32 @@ export interface RawOfferRow {
   merchants?: RawMerchantRow | RawMerchantRow[] | null;
 }
 
+function toSafeRiskScore100(raw: unknown, fallback = 0): number {
+  if (raw === null || raw === undefined || raw === '') return fallback;
+  const num = Number(raw);
+  if (!Number.isFinite(num)) return fallback;
+  return Math.max(0, Math.min(100, num));
+}
+
+function toSafeOfferPrice(raw: unknown): number {
+  const num = Number(raw);
+  if (!Number.isFinite(num) || num <= 0 || num > MAX_VALID_VND_PRICE) return 0;
+  return Math.round(num);
+}
+
+function toSafeStarRating5(raw: unknown): number {
+  const num = Number(raw);
+  if (!Number.isFinite(num) || num <= 0) return 0;
+  return Math.min(5, num);
+}
+
 export function mapTrustViewRowToMerchantOffer(
   row: RawTrustViewRow
 ): MerchantOffer {
-  const combinedRisk = Number(row.threat_risk_score || 0);
-  const dosafeRisk = Number(row.dosafe_risk_score ?? combinedRisk);
-  const reviewRisk = Number(row.review_risk_score || 0);
-  const priceCurrent = Number(row.price_current);
+  const combinedRisk = toSafeRiskScore100(row.threat_risk_score, 0);
+  const dosafeRisk = toSafeRiskScore100(row.dosafe_risk_score, combinedRisk);
+  const reviewRisk = toSafeRiskScore100(row.review_risk_score, 0);
+  const priceCurrent = toSafeOfferPrice(row.price_current);
   return {
     id: row.id,
     platform: row.platform,
@@ -1345,9 +1420,9 @@ export function mapTrustViewRowToMerchantOffer(
       priceCurrent,
       row.price_original
     ),
-    stock: row.stock,
-    rating_star: Number(row.rating_star),
-    rating_count: row.rating_count,
+    stock: toSafeNonNegativeVoteCount(row.stock, 100_000_000),
+    rating_star: toSafeStarRating5(row.rating_star),
+    rating_count: toSafeNonNegativeVoteCount(row.rating_count, 100_000_000),
     url: row.url,
     merchant: {
       id: row.merchant_id || '',
@@ -1373,22 +1448,22 @@ export function mapOfferRowToMerchantOffer(item: RawOfferRow): MerchantOffer {
     merchantObj?.metadata && typeof merchantObj.metadata === 'object'
       ? merchantObj.metadata
       : null;
-  const baseRisk = Number(merchantObj?.risk_score || 0);
+  const baseRisk = toSafeRiskScore100(merchantObj?.risk_score, 0);
   const dosafeRisk =
     merchantObj?.dosafe_risk_score != null
-      ? Number(merchantObj.dosafe_risk_score)
+      ? toSafeRiskScore100(merchantObj.dosafe_risk_score, baseRisk)
       : typeof meta?.dosafe_risk_score === 'number'
-        ? meta.dosafe_risk_score
+        ? toSafeRiskScore100(meta.dosafe_risk_score, baseRisk)
         : baseRisk;
   const reviewRisk =
     merchantObj?.review_risk_score != null
-      ? Number(merchantObj.review_risk_score)
+      ? toSafeRiskScore100(merchantObj.review_risk_score, 0)
       : typeof meta?.review_risk_score === 'number'
-        ? meta.review_risk_score
+        ? toSafeRiskScore100(meta.review_risk_score, 0)
         : 0;
   const metaCombined =
     typeof meta?.combined_risk_score === 'number'
-      ? meta.combined_risk_score
+      ? toSafeRiskScore100(meta.combined_risk_score, 0)
       : 0;
   const combinedRisk = Math.max(baseRisk, dosafeRisk, reviewRisk, metaCombined);
   const topLevelBreakdown =
@@ -1410,7 +1485,9 @@ export function mapOfferRowToMerchantOffer(item: RawOfferRow): MerchantOffer {
           ('review_risk_score' in meta || 'seeding_spam_ratio_pct' in meta)
         ? meta
         : null);
-  const priceCurrent = Number(item.price_current);
+  const priceCurrent = toSafeOfferPrice(item.price_current);
+  const rawMerchantRating =
+    merchantObj?.rating_star != null ? Number(merchantObj.rating_star) : null;
   return {
     id: item.id,
     platform: item.platform,
@@ -1420,19 +1497,25 @@ export function mapOfferRowToMerchantOffer(item: RawOfferRow): MerchantOffer {
       priceCurrent,
       item.price_original
     ),
-    stock: item.stock,
-    rating_star: Number(item.rating_star),
-    rating_count: item.rating_count,
+    stock: toSafeNonNegativeVoteCount(item.stock, 100_000_000),
+    rating_star: toSafeStarRating5(item.rating_star),
+    rating_count: toSafeNonNegativeVoteCount(item.rating_count, 100_000_000),
     url: item.url,
     merchant: {
       id: merchantObj?.id || '',
       name: merchantObj?.name || 'Gian hàng',
       platform: merchantObj?.platform || item.platform,
       is_official: Boolean(merchantObj?.is_official),
-      rating_star: merchantObj?.rating_star
-        ? Number(merchantObj.rating_star)
-        : null,
-      follower_count: merchantObj?.follower_count || 0,
+      rating_star:
+        rawMerchantRating !== null &&
+        Number.isFinite(rawMerchantRating) &&
+        rawMerchantRating > 0
+          ? Math.min(5, rawMerchantRating)
+          : null,
+      follower_count: toSafeNonNegativeVoteCount(
+        merchantObj?.follower_count,
+        100_000_000
+      ),
       location: merchantObj?.location || null,
       risk_score: combinedRisk,
       dosafe_risk_score: dosafeRisk,
@@ -2953,8 +3036,12 @@ export function filterAndSortMerchants(
     });
   }
 
-  if (params?.limit && params.limit > 0) {
-    results = results.slice(0, params.limit);
+  if (
+    typeof params?.limit === 'number' &&
+    Number.isFinite(params.limit) &&
+    params.limit >= 1
+  ) {
+    results = results.slice(0, Math.min(Math.floor(params.limit), 5000));
   }
 
   return results;
@@ -3008,8 +3095,11 @@ export async function getMerchantsList(
     params?.sort
   );
   const directLimit =
-    !hasPostQueryFilterOrSort && params?.limit && params.limit > 0
-      ? params.limit
+    !hasPostQueryFilterOrSort &&
+    typeof params?.limit === 'number' &&
+    Number.isFinite(params.limit) &&
+    params.limit >= 1
+      ? Math.min(Math.floor(params.limit), 5000)
       : null;
 
   // Every merchant unless only the top `limit` is needed: one request is
