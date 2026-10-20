@@ -119,3 +119,14 @@
 .rate-surface-dark .rate-export-menu-list {
   box-shadow: 0 16px 36px -10px rgba(0, 0, 0, 0.6);
 }
+
+// ExportMenu measures on open and sets data-align="start" where the list would
+// run off the left edge (DOS/Rate#623).
+.rate-export-menu[data-align='start'] .rate-export-menu-list {
+  right: auto;
+  left: 0;
+}
+
+.rate-export-menu-list {
+  max-width: calc(100vw - 1rem);
+}

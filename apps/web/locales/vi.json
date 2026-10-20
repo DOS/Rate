@@ -555,7 +555,8 @@
     "downvoteTitle": "Vote Không hữu ích - giảm trọng số của đánh giá này",
     "reportTitle": "Báo cáo đánh giá Seeding / Spam / Chơi xấu (-0.35 trọng số mỗi báo cáo)",
     "reportBtnLabel": "Báo cáo ({count})",
-    "filterGroupAria": "Lọc đánh giá"
+    "filterGroupAria": "Lọc đánh giá",
+    "exportMenu": "Xuất dữ liệu"
   },
   "watchlist": {
     "metaTitle": "Danh Sách Canh Giá Thật & Cảnh Báo Giảm Giá Đa Ngành | Rate.vn",
@@ -1121,7 +1122,8 @@
     "peerNoPrice": "Chưa có giá",
     "heroPriceLine": "Từ <strong>{price} ₫</strong> · {count} nơi bán",
     "specsShowAll": "Xem toàn bộ thông số",
-    "specsShowLess": "Thu gọn thông số"
+    "specsShowLess": "Thu gọn thông số",
+    "exportMenu": "Xuất dữ liệu"
   },
   "homePage": {
     "catDescSmartphones": "Lọc theo Chipset, RAM/ROM, tần số quét Hz, pin mAh & sạc nhanh W",

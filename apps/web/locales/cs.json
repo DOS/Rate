@@ -555,7 +555,8 @@
     "downvoteTitle": "Neužitečné - snižuje váhu této recenze",
     "reportTitle": "Nahlásit Seeding / Spam / Sabotáž (-0.35 váhy za každé nahlášení)",
     "reportBtnLabel": "Nahlásit ({count})",
-    "filterGroupAria": "Filtrovat recenze"
+    "filterGroupAria": "Filtrovat recenze",
+    "exportMenu": "Exportovat data"
   },
   "watchlist": {
     "metaTitle": "Seznam hlídaných cen a upozornění na slevy | Rate.vn",
@@ -1121,7 +1122,8 @@
     "peerNoPrice": "Zatím bez ceny",
     "heroPriceLine": "Od <strong>{price} ₫</strong> · {count, plural, one {# prodejce} few {# prodejci} other {# prodejců}}",
     "specsShowAll": "Zobrazit všechny parametry",
-    "specsShowLess": "Zobrazit méně parametrů"
+    "specsShowLess": "Zobrazit méně parametrů",
+    "exportMenu": "Exportovat data"
   },
   "homePage": {
     "catDescSmartphones": "Filtrovat podle čipsetu, RAM/ROM, obnovovací frekvence Hz, baterie mAh a nabíjení W",
