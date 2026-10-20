@@ -1,6 +1,6 @@
 # 📜 Rate Platform Changelog - Nhật Ký Hoàn Thành Chi Tiết (Phases 1 -> 5)
 
-> **Cập nhật lần cuối:** 18/10/2026  
+> **Cập nhật lần cuối:** 20/10/2026  
 > **Lộ trình kiến trúc & các hạng mục tiếp theo (Phase 6 & 7):** Xem [`Docs/Resources/ROADMAP.md`](./ROADMAP.md)  
 > **GitHub Project Board (Multi-Agent Queue):** [https://github.com/orgs/DOS/projects/9](https://github.com/orgs/DOS/projects/9)  
 > **Trạng thái:** Lưu trữ toàn bộ lịch sử triển khai chi tiết các hạng mục đã hoàn thành từ Phase 1 đến Phase 5 (`4.1 -> 4.78` & `5.1 -> 5.20`).
@@ -296,4 +296,11 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc **4 T�
 - [x] **6.4. Kiểm Thử Hành Vi `NextRequest -> NextResponse` Toàn Diện Cho Toàn Bộ REST API v1 & Tách CLI `backfill-specs.ts` (`DOS/Rate#187`, `#188`):**
   - Bổ sung Suite `[60/61]` kiểm thử trực tiếp toàn bộ các Route Handlers (`/api/health`, `/api/v1/rate/openapi`, `/api/v1/rate/openapi.json`, `/api/v1/rate/products`, `/api/v1/rate/products/[slug]`, `/api/v1/rate/deals`, `/api/v1/rate/leaderboard`, `/api/v1/rate/merchants`, `/api/v1/rate/merchants/[id]`, `/api/v1/rate/stats`).
   - Tách riêng `apps/importer/src/shopee/jobs/backfill-specs.ts` với cơ chế bảo vệ mặc định `dry-run` (`--apply` mới ghi DB) và kiểm toán bảo mật toàn bộ 11 file migration tham chiếu trong `supabase/migrations/` (Suite `[61/61]`).
+- [x] **6.5. Đợt Củng Cố Ranh Giới Dữ Liệu Đầu Vào Toàn Hệ Thống (Agent `Crawl`, 18/10 -> 20/10/2026):**
+  - **Shared schemas & Supabase clients (`DOS/Rate#586`, PR #587):** thêm `HttpUrlSchema` (chỉ `http:`/`https:`), `.int().nonnegative()` cho bộ đếm, trần miền giá trị cho `MasterProductSchema` (`ram_gb`, `storage_gb`, `screen_size_inch`, `battery_mah`), `ScrapedProductSchema.url` bắt buộc HTTP(S); `getPublicClient`/`getAdminClient` cắt khoảng trắng và từ chối URL Supabase không phải HTTP(S). `priceBeforeDiscount` và `models[].price` vẫn để `normalizeScrapedProductPrices` lọc sau parse, không loại cả listing.
+  - **Web BFF & REST API v1 (`DOS/Rate#535`, `#544`, `#552`, `#557`, `#578`, `#580`, `#584`):** giới hạn tham số lọc/phân trang, trần `MAX_VALID_VND_PRICE` cho watchlist, Deal Radar, leaderboard và offer mapping; parse `Bearer` theo RFC 6750 (tối đa 4096 ký tự), so khớp origin không phân biệt hoa thường; khử trùng khóa cache merchant, chặn path traversal / ký tự điều khiển / query trong `POST /api/v1/rate/revalidate`, token tối đa 512 ký tự.
+  - **Browser Extension MV3 (`DOS/Rate#580`, `#582`):** tách RAM/ROM trong tiêu đề, không hiện trust pill khi `not_found`/`accessory_skip`, kiểm tra sender đặc quyền cho message side panel, giới hạn độ dài `query`/`selectedVariant`, timeout 8s cho Deal Radar và danh bạ gian hàng.
+  - **Open-Core engine (`DOS/Rate#522`, `#528`):** chặn số không hữu hạn và giá trị ngoài miền trong `AiSpecEnricher`, `ArenaSpecSyncer`, `backfill-specs` và `AiReviewAnalyzer` (Bayesian, trọng số 6 trục, rủi ro gian hàng, ghi cờ theo lô 200 dòng).
+  - **Rate-Services (`DOS/Rate-Services#141`-`#171`):** JSON-LD và logger che secret, `proxyAwareFetch` chống SSRF qua redirect, lease/heartbeat worker, auditor phân trang theo `batch.length`, JWT hết hạn và giới hạn origin cho `service_role`, listing hết hàng / ngừng kinh doanh không có giá được ghi `listing_unavailable` thay vì lỗi (Tiki, TGDD, Lazada, CellphoneS, TikTok Shop, Shopee), Affiliate `pricesOnly`, và `resolveShopeeAssetUrl` + suy giá từ biến thể cho Shopee PDP (PR #172).
+  - Mỗi PR đều có test hồi quy và review fresh-context bằng subagent; riêng `DOS/Rate-Services#172` dùng CI + build/lint/test cục bộ thay thế vì subagent hết quota.
 
