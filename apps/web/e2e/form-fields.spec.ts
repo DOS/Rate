@@ -3,7 +3,15 @@ import { expect, test } from '@playwright/test';
 // style.scss ends with a template rule that removed every text field's border,
 // so fields on light cards were invisible. Fields that do not opt out with a
 // border-* utility must keep a visible outline (WCAG 1.4.11, >= 3:1).
-const PAGES = ['/login', '/contact-us', '/deals', '/smartphones'];
+const PAGES = [
+  '/login',
+  '/contact-us',
+  '/deals',
+  '/smartphones',
+  '/merchants',
+  '/leaderboard',
+  '/compare',
+];
 
 function luminance(rgb: string): number {
   const [r, g, b] = (rgb.match(/\d+(\.\d+)?/g) ?? []).slice(0, 3).map((v) => {
@@ -15,7 +23,8 @@ function luminance(rgb: string): number {
 
 for (const path of PAGES) {
   test(`text fields have a visible outline on ${path}`, async ({ page }) => {
-    await page.goto(path);
+    const res = await page.goto(path);
+    expect(res?.status()).toBe(200);
     await expect(page.locator('input.form-control').first()).toBeAttached();
     const fields = await page.evaluate(() =>
       [
@@ -24,7 +33,7 @@ for (const path of PAGES) {
         ),
       ]
         .filter((el) => el.getBoundingClientRect().width > 0)
-        .filter((el) => !/\bborder-/.test(el.className))
+        .filter((el) => !/\bborder-0\b/.test(el.className))
         .map((el) => {
           const cs = getComputedStyle(el);
           return {

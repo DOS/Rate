@@ -1247,12 +1247,20 @@
 // style.scss ends with a template leftover, `.form-control { border: none
 // !important }`, that erased every text field's outline; on light cards the
 // field then matched the card and could not be seen (login, contact, deals
-// search, review form). Fields that opt out with a border-* utility (pill
-// search groups, input-group halves) stay borderless.
-// Doubled class: outranks the template's .form-group.form-border rule.
-body .form-control.form-control:not([class*='border-']) {
+// search, review form, input-group searches). Only `border-0` fields (pill
+// searches) stay borderless; input-group halves keep three sides and drop the
+// shared seam. Doubled class: outranks the template's .form-group.form-border.
+body .form-control.form-control:not(.border-0) {
   border: 1px solid var(--rate-input-border) !important;
   background-color: #fff;
+
+  &.border-start-0 {
+    border-left-width: 0 !important;
+  }
+
+  &.border-end-0 {
+    border-right-width: 0 !important;
+  }
 
   &:focus {
     border-color: var(--rate-brand) !important;
@@ -1261,6 +1269,11 @@ body .form-control.form-control:not([class*='border-']) {
 
   &:disabled,
   &[readonly] {
-    background-color: var(--rate-bg-elevated);
+    background-color: #f1f5f9;
   }
+}
+
+// The icon half of an input group matches the field's outline.
+body .input-group > .input-group-text {
+  border-color: var(--rate-input-border);
 }
