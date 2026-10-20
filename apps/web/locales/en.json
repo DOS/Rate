@@ -20,7 +20,8 @@
       "priceWatchCta": "Price Watch",
       "selectLanguageAria": "Select language",
       "menuToggleAria": "Open or close the menu",
-      "menuCloseAria": "Close the menu"
+      "menuCloseAria": "Close the menu",
+      "categories": "Categories"
     },
     "footer": {
       "copyRight": "© {YEAR} Rate.vn (DOS Ecosystem). Open-Core Product Spec Intelligence, True Price History & AI Review Auditing.",

@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl';
 import {
   BsArrowLeftRight,
   BsBellFill,
+  BsChevronDown,
   BsCodeSlash,
   BsShieldCheck,
 } from 'react-icons/bs';
@@ -19,6 +20,16 @@ export interface NavbarLinkItem {
   readonly newTab?: boolean | null;
 }
 
+const CATEGORY_LINK_IDS = new Set([
+  'smartphones',
+  'laptops',
+  'tablets',
+  'smartwatches',
+  'earbuds',
+]);
+// Already reachable from the logo and the price-alert button on desktop.
+const DESKTOP_HIDDEN_LINK_IDS = new Set(['home', 'watchlist']);
+
 export function NavbarDarkDynamic({
   links,
   logoUrl,
@@ -31,6 +42,36 @@ export function NavbarDarkDynamic({
   const [toggle, setToggle] = useState(false);
   const toggleRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const [categoriesOpen, setCategoriesOpen] = useState(false);
+  const categoriesRef = useRef<HTMLLIElement>(null);
+
+  // Desktop categories dropdown: closes on Escape (focus back to its button),
+  // on a pointer press outside it, and when focus leaves it (DOS/Rate#611).
+  useEffect(() => {
+    if (!categoriesOpen) return;
+    const root = categoriesRef.current;
+    const close = () => setCategoriesOpen(false);
+    const onPointerDown = (e: PointerEvent) => {
+      if (root && !e.composedPath().includes(root)) close();
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      close();
+      root?.querySelector<HTMLElement>('button')?.focus();
+    };
+    const onFocusOut = (e: FocusEvent) => {
+      const next = e.relatedTarget as Node | null;
+      if (root && next && !root.contains(next)) close();
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    root?.addEventListener('focusout', onFocusOut);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+      root?.removeEventListener('focusout', onFocusOut);
+    };
+  }, [categoriesOpen]);
 
   // Phone menu: focus moves into it on open, Escape closes it and focus
   // returns to the toggle (DOS/Rate#523).
@@ -245,20 +286,77 @@ export function NavbarDarkDynamic({
                 const validLinks = (links || []).filter(
                   (l) => l?.href && l?.label
                 );
-                const navLinks =
-                  validLinks.length > 0 ? validLinks : defaultLinks;
+                if (validLinks.length > 0) {
+                  return (
+                    <ul className="nav-menu">
+                      {validLinks.map((link) => (
+                        <li key={String(link.id) + link.href}>
+                          <Link
+                            href={link.href!}
+                            target={link.newTab ? '_blank' : undefined}
+                          >
+                            {link.label}
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  );
+                }
+                // Desktop fits one row: the five catalogues sit in one
+                // dropdown, and Home / Watchlist (logo, price-alert button)
+                // show only in the phone menu (DOS/Rate#611).
+                const categoryLinks = defaultLinks.filter((l) =>
+                  CATEGORY_LINK_IDS.has(String(l.id))
+                );
+                const firstCategoryIndex = defaultLinks.findIndex((l) =>
+                  CATEGORY_LINK_IDS.has(String(l.id))
+                );
+                const renderLink = (link: NavbarLinkItem) => (
+                  <li
+                    key={String(link.id) + link.href}
+                    className={
+                      DESKTOP_HIDDEN_LINK_IDS.has(String(link.id))
+                        ? 'd-lg-none'
+                        : undefined
+                    }
+                  >
+                    <Link href={link.href!}>{link.label}</Link>
+                  </li>
+                );
                 return (
                   <ul className="nav-menu">
-                    {navLinks.map((link) => (
-                      <li key={String(link.id) + link.href}>
-                        <Link
-                          href={link.href!}
-                          target={link.newTab ? '_blank' : undefined}
-                        >
-                          {link.label}
-                        </Link>
-                      </li>
-                    ))}
+                    {defaultLinks.slice(0, firstCategoryIndex).map(renderLink)}
+                    <li
+                      ref={categoriesRef}
+                      className={`rate-nav-dropdown ${categoriesOpen ? 'is-open' : ''}`}
+                    >
+                      <button
+                        type="button"
+                        className="rate-nav-dropdown-toggle"
+                        aria-expanded={categoriesOpen}
+                        aria-controls="rate-nav-categories"
+                        onClick={() => setCategoriesOpen((o) => !o)}
+                      >
+                        {tNav('categories')}
+                        <BsChevronDown aria-hidden="true" />
+                      </button>
+                      <ul id="rate-nav-categories" className="nav-dropdown">
+                        {categoryLinks.map((link) => (
+                          <li key={String(link.id)}>
+                            <Link
+                              href={link.href!}
+                              onClick={() => setCategoriesOpen(false)}
+                            >
+                              {link.label}
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
+                    </li>
+                    {defaultLinks
+                      .slice(firstCategoryIndex)
+                      .filter((l) => !CATEGORY_LINK_IDS.has(String(l.id)))
+                      .map(renderLink)}
                   </ul>
                 );
               })()}
