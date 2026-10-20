@@ -222,6 +222,9 @@ function main() {
     'Sản phẩm chuẩn, giao nhanh',
     'Hàng đúng mô tả, giao nhanh',
     'sản phẩm tốt giao hàng nhanh',
+    'Đúng như mô tả, giao hàng nhanh',
+    'Hàng tuyệt vời, giao hàng nhanh',
+    'Hàng nhận được tốt, giao nhanh',
   ]) {
     const a = assess(comment);
     assert.notEqual(a.breakdown.explanationKind, 'shipping_only', comment);

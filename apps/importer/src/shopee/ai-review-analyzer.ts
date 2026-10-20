@@ -591,7 +591,7 @@ const PRODUCT_ASPECT_RE =
 // product review from the rating is worse than keeping a delivery one, so
 // the exceptions are narrow. Plus Shopee's structured product fields.
 const PRODUCT_MENTION_RE =
-  /(?<![\p{L}\p{N}])(?:máy|điện\s*thoại|tai\s*nghe|pin|màn(?:\s*hình)?|camera|loa|mic|chất\s*âm|chống\s*ồn|cảm\s*ứng|hiệu\s*năng|cấu\s*hình|chip|ram|rom|sạc|dùng|xài|sử\s*dụng|trải\s*nghiệm|mượt|lag|giật|nóng|ấm|lỗi|hỏng|hư|bền|xịn|chính\s*hãng|nguyên\s*seal|bảo\s*hành|vân\s*tay|wifi|5g|bluetooth|nhiệt\s*độ|tần\s*số|sản\s*phẩm(?!\s+(?:(?:đã\s+)?được\s+|đã\s+)?(?:đóng\s*gói|giao|vận\s*chuyển|bọc|ship))|chất\s*lượng(?!\s+(?:đóng\s*gói|giao|vận\s*chuyển|phục\s*vụ|dịch\s*vụ))|(?<!(?:giao|gói|đóng|nhận|gửi|ship)\s+)hàng(?:\s+\p{L}+)?\s+(?:đẹp|tốt|xịn|chuẩn|ok|ổn|kém|tệ|lỗi)|(?<!(?:gói|hộp|bọc|bì)(?:\s+\p{L}+)?\s*)đẹp|đúng\s*(?:với\s*)?mô\s*tả|tính\s*năng\s*nổi\s*bật)(?![\p{L}\p{N}])/iu;
+  /(?<![\p{L}\p{N}])(?:máy|điện\s*thoại|tai\s*nghe|pin|màn(?:\s*hình)?|camera|loa|mic|chất\s*âm|chống\s*ồn|cảm\s*ứng|hiệu\s*năng|cấu\s*hình|chip|ram|rom|sạc|dùng|xài|sử\s*dụng|trải\s*nghiệm|mượt|lag|giật|nóng|ấm|lỗi|hỏng|hư|bền|xịn|chính\s*hãng|nguyên\s*seal|bảo\s*hành|vân\s*tay|wifi|5g|bluetooth|nhiệt\s*độ|tần\s*số|sản\s*phẩm(?!\s+(?:(?:đã\s+)?được\s+|đã\s+)?(?:đóng\s*gói|giao\s*(?:hàng|nhanh|chậm|trễ|lâu|đến|tới)|vận\s*chuyển|bọc|ship))|chất\s*lượng(?!\s+(?:đóng\s*gói|giao|vận\s*chuyển|phục\s*vụ|dịch\s*vụ))|(?<!(?:giao|gói|đóng|nhận|gửi|ship)\s+)hàng(?:\s+\p{L}+){0,2}?\s+(?:đẹp|tốt|xịn|chuẩn|ok|ổn|kém|tệ|lỗi|tuyệt|ngon|hài\s*lòng|ưng)|(?<!(?:gói|hộp|bọc|bì)(?:\s+\p{L}+)?\s*)đẹp|mô\s*tả|(?:y|giống|đúng)\s*hình|tính\s*năng\s*nổi\s*bật)(?![\p{L}\p{N}])/iu;
 
 /**
  * Detects reviews that only discuss shipping, packaging, or courier behavior without mentioning
