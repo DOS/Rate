@@ -23,6 +23,47 @@ export const ENTITY_MATCH_CANDIDATE_FLOOR = 0.65;
 /** Minimum pg_trgm similarity required to auto-merge into an existing Master Product */
 export const ENTITY_MATCH_ACCEPT_THRESHOLD = 0.7;
 
+const VARIANT_WORDS = new Set([
+  'plus',
+  'pro',
+  'max',
+  'ultra',
+  'mini',
+  'fe',
+  'lite',
+  'air',
+  'se',
+  'edge',
+  'neo',
+]);
+
+/**
+ * Model numbers and variant words of a product name ("iPhone 16e 128GB" ->
+ * "16e"; "Galaxy S24 Ultra 256GB" -> "s24 ultra"). Storage and RAM sizes are
+ * left out, so they never decide a model match.
+ */
+export function modelVariantSignature(text: string): string {
+  const words = text
+    .toLowerCase()
+    .replace(/\b\d+(?:[.,]\d+)?\s*(?:gb|tb|mb)\b/g, ' ')
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+  return words
+    .filter(w => VARIANT_WORDS.has(w) || /\d/.test(w))
+    .sort()
+    .join(' ');
+}
+
+/**
+ * Trigram similarity alone merges near-identical names of different models
+ * ("iPhone 16e 128GB" vs "iPhone 16 128GB" scored above the accept threshold;
+ * DOS/Rate#594). A fuzzy hit is only accepted when the model numbers and
+ * variant words agree.
+ */
+export function sameModelVariant(candidateText: string, matchText: string): boolean {
+  return modelVariantSignature(candidateText) === modelVariantSignature(matchText);
+}
+
 export class EntityMatcher {
   private enricher: AiSpecEnricher;
 
@@ -83,7 +124,21 @@ export class EntityMatcher {
     let ambiguousFuzzy = false;
     if (Array.isArray(fuzzyMatches) && fuzzyMatches.length > 0) {
       const topMatch = fuzzyMatches[0];
-      if (topMatch.similarity >= ENTITY_MATCH_ACCEPT_THRESHOLD) {
+      // Compare like with like: both model fields when the RPC returns one,
+      // otherwise both display names.
+      const matchModel = (topMatch as { model?: string | null }).model;
+      const variantAgrees =
+        candidate.model && matchModel
+          ? sameModelVariant(candidate.model, matchModel)
+          : sameModelVariant(candidate.name, topMatch.name);
+      if (!variantAgrees) {
+        logger.warn(
+          'entity_match.tier2_variant_mismatch',
+          `Tier 2 top match "${topMatch.name}" is a different model variant than "${candidate.name}": seeding as draft if new.`,
+          { similarity: topMatch.similarity, modelKey: candidate.model_key }
+        );
+      }
+      if (variantAgrees && topMatch.similarity >= ENTITY_MATCH_ACCEPT_THRESHOLD) {
         logger.info(
           'entity_match.tier2_fuzzy',
           `Tier 2 Fuzzy Match found: "${candidate.name}" ~= "${topMatch.name}" (similarity: ${(topMatch.similarity * 100).toFixed(1)}%) -> ID: ${topMatch.master_id}`,

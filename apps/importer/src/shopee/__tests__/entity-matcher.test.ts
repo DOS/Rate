@@ -11,6 +11,8 @@ import {
   EntityMatcher,
   ENTITY_MATCH_ACCEPT_THRESHOLD,
   ENTITY_MATCH_CANDIDATE_FLOOR,
+  modelVariantSignature,
+  sameModelVariant,
 } from '../entity-matcher.js';
 import {
   ProductNormalizer,
@@ -343,6 +345,36 @@ async function runEntityMatcherSuite() {
     tier2AmbiguousDb.capturedUpserts[0]?.payload.status,
     'draft',
     'Ambiguous Tier 2 similarity (0.65..0.69) must seed new Master Product as draft'
+  );
+  // A high-similarity hit on a different model variant must not merge
+  // ("iPhone 16e 128GB" into "iPhone 16 128GB", DOS/Rate#594).
+  assert.equal(modelVariantSignature('Apple iPhone 16e 128GB'), '16e');
+  assert.equal(modelVariantSignature('Galaxy S24 Ultra 12GB RAM 256GB'), 's24 ultra');
+  assert.ok(sameModelVariant('Samsung Galaxy S24 Ultra 256GB', 'Galaxy S24 Ultra 512GB'));
+  assert.ok(!sameModelVariant('Apple iPhone 16e 128GB', 'Apple iPhone 16 128GB'));
+  assert.ok(!sameModelVariant('iPhone 16 Pro', 'iPhone 16 Pro Max'));
+  assert.ok(!sameModelVariant('Galaxy S24 Ultra', 'Galaxy S24 Plus'));
+  const iphone16e = normalizer.normalize(
+    createShopeeListing('Điện thoại Apple iPhone 16e 128GB Chính hãng VN/A')
+  );
+  const variantDb = createMockSupabase({
+    fuzzyMatches: [
+      {
+        master_id: 'master-iphone-16',
+        name: 'Apple iPhone 16 128GB',
+        similarity: 0.82,
+      },
+    ],
+  });
+  const variantRes = await new EntityMatcher(
+    variantDb.client,
+    offlineEnricher
+  ).resolveOrCreateMasterProduct(iphone16e);
+  assert.equal(variantRes.isNew, true, '16e must not merge into iPhone 16');
+  assert.equal(
+    variantDb.capturedUpserts[0]?.payload.status,
+    'draft',
+    'A variant-mismatched fuzzy hit seeds the new master as draft'
   );
   console.log('  ✅ [3/7] Tier 2 fuzzy match threshold & ambiguous draft fallback passed');
 
