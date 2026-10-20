@@ -3,17 +3,17 @@ import { expect, test } from '@playwright/test';
 // Product-page headings, eyebrows and buttons speak to shoppers, not about
 // internal section numbers, rating engines or audits (DOS/Rate#625).
 const PRODUCT = '/smartphones/iphone-16-pro-max-256gb';
+// Compared in lower case: eyebrows are uppercased by CSS and innerText
+// returns the transformed text.
 const JARGON = [
-  'JReviews',
-  'Dual-Rating',
+  'jreviews',
+  'dual-rating',
   '#2',
-  'TCO',
-  'Bàn Cân',
-  'Kiểm Định',
-  'Audit',
-  'AUDIT',
-  'Komise',
-  'KOMISE',
+  'tco',
+  'bàn cân',
+  'kiểm định',
+  'audit',
+  'komise',
 ];
 
 for (const [path, lang] of [
@@ -28,7 +28,7 @@ for (const [path, lang] of [
     const labels = await page.evaluate(() =>
       Array.from(
         document.querySelectorAll<HTMLElement>(
-          '.container h2, .container .rate-eyebrow, .container .badge, .container a.btn'
+          '.container h2, .container h3, .container .rate-eyebrow, .container .badge, .container a.btn'
         )
       )
         // The footer call-to-action is shared site-wide and tested there.
@@ -38,7 +38,10 @@ for (const [path, lang] of [
     expect(labels.length).toBeGreaterThan(5);
     for (const label of labels) {
       for (const term of JARGON) {
-        expect(label, `"${label}" contains "${term}"`).not.toContain(term);
+        expect(
+          label.toLowerCase(),
+          `"${label}" contains "${term}"`
+        ).not.toContain(term);
       }
     }
   });

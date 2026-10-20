@@ -20,7 +20,7 @@ Rate.vn is an independent product rating, anti-seeding review and technical audi
 
 - **Language.** Vietnamese is the default; English and Czech are full translations. Public URLs never carry a locale prefix.
 - **Voice.** Expert, evidence-led, slightly combative toward fake sales and seeding. Name the method: "Chuẩn hóa 10 nhóm thông số GSMArena & PhoneArena, phát hiện nâng khống giá gốc và lọc bình luận Seeding bằng AI."
-- **Casing.** Hero titles and CTAs use Title Case in Vietnamese ("Tra Cứu Giá Thật & Điểm Tín Nhiệm Trước Khi Mua", "Bàn Cân 10 Nhóm Thông Số"). Body copy is sentence case. Eyebrows are uppercase via CSS, not in the string.
+- **Casing.** Headings, buttons and labels use sentence case in every locale ("Thông số kỹ thuật chi tiết", "So sánh trực tiếp"). Eyebrows are uppercase via CSS, not in the string. Shopper-facing copy names what the reader gets, not internal systems, section numbers or audits.
 - **Numbers carry units and denominators.** Write `4.9 / 5.0`, `9.6 / 10`, `-18%`, `Chênh 0.12/5.0`. Never a bare score.
 - **Punctuation.** Never use em or en dashes; use a plain hyphen `-`. Use `->` or `→` only for link arrows.
 - **CTAs are review-centric.** "Đọc & Chấm điểm Review", "Viết đánh giá 5 tiêu chí", "So sánh đối đầu", "Kiểm định Link", "Theo dõi". A merchant link is a muted "Đối chiếu nguồn ↗", never "Mua ngay".
