@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { discountVerdictCopy } from '@/lib/discount-verdict-copy';
 import { useDetailsDismiss } from '@/components/elementary/use-details-dismiss';
 import { Link, useRouter } from '@/lib/navigation';
 import {
@@ -80,6 +81,7 @@ export default function DeepInspectWorkspace({
   initialInspection = null,
 }: DeepInspectWorkspaceProps) {
   const t = useTranslations('inspect');
+  const tVerdict = useTranslations('priceVerdict');
   const router = useRouter();
 
   const [queryInput, setQueryInput] = useState(
@@ -201,12 +203,12 @@ export default function DeepInspectWorkspace({
           ? [
               `- **Master Product:** ${master.name} (\`${master.model_key}\`)`,
               `- **JReviews Buyer Score:** ${masterUserRating > 0 ? `★ ${masterUserRating.toFixed(2)}/5.0` : t('userNoScore')}${masterExpertRating10 != null ? ` | Lab ${masterExpertRating10.toFixed(1)}/10` : ''} ${t('verifiedReviewsCount', { count: master.authentic_review_count || master.total_reviews || 0 })}`,
-              `- **60D Deal Radar:** ${radarMarkdownCell(radarSignal)}`,
+              `- **Deal Radar:** ${radarMarkdownCell(radarSignal)}`,
             ]
           : []),
         ...(discount
           ? [
-              `- **Price Verdict:** **${discount.badge_label}** (${discount.explanation})`,
+              `- **Price Verdict:** **${discountVerdictCopy(tVerdict, discount).label}** (${discountVerdictCopy(tVerdict, discount).explanation})`,
             ]
           : []),
         ...(currentListedPrice > 0
@@ -281,9 +283,12 @@ export default function DeepInspectWorkspace({
       histLow,
       histHigh,
       matchedPriceSpread?.spreadPct ?? 0,
-      priceHistory?.byOffer?.[o.id]?.badge_label ||
-        (o.id === matchedOffer?.id ? discount?.badge_label : null) ||
-        'Verified',
+      (() => {
+        const a =
+          priceHistory?.byOffer?.[o.id] ??
+          (o.id === matchedOffer?.id ? discount : null);
+        return a ? discountVerdictCopy(tVerdict, a).label : 'Verified';
+      })(),
       ...radarCsvCells(radarSignal),
     ]);
     const csvContent = `\uFEFF${[
@@ -463,7 +468,7 @@ export default function DeepInspectWorkspace({
                     ) : discount?.verdict === 'suspicious_discount' ? (
                       <span className="badge bg-warning text-dark rounded-pill px-3 py-2">
                         <BsExclamationTriangleFill className="me-1" />
-                        {discount.badge_label || t('fakeSaleWarning')}
+                        {discountVerdictCopy(tVerdict, discount).label}
                       </span>
                     ) : (
                       <span className="badge bg-success bg-opacity-10 text-success rounded-pill px-3 py-2">
@@ -550,8 +555,10 @@ export default function DeepInspectWorkspace({
                             : 'bg-success bg-opacity-10 text-success'
                       }`}
                     >
-                      <strong>{discount.badge_label}:</strong>{' '}
-                      {discount.explanation}
+                      <strong>
+                        {discountVerdictCopy(tVerdict, discount).label}:
+                      </strong>{' '}
+                      {discountVerdictCopy(tVerdict, discount).explanation}
                     </div>
                   )}
 

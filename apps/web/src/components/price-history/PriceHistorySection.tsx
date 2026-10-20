@@ -26,6 +26,7 @@ import {
   radarMarkdownCell,
   type RadarSignal,
 } from '@/lib/deal-radar';
+import { discountVerdictCopy } from '@/lib/discount-verdict-copy';
 import { escapeCsvCell } from '@/lib/csv-safe';
 
 interface PriceHistorySectionProps {
@@ -106,6 +107,7 @@ export default function PriceHistorySection({
   radarSignal,
 }: PriceHistorySectionProps) {
   const t = useTranslations('productDetail');
+  const tVerdict = useTranslations('priceVerdict');
   const [selectedProductId, setSelectedProductId] = useState<string>('ALL');
   const [timeRange, setTimeRange] = useState<TimeRangeKey>('all');
   const [activePointIndex, setActivePointIndex] = useState<number | null>(null);
@@ -351,15 +353,15 @@ export default function PriceHistorySection({
       formatVnd(oa.price_original),
       formatVnd(oa.historical_median_price),
       formatVnd(oa.historical_min_price),
-      oa.badge_label,
+      discountVerdictCopy(tVerdict, oa).label,
     ]);
     const md = [
-      `### 📈 Rate.vn 60-Day Price History & Fake Sale Audit: ${productName}`,
+      `### 📈 Rate.vn Price History & Fake Sale Audit: ${productName}`,
       `- **Current Lowest Price**: ${formatVnd(history.currentMinPrice)}`,
       `- **All-Time Lowest Recorded**: ${formatVnd(history.lowestEverPrice)}`,
       `- **Fake Sale Alerts**: ${history.fakeDiscountCount} | **Genuine Deals**: ${history.genuineDealCount}`,
       ...(radarSignal
-        ? [`- **Deal Radar 60N**: ${radarMarkdownCell(radarSignal)}`]
+        ? [`- **Deal Radar**: ${radarMarkdownCell(radarSignal)}`]
         : []),
       '',
       `| ${headers.join(' | ')} |`,
@@ -417,7 +419,7 @@ export default function PriceHistorySection({
   const handleDownloadPriceHistoryJson = () => {
     if (typeof document === 'undefined' || filteredPoints.length === 0) return;
     const payload = {
-      source: 'Rate.vn 60-Day Price History & Fake Sale Audit',
+      source: 'Rate.vn Price History & Fake Sale Audit',
       productName,
       exportedAt: new Date().toISOString(),
       currentMinPriceVnd: history.currentMinPrice,
@@ -966,7 +968,7 @@ export default function PriceHistorySection({
                       className={`badge ${style.badgeClass} rounded-pill small px-3 py-1`}
                     >
                       <style.icon aria-hidden="true" className="me-1" />
-                      {oa.badge_label}
+                      {discountVerdictCopy(tVerdict, oa).label}
                     </span>
                   </div>
 
@@ -1015,7 +1017,7 @@ export default function PriceHistorySection({
                   </div>
 
                   <p className="small text-secondary lh-sm mb-0">
-                    {oa.explanation}
+                    {discountVerdictCopy(tVerdict, oa).explanation}
                   </p>
                 </div>
               </div>

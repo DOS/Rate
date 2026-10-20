@@ -588,7 +588,7 @@ function renderPanelContent(
   const radarSpreadPct = Number(radarSig?.spreadPct ?? 0);
   const radarPillHtml = radarSig
     ? radarSig.verdict === 'genuine_deal'
-      ? `<span class="verdict-pill verdict-genuine_deal" style="margin-left:6px;">🔥 Đáy giá 60N (-${formatSafeNumber(radarSig.savingsPct, { min: 0, max: 100 })}%)</span>`
+      ? `<span class="verdict-pill verdict-genuine_deal" style="margin-left:6px;">🔥 Đáy giá đa sàn (-${formatSafeNumber(radarSig.savingsPct, { min: 0, max: 100 })}%)</span>`
       : radarSig.verdict === 'fake_sale_trap'
         ? `<span class="verdict-pill verdict-inflated_fake_sale" style="margin-left:6px;">🚨 Cảnh báo Sale Ảo (+${formatSafeNumber(radarSig.fakeMarkupPct, { min: 0, max: 10000 })}%)</span>`
         : Number.isFinite(radarSpreadPct) && radarSpreadPct >= 5
