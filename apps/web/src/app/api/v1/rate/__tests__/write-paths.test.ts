@@ -961,6 +961,229 @@ async function testLeaderboardEngineAndMerchantDirectoryGuards() {
   );
 }
 
+async function testRateApiTrustAndOfferBounds() {
+  console.log(
+    '→ Rate API review trust, dual score, star anomaly, and offer mapping bounds (#557)'
+  );
+  const {
+    computeWilsonLowerBound,
+    evaluateReviewTrustAssessment,
+    computeCombinedDualScore,
+    detectStarDistributionAnomaly,
+    computeJReviewsWeight,
+    computeBayesianRatingSummary,
+    mapTrustViewRowToMerchantOffer,
+    mapOfferRowToMerchantOffer,
+    filterAndSortMerchants,
+  } = await import('../../../../../lib/rate-api');
+
+  assert.equal(
+    Number.isFinite(computeWilsonLowerBound(10, 2, Number.NaN)),
+    true,
+    'computeWilsonLowerBound must fall back to z=1.96 when z is NaN (#557)'
+  );
+  assert.equal(
+    Number.isFinite(computeWilsonLowerBound(10, 2, -5)),
+    true,
+    'computeWilsonLowerBound must fall back to z=1.96 when z <= 0 (#557)'
+  );
+
+  const trustNanVotes = evaluateReviewTrustAssessment({
+    rating_star: 5,
+    comment: 'Máy dùng rất mượt, pin 5000mAh trụ tốt cả ngày.',
+    reviewer_type: 'user',
+    upvotes: Number.POSITIVE_INFINITY,
+    downvotes: Number.POSITIVE_INFINITY,
+    report_count: Number.NaN,
+    flag_category: 'authentic',
+    verdict: 'authentic',
+    include_in_rating: true,
+    signals: null,
+  });
+  assert.equal(
+    Number.isFinite(trustNanVotes.breakdown.community),
+    true,
+    'evaluateReviewTrustAssessment must clamp non-finite vote counts so community factor stays finite (#557)'
+  );
+  assert.equal(
+    Number.isFinite(trustNanVotes.breakdown.weight),
+    true,
+    'evaluateReviewTrustAssessment must produce finite weight on non-finite vote counts (#557)'
+  );
+
+  const dualInf = computeCombinedDualScore({
+    userScore: Number.POSITIVE_INFINITY,
+    expertScore: 99,
+    userConfidence: Number.NaN,
+    fallbackAverage: -5,
+  });
+  assert.equal(
+    dualInf.overall,
+    0,
+    'computeCombinedDualScore must reject non-finite or >10 scores and negative fallbackAverage (#557)'
+  );
+
+  const anomalyWithZeroStarRow = detectStarDistributionAnomaly([
+    { rating_star: 0, comment: '', flag_category: 'authentic' },
+    { rating_star: 5, comment: 'Ok', flag_category: 'authentic' },
+    { rating_star: 5, comment: 'Tốt', flag_category: 'authentic' },
+    { rating_star: 5, comment: 'Tuyệt vời', flag_category: 'authentic' },
+    { rating_star: 5, comment: 'Rất hài lòng', flag_category: 'authentic' },
+    { rating_star: 5, comment: '', flag_category: 'authentic' },
+  ]);
+  assert.equal(
+    anomalyWithZeroStarRow.isAnomalous,
+    true,
+    'detectStarDistributionAnomaly must ignore unrated (0-star) rows instead of counting them as <=3 critical reviews (#557)'
+  );
+  assert.equal(anomalyWithZeroStarRow.fiveStarRatioPct, 100);
+
+  assert.equal(
+    computeJReviewsWeight({
+      upvotes: Number.POSITIVE_INFINITY,
+      downvotes: Number.POSITIVE_INFINITY,
+      reports: Number.NaN,
+      flagCategory: 'authentic',
+      verdict: 'authentic',
+      includeInRating: true,
+    }),
+    1,
+    'computeJReviewsWeight must clamp non-finite vote/report counts instead of returning NaN (#557)'
+  );
+
+  const bayesInf = computeBayesianRatingSummary(
+    [
+      {
+        rating_star: 5,
+        helpfulness_weight: Number.POSITIVE_INFINITY,
+        include_in_rating: true,
+      },
+    ],
+    99
+  );
+  assert.equal(
+    bayesInf.bayesianRating,
+    0,
+    'computeBayesianRatingSummary must ignore non-finite weights and reject fallbackWeightedRating > 5 (#557)'
+  );
+
+  const mappedTrustOffer = mapTrustViewRowToMerchantOffer({
+    id: 'off-1',
+    merchant_id: 'm-1',
+    platform: 'shopee',
+    title: 'iPhone 16 Pro 256GB',
+    price_current: 5_000_000_000,
+    price_original: 6_000_000_000,
+    stock: -5,
+    rating_star: 9,
+    rating_count: -10,
+    url: 'https://shopee.vn/product/1/2',
+    threat_risk_score: 250,
+    dosafe_risk_score: -20,
+    review_risk_score: Number.NaN,
+  });
+  assert.equal(mappedTrustOffer.price_current, 0);
+  assert.equal(mappedTrustOffer.rating_star, 5);
+  assert.equal(mappedTrustOffer.stock, 0);
+  assert.equal(mappedTrustOffer.merchant.risk_score, 100);
+  assert.equal(mappedTrustOffer.merchant.dosafe_risk_score, 0);
+
+  const mappedRawOffer = mapOfferRowToMerchantOffer({
+    id: 'off-2',
+    platform: 'lazada',
+    title: 'Galaxy S24 Ultra',
+    price_current: 25_990_000,
+    price_original: 29_990_000,
+    stock: 10,
+    rating_star: 4.8,
+    rating_count: 20,
+    url: 'https://www.lazada.vn/products/p-i123.html',
+    merchants: {
+      id: 'm-2',
+      name: 'Mall',
+      platform: 'lazada',
+      is_official: true,
+      rating_star: 8,
+      follower_count: -50,
+      risk_score: 180,
+    },
+  });
+  assert.equal(mappedRawOffer.merchant.rating_star, 5);
+  assert.equal(mappedRawOffer.merchant.follower_count, 0);
+  assert.equal(mappedRawOffer.merchant.risk_score, 100);
+
+  const slicedMerchants = filterAndSortMerchants(
+    [
+      {
+        id: 'm1',
+        platform: 'shopee',
+        platform_shop_id: 's1',
+        name: 'Shop 1',
+        slug: null,
+        url: null,
+        is_official: true,
+        rating_star: 4.9,
+        follower_count: 100,
+        location: null,
+        dosafe_risk_score: 0,
+        review_risk_score: 0,
+        risk_score: 0,
+        trust_score: 100,
+        product_count: 5,
+        min_price: 1000,
+        max_price: 2000,
+        review_risk_breakdown: {
+          total_reviews: 0,
+          authentic_count: 0,
+          coin_spam_count: 0,
+          seeding_fake_count: 0,
+          sabotage_or_bombing_count: 0,
+          suspicious_ratio_pct: 0,
+        },
+        updated_at: null,
+      },
+      {
+        id: 'm2',
+        platform: 'shopee',
+        platform_shop_id: 's2',
+        name: 'Shop 2',
+        slug: null,
+        url: null,
+        is_official: false,
+        rating_star: 4.8,
+        follower_count: 50,
+        location: null,
+        dosafe_risk_score: 0,
+        review_risk_score: 0,
+        risk_score: 0,
+        trust_score: 90,
+        product_count: 3,
+        min_price: 1000,
+        max_price: 2000,
+        review_risk_breakdown: {
+          total_reviews: 0,
+          authentic_count: 0,
+          coin_spam_count: 0,
+          seeding_fake_count: 0,
+          sabotage_or_bombing_count: 0,
+          suspicious_ratio_pct: 0,
+        },
+        updated_at: null,
+      },
+    ],
+    { limit: 1.8 }
+  );
+  assert.equal(
+    slicedMerchants.length,
+    1,
+    'filterAndSortMerchants must floor fractional limit (#557)'
+  );
+
+  console.log(
+    '  ✅ Rate API review trust, dual score, star anomaly, and offer mapping bounds verified (#557)'
+  );
+}
+
 async function main() {
   console.log('🧪 Public write-path security suite (#155)');
   await testReviews();
@@ -969,6 +1192,7 @@ async function main() {
   await testFilterBoundsAndWatchlistPrices();
   await testDealRadarAndApiRouteGuards();
   await testLeaderboardEngineAndMerchantDirectoryGuards();
+  await testRateApiTrustAndOfferBounds();
   testSharedDataClients();
   console.log('✅ Public write-path security suite passed');
 }

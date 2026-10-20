@@ -2109,8 +2109,101 @@ async function run() {
     'persistAnalysisToSupabase must chunk review_flags upserts into batches of 200'
   );
 
+  // 16j. skipReviewAnalysis / pricesOnly skips Step 6 review re-analysis on price-only ingests (Rate-Services#158)
+  let reviewsQueriedOnPricesOnly = false;
+  const pricesOnlyStub = {
+    from: (table: string) => {
+      if (table === 'categories') {
+        return {
+          select: async () => ({
+            data: [{ id: 'cat-smartphones', slug: 'smartphones' }],
+            error: null,
+          }),
+        };
+      }
+      if (table === 'merchants') {
+        return {
+          upsert: () => ({
+            select: () => ({
+              single: async () => ({ data: { id: 'merch-158' }, error: null }),
+            }),
+          }),
+        };
+      }
+      if (table === 'master_products') {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: {
+                  id: 'master-158',
+                  specifications: { display: { panel_type: 'OLED' } },
+                },
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
+      if (table === 'products') {
+        return {
+          upsert: () => ({
+            select: () => ({
+              single: async () => ({ data: { id: 'prod-158' }, error: null }),
+            }),
+          }),
+        };
+      }
+      if (table === 'reviews') {
+        reviewsQueriedOnPricesOnly = true;
+        throw new Error(
+          'reviews table must not be queried when skipReviewAnalysis/pricesOnly is set'
+        );
+      }
+      throw new Error(`Unexpected table ${table}`);
+    },
+    rpc: async (fn: string) => {
+      if (fn === 'record_price_observation') {
+        return { data: 'unchanged_delta', error: null };
+      }
+      return { data: null, error: null };
+    },
+  } as unknown as NonNullable<
+    ConstructorParameters<typeof ShopeeIngestionPipeline>[0]
+  >['supabaseClient'];
+
+  const pipeline158 = new ShopeeIngestionPipeline({ supabaseClient: pricesOnlyStub });
+  await pipeline158.ingestProduct(
+    {
+      platform: 'shopee',
+      itemId: 'item-158',
+      shopId: 'shop-158',
+      url: 'https://shopee.vn/product/158/158',
+      title: 'Điện thoại Apple iPhone 16 Pro Max 256GB',
+      priceMin: 28_990_000,
+      priceMax: 28_990_000,
+      currency: 'VND',
+      historicalSold: 100,
+      ratingStar: 4.9,
+      ratingCount: 50,
+      images: ['https://cf.shopee.vn/file/ip16pm.jpg'],
+      models: [],
+      attributes: [],
+      shop: { shopId: 'shop-158', name: 'Apple Flagship Store', isMall: true },
+      reviews: [],
+      pricesOnly: true,
+    },
+    undefined,
+    { masterIdHint: 'master-158' }
+  );
+  assert.equal(
+    reviewsQueriedOnPricesOnly,
+    false,
+    'ingestProduct must skip Step 6 review re-analysis when pricesOnly/skipReviewAnalysis is set'
+  );
+
   console.log(
-    `✅ [P2/P3 Trust Model & #292/#352/#356/#359/#379/#382/#401/#497/#514/#522/#528] Voter weight, Wilson lower bound (50/52=${wilson50of52} > 1/1=${wilson1of1}), shingle copy seeding (sim=${shingleSim}), affiliate shortlinks, peer floor, ArenaSpecSyncer, Importer & ReviewAnalyzer hardening (#352, #356, #359, #379, #382, #401, #497, #514, #522, #528) verified`
+    `✅ [P2/P3 Trust Model & #292/#352/#356/#359/#379/#382/#401/#497/#514/#522/#528/#557] Voter weight, Wilson lower bound (50/52=${wilson50of52} > 1/1=${wilson1of1}), shingle copy seeding (sim=${shingleSim}), affiliate shortlinks, peer floor, ArenaSpecSyncer, Importer & ReviewAnalyzer hardening (#352, #356, #359, #379, #382, #401, #497, #514, #522, #528, #557) verified`
   );
 
   console.log('\n🎉 ALL AI REVIEW ANALYZER TESTS PASSED!');

@@ -254,6 +254,7 @@ export const ScrapedProductSchema = z.object({
     url: z.string().optional(),
   }),
   reviews: z.array(ScrapedReviewSchema).default([]),
+  pricesOnly: z.boolean().optional(),
 });
 
 export type Availability = z.infer<typeof AvailabilitySchema>;
