@@ -17,7 +17,7 @@ This is the release workflow for `rate.vn`. It follows the same model as DOS/DOS
    `gh pr create --repo DOS/Rate --base main --head dev --title "chore(release): promote dev to main"`
    List the PRs being released in the body.
 4. Wait for the required checks on the promotion PR: `Typecheck & Build Monorepo`, `PR into main comes from dev`, `main must not lead dev`.
-5. Merge with a merge commit: `gh pr merge <number> --repo DOS/Rate --merge`. **Never squash or rebase a promotion.** Squashing creates a commit on `main` that can never exist on `dev`, and the next promotion then diffs from a stale merge base.
+5. Ask JOY for a short yes/no consent to deploy, then the agent merges it with a merge commit: `gh pr merge <number> --repo DOS/Rate --merge`. JOY does not merge PRs; never ask JOY to click Merge. **Never squash or rebase a promotion.** Squashing creates a commit on `main` that can never exist on `dev`, and the next promotion then diffs from a stale merge base.
 6. Vercel builds `main` and assigns `rate.vn`. Verify the live revision (the deployment's Git SHA equals `main`), `/api/health`, the main routes and a browser check before calling the release done. To check a build before it takes traffic, create it from Git with `autoAssignCustomDomains: false` (Vercel API `POST /v13/deployments` with `gitSource` ref `main` and `target: "production"`), verify it with `vercel curl --deployment <id>`, then `vercel promote <id>`. Promoting an existing production deployment does not rebuild.
 
 ## Hotfix
