@@ -237,7 +237,16 @@ export function computeWilsonLowerBound(
 const WEB_SHIPPING_ASPECT_RE =
   /(?:giao\s*hàng|ship(?:per)?|vận\s*chuyển|đóng\s*gói|bọc\s*hàng|hộp\s*móp|giao\s*nhanh|giao\s*chậm|tư\s*vấn|chăm\s*sóc\s*khách)/i;
 const WEB_PRODUCT_ASPECT_RE =
-  /(?:\bpin\b|sạc|mah|màn(?:\s*hình)?|tần\s*số\s*quét|nit|hiển\s*thị|cam(?:era)?|chụp|quay\s*video|zoom|loa|mic|chất\s*âm|chống\s*ồn|bass|treble|hiệu\s*năng|chip|mượt|lag|giật|nóng|nhiệt\s*độ|fps|game|thiết\s*kế|cầm\s*nắm|vân\s*tay|face\s*id|wifi|5g|bluetooth|phím|bàn\s*phím|touchpad)/i;
+  /(?:\bpin\b|sạc|mah|màn(?:\s*hình)?|tần\s*số\s*quét|nit|hiển\s*thị|cam(?:era)?(?!\s*kết)|chụp|quay\s*video|zoom|loa|mic|chất\s*âm|chống\s*ồn|bass|treble|hiệu\s*năng|chip|mượt|lag|giật|nóng|nhiệt\s*độ|fps|game|thiết\s*kế|cầm\s*nắm|vân\s*tay|face\s*id|wifi|5g|bluetooth|phím|bàn\s*phím|touchpad)/i;
+// Any mention of the product or of using it, based on PRODUCT_ASPECT_RE in
+// apps/importer/src/shopee/ai-review-analyzer.ts (isShippingOnlyComment) plus
+// Shopee's structured product fields. Matched as whole words so "hư" in "như"
+// or "pin" in "shopping" do not count, and without the words that also
+// describe delivery ("đóng gói đẹp", "cam kết", "shipper chạy", "sản phẩm
+// được đóng gói"). Only used to decide that a review is about shipping alone;
+// depth still uses the stricter WEB_PRODUCT_ASPECT_RE.
+const WEB_PRODUCT_MENTION_RE =
+  /(?<![\p{L}\p{N}])(?:máy|điện\s*thoại|tai\s*nghe|pin|màn(?:\s*hình)?|camera|loa|mic|chất\s*âm|chống\s*ồn|cảm\s*ứng|hiệu\s*năng|cấu\s*hình|chip|ram|rom|sạc|dùng|xài|sử\s*dụng|trải\s*nghiệm|mượt|lag|giật|nóng|ấm|lỗi|hỏng|hư|bền|xịn|chính\s*hãng|nguyên\s*seal|bảo\s*hành|vân\s*tay|wifi|5g|bluetooth|nhiệt\s*độ|tần\s*số|chất\s*lượng\s*sản\s*phẩm|sản\s*phẩm\s*(?:tốt|ổn|ok|xịn|đẹp|xài|dùng|chất\s*lượng|như\s*mô\s*tả|đúng\s*mô\s*tả)|đúng\s*với\s*mô\s*tả|tính\s*năng\s*nổi\s*bật)(?![\p{L}\p{N}])/iu;
 const WEB_PLATFORM_LABEL_RE =
   /^(?:cực\s*k[ìỳ]\s*hài\s*lòng|rất\s*hài\s*lòng|hài\s*lòng|bình\s*thường|không\s*hài\s*lòng|rất\s*không\s*hài\s*lòng|tuyệt\s*vời|tốt|khá|tệ|rất\s*tệ)$/iu;
 const WEB_SPONSORED_RE =
@@ -274,7 +283,11 @@ export function evaluateReviewTrustAssessment(
   const cleanText = comment.replace(/[\s.!,]+$/u, '').trim();
   const hasShipping = WEB_SHIPPING_ASPECT_RE.test(comment);
   const hasProduct = WEB_PRODUCT_ASPECT_RE.test(comment);
-  const shippingOnly = hasShipping && !hasProduct && cleanText.length > 0;
+  const shippingOnly =
+    hasShipping &&
+    !hasProduct &&
+    !WEB_PRODUCT_MENTION_RE.test(comment) &&
+    cleanText.length > 0;
 
   // 1. Axis A: Authenticity
   let authenticity: ReviewAuthenticityAxis = 'genuine';

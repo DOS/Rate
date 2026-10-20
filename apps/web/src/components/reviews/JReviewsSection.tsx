@@ -1466,11 +1466,22 @@ export default function JReviewsSection({
                               ? 'bg-primary-subtle text-primary'
                               : 'bg-light text-muted border'
                         }`}
+                        title={t('ratingWeightTitle')}
+                        data-testid="review-rating-weight"
+                      >
+                        {t('ratingWeightBadge', {
+                          weight: rev.helpfulness_weight.toFixed(2),
+                        })}
+                      </span>
+                      {/* The 6-axis trust model is a separate estimate with its
+                          own weight, so it gets its own labelled badge rather
+                          than explaining the rating weight (DOS/Rate#596). */}
+                      <span
+                        className="badge rounded-pill small bg-light text-muted border"
                         title={weightExplanation}
                         data-testid="review-6axis-breakdown"
                       >
-                        {t('weightBadgeLabel', {
-                          weight: rev.helpfulness_weight.toFixed(2),
+                        {t('trustModelBadge', {
                           explanation: weightExplanation,
                         })}
                       </span>

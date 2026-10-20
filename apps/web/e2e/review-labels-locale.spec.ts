@@ -53,6 +53,13 @@ for (const [locale, labels] of Object.entries(LABELS)) {
         .getByTestId('review-6axis-breakdown')
         .filter({ hasText: labels.weight })
     ).not.toHaveCount(0);
+    // The rating weight badge carries only its number; the 6-axis model's own
+    // estimate sits in a separate labelled badge (DOS/Rate#596).
+    const ratingWeight = page.getByTestId('review-rating-weight');
+    await expect(ratingWeight).toHaveCount(6);
+    await expect(ratingWeight.first()).toHaveText(
+      /^(Trọng số|Weight|Váha): \d\.\d\dx$/
+    );
     // The seeded phone has buyer reviews only, so the note is the user-only one.
     await expect(
       page.getByText(labels.blendNote, { exact: true })
