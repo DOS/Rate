@@ -2267,6 +2267,126 @@ async function runTests() {
     '  ✅ [Cache Tags & Verdict Bounds] isSafeRevalidationPath, merchant PRICE_HISTORY cascade & evaluateExtensionPriceVerdict bounds verified (#497)'
   );
 
+  // --- DOS/Rate#580: RAM/ROM disambiguation, crowd ingest bounds, and JSON-LD decimal ratingCount ---
+  {
+    const laptopCommaTuple = extractStorageAndAmbiguity({
+      title:
+        'Laptop Asus Zenbook S 14 UX5406SA (Ultra 7 258V, 32GB, 1TB, 2.8K OLED)',
+      selectedVariant: null,
+    });
+    assert.equal(laptopCommaTuple.storageGb, 1024);
+    assert.equal(
+      laptopCommaTuple.hasMultipleStorageInTitle,
+      false,
+      'Comma-separated (32GB, 1TB) tuple must resolve to 1024GB without false ambiguity (#580)'
+    );
+
+    const laptop64GbRam1Tb = extractStorageAndAmbiguity({
+      title: 'MacBook Pro 16 M4 Max 64GB RAM 1TB SSD Chính hãng',
+      selectedVariant: null,
+    });
+    assert.equal(laptop64GbRam1Tb.storageGb, 1024);
+    assert.equal(
+      laptop64GbRam1Tb.hasMultipleStorageInTitle,
+      false,
+      '64GB RAM 1TB SSD must strip 64GB RAM and resolve to single storageGb=1024 (#580)'
+    );
+
+    const laptop64GbSlash1Tb = extractStorageAndAmbiguity({
+      title: 'MacBook Pro 16 M4 Max 64GB/1TB Chính hãng',
+      selectedVariant: null,
+    });
+    assert.equal(laptop64GbSlash1Tb.storageGb, 1024);
+    assert.equal(
+      laptop64GbSlash1Tb.hasMultipleStorageInTitle,
+      false,
+      '64GB/1TB tuple must resolve to single storageGb=1024 (#580)'
+    );
+
+    const multiStoragePhone64And128 = extractStorageAndAmbiguity({
+      title: 'Điện thoại iPhone 12 64GB/128GB Chính hãng VN/A',
+      selectedVariant: null,
+    });
+    assert.equal(multiStoragePhone64And128.storageGb, null);
+    assert.equal(
+      multiStoragePhone64And128.hasMultipleStorageInTitle,
+      true,
+      '64GB/128GB phone title must remain multi-storage ambiguous (#580)'
+    );
+
+    // extractRatingFromJsonLd: decimal string reviewCount must not inflate 10x
+    const decimalRatingCount = extractRatingFromJsonLd({
+      ratingValue: '4.8',
+      reviewCount: '120.0',
+    });
+    assert.equal(decimalRatingCount.ratingStar, 4.8);
+    assert.equal(
+      decimalRatingCount.ratingCount,
+      120,
+      'extractRatingFromJsonLd must parse "120.0" as 120 instead of 1200 (#580)'
+    );
+
+    const overMaxRatingCount = extractRatingFromJsonLd({
+      ratingValue: 4.9,
+      reviewCount: 500_000_000,
+    });
+    assert.equal(
+      overMaxRatingCount.ratingCount,
+      null,
+      'extractRatingFromJsonLd must reject ratingCount > 100_000_000 (#580)'
+    );
+
+    // ingestExtensionCrowdSignal: price ceiling, URL-based earbuds floor, and payload clamping
+    const overMaxPriceIngest = await ingestExtensionCrowdSignal({
+      platform: 'shopee',
+      externalItemId: '29512841920',
+      externalShopId: '88201679',
+      url: dirtyShopeeUrl,
+      title: 'Điện thoại iPhone 16 Pro Max 256GB',
+      price: 5_000_000_000,
+      userConsentOptIn: true,
+    });
+    assert.equal(overMaxPriceIngest.accepted, false);
+    assert.equal(overMaxPriceIngest.jobState, 'rejected_invalid_price');
+
+    let capturedCrowdPayload: Record<string, unknown> | null = null;
+    const earbudsUrlIngest = await ingestExtensionCrowdSignal({
+      platform: 'cellphones',
+      externalItemId: 'tai-nghe-sony-wf-c700n',
+      url: 'https://cellphones.com.vn/tai-nghe-sony-wf-c700n.html',
+      title: 'Sony WF-C700N Chính hãng', // Earbuds keyword in URL, price 650k (< 1.2M phone floor, >= 400k earbuds floor)
+      price: 650_000,
+      originalPrice: 5_000_000_000, // > MAX_VALID_VND_PRICE -> clamped to null
+      ratingStar: 9.9, // > 5 -> clamped to null
+      ratingCount: -5, // < 0 -> clamped to null
+      userConsentOptIn: true,
+      rateClient: {
+        rpc: async (_fn, args) => {
+          capturedCrowdPayload = (args.p_payload ?? null) as Record<
+            string,
+            unknown
+          > | null;
+          return {
+            data: [{ state: 'enqueued', job_id: 'job-580' }],
+            error: null,
+          };
+        },
+      },
+    });
+    assert.equal(
+      earbudsUrlIngest.accepted,
+      true,
+      'ingestExtensionCrowdSignal must pass canonicalUrl to detectAccessoryOrJunk so earbuds URLs use the 400k floor (#580)'
+    );
+    assert.equal(capturedCrowdPayload?.['observed_original_price'], null);
+    assert.equal(capturedCrowdPayload?.['observed_rating_star'], null);
+    assert.equal(capturedCrowdPayload?.['observed_rating_count'], null);
+
+    console.log(
+      '  ✅ [RAM/ROM Disambiguation, Crowd Ingest Bounds & JSON-LD Rating Count (#580)] Verified'
+    );
+  }
+
   console.log('🎉 All Rate Browser Extension MV3 v2 tests passed!');
 }
 

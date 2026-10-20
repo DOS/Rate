@@ -401,18 +401,36 @@ export function extractStorageAndAmbiguity(params: {
 } {
   const parseCapacities = (text: string): number[] => {
     const found = new Set<number>();
-    // Match RAM/ROM slash pattern like 8GB/256GB or 12/512GB first
-    const slashRegex =
-      /\b(?:4|6|8|12|16|24|32)\s*(?:gb)?\s*[/|-]\s*(64|128|256|512|1024)\s*gb\b/gi;
-    let m: RegExpExecArray | null;
-    while ((m = slashRegex.exec(text)) !== null) {
-      const cap = Number(m[1]);
-      if (cap >= 64) found.add(cap);
-    }
+    // Strip explicit RAM labels (e.g., "64GB RAM", "RAM 64GB") before scanning storage capacities
+    let remaining = text.replace(
+      /\b(?:ram\s*\d+\s*gb|\d+\s*gb\s*ram)\b/gi,
+      ' '
+    );
 
-    // Match standalone storage capacities (64GB, 128GB, 256GB, 512GB, 1TB, 2TB)
-    const capRegex = /\b(64|128|256|512)\s*gb\b|\b(1|2)\s*tb\b/gi;
-    while ((m = capRegex.exec(text)) !== null) {
+    // Match RAM/ROM slash, hyphen, or comma-tuple patterns like 8GB/256GB, 16GB/1TB, (32GB, 1TB), or 64GB/1TB
+    const tupleRegex =
+      /\b(4|6|8|12|16|18|24|32|36|48|64)\s*(?:gb)?\s*(?:[/|-]|,\s*)\s*(?:(64|128|256|512|1024)\s*gb|(1|2)\s*tb)\b/gi;
+    remaining = remaining.replace(
+      tupleRegex,
+      (fullMatch, ramRaw: string, gbRaw?: string, tbRaw?: string) => {
+        const ram = Number(ramRaw);
+        const cap = gbRaw ? Number(gbRaw) : Number(tbRaw) * 1024;
+        // 64GB paired with 128GB/256GB/512GB (without "RAM") is a multi-storage phone title (e.g. "64GB/128GB"),
+        // whereas 64GB paired with 1TB/2TB or <= 48GB paired with >= 64GB is a RAM/ROM tuple.
+        if (ram === 64 && cap < 1024) {
+          return fullMatch;
+        }
+        if (cap >= 64) {
+          found.add(cap);
+        }
+        return ' ';
+      }
+    );
+
+    // Match standalone storage capacities (64GB, 128GB, 256GB, 512GB, 1024GB, 1TB, 2TB)
+    const capRegex = /\b(64|128|256|512|1024)\s*gb\b|\b(1|2)\s*tb\b/gi;
+    let m: RegExpExecArray | null;
+    while ((m = capRegex.exec(remaining)) !== null) {
       if (m[1]) {
         found.add(Number(m[1]));
       } else if (m[2]) {
@@ -711,13 +729,15 @@ export async function lookupExtensionProduct(
   const observedPrice =
     typeof params.price === 'number' &&
     Number.isFinite(params.price) &&
-    params.price > 0
+    params.price > 0 &&
+    params.price <= MAX_VALID_VND_PRICE
       ? Math.round(params.price)
       : null;
   const observedOriginalPrice =
     typeof params.originalPrice === 'number' &&
     Number.isFinite(params.originalPrice) &&
-    params.originalPrice > 0
+    params.originalPrice > 0 &&
+    params.originalPrice <= MAX_VALID_VND_PRICE
       ? Math.round(params.originalPrice)
       : null;
 
@@ -988,10 +1008,20 @@ export async function lookupExtensionProduct(
   const topRival =
     sameCategoryPeers.find((peer) => peer.id !== matchedMaster!.id) || null;
 
-  const totalRevs = Number(matchedMaster.total_reviews || 0);
-  const authRevs = Number(matchedMaster.authentic_review_count ?? totalRevs);
+  const rawTotalRevs = Number(matchedMaster.total_reviews || 0);
+  const totalRevs =
+    Number.isFinite(rawTotalRevs) && rawTotalRevs > 0
+      ? Math.floor(rawTotalRevs)
+      : 0;
+  const rawAuthRevs = Number(matchedMaster.authentic_review_count ?? totalRevs);
+  const authRevs =
+    Number.isFinite(rawAuthRevs) && rawAuthRevs >= 0
+      ? Math.min(totalRevs, Math.floor(rawAuthRevs))
+      : totalRevs;
   const authPct =
-    totalRevs > 0 ? Math.round((authRevs / totalRevs) * 100) : 100;
+    totalRevs > 0
+      ? Math.min(100, Math.max(0, Math.round((authRevs / totalRevs) * 100)))
+      : 100;
 
   const reviewSummary: ReviewAnalysisSummary | null =
     mode === 'full'
@@ -1176,9 +1206,26 @@ export async function ingestExtensionCrowdSignal(
     };
   }
 
+  if (
+    typeof input.price !== 'number' ||
+    !Number.isFinite(input.price) ||
+    input.price <= 0 ||
+    input.price > MAX_VALID_VND_PRICE
+  ) {
+    return {
+      accepted: false,
+      quarantinedForWorker: false,
+      jobState: 'rejected_invalid_price',
+      jobId: null,
+      reason: 'Mức giá sản phẩm không hợp lệ.',
+    };
+  }
+  const safeObservedPrice = Math.round(input.price);
+
   const gatekeeper = detectAccessoryOrJunk({
     title: input.title,
-    price: input.price,
+    url: canonicalUrl,
+    price: safeObservedPrice,
   });
   if (gatekeeper.isAccessory) {
     return {
@@ -1219,8 +1266,23 @@ export async function ingestExtensionCrowdSignal(
   const validOriginalPrice =
     typeof input.originalPrice === 'number' &&
     Number.isFinite(input.originalPrice) &&
-    input.originalPrice >= input.price
-      ? input.originalPrice
+    input.originalPrice >= safeObservedPrice &&
+    input.originalPrice <= MAX_VALID_VND_PRICE
+      ? Math.round(input.originalPrice)
+      : null;
+  const validRatingStar =
+    typeof input.ratingStar === 'number' &&
+    Number.isFinite(input.ratingStar) &&
+    input.ratingStar > 0 &&
+    input.ratingStar <= 5
+      ? Number(input.ratingStar.toFixed(2))
+      : null;
+  const validRatingCount =
+    typeof input.ratingCount === 'number' &&
+    Number.isFinite(input.ratingCount) &&
+    input.ratingCount >= 0 &&
+    input.ratingCount <= 100_000_000
+      ? Math.round(input.ratingCount)
       : null;
 
   const { data, error } = await rpcClient.rpc('enqueue_crowd_verify_signal', {
@@ -1233,10 +1295,10 @@ export async function ingestExtensionCrowdSignal(
       canonical_url: canonicalUrl,
       observed_title: input.title.slice(0, 280),
       selected_variant: input.selectedVariant?.slice(0, 120) || null,
-      observed_price: input.price,
+      observed_price: safeObservedPrice,
       observed_original_price: validOriginalPrice,
-      observed_rating_star: input.ratingStar || null,
-      observed_rating_count: input.ratingCount || null,
+      observed_rating_star: validRatingStar,
+      observed_rating_count: validRatingCount,
       submitted_at: new Date().toISOString(),
     },
   });
