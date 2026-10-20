@@ -61,7 +61,7 @@ export default function CompareTrayBar() {
               </button>
             </div>
 
-            <div className="d-flex align-items-center gap-2">
+            <div className="d-flex align-items-center justify-content-end flex-wrap gap-2">
               <button
                 type="button"
                 onClick={clearCompareTray}
