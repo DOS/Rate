@@ -4,10 +4,13 @@ import {
   isFilteredOutReview,
   isPendingReview,
   reviewBadgeKind,
+  blendNoteKey,
   sponsorshipBadgeKey,
   submitErrorKey,
+  weightExplanationCopy,
 } from '../review-display';
 import {
+  computeCombinedDualScore,
   detectStarDistributionAnomaly,
   evaluateReviewTrustAssessment,
   type ReviewItem,
@@ -136,8 +139,115 @@ function main() {
     anomaly.warningLabelVi
   );
 
+  // Every weight explanation case rebuilds the Vietnamese server text; the
+  // formula case and assessments cached without a kind keep the server text.
+  const fill = (template: string, values: Record<string, string>) =>
+    template.replace(/\{(\w+)\}/g, (_, name: string) => values[name] ?? '');
+  const weightSamples: Array<[string, Partial<ReviewItem>]> = [
+    ['shipping_only', { comment: 'Giao hàng nhanh, đóng gói cẩn thận' }],
+    [
+      'filler',
+      {
+        comment: 'Nhận xét cho đủ chữ để nhận xu thôi',
+        flag_category: 'low_value_coin_spam',
+      },
+    ],
+    [
+      'sabotage',
+      {
+        comment: 'Máy dùng rất mượt, pin trâu suốt cả ngày',
+        flag_category: 'competitor_sabotage',
+      },
+    ],
+    [
+      'bombing',
+      {
+        comment: 'Máy dùng rất mượt, pin trâu suốt cả ngày',
+        flag_category: 'review_bombing',
+      },
+    ],
+    [
+      'seeding',
+      {
+        comment: 'Máy dùng rất mượt, pin trâu suốt cả ngày',
+        flag_category: 'seeding_fake',
+      },
+    ],
+    ['stars_only', { comment: '' }],
+    ['platform_label', { comment: 'Hài lòng' }],
+    ['low_effort', { comment: 'Ổn áp nha mọi người' }],
+    ['formula', { comment: 'Máy dùng rất mượt, pin trâu suốt cả ngày nha' }],
+  ];
+  for (const [kind, overrides] of weightSamples) {
+    const { breakdown } = evaluateReviewTrustAssessment({
+      id: kind,
+      rating_star: 5,
+      comment: '',
+      verdict: 'authentic',
+      flag_category: 'authentic',
+      include_in_rating: true,
+      helpfulness_weight: 1,
+      ...overrides,
+    } as ReviewItem);
+    assert.equal(breakdown.explanationKind, kind, `sample for ${kind}`);
+    const copy = weightExplanationCopy(breakdown);
+    const text =
+      'key' in copy ? fill(vi.reviews[copy.key]!, copy.values) : copy.text;
+    assert.equal(text, breakdown.explanationVi, kind);
+    assert.equal('key' in copy, kind !== 'formula', `${kind} is localized`);
+  }
+  const cached = { weight: 0.25, explanationVi: 'Trọng số 0.25x: cũ' };
+  assert.deepEqual(weightExplanationCopy(cached), {
+    text: cached.explanationVi,
+  });
+  assert.deepEqual(
+    weightExplanationCopy({
+      ...cached,
+      explanationKind: 'constructor' as never,
+    }),
+    { text: cached.explanationVi }
+  );
+
+  const blendCases: Array<
+    [string, Parameters<typeof computeCombinedDualScore>[0]]
+  > = [
+    ['blended', { userScore: 8, expertScore: 9, userConfidence: 0.7 }],
+    [
+      'separate_low_confidence',
+      { userScore: 8, expertScore: 9, userConfidence: 0.3 },
+    ],
+    ['user_only', { userScore: 8, expertScore: null, userConfidence: 0.3 }],
+    ['expert_only', { userScore: null, expertScore: 9, userConfidence: 0 }],
+    [
+      'insufficient_data',
+      { userScore: null, expertScore: null, userConfidence: 0 },
+    ],
+  ];
+  for (const [mode, params] of blendCases) {
+    const result = computeCombinedDualScore(params);
+    assert.equal(result.blendMode, mode);
+    assert.equal(
+      vi.reviews[blendNoteKey(result.blendMode)],
+      result.blendFormulaNoteVi,
+      mode
+    );
+  }
+
   // The keys exist in every locale.
   const keys = [
+    'weightExplanationShippingOnly',
+    'weightExplanationFiller',
+    'weightExplanationSabotage',
+    'weightExplanationBombing',
+    'weightExplanationSeeding',
+    'weightExplanationStarsOnly',
+    'weightExplanationPlatformLabel',
+    'weightExplanationLowEffort',
+    'blendNoteBlended',
+    'blendNoteSeparateLowConfidence',
+    'blendNoteUserOnly',
+    'blendNoteExpertOnly',
+    'blendNoteInsufficientData',
     'sponsorshipBadgeSponsoredBalanced',
     'sponsorshipBadgeSponsoredPromo',
     'sponsorshipBadgeIncentivized',
