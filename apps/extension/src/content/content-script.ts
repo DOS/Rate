@@ -3,6 +3,7 @@ import {
   formatSafeExtensionVnd,
   formatSafeNumber,
   normalizeFiveStarRating,
+  shouldRenderTrustPill,
 } from '../security-guards.js';
 import type { ExtensionLookupData } from '../types.js';
 
@@ -64,7 +65,7 @@ function getVerdictTheme(verdict: string): {
  * Zero host CSS pollution; clicking opens the Chrome Native Side Panel.
  */
 function renderShadowTrustPill(lookup: ExtensionLookupData): void {
-  if (lookup.isAccessoryOrPart || lookup.matchStatus === 'accessory_skip') {
+  if (!shouldRenderTrustPill(lookup)) {
     removeTrustPillHost();
     return;
   }

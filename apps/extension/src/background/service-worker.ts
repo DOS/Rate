@@ -182,7 +182,10 @@ chrome.runtime.onInstalled.addListener(async () => {
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  const msgType = message.type;
+  if (!message || typeof message !== 'object') {
+    return false;
+  }
+  const msgType = (message as { type?: unknown }).type;
 
   // CRITICAL MV3 Rule: Call chrome.sidePanel.open synchronously in the first turn
   // before any await so the user gesture from clicking the Shadow DOM Pill is preserved!
@@ -254,11 +257,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (msgType === 'RATE_SIDEPANEL_FETCH_FULL') {
+    if (!isPrivilegedExtensionSender(sender)) {
+      sendResponse({
+        ok: false,
+        error:
+          'Full lookup can only be requested from the Rate extension sidepanel',
+      });
+      return false;
+    }
     (async () => {
       try {
         const overrideVariant =
-          typeof message.selectedVariant === 'string'
-            ? message.selectedVariant
+          typeof message.selectedVariant === 'string' &&
+          message.selectedVariant.trim()
+            ? message.selectedVariant.trim().slice(0, 200)
             : null;
         const [activeTab] = await chrome.tabs.query({
           active: true,
@@ -349,10 +361,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (msgType === 'RATE_SIDEPANEL_QUICK_QUERY') {
+    if (!isPrivilegedExtensionSender(sender)) {
+      sendResponse({
+        ok: false,
+        error:
+          'Quick query can only be requested from the Rate extension sidepanel',
+      });
+      return false;
+    }
     (async () => {
       try {
         const rawQuery =
-          typeof message.query === 'string' ? message.query.trim() : '';
+          typeof message.query === 'string'
+            ? message.query.trim().slice(0, 500)
+            : '';
         const settings = await getSettings();
         if (!rawQuery) {
           sendResponse({
@@ -363,14 +385,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
 
         const isUrl = /^https?:\/\//i.test(rawQuery);
-        const canonicalUrl = isUrl
-          ? sanitizeProductUrl(rawQuery) || rawQuery.split('?')[0] || rawQuery
-          : '';
-        const detectedPlatform = isUrl
-          ? detectEcommercePlatform(canonicalUrl)
-          : null;
+        const canonicalUrl = isUrl ? sanitizeProductUrl(rawQuery) || '' : '';
+        const detectedPlatform =
+          isUrl && canonicalUrl ? detectEcommercePlatform(canonicalUrl) : null;
         const extractedIds =
-          isUrl && detectedPlatform
+          isUrl && detectedPlatform && canonicalUrl
             ? extractIdsFromUrl(detectedPlatform, canonicalUrl)
             : { externalItemId: null, externalShopId: null };
 
@@ -392,8 +411,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (detectedPlatform) {
           params.set('platform', detectedPlatform);
         }
-        if (isUrl) {
-          params.set('url', syntheticSignal.canonicalUrl);
+        if (canonicalUrl) {
+          params.set('url', canonicalUrl);
         }
         if (extractedIds.externalItemId) {
           params.set('externalId', extractedIds.externalItemId);
