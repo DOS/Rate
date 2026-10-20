@@ -228,7 +228,7 @@
 }
 
 // Product hero media: shorter on phones so the name, price and score fit in
-// the first screen (DOS/Rate#605); colours become one scrollable row.
+// the first screen (DOS/Rate#605).
 .rate-pdv-media {
   min-height: 380px;
 
@@ -242,18 +242,6 @@
 
     img {
       max-height: 190px;
-    }
-  }
-}
-
-@media (max-width: 767.98px) {
-  .rate-pdv-colors {
-    flex-wrap: nowrap !important;
-    overflow-x: auto;
-    padding-bottom: 2px;
-
-    > * {
-      flex-shrink: 0;
     }
   }
 }

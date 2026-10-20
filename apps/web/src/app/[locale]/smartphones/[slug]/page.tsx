@@ -185,6 +185,13 @@ export async function ProductDetailView({
   const specs = product.specifications as ProductSpecifications;
   const keySpecs = product.key_specs as KeySpecs;
   const minPriceFormatted = Number(product.min_price).toLocaleString('vi-VN');
+  // Same meaning as the catalogue card's seller count (distinct merchants with
+  // a price), not the number of listings.
+  const sellerCount = new Set(
+    offers
+      .filter((o) => Number(o.price_current) > 0)
+      .map((o) => o.merchant?.id || o.id)
+  ).size;
   const maxPriceFormatted = Number(product.max_price).toLocaleString('vi-VN');
 
   const authenticCount =
@@ -343,11 +350,11 @@ export async function ProductDetailView({
             <h1 className="h2 fw-bold text-dark mb-2">{product.name}</h1>
             {/* Price in the first screen on phones, ahead of the scoreboard
             (DOS/Rate#605); the full price strip stays further down. */}
-            {Number(product.min_price || 0) > 0 && offers.length > 0 && (
+            {Number(product.min_price || 0) > 0 && sellerCount > 0 && (
               <p className="rate-pdv-price-line mb-3">
                 {t.rich('heroPriceLine', {
                   price: minPriceFormatted,
-                  count: offers.length,
+                  count: sellerCount,
                   strong: (chunks) => (
                     <strong className="rate-tabular">{chunks}</strong>
                   ),
