@@ -11,7 +11,7 @@ import {
   FaXTwitter,
   FaTelegram,
 } from 'react-icons/fa6';
-import { BsShieldCheck, BsCodeSlash } from 'react-icons/bs';
+import { BsShieldCheck, BsCodeSlash, BsShop } from 'react-icons/bs';
 import RateWordmark from '@/components/brand/RateWordmark';
 
 export interface FooterSectionLink {
@@ -184,7 +184,7 @@ export default async function FooterDynamic({
                           target="_blank"
                           rel="noopener noreferrer"
                           className="social-link"
-                          aria-label="GitHub DOS/Rate"
+                          aria-label={tFooter('links.github')}
                         >
                           <FaGithub />
                         </a>
@@ -193,7 +193,7 @@ export default async function FooterDynamic({
                         <Link
                           href="/developers"
                           className="social-link"
-                          aria-label="REST API v1"
+                          aria-label={tFooter('links.developers')}
                         >
                           <BsCodeSlash />
                         </Link>
@@ -202,9 +202,9 @@ export default async function FooterDynamic({
                         <Link
                           href="/merchants"
                           className="social-link"
-                          aria-label="Merchants"
+                          aria-label={tFooter('links.merchants')}
                         >
-                          <FaLinkedin />
+                          <BsShop />
                         </Link>
                       </li>
                     </>

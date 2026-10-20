@@ -31,6 +31,18 @@ for (const { path, lang, label } of LOCALES) {
       expect(text).not.toContain(term);
     }
     await expect(footer.locator('a[href*="/api/"]')).toHaveCount(0);
+    // Icon-only links are named in the page's language (no English
+    // fallbacks such as 'REST API v1' or 'Merchants').
+    for (const name of await footer
+      .locator('a.social-link')
+      .evaluateAll((els) =>
+        els.map((el) => el.getAttribute('aria-label') ?? '')
+      )) {
+      expect(name).not.toBe('');
+      expect(['REST API v1', 'Merchants', 'GitHub DOS/Rate']).not.toContain(
+        name
+      );
+    }
     for (const href of ['/leaderboard', '/inspect', '/developers']) {
       await expect(footer.locator(`a[href$="${href}"]`).first()).toBeAttached();
     }
