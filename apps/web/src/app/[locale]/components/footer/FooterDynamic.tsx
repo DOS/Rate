@@ -74,11 +74,6 @@ export default async function FooterDynamic({
       { label: tFooter('links.merchants'), href: '/merchants' },
       { label: tFooter('links.watchlist'), href: '/watchlist' },
       { label: tFooter('links.developers'), href: '/developers' },
-      {
-        label: tFooter('links.apiProducts'),
-        href: '/api/v1/rate/products',
-        newTab: true,
-      },
     ],
   };
 
@@ -306,7 +301,7 @@ export default async function FooterDynamic({
             </div>
           </div>
 
-          {/* Open-Core Architecture & Security Status */}
+          {/* Trust signals */}
           <div className="col-md-4 col-lg-3 col-xl-2 col-6">
             <div className="footer-widget">
               <h4 className="widget-title">{tFooter('trustTitle')}</h4>
@@ -316,11 +311,7 @@ export default async function FooterDynamic({
                     <BsShieldCheck />
                   </div>
                   <div className="caps">
-                    <h5 className="title">
-                      DOSafe &amp; AI Review
-                      <br />
-                      Dual Risk Score
-                    </h5>
+                    <h5 className="title">{tFooter('trustRiskTitle')}</h5>
                     <p className="subs">{tFooter('antiSeedingSub')}</p>
                   </div>
                 </div>
@@ -329,7 +320,7 @@ export default async function FooterDynamic({
                     <BsCodeSlash />
                   </div>
                   <div className="caps">
-                    <h5 className="title">Open-Core REST v1</h5>
+                    <h5 className="title">{tFooter('trustOpenTitle')}</h5>
                     <p className="subs">{tFooter('specGroupsSub')}</p>
                   </div>
                 </div>
