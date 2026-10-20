@@ -9,6 +9,7 @@ import {
   extractClientRateLimitKey,
   jsonApiError,
 } from '@/server/rate/api-handler';
+import { parseEcommerceUrlOrQuery } from '@/lib/rate-api';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -17,20 +18,24 @@ const CORS_HEADERS = {
     'Content-Type, Authorization, X-Rate-Extension-Version',
 };
 
+// platform and externalItemId are optional for callers that only have the
+// product URL (the contact-page form, DOS/Rate#615); they are derived from it.
 const CrowdIngestSchema = z.object({
-  platform: z.enum([
-    'shopee',
-    'lazada',
-    'tiki',
-    'tiktok',
-    'cellphones',
-    'tgdd',
-    'fptshop',
-    'hoangha',
-    'didongviet',
-    'phongvu',
-  ]),
-  externalItemId: z.string().trim().min(1).max(120),
+  platform: z
+    .enum([
+      'shopee',
+      'lazada',
+      'tiki',
+      'tiktok',
+      'cellphones',
+      'tgdd',
+      'fptshop',
+      'hoangha',
+      'didongviet',
+      'phongvu',
+    ])
+    .optional(),
+  externalItemId: z.string().trim().min(1).max(120).optional(),
   externalShopId: z.string().trim().max(120).nullish(),
   url: z
     .string()
@@ -103,10 +108,40 @@ export async function POST(request: NextRequest) {
     }
 
     const payload = parsed.data;
+    let platform = payload.platform;
+    let externalItemId = payload.externalItemId;
+    let externalShopId = payload.externalShopId ?? null;
+    if (!platform || !externalItemId) {
+      const fromUrl = parseEcommerceUrlOrQuery(payload.url);
+      if (
+        !fromUrl.platform ||
+        fromUrl.platform === 'rate' ||
+        !fromUrl.platformItemId ||
+        (platform && platform !== fromUrl.platform)
+      ) {
+        return NextResponse.json(
+          {
+            ok: true,
+            data: {
+              accepted: false,
+              quarantinedForWorker: false,
+              jobState: 'rejected_invalid_url',
+              jobId: null,
+              reason: 'URL sản phẩm không hợp lệ.',
+            },
+          },
+          { status: 200, headers: CORS_HEADERS }
+        );
+      }
+      platform = fromUrl.platform;
+      externalItemId = externalItemId ?? fromUrl.platformItemId;
+      externalShopId = externalShopId ?? fromUrl.platformShopId;
+    }
+
     const result = await ingestExtensionCrowdSignal({
-      platform: payload.platform as SupportedEcommercePlatform,
-      externalItemId: payload.externalItemId,
-      externalShopId: payload.externalShopId ?? null,
+      platform: platform as SupportedEcommercePlatform,
+      externalItemId,
+      externalShopId,
       url: payload.url,
       title: payload.title,
       selectedVariant: payload.selectedVariant ?? null,

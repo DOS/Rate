@@ -2898,6 +2898,56 @@ async function runCoreArchitectureSuite() {
   assert.equal(extIngestAccessoryBody.data.accepted, false);
   assert.equal(extIngestAccessoryBody.data.jobState, 'skipped_accessory');
 
+  // DOS/Rate#615: callers with only a URL get platform and item id derived.
+  const postIngest = (ip: string, body: unknown) =>
+    extIngestRoute.POST(
+      new NextRequest('https://rate.vn/api/v1/rate/extension/ingest', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-forwarded-for': ip },
+        body: JSON.stringify(body),
+      })
+    );
+  const derivedRes = await postIngest('203.0.113.13', {
+    url: 'https://shopee.vn/op-lung-i.1.555555',
+    title: 'Ốp lưng silicon iPhone 16 Pro Max chống sốc',
+    price: 55000,
+    userConsentOptIn: true,
+  });
+  assert.equal(derivedRes.status, 200);
+  const derivedBody = (await derivedRes.json()) as {
+    data: { jobState: string };
+  };
+  assert.equal(derivedBody.data.jobState, 'skipped_accessory');
+  for (const [ip, body] of [
+    [
+      '203.0.113.14',
+      {
+        url: 'https://example.com/iphone-16',
+        title: 'Apple iPhone 16 Pro Max 256GB',
+        price: 28990000,
+        userConsentOptIn: true,
+      },
+    ],
+    [
+      '203.0.113.15',
+      {
+        platform: 'lazada',
+        url: 'https://shopee.vn/iphone-i.1.555556',
+        title: 'Apple iPhone 16 Pro Max 256GB',
+        price: 28990000,
+        userConsentOptIn: true,
+      },
+    ],
+  ] as const) {
+    const res = await postIngest(ip, body);
+    assert.equal(res.status, 200);
+    const resBody = (await res.json()) as {
+      data: { accepted: boolean; jobState: string };
+    };
+    assert.equal(resBody.data.accepted, false);
+    assert.equal(resBody.data.jobState, 'rejected_invalid_url');
+  }
+
   let hit429 = false;
   for (let i = 0; i < 16; i++) {
     const rlRes = await extIngestRoute.POST(
