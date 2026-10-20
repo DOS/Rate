@@ -122,6 +122,11 @@ export function resolveCompareExpertRating10(
   return norm5 != null ? Number((norm5 * 2).toFixed(1)) : null;
 }
 
+const MAX_COMPARE_DISPLAY_INCH = 100;
+const MAX_COMPARE_RAM_GB = 2048;
+const MAX_COMPARE_STORAGE_GB = 65536;
+const MAX_COMPARE_BATTERY_MAH = 100_000;
+
 export function resolveCompareDisplaySizeInch(
   p: Pick<
     SharedMasterProduct,
@@ -130,9 +135,21 @@ export function resolveCompareDisplaySizeInch(
 ): number | null {
   const specs = (p.specifications || {}) as ProductSpecifications;
   const fromSpecs = Number(specs.display?.size_inch || 0);
-  if (Number.isFinite(fromSpecs) && fromSpecs > 0) return fromSpecs;
+  if (
+    Number.isFinite(fromSpecs) &&
+    fromSpecs > 0.5 &&
+    fromSpecs <= MAX_COMPARE_DISPLAY_INCH
+  ) {
+    return fromSpecs;
+  }
   const fromTop = Number(p.screen_size_inch || 0);
-  if (Number.isFinite(fromTop) && fromTop > 0) return fromTop;
+  if (
+    Number.isFinite(fromTop) &&
+    fromTop > 0.5 &&
+    fromTop <= MAX_COMPARE_DISPLAY_INCH
+  ) {
+    return fromTop;
+  }
   const ks = (p.key_specs || {}) as KeySpecs;
   // Up to two decimals ("6.78 inch"), never starting mid-number: with one
   // decimal only, "6.78" matched as 78 (DOS/Rate#546 release-gate review).
@@ -141,7 +158,13 @@ export function resolveCompareDisplaySizeInch(
   );
   if (m?.[1]) {
     const parsed = Number(m[1].replace(',', '.'));
-    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+    if (
+      Number.isFinite(parsed) &&
+      parsed > 0.5 &&
+      parsed <= MAX_COMPARE_DISPLAY_INCH
+    ) {
+      return parsed;
+    }
   }
   return null;
 }
@@ -150,15 +173,29 @@ export function resolveCompareRamGb(
   p: Pick<SharedMasterProduct, 'ram_gb' | 'specifications' | 'key_specs'>
 ): number | null {
   const fromTop = Number(p.ram_gb || 0);
-  if (Number.isFinite(fromTop) && fromTop > 0) return fromTop;
+  if (
+    Number.isFinite(fromTop) &&
+    fromTop > 0 &&
+    fromTop <= MAX_COMPARE_RAM_GB
+  ) {
+    return fromTop;
+  }
   const specs = (p.specifications || {}) as ProductSpecifications;
   const fromSpecs = Number(specs.hardware?.ram_gb || 0);
-  if (Number.isFinite(fromSpecs) && fromSpecs > 0) return fromSpecs;
+  if (
+    Number.isFinite(fromSpecs) &&
+    fromSpecs > 0 &&
+    fromSpecs <= MAX_COMPARE_RAM_GB
+  ) {
+    return fromSpecs;
+  }
   const ks = (p.key_specs || {}) as KeySpecs;
   const m = String(ks.ram || '').match(/(\d+)\s*GB/i);
   if (m?.[1]) {
     const parsed = Number(m[1]);
-    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+    if (Number.isFinite(parsed) && parsed > 0 && parsed <= MAX_COMPARE_RAM_GB) {
+      return parsed;
+    }
   }
   return null;
 }
@@ -167,16 +204,31 @@ export function resolveCompareStorageGb(
   p: Pick<SharedMasterProduct, 'storage_gb' | 'specifications' | 'key_specs'>
 ): number | null {
   const fromTop = Number(p.storage_gb || 0);
-  if (Number.isFinite(fromTop) && fromTop > 0) return fromTop;
+  if (
+    Number.isFinite(fromTop) &&
+    fromTop > 0 &&
+    fromTop <= MAX_COMPARE_STORAGE_GB
+  ) {
+    return fromTop;
+  }
   const specs = (p.specifications || {}) as ProductSpecifications;
   const fromSpecs = Number(specs.hardware?.storage_gb || 0);
-  if (Number.isFinite(fromSpecs) && fromSpecs > 0) return fromSpecs;
+  if (
+    Number.isFinite(fromSpecs) &&
+    fromSpecs > 0 &&
+    fromSpecs <= MAX_COMPARE_STORAGE_GB
+  ) {
+    return fromSpecs;
+  }
   const ks = (p.key_specs || {}) as KeySpecs;
   const m = String(ks.storage || '').match(/(\d+(?:[.,]\d+)?)\s*(TB|GB)/i);
   if (m?.[1] && m?.[2]) {
     const val = Number(m[1].replace(',', '.'));
     if (Number.isFinite(val) && val > 0) {
-      return m[2].toUpperCase() === 'TB' ? Math.round(val * 1024) : val;
+      const gb = m[2].toUpperCase() === 'TB' ? Math.round(val * 1024) : val;
+      if (gb > 0 && gb <= MAX_COMPARE_STORAGE_GB) {
+        return gb;
+      }
     }
   }
   return null;
@@ -198,14 +250,32 @@ export function resolveCompareBatteryMah(
 ): number | null {
   const specs = (p.specifications || {}) as ProductSpecifications;
   const fromSpecs = Number(specs.battery?.capacity_mah || 0);
-  if (Number.isFinite(fromSpecs) && fromSpecs > 0) return fromSpecs;
+  if (
+    Number.isFinite(fromSpecs) &&
+    fromSpecs > 0 &&
+    fromSpecs <= MAX_COMPARE_BATTERY_MAH
+  ) {
+    return fromSpecs;
+  }
   const fromTop = Number(p.battery_mah || 0);
-  if (Number.isFinite(fromTop) && fromTop > 0) return fromTop;
+  if (
+    Number.isFinite(fromTop) &&
+    fromTop > 0 &&
+    fromTop <= MAX_COMPARE_BATTERY_MAH
+  ) {
+    return fromTop;
+  }
   const ks = (p.key_specs || {}) as KeySpecs;
   const m = String(ks.battery || '').match(/(\d{2,5})\s*mAh/i);
   if (m?.[1]) {
     const parsed = Number(m[1]);
-    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+    if (
+      Number.isFinite(parsed) &&
+      parsed > 0 &&
+      parsed <= MAX_COMPARE_BATTERY_MAH
+    ) {
+      return parsed;
+    }
   }
   return null;
 }

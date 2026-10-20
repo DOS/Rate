@@ -1,4 +1,7 @@
-import type { OfferDiscountAnalysis } from '@/lib/rate-api';
+import {
+  MAX_VALID_VND_PRICE,
+  type OfferDiscountAnalysis,
+} from '@/lib/rate-api';
 
 // rate-api builds `badge_label` / `explanation` in Vietnamese only. The UI
 // rebuilds both from the structured fields so they follow the active locale
@@ -26,18 +29,32 @@ export interface DiscountVerdictCopy {
   explanation: string;
 }
 
-const vnd = (price: number | null | undefined) =>
-  `${Number(price || 0).toLocaleString('vi-VN')} ₫`;
+const vnd = (price: number | null | undefined) => {
+  const num = Number(price || 0);
+  const safe =
+    Number.isFinite(num) && num > 0 && num <= MAX_VALID_VND_PRICE
+      ? Math.round(num)
+      : 0;
+  return `${safe.toLocaleString('vi-VN')} ₫`;
+};
+
+const toSafePct = (pct: number | null | undefined) => {
+  const num = Number(pct || 0);
+  return Number.isFinite(num) && num > 0
+    ? Math.min(100, Math.round(num * 10) / 10)
+    : 0;
+};
 
 export function discountVerdictCopy(
   t: VerdictTranslator,
   a: OfferDiscountAnalysis
 ): DiscountVerdictCopy {
   const median = vnd(a.historical_median_price);
+  const safeClaimedPct = toSafePct(a.claimed_discount_pct);
+  const safeRealPct = toSafePct(a.real_discount_vs_median_pct);
   // rate-api only judges a claimed discount when the store shows a
   // strikethrough price at least 5% above the current one.
-  const claimsDiscount =
-    a.price_original != null && a.claimed_discount_pct >= 5;
+  const claimsDiscount = a.price_original != null && safeClaimedPct >= 5;
 
   switch (a.verdict) {
     case 'fake_discount':
@@ -45,7 +62,7 @@ export function discountVerdictCopy(
         label: t('labelFake'),
         explanation: t('explainFake', {
           original: vnd(a.price_original),
-          claimed: a.claimed_discount_pct,
+          claimed: safeClaimedPct,
           max: vnd(a.historical_max_price),
           median,
         }),
@@ -54,8 +71,8 @@ export function discountVerdictCopy(
       return {
         label: t('labelSuspicious'),
         explanation: t('explainSuspicious', {
-          claimed: a.claimed_discount_pct,
-          real: Math.max(0, a.real_discount_vs_median_pct),
+          claimed: safeClaimedPct,
+          real: safeRealPct,
           median,
         }),
       };
@@ -64,10 +81,7 @@ export function discountVerdictCopy(
         ? {
             label: t('labelGenuine'),
             explanation: t('explainGenuine', {
-              pct: Math.max(
-                a.real_discount_vs_median_pct,
-                a.claimed_discount_pct
-              ),
+              pct: Math.max(safeRealPct, safeClaimedPct),
               median,
             }),
           }
