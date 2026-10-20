@@ -175,6 +175,15 @@ export interface IngestOptions {
    * otherwise the listing goes through entity matching as usual.
    */
   masterIdHint?: string | null;
+  /**
+   * When true, skips Step 6 review re-analysis so price-only (affiliate) ingests
+   * do not re-score stored reviews without reviewer metadata or pay an extra AI pass.
+   */
+  skipReviewAnalysis?: boolean;
+  /**
+   * Alias for `skipReviewAnalysis` for price-only (affiliate) ingests.
+   */
+  pricesOnly?: boolean;
 }
 
 export class ShopeeIngestionPipeline {
@@ -707,101 +716,112 @@ export class ShopeeIngestionPipeline {
     }
 
     // 6. Review analysis + JReviews-style weighted rating + merchant risk score
-    try {
-      const { data: storedReviews, error: storedErr } = await this.supabase
-        .from('reviews')
-        .select(
-          'id, platform_review_id, author_name, rating_star, comment, variation, images, is_verified_buyer, reviewer_type, upvotes, downvotes, report_count, platform_created_at'
-        )
-        .eq('product_id', productId)
-        .order('created_at', { ascending: false })
-        .limit(200);
-
-      // Reviewer metadata is not persisted yet; attach what this scrape saw so the analyzer can use it.
-      const reviewerByPlatformId = new Map(
-        (product.reviews || [])
-          .filter(r => r.reviewer)
-          .map(r => [platformReviewIdFor(r), r.reviewer] as const)
+    const shouldSkipReviewAnalysis = Boolean(
+      options.skipReviewAnalysis || options.pricesOnly || product.pricesOnly
+    );
+    if (shouldSkipReviewAnalysis) {
+      platLogger.info(
+        'ingest.review_analysis_skipped_prices_only',
+        'Review analysis skipped for price-only ingest.',
+        { productId, masterId }
       );
-      const analysisInput: ReviewInputItem[] = (storedReviews || []).map(
-        (row: ReviewInputItem & { platform_review_id?: string | null }) => ({
-          ...row,
-          reviewer: row.platform_review_id
-            ? reviewerByPlatformId.get(row.platform_review_id)
-            : undefined,
-        })
-      );
+    } else {
+      try {
+        const { data: storedReviews, error: storedErr } = await this.supabase
+          .from('reviews')
+          .select(
+            'id, platform_review_id, author_name, rating_star, comment, variation, images, is_verified_buyer, reviewer_type, upvotes, downvotes, report_count, platform_created_at'
+          )
+          .eq('product_id', productId)
+          .order('created_at', { ascending: false })
+          .limit(200);
 
-      if (storedErr) {
+        // Reviewer metadata is not persisted yet; attach what this scrape saw so the analyzer can use it.
+        const reviewerByPlatformId = new Map(
+          (product.reviews || [])
+            .filter(r => r.reviewer)
+            .map(r => [platformReviewIdFor(r), r.reviewer] as const)
+        );
+        const analysisInput: ReviewInputItem[] = (storedReviews || []).map(
+          (row: ReviewInputItem & { platform_review_id?: string | null }) => ({
+            ...row,
+            reviewer: row.platform_review_id
+              ? reviewerByPlatformId.get(row.platform_review_id)
+              : undefined,
+          })
+        );
+
+        if (storedErr) {
+          platLogger.warn(
+            'ingest.review_analysis_skipped',
+            `Review analysis skipped (fetch failed): ${storedErr.message}`,
+            { productId }
+          );
+        } else if (storedReviews && storedReviews.length > 0) {
+          const [{ data: masterRow }, { data: peerRows }] = await Promise.all([
+            this.supabase
+              .from('master_products')
+              .select('min_price')
+              .eq('id', masterId)
+              .maybeSingle(),
+            (() => {
+              const q = this.supabase
+                .from('products')
+                .select('id, price_current, merchants(is_official)')
+                .eq('cluster_id', masterId)
+                .gt('price_current', 0);
+              const withLte =
+                typeof (q as unknown as { lte?: (col: string, val: number) => typeof q }).lte ===
+                'function'
+                  ? q.lte('price_current', MAX_VALID_VND_PRICE)
+                  : q;
+              return withLte.limit(100);
+            })(),
+          ]);
+
+          const canonicalMinPrice = resolveClusterPeerFloorPrice(
+            Array.isArray(peerRows) ? (peerRows as ClusterPeerPriceCandidate[]) : [],
+            productId,
+            masterRow?.min_price ? Number(masterRow.min_price) : undefined
+          );
+
+          const { summary, merchantRisk } = await this.reviewAnalyzer.persistAnalysisToSupabase(
+            this.supabase,
+            {
+              productId,
+              masterId,
+              merchantId,
+              reviews: analysisInput,
+              entityName: candidate.name,
+              entityType: 'product',
+              platform,
+              listingPrice: product.priceMin,
+              canonicalMinPrice,
+              isOfficial: product.shop.isMall,
+              followerCount: product.shop.followerCount,
+            }
+          );
+          platLogger.info(
+            'ingest.review_analysis_completed',
+            `Review analysis: ${summary.authentic_review_count}/${summary.total_reviews_analyzed} authentic, weighted rating ${summary.user_rating_weighted}/5, merchant risk ${merchantRisk?.risk_score ?? 'n/a'} (${merchantRisk?.risk_level ?? 'n/a'}).`,
+            {
+              productId,
+              masterId,
+              authenticCount: summary.authentic_review_count,
+              totalAnalyzed: summary.total_reviews_analyzed,
+              weightedRating: summary.user_rating_weighted,
+              merchantRiskScore: merchantRisk?.risk_score ?? null,
+            }
+          );
+        }
+      } catch (err: unknown) {
+        const errMsg = err instanceof Error ? err.message : String(err);
         platLogger.warn(
-          'ingest.review_analysis_skipped',
-          `Review analysis skipped (fetch failed): ${storedErr.message}`,
+          'ingest.review_analysis_failed',
+          `Review analysis failed (non-fatal): ${errMsg}`,
           { productId }
         );
-      } else if (storedReviews && storedReviews.length > 0) {
-        const [{ data: masterRow }, { data: peerRows }] = await Promise.all([
-          this.supabase
-            .from('master_products')
-            .select('min_price')
-            .eq('id', masterId)
-            .maybeSingle(),
-          (() => {
-            const q = this.supabase
-              .from('products')
-              .select('id, price_current, merchants(is_official)')
-              .eq('cluster_id', masterId)
-              .gt('price_current', 0);
-            const withLte =
-              typeof (q as unknown as { lte?: (col: string, val: number) => typeof q }).lte ===
-              'function'
-                ? q.lte('price_current', MAX_VALID_VND_PRICE)
-                : q;
-            return withLte.limit(100);
-          })(),
-        ]);
-
-        const canonicalMinPrice = resolveClusterPeerFloorPrice(
-          Array.isArray(peerRows) ? (peerRows as ClusterPeerPriceCandidate[]) : [],
-          productId,
-          masterRow?.min_price ? Number(masterRow.min_price) : undefined
-        );
-
-        const { summary, merchantRisk } = await this.reviewAnalyzer.persistAnalysisToSupabase(
-          this.supabase,
-          {
-            productId,
-            masterId,
-            merchantId,
-            reviews: analysisInput,
-            entityName: candidate.name,
-            entityType: 'product',
-            platform,
-            listingPrice: product.priceMin,
-            canonicalMinPrice,
-            isOfficial: product.shop.isMall,
-            followerCount: product.shop.followerCount,
-          }
-        );
-        platLogger.info(
-          'ingest.review_analysis_completed',
-          `Review analysis: ${summary.authentic_review_count}/${summary.total_reviews_analyzed} authentic, weighted rating ${summary.user_rating_weighted}/5, merchant risk ${merchantRisk?.risk_score ?? 'n/a'} (${merchantRisk?.risk_level ?? 'n/a'}).`,
-          {
-            productId,
-            masterId,
-            authenticCount: summary.authentic_review_count,
-            totalAnalyzed: summary.total_reviews_analyzed,
-            weightedRating: summary.user_rating_weighted,
-            merchantRiskScore: merchantRisk?.risk_score ?? null,
-          }
-        );
       }
-    } catch (err: unknown) {
-      const errMsg = err instanceof Error ? err.message : String(err);
-      platLogger.warn(
-        'ingest.review_analysis_failed',
-        `Review analysis failed (non-fatal): ${errMsg}`,
-        { productId }
-      );
     }
 
     platLogger.info(

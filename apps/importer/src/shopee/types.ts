@@ -118,6 +118,11 @@ export interface ShopeeProduct {
     url?: string;
   };
   reviews: ShopeeReview[];
+  /**
+   * True when the payload comes from a price-only source (e.g., Shopee Affiliate API)
+   * and carries no newly scraped reviews or reviewer metadata.
+   */
+  pricesOnly?: boolean;
 }
 
 export type ScrapedProduct = ShopeeProduct;
