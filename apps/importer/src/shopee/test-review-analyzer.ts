@@ -994,6 +994,25 @@ async function run() {
     false,
     'comment mentioning product condition is NOT shipping-only'
   );
+  // Product words count only as whole words, and delivery wording is not a
+  // product mention (DOS/Rate#601, parity with the web trust model).
+  for (const comment of [
+    'Giao hàng nhanh như chớp, shipper thân thiện',
+    'Shopping vui, giao hàng nhanh',
+    'Đóng gói đẹp, giao hàng nhanh',
+    'Sản phẩm được đóng gói cẩn thận, giao nhanh',
+    'Shipper chạy nhanh, giao hàng đúng giờ',
+    'Shop cam kết giao hàng đúng hẹn',
+  ]) {
+    assert.equal(isShippingOnlyComment(comment), true, `shipping-only: ${comment}`);
+  }
+  for (const comment of [
+    'Giao hàng nhanh, máy đẹp, đóng gói kỹ',
+    'Chất lượng sản phẩm:tốt\nĐúng với mô tả:đúng mô tả\n\nĐóng gói cẩn thận. Giao hàng nhanh chóng.',
+    'GIAO HÀNG NHANH, ĐIỆN THOẠI DÙNG TỐT',
+  ]) {
+    assert.equal(isShippingOnlyComment(comment), false, `product: ${comment}`);
+  }
   assert.equal(
     hasStarSentimentContradiction(5, 'Máy bị lỗi sập nguồn liên tục, hàng giả không dùng được'),
     true

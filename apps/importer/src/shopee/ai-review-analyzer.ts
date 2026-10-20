@@ -574,8 +574,19 @@ export function isRatingOnlyComment(comment: string | null | undefined): boolean
 const SHIPPING_ASPECT_RE =
   /(?:giao\s*hàng|ship(?:per)?|vận\s*chuyển|đóng\s*gói|bọc\s*chống\s*sốc|hộp\s*(?:bị\s*)?(?:móp|rách|nát)|giao\s*(?:nhanh|chậm|trễ|lâu)|nhân\s*viên\s*giao|đơn\s*vị\s*vận\s*chuyển)/i;
 
+// Whole words only (Unicode-aware), so "hư" in "như" or "pin" in "shopping"
+// do not count as a product aspect (DOS/Rate#601).
 const PRODUCT_ASPECT_RE =
-  /(?:máy|điện\s*thoại|tai\s*nghe|sản\s*phẩm|pin|màn(?:\s*hình)?|cam(?:era)?|loa|mic|chất\s*âm|chống\s*ồn|cảm\s*ứng|hiệu\s*năng|cấu\s*hình|chip|ram|rom|sạc|dùng|xài|sử\s*dụng|trải\s*nghiệm|chạy|mượt|lag|giật|nóng|ấm|lỗi|hỏng|hư|bền|đẹp|xịn|chính\s*hãng|nguyên\s*seal|bảo\s*hành|chất\s*lượng|vân\s*tay|wifi|5g|bluetooth|nhiệt\s*độ|tần\s*số)/i;
+  /(?<![\p{L}\p{N}])(?:máy|điện\s*thoại|tai\s*nghe|sản\s*phẩm|pin|màn(?:\s*hình)?|cam(?:era)?|loa|mic|chất\s*âm|chống\s*ồn|cảm\s*ứng|hiệu\s*năng|cấu\s*hình|chip|ram|rom|sạc|dùng|xài|sử\s*dụng|trải\s*nghiệm|chạy|mượt|lag|giật|nóng|ấm|lỗi|hỏng|hư|bền|đẹp|xịn|chính\s*hãng|nguyên\s*seal|bảo\s*hành|chất\s*lượng|vân\s*tay|wifi|5g|bluetooth|nhiệt\s*độ|tần\s*số)(?![\p{L}\p{N}])/iu;
+
+// What counts as talking about the product when deciding that a review is
+// about shipping alone. Same list as WEB_PRODUCT_MENTION_RE in
+// apps/web/src/lib/rate-api.ts so the stored weight and the web estimate
+// agree: PRODUCT_ASPECT_RE without the words that also describe delivery
+// ("đóng gói đẹp", "cam kết", "shipper chạy", "sản phẩm được đóng gói"),
+// plus Shopee's structured product fields.
+const PRODUCT_MENTION_RE =
+  /(?<![\p{L}\p{N}])(?:máy|điện\s*thoại|tai\s*nghe|pin|màn(?:\s*hình)?|camera|loa|mic|chất\s*âm|chống\s*ồn|cảm\s*ứng|hiệu\s*năng|cấu\s*hình|chip|ram|rom|sạc|dùng|xài|sử\s*dụng|trải\s*nghiệm|mượt|lag|giật|nóng|ấm|lỗi|hỏng|hư|bền|xịn|chính\s*hãng|nguyên\s*seal|bảo\s*hành|vân\s*tay|wifi|5g|bluetooth|nhiệt\s*độ|tần\s*số|chất\s*lượng\s*sản\s*phẩm|sản\s*phẩm\s*(?:tốt|ổn|ok|xịn|đẹp|xài|dùng|chất\s*lượng|như\s*mô\s*tả|đúng\s*mô\s*tả)|đúng\s*với\s*mô\s*tả|tính\s*năng\s*nổi\s*bật)(?![\p{L}\p{N}])/iu;
 
 /**
  * Detects reviews that only discuss shipping, packaging, or courier behavior without mentioning
@@ -584,7 +595,7 @@ const PRODUCT_ASPECT_RE =
 export function isShippingOnlyComment(comment: string | null | undefined): boolean {
   const text = (comment || '').normalize('NFC').trim();
   if (text.length < 6 || isRatingOnlyComment(text)) return false;
-  return SHIPPING_ASPECT_RE.test(text) && !PRODUCT_ASPECT_RE.test(text);
+  return SHIPPING_ASPECT_RE.test(text) && !PRODUCT_MENTION_RE.test(text);
 }
 
 /**
