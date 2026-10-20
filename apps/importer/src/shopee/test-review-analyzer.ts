@@ -4,6 +4,7 @@
  */
 import http from 'node:http';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
   AiReviewAnalyzer,
   BURST_AUDITOR_DETECTOR,
@@ -1003,16 +1004,36 @@ async function run() {
     'Sản phẩm được đóng gói cẩn thận, giao nhanh',
     'Shipper chạy nhanh, giao hàng đúng giờ',
     'Shop cam kết giao hàng đúng hẹn',
+    'Giao hàng rất tốt, đóng gói cẩn thận',
+    'Hộp đẹp, giao nhanh',
   ]) {
     assert.equal(isShippingOnlyComment(comment), true, `shipping-only: ${comment}`);
   }
   for (const comment of [
+    'Sản phẩm rất tốt, giao hàng nhanh',
+    'Sản phẩm tuyệt vời, giao hàng nhanh',
+    'Chất lượng tốt, giao hàng nhanh chóng',
+    'Hàng đẹp, ship nhanh',
+    'Đẹp lắm, giao hàng nhanh',
     'Giao hàng nhanh, máy đẹp, đóng gói kỹ',
     'Chất lượng sản phẩm:tốt\nĐúng với mô tả:đúng mô tả\n\nĐóng gói cẩn thận. Giao hàng nhanh chóng.',
     'GIAO HÀNG NHANH, ĐIỆN THOẠI DÙNG TỐT',
   ]) {
     assert.equal(isShippingOnlyComment(comment), false, `product: ${comment}`);
   }
+  // The web trust model must use the same list, or the stored weight and the
+  // web estimate disagree again.
+  const regexLiteral = (file: string, name: string) => {
+    const src = readFileSync(new URL(file, import.meta.url), 'utf8');
+    const match = new RegExp(`const ${name} =\\s*(/.*?/iu);`).exec(src);
+    assert.ok(match, `${name} literal in ${file}`);
+    return match[1];
+  };
+  assert.equal(
+    regexLiteral('./ai-review-analyzer.ts', 'PRODUCT_MENTION_RE'),
+    regexLiteral('../../../web/src/lib/rate-api.ts', 'WEB_PRODUCT_MENTION_RE'),
+    'importer and web product mention lists are identical'
+  );
   assert.equal(
     hasStarSentimentContradiction(5, 'Máy bị lỗi sập nguồn liên tục, hàng giả không dùng được'),
     true

@@ -582,11 +582,14 @@ const PRODUCT_ASPECT_RE =
 // What counts as talking about the product when deciding that a review is
 // about shipping alone. Same list as WEB_PRODUCT_MENTION_RE in
 // apps/web/src/lib/rate-api.ts so the stored weight and the web estimate
-// agree: PRODUCT_ASPECT_RE without the words that also describe delivery
+// agree (test-review-analyzer.ts checks the two literals are identical):
+// PRODUCT_ASPECT_RE without bare words that also describe delivery
 // ("đóng gói đẹp", "cam kết", "shipper chạy", "sản phẩm được đóng gói"),
-// plus Shopee's structured product fields.
+// which count only as product praise ("sản phẩm rất tốt", "chất lượng tốt",
+// "hàng đẹp" but not "giao hàng tốt", "đẹp" but not "gói đẹp"), plus
+// Shopee's structured product fields.
 const PRODUCT_MENTION_RE =
-  /(?<![\p{L}\p{N}])(?:máy|điện\s*thoại|tai\s*nghe|pin|màn(?:\s*hình)?|camera|loa|mic|chất\s*âm|chống\s*ồn|cảm\s*ứng|hiệu\s*năng|cấu\s*hình|chip|ram|rom|sạc|dùng|xài|sử\s*dụng|trải\s*nghiệm|mượt|lag|giật|nóng|ấm|lỗi|hỏng|hư|bền|xịn|chính\s*hãng|nguyên\s*seal|bảo\s*hành|vân\s*tay|wifi|5g|bluetooth|nhiệt\s*độ|tần\s*số|chất\s*lượng\s*sản\s*phẩm|sản\s*phẩm\s*(?:tốt|ổn|ok|xịn|đẹp|xài|dùng|chất\s*lượng|như\s*mô\s*tả|đúng\s*mô\s*tả)|đúng\s*với\s*mô\s*tả|tính\s*năng\s*nổi\s*bật)(?![\p{L}\p{N}])/iu;
+  /(?<![\p{L}\p{N}])(?:máy|điện\s*thoại|tai\s*nghe|pin|màn(?:\s*hình)?|camera|loa|mic|chất\s*âm|chống\s*ồn|cảm\s*ứng|hiệu\s*năng|cấu\s*hình|chip|ram|rom|sạc|dùng|xài|sử\s*dụng|trải\s*nghiệm|mượt|lag|giật|nóng|ấm|lỗi|hỏng|hư|bền|xịn|chính\s*hãng|nguyên\s*seal|bảo\s*hành|vân\s*tay|wifi|5g|bluetooth|nhiệt\s*độ|tần\s*số|chất\s*lượng\s*sản\s*phẩm|sản\s*phẩm(?:\s+\p{L}+){0,2}?\s+(?:tốt|ổn|ok|xịn|đẹp|tuyệt|chất\s*lượng|như\s*mô\s*tả|đúng\s*mô\s*tả|kém|tệ)|chất\s*lượng(?:\s+\p{L}+)?\s+(?:tốt|ổn|kém|tệ|cao|tuyệt)|(?<!(?:giao|gói|đóng)\s+)hàng(?:\s+\p{L}+)?\s+(?:đẹp|tốt|xịn|chuẩn|ok|ổn|kém|tệ|lỗi)|(?<!(?:gói|hộp|bọc|bì)\s*)đẹp|đúng\s*với\s*mô\s*tả|tính\s*năng\s*nổi\s*bật)(?![\p{L}\p{N}])/iu;
 
 /**
  * Detects reviews that only discuss shipping, packaging, or courier behavior without mentioning
