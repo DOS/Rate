@@ -1032,13 +1032,18 @@ const CANONICAL_PHONE_REGISTRY: Record<
 };
 
 function slugify(text: string): string {
-  return text
-    .toString()
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, '-')
-    .replace(/[^\w-]+/g, '')
-    .replace(/--+/g, '-');
+  return (
+    text
+      .toString()
+      .toLowerCase()
+      // "Pro+" / "S24+" are Plus models: keep them apart from the base model's
+      // key and slug, and give "S24+" the same key as "S24 Plus" (DOS/Rate#597).
+      .replace(/\s*\+/g, ' plus ')
+      .trim()
+      .replace(/\s+/g, '-')
+      .replace(/[^\w-]+/g, '')
+      .replace(/--+/g, '-')
+  );
 }
 
 export class ProductNormalizer {
