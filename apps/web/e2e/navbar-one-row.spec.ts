@@ -11,7 +11,7 @@ async function headerHeight(page: Page): Promise<number> {
 }
 
 for (const locale of ['vi', 'en', 'cs']) {
-  for (const width of [1024, 1280, 1440]) {
+  for (const width of [992, 1024, 1280, 1440]) {
     test(`navbar is one row at ${width}px (${locale})`, async ({
       page,
       baseURL,
@@ -42,8 +42,15 @@ test('categories dropdown opens, links and closes on Escape', async ({
   const menu = page.locator('#rate-nav-categories');
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
   await expect(menu).toBeHidden();
-  await toggle.click();
-  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  // A click before hydration does nothing; retry until the menu opens.
+  await expect(async () => {
+    if ((await toggle.getAttribute('aria-expanded')) !== 'true') {
+      await toggle.click();
+    }
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true', {
+      timeout: 500,
+    });
+  }).toPass();
   await expect(menu.locator('a')).toHaveCount(5);
   await expect(menu.locator('a[href$="/laptops"]')).toBeVisible();
   await page.keyboard.press('Escape');
@@ -54,8 +61,14 @@ test('categories dropdown opens, links and closes on Escape', async ({
 test('phone menu still lists every catalogue', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/faq');
-  await page.locator('button.nav-toggle').click();
+  const navToggle = page.locator('button.nav-toggle');
   const menu = page.locator('#rate-nav-menu');
+  await expect(async () => {
+    if ((await navToggle.getAttribute('aria-expanded')) !== 'true') {
+      await navToggle.click();
+    }
+    await expect(menu).toHaveClass(/nav-menus-wrapper-open/, { timeout: 500 });
+  }).toPass();
   for (const path of [
     '/smartphones',
     '/laptops',

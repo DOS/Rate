@@ -1324,12 +1324,13 @@ body .input-group > .input-group-text {
       transform: rotate(180deg);
     }
   }
-}
 
-// The template opens any nav submenu on hover with !important; this one is
-// driven by its button so aria-expanded and Escape stay true to what shows.
-.header .nav-menu li.rate-nav-dropdown:not(.is-open):hover > ul {
-  display: none !important;
+  // The template opens any nav submenu on hover with !important; this one is
+  // driven by its button so aria-expanded and Escape match what shows.
+  // Desktop only: in the phone menu the list is inline and must stay put.
+  .navigation .nav-menu > li.rate-nav-dropdown:not(.is-open):hover > ul {
+    display: none !important;
+  }
 }
 
 // Narrow desktops (992-1199px): tighter link padding keeps one row.
@@ -1361,6 +1362,7 @@ body .input-group > .input-group-text {
         > a {
           padding: 12px 15px 12px 26px;
           border-bottom: 0;
+          color: var(--bs-nav-color);
           font-size: 13px;
           font-weight: 600;
         }
