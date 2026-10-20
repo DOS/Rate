@@ -21,6 +21,7 @@ import {
   normalizeAllowedApiBaseUrl,
   normalizeFiveStarRating,
   selectFreshestSessionSignal,
+  shouldRenderTrustPill,
 } from './security-guards.js';
 import * as extModule from '../../web/src/server/rate/extension.js';
 import * as rateApiRootMod from '../../web/src/lib/rate-api.js';
@@ -2384,6 +2385,57 @@ async function runTests() {
 
     console.log(
       '  ✅ [RAM/ROM Disambiguation, Crowd Ingest Bounds & JSON-LD Rating Count (#580)] Verified'
+    );
+  }
+
+  // --- DOS/Rate#582: shouldRenderTrustPill & sidepanel sender privilege guards ---
+  {
+    assert.equal(shouldRenderTrustPill(null), false);
+    assert.equal(
+      shouldRenderTrustPill({
+        isAccessoryOrPart: false,
+        matchStatus: 'not_found',
+      }),
+      false,
+      'shouldRenderTrustPill must return false when matchStatus is not_found (#582)'
+    );
+    assert.equal(
+      shouldRenderTrustPill({
+        isAccessoryOrPart: false,
+        matchStatus: 'accessory_skip',
+      }),
+      false
+    );
+    assert.equal(
+      shouldRenderTrustPill({
+        isAccessoryOrPart: true,
+        matchStatus: 'exact_listing',
+      }),
+      false
+    );
+    assert.equal(
+      shouldRenderTrustPill({
+        isAccessoryOrPart: false,
+        matchStatus: 'exact_listing',
+      }),
+      true
+    );
+    assert.equal(
+      shouldRenderTrustPill({
+        isAccessoryOrPart: false,
+        matchStatus: 'canonical_model',
+      }),
+      true
+    );
+    assert.equal(
+      shouldRenderTrustPill({
+        isAccessoryOrPart: false,
+        matchStatus: 'ambiguous_variant',
+      }),
+      true
+    );
+    console.log(
+      '  ✅ [Trust Pill Visibility & Sidepanel Sender Guards (#582)] Verified'
     );
   }
 

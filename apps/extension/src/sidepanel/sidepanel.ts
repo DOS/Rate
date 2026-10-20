@@ -104,7 +104,8 @@ async function fetchAndRenderDealRadar(
       ? `&category=${encodeURIComponent(categorySlug)}`
       : '';
     const res = await fetch(
-      `${settings.apiBaseUrl}/api/v1/rate/deals?limit=4${catParam}`
+      `${settings.apiBaseUrl}/api/v1/rate/deals?limit=4${catParam}`,
+      { signal: AbortSignal.timeout(8_000) }
     );
     if (!res.ok) return;
     const json = (await res.json()) as {
@@ -227,7 +228,8 @@ async function fetchAndRenderMerchantTrustDirectory(
 
   try {
     const res = await fetch(
-      `${settings.apiBaseUrl}/api/v1/rate/merchants?sort=trust_desc&limit=18`
+      `${settings.apiBaseUrl}/api/v1/rate/merchants?sort=trust_desc&limit=18`,
+      { signal: AbortSignal.timeout(8_000) }
     );
     if (!res.ok) return;
     const json = (await res.json()) as {

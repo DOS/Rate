@@ -325,3 +325,27 @@ export function filterValidSparklinePrices(
       (p) => Number.isFinite(p) && p > 0 && p <= MAX_VALID_EXTENSION_VND_PRICE
     );
 }
+
+export function shouldRenderTrustPill(
+  lookup:
+    | {
+        isAccessoryOrPart?: boolean | null;
+        matchStatus?: string | null;
+      }
+    | null
+    | undefined
+): boolean {
+  if (!lookup || typeof lookup !== 'object') return false;
+  if (lookup.isAccessoryOrPart) return false;
+  if (
+    lookup.matchStatus === 'accessory_skip' ||
+    lookup.matchStatus === 'not_found'
+  ) {
+    return false;
+  }
+  return (
+    lookup.matchStatus === 'exact_listing' ||
+    lookup.matchStatus === 'canonical_model' ||
+    lookup.matchStatus === 'ambiguous_variant'
+  );
+}
