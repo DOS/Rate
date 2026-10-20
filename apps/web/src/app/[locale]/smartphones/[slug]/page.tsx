@@ -185,6 +185,13 @@ export async function ProductDetailView({
   const specs = product.specifications as ProductSpecifications;
   const keySpecs = product.key_specs as KeySpecs;
   const minPriceFormatted = Number(product.min_price).toLocaleString('vi-VN');
+  // Same meaning as the catalogue card's seller count (distinct merchants with
+  // a price), not the number of listings.
+  const sellerCount = new Set(
+    offers
+      .filter((o) => Number(o.price_current) > 0)
+      .map((o) => o.merchant?.id || o.id)
+  ).size;
   const maxPriceFormatted = Number(product.max_price).toLocaleString('vi-VN');
 
   const authenticCount =
@@ -295,11 +302,8 @@ export async function ProductDetailView({
         <div className="row g-4 mb-5">
           {/* Left: Images */}
           <div className="col-lg-5 col-12">
-            <div className="card rounded-4 bg-light border-0 p-4 text-center shadow-sm">
-              <div
-                className="d-flex align-items-center justify-content-center"
-                style={{ minHeight: '380px' }}
-              >
+            <div className="card rounded-4 bg-light p-md-4 border-0 p-3 text-center shadow-sm">
+              <div className="rate-pdv-media d-flex align-items-center justify-content-center">
                 {product.images && product.images.length > 0 ? (
                   // The main product image is the page's largest paint: fetch it
                   // ahead of the below-the-fold peer and offer thumbnails.
@@ -308,7 +312,6 @@ export async function ProductDetailView({
                     alt={product.name}
                     fetchPriority="high"
                     className="img-fluid rounded-3"
-                    style={{ maxHeight: '350px', objectFit: 'contain' }}
                   />
                 ) : (
                   <div className="text-muted">{t('noProductImage')}</div>
@@ -321,7 +324,7 @@ export async function ProductDetailView({
                   <div className="small text-muted mb-2">
                     {t('availableColors')}
                   </div>
-                  <div className="d-flex flex-wrap gap-2">
+                  <div className="rate-pdv-colors d-flex flex-wrap gap-2">
                     {product.colors.map((c, i) => (
                       <span
                         key={i}
@@ -344,7 +347,20 @@ export async function ProductDetailView({
                 .join(' · ')}
             </p>
 
-            <h1 className="h2 fw-bold text-dark mb-3">{product.name}</h1>
+            <h1 className="h2 fw-bold text-dark mb-2">{product.name}</h1>
+            {/* Price in the first screen on phones, ahead of the scoreboard
+            (DOS/Rate#605); the full price strip stays further down. */}
+            {Number(product.min_price || 0) > 0 && sellerCount > 0 && (
+              <p className="rate-pdv-price-line mb-3">
+                {t.rich('heroPriceLine', {
+                  price: minPriceFormatted,
+                  count: sellerCount,
+                  strong: (chunks) => (
+                    <strong className="rate-tabular">{chunks}</strong>
+                  ),
+                })}
+              </p>
+            )}
 
             {/* #1 Core Focus Above the Fold: JReviews Dual-Rating & 5-Criteria Scoreboard (DESIGN.md v3.0) */}
             <div className="rate-scoreboard-dark rate-surface-dark rate-pdv-board mb-4">

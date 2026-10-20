@@ -226,3 +226,32 @@
 .rate-surface-dark .rate-chip-btn.is-active {
   color: var(--rate-crimson-text);
 }
+
+// Product hero media: shorter on phones so the name, price and score fit in
+// the first screen (DOS/Rate#605).
+.rate-pdv-media {
+  min-height: 380px;
+
+  img {
+    max-height: 350px;
+    object-fit: contain;
+  }
+
+  @media (max-width: 767.98px) {
+    min-height: 200px;
+
+    img {
+      max-height: 190px;
+    }
+  }
+}
+
+.rate-pdv-price-line {
+  font-size: 0.9375rem;
+  color: var(--rate-fg-secondary);
+
+  strong {
+    font-size: 1.125rem;
+    color: var(--rate-fg-primary);
+  }
+}
