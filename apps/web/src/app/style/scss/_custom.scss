@@ -1277,3 +1277,96 @@ body .form-control.form-control:not(.border-0) {
 body .input-group > .input-group-text {
   border-color: var(--rate-input-border);
 }
+
+// Desktop navbar categories dropdown (DOS/Rate#611). The toggle matches the
+// template's nav links; below lg the toggle hides and the catalogue links
+// list inline in the phone menu like any other link.
+.rate-nav-dropdown-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 18px 12px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.2px;
+  color: var(--bs-nav-color);
+  background: none;
+  border: 0;
+
+  svg {
+    font-size: 0.75em;
+    transition: transform 0.2s;
+  }
+
+  &:hover,
+  &:focus-visible {
+    color: var(--rate-crimson-text);
+  }
+}
+
+@media (min-width: 992px) {
+  .navigation .nav-menu > li.rate-nav-dropdown {
+    position: relative;
+
+    > .nav-dropdown {
+      display: none;
+    }
+
+    &.is-open > .nav-dropdown {
+      display: block;
+      top: 100%;
+      left: 0;
+      min-width: 200px;
+    }
+
+    &.is-open .rate-nav-dropdown-toggle svg {
+      transform: rotate(180deg);
+    }
+  }
+
+  // The template opens any nav submenu on hover with !important; this one is
+  // driven by its button so aria-expanded and Escape match what shows.
+  // Desktop only: in the phone menu the list is inline and must stay put.
+  .navigation .nav-menu > li.rate-nav-dropdown:not(.is-open):hover > ul {
+    display: none !important;
+  }
+}
+
+// Narrow desktops (992-1199px): tighter link padding keeps one row.
+@media (min-width: 992px) and (max-width: 1199.98px) {
+  .navigation .nav-menu > li > a,
+  .rate-nav-dropdown-toggle {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+}
+
+@media (max-width: 991.98px) {
+  .rate-nav-dropdown-toggle {
+    display: none;
+  }
+
+  .navigation .nav-menu > li.rate-nav-dropdown {
+    border-top: 0;
+
+    > .nav-dropdown {
+      display: block;
+      padding: 0;
+      background: none;
+      box-shadow: none;
+
+      > li {
+        border-top: solid 1px var(--bs-border-color);
+
+        > a {
+          padding: 12px 15px 12px 26px;
+          border-bottom: 0;
+          color: var(--bs-nav-color);
+          font-size: 13px;
+          font-weight: 600;
+        }
+      }
+    }
+  }
+}
