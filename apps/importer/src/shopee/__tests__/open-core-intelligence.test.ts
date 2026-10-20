@@ -109,6 +109,13 @@ async function runSuite() {
     null,
     'two storage sizes separated by a comma stay ambiguous'
   );
+  // Accepted trade-off: a small size before a large one reads as RAM + storage
+  // whatever the separator, exactly as "32GB 64GB" already did.
+  assert.equal(
+    normalizer.normalize(createDummyShopeeProduct('Điện thoại Samsung Galaxy A15 4GB, 128GB'))
+      .storage_gb,
+    128
+  );
   console.log('  ✅ [2/5] RAM/ROM Disambiguation & Identity Safety passed');
 
   // 3. Multi-Category Benchmark Enrichment (Tablets, Laptops, Smartwatches, Earbuds)
