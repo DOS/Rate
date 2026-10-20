@@ -1184,6 +1184,104 @@ async function testRateApiTrustAndOfferBounds() {
   );
 }
 
+async function testRequestAuthAndRouteBounds() {
+  console.log(
+    '→ Request auth Bearer/Origin parsing, voter eligibility, and review/OpenAPI bounds (#578)'
+  );
+  const { readBearerToken, isSameOriginRequest } =
+    await import('@/server/rate/request-auth');
+  const { evaluateVoterEligibility } =
+    await import('@/app/api/reviews/[id]/vote/route');
+  const { toReviewItem } = await import('@/app/api/v1/rate/reviews/route');
+  const { normalizeOpenApiServerOrigin, buildRateOpenApiSpec } =
+    await import('@/server/rate/openapi');
+
+  assert.equal(
+    readBearerToken(
+      new Request('https://rate.vn/api/v1/rate/reviews', {
+        headers: { Authorization: 'bearer eyJhbGciOiJIUzI1NiJ9.payload.sig' },
+      })
+    ),
+    'eyJhbGciOiJIUzI1NiJ9.payload.sig',
+    'readBearerToken must accept case-insensitive Bearer prefix per RFC 6750 (#578)'
+  );
+  assert.equal(
+    readBearerToken(
+      new Request('https://rate.vn/api/v1/rate/reviews', {
+        headers: { Authorization: `Bearer ${'a'.repeat(5000)}` },
+      })
+    ),
+    '',
+    'readBearerToken must reject oversized tokens > 4096 chars (#578)'
+  );
+  assert.equal(
+    readBearerToken(
+      new Request('https://rate.vn/api/v1/rate/reviews', {
+        headers: { Authorization: 'Bearer tok with space' },
+      })
+    ),
+    '',
+    'readBearerToken must reject tokens containing inner whitespace (#578)'
+  );
+
+  assert.equal(
+    isSameOriginRequest(
+      new Request('https://rate.vn/api/v1/rate/reviews', {
+        headers: {
+          Origin: 'https://RATE.VN',
+          'X-Forwarded-Host': 'rate.vn, proxy.internal',
+        },
+      })
+    ),
+    true,
+    'isSameOriginRequest must extract the first host from comma-separated X-Forwarded-Host and compare case-insensitively (#578)'
+  );
+
+  assert.equal(
+    evaluateVoterEligibility({
+      created_at: 'not-a-valid-timestamp',
+      email_confirmed_at: '2026-01-01T00:00:00Z',
+    }).eligible,
+    false,
+    'evaluateVoterEligibility must reject unparseable non-empty created_at strings (#578)'
+  );
+
+  const sanitizedReview = toReviewItem(
+    {
+      id: 'rev-1',
+      author_name: 'Tester',
+      rating_star: 99,
+      comment: 'Đánh giá chi tiết sản phẩm dùng tốt.',
+      helpfulness_weight: 50,
+      fake_probability: 9.5,
+      criteria_ratings: ['invalid-array'],
+    },
+    { screen: 4.5, performance: 5 }
+  );
+  assert.equal(sanitizedReview.rating_star, 5);
+  assert.equal(sanitizedReview.helpfulness_weight, 10);
+  assert.equal(sanitizedReview.fake_probability, 1);
+  assert.deepEqual(sanitizedReview.criteria_ratings, {
+    screen: 4.5,
+    performance: 5,
+  });
+
+  assert.equal(
+    normalizeOpenApiServerOrigin('javascript:alert(1)'),
+    'https://rate.vn',
+    'normalizeOpenApiServerOrigin must reject non-http(s) protocols (#578)'
+  );
+  assert.equal(
+    buildRateOpenApiSpec('https://api.rate.vn/some/path?x=1').servers[0]?.url,
+    'https://api.rate.vn',
+    'buildRateOpenApiSpec must normalize server url to clean origin (#578)'
+  );
+
+  console.log(
+    '  ✅ Request auth Bearer/Origin parsing, voter eligibility, and review/OpenAPI bounds verified (#578)'
+  );
+}
+
 async function main() {
   console.log('🧪 Public write-path security suite (#155)');
   await testReviews();
@@ -1193,6 +1291,7 @@ async function main() {
   await testDealRadarAndApiRouteGuards();
   await testLeaderboardEngineAndMerchantDirectoryGuards();
   await testRateApiTrustAndOfferBounds();
+  await testRequestAuthAndRouteBounds();
   testSharedDataClients();
   console.log('✅ Public write-path security suite passed');
 }

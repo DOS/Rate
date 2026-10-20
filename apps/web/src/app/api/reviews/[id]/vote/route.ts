@@ -61,18 +61,33 @@ export function evaluateVoterEligibility(user: {
   }
   if (typeof user.created_at === 'string' && user.created_at.trim()) {
     const createdMs = Date.parse(user.created_at);
-    if (Number.isFinite(createdMs)) {
-      const ageDays = (Date.now() - createdMs) / 86_400_000;
-      if (ageDays < 7) {
-        return {
-          eligible: false,
-          reason:
-            'Account must be at least 7 days old to vote or report reviews.',
-        };
-      }
+    if (!Number.isFinite(createdMs)) {
+      return {
+        eligible: false,
+        reason:
+          'Account must be at least 7 days old to vote or report reviews.',
+      };
+    }
+    const ageDays = (Date.now() - createdMs) / 86_400_000;
+    if (ageDays < 7) {
+      return {
+        eligible: false,
+        reason:
+          'Account must be at least 7 days old to vote or report reviews.',
+      };
     }
   }
   return { eligible: true };
+}
+
+function toSafeVoteCount(value: unknown): number {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+}
+
+function toSafeHelpfulnessWeight(value: unknown, fallback = 1): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.max(0, Math.min(10, n)) : fallback;
 }
 
 export async function POST(
@@ -226,10 +241,13 @@ export async function POST(
         mode: 'authenticated',
         reviewId,
         voteType,
-        upvotes: Number(updatedReview.upvotes ?? 0),
-        downvotes: Number(updatedReview.downvotes ?? 0),
-        reports: Number(updatedReview.report_count ?? 0),
-        helpfulnessWeight: Number(updatedReview.helpfulness_weight ?? 1),
+        upvotes: toSafeVoteCount(updatedReview.upvotes),
+        downvotes: toSafeVoteCount(updatedReview.downvotes),
+        reports: toSafeVoteCount(updatedReview.report_count),
+        helpfulnessWeight: toSafeHelpfulnessWeight(
+          updatedReview.helpfulness_weight,
+          1
+        ),
       },
       {
         status: 200,

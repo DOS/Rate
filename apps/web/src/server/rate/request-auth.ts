@@ -37,9 +37,17 @@ export interface RejectedRateRequest {
   response: NextResponse;
 }
 
+const MAX_BEARER_TOKEN_LENGTH = 4096;
+
 export function readBearerToken(request: Request): string {
-  const header = request.headers.get('authorization') || '';
-  return header.startsWith('Bearer ') ? header.slice(7).trim() : '';
+  const header = (request.headers.get('authorization') || '').trim();
+  const match = /^Bearer\s+(.+)$/i.exec(header);
+  if (!match || !match[1]) return '';
+  const token = match[1].trim();
+  if (!token || token.length > MAX_BEARER_TOKEN_LENGTH || /\s/.test(token)) {
+    return '';
+  }
+  return token;
 }
 
 function readCookies(request: Request): CookieRecord[] {
@@ -88,12 +96,17 @@ export async function readCookieAccessToken(
 export function isSameOriginRequest(request: Request): boolean {
   const origin = request.headers.get('origin');
   if (!origin) return false;
-  const host =
-    request.headers.get('x-forwarded-host') ||
-    request.headers.get('host') ||
-    new URL(request.url).host;
+  const forwardedHost = request.headers
+    .get('x-forwarded-host')
+    ?.split(',')[0]
+    ?.trim();
+  const host = (
+    forwardedHost ||
+    request.headers.get('host')?.trim() ||
+    new URL(request.url).host
+  ).toLowerCase();
   try {
-    return new URL(origin).host === host;
+    return new URL(origin).host.toLowerCase() === host;
   } catch {
     return false;
   }
