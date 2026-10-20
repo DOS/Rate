@@ -222,6 +222,10 @@ function main() {
     'Giao hàng nhanh, đóng gói cẩn thận',
     'Giao hàng nhanh như chớp, shipper thân thiện',
     'Shopping vui, giao hàng nhanh',
+    'Đóng gói đẹp, giao hàng nhanh',
+    'Sản phẩm được đóng gói cẩn thận, giao nhanh',
+    'Shipper chạy nhanh, giao hàng đúng giờ',
+    'Shop cam kết giao hàng đúng hẹn',
   ]) {
     const a = assess(comment);
     assert.equal(a.breakdown.explanationKind, 'shipping_only', comment);
