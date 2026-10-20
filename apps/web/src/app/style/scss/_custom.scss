@@ -50,6 +50,8 @@
   --rate-bg-dark-elevated: #161b26;
   --rate-border-subtle: #e2e8f0;
   --rate-border-strong: #cbd5e1;
+  // Text field outline: 3.3:1 on white, the WCAG 1.4.11 minimum for a control.
+  --rate-input-border: #868e9c;
   --rate-border-dark: rgba(255, 255, 255, 0.09);
   --rate-fg-primary: #0f172a;
   --rate-fg-secondary: #475569;
@@ -1240,4 +1242,38 @@
     align-items: center;
     justify-content: space-between;
   }
+}
+
+// style.scss ends with a template leftover, `.form-control { border: none
+// !important }`, that erased every text field's outline; on light cards the
+// field then matched the card and could not be seen (login, contact, deals
+// search, review form, input-group searches). Only `border-0` fields (pill
+// searches) stay borderless; input-group halves keep three sides and drop the
+// shared seam. Doubled class: outranks the template's .form-group.form-border.
+body .form-control.form-control:not(.border-0) {
+  border: 1px solid var(--rate-input-border) !important;
+  background-color: #fff;
+
+  &.border-start-0 {
+    border-left-width: 0 !important;
+  }
+
+  &.border-end-0 {
+    border-right-width: 0 !important;
+  }
+
+  &:focus {
+    border-color: var(--rate-brand) !important;
+    box-shadow: 0 0 0 3px rgba(216, 48, 48, 0.18);
+  }
+
+  &:disabled,
+  &[readonly] {
+    background-color: #f1f5f9;
+  }
+}
+
+// The icon half of an input group matches the field's outline.
+body .input-group > .input-group-text {
+  border-color: var(--rate-input-border);
 }
