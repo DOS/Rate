@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { StatusSchema } from './common.schema.js';
+import { HttpUrlSchema, StatusSchema } from './common.schema.js';
 
 /**
  * 10 Field Groups Specifications for Devices (PhoneArena + GSMArena unified schema)
@@ -135,15 +135,15 @@ export const MasterProductSchema = z.object({
   name: z.string().min(1),
   slug: z.string().min(1),
   description: z.string().nullable().optional(),
-  ram_gb: z.number().positive().nullable().optional(),
-  storage_gb: z.number().positive().nullable().optional(),
-  screen_size_inch: z.number().positive().nullable().optional(),
-  battery_mah: z.number().positive().nullable().optional(),
+  ram_gb: z.number().positive().max(2048).nullable().optional(),
+  storage_gb: z.number().positive().max(65536).nullable().optional(),
+  screen_size_inch: z.number().positive().max(120).nullable().optional(),
+  battery_mah: z.number().positive().max(500000).nullable().optional(),
   has_5g: z.boolean().default(false),
   specifications: ProductSpecificationsSchema.default({}),
   key_specs: KeySpecsSchema.default({}),
-  images: z.array(z.string()).default([]),
-  thumbnail: z.string().nullable().optional(),
+  images: z.array(HttpUrlSchema).default([]),
+  thumbnail: HttpUrlSchema.nullable().optional(),
   colors: z.array(z.string()).default([]),
   min_price: z.number().nonnegative().max(MAX_VALID_VND_PRICE).default(0),
   max_price: z.number().nonnegative().max(MAX_VALID_VND_PRICE).default(0),
@@ -212,7 +212,7 @@ export const ScrapedProductSchema = z.object({
   platform: SupportedEcommercePlatformSchema.optional(),
   itemId: z.string().min(1),
   shopId: z.string().min(1),
-  url: z.string().min(1),
+  url: HttpUrlSchema,
   title: z.string().min(1),
   description: z.string().optional(),
   priceMin: z.number().nonnegative().max(MAX_VALID_VND_PRICE),

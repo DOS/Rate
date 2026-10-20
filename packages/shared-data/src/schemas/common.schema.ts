@@ -4,12 +4,27 @@ import { z } from 'zod';
  * Common schemas used across the application
  */
 
+export const HttpUrlSchema = z
+  .string()
+  .url()
+  .refine(
+    (val) => {
+      try {
+        const parsed = new URL(val);
+        return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+      } catch {
+        return false;
+      }
+    },
+    { message: 'URL must use http:// or https:// protocol' }
+  );
+
 // Pagination
 export const PaginationSchema = z.object({
-  page: z.number().min(1).default(1),
-  pageSize: z.number().min(1).max(100).default(25),
-  pageCount: z.number().optional(),
-  total: z.number().optional(),
+  page: z.number().int().min(1).default(1),
+  pageSize: z.number().int().min(1).max(100).default(25),
+  pageCount: z.number().int().nonnegative().optional(),
+  total: z.number().int().nonnegative().optional(),
 });
 
 // API Response wrapper
