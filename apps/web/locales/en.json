@@ -1116,7 +1116,8 @@
     "priceHistoryMinLabel": "Lowest:",
     "priceHistoryMaxLabel": "Highest:",
     "devInfoToggle": "Technical details",
-    "peerNoPrice": "No price yet"
+    "peerNoPrice": "No price yet",
+    "heroPriceLine": "From <strong>{price} ₫</strong> · {count, plural, one {# seller} other {# sellers}}"
   },
   "homePage": {
     "catDescSmartphones": "Filter by Chipset, RAM/ROM, refresh rate Hz, battery mAh & fast charge W",
