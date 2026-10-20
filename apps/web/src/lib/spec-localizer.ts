@@ -82,10 +82,9 @@ export interface SpecUiDictionary {
 
 const SPEC_UI_DICTS: Record<RateLocale, SpecUiDictionary> = {
   vi: {
-    sectionEyebrow: 'KHU VỰC #2 - MA TRẬN THÔNG SỐ KỸ THUẬT CHUẨN HÓA',
-    sectionTitle:
-      'Thông Số Kỹ Thuật Chi Tiết (10 Nhóm Chuẩn GSMArena / PhoneArena)',
-    sectionBadge: 'Đã chuẩn hóa 10/10 nhóm thông số',
+    sectionEyebrow: 'Phân nhóm theo GSMArena / PhoneArena',
+    sectionTitle: 'Thông số kỹ thuật chi tiết',
+    sectionBadge: '10 nhóm thông số',
     yes: 'Có',
     no: 'Không',
     supported: 'Có hỗ trợ',
@@ -162,10 +161,9 @@ const SPEC_UI_DICTS: Record<RateLocale, SpecUiDictionary> = {
     },
   },
   en: {
-    sectionEyebrow: 'SECTION #2 - NORMALIZED 10-GROUP TECHNICAL SPECIFICATIONS',
-    sectionTitle:
-      'Full Technical Specifications (10 Groups - GSMArena / PhoneArena Standard)',
-    sectionBadge: 'Verified 10/10 Spec Groups',
+    sectionEyebrow: 'Grouped like GSMArena / PhoneArena',
+    sectionTitle: 'Full specifications',
+    sectionBadge: '10 spec groups',
     yes: 'Yes',
     no: 'No',
     supported: 'Supported',
@@ -242,11 +240,9 @@ const SPEC_UI_DICTS: Record<RateLocale, SpecUiDictionary> = {
     },
   },
   cs: {
-    sectionEyebrow:
-      'SEKCE #2 - STANDARDIZOVANÉ TECHNICKÉ PARAMETRY (10 SKUPIN)',
-    sectionTitle:
-      'Podrobné technické parametry (10 skupin dle GSMArena / PhoneArena)',
-    sectionBadge: 'Ověřeno 10/10 skupin parametrů',
+    sectionEyebrow: 'Členění podle GSMArena / PhoneArena',
+    sectionTitle: 'Podrobné technické parametry',
+    sectionBadge: '10 skupin parametrů',
     yes: 'Ano',
     no: 'Ne',
     supported: 'Podporováno',
