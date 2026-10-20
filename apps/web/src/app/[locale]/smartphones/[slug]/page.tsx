@@ -15,7 +15,9 @@ import {
 } from '@/server/rate';
 import { computeBayesianRatingSummary } from '@/lib/rate-api';
 import {
+  normalizeCompareFiveStarRating,
   resolveCompareEffectiveUserRating,
+  resolveCompareExpertRating5,
   resolveCompareExpertRating10,
 } from '@/lib/rate-domain';
 import {
@@ -736,18 +738,7 @@ export async function ProductDetailView({
                     brand={product.brand}
                     modelKey={product.model_key}
                     userScore5={Number(displayUserRating.toFixed(2))}
-                    expertScore10={
-                      product.expert_rating != null &&
-                      Number(product.expert_rating) > 0
-                        ? Number(
-                            (
-                              (Number(product.expert_rating) > 5
-                                ? Number(product.expert_rating) / 2
-                                : Number(product.expert_rating)) * 2
-                            ).toFixed(1)
-                          )
-                        : null
-                    }
+                    expertScore10={expertRating10}
                     authenticReviews={authenticCount}
                     minPriceVnd={Number(product.min_price || 0)}
                     offerCount={offers.length}
@@ -773,18 +764,14 @@ export async function ProductDetailView({
             masterProductId={product.id}
             productSlug={product.slug}
             productName={product.name}
-            averageRating={Number(product.average_rating || 0)}
+            averageRating={normalizeCompareFiveStarRating(
+              product.average_rating
+            )}
             userRatingWeighted={
-              product.user_rating_weighted &&
-              Number(product.user_rating_weighted) > 0
-                ? Number(product.user_rating_weighted)
-                : null
+              normalizeCompareFiveStarRating(product.user_rating_weighted) ||
+              null
             }
-            expertRating={
-              product.expert_rating != null
-                ? Number(product.expert_rating)
-                : null
-            }
+            expertRating={resolveCompareExpertRating5(product)}
             expertReviewSummary={product.expert_review_summary || null}
             authenticReviewCount={authenticCount}
             ignoredReviewCount={ignoredCount}
