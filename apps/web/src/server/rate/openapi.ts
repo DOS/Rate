@@ -1517,23 +1517,19 @@ export function buildRateOpenApiSpec(
         },
         ExtensionQuarantineIngestPayload: {
           type: 'object',
-          required: [
-            'platform',
-            'externalItemId',
-            'url',
-            'title',
-            'price',
-            'userConsentOptIn',
-          ],
+          required: ['url', 'title', 'price', 'userConsentOptIn'],
           properties: {
             platform: {
               $ref: '#/components/schemas/SupportedEcommercePlatform',
+              description:
+                'Optional; derived from `url` when omitted. When given it must match the URL.',
             },
             externalItemId: {
               type: 'string',
               minLength: 1,
               maxLength: 120,
               example: '29512841920',
+              description: 'Optional; derived from `url` when omitted.',
             },
             externalShopId: {
               type: 'string',

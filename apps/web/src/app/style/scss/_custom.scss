@@ -1370,3 +1370,12 @@ body .input-group > .input-group-text {
     }
   }
 }
+
+// The template colours alert text with the saturated theme colour, which on
+// the pale alert background is hard to read (warning about 1.5:1, danger about
+// 3.6:1). Use Bootstrap's emphasis colours instead (DOS/Rate#615).
+@each $variant in success, warning, danger, info {
+  body .alert-#{$variant} {
+    color: var(--bs-#{$variant}-text-emphasis);
+  }
+}
