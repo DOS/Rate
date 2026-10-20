@@ -213,6 +213,18 @@ function main() {
     'Chất lượng sản phẩm:tốt\nĐúng với mô tả:đúng mô tả\nTính năng nổi bật:dep\n\nĐóng gói cẩn thận. Giao hàng nhanh chóng.',
     'Lần đầu tiên mình đặt điện thoại qua Ecommerce. Khá run. Nhưng giao hàng khá nhanh.',
     'Giao hàng nhanh, máy đẹp, đóng gói kỹ',
+    'Sản phẩm rất tốt, giao hàng nhanh',
+    'Chất lượng tốt, giao hàng nhanh chóng',
+    'Hàng đẹp, ship nhanh',
+    'Đẹp lắm, giao hàng nhanh',
+    'Giao hàng nhanh, sản phẩm tuyệt vời',
+    'Hàng chất lượng, giao hàng nhanh',
+    'Sản phẩm chuẩn, giao nhanh',
+    'Hàng đúng mô tả, giao nhanh',
+    'sản phẩm tốt giao hàng nhanh',
+    'Đúng như mô tả, giao hàng nhanh',
+    'Hàng tuyệt vời, giao hàng nhanh',
+    'Hàng nhận được tốt, giao nhanh',
   ]) {
     const a = assess(comment);
     assert.notEqual(a.breakdown.explanationKind, 'shipping_only', comment);
@@ -226,6 +238,13 @@ function main() {
     'Sản phẩm được đóng gói cẩn thận, giao nhanh',
     'Shipper chạy nhanh, giao hàng đúng giờ',
     'Shop cam kết giao hàng đúng hẹn',
+    'Giao hàng rất tốt, đóng gói cẩn thận',
+    'Hộp đẹp, giao nhanh',
+    'Đóng gói hàng đẹp, giao nhanh',
+    'Hộp đựng đẹp, giao nhanh',
+    'Giao hàng nhanh, đóng gói rất đẹp',
+    'Nhận hàng tốt, giao nhanh',
+    'Chất lượng đóng gói tốt, giao nhanh',
   ]) {
     const a = assess(comment);
     assert.equal(a.breakdown.explanationKind, 'shipping_only', comment);
