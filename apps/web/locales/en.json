@@ -555,7 +555,8 @@
     "downvoteTitle": "Downvote Not Helpful - reduces this review weight",
     "reportTitle": "Report Seeding / Spam / Sabotage (-0.35 weight penalty per report)",
     "reportBtnLabel": "Report ({count})",
-    "filterGroupAria": "Filter reviews"
+    "filterGroupAria": "Filter reviews",
+    "exportMenu": "Export data"
   },
   "watchlist": {
     "metaTitle": "True Price Watchlist & Target Drop Alerts | Rate.vn",
@@ -1121,7 +1122,8 @@
     "peerNoPrice": "No price yet",
     "heroPriceLine": "From <strong>{price} ₫</strong> · {count, plural, one {# seller} other {# sellers}}",
     "specsShowAll": "Show all specs",
-    "specsShowLess": "Show fewer specs"
+    "specsShowLess": "Show fewer specs",
+    "exportMenu": "Export data"
   },
   "homePage": {
     "catDescSmartphones": "Filter by Chipset, RAM/ROM, refresh rate Hz, battery mAh & fast charge W",

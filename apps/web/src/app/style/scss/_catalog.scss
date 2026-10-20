@@ -119,3 +119,13 @@
 .rate-surface-dark .rate-export-menu-list {
   box-shadow: 0 16px 36px -10px rgba(0, 0, 0, 0.6);
 }
+
+// Section export menus that sit at the start of a wrapped row on phones open
+// rightwards there so the list stays on screen (DOS/Rate#623).
+@media (max-width: 767.98px) {
+  .rate-export-menu-start-phone .rate-export-menu-list {
+    right: auto;
+    left: 0;
+    max-width: calc(100vw - 2rem);
+  }
+}

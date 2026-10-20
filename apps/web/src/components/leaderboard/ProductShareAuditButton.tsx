@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
+import ExportMenu from '@/components/elementary/ExportMenu';
 import { escapeCsvCell } from '@/lib/csv-safe';
 import {
   RADAR_CSV_HEADERS,
@@ -161,30 +162,42 @@ export default function ProductShareAuditButton({
 
   return (
     <div className="d-inline-flex align-items-center flex-wrap gap-2">
-      <button
-        type="button"
-        onClick={handleCopyMarkdown}
-        className="btn btn-sm btn-outline-danger rounded-pill fw-medium px-3"
-        title={t('shareAuditCopyMdTitle')}
+      <ExportMenu
+        label={t('exportMenu')}
+        className="rate-export-menu-start-phone"
       >
-        {copiedMd ? t('shareAuditCopiedMdBtn') : t('shareAuditCopyMdBtn')}
-      </button>
-      <button
-        type="button"
-        onClick={handleDownloadProductCsv}
-        data-testid="product-export-csv-btn"
-        className="btn btn-sm btn-outline-secondary rounded-pill fw-medium px-3"
-      >
-        CSV
-      </button>
-      <button
-        type="button"
-        onClick={handleDownloadProductJson}
-        data-testid="product-export-json-btn"
-        className="btn btn-sm btn-outline-secondary rounded-pill fw-medium px-3"
-      >
-        JSON
-      </button>
+        {(close) => (
+          <>
+            <button
+              type="button"
+              onClick={handleCopyMarkdown}
+              title={t('shareAuditCopyMdTitle')}
+            >
+              {copiedMd ? t('shareAuditCopiedMdBtn') : t('shareAuditCopyMdBtn')}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                handleDownloadProductCsv();
+                close();
+              }}
+              data-testid="product-export-csv-btn"
+            >
+              CSV
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                handleDownloadProductJson();
+                close();
+              }}
+              data-testid="product-export-json-btn"
+            >
+              JSON
+            </button>
+          </>
+        )}
+      </ExportMenu>
       <button
         type="button"
         onClick={handleCopyLink}

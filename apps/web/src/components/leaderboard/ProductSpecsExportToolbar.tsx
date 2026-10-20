@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
+import ExportMenu from '@/components/elementary/ExportMenu';
 import type { KeySpecs, ProductSpecifications } from '@repo/shared-data';
 import {
   RADAR_CSV_HEADERS,
@@ -283,30 +284,44 @@ export default function ProductSpecsExportToolbar({
 
   return (
     <div className="d-flex align-items-center flex-wrap gap-2">
-      <button
-        type="button"
-        onClick={handleCopySpecsMarkdown}
-        className="btn btn-sm btn-outline-dark rounded-pill fw-semibold px-3 py-1"
-        data-testid="copy-specs-md-btn"
+      <ExportMenu
+        label={t('exportMenu')}
+        className="rate-export-menu-start-phone"
       >
-        {copiedSpecsMd ? t('specsToolbarCopiedMd') : t('specsToolbarCopyMd')}
-      </button>
-      <button
-        type="button"
-        onClick={handleDownloadSpecsCsv}
-        className="btn btn-sm btn-outline-secondary rounded-pill fw-semibold px-3 py-1"
-        data-testid="download-specs-csv-btn"
-      >
-        {t('specsToolbarExportCsv')}
-      </button>
-      <button
-        type="button"
-        onClick={handleDownloadSpecsJson}
-        className="btn btn-sm btn-outline-secondary rounded-pill fw-semibold px-3 py-1"
-        data-testid="download-specs-json-btn"
-      >
-        {t('specsToolbarExportJson')}
-      </button>
+        {(close) => (
+          <>
+            <button
+              type="button"
+              onClick={handleCopySpecsMarkdown}
+              data-testid="copy-specs-md-btn"
+            >
+              {copiedSpecsMd
+                ? t('specsToolbarCopiedMd')
+                : t('specsToolbarCopyMd')}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                handleDownloadSpecsCsv();
+                close();
+              }}
+              data-testid="download-specs-csv-btn"
+            >
+              {t('specsToolbarExportCsv')}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                handleDownloadSpecsJson();
+                close();
+              }}
+              data-testid="download-specs-json-btn"
+            >
+              {t('specsToolbarExportJson')}
+            </button>
+          </>
+        )}
+      </ExportMenu>
     </div>
   );
 }

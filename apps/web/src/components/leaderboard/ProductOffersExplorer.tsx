@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import ExportMenu from '@/components/elementary/ExportMenu';
 import {
   BsBarChart,
   BsCheckCircle,
@@ -358,33 +359,42 @@ export default function ProductOffersExplorer({
           </div>
 
           <div className="d-flex align-items-center flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={handleCopyOffersMarkdown}
-              className="btn btn-sm btn-outline-dark rounded-pill fw-semibold bg-white px-3 py-1"
-              style={{ fontSize: '0.8125rem' }}
-              data-testid="copy-offers-md-btn"
+            <ExportMenu
+              label={t('exportMenu')}
+              className="rate-export-menu-start-phone"
             >
-              {copiedOffersMd ? t('offersCopiedMd') : t('offersCopyMd')}
-            </button>
-            <button
-              type="button"
-              onClick={handleDownloadOffersCsv}
-              className="btn btn-sm btn-outline-secondary rounded-pill fw-semibold bg-white px-3 py-1"
-              style={{ fontSize: '0.8125rem' }}
-              data-testid="download-offers-csv-btn"
-            >
-              {t('offersExportCsv')}
-            </button>
-            <button
-              type="button"
-              onClick={handleDownloadOffersJson}
-              className="btn btn-sm btn-outline-secondary rounded-pill fw-semibold bg-white px-3 py-1"
-              style={{ fontSize: '0.8125rem' }}
-              data-testid="download-offers-json-btn"
-            >
-              {t('offersExportJson')}
-            </button>
+              {(close) => (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleCopyOffersMarkdown}
+                    data-testid="copy-offers-md-btn"
+                  >
+                    {copiedOffersMd ? t('offersCopiedMd') : t('offersCopyMd')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleDownloadOffersCsv();
+                      close();
+                    }}
+                    data-testid="download-offers-csv-btn"
+                  >
+                    {t('offersExportCsv')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleDownloadOffersJson();
+                      close();
+                    }}
+                    data-testid="download-offers-json-btn"
+                  >
+                    {t('offersExportJson')}
+                  </button>
+                </>
+              )}
+            </ExportMenu>
           </div>
         </div>
 
