@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { StatusSchema } from './common.schema.js';
+import { HttpUrlSchema, StatusSchema } from './common.schema.js';
 
 /**
  * 10 Field Groups Specifications for Devices (PhoneArena + GSMArena unified schema)
@@ -142,8 +142,8 @@ export const MasterProductSchema = z.object({
   has_5g: z.boolean().default(false),
   specifications: ProductSpecificationsSchema.default({}),
   key_specs: KeySpecsSchema.default({}),
-  images: z.array(z.string()).default([]),
-  thumbnail: z.string().nullable().optional(),
+  images: z.array(HttpUrlSchema).default([]),
+  thumbnail: HttpUrlSchema.nullable().optional(),
   colors: z.array(z.string()).default([]),
   min_price: z.number().nonnegative().max(MAX_VALID_VND_PRICE).default(0),
   max_price: z.number().nonnegative().max(MAX_VALID_VND_PRICE).default(0),
@@ -212,16 +212,12 @@ export const ScrapedProductSchema = z.object({
   platform: SupportedEcommercePlatformSchema.optional(),
   itemId: z.string().min(1),
   shopId: z.string().min(1),
-  url: z.string().min(1),
+  url: HttpUrlSchema,
   title: z.string().min(1),
   description: z.string().optional(),
   priceMin: z.number().nonnegative().max(MAX_VALID_VND_PRICE),
   priceMax: z.number().nonnegative().max(MAX_VALID_VND_PRICE),
-  priceBeforeDiscount: z
-    .number()
-    .nonnegative()
-    .max(MAX_VALID_VND_PRICE)
-    .optional(),
+  priceBeforeDiscount: z.number().nonnegative().optional(),
   currency: z.string().min(1).default('VND'),
   historicalSold: z.number().int().nonnegative().default(0),
   stock: z.number().int().nonnegative().optional(),
@@ -234,7 +230,7 @@ export const ScrapedProductSchema = z.object({
       z.object({
         modelId: z.string(),
         name: z.string(),
-        price: z.number().nonnegative().max(MAX_VALID_VND_PRICE),
+        price: z.number().nonnegative(),
         stock: z.number().int().nonnegative().optional(),
         sku: z.string().optional(),
       })

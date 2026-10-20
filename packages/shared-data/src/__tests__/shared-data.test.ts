@@ -254,16 +254,14 @@ function testMasterProductAndScrapedProductSchemas(): void {
     false
   );
   assert.equal(
-    ScrapedProductSchema.safeParse({
-      platform: 'shopee',
-      itemId: '123456',
-      shopId: '654321',
-      url: 'https://shopee.vn/product/654321/123456',
-      title: 'iPhone 16 Pro Max 256GB',
-      priceMin: 31990000,
-      priceMax: 33990000,
-      priceBeforeDiscount: 5_000_000_000,
-      shop: { shopId: '654321', name: 'Apple Flagship Store', isMall: true },
+    MasterProductSchema.safeParse({
+      id: '01929000-0000-7000-8000-000000000001',
+      brand: 'Apple',
+      model: 'iPhone 16 Pro Max',
+      model_key: 'apple-iphone-16-pro-max-8gb-256gb',
+      name: 'Apple iPhone 16 Pro Max 256GB',
+      slug: 'apple-iphone-16-pro-max-256gb',
+      images: ['javascript:alert(1)'],
     }).success,
     false
   );
