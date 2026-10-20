@@ -29,7 +29,7 @@ test('phone shows three spec groups and expands to all', async ({ page }) => {
   await expect(groups.nth(total - 1)).toBeVisible();
   // Collapsed, the section is far shorter than the full ten-group stack.
   const expandedHeight = (await section.boundingBox())?.height ?? 0;
-  expect(expandedHeight - collapsedHeight).toBeGreaterThan(1500);
+  expect(collapsedHeight).toBeLessThan(expandedHeight * 0.6);
 });
 
 test('desktop shows every spec group and no toggle', async ({ page }) => {
@@ -40,4 +40,14 @@ test('desktop shows every spec group and no toggle', async ({ page }) => {
   await expect(
     page.locator('#specs-section button[aria-expanded]')
   ).toBeHidden();
+});
+
+test('the hero link to the specs opens them on a phone', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${PRODUCT}#specs-section`);
+  const groups = page.locator('#specs-section .rate-phone-collapsible > *');
+  await expect(groups.last()).toBeVisible();
+  await expect(
+    page.locator('#specs-section button[aria-expanded]')
+  ).toHaveAttribute('aria-expanded', 'true');
 });

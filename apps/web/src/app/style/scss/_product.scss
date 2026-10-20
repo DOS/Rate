@@ -257,8 +257,8 @@
 }
 
 // Long lists show their first three items on phones until expanded
-// (PhoneCollapsible, DOS/Rate#621).
-@media (max-width: 767.98px) {
+// (PhoneCollapsible, DOS/Rate#621). Screen only: print shows every group.
+@media screen and (max-width: 767.98px) {
   .rate-phone-collapsible.is-collapsed > :nth-child(n + 4) {
     display: none;
   }

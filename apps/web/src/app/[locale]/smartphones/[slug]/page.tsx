@@ -836,6 +836,7 @@ export async function ProductDetailView({
                 className="row g-4"
                 showMoreLabel={t('specsShowAll')}
                 showLessLabel={t('specsShowLess')}
+                openOnHash="#specs-section"
               >
                 {/* 1. Display */}
                 <div className="col-md-6 col-12">
