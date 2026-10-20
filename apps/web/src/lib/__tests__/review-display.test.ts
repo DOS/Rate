@@ -217,6 +217,11 @@ function main() {
     'Chất lượng tốt, giao hàng nhanh chóng',
     'Hàng đẹp, ship nhanh',
     'Đẹp lắm, giao hàng nhanh',
+    'Giao hàng nhanh, sản phẩm tuyệt vời',
+    'Hàng chất lượng, giao hàng nhanh',
+    'Sản phẩm chuẩn, giao nhanh',
+    'Hàng đúng mô tả, giao nhanh',
+    'sản phẩm tốt giao hàng nhanh',
   ]) {
     const a = assess(comment);
     assert.notEqual(a.breakdown.explanationKind, 'shipping_only', comment);
@@ -232,6 +237,11 @@ function main() {
     'Shop cam kết giao hàng đúng hẹn',
     'Giao hàng rất tốt, đóng gói cẩn thận',
     'Hộp đẹp, giao nhanh',
+    'Đóng gói hàng đẹp, giao nhanh',
+    'Hộp đựng đẹp, giao nhanh',
+    'Giao hàng nhanh, đóng gói rất đẹp',
+    'Nhận hàng tốt, giao nhanh',
+    'Chất lượng đóng gói tốt, giao nhanh',
   ]) {
     const a = assess(comment);
     assert.equal(a.breakdown.explanationKind, 'shipping_only', comment);

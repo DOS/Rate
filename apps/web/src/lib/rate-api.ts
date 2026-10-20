@@ -241,15 +241,14 @@ const WEB_PRODUCT_ASPECT_RE =
 // Any mention of the product or of using it, based on PRODUCT_ASPECT_RE in
 // apps/importer/src/shopee/ai-review-analyzer.ts (isShippingOnlyComment) plus
 // Shopee's structured product fields. Matched as whole words so "hư" in "như"
-// or "pin" in "shopping" do not count. Bare words that also describe delivery
-// ("đóng gói đẹp", "cam kết", "shipper chạy", "sản phẩm được đóng gói") count
-// only as product praise ("sản phẩm rất tốt", "chất lượng tốt", "hàng đẹp"
-// but not "giao hàng tốt", "đẹp" but not "gói đẹp"). Kept identical to
-// PRODUCT_MENTION_RE in the importer (its tests compare the two). Only used
+// or "pin" in "shopping" do not count. Words that also describe delivery
+// count only outside a delivery phrase ("sản phẩm" but not "sản phẩm được
+// đóng gói", "đẹp" but not "đóng gói rất đẹp"); see PRODUCT_MENTION_RE in
+// the importer, which must stay identical (its tests compare the two). Only used
 // to decide that a review is about shipping alone; depth still uses the
 // stricter WEB_PRODUCT_ASPECT_RE.
 const WEB_PRODUCT_MENTION_RE =
-  /(?<![\p{L}\p{N}])(?:máy|điện\s*thoại|tai\s*nghe|pin|màn(?:\s*hình)?|camera|loa|mic|chất\s*âm|chống\s*ồn|cảm\s*ứng|hiệu\s*năng|cấu\s*hình|chip|ram|rom|sạc|dùng|xài|sử\s*dụng|trải\s*nghiệm|mượt|lag|giật|nóng|ấm|lỗi|hỏng|hư|bền|xịn|chính\s*hãng|nguyên\s*seal|bảo\s*hành|vân\s*tay|wifi|5g|bluetooth|nhiệt\s*độ|tần\s*số|chất\s*lượng\s*sản\s*phẩm|sản\s*phẩm(?:\s+\p{L}+){0,2}?\s+(?:tốt|ổn|ok|xịn|đẹp|tuyệt|chất\s*lượng|như\s*mô\s*tả|đúng\s*mô\s*tả|kém|tệ)|chất\s*lượng(?:\s+\p{L}+)?\s+(?:tốt|ổn|kém|tệ|cao|tuyệt)|(?<!(?:giao|gói|đóng)\s+)hàng(?:\s+\p{L}+)?\s+(?:đẹp|tốt|xịn|chuẩn|ok|ổn|kém|tệ|lỗi)|(?<!(?:gói|hộp|bọc|bì)\s*)đẹp|đúng\s*với\s*mô\s*tả|tính\s*năng\s*nổi\s*bật)(?![\p{L}\p{N}])/iu;
+  /(?<![\p{L}\p{N}])(?:máy|điện\s*thoại|tai\s*nghe|pin|màn(?:\s*hình)?|camera|loa|mic|chất\s*âm|chống\s*ồn|cảm\s*ứng|hiệu\s*năng|cấu\s*hình|chip|ram|rom|sạc|dùng|xài|sử\s*dụng|trải\s*nghiệm|mượt|lag|giật|nóng|ấm|lỗi|hỏng|hư|bền|xịn|chính\s*hãng|nguyên\s*seal|bảo\s*hành|vân\s*tay|wifi|5g|bluetooth|nhiệt\s*độ|tần\s*số|sản\s*phẩm(?!\s+(?:(?:đã\s+)?được\s+|đã\s+)?(?:đóng\s*gói|giao|vận\s*chuyển|bọc|ship))|chất\s*lượng(?!\s+(?:đóng\s*gói|giao|vận\s*chuyển|phục\s*vụ|dịch\s*vụ))|(?<!(?:giao|gói|đóng|nhận|gửi|ship)\s+)hàng(?:\s+\p{L}+)?\s+(?:đẹp|tốt|xịn|chuẩn|ok|ổn|kém|tệ|lỗi)|(?<!(?:gói|hộp|bọc|bì)(?:\s+\p{L}+)?\s*)đẹp|đúng\s*(?:với\s*)?mô\s*tả|tính\s*năng\s*nổi\s*bật)(?![\p{L}\p{N}])/iu;
 const WEB_PLATFORM_LABEL_RE =
   /^(?:cực\s*k[ìỳ]\s*hài\s*lòng|rất\s*hài\s*lòng|hài\s*lòng|bình\s*thường|không\s*hài\s*lòng|rất\s*không\s*hài\s*lòng|tuyệt\s*vời|tốt|khá|tệ|rất\s*tệ)$/iu;
 const WEB_SPONSORED_RE =

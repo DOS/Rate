@@ -1006,6 +1006,11 @@ async function run() {
     'Shop cam kết giao hàng đúng hẹn',
     'Giao hàng rất tốt, đóng gói cẩn thận',
     'Hộp đẹp, giao nhanh',
+    'Đóng gói hàng đẹp, giao nhanh',
+    'Hộp đựng đẹp, giao nhanh',
+    'Giao hàng nhanh, đóng gói rất đẹp',
+    'Nhận hàng tốt, giao nhanh',
+    'Chất lượng đóng gói tốt, giao nhanh',
   ]) {
     assert.equal(isShippingOnlyComment(comment), true, `shipping-only: ${comment}`);
   }
@@ -1015,6 +1020,11 @@ async function run() {
     'Chất lượng tốt, giao hàng nhanh chóng',
     'Hàng đẹp, ship nhanh',
     'Đẹp lắm, giao hàng nhanh',
+    'Giao hàng nhanh, sản phẩm tuyệt vời',
+    'Hàng chất lượng, giao hàng nhanh',
+    'Sản phẩm chuẩn, giao nhanh',
+    'Hàng đúng mô tả, giao nhanh',
+    'sản phẩm tốt giao hàng nhanh',
     'Giao hàng nhanh, máy đẹp, đóng gói kỹ',
     'Chất lượng sản phẩm:tốt\nĐúng với mô tả:đúng mô tả\n\nĐóng gói cẩn thận. Giao hàng nhanh chóng.',
     'GIAO HÀNG NHANH, ĐIỆN THOẠI DÙNG TỐT',
