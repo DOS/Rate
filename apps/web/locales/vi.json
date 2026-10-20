@@ -1113,7 +1113,8 @@
     "priceHistoryMedianLabel": "Trung vị lịch sử:",
     "priceHistoryMinLabel": "Thấp nhất:",
     "priceHistoryMaxLabel": "Cao nhất:",
-    "devInfoToggle": "Thông tin kỹ thuật"
+    "devInfoToggle": "Thông tin kỹ thuật",
+    "peerNoPrice": "Chưa có giá"
   },
   "homePage": {
     "catDescSmartphones": "Lọc theo Chipset, RAM/ROM, tần số quét Hz, pin mAh & sạc nhanh W",

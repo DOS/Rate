@@ -1113,7 +1113,8 @@
     "priceHistoryMedianLabel": "Historical median:",
     "priceHistoryMinLabel": "Lowest:",
     "priceHistoryMaxLabel": "Highest:",
-    "devInfoToggle": "Technical details"
+    "devInfoToggle": "Technical details",
+    "peerNoPrice": "No price yet"
   },
   "homePage": {
     "catDescSmartphones": "Filter by Chipset, RAM/ROM, refresh rate Hz, battery mAh & fast charge W",

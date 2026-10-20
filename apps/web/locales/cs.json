@@ -1113,7 +1113,8 @@
     "priceHistoryMedianLabel": "Historický medián:",
     "priceHistoryMinLabel": "Minimum:",
     "priceHistoryMaxLabel": "Maximum:",
-    "devInfoToggle": "Technické údaje"
+    "devInfoToggle": "Technické údaje",
+    "peerNoPrice": "Zatím bez ceny"
   },
   "homePage": {
     "catDescSmartphones": "Filtrovat podle čipsetu, RAM/ROM, obnovovací frekvence Hz, baterie mAh a nabíjení W",

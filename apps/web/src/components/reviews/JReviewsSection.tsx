@@ -31,7 +31,10 @@ import {
   radarMarkdownCell,
   type RadarSignal,
 } from '@/lib/deal-radar';
-import { getBrowserAccessToken } from '@/lib/auth/access-token';
+import {
+  getBrowserAccessToken,
+  jsonWriteHeaders,
+} from '@/lib/auth/access-token';
 import {
   blendNoteKey,
   isFilteredOutReview,
@@ -527,12 +530,6 @@ export default function JReviewsSection({
       return;
     }
 
-    const accessToken = await getBrowserAccessToken();
-    if (!accessToken) {
-      setSubmitError(t('errLoginRequired'));
-      return;
-    }
-
     setSubmittingReview(true);
     try {
       const avgStar = Math.round(
@@ -541,10 +538,7 @@ export default function JReviewsSection({
       );
       const res = await fetch('/api/v1/rate/reviews', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-        },
+        headers: await jsonWriteHeaders(),
         body: JSON.stringify({
           masterProductId,
           authorName: authorName.trim() || t('defaultAuthorName'),
@@ -555,6 +549,10 @@ export default function JReviewsSection({
         }),
       });
 
+      if (res.status === 401) {
+        setSubmitError(t('errLoginRequired'));
+        return;
+      }
       const payload = await res.json();
       if (!res.ok || !payload?.ok || !payload?.review) {
         setSubmitError(t(submitErrorKey(payload?.code)));
