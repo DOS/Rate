@@ -38,7 +38,6 @@ function outcomeFromJobState(jobState: string | undefined): SubmitOutcome {
     case 'skipped_no_consent':
       return 'noConsent';
     case 'rejected_invalid_url':
-    case 'platform_worker_pending_phase_5_1':
       return 'invalidUrl';
     case 'rejected_invalid_price':
       return 'invalidPrice';
@@ -87,7 +86,11 @@ export default function CommunityQuarantineSubmitForm() {
         .json()
         .catch(() => null)) as IngestResponse | null;
       if (res.ok && body?.ok && body.data) {
-        const accepted = body.data.accepted === true;
+        // A dry run (no database configured) queues nothing, so it is not
+        // reported as received.
+        const accepted =
+          body.data.accepted === true &&
+          body.data.jobState !== 'quarantined_dry_run';
         setResult({
           accepted,
           outcome: accepted
@@ -144,6 +147,7 @@ export default function CommunityQuarantineSubmitForm() {
             id={`${fieldId}-url`}
             type="url"
             required
+            maxLength={1024}
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             className="form-control"
@@ -162,6 +166,8 @@ export default function CommunityQuarantineSubmitForm() {
             id={`${fieldId}-title`}
             type="text"
             required
+            minLength={3}
+            maxLength={320}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             className="form-control"
@@ -217,6 +223,7 @@ export default function CommunityQuarantineSubmitForm() {
           <input
             id={`${fieldId}-sku`}
             type="text"
+            maxLength={160}
             value={skuText}
             onChange={(e) => setSkuText(e.target.value)}
             className="form-control"
@@ -262,39 +269,40 @@ export default function CommunityQuarantineSubmitForm() {
         </div>
       </form>
 
-      {result && (
-        <div
-          role="status"
-          className={`alert rounded-4 mt-4 mb-0 border ${
-            result.accepted
-              ? 'alert-success border-success'
-              : 'alert-warning border-warning'
-          }`}
-        >
-          <div className="d-flex align-items-start gap-2">
-            {result.accepted ? (
-              <BsCheckCircleFill className="text-success fs-4 mt-1 flex-shrink-0" />
-            ) : (
-              <BsExclamationTriangleFill className="text-warning fs-4 mt-1 flex-shrink-0" />
-            )}
-            <div>
-              <div className="fw-bold mb-1">
-                {result.accepted
-                  ? t('quarantineAcceptedTitle')
-                  : t('quarantineRejectedTitle')}
-              </div>
-              <div className="small mb-1">
-                {t(`quarantineOutcome.${result.outcome}`)}
-              </div>
-              {result.jobId && (
-                <div className="small text-muted">
-                  {t('quarantineJobRef', { id: result.jobId })}
-                </div>
+      <div role="status" aria-live="polite">
+        {result && (
+          <div
+            className={`alert rounded-4 mt-4 mb-0 border ${
+              result.accepted
+                ? 'alert-success border-success'
+                : 'alert-warning border-warning'
+            }`}
+          >
+            <div className="d-flex align-items-start gap-2">
+              {result.accepted ? (
+                <BsCheckCircleFill className="text-success fs-4 mt-1 flex-shrink-0" />
+              ) : (
+                <BsExclamationTriangleFill className="text-warning fs-4 mt-1 flex-shrink-0" />
               )}
+              <div>
+                <div className="fw-bold mb-1">
+                  {result.accepted
+                    ? t('quarantineAcceptedTitle')
+                    : t('quarantineRejectedTitle')}
+                </div>
+                <div className="small mb-1">
+                  {t(`quarantineOutcome.${result.outcome}`)}
+                </div>
+                {result.jobId && (
+                  <div className="small text-muted">
+                    {t('quarantineJobRef', { id: result.jobId })}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

@@ -1420,7 +1420,7 @@
     "quarantineSkuLabel": "RAM / ROM Variant (SKU)",
     "quarantineSkuPlaceholder": "e.g. 256GB Natural Titanium",
     "quarantineConsentStrong": "Anonymous sharing:",
-    "quarantineConsentText": "I agree to send this product’s public price to Rate.vn. Tracking parameters are removed from the link before it is stored, and the price is only recorded after Rate.vn checks it again on the seller’s page.",
+    "quarantineConsentText": "I agree to send this product’s public price to Rate.vn. Tracking parameters are removed from the link before it is stored. The price you enter is not published directly; it waits for Rate.vn to check it.",
     "quarantineAccessoryNote": "Cheap accessories and parts are not accepted, so device price charts stay accurate.",
     "quarantineSubmittingBtn": "Sending...",
     "quarantineSubmitBtn": "Send for checking",
@@ -1428,13 +1428,13 @@
     "quarantineRejectedTitle": "This link was not accepted",
     "quarantineJobRef": "Request ID: {id}",
     "quarantineOutcome": {
-      "accepted": "Rate.vn will check the price again on the seller’s page. It appears in the price history only after that check.",
+      "accepted": "The link is in the queue for checking. The price you entered is not published directly.",
       "noConsent": "Please tick the sharing consent box before sending.",
       "invalidUrl": "This is not a product page from one of the 10 supported stores. Open the product page and copy its link again.",
       "invalidPrice": "The current price is not valid. Enter the amount in dong.",
       "accessory": "This looks like an accessory or a part. Rate.vn only tracks device prices.",
       "rateLimited": "Too many links at once. Please wait a minute and try again.",
-      "invalidInput": "Some details are not valid. Check the link, the product name (at least 3 characters) and the price.",
+      "invalidInput": "Some details are not valid. Check the link, the product name (3 to 320 characters), the price and the variant.",
       "failed": "Could not send right now. Please try again later."
     }
   },

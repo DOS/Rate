@@ -20,20 +20,25 @@ function luminance(rgb: string): number {
   return 0.2126 * (r ?? 0) + 0.7152 * (g ?? 0) + 0.0722 * (b ?? 0);
 }
 
-async function fillForm(page: Page, title: string) {
-  // A submit before hydration would be a native GET of the page.
-  await page.waitForLoadState('networkidle');
-  const form = page
-    .locator('form')
-    .filter({ has: page.locator('#community-quarantine-consent') });
-  const inputs = form.locator('input.form-control');
-  await inputs
-    .nth(0)
-    .fill('https://cellphones.com.vn/op-lung-iphone-16-pro-max.html');
-  await inputs.nth(1).fill(title);
-  await inputs.nth(2).fill('55000');
-  await page.locator('#community-quarantine-consent').check();
-  return form;
+// Fills and submits the form, retrying when a click before hydration turned
+// into a native reload instead of a fetch.
+async function submitForm(page: Page, title: string) {
+  await expect(async () => {
+    const form = page
+      .locator('form')
+      .filter({ has: page.locator('#community-quarantine-consent') });
+    await form
+      .locator('input[type="url"]')
+      .fill('https://cellphones.com.vn/op-lung-iphone-16-pro-max.html');
+    await form.locator('input[type="text"][required]').fill(title);
+    await form.locator('input[type="number"][required]').fill('55000');
+    await page.locator('#community-quarantine-consent').check();
+    const response = page.waitForResponse('**/api/v1/rate/extension/ingest', {
+      timeout: 3000,
+    });
+    await form.locator('button[type="submit"]').click();
+    expect((await response).status()).toBe(200);
+  }).toPass();
 }
 
 for (const path of ['/contact-us', '/en/contact-us', '/cs/contact-us']) {
@@ -55,6 +60,8 @@ test('link form starts empty with consent unticked', async ({ page }) => {
   const consent = page.locator('#community-quarantine-consent');
   await expect(consent).toBeVisible();
   await expect(consent).not.toBeChecked();
+  // The live region is mounted before any result so it gets announced.
+  await expect(page.getByRole('status')).toBeAttached();
   const form = page.locator('form').filter({ has: consent });
   for (const value of await form
     .locator('input.form-control')
@@ -68,20 +75,14 @@ test('an accessory link reaches the API and gets a plain answer', async ({
 }) => {
   await page.goto('/en/contact-us');
   await expect(page.locator('#community-quarantine-consent')).toBeVisible();
-  const form = await fillForm(
-    page,
-    'Ốp lưng silicon iPhone 16 Pro Max chống sốc'
-  );
-  const response = page.waitForResponse('**/api/v1/rate/extension/ingest');
-  await form.locator('button[type="submit"]').click();
   // The route derives the store and item from the URL, so this is a 200 with
   // the accessory verdict rather than a 400 for missing fields.
-  expect((await response).status()).toBe(200);
+  await submitForm(page, 'Ốp lưng silicon iPhone 16 Pro Max chống sốc');
   const status = page.getByRole('status');
   await expect(status).toContainText('This link was not accepted');
   await expect(status).toContainText('accessory');
   // Alert text must stay readable on the pale alert background (WCAG 1.4.3).
-  const [fg, bg] = await status.evaluate((el) => {
+  const [fg, bg] = await status.locator('.alert').evaluate((el) => {
     const cs = getComputedStyle(el);
     return [cs.color, cs.backgroundColor];
   });
@@ -103,8 +104,7 @@ test('an accepted link shows the thank-you message', async ({ page }) => {
   );
   await page.goto('/contact-us');
   await expect(page.locator('#community-quarantine-consent')).toBeVisible();
-  const form = await fillForm(page, 'Apple iPhone 16 Pro Max 256GB');
-  await form.locator('button[type="submit"]').click();
+  await submitForm(page, 'Apple iPhone 16 Pro Max 256GB');
   const status = page.getByRole('status');
   await expect(status).toContainText('Đã nhận link, cảm ơn bạn');
   await expect(status).toContainText('job-123');
