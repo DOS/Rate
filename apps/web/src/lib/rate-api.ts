@@ -562,7 +562,7 @@ export function computeCombinedDualScore(params: {
       isBlended: false,
       blendMode: 'separate_low_confidence',
       blendFormulaNoteVi:
-        'Hiển thị riêng Điểm Chuyên gia & Người mua (chờ độ tin cậy người dùng đạt mức Trung bình c ≥ 60% để gộp 60/40)',
+        'Hiển thị riêng điểm chuyên gia và điểm người mua (gộp 60/40 khi độ tin cậy người mua đạt mức trung bình, độ tin cậy ≥ 60%)',
     };
   }
 
@@ -581,7 +581,7 @@ export function computeCombinedDualScore(params: {
       overall: Number(safeExpert.toFixed(2)),
       isBlended: false,
       blendMode: 'expert_only',
-      blendFormulaNoteVi: 'Tỷ trọng: 100% Đánh giá Chuyên gia Rate Lab',
+      blendFormulaNoteVi: 'Tỷ trọng: 100% đánh giá chuyên gia Rate Lab',
     };
   }
 

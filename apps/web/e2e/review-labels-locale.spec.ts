@@ -10,7 +10,8 @@ const LABELS = {
   vi: {
     badge: 'Quảng cáo',
     weight: 'nhãn mặc định theo số sao của sàn',
-    blendNote: 'Tỷ trọng: 100% người mua thực chất (đã lọc đánh giá ảo và spam nhận xu)',
+    blendNote:
+      'Tỷ trọng: 100% người mua thực chất (đã lọc đánh giá ảo và spam nhận xu)',
     warning:
       'Cảnh báo phân bố sao bất thường: 100% đánh giá là 5 sao tuyệt đối (83% chỉ chấm sao hoặc thiếu chi tiết trải nghiệm)',
   },
@@ -80,7 +81,7 @@ for (const [locale, labels] of Object.entries(LABELS)) {
         'Trọng số',
         'Tỷ trọng:',
         'Chưa đủ dữ liệu đánh giá',
-        'Hiển thị riêng Điểm',
+        'Hiển thị riêng điểm',
       ])
         expect(text).not.toContain(vi);
     }
