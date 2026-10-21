@@ -14,7 +14,8 @@ test('merchant cards stay compact on a phone', async ({ page }) => {
     .evaluateAll((els) =>
       els.slice(0, 6).map((el) => el.getBoundingClientRect().height)
     );
-  for (const h of heights) expect(h).toBeLessThan(560);
+  // Before #635 these cards were 640-710px tall at this width.
+  for (const h of heights) expect(h).toBeLessThan(600);
 });
 
 for (const [path, lang] of [

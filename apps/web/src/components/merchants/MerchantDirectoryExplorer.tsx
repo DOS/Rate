@@ -798,60 +798,52 @@ export default function MerchantDirectoryExplorer({
                       </div>
                     </div>
 
-                    {/* Shop Quick Metrics */}
-                    <div className="row g-2 mb-3">
-                      <div className="col-4">
-                        <div className="bg-light rounded-3 p-2 px-3">
-                          <div
-                            className="text-muted"
-                            style={{ fontSize: '0.8125rem' }}
-                          >
-                            {labels.platformRating}
-                          </div>
-                          <div className="fw-bold small d-flex align-items-center rate-tabular gap-1">
-                            <BsStarFill className="text-warning" />
-                            {merchant.rating_star
-                              ? `${merchant.rating_star.toFixed(2)} / 5.0`
-                              : labels.noRating}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="col-4">
-                        <div className="bg-light rounded-3 p-2 px-3">
-                          <div
-                            className="text-muted"
-                            style={{ fontSize: '0.8125rem' }}
-                          >
-                            {labels.followers}
-                          </div>
-                          <div className="fw-bold small d-flex align-items-center rate-tabular gap-1">
-                            <BsPeopleFill className="text-primary" />
-                            {merchant.follower_count > 0
-                              ? merchant.follower_count.toLocaleString('vi-VN')
-                              : '-'}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="col-4">
-                        <div className="bg-light rounded-3 p-2 px-3">
-                          <div
-                            className="text-muted"
-                            style={{ fontSize: '0.8125rem' }}
-                          >
-                            {labels.trackedProducts}
-                          </div>
-                          <div className="fw-bold small d-flex align-items-center rate-tabular gap-1">
-                            <BsBoxSeam className="text-success" />
-                            {merchant.product_count} {labels.productsUnit}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+                    {/* Shop quick metrics: one wrapping line, not three boxes,
+                        so the card stays short on phones (DOS/Rate#635). */}
+                    <ul className="list-unstyled d-flex small rate-tabular column-gap-3 row-gap-1 mb-3 flex-wrap">
+                      <li className="d-flex align-items-center gap-1">
+                        <BsStarFill
+                          aria-hidden="true"
+                          className="text-warning"
+                        />
+                        <span className="text-muted">
+                          {labels.platformRating}:
+                        </span>
+                        <strong>
+                          {merchant.rating_star
+                            ? `${merchant.rating_star.toFixed(2)} / 5.0`
+                            : labels.noRating}
+                        </strong>
+                      </li>
+                      {merchant.follower_count > 0 && (
+                        <li className="d-flex align-items-center gap-1">
+                          <BsPeopleFill
+                            aria-hidden="true"
+                            className="text-primary"
+                          />
+                          <span className="text-muted">
+                            {labels.followers}:
+                          </span>
+                          <strong>
+                            {merchant.follower_count.toLocaleString('vi-VN')}
+                          </strong>
+                        </li>
+                      )}
+                      <li className="d-flex align-items-center gap-1">
+                        <BsBoxSeam
+                          aria-hidden="true"
+                          className="text-success"
+                        />
+                        <strong>
+                          {merchant.product_count} {labels.productsUnit}
+                        </strong>
+                      </li>
+                    </ul>
 
                     {/* Dual Risk Score Breakdown */}
                     <div className="rounded-3 mb-3 border bg-white p-3">
                       <div className="row g-3">
-                        <div className="border-end col-6">
+                        <div className="border-end-sm col-sm-6 col-12">
                           <div className="d-flex justify-content-between align-items-center mb-1">
                             <span className="small text-muted fw-medium">
                               <BsShield aria-hidden="true" className="me-1" />
@@ -868,7 +860,7 @@ export default function MerchantDirectoryExplorer({
                             </span>
                           </div>
                           <div
-                            className="small text-muted"
+                            className="small text-muted d-none d-sm-block"
                             style={{ fontSize: '0.8125rem' }}
                           >
                             {merchant.dosafe_risk_score === 0
@@ -877,7 +869,7 @@ export default function MerchantDirectoryExplorer({
                           </div>
                         </div>
 
-                        <div className="col-6">
+                        <div className="col-sm-6 col-12">
                           <div className="d-flex justify-content-between align-items-center mb-1">
                             <span className="small text-muted fw-medium">
                               <BsRobot aria-hidden="true" className="me-1" />
@@ -896,7 +888,7 @@ export default function MerchantDirectoryExplorer({
                             </span>
                           </div>
                           <div
-                            className="small text-muted"
+                            className="small text-muted d-none d-sm-block"
                             style={{ fontSize: '0.8125rem' }}
                           >
                             {merchant.review_risk_breakdown.total_reviews >
@@ -968,7 +960,7 @@ export default function MerchantDirectoryExplorer({
                     <div className="d-flex justify-content-between align-items-center border-top mt-auto flex-wrap gap-2 pt-2">
                       <Link
                         href={`/merchants/${merchant.id}`}
-                        className="btn btn-primary rounded-pill fw-medium px-4"
+                        className="btn btn-primary btn-sm rounded-pill fw-medium px-3"
                       >
                         {labels.viewTrustProfileCta}
                       </Link>
