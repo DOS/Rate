@@ -88,7 +88,7 @@ export const CATEGORY_FILTER_SCHEMAS: Record<string, CategoryFilterSchema> = {
     categorySlug: 'smartphones',
     directorySlug: 'tech_electronics',
     directoryName: 'Công nghệ & Thiết bị số',
-    categoryTitle: 'Điện Thoại Thông Minh',
+    categoryTitle: 'Điện thoại thông minh',
     categorySubtitle:
       'Tra cứu dữ liệu kỹ thuật 10 nhóm thông số chuẩn GSMArena & PhoneArena, đối chiếu giá đa sàn và lọc đánh giá thật bằng AI',
     searchPlaceholder:
@@ -173,7 +173,7 @@ export const CATEGORY_FILTER_SCHEMAS: Record<string, CategoryFilterSchema> = {
     categorySlug: 'tablets',
     directorySlug: 'tech_electronics',
     directoryName: 'Công nghệ & Thiết bị số',
-    categoryTitle: 'Máy Tính Bảng (Tablets)',
+    categoryTitle: 'Máy tính bảng',
     categorySubtitle:
       'So sánh thông số kỹ thuật 10 nhóm và giá bán máy tính bảng từ các sàn TMĐT',
     searchPlaceholder: 'Tìm iPad, Galaxy Tab, Xiaomi Pad...',
@@ -230,7 +230,7 @@ export const CATEGORY_FILTER_SCHEMAS: Record<string, CategoryFilterSchema> = {
     categorySlug: 'laptops',
     directorySlug: 'tech_electronics',
     directoryName: 'Công nghệ & Thiết bị số',
-    categoryTitle: 'Máy Tính Xách Tay (Laptops)',
+    categoryTitle: 'Laptop',
     categorySubtitle:
       'Đối chiếu cấu hình phần cứng 10 nhóm và lịch sử giá laptop chính hãng',
     searchPlaceholder: 'Tìm MacBook, ThinkPad, ASUS ROG, Dell XPS...',
@@ -281,7 +281,7 @@ export const CATEGORY_FILTER_SCHEMAS: Record<string, CategoryFilterSchema> = {
     categorySlug: 'smartwatches',
     directorySlug: 'tech_electronics',
     directoryName: 'Công nghệ & Thiết bị số',
-    categoryTitle: 'Đồng Hồ Thông Minh (Smartwatches)',
+    categoryTitle: 'Đồng hồ thông minh',
     categorySubtitle:
       'Đối chiếu cảm biến sức khỏe, chuẩn kháng nước, GPS đa băng tần và lịch sử giá đồng hồ thông minh chính hãng',
     searchPlaceholder:
@@ -347,9 +347,9 @@ export const CATEGORY_FILTER_SCHEMAS: Record<string, CategoryFilterSchema> = {
     categorySlug: 'earbuds',
     directorySlug: 'tech_electronics',
     directoryName: 'Công nghệ & Thiết bị số',
-    categoryTitle: 'Tai Nghe Không Dây & Chống Ồn ANC (Earbuds)',
+    categoryTitle: 'Tai nghe không dây và chống ồn ANC',
     categorySubtitle:
-      'So sánh khả năng chống ồn chủ động ANC, codec âm thanh Hi-Res (LDAC/aptX), thời lượng pin và giá bán thực tế đa sàn',
+      'So sánh khả năng chống ồn chủ động ANC, codec âm thanh Hi-Res (LDAC/aptX), thời lượng pin và giá bán thực tế trên nhiều sàn',
     searchPlaceholder:
       'Tìm AirPods Pro, Sony WF-1000XM5, Galaxy Buds, Bose, Sennheiser...',
     defaultBrands: [
@@ -404,7 +404,7 @@ const DEFAULT_SMARTPHONE_SCHEMA: CategoryFilterSchema = {
   categorySlug: 'smartphones',
   directorySlug: 'tech_electronics',
   directoryName: 'Công nghệ & Thiết bị số',
-  categoryTitle: 'Điện Thoại Thông Minh',
+  categoryTitle: 'Điện thoại thông minh',
   categorySubtitle:
     'Tra cứu dữ liệu kỹ thuật 10 nhóm thông số chuẩn GSMArena & PhoneArena, đối chiếu giá đa sàn và lọc đánh giá thật bằng AI',
   searchPlaceholder: 'Tìm tên máy, chip (VD: iPhone 16, Snapdragon 8 Gen 3)...',

@@ -559,7 +559,7 @@
     "exportMenu": "Xuất dữ liệu"
   },
   "watchlist": {
-    "metaTitle": "Danh Sách Canh Giá Thật & Cảnh Báo Giảm Giá Đa Ngành | Rate.vn",
+    "metaTitle": "Theo dõi giá thật và cảnh báo giảm giá | Rate.vn",
     "metaDescription": "Theo dõi biến động giá theo thời gian thực trên cả 5 ngành hàng, đặt mức giá mục tiêu và chống chiêu trò nâng giá gốc giảm ảo trên Shopee, Lazada, Tiki.",
     "btnTitle": "Đặt ngưỡng giá mong muốn để theo dõi khi sản phẩm giảm giá thật",
     "btnWatching": "Đang canh giá: ≤ {price} ₫",
@@ -588,23 +588,23 @@
     "mdStatusReached": "✅ Đạt mục tiêu",
     "mdStatusWatching": "⏳ Đang canh",
     "heroBadge": "Canh giá thật & cảnh báo chạm đáy",
-    "heroTitle": "Danh Sách Theo Dõi Biến Động Giá ({count})",
+    "heroTitle": "Danh sách theo dõi giá ({count})",
     "heroSubtitle": "So sánh giá thấp nhất hiện tại với lịch sử giá đã ghi nhận và báo ngay khi chạm mức giá mục tiêu của bạn.",
     "copiedPortfolioMdBtn": "✓ Đã sao chép Markdown!",
     "copyPortfolioMdBtn": "Sao chép danh mục Markdown",
     "exportCsvBtn": "Xuất bảng CSV",
     "exportJsonBtn": "Xuất JSON",
-    "inspectLinkBtn": "Kiểm toán Link TMĐT",
+    "inspectLinkBtn": "Kiểm tra link sản phẩm",
     "addFromCatalogBtn": "+ Thêm sản phẩm từ danh mục",
     "compareSameCatBtn": "So sánh {count} máy cùng danh mục",
     "kpiTotalMinLabel": "Tổng giá trị danh mục (Giá đáy)",
     "kpiTotalTargetLabel": "Tổng ngân sách mục tiêu",
-    "kpiSpreadSavingsLabel": "Tiết kiệm chéo giữa 10 sàn",
+    "kpiSpreadSavingsLabel": "Tiết kiệm giữa 10 sàn",
     "kpiAvgRatingLabel": "Điểm JReviews trung bình danh mục",
     "kpiNoRating": "Chưa có",
     "cloudExplain": "Cảnh báo trên Rate Cloud gắn với tài khoản DOS ID đã đăng nhập và gửi tới email của tài khoản đó khi giá chạm ngưỡng mục tiêu.",
-    "cloudSyncingBtn": "Đang đồng bộ Cloud...",
-    "cloudSyncBtn": "Đồng Bộ Cảnh Báo Lên Rate Cloud",
+    "cloudSyncingBtn": "Đang lưu lên Rate Cloud...",
+    "cloudSyncBtn": "Lưu cảnh báo lên Rate Cloud",
     "statWatchingLabel": "Sản phẩm đang theo dõi",
     "statWatchingValue": "{count} mẫu",
     "statReachedLabel": "Đã chạm mục tiêu mua",
@@ -1448,28 +1448,28 @@
   "catalog": {
     "meta": {
       "smartphones": {
-        "titleCount": "So sánh giá Điện thoại di động ({count} mẫu máy chuẩn hóa) | Rate.vn",
-        "titleDefault": "So sánh giá Điện thoại di động & Kiểm định khuyến mãi AI | Rate.vn",
-        "description": "Tìm kiếm và lọc điện thoại theo 10 nhóm thông số kỹ thuật chuẩn PhoneArena/GSMArena, kiểm tra lịch sử giá thật và lọc đánh giá Seeding bằng AI trên Rate.vn."
+        "titleCount": "So sánh giá điện thoại ({count} mẫu máy) | Rate.vn",
+        "titleDefault": "So sánh giá điện thoại và kiểm tra khuyến mãi | Rate.vn",
+        "description": "Tìm và lọc điện thoại theo 10 nhóm thông số chuẩn PhoneArena/GSMArena, xem lịch sử giá thật và lọc đánh giá ảo trên Rate.vn."
       },
       "tablets": {
-        "titleCount": "So sánh giá Máy tính bảng ({count} mẫu máy chuẩn hóa) | Rate.vn",
-        "titleDefault": "So sánh giá Máy tính bảng (Tablets) & Kiểm định khuyến mãi AI | Rate.vn",
-        "description": "Tra cứu và lọc máy tính bảng (iPad, Galaxy Tab, Xiaomi Pad) theo 10 nhóm thông số kỹ thuật chuẩn hóa, kiểm tra lịch sử giá thật và lọc đánh giá Seeding trên Rate.vn."
+        "titleCount": "So sánh giá máy tính bảng ({count} mẫu máy) | Rate.vn",
+        "titleDefault": "So sánh giá máy tính bảng và kiểm tra khuyến mãi | Rate.vn",
+        "description": "Tra cứu và lọc máy tính bảng (iPad, Galaxy Tab, Xiaomi Pad) theo 10 nhóm thông số chuẩn hóa, xem lịch sử giá thật và lọc đánh giá ảo trên Rate.vn."
       },
       "laptops": {
-        "titleCount": "So sánh giá Laptop ({count} mẫu máy chuẩn hóa) | Rate.vn",
-        "titleDefault": "So sánh giá Máy tính xách tay (Laptops) & Kiểm định khuyến mãi AI | Rate.vn",
-        "description": "Tra cứu và lọc laptop (MacBook, ThinkPad, ASUS ROG, Dell XPS) theo 10 nhóm thông số kỹ thuật chuẩn hóa, kiểm tra lịch sử giá thật và lọc đánh giá Seeding trên Rate.vn."
+        "titleCount": "So sánh giá laptop ({count} mẫu máy) | Rate.vn",
+        "titleDefault": "So sánh giá laptop và kiểm tra khuyến mãi | Rate.vn",
+        "description": "Tra cứu và lọc laptop (MacBook, ThinkPad, ASUS ROG, Dell XPS) theo 10 nhóm thông số chuẩn hóa, xem lịch sử giá thật và lọc đánh giá ảo trên Rate.vn."
       },
       "smartwatches": {
-        "titleCount": "So sánh giá Đồng hồ thông minh ({count} mẫu chuẩn hóa) | Rate.vn",
-        "titleDefault": "So sánh giá Đồng hồ thông minh (Smartwatches) & Kiểm định khuyến mãi AI | Rate.vn",
-        "description": "Tra cứu và lọc đồng hồ thông minh (Apple Watch, Galaxy Watch, Garmin, Xiaomi Watch, Huawei Watch) theo 10 nhóm thông số kỹ thuật chuẩn hóa, kiểm tra lịch sử giá thật và lọc đánh giá Seeding trên Rate.vn."
+        "titleCount": "So sánh giá đồng hồ thông minh ({count} mẫu) | Rate.vn",
+        "titleDefault": "So sánh giá đồng hồ thông minh và kiểm tra khuyến mãi | Rate.vn",
+        "description": "Tra cứu và lọc đồng hồ thông minh (Apple Watch, Galaxy Watch, Garmin, Xiaomi Watch, Huawei Watch) theo 10 nhóm thông số chuẩn hóa, xem lịch sử giá thật và lọc đánh giá ảo trên Rate.vn."
       },
       "earbuds": {
-        "titleCount": "So sánh giá Tai nghe không dây ANC ({count} mẫu chuẩn hóa) | Rate.vn",
-        "titleDefault": "So sánh giá Tai nghe chống ồn ANC (Earbuds) & Kiểm định khuyến mãi AI | Rate.vn",
+        "titleCount": "So sánh giá tai nghe không dây ANC ({count} mẫu) | Rate.vn",
+        "titleDefault": "So sánh giá tai nghe chống ồn ANC và kiểm tra khuyến mãi | Rate.vn",
         "description": "Tra cứu và lọc tai nghe không dây chống ồn chủ động ANC (AirPods Pro, Sony WF-1000XM5, Galaxy Buds, Bose, Sennheiser) theo 10 nhóm thông số chuẩn hóa, lịch sử giá thật và đánh giá AI trên Rate.vn."
       }
     },
@@ -1484,7 +1484,7 @@
     "schemas": {
       "directoryTech": "Công nghệ & Thiết bị số",
       "smartphones": {
-        "title": "Điện Thoại Thông Minh",
+        "title": "Điện thoại thông minh",
         "subtitle": "Tra cứu dữ liệu kỹ thuật 10 nhóm thông số chuẩn GSMArena & PhoneArena, đối chiếu giá đa sàn và lọc đánh giá thật bằng AI",
         "searchPlaceholder": "Tìm tên máy, chip (VD: iPhone 16, Snapdragon 8 Gen 3)...",
         "presets": {
@@ -1521,7 +1521,7 @@
         }
       },
       "tablets": {
-        "title": "Máy Tính Bảng (Tablets)",
+        "title": "Máy tính bảng",
         "subtitle": "So sánh thông số kỹ thuật 10 nhóm và giá bán máy tính bảng từ các sàn TMĐT",
         "searchPlaceholder": "Tìm iPad, Galaxy Tab, Xiaomi Pad...",
         "presets": {
@@ -1545,7 +1545,7 @@
         }
       },
       "laptops": {
-        "title": "Máy Tính Xách Tay (Laptops)",
+        "title": "Laptop",
         "subtitle": "Đối chiếu cấu hình phần cứng 10 nhóm và lịch sử giá laptop chính hãng",
         "searchPlaceholder": "Tìm MacBook, ThinkPad, ASUS ROG, Dell XPS...",
         "presets": {
@@ -1565,7 +1565,7 @@
         }
       },
       "smartwatches": {
-        "title": "Đồng Hồ Thông Minh (Smartwatches)",
+        "title": "Đồng hồ thông minh",
         "subtitle": "Đối chiếu cảm biến sức khỏe, chuẩn kháng nước, GPS đa băng tần và lịch sử giá đồng hồ thông minh chính hãng",
         "searchPlaceholder": "Tìm Apple Watch, Galaxy Watch, Garmin, Xiaomi Watch, Huawei Watch...",
         "presets": {
@@ -1590,8 +1590,8 @@
         }
       },
       "earbuds": {
-        "title": "Tai Nghe Không Dây & Chống Ồn ANC (Earbuds)",
-        "subtitle": "So sánh khả năng chống ồn chủ động ANC, codec âm thanh Hi-Res (LDAC/aptX), thời lượng pin và giá bán thực tế đa sàn",
+        "title": "Tai nghe không dây và chống ồn ANC",
+        "subtitle": "So sánh khả năng chống ồn chủ động ANC, codec âm thanh Hi-Res (LDAC/aptX), thời lượng pin và giá bán thực tế trên nhiều sàn",
         "searchPlaceholder": "Tìm AirPods Pro, Sony WF-1000XM5, Galaxy Buds, Bose, Sennheiser...",
         "presets": {
           "under-1m": "Dưới 1 triệu",
@@ -1620,15 +1620,15 @@
       "foundSuffix": "/ {total} sản phẩm chuẩn hóa",
       "quickCompare3": "So sánh nhanh 3 máy",
       "quickCompare2": "So sánh nhanh 2 máy",
-      "versus1v1Badge": "Kèo 1v1: {brandA} vs {brandB}",
-      "leaderboardBadge": "Bảng Xếp Hạng",
+      "versus1v1Badge": "So sánh 1v1: {brandA} vs {brandB}",
+      "leaderboardBadge": "Bảng xếp hạng",
       "sortByPrefix": "Sắp xếp: {label}",
-      "radarBannerBadge": "RADAR KÈO THƠM & BẪY SALE ẢO ({title})",
-      "radarAnalyzedSub": "Đã kiểm toán {count} gian hàng trên 10 sàn",
-      "viewAllRadarBtn": "Xem toàn bộ Radar 10 sàn",
+      "radarBannerBadge": "Deal giá đáy và cảnh báo giảm giá ảo ({title})",
+      "radarAnalyzedSub": "Đã kiểm tra {count} tin bán trên 10 sàn",
+      "viewAllRadarBtn": "Xem tất cả deal trên 10 sàn",
       "vsMedianBadge": "-{pct}% so trung vị",
       "fakeMarkupBadge": "Kê khống +{pct}%",
-      "spreadHeader": "Độ lệch giá 10 sàn cao nhất ({title}):",
+      "spreadHeader": "Chênh lệch giá lớn nhất giữa 10 sàn ({title}):",
       "spreadSub": "Mua đúng sàn tiết kiệm hàng triệu đồng",
       "spreadDiffBadge": "Lệch +{pct}% ({amount} ₫)",
       "emptySyncingTitle": "Danh mục \"{title}\" đang chờ đồng bộ dữ liệu sản phẩm mới",
@@ -1637,7 +1637,7 @@
       "emptyMatchingDesc": "Hãy thử nới lỏng khoảng giá hoặc bỏ bớt một vài tiêu chí phần cứng để xem thêm các dòng máy khác.",
       "resetFiltersBtn": "Đặt lại bộ lọc",
       "browseSmartphonesBtn": "Xem danh mục Điện thoại đang có sẵn →",
-      "merchantProfilesBtn": "Hồ sơ Tín nhiệm Gian hàng",
+      "merchantProfilesBtn": "Hồ sơ tín nhiệm gian hàng",
       "radarDealsTitle": "Giá tốt thật",
       "radarTrapsTitle": "Cảnh báo nâng khống giá gốc",
       "paginationLabel": "Phân trang danh mục",
@@ -1794,7 +1794,7 @@
     "sources": "{count, number} nơi bán",
     "viewDetails": "Xem chi tiết",
     "priceHistory": "Lịch sử giá",
-    "priceHistoryTitle": "Kiểm định lịch sử giá & phát hiện giảm giá ảo",
+    "priceHistoryTitle": "Xem lịch sử giá và phát hiện giảm giá ảo",
     "noImage": "Chưa có ảnh",
     "verified": "Đã chuẩn hóa thông số"
   },
