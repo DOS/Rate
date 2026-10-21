@@ -7296,6 +7296,44 @@ async function runCoreArchitectureSuite() {
 
   console.log('  ✅ [82/82] Plain wording in exports (#661) passed');
 
+  // =========================================================================
+  // 83. No jargon in any shopper-facing message (#673)
+  // =========================================================================
+  {
+    // The developer docs keep their technical terms on purpose.
+    const technicalNamespaces = new Set(['developers', 'openapi']);
+    const jargon = /radar|kèo|audit|kiểm định|kiểm toán|seeding/i;
+    const offenders: string[] = [];
+    const walk = (node: unknown, key: string, locale: string) => {
+      if (typeof node === 'string') {
+        // {seeding} is a placeholder name, not shown text.
+        if (jargon.test(node.replace(/\{\w+\}/g, '')))
+          offenders.push(`${locale}.${key}`);
+      } else if (node && typeof node === 'object') {
+        for (const [k, v] of Object.entries(node))
+          walk(v, key ? `${key}.${k}` : k, locale);
+      }
+    };
+    for (const [locale, messages] of Object.entries({
+      vi: viMessages,
+      en: enMessages,
+      cs: csMessages,
+    })) {
+      for (const [ns, node] of Object.entries(messages)) {
+        if (!technicalNamespaces.has(ns)) walk(node, ns, locale);
+      }
+    }
+    assert.deepEqual(
+      offenders,
+      [],
+      'shopper-facing messages must use plain words (#673)'
+    );
+  }
+
+  console.log(
+    '  ✅ [83/83] No jargon in shopper-facing messages (#673) passed'
+  );
+
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
 
