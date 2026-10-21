@@ -7151,6 +7151,54 @@ async function runCoreArchitectureSuite() {
     '  ✅ [80/80] DeepInspectWorkspace, CategoryCatalogToolbar & gen-db-types Hardening (#554) passed'
   );
 
+  // =========================================================================
+  // 81. Competitor sabotage adds no dynamic review risk (#645)
+  // =========================================================================
+  {
+    const { computeDynamicReviewRisk } = await import('@/lib/rate-api');
+    const review645 = (
+      flag_category: string,
+      include_in_rating: boolean,
+      verdict = 'genuine'
+    ) => ({ flag_category, include_in_rating, verdict }) as never;
+
+    const sabotaged = computeDynamicReviewRisk([
+      review645('authentic', true),
+      review645('authentic', true),
+      review645('competitor_sabotage', false),
+      review645('review_bombing', false),
+    ]);
+    assert.equal(
+      sabotaged.reviewRiskScore,
+      0,
+      'a seller whose only flagged reviews are sabotage or review bombing must get no extra review risk (#645)'
+    );
+    assert.equal(sabotaged.breakdown.sabotage_or_bombing_count, 2);
+    assert.equal(sabotaged.breakdown.suspicious_ratio_pct, 50);
+
+    const seeded = computeDynamicReviewRisk([
+      review645('authentic', true),
+      review645('seeding_fake', false),
+      review645('low_value_coin_spam', false),
+      review645('competitor_sabotage', false),
+    ]);
+    assert.equal(
+      seeded.reviewRiskScore,
+      34,
+      'seeding (1.0) and coin spam (0.35) still count; sabotage does not (#645)'
+    );
+
+    const pendingOnly = computeDynamicReviewRisk([
+      review645('authentic', false, 'unanalyzed'),
+    ]);
+    assert.equal(pendingOnly.reviewRiskScore, 0);
+    assert.equal(pendingOnly.breakdown.total_reviews, 0);
+  }
+
+  console.log(
+    '  ✅ [81/81] Competitor sabotage adds no dynamic review risk (#645) passed'
+  );
+
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
 
