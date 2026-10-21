@@ -716,7 +716,8 @@
     "radarBadgeFakeTrap": "🚨 Fake Sale Alert (+{pct}%)",
     "radarBadgeSpread": "📊 +{pct}% cross-platform spread",
     "radarNoGenuine": "No offers below the market median in this category.",
-    "radarNoTraps": "No inflated list prices detected in this category."
+    "radarNoTraps": "No inflated list prices detected in this category.",
+    "showMoreDeals": "Show more deals ({count} left)"
   },
   "inspect": {
     "metaTitle": "Deep URL & Fake Discount Inspector | Rate.vn",

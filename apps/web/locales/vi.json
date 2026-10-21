@@ -716,7 +716,8 @@
     "radarBadgeFakeTrap": "🚨 Cảnh báo Sale Ảo (+{pct}%)",
     "radarBadgeSpread": "📊 Lệch giá +{pct}% đa sàn",
     "radarNoGenuine": "Chưa có nơi bán nào có giá thấp hơn trung vị thị trường trong danh mục này.",
-    "radarNoTraps": "Chưa phát hiện giá gốc bị nâng khống trong danh mục này."
+    "radarNoTraps": "Chưa phát hiện giá gốc bị nâng khống trong danh mục này.",
+    "showMoreDeals": "Xem thêm deal (còn {count})"
   },
   "inspect": {
     "metaTitle": "Trung Tâm Kiểm Toán Link Đa Sàn & Phát Hiện Giảm Giá Ảo | Rate.vn",

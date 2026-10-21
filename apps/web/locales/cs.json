@@ -716,7 +716,8 @@
     "radarBadgeFakeTrap": "🚨 Falešná sleva (+{pct}%)",
     "radarBadgeSpread": "📊 +{pct}% rozdíl mezi e-shopy",
     "radarNoGenuine": "V této kategorii nejsou žádné nabídky pod tržním mediánem.",
-    "radarNoTraps": "V této kategorii nebyly zjištěny žádné navýšené původní ceny."
+    "radarNoTraps": "V této kategorii nebyly zjištěny žádné navýšené původní ceny.",
+    "showMoreDeals": "Zobrazit další nabídky (zbývá {count})"
   },
   "inspect": {
     "metaTitle": "Hloubkový audit URL a falešných slev | Rate.vn",
