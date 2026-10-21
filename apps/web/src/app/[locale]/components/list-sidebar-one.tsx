@@ -1,7 +1,7 @@
 'use client';
 import React, { useEffect, useState, useTransition } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { BsFunnel, BsStarFill } from 'react-icons/bs';
 import { Link, usePathname, useRouter } from '@/lib/navigation';
 import { startNavigationProgress } from '@/components/elementary/NavigationProgress';
@@ -12,7 +12,10 @@ import {
   localizeCategoryFilterSchema,
   RATING_FILTER_OPTIONS,
 } from '@/lib/category-filters';
-import type { RateCategoryItem } from '@/lib/rate-domain';
+import {
+  isCanonicalCategorySlug,
+  type RateCategoryItem,
+} from '@/lib/rate-domain';
 
 export interface ListSidebarOneProps {
   categorySlug?: string;
@@ -30,6 +33,14 @@ export default function ListSidebarOne({
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
   const t = useTranslations('catalog');
+  const tNav = useTranslations('rate.nav');
+  const locale = useLocale();
+  // Category names come from the database in Vietnamese; other locales use
+  // the navbar labels for the canonical categories (DOS/Rate#646).
+  const categoryLabel = (cat: RateCategoryItem) =>
+    locale !== 'vi' && isCanonicalCategorySlug(cat.slug)
+      ? tNav(cat.slug)
+      : cat.name;
 
   const baseSchema = getCategoryFilterSchema(
     categorySlug,
@@ -355,7 +366,7 @@ export default function ListSidebarOne({
                                   className="btn btn-sm btn-secondary rounded-1 fw-medium full-width"
                                   htmlFor={`cat-${cat.slug}`}
                                 >
-                                  {cat.name}
+                                  {categoryLabel(cat)}
                                 </label>
                               </div>
                             );
