@@ -255,6 +255,8 @@ export default function MerchantDirectoryExplorer({
       authenticLabel: t('authenticLabel'),
       filteredSpamSuffix: t('filteredSpamSuffix'),
       noAbnormalReviews: t('noAbnormalReviews'),
+      riskScamLabel: t('riskScamLabel'),
+      riskReviewLabel: t('riskReviewLabel'),
       priceRangeLabel: t('priceRangeLabel'),
       viewTrustProfileCta: t('viewTrustProfileCta'),
       openStorefrontCta: t('openStorefrontCta'),
@@ -750,7 +752,7 @@ export default function MerchantDirectoryExplorer({
 
               return (
                 <div className="col-lg-6 col-12" key={merchant.id}>
-                  <div className="rate-card rounded-4 d-flex flex-column h-100 border bg-white p-4 shadow-sm">
+                  <div className="rate-card rounded-4 d-flex flex-column h-100 p-md-4 border bg-white p-3 shadow-sm">
                     <div className="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-3">
                       <div
                         className="d-flex align-items-center gap-3"
@@ -772,7 +774,7 @@ export default function MerchantDirectoryExplorer({
                                 <BsCheckCircleFill /> {labels.officialBadge}
                               </span>
                             )}
-                            <span className="text-muted small">
+                            <span className="text-muted small d-none d-md-inline">
                               ID: <code>{merchant.platform_shop_id}</code>
                             </span>
                           </div>
@@ -791,14 +793,14 @@ export default function MerchantDirectoryExplorer({
                         <span
                           className={`badge ${trustBadgeClass} rounded-pill fs-6 rate-tabular px-3 py-2`}
                         >
-                          Trust: {merchant.trust_score}/100
+                          {t('trustBadge', { score: merchant.trust_score })}
                         </span>
                       </div>
                     </div>
 
                     {/* Shop Quick Metrics */}
                     <div className="row g-2 mb-3">
-                      <div className="col-sm-4 col-6">
+                      <div className="col-4">
                         <div className="bg-light rounded-3 p-2 px-3">
                           <div
                             className="text-muted"
@@ -814,7 +816,7 @@ export default function MerchantDirectoryExplorer({
                           </div>
                         </div>
                       </div>
-                      <div className="col-sm-4 col-6">
+                      <div className="col-4">
                         <div className="bg-light rounded-3 p-2 px-3">
                           <div
                             className="text-muted"
@@ -830,7 +832,7 @@ export default function MerchantDirectoryExplorer({
                           </div>
                         </div>
                       </div>
-                      <div className="col-sm-4 col-12">
+                      <div className="col-4">
                         <div className="bg-light rounded-3 p-2 px-3">
                           <div
                             className="text-muted"
@@ -853,7 +855,7 @@ export default function MerchantDirectoryExplorer({
                           <div className="d-flex justify-content-between align-items-center mb-1">
                             <span className="small text-muted fw-medium">
                               <BsShield aria-hidden="true" className="me-1" />
-                              DOSafe Threat Risk
+                              {labels.riskScamLabel}
                             </span>
                             <span
                               className={`badge rounded-pill rate-tabular ${
@@ -879,7 +881,7 @@ export default function MerchantDirectoryExplorer({
                           <div className="d-flex justify-content-between align-items-center mb-1">
                             <span className="small text-muted fw-medium">
                               <BsRobot aria-hidden="true" className="me-1" />
-                              AI Review Risk
+                              {labels.riskReviewLabel}
                             </span>
                             <span
                               className={`badge rounded-pill rate-tabular ${

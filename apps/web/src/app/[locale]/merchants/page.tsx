@@ -125,10 +125,9 @@ export default async function MerchantsDirectoryPage({
                   {t('dualEngineTitle')}
                 </h2>
                 <p className="text-muted small mb-0">
-                  {t('dualEngineDesc1')} <strong>DOSafe Threat Risk</strong>{' '}
-                  {t('dualEngineDesc2')} <code>dosafe.threat_intel</code>{' '}
-                  {t('dualEngineDesc3')} <strong>AI Review Risk</strong>{' '}
-                  {t('dualEngineDesc4')}
+                  {t.rich('dualEngineDesc', {
+                    b: (chunks) => <strong>{chunks}</strong>,
+                  })}
                 </p>
               </div>
               <div className="col-lg-4 text-lg-end d-flex justify-content-lg-end flex-wrap gap-2">
