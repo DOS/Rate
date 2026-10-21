@@ -157,7 +157,7 @@ export default async function MerchantsDirectoryPage({
       </section>
 
       <CompareTrayBar />
-      <FooterTop />
+      <FooterTop locale={locale} />
       <FooterDynamic sections={[]} links={[]} locale={locale} />
       <BackToTop />
     </>

@@ -363,7 +363,7 @@ export default async function LeaderboardPage({ params }: PageProps) {
       </main>
 
       <CompareTrayBar />
-      <FooterTop />
+      <FooterTop locale={locale} />
       <FooterDynamic sections={[]} links={[]} locale={locale} />
       <BackToTop />
     </>

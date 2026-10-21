@@ -1,4 +1,4 @@
-import { getTranslations } from 'next-intl/server';
+import { getLocale, getTranslations } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
 import {
   BsArrowLeftRight,
@@ -8,11 +8,15 @@ import {
 } from 'react-icons/bs';
 
 export default async function FooterTop({
-  locale = 'vi',
+  // Without a locale the request locale is used (DOS/Rate#646).
+  locale,
 }: {
   locale?: string;
 }) {
-  const tFooter = await getTranslations({ locale, namespace: 'rate.footer' });
+  const tFooter = await getTranslations({
+    locale: locale ?? (await getLocale()),
+    namespace: 'rate.footer',
+  });
   return (
     <section className="rate-footer-cta rate-surface-dark py-5">
       <div className="container">
