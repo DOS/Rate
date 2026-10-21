@@ -25,7 +25,7 @@ test('hero search finds stores that are not in the page payload', async ({
   expect((await res!.body()).length).toBeLessThan(500_000);
 
   await page
-    .getByLabel(/Tìm kiếm sản phẩm công nghệ|Search/)
+    .getByLabel(/Tìm sản phẩm công nghệ|Search/)
     .first()
     .fill('Last Ranked');
   await expect(
