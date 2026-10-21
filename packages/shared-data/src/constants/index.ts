@@ -4,6 +4,7 @@
 
 // Export route constants
 export * from './routes.js';
+export * from './review-risk.js';
 
 // Status codes
 export const STATUS_CODES = {

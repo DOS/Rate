@@ -12,6 +12,8 @@ import {
   RATE_API_V1_ENDPOINTS,
   ROUTES,
   STATUS_CODES,
+  SEEDING_RISK_MAX_PENALTY,
+  seedingRiskPenalty,
   getPublicClient,
   z,
 } from '../index.js';
@@ -344,6 +346,27 @@ function testSupabaseClientGuards(): void {
   }
 }
 
+function testSeedingRiskPenalty(): void {
+  // Importer and web share this term of the review risk (DOS/Rate#671).
+  assert.equal(seedingRiskPenalty(0, 10), 0);
+  assert.equal(seedingRiskPenalty(1, 4), 19);
+  assert.equal(seedingRiskPenalty(1, 2), 38);
+  assert.equal(seedingRiskPenalty(3, 5), SEEDING_RISK_MAX_PENALTY);
+  assert.equal(seedingRiskPenalty(10, 10), 45);
+  // Ratio rounded to three decimals first: 1/3 -> 0.333 -> 24.975 -> 25.
+  assert.equal(seedingRiskPenalty(1, 3), 25);
+  for (const bad of [NaN, Infinity, -1]) {
+    assert.equal(seedingRiskPenalty(bad, 10), 0);
+    assert.equal(seedingRiskPenalty(1, bad), 0);
+  }
+  assert.equal(seedingRiskPenalty(1, 0), 0);
+  assert.equal(
+    seedingRiskPenalty(20, 10),
+    45,
+    'more seeding than reviews is capped'
+  );
+}
+
 function main(): void {
   console.log('🧪 Running @repo/shared-data unit tests...');
   testVersionAndZeroStrapiExports();
@@ -361,7 +384,9 @@ function main(): void {
     '  ✅ [4/5] MasterProduct, ScrapedProduct & common schemas verified'
   );
   testSupabaseClientGuards();
-  console.log('  ✅ [5/5] Supabase client fail-closed env guards verified');
+  console.log('  ✅ [5/6] Supabase client fail-closed env guards verified');
+  testSeedingRiskPenalty();
+  console.log('  ✅ [6/6] Shared seeding risk penalty verified');
   console.log('🎉 All @repo/shared-data tests passed!');
 }
 
