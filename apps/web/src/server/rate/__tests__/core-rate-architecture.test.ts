@@ -7340,6 +7340,41 @@ async function runCoreArchitectureSuite() {
     '  ✅ [83/83] No jargon in shopper-facing messages (#673) passed'
   );
 
+  // =========================================================================
+  // 84. English labels are sentence case (#677)
+  // =========================================================================
+  {
+    // Placeholders, names (brands, products, retailers, programs) and acronyms
+    // keep their capitals; two or more other capitalised words in a row mean
+    // Title Case.
+    const names =
+      /Rate\.vn|Rate Lab|Rate Cloud|DOS ID|DOSafe|JReviews|Markdown|TikTok Shop|Official Mall|Apple Watch|Galaxy Watch|Galaxy Buds|Galaxy Tab|Xiaomi Watch|Xiaomi Pad|Huawei Watch|AirPods Pro|Hoang Ha Mobile|Hoang Ha|Di Dong Viet|The Gioi Di Dong|Phong Vu|Natural Titanium|Alex Nguyen|Shopee|Lazada|Tiki|Apple|iPhone|Pro|Max|Samsung|Galaxy|Xiaomi|Google|Pixel|Huawei|Garmin|Sony|Bose|Sennheiser|MacBook|iPad|Rate\b|Bayesian \w+|Helpful|Report|[A-Z]{2,}\w*|\w+-[A-Z]\w*/g;
+    const strip = (s: string) => s.replace(/\{[^}]+\}/g, '').replace(names, '');
+    const titleCase =
+      /\b[A-Z][a-z]+\b(\s+(&|and|of|to|for|in|the|a|on|with|by|or|from|vs|at)?\s*\b[A-Z][a-z]+\b)+/;
+    const allowed = new Set<string>();
+    const offenders: string[] = [];
+    const walk = (node: unknown, key: string) => {
+      if (typeof node === 'string') {
+        if (!allowed.has(key) && titleCase.test(strip(node)))
+          offenders.push(`${key}: ${node}`);
+      } else if (node && typeof node === 'object') {
+        for (const [k, v] of Object.entries(node))
+          walk(v, key ? `${key}.${k}` : k);
+      }
+    };
+    for (const [ns, node] of Object.entries(enMessages)) {
+      if (ns !== 'developers' && ns !== 'openapi') walk(node, ns);
+    }
+    assert.deepEqual(
+      offenders,
+      [],
+      'English labels must be sentence case (#677)'
+    );
+  }
+
+  console.log('  ✅ [84/84] English labels are sentence case (#677) passed');
+
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
 
