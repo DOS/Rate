@@ -7195,8 +7195,8 @@ async function runCoreArchitectureSuite() {
     ]);
     assert.equal(
       seeded.reviewRiskScore,
-      25,
-      'only seeding counts; coin spam (#654) and sabotage (#645) do not'
+      19,
+      'only seeding counts (1/4 -> round(0.25 * 75)); coin spam (#654) and sabotage (#645) do not'
     );
 
     // Coin-farming comments are excluded but, as in the importer, do not
@@ -7216,8 +7216,34 @@ async function runCoreArchitectureSuite() {
       review645('authentic', true),
       review645(null, false, 'fake'),
     ]);
-    assert.equal(uncategorised.reviewRiskScore, 50);
+    assert.equal(uncategorised.reviewRiskScore, 38);
     assert.equal(uncategorised.breakdown.seeding_fake_count, 1);
+
+    // The seeding contribution matches the importer's (seedingRiskPenalty in
+    // @repo/shared-data) for every mix, and is capped at 45 (#671).
+    const { seedingRiskPenalty } = await import('@repo/shared-data');
+    for (let total = 1; total <= 40; total++) {
+      for (let seeding = 0; seeding <= total; seeding++) {
+        const mix = [
+          ...Array.from({ length: seeding }, () =>
+            review645('seeding_fake', false)
+          ),
+          ...Array.from({ length: total - seeding }, () =>
+            review645('authentic', true)
+          ),
+        ];
+        assert.equal(
+          computeDynamicReviewRisk(mix).reviewRiskScore,
+          seedingRiskPenalty(seeding, total),
+          `${seeding}/${total} seeding`
+        );
+      }
+    }
+    const allSeeded = computeDynamicReviewRisk([
+      review645('seeding_fake', false),
+      review645('seeding_fake', false),
+    ]);
+    assert.equal(allSeeded.reviewRiskScore, 45, '100% seeding is capped at 45');
 
     const pendingOnly = computeDynamicReviewRisk([
       review645('authentic', false, 'unanalyzed'),
