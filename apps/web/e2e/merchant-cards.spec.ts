@@ -14,6 +14,7 @@ test('merchant cards stay compact on a phone', async ({ page }) => {
     .evaluateAll((els) =>
       els.slice(0, 6).map((el) => el.getBoundingClientRect().height)
     );
+  expect(heights.length).toBeGreaterThan(0);
   // Before #635 these cards were 640-710px tall at this width.
   for (const h of heights) expect(h).toBeLessThan(600);
 });
@@ -30,7 +31,9 @@ for (const [path, lang] of [
       page.locator('[data-testid="merchant-deal-radar-badge"]').first()
     ).toBeVisible();
     const text = (
-      await page.locator('section:not(.rate-footer-cta)').allInnerTexts()
+      await page
+        .locator('.hero-banner, section:not(.rate-footer-cta)')
+        .allInnerTexts()
     )
       .join('\n')
       .toLowerCase();
@@ -41,10 +44,13 @@ for (const [path, lang] of [
       'jreviews',
       'kiểm toán',
       'audit profile',
-      'seeding ai',
+      'seeding',
+      'đánh giá ảo (≤',
+      'fake reviews (≤',
       'dosafe.threat_intel',
     ]) {
       expect(text).not.toContain(term);
+      expect((await page.title()).toLowerCase()).not.toContain(term);
     }
   });
 }

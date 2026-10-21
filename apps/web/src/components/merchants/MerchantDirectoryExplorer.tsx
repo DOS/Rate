@@ -248,12 +248,10 @@ export default function MerchantDirectoryExplorer({
       platformRating: t('platformRating'),
       noRating: t('noRating'),
       followers: t('followers'),
-      trackedProducts: t('trackedProducts'),
       productsUnit: t('productsUnit'),
       dosafeZero: t('dosafeZero'),
       dosafeAlert: t('dosafeAlert'),
       authenticLabel: t('authenticLabel'),
-      filteredSpamSuffix: t('filteredSpamSuffix'),
       noAbnormalReviews: t('noAbnormalReviews'),
       riskScamLabel: t('riskScamLabel'),
       riskReviewLabel: t('riskReviewLabel'),
@@ -903,11 +901,14 @@ export default function MerchantDirectoryExplorer({
                                 </strong>
                                 /{merchant.review_risk_breakdown.total_reviews}{' '}
                                 (
-                                {merchant.review_risk_breakdown
-                                  .coin_spam_count +
-                                  merchant.review_risk_breakdown
-                                    .seeding_fake_count}{' '}
-                                {labels.filteredSpamSuffix})
+                                {t('filteredSpamCount', {
+                                  count:
+                                    merchant.review_risk_breakdown
+                                      .coin_spam_count +
+                                    merchant.review_risk_breakdown
+                                      .seeding_fake_count,
+                                })}
+                                )
                               </>
                             ) : (
                               labels.noAbnormalReviews
