@@ -7211,7 +7211,7 @@ async function runCoreArchitectureSuite() {
     })) {
       for (const ns of ['productDetail', 'deals', 'watchlist'] as const) {
         const entries = Object.entries(
-          (messages as Record<string, Record<string, unknown>>)[ns]
+          (messages as Record<string, Record<string, unknown>>)[ns] ?? {}
         );
         let checked = 0;
         for (const [key, value] of entries) {
