@@ -7344,23 +7344,15 @@ async function runCoreArchitectureSuite() {
   // 84. English labels are sentence case (#677)
   // =========================================================================
   {
-    // Placeholders, product names and acronyms keep their capitals; a run of
-    // three or more other capitalised words means Title Case.
-    const strip = (s: string) =>
-      s
-        .replace(/\{[^}]+\}/g, '')
-        .replace(
-          /Rate\.vn|Rate Lab|Rate Cloud|DOS ID|DOSafe|JReviews|Markdown|TikTok Shop|[A-Z]{2,}\w*/g,
-          ''
-        );
+    // Placeholders, names (brands, products, retailers, programs) and acronyms
+    // keep their capitals; two or more other capitalised words in a row mean
+    // Title Case.
+    const names =
+      /Rate\.vn|Rate Lab|Rate Cloud|DOS ID|DOSafe|JReviews|Markdown|TikTok Shop|Official Mall|Apple Watch|Galaxy Watch|Galaxy Buds|Galaxy Tab|Xiaomi Watch|Xiaomi Pad|Huawei Watch|AirPods Pro|Hoang Ha Mobile|Hoang Ha|Di Dong Viet|The Gioi Di Dong|Phong Vu|Natural Titanium|Alex Nguyen|Shopee|Lazada|Tiki|Apple|iPhone|Pro|Max|Samsung|Galaxy|Xiaomi|Google|Pixel|Huawei|Garmin|Sony|Bose|Sennheiser|MacBook|iPad|Rate\b|Bayesian \w+|Helpful|Report|[A-Z]{2,}\w*|\w+-[A-Z]\w*/g;
+    const strip = (s: string) => s.replace(/\{[^}]+\}/g, '').replace(names, '');
     const titleCase =
-      /\b[A-Z][a-z]+\b(\s+(&|and|of|to|for|in|the|a)?\s*\b[A-Z][a-z]+\b){2,}/;
-    // Retailer and product name lists keep their names as written.
-    const allowed = new Set([
-      'staticPages.contactHeroDesc',
-      'staticPages.quarantineSubtitle',
-      'catalog.schemas.smartwatches.searchPlaceholder',
-    ]);
+      /\b[A-Z][a-z]+\b(\s+(&|and|of|to|for|in|the|a|on|with|by|or|from|vs|at)?\s*\b[A-Z][a-z]+\b)+/;
+    const allowed = new Set<string>();
     const offenders: string[] = [];
     const walk = (node: unknown, key: string) => {
       if (typeof node === 'string') {
