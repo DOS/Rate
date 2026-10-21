@@ -7181,8 +7181,8 @@ async function runCoreArchitectureSuite() {
     ]);
     assert.equal(
       sabotaged.reviewRiskScore,
-      0,
-      'a seller whose only flagged reviews are sabotage or review bombing must get no extra review risk (#645)'
+      15,
+      'a seller whose only flagged reviews are sabotage or review bombing stays at the baseline (#645, #671)'
     );
     assert.equal(sabotaged.breakdown.sabotage_or_bombing_count, 2);
     assert.equal(sabotaged.breakdown.suspicious_ratio_pct, 50);
@@ -7195,8 +7195,8 @@ async function runCoreArchitectureSuite() {
     ]);
     assert.equal(
       seeded.reviewRiskScore,
-      25,
-      'only seeding counts; coin spam (#654) and sabotage (#645) do not'
+      34,
+      'baseline 15 + seeding min(45, 25% x 75); coin spam (#654) and sabotage (#645) add nothing'
     );
 
     // Coin-farming comments are excluded but, as in the importer, do not
@@ -7207,7 +7207,7 @@ async function runCoreArchitectureSuite() {
       review645('low_value_coin_spam', false),
       review645('authentic', false),
     ]);
-    assert.equal(coinSpamOnly.reviewRiskScore, 0);
+    assert.equal(coinSpamOnly.reviewRiskScore, 15);
     assert.equal(coinSpamOnly.breakdown.coin_spam_count, 3);
     assert.equal(coinSpamOnly.breakdown.suspicious_ratio_pct, 75);
 
@@ -7216,14 +7216,77 @@ async function runCoreArchitectureSuite() {
       review645('authentic', true),
       review645(null, false, 'fake'),
     ]);
-    assert.equal(uncategorised.reviewRiskScore, 50);
+    assert.equal(uncategorised.reviewRiskScore, 53);
     assert.equal(uncategorised.breakdown.seeding_fake_count, 1);
 
     const pendingOnly = computeDynamicReviewRisk([
       review645('authentic', false, 'unanalyzed'),
     ]);
-    assert.equal(pendingOnly.reviewRiskScore, 0);
+    assert.equal(pendingOnly.reviewRiskScore, 15);
     assert.equal(pendingOnly.breakdown.total_reviews, 0);
+
+    // Same formula as the importer's evaluateMerchantRisk (#671).
+    const rated = (
+      flag_category: string,
+      rating_star: number,
+      comment: string
+    ) =>
+      ({
+        flag_category,
+        include_in_rating: flag_category === 'authentic',
+        verdict: importerVerdict(flag_category),
+        rating_star,
+        comment,
+      }) as never;
+    const fiveGood = Array.from({ length: 5 }, () =>
+      rated('authentic', 5, 'Máy chạy mượt, pin tốt')
+    );
+    // Seeding is capped at +45.
+    assert.equal(
+      computeDynamicReviewRisk(
+        Array.from({ length: 4 }, () => rated('seeding_fake', 5, 'Tuyệt vời'))
+      ).reviewRiskScore,
+      60
+    );
+    // Genuine 1-2 star complaints at 20% or more add min(25, ratio x 45).
+    const complaints = [
+      ...fiveGood.slice(0, 3),
+      rated('authentic', 1, 'Máy lỗi màn hình sau 2 ngày'),
+      rated('authentic', 2, 'Pin tụt nhanh, nóng'),
+    ];
+    assert.equal(computeDynamicReviewRisk(complaints).reviewRiskScore, 33);
+    // A star-only low rating counts at a quarter: 0.25 / 5 is under 20%.
+    assert.equal(
+      computeDynamicReviewRisk([
+        ...fiveGood.slice(0, 4),
+        rated('authentic', 1, ''),
+      ]).reviewRiskScore,
+      15
+    );
+    // Sabotage 1-star reviews are not complaints.
+    assert.equal(
+      computeDynamicReviewRisk([
+        ...fiveGood.slice(0, 3),
+        rated('competitor_sabotage', 1, 'Shop lừa đảo'),
+        rated('review_bombing', 1, 'Tệ'),
+      ]).reviewRiskScore,
+      15
+    );
+    // Official store -15, free channels +10, 50k+ followers -5.
+    assert.equal(
+      computeDynamicReviewRisk(fiveGood, { isOfficial: true }).reviewRiskScore,
+      0
+    );
+    assert.equal(
+      computeDynamicReviewRisk(fiveGood, { platform: 'facebook' })
+        .reviewRiskScore,
+      25
+    );
+    assert.equal(
+      computeDynamicReviewRisk(fiveGood, { followerCount: 50000 })
+        .reviewRiskScore,
+      10
+    );
 
     // The trust model labels them by category too, not as fabricated.
     const axis = (flag_category: string) =>
