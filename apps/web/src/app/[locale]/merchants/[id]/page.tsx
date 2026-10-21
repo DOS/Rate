@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 import { discountVerdictCopy } from '@/lib/discount-verdict-copy';
+import AnalyzerText from '@/components/reviews/AnalyzerText';
 import { Link } from '@/lib/navigation';
 import {
   getCategoryRouteHref,
@@ -373,15 +374,11 @@ export default async function MerchantProfilePage({
                       : 'bg-danger text-white'
                   }`}
                 >
-                  Risk: {merchant.dosafe_risk_score}/100
+                  {t('scamRiskBadge', { score: merchant.dosafe_risk_score })}
                 </span>
               </div>
 
-              <p className="text-muted small mb-3">
-                {t('layer1DescPrefix')}
-                <code>entity_hash</code>
-                {t('layer1DescMid')} <code>dosafe.threat_intel</code>.
-              </p>
+              <p className="text-muted small mb-3">{t('layer1Desc')}</p>
 
               <div className="rounded-3 bg-light mt-auto p-3">
                 <div className="d-flex align-items-center justify-content-between small mb-2">
@@ -434,7 +431,7 @@ export default async function MerchantProfilePage({
                         : 'bg-danger text-white'
                   }`}
                 >
-                  Review Risk: {merchant.review_risk_score}/100
+                  {t('reviewRiskBadge', { score: merchant.review_risk_score })}
                 </span>
               </div>
 
@@ -714,7 +711,7 @@ export default async function MerchantProfilePage({
                             className="text-muted"
                             style={{ fontSize: '0.8125rem' }}
                           >
-                            {rev.reason}
+                            <AnalyzerText text={rev.reason} />
                           </span>
                         )}
                       </div>

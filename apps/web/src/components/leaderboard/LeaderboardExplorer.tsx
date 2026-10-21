@@ -325,7 +325,6 @@ export default function LeaderboardExplorer({
       rank3Label: t('rank3Label'),
       fullTableTitle: t('fullTableTitle'),
       verifiedReviewsSuffix: t('verifiedReviewsSuffix'),
-      blockedSpamSuffix: t('blockedSpamSuffix'),
       storesTrackedSuffix: t('storesTrackedSuffix'),
       viewAuditDetailBtn: t('viewAuditDetailBtn'),
       inspectBtn: t('inspectBtn'),
@@ -1451,7 +1450,9 @@ export default function LeaderboardExplorer({
                               aria-hidden="true"
                               className="me-1"
                             />
-                            {entry.ignoredCount} {copy.blockedSpamSuffix}
+                            {t('blockedSpamCount', {
+                              count: entry.ignoredCount,
+                            })}
                           </span>
                         )}
                         <RadarBadge

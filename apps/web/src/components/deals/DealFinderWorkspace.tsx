@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import {
   BsArrowLeftRight,
@@ -38,6 +38,10 @@ interface DealFinderWorkspaceProps {
   readonly dealRadar?: CrossPlatformDealRadarResponse | null;
 }
 
+// Ranked deals render in pages so a 100-product catalogue is not one
+// 30,000px column on phones (DOS/Rate#633).
+const DEALS_PAGE_SIZE = 12;
+
 type PersonaKey =
   'default' | 'value_hunter' | 'photography' | 'gaming' | 'endurance';
 
@@ -56,6 +60,31 @@ export default function DealFinderWorkspace({
   const [copiedMarkdown, setCopiedMarkdown] = useState<boolean>(false);
   const [copiedRadarMd, setCopiedRadarMd] = useState<boolean>(false);
   const radarIndex = useDealRadarIndex(dealRadar);
+  // Paging restarts whenever a filter changes the ranking.
+  const filterKey = `${categoryFilter}|${persona}|${maxBudgetVnd}|${searchQuery}`;
+  const [paging, setPaging] = useState({
+    key: filterKey,
+    count: DEALS_PAGE_SIZE,
+  });
+  // Adjusting state during render (not in an effect): record the new key so
+  // returning to an earlier filter selection also starts at the first page.
+  if (paging.key !== filterKey) {
+    setPaging({ key: filterKey, count: DEALS_PAGE_SIZE });
+  }
+  const visibleCount =
+    paging.key === filterKey ? paging.count : DEALS_PAGE_SIZE;
+  // After "show more", focus the first new card's link so keyboard and
+  // screen-reader users land on the new results (the button may be gone).
+  const focusCardIndex = useRef<number | null>(null);
+  useEffect(() => {
+    const index = focusCardIndex.current;
+    if (index === null) return;
+    focusCardIndex.current = null;
+    document
+      .querySelectorAll<HTMLElement>('#rate-ranked-deals > div')
+      [index]?.querySelector<HTMLElement>('a[href]')
+      ?.focus();
+  }, [visibleCount]);
 
   const categoryOptions: Array<{
     slug: CanonicalCategorySlug | 'all';
@@ -422,7 +451,10 @@ export default function DealFinderWorkspace({
               {t('filterBadge')}
             </span>
             <strong className="text-dark">
-              {t('showingCount', { count: rankedDeals.length })}
+              {t('showingCount', {
+                visible: Math.min(visibleCount, rankedDeals.length),
+                count: rankedDeals.length,
+              })}
             </strong>
           </div>
           <div className="d-flex align-items-center flex-wrap gap-2">
@@ -475,7 +507,10 @@ export default function DealFinderWorkspace({
         </div>
 
         {/* Persona Pills */}
-        <div className="d-flex align-items-center mb-3 flex-wrap gap-2">
+        <div
+          id="rate-deal-personas"
+          className="d-flex align-items-center mb-3 flex-wrap gap-2"
+        >
           <span className="small text-secondary fw-semibold me-1">
             {t('personaLabel')}
           </span>
@@ -483,6 +518,7 @@ export default function DealFinderWorkspace({
             <button
               key={p.key}
               type="button"
+              aria-pressed={persona === p.key}
               onClick={() => setPersona(p.key)}
               className={`btn btn-sm rounded-pill px-3 py-1 ${
                 persona === p.key
@@ -736,90 +772,115 @@ export default function DealFinderWorkspace({
           </button>
         </div>
       ) : (
-        <div className="row g-3">
-          {rankedDeals.map((deal) => (
-            <div key={deal.slug} className="col-lg-6">
-              <div className="rate-card d-flex flex-column justify-content-between h-100 p-3">
-                <div>
-                  <div className="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
-                    <div className="d-flex align-items-center flex-wrap gap-2">
-                      <span className="badge bg-dark rounded-pill text-white">
-                        {t('rankDealBadge', { rank: deal.rank })}
-                      </span>
-                      <span className="rate-spec-pill">{deal.brand}</span>
-                      <span className="rate-score-badge-user">
-                        ★{' '}
-                        {deal.personaScore5 > 0
-                          ? `${deal.personaScore5.toFixed(2)}/5.0`
-                          : t('noScore')}
-                      </span>
-                      <span className="rate-score-badge-expert">
-                        {deal.expertScore10 != null
-                          ? `Lab ${deal.expertScore10.toFixed(1)}/10`
-                          : t('labNoScore')}
-                      </span>
-                      <RadarBadge
-                        signal={getRadarSignal(radarIndex, deal.slug)}
-                        minSpreadPct={Infinity}
-                      />
-                    </div>
-                    {deal.spreadSavingsVnd > 0 && (
-                      <span className="badge bg-success-subtle text-success rounded-pill rate-tabular">
-                        {t('spreadSavingsBadge', {
-                          amount: deal.spreadSavingsVnd.toLocaleString('vi-VN'),
-                        })}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="d-flex align-items-center my-2 gap-3">
-                    <img
-                      src={deal.thumbnail}
-                      alt={deal.name}
-                      className="rounded-3 flex-shrink-0 border bg-white p-1"
-                      style={{ width: 64, height: 64, objectFit: 'contain' }}
-                    />
-                    <div className="overflow-hidden">
-                      <Link
-                        href={deal.productHref}
-                        className="fw-bold text-dark text-decoration-none d-block text-truncate"
-                      >
-                        {deal.name}
-                      </Link>
-                      <div className="text-danger fw-bold rate-tabular mt-1">
-                        {deal.minPrice.toLocaleString('vi-VN')} ₫{' '}
-                        <span className="text-secondary small fw-normal">
-                          {t('costPerPointSub', {
-                            cost: deal.costPerPointVnd.toLocaleString('vi-VN'),
+        <>
+          <div className="row g-3" id="rate-ranked-deals">
+            {rankedDeals.slice(0, visibleCount).map((deal) => (
+              <div key={deal.slug} className="col-lg-6">
+                <div className="rate-card d-flex flex-column justify-content-between h-100 p-3">
+                  <div>
+                    <div className="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                      <div className="d-flex align-items-center flex-wrap gap-2">
+                        <span className="badge bg-dark rounded-pill text-white">
+                          {t('rankDealBadge', { rank: deal.rank })}
+                        </span>
+                        <span className="rate-spec-pill">{deal.brand}</span>
+                        <span className="rate-score-badge-user">
+                          ★{' '}
+                          {deal.personaScore5 > 0
+                            ? `${deal.personaScore5.toFixed(2)}/5.0`
+                            : t('noScore')}
+                        </span>
+                        <span className="rate-score-badge-expert">
+                          {deal.expertScore10 != null
+                            ? `Lab ${deal.expertScore10.toFixed(1)}/10`
+                            : t('labNoScore')}
+                        </span>
+                        <RadarBadge
+                          signal={getRadarSignal(radarIndex, deal.slug)}
+                          minSpreadPct={Infinity}
+                        />
+                      </div>
+                      {deal.spreadSavingsVnd > 0 && (
+                        <span className="badge bg-success-subtle text-success rounded-pill rate-tabular">
+                          {t('spreadSavingsBadge', {
+                            amount:
+                              deal.spreadSavingsVnd.toLocaleString('vi-VN'),
                           })}
                         </span>
+                      )}
+                    </div>
+
+                    <div className="d-flex align-items-center my-2 gap-3">
+                      <img
+                        src={deal.thumbnail}
+                        alt={deal.name}
+                        className="rounded-3 flex-shrink-0 border bg-white p-1"
+                        style={{ width: 64, height: 64, objectFit: 'contain' }}
+                      />
+                      <div className="overflow-hidden">
+                        <Link
+                          href={deal.productHref}
+                          className="fw-bold text-dark text-decoration-none d-block text-truncate"
+                        >
+                          {deal.name}
+                        </Link>
+                        <div className="text-danger fw-bold rate-tabular mt-1">
+                          {deal.minPrice.toLocaleString('vi-VN')} ₫{' '}
+                          <span className="text-secondary small fw-normal">
+                            {t('costPerPointSub', {
+                              cost: deal.costPerPointVnd.toLocaleString(
+                                'vi-VN'
+                              ),
+                            })}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="d-flex justify-content-between align-items-center border-top mt-2 flex-wrap gap-2 pt-2">
-                  <CompareQuickToggle
-                    item={{
-                      slug: deal.slug,
-                      name: deal.name,
-                      brand: deal.brand,
-                      thumbnail: deal.thumbnail,
-                      min_price: deal.minPrice,
-                      categoryPath: deal.categoryPath,
-                    }}
-                  />
-                  <Link
-                    href={deal.productHref}
-                    className="btn btn-sm btn-dark rounded-pill fw-semibold px-3"
-                  >
-                    {t('audit10PlatformsLink')}
-                  </Link>
+                  <div className="d-flex justify-content-between align-items-center border-top mt-2 flex-wrap gap-2 pt-2">
+                    <CompareQuickToggle
+                      item={{
+                        slug: deal.slug,
+                        name: deal.name,
+                        brand: deal.brand,
+                        thumbnail: deal.thumbnail,
+                        min_price: deal.minPrice,
+                        categoryPath: deal.categoryPath,
+                      }}
+                    />
+                    <Link
+                      href={deal.productHref}
+                      className="btn btn-sm btn-dark rounded-pill fw-semibold px-3"
+                    >
+                      {t('audit10PlatformsLink')}
+                    </Link>
+                  </div>
                 </div>
               </div>
+            ))}
+          </div>
+          {rankedDeals.length > visibleCount && (
+            <div className="mt-4 text-center">
+              <button
+                type="button"
+                className="btn btn-outline-dark rounded-pill fw-semibold px-4"
+                aria-controls="rate-ranked-deals"
+                onClick={() => {
+                  focusCardIndex.current = visibleCount;
+                  setPaging({
+                    key: filterKey,
+                    count: visibleCount + DEALS_PAGE_SIZE,
+                  });
+                }}
+              >
+                {t('showMoreDeals', {
+                  count: rankedDeals.length - visibleCount,
+                })}
+              </button>
             </div>
-          ))}
-        </div>
+          )}
+        </>
       )}
     </div>
   );

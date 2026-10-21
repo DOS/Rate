@@ -217,7 +217,7 @@ export default async function LeaderboardPage({ params }: PageProps) {
             <div className="row align-items-center g-4">
               <div className="col-lg-8">
                 <div
-                  className="d-inline-flex align-items-center rounded-pill mb-3 gap-2 px-3 py-1"
+                  className="rate-hero-kicker d-inline-flex align-items-center rounded-pill mb-3 gap-2 px-3 py-1"
                   style={{
                     background: 'rgba(216, 48, 48, 0.14)',
                     border: '1px solid rgba(216, 48, 48, 0.35)',
@@ -363,7 +363,7 @@ export default async function LeaderboardPage({ params }: PageProps) {
       </main>
 
       <CompareTrayBar />
-      <FooterTop />
+      <FooterTop locale={locale} />
       <FooterDynamic sections={[]} links={[]} locale={locale} />
       <BackToTop />
     </>

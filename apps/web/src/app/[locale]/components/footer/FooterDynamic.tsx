@@ -1,6 +1,6 @@
 import { Link } from '@/lib/navigation';
 import Image from 'next/image';
-import { getTranslations } from 'next-intl/server';
+import { getLocale, getTranslations } from 'next-intl/server';
 import { FaFacebookF, FaInstagram } from 'react-icons/fa';
 import {
   FaLinkedin,
@@ -32,7 +32,9 @@ export default async function FooterDynamic({
   logoUrl,
   copyRight,
   socialLinks,
-  locale = 'vi',
+  // Without a locale the request locale is used, so a caller
+  // that forgets to pass it no longer renders Vietnamese (DOS/Rate#646).
+  locale,
 }: {
   readonly sections: readonly FooterSection[];
   readonly links: readonly FooterSectionLink[];
@@ -41,7 +43,10 @@ export default async function FooterDynamic({
   readonly socialLinks?: readonly FooterSectionLink[] | null;
   readonly locale?: string;
 }) {
-  const tFooter = await getTranslations({ locale, namespace: 'rate.footer' });
+  const tFooter = await getTranslations({
+    locale: locale ?? (await getLocale()),
+    namespace: 'rate.footer',
+  });
   const yearText = new Date().getFullYear().toString();
   const copy = (copyRight || tFooter('copyRight', { YEAR: yearText })).replace(
     '{YEAR}',
