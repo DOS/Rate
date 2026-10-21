@@ -1,0 +1,177 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { ANALYZER_COPY_KEYS, analyzerCopy } from '../analyzer-copy';
+
+type Messages = { analyzerCopy?: Record<string, string> };
+const readLocale = (locale: string) =>
+  JSON.parse(
+    readFileSync(
+      new URL(`../../../locales/${locale}.json`, import.meta.url),
+      'utf8'
+    )
+  ) as Messages;
+const fill = (template: string, values: Record<string, string>) =>
+  template.replace(/\{(\w+)\}/g, (_, name: string) => values[name] ?? '');
+const placeholders = (s: string) =>
+  [...s.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort();
+
+function main() {
+  console.warn('🧪 Analyzer copy suite');
+  const vi = readLocale('vi').analyzerCopy!;
+
+  // Strings the analyzer writes (apps/importer/src/shopee/ai-review-analyzer.ts).
+  const samples: Array<[string, string]> = [
+    ['Đánh giá chi tiết, hợp lệ từ người dùng thực tế.', 'reasonAuthentic'],
+    [
+      'Phát hiện dấu hiệu đối thủ cạnh tranh không lành mạnh / điều hướng sang nơi bán khác.',
+      'reasonSabotage',
+    ],
+    [
+      'Đánh giá khi chưa sử dụng sản phẩm/dịch vụ (hủy đơn hoặc hiệu ứng đám đông).',
+      'reasonBombing',
+    ],
+    [
+      'Nội dung văn mẫu seeding trùng lặp giữa 3 tài khoản khác nhau.',
+      'reasonDuplicateSeeding',
+    ],
+    [
+      'Nội dung sao chép / xào nấu văn mẫu seeding giữa các tài khoản (tương đồng cấu trúc 68%).',
+      'reasonCopiedSeeding',
+    ],
+    [
+      'Chỉ chấm sao, không có nội dung: vẫn tính vào điểm nhưng với trọng số thấp (25% một đánh giá có nội dung).',
+      'reasonRatingOnly',
+    ],
+    [
+      'Bình luận mang tính chất nhận xu / chưa trải nghiệm thực tế (được bỏ qua khỏi điểm tổng, không phạt shop).',
+      'reasonCoinSpam',
+    ],
+    [
+      'Đánh giá chỉ nhận xét về giao hàng/đóng gói (chuyển về điểm nhà bán, không tính vào điểm sản phẩm).',
+      'reasonShippingOnly',
+    ],
+    [
+      'Số sao mâu thuẫn với nội dung nhận xét (nghi vấn chấm nhầm sao hoặc châm biếm, giảm trọng số tin cậy).',
+      'reasonContradiction',
+    ],
+    [
+      'Đánh giá bị cộng đồng Vote Down / Báo cáo nhiều nên giảm trọng số về 0.',
+      'reasonCommunityDownvoted',
+    ],
+    [
+      'Đã phân tích 10 đánh giá: giữ lại 10 đánh giá thực chất (điểm JReviews có trọng số: 5/5★) và loại bỏ 0 đánh giá rác/nhận xu/seeding/bom hàng khỏi điểm tổng.',
+      'summaryDefault',
+    ],
+    [
+      'Đã phân tích 12 đánh giá: giữ lại 9 đánh giá thực chất (điểm JReviews có trọng số: 4.37/5★) và loại bỏ 3 đánh giá rác/nhận xu/seeding/bom hàng khỏi điểm tổng.',
+      'summaryDefault',
+    ],
+    [
+      'Chưa có đánh giá thực chất sau khi lọc 4 bình luận rác/nhận xu.',
+      'summaryNoAuthentic',
+    ],
+    ['Nhận phản hồi tích cực từ người dùng thực tế', 'proPositiveFeedback'],
+    [
+      'Đánh giá cộng đồng đang chờ phân tích, chưa được tính vào điểm trung bình.',
+      'reasonCommunityPending',
+    ],
+    [
+      'Đánh giá đa tiêu chí từ cộng đồng Rate.vn đạt chuẩn độ dài và chi tiết kỹ thuật.',
+      'reasonCommunityAccepted',
+    ],
+    [
+      'Phát hiện cụm từ bình luận cày xu mẫu, tự động loại khỏi điểm trung bình JReviews.',
+      'reasonCommunityCoinSpam',
+    ],
+    [
+      'Phát hiện đường dẫn quảng cáo hoặc điều hướng ngoài luồng nghi vấn Seeding.',
+      'reasonCommunityAdLink',
+    ],
+    [
+      'Nghi vấn bình luận điều hướng sang đối thủ cạnh tranh thiếu bằng chứng trải nghiệm sản phẩm.',
+      'reasonCommunityCompetitor',
+    ],
+    [
+      'Nội dung quá ngắn, chưa đủ thông tin kiểm chứng trải nghiệm thực tế.',
+      'reasonCommunityTooShort',
+    ],
+    [
+      'Phát hiện cụm từ bình luận cày xu mẫu, loại khỏi điểm trung bình.',
+      'reasonCommunityCoinSpamExcluded',
+    ],
+    [
+      'Phát hiện đường dẫn quảng cáo hoặc điều hướng ngoài luồng, loại khỏi điểm trung bình.',
+      'reasonCommunityAdLinkExcluded',
+    ],
+    [
+      'Nghi vấn điều hướng sang đối thủ, loại khỏi điểm trung bình.',
+      'reasonCommunityCompetitorExcluded',
+    ],
+    [
+      'Nội dung quá ngắn để kiểm chứng trải nghiệm, loại khỏi điểm trung bình.',
+      'reasonCommunityTooShortExcluded',
+    ],
+  ];
+  const covered = new Set<string>();
+  for (const [text, key] of samples) {
+    const copy = analyzerCopy(text);
+    assert.ok('key' in copy, `not recognised: ${text}`);
+    assert.equal(copy.key, key, text);
+    // The Vietnamese message rebuilds the stored string exactly.
+    assert.equal(fill(vi[copy.key]!, copy.values), text, key);
+    covered.add(copy.key);
+  }
+  assert.deepEqual(
+    [...covered].sort(),
+    [...ANALYZER_COPY_KEYS].sort(),
+    'every template has a sample'
+  );
+
+  // Free text (e.g. from the LLM pass) is passed through as Vietnamese.
+  const free =
+    'Pin trâu, camera chụp đêm tốt nhưng máy hơi nóng khi chơi game.';
+  assert.deepEqual(analyzerCopy(free), { text: free, lang: 'vi' });
+  // Text that is not Vietnamese is not labelled as Vietnamese.
+  assert.deepEqual(analyzerCopy('Battery lasts all day.'), {
+    text: 'Battery lasts all day.',
+  });
+  assert.ok(
+    'text' in
+      analyzerCopy('Đánh giá chi tiết, hợp lệ từ người dùng thực tế. Thêm')
+  );
+
+  // The fixed strings still exist where they are written (the analyzer and the
+  // community review RPCs), so a wording change there fails here instead of
+  // silently falling back to Vietnamese.
+  const analyzerSrc = [
+    '../../../../importer/src/shopee/ai-review-analyzer.ts',
+    '../../../../../supabase/migrations/20261014234500_rate_community_review_submission_rpc.sql',
+    '../../../../../supabase/migrations/20261018100000_rate_community_review_auth_gate.sql',
+  ]
+    .map((file) => readFileSync(new URL(file, import.meta.url), 'utf8'))
+    .join('\n');
+  for (const key of ANALYZER_COPY_KEYS) {
+    const fixed = vi[key]!.split(/\{\w+\}/)[0]!;
+    assert.ok(
+      analyzerSrc.includes(fixed.slice(0, 40)),
+      `${key} no longer matches the analyzer source`
+    );
+  }
+
+  // Every key exists in every locale with the same placeholders.
+  for (const locale of ['en', 'cs']) {
+    const messages = readLocale(locale).analyzerCopy ?? {};
+    for (const key of [...ANALYZER_COPY_KEYS, 'originalVietnamese']) {
+      assert.ok(messages[key], `${locale}.analyzerCopy.${key} is missing`);
+      assert.deepEqual(
+        placeholders(messages[key]!),
+        placeholders(vi[key]!),
+        `${locale}.analyzerCopy.${key} placeholders`
+      );
+    }
+  }
+
+  console.warn('✅ Analyzer copy suite passed');
+}
+
+main();
