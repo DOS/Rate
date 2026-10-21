@@ -681,7 +681,7 @@
     "dealsMdTableHead": "| Rank | Device | Brand | Persona Score | JReviews Score | Lowest Price | Spread Savings | Radar |",
     "samePrice": "Uniform price",
     "filterBadge": "10-Platform Verified Deal Finder",
-    "showingCount": "Showing {count} devices within your budget",
+    "showingCount": "Showing {visible} of {count} devices within your budget",
     "copiedMdBtn": "✓ Markdown Copied!",
     "copyMdBtn": "Copy Markdown",
     "exportCsvBtn": "Export CSV ({count})",
@@ -716,7 +716,8 @@
     "radarBadgeFakeTrap": "🚨 Fake Sale Alert (+{pct}%)",
     "radarBadgeSpread": "📊 +{pct}% cross-platform spread",
     "radarNoGenuine": "No offers below the market median in this category.",
-    "radarNoTraps": "No inflated list prices detected in this category."
+    "radarNoTraps": "No inflated list prices detected in this category.",
+    "showMoreDeals": "Show more deals ({count} left)"
   },
   "inspect": {
     "metaTitle": "Deep URL & Fake Discount Inspector | Rate.vn",
