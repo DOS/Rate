@@ -7340,6 +7340,49 @@ async function runCoreArchitectureSuite() {
     '  ✅ [83/83] No jargon in shopper-facing messages (#673) passed'
   );
 
+  // =========================================================================
+  // 84. English labels are sentence case (#677)
+  // =========================================================================
+  {
+    // Placeholders, product names and acronyms keep their capitals; a run of
+    // three or more other capitalised words means Title Case.
+    const strip = (s: string) =>
+      s
+        .replace(/\{[^}]+\}/g, '')
+        .replace(
+          /Rate\.vn|Rate Lab|Rate Cloud|DOS ID|DOSafe|JReviews|Markdown|TikTok Shop|[A-Z]{2,}\w*/g,
+          ''
+        );
+    const titleCase =
+      /\b[A-Z][a-z]+\b(\s+(&|and|of|to|for|in|the|a)?\s*\b[A-Z][a-z]+\b){2,}/;
+    // Retailer and product name lists keep their names as written.
+    const allowed = new Set([
+      'staticPages.contactHeroDesc',
+      'staticPages.quarantineSubtitle',
+      'catalog.schemas.smartwatches.searchPlaceholder',
+    ]);
+    const offenders: string[] = [];
+    const walk = (node: unknown, key: string) => {
+      if (typeof node === 'string') {
+        if (!allowed.has(key) && titleCase.test(strip(node)))
+          offenders.push(`${key}: ${node}`);
+      } else if (node && typeof node === 'object') {
+        for (const [k, v] of Object.entries(node))
+          walk(v, key ? `${key}.${k}` : k);
+      }
+    };
+    for (const [ns, node] of Object.entries(enMessages)) {
+      if (ns !== 'developers' && ns !== 'openapi') walk(node, ns);
+    }
+    assert.deepEqual(
+      offenders,
+      [],
+      'English labels must be sentence case (#677)'
+    );
+  }
+
+  console.log('  ✅ [84/84] English labels are sentence case (#677) passed');
+
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
 
