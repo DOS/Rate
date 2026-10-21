@@ -23,11 +23,28 @@ for (const [prefix, lang] of [
       await page.locator('.rate-scoreboard-dark').first().innerText()
     ).toLowerCase();
     const navLink = (
-      await page.locator('a[href$="/inspect"]').first().innerText()
+      await page
+        .locator('#rate-nav-menu ul.nav-menu a[href$="/inspect"]')
+        .first()
+        .innerText()
+    ).toLowerCase();
+    const navIconLabel = (
+      (await page
+        .locator('.mobile_nav a[href$="/inspect"]')
+        .first()
+        .getAttribute('aria-label')) ?? ''
+    ).toLowerCase();
+    expect(navLink.trim().length).toBeGreaterThan(0);
+    // The page runs a sample check on load; scan its result panel too.
+    await expect(page.locator('.container h2').first()).toBeVisible();
+    const body = (
+      await page.locator('.container').first().innerText()
     ).toLowerCase();
     for (const term of JARGON) {
       expect(hero).not.toContain(term);
       expect(navLink).not.toContain(term);
+      expect(navIconLabel).not.toContain(term);
+      expect(body).not.toContain(term);
     }
   });
 

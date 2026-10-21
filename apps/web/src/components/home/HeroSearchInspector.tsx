@@ -540,7 +540,7 @@ export default function HeroSearchInspector({
                           <span className="fw-semibold small">{m.name}</span>
                           {m.is_official && (
                             <span className="badge bg-success-subtle text-success small">
-                              Mall
+                              {t('officialMallBadge')}
                             </span>
                           )}
                         </div>
@@ -552,7 +552,7 @@ export default function HeroSearchInspector({
                             className="text-muted"
                             style={{ fontSize: '0.8125rem' }}
                           >
-                            DOSafe: {m.dosafe_risk_score}/100
+                            {t('scamRiskShort', { score: m.dosafe_risk_score })}
                           </span>
                         </div>
                       </Link>
@@ -834,12 +834,13 @@ export default function HeroSearchInspector({
                         </span>
                         {inspectResult.merchantProfile.is_official && (
                           <span className="badge bg-success-subtle text-success">
-                            Official Mall
+                            {t('officialMallBadge')}
                           </span>
                         )}
                         <span className="badge bg-success rounded-pill text-white">
-                          Trust Score:{' '}
-                          {inspectResult.merchantProfile.trust_score}/100
+                          {t('trustBadge', {
+                            score: inspectResult.merchantProfile.trust_score,
+                          })}
                         </span>
                       </div>
                       <h4 className="h5 fw-bold mb-1">

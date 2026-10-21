@@ -234,7 +234,7 @@ export default function DeepInspectWorkspace({
           : []),
         ...(merchant
           ? [
-              `- **Merchant:** ${merchant.name} (${merchant.platform.toUpperCase()}) | Trust Score: **${merchant.trust_score}/100** (DOSafe Risk: ${merchant.dosafe_risk_score}/100, Seeding Risk: ${merchant.review_risk_score}/100)`,
+              `- **Merchant:** ${merchant.name} (${merchant.platform.toUpperCase()}) | Trust Score: **${merchant.trust_score}/100** (Scam risk (DOSafe): ${merchant.dosafe_risk_score}/100, Review risk: ${merchant.review_risk_score}/100)`,
             ]
           : []),
         `- **URL:** ${shareUrl}`,
