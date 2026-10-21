@@ -446,7 +446,8 @@ export function evaluateReviewTrustAssessment(
       explanationVi = 'Trọng số 0.00x: đánh giá bất thường / bom đơn';
     } else {
       explanationKind = 'seeding';
-      explanationVi = 'Trọng số 0.00x: nghi vấn seeding / văn mẫu trùng lặp';
+      explanationVi =
+        'Trọng số 0.00x: nghi là đánh giá ảo hoặc văn mẫu trùng lặp';
     }
   } else if (depth === 'stars_only') {
     explanationKind = 'stars_only';
@@ -551,7 +552,7 @@ export function computeCombinedDualScore(params: {
       isBlended: true,
       blendMode: 'blended',
       blendFormulaNoteVi:
-        'Tỷ trọng: 60% Người mua thực chất + 40% Chuyên gia Rate Lab (c ≥ 60%)',
+        'Tỷ trọng: 60% người mua thực chất + 40% chuyên gia Rate Lab (độ tin cậy ≥ 60%)',
     };
   }
 
@@ -571,7 +572,7 @@ export function computeCombinedDualScore(params: {
       isBlended: false,
       blendMode: 'user_only',
       blendFormulaNoteVi:
-        'Tỷ trọng: 100% Người mua thực chất (đã lọc Seeding & Spam xu)',
+        'Tỷ trọng: 100% người mua thực chất (đã lọc đánh giá ảo và spam nhận xu)',
     };
   }
 
