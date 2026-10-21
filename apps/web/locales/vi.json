@@ -791,7 +791,7 @@
     "totalMerchants": "Gian hàng đang theo dõi",
     "officialMalls": "Gian hàng Chính hãng (Mall)",
     "highTrustShops": "Độ tin cậy cao (>=80)",
-    "avgTrustScore": "Điểm Trust trung bình",
+    "avgTrustScore": "Điểm tin cậy trung bình",
     "searchPlaceholder": "Tìm tên gian hàng, mã shop_id hoặc sàn (Shopee, Lazada, Tiki, CellphoneS, TGDĐ)...",
     "allPlatforms": "Tất cả sàn",
     "officialMallOnly": "Chỉ hiện Official Mall",
