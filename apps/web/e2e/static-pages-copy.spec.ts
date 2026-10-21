@@ -16,6 +16,20 @@ const JARGON = [
   'pg_trgm',
   'voter_hash',
   'supabase',
+  'postgresql',
+  'security definer',
+  'trust_score',
+  'user_rating_weighted',
+  'row-level security',
+  '(rls)',
+  'sha-256',
+  'localstorage',
+  '(pii)',
+  'schema',
+  'dedupe',
+  'low_value_coin_spam',
+  'seeding_fake',
+  'kiểm định',
 ];
 const PAGES = ['/about-us', '/faq', '/privacy-policy', '/contact-us'];
 
@@ -39,9 +53,15 @@ for (const [prefix, lang] of [
         })
       ).toLowerCase();
       const title = (await page.title()).toLowerCase();
+      const description = (
+        (await page
+          .locator('meta[name="description"]')
+          .getAttribute('content')) ?? ''
+      ).toLowerCase();
       for (const term of JARGON) {
         expect(text, `body contains "${term}"`).not.toContain(term);
         expect(title).not.toContain(term);
+        expect(description).not.toContain(term);
       }
     });
   }
