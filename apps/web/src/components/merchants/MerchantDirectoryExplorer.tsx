@@ -323,7 +323,7 @@ export default function MerchantDirectoryExplorer({
       'Platform',
       'Official Mall',
       'Trust Score (/100)',
-      'AI Seeding Risk (%)',
+      'Fake review risk (%)',
       'Genuine Deals',
       'Fake Sale Traps',
       'Authentic Reviews',

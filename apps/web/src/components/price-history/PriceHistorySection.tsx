@@ -344,7 +344,7 @@ export default function PriceHistorySection({
       'Original Price (VND)',
       '90d Median (VND)',
       '90d Low (VND)',
-      'Audit Verdict',
+      'Price verdict',
     ];
     const sep = headers.map(() => '---');
     const rows = offerAnalyses.map((oa) => [
@@ -357,12 +357,12 @@ export default function PriceHistorySection({
       discountVerdictCopy(tVerdict, oa).label,
     ]);
     const md = [
-      `### 📈 Rate.vn Price History & Fake Sale Audit: ${productName}`,
+      `### 📈 Rate.vn price history and fake sale check: ${productName}`,
       `- **Current Lowest Price**: ${formatVnd(history.currentMinPrice)}`,
       `- **All-Time Lowest Recorded**: ${formatVnd(history.lowestEverPrice)}`,
       `- **Fake Sale Alerts**: ${history.fakeDiscountCount} | **Genuine Deals**: ${history.genuineDealCount}`,
       ...(radarSignal
-        ? [`- **Deal Radar**: ${radarMarkdownCell(radarSignal)}`]
+        ? [`- **Price signal**: ${radarMarkdownCell(radarSignal)}`]
         : []),
       '',
       `| ${headers.join(' | ')} |`,
@@ -420,7 +420,7 @@ export default function PriceHistorySection({
   const handleDownloadPriceHistoryJson = () => {
     if (typeof document === 'undefined' || filteredPoints.length === 0) return;
     const payload = {
-      source: 'Rate.vn Price History & Fake Sale Audit',
+      source: 'Rate.vn price history and fake sale check',
       productName,
       exportedAt: new Date().toISOString(),
       currentMinPriceVnd: history.currentMinPrice,

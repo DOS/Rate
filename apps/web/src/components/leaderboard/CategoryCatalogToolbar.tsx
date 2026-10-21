@@ -69,7 +69,7 @@ export default function CategoryCatalogToolbar({
       'Expert Score (/10)',
       'Authentic Reviews',
       'Min Price (VND)',
-      'Deal Radar',
+      'Price signal',
     ];
     const sep = headers.map(() => '---');
     const rows = products.map((p, idx) => {
@@ -94,7 +94,7 @@ export default function CategoryCatalogToolbar({
     });
 
     const md = [
-      `### 📂 Rate.vn Category Catalog Audit: ${categoryTitle} (${products.length} devices)`,
+      `### 📂 Rate.vn category catalog: ${categoryTitle} (${products.length} devices)`,
       '',
       `| ${headers.join(' | ')} |`,
       `| ${sep.join(' | ')} |`,
