@@ -16,9 +16,21 @@ test('deals load 12 at a time and filters restart paging', async ({ page }) => {
     await expect(cards).toHaveCount(24, { timeout: 500 });
   }).toPass();
 
-  // Any filter change starts again from the first page.
-  await page.locator('input[type="search"]').first().fill('a');
+  // Keyboard focus moves to the first newly shown card.
+  await expect(cards.nth(12).locator('a[href]').first()).toBeFocused();
+
+  // Any filter change starts again from the first page: a persona...
+  await page
+    .locator('#rate-deal-personas button[aria-pressed="false"]')
+    .first()
+    .click();
+  await expect(cards).toHaveCount(12);
+
+  // ...or a search.
   await expect(async () => {
-    expect(await cards.count()).toBeLessThanOrEqual(12);
+    if ((await cards.count()) === 12) await more.click();
+    await expect(cards).toHaveCount(24, { timeout: 500 });
   }).toPass();
+  await page.locator('input[type="search"]').first().fill('a');
+  await expect(cards).toHaveCount(12);
 });

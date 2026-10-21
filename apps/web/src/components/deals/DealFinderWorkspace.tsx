@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import {
   BsArrowLeftRight,
@@ -68,6 +68,18 @@ export default function DealFinderWorkspace({
   });
   const visibleCount =
     paging.key === filterKey ? paging.count : DEALS_PAGE_SIZE;
+  // After "show more", focus the first new card's link so keyboard and
+  // screen-reader users land on the new results (the button may be gone).
+  const focusCardIndex = useRef<number | null>(null);
+  useEffect(() => {
+    const index = focusCardIndex.current;
+    if (index === null) return;
+    focusCardIndex.current = null;
+    document
+      .querySelectorAll<HTMLElement>('#rate-ranked-deals > div')
+      [index]?.querySelector<HTMLElement>('a[href]')
+      ?.focus();
+  }, [visibleCount]);
 
   const categoryOptions: Array<{
     slug: CanonicalCategorySlug | 'all';
@@ -434,7 +446,10 @@ export default function DealFinderWorkspace({
               {t('filterBadge')}
             </span>
             <strong className="text-dark">
-              {t('showingCount', { count: rankedDeals.length })}
+              {t('showingCount', {
+                visible: Math.min(visibleCount, rankedDeals.length),
+                count: rankedDeals.length,
+              })}
             </strong>
           </div>
           <div className="d-flex align-items-center flex-wrap gap-2">
@@ -487,7 +502,10 @@ export default function DealFinderWorkspace({
         </div>
 
         {/* Persona Pills */}
-        <div className="d-flex align-items-center mb-3 flex-wrap gap-2">
+        <div
+          id="rate-deal-personas"
+          className="d-flex align-items-center mb-3 flex-wrap gap-2"
+        >
           <span className="small text-secondary fw-semibold me-1">
             {t('personaLabel')}
           </span>
@@ -495,6 +513,7 @@ export default function DealFinderWorkspace({
             <button
               key={p.key}
               type="button"
+              aria-pressed={persona === p.key}
               onClick={() => setPersona(p.key)}
               className={`btn btn-sm rounded-pill px-3 py-1 ${
                 persona === p.key
@@ -842,12 +861,13 @@ export default function DealFinderWorkspace({
                 type="button"
                 className="btn btn-outline-dark rounded-pill fw-semibold px-4"
                 aria-controls="rate-ranked-deals"
-                onClick={() =>
+                onClick={() => {
+                  focusCardIndex.current = visibleCount;
                   setPaging({
                     key: filterKey,
                     count: visibleCount + DEALS_PAGE_SIZE,
-                  })
-                }
+                  });
+                }}
               >
                 {t('showMoreDeals', {
                   count: rankedDeals.length - visibleCount,

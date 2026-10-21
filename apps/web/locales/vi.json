@@ -681,7 +681,7 @@
     "dealsMdTableHead": "| Hạng | Thiết bị | Hãng | Điểm Nhu Cầu | Điểm JReviews | Giá Thấp Nhất | Tiết Kiệm Chênh Sàn | Radar |",
     "samePrice": "Đồng giá",
     "filterBadge": "Săn Deal Đã Kiểm Định 10 Sàn",
-    "showingCount": "Đang hiển thị {count} thiết bị thỏa mãn ngân sách",
+    "showingCount": "Đang hiển thị {visible}/{count} thiết bị thỏa mãn ngân sách",
     "copiedMdBtn": "✓ Đã sao chép Markdown!",
     "copyMdBtn": "Sao chép Markdown",
     "exportCsvBtn": "Xuất CSV ({count})",

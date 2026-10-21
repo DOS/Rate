@@ -681,7 +681,7 @@
     "dealsMdTableHead": "| Pořadí | Zařízení | Značka | Skóre profilu | Skóre JReviews | Nejnižší cena | Úspora mezi platformami | Radar |",
     "samePrice": "Stejná cena",
     "filterBadge": "Vyhledávač ověřených nabídek z 10 platforem",
-    "showingCount": "Zobrazeno {count} zařízení v rámci rozpočtu",
+    "showingCount": "Zobrazeno {visible} z {count} zařízení v rámci rozpočtu",
     "copiedMdBtn": "✓ Markdown zkopírován!",
     "copyMdBtn": "Kopírovat Markdown",
     "exportCsvBtn": "Exportovat CSV ({count})",
@@ -717,7 +717,7 @@
     "radarBadgeSpread": "📊 +{pct}% rozdíl mezi e-shopy",
     "radarNoGenuine": "V této kategorii nejsou žádné nabídky pod tržním mediánem.",
     "radarNoTraps": "V této kategorii nebyly zjištěny žádné navýšené původní ceny.",
-    "showMoreDeals": "Zobrazit další nabídky (zbývá {count})"
+    "showMoreDeals": "Zobrazit další nabídky ({count, plural, one {zbývá #} few {zbývají #} other {zbývá #}})"
   },
   "inspect": {
     "metaTitle": "Hloubkový audit URL a falešných slev | Rate.vn",
