@@ -36,6 +36,10 @@ for (const [locale, copy] of Object.entries(COPY)) {
     await expect(body).toContainText(copy.summary);
     await expect(body).toContainText(copy.pro);
     await expect(body).toContainText(copy.reason);
+    // The stored summary says "seeding"; the page words it plainly (#656).
+    await expect(page.locator('#jreviews-section')).not.toContainText(
+      /seeding/i
+    );
     if (locale !== 'vi') {
       const text = await body.innerText();
       for (const vi of Object.values(COPY.vi)) expect(text).not.toContain(vi);
