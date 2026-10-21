@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { discountVerdictCopy } from '@/lib/discount-verdict-copy';
+import AnalyzerText from '@/components/reviews/AnalyzerText';
 import { useDetailsDismiss } from '@/components/elementary/use-details-dismiss';
 import { Link, useRouter } from '@/lib/navigation';
 import {
@@ -921,7 +922,7 @@ export default function DeepInspectWorkspace({
                     </div>
                     {reviewSummary.ai_summary && (
                       <div className="rounded-3 bg-light text-muted mt-1 p-2">
-                        {reviewSummary.ai_summary}
+                        <AnalyzerText text={reviewSummary.ai_summary} />
                       </div>
                     )}
                   </div>

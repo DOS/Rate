@@ -1810,5 +1810,23 @@
     "explainGenuine": "Aktuální cena je o {pct} % nižší než historický medián ({median}).",
     "explainHistoricLow": "Nejnižší zaznamenaná cena ({current}, maximum {max}).",
     "explainNormal": "Aktuální cena ({current}) odpovídá historickému mediánu ({median})."
+  },
+  "analyzerCopy": {
+    "reasonAuthentic": "Podrobná, platná recenze od skutečného uživatele.",
+    "reasonSabotage": "Známky nekalé konkurence / přesměrování kupujících k jinému prodejci.",
+    "reasonBombing": "Napsáno bez použití produktu či služby (zrušená objednávka nebo stádní efekt).",
+    "reasonDuplicateSeeding": "Šablonový seeding text duplikovaný mezi {count} různými účty.",
+    "reasonCopiedSeeding": "Zkopírovaná nebo upravená seedingová šablona mezi účty (strukturní podobnost {pct} %).",
+    "reasonRatingOnly": "Jen hvězdičky bez textu: počítá se, ale s nízkou váhou (25 % recenze s textem).",
+    "reasonCoinSpam": "Komentář kvůli odměnám nebo bez skutečné zkušenosti (vynechán z celkového skóre, obchod není penalizován).",
+    "reasonShippingOnly": "Hodnotí jen doručení nebo balení (přesunuto do skóre prodejce, nezapočítává se k produktu).",
+    "reasonContradiction": "Počet hvězdiček neodpovídá komentáři (podezření na omyl nebo ironii, snížená váha důvěry).",
+    "reasonCommunityDownvoted": "Komunita recenzi silně odmítla nebo nahlásila, proto má váhu 0.",
+    "reasonCommunityPending": "Komunitní recenze čeká na analýzu a zatím se nezapočítává do průměru.",
+    "reasonCommunityAccepted": "Komunitní recenze Rate.vn podle více kritérií, splňuje požadavky na délku a technické detaily.",
+    "summaryDefault": "Analyzováno {total} recenzí: ponecháno {kept} skutečných recenzí (vážené skóre JReviews: {rating}/5★) a z celkového skóre vyřazeno {removed} spamových, odměnových, seedingových nebo bombardujících recenzí.",
+    "summaryNoAuthentic": "Po odfiltrování {removed} spamových nebo odměnových komentářů zatím žádné skutečné recenze.",
+    "proPositiveFeedback": "Pozitivní zpětná vazba od skutečných uživatelů",
+    "originalVietnamese": "vietnamsky"
   }
 }

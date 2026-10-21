@@ -185,3 +185,10 @@ FROM (VALUES
 INSERT INTO rate.review_flags (review_id, verdict, include_in_rating, detector, detector_version, input_hash)
 SELECT id, 'authentic', true, 'e2e-seed', 'v1', 'seed-' || id
 FROM rate.reviews WHERE product_id = 'cccccccc-cccc-4ccc-8ccc-cccccccc0566';
+-- The analyzer's Vietnamese template texts, which the product page shows in
+-- the active locale (DOS/Rate#647).
+UPDATE rate.review_flags SET reason = 'Đánh giá chi tiết, hợp lệ từ người dùng thực tế.'
+WHERE review_id IN (SELECT id FROM rate.reviews WHERE product_id = 'cccccccc-cccc-4ccc-8ccc-cccccccc0566');
+INSERT INTO rate.review_analysis (product_id, total_reviews_analyzed, authenticity_score, pros, ai_summary)
+VALUES ('cccccccc-cccc-4ccc-8ccc-cccccccc0566', 6, 95, ARRAY['Nhận phản hồi tích cực từ người dùng thực tế'],
+  'Đã phân tích 6 đánh giá: giữ lại 6 đánh giá thực chất (điểm JReviews có trọng số: 5/5★) và loại bỏ 0 đánh giá rác/nhận xu/seeding/bom hàng khỏi điểm tổng.');

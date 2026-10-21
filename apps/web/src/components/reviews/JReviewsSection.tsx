@@ -45,6 +45,7 @@ import {
   weightExplanationCopy,
   type ReviewBadgeKind,
 } from '@/lib/review-display';
+import AnalyzerText from './AnalyzerText';
 
 type VoteChoice = 'up' | 'down' | 'report';
 type FilterTab = 'all' | 'authentic' | 'expert' | 'ignored';
@@ -1221,7 +1222,8 @@ export default function JReviewsSection({
 
         {summary.ai_summary && (
           <div className="rounded-3 small text-dark mb-3 border bg-white p-3">
-            <strong>{t('aiSummaryPrefix')}</strong> {summary.ai_summary}
+            <strong>{t('aiSummaryPrefix')}</strong>{' '}
+            <AnalyzerText text={summary.ai_summary} />
           </div>
         )}
 
@@ -1238,7 +1240,7 @@ export default function JReviewsSection({
                   <ul className="small text-secondary mb-0 ps-3">
                     {summary.pros.map((pro, idx) => (
                       <li key={idx} className="mb-1">
-                        {pro}
+                        <AnalyzerText text={pro} />
                       </li>
                     ))}
                   </ul>
@@ -1256,7 +1258,7 @@ export default function JReviewsSection({
                   <ul className="small text-secondary mb-0 ps-3">
                     {summary.cons.map((con, idx) => (
                       <li key={idx} className="mb-1">
-                        {con}
+                        <AnalyzerText text={con} />
                       </li>
                     ))}
                   </ul>
@@ -1535,7 +1537,8 @@ export default function JReviewsSection({
                     {/* AI Flag Reason Transparency Note */}
                     {rev.reason && (
                       <div className="rounded-3 bg-light small text-secondary mb-2 border p-2">
-                        <strong>{t('aiReasonPrefix')}</strong> {rev.reason}
+                        <strong>{t('aiReasonPrefix')}</strong>{' '}
+                        <AnalyzerText text={rev.reason} />
                       </div>
                     )}
                   </div>

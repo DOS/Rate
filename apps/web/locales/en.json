@@ -1810,5 +1810,23 @@
     "explainGenuine": "The current price is {pct}% below the historical median ({median}).",
     "explainHistoricLow": "At the lowest price recorded ({current}, against a high of {max}).",
     "explainNormal": "The current price ({current}) matches the historical median ({median})."
+  },
+  "analyzerCopy": {
+    "reasonAuthentic": "Detailed, valid review from a real user.",
+    "reasonSabotage": "Signs of unfair competition / steering buyers to another seller.",
+    "reasonBombing": "Written without using the product or service (cancelled order or bandwagon).",
+    "reasonDuplicateSeeding": "Seeding template text duplicated across {count} different accounts.",
+    "reasonCopiedSeeding": "Copied or reworked seeding template across accounts ({pct}% structural similarity).",
+    "reasonRatingOnly": "Stars only, no text: still counted, at a low weight (25% of a review with text).",
+    "reasonCoinSpam": "Coin-farming comment or no real experience (left out of the overall score, no penalty for the shop).",
+    "reasonShippingOnly": "Comments only on delivery or packaging (moved to the seller score, not counted for the product).",
+    "reasonContradiction": "The star rating contradicts the comment (suspected wrong star or sarcasm, trust weight reduced).",
+    "reasonCommunityDownvoted": "Heavily voted down or reported by the community, so its weight was set to 0.",
+    "reasonCommunityPending": "Community review awaiting analysis, not yet counted in the average.",
+    "reasonCommunityAccepted": "Multi-criteria Rate.vn community review that meets the length and technical-detail bar.",
+    "summaryDefault": "Analyzed {total} reviews: kept {kept} genuine reviews (weighted JReviews score: {rating}/5★) and removed {removed} spam, coin-farming, seeding or review-bombing reviews from the overall score.",
+    "summaryNoAuthentic": "No genuine reviews yet after filtering {removed} spam or coin-farming comments.",
+    "proPositiveFeedback": "Positive feedback from real users",
+    "originalVietnamese": "in Vietnamese"
   }
 }

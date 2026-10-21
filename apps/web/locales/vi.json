@@ -1810,5 +1810,23 @@
     "explainGenuine": "Giá hiện tại thấp hơn {pct}% so với mức trung vị lịch sử ({median}).",
     "explainHistoricLow": "Đang ở vùng giá thấp nhất ghi nhận được ({current} so với đỉnh {max}).",
     "explainNormal": "Giá bán hiện tại ({current}) khớp với mức trung vị lịch sử ({median})."
+  },
+  "analyzerCopy": {
+    "reasonAuthentic": "Đánh giá chi tiết, hợp lệ từ người dùng thực tế.",
+    "reasonSabotage": "Phát hiện dấu hiệu đối thủ cạnh tranh không lành mạnh / điều hướng sang nơi bán khác.",
+    "reasonBombing": "Đánh giá khi chưa sử dụng sản phẩm/dịch vụ (hủy đơn hoặc hiệu ứng đám đông).",
+    "reasonDuplicateSeeding": "Nội dung văn mẫu seeding trùng lặp giữa {count} tài khoản khác nhau.",
+    "reasonCopiedSeeding": "Nội dung sao chép / xào nấu văn mẫu seeding giữa các tài khoản (tương đồng cấu trúc {pct}%).",
+    "reasonRatingOnly": "Chỉ chấm sao, không có nội dung: vẫn tính vào điểm nhưng với trọng số thấp (25% một đánh giá có nội dung).",
+    "reasonCoinSpam": "Bình luận mang tính chất nhận xu / chưa trải nghiệm thực tế (được bỏ qua khỏi điểm tổng, không phạt shop).",
+    "reasonShippingOnly": "Đánh giá chỉ nhận xét về giao hàng/đóng gói (chuyển về điểm nhà bán, không tính vào điểm sản phẩm).",
+    "reasonContradiction": "Số sao mâu thuẫn với nội dung nhận xét (nghi vấn chấm nhầm sao hoặc châm biếm, giảm trọng số tin cậy).",
+    "reasonCommunityDownvoted": "Đánh giá bị cộng đồng Vote Down / Báo cáo nhiều nên giảm trọng số về 0.",
+    "reasonCommunityPending": "Đánh giá cộng đồng đang chờ phân tích, chưa được tính vào điểm trung bình.",
+    "reasonCommunityAccepted": "Đánh giá đa tiêu chí từ cộng đồng Rate.vn đạt chuẩn độ dài và chi tiết kỹ thuật.",
+    "summaryDefault": "Đã phân tích {total} đánh giá: giữ lại {kept} đánh giá thực chất (điểm JReviews có trọng số: {rating}/5★) và loại bỏ {removed} đánh giá rác/nhận xu/seeding/bom hàng khỏi điểm tổng.",
+    "summaryNoAuthentic": "Chưa có đánh giá thực chất sau khi lọc {removed} bình luận rác/nhận xu.",
+    "proPositiveFeedback": "Nhận phản hồi tích cực từ người dùng thực tế",
+    "originalVietnamese": "tiếng Việt"
   }
 }

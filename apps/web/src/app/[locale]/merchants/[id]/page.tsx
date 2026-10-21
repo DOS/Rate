@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 import { discountVerdictCopy } from '@/lib/discount-verdict-copy';
+import AnalyzerText from '@/components/reviews/AnalyzerText';
 import { Link } from '@/lib/navigation';
 import {
   getCategoryRouteHref,
@@ -714,7 +715,7 @@ export default async function MerchantProfilePage({
                             className="text-muted"
                             style={{ fontSize: '0.8125rem' }}
                           >
-                            {rev.reason}
+                            <AnalyzerText text={rev.reason} />
                           </span>
                         )}
                       </div>
