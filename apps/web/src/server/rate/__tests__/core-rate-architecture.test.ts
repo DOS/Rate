@@ -7213,15 +7213,20 @@ async function runCoreArchitectureSuite() {
         const entries = Object.entries(
           (messages as Record<string, Record<string, unknown>>)[ns]
         );
+        let checked = 0;
         for (const [key, value] of entries) {
           // Export content only; the export buttons are page labels.
-          if (!/Md|Csv|Json/.test(key) || /^(copy|copied|export)/.test(key))
-            continue;
+          // shareAuditPriceSources is inserted into the Markdown summary.
+          const isExport =
+            /^md|Md|Csv|Json/.test(key) || key === 'shareAuditPriceSources';
+          if (!isExport || /^(copy|copied|export)/.test(key)) continue;
+          checked += 1;
           assert.ok(
             typeof value !== 'string' || !exportJargon.test(value),
             `${locale}.${ns}.${key} export text must use plain words (#661): ${String(value)}`
           );
         }
+        assert.ok(checked > 0, `${locale}.${ns}: no export keys checked`);
       }
     }
     for (const file of [
