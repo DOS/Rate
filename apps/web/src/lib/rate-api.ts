@@ -3273,7 +3273,8 @@ export async function getMerchantsList(
         supabase
           .from('reviews')
           .select(
-            'id, product_id, review_flags(verdict, flag_category, include_in_rating)'
+            // rating_star and comment feed the complaint term (#671).
+            'id, product_id, rating_star, comment, review_flags(verdict, flag_category, include_in_rating)'
           )
           .in('product_id', chunk)
           .order('id')

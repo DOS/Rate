@@ -7272,6 +7272,59 @@ async function runCoreArchitectureSuite() {
       ]).reviewRiskScore,
       15
     );
+    // A platform rating label ("Rất không hài lòng") is star-only too.
+    assert.equal(
+      computeDynamicReviewRisk([
+        ...fiveGood.slice(0, 3),
+        rated('authentic', 1, 'Rất không hài lòng'),
+        rated('authentic', 1, 'Rất không hài lòng.'),
+      ]).reviewRiskScore,
+      15
+    );
+    // A low-star review left out of the rating is no complaint.
+    assert.equal(
+      computeDynamicReviewRisk([
+        ...fiveGood.slice(0, 4),
+        {
+          ...(rated('authentic', 1, 'Máy lỗi') as object),
+          include_in_rating: false,
+        } as never,
+      ]).reviewRiskScore,
+      15
+    );
+    // Exactly 20% counts: 1 of 5 adds round(0.2 x 45) = 9.
+    assert.equal(
+      computeDynamicReviewRisk([
+        ...fiveGood.slice(0, 4),
+        rated('authentic', 2, 'Pin tụt nhanh'),
+      ]).reviewRiskScore,
+      24
+    );
+    // The star-only rule is copied from the importer; keep them identical.
+    const literal = (file: string, name: string) => {
+      const src = fs.readFileSync(path.join(repoRoot, file), 'utf8');
+      const match = new RegExp(`const ${name} =\\s*(/.*?/i);`).exec(src);
+      assert.ok(match, `${name} literal in ${file}`);
+      return match[1];
+    };
+    assert.equal(
+      literal('apps/web/src/lib/rate-api.ts', 'RATING_ONLY_LABEL_RE'),
+      literal(
+        'apps/importer/src/shopee/ai-review-analyzer.ts',
+        'RATING_LABEL_RE'
+      ),
+      'web and importer star-only labels are identical (#671)'
+    );
+    // The merchant list reads the stars and text the complaint term needs.
+    assert.ok(
+      fs
+        .readFileSync(
+          path.join(repoRoot, 'apps/web/src/lib/rate-api.ts'),
+          'utf8'
+        )
+        .includes("'id, product_id, rating_star, comment, review_flags("),
+      'getMerchantsList selects rating_star and comment for review risk (#671)'
+    );
     // Official store -15, free channels +10, 50k+ followers -5.
     assert.equal(
       computeDynamicReviewRisk(fiveGood, { isOfficial: true }).reviewRiskScore,
