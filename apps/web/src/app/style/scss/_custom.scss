@@ -1379,3 +1379,11 @@ body .input-group > .input-group-text {
     color: var(--bs-#{$variant}-text-emphasis);
   }
 }
+
+// A column divider only where the columns sit side by side (sm and up).
+@media (min-width: 576px) {
+  .border-end-sm {
+    border-right: var(--bs-border-width) var(--bs-border-style)
+      var(--bs-border-color) !important;
+  }
+}
