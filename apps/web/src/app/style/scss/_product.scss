@@ -256,6 +256,16 @@
   }
 }
 
+.rate-pdv-hero-score {
+  font-size: 0.9375rem;
+  color: var(--rate-fg-secondary);
+
+  strong {
+    font-size: 1.125rem;
+    color: var(--rate-fg-primary);
+  }
+}
+
 // Long lists show their first three items on phones until expanded
 // (PhoneCollapsible, DOS/Rate#621). Screen only: print shows every group.
 @media screen and (max-width: 767.98px) {

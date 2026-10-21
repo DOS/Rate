@@ -32,6 +32,7 @@ import {
   BsPhone,
   BsShieldCheck,
   BsShieldExclamation,
+  BsStarFill,
 } from 'react-icons/bs';
 import RadarBadge from '@/components/radar/RadarBadge';
 import { buildRadarIndex, getRadarSignal } from '@/lib/deal-radar';
@@ -360,6 +361,25 @@ export async function ProductDetailView({
                     <strong className="rate-tabular">{chunks}</strong>
                   ),
                 })}
+              </p>
+            )}
+            {/* Below lg the scoreboard starts past the first phone screen, so
+            the buyer score is repeated next to the price (DOS/Rate#630). */}
+            {displayUserRating > 0 && (
+              <p
+                className="rate-pdv-hero-score d-flex d-lg-none align-items-center mb-3 gap-1"
+                data-testid="pdv-hero-score"
+              >
+                <BsStarFill aria-hidden="true" className="text-warning" />
+                <span className="visually-hidden">
+                  {t('userWeightedScoreLabel')}:
+                </span>
+                <strong className="rate-tabular">
+                  {displayUserRating.toFixed(1)}
+                </strong>
+                <span>
+                  {t('verifiedReviewsCount', { count: authenticCount })}
+                </span>
               </p>
             )}
 
