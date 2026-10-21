@@ -113,29 +113,34 @@ function main() {
     ],
   ];
   // The stored strings say "seeding"; the UI words these in plain Vietnamese
-  // instead (DOS/Rate#656), so they do not rebuild the stored text.
-  const reworded = new Set<string>([
-    'reasonDuplicateSeeding',
-    'reasonCopiedSeeding',
-    'reasonCommunityAdLink',
-    'summaryDefault',
-  ]);
+  // instead (DOS/Rate#656). Their stored templates are kept here so the
+  // captured values are still checked against the right placeholders.
+  const stored: Partial<Record<string, string>> = {
+    reasonDuplicateSeeding:
+      'Nội dung văn mẫu seeding trùng lặp giữa {count} tài khoản khác nhau.',
+    reasonCopiedSeeding:
+      'Nội dung sao chép / xào nấu văn mẫu seeding giữa các tài khoản (tương đồng cấu trúc {pct}%).',
+    reasonCommunityAdLink:
+      'Phát hiện đường dẫn quảng cáo hoặc điều hướng ngoài luồng nghi vấn Seeding.',
+    summaryDefault:
+      'Đã phân tích {total} đánh giá: giữ lại {kept} đánh giá thực chất (điểm JReviews có trọng số: {rating}/5★) và loại bỏ {removed} đánh giá rác/nhận xu/seeding/bom hàng khỏi điểm tổng.',
+  };
   const covered = new Set<string>();
   for (const [text, key] of samples) {
     const copy = analyzerCopy(text);
     assert.ok('key' in copy, `not recognised: ${text}`);
     assert.equal(copy.key, key, text);
-    const shown = fill(vi[copy.key]!, copy.values);
-    if (reworded.has(copy.key)) {
-      assert.ok(!/seeding/i.test(shown), `${key} still says seeding`);
+    // The template rebuilds the stored string exactly, so each captured value
+    // lands in the right placeholder.
+    const template = stored[copy.key] ?? vi[copy.key]!;
+    assert.equal(fill(template, copy.values), text, key);
+    if (stored[copy.key]) {
+      assert.ok(!/seeding/i.test(vi[copy.key]!), `${key} still says seeding`);
       assert.deepEqual(
         placeholders(vi[copy.key]!),
-        Object.keys(copy.values).sort(),
+        placeholders(template),
         `${key} uses every value the stored string carries`
       );
-    } else {
-      // The Vietnamese message rebuilds the stored string exactly.
-      assert.equal(shown, text, key);
     }
     covered.add(copy.key);
   }
@@ -168,12 +173,14 @@ function main() {
   ]
     .map((file) => readFileSync(new URL(file, import.meta.url), 'utf8'))
     .join('\n');
+  // Every literal piece of each stored string, not just its start.
   for (const [text, key] of samples) {
-    const fixed = text.split(/\d/)[0]!;
-    assert.ok(
-      analyzerSrc.includes(fixed.slice(0, 40)),
-      `${key} no longer matches the analyzer source`
-    );
+    for (const piece of text.split(/\d+(?:\.\d+)?/).filter(Boolean)) {
+      assert.ok(
+        analyzerSrc.includes(piece),
+        `${key} no longer matches the analyzer source: ${piece}`
+      );
+    }
   }
 
   // Every key exists in every locale with the same placeholders.
