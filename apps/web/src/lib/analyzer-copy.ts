@@ -5,6 +5,8 @@
  * can show them in the active locale (DOS/Rate#647). Anything else, such as
  * free text written by the LLM pass, is returned as Vietnamese text so the UI
  * can mark its language instead of passing it off as a translation.
+ * The Vietnamese messages may word a template more plainly than the stored
+ * text (no "seeding", DOS/Rate#656); the patterns below match the stored text.
  */
 
 export type AnalyzerCopyKey =

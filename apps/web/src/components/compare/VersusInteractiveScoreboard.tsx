@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { BsSliders } from 'react-icons/bs';
 import { Link } from '@/lib/navigation';
 import {
@@ -80,6 +80,7 @@ export default function VersusInteractiveScoreboard({
   scoreB,
 }: VersusInteractiveScoreboardProps) {
   const t = useTranslations('compare');
+  const locale = useLocale();
   const [persona, setPersona] = useState<PersonaPresetKey>('default');
   const [weights, setWeights] = useState<CriteriaWeights>(
     PERSONA_WEIGHTS.default
@@ -217,7 +218,7 @@ export default function VersusInteractiveScoreboard({
           return `| ${r.label} | ${r.aVal.toFixed(2)}/5.0 | ${r.bVal.toFixed(2)}/5.0 | ${winName} |`;
         }),
         `| **${t('mdRowMinPrice')}** | ${scoreA.minPrice.toLocaleString('vi-VN')} ₫ | ${scoreB.minPrice.toLocaleString('vi-VN')} ₫ | ${priceAdvantageLabel} |`,
-        `| **${t('mdRowDealRadar')}** | ${radarMarkdownCell(sigA)} | ${radarMarkdownCell(sigB)} | ${sigA.verdict === 'genuine_deal' ? scoreA.name : sigB.verdict === 'genuine_deal' ? scoreB.name : '-'} |`,
+        `| **${t('mdRowDealRadar')}** | ${radarMarkdownCell(sigA, locale)} | ${radarMarkdownCell(sigB, locale)} | ${sigA.verdict === 'genuine_deal' ? scoreA.name : sigB.verdict === 'genuine_deal' ? scoreB.name : '-'} |`,
       ];
       await navigator.clipboard.writeText(lines.join('\n'));
       setCopiedVerdict(true);
@@ -284,8 +285,8 @@ export default function VersusInteractiveScoreboard({
       [
         t('mdRowDealRadar'),
         '-',
-        radarLabel(sigA),
-        radarLabel(sigB),
+        radarLabel(sigA, 0, locale),
+        radarLabel(sigB, 0, locale),
         sigA.verdict === 'genuine_deal'
           ? scoreA.name
           : sigB.verdict === 'genuine_deal'

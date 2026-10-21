@@ -242,7 +242,8 @@ export default function DealFinderWorkspace({
   const handleDownloadRadarJson = () => {
     if (typeof window === 'undefined' || !dealRadar) return;
     const payload = {
-      source: 'Rate.vn 10-Platform Deal & Fake-Sale Anomaly Radar',
+      source:
+        'Rate.vn cross-store price lows and fake-sale warnings (10 stores)',
       categoryFilter,
       exportedAt: new Date().toISOString(),
       totalClustersAnalyzed: dealRadar.totalClustersAnalyzed,

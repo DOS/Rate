@@ -7151,6 +7151,151 @@ async function runCoreArchitectureSuite() {
     '  ✅ [80/80] DeepInspectWorkspace, CategoryCatalogToolbar & gen-db-types Hardening (#554) passed'
   );
 
+  // =========================================================================
+  // 81. Competitor sabotage adds no dynamic review risk (#645)
+  // =========================================================================
+  {
+    const { computeDynamicReviewRisk, evaluateReviewTrustAssessment } =
+      await import('@/lib/rate-api');
+    // The verdicts the importer stores (ai-review-analyzer.ts): 'fake' for
+    // seeding, sabotage and bombing, 'suspicious' for coin spam.
+    const importerVerdict = (category: string) =>
+      ['seeding_fake', 'competitor_sabotage', 'review_bombing'].includes(
+        category
+      )
+        ? 'fake'
+        : category === 'low_value_coin_spam'
+          ? 'suspicious'
+          : 'authentic';
+    const review645 = (
+      flag_category: string | null,
+      include_in_rating: boolean,
+      verdict = importerVerdict(flag_category ?? '')
+    ) => ({ flag_category, include_in_rating, verdict }) as never;
+
+    const sabotaged = computeDynamicReviewRisk([
+      review645('authentic', true),
+      review645('authentic', true),
+      review645('competitor_sabotage', false),
+      review645('review_bombing', false),
+    ]);
+    assert.equal(
+      sabotaged.reviewRiskScore,
+      0,
+      'a seller whose only flagged reviews are sabotage or review bombing must get no extra review risk (#645)'
+    );
+    assert.equal(sabotaged.breakdown.sabotage_or_bombing_count, 2);
+    assert.equal(sabotaged.breakdown.suspicious_ratio_pct, 50);
+
+    const seeded = computeDynamicReviewRisk([
+      review645('authentic', true),
+      review645('seeding_fake', false),
+      review645('low_value_coin_spam', false),
+      review645('competitor_sabotage', false),
+    ]);
+    assert.equal(
+      seeded.reviewRiskScore,
+      25,
+      'only seeding counts; coin spam (#654) and sabotage (#645) do not'
+    );
+
+    // Coin-farming comments are excluded but, as in the importer, do not
+    // penalise the seller (#654).
+    const coinSpamOnly = computeDynamicReviewRisk([
+      review645('authentic', true),
+      review645('low_value_coin_spam', false),
+      review645('low_value_coin_spam', false),
+      review645('authentic', false),
+    ]);
+    assert.equal(coinSpamOnly.reviewRiskScore, 0);
+    assert.equal(coinSpamOnly.breakdown.coin_spam_count, 3);
+    assert.equal(coinSpamOnly.breakdown.suspicious_ratio_pct, 75);
+
+    // A missing category still counts a 'fake' verdict as seeding.
+    const uncategorised = computeDynamicReviewRisk([
+      review645('authentic', true),
+      review645(null, false, 'fake'),
+    ]);
+    assert.equal(uncategorised.reviewRiskScore, 50);
+    assert.equal(uncategorised.breakdown.seeding_fake_count, 1);
+
+    const pendingOnly = computeDynamicReviewRisk([
+      review645('authentic', false, 'unanalyzed'),
+    ]);
+    assert.equal(pendingOnly.reviewRiskScore, 0);
+    assert.equal(pendingOnly.breakdown.total_reviews, 0);
+
+    // The trust model labels them by category too, not as fabricated.
+    const axis = (flag_category: string) =>
+      evaluateReviewTrustAssessment({
+        rating_star: 1,
+        comment: 'Shop lừa đảo, đừng mua, sang shop khác mua rẻ hơn',
+        reviewer_type: 'user',
+        upvotes: 0,
+        downvotes: 0,
+        report_count: 0,
+        flag_category,
+        verdict: importerVerdict(flag_category),
+        include_in_rating: false,
+        signals: null,
+      } as never).authenticity;
+    assert.equal(axis('competitor_sabotage'), 'sabotage');
+    assert.equal(axis('review_bombing'), 'bombing');
+    assert.equal(axis('seeding_fake'), 'fabricated');
+  }
+
+  console.log(
+    '  ✅ [81/81] Competitor sabotage adds no dynamic review risk (#645) passed'
+  );
+
+  // =========================================================================
+  // 82. Plain wording in Markdown/CSV/JSON exports (#661)
+  // =========================================================================
+  {
+    const exportJargon = /audit|seeding|radar|kiểm định|kiểm toán|kèo thơm/i;
+    for (const [locale, messages] of Object.entries({
+      vi: viMessages,
+      en: enMessages,
+      cs: csMessages,
+    })) {
+      for (const ns of ['productDetail', 'deals', 'watchlist'] as const) {
+        const entries = Object.entries(
+          (messages as Record<string, Record<string, unknown>>)[ns] ?? {}
+        );
+        let checked = 0;
+        for (const [key, value] of entries) {
+          // Export content only; the export buttons are page labels.
+          // shareAuditPriceSources is inserted into the Markdown summary.
+          const isExport =
+            /^md|Md|Csv|Json/.test(key) || key === 'shareAuditPriceSources';
+          if (!isExport || /^(copy|copied|export)/.test(key)) continue;
+          checked += 1;
+          assert.ok(
+            typeof value !== 'string' || !exportJargon.test(value),
+            `${locale}.${ns}.${key} export text must use plain words (#661): ${String(value)}`
+          );
+        }
+        assert.ok(checked > 0, `${locale}.${ns}: no export keys checked`);
+      }
+    }
+    for (const file of [
+      'components/reviews/JReviewsSection.tsx',
+      'components/deals/DealFinderWorkspace.tsx',
+      'components/leaderboard/ProductSpecsExportToolbar.tsx',
+    ]) {
+      const src = fs.readFileSync(
+        path.join(repoRoot, 'apps/web/src', file),
+        'utf8'
+      );
+      assert.ok(
+        !/AI-Audited|Deal Radar Signal|Anomaly Radar/.test(src),
+        `${file} export text must use plain words (#661)`
+      );
+    }
+  }
+
+  console.log('  ✅ [82/82] Plain wording in exports (#661) passed');
+
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
 

@@ -197,7 +197,7 @@ export default function ProductSpecsExportToolbar({
 
     const md = [
       `### 📋 Rate.vn 10-Field-Groups Technical Specifications: ${productName} (${brand})`,
-      `- **Deal Radar Signal:** ${radarMarkdownCell(radarSignal)}`,
+      `- **Price signal:** ${radarMarkdownCell(radarSignal)}`,
       '',
       '| Field Group | Attribute | Specification |',
       '| --- | --- | --- |',

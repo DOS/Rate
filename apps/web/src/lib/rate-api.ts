@@ -293,12 +293,16 @@ export function evaluateReviewTrustAssessment(
 
   // 1. Axis A: Authenticity
   let authenticity: ReviewAuthenticityAxis = 'genuine';
-  if (review.flag_category === 'seeding_fake' || review.verdict === 'fake') {
-    authenticity = 'fabricated';
-  } else if (review.flag_category === 'competitor_sabotage') {
+  // Sabotage and bombing also carry verdict 'fake'; their category wins.
+  if (review.flag_category === 'competitor_sabotage') {
     authenticity = 'sabotage';
   } else if (review.flag_category === 'review_bombing') {
     authenticity = 'bombing';
+  } else if (
+    review.flag_category === 'seeding_fake' ||
+    review.verdict === 'fake'
+  ) {
+    authenticity = 'fabricated';
   } else if (
     Number.isFinite(Number(review.rating_star)) &&
     Number(review.rating_star) >= 5 &&
@@ -446,7 +450,8 @@ export function evaluateReviewTrustAssessment(
       explanationVi = 'Trọng số 0.00x: đánh giá bất thường / bom đơn';
     } else {
       explanationKind = 'seeding';
-      explanationVi = 'Trọng số 0.00x: nghi vấn seeding / văn mẫu trùng lặp';
+      explanationVi =
+        'Trọng số 0.00x: nghi là đánh giá ảo hoặc văn mẫu trùng lặp';
     }
   } else if (depth === 'stars_only') {
     explanationKind = 'stars_only';
@@ -551,7 +556,7 @@ export function computeCombinedDualScore(params: {
       isBlended: true,
       blendMode: 'blended',
       blendFormulaNoteVi:
-        'Tỷ trọng: 60% Người mua thực chất + 40% Chuyên gia Rate Lab (c ≥ 60%)',
+        'Tỷ trọng: 60% người mua thực chất + 40% chuyên gia Rate Lab (độ tin cậy ≥ 60%)',
     };
   }
 
@@ -561,7 +566,7 @@ export function computeCombinedDualScore(params: {
       isBlended: false,
       blendMode: 'separate_low_confidence',
       blendFormulaNoteVi:
-        'Hiển thị riêng Điểm Chuyên gia & Người mua (chờ độ tin cậy người dùng đạt mức Trung bình c ≥ 60% để gộp 60/40)',
+        'Hiển thị riêng điểm chuyên gia và điểm người mua (gộp 60/40 khi độ tin cậy người mua đạt mức trung bình, độ tin cậy ≥ 60%)',
     };
   }
 
@@ -571,7 +576,7 @@ export function computeCombinedDualScore(params: {
       isBlended: false,
       blendMode: 'user_only',
       blendFormulaNoteVi:
-        'Tỷ trọng: 100% Người mua thực chất (đã lọc Seeding & Spam xu)',
+        'Tỷ trọng: 100% người mua thực chất (đã lọc đánh giá ảo và spam nhận xu)',
     };
   }
 
@@ -580,7 +585,7 @@ export function computeCombinedDualScore(params: {
       overall: Number(safeExpert.toFixed(2)),
       isBlended: false,
       blendMode: 'expert_only',
-      blendFormulaNoteVi: 'Tỷ trọng: 100% Đánh giá Chuyên gia Rate Lab',
+      blendFormulaNoteVi: 'Tỷ trọng: 100% đánh giá chuyên gia Rate Lab',
     };
   }
 
@@ -2857,7 +2862,7 @@ export async function getSitemapRows(): Promise<SitemapRows> {
   return { products, merchants, categorySlugById };
 }
 
-function computeDynamicReviewRisk(allReviews: ReviewItem[]): {
+export function computeDynamicReviewRisk(allReviews: ReviewItem[]): {
   reviewRiskScore: number;
   breakdown: MerchantRiskBreakdown;
 } {
@@ -2884,13 +2889,15 @@ function computeDynamicReviewRisk(allReviews: ReviewItem[]): {
   let sabotageOrBombing = 0;
 
   for (const r of reviews) {
-    if (r.flag_category === 'seeding_fake' || r.verdict === 'fake') {
-      seedingFake += 1;
-    } else if (
+    // The importer stores verdict 'fake' for sabotage and bombing too, so the
+    // category decides first; verdict only fills in a missing category.
+    if (
       r.flag_category === 'competitor_sabotage' ||
       r.flag_category === 'review_bombing'
     ) {
       sabotageOrBombing += 1;
+    } else if (r.flag_category === 'seeding_fake' || r.verdict === 'fake') {
+      seedingFake += 1;
     } else if (
       r.flag_category === 'low_value_coin_spam' ||
       !r.include_in_rating
@@ -2904,10 +2911,10 @@ function computeDynamicReviewRisk(allReviews: ReviewItem[]): {
   const flaggedTotal = coinSpam + seedingFake + sabotageOrBombing;
   const suspiciousRatioPct = Math.round((flaggedTotal / total) * 1000) / 10;
 
-  // Weighted risk formula matching Rate review risk engine:
-  // seeding_fake carries heavy weight (1.0), coin_spam moderate (0.35), sabotage (0.5)
-  const weightedPenalty =
-    (seedingFake * 1.0 + coinSpam * 0.35 + sabotageOrBombing * 0.5) / total;
+  // Only seeding_fake adds risk. Coin-farming comments are buyers chasing
+  // rewards, and sabotage or review bombing are attacks on the seller: they
+  // are filtered out but add no risk, as in the importer (DOS/Rate#645, #654).
+  const weightedPenalty = seedingFake / total;
   const reviewRiskScore = Math.min(
     100,
     Math.max(0, Math.round(weightedPenalty * 100))

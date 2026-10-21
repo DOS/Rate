@@ -142,9 +142,9 @@ export function radarLabel(
   }
   if (sig.verdict === 'fake_sale_trap') {
     const pct = safeFakeMarkupPct.toFixed(1);
-    if (loc === 'en') return `🚨 Fake Sale Alert (+${pct}%)`;
-    if (loc === 'cs') return `🚨 Falešná sleva (+${pct}%)`;
-    return `🚨 Cảnh báo Sale Ảo (+${pct}%)`;
+    if (loc === 'en') return `🚨 Fake sale warning (+${pct}%)`;
+    if (loc === 'cs') return `🚨 Upozornění na falešnou slevu (+${pct}%)`;
+    return `🚨 Cảnh báo giảm giá ảo (+${pct}%)`;
   }
   if (safeSpreadPct > 0 && safeSpreadPct >= minSpreadPct) {
     const pct = safeSpreadPct.toFixed(1);
