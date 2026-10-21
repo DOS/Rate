@@ -252,7 +252,7 @@ async function fetchAndRenderMerchantTrustDirectory(
 
     slot.innerHTML = `
       <div class="card">
-        <div class="card-title">🛡️ Kiểm Toán Độ Tin Cậy Đại Lý 10 Sàn (${allMerchants.length})</div>
+        <div class="card-title">🛡️ Độ tin cậy gian hàng trên 10 sàn (${allMerchants.length})</div>
         ${sorted
           .slice(0, 5)
           .map((m) => {
@@ -278,7 +278,7 @@ async function fetchAndRenderMerchantTrustDirectory(
                     ${m.is_official ? '<span style="color:#34d399;font-size: 13px;">[Mall]</span>' : ''}
                   </div>
                   <div class="offer-meta">
-                    ${escapeHtml(m.platform.toUpperCase())} (${formatSafeNumber(m.product_count, { min: 0 })} SP) - DOSafe: ${formatSafeNumber(m.dosafe_risk_score, { min: 0, max: 100 })} | Seeding: ${formatSafeNumber(m.review_risk_score, { min: 0, max: 100 })}
+                    ${escapeHtml(m.platform.toUpperCase())} (${formatSafeNumber(m.product_count, { min: 0 })} SP) - Rủi ro lừa đảo: ${formatSafeNumber(m.dosafe_risk_score, { min: 0, max: 100 })} | Rủi ro đánh giá: ${formatSafeNumber(m.review_risk_score, { min: 0, max: 100 })}
                   </div>
                 </div>
                 <a href="${detailHref}" target="_blank" rel="noopener noreferrer" class="offer-price" style="text-decoration:none;color:${trustColor};">
@@ -433,7 +433,7 @@ function renderPanelContent(
   const reviewHtml = reviews
     ? `
       <div class="card">
-        <div class="card-title">Chất Lượng Đánh Giá Đã Lọc Seeding AI</div>
+        <div class="card-title">Chất lượng đánh giá (đã lọc đánh giá ảo)</div>
         <div class="stats-grid">
           <div class="stat-box">
             <div class="stat-label">Điểm User Đã Lọc</div>
@@ -463,7 +463,7 @@ function renderPanelContent(
             <div class="stat-val" style="color: #34d399;">${formatSafeNumber(merchant.trust_score, { min: 0, max: 100 })}/100</div>
           </div>
           <div class="stat-box">
-            <div class="stat-label">DOSafe / Seeding Risk</div>
+            <div class="stat-label">Rủi ro lừa đảo / đánh giá</div>
             <div class="stat-val">${formatSafeNumber(merchant.dosafe_risk_score, { min: 0, max: 100 })} / ${formatSafeNumber(merchant.review_risk_score, { min: 0, max: 100 })}</div>
           </div>
         </div>
@@ -625,11 +625,11 @@ function renderPanelContent(
         ${
           versusUrl
             ? `<a class="btn-secondary" href="${versusUrl}" target="_blank" rel="noopener noreferrer">⚔️ Đối Đầu 1v1</a>`
-            : `<a class="btn-secondary" href="${inspectUrl}" target="_blank" rel="noopener noreferrer">🔬 Kiểm Toán Sâu</a>`
+            : `<a class="btn-secondary" href="${inspectUrl}" target="_blank" rel="noopener noreferrer">🔬 Kiểm tra chi tiết</a>`
         }
       </div>
       <div class="btn-row" style="margin-top: 6px;">
-        <a class="btn-secondary" href="${inspectUrl}" target="_blank" rel="noopener noreferrer">🔬 Kiểm Toán Sâu</a>
+        <a class="btn-secondary" href="${inspectUrl}" target="_blank" rel="noopener noreferrer">🔬 Kiểm tra chi tiết</a>
         <a class="btn-secondary" href="${watchlistUrl}" target="_blank" rel="noopener noreferrer">🔔 Canh Giá Thật</a>
       </div>
     </div>
@@ -715,7 +715,7 @@ async function runQuickQuery(query: string): Promise<void> {
 
   root.innerHTML = `
     <div class="card">
-      <p style="color: #9ca3af;">Đang kiểm toán nhanh dữ liệu cho "${escapeHtml(query.trim())}"...</p>
+      <p style="color: #9ca3af;">Đang kiểm tra nhanh dữ liệu cho "${escapeHtml(query.trim())}"...</p>
     </div>
   `;
 
