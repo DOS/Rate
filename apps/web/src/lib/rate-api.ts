@@ -2905,10 +2905,10 @@ export function computeDynamicReviewRisk(allReviews: ReviewItem[]): {
   const flaggedTotal = coinSpam + seedingFake + sabotageOrBombing;
   const suspiciousRatioPct = Math.round((flaggedTotal / total) * 1000) / 10;
 
-  // seeding_fake carries heavy weight (1.0), coin_spam moderate (0.35).
-  // Competitor sabotage and review bombing are attacks on the seller: they are
-  // filtered out but add no risk, as in the importer (DOS/Rate#645).
-  const weightedPenalty = (seedingFake * 1.0 + coinSpam * 0.35) / total;
+  // Only seeding_fake adds risk. Coin-farming comments are buyers chasing
+  // rewards, and sabotage or review bombing are attacks on the seller: they
+  // are filtered out but add no risk, as in the importer (DOS/Rate#645, #654).
+  const weightedPenalty = seedingFake / total;
   const reviewRiskScore = Math.min(
     100,
     Math.max(0, Math.round(weightedPenalty * 100))

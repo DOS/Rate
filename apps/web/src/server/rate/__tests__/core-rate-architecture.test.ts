@@ -7184,9 +7184,21 @@ async function runCoreArchitectureSuite() {
     ]);
     assert.equal(
       seeded.reviewRiskScore,
-      34,
-      'seeding (1.0) and coin spam (0.35) still count; sabotage does not (#645)'
+      25,
+      'only seeding counts; coin spam (#654) and sabotage (#645) do not'
     );
+
+    // Coin-farming comments are excluded but, as in the importer, do not
+    // penalise the seller (#654).
+    const coinSpamOnly = computeDynamicReviewRisk([
+      review645('authentic', true),
+      review645('low_value_coin_spam', false),
+      review645('low_value_coin_spam', false),
+      review645('authentic', false),
+    ]);
+    assert.equal(coinSpamOnly.reviewRiskScore, 0);
+    assert.equal(coinSpamOnly.breakdown.coin_spam_count, 3);
+    assert.equal(coinSpamOnly.breakdown.suspicious_ratio_pct, 75);
 
     const pendingOnly = computeDynamicReviewRisk([
       review645('authentic', false, 'unanalyzed'),
