@@ -594,7 +594,7 @@
     "copyPortfolioMdBtn": "Kopírovat Markdown portfolia",
     "exportCsvBtn": "Exportovat CSV",
     "exportJsonBtn": "Exportovat JSON",
-    "inspectLinkBtn": "Audit odkazu z tržiště",
+    "inspectLinkBtn": "Ověřit odkaz na produkt",
     "addFromCatalogBtn": "+ Přidat produkty z katalogu",
     "compareSameCatBtn": "Porovnat {count} zařízení stejné kategorie",
     "kpiTotalMinLabel": "Hodnota portfolia (minimální ceny)",
@@ -603,8 +603,8 @@
     "kpiAvgRatingLabel": "Průměrné skóre JReviews",
     "kpiNoRating": "Zatím bez hodnocení",
     "cloudExplain": "Upozornění v Rate Cloud jsou propojena s přihlášeným účtem DOS ID a zasílána na e-mail při dosažení cílové ceny.",
-    "cloudSyncingBtn": "Synchronizace s Cloudem...",
-    "cloudSyncBtn": "Synchronizovat upozornění do Rate Cloud",
+    "cloudSyncingBtn": "Ukládání do Rate Cloud...",
+    "cloudSyncBtn": "Uložit upozornění do Rate Cloud",
     "statWatchingLabel": "Sledovaná zařízení",
     "statWatchingValue": "{count} modelů",
     "statReachedLabel": "Dosažená cílová cena",
@@ -1449,28 +1449,28 @@
     "meta": {
       "smartphones": {
         "titleCount": "Srovnání cen chytrých telefonů a filtr 10 skupin parametrů ({count} modelů) | Rate.vn",
-        "titleDefault": "Srovnání cen chytrých telefonů (Smartphones) a AI kontrola slev | Rate.vn",
-        "description": "Filtrujte chytré telefony podle 10 skupin parametrů, zkontrolujte historii skutečných cen a filtrujte AI seeding recenze na Rate.vn."
+        "titleDefault": "Srovnání cen chytrých telefonů a kontrola slev | Rate.vn",
+        "description": "Filtrujte chytré telefony podle 10 skupin parametrů, zkontrolujte historii skutečných cen a čtěte recenze bez falešných na Rate.vn."
       },
       "tablets": {
-        "titleCount": "Srovnání cen tabletů ({count} normalizovaných modelů) | Rate.vn",
-        "titleDefault": "Srovnání cen tabletů (Tablets) a AI kontrola slev | Rate.vn",
+        "titleCount": "Srovnání cen tabletů ({count} modelů) | Rate.vn",
+        "titleDefault": "Srovnání cen tabletů a kontrola slev | Rate.vn",
         "description": "Vyhledávejte a filtrujte tablety (iPad, Galaxy Tab, Xiaomi Pad) podle 10 standardizovaných skupin parametrů, ověřte historii cen a odfiltrujte falešné recenze na Rate.vn."
       },
       "laptops": {
-        "titleCount": "Srovnání cen notebooků ({count} normalizovaných modelů) | Rate.vn",
-        "titleDefault": "Srovnání cen notebooků (Laptops) a AI kontrola slev | Rate.vn",
+        "titleCount": "Srovnání cen notebooků ({count} modelů) | Rate.vn",
+        "titleDefault": "Srovnání cen notebooků a kontrola slev | Rate.vn",
         "description": "Vyhledávejte a filtrujte notebooky (MacBook, ThinkPad, ASUS ROG, Dell XPS) podle 10 standardizovaných skupin parametrů, ověřte historii cen a odfiltrujte falešné recenze na Rate.vn."
       },
       "smartwatches": {
-        "titleCount": "Srovnání cen chytrých hodinek ({count} normalizovaných modelů) | Rate.vn",
-        "titleDefault": "Srovnání cen chytrých hodinek (Smartwatches) a AI kontrola slev | Rate.vn",
+        "titleCount": "Srovnání cen chytrých hodinek ({count} modelů) | Rate.vn",
+        "titleDefault": "Srovnání cen chytrých hodinek a kontrola slev | Rate.vn",
         "description": "Vyhledávejte a filtrujte chytré hodinky (Apple Watch, Galaxy Watch, Garmin, Xiaomi Watch, Huawei Watch) podle 10 skupin parametrů, ověřte historii cen a recenze na Rate.vn."
       },
       "earbuds": {
-        "titleCount": "Srovnání cen bezdrátových ANC sluchátek ({count} normalizovaných modelů) | Rate.vn",
-        "titleDefault": "Srovnání cen bezdrátových ANC sluchátek (Earbuds) a AI kontrola slev | Rate.vn",
-        "description": "Vyhledávejte a filtrujte bezdrátová sluchátka s ANC (AirPods Pro, Sony WF-1000XM5, Galaxy Buds, Bose, Sennheiser) podle 10 skupin parametrů, historie cen a AI auditu recenzí na Rate.vn."
+        "titleCount": "Srovnání cen bezdrátových ANC sluchátek ({count} modelů) | Rate.vn",
+        "titleDefault": "Srovnání cen bezdrátových ANC sluchátek a kontrola slev | Rate.vn",
+        "description": "Vyhledávejte a filtrujte bezdrátová sluchátka s ANC (AirPods Pro, Sony WF-1000XM5, Galaxy Buds, Bose, Sennheiser) podle 10 skupin parametrů, s historií cen a recenzemi zkontrolovanými AI na Rate.vn."
       }
     },
     "sortOptions": {
@@ -1521,7 +1521,7 @@
         }
       },
       "tablets": {
-        "title": "Tablety (Tablets)",
+        "title": "Tablety",
         "subtitle": "Porovnejte technické parametry v 10 skupinách a ceny tabletů napříč e-commerce tržišti",
         "searchPlaceholder": "Hledat iPad, Galaxy Tab, Xiaomi Pad...",
         "presets": {
@@ -1545,7 +1545,7 @@
         }
       },
       "laptops": {
-        "title": "Notebooky (Laptops)",
+        "title": "Notebooky",
         "subtitle": "Porovnejte hardwarové konfigurace v 10 skupinách a ověřenou historii cen notebooků",
         "searchPlaceholder": "Hledat MacBook, ThinkPad, ASUS ROG, Dell XPS...",
         "presets": {
@@ -1565,7 +1565,7 @@
         }
       },
       "smartwatches": {
-        "title": "Chytré hodinky (Smartwatches)",
+        "title": "Chytré hodinky",
         "subtitle": "Porovnejte zdravotní senzory, voděodolnost, dvoupásmovou GPS a oficiální historii cen chytrých hodinek",
         "searchPlaceholder": "Hledat Apple Watch, Galaxy Watch, Garmin, Xiaomi Watch, Huawei Watch...",
         "presets": {
@@ -1590,7 +1590,7 @@
         }
       },
       "earbuds": {
-        "title": "Bezdrátová a ANC sluchátka (Earbuds)",
+        "title": "Bezdrátová a ANC sluchátka",
         "subtitle": "Porovnejte aktivní potlačení hluku (ANC), Hi-Res kodeky (LDAC/aptX), výdrž baterie a skutečné ceny napříč tržišti",
         "searchPlaceholder": "Hledat AirPods Pro, Sony WF-1000XM5, Galaxy Buds, Bose, Sennheiser...",
         "presets": {
@@ -1623,9 +1623,9 @@
       "versus1v1Badge": "1v1: {brandA} vs {brandB}",
       "leaderboardBadge": "Žebříček",
       "sortByPrefix": "Řazení: {label}",
-      "radarBannerBadge": "RADAR SLEV A FALEŠNÝCH AKCÍ ({title})",
+      "radarBannerBadge": "Cenová minima a falešné slevy ({title})",
       "radarAnalyzedSub": "Zkontrolováno {count} nabídek napříč 10 tržišti",
-      "viewAllRadarBtn": "Zobrazit celý Radar 10 tržišť",
+      "viewAllRadarBtn": "Zobrazit všechny nabídky z 10 obchodů",
       "vsMedianBadge": "-{pct}% oproti mediánu",
       "fakeMarkupBadge": "Nadsazeno +{pct}%",
       "spreadHeader": "Největší cenový rozptyl na 10 tržištích ({title}):",

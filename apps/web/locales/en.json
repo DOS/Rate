@@ -559,12 +559,12 @@
     "exportMenu": "Export data"
   },
   "watchlist": {
-    "metaTitle": "True Price Watchlist & Target Drop Alerts | Rate.vn",
+    "metaTitle": "True price watchlist and drop alerts | Rate.vn",
     "metaDescription": "Track real-time historical price drops across all 5 tech categories, set target price alerts, and avoid inflated fake discounts on Shopee, Lazada, and Tiki.",
     "btnTitle": "Set a target price alert to get notified when genuine prices drop",
     "btnWatching": "Watching: ≤ {price} ₫",
-    "btnWatch": "Track Price Drops",
-    "editorTitle": "Set True Price Target Alert",
+    "btnWatch": "Track price drops",
+    "editorTitle": "Set a target price alert",
     "closeAria": "Close",
     "currentBestPrice": "Current lowest price:",
     "preset5Pct": "5% Off ({price} ₫)",
@@ -594,39 +594,39 @@
     "copyPortfolioMdBtn": "Copy Portfolio Markdown",
     "exportCsvBtn": "Export CSV",
     "exportJsonBtn": "Export JSON",
-    "inspectLinkBtn": "Inspect Marketplace URL",
+    "inspectLinkBtn": "Check a product link",
     "addFromCatalogBtn": "+ Add Products from Catalog",
     "compareSameCatBtn": "Compare {count} Same-Category Devices",
     "kpiTotalMinLabel": "Portfolio Total (Floor Price)",
-    "kpiTotalTargetLabel": "Total Target Budget",
-    "kpiSpreadSavingsLabel": "10-Platform Spread Savings",
-    "kpiAvgRatingLabel": "Avg Portfolio JReviews Score",
+    "kpiTotalTargetLabel": "Total target budget",
+    "kpiSpreadSavingsLabel": "Savings across 10 stores",
+    "kpiAvgRatingLabel": "Average JReviews score",
     "kpiNoRating": "No score yet",
     "cloudExplain": "Rate Cloud alerts are linked to your signed-in DOS ID account and emailed when prices hit your target threshold.",
-    "cloudSyncingBtn": "Syncing to Cloud...",
-    "cloudSyncBtn": "Sync Alerts to Rate Cloud",
+    "cloudSyncingBtn": "Saving to Rate Cloud...",
+    "cloudSyncBtn": "Save alerts to Rate Cloud",
     "statWatchingLabel": "Tracked Devices",
     "statWatchingValue": "{count} models",
-    "statReachedLabel": "Target Price Reached",
+    "statReachedLabel": "Target price reached",
     "statReachedValue": "{count} models at target",
-    "statAntiFakeLabel": "Fake Discount Protection",
+    "statAntiFakeLabel": "Fake discount protection",
     "statAntiFakeValue": "100% checked against the historical median",
     "emptyTitle": "Your price watchlist is currently empty",
     "emptyDescPrefix": "Pick a popular device below or click",
-    "emptyDescBtnName": "Track Price Drops",
+    "emptyDescBtnName": "Track price drops",
     "emptyDescSuffix": "on any product detail page to set your target price threshold.",
     "quickWatch5PctBtn": "Watch -5% Drop (≤ {price} ₫)",
     "noImg": "No Img",
-    "badgeTargetReached": "Target Price Reached!",
+    "badgeTargetReached": "Target price reached!",
     "badgeWaitingDrop": "Waiting for {diff} ₫ drop",
     "radarGenuineBadge": "Cross-platform low (-{pct}% vs median on {platform})",
     "radarFakeBadge": "{platform} Fake Markup +{pct}%",
     "radarSpreadBadge": "10-Platform Spread +{pct}% ({vnd} ₫ gap between {cheapest} & {priciest})",
     "savedDateLabel": "Saved on: {date}",
-    "colCurrentLowest": "Current Lowest Price",
+    "colCurrentLowest": "Current lowest price",
     "highestPriceSub": "Highest: {price} ₫",
     "sellersCountSub": "{count} sellers",
-    "colPriceWhenAdded": "Price When Added",
+    "colPriceWhenAdded": "Price when added",
     "diffUnchanged": "No change",
     "diffDropped": "Dropped {diff} ₫",
     "diffIncreased": "Up {diff} ₫",
@@ -639,7 +639,7 @@
     "cancelBtn": "Cancel",
     "removeFromWatchlistBtn": "Remove from watchlist",
     "priceChartLink": "Price History",
-    "viewBestSellersLink": "View Best Sellers →",
+    "viewBestSellersLink": "View best sellers →",
     "quickToggleTitleWatched": "Watching price changes (Click to unwatch)",
     "quickToggleTitleUnwatched": "Watch price changes & get real price-drop alerts (-5%)",
     "quickToggleBtnWatched": "Watching price",
@@ -1448,29 +1448,29 @@
   "catalog": {
     "meta": {
       "smartphones": {
-        "titleCount": "Smartphone Price Comparison & 10-Group Spec Filter ({count} Models) | Rate.vn",
-        "titleDefault": "Smartphone Price Comparison & AI Promo Audit | Rate.vn",
-        "description": "Filter smartphones by 10 standardized technical spec groups (PhoneArena/GSMArena), inspect true historical prices, and filter AI seeding reviews on Rate.vn."
+        "titleCount": "Smartphone price comparison ({count} models) | Rate.vn",
+        "titleDefault": "Smartphone price comparison and discount checks | Rate.vn",
+        "description": "Filter smartphones by 10 standard spec groups (PhoneArena/GSMArena), see true price history and read reviews with fakes filtered out by AI on Rate.vn."
       },
       "tablets": {
-        "titleCount": "Tablet Price Comparison ({count} normalized models) | Rate.vn",
-        "titleDefault": "Tablet Price Comparison & AI Promo Audit | Rate.vn",
-        "description": "Search and filter tablets (iPad, Galaxy Tab, Xiaomi Pad) across 10 standardized spec groups, verify true historical prices, and filter out seeding reviews on Rate.vn."
+        "titleCount": "Tablet price comparison ({count} models) | Rate.vn",
+        "titleDefault": "Tablet price comparison and discount checks | Rate.vn",
+        "description": "Search and filter tablets (iPad, Galaxy Tab, Xiaomi Pad) across 10 standard spec groups, see true price history and skip fake reviews on Rate.vn."
       },
       "laptops": {
-        "titleCount": "Laptop Price Comparison ({count} normalized models) | Rate.vn",
-        "titleDefault": "Laptop Price Comparison & AI Promo Audit | Rate.vn",
-        "description": "Search and filter laptops (MacBook, ThinkPad, ASUS ROG, Dell XPS) across 10 standardized spec groups, verify true historical prices, and filter out seeding reviews on Rate.vn."
+        "titleCount": "Laptop price comparison ({count} models) | Rate.vn",
+        "titleDefault": "Laptop price comparison and discount checks | Rate.vn",
+        "description": "Search and filter laptops (MacBook, ThinkPad, ASUS ROG, Dell XPS) across 10 standard spec groups, see true price history and skip fake reviews on Rate.vn."
       },
       "smartwatches": {
-        "titleCount": "Smartwatch Price Comparison ({count} normalized models) | Rate.vn",
-        "titleDefault": "Smartwatch Price Comparison & AI Promo Audit | Rate.vn",
-        "description": "Search and filter smartwatches (Apple Watch, Galaxy Watch, Garmin, Xiaomi Watch, Huawei Watch) across 10 standardized spec groups, verify true historical prices, and filter out seeding reviews on Rate.vn."
+        "titleCount": "Smartwatch price comparison ({count} models) | Rate.vn",
+        "titleDefault": "Smartwatch price comparison and discount checks | Rate.vn",
+        "description": "Search and filter smartwatches (Apple Watch, Galaxy Watch, Garmin, Xiaomi Watch, Huawei Watch) across 10 standard spec groups, see true price history and skip fake reviews on Rate.vn."
       },
       "earbuds": {
-        "titleCount": "ANC Wireless Earbuds Price Comparison ({count} normalized models) | Rate.vn",
-        "titleDefault": "ANC Wireless Earbuds Price Comparison & AI Promo Audit | Rate.vn",
-        "description": "Search and filter ANC wireless earbuds (AirPods Pro, Sony WF-1000XM5, Galaxy Buds, Bose, Sennheiser) across 10 standardized spec groups, true price history, and AI review audits on Rate.vn."
+        "titleCount": "ANC earbuds price comparison ({count} models) | Rate.vn",
+        "titleDefault": "ANC earbuds price comparison and discount checks | Rate.vn",
+        "description": "Search and filter ANC wireless earbuds (AirPods Pro, Sony WF-1000XM5, Galaxy Buds, Bose, Sennheiser) across 10 standard spec groups, with true price history and AI-checked reviews on Rate.vn."
       }
     },
     "sortOptions": {
@@ -1584,13 +1584,13 @@
             "desc": "Supports NFC connectivity and contactless payments"
           },
           "fastCharge": {
-            "label": "Magnetic Fast Charge",
+            "label": "Magnetic fast charging",
             "desc": "Supports magnetic wireless fast charging"
           }
         }
       },
       "earbuds": {
-        "title": "Wireless & ANC Earbuds",
+        "title": "Wireless and ANC earbuds",
         "subtitle": "Compare Active Noise Cancellation (ANC), Hi-Res audio codecs (LDAC/aptX), battery life, and real cross-platform prices",
         "searchPlaceholder": "Search AirPods Pro, Sony WF-1000XM5, Galaxy Buds, Bose, Sennheiser...",
         "presets": {
@@ -1623,12 +1623,12 @@
       "versus1v1Badge": "1v1: {brandA} vs {brandB}",
       "leaderboardBadge": "Leaderboard",
       "sortByPrefix": "Sort: {label}",
-      "radarBannerBadge": "DEAL RADAR & FAKE SALE TRAPS ({title})",
-      "radarAnalyzedSub": "Audited {count} store listings across 10 marketplaces",
-      "viewAllRadarBtn": "Explore Full 10-Platform Radar",
+      "radarBannerBadge": "Price lows and fake-sale warnings ({title})",
+      "radarAnalyzedSub": "Checked {count} store listings across 10 marketplaces",
+      "viewAllRadarBtn": "See all deals across 10 stores",
       "vsMedianBadge": "-{pct}% vs median",
       "fakeMarkupBadge": "Inflated +{pct}%",
-      "spreadHeader": "Largest 10-Marketplace Price Spread ({title}):",
+      "spreadHeader": "Largest price gap across 10 marketplaces ({title}):",
       "spreadSub": "Save millions of VND by choosing the right marketplace",
       "spreadDiffBadge": "Spread +{pct}% ({amount} ₫)",
       "emptySyncingTitle": "Category \"{title}\" is awaiting normalized product data sync",
@@ -1637,7 +1637,7 @@
       "emptyMatchingDesc": "Try widening the price range or relaxing hardware filter criteria to see more models.",
       "resetFiltersBtn": "Reset filters",
       "browseSmartphonesBtn": "Browse available Smartphones →",
-      "merchantProfilesBtn": "Merchant Trust Profiles",
+      "merchantProfilesBtn": "Seller trust profiles",
       "radarDealsTitle": "Real lows",
       "radarTrapsTitle": "Inflated list-price warnings",
       "paginationLabel": "Catalogue pages",
@@ -1670,7 +1670,7 @@
       "featuresHeader": "Key Features (10 Field Groups)",
       "filteringBtn": "Filtering data...",
       "applyFiltersBtn": "Apply Filters",
-      "clearAllFiltersBtn": "Clear All Filters",
+      "clearAllFiltersBtn": "Clear all filters",
       "rangeFrom": "From:",
       "rangeTo": "To:",
       "minPriceAria": "Minimum price",
