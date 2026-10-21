@@ -79,6 +79,38 @@ function main() {
       'Đánh giá đa tiêu chí từ cộng đồng Rate.vn đạt chuẩn độ dài và chi tiết kỹ thuật.',
       'reasonCommunityAccepted',
     ],
+    [
+      'Phát hiện cụm từ bình luận cày xu mẫu, tự động loại khỏi điểm trung bình JReviews.',
+      'reasonCommunityCoinSpam',
+    ],
+    [
+      'Phát hiện đường dẫn quảng cáo hoặc điều hướng ngoài luồng nghi vấn Seeding.',
+      'reasonCommunityAdLink',
+    ],
+    [
+      'Nghi vấn bình luận điều hướng sang đối thủ cạnh tranh thiếu bằng chứng trải nghiệm sản phẩm.',
+      'reasonCommunityCompetitor',
+    ],
+    [
+      'Nội dung quá ngắn, chưa đủ thông tin kiểm chứng trải nghiệm thực tế.',
+      'reasonCommunityTooShort',
+    ],
+    [
+      'Phát hiện cụm từ bình luận cày xu mẫu, loại khỏi điểm trung bình.',
+      'reasonCommunityCoinSpamExcluded',
+    ],
+    [
+      'Phát hiện đường dẫn quảng cáo hoặc điều hướng ngoài luồng, loại khỏi điểm trung bình.',
+      'reasonCommunityAdLinkExcluded',
+    ],
+    [
+      'Nghi vấn điều hướng sang đối thủ, loại khỏi điểm trung bình.',
+      'reasonCommunityCompetitorExcluded',
+    ],
+    [
+      'Nội dung quá ngắn để kiểm chứng trải nghiệm, loại khỏi điểm trung bình.',
+      'reasonCommunityTooShortExcluded',
+    ],
   ];
   const covered = new Set<string>();
   for (const [text, key] of samples) {

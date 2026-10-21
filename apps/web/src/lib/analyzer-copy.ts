@@ -20,6 +20,14 @@ export type AnalyzerCopyKey =
   | 'reasonCommunityDownvoted'
   | 'reasonCommunityPending'
   | 'reasonCommunityAccepted'
+  | 'reasonCommunityCoinSpam'
+  | 'reasonCommunityAdLink'
+  | 'reasonCommunityCompetitor'
+  | 'reasonCommunityTooShort'
+  | 'reasonCommunityCoinSpamExcluded'
+  | 'reasonCommunityAdLinkExcluded'
+  | 'reasonCommunityCompetitorExcluded'
+  | 'reasonCommunityTooShortExcluded'
   | 'summaryDefault'
   | 'summaryNoAuthentic'
   | 'proPositiveFeedback';
@@ -84,6 +92,38 @@ const TEMPLATES: ReadonlyArray<readonly [RegExp, AnalyzerCopyKey]> = [
   [
     /^Đánh giá đa tiêu chí từ cộng đồng Rate\.vn đạt chuẩn độ dài và chi tiết kỹ thuật\.$/u,
     'reasonCommunityAccepted',
+  ],
+  [
+    /^Phát hiện cụm từ bình luận cày xu mẫu, tự động loại khỏi điểm trung bình JReviews\.$/u,
+    'reasonCommunityCoinSpam',
+  ],
+  [
+    /^Phát hiện đường dẫn quảng cáo hoặc điều hướng ngoài luồng nghi vấn Seeding\.$/u,
+    'reasonCommunityAdLink',
+  ],
+  [
+    /^Nghi vấn bình luận điều hướng sang đối thủ cạnh tranh thiếu bằng chứng trải nghiệm sản phẩm\.$/u,
+    'reasonCommunityCompetitor',
+  ],
+  [
+    /^Nội dung quá ngắn, chưa đủ thông tin kiểm chứng trải nghiệm thực tế\.$/u,
+    'reasonCommunityTooShort',
+  ],
+  [
+    /^Phát hiện cụm từ bình luận cày xu mẫu, loại khỏi điểm trung bình\.$/u,
+    'reasonCommunityCoinSpamExcluded',
+  ],
+  [
+    /^Phát hiện đường dẫn quảng cáo hoặc điều hướng ngoài luồng, loại khỏi điểm trung bình\.$/u,
+    'reasonCommunityAdLinkExcluded',
+  ],
+  [
+    /^Nghi vấn điều hướng sang đối thủ, loại khỏi điểm trung bình\.$/u,
+    'reasonCommunityCompetitorExcluded',
+  ],
+  [
+    /^Nội dung quá ngắn để kiểm chứng trải nghiệm, loại khỏi điểm trung bình\.$/u,
+    'reasonCommunityTooShortExcluded',
   ],
   [/^Nhận phản hồi tích cực từ người dùng thực tế$/u, 'proPositiveFeedback'],
 ];
