@@ -1678,7 +1678,7 @@
     }
   },
   "heroSearch": {
-    "modeSearchBtn": "Tìm Sản Phẩm & Thông Số (10 Nhóm)",
+    "modeSearchBtn": "Tìm sản phẩm và thông số",
     "modeInspectBtn": "Dán link để kiểm tra giá ảo và độ tin cậy shop",
     "searchPlaceholder": "Tìm tên máy, chip (VD: iPhone 16, Apple A18) hoặc dán link Shopee...",
     "searchAriaLabel": "Tìm sản phẩm công nghệ hoặc dán link để kiểm tra",
@@ -1690,7 +1690,7 @@
     "normalizedProductsHeader": "Sản phẩm chuẩn hóa ({count})",
     "specFilterLink": "Bộ lọc 10 nhóm thông số →",
     "noMatchPrefix": "Không tìm thấy mẫu máy khớp với \"{query}\". Bạn có thể chuyển sang tab",
-    "inspectTabLinkBtn": "Kiểm định Link / Từ khóa",
+    "inspectTabLinkBtn": "Kiểm tra link hoặc từ khóa",
     "merchantsCount": "{count} nơi bán",
     "merchantsHeader": "Gian hàng & Hồ sơ Tín nhiệm ({count})",
     "viewAllMerchantsLink": "Xem tất cả shop →",

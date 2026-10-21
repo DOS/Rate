@@ -16,6 +16,8 @@ for (const [locale, hero] of Object.entries(HERO)) {
     expect((await page.goto('/'))?.status()).toBe(200);
     await expect(page.locator('html')).toHaveAttribute('lang', locale);
     await expect(page.locator('h1')).toHaveText(hero);
+    // The deal block is seeded, so the jargon check below covers it.
+    await expect(page.getByTestId('homepage-deal-radar')).toBeVisible();
     // CSS uppercases some eyebrows, so compare in lower case.
     const text = (await page.locator('body').innerText()).toLowerCase();
     for (const jargon of ['radar', 'audit', 'kiểm định', 'kèo']) {

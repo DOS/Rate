@@ -1678,7 +1678,7 @@
     }
   },
   "heroSearch": {
-    "modeSearchBtn": "Search Products & 10-Group Specs",
+    "modeSearchBtn": "Search products and specs",
     "modeInspectBtn": "Check a link for fake sales and seller trust",
     "searchPlaceholder": "Search model, chipset (e.g. iPhone 16, Apple A18) or paste Shopee link...",
     "searchAriaLabel": "Search tech products or paste a store link to check",
@@ -1690,7 +1690,7 @@
     "normalizedProductsHeader": "Normalized Products ({count})",
     "specFilterLink": "10-group spec filters →",
     "noMatchPrefix": "No model matches \"{query}\". You can switch to",
-    "inspectTabLinkBtn": "Inspect Link / Keyword",
+    "inspectTabLinkBtn": "Check a link or keyword",
     "merchantsCount": "{count} stores",
     "merchantsHeader": "Merchants & Trust Profiles ({count})",
     "viewAllMerchantsLink": "View all shops →",
