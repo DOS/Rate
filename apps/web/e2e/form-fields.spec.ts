@@ -25,11 +25,14 @@ for (const path of PAGES) {
   test(`text fields have a visible outline on ${path}`, async ({ page }) => {
     const res = await page.goto(path);
     expect(res?.status()).toBe(200);
-    // Wait for a laid-out field: some pages attach hidden inputs first and
-    // render the visible ones on hydration.
+    // Wait for a laid-out field this test checks: some pages attach hidden
+    // inputs or a borderless search box first and render the rest on
+    // hydration.
     await expect(
       page
-        .locator('input.form-control:visible, textarea.form-control:visible')
+        .locator(
+          'input.form-control:not(.border-0):visible, textarea.form-control:not(.border-0):visible'
+        )
         .first()
     ).toBeVisible();
     const fields = await page.evaluate(() =>
