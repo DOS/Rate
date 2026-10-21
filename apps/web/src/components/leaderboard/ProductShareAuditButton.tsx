@@ -134,7 +134,7 @@ export default function ProductShareAuditButton({
   const handleDownloadProductJson = () => {
     if (typeof window === 'undefined') return;
     const payload = {
-      source: 'Rate.vn Product Audit Summary',
+      source: 'Rate.vn product summary',
       exportedAt: new Date().toISOString(),
       product: {
         name,

@@ -145,7 +145,7 @@ To ensure Rate.vn is unmistakably a **Rating & Review Platform**, every Product 
 
 ### 5.1 Homepage (`/[locale]/page.tsx`)
 
-- **Dark Obsidian Command Hero:** Focuses on **Tra cứu Điểm Đánh Giá Đa Tiêu Chí, Lọc Review Ảo (Anti-Seeding) & So Sánh Thông Số Chuẩn 10 Nhóm**.
+- **Dark Obsidian Command Hero:** Focuses on **tra cứu giá thật và độ tin cậy gian hàng trước khi mua** (multi-criteria ratings, fake-review filtering and 10-group spec comparison).
 - **Product Intelligence Cards (`.rate-product-card`):**
   - **Header Strip:** Brand + Category pill on the left; **Dual Rating Badge (`★ 4.9` User + `Lab 4.9`)** prominently on the right.
   - **Review Authenticity Pill:** Shows `94% Review thật` (Emerald) and `5 tiêu chí chấm điểm` above hardware pills.

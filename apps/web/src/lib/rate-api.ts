@@ -787,7 +787,7 @@ export function computeBayesianRatingSummary(
       effectiveWeightSum: 0,
       confidenceRatio: 0,
       confidenceTier: 'insufficient_data',
-      tierLabelVi: 'Ít mẫu kiểm chứng (Bayesian Prior)',
+      tierLabelVi: 'Ít mẫu kiểm chứng (Bayesian prior)',
     };
   }
 
@@ -808,13 +808,13 @@ export function computeBayesianRatingSummary(
   let tierLabelVi = 'Ít mẫu kiểm chứng (Đã làm mượt Bayesian)';
   if (effectiveWeightSum >= 12) {
     confidenceTier = 'high';
-    tierLabelVi = 'Độ tin cậy cao (Bayesian High)';
+    tierLabelVi = 'Độ tin cậy cao (Bayesian high)';
   } else if (effectiveWeightSum >= 4) {
     confidenceTier = 'medium';
-    tierLabelVi = 'Độ tin cậy trung bình (Bayesian Medium)';
+    tierLabelVi = 'Độ tin cậy trung bình (Bayesian medium)';
   } else if (effectiveWeightSum >= 1.5) {
     confidenceTier = 'low';
-    tierLabelVi = 'Độ tin cậy thấp (Bayesian Low)';
+    tierLabelVi = 'Độ tin cậy thấp (Bayesian low)';
   }
 
   return {
@@ -2343,7 +2343,7 @@ export async function getMasterProductPriceHistory(
           claimedDiscountPct - realDiscountVsMedianPct >= 10)
       ) {
         verdict = 'fake_discount';
-        badgeLabel = 'Cảnh báo Giảm giá ảo';
+        badgeLabel = 'Cảnh báo giảm giá ảo';
         explanation = `Gian hàng niêm yết giá gạch ngang ${priceOriginal.toLocaleString('vi-VN')} ₫ (-${claimedDiscountPct}%), nhưng giá bán thực tế lịch sử chưa từng vượt ${histMax.toLocaleString('vi-VN')} ₫ (trung vị: ${histMedian.toLocaleString('vi-VN')} ₫).`;
         fakeDiscountCount += 1;
       } else if (claimedDiscountPct - realDiscountVsMedianPct >= 6) {

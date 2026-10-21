@@ -7278,23 +7278,148 @@ async function runCoreArchitectureSuite() {
         assert.ok(checked > 0, `${locale}.${ns}: no export keys checked`);
       }
     }
-    for (const file of [
-      'components/reviews/JReviewsSection.tsx',
-      'components/deals/DealFinderWorkspace.tsx',
-      'components/leaderboard/ProductSpecsExportToolbar.tsx',
-    ]) {
-      const src = fs.readFileSync(
-        path.join(repoRoot, 'apps/web/src', file),
-        'utf8'
-      );
+    // Hardcoded export text in every component, comments left out (#673).
+    const componentsDir = path.join(repoRoot, 'apps/web/src/components');
+    const tsxFiles = (
+      fs.readdirSync(componentsDir, {
+        recursive: true,
+      }) as string[]
+    ).filter((f) => f.endsWith('.tsx'));
+    assert.ok(tsxFiles.length >= 30, 'components were scanned');
+    for (const file of tsxFiles) {
+      const src = fs
+        .readFileSync(path.join(componentsDir, file), 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/^\s*\/\/.*$/gm, '');
       assert.ok(
-        !/AI-Audited|Deal Radar Signal|Anomaly Radar/.test(src),
-        `${file} export text must use plain words (#661)`
+        !/Deal Radar|Radar Genuine|Radar Fake|Anomaly Radar|AI Seeding|AI-Audited|\bAudit\b/.test(
+          src
+        ),
+        `components/${file} export text must use plain words (#661, #673)`
       );
     }
   }
 
   console.log('  ✅ [82/82] Plain wording in exports (#661) passed');
+
+  // =========================================================================
+  // 83. No jargon in any shopper-facing message (#673)
+  // =========================================================================
+  {
+    // The developer docs keep their technical terms on purpose.
+    const technicalNamespaces = new Set(['developers', 'openapi']);
+    const jargon = /radar|kèo|audit|kiểm định|kiểm toán|seeding/i;
+    const offenders: string[] = [];
+    const walk = (node: unknown, key: string, locale: string) => {
+      if (typeof node === 'string') {
+        // {seeding} is a placeholder name, not shown text.
+        if (jargon.test(node.replace(/\{\w+\}/g, '')))
+          offenders.push(`${locale}.${key}`);
+      } else if (node && typeof node === 'object') {
+        for (const [k, v] of Object.entries(node))
+          walk(v, key ? `${key}.${k}` : k, locale);
+      }
+    };
+    for (const [locale, messages] of Object.entries({
+      vi: viMessages,
+      en: enMessages,
+      cs: csMessages,
+    })) {
+      for (const [ns, node] of Object.entries(messages)) {
+        if (!technicalNamespaces.has(ns)) walk(node, ns, locale);
+      }
+    }
+    assert.deepEqual(
+      offenders,
+      [],
+      'shopper-facing messages must use plain words (#673)'
+    );
+  }
+
+  console.log(
+    '  ✅ [83/83] No jargon in shopper-facing messages (#673) passed'
+  );
+
+  // =========================================================================
+  // 84. English labels are sentence case (#677)
+  // =========================================================================
+  {
+    // Placeholders, names (brands, products, retailers, programs) and acronyms
+    // keep their capitals; two or more other capitalised words in a row mean
+    // Title Case.
+    const names =
+      /Rate\.vn|Rate Lab|Rate Cloud|DOS ID|DOSafe|JReviews|Markdown|TikTok Shop|Official Mall|Apple Watch|Galaxy Watch|Galaxy Buds|Galaxy Tab|Xiaomi Watch|Xiaomi Pad|Huawei Watch|AirPods Pro|Hoang Ha Mobile|Hoang Ha|Di Dong Viet|The Gioi Di Dong|Phong Vu|Natural Titanium|Alex Nguyen|Shopee|Lazada|Tiki|Apple|iPhone|Pro|Max|Samsung|Galaxy|Xiaomi|Google|Pixel|Huawei|Garmin|Sony|Bose|Sennheiser|MacBook|iPad|Rate\b|Bayesian \w+|Helpful|Report|[A-Z]{2,}\w*|\w+-[A-Z]\w*/g;
+    const strip = (s: string) => s.replace(/\{[^}]+\}/g, '').replace(names, '');
+    const titleCase =
+      /\b[A-Z][a-z]+\b(\s+(&|and|of|to|for|in|the|a|on|with|by|or|from|vs|at)?\s*\b[A-Z][a-z]+\b)+/;
+    const allowed = new Set<string>();
+    const offenders: string[] = [];
+    const walk = (node: unknown, key: string) => {
+      if (typeof node === 'string') {
+        if (!allowed.has(key) && titleCase.test(strip(node)))
+          offenders.push(`${key}: ${node}`);
+      } else if (node && typeof node === 'object') {
+        for (const [k, v] of Object.entries(node))
+          walk(v, key ? `${key}.${k}` : k);
+      }
+    };
+    for (const [ns, node] of Object.entries(enMessages)) {
+      if (ns !== 'developers' && ns !== 'openapi') walk(node, ns);
+    }
+    assert.deepEqual(
+      offenders,
+      [],
+      'English labels must be sentence case (#677)'
+    );
+  }
+
+  console.log('  ✅ [84/84] English labels are sentence case (#677) passed');
+
+  // =========================================================================
+  // 85. Vietnamese labels are sentence case (#679)
+  // =========================================================================
+  {
+    const U =
+      'A-ZĐÂĂÊÔƠƯÁÀẢÃẠẤẦẨẪẬẮẰẲẴẶÉÈẺẼẸẾỀỂỄỆÍÌỈĨỊÓÒỎÕỌỐỒỔỖỘỚỜỞỠỢÚÙỦŨỤỨỪỬỮỰÝỲỶỸỴ';
+    const L =
+      'a-zđâăêôơưáàảãạấầẩẫậắằẳẵặéèẻẽẹếềểễệíìỉĩịóòỏõọốồổỗộớờởỡợúùủũụứừửữựýỳỷỹỵ';
+    // Names keep their capitals: brands, products, retailers, programs,
+    // places and people used in examples.
+    const names =
+      /Rate\.vn|Rate Lab|Rate Cloud|DOS ID|DOSafe|JReviews|Markdown|TikTok Shop|Official Mall|Apple Watch|Galaxy Watch|Galaxy Buds|Galaxy Tab|Xiaomi Watch|Xiaomi Pad|Huawei Watch|AirPods Pro|Hoàng Hà|Di Động Việt|Thế Giới Di Động|Phong Vũ|Việt Nam|Bộ TT&TT|Minh Quân|Hà Nội|Nguyễn Văn A|Pro Max|Pro|Titan Tự Nhiên|AI Review Analyzer|Rate Trust Score|Bayesian|GSMArena|PhoneArena|GitHub|Wi-Fi|Bluetooth|Hi-Res|Qi|MagSafe|Hz|Bayes|Rate Lab|API Playground|Kiểm tra link|Liên hệ|Hữu ích|Báo cáo|Shopee|Lazada|Tiki|Apple|iPhone|Samsung|Galaxy|Xiaomi|Google|Pixel|Sony|Bose|Sennheiser|MacBook|iPad|Rate\b|[A-ZĐ]{2,}\w*/g;
+    const strip = (s: string) =>
+      s
+        .normalize('NFC')
+        .replace(/\{[^}]+\}/g, '')
+        .replace(names, ' ');
+    // Vietnamese Title Case often capitalises each compound word ("Màn hình &
+    // Hiển thị"), so a capital after a lowercase word or "&" counts too.
+    const titleCase = new RegExp(
+      `(?:[${L}]|&)\\s+[${U}][${L}]+|(^|[\\s(])[${U}][${L}]+\\s+[${U}][${L}]+`,
+      'u'
+    );
+    const offenders: string[] = [];
+    const walk = (node: unknown, key: string) => {
+      if (typeof node === 'string') {
+        if (titleCase.test(strip(node))) offenders.push(`${key}: ${node}`);
+      } else if (node && typeof node === 'object') {
+        for (const [k, v] of Object.entries(node))
+          walk(v, key ? `${key}.${k}` : k);
+      }
+    };
+    // analyzerCopy rebuilds the analyzer's stored text, so it stays as stored.
+    for (const [ns, node] of Object.entries(viMessages)) {
+      if (!['developers', 'openapi', 'analyzerCopy'].includes(ns))
+        walk(node, ns);
+    }
+    assert.deepEqual(
+      offenders,
+      [],
+      'Vietnamese labels must be sentence case (#679)'
+    );
+  }
+
+  console.log('  ✅ [85/85] Vietnamese labels are sentence case (#679) passed');
 
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }

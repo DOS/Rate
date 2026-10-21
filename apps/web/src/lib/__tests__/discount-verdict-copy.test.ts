@@ -45,7 +45,7 @@ const base: OfferDiscountAnalysis = {
 
 const cases: Array<[string, OfferDiscountAnalysis]> = [
   [
-    'Cảnh báo Giảm giá ảo',
+    'Cảnh báo giảm giá ảo',
     {
       ...base,
       verdict: 'fake_discount',
