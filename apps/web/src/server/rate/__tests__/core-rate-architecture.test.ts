@@ -7199,6 +7199,54 @@ async function runCoreArchitectureSuite() {
     '  ✅ [81/81] Competitor sabotage adds no dynamic review risk (#645) passed'
   );
 
+  // =========================================================================
+  // 82. Plain wording in Markdown/CSV/JSON exports (#661)
+  // =========================================================================
+  {
+    const exportJargon = /audit|seeding|radar|kiểm định|kiểm toán|kèo thơm/i;
+    for (const [locale, messages] of Object.entries({
+      vi: viMessages,
+      en: enMessages,
+      cs: csMessages,
+    })) {
+      for (const ns of ['productDetail', 'deals', 'watchlist'] as const) {
+        const entries = Object.entries(
+          (messages as Record<string, Record<string, unknown>>)[ns] ?? {}
+        );
+        let checked = 0;
+        for (const [key, value] of entries) {
+          // Export content only; the export buttons are page labels.
+          // shareAuditPriceSources is inserted into the Markdown summary.
+          const isExport =
+            /^md|Md|Csv|Json/.test(key) || key === 'shareAuditPriceSources';
+          if (!isExport || /^(copy|copied|export)/.test(key)) continue;
+          checked += 1;
+          assert.ok(
+            typeof value !== 'string' || !exportJargon.test(value),
+            `${locale}.${ns}.${key} export text must use plain words (#661): ${String(value)}`
+          );
+        }
+        assert.ok(checked > 0, `${locale}.${ns}: no export keys checked`);
+      }
+    }
+    for (const file of [
+      'components/reviews/JReviewsSection.tsx',
+      'components/deals/DealFinderWorkspace.tsx',
+      'components/leaderboard/ProductSpecsExportToolbar.tsx',
+    ]) {
+      const src = fs.readFileSync(
+        path.join(repoRoot, 'apps/web/src', file),
+        'utf8'
+      );
+      assert.ok(
+        !/AI-Audited|Deal Radar Signal|Anomaly Radar/.test(src),
+        `${file} export text must use plain words (#661)`
+      );
+    }
+  }
+
+  console.log('  ✅ [82/82] Plain wording in exports (#661) passed');
+
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
 
