@@ -592,7 +592,7 @@ function renderPanelContent(
     ? radarSig.verdict === 'genuine_deal'
       ? `<span class="verdict-pill verdict-genuine_deal" style="margin-left:6px;">🔥 Đáy giá đa sàn (-${formatSafeNumber(radarSig.savingsPct, { min: 0, max: 100 })}%)</span>`
       : radarSig.verdict === 'fake_sale_trap'
-        ? `<span class="verdict-pill verdict-inflated_fake_sale" style="margin-left:6px;">🚨 Cảnh báo Sale Ảo (+${formatSafeNumber(radarSig.fakeMarkupPct, { min: 0, max: 10000 })}%)</span>`
+        ? `<span class="verdict-pill verdict-inflated_fake_sale" style="margin-left:6px;">🚨 Cảnh báo giảm giá ảo (+${formatSafeNumber(radarSig.fakeMarkupPct, { min: 0, max: 10000 })}%)</span>`
         : Number.isFinite(radarSpreadPct) && radarSpreadPct >= 5
           ? `<span class="verdict-pill" style="margin-left:6px;background:#1e293b;color:#38bdf8;border:1px solid #0284c7;">📊 Lệch 10 sàn ${formatSafeNumber(radarSig.spreadPct, { min: 0, max: 10000 })}%</span>`
           : ''
