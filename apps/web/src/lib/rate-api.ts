@@ -2857,7 +2857,7 @@ export async function getSitemapRows(): Promise<SitemapRows> {
   return { products, merchants, categorySlugById };
 }
 
-function computeDynamicReviewRisk(allReviews: ReviewItem[]): {
+export function computeDynamicReviewRisk(allReviews: ReviewItem[]): {
   reviewRiskScore: number;
   breakdown: MerchantRiskBreakdown;
 } {
@@ -2904,10 +2904,10 @@ function computeDynamicReviewRisk(allReviews: ReviewItem[]): {
   const flaggedTotal = coinSpam + seedingFake + sabotageOrBombing;
   const suspiciousRatioPct = Math.round((flaggedTotal / total) * 1000) / 10;
 
-  // Weighted risk formula matching Rate review risk engine:
-  // seeding_fake carries heavy weight (1.0), coin_spam moderate (0.35), sabotage (0.5)
-  const weightedPenalty =
-    (seedingFake * 1.0 + coinSpam * 0.35 + sabotageOrBombing * 0.5) / total;
+  // seeding_fake carries heavy weight (1.0), coin_spam moderate (0.35).
+  // Competitor sabotage and review bombing are attacks on the seller: like the
+  // importer, they are filtered out but add no risk (DOS/Rate#645).
+  const weightedPenalty = (seedingFake * 1.0 + coinSpam * 0.35) / total;
   const reviewRiskScore = Math.min(
     100,
     Math.max(0, Math.round(weightedPenalty * 100))
