@@ -50,6 +50,13 @@ for (const [prefix, lang] of [
           ).not.toContain(term);
         }
       }
+      // Code names must not leak into body text either (DOS/Rate#649).
+      const body = (
+        await page.locator('main, .container').first().innerText()
+      ).toLowerCase();
+      for (const codeName of ['entity_hash', 'dosafe.threat_intel']) {
+        expect(body).not.toContain(codeName);
+      }
       const title = (await page.title()).toLowerCase();
       const description = (
         (await page
