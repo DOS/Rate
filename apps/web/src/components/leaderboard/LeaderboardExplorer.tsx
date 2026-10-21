@@ -520,7 +520,7 @@ export default function LeaderboardExplorer({
       'User Rating (/5.0)',
       'Expert Score (/10)',
       'Reference Price (VND)',
-      'Deal Radar',
+      'Price signal',
     ];
     const sep = headers.map(() => '---');
     const rows = rankedEntries.map((entry, idx) => {

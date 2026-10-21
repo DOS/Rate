@@ -142,7 +142,7 @@ export default function MerchantShareAuditButton({
   const handleDownloadMerchantJson = () => {
     if (typeof window === 'undefined') return;
     const payload = {
-      source: 'Rate.vn Merchant Dual-Risk Audit',
+      source: 'Rate.vn seller risk summary',
       exportedAt: new Date().toISOString(),
       merchant: {
         name: merchantName,

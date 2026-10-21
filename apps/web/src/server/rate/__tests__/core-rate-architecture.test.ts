@@ -7278,23 +7278,67 @@ async function runCoreArchitectureSuite() {
         assert.ok(checked > 0, `${locale}.${ns}: no export keys checked`);
       }
     }
-    for (const file of [
-      'components/reviews/JReviewsSection.tsx',
-      'components/deals/DealFinderWorkspace.tsx',
-      'components/leaderboard/ProductSpecsExportToolbar.tsx',
-    ]) {
-      const src = fs.readFileSync(
-        path.join(repoRoot, 'apps/web/src', file),
-        'utf8'
-      );
+    // Hardcoded export text in every component, comments left out (#673).
+    const componentsDir = path.join(repoRoot, 'apps/web/src/components');
+    const tsxFiles = (
+      fs.readdirSync(componentsDir, {
+        recursive: true,
+      }) as string[]
+    ).filter((f) => f.endsWith('.tsx'));
+    assert.ok(tsxFiles.length >= 30, 'components were scanned');
+    for (const file of tsxFiles) {
+      const src = fs
+        .readFileSync(path.join(componentsDir, file), 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/^\s*\/\/.*$/gm, '');
       assert.ok(
-        !/AI-Audited|Deal Radar Signal|Anomaly Radar/.test(src),
-        `${file} export text must use plain words (#661)`
+        !/Deal Radar|Radar Genuine|Radar Fake|Anomaly Radar|AI Seeding|AI-Audited|\bAudit\b/.test(
+          src
+        ),
+        `components/${file} export text must use plain words (#661, #673)`
       );
     }
   }
 
   console.log('  ✅ [82/82] Plain wording in exports (#661) passed');
+
+  // =========================================================================
+  // 83. No jargon in any shopper-facing message (#673)
+  // =========================================================================
+  {
+    // The developer docs keep their technical terms on purpose.
+    const technicalNamespaces = new Set(['developers', 'openapi']);
+    const jargon = /radar|kèo|audit|kiểm định|kiểm toán|seeding/i;
+    const offenders: string[] = [];
+    const walk = (node: unknown, key: string, locale: string) => {
+      if (typeof node === 'string') {
+        // {seeding} is a placeholder name, not shown text.
+        if (jargon.test(node.replace(/\{\w+\}/g, '')))
+          offenders.push(`${locale}.${key}`);
+      } else if (node && typeof node === 'object') {
+        for (const [k, v] of Object.entries(node))
+          walk(v, key ? `${key}.${k}` : k, locale);
+      }
+    };
+    for (const [locale, messages] of Object.entries({
+      vi: viMessages,
+      en: enMessages,
+      cs: csMessages,
+    })) {
+      for (const [ns, node] of Object.entries(messages)) {
+        if (!technicalNamespaces.has(ns)) walk(node, ns, locale);
+      }
+    }
+    assert.deepEqual(
+      offenders,
+      [],
+      'shopper-facing messages must use plain words (#673)'
+    );
+  }
+
+  console.log(
+    '  ✅ [83/83] No jargon in shopper-facing messages (#673) passed'
+  );
 
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }

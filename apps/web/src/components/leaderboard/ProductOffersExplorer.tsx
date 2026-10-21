@@ -166,7 +166,7 @@ export default function ProductOffersExplorer({
       : '';
 
     const md = [
-      `### 🛡️ Rate.vn Cross-Platform Price Audit: ${productName}`,
+      `### 🛡️ Rate.vn cross-store price check: ${productName}`,
       radarLine + spreadLine,
       `| ${headers.join(' | ')} |`,
       `| ${sep.join(' | ')} |`,

@@ -204,7 +204,7 @@ export default function DeepInspectWorkspace({
           ? [
               `- **Master Product:** ${master.name} (\`${master.model_key}\`)`,
               `- **JReviews Buyer Score:** ${masterUserRating > 0 ? `★ ${masterUserRating.toFixed(2)}/5.0` : t('userNoScore')}${masterExpertRating10 != null ? ` | Lab ${masterExpertRating10.toFixed(1)}/10` : ''} ${t('verifiedReviewsCount', { count: master.authentic_review_count || master.total_reviews || 0 })}`,
-              `- **Deal Radar:** ${radarMarkdownCell(radarSignal)}`,
+              `- **Price signal:** ${radarMarkdownCell(radarSignal)}`,
             ]
           : []),
         ...(discount
@@ -220,12 +220,12 @@ export default function DeepInspectWorkspace({
           : []),
         ...(matchedGenuineDeal
           ? [
-              `- **Radar Genuine Deal:** ${t('radarGenuinePill', { pct: matchedGenuineDeal.savingsVsMedianPct, platform: matchedGenuineDeal.platform.toUpperCase(), price: matchedGenuineDeal.priceCurrent.toLocaleString('vi-VN') })}`,
+              `- **Cross-store low:** ${t('radarGenuinePill', { pct: matchedGenuineDeal.savingsVsMedianPct, platform: matchedGenuineDeal.platform.toUpperCase(), price: matchedGenuineDeal.priceCurrent.toLocaleString('vi-VN') })}`,
             ]
           : []),
         ...(matchedFakeTrap
           ? [
-              `- **Radar Fake Sale Trap:** ${t('radarFakePill', { pct: matchedFakeTrap.fakeMarkupPct, platform: matchedFakeTrap.platform.toUpperCase() })}`,
+              `- **Fake sale warning:** ${t('radarFakePill', { pct: matchedFakeTrap.fakeMarkupPct, platform: matchedFakeTrap.platform.toUpperCase() })}`,
             ]
           : []),
         ...(matchedPriceSpread
