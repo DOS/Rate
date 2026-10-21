@@ -7386,14 +7386,16 @@ async function runCoreArchitectureSuite() {
     // Names keep their capitals: brands, products, retailers, programs,
     // places and people used in examples.
     const names =
-      /Rate\.vn|Rate Lab|Rate Cloud|DOS ID|DOSafe|JReviews|Markdown|TikTok Shop|Official Mall|Apple Watch|Galaxy Watch|Galaxy Buds|Galaxy Tab|Xiaomi Watch|Xiaomi Pad|Huawei Watch|AirPods Pro|Hoàng Hà|Di Động Việt|Thế Giới Di Động|Phong Vũ|Việt Nam|Bộ TT&TT|Minh Quân|Hà Nội|Nguyễn Văn A|Pro Max|Pro|Titan Tự Nhiên|AI Review Analyzer|Rate Trust Score|Bayesian|Shopee|Lazada|Tiki|Apple|iPhone|Samsung|Galaxy|Xiaomi|Google|Pixel|Sony|Bose|Sennheiser|MacBook|iPad|Rate\b|[A-ZĐ]{2,}\w*/g;
+      /Rate\.vn|Rate Lab|Rate Cloud|DOS ID|DOSafe|JReviews|Markdown|TikTok Shop|Official Mall|Apple Watch|Galaxy Watch|Galaxy Buds|Galaxy Tab|Xiaomi Watch|Xiaomi Pad|Huawei Watch|AirPods Pro|Hoàng Hà|Di Động Việt|Thế Giới Di Động|Phong Vũ|Việt Nam|Bộ TT&TT|Minh Quân|Hà Nội|Nguyễn Văn A|Pro Max|Pro|Titan Tự Nhiên|AI Review Analyzer|Rate Trust Score|Bayesian|GSMArena|PhoneArena|GitHub|Wi-Fi|Bluetooth|Hi-Res|Qi|MagSafe|Hz|Bayes|Rate Lab|API Playground|Kiểm tra link|Liên hệ|Hữu ích|Báo cáo|Shopee|Lazada|Tiki|Apple|iPhone|Samsung|Galaxy|Xiaomi|Google|Pixel|Sony|Bose|Sennheiser|MacBook|iPad|Rate\b|[A-ZĐ]{2,}\w*/g;
     const strip = (s: string) =>
       s
         .normalize('NFC')
         .replace(/\{[^}]+\}/g, '')
-        .replace(names, '');
+        .replace(names, ' ');
+    // Vietnamese Title Case often capitalises each compound word ("Màn hình &
+    // Hiển thị"), so a capital after a lowercase word or "&" counts too.
     const titleCase = new RegExp(
-      `(^|[\\s(])[${U}][${L}]+(\\s+(&|và|của|cho|theo|trên|với)?\\s*[${U}][${L}]+)+`,
+      `(?:[${L}]|&)\\s+[${U}][${L}]+|(^|[\\s(])[${U}][${L}]+\\s+[${U}][${L}]+`,
       'u'
     );
     const offenders: string[] = [];

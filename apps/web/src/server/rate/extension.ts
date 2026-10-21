@@ -636,7 +636,7 @@ export function evaluateExtensionPriceVerdict(params: {
   ) {
     return {
       verdict: 'inflated_fake_sale',
-      badgeLabel: 'Cảnh báo Giảm giá ảo',
+      badgeLabel: 'Cảnh báo giảm giá ảo',
       explanation: `Gian hàng treo giá gạch ngang ${effectiveOriginalPrice.toLocaleString('vi-VN')} ₫ (-${claimedDiscountPct}%), nhưng giá bán thực tế (${effectivePrice.toLocaleString('vi-VN')} ₫) vẫn cao hơn hoặc ngang trung vị thị trường (${marketMedianPrice.toLocaleString('vi-VN')} ₫) và vượt đỉnh lịch sử (${histMax.toLocaleString('vi-VN')} ₫).`,
       observedPrice: effectivePrice,
       observedOriginalPrice: effectiveOriginalPrice,

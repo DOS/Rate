@@ -2,7 +2,7 @@
  * JReviews-Inspired Directory -> Category -> Listing Type Filter Registry
  *
  * Architecture:
- * - Directory: Top-level vertical (e.g. `tech_electronics` - Công nghệ & Điện tử)
+ * - Directory: Top-level vertical (e.g. `tech_electronics` - Công nghệ & điện tử)
  * - Category: Specific row in `rate.categories` (e.g. `smartphones`, `laptops`, `tablets`, `smartwatches`, `earbuds`)
  * - Listing Type Filter Schema: Category-specific filter widgets mapped to the 10 Field Groups
  *   (`availability`, `design`, `display`, `hardware`, `battery`, `camera`, `connectivity`, `cellular`, `multimedia`, `regulatory`)
@@ -87,7 +87,7 @@ export const CATEGORY_FILTER_SCHEMAS: Record<string, CategoryFilterSchema> = {
   smartphones: {
     categorySlug: 'smartphones',
     directorySlug: 'tech_electronics',
-    directoryName: 'Công nghệ & Thiết bị số',
+    directoryName: 'Công nghệ & thiết bị số',
     categoryTitle: 'Điện thoại thông minh',
     categorySubtitle:
       'Tra cứu dữ liệu kỹ thuật 10 nhóm thông số chuẩn GSMArena & PhoneArena, đối chiếu giá đa sàn và lọc đánh giá thật bằng AI',
@@ -172,7 +172,7 @@ export const CATEGORY_FILTER_SCHEMAS: Record<string, CategoryFilterSchema> = {
   tablets: {
     categorySlug: 'tablets',
     directorySlug: 'tech_electronics',
-    directoryName: 'Công nghệ & Thiết bị số',
+    directoryName: 'Công nghệ & thiết bị số',
     categoryTitle: 'Máy tính bảng',
     categorySubtitle:
       'So sánh thông số kỹ thuật 10 nhóm và giá bán máy tính bảng từ các sàn TMĐT',
@@ -229,7 +229,7 @@ export const CATEGORY_FILTER_SCHEMAS: Record<string, CategoryFilterSchema> = {
   laptops: {
     categorySlug: 'laptops',
     directorySlug: 'tech_electronics',
-    directoryName: 'Công nghệ & Thiết bị số',
+    directoryName: 'Công nghệ & thiết bị số',
     categoryTitle: 'Laptop',
     categorySubtitle:
       'Đối chiếu cấu hình phần cứng 10 nhóm và lịch sử giá laptop chính hãng',
@@ -280,7 +280,7 @@ export const CATEGORY_FILTER_SCHEMAS: Record<string, CategoryFilterSchema> = {
   smartwatches: {
     categorySlug: 'smartwatches',
     directorySlug: 'tech_electronics',
-    directoryName: 'Công nghệ & Thiết bị số',
+    directoryName: 'Công nghệ & thiết bị số',
     categoryTitle: 'Đồng hồ thông minh',
     categorySubtitle:
       'Đối chiếu cảm biến sức khỏe, chuẩn kháng nước, GPS đa băng tần và lịch sử giá đồng hồ thông minh chính hãng',
@@ -346,7 +346,7 @@ export const CATEGORY_FILTER_SCHEMAS: Record<string, CategoryFilterSchema> = {
   earbuds: {
     categorySlug: 'earbuds',
     directorySlug: 'tech_electronics',
-    directoryName: 'Công nghệ & Thiết bị số',
+    directoryName: 'Công nghệ & thiết bị số',
     categoryTitle: 'Tai nghe không dây và chống ồn ANC',
     categorySubtitle:
       'So sánh khả năng chống ồn chủ động ANC, codec âm thanh Hi-Res (LDAC/aptX), thời lượng pin và giá bán thực tế trên nhiều sàn',
@@ -403,7 +403,7 @@ export const CATEGORY_FILTER_SCHEMAS: Record<string, CategoryFilterSchema> = {
 const DEFAULT_SMARTPHONE_SCHEMA: CategoryFilterSchema = {
   categorySlug: 'smartphones',
   directorySlug: 'tech_electronics',
-  directoryName: 'Công nghệ & Thiết bị số',
+  directoryName: 'Công nghệ & thiết bị số',
   categoryTitle: 'Điện thoại thông minh',
   categorySubtitle:
     'Tra cứu dữ liệu kỹ thuật 10 nhóm thông số chuẩn GSMArena & PhoneArena, đối chiếu giá đa sàn và lọc đánh giá thật bằng AI',

@@ -2343,7 +2343,7 @@ export async function getMasterProductPriceHistory(
           claimedDiscountPct - realDiscountVsMedianPct >= 10)
       ) {
         verdict = 'fake_discount';
-        badgeLabel = 'Cảnh báo Giảm giá ảo';
+        badgeLabel = 'Cảnh báo giảm giá ảo';
         explanation = `Gian hàng niêm yết giá gạch ngang ${priceOriginal.toLocaleString('vi-VN')} ₫ (-${claimedDiscountPct}%), nhưng giá bán thực tế lịch sử chưa từng vượt ${histMax.toLocaleString('vi-VN')} ₫ (trung vị: ${histMedian.toLocaleString('vi-VN')} ₫).`;
         fakeDiscountCount += 1;
       } else if (claimedDiscountPct - realDiscountVsMedianPct >= 6) {

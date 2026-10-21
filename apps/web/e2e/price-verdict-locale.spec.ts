@@ -5,7 +5,7 @@ import { expect, test } from '@playwright/test';
 // so this checks the visible text, not the raw HTML.
 const PRODUCT = '/smartphones/iphone-16-pro-max-256gb';
 const VI_VERDICT_TEXT = [
-  'Cảnh báo Giảm giá ảo',
+  'Cảnh báo giảm giá ảo',
   'Nghi nâng giá gốc',
   'Giảm giá thật',
   'Đáy giá lịch sử',
