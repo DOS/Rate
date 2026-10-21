@@ -2862,26 +2862,43 @@ export async function getSitemapRows(): Promise<SitemapRows> {
   return { products, merchants, categorySlugById };
 }
 
-export function computeDynamicReviewRisk(allReviews: ReviewItem[]): {
+// Text a platform fills in from the star rating itself, as in the importer's
+// isRatingOnlyComment (apps/importer/src/shopee/ai-review-analyzer.ts).
+const RATING_ONLY_LABEL_RE =
+  /^(?:(?:cực\s*k[ìỳ]|rất)\s+)?(?:không\s+)?hài\s+lòng$|^bình\s+thường$/i;
+
+function isRatingOnlyText(comment: string | null | undefined): boolean {
+  const text = (comment || '')
+    .normalize('NFC')
+    .replace(/[\s.!,]+$/u, '')
+    .trim();
+  return text.length === 0 || RATING_ONLY_LABEL_RE.test(text);
+}
+
+export interface DynamicReviewRiskMerchant {
+  isOfficial?: boolean | null;
+  platform?: string | null;
+  followerCount?: number | null;
+}
+
+/**
+ * Review risk from the reviews the page has, with the importer's formula
+ * (`evaluateMerchantRisk` in apps/importer/src/shopee/ai-review-analyzer.ts)
+ * so both agree (DOS/Rate#671): baseline 15, seeding up to +45, genuine 1-2
+ * star complaints up to +25, official store -15, free channels +10, 50k+
+ * followers -5. The price-anomaly term needs canonical prices and stays in the
+ * importer; pages show max(dynamic, persisted).
+ */
+export function computeDynamicReviewRisk(
+  allReviews: ReviewItem[],
+  merchant: DynamicReviewRiskMerchant = {}
+): {
   reviewRiskScore: number;
   breakdown: MerchantRiskBreakdown;
 } {
   // Unanalyzed community reviews carry no risk signal yet.
   const reviews = allReviews.filter((r) => !isPendingReview(r));
   const total = reviews.length;
-  if (total === 0) {
-    return {
-      reviewRiskScore: 0,
-      breakdown: {
-        total_reviews: 0,
-        authentic_count: 0,
-        coin_spam_count: 0,
-        seeding_fake_count: 0,
-        sabotage_or_bombing_count: 0,
-        suspicious_ratio_pct: 0,
-      },
-    };
-  }
 
   let authentic = 0;
   let coinSpam = 0;
@@ -2909,18 +2926,36 @@ export function computeDynamicReviewRisk(allReviews: ReviewItem[]): {
   }
 
   const flaggedTotal = coinSpam + seedingFake + sabotageOrBombing;
-  const suspiciousRatioPct = Math.round((flaggedTotal / total) * 1000) / 10;
+  const suspiciousRatioPct =
+    total > 0 ? Math.round((flaggedTotal / total) * 1000) / 10 : 0;
 
-  // Only seeding_fake adds risk. Coin-farming comments are buyers chasing
-  // rewards, and sabotage or review bombing are attacks on the seller: they
-  // are filtered out but add no risk, as in the importer (DOS/Rate#645, #654).
-  // Same seeding contribution as the importer, which stores
-  // review_risk_score: min(45, round(ratio * 75)) with the ratio rounded to
-  // three decimals. It is seedingRiskPenalty in @repo/shared-data, copied here
-  // so this client-bundled module does not pull in that package's runtime;
-  // core-rate-architecture.test.ts checks the two agree (DOS/Rate#671).
-  const seedingRatio = Number((seedingFake / total).toFixed(3));
-  const reviewRiskScore = Math.min(45, Math.round(seedingRatio * 75));
+  // Coin-farming comments, sabotage and review bombing are filtered out but
+  // add no risk (DOS/Rate#645, #654).
+  const divisor = Math.max(1, total);
+  let risk = 15;
+  const seedingRatio = Number((seedingFake / divisor).toFixed(3));
+  // Same seeding term as the importer: seedingRiskPenalty in @repo/shared-data,
+  // copied here so this client-bundled module does not pull in that package's
+  // runtime; core-rate-architecture.test.ts checks the two agree (#671).
+  if (seedingRatio > 0) risk += Math.min(45, Math.round(seedingRatio * 75));
+  // Genuine complaints; a star-only low rating counts at a quarter.
+  let lowStar = 0;
+  for (const r of reviews) {
+    if (
+      Number(r.rating_star) <= 2 &&
+      r.flag_category === 'authentic' &&
+      r.include_in_rating
+    ) {
+      lowStar += isRatingOnlyText(r.comment) ? 0.25 : 1;
+    }
+  }
+  const lowStarRatio = lowStar / divisor;
+  if (lowStarRatio >= 0.2) risk += Math.min(25, Math.round(lowStarRatio * 45));
+  if (merchant.isOfficial) risk -= 15;
+  else if (merchant.platform === 'facebook' || merchant.platform === 'website')
+    risk += 10;
+  if ((merchant.followerCount ?? 0) >= 50000) risk -= 5;
+  const reviewRiskScore = Math.max(0, Math.min(100, risk));
 
   return {
     reviewRiskScore,
@@ -3241,7 +3276,8 @@ export async function getMerchantsList(
         supabase
           .from('reviews')
           .select(
-            'id, product_id, review_flags(verdict, flag_category, include_in_rating)'
+            // rating_star and comment feed the complaint term (#671).
+            'id, product_id, rating_star, comment, review_flags(verdict, flag_category, include_in_rating)'
           )
           .in('product_id', chunk)
           .order('id')
@@ -3308,7 +3344,11 @@ export async function getMerchantsList(
     const mReviews = mappedReviewsByMerchant.get(m.id) ?? [];
     const dynamicRisk = persistedBreakdown
       ? null
-      : computeDynamicReviewRisk(mReviews);
+      : computeDynamicReviewRisk(mReviews, {
+          isOfficial: m.is_official,
+          platform: m.platform,
+          followerCount: Number(m.follower_count) || 0,
+        });
     const meta = (
       m.metadata && typeof m.metadata === 'object' ? m.metadata : {}
     ) as Record<string, unknown>;
@@ -3698,7 +3738,11 @@ export async function getMerchantProfileById(
   });
 
   const persistedBreakdown = extractPersistedBreakdown(merchantRow);
-  const dynamicRisk = computeDynamicReviewRisk(recentReviews);
+  const dynamicRisk = computeDynamicReviewRisk(recentReviews, {
+    isOfficial: merchantRow.is_official,
+    platform: merchantRow.platform,
+    followerCount: Number(merchantRow.follower_count) || 0,
+  });
   const meta = (
     merchantRow.metadata && typeof merchantRow.metadata === 'object'
       ? merchantRow.metadata
