@@ -33,4 +33,8 @@ test('deals load 12 at a time and filters restart paging', async ({ page }) => {
   }).toPass();
   await page.locator('input[type="search"]').first().fill('a');
   await expect(cards).toHaveCount(12);
+
+  // Going back to the earlier search starts at the first page again.
+  await page.locator('input[type="search"]').first().fill('');
+  await expect(cards).toHaveCount(12);
 });

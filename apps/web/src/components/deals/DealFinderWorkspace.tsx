@@ -66,6 +66,11 @@ export default function DealFinderWorkspace({
     key: filterKey,
     count: DEALS_PAGE_SIZE,
   });
+  // Adjusting state during render (not in an effect): record the new key so
+  // returning to an earlier filter selection also starts at the first page.
+  if (paging.key !== filterKey) {
+    setPaging({ key: filterKey, count: DEALS_PAGE_SIZE });
+  }
   const visibleCount =
     paging.key === filterKey ? paging.count : DEALS_PAGE_SIZE;
   // After "show more", focus the first new card's link so keyboard and
