@@ -78,10 +78,17 @@ test('an unknown leaderboard tab falls back to the defaults', async ({
 test('a criterion click keeps the chosen brand', async ({ page }) => {
   await page.goto('/leaderboard');
   const brand = page.getByLabel('Lọc theo thương hiệu');
-  await brand.selectOption('Apple');
-  await page
-    .locator('button', { hasText: 'Điểm Người Mua Thực Chất' })
-    .click();
-  await expect(page).toHaveURL(/criterion=user/);
-  await expect(brand).toHaveValue('Apple');
+  const criterion = page.locator('button', {
+    hasText: 'Điểm Người Mua Thực Chất',
+  });
+  // A choice made before hydration is reset to "all" when React takes over;
+  // retry until the brand survives the criterion click.
+  await expect(async () => {
+    if ((await brand.inputValue()) !== 'Apple') {
+      await brand.selectOption('Apple');
+    }
+    await criterion.click();
+    await expect(page).toHaveURL(/criterion=user/, { timeout: 1000 });
+    await expect(brand).toHaveValue('Apple', { timeout: 1000 });
+  }).toPass();
 });
