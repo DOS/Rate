@@ -34,7 +34,7 @@ for (const [prefix, lang] of [
       const labels = await page.evaluate(() =>
         Array.from(
           document.querySelectorAll<HTMLElement>(
-            'h1, h2, h3, .rate-eyebrow, .rate-hero-kicker, .badge, .btn, summary, th'
+            'h1, h2, h3, .rate-eyebrow, .rate-hero-kicker, .badge, button, .btn, summary, th'
           )
         )
           .filter((el) => !el.closest('.rate-footer-cta, footer'))
