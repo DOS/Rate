@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { z, MAX_VALID_VND_PRICE } from '@repo/shared-data';
+import { z, MAX_VALID_VND_PRICE, seedingRiskPenalty } from '@repo/shared-data';
 import {
   trimTrailingSlashes,
   extractJsonObjectString,
@@ -1847,7 +1847,8 @@ Return ONLY valid JSON matching:
 
     // 1. Seeding Fake Penalty (up to +45 risk)
     if (seedingRatio > 0) {
-      const seedingPenalty = Math.min(45, Math.round(seedingRatio * 75));
+      // Shared with the web's dynamic review risk (DOS/Rate#671).
+      const seedingPenalty = seedingRiskPenalty(seedingCount, total);
       risk += seedingPenalty;
       reasons.push(
         `Phát hiện ${(seedingRatio * 100).toFixed(0)}% đánh giá có dấu hiệu Seeding/Buff đơn ảo (+${seedingPenalty} điểm rủi ro).`

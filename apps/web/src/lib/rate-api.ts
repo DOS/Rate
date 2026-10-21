@@ -2934,6 +2934,9 @@ export function computeDynamicReviewRisk(
   const divisor = Math.max(1, total);
   let risk = 15;
   const seedingRatio = Number((seedingFake / divisor).toFixed(3));
+  // Same seeding term as the importer: seedingRiskPenalty in @repo/shared-data,
+  // copied here so this client-bundled module does not pull in that package's
+  // runtime; core-rate-architecture.test.ts checks the two agree (#671).
   if (seedingRatio > 0) risk += Math.min(45, Math.round(seedingRatio * 75));
   // Genuine complaints; a star-only low rating counts at a quarter.
   let lowStar = 0;

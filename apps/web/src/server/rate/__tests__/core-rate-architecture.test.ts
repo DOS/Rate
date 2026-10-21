@@ -7219,6 +7219,37 @@ async function runCoreArchitectureSuite() {
     assert.equal(uncategorised.reviewRiskScore, 53);
     assert.equal(uncategorised.breakdown.seeding_fake_count, 1);
 
+    // Above the 15 baseline, the seeding contribution matches the importer's
+    // (seedingRiskPenalty in @repo/shared-data) for every mix, and is capped
+    // at 45 (#671).
+    const { seedingRiskPenalty } = await import('@repo/shared-data');
+    for (let total = 1; total <= 40; total++) {
+      for (let seeding = 0; seeding <= total; seeding++) {
+        const mix = [
+          ...Array.from({ length: seeding }, () =>
+            review645('seeding_fake', false)
+          ),
+          ...Array.from({ length: total - seeding }, () =>
+            review645('authentic', true)
+          ),
+        ];
+        assert.equal(
+          computeDynamicReviewRisk(mix).reviewRiskScore,
+          15 + seedingRiskPenalty(seeding, total),
+          `${seeding}/${total} seeding`
+        );
+      }
+    }
+    const allSeeded = computeDynamicReviewRisk([
+      review645('seeding_fake', false),
+      review645('seeding_fake', false),
+    ]);
+    assert.equal(
+      allSeeded.reviewRiskScore,
+      60,
+      '100% seeding is capped at baseline 15 + 45'
+    );
+
     const pendingOnly = computeDynamicReviewRisk([
       review645('authentic', false, 'unanalyzed'),
     ]);
