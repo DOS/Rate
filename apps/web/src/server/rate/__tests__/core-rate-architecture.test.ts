@@ -7375,6 +7375,52 @@ async function runCoreArchitectureSuite() {
 
   console.log('  ✅ [84/84] English labels are sentence case (#677) passed');
 
+  // =========================================================================
+  // 85. Vietnamese labels are sentence case (#679)
+  // =========================================================================
+  {
+    const U =
+      'A-ZĐÂĂÊÔƠƯÁÀẢÃẠẤẦẨẪẬẮẰẲẴẶÉÈẺẼẸẾỀỂỄỆÍÌỈĨỊÓÒỎÕỌỐỒỔỖỘỚỜỞỠỢÚÙỦŨỤỨỪỬỮỰÝỲỶỸỴ';
+    const L =
+      'a-zđâăêôơưáàảãạấầẩẫậắằẳẵặéèẻẽẹếềểễệíìỉĩịóòỏõọốồổỗộớờởỡợúùủũụứừửữựýỳỷỹỵ';
+    // Names keep their capitals: brands, products, retailers, programs,
+    // places and people used in examples.
+    const names =
+      /Rate\.vn|Rate Lab|Rate Cloud|DOS ID|DOSafe|JReviews|Markdown|TikTok Shop|Official Mall|Apple Watch|Galaxy Watch|Galaxy Buds|Galaxy Tab|Xiaomi Watch|Xiaomi Pad|Huawei Watch|AirPods Pro|Hoàng Hà|Di Động Việt|Thế Giới Di Động|Phong Vũ|Việt Nam|Bộ TT&TT|Minh Quân|Hà Nội|Nguyễn Văn A|Pro Max|Pro|Titan Tự Nhiên|AI Review Analyzer|Rate Trust Score|Bayesian|GSMArena|PhoneArena|GitHub|Wi-Fi|Bluetooth|Hi-Res|Qi|MagSafe|Hz|Bayes|Rate Lab|API Playground|Kiểm tra link|Liên hệ|Hữu ích|Báo cáo|Shopee|Lazada|Tiki|Apple|iPhone|Samsung|Galaxy|Xiaomi|Google|Pixel|Sony|Bose|Sennheiser|MacBook|iPad|Rate\b|[A-ZĐ]{2,}\w*/g;
+    const strip = (s: string) =>
+      s
+        .normalize('NFC')
+        .replace(/\{[^}]+\}/g, '')
+        .replace(names, ' ');
+    // Vietnamese Title Case often capitalises each compound word ("Màn hình &
+    // Hiển thị"), so a capital after a lowercase word or "&" counts too.
+    const titleCase = new RegExp(
+      `(?:[${L}]|&)\\s+[${U}][${L}]+|(^|[\\s(])[${U}][${L}]+\\s+[${U}][${L}]+`,
+      'u'
+    );
+    const offenders: string[] = [];
+    const walk = (node: unknown, key: string) => {
+      if (typeof node === 'string') {
+        if (titleCase.test(strip(node))) offenders.push(`${key}: ${node}`);
+      } else if (node && typeof node === 'object') {
+        for (const [k, v] of Object.entries(node))
+          walk(v, key ? `${key}.${k}` : k);
+      }
+    };
+    // analyzerCopy rebuilds the analyzer's stored text, so it stays as stored.
+    for (const [ns, node] of Object.entries(viMessages)) {
+      if (!['developers', 'openapi', 'analyzerCopy'].includes(ns))
+        walk(node, ns);
+    }
+    assert.deepEqual(
+      offenders,
+      [],
+      'Vietnamese labels must be sentence case (#679)'
+    );
+  }
+
+  console.log('  ✅ [85/85] Vietnamese labels are sentence case (#679) passed');
+
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
 
