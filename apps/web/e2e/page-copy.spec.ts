@@ -12,11 +12,13 @@ const JARGON = [
   'audit',
   'seeding',
   'open-core',
+  'kiểm định',
 ];
 const PAGES = [
   '/',
   '/leaderboard',
   '/compare?slugs=iphone-16-pro-max-256gb,samsung-galaxy-s25-ultra-256gb',
+  '/compare/iphone-16-pro-max-256gb-vs-samsung-galaxy-s25-ultra-256gb',
 ];
 
 for (const [prefix, lang] of [
@@ -32,7 +34,7 @@ for (const [prefix, lang] of [
       const labels = await page.evaluate(() =>
         Array.from(
           document.querySelectorAll<HTMLElement>(
-            'h1, h2, h3, .rate-eyebrow, .badge, .btn, summary'
+            'h1, h2, h3, .rate-eyebrow, .rate-hero-kicker, .badge, .btn, summary, th'
           )
         )
           .filter((el) => !el.closest('.rate-footer-cta, footer'))
@@ -47,7 +49,16 @@ for (const [prefix, lang] of [
           ).not.toContain(term);
         }
       }
-      expect((await page.title()).toLowerCase()).not.toContain('jreviews');
+      const title = (await page.title()).toLowerCase();
+      const description = (
+        (await page
+          .locator('meta[name="description"]')
+          .getAttribute('content')) ?? ''
+      ).toLowerCase();
+      for (const term of JARGON) {
+        expect(title).not.toContain(term);
+        expect(description).not.toContain(term);
+      }
     });
   }
 }

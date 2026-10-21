@@ -1,8 +1,8 @@
 {
   "rate": {
     "seo": {
-      "siteTitle": "Rate.vn - 10-Group Spec Intelligence, True Price History & AI Review Auditing",
-      "siteDescription": "Compare standardized 10-group technical specifications, detect inflated fake discounts, and filter AI seeding reviews across Shopee, Lazada, and Tiki on Rate.vn."
+      "siteTitle": "Rate.vn - 10-group spec comparison, real price history and filtered reviews",
+      "siteDescription": "Compare standardized 10-group specs, spot inflated fake discounts and read reviews with fake ones filtered out, across Shopee, Lazada and Tiki on Rate.vn."
     },
     "nav": {
       "home": "Home",
@@ -67,7 +67,7 @@
       "heroSubtitle": "Specs standardized into 10 groups (GSMArena and PhoneArena), inflated list prices spotted, and fake reviews filtered.",
       "statProducts": "10-Group Standardized Products",
       "statPricePoints": "Historical Price Observations",
-      "statReviews": "Reviews checked by AI",
+      "statReviews": "Buyer reviews",
       "statMerchants": "Sellers with risk scores",
       "catBadge": "Device categories",
       "catTitlePrefix": "Explore By",
@@ -120,7 +120,7 @@
     "versusMetaFallbackTitle": "1v1 Compare | Rate.vn",
     "versusMetaTitle": "{nameA} vs {nameB}: 10 spec groups and review scores | Rate.vn",
     "versusMetaDescription": "Compare {nameA} and {nameB} head to head: review scores across 5 criteria, 10 spec groups and real store prices.",
-    "versusHeroBadge": "1V1 HEAD-TO-HEAD AUDIT • SAME-CATEGORY LOCK ({category})",
+    "versusHeroBadge": "1v1 comparison • same category ({category})",
     "viewCategoryLeaderboard": "View Category Leaderboard",
     "versusAutoVerdict": "Automatic verdict: {winner} leads with an overall score of {score}/5.0{expertSuffix}.",
     "compareMetaTitleWithNames": "Compare {names} - Ratings & 10 Spec Groups | Rate.vn",
@@ -256,7 +256,7 @@
     "searchingBadge": "Searching...",
     "noMatchingDevices": "No matching {unit} found for \"{query}\".",
     "unratedShort": "pending",
-    "alreadyComparingBadge": "In matrix",
+    "alreadyComparingBadge": "Comparing",
     "selectReplacementBadge": "Replace with this",
     "addToCompareBadge": "+ Add to comparison",
     "showDiffOnlyToggle": "Show differences only",
@@ -334,12 +334,12 @@
   "leaderboard": {
     "metaTitle": "Tech device leaderboard | Rate.vn",
     "metaDescription": "Independent rankings by category: expert and verified buyer scores across 5 criteria, with no ads or affiliate bias.",
-    "kicker": "JREVIEWS DUAL-RATING LEADERBOARD • DESIGN.MD V3.0",
+    "kicker": "Independent device rankings",
     "title": "Independent 10.0 Device Leaderboard",
-    "subtitle": "Objective ranking across our 4-tier taxonomy: Directory (Tech & Electronics) -> 5 Categories -> Master Products -> Verified Listings. Strictly separates Verified User, Lab Expert, and 5 sub-criteria scores from merchant pricing.",
+    "subtitle": "Objective rankings by category that keep verified buyer scores, lab expert scores and 5 sub-criteria separate from store prices.",
     "home": "Home",
     "breadcrumb": "Leaderboard",
-    "compareCta": "Open Compare Matrix",
+    "compareCta": "Compare devices",
     "inspectCta": "Check for fake reviews",
     "statProducts": "Normalized Devices",
     "statCategories": "Categories",
@@ -391,7 +391,7 @@
     "rank3Label": "Top #3",
     "fullTableTitle": "Complete Category Leaderboard",
     "verifiedReviewsSuffix": "authentic reviews",
-    "blockedSpamSuffix": "fake/spam reviews blocked",
+    "blockedSpamCount": "{count, plural, one {# fake/spam review blocked} other {# fake/spam reviews blocked}}",
     "storesTrackedSuffix": "stores compared",
     "viewAuditDetailBtn": "Reviews & 10 Spec Groups →",
     "inspectBtn": "Check price",

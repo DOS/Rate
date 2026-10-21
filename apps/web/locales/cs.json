@@ -1,8 +1,8 @@
 {
   "rate": {
     "seo": {
-      "siteTitle": "Rate.vn - Srovnání 10 skupin parametrů, historie skutečných cen a AI audit recenzí",
-      "siteDescription": "Ověřte si technické specifikace podle standardu GSMArena a PhoneArena, odhalte falešné slevy a filtrujte AI seeding recenze na Rate.vn."
+      "siteTitle": "Rate.vn - Srovnání 10 skupin parametrů, historie skutečných cen a filtrované recenze",
+      "siteDescription": "Porovnejte technické parametry podle GSMArena a PhoneArena, odhalte falešné slevy a čtěte recenze bez falešných na Shopee, Lazada a Tiki na Rate.vn."
     },
     "nav": {
       "home": "Domů",
@@ -67,7 +67,7 @@
       "heroSubtitle": "Parametry sjednocené do 10 skupin (GSMArena a PhoneArena), odhalené nadsazené původní ceny a odfiltrované falešné recenze.",
       "statProducts": "Standardizovaných produktů",
       "statPricePoints": "Bodů historie cen",
-      "statReviews": "Recenzí zkontrolovaných AI",
+      "statReviews": "Recenzí kupujících",
       "statMerchants": "Prodejců se skóre rizika",
       "catBadge": "Kategorie zařízení",
       "catTitlePrefix": "Prozkoumat podle",
@@ -89,7 +89,7 @@
       "viewMerchantAuditBtn": "Zobrazit profil prodejce",
       "reviewsBadge": "Kontrola AI",
       "reviewsTitlePrefix": "Recenze kupujících",
-      "reviewsTitleHighlight": "bez falešných recenzí",
+      "reviewsTitleHighlight": "očištěné od falešných",
       "reviewsSubtitle": "Každá recenze z obchodu dostane AI skóre důvěryhodnosti, které oddělí spam za odměnu od placených falešných recenzí",
       "whyBadge": "Otevřený kód",
       "whyTitlePrefix": "Proč kupující věří",
@@ -120,7 +120,7 @@
     "versusMetaFallbackTitle": "Souboj 1v1 | Rate.vn",
     "versusMetaTitle": "{nameA} vs {nameB}: 10 skupin parametrů a hodnocení | Rate.vn",
     "versusMetaDescription": "Přímé porovnání {nameA} a {nameB}: hodnocení v 5 kritériích, 10 skupin parametrů a skutečné ceny v obchodech.",
-    "versusHeroBadge": "1V1 SOUBOJ • ZÁMEK STEJNÉ KATEGORIE ({category})",
+    "versusHeroBadge": "Souboj 1v1 • stejná kategorie ({category})",
     "viewCategoryLeaderboard": "Zobrazit žebříček kategorie",
     "versusAutoVerdict": "Automatický verdikt: {winner} vede s celkovým skóre {score}/5.0{expertSuffix}.",
     "compareMetaTitleWithNames": "Porovnání {names} - Hodnocení a 10 skupin parametrů | Rate.vn",
@@ -334,12 +334,12 @@
   "leaderboard": {
     "metaTitle": "Žebříček technologií | Rate.vn",
     "metaDescription": "Nezávislý žebříček podle kategorií: hodnocení expertů a ověřených kupujících v 5 kritériích, bez reklam a affiliate odkazů.",
-    "kicker": "JREVIEWS DUAL-RATING LEADERBOARD • DESIGN.MD V3.0",
+    "kicker": "Nezávislý žebříček zařízení",
     "title": "Nezávislý Žebříček Zařízení 10.0",
-    "subtitle": "Objektivní žebříček dle 4-úrovňové taxonomie: Directory (Tech & Electronics) -> 5 Kategorií -> Master Products -> Ověřené nabídky. Striktně odděluje skóre uživatelů, expertů a 5 kritérií od cen obchodníků.",
+    "subtitle": "Objektivní žebříček podle kategorií, který odděluje hodnocení ověřených kupujících, expertů a 5 kritérií od cen obchodů.",
     "home": "Domů",
     "breadcrumb": "Žebříček",
-    "compareCta": "Porovnat Zařízení",
+    "compareCta": "Porovnat zařízení",
     "inspectCta": "Kontrola falešných recenzí",
     "statProducts": "Zařízení v databázi",
     "statCategories": "Kategorie",
@@ -391,7 +391,7 @@
     "rank3Label": "3. místo",
     "fullTableTitle": "Kompletní žebříček kategorie",
     "verifiedReviewsSuffix": "ověřených recenzí",
-    "blockedSpamSuffix": "falešných/spamových recenzí zablokováno",
+    "blockedSpamCount": "{count, plural, one {Zablokována # falešná/spamová recenze} few {Zablokovány # falešné/spamové recenze} other {Zablokováno # falešných/spamových recenzí}}",
     "storesTrackedSuffix": "obchodů",
     "viewAuditDetailBtn": "Recenze a 10 skupin parametrů →",
     "inspectBtn": "Ověřit cenu",
@@ -1164,7 +1164,7 @@
     "periodicMonitoring": "Pravidelně sledováno",
     "lastUpdatedLabel": "Poslední aktualizace:",
     "authenticReviewsStatBadge": "{count} autentických recenzí ({pct}%)",
-    "filteredSeedingStatBadge": "Odfiltrováno {count} spamových nebo falešných recenzí",
+    "filteredSeedingStatBadge": "{count, plural, one {Odfiltrována # spamová nebo falešná recenze} few {Odfiltrovány # spamové nebo falešné recenze} other {Odfiltrováno # spamových nebo falešných recenzí}}",
     "coinSpamBadge": "Spam za mince",
     "suspectedSeedingBadge": "Podezřelá recenze",
     "pendingAnalysisBadge": "Čeká na analýzu",
