@@ -2914,11 +2914,13 @@ export function computeDynamicReviewRisk(allReviews: ReviewItem[]): {
   // Only seeding_fake adds risk. Coin-farming comments are buyers chasing
   // rewards, and sabotage or review bombing are attacks on the seller: they
   // are filtered out but add no risk, as in the importer (DOS/Rate#645, #654).
-  const weightedPenalty = seedingFake / total;
-  const reviewRiskScore = Math.min(
-    100,
-    Math.max(0, Math.round(weightedPenalty * 100))
-  );
+  // Same seeding contribution as the importer, which stores
+  // review_risk_score: min(45, round(ratio * 75)) with the ratio rounded to
+  // three decimals. It is seedingRiskPenalty in @repo/shared-data, copied here
+  // so this client-bundled module does not pull in that package's runtime;
+  // core-rate-architecture.test.ts checks the two agree (DOS/Rate#671).
+  const seedingRatio = Number((seedingFake / total).toFixed(3));
+  const reviewRiskScore = Math.min(45, Math.round(seedingRatio * 75));
 
   return {
     reviewRiskScore,
