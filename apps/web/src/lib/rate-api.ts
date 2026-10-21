@@ -293,12 +293,16 @@ export function evaluateReviewTrustAssessment(
 
   // 1. Axis A: Authenticity
   let authenticity: ReviewAuthenticityAxis = 'genuine';
-  if (review.flag_category === 'seeding_fake' || review.verdict === 'fake') {
-    authenticity = 'fabricated';
-  } else if (review.flag_category === 'competitor_sabotage') {
+  // Sabotage and bombing also carry verdict 'fake'; their category wins.
+  if (review.flag_category === 'competitor_sabotage') {
     authenticity = 'sabotage';
   } else if (review.flag_category === 'review_bombing') {
     authenticity = 'bombing';
+  } else if (
+    review.flag_category === 'seeding_fake' ||
+    review.verdict === 'fake'
+  ) {
+    authenticity = 'fabricated';
   } else if (
     Number.isFinite(Number(review.rating_star)) &&
     Number(review.rating_star) >= 5 &&
@@ -2885,13 +2889,15 @@ export function computeDynamicReviewRisk(allReviews: ReviewItem[]): {
   let sabotageOrBombing = 0;
 
   for (const r of reviews) {
-    if (r.flag_category === 'seeding_fake' || r.verdict === 'fake') {
-      seedingFake += 1;
-    } else if (
+    // The importer stores verdict 'fake' for sabotage and bombing too, so the
+    // category decides first; verdict only fills in a missing category.
+    if (
       r.flag_category === 'competitor_sabotage' ||
       r.flag_category === 'review_bombing'
     ) {
       sabotageOrBombing += 1;
+    } else if (r.flag_category === 'seeding_fake' || r.verdict === 'fake') {
+      seedingFake += 1;
     } else if (
       r.flag_category === 'low_value_coin_spam' ||
       !r.include_in_rating
@@ -2905,10 +2911,10 @@ export function computeDynamicReviewRisk(allReviews: ReviewItem[]): {
   const flaggedTotal = coinSpam + seedingFake + sabotageOrBombing;
   const suspiciousRatioPct = Math.round((flaggedTotal / total) * 1000) / 10;
 
-  // seeding_fake carries heavy weight (1.0), coin_spam moderate (0.35).
-  // Competitor sabotage and review bombing are attacks on the seller: they are
-  // filtered out but add no risk, as in the importer (DOS/Rate#645).
-  const weightedPenalty = (seedingFake * 1.0 + coinSpam * 0.35) / total;
+  // Only seeding_fake adds risk. Coin-farming comments are buyers chasing
+  // rewards, and sabotage or review bombing are attacks on the seller: they
+  // are filtered out but add no risk, as in the importer (DOS/Rate#645, #654).
+  const weightedPenalty = seedingFake / total;
   const reviewRiskScore = Math.min(
     100,
     Math.max(0, Math.round(weightedPenalty * 100))
