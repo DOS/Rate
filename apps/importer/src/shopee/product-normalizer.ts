@@ -1032,13 +1032,20 @@ const CANONICAL_PHONE_REGISTRY: Record<
 };
 
 function slugify(text: string): string {
-  return text
-    .toString()
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, '-')
-    .replace(/[^\w-]+/g, '')
-    .replace(/--+/g, '-');
+  return (
+    text
+      .toString()
+      .toLowerCase()
+      // "Pro+" / "S24+" are Plus models: keep them apart from the base model's
+      // key and slug, and give "S24+" the same key as "S24 Plus" (DOS/Rate#597).
+      // Only a "+" that ends a model word counts; "A55 + Tặng" and "8+256GB" keep
+      // their old keys.
+      .replace(/(?<=[a-z0-9])\+(?![a-z0-9])/g, ' plus ')
+      .trim()
+      .replace(/\s+/g, '-')
+      .replace(/[^\w-]+/g, '')
+      .replace(/--+/g, '-')
+  );
 }
 
 export class ProductNormalizer {
@@ -1169,7 +1176,11 @@ export class ProductNormalizer {
       const rawTokens = cleaned.split(/\s+/).filter(Boolean);
       const modelTokens: string[] = [];
       for (const tok of rawTokens) {
-        if (modelTokens.length >= 4) break;
+        // A trailing "Plus" word is part of the model even past the 4-token cap,
+        // so "Redmi Note 13 Pro Plus" keys like "Redmi Note 13 Pro+" (#597).
+        if (modelTokens.length >= 4 && !(modelTokens.length === 4 && /^plus$/i.test(tok))) {
+          break;
+        }
         if (
           /^(?:\d+(?:[.,]\d+)?(?:GB|TB)|\d+\/\d+(?:GB|TB)?|\d{2}mm|5G|4G|LTE|GPS|RAM|ROM|OLED|WiFi|Chính|Quốc|Bản|Mới|Fullbox|Likenew|Like|Cũ|99%|98%|VN\/A|VNA|LL\/A|\(|\[|-)/i.test(
             tok

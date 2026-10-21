@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import ExportMenu from '@/components/elementary/ExportMenu';
 import type { IconType } from 'react-icons';
 import {
   BsBarChart,
@@ -465,32 +466,41 @@ export default function PriceHistorySection({
         </div>
 
         <div className="d-flex align-items-center flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={handleCopyPriceHistoryMarkdown}
-            className="btn btn-sm btn-outline-dark rounded-pill fw-semibold px-3 py-1"
-            data-testid="copy-price-history-md-btn"
-          >
-            {copiedHistoryMd
-              ? t('priceHistoryCopiedMdBtn')
-              : t('priceHistoryCopyMdBtn')}
-          </button>
-          <button
-            type="button"
-            onClick={handleDownloadPriceHistoryCsv}
-            className="btn btn-sm btn-outline-secondary rounded-pill fw-semibold px-3 py-1"
-            data-testid="download-price-history-csv-btn"
-          >
-            {t('priceHistoryExportCsvBtn')}
-          </button>
-          <button
-            type="button"
-            onClick={handleDownloadPriceHistoryJson}
-            className="btn btn-sm btn-outline-secondary rounded-pill fw-semibold px-3 py-1"
-            data-testid="download-price-history-json-btn"
-          >
-            {t('priceHistoryExportJsonBtn')}
-          </button>
+          <ExportMenu label={t('exportMenu')}>
+            {(close) => (
+              <>
+                <button
+                  type="button"
+                  onClick={handleCopyPriceHistoryMarkdown}
+                  data-testid="copy-price-history-md-btn"
+                >
+                  {copiedHistoryMd
+                    ? t('priceHistoryCopiedMdBtn')
+                    : t('priceHistoryCopyMdBtn')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleDownloadPriceHistoryCsv();
+                    close();
+                  }}
+                  data-testid="download-price-history-csv-btn"
+                >
+                  {t('priceHistoryExportCsvBtn')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleDownloadPriceHistoryJson();
+                    close();
+                  }}
+                  data-testid="download-price-history-json-btn"
+                >
+                  {t('priceHistoryExportJsonBtn')}
+                </button>
+              </>
+            )}
+          </ExportMenu>
           {history.fakeDiscountCount > 0 ? (
             <span className="badge bg-danger rounded-pill small px-3 py-2 text-white">
               {t('priceHistoryFakeAlertBadge', {

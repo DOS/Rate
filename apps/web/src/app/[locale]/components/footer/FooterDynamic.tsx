@@ -11,7 +11,7 @@ import {
   FaXTwitter,
   FaTelegram,
 } from 'react-icons/fa6';
-import { BsShieldCheck, BsCodeSlash } from 'react-icons/bs';
+import { BsShieldCheck, BsCodeSlash, BsShop } from 'react-icons/bs';
 import RateWordmark from '@/components/brand/RateWordmark';
 
 export interface FooterSectionLink {
@@ -74,11 +74,6 @@ export default async function FooterDynamic({
       { label: tFooter('links.merchants'), href: '/merchants' },
       { label: tFooter('links.watchlist'), href: '/watchlist' },
       { label: tFooter('links.developers'), href: '/developers' },
-      {
-        label: tFooter('links.apiProducts'),
-        href: '/api/v1/rate/products',
-        newTab: true,
-      },
     ],
   };
 
@@ -174,6 +169,7 @@ export default async function FooterDynamic({
                             target={s.newTab ? '_blank' : undefined}
                             rel="noopener noreferrer"
                             className="social-link"
+                            aria-label={s.label!}
                           >
                             {getSocialIcon(s.href) ||
                               getSocialIcon(s.label) ||
@@ -189,7 +185,7 @@ export default async function FooterDynamic({
                           target="_blank"
                           rel="noopener noreferrer"
                           className="social-link"
-                          aria-label="GitHub DOS/Rate"
+                          aria-label={tFooter('links.github')}
                         >
                           <FaGithub />
                         </a>
@@ -198,7 +194,7 @@ export default async function FooterDynamic({
                         <Link
                           href="/developers"
                           className="social-link"
-                          aria-label="REST API v1"
+                          aria-label={tFooter('links.developers')}
                         >
                           <BsCodeSlash />
                         </Link>
@@ -207,9 +203,9 @@ export default async function FooterDynamic({
                         <Link
                           href="/merchants"
                           className="social-link"
-                          aria-label="Merchants"
+                          aria-label={tFooter('links.merchants')}
                         >
-                          <FaLinkedin />
+                          <BsShop />
                         </Link>
                       </li>
                     </>
@@ -306,7 +302,7 @@ export default async function FooterDynamic({
             </div>
           </div>
 
-          {/* Open-Core Architecture & Security Status */}
+          {/* Trust signals */}
           <div className="col-md-4 col-lg-3 col-xl-2 col-6">
             <div className="footer-widget">
               <h4 className="widget-title">{tFooter('trustTitle')}</h4>
@@ -316,11 +312,7 @@ export default async function FooterDynamic({
                     <BsShieldCheck />
                   </div>
                   <div className="caps">
-                    <h5 className="title">
-                      DOSafe &amp; AI Review
-                      <br />
-                      Dual Risk Score
-                    </h5>
+                    <h5 className="title">{tFooter('trustRiskTitle')}</h5>
                     <p className="subs">{tFooter('antiSeedingSub')}</p>
                   </div>
                 </div>
@@ -329,7 +321,7 @@ export default async function FooterDynamic({
                     <BsCodeSlash />
                   </div>
                   <div className="caps">
-                    <h5 className="title">Open-Core REST v1</h5>
+                    <h5 className="title">{tFooter('trustOpenTitle')}</h5>
                     <p className="subs">{tFooter('specGroupsSub')}</p>
                   </div>
                 </div>

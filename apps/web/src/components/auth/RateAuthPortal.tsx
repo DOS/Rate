@@ -272,7 +272,7 @@ export default function RateAuthPortal({ mode }: RateAuthPortalProps) {
       <div className="py-lg-4 container">
         <div className="row g-4 align-items-stretch">
           {/* Left Column: Rate.vn Trust & Security Architecture */}
-          <div className="col-lg-6 d-flex">
+          <div className="col-lg-6 d-flex order-2 order-lg-1">
             <div className="card rounded-4 bg-dark p-xl-5 d-flex flex-column justify-content-between w-100 border-0 p-4 text-white shadow-sm">
               <div>
                 <div className="d-inline-flex align-items-center bg-danger bg-opacity-25 rounded-pill small fw-medium mb-3 gap-2 px-3 py-1 text-white">
@@ -359,7 +359,7 @@ export default function RateAuthPortal({ mode }: RateAuthPortalProps) {
           </div>
 
           {/* Right Column: Interactive Supabase Auth Form */}
-          <div className="col-lg-6 d-flex">
+          <div className="col-lg-6 d-flex order-1 order-lg-2">
             <div className="card rounded-4 p-xl-5 w-100 border-0 bg-white p-4 shadow-sm">
               {/* Mode Switcher Pills */}
               <div className="d-flex border-bottom mb-4 flex-wrap gap-2 pb-3">

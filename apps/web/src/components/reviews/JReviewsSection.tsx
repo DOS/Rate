@@ -2,6 +2,7 @@
 
 import React, { useEffect, useId, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import ExportMenu from '@/components/elementary/ExportMenu';
 import {
   BsBarChart,
   BsCheckCircle,
@@ -740,30 +741,41 @@ export default function JReviewsSection({
           </p>
         </div>
         <div className="d-flex align-items-center flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={handleCopyReviewsMarkdown}
-            className="btn btn-outline-dark btn-sm rounded-pill fw-semibold px-3 py-1"
-            data-testid="copy-reviews-md-btn"
-          >
-            {copiedReviewsMd ? t('copiedReviewsMd') : t('copyReviewsMdBtn')}
-          </button>
-          <button
-            type="button"
-            onClick={handleDownloadReviewsCsv}
-            className="btn btn-outline-secondary btn-sm rounded-pill fw-semibold px-3 py-1"
-            data-testid="download-reviews-csv-btn"
-          >
-            {t('exportReviewsCsvBtn')}
-          </button>
-          <button
-            type="button"
-            onClick={handleDownloadReviewsJson}
-            className="btn btn-outline-secondary btn-sm rounded-pill fw-semibold px-3 py-1"
-            data-testid="download-reviews-json-btn"
-          >
-            {t('exportJsonBtn')}
-          </button>
+          <ExportMenu label={t('exportMenu')}>
+            {(close) => (
+              <>
+                <button
+                  type="button"
+                  onClick={handleCopyReviewsMarkdown}
+                  data-testid="copy-reviews-md-btn"
+                >
+                  {copiedReviewsMd
+                    ? t('copiedReviewsMd')
+                    : t('copyReviewsMdBtn')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleDownloadReviewsCsv();
+                    close();
+                  }}
+                  data-testid="download-reviews-csv-btn"
+                >
+                  {t('exportReviewsCsvBtn')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleDownloadReviewsJson();
+                    close();
+                  }}
+                  data-testid="download-reviews-json-btn"
+                >
+                  {t('exportJsonBtn')}
+                </button>
+              </>
+            )}
+          </ExportMenu>
           {masterProductId && (
             <button
               type="button"
@@ -1466,11 +1478,22 @@ export default function JReviewsSection({
                               ? 'bg-primary-subtle text-primary'
                               : 'bg-light text-muted border'
                         }`}
+                        title={t('ratingWeightTitle')}
+                        data-testid="review-rating-weight"
+                      >
+                        {t('ratingWeightBadge', {
+                          weight: rev.helpfulness_weight.toFixed(2),
+                        })}
+                      </span>
+                      {/* The 6-axis trust model is a separate estimate with its
+                          own weight, so it gets its own labelled badge rather
+                          than explaining the rating weight (DOS/Rate#596). */}
+                      <span
+                        className="badge rounded-pill small bg-light text-muted border"
                         title={weightExplanation}
                         data-testid="review-6axis-breakdown"
                       >
-                        {t('weightBadgeLabel', {
-                          weight: rev.helpfulness_weight.toFixed(2),
+                        {t('trustModelBadge', {
                           explanation: weightExplanation,
                         })}
                       </span>

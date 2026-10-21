@@ -10,30 +10,59 @@ import {
   BsShieldCheck,
 } from 'react-icons/bs';
 
-interface QuarantineApiResult {
+// Body of POST /api/v1/rate/extension/ingest: { ok, data } on 200, { ok: false,
+// error } otherwise.
+interface IngestResponse {
+  ok?: boolean;
+  data?: { accepted?: boolean; jobState?: string; jobId?: string | null };
+}
+
+type SubmitOutcome =
+  | 'accepted'
+  | 'noConsent'
+  | 'invalidUrl'
+  | 'platformPending'
+  | 'invalidPrice'
+  | 'accessory'
+  | 'rateLimited'
+  | 'invalidInput'
+  | 'failed';
+
+interface SubmitResult {
   accepted: boolean;
-  status: string;
+  outcome: SubmitOutcome;
   jobId: string | null;
-  canonicalUrl: string | null;
-  reason: string;
+}
+
+function outcomeFromJobState(jobState: string | undefined): SubmitOutcome {
+  switch (jobState) {
+    case 'skipped_no_consent':
+      return 'noConsent';
+    case 'rejected_invalid_url':
+      return 'invalidUrl';
+    // A valid link from a store whose checking worker is not running yet.
+    case 'platform_worker_pending_phase_5_1':
+      return 'platformPending';
+    case 'rejected_invalid_price':
+      return 'invalidPrice';
+    case 'skipped_accessory':
+      return 'accessory';
+    default:
+      return 'failed';
+  }
 }
 
 export default function CommunityQuarantineSubmitForm() {
   const t = useTranslations('staticPages');
   const fieldId = useId();
-  const [url, setUrl] = useState(
-    'https://cellphones.com.vn/iphone-16-pro-max.html'
-  );
-  const [title, setTitle] = useState(
-    'Apple iPhone 16 Pro Max 256GB Chính hãng VN/A'
-  );
-  const [currentPrice, setCurrentPrice] = useState('30990000');
-  const [originalPrice, setOriginalPrice] = useState('34990000');
-  const [skuText, setSkuText] = useState('256GB Titan Tự Nhiên');
-  const [sellerName, setSellerName] = useState('');
-  const [consentGranted, setConsentGranted] = useState(true);
+  const [url, setUrl] = useState('');
+  const [title, setTitle] = useState('');
+  const [currentPrice, setCurrentPrice] = useState('');
+  const [originalPrice, setOriginalPrice] = useState('');
+  const [skuText, setSkuText] = useState('');
+  const [consentGranted, setConsentGranted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [result, setResult] = useState<QuarantineApiResult | null>(null);
+  const [result, setResult] = useState<SubmitResult | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,26 +78,44 @@ export default function CommunityQuarantineSubmitForm() {
         body: JSON.stringify({
           url: url.trim(),
           title: title.trim(),
-          currentPrice: Number(currentPrice) || 0,
+          price: Math.round(Number(currentPrice)),
           originalPrice: originalPrice.trim()
-            ? Number(originalPrice)
+            ? Math.round(Number(originalPrice))
             : undefined,
-          skuText: skuText.trim() || undefined,
-          sellerName: sellerName.trim() || undefined,
-          consentGranted,
-          extensionVersion: 'web-portal-2.1.0',
+          selectedVariant: skuText.trim() || undefined,
+          userConsentOptIn: consentGranted,
         }),
       });
-      const data = (await res.json()) as QuarantineApiResult;
-      setResult(data);
-    } catch (err) {
-      setResult({
-        accepted: false,
-        status: 'rejected_invalid_payload',
-        jobId: null,
-        canonicalUrl: null,
-        reason: err instanceof Error ? err.message : t('quarantineErrConnect'),
-      });
+      const body = (await res
+        .json()
+        .catch(() => null)) as IngestResponse | null;
+      if (res.ok && body?.ok && body.data) {
+        // A dry run (no database configured) queues nothing, so it is not
+        // reported as received.
+        const accepted =
+          body.data.accepted === true &&
+          body.data.jobState !== 'quarantined_dry_run';
+        setResult({
+          accepted,
+          outcome: accepted
+            ? 'accepted'
+            : outcomeFromJobState(body.data.jobState),
+          jobId: accepted ? (body.data.jobId ?? null) : null,
+        });
+      } else {
+        setResult({
+          accepted: false,
+          outcome:
+            res.status === 429
+              ? 'rateLimited'
+              : res.status === 400
+                ? 'invalidInput'
+                : 'failed',
+          jobId: null,
+        });
+      }
+    } catch {
+      setResult({ accepted: false, outcome: 'failed', jobId: null });
     } finally {
       setIsSubmitting(false);
     }
@@ -104,6 +151,7 @@ export default function CommunityQuarantineSubmitForm() {
             id={`${fieldId}-url`}
             type="url"
             required
+            maxLength={1024}
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             className="form-control"
@@ -122,6 +170,8 @@ export default function CommunityQuarantineSubmitForm() {
             id={`${fieldId}-title`}
             type="text"
             required
+            minLength={3}
+            maxLength={320}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             className="form-control"
@@ -129,7 +179,7 @@ export default function CommunityQuarantineSubmitForm() {
           />
         </div>
 
-        <div className="col-md-3 col-6">
+        <div className="col-md-4 col-6">
           <label
             className="form-label small fw-bold text-secondary"
             htmlFor={`${fieldId}-current-price`}
@@ -141,13 +191,14 @@ export default function CommunityQuarantineSubmitForm() {
             type="number"
             required
             min={50000}
+            inputMode="numeric"
             value={currentPrice}
             onChange={(e) => setCurrentPrice(e.target.value)}
             className="form-control"
           />
         </div>
 
-        <div className="col-md-3 col-6">
+        <div className="col-md-4 col-6">
           <label
             className="form-label small fw-bold text-secondary"
             htmlFor={`${fieldId}-original-price`}
@@ -157,7 +208,8 @@ export default function CommunityQuarantineSubmitForm() {
           <input
             id={`${fieldId}-original-price`}
             type="number"
-            min={0}
+            min={1000}
+            inputMode="numeric"
             value={originalPrice}
             onChange={(e) => setOriginalPrice(e.target.value)}
             className="form-control"
@@ -165,7 +217,7 @@ export default function CommunityQuarantineSubmitForm() {
           />
         </div>
 
-        <div className="col-md-3 col-6">
+        <div className="col-md-4">
           <label
             className="form-label small fw-bold text-secondary"
             htmlFor={`${fieldId}-sku`}
@@ -175,27 +227,11 @@ export default function CommunityQuarantineSubmitForm() {
           <input
             id={`${fieldId}-sku`}
             type="text"
+            maxLength={160}
             value={skuText}
             onChange={(e) => setSkuText(e.target.value)}
             className="form-control"
             placeholder={t('quarantineSkuPlaceholder')}
-          />
-        </div>
-
-        <div className="col-md-3 col-6">
-          <label
-            className="form-label small fw-bold text-secondary"
-            htmlFor={`${fieldId}-seller`}
-          >
-            {t('quarantineSellerLabel')}
-          </label>
-          <input
-            id={`${fieldId}-seller`}
-            type="text"
-            value={sellerName}
-            onChange={(e) => setSellerName(e.target.value)}
-            className="form-control"
-            placeholder={t('quarantineOptionalPlaceholder')}
           />
         </div>
 
@@ -204,6 +240,7 @@ export default function CommunityQuarantineSubmitForm() {
             <input
               id="community-quarantine-consent"
               type="checkbox"
+              required
               checked={consentGranted}
               onChange={(e) => setConsentGranted(e.target.checked)}
               className="form-check-input"
@@ -213,8 +250,7 @@ export default function CommunityQuarantineSubmitForm() {
               className="form-check-label small text-secondary"
             >
               <strong>{t('quarantineConsentStrong')}</strong>{' '}
-              {t('quarantineConsentText1')} <code>Zero-Trust Quarantine</code>{' '}
-              {t('quarantineConsentText2')} <code>rate.crawl_jobs</code>).
+              {t('quarantineConsentText')}
             </label>
           </div>
         </div>
@@ -222,9 +258,7 @@ export default function CommunityQuarantineSubmitForm() {
         <div className="d-flex align-items-center justify-content-between col-12 flex-wrap gap-3">
           <div className="small text-muted d-flex align-items-center gap-1">
             <BsShieldCheck className="text-success fs-5" />
-            <span>
-              {t('quarantineAccessoryNote')} <code>rate.master_products</code>.
-            </span>
+            <span>{t('quarantineAccessoryNote')}</span>
           </div>
           <button
             type="submit"
@@ -239,38 +273,40 @@ export default function CommunityQuarantineSubmitForm() {
         </div>
       </form>
 
-      {result && (
-        <div
-          className={`alert rounded-4 mt-4 mb-0 border ${
-            result.accepted
-              ? 'alert-success border-success'
-              : 'alert-warning border-warning'
-          }`}
-        >
-          <div className="d-flex align-items-start gap-2">
-            {result.accepted ? (
-              <BsCheckCircleFill className="text-success fs-4 mt-1 flex-shrink-0" />
-            ) : (
-              <BsExclamationTriangleFill className="text-warning fs-4 mt-1 flex-shrink-0" />
-            )}
-            <div>
-              <div className="fw-bold mb-1">
-                {result.accepted
-                  ? t('quarantineAcceptedTitle')
-                  : t('quarantineRejectedTitle')}{' '}
-                <span className="badge bg-dark ms-1">{result.status}</span>
-              </div>
-              <div className="small mb-1">{result.reason}</div>
-              {result.canonicalUrl && (
-                <div className="small font-monospace text-muted">
-                  {t('quarantineCanonicalUrlLabel')} {result.canonicalUrl}
-                  {result.jobId ? ` • Job ID: ${result.jobId}` : ''}
-                </div>
+      <div role="status" aria-live="polite">
+        {result && (
+          <div
+            className={`alert rounded-4 mt-4 mb-0 border ${
+              result.accepted
+                ? 'alert-success border-success'
+                : 'alert-warning border-warning'
+            }`}
+          >
+            <div className="d-flex align-items-start gap-2">
+              {result.accepted ? (
+                <BsCheckCircleFill className="text-success fs-4 mt-1 flex-shrink-0" />
+              ) : (
+                <BsExclamationTriangleFill className="text-warning fs-4 mt-1 flex-shrink-0" />
               )}
+              <div>
+                <div className="fw-bold mb-1">
+                  {result.accepted
+                    ? t('quarantineAcceptedTitle')
+                    : t('quarantineRejectedTitle')}
+                </div>
+                <div className="small mb-1">
+                  {t(`quarantineOutcome.${result.outcome}`)}
+                </div>
+                {result.jobId && (
+                  <div className="small text-muted">
+                    {t('quarantineJobRef', { id: result.jobId })}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

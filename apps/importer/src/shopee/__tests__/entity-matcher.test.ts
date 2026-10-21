@@ -128,6 +128,37 @@ interface LabeledProductPair {
 }
 
 const LABELED_ENTITY_RESOLUTION_BENCHMARK: ReadonlyArray<LabeledProductPair> = [
+  // "+" marks a Plus model and must not collapse onto the base model (#597).
+  {
+    id: 'pair-plus-1-redmi-note13-pro-plus-vs-pro',
+    titleA: 'Xiaomi Redmi Note 13 Pro+ 5G 8GB 256GB Chính hãng',
+    titleB: 'Xiaomi Redmi Note 13 Pro 5G 8GB 256GB Chính hãng',
+    shouldMatchCanonicalCluster: false,
+  },
+  {
+    id: 'pair-plus-2-s24-plus-sign-vs-s24',
+    titleA: 'Samsung Galaxy S24+ 12GB 256GB Chính hãng',
+    titleB: 'Samsung Galaxy S24 8GB 256GB Chính hãng',
+    shouldMatchCanonicalCluster: false,
+  },
+  {
+    id: 'pair-plus-4-redmi-note13-pro-plus-sign-vs-word',
+    titleA: 'Xiaomi Redmi Note 13 Pro+ 5G 8GB 256GB Chính hãng',
+    titleB: 'Xiaomi Redmi Note 13 Pro Plus 5G 8GB 256GB Chính hãng',
+    shouldMatchCanonicalCluster: true,
+  },
+  {
+    id: 'pair-plus-5-redmi-note13-pro-plus-word-vs-pro',
+    titleA: 'Xiaomi Redmi Note 13 Pro Plus 5G 8GB 256GB Chính hãng',
+    titleB: 'Xiaomi Redmi Note 13 Pro 5G 8GB 256GB Chính hãng',
+    shouldMatchCanonicalCluster: false,
+  },
+  {
+    id: 'pair-plus-3-s24-plus-sign-vs-word',
+    titleA: 'Samsung Galaxy S24+ 12GB 256GB Chính hãng',
+    titleB: 'Samsung Galaxy S24 Plus 12GB 256GB Chính hãng',
+    shouldMatchCanonicalCluster: true,
+  },
   {
     id: 'pair-1-iphone16pm-256-shopee-vs-tiki',
     titleA: '[Mã ELBAU5 giảm 5%] Điện thoại Apple iPhone 16 Pro Max 256GB Chính hãng VN/A',

@@ -1,6 +1,6 @@
 # 🗺️ Rate Platform Roadmap - Kiến Trúc Zero-Strapi & Open-Core 2026
 
-> **Cập nhật lần cuối:** 19/10/2026  
+> **Cập nhật lần cuối:** 20/10/2026  
 > **Tech Stack chuẩn hóa:** TypeScript 7.0.2 + Next.js 16.3.8 + React 19.3 + Pure PostgreSQL 17 (Supabase Cloud `rate` schema) + Open-Core 2 Repositories (`DOS/Rate` & `DOS/Rate-Services`)  
 > **GitHub Project Board (Multi-Agent Queue):** [https://github.com/orgs/DOS/projects/9](https://github.com/orgs/DOS/projects/9)  
 > **Nhật ký hoàn thành chi tiết (Phases 1 -> 5):** Xem [`Docs/Resources/CHANGELOG.md`](./CHANGELOG.md)  
@@ -70,6 +70,8 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc 4 tầ
   - Sửa `labels-sync.yml` dùng đúng input `yaml-file`/`skip-delete` của labeler v6 (bản cũ bị bỏ qua nên xóa sạch nhãn `status:*`/`agent:*` ngày 18/10), tạo lại 28 nhãn và gắn lại nhãn claim cho issue/PR đang mở; nhãn `status:*` do `labels.yml` quản lý.
   - Check bắt buộc `task-claim` (ruleset `dev-task-claim`, chỉ áp cho `dev`): PR đóng issue nào thì issue đó phải có `agent:<nick>` và `status:in-progress`/`status:in-review`; chạy bằng `pull_request_target` từ `dev` nên PR không tự sửa được check, tự chạy lại khi nhãn claim thay đổi (`task-claim-revalidate.yml`).
   - AGENTS.md tra item Project #9 từ phía issue (`gh project item-list` mặc định chỉ trả 30/321 item nên cập nhật Status/Agent của issue mới thất bại âm thầm).
+- [x] **6.11. Củng Cố Ranh Giới Dữ Liệu Đầu Vào Toàn Hệ Thống (`DOS/Rate#522`-`#586`, `DOS/Rate-Services#141`-`#171`):**
+  - Trần miền giá trị và kiểm tra số hữu hạn ở mọi tầng (shared schema, REST API v1, extension, engine, scraper); URL chỉ HTTP(S); listing hết hàng không có giá được ghi `listing_unavailable` thay vì lỗi. Chi tiết tại mục 6.5 trong [`CHANGELOG.md`](./CHANGELOG.md).
 
 ### 🚀 Phase 7: Mở Rộng Độ Phủ Dữ Liệu Thật Đa Sàn & Kiểm Thử E2E (2027 Q1)
 
