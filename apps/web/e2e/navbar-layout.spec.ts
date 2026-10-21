@@ -46,13 +46,16 @@ test('the phone header keeps the menu button on screen', async ({ page }) => {
   // while closed, so a slow first open is not undone by the retry.
   const wrapper = page.locator('.nav-menus-wrapper');
   await expect(async () => {
-    if (!/nav-menus-wrapper-open/.test((await wrapper.getAttribute('class')) ?? '')) {
+    if (
+      !/nav-menus-wrapper-open/.test(
+        (await wrapper.getAttribute('class')) ?? ''
+      )
+    ) {
       await toggle.click();
     }
-    await expect(wrapper).toHaveClass(
-      /nav-menus-wrapper-open/,
-      { timeout: 500 }
-    );
+    await expect(wrapper).toHaveClass(/nav-menus-wrapper-open/, {
+      timeout: 500,
+    });
   }).toPass();
 });
 
@@ -89,13 +92,17 @@ test('the phone menu works from the keyboard', async ({ page }) => {
   // scroll (a div role=button scrolled a whole screen).
   await page.evaluate(() => window.scrollTo(0, 0));
   await expect(async () => {
-    if (!/nav-menus-wrapper-open/.test((await menu.getAttribute('class')) ?? '')) {
+    if (
+      !/nav-menus-wrapper-open/.test((await menu.getAttribute('class')) ?? '')
+    ) {
       await toggle.focus();
       await page.keyboard.press('Space');
     }
     await expect(menu).toHaveClass(/nav-menus-wrapper-open/, { timeout: 500 });
   }).toPass();
-  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  // A sub-pixel layout shift can report 1px; a scroll from Space is a
+  // whole screen.
+  expect(await page.evaluate(() => window.scrollY)).toBeLessThan(10);
   expect(await focusInMenu()).toBe(true);
   await page.keyboard.press('Escape');
   await expect(menu).not.toHaveClass(/nav-menus-wrapper-open/);
