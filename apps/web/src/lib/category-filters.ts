@@ -349,7 +349,7 @@ export const CATEGORY_FILTER_SCHEMAS: Record<string, CategoryFilterSchema> = {
     directoryName: 'Công nghệ & Thiết bị số',
     categoryTitle: 'Tai nghe không dây và chống ồn ANC',
     categorySubtitle:
-      'So sánh khả năng chống ồn chủ động ANC, codec âm thanh Hi-Res (LDAC/aptX), thời lượng pin và giá bán thực tế đa sàn',
+      'So sánh khả năng chống ồn chủ động ANC, codec âm thanh Hi-Res (LDAC/aptX), thời lượng pin và giá bán thực tế trên nhiều sàn',
     searchPlaceholder:
       'Tìm AirPods Pro, Sony WF-1000XM5, Galaxy Buds, Bose, Sennheiser...',
     defaultBrands: [

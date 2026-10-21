@@ -1450,7 +1450,7 @@
       "smartphones": {
         "titleCount": "So sánh giá điện thoại ({count} mẫu máy) | Rate.vn",
         "titleDefault": "So sánh giá điện thoại và kiểm tra khuyến mãi | Rate.vn",
-        "description": "Tìm và lọc điện thoại theo 10 nhóm thông số chuẩn PhoneArena/GSMArena, xem lịch sử giá thật và đọc đánh giá đã được AI lọc đánh giá ảo trên Rate.vn."
+        "description": "Tìm và lọc điện thoại theo 10 nhóm thông số chuẩn PhoneArena/GSMArena, xem lịch sử giá thật và lọc đánh giá ảo trên Rate.vn."
       },
       "tablets": {
         "titleCount": "So sánh giá máy tính bảng ({count} mẫu máy) | Rate.vn",
@@ -1794,7 +1794,7 @@
     "sources": "{count, number} nơi bán",
     "viewDetails": "Xem chi tiết",
     "priceHistory": "Lịch sử giá",
-    "priceHistoryTitle": "Kiểm định lịch sử giá & phát hiện giảm giá ảo",
+    "priceHistoryTitle": "Xem lịch sử giá và phát hiện giảm giá ảo",
     "noImage": "Chưa có ảnh",
     "verified": "Đã chuẩn hóa thông số"
   },

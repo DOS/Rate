@@ -18,6 +18,15 @@ for (const locale of ['vi', 'en', 'cs']) {
       // CSS uppercases some eyebrows, so compare in lower case.
       const text = (await page.locator('body').innerText()).toLowerCase();
       for (const jargon of JARGON) expect(text).not.toContain(jargon);
+      // Tooltips are not in innerText; check title attributes too.
+      const titles = (
+        await page
+          .locator('[title]')
+          .evaluateAll((els) => els.map((el) => el.getAttribute('title')))
+      )
+        .join(' ')
+        .toLowerCase();
+      for (const jargon of JARGON) expect(titles).not.toContain(jargon);
       expect((await page.title()).toLowerCase()).not.toMatch(
         /audit|kiểm định|radar/
       );

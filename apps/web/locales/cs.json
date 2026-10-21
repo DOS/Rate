@@ -1448,9 +1448,9 @@
   "catalog": {
     "meta": {
       "smartphones": {
-        "titleCount": "Srovnání cen chytrých telefonů a filtr 10 skupin parametrů ({count} modelů) | Rate.vn",
+        "titleCount": "Srovnání cen chytrých telefonů ({count} modelů) | Rate.vn",
         "titleDefault": "Srovnání cen chytrých telefonů a kontrola slev | Rate.vn",
-        "description": "Filtrujte chytré telefony podle 10 skupin parametrů, zkontrolujte historii skutečných cen a čtěte recenze bez falešných na Rate.vn."
+        "description": "Filtrujte chytré telefony podle 10 skupin parametrů, zkontrolujte historii skutečných cen a odfiltrujte falešné recenze na Rate.vn."
       },
       "tablets": {
         "titleCount": "Srovnání cen tabletů ({count} modelů) | Rate.vn",
@@ -1624,7 +1624,7 @@
       "leaderboardBadge": "Žebříček",
       "sortByPrefix": "Řazení: {label}",
       "radarBannerBadge": "Cenová minima a falešné slevy ({title})",
-      "radarAnalyzedSub": "Zkontrolováno {count} nabídek napříč 10 tržišti",
+      "radarAnalyzedSub": "Zkontrolováno {count} nabídek v 10 obchodech",
       "viewAllRadarBtn": "Zobrazit všechny nabídky z 10 obchodů",
       "vsMedianBadge": "-{pct}% oproti mediánu",
       "fakeMarkupBadge": "Nadsazeno +{pct}%",
