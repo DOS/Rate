@@ -1092,7 +1092,9 @@ export default function CompareWorkspace({
           )
           .join(' | ')} |`,
         `| **${t('mdRowDealRadar')}** | ${products
-          .map((p) => radarMarkdownCell(getRadarSignal(radarIndex, p.slug)))
+          .map((p) =>
+            radarMarkdownCell(getRadarSignal(radarIndex, p.slug), locale)
+          )
           .join(' | ')} |`,
         `| **${t('mdRowHardwareMemory')}** | ${products
           .map((p) => {
@@ -1140,7 +1142,9 @@ export default function CompareWorkspace({
       [
         t('csvRadarGroupTitle'),
         t('csvRadarVerdictRow'),
-        ...products.map((p) => radarLabel(getRadarSignal(radarIndex, p.slug))),
+        ...products.map((p) =>
+          radarLabel(getRadarSignal(radarIndex, p.slug), 0, locale)
+        ),
       ]
         .map((c) => escapeCsvCell(c))
         .join(','),
