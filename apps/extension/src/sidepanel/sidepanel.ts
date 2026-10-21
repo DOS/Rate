@@ -124,7 +124,7 @@ async function fetchAndRenderDealRadar(
 
     slot.innerHTML = `
       <div class="card">
-        <div class="card-title">🔥 Radar Kèo Thơm Đáy Lịch Sử 10 Sàn</div>
+        <div class="card-title">🔥 Giá đáy lịch sử trên 10 sàn</div>
         ${deals
           .slice(0, 4)
           .map(

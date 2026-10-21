@@ -628,8 +628,8 @@ export default function JReviewsSection({
       r.comment.replace(/\|/g, '-').replace(/\r?\n/g, ' ').slice(0, 120),
     ]);
     const md = [
-      `### ⭐ Rate.vn JReviews AI-Audited Buyer Reviews: ${productName} (${filteredAndSortedReviews.length} reviews)`,
-      `- **Deal Radar Signal:** ${radarMarkdownCell(radarSignal)}`,
+      `### ⭐ Rate.vn JReviews AI-checked buyer reviews: ${productName} (${filteredAndSortedReviews.length} reviews)`,
+      `- **Price signal:** ${radarMarkdownCell(radarSignal)}`,
       '',
       `| ${headers.join(' | ')} |`,
       `| ${sep.join(' | ')} |`,
@@ -706,7 +706,7 @@ export default function JReviewsSection({
     )
       return;
     const payload = {
-      source: 'Rate.vn JReviews AI-Audited Buyer Reviews',
+      source: 'Rate.vn JReviews AI-checked buyer reviews',
       productSlug: productSlug || 'audit',
       productName,
       exportedAt: new Date().toISOString(),
