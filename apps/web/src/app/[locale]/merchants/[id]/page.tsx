@@ -373,7 +373,7 @@ export default async function MerchantProfilePage({
                       : 'bg-danger text-white'
                   }`}
                 >
-                  Risk: {merchant.dosafe_risk_score}/100
+                  {t('scamRiskBadge', { score: merchant.dosafe_risk_score })}
                 </span>
               </div>
 
@@ -434,7 +434,7 @@ export default async function MerchantProfilePage({
                         : 'bg-danger text-white'
                   }`}
                 >
-                  Review Risk: {merchant.review_risk_score}/100
+                  {t('reviewRiskBadge', { score: merchant.review_risk_score })}
                 </span>
               </div>
 

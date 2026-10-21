@@ -546,7 +546,7 @@ export default function HeroSearchInspector({
                         </div>
                         <div className="d-flex align-items-center small gap-2">
                           <span className="badge bg-success-subtle text-success rounded-pill">
-                            Trust: {m.trust_score}/100
+                            {t('trustBadge', { score: m.trust_score })}
                           </span>
                           <span
                             className="text-muted"
@@ -774,8 +774,10 @@ export default function HeroSearchInspector({
                               )}
                             </div>
                             <span className="badge bg-success rounded-pill text-white">
-                              Trust: {inspectResult.merchantProfile.trust_score}
-                              /100
+                              {t('trustBadge', {
+                                score:
+                                  inspectResult.merchantProfile.trust_score,
+                              })}
                             </span>
                           </div>
                         )}
@@ -845,14 +847,12 @@ export default function HeroSearchInspector({
                         {inspectResult.merchantProfile.name}
                       </h4>
                       <div className="text-muted small">
-                        DOSafe Threat Risk:{' '}
-                        <strong>
-                          {inspectResult.merchantProfile.dosafe_risk_score}/100
-                        </strong>{' '}
-                        • AI Review Risk:{' '}
-                        <strong>
-                          {inspectResult.merchantProfile.review_risk_score}/100
-                        </strong>{' '}
+                        {t.rich('merchantRiskLine', {
+                          scam: inspectResult.merchantProfile.dosafe_risk_score,
+                          review:
+                            inspectResult.merchantProfile.review_risk_score,
+                          b: (chunks) => <strong>{chunks}</strong>,
+                        })}{' '}
                         •{' '}
                         <strong>
                           {t('trackingProductsCount', {
