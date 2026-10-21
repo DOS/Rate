@@ -112,13 +112,31 @@ function main() {
       'reasonCommunityTooShortExcluded',
     ],
   ];
+  // The stored strings say "seeding"; the UI words these in plain Vietnamese
+  // instead (DOS/Rate#656), so they do not rebuild the stored text.
+  const reworded = new Set<string>([
+    'reasonDuplicateSeeding',
+    'reasonCopiedSeeding',
+    'reasonCommunityAdLink',
+    'summaryDefault',
+  ]);
   const covered = new Set<string>();
   for (const [text, key] of samples) {
     const copy = analyzerCopy(text);
     assert.ok('key' in copy, `not recognised: ${text}`);
     assert.equal(copy.key, key, text);
-    // The Vietnamese message rebuilds the stored string exactly.
-    assert.equal(fill(vi[copy.key]!, copy.values), text, key);
+    const shown = fill(vi[copy.key]!, copy.values);
+    if (reworded.has(copy.key)) {
+      assert.ok(!/seeding/i.test(shown), `${key} still says seeding`);
+      assert.deepEqual(
+        placeholders(vi[copy.key]!),
+        Object.keys(copy.values).sort(),
+        `${key} uses every value the stored string carries`
+      );
+    } else {
+      // The Vietnamese message rebuilds the stored string exactly.
+      assert.equal(shown, text, key);
+    }
     covered.add(copy.key);
   }
   assert.deepEqual(
@@ -150,8 +168,8 @@ function main() {
   ]
     .map((file) => readFileSync(new URL(file, import.meta.url), 'utf8'))
     .join('\n');
-  for (const key of ANALYZER_COPY_KEYS) {
-    const fixed = vi[key]!.split(/\{\w+\}/)[0]!;
+  for (const [text, key] of samples) {
+    const fixed = text.split(/\d/)[0]!;
     assert.ok(
       analyzerSrc.includes(fixed.slice(0, 40)),
       `${key} no longer matches the analyzer source`
