@@ -39,7 +39,7 @@ test('a leaderboard deep link opens its tab, and a click updates the URL', async
 }) => {
   await page.goto('/leaderboard?cat=earbuds&criterion=user');
   await expect(selectedTab(page)).toContainText('Tai nghe ANC');
-  await expect(activeCriterion(page)).toContainText('Điểm Người Mua Thực Chất');
+  await expect(activeCriterion(page)).toContainText('Điểm người mua thực chất');
 
   await page
     .getByRole('tablist')
@@ -70,7 +70,7 @@ test('an unknown leaderboard tab falls back to the defaults', async ({
 }) => {
   await page.goto('/leaderboard?cat=nope&criterion=user');
   // The effect ran: the criterion from the URL is applied...
-  await expect(activeCriterion(page)).toContainText('Điểm Người Mua Thực Chất');
+  await expect(activeCriterion(page)).toContainText('Điểm người mua thực chất');
   // ...and the unknown category falls back to smartphones.
   await expect(selectedTab(page)).toContainText('Điện thoại');
 });
@@ -79,7 +79,7 @@ test('a criterion click keeps the chosen brand', async ({ page }) => {
   await page.goto('/leaderboard');
   const brand = page.getByLabel('Lọc theo thương hiệu');
   const criterion = page.locator('button', {
-    hasText: 'Điểm Người Mua Thực Chất',
+    hasText: 'Điểm người mua thực chất',
   });
   // A choice made before hydration is reset to "all" when React takes over;
   // retry until the brand survives the criterion click.
