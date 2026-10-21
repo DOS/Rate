@@ -377,11 +377,7 @@ export default async function MerchantProfilePage({
                 </span>
               </div>
 
-              <p className="text-muted small mb-3">
-                {t('layer1DescPrefix')}
-                <code>entity_hash</code>
-                {t('layer1DescMid')} <code>dosafe.threat_intel</code>.
-              </p>
+              <p className="text-muted small mb-3">{t('layer1Desc')}</p>
 
               <div className="rounded-3 bg-light mt-auto p-3">
                 <div className="d-flex align-items-center justify-content-between small mb-2">

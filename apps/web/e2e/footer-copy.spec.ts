@@ -54,6 +54,13 @@ for (const { path, lang, label, icons } of LOCALES) {
       expect(text).not.toContain(term);
     }
     await expect(footer.locator('a[href*="/api/"]')).toHaveCount(0);
+    // The call-to-action band above the footer shares the same voice.
+    const cta = (
+      await page.locator('.rate-footer-cta').first().innerText()
+    ).toLowerCase();
+    for (const term of ['seeding', 'kiểm định', 'audit']) {
+      expect(cta).not.toContain(term);
+    }
     // Icon-only links are named in the page's language (DOS/Rate#619).
     const iconLinks = footer.locator('a.social-link');
     await expect(iconLinks).toHaveCount(icons.length);

@@ -5,8 +5,8 @@ import { expect, test } from '@playwright/test';
 // the footer without a locale, which used to fall back to Vietnamese, and the
 // switcher showed the Vietnamese category names from the database.
 const BADGE = {
-  vi: 'Chấm điểm minh bạch, chống seeding',
-  en: 'Open rating, anti-seeding',
+  vi: 'Chấm điểm minh bạch, lọc đánh giá ảo',
+  en: 'Open rating, fake reviews filtered',
 };
 
 for (const path of ['/deals', '/leaderboard', '/merchants', '/no-such-page']) {

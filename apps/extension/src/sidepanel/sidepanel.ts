@@ -278,7 +278,7 @@ async function fetchAndRenderMerchantTrustDirectory(
                     ${m.is_official ? '<span style="color:#34d399;font-size: 13px;">[Mall]</span>' : ''}
                   </div>
                   <div class="offer-meta">
-                    ${escapeHtml(m.platform.toUpperCase())} (${formatSafeNumber(m.product_count, { min: 0 })} SP) - DOSafe: ${formatSafeNumber(m.dosafe_risk_score, { min: 0, max: 100 })} | Seeding: ${formatSafeNumber(m.review_risk_score, { min: 0, max: 100 })}
+                    ${escapeHtml(m.platform.toUpperCase())} (${formatSafeNumber(m.product_count, { min: 0 })} SP) - Lừa đảo: ${formatSafeNumber(m.dosafe_risk_score, { min: 0, max: 100 })} | Đánh giá: ${formatSafeNumber(m.review_risk_score, { min: 0, max: 100 })}
                   </div>
                 </div>
                 <a href="${detailHref}" target="_blank" rel="noopener noreferrer" class="offer-price" style="text-decoration:none;color:${trustColor};">
@@ -433,7 +433,7 @@ function renderPanelContent(
   const reviewHtml = reviews
     ? `
       <div class="card">
-        <div class="card-title">Chất Lượng Đánh Giá Đã Lọc Seeding AI</div>
+        <div class="card-title">Chất lượng đánh giá (đã lọc đánh giá ảo)</div>
         <div class="stats-grid">
           <div class="stat-box">
             <div class="stat-label">Điểm User Đã Lọc</div>
@@ -463,7 +463,7 @@ function renderPanelContent(
             <div class="stat-val" style="color: #34d399;">${formatSafeNumber(merchant.trust_score, { min: 0, max: 100 })}/100</div>
           </div>
           <div class="stat-box">
-            <div class="stat-label">DOSafe / Seeding Risk</div>
+            <div class="stat-label">Rủi ro lừa đảo / đánh giá</div>
             <div class="stat-val">${formatSafeNumber(merchant.dosafe_risk_score, { min: 0, max: 100 })} / ${formatSafeNumber(merchant.review_risk_score, { min: 0, max: 100 })}</div>
           </div>
         </div>

@@ -19,6 +19,7 @@ const PAGES = [
   '/leaderboard',
   '/compare?slugs=iphone-16-pro-max-256gb,samsung-galaxy-s25-ultra-256gb',
   '/compare/iphone-16-pro-max-256gb-vs-samsung-galaxy-s25-ultra-256gb',
+  '/merchants/11111111-1111-4111-8111-111111111111',
 ];
 
 for (const [prefix, lang] of [
