@@ -303,22 +303,31 @@ export async function loadAndScoreMerchant(
     [merchantId]
   );
   const clusterIds = uniqueIds(listings.map(p => p.cluster_id));
-  const peers = await fetchAllByIds<ProductRow>(
+  // The peers' official flag comes embedded, so no per-merchant read.
+  type PeerRow = ProductRow & {
+    merchants?: { is_official?: boolean | null } | Array<{ is_official?: boolean | null }> | null;
+  };
+  const peers = await fetchAllByIds<PeerRow>(
     supabase,
     'products',
-    PRODUCT_RISK_SELECT,
+    `${PRODUCT_RISK_SELECT}, merchants(is_official)`,
     'cluster_id',
     clusterIds
   );
-  const productById = new Map([...listings, ...peers].map(p => [p.id, p]));
-  const peerMerchantIds = uniqueIds(peers.map(p => p.merchant_id)).filter(id => id !== merchantId);
-  const peerMerchants = await fetchAllByIds<MerchantRow>(
-    supabase,
-    'merchants',
-    MERCHANT_RISK_SELECT,
-    'id',
-    peerMerchantIds
-  );
+  const productById = new Map<string, ProductRow>();
+  const peerMerchants = new Map<string, MerchantRow>();
+  const rows: PeerRow[] = [...listings, ...peers];
+  for (const { merchants: embedded, ...product } of rows) {
+    productById.set(product.id, product);
+    if (!product.merchant_id || product.merchant_id === merchantId) continue;
+    const official = Array.isArray(embedded) ? embedded[0]?.is_official : embedded?.is_official;
+    peerMerchants.set(product.merchant_id, {
+      id: product.merchant_id,
+      platform: '',
+      is_official: Boolean(official),
+      follower_count: 0,
+    });
+  }
   const reviews = await fetchAllByIds<ReviewRow>(
     supabase,
     'reviews',
@@ -341,7 +350,7 @@ export async function loadAndScoreMerchant(
 
   const scores = scoreMerchants(
     analyzer,
-    [merchant as MerchantRow, ...peerMerchants],
+    [merchant as MerchantRow, ...peerMerchants.values()],
     [...productById.values()],
     reviews,
     masterMinByCluster
