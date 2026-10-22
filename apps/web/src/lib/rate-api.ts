@@ -1569,8 +1569,7 @@ export function mapOfferRowToMerchantOffer(item: RawOfferRow): MerchantOffer {
         ? toSafeRiskScore100(meta.dosafe_risk_score, baseRisk)
         : baseRisk;
   // Without a stored score (column, then metadata) the seller gets the merchant
-  // pages' baseline (#685). This select reads only metadata today; if the
-  // columns are added, a never-scored 0 / {} still takes the baseline.
+  // pages' baseline (#685). A never-scored column (0 / {}) is not a score.
   const columnReviewRisk = toSafeRiskScore100(
     merchantObj?.review_risk_score,
     0
@@ -2979,6 +2978,31 @@ export function baselineReviewRisk(
 }
 
 /** A persisted review risk exists once the importer wrote a score or breakdown. */
+/**
+ * The importer's stored review risk for a merchant row: the column when the
+ * importer wrote it (score or breakdown), else the metadata fallback, else 0.
+ * The column defaults to 0 / {}, so a bare 0 there is no score (#684).
+ */
+export function persistedReviewRiskOf(row: {
+  review_risk_score?: number | string | null;
+  review_risk_breakdown?: unknown;
+  metadata?: unknown;
+}): number {
+  const column = toSafeRiskScore100(row.review_risk_score, 0);
+  if (
+    row.review_risk_score != null &&
+    hasPersistedReviewRisk(column, row.review_risk_breakdown)
+  )
+    return column;
+  const meta =
+    row.metadata && typeof row.metadata === 'object'
+      ? (row.metadata as Record<string, unknown>)
+      : {};
+  return typeof meta.review_risk_score === 'number'
+    ? toSafeRiskScore100(meta.review_risk_score, 0)
+    : 0;
+}
+
 function hasPersistedReviewRisk(score: number, breakdown: unknown): boolean {
   return (
     score > 0 ||
@@ -3461,12 +3485,7 @@ export async function getMerchantsList(
       typeof meta.dosafe_risk_score === 'number'
         ? meta.dosafe_risk_score
         : Number(m.risk_score || 0);
-    const persistedReviewRisk =
-      m.review_risk_score != null
-        ? Number(m.review_risk_score)
-        : typeof meta.review_risk_score === 'number'
-          ? meta.review_risk_score
-          : 0;
+    const persistedReviewRisk = persistedReviewRiskOf(m);
     const effectiveReviewRisk = Math.max(
       dynamicRisk?.reviewRiskScore ?? 0,
       persistedReviewRisk
@@ -3862,12 +3881,7 @@ export async function getMerchantProfileById(
     typeof meta.dosafe_risk_score === 'number'
       ? meta.dosafe_risk_score
       : Number(merchantRow.risk_score || 0);
-  const persistedReviewRisk =
-    merchantRow.review_risk_score != null
-      ? Number(merchantRow.review_risk_score)
-      : typeof meta.review_risk_score === 'number'
-        ? meta.review_risk_score
-        : 0;
+  const persistedReviewRisk = persistedReviewRiskOf(merchantRow);
   // A persisted importer score covers all of the seller's reviews; the dynamic
   // one only the newest page. Use the persisted score when there is one, as
   // the merchant list and offer cards do (#684).

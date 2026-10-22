@@ -7674,6 +7674,43 @@ async function runCoreArchitectureSuite() {
       3,
       'merchant list, profile and offer fallback select the persisted review risk (#684)'
     );
+    // The column defaults to 0 / {}: a bare 0 there must not hide a
+    // metadata-only score, and a scored column wins.
+    const { persistedReviewRiskOf } = await import('@/lib/rate-api');
+    assert.equal(
+      persistedReviewRiskOf({
+        review_risk_score: 0,
+        review_risk_breakdown: {},
+      }),
+      0,
+      'never scored'
+    );
+    assert.equal(
+      persistedReviewRiskOf({
+        review_risk_score: 0,
+        review_risk_breakdown: {},
+        metadata: { review_risk_score: 37 },
+      }),
+      37,
+      'metadata-only scored seller keeps its score'
+    );
+    assert.equal(
+      persistedReviewRiskOf({
+        review_risk_score: 52,
+        review_risk_breakdown: { total_reviews: 9 },
+        metadata: { review_risk_score: 10 },
+      }),
+      52,
+      'column score wins'
+    );
+    assert.equal(
+      persistedReviewRiskOf({
+        review_risk_score: 0,
+        review_risk_breakdown: { total_reviews: 30 },
+      }),
+      0,
+      'a scored 0 (official store) stays 0'
+    );
     // The profile uses the persisted score when the importer wrote one.
     assert.match(
       src,
