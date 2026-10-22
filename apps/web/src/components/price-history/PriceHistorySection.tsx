@@ -1,8 +1,10 @@
 'use client';
 
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import ExportMenu from '@/components/elementary/ExportMenu';
+import ContentText from '@/components/elementary/ContentText';
+import { contentLang } from '@/lib/content-lang';
 import type { IconType } from 'react-icons';
 import {
   BsBarChart,
@@ -109,6 +111,7 @@ export default function PriceHistorySection({
 }: PriceHistorySectionProps) {
   const t = useTranslations('productDetail');
   const tVerdict = useTranslations('priceVerdict');
+  const locale = useLocale();
   const [selectedProductId, setSelectedProductId] = useState<string>('ALL');
   const [timeRange, setTimeRange] = useState<TimeRangeKey>('all');
   const [activePointIndex, setActivePointIndex] = useState<number | null>(null);
@@ -650,7 +653,9 @@ export default function PriceHistorySection({
                     backgroundColor: color,
                   }}
                 />
-                <span>{oa.merchant_name}</span>
+                <span lang={contentLang(oa.merchant_name, locale)}>
+                  {oa.merchant_name}
+                </span>
               </button>
             );
           })}
@@ -731,7 +736,13 @@ export default function PriceHistorySection({
               <div className="badge bg-light text-dark rounded-pill small border px-3 py-2">
                 <BsCalendar3 aria-hidden="true" className="me-1" />
                 {formatDateShort(activeNode.pt.recorded_at)} -{' '}
-                <strong>{activeNode.pt.merchant_name}</strong>:{' '}
+                <strong>
+                  <ContentText
+                    text={activeNode.pt.merchant_name}
+                    locale={locale}
+                  />
+                </strong>
+                :{' '}
                 <span className="text-danger fw-bold">
                   {formatVnd(activeNode.pt.price)}
                 </span>
@@ -971,7 +982,7 @@ export default function PriceHistorySection({
                         {oa.platform}
                       </span>
                       <span className="fw-bold text-dark small">
-                        {oa.merchant_name}
+                        <ContentText text={oa.merchant_name} locale={locale} />
                       </span>
                     </div>
                     <span

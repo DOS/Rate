@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
+import ContentText from '@/components/elementary/ContentText';
 import {
   BsArrowLeftRight,
   BsExclamationTriangle,
@@ -51,6 +52,7 @@ export default function DealFinderWorkspace({
   dealRadar = null,
 }: DealFinderWorkspaceProps) {
   const t = useTranslations('deals');
+  const locale = useLocale();
   const [categoryFilter, setCategoryFilter] = useState<
     CanonicalCategorySlug | 'all'
   >(initialCategory);
@@ -633,7 +635,11 @@ export default function DealFinderWorkspace({
                             <span className="rate-radar-platform">
                               {g.platform}
                             </span>
-                            {g.merchantName} ·{' '}
+                            <ContentText
+                              text={g.merchantName}
+                              locale={locale}
+                            />{' '}
+                            ·{' '}
                             {t('medianPriceLabel', {
                               price:
                                 g.marketMedianPrice.toLocaleString('vi-VN'),
@@ -680,7 +686,11 @@ export default function DealFinderWorkspace({
                             <span className="rate-radar-platform">
                               {trap.platform}
                             </span>
-                            {trap.merchantName} · {t('claimedOrigLabel')}{' '}
+                            <ContentText
+                              text={trap.merchantName}
+                              locale={locale}
+                            />{' '}
+                            · {t('claimedOrigLabel')}{' '}
                             <s>
                               {(
                                 trap.priceOriginal || trap.priceCurrent

@@ -1446,7 +1446,10 @@ export default function JReviewsSection({
                     {/* Top Row: Author + Role + Star Rating */}
                     <div className="d-flex justify-content-between align-items-start mb-2 gap-2">
                       <div className="d-flex align-items-center flex-wrap gap-2">
-                        <span className="fw-semibold small text-dark">
+                        <span
+                          className="fw-semibold small text-dark"
+                          lang={contentLang(rev.author_name, locale)}
+                        >
                           {rev.author_name}
                         </span>
                         {rev.reviewer_type === 'expert' ? (
@@ -1514,7 +1517,14 @@ export default function JReviewsSection({
 
                     {rev.variation && (
                       <div className="text-muted small mb-2">
-                        {t('variationPrefix', { variation: rev.variation })}
+                        {t.rich('variationPrefix', {
+                          variation: rev.variation,
+                          value: (chunks) => (
+                            <span lang={contentLang(rev.variation, locale)}>
+                              {chunks}
+                            </span>
+                          ),
+                        })}
                       </div>
                     )}
 

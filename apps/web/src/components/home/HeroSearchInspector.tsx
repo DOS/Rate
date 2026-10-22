@@ -772,7 +772,10 @@ export default function HeroSearchInspector({
                                 href={`/merchants/${inspectResult.merchantProfile.id}`}
                                 className="fw-bold text-dark text-decoration-none"
                               >
-                                {inspectResult.merchantProfile.name}
+                                <ContentText
+                                  text={inspectResult.merchantProfile.name}
+                                  locale={locale}
+                                />
                               </Link>
                               {inspectResult.merchantProfile.is_official && (
                                 <BsCheckCircleFill className="text-success ms-1" />
@@ -850,7 +853,10 @@ export default function HeroSearchInspector({
                       </div>
                       <h4 className="h5 fw-bold mb-1">
                         <BsShop className="text-primary me-2" />
-                        {inspectResult.merchantProfile.name}
+                        <ContentText
+                          text={inspectResult.merchantProfile.name}
+                          locale={locale}
+                        />
                       </h4>
                       <div className="text-muted small">
                         {t.rich('merchantRiskLine', {

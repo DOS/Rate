@@ -766,7 +766,14 @@ export default function DeepInspectWorkspace({
                           <tr key={offer.id}>
                             <td>
                               <div className="fw-semibold text-dark">
-                                {offer.merchant?.name || t('unknownShop')}
+                                {offer.merchant?.name ? (
+                                  <ContentText
+                                    text={offer.merchant.name}
+                                    locale={locale}
+                                  />
+                                ) : (
+                                  t('unknownShop')
+                                )}
                               </div>
                               <span className="badge bg-secondary bg-opacity-10 text-secondary text-uppercase small">
                                 {offer.merchant?.platform || 'shopee'}
@@ -823,7 +830,7 @@ export default function DeepInspectWorkspace({
 
                   <div className="rounded-3 bg-light mb-3 p-3">
                     <div className="fw-bold text-dark fs-5 mb-1">
-                      {merchant.name}
+                      <ContentText text={merchant.name} locale={locale} />
                     </div>
                     <div className="d-flex align-items-center small text-muted flex-wrap gap-2">
                       <span className="badge bg-dark text-uppercase">
