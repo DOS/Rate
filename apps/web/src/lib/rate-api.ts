@@ -1664,7 +1664,7 @@ const OFFER_FALLBACK_SELECT = `
   rating_star, rating_count, url,
   merchants (
     id, name, platform, is_official, rating_star, follower_count, location,
-    risk_score, metadata
+    risk_score, review_risk_score, review_risk_breakdown, metadata
   )
 `;
 
@@ -3262,7 +3262,7 @@ export async function getMerchantsList(
     let q = supabase
       .from('merchants')
       .select(
-        'id, platform, platform_shop_id, name, slug, url, is_official, rating_star, follower_count, location, risk_score, metadata, updated_at'
+        'id, platform, platform_shop_id, name, slug, url, is_official, rating_star, follower_count, location, risk_score, review_risk_score, review_risk_breakdown, metadata, updated_at'
       )
       .order('is_official', { ascending: false })
       .order('follower_count', { ascending: false })
@@ -3601,7 +3601,7 @@ export async function getMerchantProfileById(
     );
 
   const selectCols =
-    'id, platform, platform_shop_id, name, slug, url, is_official, rating_star, follower_count, location, risk_score, metadata, created_at, updated_at';
+    'id, platform, platform_shop_id, name, slug, url, is_official, rating_star, follower_count, location, risk_score, review_risk_score, review_risk_breakdown, metadata, created_at, updated_at';
 
   let merchantRow: RawMerchantSafeRow | null = null;
 
@@ -3868,10 +3868,12 @@ export async function getMerchantProfileById(
       : typeof meta.review_risk_score === 'number'
         ? meta.review_risk_score
         : 0;
-  const effectiveReviewRisk = Math.max(
-    dynamicRisk.reviewRiskScore,
-    persistedReviewRisk
-  );
+  // A persisted importer score covers all of the seller's reviews; the dynamic
+  // one only the newest page. Use the persisted score when there is one, as
+  // the merchant list and offer cards do (#684).
+  const effectiveReviewRisk = persistedBreakdown
+    ? persistedReviewRisk
+    : Math.max(dynamicRisk.reviewRiskScore, persistedReviewRisk);
   const breakdown = persistedBreakdown ?? dynamicRisk.breakdown;
   const metaCombined =
     typeof meta.combined_risk_score === 'number' ? meta.combined_risk_score : 0;

@@ -7657,6 +7657,35 @@ async function runCoreArchitectureSuite() {
     '  ✅ [86/86] Offer cards use the baseline for unscored sellers (#685) passed'
   );
 
+  // =========================================================================
+  // 87. Merchant pages and offers read the persisted review risk (#684)
+  // =========================================================================
+  {
+    const src = fs.readFileSync(
+      path.join(repoRoot, 'apps/web/src/lib/rate-api.ts'),
+      'utf8'
+    );
+    // List, profile and offer fallback selects; anon can read both columns.
+    const selects = src.match(
+      /risk_score, review_risk_score, review_risk_breakdown, metadata/g
+    );
+    assert.equal(
+      selects?.length,
+      3,
+      'merchant list, profile and offer fallback select the persisted review risk (#684)'
+    );
+    // The profile uses the persisted score when the importer wrote one.
+    assert.match(
+      src,
+      /const effectiveReviewRisk = persistedBreakdown\s+\? persistedReviewRisk/,
+      'getMerchantProfileById prefers the persisted review risk (#684)'
+    );
+  }
+
+  console.log(
+    '  ✅ [87/87] Merchant pages read the persisted review risk (#684) passed'
+  );
+
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
 
