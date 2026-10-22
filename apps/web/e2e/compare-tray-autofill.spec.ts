@@ -53,10 +53,15 @@ test('removing a device on /compare still updates the tray', async ({
 }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   expect((await page.goto(SHARED))?.status()).toBe(200);
-  await page
+  const remove = page
     .getByRole('button', { name: /^(Xóa|Remove) .*Galaxy S25 Ultra/ })
-    .first()
-    .click();
+    .first();
+  // A click that lands before hydration does nothing; retry until the
+  // device column is gone, then check the saved tray.
+  await expect(async () => {
+    if (await remove.count()) await remove.click({ timeout: 1000 });
+    await expect(remove).toHaveCount(0, { timeout: 1000 });
+  }).toPass({ timeout: 15000 });
   await expect
     .poll(async () =>
       JSON.parse((await readTray(page)) ?? '[]').map(
