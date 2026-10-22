@@ -87,13 +87,10 @@ export default function ApiPlaygroundClient() {
             url: 'https://cellphones.com.vn/iphone-16-pro-max.html?utm_source=extension_test',
             platform: 'cellphones',
             title: 'iPhone 16 Pro Max 256GB Chính hãng VN/A',
-            currentPrice: 30990000,
+            selectedVariant: '256GB Titan Tự Nhiên',
+            price: 30990000,
             originalPrice: 34990000,
-            skuText: '256GB Titan Tự Nhiên',
-            sellerName: 'CellphoneS Official',
-            isOfficialMall: true,
-            consentGranted: true,
-            extensionVersion: '2.1.0',
+            userConsentOptIn: true,
           },
           null,
           2
@@ -449,7 +446,7 @@ export default function ApiPlaygroundClient() {
                 value={requestBody}
                 onChange={(e) => setRequestBody(e.target.value)}
                 className="form-control font-monospace small bg-light"
-                placeholder='{"consentGranted": true, ...}'
+                placeholder='{"userConsentOptIn": true, ...}'
               />
             </div>
           )}
