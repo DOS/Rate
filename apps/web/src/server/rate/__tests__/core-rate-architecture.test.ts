@@ -7657,6 +7657,133 @@ async function runCoreArchitectureSuite() {
     '  ✅ [86/86] Offer cards use the baseline for unscored sellers (#685) passed'
   );
 
+  // =========================================================================
+  // 88. The review risk backfill scores sellers as the web does (#691)
+  // =========================================================================
+  {
+    const { computeDynamicReviewRisk } = await import('@/lib/rate-api');
+    // Paths in variables: the web typecheck does not compile importer sources.
+    const importerRoot = '../../../../../importer/src/shopee';
+    const jobModule = `${importerRoot}/jobs/backfill-review-risk`;
+    const analyzerModule = `${importerRoot}/ai-review-analyzer`;
+    const { scoreMerchants } = (await import(jobModule)) as {
+      scoreMerchants: (...args: unknown[]) => Array<{
+        risk: { risk_score: number };
+      }>;
+    };
+    const { AiReviewAnalyzer } = (await import(analyzerModule)) as {
+      AiReviewAnalyzer: new () => unknown;
+    };
+    const analyzer = new AiReviewAnalyzer();
+    // Review shapes stored in rate.review_flags, with stars and text.
+    const kinds = [
+      {
+        verdict: 'authentic',
+        flag_category: 'authentic',
+        include_in_rating: true,
+      },
+      {
+        verdict: 'fake',
+        flag_category: 'seeding_fake',
+        include_in_rating: false,
+      },
+      {
+        verdict: 'suspicious',
+        flag_category: 'low_value_coin_spam',
+        include_in_rating: false,
+      },
+      {
+        verdict: 'fake',
+        flag_category: 'competitor_sabotage',
+        include_in_rating: false,
+      },
+      {
+        verdict: 'fake',
+        flag_category: 'review_bombing',
+        include_in_rating: false,
+      },
+      { verdict: 'fake', flag_category: 'authentic', include_in_rating: false },
+      null,
+    ];
+    const texts = [
+      'Máy lỗi màn hình',
+      '',
+      'Rất không hài lòng',
+      'Pin tốt, máy mượt',
+    ];
+    const sellers = [
+      { platform: 'shopee', is_official: false, follower_count: 0 },
+      { platform: 'shopee', is_official: true, follower_count: 0 },
+      { platform: 'facebook', is_official: false, follower_count: 60000 },
+    ];
+    let seed = 7;
+    const rand = (n: number) => {
+      seed = (seed * 1103515245 + 12345) % 2147483648;
+      return seed % n;
+    };
+    for (let round = 0; round < 300; round++) {
+      const seller = sellers[round % sellers.length]!;
+      const count = 1 + rand(12);
+      const rows = Array.from({ length: count }, (_, i) => ({
+        id: `r${i}`,
+        product_id: 'p',
+        rating_star: 1 + rand(5),
+        comment: texts[rand(texts.length)]!,
+        review_flags: kinds[rand(kinds.length)] ?? null,
+      }));
+      const [job] = scoreMerchants(
+        analyzer,
+        [{ id: 'm', review_risk_score: 0, ...seller }],
+        [
+          {
+            id: 'p',
+            merchant_id: 'm',
+            cluster_id: null,
+            price_current: 1_000_000,
+          },
+        ],
+        rows,
+        new Map()
+      );
+      // The web's list mapping (getMerchantsList) of the same rows.
+      const items = rows.map((r) => {
+        const vf = r.review_flags;
+        const verdict = vf?.verdict ?? null;
+        const flag_category =
+          vf?.flag_category ||
+          (verdict === 'fake'
+            ? 'seeding_fake'
+            : verdict === 'suspicious'
+              ? 'low_value_coin_spam'
+              : 'authentic');
+        return {
+          rating_star: Number(r.rating_star || 5),
+          comment: r.comment || '',
+          verdict,
+          flag_category,
+          include_in_rating: Boolean(
+            vf?.include_in_rating ??
+            (flag_category === 'authentic' && verdict !== 'fake')
+          ),
+        };
+      }) as never;
+      const web = computeDynamicReviewRisk(items, {
+        isOfficial: seller.is_official,
+        platform: seller.platform,
+        followerCount: seller.follower_count,
+      });
+      assert.equal(
+        job!.risk.risk_score,
+        web.reviewRiskScore,
+        `round ${round}: backfill and web agree (#691)`
+      );
+    }
+  }
+
+  console.log(
+    '  ✅ [88/88] The review risk backfill scores sellers as the web does (#691) passed'
+  );
+
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
 

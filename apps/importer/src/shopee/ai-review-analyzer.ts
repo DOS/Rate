@@ -194,6 +194,25 @@ export interface MerchantRiskInput {
   rawReviews?: ReviewInputItem[];
 }
 
+/** The `review_risk_breakdown` stored with `review_risk_score` on rate.merchants. */
+export function merchantRiskBreakdown(risk: MerchantRiskEvaluation) {
+  return {
+    risk_level: risk.risk_level,
+    trust_score: risk.trust_score,
+    seeding_ratio: risk.seeding_ratio,
+    coin_spam_ratio: risk.coin_spam_ratio,
+    sabotage_ratio: risk.sabotage_ratio,
+    total_reviews: risk.total_reviews,
+    authentic_count: risk.authentic_count,
+    coin_spam_count: risk.coin_spam_count,
+    seeding_fake_count: risk.seeding_fake_count,
+    sabotage_or_bombing_count: risk.sabotage_or_bombing_count,
+    suspicious_ratio_pct: risk.suspicious_ratio_pct,
+    price_anomaly_detected: risk.price_anomaly_detected,
+    reasons: risk.reasons,
+  };
+}
+
 export interface MerchantRiskEvaluation {
   risk_score: number; // 0..100 (Higher = More risky)
   trust_score: number; // 0..100 (100 - risk_score, JReviews/Rate Trust Index)
@@ -2163,21 +2182,7 @@ Return ONLY valid JSON matching:
       });
 
       const nowIso = new Date().toISOString();
-      const breakdownPayload = {
-        risk_level: merchantRisk.risk_level,
-        trust_score: merchantRisk.trust_score,
-        seeding_ratio: merchantRisk.seeding_ratio,
-        coin_spam_ratio: merchantRisk.coin_spam_ratio,
-        sabotage_ratio: merchantRisk.sabotage_ratio,
-        total_reviews: merchantRisk.total_reviews,
-        authentic_count: merchantRisk.authentic_count,
-        coin_spam_count: merchantRisk.coin_spam_count,
-        seeding_fake_count: merchantRisk.seeding_fake_count,
-        sabotage_or_bombing_count: merchantRisk.sabotage_or_bombing_count,
-        suspicious_ratio_pct: merchantRisk.suspicious_ratio_pct,
-        price_anomaly_detected: merchantRisk.price_anomaly_detected,
-        reasons: merchantRisk.reasons,
-      };
+      const breakdownPayload = merchantRiskBreakdown(merchantRisk);
       const { error: merchErr } = await supabase
         .from('merchants')
         .update({
