@@ -555,9 +555,17 @@ export default function PriceHistorySection({
               className="text-success-emphasis"
               style={{ fontSize: '0.8125rem' }}
             >
-              {history.lowestEverMerchant
-                ? `${history.lowestEverMerchant} (${history.lowestEverDate ? formatDateShort(history.lowestEverDate) : ''})`
-                : t('priceHistoryKpiLowestEverDefaultSub')}
+              {history.lowestEverMerchant ? (
+                <>
+                  <ContentText
+                    text={history.lowestEverMerchant}
+                    locale={locale}
+                  />
+                  {` (${history.lowestEverDate ? formatDateShort(history.lowestEverDate) : ''})`}
+                </>
+              ) : (
+                t('priceHistoryKpiLowestEverDefaultSub')
+              )}
             </div>
           </div>
         </div>

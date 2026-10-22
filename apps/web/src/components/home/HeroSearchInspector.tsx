@@ -542,7 +542,9 @@ export default function HeroSearchInspector({
                           <span className="badge bg-danger text-uppercase small">
                             {m.platform}
                           </span>
-                          <span className="fw-semibold small">{m.name}</span>
+                          <span className="fw-semibold small">
+                            <ContentText text={m.name} locale={locale} />
+                          </span>
                           {m.is_official && (
                             <span className="badge bg-success-subtle text-success small">
                               {t('officialMallBadge')}

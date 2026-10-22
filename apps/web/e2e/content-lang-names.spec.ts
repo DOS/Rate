@@ -13,6 +13,8 @@ const PAGES = [
   // The Vietnamese-named store and a store with a Vietnamese reviewer.
   '/merchants/11111111-1111-4111-8111-111111111112',
   '/merchants/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb250',
+  '/deals',
+  '/inspect?q=iPhone%2016%20Pro%20Max',
 ];
 
 // Same letter set as src/lib/content-lang.ts: letters only Vietnamese uses
