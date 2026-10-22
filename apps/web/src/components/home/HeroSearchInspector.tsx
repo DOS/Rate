@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { discountVerdictCopy } from '@/lib/discount-verdict-copy';
 import { Link, useRouter } from '@/lib/navigation';
 import { startNavigationProgress } from '@/components/elementary/NavigationProgress';
@@ -32,6 +32,7 @@ import {
   BsShop,
   BsXLg,
 } from 'react-icons/bs';
+import ContentText from '@/components/elementary/ContentText';
 
 interface HeroSearchInspectorProps {
   initialProducts: MasterProduct[];
@@ -75,6 +76,7 @@ export default function HeroSearchInspector({
   const router = useRouter();
   const t = useTranslations('heroSearch');
   const tVerdict = useTranslations('priceVerdict');
+  const locale = useLocale();
   const radarIndex = useDealRadarIndex();
   const [mode, setMode] = useState<'search' | 'inspect'>('search');
   const [query, setQuery] = useState('');
@@ -453,7 +455,10 @@ export default function HeroSearchInspector({
                                       aria-hidden="true"
                                       className="me-1"
                                     />
-                                    {keySpecs.chip}
+                                    <ContentText
+                                      text={keySpecs.chip}
+                                      locale={locale}
+                                    />
                                   </span>
                                 )}
                                 {item.storage_gb && (
