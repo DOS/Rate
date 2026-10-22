@@ -44,5 +44,12 @@ for (const [locale, copy] of Object.entries(COPY)) {
       const text = await body.innerText();
       for (const vi of Object.values(COPY.vi)) expect(text).not.toContain(vi);
     }
+
+    // The review search matches the reason as shown, in the active locale.
+    const reasonWord = copy.reason.split(' ')[1]!.replace(/[,.]$/, '');
+    await page.locator('input[type="search"]').first().fill(reasonWord);
+    await expect(
+      page.getByText(copy.reason, { exact: false }).first()
+    ).toBeVisible();
   });
 }
