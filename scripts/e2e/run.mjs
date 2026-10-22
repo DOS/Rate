@@ -181,16 +181,21 @@ async function waitForHttp(url, label, timeoutMs, child) {
 const quoteForCmd = (arg) =>
   /[\s"&|<>^()]/.test(arg) ? `"${arg.replace(/"/g, '""')}"` : arg;
 
-function start(command, commandArgs, env) {
+function start(command, commandArgs, env, { onStderr } = {}) {
   const isWindows = process.platform === 'win32';
   const args = isWindows ? commandArgs.map(quoteForCmd) : commandArgs;
   const child = spawn(command, args, {
     cwd: repoRoot,
     env: { ...process.env, ...env },
     // No stdin: a detached process group that reads the terminal is stopped.
-    stdio: ['ignore', 'inherit', 'inherit'],
+    stdio: ['ignore', 'inherit', onStderr ? 'pipe' : 'inherit'],
     shell: isWindows,
     detached: !isWindows,
+  });
+  // Still shown as it arrives; the caller also reads it.
+  child.stderr?.on('data', (chunk) => {
+    process.stderr.write(chunk);
+    onStderr(chunk.toString());
   });
   child.on('error', (err) => {
     // A failed spawn never sets exitCode; waitForHttp checks this instead.
@@ -411,10 +416,18 @@ try {
   // the server is bound to another hostname Next proxies that rewrite as an
   // external request, which then redirects back to itself in a loop.
   const baseUrl = `http://localhost:${webPort}`;
+  // A message missing from a page's client scope renders its key and only
+  // logs MISSING_MESSAGE, so the run fails on that log (DOS/Rate#736).
+  let missingMessages = 0;
   const web = start(
     'pnpm',
     ['--filter', '@repo/web', 'exec', 'next', 'start', '-p', String(webPort)],
-    env
+    env,
+    {
+      onStderr: (text) => {
+        missingMessages += (text.match(/MISSING_MESSAGE/g) ?? []).length;
+      },
+    }
   );
   await waitForHttp(`${baseUrl}/api/health`, 'next start', 120_000, web);
 
@@ -439,6 +452,11 @@ try {
       E2E_BASE_URL: baseUrl,
     }
   );
+  if (missingMessages > 0) {
+    throw new Error(
+      `next start logged MISSING_MESSAGE ${missingMessages} times; a page's client message scope is missing a namespace (apps/web/src/lib/client-messages.ts)`
+    );
+  }
   exitCode = 0;
 } catch (err) {
   console.error(err instanceof Error ? err.message : err);

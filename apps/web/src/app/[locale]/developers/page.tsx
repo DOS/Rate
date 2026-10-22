@@ -16,6 +16,7 @@ import {
   BsLayers,
   BsShieldLock,
 } from 'react-icons/bs';
+import ClientMessages from '@/components/providers/ClientMessages';
 
 // Cached after the first request, refreshed every 5 minutes or when the
 // worker revalidates its cache tags (DOS/Rate#491).
@@ -233,278 +234,283 @@ export default async function DevelopersPage({
   ];
 
   return (
-    <>
-      <NavbarDarkDynamic links={[]} />
+    <ClientMessages scope="developers">
+      <>
+        <NavbarDarkDynamic links={[]} />
 
-      {/* Hero Header */}
-      <section className="bg-dark border-bottom border-secondary border-opacity-25 py-5 text-white">
-        <div className="container py-3">
-          <div className="row align-items-center g-4">
-            <div className="col-lg-8">
-              <div className="d-inline-flex align-items-center rounded-pill bg-danger bg-opacity-25 border-danger text-light small fw-semibold mb-3 gap-2 border px-3 py-1">
-                <BsCodeSquare className="text-danger" />
-                <span>{t('heroBadge')}</span>
-              </div>
-              <h1 className="display-6 fw-bold mb-3 text-white">
-                {t('heroTitlePrefix')}{' '}
-                <span className="text-danger">{t('heroTitleHighlight')}</span>
-              </h1>
-              <p className="lead text-white-50 mb-4">
-                {t('heroDescPrefix')} <code>rate.*</code>. {t('heroDescSuffix')}
-              </p>
-              <div className="d-flex flex-wrap gap-2">
-                <a
-                  href="#playground"
-                  className="btn btn-danger rounded-pill fw-semibold px-4 py-2"
-                >
-                  {t('btnPlayground')}
-                </a>
-                <a
-                  href="/api/v1/rate/openapi.json"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="btn btn-outline-info rounded-pill fw-semibold px-4 py-2"
-                >
-                  {t('btnOpenApiSpec')}
-                </a>
-                <a
-                  href="https://github.com/DOS/Rate"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="btn btn-outline-light rounded-pill fw-medium d-inline-flex align-items-center gap-2 px-4 py-2"
-                >
-                  <BsGithub /> {t('btnGithubSource')}
-                </a>
-              </div>
-            </div>
-
-            <div className="col-lg-4">
-              <div className="card rounded-4 bg-opacity-50 border-secondary border-opacity-25 border bg-black p-4 text-white">
-                <div className="small text-uppercase text-white-50 fw-bold mb-3">
-                  {t('liveStatsHeader')}
+        {/* Hero Header */}
+        <section className="bg-dark border-bottom border-secondary border-opacity-25 py-5 text-white">
+          <div className="container py-3">
+            <div className="row align-items-center g-4">
+              <div className="col-lg-8">
+                <div className="d-inline-flex align-items-center rounded-pill bg-danger bg-opacity-25 border-danger text-light small fw-semibold mb-3 gap-2 border px-3 py-1">
+                  <BsCodeSquare className="text-danger" />
+                  <span>{t('heroBadge')}</span>
                 </div>
-                <div className="row g-3">
-                  <div className="col-6">
-                    <div className="small text-white-50">
-                      {t('statMasterProducts')}
-                    </div>
-                    <div className="h4 fw-bold text-warning mb-0">
-                      {stats.masterProductsCount}
-                    </div>
-                  </div>
-                  <div className="col-6">
-                    <div className="small text-white-50">
-                      {t('statPriceObservations')}
-                    </div>
-                    <div className="h4 fw-bold text-info mb-0">
-                      {stats.priceObservationsCount}
-                    </div>
-                  </div>
-                  <div className="col-6">
-                    <div className="small text-white-50">
-                      {t('statAiFilteredReviews')}
-                    </div>
-                    <div className="h4 fw-bold text-success mb-0">
-                      {stats.totalReviewsCount}
-                    </div>
-                  </div>
-                  <div className="col-6">
-                    <div className="small text-white-50">
-                      {t('statEcommerceMerchants')}
-                    </div>
-                    <div className="h4 fw-bold text-light mb-0">
-                      {stats.merchantsCount}
-                    </div>
-                  </div>
+                <h1 className="display-6 fw-bold mb-3 text-white">
+                  {t('heroTitlePrefix')}{' '}
+                  <span className="text-danger">{t('heroTitleHighlight')}</span>
+                </h1>
+                <p className="lead text-white-50 mb-4">
+                  {t('heroDescPrefix')} <code>rate.*</code>.{' '}
+                  {t('heroDescSuffix')}
+                </p>
+                <div className="d-flex flex-wrap gap-2">
+                  <a
+                    href="#playground"
+                    className="btn btn-danger rounded-pill fw-semibold px-4 py-2"
+                  >
+                    {t('btnPlayground')}
+                  </a>
+                  <a
+                    href="/api/v1/rate/openapi.json"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn btn-outline-info rounded-pill fw-semibold px-4 py-2"
+                  >
+                    {t('btnOpenApiSpec')}
+                  </a>
+                  <a
+                    href="https://github.com/DOS/Rate"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn btn-outline-light rounded-pill fw-medium d-inline-flex align-items-center gap-2 px-4 py-2"
+                  >
+                    <BsGithub /> {t('btnGithubSource')}
+                  </a>
                 </div>
               </div>
+
+              <div className="col-lg-4">
+                <div className="card rounded-4 bg-opacity-50 border-secondary border-opacity-25 border bg-black p-4 text-white">
+                  <div className="small text-uppercase text-white-50 fw-bold mb-3">
+                    {t('liveStatsHeader')}
+                  </div>
+                  <div className="row g-3">
+                    <div className="col-6">
+                      <div className="small text-white-50">
+                        {t('statMasterProducts')}
+                      </div>
+                      <div className="h4 fw-bold text-warning mb-0">
+                        {stats.masterProductsCount}
+                      </div>
+                    </div>
+                    <div className="col-6">
+                      <div className="small text-white-50">
+                        {t('statPriceObservations')}
+                      </div>
+                      <div className="h4 fw-bold text-info mb-0">
+                        {stats.priceObservationsCount}
+                      </div>
+                    </div>
+                    <div className="col-6">
+                      <div className="small text-white-50">
+                        {t('statAiFilteredReviews')}
+                      </div>
+                      <div className="h4 fw-bold text-success mb-0">
+                        {stats.totalReviewsCount}
+                      </div>
+                    </div>
+                    <div className="col-6">
+                      <div className="small text-white-50">
+                        {t('statEcommerceMerchants')}
+                      </div>
+                      <div className="h4 fw-bold text-light mb-0">
+                        {stats.merchantsCount}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Interactive Playground Section */}
-      <section className="bg-light py-5" id="playground">
-        <div className="container">
-          <div className="mb-4">
-            <span className="badge bg-primary bg-opacity-10 text-primary rounded-pill fw-semibold mb-2 px-3 py-2">
-              {t('playgroundBadge')}
-            </span>
-            <h2 className="h3 fw-bold mb-1">{t('playgroundTitle')}</h2>
-            <p className="text-muted mb-0">{t('playgroundSubtitle')}</p>
-          </div>
-
-          <ApiPlaygroundClient />
-        </div>
-      </section>
-
-      {/* Endpoint Reference Table */}
-      <section className="border-top border-bottom bg-white py-5">
-        <div className="container">
-          <div className="mb-4">
-            <span className="badge bg-success bg-opacity-10 text-success rounded-pill fw-semibold mb-2 px-3 py-2">
-              {t('endpointsBadge')}
-            </span>
-            <h2 className="h3 fw-bold mb-1">{t('endpointsTitle')}</h2>
-            <p className="text-muted mb-0">{t('endpointsSubtitle')}</p>
-          </div>
-
-          <div className="table-responsive rounded-4 border shadow-sm">
-            <table className="table-hover mb-0 table align-middle">
-              <thead className="table-dark">
-                <tr>
-                  <th style={{ width: '90px' }}>{t('thMethod')}</th>
-                  <th style={{ minWidth: '250px' }}>{t('thPath')}</th>
-                  <th style={{ minWidth: '210px' }}>{t('thQueryParams')}</th>
-                  <th>{t('thDescription')}</th>
-                  <th style={{ minWidth: '180px' }}>{t('thCacheSecurity')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {apiEndpointsSpec.map((ep) => (
-                  <tr key={ep.path}>
-                    <td>
-                      <span
-                        className={`badge rounded-pill px-3 py-2 ${
-                          ep.method === 'GET' ? 'bg-primary' : 'bg-danger'
-                        }`}
-                      >
-                        {ep.method}
-                      </span>
-                    </td>
-                    <td className="font-monospace fw-bold text-dark small">
-                      {ep.path}
-                    </td>
-                    <td className="font-monospace text-muted small">
-                      {ep.queryParams}
-                    </td>
-                    <td className="small text-secondary">{ep.summary}</td>
-                    <td>
-                      <div className="small fw-semibold text-dark">
-                        {ep.auth}
-                      </div>
-                      <div
-                        className="font-monospace text-muted"
-                        style={{ fontSize: '0.8125rem' }}
-                      >
-                        {ep.cache}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      {/* 10 Field Groups Zod Specification Reference */}
-      <section className="bg-light py-5">
-        <div className="container">
-          <div className="row align-items-end g-3 mb-4">
-            <div className="col-lg-8">
-              <span className="badge bg-info bg-opacity-10 text-info rounded-pill fw-semibold mb-2 px-3 py-2">
-                {t('schemaBadge')}
+        {/* Interactive Playground Section */}
+        <section className="bg-light py-5" id="playground">
+          <div className="container">
+            <div className="mb-4">
+              <span className="badge bg-primary bg-opacity-10 text-primary rounded-pill fw-semibold mb-2 px-3 py-2">
+                {t('playgroundBadge')}
               </span>
-              <h2 className="h3 fw-bold mb-1">{t('schemaTitle')}</h2>
-              <p className="text-muted mb-0">
-                {t('schemaDescPrefix')} <code>specifications</code> (JSONB){' '}
-                {t('schemaDescMiddle')} <code>rate.master_products</code>{' '}
-                {t('schemaDescSuffix')}
-              </p>
+              <h2 className="h3 fw-bold mb-1">{t('playgroundTitle')}</h2>
+              <p className="text-muted mb-0">{t('playgroundSubtitle')}</p>
             </div>
-            <div className="col-lg-4 text-lg-end">
-              <Link
-                href="/compare"
-                className="btn btn-outline-primary rounded-pill fw-medium px-4"
-              >
-                {t('btnCompareMatrix')}
-              </Link>
+
+            <ApiPlaygroundClient />
+          </div>
+        </section>
+
+        {/* Endpoint Reference Table */}
+        <section className="border-top border-bottom bg-white py-5">
+          <div className="container">
+            <div className="mb-4">
+              <span className="badge bg-success bg-opacity-10 text-success rounded-pill fw-semibold mb-2 px-3 py-2">
+                {t('endpointsBadge')}
+              </span>
+              <h2 className="h3 fw-bold mb-1">{t('endpointsTitle')}</h2>
+              <p className="text-muted mb-0">{t('endpointsSubtitle')}</p>
+            </div>
+
+            <div className="table-responsive rounded-4 border shadow-sm">
+              <table className="table-hover mb-0 table align-middle">
+                <thead className="table-dark">
+                  <tr>
+                    <th style={{ width: '90px' }}>{t('thMethod')}</th>
+                    <th style={{ minWidth: '250px' }}>{t('thPath')}</th>
+                    <th style={{ minWidth: '210px' }}>{t('thQueryParams')}</th>
+                    <th>{t('thDescription')}</th>
+                    <th style={{ minWidth: '180px' }}>
+                      {t('thCacheSecurity')}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {apiEndpointsSpec.map((ep) => (
+                    <tr key={ep.path}>
+                      <td>
+                        <span
+                          className={`badge rounded-pill px-3 py-2 ${
+                            ep.method === 'GET' ? 'bg-primary' : 'bg-danger'
+                          }`}
+                        >
+                          {ep.method}
+                        </span>
+                      </td>
+                      <td className="font-monospace fw-bold text-dark small">
+                        {ep.path}
+                      </td>
+                      <td className="font-monospace text-muted small">
+                        {ep.queryParams}
+                      </td>
+                      <td className="small text-secondary">{ep.summary}</td>
+                      <td>
+                        <div className="small fw-semibold text-dark">
+                          {ep.auth}
+                        </div>
+                        <div
+                          className="font-monospace text-muted"
+                          style={{ fontSize: '0.8125rem' }}
+                        >
+                          {ep.cache}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
+        </section>
 
-          <div className="row g-3">
-            {TEN_FIELD_GROUPS.map((group) => (
-              <div key={group.key} className="col-lg-6 col-12">
-                <div className="card rounded-4 h-100 border bg-white p-3 shadow-sm">
-                  <div className="d-flex justify-content-between align-items-center mb-2">
-                    <div className="d-flex align-items-center gap-2">
-                      <span className="badge bg-dark rounded-pill">
-                        {t('groupOrderBadge', { order: group.order })}
-                      </span>
-                      <span className="fw-bold text-dark">{group.title}</span>
+        {/* 10 Field Groups Zod Specification Reference */}
+        <section className="bg-light py-5">
+          <div className="container">
+            <div className="row align-items-end g-3 mb-4">
+              <div className="col-lg-8">
+                <span className="badge bg-info bg-opacity-10 text-info rounded-pill fw-semibold mb-2 px-3 py-2">
+                  {t('schemaBadge')}
+                </span>
+                <h2 className="h3 fw-bold mb-1">{t('schemaTitle')}</h2>
+                <p className="text-muted mb-0">
+                  {t('schemaDescPrefix')} <code>specifications</code> (JSONB){' '}
+                  {t('schemaDescMiddle')} <code>rate.master_products</code>{' '}
+                  {t('schemaDescSuffix')}
+                </p>
+              </div>
+              <div className="col-lg-4 text-lg-end">
+                <Link
+                  href="/compare"
+                  className="btn btn-outline-primary rounded-pill fw-medium px-4"
+                >
+                  {t('btnCompareMatrix')}
+                </Link>
+              </div>
+            </div>
+
+            <div className="row g-3">
+              {TEN_FIELD_GROUPS.map((group) => (
+                <div key={group.key} className="col-lg-6 col-12">
+                  <div className="card rounded-4 h-100 border bg-white p-3 shadow-sm">
+                    <div className="d-flex justify-content-between align-items-center mb-2">
+                      <div className="d-flex align-items-center gap-2">
+                        <span className="badge bg-dark rounded-pill">
+                          {t('groupOrderBadge', { order: group.order })}
+                        </span>
+                        <span className="fw-bold text-dark">{group.title}</span>
+                      </div>
+                      <code className="small text-primary fw-semibold">
+                        specifications.{group.key}
+                      </code>
                     </div>
-                    <code className="small text-primary fw-semibold">
-                      specifications.{group.key}
-                    </code>
-                  </div>
-                  <div className="small text-muted font-monospace">
-                    {t('standardFieldsPrefix')} {group.fields}
+                    <div className="small text-muted font-monospace">
+                      {t('standardFieldsPrefix')} {group.fields}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* 4-Layer Architecture Overview */}
-      <section className="border-top bg-white py-5">
-        <div className="container">
-          <div className="mb-4 text-center">
-            <span className="badge bg-primary bg-opacity-10 text-primary rounded-pill fw-semibold mb-2 px-3 py-2">
-              {t('layersBadge')}
-            </span>
-            <h2 className="h3 fw-bold mb-2">{t('layersTitle')}</h2>
-          </div>
-
-          <div className="row g-4">
-            <div className="col-lg-3 col-md-6">
-              <div className="card rounded-4 h-100 border p-4 shadow-sm">
-                <BsLayers className="text-primary fs-2 mb-3" />
-                <h5 className="fw-bold">{t('layer1Title')}</h5>
-                <p className="small text-muted mb-0">
-                  {t('layer1DescPrefix')} <code>React.cache()</code>{' '}
-                  {t('layer1DescSuffix')}
-                </p>
-              </div>
-            </div>
-            <div className="col-lg-3 col-md-6">
-              <div className="card rounded-4 h-100 border p-4 shadow-sm">
-                <BsCpu className="text-success fs-2 mb-3" />
-                <h5 className="fw-bold">{t('layer2Title')}</h5>
-                <p className="small text-muted mb-0">
-                  {t('layer2DescPrefix')} <code>ProductNormalizer</code>,{' '}
-                  {t('layer2DescMiddle1')} <code>EntityMatcher</code>,{' '}
-                  <code>AiSpecEnricher</code> {t('layer2DescMiddle2')}{' '}
-                  <code>AiReviewAnalyzer</code> {t('layer2DescSuffix')}
-                </p>
-              </div>
-            </div>
-            <div className="col-lg-3 col-md-6">
-              <div className="card rounded-4 h-100 border p-4 shadow-sm">
-                <BsShieldLock className="text-warning fs-2 mb-3" />
-                <h5 className="fw-bold">{t('layer3Title')}</h5>
-                <p className="small text-muted mb-0">
-                  {t('layer3DescPrefix')} <code>FOR UPDATE SKIP LOCKED</code>{' '}
-                  {t('layer3DescSuffix')}
-                </p>
-              </div>
-            </div>
-            <div className="col-lg-3 col-md-6">
-              <div className="card rounded-4 h-100 border p-4 shadow-sm">
-                <BsDatabaseCheck className="text-danger fs-2 mb-3" />
-                <h5 className="fw-bold">{t('layer4Title')}</h5>
-                <p className="small text-muted mb-0">{t('layer4Desc')}</p>
-              </div>
+              ))}
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      <FooterTop locale={locale} />
-      <FooterDynamic sections={[]} links={[]} locale={locale} />
-      <BackToTop />
-    </>
+        {/* 4-Layer Architecture Overview */}
+        <section className="border-top bg-white py-5">
+          <div className="container">
+            <div className="mb-4 text-center">
+              <span className="badge bg-primary bg-opacity-10 text-primary rounded-pill fw-semibold mb-2 px-3 py-2">
+                {t('layersBadge')}
+              </span>
+              <h2 className="h3 fw-bold mb-2">{t('layersTitle')}</h2>
+            </div>
+
+            <div className="row g-4">
+              <div className="col-lg-3 col-md-6">
+                <div className="card rounded-4 h-100 border p-4 shadow-sm">
+                  <BsLayers className="text-primary fs-2 mb-3" />
+                  <h5 className="fw-bold">{t('layer1Title')}</h5>
+                  <p className="small text-muted mb-0">
+                    {t('layer1DescPrefix')} <code>React.cache()</code>{' '}
+                    {t('layer1DescSuffix')}
+                  </p>
+                </div>
+              </div>
+              <div className="col-lg-3 col-md-6">
+                <div className="card rounded-4 h-100 border p-4 shadow-sm">
+                  <BsCpu className="text-success fs-2 mb-3" />
+                  <h5 className="fw-bold">{t('layer2Title')}</h5>
+                  <p className="small text-muted mb-0">
+                    {t('layer2DescPrefix')} <code>ProductNormalizer</code>,{' '}
+                    {t('layer2DescMiddle1')} <code>EntityMatcher</code>,{' '}
+                    <code>AiSpecEnricher</code> {t('layer2DescMiddle2')}{' '}
+                    <code>AiReviewAnalyzer</code> {t('layer2DescSuffix')}
+                  </p>
+                </div>
+              </div>
+              <div className="col-lg-3 col-md-6">
+                <div className="card rounded-4 h-100 border p-4 shadow-sm">
+                  <BsShieldLock className="text-warning fs-2 mb-3" />
+                  <h5 className="fw-bold">{t('layer3Title')}</h5>
+                  <p className="small text-muted mb-0">
+                    {t('layer3DescPrefix')} <code>FOR UPDATE SKIP LOCKED</code>{' '}
+                    {t('layer3DescSuffix')}
+                  </p>
+                </div>
+              </div>
+              <div className="col-lg-3 col-md-6">
+                <div className="card rounded-4 h-100 border p-4 shadow-sm">
+                  <BsDatabaseCheck className="text-danger fs-2 mb-3" />
+                  <h5 className="fw-bold">{t('layer4Title')}</h5>
+                  <p className="small text-muted mb-0">{t('layer4Desc')}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <FooterTop locale={locale} />
+        <FooterDynamic sections={[]} links={[]} locale={locale} />
+        <BackToTop />
+      </>
+    </ClientMessages>
   );
 }

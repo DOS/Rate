@@ -121,6 +121,31 @@ const nextConfig = {
       },
     ]
   },
+
+  // www.rate.vn is assigned to the project too; one host keeps links,
+  // cookies and analytics together. Path and query are kept (DOS/Rate#744).
+  async redirects() {
+    return [
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "www.rate.vn" }],
+        destination: "https://rate.vn/:path*",
+        permanent: true,
+      },
+    ]
+  },
+
+  // iOS asks for these paths on its own; the 180px icon from
+  // app/apple-icon.png is served at /apple-icon.png (DOS/Rate#732).
+  async rewrites() {
+    return [
+      { source: "/apple-touch-icon.png", destination: "/apple-icon.png" },
+      {
+        source: "/apple-touch-icon-precomposed.png",
+        destination: "/apple-icon.png",
+      },
+    ]
+  },
 }
 
 const withConfig = (() => {

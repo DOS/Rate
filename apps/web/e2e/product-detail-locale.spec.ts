@@ -8,18 +8,18 @@ const PRODUCT = '/smartphones/iphone-16-pro-max-256gb';
 const COPY = {
   vi: {
     radar:
-      /^Rẻ hơn trung vị 10 sàn 1\.500\.000₫ \(-4\.9%\) tại Apple Flagship Store \(SHOPEE\)\.$/,
-    tier: /^(Độ tin cậy|Ít mẫu kiểm chứng)/,
+      /^Rẻ hơn trung vị 10 sàn 1\.500\.000 ₫ \(-4\.9%\) tại Apple Flagship Store \(SHOPEE\)\.$/,
+    tier: /^(Độ tin cậy|Ít mẫu kiểm chứng|Chưa đủ mẫu kiểm chứng)/,
   },
   en: {
     radar:
-      /^1\.500\.000₫ below the 10-platform median \(-4\.9%\) at Apple Flagship Store \(SHOPEE\)\.$/,
-    tier: /^(High|Medium|Low) confidence|^Few verified samples/,
+      /^1\.500\.000 ₫ below the 10-platform median \(-4\.9%\) at Apple Flagship Store \(SHOPEE\)\.$/,
+    tier: /^(High|Medium|Low) confidence|^Few verified samples|^Not enough verified samples/,
   },
   cs: {
     radar:
       /^O 1\.500\.000 ₫ levnější než medián 10 platforem \(-4\.9 %\) u Apple Flagship Store \(SHOPEE\)\.$/,
-    tier: /důvěryhodnost|^Málo ověřených vzorků/,
+    tier: /důvěryhodnost|^Málo ověřených vzorků|^Nedostatek ověřených vzorků/,
   },
 };
 

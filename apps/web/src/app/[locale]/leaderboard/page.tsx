@@ -23,6 +23,7 @@ import FooterDynamic from '../components/footer/FooterDynamic';
 import BackToTop from '../components/back-to-top';
 import CompareTrayBar from '@/components/compare/CompareTrayBar';
 import LeaderboardExplorer from '@/components/leaderboard/LeaderboardExplorer';
+import ClientMessages from '@/components/providers/ClientMessages';
 
 // Cached: the page renders the default tab, and LeaderboardExplorer applies
 // ?cat= / ?criterion= in the browser, so no request data is read here
@@ -162,210 +163,221 @@ export default async function LeaderboardPage({ params }: PageProps) {
   };
 
   return (
-    <>
-      <NavbarDarkDynamic links={[]} />
-      <main
-        style={{
-          background: '#f8fafc',
-          minHeight: '100vh',
-          paddingBottom: '72px',
-        }}
-      >
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{
-            __html: JSON.stringify(itemListSchema).replace(/</g, '\\u003c'),
-          }}
-        />
-
-        {/* DESIGN.md v3.0 Dark Obsidian Hero */}
-        <section
-          className="rate-ink-on-dark"
+    <ClientMessages scope="leaderboard">
+      <>
+        <NavbarDarkDynamic links={[]} />
+        <main
           style={{
-            background:
-              'linear-gradient(135deg, #0b0d10 0%, #12151a 60%, #191d24 100%)',
-            color: '#f8fafc',
-            padding: '40px 0 36px',
-            borderBottom: '1px solid rgba(255,255,255,0.08)',
+            background: '#f8fafc',
+            minHeight: '100vh',
+            paddingBottom: '72px',
           }}
         >
-          <div className="container">
-            <nav aria-label="breadcrumb" className="mb-3">
-              <ol
-                className="breadcrumb mb-0"
-                style={{ fontSize: '13px', background: 'transparent' }}
-              >
-                <li className="breadcrumb-item">
-                  <Link
-                    href="/"
-                    className="text-decoration-none"
-                    style={{ color: '#94a3b8' }}
+          <script
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{
+              __html: JSON.stringify(itemListSchema).replace(/</g, '\\u003c'),
+            }}
+          />
+
+          {/* DESIGN.md v3.0 Dark Obsidian Hero */}
+          <section
+            className="rate-ink-on-dark"
+            style={{
+              background:
+                'linear-gradient(135deg, #0b0d10 0%, #12151a 60%, #191d24 100%)',
+              color: '#f8fafc',
+              padding: '40px 0 36px',
+              borderBottom: '1px solid rgba(255,255,255,0.08)',
+            }}
+          >
+            <div className="container">
+              <nav aria-label="breadcrumb" className="mb-3">
+                <ol
+                  className="breadcrumb mb-0"
+                  style={{ fontSize: '13px', background: 'transparent' }}
+                >
+                  <li className="breadcrumb-item">
+                    <Link
+                      href="/"
+                      className="text-decoration-none"
+                      style={{ color: '#94a3b8' }}
+                    >
+                      {copy.home}
+                    </Link>
+                  </li>
+                  <li
+                    className="breadcrumb-item active"
+                    aria-current="page"
+                    style={{ color: '#f8fafc', fontWeight: 600 }}
                   >
-                    {copy.home}
-                  </Link>
-                </li>
-                <li
-                  className="breadcrumb-item active"
-                  aria-current="page"
-                  style={{ color: '#f8fafc', fontWeight: 600 }}
-                >
-                  {copy.breadcrumb}
-                </li>
-              </ol>
-            </nav>
+                    {copy.breadcrumb}
+                  </li>
+                </ol>
+              </nav>
 
-            <div className="row align-items-center g-4">
-              <div className="col-lg-8">
-                <div
-                  className="rate-hero-kicker d-inline-flex align-items-center rounded-pill mb-3 gap-2 px-3 py-1"
-                  style={{
-                    background: 'rgba(216, 48, 48, 0.14)',
-                    border: '1px solid rgba(216, 48, 48, 0.35)',
-                    color: '#ff6b66',
-                    fontSize: '0.8125rem',
-                    fontWeight: 700,
-                    letterSpacing: '0.06em',
-                  }}
-                >
-                  <BsTrophy aria-hidden="true" />
-                  <span>{copy.kicker}</span>
-                </div>
-
-                <h1
-                  className="fw-bold mb-2"
-                  style={{
-                    fontSize: 'clamp(1.75rem, 3vw, 2.5rem)',
-                    letterSpacing: '-0.02em',
-                    color: '#ffffff',
-                  }}
-                >
-                  {copy.title}
-                </h1>
-                <p
-                  className="mb-0"
-                  style={{
-                    color: '#94a3b8',
-                    fontSize: '15px',
-                    maxWidth: '740px',
-                    lineHeight: 1.6,
-                  }}
-                >
-                  {copy.subtitle}
-                </p>
-              </div>
-
-              <div className="col-lg-4">
-                <div
-                  className="rounded-4 p-3"
-                  style={{
-                    background: 'rgba(255,255,255,0.04)',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                  }}
-                >
-                  <div className="row g-2 mb-3 text-center">
-                    <div className="col-4">
-                      <div
-                        className="fw-bold"
-                        style={{
-                          fontSize: '20px',
-                          color: '#38bdf8',
-                          fontFamily: 'var(--font-mono, monospace)',
-                        }}
-                      >
-                        {products.length}
-                      </div>
-                      <div style={{ fontSize: '0.8125rem', color: '#94a3b8' }}>
-                        {copy.statProducts}
-                      </div>
-                    </div>
-                    <div className="col-4">
-                      <div
-                        className="fw-bold"
-                        style={{
-                          fontSize: '20px',
-                          color: '#34d399',
-                          fontFamily: 'var(--font-mono, monospace)',
-                        }}
-                      >
-                        5
-                      </div>
-                      <div style={{ fontSize: '0.8125rem', color: '#94a3b8' }}>
-                        {copy.statCategories}
-                      </div>
-                    </div>
-                    <div className="col-4">
-                      <div
-                        className="fw-bold"
-                        style={{
-                          fontSize: '20px',
-                          color: '#fbbf24',
-                          fontFamily: 'var(--font-mono, monospace)',
-                        }}
-                      >
-                        8
-                      </div>
-                      <div style={{ fontSize: '0.8125rem', color: '#94a3b8' }}>
-                        {copy.statCriteria}
-                      </div>
-                    </div>
+              <div className="row align-items-center g-4">
+                <div className="col-lg-8">
+                  <div
+                    className="rate-hero-kicker d-inline-flex align-items-center rounded-pill mb-3 gap-2 px-3 py-1"
+                    style={{
+                      background: 'rgba(216, 48, 48, 0.14)',
+                      border: '1px solid rgba(216, 48, 48, 0.35)',
+                      color: '#ff6b66',
+                      fontSize: '0.8125rem',
+                      fontWeight: 700,
+                      letterSpacing: '0.06em',
+                    }}
+                  >
+                    <BsTrophy aria-hidden="true" />
+                    <span>{copy.kicker}</span>
                   </div>
 
-                  <div className="d-flex justify-content-between align-items-center border-top border-secondary border-opacity-25 flex-wrap gap-2 pt-2">
-                    <span
-                      className="badge rounded-pill"
-                      style={{
-                        background: 'rgba(45, 186, 105, 0.15)',
-                        color: '#34d399',
-                        fontSize: '0.8125rem',
-                      }}
-                    >
-                      <BsShieldCheck aria-hidden="true" className="me-1" />
-                      {copy.statZeroBias}
-                    </span>
-                    <div className="d-flex gap-2">
-                      <Link
-                        href="/compare"
-                        className="btn btn-sm btn-outline-light rounded-pill px-3"
-                        style={{ fontSize: '0.8125rem', fontWeight: 600 }}
-                      >
-                        <BsArrowLeftRight aria-hidden="true" className="me-1" />
-                        {copy.compareCta}
-                      </Link>
-                      <Link
-                        href="/inspect"
-                        className="btn btn-sm rounded-pill px-3"
+                  <h1
+                    className="fw-bold mb-2"
+                    style={{
+                      fontSize: 'clamp(1.75rem, 3vw, 2.5rem)',
+                      letterSpacing: '-0.02em',
+                      color: '#ffffff',
+                    }}
+                  >
+                    {copy.title}
+                  </h1>
+                  <p
+                    className="mb-0"
+                    style={{
+                      color: '#94a3b8',
+                      fontSize: '15px',
+                      maxWidth: '740px',
+                      lineHeight: 1.6,
+                    }}
+                  >
+                    {copy.subtitle}
+                  </p>
+                </div>
+
+                <div className="col-lg-4">
+                  <div
+                    className="rounded-4 p-3"
+                    style={{
+                      background: 'rgba(255,255,255,0.04)',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                    }}
+                  >
+                    <div className="row g-2 mb-3 text-center">
+                      <div className="col-4">
+                        <div
+                          className="fw-bold"
+                          style={{
+                            fontSize: '20px',
+                            color: '#38bdf8',
+                            fontFamily: 'var(--font-mono, monospace)',
+                          }}
+                        >
+                          {products.length}
+                        </div>
+                        <div
+                          style={{ fontSize: '0.8125rem', color: '#94a3b8' }}
+                        >
+                          {copy.statProducts}
+                        </div>
+                      </div>
+                      <div className="col-4">
+                        <div
+                          className="fw-bold"
+                          style={{
+                            fontSize: '20px',
+                            color: '#34d399',
+                            fontFamily: 'var(--font-mono, monospace)',
+                          }}
+                        >
+                          5
+                        </div>
+                        <div
+                          style={{ fontSize: '0.8125rem', color: '#94a3b8' }}
+                        >
+                          {copy.statCategories}
+                        </div>
+                      </div>
+                      <div className="col-4">
+                        <div
+                          className="fw-bold"
+                          style={{
+                            fontSize: '20px',
+                            color: '#fbbf24',
+                            fontFamily: 'var(--font-mono, monospace)',
+                          }}
+                        >
+                          8
+                        </div>
+                        <div
+                          style={{ fontSize: '0.8125rem', color: '#94a3b8' }}
+                        >
+                          {copy.statCriteria}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="d-flex justify-content-between align-items-center border-top border-secondary border-opacity-25 flex-wrap gap-2 pt-2">
+                      <span
+                        className="badge rounded-pill"
                         style={{
-                          background: '#d83030',
-                          color: '#ffffff',
+                          background: 'rgba(45, 186, 105, 0.15)',
+                          color: '#34d399',
                           fontSize: '0.8125rem',
-                          fontWeight: 600,
                         }}
                       >
-                        <BsSearch aria-hidden="true" className="me-1" />
-                        {copy.inspectCta}
-                      </Link>
+                        <BsShieldCheck aria-hidden="true" className="me-1" />
+                        {copy.statZeroBias}
+                      </span>
+                      <div className="d-flex gap-2">
+                        <Link
+                          href="/compare"
+                          className="btn btn-sm btn-outline-light rounded-pill px-3"
+                          style={{ fontSize: '0.8125rem', fontWeight: 600 }}
+                        >
+                          <BsArrowLeftRight
+                            aria-hidden="true"
+                            className="me-1"
+                          />
+                          {copy.compareCta}
+                        </Link>
+                        <Link
+                          href="/inspect"
+                          className="btn btn-sm rounded-pill px-3"
+                          style={{
+                            background: '#d83030',
+                            color: '#ffffff',
+                            fontSize: '0.8125rem',
+                            fontWeight: 600,
+                          }}
+                        >
+                          <BsSearch aria-hidden="true" className="me-1" />
+                          {copy.inspectCta}
+                        </Link>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-        </section>
+          </section>
 
-        {/* Main Interactive 4-Tier Leaderboard Explorer */}
-        <section className="container mt-4">
-          <LeaderboardExplorer
-            products={products}
-            dealRadar={dealRadar}
-            locale={resolvedLocale}
-          />
-        </section>
-      </main>
+          {/* Main Interactive 4-Tier Leaderboard Explorer */}
+          <section className="container mt-4">
+            <LeaderboardExplorer
+              products={products}
+              dealRadar={dealRadar}
+              locale={resolvedLocale}
+            />
+          </section>
+        </main>
 
-      <CompareTrayBar />
-      <FooterTop locale={locale} />
-      <FooterDynamic sections={[]} links={[]} locale={locale} />
-      <BackToTop />
-    </>
+        <CompareTrayBar />
+        <FooterTop locale={locale} />
+        <FooterDynamic sections={[]} links={[]} locale={locale} />
+        <BackToTop />
+      </>
+    </ClientMessages>
   );
 }

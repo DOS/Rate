@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import ContentText from '@/components/elementary/ContentText';
 import { BsBell, BsCheckCircle, BsExclamationTriangle } from 'react-icons/bs';
 import { Link } from '@/lib/navigation';
 import { escapeCsvCell } from '@/lib/csv-safe';
@@ -988,7 +989,10 @@ export default function WatchlistWorkspace({
                             bestOffer.platform.toUpperCase()}
                         </span>
                         <span className="fw-medium">
-                          {bestOffer.merchant_name}
+                          <ContentText
+                            text={bestOffer.merchant_name}
+                            locale={locale || 'vi'}
+                          />
                         </span>{' '}
                         {bestOffer.is_official_mall && (
                           <span className="badge bg-success-subtle text-success border-success-subtle border">

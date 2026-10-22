@@ -2013,7 +2013,7 @@ async function runCoreArchitectureSuite() {
   );
   assert.ok(
     pdvSrc127.includes('peerRadarIndex') &&
-      pdvSrc127.includes('getRadarSignal(peerRadarIndex, peer.slug)'),
+      /getRadarSignal\(\s*peerRadarIndex,\s*peer\.slug\s*\)/.test(pdvSrc127),
     'ProductDetailView relatedCompetitors cards must render per-product RadarBadge (#127)'
   );
   console.log(
@@ -7879,6 +7879,109 @@ async function runCoreArchitectureSuite() {
 
   console.log(
     '  ✅ [87/87] Merchant pages read the persisted review risk (#684) passed'
+  );
+
+  // =========================================================================
+  // 88. Shopper-facing messages do not shout in capitals (#706)
+  // =========================================================================
+  {
+    // Short acronyms (ID, CPU, RAM) are fine; a run of all-caps words with a
+    // longer one, or a long all-caps label before a colon, is shouting.
+    // Brand names and long acronyms keep their capitals.
+    const capsAllowed = new Set(['ASUS', 'LDAC', 'JSON', 'OLED', 'REST']);
+    const capsRun =
+      /(?<![\p{L}\p{N}])\p{Lu}{2,}(?:\s+\p{Lu}{2,})+(?![\p{L}\p{N}])/gu;
+    const capsLabel = /(?<![\p{L}\p{N}])(\p{Lu}{4,})\s*:/gu;
+    const isShout = (w: string) => w.length >= 4 && !capsAllowed.has(w);
+    const shouts = (s: string) => {
+      const text = s.replace(/\{[^}]+\}/g, '');
+      return (
+        (text.match(capsRun) ?? []).some((run) =>
+          run.split(/\s+/).some(isShout)
+        ) || [...text.matchAll(capsLabel)].some((m) => isShout(m[1]!))
+      );
+    };
+    const offenders: string[] = [];
+    const walk = (node: unknown, key: string, locale: string) => {
+      if (typeof node === 'string') {
+        if (shouts(node)) offenders.push(`${locale}.${key}: ${node}`);
+      } else if (node && typeof node === 'object') {
+        for (const [k, v] of Object.entries(node))
+          walk(v, key ? `${key}.${k}` : k, locale);
+      }
+    };
+    for (const [locale, messages] of Object.entries({
+      vi: viMessages,
+      en: enMessages,
+      cs: csMessages,
+    })) {
+      for (const [ns, node] of Object.entries(messages)) {
+        if (ns !== 'developers') walk(node, ns, locale);
+      }
+    }
+    assert.deepEqual(
+      offenders,
+      [],
+      'shopper-facing messages must not shout in capitals (#706)'
+    );
+  }
+
+  console.log(
+    '  ✅ [88/88] Shopper-facing messages do not shout in capitals (#706) passed'
+  );
+
+  // =========================================================================
+  // 89. Vercel installs exactly what pnpm-lock.yaml pins (#734)
+  // =========================================================================
+  {
+    const vercel = JSON.parse(
+      fs.readFileSync(path.join(repoRoot, 'vercel.json'), 'utf8')
+    ) as { installCommand?: string };
+    const install = vercel.installCommand ?? '';
+    assert.ok(
+      /\binstall\b/.test(install) &&
+        install.includes('--frozen-lockfile') &&
+        !install.includes('--no-frozen-lockfile'),
+      `vercel.json installCommand must use --frozen-lockfile (#734), got: ${install}`
+    );
+  }
+
+  console.log(
+    '  ✅ [89/89] Vercel installs exactly what pnpm-lock.yaml pins (#734) passed'
+  );
+
+  // =========================================================================
+  // 90. The sitemap reads through the tagged Data Cache (#742)
+  // =========================================================================
+  {
+    const sitemapSrc = fs.readFileSync(
+      path.join(repoRoot, 'apps/web/src/app/sitemap.ts'),
+      'utf8'
+    );
+    const serverRateSrc = fs.readFileSync(
+      path.join(repoRoot, 'apps/web/src/server/rate/index.ts'),
+      'utf8'
+    );
+    assert.ok(
+      sitemapSrc.includes('getCachedSitemapRows()') &&
+        sitemapSrc.includes('getCachedMasterProducts(') &&
+        !/\bgetSitemapRows\(/.test(sitemapSrc),
+      'sitemap.ts must read through the cached, tagged helpers (#742)'
+    );
+    const block = serverRateSrc.slice(
+      serverRateSrc.indexOf('_getCachedSitemapRowsData')
+    );
+    assert.ok(
+      block.includes("['rate-sitemap-rows']") &&
+        block.includes('RATE_CACHE_TAGS.PRODUCTS') &&
+        block.includes('RATE_CACHE_TAGS.MERCHANTS') &&
+        block.includes('RATE_CACHE_TAGS.CATEGORIES'),
+      'sitemap rows must carry the products, merchants and categories tags (#742)'
+    );
+  }
+
+  console.log(
+    '  ✅ [90/90] The sitemap reads through the tagged Data Cache (#742) passed'
   );
 
   console.log('🎉 All Rate.vn Core Architecture tests passed!');

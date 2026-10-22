@@ -9,7 +9,8 @@ VALUES ('c0000000-0000-4000-8000-000000000001', 'Điện thoại', 'smartphones'
 INSERT INTO rate.merchants (id, platform, platform_shop_id, name, slug, is_official)
 VALUES
   ('11111111-1111-4111-8111-111111111111', 'shopee', 'shop_1', 'Apple Flagship Store', 'apple-flagship-store', true),
-  ('11111111-1111-4111-8111-111111111112', 'tiki', 'shop_2', 'Samsung Official Store', 'samsung-official-store', true),
+  -- A Vietnamese store name, marked lang="vi" on en/cs pages (DOS/Rate#720).
+  ('11111111-1111-4111-8111-111111111112', 'tiki', 'shop_2', 'Cửa Hàng Điện Thoại Hà Nội', 'cua-hang-dien-thoai-ha-noi', true),
   -- Its listing query fails on purpose (FAULT_MARKERS in scripts/e2e/run.mjs).
   ('eeeeeeee-eeee-4eee-8eee-eeeeeeeefa17', 'shopee', 'shop_fault', 'Faulty Listings Store', 'faulty-listings-store', false);
 
@@ -45,10 +46,14 @@ INSERT INTO rate.reviews (id, product_id, author_name, rating_star, comment, rev
 VALUES
   ('44444444-4444-4444-8444-444444444441', '33333333-3333-4333-8333-333333333331', 'Minh', 5,
    'Máy dùng rất mượt, pin trâu suốt cả ngày, camera chụp đêm đẹp.', 'user', now() - interval '3 days'),
-  ('44444444-4444-4444-8444-444444444442', '33333333-3333-4333-8333-333333333331', 'Lan', 4,
+  ('44444444-4444-4444-8444-444444444442', '33333333-3333-4333-8333-333333333331', 'Lan Phương', 4,
    'Màn hình đẹp, hơi nóng khi chơi game lâu nhưng vẫn ổn.', 'user', now() - interval '5 days'),
   ('44444444-4444-4444-8444-444444444443', '33333333-3333-4333-8333-333333333333', 'Huy', 5,
    'Bút S Pen tiện, zoom 100x rõ hơn mong đợi.', 'user', now() - interval '2 days');
+
+-- A Vietnamese variant name, marked lang="vi" on en/cs pages (DOS/Rate#720).
+UPDATE rate.reviews SET variation = 'Xanh Mòng Két'
+WHERE id = '44444444-4444-4444-8444-444444444442';
 
 INSERT INTO rate.review_flags (review_id, verdict, include_in_rating, detector, detector_version, input_hash)
 SELECT id, 'authentic', true, 'e2e-seed', 'v1', 'seed-' || id FROM rate.reviews;

@@ -8,7 +8,7 @@
     "lint": "eslint . --max-warnings 0",
     "preview": "next build && next start",
     "start": "next start",
-    "test": "pnpm --filter @repo/crawlers exec tsx --tsconfig ../web/tsconfig.test.json ../web/src/server/rate/__tests__/core-rate-architecture.test.ts && pnpm --filter @repo/crawlers exec tsx --tsconfig ../web/tsconfig.test.json ../web/src/app/api/v1/rate/__tests__/write-paths.test.ts && pnpm --filter @repo/crawlers exec tsx --tsconfig ../web/tsconfig.test.json ../web/src/lib/__tests__/logger.test.ts && pnpm --filter @repo/crawlers exec tsx --tsconfig ../web/tsconfig.test.json ../web/src/lib/__tests__/review-display.test.ts && pnpm --filter @repo/crawlers exec tsx --tsconfig ../web/tsconfig.test.json ../web/src/lib/__tests__/concurrency.test.ts && pnpm --filter @repo/crawlers exec tsx --tsconfig ../web/tsconfig.test.json ../web/src/lib/__tests__/catalog-listing.test.ts && pnpm --filter @repo/crawlers exec tsx --tsconfig ../web/tsconfig.test.json ../web/src/lib/__tests__/discount-verdict-copy.test.ts && pnpm --filter @repo/crawlers exec tsx --tsconfig ../web/tsconfig.test.json ../web/src/lib/__tests__/product-detail-copy.test.ts && pnpm --filter @repo/crawlers exec tsx --tsconfig ../web/tsconfig.test.json ../web/src/lib/__tests__/product-competitors.test.ts && pnpm --filter @repo/crawlers exec tsx --tsconfig ../web/tsconfig.test.json ../web/src/lib/__tests__/analyzer-copy.test.ts && pnpm --filter @repo/crawlers exec tsx --tsconfig ../web/tsconfig.test.json ../web/src/lib/__tests__/sold-count.test.ts && pnpm --filter @repo/crawlers exec tsx --tsconfig ../web/tsconfig.test.json ../web/src/lib/__tests__/content-lang.test.ts",
+    "test": "pnpm --filter @repo/crawlers exec tsx --tsconfig ../web/tsconfig.test.json ../web/src/server/rate/__tests__/core-rate-architecture.test.ts && pnpm --filter @repo/crawlers exec tsx --tsconfig ../web/tsconfig.test.json ../web/src/app/api/v1/rate/__tests__/write-paths.test.ts && pnpm --filter @repo/crawlers exec tsx --tsconfig ../web/tsconfig.test.json ../web/src/lib/__tests__/logger.test.ts && pnpm --filter @repo/crawlers exec tsx --tsconfig ../web/tsconfig.test.json ../web/src/lib/__tests__/review-display.test.ts && pnpm --filter @repo/crawlers exec tsx --tsconfig ../web/tsconfig.test.json ../web/src/lib/__tests__/concurrency.test.ts && pnpm --filter @repo/crawlers exec tsx --tsconfig ../web/tsconfig.test.json ../web/src/lib/__tests__/catalog-listing.test.ts && pnpm --filter @repo/crawlers exec tsx --tsconfig ../web/tsconfig.test.json ../web/src/lib/__tests__/discount-verdict-copy.test.ts && pnpm --filter @repo/crawlers exec tsx --tsconfig ../web/tsconfig.test.json ../web/src/lib/__tests__/product-detail-copy.test.ts && pnpm --filter @repo/crawlers exec tsx --tsconfig ../web/tsconfig.test.json ../web/src/lib/__tests__/product-competitors.test.ts && pnpm --filter @repo/crawlers exec tsx --tsconfig ../web/tsconfig.test.json ../web/src/lib/__tests__/analyzer-copy.test.ts && pnpm --filter @repo/crawlers exec tsx --tsconfig ../web/tsconfig.test.json ../web/src/lib/__tests__/sold-count.test.ts && pnpm --filter @repo/crawlers exec tsx --tsconfig ../web/tsconfig.test.json ../web/src/lib/__tests__/content-lang.test.ts && pnpm --filter @repo/crawlers exec tsx --tsconfig ../web/tsconfig.test.json ../web/src/lib/__tests__/client-messages.test.ts && pnpm --filter @repo/crawlers exec tsx --tsconfig ../web/tsconfig.test.json ../web/src/lib/__tests__/seo.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "browserslist": [
@@ -28,7 +28,7 @@
     "bootstrap": "^5.3.8",
     "dayjs": "^1.11.23",
     "lucide-react": "0.513.0",
-    "next": "^16.3.8",
+    "next": "^16.4.1",
     "next-intl": "^4.14.8",
     "next-themes": "^0.4.6",
     "plaiceholder": "^3.0.0",
@@ -40,7 +40,7 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@next/eslint-plugin-next": "16.3.8",
+    "@next/eslint-plugin-next": "16.4.2",
     "@repo/eslint-config": "workspace:*",
     "@repo/prettier-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",
@@ -53,9 +53,9 @@
     "eslint": "^9.39.5",
     "eslint-plugin-jsx-a11y": "^6.10.2",
     "eslint-plugin-react": "^7.37.5",
-    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^16.5.0",
-    "sass": "^1.105.1",
+    "sass": "^1.105.2",
     "typescript": "^7.0.2"
   },
   "engines": {

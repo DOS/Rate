@@ -10304,9 +10304,14 @@ Responsiveness Start
     display: none;
   }
 
+  // Sticky, not fixed: the bar stays on top while scrolling but keeps its
+  // height in the flow, so a page's first section (dark heroes included)
+  // starts below it instead of under it (DOS/Rate#715).
   .header {
     padding: 10px 0;
-    position:fixed ;
+    position: sticky;
+    top: 0;
+    z-index: 1030;
     width: 100%;
   }
 
@@ -10663,8 +10668,10 @@ Responsiveness Start
   }
 
   @media (max-width: 991.98px) {
+    // 8px clear of the 30px menu toggle, whose tap area reaches 7px past
+    // its edges (DOS/Rate#717).
     .navigation .mobile_nav {
-      margin-right: 30px;
+      margin-right: 38px;
     }
   }
 
@@ -10931,6 +10938,8 @@ Responsiveness Start
 }
 .top-scroll{
   position: fixed;
+  border: 0;
+  padding: 0;
   bottom: 10px;
   right: 10px;
   background-color:var( --bs-primary) ;

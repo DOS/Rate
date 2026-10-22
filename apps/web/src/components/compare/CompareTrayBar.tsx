@@ -174,7 +174,7 @@ export default function CompareTrayBar() {
                     <button
                       type="button"
                       onClick={() => handleRemove(item.slug)}
-                      className="btn btn-sm text-light p-0 px-1 opacity-75"
+                      className="rate-remove-target btn btn-sm text-light d-inline-flex align-items-center justify-content-center p-0 opacity-75"
                       title={t('trayRemoveTitle')}
                       aria-label={t('trayRemoveAria', { name: item.name })}
                     >
