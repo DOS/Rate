@@ -1999,7 +1999,7 @@ async function runCoreArchitectureSuite() {
     deepInspectSrc127.includes('RADAR_CSV_HEADERS') &&
       deepInspectSrc127.includes('radarCsvCells') &&
       deepInspectSrc127.includes('dealRadar: radarExportFields(radarSignal)') &&
-      deepInspectSrc127.includes('radarMarkdownCell(radarSignal)'),
+      deepInspectSrc127.includes('radarMarkdownCell(radarSignal, locale)'),
     'DeepInspectWorkspace exports (MD/CSV/JSON) must include unified Deal Radar columns (#127)'
   );
   assert.ok(

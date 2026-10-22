@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import ExportMenu from '@/components/elementary/ExportMenu';
 import {
   BsBarChart,
@@ -23,6 +23,7 @@ import {
   type RadarSignal,
 } from '@/lib/deal-radar';
 import { escapeCsvCell } from '@/lib/csv-safe';
+import { contentLang } from '@/lib/content-lang';
 
 interface ProductOffersExplorerProps {
   readonly productName: string;
@@ -43,6 +44,7 @@ export default function ProductOffersExplorer({
 }: ProductOffersExplorerProps) {
   const t = useTranslations('productDetail');
   const tVerdict = useTranslations('priceVerdict');
+  const locale = useLocale();
   const [selectedPlatform, setSelectedPlatform] = useState<string>('all');
   const [officialOnly, setOfficialOnly] = useState(false);
   const [highTrustOnly, setHighTrustOnly] = useState(false);
@@ -538,6 +540,7 @@ export default function ProductOffersExplorer({
                     <td
                       className="small text-truncate"
                       style={{ maxWidth: '280px' }}
+                      lang={contentLang(offer.title, locale)}
                     >
                       {offer.title}
                     </td>

@@ -21,6 +21,11 @@ import { EntityMatcher } from './entity-matcher.js';
 import { AiSpecEnricher, type AiSpecEnricherConfig } from './ai-spec-enricher.js';
 import { AiReviewAnalyzer, type ReviewInputItem } from './ai-review-analyzer.js';
 import { createImporterLogger } from './logger.js';
+import {
+  resolveClusterPeerFloorPrice,
+  type ClusterPeerPriceCandidate,
+} from './cluster-peer-floor.js';
+import { rescoreMerchantReviewRisk } from './merchant-review-risk.js';
 
 dotenv.config({ quiet: true });
 
@@ -119,48 +124,10 @@ export function normalizeScrapedProductPrices(
   };
 }
 
-export interface ClusterPeerPriceCandidate {
-  id?: unknown;
-  price_current?: unknown;
-  merchants?: { is_official?: boolean | null } | Array<{ is_official?: boolean | null }> | null;
-}
-
-/**
- * Computes the self-excluded peer floor price for a cluster (`id !== currentProductId`),
- * preferring Official Mall sibling prices when available, and falling back to
- * `fallbackMasterMinPrice` only when no positive-priced peer listings exist.
- * Ignores unscaled prices `> MAX_VALID_VND_PRICE` (1B VND).
- */
-export function resolveClusterPeerFloorPrice(
-  peerRows: readonly ClusterPeerPriceCandidate[],
-  currentProductId: string,
-  fallbackMasterMinPrice?: number | null
-): number | undefined {
-  let officialMin = Number.POSITIVE_INFINITY;
-  let peerMin = Number.POSITIVE_INFINITY;
-
-  for (const row of peerRows) {
-    if (row.id && String(row.id) === currentProductId) continue;
-    const price = Number(row.price_current || 0);
-    if (!Number.isFinite(price) || price <= 0 || price > MAX_VALID_VND_PRICE) continue;
-    if (price < peerMin) {
-      peerMin = price;
-    }
-    const mObj = Array.isArray(row.merchants) ? row.merchants[0] : row.merchants;
-    if (mObj?.is_official && price < officialMin) {
-      officialMin = price;
-    }
-  }
-
-  if (Number.isFinite(officialMin)) {
-    return officialMin;
-  }
-  if (Number.isFinite(peerMin)) {
-    return peerMin;
-  }
-  const fb = Number(fallbackMasterMinPrice);
-  return Number.isFinite(fb) && fb > 0 && fb <= MAX_VALID_VND_PRICE ? fb : undefined;
-}
+export {
+  resolveClusterPeerFloorPrice,
+  type ClusterPeerPriceCandidate,
+} from './cluster-peer-floor.js';
 
 export interface ShopeeIngestionPipelineConfig extends AiSpecEnricherConfig {
   /**
@@ -802,6 +769,32 @@ export class ShopeeIngestionPipeline {
               followerCount: product.shop.followerCount,
             }
           );
+          // persistAnalysisToSupabase scored the seller from this product's
+          // reviews only; store the seller-wide score instead (DOS/Rate#698).
+          if (merchantId) {
+            try {
+              const sellerWide = await rescoreMerchantReviewRisk(
+                this.supabase,
+                this.reviewAnalyzer,
+                merchantId
+              );
+              platLogger.info(
+                'ingest.review_risk_rescored',
+                `Seller review risk ${sellerWide?.risk.risk_score ?? 'n/a'} from ${sellerWide?.risk.total_reviews ?? 0} reviews.`,
+                {
+                  merchantId,
+                  reviewRiskScore: sellerWide?.risk.risk_score ?? null,
+                  totalReviews: sellerWide?.risk.total_reviews ?? 0,
+                }
+              );
+            } catch (err: unknown) {
+              platLogger.warn(
+                'ingest.review_risk_rescore_failed',
+                `Seller-wide review risk rescore failed (non-fatal): ${err instanceof Error ? err.message : String(err)}`,
+                { merchantId }
+              );
+            }
+          }
           platLogger.info(
             'ingest.review_analysis_completed',
             `Review analysis: ${summary.authentic_review_count}/${summary.total_reviews_analyzed} authentic, weighted rating ${summary.user_rating_weighted}/5, merchant risk ${merchantRisk?.risk_score ?? 'n/a'} (${merchantRisk?.risk_level ?? 'n/a'}).`,

@@ -8,6 +8,7 @@
  * The Vietnamese messages may word a template more plainly than the stored
  * text (no "seeding", DOS/Rate#656); the patterns below match the stored text.
  */
+import { isVietnamese } from './content-lang';
 
 export type AnalyzerCopyKey =
   | 'reasonAuthentic'
@@ -130,9 +131,6 @@ const TEMPLATES: ReadonlyArray<readonly [RegExp, AnalyzerCopyKey]> = [
   [/^Nhận phản hồi tích cực từ người dùng thực tế$/u, 'proPositiveFeedback'],
 ];
 
-const VIETNAMESE_RE =
-  /[ăâđêôơưạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵỷỹ]/iu;
-
 export function analyzerCopy(text: string): AnalyzerCopy {
   const normalized = text.normalize('NFC').trim();
   for (const [pattern, key] of TEMPLATES) {
@@ -140,7 +138,7 @@ export function analyzerCopy(text: string): AnalyzerCopy {
     if (match) return { key, values: { ...(match.groups ?? {}) } };
   }
   // Only text that is actually Vietnamese is marked as such.
-  return VIETNAMESE_RE.test(normalized) ? { text, lang: 'vi' } : { text };
+  return isVietnamese(normalized) ? { text, lang: 'vi' } : { text };
 }
 
 export const ANALYZER_COPY_KEYS: readonly AnalyzerCopyKey[] = TEMPLATES.map(

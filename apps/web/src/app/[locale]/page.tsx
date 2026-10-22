@@ -51,6 +51,8 @@ import {
   HERO_MERCHANT_PRELOAD,
   toHeroMerchantSuggestions,
 } from '@/lib/hero-merchants';
+import ContentText from '@/components/elementary/ContentText';
+import { contentLang } from '@/lib/content-lang';
 
 // Cached after the first request, refreshed every 5 minutes or when the
 // worker revalidates its cache tags (DOS/Rate#491).
@@ -1031,7 +1033,10 @@ export default async function Home({
                       </div>
 
                       {rev.comment?.trim() && (
-                        <p className="rate-review-body">
+                        <p
+                          className="rate-review-body"
+                          lang={contentLang(rev.comment, locale)}
+                        >
                           &ldquo;{rev.comment.trim()}&rdquo;
                         </p>
                       )}
@@ -1043,11 +1048,17 @@ export default async function Home({
                             href={rev.masterRouteHref}
                             className="text-truncate"
                           >
-                            {rev.productTitle}
+                            <ContentText
+                              text={rev.productTitle}
+                              locale={locale}
+                            />
                           </Link>
                         ) : (
                           <span className="text-truncate">
-                            {rev.productTitle}
+                            <ContentText
+                              text={rev.productTitle}
+                              locale={locale}
+                            />
                           </span>
                         )}
                       </div>

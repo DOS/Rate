@@ -41,6 +41,10 @@ export default async function InspectPage({
 }) {
   const { locale } = await params;
   setRequestLocale(locale);
+  const t = await getTranslations({
+    locale: normalizeRateLocale(locale),
+    namespace: 'inspect',
+  });
   const sp = await searchParams;
   const rawQ = sp.q ?? sp.url ?? '';
   const initialQuery = (Array.isArray(rawQ) ? rawQ[0] : rawQ)?.trim() || '';
@@ -53,7 +57,9 @@ export default async function InspectPage({
     <>
       <NavbarDarkDynamic links={[]} />
       <Suspense
-        fallback={<div className="container py-5 text-center">Loading...</div>}
+        fallback={
+          <div className="container py-5 text-center">{t('loading')}</div>
+        }
       >
         <DeepInspectWorkspace
           initialQuery={initialQuery}

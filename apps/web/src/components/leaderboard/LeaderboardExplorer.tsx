@@ -8,7 +8,7 @@ import React, {
   useState,
 } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import type { IconType } from 'react-icons';
 import { Link } from '@/lib/navigation';
 import {
@@ -58,6 +58,7 @@ import {
   BsTrophy,
   BsTrophyFill,
 } from 'react-icons/bs';
+import ContentText from '@/components/elementary/ContentText';
 
 export type { LeaderboardCriterionKey, LeaderboardPriceSegment };
 
@@ -173,6 +174,7 @@ export default function LeaderboardExplorer({
   dealRadar,
 }: LeaderboardExplorerProps) {
   const t = useTranslations('leaderboard');
+  const locale = useLocale();
 
   const radarIndex = useDealRadarIndex(dealRadar);
   const categoryTabs = useMemo(() => buildCategoryTabs(t), [t]);
@@ -1251,7 +1253,7 @@ export default function LeaderboardExplorer({
                       <div className="d-flex mb-3 flex-wrap gap-1">
                         {keySpecs.chip && (
                           <span className="badge bg-dark border-secondary text-white-50 small border">
-                            {keySpecs.chip}
+                            <ContentText text={keySpecs.chip} locale={locale} />
                           </span>
                         )}
                         {keySpecs.ram && (
@@ -1473,7 +1475,7 @@ export default function LeaderboardExplorer({
                       <div className="d-flex flex-wrap gap-1">
                         {keySpecs.chip && (
                           <span className="rate-spec-pill">
-                            {keySpecs.chip}
+                            <ContentText text={keySpecs.chip} locale={locale} />
                           </span>
                         )}
                         {keySpecs.ram && (
@@ -1484,7 +1486,10 @@ export default function LeaderboardExplorer({
                         )}
                         {keySpecs.battery && (
                           <span className="rate-spec-pill rate-tabular">
-                            {keySpecs.battery}
+                            <ContentText
+                              text={keySpecs.battery}
+                              locale={locale}
+                            />
                           </span>
                         )}
                       </div>
