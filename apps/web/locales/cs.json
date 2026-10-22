@@ -972,6 +972,7 @@
     "critCamera": "Fotoaparát a video",
     "critBattery": "Baterie a nabíjení",
     "critValue": "Poměr cena / výkon",
+    "critEmpty": "Zatím bez hodnocení podle kritérií. Zobrazí se, jakmile jednotlivá kritéria ohodnotí ověřené recenze nebo odborníci.",
     "expertVerdictPrefix": "Verdikt expertů Rate.vn:",
     "readAndSubmitReviewsBtn": "Číst a psát recenze ({count})",
     "tenSpecGroupsBtn": "Parametry",

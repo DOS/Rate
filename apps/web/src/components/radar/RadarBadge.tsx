@@ -46,7 +46,7 @@ export default function RadarBadge({
     <span
       data-testid="radar-badge"
       data-radar-verdict={sig.verdict}
-      className={`badge rounded-pill small font-monospace ${tone} ${className}`.trim()}
+      className={`badge rounded-pill small rate-tabular ${tone} ${className}`.trim()}
       style={style}
     >
       {label}
