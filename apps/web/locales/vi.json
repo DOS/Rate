@@ -783,7 +783,16 @@
     "mdPriceVerdict": "Kết luận giá",
     "mdSeller": "Gian hàng",
     "mdTrustScore": "Điểm tin cậy",
-    "mdLink": "Liên kết"
+    "mdLink": "Liên kết",
+    "specModelKey": "Mã model",
+    "specBrand": "Thương hiệu",
+    "expertLabel": "Chuyên gia",
+    "officialStore": "Gian hàng chính hãng",
+    "unknownShop": "Gian hàng trên sàn",
+    "checkedStatus": "Đã kiểm tra",
+    "errInspectFailed": "Không kiểm tra được link này.",
+    "errNetwork": "Lỗi mạng, vui lòng thử lại.",
+    "loading": "Đang tải..."
   },
   "merchants": {
     "dirMetaTitle": "Độ tin cậy gian hàng trên các sàn | Rate.vn",

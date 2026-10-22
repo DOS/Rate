@@ -783,7 +783,16 @@
     "mdPriceVerdict": "Verdikt ceny",
     "mdSeller": "Prodejce",
     "mdTrustScore": "Skóre důvěryhodnosti",
-    "mdLink": "Odkaz"
+    "mdLink": "Odkaz",
+    "specModelKey": "Kód modelu",
+    "specBrand": "Značka",
+    "expertLabel": "Expert",
+    "officialStore": "Oficiální obchod",
+    "unknownShop": "Obchod na tržišti",
+    "checkedStatus": "Zkontrolováno",
+    "errInspectFailed": "Tento odkaz se nepodařilo zkontrolovat.",
+    "errNetwork": "Chyba sítě, zkuste to znovu.",
+    "loading": "Načítání..."
   },
   "merchants": {
     "dirMetaTitle": "Důvěryhodnost prodejců | Rate.vn",

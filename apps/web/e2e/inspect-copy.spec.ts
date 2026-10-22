@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
 
 // The link checker, the navbar entry to it and seller risk badges speak
@@ -11,11 +13,12 @@ const JARGON = [
   'seeding',
 ];
 
-const SUMMARY_LINK_LABEL = {
-  vi: '**Liên kết:**',
-  en: '**Link:**',
-  cs: '**Odkaz:**',
-};
+const inspectLabels = (lang: string) =>
+  (
+    JSON.parse(
+      readFileSync(join(__dirname, `../locales/${lang}.json`), 'utf8')
+    ) as { inspect: Record<string, string> }
+  ).inspect;
 
 for (const [prefix, lang] of [
   ['', 'vi'],
@@ -61,17 +64,24 @@ for (const [prefix, lang] of [
     context,
   }) => {
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-    await page.goto(`${prefix}/inspect`);
+    // A seeded product, so the summary has product, score and price lines.
+    await page.goto(
+      `${prefix}/inspect?q=${encodeURIComponent('iPhone 16 Pro Max')}`
+    );
     await expect(page.locator('html')).toHaveAttribute('lang', lang);
-    await expect(page.locator('.container h2').first()).toBeVisible();
+    await expect(page.locator('.rate-score-badge-user').first()).toBeVisible();
     await page.locator('.rate-export-menu summary').click();
     await page.getByTestId('inspect-copy-md-btn').click();
+    const labels = inspectLabels(lang);
     await expect
       .poll(() => page.evaluate(() => navigator.clipboard.readText()))
-      .toContain('### 🔬');
+      .toContain(`**${labels.mdProduct}:**`);
     const md = await page.evaluate(() => navigator.clipboard.readText());
-    expect(md).toContain(SUMMARY_LINK_LABEL[lang]);
+    for (const key of ['mdQuery', 'mdBuyerScore', 'mdPriceSignal', 'mdLink']) {
+      expect(md).toContain(`**${labels[key]}:**`);
+    }
     const body = await page.locator('.container').first().innerText();
+    expect(body).toContain(`${labels.specModelKey}:`);
     for (const english of [
       'Rate.vn Inspector',
       'Master Product',
@@ -82,7 +92,9 @@ for (const [prefix, lang] of [
     ]) {
       expect(md).not.toContain(english);
     }
-    expect(body).not.toContain('SoC:');
+    for (const english of ['SoC:', 'Model Key:', 'Official Mall']) {
+      expect(body).not.toContain(english);
+    }
   });
 
   test(`seller profile risk badges are localized on ${lang}`, async ({

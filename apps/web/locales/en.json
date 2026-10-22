@@ -783,7 +783,16 @@
     "mdPriceVerdict": "Price verdict",
     "mdSeller": "Seller",
     "mdTrustScore": "Trust score",
-    "mdLink": "Link"
+    "mdLink": "Link",
+    "specModelKey": "Model code",
+    "specBrand": "Brand",
+    "expertLabel": "Expert",
+    "officialStore": "Official store",
+    "unknownShop": "Marketplace shop",
+    "checkedStatus": "Checked",
+    "errInspectFailed": "Could not check this link.",
+    "errNetwork": "Network error, please try again.",
+    "loading": "Loading..."
   },
   "merchants": {
     "dirMetaTitle": "Seller trust directory | Rate.vn",

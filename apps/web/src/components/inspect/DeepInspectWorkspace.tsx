@@ -115,12 +115,12 @@ export default function DeepInspectWorkspace({
         error?: string;
       };
       if (!res.ok || !payload.ok || !payload.data) {
-        setErrorMsg(payload.error || 'Failed to inspect URL');
+        setErrorMsg(t('errInspectFailed'));
       } else {
         setResult(payload.data);
       }
-    } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'Network error');
+    } catch {
+      setErrorMsg(t('errNetwork'));
     } finally {
       setLoading(false);
     }
@@ -274,7 +274,7 @@ export default function DeepInspectWorkspace({
       priceHistory?.highestEverPrice || master?.max_price || 0
     );
     const rows = offers.map((o) => [
-      o.merchant?.name || merchant?.name || 'Marketplace Shop',
+      o.merchant?.name || merchant?.name || t('unknownShop'),
       (
         o.platform ||
         o.merchant?.platform ||
@@ -291,7 +291,7 @@ export default function DeepInspectWorkspace({
         const a =
           priceHistory?.byOffer?.[o.id] ??
           (o.id === matchedOffer?.id ? discount : null);
-        return a ? discountVerdictCopy(tVerdict, a).label : 'Verified';
+        return a ? discountVerdictCopy(tVerdict, a).label : t('checkedStatus');
       })(),
       ...radarCsvCells(radarSignal),
     ]);
@@ -642,8 +642,8 @@ export default function DeepInspectWorkspace({
                         {master.name}
                       </h3>
                       <div className="small text-muted">
-                        Model Key: <code>{master.model_key}</code> | Brand:{' '}
-                        <strong>{master.brand}</strong>
+                        {t('specModelKey')}: <code>{master.model_key}</code> |{' '}
+                        {t('specBrand')}: <strong>{master.brand}</strong>
                       </div>
                     </div>
 
@@ -716,7 +716,7 @@ export default function DeepInspectWorkspace({
                       </span>
                       <span className="rate-score-badge-expert">
                         <span>
-                          Expert{' '}
+                          {t('expertLabel')}{' '}
                           {masterExpertRating10 != null &&
                           masterExpertRating10 > 0
                             ? `${masterExpertRating10.toFixed(1)}/10`
@@ -766,7 +766,7 @@ export default function DeepInspectWorkspace({
                           <tr key={offer.id}>
                             <td>
                               <div className="fw-semibold text-dark">
-                                {offer.merchant?.name || 'Marketplace Shop'}
+                                {offer.merchant?.name || t('unknownShop')}
                               </div>
                               <span className="badge bg-secondary bg-opacity-10 text-secondary text-uppercase small">
                                 {offer.merchant?.platform || 'shopee'}
@@ -830,7 +830,9 @@ export default function DeepInspectWorkspace({
                         {merchant.platform}
                       </span>
                       {merchant.is_official && (
-                        <span className="badge bg-danger">Official Mall</span>
+                        <span className="badge bg-danger">
+                          {t('officialStore')}
+                        </span>
                       )}
                       <span>ID: {merchant.platform_shop_id}</span>
                     </div>
