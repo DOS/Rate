@@ -17,6 +17,16 @@ assert.equal(
   'Other locales get a compact floor with +'
 );
 assert.equal(formatSoldCount(1000000, '1tr+', 'en'), '1M+');
+assert.equal(
+  formatSoldCount(1950, '1,9k', 'en'),
+  '1.9K+',
+  'The compact floor rounds down, never above the label'
+);
+assert.equal(
+  formatSoldCount(23873, null, 'en'),
+  '23,873',
+  'Exact counts follow the page locale'
+);
 assert.ok(formatSoldCount(1000000, '1tr+', 'cs').endsWith('+'));
 assert.equal(
   formatSoldCount(20000, '   ', 'vi'),
