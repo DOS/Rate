@@ -54,6 +54,7 @@ import {
 import ContentText from '@/components/elementary/ContentText';
 import { contentLang } from '@/lib/content-lang';
 import ClientMessages from '@/components/providers/ClientMessages';
+import { siteJsonLd } from '@/lib/seo';
 
 // Cached after the first request, refreshed every 5 minutes or when the
 // worker revalidates its cache tags (DOS/Rate#491).
@@ -169,6 +170,14 @@ export default async function Home({
   return (
     <ClientMessages scope="home">
       <>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(
+              siteJsonLd(locale, tRate('seo.siteDescription'))
+            ).replace(/</g, '\\u003c'),
+          }}
+        />
         <NavbarDarkDynamic links={[]} />
 
         {/* Hero Section with Interactive Autocomplete & E-commerce Link Inspector (DESIGN.md v2.0 Dark Obsidian + DOS Crimson Glow) */}

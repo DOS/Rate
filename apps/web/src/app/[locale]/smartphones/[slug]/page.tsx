@@ -37,7 +37,7 @@ import {
 import RadarBadge from '@/components/radar/RadarBadge';
 import { buildRadarIndex, getRadarSignal } from '@/lib/deal-radar';
 import { bayesianTierKey, radarExplanation } from '@/lib/product-detail-copy';
-import { defaultOpenGraph, SHARE_IMAGE } from '@/lib/seo';
+import { absoluteUrl, defaultOpenGraph, SHARE_IMAGE } from '@/lib/seo';
 import JReviewsSection from '@/components/reviews/JReviewsSection';
 import PhoneCollapsible from '@/components/product/PhoneCollapsible';
 import PriceHistorySection from '@/components/price-history/PriceHistorySection';
@@ -251,7 +251,13 @@ export async function ProductDetailView({
           name: product.brand,
         },
         sku: product.model_key,
-        image: product.images || [],
+        url: canonicalUrl,
+        description: t('metaDesc', {
+          name: product.name,
+          brand: product.brand,
+          merchantCount: product.merchant_count || 0,
+        }),
+        image: (product.images || []).map(absoluteUrl),
         offers: {
           '@type': 'AggregateOffer',
           priceCurrency: 'VND',
