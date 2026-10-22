@@ -110,7 +110,7 @@ export function buildRateOpenApiSpec(
       summary:
         'Standardized 10-Group Tech Specs, Price History, Product Deal Radar & AI Review Auditing API',
       description:
-        'Official OpenAPI 3.1 specification for the Rate.vn 4-Layer Composable Backend Architecture (Zero-Strapi 2026). Powers Web Client Islands, the Rate Browser Extension Manifest V3 across 10 Vietnamese e-commerce/retail platforms, and open e-commerce transparency research.',
+        'OpenAPI 3.1 specification for the Rate.vn REST API v1. The website, the Rate browser extension (10 Vietnamese marketplaces and retailers) and open e-commerce research all use these endpoints.',
       license: {
         name: 'MIT Open-Core License',
         url: 'https://github.com/DOS/Rate',
