@@ -600,7 +600,7 @@ const PRODUCT_ASPECT_RE =
 
 // What counts as talking about the product when deciding that a review is
 // about shipping alone. Same list as WEB_PRODUCT_MENTION_RE in
-// apps/web/src/lib/rate-api.ts so the stored weight and the web estimate
+// apps/web/src/lib/rate-domain-core.ts so the stored weight and the web estimate
 // agree (test-review-analyzer.ts checks the two literals are identical):
 // PRODUCT_ASPECT_RE, except that words which also describe delivery count
 // only outside a delivery phrase: "sản phẩm" but not "sản phẩm được đóng
