@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 import { discountVerdictCopy } from '@/lib/discount-verdict-copy';
+import { formatSoldCount } from '@/lib/sold-count';
 import AnalyzerText from '@/components/reviews/AnalyzerText';
 import { Link } from '@/lib/navigation';
 import {
@@ -814,8 +815,12 @@ export default async function MerchantProfilePage({
                                 {t('itemMetaLine')}{' '}
                                 <code>{item.platform_item_id}</code> •{' '}
                                 {t('soldLabel')}{' '}
-                                {item.historical_sold.toLocaleString('vi-VN')} •
-                                ★ {item.rating_star.toFixed(1)} (
+                                {formatSoldCount(
+                                  item.historical_sold,
+                                  item.historical_sold_display,
+                                  locale
+                                )}{' '}
+                                • ★ {item.rating_star.toFixed(1)} (
                                 {item.rating_count})
                               </div>
                             </div>

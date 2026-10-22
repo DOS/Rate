@@ -91,6 +91,11 @@ export interface ShopeeProduct {
   priceBeforeDiscount?: number;
   currency: string;
   historicalSold: number;
+  /**
+   * Marketplace sold label (e.g. "20k+") when historicalSold is only that
+   * label's floor; unset when historicalSold is an exact count.
+   */
+  historicalSoldDisplay?: string;
   /** Units in stock. Unset when the page does not show it (stored as null, not 0 = sold out). */
   stock?: number;
   ratingStar: number;
