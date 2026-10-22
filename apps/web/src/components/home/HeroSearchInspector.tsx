@@ -6,6 +6,7 @@ import { discountVerdictCopy } from '@/lib/discount-verdict-copy';
 import { Link, useRouter } from '@/lib/navigation';
 import { startNavigationProgress } from '@/components/elementary/NavigationProgress';
 import type { KeySpecs, MasterProduct } from '@repo/shared-data';
+import type { HeroProductSuggestion } from '@/lib/hero-products';
 import {
   getMasterProductHref,
   type UrlInspectionResult,
@@ -35,7 +36,7 @@ import {
 import ContentText from '@/components/elementary/ContentText';
 
 interface HeroSearchInspectorProps {
-  initialProducts: MasterProduct[];
+  initialProducts: HeroProductSuggestion[];
   initialMerchants: HeroMerchantSuggestion[];
 }
 
