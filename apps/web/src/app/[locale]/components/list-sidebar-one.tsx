@@ -313,7 +313,9 @@ export default function ListSidebarOne({
                           />
                           <label className="btn" htmlFor={opt.id}>
                             <BsStarFill className="me-1" />
-                            {opt.label}
+                            {opt.value === 0
+                              ? t('sidebar.ratingAll')
+                              : opt.label}
                           </label>
                         </div>
                       );
