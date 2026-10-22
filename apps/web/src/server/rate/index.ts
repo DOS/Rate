@@ -374,15 +374,34 @@ export const getCachedInspectProductOrShopUrl = cache(
   inspectProductOrShopUrlWithRadar
 );
 
-// The Data Cache stores JSON, so the category map travels as entries.
+// A product URL only needs its category, so only category_slug is kept from
+// metadata and specifications: whole spec sheets would push the entry past
+// the Data Cache's 2 MB limit as the catalogue grows. The Data Cache stores
+// JSON, so the category map travels as entries.
+const SITEMAP_CACHE_WARN_BYTES = 1_500_000;
+
+const categorySlugOnly = (value: Record<string, unknown> | null | undefined) =>
+  typeof value?.category_slug === 'string'
+    ? { category_slug: value.category_slug }
+    : null;
+
 const _getCachedSitemapRowsData = withRateDataCache(
   async () => {
     const rows = await _getSitemapRows();
-    return {
-      products: rows.products,
+    const data = {
+      products: rows.products.map((product) => ({
+        ...product,
+        metadata: categorySlugOnly(product.metadata),
+        specifications: categorySlugOnly(product.specifications),
+      })),
       merchants: rows.merchants,
       categories: [...rows.categorySlugById],
     };
+    const bytes = JSON.stringify(data).length;
+    if (bytes > SITEMAP_CACHE_WARN_BYTES) {
+      log.warn('sitemap rows near the Data Cache entry limit', { bytes });
+    }
+    return data;
   },
   ['rate-sitemap-rows'],
   {
