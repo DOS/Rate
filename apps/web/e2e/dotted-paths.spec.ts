@@ -36,5 +36,23 @@ test('iOS gets the touch icon at its default paths', async ({ request }) => {
 
 test('a missing dotted path shows the not-found page', async ({ page }) => {
   expect((await page.goto('/foo.png'))?.status()).toBe(404);
-  await expect(page.locator('h1')).toBeVisible();
+  await expect(page.locator('h1')).toHaveText('404');
 });
+
+// The cookie still picks the locale of an ordinary 404.
+for (const [locale, title] of [
+  ['vi', 'Không tìm thấy trang'],
+  ['en', 'Page not found'],
+] as const) {
+  test(`an unknown page is a localized 404 in ${locale}`, async ({
+    page,
+    baseURL,
+  }) => {
+    await page
+      .context()
+      .addCookies([{ name: 'NEXT_LOCALE', value: locale, url: baseURL ?? '' }]);
+    expect((await page.goto('/no-such-page'))?.status()).toBe(404);
+    await expect(page.locator('html')).toHaveAttribute('lang', locale);
+    await expect(page.locator('h1')).toHaveText(title);
+  });
+}
