@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { discountVerdictCopy } from '@/lib/discount-verdict-copy';
 import AnalyzerText from '@/components/reviews/AnalyzerText';
 import { useDetailsDismiss } from '@/components/elementary/use-details-dismiss';
@@ -48,6 +48,8 @@ import {
   BsShop,
   BsStarFill,
 } from 'react-icons/bs';
+import ContentText from '@/components/elementary/ContentText';
+import { contentLang } from '@/lib/content-lang';
 
 interface DeepInspectWorkspaceProps {
   initialQuery?: string;
@@ -83,6 +85,7 @@ export default function DeepInspectWorkspace({
 }: DeepInspectWorkspaceProps) {
   const t = useTranslations('inspect');
   const tVerdict = useTranslations('priceVerdict');
+  const locale = useLocale();
   const router = useRouter();
 
   const [queryInput, setQueryInput] = useState(
@@ -674,7 +677,8 @@ export default function DeepInspectWorkspace({
                       <div className="col-sm-6 col-md-4">
                         <div className="rounded-3 bg-light small p-2">
                           <BsCpu className="text-danger me-1" />
-                          <strong>SoC:</strong> {chipSpec}
+                          <strong>SoC:</strong>{' '}
+                          <ContentText text={chipSpec} locale={locale} />
                         </div>
                       </div>
                     )}
@@ -689,7 +693,8 @@ export default function DeepInspectWorkspace({
                     {batterySpec && (
                       <div className="col-sm-6 col-md-4">
                         <div className="rounded-3 bg-light small p-2">
-                          <strong>Battery:</strong> {batterySpec}
+                          <strong>Battery:</strong>{' '}
+                          <ContentText text={batterySpec} locale={locale} />
                         </div>
                       </div>
                     )}
@@ -763,7 +768,12 @@ export default function DeepInspectWorkspace({
                                 {offer.merchant?.platform || 'shopee'}
                               </span>
                             </td>
-                            <td className="small text-muted">{offer.title}</td>
+                            <td
+                              className="small text-muted"
+                              lang={contentLang(offer.title, locale)}
+                            >
+                              {offer.title}
+                            </td>
                             <td className="fw-bold text-danger">
                               {Number(offer.price_current).toLocaleString(
                                 'vi-VN'

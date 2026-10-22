@@ -38,6 +38,8 @@ import {
   BsStarFill,
 } from 'react-icons/bs';
 import { isPendingReview } from '@/lib/review-display';
+import ContentText from '@/components/elementary/ContentText';
+import { contentLang } from '@/lib/content-lang';
 
 // Cached after the first request, refreshed every 5 minutes or when the
 // worker revalidates its cache tags (DOS/Rate#491).
@@ -680,14 +682,20 @@ export default async function MerchantProfilePage({
                               className="text-primary text-decoration-none"
                               style={{ fontSize: '0.8125rem' }}
                             >
-                              {rev.product_title}
+                              <ContentText
+                                text={rev.product_title}
+                                locale={locale}
+                              />
                             </Link>
                           ) : (
                             <div
                               className="text-muted"
                               style={{ fontSize: '0.8125rem' }}
                             >
-                              {rev.product_title}
+                              <ContentText
+                                text={rev.product_title}
+                                locale={locale}
+                              />
                             </div>
                           )}
                         </div>
@@ -696,7 +704,10 @@ export default async function MerchantProfilePage({
                         </span>
                       </div>
 
-                      <p className="small text-dark mb-2">
+                      <p
+                        className="small text-dark mb-2"
+                        lang={contentLang(rev.comment, locale)}
+                      >
                         {rev.comment || t('noCommentBody')}
                       </p>
 
@@ -805,7 +816,10 @@ export default async function MerchantProfilePage({
                               />
                             )}
                             <div>
-                              <div className="fw-semibold small text-dark">
+                              <div
+                                className="fw-semibold small text-dark"
+                                lang={contentLang(item.title, locale)}
+                              >
                                 {item.title}
                               </div>
                               <div

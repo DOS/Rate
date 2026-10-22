@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useId, useMemo, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import ExportMenu from '@/components/elementary/ExportMenu';
 import {
   BsBarChart,
@@ -15,6 +15,7 @@ import {
   BsRobot,
   BsStarFill,
 } from 'react-icons/bs';
+import { contentLang } from '@/lib/content-lang';
 import { escapeCsvCell } from '@/lib/csv-safe';
 import {
   computeCombinedDualScore,
@@ -104,6 +105,7 @@ export default function JReviewsSection({
 }: JReviewsSectionProps) {
   const t = useTranslations('reviews');
   const tAnalyzer = useTranslations('analyzerCopy');
+  const locale = useLocale();
 
   const criteriaMeta = useMemo(
     () =>
@@ -1533,6 +1535,7 @@ export default function JReviewsSection({
                     <p
                       className="small text-dark lh-base mb-2"
                       style={{ whiteSpace: 'pre-line' }}
+                      lang={contentLang(rev.comment, locale)}
                     >
                       {rev.comment || t('emptyCommentPlaceholder')}
                     </p>

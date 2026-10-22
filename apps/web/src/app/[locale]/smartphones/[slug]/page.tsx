@@ -52,6 +52,8 @@ import type { KeySpecs, ProductSpecifications } from '@repo/shared-data';
 
 import { normalizeRateLocale } from '@/lib/rate-i18n';
 import { getSpecUiDictionary, localizeSpecValue } from '@/lib/spec-localizer';
+import { contentLang } from '@/lib/content-lang';
+import ContentText from '@/components/elementary/ContentText';
 import {
   computeProductStandingInCategory,
   scoreMasterProductForLeaderboard,
@@ -331,6 +333,7 @@ export async function ProductDetailView({
                       <span
                         key={i}
                         className="badge text-dark rounded-pill small border bg-white px-3 py-2"
+                        lang={contentLang(c, locale)}
                       >
                         {c}
                       </span>
@@ -344,9 +347,15 @@ export async function ProductDetailView({
           {/* Right: Overview & Offers Highlights */}
           <div className="col-lg-7 d-flex flex-column col-12">
             <p className="rate-product-card-meta rate-pdv-meta mb-1">
-              {[product.brand, product.has_5g ? '5G' : '', product.variant_name]
+              {[product.brand, product.has_5g ? '5G' : '']
                 .filter(Boolean)
                 .join(' · ')}
+              {product.variant_name && (
+                <>
+                  {product.brand || product.has_5g ? ' · ' : ''}
+                  <ContentText text={product.variant_name} locale={locale} />
+                </>
+              )}
             </p>
 
             <h1 className="h2 fw-bold text-dark mb-2">{product.name}</h1>
@@ -586,7 +595,10 @@ export async function ProductDetailView({
               {product.expert_review_summary && (
                 <div className="rate-pdv-verdict">
                   <strong>{t('expertVerdictPrefix')}</strong>{' '}
-                  {product.expert_review_summary}
+                  <ContentText
+                    text={product.expert_review_summary}
+                    locale={locale}
+                  />
                 </div>
               )}
 
@@ -641,12 +653,17 @@ export async function ProductDetailView({
                       : t('quickSpecScreen')}
                   </div>
                   <div className="fw-semibold small">
-                    {keySpecs?.screen ||
-                      (specs?.display?.size_inch
-                        ? `${specs.display.size_inch}" ${specs?.display?.type || ''}`.trim()
-                        : specs?.display?.type ||
-                          specs?.multimedia?.loudspeaker ||
-                          '-')}
+                    <ContentText
+                      text={String(
+                        keySpecs?.screen ||
+                          (specs?.display?.size_inch
+                            ? `${specs.display.size_inch}" ${specs?.display?.type || ''}`.trim()
+                            : specs?.display?.type ||
+                              specs?.multimedia?.loudspeaker ||
+                              '-')
+                      )}
+                      locale={locale}
+                    />
                   </div>
                 </div>
               </div>
@@ -656,10 +673,15 @@ export async function ProductDetailView({
                     {t('quickSpecChipset')}
                   </div>
                   <div className="fw-semibold small">
-                    {keySpecs?.chip ||
-                      specs?.hardware?.chipset ||
-                      specs?.hardware?.cpu ||
-                      '-'}
+                    <ContentText
+                      text={String(
+                        keySpecs?.chip ||
+                          specs?.hardware?.chipset ||
+                          specs?.hardware?.cpu ||
+                          '-'
+                      )}
+                      locale={locale}
+                    />
                   </div>
                 </div>
               </div>
@@ -673,10 +695,15 @@ export async function ProductDetailView({
                       : t('quickSpecMainCamera')}
                   </div>
                   <div className="fw-semibold small">
-                    {keySpecs?.camera ||
-                      specs?.camera?.main_camera ||
-                      specs?.multimedia?.audio_features ||
-                      '-'}
+                    <ContentText
+                      text={String(
+                        keySpecs?.camera ||
+                          specs?.camera?.main_camera ||
+                          specs?.multimedia?.audio_features ||
+                          '-'
+                      )}
+                      locale={locale}
+                    />
                   </div>
                 </div>
               </div>
@@ -702,10 +729,15 @@ export async function ProductDetailView({
                     {t('quickSpecBattery')}
                   </div>
                   <div className="fw-semibold small">
-                    {keySpecs?.battery ||
-                      (specs?.battery?.capacity_mah
-                        ? `${specs.battery.capacity_mah} mAh`
-                        : specs?.battery?.charging || '-')}
+                    <ContentText
+                      text={String(
+                        keySpecs?.battery ||
+                          (specs?.battery?.capacity_mah
+                            ? `${specs.battery.capacity_mah} mAh`
+                            : specs?.battery?.charging || '-')
+                      )}
+                      locale={locale}
+                    />
                   </div>
                 </div>
               </div>
@@ -715,9 +747,14 @@ export async function ProductDetailView({
                     {t('quickSpecDurability')}
                   </div>
                   <div className="fw-semibold small">
-                    {specs?.design?.resistance ||
-                      specs?.design?.materials ||
-                      '-'}
+                    <ContentText
+                      text={String(
+                        specs?.design?.resistance ||
+                          specs?.design?.materials ||
+                          '-'
+                      )}
+                      locale={locale}
+                    />
                   </div>
                 </div>
               </div>
@@ -821,8 +858,9 @@ export async function ProductDetailView({
         {/* SECTION #2: 10 Field Groups Specifications (Full 10/10 Canonical Schema per DESIGN.md v3.0) */}
         {(() => {
           const specUi = getSpecUiDictionary(locale);
-          const loc = (v: string | number | boolean | null | undefined) =>
-            localizeSpecValue(v, locale);
+          const loc = (v: string | number | boolean | null | undefined) => (
+            <ContentText text={localizeSpecValue(v, locale)} locale={locale} />
+          );
           return (
             <div
               id="specs-section"

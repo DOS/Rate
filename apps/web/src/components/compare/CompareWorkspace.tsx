@@ -55,6 +55,7 @@ import {
 } from './compare-tray';
 import { upsertWatchlistItem } from '@/components/watchlist/watchlist-store';
 import { getSpecUiDictionary, localizeSpecValue } from '@/lib/spec-localizer';
+import ContentText from '@/components/elementary/ContentText';
 
 interface CompareWorkspaceProps {
   initialProducts: MasterProduct[];
@@ -2269,7 +2270,7 @@ export default function CompareWorkspace({
                                       : 'text-dark'
                                   }`}
                                 >
-                                  {textVal}
+                                  <ContentText text={textVal} locale={locale} />
                                   {isWinner && (
                                     <span
                                       className="badge bg-success rounded-pill ms-1 text-white"

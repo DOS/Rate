@@ -1,10 +1,11 @@
 import React from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { BsGraphUpArrow, BsPatchCheckFill } from 'react-icons/bs';
 import { Link } from '@/lib/navigation';
 import CompareQuickToggle from '@/components/compare/CompareQuickToggle';
 import RadarBadge from '@/components/radar/RadarBadge';
 import type { RadarSignal } from '@/lib/deal-radar';
+import ContentText from '@/components/elementary/ContentText';
 
 export interface ProductCardSpec {
   readonly key: string;
@@ -61,6 +62,7 @@ export default function ProductCard({
   verified = false,
 }: ProductCardProps) {
   const t = useTranslations('productCard');
+  const locale = useLocale();
   const hasRange = maxPrice > minPrice;
   const meta = [brand, ...tags].filter(Boolean);
 
@@ -142,7 +144,9 @@ export default function ProductCard({
                 >
                   {spec.icon}
                 </span>
-                <span className="text-truncate">{spec.label}</span>
+                <span className="text-truncate">
+                  <ContentText text={spec.label} locale={locale} />
+                </span>
               </li>
             ))}
           </ul>
