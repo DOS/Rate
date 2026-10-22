@@ -8,7 +8,11 @@ export default getRequestConfig(async ({ requestLocale }) => {
   let locale = await requestLocale;
 
   const supportedLocales: readonly string[] = routing.locales;
-  if (!locale || !supportedLocales.includes(locale)) {
+  // Only a request without a [locale] segment falls back to the cookie. A
+  // segment that is not a locale (e.g. "/foo.png", which the proxy skips) is
+  // a 404 on a static route, and reading cookies there turned it into a 500
+  // (DOS/Rate#732).
+  if (!locale) {
     try {
       const cookieStore = await cookies();
       const cookieLocale = cookieStore.get('NEXT_LOCALE')?.value;
