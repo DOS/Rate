@@ -7711,11 +7711,41 @@ async function runCoreArchitectureSuite() {
       0,
       'a scored 0 (official store) stays 0'
     );
-    // The profile uses the persisted score when the importer wrote one.
-    assert.match(
-      src,
-      /const effectiveReviewRisk = persistedBreakdown\s+\? persistedReviewRisk/,
-      'getMerchantProfileById prefers the persisted review risk (#684)'
+    // A stored score (column or metadata) is shown instead of one computed
+    // from the reviews a page reads, even without a breakdown.
+    const { hasStoredReviewRisk } = await import('@/lib/rate-api');
+    assert.equal(
+      hasStoredReviewRisk({ review_risk_score: 0, review_risk_breakdown: {} }),
+      false
+    );
+    assert.equal(
+      hasStoredReviewRisk({ review_risk_score: 25, review_risk_breakdown: {} }),
+      true,
+      'column score without a breakdown'
+    );
+    assert.equal(
+      hasStoredReviewRisk({
+        review_risk_score: 0,
+        review_risk_breakdown: {},
+        metadata: { review_risk_score: 30 },
+      }),
+      true,
+      'metadata-only score'
+    );
+    assert.equal(
+      hasStoredReviewRisk({
+        review_risk_score: 0,
+        review_risk_breakdown: { total_reviews: 3 },
+      }),
+      true,
+      'scored 0 with a breakdown'
+    );
+    // Both merchant pages use it to prefer the stored score.
+    assert.equal(
+      (src.match(/persistedBreakdown \|\| hasStoredReviewRisk\(/g) ?? [])
+        .length,
+      2,
+      'list and profile prefer the stored review risk (#684)'
     );
   }
 

@@ -3003,6 +3003,31 @@ export function persistedReviewRiskOf(row: {
     : 0;
 }
 
+/**
+ * True when the importer stored a review risk for the merchant row: a scored
+ * column (score or breakdown) or the metadata fallback. Pages then show that
+ * score instead of one computed from the reviews they read (#684).
+ */
+export function hasStoredReviewRisk(row: {
+  review_risk_score?: number | string | null;
+  review_risk_breakdown?: unknown;
+  metadata?: unknown;
+}): boolean {
+  if (
+    row.review_risk_score != null &&
+    hasPersistedReviewRisk(
+      toSafeRiskScore100(row.review_risk_score, 0),
+      row.review_risk_breakdown
+    )
+  )
+    return true;
+  const meta =
+    row.metadata && typeof row.metadata === 'object'
+      ? (row.metadata as Record<string, unknown>)
+      : {};
+  return typeof meta.review_risk_score === 'number';
+}
+
 function hasPersistedReviewRisk(score: number, breakdown: unknown): boolean {
   return (
     score > 0 ||
@@ -3388,7 +3413,7 @@ export async function getMerchantsList(
 
   const unscoredProductIds: string[] = [];
   for (const m of merchants) {
-    if (!extractPersistedBreakdown(m)) {
+    if (!extractPersistedBreakdown(m) && !hasStoredReviewRisk(m)) {
       const mProdIds = productIdsByMerchant.get(m.id);
       if (mProdIds && mProdIds.length > 0) {
         unscoredProductIds.push(...mProdIds);
@@ -3471,13 +3496,14 @@ export async function getMerchantsList(
     const prices = prodsByMerchant.get(m.id) ?? [];
     const persistedBreakdown = extractPersistedBreakdown(m);
     const mReviews = mappedReviewsByMerchant.get(m.id) ?? [];
-    const dynamicRisk = persistedBreakdown
-      ? null
-      : computeDynamicReviewRisk(mReviews, {
-          isOfficial: m.is_official,
-          platform: m.platform,
-          followerCount: Number(m.follower_count) || 0,
-        });
+    const dynamicRisk =
+      persistedBreakdown || hasStoredReviewRisk(m)
+        ? null
+        : computeDynamicReviewRisk(mReviews, {
+            isOfficial: m.is_official,
+            platform: m.platform,
+            followerCount: Number(m.follower_count) || 0,
+          });
     const meta = (
       m.metadata && typeof m.metadata === 'object' ? m.metadata : {}
     ) as Record<string, unknown>;
@@ -3885,9 +3911,10 @@ export async function getMerchantProfileById(
   // A persisted importer score covers all of the seller's reviews; the dynamic
   // one only the newest page. Use the persisted score when there is one, as
   // the merchant list and offer cards do (#684).
-  const effectiveReviewRisk = persistedBreakdown
-    ? persistedReviewRisk
-    : Math.max(dynamicRisk.reviewRiskScore, persistedReviewRisk);
+  const effectiveReviewRisk =
+    persistedBreakdown || hasStoredReviewRisk(merchantRow)
+      ? persistedReviewRisk
+      : Math.max(dynamicRisk.reviewRiskScore, persistedReviewRisk);
   const breakdown = persistedBreakdown ?? dynamicRisk.breakdown;
   const metaCombined =
     typeof meta.combined_risk_score === 'number' ? meta.combined_risk_score : 0;
