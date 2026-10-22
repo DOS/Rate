@@ -1991,16 +1991,16 @@ export default function CompareWorkspace({
                           <button
                             type="button"
                             onClick={() => handleRemoveProduct(p.slug)}
-                            className="btn btn-sm btn-outline-secondary rounded-circle d-inline-flex align-items-center justify-content-center p-0"
-                            style={{
-                              width: '24px',
-                              height: '24px',
-                              lineHeight: 1,
-                            }}
+                            className="rate-remove-target btn btn-sm border-0 d-inline-flex align-items-center justify-content-center p-0"
                             title={t('removeDeviceTitle')}
                             aria-label={t('removeDeviceAria', { name: p.name })}
                           >
-                            ×
+                            <span
+                              className="rate-remove-dot rounded-circle d-inline-flex align-items-center justify-content-center"
+                              aria-hidden="true"
+                            >
+                              ×
+                            </span>
                           </button>
                         </div>
 

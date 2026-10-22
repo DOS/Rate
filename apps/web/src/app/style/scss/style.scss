@@ -10668,8 +10668,10 @@ Responsiveness Start
   }
 
   @media (max-width: 991.98px) {
+    // 8px clear of the 30px menu toggle, whose tap area reaches 7px past
+    // its edges (DOS/Rate#717).
     .navigation .mobile_nav {
-      margin-right: 30px;
+      margin-right: 38px;
     }
   }
 
