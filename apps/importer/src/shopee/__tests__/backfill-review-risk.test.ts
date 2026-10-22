@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { AiReviewAnalyzer } from '../ai-review-analyzer.js';
+import { loadAndScoreMerchant, rescoreMerchantReviewRisk } from '../merchant-review-risk.js';
 import {
   mapStoredReview,
   runReviewRiskBackfill,
@@ -179,6 +182,125 @@ async function run() {
       true
     );
   }
+
+  // DOS/Rate#698: ingestion rescores one seller from a scoped read. It must
+  // store exactly the seller's score from a full-table run, even with listings
+  // of other sellers, other clusters and unrelated reviews in the tables.
+  const wideMerchants: MerchantRow[] = [
+    ...merchants,
+    { id: 'm-other', platform: 'shopee', is_official: true, follower_count: 0 },
+  ];
+  const wideProducts: ProductRow[] = [
+    ...products,
+    { id: 'p-seed-2', merchant_id: 'm-seed', cluster_id: 'c2', price_current: 4_000_000 },
+    { id: 'p-other', merchant_id: 'm-other', cluster_id: 'c2', price_current: 9_000_000 },
+    { id: 'p-other-3', merchant_id: 'm-other', cluster_id: 'c3', price_current: 1_000_000 },
+  ];
+  const wideReviews: ReviewRow[] = [
+    ...reviews,
+    review('s5', 'p-seed-2', { verdict: 'fake', flag_category: 'seeding_fake' }),
+    review('s6', 'p-seed-2', null, 2, 'Giao chậm'),
+    review('x1', 'p-other-3', { verdict: 'fake', flag_category: 'seeding_fake' }),
+  ];
+  const wideMasters = [
+    { id: 'c1', min_price: 29_000_000 },
+    { id: 'c2', min_price: 9_500_000 },
+    { id: 'c3', min_price: 1_000_000 },
+  ];
+  const full = new Map(
+    scoreMerchants(
+      new AiReviewAnalyzer(),
+      wideMerchants,
+      wideProducts,
+      wideReviews,
+      new Map(wideMasters.map(m => [m.id, m.min_price]))
+    ).map(s => [s.merchantId, s])
+  );
+  // m-seed's 4M listing is under 58% of the official 9M peer: price anomaly.
+  assert.equal(full.get('m-seed')!.risk.price_anomaly_detected, true);
+
+  const scopedWrites: Array<{ id: string; patch: Record<string, unknown> }> = [];
+  const scopedTables: Record<string, Array<Record<string, unknown>>> = {
+    merchants: wideMerchants as unknown as Array<Record<string, unknown>>,
+    products: wideProducts as unknown as Array<Record<string, unknown>>,
+    reviews: wideReviews as unknown as Array<Record<string, unknown>>,
+    master_products: wideMasters,
+  };
+  const reads: string[] = [];
+  // Supports the filters the scoped read uses; an unfiltered read would show
+  // up in `reads` as a bare table name.
+  const query = (name: string) => {
+    let rows = scopedTables[name] ?? [];
+    const filters: string[] = [];
+    const builder = {
+      select: () => builder,
+      eq: (col: string, val: unknown) => {
+        filters.push(`${col}=`);
+        rows = rows.filter(r => r[col] === val);
+        return builder;
+      },
+      in: (col: string, vals: unknown[]) => {
+        filters.push(`${col} in`);
+        rows = rows.filter(r => vals.includes(r[col]));
+        return builder;
+      },
+      order: () => builder,
+      range: (from: number, to: number) => {
+        reads.push(`${name}[${filters.join(',')}]`);
+        return Promise.resolve({ data: rows.slice(from, to + 1), error: null });
+      },
+      maybeSingle: () => {
+        reads.push(`${name}[${filters.join(',')}]`);
+        return Promise.resolve({ data: rows[0] ?? null, error: null });
+      },
+      update: (patch: Record<string, unknown>) => ({
+        eq: (_col: string, id: string) => {
+          scopedWrites.push({ id, patch });
+          return Promise.resolve({ error: null });
+        },
+      }),
+    };
+    return builder;
+  };
+  const scopedClient = { from: query } as never;
+
+  for (const merchantId of ['m-seed', 'm-off', 'm-cheap', 'm-other']) {
+    const scoped = await loadAndScoreMerchant(scopedClient, new AiReviewAnalyzer(), merchantId);
+    assert.deepEqual(scoped, full.get(merchantId), `${merchantId}: scoped == full-table score`);
+  }
+  assert.equal(
+    await loadAndScoreMerchant(scopedClient, new AiReviewAnalyzer(), 'm-none'),
+    null,
+    'a seller with only unanalyzed reviews is not scored'
+  );
+  assert.equal(
+    reads.every(r => /\[.+\]/.test(r)),
+    true,
+    `every scoped read is filtered: ${reads.join(' ')}`
+  );
+
+  // Ingestion stores the seller-wide score, overwriting a single-product one.
+  const rescored = await rescoreMerchantReviewRisk(scopedClient, new AiReviewAnalyzer(), 'm-seed');
+  assert.equal(rescored!.risk.risk_score, full.get('m-seed')!.risk.risk_score);
+  assert.equal(scopedWrites.length, 1);
+  assert.equal(scopedWrites[0]!.id, 'm-seed');
+  assert.equal(scopedWrites[0]!.patch.review_risk_score, full.get('m-seed')!.risk.risk_score);
+  assert.equal(
+    (scopedWrites[0]!.patch.review_risk_breakdown as { total_reviews: number }).total_reviews,
+    6,
+    'all six analyzed reviews of both listings'
+  );
+  await rescoreMerchantReviewRisk(scopedClient, new AiReviewAnalyzer(), 'm-none');
+  assert.equal(scopedWrites.length, 1, 'no write for a seller without analyzed reviews');
+
+  // The pipeline rescores the seller after the per-product analysis.
+  const pipelineSrc = readFileSync(
+    fileURLToPath(new URL('../shopee-to-supabase.ts', import.meta.url)),
+    'utf8'
+  );
+  const persistAt = pipelineSrc.indexOf('.persistAnalysisToSupabase(');
+  const rescoreAt = pipelineSrc.indexOf('rescoreMerchantReviewRisk(', persistAt);
+  assert.equal(persistAt > 0 && rescoreAt > persistAt, true, 'ingestion rescores after persist');
 
   console.log('✅ Review risk backfill suite passed');
 }
