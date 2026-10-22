@@ -826,28 +826,10 @@ export default function CompareWorkspace({
       }
     }
 
-    // Otherwise sync the active comparison into the tray
-    if (initialProducts.length > 0) {
-      const primaryCat = getMasterProductCategorySlug(initialProducts[0]!);
-      const sameCatInitial = initialProducts.filter(
-        (p) => getMasterProductCategorySlug(p) === primaryCat
-      );
-      setCompareTray(
-        sameCatInitial.map((p) => ({
-          slug: p.slug,
-          name: p.name,
-          brand: p.brand,
-          thumbnail: resolveProductImageUrl(
-            p.slug,
-            p.thumbnail ||
-              (p.images && p.images.length > 0 ? p.images[0] || null : null)
-          ),
-          min_price: Number(p.min_price || 0),
-          categorySlug: primaryCat,
-        }))
-      );
-    }
-  }, [hasExplicitSlugs, catalogCandidates, initialProducts, router]);
+    // Otherwise only show the page's defaults or a shared ?slugs= list: the
+    // tray changes on the visitor's own edits (syncSelection), never on load,
+    // so it does not follow them site-wide or lose what they saved (#714).
+  }, [hasExplicitSlugs, catalogCandidates, router]);
 
   // Sync URL and localStorage tray whenever compared products change (always locked to 1 category)
   const syncSelection = (
