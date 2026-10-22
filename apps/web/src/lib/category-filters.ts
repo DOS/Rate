@@ -77,6 +77,7 @@ export const RATING_FILTER_OPTIONS: {
   id: string;
   label: string;
 }[] = [
+  // The sidebar shows catalog.sidebar.ratingAll for this option (#718).
   { value: 0, id: 'rating-all', label: 'All' },
   { value: 3, id: 'rating-3plus', label: '3.0+' },
   { value: 4, id: 'rating-4plus', label: '4.0+' },

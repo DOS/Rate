@@ -787,7 +787,7 @@ export function computeBayesianRatingSummary(
       effectiveWeightSum: 0,
       confidenceRatio: 0,
       confidenceTier: 'insufficient_data',
-      tierLabelVi: 'Ít mẫu kiểm chứng (Bayesian prior)',
+      tierLabelVi: 'Chưa đủ mẫu kiểm chứng',
     };
   }
 
@@ -805,16 +805,16 @@ export function computeBayesianRatingSummary(
     ) / 100;
 
   let confidenceTier: BayesianConfidenceTier = 'insufficient_data';
-  let tierLabelVi = 'Ít mẫu kiểm chứng (Đã làm mượt Bayesian)';
+  let tierLabelVi = 'Ít mẫu kiểm chứng, điểm đã được điều chỉnh';
   if (effectiveWeightSum >= 12) {
     confidenceTier = 'high';
-    tierLabelVi = 'Độ tin cậy cao (Bayesian high)';
+    tierLabelVi = 'Độ tin cậy cao';
   } else if (effectiveWeightSum >= 4) {
     confidenceTier = 'medium';
-    tierLabelVi = 'Độ tin cậy trung bình (Bayesian medium)';
+    tierLabelVi = 'Độ tin cậy trung bình';
   } else if (effectiveWeightSum >= 1.5) {
     confidenceTier = 'low';
-    tierLabelVi = 'Độ tin cậy thấp (Bayesian low)';
+    tierLabelVi = 'Độ tin cậy thấp';
   }
 
   return {
