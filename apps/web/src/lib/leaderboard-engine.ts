@@ -3,9 +3,8 @@ import {
   getMasterProductCategorySlug,
   getMasterProductHref,
   resolveProductImageUrl,
-  type CanonicalCategorySlug,
-  type MasterProduct,
-} from './rate-api';
+} from './rate-domain-core';
+import type { CanonicalCategorySlug, MasterProduct } from './rate-api';
 import type { KeySpecs, ProductSpecifications } from '@repo/shared-data';
 
 export type LeaderboardCriterionKey =
