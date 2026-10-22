@@ -26,7 +26,8 @@ import {
 } from '@/lib/merchant-directory';
 import { selectMerchantRadar } from '@/lib/deal-radar';
 import { useDealRadarPayload } from '@/components/radar/use-deal-radar';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
+import ContentText from '@/components/elementary/ContentText';
 import {
   BsArrowCounterclockwise,
   BsBoxSeam,
@@ -102,6 +103,7 @@ export default function MerchantDirectoryExplorer({
   summary,
 }: MerchantDirectoryExplorerProps) {
   const t = useTranslations('merchants');
+  const locale = useLocale();
   const [query, setQuery] = useState(DEFAULT_MERCHANT_DIRECTORY_FILTERS.query);
   const [platform, setPlatform] = useState(
     DEFAULT_MERCHANT_DIRECTORY_FILTERS.platform
@@ -781,7 +783,10 @@ export default function MerchantDirectoryExplorer({
                               href={`/merchants/${merchant.id}`}
                               className="text-dark text-decoration-none"
                             >
-                              {merchant.name}
+                              <ContentText
+                                text={merchant.name}
+                                locale={locale}
+                              />
                             </Link>
                           </h3>
                         </div>

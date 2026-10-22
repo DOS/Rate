@@ -206,7 +206,7 @@ export default async function MerchantProfilePage({
               </Link>
             </li>
             <li className="breadcrumb-item active" aria-current="page">
-              {merchant.name}
+              <ContentText text={merchant.name} locale={locale} />
             </li>
           </ol>
         </nav>
@@ -257,7 +257,7 @@ export default async function MerchantProfilePage({
                     </span>
                   </div>
                   <h1 className="h2 fw-bold mb-2 text-white">
-                    {merchant.name}
+                    <ContentText text={merchant.name} locale={locale} />
                   </h1>
                   <div
                     className="d-flex align-items-center small flex-wrap gap-3"
@@ -675,7 +675,12 @@ export default async function MerchantProfilePage({
                     >
                       <div className="d-flex justify-content-between align-items-start mb-2 gap-2">
                         <div>
-                          <div className="fw-bold small">{rev.author_name}</div>
+                          <div className="fw-bold small">
+                            <ContentText
+                              text={rev.author_name}
+                              locale={locale}
+                            />
+                          </div>
                           {rev.master_slug ? (
                             <Link
                               href={`${revCatBase}/${rev.master_slug}#jreviews-section`}
@@ -748,7 +753,14 @@ export default async function MerchantProfilePage({
                 })}
               </h2>
               <p className="text-muted small mb-0">
-                {t('listingsSectionSubtitle', { name: merchant.name })}
+                {t.rich('listingsSectionSubtitle', {
+                  name: merchant.name,
+                  value: (chunks) => (
+                    <span lang={contentLang(merchant.name, locale)}>
+                      {chunks}
+                    </span>
+                  ),
+                })}
               </p>
             </div>
           </div>

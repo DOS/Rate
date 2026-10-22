@@ -658,7 +658,11 @@ export default async function Home({
                                   <span className="rate-radar-platform">
                                     {g.platform}
                                   </span>
-                                  {g.merchantName} ·{' '}
+                                  <ContentText
+                                    text={g.merchantName}
+                                    locale={locale}
+                                  />{' '}
+                                  ·{' '}
                                   {tHome('medianPriceInline', {
                                     price:
                                       g.marketMedianPrice.toLocaleString(
@@ -705,8 +709,11 @@ export default async function Home({
                                   <span className="rate-radar-platform">
                                     {t.platform}
                                   </span>
-                                  {t.merchantName} ·{' '}
-                                  {tHome('inflatedOrigInline')}{' '}
+                                  <ContentText
+                                    text={t.merchantName}
+                                    locale={locale}
+                                  />{' '}
+                                  · {tHome('inflatedOrigInline')}{' '}
                                   <s>
                                     {(
                                       t.priceOriginal || t.priceCurrent
@@ -851,7 +858,7 @@ export default async function Home({
                       <div className="rate-merchant-id">
                         <h4 className="rate-merchant-name">
                           <Link href={`/merchants/${merchant.id}`}>
-                            {merchant.name}
+                            <ContentText text={merchant.name} locale={locale} />
                           </Link>
                         </h4>
                         <div className="rate-merchant-meta">
@@ -997,7 +1004,10 @@ export default async function Home({
                       <div className="rate-review-head">
                         <div>
                           <div className="rate-review-author">
-                            {rev.author_name}
+                            <ContentText
+                              text={rev.author_name}
+                              locale={locale}
+                            />
                           </div>
                           <div
                             className="rate-review-stars"

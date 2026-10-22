@@ -14,8 +14,11 @@ const readLocale = (locale: string) =>
     )
   ) as Messages;
 
+// Drops the <value> rich-text tags that mark marketplace text (DOS/Rate#720).
 const fill = (template: string, values: Record<string, string>) =>
-  template.replace(/\{(\w+)\}/g, (_, name: string) => values[name] ?? '');
+  template
+    .replace(/<\/?value>/g, '')
+    .replace(/\{(\w+)\}/g, (_, name: string) => values[name] ?? '');
 
 function main() {
   console.warn('🧪 Product detail copy suite');

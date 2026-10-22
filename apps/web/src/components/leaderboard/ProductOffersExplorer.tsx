@@ -24,6 +24,7 @@ import {
 } from '@/lib/deal-radar';
 import { escapeCsvCell } from '@/lib/csv-safe';
 import { contentLang } from '@/lib/content-lang';
+import ContentText from '@/components/elementary/ContentText';
 
 interface ProductOffersExplorerProps {
   readonly productName: string;
@@ -305,8 +306,12 @@ export default function ProductOffersExplorer({
               <span className="text-uppercase">
                 {priceSpreadAudit.cheapest.platform}
               </span>{' '}
-              ({priceSpreadAudit.cheapest.merchant.name}){' '}
-              {t('offersSpreadInsteadOf')}{' '}
+              (
+              <ContentText
+                text={priceSpreadAudit.cheapest.merchant.name}
+                locale={locale}
+              />
+              ) {t('offersSpreadInsteadOf')}{' '}
               <span className="text-uppercase">
                 {priceSpreadAudit.priciest.platform}
               </span>
@@ -523,10 +528,16 @@ export default function ProductOffersExplorer({
                                 href={`/merchants/${offer.merchant.id}`}
                                 className="text-dark text-decoration-none"
                               >
-                                {offer.merchant.name}
+                                <ContentText
+                                  text={offer.merchant.name}
+                                  locale={locale}
+                                />
                               </Link>
                             ) : (
-                              offer.merchant.name
+                              <ContentText
+                                text={offer.merchant.name}
+                                locale={locale}
+                              />
                             )}
                           </div>
                           {offer.merchant.is_official && (

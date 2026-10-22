@@ -416,7 +416,21 @@ export async function ProductDetailView({
                   className="rate-pdv-radar-note"
                   data-testid="pdv-radar-signal"
                 >
-                  {t(radarNote.key, radarNote.values)}
+                  {radarNote.key === 'radarExplanationGenuineDeal'
+                    ? t.rich(radarNote.key, {
+                        ...radarNote.values,
+                        value: (chunks) => (
+                          <span
+                            lang={contentLang(
+                              radarNote.values.merchant,
+                              locale
+                            )}
+                          >
+                            {chunks}
+                          </span>
+                        ),
+                      })
+                    : t(radarNote.key, radarNote.values)}
                 </p>
               )}
 

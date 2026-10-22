@@ -28,6 +28,7 @@ import FooterTop from '../components/footer-top';
 import FooterDynamic from '../components/footer/FooterDynamic';
 import BackToTop from '../components/back-to-top';
 import CompareTrayBar from '@/components/compare/CompareTrayBar';
+import ContentText from '@/components/elementary/ContentText';
 import CategoryCatalogToolbar from '@/components/leaderboard/CategoryCatalogToolbar';
 import {
   BsArrowLeftRight,
@@ -700,7 +701,10 @@ export async function CategoryCatalogContent({
                               <span className="rate-radar-platform">
                                 {g.platform}
                               </span>
-                              {g.merchantName}
+                              <ContentText
+                                text={g.merchantName}
+                                locale={locale}
+                              />
                             </span>
                           </div>
                           <div className="rate-radar-item-side">
@@ -738,7 +742,10 @@ export async function CategoryCatalogContent({
                                 <span className="rate-radar-platform">
                                   {trap.platform}
                                 </span>
-                                {trap.merchantName}
+                                <ContentText
+                                  text={trap.merchantName}
+                                  locale={locale}
+                                />
                               </span>
                             </div>
                             <div className="rate-radar-item-side">
