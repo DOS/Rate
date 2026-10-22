@@ -7930,6 +7930,26 @@ async function runCoreArchitectureSuite() {
     '  ✅ [88/88] Shopper-facing messages do not shout in capitals (#706) passed'
   );
 
+  // =========================================================================
+  // 89. Vercel installs exactly what pnpm-lock.yaml pins (#734)
+  // =========================================================================
+  {
+    const vercel = JSON.parse(
+      fs.readFileSync(path.join(repoRoot, 'vercel.json'), 'utf8')
+    ) as { installCommand?: string };
+    const install = vercel.installCommand ?? '';
+    assert.ok(
+      /\binstall\b/.test(install) &&
+        install.includes('--frozen-lockfile') &&
+        !install.includes('--no-frozen-lockfile'),
+      `vercel.json installCommand must use --frozen-lockfile (#734), got: ${install}`
+    );
+  }
+
+  console.log(
+    '  ✅ [89/89] Vercel installs exactly what pnpm-lock.yaml pins (#734) passed'
+  );
+
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
 

@@ -3,5 +3,5 @@
   "framework": "nextjs",
   "buildCommand": "node scripts/vercel-production-guard.mjs --vercel && npx --yes pnpm@10.34.5 --filter @repo/web... build",
   "outputDirectory": "apps/web/.next",
-  "installCommand": "npx --yes pnpm@10.34.5 install --no-frozen-lockfile"
+  "installCommand": "npx --yes pnpm@10.34.5 install --frozen-lockfile"
 }
