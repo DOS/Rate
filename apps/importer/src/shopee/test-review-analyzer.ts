@@ -1044,7 +1044,7 @@ async function run() {
   };
   assert.equal(
     regexLiteral('./ai-review-analyzer.ts', 'PRODUCT_MENTION_RE'),
-    regexLiteral('../../../web/src/lib/rate-api.ts', 'WEB_PRODUCT_MENTION_RE'),
+    regexLiteral('../../../web/src/lib/rate-domain-core.ts', 'WEB_PRODUCT_MENTION_RE'),
     'importer and web product mention lists are identical'
   );
   assert.equal(

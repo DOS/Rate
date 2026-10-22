@@ -1,13 +1,14 @@
 'use client';
 
-import { getBrowserSupabase } from '@/lib/supabase/browser';
-
 /**
  * Returns the signed-in user's Supabase access token, or null when nobody is signed
  * in. Write endpoints (reviews, votes, price alerts) require it as a Bearer token.
+ * The Supabase client loads on the first call, when the user writes, so pages
+ * that only read do not ship it (DOS/Rate#756).
  */
 export async function getBrowserAccessToken(): Promise<string | null> {
   try {
+    const { getBrowserSupabase } = await import('@/lib/supabase/browser');
     const { data } = await getBrowserSupabase().auth.getSession();
     return data.session?.access_token ?? null;
   } catch {

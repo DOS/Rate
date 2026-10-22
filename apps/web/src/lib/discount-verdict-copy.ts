@@ -1,7 +1,5 @@
-import {
-  MAX_VALID_VND_PRICE,
-  type OfferDiscountAnalysis,
-} from '@/lib/rate-api';
+import { MAX_VALID_VND_PRICE } from '@/lib/rate-domain-core';
+import type { OfferDiscountAnalysis } from '@/lib/rate-api';
 
 // rate-api builds `badge_label` / `explanation` in Vietnamese only. The UI
 // rebuilds both from the structured fields so they follow the active locale

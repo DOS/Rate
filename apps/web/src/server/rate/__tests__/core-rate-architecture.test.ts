@@ -7990,6 +7990,51 @@ async function runCoreArchitectureSuite() {
     '  ✅ [90/90] The sitemap reads through the tagged Data Cache (#742) passed'
   );
 
+  // =========================================================================
+  // 91. Client-safe domain code stays free of rate-api and Supabase (#756)
+  // =========================================================================
+  {
+    const libDir = path.join(repoRoot, 'apps/web/src/lib');
+    const coreSrc = fs.readFileSync(
+      path.join(libDir, 'rate-domain-core.ts'),
+      'utf8'
+    );
+    const valueImports = [
+      ...coreSrc.matchAll(/^import\s+(?!type\b)[^;]*?from\s+'([^']+)'/gm),
+    ].map((m) => m[1]);
+    assert.deepEqual(
+      valueImports,
+      [],
+      'rate-domain-core.ts must only use type imports (#756)'
+    );
+    for (const file of [
+      'rate-domain.ts',
+      'leaderboard-engine.ts',
+      'discount-verdict-copy.ts',
+    ]) {
+      const src = fs.readFileSync(path.join(libDir, file), 'utf8');
+      assert.ok(
+        !/^(?:import|export)\s+\{[^}]*\}\s*from\s+'(?:\.\/|@\/lib\/)rate-api'/m.test(
+          src
+        ),
+        `${file} must not take values from rate-api, which pulls Supabase into client bundles (#756)`
+      );
+    }
+    const tokenSrc = fs.readFileSync(
+      path.join(libDir, 'auth/access-token.ts'),
+      'utf8'
+    );
+    assert.ok(
+      !/^import[^;]*'@\/lib\/supabase\/browser'/m.test(tokenSrc) &&
+        tokenSrc.includes("await import('@/lib/supabase/browser')"),
+      'access-token.ts must load the browser Supabase client lazily (#756)'
+    );
+  }
+
+  console.log(
+    '  ✅ [91/91] Client-safe domain code stays free of rate-api and Supabase (#756) passed'
+  );
+
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
 
