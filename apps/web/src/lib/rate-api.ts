@@ -2481,6 +2481,8 @@ export interface MerchantProductListing {
   price_original: number | null;
   stock: number;
   historical_sold: number;
+  /** Marketplace label (e.g. "20k+") when historical_sold is only its floor. */
+  historical_sold_display: string | null;
   rating_star: number;
   rating_count: number;
   url: string;
@@ -2562,6 +2564,7 @@ interface RawProductRow {
   price_original?: number | string | null;
   stock?: number | null;
   historical_sold?: number | null;
+  historical_sold_display?: string | null;
   rating_star?: number | string | null;
   rating_count?: number | null;
   images?: string[] | null;
@@ -3537,7 +3540,7 @@ export async function getMerchantProfileById(
     supabase
       .from('products')
       .select(
-        'id, merchant_id, platform, platform_item_id, title, price_current, price_original, stock, historical_sold, rating_star, rating_count, images, url, cluster_id'
+        'id, merchant_id, platform, platform_item_id, title, price_current, price_original, stock, historical_sold, historical_sold_display, rating_star, rating_count, images, url, cluster_id'
       )
       .eq('merchant_id', merchantId)
       .order('price_current', { ascending: true })
@@ -3663,6 +3666,11 @@ export async function getMerchantProfileById(
       ),
       stock: Number(p.stock || 0),
       historical_sold: Number(p.historical_sold || 0),
+      historical_sold_display:
+        typeof p.historical_sold_display === 'string' &&
+        p.historical_sold_display.trim()
+          ? p.historical_sold_display.trim()
+          : null,
       rating_star: Number(p.rating_star || 0),
       rating_count: Number(p.rating_count || 0),
       url: p.url,

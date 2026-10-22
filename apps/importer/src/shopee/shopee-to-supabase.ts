@@ -440,6 +440,7 @@ export class ShopeeIngestionPipeline {
           price_original: product.priceBeforeDiscount || null,
           currency: product.currency || 'VND',
           historical_sold: product.historicalSold || 0,
+          historical_sold_display: product.historicalSoldDisplay ?? null,
           stock: product.stock ?? null,
           rating_star: product.ratingStar || 0,
           rating_count: product.ratingCount || 0,

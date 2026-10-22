@@ -220,6 +220,8 @@ export const ScrapedProductSchema = z.object({
   priceBeforeDiscount: z.number().nonnegative().optional(),
   currency: z.string().min(1).default('VND'),
   historicalSold: z.number().int().nonnegative().default(0),
+  /** Marketplace sold label (e.g. "20k+") when historicalSold is only its floor. */
+  historicalSoldDisplay: z.string().trim().min(1).max(16).optional(),
   stock: z.number().int().nonnegative().optional(),
   ratingStar: z.number().min(0).max(5).default(0),
   ratingCount: z.number().int().nonnegative().default(0),

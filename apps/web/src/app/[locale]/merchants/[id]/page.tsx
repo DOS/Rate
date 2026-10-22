@@ -814,8 +814,11 @@ export default async function MerchantProfilePage({
                                 {t('itemMetaLine')}{' '}
                                 <code>{item.platform_item_id}</code> •{' '}
                                 {t('soldLabel')}{' '}
-                                {item.historical_sold.toLocaleString('vi-VN')} •
-                                ★ {item.rating_star.toFixed(1)} (
+                                {item.historical_sold_display ??
+                                  item.historical_sold.toLocaleString(
+                                    'vi-VN'
+                                  )}{' '}
+                                • ★ {item.rating_star.toFixed(1)} (
                                 {item.rating_count})
                               </div>
                             </div>
