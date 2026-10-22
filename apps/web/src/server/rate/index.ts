@@ -16,6 +16,7 @@ import {
   getMerchantProfileById as _getMerchantProfileById,
   getMerchantsList as _getMerchantsList,
   getRatePlatformStats as _getRatePlatformStats,
+  getSitemapRows as _getSitemapRows,
   inspectProductOrShopUrl as _inspectProductOrShopUrl,
   isCanonicalCategorySlug,
   extractPersistedBreakdown,
@@ -28,6 +29,7 @@ import {
   filterAndSortMerchants,
   type MasterProductFilterParams,
   type MerchantListFilterParams,
+  type SitemapRows,
 } from '../../lib/rate-api';
 
 export type {
@@ -371,6 +373,40 @@ export const getCachedRatePlatformStats = cache(() =>
 export const getCachedInspectProductOrShopUrl = cache(
   inspectProductOrShopUrlWithRadar
 );
+
+// The Data Cache stores JSON, so the category map travels as entries.
+const _getCachedSitemapRowsData = withRateDataCache(
+  async () => {
+    const rows = await _getSitemapRows();
+    return {
+      products: rows.products,
+      merchants: rows.merchants,
+      categories: [...rows.categorySlugById],
+    };
+  },
+  ['rate-sitemap-rows'],
+  {
+    revalidate: 3600,
+    tags: [
+      RATE_CACHE_TAGS.PRODUCTS,
+      RATE_CACHE_TAGS.MERCHANTS,
+      RATE_CACHE_TAGS.CATEGORIES,
+    ],
+  }
+);
+
+/**
+ * Sitemap rows behind the tags the worker revalidates, so a new or removed
+ * product reaches /sitemap.xml without a deploy (DOS/Rate#742).
+ */
+export const getCachedSitemapRows = cache(async (): Promise<SitemapRows> => {
+  const rows = await _getCachedSitemapRowsData();
+  return {
+    products: rows.products,
+    merchants: rows.merchants,
+    categorySlugById: new Map(rows.categories),
+  };
+});
 
 export {
   _getMasterProducts as getMasterProducts,

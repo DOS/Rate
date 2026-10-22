@@ -7950,6 +7950,40 @@ async function runCoreArchitectureSuite() {
     '  ✅ [89/89] Vercel installs exactly what pnpm-lock.yaml pins (#734) passed'
   );
 
+  // =========================================================================
+  // 90. The sitemap reads through the tagged Data Cache (#742)
+  // =========================================================================
+  {
+    const sitemapSrc = fs.readFileSync(
+      path.join(repoRoot, 'apps/web/src/app/sitemap.ts'),
+      'utf8'
+    );
+    const serverRateSrc = fs.readFileSync(
+      path.join(repoRoot, 'apps/web/src/server/rate/index.ts'),
+      'utf8'
+    );
+    assert.ok(
+      sitemapSrc.includes('getCachedSitemapRows()') &&
+        sitemapSrc.includes('getCachedMasterProducts(') &&
+        !/\bgetSitemapRows\(/.test(sitemapSrc),
+      'sitemap.ts must read through the cached, tagged helpers (#742)'
+    );
+    const block = serverRateSrc.slice(
+      serverRateSrc.indexOf('_getCachedSitemapRowsData')
+    );
+    assert.ok(
+      block.includes("['rate-sitemap-rows']") &&
+        block.includes('RATE_CACHE_TAGS.PRODUCTS') &&
+        block.includes('RATE_CACHE_TAGS.MERCHANTS') &&
+        block.includes('RATE_CACHE_TAGS.CATEGORIES'),
+      'sitemap rows must carry the products, merchants and categories tags (#742)'
+    );
+  }
+
+  console.log(
+    '  ✅ [90/90] The sitemap reads through the tagged Data Cache (#742) passed'
+  );
+
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
 
