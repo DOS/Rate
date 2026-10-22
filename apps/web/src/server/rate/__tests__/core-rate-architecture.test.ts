@@ -7657,6 +7657,102 @@ async function runCoreArchitectureSuite() {
     '  ✅ [86/86] Offer cards use the baseline for unscored sellers (#685) passed'
   );
 
+  // =========================================================================
+  // 87. Merchant pages and offers read the persisted review risk (#684)
+  // =========================================================================
+  {
+    const src = fs.readFileSync(
+      path.join(repoRoot, 'apps/web/src/lib/rate-api.ts'),
+      'utf8'
+    );
+    // List, profile and offer fallback selects; anon can read both columns.
+    const selects = src.match(
+      /risk_score, review_risk_score, review_risk_breakdown, metadata/g
+    );
+    assert.equal(
+      selects?.length,
+      3,
+      'merchant list, profile and offer fallback select the persisted review risk (#684)'
+    );
+    // The column defaults to 0 / {}: a bare 0 there must not hide a
+    // metadata-only score, and a scored column wins.
+    const { persistedReviewRiskOf } = await import('@/lib/rate-api');
+    assert.equal(
+      persistedReviewRiskOf({
+        review_risk_score: 0,
+        review_risk_breakdown: {},
+      }),
+      0,
+      'never scored'
+    );
+    assert.equal(
+      persistedReviewRiskOf({
+        review_risk_score: 0,
+        review_risk_breakdown: {},
+        metadata: { review_risk_score: 37 },
+      }),
+      37,
+      'metadata-only scored seller keeps its score'
+    );
+    assert.equal(
+      persistedReviewRiskOf({
+        review_risk_score: 52,
+        review_risk_breakdown: { total_reviews: 9 },
+        metadata: { review_risk_score: 10 },
+      }),
+      52,
+      'column score wins'
+    );
+    assert.equal(
+      persistedReviewRiskOf({
+        review_risk_score: 0,
+        review_risk_breakdown: { total_reviews: 30 },
+      }),
+      0,
+      'a scored 0 (official store) stays 0'
+    );
+    // A stored score (column or metadata) is shown instead of one computed
+    // from the reviews a page reads, even without a breakdown.
+    const { hasStoredReviewRisk } = await import('@/lib/rate-api');
+    assert.equal(
+      hasStoredReviewRisk({ review_risk_score: 0, review_risk_breakdown: {} }),
+      false
+    );
+    assert.equal(
+      hasStoredReviewRisk({ review_risk_score: 25, review_risk_breakdown: {} }),
+      true,
+      'column score without a breakdown'
+    );
+    assert.equal(
+      hasStoredReviewRisk({
+        review_risk_score: 0,
+        review_risk_breakdown: {},
+        metadata: { review_risk_score: 30 },
+      }),
+      true,
+      'metadata-only score'
+    );
+    assert.equal(
+      hasStoredReviewRisk({
+        review_risk_score: 0,
+        review_risk_breakdown: { total_reviews: 3 },
+      }),
+      true,
+      'scored 0 with a breakdown'
+    );
+    // Both merchant pages use it to prefer the stored score.
+    assert.equal(
+      (src.match(/persistedBreakdown \|\| hasStoredReviewRisk\(/g) ?? [])
+        .length,
+      2,
+      'list and profile prefer the stored review risk (#684)'
+    );
+  }
+
+  console.log(
+    '  ✅ [87/87] Merchant pages read the persisted review risk (#684) passed'
+  );
+
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
 
