@@ -5,7 +5,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import { discountVerdictCopy } from '@/lib/discount-verdict-copy';
 import { Link, useRouter } from '@/lib/navigation';
 import { startNavigationProgress } from '@/components/elementary/NavigationProgress';
-import type { KeySpecs, MasterProduct } from '@repo/shared-data';
+import type { KeySpecs } from '@repo/shared-data';
 import type { HeroProductSuggestion } from '@/lib/hero-products';
 import {
   getMasterProductHref,
