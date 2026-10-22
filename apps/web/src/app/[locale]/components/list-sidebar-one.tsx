@@ -261,7 +261,7 @@ export default function ListSidebarOne({
               className="btn-close d-lg-none text-sm"
               data-bs-dismiss="offcanvas"
               data-bs-target="#filterSlider"
-              aria-label="Close"
+              aria-label={t('sidebar.closeAria')}
             ></button>
           </div>
           <div

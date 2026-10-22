@@ -539,7 +539,9 @@ export async function CategoryCatalogContent({
                             <Link
                               href={chip.removeHref}
                               className="btn-close"
-                              aria-label={`Remove ${chip.label}`}
+                              aria-label={t('page.removeFilterAria', {
+                                label: chip.label,
+                              })}
                             />
                           </div>
                         ))}

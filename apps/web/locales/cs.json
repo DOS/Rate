@@ -21,7 +21,8 @@
       "selectLanguageAria": "Vybrat jazyk",
       "menuToggleAria": "Otevřít nebo zavřít menu",
       "menuCloseAria": "Zavřít menu",
-      "categories": "Kategorie"
+      "categories": "Kategorie",
+      "backToTop": "Zpět nahoru"
     },
     "footer": {
       "copyRight": "© {YEAR} Rate.vn, součást ekosystému DOS. Porovnání parametrů, skutečná historie cen a recenze z mnoha obchodů.",
@@ -1665,7 +1666,8 @@
       "prevPage": "Předchozí stránka",
       "nextPage": "Další stránka",
       "pageNumber": "Stránka {page}",
-      "firstPage": "První stránka"
+      "firstPage": "První stránka",
+      "removeFilterAria": "Odebrat filtr {label}"
     },
     "toolbar": {
       "unratedText": "N/A",
@@ -1696,7 +1698,8 @@
       "rangeFrom": "Od:",
       "rangeTo": "Do:",
       "minPriceAria": "Minimální cena",
-      "maxPriceAria": "Maximální cena"
+      "maxPriceAria": "Maximální cena",
+      "closeAria": "Zavřít filtry"
     }
   },
   "heroSearch": {
