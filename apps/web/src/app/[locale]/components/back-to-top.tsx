@@ -1,42 +1,39 @@
 'use client';
-import { useState, useEffect } from 'react';
-import Link from 'next/link';
+import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 
 import { FiArrowUp } from 'react-icons/fi';
 
 export default function BackToTop() {
+  const t = useTranslations('rate.nav');
   const [scroll, setScroll] = useState<boolean>(false);
-  const [, setScrollPercent] = useState<number>(0);
 
   const scrollToTop = () => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    const reduceMotion = window.matchMedia(
+      '(prefers-reduced-motion: reduce)'
+    ).matches;
+    window.scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' });
   };
 
   useEffect(() => {
-    const handlerScroll = () => {
-      const scrolled = window.scrollY;
-      const totalHeight =
-        document.documentElement.scrollHeight - window.innerHeight;
-      const percent = (scrolled / totalHeight) * 100;
-
-      setScroll(scrolled > 50);
-      setScrollPercent(percent);
-    };
-
-    window.addEventListener('scroll', handlerScroll);
+    // Only the visibility flips, so most scroll events change no state.
+    const handlerScroll = () => setScroll(window.scrollY > 50);
+    handlerScroll();
+    window.addEventListener('scroll', handlerScroll, { passive: true });
     return () => {
       window.removeEventListener('scroll', handlerScroll);
     };
   }, []);
 
   return (
-    <Link
-      onClick={() => scrollToTop()}
+    <button
+      type="button"
+      onClick={scrollToTop}
       className={`top-scroll ${scroll ? 'd-flex' : 'd-none'}`}
-      title="Back to top"
-      href="#"
+      title={t('backToTop')}
+      aria-label={t('backToTop')}
     >
-      <FiArrowUp className="ti-arrow-up backIcon" />
-    </Link>
+      <FiArrowUp className="ti-arrow-up backIcon" aria-hidden="true" />
+    </button>
   );
 }

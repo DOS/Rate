@@ -21,7 +21,8 @@
       "selectLanguageAria": "Chọn ngôn ngữ",
       "menuToggleAria": "Mở hoặc đóng menu",
       "menuCloseAria": "Đóng menu",
-      "categories": "Danh mục"
+      "categories": "Danh mục",
+      "backToTop": "Lên đầu trang"
     },
     "footer": {
       "copyRight": "© {YEAR} Rate.vn, thuộc hệ sinh thái DOS. So sánh thông số, lịch sử giá thật và đánh giá từ nhiều sàn.",
@@ -1665,7 +1666,8 @@
       "prevPage": "Trang trước",
       "nextPage": "Trang sau",
       "pageNumber": "Trang {page}",
-      "firstPage": "Về trang đầu"
+      "firstPage": "Về trang đầu",
+      "removeFilterAria": "Bỏ lọc {label}"
     },
     "toolbar": {
       "unratedText": "chưa có",
@@ -1696,7 +1698,8 @@
       "rangeFrom": "Từ:",
       "rangeTo": "Đến:",
       "minPriceAria": "Giá tối thiểu",
-      "maxPriceAria": "Giá tối đa"
+      "maxPriceAria": "Giá tối đa",
+      "closeAria": "Đóng bộ lọc"
     }
   },
   "heroSearch": {
