@@ -20,6 +20,7 @@ import {
   HERO_MERCHANT_PRELOAD,
   toHeroMerchantSuggestions,
 } from '@/lib/hero-merchants';
+import { toHeroProductSuggestions } from '@/lib/hero-products';
 import ClientMessages from '@/components/providers/ClientMessages';
 
 // Cached after the first request, refreshed every 5 minutes or when the
@@ -86,7 +87,7 @@ export default async function ContactUsPage({
             <div className="row justify-content-center">
               <div className="col-xl-9 col-lg-10">
                 <HeroSearchInspector
-                  initialProducts={products}
+                  initialProducts={toHeroProductSuggestions(products)}
                   initialMerchants={toHeroMerchantSuggestions(
                     merchants.slice(0, HERO_MERCHANT_PRELOAD)
                   )}
