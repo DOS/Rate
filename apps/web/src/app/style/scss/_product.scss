@@ -127,6 +127,13 @@
   color: var(--rate-fg-secondary);
 }
 
+// One line instead of five empty criterion bars (DOS/Rate#719).
+.rate-pdv-crit-empty {
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  color: var(--rate-fg-secondary);
+}
+
 .rate-pdv-confidence {
   margin-top: 0.75rem;
 }

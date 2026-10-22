@@ -518,7 +518,7 @@ export async function ProductDetailView({
                         return null;
                       };
 
-                      return [
+                      const criteria = [
                         {
                           label:
                             categorySlug === 'earbuds'
@@ -546,48 +546,62 @@ export async function ProductDetailView({
                           score: avgCrit('value'),
                         },
                       ];
-                    })().map((crit) => {
-                      const val =
-                        crit.score != null
-                          ? Math.min(5, Math.max(1, Number(crit.score)))
-                          : null;
-                      const pct = val != null ? Math.round((val / 5) * 100) : 0;
-                      return (
-                        <div key={crit.label} className="rate-pdv-crit-row">
-                          <div className="rate-pdv-crit-head">
-                            <span>{crit.label}</span>
-                            <span
-                              className={`rate-pdv-crit-value${val == null ? ' is-empty' : ''}`}
-                            >
-                              {val != null
-                                ? `${val.toFixed(1)}/5`
-                                : t('notAvailableYet')}
-                            </span>
+                      // No criterion scored yet: one line instead of five
+                      // empty bars (#719).
+                      if (criteria.every((crit) => crit.score == null)) {
+                        return (
+                          <p
+                            className="rate-pdv-crit-empty mb-0"
+                            data-testid="pdv-criteria-empty"
+                          >
+                            {t('critEmpty')}
+                          </p>
+                        );
+                      }
+                      return criteria.map((crit) => {
+                        const val =
+                          crit.score != null
+                            ? Math.min(5, Math.max(1, Number(crit.score)))
+                            : null;
+                        const pct =
+                          val != null ? Math.round((val / 5) * 100) : 0;
+                        return (
+                          <div key={crit.label} className="rate-pdv-crit-row">
+                            <div className="rate-pdv-crit-head">
+                              <span>{crit.label}</span>
+                              <span
+                                className={`rate-pdv-crit-value${val == null ? ' is-empty' : ''}`}
+                              >
+                                {val != null
+                                  ? `${val.toFixed(1)}/5`
+                                  : t('notAvailableYet')}
+                              </span>
+                            </div>
+                            <div className="progress rate-pdv-crit-track">
+                              <div
+                                className="progress-bar"
+                                role="progressbar"
+                                aria-label={crit.label}
+                                style={{
+                                  width: `${pct}%`,
+                                  backgroundColor:
+                                    val == null
+                                      ? 'transparent'
+                                      : val >= 4.5
+                                        ? '#2dba69'
+                                        : val >= 3.8
+                                          ? '#f59e0b'
+                                          : '#f43f5e',
+                                }}
+                                aria-valuenow={val ?? undefined}
+                                aria-valuemin={0}
+                                aria-valuemax={5}
+                              />
+                            </div>
                           </div>
-                          <div className="progress rate-pdv-crit-track">
-                            <div
-                              className="progress-bar"
-                              role="progressbar"
-                              aria-label={crit.label}
-                              style={{
-                                width: `${pct}%`,
-                                backgroundColor:
-                                  val == null
-                                    ? 'transparent'
-                                    : val >= 4.5
-                                      ? '#2dba69'
-                                      : val >= 3.8
-                                        ? '#f59e0b'
-                                        : '#f43f5e',
-                              }}
-                              aria-valuenow={val ?? undefined}
-                              aria-valuemin={0}
-                              aria-valuemax={5}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      });
+                    })()}
                   </div>
                 </div>
               </div>

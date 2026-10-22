@@ -232,7 +232,7 @@ export function computeCrossPlatformDealRadarFromData(
         cheapestOfferUrl: cheapestOffer.url,
         priciestPlatform: priciestOffer.platform,
         priciestMerchantName: priciestOffer.merchant.name,
-        explanationVi: `Chênh lệch ${spreadVnd.toLocaleString('vi-VN')}₫ (${spreadPct}%) giữa ${cheapestOffer.platform.toUpperCase()} (${marketMinPrice.toLocaleString('vi-VN')}₫) và ${priciestOffer.platform.toUpperCase()} (${marketMaxPrice.toLocaleString('vi-VN')}₫).`,
+        explanationVi: `Chênh lệch ${spreadVnd.toLocaleString('vi-VN')} ₫ (${spreadPct}%) giữa ${cheapestOffer.platform.toUpperCase()} (${marketMinPrice.toLocaleString('vi-VN')} ₫) và ${priciestOffer.platform.toUpperCase()} (${marketMaxPrice.toLocaleString('vi-VN')} ₫).`,
       });
     }
 
@@ -293,7 +293,7 @@ export function computeCrossPlatformDealRadarFromData(
         claimedDiscountPct,
         fakeMarkupPct: 0,
         jreviewsScore10,
-        explanationVi: `Rẻ hơn trung vị 10 sàn ${savingsVsMedianVnd.toLocaleString('vi-VN')}₫ (-${savingsVsMedianPct}%) tại ${bestOffer.merchant.name} (${bestOffer.platform.toUpperCase()}).`,
+        explanationVi: `Rẻ hơn trung vị 10 sàn ${savingsVsMedianVnd.toLocaleString('vi-VN')} ₫ (-${savingsVsMedianPct}%) tại ${bestOffer.merchant.name} (${bestOffer.platform.toUpperCase()}).`,
       });
     }
 
@@ -353,7 +353,7 @@ export function computeCrossPlatformDealRadarFromData(
           claimedDiscountPct,
           fakeMarkupPct,
           jreviewsScore10,
-          explanationVi: `Gian hàng treo giá gốc gạch ngang ${validOrig.toLocaleString('vi-VN')}₫ (cao hơn trung vị thị trường +${fakeMarkupPct}%) để tạo cảm giác giảm ${claimedDiscountPct}%, nhưng giá thực bán cao hơn đáy thị trường ${(off.price_current - marketMinPrice).toLocaleString('vi-VN')}₫.`,
+          explanationVi: `Gian hàng treo giá gốc gạch ngang ${validOrig.toLocaleString('vi-VN')} ₫ (cao hơn trung vị thị trường +${fakeMarkupPct}%) để tạo cảm giác giảm ${claimedDiscountPct}%, nhưng giá thực bán cao hơn đáy thị trường ${(off.price_current - marketMinPrice).toLocaleString('vi-VN')} ₫.`,
         };
 
         if (
