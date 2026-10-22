@@ -2112,14 +2112,20 @@ async function runCoreArchitectureSuite() {
   );
   assert.ok(
     !/cdn\.jsdelivr\.net/.test(rootLayoutSrc145) &&
-      rootLayoutSrc145.includes('<BootstrapClient />') &&
+      !rootLayoutSrc145.includes('<BootstrapClient />') &&
+      fs
+        .readFileSync(
+          path.join(repoRoot, 'apps/web/src/app/[locale]/smartphones/page.tsx'),
+          'utf8'
+        )
+        .includes('<BootstrapClient />') &&
       fs
         .readFileSync(
           path.join(repoRoot, 'apps/web/src/app/BootstrapClient.tsx'),
           'utf8'
         )
         .includes("import('bootstrap/dist/js/bootstrap.bundle.min.js')"),
-    'Root layout must render BootstrapClient (bundled bootstrap JS) and must not load Bootstrap from cdn.jsdelivr.net (#145)'
+    'Only the catalog renders BootstrapClient (bundled bootstrap JS, #754), and nothing loads Bootstrap from cdn.jsdelivr.net (#145)'
   );
   console.log(
     '  ✅ [43/44] Bootstrap JS bundled from the bootstrap package via BootstrapClient, no jsDelivr script in the root layout (#145) passed'
@@ -7982,6 +7988,51 @@ async function runCoreArchitectureSuite() {
 
   console.log(
     '  ✅ [90/90] The sitemap reads through the tagged Data Cache (#742) passed'
+  );
+
+  // =========================================================================
+  // 91. Client-safe domain code stays free of rate-api and Supabase (#756)
+  // =========================================================================
+  {
+    const libDir = path.join(repoRoot, 'apps/web/src/lib');
+    const coreSrc = fs.readFileSync(
+      path.join(libDir, 'rate-domain-core.ts'),
+      'utf8'
+    );
+    const valueImports = [
+      ...coreSrc.matchAll(/^import\s+(?!type\b)[^;]*?from\s+'([^']+)'/gm),
+    ].map((m) => m[1]);
+    assert.deepEqual(
+      valueImports,
+      [],
+      'rate-domain-core.ts must only use type imports (#756)'
+    );
+    for (const file of [
+      'rate-domain.ts',
+      'leaderboard-engine.ts',
+      'discount-verdict-copy.ts',
+    ]) {
+      const src = fs.readFileSync(path.join(libDir, file), 'utf8');
+      assert.ok(
+        !/^(?:import|export)\s+\{[^}]*\}\s*from\s+'(?:\.\/|@\/lib\/)rate-api'/m.test(
+          src
+        ),
+        `${file} must not take values from rate-api, which pulls Supabase into client bundles (#756)`
+      );
+    }
+    const tokenSrc = fs.readFileSync(
+      path.join(libDir, 'auth/access-token.ts'),
+      'utf8'
+    );
+    assert.ok(
+      !/^import[^;]*'@\/lib\/supabase\/browser'/m.test(tokenSrc) &&
+        tokenSrc.includes("await import('@/lib/supabase/browser')"),
+      'access-token.ts must load the browser Supabase client lazily (#756)'
+    );
+  }
+
+  console.log(
+    '  ✅ [91/91] Client-safe domain code stays free of rate-api and Supabase (#756) passed'
   );
 
   console.log('🎉 All Rate.vn Core Architecture tests passed!');

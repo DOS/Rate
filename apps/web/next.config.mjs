@@ -89,6 +89,12 @@ const nextConfig = {
 
   async headers() {
     return [
+      // API JSON is linked from /developers but is not a search result
+      // (DOS/Rate#746).
+      {
+        source: "/api/:path*",
+        headers: [{ key: "X-Robots-Tag", value: "noindex" }],
+      },
       {
         source: "/(.*)",
         headers: [

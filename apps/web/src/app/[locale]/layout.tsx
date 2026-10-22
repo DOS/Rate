@@ -7,7 +7,6 @@ import {
   setRequestLocale,
 } from 'next-intl/server';
 import { AppProviders } from '@/app/providers';
-import BootstrapClient from '@/app/BootstrapClient';
 import { pickClientMessages } from '@/lib/client-messages';
 import { fontFaces } from '@/lib/fonts';
 import { routing } from '@/lib/navigation';
@@ -70,8 +69,6 @@ export default async function LocaleLayout({
         <NextIntlClientProvider locale={locale} messages={clientMessages}>
           <AppProviders>{children}</AppProviders>
         </NextIntlClientProvider>
-        {/* Bootstrap JS from the installed package (same version as the CSS), not a CDN */}
-        <BootstrapClient />
       </body>
     </html>
   );

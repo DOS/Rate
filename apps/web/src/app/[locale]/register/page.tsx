@@ -17,6 +17,8 @@ export async function generateMetadata({
   const t = await getTranslations({ locale, namespace: 'authPortal' });
   return {
     title: t('metaRegisterTitle'),
+    // Sign-in screens are not search results (DOS/Rate#746).
+    robots: { index: false, follow: true },
   };
 }
 

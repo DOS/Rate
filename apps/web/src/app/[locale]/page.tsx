@@ -51,6 +51,7 @@ import {
   HERO_MERCHANT_PRELOAD,
   toHeroMerchantSuggestions,
 } from '@/lib/hero-merchants';
+import { toHeroProductSuggestions } from '@/lib/hero-products';
 import ContentText from '@/components/elementary/ContentText';
 import { contentLang } from '@/lib/content-lang';
 import ClientMessages from '@/components/providers/ClientMessages';
@@ -246,7 +247,7 @@ export default async function Home({
             <div className="row justify-content-center align-items-center">
               <div className="col-xl-9 col-lg-10 col-md-12 col-sm-12">
                 <HeroSearchInspector
-                  initialProducts={masterProducts}
+                  initialProducts={toHeroProductSuggestions(masterProducts)}
                   initialMerchants={toHeroMerchantSuggestions(
                     merchants.slice(0, HERO_MERCHANT_PRELOAD)
                   )}

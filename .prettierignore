@@ -19,7 +19,6 @@ ui-debug.log
 **/functions/**
 .next
 **/functions/node_modules/**
-**/types/api/*d.ts
 **/types/generated/**
 **/.strapi/client/**
 # Archived docs are kept as they were (not reformatted)

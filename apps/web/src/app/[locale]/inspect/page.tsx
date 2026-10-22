@@ -18,10 +18,13 @@ export const dynamic = 'force-dynamic';
 
 export async function generateMetadata({
   params,
+  searchParams,
 }: {
   params: Promise<{ locale: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }): Promise<Metadata> {
   const { locale } = await params;
+  const sp = await searchParams;
   const lang = normalizeRateLocale(locale);
   const t = await getTranslations({ locale: lang, namespace: 'inspect' });
   return {
@@ -30,6 +33,9 @@ export async function generateMetadata({
     alternates: {
       canonical: 'https://rate.vn/inspect',
     },
+    // Every query renders its own result page; only the tool itself is a
+    // search result (DOS/Rate#746).
+    ...(sp.q || sp.url ? { robots: { index: false, follow: true } } : {}),
   };
 }
 
