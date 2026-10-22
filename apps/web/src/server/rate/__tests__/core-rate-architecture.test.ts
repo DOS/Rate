@@ -7703,6 +7703,7 @@ async function runCoreArchitectureSuite() {
         include_in_rating: false,
       },
       { verdict: 'fake', flag_category: 'authentic', include_in_rating: false },
+      { verdict: 'fake', flag_category: 'authentic', include_in_rating: true },
       null,
     ];
     const texts = [
@@ -7718,7 +7719,8 @@ async function runCoreArchitectureSuite() {
     ];
     let seed = 7;
     const rand = (n: number) => {
-      seed = (seed * 1103515245 + 12345) % 2147483648;
+      // Park-Miller: products stay below 2^53, so every value is exact.
+      seed = (seed * 48271) % 2147483647;
       return seed % n;
     };
     for (let round = 0; round < 300; round++) {

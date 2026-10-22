@@ -327,7 +327,13 @@ if (isDirectExecution) {
     const supabase = scopeSupabaseToRate(
       createClient(url, key, { auth: { persistSession: false } })
     );
-    await runReviewRiskBackfill(supabase, { apply: process.argv.includes('--apply') });
+    const apply = process.argv.includes('--apply');
+    // The host is not secret; it shows which project an --apply run writes to.
+    logger.info('backfill.target', `Target: ${new URL(url).host} (apply=${apply})`, {
+      host: new URL(url).host,
+      apply,
+    });
+    await runReviewRiskBackfill(supabase, { apply });
   })().catch((err: unknown) => {
     logger.error(
       'backfill.fatal',
