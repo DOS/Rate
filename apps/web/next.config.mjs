@@ -121,6 +121,18 @@ const nextConfig = {
       },
     ]
   },
+
+  // iOS asks for these paths on its own; the 180px icon from
+  // app/apple-icon.png is served at /apple-icon.png (DOS/Rate#732).
+  async rewrites() {
+    return [
+      { source: "/apple-touch-icon.png", destination: "/apple-icon.png" },
+      {
+        source: "/apple-touch-icon-precomposed.png",
+        destination: "/apple-icon.png",
+      },
+    ]
+  },
 }
 
 const withConfig = (() => {
