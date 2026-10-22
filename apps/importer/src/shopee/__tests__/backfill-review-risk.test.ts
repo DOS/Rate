@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { AiReviewAnalyzer } from '../ai-review-analyzer.js';
+import { loadAndScoreMerchant, rescoreMerchantReviewRisk } from '../merchant-review-risk.js';
 import {
   mapStoredReview,
   runReviewRiskBackfill,
@@ -179,6 +182,215 @@ async function run() {
       true
     );
   }
+
+  // DOS/Rate#698: ingestion rescores one seller from a scoped read. It must
+  // store exactly the seller's score from a full-table run, even with listings
+  // of other sellers, other clusters and unrelated reviews in the tables.
+  const wideMerchants: MerchantRow[] = [
+    ...merchants,
+    { id: 'm-other', platform: 'shopee', is_official: true, follower_count: 0 },
+  ];
+  const wideProducts: ProductRow[] = [
+    ...products,
+    { id: 'p-seed-2', merchant_id: 'm-seed', cluster_id: 'c2', price_current: 4_000_000 },
+    { id: 'p-other', merchant_id: 'm-other', cluster_id: 'c2', price_current: 9_000_000 },
+    { id: 'p-other-3', merchant_id: 'm-other', cluster_id: 'c3', price_current: 1_000_000 },
+  ];
+  const wideReviews: ReviewRow[] = [
+    ...reviews,
+    review('s5', 'p-seed-2', { verdict: 'fake', flag_category: 'seeding_fake' }),
+    review('s6', 'p-seed-2', null, 2, 'Giao chậm'),
+    review('x1', 'p-other-3', { verdict: 'fake', flag_category: 'seeding_fake' }),
+  ];
+  const wideMasters = [
+    { id: 'c1', min_price: 29_000_000 },
+    { id: 'c2', min_price: 9_500_000 },
+    { id: 'c3', min_price: 1_000_000 },
+  ];
+  const full = new Map(
+    scoreMerchants(
+      new AiReviewAnalyzer(),
+      wideMerchants,
+      wideProducts,
+      wideReviews,
+      new Map(wideMasters.map(m => [m.id, m.min_price]))
+    ).map(s => [s.merchantId, s])
+  );
+  // m-seed's 4M listing is under 58% of the official 9M peer: price anomaly.
+  assert.equal(full.get('m-seed')!.risk.price_anomaly_detected, true);
+
+  // A PostgREST stand-in for the filters the scoped read uses. It embeds
+  // `merchants(is_official)` like PostgREST, caps each response at `maxRows`
+  // (a lowered max-rows), and records every read so an unfiltered one shows.
+  const makeScopedClient = (
+    tables: Record<string, ReadonlyArray<Record<string, unknown>>>,
+    maxRows = 1000
+  ) => {
+    const reads: string[] = [];
+    const writes: Array<{ id: string; patch: Record<string, unknown> }> = [];
+    const query = (name: string) => {
+      let rows = [...(tables[name] ?? [])];
+      const filters: string[] = [];
+      const builder = {
+        select: (cols: string) => {
+          if (cols.includes('merchants(is_official)')) {
+            rows = rows.map(r => {
+              const m = (tables.merchants ?? []).find(x => x.id === r.merchant_id);
+              return { ...r, merchants: m ? { is_official: m.is_official } : null };
+            });
+          }
+          return builder;
+        },
+        eq: (col: string, val: unknown) => {
+          filters.push(`${col}=`);
+          rows = rows.filter(r => r[col] === val);
+          return builder;
+        },
+        in: (col: string, vals: unknown[]) => {
+          assert.equal(vals.length <= 100, true, `${name}.${col} in() chunk of ${vals.length}`);
+          filters.push(`${col} in`);
+          rows = rows.filter(r => vals.includes(r[col]));
+          return builder;
+        },
+        order: () => builder,
+        range: (from: number, to: number) => {
+          reads.push(`${name}[${filters.join(',')}]`);
+          const end = Math.min(to + 1, from + maxRows);
+          return Promise.resolve({ data: rows.slice(from, end), error: null });
+        },
+        maybeSingle: () => {
+          reads.push(`${name}[${filters.join(',')}]`);
+          return Promise.resolve({ data: rows[0] ?? null, error: null });
+        },
+        update: (patch: Record<string, unknown>) => ({
+          eq: (_col: string, id: string) => {
+            writes.push({ id, patch });
+            return Promise.resolve({ error: null });
+          },
+        }),
+      };
+      return builder;
+    };
+    return { client: { from: query } as never, reads, writes };
+  };
+
+  const scoped = makeScopedClient({
+    merchants: wideMerchants as unknown as Array<Record<string, unknown>>,
+    products: wideProducts as unknown as Array<Record<string, unknown>>,
+    reviews: wideReviews as unknown as Array<Record<string, unknown>>,
+    master_products: wideMasters,
+  });
+
+  for (const merchantId of ['m-seed', 'm-off', 'm-cheap', 'm-other']) {
+    const one = await loadAndScoreMerchant(scoped.client, new AiReviewAnalyzer(), merchantId);
+    assert.deepEqual(one, full.get(merchantId), `${merchantId}: scoped == full-table score`);
+  }
+  assert.equal(
+    await loadAndScoreMerchant(scoped.client, new AiReviewAnalyzer(), 'm-none'),
+    null,
+    'a seller with only unanalyzed reviews is not scored'
+  );
+  assert.equal(
+    scoped.reads.every(r => /\[.+\]/.test(r)),
+    true,
+    `every scoped read is filtered: ${scoped.reads.join(' ')}`
+  );
+  assert.equal(
+    scoped.reads.some(r => r.startsWith('merchants[id in')),
+    false,
+    'peer official flags come embedded, not from a merchants read'
+  );
+
+  // Ingestion stores the seller-wide score, overwriting a single-product one.
+  const rescored = await rescoreMerchantReviewRisk(scoped.client, new AiReviewAnalyzer(), 'm-seed');
+  assert.equal(rescored!.risk.risk_score, full.get('m-seed')!.risk.risk_score);
+  assert.equal(scoped.writes.length, 1);
+  assert.equal(scoped.writes[0]!.id, 'm-seed');
+  assert.equal(scoped.writes[0]!.patch.review_risk_score, full.get('m-seed')!.risk.risk_score);
+  assert.equal(
+    (scoped.writes[0]!.patch.review_risk_breakdown as { total_reviews: number }).total_reviews,
+    6,
+    'all six analyzed reviews of both listings'
+  );
+  await rescoreMerchantReviewRisk(scoped.client, new AiReviewAnalyzer(), 'm-none');
+  assert.equal(scoped.writes.length, 1, 'no write for a seller without analyzed reviews');
+
+  // A large seller: 230 listings over 120 clusters (several in() chunks), a
+  // peer without a merchant, an official peer setting one cluster's floor,
+  // and responses capped at 37 rows so every read pages.
+  const bigMerchants: MerchantRow[] = [
+    { id: 'm-big', platform: 'shopee', is_official: false, follower_count: 1200 },
+    { id: 'm-mall', platform: 'shopee', is_official: true, follower_count: 0 },
+  ];
+  const bigProducts: ProductRow[] = [];
+  const bigReviews: ReviewRow[] = [];
+  const bigMasters: Array<{ id: string; min_price: number }> = [];
+  for (let i = 0; i < 230; i += 1) {
+    const cluster = `bc${String(i % 120).padStart(3, '0')}`;
+    const id = `bp${String(i).padStart(3, '0')}`;
+    bigProducts.push({ id, merchant_id: 'm-big', cluster_id: cluster, price_current: 3_000_000 });
+    bigReviews.push(
+      review(
+        `br${i}a`,
+        id,
+        i % 7 === 0 ? { verdict: 'fake', flag_category: 'seeding_fake' } : null
+      ),
+      review(`br${i}b`, id, null, i % 5 === 0 ? 1 : 5, i % 5 === 0 ? 'Hàng lỗi' : 'Tốt')
+    );
+  }
+  for (let c = 0; c < 120; c += 1) {
+    const cluster = `bc${String(c).padStart(3, '0')}`;
+    bigMasters.push({ id: cluster, min_price: 3_100_000 });
+    bigProducts.push({
+      id: `peer${c}`,
+      merchant_id: c === 7 ? null : 'm-mall',
+      cluster_id: cluster,
+      price_current: c === 99 ? 9_000_000 : 3_200_000,
+    });
+  }
+  const bigFull = scoreMerchants(
+    new AiReviewAnalyzer(),
+    bigMerchants,
+    bigProducts,
+    bigReviews,
+    new Map(bigMasters.map(m => [m.id, m.min_price]))
+  ).find(s => s.merchantId === 'm-big')!;
+  // 3M against the official 9M peer of cluster bc099: price anomaly.
+  assert.equal(bigFull.risk.price_anomaly_detected, true);
+  assert.equal(bigFull.risk.total_reviews, 460);
+  const big = makeScopedClient(
+    {
+      merchants: bigMerchants as unknown as Array<Record<string, unknown>>,
+      products: bigProducts as unknown as Array<Record<string, unknown>>,
+      reviews: bigReviews as unknown as Array<Record<string, unknown>>,
+      master_products: bigMasters,
+    },
+    37
+  );
+  assert.deepEqual(
+    await loadAndScoreMerchant(big.client, new AiReviewAnalyzer(), 'm-big'),
+    bigFull,
+    'large seller: scoped == full-table score across chunks and pages'
+  );
+
+  // The pipeline awaits the rescore for the product's seller after the
+  // per-product analysis (comments stripped, so a commented-out call fails).
+  const pipelineSrc = readFileSync(
+    fileURLToPath(new URL('../shopee-to-supabase.ts', import.meta.url)),
+    'utf8'
+  )
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '');
+  const persistAt = pipelineSrc.indexOf('.persistAnalysisToSupabase(');
+  const rescoreCall =
+    /await rescoreMerchantReviewRisk\(\s*this\.supabase,\s*this\.reviewAnalyzer,\s*merchantId\s*\)/g;
+  rescoreCall.lastIndex = Math.max(persistAt, 0);
+  const rescoreMatch = rescoreCall.exec(pipelineSrc);
+  assert.equal(
+    persistAt > 0 && rescoreMatch !== null && rescoreMatch.index > persistAt,
+    true,
+    'ingestion awaits the seller rescore after persistAnalysisToSupabase'
+  );
 
   console.log('✅ Review risk backfill suite passed');
 }
