@@ -7881,6 +7881,55 @@ async function runCoreArchitectureSuite() {
     '  ✅ [87/87] Merchant pages read the persisted review risk (#684) passed'
   );
 
+  // =========================================================================
+  // 88. Shopper-facing messages do not shout in capitals (#706)
+  // =========================================================================
+  {
+    // Short acronyms (ID, CPU, RAM) are fine; a run of all-caps words with a
+    // longer one, or a long all-caps label before a colon, is shouting.
+    // Brand names and long acronyms keep their capitals.
+    const capsAllowed = new Set(['ASUS', 'LDAC', 'JSON', 'OLED', 'REST']);
+    const capsRun =
+      /(?<![\p{L}\p{N}])\p{Lu}{2,}(?:\s+\p{Lu}{2,})+(?![\p{L}\p{N}])/gu;
+    const capsLabel = /(?<![\p{L}\p{N}])(\p{Lu}{4,})\s*:/gu;
+    const isShout = (w: string) => w.length >= 4 && !capsAllowed.has(w);
+    const shouts = (s: string) => {
+      const text = s.replace(/\{[^}]+\}/g, '');
+      return (
+        (text.match(capsRun) ?? []).some((run) =>
+          run.split(/\s+/).some(isShout)
+        ) || [...text.matchAll(capsLabel)].some((m) => isShout(m[1]!))
+      );
+    };
+    const offenders: string[] = [];
+    const walk = (node: unknown, key: string, locale: string) => {
+      if (typeof node === 'string') {
+        if (shouts(node)) offenders.push(`${locale}.${key}: ${node}`);
+      } else if (node && typeof node === 'object') {
+        for (const [k, v] of Object.entries(node))
+          walk(v, key ? `${key}.${k}` : k, locale);
+      }
+    };
+    for (const [locale, messages] of Object.entries({
+      vi: viMessages,
+      en: enMessages,
+      cs: csMessages,
+    })) {
+      for (const [ns, node] of Object.entries(messages)) {
+        if (ns !== 'developers') walk(node, ns, locale);
+      }
+    }
+    assert.deepEqual(
+      offenders,
+      [],
+      'shopper-facing messages must not shout in capitals (#706)'
+    );
+  }
+
+  console.log(
+    '  ✅ [88/88] Shopper-facing messages do not shout in capitals (#706) passed'
+  );
+
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
 
