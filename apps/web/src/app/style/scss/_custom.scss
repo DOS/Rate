@@ -1387,3 +1387,48 @@ body .input-group > .input-group-text {
       var(--bs-border-color) !important;
   }
 }
+
+// Phone touch targets (DOS/Rate#717): standalone controls answer taps
+// across at least 44x44px. A small remove button keeps its 24px circle as
+// the visible part; the button around it is the hit area.
+.rate-remove-target {
+  min-width: 44px;
+  min-height: 44px;
+  line-height: 1;
+}
+
+.rate-remove-dot {
+  width: 24px;
+  height: 24px;
+  border: var(--bs-border-width) solid var(--bs-secondary);
+  color: var(--bs-secondary);
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.rate-remove-target:hover .rate-remove-dot,
+.rate-remove-target:focus-visible .rate-remove-dot {
+  background-color: var(--bs-secondary);
+  color: var(--bs-white);
+}
+
+@media (max-width: 991.98px) {
+  // The menu toggle draws its icon with ::before; ::after is free.
+  .navigation .nav-toggle::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 44px;
+    height: 44px;
+    transform: translate(-50%, -50%);
+  }
+
+  .footer-widget .footer-menu li a,
+  .rate-footer-cta-links a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+}
