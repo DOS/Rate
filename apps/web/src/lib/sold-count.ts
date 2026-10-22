@@ -20,11 +20,22 @@ export function formatSoldCount(
       : '';
   if (label && sold > 0) {
     if (locale === 'vi') return label;
+    // Round down first: the label is a lower bound, so 1,950 must not show
+    // "2K+". Compact notation with one decimal shows 0.1 of the unit.
+    const step =
+      sold >= 1_000_000_000
+        ? 100_000_000
+        : sold >= 1_000_000
+          ? 100_000
+          : sold >= 1_000
+            ? 100
+            : 1;
+    const floored = Math.floor(sold / step) * step;
     const compact = new Intl.NumberFormat(locale, {
       notation: 'compact',
       maximumFractionDigits: 1,
-    }).format(sold);
+    }).format(floored);
     return `${compact}+`;
   }
-  return sold.toLocaleString('vi-VN');
+  return sold.toLocaleString(locale === 'vi' ? 'vi-VN' : locale);
 }
