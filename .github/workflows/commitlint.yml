@@ -43,6 +43,27 @@ jobs:
             "@commitlint/cli@$CLI_VERSION" "@commitlint/config-conventional@$CONFIG_VERSION"
           echo "CL_DIR=$CL_DIR" >> "$GITHUB_ENV"
 
+      # The Dependabot exemption must stay narrow: its own subjects pass, any
+      # other sentence-case subject still fails (DOS/Rate#725).
+      - name: Check the Dependabot exemption
+        run: |
+          cd "$CL_DIR"
+          for ok in \
+            'build(deps-dev): Bump sass from 1.105.1 to 1.105.2' \
+            'build(deps): Bump actions/upload-artifact from 7.0.1 to 7.0.2' \
+            'chore(deps): Bump the npm_and_yarn group across 1 directory with 2 updates'; do
+            printf '%s\n\nBumps [x](https://github.com/x/x) from 1 to 2. A long Dependabot body line that is well over one hundred characters long.\n' "$ok" \
+              | npx --no-install commitlint >/dev/null || { echo "::error::should pass: $ok"; exit 1; }
+          done
+          for bad in \
+            'fix(web): Add a sentence-case subject' \
+            'build(deps): Bump sass' \
+            'build: Bump sass from 1 to 2'; do
+            if printf '%s\n' "$bad" | npx --no-install commitlint >/dev/null 2>&1; then
+              echo "::error::should fail: $bad"; exit 1
+            fi
+          done
+
       # Lint the PR head commit, not the synthetic merge commit that
       # actions/checkout uses for pull_request (commitlint ignores "Merge ...").
       # fetch-depth: 2 includes the head commit as the merge commit's parent.
