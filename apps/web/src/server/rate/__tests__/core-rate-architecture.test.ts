@@ -7568,6 +7568,72 @@ async function runCoreArchitectureSuite() {
 
   console.log('  ✅ [85/85] Vietnamese labels are sentence case (#679) passed');
 
+  // =========================================================================
+  // 86. Offer cards use the merchant pages' baseline for unscored sellers (#685)
+  // =========================================================================
+  {
+    const {
+      baselineReviewRisk,
+      computeDynamicReviewRisk,
+      mapTrustViewRowToMerchantOffer,
+      mapOfferRowToMerchantOffer,
+    } = await import('@/lib/rate-api');
+    const sellers = [
+      {},
+      { isOfficial: true },
+      { platform: 'facebook' },
+      { platform: 'website', followerCount: 60000 },
+      { isOfficial: true, followerCount: 60000 },
+    ];
+    // With no review signal the merchant pages show exactly the baseline.
+    for (const s of sellers) {
+      assert.equal(
+        computeDynamicReviewRisk([], s).reviewRiskScore,
+        baselineReviewRisk(s),
+        JSON.stringify(s)
+      );
+    }
+    assert.deepEqual(
+      sellers.map((s) => baselineReviewRisk(s)),
+      [15, 0, 25, 20, 0]
+    );
+
+    const viewRow = (extra: Record<string, unknown>) =>
+      mapTrustViewRowToMerchantOffer({
+        id: 'o',
+        merchant_id: 'm',
+        platform: 'shopee',
+        title: 't',
+        price_current: 1_000_000,
+        url: 'https://shopee.vn/p',
+        review_risk_score: 0,
+        ...extra,
+      } as never).merchant.review_risk_score;
+    // The view reads 0 for a never-scored seller: baseline instead.
+    assert.equal(viewRow({}), 15);
+    assert.equal(viewRow({ merchant_is_official: true }), 0);
+    // A persisted score or breakdown is kept, even a scored 0.
+    assert.equal(viewRow({ review_risk_score: 42 }), 42);
+    assert.equal(viewRow({ review_risk_breakdown: { total_reviews: 3 } }), 0);
+
+    const rawRow = (merchants: Record<string, unknown>) =>
+      mapOfferRowToMerchantOffer({
+        id: 'o',
+        platform: 'lazada',
+        title: 't',
+        price_current: 1_000_000,
+        url: 'https://www.lazada.vn/p',
+        merchants: { id: 'm', name: 'Shop', platform: 'lazada', ...merchants },
+      } as never).merchant.review_risk_score;
+    assert.equal(rawRow({}), 15);
+    assert.equal(rawRow({ follower_count: 80000 }), 10);
+    assert.equal(rawRow({ metadata: { review_risk_score: 33 } }), 33);
+  }
+
+  console.log(
+    '  ✅ [86/86] Offer cards use the baseline for unscored sellers (#685) passed'
+  );
+
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
 

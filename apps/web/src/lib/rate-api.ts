@@ -1467,7 +1467,18 @@ export function mapTrustViewRowToMerchantOffer(
 ): MerchantOffer {
   const combinedRisk = toSafeRiskScore100(row.threat_risk_score, 0);
   const dosafeRisk = toSafeRiskScore100(row.dosafe_risk_score, combinedRisk);
-  const reviewRisk = toSafeRiskScore100(row.review_risk_score, 0);
+  const persistedReviewRisk = toSafeRiskScore100(row.review_risk_score, 0);
+  // The view reads 0 for a seller the importer never scored; use the same
+  // baseline as the merchant pages (#685). The view has no follower count.
+  const reviewRisk = hasPersistedReviewRisk(
+    persistedReviewRisk,
+    row.review_risk_breakdown
+  )
+    ? persistedReviewRisk
+    : baselineReviewRisk({
+        isOfficial: row.merchant_is_official,
+        platform: row.platform,
+      });
   const priceCurrent = toSafeOfferPrice(row.price_current);
   return {
     id: row.id,
@@ -1513,12 +1524,17 @@ export function mapOfferRowToMerchantOffer(item: RawOfferRow): MerchantOffer {
       : typeof meta?.dosafe_risk_score === 'number'
         ? toSafeRiskScore100(meta.dosafe_risk_score, baseRisk)
         : baseRisk;
+  // A seller the importer never scored gets the merchant pages' baseline (#685).
   const reviewRisk =
     merchantObj?.review_risk_score != null
       ? toSafeRiskScore100(merchantObj.review_risk_score, 0)
       : typeof meta?.review_risk_score === 'number'
         ? toSafeRiskScore100(meta.review_risk_score, 0)
-        : 0;
+        : baselineReviewRisk({
+            isOfficial: merchantObj?.is_official,
+            platform: merchantObj?.platform ?? item.platform,
+            followerCount: Number(merchantObj?.follower_count) || 0,
+          });
   const metaCombined =
     typeof meta?.combined_risk_score === 'number'
       ? toSafeRiskScore100(meta.combined_risk_score, 0)
@@ -2881,6 +2897,38 @@ export interface DynamicReviewRiskMerchant {
   followerCount?: number | null;
 }
 
+/** The importer's seller adjustments: official -15, free channels +10, 50k+ followers -5. */
+function merchantRiskAdjustment(merchant: DynamicReviewRiskMerchant): number {
+  let delta = 0;
+  if (merchant.isOfficial) delta -= 15;
+  else if (merchant.platform === 'facebook' || merchant.platform === 'website')
+    delta += 10;
+  if ((Number(merchant.followerCount) || 0) >= 50000) delta -= 5;
+  return delta;
+}
+
+/**
+ * The importer's review risk for a seller with no review signal: baseline 15
+ * plus the seller adjustments. Offer cards use it for sellers without a
+ * persisted score, so they match the merchant pages (DOS/Rate#685).
+ */
+export function baselineReviewRisk(
+  merchant: DynamicReviewRiskMerchant
+): number {
+  return Math.max(0, Math.min(100, 15 + merchantRiskAdjustment(merchant)));
+}
+
+/** A persisted review risk exists once the importer wrote a score or breakdown. */
+function hasPersistedReviewRisk(score: number, breakdown: unknown): boolean {
+  return (
+    score > 0 ||
+    (!!breakdown &&
+      typeof breakdown === 'object' &&
+      !Array.isArray(breakdown) &&
+      Object.keys(breakdown).length > 0)
+  );
+}
+
 /**
  * Review risk from the reviews the page has, with the importer's formula
  * (`evaluateMerchantRisk` in apps/importer/src/shopee/ai-review-analyzer.ts)
@@ -2951,10 +2999,7 @@ export function computeDynamicReviewRisk(
   }
   const lowStarRatio = lowStar / divisor;
   if (lowStarRatio >= 0.2) risk += Math.min(25, Math.round(lowStarRatio * 45));
-  if (merchant.isOfficial) risk -= 15;
-  else if (merchant.platform === 'facebook' || merchant.platform === 'website')
-    risk += 10;
-  if ((merchant.followerCount ?? 0) >= 50000) risk -= 5;
+  risk += merchantRiskAdjustment(merchant);
   const reviewRiskScore = Math.max(0, Math.min(100, risk));
 
   return {
