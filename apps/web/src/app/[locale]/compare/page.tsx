@@ -13,6 +13,7 @@ import NavbarDarkDynamic from '../components/navbar/NavbarDarkDynamic';
 import FooterTop from '../components/footer-top';
 import FooterDynamic from '../components/footer/FooterDynamic';
 import BackToTop from '../components/back-to-top';
+import ClientMessages from '@/components/providers/ClientMessages';
 
 // Reads searchParams, so it renders per request. The [locale] layout's
 // generateStaticParams would otherwise make it static, and the searchParams
@@ -125,56 +126,58 @@ export default async function ComparePhonesPage({
       : sameCategoryCandidates.slice(0, 3);
 
   return (
-    <>
-      <NavbarDarkDynamic links={[]} />
+    <ClientMessages scope="compare">
+      <>
+        <NavbarDarkDynamic links={[]} />
 
-      <div
-        className="min-vh-100 py-md-5 py-4"
-        style={{ backgroundColor: 'var(--rate-bg-canvas)' }}
-      >
-        <div className="container">
-          {/* Header & Breadcrumb */}
-          <div className="d-flex align-items-end justify-content-between mb-4 flex-wrap gap-3">
-            <div>
-              <nav aria-label="breadcrumb">
-                <ol className="breadcrumb small mb-2">
-                  <li className="breadcrumb-item">
-                    <Link href="/" className="text-decoration-none">
-                      {t('breadcrumbHome')}
-                    </Link>
-                  </li>
-                  <li className="breadcrumb-item">
-                    <Link
-                      href={`/${activeCategory}`}
-                      className="text-decoration-none"
-                    >
-                      {t('breadcrumbCatalog')}
-                    </Link>
-                  </li>
-                  <li className="breadcrumb-item active" aria-current="page">
-                    {t('breadcrumbCompare')}
-                  </li>
-                </ol>
-              </nav>
-              <div className="rate-eyebrow mb-2">{t('pageEyebrow')}</div>
-              <h1 className="h2 fw-bold mb-1">{t('pageTitle')}</h1>
-              <p className="text-muted mb-0">{t('pageSubtitle')}</p>
+        <div
+          className="min-vh-100 py-md-5 py-4"
+          style={{ backgroundColor: 'var(--rate-bg-canvas)' }}
+        >
+          <div className="container">
+            {/* Header & Breadcrumb */}
+            <div className="d-flex align-items-end justify-content-between mb-4 flex-wrap gap-3">
+              <div>
+                <nav aria-label="breadcrumb">
+                  <ol className="breadcrumb small mb-2">
+                    <li className="breadcrumb-item">
+                      <Link href="/" className="text-decoration-none">
+                        {t('breadcrumbHome')}
+                      </Link>
+                    </li>
+                    <li className="breadcrumb-item">
+                      <Link
+                        href={`/${activeCategory}`}
+                        className="text-decoration-none"
+                      >
+                        {t('breadcrumbCatalog')}
+                      </Link>
+                    </li>
+                    <li className="breadcrumb-item active" aria-current="page">
+                      {t('breadcrumbCompare')}
+                    </li>
+                  </ol>
+                </nav>
+                <div className="rate-eyebrow mb-2">{t('pageEyebrow')}</div>
+                <h1 className="h2 fw-bold mb-1">{t('pageTitle')}</h1>
+                <p className="text-muted mb-0">{t('pageSubtitle')}</p>
+              </div>
             </div>
+
+            <CompareWorkspace
+              initialProducts={initialProducts}
+              catalogCandidates={catalogCandidates}
+              initialCategory={activeCategory}
+              hasExplicitSlugs={requestedSlugs.length > 0}
+              locale={locale}
+            />
           </div>
-
-          <CompareWorkspace
-            initialProducts={initialProducts}
-            catalogCandidates={catalogCandidates}
-            initialCategory={activeCategory}
-            hasExplicitSlugs={requestedSlugs.length > 0}
-            locale={locale}
-          />
         </div>
-      </div>
 
-      <FooterTop locale={locale} />
-      <FooterDynamic sections={[]} links={[]} locale={locale} />
-      <BackToTop />
-    </>
+        <FooterTop locale={locale} />
+        <FooterDynamic sections={[]} links={[]} locale={locale} />
+        <BackToTop />
+      </>
+    </ClientMessages>
   );
 }

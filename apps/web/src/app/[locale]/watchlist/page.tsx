@@ -8,6 +8,7 @@ import FooterDynamic from '../components/footer/FooterDynamic';
 import BackToTop from '../components/back-to-top';
 import CompareTrayBar from '@/components/compare/CompareTrayBar';
 import WatchlistWorkspace from '@/components/watchlist/WatchlistWorkspace';
+import ClientMessages from '@/components/providers/ClientMessages';
 
 // Cached after the first request, refreshed every 5 minutes or when the
 // worker revalidates its cache tags (DOS/Rate#491).
@@ -45,13 +46,15 @@ export default async function WatchlistPage({
   });
 
   return (
-    <>
-      <NavbarDarkDynamic links={[]} />
-      <WatchlistWorkspace catalogProducts={catalogProducts} locale={locale} />
-      <CompareTrayBar />
-      <FooterTop locale={locale} />
-      <FooterDynamic sections={[]} links={[]} locale={locale} />
-      <BackToTop />
-    </>
+    <ClientMessages scope="watchlist">
+      <>
+        <NavbarDarkDynamic links={[]} />
+        <WatchlistWorkspace catalogProducts={catalogProducts} locale={locale} />
+        <CompareTrayBar />
+        <FooterTop locale={locale} />
+        <FooterDynamic sections={[]} links={[]} locale={locale} />
+        <BackToTop />
+      </>
+    </ClientMessages>
   );
 }

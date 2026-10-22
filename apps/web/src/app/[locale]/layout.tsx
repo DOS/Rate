@@ -8,6 +8,7 @@ import {
 } from 'next-intl/server';
 import { AppProviders } from '@/app/providers';
 import BootstrapClient from '@/app/BootstrapClient';
+import { pickClientMessages } from '@/lib/client-messages';
 import { fontFaces } from '@/lib/fonts';
 import { routing } from '@/lib/navigation';
 import { defaultOpenGraph } from '@/lib/seo';
@@ -55,29 +56,10 @@ export default async function LocaleLayout({
   const { locale } = await params;
   if (!hasLocale(routing.locales, locale)) notFound();
   setRequestLocale(locale);
-  const messages = await getMessages();
-  // Client Components read scoped namespaces via NextIntlClientProvider.
-  // Server Components read the full catalog through getTranslations.
-  const clientMessages = {
-    rate: { nav: (messages.rate as Record<string, unknown>)?.nav },
-    errors: { global: (messages.errors as Record<string, unknown>)?.global },
-    compare: messages.compare,
-    leaderboard: messages.leaderboard,
-    reviews: messages.reviews,
-    watchlist: messages.watchlist,
-    deals: messages.deals,
-    inspect: messages.inspect,
-    merchants: messages.merchants,
-    productDetail: messages.productDetail,
-    homePage: messages.homePage,
-    developers: messages.developers,
-    staticPages: messages.staticPages,
-    catalog: messages.catalog,
-    heroSearch: messages.heroSearch,
-    authPortal: messages.authPortal,
-    priceVerdict: messages.priceVerdict,
-    analyzerCopy: messages.analyzerCopy,
-  };
+  // Client Components get only the shared messages here; each page adds its
+  // own scope with <ClientMessages> (DOS/Rate#736). Server Components read
+  // the full catalog through getTranslations.
+  const clientMessages = pickClientMessages(await getMessages());
 
   return (
     <html

@@ -6,6 +6,7 @@ import FooterTop from '../components/footer-top';
 import FooterDynamic from '../components/footer/FooterDynamic';
 import BackToTop from '../components/back-to-top';
 import RateAuthPortal from '@/components/auth/RateAuthPortal';
+import ClientMessages from '@/components/providers/ClientMessages';
 
 export async function generateMetadata({
   params,
@@ -28,20 +29,22 @@ export default async function TwoFactorAuthPage({
   setRequestLocale(locale);
   const t = await getTranslations({ locale, namespace: 'authPortal' });
   return (
-    <>
-      <NavbarDarkDynamic links={[]} />
-      <Suspense
-        fallback={
-          <div className="container py-5 text-center">
-            {t('loadingFallback')}
-          </div>
-        }
-      >
-        <RateAuthPortal mode="two-factor-auth" locale={locale} />
-      </Suspense>
-      <FooterTop locale={locale} />
-      <FooterDynamic sections={[]} links={[]} locale={locale} />
-      <BackToTop />
-    </>
+    <ClientMessages scope="auth">
+      <>
+        <NavbarDarkDynamic links={[]} />
+        <Suspense
+          fallback={
+            <div className="container py-5 text-center">
+              {t('loadingFallback')}
+            </div>
+          }
+        >
+          <RateAuthPortal mode="two-factor-auth" locale={locale} />
+        </Suspense>
+        <FooterTop locale={locale} />
+        <FooterDynamic sections={[]} links={[]} locale={locale} />
+        <BackToTop />
+      </>
+    </ClientMessages>
   );
 }

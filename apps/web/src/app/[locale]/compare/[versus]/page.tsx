@@ -23,6 +23,7 @@ import CompareWorkspace from '@/components/compare/CompareWorkspace';
 import CompareTrayBar from '@/components/compare/CompareTrayBar';
 import VersusInteractiveScoreboard from '@/components/compare/VersusInteractiveScoreboard';
 import VersusMatchupSwitcher from '@/components/compare/VersusMatchupSwitcher';
+import ClientMessages from '@/components/providers/ClientMessages';
 
 export const revalidate = 60;
 
@@ -168,101 +169,103 @@ export default async function VersusComparePage({ params }: VersusPageProps) {
   };
 
   return (
-    <>
-      <NavbarDarkDynamic links={[]} />
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify(itemListSchema).replace(/</g, '\\u003c'),
-        }}
-      />
+    <ClientMessages scope="compare">
+      <>
+        <NavbarDarkDynamic links={[]} />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(itemListSchema).replace(/</g, '\\u003c'),
+          }}
+        />
 
-      {/* DESIGN.md v3.0 1v1 Head-to-Head Hero Scoreboard */}
-      <section
-        className="rate-ink-on-dark"
-        style={{
-          background:
-            'linear-gradient(135deg, #0b0d10 0%, #12161f 55%, #181c26 100%)',
-          color: '#f8fafc',
-          padding: '40px 0 36px',
-          borderBottom: '1px solid rgba(255,255,255,0.08)',
-        }}
-      >
-        <div className="container">
-          <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-            <span
-              className="badge rounded-pill px-3 py-2"
-              style={{
-                background: 'rgba(216, 48, 48, 0.16)',
-                border: '1px solid rgba(216, 48, 48, 0.4)',
-                color: '#ff6b66',
-                fontSize: '0.8125rem',
-                fontWeight: 700,
-              }}
+        {/* DESIGN.md v3.0 1v1 Head-to-Head Hero Scoreboard */}
+        <section
+          className="rate-ink-on-dark"
+          style={{
+            background:
+              'linear-gradient(135deg, #0b0d10 0%, #12161f 55%, #181c26 100%)',
+            color: '#f8fafc',
+            padding: '40px 0 36px',
+            borderBottom: '1px solid rgba(255,255,255,0.08)',
+          }}
+        >
+          <div className="container">
+            <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+              <span
+                className="badge rounded-pill px-3 py-2"
+                style={{
+                  background: 'rgba(216, 48, 48, 0.16)',
+                  border: '1px solid rgba(216, 48, 48, 0.4)',
+                  color: '#ff6b66',
+                  fontSize: '0.8125rem',
+                  fontWeight: 700,
+                }}
+              >
+                {/* 1V1 HEAD-TO-HEAD AUDIT */}
+                {t('versusHeroBadge', { category: catSlug.toUpperCase() })}
+              </span>
+              <Link
+                href={`/leaderboard?cat=${catSlug}`}
+                className="btn btn-sm btn-outline-light rounded-pill px-3"
+              >
+                <BsTrophy aria-hidden="true" className="me-1" />
+                {t('viewCategoryLeaderboard')}
+              </Link>
+            </div>
+
+            <h1
+              className="fw-bold mb-2 text-white"
+              style={{ fontSize: 'clamp(1.5rem, 2.8vw, 2.25rem)' }}
             >
-              {/* 1V1 HEAD-TO-HEAD AUDIT */}
-              {t('versusHeroBadge', { category: catSlug.toUpperCase() })}
-            </span>
-            <Link
-              href={`/leaderboard?cat=${catSlug}`}
-              className="btn btn-sm btn-outline-light rounded-pill px-3"
-            >
-              <BsTrophy aria-hidden="true" className="me-1" />
-              {t('viewCategoryLeaderboard')}
-            </Link>
+              {scoreA.name} <span className="text-danger mx-1">vs</span>{' '}
+              {scoreB.name}
+            </h1>
+
+            <p className="text-white-50 small mb-4">
+              {t('versusAutoVerdict', {
+                winner: overallWinner.name,
+                score: overallWinner.combinedScore5.toFixed(2),
+                expertSuffix:
+                  overallWinner.expertScore10 != null
+                    ? ` (${overallWinner.expertScore10.toFixed(1)}/10 Lab)`
+                    : '',
+              })}
+            </p>
+
+            <VersusInteractiveScoreboard
+              scoreA={scoreA}
+              scoreB={scoreB}
+              locale={locale}
+            />
+
+            <VersusMatchupSwitcher
+              currentSlugA={scoreA.slug}
+              currentSlugB={scoreB.slug}
+              categorySlug={catSlug}
+              catalogCandidates={directory}
+              locale={locale}
+            />
           </div>
+        </section>
 
-          <h1
-            className="fw-bold mb-2 text-white"
-            style={{ fontSize: 'clamp(1.5rem, 2.8vw, 2.25rem)' }}
-          >
-            {scoreA.name} <span className="text-danger mx-1">vs</span>{' '}
-            {scoreB.name}
-          </h1>
+        <section className="bg-light py-5">
+          <div className="container">
+            <CompareWorkspace
+              initialProducts={compared}
+              catalogCandidates={directory}
+              initialCategory={catSlug}
+              hasExplicitSlugs={true}
+              locale={locale}
+            />
+          </div>
+        </section>
 
-          <p className="text-white-50 small mb-4">
-            {t('versusAutoVerdict', {
-              winner: overallWinner.name,
-              score: overallWinner.combinedScore5.toFixed(2),
-              expertSuffix:
-                overallWinner.expertScore10 != null
-                  ? ` (${overallWinner.expertScore10.toFixed(1)}/10 Lab)`
-                  : '',
-            })}
-          </p>
-
-          <VersusInteractiveScoreboard
-            scoreA={scoreA}
-            scoreB={scoreB}
-            locale={locale}
-          />
-
-          <VersusMatchupSwitcher
-            currentSlugA={scoreA.slug}
-            currentSlugB={scoreB.slug}
-            categorySlug={catSlug}
-            catalogCandidates={directory}
-            locale={locale}
-          />
-        </div>
-      </section>
-
-      <section className="bg-light py-5">
-        <div className="container">
-          <CompareWorkspace
-            initialProducts={compared}
-            catalogCandidates={directory}
-            initialCategory={catSlug}
-            hasExplicitSlugs={true}
-            locale={locale}
-          />
-        </div>
-      </section>
-
-      <CompareTrayBar />
-      <FooterTop locale={locale} />
-      <FooterDynamic sections={[]} links={[]} locale={locale} />
-      <BackToTop />
-    </>
+        <CompareTrayBar />
+        <FooterTop locale={locale} />
+        <FooterDynamic sections={[]} links={[]} locale={locale} />
+        <BackToTop />
+      </>
+    </ClientMessages>
   );
 }
