@@ -2,11 +2,11 @@ import type { MetadataRoute } from 'next';
 import { env } from '@/env.mjs';
 import { createLogger, serializeError } from '@/lib/logger';
 import {
+  getCachedMasterProducts,
+  getCachedSitemapRows,
   getMasterProductCategorySlug,
   getMasterProductHref,
-  getMasterProducts,
-  getSitemapRows,
-} from '@/lib/rate-api';
+} from '@/server/rate';
 import {
   buildPopular1v1BattlesForCategory,
   VALID_LEADERBOARD_CATEGORIES,
@@ -128,8 +128,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // Product and merchant URLs come from the whole catalogue; the curated
     // 1v1 battles only need the top-ranked products.
     const [rows, products] = await Promise.all([
-      getSitemapRows(),
-      getMasterProducts({ categorySlug: 'all', limit: 500 }),
+      getCachedSitemapRows(),
+      getCachedMasterProducts({ categorySlug: 'all', limit: 500 }),
     ]);
     const catSlugById = rows.categorySlugById;
 
