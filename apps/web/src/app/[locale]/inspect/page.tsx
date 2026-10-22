@@ -9,6 +9,7 @@ import FooterDynamic from '../components/footer/FooterDynamic';
 import BackToTop from '../components/back-to-top';
 import CompareTrayBar from '@/components/compare/CompareTrayBar';
 import DeepInspectWorkspace from '@/components/inspect/DeepInspectWorkspace';
+import ClientMessages from '@/components/providers/ClientMessages';
 
 // Reads searchParams, so it renders per request. The [locale] layout's
 // generateStaticParams would otherwise make it static, and the searchParams
@@ -54,23 +55,25 @@ export default async function InspectPage({
     : null;
 
   return (
-    <>
-      <NavbarDarkDynamic links={[]} />
-      <Suspense
-        fallback={
-          <div className="container py-5 text-center">{t('loading')}</div>
-        }
-      >
-        <DeepInspectWorkspace
-          initialQuery={initialQuery}
-          initialInspection={initialInspection}
-          locale={locale}
-        />
-      </Suspense>
-      <CompareTrayBar />
-      <FooterTop locale={locale} />
-      <FooterDynamic sections={[]} links={[]} locale={locale} />
-      <BackToTop />
-    </>
+    <ClientMessages scope="inspect">
+      <>
+        <NavbarDarkDynamic links={[]} />
+        <Suspense
+          fallback={
+            <div className="container py-5 text-center">{t('loading')}</div>
+          }
+        >
+          <DeepInspectWorkspace
+            initialQuery={initialQuery}
+            initialInspection={initialInspection}
+            locale={locale}
+          />
+        </Suspense>
+        <CompareTrayBar />
+        <FooterTop locale={locale} />
+        <FooterDynamic sections={[]} links={[]} locale={locale} />
+        <BackToTop />
+      </>
+    </ClientMessages>
   );
 }

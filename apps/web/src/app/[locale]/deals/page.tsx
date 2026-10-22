@@ -12,6 +12,7 @@ import FooterDynamic from '../components/footer/FooterDynamic';
 import BackToTop from '../components/back-to-top';
 import CompareTrayBar from '@/components/compare/CompareTrayBar';
 import DealFinderWorkspace from '@/components/deals/DealFinderWorkspace';
+import ClientMessages from '@/components/providers/ClientMessages';
 
 export const revalidate = 60;
 
@@ -53,41 +54,47 @@ export default async function DealsPage({ params }: PageProps) {
   ]);
 
   return (
-    <main className="bg-light min-vh-100">
-      <NavbarDarkDynamic links={[]} />
-      <section className="py-4">
-        <div className="container">
-          <div className="rate-scoreboard-dark rate-surface-dark rounded-4 mb-4 p-4">
-            <div className="d-flex justify-content-between align-items-center flex-wrap gap-3">
-              <div>
-                <div className="rate-eyebrow mb-2">{t('pageEyebrow')}</div>
-                <h1 className="h3 fw-bold mb-1 text-white">{t('pageTitle')}</h1>
-                <p className="text-white-50 small mb-0">{t('pageSubtitle')}</p>
-              </div>
-              <div className="d-flex flex-wrap gap-2">
-                <Link
-                  href="/leaderboard"
-                  className="btn btn-sm btn-outline-light rounded-pill px-3"
-                >
-                  {t('leaderboardBtn')}
-                </Link>
-                <Link
-                  href="/inspect"
-                  className="btn btn-sm btn-danger rounded-pill fw-semibold px-3"
-                >
-                  {t('inspectBtn')}
-                </Link>
+    <ClientMessages scope="deals">
+      <main className="bg-light min-vh-100">
+        <NavbarDarkDynamic links={[]} />
+        <section className="py-4">
+          <div className="container">
+            <div className="rate-scoreboard-dark rate-surface-dark rounded-4 mb-4 p-4">
+              <div className="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                <div>
+                  <div className="rate-eyebrow mb-2">{t('pageEyebrow')}</div>
+                  <h1 className="h3 fw-bold mb-1 text-white">
+                    {t('pageTitle')}
+                  </h1>
+                  <p className="text-white-50 small mb-0">
+                    {t('pageSubtitle')}
+                  </p>
+                </div>
+                <div className="d-flex flex-wrap gap-2">
+                  <Link
+                    href="/leaderboard"
+                    className="btn btn-sm btn-outline-light rounded-pill px-3"
+                  >
+                    {t('leaderboardBtn')}
+                  </Link>
+                  <Link
+                    href="/inspect"
+                    className="btn btn-sm btn-danger rounded-pill fw-semibold px-3"
+                  >
+                    {t('inspectBtn')}
+                  </Link>
+                </div>
               </div>
             </div>
-          </div>
 
-          <DealFinderWorkspace products={products} dealRadar={dealRadar} />
-        </div>
-      </section>
-      <CompareTrayBar />
-      <FooterTop locale={locale} />
-      <FooterDynamic sections={[]} links={[]} locale={locale} />
-      <BackToTop />
-    </main>
+            <DealFinderWorkspace products={products} dealRadar={dealRadar} />
+          </div>
+        </section>
+        <CompareTrayBar />
+        <FooterTop locale={locale} />
+        <FooterDynamic sections={[]} links={[]} locale={locale} />
+        <BackToTop />
+      </main>
+    </ClientMessages>
   );
 }

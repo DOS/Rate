@@ -15,6 +15,7 @@ import {
   pageMerchantDirectory,
   summarizeMerchantDirectory,
 } from '@/lib/merchant-directory';
+import ClientMessages from '@/components/providers/ClientMessages';
 
 // Cached: the page ships the unfiltered first page, and the explorer applies
 // ?q= / ?platform= / ?official= / ?sort= in the browser through the
@@ -60,106 +61,108 @@ export default async function MerchantsDirectoryPage({
   const summary = summarizeMerchantDirectory(merchants);
 
   return (
-    <>
-      <NavbarDarkDynamic links={[]} />
+    <ClientMessages scope="merchants">
+      <>
+        <NavbarDarkDynamic links={[]} />
 
-      <div
-        className="hero-banner rate-surface-dark rate-ink-on-dark position-relative overflow-hidden"
-        style={{
-          background:
-            'radial-gradient(circle at 18% 22%, rgba(216, 48, 48, 0.16), transparent 45%), radial-gradient(circle at 82% 18%, rgba(45, 186, 105, 0.14), transparent 42%), linear-gradient(180deg, #0f1113 0%, #141821 100%)',
-          paddingTop: '3.5rem',
-          paddingBottom: '3.75rem',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
-        }}
-      >
-        <div className="position-relative z-1 container">
-          <div className="row justify-content-center align-items-center">
-            <div className="col-xl-12 col-lg-12 col-md-12 col-sm-12">
-              <div className="position-relative mt-2 text-start">
-                <span className="rate-eyebrow mb-3">
-                  {t('dirHeroBadge1')} · {t('dirHeroBadge2')}
-                </span>
-                <h1
-                  className="fw-bold mb-2 text-white"
-                  style={{
-                    fontSize: 'clamp(1.75rem, 3.2vw, 2.5rem)',
-                    letterSpacing: '-0.025em',
-                  }}
-                >
-                  {t('dirHeroTitle')}
-                </h1>
-                <p
-                  className="fs-6 mb-0"
-                  style={{ color: '#94a3b8', maxWidth: '760px' }}
-                >
-                  {t('dirHeroSubtitle')}
-                </p>
+        <div
+          className="hero-banner rate-surface-dark rate-ink-on-dark position-relative overflow-hidden"
+          style={{
+            background:
+              'radial-gradient(circle at 18% 22%, rgba(216, 48, 48, 0.16), transparent 45%), radial-gradient(circle at 82% 18%, rgba(45, 186, 105, 0.14), transparent 42%), linear-gradient(180deg, #0f1113 0%, #141821 100%)',
+            paddingTop: '3.5rem',
+            paddingBottom: '3.75rem',
+            borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+          }}
+        >
+          <div className="position-relative z-1 container">
+            <div className="row justify-content-center align-items-center">
+              <div className="col-xl-12 col-lg-12 col-md-12 col-sm-12">
+                <div className="position-relative mt-2 text-start">
+                  <span className="rate-eyebrow mb-3">
+                    {t('dirHeroBadge1')} · {t('dirHeroBadge2')}
+                  </span>
+                  <h1
+                    className="fw-bold mb-2 text-white"
+                    style={{
+                      fontSize: 'clamp(1.75rem, 3.2vw, 2.5rem)',
+                      letterSpacing: '-0.025em',
+                    }}
+                  >
+                    {t('dirHeroTitle')}
+                  </h1>
+                  <p
+                    className="fs-6 mb-0"
+                    style={{ color: '#94a3b8', maxWidth: '760px' }}
+                  >
+                    {t('dirHeroSubtitle')}
+                  </p>
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <section className="py-5">
-        <div className="container">
-          <nav aria-label="breadcrumb" className="mb-4">
-            <ol className="breadcrumb small mb-0">
-              <li className="breadcrumb-item">
-                <Link href="/" className="text-decoration-none">
-                  {t('breadcrumbHome')}
-                </Link>
-              </li>
-              <li className="breadcrumb-item active" aria-current="page">
-                {t('breadcrumbMerchants')}
-              </li>
-            </ol>
-          </nav>
+        <section className="py-5">
+          <div className="container">
+            <nav aria-label="breadcrumb" className="mb-4">
+              <ol className="breadcrumb small mb-0">
+                <li className="breadcrumb-item">
+                  <Link href="/" className="text-decoration-none">
+                    {t('breadcrumbHome')}
+                  </Link>
+                </li>
+                <li className="breadcrumb-item active" aria-current="page">
+                  {t('breadcrumbMerchants')}
+                </li>
+              </ol>
+            </nav>
 
-          {/* Dual Risk Score Explanation Banner */}
-          <div className="card rounded-4 bg-light mb-4 border-0 p-4 shadow-sm">
-            <div className="row g-3 align-items-center">
-              <div className="col-lg-8">
-                <h2 className="h5 fw-bold d-flex align-items-center mb-1 gap-2">
-                  <BsShieldCheck className="text-primary" />
-                  {t('dualEngineTitle')}
-                </h2>
-                <p className="text-muted small mb-0">
-                  {t.rich('dualEngineDesc', {
-                    b: (chunks) => <strong>{chunks}</strong>,
-                  })}
-                </p>
-              </div>
-              <div className="col-lg-4 text-lg-end d-flex justify-content-lg-end flex-wrap gap-2">
-                <Link
-                  href="/inspect"
-                  className="btn btn-danger rounded-pill fw-medium btn-sm px-3"
-                >
-                  <BsSearch aria-hidden="true" className="me-1" />
-                  {t('inspectUrlBtn')}
-                </Link>
-                <Link
-                  href="/smartphones"
-                  className="btn btn-outline-primary rounded-pill fw-medium btn-sm px-3"
-                >
-                  {t('browseProductsBtn')}
-                </Link>
+            {/* Dual Risk Score Explanation Banner */}
+            <div className="card rounded-4 bg-light mb-4 border-0 p-4 shadow-sm">
+              <div className="row g-3 align-items-center">
+                <div className="col-lg-8">
+                  <h2 className="h5 fw-bold d-flex align-items-center mb-1 gap-2">
+                    <BsShieldCheck className="text-primary" />
+                    {t('dualEngineTitle')}
+                  </h2>
+                  <p className="text-muted small mb-0">
+                    {t.rich('dualEngineDesc', {
+                      b: (chunks) => <strong>{chunks}</strong>,
+                    })}
+                  </p>
+                </div>
+                <div className="col-lg-4 text-lg-end d-flex justify-content-lg-end flex-wrap gap-2">
+                  <Link
+                    href="/inspect"
+                    className="btn btn-danger rounded-pill fw-medium btn-sm px-3"
+                  >
+                    <BsSearch aria-hidden="true" className="me-1" />
+                    {t('inspectUrlBtn')}
+                  </Link>
+                  <Link
+                    href="/smartphones"
+                    className="btn btn-outline-primary rounded-pill fw-medium btn-sm px-3"
+                  >
+                    {t('browseProductsBtn')}
+                  </Link>
+                </div>
               </div>
             </div>
+
+            <MerchantDirectoryExplorer
+              initialPage={initialPage}
+              summary={summary}
+              locale={locale}
+            />
           </div>
+        </section>
 
-          <MerchantDirectoryExplorer
-            initialPage={initialPage}
-            summary={summary}
-            locale={locale}
-          />
-        </div>
-      </section>
-
-      <CompareTrayBar />
-      <FooterTop locale={locale} />
-      <FooterDynamic sections={[]} links={[]} locale={locale} />
-      <BackToTop />
-    </>
+        <CompareTrayBar />
+        <FooterTop locale={locale} />
+        <FooterDynamic sections={[]} links={[]} locale={locale} />
+        <BackToTop />
+      </>
+    </ClientMessages>
   );
 }

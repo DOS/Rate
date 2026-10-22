@@ -2013,7 +2013,7 @@ async function runCoreArchitectureSuite() {
   );
   assert.ok(
     pdvSrc127.includes('peerRadarIndex') &&
-      pdvSrc127.includes('getRadarSignal(peerRadarIndex, peer.slug)'),
+      /getRadarSignal\(\s*peerRadarIndex,\s*peer\.slug\s*\)/.test(pdvSrc127),
     'ProductDetailView relatedCompetitors cards must render per-product RadarBadge (#127)'
   );
   console.log(

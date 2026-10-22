@@ -43,6 +43,7 @@ import {
   BsExclamationTriangle,
 } from 'react-icons/bs';
 import type { KeySpecs, ProductSpecifications } from '@repo/shared-data';
+import ClientMessages from '@/components/providers/ClientMessages';
 
 // Reads searchParams, so it renders per request. The [locale] layout's
 // generateStaticParams would otherwise make it static, and the searchParams
@@ -337,686 +338,693 @@ export async function CategoryCatalogContent({
   }
 
   return (
-    <>
-      <NavbarDarkDynamic links={[]} />
+    <ClientMessages scope="catalog">
+      <>
+        <NavbarDarkDynamic links={[]} />
 
-      {/* Hero Banner (DESIGN.md v2.0 Dark Obsidian + DOS Crimson Glow) */}
-      <div
-        className="hero-banner rate-surface-dark rate-ink-on-dark position-relative overflow-hidden"
-        style={{
-          background:
-            'radial-gradient(circle at 18% 22%, rgba(216, 48, 48, 0.16), transparent 45%), radial-gradient(circle at 82% 18%, rgba(99, 102, 241, 0.14), transparent 42%), linear-gradient(180deg, #0f1113 0%, #141821 100%)',
-          paddingTop: '3.5rem',
-          paddingBottom: '4.5rem',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
-        }}
-      >
-        <div className="position-relative z-1 container">
-          <div className="row justify-content-center align-items-center">
-            <div className="col-xl-12 col-lg-12 col-md-12 col-sm-12">
-              <div className="position-relative mt-2 text-start">
-                <span className="rate-eyebrow mb-3">
-                  {schema.directoryName} · {schema.categoryTitle}
-                </span>
-                <h1
-                  className="fw-bold mb-2 text-white"
-                  style={{
-                    fontSize: 'clamp(1.75rem, 3.2vw, 2.5rem)',
-                    letterSpacing: '-0.025em',
-                  }}
-                >
-                  {schema.categoryTitle}
-                </h1>
-                <p
-                  className="fs-6 mb-0"
-                  style={{ color: '#94a3b8', maxWidth: '760px' }}
-                >
-                  {schema.categorySubtitle}
-                </p>
+        {/* Hero Banner (DESIGN.md v2.0 Dark Obsidian + DOS Crimson Glow) */}
+        <div
+          className="hero-banner rate-surface-dark rate-ink-on-dark position-relative overflow-hidden"
+          style={{
+            background:
+              'radial-gradient(circle at 18% 22%, rgba(216, 48, 48, 0.16), transparent 45%), radial-gradient(circle at 82% 18%, rgba(99, 102, 241, 0.14), transparent 42%), linear-gradient(180deg, #0f1113 0%, #141821 100%)',
+            paddingTop: '3.5rem',
+            paddingBottom: '4.5rem',
+            borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+          }}
+        >
+          <div className="position-relative z-1 container">
+            <div className="row justify-content-center align-items-center">
+              <div className="col-xl-12 col-lg-12 col-md-12 col-sm-12">
+                <div className="position-relative mt-2 text-start">
+                  <span className="rate-eyebrow mb-3">
+                    {schema.directoryName} · {schema.categoryTitle}
+                  </span>
+                  <h1
+                    className="fw-bold mb-2 text-white"
+                    style={{
+                      fontSize: 'clamp(1.75rem, 3.2vw, 2.5rem)',
+                      letterSpacing: '-0.025em',
+                    }}
+                  >
+                    {schema.categoryTitle}
+                  </h1>
+                  <p
+                    className="fs-6 mb-0"
+                    style={{ color: '#94a3b8', maxWidth: '760px' }}
+                  >
+                    {schema.categorySubtitle}
+                  </p>
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Top Hero Search Bar matching grid-layout-01 `.heroSearch.style-01` */}
-      <div className="position-relative d-flex flex-column mt-n3 z-2">
-        <div className="container">
-          <div className="row align-items-center justify-content-center">
-            <div className="col-xl-11 col-lg-12 col-md-12 col-12">
-              <form
-                method="GET"
-                action={basePath}
-                className="heroSearch style-01 shadow-sm"
-              >
-                {categorySlug !== defaultCategorySlug && (
-                  <input type="hidden" name="category" value={categorySlug} />
-                )}
-                {sortParam !== 'default' && (
-                  <input type="hidden" name="sort" value={sortParam} />
-                )}
-                {minRating > 0 && (
-                  <input
-                    type="hidden"
-                    name="rating"
-                    value={String(minRating)}
-                  />
-                )}
-                {minPrice > 0 && (
-                  <input
-                    type="hidden"
-                    name="minPrice"
-                    value={String(minPrice)}
-                  />
-                )}
-                {maxPrice > 0 && (
-                  <input
-                    type="hidden"
-                    name="maxPrice"
-                    value={String(maxPrice)}
-                  />
-                )}
-                {ramGb.length > 0 && (
-                  <input type="hidden" name="ram" value={ramGb.join(',')} />
-                )}
-                {storageGb.length > 0 && (
-                  <input
-                    type="hidden"
-                    name="storage"
-                    value={storageGb.join(',')}
-                  />
-                )}
-                {has5g && <input type="hidden" name="has5g" value="1" />}
-                {highRefresh && (
-                  <input type="hidden" name="highRefresh" value="1" />
-                )}
-                {bigBattery && (
-                  <input type="hidden" name="bigBattery" value="1" />
-                )}
-                {fastCharge && (
-                  <input type="hidden" name="fastCharge" value="1" />
-                )}
-                {hasNfc && <input type="hidden" name="hasNfc" value="1" />}
-                {compactScreen && (
-                  <input type="hidden" name="compactScreen" value="1" />
-                )}
-                <div className="row gx-lg-2 gx-md-2 gx-3 gy-sm-2 gy-2 align-items-center">
-                  <div className="col-xl-9 col-lg-8 col-md-12">
-                    <div className="row gx-lg-2 gx-md-2 gx-3 gy-sm-2 gy-2">
-                      <div className="col-xl-7 col-lg-7 col-md-12 col-sm-12">
-                        <div className="form-group mb-0">
-                          <div className="mobSearch d-flex align-items-center justify-content-start">
-                            <div className="flexStart ps-2">
-                              <span className="fw-semibold text-dark text-nowrap">
-                                {t('page.searchLabel')}
-                              </span>
+        {/* Top Hero Search Bar matching grid-layout-01 `.heroSearch.style-01` */}
+        <div className="position-relative d-flex flex-column mt-n3 z-2">
+          <div className="container">
+            <div className="row align-items-center justify-content-center">
+              <div className="col-xl-11 col-lg-12 col-md-12 col-12">
+                <form
+                  method="GET"
+                  action={basePath}
+                  className="heroSearch style-01 shadow-sm"
+                >
+                  {categorySlug !== defaultCategorySlug && (
+                    <input type="hidden" name="category" value={categorySlug} />
+                  )}
+                  {sortParam !== 'default' && (
+                    <input type="hidden" name="sort" value={sortParam} />
+                  )}
+                  {minRating > 0 && (
+                    <input
+                      type="hidden"
+                      name="rating"
+                      value={String(minRating)}
+                    />
+                  )}
+                  {minPrice > 0 && (
+                    <input
+                      type="hidden"
+                      name="minPrice"
+                      value={String(minPrice)}
+                    />
+                  )}
+                  {maxPrice > 0 && (
+                    <input
+                      type="hidden"
+                      name="maxPrice"
+                      value={String(maxPrice)}
+                    />
+                  )}
+                  {ramGb.length > 0 && (
+                    <input type="hidden" name="ram" value={ramGb.join(',')} />
+                  )}
+                  {storageGb.length > 0 && (
+                    <input
+                      type="hidden"
+                      name="storage"
+                      value={storageGb.join(',')}
+                    />
+                  )}
+                  {has5g && <input type="hidden" name="has5g" value="1" />}
+                  {highRefresh && (
+                    <input type="hidden" name="highRefresh" value="1" />
+                  )}
+                  {bigBattery && (
+                    <input type="hidden" name="bigBattery" value="1" />
+                  )}
+                  {fastCharge && (
+                    <input type="hidden" name="fastCharge" value="1" />
+                  )}
+                  {hasNfc && <input type="hidden" name="hasNfc" value="1" />}
+                  {compactScreen && (
+                    <input type="hidden" name="compactScreen" value="1" />
+                  )}
+                  <div className="row gx-lg-2 gx-md-2 gx-3 gy-sm-2 gy-2 align-items-center">
+                    <div className="col-xl-9 col-lg-8 col-md-12">
+                      <div className="row gx-lg-2 gx-md-2 gx-3 gy-sm-2 gy-2">
+                        <div className="col-xl-7 col-lg-7 col-md-12 col-sm-12">
+                          <div className="form-group mb-0">
+                            <div className="mobSearch d-flex align-items-center justify-content-start">
+                              <div className="flexStart ps-2">
+                                <span className="fw-semibold text-dark text-nowrap">
+                                  {t('page.searchLabel')}
+                                </span>
+                              </div>
+                              <input
+                                type="text"
+                                name="q"
+                                defaultValue={q}
+                                className="form-control fs-6 fw-medium border-0"
+                                placeholder={schema.searchPlaceholder}
+                              />
                             </div>
-                            <input
-                              type="text"
-                              name="q"
-                              defaultValue={q}
-                              className="form-control fs-6 fw-medium border-0"
-                              placeholder={schema.searchPlaceholder}
-                            />
                           </div>
                         </div>
-                      </div>
-                      <div className="col-xl-5 col-lg-5 col-md-12 col-sm-12 single-border">
-                        <div className="form-group mb-0">
-                          <div className="mobSearch d-flex align-items-center justify-content-start">
-                            <div className="flexStart ps-2">
-                              <span className="fw-semibold text-dark">
-                                {t('page.brandLabel')}
-                              </span>
+                        <div className="col-xl-5 col-lg-5 col-md-12 col-sm-12 single-border">
+                          <div className="form-group mb-0">
+                            <div className="mobSearch d-flex align-items-center justify-content-start">
+                              <div className="flexStart ps-2">
+                                <span className="fw-semibold text-dark">
+                                  {t('page.brandLabel')}
+                                </span>
+                              </div>
+                              <input
+                                type="text"
+                                name="brands"
+                                defaultValue={activeBrands.join(',')}
+                                className="form-control fs-6 fw-medium border-0"
+                                placeholder="Apple, Samsung, Xiaomi..."
+                              />
                             </div>
-                            <input
-                              type="text"
-                              name="brands"
-                              defaultValue={activeBrands.join(',')}
-                              className="form-control fs-6 fw-medium border-0"
-                              placeholder="Apple, Samsung, Xiaomi..."
-                            />
                           </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                  <div className="col-xl-3 col-lg-4 col-md-12 col-sm-12">
-                    <div className="form-group d-flex mb-0 gap-2">
-                      <button
-                        type="submit"
-                        className="btn btn-primary full-width fw-medium"
-                      >
-                        <BsSearch className="me-2" />
-                        {t('page.searchBtn')}
-                      </button>
+                    <div className="col-xl-3 col-lg-4 col-md-12 col-sm-12">
+                      <div className="form-group d-flex mb-0 gap-2">
+                        <button
+                          type="submit"
+                          className="btn btn-primary full-width fw-medium"
+                        >
+                          <BsSearch className="me-2" />
+                          {t('page.searchBtn')}
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </form>
+                </form>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Main Content Section matching grid-layout-01 */}
-      <section>
-        <div className="container">
-          <div className="row g-4">
-            {/* Left Sidebar: Dynamic 10-Field-Groups Filter */}
-            <div className="col-xl-4 col-lg-4 col-md-12 col-sm-12">
-              <Suspense
-                fallback={
-                  <div className="bg-light rounded-4 text-muted small p-4">
-                    {t('page.loadingFilters')}
-                  </div>
-                }
-              >
-                <ListSidebarOne
-                  categorySlug={categorySlug}
-                  categories={facets.categories}
-                  brandFacets={facets.brands}
-                />
-              </Suspense>
-            </div>
+        {/* Main Content Section matching grid-layout-01 */}
+        <section>
+          <div className="container">
+            <div className="row g-4">
+              {/* Left Sidebar: Dynamic 10-Field-Groups Filter */}
+              <div className="col-xl-4 col-lg-4 col-md-12 col-sm-12">
+                <Suspense
+                  fallback={
+                    <div className="bg-light rounded-4 text-muted small p-4">
+                      {t('page.loadingFilters')}
+                    </div>
+                  }
+                >
+                  <ListSidebarOne
+                    categorySlug={categorySlug}
+                    categories={facets.categories}
+                    brandFacets={facets.brands}
+                  />
+                </Suspense>
+              </div>
 
-            {/* Right Listing Grid */}
-            <div className="col-xl-8 col-lg-8 col-md-12 col-sm-12">
-              {/* Active Filter Chips matching `.alert.tag-alert` */}
-              {activeChips.length > 0 && (
-                <div className="row align-items-start mb-4">
-                  <div className="col-xl-12 col-lg-12 col-md-12">
-                    <div className="d-flex align-items-center justify-content-start flex-wrap gap-2">
-                      {activeChips.map((chip) => (
-                        <div
-                          key={chip.id}
-                          className="alert tag-alert alert-light alert-dismissible fade show mb-0"
-                          role="alert"
-                        >
-                          <span>{chip.label}</span>
+              {/* Right Listing Grid */}
+              <div className="col-xl-8 col-lg-8 col-md-12 col-sm-12">
+                {/* Active Filter Chips matching `.alert.tag-alert` */}
+                {activeChips.length > 0 && (
+                  <div className="row align-items-start mb-4">
+                    <div className="col-xl-12 col-lg-12 col-md-12">
+                      <div className="d-flex align-items-center justify-content-start flex-wrap gap-2">
+                        {activeChips.map((chip) => (
+                          <div
+                            key={chip.id}
+                            className="alert tag-alert alert-light alert-dismissible fade show mb-0"
+                            role="alert"
+                          >
+                            <span>{chip.label}</span>
+                            <Link
+                              href={chip.removeHref}
+                              className="btn-close"
+                              aria-label={`Remove ${chip.label}`}
+                            />
+                          </div>
+                        ))}
+
+                        <div className="clearList ms-2">
                           <Link
-                            href={chip.removeHref}
-                            className="btn-close"
-                            aria-label={`Remove ${chip.label}`}
-                          />
+                            href={
+                              categorySlug !== defaultCategorySlug
+                                ? `${basePath}?category=${categorySlug}`
+                                : basePath
+                            }
+                            className="fw-medium text-primary text-md"
+                          >
+                            {t('page.clearAllBtn')}
+                          </Link>
                         </div>
-                      ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
 
-                      <div className="clearList ms-2">
+                {/* Results Header + Compare Button + Sort Dropdown */}
+                <div className="row align-items-center justify-content-between g-2 mb-4">
+                  <div className="col-xl-7 col-lg-7 col-md-7 col-sm-12">
+                    <div className="d-flex align-items-center flex-wrap gap-2 gap-md-3">
+                      <h6 className="m-0">
+                        {t('page.foundPrefix')}{' '}
+                        <span className="text-primary fw-bold">
+                          {products.length}
+                        </span>{' '}
+                        {t('page.foundSuffix', {
+                          total: facets.totalUnfiltered,
+                        })}
+                      </h6>
+                      {products.length >= 2 && (
                         <Link
-                          href={
-                            categorySlug !== defaultCategorySlug
-                              ? `${basePath}?category=${categorySlug}`
-                              : basePath
-                          }
-                          className="fw-medium text-primary text-md"
+                          href={`/compare?cat=${categorySlug}&slugs=${products
+                            .map((p) => p.slug)
+                            .slice(0, 3)
+                            .join(',')}`}
+                          className="rate-results-link"
                         >
-                          {t('page.clearAllBtn')}
+                          <BsLightningCharge aria-hidden="true" />
+                          {products.length >= 3
+                            ? t('page.quickCompare3')
+                            : t('page.quickCompare2')}
+                        </Link>
+                      )}
+                      {products.length >= 2 && products[0] && products[1] && (
+                        <Link
+                          href={`/compare/${products[0].slug}-vs-${products[1].slug}`}
+                          className="rate-results-link"
+                        >
+                          <BsArrowLeftRight aria-hidden="true" />
+                          {t('page.versus1v1Badge', {
+                            brandA: products[0].brand,
+                            brandB: products[1].brand,
+                          })}
+                        </Link>
+                      )}
+                      <Link
+                        href={`/leaderboard?cat=${categorySlug}`}
+                        className="rate-results-link"
+                      >
+                        <BsTrophy aria-hidden="true" />
+                        {t('page.leaderboardBadge')}
+                      </Link>
+                    </div>
+                  </div>
+
+                  <div className="col-xl-5 col-lg-5 col-md-5 col-sm-12">
+                    <div className="text-md-end">
+                      <div className="dropdown d-inline-flex p-0">
+                        <a
+                          href="#shortfilter"
+                          className="dropdown-toggle toogleDrops px-3 py-2"
+                          id="shortfilter"
+                          data-bs-toggle="dropdown"
+                          aria-expanded="false"
+                        >
+                          {t('page.sortByPrefix', {
+                            label: currentSortOption.label,
+                          })}
+                        </a>
+                        <div className="dropdown-menu dropdown-menu-end border shadow-sm">
+                          <ul className="card rounded-0 list-unstyled mb-0 p-0">
+                            {SORT_OPTIONS.map((opt) => (
+                              <li key={opt.value}>
+                                <Link
+                                  href={buildFilterHref(basePath, rawSearch, {
+                                    sort:
+                                      opt.value === 'default'
+                                        ? null
+                                        : opt.value,
+                                  })}
+                                  className={`dropdown-item ${
+                                    currentSortOption.value === opt.value
+                                      ? 'active'
+                                      : ''
+                                  }`}
+                                >
+                                  {t(`sortOptions.${opt.value}`)}
+                                </Link>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <CategoryCatalogToolbar
+                  categorySlug={categorySlug}
+                  categoryTitle={
+                    facets.currentCategory?.name || schema.categoryTitle
+                  }
+                  products={products}
+                  dealRadar={categoryDealRadar}
+                />
+
+                {categoryDealRadar &&
+                  (categoryDealRadar.genuineDeals.length > 0 ||
+                    categoryDealRadar.fakeSaleTraps.length > 0) && (
+                    <div
+                      className="rate-card rate-home-radar mb-4"
+                      data-testid="category-deal-radar"
+                    >
+                      <div className="rate-radar-spread-head">
+                        <div>
+                          <span className="rate-eyebrow mb-2">
+                            {t('page.radarBannerBadge', {
+                              title: schema.categoryTitle,
+                            })}
+                          </span>
+                          <div className="rate-radar-item-meta">
+                            {t('page.radarAnalyzedSub', {
+                              count: categoryDealRadar.totalOffersAnalyzed,
+                            })}
+                          </div>
+                        </div>
+                        <Link href="/deals">
+                          {t('page.viewAllRadarBtn')}
+                          <BsArrowRight aria-hidden="true" />
                         </Link>
                       </div>
-                    </div>
-                  </div>
-                </div>
-              )}
 
-              {/* Results Header + Compare Button + Sort Dropdown */}
-              <div className="row align-items-center justify-content-between g-2 mb-4">
-                <div className="col-xl-7 col-lg-7 col-md-7 col-sm-12">
-                  <div className="d-flex align-items-center flex-wrap gap-2 gap-md-3">
-                    <h6 className="m-0">
-                      {t('page.foundPrefix')}{' '}
-                      <span className="text-primary fw-bold">
-                        {products.length}
-                      </span>{' '}
-                      {t('page.foundSuffix', { total: facets.totalUnfiltered })}
-                    </h6>
-                    {products.length >= 2 && (
-                      <Link
-                        href={`/compare?cat=${categorySlug}&slugs=${products
-                          .map((p) => p.slug)
-                          .slice(0, 3)
-                          .join(',')}`}
-                        className="rate-results-link"
-                      >
-                        <BsLightningCharge aria-hidden="true" />
-                        {products.length >= 3
-                          ? t('page.quickCompare3')
-                          : t('page.quickCompare2')}
-                      </Link>
-                    )}
-                    {products.length >= 2 && products[0] && products[1] && (
-                      <Link
-                        href={`/compare/${products[0].slug}-vs-${products[1].slug}`}
-                        className="rate-results-link"
-                      >
-                        <BsArrowLeftRight aria-hidden="true" />
-                        {t('page.versus1v1Badge', {
-                          brandA: products[0].brand,
-                          brandB: products[1].brand,
-                        })}
-                      </Link>
-                    )}
-                    <Link
-                      href={`/leaderboard?cat=${categorySlug}`}
-                      className="rate-results-link"
-                    >
-                      <BsTrophy aria-hidden="true" />
-                      {t('page.leaderboardBadge')}
-                    </Link>
-                  </div>
-                </div>
-
-                <div className="col-xl-5 col-lg-5 col-md-5 col-sm-12">
-                  <div className="text-md-end">
-                    <div className="dropdown d-inline-flex p-0">
-                      <a
-                        href="#shortfilter"
-                        className="dropdown-toggle toogleDrops px-3 py-2"
-                        id="shortfilter"
-                        data-bs-toggle="dropdown"
-                        aria-expanded="false"
-                      >
-                        {t('page.sortByPrefix', {
-                          label: currentSortOption.label,
-                        })}
-                      </a>
-                      <div className="dropdown-menu dropdown-menu-end border shadow-sm">
-                        <ul className="card rounded-0 list-unstyled mb-0 p-0">
-                          {SORT_OPTIONS.map((opt) => (
-                            <li key={opt.value}>
-                              <Link
-                                href={buildFilterHref(basePath, rawSearch, {
-                                  sort:
-                                    opt.value === 'default' ? null : opt.value,
-                                })}
-                                className={`dropdown-item ${
-                                  currentSortOption.value === opt.value
-                                    ? 'active'
-                                    : ''
-                                }`}
-                              >
-                                {t(`sortOptions.${opt.value}`)}
-                              </Link>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <CategoryCatalogToolbar
-                categorySlug={categorySlug}
-                categoryTitle={
-                  facets.currentCategory?.name || schema.categoryTitle
-                }
-                products={products}
-                dealRadar={categoryDealRadar}
-              />
-
-              {categoryDealRadar &&
-                (categoryDealRadar.genuineDeals.length > 0 ||
-                  categoryDealRadar.fakeSaleTraps.length > 0) && (
-                  <div
-                    className="rate-card rate-home-radar mb-4"
-                    data-testid="category-deal-radar"
-                  >
-                    <div className="rate-radar-spread-head">
-                      <div>
-                        <span className="rate-eyebrow mb-2">
-                          {t('page.radarBannerBadge', {
-                            title: schema.categoryTitle,
-                          })}
-                        </span>
-                        <div className="rate-radar-item-meta">
-                          {t('page.radarAnalyzedSub', {
-                            count: categoryDealRadar.totalOffersAnalyzed,
-                          })}
-                        </div>
-                      </div>
-                      <Link href="/deals">
-                        {t('page.viewAllRadarBtn')}
-                        <BsArrowRight aria-hidden="true" />
-                      </Link>
-                    </div>
-
-                    {categoryDealRadar.genuineDeals.length > 0 && (
-                      <h3 className="rate-radar-list-title is-good mt-3">
-                        <BsGraphDownArrow aria-hidden="true" />
-                        {t('page.radarDealsTitle')}
-                      </h3>
-                    )}
-                    <ul className="rate-radar-list">
-                      {categoryDealRadar.genuineDeals.slice(0, 2).map((g) => (
-                        <li key={g.id}>
-                          <div className="rate-radar-item-main">
-                            <Link
-                              href={g.productHref}
-                              className="text-truncate"
-                            >
-                              {g.productName}
-                            </Link>
-                            <span className="rate-radar-item-meta text-truncate">
-                              <span className="rate-radar-platform">
-                                {g.platform}
-                              </span>
-                              <ContentText
-                                text={g.merchantName}
-                                locale={locale}
-                              />
-                            </span>
-                          </div>
-                          <div className="rate-radar-item-side">
-                            <span className="rate-radar-price">
-                              {g.priceCurrent.toLocaleString('vi-VN')} ₫
-                            </span>
-                            <span className="rate-radar-tag is-good">
-                              {t('page.vsMedianBadge', {
-                                pct: g.savingsVsMedianPct,
-                              })}
-                            </span>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                    {categoryDealRadar.fakeSaleTraps.length > 0 && (
-                      <h3 className="rate-radar-list-title is-bad mt-3">
-                        <BsExclamationTriangle aria-hidden="true" />
-                        {t('page.radarTrapsTitle')}
-                      </h3>
-                    )}
-                    <ul className="rate-radar-list">
-                      {categoryDealRadar.fakeSaleTraps
-                        .slice(0, 2)
-                        .map((trap) => (
-                          <li key={trap.id}>
+                      {categoryDealRadar.genuineDeals.length > 0 && (
+                        <h3 className="rate-radar-list-title is-good mt-3">
+                          <BsGraphDownArrow aria-hidden="true" />
+                          {t('page.radarDealsTitle')}
+                        </h3>
+                      )}
+                      <ul className="rate-radar-list">
+                        {categoryDealRadar.genuineDeals.slice(0, 2).map((g) => (
+                          <li key={g.id}>
                             <div className="rate-radar-item-main">
                               <Link
-                                href={trap.productHref}
+                                href={g.productHref}
                                 className="text-truncate"
                               >
-                                {trap.productName}
+                                {g.productName}
                               </Link>
                               <span className="rate-radar-item-meta text-truncate">
                                 <span className="rate-radar-platform">
-                                  {trap.platform}
+                                  {g.platform}
                                 </span>
                                 <ContentText
-                                  text={trap.merchantName}
+                                  text={g.merchantName}
                                   locale={locale}
                                 />
                               </span>
                             </div>
                             <div className="rate-radar-item-side">
                               <span className="rate-radar-price">
-                                {trap.priceCurrent.toLocaleString('vi-VN')} ₫
+                                {g.priceCurrent.toLocaleString('vi-VN')} ₫
                               </span>
-                              <span className="rate-radar-tag is-bad">
-                                {t('page.fakeMarkupBadge', {
-                                  pct: trap.fakeMarkupPct,
+                              <span className="rate-radar-tag is-good">
+                                {t('page.vsMedianBadge', {
+                                  pct: g.savingsVsMedianPct,
                                 })}
                               </span>
                             </div>
                           </li>
                         ))}
-                    </ul>
+                      </ul>
+                      {categoryDealRadar.fakeSaleTraps.length > 0 && (
+                        <h3 className="rate-radar-list-title is-bad mt-3">
+                          <BsExclamationTriangle aria-hidden="true" />
+                          {t('page.radarTrapsTitle')}
+                        </h3>
+                      )}
+                      <ul className="rate-radar-list">
+                        {categoryDealRadar.fakeSaleTraps
+                          .slice(0, 2)
+                          .map((trap) => (
+                            <li key={trap.id}>
+                              <div className="rate-radar-item-main">
+                                <Link
+                                  href={trap.productHref}
+                                  className="text-truncate"
+                                >
+                                  {trap.productName}
+                                </Link>
+                                <span className="rate-radar-item-meta text-truncate">
+                                  <span className="rate-radar-platform">
+                                    {trap.platform}
+                                  </span>
+                                  <ContentText
+                                    text={trap.merchantName}
+                                    locale={locale}
+                                  />
+                                </span>
+                              </div>
+                              <div className="rate-radar-item-side">
+                                <span className="rate-radar-price">
+                                  {trap.priceCurrent.toLocaleString('vi-VN')} ₫
+                                </span>
+                                <span className="rate-radar-tag is-bad">
+                                  {t('page.fakeMarkupBadge', {
+                                    pct: trap.fakeMarkupPct,
+                                  })}
+                                </span>
+                              </div>
+                            </li>
+                          ))}
+                      </ul>
 
-                    {Array.isArray(categoryDealRadar.priceSpreadLeaders) &&
-                      categoryDealRadar.priceSpreadLeaders.length > 0 && (
-                        <div
-                          className="rate-radar-spread"
-                          data-testid="category-price-spread-leaders"
-                        >
-                          <div className="rate-radar-spread-head">
-                            <h3 className="rate-radar-list-title">
-                              <BsArrowLeftRight aria-hidden="true" />
-                              {t('page.spreadHeader', {
-                                title: schema.categoryTitle,
-                              })}
-                            </h3>
-                            <span className="rate-radar-item-meta mb-3">
-                              {t('page.spreadSub')}
-                            </span>
-                          </div>
-                          <div className="row g-2">
-                            {categoryDealRadar.priceSpreadLeaders
-                              .slice(0, 2)
-                              .map((sp) => (
-                                <div key={sp.productSlug} className="col-12">
-                                  <div className="rate-radar-spread-item">
-                                    <div className="rate-radar-item-main">
-                                      <Link
-                                        href={sp.productHref}
-                                        className="text-truncate"
-                                      >
-                                        {sp.productName}
-                                      </Link>
-                                      <span className="rate-radar-item-meta">
-                                        <span className="rate-radar-platform">
-                                          {sp.cheapestPlatform}
+                      {Array.isArray(categoryDealRadar.priceSpreadLeaders) &&
+                        categoryDealRadar.priceSpreadLeaders.length > 0 && (
+                          <div
+                            className="rate-radar-spread"
+                            data-testid="category-price-spread-leaders"
+                          >
+                            <div className="rate-radar-spread-head">
+                              <h3 className="rate-radar-list-title">
+                                <BsArrowLeftRight aria-hidden="true" />
+                                {t('page.spreadHeader', {
+                                  title: schema.categoryTitle,
+                                })}
+                              </h3>
+                              <span className="rate-radar-item-meta mb-3">
+                                {t('page.spreadSub')}
+                              </span>
+                            </div>
+                            <div className="row g-2">
+                              {categoryDealRadar.priceSpreadLeaders
+                                .slice(0, 2)
+                                .map((sp) => (
+                                  <div key={sp.productSlug} className="col-12">
+                                    <div className="rate-radar-spread-item">
+                                      <div className="rate-radar-item-main">
+                                        <Link
+                                          href={sp.productHref}
+                                          className="text-truncate"
+                                        >
+                                          {sp.productName}
+                                        </Link>
+                                        <span className="rate-radar-item-meta">
+                                          <span className="rate-radar-platform">
+                                            {sp.cheapestPlatform}
+                                          </span>
+                                          vs{' '}
+                                          <span className="rate-radar-platform">
+                                            {sp.priciestPlatform}
+                                          </span>
                                         </span>
-                                        vs{' '}
-                                        <span className="rate-radar-platform">
-                                          {sp.priciestPlatform}
+                                      </div>
+                                      <div className="rate-radar-item-side">
+                                        <span className="rate-radar-tag is-warn">
+                                          {t('page.spreadDiffBadge', {
+                                            pct: sp.spreadPct,
+                                            amount:
+                                              sp.spreadVnd.toLocaleString(
+                                                'vi-VN'
+                                              ),
+                                          })}
                                         </span>
-                                      </span>
-                                    </div>
-                                    <div className="rate-radar-item-side">
-                                      <span className="rate-radar-tag is-warn">
-                                        {t('page.spreadDiffBadge', {
-                                          pct: sp.spreadPct,
-                                          amount:
-                                            sp.spreadVnd.toLocaleString(
-                                              'vi-VN'
-                                            ),
-                                        })}
-                                      </span>
+                                      </div>
                                     </div>
                                   </div>
-                                </div>
-                              ))}
+                                ))}
+                            </div>
                           </div>
-                        </div>
+                        )}
+                    </div>
+                  )}
+
+                {/* Product Cards Grid (DESIGN.md v3.0 Rating & Review-First .rate-card) */}
+                {products.length === 0 ? (
+                  <div className="card rounded-4 bg-light border-0 p-5 text-center shadow-sm">
+                    <h5 className="fw-bold mb-2">
+                      {facets.totalUnfiltered === 0
+                        ? t('page.emptySyncingTitle', {
+                            title: schema.categoryTitle,
+                          })
+                        : t('page.emptyMatchingTitle')}
+                    </h5>
+                    <p className="text-muted mb-3">
+                      {facets.totalUnfiltered === 0
+                        ? t('page.emptySyncingDesc', {
+                            title: schema.categoryTitle,
+                            brands: schema.defaultBrands.join(', '),
+                          })
+                        : t('page.emptyMatchingDesc')}
+                    </p>
+                    <div className="d-flex justify-content-center flex-wrap gap-2">
+                      {activeChips.length > 0 && (
+                        <Link
+                          href={basePath}
+                          className="btn btn-primary rounded-pill fw-medium px-4"
+                        >
+                          {t('page.resetFiltersBtn')}
+                        </Link>
                       )}
+                      {categorySlug !== 'smartphones' && (
+                        <Link
+                          href="/smartphones"
+                          className="btn btn-primary rounded-pill fw-medium px-4"
+                        >
+                          {t('page.browseSmartphonesBtn')}
+                        </Link>
+                      )}
+                      <Link
+                        href="/merchants"
+                        className="btn btn-outline-dark rounded-pill fw-medium px-4"
+                      >
+                        {t('page.merchantProfilesBtn')}
+                      </Link>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="row align-items-stretch justify-content-start g-xl-4 g-3">
+                    {products.map((item) => {
+                      const keySpecs = (item.key_specs || {}) as KeySpecs;
+                      const specs = (item.specifications ||
+                        {}) as ProductSpecifications;
+                      const thumb =
+                        item.thumbnail ||
+                        (item.images && item.images.length > 0
+                          ? item.images[0]
+                          : null);
+
+                      const effectiveRating =
+                        item.user_rating_weighted &&
+                        Number(item.user_rating_weighted) > 0
+                          ? Number(item.user_rating_weighted)
+                          : item.average_rating &&
+                              Number(item.average_rating) > 0
+                            ? Number(item.average_rating)
+                            : null;
+                      const expertScore =
+                        item.expert_rating != null &&
+                        Number(item.expert_rating) > 0
+                          ? Number(item.expert_rating)
+                          : null;
+
+                      const refreshHz = specs.display?.refresh_rate_hz;
+                      const fastChargeW = specs.battery?.fast_charging_w;
+                      const memoryLabel = [
+                        item.ram_gb ? `${item.ram_gb}GB` : '',
+                        item.storage_gb
+                          ? formatStorageLabel(Number(item.storage_gb))
+                          : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' / ');
+                      const tags = [
+                        memoryLabel,
+                        item.has_5g ? '5G' : '',
+                        refreshHz && refreshHz >= 120 ? `${refreshHz}Hz` : '',
+                        specs.connectivity?.nfc ? 'NFC' : '',
+                      ].filter(Boolean);
+
+                      const cardSpecs: ProductCardSpec[] = [];
+                      const chip = keySpecs.chip || specs.hardware?.chipset;
+                      if (chip) {
+                        cardSpecs.push({
+                          key: 'chip',
+                          icon: <BsCpu />,
+                          label: String(chip),
+                        });
+                      }
+                      const screen =
+                        keySpecs.screen ||
+                        (item.screen_size_inch
+                          ? `${item.screen_size_inch}"`
+                          : '');
+                      if (screen) {
+                        cardSpecs.push({
+                          key: 'screen',
+                          icon: <BsPhone />,
+                          label: String(screen),
+                        });
+                      }
+                      if (item.battery_mah) {
+                        cardSpecs.push({
+                          key: 'battery',
+                          icon: <BsBatteryHalf />,
+                          label: `${item.battery_mah} mAh${
+                            fastChargeW ? ` · ${fastChargeW}W` : ''
+                          }`,
+                        });
+                      }
+
+                      return (
+                        <div
+                          className="col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12"
+                          key={item.id}
+                        >
+                          <ProductCard
+                            slug={item.slug}
+                            href={`${basePath}/${item.slug}`}
+                            categoryPath={basePath}
+                            name={item.name}
+                            brand={item.brand}
+                            thumbnail={thumb ?? null}
+                            tags={tags}
+                            specs={cardSpecs}
+                            userScore={effectiveRating}
+                            reviewCount={Number(
+                              item.authentic_review_count ||
+                                item.total_reviews ||
+                                0
+                            )}
+                            expertScore={expertScore}
+                            radarSignal={getRadarSignal(radarIndex, item.slug)}
+                            minPrice={Number(item.min_price || 0)}
+                            maxPrice={Number(item.max_price || 0)}
+                            merchantCount={item.merchant_count || 0}
+                            verified
+                          />
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
-
-              {/* Product Cards Grid (DESIGN.md v3.0 Rating & Review-First .rate-card) */}
-              {products.length === 0 ? (
-                <div className="card rounded-4 bg-light border-0 p-5 text-center shadow-sm">
-                  <h5 className="fw-bold mb-2">
-                    {facets.totalUnfiltered === 0
-                      ? t('page.emptySyncingTitle', {
-                          title: schema.categoryTitle,
-                        })
-                      : t('page.emptyMatchingTitle')}
-                  </h5>
-                  <p className="text-muted mb-3">
-                    {facets.totalUnfiltered === 0
-                      ? t('page.emptySyncingDesc', {
-                          title: schema.categoryTitle,
-                          brands: schema.defaultBrands.join(', '),
-                        })
-                      : t('page.emptyMatchingDesc')}
-                  </p>
-                  <div className="d-flex justify-content-center flex-wrap gap-2">
-                    {activeChips.length > 0 && (
+                {(page > 1 || hasNextPage) && (
+                  <nav
+                    className="d-flex justify-content-center align-items-center gap-3 mt-4"
+                    aria-label={t('page.paginationLabel')}
+                  >
+                    {page > 1 &&
+                      (products.length === 0 ? (
+                        // Past the last page: go back to the start.
+                        <Link
+                          href={pageHref(1)}
+                          className="btn btn-outline-secondary rounded-pill px-4"
+                        >
+                          {t('page.firstPage')}
+                        </Link>
+                      ) : (
+                        <Link
+                          href={pageHref(page - 1)}
+                          className="btn btn-outline-secondary rounded-pill px-4"
+                          rel="prev"
+                        >
+                          {t('page.prevPage')}
+                        </Link>
+                      ))}
+                    <span className="text-muted small">
+                      {t('page.pageNumber', { page })}
+                    </span>
+                    {hasNextPage && (
                       <Link
-                        href={basePath}
-                        className="btn btn-primary rounded-pill fw-medium px-4"
+                        href={pageHref(page + 1)}
+                        className="btn btn-outline-secondary rounded-pill px-4"
+                        rel="next"
                       >
-                        {t('page.resetFiltersBtn')}
+                        {t('page.nextPage')}
                       </Link>
                     )}
-                    {categorySlug !== 'smartphones' && (
-                      <Link
-                        href="/smartphones"
-                        className="btn btn-primary rounded-pill fw-medium px-4"
-                      >
-                        {t('page.browseSmartphonesBtn')}
-                      </Link>
-                    )}
-                    <Link
-                      href="/merchants"
-                      className="btn btn-outline-dark rounded-pill fw-medium px-4"
-                    >
-                      {t('page.merchantProfilesBtn')}
-                    </Link>
-                  </div>
-                </div>
-              ) : (
-                <div className="row align-items-stretch justify-content-start g-xl-4 g-3">
-                  {products.map((item) => {
-                    const keySpecs = (item.key_specs || {}) as KeySpecs;
-                    const specs = (item.specifications ||
-                      {}) as ProductSpecifications;
-                    const thumb =
-                      item.thumbnail ||
-                      (item.images && item.images.length > 0
-                        ? item.images[0]
-                        : null);
-
-                    const effectiveRating =
-                      item.user_rating_weighted &&
-                      Number(item.user_rating_weighted) > 0
-                        ? Number(item.user_rating_weighted)
-                        : item.average_rating && Number(item.average_rating) > 0
-                          ? Number(item.average_rating)
-                          : null;
-                    const expertScore =
-                      item.expert_rating != null &&
-                      Number(item.expert_rating) > 0
-                        ? Number(item.expert_rating)
-                        : null;
-
-                    const refreshHz = specs.display?.refresh_rate_hz;
-                    const fastChargeW = specs.battery?.fast_charging_w;
-                    const memoryLabel = [
-                      item.ram_gb ? `${item.ram_gb}GB` : '',
-                      item.storage_gb
-                        ? formatStorageLabel(Number(item.storage_gb))
-                        : '',
-                    ]
-                      .filter(Boolean)
-                      .join(' / ');
-                    const tags = [
-                      memoryLabel,
-                      item.has_5g ? '5G' : '',
-                      refreshHz && refreshHz >= 120 ? `${refreshHz}Hz` : '',
-                      specs.connectivity?.nfc ? 'NFC' : '',
-                    ].filter(Boolean);
-
-                    const cardSpecs: ProductCardSpec[] = [];
-                    const chip = keySpecs.chip || specs.hardware?.chipset;
-                    if (chip) {
-                      cardSpecs.push({
-                        key: 'chip',
-                        icon: <BsCpu />,
-                        label: String(chip),
-                      });
-                    }
-                    const screen =
-                      keySpecs.screen ||
-                      (item.screen_size_inch
-                        ? `${item.screen_size_inch}"`
-                        : '');
-                    if (screen) {
-                      cardSpecs.push({
-                        key: 'screen',
-                        icon: <BsPhone />,
-                        label: String(screen),
-                      });
-                    }
-                    if (item.battery_mah) {
-                      cardSpecs.push({
-                        key: 'battery',
-                        icon: <BsBatteryHalf />,
-                        label: `${item.battery_mah} mAh${
-                          fastChargeW ? ` · ${fastChargeW}W` : ''
-                        }`,
-                      });
-                    }
-
-                    return (
-                      <div
-                        className="col-xl-6 col-lg-6 col-md-6 col-sm-12 col-12"
-                        key={item.id}
-                      >
-                        <ProductCard
-                          slug={item.slug}
-                          href={`${basePath}/${item.slug}`}
-                          categoryPath={basePath}
-                          name={item.name}
-                          brand={item.brand}
-                          thumbnail={thumb ?? null}
-                          tags={tags}
-                          specs={cardSpecs}
-                          userScore={effectiveRating}
-                          reviewCount={Number(
-                            item.authentic_review_count ||
-                              item.total_reviews ||
-                              0
-                          )}
-                          expertScore={expertScore}
-                          radarSignal={getRadarSignal(radarIndex, item.slug)}
-                          minPrice={Number(item.min_price || 0)}
-                          maxPrice={Number(item.max_price || 0)}
-                          merchantCount={item.merchant_count || 0}
-                          verified
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-              {(page > 1 || hasNextPage) && (
-                <nav
-                  className="d-flex justify-content-center align-items-center gap-3 mt-4"
-                  aria-label={t('page.paginationLabel')}
-                >
-                  {page > 1 &&
-                    (products.length === 0 ? (
-                      // Past the last page: go back to the start.
-                      <Link
-                        href={pageHref(1)}
-                        className="btn btn-outline-secondary rounded-pill px-4"
-                      >
-                        {t('page.firstPage')}
-                      </Link>
-                    ) : (
-                      <Link
-                        href={pageHref(page - 1)}
-                        className="btn btn-outline-secondary rounded-pill px-4"
-                        rel="prev"
-                      >
-                        {t('page.prevPage')}
-                      </Link>
-                    ))}
-                  <span className="text-muted small">
-                    {t('page.pageNumber', { page })}
-                  </span>
-                  {hasNextPage && (
-                    <Link
-                      href={pageHref(page + 1)}
-                      className="btn btn-outline-secondary rounded-pill px-4"
-                      rel="next"
-                    >
-                      {t('page.nextPage')}
-                    </Link>
-                  )}
-                </nav>
-              )}
+                  </nav>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      <CompareTrayBar />
-      <FooterTop locale={locale} />
-      <FooterDynamic sections={[]} links={[]} locale={locale} />
-      <BackToTop />
-    </>
+        <CompareTrayBar />
+        <FooterTop locale={locale} />
+        <FooterDynamic sections={[]} links={[]} locale={locale} />
+        <BackToTop />
+      </>
+    </ClientMessages>
   );
 }
 
