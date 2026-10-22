@@ -1,0 +1,189 @@
+import assert from 'node:assert/strict';
+import { AiReviewAnalyzer } from '../ai-review-analyzer.js';
+import {
+  mapStoredReview,
+  runReviewRiskBackfill,
+  scoreMerchants,
+  type MerchantRow,
+  type ProductRow,
+  type ReviewRow,
+} from '../jobs/backfill-review-risk.js';
+
+const review = (
+  id: string,
+  product_id: string,
+  flags: ReviewRow['review_flags'],
+  rating_star = 5,
+  comment = 'Máy chạy mượt, pin tốt'
+): ReviewRow => ({ id, product_id, rating_star, comment, review_flags: flags });
+
+async function run() {
+  console.log('🧪 Review risk backfill suite (#691)');
+
+  // Mapping mirrors the web: unanalyzed is skipped, a missing flag is a
+  // genuine review, a 'fake' verdict is seeding unless sabotage or bombing.
+  assert.equal(mapStoredReview(review('r', 'p', { verdict: 'unanalyzed' })), null);
+  const noFlag = mapStoredReview(review('r', 'p', null))!;
+  assert.equal(noFlag.result.flag_category, 'authentic');
+  assert.equal(noFlag.result.include_in_rating, true);
+  assert.equal(
+    mapStoredReview(review('r', 'p', { verdict: 'fake', flag_category: 'authentic' }))!.result
+      .flag_category,
+    'seeding_fake'
+  );
+  assert.equal(
+    mapStoredReview(review('r', 'p', { verdict: 'fake', flag_category: 'competitor_sabotage' }))!
+      .result.flag_category,
+    'competitor_sabotage'
+  );
+  assert.equal(
+    mapStoredReview(review('r', 'p', { verdict: 'suspicious' }))!.result.flag_category,
+    'low_value_coin_spam'
+  );
+  assert.equal(
+    mapStoredReview({ ...review('r', 'p', null), rating_star: null })!.raw.rating_star,
+    5
+  );
+
+  const merchants: MerchantRow[] = [
+    {
+      id: 'm-seed',
+      platform: 'shopee',
+      is_official: false,
+      follower_count: 0,
+      review_risk_score: 0,
+    },
+    {
+      id: 'm-off',
+      platform: 'shopee',
+      is_official: true,
+      follower_count: 90000,
+      review_risk_score: 4,
+    },
+    {
+      id: 'm-cheap',
+      platform: 'lazada',
+      is_official: false,
+      follower_count: 0,
+      review_risk_score: 20,
+    },
+    {
+      id: 'm-none',
+      platform: 'shopee',
+      is_official: false,
+      follower_count: 0,
+      review_risk_score: 0,
+    },
+  ];
+  const products: ProductRow[] = [
+    { id: 'p-seed', merchant_id: 'm-seed', cluster_id: 'c1', price_current: 30_000_000 },
+    { id: 'p-off', merchant_id: 'm-off', cluster_id: 'c1', price_current: 29_000_000 },
+    { id: 'p-cheap', merchant_id: 'm-cheap', cluster_id: 'c1', price_current: 9_000_000 },
+    { id: 'p-none', merchant_id: 'm-none', cluster_id: 'c1', price_current: 31_000_000 },
+  ];
+  const reviews: ReviewRow[] = [
+    review('s1', 'p-seed', { verdict: 'fake', flag_category: 'seeding_fake' }),
+    review('s2', 'p-seed', {
+      verdict: 'authentic',
+      flag_category: 'authentic',
+      include_in_rating: true,
+    }),
+    review(
+      's3',
+      'p-seed',
+      { verdict: 'authentic', flag_category: 'authentic', include_in_rating: true },
+      1,
+      'Máy lỗi sau 2 ngày'
+    ),
+    review(
+      's4',
+      'p-seed',
+      { verdict: 'fake', flag_category: 'competitor_sabotage' },
+      1,
+      'Shop lừa đảo'
+    ),
+    review('o1', 'p-off', {
+      verdict: 'authentic',
+      flag_category: 'authentic',
+      include_in_rating: true,
+    }),
+    review('c1', 'p-cheap', {
+      verdict: 'authentic',
+      flag_category: 'authentic',
+      include_in_rating: true,
+    }),
+    review('n1', 'p-none', { verdict: 'unanalyzed' }),
+  ];
+  const scores = scoreMerchants(
+    new AiReviewAnalyzer(),
+    merchants,
+    products,
+    reviews,
+    new Map([['c1', 29_000_000]])
+  );
+  const byId = new Map(scores.map(s => [s.merchantId, s]));
+
+  // A seller with only unanalyzed reviews is not scored.
+  assert.equal(byId.has('m-none'), false);
+  // 1/4 seeding: 15 + round(0.25 x 75) = 34; 1/4 genuine complaint is 25%:
+  // + round(0.25 x 45) = 11; sabotage adds nothing.
+  assert.equal(byId.get('m-seed')!.risk.risk_score, 45);
+  assert.equal(byId.get('m-seed')!.risk.sabotage_or_bombing_count, 1);
+  // Official store with 90k followers: 15 - 15 - 5, clamped to 0.
+  assert.equal(byId.get('m-off')!.risk.risk_score, 0);
+  // 9M against the official 29M floor is under 58%: price anomaly +45.
+  assert.equal(byId.get('m-cheap')!.risk.price_anomaly_detected, true);
+  assert.equal(byId.get('m-cheap')!.risk.risk_score, 60);
+
+  // Dry-run writes nothing; --apply writes only the review risk columns.
+  const updates: Array<{ id: string; patch: Record<string, unknown> }> = [];
+  const table = (rows: unknown[]) => ({
+    select: () => ({
+      order: () => ({
+        range: (from: number, to: number) =>
+          Promise.resolve({ data: rows.slice(from, to + 1), error: null }),
+      }),
+    }),
+    update: (patch: Record<string, unknown>) => ({
+      eq: (_col: string, id: string) => {
+        updates.push({ id, patch });
+        return Promise.resolve({ error: null });
+      },
+    }),
+  });
+  const tables: Record<string, unknown[]> = {
+    merchants,
+    products,
+    reviews,
+    master_products: [{ id: 'c1', min_price: 29_000_000 }],
+  };
+  const fakeClient = { from: (name: string) => table(tables[name] ?? []) } as never;
+
+  const dry = await runReviewRiskBackfill(fakeClient, {});
+  assert.equal(dry.apply, false);
+  assert.equal(dry.scored, 3);
+  assert.equal(updates.length, 0, 'dry-run writes nothing');
+
+  const applied = await runReviewRiskBackfill(fakeClient, { apply: true });
+  assert.equal(applied.written, 3);
+  assert.deepEqual(updates.map(u => u.id).sort(), ['m-cheap', 'm-off', 'm-seed']);
+  for (const u of updates) {
+    assert.deepEqual(Object.keys(u.patch).sort(), [
+      'review_risk_breakdown',
+      'review_risk_score',
+      'review_risk_updated_at',
+      'updated_at',
+    ]);
+    assert.equal(
+      (u.patch.review_risk_breakdown as { total_reviews: number }).total_reviews > 0,
+      true
+    );
+  }
+
+  console.log('✅ Review risk backfill suite passed');
+}
+
+run().catch((err: unknown) => {
+  console.error(err);
+  process.exit(1);
+});

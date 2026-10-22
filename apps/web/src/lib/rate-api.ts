@@ -3101,6 +3101,8 @@ export function computeDynamicReviewRisk(
     if (
       Number(r.rating_star) <= 2 &&
       r.flag_category === 'authentic' &&
+      // A 'fake' verdict already counted as seeding above (#691).
+      r.verdict !== 'fake' &&
       r.include_in_rating
     ) {
       lowStar += isRatingOnlyText(r.comment) ? 0.25 : 1;
