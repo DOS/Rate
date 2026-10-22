@@ -772,7 +772,18 @@
     "auditShopBtn": "Check shop",
     "notFoundTitle": "No direct listing match found yet",
     "notFoundDesc": "Try clicking one of the live sample URLs above or enter a standardized device name (e.g. iPhone 16).",
-    "exportMenu": "Export data"
+    "exportMenu": "Export data",
+    "specChip": "Chip",
+    "specBattery": "Battery",
+    "mdQuery": "Searched for",
+    "mdProduct": "Matched product",
+    "mdBuyerScore": "Buyer score",
+    "mdExpertScore": "Expert score",
+    "mdPriceSignal": "Price signal",
+    "mdPriceVerdict": "Price verdict",
+    "mdSeller": "Seller",
+    "mdTrustScore": "Trust score",
+    "mdLink": "Link"
   },
   "merchants": {
     "dirMetaTitle": "Seller trust directory | Rate.vn",

@@ -201,18 +201,18 @@ export default function DeepInspectWorkspace({
         priceHistory?.highestEverPrice || master?.max_price || 0
       );
       const lines = [
-        `### 🔬 ${t('title')} (Rate.vn Inspector)`,
-        `- **Query:** \`${queryInput.trim()}\``,
+        `### 🔬 ${t('title')} · Rate.vn`,
+        `- **${t('mdQuery')}:** \`${queryInput.trim()}\``,
         ...(master
           ? [
-              `- **Master Product:** ${master.name} (\`${master.model_key}\`)`,
-              `- **JReviews Buyer Score:** ${masterUserRating > 0 ? `★ ${masterUserRating.toFixed(2)}/5.0` : t('userNoScore')}${masterExpertRating10 != null ? ` | Lab ${masterExpertRating10.toFixed(1)}/10` : ''} ${t('verifiedReviewsCount', { count: master.authentic_review_count || master.total_reviews || 0 })}`,
-              `- **Price signal:** ${radarMarkdownCell(radarSignal)}`,
+              `- **${t('mdProduct')}:** ${master.name} (\`${master.model_key}\`)`,
+              `- **${t('mdBuyerScore')}:** ${masterUserRating > 0 ? `★ ${masterUserRating.toFixed(2)}/5.0` : t('userNoScore')}${masterExpertRating10 != null ? ` | ${t('mdExpertScore')}: ${masterExpertRating10.toFixed(1)}/10` : ''} ${t('verifiedReviewsCount', { count: master.authentic_review_count || master.total_reviews || 0 })}`,
+              `- **${t('mdPriceSignal')}:** ${radarMarkdownCell(radarSignal, locale)}`,
             ]
           : []),
         ...(discount
           ? [
-              `- **Price Verdict:** **${discountVerdictCopy(tVerdict, discount).label}** (${discountVerdictCopy(tVerdict, discount).explanation})`,
+              `- **${t('mdPriceVerdict')}:** **${discountVerdictCopy(tVerdict, discount).label}** (${discountVerdictCopy(tVerdict, discount).explanation})`,
             ]
           : []),
         ...(currentListedPrice > 0
@@ -223,25 +223,25 @@ export default function DeepInspectWorkspace({
           : []),
         ...(matchedGenuineDeal
           ? [
-              `- **Cross-store low:** ${t('radarGenuinePill', { pct: matchedGenuineDeal.savingsVsMedianPct, platform: matchedGenuineDeal.platform.toUpperCase(), price: matchedGenuineDeal.priceCurrent.toLocaleString('vi-VN') })}`,
+              `- ${t('radarGenuinePill', { pct: matchedGenuineDeal.savingsVsMedianPct, platform: matchedGenuineDeal.platform.toUpperCase(), price: matchedGenuineDeal.priceCurrent.toLocaleString('vi-VN') })}`,
             ]
           : []),
         ...(matchedFakeTrap
           ? [
-              `- **Fake sale warning:** ${t('radarFakePill', { pct: matchedFakeTrap.fakeMarkupPct, platform: matchedFakeTrap.platform.toUpperCase() })}`,
+              `- ${t('radarFakePill', { pct: matchedFakeTrap.fakeMarkupPct, platform: matchedFakeTrap.platform.toUpperCase() })}`,
             ]
           : []),
         ...(matchedPriceSpread
           ? [
-              `- **10-Platform Price Spread:** ${t('radarSpreadPill', { pct: matchedPriceSpread.spreadPct, vnd: matchedPriceSpread.spreadVnd.toLocaleString('vi-VN'), cheapest: matchedPriceSpread.cheapestPlatform.toUpperCase(), priciest: matchedPriceSpread.priciestPlatform.toUpperCase() })}`,
+              `- ${t('radarSpreadPill', { pct: matchedPriceSpread.spreadPct, vnd: matchedPriceSpread.spreadVnd.toLocaleString('vi-VN'), cheapest: matchedPriceSpread.cheapestPlatform.toUpperCase(), priciest: matchedPriceSpread.priciestPlatform.toUpperCase() })}`,
             ]
           : []),
         ...(merchant
           ? [
-              `- **Merchant:** ${merchant.name} (${merchant.platform.toUpperCase()}) | Trust Score: **${merchant.trust_score}/100** (Scam risk (DOSafe): ${merchant.dosafe_risk_score}/100, Review risk: ${merchant.review_risk_score}/100)`,
+              `- **${t('mdSeller')}:** ${merchant.name} (${merchant.platform.toUpperCase()}) | ${t('mdTrustScore')}: **${merchant.trust_score}/100** (${t('dosafeRiskLabel')}: ${merchant.dosafe_risk_score}/100, ${t('reviewRiskLabel')}: ${merchant.review_risk_score}/100)`,
             ]
           : []),
-        `- **URL:** ${shareUrl}`,
+        `- **${t('mdLink')}:** ${shareUrl}`,
       ];
       await navigator.clipboard.writeText(lines.join('\n'));
       setCopiedMd(true);
@@ -369,7 +369,11 @@ export default function DeepInspectWorkspace({
                 {t('exportMenu')}
               </summary>
               <div className="rate-export-menu-list">
-                <button type="button" onClick={handleCopyAuditMarkdown}>
+                <button
+                  type="button"
+                  onClick={handleCopyAuditMarkdown}
+                  data-testid="inspect-copy-md-btn"
+                >
                   {copiedMd ? t('copiedAuditMdBtn') : t('copyAuditMdBtn')}
                 </button>
                 <button
@@ -677,7 +681,7 @@ export default function DeepInspectWorkspace({
                       <div className="col-sm-6 col-md-4">
                         <div className="rounded-3 bg-light small p-2">
                           <BsCpu className="text-danger me-1" />
-                          <strong>SoC:</strong>{' '}
+                          <strong>{t('specChip')}:</strong>{' '}
                           <ContentText text={chipSpec} locale={locale} />
                         </div>
                       </div>
@@ -693,7 +697,7 @@ export default function DeepInspectWorkspace({
                     {batterySpec && (
                       <div className="col-sm-6 col-md-4">
                         <div className="rounded-3 bg-light small p-2">
-                          <strong>Battery:</strong>{' '}
+                          <strong>{t('specBattery')}:</strong>{' '}
                           <ContentText text={batterySpec} locale={locale} />
                         </div>
                       </div>

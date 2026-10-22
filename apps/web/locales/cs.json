@@ -772,7 +772,18 @@
     "auditShopBtn": "Ověřit obchod",
     "notFoundTitle": "Žádná přímá shoda nebyla nalezena",
     "notFoundDesc": "Vyzkoušejte některý z ukázkových odkazů výše nebo zadejte název zařízení (např. iPhone 16).",
-    "exportMenu": "Exportovat data"
+    "exportMenu": "Exportovat data",
+    "specChip": "Čip",
+    "specBattery": "Baterie",
+    "mdQuery": "Hledáno",
+    "mdProduct": "Nalezený produkt",
+    "mdBuyerScore": "Hodnocení kupujících",
+    "mdExpertScore": "Hodnocení expertů",
+    "mdPriceSignal": "Cenový signál",
+    "mdPriceVerdict": "Verdikt ceny",
+    "mdSeller": "Prodejce",
+    "mdTrustScore": "Skóre důvěryhodnosti",
+    "mdLink": "Odkaz"
   },
   "merchants": {
     "dirMetaTitle": "Důvěryhodnost prodejců | Rate.vn",

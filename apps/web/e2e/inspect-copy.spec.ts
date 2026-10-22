@@ -11,6 +11,12 @@ const JARGON = [
   'seeding',
 ];
 
+const SUMMARY_LINK_LABEL = {
+  vi: '**Liên kết:**',
+  en: '**Link:**',
+  cs: '**Odkaz:**',
+};
+
 for (const [prefix, lang] of [
   ['', 'vi'],
   ['/en', 'en'],
@@ -46,6 +52,37 @@ for (const [prefix, lang] of [
       expect(navIconLabel).not.toContain(term);
       expect(body).not.toContain(term);
     }
+  });
+
+  // The spec strip and the copied Markdown summary use translated labels, not
+  // hardcoded English ones (DOS/Rate#702).
+  test(`inspect summary labels are localized on ${lang}`, async ({
+    page,
+    context,
+  }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    await page.goto(`${prefix}/inspect`);
+    await expect(page.locator('html')).toHaveAttribute('lang', lang);
+    await expect(page.locator('.container h2').first()).toBeVisible();
+    await page.locator('.rate-export-menu summary').click();
+    await page.getByTestId('inspect-copy-md-btn').click();
+    await expect
+      .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+      .toContain('### 🔬');
+    const md = await page.evaluate(() => navigator.clipboard.readText());
+    expect(md).toContain(SUMMARY_LINK_LABEL[lang]);
+    const body = await page.locator('.container').first().innerText();
+    for (const english of [
+      'Rate.vn Inspector',
+      'Master Product',
+      'JReviews Buyer Score',
+      'Trust Score',
+      'Price Spread',
+      '**URL:**',
+    ]) {
+      expect(md).not.toContain(english);
+    }
+    expect(body).not.toContain('SoC:');
   });
 
   test(`seller profile risk badges are localized on ${lang}`, async ({

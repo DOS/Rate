@@ -772,7 +772,18 @@
     "auditShopBtn": "Kiểm tra shop",
     "notFoundTitle": "Chưa tìm thấy bản ghi trùng khớp trực tiếp",
     "notFoundDesc": "Hãy thử chọn một trong các đường dẫn mẫu bên trên hoặc tìm theo tên dòng máy (ví dụ: iPhone 16, Galaxy S24, MacBook).",
-    "exportMenu": "Xuất dữ liệu"
+    "exportMenu": "Xuất dữ liệu",
+    "specChip": "Chip",
+    "specBattery": "Pin",
+    "mdQuery": "Đã tìm",
+    "mdProduct": "Sản phẩm khớp",
+    "mdBuyerScore": "Điểm người mua",
+    "mdExpertScore": "Điểm chuyên gia",
+    "mdPriceSignal": "Tín hiệu giá",
+    "mdPriceVerdict": "Kết luận giá",
+    "mdSeller": "Gian hàng",
+    "mdTrustScore": "Điểm tin cậy",
+    "mdLink": "Liên kết"
   },
   "merchants": {
     "dirMetaTitle": "Độ tin cậy gian hàng trên các sàn | Rate.vn",
