@@ -45,6 +45,7 @@ import {
 } from 'react-icons/bs';
 import type { KeySpecs, ProductSpecifications } from '@repo/shared-data';
 import ClientMessages from '@/components/providers/ClientMessages';
+import BootstrapClient from '@/app/BootstrapClient';
 
 // Reads searchParams, so it renders per request. The [locale] layout's
 // generateStaticParams would otherwise make it static, and the searchParams
@@ -389,6 +390,9 @@ export async function CategoryCatalogContent({
             __html: JSON.stringify(structuredData).replace(/</g, '\\u003c'),
           }}
         />
+        {/* Bootstrap JS (bundled, not a CDN) drives only the catalog's sort
+        dropdown and filter drawer, so other pages skip it (DOS/Rate#754). */}
+        <BootstrapClient />
         <NavbarDarkDynamic links={[]} />
 
         {/* Hero Banner (DESIGN.md v2.0 Dark Obsidian + DOS Crimson Glow) */}

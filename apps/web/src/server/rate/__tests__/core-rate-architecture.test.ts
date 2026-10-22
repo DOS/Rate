@@ -2112,14 +2112,20 @@ async function runCoreArchitectureSuite() {
   );
   assert.ok(
     !/cdn\.jsdelivr\.net/.test(rootLayoutSrc145) &&
-      rootLayoutSrc145.includes('<BootstrapClient />') &&
+      !rootLayoutSrc145.includes('<BootstrapClient />') &&
+      fs
+        .readFileSync(
+          path.join(repoRoot, 'apps/web/src/app/[locale]/smartphones/page.tsx'),
+          'utf8'
+        )
+        .includes('<BootstrapClient />') &&
       fs
         .readFileSync(
           path.join(repoRoot, 'apps/web/src/app/BootstrapClient.tsx'),
           'utf8'
         )
         .includes("import('bootstrap/dist/js/bootstrap.bundle.min.js')"),
-    'Root layout must render BootstrapClient (bundled bootstrap JS) and must not load Bootstrap from cdn.jsdelivr.net (#145)'
+    'Only the catalog renders BootstrapClient (bundled bootstrap JS, #754), and nothing loads Bootstrap from cdn.jsdelivr.net (#145)'
   );
   console.log(
     '  ✅ [43/44] Bootstrap JS bundled from the bootstrap package via BootstrapClient, no jsDelivr script in the root layout (#145) passed'
