@@ -6,6 +6,44 @@ export const SHARE_IMAGE = {
   alt: 'Rate.vn',
 } as const;
 
+export const SITE_URL = 'https://rate.vn';
+
+/**
+ * Structured data needs absolute URLs; Next only resolves metadata URLs
+ * against metadataBase (DOS/Rate#738).
+ */
+export function absoluteUrl(pathOrUrl: string): string {
+  return /^https?:\/\//i.test(pathOrUrl)
+    ? pathOrUrl
+    : new URL(pathOrUrl, SITE_URL).toString();
+}
+
+/** Organization and WebSite JSON-LD for the home page (DOS/Rate#738). */
+export function siteJsonLd(locale: string, description: string) {
+  const organizationId = `${SITE_URL}/#organization`;
+  return {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'Organization',
+        '@id': organizationId,
+        name: 'Rate.vn',
+        url: SITE_URL,
+        logo: absoluteUrl('/icon.png'),
+      },
+      {
+        '@type': 'WebSite',
+        '@id': `${SITE_URL}/#website`,
+        name: 'Rate.vn',
+        url: SITE_URL,
+        description,
+        inLanguage: locale,
+        publisher: { '@id': organizationId },
+      },
+    ],
+  };
+}
+
 const OG_LOCALES: Record<string, string> = {
   vi: 'vi_VN',
   en: 'en_US',
