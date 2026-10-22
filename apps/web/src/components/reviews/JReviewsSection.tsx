@@ -45,7 +45,7 @@ import {
   weightExplanationCopy,
   type ReviewBadgeKind,
 } from '@/lib/review-display';
-import AnalyzerText from './AnalyzerText';
+import AnalyzerText, { analyzerText } from './AnalyzerText';
 
 type VoteChoice = 'up' | 'down' | 'report';
 type FilterTab = 'all' | 'authentic' | 'expert' | 'ignored';
@@ -103,6 +103,7 @@ export default function JReviewsSection({
   radarSignal,
 }: JReviewsSectionProps) {
   const t = useTranslations('reviews');
+  const tAnalyzer = useTranslations('analyzerCopy');
 
   const criteriaMeta = useMemo(
     () =>
@@ -374,6 +375,8 @@ export default function JReviewsSection({
           r.author_name || '',
           r.variation || '',
           r.reason || '',
+          // The reason as shown, so a search in the active locale finds it.
+          r.reason ? analyzerText(r.reason, tAnalyzer) : '',
         ]
           .join(' ')
           .toLowerCase();
@@ -413,7 +416,7 @@ export default function JReviewsSection({
         new Date(a.created_at || 0).getTime()
       );
     });
-  }, [reviews, activeTab, sortMode, searchKeyword, starFilter]);
+  }, [reviews, activeTab, sortMode, searchKeyword, starFilter, tAnalyzer]);
 
   async function handleVote(reviewId: string, clickedVote: VoteChoice) {
     if (pendingIds[reviewId]) return;
