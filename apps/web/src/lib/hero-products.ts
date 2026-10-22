@@ -27,13 +27,20 @@ export type HeroProductSuggestion = Pick<
   | 'specifications'
 >;
 
-// getMasterProductHref only reads category_slug from these two objects.
+// getMasterProductHref only reads category_slug from these two objects. An
+// empty object, not null, matches their non-nullable schema type.
 const categorySlugOnly = <T>(value: T): T =>
   (value &&
   typeof value === 'object' &&
   typeof (value as Record<string, unknown>).category_slug === 'string'
     ? { category_slug: (value as Record<string, unknown>).category_slug }
-    : null) as T;
+    : {}) as T;
+
+// The box matches on and shows only the chip and the screen.
+const searchKeySpecs = (
+  keySpecs: HeroProductSuggestion['key_specs']
+): HeroProductSuggestion['key_specs'] =>
+  keySpecs && { chip: keySpecs.chip, screen: keySpecs.screen };
 
 export function toHeroProductSuggestions(
   products: readonly HeroProductSuggestion[]
@@ -46,7 +53,7 @@ export function toHeroProductSuggestions(
     model: p.model,
     model_key: p.model_key,
     variant_name: p.variant_name,
-    key_specs: p.key_specs,
+    key_specs: searchKeySpecs(p.key_specs),
     storage_gb: p.storage_gb,
     images: p.images?.slice(0, 1) ?? p.images,
     thumbnail: p.thumbnail,
