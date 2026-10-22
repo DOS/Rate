@@ -481,6 +481,38 @@ async function runTests() {
   assert.equal(hintedRes.masterId, 'master-hint-verified');
   assert.equal(hintOkEvents.productUpserts[0]?.cluster_id, 'master-hint-verified');
   assert.equal(hintOkEvents.productUpserts[0]?.category_id, 'cat-smartphones');
+  assert.equal(
+    hintOkEvents.productUpserts[0]?.historical_sold_display,
+    null,
+    'An exact sold count stores no label'
+  );
+  const { stub: labelStub, events: labelEvents } = createPipelineStubSupabase({
+    hintRow: { id: 'master-hint-verified' },
+  });
+  await new ShopeeIngestionPipeline({ supabaseClient: labelStub, apiKey: '' }).ingestProduct(
+    { ...createBaseProduct(), historicalSold: 20000, historicalSoldDisplay: '20k+' },
+    undefined,
+    { masterIdHint: 'master-hint-verified' }
+  );
+  assert.equal(labelEvents.productUpserts[0]?.historical_sold, 20000);
+  assert.equal(
+    labelEvents.productUpserts[0]?.historical_sold_display,
+    '20k+',
+    'A sold label (floor) is stored next to the count (DOS/Rate-Services#201)'
+  );
+  const { stub: badLabelStub, events: badLabelEvents } = createPipelineStubSupabase({
+    hintRow: { id: 'master-hint-verified' },
+  });
+  await new ShopeeIngestionPipeline({ supabaseClient: badLabelStub, apiKey: '' }).ingestProduct(
+    { ...createBaseProduct(), historicalSoldDisplay: 'x'.repeat(40) },
+    undefined,
+    { masterIdHint: 'master-hint-verified' }
+  );
+  assert.equal(
+    badLabelEvents.productUpserts[0]?.historical_sold_display,
+    null,
+    'A malformed label is dropped instead of failing the ingest'
+  );
   console.log('  ✅ [3/6] masterIdHint preservation & DB error abort passed');
 
   // 4. Smart Delta Price Compression: client-side 7-day fallback & 23505 race recovery

@@ -508,6 +508,7 @@ export type Database = {
           currency: string | null;
           description: string | null;
           historical_sold: number | null;
+          historical_sold_display: string | null;
           id: string;
           images: string[] | null;
           merchant_id: string;
@@ -535,6 +536,7 @@ export type Database = {
           currency?: string | null;
           description?: string | null;
           historical_sold?: number | null;
+          historical_sold_display?: string | null;
           id?: string;
           images?: string[] | null;
           merchant_id: string;
@@ -562,6 +564,7 @@ export type Database = {
           currency?: string | null;
           description?: string | null;
           historical_sold?: number | null;
+          historical_sold_display?: string | null;
           id?: string;
           images?: string[] | null;
           merchant_id?: string;

@@ -7495,7 +7495,7 @@ async function runCoreArchitectureSuite() {
     // keep their capitals; two or more other capitalised words in a row mean
     // Title Case.
     const names =
-      /Rate\.vn|Rate Lab|Rate Cloud|DOS ID|DOSafe|JReviews|Markdown|TikTok Shop|Official Mall|Apple Watch|Galaxy Watch|Galaxy Buds|Galaxy Tab|Xiaomi Watch|Xiaomi Pad|Huawei Watch|AirPods Pro|Hoang Ha Mobile|Hoang Ha|Di Dong Viet|The Gioi Di Dong|Phong Vu|Natural Titanium|Alex Nguyen|Shopee|Lazada|Tiki|Apple|iPhone|Pro|Max|Samsung|Galaxy|Xiaomi|Google|Pixel|Huawei|Garmin|Sony|Bose|Sennheiser|MacBook|iPad|Rate\b|Bayesian \w+|Helpful|Report|[A-Z]{2,}\w*|\w+-[A-Z]\w*/g;
+      /Rate\.vn|Rate Lab|Rate Cloud|DOS ID|DOSafe|JReviews|Markdown|OpenAPI|Next\.js|PostgreSQL|Supabase|Authorization: Bearer|TikTok Shop|Official Mall|Apple Watch|Galaxy Watch|Galaxy Buds|Galaxy Tab|Xiaomi Watch|Xiaomi Pad|Huawei Watch|AirPods Pro|Hoang Ha Mobile|Hoang Ha|Di Dong Viet|The Gioi Di Dong|Phong Vu|Natural Titanium|Alex Nguyen|Shopee|Lazada|Tiki|Apple|iPhone|Pro|Max|Samsung|Galaxy|Xiaomi|Google|Pixel|Huawei|Garmin|Sony|Bose|Sennheiser|MacBook|iPad|Rate\b|Bayesian \w+|Helpful|Report|[A-Z]{2,}\w*|\w+-[A-Z]\w*/g;
     const strip = (s: string) => s.replace(/\{[^}]+\}/g, '').replace(names, '');
     const titleCase =
       /\b[A-Z][a-z]+\b(\s+(&|and|of|to|for|in|the|a|on|with|by|or|from|vs|at)?\s*\b[A-Z][a-z]+\b)+/;
@@ -7511,7 +7511,7 @@ async function runCoreArchitectureSuite() {
       }
     };
     for (const [ns, node] of Object.entries(enMessages)) {
-      if (ns !== 'developers' && ns !== 'openapi') walk(node, ns);
+      walk(node, ns);
     }
     assert.deepEqual(
       offenders,
@@ -7533,7 +7533,7 @@ async function runCoreArchitectureSuite() {
     // Names keep their capitals: brands, products, retailers, programs,
     // places and people used in examples.
     const names =
-      /Rate\.vn|Rate Lab|Rate Cloud|DOS ID|DOSafe|JReviews|Markdown|TikTok Shop|Official Mall|Apple Watch|Galaxy Watch|Galaxy Buds|Galaxy Tab|Xiaomi Watch|Xiaomi Pad|Huawei Watch|AirPods Pro|Hoàng Hà|Di Động Việt|Thế Giới Di Động|Phong Vũ|Việt Nam|Bộ TT&TT|Minh Quân|Hà Nội|Nguyễn Văn A|Pro Max|Pro|Titan Tự Nhiên|AI Review Analyzer|Rate Trust Score|Bayesian|GSMArena|PhoneArena|GitHub|Wi-Fi|Bluetooth|Hi-Res|Qi|MagSafe|Hz|Bayes|Rate Lab|API Playground|Kiểm tra link|Liên hệ|Hữu ích|Báo cáo|Shopee|Lazada|Tiki|Apple|iPhone|Samsung|Galaxy|Xiaomi|Google|Pixel|Sony|Bose|Sennheiser|MacBook|iPad|Rate\b|[A-ZĐ]{2,}\w*/g;
+      /Rate\.vn|Rate Lab|Rate Cloud|DOS ID|DOSafe|JReviews|Markdown|TikTok Shop|Official Mall|Apple Watch|Galaxy Watch|Galaxy Buds|Galaxy Tab|Xiaomi Watch|Xiaomi Pad|Huawei Watch|AirPods Pro|OpenAPI|Next\.js|PostgreSQL|Supabase|Authorization: Bearer|Hoàng Hà|Di Động Việt|Thế Giới Di Động|Phong Vũ|Việt Nam|Bộ TT&TT|Minh Quân|Hà Nội|Nguyễn Văn A|Pro Max|Pro|Titan Tự Nhiên|AI Review Analyzer|Rate Trust Score|Bayesian|GSMArena|PhoneArena|GitHub|Wi-Fi|Bluetooth|Hi-Res|Qi|MagSafe|Hz|Bayes|Rate Lab|API Playground|Kiểm tra link|Liên hệ|Hữu ích|Báo cáo|Shopee|Lazada|Tiki|Apple|iPhone|Samsung|Galaxy|Xiaomi|Google|Pixel|Sony|Bose|Sennheiser|MacBook|iPad|Rate\b|[A-ZĐ]{2,}\w*/g;
     const strip = (s: string) =>
       s
         .normalize('NFC')
@@ -7556,8 +7556,7 @@ async function runCoreArchitectureSuite() {
     };
     // analyzerCopy rebuilds the analyzer's stored text, so it stays as stored.
     for (const [ns, node] of Object.entries(viMessages)) {
-      if (!['developers', 'openapi', 'analyzerCopy'].includes(ns))
-        walk(node, ns);
+      if (ns !== 'analyzerCopy') walk(node, ns);
     }
     assert.deepEqual(
       offenders,
@@ -7655,6 +7654,231 @@ async function runCoreArchitectureSuite() {
 
   console.log(
     '  ✅ [86/86] Offer cards use the baseline for unscored sellers (#685) passed'
+  );
+
+  // =========================================================================
+  // 88. The review risk backfill scores sellers as the web does (#691)
+  // =========================================================================
+  {
+    const { computeDynamicReviewRisk } = await import('@/lib/rate-api');
+    // Paths in variables: the web typecheck does not compile importer sources.
+    const importerRoot = '../../../../../importer/src/shopee';
+    const jobModule = `${importerRoot}/jobs/backfill-review-risk`;
+    const analyzerModule = `${importerRoot}/ai-review-analyzer`;
+    const { scoreMerchants } = (await import(jobModule)) as {
+      scoreMerchants: (...args: unknown[]) => Array<{
+        risk: { risk_score: number };
+      }>;
+    };
+    const { AiReviewAnalyzer } = (await import(analyzerModule)) as {
+      AiReviewAnalyzer: new () => unknown;
+    };
+    const analyzer = new AiReviewAnalyzer();
+    // Review shapes stored in rate.review_flags, with stars and text.
+    const kinds = [
+      {
+        verdict: 'authentic',
+        flag_category: 'authentic',
+        include_in_rating: true,
+      },
+      {
+        verdict: 'fake',
+        flag_category: 'seeding_fake',
+        include_in_rating: false,
+      },
+      {
+        verdict: 'suspicious',
+        flag_category: 'low_value_coin_spam',
+        include_in_rating: false,
+      },
+      {
+        verdict: 'fake',
+        flag_category: 'competitor_sabotage',
+        include_in_rating: false,
+      },
+      {
+        verdict: 'fake',
+        flag_category: 'review_bombing',
+        include_in_rating: false,
+      },
+      { verdict: 'fake', flag_category: 'authentic', include_in_rating: false },
+      { verdict: 'fake', flag_category: 'authentic', include_in_rating: true },
+      null,
+    ];
+    const texts = [
+      'Máy lỗi màn hình',
+      '',
+      'Rất không hài lòng',
+      'Pin tốt, máy mượt',
+    ];
+    const sellers = [
+      { platform: 'shopee', is_official: false, follower_count: 0 },
+      { platform: 'shopee', is_official: true, follower_count: 0 },
+      { platform: 'facebook', is_official: false, follower_count: 60000 },
+    ];
+    let seed = 7;
+    const rand = (n: number) => {
+      // Park-Miller: products stay below 2^53, so every value is exact.
+      seed = (seed * 48271) % 2147483647;
+      return seed % n;
+    };
+    for (let round = 0; round < 300; round++) {
+      const seller = sellers[round % sellers.length]!;
+      const count = 1 + rand(12);
+      const rows = Array.from({ length: count }, (_, i) => ({
+        id: `r${i}`,
+        product_id: 'p',
+        rating_star: 1 + rand(5),
+        comment: texts[rand(texts.length)]!,
+        review_flags: kinds[rand(kinds.length)] ?? null,
+      }));
+      const [job] = scoreMerchants(
+        analyzer,
+        [{ id: 'm', review_risk_score: 0, ...seller }],
+        [
+          {
+            id: 'p',
+            merchant_id: 'm',
+            cluster_id: null,
+            price_current: 1_000_000,
+          },
+        ],
+        rows,
+        new Map()
+      );
+      // The web's list mapping (getMerchantsList) of the same rows.
+      const items = rows.map((r) => {
+        const vf = r.review_flags;
+        const verdict = vf?.verdict ?? null;
+        const flag_category =
+          vf?.flag_category ||
+          (verdict === 'fake'
+            ? 'seeding_fake'
+            : verdict === 'suspicious'
+              ? 'low_value_coin_spam'
+              : 'authentic');
+        return {
+          rating_star: Number(r.rating_star || 5),
+          comment: r.comment || '',
+          verdict,
+          flag_category,
+          include_in_rating: Boolean(
+            vf?.include_in_rating ??
+            (flag_category === 'authentic' && verdict !== 'fake')
+          ),
+        };
+      }) as never;
+      const web = computeDynamicReviewRisk(items, {
+        isOfficial: seller.is_official,
+        platform: seller.platform,
+        followerCount: seller.follower_count,
+      });
+      assert.equal(
+        job!.risk.risk_score,
+        web.reviewRiskScore,
+        `round ${round}: backfill and web agree (#691)`
+      );
+    }
+  }
+
+  console.log(
+    '  ✅ [88/88] The review risk backfill scores sellers as the web does (#691) passed'
+  );
+
+  // =========================================================================
+  // 87. Merchant pages and offers read the persisted review risk (#684)
+  // =========================================================================
+  {
+    const src = fs.readFileSync(
+      path.join(repoRoot, 'apps/web/src/lib/rate-api.ts'),
+      'utf8'
+    );
+    // List, profile and offer fallback selects; anon can read both columns.
+    const selects = src.match(
+      /risk_score, review_risk_score, review_risk_breakdown, metadata/g
+    );
+    assert.equal(
+      selects?.length,
+      3,
+      'merchant list, profile and offer fallback select the persisted review risk (#684)'
+    );
+    // The column defaults to 0 / {}: a bare 0 there must not hide a
+    // metadata-only score, and a scored column wins.
+    const { persistedReviewRiskOf } = await import('@/lib/rate-api');
+    assert.equal(
+      persistedReviewRiskOf({
+        review_risk_score: 0,
+        review_risk_breakdown: {},
+      }),
+      0,
+      'never scored'
+    );
+    assert.equal(
+      persistedReviewRiskOf({
+        review_risk_score: 0,
+        review_risk_breakdown: {},
+        metadata: { review_risk_score: 37 },
+      }),
+      37,
+      'metadata-only scored seller keeps its score'
+    );
+    assert.equal(
+      persistedReviewRiskOf({
+        review_risk_score: 52,
+        review_risk_breakdown: { total_reviews: 9 },
+        metadata: { review_risk_score: 10 },
+      }),
+      52,
+      'column score wins'
+    );
+    assert.equal(
+      persistedReviewRiskOf({
+        review_risk_score: 0,
+        review_risk_breakdown: { total_reviews: 30 },
+      }),
+      0,
+      'a scored 0 (official store) stays 0'
+    );
+    // A stored score (column or metadata) is shown instead of one computed
+    // from the reviews a page reads, even without a breakdown.
+    const { hasStoredReviewRisk } = await import('@/lib/rate-api');
+    assert.equal(
+      hasStoredReviewRisk({ review_risk_score: 0, review_risk_breakdown: {} }),
+      false
+    );
+    assert.equal(
+      hasStoredReviewRisk({ review_risk_score: 25, review_risk_breakdown: {} }),
+      true,
+      'column score without a breakdown'
+    );
+    assert.equal(
+      hasStoredReviewRisk({
+        review_risk_score: 0,
+        review_risk_breakdown: {},
+        metadata: { review_risk_score: 30 },
+      }),
+      true,
+      'metadata-only score'
+    );
+    assert.equal(
+      hasStoredReviewRisk({
+        review_risk_score: 0,
+        review_risk_breakdown: { total_reviews: 3 },
+      }),
+      true,
+      'scored 0 with a breakdown'
+    );
+    // Both merchant pages use it to prefer the stored score.
+    assert.equal(
+      (src.match(/persistedBreakdown \|\| hasStoredReviewRisk\(/g) ?? [])
+        .length,
+      2,
+      'list and profile prefer the stored review risk (#684)'
+    );
+  }
+
+  console.log(
+    '  ✅ [87/87] Merchant pages read the persisted review risk (#684) passed'
   );
 
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
