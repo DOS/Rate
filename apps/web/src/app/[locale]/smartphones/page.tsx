@@ -11,6 +11,7 @@ import {
 } from '@/server/rate';
 import type { CanonicalCategorySlug } from '@/lib/rate-api';
 import { isPlainListing } from '@/lib/catalog-listing';
+import { absoluteUrl, SITE_URL } from '@/lib/seo';
 import { buildRadarIndex, getRadarSignal } from '@/lib/deal-radar';
 import ProductCard, {
   type ProductCardSpec,
@@ -337,9 +338,57 @@ export async function CategoryCatalogContent({
     });
   }
 
+  // Breadcrumb and a summary ItemList of the listed products, the form Google
+  // reads on list pages (DOS/Rate#750).
+  const [tNav, tDetail] = await Promise.all([
+    getTranslations({ locale, namespace: 'rate.nav' }),
+    getTranslations({ locale, namespace: 'productDetail' }),
+  ]);
+  const categoryLabel = tNav.has(categorySlug)
+    ? tNav(categorySlug as 'smartphones')
+    : categorySlug;
+  const structuredData = {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'BreadcrumbList',
+        itemListElement: [
+          {
+            '@type': 'ListItem',
+            position: 1,
+            name: tDetail('breadcrumbHome'),
+            item: SITE_URL,
+          },
+          {
+            '@type': 'ListItem',
+            position: 2,
+            name: categoryLabel,
+            item: absoluteUrl(basePath),
+          },
+        ],
+      },
+      {
+        '@type': 'ItemList',
+        name: categoryLabel,
+        itemListElement: products.map((item, index) => ({
+          '@type': 'ListItem',
+          position: (page - 1) * CATALOG_PAGE_SIZE + index + 1,
+          name: item.name,
+          url: absoluteUrl(`${basePath}/${item.slug}`),
+        })),
+      },
+    ],
+  };
+
   return (
     <ClientMessages scope="catalog">
       <>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(structuredData).replace(/</g, '\\u003c'),
+          }}
+        />
         <NavbarDarkDynamic links={[]} />
 
         {/* Hero Banner (DESIGN.md v2.0 Dark Obsidian + DOS Crimson Glow) */}
