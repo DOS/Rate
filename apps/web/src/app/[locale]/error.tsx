@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect } from 'react';
-import * as Sentry from '@sentry/nextjs';
 import { useTranslations } from 'next-intl';
+import { env } from '@/env.mjs';
 import { BsArrowClockwise, BsHouse } from 'react-icons/bs';
 import { Link } from '@/lib/navigation';
 import { isDevelopment } from '@/lib/general-helpers';
@@ -15,8 +15,13 @@ interface Props {
 export default function Error({ error, reset }: Props) {
   const t = useTranslations('errors.global');
 
+  // The SDK is only there to load when a DSN is configured; a static import
+  // put it in every page's bundle through this boundary (DOS/Rate#752).
   useEffect(() => {
-    Sentry.captureException(error);
+    if (!env.NEXT_PUBLIC_SENTRY_DSN) return;
+    void import('@sentry/nextjs').then((Sentry) =>
+      Sentry.captureException(error)
+    );
   }, [error]);
 
   const isDev = isDevelopment();
@@ -29,7 +34,7 @@ export default function Error({ error, reset }: Props) {
             <div className="card rounded-4 p-md-5 border-0 bg-white p-4 text-center shadow-sm">
               <div className="mb-3">
                 <span className="badge bg-danger bg-opacity-10 text-danger rounded-pill fw-semibold px-3 py-2">
-                  Rate.vn System Guard
+                  Rate.vn
                 </span>
               </div>
               <h1 className="h3 fw-bold text-dark mb-2">
