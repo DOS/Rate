@@ -1099,7 +1099,13 @@ export default function JReviewsSection({
                     <span className="text-muted small">/ 5.0</span>
                   </div>
                   <div className="small text-secondary">
-                    {expertReviewSummary || t('defaultExpertSummary')}
+                    {expertReviewSummary ? (
+                      <span lang={contentLang(expertReviewSummary, locale)}>
+                        {expertReviewSummary}
+                      </span>
+                    ) : (
+                      t('defaultExpertSummary')
+                    )}
                   </div>
                 </>
               ) : (

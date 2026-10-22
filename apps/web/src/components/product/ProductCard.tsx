@@ -5,7 +5,7 @@ import { Link } from '@/lib/navigation';
 import CompareQuickToggle from '@/components/compare/CompareQuickToggle';
 import RadarBadge from '@/components/radar/RadarBadge';
 import type { RadarSignal } from '@/lib/deal-radar';
-import ContentText from '@/components/elementary/ContentText';
+import { contentLang } from '@/lib/content-lang';
 
 export interface ProductCardSpec {
   readonly key: string;
@@ -137,16 +137,18 @@ export default function ProductCard({
         {specs.length > 0 && (
           <ul className="rate-product-card-specs">
             {specs.slice(0, 3).map((spec) => (
-              <li key={spec.key} title={spec.label}>
+              <li
+                key={spec.key}
+                title={spec.label}
+                lang={contentLang(spec.label, locale)}
+              >
                 <span
                   className="rate-product-card-spec-icon"
                   aria-hidden="true"
                 >
                   {spec.icon}
                 </span>
-                <span className="text-truncate">
-                  <ContentText text={spec.label} locale={locale} />
-                </span>
+                <span className="text-truncate">{spec.label}</span>
               </li>
             ))}
           </ul>

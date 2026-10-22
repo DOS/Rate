@@ -807,6 +807,7 @@ export default async function MerchantProfilePage({
                               <img
                                 src={resolvedImg}
                                 alt={item.title}
+                                lang={contentLang(item.title, locale)}
                                 className="rounded border bg-white p-1"
                                 style={{
                                   width: '52px',
