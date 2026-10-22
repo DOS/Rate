@@ -7625,7 +7625,30 @@ async function runCoreArchitectureSuite() {
         url: 'https://www.lazada.vn/p',
         merchants: { id: 'm', name: 'Shop', platform: 'lazada', ...merchants },
       } as never).merchant.review_risk_score;
+    // Follower counts fetched for unscored sellers apply the -5; a scored
+    // seller keeps its stored score.
+    const viewWithFollowers = (extra: Record<string, unknown>, n: number) =>
+      mapTrustViewRowToMerchantOffer(
+        {
+          id: 'o',
+          merchant_id: 'm',
+          platform: 'shopee',
+          title: 't',
+          price_current: 1_000_000,
+          url: 'https://shopee.vn/p',
+          review_risk_score: 0,
+          ...extra,
+        } as never,
+        n
+      ).merchant.review_risk_score;
+    assert.equal(viewWithFollowers({}, 60000), 10);
+    assert.equal(viewWithFollowers({ review_risk_score: 42 }, 60000), 42);
     assert.equal(rawRow({}), 15);
+    // A never-scored 0 / {} from the columns still takes the baseline.
+    assert.equal(
+      rawRow({ review_risk_score: 0, review_risk_breakdown: {} }),
+      15
+    );
     assert.equal(rawRow({ follower_count: 80000 }), 10);
     assert.equal(rawRow({ metadata: { review_risk_score: 33 } }), 33);
   }

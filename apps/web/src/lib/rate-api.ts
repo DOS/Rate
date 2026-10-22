@@ -1462,23 +1462,67 @@ function toSafeStarRating5(raw: unknown): number {
   return Math.min(5, num);
 }
 
+/** True when the view row's seller has no review risk from the importer. */
+function isUnscoredTrustViewRow(row: RawTrustViewRow): boolean {
+  return !hasPersistedReviewRisk(
+    toSafeRiskScore100(row.review_risk_score, 0),
+    row.review_risk_breakdown
+  );
+}
+
+/**
+ * Follower counts for the unscored sellers among view rows; the view has
+ * none and the baseline needs it (#685). Missing data leaves the count out.
+ */
+async function followerCountsForUnscoredSellers(
+  rows: readonly RawTrustViewRow[]
+): Promise<Map<string, number>> {
+  const ids = Array.from(
+    new Set(
+      rows
+        .filter((row) => row.merchant_id && isUnscoredTrustViewRow(row))
+        .map((row) => row.merchant_id)
+    )
+  );
+  const counts = new Map<string, number>();
+  if (ids.length === 0) return counts;
+  try {
+    const supabase = getRateClient();
+    for (let i = 0; i < ids.length; i += IN_FILTER_CHUNK_SIZE) {
+      const { data, error } = await supabase
+        .from('merchants')
+        .select('id, follower_count')
+        .in('id', ids.slice(i, i + IN_FILTER_CHUNK_SIZE));
+      if (error) return counts;
+      for (const m of (data ?? []) as Array<{
+        id: string;
+        follower_count: number | string | null;
+      }>) {
+        counts.set(m.id, Number(m.follower_count) || 0);
+      }
+    }
+  } catch {
+    // The baseline without the follower adjustment is still a valid number.
+  }
+  return counts;
+}
+
 export function mapTrustViewRowToMerchantOffer(
-  row: RawTrustViewRow
+  row: RawTrustViewRow,
+  followerCount?: number
 ): MerchantOffer {
   const combinedRisk = toSafeRiskScore100(row.threat_risk_score, 0);
   const dosafeRisk = toSafeRiskScore100(row.dosafe_risk_score, combinedRisk);
   const persistedReviewRisk = toSafeRiskScore100(row.review_risk_score, 0);
   // The view reads 0 for a seller the importer never scored; use the same
-  // baseline as the merchant pages (#685). The view has no follower count.
-  const reviewRisk = hasPersistedReviewRisk(
-    persistedReviewRisk,
-    row.review_risk_breakdown
-  )
-    ? persistedReviewRisk
-    : baselineReviewRisk({
+  // baseline as the merchant pages (#685).
+  const reviewRisk = isUnscoredTrustViewRow(row)
+    ? baselineReviewRisk({
         isOfficial: row.merchant_is_official,
         platform: row.platform,
-      });
+        followerCount,
+      })
+    : persistedReviewRisk;
   const priceCurrent = toSafeOfferPrice(row.price_current);
   return {
     id: row.id,
@@ -1499,7 +1543,7 @@ export function mapTrustViewRowToMerchantOffer(
       platform: row.platform,
       is_official: Boolean(row.merchant_is_official),
       rating_star: null,
-      follower_count: 0,
+      follower_count: followerCount ?? 0,
       location: row.merchant_location || null,
       risk_score: Math.max(combinedRisk, dosafeRisk, reviewRisk),
       dosafe_risk_score: dosafeRisk,
@@ -1524,10 +1568,17 @@ export function mapOfferRowToMerchantOffer(item: RawOfferRow): MerchantOffer {
       : typeof meta?.dosafe_risk_score === 'number'
         ? toSafeRiskScore100(meta.dosafe_risk_score, baseRisk)
         : baseRisk;
-  // A seller the importer never scored gets the merchant pages' baseline (#685).
+  // Without a stored score (column, then metadata) the seller gets the merchant
+  // pages' baseline (#685). This select reads only metadata today; if the
+  // columns are added, a never-scored 0 / {} still takes the baseline.
+  const columnReviewRisk = toSafeRiskScore100(
+    merchantObj?.review_risk_score,
+    0
+  );
   const reviewRisk =
-    merchantObj?.review_risk_score != null
-      ? toSafeRiskScore100(merchantObj.review_risk_score, 0)
+    merchantObj?.review_risk_score != null &&
+    hasPersistedReviewRisk(columnReviewRisk, merchantObj.review_risk_breakdown)
+      ? columnReviewRisk
       : typeof meta?.review_risk_score === 'number'
         ? toSafeRiskScore100(meta.review_risk_score, 0)
         : baselineReviewRisk({
@@ -1640,8 +1691,10 @@ export async function getMasterProductOffers(
         .range(from, to)
   ).catch(() => null);
   if (viewRows) {
-    return (viewRows as unknown as RawTrustViewRow[]).map(
-      mapTrustViewRowToMerchantOffer
+    const rows = viewRows as unknown as RawTrustViewRow[];
+    const followers = await followerCountsForUnscoredSellers(rows);
+    return rows.map((row) =>
+      mapTrustViewRowToMerchantOffer(row, followers.get(row.merchant_id))
     );
   }
 
@@ -1695,11 +1748,15 @@ export async function getMasterProductOffersBatch(
     ).catch(() => null);
 
     if (viewData) {
-      for (const row of viewData as unknown as RawTrustViewRow[]) {
+      const rows = viewData as unknown as RawTrustViewRow[];
+      const followers = await followerCountsForUnscoredSellers(rows);
+      for (const row of rows) {
         const cid = row.cluster_id ? String(row.cluster_id) : '';
         if (!cid) continue;
         const list = offersByMaster.get(cid) ?? [];
-        list.push(mapTrustViewRowToMerchantOffer(row));
+        list.push(
+          mapTrustViewRowToMerchantOffer(row, followers.get(row.merchant_id))
+        );
         offersByMaster.set(cid, list);
       }
       continue;
