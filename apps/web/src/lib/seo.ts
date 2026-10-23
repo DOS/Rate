@@ -8,6 +8,27 @@ export const SHARE_IMAGE = {
 
 export const SITE_URL = 'https://rate.vn';
 
+/** The longest title a search result shows uncut (DOS/Rate#765). */
+export const MAX_TITLE_LENGTH = 65;
+
+/**
+ * The first candidate that fits a search result, longest first. When none
+ * does, the last one is cut at a word boundary with an ellipsis
+ * (DOS/Rate#777).
+ */
+export function fitTitle(
+  candidates: readonly string[],
+  max: number = MAX_TITLE_LENGTH
+): string {
+  for (const candidate of candidates) {
+    if (candidate.length <= max) return candidate;
+  }
+  const last = candidates[candidates.length - 1] ?? '';
+  const cut = last.slice(0, max - 1);
+  const space = cut.lastIndexOf(' ');
+  return `${(space > max / 2 ? cut.slice(0, space) : cut).trimEnd()}…`;
+}
+
 /**
  * Structured data needs absolute URLs; Next only resolves metadata URLs
  * against metadataBase (DOS/Rate#738).

@@ -8,6 +8,9 @@ const ROUTES = [
   '/smartphones/iphone-16-pro-max-256gb',
   '/merchants/11111111-1111-4111-8111-111111111112',
   '/compare',
+  // Titles built from two product names (DOS/Rate#777).
+  '/compare/iphone-16-pro-max-256gb-vs-samsung-galaxy-s25-ultra-256gb',
+  '/compare?slugs=iphone-16-pro-max-256gb,samsung-galaxy-s25-ultra-256gb',
   '/deals',
   '/about-us',
   '/faq',
