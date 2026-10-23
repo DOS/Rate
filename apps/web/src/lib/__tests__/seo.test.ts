@@ -70,7 +70,7 @@ function main() {
     ]).length <= MAX_TITLE_LENGTH
   );
 
-  // Descriptions built from long names are cut at a word under 160 (#792).
+  // Descriptions built from long names are cut at a word under 160 (#793).
   const longDesc = `So sánh giá ${'Galaxy Z Fold7 Ultra '.repeat(8)}từ 5 gian hàng trên Rate.vn.`;
   const fittedDesc = fitDescription(longDesc);
   assert.ok(fittedDesc.length <= MAX_DESCRIPTION_LENGTH);

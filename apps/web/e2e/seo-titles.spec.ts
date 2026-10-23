@@ -17,7 +17,10 @@ const ROUTES = [
   '/merchants/ffffffff-ffff-4fff-8fff-ffffffff0783',
   '/smartphones/e2e-medium-name-phone',
   '/deals',
-  // Category descriptions (DOS/Rate#792).
+  // Category descriptions (DOS/Rate#793).
+  '/smartphones',
+  '/laptops',
+  '/tablets',
   '/earbuds',
   '/smartwatches',
   '/about-us',
@@ -40,7 +43,7 @@ for (const locale of ['vi', 'en', 'cs']) {
       expect((await page.goto(route))?.status()).toBe(200);
       const title = await page.title();
       expect(title.length, title).toBeLessThanOrEqual(65);
-      // Descriptions fit a search result too (DOS/Rate#792).
+      // Descriptions fit a search result too (DOS/Rate#793).
       const description =
         (await page
           .locator('meta[name="description"]')

@@ -955,7 +955,7 @@
     "notFoundTitle": "Produkt nenalezen | Rate.vn",
     "metaTitle": "{name} - Od {minPrice} ₫ | Rate.vn",
     "metaTitleShort": "{name} - Od {minPrice} ₫",
-    "metaDesc": "Porovnejte ceny {name} ({brand}) z {merchantCount} obchodů, zkontrolujte historii cen a přečtěte si AI ověřené recenze na Rate.vn.",
+    "metaDesc": "Porovnejte ceny {name} z {merchantCount} obchodů, zkontrolujte historii cen a přečtěte si ověřené recenze na Rate.vn.",
     "ogTitle": "{name} - Parametry a skutečná historie cen | Rate.vn",
     "ogDesc": "Nejlepší cena od {minPrice} ₫. Prohlédněte si 10 standardizovaných skupin parametrů GSMArena/PhoneArena a graf historie cen.",
     "breadcrumbHome": "Domů",
@@ -1482,12 +1482,12 @@
       "tablets": {
         "titleCount": "Srovnání cen tabletů ({count} modelů) | Rate.vn",
         "titleDefault": "Srovnání cen tabletů a kontrola slev | Rate.vn",
-        "description": "Vyhledávejte a filtrujte tablety (iPad, Galaxy Tab, Xiaomi Pad) podle 10 standardizovaných skupin parametrů, ověřte historii cen a odfiltrujte falešné recenze na Rate.vn."
+        "description": "Filtrujte tablety (iPad, Galaxy Tab, Xiaomi Pad) podle 10 skupin parametrů, ověřte historii cen a odfiltrujte falešné recenze na Rate.vn."
       },
       "laptops": {
         "titleCount": "Srovnání cen notebooků ({count} modelů) | Rate.vn",
         "titleDefault": "Srovnání cen notebooků a kontrola slev | Rate.vn",
-        "description": "Vyhledávejte a filtrujte notebooky (MacBook, ThinkPad, ASUS ROG, Dell XPS) podle 10 standardizovaných skupin parametrů, ověřte historii cen a odfiltrujte falešné recenze na Rate.vn."
+        "description": "Filtrujte notebooky (MacBook, ThinkPad, ASUS ROG, Dell XPS) podle 10 skupin parametrů, ověřte historii cen a odfiltrujte falešné recenze na Rate.vn."
       },
       "smartwatches": {
         "titleCount": "Srovnání cen chytrých hodinek ({count} modelů) | Rate.vn",

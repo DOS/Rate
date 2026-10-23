@@ -955,7 +955,7 @@
     "notFoundTitle": "Không tìm thấy sản phẩm | Rate.vn",
     "metaTitle": "{name} - Giá từ {minPrice} ₫ | Rate.vn",
     "metaTitleShort": "{name} - Giá từ {minPrice} ₫",
-    "metaDesc": "So sánh giá {name} từ {merchantCount} gian hàng, xem lịch sử giá để nhận ra giảm giá ảo và đọc đánh giá đã lọc bỏ đánh giá ảo trên Rate.vn.",
+    "metaDesc": "So sánh giá {name} từ {merchantCount} gian hàng, xem lịch sử giá để nhận ra giảm giá ảo và đọc đánh giá thật (đã lọc đánh giá ảo) trên Rate.vn.",
     "ogTitle": "{name} - So sánh giá và kiểm tra khuyến mãi | Rate.vn",
     "ogDesc": "Giá tốt nhất từ {minPrice} ₫. Xem 10 nhóm thông số kỹ thuật chuẩn GSMArena/PhoneArena và biểu đồ lịch sử giá.",
     "breadcrumbHome": "Trang chủ",
@@ -1379,7 +1379,7 @@
     "aboutLinkTablets": "Danh mục máy tính bảng (tablet)",
     "aboutLinkFaq": "Câu hỏi thường gặp về phương pháp tính điểm",
     "privacySeoTitle": "Chính sách bảo mật và dữ liệu | Rate.vn",
-    "privacySeoDesc": "Rate.vn không cần tài khoản để tra cứu. Khay so sánh lưu trên trình duyệt, bình chọn gắn với DOS ID, thông tin riêng của gian hàng không công khai.",
+    "privacySeoDesc": "Rate.vn không cần tài khoản để tra cứu. Khay so sánh lưu trên trình duyệt, bình chọn gắn với DOS ID và thông tin riêng của gian hàng không công khai.",
     "privacyHeroBadge": "Cách Rate.vn xử lý dữ liệu",
     "privacyHeroTitle": "Chính sách bảo mật và quyền riêng tư",
     "privacyHeroDesc": "Bạn có thể tra cứu thông số, kiểm tra link sản phẩm, so sánh máy và xem lịch sử giá mà không cần cung cấp thông tin cá nhân.",
@@ -1497,7 +1497,7 @@
       "earbuds": {
         "titleCount": "So sánh giá tai nghe không dây ANC ({count} mẫu) | Rate.vn",
         "titleDefault": "So sánh giá tai nghe chống ồn ANC và kiểm tra khuyến mãi | Rate.vn",
-        "description": "Lọc tai nghe không dây chống ồn (AirPods Pro, Sony WF-1000XM5, Galaxy Buds, Bose) theo 10 nhóm thông số, lịch sử giá thật và đánh giá đã lọc trên Rate.vn."
+        "description": "Lọc tai nghe chống ồn ANC (AirPods Pro, Sony WF-1000XM5, Galaxy Buds, Bose) theo 10 nhóm thông số, lịch sử giá thật và đánh giá đã lọc trên Rate.vn."
       }
     },
     "sortOptions": {
