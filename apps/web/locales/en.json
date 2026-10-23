@@ -121,11 +121,13 @@
   "compare": {
     "versusMetaFallbackTitle": "1v1 Compare | Rate.vn",
     "versusMetaTitle": "{nameA} vs {nameB}: 10 spec groups and review scores | Rate.vn",
+    "versusMetaTitleShort": "{nameA} vs {nameB} | Rate.vn",
     "versusMetaDescription": "Compare {nameA} and {nameB} head to head: review scores across 5 criteria, 10 spec groups and real store prices.",
     "versusHeroBadge": "1v1 comparison • same category ({category})",
     "viewCategoryLeaderboard": "View category leaderboard",
     "versusAutoVerdict": "Automatic verdict: {winner} leads with an overall score of {score}/5.0{expertSuffix}.",
     "compareMetaTitleWithNames": "Compare {names} - Ratings and 10 spec groups | Rate.vn",
+    "compareMetaTitleWithNamesShort": "{names} | Rate.vn",
     "compareMetaDescWithNames": "Compare real review scores, 10 spec groups and reference prices for {names} on Rate.vn.",
     "compareMetaDefaultTitle": "Same-category device comparison | Rate.vn",
     "compareMetaDefaultDesc": "Compare up to 4 devices in the same category (smartphones, tablets, laptops, smartwatches or earbuds) by review scores and 10 spec groups.",

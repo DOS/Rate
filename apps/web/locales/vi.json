@@ -121,11 +121,13 @@
   "compare": {
     "versusMetaFallbackTitle": "Đối đầu 1v1 | Rate.vn",
     "versusMetaTitle": "So sánh {nameA} và {nameB}: 10 nhóm thông số và điểm đánh giá | Rate.vn",
+    "versusMetaTitleShort": "{nameA} vs {nameB} | Rate.vn",
     "versusMetaDescription": "So sánh trực tiếp {nameA} và {nameB}: điểm đánh giá theo 5 tiêu chí, 10 nhóm thông số kỹ thuật và giá thật trên các sàn.",
     "versusHeroBadge": "So sánh 1v1 • cùng danh mục ({category})",
     "viewCategoryLeaderboard": "Xem bảng xếp hạng cùng ngành",
     "versusAutoVerdict": "Kết luận tự động: {winner} dẫn trước với điểm tổng hợp {score}/5.0{expertSuffix}.",
     "compareMetaTitleWithNames": "So sánh {names} - Điểm đánh giá và 10 nhóm thông số | Rate.vn",
+    "compareMetaTitleWithNamesShort": "{names} | Rate.vn",
     "compareMetaDescWithNames": "So sánh điểm đánh giá thật, 10 nhóm thông số kỹ thuật và giá tham khảo giữa {names} trên Rate.vn.",
     "compareMetaDefaultTitle": "So sánh thiết bị cùng ngành hàng | Rate.vn",
     "compareMetaDefaultDesc": "So sánh tối đa 4 thiết bị cùng danh mục (điện thoại, máy tính bảng, laptop, đồng hồ thông minh hoặc tai nghe) theo điểm đánh giá và 10 nhóm thông số kỹ thuật.",
