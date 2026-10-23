@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {
   buildSitemapLastModified,
+  newestOf,
   rowLastModified,
   versusLastModified,
 } from '../sitemap-lastmod';
@@ -60,6 +61,21 @@ function main() {
 
   // An empty catalogue has no latest date.
   assert.equal(buildSitemapLastModified([]).latest, undefined);
+
+  // The merchant directory takes the newest of the catalogue and its stores.
+  assert.equal(
+    newestOf(
+      dates.latest,
+      rowLastModified('2026-10-09T00:00:00Z'),
+      undefined
+    )?.toISOString(),
+    '2026-10-09T00:00:00.000Z'
+  );
+  assert.equal(
+    newestOf(dates.latest, undefined)?.toISOString(),
+    '2026-10-05T00:00:00.000Z'
+  );
+  assert.equal(newestOf(), undefined);
 
   console.warn('✅ Sitemap lastmod suite passed');
 }

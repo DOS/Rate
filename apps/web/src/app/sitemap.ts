@@ -11,8 +11,10 @@ import {
   buildPopular1v1BattlesForCategory,
   VALID_LEADERBOARD_CATEGORIES,
 } from '@/lib/leaderboard-engine';
+import type { CanonicalCategorySlug } from '@/lib/rate-domain-core';
 import {
   buildSitemapLastModified,
+  newestOf,
   rowLastModified,
   versusLastModified,
   type SitemapLastModified,
@@ -24,10 +26,11 @@ const baseUrl = (env.APP_PUBLIC_URL || 'https://rate.vn').replace(/\/$/, '');
 export const revalidate = 3600;
 
 // Which change time a fixed page carries (DOS/Rate#786): 'catalog' pages show
-// the newest product change, a category slug the newest change in that
-// category, and null pages (info and tools) no lastmod: Google trusts lastmod
-// only when it is accurate, and the render time is not.
-type StaticDate = 'catalog' | string | null;
+// the newest product change, 'merchants' the newest product or store change,
+// a category slug the newest change in that category, and null pages (info
+// and tools) no lastmod: Google trusts lastmod only when it is accurate, and
+// the render time is not.
+type StaticDate = 'catalog' | 'merchants' | CanonicalCategorySlug | null;
 
 const STATIC_PAGES: Array<{
   path: string;
@@ -82,7 +85,7 @@ const STATIC_PAGES: Array<{
   },
   {
     path: '/merchants',
-    date: 'catalog',
+    date: 'merchants',
     changeFrequency: 'daily',
     priority: 0.88,
   },
@@ -112,7 +115,8 @@ const STATIC_PAGES: Array<{
 ];
 
 function staticEntries(
-  dates: SitemapLastModified | null
+  dates: SitemapLastModified | null,
+  latestMerchant?: Date
 ): MetadataRoute.Sitemap {
   return STATIC_PAGES.map(({ path, date, changeFrequency, priority }) => {
     const lastModified =
@@ -120,7 +124,9 @@ function staticEntries(
         ? undefined
         : date === 'catalog'
           ? dates.latest
-          : dates.byCategory.get(date);
+          : date === 'merchants'
+            ? newestOf(dates.latest, latestMerchant)
+            : dates.byCategory.get(date);
     return {
       url: `${baseUrl}${path}`,
       ...(lastModified ? { lastModified } : {}),
@@ -204,8 +210,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       }
     );
 
+    const latestMerchant = newestOf(
+      ...rows.merchants.map((merchant) => rowLastModified(merchant.updated_at))
+    );
+
     return [
-      ...staticEntries(dates),
+      ...staticEntries(dates, latestMerchant),
       ...productEntries,
       ...versusEntries,
       ...merchantEntries,

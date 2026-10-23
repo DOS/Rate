@@ -10,7 +10,10 @@ export interface SitemapDatedRow {
 }
 
 export interface SitemapLastModified {
-  /** Newest product change in the catalogue, if any. */
+  /**
+   * Newest product change in the catalogue, if any. A max over the rows that
+   * remain, so removing the newest product does not advance it.
+   */
   latest: Date | undefined;
   /** Newest product change per category slug. */
   byCategory: Map<string, Date>;
@@ -54,6 +57,14 @@ export function versusLastModified(
   slugB: string
 ): Date | undefined {
   return newer(dates.bySlug.get(slugA), dates.bySlug.get(slugB));
+}
+
+/**
+ * The newest change among the given times: the merchant directory changes
+ * with its stores (risk rescoring) as well as with the catalogue.
+ */
+export function newestOf(...dates: Array<Date | undefined>): Date | undefined {
+  return dates.reduce<Date | undefined>((acc, d) => newer(acc, d), undefined);
 }
 
 /** A row's own change time, or undefined when unknown or unparseable. */

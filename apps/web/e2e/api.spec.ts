@@ -104,9 +104,9 @@ test('sitemap lastmod reflects content changes', async ({ request }) => {
   const at = (path: string) =>
     [...entries].find(([loc]) => new URL(loc).pathname === path)?.[1];
 
+  expect(entries.size).toBeGreaterThan(0);
   // Info and tool pages carry none.
   for (const path of ['/about-us', '/faq', '/inspect', '/watchlist']) {
-    expect(entries.size).toBeGreaterThan(0);
     expect(at(path), path).toBeUndefined();
   }
 
