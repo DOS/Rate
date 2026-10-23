@@ -837,6 +837,8 @@ export async function lookupExtensionProduct(
 
   let matchedMaster: MasterProduct | null = null;
   let matchStatus: ExtensionMatchStatus = 'not_found';
+  // The listing is known but its model is not published (DOS/Rate#769).
+  let listingOfUnpublishedModel = false;
 
   // Try matching via URL / externalId inspection if available
   const internalSlugCandidate =
@@ -876,10 +878,13 @@ export async function lookupExtensionProduct(
         }>
       ).find((r) => Boolean(r.cluster_id));
       if (matchedProd?.cluster_id) {
+        // A draft master has no product page (DOS/Rate#769). The listing is
+        // then known to be that model, so no catalogue guess either.
         const { data: masterRow, error: masterErr } = await client
           .from('master_products')
           .select('*')
           .eq('id', matchedProd.cluster_id)
+          .eq('status', 'published')
           .maybeSingle();
         if (masterErr) {
           log.error('extension_lookup_master_failed', {
@@ -892,13 +897,19 @@ export async function lookupExtensionProduct(
         if (masterRow) {
           matchedMaster = normalizeMasterProductRow(masterRow as MasterProduct);
           matchStatus = 'exact_listing';
+        } else {
+          listingOfUnpublishedModel = true;
         }
       }
     }
   }
 
   // Filter catalog candidates by storageGb if known
-  if (!matchedMaster && catalogCandidates.length > 0) {
+  if (
+    !matchedMaster &&
+    !listingOfUnpublishedModel &&
+    catalogCandidates.length > 0
+  ) {
     if (storageGb) {
       const exactStorageMatch = catalogCandidates.find(
         (m) => m.storage_gb === storageGb

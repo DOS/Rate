@@ -5,11 +5,7 @@ import { discountVerdictCopy } from '@/lib/discount-verdict-copy';
 import { formatSoldCount } from '@/lib/sold-count';
 import AnalyzerText from '@/components/reviews/AnalyzerText';
 import { Link } from '@/lib/navigation';
-import {
-  getCategoryRouteHref,
-  getMasterProductCategorySlug,
-  resolveProductImageUrl,
-} from '@/lib/rate-api';
+import { getCategoryRouteHref, resolveProductImageUrl } from '@/lib/rate-api';
 import {
   getCachedMerchantProfileById,
   getCrossPlatformDealRadar,
@@ -20,10 +16,7 @@ import {
   selectMerchantRadar,
 } from '@/lib/deal-radar';
 import RadarBadge from '@/components/radar/RadarBadge';
-import NavbarDarkDynamic from '../../components/navbar/NavbarDarkDynamic';
-import FooterTop from '../../components/footer-top';
-import FooterDynamic from '../../components/footer/FooterDynamic';
-import BackToTop from '../../components/back-to-top';
+import PageShell from '../../components/page-shell';
 import CompareTrayBar from '@/components/compare/CompareTrayBar';
 import MerchantShareAuditButton from '@/components/merchants/MerchantShareAuditButton';
 import {
@@ -184,14 +177,13 @@ export default async function MerchantProfilePage({
 
   return (
     <ClientMessages scope="merchantProfile">
-      <>
+      <PageShell locale={locale}>
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
             __html: JSON.stringify(merchantJsonLd).replace(/</g, '\\u003c'),
           }}
         />
-        <NavbarDarkDynamic links={[]} />
 
         <div className="container py-5">
           {/* Breadcrumb */}
@@ -650,12 +642,7 @@ export default async function MerchantProfilePage({
               <div className="row g-3">
                 {merchant.recent_reviews.slice(0, 12).map((rev) => {
                   const isAuthentic = rev.include_in_rating;
-                  const revCatSlug = rev.master_slug
-                    ? getMasterProductCategorySlug({
-                        slug: rev.master_slug,
-                        name: rev.product_title,
-                      })
-                    : 'smartphones';
+                  const revCatSlug = rev.master_category_slug || 'smartphones';
                   const revCatBase = getCategoryRouteHref(revCatSlug);
                   const flagBadge = isPendingReview(rev)
                     ? {
@@ -816,12 +803,11 @@ export default async function MerchantProfilePage({
                         item.master_product?.slug,
                         item.image
                       );
-                      const masterCatSlug = item.master_product
-                        ? getMasterProductCategorySlug({
-                            slug: item.master_product.slug,
-                            name: item.master_product.name,
-                          })
-                        : 'smartphones';
+                      // The category read with the master, not one guessed
+                      // from its name, which linked earbuds and others under
+                      // /smartphones (DOS/Rate#769).
+                      const masterCatSlug =
+                        item.master_product?.category_slug || 'smartphones';
                       const masterBaseHref =
                         getCategoryRouteHref(masterCatSlug);
 
@@ -978,10 +964,7 @@ export default async function MerchantProfilePage({
         </div>
 
         <CompareTrayBar />
-        <FooterTop locale={locale} />
-        <FooterDynamic sections={[]} links={[]} locale={locale} />
-        <BackToTop />
-      </>
+      </PageShell>
     </ClientMessages>
   );
 }

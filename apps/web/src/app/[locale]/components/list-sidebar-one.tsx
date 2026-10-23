@@ -255,7 +255,7 @@ export default function ListSidebarOne({
           aria-labelledby="filterSliderLabel"
         >
           <div className="offcanvas-header border-bottom py-3">
-            <h3 className="h5 mb-0">{t('sidebar.filterTitle')}</h3>
+            <h2 className="h5 mb-0">{t('sidebar.filterTitle')}</h2>
             <button
               type="button"
               className="btn-close d-lg-none text-sm"
@@ -273,9 +273,9 @@ export default function ListSidebarOne({
                 {/* 1. Keyword Search Box */}
                 <div className="filter-search-box mb-4">
                   <div className="filtersearch-title d-flex justify-content-between align-items-center">
-                    <h6 className="lh-base text-uppercase fw-medium mb-2 text-sm">
+                    <h3 className="lh-base text-uppercase fw-medium mb-2 text-sm">
                       {t('sidebar.keywordChipsetHeader')}
-                    </h6>
+                    </h3>
                     <span className="badge bg-light text-muted small border">
                       {schema.directoryName}
                     </span>
@@ -294,9 +294,9 @@ export default function ListSidebarOne({
                 {/* 2. Rating Filter (JReviews Weighted Score) */}
                 <div className="prtsTypes mb-4">
                   <div className="filtersearch-title">
-                    <h6 className="lh-base text-uppercase fw-medium mb-2 text-sm">
+                    <h3 className="lh-base text-uppercase fw-medium mb-2 text-sm">
                       {t('sidebar.jreviewsRatingHeader')}
-                    </h6>
+                    </h3>
                   </div>
                   <div className="filterButton">
                     {RATING_FILTER_OPTIONS.map((opt) => {
@@ -327,9 +327,9 @@ export default function ListSidebarOne({
                 {categories.length > 0 && (
                   <div className="filter-search-box mb-4">
                     <div className="filtersearch-title">
-                      <h6 className="lh-base text-uppercase fw-medium mb-2 text-sm">
+                      <h3 className="lh-base text-uppercase fw-medium mb-2 text-sm">
                         {t('sidebar.categoryHeader')}
-                      </h6>
+                      </h3>
                     </div>
                     <div className="row align-items-center justify-content-between gy-2">
                       <div className="col-xl-12 col-lg-12 col-md-12">
@@ -382,9 +382,9 @@ export default function ListSidebarOne({
                 {/* 4. Brands Filter (Multi-select pills) */}
                 <div className="filter-search-box mb-4">
                   <div className="filtersearch-title">
-                    <h6 className="lh-base text-uppercase fw-medium mb-2 text-sm">
+                    <h3 className="lh-base text-uppercase fw-medium mb-2 text-sm">
                       {t('sidebar.brandHeader')}
-                    </h6>
+                    </h3>
                   </div>
                   <div className="row align-items-center justify-content-between gy-2">
                     <div className="col-xl-12 col-lg-12 col-md-12">
@@ -426,9 +426,9 @@ export default function ListSidebarOne({
                 {/* 5. Price Range in Million VND (Presets + rc-slider RangeSlider) */}
                 <div className="filter-search-box mb-4">
                   <div className="filtersearch-title">
-                    <h6 className="lh-base text-uppercase fw-medium mb-2 text-sm">
+                    <h3 className="lh-base text-uppercase fw-medium mb-2 text-sm">
                       {t('sidebar.priceRangeHeader')}
-                    </h6>
+                    </h3>
                   </div>
                   <div className="d-flex align-items-center justify-content-center mb-3 flex-wrap gap-2">
                     {schema.pricePresets.map((preset) => {
@@ -484,9 +484,9 @@ export default function ListSidebarOne({
                 {/* 6. Hardware: RAM Filter */}
                 <div className="filter-search-box mb-4">
                   <div className="filtersearch-title">
-                    <h6 className="lh-base text-uppercase fw-medium mb-2 text-sm">
+                    <h3 className="lh-base text-uppercase fw-medium mb-2 text-sm">
                       {t('sidebar.ramHeader')}
-                    </h6>
+                    </h3>
                   </div>
                   <div className="d-flex align-items-center justify-content-center flex-wrap gap-2">
                     {schema.ramOptionsGb.map((ram) => {
@@ -516,9 +516,9 @@ export default function ListSidebarOne({
                 {/* 7. Hardware: Storage (ROM) Filter */}
                 <div className="filter-search-box mb-4">
                   <div className="filtersearch-title">
-                    <h6 className="lh-base text-uppercase fw-medium mb-2 text-sm">
+                    <h3 className="lh-base text-uppercase fw-medium mb-2 text-sm">
                       {t('sidebar.storageHeader')}
-                    </h6>
+                    </h3>
                   </div>
                   <div className="d-flex align-items-center justify-content-center flex-wrap gap-2">
                     {schema.storageOptionsGb.map((rom) => {
@@ -548,9 +548,9 @@ export default function ListSidebarOne({
                 {/* 8. 10 Field Groups Feature Checkboxes (Display, Battery, Cellular, Connectivity) */}
                 <div className="filter-search-box mb-4">
                   <div className="filtersearch-title">
-                    <h6 className="lh-base text-uppercase fw-medium mb-2 text-sm">
+                    <h3 className="lh-base text-uppercase fw-medium mb-2 text-sm">
                       {t('sidebar.featuresHeader')}
-                    </h6>
+                    </h3>
                   </div>
                   <div className="row align-items-center justify-content-between gy-2">
                     {schema.featureCheckboxes.map((feat) => {

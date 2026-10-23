@@ -1,10 +1,7 @@
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
-import NavbarDarkDynamic from '../components/navbar/NavbarDarkDynamic';
-import FooterTop from '../components/footer-top';
-import FooterDynamic from '../components/footer/FooterDynamic';
-import BackToTop from '../components/back-to-top';
+import PageShell from '../components/page-shell';
 import { BsQuestionCircleFill, BsShieldCheck } from 'react-icons/bs';
 
 export async function generateMetadata({
@@ -16,11 +13,7 @@ export async function generateMetadata({
   const t = await getTranslations({ locale, namespace: 'staticPages' });
   const alternates = {
     canonical: 'https://rate.vn/faq',
-    languages: {
-      vi: 'https://rate.vn/faq',
-      en: 'https://rate.vn/faq',
-      cs: 'https://rate.vn/faq',
-    },
+    // One URL serves every locale (cookie), so no hreflang alternates (DOS/Rate#765).
   };
   return {
     title: t('faqSeoTitle'),
@@ -49,9 +42,7 @@ export default async function FaqPage({
   ];
 
   return (
-    <>
-      <NavbarDarkDynamic links={[]} />
-
+    <PageShell locale={locale}>
       <section className="bg-dark border-bottom border-secondary border-opacity-25 py-5 text-white">
         <div className="container py-3 text-center">
           <span className="badge bg-primary rounded-pill fw-semibold mb-3 px-3 py-2">
@@ -79,7 +70,7 @@ export default async function FaqPage({
                     key={item.q}
                     className="card rounded-4 border bg-white p-4 shadow-sm"
                   >
-                    <h3 className="h5 fw-bold text-dark mb-2">{item.q}</h3>
+                    <h2 className="h5 fw-bold text-dark mb-2">{item.q}</h2>
                     <p className="text-secondary mb-0">{item.a}</p>
                   </div>
                 ))}
@@ -88,10 +79,10 @@ export default async function FaqPage({
               <div className="card rounded-4 border-primary border-opacity-25 mt-4 border bg-white p-4 shadow-sm">
                 <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
                   <div>
-                    <h4 className="h5 fw-bold mb-1">
+                    <h2 className="h5 fw-bold mb-1">
                       <BsShieldCheck className="text-primary me-2" />
                       {t('faqCtaTitle')}
-                    </h4>
+                    </h2>
                     <p className="text-muted small mb-0">{t('faqCtaDesc')}</p>
                   </div>
                   <div className="d-flex flex-wrap gap-2">
@@ -114,10 +105,6 @@ export default async function FaqPage({
           </div>
         </div>
       </section>
-
-      <FooterTop locale={locale} />
-      <FooterDynamic sections={[]} links={[]} locale={locale} />
-      <BackToTop />
-    </>
+    </PageShell>
   );
 }

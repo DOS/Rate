@@ -18,12 +18,19 @@ export default async function FooterTop({
     namespace: 'rate.footer',
   });
   return (
-    <section className="rate-footer-cta rate-surface-dark py-5">
+    // Named by its title, so the band is a region landmark of its own after
+    // <main>. h2: it follows whatever level the page ended on (DOS/Rate#764).
+    <section
+      className="rate-footer-cta rate-surface-dark py-5"
+      aria-labelledby="rate-footer-cta-title"
+    >
       <div className="container">
         <div className="row align-items-center justify-content-between g-4">
           <div className="col-lg-7 col-md-12">
             <span className="rate-eyebrow mb-2">{tFooter('bannerBadge')}</span>
-            <h4 className="rate-footer-cta-title">{tFooter('bannerTitle')}</h4>
+            <h2 id="rate-footer-cta-title" className="rate-footer-cta-title">
+              {tFooter('bannerTitle')}
+            </h2>
             <p className="rate-footer-cta-desc">{tFooter('bannerDesc')}</p>
           </div>
 

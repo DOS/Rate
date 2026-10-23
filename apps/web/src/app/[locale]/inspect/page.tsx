@@ -3,10 +3,7 @@ import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { getCachedInspectProductOrShopUrl } from '@/server/rate';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
-import NavbarDarkDynamic from '../components/navbar/NavbarDarkDynamic';
-import FooterTop from '../components/footer-top';
-import FooterDynamic from '../components/footer/FooterDynamic';
-import BackToTop from '../components/back-to-top';
+import PageShell from '../components/page-shell';
 import CompareTrayBar from '@/components/compare/CompareTrayBar';
 import DeepInspectWorkspace from '@/components/inspect/DeepInspectWorkspace';
 import ClientMessages from '@/components/providers/ClientMessages';
@@ -62,11 +59,12 @@ export default async function InspectPage({
 
   return (
     <ClientMessages scope="inspect">
-      <>
-        <NavbarDarkDynamic links={[]} />
+      <PageShell locale={locale}>
         <Suspense
           fallback={
-            <div className="container py-5 text-center">{t('loading')}</div>
+            <div className="rate-island-fallback container py-5 text-center">
+              {t('loading')}
+            </div>
           }
         >
           <DeepInspectWorkspace
@@ -76,10 +74,7 @@ export default async function InspectPage({
           />
         </Suspense>
         <CompareTrayBar />
-        <FooterTop locale={locale} />
-        <FooterDynamic sections={[]} links={[]} locale={locale} />
-        <BackToTop />
-      </>
+      </PageShell>
     </ClientMessages>
   );
 }

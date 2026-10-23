@@ -1,7 +1,7 @@
 {
   "rate": {
     "seo": {
-      "siteTitle": "Rate.vn - Srovnání 10 skupin parametrů, historie skutečných cen a filtrované recenze",
+      "siteTitle": "Rate.vn - Skutečné ceny, parametry a filtrované recenze",
       "siteDescription": "Porovnejte technické parametry podle GSMArena a PhoneArena, odhalte falešné slevy a čtěte recenze bez falešných na Shopee, Lazada a Tiki na Rate.vn."
     },
     "nav": {
@@ -22,7 +22,8 @@
       "menuToggleAria": "Otevřít nebo zavřít menu",
       "menuCloseAria": "Zavřít menu",
       "categories": "Kategorie",
-      "backToTop": "Zpět nahoru"
+      "backToTop": "Zpět nahoru",
+      "skipToContent": "Přeskočit na hlavní obsah"
     },
     "footer": {
       "copyRight": "© {YEAR} Rate.vn, součást ekosystému DOS. Porovnání parametrů, skutečná historie cen a recenze z mnoha obchodů.",
@@ -126,7 +127,7 @@
     "versusAutoVerdict": "Automatický verdikt: {winner} vede s celkovým skóre {score}/5.0{expertSuffix}.",
     "compareMetaTitleWithNames": "Porovnání {names} - Hodnocení a 10 skupin parametrů | Rate.vn",
     "compareMetaDescWithNames": "Porovnání skutečných hodnocení, 10 skupin technických parametrů a referenčních cen pro {names} na Rate.vn.",
-    "compareMetaDefaultTitle": "Porovnání zařízení ve stejné kategorii - 10 skupin parametrů | Rate.vn",
+    "compareMetaDefaultTitle": "Porovnání zařízení ve stejné kategorii | Rate.vn",
     "compareMetaDefaultDesc": "Porovnejte až 4 zařízení ve stejné kategorii podle hodnocení a 10 skupin technických parametrů.",
     "breadcrumbHome": "Domů",
     "breadcrumbCatalog": "Katalog zařízení",
@@ -649,7 +650,7 @@
     "quickToggleShortWatched": "Hlídáno"
   },
   "deals": {
-    "metaTitle": "Nejvýhodnější technologické nabídky ověřené v 10 obchodech | Rate.vn",
+    "metaTitle": "Výhodné nabídky ověřené v 10 obchodech | Rate.vn",
     "metaDescription": "Najděte nejvýhodnější technologická zařízení podle rozpočtu a způsobu využití, ověřená porovnáním cen napříč obchody a filtrem falešných slev na 10 tržištích.",
     "pageEyebrow": "Ověřené slevy",
     "pageTitle": "Nejvýhodnější nabídky bez falešných slev (10 obchodů)",
@@ -856,7 +857,7 @@
     "emptySubtitle": "Zkuste zrušit filtry nebo vložte odkaz na obchod či produkt do kontroly odkazů.",
     "inspectUrlCta": "Ověřit jakýkoli odkaz na obchod nebo produkt →",
     "notFoundTitle": "Obchod nenalezen | Rate.vn",
-    "profileMetaTitle": "{name} ({platform}) - Důvěra {score}/100 a historie cen | Rate.vn",
+    "profileMetaTitle": "{name} ({platform}) - Důvěra {score}/100 | Rate.vn",
     "profileMetaDesc": "Profil prodejce {name}: riziko podvodu DOSafe ({dosafe}/100), riziko recenzí ({seeding}/100) a historie cen {count} produktů na Rate.vn.",
     "trustHigh": "Vysoká důvěryhodnost (Bezpečný)",
     "trustModerate": "Střední důvěryhodnost",
@@ -949,7 +950,7 @@
   },
   "productDetail": {
     "notFoundTitle": "Produkt nenalezen | Rate.vn",
-    "metaTitle": "{name} - Od {minPrice} ₫, parametry a skutečné recenze | Rate.vn",
+    "metaTitle": "{name} - Od {minPrice} ₫ | Rate.vn",
     "metaDesc": "Porovnejte ceny {name} ({brand}) z {merchantCount} obchodů, zkontrolujte historii cen a přečtěte si AI ověřené recenze na Rate.vn.",
     "ogTitle": "{name} - Parametry a skutečná historie cen | Rate.vn",
     "ogDesc": "Nejlepší cena od {minPrice} ₫. Prohlédněte si 10 standardizovaných skupin parametrů GSMArena/PhoneArena a graf historie cen.",

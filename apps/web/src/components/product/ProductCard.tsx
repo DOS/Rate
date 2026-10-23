@@ -99,7 +99,7 @@ export default function ProductCard({
       <div className="rate-product-card-body">
         <p className="rate-product-card-meta">{meta.join(' · ')}</p>
 
-        <h4 className="rate-product-card-title">
+        <h3 className="rate-product-card-title">
           <Link href={href}>
             {name}
             {verified && (
@@ -110,7 +110,7 @@ export default function ProductCard({
               />
             )}
           </Link>
-        </h4>
+        </h3>
 
         <div className="rate-product-card-scores">
           {userScore != null ? (

@@ -1,10 +1,7 @@
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
-import NavbarDarkDynamic from '../components/navbar/NavbarDarkDynamic';
-import FooterTop from '../components/footer-top';
-import FooterDynamic from '../components/footer/FooterDynamic';
-import BackToTop from '../components/back-to-top';
+import PageShell from '../components/page-shell';
 import { EMPTY_RATE_PLATFORM_STATS } from '@/lib/rate-api';
 import { getCachedRatePlatformStats } from '@/server/rate';
 import {
@@ -30,11 +27,7 @@ export async function generateMetadata({
   const t = await getTranslations({ locale, namespace: 'staticPages' });
   const alternates = {
     canonical: 'https://rate.vn/about-us',
-    languages: {
-      vi: 'https://rate.vn/about-us',
-      en: 'https://rate.vn/about-us',
-      cs: 'https://rate.vn/about-us',
-    },
+    // One URL serves every locale (cookie), so no hreflang alternates (DOS/Rate#765).
   };
   return {
     title: t('aboutSeoTitle'),
@@ -57,9 +50,7 @@ export default async function AboutUsPage({
   ]);
 
   return (
-    <>
-      <NavbarDarkDynamic links={[]} />
-
+    <PageShell locale={locale}>
       <section className="bg-dark border-bottom border-secondary border-opacity-25 py-5 text-white">
         <div className="container py-3">
           <div className="row align-items-center g-4">
@@ -148,7 +139,7 @@ export default async function AboutUsPage({
             <div className="col-lg-4">
               <div className="card rounded-4 h-100 border bg-white p-4 shadow-sm">
                 <BsCpu className="text-primary fs-1 mb-3" />
-                <h4 className="h5 fw-bold mb-2">{t('aboutPillar1Title')}</h4>
+                <h3 className="h5 fw-bold mb-2">{t('aboutPillar1Title')}</h3>
                 <p className="text-muted small mb-3">{t('aboutPillar1Desc')}</p>
                 <div className="mt-auto pt-2">
                   <Link
@@ -164,7 +155,7 @@ export default async function AboutUsPage({
             <div className="col-lg-4">
               <div className="card rounded-4 h-100 border bg-white p-4 shadow-sm">
                 <BsGraphUpArrow className="text-success fs-1 mb-3" />
-                <h4 className="h5 fw-bold mb-2">{t('aboutPillar2Title')}</h4>
+                <h3 className="h5 fw-bold mb-2">{t('aboutPillar2Title')}</h3>
                 <p className="text-muted small mb-3">{t('aboutPillar2Desc')}</p>
                 <div className="mt-auto pt-2">
                   <Link
@@ -180,7 +171,7 @@ export default async function AboutUsPage({
             <div className="col-lg-4">
               <div className="card rounded-4 h-100 border bg-white p-4 shadow-sm">
                 <BsShieldCheck className="text-danger fs-1 mb-3" />
-                <h4 className="h5 fw-bold mb-2">{t('aboutPillar3Title')}</h4>
+                <h3 className="h5 fw-bold mb-2">{t('aboutPillar3Title')}</h3>
                 <p className="text-muted small mb-3">{t('aboutPillar3Desc')}</p>
                 <div className="mt-auto pt-2">
                   <Link
@@ -233,10 +224,10 @@ export default async function AboutUsPage({
 
             <div className="col-lg-5">
               <div className="card rounded-4 bg-light border p-4">
-                <h5 className="fw-bold mb-3">
+                <h4 className="h5 fw-bold mb-3">
                   <BsShop className="text-primary me-2" />
                   {t('aboutQuickLinksTitle')}
-                </h5>
+                </h4>
                 <div className="d-grid gap-2">
                   <Link
                     href="/smartphones"
@@ -268,10 +259,6 @@ export default async function AboutUsPage({
           </div>
         </div>
       </section>
-
-      <FooterTop locale={locale} />
-      <FooterDynamic sections={[]} links={[]} locale={locale} />
-      <BackToTop />
-    </>
+    </PageShell>
   );
 }

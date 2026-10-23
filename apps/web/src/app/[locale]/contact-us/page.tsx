@@ -1,10 +1,7 @@
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
-import NavbarDarkDynamic from '../components/navbar/NavbarDarkDynamic';
-import FooterTop from '../components/footer-top';
-import FooterDynamic from '../components/footer/FooterDynamic';
-import BackToTop from '../components/back-to-top';
+import PageShell from '../components/page-shell';
 import HeroSearchInspector from '@/components/home/HeroSearchInspector';
 import CommunityQuarantineSubmitForm from '@/components/contact/CommunityQuarantineSubmitForm';
 import { getMasterProducts } from '@/lib/rate-api';
@@ -36,11 +33,7 @@ export async function generateMetadata({
   const t = await getTranslations({ locale, namespace: 'staticPages' });
   const alternates = {
     canonical: 'https://rate.vn/contact-us',
-    languages: {
-      vi: 'https://rate.vn/contact-us',
-      en: 'https://rate.vn/contact-us',
-      cs: 'https://rate.vn/contact-us',
-    },
+    // One URL serves every locale (cookie), so no hreflang alternates (DOS/Rate#765).
   };
   return {
     title: t('contactSeoTitle'),
@@ -64,9 +57,7 @@ export default async function ContactUsPage({
 
   return (
     <ClientMessages scope="contact">
-      <>
-        <NavbarDarkDynamic links={[]} />
-
+      <PageShell locale={locale}>
         <section className="bg-dark border-bottom border-secondary border-opacity-25 py-5 text-white">
           <div className="container py-3">
             <div className="row justify-content-center mb-4 text-center">
@@ -107,7 +98,7 @@ export default async function ContactUsPage({
               <div className="col-lg-4">
                 <div className="card rounded-4 h-100 border bg-white p-4 shadow-sm">
                   <BsShieldExclamation className="text-danger fs-1 mb-3" />
-                  <h4 className="h5 fw-bold mb-2">{t('contactCard1Title')}</h4>
+                  <h3 className="h5 fw-bold mb-2">{t('contactCard1Title')}</h3>
                   <p className="text-muted small mb-3">
                     {t('contactCard1Desc')}
                   </p>
@@ -123,7 +114,7 @@ export default async function ContactUsPage({
               <div className="col-lg-4">
                 <div className="card rounded-4 h-100 border bg-white p-4 shadow-sm">
                   <BsShop className="text-primary fs-1 mb-3" />
-                  <h4 className="h5 fw-bold mb-2">{t('contactCard2Title')}</h4>
+                  <h3 className="h5 fw-bold mb-2">{t('contactCard2Title')}</h3>
                   <p className="text-muted small mb-3">
                     {t('contactCard2Desc')}
                   </p>
@@ -139,7 +130,7 @@ export default async function ContactUsPage({
               <div className="col-lg-4">
                 <div className="card rounded-4 h-100 border bg-white p-4 shadow-sm">
                   <BsCodeSquare className="text-success fs-1 mb-3" />
-                  <h4 className="h5 fw-bold mb-2">{t('contactCard3Title')}</h4>
+                  <h3 className="h5 fw-bold mb-2">{t('contactCard3Title')}</h3>
                   <p className="text-muted small mb-3">
                     {t('contactCard3Desc')}
                   </p>
@@ -174,9 +165,9 @@ export default async function ContactUsPage({
                       <BsEnvelopeAt className="fs-4" />
                     </div>
                     <div>
-                      <h5 className="fw-bold mb-1">
+                      <h4 className="h5 fw-bold mb-1">
                         {t('contactFooterTitle')}
-                      </h5>
+                      </h4>
                       <p className="text-muted small mb-0">
                         {t('contactFooterDescPrefix')}{' '}
                         <code>security@rate.vn</code>{' '}
@@ -198,11 +189,7 @@ export default async function ContactUsPage({
             </div>
           </div>
         </section>
-
-        <FooterTop locale={locale} />
-        <FooterDynamic sections={[]} links={[]} locale={locale} />
-        <BackToTop />
-      </>
+      </PageShell>
     </ClientMessages>
   );
 }

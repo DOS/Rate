@@ -9,10 +9,7 @@ import {
 } from '@/server/rate';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
 import CompareWorkspace from '@/components/compare/CompareWorkspace';
-import NavbarDarkDynamic from '../components/navbar/NavbarDarkDynamic';
-import FooterTop from '../components/footer-top';
-import FooterDynamic from '../components/footer/FooterDynamic';
-import BackToTop from '../components/back-to-top';
+import PageShell from '../components/page-shell';
 import ClientMessages from '@/components/providers/ClientMessages';
 
 // Reads searchParams, so it renders per request. The [locale] layout's
@@ -127,9 +124,7 @@ export default async function ComparePhonesPage({
 
   return (
     <ClientMessages scope="compare">
-      <>
-        <NavbarDarkDynamic links={[]} />
-
+      <PageShell locale={locale}>
         <div
           className="min-vh-100 py-md-5 py-4"
           style={{ backgroundColor: 'var(--rate-bg-canvas)' }}
@@ -173,11 +168,7 @@ export default async function ComparePhonesPage({
             />
           </div>
         </div>
-
-        <FooterTop locale={locale} />
-        <FooterDynamic sections={[]} links={[]} locale={locale} />
-        <BackToTop />
-      </>
+      </PageShell>
     </ClientMessages>
   );
 }

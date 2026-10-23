@@ -720,7 +720,7 @@ export default function HeroSearchInspector({
                             />
                           </div>
 
-                          <h4 className="h5 fw-bold mb-1">
+                          <h2 className="h5 fw-bold mb-1">
                             <Link
                               href={getMasterProductHref(
                                 inspectResult.masterProduct
@@ -729,7 +729,7 @@ export default function HeroSearchInspector({
                             >
                               {inspectResult.masterProduct.name}
                             </Link>
-                          </h4>
+                          </h2>
 
                           <div className="text-danger fw-bold fs-5 mb-1">
                             {t('bestPriceLabel')}{' '}
@@ -854,13 +854,13 @@ export default function HeroSearchInspector({
                           })}
                         </span>
                       </div>
-                      <h4 className="h5 fw-bold mb-1">
+                      <h2 className="h5 fw-bold mb-1">
                         <BsShop className="text-primary me-2" />
                         <ContentText
                           text={inspectResult.merchantProfile.name}
                           locale={locale}
                         />
-                      </h4>
+                      </h2>
                       <div className="text-muted small">
                         {t.rich('merchantRiskLine', {
                           scam: inspectResult.merchantProfile.dosafe_risk_score,
