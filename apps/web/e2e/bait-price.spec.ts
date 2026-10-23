@@ -76,6 +76,16 @@ test('inspecting the bait listing warns instead of endorsing it', async ({
     (await page.goto(`/inspect?q=${encodeURIComponent(BAIT_URL)}`))?.status()
   ).toBe(200);
   await expect(page.getByTestId('inspect-implausibly-low')).toBeVisible();
+  // Its offers list labels the bait listing once and lists it last (#805).
+  const baitBadge = page.getByTestId('inspect-offer-implausibly-low');
+  await expect(baitBadge).toHaveCount(1);
+  const offersTable = page.locator('table', { has: baitBadge });
+  await expect(offersTable.locator('tbody tr').first()).not.toContainText(
+    '1.250.000'
+  );
+  await expect(offersTable.locator('tbody tr').last()).toContainText(
+    '1.250.000'
+  );
   await expect(page.locator('main')).not.toContainText(
     'Giá niêm yết khớp với lịch sử giá thật.'
   );

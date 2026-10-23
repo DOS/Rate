@@ -149,9 +149,14 @@ export default function DeepInspectWorkspace({
     result?.matchedOffer ?? plausibleOffers(result?.allOffers ?? [])[0] ?? null;
   const discount = result?.discountAnalysis ?? null;
   // Judged as the product page's offers table judges the row (#797).
+  const implausibleOfferIds = implausiblyLowOfferIds(result?.allOffers ?? []);
   const offerImplausiblyLow =
-    !!matchedOffer &&
-    implausiblyLowOfferIds(result?.allOffers ?? []).has(matchedOffer.id);
+    !!matchedOffer && implausibleOfferIds.has(matchedOffer.id);
+  // Bait-price offers are labelled and listed after the plausible ones (#805).
+  const listedOffers = [
+    ...(result?.allOffers ?? []).filter((o) => !implausibleOfferIds.has(o.id)),
+    ...(result?.allOffers ?? []).filter((o) => implausibleOfferIds.has(o.id)),
+  ];
   const priceHistory = result?.priceHistory ?? null;
   const reviewSummary = result?.reviewSummary ?? null;
   const merchant = result?.merchantProfile ?? null;
@@ -254,7 +259,12 @@ export default function DeepInspectWorkspace({
       t('colAuditStatus'),
       ...RADAR_CSV_HEADERS,
     ];
-    const offers = result.allOffers || (matchedOffer ? [matchedOffer] : []);
+    const offers =
+      listedOffers.length > 0
+        ? listedOffers
+        : matchedOffer
+          ? [matchedOffer]
+          : [];
     const histLow = Number(
       priceHistory?.lowestEverPrice || master?.min_price || 0
     );
@@ -276,6 +286,7 @@ export default function DeepInspectWorkspace({
       histHigh,
       matchedPriceSpread?.spreadPct ?? 0,
       (() => {
+        if (implausibleOfferIds.has(o.id)) return t('implausiblyLowBadge');
         const a =
           priceHistory?.byOffer?.[o.id] ??
           (o.id === matchedOffer?.id ? discount : null);
@@ -308,6 +319,7 @@ export default function DeepInspectWorkspace({
         fakeSaleTrap: matchedFakeTrap,
         priceSpread: matchedPriceSpread,
       },
+      implausiblyLowOfferIds: [...implausibleOfferIds],
       inspection: result,
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
@@ -759,7 +771,7 @@ export default function DeepInspectWorkspace({
                         </tr>
                       </thead>
                       <tbody>
-                        {result.allOffers.map((offer) => (
+                        {listedOffers.map((offer) => (
                           <tr key={offer.id}>
                             <td>
                               <div className="fw-semibold text-dark">
@@ -787,6 +799,15 @@ export default function DeepInspectWorkspace({
                                 'vi-VN'
                               )}{' '}
                               ₫
+                              {implausibleOfferIds.has(offer.id) && (
+                                <span
+                                  className="badge bg-warning text-dark d-block mt-1"
+                                  data-testid="inspect-offer-implausibly-low"
+                                  title={t('implausiblyLowTitle')}
+                                >
+                                  {t('implausiblyLowBadge')}
+                                </span>
+                              )}
                             </td>
                             <td className="small text-muted text-decoration-line-through">
                               {offer.price_original
