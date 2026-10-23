@@ -224,7 +224,7 @@ export default async function FooterDynamic({
           <div className="col-md-4 offset-md-3 col-lg-3 offset-lg-0 col-xl-2 col-6">
             <div className="footer-widget mb-md-5 mb-lg-0 mb-5">
               {col1?.title ? (
-                <h4 className="widget-title text-pri">{col1.title}</h4>
+                <h2 className="widget-title h4 text-pri">{col1.title}</h2>
               ) : null}
               <ul className="footer-menu">
                 {(col1?.links || [])
@@ -253,7 +253,7 @@ export default async function FooterDynamic({
           <div className="col-md-4 col-lg-3 col-xl-2 col-6">
             <div className="footer-widget mb-md-5 mb-lg-0 mb-5">
               {col2?.title ? (
-                <h4 className="widget-title">{col2.title}</h4>
+                <h2 className="widget-title h4">{col2.title}</h2>
               ) : null}
               <ul className="footer-menu">
                 {(col2?.links || [])
@@ -282,7 +282,7 @@ export default async function FooterDynamic({
           <div className="col-md-4 col-lg-3 col-xl-2 col-6">
             <div className="footer-widget">
               {col3?.title ? (
-                <h4 className="widget-title">{col3.title}</h4>
+                <h2 className="widget-title h4">{col3.title}</h2>
               ) : null}
               <ul className="footer-menu">
                 {(col3?.links || [])
@@ -310,14 +310,14 @@ export default async function FooterDynamic({
           {/* Trust signals */}
           <div className="col-md-4 col-lg-3 col-xl-2 col-6">
             <div className="footer-widget">
-              <h4 className="widget-title">{tFooter('trustTitle')}</h4>
+              <h2 className="widget-title h4">{tFooter('trustTitle')}</h2>
               <div className="contactInfowrap">
                 <div className="singleinfo">
                   <div className="icons">
                     <BsShieldCheck />
                   </div>
                   <div className="caps">
-                    <h5 className="title">{tFooter('trustRiskTitle')}</h5>
+                    <h3 className="title">{tFooter('trustRiskTitle')}</h3>
                     <p className="subs">{tFooter('antiSeedingSub')}</p>
                   </div>
                 </div>
@@ -326,7 +326,7 @@ export default async function FooterDynamic({
                     <BsCodeSlash />
                   </div>
                   <div className="caps">
-                    <h5 className="title">{tFooter('trustOpenTitle')}</h5>
+                    <h3 className="title">{tFooter('trustOpenTitle')}</h3>
                     <p className="subs">{tFooter('specGroupsSub')}</p>
                   </div>
                 </div>

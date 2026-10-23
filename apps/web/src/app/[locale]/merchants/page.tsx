@@ -2,10 +2,7 @@ import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
 import { getCachedMerchantsList } from '@/server/rate';
-import NavbarDarkDynamic from '../components/navbar/NavbarDarkDynamic';
-import FooterTop from '../components/footer-top';
-import FooterDynamic from '../components/footer/FooterDynamic';
-import BackToTop from '../components/back-to-top';
+import PageShell from '../components/page-shell';
 import CompareTrayBar from '@/components/compare/CompareTrayBar';
 import { BsSearch, BsShieldCheck } from 'react-icons/bs';
 import MerchantDirectoryExplorer from '@/components/merchants/MerchantDirectoryExplorer';
@@ -62,9 +59,7 @@ export default async function MerchantsDirectoryPage({
 
   return (
     <ClientMessages scope="merchants">
-      <>
-        <NavbarDarkDynamic links={[]} />
-
+      <PageShell locale={locale}>
         <div
           className="hero-banner rate-surface-dark rate-ink-on-dark position-relative overflow-hidden"
           style={{
@@ -159,10 +154,7 @@ export default async function MerchantsDirectoryPage({
         </section>
 
         <CompareTrayBar />
-        <FooterTop locale={locale} />
-        <FooterDynamic sections={[]} links={[]} locale={locale} />
-        <BackToTop />
-      </>
+      </PageShell>
     </ClientMessages>
   );
 }

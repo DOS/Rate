@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
-import NavbarDarkDynamic from './components/navbar/NavbarDarkDynamic';
+import PageShell from './components/page-shell';
 import {
   EMPTY_RATE_PLATFORM_STATS,
   getMasterProductHref,
@@ -37,9 +37,6 @@ import {
   BsGraphDownArrow,
   BsExclamationTriangle,
 } from 'react-icons/bs';
-import FooterTop from './components/footer-top';
-import FooterDynamic from './components/footer/FooterDynamic';
-import BackToTop from './components/back-to-top';
 import HeroSearchInspector from '@/components/home/HeroSearchInspector';
 import CompareTrayBar from '@/components/compare/CompareTrayBar';
 import ProductCard, {
@@ -170,7 +167,7 @@ export default async function Home({
 
   return (
     <ClientMessages scope="home">
-      <>
+      <PageShell locale={locale}>
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
@@ -179,7 +176,6 @@ export default async function Home({
             ).replace(/</g, '\\u003c'),
           }}
         />
-        <NavbarDarkDynamic links={[]} />
 
         {/* Hero Section with Interactive Autocomplete & E-commerce Link Inspector (DESIGN.md v2.0 Dark Obsidian + DOS Crimson Glow) */}
         <div
@@ -357,12 +353,12 @@ export default async function Home({
                 <span className="rate-eyebrow mb-2">
                   {tRate('home.catBadge')}
                 </span>
-                <h3 className="sectionHeading mb-1">
+                <h2 className="sectionHeading h3 fw-semibold mb-1">
                   {tRate('home.catTitlePrefix')}{' '}
                   <span className="text-primary">
                     {tRate('home.catTitleHighlight')}
                   </span>
-                </h3>
+                </h2>
                 <p className="text-muted mb-0">{tRate('home.catSubtitle')}</p>
               </div>
               <div className="rate-section-links">
@@ -409,9 +405,9 @@ export default async function Home({
                             : tRate('home.catExpanding')}
                         </span>
                       </div>
-                      <h4 id={titleId} className="rate-category-card-title">
+                      <h3 id={titleId} className="rate-category-card-title">
                         {known ? tRate(`nav.${cat.slug}`) : cat.name}
-                      </h4>
+                      </h3>
                       {isKnownCategory(cat.slug) && (
                         <p id={descId} className="rate-category-card-desc">
                           {tHome(CATEGORY_DESC_KEYS[cat.slug])}
@@ -438,12 +434,12 @@ export default async function Home({
                   <span className="rate-eyebrow mb-2">
                     {tRate('home.featuredBadge')}
                   </span>
-                  <h3 className="sectionHeading mb-1">
+                  <h2 className="sectionHeading h3 fw-semibold mb-1">
                     {tRate('home.featuredTitlePrefix')}{' '}
                     <span className="text-primary">
                       {tRate('home.featuredTitleHighlight')}
                     </span>
-                  </h3>
+                  </h2>
                   <p className="text-muted mb-0">
                     {tRate('home.featuredSubtitle')}
                   </p>
@@ -546,9 +542,9 @@ export default async function Home({
                       <span className="rate-eyebrow mb-2">
                         {tHome('popularBattlesBadge')}
                       </span>
-                      <h4 className="rate-battles-title">
+                      <h3 className="rate-battles-title">
                         {tHome('popularBattlesTitle')}
-                      </h4>
+                      </h3>
                     </div>
                     <div className="rate-section-links">
                       <Link href="/leaderboard">
@@ -631,12 +627,12 @@ export default async function Home({
                         <span className="rate-eyebrow mb-2">
                           {tHome('radarHomeBadge')}
                         </span>
-                        <h4 className="rate-home-radar-title">
+                        <h3 className="rate-home-radar-title">
                           {tHome('radarHomeAnalyzed', {
                             offers: dealRadar.totalOffersAnalyzed,
                             clusters: dealRadar.totalClustersAnalyzed,
                           })}
-                        </h4>
+                        </h3>
                       </div>
                       <div className="rate-section-links">
                         <Link href="/inspect">
@@ -653,12 +649,12 @@ export default async function Home({
                     <div className="row g-4">
                       {dealRadar.genuineDeals.length > 0 && (
                         <div className="col-lg-6">
-                          <h5 className="rate-radar-list-title is-good">
+                          <h4 className="rate-radar-list-title is-good">
                             <BsGraphDownArrow aria-hidden="true" />
                             {tHome('radarGenuineTitle', {
                               count: dealRadar.genuineDeals.length,
                             })}
-                          </h5>
+                          </h4>
                           <ul className="rate-radar-list">
                             {dealRadar.genuineDeals.slice(0, 3).map((g) => (
                               <li key={g.id}>
@@ -704,12 +700,12 @@ export default async function Home({
 
                       {dealRadar.fakeSaleTraps.length > 0 && (
                         <div className="col-lg-6">
-                          <h5 className="rate-radar-list-title is-bad">
+                          <h4 className="rate-radar-list-title is-bad">
                             <BsExclamationTriangle aria-hidden="true" />
                             {tHome('radarFakeTitle', {
                               count: dealRadar.fakeSaleTraps.length,
                             })}
-                          </h5>
+                          </h4>
                           <ul className="rate-radar-list">
                             {dealRadar.fakeSaleTraps.slice(0, 3).map((t) => (
                               <li key={t.id}>
@@ -761,10 +757,10 @@ export default async function Home({
                           className="rate-radar-spread"
                         >
                           <div className="rate-radar-spread-head">
-                            <h5 className="rate-radar-list-title">
+                            <h4 className="rate-radar-list-title">
                               <BsArrowLeftRight aria-hidden="true" />
                               {tHome('spreadLeadersTitle')}
-                            </h5>
+                            </h4>
                             <Link href="/deals">
                               {tHome('viewAllSpreadBtn', {
                                 count: dealRadar.priceSpreadLeaders.length,
@@ -825,12 +821,12 @@ export default async function Home({
                 <span className="rate-eyebrow mb-2">
                   {tRate('home.merchantBadge')}
                 </span>
-                <h3 className="sectionHeading mb-1">
+                <h2 className="sectionHeading h3 fw-semibold mb-1">
                   {tRate('home.merchantTitlePrefix')}{' '}
                   <span className="text-primary">
                     {tRate('home.merchantTitleHighlight')}
                   </span>
-                </h3>
+                </h2>
                 <p className="text-muted mb-0">
                   {tRate('home.merchantSubtitle')}
                 </p>
@@ -876,14 +872,14 @@ export default async function Home({
                             <BsShop />
                           </span>
                           <div className="rate-merchant-id">
-                            <h4 className="rate-merchant-name">
+                            <h3 className="rate-merchant-name">
                               <Link href={`/merchants/${merchant.id}`}>
                                 <ContentText
                                   text={merchant.name}
                                   locale={locale}
                                 />
                               </Link>
-                            </h4>
+                            </h3>
                             <div className="rate-merchant-meta">
                               <span className="rate-radar-platform">
                                 {merchant.platform}
@@ -981,12 +977,12 @@ export default async function Home({
                   <span className="rate-eyebrow mb-2">
                     {tRate('home.reviewsBadge')}
                   </span>
-                  <h3 className="sectionHeading mb-1">
+                  <h2 className="sectionHeading h3 fw-semibold mb-1">
                     {tRate('home.reviewsTitlePrefix')}{' '}
                     <span className="text-primary">
                       {tRate('home.reviewsTitleHighlight')}
                     </span>
-                  </h3>
+                  </h2>
                   <p className="text-muted mb-0">
                     {tRate('home.reviewsSubtitle')}
                   </p>
@@ -1114,13 +1110,13 @@ export default async function Home({
                 <span className="rate-eyebrow mb-2">
                   {tRate('home.whyBadge')}
                 </span>
-                <h3 className="sectionHeading mb-2">
+                <h2 className="sectionHeading h3 fw-semibold mb-2">
                   {tRate('home.whyTitlePrefix')}{' '}
                   <span className="text-primary">
                     {tRate('home.whyTitleHighlight')}
                   </span>
                   ?
-                </h3>
+                </h2>
                 <p className="text-muted mb-0">{tRate('home.whySubtitle')}</p>
               </div>
             </div>
@@ -1144,9 +1140,9 @@ export default async function Home({
                     >
                       {icon}
                     </span>
-                    <h4 className="rate-category-card-title">
+                    <h3 className="rate-category-card-title">
                       {tHome(`whyCard${n}Title`)}
-                    </h4>
+                    </h3>
                     <p className="rate-category-card-desc">
                       {tHome(`whyCard${n}Desc`)}
                     </p>
@@ -1162,10 +1158,7 @@ export default async function Home({
         </section>
 
         <CompareTrayBar />
-        <FooterTop locale={locale} />
-        <FooterDynamic sections={[]} links={[]} locale={locale} />
-        <BackToTop />
-      </>
+      </PageShell>
     </ClientMessages>
   );
 }

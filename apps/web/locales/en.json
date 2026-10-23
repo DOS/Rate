@@ -22,7 +22,8 @@
       "menuToggleAria": "Open or close the menu",
       "menuCloseAria": "Close the menu",
       "categories": "Categories",
-      "backToTop": "Back to top"
+      "backToTop": "Back to top",
+      "skipToContent": "Skip to main content"
     },
     "footer": {
       "copyRight": "© {YEAR} Rate.vn, part of the DOS ecosystem. Spec comparisons, real price history and reviews from many stores.",

@@ -1,10 +1,7 @@
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
-import NavbarDarkDynamic from '../components/navbar/NavbarDarkDynamic';
-import FooterTop from '../components/footer-top';
-import FooterDynamic from '../components/footer/FooterDynamic';
-import BackToTop from '../components/back-to-top';
+import PageShell from '../components/page-shell';
 import { BsDatabaseLock, BsShieldCheck, BsShieldLock } from 'react-icons/bs';
 
 export async function generateMetadata({
@@ -35,9 +32,7 @@ export default async function PrivacyPolicyPage({
   const t = await getTranslations({ locale, namespace: 'staticPages' });
 
   return (
-    <>
-      <NavbarDarkDynamic links={[]} />
-
+    <PageShell locale={locale}>
       <section className="bg-dark border-bottom border-secondary border-opacity-25 py-5 text-white">
         <div className="container py-3">
           <span className="badge bg-success rounded-pill fw-semibold mb-3 px-3 py-2">
@@ -55,16 +50,16 @@ export default async function PrivacyPolicyPage({
           <div className="row g-4">
             <div className="col-lg-8">
               <div className="card rounded-4 p-md-5 border bg-white p-4 shadow-sm">
-                <h3 className="h5 fw-bold mb-3">{t('privacyS1Title')}</h3>
+                <h2 className="h5 fw-bold mb-3">{t('privacyS1Title')}</h2>
                 <p className="text-secondary mb-4">{t('privacyS1Desc')}</p>
 
-                <h3 className="h5 fw-bold mb-3">{t('privacyS2Title')}</h3>
+                <h2 className="h5 fw-bold mb-3">{t('privacyS2Title')}</h2>
                 <p className="text-secondary mb-4">{t('privacyS2Desc')}</p>
 
-                <h3 className="h5 fw-bold mb-3">{t('privacyS3Title')}</h3>
+                <h2 className="h5 fw-bold mb-3">{t('privacyS3Title')}</h2>
                 <p className="text-secondary mb-4">{t('privacyS3Desc')}</p>
 
-                <h3 className="h5 fw-bold mb-3">{t('privacyS4Title')}</h3>
+                <h2 className="h5 fw-bold mb-3">{t('privacyS4Title')}</h2>
                 <p className="text-secondary mb-0">{t('privacyS4Desc')}</p>
               </div>
             </div>
@@ -72,7 +67,7 @@ export default async function PrivacyPolicyPage({
             <div className="col-lg-4">
               <div className="card rounded-4 mb-4 border bg-white p-4 shadow-sm">
                 <BsDatabaseLock className="text-primary fs-1 mb-3" />
-                <h4 className="h5 fw-bold mb-2">{t('privacySide1Title')}</h4>
+                <h3 className="h5 fw-bold mb-2">{t('privacySide1Title')}</h3>
                 <p className="text-muted small mb-3">{t('privacySide1Desc')}</p>
                 <Link
                   href="/developers"
@@ -84,9 +79,9 @@ export default async function PrivacyPolicyPage({
 
               <div className="card rounded-4 bg-dark border-0 p-4 text-white shadow-sm">
                 <BsShieldCheck className="text-success fs-2 mb-2" />
-                <h5 className="fw-bold mb-2 text-white">
+                <h4 className="h5 fw-bold mb-2 text-white">
                   {t('privacySide2Title')}
-                </h5>
+                </h4>
                 <p className="small text-white-50 mb-3">
                   {t('privacySide2Desc')}
                 </p>
@@ -101,10 +96,6 @@ export default async function PrivacyPolicyPage({
           </div>
         </div>
       </section>
-
-      <FooterTop locale={locale} />
-      <FooterDynamic sections={[]} links={[]} locale={locale} />
-      <BackToTop />
-    </>
+    </PageShell>
   );
 }

@@ -17,10 +17,7 @@ import {
 } from '@/lib/rate-api';
 import { normalizeRateLocale, type SupportedRateLocale } from '@/lib/rate-i18n';
 import { defaultOpenGraph } from '@/lib/seo';
-import NavbarDarkDynamic from '../components/navbar/NavbarDarkDynamic';
-import FooterTop from '../components/footer-top';
-import FooterDynamic from '../components/footer/FooterDynamic';
-import BackToTop from '../components/back-to-top';
+import PageShell from '../components/page-shell';
 import CompareTrayBar from '@/components/compare/CompareTrayBar';
 import LeaderboardExplorer from '@/components/leaderboard/LeaderboardExplorer';
 import ClientMessages from '@/components/providers/ClientMessages';
@@ -164,9 +161,8 @@ export default async function LeaderboardPage({ params }: PageProps) {
 
   return (
     <ClientMessages scope="leaderboard">
-      <>
-        <NavbarDarkDynamic links={[]} />
-        <main
+      <PageShell locale={locale}>
+        <div
           style={{
             background: '#f8fafc',
             minHeight: '100vh',
@@ -371,13 +367,10 @@ export default async function LeaderboardPage({ params }: PageProps) {
               locale={resolvedLocale}
             />
           </section>
-        </main>
+        </div>
 
         <CompareTrayBar />
-        <FooterTop locale={locale} />
-        <FooterDynamic sections={[]} links={[]} locale={locale} />
-        <BackToTop />
-      </>
+      </PageShell>
     </ClientMessages>
   );
 }

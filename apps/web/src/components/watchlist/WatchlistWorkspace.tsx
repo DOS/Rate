@@ -672,7 +672,7 @@ export default function WatchlistWorkspace({
           <div className="display-5 text-secondary mb-3">
             <BsBell aria-hidden="true" />
           </div>
-          <h3 className="h5 fw-bold mb-2">{t('emptyTitle')}</h3>
+          <h2 className="h5 fw-bold mb-2">{t('emptyTitle')}</h2>
           <p
             className="text-muted small mx-auto mb-4"
             style={{ maxWidth: '560px' }}
@@ -708,7 +708,7 @@ export default function WatchlistWorkspace({
                           <span className="badge bg-secondary-subtle text-secondary small mb-1">
                             {p.brand}
                           </span>
-                          <h6 className="fw-bold mb-1">{p.name}</h6>
+                          <h3 className="h6 fw-bold mb-1">{p.name}</h3>
                           <div className="text-danger fw-bold small">
                             {minP.toLocaleString('vi-VN')} ₫
                           </div>
@@ -858,14 +858,14 @@ export default function WatchlistWorkspace({
                               )}
                           </div>
                         )}
-                        <h5 className="fw-bold mb-1">
+                        <h2 className="h5 fw-bold mb-1">
                           <Link
                             href={detailHref}
                             className="text-dark text-decoration-none"
                           >
                             {item.name}
                           </Link>
-                        </h5>
+                        </h2>
                         <div className="text-muted small">
                           {t('savedDateLabel', {
                             date: new Date(item.addedAt).toLocaleDateString(

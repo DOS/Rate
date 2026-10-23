@@ -27,7 +27,13 @@ export default function Error({ error, reset }: Props) {
   const isDev = isDevelopment();
 
   return (
-    <section className="bg-light min-vh-100 d-flex align-items-center py-5">
+    // The boundary replaces the whole page, PageShell included, so it brings
+    // its own <main> landmark (DOS/Rate#764).
+    <main
+      id="main-content"
+      tabIndex={-1}
+      className="bg-light min-vh-100 d-flex align-items-center py-5"
+    >
       <div className="container py-5">
         <div className="row justify-content-center">
           <div className="col-lg-7">
@@ -74,6 +80,6 @@ export default function Error({ error, reset }: Props) {
           </div>
         </div>
       </div>
-    </section>
+    </main>
   );
 }

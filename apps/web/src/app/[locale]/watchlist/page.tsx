@@ -2,10 +2,7 @@ import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { getMasterProducts } from '@/lib/rate-api';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
-import NavbarDarkDynamic from '../components/navbar/NavbarDarkDynamic';
-import FooterTop from '../components/footer-top';
-import FooterDynamic from '../components/footer/FooterDynamic';
-import BackToTop from '../components/back-to-top';
+import PageShell from '../components/page-shell';
 import CompareTrayBar from '@/components/compare/CompareTrayBar';
 import WatchlistWorkspace from '@/components/watchlist/WatchlistWorkspace';
 import ClientMessages from '@/components/providers/ClientMessages';
@@ -47,14 +44,10 @@ export default async function WatchlistPage({
 
   return (
     <ClientMessages scope="watchlist">
-      <>
-        <NavbarDarkDynamic links={[]} />
+      <PageShell locale={locale}>
         <WatchlistWorkspace catalogProducts={catalogProducts} locale={locale} />
         <CompareTrayBar />
-        <FooterTop locale={locale} />
-        <FooterDynamic sections={[]} links={[]} locale={locale} />
-        <BackToTop />
-      </>
+      </PageShell>
     </ClientMessages>
   );
 }

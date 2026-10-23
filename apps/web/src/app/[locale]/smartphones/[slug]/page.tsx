@@ -44,10 +44,7 @@ import PriceHistorySection from '@/components/price-history/PriceHistorySection'
 import CompareQuickToggle from '@/components/compare/CompareQuickToggle';
 import CompareTrayBar from '@/components/compare/CompareTrayBar';
 import PriceWatchButton from '@/components/watchlist/PriceWatchButton';
-import NavbarDarkDynamic from '../../components/navbar/NavbarDarkDynamic';
-import FooterTop from '../../components/footer-top';
-import FooterDynamic from '../../components/footer/FooterDynamic';
-import BackToTop from '../../components/back-to-top';
+import PageShell from '../../components/page-shell';
 import type { KeySpecs, ProductSpecifications } from '@repo/shared-data';
 
 import { normalizeRateLocale } from '@/lib/rate-i18n';
@@ -282,7 +279,7 @@ export async function ProductDetailView({
 
   return (
     <ClientMessages scope="productDetail">
-      <>
+      <PageShell locale={locale}>
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
@@ -292,7 +289,6 @@ export async function ProductDetailView({
             ),
           }}
         />
-        <NavbarDarkDynamic links={[]} />
         <div className="container py-5">
           {/* Breadcrumb */}
           <nav aria-label="breadcrumb" className="mb-4">
@@ -1631,14 +1627,14 @@ export async function ProductDetailView({
                                 )}
                               />
                             </div>
-                            <h6 className="fw-bold text-truncate mb-1">
+                            <h4 className="h6 fw-bold text-truncate mb-1">
                               <Link
                                 href={`${categoryBasePath}/${peer.slug}`}
                                 className="text-dark text-decoration-none"
                               >
                                 {peer.name}
                               </Link>
-                            </h6>
+                            </h4>
                             <div className="d-flex align-items-center flex-wrap gap-2">
                               {peerPrice > 0 ? (
                                 <span className="text-danger fw-bold small rate-tabular">
@@ -1709,10 +1705,7 @@ export async function ProductDetailView({
           )}
         </div>
         <CompareTrayBar />
-        <FooterTop locale={locale} />
-        <FooterDynamic sections={[]} links={[]} locale={locale} />
-        <BackToTop />
-      </>
+      </PageShell>
     </ClientMessages>
   );
 }

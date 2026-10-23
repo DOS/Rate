@@ -128,7 +128,7 @@ export default function CommunityQuarantineSubmitForm() {
           <span className="badge bg-danger bg-opacity-10 text-danger rounded-pill fw-semibold mb-2 px-3 py-1">
             {t('quarantineBadge')}
           </span>
-          <h3 className="h4 fw-bold mb-1">{t('quarantineTitle')}</h3>
+          <h2 className="h4 fw-bold mb-1">{t('quarantineTitle')}</h2>
           <p className="text-muted small mb-0">{t('quarantineSubtitle')}</p>
         </div>
         <Link

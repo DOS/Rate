@@ -6,10 +6,7 @@ import {
   getCrossPlatformDealRadar,
 } from '@/server/rate';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
-import NavbarDarkDynamic from '../components/navbar/NavbarDarkDynamic';
-import FooterTop from '../components/footer-top';
-import FooterDynamic from '../components/footer/FooterDynamic';
-import BackToTop from '../components/back-to-top';
+import PageShell from '../components/page-shell';
 import CompareTrayBar from '@/components/compare/CompareTrayBar';
 import DealFinderWorkspace from '@/components/deals/DealFinderWorkspace';
 import ClientMessages from '@/components/providers/ClientMessages';
@@ -55,8 +52,7 @@ export default async function DealsPage({ params }: PageProps) {
 
   return (
     <ClientMessages scope="deals">
-      <main className="bg-light min-vh-100">
-        <NavbarDarkDynamic links={[]} />
+      <PageShell locale={locale} mainClassName="bg-light">
         <section className="py-4">
           <div className="container">
             <div className="rate-scoreboard-dark rate-surface-dark rounded-4 mb-4 p-4">
@@ -91,10 +87,7 @@ export default async function DealsPage({ params }: PageProps) {
           </div>
         </section>
         <CompareTrayBar />
-        <FooterTop locale={locale} />
-        <FooterDynamic sections={[]} links={[]} locale={locale} />
-        <BackToTop />
-      </main>
+      </PageShell>
     </ClientMessages>
   );
 }
