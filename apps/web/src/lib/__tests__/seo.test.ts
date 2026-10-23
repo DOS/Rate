@@ -56,6 +56,12 @@ function main() {
   // An emoji is never split into a lone surrogate.
   const emoji = fitTitle(['😀'.repeat(70)]);
   assert.ok(!/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/.test(emoji));
+  assert.ok(emoji.length <= MAX_TITLE_LENGTH);
+  assert.ok(
+    fitTitle([
+      'iPhone 16 Pro Max 256GB vs Galaxy S25 Ultra 256GB 😀😀😀😀😀😀😀😀😀😀 extra words',
+    ]).length <= MAX_TITLE_LENGTH
+  );
 
   console.warn('✅ SEO helpers suite passed');
 }

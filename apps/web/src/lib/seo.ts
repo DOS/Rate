@@ -26,14 +26,17 @@ export function fitTitle(
   }
   const last = candidates[candidates.length - 1];
   if (!last) return '';
-  // Whole code points, so an emoji is never split.
-  const cut = Array.from(last)
-    .slice(0, limit - 1)
-    .join('');
+  // Whole code points, so an emoji is never split, within the same UTF-16
+  // length the candidates are measured in.
+  let cut = '';
+  for (const ch of last) {
+    if (cut.length + ch.length > limit - 1) break;
+    cut += ch;
+  }
   const space = cut.lastIndexOf(' ');
   const kept = (space > limit / 2 ? cut.slice(0, space) : cut)
     // No dangling joiner such as "vs" before the ellipsis.
-    .replace(/\s+(vs|và|-|\||:)$/u, '')
+    .replace(/\s+(vs|và|-|\+|\||:)$/u, '')
     .trimEnd();
   return `${kept}…`;
 }
