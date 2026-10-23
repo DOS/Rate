@@ -130,6 +130,18 @@ async function runSuite() {
   assert.equal(keyOf('Điện thoại vivo V40 5G 12GB/256GB'), 'vivo:v40:256gb');
   assert.equal(keyOf('Đồng hồ Vivoactive 5 GPS'), 'garmin:vivoactive-5:unknown');
   assert.equal(brandOf('Vòng đeo tay Vivosmart 5'), 'Garmin');
+  // Every Garmin Vivo line is Garmin, and the "Vòng đeo tay" prefix is dropped (DOS/Rate#774).
+  assert.equal(keyOf('Vòng đeo tay Vivosmart 5'), 'garmin:vivosmart-5:unknown');
+  assert.equal(keyOf('Vòng đeo tay thông minh Garmin Vivosmart 5'), 'garmin:vivosmart-5:unknown');
+  assert.equal(keyOf('Vòng đeo tay Vivofit 4'), 'garmin:vivofit-4:unknown');
+  assert.equal(keyOf('Đồng hồ Vivosport'), 'garmin:vivosport:unknown');
+  assert.equal(brandOf('Vivolife'), 'Garmin');
+  // "Vivo Book 15" keys like "Vivobook 15".
+  assert.equal(keyOf('Laptop ASUS Vivo Book 15 X1504 512GB'), 'asus:vivobook-15-x1504:512gb');
+  assert.equal(
+    keyOf('Laptop ASUS Vivo Book 15 X1504 512GB'),
+    keyOf('Laptop ASUS Vivobook 15 X1504 512GB')
+  );
   // "Omen" only as a word: Sennheiser "Momentum" is not HP.
   assert.equal(brandOf('Tai nghe Sennheiser Momentum 4 Wireless'), 'Sennheiser');
   assert.equal(brandOf('Laptop HP Omen 16 512GB'), 'HP');
@@ -210,6 +222,12 @@ async function runSuite() {
     keyOf('Xiaomi Redmi Note 14 Pro Plus 5G 256GB'),
     'xiaomi:redmi-note-14-pro-plus:256gb'
   );
+  // A semicolon ends the model like a comma, and "Plus;" still counts.
+  assert.equal(
+    keyOf('Xiaomi Redmi Note 14 Pro Plus; 12GB/256GB'),
+    'xiaomi:redmi-note-14-pro-plus:256gb'
+  );
+  assert.equal(keyOf('Đồng hồ Garmin Epix Gen 2; Titanium'), 'garmin:epix-gen-2:unknown');
   console.log('  ✅ [2/5] RAM/ROM Disambiguation & Identity Safety passed');
 
   // 3. Multi-Category Benchmark Enrichment (Tablets, Laptops, Smartwatches, Earbuds)
