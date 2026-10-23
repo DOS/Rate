@@ -90,9 +90,9 @@ export default function ProductOffersExplorer({
       priciest,
       spreadVnd,
       spreadPct,
-      platformCount: platforms.length,
+      platformCount: new Set(valid.map((o) => o.platform.toLowerCase())).size,
     };
-  }, [offers, platforms.length, implausibleOfferIds]);
+  }, [offers, implausibleOfferIds]);
 
   const filteredOffers = useMemo(() => {
     const base = offers.filter((o) => {
@@ -168,9 +168,11 @@ export default function ProductOffersExplorer({
         o.price_original
           ? `${o.price_original.toLocaleString('vi-VN')} ₫`
           : '-',
-        analysis
-          ? discountVerdictCopy(tVerdict, analysis).label
-          : tVerdict('labelNormal'),
+        implausibleOfferIds.has(o.id)
+          ? t('offersImplausiblyLowBadge')
+          : analysis
+            ? discountVerdictCopy(tVerdict, analysis).label
+            : tVerdict('labelNormal'),
       ];
     });
 
@@ -235,7 +237,9 @@ export default function ProductOffersExplorer({
         String(o.merchant.review_risk_score || 0),
         String(o.price_current),
         String(o.price_original || ''),
-        analysis?.verdict || 'normal',
+        implausibleOfferIds.has(o.id)
+          ? 'implausibly_low'
+          : analysis?.verdict || 'normal',
         o.url,
         ...(radarSignal ? radarCsvCells(radarSignal) : []),
       ];
@@ -288,7 +292,10 @@ export default function ProductOffersExplorer({
         trustScorePercent: Math.max(0, 100 - (o.merchant.risk_score || 0)),
         priceCurrentVnd: o.price_current,
         priceOriginalVnd: o.price_original || null,
-        verdict: byOffer[o.id]?.verdict || 'normal',
+        verdict: implausibleOfferIds.has(o.id)
+          ? 'implausibly_low'
+          : byOffer[o.id]?.verdict || 'normal',
+        implausiblyLow: implausibleOfferIds.has(o.id),
         url: o.url,
       })),
     };

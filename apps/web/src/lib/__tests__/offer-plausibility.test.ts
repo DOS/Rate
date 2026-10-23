@@ -40,6 +40,23 @@ function main() {
   assert.equal(implausiblyLowIndexes([0, NaN, 100, 1000]).size, 0);
   assert.equal(implausiblyLowIndexes([0, 100, 1000, 1000]).size, 1);
 
+  // One overpriced listing does not hide a real deal (lower median of others).
+  assert.equal(implausiblyLowIndexes([1500, 3000, 9000]).size, 0);
+  assert.equal(implausiblyLowIndexes([1300, 3000, 3200, 9000, 9500]).size, 0);
+  // Two bait listings among four are both flagged.
+  assert.deepEqual(
+    [...implausiblyLowIndexes([700, 750, 3000, 3100])].sort(),
+    [0, 1]
+  );
+  // Order of the input does not matter.
+  assert.deepEqual([...implausiblyLowIndexes([3100, 700, 3000])], [1]);
+  // Large lists stay fast (sorted once).
+  const many = Array.from({ length: 5000 }, (_, i) => 1_000_000 + i);
+  many.push(100_000);
+  const started = Date.now();
+  assert.deepEqual([...implausiblyLowIndexes(many)], [5000]);
+  assert.ok(Date.now() - started < 200, 'implausiblyLowIndexes is O(n log n)');
+
   // No priced offers: the stored minimum stands.
   assert.equal(plausibleMinPrice(5000, []), 5000);
   assert.equal(plausibleMinPrice(5000, [{ price_current: 0 }]), 5000);

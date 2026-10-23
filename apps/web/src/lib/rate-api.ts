@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import type { Database, MasterProduct } from '@repo/shared-data';
 import { createLogger } from '@/lib/logger';
 import { isPendingReview } from '@/lib/review-display';
+import { plausibleOffers } from '@/lib/offer-plausibility';
 import {
   type ReviewFlagCategory,
   type ReviewItem,
@@ -1549,7 +1550,13 @@ export async function getMasterProductPriceHistory(
   options: { allTime?: boolean } = {}
 ): Promise<MasterProductPriceHistorySummary> {
   const allTime = options.allTime ?? true;
-  const offers = existingOffers ?? (await getMasterProductOffers(masterId));
+  // Bait-price listings far below every other store take no part: no chart
+  // points, no market median, no current or all-time low, and no discount
+  // verdict (DOS/Rate#797). The highest offer is never flagged, so a
+  // non-empty list stays non-empty.
+  const offers = plausibleOffers(
+    existingOffers ?? (await getMasterProductOffers(masterId))
+  );
   if (offers.length === 0) {
     return {
       points: [],

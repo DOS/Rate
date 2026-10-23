@@ -1,4 +1,5 @@
 import 'server-only';
+import { plausibleOffers } from '../../lib/offer-plausibility';
 import type { Database } from '@repo/shared-data';
 import {
   MAX_VALID_VND_PRICE,
@@ -1061,18 +1062,22 @@ export async function lookupExtensionProduct(
       : null;
 
   const isAmbiguous = matchStatus === 'ambiguous_variant';
+  // The market reference and "cheaper elsewhere" leave bait-price listings
+  // out; the matched offer above still comes from every offer, so a shopper
+  // on a bait listing sees it judged against the real market (DOS/Rate#797).
+  const marketOffers = plausibleOffers(offers);
   const priceAssessment = evaluateExtensionPriceVerdict({
     isAccessory: false,
     accessoryReason: null,
     isAmbiguousVariant: isAmbiguous,
     observedPrice: effectiveObservedPrice,
     observedOriginalPrice: effectiveObservedOriginal,
-    offers,
+    offers: marketOffers,
     priceHistory,
   });
 
   const topCheaperOffers = effectiveObservedPrice
-    ? offers
+    ? marketOffers
         .filter(
           (o) =>
             Number.isFinite(o.price_current) &&
@@ -1082,7 +1087,7 @@ export async function lookupExtensionProduct(
         )
         .sort((a, b) => a.price_current - b.price_current)
         .slice(0, 4)
-    : offers.slice(0, 4);
+    : marketOffers.slice(0, 4);
 
   // Only the matched offer's merchant: this public endpoint used to read the
   // whole merchant directory on every lookup.

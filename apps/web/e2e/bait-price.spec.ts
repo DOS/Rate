@@ -20,9 +20,24 @@ test('a bait-price listing does not set the lowest price', async ({ page }) => {
     .textContent();
   expect(ld).toContain('"lowPrice":3030000');
 
+  // Outside the offers table the bait price appears nowhere: not as the
+  // all-time low, the price history's current best, nor the radar floor.
+  const outsideTable = await page.evaluate(() => {
+    const clone = document
+      .querySelector('main')!
+      .cloneNode(true) as HTMLElement;
+    clone.querySelector('#offers-table')?.remove();
+    return clone.innerText;
+  });
+  expect(outsideTable).not.toContain('750.000');
+
   // The bait offer is labelled once and is not ranked first by price.
   const table = page.locator('#offers-table');
   await expect(table.getByTestId('offer-implausibly-low')).toHaveCount(1);
   const firstRow = table.locator('tbody tr').first();
   await expect(firstRow).not.toContainText('750.000');
+  // Its row carries no deal verdict next to the warning.
+  const baitRow = table.locator('tbody tr', { hasText: '750.000' });
+  await expect(baitRow).toHaveCount(1);
+  await expect(baitRow).not.toContainText(/Đáy giá lịch sử|Giảm giá thật/);
 });

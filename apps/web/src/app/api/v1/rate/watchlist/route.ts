@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { plausibleMinPrice, plausibleOffers } from '@/lib/offer-plausibility';
 import { z } from 'zod';
 import {
   MAX_VALID_VND_PRICE,
@@ -74,10 +75,23 @@ export interface WatchlistBestOffer {
   is_official_mall: boolean;
 }
 
+// The stored min_price can be a bait-price listing; target checks use the
+// lowest plausible offer instead (DOS/Rate#797).
+function withPlausibleMinPrice<T extends { min_price?: unknown }>(
+  master: T,
+  offers: readonly { price_current: number }[]
+): T {
+  return {
+    ...master,
+    min_price: plausibleMinPrice(Number(master.min_price || 0), offers),
+  };
+}
+
 function selectBestOfferFromListings(
   offers: Awaited<ReturnType<typeof getCachedMasterProductOffers>>
 ): { bestOffer: WatchlistBestOffer | null; offerPlatforms: string[] } {
-  const valid = offers.filter((o) => {
+  // A bait-price listing is never the best offer (DOS/Rate#797).
+  const valid = plausibleOffers(offers).filter((o) => {
     const price = Number(o.price_current);
     return (
       Number(o.stock ?? 1) > 0 &&
@@ -174,7 +188,7 @@ export async function GET(request: NextRequest) {
       const radarSignal = computeProductRadarSignal(master, offers);
       const { currentMinPrice, currentMaxPrice } =
         resolveWatchlistMasterPriceBounds(
-          master,
+          withPlausibleMinPrice(master, offers),
           bestOffer?.price,
           MAX_VALID_VND_PRICE
         );
@@ -287,7 +301,7 @@ export async function POST(request: NextRequest) {
     const { bestOffer, offerPlatforms } = selectBestOfferFromListings(offers);
     const radarSignal = computeProductRadarSignal(masterProduct, offers);
     const { currentMinPrice } = resolveWatchlistMasterPriceBounds(
-      masterProduct,
+      withPlausibleMinPrice(masterProduct, offers),
       bestOffer?.price,
       MAX_VALID_VND_PRICE
     );
