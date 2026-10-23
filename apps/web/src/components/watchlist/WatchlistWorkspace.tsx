@@ -695,6 +695,8 @@ export default function WatchlistWorkspace({
                     <div className="card rounded-4 bg-light h-100 border p-3">
                       <div className="d-flex align-items-center mb-3 gap-3">
                         <img
+                          loading="lazy"
+                          decoding="async"
                           src={thumb}
                           alt={p.name}
                           className="rounded border bg-white p-1"
@@ -775,6 +777,8 @@ export default function WatchlistWorkspace({
                     <div className="d-flex align-items-center gap-3">
                       {item.thumbnail ? (
                         <img
+                          loading="lazy"
+                          decoding="async"
                           src={item.thumbnail}
                           alt={item.name}
                           className="rounded-3 bg-light border p-2"

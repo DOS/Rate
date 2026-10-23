@@ -1440,6 +1440,8 @@ export default function CompareWorkspace({
                                 >
                                   {thumb ? (
                                     <img
+                                      loading="lazy"
+                                      decoding="async"
                                       src={thumb}
                                       alt={item.name}
                                       style={{
@@ -1670,6 +1672,8 @@ export default function CompareWorkspace({
                     <div className="d-flex align-items-center justify-content-between my-2 gap-2">
                       <div className="d-flex align-items-center gap-2 overflow-hidden">
                         <img
+                          loading="lazy"
+                          decoding="async"
                           src={battle.productA.thumbnail}
                           alt={battle.productA.name}
                           className="rounded-2 flex-shrink-0 border bg-white p-1"
@@ -1703,6 +1707,8 @@ export default function CompareWorkspace({
                           </div>
                         </div>
                         <img
+                          loading="lazy"
+                          decoding="async"
                           src={battle.productB.thumbnail}
                           alt={battle.productB.name}
                           className="rounded-2 flex-shrink-0 border bg-white p-1"

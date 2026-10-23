@@ -823,6 +823,8 @@ export default function DealFinderWorkspace({
 
                     <div className="d-flex align-items-center my-2 gap-3">
                       <img
+                        loading="lazy"
+                        decoding="async"
                         src={deal.thumbnail}
                         alt={deal.name}
                         className="rounded-3 flex-shrink-0 border bg-white p-1"
