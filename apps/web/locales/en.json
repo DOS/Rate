@@ -1,7 +1,7 @@
 {
   "rate": {
     "seo": {
-      "siteTitle": "Rate.vn - 10-group spec comparison, real price history and filtered reviews",
+      "siteTitle": "Rate.vn - Real prices, specs and filtered reviews",
       "siteDescription": "Compare standardized 10-group specs, spot inflated fake discounts and read reviews with fake ones filtered out, across Shopee, Lazada and Tiki on Rate.vn."
     },
     "nav": {
@@ -126,7 +126,7 @@
     "versusAutoVerdict": "Automatic verdict: {winner} leads with an overall score of {score}/5.0{expertSuffix}.",
     "compareMetaTitleWithNames": "Compare {names} - Ratings and 10 spec groups | Rate.vn",
     "compareMetaDescWithNames": "Compare real review scores, 10 spec groups and reference prices for {names} on Rate.vn.",
-    "compareMetaDefaultTitle": "Same-category device comparison - Ratings and 10 spec groups | Rate.vn",
+    "compareMetaDefaultTitle": "Same-category device comparison | Rate.vn",
     "compareMetaDefaultDesc": "Compare up to 4 devices in the same category (smartphones, tablets, laptops, smartwatches or earbuds) by review scores and 10 spec groups.",
     "breadcrumbHome": "Home",
     "breadcrumbCatalog": "Device catalog",
@@ -856,7 +856,7 @@
     "emptySubtitle": "Try clearing filters or paste a store or product link into the link checker.",
     "inspectUrlCta": "Check any store or product link →",
     "notFoundTitle": "Merchant not found | Rate.vn",
-    "profileMetaTitle": "{name} ({platform}) - Trust {score}/100 and price history | Rate.vn",
+    "profileMetaTitle": "{name} ({platform}) - Trust {score}/100 | Rate.vn",
     "profileMetaDesc": "Seller profile for {name}: DOSafe scam risk ({dosafe}/100), review risk ({seeding}/100) and price history across {count} products on Rate.vn.",
     "trustHigh": "High trust (verified safe)",
     "trustModerate": "Moderate trust (monitor)",
@@ -949,7 +949,7 @@
   },
   "productDetail": {
     "notFoundTitle": "Product not found | Rate.vn",
-    "metaTitle": "{name} - From {minPrice} ₫, specs and genuine reviews | Rate.vn",
+    "metaTitle": "{name} - From {minPrice} ₫ | Rate.vn",
     "metaDesc": "Compare {name} ({brand}) prices across {merchantCount} merchants, inspect historical price charts for fake discounts, and read AI-verified buyer reviews on Rate.vn.",
     "ogTitle": "{name} - Specs and true price history | Rate.vn",
     "ogDesc": "Best price from {minPrice} ₫. See the 10 standardized GSMArena/PhoneArena spec groups and the price history chart.",

@@ -16,11 +16,7 @@ export async function generateMetadata({
   const t = await getTranslations({ locale, namespace: 'staticPages' });
   const alternates = {
     canonical: 'https://rate.vn/faq',
-    languages: {
-      vi: 'https://rate.vn/faq',
-      en: 'https://rate.vn/faq',
-      cs: 'https://rate.vn/faq',
-    },
+    // One URL serves every locale (cookie), so no hreflang alternates (DOS/Rate#765).
   };
   return {
     title: t('faqSeoTitle'),
