@@ -1161,6 +1161,8 @@ export default function LeaderboardExplorer({
                           style={{ width: 76, height: 76 }}
                         >
                           <img
+                            loading="lazy"
+                            decoding="async"
                             src={entry.thumbnail}
                             alt={entry.product.name}
                             style={{
@@ -1427,6 +1429,8 @@ export default function LeaderboardExplorer({
                       style={{ width: 72, height: 72 }}
                     >
                       <img
+                        loading="lazy"
+                        decoding="async"
                         src={entry.thumbnail}
                         alt={entry.product.name}
                         style={{

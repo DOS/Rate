@@ -8,7 +8,7 @@ import {
   getMasterProductCategorySlug,
 } from '@/server/rate';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
-import { defaultOpenGraph, fitTitle } from '@/lib/seo';
+import { defaultOpenGraph, fitTitle, fitDescription } from '@/lib/seo';
 import CompareWorkspace from '@/components/compare/CompareWorkspace';
 import PageShell from '../components/page-shell';
 import ClientMessages from '@/components/providers/ClientMessages';
@@ -69,7 +69,9 @@ export async function generateMetadata({
     if (compared.length >= 2) {
       const names = compared.map((p) => p.name).join(' vs ');
       const fullTitle = t('compareMetaTitleWithNames', { names });
-      const description = t('compareMetaDescWithNames', { names });
+      const description = fitDescription(
+        t('compareMetaDescWithNames', { names })
+      );
       return {
         // The names come first; the fixed text, then the site name, give way
         // to fit a search result (DOS/Rate#777). The share card keeps the

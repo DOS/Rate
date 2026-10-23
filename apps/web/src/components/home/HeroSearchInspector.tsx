@@ -424,6 +424,8 @@ export default function HeroSearchInspector({
                             >
                               {thumb ? (
                                 <img
+                                  loading="lazy"
+                                  decoding="async"
                                   src={thumb}
                                   alt={item.name}
                                   style={{

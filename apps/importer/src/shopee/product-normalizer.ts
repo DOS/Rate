@@ -124,14 +124,14 @@ export function detectCategorySlug(title: string): CanonicalCategorySlug {
     return 'earbuds';
   }
   if (
-    /apple\s*watch|galaxy\s*watch|\bgarmin\b|forerunner|fenix|venu|watch\s*(?:ultra|series|gt|fit|se)|đồng\s*hồ\s*thông\s*minh|smartwatch|amazfit|coros/i.test(
+    /apple\s*watch|galaxy\s*watch|\bgarmin\b|forerunner|fenix|venu|vivo(?:active|smart|move|fit|sport|life)|watch\s*(?:ultra|series|gt|fit|se)|đồng\s*hồ\s*thông\s*minh|vòng\s*(?:đeo\s*)?tay\s*thông\s*minh|smartwatch|amazfit|coros/i.test(
       t
     )
   ) {
     return 'smartwatches';
   }
   if (
-    /macbook|thinkpad|ideapad|legion|vivobook|zenbook|rog\s*(?:strix|zephyrus|flow)|tuf\s*gaming|inspiron|\bxps\b|latitude|pavilion|envy|victus|omen|nitro\s*\d|swift|predator|surface\s*laptop|\blaptop\b|máy\s*tính\s*xách\s*tay|ultrabook/i.test(
+    /macbook|thinkpad|ideapad|legion|vivo\s*book|zenbook|rog\s*(?:strix|zephyrus|flow)|tuf\s*gaming|inspiron|\bxps\b|latitude|pavilion|envy|victus|omen|nitro\s*\d|swift|predator|surface\s*laptop|\blaptop\b|máy\s*tính\s*xách\s*tay|ultrabook/i.test(
       t
     )
   ) {
@@ -1078,7 +1078,9 @@ export class ProductNormalizer {
     else if (/samsung|galaxy/i.test(title)) brand = 'Samsung';
     else if (/xiaomi|redmi|poco/i.test(title)) brand = 'Xiaomi';
     else if (/\bsony\b|wf-1000|wh-1000|xperia/i.test(title)) brand = 'Sony';
-    else if (/\bgarmin\b|forerunner|fenix|venu|vivoactive|vivosmart|vivomove/i.test(title))
+    else if (
+      /\bgarmin\b|forerunner|fenix|venu|vivo(?:active|smart|move|fit|sport|life)/i.test(title)
+    )
       brand = 'Garmin';
     else if (/\blenovo\b|thinkpad|ideapad|legion/i.test(title)) brand = 'Lenovo';
     else if (/oppo/i.test(title)) brand = 'OPPO';
@@ -1185,12 +1187,14 @@ export class ProductNormalizer {
       const cleaned = withoutLeadingPromo
         .replace(
           new RegExp(
-            `^(?:(?:Hàng\\s+)?Chính\\s+hãng\\s+)?(?:(?:Điện\\s+thoại(?:\\s+thông\\s+minh|\\s+di\\s+động)?|Smartphone|Máy\\s+tính\\s+bảng|Tablet|Laptop|Máy\\s+tính\\s+xách\\s+tay|Đồng\\s+hồ(?:\\s+đeo\\s+tay)?(?:\\s+thông\\s+minh)?|Smartwatch|Tai\\s+nghe(?:\\s+Bluetooth|\\s+chống\\s+ồn|\\s+không\\s+dây)?|Earbuds)\\s+(?:(?:Hàng\\s+)?Chính\\s+hãng\\s+)?)?(?:${brand}\\b\\s*)?`,
+            `^(?:(?:Hàng\\s+)?Chính\\s+hãng\\s+)?(?:(?:Điện\\s+thoại(?:\\s+thông\\s+minh|\\s+di\\s+động)?|Smartphone|Máy\\s+tính\\s+bảng|Tablet|Laptop|Máy\\s+tính\\s+xách\\s+tay|Đồng\\s+hồ(?:\\s+đeo\\s+tay)?(?:\\s+thông\\s+minh)?|Vòng\\s+đeo\\s+tay(?:\\s+thông\\s+minh)?|Vòng\\s+tay\\s+thông\\s+minh|Smartwatch|Tai\\s+nghe(?:\\s+Bluetooth|\\s+chống\\s+ồn|\\s+không\\s+dây)?|Earbuds)\\s+(?:(?:Hàng\\s+)?Chính\\s+hãng\\s+)?)?(?:${brand}\\b\\s*)?`,
             'i'
           ),
           ''
         )
         .replace(/^(?:\s*(?:\[[^\]]*\]|\([^)]*\)|【[^】]*】))+\s*/, '')
+        // "Vivo Book 15" is the Asus Vivobook line: key it like "Vivobook 15" (DOS/Rate#774).
+        .replace(/\bvivo\s+book\b/gi, 'Vivobook')
         .trim();
       const rawTokens = cleaned.split(/\s+/).filter(Boolean);
       const modelTokens: string[] = [];
@@ -1199,7 +1203,8 @@ export class ProductNormalizer {
         const tok = rawTokens[i];
         // "Samsung, Galaxy S25 Ultra": the brand's comma is not the end of the model.
         if (modelTokens.length === 0 && /^[,;]+$/.test(tok)) continue;
-        const startsGeneration = /^gen$/i.test(tok) && /^\d{1,2},?$/.test(rawTokens[i + 1] ?? '');
+        const startsGeneration =
+          /^gen$/i.test(tok) && /^\d{1,2}[,;]?$/.test(rawTokens[i + 1] ?? '');
         // A product code already names the generation: "IdeaPad Slim 3 15IAH8 Gen 8" and
         // "Legion 5 15IRX9 Gen 9" key as their code, like the titles without "Gen".
         if (hasProductCode && startsGeneration) break;
@@ -1207,12 +1212,12 @@ export class ProductNormalizer {
         // cap, so "ThinkPad X1 Carbon Gen 13" and "Gen 11" key apart (DOS/Rate#762).
         const generation =
           startsGeneration ||
-          (/^gen$/i.test(modelTokens[modelTokens.length - 1] ?? '') && /^\d{1,2},?$/.test(tok));
+          (/^gen$/i.test(modelTokens[modelTokens.length - 1] ?? '') && /^\d{1,2}[,;]?$/.test(tok));
         // A trailing "Plus" word is part of the model even past the 4-token cap,
         // so "Redmi Note 13 Pro Plus" keys like "Redmi Note 13 Pro+" (#597).
         if (
           modelTokens.length >= 4 &&
-          !(modelTokens.length === 4 && /^plus,?$/i.test(tok)) &&
+          !(modelTokens.length === 4 && /^plus[,;]?$/i.test(tok)) &&
           !generation
         ) {
           break;
@@ -1224,8 +1229,9 @@ export class ProductNormalizer {
         ) {
           break;
         }
-        // A comma ends the model: "Garmin Epix Gen 2, Black, Gray Carbon" is "Epix Gen 2".
-        if (tok.endsWith(',')) {
+        // A comma or semicolon ends the model: "Garmin Epix Gen 2, Black, Gray Carbon" is
+        // "Epix Gen 2" (DOS/Rate#774: "Redmi Note 13 Pro Plus; 8GB" too).
+        if (/[,;]$/.test(tok)) {
           if (tok.length > 1) modelTokens.push(tok.slice(0, -1));
           break;
         }

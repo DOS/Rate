@@ -449,6 +449,9 @@
     "confidenceMedium": "Độ tin cậy: Trung bình",
     "confidenceHigh": "Độ tin cậy: Cao",
     "authVoteNotice": "Đã áp dụng mô phỏng trọng số JReviews trên trình duyệt của bạn. Đăng nhập tài khoản DOS ID để lưu bình chọn vĩnh viễn lên hệ thống.",
+    "voteNotEligibleNotice": "Vote chưa được tính: tài khoản cần đã xác nhận email và tạo từ ít nhất 7 ngày.",
+    "voteRateLimitNotice": "Bạn vote quá nhanh. Vote này chưa được tính, hãy thử lại sau ít phút.",
+    "voteFailedNotice": "Chưa lưu được vote. Hãy thử lại sau.",
     "errCommentTooShort": "Vui lòng nhập ít nhất 15 ký tự mô tả trải nghiệm thực tế của bạn.",
     "errMissingMasterId": "Không xác định được mã sản phẩm chuẩn hóa để gửi đánh giá.",
     "errLoginRequired": "Bạn cần đăng nhập tài khoản DOS ID để gửi đánh giá. Mỗi tài khoản chỉ gửi một đánh giá cho mỗi sản phẩm.",
@@ -955,7 +958,7 @@
     "notFoundTitle": "Không tìm thấy sản phẩm | Rate.vn",
     "metaTitle": "{name} - Giá từ {minPrice} ₫ | Rate.vn",
     "metaTitleShort": "{name} - Giá từ {minPrice} ₫",
-    "metaDesc": "So sánh giá {name} ({brand}) từ {merchantCount} gian hàng, xem lịch sử giá để nhận ra giảm giá ảo và đọc đánh giá thực chất (AI đã lọc bỏ đánh giá ảo) trên Rate.vn.",
+    "metaDesc": "So sánh giá {name} từ {merchantCount} gian hàng, xem lịch sử giá để nhận ra giảm giá ảo và đọc đánh giá thật (đã lọc đánh giá ảo) trên Rate.vn.",
     "ogTitle": "{name} - So sánh giá và kiểm tra khuyến mãi | Rate.vn",
     "ogDesc": "Giá tốt nhất từ {minPrice} ₫. Xem 10 nhóm thông số kỹ thuật chuẩn GSMArena/PhoneArena và biểu đồ lịch sử giá.",
     "breadcrumbHome": "Trang chủ",
@@ -1379,7 +1382,7 @@
     "aboutLinkTablets": "Danh mục máy tính bảng (tablet)",
     "aboutLinkFaq": "Câu hỏi thường gặp về phương pháp tính điểm",
     "privacySeoTitle": "Chính sách bảo mật và dữ liệu | Rate.vn",
-    "privacySeoDesc": "Cách Rate.vn xử lý dữ liệu: không cần tài khoản để tra cứu, khay so sánh lưu trên trình duyệt, bình chọn gắn với tài khoản DOS ID và thông tin riêng của gian hàng không được công khai.",
+    "privacySeoDesc": "Rate.vn không cần tài khoản để tra cứu. Khay so sánh lưu trên trình duyệt, bình chọn gắn với DOS ID và thông tin riêng của gian hàng không công khai.",
     "privacyHeroBadge": "Cách Rate.vn xử lý dữ liệu",
     "privacyHeroTitle": "Chính sách bảo mật và quyền riêng tư",
     "privacyHeroDesc": "Bạn có thể tra cứu thông số, kiểm tra link sản phẩm, so sánh máy và xem lịch sử giá mà không cần cung cấp thông tin cá nhân.",
@@ -1492,12 +1495,12 @@
       "smartwatches": {
         "titleCount": "So sánh giá đồng hồ thông minh ({count} mẫu) | Rate.vn",
         "titleDefault": "So sánh giá đồng hồ thông minh và kiểm tra khuyến mãi | Rate.vn",
-        "description": "Tra cứu và lọc đồng hồ thông minh (Apple Watch, Galaxy Watch, Garmin, Xiaomi Watch, Huawei Watch) theo 10 nhóm thông số chuẩn hóa, xem lịch sử giá thật và lọc đánh giá ảo trên Rate.vn."
+        "description": "Lọc đồng hồ thông minh (Apple Watch, Galaxy Watch, Garmin, Xiaomi, Huawei) theo 10 nhóm thông số, lịch sử giá thật và đánh giá đã lọc trên Rate.vn."
       },
       "earbuds": {
         "titleCount": "So sánh giá tai nghe không dây ANC ({count} mẫu) | Rate.vn",
         "titleDefault": "So sánh giá tai nghe chống ồn ANC và kiểm tra khuyến mãi | Rate.vn",
-        "description": "Tra cứu và lọc tai nghe không dây chống ồn chủ động ANC (AirPods Pro, Sony WF-1000XM5, Galaxy Buds, Bose, Sennheiser) theo 10 nhóm thông số chuẩn hóa, lịch sử giá thật và đánh giá AI trên Rate.vn."
+        "description": "Lọc tai nghe chống ồn ANC (AirPods Pro, Sony WF-1000XM5, Galaxy Buds, Bose) theo 10 nhóm thông số, lịch sử giá thật và đánh giá đã lọc trên Rate.vn."
       }
     },
     "sortOptions": {

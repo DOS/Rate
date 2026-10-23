@@ -91,6 +91,37 @@ test('sitemap lists every merchant and product page', async ({ request }) => {
   expect(xml).toContain('/smartphones/e2e-many-offers-phone<');
 });
 
+// lastmod is a real change time or absent, never the render time
+// (DOS/Rate#786).
+test('sitemap lastmod reflects content changes', async ({ request }) => {
+  const xml = await (await request.get('/sitemap.xml')).text();
+  const entries = new Map(
+    [...xml.matchAll(/<url>([\s\S]*?)<\/url>/g)].map((m) => [
+      /<loc>([^<]+)<\/loc>/.exec(m[1]!)?.[1] ?? '',
+      /<lastmod>([^<]+)<\/lastmod>/.exec(m[1]!)?.[1],
+    ])
+  );
+  const at = (path: string) =>
+    [...entries].find(([loc]) => new URL(loc).pathname === path)?.[1];
+
+  expect(entries.size).toBeGreaterThan(0);
+  // Info and tool pages carry none.
+  for (const path of ['/about-us', '/faq', '/inspect', '/watchlist']) {
+    expect(at(path), path).toBeUndefined();
+  }
+
+  // The home page carries the newest product change listed in the sitemap.
+  const productDates = [...entries]
+    .filter(([loc]) =>
+      /\/(smartphones|earbuds)\/[^/]+$/.test(new URL(loc).pathname)
+    )
+    .map(([, lastmod]) => lastmod)
+    .filter((d): d is string => Boolean(d))
+    .map((d) => Date.parse(d));
+  expect(productDates.length).toBeGreaterThan(0);
+  expect(Date.parse(at('/') ?? '')).toBe(Math.max(...productDates));
+});
+
 // 201 seeded earbuds share one rating: a query for one outside the 100
 // best-rated must still find it (DOS/Rate#473).
 test('leaderboard filters the whole category, not its top 100', async ({

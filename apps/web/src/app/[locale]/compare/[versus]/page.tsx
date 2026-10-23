@@ -10,7 +10,7 @@ import {
   getMasterProductHref,
 } from '@/server/rate';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
-import { defaultOpenGraph, fitTitle } from '@/lib/seo';
+import { defaultOpenGraph, fitTitle, fitDescription } from '@/lib/seo';
 import {
   comparePositiveMinPrices,
   scoreMasterProductForLeaderboard,
@@ -72,10 +72,12 @@ export async function generateMetadata({
     t('versusMetaTitleShort', { nameA: a.name, nameB: b.name }),
     `${a.name} vs ${b.name}`,
   ]);
-  const description = t('versusMetaDescription', {
-    nameA: a.name,
-    nameB: b.name,
-  });
+  const description = fitDescription(
+    t('versusMetaDescription', {
+      nameA: a.name,
+      nameB: b.name,
+    })
+  );
 
   return {
     title,

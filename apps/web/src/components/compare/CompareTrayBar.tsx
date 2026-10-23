@@ -139,6 +139,8 @@ export default function CompareTrayBar() {
                     >
                       {item.thumbnail ? (
                         <img
+                          loading="lazy"
+                          decoding="async"
                           src={item.thumbnail}
                           alt={item.name}
                           style={{

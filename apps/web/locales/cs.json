@@ -449,6 +449,9 @@
     "confidenceMedium": "Spolehlivost: Střední",
     "confidenceHigh": "Spolehlivost: Vysoká",
     "authVoteNotice": "Simulace váhy JReviews byla použita v prohlížeči. Přihlaste se účtem DOS ID pro trvalé uložení hlasu.",
+    "voteNotEligibleNotice": "Hlas nebyl započten: účet potřebuje ověřený e-mail a musí být starý alespoň 7 dní.",
+    "voteRateLimitNotice": "Hlasujete příliš rychle. Tento hlas nebyl započten, zkuste to za pár minut.",
+    "voteFailedNotice": "Hlas se nepodařilo uložit. Zkuste to prosím později.",
     "errCommentTooShort": "Zadejte prosím alespoň 15 znaků popisujících vaši reálnou zkušenost.",
     "errMissingMasterId": "Nelze určit ID normalizovaného produktu pro odeslání recenze.",
     "errLoginRequired": "Pro odeslání recenze se musíte přihlásit účtem DOS ID. Každý účet může odeslat jednu recenzi na produkt.",
@@ -955,7 +958,7 @@
     "notFoundTitle": "Produkt nenalezen | Rate.vn",
     "metaTitle": "{name} - Od {minPrice} ₫ | Rate.vn",
     "metaTitleShort": "{name} - Od {minPrice} ₫",
-    "metaDesc": "Porovnejte ceny {name} ({brand}) z {merchantCount} obchodů, zkontrolujte historii cen a přečtěte si AI ověřené recenze na Rate.vn.",
+    "metaDesc": "Porovnejte ceny {name} z {merchantCount} obchodů, zkontrolujte historii cen a přečtěte si ověřené recenze na Rate.vn.",
     "ogTitle": "{name} - Parametry a skutečná historie cen | Rate.vn",
     "ogDesc": "Nejlepší cena od {minPrice} ₫. Prohlédněte si 10 standardizovaných skupin parametrů GSMArena/PhoneArena a graf historie cen.",
     "breadcrumbHome": "Domů",
@@ -1379,7 +1382,7 @@
     "aboutLinkTablets": "Katalog tabletů",
     "aboutLinkFaq": "Často kladené otázky o metodice bodování",
     "privacySeoTitle": "Ochrana soukromí a data | Rate.vn",
-    "privacySeoDesc": "Jak Rate.vn nakládá s daty: k prohlížení není potřeba účet, porovnávací panel zůstává ve vašem prohlížeči, hlasy u recenzí jsou vázané na účet DOS ID a soukromé údaje prodejců nejsou veřejné.",
+    "privacySeoDesc": "Rate.vn nevyžaduje účet k prohlížení. Porovnání zůstává v prohlížeči, hlasy u recenzí jsou vázané na DOS ID a soukromé údaje prodejců nejsou veřejné.",
     "privacyHeroBadge": "Jak Rate.vn nakládá s daty",
     "privacyHeroTitle": "Zásady ochrany soukromí a dat",
     "privacyHeroDesc": "Parametry, kontrolu odkazů, porovnání zařízení i historii cen můžete používat bez zadávání osobních údajů.",
@@ -1482,22 +1485,22 @@
       "tablets": {
         "titleCount": "Srovnání cen tabletů ({count} modelů) | Rate.vn",
         "titleDefault": "Srovnání cen tabletů a kontrola slev | Rate.vn",
-        "description": "Vyhledávejte a filtrujte tablety (iPad, Galaxy Tab, Xiaomi Pad) podle 10 standardizovaných skupin parametrů, ověřte historii cen a odfiltrujte falešné recenze na Rate.vn."
+        "description": "Filtrujte tablety (iPad, Galaxy Tab, Xiaomi Pad) podle 10 skupin parametrů, ověřte historii cen a odfiltrujte falešné recenze na Rate.vn."
       },
       "laptops": {
         "titleCount": "Srovnání cen notebooků ({count} modelů) | Rate.vn",
         "titleDefault": "Srovnání cen notebooků a kontrola slev | Rate.vn",
-        "description": "Vyhledávejte a filtrujte notebooky (MacBook, ThinkPad, ASUS ROG, Dell XPS) podle 10 standardizovaných skupin parametrů, ověřte historii cen a odfiltrujte falešné recenze na Rate.vn."
+        "description": "Filtrujte notebooky (MacBook, ThinkPad, ASUS ROG, Dell XPS) podle 10 skupin parametrů, ověřte historii cen a odfiltrujte falešné recenze na Rate.vn."
       },
       "smartwatches": {
         "titleCount": "Srovnání cen chytrých hodinek ({count} modelů) | Rate.vn",
         "titleDefault": "Srovnání cen chytrých hodinek a kontrola slev | Rate.vn",
-        "description": "Vyhledávejte a filtrujte chytré hodinky (Apple Watch, Galaxy Watch, Garmin, Xiaomi Watch, Huawei Watch) podle 10 skupin parametrů, ověřte historii cen a recenze na Rate.vn."
+        "description": "Filtrujte chytré hodinky (Apple Watch, Galaxy Watch, Garmin, Xiaomi, Huawei) podle 10 skupin parametrů, s historií cen a ověřenými recenzemi na Rate.vn."
       },
       "earbuds": {
         "titleCount": "Srovnání cen bezdrátových ANC sluchátek ({count} modelů) | Rate.vn",
         "titleDefault": "Srovnání cen bezdrátových ANC sluchátek a kontrola slev | Rate.vn",
-        "description": "Vyhledávejte a filtrujte bezdrátová sluchátka s ANC (AirPods Pro, Sony WF-1000XM5, Galaxy Buds, Bose, Sennheiser) podle 10 skupin parametrů, s historií cen a recenzemi zkontrolovanými AI na Rate.vn."
+        "description": "Filtrujte bezdrátová sluchátka s ANC (AirPods Pro, Sony WF-1000XM5, Galaxy Buds, Bose) podle 10 skupin parametrů, s historií cen a ověřenými recenzemi."
       }
     },
     "sortOptions": {

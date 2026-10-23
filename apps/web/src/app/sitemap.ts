@@ -11,119 +11,132 @@ import {
   buildPopular1v1BattlesForCategory,
   VALID_LEADERBOARD_CATEGORIES,
 } from '@/lib/leaderboard-engine';
+import type { CanonicalCategorySlug } from '@/lib/rate-domain-core';
+import {
+  buildSitemapLastModified,
+  newestOf,
+  rowLastModified,
+  versusLastModified,
+  type SitemapLastModified,
+} from '@/lib/sitemap-lastmod';
 
 const log = createLogger('sitemap');
 const baseUrl = (env.APP_PUBLIC_URL || 'https://rate.vn').replace(/\/$/, '');
 
 export const revalidate = 3600;
 
-export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const now = new Date();
-  const staticEntries: MetadataRoute.Sitemap = [
-    {
-      url: `${baseUrl}/`,
-      lastModified: now,
-      changeFrequency: 'daily',
-      priority: 1.0,
-    },
-    {
-      url: `${baseUrl}/smartphones`,
-      lastModified: now,
-      changeFrequency: 'hourly',
-      priority: 0.95,
-    },
-    {
-      url: `${baseUrl}/laptops`,
-      lastModified: now,
-      changeFrequency: 'daily',
-      priority: 0.9,
-    },
-    {
-      url: `${baseUrl}/tablets`,
-      lastModified: now,
-      changeFrequency: 'daily',
-      priority: 0.9,
-    },
-    {
-      url: `${baseUrl}/smartwatches`,
-      lastModified: now,
-      changeFrequency: 'daily',
-      priority: 0.88,
-    },
-    {
-      url: `${baseUrl}/earbuds`,
-      lastModified: now,
-      changeFrequency: 'daily',
-      priority: 0.88,
-    },
-    {
-      url: `${baseUrl}/deals`,
-      lastModified: now,
-      changeFrequency: 'hourly',
-      priority: 0.92,
-    },
-    {
-      url: `${baseUrl}/leaderboard`,
-      lastModified: now,
-      changeFrequency: 'daily',
-      priority: 0.92,
-    },
-    {
-      url: `${baseUrl}/merchants`,
-      lastModified: now,
-      changeFrequency: 'daily',
-      priority: 0.88,
-    },
-    {
-      url: `${baseUrl}/compare`,
-      lastModified: now,
-      changeFrequency: 'daily',
-      priority: 0.85,
-    },
-    {
-      url: `${baseUrl}/watchlist`,
-      lastModified: now,
-      changeFrequency: 'daily',
-      priority: 0.8,
-    },
-    {
-      url: `${baseUrl}/inspect`,
-      lastModified: now,
-      changeFrequency: 'daily',
-      priority: 0.85,
-    },
-    {
-      url: `${baseUrl}/developers`,
-      lastModified: now,
-      changeFrequency: 'weekly',
-      priority: 0.8,
-    },
-    {
-      url: `${baseUrl}/about-us`,
-      lastModified: now,
-      changeFrequency: 'monthly',
-      priority: 0.7,
-    },
-    {
-      url: `${baseUrl}/faq`,
-      lastModified: now,
-      changeFrequency: 'monthly',
-      priority: 0.7,
-    },
-    {
-      url: `${baseUrl}/privacy-policy`,
-      lastModified: now,
-      changeFrequency: 'monthly',
-      priority: 0.65,
-    },
-    {
-      url: `${baseUrl}/contact-us`,
-      lastModified: now,
-      changeFrequency: 'monthly',
-      priority: 0.65,
-    },
-  ];
+// Which change time a fixed page carries (DOS/Rate#786): 'catalog' pages show
+// the newest product change, 'merchants' the newest product or store change,
+// a category slug the newest change in that category, and null pages (info
+// and tools) no lastmod: Google trusts lastmod only when it is accurate, and
+// the render time is not.
+type StaticDate = 'catalog' | 'merchants' | CanonicalCategorySlug | null;
 
+const STATIC_PAGES: Array<{
+  path: string;
+  date: StaticDate;
+  changeFrequency: NonNullable<
+    MetadataRoute.Sitemap[number]['changeFrequency']
+  >;
+  priority: number;
+}> = [
+  { path: '/', date: 'catalog', changeFrequency: 'daily', priority: 1.0 },
+  {
+    path: '/smartphones',
+    date: 'smartphones',
+    changeFrequency: 'hourly',
+    priority: 0.95,
+  },
+  {
+    path: '/laptops',
+    date: 'laptops',
+    changeFrequency: 'daily',
+    priority: 0.9,
+  },
+  {
+    path: '/tablets',
+    date: 'tablets',
+    changeFrequency: 'daily',
+    priority: 0.9,
+  },
+  {
+    path: '/smartwatches',
+    date: 'smartwatches',
+    changeFrequency: 'daily',
+    priority: 0.88,
+  },
+  {
+    path: '/earbuds',
+    date: 'earbuds',
+    changeFrequency: 'daily',
+    priority: 0.88,
+  },
+  {
+    path: '/deals',
+    date: 'catalog',
+    changeFrequency: 'hourly',
+    priority: 0.92,
+  },
+  {
+    path: '/leaderboard',
+    date: 'catalog',
+    changeFrequency: 'daily',
+    priority: 0.92,
+  },
+  {
+    path: '/merchants',
+    date: 'merchants',
+    changeFrequency: 'daily',
+    priority: 0.88,
+  },
+  {
+    path: '/compare',
+    date: 'catalog',
+    changeFrequency: 'daily',
+    priority: 0.85,
+  },
+  { path: '/watchlist', date: null, changeFrequency: 'daily', priority: 0.8 },
+  { path: '/inspect', date: null, changeFrequency: 'daily', priority: 0.85 },
+  { path: '/developers', date: null, changeFrequency: 'weekly', priority: 0.8 },
+  { path: '/about-us', date: null, changeFrequency: 'monthly', priority: 0.7 },
+  { path: '/faq', date: null, changeFrequency: 'monthly', priority: 0.7 },
+  {
+    path: '/privacy-policy',
+    date: null,
+    changeFrequency: 'monthly',
+    priority: 0.65,
+  },
+  {
+    path: '/contact-us',
+    date: null,
+    changeFrequency: 'monthly',
+    priority: 0.65,
+  },
+];
+
+function staticEntries(
+  dates: SitemapLastModified | null,
+  latestMerchant?: Date
+): MetadataRoute.Sitemap {
+  return STATIC_PAGES.map(({ path, date, changeFrequency, priority }) => {
+    const lastModified =
+      !dates || date === null
+        ? undefined
+        : date === 'catalog'
+          ? dates.latest
+          : date === 'merchants'
+            ? newestOf(dates.latest, latestMerchant)
+            : dates.byCategory.get(date);
+    return {
+      url: `${baseUrl}${path}`,
+      ...(lastModified ? { lastModified } : {}),
+      changeFrequency,
+      priority,
+    };
+  });
+}
+
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   try {
     // Product and merchant URLs come from the whole catalogue; the curated
     // 1v1 battles only need the top-ranked products.
@@ -132,6 +145,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       getCachedMasterProducts({ categorySlug: 'all', limit: 500 }),
     ]);
     const catSlugById = rows.categorySlugById;
+
+    const dates = buildSitemapLastModified(
+      rows.products.map((product) => ({
+        slug: product.slug,
+        categorySlug: getMasterProductCategorySlug(product, catSlugById),
+        updatedAt: product.updated_at,
+      }))
+    );
 
     const stampedProducts = products.map((product) => {
       const catSlug = getMasterProductCategorySlug(product, catSlugById);
@@ -147,43 +168,62 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     });
 
     const productEntries: MetadataRoute.Sitemap = rows.products.map(
-      (product) => ({
-        url: `${baseUrl}${getMasterProductHref(product, catSlugById)}`,
-        lastModified: product.updated_at ? new Date(product.updated_at) : now,
-        changeFrequency: 'daily',
-        priority: 0.85,
-      })
+      (product) => {
+        const lastModified = rowLastModified(product.updated_at);
+        return {
+          url: `${baseUrl}${getMasterProductHref(product, catSlugById)}`,
+          ...(lastModified ? { lastModified } : {}),
+          changeFrequency: 'daily',
+          priority: 0.85,
+        };
+      }
     );
 
     const versusEntries: MetadataRoute.Sitemap =
       VALID_LEADERBOARD_CATEGORIES.flatMap((category) =>
         buildPopular1v1BattlesForCategory(stampedProducts, category, 3).map(
-          (pair) => ({
-            url: `${baseUrl}${pair.versusHref}`,
-            lastModified: now,
-            changeFrequency: 'daily' as const,
-            priority: 0.83,
-          })
+          (pair) => {
+            const lastModified = versusLastModified(
+              dates,
+              pair.productA.slug,
+              pair.productB.slug
+            );
+            return {
+              url: `${baseUrl}${pair.versusHref}`,
+              ...(lastModified ? { lastModified } : {}),
+              changeFrequency: 'daily' as const,
+              priority: 0.83,
+            };
+          }
         )
       );
 
     const merchantEntries: MetadataRoute.Sitemap = rows.merchants.map(
-      (merchant) => ({
-        url: `${baseUrl}/merchants/${merchant.id}`,
-        lastModified: merchant.updated_at ? new Date(merchant.updated_at) : now,
-        changeFrequency: 'daily',
-        priority: 0.82,
-      })
+      (merchant) => {
+        const lastModified = rowLastModified(merchant.updated_at);
+        return {
+          url: `${baseUrl}/merchants/${merchant.id}`,
+          ...(lastModified ? { lastModified } : {}),
+          changeFrequency: 'daily',
+          priority: 0.82,
+        };
+      }
+    );
+
+    // A reduce, not a spread: one argument per merchant could overflow the stack.
+    const latestMerchant = rows.merchants.reduce<Date | undefined>(
+      (acc, merchant) => newestOf(acc, rowLastModified(merchant.updated_at)),
+      undefined
     );
 
     return [
-      ...staticEntries,
+      ...staticEntries(dates, latestMerchant),
       ...productEntries,
       ...versusEntries,
       ...merchantEntries,
     ];
   } catch (err) {
     log.error('sitemap dynamic entries failed', { error: serializeError(err) });
-    return staticEntries;
+    return staticEntries(null);
   }
 }

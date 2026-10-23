@@ -35,7 +35,7 @@ import ContentText from '@/components/elementary/ContentText';
 import { contentLang } from '@/lib/content-lang';
 import ClientMessages from '@/components/providers/ClientMessages';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
-import { defaultOpenGraph, fitTitle } from '@/lib/seo';
+import { defaultOpenGraph, fitTitle, fitDescription } from '@/lib/seo';
 
 // Cached after the first request, refreshed every 5 minutes or when the
 // worker revalidates its cache tags (DOS/Rate#491).
@@ -71,12 +71,14 @@ export async function generateMetadata({
     name: merchant.name,
     score: merchant.trust_score,
   });
-  const description = t('profileMetaDesc', {
-    name: merchant.name,
-    dosafe: merchant.dosafe_risk_score,
-    seeding: merchant.review_risk_score,
-    count: merchant.product_count,
-  });
+  const description = fitDescription(
+    t('profileMetaDesc', {
+      name: merchant.name,
+      dosafe: merchant.dosafe_risk_score,
+      seeding: merchant.review_risk_score,
+      count: merchant.product_count,
+    })
+  );
 
   return {
     // The store name first; the platform, the site name, then the score
@@ -840,6 +842,8 @@ export default async function MerchantProfilePage({
                             <div className="d-flex align-items-center gap-3">
                               {resolvedImg && (
                                 <img
+                                  loading="lazy"
+                                  decoding="async"
                                   src={resolvedImg}
                                   alt={item.title}
                                   lang={contentLang(item.title, locale)}
