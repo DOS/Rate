@@ -34,6 +34,8 @@ import { isPendingReview } from '@/lib/review-display';
 import ContentText from '@/components/elementary/ContentText';
 import { contentLang } from '@/lib/content-lang';
 import ClientMessages from '@/components/providers/ClientMessages';
+import { normalizeRateLocale } from '@/lib/rate-i18n';
+import { defaultOpenGraph, fitTitle } from '@/lib/seo';
 
 // Cached after the first request, refreshed every 5 minutes or when the
 // worker revalidates its cache tags (DOS/Rate#491).
@@ -60,21 +62,42 @@ export async function generateMetadata({
     };
   }
   const canonicalUrl = `https://rate.vn/merchants/${merchant.id}`;
+  const fullTitle = t('profileMetaTitle', {
+    name: merchant.name,
+    platform: merchant.platform.toUpperCase(),
+    score: merchant.trust_score,
+  });
+  const shortTitle = t('profileMetaTitleShort', {
+    name: merchant.name,
+    score: merchant.trust_score,
+  });
+  const description = t('profileMetaDesc', {
+    name: merchant.name,
+    dosafe: merchant.dosafe_risk_score,
+    seeding: merchant.review_risk_score,
+    count: merchant.product_count,
+  });
 
   return {
-    title: t('profileMetaTitle', {
-      name: merchant.name,
-      platform: merchant.platform.toUpperCase(),
-      score: merchant.trust_score,
-    }),
-    description: t('profileMetaDesc', {
-      name: merchant.name,
-      dosafe: merchant.dosafe_risk_score,
-      seeding: merchant.review_risk_score,
-      count: merchant.product_count,
-    }),
+    // The store name first; the platform, the site name, then the score
+    // give way to fit a search result (DOS/Rate#782). The share card keeps
+    // the full title.
+    title: fitTitle([
+      fullTitle,
+      `${shortTitle} | Rate.vn`,
+      shortTitle,
+      `${merchant.name} | Rate.vn`,
+      merchant.name,
+    ]),
+    description,
     alternates: {
       canonical: canonicalUrl,
+    },
+    openGraph: {
+      ...defaultOpenGraph(normalizeRateLocale(locale)),
+      title: fullTitle,
+      description,
+      url: canonicalUrl,
     },
   };
 }

@@ -860,6 +860,7 @@
     "inspectUrlCta": "Ověřit jakýkoli odkaz na obchod nebo produkt →",
     "notFoundTitle": "Obchod nenalezen | Rate.vn",
     "profileMetaTitle": "{name} ({platform}) - Důvěra {score}/100 | Rate.vn",
+    "profileMetaTitleShort": "{name} - Důvěra {score}/100",
     "profileMetaDesc": "Profil prodejce {name}: riziko podvodu DOSafe ({dosafe}/100), riziko recenzí ({seeding}/100) a historie cen {count} produktů na Rate.vn.",
     "trustHigh": "Vysoká důvěryhodnost (Bezpečný)",
     "trustModerate": "Střední důvěryhodnost",
@@ -953,6 +954,7 @@
   "productDetail": {
     "notFoundTitle": "Produkt nenalezen | Rate.vn",
     "metaTitle": "{name} - Od {minPrice} ₫ | Rate.vn",
+    "metaTitleShort": "{name} - Od {minPrice} ₫",
     "metaDesc": "Porovnejte ceny {name} ({brand}) z {merchantCount} obchodů, zkontrolujte historii cen a přečtěte si AI ověřené recenze na Rate.vn.",
     "ogTitle": "{name} - Parametry a skutečná historie cen | Rate.vn",
     "ogDesc": "Nejlepší cena od {minPrice} ₫. Prohlédněte si 10 standardizovaných skupin parametrů GSMArena/PhoneArena a graf historie cen.",
