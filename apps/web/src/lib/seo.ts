@@ -11,6 +11,9 @@ export const SITE_URL = 'https://rate.vn';
 /** The longest title a search result shows uncut (DOS/Rate#765). */
 export const MAX_TITLE_LENGTH = 65;
 
+/** The longest meta description a search result shows uncut (DOS/Rate#793). */
+export const MAX_DESCRIPTION_LENGTH = 160;
+
 /**
  * The first candidate that fits a search result, longest first. When none
  * does, the last one is cut at a word boundary with an ellipsis
@@ -39,6 +42,15 @@ export function fitTitle(
     .replace(/\s+(vs|và|-|\+|\||:)$/u, '')
     .trimEnd();
   return `${kept}…`;
+}
+
+/**
+ * A meta description built from names that fits a search result: cut at a
+ * word boundary with an ellipsis when long names push it past the limit
+ * (DOS/Rate#793).
+ */
+export function fitDescription(text: string): string {
+  return fitTitle([text], MAX_DESCRIPTION_LENGTH);
 }
 
 /**

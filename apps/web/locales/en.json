@@ -958,7 +958,7 @@
     "notFoundTitle": "Product not found | Rate.vn",
     "metaTitle": "{name} - From {minPrice} ₫ | Rate.vn",
     "metaTitleShort": "{name} - From {minPrice} ₫",
-    "metaDesc": "Compare {name} ({brand}) prices across {merchantCount} merchants, inspect historical price charts for fake discounts, and read AI-verified buyer reviews on Rate.vn.",
+    "metaDesc": "Compare {name} prices across {merchantCount} merchants, spot fake discounts in the price history and read filtered buyer reviews on Rate.vn.",
     "ogTitle": "{name} - Specs and true price history | Rate.vn",
     "ogDesc": "Best price from {minPrice} ₫. See the 10 standardized GSMArena/PhoneArena spec groups and the price history chart.",
     "breadcrumbHome": "Home",
@@ -1382,7 +1382,7 @@
     "aboutLinkTablets": "Tablets catalog",
     "aboutLinkFaq": "Frequently asked questions on scoring methodology",
     "privacySeoTitle": "Privacy policy and data | Rate.vn",
-    "privacySeoDesc": "How Rate.vn handles data: no account needed to browse, the comparison tray stays in your browser, review votes are tied to your DOS ID account, and sellers' private details are not public.",
+    "privacySeoDesc": "Rate.vn needs no account to browse. The comparison tray stays in your browser, review votes are tied to DOS ID, and sellers’ private details are not public.",
     "privacyHeroBadge": "How Rate.vn handles data",
     "privacyHeroTitle": "Privacy policy and data protection",
     "privacyHeroDesc": "You can look up specs, check product links, compare devices and see price history without giving any personal details.",
@@ -1495,12 +1495,12 @@
       "smartwatches": {
         "titleCount": "Smartwatch price comparison ({count} models) | Rate.vn",
         "titleDefault": "Smartwatch price comparison and discount checks | Rate.vn",
-        "description": "Search and filter smartwatches (Apple Watch, Galaxy Watch, Garmin, Xiaomi Watch, Huawei Watch) across 10 standard spec groups, see true price history and skip fake reviews on Rate.vn."
+        "description": "Filter smartwatches (Apple Watch, Galaxy Watch, Garmin, Xiaomi, Huawei) by 10 spec groups, with true price history and filtered reviews on Rate.vn."
       },
       "earbuds": {
         "titleCount": "ANC earbuds price comparison ({count} models) | Rate.vn",
         "titleDefault": "ANC earbuds price comparison and discount checks | Rate.vn",
-        "description": "Search and filter ANC wireless earbuds (AirPods Pro, Sony WF-1000XM5, Galaxy Buds, Bose, Sennheiser) across 10 standard spec groups, with true price history and AI-checked reviews on Rate.vn."
+        "description": "Filter ANC wireless earbuds (AirPods Pro, Sony WF-1000XM5, Galaxy Buds, Bose) by 10 spec groups, with true price history and filtered reviews on Rate.vn."
       }
     },
     "sortOptions": {

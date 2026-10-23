@@ -1,5 +1,12 @@
 import assert from 'node:assert/strict';
-import { MAX_TITLE_LENGTH, absoluteUrl, fitTitle, siteJsonLd } from '../seo';
+import {
+  MAX_DESCRIPTION_LENGTH,
+  MAX_TITLE_LENGTH,
+  absoluteUrl,
+  fitDescription,
+  fitTitle,
+  siteJsonLd,
+} from '../seo';
 
 function main() {
   console.warn('🧪 SEO helpers suite');
@@ -62,6 +69,13 @@ function main() {
       'iPhone 16 Pro Max 256GB vs Galaxy S25 Ultra 256GB 😀😀😀😀😀😀😀😀😀😀 extra words',
     ]).length <= MAX_TITLE_LENGTH
   );
+
+  // Descriptions built from long names are cut at a word under 160 (#793).
+  const longDesc = `So sánh giá ${'Galaxy Z Fold7 Ultra '.repeat(8)}từ 5 gian hàng trên Rate.vn.`;
+  const fittedDesc = fitDescription(longDesc);
+  assert.ok(fittedDesc.length <= MAX_DESCRIPTION_LENGTH);
+  assert.ok(fittedDesc.endsWith('…'));
+  assert.equal(fitDescription('Ngắn gọn.'), 'Ngắn gọn.');
 
   console.warn('✅ SEO helpers suite passed');
 }
