@@ -8,6 +8,9 @@ const ROUTES = [
   '/smartphones/iphone-16-pro-max-256gb',
   '/merchants/11111111-1111-4111-8111-111111111112',
   '/compare',
+  // Titles built from two product names (DOS/Rate#777).
+  '/compare/iphone-16-pro-max-256gb-vs-samsung-galaxy-s25-ultra-256gb',
+  '/compare?slugs=iphone-16-pro-max-256gb,samsung-galaxy-s25-ultra-256gb',
   '/deals',
   '/about-us',
   '/faq',
@@ -29,6 +32,11 @@ for (const locale of ['vi', 'en', 'cs']) {
       expect((await page.goto(route))?.status()).toBe(200);
       const title = await page.title();
       expect(title.length, title).toBeLessThanOrEqual(65);
+      // Compare titles keep both product names (DOS/Rate#777).
+      if (route.startsWith('/compare/') || route.includes('slugs=')) {
+        expect(title).toContain('iPhone 16 Pro Max 256GB');
+        expect(title).toContain('Galaxy S25 Ultra 256GB');
+      }
       const hrefs = await page
         .locator('link[rel="alternate"][hreflang]')
         .evaluateAll((links) => links.map((l) => l.getAttribute('href')));

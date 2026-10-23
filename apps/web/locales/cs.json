@@ -121,11 +121,13 @@
   "compare": {
     "versusMetaFallbackTitle": "Souboj 1v1 | Rate.vn",
     "versusMetaTitle": "{nameA} vs {nameB}: 10 skupin parametrů a hodnocení | Rate.vn",
+    "versusMetaTitleShort": "{nameA} vs {nameB} | Rate.vn",
     "versusMetaDescription": "Přímé porovnání {nameA} a {nameB}: hodnocení v 5 kritériích, 10 skupin parametrů a skutečné ceny v obchodech.",
     "versusHeroBadge": "Souboj 1v1 • stejná kategorie ({category})",
     "viewCategoryLeaderboard": "Zobrazit žebříček kategorie",
     "versusAutoVerdict": "Automatický verdikt: {winner} vede s celkovým skóre {score}/5.0{expertSuffix}.",
     "compareMetaTitleWithNames": "Porovnání {names} - Hodnocení a 10 skupin parametrů | Rate.vn",
+    "compareMetaTitleWithNamesShort": "{names} | Rate.vn",
     "compareMetaDescWithNames": "Porovnání skutečných hodnocení, 10 skupin technických parametrů a referenčních cen pro {names} na Rate.vn.",
     "compareMetaDefaultTitle": "Porovnání zařízení ve stejné kategorii | Rate.vn",
     "compareMetaDefaultDesc": "Porovnejte až 4 zařízení ve stejné kategorii podle hodnocení a 10 skupin technických parametrů.",

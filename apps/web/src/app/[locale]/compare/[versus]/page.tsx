@@ -10,7 +10,7 @@ import {
   getMasterProductHref,
 } from '@/server/rate';
 import { normalizeRateLocale } from '@/lib/rate-i18n';
-import { defaultOpenGraph } from '@/lib/seo';
+import { defaultOpenGraph, fitTitle } from '@/lib/seo';
 import {
   comparePositiveMinPrices,
   scoreMasterProductForLeaderboard,
@@ -64,7 +64,14 @@ export async function generateMetadata({
   }
 
   const canonicalUrl = `https://rate.vn/compare/${a.slug}-vs-${b.slug}`;
-  const title = t('versusMetaTitle', { nameA: a.name, nameB: b.name });
+  const fullTitle = t('versusMetaTitle', { nameA: a.name, nameB: b.name });
+  // Both names first; the fixed text, then the site name, give way to fit a
+  // search result (DOS/Rate#777). The share card keeps the full title.
+  const title = fitTitle([
+    fullTitle,
+    t('versusMetaTitleShort', { nameA: a.name, nameB: b.name }),
+    `${a.name} vs ${b.name}`,
+  ]);
   const description = t('versusMetaDescription', {
     nameA: a.name,
     nameB: b.name,
@@ -78,7 +85,7 @@ export async function generateMetadata({
     },
     openGraph: {
       ...defaultOpenGraph(lang),
-      title,
+      title: fullTitle,
       description,
       url: canonicalUrl,
     },
