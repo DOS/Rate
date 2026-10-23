@@ -144,6 +144,9 @@ async function runSuite() {
   assert.equal(categoryOf('Vòng tay thông minh Xiaomi Mi Band 8'), 'smartwatches');
   assert.equal(keyOf('Vòng tay thông minh Xiaomi Mi Band 8'), 'xiaomi:mi-band-8:unknown');
   assert.equal(categoryOf('Điện thoại vivo V40 5G 12GB/256GB'), 'smartphones');
+  // "Vivo Book" with a space is a laptop like "Vivobook", "Laptop" in the title or not.
+  assert.equal(categoryOf('ASUS Vivo Book 15 X1504 512GB'), 'laptops');
+  assert.equal(categoryOf('ASUS Vivobook 15 X1504 512GB'), 'laptops');
   // "Vivo Book 15" keys like "Vivobook 15".
   assert.equal(keyOf('Laptop ASUS Vivo Book 15 X1504 512GB'), 'asus:vivobook-15-x1504:512gb');
   assert.equal(
