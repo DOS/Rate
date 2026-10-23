@@ -427,22 +427,36 @@ export default function JReviewsSection({
     const nextAction: VoteChoice | 'clear' =
       prevVote === clickedVote ? 'clear' : clickedVote;
 
+    // Only this review's entry changes: votes on other reviews may be in
+    // flight, so the map is never restored from a render-time copy
+    // (DOS/Rate#799).
+    const setVoteFor = (choice: VoteChoice | null) => {
+      setUserVotes((prev) => {
+        const next = { ...prev };
+        if (choice) {
+          next[reviewId] = choice;
+        } else {
+          delete next[reviewId];
+        }
+        try {
+          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+        } catch {
+          // Ignore storage errors
+        }
+        return next;
+      });
+    };
+
     // Kept to roll back the optimistic update when the server refuses the
     // vote for a signed-in reader (DOS/Rate#790).
     const reviewBefore = reviews.find((r) => r.id === reviewId);
-    const votesBefore = userVotes;
     const rollBack = (notice: string) => {
       if (reviewBefore) {
         setReviews((prevList) =>
           prevList.map((r) => (r.id === reviewId ? reviewBefore : r))
         );
       }
-      setUserVotes(votesBefore);
-      try {
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(votesBefore));
-      } catch {
-        // Ignore storage errors
-      }
+      setVoteFor(prevVote);
       setAuthNotice(notice);
     };
 
@@ -481,18 +495,7 @@ export default function JReviewsSection({
       })
     );
 
-    const updatedVotes = { ...userVotes };
-    if (nextAction === 'clear') {
-      delete updatedVotes[reviewId];
-    } else {
-      updatedVotes[reviewId] = nextAction;
-    }
-    setUserVotes(updatedVotes);
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedVotes));
-    } catch {
-      // Ignore storage errors
-    }
+    setVoteFor(nextAction === 'clear' ? null : nextAction);
 
     try {
       const bearerToken = await getBrowserAccessToken();
@@ -1610,6 +1613,7 @@ export default function JReviewsSection({
                         type="button"
                         disabled={isPending}
                         onClick={() => handleVote(rev.id, 'up')}
+                        aria-pressed={myVote === 'up'}
                         className={`btn btn-sm rounded-pill px-2 py-1 ${
                           myVote === 'up'
                             ? 'btn-success text-white'
@@ -1625,6 +1629,7 @@ export default function JReviewsSection({
                         type="button"
                         disabled={isPending}
                         onClick={() => handleVote(rev.id, 'down')}
+                        aria-pressed={myVote === 'down'}
                         className={`btn btn-sm rounded-pill px-2 py-1 ${
                           myVote === 'down'
                             ? 'btn-warning text-dark'
@@ -1643,6 +1648,7 @@ export default function JReviewsSection({
                         type="button"
                         disabled={isPending}
                         onClick={() => handleVote(rev.id, 'report')}
+                        aria-pressed={myVote === 'report'}
                         className={`btn btn-sm rounded-pill px-2 py-1 ${
                           myVote === 'report'
                             ? 'btn-danger text-white'
