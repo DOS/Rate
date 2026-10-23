@@ -1493,3 +1493,10 @@ body .input-group > .input-group-text {
 #main-content {
   scroll-margin-top: 5rem;
 }
+
+// Catalog rating filter: "★ Tất cả" is longer than the old "All" and broke
+// onto two lines in its 45px button; keep every option on one line
+// (DOS/Rate#794).
+.filterFlex .btn {
+  white-space: nowrap;
+}

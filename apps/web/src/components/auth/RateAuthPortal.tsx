@@ -444,6 +444,7 @@ export default function RateAuthPortal({ mode }: RateAuthPortalProps) {
                     <input
                       id="rate-auth-fullname"
                       type="text"
+                      autoComplete="name"
                       className="form-control rounded-3"
                       placeholder={copy.fullNamePlaceholder}
                       value={fullName}
@@ -464,6 +465,7 @@ export default function RateAuthPortal({ mode }: RateAuthPortalProps) {
                   <input
                     id="rate-auth-email"
                     type="email"
+                    autoComplete="email"
                     className="form-control rounded-3"
                     placeholder={copy.emailPlaceholder}
                     value={email}
@@ -494,6 +496,9 @@ export default function RateAuthPortal({ mode }: RateAuthPortalProps) {
                     <input
                       id="rate-auth-password"
                       type="password"
+                      autoComplete={
+                        mode === 'login' ? 'current-password' : 'new-password'
+                      }
                       className="form-control rounded-3"
                       placeholder={copy.passwordPlaceholder}
                       value={password}
@@ -516,6 +521,7 @@ export default function RateAuthPortal({ mode }: RateAuthPortalProps) {
                     <input
                       id="rate-auth-confirm"
                       type="password"
+                      autoComplete="new-password"
                       className="form-control rounded-3"
                       placeholder={copy.confirmPasswordPlaceholder}
                       value={confirmPassword}
@@ -548,6 +554,7 @@ export default function RateAuthPortal({ mode }: RateAuthPortalProps) {
                     <input
                       id="rate-auth-otp"
                       type="text"
+                      autoComplete="one-time-code"
                       inputMode="numeric"
                       maxLength={8}
                       className="form-control rounded-3 fw-bold fs-5 letter-spacing-2 text-center"
