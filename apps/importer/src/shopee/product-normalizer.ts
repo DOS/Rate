@@ -1031,6 +1031,19 @@ const CANONICAL_PHONE_REGISTRY: Record<
   },
 };
 
+/**
+ * A maker's product code ("15IAH8", "14AHP9", "X1407AA-LY360W"): five characters or
+ * more with at least two digits and two letters. Model names ("X1", "E14", "T14s") are
+ * shorter.
+ */
+function isProductCodeToken(token: string): boolean {
+  return (
+    token.length >= 5 &&
+    (token.match(/\d/g)?.length ?? 0) >= 2 &&
+    (token.match(/[a-z]/gi)?.length ?? 0) >= 2
+  );
+}
+
 function slugify(text: string): string {
   return (
     text
@@ -1062,16 +1075,18 @@ export class ProductNormalizer {
     else if (/samsung|galaxy/i.test(title)) brand = 'Samsung';
     else if (/xiaomi|redmi|poco/i.test(title)) brand = 'Xiaomi';
     else if (/\bsony\b|wf-1000|wh-1000|xperia/i.test(title)) brand = 'Sony';
-    else if (/\bgarmin\b|forerunner|fenix|venu/i.test(title)) brand = 'Garmin';
+    else if (/\bgarmin\b|forerunner|fenix|venu|vivoactive|vivosmart|vivomove/i.test(title))
+      brand = 'Garmin';
     else if (/\blenovo\b|thinkpad|ideapad|legion/i.test(title)) brand = 'Lenovo';
     else if (/oppo/i.test(title)) brand = 'OPPO';
-    // Not inside "Vivobook" (Asus) or "Vivoactive" (Garmin) (DOS/Rate#761).
-    else if (/\bvivo(?!book|active)/i.test(title)) brand = 'Vivo';
+    // Not "Vivobook" / "Vivo Book" (Asus) (DOS/Rate#761); Garmin's Vivo lines are matched above.
+    else if (/\bvivo(?!\s*book)/i.test(title)) brand = 'Vivo';
     else if (/realme/i.test(title)) brand = 'Realme';
     else if (/google|pixel/i.test(title)) brand = 'Google';
     else if (/\basus\b|\brog\b|zenbook|vivobook|tuf\s*gaming/i.test(title)) brand = 'Asus';
     else if (/\bdell\b|inspiron|\bxps\b|alienware|latitude/i.test(title)) brand = 'Dell';
-    else if (/\bhp\b|pavilion|victus|omen|elitebook|envy/i.test(title)) brand = 'HP';
+    // "Omen" as a word: Sennheiser "Momentum" is not HP.
+    else if (/\bhp\b|pavilion|victus|\bomen\b|elitebook|envy/i.test(title)) brand = 'HP';
     else if (/\bacer\b|nitro\s*\d|swift|predator|aspire/i.test(title)) brand = 'Acer';
     else if (/\bmsi\b|katana|cyborg|stealth|prestige/i.test(title)) brand = 'MSI';
     else if (/\bhuawei\b|matepad|freebuds|watch\s*gt/i.test(title)) brand = 'Huawei';
@@ -1178,16 +1193,20 @@ export class ProductNormalizer {
       const modelTokens: string[] = [];
       for (let i = 0; i < rawTokens.length; i++) {
         const tok = rawTokens[i];
+        // "Samsung, Galaxy S25 Ultra": the brand's comma is not the end of the model.
+        if (modelTokens.length === 0 && /^[,;]+$/.test(tok)) continue;
         // A generation ("Gen 13") is part of the model even past the 4-token cap, so
-        // "ThinkPad X1 Carbon Gen 13" and "Gen 11" key apart (DOS/Rate#762).
+        // "ThinkPad X1 Carbon Gen 13" and "Gen 11" key apart (DOS/Rate#762), unless a
+        // product code already names it ("IdeaPad Slim 3 15IAH8 Gen 8" is "15IAH8").
         const generation =
-          (/^gen$/i.test(modelTokens[modelTokens.length - 1] ?? '') && /^\d{1,2},?$/.test(tok)) ||
-          (/^gen$/i.test(tok) && /^\d{1,2},?$/.test(rawTokens[i + 1] ?? ''));
+          !modelTokens.some(isProductCodeToken) &&
+          ((/^gen$/i.test(modelTokens[modelTokens.length - 1] ?? '') && /^\d{1,2},?$/.test(tok)) ||
+            (/^gen$/i.test(tok) && /^\d{1,2},?$/.test(rawTokens[i + 1] ?? '')));
         // A trailing "Plus" word is part of the model even past the 4-token cap,
         // so "Redmi Note 13 Pro Plus" keys like "Redmi Note 13 Pro+" (#597).
         if (
           modelTokens.length >= 4 &&
-          !(modelTokens.length === 4 && /^plus$/i.test(tok)) &&
+          !(modelTokens.length === 4 && /^plus,?$/i.test(tok)) &&
           !generation
         ) {
           break;

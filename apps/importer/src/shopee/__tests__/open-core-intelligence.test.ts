@@ -118,18 +118,21 @@ async function runSuite() {
   );
   // Brand and model keys of the generic model fallback (DOS/Rate#761, #762).
   const keyOf = (title: string) => normalizer.normalize(createDummyShopeeProduct(title)).model_key;
-  // "Vivobook" and "Vivoactive" are not the vivo brand; vivo phones still are.
+  const brandOf = (title: string) => normalizer.normalize(createDummyShopeeProduct(title)).brand;
+  // "Vivobook" / "Vivo Book" are Asus and Garmin's Vivo lines are Garmin; vivo phones stay vivo.
   assert.equal(
     keyOf('Laptop Asus Vivobook 14 X1407AA-LY360W (Ultra 5-325/ 16GB/ 512GB/ Windows 11 Home)'),
     'asus:vivobook-14-x1407aa-ly360w:512gb'
   );
   assert.equal(keyOf('ASUS Vivobook S 14 OLED S5406SA 512GB'), 'asus:vivobook-s-14:512gb');
+  assert.equal(brandOf('Laptop ASUS Vivo Book 15 X1504 512GB'), 'Asus');
   assert.equal(keyOf('Điện thoại vivo V40 5G 12GB/256GB'), 'vivo:v40:256gb');
-  assert.equal(
-    normalizer.normalize(createDummyShopeeProduct('Đồng hồ Vivoactive 5 GPS')).brand,
-    'Khác'
-  );
-  // A generation past the 4-token cap stays in the model, so generations key apart.
+  assert.equal(keyOf('Đồng hồ Vivoactive 5 GPS'), 'garmin:vivoactive-5:unknown');
+  assert.equal(brandOf('Vòng đeo tay Vivosmart 5'), 'Garmin');
+  // "Omen" only as a word: Sennheiser "Momentum" is not HP.
+  assert.equal(brandOf('Tai nghe Sennheiser Momentum 4 Wireless'), 'Sennheiser');
+  assert.equal(brandOf('Laptop HP Omen 16 512GB'), 'HP');
+  // A generation past the 4-token cap stays in the model, so generations key apart...
   assert.equal(
     keyOf(
       'Laptop Lenovo ThinkPad X1 Carbon Gen 13 - 21NS010BVN (Ultra 7-258V/ 32GB/ 512GB/ Win 11 Pro)'
@@ -145,11 +148,21 @@ async function runSuite() {
     'lenovo:thinkpad-x1-carbon-gen-12:512gb'
   );
   assert.equal(keyOf('Lenovo IdeaPad Slim 5 Gen 9 512GB'), 'lenovo:ideapad-slim-5-gen-9:512gb');
-  assert.equal(
-    keyOf('Lenovo IdeaPad Slim 3 15IAH8 Gen 8 i5 16GB 512GB'),
-    'lenovo:ideapad-slim-3-15iah8-gen-8:512gb'
-  );
   assert.equal(keyOf('Lenovo Legion 5 Gen 9 512GB'), 'lenovo:legion-5-gen-9:512gb');
+  // ...unless a product code in the model already names it: both titles are one laptop.
+  for (const [withGen, plain] of [
+    [
+      'Laptop Lenovo IdeaPad Slim 3 15IAH8 Gen 8 i5 16GB 512GB',
+      'Laptop Lenovo IdeaPad Slim 3 15IAH8 512GB',
+    ],
+    ['Laptop Lenovo Yoga 7 2-in-1 14AHP9 Gen 9 512GB', 'Laptop Lenovo Yoga 7 2-in-1 14AHP9 512GB'],
+  ]) {
+    assert.equal(keyOf(withGen), keyOf(plain), withGen);
+  }
+  assert.equal(
+    keyOf('Laptop Lenovo IdeaPad Slim 3 15IAH8 512GB'),
+    'lenovo:ideapad-slim-3-15iah8:512gb'
+  );
   // A bare "Đồng hồ" prefix is dropped like "Đồng hồ thông minh", and a comma ends the model.
   assert.equal(
     keyOf('Đồng hồ Garmin Epix Gen 2, Back,Gray Carbon DLC Titanium'),
@@ -165,6 +178,13 @@ async function runSuite() {
   assert.equal(
     keyOf('Điện thoại Samsung Galaxy S25 Ultra, Điện thoại AI, Tìm kiếm thông minh'),
     'samsung:galaxy-s25-ultra:unknown'
+  );
+  // A comma right after the brand is not the end of the model; "Plus," still counts.
+  assert.equal(keyOf('Samsung, Galaxy S25 Ultra 256GB'), keyOf('Samsung Galaxy S25 Ultra 256GB'));
+  assert.equal(keyOf('Samsung, Galaxy A55 5G 256GB'), 'samsung:galaxy-a55:256gb');
+  assert.equal(
+    keyOf('Xiaomi Redmi Note 14 Pro Plus, 12GB/256GB'),
+    'xiaomi:redmi-note-14-pro-plus:256gb'
   );
   assert.equal(
     keyOf('Xiaomi Redmi Note 14 Pro Plus 5G 256GB'),
