@@ -15,10 +15,7 @@ import {
   comparePositiveMinPrices,
   scoreMasterProductForLeaderboard,
 } from '@/lib/leaderboard-engine';
-import NavbarDarkDynamic from '../../components/navbar/NavbarDarkDynamic';
-import FooterTop from '../../components/footer-top';
-import FooterDynamic from '../../components/footer/FooterDynamic';
-import BackToTop from '../../components/back-to-top';
+import PageShell from '../../components/page-shell';
 import CompareWorkspace from '@/components/compare/CompareWorkspace';
 import CompareTrayBar from '@/components/compare/CompareTrayBar';
 import VersusInteractiveScoreboard from '@/components/compare/VersusInteractiveScoreboard';
@@ -170,8 +167,7 @@ export default async function VersusComparePage({ params }: VersusPageProps) {
 
   return (
     <ClientMessages scope="compare">
-      <>
-        <NavbarDarkDynamic links={[]} />
+      <PageShell locale={locale}>
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
@@ -262,10 +258,7 @@ export default async function VersusComparePage({ params }: VersusPageProps) {
         </section>
 
         <CompareTrayBar />
-        <FooterTop locale={locale} />
-        <FooterDynamic sections={[]} links={[]} locale={locale} />
-        <BackToTop />
-      </>
+      </PageShell>
     </ClientMessages>
   );
 }

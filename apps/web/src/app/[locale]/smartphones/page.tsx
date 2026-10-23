@@ -23,11 +23,8 @@ import {
   SORT_OPTIONS,
   type ProductSortOption,
 } from '@/lib/category-filters';
-import NavbarDarkDynamic from '../components/navbar/NavbarDarkDynamic';
+import PageShell from '../components/page-shell';
 import ListSidebarOne from '../components/list-sidebar-one';
-import FooterTop from '../components/footer-top';
-import FooterDynamic from '../components/footer/FooterDynamic';
-import BackToTop from '../components/back-to-top';
 import CompareTrayBar from '@/components/compare/CompareTrayBar';
 import ContentText from '@/components/elementary/ContentText';
 import CategoryCatalogToolbar from '@/components/leaderboard/CategoryCatalogToolbar';
@@ -383,7 +380,7 @@ export async function CategoryCatalogContent({
 
   return (
     <ClientMessages scope="catalog">
-      <>
+      <PageShell locale={locale}>
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
@@ -393,7 +390,6 @@ export async function CategoryCatalogContent({
         {/* Bootstrap JS (bundled, not a CDN) drives only the catalog's sort
         dropdown and filter drawer, so other pages skip it (DOS/Rate#754). */}
         <BootstrapClient />
-        <NavbarDarkDynamic links={[]} />
 
         {/* Hero Banner (DESIGN.md v2.0 Dark Obsidian + DOS Crimson Glow) */}
         <div
@@ -620,7 +616,7 @@ export async function CategoryCatalogContent({
                 <div className="row align-items-center justify-content-between g-2 mb-4">
                   <div className="col-xl-7 col-lg-7 col-md-7 col-sm-12">
                     <div className="d-flex align-items-center flex-wrap gap-2 gap-md-3">
-                      <h6 className="m-0">
+                      <h2 className="h6 fw-semibold m-0">
                         {t('page.foundPrefix')}{' '}
                         <span className="text-primary fw-bold">
                           {products.length}
@@ -628,7 +624,7 @@ export async function CategoryCatalogContent({
                         {t('page.foundSuffix', {
                           total: facets.totalUnfiltered,
                         })}
-                      </h6>
+                      </h2>
                       {products.length >= 2 && (
                         <Link
                           href={`/compare?cat=${categorySlug}&slugs=${products
@@ -886,13 +882,13 @@ export async function CategoryCatalogContent({
                 {/* Product Cards Grid (DESIGN.md v3.0 Rating & Review-First .rate-card) */}
                 {products.length === 0 ? (
                   <div className="card rounded-4 bg-light border-0 p-5 text-center shadow-sm">
-                    <h5 className="fw-bold mb-2">
+                    <h3 className="h5 fw-bold mb-2">
                       {facets.totalUnfiltered === 0
                         ? t('page.emptySyncingTitle', {
                             title: schema.categoryTitle,
                           })
                         : t('page.emptyMatchingTitle')}
-                    </h5>
+                    </h3>
                     <p className="text-muted mb-3">
                       {facets.totalUnfiltered === 0
                         ? t('page.emptySyncingDesc', {
@@ -1075,10 +1071,7 @@ export async function CategoryCatalogContent({
         </section>
 
         <CompareTrayBar />
-        <FooterTop locale={locale} />
-        <FooterDynamic sections={[]} links={[]} locale={locale} />
-        <BackToTop />
-      </>
+      </PageShell>
     </ClientMessages>
   );
 }

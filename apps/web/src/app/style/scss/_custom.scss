@@ -1439,3 +1439,42 @@ body .input-group > .input-group-text {
 .rate-island-fallback {
   min-height: 100vh;
 }
+
+// Skip link (DOS/Rate#764): .visually-hidden-focusable hides it until it has
+// focus; then it shows above the sticky navbar instead of pushing it down.
+.rate-skip-link:focus {
+  position: fixed !important;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 1000000;
+  padding: 0.625rem 1rem !important;
+  border-radius: var(--rate-radius-btn);
+  background-color: var(--rate-bg-dark);
+  color: #ffffff;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+// The catalog filter panel's title (h2) heads its filter groups (h3). From
+// 992px the panel is an inline sidebar and style.scss hides its header; keep
+// the title for screen readers so the groups still follow an h2.
+@media (min-width: 992px) {
+  .searchingSidebar .offcanvas-header {
+    display: block !important;
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    padding: 0 !important;
+    margin: -1px !important;
+    overflow: hidden !important;
+    clip: rect(0, 0, 0, 0) !important;
+    white-space: nowrap !important;
+    border: 0 !important;
+  }
+}
+
+// The skip link focuses <main> (tabindex -1) so the next Tab starts in the
+// content; the landmark itself is not a control and needs no focus ring.
+#main-content:focus {
+  outline: none;
+}

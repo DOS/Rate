@@ -20,10 +20,7 @@ import {
   selectMerchantRadar,
 } from '@/lib/deal-radar';
 import RadarBadge from '@/components/radar/RadarBadge';
-import NavbarDarkDynamic from '../../components/navbar/NavbarDarkDynamic';
-import FooterTop from '../../components/footer-top';
-import FooterDynamic from '../../components/footer/FooterDynamic';
-import BackToTop from '../../components/back-to-top';
+import PageShell from '../../components/page-shell';
 import CompareTrayBar from '@/components/compare/CompareTrayBar';
 import MerchantShareAuditButton from '@/components/merchants/MerchantShareAuditButton';
 import {
@@ -184,14 +181,13 @@ export default async function MerchantProfilePage({
 
   return (
     <ClientMessages scope="merchantProfile">
-      <>
+      <PageShell locale={locale}>
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
             __html: JSON.stringify(merchantJsonLd).replace(/</g, '\\u003c'),
           }}
         />
-        <NavbarDarkDynamic links={[]} />
 
         <div className="container py-5">
           {/* Breadcrumb */}
@@ -978,10 +974,7 @@ export default async function MerchantProfilePage({
         </div>
 
         <CompareTrayBar />
-        <FooterTop locale={locale} />
-        <FooterDynamic sections={[]} links={[]} locale={locale} />
-        <BackToTop />
-      </>
+      </PageShell>
     </ClientMessages>
   );
 }

@@ -1,10 +1,7 @@
 import { Suspense } from 'react';
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
-import NavbarDarkDynamic from '../components/navbar/NavbarDarkDynamic';
-import FooterTop from '../components/footer-top';
-import FooterDynamic from '../components/footer/FooterDynamic';
-import BackToTop from '../components/back-to-top';
+import PageShell from '../components/page-shell';
 import RateAuthPortal from '@/components/auth/RateAuthPortal';
 import ClientMessages from '@/components/providers/ClientMessages';
 
@@ -32,8 +29,7 @@ export default async function RegisterPage({
   const t = await getTranslations({ locale, namespace: 'authPortal' });
   return (
     <ClientMessages scope="auth">
-      <>
-        <NavbarDarkDynamic links={[]} />
+      <PageShell locale={locale}>
         <Suspense
           fallback={
             <div className="rate-island-fallback container py-5 text-center">
@@ -43,10 +39,7 @@ export default async function RegisterPage({
         >
           <RateAuthPortal mode="register" locale={locale} />
         </Suspense>
-        <FooterTop locale={locale} />
-        <FooterDynamic sections={[]} links={[]} locale={locale} />
-        <BackToTop />
-      </>
+      </PageShell>
     </ClientMessages>
   );
 }

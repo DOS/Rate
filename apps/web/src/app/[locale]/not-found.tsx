@@ -9,17 +9,14 @@ import {
   BsTablet,
 } from 'react-icons/bs';
 import { Link } from '@/lib/navigation';
-import NavbarDarkDynamic from './components/navbar/NavbarDarkDynamic';
-import FooterDynamic from './components/footer/FooterDynamic';
-import BackToTop from './components/back-to-top';
+import PageShell from './components/page-shell';
 
 export default async function NotFound() {
   const t = await getTranslations('errors.notFound');
   const tCat = await getTranslations('leaderboard');
 
   return (
-    <>
-      <NavbarDarkDynamic links={[]} />
+    <PageShell footerTop={false}>
       <section className="bg-light py-5">
         <div className="container py-5">
           <div className="row justify-content-center">
@@ -99,8 +96,6 @@ export default async function NotFound() {
           </div>
         </div>
       </section>
-      <FooterDynamic sections={[]} links={[]} />
-      <BackToTop />
-    </>
+    </PageShell>
   );
 }

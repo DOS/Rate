@@ -1,10 +1,7 @@
 import type { Metadata } from 'next';
 import { getTranslations, setRequestLocale } from 'next-intl/server';
 import { Link } from '@/lib/navigation';
-import NavbarDarkDynamic from '../components/navbar/NavbarDarkDynamic';
-import FooterTop from '../components/footer-top';
-import FooterDynamic from '../components/footer/FooterDynamic';
-import BackToTop from '../components/back-to-top';
+import PageShell from '../components/page-shell';
 import ApiPlaygroundClient from '@/components/developers/ApiPlaygroundClient';
 import { EMPTY_RATE_PLATFORM_STATS } from '@/lib/rate-api';
 import { getCachedRatePlatformStats } from '@/server/rate';
@@ -235,9 +232,7 @@ export default async function DevelopersPage({
 
   return (
     <ClientMessages scope="developers">
-      <>
-        <NavbarDarkDynamic links={[]} />
-
+      <PageShell locale={locale}>
         {/* Hero Header */}
         <section className="bg-dark border-bottom border-secondary border-opacity-25 py-5 text-white">
           <div className="container py-3">
@@ -467,7 +462,7 @@ export default async function DevelopersPage({
               <div className="col-lg-3 col-md-6">
                 <div className="card rounded-4 h-100 border p-4 shadow-sm">
                   <BsLayers className="text-primary fs-2 mb-3" />
-                  <h5 className="fw-bold">{t('layer1Title')}</h5>
+                  <h3 className="h5 fw-bold">{t('layer1Title')}</h3>
                   <p className="small text-muted mb-0">
                     {t('layer1DescPrefix')} <code>React.cache()</code>{' '}
                     {t('layer1DescSuffix')}
@@ -477,7 +472,7 @@ export default async function DevelopersPage({
               <div className="col-lg-3 col-md-6">
                 <div className="card rounded-4 h-100 border p-4 shadow-sm">
                   <BsCpu className="text-success fs-2 mb-3" />
-                  <h5 className="fw-bold">{t('layer2Title')}</h5>
+                  <h3 className="h5 fw-bold">{t('layer2Title')}</h3>
                   <p className="small text-muted mb-0">
                     {t('layer2DescPrefix')} <code>ProductNormalizer</code>,{' '}
                     {t('layer2DescMiddle1')} <code>EntityMatcher</code>,{' '}
@@ -489,7 +484,7 @@ export default async function DevelopersPage({
               <div className="col-lg-3 col-md-6">
                 <div className="card rounded-4 h-100 border p-4 shadow-sm">
                   <BsShieldLock className="text-warning fs-2 mb-3" />
-                  <h5 className="fw-bold">{t('layer3Title')}</h5>
+                  <h3 className="h5 fw-bold">{t('layer3Title')}</h3>
                   <p className="small text-muted mb-0">
                     {t('layer3DescPrefix')} <code>FOR UPDATE SKIP LOCKED</code>{' '}
                     {t('layer3DescSuffix')}
@@ -499,18 +494,14 @@ export default async function DevelopersPage({
               <div className="col-lg-3 col-md-6">
                 <div className="card rounded-4 h-100 border p-4 shadow-sm">
                   <BsDatabaseCheck className="text-danger fs-2 mb-3" />
-                  <h5 className="fw-bold">{t('layer4Title')}</h5>
+                  <h3 className="h5 fw-bold">{t('layer4Title')}</h3>
                   <p className="small text-muted mb-0">{t('layer4Desc')}</p>
                 </div>
               </div>
             </div>
           </div>
         </section>
-
-        <FooterTop locale={locale} />
-        <FooterDynamic sections={[]} links={[]} locale={locale} />
-        <BackToTop />
-      </>
+      </PageShell>
     </ClientMessages>
   );
 }

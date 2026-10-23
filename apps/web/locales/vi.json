@@ -22,7 +22,8 @@
       "menuToggleAria": "Mở hoặc đóng menu",
       "menuCloseAria": "Đóng menu",
       "categories": "Danh mục",
-      "backToTop": "Lên đầu trang"
+      "backToTop": "Lên đầu trang",
+      "skipToContent": "Chuyển đến nội dung chính"
     },
     "footer": {
       "copyRight": "© {YEAR} Rate.vn, thuộc hệ sinh thái DOS. So sánh thông số, lịch sử giá thật và đánh giá từ nhiều sàn.",
