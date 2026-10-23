@@ -14,6 +14,8 @@ const ROUTES = [
   // Long store and product names (DOS/Rate#782).
   '/merchants/ffffffff-ffff-4fff-8fff-ffffffff0782',
   '/smartphones/e2e-long-name-phone',
+  '/merchants/ffffffff-ffff-4fff-8fff-ffffffff0783',
+  '/smartphones/e2e-medium-name-phone',
   '/deals',
   '/about-us',
   '/faq',
@@ -43,6 +45,17 @@ for (const locale of ['vi', 'en', 'cs']) {
       }
       if (route.endsWith('e2e-long-name-phone')) {
         expect(title.startsWith('E2E Galaxy Z Fold7'), title).toBe(true);
+      }
+      // A medium name keeps the score or the price (the short forms).
+      if (route.endsWith('ffffffff0783')) {
+        expect(title.startsWith('Cửa Hàng Điện Thoại Chính Hãng'), title).toBe(
+          true
+        );
+        expect(title).toContain('/100');
+      }
+      if (route.endsWith('e2e-medium-name-phone')) {
+        expect(title.startsWith('E2E Galaxy Z Flip7'), title).toBe(true);
+        expect(title).toContain('29.990.000');
       }
       // Compare titles keep both product names (DOS/Rate#777).
       if (route.startsWith('/compare/') || route.includes('slugs=')) {

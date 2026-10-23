@@ -223,14 +223,25 @@ INSERT INTO rate.reviews (product_id, author_name, rating_star, comment, reviewe
 VALUES ('cccccccc-cccc-4ccc-8ccc-ccccccc07692', 'Draft Links', 4, 'Máy dùng ổn, giao hàng nhanh.', 'user',
   now() - interval '120 days', now() - interval '120 days');
 
--- A store and a phone with long names: their titles must still fit a search
--- result, name first (DOS/Rate#782). The phone has no offer, so it stays off
--- the deals and the leaderboard.
+-- Stores and phones with long and medium names: their titles must still fit a
+-- search result, name first (DOS/Rate#782). The long ones exercise the cut
+-- name, the medium ones the short forms that keep the score or the price. The
+-- phones have no offers and no reviews, so they stay off the deals and the
+-- leaderboard, and their old created_at keeps them last in default orderings.
 INSERT INTO rate.merchants (id, platform, platform_shop_id, name, slug, is_official)
-VALUES ('ffffffff-ffff-4fff-8fff-ffffffff0782', 'shopee', 'shop_long_name',
-  'Cửa Hàng Ủy Quyền Chính Hãng Điện Thoại Di Động Toàn Quốc', 'long-name-store', false);
+VALUES
+  ('ffffffff-ffff-4fff-8fff-ffffffff0782', 'shopee', 'shop_long_name',
+   'Cửa Hàng Ủy Quyền Chính Hãng Điện Thoại Di Động Toàn Quốc', 'long-name-store', false),
+  ('ffffffff-ffff-4fff-8fff-ffffffff0783', 'shopee', 'shop_medium_name',
+   'Cửa Hàng Điện Thoại Chính Hãng Hà Nội 24h', 'medium-name-store', false);
 INSERT INTO rate.master_products
-  (id, category_id, brand, model, model_key, name, slug, min_price, max_price, merchant_count, status, metadata)
-VALUES ('22222222-2222-4222-8222-222222220782', 'c0000000-0000-4000-8000-000000000001', 'E2E', 'Fold Long',
-  'e2e_long_name_phone', 'E2E Galaxy Z Fold7 Ultra Limited Edition 1TB Crafted Black Titanium',
-  'e2e-long-name-phone', 52990000, 52990000, 0, 'published', '{"category_slug": "smartphones"}');
+  (id, category_id, brand, model, model_key, name, slug, min_price, max_price, merchant_count, status, metadata, created_at)
+VALUES
+  ('22222222-2222-4222-8222-222222220782', 'c0000000-0000-4000-8000-000000000001', 'E2E', 'Fold Long',
+   'e2e_long_name_phone', 'E2E Galaxy Z Fold7 Ultra Limited Edition 1TB Crafted Black Titanium',
+   'e2e-long-name-phone', 52990000, 52990000, 0, 'published', '{"category_slug": "smartphones"}',
+   timestamptz '2026-01-01 00:00:00+00'),
+  ('22222222-2222-4222-8222-222222220783', 'c0000000-0000-4000-8000-000000000001', 'E2E', 'Flip Medium',
+   'e2e_medium_name_phone', 'E2E Galaxy Z Flip7 Olympic Edition 512GB',
+   'e2e-medium-name-phone', 29990000, 29990000, 0, 'published', '{"category_slug": "smartphones"}',
+   timestamptz '2026-01-01 00:00:00+00');
