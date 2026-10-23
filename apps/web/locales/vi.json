@@ -1,7 +1,7 @@
 {
   "rate": {
     "seo": {
-      "siteTitle": "Rate.vn - So sánh thông số 10 nhóm, lịch sử giá thật và đánh giá đã lọc",
+      "siteTitle": "Rate.vn - Giá thật, thông số và đánh giá đã lọc",
       "siteDescription": "Tra cứu thông số chuẩn GSMArena và PhoneArena, phát hiện giá gốc bị nâng khống và xem đánh giá đã lọc đánh giá ảo trên Shopee, Lazada, Tiki tại Rate.vn."
     },
     "nav": {
@@ -126,7 +126,7 @@
     "versusAutoVerdict": "Kết luận tự động: {winner} dẫn trước với điểm tổng hợp {score}/5.0{expertSuffix}.",
     "compareMetaTitleWithNames": "So sánh {names} - Điểm đánh giá và 10 nhóm thông số | Rate.vn",
     "compareMetaDescWithNames": "So sánh điểm đánh giá thật, 10 nhóm thông số kỹ thuật và giá tham khảo giữa {names} trên Rate.vn.",
-    "compareMetaDefaultTitle": "So sánh thiết bị cùng ngành hàng - Điểm đánh giá và 10 nhóm thông số | Rate.vn",
+    "compareMetaDefaultTitle": "So sánh thiết bị cùng ngành hàng | Rate.vn",
     "compareMetaDefaultDesc": "So sánh tối đa 4 thiết bị cùng danh mục (điện thoại, máy tính bảng, laptop, đồng hồ thông minh hoặc tai nghe) theo điểm đánh giá và 10 nhóm thông số kỹ thuật.",
     "breadcrumbHome": "Trang chủ",
     "breadcrumbCatalog": "Danh mục thiết bị",
@@ -649,7 +649,7 @@
     "quickToggleShortWatched": "Đang canh"
   },
   "deals": {
-    "metaTitle": "Deal công nghệ đáng tiền, đã kiểm tra giá thật trên 10 sàn | Rate.vn",
+    "metaTitle": "Deal công nghệ đã kiểm tra trên 10 sàn | Rate.vn",
     "metaDescription": "Tìm kiếm thiết bị công nghệ đáng tiền nhất theo ngân sách và nhu cầu sử dụng, đã đối chiếu giá giữa các sàn và lọc khuyến mãi ảo trên 10 sàn TMĐT.",
     "pageEyebrow": "Săn deal đã kiểm chứng",
     "pageTitle": "Deal đáng tiền nhất, đã lọc khuyến mãi ảo trên 10 sàn",
@@ -856,7 +856,7 @@
     "emptySubtitle": "Hãy xóa bộ lọc hoặc dán link gian hàng/sản phẩm vào công cụ kiểm tra link.",
     "inspectUrlCta": "Kiểm tra link gian hàng hoặc sản phẩm bất kỳ →",
     "notFoundTitle": "Không tìm thấy gian hàng | Rate.vn",
-    "profileMetaTitle": "{name} ({platform}) - Độ tin cậy {score}/100 và lịch sử giá | Rate.vn",
+    "profileMetaTitle": "{name} ({platform}) - Tin cậy {score}/100 | Rate.vn",
     "profileMetaDesc": "Hồ sơ gian hàng {name}: rủi ro lừa đảo DOSafe ({dosafe}/100), rủi ro đánh giá ({seeding}/100) và lịch sử giá {count} sản phẩm trên Rate.vn.",
     "trustHigh": "Độ tin cậy cao (An toàn)",
     "trustModerate": "Độ tin cậy trung bình (Cần lưu ý)",
@@ -949,7 +949,7 @@
   },
   "productDetail": {
     "notFoundTitle": "Không tìm thấy sản phẩm | Rate.vn",
-    "metaTitle": "{name} - Giá từ {minPrice} ₫, thông số và đánh giá thực chất | Rate.vn",
+    "metaTitle": "{name} - Giá từ {minPrice} ₫ | Rate.vn",
     "metaDesc": "So sánh giá {name} ({brand}) từ {merchantCount} gian hàng, xem lịch sử giá để nhận ra giảm giá ảo và đọc đánh giá thực chất (AI đã lọc bỏ đánh giá ảo) trên Rate.vn.",
     "ogTitle": "{name} - So sánh giá và kiểm tra khuyến mãi | Rate.vn",
     "ogDesc": "Giá tốt nhất từ {minPrice} ₫. Xem 10 nhóm thông số kỹ thuật chuẩn GSMArena/PhoneArena và biểu đồ lịch sử giá.",
@@ -1335,7 +1335,7 @@
     "pgPreset13Desc": "Trả về spec OpenAPI 3.1.0 dạng JSON cho các endpoint REST API v1 của Rate.vn."
   },
   "staticPages": {
-    "aboutSeoTitle": "Giới thiệu Rate.vn - So sánh thông số, giá thật và đánh giá đã lọc | Rate.vn",
+    "aboutSeoTitle": "Giới thiệu Rate.vn - Giá thật và đánh giá đã lọc",
     "aboutSeoDesc": "Cách Rate.vn chuẩn hóa 10 nhóm thông số theo GSMArena và PhoneArena, phát hiện giá gốc bị nâng khống và lọc đánh giá ảo.",
     "aboutHeroBadge": "Hệ sinh thái bảo vệ người mua DOS",
     "aboutHeroTitlePrefix": "Về kiến trúc minh bạch của",

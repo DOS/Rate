@@ -30,11 +30,7 @@ export async function generateMetadata({
   const t = await getTranslations({ locale, namespace: 'staticPages' });
   const alternates = {
     canonical: 'https://rate.vn/about-us',
-    languages: {
-      vi: 'https://rate.vn/about-us',
-      en: 'https://rate.vn/about-us',
-      cs: 'https://rate.vn/about-us',
-    },
+    // One URL serves every locale (cookie), so no hreflang alternates (DOS/Rate#765).
   };
   return {
     title: t('aboutSeoTitle'),

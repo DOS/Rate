@@ -16,11 +16,7 @@ export async function generateMetadata({
   const t = await getTranslations({ locale, namespace: 'staticPages' });
   const alternates = {
     canonical: 'https://rate.vn/privacy-policy',
-    languages: {
-      vi: 'https://rate.vn/privacy-policy',
-      en: 'https://rate.vn/privacy-policy',
-      cs: 'https://rate.vn/privacy-policy',
-    },
+    // One URL serves every locale (cookie), so no hreflang alternates (DOS/Rate#765).
   };
   return {
     title: t('privacySeoTitle'),
