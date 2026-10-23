@@ -746,6 +746,8 @@
     "historicalHighLabel": "Nejvyšší zaznamenaná cena",
     "fakeSaleWarning": "Falešná sleva: přeškrtnutá cena je vyšší než nejvyšší cena, kterou jsme zaznamenali.",
     "genuineDiscountBadge": "Uvedená cena odpovídá skutečné historii cen.",
+    "implausiblyLowBadge": "Podezřele nízká cena",
+    "implausiblyLowTitle": "Mnohem levnější než všechny ostatní obchody: může jít o padělek, příslušenství nebo návnadu. Před nákupem obchod pečlivě ověřte.",
     "radarSectionBadge": "Cenové signály a rozdíly cen v 10 obchodech",
     "openDealRadarLink": "Zobrazit nabídky z 10 obchodů →",
     "radarGenuinePill": "Nejnižší cena v obchodech: -{pct} % na {platform} ({price} ₫)",

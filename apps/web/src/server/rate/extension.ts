@@ -194,6 +194,8 @@ export interface ExtensionPriceAssessment {
   historicalMaxPrice: number | null;
   cheaperOfferCount: number;
   maxSavingsAmount: number;
+  /** Set when the observed price is far below every other store (#797). */
+  implausiblyLow?: true;
 }
 
 export interface ExtensionLookupResponse {
@@ -497,6 +499,8 @@ export function evaluateExtensionPriceVerdict(params: {
   observedPrice: number | null;
   observedOriginalPrice: number | null;
   offers: MerchantOffer[];
+  /** The listing the observed price belongs to, when it is one of `offers`. */
+  observedOfferId?: string | null;
   priceHistory: MasterProductPriceHistorySummary | null;
 }): ExtensionPriceAssessment {
   const {
@@ -506,6 +510,7 @@ export function evaluateExtensionPriceVerdict(params: {
     observedPrice,
     observedOriginalPrice,
     offers,
+    observedOfferId,
     priceHistory,
   } = params;
 
@@ -569,11 +574,17 @@ export function evaluateExtensionPriceVerdict(params: {
 
   // A price far below every other store is a warning, never a deal: likely a
   // counterfeit, an accessory or a bait listing (DOS/Rate#797). The neutral
-  // verdict keeps the extension's allow-list; the label says why.
-  if (observedPrice && isImplausiblyLowPrice(observedPrice, marketOffers)) {
+  // verdict keeps the extension's allow-list; the label says why. Judged
+  // against every other offer, as the offers table judges each row, so the
+  // two never disagree about a listing.
+  const otherOffers = observedOfferId
+    ? offers.filter((o) => o.id !== observedOfferId)
+    : offers;
+  if (observedPrice && isImplausiblyLowPrice(observedPrice, otherOffers)) {
     return {
       verdict: 'insufficient_data',
       badgeLabel: 'Giá thấp bất thường',
+      implausiblyLow: true,
       explanation: `Giá ${observedPrice.toLocaleString('vi-VN')} ₫ thấp hơn nhiều so với các nơi bán khác (trung vị ${Math.round(marketMedianPrice ?? 0).toLocaleString('vi-VN')} ₫): có thể là hàng giả, phụ kiện hoặc tin câu khách. Hãy kiểm tra kỹ gian hàng trước khi mua.`,
       observedPrice,
       observedOriginalPrice,
@@ -639,7 +650,7 @@ export function evaluateExtensionPriceVerdict(params: {
       ((effectivePrice - marketMedianPrice) / marketMedianPrice) * 1000
     ) / 10;
 
-  const cheaperOffers = offers.filter(
+  const cheaperOffers = marketOffers.filter(
     (o) =>
       Number.isFinite(o.price_current) &&
       o.price_current > 0 &&
@@ -1015,14 +1026,13 @@ export async function lookupExtensionProduct(
   const offers = await getMasterProductOffers(matchedMaster.id);
   // Without a URL match, fall back to the cheapest plausible offer, never a
   // bait-price listing (DOS/Rate#797).
-  const matchedOffer =
+  const urlMatchedOffer =
     offers.find(
       (o) =>
         (canonicalUrl && o.url.includes(canonicalUrl)) ||
         Array.from(candidateItemIds).some((id) => o.url.includes(id))
-    ) ||
-    plausibleOffers(offers)[0] ||
-    null;
+    ) || null;
+  const matchedOffer = urlMatchedOffer || plausibleOffers(offers)[0] || null;
 
   if (matchedOffer && candidateItemIds.size > 0) {
     for (const id of candidateItemIds) {
@@ -1102,7 +1112,12 @@ export async function lookupExtensionProduct(
     isAmbiguousVariant: isAmbiguous,
     observedPrice: effectiveObservedPrice,
     observedOriginalPrice: effectiveObservedOriginal,
-    offers: marketOffers,
+    offers,
+    // The page's price belongs to the URL-matched listing; without a page
+    // price the fallback offer's own price is the one judged.
+    observedOfferId:
+      urlMatchedOffer?.id ??
+      (observedPrice === null ? (matchedOffer?.id ?? null) : null),
     priceHistory,
   });
 

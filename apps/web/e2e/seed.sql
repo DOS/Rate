@@ -259,13 +259,13 @@ VALUES
 INSERT INTO rate.master_products
   (id, category_id, brand, model, model_key, name, slug, min_price, max_price, merchant_count, status, metadata, created_at)
 VALUES ('22222222-2222-4222-8222-222222220797', 'c0000000-0000-4000-8000-000000000001', 'E2E', 'Bait Price Phone',
-  'e2e_bait_price_phone', 'E2E Bait Price Phone', 'e2e-bait-price-phone', 750000, 3690000, 4, 'published',
+  'e2e_bait_price_phone', 'E2E Bait Price Phone', 'e2e-bait-price-phone', 1250000, 3690000, 4, 'published',
   '{"category_slug": "smartphones"}', timestamptz '2026-01-01 00:00:00+00');
 INSERT INTO rate.products (id, merchant_id, platform, platform_item_id, title, category_id, price_current, url, cluster_id)
 VALUES
-  ('cccccccc-cccc-4ccc-8ccc-ccccccc07971', 'ffffffff-ffff-4fff-8fff-ffffffff7971', 'lazada', 'item_bait_1',
-   'E2E Bait Price Phone chính hãng', 'c0000000-0000-4000-8000-000000000001', 750000,
-   'https://www.lazada.vn/products/bait-1.html', '22222222-2222-4222-8222-222222220797'),
+  ('cccccccc-cccc-4ccc-8ccc-ccccccc07971', 'ffffffff-ffff-4fff-8fff-ffffffff7971', 'lazada', '7970797',
+   'E2E Bait Price Phone chính hãng', 'c0000000-0000-4000-8000-000000000001', 1250000,
+   'https://www.lazada.vn/products/e2e-bait-price-phone-i7970797.html', '22222222-2222-4222-8222-222222220797'),
   ('cccccccc-cccc-4ccc-8ccc-ccccccc07972', 'ffffffff-ffff-4fff-8fff-ffffffff7973', 'shopee', 'item_bait_2',
    'E2E Bait Price Phone', 'c0000000-0000-4000-8000-000000000001', 3030000,
    'https://shopee.vn/bait-2', '22222222-2222-4222-8222-222222220797'),

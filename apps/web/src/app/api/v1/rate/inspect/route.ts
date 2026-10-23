@@ -95,6 +95,9 @@ export async function GET(request: NextRequest) {
       observedOriginalPrice:
         observedOriginalPrice > 0 ? observedOriginalPrice : null,
       offers: inspection.allOffers,
+      // The observed price is the matched listing's: its stored price, or a
+      // ?price= read from that listing (the offers table's "Inspect" link).
+      observedOfferId: inspection.matchedOffer?.id ?? null,
       priceHistory: inspection.priceHistory,
     });
     const radarSignal = inspection.masterProduct

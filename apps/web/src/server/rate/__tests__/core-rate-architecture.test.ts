@@ -8222,6 +8222,48 @@ async function runCoreArchitectureSuite() {
       priceHistory: null,
     });
     assert.notEqual(fair797.badgeLabel, 'Giá thấp bất thường');
+    assert.equal(fair797.implausiblyLow, undefined);
+
+    // The bait listing's own page: judged against the other listings.
+    const own797 = evaluateExtensionPriceVerdict({
+      isAccessory: false,
+      accessoryReason: null,
+      isAmbiguousVariant: false,
+      observedPrice: 723269,
+      observedOriginalPrice: null,
+      offers: offers797,
+      observedOfferId: 'bait',
+      priceHistory: null,
+    });
+    assert.equal(own797.implausiblyLow, true);
+    // "Cheaper elsewhere" never counts the bait listing.
+    const tgdd797 = evaluateExtensionPriceVerdict({
+      isAccessory: false,
+      accessoryReason: null,
+      isAmbiguousVariant: false,
+      observedPrice: 3140000,
+      observedOriginalPrice: null,
+      offers: offers797,
+      observedOfferId: 'tgdd',
+      priceHistory: null,
+    });
+    assert.equal(tgdd797.cheaperOfferCount, 1);
+    // A second-tier listing the table leaves unlabelled (the page's "from"
+    // price) is not flagged on its own page either.
+    const tiered797 = [623, 993, 1171, 2794, 3169, 3328, 3629].map((p) =>
+      mkOffer797('t' + p, p)
+    );
+    const fromPrice797 = evaluateExtensionPriceVerdict({
+      isAccessory: false,
+      accessoryReason: null,
+      isAmbiguousVariant: false,
+      observedPrice: 1171,
+      observedOriginalPrice: null,
+      offers: tiered797,
+      observedOfferId: 't1171',
+      priceHistory: null,
+    });
+    assert.equal(fromPrice797.implausiblyLow, undefined);
 
     const radar797 = dealsMod.computeCrossPlatformDealRadarFromData(
       [

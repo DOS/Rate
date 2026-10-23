@@ -72,6 +72,23 @@ function main() {
   assert.equal(isImplausiblyLowPrice(0, market), false);
   assert.equal(isImplausiblyLowPrice(100, [{ price_current: 3000 }]), false);
 
+  // A listing judged against the others, as the table judges its row, gets
+  // the table's answer: the "from" price 1171 is plausible, 993 is not.
+  const tiered = [623, 993, 1171, 2794, 3169, 3328, 3629].map((p) => ({
+    id: String(p),
+    price_current: p,
+  }));
+  const tieredFlagged = implausiblyLowOfferIds(tiered);
+  for (const offer of tiered) {
+    const others = tiered.filter((o) => o.id !== offer.id);
+    assert.equal(
+      isImplausiblyLowPrice(offer.price_current, others),
+      tieredFlagged.has(offer.id),
+      'listing ' + offer.id
+    );
+  }
+  assert.equal(plausibleMinPrice(623, tiered), 1171);
+
   // No priced offers: the stored minimum stands.
   assert.equal(plausibleMinPrice(5000, []), 5000);
   assert.equal(plausibleMinPrice(5000, [{ price_current: 0 }]), 5000);

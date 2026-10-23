@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-// A listing at a quarter of what every other store asks is a bait price: it
+// A listing at under 40% of what every other store asks is a bait price: it
 // does not set the product's "from" price, and the offers table labels it
 // and lists it after the plausible offers (DOS/Rate#797).
 const PRODUCT = '/smartphones/e2e-bait-price-phone';
@@ -10,7 +10,7 @@ test('a bait-price listing does not set the lowest price', async ({ page }) => {
 
   // Title and hero price take the cheapest plausible offer (3,030,000).
   await expect(page).toHaveTitle(/3\.030\.000/);
-  await expect(page).not.toHaveTitle(/750\.000/);
+  await expect(page).not.toHaveTitle(/1\.250\.000/);
   await expect(page.locator('.rate-pdv-price-line')).toContainText('3.030.000');
 
   // JSON-LD lowPrice follows it.
@@ -29,15 +29,52 @@ test('a bait-price listing does not set the lowest price', async ({ page }) => {
     clone.querySelector('#offers-table')?.remove();
     return clone.innerText;
   });
-  expect(outsideTable).not.toContain('750.000');
+  expect(outsideTable).not.toContain('1.250.000');
 
   // The bait offer is labelled once and is not ranked first by price.
   const table = page.locator('#offers-table');
   await expect(table.getByTestId('offer-implausibly-low')).toHaveCount(1);
   const firstRow = table.locator('tbody tr').first();
-  await expect(firstRow).not.toContainText('750.000');
+  await expect(firstRow).not.toContainText('1.250.000');
   // Its row carries no deal verdict next to the warning.
-  const baitRow = table.locator('tbody tr', { hasText: '750.000' });
+  const baitRow = table.locator('tbody tr', { hasText: '1.250.000' });
   await expect(baitRow).toHaveCount(1);
   await expect(baitRow).not.toContainText(/Đáy giá lịch sử|Giảm giá thật/);
+});
+
+const BAIT_URL =
+  'https://www.lazada.vn/products/e2e-bait-price-phone-i7970797.html';
+
+test('inspecting the bait listing warns instead of endorsing it', async ({
+  page,
+  request,
+}) => {
+  const res = await request.get(
+    `/api/v1/rate/inspect?q=${encodeURIComponent(BAIT_URL)}`
+  );
+  expect(res.status()).toBe(200);
+  const body = (await res.json()) as {
+    data: {
+      matchedOffer: { price_current: number } | null;
+      priceVerdict: { verdict: string; implausiblyLow?: boolean };
+    };
+  };
+  expect(body.data.matchedOffer?.price_current).toBe(1250000);
+  expect(body.data.priceVerdict.verdict).not.toBe('genuine_deal');
+  expect(body.data.priceVerdict.implausiblyLow).toBe(true);
+
+  // The offers table's "Inspect" link adds the listing's price.
+  const withPrice = await request.get(
+    `/api/v1/rate/inspect?q=${encodeURIComponent(BAIT_URL)}&price=1250000`
+  );
+  const withPriceBody = (await withPrice.json()) as typeof body;
+  expect(withPriceBody.data.priceVerdict.implausiblyLow).toBe(true);
+
+  expect(
+    (await page.goto(`/inspect?q=${encodeURIComponent(BAIT_URL)}`))?.status()
+  ).toBe(200);
+  await expect(page.getByTestId('inspect-implausibly-low')).toBeVisible();
+  await expect(page.locator('main')).not.toContainText(
+    'Giá niêm yết khớp với lịch sử giá thật.'
+  );
 });
