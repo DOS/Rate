@@ -1432,3 +1432,10 @@ body .input-group > .input-group-text {
     min-height: 44px;
   }
 }
+
+// A client-only page body (login, register, inspect) mounts after the
+// first paint. Its Suspense fallback fills the screen, so the footer starts
+// below the fold before and after it mounts instead of jumping (DOS/Rate#763).
+.rate-island-fallback {
+  min-height: 100vh;
+}

@@ -66,7 +66,9 @@ export default async function InspectPage({
         <NavbarDarkDynamic links={[]} />
         <Suspense
           fallback={
-            <div className="container py-5 text-center">{t('loading')}</div>
+            <div className="rate-island-fallback container py-5 text-center">
+              {t('loading')}
+            </div>
           }
         >
           <DeepInspectWorkspace
