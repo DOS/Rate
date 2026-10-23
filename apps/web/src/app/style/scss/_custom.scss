@@ -1478,3 +1478,18 @@ body .input-group > .input-group-text {
 #main-content:focus {
   outline: none;
 }
+
+// From 992px the bar used to turn position: fixed after 50px of scroll and
+// leave the flow, pulling the content up under it (a skip-link jump landed
+// the start of <main> behind it). Keep it sticky like phones (#715), and
+// leave room for it when jumping to the content (DOS/Rate#764).
+@media (min-width: 992px) {
+  .header.header-light.header-fixed {
+    position: sticky;
+    animation: none;
+  }
+}
+
+#main-content {
+  scroll-margin-top: 5rem;
+}

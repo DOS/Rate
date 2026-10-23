@@ -90,6 +90,8 @@ for (const path of SKIP_LINK_PAGES) {
     const skip = page.locator('a.rate-skip-link');
     await expect(skip).toHaveAttribute('href', '#main-content');
     await expect(skip).toHaveText('Chuyển đến nội dung chính');
+    // Hidden (clipped to 1px) until it has focus.
+    expect((await skip.boundingBox())?.width ?? 0).toBeLessThanOrEqual(1);
 
     await page.keyboard.press('Tab');
     await expect(skip).toBeFocused();
@@ -97,6 +99,22 @@ for (const path of SKIP_LINK_PAGES) {
 
     await page.keyboard.press('Enter');
     await expect(page.locator('main#main-content')).toBeFocused();
+    // The jump lands the start of the content below the navbar, not under it.
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const header = document.querySelector('div.header');
+          const first = document.querySelector(
+            'main#main-content :is(h1, h2, nav, p)'
+          );
+          if (!header || !first) return 'missing';
+          return first.getBoundingClientRect().top >=
+            header.getBoundingClientRect().bottom - 1
+            ? 'below'
+            : 'covered';
+        })
+      )
+      .toBe('below');
     // The next stop is a control inside the content, not the navbar.
     await page.keyboard.press('Tab');
     await expect
