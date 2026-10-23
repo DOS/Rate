@@ -1,8 +1,10 @@
 import { expect, test } from '@playwright/test';
 
-// A listing at under 40% of what every other store asks is a bait price: it
-// does not set the product's "from" price, and the offers table labels it
-// and lists it after the plausible offers (DOS/Rate#797).
+// A listing below 40% of the lower median of the other stores is a bait
+// price: it does not set the product's "from" price, and the offers table
+// labels it and lists it after the plausible offers (DOS/Rate#797). The seed
+// keeps it at 1,250,000: under 40% of 3,140,000 and above the 1,200,000
+// accessory floor, which would otherwise answer first.
 const PRODUCT = '/smartphones/e2e-bait-price-phone';
 
 test('a bait-price listing does not set the lowest price', async ({ page }) => {

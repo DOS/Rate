@@ -97,7 +97,11 @@ export async function GET(request: NextRequest) {
       offers: inspection.allOffers,
       // The observed price is the matched listing's: its stored price, or a
       // ?price= read from that listing (the offers table's "Inspect" link).
-      observedOfferId: inspection.matchedOffer?.id ?? null,
+      // A fallback offer for a slug or keyword is not the priced listing.
+      observedOfferId:
+        queryPrice === null || inspection.matchedType === 'product_listing'
+          ? (inspection.matchedOffer?.id ?? null)
+          : null,
       priceHistory: inspection.priceHistory,
     });
     const radarSignal = inspection.masterProduct

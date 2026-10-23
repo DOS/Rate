@@ -246,8 +246,9 @@ VALUES
    'e2e-medium-name-phone', 29990000, 29990000, 0, 'published', '{"category_slug": "smartphones"}',
    timestamptz '2026-01-01 00:00:00+00');
 
--- A phone whose cheapest listing is a bait price, a quarter of what three
--- other stores ask: it must not set the "from" price and is labelled
+-- A phone whose cheapest listing is a bait price, 1,250,000: under 40% of
+-- the others' lower median (3,140,000) and above the 1,200,000 accessory
+-- floor (see bait-price.spec.ts). It must not set the "from" price and is labelled
 -- (DOS/Rate#797). Old created_at keeps it last in default orderings. Four
 -- short-named stores of its own keep the other merchants' cards unchanged.
 INSERT INTO rate.merchants (id, platform, platform_shop_id, name, slug, is_official)
