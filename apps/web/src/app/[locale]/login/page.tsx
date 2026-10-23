@@ -36,7 +36,7 @@ export default async function LoginPage({
         <NavbarDarkDynamic links={[]} />
         <Suspense
           fallback={
-            <div className="container py-5 text-center">
+            <div className="rate-island-fallback container py-5 text-center">
               {t('loadingFallback')}
             </div>
           }
