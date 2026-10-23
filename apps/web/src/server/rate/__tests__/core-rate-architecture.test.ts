@@ -8035,6 +8035,149 @@ async function runCoreArchitectureSuite() {
     '  ✅ [91/91] Client-safe domain code stays free of rate-api and Supabase (#756) passed'
   );
 
+  // =========================================================================
+  // 92. A listing of a draft model gets no product and no catalogue guess (#769)
+  // =========================================================================
+  {
+    const { lookupExtensionProduct } = await import('@/server/rate/extension');
+    const { inspectProductOrShopUrl } = await import('@/lib/rate-api');
+    const json = (body: unknown) =>
+      new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    const publishedProMax = {
+      id: 'mp-769-pro-max',
+      slug: 'apple-iphone-17-pro-max-256gb',
+      name: 'Apple iPhone 17 Pro Max 256GB',
+      brand: 'Apple',
+      model: 'iPhone 17 Pro Max',
+      model_key: 'apple:iphone-17-pro-max:256gb',
+      category_id: 'cat-smartphones',
+      storage_gb: 256,
+      min_price: 34990000,
+      max_price: 36990000,
+      merchant_count: 1,
+      status: 'published',
+      specifications: { category_slug: 'smartphones' },
+      key_specs: {},
+      metadata: {},
+      images: [],
+    };
+    const draftPro = {
+      ...publishedProMax,
+      id: 'mp-769-draft-pro',
+      slug: 'apple-iphone-17-pro-256gb',
+      name: 'Apple iPhone 17 Pro 256GB',
+      model: 'iPhone 17 Pro',
+      status: 'draft',
+    };
+    const origFetch769 = globalThis.fetch;
+    try {
+      globalThis.fetch = (async (input: RequestInfo | URL) => {
+        const url = decodeURIComponent(
+          typeof input === 'string'
+            ? input
+            : input instanceof URL
+              ? input.toString()
+              : input.url
+        );
+        if (
+          url.includes('/rest/v1/products') &&
+          url.includes('platform_item_id=in.') &&
+          url.includes('769000')
+        ) {
+          const row = {
+            id: 'offer-769',
+            cluster_id: draftPro.id,
+            merchant_id: 'merch-769',
+            platform_item_id: '769000',
+          };
+          // inspect reads one row, the extension a list.
+          return json(url.includes('cluster_id=not.is.null') ? [row] : row);
+        }
+        if (
+          url.includes('/rest/v1/products') &&
+          url.includes('platform_item_id=in.')
+        ) {
+          return json(url.includes('cluster_id=not.is.null') ? [] : null);
+        }
+        if (
+          url.includes(`/rest/v1/master_products`) &&
+          url.includes(`id=eq.${draftPro.id}`)
+        ) {
+          // The draft is returned only to a read without the published filter.
+          return json(url.includes('status=eq.published') ? null : draftPro);
+        }
+        if (url.includes('/rest/v1/merchants') && url.includes('merch-769')) {
+          return json([
+            {
+              id: 'merch-769',
+              platform: 'shopee',
+              platform_shop_id: '7690',
+              name: 'Draft Model Store',
+              slug: 'draft-model-store',
+              is_official: false,
+              metadata: {},
+            },
+          ]);
+        }
+        if (url.includes('/rest/v1/rpc/search_master_products')) {
+          return json([publishedProMax]);
+        }
+        if (url.includes('/rest/v1/master_products')) {
+          return json([publishedProMax]);
+        }
+        return json([]);
+      }) as typeof fetch;
+
+      // Control: an unknown listing of the same title does take the catalogue
+      // guess, so the assertion below is not vacuous.
+      const unknownListing = await lookupExtensionProduct({
+        platform: 'shopee',
+        externalId: '7690_123456',
+        title: 'Apple iPhone 17 Pro 256GB',
+        mode: 'pill',
+      });
+      assert.equal(
+        unknownListing.masterProduct?.slug,
+        publishedProMax.slug,
+        'control: an unknown listing falls back to the catalogue match (#769)'
+      );
+
+      const draftListing = await lookupExtensionProduct({
+        platform: 'shopee',
+        externalId: '7690_769000',
+        title: 'Apple iPhone 17 Pro 256GB',
+        mode: 'pill',
+      });
+      assert.equal(
+        draftListing.matchStatus,
+        'not_found',
+        'the extension must not guess a catalogue model for a listing of a draft model (#769)'
+      );
+      assert.equal(draftListing.masterProduct, null);
+      assert.equal(draftListing.productDetailUrl, null);
+
+      const inspected = await inspectProductOrShopUrl(
+        'https://shopee.vn/Apple-iPhone-17-Pro-256GB-i.7690.769000'
+      );
+      assert.equal(
+        inspected.matchedType,
+        'merchant',
+        'inspect must answer with the listing store, not a guessed model, for a draft model (#769)'
+      );
+      assert.equal(inspected.masterProduct, null);
+      assert.equal(inspected.merchantProfile?.id, 'merch-769');
+    } finally {
+      globalThis.fetch = origFetch769;
+    }
+  }
+
+  console.log(
+    '  ✅ [92/92] A listing of a draft model gets no product and no catalogue guess (#769) passed'
+  );
+
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
 

@@ -808,8 +808,8 @@ export default async function MerchantProfilePage({
                         item.image
                       );
                       // The category read with the master, not one guessed
-                      // from its name, which sent earbuds and others to a 404
-                      // under /smartphones (DOS/Rate#769).
+                      // from its name, which linked earbuds and others under
+                      // /smartphones (DOS/Rate#769).
                       const masterCatSlug =
                         item.master_product?.category_slug || 'smartphones';
                       const masterBaseHref =

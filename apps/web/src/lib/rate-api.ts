@@ -3235,6 +3235,10 @@ export async function inspectProductOrShopUrl(
 
   const supabase = getRateClient();
 
+  // The listing is known but its model is not published (DOS/Rate#769):
+  // the merchant id of that listing, else null.
+  let unpublishedListingMerchantId: string | null = null;
+
   // 1. Direct lookup by platform_item_id if parsed from URL
   if (parsedUrl.platformItemId) {
     const candidateIds = new Set<string>([parsedUrl.platformItemId]);
@@ -3269,8 +3273,8 @@ export async function inspectProductOrShopUrl(
     } | null;
 
     if (matchedProd?.cluster_id) {
-      // A draft master has no product page (DOS/Rate#769): fall through to
-      // the shop and keyword lookups instead.
+      // A draft master has no product page (DOS/Rate#769). The listing is
+      // then known to be that model, so only the shop lookup below applies.
       const { data: masterData, error: masterErr } = await supabase
         .from('master_products')
         .select('*')
@@ -3320,6 +3324,7 @@ export async function inspectProductOrShopUrl(
           suggestions: [],
         };
       }
+      unpublishedListingMerchantId = matchedProd.merchant_id;
     }
   }
 
@@ -3359,6 +3364,36 @@ export async function inspectProductOrShopUrl(
         suggestions,
       };
     }
+  }
+
+  // A keyword guess could only find a different model than the listing's,
+  // so answer with the listing's store, if tracked.
+  if (unpublishedListingMerchantId) {
+    const [suggestions, listingMerchants] = await Promise.all([
+      getMasterProducts({ limit: 3 }),
+      matchedMerchantByShopId
+        ? Promise.resolve([matchedMerchantByShopId])
+        : getMerchantsList({ ids: [unpublishedListingMerchantId], limit: 1 }),
+    ]);
+    const merchantProfile =
+      listingMerchants.find(
+        (m) =>
+          m.id === unpublishedListingMerchantId ||
+          m.id === matchedMerchantByShopId?.id
+      ) || null;
+    return {
+      query,
+      matchedType: merchantProfile ? 'merchant' : 'not_found',
+      parsedUrl,
+      masterProduct: null,
+      matchedOffer: null,
+      allOffers: [],
+      discountAnalysis: null,
+      priceHistory: null,
+      reviewSummary: null,
+      merchantProfile,
+      suggestions,
+    };
   }
 
   const pickOfferForUrlInspection = (
