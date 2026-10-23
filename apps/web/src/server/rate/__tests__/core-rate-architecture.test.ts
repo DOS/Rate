@@ -8178,6 +8178,124 @@ async function runCoreArchitectureSuite() {
     '  ✅ [92/92] A listing of a draft model gets no product and no catalogue guess (#769) passed'
   );
 
+  // 93. A bait price is never endorsed by the extension or the radar (#797)
+  {
+    const mkOffer797 = (id: string, price: number) =>
+      ({
+        id,
+        platform: 'shopee',
+        url: 'https://example.test/797/' + id,
+        price_current: price,
+        price_original: null,
+        merchant: {
+          id: 'm-' + id,
+          name: 'Shop ' + id,
+          risk_score: 5,
+          is_official: true,
+        },
+      }) as never;
+    const offers797 = [
+      mkOffer797('bait', 723269),
+      mkOffer797('fpt', 3032000),
+      mkOffer797('tgdd', 3140000),
+      mkOffer797('cps', 3690000),
+    ];
+    const verdict797 = evaluateExtensionPriceVerdict({
+      isAccessory: false,
+      accessoryReason: null,
+      isAmbiguousVariant: false,
+      observedPrice: 723269,
+      observedOriginalPrice: null,
+      offers: offers797,
+      priceHistory: null,
+    });
+    assert.notEqual(verdict797.verdict, 'genuine_deal');
+    assert.equal(verdict797.badgeLabel, 'Giá thấp bất thường');
+    assert.equal(verdict797.cheaperOfferCount, 0);
+    const fair797 = evaluateExtensionPriceVerdict({
+      isAccessory: false,
+      accessoryReason: null,
+      isAmbiguousVariant: false,
+      observedPrice: 3032000,
+      observedOriginalPrice: null,
+      offers: offers797,
+      priceHistory: null,
+    });
+    assert.notEqual(fair797.badgeLabel, 'Giá thấp bất thường');
+    assert.equal(fair797.implausiblyLow, undefined);
+
+    // The bait listing's own page: judged against the other listings.
+    const own797 = evaluateExtensionPriceVerdict({
+      isAccessory: false,
+      accessoryReason: null,
+      isAmbiguousVariant: false,
+      observedPrice: 723269,
+      observedOriginalPrice: null,
+      offers: offers797,
+      observedOfferId: 'bait',
+      priceHistory: null,
+    });
+    assert.equal(own797.implausiblyLow, true);
+    // "Cheaper elsewhere" never counts the bait listing.
+    const tgdd797 = evaluateExtensionPriceVerdict({
+      isAccessory: false,
+      accessoryReason: null,
+      isAmbiguousVariant: false,
+      observedPrice: 3140000,
+      observedOriginalPrice: null,
+      offers: offers797,
+      observedOfferId: 'tgdd',
+      priceHistory: null,
+    });
+    assert.equal(tgdd797.cheaperOfferCount, 1);
+    // A second-tier listing the table leaves unlabelled (the page's "from"
+    // price) is not flagged on its own page either.
+    const tiered797 = [623, 993, 1171, 2794, 3169, 3328, 3629].map((p) =>
+      mkOffer797('t' + p, p)
+    );
+    const fromPrice797 = evaluateExtensionPriceVerdict({
+      isAccessory: false,
+      accessoryReason: null,
+      isAmbiguousVariant: false,
+      observedPrice: 1171,
+      observedOriginalPrice: null,
+      offers: tiered797,
+      observedOfferId: 't1171',
+      priceHistory: null,
+    });
+    assert.equal(fromPrice797.implausiblyLow, undefined);
+
+    const radar797 = dealsMod.computeCrossPlatformDealRadarFromData(
+      [
+        {
+          master: {
+            id: 'id-797',
+            slug: 'buds-797',
+            name: 'Buds 797',
+            brand: 'Brand',
+            category: 'earbuds',
+            min_price: 723269,
+            max_price: 3690000,
+          },
+          offers: offers797,
+        },
+      ] as never,
+      { categorySlug: 'all', limit: 10 }
+    );
+    for (const item of [...radar797.genuineDeals, ...radar797.fakeSaleTraps]) {
+      assert.notEqual(item.priceCurrent, 723269);
+      assert.equal(item.marketMinPrice, 3032000);
+    }
+    assert.ok(radar797.priceSpreadLeaders.length > 0);
+    for (const item of radar797.priceSpreadLeaders) {
+      assert.equal(item.minPrice, 3032000);
+    }
+  }
+
+  console.log(
+    '  ✅ [93/93] A bait price is never endorsed by the extension or the radar (#797) passed'
+  );
+
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
 
