@@ -210,8 +210,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       }
     );
 
-    const latestMerchant = newestOf(
-      ...rows.merchants.map((merchant) => rowLastModified(merchant.updated_at))
+    // A reduce, not a spread: one argument per merchant could overflow the stack.
+    const latestMerchant = rows.merchants.reduce<Date | undefined>(
+      (acc, merchant) => newestOf(acc, rowLastModified(merchant.updated_at)),
+      undefined
     );
 
     return [
