@@ -263,7 +263,8 @@ test('category catalogue pages past 200 models', async ({ page }) => {
   // A sidebar filter change returns to page 1. The URL changes only once the
   // filtered page has rendered (router.replace in a transition), which takes
   // several seconds when the suite runs in parallel. Click once, after
-  // hydration: a second click would clear the filter again (DOS/Rate#779).
+  // hydration: a click after the first navigation commits would toggle the
+  // brand off again (DOS/Rate#779).
   await page.waitForLoadState('networkidle');
   await page.locator('label[for^="brand-"]').first().click();
   await expect(page).toHaveURL(/[?&]brands=/, { timeout: 20_000 });
