@@ -222,3 +222,15 @@ VALUES ('cccccccc-cccc-4ccc-8ccc-ccccccc07692', 'ffffffff-ffff-4fff-8fff-fffffff
 INSERT INTO rate.reviews (product_id, author_name, rating_star, comment, reviewer_type, platform_created_at, created_at)
 VALUES ('cccccccc-cccc-4ccc-8ccc-ccccccc07692', 'Draft Links', 4, 'Máy dùng ổn, giao hàng nhanh.', 'user',
   now() - interval '120 days', now() - interval '120 days');
+
+-- A store and a phone with long names: their titles must still fit a search
+-- result, name first (DOS/Rate#782). The phone has no offer, so it stays off
+-- the deals and the leaderboard.
+INSERT INTO rate.merchants (id, platform, platform_shop_id, name, slug, is_official)
+VALUES ('ffffffff-ffff-4fff-8fff-ffffffff0782', 'shopee', 'shop_long_name',
+  'Cửa Hàng Ủy Quyền Chính Hãng Điện Thoại Di Động Toàn Quốc', 'long-name-store', false);
+INSERT INTO rate.master_products
+  (id, category_id, brand, model, model_key, name, slug, min_price, max_price, merchant_count, status, metadata)
+VALUES ('22222222-2222-4222-8222-222222220782', 'c0000000-0000-4000-8000-000000000001', 'E2E', 'Fold Long',
+  'e2e_long_name_phone', 'E2E Galaxy Z Fold7 Ultra Limited Edition 1TB Crafted Black Titanium',
+  'e2e-long-name-phone', 52990000, 52990000, 0, 'published', '{"category_slug": "smartphones"}');
