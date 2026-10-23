@@ -860,6 +860,7 @@
     "inspectUrlCta": "Kiểm tra link gian hàng hoặc sản phẩm bất kỳ →",
     "notFoundTitle": "Không tìm thấy gian hàng | Rate.vn",
     "profileMetaTitle": "{name} ({platform}) - Tin cậy {score}/100 | Rate.vn",
+    "profileMetaTitleShort": "{name} - Tin cậy {score}/100",
     "profileMetaDesc": "Hồ sơ gian hàng {name}: rủi ro lừa đảo DOSafe ({dosafe}/100), rủi ro đánh giá ({seeding}/100) và lịch sử giá {count} sản phẩm trên Rate.vn.",
     "trustHigh": "Độ tin cậy cao (An toàn)",
     "trustModerate": "Độ tin cậy trung bình (Cần lưu ý)",
@@ -953,6 +954,7 @@
   "productDetail": {
     "notFoundTitle": "Không tìm thấy sản phẩm | Rate.vn",
     "metaTitle": "{name} - Giá từ {minPrice} ₫ | Rate.vn",
+    "metaTitleShort": "{name} - Giá từ {minPrice} ₫",
     "metaDesc": "So sánh giá {name} ({brand}) từ {merchantCount} gian hàng, xem lịch sử giá để nhận ra giảm giá ảo và đọc đánh giá thực chất (AI đã lọc bỏ đánh giá ảo) trên Rate.vn.",
     "ogTitle": "{name} - So sánh giá và kiểm tra khuyến mãi | Rate.vn",
     "ogDesc": "Giá tốt nhất từ {minPrice} ₫. Xem 10 nhóm thông số kỹ thuật chuẩn GSMArena/PhoneArena và biểu đồ lịch sử giá.",

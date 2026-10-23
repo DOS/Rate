@@ -860,6 +860,7 @@
     "inspectUrlCta": "Check any store or product link →",
     "notFoundTitle": "Merchant not found | Rate.vn",
     "profileMetaTitle": "{name} ({platform}) - Trust {score}/100 | Rate.vn",
+    "profileMetaTitleShort": "{name} - Trust {score}/100",
     "profileMetaDesc": "Seller profile for {name}: DOSafe scam risk ({dosafe}/100), review risk ({seeding}/100) and price history across {count} products on Rate.vn.",
     "trustHigh": "High trust (verified safe)",
     "trustModerate": "Moderate trust (monitor)",
@@ -953,6 +954,7 @@
   "productDetail": {
     "notFoundTitle": "Product not found | Rate.vn",
     "metaTitle": "{name} - From {minPrice} ₫ | Rate.vn",
+    "metaTitleShort": "{name} - From {minPrice} ₫",
     "metaDesc": "Compare {name} ({brand}) prices across {merchantCount} merchants, inspect historical price charts for fake discounts, and read AI-verified buyer reviews on Rate.vn.",
     "ogTitle": "{name} - Specs and true price history | Rate.vn",
     "ogDesc": "Best price from {minPrice} ₫. See the 10 standardized GSMArena/PhoneArena spec groups and the price history chart.",

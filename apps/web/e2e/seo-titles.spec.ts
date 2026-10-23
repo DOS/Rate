@@ -11,6 +11,11 @@ const ROUTES = [
   // Titles built from two product names (DOS/Rate#777).
   '/compare/iphone-16-pro-max-256gb-vs-samsung-galaxy-s25-ultra-256gb',
   '/compare?slugs=iphone-16-pro-max-256gb,samsung-galaxy-s25-ultra-256gb',
+  // Long store and product names (DOS/Rate#782).
+  '/merchants/ffffffff-ffff-4fff-8fff-ffffffff0782',
+  '/smartphones/e2e-long-name-phone',
+  '/merchants/ffffffff-ffff-4fff-8fff-ffffffff0783',
+  '/smartphones/e2e-medium-name-phone',
   '/deals',
   '/about-us',
   '/faq',
@@ -32,6 +37,26 @@ for (const locale of ['vi', 'en', 'cs']) {
       expect((await page.goto(route))?.status()).toBe(200);
       const title = await page.title();
       expect(title.length, title).toBeLessThanOrEqual(65);
+      // Long names lead their titles (DOS/Rate#782).
+      if (route.endsWith('ffffffff0782')) {
+        expect(title.startsWith('Cửa Hàng Ủy Quyền Chính Hãng'), title).toBe(
+          true
+        );
+      }
+      if (route.endsWith('e2e-long-name-phone')) {
+        expect(title.startsWith('E2E Galaxy Z Fold7'), title).toBe(true);
+      }
+      // A medium name keeps the score or the price (the short forms).
+      if (route.endsWith('ffffffff0783')) {
+        expect(title.startsWith('Cửa Hàng Điện Thoại Chính Hãng'), title).toBe(
+          true
+        );
+        expect(title).toContain('/100');
+      }
+      if (route.endsWith('e2e-medium-name-phone')) {
+        expect(title.startsWith('E2E Galaxy Z Flip7'), title).toBe(true);
+        expect(title).toContain('29.990.000');
+      }
       // Compare titles keep both product names (DOS/Rate#777).
       if (route.startsWith('/compare/') || route.includes('slugs=')) {
         expect(title).toContain('iPhone 16 Pro Max 256GB');
