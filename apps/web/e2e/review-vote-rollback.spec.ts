@@ -58,12 +58,16 @@ test('a signed-out vote stays as a browser simulation', async ({ page }) => {
 test('a refused vote does not bring back or drop votes on other reviews', async ({
   page,
 }) => {
-  // Hold both requests, then refuse the first review's vote before the
-  // second's, so each rollback runs while the other review has a vote
-  // (DOS/Rate#799).
-  const held: Array<() => Promise<void>> = [];
+  // Hold both votes, refuse Minh's while Lan Phương's is still in flight,
+  // then refuse hers: each rollback must touch only its own review
+  // (DOS/Rate#799). Cards are found by their seeded text because a vote
+  // can re-sort the list.
+  const MINH = '44444444-4444-4444-8444-444444444441';
+  const LAN = '44444444-4444-4444-8444-444444444442';
+  const held = new Map<string, () => Promise<void>>();
   await page.route('**/api/reviews/*/vote', async (route) => {
-    held.push(() =>
+    const id = route.request().url().split('/').at(-2) ?? '';
+    held.set(id, () =>
       route.fulfill({
         status: 403,
         contentType: 'application/json',
@@ -71,25 +75,29 @@ test('a refused vote does not bring back or drop votes on other reviews', async 
       })
     );
   });
+  const stored = () =>
+    page.evaluate(() => window.localStorage.getItem('rate_review_votes_v1'));
+  const helpful = (text: string) =>
+    page
+      .locator('div.col-md-6')
+      .filter({ hasText: text })
+      .getByRole('button', { name: /Hữu ích \(\d+\)/ });
+  const minh = helpful('pin trâu suốt cả ngày');
+  const lan = helpful('hơi nóng khi chơi game');
+
   expect((await page.goto(PRODUCT))?.status()).toBe(200);
-  // Newest-first keeps the cards in place while their vote counts change.
-  await page
-    .locator('select:has(option[value="newest"])')
-    .selectOption('newest');
-  const votes = page.getByRole('button', { name: /Hữu ích \(\d+\)/ });
-  await votes.nth(1).scrollIntoViewIfNeeded();
+  await lan.scrollIntoViewIfNeeded();
+  await minh.click();
+  await lan.click();
+  await expect.poll(() => held.size).toBe(2);
 
-  await votes.nth(0).click();
-  await votes.nth(1).click();
-  await expect.poll(() => held.length).toBe(2);
-  await held[0]?.();
-  await expect(votes.nth(0)).toHaveAttribute('aria-pressed', 'false');
-  await held[1]?.();
-  await expect(votes.nth(1)).toHaveAttribute('aria-pressed', 'false');
+  await held.get(MINH)?.();
+  await expect(minh).toHaveAttribute('aria-pressed', 'false');
+  await expect(lan).toHaveAttribute('aria-pressed', 'true');
+  expect(JSON.parse((await stored()) ?? 'null')).toEqual({ [LAN]: 'up' });
 
-  await expect(votes.nth(0)).toHaveAttribute('aria-pressed', 'false');
-  const saved = await page.evaluate(() =>
-    window.localStorage.getItem('rate_review_votes_v1')
-  );
-  expect(saved).toBe('{}');
+  await held.get(LAN)?.();
+  await expect(lan).toHaveAttribute('aria-pressed', 'false');
+  await expect(minh).toHaveAttribute('aria-pressed', 'false');
+  expect(JSON.parse((await stored()) ?? 'null')).toEqual({});
 });
