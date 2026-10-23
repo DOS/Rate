@@ -7,6 +7,7 @@ import PageShell from '../components/page-shell';
 import CompareTrayBar from '@/components/compare/CompareTrayBar';
 import DeepInspectWorkspace from '@/components/inspect/DeepInspectWorkspace';
 import ClientMessages from '@/components/providers/ClientMessages';
+import { SAMPLE_AUDIT_URLS } from '@/lib/inspect-samples';
 
 // Reads searchParams, so it renders per request. The [locale] layout's
 // generateStaticParams would otherwise make it static, and the searchParams
@@ -53,9 +54,12 @@ export default async function InspectPage({
   const rawQ = sp.q ?? sp.url ?? '';
   const initialQuery = (Array.isArray(rawQ) ? rawQ[0] : rawQ)?.trim() || '';
 
-  const initialInspection = initialQuery
-    ? await getCachedInspectProductOrShopUrl(initialQuery).catch(() => null)
-    : null;
+  // Without ?q= the workspace shows the first sample link. Inspect it here too,
+  // so the result renders with the page instead of growing after hydration
+  // and pushing the footer down (DOS/Rate#763).
+  const initialInspection = await getCachedInspectProductOrShopUrl(
+    initialQuery || SAMPLE_AUDIT_URLS[0]!.query
+  ).catch(() => null);
 
   return (
     <ClientMessages scope="inspect">
