@@ -14,6 +14,10 @@ const SUPABASE_URL = 'https://stub.supabase.test';
 const ANON_KEY = 'anon-test-key';
 const SERVICE_KEY = 'service-role-test-key';
 const GOOD_TOKEN = 'good-user-token';
+const VOTER_TOKEN = 'eligible-voter-token';
+// What the stubbed PostgREST answers a VOTER_TOKEN vote with (code 42501).
+let voteRejectionMessage =
+  'review_votes: account is not eligible to vote on reviews';
 // A JWT-shaped access token for the cookie session (supabase-js reads its exp).
 const b64url = (o: unknown) =>
   Buffer.from(JSON.stringify(o)).toString('base64url');
@@ -83,6 +87,29 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   calls.push({ url, method: init?.method || 'GET', headers, body });
 
   const { pathname } = new URL(url);
+  // A voter the route accepts but the database guard rejects (DOS/Rate#771).
+  if (
+    pathname === '/auth/v1/user' &&
+    headers.authorization === `Bearer ${VOTER_TOKEN}`
+  ) {
+    return jsonResponse(200, {
+      ...USER,
+      aud: 'authenticated',
+      role: 'authenticated',
+      created_at: '2026-01-01T00:00:00Z',
+      email_confirmed_at: '2026-01-01T00:00:00Z',
+    });
+  }
+  if (
+    pathname === '/rest/v1/review_votes' &&
+    init?.method === 'POST' &&
+    headers.authorization === `Bearer ${VOTER_TOKEN}`
+  ) {
+    return jsonResponse(403, {
+      code: '42501',
+      message: voteRejectionMessage,
+    });
+  }
   if (pathname === '/auth/v1/user') {
     return headers.authorization === `Bearer ${GOOD_TOKEN}` ||
       headers.authorization === `Bearer ${COOKIE_JWT}`
@@ -581,7 +608,10 @@ async function testCookieSessions() {
   );
 
   // POST /api/reviews/[id]/vote also accepts same-origin @supabase/ssr cookies and rejects cross-site cookies (#402)
-  const { POST: postVote } = await import('@/app/api/reviews/[id]/vote/route');
+  const {
+    POST: postVote,
+    evaluateVoterEligibility: evaluateVoterEligibilityForTest,
+  } = await import('@/app/api/reviews/[id]/vote/route');
   type VoteReq = Parameters<typeof postVote>[0];
   const reviewId = '11111111-2222-4333-8444-666666666666';
 
@@ -600,6 +630,104 @@ async function testCookieSessions() {
     'POST /api/reviews/[id]/vote must reject cross-site cookie sessions with 403 (#402)'
   );
   assert.equal((await crossSiteVoteRes.json()).code, 'CROSS_SITE');
+
+  // The database guard's 42501 is a 403 with the eligibility code, not a
+  // generic 400 (DOS/Rate#771).
+  const dbRejectedVoteRes = await postVote(
+    new Request(`https://rate.vn/api/reviews/${reviewId}/vote`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${VOTER_TOKEN}`,
+      },
+      body: JSON.stringify({ voteType: 'up' }),
+    }) as VoteReq,
+    { params: Promise.resolve({ id: reviewId }) }
+  );
+  assert.equal(
+    dbRejectedVoteRes.status,
+    403,
+    'POST /api/reviews/[id]/vote must answer 403 when the database rejects the voter (#771)'
+  );
+  assert.equal((await dbRejectedVoteRes.json()).code, 'VOTER_NOT_ELIGIBLE');
+
+  // Another 42501 (say, a missing grant) is not blamed on the voter.
+  voteRejectionMessage = 'permission denied for table review_votes';
+  const grantErrorVoteRes = await postVote(
+    new Request(`https://rate.vn/api/reviews/${reviewId}/vote`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${VOTER_TOKEN}`,
+      },
+      body: JSON.stringify({ voteType: 'up' }),
+    }) as VoteReq,
+    { params: Promise.resolve({ id: reviewId }) }
+  );
+  assert.equal(
+    grantErrorVoteRes.status,
+    400,
+    'a 42501 that is not the eligibility guard must not answer VOTER_NOT_ELIGIBLE (#771)'
+  );
+  assert.equal((await grantErrorVoteRes.json()).code, 'VOTE_REJECTED');
+
+  // An ineligible voter (no created_at, no confirmation) can still clear a vote.
+  const clearRes = await postVote(
+    new Request(`https://rate.vn/api/reviews/${reviewId}/vote`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${GOOD_TOKEN}`,
+      },
+      body: JSON.stringify({ voteType: 'clear' }),
+    }) as VoteReq,
+    { params: Promise.resolve({ id: reviewId }) }
+  );
+  assert.notEqual(
+    (await clearRes.clone().json()).code,
+    'VOTER_NOT_ELIGIBLE',
+    'clearing a vote must not be refused for eligibility (#771)'
+  );
+  const clearCall = calls.find(
+    (c) => c.method === 'DELETE' && c.url.includes('/rest/v1/review_votes')
+  );
+  assert.ok(clearCall, 'clear must reach the review_votes delete (#771)');
+  assert.ok(
+    clearCall.url.includes(`voter_id=eq.${USER.id}`) &&
+      clearCall.url.includes(`review_id=eq.${reviewId}`),
+    'clear must delete only the caller own vote on that review (#771)'
+  );
+  assert.match(
+    clearCall.headers.prefer ?? '',
+    /count=exact/,
+    'clear must count deleted rows, so an empty clear does not flush caches (#771)'
+  );
+  voteRejectionMessage =
+    'review_votes: account is not eligible to vote on reviews';
+
+  // The route's own gate: a missing confirmation field or created_at fails
+  // closed (the auth server omits null fields).
+  assert.equal(
+    evaluateVoterEligibilityForTest({ created_at: '2026-01-01T00:00:00Z' })
+      .eligible,
+    false,
+    'evaluateVoterEligibility must reject an account with no confirmation field (#771)'
+  );
+  assert.equal(
+    evaluateVoterEligibilityForTest({
+      email_confirmed_at: '2026-01-01T00:00:00Z',
+    }).eligible,
+    false,
+    'evaluateVoterEligibility must reject an account with no created_at (#771)'
+  );
+  assert.equal(
+    evaluateVoterEligibilityForTest({
+      created_at: '2026-01-01T00:00:00Z',
+      phone_confirmed_at: '2026-01-01T00:00:00Z',
+    }).eligible,
+    true,
+    'evaluateVoterEligibility must accept a phone-confirmed account older than 7 days (#771)'
+  );
 
   console.log(
     '  ✅ Cookie sessions (@supabase/ssr) work same-origin and are rejected cross-site'

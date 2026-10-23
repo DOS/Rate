@@ -28,11 +28,17 @@ export async function OPTIONS() {
   });
 }
 
+const NOT_ELIGIBLE_AGE_REASON =
+  'Account must be at least 7 days old to vote or report reviews.';
+
 /**
- * Review Trust Model Section 9: Voter Eligibility Gate
+ * Review Trust Model Section 9: Voter Eligibility Gate. The database applies
+ * the same rules in rate.review_votes_guard (DOS/Rate#613, #771):
  * - Rejects anonymous Supabase sessions (`is_anonymous === true`)
- * - Account must have a confirmed email or phone when confirmation fields are present
- * - Account must be at least 7 days old when `created_at` is present
+ * - Account must have a confirmed email or phone. The auth server omits these
+ *   fields when they are null, so a missing field counts as unconfirmed.
+ * - Account must be at least 7 days old; a missing or unparseable
+ *   `created_at` fails closed.
  */
 export function evaluateVoterEligibility(user: {
   created_at?: string | null;
@@ -46,36 +52,20 @@ export function evaluateVoterEligibility(user: {
       reason: 'Anonymous accounts cannot vote on reviews.',
     };
   }
-  const hasConfirmationField =
-    ('email_confirmed_at' in user && user.email_confirmed_at !== undefined) ||
-    ('phone_confirmed_at' in user && user.phone_confirmed_at !== undefined);
-  if (
-    hasConfirmationField &&
-    !user.email_confirmed_at &&
-    !user.phone_confirmed_at
-  ) {
+  if (!user.email_confirmed_at && !user.phone_confirmed_at) {
     return {
       eligible: false,
       reason: 'Verified email or phone number is required to vote on reviews.',
     };
   }
-  if (typeof user.created_at === 'string' && user.created_at.trim()) {
-    const createdMs = Date.parse(user.created_at);
-    if (!Number.isFinite(createdMs)) {
-      return {
-        eligible: false,
-        reason:
-          'Account must be at least 7 days old to vote or report reviews.',
-      };
-    }
-    const ageDays = (Date.now() - createdMs) / 86_400_000;
-    if (ageDays < 7) {
-      return {
-        eligible: false,
-        reason:
-          'Account must be at least 7 days old to vote or report reviews.',
-      };
-    }
+  const createdMs =
+    typeof user.created_at === 'string' ? Date.parse(user.created_at) : NaN;
+  if (!Number.isFinite(createdMs)) {
+    return { eligible: false, reason: NOT_ELIGIBLE_AGE_REASON };
+  }
+  const ageDays = (Date.now() - createdMs) / 86_400_000;
+  if (ageDays < 7) {
+    return { eligible: false, reason: NOT_ELIGIBLE_AGE_REASON };
   }
   return { eligible: true };
 }
@@ -130,7 +120,13 @@ export async function POST(
     const { voteType, reportReason } = parsedInput;
     const { userId: voterId, user, rateClient } = auth;
 
-    const eligibility = evaluateVoterEligibility(user);
+    // Clearing one's own vote stays open to every signed-in voter, as in the
+    // database guard (DOS/Rate#771): an account that voted before the rules
+    // applied can still withdraw it.
+    const eligibility =
+      voteType === 'clear'
+        ? { eligible: true as const }
+        : evaluateVoterEligibility(user);
     if (!eligibility.eligible) {
       return NextResponse.json(
         {
@@ -142,12 +138,17 @@ export async function POST(
       );
     }
 
+    // A clear that removed nothing changes no count, so it must not flush the
+    // shared caches: clearing is open to every signed-in session and has no
+    // rate limit (DOS/Rate#771).
+    let votesChanged = true;
     if (voteType === 'clear') {
-      const { error: delErr } = await rateClient
+      const { error: delErr, count: deletedCount } = await rateClient
         .from('review_votes')
-        .delete()
+        .delete({ count: 'exact' })
         .eq('review_id', reviewId)
         .eq('voter_id', voterId);
+      votesChanged = deletedCount !== 0;
 
       if (delErr) {
         return NextResponse.json(
@@ -190,7 +191,29 @@ export async function POST(
         .upsert(votePayload, { onConflict: 'review_id,voter_id' });
 
       if (upsertErr) {
+        // The database guard rejects ineligible voters with 42501 and this
+        // message (DOS/Rate#613). Other 42501s (a missing grant) are not the
+        // voter's fault: they fall through to the logged generic answer.
+        if (
+          upsertErr.code === '42501' &&
+          upsertErr.message?.startsWith('review_votes: account is not eligible')
+        ) {
+          return NextResponse.json(
+            {
+              ok: false,
+              error: 'Voter account is not eligible to vote on reviews.',
+              code: 'VOTER_NOT_ELIGIBLE',
+            },
+            { status: 403, headers: REVIEW_VOTE_CORS_HEADERS }
+          );
+        }
         const isRateLimit = upsertErr.code === '54000';
+        if (!isRateLimit) {
+          log.warn('vote upsert rejected', {
+            code: upsertErr.code,
+            message: upsertErr.message,
+          });
+        }
         return NextResponse.json(
           {
             ok: false,
@@ -223,11 +246,13 @@ export async function POST(
       );
     }
 
-    for (const tag of [
-      RATE_CACHE_TAGS.REVIEWS,
-      RATE_CACHE_TAGS.PRODUCTS,
-      RATE_CACHE_TAGS.STATS,
-    ]) {
+    for (const tag of votesChanged
+      ? [
+          RATE_CACHE_TAGS.REVIEWS,
+          RATE_CACHE_TAGS.PRODUCTS,
+          RATE_CACHE_TAGS.STATS,
+        ]
+      : []) {
       try {
         revalidateTag(tag, 'max');
       } catch {
