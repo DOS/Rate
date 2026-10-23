@@ -840,6 +840,8 @@ export default async function MerchantProfilePage({
                             <div className="d-flex align-items-center gap-3">
                               {resolvedImg && (
                                 <img
+                                  loading="lazy"
+                                  decoding="async"
                                   src={resolvedImg}
                                   alt={item.title}
                                   lang={contentLang(item.title, locale)}

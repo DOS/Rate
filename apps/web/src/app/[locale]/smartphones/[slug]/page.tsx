@@ -1606,6 +1606,8 @@ export async function ProductDetailView({
                           >
                             {peerThumb ? (
                               <img
+                                loading="lazy"
+                                decoding="async"
                                 src={peerThumb}
                                 alt={peer.name}
                                 style={{
