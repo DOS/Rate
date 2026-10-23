@@ -67,6 +67,7 @@ import ProductValueCalculator from '@/components/leaderboard/ProductValueCalcula
 import ProductOffersExplorer from '@/components/leaderboard/ProductOffersExplorer';
 import ProductSpecsExportToolbar from '@/components/leaderboard/ProductSpecsExportToolbar';
 import ClientMessages from '@/components/providers/ClientMessages';
+import { plausibleMinPrice } from '@/lib/offer-plausibility';
 
 // Cached after the first request, refreshed every 5 minutes or when the
 // worker revalidates its cache tags (DOS/Rate#491).
@@ -92,7 +93,12 @@ export async function generateCategoryProductMetadata(
       title: t('notFoundTitle'),
     };
   }
-  const minPrice = Number(product.min_price || 0).toLocaleString('vi-VN');
+  // A bait-price listing does not set the "from" price (DOS/Rate#797).
+  const offers = await getCachedMasterProductOffers(product.id);
+  const minPrice = plausibleMinPrice(
+    Number(product.min_price || 0),
+    offers
+  ).toLocaleString('vi-VN');
   const canonicalUrl = `https://rate.vn${categoryBasePath}/${product.slug}`;
 
   return {
@@ -192,7 +198,12 @@ export async function ProductDetailView({
     product,
     categoryPeers
   );
-  const currentMinPrice = Number(product.min_price || 0);
+  // The lowest plausible offer: a bait-price listing far below every other
+  // store does not set the "from" price (DOS/Rate#797).
+  const currentMinPrice = plausibleMinPrice(
+    Number(product.min_price || 0),
+    offers
+  );
   const relatedCompetitors = rankRelatedCompetitors(
     categoryPeers,
     product.slug,
@@ -201,7 +212,7 @@ export async function ProductDetailView({
 
   const specs = product.specifications as ProductSpecifications;
   const keySpecs = product.key_specs as KeySpecs;
-  const minPriceFormatted = Number(product.min_price).toLocaleString('vi-VN');
+  const minPriceFormatted = currentMinPrice.toLocaleString('vi-VN');
   // Same meaning as the catalogue card's seller count (distinct merchants with
   // a price), not the number of listings.
   const sellerCount = new Set(
@@ -273,7 +284,7 @@ export async function ProductDetailView({
         offers: {
           '@type': 'AggregateOffer',
           priceCurrency: 'VND',
-          lowPrice: Number(product.min_price || 0),
+          lowPrice: currentMinPrice,
           highPrice: Number(product.max_price || product.min_price || 0),
           offerCount: offers.length || product.merchant_count || 0,
         },
@@ -383,7 +394,7 @@ export async function ProductDetailView({
               <h1 className="h2 fw-bold text-dark mb-2">{product.name}</h1>
               {/* Price in the first screen on phones, ahead of the scoreboard
             (DOS/Rate#605); the full price strip stays further down. */}
-              {Number(product.min_price || 0) > 0 && sellerCount > 0 && (
+              {currentMinPrice > 0 && sellerCount > 0 && (
                 <p className="rate-pdv-price-line mb-3">
                   {t.rich('heroPriceLine', {
                     price: minPriceFormatted,
@@ -688,7 +699,7 @@ export async function ProductDetailView({
                         (product.images && product.images.length > 0
                           ? product.images[0] || null
                           : null),
-                      min_price: Number(product.min_price || 0),
+                      min_price: currentMinPrice,
                       categoryPath: categoryBasePath,
                     }}
                   />
@@ -828,7 +839,7 @@ export async function ProductDetailView({
                     </div>
                     <div className="fw-bold text-dark rate-tabular fs-5">
                       {minPriceFormatted} ₫
-                      {product.min_price !== product.max_price && (
+                      {currentMinPrice !== Number(product.max_price || 0) && (
                         <span className="small fw-normal text-muted ms-2">
                           ~ {maxPriceFormatted} ₫
                         </span>
@@ -857,7 +868,7 @@ export async function ProductDetailView({
                           ? product.images[0] || null
                           : null)
                       }
-                      currentMinPrice={Number(product.min_price || 0)}
+                      currentMinPrice={currentMinPrice}
                       size="sm"
                     />
                     <a
@@ -873,7 +884,7 @@ export async function ProductDetailView({
                       userScore5={Number(displayUserRating.toFixed(2))}
                       expertScore10={expertRating10}
                       authenticReviews={authenticCount}
-                      minPriceVnd={Number(product.min_price || 0)}
+                      minPriceVnd={currentMinPrice}
                       offerCount={offers.length}
                       keySpecLine={keySpecLine}
                       radarSignal={radarSignal}
@@ -1527,7 +1538,7 @@ export async function ProductDetailView({
                 productName={product.name}
                 brand={product.brand}
                 categorySlug={categorySlug}
-                minPriceVnd={Number(product.min_price || 0)}
+                minPriceVnd={currentMinPrice}
                 maxPriceVnd={Number(
                   product.max_price || product.min_price || 0
                 )}

@@ -51,6 +51,10 @@ import {
 import ContentText from '@/components/elementary/ContentText';
 import { contentLang } from '@/lib/content-lang';
 import { SAMPLE_AUDIT_URLS } from '@/lib/inspect-samples';
+import {
+  implausiblyLowOfferIds,
+  plausibleOffers,
+} from '@/lib/offer-plausibility';
 
 interface DeepInspectWorkspaceProps {
   initialQuery?: string;
@@ -141,8 +145,13 @@ export default function DeepInspectWorkspace({
   };
 
   const master = result?.masterProduct ?? null;
-  const matchedOffer = result?.matchedOffer ?? result?.allOffers?.[0] ?? null;
+  const matchedOffer =
+    result?.matchedOffer ?? plausibleOffers(result?.allOffers ?? [])[0] ?? null;
   const discount = result?.discountAnalysis ?? null;
+  // Judged as the product page's offers table judges the row (#797).
+  const offerImplausiblyLow =
+    !!matchedOffer &&
+    implausiblyLowOfferIds(result?.allOffers ?? []).has(matchedOffer.id);
   const priceHistory = result?.priceHistory ?? null;
   const reviewSummary = result?.reviewSummary ?? null;
   const merchant = result?.merchantProfile ?? null;
@@ -447,7 +456,16 @@ export default function DeepInspectWorkspace({
                       <BsGraphDownArrow className="text-danger" />
                       <span>{t('verdictTitle')}</span>
                     </h2>
-                    {discount?.verdict === 'fake_discount' ? (
+                    {offerImplausiblyLow ? (
+                      <span
+                        className="badge bg-warning text-dark rounded-pill px-3 py-2"
+                        data-testid="inspect-implausibly-low"
+                        title={t('implausiblyLowTitle')}
+                      >
+                        <BsExclamationTriangleFill className="me-1" />
+                        {t('implausiblyLowBadge')}
+                      </span>
+                    ) : discount?.verdict === 'fake_discount' ? (
                       <span className="badge bg-danger rounded-pill px-3 py-2 text-white">
                         <BsExclamationTriangleFill className="me-1" />
                         {t('fakeSaleWarning')}
@@ -457,12 +475,12 @@ export default function DeepInspectWorkspace({
                         <BsExclamationTriangleFill className="me-1" />
                         {discountVerdictCopy(tVerdict, discount).label}
                       </span>
-                    ) : (
+                    ) : discount ? (
                       <span className="badge bg-success bg-opacity-10 text-success rounded-pill px-3 py-2">
                         <BsCheckCircleFill className="me-1" />
                         {t('genuineDiscountBadge')}
                       </span>
-                    )}
+                    ) : null}
                   </div>
 
                   <div className="row g-3">

@@ -16,6 +16,7 @@ import {
   getRadarSignal,
   type RadarSignal,
 } from '../../lib/deal-radar';
+import { plausibleOffers } from '../../lib/offer-plausibility';
 import {
   RATE_CACHE_TAGS,
   categoryCacheTag,
@@ -160,11 +161,15 @@ export function computeCrossPlatformDealRadarFromData(
       continue;
     }
 
-    const validOffers = offers.filter(
-      (o) =>
-        Number.isFinite(o.price_current) &&
-        o.price_current > 0 &&
-        o.price_current <= MAX_VALID_VND_PRICE
+    // Bait-price listings (far below every other store) set no market floor,
+    // spread, deal or trap (DOS/Rate#797).
+    const validOffers = plausibleOffers(
+      offers.filter(
+        (o) =>
+          Number.isFinite(o.price_current) &&
+          o.price_current > 0 &&
+          o.price_current <= MAX_VALID_VND_PRICE
+      )
     );
     if (validOffers.length < 2) continue;
 

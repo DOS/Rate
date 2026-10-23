@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import type { Database, MasterProduct } from '@repo/shared-data';
 import { createLogger } from '@/lib/logger';
 import { isPendingReview } from '@/lib/review-display';
+import { plausibleOffers } from '@/lib/offer-plausibility';
 import {
   type ReviewFlagCategory,
   type ReviewItem,
@@ -1549,7 +1550,13 @@ export async function getMasterProductPriceHistory(
   options: { allTime?: boolean } = {}
 ): Promise<MasterProductPriceHistorySummary> {
   const allTime = options.allTime ?? true;
-  const offers = existingOffers ?? (await getMasterProductOffers(masterId));
+  // Bait-price listings far below every other store take no part: no chart
+  // points, no market median, no current or all-time low, and no discount
+  // verdict (DOS/Rate#797). The highest offer is never flagged, so a
+  // non-empty list stays non-empty.
+  const offers = plausibleOffers(
+    existingOffers ?? (await getMasterProductOffers(masterId))
+  );
   if (offers.length === 0) {
     return {
       points: [],
@@ -3302,8 +3309,11 @@ export async function inspectProductOrShopUrl(
           getMasterProductPriceHistory(masterProduct.id, offers),
           getMasterProductReviewSummary(masterProduct.id, reviews),
         ]);
+        // No bait-price listing as the fallback match (DOS/Rate#797).
         const matchedOffer =
-          offers.find((o) => o.id === matchedProd.id) || offers[0] || null;
+          offers.find((o) => o.id === matchedProd.id) ||
+          plausibleOffers(offers)[0] ||
+          null;
         const discountAnalysis = matchedOffer
           ? priceHistory.byOffer[matchedOffer.id] || null
           : null;
@@ -3408,7 +3418,8 @@ export async function inspectProductOrShopUrl(
       );
       if (byShopMerchant) return byShopMerchant;
     }
-    return offers[0] || null;
+    // The cheapest plausible offer, never a bait-price listing (DOS/Rate#797).
+    return plausibleOffers(offers)[0] || null;
   };
 
   // 3. Internal slug or exact master product slug match (including slugified URL keyword)
