@@ -43,6 +43,19 @@ function main() {
   const word = fitTitle(['x'.repeat(80)]);
   assert.equal(word.length, MAX_TITLE_LENGTH);
   assert.ok(word.endsWith('…'));
+  // No dangling "vs" before the ellipsis.
+  assert.equal(
+    fitTitle([
+      'ABCDE Galaxy S25 Ultra 256GB vs Galaxy S25 Ultra 512GB Gold vs X Y',
+    ]),
+    'ABCDE Galaxy S25 Ultra 256GB vs Galaxy S25 Ultra 512GB Gold…'
+  );
+  // Degenerate input stays sane.
+  assert.equal(fitTitle([]), '');
+  assert.ok(fitTitle(['abc def ghi jkl'], 0).length <= 1);
+  // An emoji is never split into a lone surrogate.
+  const emoji = fitTitle(['😀'.repeat(70)]);
+  assert.ok(!/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/.test(emoji));
 
   console.warn('✅ SEO helpers suite passed');
 }

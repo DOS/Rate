@@ -32,6 +32,11 @@ for (const locale of ['vi', 'en', 'cs']) {
       expect((await page.goto(route))?.status()).toBe(200);
       const title = await page.title();
       expect(title.length, title).toBeLessThanOrEqual(65);
+      // Compare titles keep both product names (DOS/Rate#777).
+      if (route.startsWith('/compare/') || route.includes('slugs=')) {
+        expect(title).toContain('iPhone 16 Pro Max 256GB');
+        expect(title).toContain('Galaxy S25 Ultra 256GB');
+      }
       const hrefs = await page
         .locator('link[rel="alternate"][hreflang]')
         .evaluateAll((links) => links.map((l) => l.getAttribute('href')));

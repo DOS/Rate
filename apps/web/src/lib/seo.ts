@@ -20,13 +20,22 @@ export function fitTitle(
   candidates: readonly string[],
   max: number = MAX_TITLE_LENGTH
 ): string {
+  const limit = Math.max(1, Math.floor(max));
   for (const candidate of candidates) {
-    if (candidate.length <= max) return candidate;
+    if (candidate.length <= limit) return candidate;
   }
-  const last = candidates[candidates.length - 1] ?? '';
-  const cut = last.slice(0, max - 1);
+  const last = candidates[candidates.length - 1];
+  if (!last) return '';
+  // Whole code points, so an emoji is never split.
+  const cut = Array.from(last)
+    .slice(0, limit - 1)
+    .join('');
   const space = cut.lastIndexOf(' ');
-  return `${(space > max / 2 ? cut.slice(0, space) : cut).trimEnd()}…`;
+  const kept = (space > limit / 2 ? cut.slice(0, space) : cut)
+    // No dangling joiner such as "vs" before the ellipsis.
+    .replace(/\s+(vs|và|-|\||:)$/u, '')
+    .trimEnd();
+  return `${kept}…`;
 }
 
 /**
