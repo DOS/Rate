@@ -126,6 +126,7 @@ async function runSuite() {
   );
   assert.equal(keyOf('ASUS Vivobook S 14 OLED S5406SA 512GB'), 'asus:vivobook-s-14:512gb');
   assert.equal(brandOf('Laptop ASUS Vivo Book 15 X1504 512GB'), 'Asus');
+  assert.equal(brandOf('Laptop Vivo Book 15 X1504 512GB'), 'Asus');
   assert.equal(keyOf('Điện thoại vivo V40 5G 12GB/256GB'), 'vivo:v40:256gb');
   assert.equal(keyOf('Đồng hồ Vivoactive 5 GPS'), 'garmin:vivoactive-5:unknown');
   assert.equal(brandOf('Vòng đeo tay Vivosmart 5'), 'Garmin');
@@ -162,6 +163,25 @@ async function runSuite() {
   assert.equal(
     keyOf('Laptop Lenovo IdeaPad Slim 3 15IAH8 512GB'),
     'lenovo:ideapad-slim-3-15iah8:512gb'
+  );
+  // A code before the 4-token cap names it too, with no "-gen" left over.
+  assert.equal(keyOf('Laptop Lenovo Legion 5 15IRX9 Gen 9 512GB'), 'lenovo:legion-5-15irx9:512gb');
+  assert.equal(
+    keyOf('Laptop Lenovo IdeaPad 5 15IAH8 Gen 8 512GB'),
+    keyOf('Laptop Lenovo IdeaPad 5 15IAH8 512GB')
+  );
+  // "2-in-1" and short model names ("T14s") are no product codes: generations key apart.
+  assert.notEqual(
+    keyOf('Laptop Lenovo Yoga 9i 2-in-1 Gen 8 1TB'),
+    keyOf('Laptop Lenovo Yoga 9i 2-in-1 Gen 9 1TB')
+  );
+  assert.equal(
+    keyOf('Laptop Lenovo ThinkPad X1 2-in-1 Gen 10 1TB'),
+    'lenovo:thinkpad-x1-2-in-1-gen-10:1024gb'
+  );
+  assert.notEqual(
+    keyOf('Lenovo ThinkPad T14s Gen 4 512GB'),
+    keyOf('Lenovo ThinkPad T14s Gen 5 512GB')
   );
   // A bare "Đồng hồ" prefix is dropped like "Đồng hồ thông minh", and a comma ends the model.
   assert.equal(

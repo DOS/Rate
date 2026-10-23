@@ -1032,16 +1032,19 @@ const CANONICAL_PHONE_REGISTRY: Record<
 };
 
 /**
- * A maker's product code ("15IAH8", "14AHP9", "X1407AA-LY360W"): five characters or
- * more with at least two digits and two letters. Model names ("X1", "E14", "T14s") are
- * shorter.
+ * A maker's product code ("15IAH8", "14AHP9", "X1407AA-LY360W"): an alphanumeric run of
+ * five characters or more with at least two digits and two letters. Model names ("X1",
+ * "E14", "T14s") are shorter, and "2-in-1" is three runs.
  */
 function isProductCodeToken(token: string): boolean {
-  return (
-    token.length >= 5 &&
-    (token.match(/\d/g)?.length ?? 0) >= 2 &&
-    (token.match(/[a-z]/gi)?.length ?? 0) >= 2
-  );
+  return token
+    .split(/[^a-z0-9]+/i)
+    .some(
+      run =>
+        run.length >= 5 &&
+        (run.match(/\d/g)?.length ?? 0) >= 2 &&
+        (run.match(/[a-z]/gi)?.length ?? 0) >= 2
+    );
 }
 
 function slugify(text: string): string {
@@ -1083,7 +1086,7 @@ export class ProductNormalizer {
     else if (/\bvivo(?!\s*book)/i.test(title)) brand = 'Vivo';
     else if (/realme/i.test(title)) brand = 'Realme';
     else if (/google|pixel/i.test(title)) brand = 'Google';
-    else if (/\basus\b|\brog\b|zenbook|vivobook|tuf\s*gaming/i.test(title)) brand = 'Asus';
+    else if (/\basus\b|\brog\b|zenbook|vivo\s*book|tuf\s*gaming/i.test(title)) brand = 'Asus';
     else if (/\bdell\b|inspiron|\bxps\b|alienware|latitude/i.test(title)) brand = 'Dell';
     // "Omen" as a word: Sennheiser "Momentum" is not HP.
     else if (/\bhp\b|pavilion|victus|\bomen\b|elitebook|envy/i.test(title)) brand = 'HP';
@@ -1191,17 +1194,20 @@ export class ProductNormalizer {
         .trim();
       const rawTokens = cleaned.split(/\s+/).filter(Boolean);
       const modelTokens: string[] = [];
+      let hasProductCode = false;
       for (let i = 0; i < rawTokens.length; i++) {
         const tok = rawTokens[i];
         // "Samsung, Galaxy S25 Ultra": the brand's comma is not the end of the model.
         if (modelTokens.length === 0 && /^[,;]+$/.test(tok)) continue;
-        // A generation ("Gen 13") is part of the model even past the 4-token cap, so
-        // "ThinkPad X1 Carbon Gen 13" and "Gen 11" key apart (DOS/Rate#762), unless a
-        // product code already names it ("IdeaPad Slim 3 15IAH8 Gen 8" is "15IAH8").
+        const startsGeneration = /^gen$/i.test(tok) && /^\d{1,2},?$/.test(rawTokens[i + 1] ?? '');
+        // A product code already names the generation: "IdeaPad Slim 3 15IAH8 Gen 8" and
+        // "Legion 5 15IRX9 Gen 9" key as their code, like the titles without "Gen".
+        if (hasProductCode && startsGeneration) break;
+        // Otherwise a generation ("Gen 13") is part of the model even past the 4-token
+        // cap, so "ThinkPad X1 Carbon Gen 13" and "Gen 11" key apart (DOS/Rate#762).
         const generation =
-          !modelTokens.some(isProductCodeToken) &&
-          ((/^gen$/i.test(modelTokens[modelTokens.length - 1] ?? '') && /^\d{1,2},?$/.test(tok)) ||
-            (/^gen$/i.test(tok) && /^\d{1,2},?$/.test(rawTokens[i + 1] ?? '')));
+          startsGeneration ||
+          (/^gen$/i.test(modelTokens[modelTokens.length - 1] ?? '') && /^\d{1,2},?$/.test(tok));
         // A trailing "Plus" word is part of the model even past the 4-token cap,
         // so "Redmi Note 13 Pro Plus" keys like "Redmi Note 13 Pro+" (#597).
         if (
@@ -1224,6 +1230,7 @@ export class ProductNormalizer {
           break;
         }
         modelTokens.push(tok);
+        hasProductCode ||= isProductCodeToken(tok);
       }
       model = modelTokens.length > 0 ? modelTokens.join(' ') : rawTokens.slice(0, 2).join(' ');
     }
