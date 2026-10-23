@@ -29,11 +29,14 @@ for (const locale of ['vi', 'en', 'cs']) {
       .addCookies([{ name: 'NEXT_LOCALE', value: locale, url: baseURL ?? '' }]);
     await page.setViewportSize({ width: 1366, height: 900 });
     expect((await page.goto('/smartphones'))?.status()).toBe(200);
-    await expect(page.locator('label[for^="rating-"]')).toHaveCount(4);
+    const labels = page.locator('label[for^="rating-"]');
+    await expect(labels).toHaveCount(4);
+    await expect(labels.first()).toBeVisible();
     await page.evaluate(() => document.fonts.ready);
-    for (const n of await lineCount(page, 'label[for^="rating-"]')) {
-      expect(n).toBe(1);
-    }
+    // Poll: the sidebar can still be laying out right after hydration.
+    await expect
+      .poll(() => lineCount(page, 'label[for^="rating-"]'))
+      .toEqual([1, 1, 1, 1]);
   });
 }
 
