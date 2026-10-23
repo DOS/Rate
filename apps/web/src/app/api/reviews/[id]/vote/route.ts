@@ -120,7 +120,13 @@ export async function POST(
     const { voteType, reportReason } = parsedInput;
     const { userId: voterId, user, rateClient } = auth;
 
-    const eligibility = evaluateVoterEligibility(user);
+    // Clearing one's own vote stays open to every signed-in voter, as in the
+    // database guard (DOS/Rate#771): an account that voted before the rules
+    // applied can still withdraw it.
+    const eligibility =
+      voteType === 'clear'
+        ? { eligible: true as const }
+        : evaluateVoterEligibility(user);
     if (!eligibility.eligible) {
       return NextResponse.json(
         {
@@ -180,8 +186,13 @@ export async function POST(
         .upsert(votePayload, { onConflict: 'review_id,voter_id' });
 
       if (upsertErr) {
-        // The database guard rejects ineligible voters with 42501 (DOS/Rate#613).
-        if (upsertErr.code === '42501') {
+        // The database guard rejects ineligible voters with 42501 and this
+        // message (DOS/Rate#613). Other 42501s (a missing grant) are not the
+        // voter's fault: they fall through to the logged generic answer.
+        if (
+          upsertErr.code === '42501' &&
+          upsertErr.message?.startsWith('review_votes: account is not eligible')
+        ) {
           return NextResponse.json(
             {
               ok: false,
@@ -192,6 +203,12 @@ export async function POST(
           );
         }
         const isRateLimit = upsertErr.code === '54000';
+        if (!isRateLimit) {
+          log.warn('vote upsert rejected', {
+            code: upsertErr.code,
+            message: upsertErr.message,
+          });
+        }
         return NextResponse.json(
           {
             ok: false,

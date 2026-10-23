@@ -15,6 +15,9 @@ const ANON_KEY = 'anon-test-key';
 const SERVICE_KEY = 'service-role-test-key';
 const GOOD_TOKEN = 'good-user-token';
 const VOTER_TOKEN = 'eligible-voter-token';
+// What the stubbed PostgREST answers a VOTER_TOKEN vote with (code 42501).
+let voteRejectionMessage =
+  'review_votes: account is not eligible to vote on reviews';
 // A JWT-shaped access token for the cookie session (supabase-js reads its exp).
 const b64url = (o: unknown) =>
   Buffer.from(JSON.stringify(o)).toString('base64url');
@@ -97,10 +100,14 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
       email_confirmed_at: '2026-01-01T00:00:00Z',
     });
   }
-  if (pathname === '/rest/v1/review_votes' && init?.method === 'POST') {
+  if (
+    pathname === '/rest/v1/review_votes' &&
+    init?.method === 'POST' &&
+    headers.authorization === `Bearer ${VOTER_TOKEN}`
+  ) {
     return jsonResponse(403, {
       code: '42501',
-      message: 'review_votes: account is not eligible to vote on reviews',
+      message: voteRejectionMessage,
     });
   }
   if (pathname === '/auth/v1/user') {
@@ -643,6 +650,50 @@ async function testCookieSessions() {
     'POST /api/reviews/[id]/vote must answer 403 when the database rejects the voter (#771)'
   );
   assert.equal((await dbRejectedVoteRes.json()).code, 'VOTER_NOT_ELIGIBLE');
+
+  // Another 42501 (say, a missing grant) is not blamed on the voter.
+  voteRejectionMessage = 'permission denied for table review_votes';
+  const grantErrorVoteRes = await postVote(
+    new Request(`https://rate.vn/api/reviews/${reviewId}/vote`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${VOTER_TOKEN}`,
+      },
+      body: JSON.stringify({ voteType: 'up' }),
+    }) as VoteReq,
+    { params: Promise.resolve({ id: reviewId }) }
+  );
+  assert.equal(
+    grantErrorVoteRes.status,
+    400,
+    'a 42501 that is not the eligibility guard must not answer VOTER_NOT_ELIGIBLE (#771)'
+  );
+  assert.equal((await grantErrorVoteRes.json()).code, 'VOTE_REJECTED');
+
+  // An ineligible voter (no created_at, no confirmation) can still clear a vote.
+  const clearRes = await postVote(
+    new Request(`https://rate.vn/api/reviews/${reviewId}/vote`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${GOOD_TOKEN}`,
+      },
+      body: JSON.stringify({ voteType: 'clear' }),
+    }) as VoteReq,
+    { params: Promise.resolve({ id: reviewId }) }
+  );
+  assert.notEqual(
+    (await clearRes.clone().json()).code,
+    'VOTER_NOT_ELIGIBLE',
+    'clearing a vote must not be refused for eligibility (#771)'
+  );
+  assert.ok(
+    calls.some(
+      (c) => c.method === 'DELETE' && c.url.includes('/rest/v1/review_votes')
+    ),
+    'clear must reach the review_votes delete (#771)'
+  );
 
   // The route's own gate: a missing confirmation field or created_at fails
   // closed (the auth server omits null fields).
