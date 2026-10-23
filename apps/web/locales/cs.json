@@ -1035,6 +1035,8 @@
     "offersColRecordedPrice": "Zaznamenaná cena",
     "offersColAuditSource": "Kontrola a zdroj",
     "offersOfficialMallBadge": "Oficiální (Mall)",
+    "offersImplausiblyLowBadge": "Podezřele nízká cena",
+    "offersImplausiblyLowTitle": "Mnohem levnější než všechny ostatní obchody: může jít o padělek, příslušenství nebo návnadu. Nezapočítává se do nejnižší ceny.",
     "offersMerchantTrustTitle": "Zobrazit profil důvěryhodnosti obchodníka",
     "offersInspectBtnTitle": "Podrobně zkontrolovat tuto nabídku na stránce Ověřit odkaz",
     "offersInspectBtn": "Zkontrolovat",

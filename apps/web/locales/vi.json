@@ -1035,6 +1035,8 @@
     "offersColRecordedPrice": "Giá ghi nhận",
     "offersColAuditSource": "Kiểm tra và nguồn",
     "offersOfficialMallBadge": "Chính hãng (Mall)",
+    "offersImplausiblyLowBadge": "Giá thấp bất thường",
+    "offersImplausiblyLowTitle": "Rẻ hơn nhiều so với mọi nơi bán khác: có thể là hàng giả, phụ kiện hoặc tin câu khách. Không tính vào giá thấp nhất.",
     "offersMerchantTrustTitle": "Xem hồ sơ tín nhiệm gian hàng",
     "offersInspectBtnTitle": "Kiểm tra chi tiết tin bán này ở trang Kiểm tra link",
     "offersInspectBtn": "Kiểm tra",

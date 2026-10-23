@@ -23,6 +23,7 @@ import {
   type RadarSignal,
 } from '@/lib/deal-radar';
 import { escapeCsvCell } from '@/lib/csv-safe';
+import { implausiblyLowOfferIds } from '@/lib/offer-plausibility';
 import { contentLang } from '@/lib/content-lang';
 import ContentText from '@/components/elementary/ContentText';
 
@@ -61,8 +62,17 @@ export default function ProductOffersExplorer({
     return Array.from(counts.entries());
   }, [offers]);
 
+  // Bait-price listings far below every other store (DOS/Rate#797): labelled,
+  // listed after the plausible offers and left out of the price spread.
+  const implausibleOfferIds = useMemo(
+    () => implausiblyLowOfferIds(offers),
+    [offers]
+  );
+
   const priceSpreadAudit = useMemo(() => {
-    const valid = offers.filter((o) => Number(o.price_current || 0) > 0);
+    const valid = offers.filter(
+      (o) => Number(o.price_current || 0) > 0 && !implausibleOfferIds.has(o.id)
+    );
     if (valid.length < 2) return null;
     const sorted = [...valid].sort((a, b) => a.price_current - b.price_current);
     const cheapest = sorted[0]!;
@@ -82,7 +92,7 @@ export default function ProductOffersExplorer({
       spreadPct,
       platformCount: platforms.length,
     };
-  }, [offers, platforms.length]);
+  }, [offers, platforms.length, implausibleOfferIds]);
 
   const filteredOffers = useMemo(() => {
     const base = offers.filter((o) => {
@@ -103,6 +113,9 @@ export default function ProductOffersExplorer({
     });
 
     return [...base].sort((a, b) => {
+      const implausibleA = implausibleOfferIds.has(a.id) ? 1 : 0;
+      const implausibleB = implausibleOfferIds.has(b.id) ? 1 : 0;
+      if (implausibleA !== implausibleB) return implausibleA - implausibleB;
       const trustA = Math.max(0, 100 - (a.merchant.risk_score || 0));
       const trustB = Math.max(0, 100 - (b.merchant.risk_score || 0));
       const discA =
@@ -122,7 +135,14 @@ export default function ProductOffersExplorer({
       }
       return a.price_current - b.price_current || trustB - trustA;
     });
-  }, [offers, selectedPlatform, officialOnly, highTrustOnly, sortBy]);
+  }, [
+    offers,
+    selectedPlatform,
+    officialOnly,
+    highTrustOnly,
+    sortBy,
+    implausibleOfferIds,
+  ]);
 
   const handleCopyOffersMarkdown = async () => {
     if (typeof navigator === 'undefined' || filteredOffers.length === 0) return;
@@ -543,6 +563,15 @@ export default function ProductOffersExplorer({
                           {offer.merchant.is_official && (
                             <span className="badge bg-success-subtle text-success small">
                               {t('offersOfficialMallBadge')}
+                            </span>
+                          )}
+                          {implausibleOfferIds.has(offer.id) && (
+                            <span
+                              className="badge bg-danger-subtle text-danger small"
+                              data-testid="offer-implausibly-low"
+                              title={t('offersImplausiblyLowTitle')}
+                            >
+                              {t('offersImplausiblyLowBadge')}
                             </span>
                           )}
                         </div>

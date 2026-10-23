@@ -1035,6 +1035,8 @@
     "offersColRecordedPrice": "Recorded price",
     "offersColAuditSource": "Check and source",
     "offersOfficialMallBadge": "Official Mall",
+    "offersImplausiblyLowBadge": "Suspiciously low price",
+    "offersImplausiblyLowTitle": "Far cheaper than every other store: possibly a counterfeit, an accessory or a bait listing. Not counted as the lowest price.",
     "offersMerchantTrustTitle": "View merchant trust profile",
     "offersInspectBtnTitle": "Check this listing in detail on the link check page",
     "offersInspectBtn": "Check",
