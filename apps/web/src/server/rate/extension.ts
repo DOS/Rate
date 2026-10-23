@@ -876,10 +876,13 @@ export async function lookupExtensionProduct(
         }>
       ).find((r) => Boolean(r.cluster_id));
       if (matchedProd?.cluster_id) {
+        // A draft master has no product page (DOS/Rate#769): fall back to
+        // the catalogue match instead.
         const { data: masterRow, error: masterErr } = await client
           .from('master_products')
           .select('*')
           .eq('id', matchedProd.cluster_id)
+          .eq('status', 'published')
           .maybeSingle();
         if (masterErr) {
           log.error('extension_lookup_master_failed', {

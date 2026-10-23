@@ -1897,6 +1897,7 @@ export interface MerchantProfileDetail extends MerchantSummary {
       product_id: string;
       product_title: string;
       master_slug: string | null;
+      master_category_slug: string | null;
     }
   >;
 }
@@ -2637,6 +2638,9 @@ export async function getMerchantProfileById(
   const productIds = rawProducts.map((p) => p.id);
 
   const [masterRows, catsRes, reviewRows] = await Promise.all([
+    // Published only: the product page serves no other status, so a draft
+    // master would be linked to a 404 (DOS/Rate#769). Its listings show as
+    // unclustered.
     readInChunks(clusterIds, 'merchant profile', (chunk) =>
       supabase
         .from('master_products')
@@ -2644,6 +2648,7 @@ export async function getMerchantProfileById(
           'id, slug, name, model, brand, category_id, metadata, specifications, min_price, max_price, merchant_count'
         )
         .in('id', chunk)
+        .eq('status', 'published')
     ),
     supabase.from('categories').select('id, slug'),
     readInChunks(productIds, 'merchant profile', (chunk) =>
@@ -2804,6 +2809,7 @@ export async function getMerchantProfileById(
       product_id: r.product_id,
       product_title: prod?.title || 'Sản phẩm niêm yết',
       master_slug: prod?.master_product?.slug || null,
+      master_category_slug: prod?.master_product?.category_slug || null,
       author_name: r.author_name || 'Khách hàng',
       rating_star: Number(r.rating_star || 5),
       comment: r.comment || '',
@@ -3263,10 +3269,13 @@ export async function inspectProductOrShopUrl(
     } | null;
 
     if (matchedProd?.cluster_id) {
+      // A draft master has no product page (DOS/Rate#769): fall through to
+      // the shop and keyword lookups instead.
       const { data: masterData, error: masterErr } = await supabase
         .from('master_products')
         .select('*')
         .eq('id', matchedProd.cluster_id)
+        .eq('status', 'published')
         .maybeSingle();
 
       if (masterErr) {
