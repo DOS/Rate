@@ -5,11 +5,7 @@ import { discountVerdictCopy } from '@/lib/discount-verdict-copy';
 import { formatSoldCount } from '@/lib/sold-count';
 import AnalyzerText from '@/components/reviews/AnalyzerText';
 import { Link } from '@/lib/navigation';
-import {
-  getCategoryRouteHref,
-  getMasterProductCategorySlug,
-  resolveProductImageUrl,
-} from '@/lib/rate-api';
+import { getCategoryRouteHref, resolveProductImageUrl } from '@/lib/rate-api';
 import {
   getCachedMerchantProfileById,
   getCrossPlatformDealRadar,
@@ -646,12 +642,7 @@ export default async function MerchantProfilePage({
               <div className="row g-3">
                 {merchant.recent_reviews.slice(0, 12).map((rev) => {
                   const isAuthentic = rev.include_in_rating;
-                  const revCatSlug = rev.master_slug
-                    ? getMasterProductCategorySlug({
-                        slug: rev.master_slug,
-                        name: rev.product_title,
-                      })
-                    : 'smartphones';
+                  const revCatSlug = rev.master_category_slug || 'smartphones';
                   const revCatBase = getCategoryRouteHref(revCatSlug);
                   const flagBadge = isPendingReview(rev)
                     ? {
@@ -812,12 +803,11 @@ export default async function MerchantProfilePage({
                         item.master_product?.slug,
                         item.image
                       );
-                      const masterCatSlug = item.master_product
-                        ? getMasterProductCategorySlug({
-                            slug: item.master_product.slug,
-                            name: item.master_product.name,
-                          })
-                        : 'smartphones';
+                      // The category read with the master, not one guessed
+                      // from its name, which linked earbuds and others under
+                      // /smartphones (DOS/Rate#769).
+                      const masterCatSlug =
+                        item.master_product?.category_slug || 'smartphones';
                       const masterBaseHref =
                         getCategoryRouteHref(masterCatSlug);
 

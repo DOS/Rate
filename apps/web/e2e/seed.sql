@@ -197,3 +197,28 @@ WHERE review_id IN (SELECT id FROM rate.reviews WHERE product_id = 'cccccccc-ccc
 INSERT INTO rate.review_analysis (product_id, total_reviews_analyzed, authenticity_score, pros, ai_summary)
 VALUES ('cccccccc-cccc-4ccc-8ccc-cccccccc0566', 6, 95, ARRAY['Nhận phản hồi tích cực từ người dùng thực tế'],
   'Đã phân tích 6 đánh giá: giữ lại 6 đánh giá thực chất (điểm JReviews có trọng số: 5/5★) và loại bỏ 0 đánh giá rác/nhận xu/seeding/bom hàng khỏi điểm tổng.');
+
+-- A store selling one listing of a published model (E2E Bud 001, which has no
+-- other offer) and one of a draft phone. The draft has no product page, so the
+-- profile must not link it (DOS/Rate#769). The draft listing's review, older
+-- than every other review, covers the recent-review link too.
+INSERT INTO rate.merchants (id, platform, platform_shop_id, name, slug, is_official)
+VALUES ('ffffffff-ffff-4fff-8fff-ffffffff0769', 'shopee', 'shop_draft_links', 'Draft Links Store', 'draft-links-store', false);
+INSERT INTO rate.master_products
+  (id, category_id, brand, model, model_key, name, slug, min_price, max_price, merchant_count, status, metadata)
+VALUES
+  ('22222222-2222-4222-8222-222222220769', 'c0000000-0000-4000-8000-000000000001', 'E2E', 'Draft Phone',
+   'e2e_draft_phone', 'E2E Draft Phone', 'e2e-draft-phone', 4000000, 4000000, 1, 'draft',
+   '{"category_slug": "smartphones"}');
+INSERT INTO rate.products (id, merchant_id, platform, platform_item_id, title, category_id, brand, price_current, url, cluster_id)
+SELECT 'cccccccc-cccc-4ccc-8ccc-ccccccc07691', 'ffffffff-ffff-4fff-8fff-ffffffff0769', 'shopee', 'item_draft_links_public',
+  'E2E Bud 001 chính hãng', 'c0000000-0000-4000-8000-000000000005', 'E2E Audio', 500000,
+  'https://shopee.vn/item-draft-links-public', id
+FROM rate.master_products WHERE slug = 'e2e-bud-001';
+INSERT INTO rate.products (id, merchant_id, platform, platform_item_id, title, category_id, price_current, url, cluster_id)
+VALUES ('cccccccc-cccc-4ccc-8ccc-ccccccc07692', 'ffffffff-ffff-4fff-8fff-ffffffff0769', 'shopee', 'item_draft_links_draft',
+  'E2E Draft Phone chính hãng', 'c0000000-0000-4000-8000-000000000001', 4000000,
+  'https://shopee.vn/item-draft-links-draft', '22222222-2222-4222-8222-222222220769');
+INSERT INTO rate.reviews (product_id, author_name, rating_star, comment, reviewer_type, platform_created_at, created_at)
+VALUES ('cccccccc-cccc-4ccc-8ccc-ccccccc07692', 'Draft Links', 4, 'Máy dùng ổn, giao hàng nhanh.', 'user',
+  now() - interval '120 days', now() - interval '120 days');

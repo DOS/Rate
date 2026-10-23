@@ -1897,6 +1897,7 @@ export interface MerchantProfileDetail extends MerchantSummary {
       product_id: string;
       product_title: string;
       master_slug: string | null;
+      master_category_slug: string | null;
     }
   >;
 }
@@ -2637,6 +2638,9 @@ export async function getMerchantProfileById(
   const productIds = rawProducts.map((p) => p.id);
 
   const [masterRows, catsRes, reviewRows] = await Promise.all([
+    // Published only: the product page serves no other status, so a draft
+    // master would be linked to a 404 (DOS/Rate#769). Its listings show as
+    // unclustered.
     readInChunks(clusterIds, 'merchant profile', (chunk) =>
       supabase
         .from('master_products')
@@ -2644,6 +2648,7 @@ export async function getMerchantProfileById(
           'id, slug, name, model, brand, category_id, metadata, specifications, min_price, max_price, merchant_count'
         )
         .in('id', chunk)
+        .eq('status', 'published')
     ),
     supabase.from('categories').select('id, slug'),
     readInChunks(productIds, 'merchant profile', (chunk) =>
@@ -2804,6 +2809,7 @@ export async function getMerchantProfileById(
       product_id: r.product_id,
       product_title: prod?.title || 'Sản phẩm niêm yết',
       master_slug: prod?.master_product?.slug || null,
+      master_category_slug: prod?.master_product?.category_slug || null,
       author_name: r.author_name || 'Khách hàng',
       rating_star: Number(r.rating_star || 5),
       comment: r.comment || '',
@@ -3229,6 +3235,10 @@ export async function inspectProductOrShopUrl(
 
   const supabase = getRateClient();
 
+  // The listing is known but its model is not published (DOS/Rate#769):
+  // the merchant id of that listing, else null.
+  let unpublishedListingMerchantId: string | null = null;
+
   // 1. Direct lookup by platform_item_id if parsed from URL
   if (parsedUrl.platformItemId) {
     const candidateIds = new Set<string>([parsedUrl.platformItemId]);
@@ -3263,10 +3273,13 @@ export async function inspectProductOrShopUrl(
     } | null;
 
     if (matchedProd?.cluster_id) {
+      // A draft master has no product page (DOS/Rate#769). The listing is
+      // then known to be that model, so only the shop lookup below applies.
       const { data: masterData, error: masterErr } = await supabase
         .from('master_products')
         .select('*')
         .eq('id', matchedProd.cluster_id)
+        .eq('status', 'published')
         .maybeSingle();
 
       if (masterErr) {
@@ -3311,6 +3324,7 @@ export async function inspectProductOrShopUrl(
           suggestions: [],
         };
       }
+      unpublishedListingMerchantId = matchedProd.merchant_id;
     }
   }
 
@@ -3350,6 +3364,36 @@ export async function inspectProductOrShopUrl(
         suggestions,
       };
     }
+  }
+
+  // A keyword guess could only find a different model than the listing's,
+  // so answer with the listing's store, if tracked.
+  if (unpublishedListingMerchantId) {
+    const [suggestions, listingMerchants] = await Promise.all([
+      getMasterProducts({ limit: 3 }),
+      matchedMerchantByShopId
+        ? Promise.resolve([matchedMerchantByShopId])
+        : getMerchantsList({ ids: [unpublishedListingMerchantId], limit: 1 }),
+    ]);
+    const merchantProfile =
+      listingMerchants.find(
+        (m) =>
+          m.id === unpublishedListingMerchantId ||
+          m.id === matchedMerchantByShopId?.id
+      ) || null;
+    return {
+      query,
+      matchedType: merchantProfile ? 'merchant' : 'not_found',
+      parsedUrl,
+      masterProduct: null,
+      matchedOffer: null,
+      allOffers: [],
+      discountAnalysis: null,
+      priceHistory: null,
+      reviewSummary: null,
+      merchantProfile,
+      suggestions,
+    };
   }
 
   const pickOfferForUrlInspection = (
