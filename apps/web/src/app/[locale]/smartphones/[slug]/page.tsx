@@ -42,6 +42,7 @@ import {
   defaultOpenGraph,
   fitTitle,
   SHARE_IMAGE,
+  fitDescription,
 } from '@/lib/seo';
 import JReviewsSection from '@/components/reviews/JReviewsSection';
 import PhoneCollapsible from '@/components/product/PhoneCollapsible';
@@ -103,11 +104,13 @@ export async function generateCategoryProductMetadata(
       `${product.name} | Rate.vn`,
       product.name,
     ]),
-    description: t('metaDesc', {
-      name: product.name,
-      brand: product.brand,
-      merchantCount: product.merchant_count || 0,
-    }),
+    description: fitDescription(
+      t('metaDesc', {
+        name: product.name,
+        brand: product.brand,
+        merchantCount: product.merchant_count || 0,
+      })
+    ),
     alternates: {
       canonical: canonicalUrl,
     },

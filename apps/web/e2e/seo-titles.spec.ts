@@ -17,6 +17,9 @@ const ROUTES = [
   '/merchants/ffffffff-ffff-4fff-8fff-ffffffff0783',
   '/smartphones/e2e-medium-name-phone',
   '/deals',
+  // Category descriptions (DOS/Rate#792).
+  '/earbuds',
+  '/smartwatches',
   '/about-us',
   '/faq',
   '/contact-us',
@@ -37,6 +40,13 @@ for (const locale of ['vi', 'en', 'cs']) {
       expect((await page.goto(route))?.status()).toBe(200);
       const title = await page.title();
       expect(title.length, title).toBeLessThanOrEqual(65);
+      // Descriptions fit a search result too (DOS/Rate#792).
+      const description =
+        (await page
+          .locator('meta[name="description"]')
+          .getAttribute('content')) ?? '';
+      expect(description.length, description).toBeGreaterThan(0);
+      expect(description.length, description).toBeLessThanOrEqual(160);
       // Long names lead their titles (DOS/Rate#782).
       if (route.endsWith('ffffffff0782')) {
         expect(title.startsWith('Cửa Hàng Ủy Quyền Chính Hãng'), title).toBe(

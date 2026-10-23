@@ -1379,7 +1379,7 @@
     "aboutLinkTablets": "Katalog tabletů",
     "aboutLinkFaq": "Často kladené otázky o metodice bodování",
     "privacySeoTitle": "Ochrana soukromí a data | Rate.vn",
-    "privacySeoDesc": "Jak Rate.vn nakládá s daty: k prohlížení není potřeba účet, porovnávací panel zůstává ve vašem prohlížeči, hlasy u recenzí jsou vázané na účet DOS ID a soukromé údaje prodejců nejsou veřejné.",
+    "privacySeoDesc": "Rate.vn nevyžaduje účet k prohlížení. Porovnání zůstává v prohlížeči, hlasy u recenzí jsou vázané na DOS ID a soukromé údaje prodejců nejsou veřejné.",
     "privacyHeroBadge": "Jak Rate.vn nakládá s daty",
     "privacyHeroTitle": "Zásady ochrany soukromí a dat",
     "privacyHeroDesc": "Parametry, kontrolu odkazů, porovnání zařízení i historii cen můžete používat bez zadávání osobních údajů.",
@@ -1492,12 +1492,12 @@
       "smartwatches": {
         "titleCount": "Srovnání cen chytrých hodinek ({count} modelů) | Rate.vn",
         "titleDefault": "Srovnání cen chytrých hodinek a kontrola slev | Rate.vn",
-        "description": "Vyhledávejte a filtrujte chytré hodinky (Apple Watch, Galaxy Watch, Garmin, Xiaomi Watch, Huawei Watch) podle 10 skupin parametrů, ověřte historii cen a recenze na Rate.vn."
+        "description": "Filtrujte chytré hodinky (Apple Watch, Galaxy Watch, Garmin, Xiaomi, Huawei) podle 10 skupin parametrů, s historií cen a ověřenými recenzemi na Rate.vn."
       },
       "earbuds": {
         "titleCount": "Srovnání cen bezdrátových ANC sluchátek ({count} modelů) | Rate.vn",
         "titleDefault": "Srovnání cen bezdrátových ANC sluchátek a kontrola slev | Rate.vn",
-        "description": "Vyhledávejte a filtrujte bezdrátová sluchátka s ANC (AirPods Pro, Sony WF-1000XM5, Galaxy Buds, Bose, Sennheiser) podle 10 skupin parametrů, s historií cen a recenzemi zkontrolovanými AI na Rate.vn."
+        "description": "Filtrujte bezdrátová sluchátka s ANC (AirPods Pro, Sony WF-1000XM5, Galaxy Buds, Bose) podle 10 skupin parametrů, s historií cen a ověřenými recenzemi."
       }
     },
     "sortOptions": {
