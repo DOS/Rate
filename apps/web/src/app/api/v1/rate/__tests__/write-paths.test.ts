@@ -688,12 +688,22 @@ async function testCookieSessions() {
     'VOTER_NOT_ELIGIBLE',
     'clearing a vote must not be refused for eligibility (#771)'
   );
-  assert.ok(
-    calls.some(
-      (c) => c.method === 'DELETE' && c.url.includes('/rest/v1/review_votes')
-    ),
-    'clear must reach the review_votes delete (#771)'
+  const clearCall = calls.find(
+    (c) => c.method === 'DELETE' && c.url.includes('/rest/v1/review_votes')
   );
+  assert.ok(clearCall, 'clear must reach the review_votes delete (#771)');
+  assert.ok(
+    clearCall.url.includes(`voter_id=eq.${USER.id}`) &&
+      clearCall.url.includes(`review_id=eq.${reviewId}`),
+    'clear must delete only the caller own vote on that review (#771)'
+  );
+  assert.match(
+    clearCall.headers.prefer ?? '',
+    /count=exact/,
+    'clear must count deleted rows, so an empty clear does not flush caches (#771)'
+  );
+  voteRejectionMessage =
+    'review_votes: account is not eligible to vote on reviews';
 
   // The route's own gate: a missing confirmation field or created_at fails
   // closed (the auth server omits null fields).

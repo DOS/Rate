@@ -138,12 +138,17 @@ export async function POST(
       );
     }
 
+    // A clear that removed nothing changes no count, so it must not flush the
+    // shared caches: clearing is open to every signed-in session and has no
+    // rate limit (DOS/Rate#771).
+    let votesChanged = true;
     if (voteType === 'clear') {
-      const { error: delErr } = await rateClient
+      const { error: delErr, count: deletedCount } = await rateClient
         .from('review_votes')
-        .delete()
+        .delete({ count: 'exact' })
         .eq('review_id', reviewId)
         .eq('voter_id', voterId);
+      votesChanged = deletedCount !== 0;
 
       if (delErr) {
         return NextResponse.json(
@@ -241,11 +246,13 @@ export async function POST(
       );
     }
 
-    for (const tag of [
-      RATE_CACHE_TAGS.REVIEWS,
-      RATE_CACHE_TAGS.PRODUCTS,
-      RATE_CACHE_TAGS.STATS,
-    ]) {
+    for (const tag of votesChanged
+      ? [
+          RATE_CACHE_TAGS.REVIEWS,
+          RATE_CACHE_TAGS.PRODUCTS,
+          RATE_CACHE_TAGS.STATS,
+        ]
+      : []) {
       try {
         revalidateTag(tag, 'max');
       } catch {
