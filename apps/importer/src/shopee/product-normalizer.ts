@@ -124,7 +124,7 @@ export function detectCategorySlug(title: string): CanonicalCategorySlug {
     return 'earbuds';
   }
   if (
-    /apple\s*watch|galaxy\s*watch|\bgarmin\b|forerunner|fenix|venu|watch\s*(?:ultra|series|gt|fit|se)|đồng\s*hồ\s*thông\s*minh|smartwatch|amazfit|coros/i.test(
+    /apple\s*watch|galaxy\s*watch|\bgarmin\b|forerunner|fenix|venu|vivo(?:active|smart|move|fit|sport|life)|watch\s*(?:ultra|series|gt|fit|se)|đồng\s*hồ\s*thông\s*minh|vòng\s*(?:đeo\s*)?tay\s*thông\s*minh|smartwatch|amazfit|coros/i.test(
       t
     )
   ) {
@@ -1187,7 +1187,7 @@ export class ProductNormalizer {
       const cleaned = withoutLeadingPromo
         .replace(
           new RegExp(
-            `^(?:(?:Hàng\\s+)?Chính\\s+hãng\\s+)?(?:(?:Điện\\s+thoại(?:\\s+thông\\s+minh|\\s+di\\s+động)?|Smartphone|Máy\\s+tính\\s+bảng|Tablet|Laptop|Máy\\s+tính\\s+xách\\s+tay|Đồng\\s+hồ(?:\\s+đeo\\s+tay)?(?:\\s+thông\\s+minh)?|Vòng\\s+đeo\\s+tay(?:\\s+thông\\s+minh)?|Smartwatch|Tai\\s+nghe(?:\\s+Bluetooth|\\s+chống\\s+ồn|\\s+không\\s+dây)?|Earbuds)\\s+(?:(?:Hàng\\s+)?Chính\\s+hãng\\s+)?)?(?:${brand}\\b\\s*)?`,
+            `^(?:(?:Hàng\\s+)?Chính\\s+hãng\\s+)?(?:(?:Điện\\s+thoại(?:\\s+thông\\s+minh|\\s+di\\s+động)?|Smartphone|Máy\\s+tính\\s+bảng|Tablet|Laptop|Máy\\s+tính\\s+xách\\s+tay|Đồng\\s+hồ(?:\\s+đeo\\s+tay)?(?:\\s+thông\\s+minh)?|Vòng\\s+đeo\\s+tay(?:\\s+thông\\s+minh)?|Vòng\\s+tay\\s+thông\\s+minh|Smartwatch|Tai\\s+nghe(?:\\s+Bluetooth|\\s+chống\\s+ồn|\\s+không\\s+dây)?|Earbuds)\\s+(?:(?:Hàng\\s+)?Chính\\s+hãng\\s+)?)?(?:${brand}\\b\\s*)?`,
             'i'
           ),
           ''
