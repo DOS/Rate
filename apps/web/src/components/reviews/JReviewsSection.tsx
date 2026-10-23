@@ -427,6 +427,25 @@ export default function JReviewsSection({
     const nextAction: VoteChoice | 'clear' =
       prevVote === clickedVote ? 'clear' : clickedVote;
 
+    // Kept to roll back the optimistic update when the server refuses the
+    // vote for a signed-in reader (DOS/Rate#790).
+    const reviewBefore = reviews.find((r) => r.id === reviewId);
+    const votesBefore = userVotes;
+    const rollBack = (notice: string) => {
+      if (reviewBefore) {
+        setReviews((prevList) =>
+          prevList.map((r) => (r.id === reviewId ? reviewBefore : r))
+        );
+      }
+      setUserVotes(votesBefore);
+      try {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(votesBefore));
+      } catch {
+        // Ignore storage errors
+      }
+      setAuthNotice(notice);
+    };
+
     // Optimistic state update using the canonical SQL/Importer JReviews weight formula
     setPendingIds((prev) => ({ ...prev, [reviewId]: true }));
     setReviews((prevList) =>
@@ -512,10 +531,23 @@ export default function JReviewsSection({
           );
         }
       } else if (res.status === 401) {
+        // Signed out: the vote stays as a browser-only simulation.
         setAuthNotice(t('authVoteNotice'));
+      } else {
+        const payload = (await res.json().catch(() => null)) as {
+          code?: string;
+        } | null;
+        rollBack(
+          payload?.code === 'VOTER_NOT_ELIGIBLE'
+            ? t('voteNotEligibleNotice')
+            : payload?.code === 'RATE_LIMIT_EXCEEDED' || res.status === 429
+              ? t('voteRateLimitNotice')
+              : t('voteFailedNotice')
+        );
       }
     } catch (err) {
       console.error('Failed to sync review vote:', err);
+      rollBack(t('voteFailedNotice'));
     } finally {
       setPendingIds((prev) => ({ ...prev, [reviewId]: false }));
     }
