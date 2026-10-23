@@ -116,6 +116,60 @@ async function runSuite() {
       .storage_gb,
     128
   );
+  // Brand and model keys of the generic model fallback (DOS/Rate#761, #762).
+  const keyOf = (title: string) => normalizer.normalize(createDummyShopeeProduct(title)).model_key;
+  // "Vivobook" and "Vivoactive" are not the vivo brand; vivo phones still are.
+  assert.equal(
+    keyOf('Laptop Asus Vivobook 14 X1407AA-LY360W (Ultra 5-325/ 16GB/ 512GB/ Windows 11 Home)'),
+    'asus:vivobook-14-x1407aa-ly360w:512gb'
+  );
+  assert.equal(keyOf('ASUS Vivobook S 14 OLED S5406SA 512GB'), 'asus:vivobook-s-14:512gb');
+  assert.equal(keyOf('Điện thoại vivo V40 5G 12GB/256GB'), 'vivo:v40:256gb');
+  assert.equal(
+    normalizer.normalize(createDummyShopeeProduct('Đồng hồ Vivoactive 5 GPS')).brand,
+    'Khác'
+  );
+  // A generation past the 4-token cap stays in the model, so generations key apart.
+  assert.equal(
+    keyOf(
+      'Laptop Lenovo ThinkPad X1 Carbon Gen 13 - 21NS010BVN (Ultra 7-258V/ 32GB/ 512GB/ Win 11 Pro)'
+    ),
+    'lenovo:thinkpad-x1-carbon-gen-13:512gb'
+  );
+  assert.equal(
+    keyOf('Lenovo ThinkPad X1 Carbon Gen 11 512GB'),
+    'lenovo:thinkpad-x1-carbon-gen-11:512gb'
+  );
+  assert.equal(
+    keyOf('Lenovo ThinkPad X1 Carbon Gen 12 512GB'),
+    'lenovo:thinkpad-x1-carbon-gen-12:512gb'
+  );
+  assert.equal(keyOf('Lenovo IdeaPad Slim 5 Gen 9 512GB'), 'lenovo:ideapad-slim-5-gen-9:512gb');
+  assert.equal(
+    keyOf('Lenovo IdeaPad Slim 3 15IAH8 Gen 8 i5 16GB 512GB'),
+    'lenovo:ideapad-slim-3-15iah8-gen-8:512gb'
+  );
+  assert.equal(keyOf('Lenovo Legion 5 Gen 9 512GB'), 'lenovo:legion-5-gen-9:512gb');
+  // A bare "Đồng hồ" prefix is dropped like "Đồng hồ thông minh", and a comma ends the model.
+  assert.equal(
+    keyOf('Đồng hồ Garmin Epix Gen 2, Back,Gray Carbon DLC Titanium'),
+    'garmin:epix-gen-2:unknown'
+  );
+  assert.equal(keyOf('Đồng hồ Garmin Fenix 8 47mm'), 'garmin:fenix-8:unknown');
+  assert.equal(keyOf('Đồng hồ thông minh Garmin Venu 3'), 'garmin:venu-3:unknown');
+  assert.equal(
+    keyOf('Đồng hồ đeo tay thông minh Samsung Galaxy Watch FE 2024'),
+    'samsung:galaxy-watch-fe-2024:unknown'
+  );
+  assert.equal(keyOf('Đồng hồ Garmin Forerunner 265'), 'garmin:forerunner-265:8gb');
+  assert.equal(
+    keyOf('Điện thoại Samsung Galaxy S25 Ultra, Điện thoại AI, Tìm kiếm thông minh'),
+    'samsung:galaxy-s25-ultra:unknown'
+  );
+  assert.equal(
+    keyOf('Xiaomi Redmi Note 14 Pro Plus 5G 256GB'),
+    'xiaomi:redmi-note-14-pro-plus:256gb'
+  );
   console.log('  ✅ [2/5] RAM/ROM Disambiguation & Identity Safety passed');
 
   // 3. Multi-Category Benchmark Enrichment (Tablets, Laptops, Smartwatches, Earbuds)

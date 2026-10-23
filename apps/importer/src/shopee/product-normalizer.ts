@@ -1065,7 +1065,8 @@ export class ProductNormalizer {
     else if (/\bgarmin\b|forerunner|fenix|venu/i.test(title)) brand = 'Garmin';
     else if (/\blenovo\b|thinkpad|ideapad|legion/i.test(title)) brand = 'Lenovo';
     else if (/oppo/i.test(title)) brand = 'OPPO';
-    else if (/vivo/i.test(title)) brand = 'Vivo';
+    // Not inside "Vivobook" (Asus) or "Vivoactive" (Garmin) (DOS/Rate#761).
+    else if (/\bvivo(?!book|active)/i.test(title)) brand = 'Vivo';
     else if (/realme/i.test(title)) brand = 'Realme';
     else if (/google|pixel/i.test(title)) brand = 'Google';
     else if (/\basus\b|\brog\b|zenbook|vivobook|tuf\s*gaming/i.test(title)) brand = 'Asus';
@@ -1166,7 +1167,7 @@ export class ProductNormalizer {
       const cleaned = withoutLeadingPromo
         .replace(
           new RegExp(
-            `^(?:(?:Hàng\\s+)?Chính\\s+hãng\\s+)?(?:(?:Điện\\s+thoại(?:\\s+thông\\s+minh|\\s+di\\s+động)?|Smartphone|Máy\\s+tính\\s+bảng|Tablet|Laptop|Máy\\s+tính\\s+xách\\s+tay|Đồng\\s+hồ\\s+thông\\s+minh|Smartwatch|Tai\\s+nghe(?:\\s+Bluetooth|\\s+chống\\s+ồn|\\s+không\\s+dây)?|Earbuds)\\s+(?:(?:Hàng\\s+)?Chính\\s+hãng\\s+)?)?(?:${brand}\\b\\s*)?`,
+            `^(?:(?:Hàng\\s+)?Chính\\s+hãng\\s+)?(?:(?:Điện\\s+thoại(?:\\s+thông\\s+minh|\\s+di\\s+động)?|Smartphone|Máy\\s+tính\\s+bảng|Tablet|Laptop|Máy\\s+tính\\s+xách\\s+tay|Đồng\\s+hồ(?:\\s+đeo\\s+tay)?(?:\\s+thông\\s+minh)?|Smartwatch|Tai\\s+nghe(?:\\s+Bluetooth|\\s+chống\\s+ồn|\\s+không\\s+dây)?|Earbuds)\\s+(?:(?:Hàng\\s+)?Chính\\s+hãng\\s+)?)?(?:${brand}\\b\\s*)?`,
             'i'
           ),
           ''
@@ -1175,10 +1176,20 @@ export class ProductNormalizer {
         .trim();
       const rawTokens = cleaned.split(/\s+/).filter(Boolean);
       const modelTokens: string[] = [];
-      for (const tok of rawTokens) {
+      for (let i = 0; i < rawTokens.length; i++) {
+        const tok = rawTokens[i];
+        // A generation ("Gen 13") is part of the model even past the 4-token cap, so
+        // "ThinkPad X1 Carbon Gen 13" and "Gen 11" key apart (DOS/Rate#762).
+        const generation =
+          (/^gen$/i.test(modelTokens[modelTokens.length - 1] ?? '') && /^\d{1,2},?$/.test(tok)) ||
+          (/^gen$/i.test(tok) && /^\d{1,2},?$/.test(rawTokens[i + 1] ?? ''));
         // A trailing "Plus" word is part of the model even past the 4-token cap,
         // so "Redmi Note 13 Pro Plus" keys like "Redmi Note 13 Pro+" (#597).
-        if (modelTokens.length >= 4 && !(modelTokens.length === 4 && /^plus$/i.test(tok))) {
+        if (
+          modelTokens.length >= 4 &&
+          !(modelTokens.length === 4 && /^plus$/i.test(tok)) &&
+          !generation
+        ) {
           break;
         }
         if (
@@ -1186,6 +1197,11 @@ export class ProductNormalizer {
             tok
           )
         ) {
+          break;
+        }
+        // A comma ends the model: "Garmin Epix Gen 2, Black, Gray Carbon" is "Epix Gen 2".
+        if (tok.endsWith(',')) {
+          if (tok.length > 1) modelTokens.push(tok.slice(0, -1));
           break;
         }
         modelTokens.push(tok);
