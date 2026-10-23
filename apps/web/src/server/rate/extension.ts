@@ -1,5 +1,8 @@
 import 'server-only';
-import { plausibleOffers } from '../../lib/offer-plausibility';
+import {
+  isImplausiblyLowPrice,
+  plausibleOffers,
+} from '../../lib/offer-plausibility';
 import type { Database } from '@repo/shared-data';
 import {
   MAX_VALID_VND_PRICE,
@@ -527,7 +530,10 @@ export function evaluateExtensionPriceVerdict(params: {
     };
   }
 
-  const offerPrices = offers
+  // The market reference leaves bait-price listings out, whichever caller
+  // (extension lookup or the inspect API) passes the offers (DOS/Rate#797).
+  const marketOffers = plausibleOffers(offers);
+  const offerPrices = marketOffers
     .map((o) => o.price_current)
     .filter((p) => Number.isFinite(p) && p > 0 && p <= MAX_VALID_VND_PRICE);
 
@@ -547,6 +553,28 @@ export function evaluateExtensionPriceVerdict(params: {
       badgeLabel: 'Chọn dung lượng bộ nhớ',
       explanation:
         'Trang sản phẩm có nhiều tùy chọn bộ nhớ (128GB/256GB/512GB). Hãy chọn phân loại trên trang hoặc trong bảng Rate để so sánh đúng phiên bản.',
+      observedPrice,
+      observedOriginalPrice,
+      claimedDiscountPct: 0,
+      vsMarketMedianPct: null,
+      marketMinPrice,
+      marketMedianPrice,
+      marketMaxPrice,
+      historicalMinPrice,
+      historicalMaxPrice,
+      cheaperOfferCount: 0,
+      maxSavingsAmount: 0,
+    };
+  }
+
+  // A price far below every other store is a warning, never a deal: likely a
+  // counterfeit, an accessory or a bait listing (DOS/Rate#797). The neutral
+  // verdict keeps the extension's allow-list; the label says why.
+  if (observedPrice && isImplausiblyLowPrice(observedPrice, marketOffers)) {
+    return {
+      verdict: 'insufficient_data',
+      badgeLabel: 'Giá thấp bất thường',
+      explanation: `Giá ${observedPrice.toLocaleString('vi-VN')} ₫ thấp hơn nhiều so với các nơi bán khác (trung vị ${Math.round(marketMedianPrice ?? 0).toLocaleString('vi-VN')} ₫): có thể là hàng giả, phụ kiện hoặc tin câu khách. Hãy kiểm tra kỹ gian hàng trước khi mua.`,
       observedPrice,
       observedOriginalPrice,
       claimedDiscountPct: 0,
@@ -985,13 +1013,15 @@ export async function lookupExtensionProduct(
 
   // Fetch offers, price history, and reviews for matched master product
   const offers = await getMasterProductOffers(matchedMaster.id);
+  // Without a URL match, fall back to the cheapest plausible offer, never a
+  // bait-price listing (DOS/Rate#797).
   const matchedOffer =
     offers.find(
       (o) =>
         (canonicalUrl && o.url.includes(canonicalUrl)) ||
         Array.from(candidateItemIds).some((id) => o.url.includes(id))
     ) ||
-    offers[0] ||
+    plausibleOffers(offers)[0] ||
     null;
 
   if (matchedOffer && candidateItemIds.size > 0) {

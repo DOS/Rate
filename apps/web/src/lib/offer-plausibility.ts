@@ -36,6 +36,25 @@ export function implausiblyLowIndexes(prices: readonly number[]): Set<number> {
   return flagged;
 }
 
+/**
+ * Whether a price seen outside the offer list (a shopper's page, an inspect
+ * query) is implausibly low against the lower median of the given offers.
+ * Needs at least two priced offers to compare with.
+ */
+export function isImplausiblyLowPrice(
+  price: number,
+  offers: readonly { price_current: number }[]
+): boolean {
+  if (!Number.isFinite(price) || price <= 0) return false;
+  const sorted = offers
+    .map((o) => o.price_current)
+    .filter((p) => Number.isFinite(p) && p > 0)
+    .sort((a, b) => a - b);
+  if (sorted.length < MIN_OFFERS_FOR_OUTLIER - 1) return false;
+  const lowerMedian = sorted[Math.floor((sorted.length - 1) / 2)]!;
+  return price < lowerMedian * IMPLAUSIBLY_LOW_RATIO;
+}
+
 /** The offers minus the implausibly low ones, in their original order. */
 export function plausibleOffers<T extends { price_current: number }>(
   offers: readonly T[]

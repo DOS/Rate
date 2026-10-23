@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {
   implausiblyLowIndexes,
   implausiblyLowOfferIds,
+  isImplausiblyLowPrice,
   plausibleMinPrice,
   plausibleOffers,
 } from '../offer-plausibility';
@@ -56,6 +57,20 @@ function main() {
   const started = Date.now();
   assert.deepEqual([...implausiblyLowIndexes(many)], [5000]);
   assert.ok(Date.now() - started < 200, 'implausiblyLowIndexes is O(n log n)');
+
+  // With three offers, two equal low prices are the market, not bait.
+  assert.equal(implausiblyLowIndexes([700, 700, 3000]).size, 0);
+
+  // A price seen outside the list (a shopper's page) against plausible offers.
+  const market = [
+    { price_current: 3032000 },
+    { price_current: 3140000 },
+    { price_current: 3690000 },
+  ];
+  assert.equal(isImplausiblyLowPrice(723269, market), true);
+  assert.equal(isImplausiblyLowPrice(2900000, market), false);
+  assert.equal(isImplausiblyLowPrice(0, market), false);
+  assert.equal(isImplausiblyLowPrice(100, [{ price_current: 3000 }]), false);
 
   // No priced offers: the stored minimum stands.
   assert.equal(plausibleMinPrice(5000, []), 5000);
