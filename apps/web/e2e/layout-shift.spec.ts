@@ -18,6 +18,8 @@ for (const path of ['/login', '/register', '/inspect']) {
     });
     expect((await page.goto(path))?.status()).toBe(200);
     await page.waitForLoadState('networkidle');
+    // The client body (with the page h1) mounted, so the fallback is gone.
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     // Let late mounts and fonts settle.
     await page.waitForTimeout(1000);
     const cls = await page.evaluate(
