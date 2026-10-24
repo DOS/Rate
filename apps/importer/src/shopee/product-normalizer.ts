@@ -117,7 +117,7 @@ export function detectProductOrigin(title: string, description?: string): Produc
 export function detectCategorySlug(title: string): CanonicalCategorySlug {
   const t = title.toLowerCase();
   if (
-    /airpods|galaxy\s*buds|w[fh]-?1000|wf-\d+|wh-\d+|tai\s*nghe|earbuds?|freebuds|soundcore|quietcomfort|momentum\s*true/i.test(
+    /airpods|galaxy\s*buds|w[fh]1000xm|wf-\d+|wh-\d+|tai\s*nghe|earbuds?|freebuds|soundcore|quietcomfort|momentum\s*true/i.test(
       t
     )
   ) {
@@ -1077,7 +1077,7 @@ export class ProductNormalizer {
     if (/apple|iphone|ipad|macbook|airpods/i.test(title)) brand = 'Apple';
     else if (/samsung|galaxy/i.test(title)) brand = 'Samsung';
     else if (/xiaomi|redmi|poco/i.test(title)) brand = 'Xiaomi';
-    else if (/\bsony\b|w[fh]-?1000|xperia/i.test(title)) brand = 'Sony';
+    else if (/\bsony\b|w[fh]-1000|w[fh]1000xm|xperia/i.test(title)) brand = 'Sony';
     else if (
       /\bgarmin\b|forerunner|fenix|venu|vivo(?:active|smart|move|fit|sport|life)/i.test(title)
     )
@@ -1133,7 +1133,8 @@ export class ProductNormalizer {
           .trim()
           .replace(/^(\d+)E\b/, '$1e')
           .replace(/^se\b/i, 'SE')
-          // "16 ProMax" is "16 Pro Max" (DOS/Rate#815).
+          // "16ProMax" and "16 ProMax" are "16 Pro Max" (DOS/Rate#815).
+          .replace(/^(\d+)(?=pro|plus|mini|air)/i, '$1 ')
           .replace(/\b(pro)(max)\b/i, '$1 $2');
         model = `iPhone ${normalizedIphoneSuffix}`;
       } else if (ipadMatch && ipadMatch[1]) {
@@ -1216,10 +1217,12 @@ export class ProductNormalizer {
           startsGeneration ||
           (/^gen$/i.test(modelTokens[modelTokens.length - 1] ?? '') && /^\d{1,2}[,;]?$/.test(tok));
         // A trailing "Plus" word is part of the model even past the 4-token cap,
-        // so "Redmi Note 13 Pro Plus" keys like "Redmi Note 13 Pro+" (#597).
+        // so "Redmi Note 13 Pro Plus" keys like "Redmi Note 13 Pro+" (#597); so is
+        // "Max" after "Pro": "Redmi Note 17 Pro Max" is not the Pro (DOS/Rate#815).
         if (
           modelTokens.length >= 4 &&
           !(modelTokens.length === 4 && /^plus[,;]?$/i.test(tok)) &&
+          !(/^pro$/i.test(modelTokens[modelTokens.length - 1] ?? '') && /^max[,;]?$/i.test(tok)) &&
           !generation
         ) {
           break;
