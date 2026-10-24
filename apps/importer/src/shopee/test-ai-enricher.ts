@@ -574,6 +574,74 @@ async function runTests() {
     assert.equal(sanitizedHtmlSpecs.design?.colors?.[1]?.length, 80);
     assert.equal(sanitizedHtmlSpecs.design?.colors?.length, 32);
 
+    // DOS/Rate#888: ArenaSpecSyncer Object.hasOwn prototype safety, C1 control-char URL guard, and audit key normalization
+    const {
+      ArenaSpecSyncer,
+      extractGsmArenaDataSpecs,
+      extractPhoneArenaTableSpecs,
+      parseGsmArenaBrandCatalogHtml,
+    } = await import('./arena-spec-syncer.js');
+    const gsmSpecs888 = extractGsmArenaDataSpecs(
+      '<td data-spec="toString">Proto\u0000Value</td><td data-spec="modelname">Apple\u0085iPhone 18 Pro</td>'
+    );
+    assert.equal(
+      gsmSpecs888.toString,
+      'Proto Value',
+      'extractGsmArenaDataSpecs must use Object.hasOwn so prototype keys like toString are captured'
+    );
+    assert.equal(
+      gsmSpecs888.modelname,
+      'Apple iPhone 18 Pro',
+      'extractGsmArenaDataSpecs must strip C1 control characters from values'
+    );
+    const paSpecs888 = extractPhoneArenaTableSpecs(
+      '<tr><th>toString:</th><td>PA\u0000Proto</td></tr><tr><th>System chip</th><td>Apple A20 Pro</td></tr>'
+    );
+    assert.equal(
+      paSpecs888.tostring,
+      'PA Proto',
+      'extractPhoneArenaTableSpecs must use Object.hasOwn so prototype keys are captured'
+    );
+    const catalog888 = parseGsmArenaBrandCatalogHtml(
+      '<li><a href="apple_iphone_18\u0085-1.php"><span>iPhone 18</span></a></li>' +
+        '<li><a href="apple_iphone_18_pro-2.php"><span>iPhone 18 Pro</span></a></li>',
+      'Apple'
+    );
+    assert.equal(
+      catalog888.length,
+      1,
+      'parseGsmArenaBrandCatalogHtml must reject URLs containing C1 control characters'
+    );
+    const syncer888 = new ArenaSpecSyncer();
+    const auditReport888 = await syncer888.auditCatalogAgainstArenaRegistry({
+      from: () => ({
+        select: () => ({
+          order: () => ({
+            range: async (from: number) => ({
+              data:
+                from === 0
+                  ? [
+                      {
+                        id: 'm-1',
+                        name: 'Xiaomi 18 Pro Max 512GB',
+                        model_key: '  XIAOMI:18-PRO-MAX:512GB\u0000 ',
+                        slug: '  xiaomi-18-pro-max-512gb\r\n ',
+                        specifications: null,
+                      },
+                    ]
+                  : [],
+              error: null,
+            }),
+          }),
+        }),
+      }),
+    });
+    assert.equal(
+      auditReport888.missingFromDatabase.some(r => r.model_key === 'xiaomi:18-pro-max:512gb'),
+      false,
+      'auditCatalogAgainstArenaRegistry must trim and strip control chars from DB model_key and slug'
+    );
+
     console.log('✅ [AiSpecEnricher] Mock OpenAI-compatible enrichment & caching passed 100%!');
   } finally {
     mockServer.close();

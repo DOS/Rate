@@ -92,12 +92,8 @@ function normalizeArenaUrl(
   baseOrigin?: string
 ): string | undefined {
   const trimmed = typeof rawUrl === 'string' ? rawUrl.trim() : '';
-  if (!trimmed || trimmed.length > 2048 || /\s/.test(trimmed)) {
+  if (!trimmed || trimmed.length > 2048 || /\p{Cc}/u.test(trimmed) || /\s/.test(trimmed)) {
     return undefined;
-  }
-  for (let i = 0; i < trimmed.length; i++) {
-    const code = trimmed.charCodeAt(i);
-    if (code <= 0x1f || code === 0x7f) return undefined;
   }
   try {
     const parsed = baseOrigin ? new URL(trimmed, baseOrigin) : new URL(trimmed);
@@ -116,6 +112,7 @@ function normalizeArenaUrl(
 
 function stripHtmlTags(raw: string): string {
   return decodeArenaHtmlEntities(raw.replace(/<br\s*\/?>/gi, '\n').replace(/<[^<>]+>/g, ' '))
+    .replace(/(?:(?!\n)\p{Cc})+/gu, ' ')
     .replace(/[ \t]+/g, ' ')
     .trim();
 }
@@ -157,9 +154,9 @@ export function extractGsmArenaDataSpecs(html: string): Record<string, string> {
     cursors.set(tag, cursor);
     const close = list[cursor];
     if (!close) continue;
-    const key = keyMatch[1]?.trim();
+    const key = keyMatch[1]?.replace(/\p{Cc}+/gu, '').trim();
     const val = stripHtmlTags(safeHtml.slice(openTag.lastIndex, close.at));
-    if (key && val && !specs[key]) {
+    if (key && val && !Object.hasOwn(specs, key)) {
       specs[key] = val;
     }
     openTag.lastIndex = close.end;
@@ -435,9 +432,10 @@ export function extractPhoneArenaTableSpecs(html: string): Record<string, string
   while ((match = rowRegex.exec(safeHtml)) !== null) {
     const label = stripHtmlTags(match[1] || '')
       .replace(/:$/, '')
+      .trim()
       .toLowerCase();
     const val = stripHtmlTags(match[2] || '');
-    if (label && val && !out[label]) {
+    if (label && val && !Object.hasOwn(out, label)) {
       out[label] = val;
     }
   }
@@ -657,8 +655,20 @@ export class ArenaSpecSyncer {
     const incompleteSpecMasters: ArenaCatalogAuditReport['incompleteSpecMasters'] = [];
 
     for (const r of rows) {
-      if (r.model_key) existingKeys.add(String(r.model_key).toLowerCase());
-      if (r.slug) existingSlugs.add(String(r.slug).toLowerCase());
+      if (r.model_key) {
+        const cleanedKey = String(r.model_key)
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .toLowerCase();
+        if (cleanedKey) existingKeys.add(cleanedKey);
+      }
+      if (r.slug) {
+        const cleanedSlug = String(r.slug)
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .toLowerCase();
+        if (cleanedSlug) existingSlugs.add(cleanedSlug);
+      }
       const populatedGroups = countPopulatedFieldGroups(r.specifications);
       if (populatedGroups < 10) {
         incompleteSpecMasters.push({
