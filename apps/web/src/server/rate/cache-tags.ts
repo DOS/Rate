@@ -40,24 +40,51 @@ export interface RevalidationTargetsInput {
   paths?: readonly string[];
 }
 
-export function canonicalizeCacheParams(value: unknown): string {
+const SAFE_CACHE_TAG_REGEX = /^rate:[a-z0-9:._-]{1,150}$/i;
+const SAFE_ENTITY_TOKEN_REGEX = /^[a-z0-9._-]+$/i;
+const SAFE_MERCHANT_IDENTIFIER_REGEX = /^[a-z0-9:._-]+$/i;
+
+export function canonicalizeCacheParams(
+  value: unknown,
+  depth = 0,
+  seen: WeakSet<object> = new WeakSet<object>()
+): string {
   if (value === null || value === undefined) {
-    return '{}';
+    return depth === 0 ? '{}' : 'null';
   }
-  if (Array.isArray(value)) {
-    return `[${value.map((item) => canonicalizeCacheParams(item)).join(',')}]`;
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? JSON.stringify(value) : 'null';
   }
-  if (typeof value === 'object') {
+  if (typeof value !== 'object') {
+    return JSON.stringify(value);
+  }
+  if (seen.has(value)) {
+    return '"[Circular]"';
+  }
+  if (depth > 6) {
+    return '"[MaxDepth]"';
+  }
+  seen.add(value);
+  try {
+    if (Array.isArray(value)) {
+      return `[${value
+        .slice(0, 100)
+        .map((item) => canonicalizeCacheParams(item, depth + 1, seen))
+        .join(',')}]`;
+    }
     const entries = Object.entries(value as Record<string, unknown>)
       .filter(([, val]) => val !== undefined)
-      .sort(([keyA], [keyB]) => keyA.localeCompare(keyB));
+      .sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
+      .slice(0, 60);
     return `{${entries
       .map(
-        ([key, val]) => `${JSON.stringify(key)}:${canonicalizeCacheParams(val)}`
+        ([key, val]) =>
+          `${JSON.stringify(key)}:${canonicalizeCacheParams(val, depth + 1, seen)}`
       )
       .join(',')}}`;
+  } finally {
+    seen.delete(value);
   }
-  return JSON.stringify(value);
 }
 
 export function isSafeRevalidationPath(rawPath: string): boolean {
@@ -80,13 +107,19 @@ export function resolveRevalidationTargets(input: RevalidationTargetsInput): {
   const tagSet = new Set<string>();
   const pathSet = new Set<string>();
 
-  for (const tag of input.tags ?? []) {
-    const clean = tag.trim();
-    if (clean) tagSet.add(clean);
+  for (const tag of (input.tags ?? []).slice(0, 50)) {
+    if (typeof tag !== 'string') continue;
+    const clean = tag.trim().toLowerCase();
+    if (clean && SAFE_CACHE_TAG_REGEX.test(clean)) {
+      tagSet.add(clean);
+    }
   }
-  for (const slug of input.slugs ?? []) {
+  for (const slug of (input.slugs ?? []).slice(0, 50)) {
+    if (typeof slug !== 'string') continue;
     const clean = slug.trim();
-    if (!clean) continue;
+    if (!clean || clean.length > 120 || !SAFE_ENTITY_TOKEN_REGEX.test(clean)) {
+      continue;
+    }
     tagSet.add(productCacheTag(clean));
     tagSet.add(RATE_CACHE_TAGS.PRODUCTS);
     tagSet.add(RATE_CACHE_TAGS.OFFERS);
@@ -95,18 +128,28 @@ export function resolveRevalidationTargets(input: RevalidationTargetsInput): {
     tagSet.add(RATE_CACHE_TAGS.DEALS);
     tagSet.add(RATE_CACHE_TAGS.STATS);
   }
-  for (const cat of input.categories ?? []) {
+  for (const cat of (input.categories ?? []).slice(0, 20)) {
+    if (typeof cat !== 'string') continue;
     const clean = cat.trim();
-    if (!clean) continue;
+    if (!clean || clean.length > 60 || !SAFE_ENTITY_TOKEN_REGEX.test(clean)) {
+      continue;
+    }
     tagSet.add(categoryCacheTag(clean));
     tagSet.add(RATE_CACHE_TAGS.CATEGORIES);
     tagSet.add(RATE_CACHE_TAGS.PRODUCTS);
     tagSet.add(RATE_CACHE_TAGS.DEALS);
     tagSet.add(RATE_CACHE_TAGS.STATS);
   }
-  for (const merchantId of input.merchants ?? []) {
+  for (const merchantId of (input.merchants ?? []).slice(0, 50)) {
+    if (typeof merchantId !== 'string') continue;
     const clean = merchantId.trim();
-    if (!clean) continue;
+    if (
+      !clean ||
+      clean.length > 120 ||
+      !SAFE_MERCHANT_IDENTIFIER_REGEX.test(clean)
+    ) {
+      continue;
+    }
     tagSet.add(merchantCacheTag(clean));
     tagSet.add(RATE_CACHE_TAGS.MERCHANTS);
     tagSet.add(RATE_CACHE_TAGS.OFFERS);
@@ -114,7 +157,8 @@ export function resolveRevalidationTargets(input: RevalidationTargetsInput): {
     tagSet.add(RATE_CACHE_TAGS.DEALS);
     tagSet.add(RATE_CACHE_TAGS.STATS);
   }
-  for (const p of input.paths ?? []) {
+  for (const p of (input.paths ?? []).slice(0, 50)) {
+    if (typeof p !== 'string') continue;
     const clean = p.trim();
     if (isSafeRevalidationPath(clean)) {
       pathSet.add(clean);
