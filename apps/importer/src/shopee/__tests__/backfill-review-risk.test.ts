@@ -729,6 +729,59 @@ async function run() {
     /requires a non-null product object/
   );
 
+  // DOS/Rate#914: RATE_API_V1_ENDPOINTS, scopeSupabaseToRate, resolveClusterPeerFloorPrice & platformReviewIdFor bounds
+  const { RATE_API_V1_ENDPOINTS } = await import('@repo/shared-data');
+  const { scopeSupabaseToRate } = await import('../types.js');
+  const { platformReviewIdFor } = await import('../shopee-to-supabase.js');
+
+  assert.equal(
+    RATE_API_V1_ENDPOINTS.PRODUCT_DETAIL('  iphone-16-pro\u0000  '),
+    '/api/v1/rate/products/iphone-16-pro'
+  );
+  assert.equal(
+    RATE_API_V1_ENDPOINTS.MERCHANT_DETAIL('  m-123\u0000  '),
+    '/api/v1/rate/merchants/m-123'
+  );
+  assert.equal(RATE_API_V1_ENDPOINTS.REVIEW_VOTE('  rev-1\u0000  '), '/api/reviews/rev-1/vote');
+
+  assert.throws(
+    () => scopeSupabaseToRate(null as unknown as never),
+    /requires a valid SupabaseClient/
+  );
+  assert.throws(
+    () => scopeSupabaseToRate({} as unknown as never),
+    /requires a valid SupabaseClient/
+  );
+
+  assert.equal(
+    resolveClusterPeerFloorPrice(
+      [
+        { id: '  p-self\u0000  ', price_current: 5_000_000, merchants: { is_official: true } },
+        { id: 'p-peer', price_current: 20_000_000, merchants: { is_official: true } },
+      ],
+      'p-self'
+    ),
+    20_000_000
+  );
+
+  const fallbackRevHash = platformReviewIdFor({
+    reviewId: '  \u0000  ',
+    author: 'Alice',
+    ratingStar: true as unknown as number,
+    comment: 'Great phone',
+    images: [],
+  });
+  assert.equal(
+    fallbackRevHash,
+    platformReviewIdFor({
+      reviewId: '',
+      author: 'Alice',
+      ratingStar: undefined as unknown as number,
+      comment: 'Great phone',
+      images: [],
+    })
+  );
+
   console.log('✅ Review risk backfill suite passed');
 }
 

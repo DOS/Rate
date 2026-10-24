@@ -37,17 +37,25 @@ function hashEntity(val: string): string {
 }
 
 export function platformReviewIdFor(r: ShopeeReview): string {
-  const cleanId = typeof r?.reviewId === 'string' ? r.reviewId.replace(/\p{Cc}+/gu, '').trim() : '';
+  const safeReview = r && typeof r === 'object' ? r : ({} as Partial<ShopeeReview>);
+  const cleanId =
+    typeof safeReview.reviewId === 'string'
+      ? safeReview.reviewId.replace(/\p{Cc}+/gu, '').trim()
+      : '';
   if (cleanId.length > 0 && cleanId.length <= 160) {
     return cleanId;
   }
+  const author = String(safeReview.author || '').slice(0, 200);
+  const rating =
+    typeof safeReview.ratingStar === 'boolean' ? '' : String(safeReview.ratingStar ?? '');
+  const variation = String(safeReview.variation || '').slice(0, 200);
+  const createdAt = String(safeReview.createdAt || '').slice(0, 64);
+  const comment = String(safeReview.comment || '').slice(0, 10_000);
   return (
     'rv-' +
     crypto
       .createHash('sha256')
-      .update(
-        `${r?.author || ''}|${r?.ratingStar ?? ''}|${r?.variation || ''}|${r?.createdAt || ''}|${r?.comment || ''}`
-      )
+      .update(`${author}|${rating}|${variation}|${createdAt}|${comment}`)
       .digest('hex')
   );
 }

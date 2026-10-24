@@ -21,7 +21,8 @@ export function resolveClusterPeerFloorPrice(
 ): number | undefined {
   let officialMin = Number.POSITIVE_INFINITY;
   let peerMin = Number.POSITIVE_INFINITY;
-  const safeCurrentId = typeof currentProductId === 'string' ? currentProductId.trim() : '';
+  const safeCurrentId =
+    typeof currentProductId === 'string' ? currentProductId.replace(/\p{Cc}+/gu, '').trim() : '';
 
   if (Array.isArray(peerRows)) {
     const limit = Math.min(peerRows.length, MAX_CLUSTER_PEER_ROWS);
@@ -29,7 +30,11 @@ export function resolveClusterPeerFloorPrice(
       const row = peerRows[i];
       if (!row || typeof row !== 'object') continue;
       const rowId =
-        typeof row.id === 'string' || typeof row.id === 'number' ? String(row.id).trim() : '';
+        typeof row.id === 'string' || typeof row.id === 'number'
+          ? String(row.id)
+              .replace(/\p{Cc}+/gu, '')
+              .trim()
+          : '';
       if (safeCurrentId && rowId === safeCurrentId) continue;
       if (
         typeof row.price_current === 'boolean' ||

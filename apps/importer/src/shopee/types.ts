@@ -19,6 +19,13 @@ export type RateSupabaseClient = SupabaseClient;
  * Scopes a SupabaseClient instance to the `rate` schema without using `any`.
  */
 export function scopeSupabaseToRate(client: SupabaseClient): RateSupabaseClient {
+  if (
+    !client ||
+    typeof client !== 'object' ||
+    typeof (client as unknown as { schema?: unknown }).schema !== 'function'
+  ) {
+    throw new Error('scopeSupabaseToRate requires a valid SupabaseClient with a .schema() method');
+  }
   return (client as unknown as { schema: (name: 'rate') => RateSupabaseClient }).schema('rate');
 }
 
