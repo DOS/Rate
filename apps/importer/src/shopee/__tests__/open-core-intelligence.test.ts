@@ -204,9 +204,14 @@ async function runSuite() {
   assert.equal(keyOf('Apple iPad 11 inch (A16) 128GB'), 'apple:ipad-a16:128gb');
   assert.equal(keyOf('iPad 11 (A16) WiFi 128GB - Hàng Chính Hãng'), 'apple:ipad-a16:128gb');
   assert.equal(keyOf('Apple iPad Gen 11 A16 128GB'), 'apple:ipad-a16:128gb');
+  assert.equal(keyOf('iPad 11-inch (A16) 128GB'), 'apple:ipad-a16:128gb');
   assert.equal(keyOf('iPad Gen 10 (A14 Bionic) 64GB'), keyOf('Apple iPad 10 64GB'));
   assert.equal(keyOf('Apple iPad 10.9 inch (A14) 64GB'), keyOf('Apple iPad 10 64GB'));
   assert.equal(keyOf('MacBook Neoprene Sleeve 13 inch'), 'apple:macbook:unknown');
+  assert.equal(
+    normalizer.normalize(createDummyShopeeProduct('MACBOOK NEO 13 INCH 256GB')).model,
+    'MacBook Neo'
+  );
   assert.equal(
     normalizer.normalize(createDummyShopeeProduct('iPhone Air 256GB')).model,
     'iPhone Air'
@@ -237,9 +242,14 @@ async function runSuite() {
   assert.equal(ultra2.model, 'Watch Ultra 2');
   assert.ok(!/\s{2}/.test(ultra2.name), ultra2.name);
   assert.equal(keyOf('Apple Watch Series'), 'apple:watch:unknown');
-  // A case size or storage after "SE" is not its generation: one SE, not "SE 40".
+  // A case size or storage after "SE" is not its generation: one SE, not "SE 40"; an
+  // ordinal one is ("SE 2nd Gen").
   assert.equal(keyOf('Apple Watch SE 40mm'), 'apple:watch-se:unknown');
   assert.equal(keyOf('Apple Watch SE 44mm GPS'), 'apple:watch-se:unknown');
+  assert.equal(keyOf('Apple Watch SE 44 mm GPS'), 'apple:watch-se:unknown');
+  assert.equal(keyOf('Apple Watch SE 2nd Gen GPS 44mm'), 'apple:watch-se-2:unknown');
+  assert.equal(keyOf('Apple Watch SE 3rd Gen 44mm'), 'apple:watch-se-3:unknown');
+  assert.equal(keyOf('Apple Watch SE 2022 40mm'), 'apple:watch-se-2022:unknown');
   assert.equal(keyOf('Apple Watch SE 32GB'), 'apple:watch-se:32gb');
   assert.equal(keyOf('Apple Watch SE2 40mm'), 'apple:watch-se2:unknown');
   // With no line matched, the family the title names first, else iPhone.
@@ -259,6 +269,8 @@ async function runSuite() {
     `Apple iPad 11${spaces}x`,
     `Apple iPad 11 (${spaces}x`,
     `Apple Watch${spaces}(2nd generation)`,
+    `Apple Watch SE${spaces}2`,
+    `Apple Watch SE 2${spaces}mm`,
   ]) {
     keyOf(title);
   }

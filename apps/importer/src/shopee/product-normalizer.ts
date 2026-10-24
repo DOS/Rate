@@ -1133,7 +1133,7 @@ export class ProductNormalizer {
         /macbook\s*(pro\s*m\d+(?:\s*(?:pro|max))?|air\s*m\d+|air|pro|neo\b)/i
       );
       const watchMatch = appleTitle.match(
-        /(?:apple\s*)?watch\s*(ultra\s*\d+|series\s*\d+|se(?:\s*\d+)?\b)/i
+        /(?:apple\s*)?watch\s*(ultra\s*\d+|series\s*\d+|se(?:\s*\d+(?!\d|\s*(?:mm|gb|tb)\b)|(?![a-z])))/i
       );
       const airpodsMatch = appleTitle.match(
         // Each run of spaces has exactly one `\s*` that can match it, so long
@@ -1172,7 +1172,7 @@ export class ProductNormalizer {
         const chipAfter = /^(?:gen\s*)?\d+$/i.test(ipadMatch[1])
           ? appleTitle
               .slice((ipadMatch.index ?? 0) + ipadMatch[0].length)
-              .match(/^(?:[.,]\d+)?\s*(?:(?:inch\b|in\b|"|'')\s*)?(?:\(\s*)?a(1[6-9]|2\d)\b/i)
+              .match(/^(?:[.,]\d+)?\s*(?:-?(?:inch\b|in\b|"|'')\s*)?(?:\(\s*)?a(1[6-9]|2\d)\b/i)
           : null;
         const line = chipAfter
           ? `A${chipAfter[1]}`
@@ -1182,7 +1182,7 @@ export class ProductNormalizer {
               .replace(/^a(\d{2})$/i, 'A$1');
         model = /^(pro|air)$/i.test(line) && chip ? `iPad ${line} ${chip}` : `iPad ${line}`;
       } else if (macbookMatch && macbookMatch[1]) {
-        const line = macbookMatch[1].trim();
+        const line = macbookMatch[1].trim().replace(/^neo$/i, 'Neo');
         model =
           /^(pro|air)$/i.test(line) && chip
             ? `MacBook ${line} ${chip}${chipMatch?.[2] ? ` ${chipMatch[2]}` : ''}`
