@@ -15,6 +15,7 @@ import { ProductSpecificationsSchema, KeySpecsSchema } from '@repo/shared-data';
 import { ProductNormalizer } from './product-normalizer.js';
 import {
   AiSpecEnricher,
+  AiSpecEnrichmentPayloadSchema,
   extractJsonObjectString,
   sanitizeSpecifications,
 } from './ai-spec-enricher.js';
@@ -485,6 +486,54 @@ async function runTests() {
       'Invalid params.storageGb (0) must fall back to valid AI storage_gb'
     );
     assert.equal(ProductSpecificationsSchema.safeParse(boundedAiRes?.specifications).success, true);
+
+    // DOS/Rate#825: AiSpecEnrichmentPayloadSchema integer/domain bounds, baseUrl validation, fractional integer rejection, and enrichCandidate storage_gb backfill
+    assert.equal(
+      AiSpecEnrichmentPayloadSchema.safeParse({
+        ram_gb: 4096,
+        specifications: {},
+      }).success,
+      false,
+      'AiSpecEnrichmentPayloadSchema must reject ram_gb > 2048'
+    );
+    assert.equal(
+      AiSpecEnrichmentPayloadSchema.safeParse({
+        ram_gb: 12.5,
+        specifications: {},
+      }).success,
+      false,
+      'AiSpecEnrichmentPayloadSchema must reject non-integer ram_gb'
+    );
+
+    const fallbackUrlEnricher = new AiSpecEnricher({
+      provider: 'openai',
+      apiKey: 'test-key',
+      baseUrl: 'javascript:alert(1)',
+      timeoutMs: -50,
+      temperature: 99,
+    });
+    assert.equal(fallbackUrlEnricher.getProviderInfo().baseUrl, 'https://api.openai.com/v1');
+
+    const fractionalSpecs = sanitizeSpecifications({
+      display: { size_inch: 6.7, refresh_rate_hz: 120.5, ppi: 450.2 },
+      hardware: { ram_gb: 12.5, storage_gb: 256.8 },
+      battery: { capacity_mah: 5000.5 },
+    });
+    assert.equal(fractionalSpecs.display?.size_inch, 6.7);
+    assert.equal(fractionalSpecs.display?.refresh_rate_hz, undefined);
+    assert.equal(fractionalSpecs.display?.ppi, undefined);
+    assert.equal(fractionalSpecs.hardware?.ram_gb, undefined);
+    assert.equal(fractionalSpecs.hardware?.storage_gb, undefined);
+    assert.equal(fractionalSpecs.battery?.capacity_mah, undefined);
+
+    const enrichedBackfillStorage = await enricher.enrichCandidate({
+      ...xiaomi,
+      ram_gb: 0 as unknown as null,
+      storage_gb: null,
+      is_benchmark_enriched: false,
+    });
+    assert.equal(enrichedBackfillStorage.ram_gb, 16);
+    assert.equal(enrichedBackfillStorage.storage_gb, 512);
 
     console.log('✅ [AiSpecEnricher] Mock OpenAI-compatible enrichment & caching passed 100%!');
   } finally {
