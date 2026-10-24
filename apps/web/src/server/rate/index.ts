@@ -558,7 +558,6 @@ export {
 
 export {
   MAX_DEAL_RADAR_CLUSTERS,
-  MAX_OFFERS_PER_CLUSTER,
   computeCrossPlatformDealRadarFromData,
   computeProductRadarSignal,
   getCrossPlatformDealRadar,

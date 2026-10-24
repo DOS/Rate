@@ -132,7 +132,6 @@ function resolveEffectiveMerchantRisk(
  */
 const SAFE_PLATFORM_FILTER_REGEX = /^[a-z0-9_-]{1,40}$/;
 export const MAX_DEAL_RADAR_CLUSTERS = 500;
-export const MAX_OFFERS_PER_CLUSTER = 200;
 
 export function normalizeDealRadarOptions(options?: {
   categorySlug?: string | null;
@@ -204,14 +203,14 @@ export function computeCrossPlatformDealRadarFromData(
       continue;
     }
 
-    const boundedOffers = Array.isArray(offers)
-      ? offers.slice(0, MAX_OFFERS_PER_CLUSTER)
-      : [];
+    // Every offer counts: offers arrive sorted by price, so a slice would keep
+    // only the cheapest and understate the spread (DOS/Rate#867, #333).
+    const clusterOffers = Array.isArray(offers) ? offers : [];
 
     // Bait-price listings (far below every other store) set no market floor,
     // spread, deal or trap (DOS/Rate#797).
     const validOffers = plausibleOffers(
-      boundedOffers.filter(
+      clusterOffers.filter(
         (o) =>
           Number.isFinite(o.price_current) &&
           o.price_current > 0 &&
