@@ -66,7 +66,7 @@ export const DateRangeSchema = z.object({
 });
 
 export const SortSchema = z.object({
-  field: z.string(),
+  field: z.string().trim().min(1).max(64),
   order: z.enum(['asc', 'desc']).default('asc'),
 });
 

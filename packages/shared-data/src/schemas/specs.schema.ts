@@ -182,43 +182,43 @@ export const SupportedEcommercePlatformSchema = z.enum([
 ]);
 
 export const ScrapedReviewerSchema = z.object({
-  key: z.string().optional(),
+  key: z.string().max(128).optional(),
   isAnonymous: z.boolean().optional(),
-  profileUrl: z.string().optional(),
-  joinedAt: z.string().optional(),
+  profileUrl: z.string().max(2048).optional(),
+  joinedAt: z.string().max(64).optional(),
   totalReviews: z.number().int().nonnegative().optional(),
   helpfulVotes: z.number().int().nonnegative().optional(),
   verifiedPurchase: z.boolean().optional(),
-  purchasedAt: z.string().optional(),
+  purchasedAt: z.string().max(64).optional(),
   repeatPurchase: z.boolean().optional(),
 });
 
 export const ScrapedReviewSchema = z.object({
-  reviewId: z.string(),
-  author: z.string(),
-  authorAvatar: z.string().optional(),
+  reviewId: z.string().max(128),
+  author: z.string().max(200),
+  authorAvatar: z.string().max(2048).optional(),
   ratingStar: z.number().min(1).max(5),
-  comment: z.string(),
-  variation: z.string().optional(),
-  createdAt: z.string().optional(),
-  images: z.array(z.string()).default([]),
-  videos: z.array(z.string()).optional(),
-  sellerReply: z.string().optional(),
+  comment: z.string().max(10_000),
+  variation: z.string().max(250).optional(),
+  createdAt: z.string().max(64).optional(),
+  images: z.array(z.string().max(2048)).max(50).default([]),
+  videos: z.array(z.string().max(2048)).max(20).optional(),
+  sellerReply: z.string().max(5000).optional(),
   likeCount: z.number().int().nonnegative().optional(),
   reviewer: ScrapedReviewerSchema.optional(),
 });
 
 export const ScrapedProductSchema = z.object({
   platform: SupportedEcommercePlatformSchema.optional(),
-  itemId: z.string().min(1),
-  shopId: z.string().min(1),
+  itemId: z.string().min(1).max(128),
+  shopId: z.string().min(1).max(128),
   url: HttpUrlSchema,
-  title: z.string().min(1),
-  description: z.string().optional(),
+  title: z.string().min(1).max(1000),
+  description: z.string().max(50_000).optional(),
   priceMin: z.number().nonnegative().max(MAX_VALID_VND_PRICE),
   priceMax: z.number().nonnegative().max(MAX_VALID_VND_PRICE),
   priceBeforeDiscount: z.number().nonnegative().optional(),
-  currency: z.string().min(1).default('VND'),
+  currency: z.string().min(1).max(16).default('VND'),
   historicalSold: z.number().int().nonnegative().default(0),
   /** Marketplace sold label (e.g. "20k+") when historicalSold is only its floor. */
   // Cosmetic: a malformed label is dropped, never a reason to reject the listing.
@@ -232,37 +232,42 @@ export const ScrapedProductSchema = z.object({
   stock: z.number().int().nonnegative().optional(),
   ratingStar: z.number().min(0).max(5).default(0),
   ratingCount: z.number().int().nonnegative().default(0),
-  ratingScoreDistribution: z.array(z.number().int().nonnegative()).optional(),
-  images: z.array(z.string()).default([]),
+  ratingScoreDistribution: z
+    .array(z.number().int().nonnegative())
+    .max(10)
+    .optional(),
+  images: z.array(z.string().max(2048)).max(100).default([]),
   models: z
     .array(
       z.object({
-        modelId: z.string(),
-        name: z.string(),
+        modelId: z.string().max(128),
+        name: z.string().max(300),
         price: z.number().nonnegative(),
         stock: z.number().int().nonnegative().optional(),
-        sku: z.string().optional(),
+        sku: z.string().max(200).optional(),
       })
     )
+    .max(200)
     .default([]),
   attributes: z
     .array(
       z.object({
-        name: z.string(),
-        value: z.string(),
+        name: z.string().max(200),
+        value: z.string().max(1000),
       })
     )
+    .max(200)
     .default([]),
   shop: z.object({
-    shopId: z.string().min(1),
-    name: z.string().min(1),
+    shopId: z.string().min(1).max(128),
+    name: z.string().min(1).max(250),
     isMall: z.boolean(),
     ratingStar: z.number().min(0).max(5).optional(),
     followerCount: z.number().int().nonnegative().optional(),
-    location: z.string().optional(),
-    url: z.string().optional(),
+    location: z.string().max(200).optional(),
+    url: z.string().max(2048).optional(),
   }),
-  reviews: z.array(ScrapedReviewSchema).default([]),
+  reviews: z.array(ScrapedReviewSchema).max(500).default([]),
   pricesOnly: z.boolean().optional(),
 });
 
