@@ -119,7 +119,6 @@
     }
   },
   "compare": {
-    "versusMetaFallbackTitle": "Souboj 1v1 | Rate.vn",
     "versusMetaTitle": "{nameA} vs {nameB}: 10 skupin parametrů a hodnocení | Rate.vn",
     "versusMetaTitleShort": "{nameA} vs {nameB} | Rate.vn",
     "versusMetaDescription": "Přímé porovnání {nameA} a {nameB}: hodnocení v 5 kritériích, 10 skupin parametrů a skutečné ceny v obchodech.",
