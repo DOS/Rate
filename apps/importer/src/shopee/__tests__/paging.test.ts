@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { fetchAllPages, parseShopeeEnqueueUrl } from '../paging.js';
+import { fetchAllPages, parseShopeeEnqueueUrl, resolveBackfillSupabaseTarget } from '../paging.js';
+import { mergeKeySpecs, sanitizeKeySpecKey } from '../jobs/backfill-specs.js';
 
 // A fake query over `total` rows that, like PostgREST, never returns more than
 // `maxRows` per response whatever range is asked for.
@@ -109,6 +110,46 @@ async function run() {
     999_999
   );
   assert.deepEqual(clampedCalls, [[0, 999]], 'fetchAllPages must clamp pageSize at 1000');
+
+  // Issue #873: non-array data, boolean pageSize/maxPages, C1 control chars, port check & resolveBackfillSupabaseTarget
+  const nonArrayRes = await fetchAllPages(
+    'non-array\u0000label',
+    () => Promise.resolve({ data: { notAnArray: true } as unknown as never[], error: null }),
+    true as unknown as number,
+    true as unknown as number
+  );
+  assert.deepEqual(nonArrayRes, []);
+
+  assert.equal(
+    parseShopeeEnqueueUrl('https://shopee.vn:8443/product/88201679/27110898667'),
+    null,
+    'must reject non-standard port (#873)'
+  );
+  assert.equal(
+    parseShopeeEnqueueUrl('https://shopee.vn/product/88201679/27110898667\u0085'),
+    null,
+    'must reject C1 Unicode control characters (#873)'
+  );
+
+  assert.deepEqual(resolveBackfillSupabaseTarget('  https://example.supabase.co/rest/v1  '), {
+    url: 'https://example.supabase.co',
+    host: 'example.supabase.co',
+  });
+  assert.throws(
+    () => resolveBackfillSupabaseTarget('https://user:pass@example.supabase.co'),
+    /embedded credentials/,
+    'resolveBackfillSupabaseTarget must reject embedded credentials'
+  );
+  assert.throws(
+    () => resolveBackfillSupabaseTarget('ftp://example.supabase.co'),
+    /http:\/\/ or https:\/\//
+  );
+
+  assert.equal(sanitizeKeySpecKey('chip\u0085name'), 'chip name');
+  assert.deepEqual(mergeKeySpecs({ a: 'val\u0085one' }, { __proto__: 'bad', b: 'ok' }), {
+    a: 'val one',
+    b: 'ok',
+  });
 
   console.log('✅ fetchAllPages & parseShopeeEnqueueUrl suite passed');
 }

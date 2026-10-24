@@ -17,7 +17,7 @@
 import { pathToFileURL } from 'node:url';
 import dotenv from 'dotenv';
 import { AiReviewAnalyzer } from '../ai-review-analyzer.js';
-import { fetchAllPages } from '../paging.js';
+import { fetchAllPages, resolveBackfillSupabaseTarget } from '../paging.js';
 import {
   MERCHANT_RISK_SELECT,
   PRODUCT_RISK_SELECT,
@@ -114,18 +114,19 @@ if (isDirectExecution) {
   dotenv.config({ path: '../../.env', quiet: true });
   (async () => {
     const { createClient } = await import('@supabase/supabase-js');
-    const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY || '';
-    if (!url || !key) {
+    const rawUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+    const key = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY || '').trim();
+    if (!rawUrl.trim() || !key) {
       throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in environment.');
     }
+    const { url, host } = resolveBackfillSupabaseTarget(rawUrl);
     const supabase = scopeSupabaseToRate(
       createClient(url, key, { auth: { persistSession: false } })
     );
     const apply = process.argv.includes('--apply');
     // The host is not secret; it shows which project an --apply run writes to.
-    logger.info('backfill.target', `Target: ${new URL(url).host} (apply=${apply})`, {
-      host: new URL(url).host,
+    logger.info('backfill.target', `Target: ${host} (apply=${apply})`, {
+      host,
       apply,
     });
     await runReviewRiskBackfill(supabase, { apply });
