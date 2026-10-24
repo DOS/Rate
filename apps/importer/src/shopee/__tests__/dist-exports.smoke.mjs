@@ -74,11 +74,64 @@ assert.equal(
   'auditMasterSpecs subpath export is broken'
 );
 
-const { ProductSpecificationsSchema } = await import('@repo/shared-data');
+const {
+  ProductSpecificationsSchema,
+  HttpUrlSchema,
+  isValidSupabaseHttpUrl,
+  isValidSupabaseApiKey,
+  seedingRiskPenalty,
+} = await import('@repo/shared-data');
 assert.equal(
   typeof ProductSpecificationsSchema?.safeParse,
   'function',
   '@repo/shared-data is broken'
+);
+assert.equal(
+  HttpUrlSchema.safeParse('https://shopee.vn/item-i.1.2').success,
+  true
+);
+assert.equal(
+  HttpUrlSchema.safeParse('https://user:pass@shopee.vn/item-i.1.2').success,
+  false,
+  'HttpUrlSchema must reject embedded URL credentials'
+);
+assert.equal(
+  HttpUrlSchema.safeParse('https://shopee.vn/item\u0000-i.1.2').success,
+  false,
+  'HttpUrlSchema must reject control characters'
+);
+assert.equal(
+  isValidSupabaseHttpUrl('https://example.supabase.co'),
+  true
+);
+assert.equal(
+  isValidSupabaseHttpUrl('https://user:pass@example.supabase.co'),
+  false,
+  'isValidSupabaseHttpUrl must reject embedded credentials'
+);
+assert.equal(
+  isValidSupabaseHttpUrl('https://example.supabase.co?x=1'),
+  false,
+  'isValidSupabaseHttpUrl must reject query strings'
+);
+assert.equal(
+  isValidSupabaseApiKey('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.valid'),
+  true
+);
+assert.equal(
+  isValidSupabaseApiKey('bad key with spaces'),
+  false,
+  'isValidSupabaseApiKey must reject whitespace'
+);
+assert.equal(
+  isValidSupabaseApiKey('short'),
+  false,
+  'isValidSupabaseApiKey must reject too-short keys'
+);
+assert.equal(
+  seedingRiskPenalty(true, 10),
+  0,
+  'seedingRiskPenalty must reject non-number arguments'
 );
 
 // Scripts that execute on import (test-ai-enricher, test-review-analyzer,

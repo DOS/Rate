@@ -6,17 +6,28 @@ import { z } from 'zod';
 
 export const HttpUrlSchema = z
   .string()
+  .min(1)
+  .max(2048)
   .url()
   .refine(
     (val) => {
+      if (/\p{Cc}/u.test(val) || /\s/.test(val)) return false;
       try {
         const parsed = new URL(val);
-        return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+        return (
+          (parsed.protocol === 'http:' || parsed.protocol === 'https:') &&
+          parsed.username === '' &&
+          parsed.password === '' &&
+          Boolean(parsed.hostname)
+        );
       } catch {
         return false;
       }
     },
-    { message: 'URL must use http:// or https:// protocol' }
+    {
+      message:
+        'URL must use http:// or https:// protocol without credentials or control chars',
+    }
   );
 
 // Pagination
