@@ -77,8 +77,14 @@ export function hasPopulatedSpecificationGroups(specs: unknown): boolean {
     if (group && typeof group === 'object' && !Array.isArray(group)) {
       const hasValue = Object.values(group as Record<string, unknown>).some(v => {
         if (v === undefined || v === null) return false;
+        if (typeof v === 'number') return Number.isFinite(v);
         if (Array.isArray(v)) {
-          return v.some(item => item !== undefined && item !== null && String(item).trim() !== '');
+          return v.some(
+            item =>
+              item !== undefined &&
+              item !== null &&
+              (typeof item === 'number' ? Number.isFinite(item) : String(item).trim() !== '')
+          );
         }
         return String(v).trim() !== '';
       });
@@ -98,14 +104,16 @@ export function hasPopulatedSpecificationGroups(specs: unknown): boolean {
 export function normalizeScrapedProductPrices(
   product: ValidatedScrapedProduct
 ): ValidatedScrapedProduct {
-  const priceMin = Number(product.priceMin);
-  const rawPriceMax = Number(product.priceMax);
+  const priceMin = typeof product.priceMin === 'boolean' ? 0 : Number(product.priceMin);
+  const rawPriceMax = typeof product.priceMax === 'boolean' ? Number.NaN : Number(product.priceMax);
   const priceMax =
     Number.isFinite(rawPriceMax) && rawPriceMax >= priceMin && rawPriceMax <= MAX_VALID_VND_PRICE
       ? rawPriceMax
       : priceMin;
   const rawBefore =
-    product.priceBeforeDiscount !== undefined && product.priceBeforeDiscount !== null
+    product.priceBeforeDiscount !== undefined &&
+    product.priceBeforeDiscount !== null &&
+    typeof product.priceBeforeDiscount !== 'boolean'
       ? Number(product.priceBeforeDiscount)
       : undefined;
   const validBeforeDiscount =
@@ -118,7 +126,8 @@ export function normalizeScrapedProductPrices(
       : undefined;
   const models = Array.isArray(product.models)
     ? product.models.filter(m => {
-        const p = Number(m?.price);
+        if (!m || typeof m !== 'object' || typeof m.price === 'boolean') return false;
+        const p = Number(m.price);
         return Number.isFinite(p) && p > 0 && p <= MAX_VALID_VND_PRICE;
       })
     : [];

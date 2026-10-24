@@ -137,7 +137,7 @@ export class EntityMatcher {
     const validFuzzyMatches = Array.isArray(fuzzyMatches)
       ? fuzzyMatches.filter(m => {
           const masterId = typeof m?.master_id === 'string' ? m.master_id.trim() : '';
-          const sim = Number(m?.similarity);
+          const sim = typeof m?.similarity === 'boolean' ? Number.NaN : Number(m?.similarity);
           return (
             masterId.length > 0 &&
             Number.isFinite(sim) &&
