@@ -218,7 +218,11 @@ export function mapRpcRejection(
   error: { code?: string } | null | undefined,
   table: Record<string, RpcRejection>
 ): RpcRejection | null {
-  const rejection = (error?.code && table[error.code]) || null;
+  const code = typeof error?.code === 'string' ? error.code.trim() : '';
+  const rejection =
+    code && table && typeof table === 'object' && Object.hasOwn(table, code)
+      ? (table[code] ?? null)
+      : null;
   if (rejection) {
     // Native Postgres errors can share these SQLSTATEs; keep the real text in logs.
     log.warn('rpc rejected', {

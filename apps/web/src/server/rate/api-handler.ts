@@ -278,18 +278,13 @@ export function selectBestOfferFromListings(
       price <= MAX_VALID_VND_PRICE
     );
   });
-  const platforms = Array.from(
-    new Set(
-      valid
-        .map((o) =>
-          String(o.merchant?.platform || o.platform || 'shopee')
-            .replace(/\p{Cc}+/gu, '')
-            .trim()
-            .toLowerCase()
-        )
-        .filter(Boolean)
-    )
-  );
+  const normalizeOfferPlatform = (o: WatchlistCandidateOffer): string =>
+    String(o.merchant?.platform || o.platform || 'shopee')
+      .replace(/\p{Cc}+/gu, '')
+      .trim()
+      .toLowerCase()
+      .slice(0, 32) || 'shopee';
+  const platforms = Array.from(new Set(valid.map(normalizeOfferPlatform)));
   if (valid.length === 0) {
     return { bestOffer: null, offerPlatforms: platforms };
   }
@@ -320,15 +315,21 @@ export function selectBestOfferFromListings(
     .slice(0, 120);
   return {
     bestOffer: {
-      id: String(best.id || '').trim(),
+      id: String(best.id || '')
+        .replace(/\p{Cc}+/gu, '')
+        .trim()
+        .slice(0, 128),
       title: cleanTitle,
       price: bestPrice,
       original_price: validOrig ?? bestPrice,
-      url: typeof best.url === 'string' ? best.url.trim().slice(0, 2048) : '',
-      platform: String(best.merchant?.platform || best.platform || 'shopee')
-        .replace(/\p{Cc}+/gu, '')
-        .trim()
-        .toLowerCase(),
+      url:
+        typeof best.url === 'string'
+          ? best.url
+              .replace(/\p{Cc}+/gu, '')
+              .trim()
+              .slice(0, 2048)
+          : '',
+      platform: normalizeOfferPlatform(best),
       merchant_name: cleanMerchantName || 'Official Store',
       is_official_mall: Boolean(best.merchant?.is_official),
     },
@@ -497,17 +498,27 @@ export class BoundedSlidingWindowRateLimiter {
   }
 
   public pruneExpired(now = Date.now()): void {
+    const safeNow =
+      typeof now === 'number' && Number.isFinite(now) ? now : Date.now();
     for (const [key, bucket] of this.buckets.entries()) {
-      if (now >= bucket.windowResetAt) {
+      if (safeNow >= bucket.windowResetAt) {
         this.buckets.delete(key);
       }
     }
   }
 
   public allow(clientKey: string, now = Date.now()): boolean {
-    const normalizedKey = clientKey.trim().slice(0, 128) || 'anon';
+    const safeNow =
+      typeof now === 'number' && Number.isFinite(now) ? now : Date.now();
+    const normalizedKey =
+      (typeof clientKey === 'string'
+        ? clientKey
+            .replace(/\p{Cc}+/gu, '')
+            .trim()
+            .slice(0, 128)
+        : '') || 'anon';
     const existing = this.buckets.get(normalizedKey);
-    if (existing && now < existing.windowResetAt) {
+    if (existing && safeNow < existing.windowResetAt) {
       if (existing.count >= this.maxRequests) {
         return false;
       }
@@ -522,7 +533,7 @@ export class BoundedSlidingWindowRateLimiter {
     }
 
     if (this.buckets.size >= this.maxBuckets) {
-      this.pruneExpired(now);
+      this.pruneExpired(safeNow);
       while (this.buckets.size >= this.maxBuckets) {
         const oldestKey = this.buckets.keys().next().value;
         if (oldestKey === undefined) break;
@@ -532,7 +543,7 @@ export class BoundedSlidingWindowRateLimiter {
 
     this.buckets.set(normalizedKey, {
       count: 1,
-      windowResetAt: now + this.windowMs,
+      windowResetAt: safeNow + this.windowMs,
     });
     return true;
   }
@@ -593,9 +604,15 @@ export function resolveReviewVoteInput(rawBody: unknown): {
   let voteType: ReviewVoteAction | null = null;
   const rawAction =
     typeof body.voteType === 'string'
-      ? body.voteType.trim().toLowerCase()
+      ? body.voteType
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .toLowerCase()
       : typeof body.vote === 'string'
-        ? body.vote.trim().toLowerCase()
+        ? body.vote
+            .replace(/\p{Cc}+/gu, '')
+            .trim()
+            .toLowerCase()
         : null;
 
   if (
@@ -613,9 +630,15 @@ export function resolveReviewVoteInput(rawBody: unknown): {
 
   const rawReason =
     typeof body.reportReason === 'string'
-      ? body.reportReason.trim().toLowerCase()
+      ? body.reportReason
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .toLowerCase()
       : typeof body.reason === 'string'
-        ? body.reason.trim().toLowerCase()
+        ? body.reason
+            .replace(/\p{Cc}+/gu, '')
+            .trim()
+            .toLowerCase()
         : null;
   const reportReason: ReviewReportReason =
     rawReason &&
