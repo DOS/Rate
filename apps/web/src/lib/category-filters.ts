@@ -549,12 +549,14 @@ export function localizeCategoryFilterSchema(
     Object.hasOwn(CATEGORY_FILTER_SCHEMAS, safeSchema.categorySlug)
       ? safeSchema.categorySlug
       : 'smartphones';
+  const fallbackSchema =
+    CATEGORY_FILTER_SCHEMAS[slug] ?? DEFAULT_SMARTPHONE_SCHEMA;
   const presets = Array.isArray(safeSchema.pricePresets)
     ? safeSchema.pricePresets
-    : DEFAULT_SMARTPHONE_SCHEMA.pricePresets;
+    : fallbackSchema.pricePresets;
   const features = Array.isArray(safeSchema.featureCheckboxes)
     ? safeSchema.featureCheckboxes
-    : DEFAULT_SMARTPHONE_SCHEMA.featureCheckboxes;
+    : fallbackSchema.featureCheckboxes;
 
   return {
     ...safeSchema,

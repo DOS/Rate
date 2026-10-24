@@ -109,7 +109,7 @@ export function merchantDirectoryFilterParams(
 ): URLSearchParams {
   const params = new URLSearchParams();
   const safeFilters =
-    filters && typeof filters === 'object'
+    filters && typeof filters === 'object' && !Array.isArray(filters)
       ? filters
       : DEFAULT_MERCHANT_DIRECTORY_FILTERS;
   const safeQuery = (
@@ -129,7 +129,7 @@ export function merchantDirectoryFilterParams(
   if (safePlatform !== 'all' && SAFE_PLATFORM_FILTER_REGEX.test(safePlatform)) {
     params.set('platform', safePlatform);
   }
-  if (safeFilters.officialOnly) params.set('official', 'true');
+  if (safeFilters.officialOnly === true) params.set('official', 'true');
   if (
     RISK_TIERS.includes(safeFilters.riskTier) &&
     safeFilters.riskTier !== 'all'
@@ -219,10 +219,29 @@ export function filterMerchantDirectory(
       )
     : [];
   const safeFilters =
-    filters && typeof filters === 'object'
+    filters && typeof filters === 'object' && !Array.isArray(filters)
       ? filters
       : DEFAULT_MERCHANT_DIRECTORY_FILTERS;
-  const { platform, officialOnly, riskTier, seedingTier, sortBy } = safeFilters;
+  const rawPlatform = (
+    typeof safeFilters.platform === 'string' ? safeFilters.platform : 'all'
+  )
+    .replace(/\p{Cc}+/gu, '')
+    .trim()
+    .toLowerCase();
+  const platform =
+    rawPlatform !== 'all' && SAFE_PLATFORM_FILTER_REGEX.test(rawPlatform)
+      ? rawPlatform
+      : 'all';
+  const officialOnly = safeFilters.officialOnly === true;
+  const riskTier = RISK_TIERS.includes(safeFilters.riskTier)
+    ? safeFilters.riskTier
+    : 'all';
+  const seedingTier = SEEDING_TIERS.includes(safeFilters.seedingTier)
+    ? safeFilters.seedingTier
+    : 'all';
+  const sortBy = SORTS.includes(safeFilters.sortBy)
+    ? safeFilters.sortBy
+    : 'trust_desc';
   const kw = (typeof safeFilters.query === 'string' ? safeFilters.query : '')
     .replace(/\p{Cc}+/gu, ' ')
     .replace(/\s+/g, ' ')
