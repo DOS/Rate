@@ -755,15 +755,22 @@ export function normalizeOfferOriginalPrice(
   priceCurrent: number,
   rawOriginal: unknown
 ): number | null {
-  if (rawOriginal === null || rawOriginal === undefined || rawOriginal === '') {
+  if (typeof rawOriginal !== 'number' && typeof rawOriginal !== 'string') {
     return null;
   }
-  const orig = Number(rawOriginal);
+  if (typeof rawOriginal === 'string' && rawOriginal.trim() === '') {
+    return null;
+  }
+  const orig = Math.round(Number(rawOriginal));
+  const safeCurrent =
+    typeof priceCurrent === 'number' && Number.isFinite(priceCurrent)
+      ? Math.round(priceCurrent)
+      : 0;
   if (
     !Number.isFinite(orig) ||
     orig <= 0 ||
     orig > MAX_VALID_VND_PRICE ||
-    (Number.isFinite(priceCurrent) && priceCurrent > 0 && orig < priceCurrent)
+    (safeCurrent > 0 && orig < safeCurrent)
   ) {
     return null;
   }
@@ -800,22 +807,29 @@ export interface RawOfferRow {
 }
 
 function toSafeRiskScore100(raw: unknown, fallback = 0): number {
-  if (raw === null || raw === undefined || raw === '') return fallback;
+  if (typeof raw !== 'number' && typeof raw !== 'string') return fallback;
+  if (typeof raw === 'string' && raw.trim() === '') return fallback;
   const num = Number(raw);
   if (!Number.isFinite(num)) return fallback;
   return Math.max(0, Math.min(100, num));
 }
 
 function toSafeOfferPrice(raw: unknown): number {
+  if (typeof raw !== 'number' && typeof raw !== 'string') return 0;
   const num = Number(raw);
   if (!Number.isFinite(num) || num <= 0 || num > MAX_VALID_VND_PRICE) return 0;
   return Math.round(num);
 }
 
 function toSafeStarRating5(raw: unknown): number {
+  if (typeof raw !== 'number' && typeof raw !== 'string') return 0;
   const num = Number(raw);
   if (!Number.isFinite(num) || num <= 0) return 0;
   return Math.min(5, num);
+}
+
+function sanitizeOfferString(raw: unknown): string {
+  return typeof raw === 'string' ? raw.replace(/\p{Cc}+/gu, '').trim() : '';
 }
 
 /** True when the view row's seller has no review risk from the importer. */
@@ -880,10 +894,18 @@ export function mapTrustViewRowToMerchantOffer(
       })
     : persistedReviewRisk;
   const priceCurrent = toSafeOfferPrice(row.price_current);
+  const cleanPlatform = sanitizeOfferString(row.platform).toLowerCase();
+  const cleanLocation = sanitizeOfferString(row.merchant_location);
+  const safeBreakdown =
+    row.review_risk_breakdown &&
+    typeof row.review_risk_breakdown === 'object' &&
+    !Array.isArray(row.review_risk_breakdown)
+      ? row.review_risk_breakdown
+      : null;
   return {
-    id: row.id,
-    platform: row.platform,
-    title: row.title,
+    id: sanitizeOfferString(row.id),
+    platform: cleanPlatform,
+    title: sanitizeOfferString(row.title),
     price_current: priceCurrent,
     price_original: normalizeOfferOriginalPrice(
       priceCurrent,
@@ -892,19 +914,19 @@ export function mapTrustViewRowToMerchantOffer(
     stock: toSafeNonNegativeVoteCount(row.stock, 100_000_000),
     rating_star: toSafeStarRating5(row.rating_star),
     rating_count: toSafeNonNegativeVoteCount(row.rating_count, 100_000_000),
-    url: row.url,
+    url: sanitizeOfferString(row.url),
     merchant: {
-      id: row.merchant_id || '',
-      name: row.merchant_name || 'Gian hàng',
-      platform: row.platform,
+      id: sanitizeOfferString(row.merchant_id),
+      name: sanitizeOfferString(row.merchant_name) || 'Gian hàng',
+      platform: cleanPlatform,
       is_official: Boolean(row.merchant_is_official),
       rating_star: null,
-      follower_count: followerCount ?? 0,
-      location: row.merchant_location || null,
+      follower_count: toSafeNonNegativeVoteCount(followerCount, 100_000_000),
+      location: cleanLocation || null,
       risk_score: Math.max(combinedRisk, dosafeRisk, reviewRisk),
       dosafe_risk_score: dosafeRisk,
       review_risk_score: reviewRisk,
-      review_risk_breakdown: row.review_risk_breakdown || null,
+      review_risk_breakdown: safeBreakdown,
     },
   };
 }
@@ -967,11 +989,20 @@ export function mapOfferRowToMerchantOffer(item: RawOfferRow): MerchantOffer {
         : null);
   const priceCurrent = toSafeOfferPrice(item.price_current);
   const rawMerchantRating =
-    merchantObj?.rating_star != null ? Number(merchantObj.rating_star) : null;
+    typeof merchantObj?.rating_star === 'number' ||
+    (typeof merchantObj?.rating_star === 'string' &&
+      merchantObj.rating_star.trim() !== '')
+      ? Number(merchantObj.rating_star)
+      : null;
+  const cleanItemPlatform = sanitizeOfferString(item.platform).toLowerCase();
+  const cleanMerchantPlatform =
+    sanitizeOfferString(merchantObj?.platform).toLowerCase() ||
+    cleanItemPlatform;
+  const cleanMerchantLocation = sanitizeOfferString(merchantObj?.location);
   return {
-    id: item.id,
-    platform: item.platform,
-    title: item.title,
+    id: sanitizeOfferString(item.id),
+    platform: cleanItemPlatform,
+    title: sanitizeOfferString(item.title),
     price_current: priceCurrent,
     price_original: normalizeOfferOriginalPrice(
       priceCurrent,
@@ -980,11 +1011,11 @@ export function mapOfferRowToMerchantOffer(item: RawOfferRow): MerchantOffer {
     stock: toSafeNonNegativeVoteCount(item.stock, 100_000_000),
     rating_star: toSafeStarRating5(item.rating_star),
     rating_count: toSafeNonNegativeVoteCount(item.rating_count, 100_000_000),
-    url: item.url,
+    url: sanitizeOfferString(item.url),
     merchant: {
-      id: merchantObj?.id || '',
-      name: merchantObj?.name || 'Gian hàng',
-      platform: merchantObj?.platform || item.platform,
+      id: sanitizeOfferString(merchantObj?.id),
+      name: sanitizeOfferString(merchantObj?.name) || 'Gian hàng',
+      platform: cleanMerchantPlatform,
       is_official: Boolean(merchantObj?.is_official),
       rating_star:
         rawMerchantRating !== null &&
@@ -996,7 +1027,7 @@ export function mapOfferRowToMerchantOffer(item: RawOfferRow): MerchantOffer {
         merchantObj?.follower_count,
         100_000_000
       ),
-      location: merchantObj?.location || null,
+      location: cleanMerchantLocation || null,
       risk_score: combinedRisk,
       dosafe_risk_score: dosafeRisk,
       review_risk_score: reviewRisk,
@@ -1961,10 +1992,15 @@ export function normalizeMasterProductRow(
   row: MasterProduct,
   categorySlugHint?: CanonicalCategorySlug | null
 ): MasterProduct {
-  if (!row?.slug) return row;
-  let normalized = row;
-  if (KNOWN_LOCAL_DEVICE_IMAGES.has(row.slug)) {
-    const localImg = `/img/devices/${row.slug}.jpg`;
+  if (!row || typeof row !== 'object') return row;
+  const cleanSlug =
+    typeof row.slug === 'string'
+      ? row.slug.replace(/\p{Cc}+/gu, '').trim()
+      : '';
+  if (!cleanSlug) return row;
+  let normalized = cleanSlug === row.slug ? row : { ...row, slug: cleanSlug };
+  if (KNOWN_LOCAL_DEVICE_IMAGES.has(cleanSlug)) {
+    const localImg = `/img/devices/${cleanSlug}.jpg`;
     normalized = {
       ...normalized,
       thumbnail: localImg,
@@ -1977,20 +2013,24 @@ export function normalizeMasterProductRow(
     !Array.isArray(normalized.specifications)
       ? (normalized.specifications as { category_slug?: unknown }).category_slug
       : undefined;
+  const validHint = isCanonicalCategorySlug(categorySlugHint)
+    ? categorySlugHint
+    : null;
   const effectiveCatHint: CanonicalCategorySlug | null =
-    categorySlugHint ??
-    (isCanonicalCategorySlug(specCatSlug) ? specCatSlug : null);
+    validHint ?? (isCanonicalCategorySlug(specCatSlug) ? specCatSlug : null);
 
-  if (
-    effectiveCatHint &&
-    typeof normalized.metadata?.category_slug !== 'string'
-  ) {
+  const existingMetaObj =
+    normalized.metadata &&
+    typeof normalized.metadata === 'object' &&
+    !Array.isArray(normalized.metadata)
+      ? normalized.metadata
+      : null;
+
+  if (effectiveCatHint && typeof existingMetaObj?.category_slug !== 'string') {
     normalized = {
       ...normalized,
       metadata: {
-        ...(normalized.metadata && typeof normalized.metadata === 'object'
-          ? normalized.metadata
-          : {}),
+        ...(existingMetaObj ?? {}),
         category_slug: effectiveCatHint,
       },
     };
@@ -2087,11 +2127,20 @@ export interface DynamicReviewRiskMerchant {
 
 /** The importer's seller adjustments: official -15, free channels +10, 50k+ followers -5. */
 function merchantRiskAdjustment(merchant: DynamicReviewRiskMerchant): number {
+  if (!merchant || typeof merchant !== 'object') return 0;
   let delta = 0;
+  const cleanPlatform =
+    typeof merchant.platform === 'string'
+      ? merchant.platform.trim().toLowerCase()
+      : '';
   if (merchant.isOfficial) delta -= 15;
-  else if (merchant.platform === 'facebook' || merchant.platform === 'website')
+  else if (cleanPlatform === 'facebook' || cleanPlatform === 'website')
     delta += 10;
-  if ((Number(merchant.followerCount) || 0) >= 50000) delta -= 5;
+  const followers = toSafeNonNegativeVoteCount(
+    merchant.followerCount,
+    100_000_000
+  );
+  if (followers >= 50000) delta -= 5;
   return delta;
 }
 
@@ -2117,6 +2166,7 @@ export function persistedReviewRiskOf(row: {
   review_risk_breakdown?: unknown;
   metadata?: unknown;
 }): number {
+  if (!row || typeof row !== 'object') return 0;
   const column = toSafeRiskScore100(row.review_risk_score, 0);
   if (
     row.review_risk_score != null &&
@@ -2124,10 +2174,13 @@ export function persistedReviewRiskOf(row: {
   )
     return column;
   const meta =
-    row.metadata && typeof row.metadata === 'object'
+    row.metadata &&
+    typeof row.metadata === 'object' &&
+    !Array.isArray(row.metadata)
       ? (row.metadata as Record<string, unknown>)
       : {};
-  return typeof meta.review_risk_score === 'number'
+  return typeof meta.review_risk_score === 'number' &&
+    Number.isFinite(meta.review_risk_score)
     ? toSafeRiskScore100(meta.review_risk_score, 0)
     : 0;
 }
@@ -2142,6 +2195,7 @@ export function hasStoredReviewRisk(row: {
   review_risk_breakdown?: unknown;
   metadata?: unknown;
 }): boolean {
+  if (!row || typeof row !== 'object') return false;
   if (
     row.review_risk_score != null &&
     hasPersistedReviewRisk(
@@ -2151,10 +2205,16 @@ export function hasStoredReviewRisk(row: {
   )
     return true;
   const meta =
-    row.metadata && typeof row.metadata === 'object'
+    row.metadata &&
+    typeof row.metadata === 'object' &&
+    !Array.isArray(row.metadata)
       ? (row.metadata as Record<string, unknown>)
       : {};
-  return typeof meta.review_risk_score === 'number';
+  return (
+    typeof meta.review_risk_score === 'number' &&
+    Number.isFinite(meta.review_risk_score) &&
+    meta.review_risk_score >= 0
+  );
 }
 
 function hasPersistedReviewRisk(score: number, breakdown: unknown): boolean {
@@ -2183,7 +2243,12 @@ export function computeDynamicReviewRisk(
   breakdown: MerchantRiskBreakdown;
 } {
   // Unanalyzed community reviews carry no risk signal yet.
-  const reviews = allReviews.filter((r) => !isPendingReview(r));
+  const safeReviews = Array.isArray(allReviews)
+    ? allReviews.filter((r): r is ReviewItem =>
+        Boolean(r && typeof r === 'object')
+      )
+    : [];
+  const reviews = safeReviews.filter((r) => !isPendingReview(r));
   const total = reviews.length;
 
   let authentic = 0;
@@ -2227,8 +2292,15 @@ export function computeDynamicReviewRisk(
   // Genuine complaints; a star-only low rating counts at a quarter.
   let lowStar = 0;
   for (const r of reviews) {
+    const star =
+      typeof r.rating_star === 'number' ||
+      (typeof r.rating_star === 'string' && String(r.rating_star).trim() !== '')
+        ? Number(r.rating_star)
+        : NaN;
     if (
-      Number(r.rating_star) <= 2 &&
+      Number.isFinite(star) &&
+      star > 0 &&
+      star <= 2 &&
       r.flag_category === 'authentic' &&
       // A 'fake' verdict already counted as seeding above (#691).
       r.verdict !== 'fake' &&
