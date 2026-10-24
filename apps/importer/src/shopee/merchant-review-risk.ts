@@ -78,6 +78,9 @@ export interface ReviewRow {
 export function mapStoredReview(
   row: ReviewRow
 ): { result: AnalyzedReviewResult; raw: ReviewInputItem } | null {
+  if (!row || typeof row !== 'object') return null;
+  const reviewId = typeof row.id === 'string' ? row.id.trim() : '';
+  if (!reviewId) return null;
   const vf = Array.isArray(row.review_flags) ? row.review_flags[0] : row.review_flags;
   const rawVerdict = typeof vf?.verdict === 'string' ? vf.verdict.trim().toLowerCase() : null;
   if (rawVerdict === 'unanalyzed') return null;
@@ -104,12 +107,17 @@ export function mapStoredReview(
   const includeInRating = Boolean(
     vf?.include_in_rating ?? (category === 'authentic' && verdict !== 'fake')
   );
-  const parsedStar = Number(row.rating_star);
+  const parsedStar =
+    typeof row.rating_star === 'boolean' ||
+    row.rating_star === null ||
+    row.rating_star === undefined
+      ? Number.NaN
+      : Number(row.rating_star);
   const ratingStar =
     Number.isFinite(parsedStar) && parsedStar >= 1 && parsedStar <= 5 ? Math.round(parsedStar) : 5;
   return {
     result: {
-      review_id: row.id,
+      review_id: reviewId,
       verdict,
       flag_category: category,
       fake_probability: 0,
@@ -119,7 +127,7 @@ export function mapStoredReview(
       signals: {} as AnalyzedReviewResult['signals'],
     },
     raw: {
-      id: row.id,
+      id: reviewId,
       rating_star: ratingStar,
       comment: typeof row.comment === 'string' ? row.comment.slice(0, 4000) : '',
     },
@@ -128,6 +136,7 @@ export function mapStoredReview(
 
 /** A usable VND price, or 0. */
 export const toValidPrice = (raw: unknown): number => {
+  if (typeof raw === 'boolean' || raw === null || raw === undefined) return 0;
   const n = Number(raw);
   return Number.isFinite(n) && n > 0 && n <= MAX_VALID_VND_PRICE ? n : 0;
 };
@@ -225,7 +234,12 @@ export function scoreMerchants(
       officialByMerchant,
       masterMinByCluster
     );
-    const rawFollowers = Number(merchant.follower_count);
+    const rawFollowers =
+      typeof merchant.follower_count === 'boolean' ||
+      merchant.follower_count === null ||
+      merchant.follower_count === undefined
+        ? Number.NaN
+        : Number(merchant.follower_count);
     const safeFollowerCount =
       Number.isFinite(rawFollowers) &&
       rawFollowers >= 0 &&
@@ -242,13 +256,32 @@ export function scoreMerchants(
       reviewResults: bucket.results,
       rawReviews: bucket.raws,
     });
+    const rawPrev =
+      typeof merchant.review_risk_score === 'boolean' ||
+      merchant.review_risk_score === null ||
+      merchant.review_risk_score === undefined
+        ? Number.NaN
+        : Number(merchant.review_risk_score);
+    const previousScore =
+      Number.isFinite(rawPrev) && rawPrev >= 0 && rawPrev <= 100 ? rawPrev : null;
     scores.push({
       merchantId,
-      previousScore: merchant.review_risk_score ?? null,
+      previousScore,
       risk,
     });
   }
   return scores.sort((a, b) => a.merchantId.localeCompare(b.merchantId));
+}
+
+function normalizeSafeId(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  if (!trimmed || trimmed.length > 128) return null;
+  for (let i = 0; i < trimmed.length; i++) {
+    const code = trimmed.charCodeAt(i);
+    if (code <= 0x1f || code === 0x7f) return null;
+  }
+  return trimmed;
 }
 
 /** Writes only the review risk columns (and updated_at) on rate.merchants. */
@@ -258,17 +291,32 @@ export async function writeMerchantReviewRisk(
   risk: MerchantRiskEvaluation,
   nowIso = new Date().toISOString()
 ): Promise<void> {
+  const safeMerchantId = normalizeSafeId(merchantId);
+  if (!safeMerchantId) {
+    throw new Error('Invalid merchantId for writeMerchantReviewRisk');
+  }
+  const rawScore =
+    typeof (risk as { risk_score?: unknown })?.risk_score === 'boolean'
+      ? Number.NaN
+      : Number(risk?.risk_score);
+  const safeScore = Number.isFinite(rawScore)
+    ? Math.min(100, Math.max(0, Math.round(rawScore)))
+    : 0;
+  const safeNowIso =
+    typeof nowIso === 'string' && nowIso.trim() && Number.isFinite(Date.parse(nowIso.trim()))
+      ? new Date(nowIso.trim()).toISOString()
+      : new Date().toISOString();
   const { error } = await supabase
     .from('merchants')
     .update({
-      review_risk_score: risk.risk_score,
+      review_risk_score: safeScore,
       review_risk_breakdown: merchantRiskBreakdown(risk),
-      review_risk_updated_at: nowIso,
-      updated_at: nowIso,
+      review_risk_updated_at: safeNowIso,
+      updated_at: safeNowIso,
     })
-    .eq('id', merchantId);
+    .eq('id', safeMerchantId);
   if (error) {
-    throw new Error(`Failed to write review risk for ${merchantId}: ${error.message}`);
+    throw new Error(`Failed to write review risk for ${safeMerchantId}: ${error.message}`);
   }
 }
 
@@ -305,8 +353,15 @@ async function fetchAllByIds<T>(
   return rows;
 }
 
-const uniqueIds = (values: ReadonlyArray<string | null | undefined>): string[] =>
-  [...new Set(values.filter((v): v is string => Boolean(v)))].sort();
+export const uniqueIds = (values: ReadonlyArray<string | null | undefined>): string[] => {
+  if (!Array.isArray(values)) return [];
+  const seen = new Set<string>();
+  for (const v of values) {
+    const safe = normalizeSafeId(v);
+    if (safe) seen.add(safe);
+  }
+  return [...seen].sort();
+};
 
 /**
  * Scores one seller from the same inputs the backfill reads for it: its
@@ -319,10 +374,12 @@ export async function loadAndScoreMerchant(
   analyzer: AiReviewAnalyzer,
   merchantId: string
 ): Promise<MerchantScore | null> {
+  const safeMerchantId = normalizeSafeId(merchantId);
+  if (!safeMerchantId) return null;
   const { data: merchant, error: merchantErr } = await supabase
     .from('merchants')
     .select(MERCHANT_RISK_SELECT)
-    .eq('id', merchantId)
+    .eq('id', safeMerchantId)
     .maybeSingle();
   if (merchantErr) throw new Error(`merchants: ${merchantErr.message}`);
   if (!merchant) return null;
@@ -332,7 +389,7 @@ export async function loadAndScoreMerchant(
     'products',
     PRODUCT_RISK_SELECT,
     'merchant_id',
-    [merchantId]
+    [safeMerchantId]
   );
   const clusterIds = uniqueIds(listings.map(p => p.cluster_id));
   // The peers' official flag comes embedded, so no per-merchant read.
@@ -351,7 +408,7 @@ export async function loadAndScoreMerchant(
   const rows: PeerRow[] = [...listings, ...peers];
   for (const { merchants: embedded, ...product } of rows) {
     productById.set(product.id, product);
-    if (!product.merchant_id || product.merchant_id === merchantId) continue;
+    if (!product.merchant_id || product.merchant_id === safeMerchantId) continue;
     const official = Array.isArray(embedded) ? embedded[0]?.is_official : embedded?.is_official;
     peerMerchants.set(product.merchant_id, {
       id: product.merchant_id,
@@ -387,7 +444,7 @@ export async function loadAndScoreMerchant(
     reviews,
     masterMinByCluster
   );
-  return scores.find(s => s.merchantId === merchantId) ?? null;
+  return scores.find(s => s.merchantId === safeMerchantId) ?? null;
 }
 
 /**
@@ -399,7 +456,9 @@ export async function rescoreMerchantReviewRisk(
   analyzer: AiReviewAnalyzer,
   merchantId: string
 ): Promise<MerchantScore | null> {
-  const score = await loadAndScoreMerchant(supabase, analyzer, merchantId);
-  if (score) await writeMerchantReviewRisk(supabase, merchantId, score.risk);
+  const safeMerchantId = normalizeSafeId(merchantId);
+  if (!safeMerchantId) return null;
+  const score = await loadAndScoreMerchant(supabase, analyzer, safeMerchantId);
+  if (score) await writeMerchantReviewRisk(supabase, safeMerchantId, score.risk);
   return score;
 }

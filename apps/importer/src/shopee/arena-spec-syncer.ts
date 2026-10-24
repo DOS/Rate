@@ -83,12 +83,15 @@ function toBoundedNumber(
   return val;
 }
 
+export const MAX_ARENA_HTML_LENGTH = 2_000_000;
+export const MAX_ARENA_CATALOG_ITEMS = 500;
+
 function normalizeArenaUrl(
   rawUrl: string | undefined,
   hostPattern: RegExp,
   baseOrigin?: string
 ): string | undefined {
-  const trimmed = rawUrl?.trim();
+  const trimmed = typeof rawUrl === 'string' ? rawUrl.trim() : '';
   if (!trimmed || trimmed.length > 2048 || /\s/.test(trimmed)) {
     return undefined;
   }
@@ -100,6 +103,7 @@ function normalizeArenaUrl(
     const parsed = baseOrigin ? new URL(trimmed, baseOrigin) : new URL(trimmed);
     if (
       (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') ||
+      Boolean(parsed.username || parsed.password) ||
       !hostPattern.test(parsed.hostname)
     ) {
       return undefined;
@@ -120,6 +124,9 @@ function stripHtmlTags(raw: string): string {
  * Extracts all `[data-spec="key"]` values from a GSMArena specification page HTML.
  */
 export function extractGsmArenaDataSpecs(html: string): Record<string, string> {
+  if (typeof html !== 'string' || !html) return {};
+  const safeHtml =
+    html.length > MAX_ARENA_HTML_LENGTH ? html.slice(0, MAX_ARENA_HTML_LENGTH) : html;
   const specs: Record<string, string> = {};
   // Scan opening tags, then search for the matching close from there. A single
   // regex with `[^>]*\bdata-spec=` and a lazy body backtracks polynomially on
@@ -130,7 +137,7 @@ export function extractGsmArenaDataSpecs(html: string): Record<string, string> {
   // per-tag cursor finds the first close after each opening in amortized
   // constant time and the whole scan stays linear.
   const closesByTag = new Map<string, { at: number; end: number }[]>();
-  for (const close of html.matchAll(/<\/([a-z0-9]+)>/gi)) {
+  for (const close of safeHtml.matchAll(/<\/([a-z0-9]+)>/gi)) {
     const tag = close[1].toLowerCase();
     const list = closesByTag.get(tag) ?? [];
     const at = close.index ?? 0;
@@ -139,7 +146,7 @@ export function extractGsmArenaDataSpecs(html: string): Record<string, string> {
   }
   const cursors = new Map<string, number>();
   let match: RegExpExecArray | null;
-  while ((match = openTag.exec(html)) !== null) {
+  while ((match = openTag.exec(safeHtml)) !== null) {
     const keyMatch = /\bdata-spec=["']([^"']+)["']/i.exec(match[2] || '');
     if (!keyMatch) continue;
     const tag = match[1].toLowerCase();
@@ -151,7 +158,7 @@ export function extractGsmArenaDataSpecs(html: string): Record<string, string> {
     const close = list[cursor];
     if (!close) continue;
     const key = keyMatch[1]?.trim();
-    const val = stripHtmlTags(html.slice(openTag.lastIndex, close.at));
+    const val = stripHtmlTags(safeHtml.slice(openTag.lastIndex, close.at));
     if (key && val && !specs[key]) {
       specs[key] = val;
     }
@@ -416,13 +423,16 @@ export function parseGsmArenaHtmlToSpecs(
  * and merges/overrides split camera & hardware fields.
  */
 export function extractPhoneArenaTableSpecs(html: string): Record<string, string> {
+  if (typeof html !== 'string' || !html) return {};
+  const safeHtml =
+    html.length > MAX_ARENA_HTML_LENGTH ? html.slice(0, MAX_ARENA_HTML_LENGTH) : html;
   const out: Record<string, string> = {};
   // Cell bodies cannot contain another tr/th/td tag, so each attempt stops at
   // the next cell instead of rescanning the rest of the page (polynomial-redos).
   const rowRegex =
     /<tr[^<>]*>\s*<(?:th|td)[^<>]*>((?:(?!<\/?t[rhd]\b)[\s\S])*)<\/(?:th|td)>\s*<td[^<>]*>((?:(?!<\/?t[rhd]\b)[\s\S])*)<\/td>\s*<\/tr>/gi;
   let match: RegExpExecArray | null;
-  while ((match = rowRegex.exec(html)) !== null) {
+  while ((match = rowRegex.exec(safeHtml)) !== null) {
     const label = stripHtmlTags(match[1] || '')
       .replace(/:$/, '')
       .toLowerCase();
@@ -449,8 +459,11 @@ export function parseGsmArenaBrandCatalogHtml(
   html: string,
   brandHint?: string
 ): DiscoveredArenaCatalogItem[] {
+  if (typeof html !== 'string' || !html) return [];
+  const safeHtml =
+    html.length > MAX_ARENA_HTML_LENGTH ? html.slice(0, MAX_ARENA_HTML_LENGTH) : html;
   const results: DiscoveredArenaCatalogItem[] = [];
-  const trimmedBrand = brandHint?.trim() || '';
+  const trimmedBrand = typeof brandHint === 'string' ? brandHint.trim() : '';
   const brandPrefixRe = trimmedBrand
     ? new RegExp(`^${escapeRegExp(trimmedBrand)}(?:\\s|$)`, 'i')
     : null;
@@ -459,7 +472,7 @@ export function parseGsmArenaBrandCatalogHtml(
   const itemRegex =
     /<li[^<>]*>\s*<a\s+href=["']([^"'<>]+\.php)["'][^<>]*>((?:(?!<\/?(?:a|li)\b)[\s\S])*)<\/a>\s*<\/li>/gi;
   let match: RegExpExecArray | null;
-  while ((match = itemRegex.exec(html)) !== null) {
+  while (results.length < MAX_ARENA_CATALOG_ITEMS && (match = itemRegex.exec(safeHtml)) !== null) {
     const href = match[1]?.trim() || '';
     const inner = match[2] || '';
     const nameMatch = inner.match(/<span[^<>]*>((?:(?!<\/?span\b)[\s\S])*)<\/span>/i);
@@ -496,6 +509,9 @@ export function parseGsmArenaBrandCatalogHtml(
  * Parses a PhoneArena device finder HTML block to discover newly announced devices.
  */
 export function parsePhoneArenaCatalogHtml(html: string): DiscoveredArenaCatalogItem[] {
+  if (typeof html !== 'string' || !html) return [];
+  const safeHtml =
+    html.length > MAX_ARENA_HTML_LENGTH ? html.slice(0, MAX_ARENA_HTML_LENGTH) : html;
   const results: DiscoveredArenaCatalogItem[] = [];
   // Match the whole <a> first (attributes cannot span tags, the body cannot
   // contain another <a>), then read href from the attributes. One regex with
@@ -505,7 +521,7 @@ export function parsePhoneArenaCatalogHtml(html: string): DiscoveredArenaCatalog
     /(?:^|\s)href=["'](https?:\/\/www\.phonearena\.com\/phones\/[^"'#?]+|\/phones\/[^"'#?]+)["']/i;
   const seen = new Set<string>();
   let match: RegExpExecArray | null;
-  while ((match = linkRegex.exec(html)) !== null) {
+  while (results.length < MAX_ARENA_CATALOG_ITEMS && (match = linkRegex.exec(safeHtml)) !== null) {
     const rawHref = hrefRegex.exec(match[1] || '')?.[1]?.trim() || '';
     const text = stripHtmlTags(match[2] || '');
     if (!rawHref || !text || text.length < 4) continue;
