@@ -895,6 +895,29 @@ async function run() {
   assert.equal(sanitizedSpecs.category_slug?.length, 64);
   assert.equal(sanitizedSpecs.design?.colors?.[0]?.length, 80);
 
+  // DOS/Rate#922: EntityMatcher & ShopeeIngestionPipeline bounds
+  const clampedProduct = normalizeScrapedProductPrices({
+    platform: 'shopee',
+    itemId: '1',
+    shopId: '2',
+    url: 'https://shopee.vn/product/2/1',
+    title: 'Apple iPhone 16 128GB',
+    priceMin: 20_000_000,
+    priceMax: 20_000_000,
+    currency: 'VND',
+    historicalSold: 9_999_999_999,
+    ratingStar: 9.5,
+    ratingCount: -10,
+    images: [],
+    models: [],
+    attributes: [],
+    shop: { shopId: '2', name: 'Shop', isMall: true },
+    reviews: [],
+  });
+  assert.equal(clampedProduct.historicalSold, 1_000_000_000);
+  assert.equal(clampedProduct.ratingStar, 0);
+  assert.equal(clampedProduct.ratingCount, 0);
+
   console.log('✅ Review risk backfill suite passed');
 }
 

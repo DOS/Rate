@@ -153,6 +153,20 @@ export function normalizeScrapedProductPrices(
         return Number.isFinite(p) && p > 0 && p <= MAX_VALID_VND_PRICE;
       })
     : [];
+  const rawSold =
+    typeof product.historicalSold === 'boolean' ? Number.NaN : Number(product.historicalSold);
+  const historicalSold =
+    Number.isFinite(rawSold) && rawSold >= 0 ? Math.min(Math.floor(rawSold), 1_000_000_000) : 0;
+  const rawRatingStar =
+    typeof product.ratingStar === 'boolean' ? Number.NaN : Number(product.ratingStar);
+  const ratingStar =
+    Number.isFinite(rawRatingStar) && rawRatingStar >= 0 && rawRatingStar <= 5 ? rawRatingStar : 0;
+  const rawRatingCount =
+    typeof product.ratingCount === 'boolean' ? Number.NaN : Number(product.ratingCount);
+  const ratingCount =
+    Number.isFinite(rawRatingCount) && rawRatingCount >= 0
+      ? Math.min(Math.floor(rawRatingCount), 100_000_000)
+      : 0;
   const images = sanitizeHttpUrlList(product.images);
   const shopUrl = sanitizeHttpUrl(product.shop?.url) ?? undefined;
   const reviews = Array.isArray(product.reviews)
@@ -175,6 +189,9 @@ export function normalizeScrapedProductPrices(
     ...product,
     priceMax,
     priceBeforeDiscount: validBeforeDiscount,
+    historicalSold,
+    ratingStar,
+    ratingCount,
     images,
     models,
     shop: {
@@ -259,13 +276,33 @@ export class ShopeeIngestionPipeline {
     errorPrefix: string
   ): Promise<Set<string>> {
     const found = new Set<string>();
-    const unique = [...new Set(ids.filter(Boolean))];
+    const safeProductId =
+      typeof productId === 'string'
+        ? productId
+            .replace(/\p{Cc}+/gu, '')
+            .trim()
+            .slice(0, 128)
+        : '';
+    if (!safeProductId || !Array.isArray(ids) || ids.length === 0) return found;
+    const unique = [
+      ...new Set(
+        ids
+          .filter((id): id is string => typeof id === 'string')
+          .map(id =>
+            id
+              .replace(/\p{Cc}+/gu, '')
+              .trim()
+              .slice(0, 160)
+          )
+          .filter(Boolean)
+      ),
+    ].slice(0, 1_000);
     for (let i = 0; i < unique.length; i += 50) {
       const chunk = unique.slice(i, i + 50);
       const eqBuilder = this.supabase
         .from('reviews')
         .select('platform_review_id')
-        .eq('product_id', productId) as unknown as {
+        .eq('product_id', safeProductId) as unknown as {
         in?: (
           col: string,
           vals: string[]
