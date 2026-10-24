@@ -153,6 +153,23 @@ async function runSuite() {
     keyOf('Laptop ASUS Vivo Book 15 X1504 512GB'),
     keyOf('Laptop ASUS Vivobook 15 X1504 512GB')
   );
+  // Xiaomi's "Mipad" and "Mi Pad" are no Apple iPad, and they are tablets (DOS/Rate#826).
+  const mipad5 = 'Xiaomi Mipad 5 Pro 12.4 Tablet, 8G/256G Ram, Mi Pad 5 Pro 12.4 - Imported Goods';
+  assert.equal(brandOf(mipad5), 'Xiaomi');
+  assert.match(keyOf(mipad5), /^xiaomi:/);
+  assert.equal(
+    brandOf('Máy tính bảng Xiaomi Mi Pad 5 Mipad 5 Ram 6G /128Gb likenew Hàng Nhập khẩu'),
+    'Xiaomi'
+  );
+  assert.equal(brandOf('Mipad 5 Pro 128GB'), 'Xiaomi');
+  assert.equal(keyOf('Mi pad 6 8GB 256GB'), 'xiaomi:mi-pad-6:256gb');
+  assert.equal(categoryOf('Mi pad 6 8GB 256GB'), 'tablets');
+  assert.equal(categoryOf('Mipad 5 Pro 128GB'), 'tablets');
+  // An iPad after a space or punctuation is still Apple; "Kami Pad" is no Xiaomi.
+  assert.equal(keyOf('Apple iPad A16 11 inch 2025 Wifi 128GB'), 'apple:ipad-a16:128gb');
+  assert.equal(brandOf('(iPad Air M4) 256GB'), 'Apple');
+  assert.equal(brandOf('Ốp lưng cho iPad/Mipad 5'), 'Apple');
+  assert.equal(brandOf('Kami Pad 5 128GB'), 'Khác');
   // A size written apart ends the model like one written together (DOS/Rate#815).
   assert.equal(
     keyOf('Samsung Galaxy S24 Ultra 256 GB Chính hãng'),
