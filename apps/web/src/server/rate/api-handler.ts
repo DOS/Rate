@@ -357,6 +357,51 @@ export function isSafeCrowdIngestHttpUrl(rawUrl: string): boolean {
   }
 }
 
+export function resolveInspectObservedPrices(input: {
+  queryPrice?: number | null;
+  queryOriginalPrice?: number | null;
+  matchedOfferPriceCurrent?: unknown;
+  matchedOfferPriceOriginal?: unknown;
+  masterMinPrice?: unknown;
+  maxVnd?: number;
+}): { observedPrice: number; observedOriginalPrice: number } {
+  const safeMaxVnd =
+    typeof input.maxVnd === 'number' &&
+    Number.isFinite(input.maxVnd) &&
+    input.maxVnd > 0
+      ? Math.round(input.maxVnd)
+      : MAX_VALID_VND_PRICE;
+  const toPositiveBoundedPrice = (val: unknown): number => {
+    if (
+      val === null ||
+      val === undefined ||
+      typeof val === 'boolean' ||
+      (typeof val === 'string' && !val.trim())
+    ) {
+      return 0;
+    }
+    const n = Number(val);
+    return Number.isFinite(n) && n > 0 && n <= safeMaxVnd ? Math.round(n) : 0;
+  };
+
+  const observedPrice =
+    toPositiveBoundedPrice(input.queryPrice) ||
+    toPositiveBoundedPrice(input.matchedOfferPriceCurrent) ||
+    toPositiveBoundedPrice(input.masterMinPrice) ||
+    0;
+
+  const rawOrigCandidate =
+    input.queryOriginalPrice ??
+    (input.queryPrice === null || input.queryPrice === undefined
+      ? input.matchedOfferPriceOriginal
+      : null);
+  const candidateOrig = toPositiveBoundedPrice(rawOrigCandidate);
+  const observedOriginalPrice =
+    observedPrice > 0 && candidateOrig >= observedPrice ? candidateOrig : 0;
+
+  return { observedPrice, observedOriginalPrice };
+}
+
 const CANONICAL_PRODUCT_SLUG_REGEX = /^[a-zA-Z0-9._-]+$/;
 
 /**

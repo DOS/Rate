@@ -31,9 +31,10 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const rawCat = (
-      searchParams.get('category') ||
-      searchParams.get('cat') ||
-      'smartphones'
+      parseBoundedStringParam(
+        searchParams.get('category') || searchParams.get('cat'),
+        32
+      ) || 'smartphones'
     )
       .toLowerCase()
       .trim();

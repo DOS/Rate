@@ -9084,6 +9084,99 @@ async function runCoreArchitectureSuite() {
     );
   }
 
+  // 101. Issue #868: Inspect Observed Price Bounds, Health TTL Clock Guard & Revalidate Token Checks
+  {
+    const { NextRequest } = await import('next/server');
+    const { resolveInspectObservedPrices } = await import('../api-handler');
+    const { extractProvidedToken, verifyRevalidateSecret } =
+      await import('../../../app/api/v1/rate/revalidate/route');
+
+    assert.deepEqual(
+      resolveInspectObservedPrices({
+        queryPrice: null,
+        queryOriginalPrice: null,
+        matchedOfferPriceCurrent: true,
+        matchedOfferPriceOriginal: true,
+        masterMinPrice: 18_990_000,
+      }),
+      {
+        observedPrice: 18_990_000,
+        observedOriginalPrice: 0,
+      },
+      'resolveInspectObservedPrices must reject boolean price_current/price_original and fall back to masterMinPrice'
+    );
+    assert.deepEqual(
+      resolveInspectObservedPrices({
+        queryPrice: null,
+        queryOriginalPrice: null,
+        matchedOfferPriceCurrent: 22_990_000.4,
+        matchedOfferPriceOriginal: 25_990_000.4,
+        masterMinPrice: 20_000_000,
+      }),
+      {
+        observedPrice: 22_990_000,
+        observedOriginalPrice: 25_990_000,
+      }
+    );
+    assert.deepEqual(
+      resolveInspectObservedPrices({
+        queryPrice: 24_990_000,
+        queryOriginalPrice: null,
+        matchedOfferPriceCurrent: 22_990_000,
+        matchedOfferPriceOriginal: 25_990_000,
+        masterMinPrice: 20_000_000,
+      }),
+      {
+        observedPrice: 24_990_000,
+        observedOriginalPrice: 0,
+      },
+      'when queryPrice is provided without queryOriginalPrice, matchedOfferPriceOriginal must not be attached'
+    );
+
+    assert.equal(
+      verifyRevalidateSecret('secret\u0000123', 'secret\u0000123'),
+      false
+    );
+    assert.equal(verifyRevalidateSecret('secret 123', 'secret 123'), false);
+    assert.equal(
+      verifyRevalidateSecret('aaaa-aaaa-aaaa', 'aaaa-aaaa-aaaa'),
+      true
+    );
+    assert.equal(
+      extractProvidedToken(
+        new NextRequest('https://rate.vn/api/v1/rate/revalidate', {
+          headers: { 'x-rate-revalidate-token': 'tok\u0007en' },
+        })
+      ),
+      null
+    );
+
+    let probes868 = 0;
+    await withHealthDatabase(
+      async () => {
+        probes868++;
+        return new Response(JSON.stringify([{ id: 'cat-1' }]), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      },
+      async () => {
+        assert.equal(await healthMod.checkDatabase(100_000), 'ok');
+        assert.equal(probes868, 1);
+        // Same window: cached
+        assert.equal(await healthMod.checkDatabase(105_000), 'ok');
+        assert.equal(probes868, 1);
+        // Backward clock jump (now < cached.at): must not blindly trust a future-stamped cache
+        assert.equal(await healthMod.checkDatabase(50_000), 'ok');
+        assert.equal(probes868, 2);
+      }
+    );
+
+    console.log(
+      '  ✅ [101/101] Inspect Observed Price Bounds, Health TTL Clock Guard & Revalidate Token Checks (#868) passed'
+    );
+  }
+
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
 
