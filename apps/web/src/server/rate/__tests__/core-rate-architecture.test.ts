@@ -8757,7 +8757,84 @@ async function runCoreArchitectureSuite() {
     assert.equal(normalizeRateLocale('vi-VN'), 'vi');
     assert.equal(normalizeRateLocale('fr-FR'), 'vi');
     console.log(
-      '  ✅ [97/97] Navigation, MerchantDirectory, Hero Suggestions & Rate i18n Bounds (#856) passed'
+      '  ✅ [97/98] Navigation, MerchantDirectory, Hero Suggestions & Rate i18n Bounds (#856) passed'
+    );
+  }
+
+  // =========================================================================
+  // 98. Server Rate Deals Radar & Cached Query Key Bounds (#858)
+  // =========================================================================
+  {
+    const {
+      MAX_DEAL_RADAR_CLUSTERS,
+      getCachedMasterProductOffers,
+      getCachedMasterProductReviews,
+      getCachedMerchantProfileById,
+      normalizeCachedFacetCategory,
+      normalizeDealRadarOptions,
+      sanitizeCachedCompareSlugsCsv,
+      sanitizeCachedEntityId,
+      sanitizeCachedInspectQuery,
+      sanitizeCachedProductSlug,
+    } = await import('../index');
+
+    assert.equal(normalizeCachedFacetCategory(undefined), 'smartphones');
+    assert.equal(normalizeCachedFacetCategory('  '), 'smartphones');
+    assert.equal(
+      normalizeCachedFacetCategory('  SMARTPHONES\u0000 '),
+      'smartphones'
+    );
+    assert.equal(normalizeCachedFacetCategory('tablets'), 'tablets');
+    assert.equal(normalizeCachedFacetCategory('arbitrary-category'), 'all');
+
+    assert.equal(await getCachedMerchantProfileById('  \u0000 '), null);
+    assert.deepEqual(await getCachedMasterProductOffers('  \u0000 '), []);
+    assert.deepEqual(await getCachedMasterProductReviews('  \u0000 '), []);
+
+    assert.deepEqual(
+      normalizeDealRadarOptions({
+        categorySlug: '  SMARTPHONES\u0000 ',
+        platform: '  Shopee\u0007 ',
+        limit: 999,
+      }),
+      {
+        categoryFilter: 'smartphones',
+        platformFilter: 'shopee',
+        limit: 50,
+      }
+    );
+    assert.deepEqual(
+      normalizeDealRadarOptions({
+        categorySlug: 'arbitrary-invalid-category',
+        platform: 'bad/platform!@#',
+        limit: -5,
+      }),
+      {
+        categoryFilter: 'all',
+        platformFilter: 'all',
+        limit: 12,
+      }
+    );
+    assert.equal(MAX_DEAL_RADAR_CLUSTERS, 500);
+
+    assert.equal(sanitizeCachedEntityId('  m-123\u0000\u0007  '), 'm-123');
+    assert.equal(
+      sanitizeCachedProductSlug('  iPhone-16-Pro\u0000 '),
+      'iphone-16-pro'
+    );
+    assert.equal(sanitizeCachedProductSlug('bad/slug/../../etc'), '');
+    assert.equal(
+      sanitizeCachedCompareSlugsCsv(
+        ' iPhone-16\u0000 , bad/slug , GALAXY-S24 , iphone-16 , pixel-9 , xiaomi-15 , extra-6 '
+      ),
+      'iphone-16,galaxy-s24,pixel-9,xiaomi-15'
+    );
+    assert.equal(
+      sanitizeCachedInspectQuery('  https://shopee.vn/item\u0000\n123  '),
+      'https://shopee.vn/item 123'
+    );
+    console.log(
+      '  ✅ [98/98] Server Rate Deals Radar & Cached Query Key Bounds (#858) passed'
     );
   }
 

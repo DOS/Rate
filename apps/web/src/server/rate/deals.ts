@@ -5,6 +5,7 @@ import {
   getMasterProductCategorySlug,
   getMasterProductOffersBatch,
   getMasterProducts,
+  isCanonicalCategorySlug,
   normalizeOfferOriginalPrice,
   resolveProductImageUrl,
   type CanonicalCategorySlug,
@@ -129,6 +130,50 @@ function resolveEffectiveMerchantRisk(
  * 3. `priceSpreadLeaders`: Products with the largest absolute price spread (`max_price - min_price`)
  *    across 10 retailers so buyers can avoid overpriced listings and buy at the lowest verified retailer.
  */
+const SAFE_PLATFORM_FILTER_REGEX = /^[a-z0-9_-]{1,40}$/;
+export const MAX_DEAL_RADAR_CLUSTERS = 500;
+export const MAX_OFFERS_PER_CLUSTER = 200;
+
+export function normalizeDealRadarOptions(options?: {
+  categorySlug?: string | null;
+  platform?: string | null;
+  limit?: number;
+}): {
+  categoryFilter: CanonicalCategorySlug | 'all';
+  platformFilter: string;
+  limit: number;
+} {
+  const rawCat =
+    typeof options?.categorySlug === 'string'
+      ? options.categorySlug
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .toLowerCase()
+      : '';
+  const categoryFilter: CanonicalCategorySlug | 'all' =
+    rawCat && isCanonicalCategorySlug(rawCat) ? rawCat : 'all';
+
+  const rawPlat =
+    typeof options?.platform === 'string'
+      ? options.platform
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .toLowerCase()
+      : '';
+  const platformFilter =
+    rawPlat && rawPlat !== 'all' && SAFE_PLATFORM_FILTER_REGEX.test(rawPlat)
+      ? rawPlat
+      : 'all';
+
+  const rawLimit = Number(options?.limit);
+  const limit =
+    Number.isFinite(rawLimit) && rawLimit >= 1
+      ? Math.min(Math.floor(rawLimit), 50)
+      : 12;
+
+  return { categoryFilter, platformFilter, limit };
+}
+
 export function computeCrossPlatformDealRadarFromData(
   clusters: Array<{
     master: MasterProduct;
@@ -140,14 +185,8 @@ export function computeCrossPlatformDealRadarFromData(
     limit?: number;
   }
 ): CrossPlatformDealRadarResponse {
-  const categoryFilter = options?.categorySlug || 'all';
-  const platformFilter =
-    (options?.platform || 'all').trim().toLowerCase() || 'all';
-  const rawLimit = Number(options?.limit);
-  const limit =
-    Number.isFinite(rawLimit) && rawLimit >= 1
-      ? Math.min(Math.floor(rawLimit), 50)
-      : 12;
+  const { categoryFilter, platformFilter, limit } =
+    normalizeDealRadarOptions(options);
 
   const genuineDeals: CrossPlatformDealRadarItem[] = [];
   const fakeSaleTraps: CrossPlatformDealRadarItem[] = [];
@@ -155,16 +194,24 @@ export function computeCrossPlatformDealRadarFromData(
   let totalClustersAnalyzed = 0;
   let totalOffersAnalyzed = 0;
 
-  for (const { master, offers } of clusters) {
+  const boundedClusters = Array.isArray(clusters)
+    ? clusters.slice(0, MAX_DEAL_RADAR_CLUSTERS)
+    : [];
+
+  for (const { master, offers } of boundedClusters) {
     const categorySlug = getMasterProductCategorySlug(master);
     if (categoryFilter !== 'all' && categorySlug !== categoryFilter) {
       continue;
     }
 
+    const boundedOffers = Array.isArray(offers)
+      ? offers.slice(0, MAX_OFFERS_PER_CLUSTER)
+      : [];
+
     // Bait-price listings (far below every other store) set no market floor,
     // spread, deal or trap (DOS/Rate#797).
     const validOffers = plausibleOffers(
-      offers.filter(
+      boundedOffers.filter(
         (o) =>
           Number.isFinite(o.price_current) &&
           o.price_current > 0 &&
@@ -472,13 +519,7 @@ export function getCrossPlatformDealRadar(options?: {
   platform?: string;
   limit?: number;
 }): Promise<CrossPlatformDealRadarResponse> {
-  const categorySlug = options?.categorySlug || 'all';
-  const platformFilter =
-    (options?.platform || 'all').trim().toLowerCase() || 'all';
-  const rawLimit = Number(options?.limit);
-  const limit =
-    Number.isFinite(rawLimit) && rawLimit >= 1
-      ? Math.min(Math.floor(rawLimit), 50)
-      : 12;
-  return _getCrossPlatformDealRadarByKey(categorySlug, platformFilter, limit);
+  const { categoryFilter, platformFilter, limit } =
+    normalizeDealRadarOptions(options);
+  return _getCrossPlatformDealRadarByKey(categoryFilter, platformFilter, limit);
 }
