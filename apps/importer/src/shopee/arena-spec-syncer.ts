@@ -142,8 +142,9 @@ export function extractGsmArenaDataSpecs(html: string): Record<string, string> {
     closesByTag.set(tag, list);
   }
   const cursors = new Map<string, number>();
+  let specCount = 0;
   let match: RegExpExecArray | null;
-  while ((match = openTag.exec(safeHtml)) !== null) {
+  while (specCount < 500 && (match = openTag.exec(safeHtml)) !== null) {
     const keyMatch = /\bdata-spec=["']([^"']+)["']/i.exec(match[2] || '');
     if (!keyMatch) continue;
     const tag = match[1].toLowerCase();
@@ -154,10 +155,14 @@ export function extractGsmArenaDataSpecs(html: string): Record<string, string> {
     cursors.set(tag, cursor);
     const close = list[cursor];
     if (!close) continue;
-    const key = keyMatch[1]?.replace(/\p{Cc}+/gu, '').trim();
-    const val = stripHtmlTags(safeHtml.slice(openTag.lastIndex, close.at));
+    const key = keyMatch[1]
+      ?.replace(/\p{Cc}+/gu, '')
+      .trim()
+      .slice(0, 120);
+    const val = stripHtmlTags(safeHtml.slice(openTag.lastIndex, close.at)).slice(0, 4000);
     if (key && val && !Object.hasOwn(specs, key)) {
       specs[key] = val;
+      specCount += 1;
     }
     openTag.lastIndex = close.end;
   }
@@ -200,10 +205,16 @@ export function parseGsmArenaHtmlToSpecs(
 ): ArenaSyncedDeviceSpec {
   const d = extractGsmArenaDataSpecs(html);
   const pa = meta?.phonearenaHtml ? extractPhoneArenaTableSpecs(meta.phonearenaHtml) : {};
-  const modelName = d['modelname'] || pa['device name'] || 'Unknown Device';
-  const brand = modelName.split(/\s+/)[0] || 'Generic';
-  const model =
-    modelName.replace(new RegExp(`^${escapeRegExp(brand)}\\s+`, 'i'), '').trim() || modelName;
+  const rawModelName = (d['modelname'] || pa['device name'] || 'Unknown Device')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const modelName = (rawModelName || 'Unknown Device').slice(0, 200).trim();
+  const brand = (modelName.split(/\s+/)[0] || 'Generic').slice(0, 80);
+  const model = (
+    modelName.replace(new RegExp(`^${escapeRegExp(brand)}\\s+`, 'i'), '').trim() || modelName
+  )
+    .slice(0, 160)
+    .trim();
 
   // Display parsing
   const sizeMatch = (d['displaysize'] || pa['screen size'] || '').match(
@@ -426,8 +437,8 @@ export function parseGsmArenaHtmlToSpecs(
     brand,
     model,
     modelName,
-    announced: d['announced'],
-    status: d['status'],
+    announced: capSpec(d['announced']?.replace(/\s+/g, ' ')),
+    status: capSpec(d['status']?.replace(/\s+/g, ' ')),
     ramGb,
     storageGb,
     screenSizeInch,
@@ -451,15 +462,19 @@ export function extractPhoneArenaTableSpecs(html: string): Record<string, string
   // the next cell instead of rescanning the rest of the page (polynomial-redos).
   const rowRegex =
     /<tr[^<>]*>\s*<(?:th|td)[^<>]*>((?:(?!<\/?t[rhd]\b)[\s\S])*)<\/(?:th|td)>\s*<td[^<>]*>((?:(?!<\/?t[rhd]\b)[\s\S])*)<\/td>\s*<\/tr>/gi;
+  let rowCount = 0;
   let match: RegExpExecArray | null;
-  while ((match = rowRegex.exec(safeHtml)) !== null) {
+  while (rowCount < 500 && (match = rowRegex.exec(safeHtml)) !== null) {
     const label = stripHtmlTags(match[1] || '')
+      .replace(/\s+/g, ' ')
       .replace(/:$/, '')
       .trim()
-      .toLowerCase();
-    const val = stripHtmlTags(match[2] || '');
+      .toLowerCase()
+      .slice(0, 120);
+    const val = stripHtmlTags(match[2] || '').slice(0, 4000);
     if (label && val && !Object.hasOwn(out, label)) {
       out[label] = val;
+      rowCount += 1;
     }
   }
   return out;
@@ -484,7 +499,14 @@ export function parseGsmArenaBrandCatalogHtml(
   const safeHtml =
     html.length > MAX_ARENA_HTML_LENGTH ? html.slice(0, MAX_ARENA_HTML_LENGTH) : html;
   const results: DiscoveredArenaCatalogItem[] = [];
-  const trimmedBrand = typeof brandHint === 'string' ? brandHint.trim() : '';
+  const trimmedBrand =
+    typeof brandHint === 'string'
+      ? brandHint
+          .replace(/\p{Cc}+/gu, ' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .slice(0, 80)
+      : '';
   const brandPrefixRe = trimmedBrand
     ? new RegExp(`^${escapeRegExp(trimmedBrand)}(?:\\s|$)`, 'i')
     : null;
@@ -497,7 +519,10 @@ export function parseGsmArenaBrandCatalogHtml(
     const href = match[1]?.trim() || '';
     const inner = match[2] || '';
     const nameMatch = inner.match(/<span[^<>]*>((?:(?!<\/?span\b)[\s\S])*)<\/span>/i);
-    const rawName = stripHtmlTags(nameMatch ? nameMatch[1] || '' : inner);
+    const rawName = stripHtmlTags(nameMatch ? nameMatch[1] || '' : inner)
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 200);
     if (!rawName || !href) continue;
     const url = normalizeArenaUrl(
       decodeArenaHtmlEntities(href),
@@ -505,8 +530,11 @@ export function parseGsmArenaBrandCatalogHtml(
       'https://www.gsmarena.com/'
     );
     if (!url) continue;
-    const fullName =
-      brandPrefixRe && !brandPrefixRe.test(rawName) ? `${trimmedBrand} ${rawName}` : rawName;
+    const fullName = (
+      brandPrefixRe && !brandPrefixRe.test(rawName) ? `${trimmedBrand} ${rawName}` : rawName
+    )
+      .slice(0, 200)
+      .trim();
     const rawImgSrc = [...inner.matchAll(/<img\b([^<>]*)>/gi)]
       // `(?:^|\s)` so `data-src` lazy-load placeholders are not taken for src.
       .map(img => /(?:^|\s)src=["']([^"']+)["']/i.exec(img[1] || '')?.[1])
@@ -544,7 +572,10 @@ export function parsePhoneArenaCatalogHtml(html: string): DiscoveredArenaCatalog
   let match: RegExpExecArray | null;
   while (results.length < MAX_ARENA_CATALOG_ITEMS && (match = linkRegex.exec(safeHtml)) !== null) {
     const rawHref = hrefRegex.exec(match[1] || '')?.[1]?.trim() || '';
-    const text = stripHtmlTags(match[2] || '');
+    const text = stripHtmlTags(match[2] || '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 200);
     if (!rawHref || !text || text.length < 4) continue;
     if (/compare|benchmarks|size-compare|reviews/i.test(rawHref)) continue;
     const url = normalizeArenaUrl(
