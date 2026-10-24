@@ -24,9 +24,13 @@ export async function OPTIONS() {
   });
 }
 
-function parseBooleanFlag(raw: string | null): boolean | undefined {
-  if (!raw) return undefined;
-  return raw === '1' || raw.toLowerCase() === 'true' ? true : undefined;
+export function parseBooleanFlag(raw: string | null): boolean | undefined {
+  if (typeof raw !== 'string') return undefined;
+  const cleaned = raw
+    .replace(/\p{Cc}+/gu, '')
+    .trim()
+    .toLowerCase();
+  return cleaned === '1' || cleaned === 'true' ? true : undefined;
 }
 
 const VALID_PRODUCT_SORTS = new Set<
@@ -58,20 +62,21 @@ export async function GET(request: NextRequest) {
       );
     }
     const { categorySlug, brands, minPrice, maxPrice } = filterBounds;
-    const includeFacets =
-      sp.get('facets') === '1' || sp.get('facets') === 'true';
+    const includeFacets = Boolean(parseBooleanFlag(sp.get('facets')));
 
-    const rawSort = sp.get('sort') as MasterProductFilterParams['sort'] | null;
+    const rawSort = (sp.get('sort') ?? '')
+      .replace(/\p{Cc}+/gu, '')
+      .trim()
+      .toLowerCase() as MasterProductFilterParams['sort'];
     const sort: NonNullable<MasterProductFilterParams['sort']> =
       rawSort && VALID_PRODUCT_SORTS.has(rawSort) ? rawSort : 'default';
     const limit = parseBoundedIntParam(sp.get('limit'), 24, 1, 100);
     const offset = parseBoundedIntParam(sp.get('offset'), 0, 0, 100_000);
 
     const compactRaw = sp.get('compactScreen') || sp.get('compact');
-    const maxScreenSizeInch =
-      compactRaw === '1' || compactRaw?.toLowerCase() === 'true'
-        ? 6.2
-        : parseBoundedNumberParam(compactRaw, 1, 30);
+    const maxScreenSizeInch = parseBooleanFlag(compactRaw)
+      ? 6.2
+      : parseBoundedNumberParam(compactRaw, 1, 30);
 
     const filterParams: MasterProductFilterParams = {
       categorySlug,
