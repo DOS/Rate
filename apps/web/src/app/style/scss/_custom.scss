@@ -1503,14 +1503,12 @@ body .input-group > .input-group-text {
 
 // Phone header at 320px: brand, icon group and menu toggle need 327px of
 // the 296px available, so the page scrolled sideways and the toggle was cut
-// off. Tighten the spacing below 360px only (DOS/Rate#809).
+// off. Tighten the spacing below 360px only (DOS/Rate#809). The 38px the
+// template keeps before the toggle stays: the toggle's 44px tap area reaches
+// 7px past its 30px box and must not cover the icons.
 @media (max-width: 359.98px) {
   .navigation .nav-brand {
     margin-right: 0.5rem;
-  }
-
-  .navigation .mobile_nav {
-    margin-right: 34px;
   }
 
   .navigation .mobile_nav ul {
