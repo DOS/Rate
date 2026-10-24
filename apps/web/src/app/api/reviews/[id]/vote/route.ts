@@ -33,7 +33,7 @@ const NOT_ELIGIBLE_AGE_REASON =
 
 function isValidConfirmedTimestamp(raw: unknown): boolean {
   if (typeof raw !== 'string') return false;
-  const trimmed = raw.trim();
+  const trimmed = raw.replace(/\p{Cc}+/gu, '').trim();
   if (!trimmed || trimmed.length > 64) return false;
   const ms = Date.parse(trimmed);
   return Number.isFinite(ms) && ms > 0;
@@ -77,9 +77,13 @@ export function evaluateVoterEligibility(
       reason: 'Verified email or phone number is required to vote on reviews.',
     };
   }
+  const cleanedCreatedAt =
+    typeof user.created_at === 'string'
+      ? user.created_at.replace(/\p{Cc}+/gu, '').trim()
+      : '';
   const createdMs =
-    typeof user.created_at === 'string' && user.created_at.trim().length <= 64
-      ? Date.parse(user.created_at.trim())
+    cleanedCreatedAt && cleanedCreatedAt.length <= 64
+      ? Date.parse(cleanedCreatedAt)
       : NaN;
   if (!Number.isFinite(createdMs) || createdMs <= 0) {
     return { eligible: false, reason: NOT_ELIGIBLE_AGE_REASON };
@@ -116,7 +120,11 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id: reviewId } = await params;
+  const { id: rawReviewId } = await params;
+  const reviewId =
+    typeof rawReviewId === 'string'
+      ? rawReviewId.replace(/\p{Cc}+/gu, '').trim()
+      : '';
 
   if (!reviewId || !UUID_REGEX.test(reviewId)) {
     return NextResponse.json(

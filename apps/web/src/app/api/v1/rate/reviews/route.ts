@@ -134,9 +134,18 @@ const SubmitReviewSchema = z.object({
   ),
   comment: z
     .string()
-    .trim()
-    .min(15, 'Nội dung đánh giá phải có độ dài từ 15 đến 3.000 ký tự.')
-    .max(3000, 'Nội dung đánh giá phải có độ dài từ 15 đến 3.000 ký tự.'),
+    .transform((s) =>
+      s
+        .replace(/\r\n?/g, '\n')
+        .replace(/[^\P{Cc}\n]+/gu, '')
+        .trim()
+    )
+    .pipe(
+      z
+        .string()
+        .min(15, 'Nội dung đánh giá phải có độ dài từ 15 đến 3.000 ký tự.')
+        .max(3000, 'Nội dung đánh giá phải có độ dài từ 15 đến 3.000 ký tự.')
+    ),
   variation: z.string().optional(),
   criteriaRatings: z.record(z.string(), z.unknown()).optional(),
 });
@@ -251,7 +260,7 @@ export function toReviewItem(
       : safeFallbackCriteria;
   const rawCreatedAt =
     typeof safeRecord.created_at === 'string'
-      ? safeRecord.created_at.trim()
+      ? safeRecord.created_at.replace(/\p{Cc}+/gu, '').trim()
       : '';
   const createdMs =
     rawCreatedAt && rawCreatedAt.length <= 64 ? Date.parse(rawCreatedAt) : NaN;
@@ -261,25 +270,42 @@ export function toReviewItem(
       : new Date().toISOString();
   const cleanComment =
     typeof safeRecord.comment === 'string'
-      ? safeRecord.comment.trim().slice(0, 3000)
+      ? safeRecord.comment
+          .replace(/\r\n?/g, '\n')
+          .replace(/[^\P{Cc}\n]+/gu, '')
+          .trim()
+          .slice(0, 3000)
       : '';
   const cleanVariation =
     typeof safeRecord.variation === 'string'
-      ? safeRecord.variation.trim().slice(0, 120) || null
+      ? safeRecord.variation
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .slice(0, 120) || null
       : null;
   const cleanReason =
     typeof safeRecord.reason === 'string'
-      ? safeRecord.reason.trim().slice(0, 500) || null
+      ? safeRecord.reason
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .slice(0, 500) || null
       : null;
   const rawFakeProb = asNumber(safeRecord.fake_probability, NaN);
   return {
     id:
-      typeof safeRecord.id === 'string' || typeof safeRecord.id === 'number'
-        ? String(safeRecord.id).trim().slice(0, 120)
+      typeof safeRecord.id === 'string' ||
+      (typeof safeRecord.id === 'number' && Number.isFinite(safeRecord.id))
+        ? String(safeRecord.id)
+            .replace(/\p{Cc}+/gu, '')
+            .trim()
+            .slice(0, 120)
         : '',
     author_name:
       typeof safeRecord.author_name === 'string'
-        ? safeRecord.author_name.trim().slice(0, 80)
+        ? safeRecord.author_name
+            .replace(/\p{Cc}+/gu, '')
+            .trim()
+            .slice(0, 80)
         : '',
     rating_star: clampedStar,
     comment: cleanComment,
@@ -358,8 +384,15 @@ export async function POST(request: NextRequest) {
       Math.min(5, Math.round(asNumber(body.ratingStar, computedAvgStar)))
     );
     const authorName =
-      (body.authorName || '').trim().slice(0, 80) || 'Người dùng Rate.vn';
-    const variation = (body.variation || '').trim().slice(0, 120) || null;
+      (body.authorName || '')
+        .replace(/\p{Cc}+/gu, '')
+        .trim()
+        .slice(0, 80) || 'Người dùng Rate.vn';
+    const variation =
+      (body.variation || '')
+        .replace(/\p{Cc}+/gu, '')
+        .trim()
+        .slice(0, 120) || null;
 
     const { data: rpcData, error: rpcError } = await auth.rateClient.rpc(
       'submit_community_review',

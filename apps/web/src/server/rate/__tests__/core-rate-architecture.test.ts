@@ -10149,7 +10149,70 @@ async function runCoreArchitectureSuite() {
     assert.equal(products936.length, 0);
 
     console.log(
-      '  ✅ [110/110] Supabase Cookie Env, Browser Access Token, Logger & Hero Bounds (#936) passed'
+      '  ✅ [110/111] Supabase Cookie Env, Browser Access Token, Logger & Hero Bounds (#936) passed'
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // 111. Review Item Sanitization, Voter Timestamp Guards & API Route Query Bounds (#938)
+  // ---------------------------------------------------------------------------
+  {
+    const reviewsRouteMod =
+      await import('../../../app/api/v1/rate/reviews/route');
+    const voteRouteMod =
+      await import('../../../app/api/reviews/[id]/vote/route');
+    const productsRouteMod =
+      await import('../../../app/api/v1/rate/products/route');
+    const watchlistRouteMod =
+      await import('../../../app/api/v1/rate/watchlist/route');
+
+    const sanitizedReview938 = reviewsRouteMod.toReviewItem(
+      {
+        id: Number.NaN,
+        author_name: '  Alice\u0000 ',
+        comment: 'Line 1\r\nLine 2\u0007',
+        variation: '  256GB\u0000 ',
+        reason: '  Valid\u0007 reason ',
+        created_at: '  2026-01-01T00:00:00.000Z\u0000 ',
+      },
+      {}
+    );
+    assert.equal(
+      sanitizedReview938.id,
+      '',
+      'toReviewItem must reject NaN numeric id'
+    );
+    assert.equal(sanitizedReview938.author_name, 'Alice');
+    assert.equal(sanitizedReview938.comment, 'Line 1\nLine 2');
+    assert.equal(sanitizedReview938.variation, '256GB');
+    assert.equal(sanitizedReview938.reason, 'Valid reason');
+    assert.equal(sanitizedReview938.created_at, '2026-01-01T00:00:00.000Z');
+
+    const elig938 = voteRouteMod.evaluateVoterEligibility({
+      is_anonymous: false,
+      email_confirmed_at: '  2025-01-01T00:00:00.000Z\u0000 ',
+      created_at: '  2025-01-01T00:00:00.000Z\u0007 ',
+    });
+    assert.equal(elig938.eligible, true);
+
+    assert.equal(productsRouteMod.parseBooleanFlag('  TRUE\u0000 '), true);
+    assert.equal(productsRouteMod.parseBooleanFlag(' 1\u0007 '), true);
+    assert.equal(productsRouteMod.parseBooleanFlag('false'), undefined);
+
+    assert.equal(
+      watchlistRouteMod.resolveWatchlistMerchantCount(-5, 3),
+      3,
+      'resolveWatchlistMerchantCount must fall back to offersCount when rawMerchantCount is negative'
+    );
+    assert.equal(
+      watchlistRouteMod.resolveWatchlistMerchantCount(true, 4),
+      4,
+      'resolveWatchlistMerchantCount must reject boolean rawMerchantCount'
+    );
+    assert.equal(watchlistRouteMod.resolveWatchlistMerchantCount(12, 4), 12);
+
+    console.log(
+      '  ✅ [111/111] Review Item Sanitization, Voter Timestamp Guards & API Route Query Bounds (#938) passed'
     );
   }
 

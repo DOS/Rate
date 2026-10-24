@@ -25,15 +25,20 @@ export async function GET(request: NextRequest) {
     const q = parseBoundedStringParam(sp.get('q'), 160) || undefined;
     const platform =
       parseBoundedStringParam(sp.get('platform'), 32) || undefined;
-    const rawOfficial = sp.get('officialOnly') ?? sp.get('official');
-    const officialOnly =
-      rawOfficial === '1' || rawOfficial?.toLowerCase() === 'true';
+    const rawOfficial = (sp.get('officialOnly') ?? sp.get('official') ?? '')
+      .replace(/\p{Cc}+/gu, '')
+      .trim()
+      .toLowerCase();
+    const officialOnly = rawOfficial === '1' || rawOfficial === 'true';
     const minTrust = parseBoundedNumberParam(
       sp.get('min_trust') ?? sp.get('minTrust'),
       0,
       100
     );
-    const rawSort = sp.get('sort');
+    const rawSort = (sp.get('sort') ?? '')
+      .replace(/\p{Cc}+/gu, '')
+      .trim()
+      .toLowerCase();
     const sort =
       rawSort === 'trust_desc' ||
       rawSort === 'products_desc' ||
