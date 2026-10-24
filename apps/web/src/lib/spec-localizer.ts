@@ -478,7 +478,10 @@ export function localizeSpecValue(
     return Number.isFinite(raw) ? String(raw) : '-';
   }
 
-  let text = String(raw).trim();
+  let text = String(raw)
+    .replace(/\p{Cc}/gu, ' ')
+    .trim()
+    .slice(0, 2_000);
   if (!text || text === '-') return '-';
 
   if (lang === 'vi') {

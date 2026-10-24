@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { computeProductRadarSignal } from '../../server/rate/deals';
 import { bayesianTierKey, radarExplanation } from '../product-detail-copy';
+import { localizeSpecValue } from '../spec-localizer';
 import { computeBayesianRatingSummary } from '../rate-api';
 
 type Messages = Record<string, Record<string, string>>;
@@ -129,6 +130,38 @@ function main() {
       );
     }
   }
+
+  // Non-finite / negative radar values & control-char sanitization (#854)
+  assert.equal(
+    bayesianTierKey({
+      confidenceTier: 'none' as never,
+      effectiveWeightSum: Number.NaN,
+    }),
+    'bayesianTierPrior'
+  );
+  const sanitizedDealExp = radarExplanation({
+    verdict: 'genuine_deal',
+    genuineDeal: {
+      ...signal.genuineDeal!,
+      savingsVsMedianVnd: -500_000,
+      savingsVsMedianPct: Number.NaN,
+      merchantName: '  Official\u0000 Store  ',
+      platform: ' shopee\u0007 ',
+    },
+    fakeSaleTrap: null,
+  });
+  assert.equal(sanitizedDealExp?.key, 'radarExplanationGenuineDeal');
+  if (sanitizedDealExp?.key === 'radarExplanationGenuineDeal') {
+    assert.equal(sanitizedDealExp.values.savings, '0');
+    assert.equal(sanitizedDealExp.values.pct, '0');
+    assert.equal(sanitizedDealExp.values.merchant, 'Official Store');
+    assert.equal(sanitizedDealExp.values.platform, 'SHOPEE');
+  }
+
+  // spec-localizer control-char stripping & length cap (#854)
+  assert.equal(localizeSpecValue('\u0000\u0007', 'vi'), '-');
+  assert.equal(localizeSpecValue('Quad\u0000Camera', 'vi'), 'Cụm 4 camera');
+  assert.equal(localizeSpecValue('x'.repeat(3_000), 'en').length, 2_000);
 
   console.warn('✅ Product detail copy suite passed');
 }

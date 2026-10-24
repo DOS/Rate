@@ -131,14 +131,23 @@ const TEMPLATES: ReadonlyArray<readonly [RegExp, AnalyzerCopyKey]> = [
   [/^Nhận phản hồi tích cực từ người dùng thực tế$/u, 'proPositiveFeedback'],
 ];
 
+const MAX_ANALYZER_COPY_LEN = 4_000;
+
 export function analyzerCopy(text: string): AnalyzerCopy {
-  const normalized = text.normalize('NFC').trim();
+  if (typeof text !== 'string') return { text: '' };
+  const safeText =
+    text.length > MAX_ANALYZER_COPY_LEN
+      ? text.slice(0, MAX_ANALYZER_COPY_LEN)
+      : text;
+  const normalized = safeText.normalize('NFC').trim();
   for (const [pattern, key] of TEMPLATES) {
     const match = pattern.exec(normalized);
     if (match) return { key, values: { ...(match.groups ?? {}) } };
   }
   // Only text that is actually Vietnamese is marked as such.
-  return isVietnamese(normalized) ? { text, lang: 'vi' } : { text };
+  return isVietnamese(normalized)
+    ? { text: safeText, lang: 'vi' }
+    : { text: safeText };
 }
 
 export const ANALYZER_COPY_KEYS: readonly AnalyzerCopyKey[] = TEMPLATES.map(

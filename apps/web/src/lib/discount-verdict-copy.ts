@@ -47,21 +47,24 @@ export function discountVerdictCopy(
   t: VerdictTranslator,
   a: OfferDiscountAnalysis
 ): DiscountVerdictCopy {
-  const median = vnd(a.historical_median_price);
-  const safeClaimedPct = toSafePct(a.claimed_discount_pct);
-  const safeRealPct = toSafePct(a.real_discount_vs_median_pct);
+  const safeAnalysis =
+    a && typeof a === 'object' ? a : ({} as Partial<OfferDiscountAnalysis>);
+  const median = vnd(safeAnalysis.historical_median_price);
+  const safeClaimedPct = toSafePct(safeAnalysis.claimed_discount_pct);
+  const safeRealPct = toSafePct(safeAnalysis.real_discount_vs_median_pct);
   // rate-api only judges a claimed discount when the store shows a
   // strikethrough price at least 5% above the current one.
-  const claimsDiscount = a.price_original != null && safeClaimedPct >= 5;
+  const claimsDiscount =
+    safeAnalysis.price_original != null && safeClaimedPct >= 5;
 
-  switch (a.verdict) {
+  switch (safeAnalysis.verdict) {
     case 'fake_discount':
       return {
         label: t('labelFake'),
         explanation: t('explainFake', {
-          original: vnd(a.price_original),
+          original: vnd(safeAnalysis.price_original),
           claimed: safeClaimedPct,
-          max: vnd(a.historical_max_price),
+          max: vnd(safeAnalysis.historical_max_price),
           median,
         }),
       };
@@ -86,15 +89,15 @@ export function discountVerdictCopy(
         : {
             label: t('labelHistoricLow'),
             explanation: t('explainHistoricLow', {
-              current: vnd(a.price_current),
-              max: vnd(a.historical_max_price),
+              current: vnd(safeAnalysis.price_current),
+              max: vnd(safeAnalysis.historical_max_price),
             }),
           };
     default:
       return {
         label: t('labelNormal'),
         explanation: t('explainNormal', {
-          current: vnd(a.price_current),
+          current: vnd(safeAnalysis.price_current),
           median,
         }),
       };

@@ -134,6 +134,13 @@ function main() {
   const suspicious = discountVerdictCopy(en, cases[1]![1]);
   assert.ok(suspicious.explanation.includes('(-0%)'), suspicious.explanation);
 
+  // Nullish analysis input falls back safely to normal_price (#854)
+  const fallbackNull = discountVerdictCopy(
+    en,
+    null as unknown as OfferDiscountAnalysis
+  );
+  assert.equal(fallbackNull.label, messages.en.labelNormal);
+
   console.warn('✅ Discount verdict copy suite passed');
 }
 
