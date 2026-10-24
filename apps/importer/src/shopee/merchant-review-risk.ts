@@ -424,12 +424,17 @@ export async function loadAndScoreMerchant(
   const productById = new Map<string, ProductRow>();
   const peerMerchants = new Map<string, MerchantRow>();
   const rows: PeerRow[] = [...listings, ...peers];
-  for (const { merchants: embedded, ...product } of rows) {
-    productById.set(product.id, product);
-    if (!product.merchant_id || product.merchant_id === safeMerchantId) continue;
+  for (const rawRow of rows) {
+    if (!rawRow || typeof rawRow !== 'object') continue;
+    const { merchants: embedded, ...product } = rawRow;
+    const safeProductId = normalizeSafeId(product.id);
+    if (!safeProductId) continue;
+    productById.set(safeProductId, { ...product, id: safeProductId });
+    const safePeerMerchantId = normalizeSafeId(product.merchant_id);
+    if (!safePeerMerchantId || safePeerMerchantId === safeMerchantId) continue;
     const official = Array.isArray(embedded) ? embedded[0]?.is_official : embedded?.is_official;
-    peerMerchants.set(product.merchant_id, {
-      id: product.merchant_id,
+    peerMerchants.set(safePeerMerchantId, {
+      id: safePeerMerchantId,
       platform: '',
       is_official: Boolean(official),
       follower_count: 0,
@@ -440,7 +445,7 @@ export async function loadAndScoreMerchant(
     'reviews',
     REVIEW_RISK_SELECT,
     'product_id',
-    uniqueIds(listings.map(p => p.id))
+    uniqueIds(listings.filter(p => Boolean(p && typeof p === 'object')).map(p => p.id))
   );
   const masters = await fetchAllByIds<{ id: string; min_price: number | string | null }>(
     supabase,
@@ -451,8 +456,10 @@ export async function loadAndScoreMerchant(
   );
   const masterMinByCluster = new Map<string, number>();
   for (const m of masters) {
+    if (!m || typeof m !== 'object') continue;
+    const masterId = normalizeSafeId(m.id);
     const price = toValidPrice(m.min_price);
-    if (price) masterMinByCluster.set(m.id, price);
+    if (masterId && price) masterMinByCluster.set(masterId, price);
   }
 
   const scores = scoreMerchants(

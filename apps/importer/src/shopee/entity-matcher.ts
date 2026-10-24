@@ -5,6 +5,7 @@ import {
   type NormalizedProductCandidate,
 } from './product-normalizer.js';
 import { AiSpecEnricher, mergeProductSpecifications } from './ai-spec-enricher.js';
+import { mergeKeySpecs } from './jobs/backfill-specs.js';
 import { createImporterLogger } from './logger.js';
 import type { RateSupabaseClient } from './types.js';
 
@@ -94,6 +95,17 @@ export class EntityMatcher {
     categoryId?: string,
     rawTitle?: string
   ): Promise<{ masterId: string; isNew: boolean }> {
+    if (!candidate || typeof candidate !== 'object') {
+      throw new Error('[EntityMatcher] candidate must be a non-null object');
+    }
+    const safeModelKey = String(candidate.model_key ?? '')
+      .replace(/\p{Cc}+/gu, '')
+      .trim();
+    if (!safeModelKey) {
+      throw new Error('[EntityMatcher] candidate.model_key must be a non-empty string');
+    }
+    candidate = { ...candidate, model_key: safeModelKey };
+
     // Tier 1: Deterministic model_key matching
     const { data: exactMatch, error: exactErr } = await this.supabase
       .from('master_products')
@@ -286,16 +298,26 @@ export class EntityMatcher {
    * Enriches an existing Master Product row in Supabase with full 10-Field-Group specs via AI
    */
   public async enrichMasterProductById(masterId: string): Promise<boolean> {
+    const safeMasterId = String(masterId ?? '')
+      .replace(/\p{Cc}+/gu, '')
+      .trim()
+      .slice(0, 128);
+    if (!safeMasterId) {
+      throw new Error('[EntityMatcher] masterId must be a non-empty string');
+    }
+
     const { data: row, error: fetchErr } = await this.supabase
       .from('master_products')
       .select(
         'id, brand, model, storage_gb, ram_gb, screen_size_inch, battery_mah, has_5g, name, description, colors, specifications, key_specs'
       )
-      .eq('id', masterId)
+      .eq('id', safeMasterId)
       .maybeSingle();
 
     if (fetchErr || !row) {
-      throw new Error(`[EntityMatcher] Master product ${masterId} not found: ${fetchErr?.message}`);
+      throw new Error(
+        `[EntityMatcher] Master product ${safeMasterId} not found: ${fetchErr?.message}`
+      );
     }
 
     const existingSpecsRecord =
@@ -345,19 +367,10 @@ export class EntityMatcher {
       mergedSpecifications.category_slug = inferredCategorySlug;
     }
 
-    const existingKeySpecs =
-      row.key_specs && typeof row.key_specs === 'object' && !Array.isArray(row.key_specs)
-        ? (row.key_specs as Record<string, unknown>)
-        : {};
-    const incomingKeySpecs = Object.fromEntries(
-      Object.entries(aiResult.key_specs || {}).filter(
-        ([, v]) => v !== undefined && v !== null && String(v).trim() !== ''
-      )
+    const mergedKeySpecs = mergeKeySpecs(
+      row.key_specs,
+      aiResult.key_specs as unknown as Record<string, unknown>
     );
-    const mergedKeySpecs = {
-      ...existingKeySpecs,
-      ...incomingKeySpecs,
-    };
 
     const { error: updateErr } = await this.supabase
       .from('master_products')
@@ -374,11 +387,11 @@ export class EntityMatcher {
         key_specs: mergedKeySpecs,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', masterId);
+      .eq('id', safeMasterId);
 
     if (updateErr) {
       throw new Error(
-        `[EntityMatcher] Failed to update enriched specs for ${masterId}: ${updateErr.message}`
+        `[EntityMatcher] Failed to update enriched specs for ${safeMasterId}: ${updateErr.message}`
       );
     }
 

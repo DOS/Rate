@@ -78,15 +78,26 @@ export function hasPopulatedSpecificationGroups(specs: unknown): boolean {
       const hasValue = Object.values(group as Record<string, unknown>).some(v => {
         if (v === undefined || v === null) return false;
         if (typeof v === 'number') return Number.isFinite(v);
+        if (typeof v === 'boolean') return true;
         if (Array.isArray(v)) {
           return v.some(
             item =>
               item !== undefined &&
               item !== null &&
-              (typeof item === 'number' ? Number.isFinite(item) : String(item).trim() !== '')
+              (typeof item === 'number'
+                ? Number.isFinite(item)
+                : typeof item === 'boolean'
+                  ? true
+                  : String(item)
+                      .replace(/\p{Cc}+/gu, '')
+                      .trim() !== '')
           );
         }
-        return String(v).trim() !== '';
+        return (
+          String(v)
+            .replace(/\p{Cc}+/gu, '')
+            .trim() !== ''
+        );
       });
       if (hasValue) return true;
     }
@@ -104,6 +115,9 @@ export function hasPopulatedSpecificationGroups(specs: unknown): boolean {
 export function normalizeScrapedProductPrices(
   product: ValidatedScrapedProduct
 ): ValidatedScrapedProduct {
+  if (!product || typeof product !== 'object') {
+    throw new Error('normalizeScrapedProductPrices requires a non-null product object');
+  }
   const priceMin = typeof product.priceMin === 'boolean' ? 0 : Number(product.priceMin);
   const rawPriceMax = typeof product.priceMax === 'boolean' ? Number.NaN : Number(product.priceMax);
   const priceMax =
@@ -317,6 +331,7 @@ export class ShopeeIngestionPipeline {
     masterId: string;
     platform: SupportedEcommercePlatform;
   }> {
+    if (!options || typeof options !== 'object') options = {};
     const product = normalizeScrapedProductPrices(ScrapedProductSchema.parse(rawProduct));
     if (
       !Number.isFinite(product.priceMin) ||
@@ -394,16 +409,21 @@ export class ShopeeIngestionPipeline {
     // a listing that is already clustered) keeps the listing on it instead of
     // re-matching every crawl, which can split it onto a new draft master.
     let hinted: { masterId: string; isNew: boolean } | null = null;
-    if (options.masterIdHint) {
+    const safeMasterIdHint =
+      typeof options.masterIdHint === 'string'
+        ? options.masterIdHint
+            .replace(/\p{Cc}+/gu, '')
+            .trim()
+            .slice(0, 128)
+        : '';
+    if (safeMasterIdHint) {
       const { data: hintRow, error: hintErr } = await this.supabase
         .from('master_products')
         .select('id, specifications')
-        .eq('id', options.masterIdHint)
+        .eq('id', safeMasterIdHint)
         .maybeSingle();
       if (hintErr) {
-        throw new Error(
-          `Failed to verify masterIdHint (${options.masterIdHint}): ${hintErr.message}`
-        );
+        throw new Error(`Failed to verify masterIdHint (${safeMasterIdHint}): ${hintErr.message}`);
       }
       if (hintRow?.id) {
         hinted = { masterId: hintRow.id, isNew: false };

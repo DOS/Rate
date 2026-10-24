@@ -476,12 +476,16 @@ export class AiSpecEnricher {
   private memoryCache = new Map<string, AiEnrichmentResponse>();
 
   constructor(config: AiSpecEnricherConfig = {}) {
-    this.provider = this.resolveProvider(config.provider);
+    const safeConfig = config && typeof config === 'object' ? config : {};
+    this.provider = this.resolveProvider(safeConfig.provider);
     const defaults = PROVIDER_DEFAULTS[this.provider];
 
-    this.apiKey = config.apiKey ?? this.resolveApiKey(this.provider);
+    this.apiKey =
+      typeof safeConfig.apiKey === 'string'
+        ? safeConfig.apiKey.trim()
+        : this.resolveApiKey(this.provider);
     this.baseUrl = resolveValidHttpBaseUrl(
-      config.baseUrl ||
+      safeConfig.baseUrl ||
         process.env.AI_BASE_URL ||
         process.env.DOS_AI_BASE_URL ||
         process.env.OPENAI_BASE_URL ||
@@ -490,14 +494,18 @@ export class AiSpecEnricher {
     );
 
     this.model =
-      config.model || process.env.AI_MODEL || process.env.OPENAI_MODEL || defaults.defaultModel;
+      safeConfig.model || process.env.AI_MODEL || process.env.OPENAI_MODEL || defaults.defaultModel;
 
-    const rawTimeout = config.timeoutMs ?? Number(process.env.AI_TIMEOUT_MS || 25000);
+    const rawTimeout =
+      typeof safeConfig.timeoutMs === 'boolean'
+        ? Number.NaN
+        : (safeConfig.timeoutMs ?? Number(process.env.AI_TIMEOUT_MS || 25000));
     this.timeoutMs =
       Number.isFinite(rawTimeout) && rawTimeout >= 1000 && rawTimeout <= 120000
         ? Math.round(rawTimeout)
         : 25000;
-    const rawTemp = config.temperature ?? 0.1;
+    const rawTemp =
+      typeof safeConfig.temperature === 'boolean' ? Number.NaN : (safeConfig.temperature ?? 0.1);
     this.temperature = Number.isFinite(rawTemp) && rawTemp >= 0 && rawTemp <= 2 ? rawTemp : 0.1;
   }
 
@@ -714,6 +722,14 @@ REQUIRED JSON SCHEMA:
     rawDescription?: string;
     categorySlug?: string;
   }): Promise<AiEnrichmentResponse | null> {
+    if (!params || typeof params !== 'object') return null;
+    const cleanBrand =
+      typeof params.brand === 'string' ? params.brand.replace(/\p{Cc}+/gu, ' ').trim() : '';
+    const cleanModel =
+      typeof params.model === 'string' ? params.model.replace(/\p{Cc}+/gu, ' ').trim() : '';
+    if (!cleanBrand || !cleanModel) return null;
+    params = { ...params, brand: cleanBrand, model: cleanModel };
+
     if (!this.isConfigured()) {
       logger.info(
         'spec_enrich.skipped_unconfigured',
@@ -931,6 +947,9 @@ REQUIRED JSON SCHEMA:
     candidate: NormalizedProductCandidate,
     rawTitle?: string
   ): Promise<NormalizedProductCandidate> {
+    if (!candidate || typeof candidate !== 'object') {
+      throw new Error('[AiSpecEnricher] candidate must be a non-null object');
+    }
     if (candidate.is_benchmark_enriched) {
       return {
         ...candidate,
