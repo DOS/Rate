@@ -285,57 +285,69 @@ export function parseGsmArenaHtmlToSpecs(
         new Set(
           colorsRaw
             .split(',')
-            .map(c => c.trim())
+            .map(c => c.trim().slice(0, 80))
             .filter(Boolean)
         )
-      )
+      ).slice(0, 50)
     : [];
   const nfcRaw = d['nfc'] || pa['nfc'] || '';
+  const capSpec = (val: string | undefined): string | undefined => {
+    if (!val) return undefined;
+    const trimmed = val.trim().slice(0, 500);
+    return trimmed || undefined;
+  };
+  const capKeySpec = (val: string | undefined): string | undefined => {
+    if (!val) return undefined;
+    const trimmed = val.trim().slice(0, 200);
+    return trimmed || undefined;
+  };
 
   const rawSpecs: ProductSpecifications = {
     display: {
       size_inch: screenSizeInch ?? undefined,
-      type: d['displaytype'] || pa['display type'] || undefined,
-      resolution: d['displayresolution'] || pa['resolution'] || undefined,
+      type: capSpec(d['displaytype'] || pa['display type']),
+      resolution: capSpec(d['displayresolution'] || pa['resolution']),
       refresh_rate_hz: refreshRateHz,
       ppi,
-      protection: d['displayprotection'] || undefined,
-      features: d['displayother'] || d['displaytype'] || undefined,
+      protection: capSpec(d['displayprotection']),
+      features: capSpec(d['displayother'] || d['displaytype']),
     },
     hardware: {
-      chipset: d['chipset'] || pa['system chip'] || undefined,
-      cpu: d['cpu'] || pa['processor'] || undefined,
-      gpu: d['gpu'] || pa['gpu'] || undefined,
+      chipset: capSpec(d['chipset'] || pa['system chip']),
+      cpu: capSpec(d['cpu'] || pa['processor']),
+      gpu: capSpec(d['gpu'] || pa['gpu']),
       ram_gb: ramGb ?? undefined,
       storage_gb: storageGb ?? undefined,
-      storage_expansion: d['memoryother']
-        ? `${d['memoryslot'] || 'No'} (${d['memoryother']})`
-        : d['memoryslot'] || 'No',
-      os: d['os'] || pa['os'] || undefined,
+      storage_expansion: capSpec(
+        d['memoryother']
+          ? `${d['memoryslot'] || 'No'} (${d['memoryother']})`
+          : d['memoryslot'] || 'No'
+      ),
+      os: capSpec(d['os'] || pa['os']),
     },
     camera: {
-      main_camera: camSplit.main_camera,
-      second_camera: camSplit.second_camera,
-      third_camera: camSplit.third_camera,
-      fourth_camera: camSplit.fourth_camera,
-      video_recording: d['cam1video'] || pa['video recording'] || undefined,
-      front_camera: d['cam2modules']
-        ? d['cam2modules'].replace(/\r?\n/g, ' | ')
-        : pa['front camera'] || undefined,
-      flash: d['cam1features'] || 'LED Flash, HDR, Panorama',
+      main_camera: capSpec(camSplit.main_camera),
+      second_camera: capSpec(camSplit.second_camera),
+      third_camera: capSpec(camSplit.third_camera),
+      fourth_camera: capSpec(camSplit.fourth_camera),
+      video_recording: capSpec(d['cam1video'] || pa['video recording']),
+      front_camera: capSpec(
+        d['cam2modules'] ? d['cam2modules'].replace(/\r?\n/g, ' | ') : pa['front camera']
+      ),
+      flash: capSpec(d['cam1features'] || 'LED Flash, HDR, Panorama'),
     },
     battery: {
       capacity_mah: batteryMah ?? undefined,
-      type: batRaw || undefined,
-      charging: chargingRaw ? chargingRaw.replace(/\r?\n/g, ', ') : undefined,
+      type: capSpec(batRaw),
+      charging: capSpec(chargingRaw ? chargingRaw.replace(/\r?\n/g, ', ') : undefined),
       fast_charging_w: fastChargingW,
       reverse_charging: /reverse\s+wireless/i.test(chargingRaw) ? true : undefined,
     },
     design: {
-      dimensions: d['dimensions'] || pa['dimensions'] || undefined,
+      dimensions: capSpec(d['dimensions'] || pa['dimensions']),
       weight_g: weightG,
-      materials: d['build'] || d['bodyother'] || undefined,
-      resistance: resistanceMatch ? resistanceMatch[0].trim() : undefined,
+      materials: capSpec(d['build'] || d['bodyother']),
+      resistance: capSpec(resistanceMatch ? resistanceMatch[0].trim() : undefined),
       biometrics: /fingerprint/i.test(d['sensors'] || pa['biometrics'] || '')
         ? 'Under-display ultrasonic fingerprint, Face Unlock'
         : 'Face ID / Biometric sensor',
@@ -343,57 +355,65 @@ export function parseGsmArenaHtmlToSpecs(
     },
     cellular: {
       has_5g: has5g,
-      bands_5g: has5g ? d['net5g'] || '5G SA/NSA/Sub6' : d['net5g'] || undefined,
-      sim_type: d['sim'] || (has5g ? 'Dual SIM (Nano-SIM + eSIM)' : 'No cellular connectivity'),
-      data_speed: d['speed'] || (has5g ? '5G, LTE-A' : 'Wi-Fi Only'),
-      technology: d['nettech'] || (has5g ? 'GSM / HSPA / LTE / 5G' : 'No cellular connectivity'),
+      bands_5g: capSpec(has5g ? d['net5g'] || '5G SA/NSA/Sub6' : d['net5g']),
+      sim_type: capSpec(
+        d['sim'] || (has5g ? 'Dual SIM (Nano-SIM + eSIM)' : 'No cellular connectivity')
+      ),
+      data_speed: capSpec(d['speed'] || (has5g ? '5G, LTE-A' : 'Wi-Fi Only')),
+      technology: capSpec(
+        d['nettech'] || (has5g ? 'GSM / HSPA / LTE / 5G' : 'No cellular connectivity')
+      ),
     },
     connectivity: {
-      bluetooth: d['bluetooth'] || pa['bluetooth'] || undefined,
-      wlan: d['wlan'] || pa['wi-fi'] || undefined,
-      usb: d['usb'] || pa['usb'] || undefined,
+      bluetooth: capSpec(d['bluetooth'] || pa['bluetooth']),
+      wlan: capSpec(d['wlan'] || pa['wi-fi']),
+      usb: capSpec(d['usb'] || pa['usb']),
       nfc: nfcRaw ? /yes|true|nfc/i.test(nfcRaw) && !/^no\b/i.test(nfcRaw.trim()) : true,
-      location: d['gps'] || undefined,
-      sensors: d['sensors'] || undefined,
+      location: capSpec(d['gps']),
+      sensors: capSpec(d['sensors']),
     },
     multimedia: {
-      loudspeaker: d['loudspeaker'] || 'Stereo speakers, Dolby Atmos',
+      loudspeaker: capSpec(d['loudspeaker'] || 'Stereo speakers, Dolby Atmos'),
       headphone_jack_35mm: has35mmJack,
-      audio_features: d['soundother'] || '24-bit/192kHz Hi-Res & Hi-Res Wireless audio',
+      audio_features: capSpec(d['soundother'] || '24-bit/192kHz Hi-Res & Hi-Res Wireless audio'),
     },
     availability: {
-      announced: d['announced'] || undefined,
-      status: d['status'] || undefined,
-      prices_msrp: d['price'] || undefined,
+      announced: capSpec(d['announced']),
+      status: capSpec(d['status']),
+      prices_msrp: capSpec(d['price']),
     },
     regulatory: {
-      sar_head: d['sar-us'] || undefined,
-      sar_body: d['sar-eu'] || undefined,
+      sar_head: capSpec(d['sar-us']),
+      sar_body: capSpec(d['sar-eu']),
       certifications: 'CE, FCC, RoHS, QCVN (BTTTT Vietnam)',
     },
   };
 
   const validatedSpecs = ProductSpecificationsSchema.parse(rawSpecs);
   const keySpecs = KeySpecsSchema.parse({
-    screen: screenSizeInch
-      ? `${screenSizeInch}" ${d['displaytype']?.split(',')[0] || 'LTPO OLED'} ${refreshRateHz ? `${refreshRateHz}Hz` : ''}`.trim()
-      : d['displaytype'],
-    chip: d['chipset'] || pa['system chip'] || undefined,
+    screen: capKeySpec(
+      screenSizeInch
+        ? `${screenSizeInch}" ${d['displaytype']?.split(',')[0] || 'LTPO OLED'} ${refreshRateHz ? `${refreshRateHz}Hz` : ''}`
+        : d['displaytype']
+    ),
+    chip: capKeySpec(d['chipset'] || pa['system chip']),
     ram: ramGb ? `${ramGb}GB` : undefined,
     storage: storageGb
       ? storageGb >= 1024 && storageGb % 512 === 0
         ? `${storageGb / 1024}TB`
         : `${storageGb}GB`
       : undefined,
-    camera: camSplit.main_camera
-      ? [camSplit.main_camera, camSplit.second_camera, camSplit.third_camera]
-          .filter(Boolean)
-          .map(c => c?.split(',')[0]?.trim())
-          .join(' + ')
-      : undefined,
-    battery: batteryMah
-      ? `${batteryMah}mAh${fastChargingW ? ` ${fastChargingW}W` : ''}`
-      : batRaw || undefined,
+    camera: capKeySpec(
+      camSplit.main_camera
+        ? [camSplit.main_camera, camSplit.second_camera, camSplit.third_camera]
+            .filter(Boolean)
+            .map(c => c?.split(',')[0]?.trim())
+            .join(' + ')
+        : undefined
+    ),
+    battery: capKeySpec(
+      batteryMah ? `${batteryMah}mAh${fastChargingW ? ` ${fastChargingW}W` : ''}` : batRaw
+    ),
   });
 
   const gsmarenaUrl = normalizeArenaUrl(meta?.gsmarenaUrl, /(?:^|\.)gsmarena\.com$/i);

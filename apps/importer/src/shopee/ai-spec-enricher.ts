@@ -321,7 +321,7 @@ export function sanitizeSpecifications(raw: unknown): ProductSpecifications {
     : undefined;
 
   const candidateSpecs: ProductSpecifications = {
-    category_slug: toStringOrUndefined(root.category_slug),
+    category_slug: toStringOrUndefined(root.category_slug, 64),
     availability: availabilityParsed?.success ? availabilityParsed.data : undefined,
     design: designParsed?.success ? designParsed.data : undefined,
     display: displayParsed?.success ? displayParsed.data : undefined,
