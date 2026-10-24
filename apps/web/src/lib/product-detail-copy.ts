@@ -1,3 +1,4 @@
+import { MAX_VALID_VND_PRICE } from './rate-domain-core';
 import type { BayesianRatingSummary } from './rate-api';
 import type { RadarSignal } from './deal-radar';
 
@@ -16,7 +17,7 @@ export type BayesianTierKey =
 export function bayesianTierKey(
   summary: Pick<BayesianRatingSummary, 'confidenceTier' | 'effectiveWeightSum'>
 ): BayesianTierKey {
-  switch (summary.confidenceTier) {
+  switch (summary?.confidenceTier) {
     case 'high':
       return 'bayesianTierHigh';
     case 'medium':
@@ -24,7 +25,8 @@ export function bayesianTierKey(
     case 'low':
       return 'bayesianTierLow';
     default:
-      return summary.effectiveWeightSum > 0
+      return Number.isFinite(summary?.effectiveWeightSum) &&
+        summary.effectiveWeightSum > 0
         ? 'bayesianTierSmoothed'
         : 'bayesianTierPrior';
   }
@@ -50,7 +52,27 @@ export type RadarExplanation =
       };
     };
 
-const vnd = (value: number) => value.toLocaleString('vi-VN');
+const COPY_CONTROL_CHAR_RE = /\p{Cc}/gu;
+
+const vnd = (value: number) => {
+  const num = Number(value);
+  const safe =
+    Number.isFinite(num) && num > 0
+      ? Math.min(Math.round(num), MAX_VALID_VND_PRICE)
+      : 0;
+  return safe.toLocaleString('vi-VN');
+};
+
+const safePctString = (value: unknown, max = 10_000): string => {
+  const num = Number(value);
+  if (!Number.isFinite(num) || num <= 0) return '0';
+  return String(Math.min(num, max));
+};
+
+const safeLabelText = (value: unknown, maxLen: number): string => {
+  if (typeof value !== 'string') return '';
+  return value.replace(COPY_CONTROL_CHAR_RE, '').trim().slice(0, maxLen);
+};
 
 /**
  * Message key and values for the radar note under the product header. Values
@@ -59,15 +81,16 @@ const vnd = (value: number) => value.toLocaleString('vi-VN');
 export function radarExplanation(
   signal: Pick<RadarSignal, 'verdict' | 'genuineDeal' | 'fakeSaleTrap'>
 ): RadarExplanation | null {
+  if (!signal || typeof signal !== 'object') return null;
   if (signal.verdict === 'genuine_deal' && signal.genuineDeal) {
     const deal = signal.genuineDeal;
     return {
       key: 'radarExplanationGenuineDeal',
       values: {
         savings: vnd(deal.savingsVsMedianVnd),
-        pct: String(deal.savingsVsMedianPct),
-        merchant: deal.merchantName,
-        platform: deal.platform.toUpperCase(),
+        pct: safePctString(deal.savingsVsMedianPct),
+        merchant: safeLabelText(deal.merchantName, 200),
+        platform: safeLabelText(deal.platform, 64).toUpperCase(),
       },
     };
   }
@@ -77,13 +100,14 @@ export function radarExplanation(
     trap &&
     trap.priceOriginal != null
   ) {
+    const rawDiff = Number(trap.priceCurrent) - Number(trap.marketMinPrice);
     return {
       key: 'radarExplanationFakeSale',
       values: {
         original: vnd(trap.priceOriginal),
-        markupPct: String(trap.fakeMarkupPct),
-        claimedPct: String(trap.claimedDiscountPct),
-        aboveFloor: vnd(trap.priceCurrent - trap.marketMinPrice),
+        markupPct: safePctString(trap.fakeMarkupPct),
+        claimedPct: safePctString(trap.claimedDiscountPct),
+        aboveFloor: vnd(Number.isFinite(rawDiff) && rawDiff > 0 ? rawDiff : 0),
       },
     };
   }

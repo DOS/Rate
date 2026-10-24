@@ -50,4 +50,25 @@ for (const filter of [
   );
 }
 
+// Invalid/non-object params or out-of-bounds limit/offset are rejected (#854)
+assert.equal(isPlainListing(null as never), false);
+assert.equal(isPlainListing([] as never), false);
+assert.equal(isPlainListing({ categorySlug: 'smartphones', limit: 0 }), false);
+assert.equal(
+  isPlainListing({ categorySlug: 'smartphones', limit: 501 }),
+  false
+);
+assert.equal(
+  isPlainListing({ categorySlug: 'smartphones', limit: Number.NaN }),
+  false
+);
+assert.equal(
+  isPlainListing({ categorySlug: 'smartphones', offset: -1 }),
+  false
+);
+assert.equal(
+  isPlainListing({ categorySlug: 'smartphones', offset: 100_001 }),
+  false
+);
+
 console.warn('✅ Catalogue plain-listing suite passed');

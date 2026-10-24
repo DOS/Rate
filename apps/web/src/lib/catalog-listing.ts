@@ -20,7 +20,29 @@ const CANONICAL_CATEGORY_SLUGS: ReadonlySet<string> =
  * window. Those reads share the data cache; a filter added later is treated
  * as free-form and stays uncached until listed here (DOS/Rate#495).
  */
+const MAX_PLAIN_LISTING_LIMIT = 500;
+const MAX_PLAIN_LISTING_OFFSET = 100_000;
+
 export function isPlainListing(params: MasterProductFilterParams): boolean {
+  if (!params || typeof params !== 'object' || Array.isArray(params)) {
+    return false;
+  }
+  if (
+    params.limit !== undefined &&
+    (!Number.isFinite(params.limit) ||
+      params.limit < 1 ||
+      params.limit > MAX_PLAIN_LISTING_LIMIT)
+  ) {
+    return false;
+  }
+  if (
+    params.offset !== undefined &&
+    (!Number.isFinite(params.offset) ||
+      params.offset < 0 ||
+      params.offset > MAX_PLAIN_LISTING_OFFSET)
+  ) {
+    return false;
+  }
   return (
     typeof params.categorySlug === 'string' &&
     CANONICAL_CATEGORY_SLUGS.has(params.categorySlug) &&
