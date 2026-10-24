@@ -542,23 +542,31 @@ export function localizeCategoryFilterSchema(
   schema: CategoryFilterSchema,
   t: (key: string) => string
 ): CategoryFilterSchema {
+  const safeSchema =
+    schema && typeof schema === 'object' ? schema : DEFAULT_SMARTPHONE_SCHEMA;
   const slug =
-    typeof schema?.categorySlug === 'string' &&
-    Object.hasOwn(CATEGORY_FILTER_SCHEMAS, schema.categorySlug)
-      ? schema.categorySlug
+    typeof safeSchema.categorySlug === 'string' &&
+    Object.hasOwn(CATEGORY_FILTER_SCHEMAS, safeSchema.categorySlug)
+      ? safeSchema.categorySlug
       : 'smartphones';
+  const presets = Array.isArray(safeSchema.pricePresets)
+    ? safeSchema.pricePresets
+    : DEFAULT_SMARTPHONE_SCHEMA.pricePresets;
+  const features = Array.isArray(safeSchema.featureCheckboxes)
+    ? safeSchema.featureCheckboxes
+    : DEFAULT_SMARTPHONE_SCHEMA.featureCheckboxes;
 
   return {
-    ...schema,
+    ...safeSchema,
     directoryName: t('schemas.directoryTech'),
     categoryTitle: t(`schemas.${slug}.title`),
     categorySubtitle: t(`schemas.${slug}.subtitle`),
     searchPlaceholder: t(`schemas.${slug}.searchPlaceholder`),
-    pricePresets: schema.pricePresets.map((preset) => ({
+    pricePresets: presets.map((preset) => ({
       ...preset,
       label: t(`schemas.${slug}.presets.${preset.id}`),
     })),
-    featureCheckboxes: schema.featureCheckboxes.map((feat) => ({
+    featureCheckboxes: features.map((feat) => ({
       ...feat,
       label: t(`schemas.${slug}.features.${feat.key}.label`),
       description: t(`schemas.${slug}.features.${feat.key}.desc`),
@@ -567,7 +575,14 @@ export function localizeCategoryFilterSchema(
 }
 
 export function formatStorageLabel(gb: number): string {
-  const n = Number(gb);
+  const rawGb: unknown = gb;
+  if (typeof rawGb !== 'number' && typeof rawGb !== 'string') {
+    return '0GB';
+  }
+  if (typeof rawGb === 'string' && !rawGb.trim()) {
+    return '0GB';
+  }
+  const n = typeof rawGb === 'string' ? Number(rawGb.trim()) : rawGb;
   if (!Number.isFinite(n) || n <= 0 || n > MAX_STORAGE_GB) {
     return '0GB';
   }

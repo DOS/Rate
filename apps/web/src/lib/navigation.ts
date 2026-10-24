@@ -68,7 +68,7 @@ export const isAppLink = (link: string): boolean => {
     if (url.username || url.password) {
       return false;
     }
-    return url.hostname === base.hostname;
+    return url.origin === base.origin;
   } catch {
     return false;
   }

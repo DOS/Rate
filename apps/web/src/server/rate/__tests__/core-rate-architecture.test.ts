@@ -9832,6 +9832,170 @@ async function runCoreArchitectureSuite() {
     );
   }
 
+  // -------------------------------------------------------------------------
+  // 108. Merchant-Directory, Rate-Domain Compare Specs & Catalog/Copy/Nav Helpers Bounds (#902)
+  // -------------------------------------------------------------------------
+  {
+    const dirMod = await import('../../../lib/merchant-directory');
+    const domMod = await import('../../../lib/rate-domain');
+    const catListMod = await import('../../../lib/catalog-listing');
+    const catFilterMod = await import('../../../lib/category-filters');
+    const soldMod = await import('../../../lib/sold-count');
+    const langMod = await import('../../../lib/content-lang');
+    const analyzerMod = await import('../../../lib/analyzer-copy');
+    const navMod = await import('../../../lib/navigation');
+
+    assert.deepEqual(
+      dirMod.parseMerchantDirectoryFilters(
+        null as unknown as (key: string) => string
+      ),
+      dirMod.DEFAULT_MERCHANT_DIRECTORY_FILTERS,
+      'parseMerchantDirectoryFilters must guard non-function getter'
+    );
+    const dirSummary902 = dirMod.summarizeMerchantDirectory([
+      {
+        id: 'm1',
+        name: 'Shop 1',
+        platform: 'shopee',
+        platform_shop_id: '111',
+        is_official: true,
+        rating_star: 4.9,
+        follower_count: true as unknown as number,
+        product_count: true as unknown as number,
+        risk_score: 0,
+        review_risk_score: false as unknown as number,
+        trust_score: null as unknown as number,
+      } as unknown as import('../../../lib/rate-domain').MerchantSummary,
+    ]);
+    assert.equal(
+      dirSummary902.safe,
+      0,
+      'summarizeMerchantDirectory must not coerce null trust_score to 80+'
+    );
+    assert.deepEqual(
+      dirMod.filterMerchantDirectory(
+        null as unknown as import('../../../lib/rate-domain').MerchantSummary[],
+        null as unknown as import('../../../lib/merchant-directory').MerchantDirectoryFilters
+      ),
+      [],
+      'filterMerchantDirectory must guard non-array merchants and nullish filters'
+    );
+
+    assert.equal(
+      domMod.resolveCompareDisplaySizeInch({
+        screen_size_inch: true as unknown as number,
+        specifications: { display: { size_inch: true as unknown as number } },
+        key_specs: { screen: '6.78 inch' },
+      } as unknown as import('@repo/shared-data').MasterProduct),
+      6.78,
+      'resolveCompareDisplaySizeInch must reject boolean size_inch and fall back to key_specs.screen'
+    );
+    assert.equal(
+      domMod.resolveCompareRamGb({
+        ram_gb: true as unknown as number,
+        specifications: { hardware: { ram_gb: true as unknown as number } },
+        key_specs: { ram: '12 GB' },
+      } as unknown as import('@repo/shared-data').MasterProduct),
+      12,
+      'resolveCompareRamGb must reject boolean ram_gb and fall back to key_specs.ram'
+    );
+    assert.equal(
+      domMod.resolveCompareStorageGb({
+        storage_gb: true as unknown as number,
+        specifications: { hardware: { storage_gb: true as unknown as number } },
+        key_specs: { storage: '512 GB' },
+      } as unknown as import('@repo/shared-data').MasterProduct),
+      512,
+      'resolveCompareStorageGb must reject boolean storage_gb and fall back to key_specs.storage'
+    );
+    assert.equal(
+      domMod.resolveCompareBatteryMah({
+        battery_mah: true as unknown as number,
+        specifications: {
+          battery: { capacity_mah: true as unknown as number },
+        },
+        key_specs: { battery: '5000 mAh' },
+      } as unknown as import('@repo/shared-data').MasterProduct),
+      5000,
+      'resolveCompareBatteryMah must reject boolean battery_mah and fall back to key_specs.battery'
+    );
+
+    assert.equal(
+      catListMod.isPlainListing({
+        categorySlug: 'smartphones',
+        sort: 'sql_injection' as unknown as import('../../../lib/rate-api').MasterProductFilterParams['sort'],
+      }),
+      false,
+      'isPlainListing must reject non-canonical sort options'
+    );
+    assert.equal(
+      catListMod.isPlainListing({
+        categorySlug: 'smartphones',
+        limit: 12.5,
+      }),
+      false,
+      'isPlainListing must reject fractional limit values'
+    );
+    assert.equal(
+      catListMod.isPlainListing({
+        categorySlug: 'smartphones',
+        sort: 'price_asc',
+        limit: 24,
+        offset: 0,
+      }),
+      true
+    );
+
+    assert.equal(
+      catFilterMod.formatStorageLabel(true as unknown as number),
+      '0GB',
+      'formatStorageLabel must reject boolean true'
+    );
+    assert.equal(
+      catFilterMod.formatStorageLabel('1024' as unknown as number),
+      '1TB'
+    );
+
+    assert.equal(
+      soldMod.formatSoldCount('1500' as unknown as number, '1,5k+', 'en'),
+      '1.5K+',
+      'formatSoldCount must accept numeric string historicalSold'
+    );
+    assert.equal(
+      langMod.contentLang('Điện thoại chính hãng', 'vi-VN'),
+      undefined,
+      'contentLang must treat vi-VN as Vietnamese locale without override'
+    );
+    assert.equal(
+      langMod.contentLang('Điện thoại chính hãng', 'en-US'),
+      'vi',
+      'contentLang must return vi for Vietnamese text on non-vi locale'
+    );
+
+    const aCopy902 = analyzerMod.analyzerCopy(
+      '  Đánh giá chi tiết,\u0000hợp lệ từ người dùng thực tế.  '
+    );
+    assert.deepEqual(
+      aCopy902,
+      { key: 'reasonAuthentic', values: {} },
+      'analyzerCopy must strip control characters and collapse whitespace before template matching'
+    );
+
+    const baseAppUrl902 = navMod.getAppPublicUrl();
+    const parsedBase902 = new URL(baseAppUrl902);
+    const diffPortUrl902 = `${parsedBase902.protocol}//${parsedBase902.hostname}:65432/smartphones`;
+    assert.equal(
+      navMod.isAppLink(diffPortUrl902),
+      false,
+      'isAppLink must reject different port on the same hostname'
+    );
+    assert.equal(navMod.isAppLink('/smartphones'), true);
+
+    console.log(
+      '  ✅ [108/108] Merchant-Directory, Rate-Domain Compare Specs & Catalog/Copy/Nav Helpers Bounds (#902) passed'
+    );
+  }
+
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
 

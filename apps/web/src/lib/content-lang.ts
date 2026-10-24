@@ -25,7 +25,18 @@ export function contentLang(
   text: string | number | boolean | null | undefined,
   locale: string
 ): 'vi' | undefined {
-  return locale !== 'vi' && typeof text === 'string' && isVietnamese(text)
+  const cleanLocale =
+    typeof locale === 'string'
+      ? locale
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .toLowerCase()
+      : '';
+  const isViLocale =
+    cleanLocale === 'vi' ||
+    cleanLocale.startsWith('vi-') ||
+    cleanLocale.startsWith('vi_');
+  return !isViLocale && typeof text === 'string' && isVietnamese(text)
     ? 'vi'
     : undefined;
 }
