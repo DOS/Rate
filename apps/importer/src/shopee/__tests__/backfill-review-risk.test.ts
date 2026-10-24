@@ -783,8 +783,19 @@ async function run() {
   );
 
   // DOS/Rate#916: ScrapedProductSchema, ScrapedReviewSchema, and SortSchema bounds
-  const { ScrapedProductSchema, ScrapedReviewSchema, SortSchema } =
-    await import('@repo/shared-data');
+  const {
+    KeySpecsSchema,
+    ListingFilterSchema,
+    ListingSchema,
+    MasterProductSchema,
+    ReviewReactionSchema,
+    ReviewSchema,
+    ScrapedProductSchema,
+    ScrapedReviewSchema,
+    SortSchema,
+    UserAuthResponseSchema,
+    UserLoginSchema,
+  } = await import('@repo/shared-data');
   assert.equal(SortSchema.safeParse({ field: '   ', order: 'asc' }).success, false);
   assert.equal(SortSchema.safeParse({ field: 'a'.repeat(65), order: 'desc' }).success, false);
   assert.equal(SortSchema.safeParse({ field: 'price_min', order: 'asc' }).success, true);
@@ -808,6 +819,50 @@ async function run() {
       priceMin: 25_000_000,
       priceMax: 25_000_000,
       shop: { shopId: '456', name: 'Shop', isMall: true },
+    }).success,
+    false
+  );
+
+  // DOS/Rate#918: User, Listing, Review, KeySpecs, and MasterProduct bounds
+  assert.equal(UserLoginSchema.safeParse({ identifier: '   ', password: 'secret' }).success, false);
+  assert.equal(UserLoginSchema.safeParse({ identifier: 'alice', password: '' }).success, false);
+  assert.equal(
+    UserAuthResponseSchema.safeParse({
+      jwt: '',
+      user: {
+        id: '018f1234-5678-7abc-9def-0123456789ab',
+        username: 'alice',
+        email: 'alice@example.com',
+        role: 'user',
+        isActive: true,
+        emailConfirmed: true,
+        createdAt: '2026-10-24T00:00:00.000Z',
+        updatedAt: '2026-10-24T00:00:00.000Z',
+      },
+    }).success,
+    false
+  );
+  assert.equal(ListingFilterSchema.safeParse({ search: 's'.repeat(201) }).success, false);
+  assert.equal(ListingSchema.shape.tags.safeParse(['t'.repeat(65)]).success, false);
+  assert.equal(ReviewSchema.shape.pros.safeParse(['p'.repeat(301)]).success, false);
+  assert.equal(
+    ReviewReactionSchema.safeParse({
+      reviewId: '018f1234-5678-7abc-9def-0123456789ab',
+      userId: '018f1234-5678-7abc-9def-0123456789ac',
+      type: 'report',
+      reason: 'r'.repeat(1001),
+    }).success,
+    false
+  );
+  assert.equal(KeySpecsSchema.safeParse({ screen: 's'.repeat(201) }).success, false);
+  assert.equal(
+    MasterProductSchema.safeParse({
+      id: '018f1234-5678-7abc-9def-0123456789ab',
+      brand: 'b'.repeat(121),
+      model: 'iPhone 16',
+      model_key: 'apple_iphone_16',
+      name: 'Apple iPhone 16',
+      slug: 'apple-iphone-16',
     }).success,
     false
   );
