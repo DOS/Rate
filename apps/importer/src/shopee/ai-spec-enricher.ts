@@ -480,10 +480,12 @@ export class AiSpecEnricher {
     this.provider = this.resolveProvider(safeConfig.provider);
     const defaults = PROVIDER_DEFAULTS[this.provider];
 
-    this.apiKey =
-      typeof safeConfig.apiKey === 'string'
-        ? safeConfig.apiKey.trim()
-        : this.resolveApiKey(this.provider);
+    const rawApiKey =
+      typeof safeConfig.apiKey === 'string' ? safeConfig.apiKey : this.resolveApiKey(this.provider);
+    this.apiKey = rawApiKey
+      .replace(/\p{Cc}+/gu, '')
+      .trim()
+      .slice(0, 512);
     this.baseUrl = resolveValidHttpBaseUrl(
       safeConfig.baseUrl ||
         process.env.AI_BASE_URL ||
@@ -493,8 +495,12 @@ export class AiSpecEnricher {
       defaults.baseUrl
     );
 
-    this.model =
-      safeConfig.model || process.env.AI_MODEL || process.env.OPENAI_MODEL || defaults.defaultModel;
+    const rawModelCandidate =
+      (typeof safeConfig.model === 'string' && safeConfig.model.replace(/\p{Cc}+/gu, '').trim()) ||
+      (process.env.AI_MODEL || '').replace(/\p{Cc}+/gu, '').trim() ||
+      (process.env.OPENAI_MODEL || '').replace(/\p{Cc}+/gu, '').trim() ||
+      '';
+    this.model = rawModelCandidate.slice(0, 128) || defaults.defaultModel;
 
     const rawTimeout =
       typeof safeConfig.timeoutMs === 'boolean'
@@ -510,9 +516,13 @@ export class AiSpecEnricher {
   }
 
   private resolveProvider(explicit?: SupportedAiProvider): SupportedAiProvider {
-    if (explicit && explicit in PROVIDER_DEFAULTS) return explicit;
-    const envProvider = (process.env.AI_PROVIDER || '').trim().toLowerCase() as SupportedAiProvider;
-    if (envProvider && envProvider in PROVIDER_DEFAULTS) return envProvider;
+    if (typeof explicit === 'string' && Object.hasOwn(PROVIDER_DEFAULTS, explicit)) {
+      return explicit as SupportedAiProvider;
+    }
+    const envProvider = (process.env.AI_PROVIDER || '').trim().toLowerCase();
+    if (envProvider && Object.hasOwn(PROVIDER_DEFAULTS, envProvider)) {
+      return envProvider as SupportedAiProvider;
+    }
 
     if (process.env.DOS_AI_API_KEY || process.env.DOS_AI_BASE_URL) return 'dos-ai';
     if (process.env.OPENAI_API_KEY) return 'openai';
@@ -527,7 +537,13 @@ export class AiSpecEnricher {
     const keys = PROVIDER_DEFAULTS[provider].envKeys;
     for (const k of keys) {
       const val = process.env[k];
-      if (val && val.trim().length > 0) return val.trim();
+      if (typeof val === 'string') {
+        const cleaned = val
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .slice(0, 512);
+        if (cleaned.length > 0) return cleaned;
+      }
     }
     return '';
   }

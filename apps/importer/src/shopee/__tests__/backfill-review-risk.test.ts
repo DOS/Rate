@@ -918,6 +918,91 @@ async function run() {
   assert.equal(clampedProduct.ratingStar, 0);
   assert.equal(clampedProduct.ratingCount, 0);
 
+  // DOS/Rate#924: AiReviewAnalyzer & AiSpecEnricher bounds and persistence guards
+  const { AiReviewBatchItemSchema, AiReviewBatchResponseSchema, merchantRiskBreakdown } =
+    await import('../ai-review-analyzer.js');
+
+  const enricherWithProtoProvider = new AiSpecEnricher({
+    provider: 'toString' as unknown as 'openai',
+    model: '   \u0007   ',
+    apiKey: '  sk-test\u0000\u001f  ',
+  });
+  assert.equal(enricherWithProtoProvider.getProviderInfo().provider, 'openai');
+  assert.equal(enricherWithProtoProvider.getProviderInfo().model, 'gpt-4o-mini');
+  assert.equal(enricherWithProtoProvider.isConfigured(), true);
+
+  const analyzerWithProtoProvider = new AiReviewAnalyzer({
+    provider: 'constructor' as unknown as 'openai',
+    model: '   \u0007   ',
+    apiKey: '  sk-test\u0000  ',
+  });
+  assert.equal(analyzerWithProtoProvider.isConfigured(), true);
+
+  assert.equal(
+    AiReviewBatchItemSchema.safeParse({
+      review_id: 'r'.repeat(129),
+      flag_category: 'authentic',
+      verdict: 'authentic',
+      fake_probability: 0.1,
+      reason: 'ok',
+    }).success,
+    false
+  );
+  assert.equal(
+    AiReviewBatchResponseSchema.safeParse({
+      reviews: [],
+      pros: ['p'.repeat(201)],
+      cons: [],
+      ai_summary: 'ok',
+    }).success,
+    false
+  );
+
+  const breakdown = merchantRiskBreakdown({
+    risk_score: 50,
+    trust_score: 150,
+    risk_level: 'invalid' as unknown as 'low',
+    seeding_ratio: 5,
+    coin_spam_ratio: -1,
+    sabotage_ratio: Number.NaN,
+    total_reviews: -10,
+    authentic_count: 2_000_000_000,
+    coin_spam_count: 1.9,
+    seeding_fake_count: 0,
+    sabotage_or_bombing_count: 0,
+    suspicious_ratio_pct: 999,
+    price_anomaly_detected: 1 as unknown as boolean,
+    reasons: ['ok\u0000reason', '', 'r'.repeat(500)],
+  });
+  assert.equal(breakdown.risk_level, 'low');
+  assert.equal(breakdown.trust_score, 100);
+  assert.equal(breakdown.seeding_ratio, 1);
+  assert.equal(breakdown.coin_spam_ratio, 0);
+  assert.equal(breakdown.total_reviews, 0);
+  assert.equal(breakdown.authentic_count, 1_000_000_000);
+  assert.equal(breakdown.suspicious_ratio_pct, 100);
+  assert.equal(breakdown.reasons.length, 2);
+  assert.equal(breakdown.reasons[0], 'ok reason');
+  assert.equal(breakdown.reasons[1].length, 400);
+
+  await assert.rejects(
+    () =>
+      analyzerWithProtoProvider.castReviewVote({} as never, {
+        reviewId: 'bad\u0000id',
+        voterId: 'user-1',
+        vote: 'up',
+      }),
+    /reviewId and voterId must be non-empty strings/
+  );
+  await assert.rejects(
+    () =>
+      analyzerWithProtoProvider.persistAnalysisToSupabase({} as never, {
+        productId: 'bad\u0000prod',
+        reviews: [],
+      }),
+    /productId must be a valid non-empty string/
+  );
+
   console.log('✅ Review risk backfill suite passed');
 }
 
