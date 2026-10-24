@@ -11,12 +11,21 @@ export function escapeCsvCell(value: unknown): string {
   if (typeof value === 'number') {
     return Number.isFinite(value) ? String(value) : '';
   }
+  let rawStr: string;
+  if (typeof value === 'string') {
+    rawStr = value;
+  } else if (typeof value === 'boolean' || typeof value === 'bigint') {
+    rawStr = String(value);
+  } else if (value instanceof Date) {
+    rawStr = Number.isFinite(value.getTime()) ? value.toISOString() : '';
+  } else {
+    return '';
+  }
 
-  let str = String(value)
+  let str = rawStr
     .replace(/\r\n/g, '\n')
     .replace(/\r/g, '\n')
-    // eslint-disable-next-line no-control-regex
-    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]+/g, '');
+    .replace(/[^\P{Cc}\n\t]+/gu, '');
   if (str.length > MAX_CSV_CELL_LENGTH) {
     str = str.slice(0, MAX_CSV_CELL_LENGTH);
   }
@@ -47,6 +56,7 @@ export function buildSafeCsvContent(
   rows: readonly (readonly unknown[])[],
   lineEnding: '\n' | '\r\n' = '\r\n'
 ): string {
+  const safeLineEnding = lineEnding === '\n' ? '\n' : '\r\n';
   const safeHeaders = Array.isArray(headers)
     ? headers.slice(0, MAX_CSV_COLUMNS)
     : [];
@@ -57,5 +67,5 @@ export function buildSafeCsvContent(
       .map(escapeCsvCell)
       .join(',')
   );
-  return `\uFEFF${[headerLine, ...rowLines].join(lineEnding)}`;
+  return `\uFEFF${[headerLine, ...rowLines].join(safeLineEnding)}`;
 }

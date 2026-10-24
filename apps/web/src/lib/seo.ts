@@ -145,10 +145,20 @@ const OG_LOCALES: Record<string, string> = {
  * page's resolved title and description.
  */
 export function defaultOpenGraph(locale: string) {
+  const cleanLocale =
+    typeof locale === 'string'
+      ? locale
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .toLowerCase()
+      : '';
+  const resolvedOgLocale = Object.hasOwn(OG_LOCALES, cleanLocale)
+    ? OG_LOCALES[cleanLocale]!
+    : OG_LOCALES.vi;
   return {
     type: 'website' as const,
     siteName: 'Rate.vn',
-    locale: OG_LOCALES[locale] ?? OG_LOCALES.vi,
+    locale: resolvedOgLocale,
     images: [SHARE_IMAGE],
   };
 }

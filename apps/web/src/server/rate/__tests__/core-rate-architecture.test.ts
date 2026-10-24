@@ -10212,7 +10212,98 @@ async function runCoreArchitectureSuite() {
     assert.equal(watchlistRouteMod.resolveWatchlistMerchantCount(12, 4), 12);
 
     console.log(
-      '  ✅ [111/111] Review Item Sanitization, Voter Timestamp Guards & API Route Query Bounds (#938) passed'
+      '  ✅ [111/112] Review Item Sanitization, Voter Timestamp Guards & API Route Query Bounds (#938) passed'
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // 112. Merchant Directory Filters, CSV Coercion, SEO Locale & OpenAPI Route (#940)
+  // ---------------------------------------------------------------------------
+  {
+    const merchantDirMod = await import('../../../lib/merchant-directory');
+    const csvSafeMod = await import('../../../lib/csv-safe');
+    const seoMod = await import('../../../lib/seo');
+    const openApiJsonRouteMod =
+      await import('../../../app/api/v1/rate/openapi.json/route');
+    const { NextRequest } = await import('next/server');
+
+    const parsedFilters940 = merchantDirMod.parseMerchantDirectoryFilters(
+      (key) => {
+        if (key === 'official') return '  TRUE\u0000 ';
+        if (key === 'risk') return '  SAFE\u0007 ';
+        if (key === 'seeding') return '  LOW\u0000 ';
+        if (key === 'sort') return '  FOLLOWERS_DESC\u0007 ';
+        return null;
+      }
+    );
+    assert.equal(parsedFilters940.officialOnly, true);
+    assert.equal(parsedFilters940.riskTier, 'safe');
+    assert.equal(parsedFilters940.seedingTier, 'low');
+    assert.equal(parsedFilters940.sortBy, 'followers_desc');
+
+    const filteredMerchants940 = merchantDirMod.filterMerchantDirectory(
+      [
+        {
+          id: 'm1',
+          name: 12345 as unknown as string,
+          platform: 'shopee',
+          platform_shop_id: 'shop\u0000123',
+          slug: 'apple-store',
+          is_official: true,
+          rating_star: 4.9,
+          follower_count: 1000,
+          product_count: 10,
+          location: 'VN',
+          trust_score: 95,
+          risk_score: 5,
+          review_risk_score: 5,
+        } as unknown as import('../../../lib/rate-domain').MerchantSummary,
+      ],
+      {
+        ...merchantDirMod.DEFAULT_MERCHANT_DIRECTORY_FILTERS,
+        query: 'shop 123',
+      }
+    );
+    assert.equal(filteredMerchants940.length, 1);
+
+    assert.equal(
+      csvSafeMod.escapeCsvCell(Object.create(null)),
+      '',
+      'escapeCsvCell must not throw TypeError on Object.create(null)'
+    );
+    assert.equal(
+      csvSafeMod.escapeCsvCell({ arbitrary: true }),
+      '',
+      'escapeCsvCell must not serialize plain objects as [object Object]'
+    );
+    assert.equal(
+      csvSafeMod.escapeCsvCell('Hello\u0085World\u009F'),
+      'HelloWorld',
+      'escapeCsvCell must strip Unicode C1 control characters'
+    );
+    assert.equal(
+      csvSafeMod.buildSafeCsvContent(
+        ['Col'],
+        [['Val']],
+        'INVALID' as unknown as '\r\n'
+      ),
+      '\uFEFFCol\r\nVal'
+    );
+
+    assert.equal(
+      seoMod.defaultOpenGraph('__proto__').locale,
+      'vi_VN',
+      'defaultOpenGraph must guard OG_LOCALES with Object.hasOwn'
+    );
+    assert.equal(seoMod.defaultOpenGraph('  EN\u0000 ').locale, 'en_US');
+
+    const openApiRes940 = await openApiJsonRouteMod.GET(
+      new NextRequest('https://rate.vn/api/v1/rate/openapi.json')
+    );
+    assert.equal(openApiRes940.status, 200);
+
+    console.log(
+      '  ✅ [112/112] Merchant Directory Filters, CSV Coercion, SEO Locale & OpenAPI Route (#940) passed'
     );
   }
 
