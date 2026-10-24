@@ -28,7 +28,12 @@ export interface DiscountVerdictCopy {
 }
 
 const vnd = (price: number | null | undefined) => {
-  const num = Number(price || 0);
+  const num =
+    typeof price === 'number'
+      ? price
+      : typeof price === 'string' && String(price).trim()
+        ? Number(price)
+        : 0;
   const safe =
     Number.isFinite(num) && num > 0 && num <= MAX_VALID_VND_PRICE
       ? Math.round(num)
@@ -37,7 +42,12 @@ const vnd = (price: number | null | undefined) => {
 };
 
 const toSafePct = (pct: number | null | undefined) => {
-  const num = Number(pct || 0);
+  const num =
+    typeof pct === 'number'
+      ? pct
+      : typeof pct === 'string' && String(pct).trim()
+        ? Number(pct)
+        : 0;
   return Number.isFinite(num) && num > 0
     ? Math.min(100, Math.round(num * 10) / 10)
     : 0;
