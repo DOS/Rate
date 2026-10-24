@@ -109,6 +109,25 @@ function main() {
     4.5
   );
 
+  // DOS/Rate#850: Non-finite/overflowed prices and control characters in buildKeySpecLine.
+  assert.equal(peerPriceDelta(Number.NaN, 20_000_000), 0);
+  assert.equal(peerPriceDelta(2_000_000_000, 20_000_000), 0);
+  assert.equal(
+    buildKeySpecLine({
+      key_specs: {
+        chip: '  A18\u0000\r\nPro  ',
+        ram: '8GB',
+        storage: '256GB',
+        battery: '4685 mAh',
+      },
+      specifications: {},
+      ram_gb: null,
+      storage_gb: null,
+      battery_mah: null,
+    } as never),
+    'A18 Pro • 8GB • 256GB • 4685 mAh'
+  );
+
   console.warn('✅ Product competitors suite passed');
 }
 

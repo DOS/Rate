@@ -77,6 +77,38 @@ async function run() {
     null,
     'must reject non-HTTP(S) scheme'
   );
+  assert.equal(
+    parseShopeeEnqueueUrl('https://user:pass@shopee.vn/product/88201679/27110898667'),
+    null,
+    'must reject URLs with embedded userinfo credentials (#838)'
+  );
+  assert.equal(
+    parseShopeeEnqueueUrl('https://shopee.vn/product/0/27110898667'),
+    null,
+    'must reject zero shopId (#838)'
+  );
+  assert.equal(
+    parseShopeeEnqueueUrl('https://shopee.vn/product/88201679/0'),
+    null,
+    'must reject zero itemId (#838)'
+  );
+  assert.equal(
+    parseShopeeEnqueueUrl('https://shopee.vn/product/88201679/123456789012345678901'),
+    null,
+    'must reject oversized >20-digit itemId (#838)'
+  );
+
+  // Oversized pageSize is clamped to 1000 (#838)
+  const clampedCalls: Array<[number, number]> = [];
+  await fetchAllPages(
+    'clamped',
+    (from, to) => {
+      clampedCalls.push([from, to]);
+      return Promise.resolve({ data: [], error: null });
+    },
+    999_999
+  );
+  assert.deepEqual(clampedCalls, [[0, 999]], 'fetchAllPages must clamp pageSize at 1000');
 
   console.log('✅ fetchAllPages & parseShopeeEnqueueUrl suite passed');
 }

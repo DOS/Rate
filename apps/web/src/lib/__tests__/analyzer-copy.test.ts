@@ -196,6 +196,12 @@ function main() {
     }
   }
 
+  // Non-string & oversized input bounds (#854)
+  assert.deepEqual(analyzerCopy(null as unknown as string), { text: '' });
+  const oversized = analyzerCopy('Đ' + 'a'.repeat(5_000));
+  assert.ok('text' in oversized && oversized.text.length === 4_000);
+  assert.equal('text' in oversized ? oversized.lang : undefined, 'vi');
+
   console.warn('✅ Analyzer copy suite passed');
 }
 

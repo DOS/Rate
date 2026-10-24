@@ -1,3 +1,16 @@
+export const MAX_DISPLAY_SOLD_COUNT = 100_000_000;
+
+function resolveSafeSoldLocale(locale: string): string {
+  if (typeof locale !== 'string') return 'vi-VN';
+  const cleaned = locale.replace(/\p{Cc}+/gu, '').trim();
+  if (!cleaned || cleaned.length > 35) return 'vi-VN';
+  try {
+    return Intl.getCanonicalLocales(cleaned)[0] || 'vi-VN';
+  } catch {
+    return 'vi-VN';
+  }
+}
+
 /**
  * Sold count for display (DOS/Rate-Services#201). When the marketplace only
  * showed a label ("20k+"), `historical_sold` holds that label's floor and
@@ -11,15 +24,23 @@ export function formatSoldCount(
   locale: string
 ): string {
   const sold =
-    Number.isFinite(historicalSold) && historicalSold > 0
+    Number.isFinite(historicalSold) &&
+    historicalSold > 0 &&
+    historicalSold <= MAX_DISPLAY_SOLD_COUNT
       ? Math.trunc(historicalSold)
       : 0;
   const label =
     typeof historicalSoldDisplay === 'string'
-      ? historicalSoldDisplay.trim()
+      ? historicalSoldDisplay
+          .replace(/\p{Cc}+/gu, ' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .slice(0, 40)
       : '';
+  const safeLocale = resolveSafeSoldLocale(locale);
+  const isVi = safeLocale === 'vi' || safeLocale.startsWith('vi-');
   if (label && sold > 0) {
-    if (locale === 'vi') return label;
+    if (isVi) return label;
     // Round down first: the label is a lower bound, so 1,950 must not show
     // "2K+". Compact notation with one decimal shows 0.1 of the unit.
     const step =
@@ -31,11 +52,11 @@ export function formatSoldCount(
             ? 100
             : 1;
     const floored = Math.floor(sold / step) * step;
-    const compact = new Intl.NumberFormat(locale, {
+    const compact = new Intl.NumberFormat(safeLocale, {
       notation: 'compact',
       maximumFractionDigits: 1,
     }).format(floored);
     return `${compact}+`;
   }
-  return sold.toLocaleString(locale === 'vi' ? 'vi-VN' : locale);
+  return sold.toLocaleString(isVi ? 'vi-VN' : safeLocale);
 }

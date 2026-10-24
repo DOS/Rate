@@ -2255,8 +2255,149 @@ async function run() {
     'ingestProduct must skip Step 6 review re-analysis when pricesOnly/skipReviewAnalysis is set'
   );
 
+  // 16k. DOS/Rate#834: AiReviewAnalyzer config bounds, computeJReviewsSummary sanitization, and castReviewVote validation
+  const analyzer834 = new AiReviewAnalyzer({
+    provider: 'openai',
+    baseUrl: 'javascript:alert(1)',
+    timeoutMs: -500,
+  });
+  const analyzer834Internal = analyzer834 as unknown as { baseUrl: string; timeoutMs: number };
+  assert.equal(
+    analyzer834Internal.baseUrl,
+    'https://api.openai.com/v1',
+    'AiReviewAnalyzer must fall back to provider default baseUrl when baseUrl is non-HTTP(S)'
+  );
+  assert.equal(
+    analyzer834Internal.timeoutMs,
+    25000,
+    'AiReviewAnalyzer must fall back to 25000ms when timeoutMs is negative or non-finite'
+  );
+
+  const summary834 = analyzer834.computeJReviewsSummary(
+    [{ id: 'r-834', rating_star: 5, comment: 'Máy rất tốt' }],
+    analyzer834.analyzeWithHeuristics([{ id: 'r-834', rating_star: 5, comment: 'Máy rất tốt' }]),
+    null,
+    ['<b>Pin trâu</b>', 'Pin trâu', '   '],
+    ['<script>Nóng máy</script>'],
+    '  <p>Tổng kết đánh giá</p>  '
+  );
+  assert.deepEqual(
+    summary834.pros,
+    ['Pin trâu'],
+    'computeJReviewsSummary must strip HTML tags and deduplicate pros'
+  );
+  assert.deepEqual(summary834.cons, ['Nóng máy']);
+  assert.equal(summary834.ai_summary, 'Tổng kết đánh giá');
+
+  await assert.rejects(
+    () =>
+      analyzer834.castReviewVote(pricesOnlyStub!, {
+        reviewId: '   ',
+        voterId: 'voter-1',
+        vote: 'up',
+      }),
+    /reviewId and voterId must be non-empty strings/,
+    'castReviewVote must reject blank reviewId or voterId'
+  );
+
+  // 16l. DOS/Rate#836: ProductNormalizer integer RAM/storage bounds, TB formatting, and asset/color sanitization
+  const normalizer836 = new ProductNormalizer();
+  const baseRaw836 = {
+    platform: 'shopee' as const,
+    itemId: 'item-836',
+    shopId: 'shop-836',
+    url: 'https://shopee.vn/product/836/836',
+    priceMin: 12_990_000,
+    priceMax: 12_990_000,
+    currency: 'VND',
+    historicalSold: 10,
+    ratingStar: 4.8,
+    ratingCount: 5,
+    attributes: [],
+    shop: { shopId: 'shop-836', name: 'Shop 836', isMall: false },
+    reviews: [],
+  };
+  const fractionalRom836 = normalizer836.normalize({
+    ...baseRaw836,
+    title: 'Điện thoại Samsung Galaxy S24 FE 8.5GB RAM ROM 12.5GB',
+    images: [
+      'https://cf.shopee.vn/file/valid.jpg',
+      'javascript:alert(1)',
+      'ftp://files.example.com/img.jpg',
+      '   ',
+    ],
+    models: [
+      { modelId: 'm-1', name: '  Xanh   Mint\u0007  ', price: 12_990_000, stock: 5 },
+      { modelId: 'm-2', name: 'Xanh Mint', price: 12_990_000, stock: 3 },
+      { modelId: 'm-3', name: 'Đ'.repeat(120), price: 12_990_000, stock: 2 },
+    ],
+    description: '  Máy chính hãng\u0000 bảo hành 12 tháng  ',
+  });
+  assert.equal(
+    fractionalRom836.storage_gb,
+    null,
+    'ProductNormalizer must reject non-integer GB storage values like 12.5GB'
+  );
+  assert.equal(
+    fractionalRom836.ram_gb,
+    null,
+    'ProductNormalizer must reject non-integer GB RAM values like 8.5GB'
+  );
+  assert.deepEqual(
+    fractionalRom836.images,
+    ['https://cf.shopee.vn/file/valid.jpg'],
+    'ProductNormalizer must keep only valid http/https asset URLs in images'
+  );
+  assert.equal(
+    fractionalRom836.colors[0],
+    'Xanh Mint',
+    'ProductNormalizer must strip control chars, collapse whitespace, and deduplicate colors'
+  );
+  assert.equal(
+    fractionalRom836.colors.length,
+    2,
+    'ProductNormalizer must deduplicate collapsed color names'
+  );
+  assert.equal(
+    fractionalRom836.colors[1]?.length,
+    80,
+    'ProductNormalizer must cap color name length at 80 characters'
+  );
+  assert.equal(
+    fractionalRom836.description,
+    'Máy chính hãng  bảo hành 12 tháng',
+    'ProductNormalizer must strip control characters and trim description'
+  );
+
+  const nonMultipleTb836 = normalizer836.normalize({
+    ...baseRaw836,
+    title: 'Laptop Asus Vivobook 15 16GB RAM ROM 1280GB',
+    images: [],
+    models: [],
+  });
+  assert.equal(nonMultipleTb836.storage_gb, 1280);
+  assert.equal(
+    nonMultipleTb836.variant_name,
+    '1280GB',
+    'ProductNormalizer must format non-512-multiple storage >= 1024 as GB rather than fractional TB'
+  );
+  assert.equal(nonMultipleTb836.key_specs.storage, '1280GB');
+
+  const binaryTb836 = normalizer836.normalize({
+    ...baseRaw836,
+    title: 'Laptop Asus Vivobook 15 16GB RAM 1.5TB SSD',
+    images: [],
+    models: [],
+  });
+  assert.equal(binaryTb836.storage_gb, 1536);
+  assert.equal(
+    binaryTb836.variant_name,
+    '1.5TB',
+    'ProductNormalizer must preserve 1.5TB (1536GB) as 1.5TB'
+  );
+
   console.log(
-    `✅ [P2/P3 Trust Model & #292/#352/#356/#359/#379/#382/#401/#497/#514/#522/#528/#557] Voter weight, Wilson lower bound (50/52=${wilson50of52} > 1/1=${wilson1of1}), shingle copy seeding (sim=${shingleSim}), affiliate shortlinks, peer floor, ArenaSpecSyncer, Importer & ReviewAnalyzer hardening (#352, #356, #359, #379, #382, #401, #497, #514, #522, #528, #557) verified`
+    `✅ [P2/P3 Trust Model & #292/#352/#356/#359/#379/#382/#401/#497/#514/#522/#528/#557/#834/#836] Voter weight, Wilson lower bound (50/52=${wilson50of52} > 1/1=${wilson1of1}), shingle copy seeding (sim=${shingleSim}), affiliate shortlinks, peer floor, ArenaSpecSyncer, Importer & ReviewAnalyzer hardening (#352, #356, #359, #379, #382, #401, #497, #514, #522, #528, #557, #834, #836) verified`
   );
 
   console.log('\n🎉 ALL AI REVIEW ANALYZER TESTS PASSED!');

@@ -7,9 +7,15 @@ import type {
  * Strip all tracking query strings (sp_atk, xptdk, utm_*, fbclid, etc.) and hashes.
  */
 export function sanitizeProductUrl(rawUrl: string): string | null {
+  if (typeof rawUrl !== 'string') return null;
+  const cleaned = rawUrl.replace(/\p{Cc}+/gu, '').trim();
+  if (!cleaned || cleaned.length > 2048) return null;
   try {
-    const parsed = new URL(rawUrl);
+    const parsed = new URL(cleaned);
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return null;
+    }
+    if (parsed.username || parsed.password) {
       return null;
     }
     return `${parsed.origin}${parsed.pathname}`;
@@ -25,10 +31,16 @@ function isDomainOrSubdomain(host: string, domain: string): boolean {
 export function detectEcommercePlatform(
   url: string
 ): SupportedEcommercePlatform | null {
+  if (typeof url !== 'string') return null;
+  const cleaned = url.replace(/\p{Cc}+/gu, '').trim();
+  if (!cleaned || cleaned.length > 2048) return null;
   let host: string;
   try {
-    const parsed = new URL(url);
+    const parsed = new URL(cleaned);
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return null;
+    }
+    if (parsed.username || parsed.password) {
       return null;
     }
     host = parsed.hostname.toLowerCase();
@@ -114,10 +126,10 @@ export function extractIdsFromUrl(
     const m =
       canonicalUrl.match(/(?:a-)?i\.(\d+)\.(\d+)/i) ||
       canonicalUrl.match(/\/(?:product|opaanlp)\/(\d+)\/(\d+)/i);
-    if (m) {
+    if (m && m[1] && m[2] && m[1].length <= 24 && m[2].length <= 24) {
       return {
-        externalShopId: m[1] || null,
-        externalItemId: m[2] || null,
+        externalShopId: m[1],
+        externalItemId: m[2],
       };
     }
     return { externalItemId: null, externalShopId: null };
@@ -125,9 +137,9 @@ export function extractIdsFromUrl(
 
   if (platform === 'lazada') {
     const m = canonicalUrl.match(/-i(\d+)(?:-s(\d+))?\.html/i);
-    if (m) {
+    if (m && m[1] && m[1].length <= 24 && (!m[2] || m[2].length <= 24)) {
       return {
-        externalItemId: m[1] || null,
+        externalItemId: m[1],
         externalShopId: m[2] || null,
       };
     }
@@ -136,9 +148,9 @@ export function extractIdsFromUrl(
 
   if (platform === 'tiki') {
     const m = canonicalUrl.match(/-p(\d+)\.html/i);
-    if (m) {
+    if (m && m[1] && m[1].length <= 24) {
       return {
-        externalItemId: m[1] || null,
+        externalItemId: m[1],
         externalShopId: null,
       };
     }
@@ -153,9 +165,13 @@ export function extractIdsFromUrl(
       canonicalUrl.match(/\/product\/(\d+)/i) ||
       canonicalUrl.match(/\/view\/product\/(\d+)/i);
     const shopMatch = canonicalUrl.match(/\/@([a-zA-Z0-9_.-]+)/);
+    const itemId =
+      prodMatch?.[1] && prodMatch[1].length <= 24 ? prodMatch[1] : null;
+    const shopId =
+      shopMatch?.[1] && shopMatch[1].length <= 64 ? shopMatch[1] : null;
     return {
-      externalItemId: prodMatch?.[1] || null,
-      externalShopId: shopMatch?.[1] || null,
+      externalItemId: itemId,
+      externalShopId: shopId,
     };
   }
 
@@ -179,6 +195,8 @@ export function extractIdsFromUrl(
   const isValidItemSlug =
     Boolean(lastSegment) &&
     lastSegment!.length >= 2 &&
+    lastSegment!.length <= 120 &&
+    /^[a-zA-Z0-9_.-]+$/.test(lastSegment!) &&
     !RETAIL_NON_PRODUCT_FIRST_SEGMENTS.has(firstSegLower) &&
     !RETAIL_NON_PRODUCT_FIRST_SEGMENTS.has(lastSegLower) &&
     !(segments.length === 1 && RETAIL_CATEGORY_ROOT_SLUGS.has(firstSegLower)) &&
@@ -225,6 +243,9 @@ const JSON_LD_PRODUCT_TYPES = new Set([
   'productmodel',
 ]);
 
+const MAX_JSON_LD_ENTITIES = 100;
+const MAX_JSON_LD_OFFERS = 100;
+
 export function flattenJsonLdEntities(
   raw: unknown,
   depth = 0
@@ -233,7 +254,12 @@ export function flattenJsonLdEntities(
   if (Array.isArray(raw)) {
     const out: Record<string, unknown>[] = [];
     for (const entry of raw) {
-      out.push(...flattenJsonLdEntities(entry, depth + 1));
+      if (out.length >= MAX_JSON_LD_ENTITIES) break;
+      const nested = flattenJsonLdEntities(entry, depth + 1);
+      for (const item of nested) {
+        if (out.length >= MAX_JSON_LD_ENTITIES) break;
+        out.push(item);
+      }
     }
     return out;
   }
@@ -241,7 +267,11 @@ export function flattenJsonLdEntities(
     const obj = raw as Record<string, unknown>;
     const out: Record<string, unknown>[] = [obj];
     if (Array.isArray(obj['@graph'])) {
-      out.push(...flattenJsonLdEntities(obj['@graph'], depth + 1));
+      const nested = flattenJsonLdEntities(obj['@graph'], depth + 1);
+      for (const item of nested) {
+        if (out.length >= MAX_JSON_LD_ENTITIES) break;
+        out.push(item);
+      }
     }
     return out;
   }
@@ -270,11 +300,18 @@ export function extractPriceFromJsonLdOffers(offersRaw: unknown): {
   }
   const candidates: Record<string, unknown>[] = [];
   const pushOffer = (entry: unknown) => {
-    if (!entry || typeof entry !== 'object') return;
+    if (
+      !entry ||
+      typeof entry !== 'object' ||
+      candidates.length >= MAX_JSON_LD_OFFERS
+    ) {
+      return;
+    }
     const obj = entry as Record<string, unknown>;
     candidates.push(obj);
     if (Array.isArray(obj.offers)) {
       for (const nested of obj.offers) {
+        if (candidates.length >= MAX_JSON_LD_OFFERS) break;
         if (nested && typeof nested === 'object') {
           candidates.push(nested as Record<string, unknown>);
         }
@@ -283,7 +320,10 @@ export function extractPriceFromJsonLdOffers(offersRaw: unknown): {
   };
 
   if (Array.isArray(offersRaw)) {
-    for (const entry of offersRaw) pushOffer(entry);
+    for (const entry of offersRaw) {
+      if (candidates.length >= MAX_JSON_LD_OFFERS) break;
+      pushOffer(entry);
+    }
   } else {
     pushOffer(offersRaw);
   }

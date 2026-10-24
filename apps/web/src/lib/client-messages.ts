@@ -43,18 +43,23 @@ export type ClientMessageScope = keyof typeof CLIENT_MESSAGE_SCOPES;
 
 type Messages = Record<string, unknown>;
 
+const UNSAFE_MESSAGE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
 const isRecord = (value: unknown): value is Messages =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
 function mergeInto(target: Messages, path: string[], value: unknown) {
+  if (path.length === 0 || path.some((k) => !k || UNSAFE_MESSAGE_KEYS.has(k))) {
+    return;
+  }
   let node = target;
   for (const key of path.slice(0, -1)) {
-    if (!isRecord(node[key])) node[key] = {};
+    if (!Object.hasOwn(node, key) || !isRecord(node[key])) node[key] = {};
     node = node[key] as Messages;
   }
   const last = path[path.length - 1]!;
   node[last] =
-    isRecord(node[last]) && isRecord(value)
+    Object.hasOwn(node, last) && isRecord(node[last]) && isRecord(value)
       ? { ...node[last], ...value }
       : value;
 }
@@ -64,9 +69,16 @@ export function pickClientMessages(
   messages: Messages,
   scope: ClientMessageScope = 'shared'
 ): Messages {
+  if (!isRecord(messages)) return {};
+  const safeScope: ClientMessageScope = Object.hasOwn(
+    CLIENT_MESSAGE_SCOPES,
+    scope
+  )
+    ? scope
+    : 'shared';
   const picks = new Set<string>([
     ...CLIENT_MESSAGE_SCOPES.shared,
-    ...CLIENT_MESSAGE_SCOPES[scope],
+    ...CLIENT_MESSAGE_SCOPES[safeScope],
   ]);
   const out: Messages = {};
   for (const pick of picks) {
@@ -74,17 +86,29 @@ export function pickClientMessages(
     if (pick.endsWith('*')) {
       const prefix = path.pop()!;
       const parent = path.reduce<unknown>(
-        (node, key) => (isRecord(node) ? node[key] : undefined),
+        (node, key) =>
+          isRecord(node) &&
+          !UNSAFE_MESSAGE_KEYS.has(key) &&
+          Object.hasOwn(node, key)
+            ? node[key]
+            : undefined,
         messages
       );
       if (!isRecord(parent)) continue;
       const subset = Object.fromEntries(
-        Object.entries(parent).filter(([key]) => key.startsWith(prefix))
+        Object.entries(parent).filter(
+          ([key]) => !UNSAFE_MESSAGE_KEYS.has(key) && key.startsWith(prefix)
+        )
       );
       if (Object.keys(subset).length > 0) mergeInto(out, path, subset);
     } else {
       const value = path.reduce<unknown>(
-        (node, key) => (isRecord(node) ? node[key] : undefined),
+        (node, key) =>
+          isRecord(node) &&
+          !UNSAFE_MESSAGE_KEYS.has(key) &&
+          Object.hasOwn(node, key)
+            ? node[key]
+            : undefined,
         messages
       );
       if (value !== undefined) mergeInto(out, path, value);

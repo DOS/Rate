@@ -98,6 +98,71 @@ export async function auditMasterSpecs(supabase: RateSupabaseClient): Promise<nu
   return rows.length;
 }
 
+export const MAX_KEY_SPEC_STRING_LENGTH = 500;
+export const MAX_KEY_SPEC_KEY_LENGTH = 100;
+export const MAX_KEY_SPEC_OBJECT_KEYS = 100;
+
+const UNSAFE_KEY_SPEC_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+function stripKeySpecControlChars(input: string): string {
+  let out = '';
+  for (let i = 0; i < input.length; i++) {
+    const code = input.charCodeAt(i);
+    if (code > 0x1f && code !== 0x7f) {
+      out += input[i];
+    } else {
+      out += ' ';
+    }
+  }
+  return out;
+}
+
+function sanitizeKeySpecKey(key: string): string | null {
+  const cleaned = stripKeySpecControlChars(key).replace(/\s+/g, ' ').trim();
+  if (!cleaned || cleaned.length > MAX_KEY_SPEC_KEY_LENGTH || UNSAFE_KEY_SPEC_KEYS.has(cleaned)) {
+    return null;
+  }
+  return cleaned;
+}
+
+function sanitizeKeySpecValue(value: unknown, depth = 0): unknown {
+  if (depth > 4 || value === undefined || value === null) return undefined;
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : undefined;
+  }
+  if (typeof value === 'string') {
+    const cleaned = stripKeySpecControlChars(value)
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, MAX_KEY_SPEC_STRING_LENGTH)
+      .trim();
+    return cleaned.length > 0 ? cleaned : undefined;
+  }
+  if (Array.isArray(value)) {
+    return value
+      .slice(0, 50)
+      .map(item => sanitizeKeySpecValue(item, depth + 1))
+      .filter(item => item !== undefined);
+  }
+  if (typeof value === 'object') {
+    const objOut: Record<string, unknown> = {};
+    let count = 0;
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      const safeKey = sanitizeKeySpecKey(k);
+      if (!safeKey) continue;
+      if (count >= MAX_KEY_SPEC_OBJECT_KEYS && !Object.hasOwn(objOut, safeKey)) continue;
+      const sanitized = sanitizeKeySpecValue(v, depth + 1);
+      if (sanitized !== undefined) {
+        if (!Object.hasOwn(objOut, safeKey)) count += 1;
+        objOut[safeKey] = sanitized;
+      }
+    }
+    return objOut;
+  }
+  return undefined;
+}
+
 export function mergeKeySpecs(
   existing: unknown,
   incoming: Record<string, unknown> | null | undefined
@@ -108,17 +173,17 @@ export function mergeKeySpecs(
       : {};
   const next = incoming && typeof incoming === 'object' && !Array.isArray(incoming) ? incoming : {};
   const out: Record<string, unknown> = {};
+  let count = 0;
   for (const source of [base, next]) {
     for (const [k, v] of Object.entries(source)) {
-      if (v === undefined || v === null) continue;
-      if (typeof v === 'number' && !Number.isFinite(v)) continue;
-      if (typeof v === 'string') {
-        const trimmed = v.trim();
-        if (!trimmed) continue;
-        out[k] = trimmed;
-        continue;
+      const safeKey = sanitizeKeySpecKey(k);
+      if (!safeKey) continue;
+      if (count >= MAX_KEY_SPEC_OBJECT_KEYS && !Object.hasOwn(out, safeKey)) continue;
+      const sanitized = sanitizeKeySpecValue(v, 0);
+      if (sanitized !== undefined) {
+        if (!Object.hasOwn(out, safeKey)) count += 1;
+        out[safeKey] = sanitized;
       }
-      out[k] = v;
     }
   }
   return out;
@@ -183,7 +248,7 @@ export async function runMasterSpecsBackfill(
       battery_mah: device.battery_mah,
       has_5g: device.has_5g,
       specifications: device.specifications,
-      key_specs: device.key_specs,
+      key_specs: mergeKeySpecs(undefined, device.key_specs as unknown as Record<string, unknown>),
       colors: device.colors,
       ...(device.images.length > 0 ? { images: device.images, thumbnail: device.images[0] } : {}),
       updated_at: new Date().toISOString(),

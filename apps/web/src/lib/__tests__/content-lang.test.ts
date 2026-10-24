@@ -28,6 +28,11 @@ function main() {
   assert.equal(contentLang(null, 'en'), undefined);
   assert.equal(contentLang(5000, 'en'), undefined);
   assert.equal(contentLang(true, 'en'), undefined);
+  assert.equal(isVietnamese(''), false);
+  assert.equal(isVietnamese(null as unknown as string), false);
+  // Oversized input (> 4_000 chars) slices before NFC normalization (#852)
+  assert.equal(isVietnamese('a'.repeat(5_000) + 'đ'), false);
+  assert.equal(isVietnamese('Đ' + 'a'.repeat(5_000)), true);
 
   console.warn('✅ Content language suite passed');
 }

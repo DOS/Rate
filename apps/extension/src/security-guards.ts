@@ -122,6 +122,35 @@ export function selectFreshestSessionSignal<T extends SessionSignalEntry>(
   return tabSignal ?? latestSignal ?? null;
 }
 
+const SAFE_EXTERNAL_ID_REGEX = /^[a-zA-Z0-9_.-]{1,120}$/;
+
+function sanitizeExternalIdentifier(val: unknown): string | null {
+  if (typeof val !== 'string') return null;
+  const cleaned = val.replace(/\p{Cc}+/gu, '').trim();
+  if (!cleaned || !SAFE_EXTERNAL_ID_REGEX.test(cleaned)) {
+    return null;
+  }
+  return cleaned;
+}
+
+function sanitizeCanonicalSignalUrl(rawUrl: unknown): string {
+  if (typeof rawUrl !== 'string') return '';
+  const cleaned = rawUrl.replace(/\p{Cc}+/gu, '').trim();
+  if (!cleaned || cleaned.length > 2048) return '';
+  try {
+    const parsed = new URL(cleaned);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return '';
+    }
+    if (parsed.username || parsed.password) {
+      return '';
+    }
+    return `${parsed.origin}${parsed.pathname}`;
+  } catch {
+    return '';
+  }
+}
+
 export function sanitizeExtensionProductSignal(
   signal: ExtractedPageProductSignal
 ): ExtractedPageProductSignal {
@@ -159,14 +188,27 @@ export function sanitizeExtensionProductSignal(
       : null;
 
   const trimmedTitle =
-    typeof signal.title === 'string' ? signal.title.trim().slice(0, 500) : '';
+    typeof signal.title === 'string'
+      ? signal.title
+          .replace(/\p{Cc}+/gu, ' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .slice(0, 500)
+      : '';
   const trimmedVariant =
-    typeof signal.selectedVariant === 'string' && signal.selectedVariant.trim()
-      ? signal.selectedVariant.trim().slice(0, 200)
+    typeof signal.selectedVariant === 'string'
+      ? signal.selectedVariant
+          .replace(/\p{Cc}+/gu, ' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .slice(0, 200) || null
       : null;
 
   return {
     ...signal,
+    canonicalUrl: sanitizeCanonicalSignalUrl(signal.canonicalUrl),
+    externalItemId: sanitizeExternalIdentifier(signal.externalItemId),
+    externalShopId: sanitizeExternalIdentifier(signal.externalShopId),
     title: trimmedTitle,
     selectedVariant: trimmedVariant,
     price: validPrice,
@@ -181,11 +223,14 @@ export function escapeSafeExternalHref(
   fallbackUrl = 'https://rate.vn'
 ): string {
   if (typeof rawUrl !== 'string') return fallbackUrl;
-  const trimmed = rawUrl.trim();
-  if (!trimmed) return fallbackUrl;
+  const trimmed = rawUrl.replace(/\p{Cc}+/gu, '').trim();
+  if (!trimmed || trimmed.length > 2048) return fallbackUrl;
   try {
     const parsed = new URL(trimmed, 'https://rate.vn');
     if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+      return fallbackUrl;
+    }
+    if (parsed.username || parsed.password) {
       return fallbackUrl;
     }
     return parsed.href
@@ -315,15 +360,20 @@ export function sanitizeVerdictClassSuffix(
     : 'insufficient_data';
 }
 
+export const MAX_SPARKLINE_POINTS = 365;
+
 export function filterValidSparklinePrices(
   points: ReadonlyArray<{ price: number }> | null | undefined
 ): number[] {
   if (!Array.isArray(points)) return [];
-  return points
+  const valid = points
     .map((p) => Number(p?.price))
     .filter(
       (p) => Number.isFinite(p) && p > 0 && p <= MAX_VALID_EXTENSION_VND_PRICE
     );
+  return valid.length > MAX_SPARKLINE_POINTS
+    ? valid.slice(-MAX_SPARKLINE_POINTS)
+    : valid;
 }
 
 export function shouldRenderTrustPill(

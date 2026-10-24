@@ -122,6 +122,16 @@ export function normalizeLeaderboardPriceSegment(
   return 'all';
 }
 
+const MAX_LEADERBOARD_COUNT_CEILING = 10_000_000;
+const MAX_LEADERBOARD_PRODUCTS_SCAN = 5_000;
+const MAX_LEADERBOARD_LIMIT = 500;
+const LEADERBOARD_CONTROL_CHAR_RE = /\p{Cc}/gu;
+
+function sanitizeLeaderboardText(raw: unknown, maxLen: number): string {
+  if (typeof raw !== 'string') return '';
+  return raw.replace(LEADERBOARD_CONTROL_CHAR_RE, '').trim().slice(0, maxLen);
+}
+
 function clampScore5(value: number): number {
   if (!Number.isFinite(value) || value <= 0) return 0;
   return Number(Math.min(5.0, value).toFixed(2));
@@ -384,10 +394,12 @@ export function scoreMasterProductForLeaderboard(
   const rawAuthentic = Number(item.authentic_review_count);
   const rawTotal = Number(item.total_reviews);
   const safeTotal =
-    Number.isFinite(rawTotal) && rawTotal > 0 ? Math.floor(rawTotal) : 0;
+    Number.isFinite(rawTotal) && rawTotal > 0
+      ? Math.min(Math.floor(rawTotal), MAX_LEADERBOARD_COUNT_CEILING)
+      : 0;
   const authenticReviewCount =
     Number.isFinite(rawAuthentic) && rawAuthentic > 0
-      ? Math.floor(rawAuthentic)
+      ? Math.min(Math.floor(rawAuthentic), MAX_LEADERBOARD_COUNT_CEILING)
       : safeTotal;
   const filteredNoiseReviewCount = Math.max(
     0,
@@ -411,14 +423,14 @@ export function scoreMasterProductForLeaderboard(
   const rawMerchantCount = Number(item.merchant_count || 0);
   const merchantCount =
     Number.isFinite(rawMerchantCount) && rawMerchantCount > 0
-      ? Math.floor(rawMerchantCount)
+      ? Math.min(Math.floor(rawMerchantCount), MAX_LEADERBOARD_COUNT_CEILING)
       : 0;
 
   return {
-    slug: item.slug,
-    name: item.name,
-    brand: item.brand,
-    model: item.model,
+    slug: sanitizeLeaderboardText(item.slug, 256),
+    name: sanitizeLeaderboardText(item.name, 300),
+    brand: sanitizeLeaderboardText(item.brand, 128),
+    model: sanitizeLeaderboardText(item.model, 256),
     categorySlug,
     categoryPath,
     productHref,
@@ -452,10 +464,14 @@ export function rankMasterProductsForLeaderboard(
   const category = options?.category ?? 'smartphones';
   const criterion = options?.criterion ?? 'combined';
   const priceSegment = options?.priceSegment ?? 'all';
-  const brand = (options?.brand || 'all').trim();
-  const q = (options?.query || '').trim().toLowerCase();
+  const brand = sanitizeLeaderboardText(options?.brand ?? 'all', 128) || 'all';
+  const q = sanitizeLeaderboardText(options?.query ?? '', 256).toLowerCase();
 
-  const filtered = products
+  const safeProducts = Array.isArray(products)
+    ? products.slice(0, MAX_LEADERBOARD_PRODUCTS_SCAN)
+    : [];
+
+  const filtered = safeProducts
     .map((item) => scoreMasterProductForLeaderboard(item, criterion))
     .filter((entry) => {
       if (category !== 'all' && entry.categorySlug !== category) {
@@ -538,7 +554,10 @@ export function rankMasterProductsForLeaderboard(
 
   const rawLimit = Number(options?.limit);
   if (Number.isFinite(rawLimit) && rawLimit >= 1) {
-    return filtered.slice(0, Math.floor(rawLimit));
+    return filtered.slice(
+      0,
+      Math.min(Math.floor(rawLimit), MAX_LEADERBOARD_LIMIT)
+    );
   }
   return filtered;
 }

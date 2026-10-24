@@ -64,6 +64,8 @@ const SEEDING_TIERS: readonly MerchantSeedingTier[] = [
   'elevated',
 ];
 
+const SAFE_PLATFORM_FILTER_REGEX = /^[a-z0-9_-]{1,40}$/;
+
 /** Parses filters from URL search params, falling back to the defaults. */
 export function parseMerchantDirectoryFilters(
   get: (key: string) => string | null | undefined
@@ -77,10 +79,20 @@ export function parseMerchantDirectoryFilters(
     return allowed.includes(v) ? v : fallback;
   };
   const official = (get('official') ?? get('officialOnly') ?? '').toLowerCase();
+  const rawPlatform = (get('platform') ?? 'all')
+    .replace(/\p{Cc}+/gu, '')
+    .trim()
+    .toLowerCase();
+  const platform = SAFE_PLATFORM_FILTER_REGEX.test(rawPlatform)
+    ? rawPlatform
+    : 'all';
   return {
-    query: (get('q') ?? '').trim().slice(0, 160),
-    platform:
-      (get('platform') ?? 'all').trim().toLowerCase().slice(0, 40) || 'all',
+    query: (get('q') ?? '')
+      .replace(/\p{Cc}+/gu, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 160),
+    platform,
     officialOnly: official === 'true' || official === '1',
     riskTier: pick(get('risk'), RISK_TIERS, 'all'),
     seedingTier: pick(get('seeding'), SEEDING_TIERS, 'all'),
@@ -93,12 +105,34 @@ export function merchantDirectoryFilterParams(
   filters: MerchantDirectoryFilters
 ): URLSearchParams {
   const params = new URLSearchParams();
-  if (filters.query.trim()) params.set('q', filters.query.trim());
-  if (filters.platform !== 'all') params.set('platform', filters.platform);
+  const safeQuery = (typeof filters.query === 'string' ? filters.query : '')
+    .replace(/\p{Cc}+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 160);
+  if (safeQuery) params.set('q', safeQuery);
+  const safePlatform = (
+    typeof filters.platform === 'string' ? filters.platform : 'all'
+  )
+    .replace(/\p{Cc}+/gu, '')
+    .trim()
+    .toLowerCase();
+  if (safePlatform !== 'all' && SAFE_PLATFORM_FILTER_REGEX.test(safePlatform)) {
+    params.set('platform', safePlatform);
+  }
   if (filters.officialOnly) params.set('official', 'true');
-  if (filters.riskTier !== 'all') params.set('risk', filters.riskTier);
-  if (filters.seedingTier !== 'all') params.set('seeding', filters.seedingTier);
-  if (filters.sortBy !== 'trust_desc') params.set('sort', filters.sortBy);
+  if (RISK_TIERS.includes(filters.riskTier) && filters.riskTier !== 'all') {
+    params.set('risk', filters.riskTier);
+  }
+  if (
+    SEEDING_TIERS.includes(filters.seedingTier) &&
+    filters.seedingTier !== 'all'
+  ) {
+    params.set('seeding', filters.seedingTier);
+  }
+  if (SORTS.includes(filters.sortBy) && filters.sortBy !== 'trust_desc') {
+    params.set('sort', filters.sortBy);
+  }
   return params;
 }
 
@@ -120,8 +154,21 @@ export function summarizeMerchantDirectory(
   let safe = 0;
   let trustSum = 0;
   for (const m of merchants) {
-    const p = (m.platform || '').toLowerCase();
-    platformCounts[p] = (platformCounts[p] ?? 0) + 1;
+    const p = (m.platform || '')
+      .replace(/\p{Cc}+/gu, '')
+      .trim()
+      .toLowerCase();
+    if (
+      SAFE_PLATFORM_FILTER_REGEX.test(p) &&
+      p !== '__proto__' &&
+      p !== 'constructor' &&
+      p !== 'prototype'
+    ) {
+      const prev = Object.hasOwn(platformCounts, p)
+        ? (platformCounts[p] ?? 0)
+        : 0;
+      platformCounts[p] = prev + 1;
+    }
     if (m.is_official) official += 1;
     const trustScore = toSafeScore100(m.trust_score);
     if (trustScore >= 80) safe += 1;
@@ -143,7 +190,12 @@ export function filterMerchantDirectory(
   filters: MerchantDirectoryFilters
 ): MerchantSummary[] {
   const { platform, officialOnly, riskTier, seedingTier, sortBy } = filters;
-  const kw = filters.query.trim().toLowerCase();
+  const kw = (typeof filters.query === 'string' ? filters.query : '')
+    .replace(/\p{Cc}+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 160)
+    .toLowerCase();
   const filtered = merchants.filter((m) => {
     if (platform !== 'all' && (m.platform || '').toLowerCase() !== platform) {
       return false;
@@ -205,7 +257,7 @@ export function pageMerchantDirectory(
   const start = Number.isFinite(offset) && offset >= 0 ? Math.floor(offset) : 0;
   const safeLimit =
     Number.isFinite(limit) && limit >= 0
-      ? Math.floor(limit)
+      ? Math.min(500, Math.floor(limit))
       : MERCHANT_PAGE_SIZE;
   return {
     items: matching.slice(start, start + safeLimit),

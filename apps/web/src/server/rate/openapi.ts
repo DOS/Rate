@@ -76,11 +76,20 @@ export interface RateOpenApiDocument {
 export function normalizeOpenApiServerOrigin(
   rawBaseUrl?: string | null
 ): string {
-  const trimmed = (rawBaseUrl ?? '').trim();
-  if (!trimmed || trimmed.length > 256) return 'https://rate.vn';
+  if (typeof rawBaseUrl !== 'string') return 'https://rate.vn';
+  const trimmed = rawBaseUrl.trim();
+  if (!trimmed || trimmed.length > 256 || /[\s\p{Cc}]/u.test(trimmed)) {
+    return 'https://rate.vn';
+  }
   try {
     const parsed = new URL(trimmed);
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return 'https://rate.vn';
+    }
+    if (parsed.username || parsed.password) {
+      return 'https://rate.vn';
+    }
+    if (!parsed.origin || parsed.origin === 'null') {
       return 'https://rate.vn';
     }
     return parsed.origin;
@@ -1470,7 +1479,7 @@ export function buildRateOpenApiSpec(
           operationId: 'getHealthStatus',
           summary: 'Liveness & readiness health check probe',
           description:
-            'Returns service metadata (`status`, `service: "rate-web"`, `version`, ISO-8601 `timestamp`) and `checks.database`, the result of a small read with the app\'s own database client (3 s timeout, reused for up to 15 s per instance), with `Cache-Control: no-store, max-age=0` for load balancers and uptime monitors.',
+            'Returns service metadata (`status`, `service: "rate-web"`, `version`, ISO-8601 `timestamp`, `commit`: the Git SHA the deployment was built from, or null outside Vercel) and `checks.database`, the result of a small read with the app\'s own database client (3 s timeout, reused for up to 15 s per instance), with `Cache-Control: no-store, max-age=0` for load balancers and uptime monitors.',
           tags: ['Platform Telemetry'],
           responses: {
             '200': {

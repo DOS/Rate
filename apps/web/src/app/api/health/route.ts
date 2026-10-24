@@ -14,6 +14,9 @@ export async function GET() {
       service: 'rate-web',
       version: '2.0.0',
       timestamp: new Date().toISOString(),
+      // The Git commit this deployment was built from, so a release check can
+      // compare it with main (scripts/ops/verify-live.mjs). Null off Vercel.
+      commit: process.env.VERCEL_GIT_COMMIT_SHA || null,
       checks: { database },
     },
     {

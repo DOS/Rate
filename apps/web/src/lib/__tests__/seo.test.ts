@@ -2,11 +2,17 @@ import assert from 'node:assert/strict';
 import {
   MAX_DESCRIPTION_LENGTH,
   MAX_TITLE_LENGTH,
+  SITE_URL,
   absoluteUrl,
   fitDescription,
   fitTitle,
   siteJsonLd,
 } from '../seo';
+import { buildSafeCsvContent, escapeCsvCell } from '../csv-safe';
+import {
+  pageMerchantDirectory,
+  parseMerchantDirectoryFilters,
+} from '../merchant-directory';
 
 function main() {
   console.warn('🧪 SEO helpers suite');
@@ -76,6 +82,41 @@ function main() {
   assert.ok(fittedDesc.length <= MAX_DESCRIPTION_LENGTH);
   assert.ok(fittedDesc.endsWith('…'));
   assert.equal(fitDescription('Ngắn gọn.'), 'Ngắn gọn.');
+
+  // DOS/Rate#848: absoluteUrl protocol-relative/credential/invalid guards, fitTitle NaN/control chars, CSV & merchant-directory bounds
+  assert.equal(absoluteUrl('//evil.example.com/phish'), SITE_URL);
+  assert.equal(absoluteUrl('/\\evil.example.com/phish'), SITE_URL);
+  assert.equal(
+    absoluteUrl('https://user:pass@cdn.example.com/a.jpg'),
+    SITE_URL
+  );
+  assert.equal(absoluteUrl('javascript:alert(1)'), SITE_URL);
+  assert.equal(absoluteUrl('http://[invalid-url'), SITE_URL);
+  assert.equal(
+    fitTitle(['  iPhone 16\u0000\r\nPro   Max  '], Number.NaN),
+    'iPhone 16 Pro Max'
+  );
+
+  assert.equal(
+    escapeCsvCell('\u0000=cmd|"/c calc"!A0'),
+    `"'=cmd|""/c calc""!A0"`
+  );
+  assert.equal(escapeCsvCell('\u000b+SUM(A1:A2)'), "'+SUM(A1:A2)");
+  assert.equal(escapeCsvCell('-15.4%'), '-15.4%');
+  assert.equal(escapeCsvCell('x'.repeat(12_000)).length, 10_000);
+  const csvOut = buildSafeCsvContent(['col1', 'col2'], [['\u0000=1+1', 42]]);
+  assert.ok(csvOut.includes("'=1+1,42"));
+
+  const params848 = new URLSearchParams(
+    'q=  Apple\u0000\r\nStore  &platform=bad<script>plat'
+  );
+  const parsedFilters848 = parseMerchantDirectoryFilters((k) =>
+    params848.get(k)
+  );
+  assert.equal(parsedFilters848.query, 'Apple Store');
+  assert.equal(parsedFilters848.platform, 'all');
+  const paged848 = pageMerchantDirectory([], parsedFilters848, -10, 999_999);
+  assert.equal(paged848.offset, 0);
 
   console.warn('✅ SEO helpers suite passed');
 }

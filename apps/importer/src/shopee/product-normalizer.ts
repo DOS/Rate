@@ -3,6 +3,42 @@ import type { ShopeeProduct } from './types.js';
 
 export const MAX_VALID_RAM_GB = 2048;
 export const MAX_VALID_STORAGE_GB = 65536;
+export const MAX_NORMALIZED_COLOR_LENGTH = 80;
+export const MAX_NORMALIZED_COLOR_COUNT = 24;
+export const MAX_NORMALIZED_IMAGE_URL_LENGTH = 2048;
+export const MAX_NORMALIZED_IMAGE_COUNT = 50;
+export const MAX_NORMALIZED_DESCRIPTION_LENGTH = 8000;
+
+function stripControlChars(input: string): string {
+  let out = '';
+  for (let i = 0; i < input.length; i++) {
+    const code = input.charCodeAt(i);
+    if (code === 0x09 || code === 0x0a || code === 0x0d || (code > 0x1f && code !== 0x7f)) {
+      out += input[i];
+    } else {
+      out += ' ';
+    }
+  }
+  return out;
+}
+
+function normalizeHttpAssetUrl(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  if (!trimmed || trimmed.length > MAX_NORMALIZED_IMAGE_URL_LENGTH) return null;
+  for (let i = 0; i < trimmed.length; i++) {
+    const code = trimmed.charCodeAt(i);
+    if (code <= 0x20 || code === 0x7f) return null;
+  }
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+    if (!parsed.hostname) return null;
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
 
 export type CanonicalCategorySlug =
   'smartphones' | 'tablets' | 'laptops' | 'smartwatches' | 'earbuds';
@@ -1373,14 +1409,16 @@ export class ProductNormalizer {
     }
 
     const storageCandidates = claimable.filter(
-      t => !t.claimed && t.value > 0 && t.value <= MAX_VALID_STORAGE_GB
+      t => !t.claimed && Number.isInteger(t.value) && t.value > 0 && t.value <= MAX_VALID_STORAGE_GB
     );
 
     const baseKey = `${slugify(brand)}:${slugify(model)}`;
     const benchmark = CANONICAL_PHONE_REGISTRY[baseKey];
 
     const toValidStorageGb = (val: number): number | null =>
-      Number.isFinite(val) && val > 0 && val <= MAX_VALID_STORAGE_GB ? val : null;
+      Number.isFinite(val) && Number.isInteger(val) && val > 0 && val <= MAX_VALID_STORAGE_GB
+        ? val
+        : null;
 
     let storageGb: number | null = null;
     let storageConfident = false;
@@ -1419,9 +1457,17 @@ export class ProductNormalizer {
     const colors: string[] = [];
     if (Array.isArray(raw.models)) {
       for (const m of raw.models) {
-        const trimmedColor = typeof m?.name === 'string' ? m.name.trim() : '';
-        if (trimmedColor.length > 0 && !colors.includes(trimmedColor)) {
-          colors.push(trimmedColor);
+        if (colors.length >= MAX_NORMALIZED_COLOR_COUNT) break;
+        const normalizedColor =
+          typeof m?.name === 'string'
+            ? stripControlChars(m.name)
+                .replace(/\s+/g, ' ')
+                .trim()
+                .slice(0, MAX_NORMALIZED_COLOR_LENGTH)
+                .trim()
+            : '';
+        if (normalizedColor.length > 0 && !colors.includes(normalizedColor)) {
+          colors.push(normalizedColor);
         }
       }
     }
@@ -1429,9 +1475,10 @@ export class ProductNormalizer {
     const images: string[] = [];
     if (Array.isArray(raw.images)) {
       for (const img of raw.images) {
-        const trimmedImg = typeof img === 'string' ? img.trim() : '';
-        if (trimmedImg.length > 0 && !images.includes(trimmedImg)) {
-          images.push(trimmedImg);
+        if (images.length >= MAX_NORMALIZED_IMAGE_COUNT) break;
+        const normalizedImg = normalizeHttpAssetUrl(img);
+        if (normalizedImg && !images.includes(normalizedImg)) {
+          images.push(normalizedImg);
         }
       }
     }
@@ -1444,7 +1491,7 @@ export class ProductNormalizer {
         ? 'Standard'
         : storageGb === null
           ? 'Không rõ dung lượng'
-          : storageGb >= 1024
+          : storageGb >= 1024 && storageGb % 512 === 0
             ? `${storageGb / 1024}TB`
             : `${storageGb}GB`;
     const canonicalName =
@@ -1476,6 +1523,7 @@ export class ProductNormalizer {
     const validClaimedRam =
       claimedRamValue !== null &&
       Number.isFinite(claimedRamValue) &&
+      Number.isInteger(claimedRamValue) &&
       claimedRamValue > 0 &&
       claimedRamValue <= MAX_VALID_RAM_GB
         ? claimedRamValue
@@ -1792,8 +1840,12 @@ export class ProductNormalizer {
       ram: ramGb ? `${ramGb}GB` : undefined,
     };
 
-    const condition = detectProductCondition(title, raw.description);
-    const origin = detectProductOrigin(title, raw.description);
+    const sanitizedDescription =
+      typeof raw.description === 'string'
+        ? stripControlChars(raw.description).trim().slice(0, MAX_NORMALIZED_DESCRIPTION_LENGTH)
+        : undefined;
+    const condition = detectProductCondition(title, sanitizedDescription);
+    const origin = detectProductOrigin(title, sanitizedDescription);
 
     return {
       category_slug: categorySlug,
@@ -1815,7 +1867,8 @@ export class ProductNormalizer {
       images,
       specifications,
       key_specs: keySpecs,
-      description: raw.description,
+      description:
+        sanitizedDescription && sanitizedDescription.length > 0 ? sanitizedDescription : undefined,
       is_benchmark_enriched: Boolean(benchmark),
       spec_source: benchmark ? 'benchmark_registry' : 'crawled_title',
     };

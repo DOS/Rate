@@ -3510,9 +3510,12 @@ async function runCoreArchitectureSuite() {
   const healthBody60 = (await healthRes60.json()) as {
     status: string;
     service: string;
+    commit: string | null;
   };
   assert.equal(healthBody60.status, 'ok');
   assert.equal(healthBody60.service, 'rate-web');
+  // The deployed commit, for scripts/ops/verify-live.mjs (DOS/Rate#865).
+  assert.equal(healthBody60.commit, process.env.VERCEL_GIT_COMMIT_SHA || null);
 
   // 60.2 /api/v1/rate/openapi & /api/v1/rate/openapi.json
   const openApiOpt = await openApiRoute.OPTIONS();
@@ -8470,6 +8473,712 @@ async function runCoreArchitectureSuite() {
   console.log(
     '  ✅ [94/94] /api/health reports a database the app cannot read (#829) passed'
   );
+
+  // 95. cache-tags revalidation targets, api-handler bounds & cookie token parsing (#842)
+  {
+    const { canonicalizeCacheParams, resolveRevalidationTargets } =
+      await import('../cache-tags');
+    const { BoundedSlidingWindowRateLimiter, parseBoundedStringParam } =
+      await import('../api-handler');
+    const { readBearerToken, readCookieAccessToken } =
+      await import('../request-auth');
+
+    const sharedSub = { a: 1 };
+    const cyclicCacheObj: Record<string, unknown> = {
+      first: sharedSub,
+      second: sharedSub,
+      nanVal: Number.NaN,
+    };
+    cyclicCacheObj.self = cyclicCacheObj;
+    const serialized = canonicalizeCacheParams(cyclicCacheObj);
+    assert.equal(serialized.includes('"[Circular]"'), true);
+    assert.equal(serialized.includes('"nanVal":null'), true);
+
+    const targets = resolveRevalidationTargets({
+      tags: ['  RATE:PRODUCTS  ', 'arbitrary-tag', 'rate:bad space'],
+      slugs: ['iphone-16-pro', '../bad/slug', 'a'.repeat(130)],
+      categories: ['smartphones', 'bad/category'],
+      merchants: ['m-123', 'shopee:88201679', 'bad merchant id'],
+      paths: ['/smartphones/iphone-16-pro', '//evil.com'],
+    });
+    assert.equal(targets.tags.includes('rate:products'), true);
+    assert.equal(targets.tags.includes('arbitrary-tag'), false);
+    assert.equal(targets.tags.includes('rate:product:iphone-16-pro'), true);
+    assert.equal(targets.tags.includes('rate:category:smartphones'), true);
+    assert.equal(targets.tags.includes('rate:merchant:m-123'), true);
+    assert.equal(targets.tags.includes('rate:merchant:shopee:88201679'), true);
+    assert.deepEqual(targets.paths, ['/smartphones/iphone-16-pro']);
+
+    assert.equal(
+      parseBoundedStringParam('  hello\u0000\u0007world     ', 11),
+      'hello world',
+      'parseBoundedStringParam must strip control chars and trim after slicing'
+    );
+    assert.equal(
+      parseBoundedStringParam('\u0000\u0007   ', 20),
+      null,
+      'parseBoundedStringParam must return null when only control/whitespace chars remain'
+    );
+
+    const nanLimiter = new BoundedSlidingWindowRateLimiter({
+      windowMs: Number.NaN,
+      maxRequests: Number.NaN,
+      maxBuckets: Number.NaN,
+    });
+    assert.equal(nanLimiter.allow('ip-842', 1000), true);
+
+    assert.equal(
+      readBearerToken(
+        new Request('https://rate.vn/api', {
+          headers: { Authorization: 'Bearer tok\u0007en' },
+        })
+      ),
+      '',
+      'readBearerToken must reject tokens containing control characters'
+    );
+    assert.equal(
+      await readCookieAccessToken([
+        {
+          name: 'sb-ref-auth-token',
+          value: JSON.stringify({ access_token: 'bad\u0000token' }),
+        },
+      ]),
+      null,
+      'readCookieAccessToken must reject tokens containing control characters'
+    );
+    assert.equal(
+      await readCookieAccessToken([
+        {
+          name: 'sb-ref-auth-token',
+          value: JSON.stringify({ access_token: 't'.repeat(5000) }),
+        },
+      ]),
+      null,
+      'readCookieAccessToken must reject oversized access tokens > 4096 chars'
+    );
+  }
+  console.log(
+    '  ✅ [95/95] cache-tags revalidation targets, api-handler bounds & cookie token parsing (#842) passed'
+  );
+
+  // =========================================================================
+  // 96. Extension Server URL Credential/Length & Crowd Ingest Bounds (#844)
+  // =========================================================================
+  {
+    const {
+      canonicalizeProductUrl,
+      detectPlatformFromInput,
+      ingestExtensionCrowdSignal,
+    } = await import('../extension');
+
+    assert.equal(
+      canonicalizeProductUrl('https://user:pass@shopee.vn/product/123/456'),
+      null,
+      'canonicalizeProductUrl must reject embedded URL credentials'
+    );
+    assert.equal(
+      canonicalizeProductUrl(
+        `https://shopee.vn/product/123/${'a'.repeat(2100)}`
+      ),
+      null,
+      'canonicalizeProductUrl must reject URLs > 2048 chars'
+    );
+    assert.equal(
+      detectPlatformFromInput(
+        null,
+        'https://user:pass@shopee.vn/product/123/456'
+      ),
+      null,
+      'detectPlatformFromInput must reject embedded URL credentials'
+    );
+
+    let capturedRpcArgs: Record<string, unknown> | null = null;
+    const ingestRes844 = await ingestExtensionCrowdSignal({
+      platform: 'shopee',
+      externalItemId: '  18093055535\u0007 ',
+      externalShopId: '  88201679\u0000 ',
+      url: 'https://shopee.vn/Apple-iPhone-15-128GB-i.88201679.18093055535',
+      title: '  Apple\u0000   iPhone 15 128GB Chính Hãng  ',
+      selectedVariant: '  128GB\u0007   Đen  ',
+      price: 18_990_000,
+      userConsentOptIn: true,
+      rateClient: {
+        rpc: async (_fn, args) => {
+          capturedRpcArgs = args as unknown as Record<string, unknown>;
+          return {
+            data: [{ job_id: 'job-844', state: 'enqueued' }],
+            error: null,
+          };
+        },
+      },
+    });
+    assert.equal(ingestRes844.accepted, true);
+    assert.equal(
+      (capturedRpcArgs as unknown as { p_platform_item_id: string })
+        ?.p_platform_item_id,
+      '88201679_18093055535'
+    );
+    const payload844 = (
+      capturedRpcArgs as unknown as {
+        p_payload: { observed_title: string; selected_variant: string };
+      }
+    )?.p_payload;
+    assert.equal(
+      payload844?.observed_title,
+      'Apple iPhone 15 128GB Chính Hãng'
+    );
+    assert.equal(payload844?.selected_variant, '128GB Đen');
+    console.log(
+      '  ✅ [96/97] Extension server URL credential/length & crowd ingest bounds (#844) passed'
+    );
+  }
+
+  // =========================================================================
+  // 97. Navigation, MerchantDirectory, Hero Suggestions & Rate i18n Bounds (#856)
+  // =========================================================================
+  {
+    const { formatHref, isAppLink } = await import('../../../lib/navigation');
+    const { merchantDirectoryFilterParams, summarizeMerchantDirectory } =
+      await import('../../../lib/merchant-directory');
+    const { MAX_HERO_MERCHANTS, toHeroMerchantSuggestions } =
+      await import('../../../lib/hero-merchants');
+    const { MAX_HERO_PRODUCTS, toHeroProductSuggestions } =
+      await import('../../../lib/hero-products');
+
+    assert.equal(formatHref('javascript:alert(1)'), '#');
+    assert.equal(formatHref('data:text/html,<script>alert(1)</script>'), '#');
+    assert.equal(formatHref('//evil.example/phish'), '#');
+    assert.equal(formatHref('/\\evil.example/phish'), '#');
+    assert.equal(formatHref('https://user:pass@rate.vn/deals'), '#');
+    assert.equal(formatHref('httpfoo:bar'), '#');
+    assert.equal(formatHref(`https://rate.vn/${'a'.repeat(2100)}`), '#');
+    assert.equal(formatHref('products/iphone-16\u0000'), '/products/iphone-16');
+    assert.equal(formatHref('#reviews\u0007'), '#reviews');
+    assert.equal(
+      formatHref('mailto:support@rate.vn'),
+      'mailto:support@rate.vn'
+    );
+    assert.equal(formatHref('mailto:bad address@rate.vn'), '#');
+
+    assert.equal(isAppLink('https://rate.vn/smartphones'), true);
+    assert.equal(isAppLink('/smartphones/iphone-16'), true);
+    assert.equal(isAppLink('//evil.example/phish'), false);
+    assert.equal(isAppLink('javascript:alert(1)'), false);
+    assert.equal(isAppLink('https://user:pass@rate.vn/smartphones'), false);
+
+    const summary856 = summarizeMerchantDirectory([
+      {
+        id: 'm1',
+        name: 'Shop 1',
+        platform: 'constructor',
+        platform_shop_id: 's1',
+        is_official: true,
+        trust_score: 90,
+        dosafe_risk_score: 10,
+      } as never,
+      {
+        id: 'm2',
+        name: 'Shop 2',
+        platform: '  Shopee\u0000 ',
+        platform_shop_id: 's2',
+        is_official: false,
+        trust_score: 70,
+        dosafe_risk_score: 20,
+      } as never,
+    ]);
+    assert.equal(summary856.platformCounts.shopee, 1);
+    assert.equal(
+      Object.hasOwn(summary856.platformCounts, 'constructor'),
+      false,
+      'summarizeMerchantDirectory must not collide with Object.prototype.constructor'
+    );
+
+    const filterParams856 = merchantDirectoryFilterParams({
+      query: `  apple\u0000   store   ${'x'.repeat(200)}`,
+      platform: 'bad/platform',
+      officialOnly: true,
+      riskTier: 'safe',
+      seedingTier: 'low',
+      sortBy: 'products_desc',
+    });
+    assert.equal(filterParams856.get('q')?.length, 160);
+    assert.equal(filterParams856.get('platform'), null);
+    assert.equal(filterParams856.get('official'), 'true');
+
+    const heroMerchants856 = toHeroMerchantSuggestions(
+      Array.from({ length: MAX_HERO_MERCHANTS + 10 }, (_, idx) => ({
+        id: `m-${idx}\u0000`,
+        name: `  Store ${idx}\u0007 `,
+        platform: 'shopee',
+        platform_shop_id: `shop-${idx}`,
+        is_official: true,
+        trust_score: 150,
+        dosafe_risk_score: -10,
+      }))
+    );
+    assert.equal(heroMerchants856.length, MAX_HERO_MERCHANTS);
+    assert.equal(heroMerchants856[0]?.id, 'm-0');
+    assert.equal(heroMerchants856[0]?.name, 'Store 0');
+    assert.equal(heroMerchants856[0]?.trust_score, 100);
+    assert.equal(heroMerchants856[0]?.dosafe_risk_score, 0);
+
+    const heroProducts856 = toHeroProductSuggestions(
+      Array.from({ length: MAX_HERO_PRODUCTS + 5 }, (_, idx) => ({
+        id: `p-${idx}`,
+        slug: `slug-${idx}`,
+        name: `Product ${idx}`,
+        brand: 'Apple',
+        model: 'iPhone',
+        model_key: `apple:iphone:${idx}`,
+        variant_name: '128GB',
+        key_specs: {
+          chip: '  A18\u0000 Pro  ',
+          screen: '\u0007   ',
+        },
+        storage_gb: 128,
+        images: ['img1.jpg', 'img2.jpg'],
+        thumbnail: 'thumb.jpg',
+        min_price: 20_000_000,
+        merchant_count: 3,
+        user_rating_weighted: 4.8,
+        average_rating: 4.7,
+        category_id: 'cat-1',
+        metadata: { category_slug: '  smartphones\u0000 ', extra: 1 } as never,
+        specifications: { category_slug: '\u0000  ' } as never,
+      }))
+    );
+    assert.equal(heroProducts856.length, MAX_HERO_PRODUCTS);
+    assert.equal(heroProducts856[0]?.key_specs?.chip, 'A18 Pro');
+    assert.equal(heroProducts856[0]?.key_specs?.screen, undefined);
+    assert.deepEqual(heroProducts856[0]?.metadata, {
+      category_slug: 'smartphones',
+    });
+    assert.deepEqual(heroProducts856[0]?.specifications, {});
+
+    assert.equal(normalizeRateLocale(' EN-US '), 'en');
+    assert.equal(normalizeRateLocale('cs_CZ\u0000'), 'cs');
+    assert.equal(normalizeRateLocale('vi-VN'), 'vi');
+    assert.equal(normalizeRateLocale('fr-FR'), 'vi');
+    console.log(
+      '  ✅ [97/98] Navigation, MerchantDirectory, Hero Suggestions & Rate i18n Bounds (#856) passed'
+    );
+  }
+
+  // =========================================================================
+  // 98. Server Rate Deals Radar & Cached Query Key Bounds (#858)
+  // =========================================================================
+  {
+    const {
+      MAX_DEAL_RADAR_CLUSTERS,
+      getCachedMasterProductOffers,
+      getCachedMasterProductReviews,
+      getCachedMerchantProfileById,
+      normalizeCachedFacetCategory,
+      normalizeDealRadarOptions,
+      sanitizeCachedCompareSlugsCsv,
+      sanitizeCachedEntityId,
+      sanitizeCachedInspectQuery,
+      sanitizeCachedProductSlug,
+    } = await import('../index');
+
+    assert.equal(normalizeCachedFacetCategory(undefined), 'smartphones');
+    assert.equal(normalizeCachedFacetCategory('  '), 'smartphones');
+    assert.equal(
+      normalizeCachedFacetCategory('  SMARTPHONES\u0000 '),
+      'smartphones'
+    );
+    assert.equal(normalizeCachedFacetCategory('tablets'), 'tablets');
+    assert.equal(normalizeCachedFacetCategory('arbitrary-category'), 'all');
+
+    assert.equal(await getCachedMerchantProfileById('  \u0000 '), null);
+    assert.deepEqual(await getCachedMasterProductOffers('  \u0000 '), []);
+    assert.deepEqual(await getCachedMasterProductReviews('  \u0000 '), []);
+
+    assert.deepEqual(
+      normalizeDealRadarOptions({
+        categorySlug: '  SMARTPHONES\u0000 ',
+        platform: '  Shopee\u0007 ',
+        limit: 999,
+      }),
+      {
+        categoryFilter: 'smartphones',
+        platformFilter: 'shopee',
+        limit: 50,
+      }
+    );
+    assert.deepEqual(
+      normalizeDealRadarOptions({
+        categorySlug: 'arbitrary-invalid-category',
+        platform: 'bad/platform!@#',
+        limit: -5,
+      }),
+      {
+        categoryFilter: 'all',
+        platformFilter: 'all',
+        limit: 12,
+      }
+    );
+    assert.equal(MAX_DEAL_RADAR_CLUSTERS, 500);
+
+    // Every offer of a cluster counts: with the priciest of 250 offers last,
+    // the spread still reaches it (DOS/Rate#867; a 200-offer slice made it 0).
+    {
+      const { computeCrossPlatformDealRadarFromData: radar867 } =
+        await import('../index');
+      const offers867 = Array.from({ length: 250 }, (_, i) => ({
+        id: 'o867-' + i,
+        platform: i % 2 ? 'shopee' : 'lazada',
+        url: 'https://example.test/867/' + i,
+        price_current: i < 249 ? 10_000_000 : 12_000_000,
+        price_original: null,
+        merchant: {
+          id: 'm867-' + i,
+          name: 'Shop ' + i,
+          risk_score: 5,
+          is_official: true,
+        },
+      }));
+      const feed867 = radar867(
+        [
+          {
+            master: {
+              id: 'id-867',
+              slug: 'phone-867',
+              name: 'Phone 867',
+              brand: 'Brand',
+              category: 'smartphones',
+              min_price: 10_000_000,
+              max_price: 12_000_000,
+            },
+            offers: offers867,
+          },
+        ] as never,
+        { categorySlug: 'all', limit: 10 }
+      );
+      assert.equal(feed867.totalOffersAnalyzed, 250);
+      const spread867 = feed867.priceSpreadLeaders.find(
+        (s) => s.productSlug === 'phone-867'
+      );
+      assert.ok(spread867, 'a 20% spread across 250 offers is reported');
+      assert.equal(spread867.maxPrice, 12_000_000);
+    }
+
+    assert.equal(sanitizeCachedEntityId('  m-123\u0000\u0007  '), 'm-123');
+    assert.equal(
+      sanitizeCachedProductSlug('  iPhone-16-Pro\u0000 '),
+      'iphone-16-pro'
+    );
+    assert.equal(sanitizeCachedProductSlug('bad/slug/../../etc'), '');
+    assert.equal(
+      sanitizeCachedCompareSlugsCsv(
+        ' iPhone-16\u0000 , bad/slug , GALAXY-S24 , iphone-16 , pixel-9 , xiaomi-15 , extra-6 '
+      ),
+      'iphone-16,galaxy-s24,pixel-9,xiaomi-15'
+    );
+    assert.equal(
+      sanitizeCachedInspectQuery('  https://shopee.vn/item\u0000\n123  '),
+      'https://shopee.vn/item 123'
+    );
+    console.log(
+      '  ✅ [98/99] Server Rate Deals Radar & Cached Query Key Bounds (#858) passed'
+    );
+  }
+
+  // =========================================================================
+  // 99. Review Vote Eligibility, Community Review Mapper & OpenAPI Origin Bounds (#860)
+  // =========================================================================
+  {
+    const { evaluateVoterEligibility } =
+      await import('../../../app/api/reviews/[id]/vote/route');
+    const { toReviewItem } =
+      await import('../../../app/api/v1/rate/reviews/route');
+    const { normalizeOpenApiServerOrigin } = await import('../openapi');
+
+    assert.equal(evaluateVoterEligibility(null).eligible, false);
+    assert.equal(evaluateVoterEligibility(undefined).eligible, false);
+    assert.equal(
+      evaluateVoterEligibility({
+        created_at: '2026-01-01T00:00:00Z',
+        email_confirmed_at: '   ',
+        phone_confirmed_at: 'not-a-timestamp',
+      }).eligible,
+      false
+    );
+    assert.equal(
+      evaluateVoterEligibility({
+        created_at: '1970-01-01T00:00:00Z',
+        email_confirmed_at: '2026-01-01T00:00:00Z',
+      }).eligible,
+      false
+    );
+    assert.equal(
+      evaluateVoterEligibility({
+        created_at: new Date(Date.now() - 8 * 86_400_000).toISOString(),
+        email_confirmed_at: '2026-01-01T00:00:00Z',
+      }).eligible,
+      true
+    );
+
+    const mappedNullStar = toReviewItem(
+      {
+        id: '  rev-1  ',
+        author_name: '  Nguyen Van A  ',
+        rating_star: null,
+        comment: '  Đánh giá chi tiết sản phẩm  ',
+        variation: '   ',
+        created_at: 'invalid-date',
+        upvotes: '12',
+        downvotes: -3,
+        report_count: '2',
+        helpfulness_weight: null,
+        fake_probability: '',
+        reason: '   ',
+      },
+      { screen: 4.56, battery: 99 }
+    );
+    assert.equal(mappedNullStar.id, 'rev-1');
+    assert.equal(mappedNullStar.author_name, 'Nguyen Van A');
+    assert.equal(
+      mappedNullStar.rating_star,
+      5,
+      'null rating_star must fall back to default 5 instead of coercing to 0'
+    );
+    assert.equal(mappedNullStar.variation, null);
+    assert.ok(Number.isFinite(Date.parse(mappedNullStar.created_at)));
+    assert.equal(mappedNullStar.upvotes, 12);
+    assert.equal(mappedNullStar.downvotes, 0);
+    assert.equal(mappedNullStar.report_count, 2);
+    assert.equal(mappedNullStar.fake_probability, null);
+    assert.equal(mappedNullStar.reason, null);
+    assert.deepEqual(mappedNullStar.criteria_ratings, { screen: 4.6 });
+
+    assert.equal(
+      normalizeOpenApiServerOrigin(123 as unknown as string),
+      'https://rate.vn'
+    );
+    assert.equal(
+      normalizeOpenApiServerOrigin('https://user:pass@rate.vn/api'),
+      'https://rate.vn'
+    );
+    assert.equal(
+      normalizeOpenApiServerOrigin('https://staging.rate.vn/path'),
+      'https://staging.rate.vn'
+    );
+    console.log(
+      '  ✅ [99/99] Review Vote Eligibility, Community Review Mapper & OpenAPI Origin Bounds (#860) passed'
+    );
+  }
+
+  // 100. Issue #864: API Handler Price/IP Bounds, Watchlist Offer Selection, and Crowd Ingest URL Checks
+  {
+    const {
+      extractClientRateLimitKey,
+      isSafeCrowdIngestHttpUrl,
+      parseOptionalVndPriceParam,
+      resolveWatchlistMasterPriceBounds,
+      selectBestOfferFromListings,
+      withPlausibleMinPrice,
+    } = await import('../api-handler');
+
+    assert.equal(
+      parseOptionalVndPriceParam('15000000', Number.NaN),
+      15_000_000,
+      'parseOptionalVndPriceParam must fall back to 500M cap when maxVnd is NaN'
+    );
+    assert.deepEqual(
+      resolveWatchlistMasterPriceBounds(null, 24_990_000, Number.NaN),
+      {
+        currentMinPrice: 24_990_000,
+        currentMaxPrice: 24_990_000,
+      },
+      'null master must fall back to bestOfferPrice without throwing'
+    );
+    assert.deepEqual(
+      resolveWatchlistMasterPriceBounds(
+        { min_price: true, max_price: true },
+        24_990_000
+      ),
+      {
+        currentMinPrice: 24_990_000,
+        currentMaxPrice: 24_990_000,
+      },
+      'boolean min_price/max_price must not coerce to 1 VND'
+    );
+
+    assert.equal(extractClientRateLimitKey(null), 'anon');
+    const spoofedHeaders = {
+      get(name: string) {
+        return name.toLowerCase() === 'x-forwarded-for'
+          ? ' 203.0.113.10\r\n\u0000 , 10.0.0.1 '
+          : null;
+      },
+    } as unknown as Headers;
+    assert.equal(extractClientRateLimitKey(spoofedHeaders), '203.0.113.10');
+    const wsHeaders = new Headers({
+      'x-forwarded-for': ' 203.0.113.10\t99 , 10.0.0.1 ',
+    });
+    assert.equal(extractClientRateLimitKey(wsHeaders), '203.0.113.1099');
+
+    const plausibleBoolMaster = withPlausibleMinPrice(
+      { min_price: true as unknown as number },
+      [{ price_current: 28_990_000 }]
+    );
+    assert.equal(
+      plausibleBoolMaster.min_price,
+      28_990_000,
+      'withPlausibleMinPrice must ignore boolean min_price and use plausible offer price'
+    );
+
+    const bestOfferRes = selectBestOfferFromListings([
+      {
+        id: 'off-bool',
+        title: 'Boolean Price Offer',
+        price_current: true as unknown as number,
+        price_original: 0,
+        stock: 10,
+        url: 'https://shopee.vn/product/1/2',
+        platform: 'shopee',
+        merchant: { name: 'Bad Shop', platform: 'shopee', is_official: true },
+      },
+      {
+        id: '  off-valid  ',
+        title: '  Apple\u0000 iPhone 16 128GB  ',
+        price_current: 21_990_000,
+        price_original: 22_990_000,
+        stock: 5,
+        url: '  https://shopee.vn/product/88201679/27110898667  ',
+        platform: 'shopee',
+        merchant: {
+          name: '  Apple\u0007 Flagship Store  ',
+          platform: 'Shopee\u0000',
+          is_official: true,
+        },
+      },
+    ] as unknown as Parameters<typeof selectBestOfferFromListings>[0]);
+    assert.equal(bestOfferRes.bestOffer?.id, 'off-valid');
+    assert.equal(bestOfferRes.bestOffer?.title, 'Apple  iPhone 16 128GB');
+    assert.equal(
+      bestOfferRes.bestOffer?.merchant_name,
+      'Apple  Flagship Store'
+    );
+    assert.equal(bestOfferRes.bestOffer?.platform, 'shopee');
+    assert.deepEqual(bestOfferRes.offerPlatforms, ['shopee']);
+
+    assert.equal(
+      isSafeCrowdIngestHttpUrl(
+        'https://shopee.vn/product-i.88201679.27110898667'
+      ),
+      true
+    );
+    assert.equal(
+      isSafeCrowdIngestHttpUrl(
+        'https://user:pass@shopee.vn/product-i.88201679.27110898667'
+      ),
+      false,
+      'isSafeCrowdIngestHttpUrl must reject embedded URL credentials'
+    );
+    assert.equal(
+      isSafeCrowdIngestHttpUrl('ftp://shopee.vn/product-i.1.2'),
+      false
+    );
+
+    console.log(
+      '  ✅ [100/100] API Handler Price/IP Bounds, Watchlist Offer Selection & Crowd Ingest URL Checks (#864) passed'
+    );
+  }
+
+  // 101. Issue #868: Inspect Observed Price Bounds, Health TTL Clock Guard & Revalidate Token Checks
+  {
+    const { NextRequest } = await import('next/server');
+    const { resolveInspectObservedPrices } = await import('../api-handler');
+    const { extractProvidedToken, verifyRevalidateSecret } =
+      await import('../../../app/api/v1/rate/revalidate/route');
+
+    assert.deepEqual(
+      resolveInspectObservedPrices({
+        queryPrice: null,
+        queryOriginalPrice: null,
+        matchedOfferPriceCurrent: true,
+        matchedOfferPriceOriginal: true,
+        masterMinPrice: 18_990_000,
+      }),
+      {
+        observedPrice: 18_990_000,
+        observedOriginalPrice: 0,
+      },
+      'resolveInspectObservedPrices must reject boolean price_current/price_original and fall back to masterMinPrice'
+    );
+    assert.deepEqual(
+      resolveInspectObservedPrices({
+        queryPrice: null,
+        queryOriginalPrice: null,
+        matchedOfferPriceCurrent: 22_990_000.4,
+        matchedOfferPriceOriginal: 25_990_000.4,
+        masterMinPrice: 20_000_000,
+      }),
+      {
+        observedPrice: 22_990_000,
+        observedOriginalPrice: 25_990_000,
+      }
+    );
+    assert.deepEqual(
+      resolveInspectObservedPrices({
+        queryPrice: 24_990_000,
+        queryOriginalPrice: null,
+        matchedOfferPriceCurrent: 22_990_000,
+        matchedOfferPriceOriginal: 25_990_000,
+        masterMinPrice: 20_000_000,
+      }),
+      {
+        observedPrice: 24_990_000,
+        observedOriginalPrice: 0,
+      },
+      'when queryPrice is provided without queryOriginalPrice, matchedOfferPriceOriginal must not be attached'
+    );
+
+    assert.equal(
+      verifyRevalidateSecret('secret\u0000123', 'secret\u0000123'),
+      false
+    );
+    assert.equal(verifyRevalidateSecret('secret 123', 'secret 123'), false);
+    assert.equal(
+      verifyRevalidateSecret('aaaa-aaaa-aaaa', 'aaaa-aaaa-aaaa'),
+      true
+    );
+    assert.equal(
+      extractProvidedToken(
+        new NextRequest('https://rate.vn/api/v1/rate/revalidate', {
+          headers: { 'x-rate-revalidate-token': 'tok\u0007en' },
+        })
+      ),
+      null
+    );
+
+    let probes868 = 0;
+    await withHealthDatabase(
+      async () => {
+        probes868++;
+        return new Response(JSON.stringify([{ id: 'cat-1' }]), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      },
+      async () => {
+        assert.equal(await healthMod.checkDatabase(100_000), 'ok');
+        assert.equal(probes868, 1);
+        // Same window: cached
+        assert.equal(await healthMod.checkDatabase(105_000), 'ok');
+        assert.equal(probes868, 1);
+        // Backward clock jump (now < cached.at): must not blindly trust a future-stamped cache
+        assert.equal(await healthMod.checkDatabase(50_000), 'ok');
+        assert.equal(probes868, 2);
+      }
+    );
+
+    console.log(
+      '  ✅ [101/101] Inspect Observed Price Bounds, Health TTL Clock Guard & Revalidate Token Checks (#868) passed'
+    );
+  }
 
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }

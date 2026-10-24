@@ -3,6 +3,21 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CLIENT_MESSAGE_SCOPES, pickClientMessages } from '../client-messages';
+import {
+  buildRadarIndex,
+  getRadarSignal,
+  radarExportFields,
+} from '../deal-radar';
+import {
+  formatStorageLabel,
+  getCategoryFilterSchema,
+  localizeCategoryFilterSchema,
+} from '../category-filters';
+import {
+  rankMasterProductsForLeaderboard,
+  scoreMasterProductForLeaderboard,
+} from '../leaderboard-engine';
+import type { MasterProduct } from '../rate-api';
 
 const srcDir = fileURLToPath(new URL('../../', import.meta.url));
 const en = JSON.parse(
@@ -69,6 +84,122 @@ function main() {
     }
   }
   assert.deepEqual([...missing], [], 'client namespaces without a scope');
+
+  // Prototype-key & invalid input guards (#852)
+  assert.deepEqual(
+    pickClientMessages(null as unknown as Record<string, unknown>),
+    {}
+  );
+  const protoFallback = pickClientMessages(en, 'constructor' as never);
+  assert.deepEqual(Object.keys(protoFallback).sort(), [
+    'compare',
+    'deals',
+    'errors',
+    'rate',
+    'watchlist',
+  ]);
+
+  // deal-radar bounds: negative percentages clamp to 0 & control chars stripped from slugs (#852)
+  const negExport = radarExportFields({
+    verdict: 'none',
+    savingsPct: -15,
+    fakeMarkupPct: -30,
+    spreadPct: -8,
+    genuineDeal: null,
+    fakeSaleTrap: null,
+    priceSpread: null,
+  });
+  assert.equal(negExport.savingsPct, 0);
+  assert.equal(negExport.fakeMarkupPct, 0);
+  assert.equal(negExport.spreadPct, 0);
+
+  const radarIdx = buildRadarIndex({
+    generatedAt: '2026-06-01T00:00:00Z',
+    categoryFilter: 'all',
+    totalClustersAnalyzed: 1,
+    totalOffersAnalyzed: 2,
+    genuineDeals: [
+      {
+        id: 'gd-ctrl',
+        verdict: 'best_market_deal',
+        verdictBadgeVi: 'Giá tốt',
+        productSlug: '  iphone-16\u0000-pro  ',
+        productName: 'iPhone 16 Pro',
+        brand: 'Apple',
+        categorySlug: 'smartphones',
+        productHref: '/smartphones/iphone-16-pro',
+        imageUrl: null,
+        platform: 'shopee',
+        merchantId: 'm-1',
+        merchantName: 'Shop A',
+        isOfficialMall: true,
+        merchantRiskScore: 5,
+        offerUrl: 'https://shopee.vn/a',
+        priceCurrent: 24_000_000,
+        priceOriginal: 28_000_000,
+        marketMedianPrice: 26_000_000,
+        marketMinPrice: 24_000_000,
+        marketMaxPrice: 28_000_000,
+        savingsVsMedianVnd: 2_000_000,
+        savingsVsMedianPct: 7.7,
+        claimedDiscountPct: 14.3,
+        fakeMarkupPct: 0,
+        jreviewsScore10: 9.0,
+        explanationVi: 'Tốt',
+      },
+    ],
+    fakeSaleTraps: [],
+    priceSpreadLeaders: [],
+  });
+  assert.equal(getRadarSignal(radarIdx, 'iphone-16-pro').savingsPct, 7.7);
+
+  // category-filters prototype-key & storage guards (#852)
+  const protoSchema = getCategoryFilterSchema('constructor', [
+    '  Sony\u0007  ',
+  ]);
+  assert.equal(protoSchema.categorySlug, 'smartphones');
+  assert.ok(protoSchema.defaultBrands.includes('Sony'));
+  const localizedProto = localizeCategoryFilterSchema(
+    { ...protoSchema, categorySlug: '__proto__' },
+    (k) => k
+  );
+  assert.equal(localizedProto.categoryTitle, 'schemas.smartphones.title');
+  assert.equal(formatStorageLabel(Number.NaN), '0GB');
+  assert.equal(formatStorageLabel(-128), '0GB');
+  assert.equal(formatStorageLabel(1024), '1TB');
+
+  // leaderboard-engine count ceiling & limit cap (#852)
+  const scored = scoreMasterProductForLeaderboard({
+    id: 'p1',
+    slug: 'iphone\u0000-16',
+    name: 'iPhone\u0007 16',
+    brand: 'Apple',
+    model: 'iPhone 16',
+    user_rating_weighted: 4.8,
+    total_reviews: 999_999_999,
+    authentic_review_count: 888_888_888,
+    merchant_count: 777_777_777,
+    min_price: 20_000_000,
+  } as unknown as MasterProduct);
+  assert.equal(scored.slug, 'iphone-16');
+  assert.equal(scored.name, 'iPhone 16');
+  assert.equal(scored.authenticReviewCount, 10_000_000);
+  assert.equal(scored.merchantCount, 10_000_000);
+  const ranked = rankMasterProductsForLeaderboard(
+    [
+      {
+        id: 'p1',
+        slug: 'iphone-16',
+        name: 'iPhone 16',
+        brand: 'Apple',
+        model: 'iPhone 16',
+        user_rating_weighted: 4.8,
+        min_price: 20_000_000,
+      } as unknown as MasterProduct,
+    ],
+    { limit: 999_999, query: 'iphone\u0000' }
+  );
+  assert.equal(ranked.length, 1);
 
   console.warn('✅ Client messages suite passed');
 }

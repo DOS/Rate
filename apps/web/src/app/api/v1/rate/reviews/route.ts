@@ -125,7 +125,13 @@ const SubmitReviewSchema = z.object({
     .trim()
     .uuid('Mã sản phẩm chuẩn hóa (masterProductId) không hợp lệ.'),
   authorName: z.string().optional(),
-  ratingStar: z.coerce.number().optional(),
+  ratingStar: z.preprocess(
+    (val) =>
+      val === null || (typeof val === 'string' && !val.trim())
+        ? undefined
+        : val,
+    z.coerce.number().finite().optional()
+  ),
   comment: z
     .string()
     .trim()
@@ -180,8 +186,9 @@ const RPC_REJECTIONS: Record<string, RpcRejection> = {
 
 function sanitizeCriteria(raw: Record<string, unknown> | undefined) {
   const out: Record<string, number> = {};
+  if (!raw || typeof raw !== 'object') return out;
   for (const key of CRITERIA_KEYS) {
-    const val = Number(raw?.[key]);
+    const val = asNumber(raw[key], NaN);
     if (Number.isFinite(val) && val >= 1 && val <= 5) {
       out[key] = Math.round(val * 10) / 10;
     }
@@ -190,8 +197,21 @@ function sanitizeCriteria(raw: Record<string, unknown> | undefined) {
 }
 
 function asNumber(value: unknown, fallback: number): number {
-  const n = Number(value);
+  if (
+    value === null ||
+    value === undefined ||
+    typeof value === 'boolean' ||
+    (typeof value === 'string' && !value.trim())
+  ) {
+    return fallback;
+  }
+  const n = typeof value === 'number' ? value : Number(String(value).trim());
   return Number.isFinite(n) ? n : fallback;
+}
+
+function toSafeCount(value: unknown): number {
+  const n = asNumber(value, 0);
+  return n > 0 ? Math.min(100_000_000, Math.floor(n)) : 0;
 }
 
 /**
@@ -202,41 +222,75 @@ export function toReviewItem(
   record: Record<string, unknown>,
   criteria: Record<string, number>
 ): ReviewItem {
-  const verdict = record.verdict;
-  const flag = record.flag_category as ReviewFlagCategory;
-  const rawStar = asNumber(record.rating_star, 5);
+  const safeRecord =
+    record && typeof record === 'object' && !Array.isArray(record)
+      ? record
+      : {};
+  const safeFallbackCriteria =
+    criteria && typeof criteria === 'object' && !Array.isArray(criteria)
+      ? sanitizeCriteria(criteria)
+      : {};
+  const verdict = safeRecord.verdict;
+  const flag = safeRecord.flag_category as ReviewFlagCategory;
+  const rawStar = asNumber(safeRecord.rating_star, 5);
   const clampedStar =
     rawStar > 0 ? Math.max(1, Math.min(5, Math.round(rawStar))) : 0;
   const clampedWeight = Math.max(
     0,
-    Math.min(10, asNumber(record.helpfulness_weight, 0))
+    Math.min(10, asNumber(safeRecord.helpfulness_weight, 0))
   );
   const sanitizedRecordCriteria =
-    record.criteria_ratings &&
-    typeof record.criteria_ratings === 'object' &&
-    !Array.isArray(record.criteria_ratings)
-      ? sanitizeCriteria(record.criteria_ratings as Record<string, unknown>)
+    safeRecord.criteria_ratings &&
+    typeof safeRecord.criteria_ratings === 'object' &&
+    !Array.isArray(safeRecord.criteria_ratings)
+      ? sanitizeCriteria(safeRecord.criteria_ratings as Record<string, unknown>)
       : {};
   const effectiveCriteria =
     Object.keys(sanitizedRecordCriteria).length > 0
       ? sanitizedRecordCriteria
-      : criteria;
+      : safeFallbackCriteria;
+  const rawCreatedAt =
+    typeof safeRecord.created_at === 'string'
+      ? safeRecord.created_at.trim()
+      : '';
+  const createdMs =
+    rawCreatedAt && rawCreatedAt.length <= 64 ? Date.parse(rawCreatedAt) : NaN;
+  const createdAt =
+    Number.isFinite(createdMs) && createdMs > 0
+      ? rawCreatedAt
+      : new Date().toISOString();
+  const cleanComment =
+    typeof safeRecord.comment === 'string'
+      ? safeRecord.comment.trim().slice(0, 3000)
+      : '';
+  const cleanVariation =
+    typeof safeRecord.variation === 'string'
+      ? safeRecord.variation.trim().slice(0, 120) || null
+      : null;
+  const cleanReason =
+    typeof safeRecord.reason === 'string'
+      ? safeRecord.reason.trim().slice(0, 500) || null
+      : null;
+  const rawFakeProb = asNumber(safeRecord.fake_probability, NaN);
   return {
-    id: String(record.id),
-    author_name: String(record.author_name ?? ''),
+    id:
+      typeof safeRecord.id === 'string' || typeof safeRecord.id === 'number'
+        ? String(safeRecord.id).trim().slice(0, 120)
+        : '',
+    author_name:
+      typeof safeRecord.author_name === 'string'
+        ? safeRecord.author_name.trim().slice(0, 80)
+        : '',
     rating_star: clampedStar,
-    comment: String(record.comment ?? ''),
-    variation: typeof record.variation === 'string' ? record.variation : null,
-    created_at:
-      typeof record.created_at === 'string'
-        ? record.created_at
-        : new Date().toISOString(),
-    reviewer_type: record.reviewer_type === 'expert' ? 'expert' : 'user',
-    upvotes: 0,
-    downvotes: 0,
-    report_count: 0,
+    comment: cleanComment,
+    variation: cleanVariation,
+    created_at: createdAt,
+    reviewer_type: safeRecord.reviewer_type === 'expert' ? 'expert' : 'user',
+    upvotes: toSafeCount(safeRecord.upvotes),
+    downvotes: toSafeCount(safeRecord.downvotes),
+    report_count: toSafeCount(safeRecord.report_count),
     helpfulness_weight: clampedWeight,
-    include_in_rating: record.include_in_rating === true,
+    include_in_rating: safeRecord.include_in_rating === true,
     criteria_ratings: effectiveCriteria,
     verdict:
       verdict === 'authentic' ||
@@ -245,16 +299,15 @@ export function toReviewItem(
       verdict === 'unanalyzed'
         ? verdict
         : null,
-    fake_probability:
-      record.fake_probability == null
-        ? null
-        : Math.max(0, Math.min(1, asNumber(record.fake_probability, 0))),
+    fake_probability: Number.isFinite(rawFakeProb)
+      ? Math.max(0, Math.min(1, rawFakeProb))
+      : null,
     flag_category: FLAG_CATEGORIES.has(flag) ? flag : 'authentic',
-    reason: typeof record.reason === 'string' ? record.reason : null,
+    reason: cleanReason,
     signals: {
       source: 'rate_community_jreviews',
       criteria_count: Object.keys(effectiveCriteria).length,
-      comment_length: String(record.comment ?? '').length,
+      comment_length: cleanComment.length,
     },
   };
 }

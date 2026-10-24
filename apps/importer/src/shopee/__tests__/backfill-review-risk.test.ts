@@ -2,7 +2,24 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { AiReviewAnalyzer } from '../ai-review-analyzer.js';
-import { loadAndScoreMerchant, rescoreMerchantReviewRisk } from '../merchant-review-risk.js';
+import {
+  extractGsmArenaDataSpecs,
+  MAX_ARENA_CATALOG_ITEMS,
+  parseGsmArenaBrandCatalogHtml,
+  parseGsmArenaHtmlToSpecs,
+  parsePhoneArenaCatalogHtml,
+} from '../arena-spec-syncer.js';
+import { MAX_CLUSTER_PEER_ROWS, resolveClusterPeerFloorPrice } from '../cluster-peer-floor.js';
+import { MAX_ENTITY_IMAGES, sanitizeHttpUrl, sanitizeHttpUrlList } from '../entity-matcher.js';
+import { computeRetryDelayMs, redactSensitiveString, sanitizeLogMeta } from '../logger.js';
+import {
+  loadAndScoreMerchant,
+  rescoreMerchantReviewRisk,
+  toValidPrice,
+  uniqueIds,
+  writeMerchantReviewRisk,
+} from '../merchant-review-risk.js';
+import { mergeKeySpecs } from '../jobs/backfill-specs.js';
 import {
   mapStoredReview,
   runReviewRiskBackfill,
@@ -391,6 +408,231 @@ async function run() {
     true,
     'ingestion awaits the seller rescore after persistAnalysisToSupabase'
   );
+
+  // DOS/Rate#838: mapStoredReview vocabulary validation, follower_count ceiling, and mergeKeySpecs sanitization
+  const badVocab = mapStoredReview({
+    id: 'r-838',
+    product_id: 'p-1',
+    rating_star: -10,
+    comment: 'Tốt',
+    review_flags: { verdict: 'unknown_verdict', flag_category: 'unknown_category' },
+  })!;
+  assert.equal(badVocab.result.verdict, 'authentic');
+  assert.equal(badVocab.result.flag_category, 'authentic');
+  assert.equal(badVocab.raw.rating_star, 5);
+
+  const overflowMerchants: MerchantRow[] = [
+    {
+      id: 'm-overflow',
+      platform: 'shopee',
+      is_official: false,
+      follower_count: 999_999_999,
+      review_risk_score: 0,
+    },
+  ];
+  const overflowScores = scoreMerchants(
+    new AiReviewAnalyzer(),
+    overflowMerchants,
+    [{ id: 'p-ov', merchant_id: 'm-overflow', cluster_id: 'c1', price_current: 10_000_000 }],
+    [review('r-ov', 'p-ov', { verdict: 'authentic', flag_category: 'authentic' })],
+    new Map()
+  );
+  assert.equal(
+    overflowScores[0]?.risk.risk_score,
+    15,
+    'scoreMerchants must ignore overflowed follower_count > 100M rather than granting the 50k+ follower discount'
+  );
+
+  const mergedSpecs = mergeKeySpecs(
+    {
+      screen: '  6.9"\u0007 OLED  ',
+      price_spread_audit: {
+        verdict: '  tight_market_consensus  ',
+        spread_vnd: Number.NaN,
+        platform_count: 3,
+      },
+    },
+    {
+      chip: 'A'.repeat(600),
+      ram: '   ',
+    }
+  );
+  assert.equal(mergedSpecs.screen, '6.9" OLED');
+  assert.equal((mergedSpecs.chip as string).length, 500);
+  assert.equal('ram' in mergedSpecs, false);
+  assert.deepEqual(mergedSpecs.price_spread_audit, {
+    verdict: 'tight_market_consensus',
+    platform_count: 3,
+  });
+
+  // DOS/Rate#840: computeRetryDelayMs bounds, redactSensitiveString & sanitizeLogMeta hardening, and mergeKeySpecs key safety
+  assert.equal(
+    Number.isInteger(computeRetryDelayMs(Number.NaN, Number.NaN, Number.NaN, () => Number.NaN)),
+    true,
+    'computeRetryDelayMs must return a finite integer when inputs are NaN'
+  );
+  assert.equal(
+    computeRetryDelayMs(0, 400, 400, () => 1.0),
+    400,
+    'computeRetryDelayMs must never exceed maxDelayMs when randomFn returns 1.0'
+  );
+
+  const fakeGeminiToken = `AIza${'x'.repeat(24)}`;
+  const fakeGhToken = `ghp_${'y'.repeat(24)}`;
+  const redacted = redactSensitiveString(
+    `GET https://api.example.com/v1?api_key=${'s'.repeat(12)}&token=${'t'.repeat(12)} ${fakeGeminiToken} ${fakeGhToken}`
+  );
+  assert.equal(redacted.includes('s'.repeat(12)), false);
+  assert.equal(redacted.includes('t'.repeat(12)), false);
+  assert.equal(redacted.includes(fakeGeminiToken), false);
+  assert.equal(redacted.includes(fakeGhToken), false);
+
+  const circularObj: Record<string, unknown> = {
+    ok: 'fine',
+    nanVal: Number.NaN,
+    apiKey: 'secret-val',
+  };
+  circularObj.self = circularObj;
+  const sharedChild = { status: 'active' };
+  circularObj.firstRef = sharedChild;
+  circularObj.secondRef = sharedChild;
+  circularObj.d1 = {
+    d2: {
+      d3: {
+        d4: {
+          leafNote: `Bearer ${'z'.repeat(24)}`,
+          tooDeepObj: { nope: true },
+        },
+      },
+    },
+  };
+  const sanitizedMeta = sanitizeLogMeta(circularObj) as Record<string, unknown>;
+  assert.equal(sanitizedMeta.ok, 'fine');
+  assert.equal(sanitizedMeta.nanVal, null);
+  assert.equal(sanitizedMeta.apiKey, '[REDACTED]');
+  assert.equal(sanitizedMeta.self, '[Circular]');
+  assert.deepEqual(sanitizedMeta.firstRef, { status: 'active' });
+  assert.deepEqual(
+    sanitizedMeta.secondRef,
+    { status: 'active' },
+    'Shared non-circular DAG object references must not be marked [Circular]'
+  );
+  const d4Out = (
+    ((sanitizedMeta.d1 as Record<string, unknown>).d2 as Record<string, unknown>).d3 as Record<
+      string,
+      unknown
+    >
+  ).d4 as Record<string, unknown>;
+  assert.equal(d4Out.leafNote, 'Bearer [REDACTED]');
+  assert.equal(d4Out.tooDeepObj, '[MaxDepth]');
+
+  const boundaryStraddle = `${'a'.repeat(7990)} http://admin:${'p'.repeat(16)}@proxy.example.com`;
+  const redactedBoundary = redactSensitiveString(boundaryStraddle);
+  assert.equal(redactedBoundary.includes('p'.repeat(16)), false);
+  assert.equal(redactedBoundary.length <= 8000, true);
+
+  const keyBoundedSpecs = mergeKeySpecs(
+    {
+      ['  display   type  ']: 'LTPO OLED',
+      ['constructor']: 'polluted',
+      ['K'.repeat(120)]: 'too-long-key',
+    },
+    {
+      nested: {
+        ['prototype']: 'blocked',
+        ['  refresh   rate  ']: '120Hz',
+      },
+    }
+  );
+  assert.equal(keyBoundedSpecs['display type'], 'LTPO OLED');
+  assert.equal(Object.hasOwn(keyBoundedSpecs, 'constructor'), false);
+  assert.equal(Object.hasOwn(keyBoundedSpecs, 'K'.repeat(120)), false);
+  assert.deepEqual(keyBoundedSpecs.nested, { 'refresh rate': '120Hz' });
+
+  // DOS/Rate#862: resolveClusterPeerFloorPrice, merchant-review-risk, and Arena/Entity URL bounds
+  assert.equal(
+    resolveClusterPeerFloorPrice(null as unknown as never[], 'p-1', 25_000_000),
+    25_000_000,
+    'Non-array peerRows falls back to fallbackMasterMinPrice instead of throwing'
+  );
+  assert.equal(
+    resolveClusterPeerFloorPrice(
+      [
+        null as unknown as never,
+        { id: '  p-self  ', price_current: 15_000_000, merchants: { is_official: true } },
+        { id: 'p-bool', price_current: true, merchants: { is_official: true } },
+        { id: 'p-peer', price_current: 28_990_000, merchants: { is_official: false } },
+      ],
+      'p-self',
+      true as unknown as number
+    ),
+    28_990_000,
+    'Self-exclusion trims IDs and boolean prices/fallbacks are rejected'
+  );
+  assert.equal(MAX_CLUSTER_PEER_ROWS, 1000);
+
+  assert.equal(toValidPrice(true), 0, 'toValidPrice rejects boolean true');
+  assert.equal(mapStoredReview(null as unknown as ReviewRow), null);
+  assert.equal(mapStoredReview({ ...review('   ', 'p', null) }), null);
+  assert.equal(
+    mapStoredReview({
+      ...review('  r-trim  ', 'p', null),
+      rating_star: true as unknown as number,
+    })?.raw.rating_star,
+    5,
+    'boolean rating_star falls back to 5 instead of coercing true -> 1'
+  );
+
+  const boundedScoreMerchants = scoreMerchants(
+    new AiReviewAnalyzer(),
+    [
+      {
+        id: 'm-prev-bad',
+        platform: 'shopee',
+        is_official: false,
+        follower_count: true as unknown as number,
+        review_risk_score: 999,
+      },
+    ],
+    [{ id: 'p-prev', merchant_id: 'm-prev-bad', cluster_id: 'c1', price_current: 10_000_000 }],
+    [review('r-prev', 'p-prev', { verdict: 'authentic', flag_category: 'authentic' })],
+    new Map()
+  );
+  assert.equal(
+    boundedScoreMerchants[0]?.previousScore,
+    null,
+    'Out-of-range previousScore > 100 is normalized to null'
+  );
+
+  assert.deepEqual(uniqueIds(['  m-2  ', '', '   ', 'm-1\u0000bad', 'm-1', 'm-2']), ['m-1', 'm-2']);
+  assert.equal(await loadAndScoreMerchant(scoped.client, new AiReviewAnalyzer(), '   '), null);
+  await assert.rejects(
+    () =>
+      writeMerchantReviewRisk(
+        scoped.client,
+        '   ',
+        boundedScoreMerchants[0]!.risk,
+        '2026-10-24T00:00:00.000Z'
+      ),
+    /Invalid merchantId/
+  );
+
+  assert.equal(sanitizeHttpUrl('https://user:pass@example.com/a.jpg'), null);
+  const cappedImgs = sanitizeHttpUrlList(
+    Array.from({ length: 70 }, (_, i) => `https://cdn.example.com/img-${i}.jpg`)
+  );
+  assert.equal(cappedImgs.length, MAX_ENTITY_IMAGES);
+
+  const parsedArenaCreds = parseGsmArenaHtmlToSpecs('<h1 data-spec="modelname">Test Phone</h1>', {
+    gsmarenaUrl: 'https://user:pass@www.gsmarena.com/test-1.php',
+    phonearenaUrl: 'https://admin:secret@www.phonearena.com/phones/Test_id1',
+  });
+  assert.equal(parsedArenaCreds.gsmarenaUrl, undefined);
+  assert.equal(parsedArenaCreds.phonearenaUrl, undefined);
+  assert.deepEqual(extractGsmArenaDataSpecs(null as unknown as string), {});
+  assert.deepEqual(parseGsmArenaBrandCatalogHtml(null as unknown as string), []);
+  assert.deepEqual(parsePhoneArenaCatalogHtml(null as unknown as string), []);
+  assert.equal(MAX_ARENA_CATALOG_ITEMS, 500);
 
   console.log('✅ Review risk backfill suite passed');
 }

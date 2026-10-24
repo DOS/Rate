@@ -62,7 +62,10 @@ export function verifyRevalidateSecret(
     !cleanExpected ||
     cleanProvided.length > MAX_REVALIDATE_TOKEN_LENGTH ||
     cleanExpected.length > MAX_REVALIDATE_TOKEN_LENGTH ||
-    /\s/.test(cleanProvided)
+    /\s/.test(cleanProvided) ||
+    /\s/.test(cleanExpected) ||
+    /\p{Cc}/u.test(cleanProvided) ||
+    /\p{Cc}/u.test(cleanExpected)
   ) {
     return false;
   }
@@ -75,7 +78,9 @@ export function extractProvidedToken(request: NextRequest): string | null {
   const headerToken = request.headers.get('x-rate-revalidate-token');
   if (headerToken && headerToken.trim()) {
     const trimmed = headerToken.trim();
-    return trimmed.length <= MAX_REVALIDATE_TOKEN_LENGTH && !/\s/.test(trimmed)
+    return trimmed.length <= MAX_REVALIDATE_TOKEN_LENGTH &&
+      !/\s/.test(trimmed) &&
+      !/\p{Cc}/u.test(trimmed)
       ? trimmed
       : null;
   }
@@ -84,7 +89,8 @@ export function extractProvidedToken(request: NextRequest): string | null {
     const trimmed = authHeader.replace(/^Bearer\s+/i, '').trim();
     return trimmed.length > 0 &&
       trimmed.length <= MAX_REVALIDATE_TOKEN_LENGTH &&
-      !/\s/.test(trimmed)
+      !/\s/.test(trimmed) &&
+      !/\p{Cc}/u.test(trimmed)
       ? trimmed
       : null;
   }

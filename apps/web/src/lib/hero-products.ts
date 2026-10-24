@@ -27,25 +27,47 @@ export type HeroProductSuggestion = Pick<
   | 'specifications'
 >;
 
+export const MAX_HERO_PRODUCTS = 200;
+
+function sanitizeOptionalSpecText(
+  value: unknown,
+  maxLen = 160
+): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const cleaned = value
+    .replace(/\p{Cc}+/gu, '')
+    .trim()
+    .slice(0, maxLen);
+  return cleaned || undefined;
+}
+
 // getMasterProductHref only reads category_slug from these two objects. An
 // empty object, not null, matches their non-nullable schema type.
-const categorySlugOnly = <T>(value: T): T =>
-  (value &&
-  typeof value === 'object' &&
-  typeof (value as Record<string, unknown>).category_slug === 'string'
-    ? { category_slug: (value as Record<string, unknown>).category_slug }
-    : {}) as T;
+const categorySlugOnly = <T>(value: T): T => {
+  if (!value || typeof value !== 'object') return {} as T;
+  const raw = (value as Record<string, unknown>).category_slug;
+  if (typeof raw !== 'string') return {} as T;
+  const slug = raw
+    .replace(/\p{Cc}+/gu, '')
+    .trim()
+    .slice(0, 64);
+  return (slug ? { category_slug: slug } : {}) as T;
+};
 
 // The box matches on and shows only the chip and the screen.
 const searchKeySpecs = (
   keySpecs: HeroProductSuggestion['key_specs']
 ): HeroProductSuggestion['key_specs'] =>
-  keySpecs && { chip: keySpecs.chip, screen: keySpecs.screen };
+  keySpecs && {
+    chip: sanitizeOptionalSpecText(keySpecs.chip),
+    screen: sanitizeOptionalSpecText(keySpecs.screen),
+  };
 
 export function toHeroProductSuggestions(
   products: readonly HeroProductSuggestion[]
 ): HeroProductSuggestion[] {
-  return products.map((p) => ({
+  if (!Array.isArray(products)) return [];
+  return products.slice(0, MAX_HERO_PRODUCTS).map((p) => ({
     id: p.id,
     slug: p.slug,
     name: p.name,

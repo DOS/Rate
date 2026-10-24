@@ -7,6 +7,7 @@ import {
 import {
   BoundedSlidingWindowRateLimiter,
   extractClientRateLimitKey,
+  isSafeCrowdIngestHttpUrl,
   jsonApiError,
 } from '@/server/rate/api-handler';
 import { parseEcommerceUrlOrQuery } from '@/lib/rate-api';
@@ -43,8 +44,8 @@ const CrowdIngestSchema = z.object({
     .url()
     .max(1024)
     .refine(
-      (u) => /^https?:\/\//i.test(u),
-      'Product URL must use http:// or https://'
+      (u) => isSafeCrowdIngestHttpUrl(u),
+      'Product URL must use http:// or https:// without embedded credentials'
     ),
   title: z.string().trim().min(3).max(320),
   selectedVariant: z.string().trim().max(160).nullish(),

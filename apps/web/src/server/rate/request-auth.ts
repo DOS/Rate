@@ -44,7 +44,11 @@ export function readBearerToken(request: Request): string {
   const match = /^Bearer\s+(.+)$/i.exec(header);
   if (!match || !match[1]) return '';
   const token = match[1].trim();
-  if (!token || token.length > MAX_BEARER_TOKEN_LENGTH || /\s/.test(token)) {
+  if (
+    !token ||
+    token.length > MAX_BEARER_TOKEN_LENGTH ||
+    /[\s\p{Cc}]/u.test(token)
+  ) {
     return '';
   }
   return token;
@@ -59,6 +63,7 @@ function readCookies(request: Request): CookieRecord[] {
 
 const AUTH_COOKIE_RE = /^(sb-[^.]+-auth-token)(?:\.\d+)?$/;
 const BASE64_PREFIX = 'base64-';
+const MAX_COOKIE_SESSION_LENGTH = 16_384;
 
 /**
  * Reads the access token from the @supabase/ssr session cookie
@@ -74,16 +79,23 @@ export async function readCookieAccessToken(
     .find((k): k is string => Boolean(k));
   if (!key) return null;
   const raw = await combineChunks(key, (name) => byName.get(name));
-  if (!raw) return null;
+  if (!raw || raw.length > MAX_COOKIE_SESSION_LENGTH) return null;
   try {
     const json = raw.startsWith(BASE64_PREFIX)
       ? stringFromBase64URL(raw.slice(BASE64_PREFIX.length))
       : raw;
+    if (!json || json.length > MAX_COOKIE_SESSION_LENGTH) return null;
     const session = JSON.parse(json) as { access_token?: unknown };
-    return typeof session.access_token === 'string' &&
-      session.access_token.length > 0
-      ? session.access_token
-      : null;
+    if (typeof session.access_token !== 'string') return null;
+    const token = session.access_token.trim();
+    if (
+      !token ||
+      token.length > MAX_BEARER_TOKEN_LENGTH ||
+      /[\s\p{Cc}]/u.test(token)
+    ) {
+      return null;
+    }
+    return token;
   } catch {
     return null;
   }
