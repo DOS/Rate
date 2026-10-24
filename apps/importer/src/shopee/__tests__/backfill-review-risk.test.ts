@@ -669,6 +669,66 @@ async function run() {
     'Master min_price keyed by trimmed c1 detects price anomaly (score 60 != previousScore 20)'
   );
 
+  // DOS/Rate#912: EntityMatcher, AiSpecEnricher, ShopeeToSupabase & MerchantReviewRisk bounds
+  const { EntityMatcher } = await import('../entity-matcher.js');
+  const { AiSpecEnricher } = await import('../ai-spec-enricher.js');
+  const { hasPopulatedSpecificationGroups, normalizeScrapedProductPrices } =
+    await import('../shopee-to-supabase.js');
+  const enricher912 = new AiSpecEnricher(null as unknown as never);
+  assert.equal(enricher912.getProviderInfo().provider.length > 0, true);
+  const enricherBool912 = new AiSpecEnricher({
+    timeoutMs: true as unknown as number,
+    temperature: true as unknown as number,
+  });
+  assert.equal(await enricherBool912.fetchSpecsFromAi(null as unknown as never), null);
+  assert.equal(
+    await enricherBool912.fetchSpecsFromAi({
+      brand: '  \u0000  ',
+      model: 'S25',
+      storageGb: 256,
+      ramGb: 12,
+    }),
+    null
+  );
+  await assert.rejects(
+    () => enricherBool912.enrichCandidate(null as unknown as never),
+    /candidate must be a non-null object/
+  );
+
+  const matcher912 = new EntityMatcher({} as never, enricher912);
+  await assert.rejects(
+    () => matcher912.resolveOrCreateMasterProduct(null as unknown as never),
+    /candidate must be a non-null object/
+  );
+  await assert.rejects(
+    () =>
+      matcher912.resolveOrCreateMasterProduct({
+        model_key: '  \u0000  ',
+      } as never),
+    /candidate\.model_key must be a non-empty string/
+  );
+  await assert.rejects(
+    () => matcher912.enrichMasterProductById('  \u0000  '),
+    /masterId must be a non-empty string/
+  );
+
+  assert.equal(
+    hasPopulatedSpecificationGroups({
+      display: { type: '\u0000\t\n ' },
+    }),
+    false
+  );
+  assert.equal(
+    hasPopulatedSpecificationGroups({
+      cellular: { has_5g: true },
+    }),
+    true
+  );
+  assert.throws(
+    () => normalizeScrapedProductPrices(null as unknown as never),
+    /requires a non-null product object/
+  );
+
   console.log('✅ Review risk backfill suite passed');
 }
 
