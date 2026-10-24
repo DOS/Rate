@@ -55,6 +55,7 @@ import {
   implausiblyLowOfferIds,
   plausibleOffers,
 } from '@/lib/offer-plausibility';
+import { productImageUrl } from '@/lib/rate-domain-core';
 
 interface DeepInspectWorkspaceProps {
   initialQuery?: string;
@@ -665,7 +666,7 @@ export default function DeepInspectWorkspace({
                           categoryPath: productCategoryPath,
                           thumbnail: resolveProductImageUrl(
                             master.slug,
-                            master.thumbnail || master.images?.[0] || null
+                            productImageUrl(master)
                           ),
                           min_price: Number(master.min_price || 0),
                         }}
@@ -677,7 +678,7 @@ export default function DeepInspectWorkspace({
                         categoryPath={productCategoryPath}
                         thumbnail={resolveProductImageUrl(
                           master.slug,
-                          master.thumbnail || master.images?.[0] || null
+                          productImageUrl(master)
                         )}
                         currentMinPrice={Number(master.min_price || 0)}
                       />

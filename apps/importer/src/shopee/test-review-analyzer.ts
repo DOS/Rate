@@ -2396,8 +2396,82 @@ async function run() {
     'ProductNormalizer must preserve 1.5TB (1536GB) as 1.5TB'
   );
 
+  // DOS/Rate#882: computeVoterWeight NaN guards, computeTextShingleSimilarity k bounds, and control-char stripping in review heuristics
+  assert.equal(
+    computeVoterWeight({
+      accountAgeDays: Number.NaN,
+      verifiedReviewCount: Number.NaN,
+      trustScore: 0.9,
+      isVerifiedContact: true,
+    }),
+    0.1,
+    'computeVoterWeight must cap unproven/NaN verifiedReviewCount voters at 0.1'
+  );
+  assert.equal(
+    computeVoterWeight({
+      accountAgeDays: -5,
+      verifiedReviewCount: 0,
+      trustScore: 0.9,
+      isVerifiedContact: true,
+    }),
+    0.1,
+    'computeVoterWeight must treat negative accountAgeDays as unknown and cap 0-review voters at 0.1'
+  );
+  assert.equal(
+    computeTextShingleSimilarity(
+      'Máy dùng rất mượt pin trâu màn hình đẹp tuyệt vời',
+      'Máy dùng rất mượt pin trâu màn hình sáng rõ nét',
+      0
+    ),
+    computeTextShingleSimilarity(
+      'Máy dùng rất mượt pin trâu màn hình đẹp tuyệt vời',
+      'Máy dùng rất mượt pin trâu màn hình sáng rõ nét',
+      3
+    ),
+    'computeTextShingleSimilarity must fall back to k=3 when k <= 0'
+  );
+  assert.equal(
+    isRatingOnlyComment('Cực\u0000 kì hài lòng!'),
+    true,
+    'isRatingOnlyComment must strip control characters before matching platform rating labels'
+  );
+  assert.equal(
+    isShippingOnlyComment('Giao\u0000 hàng nhanh đóng gói cẩn thận'),
+    true,
+    'isShippingOnlyComment must strip control characters before checking shipping/product regexes'
+  );
+  assert.equal(
+    hasStarSentimentContradiction(5, 'Hàng\u0000 giả lừa đảo không dùng được'),
+    true,
+    'hasStarSentimentContradiction must strip control characters before matching contradiction regex'
+  );
+  const ctrlHeuristicRes = analyzer.analyzeWithHeuristics([
+    {
+      id: 'rev-882-coin',
+      author_name: 'u1',
+      rating_star: 5,
+      comment: 'Đánh giá mang\u0000 tính chất minh họa để nhận\u0000 xu thôi ạ',
+    },
+    {
+      id: 'rev-882-nulls',
+      author_name: 'u2',
+      rating_star: 5,
+      comment: 'ok\u0000\u0000\u0000\u0000\u0000\u0000',
+    },
+  ]);
+  assert.equal(
+    ctrlHeuristicRes[0]?.flag_category,
+    'low_value_coin_spam',
+    'analyzeWithHeuristics must strip control characters so coin-farming spam cannot evade detection'
+  );
+  assert.equal(
+    ctrlHeuristicRes[1]?.flag_category,
+    'low_value_coin_spam',
+    'analyzeWithHeuristics must strip control characters before checking minimum comment length'
+  );
+
   console.log(
-    `✅ [P2/P3 Trust Model & #292/#352/#356/#359/#379/#382/#401/#497/#514/#522/#528/#557/#834/#836] Voter weight, Wilson lower bound (50/52=${wilson50of52} > 1/1=${wilson1of1}), shingle copy seeding (sim=${shingleSim}), affiliate shortlinks, peer floor, ArenaSpecSyncer, Importer & ReviewAnalyzer hardening (#352, #356, #359, #379, #382, #401, #497, #514, #522, #528, #557, #834, #836) verified`
+    `✅ [P2/P3 Trust Model & #292/#352/#356/#359/#379/#382/#401/#497/#514/#522/#528/#557/#834/#836/#882] Voter weight, Wilson lower bound (50/52=${wilson50of52} > 1/1=${wilson1of1}), shingle copy seeding (sim=${shingleSim}), affiliate shortlinks, peer floor, ArenaSpecSyncer, Importer & ReviewAnalyzer hardening (#352, #356, #359, #379, #382, #401, #497, #514, #522, #528, #557, #834, #836, #882) verified`
   );
 
   console.log('\n🎉 ALL AI REVIEW ANALYZER TESTS PASSED!');

@@ -211,10 +211,13 @@ VALUES
    'e2e_draft_phone', 'E2E Draft Phone', 'e2e-draft-phone', 4000000, 4000000, 1, 'draft',
    '{"category_slug": "smartphones"}');
 -- The listing has a picture, so the profile renders a thumbnail (DOS/Rate#789).
+-- Its stored images start with "[object Object]", as some crawled TGDD rows
+-- do; the thumbnail must use the first real URL (DOS/Rate#810).
 INSERT INTO rate.products (id, merchant_id, platform, platform_item_id, title, category_id, brand, price_current, url, cluster_id, images)
 SELECT 'cccccccc-cccc-4ccc-8ccc-ccccccc07691', 'ffffffff-ffff-4fff-8fff-ffffffff0769', 'shopee', 'item_draft_links_public',
   'E2E Bud 001 chính hãng', 'c0000000-0000-4000-8000-000000000005', 'E2E Audio', 500000,
-  'https://shopee.vn/item-draft-links-public', id, ARRAY['/img/devices/apple-airpods-pro-3-usb-c.jpg']
+  'https://shopee.vn/item-draft-links-public', id,
+  ARRAY['[object Object]', '/img/devices/apple-airpods-pro-3-usb-c.jpg']
 FROM rate.master_products WHERE slug = 'e2e-bud-001';
 INSERT INTO rate.products (id, merchant_id, platform, platform_item_id, title, category_id, price_current, url, cluster_id)
 VALUES ('cccccccc-cccc-4ccc-8ccc-ccccccc07692', 'ffffffff-ffff-4fff-8fff-ffffffff0769', 'shopee', 'item_draft_links_draft',

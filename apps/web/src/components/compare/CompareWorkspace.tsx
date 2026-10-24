@@ -56,6 +56,7 @@ import {
 import { upsertWatchlistItem } from '@/components/watchlist/watchlist-store';
 import { getSpecUiDictionary, localizeSpecValue } from '@/lib/spec-localizer';
 import ContentText from '@/components/elementary/ContentText';
+import { productImageUrl } from '@/lib/rate-domain-core';
 
 interface CompareWorkspaceProps {
   initialProducts: MasterProduct[];
@@ -851,11 +852,7 @@ export default function CompareWorkspace({
         slug: p.slug,
         name: p.name,
         brand: p.brand,
-        thumbnail: resolveProductImageUrl(
-          p.slug,
-          p.thumbnail ||
-            (p.images && p.images.length > 0 ? p.images[0] || null : null)
-        ),
+        thumbnail: resolveProductImageUrl(p.slug, productImageUrl(p)),
         min_price: Number(p.min_price || 0),
         categorySlug: targetCat,
       }))
@@ -1213,11 +1210,7 @@ export default function CompareWorkspace({
         minP > 0
           ? Math.max(100_000, Math.round((minP * 0.95) / 100_000) * 100_000)
           : 10_000_000;
-      const thumb = resolveProductImageUrl(
-        p.slug,
-        p.thumbnail ||
-          (p.images && p.images.length > 0 ? p.images[0] || null : null)
-      );
+      const thumb = resolveProductImageUrl(p.slug, productImageUrl(p));
       const resolvedHref = getMasterProductHref(p);
       const resolvedCategoryPath =
         resolvedHref.replace(`/${p.slug}`, '') || '/smartphones';
@@ -1409,10 +1402,7 @@ export default function CompareWorkspace({
                           const alreadySelected = selectedSlugs.has(item.slug);
                           const thumb = resolveProductImageUrl(
                             item.slug,
-                            item.thumbnail ||
-                              (item.images && item.images.length > 0
-                                ? item.images[0]
-                                : null)
+                            productImageUrl(item)
                           );
                           const priceFormatted = Number(
                             item.min_price || 0
@@ -1966,8 +1956,7 @@ export default function CompareWorkspace({
                   {products.map((p, idx) => {
                     const thumb = resolveProductImageUrl(
                       p.slug,
-                      p.thumbnail ||
-                        (p.images && p.images.length > 0 ? p.images[0] : null)
+                      productImageUrl(p)
                     );
                     const minPrice = Number(p.min_price || 0);
                     const minPriceFormatted = minPrice.toLocaleString('vi-VN');

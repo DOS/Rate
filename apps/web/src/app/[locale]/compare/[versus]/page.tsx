@@ -51,16 +51,25 @@ export async function generateMetadata({
   const { locale, versus } = await params;
   const lang = normalizeRateLocale(locale);
   const t = await getTranslations({ locale: lang, namespace: 'compare' });
+  // Both cases below render the 404 page, so they are titled as one
+  // (DOS/Rate#877).
+  const notFoundMeta = async (): Promise<Metadata> => {
+    const tNotFound = await getTranslations({
+      locale: lang,
+      namespace: 'errors.notFound',
+    });
+    return { title: `${tNotFound('title')} | Rate.vn` };
+  };
   const parsed = parseVersusSlugs(versus);
   if (!parsed) {
-    return { title: t('versusMetaFallbackTitle') };
+    return notFoundMeta();
   }
 
   const compared = await getCachedCompareMasterProducts(parsed.join(','));
   const a = compared[0];
   const b = compared[1];
   if (!a || !b) {
-    return { title: t('versusMetaFallbackTitle') };
+    return notFoundMeta();
   }
 
   const canonicalUrl = `https://rate.vn/compare/${a.slug}-vs-${b.slug}`;

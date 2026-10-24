@@ -119,7 +119,6 @@
     }
   },
   "compare": {
-    "versusMetaFallbackTitle": "Đối đầu 1v1 | Rate.vn",
     "versusMetaTitle": "So sánh {nameA} và {nameB}: 10 nhóm thông số và điểm đánh giá | Rate.vn",
     "versusMetaTitleShort": "{nameA} vs {nameB} | Rate.vn",
     "versusMetaDescription": "So sánh trực tiếp {nameA} và {nameB}: điểm đánh giá theo 5 tiêu chí, 10 nhóm thông số kỹ thuật và giá thật trên các sàn.",

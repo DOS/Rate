@@ -837,6 +837,42 @@ export const KNOWN_LOCAL_DEVICE_IMAGES = new Set<string>([
   'xiaomi-pad-7-pro-256gb',
 ]);
 
+/**
+ * Whether a stored image entry can be used as an `src`: an absolute
+ * http(s) URL, a protocol-relative URL or a site path. Crawled rows can hold
+ * other strings, such as "[object Object]" from a stringified image object
+ * (DOS/Rate#810).
+ */
+export function isImageUrl(value: unknown): value is string {
+  // A host after "http(s)://" or "//"; otherwise one slash and a path.
+  return (
+    typeof value === 'string' &&
+    /^(?:(?:https?:)?\/\/[^\s/?#]+|\/(?!\/)\S)\S*$/i.test(value.trim())
+  );
+}
+
+/** The usable images of a stored `images` list, trimmed, in order. */
+export function usableImageUrls(
+  images: readonly unknown[] | null | undefined
+): string[] {
+  return (images ?? []).filter(isImageUrl).map((url) => url.trim());
+}
+
+/** The first usable image of a stored `images` list, or null. */
+export function firstImageUrl(
+  images: readonly unknown[] | null | undefined
+): string | null {
+  return usableImageUrls(images)[0] ?? null;
+}
+
+/** A product's thumbnail if usable, else its first usable stored image. */
+export function productImageUrl(product: {
+  readonly thumbnail?: string | null;
+  readonly images?: readonly unknown[] | null;
+}): string | null {
+  return firstImageUrl([product.thumbnail, ...(product.images ?? [])]);
+}
+
 export function resolveProductImageUrl(
   slugOrProduct?:
     | string
@@ -854,19 +890,20 @@ export function resolveProductImageUrl(
     if (slug && KNOWN_LOCAL_DEVICE_IMAGES.has(slug)) {
       return `/img/devices/${slug}.jpg`;
     }
+    // Stored thumbnails and listing images can be junk such as
+    // "[object Object]" (DOS/Rate#810).
     return (
-      slugOrProduct.thumbnail ||
-      (Array.isArray(slugOrProduct.images) && slugOrProduct.images.length > 0
-        ? slugOrProduct.images[0] || null
-        : null) ||
-      fallbackUrl ||
-      null
+      firstImageUrl([slugOrProduct.thumbnail]) ||
+      firstImageUrl(
+        Array.isArray(slugOrProduct.images) ? slugOrProduct.images : null
+      ) ||
+      firstImageUrl([fallbackUrl])
     );
   }
   if (slugOrProduct && KNOWN_LOCAL_DEVICE_IMAGES.has(slugOrProduct)) {
     return `/img/devices/${slugOrProduct}.jpg`;
   }
-  return fallbackUrl || null;
+  return firstImageUrl([fallbackUrl]);
 }
 
 export type CanonicalCategorySlug =
