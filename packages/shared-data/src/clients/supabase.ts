@@ -43,7 +43,7 @@ export function isValidSupabaseApiKey(rawKey: string): boolean {
   if (typeof rawKey !== 'string') return false;
   const trimmed = rawKey.trim();
   return (
-    trimmed.length >= 16 &&
+    trimmed.length >= 8 &&
     trimmed.length <= 4096 &&
     !/\p{Cc}/u.test(trimmed) &&
     !/\s/.test(trimmed)
