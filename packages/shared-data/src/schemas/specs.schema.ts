@@ -7,100 +7,100 @@ import { HttpUrlSchema, StatusSchema } from './common.schema.js';
  */
 
 export const AvailabilitySchema = z.object({
-  announced: z.string().optional(),
-  status: z.string().optional(),
-  prices_msrp: z.string().optional(),
+  announced: z.string().max(500).optional(),
+  status: z.string().max(500).optional(),
+  prices_msrp: z.string().max(500).optional(),
 });
 
 export const DesignSchema = z.object({
-  dimensions: z.string().optional(),
+  dimensions: z.string().max(500).optional(),
   weight_g: z.number().positive().max(25000).optional(),
-  materials: z.string().optional(),
-  build: z.string().optional(),
-  resistance: z.string().optional(),
-  biometrics: z.string().optional(),
-  keys: z.string().optional(),
-  colors: z.array(z.string()).optional(),
+  materials: z.string().max(500).optional(),
+  build: z.string().max(500).optional(),
+  resistance: z.string().max(500).optional(),
+  biometrics: z.string().max(500).optional(),
+  keys: z.string().max(500).optional(),
+  colors: z.array(z.string().max(64)).max(50).optional(),
 });
 
 export const DisplaySchema = z.object({
   size_inch: z.number().positive().max(120).optional(),
-  type: z.string().optional(),
-  resolution: z.string().optional(),
+  type: z.string().max(500).optional(),
+  resolution: z.string().max(500).optional(),
   refresh_rate_hz: z.number().positive().max(1000).optional(),
   ppi: z.number().positive().max(5000).optional(),
-  protection: z.string().optional(),
-  features: z.string().optional(),
+  protection: z.string().max(500).optional(),
+  features: z.string().max(500).optional(),
 });
 
 export const HardwareSchema = z.object({
-  chipset: z.string().optional(),
-  cpu: z.string().optional(),
-  gpu: z.string().optional(),
+  chipset: z.string().max(500).optional(),
+  cpu: z.string().max(500).optional(),
+  gpu: z.string().max(500).optional(),
   ram_gb: z.number().positive().max(2048).optional(),
   storage_gb: z.number().positive().max(65536).optional(),
-  storage_expansion: z.string().optional(),
-  os: z.string().optional(),
+  storage_expansion: z.string().max(500).optional(),
+  os: z.string().max(500).optional(),
 });
 
 export const BatterySchema = z.object({
   capacity_mah: z.number().positive().max(500000).optional(),
-  type: z.string().optional(),
-  charging: z.string().optional(),
+  type: z.string().max(500).optional(),
+  charging: z.string().max(500).optional(),
   fast_charging_w: z.number().nonnegative().max(1000).optional(),
-  reverse_charging: z.union([z.boolean(), z.string()]).optional(),
+  reverse_charging: z.union([z.boolean(), z.string().max(500)]).optional(),
 });
 
 export const CameraSchema = z.object({
-  rear_setup: z.string().optional(),
-  main_camera: z.string().optional(),
-  second_camera: z.string().optional(),
-  third_camera: z.string().optional(),
-  fourth_camera: z.string().optional(),
-  flash: z.string().optional(),
-  video_recording: z.string().optional(),
-  front_camera: z.string().optional(),
+  rear_setup: z.string().max(500).optional(),
+  main_camera: z.string().max(500).optional(),
+  second_camera: z.string().max(500).optional(),
+  third_camera: z.string().max(500).optional(),
+  fourth_camera: z.string().max(500).optional(),
+  flash: z.string().max(500).optional(),
+  video_recording: z.string().max(500).optional(),
+  front_camera: z.string().max(500).optional(),
 });
 
 export const ConnectivitySchema = z.object({
-  bluetooth: z.string().optional(),
-  wlan: z.string().optional(),
-  usb: z.string().optional(),
-  sensors: z.string().optional(),
-  location: z.string().optional(),
+  bluetooth: z.string().max(500).optional(),
+  wlan: z.string().max(500).optional(),
+  usb: z.string().max(500).optional(),
+  sensors: z.string().max(500).optional(),
+  location: z.string().max(500).optional(),
   nfc: z.boolean().optional(),
-  other: z.string().optional(),
+  other: z.string().max(500).optional(),
 });
 
 export const CellularSchema = z.object({
   has_5g: z.boolean().optional(),
-  bands_5g: z.string().optional(),
-  bands_4g: z.string().optional(),
-  bands_3g: z.string().optional(),
-  bands_2g: z.string().optional(),
-  technology: z.string().optional(),
-  data_speed: z.string().optional(),
-  sim_type: z.string().optional(),
+  bands_5g: z.string().max(500).optional(),
+  bands_4g: z.string().max(500).optional(),
+  bands_3g: z.string().max(500).optional(),
+  bands_2g: z.string().max(500).optional(),
+  technology: z.string().max(500).optional(),
+  data_speed: z.string().max(500).optional(),
+  sim_type: z.string().max(500).optional(),
   volte: z.boolean().optional(),
   vowifi: z.boolean().optional(),
 });
 
 export const MultimediaSchema = z.object({
-  loudspeaker: z.string().optional(),
+  loudspeaker: z.string().max(500).optional(),
   headphone_jack_35mm: z.boolean().optional(),
-  audio_features: z.string().optional(),
+  audio_features: z.string().max(500).optional(),
 });
 
 export const RegulatorySchema = z.object({
-  fcc_approval: z.string().optional(),
-  sar_head: z.string().optional(),
-  sar_body: z.string().optional(),
-  sar_simultaneous: z.string().optional(),
-  certifications: z.string().optional(),
+  fcc_approval: z.string().max(500).optional(),
+  sar_head: z.string().max(500).optional(),
+  sar_body: z.string().max(500).optional(),
+  sar_simultaneous: z.string().max(500).optional(),
+  certifications: z.string().max(500).optional(),
 });
 
 export const ProductSpecificationsSchema = z.object({
-  category_slug: z.string().optional(),
+  category_slug: z.string().max(64).optional(),
   availability: AvailabilitySchema.optional(),
   design: DesignSchema.optional(),
   display: DisplaySchema.optional(),

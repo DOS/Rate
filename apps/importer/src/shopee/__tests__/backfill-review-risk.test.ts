@@ -788,6 +788,7 @@ async function run() {
     ListingFilterSchema,
     ListingSchema,
     MasterProductSchema,
+    ProductSpecificationsSchema,
     ReviewReactionSchema,
     ReviewSchema,
     ScrapedProductSchema,
@@ -866,6 +867,33 @@ async function run() {
     }).success,
     false
   );
+
+  // DOS/Rate#920: ProductSpecificationsSchema 10-field-groups bounds
+  assert.equal(
+    ProductSpecificationsSchema.safeParse({
+      category_slug: 'c'.repeat(65),
+    }).success,
+    false
+  );
+  assert.equal(
+    ProductSpecificationsSchema.safeParse({
+      hardware: { chipset: 'x'.repeat(501) },
+    }).success,
+    false
+  );
+  assert.equal(
+    ProductSpecificationsSchema.safeParse({
+      design: { colors: ['c'.repeat(65)] },
+    }).success,
+    false
+  );
+  const { sanitizeSpecifications } = await import('../ai-spec-enricher.js');
+  const sanitizedSpecs = sanitizeSpecifications({
+    category_slug: 's'.repeat(70),
+    design: { colors: ['c'.repeat(75)] },
+  });
+  assert.equal(sanitizedSpecs.category_slug?.length, 64);
+  assert.equal(sanitizedSpecs.design?.colors?.[0]?.length, 64);
 
   console.log('✅ Review risk backfill suite passed');
 }
