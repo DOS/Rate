@@ -199,13 +199,65 @@ async function runSuite() {
   assert.equal(categoryOf('MacBook Neo 13 inch A18 Pro 2026 6CPU 5GPU 8GB 256GB'), 'laptops');
   assert.equal(keyOf('iPhone Air 256GB'), 'apple:iphone-air:256gb');
   assert.equal(keyOf('iPhone Duo 512GB'), 'apple:iphone-duo:512gb');
-  // "(2nd generation)" is the generation number.
+  // An A16 or later chip after the screen size or generation names the base iPad; an
+  // earlier chip leaves the generation.
+  assert.equal(keyOf('Apple iPad 11 inch (A16) 128GB'), 'apple:ipad-a16:128gb');
+  assert.equal(keyOf('iPad 11 (A16) WiFi 128GB - Hàng Chính Hãng'), 'apple:ipad-a16:128gb');
+  assert.equal(keyOf('Apple iPad Gen 11 A16 128GB'), 'apple:ipad-a16:128gb');
+  assert.equal(keyOf('iPad Gen 10 (A14 Bionic) 64GB'), keyOf('Apple iPad 10 64GB'));
+  assert.equal(keyOf('Apple iPad 10.9 inch (A14) 64GB'), keyOf('Apple iPad 10 64GB'));
+  assert.equal(keyOf('MacBook Neoprene Sleeve 13 inch'), 'apple:macbook:unknown');
+  assert.equal(
+    normalizer.normalize(createDummyShopeeProduct('iPhone Air 256GB')).model,
+    'iPhone Air'
+  );
+  assert.equal(
+    normalizer.normalize(createDummyShopeeProduct('iPhone Duo 512GB')).model,
+    'iPhone Duo'
+  );
+  assert.equal(
+    normalizer.normalize(createDummyShopeeProduct('iPad (a16) 128GB')).model,
+    'iPad A16'
+  );
+  // "(2nd generation)" is the generation number, one or two digits, any ordinal.
   assert.equal(keyOf('Apple Watch Ultra (2nd generation) 49mm'), keyOf('Apple Watch Ultra 2 49mm'));
   assert.equal(keyOf('AirPods Pro (2nd generation)'), keyOf('AirPods Pro 2'));
+  assert.equal(keyOf('AirPods Pro (2nd gen) USB-C'), keyOf('AirPods Pro 2 USB-C'));
+  assert.equal(keyOf('AirPods (3rd generation)'), keyOf('AirPods 3'));
+  assert.equal(keyOf('iPhone SE (3rd generation) 64GB'), keyOf('iPhone SE 3 64GB'));
+  assert.equal(keyOf('iPad (10th generation) 64GB'), keyOf('Apple iPad 10 64GB'));
+  assert.equal(
+    keyOf('Apple Watch Series (10th generation) 46mm'),
+    keyOf('Apple Watch Series 10 46mm')
+  );
+  // The persisted name keeps one space, and "Series" alone is not the SE.
+  const ultra2 = normalizer.normalize(
+    createDummyShopeeProduct('Apple Watch Ultra (2nd generation) 49mm')
+  );
+  assert.equal(ultra2.model, 'Watch Ultra 2');
+  assert.ok(!/\s{2}/.test(ultra2.name), ultra2.name);
+  assert.equal(keyOf('Apple Watch Series'), 'apple:watch:unknown');
   // With no line matched, the family the title names first, else iPhone.
   assert.equal(keyOf('MacBook M4'), 'apple:macbook:unknown');
   assert.equal(keyOf('Apple "iPad" 256GB'), 'apple:ipad:256gb');
   assert.equal(keyOf('Đặt trước iPhone mới, ưu đãi MacBook'), 'apple:iphone:unknown');
+  assert.equal(keyOf('Túi MacBook, iPhone mới'), 'apple:macbook:unknown');
+  assert.equal(keyOf('Apple Watch Band 45mm'), 'apple:watch:unknown');
+  assert.equal(keyOf('Apple AirPods Case'), 'apple:airpods:1gb');
+  assert.equal(keyOf('Apple Swatch band'), 'apple:iphone:unknown');
+  assert.equal(keyOf('Apple watchOS 11 hướng dẫn'), 'apple:iphone:unknown');
+  // Long whitespace stays linear in the Apple patterns (CodeQL js/polynomial-redos).
+  const appleRunStart = Date.now();
+  const spaces = ' '.repeat(50_000);
+  for (const title of [
+    `Apple iPad${spaces}x`,
+    `Apple iPad 11${spaces}x`,
+    `Apple iPad 11 (${spaces}x`,
+    `Apple Watch${spaces}(2nd generation)`,
+  ]) {
+    keyOf(title);
+  }
+  assert.ok(Date.now() - appleRunStart < 1_000, 'a 50k-space Apple title must not hang');
   // "Omen" only as a word: Sennheiser "Momentum" is not HP.
   assert.equal(brandOf('Tai nghe Sennheiser Momentum 4 Wireless'), 'Sennheiser');
   assert.equal(brandOf('Laptop HP Omen 16 512GB'), 'HP');
