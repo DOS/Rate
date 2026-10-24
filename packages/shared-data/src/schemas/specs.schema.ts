@@ -114,12 +114,12 @@ export const ProductSpecificationsSchema = z.object({
 });
 
 export const KeySpecsSchema = z.object({
-  screen: z.string().optional(),
-  chip: z.string().optional(),
-  camera: z.string().optional(),
-  battery: z.string().optional(),
-  storage: z.string().optional(),
-  ram: z.string().optional(),
+  screen: z.string().max(200).optional(),
+  chip: z.string().max(200).optional(),
+  camera: z.string().max(200).optional(),
+  battery: z.string().max(200).optional(),
+  storage: z.string().max(200).optional(),
+  ram: z.string().max(200).optional(),
 });
 
 /** Maximum realistic VND listing price (1 billion VND) to block unscaled fixed-point / concatenated price bugs. */
@@ -128,13 +128,13 @@ export const MAX_VALID_VND_PRICE = 1_000_000_000;
 export const MasterProductSchema = z.object({
   id: z.string().uuid(),
   category_id: z.string().uuid().nullable().optional(),
-  brand: z.string().min(1),
-  model: z.string().min(1),
-  variant_name: z.string().nullable().optional(),
-  model_key: z.string().min(1),
-  name: z.string().min(1),
-  slug: z.string().min(1),
-  description: z.string().nullable().optional(),
+  brand: z.string().min(1).max(120),
+  model: z.string().min(1).max(200),
+  variant_name: z.string().max(200).nullable().optional(),
+  model_key: z.string().min(1).max(200),
+  name: z.string().min(1).max(300),
+  slug: z.string().min(1).max(200),
+  description: z.string().max(50_000).nullable().optional(),
   ram_gb: z.number().positive().max(2048).nullable().optional(),
   storage_gb: z.number().positive().max(65536).nullable().optional(),
   screen_size_inch: z.number().positive().max(120).nullable().optional(),
@@ -142,9 +142,9 @@ export const MasterProductSchema = z.object({
   has_5g: z.boolean().default(false),
   specifications: ProductSpecificationsSchema.default({}),
   key_specs: KeySpecsSchema.default({}),
-  images: z.array(HttpUrlSchema).default([]),
+  images: z.array(HttpUrlSchema).max(100).default([]),
   thumbnail: HttpUrlSchema.nullable().optional(),
-  colors: z.array(z.string()).default([]),
+  colors: z.array(z.string().max(64)).max(50).default([]),
   min_price: z.number().nonnegative().max(MAX_VALID_VND_PRICE).default(0),
   max_price: z.number().nonnegative().max(MAX_VALID_VND_PRICE).default(0),
   merchant_count: z.number().int().nonnegative().default(0),
@@ -152,7 +152,7 @@ export const MasterProductSchema = z.object({
   average_rating: z.number().min(0).max(5).nullable().default(null),
   entity_type: z.enum(['product', 'service']).default('product').optional(),
   expert_rating: z.number().min(0).max(5).nullable().optional(),
-  expert_review_summary: z.string().nullable().optional(),
+  expert_review_summary: z.string().max(10_000).nullable().optional(),
   expert_criteria_scores: z
     .record(z.string(), z.unknown())
     .default({})
@@ -161,8 +161,8 @@ export const MasterProductSchema = z.object({
   authentic_review_count: z.number().int().nonnegative().default(0).optional(),
   status: StatusSchema.default('draft'),
   metadata: z.record(z.string(), z.unknown()).default({}),
-  created_at: z.string().optional(),
-  updated_at: z.string().optional(),
+  created_at: z.string().max(64).optional(),
+  updated_at: z.string().max(64).optional(),
 });
 
 /**

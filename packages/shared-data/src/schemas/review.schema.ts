@@ -15,9 +15,9 @@ export const ReviewSchema = z.object({
   rating: z.number().min(1).max(5),
   title: z.string().min(1).max(200).optional(),
   content: z.string().min(10).max(5000),
-  pros: z.array(z.string()).optional(),
-  cons: z.array(z.string()).optional(),
-  images: z.array(HttpUrlSchema).optional(),
+  pros: z.array(z.string().max(300)).max(20).optional(),
+  cons: z.array(z.string().max(300)).max(20).optional(),
+  images: z.array(HttpUrlSchema).max(50).optional(),
   isVerified: z.boolean().default(false),
   isAnonymous: z.boolean().default(false),
   status: StatusSchema,
@@ -26,7 +26,7 @@ export const ReviewSchema = z.object({
   reportCount: z.number().int().nonnegative().default(0),
   reply: z
     .object({
-      content: z.string(),
+      content: z.string().min(1).max(5000),
       createdAt: z.string().datetime(),
       createdBy: UUIDv7Schema,
     })
@@ -69,7 +69,7 @@ export const ReviewReactionSchema = z.object({
   reviewId: UUIDv7Schema,
   userId: UUIDv7Schema,
   type: z.enum(['helpful', 'unhelpful', 'report']),
-  reason: z.string().optional(), // For reports
+  reason: z.string().max(1000).optional(), // For reports
 });
 
 export type Review = z.infer<typeof ReviewSchema>;
