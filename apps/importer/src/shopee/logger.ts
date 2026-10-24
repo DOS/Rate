@@ -14,23 +14,31 @@ function sanitizeImporterIdentifier(value: unknown, maxLen: number): string {
     .slice(0, maxLen);
 }
 
+const UNSAFE_PARAM_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
 function canonicalizeParamValue(
   value: unknown,
   depth = 0,
   seen: WeakSet<object> = new WeakSet<object>()
 ): unknown {
-  if (value === null || value === undefined || typeof value !== 'object') return value;
+  if (value === null || value === undefined || typeof value === 'boolean') return value;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value === 'bigint') return value.toString();
+  if (typeof value === 'string') return value.slice(0, 1000);
+  if (typeof value !== 'object') return String(value).slice(0, 200);
   if (seen.has(value)) return '[Circular]';
   if (depth > 8) return '[MaxDepth]';
   seen.add(value);
   try {
     if (Array.isArray(value)) {
-      return value.map(item => canonicalizeParamValue(item, depth + 1, seen));
+      return value.slice(0, 100).map(item => canonicalizeParamValue(item, depth + 1, seen));
     }
     const obj = value as Record<string, unknown>;
     return Object.keys(obj)
+      .filter(k => !UNSAFE_PARAM_KEYS.has(k))
       .sort()
-      .map(k => [k, canonicalizeParamValue(obj[k], depth + 1, seen)]);
+      .slice(0, 100)
+      .map(k => [k.slice(0, 128), canonicalizeParamValue(obj[k], depth + 1, seen)]);
   } finally {
     seen.delete(value);
   }
