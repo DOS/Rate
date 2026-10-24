@@ -20,7 +20,7 @@ export const DesignSchema = z.object({
   resistance: z.string().max(500).optional(),
   biometrics: z.string().max(500).optional(),
   keys: z.string().max(500).optional(),
-  colors: z.array(z.string().max(64)).max(50).optional(),
+  colors: z.array(z.string().max(80)).max(50).optional(),
 });
 
 export const DisplaySchema = z.object({
@@ -144,7 +144,7 @@ export const MasterProductSchema = z.object({
   key_specs: KeySpecsSchema.default({}),
   images: z.array(HttpUrlSchema).max(100).default([]),
   thumbnail: HttpUrlSchema.nullable().optional(),
-  colors: z.array(z.string().max(64)).max(50).default([]),
+  colors: z.array(z.string().max(80)).max(50).default([]),
   min_price: z.number().nonnegative().max(MAX_VALID_VND_PRICE).default(0),
   max_price: z.number().nonnegative().max(MAX_VALID_VND_PRICE).default(0),
   merchant_count: z.number().int().nonnegative().default(0),

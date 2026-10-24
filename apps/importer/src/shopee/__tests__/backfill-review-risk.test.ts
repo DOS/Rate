@@ -883,17 +883,17 @@ async function run() {
   );
   assert.equal(
     ProductSpecificationsSchema.safeParse({
-      design: { colors: ['c'.repeat(65)] },
+      design: { colors: ['c'.repeat(81)] },
     }).success,
     false
   );
   const { sanitizeSpecifications } = await import('../ai-spec-enricher.js');
   const sanitizedSpecs = sanitizeSpecifications({
     category_slug: 's'.repeat(70),
-    design: { colors: ['c'.repeat(75)] },
+    design: { colors: ['c'.repeat(95)] },
   });
   assert.equal(sanitizedSpecs.category_slug?.length, 64);
-  assert.equal(sanitizedSpecs.design?.colors?.[0]?.length, 64);
+  assert.equal(sanitizedSpecs.design?.colors?.[0]?.length, 80);
 
   console.log('✅ Review risk backfill suite passed');
 }

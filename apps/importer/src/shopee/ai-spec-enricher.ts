@@ -160,7 +160,7 @@ function sanitizeColorList(val: unknown): string[] | undefined {
   if (!Array.isArray(val)) return undefined;
   const cleaned = Array.from(
     new Set(
-      val.map((c: unknown) => toStringOrUndefined(c, 64)).filter((c): c is string => Boolean(c))
+      val.map((c: unknown) => toStringOrUndefined(c, 80)).filter((c): c is string => Boolean(c))
     )
   ).slice(0, 32);
   return cleaned.length > 0 ? cleaned : undefined;

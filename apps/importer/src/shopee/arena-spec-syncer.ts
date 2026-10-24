@@ -285,7 +285,7 @@ export function parseGsmArenaHtmlToSpecs(
         new Set(
           colorsRaw
             .split(',')
-            .map(c => c.trim().slice(0, 64))
+            .map(c => c.trim().slice(0, 80))
             .filter(Boolean)
         )
       ).slice(0, 50)
