@@ -117,7 +117,7 @@ export function detectProductOrigin(title: string, description?: string): Produc
 export function detectCategorySlug(title: string): CanonicalCategorySlug {
   const t = title.toLowerCase();
   if (
-    /airpods|galaxy\s*buds|wf-\d+|wh-\d+|tai\s*nghe|earbuds?|freebuds|soundcore|quietcomfort|momentum\s*true/i.test(
+    /airpods|galaxy\s*buds|w[fh]1000xm|wf-\d+|wh-\d+|tai\s*nghe|earbuds?|freebuds|soundcore|quietcomfort|momentum\s*true/i.test(
       t
     )
   ) {
@@ -1077,7 +1077,7 @@ export class ProductNormalizer {
     if (/apple|iphone|ipad|macbook|airpods/i.test(title)) brand = 'Apple';
     else if (/samsung|galaxy/i.test(title)) brand = 'Samsung';
     else if (/xiaomi|redmi|poco/i.test(title)) brand = 'Xiaomi';
-    else if (/\bsony\b|wf-1000|wh-1000|xperia/i.test(title)) brand = 'Sony';
+    else if (/\bsony\b|w[fh]-1000|w[fh]1000xm|xperia/i.test(title)) brand = 'Sony';
     else if (
       /\bgarmin\b|forerunner|fenix|venu|vivo(?:active|smart|move|fit|sport|life)/i.test(title)
     )
@@ -1132,7 +1132,10 @@ export class ProductNormalizer {
           .replace(/\s+/g, ' ')
           .trim()
           .replace(/^(\d+)E\b/, '$1e')
-          .replace(/^se\b/i, 'SE');
+          .replace(/^se\b/i, 'SE')
+          // "16ProMax" and "16 ProMax" are "16 Pro Max" (DOS/Rate#815).
+          .replace(/^(\d+)(?=pro|plus|mini|air)/i, '$1 ')
+          .replace(/\b(pro)(max)\b/i, '$1 $2');
         model = `iPhone ${normalizedIphoneSuffix}`;
       } else if (ipadMatch && ipadMatch[1]) {
         const line = ipadMatch[1].trim();
@@ -1158,12 +1161,10 @@ export class ProductNormalizer {
       } else {
         model = 'iPhone';
       }
-    } else if (brand === 'Sony' && /wf-1000xm(\d+)/i.test(title)) {
-      const m = title.match(/wf-1000xm(\d+)/i);
-      model = `WF-1000XM${m?.[1] || '5'}`;
-    } else if (brand === 'Sony' && /wh-1000xm(\d+)/i.test(title)) {
-      const m = title.match(/wh-1000xm(\d+)/i);
-      model = `WH-1000XM${m?.[1] || '5'}`;
+    } else if (brand === 'Sony' && /w([fh])-?1000xm(\d+)/i.test(title)) {
+      // "WF1000XM5" without the hyphen is the same model (DOS/Rate#815).
+      const m = title.match(/w([fh])-?1000xm(\d+)/i);
+      model = `W${m?.[1]?.toUpperCase()}-1000XM${m?.[2]}`;
     } else if (brand === 'Asus' && /zenbook\s*s\s*14/i.test(title)) {
       model = 'Zenbook S 14';
     } else if (brand === 'Lenovo' && /thinkpad\s*x1\s*carbon\s*gen\s*12/i.test(title)) {
@@ -1195,6 +1196,8 @@ export class ProductNormalizer {
         .replace(/^(?:\s*(?:\[[^\]]*\]|\([^)]*\)|【[^】]*】))+\s*/, '')
         // "Vivo Book 15" is the Asus Vivobook line: key it like "Vivobook 15" (DOS/Rate#774).
         .replace(/\bvivo\s+book\b/gi, 'Vivobook')
+        // "17 ProMax" keys like "17 Pro Max" (DOS/Rate#815).
+        .replace(/\b(pro)(max)\b/gi, '$1 $2')
         .trim();
       const rawTokens = cleaned.split(/\s+/).filter(Boolean);
       const modelTokens: string[] = [];
@@ -1214,10 +1217,12 @@ export class ProductNormalizer {
           startsGeneration ||
           (/^gen$/i.test(modelTokens[modelTokens.length - 1] ?? '') && /^\d{1,2}[,;]?$/.test(tok));
         // A trailing "Plus" word is part of the model even past the 4-token cap,
-        // so "Redmi Note 13 Pro Plus" keys like "Redmi Note 13 Pro+" (#597).
+        // so "Redmi Note 13 Pro Plus" keys like "Redmi Note 13 Pro+" (#597); so is
+        // "Max" after "Pro": "Redmi Note 17 Pro Max" is not the Pro (DOS/Rate#815).
         if (
           modelTokens.length >= 4 &&
           !(modelTokens.length === 4 && /^plus[,;]?$/i.test(tok)) &&
+          !(/^pro$/i.test(modelTokens[modelTokens.length - 1] ?? '') && /^max[,;]?$/i.test(tok)) &&
           !generation
         ) {
           break;
@@ -1225,7 +1230,9 @@ export class ProductNormalizer {
         if (
           /^(?:\d+(?:[.,]\d+)?(?:GB|TB)|\d+\/\d+(?:GB|TB)?|\d{2}mm|5G|4G|LTE|GPS|RAM|ROM|OLED|WiFi|Chính|Quốc|Bản|Mới|Fullbox|Likenew|Like|Cũ|99%|98%|VN\/A|VNA|LL\/A|\(|\[|-)/i.test(
             tok
-          )
+          ) ||
+          // A size written apart, "256 GB", ends the model like "256GB" (DOS/Rate#815).
+          (/^\d+(?:[.,]\d+)?$/.test(tok) && /^(?:GB|TB)\b/i.test(rawTokens[i + 1] ?? ''))
         ) {
           break;
         }
