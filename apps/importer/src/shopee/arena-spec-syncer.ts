@@ -83,6 +83,33 @@ function toBoundedNumber(
   return val;
 }
 
+function normalizeArenaUrl(
+  rawUrl: string | undefined,
+  hostPattern: RegExp,
+  baseOrigin?: string
+): string | undefined {
+  const trimmed = rawUrl?.trim();
+  if (!trimmed || trimmed.length > 2048 || /\s/.test(trimmed)) {
+    return undefined;
+  }
+  for (let i = 0; i < trimmed.length; i++) {
+    const code = trimmed.charCodeAt(i);
+    if (code <= 0x1f || code === 0x7f) return undefined;
+  }
+  try {
+    const parsed = baseOrigin ? new URL(trimmed, baseOrigin) : new URL(trimmed);
+    if (
+      (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') ||
+      !hostPattern.test(parsed.hostname)
+    ) {
+      return undefined;
+    }
+    return parsed.href;
+  } catch {
+    return undefined;
+  }
+}
+
 function stripHtmlTags(raw: string): string {
   return decodeArenaHtmlEntities(raw.replace(/<br\s*\/?>/gi, '\n').replace(/<[^<>]+>/g, ' '))
     .replace(/[ \t]+/g, ' ')
@@ -189,12 +216,16 @@ export function parseGsmArenaHtmlToSpecs(
   // Hardware & memory parsing (`256GB 12GB RAM, 512GB 16GB RAM`)
   const memRaw = d['internalmemory'] || `${pa['internal storage'] || ''} ${pa['ram'] || ''}`.trim();
   const ramMatches = Array.from(memRaw.matchAll(/(\d+(?:\.\d+)?)\s*GB\s*RAM/gi))
-    .map(m => toBoundedNumber(Number(m[1]), 0.125, 2048))
+    .map(m => {
+      const val = Number(m[1]);
+      return Number.isInteger(val) ? toBoundedNumber(val, 1, 2048, true) : undefined;
+    })
     .filter((v): v is number => v !== undefined);
   const storageMatches = Array.from(memRaw.matchAll(/(\d+(?:\.\d+)?)\s*(GB|TB)(?!\s*RAM)/gi))
-    .map(m =>
-      toBoundedNumber(m[2]?.toUpperCase() === 'TB' ? Number(m[1]) * 1024 : Number(m[1]), 0.5, 65536)
-    )
+    .map(m => {
+      const val = m[2]?.toUpperCase() === 'TB' ? Number(m[1]) * 1024 : Number(m[1]);
+      return Number.isInteger(val) ? toBoundedNumber(val, 1, 65536, true) : undefined;
+    })
     .filter((v): v is number => v !== undefined);
 
   const ramGb = ramMatches.length > 0 ? Math.max(...ramMatches) : null;
@@ -343,7 +374,7 @@ export function parseGsmArenaHtmlToSpecs(
     chip: d['chipset'] || pa['system chip'] || undefined,
     ram: ramGb ? `${ramGb}GB` : undefined,
     storage: storageGb
-      ? storageGb >= 1024
+      ? storageGb >= 1024 && storageGb % 512 === 0
         ? `${storageGb / 1024}TB`
         : `${storageGb}GB`
       : undefined,
@@ -358,10 +389,13 @@ export function parseGsmArenaHtmlToSpecs(
       : batRaw || undefined,
   });
 
+  const gsmarenaUrl = normalizeArenaUrl(meta?.gsmarenaUrl, /(?:^|\.)gsmarena\.com$/i);
+  const phonearenaUrl = normalizeArenaUrl(meta?.phonearenaUrl, /(?:^|\.)phonearena\.com$/i);
+
   return {
-    source: meta?.phonearenaUrl || meta?.phonearenaHtml ? 'hybrid' : 'gsmarena',
-    gsmarenaUrl: meta?.gsmarenaUrl,
-    phonearenaUrl: meta?.phonearenaUrl,
+    source: phonearenaUrl || meta?.phonearenaHtml ? 'hybrid' : 'gsmarena',
+    gsmarenaUrl,
+    phonearenaUrl,
     brand,
     model,
     modelName,
@@ -431,25 +465,23 @@ export function parseGsmArenaBrandCatalogHtml(
     const nameMatch = inner.match(/<span[^<>]*>((?:(?!<\/?span\b)[\s\S])*)<\/span>/i);
     const rawName = stripHtmlTags(nameMatch ? nameMatch[1] || '' : inner);
     if (!rawName || !href) continue;
-    let url = '';
-    try {
-      const parsed = new URL(href, 'https://www.gsmarena.com/');
-      if (
-        (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') ||
-        !/(?:^|\.)gsmarena\.com$/i.test(parsed.hostname)
-      ) {
-        continue;
-      }
-      url = parsed.href;
-    } catch {
-      continue;
-    }
+    const url = normalizeArenaUrl(
+      decodeArenaHtmlEntities(href),
+      /(?:^|\.)gsmarena\.com$/i,
+      'https://www.gsmarena.com/'
+    );
+    if (!url) continue;
     const fullName =
       brandPrefixRe && !brandPrefixRe.test(rawName) ? `${trimmedBrand} ${rawName}` : rawName;
-    const imgSrc = [...inner.matchAll(/<img\b([^<>]*)>/gi)]
+    const rawImgSrc = [...inner.matchAll(/<img\b([^<>]*)>/gi)]
       // `(?:^|\s)` so `data-src` lazy-load placeholders are not taken for src.
       .map(img => /(?:^|\s)src=["']([^"']+)["']/i.exec(img[1] || '')?.[1])
       .find(Boolean);
+    const imgSrc = normalizeArenaUrl(
+      rawImgSrc ? decodeArenaHtmlEntities(rawImgSrc) : undefined,
+      /(?:^|\.)gsmarena\.com$/i,
+      'https://www.gsmarena.com/'
+    );
     results.push({
       source: 'gsmarena',
       name: fullName,
@@ -478,7 +510,12 @@ export function parsePhoneArenaCatalogHtml(html: string): DiscoveredArenaCatalog
     const text = stripHtmlTags(match[2] || '');
     if (!rawHref || !text || text.length < 4) continue;
     if (/compare|benchmarks|size-compare|reviews/i.test(rawHref)) continue;
-    const url = rawHref.startsWith('http') ? rawHref : `https://www.phonearena.com${rawHref}`;
+    const url = normalizeArenaUrl(
+      decodeArenaHtmlEntities(rawHref),
+      /(?:^|\.)phonearena\.com$/i,
+      'https://www.phonearena.com/'
+    );
+    if (!url || !new URL(url).pathname.toLowerCase().startsWith('/phones/')) continue;
     if (seen.has(url)) continue;
     seen.add(url);
     results.push({
@@ -701,10 +738,7 @@ export const UPSTREAM_2026_ARENA_REFERENCE_URLS: ReadonlyArray<{
     name: 'Apple iPad Pro M5 11 inch 256GB',
     announced: '2025, October 30',
     gsmarenaUrl: 'https://www.gsmarena.com/apple_ipad_pro_11_(2025)-14102.php',
-    phonearenaUrl: 'https://www.phonearena.com/ tablets/Apple-iPad-Pro-11-inch-M5_id12750'.replace(
-      /\s+/g,
-      ''
-    ),
+    phonearenaUrl: 'https://www.phonearena.com/tablets/Apple-iPad-Pro-11-inch-M5_id12750',
   },
   {
     category_slug: 'tablets',

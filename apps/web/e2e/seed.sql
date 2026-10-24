@@ -277,3 +277,31 @@ VALUES
   ('cccccccc-cccc-4ccc-8ccc-ccccccc07974', 'ffffffff-ffff-4fff-8fff-ffffffff7972', 'shopee', 'item_bait_4',
    'E2E Bait Price Phone', 'c0000000-0000-4000-8000-000000000001', 3690000,
    'https://shopee.vn/bait-4', '22222222-2222-4222-8222-222222220797');
+
+-- A phone with one review excluded from the score as coin-farming spam, shown
+-- set apart on the product page: its text must still meet 4.5:1 contrast
+-- (DOS/Rate#811). Its rating is never refreshed, so it stays off the
+-- leaderboard, and its reviews are older than every other review.
+INSERT INTO rate.merchants (id, platform, platform_shop_id, name, slug, is_official)
+VALUES ('ffffffff-ffff-4fff-8fff-ffffffff0811', 'shopee', 'shop_excluded_review', 'Excluded Review Store', 'excluded-review-store', false);
+INSERT INTO rate.master_products
+  (id, category_id, brand, model, model_key, name, slug, min_price, max_price, merchant_count, status, metadata)
+VALUES ('22222222-2222-4222-8222-222222220811', 'c0000000-0000-4000-8000-000000000001', 'E2E', 'Excluded Review Phone',
+  'e2e_excluded_review_phone', 'E2E Excluded Review Phone', 'e2e-excluded-review-phone', 3000000, 3000000, 1, 'published',
+  '{"category_slug": "smartphones"}');
+INSERT INTO rate.products (id, merchant_id, platform, platform_item_id, title, category_id, price_current, url, cluster_id)
+VALUES ('cccccccc-cccc-4ccc-8ccc-cccccccc0811', 'ffffffff-ffff-4fff-8fff-ffffffff0811', 'shopee', 'item_excluded_review',
+  'E2E Excluded Review Phone', 'c0000000-0000-4000-8000-000000000001', 3000000, 'https://shopee.vn/item-excluded-review',
+  '22222222-2222-4222-8222-222222220811');
+INSERT INTO rate.reviews (id, product_id, author_name, rating_star, comment, reviewer_type, platform_created_at, created_at)
+VALUES
+  ('44444444-4444-4444-8444-444444440811', 'cccccccc-cccc-4ccc-8ccc-cccccccc0811', 'Excluded 1', 5,
+   'Sản phẩm tốt tuyệt vời, shop uy tín, giao nhanh nhận xu.', 'user', now() - interval '100 days', now() - interval '100 days'),
+  ('44444444-4444-4444-8444-444444440812', 'cccccccc-cccc-4ccc-8ccc-cccccccc0811', 'Excluded 2', 4,
+   'Máy chạy ổn, pin dùng được một ngày, màn hình hơi tối ngoài nắng.', 'user', now() - interval '100 days', now() - interval '100 days');
+INSERT INTO rate.review_flags (review_id, verdict, fake_probability, detector, detector_version, input_hash, include_in_rating, flag_category, reason)
+VALUES
+  ('44444444-4444-4444-8444-444444440811', 'fake', 0.9, 'e2e', '1', 'e2e-0811', false, 'seeding_fake',
+   'Bình luận mang tính chất nhận xu, không mô tả trải nghiệm.'),
+  ('44444444-4444-4444-8444-444444440812', 'authentic', 0.05, 'e2e', '1', 'e2e-0812', true, null,
+   'Đánh giá chi tiết, hợp lệ từ người dùng thực tế.');

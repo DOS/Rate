@@ -111,13 +111,22 @@ export function detectProductOrigin(title: string, description?: string): Produc
   return 'unknown';
 }
 
+/** Apple product families, for a title whose line no Apple pattern matched (DOS/Rate#817). */
+const APPLE_FAMILIES: ReadonlyArray<readonly [RegExp, string]> = [
+  [/iphone/i, 'iPhone'],
+  [/ipad/i, 'iPad'],
+  [/macbook/i, 'MacBook'],
+  [/\bwatch\b/i, 'Watch'],
+  [/airpods/i, 'AirPods'],
+];
+
 /**
  * Detect canonical category slug from product title across all 5 tech categories.
  */
 export function detectCategorySlug(title: string): CanonicalCategorySlug {
   const t = title.toLowerCase();
   if (
-    /airpods|galaxy\s*buds|wf-\d+|wh-\d+|tai\s*nghe|earbuds?|freebuds|soundcore|quietcomfort|momentum\s*true/i.test(
+    /airpods|galaxy\s*buds|w[fh]1000xm|wf-\d+|wh-\d+|tai\s*nghe|earbuds?|freebuds|soundcore|quietcomfort|momentum\s*true/i.test(
       t
     )
   ) {
@@ -138,7 +147,7 @@ export function detectCategorySlug(title: string): CanonicalCategorySlug {
     return 'laptops';
   }
   if (
-    /\bipad\b|galaxy\s*tab|xiaomi\s*pad|redmi\s*pad|matepad|lenovo\s*tab|surface\s*pro|máy\s*tính\s*bảng|\btablet\b/i.test(
+    /\bipad\b|galaxy\s*tab|xiaomi\s*pad|redmi\s*pad|\bmi\s*pad\b|matepad|lenovo\s*tab|surface\s*pro|máy\s*tính\s*bảng|\btablet\b/i.test(
       t
     )
   ) {
@@ -154,9 +163,9 @@ export function detectCategorySlug(title: string): CanonicalCategorySlug {
 const CANONICAL_PHONE_REGISTRY: Record<
   string,
   {
-    screen_size_inch: number;
+    screen_size_inch?: number;
     battery_mah: number;
-    ram_gb: number;
+    ram_gb?: number;
     chipset: string;
     cpu: string;
     gpu: string;
@@ -165,7 +174,7 @@ const CANONICAL_PHONE_REGISTRY: Record<
     dimensions: string;
     resolution: string;
     screen_type: string;
-    refresh_rate_hz: number;
+    refresh_rate_hz?: number;
     rear_camera: string;
     second_camera?: string;
     third_camera?: string;
@@ -506,9 +515,7 @@ const CANONICAL_PHONE_REGISTRY: Record<
     default_storage_gb: 64,
   },
   'apple:airpods-pro-2': {
-    screen_size_inch: 1.0,
     battery_mah: 523,
-    ram_gb: 1,
     chipset: 'Apple H2 headphone chip + Apple U1 chip (MagSafe Case)',
     cpu: 'Apple H2 custom acoustic DSP',
     gpu: 'N/A',
@@ -517,19 +524,15 @@ const CANONICAL_PHONE_REGISTRY: Record<
     dimensions: '45.2 x 60.6 x 21.7 mm (Case)',
     resolution: 'Custom high-excursion Apple driver',
     screen_type: 'Active Noise Cancellation (2x ANC) + Adaptive Transparency',
-    refresh_rate_hz: 60,
     rear_camera: 'Inward-facing microphone + skin-detect sensor',
     front_camera: 'Beamforming dual microphones',
     charging_w: 5,
     has_5g: false,
     release_date: 'September 2023',
     ip_rating: 'IP54 dust, sweat, and water resistant',
-    default_storage_gb: 1,
   },
   'sony:wf-1000xm5': {
-    screen_size_inch: 1.0,
     battery_mah: 500,
-    ram_gb: 1,
     chipset: 'Sony Integrated Processor V2 + HD Noise Cancelling Processor QN2e',
     cpu: 'Dual-processor 24-bit Audio DSP',
     gpu: 'N/A',
@@ -538,7 +541,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     dimensions: '64.6 x 40.0 x 26.5 mm (Case)',
     resolution: '8.4 mm Dynamic Driver X (20Hz-40,000Hz LDAC)',
     screen_type: 'Industry-leading Dual-Processor ANC + Bone Conduction Sensor',
-    refresh_rate_hz: 60,
     rear_camera: 'Dual feedback microphones per earbud',
     second_camera: 'Feed-forward & feedback 6-mic array',
     front_camera: 'Bone conduction sensor + Wind noise reduction',
@@ -546,7 +548,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     has_5g: false,
     release_date: 'July 2023',
     ip_rating: 'IPX4 water resistant',
-    default_storage_gb: 1,
   },
   'samsung:galaxy-tab-s10-ultra': {
     screen_size_inch: 14.6,
@@ -681,9 +682,7 @@ const CANONICAL_PHONE_REGISTRY: Record<
     default_storage_gb: 8,
   },
   'samsung:galaxy-buds3-pro': {
-    screen_size_inch: 1.0,
     battery_mah: 515,
-    ram_gb: 1,
     chipset: 'Samsung Proprietary Bluetooth 5.4 SoC + Dual Amplifier',
     cpu: 'Galaxy AI Adaptive ANC & Real-Time Interpreter DSP',
     gpu: 'Blade Lights LED Controller',
@@ -692,7 +691,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     dimensions: '48.7 x 58.9 x 24.4 mm (Case)',
     resolution: 'Enhanced 2-Way Speaker (10.5mm Dynamic + 6.1mm Planar Tweeter)',
     screen_type: 'Blade Lights LED Indicator + Transparent Cradle Lid',
-    refresh_rate_hz: 60,
     rear_camera: '3 High-SNR Microphones + VPU (Voice Pickup Unit)',
     second_camera: 'In-canal feedback mic + Siren/Voice Detect AI sensor',
     front_camera: 'Pinch & Swipe Blade Touch Controls',
@@ -700,7 +698,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     has_5g: false,
     release_date: 'July 2024',
     ip_rating: 'IP57 dust and water resistant (1m up to 30 mins)',
-    default_storage_gb: 1,
   },
   // === 2026 Flagship Lineup (Smartphones, Tablets, Laptops, Smartwatches, Earbuds) ===
   'xiaomi:18-pro-max': {
@@ -986,9 +983,7 @@ const CANONICAL_PHONE_REGISTRY: Record<
     default_storage_gb: 64,
   },
   'apple:airpods-pro-3': {
-    screen_size_inch: 1.0,
     battery_mah: 540,
-    ram_gb: 1,
     chipset: 'Apple H3 Headphone Chip + U2 Ultra Wideband (MagSafe Case)',
     cpu: 'Apple H3 Ultra-Low-Latency Audio DSP (96kHz/24-bit Lossless)',
     gpu: 'Acoustic & Heart-Rate Biosensor Co-Processor',
@@ -997,7 +992,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     dimensions: '45.2 x 60.6 x 21.7 mm (USB-C MagSafe Case)',
     resolution: 'Custom High-Excursion Apple Driver + High Dynamic Range Amplifier',
     screen_type: 'Status LED + Built-in Find My Precision Speaker',
-    refresh_rate_hz: 60,
     rear_camera: 'In-Ear Optical Heart-Rate & Body Temperature Sensor + 3x ANC Pro vs Gen 1',
     second_camera: 'Clinical-Grade Hearing Aid Mode + Conversation Awareness + Voice Isolation',
     front_camera: 'Capacitive Touch Stem (Swipe Volume + Press Control)',
@@ -1005,12 +999,9 @@ const CANONICAL_PHONE_REGISTRY: Record<
     has_5g: false,
     release_date: 'September 2025',
     ip_rating: 'IP54 dust, sweat, and water resistant (earbuds and MagSafe charging case)',
-    default_storage_gb: 1,
   },
   'sony:wf-1000xm6': {
-    screen_size_inch: 1.0,
     battery_mah: 550,
-    ram_gb: 1,
     chipset: 'Sony Integrated Processor V3 + QN3e HD Noise Cancelling Processor',
     cpu: 'Dual-Processor 24-bit Audio Signal Processing + DSEE Ultimate AI',
     gpu: 'LE Audio LC3 & LDAC High-Bitrate Controller',
@@ -1019,7 +1010,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     dimensions: '64.0 x 40.0 x 25.8 mm (Qi Wireless Case)',
     resolution: '8.4mm Dynamic Driver X (Dual-layer dome-edge diaphragm)',
     screen_type: 'Recessed Matte Acoustic Chassis + Multi-Point Status LED',
-    refresh_rate_hz: 60,
     rear_camera: 'Dual Feedback + Feedforward 6-Mic Array + Bone Conduction Sensor',
     second_camera: 'AI Beamforming Wind Noise Reduction + Speak-to-Chat + Head Gesture Control',
     front_camera: 'Customizable Capacitive Touch Panels (L/R)',
@@ -1027,7 +1017,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     has_5g: false,
     release_date: 'June 2025',
     ip_rating: 'IPX4 splash and sweat resistant + Polyurethane Noise Isolation Tips',
-    default_storage_gb: 1,
   },
 };
 
@@ -1051,7 +1040,10 @@ function slugify(text: string): string {
   return (
     text
       .toString()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
       .toLowerCase()
+      .replace(/đ/g, 'd')
       // "Pro+" / "S24+" are Plus models: keep them apart from the base model's
       // key and slug, and give "S24+" the same key as "S24 Plus" (DOS/Rate#597).
       // Only a "+" that ends a model word counts; "A55 + Tặng" and "8+256GB" keep
@@ -1074,10 +1066,11 @@ export class ProductNormalizer {
 
     // 1. Extract Brand
     let brand = 'Khác';
-    if (/apple|iphone|ipad|macbook|airpods/i.test(title)) brand = 'Apple';
+    // Not the "ipad" in Xiaomi's "Mipad" (DOS/Rate#826).
+    if (/apple|iphone|(?<![a-z])ipad|macbook|airpods/i.test(title)) brand = 'Apple';
     else if (/samsung|galaxy/i.test(title)) brand = 'Samsung';
-    else if (/xiaomi|redmi|poco/i.test(title)) brand = 'Xiaomi';
-    else if (/\bsony\b|wf-1000|wh-1000|xperia/i.test(title)) brand = 'Sony';
+    else if (/xiaomi|redmi|poco|\bmi\s*pad\b/i.test(title)) brand = 'Xiaomi';
+    else if (/\bsony\b|w[fh]-1000|w[fh]1000xm|xperia/i.test(title)) brand = 'Sony';
     else if (
       /\bgarmin\b|forerunner|fenix|venu|vivo(?:active|smart|move|fit|sport|life)/i.test(title)
     )
@@ -1104,20 +1097,32 @@ export class ProductNormalizer {
     // 2. Extract Model
     let model = '';
     if (brand === 'Apple') {
-      const iphoneMatch = title.match(
-        /iphone\s*(\d+e\b|\d+(?:\s*(?:pro\s*max|pro|plus|mini|air))?|se(?:\s*(?:\(\s*(?:2020|2022|2025)\s*\)|(?:2020|2022|2025)\b|(?:gen\s*)?[234]\b))?)/i
+      // "(2nd generation)" is the generation number: "Watch Ultra (2nd generation)" is
+      // "Watch Ultra 2", "AirPods Pro (2nd generation)" is "AirPods Pro 2" (DOS/Rate#817).
+      // One optional space before the "(" keeps a single space in the name; a leading
+      // `\s*` would be quadratic on long whitespace (CodeQL js/polynomial-redos).
+      const appleTitle = title.replace(
+        / ?\(\s*(\d{1,2})(?:st|nd|rd|th)\s*gen(?:eration)?\s*\)/gi,
+        ' $1'
       );
-      const ipadMatch = title.match(/ipad\s*(pro\s*m\d+|air\s*m\d+|pro|air|mini|\d+)/i);
-      const macbookMatch = title.match(
-        /macbook\s*(pro\s*m\d+(?:\s*(?:pro|max))?|air\s*m\d+|air|pro)/i
+      const iphoneMatch = appleTitle.match(
+        /iphone\s*(\d+e\b|\d+(?:\s*(?:pro\s*max|pro|plus|mini|air))?|air\b|duo\b|se(?:\s*(?:\(\s*(?:2020|2022|2025)\s*\)|(?:2020|2022|2025)\b|(?:gen\s*)?[234]\b))?)/i
       );
-      const watchMatch = title.match(
-        /(?:apple\s*)?watch\s*(ultra\s*\d+|series\s*\d+|se(?:\s*\d+)?)/i
+      // The base iPad by its chip, "iPad A16" or "iPad (A16)", and "iPad Gen 10" like
+      // "iPad 10" (DOS/Rate#817).
+      const ipadMatch = appleTitle.match(
+        /ipad\s*(?:\(\s*)?(pro\s*m\d+|air\s*m\d+|pro|air|mini(?:\s*[1-9](?!\d|[.,]\d|g\b|\s*(?:gb|tb|inch\b|in\b|"|'')))?|gen\s*\d+|a\d{2}\b|\d+)/i
       );
-      const airpodsMatch = title.match(
+      const macbookMatch = appleTitle.match(
+        /macbook\s*(pro\s*m\d+(?:\s*(?:pro|max))?|air\s*m\d+|air|pro|neo\b)/i
+      );
+      const watchMatch = appleTitle.match(
+        /(?:apple\s*)?watch\s*(ultra\s*\d+|series\s*\d+|se(?:\s*\d+(?!\d|\s*(?:mm|gb|tb)\b)|(?![a-z])))/i
+      );
+      const airpodsMatch = appleTitle.match(
         // Each run of spaces has exactly one `\s*` that can match it, so long
         // whitespace cannot backtrack polynomially (CodeQL js/polynomial-redos).
-        /airpods\s*(?:(pro)(?:\s*(?:(?:gen|thế\s*hệ)\s*)?(\d+))?|(max)|(?:(?:gen|thế\s*hệ)\s*)?(\d+))/i
+        /airpods\s*(?:(pro)(?:\s*(?:(?:gen|thế\s*hệ)\s*|\(\s*)?(\d+))?|(max)|(?:(?:gen|thế\s*hệ)\s*)?(\d+))/i
       );
 
       // Retail titles often put the chip after the screen size ("iPad Pro 11 inch M4",
@@ -1132,13 +1137,42 @@ export class ProductNormalizer {
           .replace(/\s+/g, ' ')
           .trim()
           .replace(/^(\d+)E\b/, '$1e')
-          .replace(/^se\b/i, 'SE');
+          .replace(/^se\b/i, 'SE')
+          // "iPhone Air" and "iPhone Duo" have no number (DOS/Rate#817).
+          .replace(
+            /^(air|duo)$/i,
+            (line: string) => line[0]!.toUpperCase() + line.slice(1).toLowerCase()
+          )
+          // "16ProMax" and "16 ProMax" are "16 Pro Max" (DOS/Rate#815).
+          .replace(/^(\d+)(?=pro|plus|mini|air)/i, '$1 ')
+          .replace(/\b(pro)(max)\b/i, '$1 $2');
         model = `iPhone ${normalizedIphoneSuffix}`;
       } else if (ipadMatch && ipadMatch[1]) {
-        const line = ipadMatch[1].trim();
+        // Apple names the base iPad by its chip from the A16 on, so an A16 or later chip
+        // right after the screen size or generation is the model: "iPad 11 inch (A16)" and
+        // "iPad 11 (A16)" are the iPad (A16). Earlier ones go by generation: "iPad 10" and
+        // "iPad Gen 10 (A14 Bionic)" stay the 10th (DOS/Rate#817). Each run of spaces has
+        // one `\s*` that can match it.
+        const chipAfter = /^(?:gen\s*)?\d+$/i.test(ipadMatch[1])
+          ? appleTitle
+              .slice((ipadMatch.index ?? 0) + ipadMatch[0].length)
+              .match(/^(?:[.,]\d+)?\s*(?:-?(?:inch\b|in\b|"|'')\s*)?(?:\(\s*)?a(1[6-9]|2\d)\b/i)
+          : null;
+        let line = chipAfter
+          ? `A${chipAfter[1]}`
+          : ipadMatch[1]
+              .trim()
+              .replace(/^gen\s*/i, '')
+              .replace(/^a(\d{2})$/i, 'A$1');
+        // "iPad mini 6" and "iPad mini 7" are two models, not one "iPad mini"; Apple calls the
+        // 7th "iPad mini (A17 Pro)", and "8.3 inch" or "8,3 inch" is the screen (DOS/Rate#819).
+        // One digit, not a "5G" or "4G" network or a storage ("mini 64 Wifi").
+        const mini = line.match(/^mini\s*([1-9])?$/i);
+        if (mini)
+          line = `mini${mini[1] ? ` ${mini[1]}` : /\ba17\s*pro\b/i.test(appleTitle) ? ' 7' : ''}`;
         model = /^(pro|air)$/i.test(line) && chip ? `iPad ${line} ${chip}` : `iPad ${line}`;
       } else if (macbookMatch && macbookMatch[1]) {
-        const line = macbookMatch[1].trim();
+        const line = macbookMatch[1].trim().replace(/^neo$/i, 'Neo');
         model =
           /^(pro|air)$/i.test(line) && chip
             ? `MacBook ${line} ${chip}${chipMatch?.[2] ? ` ${chipMatch[2]}` : ''}`
@@ -1147,7 +1181,11 @@ export class ProductNormalizer {
         model = `Watch ${watchMatch[1].trim()}`;
       } else if (airpodsMatch) {
         if (airpodsMatch[1]) {
-          model = `AirPods Pro${airpodsMatch[2] ? ` ${airpodsMatch[2]}` : ''}`;
+          const rawGen = airpodsMatch[2];
+          // FPT Shop names 2nd-gen AirPods Pro by release/USB-C refresh year ("AirPods Pro 2022",
+          // "AirPods Pro 2023") (DOS/Rate#643).
+          const proGen = rawGen === '2022' || rawGen === '2023' ? '2' : rawGen;
+          model = `AirPods Pro${proGen ? ` ${proGen}` : ''}`;
         } else if (airpodsMatch[3]) {
           model = 'AirPods Max';
         } else if (airpodsMatch[4]) {
@@ -1156,14 +1194,19 @@ export class ProductNormalizer {
           model = 'AirPods';
         }
       } else {
+        // No line matched: keep the family the title names first rather than call it an
+        // iPhone ("MacBook M4", "Apple \"iPad\" 256GB") (DOS/Rate#817).
+        let first = Infinity;
         model = 'iPhone';
+        for (const [family, name] of APPLE_FAMILIES) {
+          const at = title.search(family);
+          if (at >= 0 && at < first) [first, model] = [at, name];
+        }
       }
-    } else if (brand === 'Sony' && /wf-1000xm(\d+)/i.test(title)) {
-      const m = title.match(/wf-1000xm(\d+)/i);
-      model = `WF-1000XM${m?.[1] || '5'}`;
-    } else if (brand === 'Sony' && /wh-1000xm(\d+)/i.test(title)) {
-      const m = title.match(/wh-1000xm(\d+)/i);
-      model = `WH-1000XM${m?.[1] || '5'}`;
+    } else if (brand === 'Sony' && /w([fh])-?1000xm(\d+)/i.test(title)) {
+      // "WF1000XM5" without the hyphen is the same model (DOS/Rate#815).
+      const m = title.match(/w([fh])-?1000xm(\d+)/i);
+      model = `W${m?.[1]?.toUpperCase()}-1000XM${m?.[2]}`;
     } else if (brand === 'Asus' && /zenbook\s*s\s*14/i.test(title)) {
       model = 'Zenbook S 14';
     } else if (brand === 'Lenovo' && /thinkpad\s*x1\s*carbon\s*gen\s*12/i.test(title)) {
@@ -1195,6 +1238,8 @@ export class ProductNormalizer {
         .replace(/^(?:\s*(?:\[[^\]]*\]|\([^)]*\)|【[^】]*】))+\s*/, '')
         // "Vivo Book 15" is the Asus Vivobook line: key it like "Vivobook 15" (DOS/Rate#774).
         .replace(/\bvivo\s+book\b/gi, 'Vivobook')
+        // "17 ProMax" keys like "17 Pro Max" (DOS/Rate#815).
+        .replace(/\b(pro)(max)\b/gi, '$1 $2')
         .trim();
       const rawTokens = cleaned.split(/\s+/).filter(Boolean);
       const modelTokens: string[] = [];
@@ -1214,10 +1259,12 @@ export class ProductNormalizer {
           startsGeneration ||
           (/^gen$/i.test(modelTokens[modelTokens.length - 1] ?? '') && /^\d{1,2}[,;]?$/.test(tok));
         // A trailing "Plus" word is part of the model even past the 4-token cap,
-        // so "Redmi Note 13 Pro Plus" keys like "Redmi Note 13 Pro+" (#597).
+        // so "Redmi Note 13 Pro Plus" keys like "Redmi Note 13 Pro+" (#597); so is
+        // "Max" after "Pro": "Redmi Note 17 Pro Max" is not the Pro (DOS/Rate#815).
         if (
           modelTokens.length >= 4 &&
           !(modelTokens.length === 4 && /^plus[,;]?$/i.test(tok)) &&
+          !(/^pro$/i.test(modelTokens[modelTokens.length - 1] ?? '') && /^max[,;]?$/i.test(tok)) &&
           !generation
         ) {
           break;
@@ -1225,7 +1272,9 @@ export class ProductNormalizer {
         if (
           /^(?:\d+(?:[.,]\d+)?(?:GB|TB)|\d+\/\d+(?:GB|TB)?|\d{2}mm|5G|4G|LTE|GPS|RAM|ROM|OLED|WiFi|Chính|Quốc|Bản|Mới|Fullbox|Likenew|Like|Cũ|99%|98%|VN\/A|VNA|LL\/A|\(|\[|-)/i.test(
             tok
-          )
+          ) ||
+          // A size written apart, "256 GB", ends the model like "256GB" (DOS/Rate#815).
+          (/^\d+(?:[.,]\d+)?$/.test(tok) && /^(?:GB|TB)\b/i.test(rawTokens[i + 1] ?? ''))
         ) {
           break;
         }
@@ -1282,6 +1331,13 @@ export class ProductNormalizer {
     // `\s*(?:X\s*)?` rather than `\s*X?\s*` (here and in the ROM patterns
     // below): the same strings, without the two adjacent \s* that made long
     // whitespace runs quadratic (CodeQL polynomial regex, DOS/Rate#537).
+    const romExplicit = title.match(
+      /(?:ROM|bộ nhớ trong)\s*(?:[:-]\s*)?(\d+(?:[.,]\d+)?)\s*(TB|GB)/i
+    );
+    const romLoose = title.match(
+      /dung lượng\s*(?:[:-]\s*)?(\d+(?:[.,]\d+)?)\s*(TB|GB)(?!\s*(?:RAM|bộ\s*nhớ\s*RAM|dung\s*lượng\s*RAM))/i
+    );
+
     const slashRamRom = title.match(/\b(\d{1,2})\s*(?:GB\s*)?\/\s*(\d+(?:[.,]\d+)?)\s*(TB|GB)\b/i);
     if (slashRamRom && ramPhrases.length === 0) {
       const slashRam = parseInt(slashRamRom[1], 10);
@@ -1297,17 +1353,27 @@ export class ProductNormalizer {
       if (first.value <= 32 && second.value >= 64 && /^[\s/,-]+$/.test(between)) {
         first.claimed = true;
       }
+    } else if (
+      ramPhrases.length === 0 &&
+      !romExplicit &&
+      !romLoose &&
+      claimable.filter(t => !t.claimed).length === 1
+    ) {
+      const [only] = claimable.filter(t => !t.claimed);
+      // Retailers such as FPT Shop name iPads/laptops by their RAM ("iPad Pro 11 M5 2025 WiFi 12GB"):
+      // tablets start at >=32GB storage and laptops at >=64GB, and non-power-of-two GB values
+      // (6/12/18/24/36/48GB) are always RAM rather than storage (DOS/Rate#643).
+      const isTabletOrLaptopRamOnly =
+        (categorySlug === 'tablets' && only.value <= 24) ||
+        (categorySlug === 'laptops' && only.value <= 48);
+      const isNonPowerOfTwoRamSize = [3, 6, 12, 18, 24, 36, 48].includes(only.value);
+      if (isTabletOrLaptopRamOnly || isNonPowerOfTwoRamSize) {
+        only.claimed = true;
+      }
     }
 
     const storageCandidates = claimable.filter(
       t => !t.claimed && t.value > 0 && t.value <= MAX_VALID_STORAGE_GB
-    );
-
-    const romExplicit = title.match(
-      /(?:ROM|bộ nhớ trong)\s*(?:[:-]\s*)?(\d+(?:[.,]\d+)?)\s*(TB|GB)/i
-    );
-    const romLoose = title.match(
-      /dung lượng\s*(?:[:-]\s*)?(\d+(?:[.,]\d+)?)\s*(TB|GB)(?!\s*(?:RAM|bộ\s*nhớ\s*RAM|dung\s*lượng\s*RAM))/i
     );
 
     const baseKey = `${slugify(brand)}:${slugify(model)}`;
@@ -1319,7 +1385,11 @@ export class ProductNormalizer {
     let storageGb: number | null = null;
     let storageConfident = false;
     const marker = romExplicit ?? romLoose;
-    if (marker) {
+    if (categorySlug === 'earbuds') {
+      // Earbuds have no storage variant and must key as :unknown with null storage (DOS/Rate#643, #657).
+      storageGb = null;
+      storageConfident = true;
+    } else if (marker) {
       const candidateStorage = toValidStorageGb(
         parseFloat(marker[1].replace(',', '.')) * (marker[2].toUpperCase() === 'TB' ? 1024 : 1)
       );
@@ -1341,9 +1411,6 @@ export class ProductNormalizer {
       storageConfident = true;
     } else if (storageCandidates.length === 0 && benchmark?.default_storage_gb != null) {
       storageGb = benchmark.default_storage_gb;
-      storageConfident = true;
-    } else if (storageCandidates.length === 0 && categorySlug === 'earbuds') {
-      storageGb = 1;
       storageConfident = true;
     }
     const storageKnown = storageGb !== null;
@@ -1373,7 +1440,7 @@ export class ProductNormalizer {
     // (':unknown') instead of guessing a default (plan v7 §5.2).
     const modelKey = storageKnown ? `${baseKey}:${storageGb}gb` : `${baseKey}:unknown`;
     const storageDisplay =
-      categorySlug === 'earbuds' && storageGb === 1
+      categorySlug === 'earbuds'
         ? 'Standard'
         : storageGb === null
           ? 'Không rõ dung lượng'
@@ -1381,7 +1448,7 @@ export class ProductNormalizer {
             ? `${storageGb / 1024}TB`
             : `${storageGb}GB`;
     const canonicalName =
-      categorySlug === 'earbuds' && storageGb === 1
+      categorySlug === 'earbuds'
         ? `${brand} ${model}`
         : storageKnown
           ? `${brand} ${model} ${storageDisplay}`
@@ -1390,6 +1457,7 @@ export class ProductNormalizer {
 
     // 6. Enrich with 10 Field Groups (PhoneArena structure + GSMArena depth)
     const isApple = brand === 'Apple';
+    const isSmartphone = categorySlug === 'smartphones';
 
     const titleScreenMatch =
       categorySlug === 'earbuds' ? null : title.match(/\b(\d{1,2}(?:[.,]\d)?)\s*(?:inch|in\b|")/i);
@@ -1405,15 +1473,21 @@ export class ProductNormalizer {
         : null;
 
     const claimedRamValue = claimable.find(t => t.claimed)?.value ?? null;
-    const ramGb = benchmark
-      ? benchmark.ram_gb
-      : claimedRamValue !== null &&
-          Number.isFinite(claimedRamValue) &&
-          claimedRamValue > 0 &&
-          claimedRamValue <= MAX_VALID_RAM_GB
+    const validClaimedRam =
+      claimedRamValue !== null &&
+      Number.isFinite(claimedRamValue) &&
+      claimedRamValue > 0 &&
+      claimedRamValue <= MAX_VALID_RAM_GB
         ? claimedRamValue
         : null;
-    const screenSize = benchmark ? benchmark.screen_size_inch : titleScreenSize;
+    // Title-stated RAM takes precedence over benchmark RAM; earbuds and smartwatches
+    // have no GB RAM spec (DOS/Rate#657).
+    const ramGb =
+      categorySlug === 'earbuds' || categorySlug === 'smartwatches'
+        ? null
+        : (validClaimedRam ?? benchmark?.ram_gb ?? null);
+    const screenSize =
+      categorySlug === 'earbuds' ? null : (benchmark?.screen_size_inch ?? titleScreenSize);
     const batteryMah = benchmark ? benchmark.battery_mah : null;
     const has5g = benchmark
       ? benchmark.has_5g
@@ -1593,24 +1667,46 @@ export class ProductNormalizer {
       design: {
         dimensions: benchmark?.dimensions || undefined,
         weight_g: benchmark?.weight_g || undefined,
-        materials: isApple
-          ? 'Ceramic Shield front, glass back, metal frame'
-          : 'Glass front/back, metal frame',
-        resistance: benchmark?.ip_rating || 'IP68 dust/water resistant',
-        biometrics: isApple ? 'Face ID' : 'Fingerprint (under display), Face unlock',
-        keys: isApple ? 'Action Button, Camera Control, Volume, Power' : 'Volume, Power',
+        materials: isSmartphone
+          ? isApple
+            ? 'Ceramic Shield front, glass back, metal frame'
+            : 'Glass front/back, metal frame'
+          : undefined,
+        resistance:
+          benchmark?.ip_rating || (isSmartphone ? 'IP68 dust/water resistant' : undefined),
+        biometrics: isSmartphone
+          ? isApple
+            ? /^iPhone SE\b/i.test(model)
+              ? 'Touch ID'
+              : 'Face ID'
+            : 'Fingerprint (under display), Face unlock'
+          : undefined,
+        keys: isSmartphone
+          ? isApple
+            ? 'Action Button, Camera Control, Volume, Power'
+            : 'Volume, Power'
+          : undefined,
         colors: colors.length > 0 ? colors : ['Tiêu chuẩn'],
       },
       display: {
-        size_inch: screenSize || undefined,
+        size_inch: categorySlug === 'earbuds' ? undefined : screenSize || undefined,
         type: benchmark?.screen_type || fallbackScreenType,
         resolution: benchmark?.resolution || undefined,
-        refresh_rate_hz: benchmark?.refresh_rate_hz || (isApple ? 60 : 120),
-        ppi: benchmark?.screen_size_inch === 6.8 ? 505 : 460,
-        protection: isApple ? 'Ceramic Shield' : 'Corning Gorilla Glass',
-        features: isApple
-          ? 'Dynamic Island, True Tone, Wide color (P3), Haptic Touch'
-          : 'Always-on display, HDR10+, Eye Comfort Shield',
+        refresh_rate_hz:
+          categorySlug === 'earbuds'
+            ? undefined
+            : benchmark?.refresh_rate_hz || (isSmartphone ? (isApple ? 60 : 120) : undefined),
+        ppi: isSmartphone ? (benchmark?.screen_size_inch === 6.8 ? 505 : 460) : undefined,
+        protection: isSmartphone
+          ? isApple
+            ? 'Ceramic Shield'
+            : 'Corning Gorilla Glass'
+          : undefined,
+        features: isSmartphone
+          ? isApple
+            ? 'Dynamic Island, True Tone, Wide color (P3), Haptic Touch'
+            : 'Always-on display, HDR10+, Eye Comfort Shield'
+          : undefined,
       },
       hardware: {
         chipset: benchmark?.chipset || undefined,
@@ -1642,9 +1738,11 @@ export class ProductNormalizer {
         bluetooth: '5.3, A2DP, LE',
         wlan: 'Wi-Fi 6E/7, dual-band, Wi-Fi Direct',
         usb: 'USB Type-C, OTG',
-        sensors: isApple
-          ? 'Face ID, gia tốc kế, con quay hồi chuyển, tiệm cận, la bàn, khí áp kế'
-          : 'Vân tay dưới màn hình, gia tốc kế, con quay hồi chuyển, tiệm cận, la bàn',
+        sensors: isSmartphone
+          ? isApple
+            ? 'Face ID, gia tốc kế, con quay hồi chuyển, tiệm cận, la bàn, khí áp kế'
+            : 'Vân tay dưới màn hình, gia tốc kế, con quay hồi chuyển, tiệm cận, la bàn'
+          : undefined,
         location: 'GPS, GLONASS, Galileo, QZSS, BeiDou',
         nfc: true,
         other: isApple ? 'Ultra Wideband (UWB), SOS vệ tinh' : 'Hỗ trợ OTG, Chia sẻ nhanh',
@@ -1677,15 +1775,15 @@ export class ProductNormalizer {
       },
       regulatory: {
         certifications: isApple ? 'CE, FCC ID, Apple Eco Standards' : 'CE, FCC, RoHS',
-        sar_head: '1.10 W/kg',
-        sar_body: '1.15 W/kg',
+        sar_head: isSmartphone ? '1.10 W/kg' : undefined,
+        sar_body: isSmartphone ? '1.15 W/kg' : undefined,
       },
     };
 
     const keySpecs: KeySpecs = {
       screen:
-        categorySlug === 'earbuds' && !benchmark
-          ? 'TWS In-Ear + Charging Case'
+        categorySlug === 'earbuds'
+          ? benchmark?.screen_type?.split(',')[0] || 'TWS In-Ear + Charging Case'
           : `${fallbackScreenSize}" ${benchmark?.screen_type?.split(',')[0] || fallbackScreenType.split(',')[0]}`,
       chip: benchmark?.chipset?.split('(')[0]?.trim() || fallbackChip,
       camera: benchmark?.rear_camera ? benchmark.rear_camera.split(',')[0] : fallbackKeyCamera,

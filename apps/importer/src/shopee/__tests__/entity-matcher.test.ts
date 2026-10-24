@@ -11,6 +11,8 @@ import {
   EntityMatcher,
   ENTITY_MATCH_ACCEPT_THRESHOLD,
   ENTITY_MATCH_CANDIDATE_FLOOR,
+  sanitizeHttpUrl,
+  sanitizeHttpUrlList,
 } from '../entity-matcher.js';
 import {
   ProductNormalizer,
@@ -514,6 +516,118 @@ async function runEntityMatcherSuite() {
   console.log(
     '  ✅ [7/7] Zod 4 JSON Schema, URL/phone prompt-injection filter, MasterProductSchema defaults & structured logger passed'
   );
+
+  // 8. DOS/Rate#821: Tier 2 malformed fuzzy row filtering, Tier 3 image/spec bounds, and enrichMasterProductById zero/out-of-bounds fallback
+  assert.equal(sanitizeHttpUrl('https://rate.vn/img/a.png'), 'https://rate.vn/img/a.png');
+  assert.equal(sanitizeHttpUrl('javascript:alert(1)'), null);
+  assert.equal(sanitizeHttpUrl('[object Object]'), null);
+  assert.deepEqual(
+    sanitizeHttpUrlList([
+      'https://rate.vn/img/1.png',
+      '[object Object]',
+      'javascript:alert(1)',
+      'https://rate.vn/img/1.png',
+    ]),
+    ['https://rate.vn/img/1.png']
+  );
+
+  const malformedFuzzyDb = createMockSupabase({
+    fuzzyMatches: [
+      { master_id: '', name: 'Missing ID', similarity: 0.95 },
+      { master_id: 'nan-sim', name: 'NaN Sim', similarity: Number.NaN },
+      { master_id: 'valid-fuzzy-821', name: 'Samsung Galaxy S24 Ultra 256GB', similarity: 0.78 },
+    ],
+  });
+  const malformedFuzzyMatcher = new EntityMatcher(malformedFuzzyDb.client, offlineEnricher);
+  const malformedFuzzyRes = await malformedFuzzyMatcher.resolveOrCreateMasterProduct(s24New);
+  assert.deepEqual(malformedFuzzyRes, { masterId: 'valid-fuzzy-821', isNew: false });
+
+  const tier3BoundsDb = createMockSupabase();
+  const tier3BoundsMatcher = new EntityMatcher(tier3BoundsDb.client, offlineEnricher);
+  await tier3BoundsMatcher.resolveOrCreateMasterProduct({
+    ...s24New,
+    ram_gb: 0,
+    storage_gb: 999_999,
+    screen_size_inch: -5,
+    battery_mah: 9_999_999,
+    images: ['[object Object]', 'https://rate.vn/img/valid.png', 'javascript:void(0)'],
+  });
+  const seededRow = tier3BoundsDb.capturedUpserts[0]?.payload;
+  assert.equal(seededRow?.ram_gb, null);
+  assert.equal(seededRow?.storage_gb, null);
+  assert.equal(seededRow?.screen_size_inch, null);
+  assert.equal(seededRow?.battery_mah, null);
+  assert.deepEqual(seededRow?.images, ['https://rate.vn/img/valid.png']);
+  assert.equal(seededRow?.thumbnail, 'https://rate.vn/img/valid.png');
+
+  let updatedRow821: Record<string, unknown> | undefined;
+  let forwardedParams821: Record<string, unknown> | undefined;
+  const enrichDb821 = {
+    from(table: string) {
+      assert.equal(table, 'master_products');
+      return {
+        select() {
+          return {
+            eq() {
+              return {
+                async maybeSingle() {
+                  return {
+                    data: {
+                      id: 'master-821',
+                      brand: 'Samsung',
+                      model: 'Galaxy S24 Ultra',
+                      storage_gb: 0,
+                      ram_gb: 99999,
+                      screen_size_inch: 0,
+                      battery_mah: -100,
+                      has_5g: false,
+                      name: 'Samsung Galaxy S24 Ultra 256GB',
+                      description: '',
+                      colors: ['Titanium Gray'],
+                      specifications: { category_slug: 'smartphones' },
+                      key_specs: {},
+                    },
+                    error: null,
+                  };
+                },
+              };
+            },
+          };
+        },
+        update(payload: Record<string, unknown>) {
+          updatedRow821 = payload;
+          return {
+            async eq() {
+              return { error: null };
+            },
+          };
+        },
+      };
+    },
+  } as unknown as RateSupabaseClient;
+  const stubEnricher821 = {
+    async fetchSpecsFromAi(params: Record<string, unknown>) {
+      forwardedParams821 = params;
+      return {
+        ram_gb: 12,
+        storage_gb: 256,
+        screen_size_inch: 6.8,
+        battery_mah: 5000,
+        has_5g: true,
+        specifications: { display: { size_inch: 6.8 } },
+        key_specs: { ram: '12GB' },
+      };
+    },
+  } as unknown as AiSpecEnricher;
+  const enrichMatcher821 = new EntityMatcher(enrichDb821, stubEnricher821);
+  assert.equal(await enrichMatcher821.enrichMasterProductById('master-821'), true);
+  assert.equal(forwardedParams821?.storageGb, null);
+  assert.equal(forwardedParams821?.ramGb, null);
+  assert.equal(updatedRow821?.ram_gb, 12);
+  assert.equal(updatedRow821?.storage_gb, 256);
+  assert.equal(updatedRow821?.screen_size_inch, 6.8);
+  assert.equal(updatedRow821?.battery_mah, 5000);
+  console.log('  ✅ [8/8] DOS/Rate#821 EntityMatcher bounds & HTTP URL sanitization passed');
 
   console.log('🎉 All EntityMatcher & Open-Core Audit C6/C8/T15/Low tests passed!');
 }
