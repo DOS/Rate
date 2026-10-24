@@ -13,6 +13,8 @@ import {
   ENTITY_MATCH_CANDIDATE_FLOOR,
   sanitizeHttpUrl,
   sanitizeHttpUrlList,
+  toBoundedPositiveInt,
+  toBoundedPositiveNumber,
 } from '../entity-matcher.js';
 import {
   ProductNormalizer,
@@ -629,6 +631,50 @@ async function runEntityMatcherSuite() {
   assert.equal(updatedRow821?.battery_mah, 5000);
   console.log('  ✅ [8/8] DOS/Rate#821 EntityMatcher bounds & HTTP URL sanitization passed');
 
+  // 9. DOS/Rate#876: EntityMatcher URL C1 control/whitespace/port bounds, boolean numeric rejection & logger control-char sanitization
+  assert.equal(
+    sanitizeHttpUrl('https://rate.vn/img/\u0085bad.png'),
+    null,
+    'sanitizeHttpUrl must reject C1 control characters'
+  );
+  assert.equal(
+    sanitizeHttpUrl('https://rate.vn/img/\u00A0bad.png'),
+    null,
+    'sanitizeHttpUrl must reject Unicode non-breaking space'
+  );
+  assert.equal(
+    sanitizeHttpUrl('https://rate.vn:8443/img/bad.png'),
+    null,
+    'sanitizeHttpUrl must reject non-default ports'
+  );
+  assert.equal(
+    toBoundedPositiveInt(true, 2048),
+    null,
+    'toBoundedPositiveInt must reject boolean true'
+  );
+  assert.equal(
+    toBoundedPositiveNumber(true, 120),
+    null,
+    'toBoundedPositiveNumber must reject boolean true'
+  );
+  assert.equal(
+    sanitizeAiGeneratedText('Máy\u0085rất\u0000tốt', Number.NaN),
+    'Máy rất tốt',
+    'sanitizeAiGeneratedText must strip C1 control chars and fall back to default maxLen when given NaN'
+  );
+  assert.equal(sanitizeAiGeneratedText('Máy rất tốt', true as unknown as number), 'Máy rất tốt');
+  const ctrlLogger = createImporterLogger('Comp\u0000\nName', {
+    runId: '  run\u0000\r\n123  ',
+    jobId: '  job\u0085456  ',
+    platform: '  shopee\u0007  ',
+  });
+  const ctrlEntry = ctrlLogger.formatEntry('info', '  evt\u0000\nname  ', 'ok');
+  assert.equal(ctrlEntry.component, 'Comp Name');
+  assert.equal(ctrlEntry.run_id, 'run 123');
+  assert.equal(ctrlEntry.job_id, 'job 456');
+  assert.equal(ctrlEntry.platform, 'shopee');
+  assert.equal(ctrlEntry.event, 'evt name');
+  console.log('  ✅ [9/9] DOS/Rate#876 EntityMatcher & Logger control-char/boolean bounds passed');
   console.log('🎉 All EntityMatcher & Open-Core Audit C6/C8/T15/Low tests passed!');
 }
 
