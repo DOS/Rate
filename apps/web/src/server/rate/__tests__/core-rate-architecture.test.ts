@@ -8817,6 +8817,49 @@ async function runCoreArchitectureSuite() {
     );
     assert.equal(MAX_DEAL_RADAR_CLUSTERS, 500);
 
+    // Every offer of a cluster counts: with the priciest of 250 offers last,
+    // the spread still reaches it (DOS/Rate#867; a 200-offer slice made it 0).
+    {
+      const { computeCrossPlatformDealRadarFromData: radar867 } =
+        await import('../index');
+      const offers867 = Array.from({ length: 250 }, (_, i) => ({
+        id: 'o867-' + i,
+        platform: i % 2 ? 'shopee' : 'lazada',
+        url: 'https://example.test/867/' + i,
+        price_current: i < 249 ? 10_000_000 : 12_000_000,
+        price_original: null,
+        merchant: {
+          id: 'm867-' + i,
+          name: 'Shop ' + i,
+          risk_score: 5,
+          is_official: true,
+        },
+      }));
+      const feed867 = radar867(
+        [
+          {
+            master: {
+              id: 'id-867',
+              slug: 'phone-867',
+              name: 'Phone 867',
+              brand: 'Brand',
+              category: 'smartphones',
+              min_price: 10_000_000,
+              max_price: 12_000_000,
+            },
+            offers: offers867,
+          },
+        ] as never,
+        { categorySlug: 'all', limit: 10 }
+      );
+      assert.equal(feed867.totalOffersAnalyzed, 250);
+      const spread867 = feed867.priceSpreadLeaders.find(
+        (s) => s.productSlug === 'phone-867'
+      );
+      assert.ok(spread867, 'a 20% spread across 250 offers is reported');
+      assert.equal(spread867.maxPrice, 12_000_000);
+    }
+
     assert.equal(sanitizeCachedEntityId('  m-123\u0000\u0007  '), 'm-123');
     assert.equal(
       sanitizeCachedProductSlug('  iPhone-16-Pro\u0000 '),
