@@ -31,6 +31,14 @@ export async function OPTIONS() {
 const NOT_ELIGIBLE_AGE_REASON =
   'Account must be at least 7 days old to vote or report reviews.';
 
+function isValidConfirmedTimestamp(raw: unknown): boolean {
+  if (typeof raw !== 'string') return false;
+  const trimmed = raw.trim();
+  if (!trimmed || trimmed.length > 64) return false;
+  const ms = Date.parse(trimmed);
+  return Number.isFinite(ms) && ms > 0;
+}
+
 /**
  * Review Trust Model Section 9: Voter Eligibility Gate. The database applies
  * the same rules in rate.review_votes_guard (DOS/Rate#613, #771):
@@ -40,42 +48,66 @@ const NOT_ELIGIBLE_AGE_REASON =
  * - Account must be at least 7 days old; a missing or unparseable
  *   `created_at` fails closed.
  */
-export function evaluateVoterEligibility(user: {
-  created_at?: string | null;
-  email_confirmed_at?: string | null;
-  phone_confirmed_at?: string | null;
-  is_anonymous?: boolean | null;
-}): { eligible: boolean; reason?: string } {
+export function evaluateVoterEligibility(
+  user:
+    | {
+        created_at?: string | null;
+        email_confirmed_at?: string | null;
+        phone_confirmed_at?: string | null;
+        is_anonymous?: boolean | null;
+      }
+    | null
+    | undefined
+): { eligible: boolean; reason?: string } {
+  if (!user || typeof user !== 'object') {
+    return { eligible: false, reason: NOT_ELIGIBLE_AGE_REASON };
+  }
   if (user.is_anonymous === true) {
     return {
       eligible: false,
       reason: 'Anonymous accounts cannot vote on reviews.',
     };
   }
-  if (!user.email_confirmed_at && !user.phone_confirmed_at) {
+  if (
+    !isValidConfirmedTimestamp(user.email_confirmed_at) &&
+    !isValidConfirmedTimestamp(user.phone_confirmed_at)
+  ) {
     return {
       eligible: false,
       reason: 'Verified email or phone number is required to vote on reviews.',
     };
   }
   const createdMs =
-    typeof user.created_at === 'string' ? Date.parse(user.created_at) : NaN;
-  if (!Number.isFinite(createdMs)) {
+    typeof user.created_at === 'string' && user.created_at.trim().length <= 64
+      ? Date.parse(user.created_at.trim())
+      : NaN;
+  if (!Number.isFinite(createdMs) || createdMs <= 0) {
     return { eligible: false, reason: NOT_ELIGIBLE_AGE_REASON };
   }
   const ageDays = (Date.now() - createdMs) / 86_400_000;
-  if (ageDays < 7) {
+  if (!Number.isFinite(ageDays) || ageDays < 7) {
     return { eligible: false, reason: NOT_ELIGIBLE_AGE_REASON };
   }
   return { eligible: true };
 }
 
 function toSafeVoteCount(value: unknown): number {
+  if (typeof value === 'boolean' || value === null || value === undefined) {
+    return 0;
+  }
   const n = Number(value);
-  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+  return Number.isFinite(n) && n > 0 ? Math.min(100_000_000, Math.floor(n)) : 0;
 }
 
 function toSafeHelpfulnessWeight(value: unknown, fallback = 1): number {
+  if (
+    typeof value === 'boolean' ||
+    value === null ||
+    value === undefined ||
+    (typeof value === 'string' && !value.trim())
+  ) {
+    return fallback;
+  }
   const n = Number(value);
   return Number.isFinite(n) ? Math.max(0, Math.min(10, n)) : fallback;
 }

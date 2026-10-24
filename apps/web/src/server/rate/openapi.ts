@@ -76,11 +76,20 @@ export interface RateOpenApiDocument {
 export function normalizeOpenApiServerOrigin(
   rawBaseUrl?: string | null
 ): string {
-  const trimmed = (rawBaseUrl ?? '').trim();
-  if (!trimmed || trimmed.length > 256) return 'https://rate.vn';
+  if (typeof rawBaseUrl !== 'string') return 'https://rate.vn';
+  const trimmed = rawBaseUrl.trim();
+  if (!trimmed || trimmed.length > 256 || /[\s\p{Cc}]/u.test(trimmed)) {
+    return 'https://rate.vn';
+  }
   try {
     const parsed = new URL(trimmed);
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return 'https://rate.vn';
+    }
+    if (parsed.username || parsed.password) {
+      return 'https://rate.vn';
+    }
+    if (!parsed.origin || parsed.origin === 'null') {
       return 'https://rate.vn';
     }
     return parsed.origin;
