@@ -56,6 +56,7 @@ import {
 import { upsertWatchlistItem } from '@/components/watchlist/watchlist-store';
 import { getSpecUiDictionary, localizeSpecValue } from '@/lib/spec-localizer';
 import ContentText from '@/components/elementary/ContentText';
+import { firstImageUrl } from '@/lib/rate-domain-core';
 
 interface CompareWorkspaceProps {
   initialProducts: MasterProduct[];
@@ -853,8 +854,7 @@ export default function CompareWorkspace({
         brand: p.brand,
         thumbnail: resolveProductImageUrl(
           p.slug,
-          p.thumbnail ||
-            (p.images && p.images.length > 0 ? p.images[0] || null : null)
+          p.thumbnail || firstImageUrl(p.images)
         ),
         min_price: Number(p.min_price || 0),
         categorySlug: targetCat,
@@ -1215,8 +1215,7 @@ export default function CompareWorkspace({
           : 10_000_000;
       const thumb = resolveProductImageUrl(
         p.slug,
-        p.thumbnail ||
-          (p.images && p.images.length > 0 ? p.images[0] || null : null)
+        p.thumbnail || firstImageUrl(p.images)
       );
       const resolvedHref = getMasterProductHref(p);
       const resolvedCategoryPath =
@@ -1409,10 +1408,7 @@ export default function CompareWorkspace({
                           const alreadySelected = selectedSlugs.has(item.slug);
                           const thumb = resolveProductImageUrl(
                             item.slug,
-                            item.thumbnail ||
-                              (item.images && item.images.length > 0
-                                ? item.images[0]
-                                : null)
+                            item.thumbnail || firstImageUrl(item.images)
                           );
                           const priceFormatted = Number(
                             item.min_price || 0
@@ -1966,8 +1962,7 @@ export default function CompareWorkspace({
                   {products.map((p, idx) => {
                     const thumb = resolveProductImageUrl(
                       p.slug,
-                      p.thumbnail ||
-                        (p.images && p.images.length > 0 ? p.images[0] : null)
+                      p.thumbnail || firstImageUrl(p.images)
                     );
                     const minPrice = Number(p.min_price || 0);
                     const minPriceFormatted = minPrice.toLocaleString('vi-VN');

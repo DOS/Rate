@@ -53,6 +53,7 @@ import ContentText from '@/components/elementary/ContentText';
 import { contentLang } from '@/lib/content-lang';
 import ClientMessages from '@/components/providers/ClientMessages';
 import { siteJsonLd } from '@/lib/seo';
+import { firstImageUrl } from '@/lib/rate-domain-core';
 
 // Cached after the first request, refreshed every 5 minutes or when the
 // worker revalidates its cache tags (DOS/Rate#491).
@@ -465,11 +466,7 @@ export default async function Home({
 
               <div className="row g-4">
                 {masterProducts.slice(0, 6).map((item) => {
-                  const thumb =
-                    item.thumbnail ||
-                    (item.images && item.images.length > 0
-                      ? item.images[0]
-                      : null);
+                  const thumb = item.thumbnail || firstImageUrl(item.images);
                   const keySpecs = item.key_specs || {};
                   const productHref = getMasterProductHref(item, catSlugById);
                   const rawUser = Number(

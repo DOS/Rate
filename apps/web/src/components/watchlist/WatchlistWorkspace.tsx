@@ -35,6 +35,7 @@ import {
   authorizedJsonHeaders,
   jsonWriteHeaders,
 } from '@/lib/auth/access-token';
+import { firstImageUrl } from '@/lib/rate-domain-core';
 
 interface WatchlistWorkspaceProps {
   catalogProducts: MasterProduct[];
@@ -125,9 +126,7 @@ export default function WatchlistWorkspace({
   const handleQuickAddCatalog = (p: MasterProduct) => {
     const minP = Number(p.min_price || 0);
     const targetP = computeWatchlistTargetPrice(minP, 5);
-    const thumb =
-      p.thumbnail ||
-      (p.images && p.images.length > 0 ? p.images[0] || null : null);
+    const thumb = p.thumbnail || firstImageUrl(p.images);
     const resolvedHref = getMasterProductHref(p);
     const resolvedCategoryPath =
       resolvedHref.replace(`/${p.slug}`, '') || '/smartphones';
@@ -687,9 +686,8 @@ export default function WatchlistWorkspace({
                 const minP = Number(p.min_price || 0);
                 const thumb =
                   p.thumbnail ||
-                  (p.images && p.images.length > 0
-                    ? p.images[0]
-                    : '/img/placeholder.png');
+                  firstImageUrl(p.images) ||
+                  '/img/placeholder.png';
                 return (
                   <div key={p.id} className="col-lg-4 col-md-6 col-12">
                     <div className="card rounded-4 bg-light h-100 border p-3">

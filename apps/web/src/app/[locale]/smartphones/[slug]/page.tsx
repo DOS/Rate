@@ -68,6 +68,7 @@ import ProductOffersExplorer from '@/components/leaderboard/ProductOffersExplore
 import ProductSpecsExportToolbar from '@/components/leaderboard/ProductSpecsExportToolbar';
 import ClientMessages from '@/components/providers/ClientMessages';
 import { plausibleMinPrice } from '@/lib/offer-plausibility';
+import { firstImageUrl } from '@/lib/rate-domain-core';
 
 // Cached after the first request, refreshed every 5 minutes or when the
 // worker revalidates its cache tags (DOS/Rate#491).
@@ -125,10 +126,7 @@ export async function generateCategoryProductMetadata(
       title: t('ogTitle', { name: product.name }),
       description: t('ogDesc', { minPrice }),
       url: canonicalUrl,
-      images:
-        product.images && product.images.length > 0
-          ? [product.images[0]!]
-          : [SHARE_IMAGE],
+      images: [firstImageUrl(product.images) ?? SHARE_IMAGE],
     },
   };
 }
@@ -237,6 +235,7 @@ export async function ProductDetailView({
       : rawUserRating;
 
   const keySpecLine = buildKeySpecLine(product);
+  const mainImage = firstImageUrl(product.images);
 
   const canonicalUrl = `https://rate.vn${categoryBasePath}/${product.slug}`;
 
@@ -341,11 +340,11 @@ export async function ProductDetailView({
             <div className="col-lg-5 col-12">
               <div className="card rounded-4 bg-light p-md-4 border-0 p-3 text-center shadow-sm">
                 <div className="rate-pdv-media d-flex align-items-center justify-content-center">
-                  {product.images && product.images.length > 0 ? (
+                  {mainImage ? (
                     // The main product image is the page's largest paint: fetch it
                     // ahead of the below-the-fold peer and offer thumbnails.
                     <img
-                      src={product.images[0]}
+                      src={mainImage}
                       alt={product.name}
                       fetchPriority="high"
                       className="img-fluid rounded-3"
@@ -695,10 +694,7 @@ export async function ProductDetailView({
                       name: product.name,
                       brand: product.brand,
                       thumbnail:
-                        product.thumbnail ||
-                        (product.images && product.images.length > 0
-                          ? product.images[0] || null
-                          : null),
+                        product.thumbnail || firstImageUrl(product.images),
                       min_price: currentMinPrice,
                       categoryPath: categoryBasePath,
                     }}
@@ -863,10 +859,7 @@ export async function ProductDetailView({
                       brand={product.brand}
                       categoryPath={categoryBasePath}
                       thumbnail={
-                        product.thumbnail ||
-                        (product.images && product.images.length > 0
-                          ? product.images[0] || null
-                          : null)
+                        product.thumbnail || firstImageUrl(product.images)
                       }
                       currentMinPrice={currentMinPrice}
                       size="sm"
@@ -1590,10 +1583,7 @@ export async function ProductDetailView({
                   const peerPrice = Number(peer.min_price || 0);
                   const priceDelta = peerPriceDelta(peerPrice, currentMinPrice);
                   const peerThumb =
-                    peer.thumbnail ||
-                    (peer.images && peer.images.length > 0
-                      ? peer.images[0]
-                      : null);
+                    peer.thumbnail || firstImageUrl(peer.images);
                   const peerRating = resolveCompareEffectiveUserRating(peer);
                   const peerScore10 = peerRating * 2;
                   const currentScore10 = displayUserRating * 2;

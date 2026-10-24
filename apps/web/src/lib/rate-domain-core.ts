@@ -837,6 +837,23 @@ export const KNOWN_LOCAL_DEVICE_IMAGES = new Set<string>([
   'xiaomi-pad-7-pro-256gb',
 ]);
 
+/**
+ * Whether a stored image entry can be used as an `src`: an absolute
+ * http(s) URL, a protocol-relative URL or a site path. Crawled rows can hold
+ * other strings, such as "[object Object]" from a stringified image object
+ * (DOS/Rate#810).
+ */
+export function isImageUrl(value: unknown): value is string {
+  return typeof value === 'string' && /^(https?:\/\/|\/)\S+$/i.test(value);
+}
+
+/** The first usable image of a stored `images` list, or null. */
+export function firstImageUrl(
+  images: readonly unknown[] | null | undefined
+): string | null {
+  return images?.find(isImageUrl) ?? null;
+}
+
 export function resolveProductImageUrl(
   slugOrProduct?:
     | string
@@ -856,17 +873,18 @@ export function resolveProductImageUrl(
     }
     return (
       slugOrProduct.thumbnail ||
-      (Array.isArray(slugOrProduct.images) && slugOrProduct.images.length > 0
-        ? slugOrProduct.images[0] || null
-        : null) ||
-      fallbackUrl ||
-      null
+      firstImageUrl(
+        Array.isArray(slugOrProduct.images) ? slugOrProduct.images : null
+      ) ||
+      (isImageUrl(fallbackUrl) ? fallbackUrl : null)
     );
   }
   if (slugOrProduct && KNOWN_LOCAL_DEVICE_IMAGES.has(slugOrProduct)) {
     return `/img/devices/${slugOrProduct}.jpg`;
   }
-  return fallbackUrl || null;
+  // Callers pass a stored listing image here, which can be junk such as
+  // "[object Object]" (DOS/Rate#810).
+  return isImageUrl(fallbackUrl) ? fallbackUrl : null;
 }
 
 export type CanonicalCategorySlug =
