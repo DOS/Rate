@@ -1,4 +1,5 @@
 import type { MasterProduct } from '@repo/shared-data';
+import { usableImageUrls } from './rate-domain-core';
 
 /**
  * The product fields the hero search box shows, filters on and links with.
@@ -77,7 +78,9 @@ export function toHeroProductSuggestions(
     variant_name: p.variant_name,
     key_specs: searchKeySpecs(p.key_specs),
     storage_gb: p.storage_gb,
-    images: p.images?.slice(0, 1) ?? p.images,
+    // The first usable image, not the first entry, which can be junk such as
+    // "[object Object]" (DOS/Rate#810).
+    images: usableImageUrls(p.images).slice(0, 1),
     thumbnail: p.thumbnail,
     min_price: p.min_price,
     merchant_count: p.merchant_count,

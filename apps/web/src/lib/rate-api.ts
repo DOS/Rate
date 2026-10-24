@@ -25,6 +25,7 @@ import {
   type ParsedEcommerceUrl,
   parseEcommerceUrlOrQuery,
   extractProductKeywordFromUrl,
+  firstImageUrl,
 } from './rate-domain-core';
 export {
   computeWilsonLowerBound,
@@ -2773,7 +2774,7 @@ export async function getMerchantProfileById(
       rating_star: Number(p.rating_star || 0),
       rating_count: Number(p.rating_count || 0),
       url: p.url,
-      image: p.images && p.images.length > 0 ? p.images[0] || null : null,
+      image: firstImageUrl(p.images),
       master_product: masterInfo,
       discount_analysis: discountByOfferId.get(p.id) || null,
     };
