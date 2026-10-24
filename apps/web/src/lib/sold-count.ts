@@ -23,11 +23,16 @@ export function formatSoldCount(
   historicalSoldDisplay: string | null | undefined,
   locale: string
 ): string {
+  const rawInput: unknown = historicalSold;
+  const rawSold =
+    typeof rawInput === 'number'
+      ? rawInput
+      : typeof rawInput === 'string' && rawInput.trim()
+        ? Number(rawInput.trim())
+        : NaN;
   const sold =
-    Number.isFinite(historicalSold) &&
-    historicalSold > 0 &&
-    historicalSold <= MAX_DISPLAY_SOLD_COUNT
-      ? Math.trunc(historicalSold)
+    Number.isFinite(rawSold) && rawSold > 0 && rawSold <= MAX_DISPLAY_SOLD_COUNT
+      ? Math.trunc(rawSold)
       : 0;
   const label =
     typeof historicalSoldDisplay === 'string'

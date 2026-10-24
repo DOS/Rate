@@ -70,6 +70,9 @@ const SAFE_PLATFORM_FILTER_REGEX = /^[a-z0-9_-]{1,40}$/;
 export function parseMerchantDirectoryFilters(
   get: (key: string) => string | null | undefined
 ): MerchantDirectoryFilters {
+  if (typeof get !== 'function') {
+    return { ...DEFAULT_MERCHANT_DIRECTORY_FILTERS };
+  }
   const pick = <T extends string>(
     raw: string | null | undefined,
     allowed: readonly T[],
@@ -105,14 +108,20 @@ export function merchantDirectoryFilterParams(
   filters: MerchantDirectoryFilters
 ): URLSearchParams {
   const params = new URLSearchParams();
-  const safeQuery = (typeof filters.query === 'string' ? filters.query : '')
+  const safeFilters =
+    filters && typeof filters === 'object' && !Array.isArray(filters)
+      ? filters
+      : DEFAULT_MERCHANT_DIRECTORY_FILTERS;
+  const safeQuery = (
+    typeof safeFilters.query === 'string' ? safeFilters.query : ''
+  )
     .replace(/\p{Cc}+/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, 160);
   if (safeQuery) params.set('q', safeQuery);
   const safePlatform = (
-    typeof filters.platform === 'string' ? filters.platform : 'all'
+    typeof safeFilters.platform === 'string' ? safeFilters.platform : 'all'
   )
     .replace(/\p{Cc}+/gu, '')
     .trim()
@@ -120,40 +129,55 @@ export function merchantDirectoryFilterParams(
   if (safePlatform !== 'all' && SAFE_PLATFORM_FILTER_REGEX.test(safePlatform)) {
     params.set('platform', safePlatform);
   }
-  if (filters.officialOnly) params.set('official', 'true');
-  if (RISK_TIERS.includes(filters.riskTier) && filters.riskTier !== 'all') {
-    params.set('risk', filters.riskTier);
+  if (safeFilters.officialOnly === true) params.set('official', 'true');
+  if (
+    RISK_TIERS.includes(safeFilters.riskTier) &&
+    safeFilters.riskTier !== 'all'
+  ) {
+    params.set('risk', safeFilters.riskTier);
   }
   if (
-    SEEDING_TIERS.includes(filters.seedingTier) &&
-    filters.seedingTier !== 'all'
+    SEEDING_TIERS.includes(safeFilters.seedingTier) &&
+    safeFilters.seedingTier !== 'all'
   ) {
-    params.set('seeding', filters.seedingTier);
+    params.set('seeding', safeFilters.seedingTier);
   }
-  if (SORTS.includes(filters.sortBy) && filters.sortBy !== 'trust_desc') {
-    params.set('sort', filters.sortBy);
+  if (
+    SORTS.includes(safeFilters.sortBy) &&
+    safeFilters.sortBy !== 'trust_desc'
+  ) {
+    params.set('sort', safeFilters.sortBy);
   }
   return params;
 }
 
 function toSafeScore100(value: unknown, fallback = 0): number {
-  const n = Number(value);
+  if (typeof value !== 'number' && typeof value !== 'string') return fallback;
+  if (typeof value === 'string' && !value.trim()) return fallback;
+  const n = typeof value === 'string' ? Number(value.trim()) : value;
   return Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : fallback;
 }
 
 function toSafeCount(value: unknown): number {
-  const n = Number(value);
-  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+  if (typeof value !== 'number' && typeof value !== 'string') return 0;
+  if (typeof value === 'string' && !value.trim()) return 0;
+  const n = typeof value === 'string' ? Number(value.trim()) : value;
+  return Number.isFinite(n) && n > 0 ? Math.min(100_000_000, Math.floor(n)) : 0;
 }
 
 export function summarizeMerchantDirectory(
   merchants: readonly MerchantSummary[]
 ): MerchantDirectorySummary {
+  const safeMerchants = Array.isArray(merchants)
+    ? merchants.filter((m): m is MerchantSummary =>
+        Boolean(m && typeof m === 'object')
+      )
+    : [];
   const platformCounts: Record<string, number> = {};
   let official = 0;
   let safe = 0;
   let trustSum = 0;
-  for (const m of merchants) {
+  for (const m of safeMerchants) {
     const p = (m.platform || '')
       .replace(/\p{Cc}+/gu, '')
       .trim()
@@ -174,7 +198,7 @@ export function summarizeMerchantDirectory(
     if (trustScore >= 80) safe += 1;
     trustSum += trustScore;
   }
-  const total = merchants.length;
+  const total = safeMerchants.length;
   return {
     total,
     official,
@@ -189,14 +213,42 @@ export function filterMerchantDirectory(
   merchants: readonly MerchantSummary[],
   filters: MerchantDirectoryFilters
 ): MerchantSummary[] {
-  const { platform, officialOnly, riskTier, seedingTier, sortBy } = filters;
-  const kw = (typeof filters.query === 'string' ? filters.query : '')
+  const safeMerchants = Array.isArray(merchants)
+    ? merchants.filter((m): m is MerchantSummary =>
+        Boolean(m && typeof m === 'object')
+      )
+    : [];
+  const safeFilters =
+    filters && typeof filters === 'object' && !Array.isArray(filters)
+      ? filters
+      : DEFAULT_MERCHANT_DIRECTORY_FILTERS;
+  const rawPlatform = (
+    typeof safeFilters.platform === 'string' ? safeFilters.platform : 'all'
+  )
+    .replace(/\p{Cc}+/gu, '')
+    .trim()
+    .toLowerCase();
+  const platform =
+    rawPlatform !== 'all' && SAFE_PLATFORM_FILTER_REGEX.test(rawPlatform)
+      ? rawPlatform
+      : 'all';
+  const officialOnly = safeFilters.officialOnly === true;
+  const riskTier = RISK_TIERS.includes(safeFilters.riskTier)
+    ? safeFilters.riskTier
+    : 'all';
+  const seedingTier = SEEDING_TIERS.includes(safeFilters.seedingTier)
+    ? safeFilters.seedingTier
+    : 'all';
+  const sortBy = SORTS.includes(safeFilters.sortBy)
+    ? safeFilters.sortBy
+    : 'trust_desc';
+  const kw = (typeof safeFilters.query === 'string' ? safeFilters.query : '')
     .replace(/\p{Cc}+/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, 160)
     .toLowerCase();
-  const filtered = merchants.filter((m) => {
+  const filtered = safeMerchants.filter((m) => {
     if (platform !== 'all' && (m.platform || '').toLowerCase() !== platform) {
       return false;
     }

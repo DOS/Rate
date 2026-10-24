@@ -135,11 +135,15 @@ const MAX_ANALYZER_COPY_LEN = 4_000;
 
 export function analyzerCopy(text: string): AnalyzerCopy {
   if (typeof text !== 'string') return { text: '' };
-  const safeText =
+  const safeText = (
     text.length > MAX_ANALYZER_COPY_LEN
       ? text.slice(0, MAX_ANALYZER_COPY_LEN)
-      : text;
-  const normalized = safeText.normalize('NFC').trim();
+      : text
+  )
+    .replace(/\p{Cc}+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const normalized = safeText.normalize('NFC');
   for (const [pattern, key] of TEMPLATES) {
     const match = pattern.exec(normalized);
     if (match) return { key, values: { ...(match.groups ?? {}) } };
