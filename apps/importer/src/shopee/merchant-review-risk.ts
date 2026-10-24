@@ -152,21 +152,34 @@ export function strongestPriceAnomaly(
   officialByMerchant: ReadonlyMap<string, boolean>,
   masterMinByCluster: ReadonlyMap<string, number>
 ): { listingPrice: number; canonicalMinPrice: number } | null {
-  if (merchant.is_official) return null;
+  if (!merchant || typeof merchant !== 'object' || merchant.is_official) return null;
+  if (!Array.isArray(listings) || listings.length === 0) return null;
   let best: { listingPrice: number; canonicalMinPrice: number; ratio: number } | null = null;
   for (const listing of listings) {
+    if (!listing || typeof listing !== 'object') continue;
     const price = toValidPrice(listing.price_current);
     if (!price || !listing.cluster_id) continue;
-    const peers = (productsByCluster.get(listing.cluster_id) ?? []).map(p => ({
-      id: p.id,
-      price_current: p.price_current,
-      merchants: { is_official: officialByMerchant.get(p.merchant_id ?? '') ?? false },
-    }));
-    const floor = resolveClusterPeerFloorPrice(
-      peers,
-      listing.id,
-      masterMinByCluster.get(listing.cluster_id)
-    );
+    const clusterPeers =
+      productsByCluster && typeof productsByCluster.get === 'function'
+        ? (productsByCluster.get(listing.cluster_id) ?? [])
+        : [];
+    const peers = clusterPeers
+      .filter((p): p is ProductRow => Boolean(p && typeof p === 'object'))
+      .map(p => ({
+        id: p.id,
+        price_current: p.price_current,
+        merchants: {
+          is_official:
+            officialByMerchant && typeof officialByMerchant.get === 'function'
+              ? (officialByMerchant.get(p.merchant_id ?? '') ?? false)
+              : false,
+        },
+      }));
+    const fallbackMasterMin =
+      masterMinByCluster && typeof masterMinByCluster.get === 'function'
+        ? masterMinByCluster.get(listing.cluster_id)
+        : undefined;
+    const floor = resolveClusterPeerFloorPrice(peers, listing.id, fallbackMasterMin);
     if (!floor || floor <= 2_000_000 || floor > MAX_VALID_VND_PRICE) continue;
     const ratio = price / floor;
     if (ratio < 0.58 && (!best || ratio < best.ratio)) {
@@ -192,12 +205,21 @@ export function scoreMerchants(
   reviews: readonly ReviewRow[],
   masterMinByCluster: ReadonlyMap<string, number>
 ): MerchantScore[] {
-  const merchantById = new Map(merchants.map(m => [m.id, m]));
-  const officialByMerchant = new Map(merchants.map(m => [m.id, Boolean(m.is_official)]));
-  const productById = new Map(products.map(p => [p.id, p]));
+  const safeMerchants = Array.isArray(merchants)
+    ? merchants.filter((m): m is MerchantRow => Boolean(m && typeof m === 'object' && m.id))
+    : [];
+  const safeProducts = Array.isArray(products)
+    ? products.filter((p): p is ProductRow => Boolean(p && typeof p === 'object' && p.id))
+    : [];
+  const safeReviews = Array.isArray(reviews)
+    ? reviews.filter((rv): rv is ReviewRow => Boolean(rv && typeof rv === 'object'))
+    : [];
+  const merchantById = new Map(safeMerchants.map(m => [m.id, m]));
+  const officialByMerchant = new Map(safeMerchants.map(m => [m.id, Boolean(m.is_official)]));
+  const productById = new Map(safeProducts.map(p => [p.id, p]));
   const productsByCluster = new Map<string, ProductRow[]>();
   const listingsByMerchant = new Map<string, ProductRow[]>();
-  for (const p of products) {
+  for (const p of safeProducts) {
     if (p.cluster_id) {
       const list = productsByCluster.get(p.cluster_id) ?? [];
       list.push(p);
@@ -213,7 +235,7 @@ export function scoreMerchants(
     string,
     { results: AnalyzedReviewResult[]; raws: ReviewInputItem[] }
   >();
-  for (const row of reviews) {
+  for (const row of safeReviews) {
     const merchantId = productById.get(row.product_id)?.merchant_id;
     if (!merchantId || !merchantById.has(merchantId)) continue;
     const mapped = mapStoredReview(row);
@@ -276,11 +298,7 @@ export function scoreMerchants(
 function normalizeSafeId(raw: unknown): string | null {
   if (typeof raw !== 'string') return null;
   const trimmed = raw.trim();
-  if (!trimmed || trimmed.length > 128) return null;
-  for (let i = 0; i < trimmed.length; i++) {
-    const code = trimmed.charCodeAt(i);
-    if (code <= 0x1f || code === 0x7f) return null;
-  }
+  if (!trimmed || trimmed.length > 128 || /\p{Cc}/u.test(trimmed)) return null;
   return trimmed;
 }
 

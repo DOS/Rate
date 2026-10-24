@@ -643,6 +643,103 @@ async function runTests() {
     );
 
     console.log('✅ [AiSpecEnricher] Mock OpenAI-compatible enrichment & caching passed 100%!');
+    // DOS/Rate#904: merchant-review-risk C1 control-char & nullish guards, ai-spec-enricher negative-string guard, entity-matcher boolean similarity guard, and shopee-to-supabase NaN/boolean guards
+    const { uniqueIds, strongestPriceAnomaly, scoreMerchants } =
+      await import('./merchant-review-risk.js');
+    const { trimTrailingSlashes, cloneAiEnrichmentResponse } =
+      await import('./ai-spec-enricher.js');
+    const { hasPopulatedSpecificationGroups, normalizeScrapedProductPrices } =
+      await import('./shopee-to-supabase.js');
+
+    assert.deepEqual(
+      uniqueIds(['valid-id', 'badid', 'bad id']),
+      ['valid-id'],
+      'uniqueIds must reject C1 and C0 control characters via normalizeSafeId'
+    );
+    assert.equal(
+      strongestPriceAnomaly(
+        null as unknown as Parameters<typeof strongestPriceAnomaly>[0],
+        [],
+        new Map(),
+        new Map(),
+        new Map()
+      ),
+      null,
+      'strongestPriceAnomaly must guard nullish merchant'
+    );
+    assert.deepEqual(
+      scoreMerchants(
+        null as unknown as Parameters<typeof scoreMerchants>[0],
+        null as unknown as [],
+        null as unknown as [],
+        null as unknown as [],
+        new Map()
+      ),
+      [],
+      'scoreMerchants must guard non-array inputs'
+    );
+
+    const negStringSpecs = sanitizeSpecifications({
+      hardware: { ram_gb: '-12 GB', storage_gb: '256 GB' },
+      display: { size_inch: '-6.7 inch' },
+    });
+    assert.equal(
+      negStringSpecs.hardware?.ram_gb,
+      undefined,
+      'sanitizeSpecifications must not parse "-12 GB" as +12'
+    );
+    assert.equal(negStringSpecs.hardware?.storage_gb, 256);
+    assert.equal(
+      negStringSpecs.display?.size_inch,
+      undefined,
+      'sanitizeSpecifications must not parse "-6.7 inch" as +6.7'
+    );
+    assert.equal(extractJsonObjectString(null as unknown as string), '');
+    assert.equal(trimTrailingSlashes(null as unknown as string), '');
+    assert.deepEqual(cloneAiEnrichmentResponse(null as unknown as never).specifications, {});
+
+    assert.equal(
+      hasPopulatedSpecificationGroups({
+        display: { size_inch: Number.NaN, ppi: Number.POSITIVE_INFINITY },
+      }),
+      false,
+      'hasPopulatedSpecificationGroups must reject NaN and Infinity numbers'
+    );
+    const normalizedPrices904 = normalizeScrapedProductPrices({
+      platform: 'shopee',
+      itemId: '1',
+      shopId: '2',
+      url: 'https://shopee.vn/item-i.2.1',
+      title: 'Phone',
+      priceMin: 10_000_000,
+      priceMax: true as unknown as number,
+      priceBeforeDiscount: true as unknown as number,
+      currency: 'VND',
+      stock: 5,
+      historicalSold: 10,
+      ratingStar: 4.9,
+      ratingCount: 10,
+      images: [],
+      attributes: [],
+      models: [{ modelId: 'm1', name: '128GB', price: true as unknown as number, stock: 1 }],
+      shop: { shopId: '2', name: 'Shop', isMall: false, ratingStar: 4.9, followerCount: 100 },
+      reviews: [],
+    });
+    assert.equal(
+      normalizedPrices904.priceMax,
+      10_000_000,
+      'normalizeScrapedProductPrices must reject boolean priceMax'
+    );
+    assert.equal(
+      normalizedPrices904.priceBeforeDiscount,
+      undefined,
+      'normalizeScrapedProductPrices must reject boolean priceBeforeDiscount'
+    );
+    assert.deepEqual(
+      normalizedPrices904.models,
+      [],
+      'normalizeScrapedProductPrices must reject boolean model price'
+    );
   } finally {
     mockServer.close();
   }

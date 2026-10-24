@@ -100,7 +100,10 @@ const PROVIDER_DEFAULTS: Record<
 function toNumberOrUndefined(val: unknown): number | undefined {
   if (typeof val === 'number' && Number.isFinite(val)) return val;
   if (typeof val === 'string') {
-    const match = val.replace(',', '.').match(/(\d+(?:\.\d+)?)/);
+    const match = val
+      .slice(0, 200)
+      .replace(',', '.')
+      .match(/(?<![-\d.])(\d+(?:\.\d+)?)/);
     if (match) {
       const parsed = parseFloat(match[1]);
       if (Number.isFinite(parsed)) return parsed;
@@ -173,6 +176,7 @@ function asRecord(val: unknown): Record<string, unknown> | undefined {
  * Extracts the outermost JSON object substring (`{...}`) in O(n) without regex backtracking.
  */
 export function extractJsonObjectString(rawContent: string): string {
+  if (typeof rawContent !== 'string') return '';
   const trimmed = rawContent.trim();
   const firstBrace = trimmed.indexOf('{');
   const lastBrace = trimmed.lastIndexOf('}');
@@ -414,14 +418,15 @@ export function mergeProductSpecifications(
 export const MAX_SPEC_CACHE_ENTRIES = 250;
 
 export function cloneAiEnrichmentResponse(res: AiEnrichmentResponse): AiEnrichmentResponse {
+  const safeRes = res && typeof res === 'object' ? res : ({} as AiEnrichmentResponse);
   return {
-    ram_gb: res.ram_gb ?? null,
-    storage_gb: res.storage_gb ?? null,
-    screen_size_inch: res.screen_size_inch ?? null,
-    battery_mah: res.battery_mah ?? null,
-    has_5g: res.has_5g,
-    specifications: sanitizeSpecifications(res.specifications),
-    key_specs: { ...(res.key_specs ?? {}) },
+    ram_gb: safeRes.ram_gb ?? null,
+    storage_gb: safeRes.storage_gb ?? null,
+    screen_size_inch: safeRes.screen_size_inch ?? null,
+    battery_mah: safeRes.battery_mah ?? null,
+    has_5g: safeRes.has_5g,
+    specifications: sanitizeSpecifications(safeRes.specifications),
+    key_specs: { ...(safeRes.key_specs ?? {}) },
   };
 }
 
@@ -431,6 +436,7 @@ export function cloneAiEnrichmentResponse(res: AiEnrichmentResponse): AiEnrichme
  * Supports: OpenAI, DOS-AI Gateway, Gemini, DeepSeek, Groq, OpenRouter, Ollama (or any OpenAI-compatible API).
  */
 export function trimTrailingSlashes(rawUrl: string): string {
+  if (typeof rawUrl !== 'string') return '';
   let end = rawUrl.length;
   while (end > 0 && rawUrl.charCodeAt(end - 1) === 47) {
     end -= 1;
