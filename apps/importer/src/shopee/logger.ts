@@ -6,16 +6,34 @@ export interface ImporterAlgorithmMetadata {
   paramsHash: string;
 }
 
-function canonicalizeParamValue(value: unknown, depth = 0): unknown {
-  if (depth > 8 || value === null || value === undefined) return value;
-  if (typeof value !== 'object') return value;
-  if (Array.isArray(value)) {
-    return value.map(item => canonicalizeParamValue(item, depth + 1));
+function sanitizeImporterIdentifier(value: unknown, maxLen: number): string {
+  if (typeof value !== 'string') return '';
+  return value
+    .replace(/\p{Cc}+/gu, '')
+    .trim()
+    .slice(0, maxLen);
+}
+
+function canonicalizeParamValue(
+  value: unknown,
+  depth = 0,
+  seen: WeakSet<object> = new WeakSet<object>()
+): unknown {
+  if (value === null || value === undefined || typeof value !== 'object') return value;
+  if (seen.has(value)) return '[Circular]';
+  if (depth > 8) return '[MaxDepth]';
+  seen.add(value);
+  try {
+    if (Array.isArray(value)) {
+      return value.map(item => canonicalizeParamValue(item, depth + 1, seen));
+    }
+    const obj = value as Record<string, unknown>;
+    return Object.keys(obj)
+      .sort()
+      .map(k => [k, canonicalizeParamValue(obj[k], depth + 1, seen)]);
+  } finally {
+    seen.delete(value);
   }
-  const obj = value as Record<string, unknown>;
-  return Object.keys(obj)
-    .sort()
-    .map(k => [k, canonicalizeParamValue(obj[k], depth + 1)]);
 }
 
 /**
@@ -27,16 +45,18 @@ export function computeImporterAlgorithmMetadata(
   version: string,
   params: Record<string, unknown>
 ): ImporterAlgorithmMetadata {
+  const safeAlgo = sanitizeImporterIdentifier(algo, 128) || 'unknown';
+  const safeVersion = sanitizeImporterIdentifier(version, 64) || '0.0.0';
   const sortedEntries = canonicalizeParamValue(params, 0);
   const canonicalJson = JSON.stringify(sortedEntries);
   const paramsHash = crypto
     .createHash('sha256')
-    .update(`${algo}@${version}:${canonicalJson}`)
+    .update(`${safeAlgo}@${safeVersion}:${canonicalJson}`)
     .digest('hex')
     .slice(0, 12);
   return {
-    algo,
-    version,
+    algo: safeAlgo,
+    version: safeVersion,
     paramsHash,
   };
 }
@@ -106,7 +126,7 @@ export function sanitizeAiGeneratedText(raw: unknown, maxLen = 400): string {
  * from log strings and metadata values (Audit Low).
  */
 export function redactSensitiveString(raw: string): string {
-  if (!raw) return raw;
+  if (typeof raw !== 'string' || !raw) return '';
   const maxScanLen = MAX_LOG_STRING_LENGTH + 512;
   const bounded = raw.length > maxScanLen ? raw.slice(0, maxScanLen) : raw;
   return (
@@ -139,7 +159,7 @@ export function redactSensitiveString(raw: string): string {
 }
 
 const SENSITIVE_META_KEY_RE =
-  /(password|secret|token|api_?key|service_role|authorization|cookie|credential|jwt)/i;
+  /(password|secret|token|api_?key|service_role|authorization|cookie|credential|jwt|publishable_?key)/i;
 
 const UNSAFE_OBJECT_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 

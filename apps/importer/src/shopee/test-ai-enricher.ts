@@ -740,6 +740,97 @@ async function runTests() {
       [],
       'normalizeScrapedProductPrices must reject boolean model price'
     );
+
+    // 10. ArenaSpecSyncer, ProductNormalizer & Logger Bounds (#906)
+    const { countPopulatedFieldGroups, splitCameraModulesToPhoneArenaFormat } =
+      await import('./arena-spec-syncer.js');
+    const { detectProductCondition, detectProductOrigin, detectCategorySlug } =
+      await import('./product-normalizer.js');
+    const { computeImporterAlgorithmMetadata, redactSensitiveString, sanitizeLogMeta } =
+      await import('./logger.js');
+
+    const circularGroup906: Record<string, unknown> = {};
+    circularGroup906.self = circularGroup906;
+    assert.equal(
+      countPopulatedFieldGroups({ display: circularGroup906 }),
+      0,
+      'countPopulatedFieldGroups must not overflow stack on circular spec group'
+    );
+    assert.deepEqual(
+      splitCameraModulesToPhoneArenaFormat(null as unknown as string),
+      {},
+      'splitCameraModulesToPhoneArenaFormat must guard non-string input'
+    );
+
+    assert.equal(
+      detectProductCondition(null as unknown as string),
+      'new',
+      'detectProductCondition must guard non-string title'
+    );
+    assert.equal(
+      detectProductOrigin(null as unknown as string),
+      'unknown',
+      'detectProductOrigin must guard non-string title'
+    );
+    assert.equal(
+      detectCategorySlug(null as unknown as string),
+      'smartphones',
+      'detectCategorySlug must guard non-string title'
+    );
+    const normalized906 = new ProductNormalizer().normalize({
+      itemId: '906',
+      shopId: '2',
+      url: 'https://shopee.vn/item-i.2.906',
+      title: 'Apple iPhone 16 Pro Max 256GB VN/A',
+      description: 'M\u0085y m\u009fi 100%',
+      priceMin: true as unknown as number,
+      priceMax: 30_000_000,
+      currency: 'VND',
+      stock: 5,
+      historicalSold: 10,
+      ratingStar: 4.9,
+      ratingCount: 10,
+      images: ['https://user:pass@cf.shopee.vn/file/bad.jpg', 'https://cf.shopee.vn/file/good.jpg'],
+      attributes: [],
+      models: [],
+      shop: { shopId: '2', name: 'Shop', isMall: true, ratingStar: 4.9, followerCount: 100 },
+      reviews: [],
+    });
+    assert.ok(
+      !/\p{Cc}/u.test(normalized906.description ?? ''),
+      'ProductNormalizer must strip C1 control characters from description'
+    );
+    assert.deepEqual(
+      normalized906.images,
+      ['https://cf.shopee.vn/file/good.jpg'],
+      'ProductNormalizer must reject image URLs with embedded credentials'
+    );
+    assert.ok(
+      normalized906.specifications.availability?.prices_msrp?.includes(': 0'),
+      'ProductNormalizer must reject boolean priceMin'
+    );
+
+    const circularParams906: Record<string, unknown> = { a: 1 };
+    circularParams906.self = circularParams906;
+    const importerMeta906 = computeImporterAlgorithmMetadata(
+      '  norm_engine\u0000\r\n ',
+      ' 2.0.0\u0007 ',
+      circularParams906
+    );
+    assert.equal(importerMeta906.algo, 'norm_engine');
+    assert.equal(importerMeta906.version, '2.0.0');
+    assert.equal(importerMeta906.paramsHash.length, 12);
+    assert.equal(
+      redactSensitiveString(123 as unknown as string),
+      '',
+      'redactSensitiveString must return empty string for non-string input'
+    );
+    const sanitizedMeta906 = sanitizeLogMeta({
+      publishableKey: 'dummy',
+      publishable_key: 'dummy',
+    }) as Record<string, unknown>;
+    assert.equal(sanitizedMeta906.publishableKey, '[REDACTED]');
+    assert.equal(sanitizedMeta906.publishable_key, '[REDACTED]');
   } finally {
     mockServer.close();
   }
