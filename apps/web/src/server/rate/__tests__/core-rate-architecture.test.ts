@@ -8834,7 +8834,92 @@ async function runCoreArchitectureSuite() {
       'https://shopee.vn/item 123'
     );
     console.log(
-      '  ✅ [98/98] Server Rate Deals Radar & Cached Query Key Bounds (#858) passed'
+      '  ✅ [98/99] Server Rate Deals Radar & Cached Query Key Bounds (#858) passed'
+    );
+  }
+
+  // =========================================================================
+  // 99. Review Vote Eligibility, Community Review Mapper & OpenAPI Origin Bounds (#860)
+  // =========================================================================
+  {
+    const { evaluateVoterEligibility } =
+      await import('../../../app/api/reviews/[id]/vote/route');
+    const { toReviewItem } =
+      await import('../../../app/api/v1/rate/reviews/route');
+    const { normalizeOpenApiServerOrigin } = await import('../openapi');
+
+    assert.equal(evaluateVoterEligibility(null).eligible, false);
+    assert.equal(evaluateVoterEligibility(undefined).eligible, false);
+    assert.equal(
+      evaluateVoterEligibility({
+        created_at: '2026-01-01T00:00:00Z',
+        email_confirmed_at: '   ',
+        phone_confirmed_at: 'not-a-timestamp',
+      }).eligible,
+      false
+    );
+    assert.equal(
+      evaluateVoterEligibility({
+        created_at: '1970-01-01T00:00:00Z',
+        email_confirmed_at: '2026-01-01T00:00:00Z',
+      }).eligible,
+      false
+    );
+    assert.equal(
+      evaluateVoterEligibility({
+        created_at: new Date(Date.now() - 8 * 86_400_000).toISOString(),
+        email_confirmed_at: '2026-01-01T00:00:00Z',
+      }).eligible,
+      true
+    );
+
+    const mappedNullStar = toReviewItem(
+      {
+        id: '  rev-1  ',
+        author_name: '  Nguyen Van A  ',
+        rating_star: null,
+        comment: '  Đánh giá chi tiết sản phẩm  ',
+        variation: '   ',
+        created_at: 'invalid-date',
+        upvotes: '12',
+        downvotes: -3,
+        report_count: '2',
+        helpfulness_weight: null,
+        fake_probability: '',
+        reason: '   ',
+      },
+      { screen: 4.56, battery: 99 }
+    );
+    assert.equal(mappedNullStar.id, 'rev-1');
+    assert.equal(mappedNullStar.author_name, 'Nguyen Van A');
+    assert.equal(
+      mappedNullStar.rating_star,
+      5,
+      'null rating_star must fall back to default 5 instead of coercing to 0'
+    );
+    assert.equal(mappedNullStar.variation, null);
+    assert.ok(Number.isFinite(Date.parse(mappedNullStar.created_at)));
+    assert.equal(mappedNullStar.upvotes, 12);
+    assert.equal(mappedNullStar.downvotes, 0);
+    assert.equal(mappedNullStar.report_count, 2);
+    assert.equal(mappedNullStar.fake_probability, null);
+    assert.equal(mappedNullStar.reason, null);
+    assert.deepEqual(mappedNullStar.criteria_ratings, { screen: 4.6 });
+
+    assert.equal(
+      normalizeOpenApiServerOrigin(123 as unknown as string),
+      'https://rate.vn'
+    );
+    assert.equal(
+      normalizeOpenApiServerOrigin('https://user:pass@rate.vn/api'),
+      'https://rate.vn'
+    );
+    assert.equal(
+      normalizeOpenApiServerOrigin('https://staging.rate.vn/path'),
+      'https://staging.rate.vn'
+    );
+    console.log(
+      '  ✅ [99/99] Review Vote Eligibility, Community Review Mapper & OpenAPI Origin Bounds (#860) passed'
     );
   }
 
