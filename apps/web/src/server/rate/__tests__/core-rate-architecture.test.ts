@@ -8471,6 +8471,92 @@ async function runCoreArchitectureSuite() {
     '  ✅ [94/94] /api/health reports a database the app cannot read (#829) passed'
   );
 
+  // 95. cache-tags revalidation targets, api-handler bounds & cookie token parsing (#842)
+  {
+    const { canonicalizeCacheParams, resolveRevalidationTargets } =
+      await import('../cache-tags');
+    const { BoundedSlidingWindowRateLimiter, parseBoundedStringParam } =
+      await import('../api-handler');
+    const { readBearerToken, readCookieAccessToken } =
+      await import('../request-auth');
+
+    const sharedSub = { a: 1 };
+    const cyclicCacheObj: Record<string, unknown> = {
+      first: sharedSub,
+      second: sharedSub,
+      nanVal: Number.NaN,
+    };
+    cyclicCacheObj.self = cyclicCacheObj;
+    const serialized = canonicalizeCacheParams(cyclicCacheObj);
+    assert.equal(serialized.includes('"[Circular]"'), true);
+    assert.equal(serialized.includes('"nanVal":null'), true);
+
+    const targets = resolveRevalidationTargets({
+      tags: ['  RATE:PRODUCTS  ', 'arbitrary-tag', 'rate:bad space'],
+      slugs: ['iphone-16-pro', '../bad/slug', 'a'.repeat(130)],
+      categories: ['smartphones', 'bad/category'],
+      merchants: ['m-123', 'bad merchant id'],
+      paths: ['/smartphones/iphone-16-pro', '//evil.com'],
+    });
+    assert.equal(targets.tags.includes('rate:products'), true);
+    assert.equal(targets.tags.includes('arbitrary-tag'), false);
+    assert.equal(targets.tags.includes('rate:product:iphone-16-pro'), true);
+    assert.equal(targets.tags.includes('rate:category:smartphones'), true);
+    assert.equal(targets.tags.includes('rate:merchant:m-123'), true);
+    assert.deepEqual(targets.paths, ['/smartphones/iphone-16-pro']);
+
+    assert.equal(
+      parseBoundedStringParam('  hello\u0000\u0007world     ', 11),
+      'hello world',
+      'parseBoundedStringParam must strip control chars and trim after slicing'
+    );
+    assert.equal(
+      parseBoundedStringParam('\u0000\u0007   ', 20),
+      null,
+      'parseBoundedStringParam must return null when only control/whitespace chars remain'
+    );
+
+    const nanLimiter = new BoundedSlidingWindowRateLimiter({
+      windowMs: Number.NaN,
+      maxRequests: Number.NaN,
+      maxBuckets: Number.NaN,
+    });
+    assert.equal(nanLimiter.allow('ip-842', 1000), true);
+
+    assert.equal(
+      readBearerToken(
+        new Request('https://rate.vn/api', {
+          headers: { Authorization: 'Bearer tok\u0007en' },
+        })
+      ),
+      '',
+      'readBearerToken must reject tokens containing control characters'
+    );
+    assert.equal(
+      await readCookieAccessToken([
+        {
+          name: 'sb-ref-auth-token',
+          value: JSON.stringify({ access_token: 'bad\u0000token' }),
+        },
+      ]),
+      null,
+      'readCookieAccessToken must reject tokens containing control characters'
+    );
+    assert.equal(
+      await readCookieAccessToken([
+        {
+          name: 'sb-ref-auth-token',
+          value: JSON.stringify({ access_token: 't'.repeat(5000) }),
+        },
+      ]),
+      null,
+      'readCookieAccessToken must reject oversized access tokens > 4096 chars'
+    );
+  }
+  console.log(
+    '  ✅ [95/95] cache-tags revalidation targets, api-handler bounds & cookie token parsing (#842) passed'
+  );
+
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
 

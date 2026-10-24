@@ -91,9 +91,15 @@ export function parseBoundedStringParam(
   maxLength: number
 ): string | null {
   if (raw == null) return null;
-  const trimmed = raw.trim();
-  if (!trimmed) return null;
-  return trimmed.length > maxLength ? trimmed.slice(0, maxLength) : trimmed;
+  const safeMaxLength =
+    Number.isFinite(maxLength) && maxLength >= 1 ? Math.floor(maxLength) : 256;
+  const cleaned = raw.replace(/\p{Cc}+/gu, ' ').trim();
+  if (!cleaned) return null;
+  const sliced =
+    cleaned.length > safeMaxLength
+      ? cleaned.slice(0, safeMaxLength).trim()
+      : cleaned;
+  return sliced || null;
 }
 
 /**
@@ -245,9 +251,19 @@ export class BoundedSlidingWindowRateLimiter {
   private readonly maxBuckets: number;
 
   constructor(options: SlidingWindowRateLimiterOptions) {
-    this.windowMs = Math.max(1_000, options.windowMs);
-    this.maxRequests = Math.max(1, options.maxRequests);
-    this.maxBuckets = Math.max(1, options.maxBuckets ?? 2_000);
+    this.windowMs =
+      Number.isFinite(options.windowMs) && options.windowMs >= 1_000
+        ? Math.min(86_400_000, Math.floor(options.windowMs))
+        : 60_000;
+    this.maxRequests =
+      Number.isFinite(options.maxRequests) && options.maxRequests >= 1
+        ? Math.min(100_000, Math.floor(options.maxRequests))
+        : 30;
+    const rawMaxBuckets = options.maxBuckets ?? 2_000;
+    this.maxBuckets =
+      Number.isFinite(rawMaxBuckets) && rawMaxBuckets >= 1
+        ? Math.min(50_000, Math.floor(rawMaxBuckets))
+        : 2_000;
   }
 
   public get size(): number {
