@@ -16,7 +16,7 @@ import {
   type KeySpecs,
 } from '@repo/shared-data';
 import type { NormalizedProductCandidate } from './product-normalizer.js';
-import { computeRetryDelayMs, createImporterLogger } from './logger.js';
+import { computeRetryDelayMs, createImporterLogger, sanitizeAiGeneratedText } from './logger.js';
 
 export type SupportedAiProvider =
   'openai' | 'dos-ai' | 'gemini' | 'deepseek' | 'groq' | 'openrouter' | 'ollama';
@@ -41,10 +41,10 @@ export interface AiEnrichmentResponse {
 }
 
 export const AiSpecEnrichmentPayloadSchema = z.object({
-  ram_gb: z.number().positive().nullable().optional(),
-  storage_gb: z.number().positive().nullable().optional(),
-  screen_size_inch: z.number().positive().nullable().optional(),
-  battery_mah: z.number().positive().nullable().optional(),
+  ram_gb: z.number().int().positive().max(2048).nullable().optional(),
+  storage_gb: z.number().int().positive().max(65536).nullable().optional(),
+  screen_size_inch: z.number().positive().max(120).nullable().optional(),
+  battery_mah: z.number().int().positive().max(500000).nullable().optional(),
   has_5g: z.boolean().optional(),
   specifications: ProductSpecificationsSchema,
   key_specs: KeySpecsSchema.optional(),
@@ -119,6 +119,19 @@ function toBoundedNumberOrUndefined(
   const minOk = allowZero ? num >= 0 : num > 0;
   if (!minOk || num > max) return undefined;
   return num;
+}
+
+function toBoundedIntOrUndefined(val: unknown, max: number, allowZero = false): number | undefined {
+  const num = toBoundedNumberOrUndefined(val, max, allowZero);
+  if (num === undefined || !Number.isInteger(num)) return undefined;
+  return num;
+}
+
+function sanitizeKeySpecText(val: unknown): string | undefined {
+  const str = toStringOrUndefined(val);
+  if (!str) return undefined;
+  const cleaned = sanitizeAiGeneratedText(str).trim().slice(0, 160);
+  return cleaned.length > 0 ? cleaned : undefined;
 }
 
 function toBooleanOrUndefined(val: unknown): boolean | undefined {
@@ -202,8 +215,8 @@ export function sanitizeSpecifications(raw: unknown): ProductSpecifications {
         size_inch: toBoundedNumberOrUndefined(rawDisplay.size_inch, 120),
         type: toStringOrUndefined(rawDisplay.type),
         resolution: toStringOrUndefined(rawDisplay.resolution),
-        refresh_rate_hz: toBoundedNumberOrUndefined(rawDisplay.refresh_rate_hz, 1000),
-        ppi: toBoundedNumberOrUndefined(rawDisplay.ppi, 5000),
+        refresh_rate_hz: toBoundedIntOrUndefined(rawDisplay.refresh_rate_hz, 1000),
+        ppi: toBoundedIntOrUndefined(rawDisplay.ppi, 5000),
         protection: toStringOrUndefined(rawDisplay.protection),
         features: toStringOrUndefined(rawDisplay.features),
       })
@@ -215,8 +228,8 @@ export function sanitizeSpecifications(raw: unknown): ProductSpecifications {
         chipset: toStringOrUndefined(rawHardware.chipset),
         cpu: toStringOrUndefined(rawHardware.cpu),
         gpu: toStringOrUndefined(rawHardware.gpu),
-        ram_gb: toBoundedNumberOrUndefined(rawHardware.ram_gb, 2048),
-        storage_gb: toBoundedNumberOrUndefined(rawHardware.storage_gb, 65536),
+        ram_gb: toBoundedIntOrUndefined(rawHardware.ram_gb, 2048),
+        storage_gb: toBoundedIntOrUndefined(rawHardware.storage_gb, 65536),
         storage_expansion: toStringOrUndefined(rawHardware.storage_expansion),
         os: toStringOrUndefined(rawHardware.os),
       })
@@ -225,7 +238,7 @@ export function sanitizeSpecifications(raw: unknown): ProductSpecifications {
   const rawBattery = asRecord(root.battery);
   const batteryParsed = rawBattery
     ? BatterySchema.safeParse({
-        capacity_mah: toBoundedNumberOrUndefined(rawBattery.capacity_mah, 500000),
+        capacity_mah: toBoundedIntOrUndefined(rawBattery.capacity_mah, 500000),
         type: toStringOrUndefined(rawBattery.type),
         charging: toStringOrUndefined(rawBattery.charging),
         fast_charging_w: toBoundedNumberOrUndefined(rawBattery.fast_charging_w, 1000, true),
@@ -420,6 +433,21 @@ export function trimTrailingSlashes(rawUrl: string): string {
   return end === rawUrl.length ? rawUrl : rawUrl.slice(0, end);
 }
 
+function resolveValidHttpBaseUrl(candidateUrl: string, fallbackUrl: string): string {
+  const cleaned = trimTrailingSlashes((candidateUrl || '').trim());
+  if (cleaned) {
+    try {
+      const parsed = new URL(cleaned);
+      if ((parsed.protocol === 'http:' || parsed.protocol === 'https:') && parsed.hostname) {
+        return cleaned;
+      }
+    } catch {
+      // fall through to fallbackUrl
+    }
+  }
+  return trimTrailingSlashes(fallbackUrl);
+}
+
 export class AiSpecEnricher {
   private provider: SupportedAiProvider;
   private apiKey: string;
@@ -434,19 +462,25 @@ export class AiSpecEnricher {
     const defaults = PROVIDER_DEFAULTS[this.provider];
 
     this.apiKey = config.apiKey ?? this.resolveApiKey(this.provider);
-    this.baseUrl = trimTrailingSlashes(
+    this.baseUrl = resolveValidHttpBaseUrl(
       config.baseUrl ||
         process.env.AI_BASE_URL ||
         process.env.DOS_AI_BASE_URL ||
         process.env.OPENAI_BASE_URL ||
-        defaults.baseUrl
+        defaults.baseUrl,
+      defaults.baseUrl
     );
 
     this.model =
       config.model || process.env.AI_MODEL || process.env.OPENAI_MODEL || defaults.defaultModel;
 
-    this.timeoutMs = config.timeoutMs ?? Number(process.env.AI_TIMEOUT_MS || 25000);
-    this.temperature = config.temperature ?? 0.1;
+    const rawTimeout = config.timeoutMs ?? Number(process.env.AI_TIMEOUT_MS || 25000);
+    this.timeoutMs =
+      Number.isFinite(rawTimeout) && rawTimeout >= 1000 && rawTimeout <= 120000
+        ? Math.round(rawTimeout)
+        : 25000;
+    const rawTemp = config.temperature ?? 0.1;
+    this.temperature = Number.isFinite(rawTemp) && rawTemp >= 0 && rawTemp <= 2 ? rawTemp : 0.1;
   }
 
   private resolveProvider(explicit?: SupportedAiProvider): SupportedAiProvider {
@@ -675,8 +709,8 @@ REQUIRED JSON SCHEMA:
       return null;
     }
 
-    const safeParamStorageGb = toBoundedNumberOrUndefined(params.storageGb, 65536) ?? null;
-    const safeParamRamGb = toBoundedNumberOrUndefined(params.ramGb, 2048) ?? null;
+    const safeParamStorageGb = toBoundedIntOrUndefined(params.storageGb, 65536) ?? null;
+    const safeParamRamGb = toBoundedIntOrUndefined(params.ramGb, 2048) ?? null;
     const catKey = (params.categorySlug || 'smartphones').trim().toLowerCase() || 'smartphones';
     const cacheKey = `${catKey}:${params.brand.toLowerCase()}:${params.model.toLowerCase()}:${safeParamStorageGb || 'default'}:${safeParamRamGb || 'default'}`;
     const cached = this.memoryCache.get(cacheKey);
@@ -780,13 +814,13 @@ REQUIRED JSON SCHEMA:
 
       const ramGb =
         safeParamRamGb ??
-        toBoundedNumberOrUndefined(parsedJson.ram_gb, 2048) ??
+        toBoundedIntOrUndefined(parsedJson.ram_gb, 2048) ??
         specifications.hardware?.ram_gb ??
         null;
 
       const storageGb =
         safeParamStorageGb ??
-        toBoundedNumberOrUndefined(parsedJson.storage_gb, 65536) ??
+        toBoundedIntOrUndefined(parsedJson.storage_gb, 65536) ??
         specifications.hardware?.storage_gb ??
         null;
 
@@ -796,7 +830,7 @@ REQUIRED JSON SCHEMA:
         null;
 
       const batteryMah =
-        toBoundedNumberOrUndefined(parsedJson.battery_mah, 500000) ??
+        toBoundedIntOrUndefined(parsedJson.battery_mah, 500000) ??
         specifications.battery?.capacity_mah ??
         null;
 
@@ -810,28 +844,28 @@ REQUIRED JSON SCHEMA:
       const rawKeySpecs = parsedJson.key_specs || {};
       const keySpecsCandidate: KeySpecs = {
         screen:
-          toStringOrUndefined(rawKeySpecs.screen) ||
+          sanitizeKeySpecText(rawKeySpecs.screen) ||
           (screenSizeInch
             ? `${screenSizeInch}" ${specifications.display?.type?.split(',')[0] || 'OLED'}`
             : undefined),
         chip:
-          toStringOrUndefined(rawKeySpecs.chip) ||
+          sanitizeKeySpecText(rawKeySpecs.chip) ||
           specifications.hardware?.chipset?.split('(')[0]?.trim(),
         camera:
-          toStringOrUndefined(rawKeySpecs.camera) ||
+          sanitizeKeySpecText(rawKeySpecs.camera) ||
           specifications.camera?.main_camera?.split(',')[0]?.trim(),
         battery:
-          toStringOrUndefined(rawKeySpecs.battery) ||
+          sanitizeKeySpecText(rawKeySpecs.battery) ||
           (batteryMah
             ? `${batteryMah} mAh${specifications.battery?.fast_charging_w ? ` (${specifications.battery.fast_charging_w}W)` : ''}`
             : undefined),
         storage:
           storageGb !== null
-            ? storageGb >= 1024
+            ? storageGb >= 1024 && storageGb % 512 === 0
               ? `${storageGb / 1024}TB`
               : `${storageGb}GB`
-            : toStringOrUndefined(rawKeySpecs.storage),
-        ram: ramGb !== null ? `${ramGb}GB` : toStringOrUndefined(rawKeySpecs.ram),
+            : sanitizeKeySpecText(rawKeySpecs.storage),
+        ram: ramGb !== null ? `${ramGb}GB` : sanitizeKeySpecText(rawKeySpecs.ram),
       };
 
       const keySpecsParsed = KeySpecsSchema.safeParse(keySpecsCandidate);
@@ -886,11 +920,17 @@ REQUIRED JSON SCHEMA:
       };
     }
 
+    const validCandidateRam = toBoundedIntOrUndefined(candidate.ram_gb, 2048) ?? null;
+    const validCandidateStorage = toBoundedIntOrUndefined(candidate.storage_gb, 65536) ?? null;
+    const validCandidateScreen =
+      toBoundedNumberOrUndefined(candidate.screen_size_inch, 120) ?? null;
+    const validCandidateBattery = toBoundedIntOrUndefined(candidate.battery_mah, 500000) ?? null;
+
     const aiResult = await this.fetchSpecsFromAi({
       brand: candidate.brand,
       model: candidate.model,
-      storageGb: candidate.storage_gb,
-      ramGb: candidate.ram_gb,
+      storageGb: validCandidateStorage,
+      ramGb: validCandidateRam,
       rawTitle,
       rawDescription: candidate.description,
       categorySlug: candidate.category_slug,
@@ -916,9 +956,12 @@ REQUIRED JSON SCHEMA:
 
     return {
       ...candidate,
-      ram_gb: candidate.ram_gb ?? aiResult.ram_gb ?? null,
-      screen_size_inch: aiResult.screen_size_inch ?? candidate.screen_size_inch,
-      battery_mah: aiResult.battery_mah ?? candidate.battery_mah,
+      ram_gb: validCandidateRam ?? toBoundedIntOrUndefined(aiResult.ram_gb, 2048) ?? null,
+      storage_gb:
+        validCandidateStorage ?? toBoundedIntOrUndefined(aiResult.storage_gb, 65536) ?? null,
+      screen_size_inch:
+        toBoundedNumberOrUndefined(aiResult.screen_size_inch, 120) ?? validCandidateScreen,
+      battery_mah: toBoundedIntOrUndefined(aiResult.battery_mah, 500000) ?? validCandidateBattery,
       has_5g: aiResult.has_5g ?? candidate.has_5g,
       specifications: mergedSpecifications,
       key_specs: {
