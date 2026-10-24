@@ -237,6 +237,11 @@ async function runSuite() {
   assert.equal(ultra2.model, 'Watch Ultra 2');
   assert.ok(!/\s{2}/.test(ultra2.name), ultra2.name);
   assert.equal(keyOf('Apple Watch Series'), 'apple:watch:unknown');
+  // A case size or storage after "SE" is not its generation: one SE, not "SE 40".
+  assert.equal(keyOf('Apple Watch SE 40mm'), 'apple:watch-se:unknown');
+  assert.equal(keyOf('Apple Watch SE 44mm GPS'), 'apple:watch-se:unknown');
+  assert.equal(keyOf('Apple Watch SE 32GB'), 'apple:watch-se:32gb');
+  assert.equal(keyOf('Apple Watch SE2 40mm'), 'apple:watch-se2:unknown');
   // With no line matched, the family the title names first, else iPhone.
   assert.equal(keyOf('MacBook M4'), 'apple:macbook:unknown');
   assert.equal(keyOf('Apple "iPad" 256GB'), 'apple:ipad:256gb');
