@@ -1127,7 +1127,7 @@ export class ProductNormalizer {
       // The base iPad by its chip, "iPad A16" or "iPad (A16)", and "iPad Gen 10" like
       // "iPad 10" (DOS/Rate#817).
       const ipadMatch = appleTitle.match(
-        /ipad\s*(?:\(\s*)?(pro\s*m\d+|air\s*m\d+|pro|air|mini(?:\s*\d{1,2}(?![\d.,]|\s*(?:gb|tb|inch\b|in\b|"|'')))?|gen\s*\d+|a\d{2}\b|\d+)/i
+        /ipad\s*(?:\(\s*)?(pro\s*m\d+|air\s*m\d+|pro|air|mini(?:\s*\d{1,2}(?!\d|[.,]\d|\s*(?:gb|tb|inch\b|in\b|"|'')))?|gen\s*\d+|a\d{2}\b|\d+)/i
       );
       const macbookMatch = appleTitle.match(
         /macbook\s*(pro\s*m\d+(?:\s*(?:pro|max))?|air\s*m\d+|air|pro|neo\b)/i
@@ -1181,7 +1181,7 @@ export class ProductNormalizer {
               .replace(/^gen\s*/i, '')
               .replace(/^a(\d{2})$/i, 'A$1');
         // "iPad mini 6" and "iPad mini 7" are two models, not one "iPad mini"; Apple calls the
-        // 7th "iPad mini (A17 Pro)", and "8.3 inch" is the screen (DOS/Rate#819).
+        // 7th "iPad mini (A17 Pro)", and "8.3 inch" or "8,3 inch" is the screen (DOS/Rate#819).
         const mini = line.match(/^mini\s*(\d{1,2})?$/i);
         if (mini)
           line = `mini${mini[1] ? ` ${mini[1]}` : /\ba17\s*pro\b/i.test(appleTitle) ? ' 7' : ''}`;

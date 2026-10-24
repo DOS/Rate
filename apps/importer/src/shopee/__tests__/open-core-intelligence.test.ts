@@ -213,6 +213,8 @@ async function runSuite() {
   assert.equal(keyOf('Apple iPad mini 6 Wi-Fi 64GB'), 'apple:ipad-mini-6:64gb');
   assert.equal(keyOf('Apple iPad mini 7 64GB'), 'apple:ipad-mini-7:64gb');
   assert.equal(keyOf('Apple iPad mini 8.3 inch (A17 Pro) Wi-Fi 128GB'), 'apple:ipad-mini-7:128gb');
+  assert.equal(keyOf('Apple iPad mini 6, Wi-Fi 64GB'), 'apple:ipad-mini-6:64gb');
+  assert.equal(keyOf('Apple iPad mini 8,3 inch Wi-Fi 64GB'), 'apple:ipad-mini:64gb');
   assert.equal(keyOf('iPad mini 7 (A17 Pro) Wifi 128GB'), 'apple:ipad-mini-7:128gb');
   assert.equal(keyOf('iPad mini (6th generation) 64GB'), 'apple:ipad-mini-6:64gb');
   assert.equal(keyOf('iPad mini 64GB'), 'apple:ipad-mini:64gb');
