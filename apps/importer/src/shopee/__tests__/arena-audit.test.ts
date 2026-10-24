@@ -8,6 +8,9 @@ import assert from 'node:assert/strict';
 import {
   ArenaSpecSyncer,
   UPSTREAM_2026_ARENA_REFERENCE_URLS,
+  parseGsmArenaHtmlToSpecs,
+  parseGsmArenaBrandCatalogHtml,
+  parsePhoneArenaCatalogHtml,
   type ArenaAuditMasterRow,
 } from '../arena-spec-syncer.js';
 
@@ -117,6 +120,54 @@ async function run() {
   assert.equal(empty.presentInDatabase, 0);
   assert.equal(empty.missingFromDatabase.length, UPSTREAM_2026_ARENA_REFERENCE_URLS.length);
   assert.deepEqual(empty.incompleteSpecMasters, []);
+
+  // parseGsmArenaHtmlToSpecs enforces integer RAM/storage bounds, clean TB formatting, and meta URL checks (#831)
+  const parsedSpec = parseGsmArenaHtmlToSpecs(
+    `<h1 data-spec="modelname">Samsung Galaxy S26 Ultra</h1>
+     <td data-spec="internalmemory">0.5GB 0.5GB RAM, 1200GB 12.5GB RAM, 1200GB 16GB RAM</td>`,
+    {
+      gsmarenaUrl: 'https://www.gsmarena.com/samsung_galaxy_s26_ultra-14015.php',
+      phonearenaUrl: 'https://evil.example/phones/Samsung',
+    }
+  );
+  assert.equal(parsedSpec.ramGb, 16);
+  assert.equal(parsedSpec.storageGb, 1200);
+  assert.equal(parsedSpec.keySpecs.storage, '1200GB');
+  assert.equal(
+    parsedSpec.gsmarenaUrl,
+    'https://www.gsmarena.com/samsung_galaxy_s26_ultra-14015.php'
+  );
+  assert.equal(parsedSpec.phonearenaUrl, undefined);
+  assert.equal(parsedSpec.source, 'gsmarena');
+
+  const parsedTbSpec = parseGsmArenaHtmlToSpecs(
+    `<h1 data-spec="modelname">Apple iPad Pro M5</h1>
+     <td data-spec="internalmemory">1.5TB 16GB RAM</td>`
+  );
+  assert.equal(parsedTbSpec.storageGb, 1536);
+  assert.equal(parsedTbSpec.keySpecs.storage, '1.5TB');
+
+  // parseGsmArenaBrandCatalogHtml normalizes *.gsmarena.com image URLs and drops non-gsmarena image sources (#831)
+  const gsmCatalog = parseGsmArenaBrandCatalogHtml(
+    `<ul>
+       <li><a href="xiaomi_18_pro-14288.php"><img src="//fdn2.gsmarena.com/vv/bigpic/xiaomi-18.jpg"><span>18 Pro</span></a></li>
+       <li><a href="xiaomi_18-14287.php"><img src="https://evil.example/tracker.png"><span>18</span></a></li>
+     </ul>`,
+    'Xiaomi'
+  );
+  assert.equal(gsmCatalog.length, 2);
+  assert.equal(gsmCatalog[0]?.imageUrl, 'https://fdn2.gsmarena.com/vv/bigpic/xiaomi-18.jpg');
+  assert.equal(gsmCatalog[1]?.imageUrl, undefined);
+
+  // parsePhoneArenaCatalogHtml canonicalizes URLs and rejects path traversal outside /phones/ (#831)
+  const paCatalog = parsePhoneArenaCatalogHtml(
+    `<div>
+       <a href="/phones/Apple-iPhone-18-Pro_id12539">Apple iPhone 18 Pro</a>
+       <a href="/phones/../../news/leak">Leaked News</a>
+     </div>`
+  );
+  assert.equal(paCatalog.length, 1);
+  assert.equal(paCatalog[0]?.url, 'https://www.phonearena.com/phones/Apple-iPhone-18-Pro_id12539');
 
   console.log('✅ ArenaSpecSyncer catalog audit suite passed');
 }
