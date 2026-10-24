@@ -28,21 +28,19 @@ async function probeDatabase(): Promise<CheckStatus> {
       .limit(1)
       .abortSignal(controller.signal);
     if (error) {
+      // postgrest-js retries a network error until the abort, so keep the
+      // cause next to the timeout flag.
       log.error('database check failed', {
-        message: controller.signal.aborted
-          ? `timed out after ${DATABASE_CHECK_TIMEOUT_MS} ms`
-          : error.message,
+        message: error.message,
+        timedOut: controller.signal.aborted,
       });
       return 'error';
     }
     return 'ok';
   } catch (err) {
     log.error('database check failed', {
-      message: controller.signal.aborted
-        ? `timed out after ${DATABASE_CHECK_TIMEOUT_MS} ms`
-        : err instanceof Error
-          ? err.message
-          : String(err),
+      message: err instanceof Error ? err.message : String(err),
+      timedOut: controller.signal.aborted,
     });
     return 'error';
   } finally {
@@ -56,11 +54,15 @@ async function probeDatabase(): Promise<CheckStatus> {
  */
 export async function checkDatabase(now = Date.now()): Promise<CheckStatus> {
   if (cached && now - cached.at < DATABASE_CHECK_TTL_MS) return cached.status;
-  inFlight ??= probeDatabase().then((status) => {
-    cached = { status, at: Date.now() };
-    inFlight = null;
-    return status;
-  });
+  inFlight ??= probeDatabase()
+    .catch((): CheckStatus => 'error')
+    .then((status) => {
+      cached = { status, at: Date.now() };
+      return status;
+    })
+    .finally(() => {
+      inFlight = null;
+    });
   return inFlight;
 }
 

@@ -100,6 +100,11 @@ export function getRateClient(): RateSchemaClient {
   return _client;
 }
 
+/** Tests only: drop the cached client so the next call reads the env again. */
+export function resetRateClientForTests(): void {
+  _client = null;
+}
+
 /**
  * PostgREST caps every response at the project's max-rows (1000 by default) and
  * silently drops the rest, so unbounded table reads must be paged. Pages advance by

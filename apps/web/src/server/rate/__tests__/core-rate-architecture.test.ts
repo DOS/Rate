@@ -2321,6 +2321,8 @@ async function runCoreArchitectureSuite() {
 
   // /api/health reads the database (#829): stub PostgREST and the public env.
   const healthMod = require('../../health') as typeof import('../../health');
+  const rateApiMod829 =
+    require('../../../lib/rate-api') as typeof import('../../../lib/rate-api');
   const withHealthDatabase = async <T>(
     respond: (url: string, init?: RequestInit) => Promise<Response>,
     run: () => Promise<T>
@@ -2333,6 +2335,9 @@ async function runCoreArchitectureSuite() {
     process.env[urlEnv] = prevUrl || 'https://stub.supabase.test';
     process.env[anonEnv] = prevAnon || 'stub-public-token';
     healthMod.resetHealthCacheForTests();
+    // The client is cached; it must not outlive the stub env and point later
+    // guards at the stub host.
+    rateApiMod829.resetRateClientForTests();
     globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) =>
       respond(
         typeof input === 'string'
@@ -2351,6 +2356,7 @@ async function runCoreArchitectureSuite() {
       if (prevAnon === undefined) delete process.env[anonEnv];
       else process.env[anonEnv] = prevAnon;
       healthMod.resetHealthCacheForTests();
+      rateApiMod829.resetRateClientForTests();
     }
   };
   const healthyDatabase = async () =>
@@ -8428,7 +8434,8 @@ async function runCoreArchitectureSuite() {
       }
     );
 
-    // A network failure is an error, not a crash.
+    // A network failure is an error, not a crash. postgrest-js retries it
+    // until the timeout aborts the probe, so this also takes about 3 s.
     await withHealthDatabase(
       async () => {
         throw new TypeError('fetch failed');
