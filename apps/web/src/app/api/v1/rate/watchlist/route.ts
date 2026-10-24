@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { plausibleMinPrice, plausibleOffers } from '@/lib/offer-plausibility';
 import { z } from 'zod';
-import {
-  MAX_VALID_VND_PRICE,
-  normalizeOfferOriginalPrice,
-} from '@/lib/rate-api';
+import { MAX_VALID_VND_PRICE } from '@/lib/rate-api';
 import {
   computeProductRadarSignal,
   getCachedMasterProductBySlug,
@@ -17,6 +13,8 @@ import {
   jsonApiError,
   parseWatchlistSlugsParam,
   resolveWatchlistMasterPriceBounds,
+  selectBestOfferFromListings,
+  withPlausibleMinPrice,
 } from '@/server/rate/api-handler';
 import {
   authenticateRateRequest,
@@ -63,83 +61,6 @@ const RPC_REJECTIONS: Record<string, RpcRejection> = {
     error: 'Bạn đã có quá 100 cảnh báo giá đang hoạt động.',
   },
 };
-
-export interface WatchlistBestOffer {
-  id: string;
-  title: string;
-  price: number;
-  original_price: number;
-  url: string;
-  platform: string;
-  merchant_name: string;
-  is_official_mall: boolean;
-}
-
-// The stored min_price can be a bait-price listing; target checks use the
-// lowest plausible offer instead (DOS/Rate#797).
-function withPlausibleMinPrice<T extends { min_price?: unknown }>(
-  master: T,
-  offers: readonly { price_current: number }[]
-): T {
-  return {
-    ...master,
-    min_price: plausibleMinPrice(Number(master.min_price || 0), offers),
-  };
-}
-
-function selectBestOfferFromListings(
-  offers: Awaited<ReturnType<typeof getCachedMasterProductOffers>>
-): { bestOffer: WatchlistBestOffer | null; offerPlatforms: string[] } {
-  // A bait-price listing is never the best offer (DOS/Rate#797).
-  const valid = plausibleOffers(offers).filter((o) => {
-    const price = Number(o.price_current);
-    return (
-      Number(o.stock ?? 1) > 0 &&
-      Number.isFinite(price) &&
-      price > 0 &&
-      price <= MAX_VALID_VND_PRICE
-    );
-  });
-  const platforms = Array.from(
-    new Set(
-      valid
-        .map((o) =>
-          String(o.merchant?.platform || o.platform || 'shopee').toLowerCase()
-        )
-        .filter(Boolean)
-    )
-  );
-  if (valid.length === 0) {
-    return { bestOffer: null, offerPlatforms: platforms };
-  }
-
-  const sorted = [...valid].sort((a, b) => {
-    const diff = Number(a.price_current) - Number(b.price_current);
-    if (diff !== 0) return diff;
-    const mallA = a.merchant?.is_official ? 1 : 0;
-    const mallB = b.merchant?.is_official ? 1 : 0;
-    return mallB - mallA;
-  });
-
-  const best = sorted[0]!;
-  const bestPrice = Number(best.price_current);
-  const validOrig = normalizeOfferOriginalPrice(bestPrice, best.price_original);
-  return {
-    bestOffer: {
-      id: best.id,
-      title: best.title,
-      price: bestPrice,
-      original_price: validOrig ?? bestPrice,
-      url: best.url,
-      platform: String(
-        best.merchant?.platform || best.platform || 'shopee'
-      ).toLowerCase(),
-      merchant_name: String(best.merchant?.name || 'Official Store'),
-      is_official_mall: Boolean(best.merchant?.is_official),
-    },
-    offerPlatforms: platforms,
-  };
-}
 
 /**
  * GET /api/v1/rate/watchlist?slugs=apple-iphone-16-128gb,apple-iphone-16-pro-max-256gb
@@ -343,12 +264,14 @@ export async function POST(request: NextRequest) {
     }
 
     if (!rpcError && rpcData) {
+      const safeRpcData =
+        typeof rpcData === 'object' && !Array.isArray(rpcData) ? rpcData : {};
       return NextResponse.json(
         {
           ok: true,
           persistedInCloud: true,
           data: {
-            ...(typeof rpcData === 'object' ? rpcData : {}),
+            ...safeRpcData,
             best_offer: bestOffer,
             offer_platforms: offerPlatforms,
             deal_radar: radarExportFields(radarSignal),
