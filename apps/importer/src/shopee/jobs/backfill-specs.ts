@@ -99,6 +99,10 @@ export async function auditMasterSpecs(supabase: RateSupabaseClient): Promise<nu
 }
 
 export const MAX_KEY_SPEC_STRING_LENGTH = 500;
+export const MAX_KEY_SPEC_KEY_LENGTH = 100;
+export const MAX_KEY_SPEC_OBJECT_KEYS = 100;
+
+const UNSAFE_KEY_SPEC_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 
 function stripKeySpecControlChars(input: string): string {
   let out = '';
@@ -111,6 +115,14 @@ function stripKeySpecControlChars(input: string): string {
     }
   }
   return out;
+}
+
+function sanitizeKeySpecKey(key: string): string | null {
+  const cleaned = stripKeySpecControlChars(key).replace(/\s+/g, ' ').trim();
+  if (!cleaned || cleaned.length > MAX_KEY_SPEC_KEY_LENGTH || UNSAFE_KEY_SPEC_KEYS.has(cleaned)) {
+    return null;
+  }
+  return cleaned;
 }
 
 function sanitizeKeySpecValue(value: unknown, depth = 0): unknown {
@@ -135,10 +147,15 @@ function sanitizeKeySpecValue(value: unknown, depth = 0): unknown {
   }
   if (typeof value === 'object') {
     const objOut: Record<string, unknown> = {};
+    let count = 0;
     for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      const safeKey = sanitizeKeySpecKey(k);
+      if (!safeKey) continue;
+      if (count >= MAX_KEY_SPEC_OBJECT_KEYS && !Object.hasOwn(objOut, safeKey)) continue;
       const sanitized = sanitizeKeySpecValue(v, depth + 1);
       if (sanitized !== undefined) {
-        objOut[k] = sanitized;
+        if (!Object.hasOwn(objOut, safeKey)) count += 1;
+        objOut[safeKey] = sanitized;
       }
     }
     return objOut;
@@ -156,11 +173,16 @@ export function mergeKeySpecs(
       : {};
   const next = incoming && typeof incoming === 'object' && !Array.isArray(incoming) ? incoming : {};
   const out: Record<string, unknown> = {};
+  let count = 0;
   for (const source of [base, next]) {
     for (const [k, v] of Object.entries(source)) {
+      const safeKey = sanitizeKeySpecKey(k);
+      if (!safeKey) continue;
+      if (count >= MAX_KEY_SPEC_OBJECT_KEYS && !Object.hasOwn(out, safeKey)) continue;
       const sanitized = sanitizeKeySpecValue(v, 0);
       if (sanitized !== undefined) {
-        out[k] = sanitized;
+        if (!Object.hasOwn(out, safeKey)) count += 1;
+        out[safeKey] = sanitized;
       }
     }
   }
@@ -226,7 +248,7 @@ export async function runMasterSpecsBackfill(
       battery_mah: device.battery_mah,
       has_5g: device.has_5g,
       specifications: device.specifications,
-      key_specs: device.key_specs,
+      key_specs: mergeKeySpecs(undefined, device.key_specs as unknown as Record<string, unknown>),
       colors: device.colors,
       ...(device.images.length > 0 ? { images: device.images, thumbnail: device.images[0] } : {}),
       updated_at: new Date().toISOString(),
