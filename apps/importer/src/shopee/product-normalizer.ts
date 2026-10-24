@@ -147,7 +147,7 @@ export function detectCategorySlug(title: string): CanonicalCategorySlug {
     return 'laptops';
   }
   if (
-    /\bipad\b|galaxy\s*tab|xiaomi\s*pad|redmi\s*pad|matepad|lenovo\s*tab|surface\s*pro|máy\s*tính\s*bảng|\btablet\b/i.test(
+    /\bipad\b|galaxy\s*tab|xiaomi\s*pad|redmi\s*pad|\bmi\s*pad\b|matepad|lenovo\s*tab|surface\s*pro|máy\s*tính\s*bảng|\btablet\b/i.test(
       t
     )
   ) {
@@ -1083,9 +1083,10 @@ export class ProductNormalizer {
 
     // 1. Extract Brand
     let brand = 'Khác';
-    if (/apple|iphone|ipad|macbook|airpods/i.test(title)) brand = 'Apple';
+    // Not the "ipad" in Xiaomi's "Mipad" (DOS/Rate#826).
+    if (/apple|iphone|(?<![a-z])ipad|macbook|airpods/i.test(title)) brand = 'Apple';
     else if (/samsung|galaxy/i.test(title)) brand = 'Samsung';
-    else if (/xiaomi|redmi|poco/i.test(title)) brand = 'Xiaomi';
+    else if (/xiaomi|redmi|poco|\bmi\s*pad\b/i.test(title)) brand = 'Xiaomi';
     else if (/\bsony\b|w[fh]-1000|w[fh]1000xm|xperia/i.test(title)) brand = 'Sony';
     else if (
       /\bgarmin\b|forerunner|fenix|venu|vivo(?:active|smart|move|fit|sport|life)/i.test(title)
