@@ -634,6 +634,41 @@ async function run() {
   assert.deepEqual(parsePhoneArenaCatalogHtml(null as unknown as string), []);
   assert.equal(MAX_ARENA_CATALOG_ITEMS, 500);
 
+  // DOS/Rate#910: loadAndScore trims master_products.id & skips nullish master rows, and runReviewRiskBackfill tolerates nullish options
+  const tablesWithUntrimmedMaster: Record<string, unknown[]> = {
+    merchants: [
+      {
+        id: 'm-cheap',
+        platform: 'lazada',
+        is_official: false,
+        follower_count: 0,
+        review_risk_score: 20,
+      },
+    ],
+    products: [
+      { id: 'p-cheap', merchant_id: 'm-cheap', cluster_id: 'c1', price_current: 9_000_000 },
+    ],
+    reviews: [
+      review('c1', 'p-cheap', {
+        verdict: 'authentic',
+        flag_category: 'authentic',
+        include_in_rating: true,
+      }),
+    ],
+    master_products: [null, { id: '  c1\u0000  ', min_price: 29_000_000 }],
+  };
+  const untrimmedMasterClient = {
+    from: (name: string) => table(tablesWithUntrimmedMaster[name] ?? []),
+  } as never;
+  const nullOptsRes = await runReviewRiskBackfill(untrimmedMasterClient, undefined as never);
+  assert.equal(nullOptsRes.apply, false);
+  assert.equal(nullOptsRes.scored, 1);
+  assert.equal(
+    nullOptsRes.changed,
+    1,
+    'Master min_price keyed by trimmed c1 detects price anomaly (score 60 != previousScore 20)'
+  );
+
   console.log('✅ Review risk backfill suite passed');
 }
 

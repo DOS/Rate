@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { fetchAllPages, parseShopeeEnqueueUrl, resolveBackfillSupabaseTarget } from '../paging.js';
-import { mergeKeySpecs, sanitizeKeySpecKey } from '../jobs/backfill-specs.js';
+import { auditMasterSpecs, mergeKeySpecs, sanitizeKeySpecKey } from '../jobs/backfill-specs.js';
 
 // A fake query over `total` rows that, like PostgREST, never returns more than
 // `maxRows` per response whatever range is asked for.
@@ -150,6 +150,68 @@ async function run() {
     a: 'val one',
     b: 'ok',
   });
+
+  // Issue #910: non-function buildPage, nullish page response, control chars in error.message,
+  // non-string sanitizeKeySpecKey, cyclic/non-plain objects in mergeKeySpecs, and auditMasterSpecs label sanitization
+  await assert.rejects(
+    fetchAllPages('bad_builder', null as unknown as never),
+    /bad_builder: buildPage must be a function/
+  );
+  assert.deepEqual(
+    await fetchAllPages('null_page', () => Promise.resolve(null as unknown as never)),
+    []
+  );
+  await assert.rejects(
+    fetchAllPages('ctrl_err', () =>
+      Promise.resolve({ data: null, error: { message: 'db\u0007\u0085failure' } })
+    ),
+    /ctrl_err: db failure/
+  );
+
+  assert.equal(sanitizeKeySpecKey(123 as unknown as string), null);
+  const cyclicSpec: Record<string, unknown> = { valid: 'ok' };
+  cyclicSpec.self = cyclicSpec;
+  const cyclicArr: unknown[] = ['item1'];
+  cyclicArr.push(cyclicArr);
+  cyclicSpec.arr = cyclicArr;
+  cyclicSpec.dateObj = new Date(0);
+  const sharedLeaf = { sub: 'shared' };
+  cyclicSpec.refA = sharedLeaf;
+  cyclicSpec.refB = sharedLeaf;
+  assert.deepEqual(mergeKeySpecs(cyclicSpec, new Date(0) as unknown as Record<string, unknown>), {
+    valid: 'ok',
+    arr: ['item1'],
+    refA: { sub: 'shared' },
+    refB: { sub: 'shared' },
+  });
+
+  await assert.rejects(
+    auditMasterSpecs({
+      from: () => ({
+        select: () => ({
+          order: () => ({
+            range: (from: number) =>
+              Promise.resolve({
+                data:
+                  from === 0
+                    ? [
+                        null,
+                        {
+                          id: 'm1',
+                          name: 'Phone\u0000\u0085X',
+                          model_key: 'phone\u0007-x',
+                          specifications: null,
+                        },
+                      ]
+                    : [],
+                error: null,
+              }),
+          }),
+        }),
+      }),
+    } as never),
+    /Phone X \(phone -x\) failed ProductSpecificationsSchema validation/
+  );
 
   console.log('✅ fetchAllPages & parseShopeeEnqueueUrl suite passed');
 }

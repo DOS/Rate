@@ -62,8 +62,10 @@ export async function loadAndScore(supabase: RateSupabaseClient): Promise<Mercha
   );
   const masterMinByCluster = new Map<string, number>();
   for (const m of masters) {
+    if (!m || typeof m !== 'object') continue;
+    const clusterId = typeof m.id === 'string' ? m.id.replace(/\p{Cc}+/gu, '').trim() : '';
     const price = toValidPrice(m.min_price);
-    if (price) masterMinByCluster.set(m.id, price);
+    if (clusterId && price) masterMinByCluster.set(clusterId, price);
   }
   logger.info(
     'backfill.loaded',
@@ -77,7 +79,7 @@ export async function runReviewRiskBackfill(
   supabase: RateSupabaseClient,
   options: { apply?: boolean } = {}
 ): Promise<{ apply: boolean; scored: number; changed: number; written: number }> {
-  const apply = Boolean(options.apply);
+  const apply = Boolean(options?.apply);
   const scores = await loadAndScore(supabase);
   const changed = scores.filter(s => s.previousScore !== s.risk.risk_score);
   for (const s of changed.slice(0, 25)) {
