@@ -2,8 +2,23 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { AiReviewAnalyzer } from '../ai-review-analyzer.js';
+import {
+  extractGsmArenaDataSpecs,
+  MAX_ARENA_CATALOG_ITEMS,
+  parseGsmArenaBrandCatalogHtml,
+  parseGsmArenaHtmlToSpecs,
+  parsePhoneArenaCatalogHtml,
+} from '../arena-spec-syncer.js';
+import { MAX_CLUSTER_PEER_ROWS, resolveClusterPeerFloorPrice } from '../cluster-peer-floor.js';
+import { MAX_ENTITY_IMAGES, sanitizeHttpUrl, sanitizeHttpUrlList } from '../entity-matcher.js';
 import { computeRetryDelayMs, redactSensitiveString, sanitizeLogMeta } from '../logger.js';
-import { loadAndScoreMerchant, rescoreMerchantReviewRisk } from '../merchant-review-risk.js';
+import {
+  loadAndScoreMerchant,
+  rescoreMerchantReviewRisk,
+  toValidPrice,
+  uniqueIds,
+  writeMerchantReviewRisk,
+} from '../merchant-review-risk.js';
 import { mergeKeySpecs } from '../jobs/backfill-specs.js';
 import {
   mapStoredReview,
@@ -533,6 +548,91 @@ async function run() {
   assert.equal(Object.hasOwn(keyBoundedSpecs, 'constructor'), false);
   assert.equal(Object.hasOwn(keyBoundedSpecs, 'K'.repeat(120)), false);
   assert.deepEqual(keyBoundedSpecs.nested, { 'refresh rate': '120Hz' });
+
+  // DOS/Rate#862: resolveClusterPeerFloorPrice, merchant-review-risk, and Arena/Entity URL bounds
+  assert.equal(
+    resolveClusterPeerFloorPrice(null as unknown as never[], 'p-1', 25_000_000),
+    25_000_000,
+    'Non-array peerRows falls back to fallbackMasterMinPrice instead of throwing'
+  );
+  assert.equal(
+    resolveClusterPeerFloorPrice(
+      [
+        null as unknown as never,
+        { id: '  p-self  ', price_current: 15_000_000, merchants: { is_official: true } },
+        { id: 'p-bool', price_current: true, merchants: { is_official: true } },
+        { id: 'p-peer', price_current: 28_990_000, merchants: { is_official: false } },
+      ],
+      'p-self',
+      true as unknown as number
+    ),
+    28_990_000,
+    'Self-exclusion trims IDs and boolean prices/fallbacks are rejected'
+  );
+  assert.equal(MAX_CLUSTER_PEER_ROWS, 1000);
+
+  assert.equal(toValidPrice(true), 0, 'toValidPrice rejects boolean true');
+  assert.equal(mapStoredReview(null as unknown as ReviewRow), null);
+  assert.equal(mapStoredReview({ ...review('   ', 'p', null) }), null);
+  assert.equal(
+    mapStoredReview({
+      ...review('  r-trim  ', 'p', null),
+      rating_star: true as unknown as number,
+    })?.raw.rating_star,
+    5,
+    'boolean rating_star falls back to 5 instead of coercing true -> 1'
+  );
+
+  const boundedScoreMerchants = scoreMerchants(
+    new AiReviewAnalyzer(),
+    [
+      {
+        id: 'm-prev-bad',
+        platform: 'shopee',
+        is_official: false,
+        follower_count: true as unknown as number,
+        review_risk_score: 999,
+      },
+    ],
+    [{ id: 'p-prev', merchant_id: 'm-prev-bad', cluster_id: 'c1', price_current: 10_000_000 }],
+    [review('r-prev', 'p-prev', { verdict: 'authentic', flag_category: 'authentic' })],
+    new Map()
+  );
+  assert.equal(
+    boundedScoreMerchants[0]?.previousScore,
+    null,
+    'Out-of-range previousScore > 100 is normalized to null'
+  );
+
+  assert.deepEqual(uniqueIds(['  m-2  ', '', '   ', 'm-1\u0000bad', 'm-1', 'm-2']), ['m-1', 'm-2']);
+  assert.equal(await loadAndScoreMerchant(scoped.client, new AiReviewAnalyzer(), '   '), null);
+  await assert.rejects(
+    () =>
+      writeMerchantReviewRisk(
+        scoped.client,
+        '   ',
+        boundedScoreMerchants[0]!.risk,
+        '2026-10-24T00:00:00.000Z'
+      ),
+    /Invalid merchantId/
+  );
+
+  assert.equal(sanitizeHttpUrl('https://user:pass@example.com/a.jpg'), null);
+  const cappedImgs = sanitizeHttpUrlList(
+    Array.from({ length: 70 }, (_, i) => `https://cdn.example.com/img-${i}.jpg`)
+  );
+  assert.equal(cappedImgs.length, MAX_ENTITY_IMAGES);
+
+  const parsedArenaCreds = parseGsmArenaHtmlToSpecs('<h1 data-spec="modelname">Test Phone</h1>', {
+    gsmarenaUrl: 'https://user:pass@www.gsmarena.com/test-1.php',
+    phonearenaUrl: 'https://admin:secret@www.phonearena.com/phones/Test_id1',
+  });
+  assert.equal(parsedArenaCreds.gsmarenaUrl, undefined);
+  assert.equal(parsedArenaCreds.phonearenaUrl, undefined);
+  assert.deepEqual(extractGsmArenaDataSpecs(null as unknown as string), {});
+  assert.deepEqual(parseGsmArenaBrandCatalogHtml(null as unknown as string), []);
+  assert.deepEqual(parsePhoneArenaCatalogHtml(null as unknown as string), []);
+  assert.equal(MAX_ARENA_CATALOG_ITEMS, 500);
 
   console.log('✅ Review risk backfill suite passed');
 }

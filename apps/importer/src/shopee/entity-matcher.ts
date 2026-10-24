@@ -27,6 +27,7 @@ const MAX_RAM_GB = 2048;
 const MAX_STORAGE_GB = 65536;
 const MAX_SCREEN_SIZE_INCH = 120;
 const MAX_BATTERY_MAH = 500_000;
+export const MAX_ENTITY_IMAGES = 50;
 
 function hasControlOrSpaceChar(val: string): boolean {
   for (let i = 0; i < val.length; i++) {
@@ -43,6 +44,7 @@ export function sanitizeHttpUrl(raw: unknown): string | null {
   try {
     const parsed = new URL(trimmed);
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+    if (parsed.username || parsed.password) return null;
     if (!parsed.hostname) return null;
     return trimmed;
   } catch {
@@ -55,6 +57,7 @@ export function sanitizeHttpUrlList(urls: unknown): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
   for (const item of urls) {
+    if (out.length >= MAX_ENTITY_IMAGES) break;
     const valid = sanitizeHttpUrl(item);
     if (valid && !seen.has(valid)) {
       seen.add(valid);

@@ -1,5 +1,7 @@
 import { MAX_VALID_VND_PRICE } from '@repo/shared-data';
 
+export const MAX_CLUSTER_PEER_ROWS = 1000;
+
 export interface ClusterPeerPriceCandidate {
   id?: unknown;
   price_current?: unknown;
@@ -19,17 +21,32 @@ export function resolveClusterPeerFloorPrice(
 ): number | undefined {
   let officialMin = Number.POSITIVE_INFINITY;
   let peerMin = Number.POSITIVE_INFINITY;
+  const safeCurrentId = typeof currentProductId === 'string' ? currentProductId.trim() : '';
 
-  for (const row of peerRows) {
-    if (row.id && String(row.id) === currentProductId) continue;
-    const price = Number(row.price_current || 0);
-    if (!Number.isFinite(price) || price <= 0 || price > MAX_VALID_VND_PRICE) continue;
-    if (price < peerMin) {
-      peerMin = price;
-    }
-    const mObj = Array.isArray(row.merchants) ? row.merchants[0] : row.merchants;
-    if (mObj?.is_official && price < officialMin) {
-      officialMin = price;
+  if (Array.isArray(peerRows)) {
+    const limit = Math.min(peerRows.length, MAX_CLUSTER_PEER_ROWS);
+    for (let i = 0; i < limit; i++) {
+      const row = peerRows[i];
+      if (!row || typeof row !== 'object') continue;
+      const rowId =
+        typeof row.id === 'string' || typeof row.id === 'number' ? String(row.id).trim() : '';
+      if (safeCurrentId && rowId === safeCurrentId) continue;
+      if (
+        typeof row.price_current === 'boolean' ||
+        row.price_current === null ||
+        row.price_current === undefined
+      ) {
+        continue;
+      }
+      const price = Number(row.price_current);
+      if (!Number.isFinite(price) || price <= 0 || price > MAX_VALID_VND_PRICE) continue;
+      if (price < peerMin) {
+        peerMin = price;
+      }
+      const mObj = Array.isArray(row.merchants) ? row.merchants[0] : row.merchants;
+      if (mObj?.is_official && price < officialMin) {
+        officialMin = price;
+      }
     }
   }
 
@@ -38,6 +55,13 @@ export function resolveClusterPeerFloorPrice(
   }
   if (Number.isFinite(peerMin)) {
     return peerMin;
+  }
+  if (
+    typeof fallbackMasterMinPrice === 'boolean' ||
+    fallbackMasterMinPrice === null ||
+    fallbackMasterMinPrice === undefined
+  ) {
+    return undefined;
   }
   const fb = Number(fallbackMasterMinPrice);
   return Number.isFinite(fb) && fb > 0 && fb <= MAX_VALID_VND_PRICE ? fb : undefined;
