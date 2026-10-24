@@ -24,21 +24,24 @@ export function productCacheTag(slug: string): string {
   return `rate:product:${String(slug ?? '')
     .replace(/\p{Cc}+/gu, '')
     .trim()
-    .toLowerCase()}`;
+    .toLowerCase()
+    .slice(0, 120)}`;
 }
 
 export function categoryCacheTag(categorySlug: string): string {
   return `rate:category:${String(categorySlug ?? '')
     .replace(/\p{Cc}+/gu, '')
     .trim()
-    .toLowerCase()}`;
+    .toLowerCase()
+    .slice(0, 60)}`;
 }
 
 export function merchantCacheTag(merchantId: string): string {
   return `rate:merchant:${String(merchantId ?? '')
     .replace(/\p{Cc}+/gu, '')
     .trim()
-    .toLowerCase()}`;
+    .toLowerCase()
+    .slice(0, 120)}`;
 }
 
 export interface RevalidationTargetsInput {
@@ -52,6 +55,11 @@ export interface RevalidationTargetsInput {
 const SAFE_CACHE_TAG_REGEX = /^rate:[a-z0-9:._-]{1,150}$/i;
 const SAFE_ENTITY_TOKEN_REGEX = /^[a-z0-9._-]+$/i;
 const SAFE_MERCHANT_IDENTIFIER_REGEX = /^[a-z0-9:._-]+$/i;
+const UNSAFE_CACHE_PARAM_KEYS = new Set([
+  '__proto__',
+  'constructor',
+  'prototype',
+]);
 
 export function canonicalizeCacheParams(
   value: unknown,
@@ -60,6 +68,9 @@ export function canonicalizeCacheParams(
 ): string {
   if (value === null || value === undefined) {
     return depth === 0 ? '{}' : 'null';
+  }
+  if (typeof value === 'string') {
+    return JSON.stringify(value.replace(/\p{Cc}+/gu, '').slice(0, 500));
   }
   if (typeof value === 'number') {
     return Number.isFinite(value) ? JSON.stringify(value) : 'null';
@@ -85,7 +96,12 @@ export function canonicalizeCacheParams(
         .join(',')}]`;
     }
     const entries = Object.entries(value as Record<string, unknown>)
-      .filter(([, val]) => val !== undefined)
+      .filter(
+        ([key, val]) =>
+          val !== undefined &&
+          !UNSAFE_CACHE_PARAM_KEYS.has(key) &&
+          key.length <= 128
+      )
       .sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
       .slice(0, 60);
     return `{${entries

@@ -9992,7 +9992,87 @@ async function runCoreArchitectureSuite() {
     assert.equal(navMod.isAppLink('/smartphones'), true);
 
     console.log(
-      '  ✅ [108/108] Merchant-Directory, Rate-Domain Compare Specs & Catalog/Copy/Nav Helpers Bounds (#902) passed'
+      '  ✅ [108/109] Merchant-Directory, Rate-Domain Compare Specs & Catalog/Copy/Nav Helpers Bounds (#902) passed'
+    );
+  }
+
+  // 109. RPC Error Lookup, Sliding-Window Rate Limiter & Cache Parameter Canonicalization (#934)
+  {
+    const reqAuthMod =
+      require('../request-auth') as typeof import('../request-auth');
+    const apiHandlerMod =
+      require('../api-handler') as typeof import('../api-handler');
+    const cacheTagsMod =
+      require('../cache-tags') as typeof import('../cache-tags');
+
+    const rpcTable = {
+      P0001: { status: 400, code: 'BAD_INPUT', error: 'Invalid input' },
+    };
+    assert.equal(
+      reqAuthMod.mapRpcRejection({ code: 'toString' }, rpcTable),
+      null,
+      'mapRpcRejection must ignore Object.prototype keys like toString'
+    );
+    assert.equal(
+      reqAuthMod.mapRpcRejection({ code: 'constructor' }, rpcTable),
+      null,
+      'mapRpcRejection must ignore Object.prototype keys like constructor'
+    );
+    assert.deepEqual(
+      reqAuthMod.mapRpcRejection({ code: ' P0001 ' }, rpcTable),
+      rpcTable.P0001
+    );
+
+    const limiter = new apiHandlerMod.BoundedSlidingWindowRateLimiter({
+      windowMs: 60_000,
+      maxRequests: 1,
+    });
+    assert.equal(limiter.allow('  client\u0007-1  ', Number.NaN), true);
+    assert.equal(limiter.allow('client-1', Number.POSITIVE_INFINITY), false);
+    assert.equal(
+      limiter.allow(null as unknown as string, 1000),
+      true,
+      'allow must guard non-string clientKey as anon'
+    );
+
+    const bestOfferRes = apiHandlerMod.selectBestOfferFromListings([
+      {
+        id: `  offer\u0000-${'x'.repeat(200)}  `,
+        title: 'iPhone 16',
+        price_current: 20_000_000,
+        url: '  https://shopee.vn/item\u0007-1  ',
+        platform: '  SHOPEE\u0000  ',
+      },
+    ]);
+    assert.equal(bestOfferRes.bestOffer?.id.length, 128);
+    assert.ok(!bestOfferRes.bestOffer?.id.includes('\u0000'));
+    assert.equal(bestOfferRes.bestOffer?.url, 'https://shopee.vn/item-1');
+    assert.equal(bestOfferRes.bestOffer?.platform, 'shopee');
+
+    assert.deepEqual(
+      apiHandlerMod.resolveReviewVoteInput({
+        voteType: '  UP\u0000 ',
+        reportReason: ' FAKE\u0007 ',
+      }),
+      { voteType: 'up', reportReason: 'fake' }
+    );
+
+    const canonJson = cacheTagsMod.canonicalizeCacheParams({
+      q: `iphone\u0000${'x'.repeat(600)}`,
+      ['__proto__']: { polluted: true },
+      constructor: 'bad',
+    });
+    const parsedCanon = JSON.parse(canonJson) as Record<string, unknown>;
+    assert.equal(typeof parsedCanon.q, 'string');
+    assert.equal((parsedCanon.q as string).length, 500);
+    assert.equal(Object.hasOwn(parsedCanon, 'constructor'), false);
+    assert.equal(
+      cacheTagsMod.productCacheTag(`slug-${'a'.repeat(200)}`).length,
+      'rate:product:'.length + 120
+    );
+
+    console.log(
+      '  ✅ [109/109] RPC Error Lookup, Sliding-Window Rate Limiter & Cache Parameter Canonicalization (#934) passed'
     );
   }
 
