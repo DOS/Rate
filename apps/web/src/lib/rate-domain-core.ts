@@ -844,14 +844,23 @@ export const KNOWN_LOCAL_DEVICE_IMAGES = new Set<string>([
  * (DOS/Rate#810).
  */
 export function isImageUrl(value: unknown): value is string {
-  return typeof value === 'string' && /^(https?:\/\/|\/)\S+$/i.test(value);
+  return (
+    typeof value === 'string' && /^(https?:\/\/|\/)\S+$/i.test(value.trim())
+  );
+}
+
+/** The usable images of a stored `images` list, trimmed, in order. */
+export function usableImageUrls(
+  images: readonly unknown[] | null | undefined
+): string[] {
+  return (images ?? []).filter(isImageUrl).map((url) => url.trim());
 }
 
 /** The first usable image of a stored `images` list, or null. */
 export function firstImageUrl(
   images: readonly unknown[] | null | undefined
 ): string | null {
-  return images?.find(isImageUrl) ?? null;
+  return usableImageUrls(images)[0] ?? null;
 }
 
 export function resolveProductImageUrl(
@@ -871,20 +880,20 @@ export function resolveProductImageUrl(
     if (slug && KNOWN_LOCAL_DEVICE_IMAGES.has(slug)) {
       return `/img/devices/${slug}.jpg`;
     }
+    // Stored thumbnails and listing images can be junk such as
+    // "[object Object]" (DOS/Rate#810).
     return (
-      slugOrProduct.thumbnail ||
+      firstImageUrl([slugOrProduct.thumbnail]) ||
       firstImageUrl(
         Array.isArray(slugOrProduct.images) ? slugOrProduct.images : null
       ) ||
-      (isImageUrl(fallbackUrl) ? fallbackUrl : null)
+      firstImageUrl([fallbackUrl])
     );
   }
   if (slugOrProduct && KNOWN_LOCAL_DEVICE_IMAGES.has(slugOrProduct)) {
     return `/img/devices/${slugOrProduct}.jpg`;
   }
-  // Callers pass a stored listing image here, which can be junk such as
-  // "[object Object]" (DOS/Rate#810).
-  return isImageUrl(fallbackUrl) ? fallbackUrl : null;
+  return firstImageUrl([fallbackUrl]);
 }
 
 export type CanonicalCategorySlug =

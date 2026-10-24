@@ -1,5 +1,10 @@
 import assert from 'node:assert/strict';
-import { firstImageUrl, isImageUrl } from '../rate-domain-core';
+import {
+  firstImageUrl,
+  isImageUrl,
+  resolveProductImageUrl,
+  usableImageUrls,
+} from '../rate-domain-core';
 
 function main() {
   console.warn('🧪 Image URL suite');
@@ -31,6 +36,28 @@ function main() {
   assert.equal(firstImageUrl([]), null);
   assert.equal(firstImageUrl(null), null);
   assert.equal(firstImageUrl(undefined), null);
+
+  // Surrounding whitespace is trimmed rather than rejected.
+  assert.equal(isImageUrl('  https://a/1.jpg\n'), true);
+  assert.equal(firstImageUrl([' https://a/1.jpg ']), 'https://a/1.jpg');
+  assert.deepEqual(
+    usableImageUrls(['[object Object]', 'https://a/1.jpg', '', '/b.png']),
+    ['https://a/1.jpg', '/b.png']
+  );
+
+  // A junk thumbnail or fallback gives way to the stored images.
+  assert.equal(
+    resolveProductImageUrl({
+      slug: 'e2e-not-local',
+      thumbnail: '[object Object]',
+      images: ['[object Object]', 'https://a/1.jpg'],
+    }),
+    'https://a/1.jpg'
+  );
+  assert.equal(
+    resolveProductImageUrl('e2e-not-local', '[object Object]'),
+    null
+  );
 
   console.warn('✅ Image URL suite passed');
 }

@@ -68,7 +68,7 @@ import ProductOffersExplorer from '@/components/leaderboard/ProductOffersExplore
 import ProductSpecsExportToolbar from '@/components/leaderboard/ProductSpecsExportToolbar';
 import ClientMessages from '@/components/providers/ClientMessages';
 import { plausibleMinPrice } from '@/lib/offer-plausibility';
-import { firstImageUrl } from '@/lib/rate-domain-core';
+import { firstImageUrl, usableImageUrls } from '@/lib/rate-domain-core';
 
 // Cached after the first request, refreshed every 5 minutes or when the
 // worker revalidates its cache tags (DOS/Rate#491).
@@ -279,7 +279,7 @@ export async function ProductDetailView({
           brand: product.brand,
           merchantCount: product.merchant_count || 0,
         }),
-        image: (product.images || []).map(absoluteUrl),
+        image: usableImageUrls(product.images).map(absoluteUrl),
         offers: {
           '@type': 'AggregateOffer',
           priceCurrency: 'VND',
