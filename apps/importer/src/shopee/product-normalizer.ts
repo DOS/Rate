@@ -10,30 +10,23 @@ export const MAX_NORMALIZED_IMAGE_COUNT = 50;
 export const MAX_NORMALIZED_DESCRIPTION_LENGTH = 8000;
 
 function stripControlChars(input: string): string {
-  let out = '';
-  for (let i = 0; i < input.length; i++) {
-    const code = input.charCodeAt(i);
-    if (code === 0x09 || code === 0x0a || code === 0x0d || (code > 0x1f && code !== 0x7f)) {
-      out += input[i];
-    } else {
-      out += ' ';
-    }
-  }
-  return out;
+  if (typeof input !== 'string') return '';
+  return input.replace(/(?:(?![\t\r\n])\p{Cc})/gu, ' ');
 }
 
 function normalizeHttpAssetUrl(raw: unknown): string | null {
   if (typeof raw !== 'string') return null;
   const trimmed = raw.trim();
-  if (!trimmed || trimmed.length > MAX_NORMALIZED_IMAGE_URL_LENGTH) return null;
-  for (let i = 0; i < trimmed.length; i++) {
-    const code = trimmed.charCodeAt(i);
-    if (code <= 0x20 || code === 0x7f) return null;
+  if (!trimmed || trimmed.length > MAX_NORMALIZED_IMAGE_URL_LENGTH || /[\s\p{Cc}]/u.test(trimmed)) {
+    return null;
   }
   try {
     const parsed = new URL(trimmed);
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
-    if (!parsed.hostname) return null;
+    if (parsed.username || parsed.password) return null;
+    if (!parsed.hostname || parsed.hostname.startsWith('.') || parsed.hostname.endsWith('.')) {
+      return null;
+    }
     return parsed.toString();
   } catch {
     return null;
@@ -82,8 +75,10 @@ export interface NormalizedProductCandidate {
  * offering trade-in programs are not misclassified as used devices.
  */
 export function detectProductCondition(title: string, description?: string): ProductCondition {
-  const cleanTitle = title.replace(/thu\s*cũ\s*đổi\s*mới/gi, ' ');
-  const cleanDesc = (description || '').replace(/thu\s*cũ\s*đổi\s*mới/gi, ' ');
+  const safeTitle = typeof title === 'string' ? title : '';
+  const safeDesc = typeof description === 'string' ? description : '';
+  const cleanTitle = safeTitle.replace(/thu\s*cũ\s*đổi\s*mới/gi, ' ');
+  const cleanDesc = safeDesc.replace(/thu\s*cũ\s*đổi\s*mới/gi, ' ');
 
   const checkSource = (text: string): ProductCondition | null => {
     if (
@@ -129,7 +124,9 @@ export function detectProductCondition(title: string, description?: string): Pro
  * Detect product distribution origin (official VN/A vs parallel import vs unknown) (Audit C6).
  */
 export function detectProductOrigin(title: string, description?: string): ProductOrigin {
-  const combined = `${title} ${description || ''}`;
+  const safeTitle = typeof title === 'string' ? title : '';
+  const safeDesc = typeof description === 'string' ? description : '';
+  const combined = `${safeTitle} ${safeDesc}`;
   if (
     /(?:xách\s*tay|bản\s*mỹ|\bll\/a\b|\bzp\/a\b|\bza\/a\b|\bch\/a\b|\bkh\/a\b|\bj\/a\b|bản\s*hàn|bản\s*nhật|bản\s*trung|nội\s*địa(?:\s*trung|\s*nhật|\s*hàn)?|quốc\s*tế\s*mỹ)/i.test(
       combined
@@ -160,7 +157,7 @@ const APPLE_FAMILIES: ReadonlyArray<readonly [RegExp, string]> = [
  * Detect canonical category slug from product title across all 5 tech categories.
  */
 export function detectCategorySlug(title: string): CanonicalCategorySlug {
-  const t = title.toLowerCase();
+  const t = typeof title === 'string' ? title.toLowerCase() : '';
   if (
     /airpods|galaxy\s*buds|w[fh]1000xm|wf-\d+|wh-\d+|tai\s*nghe|earbuds?|freebuds|soundcore|quietcomfort|momentum\s*true/i.test(
       t
@@ -1699,7 +1696,8 @@ export class ProductNormalizer {
             ? 'Dual Camera'
             : 'Single Camera';
 
-    const rawPriceMin = Number(raw.priceMin);
+    const rawPriceMinInput: unknown = raw.priceMin;
+    const rawPriceMin = typeof rawPriceMinInput === 'boolean' ? NaN : Number(rawPriceMinInput);
     const safePriceMin =
       Number.isFinite(rawPriceMin) && rawPriceMin > 0 && rawPriceMin <= MAX_VALID_VND_PRICE
         ? rawPriceMin

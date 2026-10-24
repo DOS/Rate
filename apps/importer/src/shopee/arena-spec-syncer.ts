@@ -174,6 +174,9 @@ export function splitCameraModulesToPhoneArenaFormat(rawModules: string): {
   third_camera?: string;
   fourth_camera?: string;
 } {
+  if (typeof rawModules !== 'string' || !rawModules) {
+    return {};
+  }
   const lines = rawModules
     .split(/\r?\n|;\s*(?=\d+\s*MP)/i)
     .map(l => l.trim())
@@ -554,21 +557,36 @@ const CANONICAL_10_SPEC_GROUPS = [
   'regulatory',
 ] as const;
 
-function isPopulatedSpecFieldValue(v: unknown): boolean {
-  if (v === null || v === undefined) return false;
+function isPopulatedSpecFieldValue(
+  v: unknown,
+  depth = 0,
+  seen: WeakSet<object> = new WeakSet<object>()
+): boolean {
+  if (v === null || v === undefined || depth > 8) return false;
   if (typeof v === 'number') return Number.isFinite(v);
   if (typeof v === 'string') return v.trim().length > 0;
-  if (Array.isArray(v)) return v.some(isPopulatedSpecFieldValue);
+  if (typeof v === 'boolean') return true;
   if (typeof v === 'object') {
-    return Object.values(v as Record<string, unknown>).some(isPopulatedSpecFieldValue);
+    if (seen.has(v)) return false;
+    seen.add(v);
+    try {
+      if (Array.isArray(v)) {
+        return v.slice(0, 100).some(item => isPopulatedSpecFieldValue(item, depth + 1, seen));
+      }
+      return Object.values(v as Record<string, unknown>)
+        .slice(0, 100)
+        .some(item => isPopulatedSpecFieldValue(item, depth + 1, seen));
+    } finally {
+      seen.delete(v);
+    }
   }
-  return true;
+  return false;
 }
 
 export function countPopulatedFieldGroups(
   specs: Record<string, unknown> | null | undefined
 ): number {
-  if (!specs || typeof specs !== 'object') return 0;
+  if (!specs || typeof specs !== 'object' || Array.isArray(specs)) return 0;
   let count = 0;
   for (const key of CANONICAL_10_SPEC_GROUPS) {
     const group = specs[key];
@@ -576,7 +594,7 @@ export function countPopulatedFieldGroups(
       group &&
       typeof group === 'object' &&
       !Array.isArray(group) &&
-      Object.values(group as Record<string, unknown>).some(isPopulatedSpecFieldValue)
+      Object.values(group as Record<string, unknown>).some(val => isPopulatedSpecFieldValue(val, 0))
     ) {
       count += 1;
     }
@@ -672,9 +690,27 @@ export class ArenaSpecSyncer {
       const populatedGroups = countPopulatedFieldGroups(r.specifications);
       if (populatedGroups < 10) {
         incompleteSpecMasters.push({
-          id: r.id,
-          name: r.name,
-          model_key: r.model_key,
+          id:
+            typeof r.id === 'string'
+              ? r.id
+                  .replace(/\p{Cc}+/gu, '')
+                  .trim()
+                  .slice(0, 128)
+              : '',
+          name:
+            typeof r.name === 'string'
+              ? r.name
+                  .replace(/\p{Cc}+/gu, '')
+                  .trim()
+                  .slice(0, 300)
+              : '',
+          model_key:
+            typeof r.model_key === 'string'
+              ? r.model_key
+                  .replace(/\p{Cc}+/gu, '')
+                  .trim()
+                  .slice(0, 200)
+              : '',
           populatedGroups,
         });
       }
