@@ -333,7 +333,7 @@ export function compute6AxisWeightBreakdown(params: {
     upvotes = 0,
     downvotes = 0,
     reportCount = 0,
-  } = params;
+  } = params ?? ({} as typeof params);
 
   const authenticityMap: Record<Authenticity, number> = {
     genuine: 1.0,
@@ -362,9 +362,9 @@ export function compute6AxisWeightBreakdown(params: {
     expert_depth: 1.2,
   };
 
-  const A = authenticityMap[authenticity];
-  const B = independenceMap[independence];
-  let C = depthBaseMap[depth];
+  const A = Object.hasOwn(authenticityMap, authenticity) ? authenticityMap[authenticity] : 0;
+  const B = Object.hasOwn(independenceMap, independence) ? independenceMap[independence] : 0;
+  let C = Object.hasOwn(depthBaseMap, depth) ? depthBaseMap[depth] : 0;
   if (depth === 'specific_short' || depth === 'detailed' || depth === 'expert_depth') {
     if (hasRealMedia) C += 0.1;
     if (hasLongTermUsage) C += 0.2;
@@ -384,8 +384,15 @@ export function compute6AxisWeightBreakdown(params: {
   const rawF = 1 + 0.45 * Math.log(1 + netPos) - 0.3 * netNeg - 0.35 * safeReportCount;
   const F = Number(Math.max(0.1, Math.min(2.0, rawF)).toFixed(4));
 
+  const cleanGateOverride =
+    typeof gateOverrideReason === 'string'
+      ? gateOverrideReason
+          .replace(/\p{Cc}+/gu, ' ')
+          .trim()
+          .slice(0, 120)
+      : '';
   let gate: 0 | 1 = 1;
-  let gateReason: string | undefined = gateOverrideReason;
+  let gateReason: string | undefined = cleanGateOverride || undefined;
   if (gateReason) {
     gate = 0;
   } else if (A === 0) {
@@ -454,10 +461,20 @@ export function computeBayesianProductRating(
 
   let weightSum = 0;
   let weightedRatingSum = 0;
-  for (const item of items) {
-    const w = Number.isFinite(item.weight) && item.weight > 0 ? item.weight : 0;
+  const safeItems = Array.isArray(items) ? items : [];
+  for (const item of safeItems) {
+    if (!item || typeof item !== 'object') continue;
+    const w =
+      typeof item.weight === 'number' && Number.isFinite(item.weight) && item.weight > 0
+        ? item.weight
+        : 0;
     if (w <= 0) continue;
-    if (!Number.isFinite(item.rating_star) || item.rating_star < 1 || item.rating_star > 5) {
+    if (
+      typeof item.rating_star !== 'number' ||
+      !Number.isFinite(item.rating_star) ||
+      item.rating_star < 1 ||
+      item.rating_star > 5
+    ) {
       continue;
     }
     weightSum += w;
@@ -510,16 +527,10 @@ export function computeReviewWeight(params: {
   flagCategory: ReviewFlagCategory;
   verdict: ReviewVerdict;
 }): number {
+  if (!params || typeof params !== 'object') return 0;
   const { upvotes = 0, downvotes = 0, reportCount = 0, flagCategory, verdict } = params;
 
-  if (
-    flagCategory === 'low_value_coin_spam' ||
-    flagCategory === 'seeding_fake' ||
-    flagCategory === 'competitor_sabotage' ||
-    flagCategory === 'review_bombing' ||
-    verdict === 'fake' ||
-    verdict === 'unanalyzed'
-  ) {
+  if (flagCategory !== 'authentic' || (verdict !== 'authentic' && verdict !== 'suspicious')) {
     return 0;
   }
 
@@ -546,10 +557,13 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** Age of the reviewer's account when the review was written, in days. */
 function accountAgeDays(r: ReviewInputItem): number | null {
-  const joined = Date.parse(r.reviewer?.joinedAt || '');
+  if (!r || typeof r !== 'object') return null;
+  const rawJoined = typeof r.reviewer?.joinedAt === 'string' ? r.reviewer.joinedAt.trim() : '';
+  const joined = rawJoined ? Date.parse(rawJoined) : Number.NaN;
   if (!Number.isFinite(joined)) return null;
   // Age at the time of writing; without a review date we would be measuring today's age.
-  const written = Date.parse(r.platform_created_at || '');
+  const rawWritten = typeof r.platform_created_at === 'string' ? r.platform_created_at.trim() : '';
+  const written = rawWritten ? Date.parse(rawWritten) : Number.NaN;
   if (!Number.isFinite(written)) return null;
   const days = (written - joined) / DAY_MS;
   return days >= 0 ? days : null;
@@ -569,6 +583,7 @@ export function accountAgeBucket(r: ReviewInputItem): ReviewSignals['account_age
  * count (0 -> 0, 9 -> 0.5, 99+ -> 1). Falls back to the old neutral prior when unknown.
  */
 export function reviewerHistoryScore(r: ReviewInputItem): number {
+  if (!r || typeof r !== 'object') return 0.7;
   if (r.reviewer_type === 'expert') return 1.0;
   const total = r.reviewer?.totalReviews;
   if (typeof total !== 'number' || !Number.isFinite(total) || total < 0) return 0.7;
@@ -583,7 +598,7 @@ export function reviewerHistoryScore(r: ReviewInputItem): number {
 const RATING_LABEL_RE = /^(?:(?:cực\s*k[ìỳ]|rất)\s+)?(?:không\s+)?hài\s+lòng$|^bình\s+thường$/i;
 
 export function isRatingOnlyComment(comment: string | null | undefined): boolean {
-  const text = (comment || '')
+  const text = (typeof comment === 'string' ? comment : '')
     .normalize('NFC')
     .replace(/\p{Cc}+/gu, '')
     .replace(/[\s.!,]+$/u, '')
@@ -618,7 +633,7 @@ const PRODUCT_MENTION_RE =
  * any product attribute or usage experience (Section 4 #13 & Section 13 P1).
  */
 export function isShippingOnlyComment(comment: string | null | undefined): boolean {
-  const text = (comment || '')
+  const text = (typeof comment === 'string' ? comment : '')
     .normalize('NFC')
     .replace(/\p{Cc}+/gu, '')
     .trim();
@@ -634,7 +649,8 @@ export function hasStarSentimentContradiction(
   ratingStar: number,
   comment: string | null | undefined
 ): boolean {
-  const text = (comment || '')
+  if (typeof ratingStar !== 'number' || !Number.isFinite(ratingStar)) return false;
+  const text = (typeof comment === 'string' ? comment : '')
     .normalize('NFC')
     .replace(/\p{Cc}+/gu, '')
     .trim();
@@ -723,15 +739,18 @@ export function computeWilsonLowerBound(
   const neg = Number.isFinite(unhelpfulWeight) && unhelpfulWeight > 0 ? unhelpfulWeight : 0;
   const n = pos + neg;
   if (n <= 0) return 0;
+  const safeZ = typeof z === 'number' && Number.isFinite(z) && z > 0 && z <= 10 ? z : 1.96;
   const pHat = pos / n;
-  const z2 = z * z;
-  const numerator = pHat + z2 / (2 * n) - z * Math.sqrt((pHat * (1 - pHat) + z2 / (4 * n)) / n);
+  const z2 = safeZ * safeZ;
+  const numerator = pHat + z2 / (2 * n) - safeZ * Math.sqrt((pHat * (1 - pHat) + z2 / (4 * n)) / n);
   const denominator = 1 + z2 / n;
   return Number(Math.max(0, Math.min(1, numerator / denominator)).toFixed(4));
 }
 
 function normalizeTextForDedupe(text: string): string {
+  if (typeof text !== 'string') return '';
   return text
+    .slice(0, 4000)
     .toLowerCase()
     .replace(/[^\p{L}\p{N}\s]/gu, ' ')
     .replace(/\s+/g, ' ')
@@ -787,7 +806,9 @@ export function assessReview6Axes(
     isConflictOfInterest?: boolean;
   } = {}
 ): ReviewAssessment {
-  const comment = (review.comment || '')
+  const safeReview =
+    review && typeof review === 'object' ? review : ({ id: '', rating_star: 0 } as ReviewInputItem);
+  const comment = (typeof safeReview.comment === 'string' ? safeReview.comment : '')
     .normalize('NFC')
     .replace(/\p{Cc}+/gu, '')
     .trim();
@@ -796,7 +817,7 @@ export function assessReview6Axes(
   // 1. Extract aspects & routing
   const aspects: Record<string, ReviewAspectSignal> = {};
   const defaultSentiment: -1 | 0 | 1 =
-    review.rating_star >= 4 ? 1 : review.rating_star <= 2 ? -1 : 0;
+    safeReview.rating_star >= 4 ? 1 : safeReview.rating_star <= 2 ? -1 : 0;
 
   if (SHIPPING_ASPECT_RE.test(comment)) {
     aspects.shipping = {
@@ -843,7 +864,7 @@ export function assessReview6Axes(
 
   const productAspectCount = Object.values(aspects).filter(a => a.routesTo === 'product').length;
   const shippingOnly = isShippingOnlyComment(comment);
-  const contradiction = hasStarSentimentContradiction(review.rating_star, comment);
+  const contradiction = hasStarSentimentContradiction(safeReview.rating_star, comment);
 
   // 2. Axis A: Authenticity
   let authenticity: Authenticity = 'genuine';
@@ -883,7 +904,7 @@ export function assessReview6Axes(
   } else if (options.isCoinSpam) {
     depth = 'filler';
   } else if (
-    review.reviewer_type === 'expert' ||
+    safeReview.reviewer_type === 'expert' ||
     TECHNICAL_MEASUREMENT_RE.test(comment) ||
     (comment.length >= 240 && productAspectCount >= 2)
   ) {
@@ -899,20 +920,25 @@ export function assessReview6Axes(
     depth = 'low_effort';
   }
 
-  const hasRealMedia = Array.isArray(review.images) && review.images.length > 0;
+  const hasRealMedia =
+    Array.isArray(safeReview.images) &&
+    safeReview.images.some(img => typeof img === 'string' && img.trim().length > 0);
   const hasLongTermUsage = LONG_TERM_USAGE_RE.test(comment);
 
   // 5. Axis D: Reviewer credibility
   let reviewerMultiplier = 1.0;
-  const ageBucket = accountAgeBucket(review);
-  const totalReviews = review.reviewer?.totalReviews;
-  if (review.reviewer_type === 'expert') {
+  const ageBucket = accountAgeBucket(safeReview);
+  const totalReviews = safeReview.reviewer?.totalReviews;
+  if (safeReview.reviewer_type === 'expert') {
     reviewerMultiplier = 1.3;
   } else if (ageBucket === 'low' && (totalReviews === undefined || totalReviews <= 2)) {
     reviewerMultiplier = 0.5;
   } else if (typeof totalReviews === 'number' && totalReviews >= 10) {
     reviewerMultiplier = 1.1;
-  } else if (review.is_verified_buyer === false && review.reviewer?.verifiedPurchase === false) {
+  } else if (
+    safeReview.is_verified_buyer === false &&
+    safeReview.reviewer?.verifiedPurchase === false
+  ) {
     reviewerMultiplier = 0.8;
   }
 
@@ -938,9 +964,9 @@ export function assessReview6Axes(
     hasLongTermUsage,
     reviewerMultiplier,
     contextMultiplier,
-    upvotes: review.upvotes ?? 0,
-    downvotes: review.downvotes ?? 0,
-    reportCount: review.report_count ?? 0,
+    upvotes: safeReview.upvotes ?? 0,
+    downvotes: safeReview.downvotes ?? 0,
+    reportCount: safeReview.report_count ?? 0,
   });
 
   return {
@@ -1080,19 +1106,27 @@ export class AiReviewAnalyzer {
    * at 0 token cost.
    */
   public analyzeWithHeuristics(reviews: ReviewInputItem[]): AnalyzedReviewResult[] {
+    if (!Array.isArray(reviews)) return [];
+    const safeReviews = reviews.filter((r): r is ReviewInputItem =>
+      Boolean(r && typeof r === 'object')
+    );
     // 1. Pre-compute duplicate comment frequency across distinct authors
     const commentCounts = new Map<string, Set<string>>();
     const substantiveByAuthor: Array<{ id: string; authorKey: string; norm: string }> = [];
-    for (const r of reviews) {
+    for (const r of safeReviews) {
       const norm = normalizeTextForDedupe(r.comment || '');
       // Rating labels repeat across buyers because the platform writes them, not because of seeding.
       if (norm.length >= 15 && !isRatingOnlyComment(r.comment)) {
-        const authorKey = (r.author_name || r.id).toLowerCase();
+        const rawAuthor =
+          typeof r.author_name === 'string' && r.author_name.trim()
+            ? r.author_name
+            : String(r.id ?? '');
+        const authorKey = rawAuthor.toLowerCase();
         const authors = commentCounts.get(norm) || new Set<string>();
         authors.add(authorKey);
         commentCounts.set(norm, authors);
         if (norm.length >= 25) {
-          substantiveByAuthor.push({ id: r.id, authorKey, norm });
+          substantiveByAuthor.push({ id: String(r.id ?? ''), authorKey, norm });
         }
       }
     }
@@ -1112,8 +1146,8 @@ export class AiReviewAnalyzer {
       }
     }
 
-    return reviews.map(r => {
-      const comment = (r.comment || '')
+    return safeReviews.map(r => {
+      const comment = (typeof r.comment === 'string' ? r.comment : '')
         .normalize('NFC')
         .replace(/\p{Cc}+/gu, '')
         .trim();
@@ -1632,7 +1666,9 @@ Return ONLY valid JSON matching:
               ? clamp01(aiItem.ai_generated_prob)
               : updatedAssessment.aiGeneratedProb;
 
-          const hasRealMedia = Array.isArray(srcReview?.images) && srcReview.images.length > 0;
+          const hasRealMedia =
+            Array.isArray(srcReview?.images) &&
+            srcReview.images.some(img => typeof img === 'string' && img.trim().length > 0);
           const hasLongTermUsage = LONG_TERM_USAGE_RE.test(srcReview?.comment || '');
           const nextBreakdown = compute6AxisWeightBreakdown({
             authenticity: nextAuth,
@@ -1731,6 +1767,8 @@ Return ONLY valid JSON matching:
     aiCons: string[] = [],
     aiSummaryText = ''
   ): JReviewsProductSummary {
+    const safeReviews = Array.isArray(reviews) ? reviews : [];
+    const safeResults = Array.isArray(results) ? results : [];
     const breakdown: Record<ReviewFlagCategory, number> = {
       authentic: 0,
       low_value_coin_spam: 0,
@@ -1749,13 +1787,22 @@ Return ONLY valid JSON matching:
     let positiveAuthenticCount = 0;
     const bayesianInputs: Array<{ rating_star: number; weight: number }> = [];
 
-    for (let i = 0; i < reviews.length; i++) {
-      const r = reviews[i];
-      const res = results[i];
-      const cat = res?.flag_category ?? 'authentic';
+    for (let i = 0; i < safeReviews.length; i++) {
+      const r = safeReviews[i];
+      const res = safeResults[i];
+      if (!r || typeof r !== 'object') {
+        ignoredCount++;
+        continue;
+      }
+      const rawCat = res?.flag_category;
+      const cat: ReviewFlagCategory =
+        rawCat && Object.hasOwn(breakdown, rawCat) ? rawCat : 'authentic';
       breakdown[cat] = (breakdown[cat] || 0) + 1;
 
-      const safeStar = Number.isFinite(r.rating_star) ? Math.max(1, Math.min(5, r.rating_star)) : 0;
+      const safeStar =
+        typeof r.rating_star === 'number' && Number.isFinite(r.rating_star)
+          ? Math.max(1, Math.min(5, r.rating_star))
+          : 0;
       rawSum += safeStar;
 
       const weight =
@@ -1783,7 +1830,7 @@ Return ONLY valid JSON matching:
       }
     }
 
-    const rawAvg = reviews.length > 0 ? Number((rawSum / reviews.length).toFixed(2)) : 0;
+    const rawAvg = safeReviews.length > 0 ? Number((rawSum / safeReviews.length).toFixed(2)) : 0;
     // No user review carries weight: there is no weighted rating (0, as refresh_master_product_rating
     // writes), not the raw average of the reviews that were just excluded.
     const weightedUserRating =
@@ -1813,7 +1860,7 @@ Return ONLY valid JSON matching:
     // Authenticity score penalizes seeding_fake, but treats coin_spam mildly
     const seedingCount = breakdown.seeding_fake;
     const coinSpamCount = breakdown.low_value_coin_spam;
-    const total = Math.max(1, reviews.length);
+    const total = Math.max(1, safeReviews.length);
     const authenticityScore = Number(
       Math.max(
         0,
@@ -1828,19 +1875,27 @@ Return ONLY valid JSON matching:
 
     const defaultSummary =
       authenticCount > 0
-        ? `Đã phân tích ${reviews.length} đánh giá: giữ lại ${authenticCount} đánh giá thực chất (điểm JReviews có trọng số: ${weightedUserRating}/5★) và loại bỏ ${ignoredCount} đánh giá rác/nhận xu/seeding/bom hàng khỏi điểm tổng.`
+        ? `Đã phân tích ${safeReviews.length} đánh giá: giữ lại ${authenticCount} đánh giá thực chất (điểm JReviews có trọng số: ${weightedUserRating}/5★) và loại bỏ ${ignoredCount} đánh giá rác/nhận xu/seeding/bom hàng khỏi điểm tổng.`
         : `Chưa có đánh giá thực chất sau khi lọc ${ignoredCount} bình luận rác/nhận xu.`;
 
     const cleanPros = Array.from(
-      new Set(aiPros.map(p => sanitizeAiGeneratedText(p, 160)).filter(Boolean))
+      new Set(
+        (Array.isArray(aiPros) ? aiPros : [])
+          .map(p => sanitizeAiGeneratedText(p, 160))
+          .filter(Boolean)
+      )
     ).slice(0, 6);
     const cleanCons = Array.from(
-      new Set(aiCons.map(c => sanitizeAiGeneratedText(c, 160)).filter(Boolean))
+      new Set(
+        (Array.isArray(aiCons) ? aiCons : [])
+          .map(c => sanitizeAiGeneratedText(c, 160))
+          .filter(Boolean)
+      )
     ).slice(0, 6);
     const cleanSummaryText = sanitizeAiGeneratedText(aiSummaryText, 600);
 
     return {
-      total_reviews_analyzed: reviews.length,
+      total_reviews_analyzed: safeReviews.length,
       authentic_review_count: authenticCount,
       ignored_review_count: ignoredCount,
       raw_average_rating: rawAvg,
@@ -1868,16 +1923,25 @@ Return ONLY valid JSON matching:
    * - Does NOT penalize the merchant for `low_value_coin_spam`, `competitor_sabotage`, or `review_bombing`!
    */
   public evaluateMerchantRisk(input: MerchantRiskInput): MerchantRiskEvaluation {
-    const totalReviews = input.reviewResults.length;
+    const safeInput =
+      input && typeof input === 'object'
+        ? input
+        : ({ platform: 'shopee', isOfficial: false, reviewResults: [] } as MerchantRiskInput);
+    const safeReviewResults = Array.isArray(safeInput.reviewResults)
+      ? safeInput.reviewResults.filter((r): r is AnalyzedReviewResult =>
+          Boolean(r && typeof r === 'object')
+        )
+      : [];
+    const totalReviews = safeReviewResults.length;
     const total = Math.max(1, totalReviews);
-    const seedingCount = input.reviewResults.filter(r => r.flag_category === 'seeding_fake').length;
-    const coinSpamCategoryCount = input.reviewResults.filter(
+    const seedingCount = safeReviewResults.filter(r => r.flag_category === 'seeding_fake').length;
+    const coinSpamCategoryCount = safeReviewResults.filter(
       r => r.flag_category === 'low_value_coin_spam'
     ).length;
-    const sabotageCount = input.reviewResults.filter(
+    const sabotageCount = safeReviewResults.filter(
       r => r.flag_category === 'competitor_sabotage' || r.flag_category === 'review_bombing'
     ).length;
-    const coinSpamOrExcludedCount = input.reviewResults.filter(
+    const coinSpamOrExcludedCount = safeReviewResults.filter(
       r =>
         r.flag_category === 'low_value_coin_spam' ||
         (!r.include_in_rating && r.flag_category === 'authentic')
@@ -1910,31 +1974,37 @@ Return ONLY valid JSON matching:
     // 2. Price Anomaly Detection (Scam / Counterfeit dump pricing)
     let priceAnomaly = false;
     if (
-      typeof input.listingPrice === 'number' &&
-      Number.isFinite(input.listingPrice) &&
-      input.listingPrice > 0 &&
-      input.listingPrice <= MAX_VALID_VND_PRICE &&
-      typeof input.canonicalMinPrice === 'number' &&
-      Number.isFinite(input.canonicalMinPrice) &&
-      input.canonicalMinPrice > 2_000_000 &&
-      input.canonicalMinPrice <= MAX_VALID_VND_PRICE &&
-      input.listingPrice < input.canonicalMinPrice * 0.58 &&
-      !input.isOfficial
+      typeof safeInput.listingPrice === 'number' &&
+      Number.isFinite(safeInput.listingPrice) &&
+      safeInput.listingPrice > 0 &&
+      safeInput.listingPrice <= MAX_VALID_VND_PRICE &&
+      typeof safeInput.canonicalMinPrice === 'number' &&
+      Number.isFinite(safeInput.canonicalMinPrice) &&
+      safeInput.canonicalMinPrice > 2_000_000 &&
+      safeInput.canonicalMinPrice <= MAX_VALID_VND_PRICE &&
+      safeInput.listingPrice < safeInput.canonicalMinPrice * 0.58 &&
+      !safeInput.isOfficial
     ) {
       priceAnomaly = true;
       risk += 45;
       reasons.push(
-        `Giá bán (${input.listingPrice.toLocaleString('vi-VN')}₫) thấp bất thường so với giá sàn chuẩn (${input.canonicalMinPrice.toLocaleString('vi-VN')}₫) -> Cảnh báo hàng dựng/nhái hoặc lừa đảo (+45 điểm rủi ro).`
+        `Giá bán (${safeInput.listingPrice.toLocaleString('vi-VN')}₫) thấp bất thường so với giá sàn chuẩn (${safeInput.canonicalMinPrice.toLocaleString('vi-VN')}₫) -> Cảnh báo hàng dựng/nhái hoặc lừa đảo (+45 điểm rủi ro).`
       );
     }
 
     // 3. Authentic 1-2 Star Scam/Defect Reports (exclude competitor_sabotage & review_bombing!)
-    if (input.rawReviews && input.rawReviews.length > 0) {
+    if (Array.isArray(safeInput.rawReviews) && safeInput.rawReviews.length > 0) {
       let authenticLowStarCount = 0;
-      for (let i = 0; i < input.rawReviews.length; i++) {
-        const rev = input.rawReviews[i];
-        const flag = input.reviewResults[i];
-        if (rev.rating_star <= 2 && flag?.flag_category === 'authentic' && flag.include_in_rating) {
+      for (let i = 0; i < safeInput.rawReviews.length; i++) {
+        const rev = safeInput.rawReviews[i];
+        const flag = safeInput.reviewResults?.[i];
+        if (
+          rev &&
+          typeof rev.rating_star === 'number' &&
+          rev.rating_star <= 2 &&
+          flag?.flag_category === 'authentic' &&
+          flag.include_in_rating
+        ) {
           // A review left out of the rating (e.g. voted down to weight 0) is no complaint either.
           // A low star with no text describes no defect: it counts at the same reduced weight
           // as in the rating, not as a full complaint.
@@ -1952,17 +2022,17 @@ Return ONLY valid JSON matching:
     }
 
     // 4. Platform & Official Mall Trust Bonus
-    if (input.isOfficial) {
+    if (safeInput.isOfficial) {
       risk -= 15;
       reasons.push('Gian hàng Chính hãng (Mall / Official Store) (-15 điểm rủi ro).');
-    } else if (input.platform === 'facebook' || input.platform === 'website') {
+    } else if (safeInput.platform === 'facebook' || safeInput.platform === 'website') {
       risk += 10;
       reasons.push(
-        `Giao dịch qua kênh tự do (${input.platform}) cần kiểm tra kỹ thông tin thanh toán (+10 điểm rủi ro).`
+        `Giao dịch qua kênh tự do (${safeInput.platform}) cần kiểm tra kỹ thông tin thanh toán (+10 điểm rủi ro).`
       );
     }
 
-    if ((input.followerCount ?? 0) >= 50000) {
+    if ((safeInput.followerCount ?? 0) >= 50000) {
       risk -= 5;
     }
 

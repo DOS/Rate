@@ -2470,8 +2470,78 @@ async function run() {
     'analyzeWithHeuristics must strip control characters before checking minimum comment length'
   );
 
+  // DOS/Rate#908: compute6AxisWeightBreakdown, computeBayesianProductRating, computeReviewWeight, computeWilsonLowerBound, computeTextShingleSimilarity, assessReview6Axes, analyzeWithHeuristics, computeJReviewsSummary & evaluateMerchantRisk bounds
+  const unknownAxisBreakdown = compute6AxisWeightBreakdown({
+    authenticity: 'unknown_axis' as unknown as import('./ai-review-analyzer.js').Authenticity,
+    independence: 'organic',
+    depth: 'detailed',
+    gateOverrideReason: '  policy\u0000_override\r\n ',
+  });
+  assert.equal(unknownAxisBreakdown.gate, 0);
+  assert.equal(unknownAxisBreakdown.weight, 0);
+  assert.equal(unknownAxisBreakdown.gateReason, 'policy _override');
+
+  const bayesianMalformed = computeBayesianProductRating(null as unknown as []);
+  assert.equal(bayesianMalformed.score, 4.2);
+  assert.equal(bayesianMalformed.confidence, 0);
+
+  assert.equal(
+    computeReviewWeight({
+      flagCategory:
+        'unknown_cat' as unknown as import('./ai-review-analyzer.js').ReviewFlagCategory,
+      verdict: 'authentic',
+    }),
+    0,
+    'computeReviewWeight must return 0 for unrecognized flagCategory'
+  );
+  assert.equal(
+    computeReviewWeight({
+      flagCategory: 'authentic',
+      verdict: 'unknown_verdict' as unknown as import('./ai-review-analyzer.js').ReviewVerdict,
+    }),
+    0,
+    'computeReviewWeight must return 0 for unrecognized verdict'
+  );
+  assert.equal(
+    computeWilsonLowerBound(10, 2, Number.NaN),
+    computeWilsonLowerBound(10, 2, 1.96),
+    'computeWilsonLowerBound must fall back to z=1.96 when z is NaN'
+  );
+  assert.equal(
+    computeTextShingleSimilarity(null as unknown as string, 'test a b c'),
+    0,
+    'computeTextShingleSimilarity must return 0 on non-string input'
+  );
+  const emptyMediaAssess = assessReview6Axes({
+    id: 'rev-908',
+    rating_star: 5,
+    comment: 'Máy dùng rất mượt, pin trâu cả ngày, màn hình sáng đẹp rõ nét',
+    images: ['   ', '' as string],
+  });
+  const noMediaAssess = assessReview6Axes({
+    id: 'rev-908',
+    rating_star: 5,
+    comment: 'Máy dùng rất mượt, pin trâu cả ngày, màn hình sáng đẹp rõ nét',
+    images: [],
+  });
+  assert.equal(
+    emptyMediaAssess.breakdown.depth,
+    noMediaAssess.breakdown.depth,
+    'assessReview6Axes must ignore whitespace-only image strings when computing hasRealMedia'
+  );
+  assert.deepEqual(analyzer.analyzeWithHeuristics(null as unknown as []), []);
+  const emptySummary908 = analyzer.computeJReviewsSummary(
+    null as unknown as [],
+    null as unknown as []
+  );
+  assert.equal(emptySummary908.total_reviews_analyzed, 0);
+  const emptyMerchantRisk908 = analyzer.evaluateMerchantRisk(
+    null as unknown as import('./ai-review-analyzer.js').MerchantRiskInput
+  );
+  assert.equal(emptyMerchantRisk908.total_reviews, 0);
+
   console.log(
-    `✅ [P2/P3 Trust Model & #292/#352/#356/#359/#379/#382/#401/#497/#514/#522/#528/#557/#834/#836/#882] Voter weight, Wilson lower bound (50/52=${wilson50of52} > 1/1=${wilson1of1}), shingle copy seeding (sim=${shingleSim}), affiliate shortlinks, peer floor, ArenaSpecSyncer, Importer & ReviewAnalyzer hardening (#352, #356, #359, #379, #382, #401, #497, #514, #522, #528, #557, #834, #836, #882) verified`
+    `✅ [P2/P3 Trust Model & #292/#352/#356/#359/#379/#382/#401/#497/#514/#522/#528/#557/#834/#836/#882/#908] Voter weight, Wilson lower bound (50/52=${wilson50of52} > 1/1=${wilson1of1}), shingle copy seeding (sim=${shingleSim}), affiliate shortlinks, peer floor, ArenaSpecSyncer, Importer & ReviewAnalyzer hardening (#352, #356, #359, #379, #382, #401, #497, #514, #522, #528, #557, #834, #836, #882, #908) verified`
   );
 
   console.log('\n🎉 ALL AI REVIEW ANALYZER TESTS PASSED!');
