@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { AiReviewAnalyzer } from '../ai-review-analyzer.js';
 import { loadAndScoreMerchant, rescoreMerchantReviewRisk } from '../merchant-review-risk.js';
+import { mergeKeySpecs } from '../jobs/backfill-specs.js';
 import {
   mapStoredReview,
   runReviewRiskBackfill,
@@ -391,6 +392,62 @@ async function run() {
     true,
     'ingestion awaits the seller rescore after persistAnalysisToSupabase'
   );
+
+  // DOS/Rate#838: mapStoredReview vocabulary validation, follower_count ceiling, and mergeKeySpecs sanitization
+  const badVocab = mapStoredReview({
+    id: 'r-838',
+    product_id: 'p-1',
+    rating_star: -10,
+    comment: 'Tốt',
+    review_flags: { verdict: 'unknown_verdict', flag_category: 'unknown_category' },
+  })!;
+  assert.equal(badVocab.result.verdict, 'authentic');
+  assert.equal(badVocab.result.flag_category, 'authentic');
+  assert.equal(badVocab.raw.rating_star, 5);
+
+  const overflowMerchants: MerchantRow[] = [
+    {
+      id: 'm-overflow',
+      platform: 'shopee',
+      is_official: false,
+      follower_count: 999_999_999,
+      review_risk_score: 0,
+    },
+  ];
+  const overflowScores = scoreMerchants(
+    new AiReviewAnalyzer(),
+    overflowMerchants,
+    [{ id: 'p-ov', merchant_id: 'm-overflow', cluster_id: 'c1', price_current: 10_000_000 }],
+    [review('r-ov', 'p-ov', { verdict: 'authentic', flag_category: 'authentic' })],
+    new Map()
+  );
+  assert.equal(
+    overflowScores[0]?.risk.risk_score,
+    15,
+    'scoreMerchants must ignore overflowed follower_count > 100M rather than granting the 50k+ follower discount'
+  );
+
+  const mergedSpecs = mergeKeySpecs(
+    {
+      screen: '  6.9"\u0007 OLED  ',
+      price_spread_audit: {
+        verdict: '  tight_market_consensus  ',
+        spread_vnd: Number.NaN,
+        platform_count: 3,
+      },
+    },
+    {
+      chip: 'A'.repeat(600),
+      ram: '   ',
+    }
+  );
+  assert.equal(mergedSpecs.screen, '6.9" OLED');
+  assert.equal((mergedSpecs.chip as string).length, 500);
+  assert.equal('ram' in mergedSpecs, false);
+  assert.deepEqual(mergedSpecs.price_spread_audit, {
+    verdict: 'tight_market_consensus',
+    platform_count: 3,
+  });
 
   console.log('✅ Review risk backfill suite passed');
 }

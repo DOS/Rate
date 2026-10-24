@@ -98,6 +98,54 @@ export async function auditMasterSpecs(supabase: RateSupabaseClient): Promise<nu
   return rows.length;
 }
 
+export const MAX_KEY_SPEC_STRING_LENGTH = 500;
+
+function stripKeySpecControlChars(input: string): string {
+  let out = '';
+  for (let i = 0; i < input.length; i++) {
+    const code = input.charCodeAt(i);
+    if (code > 0x1f && code !== 0x7f) {
+      out += input[i];
+    } else {
+      out += ' ';
+    }
+  }
+  return out;
+}
+
+function sanitizeKeySpecValue(value: unknown, depth = 0): unknown {
+  if (depth > 4 || value === undefined || value === null) return undefined;
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : undefined;
+  }
+  if (typeof value === 'string') {
+    const cleaned = stripKeySpecControlChars(value)
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, MAX_KEY_SPEC_STRING_LENGTH)
+      .trim();
+    return cleaned.length > 0 ? cleaned : undefined;
+  }
+  if (Array.isArray(value)) {
+    return value
+      .slice(0, 50)
+      .map(item => sanitizeKeySpecValue(item, depth + 1))
+      .filter(item => item !== undefined);
+  }
+  if (typeof value === 'object') {
+    const objOut: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      const sanitized = sanitizeKeySpecValue(v, depth + 1);
+      if (sanitized !== undefined) {
+        objOut[k] = sanitized;
+      }
+    }
+    return objOut;
+  }
+  return undefined;
+}
+
 export function mergeKeySpecs(
   existing: unknown,
   incoming: Record<string, unknown> | null | undefined
@@ -110,15 +158,10 @@ export function mergeKeySpecs(
   const out: Record<string, unknown> = {};
   for (const source of [base, next]) {
     for (const [k, v] of Object.entries(source)) {
-      if (v === undefined || v === null) continue;
-      if (typeof v === 'number' && !Number.isFinite(v)) continue;
-      if (typeof v === 'string') {
-        const trimmed = v.trim();
-        if (!trimmed) continue;
-        out[k] = trimmed;
-        continue;
+      const sanitized = sanitizeKeySpecValue(v, 0);
+      if (sanitized !== undefined) {
+        out[k] = sanitized;
       }
-      out[k] = v;
     }
   }
   return out;
