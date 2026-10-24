@@ -39,6 +39,11 @@ Tài liệu này tổng hợp đầy đủ **User-Level Hard Rules (`C:\Users\JO
    - **TUYỆT ĐỐI KHÔNG** chạy `vercel deploy --prod`, `vercel --prod`, `--prebuilt --prod`, `--skip-domain` rồi `promote`, hay promote một bản Preview của `dev` lên production, kể cả khi JOY đã cho phép "deploy". Lời cho phép deploy nghĩa là merge PR promote `dev` -> `main`, không phải deploy từ máy local.
    - Chốt kỹ thuật: `scripts/vercel-production-guard.mjs` (chạy trong `buildCommand` của `vercel.json`) làm build production thất bại nếu không phải GitHub build từ `DOS/Rate@main`; workflow `Validate PR Base` chặn PR vào `main` không từ `dev`; workflow `Branch Divergence` báo lỗi khi `main` có commit mà `dev` không có. Không được sửa hay vô hiệu hóa các chốt này để deploy cho nhanh.
    - Ngoại lệ duy nhất: **rollback** về một bản production cũ đã build từ Git (`vercel rollback`), vì không build lại. Sau đó sửa tiếp qua PR hotfix.
+   - **Script vận hành có sẵn trong repo (`scripts/ops/`, dùng thay cho lệnh gõ tay):**
+     - `node scripts/ops/merge-when-green.mjs <pr>`: chờ toàn bộ check của commit head xanh rồi merge, ghim theo SHA head. PR vào `main` luôn dùng merge commit, PR khác mặc định squash.
+     - `node scripts/ops/promote.mjs`: mở hoặc dùng lại PR promote `dev` -> `main`, liệt kê các PR được phát hành, merge bằng merge commit khi CI xanh.
+     - `node scripts/ops/verify-live.mjs --wait 900`: kiểm tra rate.vn chạy đúng commit của `main` (`/api/health` trả `commit`), database đọc được và các route chính trả 200. Khi lệch commit, script in ra deployment Production build từ `main`, nguồn redeploy đúng duy nhất. Không bao giờ redeploy một deployment build từ commit khác.
+     - `node scripts/ops/board.mjs <issue> --status in-progress|in-review|done --agent <Nick>`: cập nhật Project #9 và nhãn (xem mục 1).
 
 7. **Chủ động thực thi liên tục & đề xuất việc tiếp theo (Proactive Next-Task):**
    - **Khi đang ở chế độ `/goal` hoặc được giao làm hết backlog:** Tự động tạo/nhận và làm liên tục từng task đến khi sạch toàn bộ backlog mà **KHÔNG dừng lại hỏi `Bắt đầu chứ?`**.
@@ -74,6 +79,8 @@ gh issue list -R DOS/Rate-Services --state open
     gh project item-add 9 --owner DOS --url <ISSUE_URL>
     ```
 - **Chuyển trạng thái sang `In Progress` & Ghi danh Agent ngay khi bắt đầu (BẮT BUỘC đồng bộ cả Issue lẫn Board Project #9, comment bằng Tiếng Anh):**
+
+  Cách nhanh, một lệnh làm cả nhãn lẫn board (tự thêm issue vào Project #9 nếu chưa có, chỉ giữ một nhãn `status:*`): `node scripts/ops/board.mjs <ISSUE_NUMBER> --status in-progress --agent $agentNick`. Các trạng thái khác: `ready`, `in-review`, `done`, `backlog`. Các lệnh `gh` dưới đây là cách làm tương đương bằng tay.
 
   ```powershell
   $agentNick = "Crawl" # Nickname của Agent hiện tại
