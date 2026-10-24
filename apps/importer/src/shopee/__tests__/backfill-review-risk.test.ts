@@ -1093,6 +1093,73 @@ async function run() {
   assert.equal(scores928.length, 1);
   assert.equal(scores928[0]?.merchantId, 'merch-928');
 
+  // DOS/Rate#930: EntityMatcher fuzzy master_id bounds & ShopeeIngestionPipeline init/review guards
+  const { EntityMatcher: EntityMatcher930 } = await import('../entity-matcher.js');
+  const { ShopeeIngestionPipeline: ShopeeIngestionPipeline930 } =
+    await import('../shopee-to-supabase.js');
+
+  const matcher930 = new EntityMatcher930({
+    from: () => ({
+      select: () => ({
+        eq: () => ({
+          maybeSingle: async () => ({ data: null, error: null }),
+        }),
+      }),
+    }),
+    rpc: async () => ({
+      data: [
+        { master_id: 'bad\u0000master', similarity: 0.99, name: 'Bad' },
+        { master_id: 'm'.repeat(130), similarity: 0.99, name: 'TooLong' },
+        { master_id: '  good-master-930  ', similarity: 0.85, name: 'Good Master' },
+      ],
+      error: null,
+    }),
+  } as never);
+  const resolved930 = await matcher930.resolveOrCreateMasterProduct({
+    brand: 'Samsung',
+    model: 'Galaxy S24 Ultra',
+    variant_name: '256GB',
+    model_key: 'samsung:galaxy-s24-ultra:256gb',
+    name: 'Samsung Galaxy S24 Ultra 256GB',
+    slug: 'samsung-galaxy-s24-ultra-256gb',
+    description: '',
+    ram_gb: 12,
+    storage_gb: 256,
+    screen_size_inch: 6.8,
+    battery_mah: 5000,
+    has_5g: true,
+    specifications: {},
+    key_specs: {},
+    images: [],
+    colors: [],
+    category_slug: 'smartphones',
+    is_benchmark_enriched: true,
+    needs_review: false,
+  });
+  assert.equal(resolved930.masterId, 'good-master-930');
+  assert.equal(resolved930.isNew, false);
+
+  const pipeline930 = new ShopeeIngestionPipeline930({
+    supabaseClient: {
+      from: (table: string) => {
+        if (table === 'categories') {
+          return {
+            select: async () => ({
+              data: [
+                null,
+                { id: 'bad\u0000cat', slug: 'smartphones' },
+                { id: '  cat-smartphones-930  ', slug: '  smartphones\u0007 ' },
+              ],
+              error: null,
+            }),
+          };
+        }
+        throw new Error(`Unexpected table: ${table}`);
+      },
+    } as never,
+  });
+  await pipeline930.init();
+
   console.log('✅ Review risk backfill suite passed');
 }
 

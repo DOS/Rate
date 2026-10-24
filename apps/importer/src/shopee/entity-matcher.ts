@@ -164,10 +164,14 @@ export class EntityMatcher {
     let ambiguousFuzzy = false;
     const validFuzzyMatches = Array.isArray(fuzzyMatches)
       ? fuzzyMatches.filter(m => {
-          const masterId = typeof m?.master_id === 'string' ? m.master_id.trim() : '';
+          const masterId =
+            typeof m?.master_id === 'string' && !/\p{Cc}/u.test(m.master_id.trim())
+              ? m.master_id.trim()
+              : '';
           const sim = typeof m?.similarity === 'boolean' ? Number.NaN : Number(m?.similarity);
           return (
             masterId.length > 0 &&
+            masterId.length <= 128 &&
             Number.isFinite(sim) &&
             sim >= ENTITY_MATCH_CANDIDATE_FLOOR &&
             sim <= 1
@@ -176,7 +180,7 @@ export class EntityMatcher {
       : [];
     if (validFuzzyMatches.length > 0) {
       const topMatch = validFuzzyMatches[0]!;
-      const topMasterId = String(topMatch.master_id).trim();
+      const topMasterId = String(topMatch.master_id).trim().slice(0, 128);
       const topSim = Number(topMatch.similarity);
       if (topSim >= ENTITY_MATCH_ACCEPT_THRESHOLD) {
         logger.info(
@@ -409,13 +413,42 @@ export class EntityMatcher {
     const existingScreenInch = toBoundedPositiveNumber(row.screen_size_inch, MAX_SCREEN_SIZE_INCH);
     const existingBatteryMah = toBoundedPositiveInt(row.battery_mah, MAX_BATTERY_MAH);
 
+    const safeRowBrand =
+      typeof row.brand === 'string'
+        ? row.brand
+            .replace(/\p{Cc}+/gu, ' ')
+            .trim()
+            .slice(0, 100) || 'Unknown'
+        : 'Unknown';
+    const safeRowModel =
+      typeof row.model === 'string'
+        ? row.model
+            .replace(/\p{Cc}+/gu, ' ')
+            .trim()
+            .slice(0, 200) || 'Unknown'
+        : 'Unknown';
+    const safeRowName =
+      typeof row.name === 'string'
+        ? row.name
+            .replace(/\p{Cc}+/gu, ' ')
+            .trim()
+            .slice(0, 300)
+        : undefined;
+    const safeRowDescription =
+      typeof row.description === 'string'
+        ? row.description
+            .replace(/\p{Cc}+/gu, ' ')
+            .trim()
+            .slice(0, 4_000)
+        : undefined;
+
     const aiResult = await this.enricher.fetchSpecsFromAi({
-      brand: row.brand,
-      model: row.model,
+      brand: safeRowBrand,
+      model: safeRowModel,
       storageGb: existingStorageGb,
       ramGb: existingRamGb,
-      rawTitle: row.name,
-      rawDescription: row.description,
+      rawTitle: safeRowName,
+      rawDescription: safeRowDescription,
       categorySlug: inferredCategorySlug,
     });
 
