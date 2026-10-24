@@ -219,6 +219,13 @@ async function runSuite() {
   assert.equal(keyOf('iPad mini (6th generation) 64GB'), 'apple:ipad-mini-6:64gb');
   assert.equal(keyOf('iPad mini 64GB'), 'apple:ipad-mini:64gb');
   assert.equal(keyOf('iPad mini 2024 128GB'), 'apple:ipad-mini:128gb');
+  // A "5G" or "4G" network or a storage after "mini" is no generation: "mini 5G" is not the
+  // 2019 iPad mini 5, and "mini 64 Wifi" is no "mini 64".
+  assert.equal(keyOf('Apple iPad mini 5G 64GB'), 'apple:ipad-mini:64gb');
+  assert.equal(keyOf('Apple iPad mini 4G 64GB'), 'apple:ipad-mini:64gb');
+  assert.equal(keyOf('Apple iPad mini 64 Wifi'), 'apple:ipad-mini:unknown');
+  assert.equal(keyOf('Apple iPad mini 64/256GB'), 'apple:ipad-mini:256gb');
+  assert.equal(keyOf('Apple iPad mini 6 5G 64GB'), 'apple:ipad-mini-6:64gb');
   assert.equal(
     normalizer.normalize(createDummyShopeeProduct('iPad Mini 7 Wifi 128GB')).model,
     'iPad mini 7'
