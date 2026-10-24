@@ -9347,7 +9347,80 @@ async function runCoreArchitectureSuite() {
     );
 
     console.log(
-      '  ✅ [103/103] Deals, Extension & Server Rate Cache Input Bounds (#892) passed'
+      '  ✅ [103/104] Deals, Extension & Server Rate Cache Input Bounds (#892) passed'
+    );
+  }
+
+  // 104. Rate Domain Core Image URL, Vote Count & Parser Bounds (#894)
+  {
+    const domainCoreMod =
+      require('../../../lib/rate-domain-core') as typeof import('../../../lib/rate-domain-core');
+
+    assert.equal(
+      domainCoreMod.toSafeNonNegativeVoteCount(true),
+      0,
+      'toSafeNonNegativeVoteCount must reject boolean true'
+    );
+    assert.equal(
+      domainCoreMod.toSafeNonNegativeVoteCount('15'),
+      15,
+      'toSafeNonNegativeVoteCount must accept numeric strings'
+    );
+
+    const bayesian = domainCoreMod.computeBayesianRatingSummary([
+      {
+        rating_star: true as unknown as number,
+        helpfulness_weight: true as unknown as number,
+        include_in_rating: true,
+      },
+    ]);
+    assert.equal(
+      bayesian.effectiveWeightSum,
+      0,
+      'computeBayesianRatingSummary must ignore non-numeric rating_star / helpfulness_weight'
+    );
+
+    assert.equal(
+      domainCoreMod.isImageUrl('https://user:pass@evil.example/img.jpg'),
+      false,
+      'isImageUrl must reject URLs with embedded credentials'
+    );
+    assert.equal(
+      domainCoreMod.isImageUrl('https://cdn.example.com/img\u0000.jpg'),
+      false,
+      'isImageUrl must reject URLs with control characters'
+    );
+    assert.equal(
+      domainCoreMod.isImageUrl('//cdn.example.com/valid.jpg'),
+      true,
+      'isImageUrl must accept valid protocol-relative URLs'
+    );
+
+    assert.equal(
+      domainCoreMod.sanitizePostgrestFilterToken(123 as unknown as string),
+      '',
+      'sanitizePostgrestFilterToken must guard non-string inputs'
+    );
+    assert.equal(
+      domainCoreMod.parseEcommerceUrlOrQuery(null as unknown as string).isUrl,
+      false,
+      'parseEcommerceUrlOrQuery must guard non-string inputs'
+    );
+    assert.equal(
+      domainCoreMod.stripEcommerceNoiseTokens(123 as unknown as string),
+      '',
+      'stripEcommerceNoiseTokens must guard non-string inputs'
+    );
+    assert.equal(
+      domainCoreMod.extractProductKeywordFromUrl(
+        'https://shopee.vn/iPhone-18-Pro-i.111.222\u0000'
+      ),
+      'iPhone 18 Pro',
+      'extractProductKeywordFromUrl must strip control characters before parsing'
+    );
+
+    console.log(
+      '  ✅ [104/104] Rate Domain Core Image URL, Vote Count & Parser Bounds (#894) passed'
     );
   }
 

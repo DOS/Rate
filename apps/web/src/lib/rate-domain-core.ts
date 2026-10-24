@@ -97,7 +97,11 @@ export function toSafeNonNegativeVoteCount(
   raw: unknown,
   max = 1_000_000
 ): number {
-  const num = Number(raw);
+  const num =
+    typeof raw === 'number' ||
+    (typeof raw === 'string' && raw.trim().length > 0)
+      ? Number(raw)
+      : Number.NaN;
   if (!Number.isFinite(num) || num <= 0) return 0;
   return Math.min(max, Math.floor(num));
 }
@@ -663,8 +667,11 @@ export function computeBayesianRatingSummary(
 
   for (const r of reviews) {
     if (!r.include_in_rating) continue;
-    const rawW = Number(r.helpfulness_weight);
-    const star = Number(r.rating_star);
+    const rawW =
+      typeof r.helpfulness_weight === 'number'
+        ? r.helpfulness_weight
+        : Number.NaN;
+    const star = typeof r.rating_star === 'number' ? r.rating_star : Number.NaN;
     if (
       Number.isFinite(rawW) &&
       rawW > 0 &&
@@ -844,11 +851,23 @@ export const KNOWN_LOCAL_DEVICE_IMAGES = new Set<string>([
  * (DOS/Rate#810).
  */
 export function isImageUrl(value: unknown): value is string {
-  // A host after "http(s)://" or "//"; otherwise one slash and a path.
-  return (
-    typeof value === 'string' &&
-    /^(?:(?:https?:)?\/\/[^\s/?#]+|\/(?!\/)\S)\S*$/i.test(value.trim())
-  );
+  if (typeof value !== 'string') return false;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > 2048 || /[\s\p{Cc}]/u.test(trimmed))
+    return false;
+  if (/^\/(?!\/)\S+$/.test(trimmed)) return true;
+  if (!/^(?:https?:)?\/\/[^\s/?#]+\S*$/i.test(trimmed)) return false;
+  try {
+    const parsed = new URL(
+      trimmed.startsWith('//') ? `https:${trimmed}` : trimmed
+    );
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:')
+      return false;
+    if (parsed.username || parsed.password) return false;
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** The usable images of a stored `images` list, trimmed, in order. */
@@ -1185,7 +1204,8 @@ export function filterAndSortMerchants(
  * so commas, parentheses, dots, or spaces cannot inject arbitrary PostgREST operators.
  */
 export function sanitizePostgrestFilterToken(raw: string): string {
-  return raw.replace(/[^a-zA-Z0-9_-]/g, '');
+  if (typeof raw !== 'string') return '';
+  return raw.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 128);
 }
 
 export interface ParsedEcommerceUrl {
@@ -1264,7 +1284,13 @@ const RETAIL_CATEGORY_ROOT_SLUGS = new Set([
 ]);
 
 export function parseEcommerceUrlOrQuery(raw: string): ParsedEcommerceUrl {
-  const trimmed = raw.trim();
+  const trimmed =
+    typeof raw === 'string'
+      ? raw
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .slice(0, 2048)
+      : '';
   const hasHttpProtocol = /^https?:\/\//i.test(trimmed);
   const hasKnownDomainToken =
     /(?:^|\/\/|\.)(?:shopee\.vn|lazada\.vn|tiki\.vn|tiktok\.com|cellphones\.com\.vn|thegioididong\.com|topzone\.vn|dienmayxanh\.com|fptshop\.com\.vn|hoanghamobile\.com|didongviet\.vn|phongvu\.vn|rate\.vn)(?:\/|$)/i.test(
@@ -1514,7 +1540,9 @@ const ECOMMERCE_SLUG_NOISE_PHRASES_REGEX =
   /(?:^|[\s,.|-]+)(?:điện thoại di động|dien thoai di dong|điện thoại|dien thoai|di động|di dong|smartphone|máy tính bảng|may tinh bang|tablet|máy tính xách tay|may tinh xach tay|laptop|đồng hồ thông minh|dong ho thong minh|smartwatch|tai nghe bluetooth true wireless|tai nghe bluetooth không dây|tai nghe bluetooth khong day|tai nghe chụp tai chống ồn|tai nghe chup tai chong on|tai nghe bluetooth|tai nghe không dây|tai nghe khong day|tai nghe true wireless|tai nghe nhét tai|tai nghe nhet tai|tai nghe(?!\s+(?:có dây|co day))|earbuds|chính hãng vn\/a|chinh hang vn a|chinh hang vna|chính hãng|chinh hang|vn\/a|vn a|vna|fullbox|mới 100%|moi 100%|moi 100|nguyên seal|nguyen seal|trả góp 0%|tra gop 0%|trả góp|tra gop|bảo hành \d+ tháng|bao hanh \d+ thang|bảo hành chính hãng|bao hanh chinh hang|freeship|hoả tốc|hỏa tốc|hoa toc|giá rẻ|gia re|nhập khẩu|nhap khau|quốc tế|quoc te)(?=$|[\s,.|-])/giu;
 
 export function stripEcommerceNoiseTokens(rawText: string): string {
+  if (typeof rawText !== 'string') return '';
   return rawText
+    .replace(/\p{Cc}+/gu, ' ')
     .replace(/\[[^\]]*\]/g, ' ')
     .replace(/\([^)]*\)/g, ' ')
     .replace(ECOMMERCE_SLUG_NOISE_PHRASES_REGEX, ' ')
@@ -1529,8 +1557,8 @@ export function stripEcommerceNoiseTokens(rawText: string): string {
  */
 export function extractProductKeywordFromUrl(rawUrl?: string | null): string {
   if (!rawUrl || typeof rawUrl !== 'string') return '';
-  const trimmed = rawUrl.trim();
-  if (!trimmed) return '';
+  const trimmed = rawUrl.replace(/\p{Cc}+/gu, '').trim();
+  if (!trimmed || trimmed.length > 2048) return '';
   const hasHttpProtocol = /^https?:\/\//i.test(trimmed);
   const hasKnownDomainToken =
     /(?:^|\/\/|\.)(?:shopee\.vn|lazada\.vn|tiki\.vn|tiktok\.com|cellphones\.com\.vn|thegioididong\.com|topzone\.vn|dienmayxanh\.com|fptshop\.com\.vn|hoanghamobile\.com|didongviet\.vn|phongvu\.vn|rate\.vn)(?:\/|$)/i.test(
