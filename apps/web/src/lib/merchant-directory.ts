@@ -78,10 +78,16 @@ export function parseMerchantDirectoryFilters(
     allowed: readonly T[],
     fallback: T
   ): T => {
-    const v = (raw ?? '').trim().toLowerCase() as T;
+    const v = (raw ?? '')
+      .replace(/\p{Cc}+/gu, '')
+      .trim()
+      .toLowerCase() as T;
     return allowed.includes(v) ? v : fallback;
   };
-  const official = (get('official') ?? get('officialOnly') ?? '').toLowerCase();
+  const official = (get('official') ?? get('officialOnly') ?? '')
+    .replace(/\p{Cc}+/gu, '')
+    .trim()
+    .toLowerCase();
   const rawPlatform = (get('platform') ?? 'all')
     .replace(/\p{Cc}+/gu, '')
     .trim()
@@ -248,8 +254,23 @@ export function filterMerchantDirectory(
     .trim()
     .slice(0, 160)
     .toLowerCase();
+  const toCleanLower = (val: unknown): string =>
+    typeof val === 'string'
+      ? val
+          .replace(/\p{Cc}+/gu, ' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .toLowerCase()
+      : '';
   const filtered = safeMerchants.filter((m) => {
-    if (platform !== 'all' && (m.platform || '').toLowerCase() !== platform) {
+    const mPlatform =
+      typeof m.platform === 'string'
+        ? m.platform
+            .replace(/\p{Cc}+/gu, '')
+            .trim()
+            .toLowerCase()
+        : '';
+    if (platform !== 'all' && mPlatform !== platform) {
       return false;
     }
     if (officialOnly && !m.is_official) return false;
@@ -264,10 +285,10 @@ export function filterMerchantDirectory(
     if (seedingTier === 'elevated' && reviewRiskScore <= 15) return false;
     if (kw) {
       const hit =
-        (m.name || '').toLowerCase().includes(kw) ||
-        (m.platform_shop_id || '').toLowerCase().includes(kw) ||
-        (m.platform || '').toLowerCase().includes(kw) ||
-        (m.slug ? m.slug.toLowerCase().includes(kw) : false);
+        toCleanLower(m.name).includes(kw) ||
+        toCleanLower(m.platform_shop_id).includes(kw) ||
+        mPlatform.includes(kw) ||
+        toCleanLower(m.slug).includes(kw);
       if (!hit) return false;
     }
     return true;
