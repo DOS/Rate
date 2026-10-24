@@ -2255,8 +2255,53 @@ async function run() {
     'ingestProduct must skip Step 6 review re-analysis when pricesOnly/skipReviewAnalysis is set'
   );
 
+  // 16k. DOS/Rate#834: AiReviewAnalyzer config bounds, computeJReviewsSummary sanitization, and castReviewVote validation
+  const analyzer834 = new AiReviewAnalyzer({
+    provider: 'openai',
+    baseUrl: 'javascript:alert(1)',
+    timeoutMs: -500,
+  });
+  const analyzer834Internal = analyzer834 as unknown as { baseUrl: string; timeoutMs: number };
+  assert.equal(
+    analyzer834Internal.baseUrl,
+    'https://api.openai.com/v1',
+    'AiReviewAnalyzer must fall back to provider default baseUrl when baseUrl is non-HTTP(S)'
+  );
+  assert.equal(
+    analyzer834Internal.timeoutMs,
+    25000,
+    'AiReviewAnalyzer must fall back to 25000ms when timeoutMs is negative or non-finite'
+  );
+
+  const summary834 = analyzer834.computeJReviewsSummary(
+    [{ id: 'r-834', rating_star: 5, comment: 'Máy rất tốt' }],
+    analyzer834.analyzeWithHeuristics([{ id: 'r-834', rating_star: 5, comment: 'Máy rất tốt' }]),
+    null,
+    ['<b>Pin trâu</b>', 'Pin trâu', '   '],
+    ['<script>Nóng máy</script>'],
+    '  <p>Tổng kết đánh giá</p>  '
+  );
+  assert.deepEqual(
+    summary834.pros,
+    ['Pin trâu'],
+    'computeJReviewsSummary must strip HTML tags and deduplicate pros'
+  );
+  assert.deepEqual(summary834.cons, ['Nóng máy']);
+  assert.equal(summary834.ai_summary, 'Tổng kết đánh giá');
+
+  await assert.rejects(
+    () =>
+      analyzer834.castReviewVote(pricesOnlyStub!, {
+        reviewId: '   ',
+        voterId: 'voter-1',
+        vote: 'up',
+      }),
+    /reviewId and voterId must be non-empty strings/,
+    'castReviewVote must reject blank reviewId or voterId'
+  );
+
   console.log(
-    `✅ [P2/P3 Trust Model & #292/#352/#356/#359/#379/#382/#401/#497/#514/#522/#528/#557] Voter weight, Wilson lower bound (50/52=${wilson50of52} > 1/1=${wilson1of1}), shingle copy seeding (sim=${shingleSim}), affiliate shortlinks, peer floor, ArenaSpecSyncer, Importer & ReviewAnalyzer hardening (#352, #356, #359, #379, #382, #401, #497, #514, #522, #528, #557) verified`
+    `✅ [P2/P3 Trust Model & #292/#352/#356/#359/#379/#382/#401/#497/#514/#522/#528/#557/#834] Voter weight, Wilson lower bound (50/52=${wilson50of52} > 1/1=${wilson1of1}), shingle copy seeding (sim=${shingleSim}), affiliate shortlinks, peer floor, ArenaSpecSyncer, Importer & ReviewAnalyzer hardening (#352, #356, #359, #379, #382, #401, #497, #514, #522, #528, #557, #834) verified`
   );
 
   console.log('\n🎉 ALL AI REVIEW ANALYZER TESTS PASSED!');

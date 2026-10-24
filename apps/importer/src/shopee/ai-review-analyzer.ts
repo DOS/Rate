@@ -1006,19 +1006,33 @@ export class AiReviewAnalyzer {
     this.provider = this.resolveProvider(config.provider);
     const defaults = PROVIDER_DEFAULTS[this.provider];
 
-    this.apiKey = config.apiKey ?? this.resolveApiKey(this.provider);
-    this.baseUrl = trimTrailingSlashes(
+    this.apiKey = (config.apiKey ?? this.resolveApiKey(this.provider)).trim();
+    const rawBaseUrl = trimTrailingSlashes(
       config.baseUrl ||
         process.env.AI_BASE_URL ||
         process.env.DOS_AI_BASE_URL ||
         process.env.OPENAI_BASE_URL ||
         defaults.baseUrl
     );
+    try {
+      const parsedBase = new URL(rawBaseUrl);
+      this.baseUrl =
+        parsedBase.protocol === 'https:' || parsedBase.protocol === 'http:'
+          ? rawBaseUrl
+          : defaults.baseUrl;
+    } catch {
+      this.baseUrl = defaults.baseUrl;
+    }
 
     this.model =
-      config.model || process.env.AI_MODEL || process.env.OPENAI_MODEL || defaults.defaultModel;
+      (config.model || process.env.AI_MODEL || process.env.OPENAI_MODEL || '').trim() ||
+      defaults.defaultModel;
 
-    this.timeoutMs = config.timeoutMs ?? Number(process.env.AI_TIMEOUT_MS || 25000);
+    const rawTimeout = config.timeoutMs ?? Number(process.env.AI_TIMEOUT_MS || 25000);
+    this.timeoutMs =
+      Number.isFinite(rawTimeout) && rawTimeout > 0
+        ? Math.min(Math.max(Math.round(rawTimeout), 1000), 120000)
+        : 25000;
   }
 
   private resolveProvider(explicit?: SupportedAiProvider): SupportedAiProvider {
@@ -1806,6 +1820,14 @@ Return ONLY valid JSON matching:
         ? `Đã phân tích ${reviews.length} đánh giá: giữ lại ${authenticCount} đánh giá thực chất (điểm JReviews có trọng số: ${weightedUserRating}/5★) và loại bỏ ${ignoredCount} đánh giá rác/nhận xu/seeding/bom hàng khỏi điểm tổng.`
         : `Chưa có đánh giá thực chất sau khi lọc ${ignoredCount} bình luận rác/nhận xu.`;
 
+    const cleanPros = Array.from(
+      new Set(aiPros.map(p => sanitizeAiGeneratedText(p, 160)).filter(Boolean))
+    ).slice(0, 6);
+    const cleanCons = Array.from(
+      new Set(aiCons.map(c => sanitizeAiGeneratedText(c, 160)).filter(Boolean))
+    ).slice(0, 6);
+    const cleanSummaryText = sanitizeAiGeneratedText(aiSummaryText, 600);
+
     return {
       total_reviews_analyzed: reviews.length,
       authentic_review_count: authenticCount,
@@ -1817,13 +1839,13 @@ Return ONLY valid JSON matching:
       authenticity_score: authenticityScore,
       sentiment_positive_ratio: sentimentPositiveRatio,
       pros:
-        aiPros.length > 0
-          ? aiPros
+        cleanPros.length > 0
+          ? cleanPros
           : positiveAuthenticCount > 0
             ? ['Nhận phản hồi tích cực từ người dùng thực tế']
             : [],
-      cons: aiCons.length > 0 ? aiCons : [],
-      ai_summary: aiSummaryText || defaultSummary,
+      cons: cleanCons,
+      ai_summary: cleanSummaryText || defaultSummary,
       breakdown_by_category: breakdown,
       bayesian_rating: bayesianRating,
     };
@@ -1990,13 +2012,29 @@ Return ONLY valid JSON matching:
           `[AiReviewAnalyzer] Failed to read existing review_flags: ${error.message}`
         );
       }
+      const validVerdicts = new Set<ReviewVerdict>([
+        'authentic',
+        'suspicious',
+        'fake',
+        'unanalyzed',
+      ]);
+      const validCategories = new Set<ReviewFlagCategory>([
+        'authentic',
+        'low_value_coin_spam',
+        'seeding_fake',
+        'competitor_sabotage',
+        'review_bombing',
+      ]);
       for (const row of (data || []) as Array<Record<string, unknown>>) {
-        if (!row.review_id) continue;
-        preserved.set(String(row.review_id), {
-          verdict: row.verdict as ReviewVerdict,
-          flag_category: row.flag_category as ReviewFlagCategory,
+        const revId = typeof row.review_id === 'string' ? row.review_id.trim() : '';
+        if (!revId) continue;
+        const rawVerdict = row.verdict as ReviewVerdict;
+        const rawFlagCat = row.flag_category as ReviewFlagCategory;
+        preserved.set(revId, {
+          verdict: validVerdicts.has(rawVerdict) ? rawVerdict : 'fake',
+          flag_category: validCategories.has(rawFlagCat) ? rawFlagCat : 'seeding_fake',
           include_in_rating: Boolean(row.include_in_rating),
-          fake_probability: Number(row.fake_probability ?? 0),
+          fake_probability: clamp01(Number(row.fake_probability ?? 0)),
         });
       }
     }
@@ -2237,16 +2275,26 @@ Return ONLY valid JSON matching:
       reportReason?: 'spam' | 'fake' | 'offensive' | 'off_topic' | 'other' | null;
     }
   ): Promise<{ action: 'upserted' | 'deleted' }> {
-    const vote = params.vote ?? null;
+    const reviewId = (params.reviewId || '').trim();
+    const voterId = (params.voterId || '').trim();
+    if (!reviewId || !voterId) {
+      throw new Error('[AiReviewAnalyzer] reviewId and voterId must be non-empty strings');
+    }
+    const vote = params.vote === 'up' || params.vote === 'down' ? params.vote : null;
     const reported = Boolean(params.reported);
-    const reportReason = reported ? (params.reportReason ?? 'other') : null;
+    const validReasons = new Set(['spam', 'fake', 'offensive', 'off_topic', 'other']);
+    const reportReason = reported
+      ? params.reportReason && validReasons.has(params.reportReason)
+        ? params.reportReason
+        : 'other'
+      : null;
 
     if (!vote && !reported) {
       const { error } = await supabase
         .from('review_votes')
         .delete()
-        .eq('review_id', params.reviewId)
-        .eq('voter_id', params.voterId);
+        .eq('review_id', reviewId)
+        .eq('voter_id', voterId);
       if (error) {
         throw new Error(`[AiReviewAnalyzer] Failed to delete review_vote: ${error.message}`);
       }
@@ -2255,8 +2303,8 @@ Return ONLY valid JSON matching:
 
     const { error } = await supabase.from('review_votes').upsert(
       {
-        review_id: params.reviewId,
-        voter_id: params.voterId,
+        review_id: reviewId,
+        voter_id: voterId,
         vote,
         reported,
         report_reason: reportReason,
