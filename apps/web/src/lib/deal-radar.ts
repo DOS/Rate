@@ -39,9 +39,11 @@ export const EMPTY_RADAR_SIGNAL: RadarSignal = Object.freeze({
 export function unwrapRadarPayload(
   json: unknown
 ): CrossPlatformDealRadarResponse | null {
-  const raw = (json as { data?: unknown } | null)?.data ?? json;
-  const payload = raw as Partial<CrossPlatformDealRadarResponse> | null;
-  if (!payload || !Array.isArray(payload.genuineDeals)) return null;
+  if (!json || typeof json !== 'object' || Array.isArray(json)) return null;
+  const raw = (json as { data?: unknown }).data ?? json;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const payload = raw as Partial<CrossPlatformDealRadarResponse>;
+  if (!Array.isArray(payload.genuineDeals)) return null;
   return payload as CrossPlatformDealRadarResponse;
 }
 
@@ -56,6 +58,12 @@ function normalizeRadarSlug(raw: unknown): string {
 }
 
 function toSafeRadarPrice(value: unknown): number {
+  if (typeof value !== 'number' && typeof value !== 'string') {
+    return Number.POSITIVE_INFINITY;
+  }
+  if (typeof value === 'string' && !value.trim()) {
+    return Number.POSITIVE_INFINITY;
+  }
   const n = Number(value);
   return Number.isFinite(n) && n > 0 && n <= MAX_RADAR_VND_PRICE
     ? n
@@ -63,8 +71,16 @@ function toSafeRadarPrice(value: unknown): number {
 }
 
 function toSafeRadarPct(value: unknown, max = 10_000): number {
+  if (typeof value !== 'number' && typeof value !== 'string') return 0;
+  if (typeof value === 'string' && !value.trim()) return 0;
   const n = Number(value);
   return Number.isFinite(n) && n > 0 ? Math.min(n, max) : 0;
+}
+
+function normalizeRadarVerdict(value: unknown): RadarVerdict {
+  return value === 'genuine_deal' || value === 'fake_sale_trap'
+    ? value
+    : 'none';
 }
 
 /** Build a slug -> signal index. A genuine deal wins over a trap. */
@@ -153,24 +169,32 @@ export function radarLabel(
   minSpreadPct = 0,
   locale?: string
 ): string {
-  const sig = signal ?? EMPTY_RADAR_SIGNAL;
+  const sig =
+    signal && typeof signal === 'object' ? signal : EMPTY_RADAR_SIGNAL;
+  const verdict = normalizeRadarVerdict(sig.verdict);
   const loc = locale === 'en' || locale === 'cs' ? locale : 'vi';
+  const safeMinSpreadPct =
+    typeof minSpreadPct === 'number' &&
+    Number.isFinite(minSpreadPct) &&
+    minSpreadPct > 0
+      ? minSpreadPct
+      : 0;
   const safeSavingsPct = toSafeRadarPct(sig.savingsPct);
   const safeFakeMarkupPct = toSafeRadarPct(sig.fakeMarkupPct);
   const safeSpreadPct = toSafeRadarPct(sig.spreadPct);
-  if (sig.verdict === 'genuine_deal') {
+  if (verdict === 'genuine_deal') {
     const pct = safeSavingsPct.toFixed(1);
     if (loc === 'en') return `🔥 Cross-platform low (-${pct}%)`;
     if (loc === 'cs') return `🔥 Minimum napříč obchody (-${pct}%)`;
     return `🔥 Đáy giá đa sàn (-${pct}%)`;
   }
-  if (sig.verdict === 'fake_sale_trap') {
+  if (verdict === 'fake_sale_trap') {
     const pct = safeFakeMarkupPct.toFixed(1);
     if (loc === 'en') return `🚨 Fake sale warning (+${pct}%)`;
     if (loc === 'cs') return `🚨 Upozornění na falešnou slevu (+${pct}%)`;
     return `🚨 Cảnh báo giảm giá ảo (+${pct}%)`;
   }
-  if (safeSpreadPct > 0 && safeSpreadPct >= minSpreadPct) {
+  if (safeSpreadPct > 0 && safeSpreadPct >= safeMinSpreadPct) {
     const pct = safeSpreadPct.toFixed(1);
     if (loc === 'en') return `📊 +${pct}% cross-platform spread`;
     if (loc === 'cs') return `📊 +${pct}% rozdíl mezi e-shopy`;
@@ -181,9 +205,10 @@ export function radarLabel(
 
 /** Flat fields used by every Markdown/CSV/JSON export. */
 export function radarExportFields(signal?: RadarSignal | null) {
-  const sig = signal ?? EMPTY_RADAR_SIGNAL;
+  const sig =
+    signal && typeof signal === 'object' ? signal : EMPTY_RADAR_SIGNAL;
   return {
-    verdict: sig.verdict,
+    verdict: normalizeRadarVerdict(sig.verdict),
     savingsPct: toSafeRadarPct(sig.savingsPct),
     fakeMarkupPct: toSafeRadarPct(sig.fakeMarkupPct),
     spreadPct: toSafeRadarPct(sig.spreadPct),
@@ -198,9 +223,10 @@ export const RADAR_CSV_HEADERS = [
 ] as const;
 
 export function radarCsvCells(signal?: RadarSignal | null): string[] {
-  const sig = signal ?? EMPTY_RADAR_SIGNAL;
+  const sig =
+    signal && typeof signal === 'object' ? signal : EMPTY_RADAR_SIGNAL;
   return [
-    sig.verdict,
+    normalizeRadarVerdict(sig.verdict),
     toSafeRadarPct(sig.savingsPct).toFixed(1),
     toSafeRadarPct(sig.fakeMarkupPct).toFixed(1),
     toSafeRadarPct(sig.spreadPct).toFixed(1),

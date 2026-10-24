@@ -9559,7 +9559,140 @@ async function runCoreArchitectureSuite() {
     );
 
     console.log(
-      '  \u2705 [105/105] Rate API Offer Mapping, Risk Score & Master Row Bounds (#896) passed'
+      '  \u2705 [105/106] Rate API Offer Mapping, Risk Score & Master Row Bounds (#896) passed'
+    );
+  }
+
+  // 106. Issue #898: Deal Radar & Leaderboard Engine Numeric, Criterion & Input Bounds
+  {
+    const dealRadarMod =
+      require('../../../lib/deal-radar') as typeof import('../../../lib/deal-radar');
+    const lbMod =
+      require('../../../lib/leaderboard-engine') as typeof import('../../../lib/leaderboard-engine');
+
+    assert.equal(
+      dealRadarMod.unwrapRadarPayload([]),
+      null,
+      'unwrapRadarPayload must reject top-level arrays'
+    );
+    assert.equal(
+      dealRadarMod.unwrapRadarPayload({ data: [] }),
+      null,
+      'unwrapRadarPayload must reject array data envelopes'
+    );
+
+    const radarIdx898 = dealRadarMod.buildRadarIndex({
+      generatedAt: '2026-01-01T00:00:00Z',
+      genuineDeals: [
+        {
+          productSlug: 'iphone-16-pro\u0000',
+          productName: 'iPhone 16 Pro',
+          platform: 'shopee',
+          merchantId: 'm-1',
+          merchantName: 'Shop 1',
+          priceCurrent: true as unknown as number,
+          savingsVsMedianPct: true as unknown as number,
+          claimedDiscountPct: 0,
+          fakeMarkupPct: 0,
+          verdict: 'best_market_deal',
+        } as unknown as import('../../../lib/deal-radar').CrossPlatformDealRadarItem,
+      ],
+      fakeSaleTraps: [],
+      priceSpreadLeaders: [],
+    } as unknown as import('../../../lib/deal-radar').CrossPlatformDealRadarResponse);
+    const sig898 = dealRadarMod.getRadarSignal(radarIdx898, 'iphone-16-pro');
+    assert.equal(
+      sig898.savingsPct,
+      0,
+      'buildRadarIndex must not coerce boolean savingsVsMedianPct to 1'
+    );
+
+    assert.equal(
+      dealRadarMod.radarLabel(
+        {
+          ...dealRadarMod.EMPTY_RADAR_SIGNAL,
+          verdict:
+            'invalid' as unknown as import('../../../lib/deal-radar').RadarVerdict,
+          spreadPct: 12.5,
+        },
+        NaN,
+        'en'
+      ),
+      '\u{1F4CA} +12.5% cross-platform spread',
+      'radarLabel must normalize invalid verdict and sanitize NaN minSpreadPct to 0'
+    );
+    assert.equal(
+      dealRadarMod.radarExportFields({
+        ...dealRadarMod.EMPTY_RADAR_SIGNAL,
+        verdict:
+          'invalid' as unknown as import('../../../lib/deal-radar').RadarVerdict,
+      }).verdict,
+      'none',
+      'radarExportFields must normalize invalid verdict to none'
+    );
+
+    assert.equal(
+      lbMod.normalizeLeaderboardCategory('  LAPTOPS\u0000 '),
+      'laptops',
+      'normalizeLeaderboardCategory must strip control chars'
+    );
+    assert.equal(
+      lbMod.normalizeLeaderboardCriterion('  BATTERY\u0007 '),
+      'battery',
+      'normalizeLeaderboardCriterion must strip control chars'
+    );
+    assert.equal(
+      lbMod.normalizeLeaderboardPriceSegment('  UNDER15M\u0000 '),
+      'under15m',
+      'normalizeLeaderboardPriceSegment must strip control chars'
+    );
+
+    const scored898 = lbMod.scoreMasterProductForLeaderboard(
+      {
+        id: 'mp-898',
+        slug: 'galaxy-s24-ultra\u0000',
+        name: 'Samsung Galaxy S24 Ultra',
+        brand: 'Samsung',
+        model: 'S24 Ultra',
+        average_rating: 4.8,
+        total_reviews: 25,
+        authentic_review_count: 0,
+        min_price: 24_990_000,
+      } as unknown as import('@repo/shared-data').MasterProduct,
+      'invalid-crit' as unknown as import('../../../lib/leaderboard-engine').LeaderboardCriterionKey
+    );
+    assert.equal(
+      scored898.authenticReviewCount,
+      0,
+      'scoreMasterProductForLeaderboard must preserve explicit authentic_review_count: 0'
+    );
+    assert.equal(
+      scored898.filteredNoiseReviewCount,
+      25,
+      'scoreMasterProductForLeaderboard must count all 25 reviews as filtered noise when authentic_review_count is 0'
+    );
+    assert.ok(
+      Number.isFinite(scored898.activeScore5) &&
+        Number.isFinite(scored898.activeScore10),
+      'scoreMasterProductForLeaderboard must normalize invalid criterion so activeScore5/10 stay finite'
+    );
+
+    assert.deepEqual(
+      lbMod.computeProductStandingInCategory(
+        null as unknown as import('@repo/shared-data').MasterProduct,
+        []
+      ),
+      [],
+      'computeProductStandingInCategory must guard null targetProduct'
+    );
+    assert.equal(
+      lbMod.comparePositiveMinPrices(true as unknown as number, 10_000_000),
+      'B',
+      'comparePositiveMinPrices must reject boolean minPriceA'
+    );
+
+    console.log(
+      '  ✅ [106/106] Deal Radar & Leaderboard Engine Numeric, Criterion & Input Bounds (#898) passed'
     );
   }
 
