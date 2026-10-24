@@ -16,6 +16,7 @@ import {
 } from './extractors/ecommerce-detector.js';
 import {
   DEFAULT_API_BASE_URL,
+  MAX_SPARKLINE_POINTS,
   escapeSafeExternalHref,
   isPrivilegedExtensionSender,
   normalizeAllowedApiBaseUrl,
@@ -2439,6 +2440,126 @@ async function runTests() {
     );
     console.log(
       '  ✅ [Trust Pill Visibility & Sidepanel Sender Guards (#582)] Verified'
+    );
+  }
+
+  // --- DOS/Rate#846: security-guards signal/URL sanitization & ecommerce-detector JSON-LD/ID bounds ---
+  {
+    const sanitizedSig = sanitizeExtensionProductSignal({
+      platform: 'shopee',
+      canonicalUrl:
+        'https://shopee.vn/iPhone-16-i.88201679.29512841920?utm_source=ads#frag',
+      externalItemId: '  29512841920\u0000 ',
+      externalShopId: 'bad<script>shop',
+      title: '  iPhone 16\u0000\r\nPro   Max  ',
+      selectedVariant: '  Titan\t\n256GB  ',
+      price: 28_990_000,
+      originalPrice: 31_990_000,
+      ratingStar: 4.9,
+      ratingCount: 150,
+    });
+    assert.equal(
+      sanitizedSig.canonicalUrl,
+      'https://shopee.vn/iPhone-16-i.88201679.29512841920'
+    );
+    assert.equal(sanitizedSig.externalItemId, '29512841920');
+    assert.equal(sanitizedSig.externalShopId, null);
+    assert.equal(sanitizedSig.title, 'iPhone 16 Pro Max');
+    assert.equal(sanitizedSig.selectedVariant, 'Titan 256GB');
+
+    const credentialSig = sanitizeExtensionProductSignal({
+      platform: 'shopee',
+      canonicalUrl: 'https://user:pass@shopee.vn/iPhone-16-i.1.2',
+      externalItemId: '1'.repeat(121),
+      externalShopId: null,
+      title: 'Test',
+      selectedVariant: '   \u0000  ',
+      price: 10_000_000,
+      originalPrice: null,
+      ratingStar: null,
+      ratingCount: null,
+    });
+    assert.equal(credentialSig.canonicalUrl, '');
+    assert.equal(credentialSig.externalItemId, null);
+    assert.equal(credentialSig.selectedVariant, null);
+
+    assert.equal(
+      escapeSafeExternalHref('https://user:pass@shopee.vn/item'),
+      'https://rate.vn'
+    );
+    assert.equal(
+      escapeSafeExternalHref(`https://shopee.vn/${'a'.repeat(2050)}`),
+      'https://rate.vn'
+    );
+
+    const sparklinePoints = Array.from({ length: 500 }, (_, idx) => ({
+      price: 10_000_000 + idx * 1_000,
+    }));
+    const boundedSparkline = filterValidSparklinePrices(sparklinePoints);
+    assert.equal(boundedSparkline.length, MAX_SPARKLINE_POINTS);
+    assert.equal(boundedSparkline[0], 10_000_000 + (500 - 365) * 1_000);
+    assert.equal(boundedSparkline[boundedSparkline.length - 1], 10_499_000);
+
+    assert.equal(
+      sanitizeProductUrl('https://user:pass@shopee.vn/item-i.1.2'),
+      null
+    );
+    assert.equal(
+      sanitizeProductUrl(`https://shopee.vn/${'a'.repeat(2050)}`),
+      null
+    );
+    assert.equal(
+      detectEcommercePlatform('https://user:pass@shopee.vn/item-i.1.2'),
+      null
+    );
+    assert.equal(
+      detectEcommercePlatform(`https://shopee.vn/${'a'.repeat(2050)}`),
+      null
+    );
+
+    assert.deepEqual(
+      extractIdsFromUrl(
+        'shopee',
+        `https://shopee.vn/item-i.${'1'.repeat(25)}.2`
+      ),
+      { externalItemId: null, externalShopId: null }
+    );
+    assert.deepEqual(
+      extractIdsFromUrl(
+        'tiktok',
+        `https://www.tiktok.com/@${'a'.repeat(65)}/product/123456`
+      ),
+      { externalItemId: '123456', externalShopId: null }
+    );
+    assert.deepEqual(
+      extractIdsFromUrl(
+        'cellphones',
+        `https://cellphones.com.vn/${'a'.repeat(121)}.html`
+      ),
+      { externalItemId: null, externalShopId: null }
+    );
+
+    const hugeGraph = {
+      '@graph': Array.from({ length: 250 }, (_, idx) => ({
+        '@type': 'Product',
+        name: `Item ${idx}`,
+      })),
+    };
+    const flattened = flattenJsonLdEntities(hugeGraph);
+    assert.equal(flattened.length, 100);
+
+    const hugeOffers = Array.from({ length: 250 }, (_, idx) => ({
+      price: idx === 150 ? 19_990_000 : idx === 50 ? 24_990_000 : null,
+      highPrice: idx === 50 ? 27_990_000 : null,
+    }));
+    const offerPrices = extractPriceFromJsonLdOffers(hugeOffers);
+    assert.deepEqual(offerPrices, {
+      price: 24_990_000,
+      originalPrice: 27_990_000,
+    });
+
+    console.log(
+      '  ✅ [Extension Security Guards & Detector Bounds (#846)] Verified'
     );
   }
 
