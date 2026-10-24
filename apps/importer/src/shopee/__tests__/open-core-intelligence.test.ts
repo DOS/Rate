@@ -185,6 +185,27 @@ async function runSuite() {
   // Without the hyphen it needs the "XM": other "Wh1000" strings are not Sony.
   assert.equal(brandOf('Laptop Lenovo ThinkPad 50Wh1000 16 GB'), 'Lenovo');
   assert.equal(brandOf('Huawei FreeBuds WH1000'), 'Huawei');
+  // Apple lines no pattern knew are not iPhones (DOS/Rate#817).
+  assert.equal(
+    keyOf('iPad A16 Wifi 128GB 2025 | Chính hãng Apple Việt Nam'),
+    'apple:ipad-a16:128gb'
+  );
+  assert.equal(keyOf('Apple iPad (A16) Wi-Fi 128GB'), 'apple:ipad-a16:128gb');
+  assert.equal(keyOf('Apple iPad Gen 10 64GB'), keyOf('Apple iPad 10 64GB'));
+  assert.equal(
+    keyOf('MacBook Neo 13 inch A18 Pro 2026 6CPU 5GPU 8GB 256GB'),
+    'apple:macbook-neo:256gb'
+  );
+  assert.equal(categoryOf('MacBook Neo 13 inch A18 Pro 2026 6CPU 5GPU 8GB 256GB'), 'laptops');
+  assert.equal(keyOf('iPhone Air 256GB'), 'apple:iphone-air:256gb');
+  assert.equal(keyOf('iPhone Duo 512GB'), 'apple:iphone-duo:512gb');
+  // "(2nd generation)" is the generation number.
+  assert.equal(keyOf('Apple Watch Ultra (2nd generation) 49mm'), keyOf('Apple Watch Ultra 2 49mm'));
+  assert.equal(keyOf('AirPods Pro (2nd generation)'), keyOf('AirPods Pro 2'));
+  // With no line matched, the family the title names first, else iPhone.
+  assert.equal(keyOf('MacBook M4'), 'apple:macbook:unknown');
+  assert.equal(keyOf('Apple "iPad" 256GB'), 'apple:ipad:256gb');
+  assert.equal(keyOf('Đặt trước iPhone mới, ưu đãi MacBook'), 'apple:iphone:unknown');
   // "Omen" only as a word: Sennheiser "Momentum" is not HP.
   assert.equal(brandOf('Tai nghe Sennheiser Momentum 4 Wireless'), 'Sennheiser');
   assert.equal(brandOf('Laptop HP Omen 16 512GB'), 'HP');

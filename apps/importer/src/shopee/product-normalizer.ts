@@ -111,6 +111,15 @@ export function detectProductOrigin(title: string, description?: string): Produc
   return 'unknown';
 }
 
+/** Apple product families, for a title whose line no Apple pattern matched (DOS/Rate#817). */
+const APPLE_FAMILIES: ReadonlyArray<readonly [RegExp, string]> = [
+  [/iphone/i, 'iPhone'],
+  [/ipad/i, 'iPad'],
+  [/macbook/i, 'MacBook'],
+  [/\bwatch\b/i, 'Watch'],
+  [/airpods/i, 'AirPods'],
+];
+
 /**
  * Detect canonical category slug from product title across all 5 tech categories.
  */
@@ -1104,17 +1113,24 @@ export class ProductNormalizer {
     // 2. Extract Model
     let model = '';
     if (brand === 'Apple') {
-      const iphoneMatch = title.match(
-        /iphone\s*(\d+e\b|\d+(?:\s*(?:pro\s*max|pro|plus|mini|air))?|se(?:\s*(?:\(\s*(?:2020|2022|2025)\s*\)|(?:2020|2022|2025)\b|(?:gen\s*)?[234]\b))?)/i
+      // "(2nd generation)" is the generation number: "Watch Ultra (2nd generation)" is
+      // "Watch Ultra 2", "AirPods Pro (2nd generation)" is "AirPods Pro 2" (DOS/Rate#817).
+      const appleTitle = title.replace(/\(\s*(\d)(?:st|nd|rd|th)\s*gen(?:eration)?\s*\)/gi, ' $1');
+      const iphoneMatch = appleTitle.match(
+        /iphone\s*(\d+e\b|\d+(?:\s*(?:pro\s*max|pro|plus|mini|air))?|air\b|duo\b|se(?:\s*(?:\(\s*(?:2020|2022|2025)\s*\)|(?:2020|2022|2025)\b|(?:gen\s*)?[234]\b))?)/i
       );
-      const ipadMatch = title.match(/ipad\s*(pro\s*m\d+|air\s*m\d+|pro|air|mini|\d+)/i);
-      const macbookMatch = title.match(
-        /macbook\s*(pro\s*m\d+(?:\s*(?:pro|max))?|air\s*m\d+|air|pro)/i
+      // The base iPad by its chip, "iPad A16" or "iPad (A16)", and "iPad Gen 10" like
+      // "iPad 10" (DOS/Rate#817).
+      const ipadMatch = appleTitle.match(
+        /ipad\s*\(?\s*(pro\s*m\d+|air\s*m\d+|pro|air|mini|gen\s*\d+|a\d{2}\b|\d+)/i
       );
-      const watchMatch = title.match(
+      const macbookMatch = appleTitle.match(
+        /macbook\s*(pro\s*m\d+(?:\s*(?:pro|max))?|air\s*m\d+|air|pro|neo)/i
+      );
+      const watchMatch = appleTitle.match(
         /(?:apple\s*)?watch\s*(ultra\s*\d+|series\s*\d+|se(?:\s*\d+)?)/i
       );
-      const airpodsMatch = title.match(
+      const airpodsMatch = appleTitle.match(
         // Each run of spaces has exactly one `\s*` that can match it, so long
         // whitespace cannot backtrack polynomially (CodeQL js/polynomial-redos).
         /airpods\s*(?:(pro)(?:\s*(?:(?:gen|thế\s*hệ)\s*)?(\d+))?|(max)|(?:(?:gen|thế\s*hệ)\s*)?(\d+))/i
@@ -1133,12 +1149,20 @@ export class ProductNormalizer {
           .trim()
           .replace(/^(\d+)E\b/, '$1e')
           .replace(/^se\b/i, 'SE')
+          // "iPhone Air" and "iPhone Duo" have no number (DOS/Rate#817).
+          .replace(
+            /^(air|duo)$/i,
+            (line: string) => line[0]!.toUpperCase() + line.slice(1).toLowerCase()
+          )
           // "16ProMax" and "16 ProMax" are "16 Pro Max" (DOS/Rate#815).
           .replace(/^(\d+)(?=pro|plus|mini|air)/i, '$1 ')
           .replace(/\b(pro)(max)\b/i, '$1 $2');
         model = `iPhone ${normalizedIphoneSuffix}`;
       } else if (ipadMatch && ipadMatch[1]) {
-        const line = ipadMatch[1].trim();
+        const line = ipadMatch[1]
+          .trim()
+          .replace(/^gen\s*/i, '')
+          .replace(/^a(\d{2})$/i, 'A$1');
         model = /^(pro|air)$/i.test(line) && chip ? `iPad ${line} ${chip}` : `iPad ${line}`;
       } else if (macbookMatch && macbookMatch[1]) {
         const line = macbookMatch[1].trim();
@@ -1159,7 +1183,14 @@ export class ProductNormalizer {
           model = 'AirPods';
         }
       } else {
+        // No line matched: keep the family the title names first rather than call it an
+        // iPhone ("MacBook M4", "Apple \"iPad\" 256GB") (DOS/Rate#817).
+        let first = Infinity;
         model = 'iPhone';
+        for (const [family, name] of APPLE_FAMILIES) {
+          const at = title.search(family);
+          if (at >= 0 && at < first) [first, model] = [at, name];
+        }
       }
     } else if (brand === 'Sony' && /w([fh])-?1000xm(\d+)/i.test(title)) {
       // "WF1000XM5" without the hyphen is the same model (DOS/Rate#815).
