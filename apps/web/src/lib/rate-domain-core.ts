@@ -793,16 +793,27 @@ export interface RawMerchantSafeRow {
 }
 
 export function getCategoryRouteHref(slug: string): string {
-  if (
-    slug === 'smartphones' ||
-    slug === 'tablets' ||
-    slug === 'laptops' ||
-    slug === 'smartwatches' ||
-    slug === 'earbuds'
-  ) {
-    return `/${slug}`;
+  const safeSlug =
+    typeof slug === 'string'
+      ? slug
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .toLowerCase()
+          .slice(0, 128)
+      : '';
+  if (!safeSlug) {
+    return '/smartphones';
   }
-  return `/smartphones?category=${encodeURIComponent(slug)}`;
+  if (
+    safeSlug === 'smartphones' ||
+    safeSlug === 'tablets' ||
+    safeSlug === 'laptops' ||
+    safeSlug === 'smartwatches' ||
+    safeSlug === 'earbuds'
+  ) {
+    return `/${safeSlug}`;
+  }
+  return `/smartphones?category=${encodeURIComponent(safeSlug)}`;
 }
 
 export const KNOWN_LOCAL_DEVICE_IMAGES = new Set<string>([
@@ -905,7 +916,13 @@ export function resolveProductImageUrl(
   fallbackUrl?: string | null
 ): string | null {
   if (slugOrProduct && typeof slugOrProduct === 'object') {
-    const slug = slugOrProduct.slug;
+    const slug =
+      typeof slugOrProduct.slug === 'string'
+        ? slugOrProduct.slug
+            .replace(/\p{Cc}+/gu, '')
+            .trim()
+            .toLowerCase()
+        : '';
     if (slug && KNOWN_LOCAL_DEVICE_IMAGES.has(slug)) {
       return `/img/devices/${slug}.jpg`;
     }
@@ -919,8 +936,15 @@ export function resolveProductImageUrl(
       firstImageUrl([fallbackUrl])
     );
   }
-  if (slugOrProduct && KNOWN_LOCAL_DEVICE_IMAGES.has(slugOrProduct)) {
-    return `/img/devices/${slugOrProduct}.jpg`;
+  const cleanStringSlug =
+    typeof slugOrProduct === 'string'
+      ? slugOrProduct
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .toLowerCase()
+      : '';
+  if (cleanStringSlug && KNOWN_LOCAL_DEVICE_IMAGES.has(cleanStringSlug)) {
+    return `/img/devices/${cleanStringSlug}.jpg`;
   }
   return firstImageUrl([fallbackUrl]);
 }
@@ -1021,8 +1045,22 @@ export function getMasterProductHref(
   },
   categorySlugById?: ReadonlyMap<string, string>
 ): string {
-  const catSlug = getMasterProductCategorySlug(product, categorySlugById);
-  return `/${catSlug}/${product.slug}`;
+  const safeProduct =
+    product && typeof product === 'object'
+      ? product
+      : ({ slug: '' } as Pick<MasterProduct, 'slug'>);
+  const catSlug = getMasterProductCategorySlug(safeProduct, categorySlugById);
+  const safeSlug =
+    typeof safeProduct.slug === 'string'
+      ? safeProduct.slug
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .replace(/^\/+|\/+$/g, '')
+          .slice(0, 256)
+      : '';
+  return safeSlug
+    ? `/${catSlug}/${encodeURIComponent(safeSlug)}`
+    : `/${catSlug}`;
 }
 
 export interface MerchantListFilterParams {
@@ -1145,42 +1183,89 @@ export function filterAndSortMerchants(
   merchants: MerchantSummary[],
   params?: MerchantListFilterParams
 ): MerchantSummary[] {
-  let results = [...merchants];
+  if (!Array.isArray(merchants)) return [];
+  let results = merchants.filter((m): m is MerchantSummary =>
+    Boolean(m && typeof m === 'object')
+  );
 
-  if (params?.q && params.q.trim()) {
-    const kw = params.q.trim().toLowerCase();
-    results = results.filter(
-      (m) =>
-        m.name.toLowerCase().includes(kw) ||
-        m.platform_shop_id.toLowerCase().includes(kw) ||
-        m.platform.toLowerCase().includes(kw) ||
-        (m.slug && m.slug.toLowerCase().includes(kw))
-    );
+  const cleanQ =
+    typeof params?.q === 'string'
+      ? params.q
+          .replace(/\p{Cc}+/gu, ' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .slice(0, 200)
+          .toLowerCase()
+      : '';
+  if (cleanQ) {
+    results = results.filter((m) => {
+      const name =
+        typeof m.name === 'string'
+          ? m.name
+              .replace(/\p{Cc}+/gu, ' ')
+              .replace(/\s+/g, ' ')
+              .toLowerCase()
+          : '';
+      const shopId =
+        typeof m.platform_shop_id === 'string'
+          ? m.platform_shop_id.replace(/\p{Cc}+/gu, '').toLowerCase()
+          : '';
+      const platform =
+        typeof m.platform === 'string'
+          ? m.platform.replace(/\p{Cc}+/gu, '').toLowerCase()
+          : '';
+      const slug =
+        typeof m.slug === 'string'
+          ? m.slug.replace(/\p{Cc}+/gu, '').toLowerCase()
+          : '';
+      return (
+        name.includes(cleanQ) ||
+        shopId.includes(cleanQ) ||
+        platform.includes(cleanQ) ||
+        (Boolean(slug) && slug.includes(cleanQ))
+      );
+    });
   }
 
-  if (typeof params?.minTrust === 'number' && !Number.isNaN(params.minTrust)) {
-    results = results.filter((m) => m.trust_score >= params.minTrust!);
+  if (
+    typeof params?.minTrust === 'number' &&
+    Number.isFinite(params.minTrust)
+  ) {
+    const safeMinTrust = Math.max(0, Math.min(100, params.minTrust));
+    results = results.filter((m) => {
+      const trust =
+        typeof m.trust_score === 'number' && Number.isFinite(m.trust_score)
+          ? m.trust_score
+          : 0;
+      return trust >= safeMinTrust;
+    });
   }
 
   if (params?.sort) {
+    const safeNum = (v: unknown, fallback = 0): number =>
+      typeof v === 'number' && Number.isFinite(v) ? v : fallback;
     results.sort((a, b) => {
       switch (params.sort) {
         case 'trust_desc':
           return (
-            b.trust_score - a.trust_score || b.product_count - a.product_count
+            safeNum(b.trust_score) - safeNum(a.trust_score) ||
+            safeNum(b.product_count) - safeNum(a.product_count)
           );
         case 'products_desc':
           return (
-            b.product_count - a.product_count || b.trust_score - a.trust_score
+            safeNum(b.product_count) - safeNum(a.product_count) ||
+            safeNum(b.trust_score) - safeNum(a.trust_score)
           );
         case 'seeding_asc':
           return (
-            a.review_risk_score - b.review_risk_score ||
-            b.trust_score - a.trust_score
+            safeNum(a.review_risk_score, 100) -
+              safeNum(b.review_risk_score, 100) ||
+            safeNum(b.trust_score) - safeNum(a.trust_score)
           );
         case 'followers_desc':
           return (
-            b.follower_count - a.follower_count || b.trust_score - a.trust_score
+            safeNum(b.follower_count) - safeNum(a.follower_count) ||
+            safeNum(b.trust_score) - safeNum(a.trust_score)
           );
         default:
           return 0;
@@ -1298,6 +1383,15 @@ export function parseEcommerceUrlOrQuery(raw: string): ParsedEcommerceUrl {
     );
   const isUrl = hasHttpProtocol || hasKnownDomainToken;
 
+  const toPositiveNumericId = (
+    val: string | undefined,
+    minLen = 1,
+    maxLen = 24
+  ): string | null => {
+    if (!val || val.length < minLen || val.length > maxLen) return null;
+    return /^[1-9]\d*$/.test(val) ? val : null;
+  };
+
   let parsedHost: string | null = null;
   let parsedPathname = trimmed;
   if (hasHttpProtocol || hasKnownDomainToken) {
@@ -1305,7 +1399,10 @@ export function parseEcommerceUrlOrQuery(raw: string): ParsedEcommerceUrl {
       const parsed = new URL(
         hasHttpProtocol ? trimmed : `https://${trimmed.replace(/^\/+/, '')}`
       );
-      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      if (
+        (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') ||
+        Boolean(parsed.username || parsed.password)
+      ) {
         return {
           isUrl: false,
           platform: null,
@@ -1328,11 +1425,13 @@ export function parseEcommerceUrlOrQuery(raw: string): ParsedEcommerceUrl {
         parsedPathname.match(/(?:a-)?i\.(\d+)\.(\d+)/i) ||
         parsedPathname.match(/\/(?:product|opaanlp)\/(\d+)\/(\d+)/i);
       if (itemMatch) {
+        const shopId = toPositiveNumericId(itemMatch[1]);
+        const itemId = toPositiveNumericId(itemMatch[2]);
         return {
           isUrl: true,
           platform: 'shopee',
-          platformShopId: itemMatch[1] || null,
-          platformItemId: itemMatch[2] || null,
+          platformShopId: shopId && itemId ? shopId : null,
+          platformItemId: shopId && itemId ? itemId : null,
           internalSlug: null,
         };
       }
@@ -1341,7 +1440,7 @@ export function parseEcommerceUrlOrQuery(raw: string): ParsedEcommerceUrl {
         return {
           isUrl: true,
           platform: 'shopee',
-          platformShopId: shopMatch[1] || null,
+          platformShopId: toPositiveNumericId(shopMatch[1]),
           platformItemId: null,
           internalSlug: null,
         };
@@ -1357,11 +1456,13 @@ export function parseEcommerceUrlOrQuery(raw: string): ParsedEcommerceUrl {
 
     if (isDomainOrSubdomain(parsedHost, 'lazada.vn')) {
       const lazadaMatch = parsedPathname.match(/-i(\d+)(?:-s(\d+))?\.html/i);
+      const itemId = toPositiveNumericId(lazadaMatch?.[1]);
+      const skuId = toPositiveNumericId(lazadaMatch?.[2]);
       return {
         isUrl: true,
         platform: 'lazada',
-        platformShopId: lazadaMatch?.[2] || null,
-        platformItemId: lazadaMatch?.[1] || null,
+        platformShopId: itemId ? skuId : null,
+        platformItemId: itemId,
         internalSlug: null,
       };
     }
@@ -1372,7 +1473,7 @@ export function parseEcommerceUrlOrQuery(raw: string): ParsedEcommerceUrl {
         isUrl: true,
         platform: 'tiki',
         platformShopId: null,
-        platformItemId: tikiMatch?.[1] || null,
+        platformItemId: toPositiveNumericId(tikiMatch?.[1]),
         internalSlug: null,
       };
     }
@@ -1390,12 +1491,12 @@ export function parseEcommerceUrlOrQuery(raw: string): ParsedEcommerceUrl {
       const prodMatch =
         parsedPathname.match(/\/product\/(\d+)/i) ||
         parsedPathname.match(/\/view\/product\/(\d+)/i);
-      const shopMatch = parsedPathname.match(/\/@([a-zA-Z0-9_.-]+)/);
+      const shopMatch = parsedPathname.match(/\/@([a-zA-Z0-9_.-]{1,64})/);
       return {
         isUrl: true,
         platform: 'tiktok',
         platformShopId: shopMatch?.[1] || null,
-        platformItemId: prodMatch?.[1] || null,
+        platformItemId: toPositiveNumericId(prodMatch?.[1], 6, 24),
         internalSlug: null,
       };
     }
@@ -1482,35 +1583,46 @@ export function parseEcommerceUrlOrQuery(raw: string): ParsedEcommerceUrl {
     trimmed.match(/(?:a-)?i\.(\d+)\.(\d+)/i) ||
     trimmed.match(/\/(?:product|opaanlp)\/(\d+)\/(\d+)/i);
   if (shopeeItemMatch) {
-    return {
-      isUrl: true,
-      platform: 'shopee',
-      platformShopId: shopeeItemMatch[1] || null,
-      platformItemId: shopeeItemMatch[2] || null,
-      internalSlug: null,
-    };
+    const shopId = toPositiveNumericId(shopeeItemMatch[1]);
+    const itemId = toPositiveNumericId(shopeeItemMatch[2]);
+    if (shopId && itemId) {
+      return {
+        isUrl: true,
+        platform: 'shopee',
+        platformShopId: shopId,
+        platformItemId: itemId,
+        internalSlug: null,
+      };
+    }
   }
 
   const lazadaMatch = trimmed.match(/-i(\d+)(?:-s(\d+))?\.html/i);
   if (lazadaMatch) {
-    return {
-      isUrl: true,
-      platform: 'lazada',
-      platformShopId: lazadaMatch[2] || null,
-      platformItemId: lazadaMatch[1] || null,
-      internalSlug: null,
-    };
+    const itemId = toPositiveNumericId(lazadaMatch[1]);
+    const skuId = toPositiveNumericId(lazadaMatch[2]);
+    if (itemId) {
+      return {
+        isUrl: true,
+        platform: 'lazada',
+        platformShopId: skuId,
+        platformItemId: itemId,
+        internalSlug: null,
+      };
+    }
   }
 
   const tikiMatch = trimmed.match(/-p(\d+)\.html/i);
   if (tikiMatch) {
-    return {
-      isUrl: true,
-      platform: 'tiki',
-      platformShopId: null,
-      platformItemId: tikiMatch[1] || null,
-      internalSlug: null,
-    };
+    const itemId = toPositiveNumericId(tikiMatch[1]);
+    if (itemId) {
+      return {
+        isUrl: true,
+        platform: 'tiki',
+        platformShopId: null,
+        platformItemId: itemId,
+        internalSlug: null,
+      };
+    }
   }
 
   // Rate.vn internal relative URL: /smartphones/<slug>, /tablets/<slug>, /laptops/<slug>, /smartwatches/<slug>, /earbuds/<slug>
