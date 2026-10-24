@@ -9692,7 +9692,143 @@ async function runCoreArchitectureSuite() {
     );
 
     console.log(
-      '  ✅ [106/106] Deal Radar & Leaderboard Engine Numeric, Criterion & Input Bounds (#898) passed'
+      '  ✅ [106/107] Deal Radar & Leaderboard Engine Numeric, Criterion & Input Bounds (#898) passed'
+    );
+  }
+
+  // 107. Issue #900: Offer-Plausibility, Product-Competitors & Copy/SEO/Sitemap Helpers Bounds
+  {
+    const plausMod =
+      require('../../../lib/offer-plausibility') as typeof import('../../../lib/offer-plausibility');
+    const compMod =
+      require('../../../lib/product-competitors') as typeof import('../../../lib/product-competitors');
+    const verdictCopyMod =
+      require('../../../lib/discount-verdict-copy') as typeof import('../../../lib/discount-verdict-copy');
+    const detailCopyMod =
+      require('../../../lib/product-detail-copy') as typeof import('../../../lib/product-detail-copy');
+    const revDisplayMod =
+      require('../../../lib/review-display') as typeof import('../../../lib/review-display');
+    const seoMod =
+      require('../../../lib/seo') as typeof import('../../../lib/seo');
+    const sitemapMod =
+      require('../../../lib/sitemap-lastmod') as typeof import('../../../lib/sitemap-lastmod');
+
+    assert.equal(
+      plausMod.implausiblyLowIndexes([
+        true as unknown as number,
+        20_000_000,
+        21_000_000,
+      ]).size,
+      0,
+      'implausiblyLowIndexes must ignore boolean true instead of coercing to 1 VND'
+    );
+    assert.equal(
+      plausMod.isImplausiblyLowPrice(true as unknown as number, [
+        { price_current: 20_000_000 },
+        { price_current: 21_000_000 },
+      ]),
+      false,
+      'isImplausiblyLowPrice must reject boolean price'
+    );
+    const lowIds900 = plausMod.implausiblyLowOfferIds([
+      { id: 'bait-1\u0000', price_current: 1_000_000 },
+      { id: 'real-1', price_current: 20_000_000 },
+      { id: 'real-2', price_current: 21_000_000 },
+    ]);
+    assert.equal(
+      lowIds900.has('bait-1'),
+      true,
+      'implausiblyLowOfferIds must strip control chars from id'
+    );
+
+    const rankedPeers900 = compMod.rankRelatedCompetitors(
+      [
+        { slug: 'iphone-16\u0000', min_price: 20_000_000 },
+        { slug: 'galaxy-s24', min_price: true as unknown as number },
+        { slug: 'xiaomi-14', min_price: 19_000_000 },
+      ],
+      '  iphone-16  ',
+      20_000_000,
+      true as unknown as number
+    );
+    assert.equal(
+      rankedPeers900.length,
+      2,
+      'rankRelatedCompetitors must exclude currentSlug after stripping control chars'
+    );
+    assert.equal(
+      rankedPeers900[0]?.slug,
+      'xiaomi-14',
+      'rankRelatedCompetitors must rank priced peer ahead of boolean min_price peer'
+    );
+    assert.equal(
+      compMod.buildKeySpecLine(
+        null as unknown as import('@repo/shared-data').MasterProduct
+      ),
+      ''
+    );
+
+    const vCopy900 = verdictCopyMod.discountVerdictCopy(
+      (k, v) => `${k}:${JSON.stringify(v)}`,
+      {
+        verdict: 'fake_discount',
+        price_current: true as unknown as number,
+        price_original: true as unknown as number,
+        historical_median_price: 20_000_000,
+        historical_max_price: 22_000_000,
+        claimed_discount_pct: true as unknown as number,
+        real_discount_vs_median_pct: 0,
+      } as unknown as import('../../../lib/rate-api').OfferDiscountAnalysis
+    );
+    assert.match(
+      vCopy900.explanation,
+      /"claimed":0/,
+      'discountVerdictCopy must not coerce boolean claimed_discount_pct to 1'
+    );
+
+    const rExp900 = detailCopyMod.radarExplanation({
+      verdict: 'genuine_deal',
+      genuineDeal: {
+        savingsVsMedianVnd: true as unknown as number,
+        savingsVsMedianPct: true as unknown as number,
+        merchantName: 'Shop\u0000A',
+        platform: 'shopee\u0000',
+      } as unknown as import('../../../lib/deal-radar').CrossPlatformDealRadarItem,
+      fakeSaleTrap: null,
+    });
+    assert.equal(
+      rExp900?.key === 'radarExplanationGenuineDeal'
+        ? rExp900.values.pct
+        : null,
+      '0',
+      'radarExplanation must not coerce boolean savingsVsMedianPct to 1'
+    );
+
+    assert.equal(
+      revDisplayMod.isFilteredOutReview({
+        verdict: 'authentic',
+        include_in_rating: true,
+        helpfulness_weight: true as unknown as number,
+      }),
+      true,
+      'isFilteredOutReview must treat boolean helpfulness_weight as invalid'
+    );
+
+    assert.equal(seoMod.fitTitle(null as unknown as string[]), '');
+    const jsonLd900 = seoMod.siteJsonLd('evil-locale', 'Hello\u0000World');
+    assert.equal(jsonLd900['@graph'][1]?.inLanguage, 'vi');
+    assert.equal(jsonLd900['@graph'][1]?.description, 'Hello World');
+
+    const invalidDate900 = new Date('invalid');
+    const validDate900 = new Date('2026-01-15T00:00:00Z');
+    assert.equal(
+      sitemapMod.newestOf(invalidDate900, validDate900),
+      validDate900,
+      'newestOf must ignore Invalid Date instances'
+    );
+
+    console.log(
+      '  ✅ [107/107] Offer-Plausibility, Product-Competitors & Copy/SEO/Sitemap Helpers Bounds (#900) passed'
     );
   }
 

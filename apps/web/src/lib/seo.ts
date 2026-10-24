@@ -23,7 +23,8 @@ export function fitTitle(
   candidates: readonly string[],
   max: number = MAX_TITLE_LENGTH
 ): string {
-  const rawMax = Number(max);
+  if (!Array.isArray(candidates)) return '';
+  const rawMax = typeof max === 'number' ? max : NaN;
   const limit = Number.isFinite(rawMax)
     ? Math.max(1, Math.min(1000, Math.floor(rawMax)))
     : MAX_TITLE_LENGTH;
@@ -97,6 +98,15 @@ export function absoluteUrl(pathOrUrl: string): string {
 
 /** Organization and WebSite JSON-LD for the home page (DOS/Rate#738). */
 export function siteJsonLd(locale: string, description: string) {
+  const safeLocale = locale === 'en' || locale === 'cs' ? locale : 'vi';
+  const safeDescription =
+    typeof description === 'string'
+      ? description
+          .replace(/\p{Cc}+/gu, ' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .slice(0, 500)
+      : '';
   const organizationId = `${SITE_URL}/#organization`;
   return {
     '@context': 'https://schema.org',
@@ -113,8 +123,8 @@ export function siteJsonLd(locale: string, description: string) {
         '@id': `${SITE_URL}/#website`,
         name: 'Rate.vn',
         url: SITE_URL,
-        description,
-        inLanguage: locale,
+        description: safeDescription,
+        inLanguage: safeLocale,
         publisher: { '@id': organizationId },
       },
     ],

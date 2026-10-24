@@ -54,8 +54,13 @@ export type RadarExplanation =
 
 const COPY_CONTROL_CHAR_RE = /\p{Cc}/gu;
 
-const vnd = (value: number) => {
-  const num = Number(value);
+const vnd = (value: unknown) => {
+  const num =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string' && value.trim()
+        ? Number(value)
+        : 0;
   const safe =
     Number.isFinite(num) && num > 0
       ? Math.min(Math.round(num), MAX_VALID_VND_PRICE)
@@ -64,7 +69,12 @@ const vnd = (value: number) => {
 };
 
 const safePctString = (value: unknown, max = 10_000): string => {
-  const num = Number(value);
+  const num =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string' && value.trim()
+        ? Number(value)
+        : 0;
   if (!Number.isFinite(num) || num <= 0) return '0';
   return String(Math.min(num, max));
 };
@@ -100,7 +110,21 @@ export function radarExplanation(
     trap &&
     trap.priceOriginal != null
   ) {
-    const rawDiff = Number(trap.priceCurrent) - Number(trap.marketMinPrice);
+    const current =
+      typeof trap.priceCurrent === 'number'
+        ? trap.priceCurrent
+        : typeof trap.priceCurrent === 'string' &&
+            String(trap.priceCurrent).trim()
+          ? Number(trap.priceCurrent)
+          : NaN;
+    const floor =
+      typeof trap.marketMinPrice === 'number'
+        ? trap.marketMinPrice
+        : typeof trap.marketMinPrice === 'string' &&
+            String(trap.marketMinPrice).trim()
+          ? Number(trap.marketMinPrice)
+          : NaN;
+    const rawDiff = current - floor;
     return {
       key: 'radarExplanationFakeSale',
       values: {
