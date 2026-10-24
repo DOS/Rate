@@ -6,10 +6,13 @@
 //   node scripts/ops/verify-live.mjs [--wait <seconds>] [--base-url https://rate.vn]
 //     [--repo DOS/Rate] [--route /path]...
 //
-// --wait keeps polling while the only problem is a commit mismatch (the build
-// of main is still deploying). On failure it prints the production deployment
-// built from main, the only correct redeploy source: on 2026-10-24 a redeploy
-// of an older production deployment rolled back a release (DOS/Rate#814).
+// --wait keeps polling while the only problem is the commit (the build of main
+// is still deploying); main is re-read on every poll, so a newer promotion is
+// followed, never undone. When the live commit is behind main and main's
+// production deployment is built, it prints that deployment as the one to
+// promote: on 2026-10-24 a redeploy of an older production deployment rolled
+// back a release (DOS/Rate#814). It never suggests a deployment of any other
+// commit.
 
 import { parseArgs } from 'node:util';
 import { DEFAULT_REPO, fail, ghJson, isMain, sleep } from './lib.mjs';
@@ -41,7 +44,11 @@ export function evaluateLive({ mainSha, health, routes }) {
   }
   const commit = health.body?.commit;
   if (!commit) {
-    problems.push({ kind: 'commit', message: '/api/health reports no commit' });
+    problems.push({
+      kind: 'commit',
+      message:
+        '/api/health reports no commit (a deployment from before DOS/Rate#865, or the site is down)',
+    });
   } else if (commit !== mainSha) {
     problems.push({
       kind: 'commit',
@@ -66,6 +73,24 @@ export const onlyCommitMismatch = (problems) =>
 export function redeploySource(statuses) {
   const ok = statuses.find((s) => s.state === 'success' && s.environment_url);
   return ok?.environment_url ?? null;
+}
+
+/**
+ * What to do about a live commit that is not main. `relation` is the GitHub
+ * compare status of live...main: 'ahead' means main has commits live lacks,
+ * i.e. live is behind main. Only then is main's own deployment the fix.
+ */
+export function restoreAdvice({ relation, source }) {
+  if (relation === 'behind' || relation === 'diverged') {
+    return 'Live is not behind main (main moved, or live has commits main lacks). Do not redeploy or promote anything: re-run verify-live.';
+  }
+  if (!source) {
+    return 'No successful Production deployment of main yet: wait for the Vercel build of main. Never redeploy or promote an older deployment.';
+  }
+  const how = `vercel promote ${source} --scope metados`;
+  return relation === 'ahead'
+    ? `Live is behind main. Once main's build is Ready, put it on the domains with: ${how} (a promote does not rebuild and re-enables auto-assignment after a rollback). Never promote or redeploy a deployment built from another commit.`
+    : `Live commit unknown. If rate.vn does not serve main's build, the only deployment to promote is main's: ${how}`;
 }
 
 // One retry after a network error: a single dropped connection is not an
@@ -120,15 +145,30 @@ function findRedeploySource(repo, sha) {
   return null;
 }
 
+function adviceFor(repo, liveSha, mainSha) {
+  try {
+    const relation = liveSha
+      ? ghJson(['api', `repos/${repo}/compare/${liveSha}...${mainSha}`])?.status
+      : null;
+    return restoreAdvice({
+      relation,
+      source: findRedeploySource(repo, mainSha),
+    });
+  } catch (err) {
+    return `Could not look up main's deployment (${err.message}). Do not redeploy or promote anything until it is known.`;
+  }
+}
+
 export async function verifyLive({
   repo = DEFAULT_REPO,
   baseUrl = 'https://rate.vn',
   routes = DEFAULT_ROUTES,
   waitMs = 0,
 } = {}) {
-  const mainSha = ghJson(['api', `repos/${repo}/commits/main`]).sha;
   const deadline = Date.now() + waitMs;
   for (;;) {
+    // Re-read every poll: a promotion during the wait moves main forward.
+    const mainSha = ghJson(['api', `repos/${repo}/commits/main`]).sha;
     const live = await readLive(baseUrl, routes);
     const problems = evaluateLive({ mainSha, ...live });
     if (problems.length === 0) {
@@ -140,12 +180,7 @@ export async function verifyLive({
     if (!onlyCommitMismatch(problems) || Date.now() >= deadline) {
       const lines = problems.map((p) => `- ${p.message}`);
       if (problems.some((p) => p.kind === 'commit')) {
-        const source = findRedeploySource(repo, mainSha);
-        lines.push(
-          source
-            ? `Redeploy source for main: ${source} (vercel redeploy ${source} --target production --scope metados). Never redeploy a deployment built from another commit.`
-            : 'No successful Production deployment of main yet: wait for the Vercel build of main, do not redeploy an older one.'
-        );
+        lines.push(adviceFor(repo, live.health.body?.commit, mainSha));
       }
       return {
         ok: false,

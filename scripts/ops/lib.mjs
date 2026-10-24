@@ -26,6 +26,21 @@ export function ghJson(args) {
   return out ? JSON.parse(out) : null;
 }
 
+/**
+ * Every item of a paginated REST list: `jq` selects the items of one page,
+ * each printed as one JSON line.
+ */
+export function ghPaginated(path, jq) {
+  return gh(['api', '--paginate', path, '--jq', jq])
+    .stdout.split('\n')
+    .filter((line) => line.trim())
+    .map((line) => JSON.parse(line));
+}
+
+/** A path segment per branch-name part: `fix#12` must not become `fix`. */
+export const encodeRef = (ref) =>
+  ref.split('/').map(encodeURIComponent).join('/');
+
 export const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export const isMain = (url) =>

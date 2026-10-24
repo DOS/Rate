@@ -30,14 +30,23 @@ export const STATUSES = {
 
 export const agentLabel = (nick) => `agent:${nick.trim().toLowerCase()}`;
 
-/** Label edits that leave exactly one status label and the agent label. */
+/**
+ * Label edits that leave exactly one status label and one agent label: the
+ * agent running the command now holds the issue, so another agent's claim
+ * label goes (a hand-over).
+ */
 export function labelChanges(current, status, nick) {
   const spec = STATUSES[status];
   if (!spec) throw new Error(`unknown status ${status}`);
-  const want = [spec.label, agentLabel(nick)].filter(Boolean);
+  const mine = agentLabel(nick);
+  const want = [spec.label, mine].filter(Boolean);
   return {
     add: want.filter((l) => !current.includes(l)),
-    remove: current.filter((l) => l.startsWith('status:') && l !== spec.label),
+    remove: current.filter(
+      (l) =>
+        (l.startsWith('status:') && l !== spec.label) ||
+        (l.startsWith('agent:') && l !== mine)
+    ),
   };
 }
 
@@ -80,6 +89,38 @@ export function setBoard({ repo = DEFAULT_REPO, number, status, nick }) {
   const spec = STATUSES[status];
   if (!spec) throw new Error(`unknown status ${status}`);
   const issue = readIssue(repo, number);
+
+  // Labels first: the required task-claim check reads them, so a failure
+  // later on the board leaves the claim intact.
+  const { add, remove } = labelChanges(issue.labels, status, nick);
+  if (add.includes(agentLabel(nick))) {
+    gh(
+      [
+        'label',
+        'create',
+        agentLabel(nick),
+        '-R',
+        repo,
+        '--color',
+        'D93F0B',
+        '--description',
+        `Claimed by Agent: ${nick}`,
+      ],
+      { allowFailure: true } // already exists; a real failure resurfaces below
+    );
+  }
+  gh([
+    'issue',
+    'edit',
+    String(number),
+    '-R',
+    repo,
+    '--add-assignee',
+    '@me',
+    ...add.flatMap((l) => ['--add-label', l]),
+    ...remove.flatMap((l) => ['--remove-label', l]),
+  ]);
+
   let itemId = issue.itemId;
   if (!itemId) {
     itemId = ghJson([
@@ -108,35 +149,6 @@ export function setBoard({ repo = DEFAULT_REPO, number, status, nick }) {
     ]);
   edit(PROJECT.statusField, ['--single-select-option-id', spec.option]);
   edit(PROJECT.agentField, ['--text', nick]);
-
-  const { add, remove } = labelChanges(issue.labels, status, nick);
-  if (add.includes(agentLabel(nick))) {
-    gh(
-      [
-        'label',
-        'create',
-        agentLabel(nick),
-        '-R',
-        repo,
-        '--color',
-        'D93F0B',
-        '--description',
-        `Claimed by Agent: ${nick}`,
-      ],
-      { allowFailure: true } // already exists
-    );
-  }
-  if (add.length > 0 || remove.length > 0) {
-    gh([
-      'issue',
-      'edit',
-      String(number),
-      '-R',
-      repo,
-      ...add.flatMap((l) => ['--add-label', l]),
-      ...remove.flatMap((l) => ['--remove-label', l]),
-    ]);
-  }
   return `${repo}#${number} -> ${status} (${nick})`;
 }
 

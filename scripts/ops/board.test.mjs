@@ -28,6 +28,16 @@ test('leaves exactly one status label', () => {
   );
 });
 
+test('a hand-over replaces the previous agent label', () => {
+  assert.deepEqual(
+    labelChanges(['status:in-review', 'agent:crawl'], 'in-progress', 'Guard'),
+    {
+      add: ['status:in-progress', 'agent:guard'],
+      remove: ['status:in-review', 'agent:crawl'],
+    }
+  );
+});
+
 test('changes nothing when the labels already match', () => {
   assert.deepEqual(
     labelChanges(['status:in-review', 'agent:guard'], 'in-review', 'guard'),

@@ -12,36 +12,46 @@ import { DEFAULT_REPO, fail, gh, ghJson, isMain } from './lib.mjs';
 import { mergeWhenGreen } from './merge-when-green.mjs';
 
 export const PROMOTION_TITLE = 'chore(release): promote dev to main';
+/** The compare API lists at most this many commits. */
+const COMPARE_COMMIT_LIMIT = 250;
 
 /**
- * PR numbers from the squash subjects "title (#123)" on dev, oldest first.
- * Merge commits ("Merge pull request #N from DOS/dev") are back-merges or
- * earlier promotions, not released work.
+ * The squashed PRs on dev ("title (#123)"), oldest first and once each, and
+ * how many single-parent commits carry no PR number. Merge commits are
+ * back-merges, earlier promotions or merge-commit PRs, not separate work.
  */
 export function releasedPrs(commits) {
   const seen = new Set();
   const prs = [];
+  let unnumbered = 0;
   for (const c of commits) {
-    const subject = c.commit.message.split('\n')[0];
     if (c.parents.length > 1) continue;
+    const subject = c.commit.message.split('\n')[0];
     const match = subject.match(/\(#(\d+)\)\s*$/);
-    if (!match || seen.has(match[1])) continue;
+    if (!match) {
+      unnumbered += 1;
+      continue;
+    }
+    if (seen.has(match[1])) continue;
     seen.add(match[1]);
     prs.push({
       number: Number(match[1]),
       title: subject.replace(/\s*\(#\d+\)\s*$/, ''),
     });
   }
-  return prs;
+  return { prs, unnumbered };
 }
 
-export function promotionBody(prs, extraCommits) {
+export function promotionBody({ prs, unnumbered }, { truncated = false } = {}) {
   const lines = ['Promote dev to main.', ''];
-  if (prs.length > 0) {
-    lines.push(...prs.map((p) => `- #${p.number} ${p.title}`));
+  lines.push(...prs.map((p) => `- #${p.number} ${p.title}`));
+  if (unnumbered > 0) {
+    lines.push(`- ${unnumbered} other commit(s) without a PR number`);
   }
-  if (extraCommits > 0) {
-    lines.push(`- ${extraCommits} other commit(s) without a PR number`);
+  if (truncated) {
+    lines.push(
+      `- more than ${COMPARE_COMMIT_LIMIT} commits: the list above is incomplete`
+    );
   }
   lines.push(
     '',
@@ -49,6 +59,10 @@ export function promotionBody(prs, extraCommits) {
   );
   return lines.join('\n');
 }
+
+/** The open promotion PR: head dev of this repository, never a fork's dev. */
+export const ownPromotionPr = (open) =>
+  (open ?? []).find((p) => !p.isCrossRepository) ?? null;
 
 export async function promote({ repo = DEFAULT_REPO, merge = true } = {}) {
   const compare = ghJson(['api', `repos/${repo}/compare/main...dev`]);
@@ -58,27 +72,32 @@ export async function promote({ repo = DEFAULT_REPO, merge = true } = {}) {
       message: 'dev has nothing that main lacks: no promotion needed',
     };
   }
-  const prs = releasedPrs(compare.commits);
-  const singleParent = compare.commits.filter(
-    (c) => c.parents.length === 1
-  ).length;
+  const body = promotionBody(releasedPrs(compare.commits), {
+    truncated: compare.ahead_by > compare.commits.length,
+  });
 
-  const open = ghJson([
-    'pr',
-    'list',
-    '--repo',
-    repo,
-    '--base',
-    'main',
-    '--head',
-    'dev',
-    '--state',
-    'open',
-    '--json',
-    'number,url',
-  ]);
-  let number = open[0]?.number;
-  if (!number) {
+  const existing = ownPromotionPr(
+    ghJson([
+      'pr',
+      'list',
+      '--repo',
+      repo,
+      '--base',
+      'main',
+      '--head',
+      'dev',
+      '--state',
+      'open',
+      '--json',
+      'number,url,isCrossRepository',
+    ])
+  );
+  let number = existing?.number;
+  if (number) {
+    // dev may have moved since the PR was opened: list what it releases now.
+    gh(['pr', 'edit', String(number), '--repo', repo, '--body', body]);
+    console.log(`reusing open promotion PR #${number}`);
+  } else {
     const url = gh([
       'pr',
       'create',
@@ -91,14 +110,10 @@ export async function promote({ repo = DEFAULT_REPO, merge = true } = {}) {
       '--title',
       PROMOTION_TITLE,
       '--body',
-      promotionBody(prs, singleParent - prs.length),
+      body,
     ]).stdout.trim();
     number = Number(url.split('/').pop());
-    console.log(
-      `opened ${url} (${prs.length} PRs, ${compare.ahead_by} commits)`
-    );
-  } else {
-    console.log(`reusing open promotion PR #${number}`);
+    console.log(`opened ${url} (${compare.ahead_by} commits)`);
   }
   if (!merge)
     return {
