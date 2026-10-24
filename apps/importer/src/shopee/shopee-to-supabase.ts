@@ -325,7 +325,12 @@ export class ShopeeIngestionPipeline {
           : await eqBuilder.not('platform_review_id', 'is', null);
       if (error) throw new Error(`${errorPrefix}: ${error.message}`);
       for (const r of (data || []) as Array<{ platform_review_id: string }>) {
-        if (r?.platform_review_id) found.add(r.platform_review_id);
+        if (!r || typeof r !== 'object' || typeof r.platform_review_id !== 'string') continue;
+        const cleanRevId = r.platform_review_id
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .slice(0, 160);
+        if (cleanRevId) found.add(cleanRevId);
       }
       if (typeof eqBuilder.in !== 'function') break;
     }
@@ -344,9 +349,20 @@ export class ShopeeIngestionPipeline {
     }
 
     for (const c of cats || []) {
-      this.categoryIdBySlug.set(c.slug, c.id);
-      if (c.slug === 'smartphones') {
-        this.smartphoneCategoryId = c.id;
+      if (!c || typeof c !== 'object') continue;
+      const safeSlug =
+        typeof c.slug === 'string'
+          ? c.slug
+              .replace(/\p{Cc}+/gu, '')
+              .trim()
+              .slice(0, 120)
+          : '';
+      const safeId =
+        typeof c.id === 'string' && !/\p{Cc}/u.test(c.id.trim()) ? c.id.trim().slice(0, 128) : '';
+      if (!safeSlug || !safeId) continue;
+      this.categoryIdBySlug.set(safeSlug, safeId);
+      if (safeSlug === 'smartphones') {
+        this.smartphoneCategoryId = safeId;
       }
     }
 
