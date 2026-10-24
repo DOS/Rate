@@ -42,6 +42,7 @@ export interface RevalidationTargetsInput {
 
 const SAFE_CACHE_TAG_REGEX = /^rate:[a-z0-9:._-]{1,150}$/i;
 const SAFE_ENTITY_TOKEN_REGEX = /^[a-z0-9._-]+$/i;
+const SAFE_MERCHANT_IDENTIFIER_REGEX = /^[a-z0-9:._-]+$/i;
 
 export function canonicalizeCacheParams(
   value: unknown,
@@ -142,7 +143,11 @@ export function resolveRevalidationTargets(input: RevalidationTargetsInput): {
   for (const merchantId of (input.merchants ?? []).slice(0, 50)) {
     if (typeof merchantId !== 'string') continue;
     const clean = merchantId.trim();
-    if (!clean || clean.length > 120 || !SAFE_ENTITY_TOKEN_REGEX.test(clean)) {
+    if (
+      !clean ||
+      clean.length > 120 ||
+      !SAFE_MERCHANT_IDENTIFIER_REGEX.test(clean)
+    ) {
       continue;
     }
     tagSet.add(merchantCacheTag(clean));

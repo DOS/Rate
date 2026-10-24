@@ -8495,7 +8495,7 @@ async function runCoreArchitectureSuite() {
       tags: ['  RATE:PRODUCTS  ', 'arbitrary-tag', 'rate:bad space'],
       slugs: ['iphone-16-pro', '../bad/slug', 'a'.repeat(130)],
       categories: ['smartphones', 'bad/category'],
-      merchants: ['m-123', 'bad merchant id'],
+      merchants: ['m-123', 'shopee:88201679', 'bad merchant id'],
       paths: ['/smartphones/iphone-16-pro', '//evil.com'],
     });
     assert.equal(targets.tags.includes('rate:products'), true);
@@ -8503,6 +8503,7 @@ async function runCoreArchitectureSuite() {
     assert.equal(targets.tags.includes('rate:product:iphone-16-pro'), true);
     assert.equal(targets.tags.includes('rate:category:smartphones'), true);
     assert.equal(targets.tags.includes('rate:merchant:m-123'), true);
+    assert.equal(targets.tags.includes('rate:merchant:shopee:88201679'), true);
     assert.deepEqual(targets.paths, ['/smartphones/iphone-16-pro']);
 
     assert.equal(
