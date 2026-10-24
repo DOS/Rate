@@ -32,7 +32,8 @@ export function isFilteredOutReview(
   >
 ): boolean {
   if (isPendingReview(review)) return false;
-  return !review.include_in_rating || review.helpfulness_weight <= 0;
+  const weight = Number(review.helpfulness_weight);
+  return !review.include_in_rating || !Number.isFinite(weight) || weight <= 0;
 }
 
 export type SponsorshipBadgeKey =
@@ -58,6 +59,12 @@ const SPONSORSHIP_BADGE_KEYS: Partial<
 export function sponsorshipBadgeKey(
   independence: ReviewIndependenceAxis
 ): SponsorshipBadgeKey | null {
+  if (
+    typeof independence !== 'string' ||
+    !Object.hasOwn(SPONSORSHIP_BADGE_KEYS, independence)
+  ) {
+    return null;
+  }
   return SPONSORSHIP_BADGE_KEYS[independence] ?? null;
 }
 
@@ -104,11 +111,23 @@ export function weightExplanationCopy(
     kind === 'formula' ||
     !Object.hasOwn(WEIGHT_EXPLANATION_KEYS, kind)
   ) {
-    return { text: breakdown.explanationVi };
+    const cleanText =
+      typeof breakdown.explanationVi === 'string'
+        ? breakdown.explanationVi
+            .replace(/\p{Cc}+/gu, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, 300)
+        : '';
+    return { text: cleanText };
   }
+  const rawWeight = Number(breakdown.weight);
+  const safeWeight = Number.isFinite(rawWeight)
+    ? Math.max(0, Math.min(10, rawWeight))
+    : 0;
   return {
     key: WEIGHT_EXPLANATION_KEYS[kind],
-    values: { weight: Number(breakdown.weight).toFixed(2) },
+    values: { weight: safeWeight.toFixed(2) },
   };
 }
 
@@ -129,6 +148,9 @@ const BLEND_NOTE_KEYS: Record<CombinedDualScoreBlendMode, BlendNoteKey> = {
 
 /** Localized key for the `blendFormulaNoteVi` case `computeCombinedDualScore` picked. */
 export function blendNoteKey(mode: CombinedDualScoreBlendMode): BlendNoteKey {
+  if (typeof mode !== 'string' || !Object.hasOwn(BLEND_NOTE_KEYS, mode)) {
+    return 'blendNoteInsufficientData';
+  }
   return BLEND_NOTE_KEYS[mode];
 }
 

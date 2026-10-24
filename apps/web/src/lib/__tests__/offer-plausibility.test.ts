@@ -93,6 +93,16 @@ function main() {
   assert.equal(plausibleMinPrice(5000, []), 5000);
   assert.equal(plausibleMinPrice(5000, [{ price_current: 0 }]), 5000);
 
+  // DOS/Rate#850: Overflowed >1B VND prices are ignored and invalid storedMinPrice falls back to 0.
+  assert.equal(
+    implausiblyLowIndexes([20_000_000, 22_000_000, 9_000_000_000]).size,
+    0,
+    'Overflowed >1B VND price must be ignored and not pull median up (#850)'
+  );
+  assert.equal(plausibleMinPrice(Number.NaN, []), 0);
+  assert.equal(plausibleMinPrice(-5000, []), 0);
+  assert.equal(plausibleMinPrice(5_000_000_000, []), 0);
+
   console.warn('✅ Offer plausibility suite passed');
 }
 

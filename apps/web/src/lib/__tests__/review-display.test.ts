@@ -262,6 +262,32 @@ function main() {
     }),
     { text: cached.explanationVi }
   );
+  // DOS/Rate#850: NaN weight, prototype keys, and control chars in explanationVi
+  assert.equal(
+    isFilteredOutReview({ ...counted, helpfulness_weight: Number.NaN }),
+    true
+  );
+  assert.equal(sponsorshipBadgeKey('constructor' as never), null);
+  assert.equal(
+    blendNoteKey('constructor' as never),
+    'blendNoteInsufficientData'
+  );
+  assert.deepEqual(
+    weightExplanationCopy({
+      weight: Number.NaN,
+      explanationVi: '  Trọng số\u0000\r\n0.00x  ',
+      explanationKind: 'seeding',
+    }),
+    { key: 'weightExplanationSeeding', values: { weight: '0.00' } }
+  );
+  assert.deepEqual(
+    weightExplanationCopy({
+      weight: 1,
+      explanationVi: '  A=1\u0000\r\nB=1  ',
+      explanationKind: 'formula',
+    }),
+    { text: 'A=1 B=1' }
+  );
 
   const blendCases: Array<
     [string, Parameters<typeof computeCombinedDualScore>[0]]

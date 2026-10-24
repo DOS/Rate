@@ -21,10 +21,22 @@ export interface SitemapLastModified {
   bySlug: Map<string, Date>;
 }
 
+const MIN_SITEMAP_TIMESTAMP_MS = Date.UTC(2020, 0, 1);
+const MAX_FUTURE_SKEW_MS = 24 * 60 * 60 * 1000;
+
 function parseDate(value: string | null | undefined): Date | undefined {
-  if (!value) return undefined;
-  const ms = Date.parse(value);
-  return Number.isFinite(ms) ? new Date(ms) : undefined;
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > 64) return undefined;
+  const ms = Date.parse(trimmed);
+  if (
+    !Number.isFinite(ms) ||
+    ms < MIN_SITEMAP_TIMESTAMP_MS ||
+    ms > Date.now() + MAX_FUTURE_SKEW_MS
+  ) {
+    return undefined;
+  }
+  return new Date(ms);
 }
 
 function newer(a: Date | undefined, b: Date | undefined): Date | undefined {
@@ -39,13 +51,24 @@ export function buildSitemapLastModified(
   let latest: Date | undefined;
   const byCategory = new Map<string, Date>();
   const bySlug = new Map<string, Date>();
+  if (!Array.isArray(rows)) return { latest, byCategory, bySlug };
   for (const row of rows) {
+    if (!row) continue;
+    const slug =
+      typeof row.slug === 'string'
+        ? row.slug.replace(/\p{Cc}+/gu, '').trim()
+        : '';
+    const categorySlug =
+      typeof row.categorySlug === 'string'
+        ? row.categorySlug.replace(/\p{Cc}+/gu, '').trim()
+        : '';
+    if (!slug || !categorySlug) continue;
     const date = parseDate(row.updatedAt);
     if (!date) continue;
-    bySlug.set(row.slug, date);
+    bySlug.set(slug, date);
     latest = newer(latest, date);
-    const current = byCategory.get(row.categorySlug);
-    byCategory.set(row.categorySlug, newer(current, date)!);
+    const current = byCategory.get(categorySlug);
+    byCategory.set(categorySlug, newer(current, date)!);
   }
   return { latest, byCategory, bySlug };
 }
