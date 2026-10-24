@@ -77,6 +77,27 @@ function main() {
   );
   assert.equal(newestOf(), undefined);
 
+  // DOS/Rate#850: Reject Unix epoch placeholders (< 2020-01-01) and far-future timestamps (> now + 24h)
+  assert.equal(rowLastModified('1970-01-01T00:00:00Z'), undefined);
+  assert.equal(rowLastModified('2099-01-01T00:00:00Z'), undefined);
+  const cleanedDates = buildSitemapLastModified([
+    {
+      slug: '  iphone-16\u0000 ',
+      categorySlug: ' smartphones\r\n ',
+      updatedAt: '2026-10-05T00:00:00Z',
+    },
+    {
+      slug: '   ',
+      categorySlug: 'smartphones',
+      updatedAt: '2026-10-06T00:00:00Z',
+    },
+  ]);
+  assert.equal(cleanedDates.bySlug.has('iphone-16'), true);
+  assert.equal(
+    cleanedDates.byCategory.get('smartphones')?.toISOString(),
+    '2026-10-05T00:00:00.000Z'
+  );
+
   console.warn('✅ Sitemap lastmod suite passed');
 }
 
