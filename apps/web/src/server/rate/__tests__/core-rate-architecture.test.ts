@@ -3510,9 +3510,12 @@ async function runCoreArchitectureSuite() {
   const healthBody60 = (await healthRes60.json()) as {
     status: string;
     service: string;
+    commit: string | null;
   };
   assert.equal(healthBody60.status, 'ok');
   assert.equal(healthBody60.service, 'rate-web');
+  // The deployed commit, for scripts/ops/verify-live.mjs (DOS/Rate#865).
+  assert.equal(healthBody60.commit, process.env.VERCEL_GIT_COMMIT_SHA || null);
 
   // 60.2 /api/v1/rate/openapi & /api/v1/rate/openapi.json
   const openApiOpt = await openApiRoute.OPTIONS();

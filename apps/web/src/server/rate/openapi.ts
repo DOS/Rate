@@ -1479,7 +1479,7 @@ export function buildRateOpenApiSpec(
           operationId: 'getHealthStatus',
           summary: 'Liveness & readiness health check probe',
           description:
-            'Returns service metadata (`status`, `service: "rate-web"`, `version`, ISO-8601 `timestamp`) and `checks.database`, the result of a small read with the app\'s own database client (3 s timeout, reused for up to 15 s per instance), with `Cache-Control: no-store, max-age=0` for load balancers and uptime monitors.',
+            'Returns service metadata (`status`, `service: "rate-web"`, `version`, ISO-8601 `timestamp`, `commit`: the Git SHA the deployment was built from, or null outside Vercel) and `checks.database`, the result of a small read with the app\'s own database client (3 s timeout, reused for up to 15 s per instance), with `Cache-Control: no-store, max-age=0` for load balancers and uptime monitors.',
           tags: ['Platform Telemetry'],
           responses: {
             '200': {
