@@ -8626,7 +8626,138 @@ async function runCoreArchitectureSuite() {
     );
     assert.equal(payload844?.selected_variant, '128GB Đen');
     console.log(
-      '  ✅ [96/96] Extension server URL credential/length & crowd ingest bounds (#844) passed'
+      '  ✅ [96/97] Extension server URL credential/length & crowd ingest bounds (#844) passed'
+    );
+  }
+
+  // =========================================================================
+  // 97. Navigation, MerchantDirectory, Hero Suggestions & Rate i18n Bounds (#856)
+  // =========================================================================
+  {
+    const { formatHref, isAppLink } = await import('../../../lib/navigation');
+    const { merchantDirectoryFilterParams, summarizeMerchantDirectory } =
+      await import('../../../lib/merchant-directory');
+    const { MAX_HERO_MERCHANTS, toHeroMerchantSuggestions } =
+      await import('../../../lib/hero-merchants');
+    const { MAX_HERO_PRODUCTS, toHeroProductSuggestions } =
+      await import('../../../lib/hero-products');
+
+    assert.equal(formatHref('javascript:alert(1)'), '#');
+    assert.equal(formatHref('data:text/html,<script>alert(1)</script>'), '#');
+    assert.equal(formatHref('//evil.example/phish'), '#');
+    assert.equal(formatHref('/\\evil.example/phish'), '#');
+    assert.equal(formatHref('https://user:pass@rate.vn/deals'), '#');
+    assert.equal(formatHref('httpfoo:bar'), '#');
+    assert.equal(formatHref(`https://rate.vn/${'a'.repeat(2100)}`), '#');
+    assert.equal(formatHref('products/iphone-16\u0000'), '/products/iphone-16');
+    assert.equal(formatHref('#reviews\u0007'), '#reviews');
+    assert.equal(
+      formatHref('mailto:support@rate.vn'),
+      'mailto:support@rate.vn'
+    );
+    assert.equal(formatHref('mailto:bad address@rate.vn'), '#');
+
+    assert.equal(isAppLink('https://rate.vn/smartphones'), true);
+    assert.equal(isAppLink('/smartphones/iphone-16'), true);
+    assert.equal(isAppLink('//evil.example/phish'), false);
+    assert.equal(isAppLink('javascript:alert(1)'), false);
+    assert.equal(isAppLink('https://user:pass@rate.vn/smartphones'), false);
+
+    const summary856 = summarizeMerchantDirectory([
+      {
+        id: 'm1',
+        name: 'Shop 1',
+        platform: 'constructor',
+        platform_shop_id: 's1',
+        is_official: true,
+        trust_score: 90,
+        dosafe_risk_score: 10,
+      } as never,
+      {
+        id: 'm2',
+        name: 'Shop 2',
+        platform: '  Shopee\u0000 ',
+        platform_shop_id: 's2',
+        is_official: false,
+        trust_score: 70,
+        dosafe_risk_score: 20,
+      } as never,
+    ]);
+    assert.equal(summary856.platformCounts.shopee, 1);
+    assert.equal(
+      Object.hasOwn(summary856.platformCounts, 'constructor'),
+      false,
+      'summarizeMerchantDirectory must not collide with Object.prototype.constructor'
+    );
+
+    const filterParams856 = merchantDirectoryFilterParams({
+      query: `  apple\u0000   store   ${'x'.repeat(200)}`,
+      platform: 'bad/platform',
+      officialOnly: true,
+      riskTier: 'safe',
+      seedingTier: 'low',
+      sortBy: 'products_desc',
+    });
+    assert.equal(filterParams856.get('q')?.length, 160);
+    assert.equal(filterParams856.get('platform'), null);
+    assert.equal(filterParams856.get('official'), 'true');
+
+    const heroMerchants856 = toHeroMerchantSuggestions(
+      Array.from({ length: MAX_HERO_MERCHANTS + 10 }, (_, idx) => ({
+        id: `m-${idx}\u0000`,
+        name: `  Store ${idx}\u0007 `,
+        platform: 'shopee',
+        platform_shop_id: `shop-${idx}`,
+        is_official: true,
+        trust_score: 150,
+        dosafe_risk_score: -10,
+      }))
+    );
+    assert.equal(heroMerchants856.length, MAX_HERO_MERCHANTS);
+    assert.equal(heroMerchants856[0]?.id, 'm-0');
+    assert.equal(heroMerchants856[0]?.name, 'Store 0');
+    assert.equal(heroMerchants856[0]?.trust_score, 100);
+    assert.equal(heroMerchants856[0]?.dosafe_risk_score, 0);
+
+    const heroProducts856 = toHeroProductSuggestions(
+      Array.from({ length: MAX_HERO_PRODUCTS + 5 }, (_, idx) => ({
+        id: `p-${idx}`,
+        slug: `slug-${idx}`,
+        name: `Product ${idx}`,
+        brand: 'Apple',
+        model: 'iPhone',
+        model_key: `apple:iphone:${idx}`,
+        variant_name: '128GB',
+        key_specs: {
+          chip: '  A18\u0000 Pro  ',
+          screen: '\u0007   ',
+        },
+        storage_gb: 128,
+        images: ['img1.jpg', 'img2.jpg'],
+        thumbnail: 'thumb.jpg',
+        min_price: 20_000_000,
+        merchant_count: 3,
+        user_rating_weighted: 4.8,
+        average_rating: 4.7,
+        category_id: 'cat-1',
+        metadata: { category_slug: '  smartphones\u0000 ', extra: 1 } as never,
+        specifications: { category_slug: '\u0000  ' } as never,
+      }))
+    );
+    assert.equal(heroProducts856.length, MAX_HERO_PRODUCTS);
+    assert.equal(heroProducts856[0]?.key_specs?.chip, 'A18 Pro');
+    assert.equal(heroProducts856[0]?.key_specs?.screen, undefined);
+    assert.deepEqual(heroProducts856[0]?.metadata, {
+      category_slug: 'smartphones',
+    });
+    assert.deepEqual(heroProducts856[0]?.specifications, {});
+
+    assert.equal(normalizeRateLocale(' EN-US '), 'en');
+    assert.equal(normalizeRateLocale('cs_CZ\u0000'), 'cs');
+    assert.equal(normalizeRateLocale('vi-VN'), 'vi');
+    assert.equal(normalizeRateLocale('fr-FR'), 'vi');
+    console.log(
+      '  ✅ [97/97] Navigation, MerchantDirectory, Hero Suggestions & Rate i18n Bounds (#856) passed'
     );
   }
 
