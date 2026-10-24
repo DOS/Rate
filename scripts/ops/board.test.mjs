@@ -28,9 +28,23 @@ test('leaves exactly one status label', () => {
   );
 });
 
-test('a hand-over replaces the previous agent label', () => {
+test('never takes an issue another agent claimed without --take-over', () => {
+  assert.throws(
+    () =>
+      labelChanges(
+        ['status:in-progress', 'agent:crawl'],
+        'in-progress',
+        'Guard'
+      ),
+    /claimed by agent:crawl: pass --take-over/
+  );
+});
+
+test('a deliberate hand-over replaces the previous agent label', () => {
   assert.deepEqual(
-    labelChanges(['status:in-review', 'agent:crawl'], 'in-progress', 'Guard'),
+    labelChanges(['status:in-review', 'agent:crawl'], 'in-progress', 'Guard', {
+      takeOver: true,
+    }),
     {
       add: ['status:in-progress', 'agent:guard'],
       remove: ['status:in-review', 'agent:crawl'],

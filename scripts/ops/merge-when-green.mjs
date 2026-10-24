@@ -32,6 +32,12 @@ const PROTECTED_BRANCHES = new Set(['main', 'dev', 'master']);
 export const BLOCKED_POLLS = 6;
 /** Consecutive GitHub API errors tolerated before giving up. */
 const MAX_API_ERRORS = 3;
+/** Merge refusals retried after a fresh read of the head. */
+const MAX_MERGE_REFUSALS = 3;
+
+/** Required checks an --ignore would hide: that can never turn green. */
+export const ignoredRequired = (required, ignore) =>
+  required.filter((name) => ignore.includes(name));
 
 /** A re-run adds a check run with the same name: keep the newest of each. */
 export function latestRuns(checkRuns) {
@@ -174,7 +180,7 @@ export async function mergeWhenGreen({
   const deadline = Date.now() + timeoutMs;
   let blockedPolls = 0;
   let apiErrors = 0;
-  let method = null;
+  let mergeRefusals = 0;
   for (;;) {
     let head;
     try {
@@ -188,12 +194,22 @@ export async function mergeWhenGreen({
       continue;
     }
     const { pr } = head;
-    // Refuse a wrong method before waiting, not after the checks pass.
-    if (pr.state === 'open' && !method) {
+    // Refuse a wrong method or an ignored required check before waiting, not
+    // after the checks pass; both are re-read each poll (a PR can be
+    // retargeted).
+    let method = null;
+    if (pr.state === 'open') {
       try {
         method = mergeMethodFor(pr.base.ref, requested);
       } catch (err) {
         return { ok: false, message: `PR ${number}: ${err.message}` };
+      }
+      const conflict = ignoredRequired(head.required, ignore);
+      if (conflict.length > 0) {
+        return {
+          ok: false,
+          message: `PR ${number}: cannot --ignore required check(s) ${conflict.join(', ')}`,
+        };
       }
     }
     const checks = evaluateChecks(head.runs, head.statuses, {
@@ -220,6 +236,12 @@ export async function mergeWhenGreen({
         { allowFailure: true }
       );
       if (merged.status !== 0) {
+        // A check re-queued after the last read (for example by a PR edit)
+        // makes GitHub refuse briefly: read the head again before giving up.
+        if (++mergeRefusals < MAX_MERGE_REFUSALS) {
+          await sleep(intervalMs);
+          continue;
+        }
         return {
           ok: false,
           message: `PR ${number} merge refused: ${merged.stderr.trim()}`,

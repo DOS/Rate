@@ -89,13 +89,16 @@ export async function promote({ repo = DEFAULT_REPO, merge = true } = {}) {
       '--state',
       'open',
       '--json',
-      'number,url,isCrossRepository',
+      'number,url,isCrossRepository,body',
     ])
   );
   let number = existing?.number;
   if (number) {
     // dev may have moved since the PR was opened: list what it releases now.
-    gh(['pr', 'edit', String(number), '--repo', repo, '--body', body]);
+    // Only on a real change, since an edit re-runs the PR-base check.
+    if ((existing.body ?? '').trim() !== body.trim()) {
+      gh(['pr', 'edit', String(number), '--repo', repo, '--body', body]);
+    }
     console.log(`reusing open promotion PR #${number}`);
   } else {
     const url = gh([

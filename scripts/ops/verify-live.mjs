@@ -166,9 +166,23 @@ export async function verifyLive({
   waitMs = 0,
 } = {}) {
   const deadline = Date.now() + waitMs;
+  let apiErrors = 0;
   for (;;) {
     // Re-read every poll: a promotion during the wait moves main forward.
-    const mainSha = ghJson(['api', `repos/${repo}/commits/main`]).sha;
+    let mainSha;
+    try {
+      mainSha = ghJson(['api', `repos/${repo}/commits/main`]).sha;
+      apiErrors = 0;
+    } catch (err) {
+      if (++apiErrors >= 3 || Date.now() >= deadline) {
+        return {
+          ok: false,
+          message: `Could not read main (${err.message}). Do not redeploy or promote anything until it is known.`,
+        };
+      }
+      await sleep(POLL_MS);
+      continue;
+    }
     const live = await readLive(baseUrl, routes);
     const problems = evaluateLive({ mainSha, ...live });
     if (problems.length === 0) {

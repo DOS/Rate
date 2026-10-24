@@ -7,7 +7,8 @@
 //
 // The status label replaces any other status:* label, the agent label
 // (agent:<nick>) is created when missing, and an issue not yet on the board
-// is added to it.
+// is added to it. An issue another agent has claimed is refused unless
+// --take-over is passed (a hand-over or JOY's assignment).
 
 import { parseArgs } from 'node:util';
 import { DEFAULT_REPO, fail, gh, ghJson, isMain } from './lib.mjs';
@@ -31,14 +32,20 @@ export const STATUSES = {
 export const agentLabel = (nick) => `agent:${nick.trim().toLowerCase()}`;
 
 /**
- * Label edits that leave exactly one status label and one agent label: the
- * agent running the command now holds the issue, so another agent's claim
- * label goes (a hand-over).
+ * Label edits that leave exactly one status label and one agent label.
+ * An issue claimed by another agent is never taken silently (AGENTS.md
+ * section 1): that needs `takeOver`, and its claim label is then removed.
  */
-export function labelChanges(current, status, nick) {
+export function labelChanges(current, status, nick, { takeOver = false } = {}) {
   const spec = STATUSES[status];
   if (!spec) throw new Error(`unknown status ${status}`);
   const mine = agentLabel(nick);
+  const others = current.filter((l) => l.startsWith('agent:') && l !== mine);
+  if (others.length > 0 && !takeOver) {
+    throw new Error(
+      `claimed by ${others.join(', ')}: pass --take-over only when that agent handed it over or JOY assigned it`
+    );
+  }
   const want = [spec.label, mine].filter(Boolean);
   return {
     add: want.filter((l) => !current.includes(l)),
@@ -85,14 +92,26 @@ function readIssue(repo, number) {
   };
 }
 
-export function setBoard({ repo = DEFAULT_REPO, number, status, nick }) {
+export function setBoard({
+  repo = DEFAULT_REPO,
+  number,
+  status,
+  nick,
+  takeOver = false,
+}) {
   const spec = STATUSES[status];
   if (!spec) throw new Error(`unknown status ${status}`);
   const issue = readIssue(repo, number);
 
   // Labels first: the required task-claim check reads them, so a failure
   // later on the board leaves the claim intact.
-  const { add, remove } = labelChanges(issue.labels, status, nick);
+  const { add, remove } = labelChanges(issue.labels, status, nick, {
+    takeOver,
+  });
+  const taken = remove.filter((l) => l.startsWith('agent:'));
+  if (taken.length > 0) {
+    console.log(`${repo}#${number}: taking over from ${taken.join(', ')}`);
+  }
   if (add.includes(agentLabel(nick))) {
     gh(
       [
@@ -159,6 +178,7 @@ if (isMain(import.meta.url)) {
       repo: { type: 'string', default: DEFAULT_REPO },
       status: { type: 'string' },
       agent: { type: 'string' },
+      'take-over': { type: 'boolean', default: false },
     },
   });
   const numbers = positionals.map(Number);
@@ -169,17 +189,22 @@ if (isMain(import.meta.url)) {
     !values.agent?.trim()
   ) {
     fail(
-      `usage: board.mjs <issue>... --status ${Object.keys(STATUSES).join('|')} --agent <nick> [--repo owner/name]`
+      `usage: board.mjs <issue>... --status ${Object.keys(STATUSES).join('|')} --agent <nick> [--take-over] [--repo owner/name]`
     );
   }
   for (const number of numbers) {
-    console.log(
-      setBoard({
-        repo: values.repo,
-        number,
-        status: values.status,
-        nick: values.agent.trim(),
-      })
-    );
+    try {
+      console.log(
+        setBoard({
+          repo: values.repo,
+          number,
+          status: values.status,
+          nick: values.agent.trim(),
+          takeOver: values['take-over'],
+        })
+      );
+    } catch (err) {
+      fail(`${values.repo}#${number}: ${err.message}`);
+    }
   }
 }

@@ -5,6 +5,7 @@ import {
   BLOCKED_POLLS,
   decide,
   evaluateChecks,
+  ignoredRequired,
   latestRuns,
   mergeMethodFor,
   requiredChecksFromRules,
@@ -113,6 +114,17 @@ test('--ignore lets a named broken check through, nothing else', () => {
     evaluateChecks(runs, [], { ignore: ['E2E (Playwright)'] }).state,
     'passed'
   );
+});
+
+test('an --ignore that hides a required check is refused', () => {
+  assert.deepEqual(
+    ignoredRequired(
+      ['Typecheck & Build Monorepo', 'task-claim'],
+      ['E2E (Playwright)', 'task-claim']
+    ),
+    ['task-claim']
+  );
+  assert.deepEqual(ignoredRequired(['task-claim'], ['E2E (Playwright)']), []);
 });
 
 test('reads the required check names from the branch rules', () => {
