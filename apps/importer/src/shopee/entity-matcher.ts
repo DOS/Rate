@@ -23,6 +23,57 @@ export const ENTITY_MATCH_CANDIDATE_FLOOR = 0.65;
 /** Minimum pg_trgm similarity required to auto-merge into an existing Master Product */
 export const ENTITY_MATCH_ACCEPT_THRESHOLD = 0.7;
 
+const MAX_RAM_GB = 2048;
+const MAX_STORAGE_GB = 65536;
+const MAX_SCREEN_SIZE_INCH = 120;
+const MAX_BATTERY_MAH = 500_000;
+
+function hasControlOrSpaceChar(val: string): boolean {
+  for (let i = 0; i < val.length; i++) {
+    const code = val.charCodeAt(i);
+    if (code <= 0x20 || code === 0x7f) return true;
+  }
+  return false;
+}
+
+export function sanitizeHttpUrl(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  if (!trimmed || trimmed.length > 2048 || hasControlOrSpaceChar(trimmed)) return null;
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+    if (!parsed.hostname) return null;
+    return trimmed;
+  } catch {
+    return null;
+  }
+}
+
+export function sanitizeHttpUrlList(urls: unknown): string[] {
+  if (!Array.isArray(urls)) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const item of urls) {
+    const valid = sanitizeHttpUrl(item);
+    if (valid && !seen.has(valid)) {
+      seen.add(valid);
+      out.push(valid);
+    }
+  }
+  return out;
+}
+
+function toBoundedPositiveInt(value: unknown, max: number): number | null {
+  const n = Number(value);
+  return Number.isInteger(n) && n > 0 && n <= max ? n : null;
+}
+
+function toBoundedPositiveNumber(value: unknown, max: number): number | null {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 && n <= max ? n : null;
+}
+
 export class EntityMatcher {
   private enricher: AiSpecEnricher;
 
@@ -81,27 +132,41 @@ export class EntityMatcher {
       throw new Error(`[EntityMatcher] Tier 2 fuzzy match failed: ${fuzzyErr.message}`);
     }
     let ambiguousFuzzy = false;
-    if (Array.isArray(fuzzyMatches) && fuzzyMatches.length > 0) {
-      const topMatch = fuzzyMatches[0];
-      if (topMatch.similarity >= ENTITY_MATCH_ACCEPT_THRESHOLD) {
+    const validFuzzyMatches = Array.isArray(fuzzyMatches)
+      ? fuzzyMatches.filter(m => {
+          const masterId = typeof m?.master_id === 'string' ? m.master_id.trim() : '';
+          const sim = Number(m?.similarity);
+          return (
+            masterId.length > 0 &&
+            Number.isFinite(sim) &&
+            sim >= ENTITY_MATCH_CANDIDATE_FLOOR &&
+            sim <= 1
+          );
+        })
+      : [];
+    if (validFuzzyMatches.length > 0) {
+      const topMatch = validFuzzyMatches[0]!;
+      const topMasterId = String(topMatch.master_id).trim();
+      const topSim = Number(topMatch.similarity);
+      if (topSim >= ENTITY_MATCH_ACCEPT_THRESHOLD) {
         logger.info(
           'entity_match.tier2_fuzzy',
-          `Tier 2 Fuzzy Match found: "${candidate.name}" ~= "${topMatch.name}" (similarity: ${(topMatch.similarity * 100).toFixed(1)}%) -> ID: ${topMatch.master_id}`,
+          `Tier 2 Fuzzy Match found: "${candidate.name}" ~= "${topMatch.name}" (similarity: ${(topSim * 100).toFixed(1)}%) -> ID: ${topMasterId}`,
           {
-            masterId: topMatch.master_id,
-            similarity: topMatch.similarity,
+            masterId: topMasterId,
+            similarity: topSim,
             candidateName: candidate.name,
           }
         );
-        return { masterId: topMatch.master_id, isNew: false };
+        return { masterId: topMasterId, isNew: false };
       }
       // Candidates exist but all below the accept threshold: identity is
       // uncertain -> seed as draft (plan v7 §5.1), never auto-publish.
       ambiguousFuzzy = true;
       logger.warn(
         'entity_match.tier2_ambiguous',
-        `Tier 2 best similarity ${(topMatch.similarity * 100).toFixed(1)}% < ${(ENTITY_MATCH_ACCEPT_THRESHOLD * 100).toFixed(0)}%: seeding as draft if new.`,
-        { similarity: topMatch.similarity, modelKey: candidate.model_key }
+        `Tier 2 best similarity ${(topSim * 100).toFixed(1)}% < ${(ENTITY_MATCH_ACCEPT_THRESHOLD * 100).toFixed(0)}%: seeding as draft if new.`,
+        { similarity: topSim, modelKey: candidate.model_key }
       );
     }
 
@@ -134,6 +199,7 @@ export class EntityMatcher {
     // Insert-only with ignoreDuplicates: the LOSING worker must refetch the
     // winner WITHOUT overwriting its canonical metadata or status (Codex
     // blocker: a re-asserting upsert could re-publish a draft/archived master).
+    const safeImages = sanitizeHttpUrlList(candidate.images);
     const baseInsertRow = {
       category_id: categoryId || null,
       brand: candidate.brand,
@@ -143,15 +209,15 @@ export class EntityMatcher {
       name: candidate.name,
       slug: candidate.slug,
       description: candidate.description || '',
-      ram_gb: candidate.ram_gb,
-      storage_gb: candidate.storage_gb,
-      screen_size_inch: candidate.screen_size_inch,
-      battery_mah: candidate.battery_mah,
+      ram_gb: toBoundedPositiveInt(candidate.ram_gb, MAX_RAM_GB),
+      storage_gb: toBoundedPositiveInt(candidate.storage_gb, MAX_STORAGE_GB),
+      screen_size_inch: toBoundedPositiveNumber(candidate.screen_size_inch, MAX_SCREEN_SIZE_INCH),
+      battery_mah: toBoundedPositiveInt(candidate.battery_mah, MAX_BATTERY_MAH),
       has_5g: candidate.has_5g,
       specifications: candidate.specifications,
       key_specs: candidate.key_specs,
-      images: candidate.images,
-      thumbnail: candidate.images[0] || null,
+      images: safeImages,
+      thumbnail: safeImages[0] || null,
       colors: candidate.colors,
       status: seedStatus,
     };
@@ -249,11 +315,16 @@ export class EntityMatcher {
       existingCategorySlug ??
       detectCategorySlug(`${row.brand || ''} ${row.model || ''} ${row.name || ''}`);
 
+    const existingRamGb = toBoundedPositiveInt(row.ram_gb, MAX_RAM_GB);
+    const existingStorageGb = toBoundedPositiveInt(row.storage_gb, MAX_STORAGE_GB);
+    const existingScreenInch = toBoundedPositiveNumber(row.screen_size_inch, MAX_SCREEN_SIZE_INCH);
+    const existingBatteryMah = toBoundedPositiveInt(row.battery_mah, MAX_BATTERY_MAH);
+
     const aiResult = await this.enricher.fetchSpecsFromAi({
       brand: row.brand,
       model: row.model,
-      storageGb: row.storage_gb,
-      ramGb: row.ram_gb,
+      storageGb: existingStorageGb,
+      ramGb: existingRamGb,
       rawTitle: row.name,
       rawDescription: row.description,
       categorySlug: inferredCategorySlug,
@@ -289,10 +360,13 @@ export class EntityMatcher {
     const { error: updateErr } = await this.supabase
       .from('master_products')
       .update({
-        ram_gb: row.ram_gb ?? aiResult.ram_gb,
-        storage_gb: row.storage_gb ?? aiResult.storage_gb,
-        screen_size_inch: row.screen_size_inch ?? aiResult.screen_size_inch,
-        battery_mah: row.battery_mah ?? aiResult.battery_mah,
+        ram_gb: existingRamGb ?? toBoundedPositiveInt(aiResult.ram_gb, MAX_RAM_GB),
+        storage_gb: existingStorageGb ?? toBoundedPositiveInt(aiResult.storage_gb, MAX_STORAGE_GB),
+        screen_size_inch:
+          existingScreenInch ??
+          toBoundedPositiveNumber(aiResult.screen_size_inch, MAX_SCREEN_SIZE_INCH),
+        battery_mah:
+          existingBatteryMah ?? toBoundedPositiveInt(aiResult.battery_mah, MAX_BATTERY_MAH),
         has_5g: row.has_5g ? true : (aiResult.has_5g ?? row.has_5g),
         specifications: mergedSpecifications,
         key_specs: mergedKeySpecs,

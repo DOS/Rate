@@ -8,7 +8,11 @@
  */
 import assert from 'node:assert/strict';
 import { trimTrailingSlashes } from '../ai-spec-enricher.js';
-import { ShopeeIngestionPipeline, platformReviewIdFor } from '../shopee-to-supabase.js';
+import {
+  ShopeeIngestionPipeline,
+  normalizeScrapedProductPrices,
+  platformReviewIdFor,
+} from '../shopee-to-supabase.js';
 import type { RateSupabaseClient, ShopeeProduct, ShopeeReview } from '../types.js';
 
 function createBaseProduct(overrides: Partial<ShopeeProduct> = {}): ShopeeProduct {
@@ -669,6 +673,41 @@ async function runTests() {
     'A stored review past the 1000-row cap is still skipped'
   );
   console.log('  ✅ [6/6] Duplicate detection past the 1000-row cap passed');
+
+  // 7. DOS/Rate#821: normalizeScrapedProductPrices HTTP URL sanitization and ingestProduct unpriced rejection
+  const sanitizedProduct = normalizeScrapedProductPrices({
+    ...createBaseProduct(),
+    images: ['[object Object]', 'https://rate.vn/img/clean.png', 'javascript:alert(1)'],
+    shop: {
+      ...createBaseProduct().shop,
+      url: 'javascript:alert(1)',
+    },
+    reviews: [
+      {
+        reviewId: 'rev-821',
+        author: 'Tester',
+        authorAvatar: 'data:image/png;base64,AAAA',
+        ratingStar: 5,
+        comment: 'Good',
+        images: ['[object Object]', 'https://rate.vn/img/rev.png'],
+      },
+    ],
+  });
+  assert.deepEqual(sanitizedProduct.images, ['https://rate.vn/img/clean.png']);
+  assert.equal(sanitizedProduct.shop.url, undefined);
+  assert.equal(sanitizedProduct.reviews[0]?.authorAvatar, undefined);
+  assert.deepEqual(sanitizedProduct.reviews[0]?.images, ['https://rate.vn/img/rev.png']);
+
+  const { stub: unpricedStub } = createPipelineStubSupabase();
+  const unpricedPipeline = new ShopeeIngestionPipeline({
+    supabaseClient: unpricedStub,
+    apiKey: '',
+  });
+  await assert.rejects(
+    () => unpricedPipeline.ingestProduct(createBaseProduct({ priceMin: 0, priceMax: 0 })),
+    /Cannot ingest unpriced or out-of-bounds product listing/
+  );
+  console.log('  ✅ [7/7] DOS/Rate#821 HTTP URL sanitization & unpriced rejection passed');
 
   console.log('\n🎉 ALL SHOPEE INGESTION PIPELINE TESTS PASSED!');
 }

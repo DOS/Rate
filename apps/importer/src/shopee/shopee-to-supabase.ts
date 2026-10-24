@@ -17,7 +17,7 @@ import {
   type ValidatedScrapedProduct,
 } from './types.js';
 import { ProductNormalizer } from './product-normalizer.js';
-import { EntityMatcher } from './entity-matcher.js';
+import { EntityMatcher, sanitizeHttpUrl, sanitizeHttpUrlList } from './entity-matcher.js';
 import { AiSpecEnricher, type AiSpecEnricherConfig } from './ai-spec-enricher.js';
 import { AiReviewAnalyzer, type ReviewInputItem } from './ai-review-analyzer.js';
 import { createImporterLogger } from './logger.js';
@@ -116,11 +116,26 @@ export function normalizeScrapedProductPrices(
         return Number.isFinite(p) && p > 0 && p <= MAX_VALID_VND_PRICE;
       })
     : [];
+  const images = sanitizeHttpUrlList(product.images);
+  const shopUrl = sanitizeHttpUrl(product.shop?.url) ?? undefined;
+  const reviews = Array.isArray(product.reviews)
+    ? product.reviews.map(r => ({
+        ...r,
+        authorAvatar: sanitizeHttpUrl(r.authorAvatar) ?? undefined,
+        images: sanitizeHttpUrlList(r.images),
+      }))
+    : [];
   return {
     ...product,
     priceMax,
     priceBeforeDiscount: validBeforeDiscount,
+    images,
     models,
+    shop: {
+      ...product.shop,
+      url: shopUrl,
+    },
+    reviews,
   };
 }
 
@@ -278,6 +293,15 @@ export class ShopeeIngestionPipeline {
     platform: SupportedEcommercePlatform;
   }> {
     const product = normalizeScrapedProductPrices(ScrapedProductSchema.parse(rawProduct));
+    if (
+      !Number.isFinite(product.priceMin) ||
+      product.priceMin <= 0 ||
+      product.priceMin > MAX_VALID_VND_PRICE
+    ) {
+      throw new Error(
+        `Cannot ingest unpriced or out-of-bounds product listing (priceMin=${product.priceMin})`
+      );
+    }
     if (this.categoryIdBySlug.size === 0) {
       await this.init();
     }
