@@ -1384,7 +1384,9 @@ export default function JReviewsSection({
               value={sortMode}
               onChange={(e) => setSortMode(e.target.value as SortMode)}
               className="form-select form-select-sm rounded-pill"
-              style={{ minWidth: '240px' }}
+              // Up to 240px, shrinking with the row on a 320px phone
+              // (DOS/Rate#809).
+              style={{ flex: '0 1 240px', minWidth: 0 }}
             >
               <option value="weight_desc">{t('sortMostHelpful')}</option>
               <option value="newest">{t('sortNewest')}</option>
@@ -1470,10 +1472,13 @@ export default function JReviewsSection({
 
             return (
               <div key={rev.id} className="col-md-6 col-12">
+                {/* Excluded reviews are set apart by background and border,
+                    not opacity, which dropped their text below 4.5:1
+                    (DOS/Rate#811). */}
                 <div
                   className={`rounded-4 d-flex flex-column justify-content-between h-100 p-3 ${
                     isFilteredOutReview(rev)
-                      ? 'card bg-light border-danger-subtle border opacity-75'
+                      ? 'card bg-light border-danger-subtle border'
                       : 'rate-card border bg-white shadow-sm'
                   }`}
                 >

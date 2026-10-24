@@ -693,9 +693,11 @@ export default async function MerchantProfilePage({
 
                   return (
                     <div className="col-md-6 col-12" key={rev.id}>
+                      {/* Set apart by background, not opacity, which dropped
+                          the text below 4.5:1 (DOS/Rate#811). */}
                       <div
                         className={`rounded-4 h-100 border p-3 ${
-                          isAuthentic ? 'bg-white' : 'bg-light opacity-75'
+                          isAuthentic ? 'bg-white' : 'bg-light'
                         }`}
                       >
                         <div className="d-flex justify-content-between align-items-start mb-2 gap-2">
