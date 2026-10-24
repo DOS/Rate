@@ -85,6 +85,26 @@ function main() {
     }
   );
 
+  // Circular references, shared DAG sub-objects, BigInt, NaN, and boundary-straddling emails/tokens (#844).
+  const sharedDag = { ok: true };
+  const cyclic: Record<string, unknown> = {
+    first: sharedDag,
+    second: sharedDag,
+    big: BigInt('9007199254740993'),
+    nanVal: Number.NaN,
+    bearerMsg: `Authorization: Bearer ${'s'.repeat(16)}`,
+    boundaryEmail: `${'a'.repeat(1995)}victim@example.com`,
+  };
+  cyclic.self = cyclic;
+  const redactedCyclic = redact(cyclic) as Record<string, unknown>;
+  assert.equal(redactedCyclic.self, '[Circular]');
+  assert.deepEqual(redactedCyclic.first, { ok: true });
+  assert.deepEqual(redactedCyclic.second, { ok: true });
+  assert.equal(redactedCyclic.big, '9007199254740993');
+  assert.equal(redactedCyclic.nanVal, null);
+  assert.equal(redactedCyclic.bearerMsg, 'Authorization: Bearer [redacted]');
+  assert.equal(String(redactedCyclic.boundaryEmail).includes('victim'), false);
+
   console.warn('✅ Structured logger suite passed');
 }
 
