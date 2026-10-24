@@ -16,14 +16,30 @@ for (const path of PHONE_PAGES) {
     await page.setViewportSize({ width: 320, height: 640 });
     expect((await page.goto(path))?.status()).toBe(200);
     await page.evaluate(() => document.fonts.ready);
-    const { scrollWidth, toggleRight } = await page.evaluate(() => ({
-      scrollWidth: document.documentElement.scrollWidth,
-      toggleRight:
-        document.querySelector('.nav-toggle')?.getBoundingClientRect().right ??
-        Infinity,
-    }));
+    const scrollWidth = await page.evaluate(
+      () => document.documentElement.scrollWidth
+    );
     expect(scrollWidth).toBeLessThanOrEqual(320);
-    expect(toggleRight).toBeLessThanOrEqual(320);
+    // The toggle's 44px tap area (its ::after, DOS/Rate#717) stays inside the
+    // viewport and clear of the header icons.
+    const toggle = page.locator('.nav-toggle');
+    await expect(toggle).toBeVisible();
+    const hit = await toggle.evaluate((el) => {
+      const box = el.getBoundingClientRect();
+      const size = parseFloat(getComputedStyle(el, '::after').width) || 0;
+      const icons = [...document.querySelectorAll('.mobile_nav li')].map(
+        (li) => li.getBoundingClientRect().right
+      );
+      return {
+        size,
+        left: box.left + (box.width - size) / 2,
+        right: box.left + (box.width + size) / 2,
+        iconsRight: Math.max(0, ...icons),
+      };
+    });
+    expect(hit.size).toBeGreaterThanOrEqual(44);
+    expect(hit.left).toBeGreaterThanOrEqual(hit.iconsRight);
+    expect(hit.right).toBeLessThanOrEqual(320);
   });
 }
 
