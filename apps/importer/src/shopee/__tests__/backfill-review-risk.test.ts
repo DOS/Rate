@@ -1160,6 +1160,39 @@ async function run() {
   });
   await pipeline930.init();
 
+  // DOS/Rate#932: cluster-peer-floor ID bounds, backfill master IDs & logger BigInt/proto serialization
+  const { resolveClusterPeerFloorPrice: resolveClusterPeerFloorPrice932 } =
+    await import('../cluster-peer-floor.js');
+  const { computeImporterAlgorithmMetadata: computeImporterAlgorithmMetadata932 } =
+    await import('../logger.js');
+
+  assert.equal(
+    resolveClusterPeerFloorPrice932(
+      [
+        { id: '  prod-self\u0007 ', price_current: 16_000_000, merchants: { is_official: true } },
+        { id: 'prod-peer', price_current: 24_000_000, merchants: { is_official: true } },
+      ],
+      '  prod-self\u0000 '
+    ),
+    24_000_000
+  );
+  assert.equal(
+    resolveClusterPeerFloorPrice932(
+      [{ id: Number.NaN, price_current: 15_000_000, merchants: { is_official: true } }],
+      'NaN'
+    ),
+    15_000_000
+  );
+
+  const metaWithBigInt = computeImporterAlgorithmMetadata932('test-algo', '1.0.0', {
+    big: 9007199254740993n,
+    badNum: Number.NaN,
+    ['__proto__']: { polluted: true },
+  });
+  assert.equal(metaWithBigInt.algo, 'test-algo');
+  assert.equal(metaWithBigInt.version, '1.0.0');
+  assert.equal(metaWithBigInt.paramsHash.length, 12);
+
   console.log('✅ Review risk backfill suite passed');
 }
 
