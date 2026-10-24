@@ -2319,9 +2319,51 @@ async function runCoreArchitectureSuite() {
     'getMerchantsList must scope products by merchantIds and only query reviews for unscoredProductIds (C2)'
   );
 
+  // /api/health reads the database (#829): stub PostgREST and the public env.
+  const healthMod = require('../../health') as typeof import('../../health');
+  const withHealthDatabase = async <T>(
+    respond: (url: string, init?: RequestInit) => Promise<Response>,
+    run: () => Promise<T>
+  ): Promise<T> => {
+    const urlEnv = ['NEXT_PUBLIC_SUPABASE', 'URL'].join('_');
+    const anonEnv = ['NEXT_PUBLIC_SUPABASE', 'ANON', 'KEY'].join('_');
+    const prevUrl = process.env[urlEnv];
+    const prevAnon = process.env[anonEnv];
+    const prevFetch = globalThis.fetch;
+    process.env[urlEnv] = prevUrl || 'https://stub.supabase.test';
+    process.env[anonEnv] = prevAnon || 'stub-public-token';
+    healthMod.resetHealthCacheForTests();
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) =>
+      respond(
+        typeof input === 'string'
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url,
+        init
+      )) as typeof fetch;
+    try {
+      return await run();
+    } finally {
+      globalThis.fetch = prevFetch;
+      if (prevUrl === undefined) delete process.env[urlEnv];
+      else process.env[urlEnv] = prevUrl;
+      if (prevAnon === undefined) delete process.env[anonEnv];
+      else process.env[anonEnv] = prevAnon;
+      healthMod.resetHealthCacheForTests();
+    }
+  };
+  const healthyDatabase = async () =>
+    new Response('[{"id":"cat-1"}]', {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+
   const healthRoute =
     require('../../../app/api/health/route') as typeof import('../../../app/api/health/route');
-  const healthRes = await healthRoute.GET();
+  const healthRes = await withHealthDatabase(healthyDatabase, () =>
+    healthRoute.GET()
+  );
   assert.equal(healthRes.status, 200);
   const healthBody = (await healthRes.json()) as {
     status: string;
@@ -3454,7 +3496,9 @@ async function runCoreArchitectureSuite() {
   const statsRoute = await import('../../../app/api/v1/rate/stats/route');
 
   // 60.1 /api/health
-  const healthRes60 = await healthRoute60.GET();
+  const healthRes60 = await withHealthDatabase(healthyDatabase, () =>
+    healthRoute60.GET()
+  );
   assert.equal(healthRes60.status, 200);
   assert.equal(healthRes60.headers.get('Cache-Control'), 'no-store, max-age=0');
   const healthBody60 = (await healthRes60.json()) as {
@@ -8294,6 +8338,130 @@ async function runCoreArchitectureSuite() {
 
   console.log(
     '  ✅ [93/93] A bait price is never endorsed by the extension or the radar (#797) passed'
+  );
+
+  // 94. /api/health reports a database the app cannot read (#829)
+  {
+    const route829 = await import('../../../app/api/health/route');
+    type Health829 = {
+      status: string;
+      service: string;
+      checks: { database: string };
+    };
+    let probes829 = 0;
+    const json829 = (status: number, body: unknown) =>
+      new Response(JSON.stringify(body), {
+        status,
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+    // OK: one small read of the rate schema with the app's client.
+    await withHealthDatabase(
+      async (url) => {
+        probes829++;
+        assert.match(url, /\/rest\/v1\/categories\?select=id&limit=1$/);
+        return json829(200, [{ id: 'cat-1' }]);
+      },
+      async () => {
+        const res = await route829.GET();
+        assert.equal(res.status, 200);
+        const body = (await res.json()) as Health829;
+        assert.equal(body.status, 'ok');
+        assert.deepEqual(body.checks, { database: 'ok' });
+        assert.equal(res.headers.get('Cache-Control'), 'no-store, max-age=0');
+      }
+    );
+    assert.equal(probes829, 1);
+
+    // The 2026-10-24 outage: PostgREST refuses the key. 503, no detail.
+    const outage829 = async (run: () => Promise<void>) =>
+      withHealthDatabase(async () => {
+        probes829++;
+        return json829(401, {
+          message: 'Legacy API keys are disabled',
+          hint: 'stub',
+        });
+      }, run);
+    probes829 = 0;
+    await outage829(async () => {
+      const res = await route829.GET();
+      assert.equal(res.status, 503);
+      const text = await res.text();
+      assert.ok(!text.includes('Legacy API keys'), 'the cause is not returned');
+      const body = JSON.parse(text) as Health829;
+      assert.equal(body.status, 'degraded');
+      assert.equal(body.service, 'rate-web');
+      assert.deepEqual(body.checks, { database: 'error' });
+      assert.equal(res.headers.get('Cache-Control'), 'no-store, max-age=0');
+      // Within the TTL the result is reused: no second probe.
+      assert.equal((await route829.GET()).status, 503);
+      assert.equal(probes829, 1);
+      // After the TTL the database is probed again.
+      assert.equal(
+        await healthMod.checkDatabase(
+          Date.now() + healthMod.DATABASE_CHECK_TTL_MS + 1
+        ),
+        'error'
+      );
+      assert.equal(probes829, 2);
+    });
+
+    // Concurrent requests share one probe.
+    probes829 = 0;
+    await withHealthDatabase(
+      async () => {
+        probes829++;
+        await new Promise((r) => setTimeout(r, 20));
+        return json829(200, []);
+      },
+      async () => {
+        const all = await Promise.all([
+          route829.GET(),
+          route829.GET(),
+          route829.GET(),
+        ]);
+        assert.deepEqual(
+          all.map((r) => r.status),
+          [200, 200, 200]
+        );
+        assert.equal(probes829, 1);
+      }
+    );
+
+    // A network failure is an error, not a crash.
+    await withHealthDatabase(
+      async () => {
+        throw new TypeError('fetch failed');
+      },
+      async () => {
+        assert.equal((await route829.GET()).status, 503);
+      }
+    );
+
+    // A database that never answers fails at the timeout.
+    await withHealthDatabase(
+      (_url, init) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () =>
+            reject(new DOMException('aborted', 'AbortError'))
+          );
+        }),
+      async () => {
+        const started = Date.now();
+        const res = await route829.GET();
+        const took = Date.now() - started;
+        assert.equal(res.status, 503);
+        assert.ok(
+          took >= healthMod.DATABASE_CHECK_TIMEOUT_MS - 50 &&
+            took < healthMod.DATABASE_CHECK_TIMEOUT_MS + 2000,
+          `timed out after ${took} ms`
+        );
+      }
+    );
+  }
+
+  console.log(
+    '  ✅ [94/94] /api/health reports a database the app cannot read (#829) passed'
   );
 
   console.log('🎉 All Rate.vn Core Architecture tests passed!');

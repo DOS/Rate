@@ -1470,11 +1470,16 @@ export function buildRateOpenApiSpec(
           operationId: 'getHealthStatus',
           summary: 'Liveness & readiness health check probe',
           description:
-            'Returns service liveness metadata (`status: "ok"`, `service: "rate-web"`, `version`, and ISO-8601 `timestamp`) with `Cache-Control: no-store, max-age=0` for load balancers and uptime monitors.',
+            'Returns service metadata (`status`, `service: "rate-web"`, `version`, ISO-8601 `timestamp`) and `checks.database`, the result of a small read with the app\'s own database client (3 s timeout, reused for up to 15 s per instance), with `Cache-Control: no-store, max-age=0` for load balancers and uptime monitors.',
           tags: ['Platform Telemetry'],
           responses: {
             '200': {
-              description: 'Service is healthy and responding.',
+              description:
+                'Service is healthy: `status: "ok"`, `checks.database: "ok"`.',
+            },
+            '503': {
+              description:
+                'The database cannot be read: `status: "degraded"`, `checks.database: "error"`. The cause is logged server-side, not returned.',
             },
           },
         },
