@@ -208,6 +208,21 @@ async function runSuite() {
   assert.equal(keyOf('iPad Gen 10 (A14 Bionic) 64GB'), keyOf('Apple iPad 10 64GB'));
   assert.equal(keyOf('Apple iPad 10.9 inch (A14) 64GB'), keyOf('Apple iPad 10 64GB'));
   assert.equal(keyOf('MacBook Neoprene Sleeve 13 inch'), 'apple:macbook:unknown');
+  // iPad mini 6 and 7 are two models (DOS/Rate#819): "(A17 Pro)" is the 7th, "8.3 inch" is
+  // its screen, and a size or a year after "mini" is no generation.
+  assert.equal(keyOf('Apple iPad mini 6 Wi-Fi 64GB'), 'apple:ipad-mini-6:64gb');
+  assert.equal(keyOf('Apple iPad mini 7 64GB'), 'apple:ipad-mini-7:64gb');
+  assert.equal(keyOf('Apple iPad mini 8.3 inch (A17 Pro) Wi-Fi 128GB'), 'apple:ipad-mini-7:128gb');
+  assert.equal(keyOf('Apple iPad mini 6, Wi-Fi 64GB'), 'apple:ipad-mini-6:64gb');
+  assert.equal(keyOf('Apple iPad mini 8,3 inch Wi-Fi 64GB'), 'apple:ipad-mini:64gb');
+  assert.equal(keyOf('iPad mini 7 (A17 Pro) Wifi 128GB'), 'apple:ipad-mini-7:128gb');
+  assert.equal(keyOf('iPad mini (6th generation) 64GB'), 'apple:ipad-mini-6:64gb');
+  assert.equal(keyOf('iPad mini 64GB'), 'apple:ipad-mini:64gb');
+  assert.equal(keyOf('iPad mini 2024 128GB'), 'apple:ipad-mini:128gb');
+  assert.equal(
+    normalizer.normalize(createDummyShopeeProduct('iPad Mini 7 Wifi 128GB')).model,
+    'iPad mini 7'
+  );
   assert.equal(
     normalizer.normalize(createDummyShopeeProduct('MACBOOK NEO 13 INCH 256GB')).model,
     'MacBook Neo'
@@ -270,6 +285,7 @@ async function runSuite() {
     `Apple iPad 11 (${spaces}x`,
     `Apple Watch${spaces}(2nd generation)`,
     `Apple Watch SE${spaces}2`,
+    `Apple iPad mini 7${spaces}inch`,
     `Apple Watch SE 2${spaces}mm`,
   ]) {
     keyOf(title);
