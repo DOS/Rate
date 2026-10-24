@@ -68,7 +68,11 @@ import ProductOffersExplorer from '@/components/leaderboard/ProductOffersExplore
 import ProductSpecsExportToolbar from '@/components/leaderboard/ProductSpecsExportToolbar';
 import ClientMessages from '@/components/providers/ClientMessages';
 import { plausibleMinPrice } from '@/lib/offer-plausibility';
-import { firstImageUrl, usableImageUrls } from '@/lib/rate-domain-core';
+import {
+  firstImageUrl,
+  usableImageUrls,
+  productImageUrl,
+} from '@/lib/rate-domain-core';
 
 // Cached after the first request, refreshed every 5 minutes or when the
 // worker revalidates its cache tags (DOS/Rate#491).
@@ -693,8 +697,7 @@ export async function ProductDetailView({
                       slug: product.slug,
                       name: product.name,
                       brand: product.brand,
-                      thumbnail:
-                        product.thumbnail || firstImageUrl(product.images),
+                      thumbnail: productImageUrl(product),
                       min_price: currentMinPrice,
                       categoryPath: categoryBasePath,
                     }}
@@ -858,9 +861,7 @@ export async function ProductDetailView({
                       name={product.name}
                       brand={product.brand}
                       categoryPath={categoryBasePath}
-                      thumbnail={
-                        product.thumbnail || firstImageUrl(product.images)
-                      }
+                      thumbnail={productImageUrl(product)}
                       currentMinPrice={currentMinPrice}
                       size="sm"
                     />
@@ -1582,8 +1583,7 @@ export async function ProductDetailView({
                 {relatedCompetitors.map((peer) => {
                   const peerPrice = Number(peer.min_price || 0);
                   const priceDelta = peerPriceDelta(peerPrice, currentMinPrice);
-                  const peerThumb =
-                    peer.thumbnail || firstImageUrl(peer.images);
+                  const peerThumb = productImageUrl(peer);
                   const peerRating = resolveCompareEffectiveUserRating(peer);
                   const peerScore10 = peerRating * 2;
                   const currentScore10 = displayUserRating * 2;

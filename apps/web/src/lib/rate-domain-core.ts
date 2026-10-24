@@ -844,8 +844,10 @@ export const KNOWN_LOCAL_DEVICE_IMAGES = new Set<string>([
  * (DOS/Rate#810).
  */
 export function isImageUrl(value: unknown): value is string {
+  // A host after "http(s)://" or "//"; otherwise one slash and a path.
   return (
-    typeof value === 'string' && /^(https?:\/\/|\/)\S+$/i.test(value.trim())
+    typeof value === 'string' &&
+    /^(?:(?:https?:)?\/\/[^\s/?#]+|\/(?!\/)\S)\S*$/i.test(value.trim())
   );
 }
 
@@ -861,6 +863,14 @@ export function firstImageUrl(
   images: readonly unknown[] | null | undefined
 ): string | null {
   return usableImageUrls(images)[0] ?? null;
+}
+
+/** A product's thumbnail if usable, else its first usable stored image. */
+export function productImageUrl(product: {
+  readonly thumbnail?: string | null;
+  readonly images?: readonly unknown[] | null;
+}): string | null {
+  return firstImageUrl([product.thumbnail, ...(product.images ?? [])]);
 }
 
 export function resolveProductImageUrl(

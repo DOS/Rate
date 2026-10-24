@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {
   firstImageUrl,
   isImageUrl,
+  productImageUrl,
   resolveProductImageUrl,
   usableImageUrls,
 } from '../rate-domain-core';
@@ -36,6 +37,26 @@ function main() {
   assert.equal(firstImageUrl([]), null);
   assert.equal(firstImageUrl(null), null);
   assert.equal(firstImageUrl(undefined), null);
+
+  // A protocol-relative or absolute URL needs a host.
+  assert.equal(isImageUrl('//'), false);
+  assert.equal(isImageUrl('/'), false);
+  assert.equal(isImageUrl('https://'), false);
+  assert.equal(firstImageUrl(['//', '/img/good.jpg']), '/img/good.jpg');
+
+  // A junk thumbnail gives way to the first usable stored image.
+  assert.equal(
+    productImageUrl({
+      thumbnail: '[object Object]',
+      images: ['[object Object]', 'https://a/1.jpg'],
+    }),
+    'https://a/1.jpg'
+  );
+  assert.equal(
+    productImageUrl({ thumbnail: '/t.jpg', images: ['https://a/1.jpg'] }),
+    '/t.jpg'
+  );
+  assert.equal(productImageUrl({ thumbnail: null, images: null }), null);
 
   // Surrounding whitespace is trimmed rather than rejected.
   assert.equal(isImageUrl('  https://a/1.jpg\n'), true);

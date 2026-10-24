@@ -43,7 +43,7 @@ import {
 import type { KeySpecs, ProductSpecifications } from '@repo/shared-data';
 import ClientMessages from '@/components/providers/ClientMessages';
 import BootstrapClient from '@/app/BootstrapClient';
-import { firstImageUrl } from '@/lib/rate-domain-core';
+import { productImageUrl } from '@/lib/rate-domain-core';
 
 // Reads searchParams, so it renders per request. The [locale] layout's
 // generateStaticParams would otherwise make it static, and the searchParams
@@ -929,8 +929,7 @@ export async function CategoryCatalogContent({
                       const keySpecs = (item.key_specs || {}) as KeySpecs;
                       const specs = (item.specifications ||
                         {}) as ProductSpecifications;
-                      const thumb =
-                        item.thumbnail || firstImageUrl(item.images);
+                      const thumb = productImageUrl(item);
 
                       const effectiveRating =
                         item.user_rating_weighted &&

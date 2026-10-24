@@ -34,7 +34,7 @@ import {
   BsXLg,
 } from 'react-icons/bs';
 import ContentText from '@/components/elementary/ContentText';
-import { firstImageUrl } from '@/lib/rate-domain-core';
+import { firstImageUrl, productImageUrl } from '@/lib/rate-domain-core';
 
 interface HeroSearchInspectorProps {
   initialProducts: HeroProductSuggestion[];
@@ -393,8 +393,7 @@ export default function HeroSearchInspector({
                   <div className="list-group list-group-flush">
                     {filteredProducts.map((item, idx) => {
                       const keySpecs = (item.key_specs || {}) as KeySpecs;
-                      const thumb =
-                        item.thumbnail || firstImageUrl(item.images);
+                      const thumb = productImageUrl(item);
                       const minPrice = Number(
                         item.min_price || 0
                       ).toLocaleString('vi-VN');
