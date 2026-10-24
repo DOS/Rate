@@ -21,6 +21,7 @@ import { EntityMatcher, sanitizeHttpUrl, sanitizeHttpUrlList } from './entity-ma
 import { AiSpecEnricher, type AiSpecEnricherConfig } from './ai-spec-enricher.js';
 import { AiReviewAnalyzer, type ReviewInputItem } from './ai-review-analyzer.js';
 import { createImporterLogger } from './logger.js';
+import { resolveBackfillSupabaseTarget } from './paging.js';
 import {
   resolveClusterPeerFloorPrice,
   type ClusterPeerPriceCandidate,
@@ -36,15 +37,18 @@ function hashEntity(val: string): string {
 }
 
 export function platformReviewIdFor(r: ShopeeReview): string {
+  const cleanId = typeof r?.reviewId === 'string' ? r.reviewId.replace(/\p{Cc}+/gu, '').trim() : '';
+  if (cleanId.length > 0 && cleanId.length <= 160) {
+    return cleanId;
+  }
   return (
-    r.reviewId ||
     'rv-' +
-      crypto
-        .createHash('sha256')
-        .update(
-          `${r.author || ''}|${r.ratingStar ?? ''}|${r.variation || ''}|${r.createdAt || ''}|${r.comment || ''}`
-        )
-        .digest('hex')
+    crypto
+      .createHash('sha256')
+      .update(
+        `${r?.author || ''}|${r?.ratingStar ?? ''}|${r?.variation || ''}|${r?.createdAt || ''}|${r?.comment || ''}`
+      )
+      .digest('hex')
   );
 }
 
@@ -73,7 +77,9 @@ export function hasPopulatedSpecificationGroups(specs: unknown): boolean {
     if (group && typeof group === 'object' && !Array.isArray(group)) {
       const hasValue = Object.values(group as Record<string, unknown>).some(v => {
         if (v === undefined || v === null) return false;
-        if (Array.isArray(v)) return v.length > 0;
+        if (Array.isArray(v)) {
+          return v.some(item => item !== undefined && item !== null && String(item).trim() !== '');
+        }
         return String(v).trim() !== '';
       });
       if (hasValue) return true;
@@ -123,6 +129,15 @@ export function normalizeScrapedProductPrices(
         ...r,
         authorAvatar: sanitizeHttpUrl(r.authorAvatar) ?? undefined,
         images: sanitizeHttpUrlList(r.images),
+        ...(r.videos !== undefined ? { videos: sanitizeHttpUrlList(r.videos) } : {}),
+        ...(r.reviewer
+          ? {
+              reviewer: {
+                ...r.reviewer,
+                profileUrl: sanitizeHttpUrl(r.reviewer.profileUrl) ?? undefined,
+              },
+            }
+          : {}),
       }))
     : [];
   return {
@@ -181,12 +196,13 @@ export class ShopeeIngestionPipeline {
     if (aiConfig?.supabaseClient) {
       this.supabase = aiConfig.supabaseClient;
     } else {
-      const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-      const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY || '';
+      const rawUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+      const key = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY || '').trim();
 
-      if (!url || !key) {
+      if (!rawUrl.trim() || !key) {
         throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in environment.');
       }
+      const { url } = resolveBackfillSupabaseTarget(rawUrl);
 
       const admin = createClient(url, key, {
         auth: { autoRefreshToken: false, persistSession: false },
