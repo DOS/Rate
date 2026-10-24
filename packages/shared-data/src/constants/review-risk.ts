@@ -19,6 +19,8 @@ export function seedingRiskPenalty(
   total: number
 ): number {
   if (
+    typeof seedingCount !== 'number' ||
+    typeof total !== 'number' ||
     !Number.isFinite(seedingCount) ||
     !Number.isFinite(total) ||
     seedingCount <= 0 ||

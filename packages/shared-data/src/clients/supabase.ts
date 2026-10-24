@@ -13,13 +13,41 @@ let _publicClient: SupabaseClient | null = null;
  * Get the public anon client (respects RLS) for browser / client-side components.
  * Throws when the anon key is missing instead of falling back to a privileged key.
  */
-function isValidSupabaseHttpUrl(rawUrl: string): boolean {
+export function isValidSupabaseHttpUrl(rawUrl: string): boolean {
+  if (typeof rawUrl !== 'string') return false;
+  const trimmed = rawUrl.trim();
+  if (
+    !trimmed ||
+    trimmed.length > 512 ||
+    /\p{Cc}/u.test(trimmed) ||
+    /\s/.test(trimmed)
+  ) {
+    return false;
+  }
   try {
-    const parsed = new URL(rawUrl);
-    return parsed.protocol === 'https:' || parsed.protocol === 'http:';
+    const parsed = new URL(trimmed);
+    return (
+      (parsed.protocol === 'https:' || parsed.protocol === 'http:') &&
+      Boolean(parsed.hostname) &&
+      parsed.username === '' &&
+      parsed.password === '' &&
+      parsed.search === '' &&
+      parsed.hash === ''
+    );
   } catch {
     return false;
   }
+}
+
+export function isValidSupabaseApiKey(rawKey: string): boolean {
+  if (typeof rawKey !== 'string') return false;
+  const trimmed = rawKey.trim();
+  return (
+    trimmed.length >= 16 &&
+    trimmed.length <= 4096 &&
+    !/\p{Cc}/u.test(trimmed) &&
+    !/\s/.test(trimmed)
+  );
 }
 
 export function getPublicClient(): SupabaseClient {
@@ -42,6 +70,11 @@ export function getPublicClient(): SupabaseClient {
     if (!isValidSupabaseHttpUrl(supabaseUrl)) {
       throw new Error(
         'Invalid NEXT_PUBLIC_SUPABASE_URL: must use http:// or https:// protocol.'
+      );
+    }
+    if (!isValidSupabaseApiKey(supabaseAnonKey)) {
+      throw new Error(
+        'Invalid NEXT_PUBLIC_SUPABASE_ANON_KEY: must be a non-empty token without whitespace or control characters.'
       );
     }
     _publicClient = createClient(supabaseUrl, supabaseAnonKey);
