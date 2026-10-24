@@ -17,6 +17,7 @@ import {
   AiSpecEnricher,
   AiSpecEnrichmentPayloadSchema,
   extractJsonObjectString,
+  resolveValidHttpBaseUrl,
   sanitizeSpecifications,
 } from './ai-spec-enricher.js';
 import {
@@ -534,6 +535,44 @@ async function runTests() {
     });
     assert.equal(enrichedBackfillStorage.ram_gb, 16);
     assert.equal(enrichedBackfillStorage.storage_gb, 512);
+
+    // DOS/Rate#882: resolveValidHttpBaseUrl rejects credentials/query/fragment/control-chars, and sanitizeSpecifications strips HTML/control chars & bounds colors
+    assert.equal(
+      resolveValidHttpBaseUrl('https://user:pass@api.example.com/v1', 'https://api.openai.com/v1'),
+      'https://api.openai.com/v1',
+      'resolveValidHttpBaseUrl must reject embedded URL credentials'
+    );
+    assert.equal(
+      resolveValidHttpBaseUrl('https://api.example.com/v1?foo=1', 'https://api.openai.com/v1'),
+      'https://api.openai.com/v1',
+      'resolveValidHttpBaseUrl must reject query strings on baseUrl'
+    );
+    assert.equal(
+      resolveValidHttpBaseUrl('https://api.example.com/v1#frag', 'https://api.openai.com/v1'),
+      'https://api.openai.com/v1',
+      'resolveValidHttpBaseUrl must reject fragments on baseUrl'
+    );
+    assert.equal(
+      resolveValidHttpBaseUrl('https://api.example.com/v1\u0000/', 'https://api.openai.com/v1'),
+      'https://api.openai.com/v1',
+      'resolveValidHttpBaseUrl must reject control characters in baseUrl'
+    );
+    const sanitizedHtmlSpecs = sanitizeSpecifications({
+      hardware: {
+        chipset: '  <b>Apple A18 Pro</b>\u0000<script>alert(1)</script> (3 nm)  ',
+      },
+      design: {
+        colors: [
+          '<b>Titan</b>\u0000 Đen',
+          'x'.repeat(120),
+          ...Array.from({ length: 40 }, (_, idx) => `Color-${idx}`),
+        ],
+      },
+    });
+    assert.equal(sanitizedHtmlSpecs.hardware?.chipset, 'Apple A18 Pro alert(1) (3 nm)');
+    assert.equal(sanitizedHtmlSpecs.design?.colors?.[0], 'Titan Đen');
+    assert.equal(sanitizedHtmlSpecs.design?.colors?.[1]?.length, 80);
+    assert.equal(sanitizedHtmlSpecs.design?.colors?.length, 32);
 
     console.log('✅ [AiSpecEnricher] Mock OpenAI-compatible enrichment & caching passed 100%!');
   } finally {

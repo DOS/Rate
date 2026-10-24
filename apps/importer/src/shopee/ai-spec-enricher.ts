@@ -144,8 +144,11 @@ function toBooleanOrUndefined(val: unknown): boolean | undefined {
   return undefined;
 }
 
-function toStringOrUndefined(val: unknown): string | undefined {
-  if (typeof val === 'string' && val.trim().length > 0) return val.trim();
+function toStringOrUndefined(val: unknown, maxLen = 500): string | undefined {
+  if (typeof val === 'string') {
+    const cleaned = sanitizeAiGeneratedText(val, maxLen).trim();
+    return cleaned.length > 0 ? cleaned : undefined;
+  }
   if (typeof val === 'number' && Number.isFinite(val)) return String(val);
   return undefined;
 }
@@ -153,8 +156,10 @@ function toStringOrUndefined(val: unknown): string | undefined {
 function sanitizeColorList(val: unknown): string[] | undefined {
   if (!Array.isArray(val)) return undefined;
   const cleaned = Array.from(
-    new Set(val.map((c: unknown) => toStringOrUndefined(c)).filter((c): c is string => Boolean(c)))
-  );
+    new Set(
+      val.map((c: unknown) => toStringOrUndefined(c, 80)).filter((c): c is string => Boolean(c))
+    )
+  ).slice(0, 32);
   return cleaned.length > 0 ? cleaned : undefined;
 }
 
@@ -433,12 +438,19 @@ export function trimTrailingSlashes(rawUrl: string): string {
   return end === rawUrl.length ? rawUrl : rawUrl.slice(0, end);
 }
 
-function resolveValidHttpBaseUrl(candidateUrl: string, fallbackUrl: string): string {
-  const cleaned = trimTrailingSlashes((candidateUrl || '').trim());
-  if (cleaned) {
+export function resolveValidHttpBaseUrl(candidateUrl: string, fallbackUrl: string): string {
+  const cleaned = trimTrailingSlashes(typeof candidateUrl === 'string' ? candidateUrl.trim() : '');
+  if (cleaned && cleaned.length <= 512 && !/\p{Cc}/u.test(cleaned) && !/\s/.test(cleaned)) {
     try {
       const parsed = new URL(cleaned);
-      if ((parsed.protocol === 'http:' || parsed.protocol === 'https:') && parsed.hostname) {
+      if (
+        (parsed.protocol === 'http:' || parsed.protocol === 'https:') &&
+        parsed.hostname &&
+        parsed.username === '' &&
+        parsed.password === '' &&
+        parsed.search === '' &&
+        parsed.hash === ''
+      ) {
         return cleaned;
       }
     } catch {

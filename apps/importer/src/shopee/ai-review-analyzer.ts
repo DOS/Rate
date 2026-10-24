@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import { z, MAX_VALID_VND_PRICE, seedingRiskPenalty } from '@repo/shared-data';
 import {
-  trimTrailingSlashes,
+  resolveValidHttpBaseUrl,
   extractJsonObjectString,
   type SupportedAiProvider,
   type AiSpecEnricherConfig,
@@ -585,6 +585,7 @@ const RATING_LABEL_RE = /^(?:(?:cực\s*k[ìỳ]|rất)\s+)?(?:không\s+)?hài\s
 export function isRatingOnlyComment(comment: string | null | undefined): boolean {
   const text = (comment || '')
     .normalize('NFC')
+    .replace(/\p{Cc}+/gu, '')
     .replace(/[\s.!,]+$/u, '')
     .trim();
   return text.length === 0 || RATING_LABEL_RE.test(text);
@@ -617,7 +618,10 @@ const PRODUCT_MENTION_RE =
  * any product attribute or usage experience (Section 4 #13 & Section 13 P1).
  */
 export function isShippingOnlyComment(comment: string | null | undefined): boolean {
-  const text = (comment || '').normalize('NFC').trim();
+  const text = (comment || '')
+    .normalize('NFC')
+    .replace(/\p{Cc}+/gu, '')
+    .trim();
   if (text.length < 6 || isRatingOnlyComment(text)) return false;
   return SHIPPING_ASPECT_RE.test(text) && !PRODUCT_MENTION_RE.test(text);
 }
@@ -630,7 +634,10 @@ export function hasStarSentimentContradiction(
   ratingStar: number,
   comment: string | null | undefined
 ): boolean {
-  const text = (comment || '').normalize('NFC').trim();
+  const text = (comment || '')
+    .normalize('NFC')
+    .replace(/\p{Cc}+/gu, '')
+    .trim();
   if (text.length < 10 || isRatingOnlyComment(text)) return false;
 
   if (ratingStar >= 5) {
@@ -686,8 +693,16 @@ export function computeVoterWeight(params: {
 }): number {
   const { accountAgeDays, verifiedReviewCount, trustScore, isVerifiedContact = true } = params;
   if (!isVerifiedContact) return 0;
-  if (accountAgeDays !== null && accountAgeDays < 7) return 0;
-  if ((accountAgeDays !== null && accountAgeDays < 30) || verifiedReviewCount <= 0) {
+  const validAge =
+    typeof accountAgeDays === 'number' && Number.isFinite(accountAgeDays) && accountAgeDays >= 0
+      ? accountAgeDays
+      : null;
+  const validReviews =
+    typeof verifiedReviewCount === 'number' && Number.isFinite(verifiedReviewCount)
+      ? verifiedReviewCount
+      : 0;
+  if (validAge !== null && validAge < 7) return 0;
+  if ((validAge !== null && validAge < 30) || validReviews <= 0) {
     return 0.1;
   }
   const rawT = typeof trustScore === 'number' && Number.isFinite(trustScore) ? trustScore : 0.5;
@@ -728,6 +743,7 @@ function normalizeTextForDedupe(text: string): string {
  * Used to detect paraphrased or reordered seeding templates across distinct accounts/listings.
  */
 export function computeTextShingleSimilarity(textA: string, textB: string, k = 3): number {
+  const safeK = typeof k === 'number' && Number.isInteger(k) && k >= 1 && k <= 10 ? k : 3;
   const normA = normalizeTextForDedupe(textA);
   const normB = normalizeTextForDedupe(textB);
   if (!normA || !normB) return 0;
@@ -735,17 +751,17 @@ export function computeTextShingleSimilarity(textA: string, textB: string, k = 3
 
   const wordsA = normA.split(' ').filter(Boolean);
   const wordsB = normB.split(' ').filter(Boolean);
-  if (wordsA.length < k || wordsB.length < k) {
+  if (wordsA.length < safeK || wordsB.length < safeK) {
     return 0;
   }
 
   const shinglesA = new Set<string>();
-  for (let i = 0; i <= wordsA.length - k; i++) {
-    shinglesA.add(wordsA.slice(i, i + k).join(' '));
+  for (let i = 0; i <= wordsA.length - safeK; i++) {
+    shinglesA.add(wordsA.slice(i, i + safeK).join(' '));
   }
   const shinglesB = new Set<string>();
-  for (let i = 0; i <= wordsB.length - k; i++) {
-    shinglesB.add(wordsB.slice(i, i + k).join(' '));
+  for (let i = 0; i <= wordsB.length - safeK; i++) {
+    shinglesB.add(wordsB.slice(i, i + safeK).join(' '));
   }
 
   let intersection = 0;
@@ -771,7 +787,10 @@ export function assessReview6Axes(
     isConflictOfInterest?: boolean;
   } = {}
 ): ReviewAssessment {
-  const comment = (review.comment || '').normalize('NFC').trim();
+  const comment = (review.comment || '')
+    .normalize('NFC')
+    .replace(/\p{Cc}+/gu, '')
+    .trim();
   const cleanText = comment.replace(/[\s.!,]+$/u, '').trim();
 
   // 1. Extract aspects & routing
@@ -1007,22 +1026,14 @@ export class AiReviewAnalyzer {
     const defaults = PROVIDER_DEFAULTS[this.provider];
 
     this.apiKey = (config.apiKey ?? this.resolveApiKey(this.provider)).trim();
-    const rawBaseUrl = trimTrailingSlashes(
+    this.baseUrl = resolveValidHttpBaseUrl(
       config.baseUrl ||
         process.env.AI_BASE_URL ||
         process.env.DOS_AI_BASE_URL ||
         process.env.OPENAI_BASE_URL ||
-        defaults.baseUrl
+        defaults.baseUrl,
+      defaults.baseUrl
     );
-    try {
-      const parsedBase = new URL(rawBaseUrl);
-      this.baseUrl =
-        parsedBase.protocol === 'https:' || parsedBase.protocol === 'http:'
-          ? rawBaseUrl
-          : defaults.baseUrl;
-    } catch {
-      this.baseUrl = defaults.baseUrl;
-    }
 
     this.model =
       (config.model || process.env.AI_MODEL || process.env.OPENAI_MODEL || '').trim() ||
@@ -1102,7 +1113,10 @@ export class AiReviewAnalyzer {
     }
 
     return reviews.map(r => {
-      const comment = (r.comment || '').trim();
+      const comment = (r.comment || '')
+        .normalize('NFC')
+        .replace(/\p{Cc}+/gu, '')
+        .trim();
       const norm = normalizeTextForDedupe(comment);
       const distinctAuthorsWithSameText = commentCounts.get(norm)?.size ?? 1;
       const maxShingleSim = maxShingleSimByReviewId.get(r.id) ?? 0;
@@ -1352,13 +1366,10 @@ export class AiReviewAnalyzer {
   } | null> {
     const sanitizePromptText = (raw: string | null | undefined, maxLen = 1500): string => {
       if (!raw) return '';
-      return (
-        raw
-          // eslint-disable-next-line no-control-regex -- stripping control characters is the point
-          .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, ' ')
-          .trim()
-          .slice(0, maxLen)
-      );
+      return raw
+        .replace(/\p{Cc}+/gu, ' ')
+        .trim()
+        .slice(0, maxLen);
     };
 
     const sanitizeOutputText = (raw: unknown, maxLen = 400): string =>
