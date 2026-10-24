@@ -254,7 +254,14 @@ export async function runMasterSpecsBackfill(
   }
   const categoryIdBySlug = new Map<string, string>();
   for (const c of categories || []) {
-    categoryIdBySlug.set(c.slug, c.id);
+    if (!c || typeof c !== 'object') continue;
+    const safeSlug =
+      typeof c.slug === 'string' ? stripKeySpecControlChars(c.slug).trim().slice(0, 120) : '';
+    const safeCatId =
+      typeof c.id === 'string' && !/\p{Cc}/u.test(c.id.trim()) ? c.id.trim().slice(0, 128) : '';
+    if (safeSlug && safeCatId) {
+      categoryIdBySlug.set(safeSlug, safeCatId);
+    }
   }
 
   const catalogModelKeys = new Set<string>();
@@ -359,10 +366,25 @@ export async function runMasterSpecsBackfill(
 
   let skipped = 0;
   for (const m of masters || []) {
-    if (catalogModelKeys.has(m.model_key)) continue;
+    if (!m || typeof m !== 'object') continue;
+    const safeMasterId =
+      typeof m.id === 'string' && !/\p{Cc}/u.test(m.id.trim()) ? m.id.trim().slice(0, 128) : '';
+    const safeModelKey =
+      typeof m.model_key === 'string'
+        ? stripKeySpecControlChars(m.model_key).trim().slice(0, 160)
+        : '';
+    const safeName =
+      typeof m.name === 'string'
+        ? stripKeySpecControlChars(m.name).replace(/\s+/g, ' ').trim().slice(0, 200) || '(unnamed)'
+        : '(unnamed)';
+    if (!safeMasterId || !safeModelKey) {
+      skipped++;
+      continue;
+    }
+    if (catalogModelKeys.has(safeModelKey)) continue;
 
-    const canonicalEntry = Object.hasOwn(CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY, m.model_key)
-      ? CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY[m.model_key]
+    const canonicalEntry = Object.hasOwn(CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY, safeModelKey)
+      ? CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY[safeModelKey]
       : undefined;
 
     if (canonicalEntry) {
@@ -387,20 +409,20 @@ export async function runMasterSpecsBackfill(
             ),
             updated_at: new Date().toISOString(),
           })
-          .eq('id', m.id);
+          .eq('id', safeMasterId);
 
         if (upErr) {
-          throw new Error(`Failed to backfill ${m.name}: ${upErr.message}`);
+          throw new Error(`Failed to backfill ${safeName}: ${upErr.message}`);
         }
       }
       catalogUpdated++;
       logger.info(
         'backfill.canonical_updated',
-        `[Canonical Specs] ${m.name} (${m.model_key}): ${apply ? 'UPDATED' : 'DRY-RUN WOULD UPDATE'}`,
-        { modelKey: m.model_key, apply }
+        `[Canonical Specs] ${safeName} (${safeModelKey}): ${apply ? 'UPDATED' : 'DRY-RUN WOULD UPDATE'}`,
+        { modelKey: safeModelKey, apply }
       );
     } else if (apply && enricher.isConfigured()) {
-      const ok = await matcher.enrichMasterProductById(m.id);
+      const ok = await matcher.enrichMasterProductById(safeMasterId);
       if (ok) {
         catalogUpdated++;
       } else {
@@ -408,8 +430,8 @@ export async function runMasterSpecsBackfill(
       }
       logger.info(
         'backfill.ai_enriched',
-        `[AI Enrich] ${m.name} (${m.id}): ${ok ? 'UPDATED' : 'SKIPPED'}`,
-        { masterId: m.id, updated: ok }
+        `[AI Enrich] ${safeName} (${safeMasterId}): ${ok ? 'UPDATED' : 'SKIPPED'}`,
+        { masterId: safeMasterId, updated: ok }
       );
     } else {
       skipped++;
