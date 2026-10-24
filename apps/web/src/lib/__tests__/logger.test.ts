@@ -105,6 +105,37 @@ function main() {
   assert.equal(redactedCyclic.bearerMsg, 'Authorization: Bearer [redacted]');
   assert.equal(String(redactedCyclic.boundaryEmail).includes('victim'), false);
 
+  // Caller fields cannot overwrite ts/level/scope/msg, scope is bounded, and stacks are scrubbed (#936).
+  const [protectedLine] = capture(() =>
+    createLogger(`  api.scope\u0000${'s'.repeat(200)}  `).warn('true message', {
+      level: 'debug',
+      scope: 'forged.scope',
+      msg: 'forged message',
+      ts: '1970-01-01T00:00:00.000Z',
+      extra: 'ok',
+    })
+  );
+  const parsedProtected = JSON.parse(protectedLine!);
+  assert.equal(parsedProtected.level, 'warn');
+  assert.equal(parsedProtected.msg, 'true message');
+  assert.equal(parsedProtected.scope.length, 128);
+  assert.notEqual(parsedProtected.scope, 'forged.scope');
+  assert.notEqual(parsedProtected.ts, '1970-01-01T00:00:00.000Z');
+  assert.equal(parsedProtected.extra, 'ok');
+
+  const stackErr = new Error('fail');
+  stackErr.stack =
+    'Error: fail at Bearer secretToken123456 and user@example.com';
+  const serializedNonProd = serializeError(stackErr);
+  assert.equal(
+    String(serializedNonProd.stack).includes('secretToken123456'),
+    false
+  );
+  assert.equal(
+    String(serializedNonProd.stack).includes('user@example.com'),
+    false
+  );
+
   console.warn('✅ Structured logger suite passed');
 }
 

@@ -6,11 +6,26 @@
  * The Supabase client loads on the first call, when the user writes, so pages
  * that only read do not ship it (DOS/Rate#756).
  */
+export const MAX_BROWSER_ACCESS_TOKEN_LENGTH = 16_384;
+
+export function sanitizeBrowserAccessToken(rawToken: unknown): string | null {
+  if (typeof rawToken !== 'string') return null;
+  const trimmed = rawToken.replace(/\p{Cc}+/gu, '').trim();
+  if (
+    !trimmed ||
+    trimmed.length > MAX_BROWSER_ACCESS_TOKEN_LENGTH ||
+    /\s/u.test(trimmed)
+  ) {
+    return null;
+  }
+  return trimmed;
+}
+
 export async function getBrowserAccessToken(): Promise<string | null> {
   try {
     const { getBrowserSupabase } = await import('@/lib/supabase/browser');
     const { data } = await getBrowserSupabase().auth.getSession();
-    return data.session?.access_token ?? null;
+    return sanitizeBrowserAccessToken(data.session?.access_token);
   } catch {
     return null;
   }

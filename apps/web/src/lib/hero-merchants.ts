@@ -30,6 +30,10 @@ function sanitizeMerchantText(value: unknown, maxLen: number): string {
 }
 
 function clampScore100(value: unknown): number {
+  if (typeof value === 'boolean' || value === null || value === undefined) {
+    return 0;
+  }
+  if (typeof value === 'string' && !value.trim()) return 0;
   const n = Number(value);
   return Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : 0;
 }
@@ -39,6 +43,9 @@ export function toHeroMerchantSuggestions(
 ): HeroMerchantSuggestion[] {
   if (!Array.isArray(merchants)) return [];
   return merchants
+    .filter(
+      (m): m is HeroMerchantSuggestion => Boolean(m) && typeof m === 'object'
+    )
     .slice(0, MAX_HERO_MERCHANTS)
     .map(
       ({

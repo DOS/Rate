@@ -39,12 +39,21 @@ function isProduction(): boolean {
 export function serializeError(err: unknown): LogFields {
   if (err instanceof Error) {
     const withCode = err as Error & { code?: unknown; digest?: unknown };
+    const safeName =
+      typeof err.name === 'string' && err.name.trim()
+        ? scrubText(err.name.replace(/\p{Cc}+/gu, '').trim()).slice(0, 128)
+        : 'Error';
     return {
-      name: err.name,
+      name: safeName || 'Error',
       message: scrubText(err.message),
       ...(withCode.code !== undefined ? { code: withCode.code } : {}),
       ...(withCode.digest !== undefined ? { digest: withCode.digest } : {}),
-      ...(isProduction() ? {} : { stack: err.stack }),
+      ...(isProduction()
+        ? {}
+        : {
+            stack:
+              typeof err.stack === 'string' ? scrubText(err.stack) : err.stack,
+          }),
     };
   }
   if (err && typeof err === 'object') {
@@ -74,8 +83,11 @@ export function redact(
     const out: LogFields = {};
     for (const [key, v] of Object.entries(value).slice(0, MAX_KEYS)) {
       if (UNSAFE_OBJECT_KEYS.has(key)) continue;
-      const safeKey = key.slice(0, 120);
-      if (!safeKey) continue;
+      const safeKey = key
+        .replace(/\p{Cc}+/gu, '')
+        .trim()
+        .slice(0, 120);
+      if (!safeKey || UNSAFE_OBJECT_KEYS.has(safeKey)) continue;
       out[safeKey] = SECRET_KEY.test(safeKey)
         ? '[redacted]'
         : redact(v, depth + 1, seen);
@@ -94,14 +106,25 @@ export interface Logger {
 }
 
 export function createLogger(scope: string): Logger {
+  const safeScope =
+    (typeof scope === 'string'
+      ? scope
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .slice(0, 128)
+      : '') || 'app';
   const write = (level: LogLevel, msg: string, fields?: LogFields) => {
     if (level === 'debug' && isProduction()) return;
+    const redactedFields =
+      fields && typeof fields === 'object' && !Array.isArray(fields)
+        ? (redact(fields) as LogFields)
+        : {};
     const line = JSON.stringify({
+      ...redactedFields,
       ts: new Date().toISOString(),
       level,
-      scope,
+      scope: safeScope,
       msg: scrubText(String(msg ?? '')),
-      ...((fields ? redact(fields) : {}) as LogFields),
     });
     if (level === 'error' || level === 'warn') {
       console.error(line);
