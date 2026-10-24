@@ -163,9 +163,9 @@ export function detectCategorySlug(title: string): CanonicalCategorySlug {
 const CANONICAL_PHONE_REGISTRY: Record<
   string,
   {
-    screen_size_inch: number;
+    screen_size_inch?: number;
     battery_mah: number;
-    ram_gb: number;
+    ram_gb?: number;
     chipset: string;
     cpu: string;
     gpu: string;
@@ -174,7 +174,7 @@ const CANONICAL_PHONE_REGISTRY: Record<
     dimensions: string;
     resolution: string;
     screen_type: string;
-    refresh_rate_hz: number;
+    refresh_rate_hz?: number;
     rear_camera: string;
     second_camera?: string;
     third_camera?: string;
@@ -515,9 +515,7 @@ const CANONICAL_PHONE_REGISTRY: Record<
     default_storage_gb: 64,
   },
   'apple:airpods-pro-2': {
-    screen_size_inch: 1.0,
     battery_mah: 523,
-    ram_gb: 1,
     chipset: 'Apple H2 headphone chip + Apple U1 chip (MagSafe Case)',
     cpu: 'Apple H2 custom acoustic DSP',
     gpu: 'N/A',
@@ -526,19 +524,15 @@ const CANONICAL_PHONE_REGISTRY: Record<
     dimensions: '45.2 x 60.6 x 21.7 mm (Case)',
     resolution: 'Custom high-excursion Apple driver',
     screen_type: 'Active Noise Cancellation (2x ANC) + Adaptive Transparency',
-    refresh_rate_hz: 60,
     rear_camera: 'Inward-facing microphone + skin-detect sensor',
     front_camera: 'Beamforming dual microphones',
     charging_w: 5,
     has_5g: false,
     release_date: 'September 2023',
     ip_rating: 'IP54 dust, sweat, and water resistant',
-    default_storage_gb: 1,
   },
   'sony:wf-1000xm5': {
-    screen_size_inch: 1.0,
     battery_mah: 500,
-    ram_gb: 1,
     chipset: 'Sony Integrated Processor V2 + HD Noise Cancelling Processor QN2e',
     cpu: 'Dual-processor 24-bit Audio DSP',
     gpu: 'N/A',
@@ -547,7 +541,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     dimensions: '64.6 x 40.0 x 26.5 mm (Case)',
     resolution: '8.4 mm Dynamic Driver X (20Hz-40,000Hz LDAC)',
     screen_type: 'Industry-leading Dual-Processor ANC + Bone Conduction Sensor',
-    refresh_rate_hz: 60,
     rear_camera: 'Dual feedback microphones per earbud',
     second_camera: 'Feed-forward & feedback 6-mic array',
     front_camera: 'Bone conduction sensor + Wind noise reduction',
@@ -555,7 +548,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     has_5g: false,
     release_date: 'July 2023',
     ip_rating: 'IPX4 water resistant',
-    default_storage_gb: 1,
   },
   'samsung:galaxy-tab-s10-ultra': {
     screen_size_inch: 14.6,
@@ -690,9 +682,7 @@ const CANONICAL_PHONE_REGISTRY: Record<
     default_storage_gb: 8,
   },
   'samsung:galaxy-buds3-pro': {
-    screen_size_inch: 1.0,
     battery_mah: 515,
-    ram_gb: 1,
     chipset: 'Samsung Proprietary Bluetooth 5.4 SoC + Dual Amplifier',
     cpu: 'Galaxy AI Adaptive ANC & Real-Time Interpreter DSP',
     gpu: 'Blade Lights LED Controller',
@@ -701,7 +691,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     dimensions: '48.7 x 58.9 x 24.4 mm (Case)',
     resolution: 'Enhanced 2-Way Speaker (10.5mm Dynamic + 6.1mm Planar Tweeter)',
     screen_type: 'Blade Lights LED Indicator + Transparent Cradle Lid',
-    refresh_rate_hz: 60,
     rear_camera: '3 High-SNR Microphones + VPU (Voice Pickup Unit)',
     second_camera: 'In-canal feedback mic + Siren/Voice Detect AI sensor',
     front_camera: 'Pinch & Swipe Blade Touch Controls',
@@ -709,7 +698,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     has_5g: false,
     release_date: 'July 2024',
     ip_rating: 'IP57 dust and water resistant (1m up to 30 mins)',
-    default_storage_gb: 1,
   },
   // === 2026 Flagship Lineup (Smartphones, Tablets, Laptops, Smartwatches, Earbuds) ===
   'xiaomi:18-pro-max': {
@@ -995,9 +983,7 @@ const CANONICAL_PHONE_REGISTRY: Record<
     default_storage_gb: 64,
   },
   'apple:airpods-pro-3': {
-    screen_size_inch: 1.0,
     battery_mah: 540,
-    ram_gb: 1,
     chipset: 'Apple H3 Headphone Chip + U2 Ultra Wideband (MagSafe Case)',
     cpu: 'Apple H3 Ultra-Low-Latency Audio DSP (96kHz/24-bit Lossless)',
     gpu: 'Acoustic & Heart-Rate Biosensor Co-Processor',
@@ -1006,7 +992,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     dimensions: '45.2 x 60.6 x 21.7 mm (USB-C MagSafe Case)',
     resolution: 'Custom High-Excursion Apple Driver + High Dynamic Range Amplifier',
     screen_type: 'Status LED + Built-in Find My Precision Speaker',
-    refresh_rate_hz: 60,
     rear_camera: 'In-Ear Optical Heart-Rate & Body Temperature Sensor + 3x ANC Pro vs Gen 1',
     second_camera: 'Clinical-Grade Hearing Aid Mode + Conversation Awareness + Voice Isolation',
     front_camera: 'Capacitive Touch Stem (Swipe Volume + Press Control)',
@@ -1014,12 +999,9 @@ const CANONICAL_PHONE_REGISTRY: Record<
     has_5g: false,
     release_date: 'September 2025',
     ip_rating: 'IP54 dust, sweat, and water resistant (earbuds and MagSafe charging case)',
-    default_storage_gb: 1,
   },
   'sony:wf-1000xm6': {
-    screen_size_inch: 1.0,
     battery_mah: 550,
-    ram_gb: 1,
     chipset: 'Sony Integrated Processor V3 + QN3e HD Noise Cancelling Processor',
     cpu: 'Dual-Processor 24-bit Audio Signal Processing + DSEE Ultimate AI',
     gpu: 'LE Audio LC3 & LDAC High-Bitrate Controller',
@@ -1028,7 +1010,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     dimensions: '64.0 x 40.0 x 25.8 mm (Qi Wireless Case)',
     resolution: '8.4mm Dynamic Driver X (Dual-layer dome-edge diaphragm)',
     screen_type: 'Recessed Matte Acoustic Chassis + Multi-Point Status LED',
-    refresh_rate_hz: 60,
     rear_camera: 'Dual Feedback + Feedforward 6-Mic Array + Bone Conduction Sensor',
     second_camera: 'AI Beamforming Wind Noise Reduction + Speak-to-Chat + Head Gesture Control',
     front_camera: 'Customizable Capacitive Touch Panels (L/R)',
@@ -1036,7 +1017,6 @@ const CANONICAL_PHONE_REGISTRY: Record<
     has_5g: false,
     release_date: 'June 2025',
     ip_rating: 'IPX4 splash and sweat resistant + Polyurethane Noise Isolation Tips',
-    default_storage_gb: 1,
   },
 };
 
@@ -1060,7 +1040,10 @@ function slugify(text: string): string {
   return (
     text
       .toString()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
       .toLowerCase()
+      .replace(/đ/g, 'd')
       // "Pro+" / "S24+" are Plus models: keep them apart from the base model's
       // key and slug, and give "S24+" the same key as "S24 Plus" (DOS/Rate#597).
       // Only a "+" that ends a model word counts; "A55 + Tặng" and "8+256GB" keep
@@ -1138,7 +1121,7 @@ export class ProductNormalizer {
       const airpodsMatch = appleTitle.match(
         // Each run of spaces has exactly one `\s*` that can match it, so long
         // whitespace cannot backtrack polynomially (CodeQL js/polynomial-redos).
-        /airpods\s*(?:(pro)(?:\s*(?:(?:gen|thế\s*hệ)\s*)?(\d+))?|(max)|(?:(?:gen|thế\s*hệ)\s*)?(\d+))/i
+        /airpods\s*(?:(pro)(?:\s*(?:(?:gen|thế\s*hệ)\s*|\(\s*)?(\d+))?|(max)|(?:(?:gen|thế\s*hệ)\s*)?(\d+))/i
       );
 
       // Retail titles often put the chip after the screen size ("iPad Pro 11 inch M4",
@@ -1197,7 +1180,11 @@ export class ProductNormalizer {
         model = `Watch ${watchMatch[1].trim()}`;
       } else if (airpodsMatch) {
         if (airpodsMatch[1]) {
-          model = `AirPods Pro${airpodsMatch[2] ? ` ${airpodsMatch[2]}` : ''}`;
+          const rawGen = airpodsMatch[2];
+          // FPT Shop names 2nd-gen AirPods Pro by release/USB-C refresh year ("AirPods Pro 2022",
+          // "AirPods Pro 2023") (DOS/Rate#643).
+          const proGen = rawGen === '2022' || rawGen === '2023' ? '2' : rawGen;
+          model = `AirPods Pro${proGen ? ` ${proGen}` : ''}`;
         } else if (airpodsMatch[3]) {
           model = 'AirPods Max';
         } else if (airpodsMatch[4]) {
@@ -1343,6 +1330,13 @@ export class ProductNormalizer {
     // `\s*(?:X\s*)?` rather than `\s*X?\s*` (here and in the ROM patterns
     // below): the same strings, without the two adjacent \s* that made long
     // whitespace runs quadratic (CodeQL polynomial regex, DOS/Rate#537).
+    const romExplicit = title.match(
+      /(?:ROM|bộ nhớ trong)\s*(?:[:-]\s*)?(\d+(?:[.,]\d+)?)\s*(TB|GB)/i
+    );
+    const romLoose = title.match(
+      /dung lượng\s*(?:[:-]\s*)?(\d+(?:[.,]\d+)?)\s*(TB|GB)(?!\s*(?:RAM|bộ\s*nhớ\s*RAM|dung\s*lượng\s*RAM))/i
+    );
+
     const slashRamRom = title.match(/\b(\d{1,2})\s*(?:GB\s*)?\/\s*(\d+(?:[.,]\d+)?)\s*(TB|GB)\b/i);
     if (slashRamRom && ramPhrases.length === 0) {
       const slashRam = parseInt(slashRamRom[1], 10);
@@ -1358,17 +1352,27 @@ export class ProductNormalizer {
       if (first.value <= 32 && second.value >= 64 && /^[\s/,-]+$/.test(between)) {
         first.claimed = true;
       }
+    } else if (
+      ramPhrases.length === 0 &&
+      !romExplicit &&
+      !romLoose &&
+      claimable.filter(t => !t.claimed).length === 1
+    ) {
+      const [only] = claimable.filter(t => !t.claimed);
+      // Retailers such as FPT Shop name iPads/laptops by their RAM ("iPad Pro 11 M5 2025 WiFi 12GB"):
+      // tablets start at >=32GB storage and laptops at >=64GB, and non-power-of-two GB values
+      // (6/12/18/24/36/48GB) are always RAM rather than storage (DOS/Rate#643).
+      const isTabletOrLaptopRamOnly =
+        (categorySlug === 'tablets' && only.value <= 24) ||
+        (categorySlug === 'laptops' && only.value <= 48);
+      const isNonPowerOfTwoRamSize = [3, 6, 12, 18, 24, 36, 48].includes(only.value);
+      if (isTabletOrLaptopRamOnly || isNonPowerOfTwoRamSize) {
+        only.claimed = true;
+      }
     }
 
     const storageCandidates = claimable.filter(
       t => !t.claimed && t.value > 0 && t.value <= MAX_VALID_STORAGE_GB
-    );
-
-    const romExplicit = title.match(
-      /(?:ROM|bộ nhớ trong)\s*(?:[:-]\s*)?(\d+(?:[.,]\d+)?)\s*(TB|GB)/i
-    );
-    const romLoose = title.match(
-      /dung lượng\s*(?:[:-]\s*)?(\d+(?:[.,]\d+)?)\s*(TB|GB)(?!\s*(?:RAM|bộ\s*nhớ\s*RAM|dung\s*lượng\s*RAM))/i
     );
 
     const baseKey = `${slugify(brand)}:${slugify(model)}`;
@@ -1380,7 +1384,11 @@ export class ProductNormalizer {
     let storageGb: number | null = null;
     let storageConfident = false;
     const marker = romExplicit ?? romLoose;
-    if (marker) {
+    if (categorySlug === 'earbuds') {
+      // Earbuds have no storage variant and must key as :unknown with null storage (DOS/Rate#643, #657).
+      storageGb = null;
+      storageConfident = true;
+    } else if (marker) {
       const candidateStorage = toValidStorageGb(
         parseFloat(marker[1].replace(',', '.')) * (marker[2].toUpperCase() === 'TB' ? 1024 : 1)
       );
@@ -1402,9 +1410,6 @@ export class ProductNormalizer {
       storageConfident = true;
     } else if (storageCandidates.length === 0 && benchmark?.default_storage_gb != null) {
       storageGb = benchmark.default_storage_gb;
-      storageConfident = true;
-    } else if (storageCandidates.length === 0 && categorySlug === 'earbuds') {
-      storageGb = 1;
       storageConfident = true;
     }
     const storageKnown = storageGb !== null;
@@ -1434,7 +1439,7 @@ export class ProductNormalizer {
     // (':unknown') instead of guessing a default (plan v7 §5.2).
     const modelKey = storageKnown ? `${baseKey}:${storageGb}gb` : `${baseKey}:unknown`;
     const storageDisplay =
-      categorySlug === 'earbuds' && storageGb === 1
+      categorySlug === 'earbuds'
         ? 'Standard'
         : storageGb === null
           ? 'Không rõ dung lượng'
@@ -1442,7 +1447,7 @@ export class ProductNormalizer {
             ? `${storageGb / 1024}TB`
             : `${storageGb}GB`;
     const canonicalName =
-      categorySlug === 'earbuds' && storageGb === 1
+      categorySlug === 'earbuds'
         ? `${brand} ${model}`
         : storageKnown
           ? `${brand} ${model} ${storageDisplay}`
@@ -1451,6 +1456,7 @@ export class ProductNormalizer {
 
     // 6. Enrich with 10 Field Groups (PhoneArena structure + GSMArena depth)
     const isApple = brand === 'Apple';
+    const isSmartphone = categorySlug === 'smartphones';
 
     const titleScreenMatch =
       categorySlug === 'earbuds' ? null : title.match(/\b(\d{1,2}(?:[.,]\d)?)\s*(?:inch|in\b|")/i);
@@ -1466,15 +1472,21 @@ export class ProductNormalizer {
         : null;
 
     const claimedRamValue = claimable.find(t => t.claimed)?.value ?? null;
-    const ramGb = benchmark
-      ? benchmark.ram_gb
-      : claimedRamValue !== null &&
-          Number.isFinite(claimedRamValue) &&
-          claimedRamValue > 0 &&
-          claimedRamValue <= MAX_VALID_RAM_GB
+    const validClaimedRam =
+      claimedRamValue !== null &&
+      Number.isFinite(claimedRamValue) &&
+      claimedRamValue > 0 &&
+      claimedRamValue <= MAX_VALID_RAM_GB
         ? claimedRamValue
         : null;
-    const screenSize = benchmark ? benchmark.screen_size_inch : titleScreenSize;
+    // Title-stated RAM takes precedence over benchmark RAM; earbuds and smartwatches
+    // have no GB RAM spec (DOS/Rate#657).
+    const ramGb =
+      categorySlug === 'earbuds' || categorySlug === 'smartwatches'
+        ? null
+        : (validClaimedRam ?? benchmark?.ram_gb ?? null);
+    const screenSize =
+      categorySlug === 'earbuds' ? null : (benchmark?.screen_size_inch ?? titleScreenSize);
     const batteryMah = benchmark ? benchmark.battery_mah : null;
     const has5g = benchmark
       ? benchmark.has_5g
@@ -1654,24 +1666,46 @@ export class ProductNormalizer {
       design: {
         dimensions: benchmark?.dimensions || undefined,
         weight_g: benchmark?.weight_g || undefined,
-        materials: isApple
-          ? 'Ceramic Shield front, glass back, metal frame'
-          : 'Glass front/back, metal frame',
-        resistance: benchmark?.ip_rating || 'IP68 dust/water resistant',
-        biometrics: isApple ? 'Face ID' : 'Fingerprint (under display), Face unlock',
-        keys: isApple ? 'Action Button, Camera Control, Volume, Power' : 'Volume, Power',
+        materials: isSmartphone
+          ? isApple
+            ? 'Ceramic Shield front, glass back, metal frame'
+            : 'Glass front/back, metal frame'
+          : undefined,
+        resistance:
+          benchmark?.ip_rating || (isSmartphone ? 'IP68 dust/water resistant' : undefined),
+        biometrics: isSmartphone
+          ? isApple
+            ? /^iPhone SE\b/i.test(model)
+              ? 'Touch ID'
+              : 'Face ID'
+            : 'Fingerprint (under display), Face unlock'
+          : undefined,
+        keys: isSmartphone
+          ? isApple
+            ? 'Action Button, Camera Control, Volume, Power'
+            : 'Volume, Power'
+          : undefined,
         colors: colors.length > 0 ? colors : ['Tiêu chuẩn'],
       },
       display: {
-        size_inch: screenSize || undefined,
+        size_inch: categorySlug === 'earbuds' ? undefined : screenSize || undefined,
         type: benchmark?.screen_type || fallbackScreenType,
         resolution: benchmark?.resolution || undefined,
-        refresh_rate_hz: benchmark?.refresh_rate_hz || (isApple ? 60 : 120),
-        ppi: benchmark?.screen_size_inch === 6.8 ? 505 : 460,
-        protection: isApple ? 'Ceramic Shield' : 'Corning Gorilla Glass',
-        features: isApple
-          ? 'Dynamic Island, True Tone, Wide color (P3), Haptic Touch'
-          : 'Always-on display, HDR10+, Eye Comfort Shield',
+        refresh_rate_hz:
+          categorySlug === 'earbuds'
+            ? undefined
+            : benchmark?.refresh_rate_hz || (isSmartphone ? (isApple ? 60 : 120) : undefined),
+        ppi: isSmartphone ? (benchmark?.screen_size_inch === 6.8 ? 505 : 460) : undefined,
+        protection: isSmartphone
+          ? isApple
+            ? 'Ceramic Shield'
+            : 'Corning Gorilla Glass'
+          : undefined,
+        features: isSmartphone
+          ? isApple
+            ? 'Dynamic Island, True Tone, Wide color (P3), Haptic Touch'
+            : 'Always-on display, HDR10+, Eye Comfort Shield'
+          : undefined,
       },
       hardware: {
         chipset: benchmark?.chipset || undefined,
@@ -1703,9 +1737,11 @@ export class ProductNormalizer {
         bluetooth: '5.3, A2DP, LE',
         wlan: 'Wi-Fi 6E/7, dual-band, Wi-Fi Direct',
         usb: 'USB Type-C, OTG',
-        sensors: isApple
-          ? 'Face ID, gia tốc kế, con quay hồi chuyển, tiệm cận, la bàn, khí áp kế'
-          : 'Vân tay dưới màn hình, gia tốc kế, con quay hồi chuyển, tiệm cận, la bàn',
+        sensors: isSmartphone
+          ? isApple
+            ? 'Face ID, gia tốc kế, con quay hồi chuyển, tiệm cận, la bàn, khí áp kế'
+            : 'Vân tay dưới màn hình, gia tốc kế, con quay hồi chuyển, tiệm cận, la bàn'
+          : undefined,
         location: 'GPS, GLONASS, Galileo, QZSS, BeiDou',
         nfc: true,
         other: isApple ? 'Ultra Wideband (UWB), SOS vệ tinh' : 'Hỗ trợ OTG, Chia sẻ nhanh',
@@ -1738,15 +1774,15 @@ export class ProductNormalizer {
       },
       regulatory: {
         certifications: isApple ? 'CE, FCC ID, Apple Eco Standards' : 'CE, FCC, RoHS',
-        sar_head: '1.10 W/kg',
-        sar_body: '1.15 W/kg',
+        sar_head: isSmartphone ? '1.10 W/kg' : undefined,
+        sar_body: isSmartphone ? '1.15 W/kg' : undefined,
       },
     };
 
     const keySpecs: KeySpecs = {
       screen:
-        categorySlug === 'earbuds' && !benchmark
-          ? 'TWS In-Ear + Charging Case'
+        categorySlug === 'earbuds'
+          ? benchmark?.screen_type?.split(',')[0] || 'TWS In-Ear + Charging Case'
           : `${fallbackScreenSize}" ${benchmark?.screen_type?.split(',')[0] || fallbackScreenType.split(',')[0]}`,
       chip: benchmark?.chipset?.split('(')[0]?.trim() || fallbackChip,
       camera: benchmark?.rear_camera ? benchmark.rear_camera.split(',')[0] : fallbackKeyCamera,
