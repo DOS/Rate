@@ -194,22 +194,61 @@ export interface MerchantRiskInput {
   rawReviews?: ReviewInputItem[];
 }
 
+const VALID_MERCHANT_RISK_LEVELS = new Set<MerchantRiskEvaluation['risk_level']>([
+  'low',
+  'moderate',
+  'high',
+  'critical',
+]);
+
+function clampNonNegativeInt(n: unknown, max = 1_000_000_000): number {
+  const num = typeof n === 'number' ? n : Number.NaN;
+  if (!Number.isFinite(num) || num < 0) return 0;
+  return Math.min(max, Math.floor(num));
+}
+
+function clamp0to100(n: unknown, fallback = 0): number {
+  const num = typeof n === 'number' ? n : Number.NaN;
+  if (!Number.isFinite(num)) return fallback;
+  return Math.min(100, Math.max(0, Number(num.toFixed(2))));
+}
+
+function normalizeSafeDbId(raw: unknown): string {
+  if (typeof raw !== 'string') return '';
+  const trimmed = raw.trim();
+  if (!trimmed || trimmed.length > 128 || /\p{Cc}/u.test(trimmed)) return '';
+  return trimmed;
+}
+
 /** The `review_risk_breakdown` stored with `review_risk_score` on rate.merchants. */
 export function merchantRiskBreakdown(risk: MerchantRiskEvaluation) {
+  const safeRisk =
+    risk && typeof risk === 'object' ? risk : ({} as Partial<MerchantRiskEvaluation>);
+  const riskLevel: MerchantRiskEvaluation['risk_level'] = VALID_MERCHANT_RISK_LEVELS.has(
+    safeRisk.risk_level as MerchantRiskEvaluation['risk_level']
+  )
+    ? (safeRisk.risk_level as MerchantRiskEvaluation['risk_level'])
+    : 'low';
+  const reasons = Array.isArray(safeRisk.reasons)
+    ? safeRisk.reasons
+        .map(r => (typeof r === 'string' ? sanitizeAiGeneratedText(r, 400) : ''))
+        .filter(Boolean)
+        .slice(0, 20)
+    : [];
   return {
-    risk_level: risk.risk_level,
-    trust_score: risk.trust_score,
-    seeding_ratio: risk.seeding_ratio,
-    coin_spam_ratio: risk.coin_spam_ratio,
-    sabotage_ratio: risk.sabotage_ratio,
-    total_reviews: risk.total_reviews,
-    authentic_count: risk.authentic_count,
-    coin_spam_count: risk.coin_spam_count,
-    seeding_fake_count: risk.seeding_fake_count,
-    sabotage_or_bombing_count: risk.sabotage_or_bombing_count,
-    suspicious_ratio_pct: risk.suspicious_ratio_pct,
-    price_anomaly_detected: risk.price_anomaly_detected,
-    reasons: risk.reasons,
+    risk_level: riskLevel,
+    trust_score: clamp0to100(safeRisk.trust_score, 85),
+    seeding_ratio: clamp01(Number(safeRisk.seeding_ratio ?? 0)),
+    coin_spam_ratio: clamp01(Number(safeRisk.coin_spam_ratio ?? 0)),
+    sabotage_ratio: clamp01(Number(safeRisk.sabotage_ratio ?? 0)),
+    total_reviews: clampNonNegativeInt(safeRisk.total_reviews),
+    authentic_count: clampNonNegativeInt(safeRisk.authentic_count),
+    coin_spam_count: clampNonNegativeInt(safeRisk.coin_spam_count),
+    seeding_fake_count: clampNonNegativeInt(safeRisk.seeding_fake_count),
+    sabotage_or_bombing_count: clampNonNegativeInt(safeRisk.sabotage_or_bombing_count),
+    suspicious_ratio_pct: clamp0to100(safeRisk.suspicious_ratio_pct, 0),
+    price_anomaly_detected: Boolean(safeRisk.price_anomaly_detected),
+    reasons,
   };
 }
 
@@ -982,7 +1021,7 @@ export function assessReview6Axes(
 }
 
 export const AiReviewBatchItemSchema = z.object({
-  review_id: z.string().min(1),
+  review_id: z.string().min(1).max(128),
   flag_category: z.enum([
     'authentic',
     'low_value_coin_spam',
@@ -1019,14 +1058,14 @@ export const AiReviewBatchItemSchema = z.object({
     .optional(),
   relevance: z.number().min(0).max(1).optional(),
   ai_generated_prob: z.number().min(0).max(1).optional(),
-  reason: z.string(),
+  reason: z.string().max(500),
 });
 
 export const AiReviewBatchResponseSchema = z.object({
-  reviews: z.array(AiReviewBatchItemSchema),
-  pros: z.array(z.string()).default([]),
-  cons: z.array(z.string()).default([]),
-  ai_summary: z.string().default(''),
+  reviews: z.array(AiReviewBatchItemSchema).max(100),
+  pros: z.array(z.string().max(200)).max(12).default([]),
+  cons: z.array(z.string().max(200)).max(12).default([]),
+  ai_summary: z.string().max(1000).default(''),
 });
 
 /**
@@ -1048,12 +1087,18 @@ export class AiReviewAnalyzer {
   private timeoutMs: number;
 
   constructor(config: AiSpecEnricherConfig = {}) {
-    this.provider = this.resolveProvider(config.provider);
+    const safeConfig = config && typeof config === 'object' ? config : {};
+    this.provider = this.resolveProvider(safeConfig.provider);
     const defaults = PROVIDER_DEFAULTS[this.provider];
 
-    this.apiKey = (config.apiKey ?? this.resolveApiKey(this.provider)).trim();
+    const rawApiKey =
+      typeof safeConfig.apiKey === 'string' ? safeConfig.apiKey : this.resolveApiKey(this.provider);
+    this.apiKey = rawApiKey
+      .replace(/\p{Cc}+/gu, '')
+      .trim()
+      .slice(0, 512);
     this.baseUrl = resolveValidHttpBaseUrl(
-      config.baseUrl ||
+      safeConfig.baseUrl ||
         process.env.AI_BASE_URL ||
         process.env.DOS_AI_BASE_URL ||
         process.env.OPENAI_BASE_URL ||
@@ -1061,11 +1106,17 @@ export class AiReviewAnalyzer {
       defaults.baseUrl
     );
 
-    this.model =
-      (config.model || process.env.AI_MODEL || process.env.OPENAI_MODEL || '').trim() ||
-      defaults.defaultModel;
+    const rawModelCandidate =
+      (typeof safeConfig.model === 'string' && safeConfig.model.replace(/\p{Cc}+/gu, '').trim()) ||
+      (process.env.AI_MODEL || '').replace(/\p{Cc}+/gu, '').trim() ||
+      (process.env.OPENAI_MODEL || '').replace(/\p{Cc}+/gu, '').trim() ||
+      '';
+    this.model = rawModelCandidate.slice(0, 128) || defaults.defaultModel;
 
-    const rawTimeout = config.timeoutMs ?? Number(process.env.AI_TIMEOUT_MS || 25000);
+    const rawTimeout =
+      typeof safeConfig.timeoutMs === 'boolean'
+        ? Number.NaN
+        : (safeConfig.timeoutMs ?? Number(process.env.AI_TIMEOUT_MS || 25000));
     this.timeoutMs =
       Number.isFinite(rawTimeout) && rawTimeout > 0
         ? Math.min(Math.max(Math.round(rawTimeout), 1000), 120000)
@@ -1073,9 +1124,13 @@ export class AiReviewAnalyzer {
   }
 
   private resolveProvider(explicit?: SupportedAiProvider): SupportedAiProvider {
-    if (explicit && explicit in PROVIDER_DEFAULTS) return explicit;
-    const envProvider = (process.env.AI_PROVIDER || '').trim().toLowerCase() as SupportedAiProvider;
-    if (envProvider && envProvider in PROVIDER_DEFAULTS) return envProvider;
+    if (typeof explicit === 'string' && Object.hasOwn(PROVIDER_DEFAULTS, explicit)) {
+      return explicit as SupportedAiProvider;
+    }
+    const envProvider = (process.env.AI_PROVIDER || '').trim().toLowerCase();
+    if (envProvider && Object.hasOwn(PROVIDER_DEFAULTS, envProvider)) {
+      return envProvider as SupportedAiProvider;
+    }
 
     if (process.env.DOS_AI_API_KEY || process.env.DOS_AI_BASE_URL) return 'dos-ai';
     if (process.env.OPENAI_API_KEY) return 'openai';
@@ -1090,7 +1145,13 @@ export class AiReviewAnalyzer {
     const keys = PROVIDER_DEFAULTS[provider].envKeys;
     for (const k of keys) {
       const val = process.env[k];
-      if (val && val.trim().length > 0) return val.trim();
+      if (typeof val === 'string') {
+        const cleaned = val
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .slice(0, 512);
+        if (cleaned.length > 0) return cleaned;
+      }
     }
     return '';
   }
@@ -2080,7 +2141,9 @@ Return ONLY valid JSON matching:
     reviewIds: readonly string[]
   ): Promise<Map<string, PreservedReviewFlag>> {
     const preserved = new Map<string, PreservedReviewFlag>();
-    const uniqueIds = Array.from(new Set(reviewIds.filter(Boolean)));
+    const uniqueIds = Array.from(
+      new Set((Array.isArray(reviewIds) ? reviewIds : []).map(normalizeSafeDbId).filter(Boolean))
+    );
     // Chunked so a large batch never exceeds the PostgREST URL length.
     for (let i = 0; i < uniqueIds.length; i += 150) {
       const { data, error } = await supabase
@@ -2107,7 +2170,7 @@ Return ONLY valid JSON matching:
         'review_bombing',
       ]);
       for (const row of (data || []) as Array<Record<string, unknown>>) {
-        const revId = typeof row.review_id === 'string' ? row.review_id.trim() : '';
+        const revId = normalizeSafeDbId(row?.review_id);
         if (!revId) continue;
         const rawVerdict = row.verdict as ReviewVerdict;
         const rawFlagCat = row.flag_category as ReviewFlagCategory;
@@ -2145,10 +2208,26 @@ Return ONLY valid JSON matching:
     summary: JReviewsProductSummary;
     merchantRisk?: MerchantRiskEvaluation;
   }> {
-    const analysis = await this.analyzeReviewsRaw(params.reviews, {
-      entityName: params.entityName,
-      entityType: params.entityType,
-      platform: params.platform,
+    const safeProductId = normalizeSafeDbId(params?.productId);
+    if (!safeProductId) {
+      throw new Error('[AiReviewAnalyzer] productId must be a valid non-empty string');
+    }
+    const safeMasterId = normalizeSafeDbId(params?.masterId);
+    const safeMerchantId = normalizeSafeDbId(params?.merchantId);
+    const safePlatform =
+      typeof params?.platform === 'string'
+        ? params.platform
+            .replace(/\p{Cc}+/gu, '')
+            .trim()
+            .toLowerCase()
+            .slice(0, 32) || 'shopee'
+        : 'shopee';
+    const safeReviews = Array.isArray(params?.reviews) ? params.reviews : [];
+
+    const analysis = await this.analyzeReviewsRaw(safeReviews, {
+      entityName: params?.entityName,
+      entityType: params?.entityType,
+      platform: safePlatform,
     });
 
     // Flags owned by another detector are neither overwritten nor contradicted:
@@ -2165,9 +2244,9 @@ Return ONLY valid JSON matching:
       preservedFlags.size === 0
         ? analysis.results
         : analysis.results.map((r, idx) => {
-            const stored = preservedFlags.get(r.review_id);
+            const stored = preservedFlags.get(normalizeSafeDbId(r.review_id));
             if (!stored) return r;
-            const srcReview = params.reviews[idx];
+            const srcReview = safeReviews[idx];
             const helpfulness_weight = !stored.include_in_rating
               ? 0
               : computeReviewWeight({
@@ -2180,7 +2259,7 @@ Return ONLY valid JSON matching:
             return { ...r, ...stored, helpfulness_weight };
           });
     const summary = this.computeJReviewsSummary(
-      params.reviews,
+      safeReviews,
       results,
       null,
       analysis.aiPros,
@@ -2190,26 +2269,37 @@ Return ONLY valid JSON matching:
 
     // 1. Upsert into rate.review_flags & update helpfulness_weight on rate.reviews
     if (results.length > 0) {
-      const flagRows = results.map((r, i) => ({
-        review_id: r.review_id,
-        fake_probability: r.fake_probability,
-        verdict: r.verdict,
-        flag_category: r.flag_category,
-        reason: r.reason,
-        include_in_rating: r.include_in_rating,
-        signals: r.signals,
-        detector:
-          r.detector ||
-          (this.isConfigured() ? `hybrid:${this.provider}:${this.model}` : 'heuristic:v2-jreviews'),
-        detector_version: '2.0.0',
-        input_hash:
-          '0x' +
-          crypto
-            .createHash('sha256')
-            .update(`${r.review_id}|${params.reviews[i]?.comment || ''}`)
-            .digest('hex'),
-        analyzed_at: new Date().toISOString(),
-      }));
+      const flagRows = results
+        .map((r, i) => {
+          const safeRevId = normalizeSafeDbId(r.review_id);
+          if (!safeRevId) return null;
+          return {
+            review_id: safeRevId,
+            fake_probability: clamp01(r.fake_probability),
+            verdict: r.verdict,
+            flag_category: r.flag_category,
+            reason: sanitizeAiGeneratedText(r.reason, 500) || 'Đánh giá người dùng',
+            include_in_rating: Boolean(r.include_in_rating),
+            signals: r.signals,
+            detector:
+              sanitizeAiGeneratedText(
+                r.detector ||
+                  (this.isConfigured()
+                    ? `hybrid:${this.provider}:${this.model}`
+                    : 'heuristic:v2-jreviews'),
+                120
+              ) || 'heuristic:v2-jreviews',
+            detector_version: '2.0.0',
+            input_hash:
+              '0x' +
+              crypto
+                .createHash('sha256')
+                .update(`${safeRevId}|${safeReviews[i]?.comment || ''}`)
+                .digest('hex'),
+            analyzed_at: new Date().toISOString(),
+          };
+        })
+        .filter((row): row is NonNullable<typeof row> => row !== null);
       const writableFlagRows = flagRows.filter(row => !preservedFlags.has(row.review_id));
 
       for (let i = 0; i < writableFlagRows.length; i += 200) {
@@ -2224,10 +2314,12 @@ Return ONLY valid JSON matching:
       }
 
       for (const r of results) {
+        const safeRevId = normalizeSafeDbId(r.review_id);
+        if (!safeRevId) continue;
         const { error: revErr } = await supabase
           .from('reviews')
           .update({ helpfulness_weight: r.helpfulness_weight })
-          .eq('id', r.review_id);
+          .eq('id', safeRevId);
         if (revErr) {
           throw new Error(
             `[AiReviewAnalyzer] Failed to update review helpfulness_weight: ${revErr.message}`
@@ -2239,7 +2331,7 @@ Return ONLY valid JSON matching:
     // 2. Upsert product-level summary into rate.review_analysis
     const { error: analysisErr } = await supabase.from('review_analysis').upsert(
       {
-        product_id: params.productId,
+        product_id: safeProductId,
         total_reviews_analyzed: summary.total_reviews_analyzed,
         authenticity_score: summary.authenticity_score,
         sentiment_positive_ratio: summary.sentiment_positive_ratio,
@@ -2258,10 +2350,10 @@ Return ONLY valid JSON matching:
     }
 
     // 3. Update master_products weighted rating & authentic count via canonical SQL RPC (Audit C5)
-    if (params.masterId) {
+    if (safeMasterId) {
       if (typeof supabase.rpc === 'function') {
         const { error: rpcErr } = await supabase.rpc('refresh_master_product_rating', {
-          p_master_id: params.masterId,
+          p_master_id: safeMasterId,
         });
         if (rpcErr) {
           throw new Error(
@@ -2277,7 +2369,7 @@ Return ONLY valid JSON matching:
             authentic_review_count: summary.authentic_review_count,
             updated_at: new Date().toISOString(),
           })
-          .eq('id', params.masterId);
+          .eq('id', safeMasterId);
         if (masterErr) {
           throw new Error(
             `[AiReviewAnalyzer] Failed to update master_products rating: ${masterErr.message}`
@@ -2288,16 +2380,16 @@ Return ONLY valid JSON matching:
 
     // 4. Evaluate and update merchant review_risk_score (leaving risk_score for DOSafe threat_intel)
     let merchantRisk: MerchantRiskEvaluation | undefined;
-    if (params.merchantId) {
+    if (safeMerchantId) {
       merchantRisk = this.evaluateMerchantRisk({
-        merchantId: params.merchantId,
-        platform: params.platform || 'shopee',
+        merchantId: safeMerchantId,
+        platform: safePlatform,
         isOfficial: Boolean(params.isOfficial),
         followerCount: params.followerCount,
         listingPrice: params.listingPrice,
         canonicalMinPrice: params.canonicalMinPrice,
         reviewResults: results,
-        rawReviews: params.reviews,
+        rawReviews: safeReviews,
       });
 
       const nowIso = new Date().toISOString();
@@ -2310,7 +2402,7 @@ Return ONLY valid JSON matching:
           review_risk_updated_at: nowIso,
           updated_at: nowIso,
         })
-        .eq('id', params.merchantId);
+        .eq('id', safeMerchantId);
       if (merchErr) {
         if (/review_risk_score|schema cache/i.test(merchErr.message)) {
           const { error: fallbackErr } = await supabase
@@ -2323,7 +2415,7 @@ Return ONLY valid JSON matching:
               },
               updated_at: nowIso,
             })
-            .eq('id', params.merchantId);
+            .eq('id', safeMerchantId);
           if (fallbackErr) {
             throw new Error(
               `[AiReviewAnalyzer] Failed to update merchant metadata risk fallback: ${fallbackErr.message}`
@@ -2356,8 +2448,8 @@ Return ONLY valid JSON matching:
       reportReason?: 'spam' | 'fake' | 'offensive' | 'off_topic' | 'other' | null;
     }
   ): Promise<{ action: 'upserted' | 'deleted' }> {
-    const reviewId = (params.reviewId || '').trim();
-    const voterId = (params.voterId || '').trim();
+    const reviewId = normalizeSafeDbId(params?.reviewId);
+    const voterId = normalizeSafeDbId(params?.voterId);
     if (!reviewId || !voterId) {
       throw new Error('[AiReviewAnalyzer] reviewId and voterId must be non-empty strings');
     }
