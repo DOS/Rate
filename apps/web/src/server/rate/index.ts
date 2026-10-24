@@ -325,10 +325,21 @@ export const getCachedMasterProductPriceHistory = cache(
     const offersKey = existingOffers
       ? `offers:${existingOffers.length}:${existingOffers
           .slice(0, 20)
-          .map(
-            (o) =>
-              `${sanitizeCachedEntityId(o.id)}:${o.price_current}:${o.price_original ?? ''}`
-          )
+          .map((o) => {
+            const safeCur =
+              typeof o.price_current === 'number' &&
+              Number.isFinite(o.price_current) &&
+              o.price_current > 0
+                ? Math.round(o.price_current)
+                : 0;
+            const safeOrig =
+              typeof o.price_original === 'number' &&
+              Number.isFinite(o.price_original) &&
+              o.price_original > 0
+                ? Math.round(o.price_original)
+                : '';
+            return `${sanitizeCachedEntityId(o.id)}:${safeCur}:${safeOrig}`;
+          })
           .join('|')}`
       : 'offers:auto';
     return withRateDataCache(

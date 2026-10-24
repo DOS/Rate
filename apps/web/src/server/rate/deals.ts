@@ -107,16 +107,26 @@ function resolveEffectiveMerchantRisk(
   fallback: number
 ): number {
   const safeFallback =
-    Number.isFinite(fallback) && fallback >= 0 ? Math.min(100, fallback) : 0;
+    typeof fallback === 'number' && Number.isFinite(fallback) && fallback >= 0
+      ? Math.min(100, fallback)
+      : 0;
   if (!merchant) return safeFallback;
-  const risk = Number(merchant.risk_score ?? safeFallback);
-  const dosafe = Number(merchant.dosafe_risk_score ?? 0);
-  const review = Number(merchant.review_risk_score ?? 0);
-  const rawMax = Math.max(
-    Number.isFinite(risk) ? risk : safeFallback,
-    Number.isFinite(dosafe) ? dosafe : 0,
-    Number.isFinite(review) ? review : 0
-  );
+  const risk =
+    typeof merchant.risk_score === 'number' &&
+    Number.isFinite(merchant.risk_score)
+      ? merchant.risk_score
+      : safeFallback;
+  const dosafe =
+    typeof merchant.dosafe_risk_score === 'number' &&
+    Number.isFinite(merchant.dosafe_risk_score)
+      ? merchant.dosafe_risk_score
+      : 0;
+  const review =
+    typeof merchant.review_risk_score === 'number' &&
+    Number.isFinite(merchant.review_risk_score)
+      ? merchant.review_risk_score
+      : 0;
+  const rawMax = Math.max(risk, dosafe, review);
   return Math.min(100, Math.max(0, rawMax));
 }
 
@@ -164,7 +174,8 @@ export function normalizeDealRadarOptions(options?: {
       ? rawPlat
       : 'all';
 
-  const rawLimit = Number(options?.limit);
+  const rawLimit =
+    typeof options?.limit === 'number' ? options.limit : Number.NaN;
   const limit =
     Number.isFinite(rawLimit) && rawLimit >= 1
       ? Math.min(Math.floor(rawLimit), 50)
@@ -228,12 +239,12 @@ export function computeCrossPlatformDealRadarFromData(
     const marketMedianPrice = computeMedian(prices);
     if (marketMedianPrice <= 0) continue;
 
-    const rawExpert = Number(
-      master.expert_rating ||
-        master.user_rating_weighted ||
-        master.average_rating ||
-        0
-    );
+    const pickPositiveRating = (val: unknown): number =>
+      typeof val === 'number' && Number.isFinite(val) && val > 0 ? val : 0;
+    const rawExpert =
+      pickPositiveRating(master.expert_rating) ||
+      pickPositiveRating(master.user_rating_weighted) ||
+      pickPositiveRating(master.average_rating);
     // No expert or user rating yet: leave the score empty instead of inventing one.
     const jreviewsScore10 =
       Number.isFinite(rawExpert) && rawExpert > 0 && rawExpert <= 10

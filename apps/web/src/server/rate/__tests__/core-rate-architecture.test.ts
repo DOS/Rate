@@ -9236,7 +9236,118 @@ async function runCoreArchitectureSuite() {
     );
 
     console.log(
-      '  ✅ [102/102] Cache-Tags Revalidation/BigInt Guards & Api-Handler Parameter Bounds (#890) passed'
+      '  ✅ [102/103] Cache-Tags Revalidation/BigInt Guards & Api-Handler Parameter Bounds (#890) passed'
+    );
+  }
+
+  // 103. Deals, Extension & Server Rate Cache Input Bounds (#892)
+  {
+    const dealsMod = require('../deals') as typeof import('../deals');
+    const extMod = require('../extension') as typeof import('../extension');
+
+    const normOpts = dealsMod.normalizeDealRadarOptions({
+      limit: true as unknown as number,
+    });
+    assert.equal(
+      normOpts.limit,
+      12,
+      'normalizeDealRadarOptions must reject boolean limit: true and fall back to default 12'
+    );
+
+    const radarRes = dealsMod.computeCrossPlatformDealRadarFromData([
+      {
+        master: {
+          id: 'mp-892',
+          slug: 'iphone-18-pro',
+          name: 'iPhone 18 Pro',
+          brand: 'Apple',
+          model: 'iPhone 18 Pro',
+          category_id: null,
+          min_price: 25_000_000,
+          max_price: 28_000_000,
+          expert_rating: true as unknown as number,
+          user_rating_weighted: '4.8' as unknown as number,
+          average_rating: 4.5,
+        } as unknown as import('../../../lib/rate-api').MasterProduct,
+        offers: [
+          {
+            id: 'off-1',
+            platform: 'shopee',
+            price_current: 25_000_000,
+            price_original: 27_000_000,
+            url: 'https://shopee.vn/iPhone-18-Pro-i.1.2',
+            merchant: {
+              id: 'm-1',
+              name: 'Shopee Mall',
+              is_official: true,
+              risk_score: true as unknown as number,
+              dosafe_risk_score: '90' as unknown as number,
+              review_risk_score: false as unknown as number,
+            },
+          },
+          {
+            id: 'off-2',
+            platform: 'lazada',
+            price_current: 28_000_000,
+            price_original: 28_000_000,
+            url: 'https://www.lazada.vn/products/iphone-18-pro-i123.html',
+            merchant: {
+              id: 'm-2',
+              name: 'Lazada Mall',
+              is_official: true,
+              risk_score: 10,
+            },
+          },
+        ] as unknown as import('../../../lib/rate-api').MerchantOffer[],
+      },
+    ]);
+    assert.equal(radarRes.genuineDeals.length, 1);
+    assert.equal(
+      radarRes.genuineDeals[0]?.jreviewsScore10,
+      9.0,
+      'computeCrossPlatformDealRadarFromData must ignore non-numeric expert_rating/user_rating_weighted'
+    );
+    assert.equal(
+      radarRes.genuineDeals[0]?.merchantRiskScore,
+      5,
+      'resolveEffectiveMerchantRisk must ignore non-numeric risk scores and use fallback'
+    );
+
+    assert.equal(
+      extMod.canonicalizeProductUrl(
+        'https://shopee.vn/iPhone-18-i.111.222\u0000'
+      ),
+      null,
+      'canonicalizeProductUrl must reject URLs containing control characters'
+    );
+    assert.equal(
+      extMod.canonicalizeProductUrl('https://shopee.vn/iPhone 18-i.111.222'),
+      null,
+      'canonicalizeProductUrl must reject URLs containing internal whitespace'
+    );
+    assert.equal(
+      extMod.detectPlatformFromInput(
+        123 as unknown as string,
+        'https://shopee.vn/iPhone-18-i.111.222\u0085'
+      ),
+      null,
+      'detectPlatformFromInput must guard non-string platform and reject C1 control chars in URL'
+    );
+    assert.doesNotThrow(() =>
+      extMod.detectAccessoryOrJunk({
+        title: 123 as unknown as string,
+        url: {} as unknown as string,
+      })
+    );
+    assert.doesNotThrow(() =>
+      extMod.extractStorageAndAmbiguity({
+        title: 123 as unknown as string,
+        selectedVariant: true as unknown as string,
+      })
+    );
+
+    console.log(
+      '  ✅ [103/103] Deals, Extension & Server Rate Cache Input Bounds (#892) passed'
     );
   }
 
