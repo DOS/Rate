@@ -153,6 +153,28 @@ async function runSuite() {
     keyOf('Laptop ASUS Vivo Book 15 X1504 512GB'),
     keyOf('Laptop ASUS Vivobook 15 X1504 512GB')
   );
+  // A size written apart ends the model like one written together (DOS/Rate#815).
+  assert.equal(
+    keyOf('Samsung Galaxy S24 Ultra 256 GB Chính hãng'),
+    keyOf('Samsung Galaxy S24 Ultra 256GB Chính hãng')
+  );
+  assert.equal(
+    keyOf('Samsung Galaxy S24 Ultra 256 GB Chính hãng'),
+    'samsung:galaxy-s24-ultra:256gb'
+  );
+  assert.equal(keyOf('Xiaomi 14 Ultra 1 TB'), 'xiaomi:14-ultra:1024gb');
+  // A number that is not followed by a size unit stays in the model.
+  assert.equal(keyOf('Xiaomi 14 Ultra 512GB'), 'xiaomi:14-ultra:512gb');
+  // "ProMax" written together is "Pro Max", for iPhones and the generic fallback.
+  assert.equal(keyOf('iPhone 16 ProMax 256GB'), 'apple:iphone-16-pro-max:256gb');
+  assert.equal(keyOf('iphone 16 promax 256gb'), 'apple:iphone-16-pro-max:256gb');
+  assert.equal(keyOf('Xiaomi 17 ProMax 512GB'), keyOf('Xiaomi 17 Pro Max 512GB'));
+  // Sony's WF/WH-1000XM line with or without the hyphen.
+  assert.equal(keyOf('Tai nghe TWS Sony WF1000XM5'), keyOf('Tai nghe TWS Sony WF-1000XM5'));
+  assert.equal(keyOf('Tai nghe TWS Sony WF1000XM5'), 'sony:wf-1000xm5:1gb');
+  assert.equal(keyOf('Sony WH1000XM6 Bluetooth'), 'sony:wh-1000xm6:1gb');
+  assert.equal(brandOf('Tai nghe WF1000XM5'), 'Sony');
+  assert.equal(categoryOf('Sony WF1000XM5'), 'earbuds');
   // "Omen" only as a word: Sennheiser "Momentum" is not HP.
   assert.equal(brandOf('Tai nghe Sennheiser Momentum 4 Wireless'), 'Sennheiser');
   assert.equal(brandOf('Laptop HP Omen 16 512GB'), 'HP');
