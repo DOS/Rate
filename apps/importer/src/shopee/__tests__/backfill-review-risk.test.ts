@@ -1003,6 +1003,56 @@ async function run() {
     /productId must be a valid non-empty string/
   );
 
+  // DOS/Rate#926: ProductNormalizer & ArenaSpecSyncer input and output bounds
+  const { ProductNormalizer: ProductNormalizer926 } = await import('../product-normalizer.js');
+
+  const normalizer926 = new ProductNormalizer926();
+  const normalizedNullish = normalizer926.normalize(null as unknown as never);
+  assert.equal(normalizedNullish.brand, 'Khác');
+  assert.equal(normalizedNullish.slug, 'khac');
+
+  const normalizedLongToken = normalizer926.normalize({
+    itemId: '1',
+    shopId: '2',
+    title: `Xiaomi\u0000 ${'X'.repeat(300)} - 256GB`,
+    price: 10_000_000,
+    priceMin: 10_000_000,
+    priceMax: 10_000_000,
+    currency: 'VND',
+    url: 'https://shopee.vn/item-i.2.1',
+  } as never);
+  assert.ok(normalizedLongToken.model.length <= 120);
+  assert.ok(!normalizedLongToken.slug.startsWith('-') && !normalizedLongToken.slug.endsWith('-'));
+  assert.ok(!normalizedLongToken.model.includes('\u0000'));
+
+  const arenaParsed = parseGsmArenaHtmlToSpecs(
+    `<h1 data-spec="modelname">Samsung<br/>Galaxy ${'S'.repeat(300)}</h1>
+     <td data-spec="announced">2026<br/>January ${'A'.repeat(600)}</td>
+     <td data-spec="status">Available<br/>Now</td>`
+  );
+  assert.ok(!arenaParsed.modelName.includes('\n'));
+  assert.ok(arenaParsed.modelName.length <= 200);
+  assert.ok(arenaParsed.model.length <= 160);
+  assert.ok(!arenaParsed.announced?.includes('\n'));
+  assert.ok((arenaParsed.announced?.length ?? 0) <= 500);
+  assert.equal(arenaParsed.status, 'Available Now');
+
+  const gsmCatalog = parseGsmArenaBrandCatalogHtml(
+    `<ul><li><a href="samsung_s26-1.php"><span>Galaxy<br/>${'U'.repeat(250)}</span></a></li></ul>`,
+    '  Samsung\u0000  '
+  );
+  assert.equal(gsmCatalog.length, 1);
+  assert.ok(!gsmCatalog[0]!.name.includes('\n'));
+  assert.ok(!gsmCatalog[0]!.name.includes('\u0000'));
+  assert.ok(gsmCatalog[0]!.name.length <= 200);
+
+  const paCatalog = parsePhoneArenaCatalogHtml(
+    `<a href="/phones/Samsung-Galaxy-S26_id1">Galaxy<br/>${'Z'.repeat(250)}</a>`
+  );
+  assert.equal(paCatalog.length, 1);
+  assert.ok(!paCatalog[0]!.name.includes('\n'));
+  assert.ok(paCatalog[0]!.name.length <= 200);
+
   console.log('✅ Review risk backfill suite passed');
 }
 

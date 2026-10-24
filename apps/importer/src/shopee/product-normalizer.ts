@@ -1071,8 +1071,7 @@ function isProductCodeToken(token: string): boolean {
 
 function slugify(text: string): string {
   return (
-    text
-      .toString()
+    String(text ?? '')
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
       .toLowerCase()
@@ -1086,6 +1085,9 @@ function slugify(text: string): string {
       .replace(/\s+/g, '-')
       .replace(/[^\w-]+/g, '')
       .replace(/--+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 200)
+      .replace(/-+$/g, '')
   );
 }
 
@@ -1094,7 +1096,11 @@ export class ProductNormalizer {
    * Normalizes raw Shopee product into canonical master product candidate across all 5 categories
    */
   public normalize(raw: ShopeeProduct): NormalizedProductCandidate {
-    const title = raw.title;
+    const safeRaw = raw && typeof raw === 'object' ? raw : ({} as ShopeeProduct);
+    const title =
+      typeof safeRaw.title === 'string'
+        ? stripControlChars(safeRaw.title).replace(/\s+/g, ' ').trim().slice(0, 1000)
+        : '';
     const categorySlug = detectCategorySlug(title);
 
     // 1. Extract Brand
@@ -1322,6 +1328,7 @@ export class ProductNormalizer {
       }
       model = modelTokens.length > 0 ? modelTokens.join(' ') : rawTokens.slice(0, 2).join(' ');
     }
+    model = model.replace(/\s+/g, ' ').trim().slice(0, 120).trim();
 
     // 3. Extract Storage - RAM-aware (plan v7 §5.2, Codex-reproduced bug:
     // "Samsung Galaxy A55 8GB RAM 256GB" must be 256GB, not the first GB token).
@@ -1410,7 +1417,9 @@ export class ProductNormalizer {
     );
 
     const baseKey = `${slugify(brand)}:${slugify(model)}`;
-    const benchmark = CANONICAL_PHONE_REGISTRY[baseKey];
+    const benchmark = Object.hasOwn(CANONICAL_PHONE_REGISTRY, baseKey)
+      ? CANONICAL_PHONE_REGISTRY[baseKey]
+      : undefined;
 
     const toValidStorageGb = (val: number): number | null =>
       Number.isFinite(val) && Number.isInteger(val) && val > 0 && val <= MAX_VALID_STORAGE_GB
@@ -1452,8 +1461,8 @@ export class ProductNormalizer {
 
     // 4. Extract Colors from models / variations
     const colors: string[] = [];
-    if (Array.isArray(raw.models)) {
-      for (const m of raw.models) {
+    if (Array.isArray(safeRaw.models)) {
+      for (const m of safeRaw.models) {
         if (colors.length >= MAX_NORMALIZED_COLOR_COUNT) break;
         const normalizedColor =
           typeof m?.name === 'string'
@@ -1470,8 +1479,8 @@ export class ProductNormalizer {
     }
 
     const images: string[] = [];
-    if (Array.isArray(raw.images)) {
-      for (const img of raw.images) {
+    if (Array.isArray(safeRaw.images)) {
+      for (const img of safeRaw.images) {
         if (images.length >= MAX_NORMALIZED_IMAGE_COUNT) break;
         const normalizedImg = normalizeHttpAssetUrl(img);
         if (normalizedImg && !images.includes(normalizedImg)) {
@@ -1696,7 +1705,7 @@ export class ProductNormalizer {
             ? 'Dual Camera'
             : 'Single Camera';
 
-    const rawPriceMinInput: unknown = raw.priceMin;
+    const rawPriceMinInput: unknown = safeRaw.priceMin;
     const rawPriceMin = typeof rawPriceMinInput === 'boolean' ? NaN : Number(rawPriceMinInput);
     const safePriceMin =
       Number.isFinite(rawPriceMin) && rawPriceMin > 0 && rawPriceMin <= MAX_VALID_VND_PRICE
@@ -1839,8 +1848,8 @@ export class ProductNormalizer {
     };
 
     const sanitizedDescription =
-      typeof raw.description === 'string'
-        ? stripControlChars(raw.description).trim().slice(0, MAX_NORMALIZED_DESCRIPTION_LENGTH)
+      typeof safeRaw.description === 'string'
+        ? stripControlChars(safeRaw.description).trim().slice(0, MAX_NORMALIZED_DESCRIPTION_LENGTH)
         : undefined;
     const condition = detectProductCondition(title, sanitizedDescription);
     const origin = detectProductOrigin(title, sanitizedDescription);
