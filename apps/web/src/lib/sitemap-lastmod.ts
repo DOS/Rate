@@ -52,15 +52,21 @@ export function buildSitemapLastModified(
   const byCategory = new Map<string, Date>();
   const bySlug = new Map<string, Date>();
   if (!Array.isArray(rows)) return { latest, byCategory, bySlug };
-  for (const row of rows) {
-    if (!row) continue;
+  for (const row of rows.slice(0, 10_000)) {
+    if (!row || typeof row !== 'object') continue;
     const slug =
       typeof row.slug === 'string'
-        ? row.slug.replace(/\p{Cc}+/gu, '').trim()
+        ? row.slug
+            .replace(/\p{Cc}+/gu, '')
+            .trim()
+            .slice(0, 256)
         : '';
     const categorySlug =
       typeof row.categorySlug === 'string'
-        ? row.categorySlug.replace(/\p{Cc}+/gu, '').trim()
+        ? row.categorySlug
+            .replace(/\p{Cc}+/gu, '')
+            .trim()
+            .slice(0, 64)
         : '';
     if (!slug || !categorySlug) continue;
     const date = parseDate(row.updatedAt);
@@ -79,7 +85,22 @@ export function versusLastModified(
   slugA: string,
   slugB: string
 ): Date | undefined {
-  return newer(dates.bySlug.get(slugA), dates.bySlug.get(slugB));
+  if (!dates || !(dates.bySlug instanceof Map)) return undefined;
+  const cleanA =
+    typeof slugA === 'string'
+      ? slugA
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .slice(0, 256)
+      : '';
+  const cleanB =
+    typeof slugB === 'string'
+      ? slugB
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .slice(0, 256)
+      : '';
+  return newer(dates.bySlug.get(cleanA), dates.bySlug.get(cleanB));
 }
 
 /**
@@ -87,7 +108,11 @@ export function versusLastModified(
  * with its stores (risk rescoring) as well as with the catalogue.
  */
 export function newestOf(...dates: Array<Date | undefined>): Date | undefined {
-  return dates.reduce<Date | undefined>((acc, d) => newer(acc, d), undefined);
+  return dates.reduce<Date | undefined>(
+    (acc, d) =>
+      d instanceof Date && Number.isFinite(d.getTime()) ? newer(acc, d) : acc,
+    undefined
+  );
 }
 
 /** A row's own change time, or undefined when unknown or unparseable. */

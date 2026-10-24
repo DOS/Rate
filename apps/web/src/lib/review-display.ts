@@ -15,13 +15,19 @@ import type {
 export type ReviewBadgeKind = ReviewFlagCategory | 'pending';
 
 export function isPendingReview(review: Pick<ReviewItem, 'verdict'>): boolean {
-  return review.verdict === 'unanalyzed';
+  return (
+    Boolean(review && typeof review === 'object') &&
+    review.verdict === 'unanalyzed'
+  );
 }
 
 export function reviewBadgeKind(
   review: Pick<ReviewItem, 'verdict' | 'flag_category'>
 ): ReviewBadgeKind {
-  return isPendingReview(review) ? 'pending' : review.flag_category;
+  if (!review || typeof review !== 'object') return 'authentic';
+  return isPendingReview(review)
+    ? 'pending'
+    : review.flag_category || 'authentic';
 }
 
 /** Excluded from the rating because it was flagged, not because it is still pending. */
@@ -31,8 +37,15 @@ export function isFilteredOutReview(
     'verdict' | 'include_in_rating' | 'helpfulness_weight'
   >
 ): boolean {
+  if (!review || typeof review !== 'object') return false;
   if (isPendingReview(review)) return false;
-  const weight = Number(review.helpfulness_weight);
+  const rawWeight = review.helpfulness_weight;
+  const weight =
+    typeof rawWeight === 'number'
+      ? rawWeight
+      : typeof rawWeight === 'string' && String(rawWeight).trim()
+        ? Number(rawWeight)
+        : NaN;
   return !review.include_in_rating || !Number.isFinite(weight) || weight <= 0;
 }
 
@@ -105,6 +118,7 @@ export function weightExplanationCopy(
     explanationKind?: ReviewWeightExplanationKind;
   }
 ): WeightExplanationCopy {
+  if (!breakdown || typeof breakdown !== 'object') return { text: '' };
   const kind = breakdown.explanationKind;
   if (
     !kind ||
@@ -121,7 +135,13 @@ export function weightExplanationCopy(
         : '';
     return { text: cleanText };
   }
-  const rawWeight = Number(breakdown.weight);
+  const rawWeightInput = breakdown.weight;
+  const rawWeight =
+    typeof rawWeightInput === 'number'
+      ? rawWeightInput
+      : typeof rawWeightInput === 'string' && String(rawWeightInput).trim()
+        ? Number(rawWeightInput)
+        : NaN;
   const safeWeight = Number.isFinite(rawWeight)
     ? Math.max(0, Math.min(10, rawWeight))
     : 0;
