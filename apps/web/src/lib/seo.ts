@@ -23,11 +23,24 @@ export function fitTitle(
   candidates: readonly string[],
   max: number = MAX_TITLE_LENGTH
 ): string {
-  const limit = Math.max(1, Math.floor(max));
-  for (const candidate of candidates) {
+  const rawMax = Number(max);
+  const limit = Number.isFinite(rawMax)
+    ? Math.max(1, Math.min(1000, Math.floor(rawMax)))
+    : MAX_TITLE_LENGTH;
+  const cleanedCandidates = candidates
+    .map((c) =>
+      typeof c === 'string'
+        ? c
+            .replace(/\p{Cc}+/gu, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+        : ''
+    )
+    .filter(Boolean);
+  for (const candidate of cleanedCandidates) {
     if (candidate.length <= limit) return candidate;
   }
-  const last = candidates[candidates.length - 1];
+  const last = cleanedCandidates[cleanedCandidates.length - 1];
   if (!last) return '';
   // Whole code points, so an emoji is never split, within the same UTF-16
   // length the candidates are measured in.
@@ -58,9 +71,28 @@ export function fitDescription(text: string): string {
  * against metadataBase (DOS/Rate#738).
  */
 export function absoluteUrl(pathOrUrl: string): string {
-  return /^https?:\/\//i.test(pathOrUrl)
-    ? pathOrUrl
-    : new URL(pathOrUrl, SITE_URL).toString();
+  if (typeof pathOrUrl !== 'string') return SITE_URL;
+  const cleaned = pathOrUrl.replace(/\p{Cc}+/gu, '').trim();
+  if (!cleaned || cleaned.length > 2048) return SITE_URL;
+  if (cleaned.startsWith('//') || cleaned.startsWith('/\\')) {
+    return SITE_URL;
+  }
+  try {
+    const isAbsolute = /^https?:\/\//i.test(cleaned);
+    const parsed = isAbsolute ? new URL(cleaned) : new URL(cleaned, SITE_URL);
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+      return SITE_URL;
+    }
+    if (parsed.username || parsed.password) {
+      return SITE_URL;
+    }
+    if (!isAbsolute && parsed.origin !== SITE_URL) {
+      return SITE_URL;
+    }
+    return isAbsolute ? cleaned : parsed.toString();
+  } catch {
+    return SITE_URL;
+  }
 }
 
 /** Organization and WebSite JSON-LD for the home page (DOS/Rate#738). */
