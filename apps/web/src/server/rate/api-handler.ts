@@ -1,6 +1,11 @@
 import 'server-only';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
+import { plausibleMinPrice, plausibleOffers } from '@/lib/offer-plausibility';
+import {
+  MAX_VALID_VND_PRICE,
+  normalizeOfferOriginalPrice,
+} from '@/lib/rate-api';
 
 export const PUBLIC_API_CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -110,12 +115,16 @@ export function parseOptionalVndPriceParam(
   raw: string | null | undefined,
   maxVnd = 500_000_000
 ): number | null {
-  if (raw == null) return null;
+  if (raw == null || typeof raw !== 'string') return null;
   const trimmed = raw.trim();
   if (!trimmed) return null;
   const n = Number(trimmed);
   if (!Number.isFinite(n) || n <= 0) return null;
-  return Math.min(Math.round(n), maxVnd);
+  const safeMaxVnd =
+    typeof maxVnd === 'number' && Number.isFinite(maxVnd) && maxVnd > 0
+      ? Math.round(maxVnd)
+      : 500_000_000;
+  return Math.min(Math.round(n), safeMaxVnd);
 }
 
 /**
@@ -152,31 +161,200 @@ export function parseBoundedPositiveIntArrayParam(
  * when `master.min_price` is missing, non-positive, or exceeds `maxVnd` (1B VND).
  */
 export function resolveWatchlistMasterPriceBounds(
-  master: { min_price?: unknown; max_price?: unknown },
+  master: { min_price?: unknown; max_price?: unknown } | null | undefined,
   bestOfferPrice?: number | null,
   maxVnd = 1_000_000_000
 ): { currentMinPrice: number; currentMaxPrice: number } {
-  const rawMin = Number(master.min_price);
+  const safeMaxVnd =
+    typeof maxVnd === 'number' && Number.isFinite(maxVnd) && maxVnd > 0
+      ? Math.round(maxVnd)
+      : 1_000_000_000;
+  const rawMin =
+    !master ||
+    typeof master !== 'object' ||
+    typeof master.min_price === 'boolean' ||
+    master.min_price === null ||
+    master.min_price === undefined
+      ? Number.NaN
+      : Number(master.min_price);
   const safeBestOffer =
     typeof bestOfferPrice === 'number' &&
     Number.isFinite(bestOfferPrice) &&
     bestOfferPrice > 0 &&
-    bestOfferPrice <= maxVnd
+    bestOfferPrice <= safeMaxVnd
       ? bestOfferPrice
       : 0;
   const currentMinPrice =
-    Number.isFinite(rawMin) && rawMin > 0 && rawMin <= maxVnd
+    Number.isFinite(rawMin) && rawMin > 0 && rawMin <= safeMaxVnd
       ? rawMin
       : safeBestOffer;
-  const rawMax = Number(master.max_price);
+  const rawMax =
+    !master ||
+    typeof master !== 'object' ||
+    typeof master.max_price === 'boolean' ||
+    master.max_price === null ||
+    master.max_price === undefined
+      ? Number.NaN
+      : Number(master.max_price);
   const currentMaxPrice =
     currentMinPrice > 0 &&
     Number.isFinite(rawMax) &&
     rawMax >= currentMinPrice &&
-    rawMax <= maxVnd
+    rawMax <= safeMaxVnd
       ? rawMax
       : currentMinPrice;
   return { currentMinPrice, currentMaxPrice };
+}
+
+export interface WatchlistBestOffer {
+  id: string;
+  title: string;
+  price: number;
+  original_price: number;
+  url: string;
+  platform: string;
+  merchant_name: string;
+  is_official_mall: boolean;
+}
+
+export interface WatchlistCandidateOffer {
+  id?: unknown;
+  title?: unknown;
+  price_current: number;
+  price_original?: unknown;
+  stock?: unknown;
+  url?: unknown;
+  platform?: unknown;
+  merchant?: {
+    name?: unknown;
+    platform?: unknown;
+    is_official?: unknown;
+  } | null;
+}
+
+// The stored min_price can be a bait-price listing; target checks use the
+// lowest plausible offer instead (DOS/Rate#797).
+export function withPlausibleMinPrice<T extends { min_price?: unknown }>(
+  master: T,
+  offers: readonly { price_current: number }[]
+): T {
+  const rawMin =
+    !master ||
+    typeof master !== 'object' ||
+    typeof master.min_price === 'boolean' ||
+    master.min_price === null ||
+    master.min_price === undefined
+      ? 0
+      : Number(master.min_price || 0);
+  return {
+    ...master,
+    min_price: plausibleMinPrice(
+      Number.isFinite(rawMin) ? rawMin : 0,
+      Array.isArray(offers) ? offers : []
+    ),
+  };
+}
+
+export function selectBestOfferFromListings(
+  offers: readonly WatchlistCandidateOffer[]
+): { bestOffer: WatchlistBestOffer | null; offerPlatforms: string[] } {
+  const safeOffers = Array.isArray(offers) ? offers : [];
+  // A bait-price listing is never the best offer (DOS/Rate#797).
+  const valid = plausibleOffers(safeOffers).filter((o) => {
+    if (!o || typeof o !== 'object') return false;
+    if (typeof o.price_current === 'boolean' || typeof o.stock === 'boolean') {
+      return false;
+    }
+    const price = Number(o.price_current);
+    const stock = o.stock == null ? 1 : Number(o.stock);
+    return (
+      Number.isFinite(stock) &&
+      stock > 0 &&
+      Number.isFinite(price) &&
+      price > 0 &&
+      price <= MAX_VALID_VND_PRICE
+    );
+  });
+  const platforms = Array.from(
+    new Set(
+      valid
+        .map((o) =>
+          String(o.merchant?.platform || o.platform || 'shopee')
+            .replace(/\p{Cc}+/gu, '')
+            .trim()
+            .toLowerCase()
+        )
+        .filter(Boolean)
+    )
+  );
+  if (valid.length === 0) {
+    return { bestOffer: null, offerPlatforms: platforms };
+  }
+
+  const sorted = [...valid].sort((a, b) => {
+    const diff = Number(a.price_current) - Number(b.price_current);
+    if (diff !== 0) return diff;
+    const mallA = a.merchant?.is_official ? 1 : 0;
+    const mallB = b.merchant?.is_official ? 1 : 0;
+    return mallB - mallA;
+  });
+
+  const best = sorted[0]!;
+  const bestPrice = Number(best.price_current);
+  const validOrig = normalizeOfferOriginalPrice(
+    bestPrice,
+    typeof best.price_original === 'boolean'
+      ? 0
+      : Number(best.price_original ?? 0)
+  );
+  const cleanTitle = String(best.title || '')
+    .replace(/\p{Cc}+/gu, ' ')
+    .trim()
+    .slice(0, 320);
+  const cleanMerchantName = String(best.merchant?.name || 'Official Store')
+    .replace(/\p{Cc}+/gu, ' ')
+    .trim()
+    .slice(0, 120);
+  return {
+    bestOffer: {
+      id: String(best.id || '').trim(),
+      title: cleanTitle,
+      price: bestPrice,
+      original_price: validOrig ?? bestPrice,
+      url: typeof best.url === 'string' ? best.url.trim().slice(0, 2048) : '',
+      platform: String(best.merchant?.platform || best.platform || 'shopee')
+        .replace(/\p{Cc}+/gu, '')
+        .trim()
+        .toLowerCase(),
+      merchant_name: cleanMerchantName || 'Official Store',
+      is_official_mall: Boolean(best.merchant?.is_official),
+    },
+    offerPlatforms: platforms,
+  };
+}
+
+export function isSafeCrowdIngestHttpUrl(rawUrl: string): boolean {
+  if (typeof rawUrl !== 'string') return false;
+  const trimmed = rawUrl.trim();
+  if (
+    !trimmed ||
+    trimmed.length > 1024 ||
+    /\s/.test(trimmed) ||
+    /\p{Cc}/u.test(trimmed)
+  ) {
+    return false;
+  }
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return false;
+    }
+    if (parsed.username || parsed.password) return false;
+    if (!parsed.hostname) return false;
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 const CANONICAL_PRODUCT_SLUG_REGEX = /^[a-zA-Z0-9._-]+$/;
@@ -313,15 +491,23 @@ export class BoundedSlidingWindowRateLimiter {
 }
 
 export function extractClientRateLimitKey(
-  headers: Pick<Headers, 'get'>
+  headers: Pick<Headers, 'get'> | null | undefined
 ): string {
+  if (!headers || typeof headers.get !== 'function') return 'anon';
+  const sanitizeIpCandidate = (raw: string | null | undefined): string => {
+    if (typeof raw !== 'string') return '';
+    return raw
+      .replace(/\p{Cc}+/gu, '')
+      .replace(/\s+/g, '')
+      .slice(0, 128);
+  };
   const forwardedFor = headers.get('x-forwarded-for');
   if (forwardedFor) {
-    const firstIp = forwardedFor.split(',')[0]?.trim();
-    if (firstIp) return firstIp.slice(0, 128);
+    const firstIp = sanitizeIpCandidate(forwardedFor.split(',')[0]);
+    if (firstIp) return firstIp;
   }
-  const realIp = headers.get('x-real-ip')?.trim();
-  if (realIp) return realIp.slice(0, 128);
+  const realIp = sanitizeIpCandidate(headers.get('x-real-ip'));
+  if (realIp) return realIp;
   return 'anon';
 }
 

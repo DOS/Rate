@@ -8923,6 +8923,124 @@ async function runCoreArchitectureSuite() {
     );
   }
 
+  // 100. Issue #864: API Handler Price/IP Bounds, Watchlist Offer Selection, and Crowd Ingest URL Checks
+  {
+    const {
+      extractClientRateLimitKey,
+      isSafeCrowdIngestHttpUrl,
+      parseOptionalVndPriceParam,
+      resolveWatchlistMasterPriceBounds,
+      selectBestOfferFromListings,
+      withPlausibleMinPrice,
+    } = await import('../api-handler');
+
+    assert.equal(
+      parseOptionalVndPriceParam('15000000', Number.NaN),
+      15_000_000,
+      'parseOptionalVndPriceParam must fall back to 500M cap when maxVnd is NaN'
+    );
+    assert.deepEqual(
+      resolveWatchlistMasterPriceBounds(null, 24_990_000, Number.NaN),
+      {
+        currentMinPrice: 24_990_000,
+        currentMaxPrice: 24_990_000,
+      },
+      'null master must fall back to bestOfferPrice without throwing'
+    );
+    assert.deepEqual(
+      resolveWatchlistMasterPriceBounds(
+        { min_price: true, max_price: true },
+        24_990_000
+      ),
+      {
+        currentMinPrice: 24_990_000,
+        currentMaxPrice: 24_990_000,
+      },
+      'boolean min_price/max_price must not coerce to 1 VND'
+    );
+
+    assert.equal(extractClientRateLimitKey(null), 'anon');
+    const spoofedHeaders = {
+      get(name: string) {
+        return name.toLowerCase() === 'x-forwarded-for'
+          ? ' 203.0.113.10\r\n\u0000 , 10.0.0.1 '
+          : null;
+      },
+    } as unknown as Headers;
+    assert.equal(extractClientRateLimitKey(spoofedHeaders), '203.0.113.10');
+    const wsHeaders = new Headers({
+      'x-forwarded-for': ' 203.0.113.10\t99 , 10.0.0.1 ',
+    });
+    assert.equal(extractClientRateLimitKey(wsHeaders), '203.0.113.1099');
+
+    const plausibleBoolMaster = withPlausibleMinPrice(
+      { min_price: true as unknown as number },
+      [{ price_current: 28_990_000 }]
+    );
+    assert.equal(
+      plausibleBoolMaster.min_price,
+      28_990_000,
+      'withPlausibleMinPrice must ignore boolean min_price and use plausible offer price'
+    );
+
+    const bestOfferRes = selectBestOfferFromListings([
+      {
+        id: 'off-bool',
+        title: 'Boolean Price Offer',
+        price_current: true as unknown as number,
+        price_original: 0,
+        stock: 10,
+        url: 'https://shopee.vn/product/1/2',
+        platform: 'shopee',
+        merchant: { name: 'Bad Shop', platform: 'shopee', is_official: true },
+      },
+      {
+        id: '  off-valid  ',
+        title: '  Apple\u0000 iPhone 16 128GB  ',
+        price_current: 21_990_000,
+        price_original: 22_990_000,
+        stock: 5,
+        url: '  https://shopee.vn/product/88201679/27110898667  ',
+        platform: 'shopee',
+        merchant: {
+          name: '  Apple\u0007 Flagship Store  ',
+          platform: 'Shopee\u0000',
+          is_official: true,
+        },
+      },
+    ] as unknown as Parameters<typeof selectBestOfferFromListings>[0]);
+    assert.equal(bestOfferRes.bestOffer?.id, 'off-valid');
+    assert.equal(bestOfferRes.bestOffer?.title, 'Apple  iPhone 16 128GB');
+    assert.equal(
+      bestOfferRes.bestOffer?.merchant_name,
+      'Apple  Flagship Store'
+    );
+    assert.equal(bestOfferRes.bestOffer?.platform, 'shopee');
+    assert.deepEqual(bestOfferRes.offerPlatforms, ['shopee']);
+
+    assert.equal(
+      isSafeCrowdIngestHttpUrl(
+        'https://shopee.vn/product-i.88201679.27110898667'
+      ),
+      true
+    );
+    assert.equal(
+      isSafeCrowdIngestHttpUrl(
+        'https://user:pass@shopee.vn/product-i.88201679.27110898667'
+      ),
+      false,
+      'isSafeCrowdIngestHttpUrl must reject embedded URL credentials'
+    );
+    assert.equal(
+      isSafeCrowdIngestHttpUrl('ftp://shopee.vn/product-i.1.2'),
+      false
+    );
+
+    console.log(
+      '  ✅ [100/100] API Handler Price/IP Bounds, Watchlist Offer Selection & Crowd Ingest URL Checks (#864) passed'
+    );
+  }
+
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
 
