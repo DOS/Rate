@@ -25,10 +25,13 @@ export function sanitizePublicApiError(
   err: unknown,
   fallbackMessage = 'Internal server error'
 ): string {
-  if (!(err instanceof Error)) {
+  if (!(err instanceof Error) || typeof err.message !== 'string') {
     return fallbackMessage;
   }
-  const msg = err.message.trim();
+  const msg = err.message
+    .replace(/\p{Cc}+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
   if (!msg || msg.length > 240 || DB_INTERNAL_ERROR_REGEX.test(msg)) {
     return fallbackMessage;
   }
@@ -65,7 +68,7 @@ export function parseBoundedIntParam(
   min: number,
   max: number
 ): number {
-  if (raw == null || raw.trim() === '') return defaultValue;
+  if (typeof raw !== 'string' || raw.trim() === '') return defaultValue;
   const schema = z.coerce.number().int();
   const parsed = schema.safeParse(raw);
   if (!parsed.success || !Number.isFinite(parsed.data)) {
@@ -79,7 +82,7 @@ export function parseBoundedNumberParam(
   min: number,
   max: number
 ): number | undefined {
-  if (raw == null || raw.trim() === '') return undefined;
+  if (typeof raw !== 'string' || raw.trim() === '') return undefined;
   const schema = z.coerce.number();
   const parsed = schema.safeParse(raw);
   if (!parsed.success || !Number.isFinite(parsed.data)) {
@@ -95,7 +98,7 @@ export function parseBoundedStringParam(
   raw: string | null | undefined,
   maxLength: number
 ): string | null {
-  if (raw == null) return null;
+  if (typeof raw !== 'string') return null;
   const safeMaxLength =
     Number.isFinite(maxLength) && maxLength >= 1 ? Math.floor(maxLength) : 256;
   const cleaned = raw.replace(/\p{Cc}+/gu, ' ').trim();

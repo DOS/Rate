@@ -21,15 +21,24 @@ export type RateCanonicalCacheTag =
   (typeof RATE_CACHE_TAGS)[keyof typeof RATE_CACHE_TAGS];
 
 export function productCacheTag(slug: string): string {
-  return `rate:product:${slug.trim().toLowerCase()}`;
+  return `rate:product:${String(slug ?? '')
+    .replace(/\p{Cc}+/gu, '')
+    .trim()
+    .toLowerCase()}`;
 }
 
 export function categoryCacheTag(categorySlug: string): string {
-  return `rate:category:${categorySlug.trim().toLowerCase()}`;
+  return `rate:category:${String(categorySlug ?? '')
+    .replace(/\p{Cc}+/gu, '')
+    .trim()
+    .toLowerCase()}`;
 }
 
 export function merchantCacheTag(merchantId: string): string {
-  return `rate:merchant:${merchantId.trim().toLowerCase()}`;
+  return `rate:merchant:${String(merchantId ?? '')
+    .replace(/\p{Cc}+/gu, '')
+    .trim()
+    .toLowerCase()}`;
 }
 
 export interface RevalidationTargetsInput {
@@ -55,8 +64,11 @@ export function canonicalizeCacheParams(
   if (typeof value === 'number') {
     return Number.isFinite(value) ? JSON.stringify(value) : 'null';
   }
+  if (typeof value === 'bigint') {
+    return JSON.stringify(value.toString());
+  }
   if (typeof value !== 'object') {
-    return JSON.stringify(value);
+    return JSON.stringify(value) ?? 'null';
   }
   if (seen.has(value)) {
     return '"[Circular]"';
@@ -92,8 +104,7 @@ export function isSafeRevalidationPath(rawPath: string): boolean {
   const clean = rawPath.trim();
   if (!clean || clean.length > 200) return false;
   if (!clean.startsWith('/') || clean.startsWith('//')) return false;
-  // eslint-disable-next-line no-control-regex -- rejecting control characters in revalidation paths
-  if (clean.includes('\\') || /[\u0000-\u001F\u007F?#]/.test(clean)) {
+  if (clean.includes('\\') || /\p{Cc}/u.test(clean) || /[\s?#]/.test(clean)) {
     return false;
   }
   if (/(?:^|\/)\.\.(?:\/|$)/.test(clean)) return false;
