@@ -30,11 +30,7 @@ const MAX_BATTERY_MAH = 500_000;
 export const MAX_ENTITY_IMAGES = 50;
 
 function hasControlOrSpaceChar(val: string): boolean {
-  for (let i = 0; i < val.length; i++) {
-    const code = val.charCodeAt(i);
-    if (code <= 0x20 || code === 0x7f) return true;
-  }
-  return false;
+  return /[\p{Cc}\s]/u.test(val);
 }
 
 export function sanitizeHttpUrl(raw: unknown): string | null {
@@ -46,6 +42,7 @@ export function sanitizeHttpUrl(raw: unknown): string | null {
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
     if (parsed.username || parsed.password) return null;
     if (!parsed.hostname) return null;
+    if (parsed.port !== '' && parsed.port !== '80' && parsed.port !== '443') return null;
     return trimmed;
   } catch {
     return null;
@@ -67,12 +64,14 @@ export function sanitizeHttpUrlList(urls: unknown): string[] {
   return out;
 }
 
-function toBoundedPositiveInt(value: unknown, max: number): number | null {
+export function toBoundedPositiveInt(value: unknown, max: number): number | null {
+  if (typeof value === 'boolean') return null;
   const n = Number(value);
   return Number.isInteger(n) && n > 0 && n <= max ? n : null;
 }
 
-function toBoundedPositiveNumber(value: unknown, max: number): number | null {
+export function toBoundedPositiveNumber(value: unknown, max: number): number | null {
+  if (typeof value === 'boolean') return null;
   const n = Number(value);
   return Number.isFinite(n) && n > 0 && n <= max ? n : null;
 }

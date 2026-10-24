@@ -75,8 +75,13 @@ export function computeRetryDelayMs(
  */
 export function sanitizeAiGeneratedText(raw: unknown, maxLen = 400): string {
   if (typeof raw !== 'string') return '';
+  const safeMaxLen =
+    typeof maxLen === 'number' && Number.isFinite(maxLen) && maxLen >= 1
+      ? Math.min(Math.floor(maxLen), MAX_LOG_STRING_LENGTH)
+      : 400;
+  const boundedInput = raw.slice(0, Math.max(safeMaxLen * 4, 4096));
   return (
-    raw
+    boundedInput
       // `[^<>]` rather than `[^>]`: a run of unclosed '<' would otherwise be
       // rescanned to the end of the string from each '<' (quadratic).
       .replace(/<[^<>]*>/g, ' ')
@@ -89,11 +94,10 @@ export function sanitizeAiGeneratedText(raw: unknown, maxLen = 400): string {
       )
       // Strip Vietnamese phone / Zalo numbers (e.g. 0912345678, +84 912 345 678, 098.123.4567)
       .replace(/(?:\+?84|0)\s*[1-9](?:[\s.-]*\d){7,9}\b/g, '[phone-removed]')
-      // eslint-disable-next-line no-control-regex -- stripping control characters is intentional
-      .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, ' ')
+      .replace(/\p{Cc}+/gu, ' ')
       .replace(/\s+/g, ' ')
       .trim()
-      .slice(0, maxLen)
+      .slice(0, safeMaxLen)
   );
 }
 
@@ -227,17 +231,29 @@ export class ImporterStructuredLogger {
     message: string,
     meta?: Record<string, unknown>
   ): ImporterLogEntry {
+    const cleanField = (val: unknown, fallback = ''): string =>
+      typeof val === 'string'
+        ? val
+            .replace(/\p{Cc}+/gu, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, 120) || fallback
+        : fallback;
+    const cleanNullableField = (val: unknown): string | null => {
+      const cleaned = cleanField(val, '');
+      return cleaned.length > 0 ? cleaned : null;
+    };
     const sanitizedMeta = meta ? (sanitizeLogMeta(meta) as Record<string, unknown>) : undefined;
     return {
       timestamp: new Date().toISOString(),
       level,
       service: '@repo/crawlers',
-      component: this.context.component,
-      run_id: this.context.runId ?? process.env.RATE_RUN_ID ?? null,
-      job_id: this.context.jobId ?? null,
-      platform: this.context.platform ?? null,
-      event,
-      message: redactSensitiveString(message),
+      component: cleanField(this.context.component, 'Importer'),
+      run_id: cleanNullableField(this.context.runId ?? process.env.RATE_RUN_ID ?? null),
+      job_id: cleanNullableField(this.context.jobId ?? null),
+      platform: cleanNullableField(this.context.platform ?? null),
+      event: cleanField(event, 'importer.event'),
+      message: redactSensitiveString(typeof message === 'string' ? message : String(message ?? '')),
       ...(sanitizedMeta && Object.keys(sanitizedMeta).length > 0 ? { meta: sanitizedMeta } : {}),
     };
   }
