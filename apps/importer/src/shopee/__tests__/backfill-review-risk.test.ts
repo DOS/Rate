@@ -782,6 +782,36 @@ async function run() {
     })
   );
 
+  // DOS/Rate#916: ScrapedProductSchema, ScrapedReviewSchema, and SortSchema bounds
+  const { ScrapedProductSchema, ScrapedReviewSchema, SortSchema } =
+    await import('@repo/shared-data');
+  assert.equal(SortSchema.safeParse({ field: '   ', order: 'asc' }).success, false);
+  assert.equal(SortSchema.safeParse({ field: 'a'.repeat(65), order: 'desc' }).success, false);
+  assert.equal(SortSchema.safeParse({ field: 'price_min', order: 'asc' }).success, true);
+
+  assert.equal(
+    ScrapedReviewSchema.safeParse({
+      reviewId: 'r-1',
+      author: 'Alice',
+      ratingStar: 5,
+      comment: 'x'.repeat(10_001),
+      images: [],
+    }).success,
+    false
+  );
+  assert.equal(
+    ScrapedProductSchema.safeParse({
+      itemId: '123',
+      shopId: '456',
+      url: 'https://shopee.vn/item-i.456.123',
+      title: 'x'.repeat(1001),
+      priceMin: 25_000_000,
+      priceMax: 25_000_000,
+      shop: { shopId: '456', name: 'Shop', isMall: true },
+    }).success,
+    false
+  );
+
   console.log('✅ Review risk backfill suite passed');
 }
 
