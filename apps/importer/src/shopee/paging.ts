@@ -22,11 +22,11 @@ export async function fetchAllPages<T>(
   maxPages = DEFAULT_FETCH_ALL_MAX_PAGES
 ): Promise<T[]> {
   const safePageSize =
-    Number.isFinite(pageSize) && pageSize > 0
+    Number.isFinite(pageSize) && pageSize >= 1
       ? Math.min(MAX_FETCH_ALL_PAGE_SIZE, Math.floor(pageSize))
       : MAX_FETCH_ALL_PAGE_SIZE;
   const safeMaxPages =
-    Number.isFinite(maxPages) && maxPages > 0
+    Number.isFinite(maxPages) && maxPages >= 1
       ? Math.min(MAX_FETCH_ALL_PAGES_CEILING, Math.floor(maxPages))
       : DEFAULT_FETCH_ALL_MAX_PAGES;
   const rows: T[] = [];
