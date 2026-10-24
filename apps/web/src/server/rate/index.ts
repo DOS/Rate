@@ -138,30 +138,101 @@ const _getCachedMasterProductsByKey = cache(
     )(serializedParams)
 );
 
+const SAFE_PRODUCT_SLUG_REGEX = /^[a-z0-9._-]{1,120}$/;
+
+export function sanitizeCachedEntityId(value: unknown, maxLen = 128): string {
+  if (typeof value !== 'string') return '';
+  return value
+    .replace(/\p{Cc}+/gu, '')
+    .trim()
+    .slice(0, maxLen);
+}
+
+export function sanitizeCachedProductSlug(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  const cleaned = value
+    .replace(/\p{Cc}+/gu, '')
+    .trim()
+    .toLowerCase()
+    .slice(0, 120);
+  return SAFE_PRODUCT_SLUG_REGEX.test(cleaned) ? cleaned : '';
+}
+
+export function sanitizeCachedCompareSlugsCsv(slugsCsv: unknown): string {
+  if (typeof slugsCsv !== 'string') return '';
+  return Array.from(
+    new Set(
+      slugsCsv
+        .split(',')
+        .map((s) => sanitizeCachedProductSlug(s))
+        .filter(Boolean)
+    )
+  )
+    .slice(0, 4)
+    .join(',');
+}
+
+export function sanitizeCachedInspectQuery(rawQuery: unknown): string {
+  if (typeof rawQuery !== 'string') return '';
+  return rawQuery
+    .replace(/\p{Cc}+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 2048);
+}
+
+export function normalizeCachedFacetCategory(
+  categorySlug?: string | null
+): import('../../lib/rate-api').CanonicalCategorySlug | 'all' {
+  if (categorySlug === undefined || categorySlug === null) {
+    return 'smartphones';
+  }
+  const cleaned =
+    typeof categorySlug === 'string'
+      ? categorySlug
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .toLowerCase()
+      : '';
+  if (!cleaned) return 'smartphones';
+  return isCanonicalCategorySlug(cleaned) ? cleaned : 'all';
+}
+
 export function getCachedMasterProducts(params?: MasterProductFilterParams) {
-  const cleanCat = params?.categorySlug?.trim().toLowerCase() || 'all';
+  const rawCat =
+    typeof params?.categorySlug === 'string'
+      ? params.categorySlug
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .toLowerCase()
+      : '';
+  const cleanCat = rawCat && isCanonicalCategorySlug(rawCat) ? rawCat : 'all';
   return _getCachedMasterProductsByKey(
     canonicalizeCacheParams(params ?? {}),
     cleanCat
   );
 }
 
-export const getCachedMasterProductBySlug = cache((slug: string) => {
-  const cleanSlug = slug.trim().toLowerCase();
-  return withRateDataCache(
+const _getCachedMasterProductBySlugKey = cache((cleanSlug: string) =>
+  withRateDataCache(
     _getMasterProductBySlug,
     ['rate-master-product-by-slug', cleanSlug],
     {
       revalidate: 300,
       tags: [RATE_CACHE_TAGS.PRODUCTS, productCacheTag(cleanSlug)],
     }
-  )(cleanSlug);
-});
+  )(cleanSlug)
+);
 
-export const getCachedCategoryDirectoryFacets = cache(
-  (categorySlug?: string) => {
-    const cleanCat = categorySlug?.trim().toLowerCase() || 'all';
-    return withRateDataCache(
+export function getCachedMasterProductBySlug(slug: string) {
+  const cleanSlug = sanitizeCachedProductSlug(slug);
+  if (!cleanSlug) return Promise.resolve(null);
+  return _getCachedMasterProductBySlugKey(cleanSlug);
+}
+
+const _getCachedCategoryDirectoryFacetsByKey = cache(
+  (cleanCat: import('../../lib/rate-api').CanonicalCategorySlug | 'all') =>
+    withRateDataCache(
       _getCategoryDirectoryFacets,
       ['rate-category-facets', cleanCat],
       {
@@ -172,47 +243,61 @@ export const getCachedCategoryDirectoryFacets = cache(
           ...(cleanCat !== 'all' ? [categoryCacheTag(cleanCat)] : []),
         ],
       }
-    )(categorySlug);
-  }
+    )(cleanCat)
 );
 
-export const getCachedMasterProductOffers = cache((masterProductId: string) => {
-  const cleanId = masterProductId.trim();
-  return withRateDataCache(
+export function getCachedCategoryDirectoryFacets(categorySlug?: string) {
+  return _getCachedCategoryDirectoryFacetsByKey(
+    normalizeCachedFacetCategory(categorySlug)
+  );
+}
+
+const _getCachedMasterProductOffersByKey = cache((cleanId: string) =>
+  withRateDataCache(
     _getMasterProductOffers,
     ['rate-master-product-offers', cleanId],
     {
       revalidate: 180,
       tags: [RATE_CACHE_TAGS.OFFERS, RATE_CACHE_TAGS.DEALS],
     }
-  )(cleanId);
-});
-
-export const getCachedMasterProductReviews = cache(
-  (masterProductId: string) => {
-    const cleanId = masterProductId.trim();
-    return withRateDataCache(
-      _getMasterProductReviews,
-      ['rate-master-product-reviews', cleanId],
-      {
-        revalidate: 300,
-        tags: [RATE_CACHE_TAGS.REVIEWS],
-      }
-    )(cleanId);
-  }
+  )(cleanId)
 );
+
+export function getCachedMasterProductOffers(masterProductId: string) {
+  const cleanId = sanitizeCachedEntityId(masterProductId);
+  if (!cleanId) return Promise.resolve([]);
+  return _getCachedMasterProductOffersByKey(cleanId);
+}
+
+const _getCachedMasterProductReviewsByKey = cache((cleanId: string) =>
+  withRateDataCache(
+    _getMasterProductReviews,
+    ['rate-master-product-reviews', cleanId],
+    {
+      revalidate: 300,
+      tags: [RATE_CACHE_TAGS.REVIEWS],
+    }
+  )(cleanId)
+);
+
+export function getCachedMasterProductReviews(masterProductId: string) {
+  const cleanId = sanitizeCachedEntityId(masterProductId);
+  if (!cleanId) return Promise.resolve([]);
+  return _getCachedMasterProductReviewsByKey(cleanId);
+}
 
 export const getCachedMasterProductReviewSummary = cache(
   (
     masterProductId: string,
     existingReviews?: import('../../lib/rate-api').ReviewItem[]
   ) => {
-    const cleanId = masterProductId.trim();
+    const cleanId = sanitizeCachedEntityId(masterProductId);
     const reviewsKey = existingReviews
       ? `reviews:${existingReviews.length}:${existingReviews
           .slice(0, 20)
           .map(
-            (r) => `${r.id}:${r.verdict ?? ''}:${r.include_in_rating ? 1 : 0}`
+            (r) =>
+              `${sanitizeCachedEntityId(r.id)}:${sanitizeCachedEntityId(r.verdict ?? '', 32)}:${r.include_in_rating ? 1 : 0}`
           )
           .join('|')}`
       : 'reviews:auto';
@@ -236,11 +321,14 @@ export const getCachedMasterProductPriceHistory = cache(
     masterProductId: string,
     existingOffers?: import('../../lib/rate-api').MerchantOffer[]
   ) => {
-    const cleanId = masterProductId.trim();
+    const cleanId = sanitizeCachedEntityId(masterProductId);
     const offersKey = existingOffers
       ? `offers:${existingOffers.length}:${existingOffers
           .slice(0, 20)
-          .map((o) => `${o.id}:${o.price_current}:${o.price_original ?? ''}`)
+          .map(
+            (o) =>
+              `${sanitizeCachedEntityId(o.id)}:${o.price_current}:${o.price_original ?? ''}`
+          )
           .join('|')}`
       : 'offers:auto';
     return withRateDataCache(
@@ -277,21 +365,13 @@ const _getCachedCompareMasterProductsByKey = cache(
 );
 
 export function getCachedCompareMasterProducts(slugsCsv: string) {
-  const canonicalSlugsCsv = Array.from(
-    new Set(
-      (slugsCsv || '')
-        .split(',')
-        .map((s) => s.trim().toLowerCase())
-        .filter(Boolean)
-    )
-  )
-    .slice(0, 4)
-    .join(',');
+  const canonicalSlugsCsv = sanitizeCachedCompareSlugsCsv(slugsCsv);
   return _getCachedCompareMasterProductsByKey(canonicalSlugsCsv);
 }
 
 async function inspectProductOrShopUrlWithRadar(rawQuery: string) {
-  const res = await _inspectProductOrShopUrl(rawQuery);
+  const safeQuery = sanitizeCachedInspectQuery(rawQuery);
+  const res = await _inspectProductOrShopUrl(safeQuery);
   return {
     ...res,
     radarSignal: res.masterProduct
@@ -351,17 +431,22 @@ export async function getCachedMerchantsList(
   return all;
 }
 
-export const getCachedMerchantProfileById = cache((merchantId: string) => {
-  const cleanId = merchantId.trim();
-  return withRateDataCache(
+const _getCachedMerchantProfileByIdKey = cache((cleanId: string) =>
+  withRateDataCache(
     _getMerchantProfileById,
     ['rate-merchant-profile', cleanId],
     {
       revalidate: 600,
       tags: [RATE_CACHE_TAGS.MERCHANTS, merchantCacheTag(cleanId)],
     }
-  )(cleanId);
-});
+  )(cleanId)
+);
+
+export function getCachedMerchantProfileById(merchantId: string) {
+  const cleanId = sanitizeCachedEntityId(merchantId);
+  if (!cleanId) return Promise.resolve(null);
+  return _getCachedMerchantProfileByIdKey(cleanId);
+}
 
 export const getCachedRatePlatformStats = cache(() =>
   withRateDataCache(_getRatePlatformStats, ['rate-platform-stats'], {
@@ -380,10 +465,16 @@ export const getCachedInspectProductOrShopUrl = cache(
 // JSON, so the category map travels as entries.
 const SITEMAP_CACHE_WARN_BYTES = 1_500_000;
 
-const categorySlugOnly = (value: Record<string, unknown> | null | undefined) =>
-  typeof value?.category_slug === 'string'
-    ? { category_slug: value.category_slug }
-    : null;
+const categorySlugOnly = (
+  value: Record<string, unknown> | null | undefined
+) => {
+  if (typeof value?.category_slug !== 'string') return null;
+  const slug = value.category_slug
+    .replace(/\p{Cc}+/gu, '')
+    .trim()
+    .slice(0, 64);
+  return slug ? { category_slug: slug } : null;
+};
 
 const _getCachedSitemapRowsData = withRateDataCache(
   async () => {
@@ -466,9 +557,12 @@ export {
 } from './openapi';
 
 export {
+  MAX_DEAL_RADAR_CLUSTERS,
+  MAX_OFFERS_PER_CLUSTER,
   computeCrossPlatformDealRadarFromData,
   computeProductRadarSignal,
   getCrossPlatformDealRadar,
+  normalizeDealRadarOptions,
   type CrossPlatformDealRadarItem,
   type CrossPlatformDealRadarResponse,
   type CrossPlatformPriceSpreadItem,
