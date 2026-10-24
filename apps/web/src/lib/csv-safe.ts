@@ -1,3 +1,7 @@
+const MAX_CSV_CELL_LENGTH = 10_000;
+const MAX_CSV_COLUMNS = 200;
+const MAX_CSV_ROWS = 10_000;
+
 /**
  * Shared CSV cell escaper that neutralizes spreadsheet formula injection (CSV/Excel DDE)
  * while preserving numeric values (including negative numbers).
@@ -8,7 +12,14 @@ export function escapeCsvCell(value: unknown): string {
     return Number.isFinite(value) ? String(value) : '';
   }
 
-  let str = String(value).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  let str = String(value)
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]+/g, '');
+  if (str.length > MAX_CSV_CELL_LENGTH) {
+    str = str.slice(0, MAX_CSV_CELL_LENGTH);
+  }
 
   // Neutralize formula-injection payloads starting with =, +, -, @, |, \t, \r
   // (including payloads with leading whitespace/newlines before =, +, -, @, |)
@@ -36,7 +47,15 @@ export function buildSafeCsvContent(
   rows: readonly (readonly unknown[])[],
   lineEnding: '\n' | '\r\n' = '\r\n'
 ): string {
-  const headerLine = headers.map(escapeCsvCell).join(',');
-  const rowLines = rows.map((row) => row.map(escapeCsvCell).join(','));
+  const safeHeaders = Array.isArray(headers)
+    ? headers.slice(0, MAX_CSV_COLUMNS)
+    : [];
+  const safeRows = Array.isArray(rows) ? rows.slice(0, MAX_CSV_ROWS) : [];
+  const headerLine = safeHeaders.map(escapeCsvCell).join(',');
+  const rowLines = safeRows.map((row) =>
+    (Array.isArray(row) ? row.slice(0, MAX_CSV_COLUMNS) : [])
+      .map(escapeCsvCell)
+      .join(',')
+  );
   return `\uFEFF${[headerLine, ...rowLines].join(lineEnding)}`;
 }

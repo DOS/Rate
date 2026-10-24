@@ -39,4 +39,19 @@ assert.equal(
   'A label without a floor is not shown'
 );
 assert.equal(formatSoldCount(Number.NaN, null, 'vi'), '0');
+assert.equal(
+  formatSoldCount(999_999_999, '20k+', 'vi'),
+  '0',
+  'Overflowed historicalSold > 100M must be rejected (#848)'
+);
+assert.equal(
+  formatSoldCount(20_000, '  20k+\u0000\r\n ', 'vi'),
+  '20k+',
+  'Control characters must be stripped from historicalSoldDisplay (#848)'
+);
+assert.equal(
+  formatSoldCount(23_873, null, 'invalid_locale_tag_!!!'),
+  '23.873',
+  'Invalid locale tags must safely fall back to vi-VN (#848)'
+);
 console.log('✅ sold-count display');
