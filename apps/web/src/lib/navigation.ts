@@ -36,40 +36,80 @@ export const getAppPublicUrl = () => {
   return baseUrl;
 };
 
+const MAX_HREF_LEN = 2_048;
+
+function sanitizeHrefInput(raw: string | undefined | null): string {
+  if (typeof raw !== 'string') return '';
+  return raw.replace(/\p{Cc}+/gu, '').trim();
+}
+
 export const isAppLink = (link: string): boolean => {
+  const cleaned = sanitizeHrefInput(link);
+  if (
+    !cleaned ||
+    cleaned.length > MAX_HREF_LEN ||
+    cleaned.startsWith('//') ||
+    cleaned.startsWith('/\\') ||
+    cleaned.startsWith('\\')
+  ) {
+    return false;
+  }
   try {
     const baseUrl = getAppPublicUrl();
     if (!baseUrl) {
       throw new Error('Base URL is not defined.');
     }
 
-    const url = new URL(link, baseUrl);
-    return url.hostname === new URL(baseUrl).hostname;
+    const base = new URL(baseUrl);
+    const url = new URL(cleaned, base);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+      return false;
+    }
+    if (url.username || url.password) {
+      return false;
+    }
+    return url.hostname === base.hostname;
   } catch {
     return false;
   }
 };
 
 export const formatHref = (href: string | undefined | null): string => {
-  if (!href || href === '#') {
-    // Empty path -> return hash to prevent unwanted issues
+  const cleaned = sanitizeHrefInput(href);
+  if (!cleaned || cleaned === '#' || cleaned.length > MAX_HREF_LEN) {
+    // Empty or over-length path -> return hash to prevent unwanted issues
     return '#';
   }
 
-  if (href.startsWith('http')) {
-    // External or internal link that starts with http(s) -> return as is
-    return href;
+  if (
+    cleaned.startsWith('//') ||
+    cleaned.startsWith('/\\') ||
+    cleaned.startsWith('\\')
+  ) {
+    return '#';
   }
 
-  if (!isAppLink(href)) {
-    // External link -> return as is
-    return href;
+  if (cleaned.startsWith('#')) {
+    return cleaned;
   }
 
-  if (!href.startsWith('/')) {
-    // Ensure path starts with a slash
-    href = `/${href}`;
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(cleaned)) {
+    try {
+      const parsed = new URL(cleaned);
+      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+        if (parsed.username || parsed.password || !parsed.hostname) {
+          return '#';
+        }
+        return cleaned;
+      }
+      if (parsed.protocol === 'mailto:' || parsed.protocol === 'tel:') {
+        return /\s/.test(cleaned) ? '#' : cleaned;
+      }
+      return '#';
+    } catch {
+      return '#';
+    }
   }
 
-  return href;
+  return cleaned.startsWith('/') ? cleaned : `/${cleaned}`;
 };

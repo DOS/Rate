@@ -8,8 +8,17 @@ export type RateLocale = SupportedRateLocale;
 export function normalizeRateLocale(
   locale?: string | null
 ): SupportedRateLocale {
-  if (locale === 'en' || locale === 'cs') {
-    return locale;
+  if (typeof locale !== 'string') {
+    return 'vi';
+  }
+  const cleaned = locale
+    .replace(/\p{Cc}+/gu, '')
+    .trim()
+    .slice(0, 32)
+    .toLowerCase();
+  const primary = cleaned.split(/[-_]/)[0];
+  if (primary === 'en' || primary === 'cs') {
+    return primary;
   }
   return 'vi';
 }
