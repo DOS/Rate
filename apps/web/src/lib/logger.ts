@@ -12,12 +12,25 @@ const SECRET_KEY =
 // Postgres error text can echo user input ("Key (email)=(a@b.c) ..."); emails
 // are personal data, so they are masked inside any logged string.
 const EMAIL_IN_TEXT = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
+const BEARER_IN_TEXT = /\bBearer\s+[A-Za-z0-9._~+/=-]{8,}/gi;
+const URL_CREDENTIALS_IN_TEXT = /(https?:\/\/[^/\s:@]+:)([^/\s@]+)(@)/gi;
+const JWT_IN_TEXT =
+  /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g;
 
-function scrubText(text: string): string {
-  return text.slice(0, MAX_STRING).replace(EMAIL_IN_TEXT, '[email]');
-}
 const MAX_DEPTH = 4;
 const MAX_STRING = 2000;
+const MAX_KEYS = 60;
+const UNSAFE_OBJECT_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+function scrubText(text: string): string {
+  const bounded = text.slice(0, MAX_STRING + 256);
+  return bounded
+    .replace(EMAIL_IN_TEXT, '[email]')
+    .replace(BEARER_IN_TEXT, 'Bearer [redacted]')
+    .replace(URL_CREDENTIALS_IN_TEXT, '$1[redacted]$3')
+    .replace(JWT_IN_TEXT, '[redacted]')
+    .slice(0, MAX_STRING);
+}
 
 function isProduction(): boolean {
   return process.env.NODE_ENV === 'production';
@@ -41,18 +54,36 @@ export function serializeError(err: unknown): LogFields {
   return { message: scrubText(String(err)) };
 }
 
-export function redact(value: unknown, depth = 0): unknown {
+export function redact(
+  value: unknown,
+  depth = 0,
+  seen: WeakSet<object> = new WeakSet()
+): unknown {
   if (value instanceof Error) return serializeError(value);
   if (typeof value === 'string') return scrubText(value);
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value === 'bigint') return value.toString();
   if (value === null || typeof value !== 'object') return value;
+  if (seen.has(value)) return '[Circular]';
   if (depth >= MAX_DEPTH) return '[truncated]';
-  if (Array.isArray(value))
-    return value.slice(0, 50).map((v) => redact(v, depth + 1));
-  const out: LogFields = {};
-  for (const [key, v] of Object.entries(value)) {
-    out[key] = SECRET_KEY.test(key) ? '[redacted]' : redact(v, depth + 1);
+  seen.add(value);
+  try {
+    if (Array.isArray(value)) {
+      return value.slice(0, 50).map((v) => redact(v, depth + 1, seen));
+    }
+    const out: LogFields = {};
+    for (const [key, v] of Object.entries(value).slice(0, MAX_KEYS)) {
+      if (UNSAFE_OBJECT_KEYS.has(key)) continue;
+      const safeKey = key.slice(0, 120);
+      if (!safeKey) continue;
+      out[safeKey] = SECRET_KEY.test(safeKey)
+        ? '[redacted]'
+        : redact(v, depth + 1, seen);
+    }
+    return out;
+  } finally {
+    seen.delete(value);
   }
-  return out;
 }
 
 export interface Logger {
@@ -69,7 +100,7 @@ export function createLogger(scope: string): Logger {
       ts: new Date().toISOString(),
       level,
       scope,
-      msg,
+      msg: scrubText(String(msg ?? '')),
       ...((fields ? redact(fields) : {}) as LogFields),
     });
     if (level === 'error' || level === 'warn') {

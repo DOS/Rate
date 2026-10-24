@@ -8558,6 +8558,78 @@ async function runCoreArchitectureSuite() {
     '  ✅ [95/95] cache-tags revalidation targets, api-handler bounds & cookie token parsing (#842) passed'
   );
 
+  // =========================================================================
+  // 96. Extension Server URL Credential/Length & Crowd Ingest Bounds (#844)
+  // =========================================================================
+  {
+    const {
+      canonicalizeProductUrl,
+      detectPlatformFromInput,
+      ingestExtensionCrowdSignal,
+    } = await import('../extension');
+
+    assert.equal(
+      canonicalizeProductUrl('https://user:pass@shopee.vn/product/123/456'),
+      null,
+      'canonicalizeProductUrl must reject embedded URL credentials'
+    );
+    assert.equal(
+      canonicalizeProductUrl(
+        `https://shopee.vn/product/123/${'a'.repeat(2100)}`
+      ),
+      null,
+      'canonicalizeProductUrl must reject URLs > 2048 chars'
+    );
+    assert.equal(
+      detectPlatformFromInput(
+        null,
+        'https://user:pass@shopee.vn/product/123/456'
+      ),
+      null,
+      'detectPlatformFromInput must reject embedded URL credentials'
+    );
+
+    let capturedRpcArgs: Record<string, unknown> | null = null;
+    const ingestRes844 = await ingestExtensionCrowdSignal({
+      platform: 'shopee',
+      externalItemId: '  18093055535\u0007 ',
+      externalShopId: '  88201679\u0000 ',
+      url: 'https://shopee.vn/Apple-iPhone-15-128GB-i.88201679.18093055535',
+      title: '  Apple\u0000   iPhone 15 128GB Chính Hãng  ',
+      selectedVariant: '  128GB\u0007   Đen  ',
+      price: 18_990_000,
+      userConsentOptIn: true,
+      rateClient: {
+        rpc: async (_fn, args) => {
+          capturedRpcArgs = args as unknown as Record<string, unknown>;
+          return {
+            data: [{ job_id: 'job-844', state: 'enqueued' }],
+            error: null,
+          };
+        },
+      },
+    });
+    assert.equal(ingestRes844.accepted, true);
+    assert.equal(
+      (capturedRpcArgs as unknown as { p_platform_item_id: string })
+        ?.p_platform_item_id,
+      '88201679_18093055535'
+    );
+    const payload844 = (
+      capturedRpcArgs as unknown as {
+        p_payload: { observed_title: string; selected_variant: string };
+      }
+    )?.p_payload;
+    assert.equal(
+      payload844?.observed_title,
+      'Apple iPhone 15 128GB Chính Hãng'
+    );
+    assert.equal(payload844?.selected_variant, '128GB Đen');
+    console.log(
+      '  ✅ [96/96] Extension server URL credential/length & crowd ingest bounds (#844) passed'
+    );
+  }
+
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
 

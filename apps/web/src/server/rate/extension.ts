@@ -278,17 +278,32 @@ function isDomainOrSubdomain(host: string, domain: string): boolean {
   return host === domain || host.endsWith(`.${domain}`);
 }
 
+const MAX_EXTENSION_URL_LENGTH = 2048;
+
+function sanitizeExtensionField(raw: unknown, maxLen: number): string {
+  if (typeof raw !== 'string') return '';
+  return raw
+    .replace(/\p{Cc}+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, maxLen)
+    .trim();
+}
+
 /**
  * Strip all tracking & session parameters (sp_atk, xptdk, utm_*, fbclid, etc.)
  * to comply with Chrome Web Store User Data Privacy policies.
  */
 export function canonicalizeProductUrl(rawUrl?: string | null): string | null {
   if (!rawUrl || typeof rawUrl !== 'string') return null;
-  const trimmed = rawUrl.trim();
-  if (!trimmed) return null;
+  const trimmed = rawUrl.replace(/\p{Cc}+/gu, '').trim();
+  if (!trimmed || trimmed.length > MAX_EXTENSION_URL_LENGTH) return null;
   try {
     const parsed = new URL(trimmed);
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return null;
+    }
+    if (parsed.username !== '' || parsed.password !== '') {
       return null;
     }
     return `${parsed.origin}${parsed.pathname}`;
@@ -321,10 +336,15 @@ export function detectPlatformFromInput(
     return norm;
   }
   if (!rawUrl || typeof rawUrl !== 'string') return null;
+  const trimmedUrl = rawUrl.replace(/\p{Cc}+/gu, '').trim();
+  if (!trimmedUrl || trimmedUrl.length > MAX_EXTENSION_URL_LENGTH) return null;
   let host: string;
   try {
-    const parsed = new URL(rawUrl.trim());
+    const parsed = new URL(trimmedUrl);
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return null;
+    }
+    if (parsed.username !== '' || parsed.password !== '') {
       return null;
     }
     host = parsed.hostname.toLowerCase();
@@ -1321,9 +1341,20 @@ export async function ingestExtensionCrowdSignal(
     rpcClient = getRateClient();
   }
 
-  const normalizedItemId = input.externalShopId
-    ? `${input.externalShopId}_${input.externalItemId}`
-    : input.externalItemId;
+  const cleanItemId = sanitizeExtensionField(input.externalItemId, 128);
+  const cleanShopId = sanitizeExtensionField(input.externalShopId, 128);
+  if (!cleanItemId) {
+    return {
+      accepted: false,
+      quarantinedForWorker: false,
+      jobState: 'rejected_invalid_url',
+      jobId: null,
+      reason: 'Mã định danh sản phẩm không hợp lệ.',
+    };
+  }
+  const normalizedItemId = cleanShopId
+    ? `${cleanShopId}_${cleanItemId}`
+    : cleanItemId;
   const validOriginalPrice =
     typeof input.originalPrice === 'number' &&
     Number.isFinite(input.originalPrice) &&
@@ -1346,16 +1377,20 @@ export async function ingestExtensionCrowdSignal(
       ? Math.round(input.ratingCount)
       : null;
 
+  const cleanObservedTitle = sanitizeExtensionField(input.title, 280);
+  const cleanSelectedVariant =
+    sanitizeExtensionField(input.selectedVariant, 120) || null;
+
   const { data, error } = await rpcClient.rpc('enqueue_crowd_verify_signal', {
     p_platform: input.platform,
     p_target_url: canonicalUrl,
     p_platform_item_id: normalizedItemId,
-    p_platform_shop_id: input.externalShopId || undefined,
+    p_platform_shop_id: cleanShopId || undefined,
     p_payload: {
       source: 'extension_mv3_quarantine',
       canonical_url: canonicalUrl,
-      observed_title: input.title.slice(0, 280),
-      selected_variant: input.selectedVariant?.slice(0, 120) || null,
+      observed_title: cleanObservedTitle,
+      selected_variant: cleanSelectedVariant,
       observed_price: safeObservedPrice,
       observed_original_price: validOriginalPrice,
       observed_rating_star: validRatingStar,
