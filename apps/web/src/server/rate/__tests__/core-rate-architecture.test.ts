@@ -9180,6 +9180,66 @@ async function runCoreArchitectureSuite() {
     );
   }
 
+  // 102. Cache-Tags Revalidation/BigInt Guards & Api-Handler Parameter Bounds (#890)
+  {
+    const cacheTagsMod =
+      require('../cache-tags') as typeof import('../cache-tags');
+    const apiHandlerMod =
+      require('../api-handler') as typeof import('../api-handler');
+
+    assert.equal(
+      cacheTagsMod.productCacheTag('  Apple-iPhone-18\u0000 '),
+      'rate:product:apple-iphone-18'
+    );
+    assert.equal(
+      cacheTagsMod.categoryCacheTag('  Smartphones\u0085 '),
+      'rate:category:smartphones'
+    );
+    assert.equal(
+      cacheTagsMod.merchantCacheTag('  Shopee:123\u0007 '),
+      'rate:merchant:shopee:123'
+    );
+    assert.equal(
+      cacheTagsMod.isSafeRevalidationPath('/smartphones\u0085/iphone'),
+      false,
+      'isSafeRevalidationPath must reject C1 control characters'
+    );
+    assert.equal(
+      cacheTagsMod.isSafeRevalidationPath('/smartphones/iphone 18'),
+      false,
+      'isSafeRevalidationPath must reject internal whitespace'
+    );
+    assert.equal(
+      cacheTagsMod.canonicalizeCacheParams({
+        big: BigInt('9007199254740993'),
+        arr: [1, () => {}, Symbol('x')],
+      }),
+      '{"arr":[1,null,null],"big":"9007199254740993"}'
+    );
+    assert.equal(
+      apiHandlerMod.sanitizePublicApiError(
+        new Error('Invalid\u0000\r\nquery param')
+      ),
+      'Invalid query param'
+    );
+    assert.equal(
+      apiHandlerMod.parseBoundedIntParam(true as unknown as string, 25, 1, 100),
+      25
+    );
+    assert.equal(
+      apiHandlerMod.parseBoundedNumberParam(123 as unknown as string, 1, 100),
+      undefined
+    );
+    assert.equal(
+      apiHandlerMod.parseBoundedStringParam({} as unknown as string, 50),
+      null
+    );
+
+    console.log(
+      '  ✅ [102/102] Cache-Tags Revalidation/BigInt Guards & Api-Handler Parameter Bounds (#890) passed'
+    );
+  }
+
   console.log('🎉 All Rate.vn Core Architecture tests passed!');
 }
 
