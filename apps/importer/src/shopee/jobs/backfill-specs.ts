@@ -72,7 +72,18 @@ export async function auditMasterSpecs(supabase: RateSupabaseClient): Promise<nu
     model_key: string;
     specifications?: ProductSpecifications | null;
   }>) {
-    const label = `${row.name} (${row.model_key})`;
+    if (!row || typeof row !== 'object') continue;
+    const safeName =
+      stripKeySpecControlChars(String(row.name ?? ''))
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 200) || '(unnamed)';
+    const safeModelKey =
+      stripKeySpecControlChars(String(row.model_key ?? ''))
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 160) || '(no-key)';
+    const label = `${safeName} (${safeModelKey})`;
     const specCheck = ProductSpecificationsSchema.safeParse(row.specifications);
     if (!specCheck.success) {
       failures.push(`${label} failed ProductSpecificationsSchema validation`);
@@ -108,7 +119,14 @@ function stripKeySpecControlChars(input: string): string {
   return input.replace(/\p{Cc}+/gu, ' ');
 }
 
+function isPlainSpecObject(value: unknown): value is Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
 export function sanitizeKeySpecKey(key: string): string | null {
+  if (typeof key !== 'string') return null;
   const cleaned = stripKeySpecControlChars(key).replace(/\s+/g, ' ').trim();
   if (!cleaned || cleaned.length > MAX_KEY_SPEC_KEY_LENGTH || UNSAFE_KEY_SPEC_KEYS.has(cleaned)) {
     return null;
@@ -116,7 +134,11 @@ export function sanitizeKeySpecKey(key: string): string | null {
   return cleaned;
 }
 
-function sanitizeKeySpecValue(value: unknown, depth = 0): unknown {
+function sanitizeKeySpecValue(
+  value: unknown,
+  depth = 0,
+  seen: WeakSet<object> = new WeakSet<object>()
+): unknown {
   if (depth > 4 || value === undefined || value === null) return undefined;
   if (typeof value === 'boolean') return value;
   if (typeof value === 'number') {
@@ -131,25 +153,37 @@ function sanitizeKeySpecValue(value: unknown, depth = 0): unknown {
     return cleaned.length > 0 ? cleaned : undefined;
   }
   if (Array.isArray(value)) {
-    return value
-      .slice(0, 50)
-      .map(item => sanitizeKeySpecValue(item, depth + 1))
-      .filter(item => item !== undefined);
-  }
-  if (typeof value === 'object') {
-    const objOut: Record<string, unknown> = {};
-    let count = 0;
-    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-      const safeKey = sanitizeKeySpecKey(k);
-      if (!safeKey) continue;
-      if (count >= MAX_KEY_SPEC_OBJECT_KEYS && !Object.hasOwn(objOut, safeKey)) continue;
-      const sanitized = sanitizeKeySpecValue(v, depth + 1);
-      if (sanitized !== undefined) {
-        if (!Object.hasOwn(objOut, safeKey)) count += 1;
-        objOut[safeKey] = sanitized;
-      }
+    if (seen.has(value)) return undefined;
+    seen.add(value);
+    try {
+      return value
+        .slice(0, 50)
+        .map(item => sanitizeKeySpecValue(item, depth + 1, seen))
+        .filter(item => item !== undefined);
+    } finally {
+      seen.delete(value);
     }
-    return objOut;
+  }
+  if (isPlainSpecObject(value)) {
+    if (seen.has(value)) return undefined;
+    seen.add(value);
+    try {
+      const objOut: Record<string, unknown> = {};
+      let count = 0;
+      for (const [k, v] of Object.entries(value)) {
+        const safeKey = sanitizeKeySpecKey(k);
+        if (!safeKey) continue;
+        if (count >= MAX_KEY_SPEC_OBJECT_KEYS && !Object.hasOwn(objOut, safeKey)) continue;
+        const sanitized = sanitizeKeySpecValue(v, depth + 1, seen);
+        if (sanitized !== undefined) {
+          if (!Object.hasOwn(objOut, safeKey)) count += 1;
+          objOut[safeKey] = sanitized;
+        }
+      }
+      return objOut;
+    } finally {
+      seen.delete(value);
+    }
   }
   return undefined;
 }
@@ -158,11 +192,8 @@ export function mergeKeySpecs(
   existing: unknown,
   incoming: Record<string, unknown> | null | undefined
 ): Record<string, unknown> {
-  const base =
-    existing && typeof existing === 'object' && !Array.isArray(existing)
-      ? (existing as Record<string, unknown>)
-      : {};
-  const next = incoming && typeof incoming === 'object' && !Array.isArray(incoming) ? incoming : {};
+  const base = isPlainSpecObject(existing) ? existing : {};
+  const next = isPlainSpecObject(incoming) ? incoming : {};
   const out: Record<string, unknown> = {};
   let count = 0;
   for (const source of [base, next]) {
@@ -170,7 +201,7 @@ export function mergeKeySpecs(
       const safeKey = sanitizeKeySpecKey(k);
       if (!safeKey) continue;
       if (count >= MAX_KEY_SPEC_OBJECT_KEYS && !Object.hasOwn(out, safeKey)) continue;
-      const sanitized = sanitizeKeySpecValue(v, 0);
+      const sanitized = sanitizeKeySpecValue(v, 0, new WeakSet<object>([source]));
       if (sanitized !== undefined) {
         if (!Object.hasOwn(out, safeKey)) count += 1;
         out[safeKey] = sanitized;
@@ -187,7 +218,7 @@ export function mergeKeySpecs(
 export async function runMasterSpecsBackfill(
   options: BackfillSpecsOptions = {}
 ): Promise<BackfillSpecsResult> {
-  const apply = options.apply === true;
+  const apply = options?.apply === true;
   const { createClient } = await import('@supabase/supabase-js');
   const { EntityMatcher } = await import('../entity-matcher.js');
 
@@ -403,7 +434,7 @@ export async function runMasterSpecsBackfill(
 export async function runQuickSpecSyncAndAudit(
   options: BackfillSpecsOptions = {}
 ): Promise<number> {
-  const apply = options.apply === true;
+  const apply = options?.apply === true;
   const { createClient } = await import('@supabase/supabase-js');
   const rawSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
   const supabaseKey = (
