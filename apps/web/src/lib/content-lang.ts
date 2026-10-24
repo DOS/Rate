@@ -5,8 +5,15 @@
 const VIETNAMESE_RE =
   /[àãèìĩòõùũăâđêôơưạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵỷỹ]/iu;
 
+const MAX_CONTENT_LANG_LEN = 4_000;
+
 export function isVietnamese(text: string): boolean {
-  return VIETNAMESE_RE.test(text.normalize('NFC'));
+  if (typeof text !== 'string' || text.length === 0) return false;
+  const bounded =
+    text.length > MAX_CONTENT_LANG_LEN
+      ? text.slice(0, MAX_CONTENT_LANG_LEN)
+      : text;
+  return VIETNAMESE_RE.test(bounded.normalize('NFC'));
 }
 
 /**

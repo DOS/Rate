@@ -486,12 +486,25 @@ const DEFAULT_SMARTPHONE_SCHEMA: CategoryFilterSchema = {
   ],
 };
 
+const MAX_DYNAMIC_BRANDS = 100;
+const MAX_BRAND_NAME_LEN = 128;
+const MAX_STORAGE_GB = 1_048_576;
+const CATEGORY_CONTROL_CHAR_RE = /\p{Cc}/gu;
+
 export function getCategoryFilterSchema(
   categorySlug: string = 'smartphones',
   dynamicBrands: string[] = []
 ): CategoryFilterSchema {
-  const base: CategoryFilterSchema =
-    CATEGORY_FILTER_SCHEMAS[categorySlug] ?? DEFAULT_SMARTPHONE_SCHEMA;
+  const safeSlug =
+    typeof categorySlug === 'string'
+      ? categorySlug.replace(CATEGORY_CONTROL_CHAR_RE, '').trim()
+      : 'smartphones';
+  const base: CategoryFilterSchema = Object.hasOwn(
+    CATEGORY_FILTER_SCHEMAS,
+    safeSlug
+  )
+    ? CATEGORY_FILTER_SCHEMAS[safeSlug]!
+    : DEFAULT_SMARTPHONE_SCHEMA;
 
   const canonicalByLower = new Map<string, string>();
   for (const defBrand of base.defaultBrands) {
@@ -501,11 +514,17 @@ export function getCategoryFilterSchema(
     }
   }
 
+  const safeDynamic = Array.isArray(dynamicBrands)
+    ? dynamicBrands.slice(0, MAX_DYNAMIC_BRANDS)
+    : [];
   const seenLower = new Set<string>();
   const mergedBrands: string[] = [];
-  for (const candidate of [...dynamicBrands, ...base.defaultBrands]) {
+  for (const candidate of [...safeDynamic, ...base.defaultBrands]) {
     if (typeof candidate !== 'string') continue;
-    const trimmed = candidate.trim();
+    const trimmed = candidate
+      .replace(CATEGORY_CONTROL_CHAR_RE, '')
+      .trim()
+      .slice(0, MAX_BRAND_NAME_LEN);
     if (!trimmed) continue;
     const lower = trimmed.toLowerCase();
     if (seenLower.has(lower)) continue;
@@ -524,7 +543,8 @@ export function localizeCategoryFilterSchema(
   t: (key: string) => string
 ): CategoryFilterSchema {
   const slug =
-    schema.categorySlug in CATEGORY_FILTER_SCHEMAS
+    typeof schema?.categorySlug === 'string' &&
+    Object.hasOwn(CATEGORY_FILTER_SCHEMAS, schema.categorySlug)
       ? schema.categorySlug
       : 'smartphones';
 
@@ -547,11 +567,15 @@ export function localizeCategoryFilterSchema(
 }
 
 export function formatStorageLabel(gb: number): string {
-  if (gb >= 1024 && Number.isFinite(gb)) {
-    const tb = Number((gb / 1024).toFixed(2));
-    if (Math.abs(tb * 1024 - gb) < 1e-6) {
+  const n = Number(gb);
+  if (!Number.isFinite(n) || n <= 0 || n > MAX_STORAGE_GB) {
+    return '0GB';
+  }
+  if (n >= 1024) {
+    const tb = Number((n / 1024).toFixed(2));
+    if (Math.abs(tb * 1024 - n) < 1e-6) {
       return `${tb}TB`;
     }
   }
-  return `${gb}GB`;
+  return `${n}GB`;
 }
