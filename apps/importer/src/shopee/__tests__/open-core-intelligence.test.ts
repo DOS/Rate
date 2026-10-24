@@ -185,6 +185,96 @@ async function runSuite() {
   // Without the hyphen it needs the "XM": other "Wh1000" strings are not Sony.
   assert.equal(brandOf('Laptop Lenovo ThinkPad 50Wh1000 16 GB'), 'Lenovo');
   assert.equal(brandOf('Huawei FreeBuds WH1000'), 'Huawei');
+  // Apple lines no pattern knew are not iPhones (DOS/Rate#817).
+  assert.equal(
+    keyOf('iPad A16 Wifi 128GB 2025 | Chính hãng Apple Việt Nam'),
+    'apple:ipad-a16:128gb'
+  );
+  assert.equal(keyOf('Apple iPad (A16) Wi-Fi 128GB'), 'apple:ipad-a16:128gb');
+  assert.equal(keyOf('Apple iPad Gen 10 64GB'), keyOf('Apple iPad 10 64GB'));
+  assert.equal(
+    keyOf('MacBook Neo 13 inch A18 Pro 2026 6CPU 5GPU 8GB 256GB'),
+    'apple:macbook-neo:256gb'
+  );
+  assert.equal(categoryOf('MacBook Neo 13 inch A18 Pro 2026 6CPU 5GPU 8GB 256GB'), 'laptops');
+  assert.equal(keyOf('iPhone Air 256GB'), 'apple:iphone-air:256gb');
+  assert.equal(keyOf('iPhone Duo 512GB'), 'apple:iphone-duo:512gb');
+  // An A16 or later chip after the screen size or generation names the base iPad; an
+  // earlier chip leaves the generation.
+  assert.equal(keyOf('Apple iPad 11 inch (A16) 128GB'), 'apple:ipad-a16:128gb');
+  assert.equal(keyOf('iPad 11 (A16) WiFi 128GB - Hàng Chính Hãng'), 'apple:ipad-a16:128gb');
+  assert.equal(keyOf('Apple iPad Gen 11 A16 128GB'), 'apple:ipad-a16:128gb');
+  assert.equal(keyOf('iPad 11-inch (A16) 128GB'), 'apple:ipad-a16:128gb');
+  assert.equal(keyOf('iPad Gen 10 (A14 Bionic) 64GB'), keyOf('Apple iPad 10 64GB'));
+  assert.equal(keyOf('Apple iPad 10.9 inch (A14) 64GB'), keyOf('Apple iPad 10 64GB'));
+  assert.equal(keyOf('MacBook Neoprene Sleeve 13 inch'), 'apple:macbook:unknown');
+  assert.equal(
+    normalizer.normalize(createDummyShopeeProduct('MACBOOK NEO 13 INCH 256GB')).model,
+    'MacBook Neo'
+  );
+  assert.equal(
+    normalizer.normalize(createDummyShopeeProduct('iPhone Air 256GB')).model,
+    'iPhone Air'
+  );
+  assert.equal(
+    normalizer.normalize(createDummyShopeeProduct('iPhone Duo 512GB')).model,
+    'iPhone Duo'
+  );
+  assert.equal(
+    normalizer.normalize(createDummyShopeeProduct('iPad (a16) 128GB')).model,
+    'iPad A16'
+  );
+  // "(2nd generation)" is the generation number, one or two digits, any ordinal.
+  assert.equal(keyOf('Apple Watch Ultra (2nd generation) 49mm'), keyOf('Apple Watch Ultra 2 49mm'));
+  assert.equal(keyOf('AirPods Pro (2nd generation)'), keyOf('AirPods Pro 2'));
+  assert.equal(keyOf('AirPods Pro (2nd gen) USB-C'), keyOf('AirPods Pro 2 USB-C'));
+  assert.equal(keyOf('AirPods (3rd generation)'), keyOf('AirPods 3'));
+  assert.equal(keyOf('iPhone SE (3rd generation) 64GB'), keyOf('iPhone SE 3 64GB'));
+  assert.equal(keyOf('iPad (10th generation) 64GB'), keyOf('Apple iPad 10 64GB'));
+  assert.equal(
+    keyOf('Apple Watch Series (10th generation) 46mm'),
+    keyOf('Apple Watch Series 10 46mm')
+  );
+  // The persisted name keeps one space, and "Series" alone is not the SE.
+  const ultra2 = normalizer.normalize(
+    createDummyShopeeProduct('Apple Watch Ultra (2nd generation) 49mm')
+  );
+  assert.equal(ultra2.model, 'Watch Ultra 2');
+  assert.ok(!/\s{2}/.test(ultra2.name), ultra2.name);
+  assert.equal(keyOf('Apple Watch Series'), 'apple:watch:unknown');
+  // A case size or storage after "SE" is not its generation: one SE, not "SE 40"; an
+  // ordinal one is ("SE 2nd Gen").
+  assert.equal(keyOf('Apple Watch SE 40mm'), 'apple:watch-se:unknown');
+  assert.equal(keyOf('Apple Watch SE 44mm GPS'), 'apple:watch-se:unknown');
+  assert.equal(keyOf('Apple Watch SE 44 mm GPS'), 'apple:watch-se:unknown');
+  assert.equal(keyOf('Apple Watch SE 2nd Gen GPS 44mm'), 'apple:watch-se-2:unknown');
+  assert.equal(keyOf('Apple Watch SE 3rd Gen 44mm'), 'apple:watch-se-3:unknown');
+  assert.equal(keyOf('Apple Watch SE 2022 40mm'), 'apple:watch-se-2022:unknown');
+  assert.equal(keyOf('Apple Watch SE 32GB'), 'apple:watch-se:32gb');
+  assert.equal(keyOf('Apple Watch SE2 40mm'), 'apple:watch-se2:unknown');
+  // With no line matched, the family the title names first, else iPhone.
+  assert.equal(keyOf('MacBook M4'), 'apple:macbook:unknown');
+  assert.equal(keyOf('Apple "iPad" 256GB'), 'apple:ipad:256gb');
+  assert.equal(keyOf('Đặt trước iPhone mới, ưu đãi MacBook'), 'apple:iphone:unknown');
+  assert.equal(keyOf('Túi MacBook, iPhone mới'), 'apple:macbook:unknown');
+  assert.equal(keyOf('Apple Watch Band 45mm'), 'apple:watch:unknown');
+  assert.equal(keyOf('Apple AirPods Case'), 'apple:airpods:1gb');
+  assert.equal(keyOf('Apple Swatch band'), 'apple:iphone:unknown');
+  assert.equal(keyOf('Apple watchOS 11 hướng dẫn'), 'apple:iphone:unknown');
+  // Long whitespace stays linear in the Apple patterns (CodeQL js/polynomial-redos).
+  const appleRunStart = Date.now();
+  const spaces = ' '.repeat(50_000);
+  for (const title of [
+    `Apple iPad${spaces}x`,
+    `Apple iPad 11${spaces}x`,
+    `Apple iPad 11 (${spaces}x`,
+    `Apple Watch${spaces}(2nd generation)`,
+    `Apple Watch SE${spaces}2`,
+    `Apple Watch SE 2${spaces}mm`,
+  ]) {
+    keyOf(title);
+  }
+  assert.ok(Date.now() - appleRunStart < 1_000, 'a 50k-space Apple title must not hang');
   // "Omen" only as a word: Sennheiser "Momentum" is not HP.
   assert.equal(brandOf('Tai nghe Sennheiser Momentum 4 Wireless'), 'Sennheiser');
   assert.equal(brandOf('Laptop HP Omen 16 512GB'), 'HP');
