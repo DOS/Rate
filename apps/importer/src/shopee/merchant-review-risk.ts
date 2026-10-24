@@ -79,7 +79,7 @@ export function mapStoredReview(
   row: ReviewRow
 ): { result: AnalyzedReviewResult; raw: ReviewInputItem } | null {
   if (!row || typeof row !== 'object') return null;
-  const reviewId = typeof row.id === 'string' ? row.id.trim() : '';
+  const reviewId = normalizeSafeId(row.id);
   if (!reviewId) return null;
   const vf = Array.isArray(row.review_flags) ? row.review_flags[0] : row.review_flags;
   const rawVerdict = typeof vf?.verdict === 'string' ? vf.verdict.trim().toLowerCase() : null;
@@ -129,7 +129,10 @@ export function mapStoredReview(
     raw: {
       id: reviewId,
       rating_star: ratingStar,
-      comment: typeof row.comment === 'string' ? row.comment.slice(0, 4000) : '',
+      comment:
+        typeof row.comment === 'string'
+          ? row.comment.slice(0, 4000).replace(/(?:(?![\t\r\n])\p{Cc})+/gu, ' ')
+          : '',
     },
   };
 }
@@ -205,12 +208,29 @@ export function scoreMerchants(
   reviews: readonly ReviewRow[],
   masterMinByCluster: ReadonlyMap<string, number>
 ): MerchantScore[] {
-  const safeMerchants = Array.isArray(merchants)
-    ? merchants.filter((m): m is MerchantRow => Boolean(m && typeof m === 'object' && m.id))
-    : [];
-  const safeProducts = Array.isArray(products)
-    ? products.filter((p): p is ProductRow => Boolean(p && typeof p === 'object' && p.id))
-    : [];
+  const safeMerchants: MerchantRow[] = [];
+  if (Array.isArray(merchants)) {
+    for (const m of merchants) {
+      if (!m || typeof m !== 'object') continue;
+      const safeId = normalizeSafeId(m.id);
+      if (!safeId) continue;
+      safeMerchants.push({ ...m, id: safeId });
+    }
+  }
+  const safeProducts: ProductRow[] = [];
+  if (Array.isArray(products)) {
+    for (const p of products) {
+      if (!p || typeof p !== 'object') continue;
+      const safeId = normalizeSafeId(p.id);
+      if (!safeId) continue;
+      safeProducts.push({
+        ...p,
+        id: safeId,
+        merchant_id: normalizeSafeId(p.merchant_id),
+        cluster_id: normalizeSafeId(p.cluster_id),
+      });
+    }
+  }
   const safeReviews = Array.isArray(reviews)
     ? reviews.filter((rv): rv is ReviewRow => Boolean(rv && typeof rv === 'object'))
     : [];
@@ -236,7 +256,9 @@ export function scoreMerchants(
     { results: AnalyzedReviewResult[]; raws: ReviewInputItem[] }
   >();
   for (const row of safeReviews) {
-    const merchantId = productById.get(row.product_id)?.merchant_id;
+    const safeProductId = normalizeSafeId(row.product_id);
+    if (!safeProductId) continue;
+    const merchantId = productById.get(safeProductId)?.merchant_id;
     if (!merchantId || !merchantById.has(merchantId)) continue;
     const mapped = mapStoredReview(row);
     if (!mapped) continue;
@@ -268,9 +290,16 @@ export function scoreMerchants(
       rawFollowers <= MAX_MERCHANT_FOLLOWER_COUNT
         ? Math.floor(rawFollowers)
         : 0;
+    const safePlatform =
+      typeof merchant.platform === 'string'
+        ? merchant.platform
+            .replace(/\p{Cc}+/gu, '')
+            .trim()
+            .slice(0, 40)
+        : '';
     const risk = analyzer.evaluateMerchantRisk({
       merchantId,
-      platform: merchant.platform,
+      platform: safePlatform,
       isOfficial: Boolean(merchant.is_official),
       followerCount: safeFollowerCount,
       listingPrice: anomaly?.listingPrice,

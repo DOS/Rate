@@ -1053,6 +1053,46 @@ async function run() {
   assert.ok(!paCatalog[0]!.name.includes('\n'));
   assert.ok(paCatalog[0]!.name.length <= 200);
 
+  // DOS/Rate#928: merchant-review-risk ID normalization & comment sanitization
+  assert.equal(mapStoredReview(review('bad\u0000id', 'p-1', { verdict: 'authentic' })), null);
+  assert.equal(mapStoredReview(review('r'.repeat(130), 'p-1', { verdict: 'authentic' })), null);
+  const mapped928 = mapStoredReview(
+    review('  rev-928  ', 'p-1', { verdict: 'authentic' }, 5, 'Good\u0000phone\u0007\nYes')
+  );
+  assert.equal(mapped928?.result.review_id, 'rev-928');
+  assert.equal(mapped928?.raw.id, 'rev-928');
+  assert.equal(mapped928?.raw.comment, 'Good phone \nYes');
+
+  const scores928 = scoreMerchants(
+    new AiReviewAnalyzer(),
+    [
+      {
+        id: '  merch-928  ',
+        platform: '  shopee\u0007 ',
+        is_official: false,
+        follower_count: 100,
+      },
+      {
+        id: 'bad\u0000merch',
+        platform: 'shopee',
+        is_official: false,
+        follower_count: 100,
+      },
+    ],
+    [
+      {
+        id: '  prod-928  ',
+        merchant_id: 'merch-928',
+        cluster_id: '  clus-928  ',
+        price_current: 20_000_000,
+      },
+    ],
+    [review('  rev-928-1  ', 'prod-928', { verdict: 'authentic' }, 5, 'Pin khoe\u0000')],
+    new Map([['clus-928', 20_000_000]])
+  );
+  assert.equal(scores928.length, 1);
+  assert.equal(scores928[0]?.merchantId, 'merch-928');
+
   console.log('✅ Review risk backfill suite passed');
 }
 
