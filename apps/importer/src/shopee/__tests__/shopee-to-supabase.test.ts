@@ -10,6 +10,7 @@ import assert from 'node:assert/strict';
 import { trimTrailingSlashes } from '../ai-spec-enricher.js';
 import {
   ShopeeIngestionPipeline,
+  hasPopulatedSpecificationGroups,
   normalizeScrapedProductPrices,
   platformReviewIdFor,
 } from '../shopee-to-supabase.js';
@@ -709,6 +710,67 @@ async function runTests() {
   );
   console.log('  ✅ [7/7] DOS/Rate#821 HTTP URL sanitization & unpriced rejection passed');
 
+  // 8. DOS/Rate#879: platformReviewIdFor whitespace/control-char/overlong bounds, review videos/profileUrl sanitization & hasPopulatedSpecificationGroups
+  assert.equal(
+    platformReviewIdFor({ ...maskedReviewA, reviewId: '   \u0000\n  ' }),
+    idA,
+    'platformReviewIdFor must fall back to SHA-256 hash when reviewId is whitespace or control characters'
+  );
+  assert.equal(
+    platformReviewIdFor({ ...maskedReviewA, reviewId: '  sp-rev\u0000-879  ' }),
+    'sp-rev-879',
+    'platformReviewIdFor must strip control characters and trim explicit reviewId'
+  );
+  assert.equal(
+    platformReviewIdFor({ ...maskedReviewA, reviewId: 'r'.repeat(161) }),
+    idA,
+    'platformReviewIdFor must fall back to SHA-256 hash when reviewId exceeds 160 chars'
+  );
+  assert.equal(
+    hasPopulatedSpecificationGroups({ design: { colors: ['   ', ''] } }),
+    false,
+    'hasPopulatedSpecificationGroups must reject arrays of blank/whitespace strings'
+  );
+  assert.equal(hasPopulatedSpecificationGroups({ design: { colors: ['Black'] } }), true);
+
+  const sanitized879 = normalizeScrapedProductPrices({
+    ...createBaseProduct(),
+    reviews: [
+      {
+        reviewId: 'rev-879',
+        author: 'Buyer',
+        ratingStar: 5,
+        comment: 'Great',
+        images: [],
+        videos: [
+          'javascript:alert(1)',
+          'https://rate.vn/vid/1.mp4',
+          'https://rate.vn:8443/bad.mp4',
+        ],
+        reviewer: {
+          verifiedPurchase: true,
+          profileUrl: 'javascript:alert(1)',
+        },
+      },
+      {
+        reviewId: 'rev-879-ok',
+        author: 'Buyer 2',
+        ratingStar: 5,
+        comment: 'Nice',
+        images: [],
+        reviewer: {
+          verifiedPurchase: true,
+          profileUrl: 'https://shopee.vn/shop/12345',
+        },
+      },
+    ],
+  });
+  assert.deepEqual(sanitized879.reviews[0]?.videos, ['https://rate.vn/vid/1.mp4']);
+  assert.equal(sanitized879.reviews[0]?.reviewer?.profileUrl, undefined);
+  assert.equal(sanitized879.reviews[1]?.reviewer?.profileUrl, 'https://shopee.vn/shop/12345');
+  console.log(
+    '  ✅ [8/8] DOS/Rate#879 platformReviewIdFor, review videos/profileUrl & spec group bounds passed'
+  );
   console.log('\n🎉 ALL SHOPEE INGESTION PIPELINE TESTS PASSED!');
 }
 
