@@ -218,7 +218,8 @@ export function mergeKeySpecs(
 export async function runMasterSpecsBackfill(
   options: BackfillSpecsOptions = {}
 ): Promise<BackfillSpecsResult> {
-  const apply = options?.apply === true;
+  if (!options || typeof options !== 'object') options = {};
+  const apply = options.apply === true;
   const { createClient } = await import('@supabase/supabase-js');
   const { EntityMatcher } = await import('../entity-matcher.js');
 
@@ -434,7 +435,8 @@ export async function runMasterSpecsBackfill(
 export async function runQuickSpecSyncAndAudit(
   options: BackfillSpecsOptions = {}
 ): Promise<number> {
-  const apply = options?.apply === true;
+  if (!options || typeof options !== 'object') options = {};
+  const apply = options.apply === true;
   const { createClient } = await import('@supabase/supabase-js');
   const rawSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
   const supabaseKey = (
