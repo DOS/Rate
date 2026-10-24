@@ -162,10 +162,14 @@ export function LocaleSwitcher({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="d-inline-flex align-items-center justify-content-center rounded-2 gap-2 border transition-all"
+        className={`d-inline-flex align-items-center justify-content-center rounded-2 border transition-all ${
+          compact ? 'gap-1' : 'gap-2'
+        }`}
         style={{
           height: compact ? '38px' : '48px',
-          padding: compact ? '0 10px' : '0 14px',
+          // The compact switcher sits in the phone header, which has to fit
+          // 320px (DOS/Rate#809).
+          padding: compact ? '0 8px' : '0 14px',
           backgroundColor: isDarkHeader
             ? 'rgba(255, 255, 255, 0.12)'
             : 'var(--bs-card-bg, #ffffff)',
