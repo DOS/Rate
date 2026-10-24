@@ -10072,7 +10072,84 @@ async function runCoreArchitectureSuite() {
     );
 
     console.log(
-      '  ✅ [109/109] RPC Error Lookup, Sliding-Window Rate Limiter & Cache Parameter Canonicalization (#934) passed'
+      '  ✅ [109/110] RPC Error Lookup, Sliding-Window Rate Limiter & Cache Parameter Canonicalization (#934) passed'
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // 110. Supabase Cookie Env, Browser Access Token, Logger & Hero Bounds (#936)
+  // ---------------------------------------------------------------------------
+  {
+    const cookiesMod = await import('../../../lib/supabase/cookies');
+    const tokenMod = await import('../../../lib/auth/access-token');
+    const heroMerchantsMod = await import('../../../lib/hero-merchants');
+    const heroProductsMod = await import('../../../lib/hero-products');
+
+    assert.equal(
+      cookiesMod.hasSupabaseAuthCookie(
+        null as unknown as import('../../../lib/supabase/cookies').CookieRecord[]
+      ),
+      false,
+      'hasSupabaseAuthCookie must guard non-array inputs'
+    );
+    assert.equal(
+      cookiesMod.hasSupabaseAuthCookie([
+        { name: 'sb-proj-auth-token', value: '  \u0000  ' },
+      ]),
+      false,
+      'hasSupabaseAuthCookie must reject empty/whitespace/control-char cookie values'
+    );
+    assert.equal(
+      cookiesMod.hasSupabaseAuthCookie([
+        { name: 'sb-proj-auth-token.0', value: 'eyJhbGciOiJIUzI1NiJ9' },
+      ]),
+      true
+    );
+
+    assert.equal(
+      tokenMod.sanitizeBrowserAccessToken(
+        '  \u0007eyJhbGciOiJIUzI1NiJ9.payload.sig  '
+      ),
+      'eyJhbGciOiJIUzI1NiJ9.payload.sig'
+    );
+    assert.equal(
+      tokenMod.sanitizeBrowserAccessToken('token with spaces'),
+      null,
+      'sanitizeBrowserAccessToken must reject whitespace-containing tokens'
+    );
+    assert.equal(
+      tokenMod.sanitizeBrowserAccessToken('a'.repeat(17_000)),
+      null,
+      'sanitizeBrowserAccessToken must reject oversized tokens'
+    );
+
+    const merchants936 = heroMerchantsMod.toHeroMerchantSuggestions([
+      null as unknown as import('../../../lib/hero-merchants').HeroMerchantSuggestion,
+      {
+        id: 'm-1',
+        name: 'Shop 1',
+        platform: 'shopee',
+        platform_shop_id: 's-1',
+        is_official: true,
+        trust_score: true as unknown as number,
+        dosafe_risk_score: '   ' as unknown as number,
+      },
+    ]);
+    assert.equal(merchants936.length, 1);
+    assert.equal(
+      merchants936[0]?.trust_score,
+      0,
+      'clampScore100 must reject boolean true instead of coercing to 1'
+    );
+    assert.equal(merchants936[0]?.dosafe_risk_score, 0);
+
+    const products936 = heroProductsMod.toHeroProductSuggestions([
+      undefined as unknown as import('../../../lib/hero-products').HeroProductSuggestion,
+    ]);
+    assert.equal(products936.length, 0);
+
+    console.log(
+      '  ✅ [110/110] Supabase Cookie Env, Browser Access Token, Logger & Hero Bounds (#936) passed'
     );
   }
 
