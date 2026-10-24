@@ -296,8 +296,15 @@ function sanitizeExtensionField(raw: unknown, maxLen: number): string {
  */
 export function canonicalizeProductUrl(rawUrl?: string | null): string | null {
   if (!rawUrl || typeof rawUrl !== 'string') return null;
-  const trimmed = rawUrl.replace(/\p{Cc}+/gu, '').trim();
-  if (!trimmed || trimmed.length > MAX_EXTENSION_URL_LENGTH) return null;
+  if (/\p{Cc}/u.test(rawUrl)) return null;
+  const trimmed = rawUrl.trim();
+  if (
+    !trimmed ||
+    trimmed.length > MAX_EXTENSION_URL_LENGTH ||
+    /\s/.test(trimmed)
+  ) {
+    return null;
+  }
   try {
     const parsed = new URL(trimmed);
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
@@ -320,7 +327,13 @@ export function detectPlatformFromInput(
   rawPlatform?: string | null,
   rawUrl?: string | null
 ): SupportedEcommercePlatform | null {
-  const norm = (rawPlatform || '').trim().toLowerCase();
+  const norm =
+    typeof rawPlatform === 'string'
+      ? rawPlatform
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .toLowerCase()
+      : '';
   if (
     norm === 'shopee' ||
     norm === 'lazada' ||
@@ -336,8 +349,15 @@ export function detectPlatformFromInput(
     return norm;
   }
   if (!rawUrl || typeof rawUrl !== 'string') return null;
-  const trimmedUrl = rawUrl.replace(/\p{Cc}+/gu, '').trim();
-  if (!trimmedUrl || trimmedUrl.length > MAX_EXTENSION_URL_LENGTH) return null;
+  if (/\p{Cc}/u.test(rawUrl)) return null;
+  const trimmedUrl = rawUrl.trim();
+  if (
+    !trimmedUrl ||
+    trimmedUrl.length > MAX_EXTENSION_URL_LENGTH ||
+    /\s/.test(trimmedUrl)
+  ) {
+    return null;
+  }
   let host: string;
   try {
     const parsed = new URL(trimmedUrl);
@@ -379,8 +399,20 @@ export function detectAccessoryOrJunk(params: {
   url?: string | null;
   price?: number | null;
 }): { isAccessory: boolean; reason: string | null } {
-  const titleLower = (params.title || '').trim().toLowerCase();
-  const urlLower = (params.url || '').trim().toLowerCase();
+  const titleLower =
+    typeof params.title === 'string'
+      ? params.title
+          .replace(/\p{Cc}+/gu, ' ')
+          .trim()
+          .toLowerCase()
+      : '';
+  const urlLower =
+    typeof params.url === 'string'
+      ? params.url
+          .replace(/\p{Cc}+/gu, '')
+          .trim()
+          .toLowerCase()
+      : '';
   if (titleLower) {
     for (const kw of ACCESSORY_KEYWORDS_VI_EN) {
       if (titleLower.includes(kw)) {
@@ -466,8 +498,8 @@ export function extractStorageAndAmbiguity(params: {
     return Array.from(found).sort((a, b) => a - b);
   };
 
-  const variantText = (params.selectedVariant || '').trim();
-  const titleText = (params.title || '').trim();
+  const variantText = sanitizeExtensionField(params.selectedVariant, 160);
+  const titleText = sanitizeExtensionField(params.title, 400);
 
   const variantCaps = variantText ? parseCapacities(variantText) : [];
   const titleCaps = titleText ? parseCapacities(titleText) : [];
@@ -802,7 +834,8 @@ export async function lookupExtensionProduct(
       : null;
 
   const urlKeyword = extractKeywordFromProductUrl(canonicalUrl || params.url);
-  const effectiveTitle = (params.title || '').trim() || urlKeyword;
+  const effectiveTitle =
+    sanitizeExtensionField(params.title, 400) || urlKeyword;
 
   // Step 1: Accessory / Junk Gatekeeper
   const gatekeeper = detectAccessoryOrJunk({
@@ -859,9 +892,13 @@ export async function lookupExtensionProduct(
     ? parseEcommerceUrlOrQuery(canonicalUrl)
     : null;
   const rawExternalId =
-    (params.externalId || '').trim() || parsedFromUrl?.platformItemId || null;
+    sanitizeExtensionField(params.externalId, 128) ||
+    parsedFromUrl?.platformItemId ||
+    null;
   const effectiveShopId =
-    (params.shopId || '').trim() || parsedFromUrl?.platformShopId || null;
+    sanitizeExtensionField(params.shopId, 128) ||
+    parsedFromUrl?.platformShopId ||
+    null;
 
   // Normalize externalId (handle both `shopId_itemId`, platform prefixes, and raw `itemId`)
   const candidateItemIds = new Set<string>();
@@ -1080,12 +1117,18 @@ export async function lookupExtensionProduct(
   const topRival =
     sameCategoryPeers.find((peer) => peer.id !== matchedMaster!.id) || null;
 
-  const rawTotalRevs = Number(matchedMaster.total_reviews || 0);
+  const rawTotalRevs =
+    typeof matchedMaster.total_reviews === 'number'
+      ? matchedMaster.total_reviews
+      : 0;
   const totalRevs =
     Number.isFinite(rawTotalRevs) && rawTotalRevs > 0
       ? Math.floor(rawTotalRevs)
       : 0;
-  const rawAuthRevs = Number(matchedMaster.authentic_review_count ?? totalRevs);
+  const rawAuthRevs =
+    typeof matchedMaster.authentic_review_count === 'number'
+      ? matchedMaster.authentic_review_count
+      : totalRevs;
   const authRevs =
     Number.isFinite(rawAuthRevs) && rawAuthRevs >= 0
       ? Math.min(totalRevs, Math.floor(rawAuthRevs))
