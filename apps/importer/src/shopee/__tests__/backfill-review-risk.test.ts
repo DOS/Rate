@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { AiReviewAnalyzer } from '../ai-review-analyzer.js';
+import { computeRetryDelayMs, redactSensitiveString, sanitizeLogMeta } from '../logger.js';
 import { loadAndScoreMerchant, rescoreMerchantReviewRisk } from '../merchant-review-risk.js';
 import { mergeKeySpecs } from '../jobs/backfill-specs.js';
 import {
@@ -448,6 +449,58 @@ async function run() {
     verdict: 'tight_market_consensus',
     platform_count: 3,
   });
+
+  // DOS/Rate#840: computeRetryDelayMs bounds, redactSensitiveString & sanitizeLogMeta hardening, and mergeKeySpecs key safety
+  assert.equal(
+    Number.isInteger(computeRetryDelayMs(Number.NaN, Number.NaN, Number.NaN, () => Number.NaN)),
+    true,
+    'computeRetryDelayMs must return a finite integer when inputs are NaN'
+  );
+  assert.equal(
+    computeRetryDelayMs(0, 400, 400, () => 1.0),
+    400,
+    'computeRetryDelayMs must never exceed maxDelayMs when randomFn returns 1.0'
+  );
+
+  const fakeGeminiToken = `AIza${'x'.repeat(24)}`;
+  const fakeGhToken = `ghp_${'y'.repeat(24)}`;
+  const redacted = redactSensitiveString(
+    `GET https://api.example.com/v1?api_key=${'s'.repeat(12)}&token=${'t'.repeat(12)} ${fakeGeminiToken} ${fakeGhToken}`
+  );
+  assert.equal(redacted.includes('s'.repeat(12)), false);
+  assert.equal(redacted.includes('t'.repeat(12)), false);
+  assert.equal(redacted.includes(fakeGeminiToken), false);
+  assert.equal(redacted.includes(fakeGhToken), false);
+
+  const circularObj: Record<string, unknown> = {
+    ok: 'fine',
+    nanVal: Number.NaN,
+    apiKey: 'secret-val',
+  };
+  circularObj.self = circularObj;
+  const sanitizedMeta = sanitizeLogMeta(circularObj) as Record<string, unknown>;
+  assert.equal(sanitizedMeta.ok, 'fine');
+  assert.equal(sanitizedMeta.nanVal, null);
+  assert.equal(sanitizedMeta.apiKey, '[REDACTED]');
+  assert.equal(sanitizedMeta.self, '[Circular]');
+
+  const keyBoundedSpecs = mergeKeySpecs(
+    {
+      ['  display   type  ']: 'LTPO OLED',
+      ['constructor']: 'polluted',
+      ['K'.repeat(120)]: 'too-long-key',
+    },
+    {
+      nested: {
+        ['prototype']: 'blocked',
+        ['  refresh   rate  ']: '120Hz',
+      },
+    }
+  );
+  assert.equal(keyBoundedSpecs['display type'], 'LTPO OLED');
+  assert.equal(Object.hasOwn(keyBoundedSpecs, 'constructor'), false);
+  assert.equal(Object.hasOwn(keyBoundedSpecs, 'K'.repeat(120)), false);
+  assert.deepEqual(keyBoundedSpecs.nested, { 'refresh rate': '120Hz' });
 
   console.log('✅ Review risk backfill suite passed');
 }
