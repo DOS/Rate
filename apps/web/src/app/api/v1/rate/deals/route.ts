@@ -5,6 +5,7 @@ import {
   PUBLIC_API_CORS_HEADERS,
   jsonApiError,
   parseBoundedIntParam,
+  parseBoundedStringParam,
 } from '@/server/rate/api-handler';
 
 const VALID_CATEGORIES = new Set<CanonicalCategorySlug>([
@@ -39,9 +40,10 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const rawCat = (
-      searchParams.get('category') ||
-      searchParams.get('cat') ||
-      'all'
+      parseBoundedStringParam(
+        searchParams.get('category') || searchParams.get('cat'),
+        32
+      ) || 'all'
     )
       .trim()
       .toLowerCase();
@@ -51,7 +53,9 @@ export async function GET(request: Request) {
       ? (rawCat as CanonicalCategorySlug)
       : 'all';
 
-    const rawPlatform = (searchParams.get('platform') || 'all')
+    const rawPlatform = (
+      parseBoundedStringParam(searchParams.get('platform'), 32) || 'all'
+    )
       .trim()
       .toLowerCase();
     const platform = VALID_PLATFORMS.has(rawPlatform) ? rawPlatform : 'all';

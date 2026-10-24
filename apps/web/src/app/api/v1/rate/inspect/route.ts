@@ -12,6 +12,7 @@ import {
   jsonApiError,
   parseBoundedStringParam,
   parseOptionalVndPriceParam,
+  resolveInspectObservedPrices,
 } from '@/server/rate/api-handler';
 
 export async function OPTIONS() {
@@ -51,32 +52,15 @@ export async function GET(request: NextRequest) {
 
     const inspection = await getCachedInspectProductOrShopUrl(rawQuery);
     const canonicalUrl = canonicalizeProductUrl(rawQuery);
-    const rawObservedPrice = Number(
-      queryPrice ??
-        inspection.matchedOffer?.price_current ??
-        inspection.masterProduct?.min_price ??
-        0
-    );
-    const observedPrice =
-      Number.isFinite(rawObservedPrice) &&
-      rawObservedPrice > 0 &&
-      rawObservedPrice <= MAX_VALID_VND_PRICE
-        ? Math.round(rawObservedPrice)
-        : 0;
-    const rawObservedOriginalPrice = Number(
-      queryOriginalPrice ??
-        (queryPrice === null
-          ? inspection.matchedOffer?.price_original
-          : null) ??
-        0
-    );
-    const observedOriginalPrice =
-      Number.isFinite(rawObservedOriginalPrice) &&
-      rawObservedOriginalPrice > 0 &&
-      rawObservedOriginalPrice >= observedPrice &&
-      rawObservedOriginalPrice <= MAX_VALID_VND_PRICE
-        ? Math.round(rawObservedOriginalPrice)
-        : 0;
+    const { observedPrice, observedOriginalPrice } =
+      resolveInspectObservedPrices({
+        queryPrice,
+        queryOriginalPrice,
+        matchedOfferPriceCurrent: inspection.matchedOffer?.price_current,
+        matchedOfferPriceOriginal: inspection.matchedOffer?.price_original,
+        masterMinPrice: inspection.masterProduct?.min_price,
+        maxVnd: MAX_VALID_VND_PRICE,
+      });
 
     const gatekeeper = detectAccessoryOrJunk({
       title:

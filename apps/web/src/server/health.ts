@@ -53,11 +53,21 @@ async function probeDatabase(): Promise<CheckStatus> {
  * callers share one probe, and a result is reused for DATABASE_CHECK_TTL_MS.
  */
 export async function checkDatabase(now = Date.now()): Promise<CheckStatus> {
-  if (cached && now - cached.at < DATABASE_CHECK_TTL_MS) return cached.status;
+  const safeNow =
+    typeof now === 'number' && Number.isFinite(now) && now > 0
+      ? now
+      : Date.now();
+  if (
+    cached &&
+    safeNow >= cached.at &&
+    safeNow - cached.at < DATABASE_CHECK_TTL_MS
+  ) {
+    return cached.status;
+  }
   inFlight ??= probeDatabase()
     .catch((): CheckStatus => 'error')
     .then((status) => {
-      cached = { status, at: Date.now() };
+      cached = { status, at: safeNow };
       return status;
     })
     .finally(() => {
