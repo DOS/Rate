@@ -9420,7 +9420,146 @@ async function runCoreArchitectureSuite() {
     );
 
     console.log(
-      '  ✅ [104/104] Rate Domain Core Image URL, Vote Count & Parser Bounds (#894) passed'
+      '  ✅ [104/105] Rate Domain Core Image URL, Vote Count & Parser Bounds (#894) passed'
+    );
+  }
+
+  // 105. Rate API Offer Mapping, Risk Score & Master Row Bounds (#896)
+  {
+    const rateApiMod =
+      require('../../../lib/rate-api') as typeof import('../../../lib/rate-api');
+
+    assert.equal(
+      rateApiMod.normalizeOfferOriginalPrice(10_000_000, true),
+      null,
+      'normalizeOfferOriginalPrice must reject boolean true'
+    );
+    assert.equal(
+      rateApiMod.normalizeOfferOriginalPrice(10_000_000, '   '),
+      null,
+      'normalizeOfferOriginalPrice must reject whitespace-only strings'
+    );
+    assert.equal(
+      rateApiMod.normalizeOfferOriginalPrice(10_000_000, 12_345_678.6),
+      12_345_679,
+      'normalizeOfferOriginalPrice must round fractional VND prices'
+    );
+
+    const trustOffer = rateApiMod.mapTrustViewRowToMerchantOffer(
+      {
+        id: 'off-1\u0000',
+        merchant_id: 'm-1\u0000',
+        platform: 'SHOPEE\u0000',
+        title: 'iPhone 16 Pro\u0007',
+        price_current: '25990000',
+        price_original: true as unknown as number,
+        stock: -10,
+        rating_star: true as unknown as number,
+        rating_count: '20' as unknown as number,
+        url: 'https://shopee.vn/item\u0000',
+        merchant_name: 'Apple Flagship\u0000',
+        merchant_is_official: true,
+        merchant_location: '\u0000',
+        review_risk_breakdown: [] as unknown as Record<string, unknown>,
+      },
+      -500
+    );
+    assert.equal(trustOffer.id, 'off-1');
+    assert.equal(trustOffer.platform, 'shopee');
+    assert.equal(trustOffer.title, 'iPhone 16 Pro');
+    assert.equal(trustOffer.rating_star, 0);
+    assert.equal(trustOffer.merchant.follower_count, 0);
+    assert.equal(trustOffer.merchant.location, null);
+    assert.equal(trustOffer.merchant.review_risk_breakdown, null);
+
+    const mappedOffer = rateApiMod.mapOfferRowToMerchantOffer({
+      id: 'off-2\u0000',
+      platform: 'LAZADA\u0000',
+      title: 'Galaxy S24\u0000',
+      price_current: 20_000_000,
+      price_original: null,
+      stock: 5,
+      rating_star: 4.8,
+      rating_count: 10,
+      url: 'https://www.lazada.vn/products/s24.html\u0000',
+      merchants: {
+        id: 'm-2\u0000',
+        name: 'Samsung Official\u0000',
+        platform: 'LAZADA',
+        is_official: true,
+        rating_star: true as unknown as number,
+        follower_count: 1000,
+      },
+    });
+    assert.equal(
+      mappedOffer.merchant.rating_star,
+      null,
+      'mapOfferRowToMerchantOffer must reject boolean merchant rating_star'
+    );
+    assert.equal(mappedOffer.platform, 'lazada');
+
+    assert.equal(
+      rateApiMod.hasStoredReviewRisk({
+        metadata: { review_risk_score: NaN },
+      }),
+      false,
+      'hasStoredReviewRisk must reject NaN metadata.review_risk_score'
+    );
+    assert.equal(
+      rateApiMod.hasStoredReviewRisk({
+        metadata: { review_risk_score: -5 },
+      }),
+      false,
+      'hasStoredReviewRisk must reject negative metadata.review_risk_score'
+    );
+
+    const dynRisk = rateApiMod.computeDynamicReviewRisk(
+      [
+        {
+          id: 'r-1',
+          author_name: 'Buyer',
+          rating_star: 0,
+          comment: 'Missing rating star',
+          variation: null,
+          created_at: '2026-01-01T00:00:00Z',
+          reviewer_type: 'user',
+          upvotes: 0,
+          downvotes: 0,
+          report_count: 0,
+          helpfulness_weight: 1,
+          include_in_rating: true,
+          criteria_ratings: {},
+          verdict: 'authentic',
+          fake_probability: 0,
+          flag_category: 'authentic',
+          reason: null,
+          signals: null,
+        },
+      ],
+      { platform: '  FACEBOOK  ' }
+    );
+    assert.equal(
+      dynRisk.reviewRiskScore,
+      25,
+      'computeDynamicReviewRisk must ignore 0-star rows in 1-2 star complaint calculation and normalize platform case'
+    );
+
+    const normMaster = rateApiMod.normalizeMasterProductRow(
+      {
+        id: 'mp-1',
+        slug: 'apple-iphone-16-pro-max-256gb\u0000',
+        metadata: [] as unknown as Record<string, unknown>,
+      } as unknown as import('@repo/shared-data').MasterProduct,
+      'invalid-cat' as unknown as import('../../../lib/rate-api').CanonicalCategorySlug
+    );
+    assert.equal(normMaster.slug, 'apple-iphone-16-pro-max-256gb');
+    assert.equal(
+      normMaster.thumbnail,
+      '/img/devices/apple-iphone-16-pro-max-256gb.jpg'
+    );
+
+    console.log(
+      '  \u2705 [105/105] Rate API Offer Mapping, Risk Score & Master Row Bounds (#896) passed'
     );
   }
 
