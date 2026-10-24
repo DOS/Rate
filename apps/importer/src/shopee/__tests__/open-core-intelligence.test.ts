@@ -178,8 +178,8 @@ async function runSuite() {
   assert.equal(keyOf('Xiaomi Redmi Note 17 Pro 512GB'), 'xiaomi:redmi-note-17-pro:512gb');
   // Sony's WF/WH-1000XM line with or without the hyphen.
   assert.equal(keyOf('Tai nghe TWS Sony WF1000XM5'), keyOf('Tai nghe TWS Sony WF-1000XM5'));
-  assert.equal(keyOf('Tai nghe TWS Sony WF1000XM5'), 'sony:wf-1000xm5:1gb');
-  assert.equal(keyOf('Sony WH1000XM6 Bluetooth'), 'sony:wh-1000xm6:1gb');
+  assert.equal(keyOf('Tai nghe TWS Sony WF1000XM5'), 'sony:wf-1000xm5:unknown');
+  assert.equal(keyOf('Sony WH1000XM6 Bluetooth'), 'sony:wh-1000xm6:unknown');
   assert.equal(brandOf('Tai nghe WF1000XM5'), 'Sony');
   assert.equal(categoryOf('Sony WF1000XM5'), 'earbuds');
   // Without the hyphen it needs the "XM": other "Wh1000" strings are not Sony.
@@ -280,7 +280,7 @@ async function runSuite() {
   assert.equal(keyOf('Đặt trước iPhone mới, ưu đãi MacBook'), 'apple:iphone:unknown');
   assert.equal(keyOf('Túi MacBook, iPhone mới'), 'apple:macbook:unknown');
   assert.equal(keyOf('Apple Watch Band 45mm'), 'apple:watch:unknown');
-  assert.equal(keyOf('Apple AirPods Case'), 'apple:airpods:1gb');
+  assert.equal(keyOf('Apple AirPods Case'), 'apple:airpods:unknown');
   assert.equal(keyOf('Apple Swatch band'), 'apple:iphone:unknown');
   assert.equal(keyOf('Apple watchOS 11 hướng dẫn'), 'apple:iphone:unknown');
   // Long whitespace stays linear in the Apple patterns (CodeQL js/polynomial-redos).
@@ -487,7 +487,7 @@ async function runSuite() {
     createDummyShopeeProduct('Tai nghe Bluetooth Samsung Galaxy Buds3 Pro Chính hãng')
   );
   assert.equal(galaxyBuds3Pro.category_slug, 'earbuds');
-  assert.equal(galaxyBuds3Pro.model_key, 'samsung:galaxy-buds3-pro:1gb');
+  assert.equal(galaxyBuds3Pro.model_key, 'samsung:galaxy-buds3-pro:unknown');
   assert.equal(galaxyBuds3Pro.is_benchmark_enriched, true);
   console.log('  ✅ [3/5] Multi-Category Benchmark Enrichment (5 Categories, 12 Flagships) passed');
 
@@ -1002,10 +1002,10 @@ async function runSuite() {
   );
   assert.equal(unbenchmarkedEarbuds.category_slug, 'earbuds');
   assert.equal(unbenchmarkedEarbuds.specifications.category_slug, 'earbuds');
-  assert.equal(unbenchmarkedEarbuds.storage_gb, 1);
+  assert.equal(unbenchmarkedEarbuds.storage_gb, null);
   assert.equal(unbenchmarkedEarbuds.variant_name, 'Standard');
   assert.equal(unbenchmarkedEarbuds.needs_review, false);
-  assert.ok(unbenchmarkedEarbuds.model_key.endsWith(':1gb'));
+  assert.ok(unbenchmarkedEarbuds.model_key.endsWith(':unknown'));
   assert.equal(unbenchmarkedEarbuds.specifications.hardware?.os, 'Bluetooth 5.3 Audio DSP');
   assert.equal(unbenchmarkedEarbuds.specifications.cellular?.has_5g, false);
   assert.equal(unbenchmarkedEarbuds.specifications.cellular?.sim_type, 'No SIM');
@@ -1187,7 +1187,104 @@ async function runSuite() {
     assert.equal(brk521.suspicious_ratio_pct, 50);
   }
 
-  console.log('  ✅ [13/13] AiReviewAnalyzer MerchantRiskBreakdown Schema Alignment (#521) passed');
+  console.log('  ✅ [13/14] AiReviewAnalyzer MerchantRiskBreakdown Schema Alignment (#521) passed');
+
+  // =========================================================================
+  // 14. Earbud :unknown Keys, AirPods Pro Years, iPad RAM & Non-Phone Spec Hygiene (#643, #657)
+  // =========================================================================
+  {
+    // #643: Earbuds have no storage variant and must normalize to :unknown
+    assert.equal(keyOf('Tai nghe Samsung Galaxy Buds3 Pro'), 'samsung:galaxy-buds3-pro:unknown');
+    assert.equal(keyOf('AirPods Pro 2'), 'apple:airpods-pro-2:unknown');
+    assert.equal(keyOf('Apple AirPods 4'), 'apple:airpods-4:unknown');
+
+    // #643: FPT Shop AirPods Pro 2022 / 2023 map to AirPods Pro 2 (:unknown)
+    assert.equal(keyOf('Tai nghe AirPods Pro 2022'), 'apple:airpods-pro-2:unknown');
+    assert.equal(keyOf('Tai nghe AirPods Pro 2023'), 'apple:airpods-pro-2:unknown');
+    assert.equal(keyOf('Tai nghe AirPods Pro (2023) USB-C'), 'apple:airpods-pro-2:unknown');
+
+    // #643: FPT Shop names 256GB iPad Pro M5 by its 12GB RAM
+    const ipadProM5Ram = normalizer.normalize(
+      createDummyShopeeProduct('iPad Pro 11 M5 2025 WiFi 12GB')
+    );
+    assert.equal(ipadProM5Ram.model_key, 'apple:ipad-pro-m5:256gb');
+    assert.equal(ipadProM5Ram.ram_gb, 12);
+    assert.equal(ipadProM5Ram.storage_gb, 256);
+
+    const ipadAirRamOnly = normalizer.normalize(
+      createDummyShopeeProduct('iPad Air 11 M3 2025 WiFi 8GB')
+    );
+    assert.equal(ipadAirRamOnly.model_key, 'apple:ipad-air-m3:unknown');
+    assert.equal(ipadAirRamOnly.ram_gb, 8);
+    assert.equal(ipadAirRamOnly.storage_gb, null);
+
+    // #643: Vietnamese diacritic translocation in slugify & Cloudflare challenge brand safety
+    assert.equal(brandOf('Just a moment...'), 'Khác');
+    assert.equal(brandOf('Please wait a moment'), 'Khác');
+    assert.equal(keyOf('Just a moment...'), 'khac:just-a-moment:unknown');
+    assert.equal(
+      keyOf('Bàn phím dành cho Laptop Lenovo ThinkPad X1'),
+      'lenovo:ban-phim-danh-cho:unknown'
+    );
+    assert.equal(keyOf('Đồng hồ Samsung Galaxy Watch7 44mm'), 'samsung:galaxy-watch7:unknown');
+
+    // #657 Case 1: Title-stated RAM beats benchmark RAM
+    const s26Ultra12Gb = normalizer.normalize(
+      createDummyShopeeProduct('Samsung Galaxy S26 Ultra - 12GB/256GB')
+    );
+    assert.equal(s26Ultra12Gb.model_key, 'samsung:galaxy-s26-ultra:256gb');
+    assert.equal(s26Ultra12Gb.ram_gb, 12);
+    assert.equal(s26Ultra12Gb.specifications.hardware?.ram_gb, 12);
+    assert.equal(s26Ultra12Gb.key_specs.ram, '12GB');
+
+    const s26UltraBenchmarkRam = normalizer.normalize(
+      createDummyShopeeProduct('Samsung Galaxy S26 Ultra 256GB')
+    );
+    assert.equal(s26UltraBenchmarkRam.ram_gb, 16);
+    assert.equal(s26UltraBenchmarkRam.specifications.hardware?.ram_gb, 16);
+
+    // #657 Case 2 & 3: Earbuds, watches, tablets, laptops get no phone-shaped storage/RAM/screen/SAR/Face ID
+    const wf1000xm6 = normalizer.normalize(createDummyShopeeProduct('Tai nghe Sony WF-1000XM6'));
+    assert.equal(wf1000xm6.model_key, 'sony:wf-1000xm6:unknown');
+    assert.equal(wf1000xm6.ram_gb, null);
+    assert.equal(wf1000xm6.storage_gb, null);
+    assert.equal(wf1000xm6.screen_size_inch, null);
+    assert.equal(wf1000xm6.specifications.hardware?.ram_gb, undefined);
+    assert.equal(wf1000xm6.specifications.hardware?.storage_gb, undefined);
+    assert.equal(wf1000xm6.specifications.display?.size_inch, undefined);
+    assert.equal(wf1000xm6.specifications.display?.refresh_rate_hz, undefined);
+    assert.equal(wf1000xm6.specifications.display?.ppi, undefined);
+    assert.equal(wf1000xm6.specifications.regulatory?.sar_head, undefined);
+    assert.equal(wf1000xm6.specifications.regulatory?.sar_body, undefined);
+    assert.equal(wf1000xm6.specifications.design?.biometrics, undefined);
+
+    const airpodsPro2 = normalizer.normalize(createDummyShopeeProduct('Tai nghe AirPods Pro 2'));
+    assert.equal(airpodsPro2.model_key, 'apple:airpods-pro-2:unknown');
+    assert.equal(airpodsPro2.ram_gb, null);
+    assert.equal(airpodsPro2.storage_gb, null);
+    assert.equal(airpodsPro2.screen_size_inch, null);
+    assert.equal(airpodsPro2.specifications.design?.biometrics, undefined);
+    assert.equal(airpodsPro2.specifications.regulatory?.sar_head, undefined);
+
+    assert.equal(ipad.specifications.design?.biometrics, undefined);
+    assert.equal(ipad.specifications.regulatory?.sar_head, undefined);
+    assert.equal(macbook.specifications.design?.biometrics, undefined);
+    assert.equal(macbook.specifications.regulatory?.sar_head, undefined);
+    assert.equal(watchUltra.ram_gb, null);
+    assert.equal(watchUltra.specifications.design?.biometrics, undefined);
+    assert.equal(watchUltra.specifications.regulatory?.sar_head, undefined);
+
+    // Smartphones retain their template SAR and biometrics
+    assert.equal(s24.specifications.regulatory?.sar_head, '1.10 W/kg');
+    assert.equal(s24.specifications.regulatory?.sar_body, '1.15 W/kg');
+    assert.equal(s24.specifications.design?.biometrics, 'Fingerprint (under display), Face unlock');
+    const iphone16 = normalizer.normalize(createDummyShopeeProduct('iPhone 16 Pro Max 256GB'));
+    assert.equal(iphone16.specifications.design?.biometrics, 'Face ID');
+    assert.equal(iphone16.specifications.regulatory?.sar_head, '1.10 W/kg');
+  }
+  console.log(
+    '  ✅ [14/14] Earbud :unknown Keys, AirPods Pro Years, iPad RAM & Non-Phone Spec Hygiene (#643, #657) passed'
+  );
 
   console.log('🎉 All @repo/crawlers Open-Core Intelligence tests passed!');
 }
