@@ -15,7 +15,7 @@ import { pathToFileURL } from 'node:url';
 import dotenv from 'dotenv';
 import { ProductSpecificationsSchema, type ProductSpecifications } from '@repo/shared-data';
 import { AiSpecEnricher, mergeProductSpecifications } from '../ai-spec-enricher.js';
-import { fetchAllPages } from '../paging.js';
+import { fetchAllPages, resolveBackfillSupabaseTarget } from '../paging.js';
 import {
   CANONICAL_BACKFILL_SPECS_BY_MODEL_KEY,
   FLAGSHIP_DEVICES_TO_SEED,
@@ -105,19 +105,10 @@ export const MAX_KEY_SPEC_OBJECT_KEYS = 100;
 const UNSAFE_KEY_SPEC_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 
 function stripKeySpecControlChars(input: string): string {
-  let out = '';
-  for (let i = 0; i < input.length; i++) {
-    const code = input.charCodeAt(i);
-    if (code > 0x1f && code !== 0x7f) {
-      out += input[i];
-    } else {
-      out += ' ';
-    }
-  }
-  return out;
+  return input.replace(/\p{Cc}+/gu, ' ');
 }
 
-function sanitizeKeySpecKey(key: string): string | null {
+export function sanitizeKeySpecKey(key: string): string | null {
   const cleaned = stripKeySpecControlChars(key).replace(/\s+/g, ' ').trim();
   if (!cleaned || cleaned.length > MAX_KEY_SPEC_KEY_LENGTH || UNSAFE_KEY_SPEC_KEYS.has(cleaned)) {
     return null;
@@ -200,11 +191,12 @@ export async function runMasterSpecsBackfill(
   const { createClient } = await import('@supabase/supabase-js');
   const { EntityMatcher } = await import('../entity-matcher.js');
 
-  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY || '';
-  if (!url || !key) {
+  const rawUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+  const key = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY || '').trim();
+  if (!rawUrl.trim() || !key) {
     throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in environment.');
   }
+  const { url } = resolveBackfillSupabaseTarget(rawUrl);
 
   const supabase = scopeSupabaseToRate(createClient(url, key, { auth: { persistSession: false } }));
   const enricher = new AiSpecEnricher();
@@ -413,14 +405,17 @@ export async function runQuickSpecSyncAndAudit(
 ): Promise<number> {
   const apply = options.apply === true;
   const { createClient } = await import('@supabase/supabase-js');
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-  const supabaseKey =
+  const rawSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+  const supabaseKey = (
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    process.env.SUPABASE_ANON_KEY;
-  if (!supabaseUrl || !supabaseKey) {
+    process.env.SUPABASE_ANON_KEY ||
+    ''
+  ).trim();
+  if (!rawSupabaseUrl?.trim() || !supabaseKey) {
     throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
   }
+  const { url: supabaseUrl } = resolveBackfillSupabaseTarget(rawSupabaseUrl);
   const supabase = scopeSupabaseToRate(
     createClient(supabaseUrl, supabaseKey, {
       auth: { persistSession: false },
