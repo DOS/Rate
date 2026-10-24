@@ -25,6 +25,20 @@ export const MERCHANT_RISK_SELECT = 'id, platform, is_official, follower_count, 
 export const PRODUCT_RISK_SELECT = 'id, merchant_id, cluster_id, price_current';
 export const REVIEW_RISK_SELECT =
   'id, product_id, rating_star, comment, review_flags(verdict, flag_category, include_in_rating)';
+export const MAX_MERCHANT_FOLLOWER_COUNT = 100_000_000;
+
+const VALID_STORED_VERDICTS = new Set<AnalyzedReviewResult['verdict']>([
+  'authentic',
+  'suspicious',
+  'fake',
+]);
+const VALID_STORED_FLAG_CATEGORIES = new Set<AnalyzedReviewResult['flag_category']>([
+  'authentic',
+  'low_value_coin_spam',
+  'seeding_fake',
+  'competitor_sabotage',
+  'review_bombing',
+]);
 
 export interface MerchantRow {
   id: string;
@@ -65,15 +79,23 @@ export function mapStoredReview(
   row: ReviewRow
 ): { result: AnalyzedReviewResult; raw: ReviewInputItem } | null {
   const vf = Array.isArray(row.review_flags) ? row.review_flags[0] : row.review_flags;
-  const verdict = vf?.verdict ?? null;
-  if (verdict === 'unanalyzed') return null;
-  let category =
-    vf?.flag_category ||
-    (verdict === 'fake'
+  const rawVerdict = typeof vf?.verdict === 'string' ? vf.verdict.trim().toLowerCase() : null;
+  if (rawVerdict === 'unanalyzed') return null;
+  const verdict: AnalyzedReviewResult['verdict'] =
+    rawVerdict && VALID_STORED_VERDICTS.has(rawVerdict as AnalyzedReviewResult['verdict'])
+      ? (rawVerdict as AnalyzedReviewResult['verdict'])
+      : 'authentic';
+  const rawCategory =
+    typeof vf?.flag_category === 'string' ? vf.flag_category.trim().toLowerCase() : '';
+  let category: AnalyzedReviewResult['flag_category'] = VALID_STORED_FLAG_CATEGORIES.has(
+    rawCategory as AnalyzedReviewResult['flag_category']
+  )
+    ? (rawCategory as AnalyzedReviewResult['flag_category'])
+    : verdict === 'fake'
       ? 'seeding_fake'
       : verdict === 'suspicious'
         ? 'low_value_coin_spam'
-        : 'authentic');
+        : 'authentic';
   // The web counts a 'fake' verdict as seeding unless the category says
   // sabotage or bombing (DOS/Rate#645).
   if (verdict === 'fake' && category !== 'competitor_sabotage' && category !== 'review_bombing') {
@@ -82,11 +104,14 @@ export function mapStoredReview(
   const includeInRating = Boolean(
     vf?.include_in_rating ?? (category === 'authentic' && verdict !== 'fake')
   );
+  const parsedStar = Number(row.rating_star);
+  const ratingStar =
+    Number.isFinite(parsedStar) && parsedStar >= 1 && parsedStar <= 5 ? Math.round(parsedStar) : 5;
   return {
     result: {
       review_id: row.id,
-      verdict: (verdict ?? 'authentic') as AnalyzedReviewResult['verdict'],
-      flag_category: category as AnalyzedReviewResult['flag_category'],
+      verdict,
+      flag_category: category,
       fake_probability: 0,
       include_in_rating: includeInRating,
       helpfulness_weight: includeInRating ? 1 : 0,
@@ -95,8 +120,8 @@ export function mapStoredReview(
     },
     raw: {
       id: row.id,
-      rating_star: Number(row.rating_star || 5),
-      comment: row.comment || '',
+      rating_star: ratingStar,
+      comment: typeof row.comment === 'string' ? row.comment.slice(0, 4000) : '',
     },
   };
 }
@@ -200,11 +225,18 @@ export function scoreMerchants(
       officialByMerchant,
       masterMinByCluster
     );
+    const rawFollowers = Number(merchant.follower_count);
+    const safeFollowerCount =
+      Number.isFinite(rawFollowers) &&
+      rawFollowers >= 0 &&
+      rawFollowers <= MAX_MERCHANT_FOLLOWER_COUNT
+        ? Math.floor(rawFollowers)
+        : 0;
     const risk = analyzer.evaluateMerchantRisk({
       merchantId,
       platform: merchant.platform,
       isOfficial: Boolean(merchant.is_official),
-      followerCount: Number(merchant.follower_count) || 0,
+      followerCount: safeFollowerCount,
       listingPrice: anomaly?.listingPrice,
       canonicalMinPrice: anomaly?.canonicalMinPrice,
       reviewResults: bucket.results,

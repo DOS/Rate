@@ -1,4 +1,7 @@
 export const DEFAULT_FETCH_ALL_MAX_PAGES = 500;
+export const MAX_FETCH_ALL_PAGE_SIZE = 1000;
+export const MAX_FETCH_ALL_PAGES_CEILING = 10_000;
+export const MAX_SHOPEE_ENQUEUE_URL_LENGTH = 2048;
 
 /**
  * Reads every row of a query in pages. One PostgREST response stops at the
@@ -15,12 +18,17 @@ export async function fetchAllPages<T>(
     from: number,
     to: number
   ) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
-  pageSize = 1000,
+  pageSize = MAX_FETCH_ALL_PAGE_SIZE,
   maxPages = DEFAULT_FETCH_ALL_MAX_PAGES
 ): Promise<T[]> {
-  const safePageSize = Number.isFinite(pageSize) && pageSize > 0 ? Math.floor(pageSize) : 1000;
+  const safePageSize =
+    Number.isFinite(pageSize) && pageSize > 0
+      ? Math.min(MAX_FETCH_ALL_PAGE_SIZE, Math.floor(pageSize))
+      : MAX_FETCH_ALL_PAGE_SIZE;
   const safeMaxPages =
-    Number.isFinite(maxPages) && maxPages > 0 ? Math.floor(maxPages) : DEFAULT_FETCH_ALL_MAX_PAGES;
+    Number.isFinite(maxPages) && maxPages > 0
+      ? Math.min(MAX_FETCH_ALL_PAGES_CEILING, Math.floor(maxPages))
+      : DEFAULT_FETCH_ALL_MAX_PAGES;
   const rows: T[] = [];
   let nonEmptyPages = 0;
   for (let from = 0; ;) {
@@ -40,14 +48,19 @@ export async function fetchAllPages<T>(
 /**
  * Validates and extracts `{ shopId, itemId, normalizedUrl }` from a Shopee Vietnam
  * product URL (`https://shopee.vn/...-i.<shopId>.<itemId>`, `/product/<shopId>/<itemId>`,
- * or `/opaanlp/<shopId>/<itemId>`). Rejects non-HTTP(S) schemes and non-Shopee hosts.
+ * or `/opaanlp/<shopId>/<itemId>`). Rejects non-HTTP(S) schemes, credentials, control
+ * characters, and non-Shopee hosts.
  */
 export function parseShopeeEnqueueUrl(
   rawUrl: string
 ): { shopId: string; itemId: string; normalizedUrl: string } | null {
   if (typeof rawUrl !== 'string') return null;
   const trimmed = rawUrl.trim();
-  if (!trimmed) return null;
+  if (!trimmed || trimmed.length > MAX_SHOPEE_ENQUEUE_URL_LENGTH) return null;
+  for (let i = 0; i < trimmed.length; i++) {
+    const code = trimmed.charCodeAt(i);
+    if (code <= 0x20 || code === 0x7f) return null;
+  }
   let parsed: URL;
   try {
     parsed = new URL(trimmed);
@@ -57,13 +70,16 @@ export function parseShopeeEnqueueUrl(
   if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
     return null;
   }
+  if (parsed.username || parsed.password) {
+    return null;
+  }
   const host = parsed.hostname.toLowerCase();
   if (host !== 'shopee.vn' && !host.endsWith('.shopee.vn')) {
     return null;
   }
   const match =
-    parsed.pathname.match(/(?:a-)?i\.(\d+)\.(\d+)/i) ||
-    parsed.pathname.match(/\/(?:product|opaanlp)\/(\d+)\/(\d+)/i);
+    parsed.pathname.match(/(?:a-)?i\.([1-9]\d{0,19})\.([1-9]\d{0,19})(?!\d)/i) ||
+    parsed.pathname.match(/\/(?:product|opaanlp)\/([1-9]\d{0,19})\/([1-9]\d{0,19})(?!\d)/i);
   if (!match || !match[1] || !match[2]) {
     return null;
   }
