@@ -478,11 +478,43 @@ async function run() {
     apiKey: 'secret-val',
   };
   circularObj.self = circularObj;
+  const sharedChild = { status: 'active' };
+  circularObj.firstRef = sharedChild;
+  circularObj.secondRef = sharedChild;
+  circularObj.d1 = {
+    d2: {
+      d3: {
+        d4: {
+          leafNote: `Bearer ${'z'.repeat(24)}`,
+          tooDeepObj: { nope: true },
+        },
+      },
+    },
+  };
   const sanitizedMeta = sanitizeLogMeta(circularObj) as Record<string, unknown>;
   assert.equal(sanitizedMeta.ok, 'fine');
   assert.equal(sanitizedMeta.nanVal, null);
   assert.equal(sanitizedMeta.apiKey, '[REDACTED]');
   assert.equal(sanitizedMeta.self, '[Circular]');
+  assert.deepEqual(sanitizedMeta.firstRef, { status: 'active' });
+  assert.deepEqual(
+    sanitizedMeta.secondRef,
+    { status: 'active' },
+    'Shared non-circular DAG object references must not be marked [Circular]'
+  );
+  const d4Out = (
+    ((sanitizedMeta.d1 as Record<string, unknown>).d2 as Record<string, unknown>).d3 as Record<
+      string,
+      unknown
+    >
+  ).d4 as Record<string, unknown>;
+  assert.equal(d4Out.leafNote, 'Bearer [REDACTED]');
+  assert.equal(d4Out.tooDeepObj, '[MaxDepth]');
+
+  const boundaryStraddle = `${'a'.repeat(7990)} http://admin:${'p'.repeat(16)}@proxy.example.com`;
+  const redactedBoundary = redactSensitiveString(boundaryStraddle);
+  assert.equal(redactedBoundary.includes('p'.repeat(16)), false);
+  assert.equal(redactedBoundary.length <= 8000, true);
 
   const keyBoundedSpecs = mergeKeySpecs(
     {

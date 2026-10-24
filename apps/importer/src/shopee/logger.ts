@@ -103,7 +103,8 @@ export function sanitizeAiGeneratedText(raw: unknown, maxLen = 400): string {
  */
 export function redactSensitiveString(raw: string): string {
   if (!raw) return raw;
-  const bounded = raw.length > MAX_LOG_STRING_LENGTH ? raw.slice(0, MAX_LOG_STRING_LENGTH) : raw;
+  const maxScanLen = MAX_LOG_STRING_LENGTH + 512;
+  const bounded = raw.length > maxScanLen ? raw.slice(0, maxScanLen) : raw;
   return (
     bounded
       // Proxy credentials in URLs: http://user:pass@host -> http://u***:p***@host
@@ -129,6 +130,7 @@ export function redactSensitiveString(raw: string): string {
         /\b([A-Za-z0-9._%+-])[A-Za-z0-9._%+-]*@([A-Za-z0-9.-]+\.[A-Za-z]{2,})\b/g,
         '$1***@$2'
       )
+      .slice(0, MAX_LOG_STRING_LENGTH)
   );
 }
 
@@ -142,7 +144,7 @@ export function sanitizeLogMeta(
   depth = 0,
   seen: WeakSet<object> = new WeakSet<object>()
 ): unknown {
-  if (depth > 4 || value === null || value === undefined) return value;
+  if (value === null || value === undefined) return value;
   if (typeof value === 'string') return redactSensitiveString(value);
   if (typeof value === 'boolean') return value;
   if (typeof value === 'number') return Number.isFinite(value) ? value : null;
@@ -154,23 +156,28 @@ export function sanitizeLogMeta(
   }
   if (typeof value === 'object') {
     if (seen.has(value)) return '[Circular]';
+    if (depth > 4) return '[MaxDepth]';
     seen.add(value);
-    if (Array.isArray(value)) {
-      return value.slice(0, 50).map(item => sanitizeLogMeta(item, depth + 1, seen));
-    }
-    const out: Record<string, unknown> = {};
-    let count = 0;
-    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-      if (UNSAFE_OBJECT_KEYS.has(k)) continue;
-      if (count >= MAX_LOG_META_KEYS) break;
-      count += 1;
-      if (SENSITIVE_META_KEY_RE.test(k)) {
-        out[k] = '[REDACTED]';
-      } else {
-        out[k] = sanitizeLogMeta(v, depth + 1, seen);
+    try {
+      if (Array.isArray(value)) {
+        return value.slice(0, 50).map(item => sanitizeLogMeta(item, depth + 1, seen));
       }
+      const out: Record<string, unknown> = {};
+      let count = 0;
+      for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+        if (UNSAFE_OBJECT_KEYS.has(k)) continue;
+        if (count >= MAX_LOG_META_KEYS) break;
+        count += 1;
+        if (SENSITIVE_META_KEY_RE.test(k)) {
+          out[k] = '[REDACTED]';
+        } else {
+          out[k] = sanitizeLogMeta(v, depth + 1, seen);
+        }
+      }
+      return out;
+    } finally {
+      seen.delete(value);
     }
-    return out;
   }
   return redactSensitiveString(String(value));
 }
