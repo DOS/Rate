@@ -10303,7 +10303,134 @@ async function runCoreArchitectureSuite() {
     assert.equal(openApiRes940.status, 200);
 
     console.log(
-      '  ✅ [112/112] Merchant Directory Filters, CSV Coercion, SEO Locale & OpenAPI Route (#940) passed'
+      '  ✅ [112/113] Merchant Directory Filters, CSV Coercion, SEO Locale & OpenAPI Route (#940) passed'
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // 113. rate-domain-core Route Hrefs, Merchant Filter/Sort & URL ID Parsing (#942)
+  // ---------------------------------------------------------------------------
+  {
+    const domCoreMod = await import('../../../lib/rate-domain-core');
+
+    assert.equal(
+      domCoreMod.getCategoryRouteHref('  TABLETS\u0000 '),
+      '/tablets',
+      'getCategoryRouteHref must strip control chars and lowercase canonical category slugs'
+    );
+    assert.equal(
+      domCoreMod.getCategoryRouteHref('  \u0000  '),
+      '/smartphones',
+      'getCategoryRouteHref must default empty/whitespace slugs to /smartphones'
+    );
+    assert.equal(
+      domCoreMod.resolveProductImageUrl('  APPLE-IPHONE-16-128GB\u0000 '),
+      '/img/devices/apple-iphone-16-128gb.jpg',
+      'resolveProductImageUrl must normalize string slug before KNOWN_LOCAL_DEVICE_IMAGES lookup'
+    );
+    assert.equal(
+      domCoreMod.resolveProductImageUrl({
+        slug: '  SAMSUNG-GALAXY-S24-ULTRA-256GB\u0007 ',
+      }),
+      '/img/devices/samsung-galaxy-s24-ultra-256gb.jpg',
+      'resolveProductImageUrl must normalize object slug before KNOWN_LOCAL_DEVICE_IMAGES lookup'
+    );
+    assert.equal(
+      domCoreMod.getMasterProductHref({
+        slug: '  /apple-iphone-16-128gb\u0000/ ',
+        name: 'iPhone 16',
+      }),
+      '/smartphones/apple-iphone-16-128gb',
+      'getMasterProductHref must strip control characters and leading/trailing slashes from product.slug'
+    );
+
+    assert.deepEqual(
+      domCoreMod.filterAndSortMerchants(
+        null as unknown as import('../../../lib/rate-domain-core').MerchantSummary[]
+      ),
+      [],
+      'filterAndSortMerchants must guard non-array merchants input'
+    );
+    const merchants942 = domCoreMod.filterAndSortMerchants(
+      [
+        {
+          id: 'm1',
+          name: 'Apple\u0000Flagship',
+          platform: 'shopee',
+          platform_shop_id: '88201679',
+          slug: null,
+          url: null,
+          is_official: true,
+          rating_star: 4.9,
+          follower_count: 1000,
+          location: 'VN',
+          dosafe_risk_score: 5,
+          review_risk_score: Number.NaN,
+          risk_score: 5,
+          trust_score: 90,
+          product_count: 10,
+          min_price: null,
+          max_price: null,
+          review_risk_breakdown: {
+            total_reviews: 0,
+            authentic_count: 0,
+            coin_spam_count: 0,
+            seeding_fake_count: 0,
+            sabotage_or_bombing_count: 0,
+            suspicious_ratio_pct: 0,
+          },
+          updated_at: null,
+        },
+      ],
+      {
+        q: '  apple\u0007flagship  ',
+        minTrust: Number.POSITIVE_INFINITY,
+        sort: 'seeding_asc',
+      }
+    );
+    assert.equal(
+      merchants942.length,
+      1,
+      'filterAndSortMerchants must ignore non-finite minTrust and match control-char stripped q'
+    );
+
+    assert.equal(
+      domCoreMod.parseEcommerceUrlOrQuery(
+        'https://user:pass@shopee.vn/item-i.88201679.18093055535'
+      ).isUrl,
+      false,
+      'parseEcommerceUrlOrQuery must reject credentialed URLs'
+    );
+    assert.equal(
+      domCoreMod.parseEcommerceUrlOrQuery(
+        'https://shopee.vn/item-i.0.18093055535'
+      ).platformItemId,
+      null,
+      'parseEcommerceUrlOrQuery must reject zero shopId on Shopee URLs'
+    );
+    assert.equal(
+      domCoreMod.parseEcommerceUrlOrQuery(
+        'https://www.lazada.vn/products/item-i0.html'
+      ).platformItemId,
+      null,
+      'parseEcommerceUrlOrQuery must reject zero itemId on Lazada URLs'
+    );
+    assert.equal(
+      domCoreMod.parseEcommerceUrlOrQuery('https://tiki.vn/item-p00123.html')
+        .platformItemId,
+      null,
+      'parseEcommerceUrlOrQuery must reject leading-zero itemId on Tiki URLs'
+    );
+    assert.equal(
+      domCoreMod.parseEcommerceUrlOrQuery(
+        'https://shop.tiktok.com/view/product/00000000'
+      ).platformItemId,
+      null,
+      'parseEcommerceUrlOrQuery must reject zero/leading-zero product IDs on TikTok URLs'
+    );
+
+    console.log(
+      '  ✅ [113/113] rate-domain-core Route Hrefs, Merchant Filter/Sort & URL ID Parsing (#942) passed'
     );
   }
 
