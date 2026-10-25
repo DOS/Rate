@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { BsSliders } from 'react-icons/bs';
 import { Link } from '@/lib/navigation';
@@ -171,6 +171,8 @@ export default function VersusInteractiveScoreboard({
 }: VersusInteractiveScoreboardProps) {
   const t = useTranslations('compare');
   const locale = useLocale();
+  const useCaseLabelId = useId();
+  const slidersPanelId = useId();
   const [persona, setPersona] = useState<PersonaPresetKey>('default');
   const [weights, setWeights] = useState<CriteriaWeights>(
     PERSONA_WEIGHTS.default
@@ -430,8 +432,16 @@ export default function VersusInteractiveScoreboard({
     <div className="rate-scoreboard-dark rounded-4 p-4">
       {/* Top Action & Persona Filter Strip */}
       <div className="d-flex justify-content-between align-items-center border-bottom border-secondary border-opacity-25 mb-3 flex-wrap gap-2 pb-3">
-        <div className="d-flex align-items-center flex-wrap gap-1">
-          <span className="small text-white-50 fw-semibold me-1">
+        {/* Presets expose the pressed one, not only its colour (DOS/Rate#1069). */}
+        <div
+          className="d-flex align-items-center flex-wrap gap-1"
+          role="group"
+          aria-labelledby={useCaseLabelId}
+        >
+          <span
+            id={useCaseLabelId}
+            className="small text-white-50 fw-semibold me-1"
+          >
             {t('useCaseLabel')}
           </span>
           {(
@@ -446,6 +456,7 @@ export default function VersusInteractiveScoreboard({
             <button
               key={item.key}
               type="button"
+              aria-pressed={persona === item.key}
               onClick={() => selectPersona(item.key)}
               className={`btn btn-sm rounded-pill px-3 py-1 ${
                 persona === item.key
@@ -459,6 +470,8 @@ export default function VersusInteractiveScoreboard({
           ))}
           <button
             type="button"
+            aria-expanded={showSliders}
+            aria-controls={slidersPanelId}
             onClick={() => setShowSliders((prev) => !prev)}
             className={`btn btn-sm rounded-pill px-3 py-1 ${
               showSliders || persona === 'custom'
@@ -469,6 +482,11 @@ export default function VersusInteractiveScoreboard({
           >
             <BsSliders aria-hidden="true" className="me-1" />
             {t('customWeightsBtn')}
+            {/* Custom weights select no preset and are shown only by this
+                button's colour, so its name says so too (DOS/Rate#1069). */}
+            {persona === 'custom' && (
+              <span className="visually-hidden">{`: ${t('customWeightsActive')}`}</span>
+            )}
           </button>
         </div>
 
@@ -509,6 +527,7 @@ export default function VersusInteractiveScoreboard({
       {/* Interactive 5-Criteria Weight Sliders */}
       {showSliders && (
         <div
+          id={slidersPanelId}
           className="rounded-3 border-secondary border-opacity-25 mb-3 border p-3"
           style={{ background: 'rgba(255,255,255,0.04)' }}
         >

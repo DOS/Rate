@@ -498,12 +498,18 @@ export async function CategoryCatalogContent({
                         <div className="col-xl-7 col-lg-7 col-md-12 col-sm-12">
                           <div className="form-group mb-0">
                             <div className="mobSearch d-flex align-items-center justify-content-start">
+                              {/* The caption labels the input, not only sits
+                                  next to it (DOS/Rate#1077). */}
                               <div className="flexStart ps-2">
-                                <span className="fw-semibold text-dark text-nowrap">
+                                <label
+                                  htmlFor="catalog-search-q"
+                                  className="fw-semibold text-dark text-nowrap mb-0"
+                                >
                                   {t('page.searchLabel')}
-                                </span>
+                                </label>
                               </div>
                               <input
+                                id="catalog-search-q"
                                 type="text"
                                 name="q"
                                 defaultValue={q}
@@ -517,11 +523,15 @@ export async function CategoryCatalogContent({
                           <div className="form-group mb-0">
                             <div className="mobSearch d-flex align-items-center justify-content-start">
                               <div className="flexStart ps-2">
-                                <span className="fw-semibold text-dark">
+                                <label
+                                  htmlFor="catalog-search-brands"
+                                  className="fw-semibold text-dark mb-0"
+                                >
                                   {t('page.brandLabel')}
-                                </span>
+                                </label>
                               </div>
                               <input
+                                id="catalog-search-brands"
                                 type="text"
                                 name="brands"
                                 defaultValue={activeBrands.join(',')}

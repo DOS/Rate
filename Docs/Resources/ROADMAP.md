@@ -55,7 +55,7 @@ Hệ thống **Rate Platform (`rate.vn`)** vận hành trên kiến trúc 4 tầ
   - [x] Dependabot security updates và CodeQL default setup đã bật.
   - [x] Quét secret bù trừ: gitleaks quét commit của mỗi PR vào `dev`/`main` (`DOS/Rate#305`).
   - [ ] Secret Scanning + Push Protection: repo public nên miễn phí, nhưng API trả `422` "blocked by an enterprise policy"; cần chủ enterprise mở policy hoặc gắn cấu hình "Secret Protection enabled" của org cho repo.
-  - [ ] Branch Rulesets: `dev-main-light` và `main-release` đã bật lại sau khi làm sạch lịch sử (`#153`); còn thiếu `Secret scan (gitleaks)` trong danh sách check bắt buộc (cần chủ repo cho phép).
+  - [x] Branch Rulesets: `dev-main-light` và `main-release` đã bật lại sau khi làm sạch lịch sử (`#153`); `dev-main-light` bắt buộc `Typecheck & Build Monorepo`, `E2E (Playwright)` và `Secret scan (gitleaks)` trên `dev` và `main` (JOY cho phép ngày 2026-10-25, `#1073`).
 - [x] **6.6. Khóa Đường Ghi Công Khai Theo Người Dùng & Phiên Cookie (`DOS/Rate#155`, `#194` - Audit K1, K2, C4, T13):**
   - `POST /api/v1/rate/reviews` và `/watchlist` bắt buộc đăng nhập, gọi RPC dưới quyền người dùng (không còn service role), không báo thành công giả, mã lỗi RPC → 403/409/422/429. Client service role tách sang `@repo/shared-data/server` (ESLint cấm trong `apps/web`).
   - Phiên đăng nhập lưu trong cookie qua `@supabase/ssr`; `middleware.ts` → `proxy.ts` (Next.js 16) refresh phiên; request dùng cookie phải cùng origin.
