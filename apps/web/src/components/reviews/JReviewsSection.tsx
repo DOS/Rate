@@ -1284,11 +1284,12 @@ export default function JReviewsSection({
           </div>
         </div>
 
-        {/* Progress Bar */}
+        {/* Progress Bar: draws the badge percentages above, so it is hidden
+            from assistive tech rather than labelled (DOS/Rate#1071). */}
         <div
           className="progress rounded-pill mb-3"
           style={{ height: '10px' }}
-          aria-label={t('authenticityProgressAria')}
+          aria-hidden="true"
         >
           <div
             className="progress-bar bg-success"

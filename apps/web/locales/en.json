@@ -509,7 +509,6 @@
     "authenticPctBadge": "Authentic: {pct}%",
     "suspiciousPctBadge": "Coin spam / suspicious: {pct}%",
     "fakePctBadge": "Fake reviews: {pct}%",
-    "authenticityProgressAria": "Review authenticity ratio",
     "aiSummaryPrefix": "AI Summary:",
     "prosHeading": "Pros reported by buyers",
     "prosEmpty": "Synthesizing additional pros from verified buyers.",

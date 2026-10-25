@@ -509,7 +509,6 @@
     "authenticPctBadge": "Thực chất: {pct}%",
     "suspiciousPctBadge": "Cày xu / Nghi vấn: {pct}%",
     "fakePctBadge": "Đánh giá ảo: {pct}%",
-    "authenticityProgressAria": "Tỷ lệ độ trung thực của đánh giá",
     "aiSummaryPrefix": "Tóm tắt AI:",
     "prosHeading": "Ưu điểm người mua ghi nhận",
     "prosEmpty": "Đang tổng hợp thêm từ người mua thực tế.",
