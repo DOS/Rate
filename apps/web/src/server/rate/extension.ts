@@ -873,6 +873,92 @@ export function evaluateExtensionPriceVerdict(params: {
   };
 }
 
+const SAFE_EXTERNAL_ID_REGEX = /^[a-zA-Z0-9._-]{1,128}$/;
+
+export function isValidExternalEntityId(val: string): boolean {
+  return (
+    typeof val === 'string' &&
+    SAFE_EXTERNAL_ID_REGEX.test(val) &&
+    /[a-zA-Z0-9]/.test(val) &&
+    !/^0+$/.test(val) &&
+    !val.startsWith('.') &&
+    !val.endsWith('.') &&
+    !val.includes('..') &&
+    !/^(?:null|undefined|nan|infinity|-infinity|true|false)$/i.test(val)
+  );
+}
+
+export function buildCandidateExternalItemIds(params: {
+  externalId?: string | null;
+  shopId?: string | null;
+  platform?: SupportedEcommercePlatform | null;
+}): string[] {
+  const rawExternalId = sanitizeExtensionField(params.externalId, 128);
+  const cleanExternalId = isValidExternalEntityId(rawExternalId)
+    ? rawExternalId
+    : null;
+  const rawShopId = sanitizeExtensionField(params.shopId, 128);
+  const cleanShopId = isValidExternalEntityId(rawShopId) ? rawShopId : null;
+
+  const candidateItemIds = new Set<string>();
+  if (!cleanExternalId) {
+    return [];
+  }
+
+  candidateItemIds.add(cleanExternalId);
+  if (cleanExternalId.includes('_')) {
+    const parts = cleanExternalId.split('_');
+    if (parts[1] && isValidExternalEntityId(parts[1])) {
+      candidateItemIds.add(parts[1]);
+    }
+  }
+  if (cleanShopId && !cleanExternalId.includes('_')) {
+    candidateItemIds.add(`${cleanShopId}_${cleanExternalId}`);
+  }
+  const prefixMap: Partial<Record<SupportedEcommercePlatform, string>> = {
+    tiktok: 'tts-',
+    cellphones: 'cps-',
+    tgdd: 'tgdd-',
+    fptshop: 'fpt-',
+    hoangha: 'hhm-',
+    didongviet: 'ddv-',
+    phongvu: 'pv-',
+  };
+  const prefix = params.platform ? prefixMap[params.platform] : undefined;
+  if (prefix && !cleanExternalId.startsWith(prefix)) {
+    const prefixed = `${prefix}${cleanExternalId}`;
+    if (isValidExternalEntityId(prefixed)) {
+      candidateItemIds.add(prefixed);
+    }
+  }
+  return Array.from(candidateItemIds);
+}
+
+export function doesOfferUrlMatchCandidateIds(
+  offerUrl: string,
+  candidateItemIds: Iterable<string>
+): boolean {
+  if (typeof offerUrl !== 'string' || !offerUrl.trim()) return false;
+  let pathAndSearch = offerUrl;
+  try {
+    const parsed = new URL(offerUrl);
+    pathAndSearch = `${parsed.pathname}${parsed.search}`;
+  } catch {
+    // Keep raw string when URL parsing fails
+  }
+  for (const id of candidateItemIds) {
+    if (
+      typeof id === 'string' &&
+      id.length >= 4 &&
+      isValidExternalEntityId(id) &&
+      pathAndSearch.includes(id)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /**
  * Fast-Path Read-Only Lookup for Rate Browser Extension MV3 (`GET /api/v1/rate/extension/lookup`).
  * Strictly Read-Only: Never invokes AI Spec Enricher or mutates `rate.master_products`.
@@ -961,40 +1047,32 @@ export async function lookupExtensionProduct(
   const parsedFromUrl = canonicalUrl
     ? parseEcommerceUrlOrQuery(canonicalUrl)
     : null;
+  const sanitizedParamExternalId = sanitizeExtensionField(
+    params.externalId,
+    128
+  );
   const rawExternalId =
-    sanitizeExtensionField(params.externalId, 128) ||
+    (isValidExternalEntityId(sanitizedParamExternalId)
+      ? sanitizedParamExternalId
+      : null) ||
     parsedFromUrl?.platformItemId ||
     null;
+  const sanitizedParamShopId = sanitizeExtensionField(params.shopId, 128);
   const effectiveShopId =
-    sanitizeExtensionField(params.shopId, 128) ||
+    (isValidExternalEntityId(sanitizedParamShopId)
+      ? sanitizedParamShopId
+      : null) ||
     parsedFromUrl?.platformShopId ||
     null;
 
   // Normalize externalId (handle both `shopId_itemId`, platform prefixes, and raw `itemId`)
-  const candidateItemIds = new Set<string>();
-  if (rawExternalId) {
-    candidateItemIds.add(rawExternalId);
-    if (rawExternalId.includes('_')) {
-      const parts = rawExternalId.split('_');
-      if (parts[1]) candidateItemIds.add(parts[1]);
-    }
-    if (effectiveShopId && !rawExternalId.includes('_')) {
-      candidateItemIds.add(`${effectiveShopId}_${rawExternalId}`);
-    }
-    const prefixMap: Partial<Record<SupportedEcommercePlatform, string>> = {
-      tiktok: 'tts-',
-      cellphones: 'cps-',
-      tgdd: 'tgdd-',
-      fptshop: 'fpt-',
-      hoangha: 'hhm-',
-      didongviet: 'ddv-',
-      phongvu: 'pv-',
-    };
-    const prefix = platform ? prefixMap[platform] : undefined;
-    if (prefix && !rawExternalId.startsWith(prefix)) {
-      candidateItemIds.add(`${prefix}${rawExternalId}`);
-    }
-  }
+  const candidateItemIds = new Set<string>(
+    buildCandidateExternalItemIds({
+      externalId: rawExternalId,
+      shopId: effectiveShopId,
+      platform,
+    })
+  );
 
   // Step 3: Search candidate Master Products in DB (Read-Only)
   const searchKeyword = cleanModelSearchQuery || effectiveTitle || '';
@@ -1157,17 +1235,15 @@ export async function lookupExtensionProduct(
     offers.find(
       (o) =>
         (canonicalUrl && o.url.includes(canonicalUrl)) ||
-        Array.from(candidateItemIds).some((id) => o.url.includes(id))
+        doesOfferUrlMatchCandidateIds(o.url, candidateItemIds)
     ) || null;
   const matchedOffer = urlMatchedOffer || plausibleOffers(offers)[0] || null;
 
-  if (matchedOffer && candidateItemIds.size > 0) {
-    for (const id of candidateItemIds) {
-      if (matchedOffer.url.includes(id)) {
-        matchStatus = 'exact_listing';
-        break;
-      }
-    }
+  if (
+    matchedOffer &&
+    doesOfferUrlMatchCandidateIds(matchedOffer.url, candidateItemIds)
+  ) {
+    matchStatus = 'exact_listing';
   }
 
   const categoryPath = getMasterProductCategorySlug(matchedMaster);
@@ -1459,14 +1535,6 @@ export async function ingestExtensionCrowdSignal(
     rpcClient = getRateClient();
   }
 
-  const SAFE_EXTERNAL_ID_REGEX = /^[a-zA-Z0-9._-]{1,128}$/;
-  const isValidExternalEntityId = (val: string): boolean =>
-    SAFE_EXTERNAL_ID_REGEX.test(val) &&
-    /[a-zA-Z0-9]/.test(val) &&
-    !val.startsWith('.') &&
-    !val.endsWith('.') &&
-    !val.includes('..') &&
-    !/^(?:0|null|undefined|nan|infinity|-infinity|true|false)$/i.test(val);
   const rawCleanItemId = sanitizeExtensionField(input.externalItemId, 128);
   const cleanItemId = isValidExternalEntityId(rawCleanItemId)
     ? rawCleanItemId

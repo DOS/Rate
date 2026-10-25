@@ -267,11 +267,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
     (async () => {
       try {
-        const overrideVariant =
-          typeof message.selectedVariant === 'string' &&
-          message.selectedVariant.trim()
-            ? message.selectedVariant.trim().slice(0, 200)
-            : null;
+        const cleanedVariant =
+          typeof message.selectedVariant === 'string'
+            ? message.selectedVariant
+                .replace(/\p{Cc}+/gu, ' ')
+                .trim()
+                .slice(0, 200)
+            : '';
+        const overrideVariant = cleanedVariant || null;
         const [activeTab] = await chrome.tabs.query({
           active: true,
           currentWindow: true,
@@ -373,7 +376,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       try {
         const rawQuery =
           typeof message.query === 'string'
-            ? message.query.trim().slice(0, 500)
+            ? message.query
+                .replace(/\p{Cc}+/gu, ' ')
+                .trim()
+                .slice(0, 500)
             : '';
         const settings = await getSettings();
         if (!rawQuery) {
