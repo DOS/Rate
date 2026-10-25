@@ -3444,6 +3444,42 @@ async function runTests() {
     );
   }
 
+  // Rate Server Index & Extension Entity, Slug, and Category Bounds (#1029)
+  {
+    const {
+      sanitizeCachedEntityId,
+      sanitizeCachedProductSlug,
+      categorySlugOnly,
+    } = await import('../../web/src/server/rate/index');
+    const { isValidExternalEntityId } =
+      await import('../../web/src/server/rate/extension');
+
+    assert.equal(sanitizeCachedEntityId('0000'), '');
+    assert.equal(sanitizeCachedEntityId('---'), '');
+    assert.equal(sanitizeCachedEntityId('__proto__'), '');
+    assert.equal(sanitizeCachedEntityId('none'), '');
+    assert.equal(sanitizeCachedEntityId('m-42'), 'm-42');
+
+    assert.equal(sanitizeCachedProductSlug('000'), '');
+    assert.equal(sanitizeCachedProductSlug('---'), '');
+    assert.equal(sanitizeCachedProductSlug('__proto__'), '');
+    assert.equal(sanitizeCachedProductSlug('iphone-16-pro'), 'iphone-16-pro');
+
+    assert.equal(categorySlugOnly({ category_slug: 'non-canonical' }), null);
+    assert.deepEqual(categorySlugOnly({ category_slug: 'TABLETS' }), {
+      category_slug: 'tablets',
+    });
+
+    assert.equal(isValidExternalEntityId('none'), false);
+    assert.equal(isValidExternalEntityId('__proto__'), false);
+    assert.equal(isValidExternalEntityId('constructor'), false);
+    assert.equal(isValidExternalEntityId('prototype'), false);
+
+    console.log(
+      '  \u2705 [Rate Server Index & Extension Entity, Slug, and Category Bounds (#1029)] Verified'
+    );
+  }
+
   console.log('🎉 All Rate Browser Extension MV3 v2 tests passed!');
 }
 
