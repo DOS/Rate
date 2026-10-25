@@ -76,7 +76,42 @@ export function sanitizeWatchlistTargetPrice(
   );
 }
 
+const WATCHLIST_CONTROL_CHAR_RE = /\p{Cc}+/gu;
+
+function sanitizeWatchlistText(raw: unknown, maxLen: number): string {
+  if (typeof raw !== 'string') return '';
+  return raw.replace(WATCHLIST_CONTROL_CHAR_RE, '').trim().slice(0, maxLen);
+}
+
+export function resolveWatchlistItemCurrentPrices(
+  item: Pick<WatchlistItem, 'priceWhenAdded'>,
+  liveDeal?: {
+    readonly current_min_price?: unknown;
+    readonly current_max_price?: unknown;
+  } | null,
+  liveProd?: {
+    readonly min_price?: unknown;
+    readonly max_price?: unknown;
+  } | null
+): { currentMin: number; currentMax: number } {
+  const dealMin = sanitizeWatchlistPrice(liveDeal?.current_min_price);
+  const prodMin = sanitizeWatchlistPrice(liveProd?.min_price);
+  const fallbackMin = sanitizeWatchlistPrice(item.priceWhenAdded);
+  const currentMin =
+    dealMin > 0 ? dealMin : prodMin > 0 ? prodMin : fallbackMin;
+
+  const dealMax = sanitizeWatchlistPrice(liveDeal?.current_max_price);
+  const prodMax = sanitizeWatchlistPrice(liveProd?.max_price);
+  const rawMax = dealMax > 0 ? dealMax : prodMax > 0 ? prodMax : currentMin;
+  const currentMax = Math.max(currentMin, rawMax);
+
+  return { currentMin, currentMax };
+}
+
 export function normalizeWatchlistItem(item: WatchlistItem): WatchlistItem {
+  const cleanSlug = sanitizeWatchlistText(item.slug, 256);
+  const cleanName = sanitizeWatchlistText(item.name, 300);
+  const cleanBrand = sanitizeWatchlistText(item.brand, 128);
   const pathMatch =
     typeof item.categoryPath === 'string'
       ? /^\/(smartphones|tablets|laptops|smartwatches|earbuds)(?:\/|$)/.exec(
@@ -84,21 +119,27 @@ export function normalizeWatchlistItem(item: WatchlistItem): WatchlistItem {
         )
       : null;
   const catSlug = getMasterProductCategorySlug({
-    slug: item.slug,
-    name: item.name,
+    slug: cleanSlug,
+    name: cleanName,
     metadata: pathMatch ? { category_slug: pathMatch[1] } : undefined,
   });
   const priceWhenAdded = sanitizeWatchlistPrice(item.priceWhenAdded);
   const targetPrice = sanitizeWatchlistPrice(item.targetPrice);
+  const parsedAddedAt =
+    typeof item.addedAt === 'string' ? Date.parse(item.addedAt) : Number.NaN;
+  const safeAddedAt = Number.isFinite(parsedAddedAt)
+    ? new Date(parsedAddedAt).toISOString()
+    : new Date().toISOString();
   return {
     ...item,
-    slug: item.slug.trim(),
-    name: item.name.trim(),
-    brand: typeof item.brand === 'string' ? item.brand.trim() : '',
+    slug: cleanSlug,
+    name: cleanName,
+    brand: cleanBrand,
     categoryPath: getCategoryRouteHref(catSlug),
-    thumbnail: resolveProductImageUrl(item.slug.trim(), item.thumbnail),
+    thumbnail: resolveProductImageUrl(cleanSlug, item.thumbnail),
     priceWhenAdded,
     targetPrice,
+    addedAt: safeAddedAt,
   };
 }
 
@@ -122,7 +163,9 @@ export function getWatchlist(): WatchlistItem[] {
         continue;
       }
       const normalized = normalizeWatchlistItem(item as WatchlistItem);
-      if (seen.has(normalized.slug)) continue;
+      if (!normalized.slug || !normalized.name || seen.has(normalized.slug)) {
+        continue;
+      }
       seen.add(normalized.slug);
       deduped.push(normalized);
       if (deduped.length >= MAX_WATCHLIST_ITEMS) break;
@@ -149,6 +192,7 @@ function saveWatchlist(items: WatchlistItem[]) {
 export function upsertWatchlistItem(item: WatchlistItem): WatchlistItem[] {
   const normalized = normalizeWatchlistItem(item);
   const current = getWatchlist();
+  if (!normalized.slug || !normalized.name) return current;
   const idx = current.findIndex((x) => x.slug === normalized.slug);
   const next = (
     idx >= 0
