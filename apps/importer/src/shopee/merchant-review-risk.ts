@@ -110,9 +110,10 @@ export function mapStoredReview(
   if (verdict === 'fake' && category !== 'competitor_sabotage' && category !== 'review_bombing') {
     category = 'seeding_fake';
   }
-  const includeInRating = Boolean(
-    vf?.include_in_rating ?? (category === 'authentic' && verdict !== 'fake')
-  );
+  const includeInRating =
+    typeof vf?.include_in_rating === 'boolean'
+      ? vf.include_in_rating
+      : category === 'authentic' && verdict !== 'fake';
   const parsedStar =
     typeof row.rating_star === 'boolean' ||
     row.rating_star === null ||
@@ -165,7 +166,7 @@ export function strongestPriceAnomaly(
     !merchant ||
     typeof merchant !== 'object' ||
     Array.isArray(merchant) ||
-    merchant.is_official
+    merchant.is_official === true
   ) {
     return null;
   }
@@ -250,7 +251,7 @@ export function scoreMerchants(
       )
     : [];
   const merchantById = new Map(safeMerchants.map(m => [m.id, m]));
-  const officialByMerchant = new Map(safeMerchants.map(m => [m.id, Boolean(m.is_official)]));
+  const officialByMerchant = new Map(safeMerchants.map(m => [m.id, m.is_official === true]));
   const productById = new Map(safeProducts.map(p => [p.id, p]));
   const productsByCluster = new Map<string, ProductRow[]>();
   const listingsByMerchant = new Map<string, ProductRow[]>();
@@ -315,7 +316,7 @@ export function scoreMerchants(
     const risk = analyzer.evaluateMerchantRisk({
       merchantId,
       platform: safePlatform,
-      isOfficial: Boolean(merchant.is_official),
+      isOfficial: merchant.is_official === true,
       followerCount: safeFollowerCount,
       listingPrice: anomaly?.listingPrice,
       canonicalMinPrice: anomaly?.canonicalMinPrice,
@@ -342,7 +343,7 @@ export function scoreMerchants(
 function normalizeSafeId(raw: unknown): string | null {
   if (typeof raw !== 'string') return null;
   const trimmed = raw.trim();
-  if (!trimmed || trimmed.length > 128 || /\p{Cc}/u.test(trimmed)) return null;
+  if (!trimmed || trimmed.length > 128 || /[\s\p{Cc}]/u.test(trimmed)) return null;
   return trimmed;
 }
 
@@ -488,7 +489,7 @@ export async function loadAndScoreMerchant(
     peerMerchants.set(safePeerMerchantId, {
       id: safePeerMerchantId,
       platform: '',
-      is_official: Boolean(official),
+      is_official: official === true,
       follower_count: 0,
     });
   }

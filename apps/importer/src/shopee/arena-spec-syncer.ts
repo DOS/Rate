@@ -105,6 +105,7 @@ function normalizeArenaUrl(
       !hostname ||
       hostname.startsWith('.') ||
       hostname.endsWith('.') ||
+      hostname.includes('..') ||
       !hostPattern.test(hostname)
     ) {
       return undefined;
@@ -189,7 +190,13 @@ export function splitCameraModulesToPhoneArenaFormat(rawModules: string): {
   }
   const lines = rawModules
     .split(/\r?\n|;\s*(?=\d+\s*MP)/i)
-    .map(l => l.trim())
+    .map(l =>
+      l
+        .replace(/\p{Cc}+/gu, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 500)
+    )
     .filter(l => l.length > 0);
 
   return {
@@ -208,8 +215,12 @@ export function parseGsmArenaHtmlToSpecs(
   html: string,
   meta?: { gsmarenaUrl?: string; phonearenaUrl?: string; phonearenaHtml?: string }
 ): ArenaSyncedDeviceSpec {
+  const safeMeta = meta && typeof meta === 'object' && !Array.isArray(meta) ? meta : undefined;
   const d = extractGsmArenaDataSpecs(html);
-  const pa = meta?.phonearenaHtml ? extractPhoneArenaTableSpecs(meta.phonearenaHtml) : {};
+  const pa =
+    typeof safeMeta?.phonearenaHtml === 'string' && safeMeta.phonearenaHtml
+      ? extractPhoneArenaTableSpecs(safeMeta.phonearenaHtml)
+      : {};
   const rawModelName = (d['modelname'] || pa['device name'] || 'Unknown Device')
     .replace(/\s+/g, ' ')
     .trim();
@@ -432,11 +443,14 @@ export function parseGsmArenaHtmlToSpecs(
     ),
   });
 
-  const gsmarenaUrl = normalizeArenaUrl(meta?.gsmarenaUrl, /(?:^|\.)gsmarena\.com$/i);
-  const phonearenaUrl = normalizeArenaUrl(meta?.phonearenaUrl, /(?:^|\.)phonearena\.com$/i);
+  const gsmarenaUrl = normalizeArenaUrl(safeMeta?.gsmarenaUrl, /(?:^|\.)gsmarena\.com$/i);
+  const phonearenaUrl = normalizeArenaUrl(safeMeta?.phonearenaUrl, /(?:^|\.)phonearena\.com$/i);
 
   return {
-    source: phonearenaUrl || meta?.phonearenaHtml ? 'hybrid' : 'gsmarena',
+    source:
+      phonearenaUrl || (typeof safeMeta?.phonearenaHtml === 'string' && safeMeta.phonearenaHtml)
+        ? 'hybrid'
+        : 'gsmarena',
     gsmarenaUrl,
     phonearenaUrl,
     brand,

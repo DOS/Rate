@@ -103,7 +103,12 @@ export function parseShopeeEnqueueUrl(
     return null;
   }
   const host = parsed.hostname.toLowerCase();
-  if (host !== 'shopee.vn' && !host.endsWith('.shopee.vn')) {
+  if (
+    host.startsWith('.') ||
+    host.endsWith('.') ||
+    host.includes('..') ||
+    (host !== 'shopee.vn' && !host.endsWith('.shopee.vn'))
+  ) {
     return null;
   }
   const match =
@@ -143,8 +148,16 @@ export function resolveBackfillSupabaseTarget(rawUrl: string | undefined | null)
   if (parsed.username || parsed.password) {
     throw new Error('SUPABASE_URL must not contain embedded credentials.');
   }
-  if (!parsed.hostname || parsed.hostname.startsWith('.') || parsed.hostname.endsWith('.')) {
+  if (
+    !parsed.hostname ||
+    parsed.hostname.startsWith('.') ||
+    parsed.hostname.endsWith('.') ||
+    parsed.hostname.includes('..')
+  ) {
     throw new Error('SUPABASE_URL is missing or has an invalid hostname.');
+  }
+  if (parsed.search || parsed.hash) {
+    throw new Error('SUPABASE_URL must not contain query parameters or fragments.');
   }
   return {
     url: parsed.origin,
