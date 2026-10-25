@@ -12577,6 +12577,70 @@ async function runCoreArchitectureSuite() {
   }
 
   // -------------------------------------------------------------------------
+  // 126d. PriceHistorySection, CompareWorkspace & HeroSearchInspector Bounds (#1043)
+  // -------------------------------------------------------------------------
+  {
+    const {
+      formatPriceHistoryVnd,
+      formatCompactPriceHistoryVnd,
+      sanitizePriceHistoryCount,
+      sanitizePriceHistoryMarkdownCell,
+    } = await import('../../../components/price-history/PriceHistorySection');
+    const {
+      sanitizeComparePriceVnd,
+      formatComparePriceVnd,
+      sanitizeCompareMerchantCount,
+      sanitizeCompareMarkdownCell,
+    } = await import('../../../components/compare/CompareWorkspace');
+    const {
+      isLikelyEcommerceUrl,
+      sanitizeHeroInspectorPriceVnd,
+      sanitizeHeroInspectorRating,
+    } = await import('../../../components/home/HeroSearchInspector');
+
+    assert.equal(formatPriceHistoryVnd(18_990_000.4), '18.990.000 ₫');
+    assert.equal(formatPriceHistoryVnd(-500), '-');
+    assert.equal(formatPriceHistoryVnd(9_000_000_000), '-');
+    assert.equal(formatCompactPriceHistoryVnd(18_500_000), '18.5tr');
+    assert.equal(formatCompactPriceHistoryVnd(450_000), '450k');
+    assert.equal(formatCompactPriceHistoryVnd(-100), '0');
+    assert.equal(sanitizePriceHistoryCount(14.8), 15);
+    assert.equal(sanitizePriceHistoryCount(-5), 0);
+    assert.equal(
+      sanitizePriceHistoryMarkdownCell('  Apple\r\nFlagship | Store\u0000  '),
+      'Apple Flagship - Store'
+    );
+
+    assert.equal(sanitizeComparePriceVnd(25_990_000.4), 25_990_000);
+    assert.equal(sanitizeComparePriceVnd(-100), 0);
+    assert.equal(sanitizeComparePriceVnd(9_000_000_000), 0);
+    assert.equal(formatComparePriceVnd(25_990_000), '25.990.000 ₫');
+    assert.equal(formatComparePriceVnd(-100), '-');
+    assert.equal(sanitizeCompareMerchantCount(8.4), 8);
+    assert.equal(sanitizeCompareMerchantCount(-3), 0);
+    assert.equal(
+      sanitizeCompareMarkdownCell('  iPhone\r\n16 | Pro\u0000  '),
+      'iPhone 16 - Pro'
+    );
+
+    assert.equal(
+      isLikelyEcommerceUrl('  \u0000https://shopee.vn/item-i.123.456  '),
+      true
+    );
+    assert.equal(isLikelyEcommerceUrl('iphone 16 pro max'), false);
+    assert.equal(isLikelyEcommerceUrl(null), false);
+    assert.equal(sanitizeHeroInspectorPriceVnd(18_990_000.4), 18_990_000);
+    assert.equal(sanitizeHeroInspectorPriceVnd(-100), 0);
+    assert.equal(sanitizeHeroInspectorRating(4.8, 4.2), 4.8);
+    assert.equal(sanitizeHeroInspectorRating(0, 6.4), 5);
+    assert.equal(sanitizeHeroInspectorRating(-1, Number.NaN), 0);
+
+    console.log(
+      '  ✅ [126d/131] PriceHistorySection, CompareWorkspace & HeroSearchInspector Bounds (#1043) passed'
+    );
+  }
+
+  // -------------------------------------------------------------------------
   // 127. Rate Server Index & Extension Entity, Slug, and Category Bounds (#1029)
   // -------------------------------------------------------------------------
   {

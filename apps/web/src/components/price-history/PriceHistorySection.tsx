@@ -77,21 +77,54 @@ function getVerdictBadgeStyle(verdict: DiscountVerdictType): {
   }
 }
 
-function formatVnd(price: number | null | undefined): string {
-  if (price == null || price <= 0) return '-';
-  return `${Math.round(price).toLocaleString('vi-VN')} ₫`;
+const PRICE_HISTORY_CONTROL_CHARS_RE = /\p{Cc}+/gu;
+
+export function formatPriceHistoryVnd(price: unknown): string {
+  const num = Number(price);
+  if (!Number.isFinite(num) || num <= 0 || num > MAX_VALID_VND_PRICE) {
+    return '-';
+  }
+  return `${Math.round(num).toLocaleString('vi-VN')} ₫`;
 }
 
-function formatCompactVnd(price: number): string {
-  if (price >= 1_000_000) {
-    const tr = price / 1_000_000;
+export function formatCompactPriceHistoryVnd(price: unknown): string {
+  const num = Number(price);
+  if (!Number.isFinite(num) || num <= 0 || num > MAX_VALID_VND_PRICE) {
+    return '0';
+  }
+  const rounded = Math.round(num);
+  if (rounded >= 1_000_000) {
+    const tr = rounded / 1_000_000;
     return `${tr % 1 === 0 ? tr.toFixed(0) : tr.toFixed(1)}tr`;
   }
-  if (price >= 1_000) {
-    return `${Math.round(price / 1_000)}k`;
+  if (rounded >= 1_000) {
+    return `${Math.round(rounded / 1_000)}k`;
   }
-  return `${price}`;
+  return `${rounded}`;
 }
+
+export function sanitizePriceHistoryCount(value: unknown): number {
+  const num = Number(value);
+  if (!Number.isFinite(num) || num <= 0) return 0;
+  return Math.min(10_000_000, Math.round(num));
+}
+
+export function sanitizePriceHistoryMarkdownCell(
+  value: unknown,
+  fallback = '-'
+): string {
+  if (typeof value !== 'string') return fallback;
+  const cleaned = value
+    .replace(PRICE_HISTORY_CONTROL_CHARS_RE, ' ')
+    .replace(/\|/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 160);
+  return cleaned || fallback;
+}
+
+const formatVnd = formatPriceHistoryVnd;
+const formatCompactVnd = formatCompactPriceHistoryVnd;
 
 function formatDateShort(iso: string): string {
   const d = new Date(iso);
@@ -350,20 +383,24 @@ export default function PriceHistorySection({
       'Price verdict',
     ];
     const sep = headers.map(() => '---');
+    const safeFakeCount = sanitizePriceHistoryCount(history.fakeDiscountCount);
+    const safeGenuineCount = sanitizePriceHistoryCount(
+      history.genuineDealCount
+    );
     const rows = offerAnalyses.map((oa) => [
-      oa.merchant_name.replace(/\|/g, '-'),
-      oa.platform.toUpperCase(),
+      sanitizePriceHistoryMarkdownCell(oa.merchant_name),
+      sanitizePriceHistoryMarkdownCell(oa.platform.toUpperCase()),
       formatVnd(oa.price_current),
       formatVnd(oa.price_original),
       formatVnd(oa.historical_median_price),
       formatVnd(oa.historical_min_price),
-      discountVerdictCopy(tVerdict, oa).label,
+      sanitizePriceHistoryMarkdownCell(discountVerdictCopy(tVerdict, oa).label),
     ]);
     const md = [
-      `### 📈 Rate.vn price history and fake sale check: ${productName}`,
+      `### 📈 Rate.vn price history and fake sale check: ${sanitizePriceHistoryMarkdownCell(productName)}`,
       `- **Current Lowest Price**: ${formatVnd(history.currentMinPrice)}`,
       `- **All-Time Lowest Recorded**: ${formatVnd(history.lowestEverPrice)}`,
-      `- **Fake Sale Alerts**: ${history.fakeDiscountCount} | **Genuine Deals**: ${history.genuineDealCount}`,
+      `- **Fake Sale Alerts**: ${safeFakeCount} | **Genuine Deals**: ${safeGenuineCount}`,
       ...(radarSignal
         ? [`- **Price signal**: ${radarMarkdownCell(radarSignal)}`]
         : []),
@@ -428,8 +465,8 @@ export default function PriceHistorySection({
       exportedAt: new Date().toISOString(),
       currentMinPriceVnd: history.currentMinPrice,
       lowestEverPriceVnd: history.lowestEverPrice,
-      fakeDiscountCount: history.fakeDiscountCount,
-      genuineDealCount: history.genuineDealCount,
+      fakeDiscountCount: sanitizePriceHistoryCount(history.fakeDiscountCount),
+      genuineDealCount: sanitizePriceHistoryCount(history.genuineDealCount),
       dealRadar: radarSignal ? radarExportFields(radarSignal) : null,
       offerAnalyses,
       points: filteredPoints,
