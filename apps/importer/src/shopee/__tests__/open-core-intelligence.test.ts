@@ -1495,6 +1495,91 @@ async function runSuite() {
     );
   }
 
+  // =========================================================================
+  // 17. EntityMatcher & ArenaSpecSyncer Numeric, Key & ID Bounds (#1053)
+  // =========================================================================
+  {
+    const {
+      EntityMatcher,
+      sanitizeMatcherEntityId,
+      toBoundedPositiveInt,
+      toBoundedPositiveNumber,
+    } = await import('../entity-matcher.js');
+    const { ArenaSpecSyncer, extractGsmArenaDataSpecs } = await import('../arena-spec-syncer.js');
+
+    // 1. toBoundedPositiveInt and toBoundedPositiveNumber strip control chars and reject hex/octal/binary prefixes
+    assert.equal(toBoundedPositiveInt('0x10', 2048), null);
+    assert.equal(toBoundedPositiveInt('0o20', 2048), null);
+    assert.equal(toBoundedPositiveInt('0b1000', 2048), null);
+    assert.equal(toBoundedPositiveInt('\u0000 16 \r\n', 2048), 16);
+    assert.equal(toBoundedPositiveNumber('0x10', 120), null);
+    assert.equal(toBoundedPositiveNumber('\u0000 6.8 \n', 120), 6.8);
+
+    // 2. sanitizeMatcherEntityId and enrichMasterProductById reject multi-zero, pure-punctuation, internal whitespace, and prototype keys
+    assert.equal(sanitizeMatcherEntityId('0000'), '');
+    assert.equal(sanitizeMatcherEntityId('---'), '');
+    assert.equal(sanitizeMatcherEntityId('__proto__'), '');
+    assert.equal(sanitizeMatcherEntityId('constructor'), '');
+    assert.equal(sanitizeMatcherEntityId('prototype'), '');
+    assert.equal(sanitizeMatcherEntityId('id with space'), '');
+    assert.equal(sanitizeMatcherEntityId('  master-1053  '), 'master-1053');
+
+    const matcher1053 = new EntityMatcher({} as never);
+    await assert.rejects(
+      () => matcher1053.enrichMasterProductById('0000'),
+      /masterId must be a non-empty string/
+    );
+    await assert.rejects(
+      () => matcher1053.enrichMasterProductById('__proto__'),
+      /masterId must be a non-empty string/
+    );
+
+    // 3. extractGsmArenaDataSpecs rejects prototype-pollution and pure-punctuation keys
+    const specs1053 = extractGsmArenaDataSpecs(
+      `<td data-spec="__proto__">polluted</td>
+       <td data-spec="constructor">bad</td>
+       <td data-spec="---">dash</td>
+       <td data-spec="modelname">Samsung Galaxy S26 Ultra</td>`
+    );
+    assert.equal(Object.hasOwn(specs1053, '__proto__'), false);
+    assert.equal(Object.hasOwn(specs1053, 'constructor'), false);
+    assert.equal(Object.hasOwn(specs1053, '---'), false);
+    assert.equal(specs1053.modelname, 'Samsung Galaxy S26 Ultra');
+
+    // 4. auditCatalogAgainstArenaRegistry sanitizes id, model_key, and slug
+    const syncer1053 = new ArenaSpecSyncer();
+    const audit1053 = await syncer1053.auditCatalogAgainstArenaRegistry({
+      from: () => ({
+        select: () => ({
+          order: () => ({
+            range: async (from: number) => ({
+              data:
+                from === 0
+                  ? [
+                      {
+                        id: '0000',
+                        name: 'Bad Sentinel Master',
+                        model_key: '__proto__',
+                        slug: '---',
+                        specifications: {},
+                      },
+                    ]
+                  : [],
+              error: null,
+            }),
+          }),
+        }),
+      }),
+    } as never);
+    assert.equal(audit1053.incompleteSpecMasters.length, 1);
+    assert.equal(audit1053.incompleteSpecMasters[0]?.id, '');
+    assert.equal(audit1053.incompleteSpecMasters[0]?.model_key, '');
+
+    console.log(
+      '  ✅ [17/17] EntityMatcher & ArenaSpecSyncer Numeric, Key & ID Bounds (#1053) passed'
+    );
+  }
+
   console.log('🎉 All @repo/crawlers Open-Core Intelligence tests passed!');
 }
 
