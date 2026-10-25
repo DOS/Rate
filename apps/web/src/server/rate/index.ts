@@ -139,14 +139,30 @@ const _getCachedMasterProductsByKey = cache(
 );
 
 const SAFE_PRODUCT_SLUG_REGEX = /^[a-z0-9._-]{1,120}$/;
+const DISALLOWED_CACHED_IDENTIFIER_TOKEN_REGEX =
+  /^(?:null|undefined|nan|none|infinity|-infinity|true|false|__proto__|constructor|prototype)$/i;
 
 export function sanitizeCachedEntityId(value: unknown, maxLen = 128): string {
   if (typeof value !== 'string') return '';
+  const safeMaxLen =
+    typeof maxLen === 'number' && Number.isFinite(maxLen) && maxLen > 0
+      ? Math.min(Math.trunc(maxLen), 128)
+      : 128;
   const cleaned = value
     .replace(/\p{Cc}+/gu, '')
     .trim()
-    .slice(0, maxLen);
-  if (!cleaned || cleaned === '.' || cleaned === '..') return '';
+    .slice(0, safeMaxLen);
+  if (
+    !cleaned ||
+    !/[a-zA-Z0-9]/.test(cleaned) ||
+    /^0+$/.test(cleaned) ||
+    cleaned.startsWith('.') ||
+    cleaned.endsWith('.') ||
+    cleaned.includes('..') ||
+    DISALLOWED_CACHED_IDENTIFIER_TOKEN_REGEX.test(cleaned)
+  ) {
+    return '';
+  }
   return cleaned;
 }
 
@@ -159,9 +175,12 @@ export function sanitizeCachedProductSlug(value: unknown): string {
     .slice(0, 120);
   if (
     !SAFE_PRODUCT_SLUG_REGEX.test(cleaned) ||
+    !/[a-z0-9]/.test(cleaned) ||
+    /^0+$/.test(cleaned) ||
     cleaned.startsWith('.') ||
     cleaned.endsWith('.') ||
-    cleaned.includes('..')
+    cleaned.includes('..') ||
+    DISALLOWED_CACHED_IDENTIFIER_TOKEN_REGEX.test(cleaned)
   ) {
     return '';
   }
@@ -491,15 +510,17 @@ export const getCachedInspectProductOrShopUrl = cache(
 // JSON, so the category map travels as entries.
 const SITEMAP_CACHE_WARN_BYTES = 1_500_000;
 
-const categorySlugOnly = (
+export const categorySlugOnly = (
   value: Record<string, unknown> | null | undefined
-) => {
-  if (typeof value?.category_slug !== 'string') return null;
+): { category_slug: string } | null => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  if (typeof value.category_slug !== 'string') return null;
   const slug = value.category_slug
     .replace(/\p{Cc}+/gu, '')
     .trim()
+    .toLowerCase()
     .slice(0, 64);
-  return slug ? { category_slug: slug } : null;
+  return isCanonicalCategorySlug(slug) ? { category_slug: slug } : null;
 };
 
 const _getCachedSitemapRowsData = withRateDataCache(

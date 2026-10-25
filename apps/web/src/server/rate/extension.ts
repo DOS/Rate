@@ -884,7 +884,9 @@ export function isValidExternalEntityId(val: string): boolean {
     !val.startsWith('.') &&
     !val.endsWith('.') &&
     !val.includes('..') &&
-    !/^(?:null|undefined|nan|infinity|-infinity|true|false)$/i.test(val)
+    !/^(?:null|undefined|nan|none|infinity|-infinity|true|false|__proto__|constructor|prototype)$/i.test(
+      val
+    )
   );
 }
 

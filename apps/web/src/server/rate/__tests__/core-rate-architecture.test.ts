@@ -12358,7 +12358,7 @@ async function runCoreArchitectureSuite() {
     assert.equal(isMissingRpcError({ code: '\u0000pgrst202 ' }), true);
 
     console.log(
-      '  ✅ [125/126] API Handler & Request Auth Numeric/Slug/Brand/Token Bounds (#1025) passed'
+      '  ✅ [125/127] API Handler & Request Auth Numeric/Slug/Brand/Token Bounds (#1025) passed'
     );
   }
 
@@ -12448,7 +12448,79 @@ async function runCoreArchitectureSuite() {
     );
 
     console.log(
-      '  ✅ [126/126] compare-tray, CompareTrayBar & ProductLeaderboardBadges Bounds (#1030) passed'
+      '  ✅ [126/127] compare-tray, CompareTrayBar & ProductLeaderboardBadges Bounds (#1030) passed'
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // 127. Rate Server Index & Extension Entity, Slug, and Category Bounds (#1029)
+  // -------------------------------------------------------------------------
+  {
+    const {
+      sanitizeCachedEntityId,
+      sanitizeCachedProductSlug,
+      sanitizeCachedCompareSlugsCsv,
+      categorySlugOnly,
+    } = await import('../index');
+    const { isValidExternalEntityId } = await import('../extension');
+
+    assert.equal(sanitizeCachedEntityId('0'), '');
+    assert.equal(sanitizeCachedEntityId('0000'), '');
+    assert.equal(sanitizeCachedEntityId('---'), '');
+    assert.equal(sanitizeCachedEntityId('_._'), '');
+    assert.equal(sanitizeCachedEntityId('null'), '');
+    assert.equal(sanitizeCachedEntityId('undefined'), '');
+    assert.equal(sanitizeCachedEntityId('NaN'), '');
+    assert.equal(sanitizeCachedEntityId('none'), '');
+    assert.equal(sanitizeCachedEntityId('true'), '');
+    assert.equal(sanitizeCachedEntityId('false'), '');
+    assert.equal(sanitizeCachedEntityId('__proto__'), '');
+    assert.equal(sanitizeCachedEntityId('constructor'), '');
+    assert.equal(sanitizeCachedEntityId('prototype'), '');
+    assert.equal(sanitizeCachedEntityId('.lead'), '');
+    assert.equal(sanitizeCachedEntityId('trail.'), '');
+    assert.equal(sanitizeCachedEntityId('a..b'), '');
+    assert.equal(sanitizeCachedEntityId('\u0000m-123 ', 10), 'm-123');
+
+    assert.equal(sanitizeCachedProductSlug('0'), '');
+    assert.equal(sanitizeCachedProductSlug('000'), '');
+    assert.equal(sanitizeCachedProductSlug('---'), '');
+    assert.equal(sanitizeCachedProductSlug('___'), '');
+    assert.equal(sanitizeCachedProductSlug('null'), '');
+    assert.equal(sanitizeCachedProductSlug('undefined'), '');
+    assert.equal(sanitizeCachedProductSlug('nan'), '');
+    assert.equal(sanitizeCachedProductSlug('none'), '');
+    assert.equal(sanitizeCachedProductSlug('true'), '');
+    assert.equal(sanitizeCachedProductSlug('false'), '');
+    assert.equal(sanitizeCachedProductSlug('__proto__'), '');
+    assert.equal(sanitizeCachedProductSlug('constructor'), '');
+    assert.equal(sanitizeCachedProductSlug('prototype'), '');
+    assert.equal(
+      sanitizeCachedCompareSlugsCsv(
+        '000,---,null,__proto__,iphone-16-pro,galaxy-s25'
+      ),
+      'iphone-16-pro,galaxy-s25'
+    );
+
+    assert.equal(categorySlugOnly(null), null);
+    assert.equal(
+      categorySlugOnly([] as unknown as Record<string, unknown>),
+      null
+    );
+    assert.equal(categorySlugOnly({ category_slug: '---' }), null);
+    assert.equal(categorySlugOnly({ category_slug: 'electronics' }), null);
+    assert.deepEqual(categorySlugOnly({ category_slug: '  \u0000EARBUDS  ' }), {
+      category_slug: 'earbuds',
+    });
+
+    assert.equal(isValidExternalEntityId('none'), false);
+    assert.equal(isValidExternalEntityId('__proto__'), false);
+    assert.equal(isValidExternalEntityId('constructor'), false);
+    assert.equal(isValidExternalEntityId('prototype'), false);
+    assert.equal(isValidExternalEntityId('123456789'), true);
+
+    console.log(
+      '  ✅ [127/127] Rate Server Index & Extension Entity, Slug, and Category Bounds (#1029) passed'
     );
   }
 
